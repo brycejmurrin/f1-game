@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Apex 26 — Car Viewer</title>
 <!--
+  @doc Standalone isolated car photo studio (no track, no game.js): Car3D + LiveryTex via GLX; headless API `window.CARVIEW`.
+  @skill playwright-probe
   Standalone, ISOLATED car viewer (no track / no game.js). Renders the procedural
   Car3D on a plain studio backdrop using the real GLX renderer + LiveryTex decals.
   Meant as a dev/inspection tool: pick team / livery / parts / lighting / angle and
@@ -12,6 +14,7 @@
 
   Drive it by URL params (headless-friendly) or by mouse/keys:
     ?team=ferrari&livery=fer_matte&num=16
+    ?team=ferrari&finish=pearl        (gloss|satin|chrome|matte|carbon|brushed|pearl)
     &engine=race&aero=high_downforce&brakes=ceramic&gearbox=f1_spec&tyres=soft&ers=full_attack
     &az=40&el=16&dist=4.6&tod=day&studio=1&bg=101014
   Mouse: drag = orbit, wheel = zoom.  Keys: 1-5 tod presets, [ ] spin, r reset.
@@ -19,6 +22,9 @@
   Headless API (window.CARVIEW):
     CARVIEW.set({team,livery,num,parts,az,el,dist,tod,studio,bg})  -> rebuilds + renders
     CARVIEW.angle(az,el,dist)                                       -> just re-aims camera
+    CARVIEW.set({hideCar:true})  (also ?hidecar=1)                  -> EMPTY-STAGE PLATE: same
+        camera, same light, no car. Shoot it against the normal frame and every pixel that
+        DIFFERS is car — an exact matte, with no colour key to fool black bodywork.
     CARVIEW.ready  (bool)                                           -> first frame drawn
 -->
 <style>
@@ -40,11 +46,14 @@
   <b>Car Viewer</b>
   <div class="row"><span class="k">Team</span><select id="ui-team"></select></div>
   <div class="row"><span class="k">Livery</span><select id="ui-livery"></select></div>
-  <div class="row"><span class="k">Engine</span><select id="ui-engine"></select></div>
-  <div class="row"><span class="k">Aero</span><select id="ui-aero"></select></div>
-  <div class="row"><span class="k">Brakes</span><select id="ui-brakes"></select></div>
-  <div class="row"><span class="k">Gearbox</span><select id="ui-gearbox"></select></div>
-  <div class="row"><span class="k">ERS</span><select id="ui-ers"></select></div>
+  <!-- One row per Parts.CATALOG category, built in JS from PART_CATS. These
+       were eight hardcoded rows, which silently broke the whole viewer the
+       moment a category was added: getElementById returned null and wiring its
+       onchange threw before the car ever built. -->
+  <div id="ui-parts"></div>
+  <div class="row"><span class="k">After-fire</span><input id="ui-exhaust-flame" type="checkbox"></div>
+  <div class="row"><span class="k">Brake heat</span><input id="ui-brake-glow" type="checkbox"></div>
+  <div class="row"><span class="k">ERS deploy</span><input id="ui-ers-deploy" type="checkbox"></div>
   <div class="row"><span class="k">Light</span><select id="ui-tod"></select></div>
   <div class="row"><span class="k">Rig</span><select id="ui-rig"></select></div>
   <div class="row"><span class="k">Reflect</span><input id="ui-refl" type="range" min="0" max="1" step="0.05" style="width:120px"></div>
@@ -52,14 +61,47 @@
 <div id="tip">drag orbit · wheel zoom · 1-5 tod · +/− exposure · ,/. intensity · l sweep · r reset</div>
 <div id="err"></div>
 
-<script src="../js/mat4.js"></script>
-<script src="../js/shaders/glx-shaders.js"></script>
-<script src="../js/glx.js"></script>
-<script src="../js/teams.js"></script>
-<script src="../js/parts.js"></script>
-<script src="../js/car3d.js"></script>
-<script src="../js/liveries.js"></script>
-<script src="../js/liverytex.js"></script>
+<!-- @gen-shell:carview -->
+<script src="../js/core/log.js"></script>
+<script src="../js/core/dev-flags.js"></script>
+<script src="../js/core/mat4.js"></script>
+<script src="../js/render/shared/glx-facade.js"></script>
+<script src="../js/render/glx/shaders/glsl-chunks.js"></script>
+<script src="../js/render/glx/shaders/glsl-lit.js"></script>
+<script src="../js/render/glx/shaders/glsl-sky.js"></script>
+<script src="../js/render/glx/shaders/glsl-fx.js"></script>
+<script src="../js/render/glx/shaders/glsl-post.js"></script>
+<script src="../js/render/shared/light-budget.js"></script>
+<script src="../js/lighting/knobs.js"></script>
+<script src="../js/render/shared/post-common.js"></script>
+<script src="../js/render/shared/canvas-css-size.js"></script>
+<script src="../js/render/glx/post.js"></script>
+<script src="../js/render/glx/shadow.js"></script>
+<script src="../js/render/shared/lamp-chunks.js"></script>
+<script src="../js/render/shared/frustum.js"></script>
+<script src="../js/render/shared/inst-cells.js"></script>
+<script src="../js/render/shared/vertex-pack.js"></script>
+<script src="../js/render/shared/chunk-bins.js"></script>
+<script src="../js/render/glx/chunked.js"></script>
+<script src="../js/render/glx/glx.js"></script>
+<script src="../js/data/teams.js"></script>
+<script src="../js/car/parts.js"></script>
+<script src="../js/car/helmets.js"></script>
+<script src="../js/car/car-geometry.js"></script>
+<script src="../js/car/car-wheels.js"></script>
+<script src="../js/car/car-material-shade.js"></script>
+<script src="../js/car/car-materials.js"></script>
+<script src="../js/car/car-shade.js"></script>
+<script src="../js/car/car-body-geom.js"></script>
+<script src="../js/car/car3d.js"></script>
+<script src="../js/car/liveries.js"></script>
+<script src="../js/car/crest-paths.js"></script>
+<script src="../js/car/livery-graphics.js"></script>
+<script src="../js/car/liverytex.js"></script>
+<script src="../js/physics/consts.js"></script>
+<script src="../js/car/car-mesh.js"></script>
+<script src="../js/camera/cockpit-preview.js"></script>
+<!-- /@gen-shell:carview -->
 <script>
 "use strict";
 (function () {
@@ -67,45 +109,23 @@
   const errEl = document.getElementById("err");
   const fail = (m) => { errEl.style.display = "grid"; errEl.textContent = m; };
   if (!GLX.init(canvas)) { fail("WebGL2 unavailable"); return; }
+  CarMesh.init(GLX);
+  // The custom team's uploaded emblem loads asynchronously; rebuild when it
+  // changes. The eleven shipped marks are vector and need no wait.
+  if (LiveryTex.onMarkChange) LiveryTex.onMarkChange(() => rebuild());   // rebuild() frees the old atlas itself
 
   // Car is drawn through an X-reflection: the in-race car model matrix is a
   // reflection (det −1), and the decal UVs are authored for that handedness, so
   // we must match it here or the sponsor/number text would read mirrored.
   const REFLECT_X = new Float32Array([-1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+  // ACTIVE AERO moveable wing elements (see rebuild()/drawFlaps below).
+  let flapLvl = 2, flapStyle = null, flapCol = null;
+  const _flapW = new Float32Array(16);
   const CENTER = [0, 0.45, 0];   // base orbit look-target (car centre, ~hip height)
 
   // ---- URL params ----
   const Q = new URLSearchParams(location.search);
   const qp = (k, d) => Q.has(k) ? Q.get(k) : d;
-
-  // ---- decal mesh (mirrors game.js carDecalData; U pre-flipped for REFLECT_X) ----
-  function carDecalData(aLvl) {
-    const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
-    const out = { pos: [], nrm: [], uv: [], idx: [] };
-    const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / S, vB: 1 - (r.y + r.h) / S });
-    const quad = (c, n, region) => {
-      const u = uvOf(region), i = out.pos.length / 3;
-      const uvs = [[u.uR, u.vB], [u.uL, u.vB], [u.uL, u.vT], [u.uR, u.vT]];
-      for (let k = 0; k < 4; k++) { out.pos.push(c[k][0], c[k][1], c[k][2]); out.nrm.push(n[0], n[1], n[2]); out.uv.push(uvs[k][0], uvs[k][1]); }
-      out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
-    };
-    const yB = 0.19, yT = 0.45, zF = 0.46, zR = -0.34;
-    quad([[0.715, yB, zF], [0.715, yB, zR], [0.715, yT, zR], [0.715, yT, zF]], [1, 0, 0], R.titleA);
-    quad([[-0.715, yB, zR], [-0.715, yB, zF], [-0.715, yT, zF], [-0.715, yT, zR]], [-1, 0, 0], R.titleA);
-    quad([[-0.15, 0.565, -0.62], [0.15, 0.565, -0.62], [0.15, 0.6, -1.28], [-0.15, 0.6, -1.28]], [0, 1, 0.06], R.crest);
-    const fX = 0.023, fyB = 0.655, fyT = 0.945, fzF = -0.82, fzR = -1.56;
-    quad([[fX, fyB, fzF], [fX, fyB, fzR], [fX, fyT, fzR], [fX, fyT, fzF]], [1, 0, 0], R.fin);
-    quad([[-fX, fyB, fzR], [-fX, fyB, fzF], [-fX, fyT, fzF], [-fX, fyT, fzR]], [-1, 0, 0], R.fin);
-    quad([[-0.155, 0.472, 1.72], [0.155, 0.472, 1.72], [0.155, 0.472, 2.10], [-0.155, 0.472, 2.10]], [0, 1, 0.05], R.num);
-    quad([[-0.14, 0.556, 1.16], [0.14, 0.556, 1.16], [0.14, 0.504, 1.66], [-0.14, 0.504, 1.66]], [0, 1, 0.10], R.titleB);
-    quad([[0.7, 0.10, zF], [0.7, 0.10, zR], [0.7, 0.185, zR], [0.7, 0.185, zF]], [1, 0, 0], R.strip);
-    quad([[-0.7, 0.10, zR], [-0.7, 0.10, zF], [-0.7, 0.185, zF], [-0.7, 0.185, zR]], [-1, 0, 0], R.strip);
-    const nb = Car3D.numberBoard(aLvl == null ? 2 : aLvl);   // tracks the rear wing (mirrors game.js)
-    const ex = 0.539, eyB = nb.cy - nb.h * 0.5 + 0.01, eyT = nb.cy + nb.h * 0.5 - 0.01, ezF = -2.30, ezR = -2.52;
-    quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
-    quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
-    return out;
-  }
 
   // ---- lighting rigs + point lights ----
   // Light record layout (15 floats): pos(3) energy(3) radius dir(3) cone(3) spot on
@@ -149,7 +169,7 @@
   // drawSky. Kept a touch brighter than the bg so the paint has something warm to
   // mirror. void = a neutral grey studio dome (still reflective, just no colour).
   const TOD = {
-    day:   { sunDir: [0.4, 0.82, 0.35], sunColor: [1.05, 1.02, 0.96], ambSky: [0.30, 0.33, 0.38], ambGnd: [0.20, 0.19, 0.18], bg: [0.09, 0.10, 0.12], studioI: 1.4, zenith: [0.20, 0.42, 0.80], horizon: [0.70, 0.80, 0.92] },
+    day:   { sunDir: [0, 0.88, 0.47], sunColor: [1.05, 1.02, 0.96], ambSky: [0.30, 0.33, 0.38], ambGnd: [0.20, 0.19, 0.18], bg: [0.09, 0.10, 0.12], studioI: 1.4, zenith: [0.20, 0.42, 0.80], horizon: [0.70, 0.80, 0.92] },
     dusk:  { sunDir: [0.5, 0.28, -0.2], sunColor: [1.15, 0.62, 0.36], ambSky: [0.22, 0.20, 0.26], ambGnd: [0.16, 0.13, 0.14], bg: [0.10, 0.07, 0.10], studioI: 1.8, zenith: [0.12, 0.10, 0.26], horizon: [0.92, 0.45, 0.28] },
     dawn:  { sunDir: [-0.4, 0.30, 0.4], sunColor: [0.95, 0.75, 0.72], ambSky: [0.24, 0.24, 0.30], ambGnd: [0.16, 0.15, 0.16], bg: [0.09, 0.09, 0.12], studioI: 1.7, zenith: [0.16, 0.20, 0.38], horizon: [0.86, 0.66, 0.58] },
     night: { sunDir: [0.3, 0.7, 0.2],   sunColor: [0.18, 0.20, 0.30], ambSky: [0.05, 0.06, 0.10], ambGnd: [0.03, 0.035, 0.05], bg: [0.02, 0.02, 0.035], studioI: 2.6, zenith: [0.01, 0.02, 0.05], horizon: [0.05, 0.06, 0.12], stars: 1 },
@@ -165,11 +185,18 @@
   const S = {
     team: qp("team", "mclaren"),
     livery: qp("livery", null),
+    finish: qp("finish", null),   // paint FINISH override: gloss|satin|chrome|matte|carbon|brushed|pearl
+
+    colors: null,
     num: qp("num", null),
     parts: {},
     az: parseFloat(qp("az", "35")), el: parseFloat(qp("el", "14")), dist: parseFloat(qp("dist", "6.2")),
     look: parseFloat(qp("look", "0")),   // orbit-target Z offset (+nose / −rear) — lets a close dist frame ONE end (a wheel corner, the wing) without cropping it by centring the target off the car's midpoint
     lookX: parseFloat(qp("lookx", "0")), // orbit-target X offset (+right / −left) — frames one wheel side, not the car spine
+    lookY: parseFloat(qp("looky", "0")), // orbit-target Y offset (+up) — the wings sit 0.3-0.6 m above CENTER's 0.45,
+                                         // so without this a close shot of either one pins it to the frame edge
+    flap: parseFloat(qp("flap", "0")),   // ACTIVE AERO blend 0 = Z-mode (closed) .. 1 = X-mode (flat).
+                                         // NOT "aero" — that query param is already the aero PART id.
     tod: qp("tod", "day"),
     rig: qp("rig", qp("studio", "1") !== "0" ? "studio" : "none"),        // lighting rig preset
     intensity: Q.has("intensity") ? parseFloat(qp("intensity")) : null,   // null = tod default
@@ -177,12 +204,21 @@
     refl: parseFloat(qp("refl", "0.2")),   // env-mirror strength 0..1 (0 = matte paint, no chrome). Low default so renders read as team paint, not chrome.
     lights: plights,                                                       // extra movable point lights
     bg: qp("bg", null),
+    // THE EMPTY-STAGE PLATE. Draw everything except the car, so a capture tool
+    // can shoot the same camera twice and DIFFERENCE the two frames into an
+    // exact matte. Keying a background colour cannot do this: the tonemap,
+    // vignette and env reflections all touch the backdrop, and the car's own
+    // black bodywork keys out with it — which is precisely how every traced
+    // drawing so far arrived with its wings missing.
+    hideCar: qp("hidecar", "0") !== "0",
     hud: qp("hud", "1") !== "0",
     spin: qp("spin", "0") !== "0",
     sweep: qp("sweep", "0") !== "0",     // a bright point light orbiting the car (reflection test)
+    effects: { exhaustFlame: false, brakeGlow: false, ersDeploy: false, boostFlame: false },
   };
+  const PART_CATS = ["engine", "aero", "suspension", "brakes", "tyres", "ers", "gearbox", "fuel", "exhaust", "floor", "cockpit", "wheels"];
   let sweepA = 0;
-  for (const cat of ["engine", "aero", "brakes", "gearbox", "tyres", "ers", "suspension", "fuel"]) {
+  for (const cat of PART_CATS) {
     if (Q.has(cat)) S.parts[cat] = Q.get(cat);
   }
   if (!S.hud) document.getElementById("hud").style.display = "none";
@@ -208,14 +244,69 @@
     };
   }
 
+  // LIVERY FIELD OVERRIDES. The spine/fin/cover designs are FIELDS on a livery,
+  // not livery ids, so `?livery=` cannot reach them and the studio could only
+  // ever show whatever each team happens to author. Any of these as a query
+  // param overrides the resolved livery — ?spineLogo=saddle&cover=ffffff — which
+  // is what sweeping a design across teams needs. Colours take hex; the rest are
+  // the enum ids in js/car/liveries.js.
+  const LIV_FIELDS = ["finShape", "finStyle", "finBadge", "spineLogo", "spineSide",
+                      "spineHeight", "tcam", "coverVents", "wingCarbon", "numFont",
+                      "cover", "rearWing", "stripe", "accent", "nose", "pod", "wing",
+                      "halo", "fin", "finArt", "noseStripe", "logo", "logo2", "logo3",
+                      "spineTint", "sideTint"];
+  // logo*/spineTint/sideTint are RGB triples — without HEX_FIELDS they stay
+  // strings and markPalette crashes on .slice (same class as wrap+partial).
+  const HEX_FIELDS = new Set(["cover", "rearWing", "stripe", "accent", "nose", "pod",
+                              "wing", "halo", "fin", "finArt", "noseStripe",
+                              "logo", "logo2", "logo3", "spineTint", "sideTint"]);
+  const hexRgb = (h) => { const v = parseInt(String(h).replace(/^#/, ""), 16);
+    return Number.isFinite(v) ? [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255] : null; };
+  const LIV_OVER = (() => {
+    const o = {};
+    for (const f of LIV_FIELDS) { const v = qp(f, null); if (v == null) continue;
+      o[f] = HEX_FIELDS.has(f) ? hexRgb(v) : v; }
+    return o;
+  })();
+
   function teamObj() { return Teams.LIST.find(t => t.id === S.team) || Teams.LIST[0]; }
   function liveryList(team) { return Liveries.forTeam(team); }
   function resolveLiv(team) {
     const list = liveryList(team);
-    const l = (S.livery && list.find(x => x.id === S.livery)) || list[0];
-    return { c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
-             nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
-             noseStripe: l.noseStripe || null };
+    // S.livery is an ID, OR a livery OBJECT (full or a patch). An id that matches
+    // nothing warns and renders the default rather than pretending. An object is
+    // merged onto list[0] so `{spineLogo:"wrap"}` still carries c1/c2 — using the
+    // object alone (2026-09-09) made partial patches crash SPINE TOP wrap in
+    // markPalette. A complete object still overrides every field via assign.
+    let l;
+    if (S.livery && typeof S.livery === "object") {
+      // Merge onto the team default so a partial patch
+      // (`{spineLogo:"wrap"}`) still has c1/c2/stripe. Using the object alone
+      // as the whole livery left colours undefined, and SPINE TOP `wrap`
+      // crashed in markPalette (sunColour → alt.slice on null). A FULL object
+      // still wins field-by-field via assign.
+      l = Object.assign({}, list[0], S.livery);
+    } else {
+      l = (S.livery && list.find(x => x.id === S.livery)) || list[0];
+      if (S.livery && typeof S.livery === "string" && !list.some(x => x.id === S.livery))
+        Log.warn("carview", `livery "${S.livery}" is not one of ${team.id}'s — rendering ${l.id || "the default"}`);
+    }
+    // EVERY livery field the game resolves (Liveries.FIELDS — the list
+    // CustomLiveries.pickLivery copies for the race car), not a hand copy: the
+    // old hand list had drifted ten fields short (bodySplit, lower, sponsors,
+    // numFont, finHandoff, the tints...), so studio shots of Cadillac's L/R body
+    // or a two-tone `lower` showed a car the game never builds.
+    const o = { c1: S.colors ? S.colors[0] : l.c1, c2: S.colors ? S.colors[1] : l.c2 };
+    for (const f of Liveries.FIELDS) o[f] = l[f] != null ? l[f] : null;
+    // ?finish= overrides the livery's own, so a finish can be inspected
+    // without authoring a livery for it (Car3D.FINISH_SURFACE).
+    o.finish = S.finish || l.finish || null;
+    return o;
+  }
+  function resolveLivOver(team) {
+    const liv = resolveLiv(team);
+    for (const k in LIV_OVER) if (LIV_OVER[k] != null) liv[k] = LIV_OVER[k];
+    return liv;
   }
   function driverNum(team) {
     if (S.num != null) return parseInt(S.num, 10) || 0;
@@ -224,14 +315,25 @@
 
   function rebuild() {
     const team = teamObj();
-    const liv = resolveLiv(team);
-    const tiers = Parts.getVisualTiers(S.parts, team.engine);
+    const liv = resolveLivOver(team);
+    const tiers = Parts.getVisualTiers(S.parts, team);
     const num = driverNum(team);
     if (carMesh) GLX.freeMesh(carMesh);
     carMesh = GLX.createMesh(Car3D.build(liv.c1, liv.c2, { livery: liv, num, parts: tiers }));
-    // Rebuild the decal mesh every time — the rear-wing number height tracks aero.
-    if (decalMesh && GLX.freeMesh) GLX.freeMesh(decalMesh);
-    if (GLX.createTexMesh) decalMesh = GLX.createTexMesh(carDecalData(Car3D.aeroLevelOf(tiers)));
+    // ACTIVE AERO: the wing's top elements are NOT in that mesh — Car3D leaves
+    // them out so they can rotate (see Car3D.aeroFlaps). A viewer that only drew
+    // Car3D.build() would therefore show a wing missing its top flaps. Keep what
+    // they need so frame() can draw them at the current blend.
+    flapLvl = Car3D.aeroLevelOf(tiers);
+    // The resolved RECIPE, never tiers.aero — that is the tier NUMBER, and
+    // aeroFlapsGeom reading .frontSweep off a number NaN'd every flap vertex,
+    // which is how this page rendered byte-identical frames at flap=0 and 1.
+    flapStyle = Car3D.aeroStyleOf ? Car3D.aeroStyleOf(tiers) : null;
+    flapCol = liv.wing || liv.c2 || team.color2;
+    // Shared runtime implementation: same body anchors, segmentation and bounded
+    // cache as the race renderer.
+    // finShape rides with the livery (5th arg): no fin means no fin decal.
+    decalMesh = CarMesh.getCarDecalMesh(Car3D.aeroLevelOf(tiers), tiers, false, undefined, liv.finShape, liv.spineHeight);
     if (decalTex && GLX.freeTexture) GLX.freeTexture(decalTex);
     try { decalTex = GLX.createTexture(LiveryTex.buildAtlas(team.id, liv, num)); } catch (e) { decalTex = null; }
     paint = paintFromRefl(S.refl);   // kept live in frame() too, so CARVIEW.set({refl}) responds without a rebuild
@@ -243,7 +345,7 @@
     // dead-centre target crops BOTH ends of the ~5.4 m car out of frame; shifting
     // the target toward one wheel/corner lets a close shot fill the frame with
     // that part while the rest of the car still reads around it.
-    const tgt = [CENTER[0] + S.lookX, CENTER[1], CENTER[2] + S.look];
+    const tgt = [CENTER[0] + S.lookX, CENTER[1] + S.lookY, CENTER[2] + S.look];
     // az 0 = behind the car (rear), 180 = head-on; el = elevation.
     const eye = [
       tgt[0] + S.dist * Math.cos(e) * Math.sin(a),
@@ -277,7 +379,32 @@
     }
   }
 
-  let ready = false;
+  let ready = false, frameSeq = 0;
+  // Mirrors drawAeroFlaps() in js/game.js: each element is hinged at its own
+  // PIVOT (a point on its chord line, near the trailing edge for the rear wing
+  // and mid-chord for the front) and rotated about the car's local X between its
+  // closed incidence (zAngle) and its open one (xAngle).
+  function drawFlaps() {
+    if (!Car3D.aeroFlaps) return;
+    const els = Car3D.aeroFlaps(flapLvl, flapStyle);
+    const b = Math.max(0, Math.min(1, S.flap || 0));
+    for (let i = 0; i < els.length; i++) {
+      const g = els[i];
+      const ang = g.zAngle + (g.xAngle - g.zAngle) * b;
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+      const W = _flapW;
+      W.set(REFLECT_X);
+      for (let k = 0; k < 3; k++) {
+        const uu = REFLECT_X[4 + k], ff = REFLECT_X[8 + k];
+        W[4 + k] = uu * ca + ff * sa;
+        W[8 + k] = -uu * sa + ff * ca;
+        W[12 + k] += uu * g.y + ff * g.z;
+      }
+      const mesh = CarMesh.getAeroFlap(flapLvl, flapCol, i, flapStyle);
+      if (mesh) GLX.draw(mesh, W, paint);
+    }
+  }
+
   function frame() {
     GLX.resize();
     if (S.spin) S.az = (S.az + 0.4) % 360;
@@ -302,9 +429,36 @@
     if (pk !== _probedKey) { probeEnv(frameParams, t); _probedKey = pk; }
     GLX.begin(frameParams);
     if (paint) Object.assign(paint, paintFromRefl(S.refl));   // live reflection strength (sparkle/doubleSided untouched by draw, harmless to reassign)
-    if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
-    if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
+    if (!S.hideCar) {
+      if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
+      drawFlaps();
+      if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
+    }
+    const effectWorld = (y, z, x) => {
+      const W = new Float32Array(REFLECT_X);
+      W[12] += W[0] * (x || 0) + W[4] * y + W[8] * z;
+      W[13] += W[1] * (x || 0) + W[5] * y + W[9] * z;
+      W[14] += W[2] * (x || 0) + W[6] * y + W[10] * z;
+      return W;
+    };
+    if (!S.hideCar && S.effects.brakeGlow) for (const x of [-0.985, 0.985])
+      GLX.draw(CarMesh.getBrakeRing(), effectWorld(0.34, 1.70, x),
+        { emissive: 1, roughness: 0.9, specular: 0, alpha: 0.9, noAlphaWrite: true });
+    if (!S.hideCar && S.effects.exhaustFlame)
+      GLX.draw(CarMesh.getExhaustFlame(), effectWorld(0.40, -2.63, 0),
+        { emissive: 1, roughness: 1, specular: 0, alpha: 0.85, noAlphaWrite: true });
+    if (!S.hideCar && S.effects.ersDeploy)
+      GLX.draw(CarMesh.getErsLight(), effectWorld(0.605, -2.615, 0),
+        { emissive: 1, roughness: 1, specular: 0, alpha: 0.9, noAlphaWrite: true });
     GLX.present({ exposure: S.exp });
+    // THE SOFT OVERLAY HAS TO BE FED, OR IT IS A BLACK LID. Under a headless
+    // UA, GLX.init creates #game-soft — a fixed, inset-0, opaque 2D canvas at
+    // z-index 1 — and blits into it ONLY when something is waiting. The game
+    // arms that from snapCam()/park(); this page never did, so every capture of
+    // the studio came back black and the whole tool read as "renders nothing".
+    // The real frame was on #view underneath the lid the entire time.
+    if (GLX.softPresent && GLX.softPresent() && GLX.invalidateSoftPresent) GLX.invalidateSoftPresent();
+    frameSeq++;
     ready = true;
     requestAnimationFrame(frame);
   }
@@ -319,29 +473,47 @@
       sel.appendChild(o);
     }
   }
-  function partOptions(catId) {
+  function partOptions(catId, team) {
     const cat = Parts.CATALOG.find(c => c.id === catId);
-    return cat ? cat.options : [];
+    return cat ? cat.options.filter(o => Parts.isOptionAvailable(o, team)) : [];
+  }
+  // Create a select for any category that does not have one yet.
+  function ensurePartRows() {
+    const host = document.getElementById("ui-parts");
+    for (const cat of PART_CATS) {
+      if (document.getElementById("ui-" + cat)) continue;
+      const meta = Parts.CATALOG.find(c => c.id === cat);
+      const row = document.createElement("div"); row.className = "row";
+      const k = document.createElement("span"); k.className = "k";
+      k.textContent = meta ? meta.label : cat.toUpperCase();
+      const sel = document.createElement("select"); sel.id = "ui-" + cat;
+      sel.onchange = e => { S.parts[cat] = e.target.value; rebuild(); };
+      row.append(k, sel); host.appendChild(row);
+    }
   }
   function buildUI() {
     const team = teamObj();
+    ensurePartRows();
     opt(document.getElementById("ui-team"), Teams.LIST, S.team);
     opt(document.getElementById("ui-livery"), liveryList(team), S.livery || "default");
-    for (const cat of ["engine", "aero", "brakes", "gearbox", "ers"]) {
+    for (const cat of PART_CATS) {
       const cur = S.parts[cat] || (Parts.DEFAULTS && Parts.DEFAULTS[cat]) || "";
-      opt(document.getElementById("ui-" + cat), partOptions(cat), cur);
+      opt(document.getElementById("ui-" + cat), partOptions(cat, team), cur);
     }
     opt(document.getElementById("ui-tod"), Object.keys(TOD).map(k => ({ id: k, name: k })), S.tod);
     opt(document.getElementById("ui-rig"), RIGS.map(k => ({ id: k, name: k })), S.rig);
     document.getElementById("ui-refl").value = S.refl;
+    document.getElementById("ui-exhaust-flame").checked = S.effects.exhaustFlame;
+    document.getElementById("ui-brake-glow").checked = S.effects.brakeGlow;
+    document.getElementById("ui-ers-deploy").checked = S.effects.ersDeploy;
   }
   document.getElementById("ui-team").onchange = e => { S.team = e.target.value; S.livery = null; buildUI(); rebuild(); };
   document.getElementById("ui-livery").onchange = e => { S.livery = e.target.value; rebuild(); };
-  for (const cat of ["engine", "aero", "brakes", "gearbox", "ers"])
-    document.getElementById("ui-" + cat).onchange = e => { S.parts[cat] = e.target.value; rebuild(); };
   document.getElementById("ui-tod").onchange = e => { S.tod = e.target.value; };
   document.getElementById("ui-rig").onchange = e => { S.rig = e.target.value; };
   document.getElementById("ui-refl").oninput = e => { S.refl = parseFloat(e.target.value); };
+  for (const [id, key] of [["ui-exhaust-flame","exhaustFlame"], ["ui-brake-glow","brakeGlow"], ["ui-ers-deploy","ersDeploy"]])
+    document.getElementById(id).onchange = e => { S.effects[key] = !!e.target.checked; };
 
   // ---- mouse / keys ----
   let drag = null;
@@ -367,6 +539,8 @@
   // ---- headless API ----
   window.CARVIEW = {
     get ready() { return ready; },
+    get frame() { return frameSeq; },
+    get effects() { return { ...S.effects }; },
     angle(az, el, dist) { if (az != null) S.az = az; if (el != null) S.el = el; if (dist != null) S.dist = dist; },
     // Add a point light for reflection testing: addLight([x,y,z], [r,g,b], intensity, radius)
     addLight(pos, col, intensity, radius) { S.lights.push({ pos, col: col || [1, 1, 1], intensity: intensity != null ? intensity : 2, radius: radius || 16 }); },
@@ -375,9 +549,15 @@
       o = o || {};
       let reb = false;
       for (const k of ["team", "livery", "num"]) if (o[k] !== undefined) { S[k] = o[k]; reb = true; }
+      if (o.colors !== undefined) { S.colors = o.colors; reb = true; }
       if (o.parts) { Object.assign(S.parts, o.parts); reb = true; }
+      if (o.effects) {
+        Object.assign(S.effects, o.effects);
+        S.effects.boostFlame = false;
+        buildUI();
+      }
       if (o.lights !== undefined) S.lights = o.lights || [];
-      for (const k of ["az", "el", "dist", "look", "lookX", "tod", "rig", "intensity", "exp", "refl", "bg", "spin", "sweep"]) if (o[k] !== undefined) S[k] = o[k];
+      for (const k of ["az", "el", "dist", "look", "lookX", "lookY", "tod", "rig", "intensity", "exp", "refl", "bg", "spin", "sweep", "hideCar"]) if (o[k] !== undefined) S[k] = o[k];
       if (reb) { buildUI(); rebuild(); }
       return true;
     },

@@ -1,0 +1,410 @@
+/* test-groups.test.mjs — keep the test TAXONOMY honest.
+ *
+ * The suite is navigated by npm `test:<group>` scripts, not by directory: the
+ * specs (115 at the 2026-08 census; the count test below holds the live number,
+ * now under tests/specs/) and the groups are what say which ones matter for a
+ * given change. That only works while three things agree — package.json, the
+ * routing rules in tools/ci/pick-tests.mjs, and docs/TESTING.md. Nothing forces
+ * them to, and each has drifted: TESTING.md advertised 69 specs against 98 on
+ * disk and listed `tooling` twice while omitting a dozen groups outright.
+ *
+ * These are mechanical checks only. Whether a group is a GOOD grouping is a
+ * judgement call and stays with the reader.
+ *
+ * Run: node --test tests/unit/test-groups.test.mjs   (npm run test:tooling-fast)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { RULES } from "../../tools/ci/pick-tests.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+const pkg = JSON.parse(read("package.json"));
+
+const GROUPS = Object.keys(pkg.scripts)
+  .filter((k) => k.startsWith("test:"))
+  .map((k) => k.slice(5));
+
+// Partition/meta scripts: they run a project or a tool rather than naming a
+// topical set of specs, so the coverage audit and the docs table treat them
+// differently from the rest.
+const META = new Set(["headless", "render", "update", "pick", "bg"]);
+
+test("every group tools/ci/pick-tests.mjs routes to exists in package.json", () => {
+  const missing = [];
+  for (const [re, groups] of RULES)
+    for (const g of groups)
+      if (!pkg.scripts[`test:${g}`]) missing.push(`${re} -> test:${g}`);
+  assert.deepEqual(missing, [],
+    "a pick-tests rule points at a script that does not exist — rename the rule with the script");
+});
+
+test("test:tooling-fast is the sequential runner (not a parallel node --test dump)", () => {
+  assert.match(pkg.scripts["test:tooling-fast"], /^node tools\/ci\/tooling-fast\.mjs\b/,
+    "bunched `node --test file1 file2…` parallelises by default — use tools/ci/tooling-fast.mjs");
+  assert.ok(fs.existsSync(path.join(ROOT, "tools/ci/tooling-fast.mjs")),
+    "tools/ci/tooling-fast.mjs must exist (per-file logging + --test-concurrency=1)");
+});
+
+test("pick-tests routes every source directory somewhere", () => {
+  // A source tree no rule matches is a change nobody is told to test. Checked
+  // at DIRECTORY granularity: individual files fall through to their dir's rule.
+  const dirs = ["js", "js/render", "js/track", "js/circuits", "js/car", "js/game",
+                "js/data", "js/net", "css", "tools", "tests", "docs"];
+  const unrouted = dirs.filter((d) => {
+    const probe = `${d}/probe.js`;
+    // NB: the two "always" rules (tiny / tooling-fast) match every js/ and css/
+    // path, so for those trees this proves only that SOMETHING runs. The
+    // spec-backed-file test below is the one with teeth for js/.
+    return !RULES.some(([re]) => re.test(probe));
+  });
+  assert.deepEqual(unrouted, [],
+    "a source directory matches no pick-tests rule — a change there would be told to run nothing");
+});
+
+test("a js/game file with its own browser spec routes to that spec's group", () => {
+  // These four used to reach only tiny + tooling-fast while a dedicated spec
+  // sat in a group nobody was told to run (found 2026-09-01). The always-rules
+  // are excluded here on purpose, so this cannot pass vacuously.
+  const specBacked = [
+    ["js/ui/scale.js", "ui"],
+    ["js/race/race-control.js", "physics-core"],
+    ["js/physics/aero-zones.js", "aero"],
+    ["js/garage/scene.js", "car"],
+  ];
+  const specific = RULES.slice(2);
+  for (const [file, group] of specBacked) {
+    const groups = new Set(specific.filter(([re]) => re.test(file)).flatMap(([, g]) => g));
+    assert.ok(groups.has(group), `${file} must route to test:${group} (got ${[...groups].join(",") || "nothing"})`);
+  }
+});
+
+test("the topical browser groups are a DISJOINT partition of the specs", () => {
+  // The 2026-09 regroup folded 30 browser groups into 12 by UNION, and the
+  // point of a union is that pick-tests can name two groups without running a
+  // spec twice. `fast` used to double-run nine specs whenever it co-ran with
+  // hooks or driving. tiny/smoke are the boot gate, not a topic: they overlap
+  // hooks on purpose (dev-tools, logging) and are exempt here.
+  const BOOT = new Set(["tiny", "smoke"]);
+  const specsDir = path.join(ROOT, "tests", "specs");
+  const onDisk = fs.readdirSync(specsDir).filter((f) => f.endsWith(".spec.js"));
+  const expand = (tok) => {
+    const re = new RegExp("^" + path.basename(tok).replace(/[.]/g, "\\.").replace(/\*/g, "[a-z0-9_-]*") + "$");
+    return onDisk.filter((f) => re.test(f));
+  };
+  const owner = new Map();
+  const dups = [];
+  for (const [name, cmd] of Object.entries(pkg.scripts)) {
+    if (!name.startsWith("test:") || !/run-playwright/.test(cmd) || /--project=|--update-snapshots/.test(cmd)) continue;
+    const g = name.slice(5);
+    if (BOOT.has(g)) continue;
+    for (const tok of cmd.match(/tests\/specs\/[^\s"']+\.spec\.js/g) || [])
+      for (const f of expand(tok)) {
+        if (owner.has(f) && owner.get(f) !== g) dups.push(`${f}: ${owner.get(f)} + ${g}`);
+        owner.set(f, g);
+      }
+  }
+  assert.ok(owner.size > 100, `only ${owner.size} specs resolved from the topical groups — the pattern is broken`);
+  assert.deepEqual(dups, [], "a spec is named by two topical browser groups — pick-tests would run it twice");
+});
+
+/* Pull one "## N. Heading" section out of the doc, so a table elsewhere in the
+   file cannot be mistaken for the one being checked. */
+function section(doc, heading) {
+  const start = doc.indexOf(`## ${heading}`);
+  assert.ok(start >= 0, `docs/TESTING.md has no "## ${heading}" section`);
+  const next = doc.indexOf("\n## ", start + 1);
+  return doc.slice(start, next < 0 ? doc.length : next);
+}
+
+test("docs/TESTING.md documents every test group, and no group that is gone", () => {
+  const doc = section(read("docs/TESTING.md"), "2. Test groups");
+  // The group tables' first column is `| \`<name>\` |`.
+  const listed = new Set([...doc.matchAll(/^\|\s*`([a-z0-9-]+)`\s*\|/gm)].map((m) => m[1]));
+  const undocumented = GROUPS.filter((g) => !META.has(g) && !listed.has(g));
+  const stale = [...listed].filter((g) => !GROUPS.includes(g));
+  assert.deepEqual(undocumented, [], "an npm test:* group is missing from the docs/TESTING.md group table");
+  assert.deepEqual(stale, [], "docs/TESTING.md lists a group that no longer exists in package.json");
+});
+
+test("docs/TESTING.md's coverage table names every root spec and unit suite", () => {
+  const doc = section(read("docs/TESTING.md"), "5. Coverage table");
+  // A row may name a FAMILY with a glob — the 16 per-circuit foundation specs
+  // differ only by circuit and 16 identical rows would document nothing. A new
+  // KIND of spec still has to earn its own row.
+  const globs = [...doc.matchAll(/`([a-z0-9_-]*\*[a-z0-9_*-]*\.(?:spec\.js|test\.mjs))`/g)]
+    .map((m) => new RegExp("^" + m[1].replace(/[.]/g, "\\.").replace(/\*/g, "[a-z0-9_-]*") + "$"));
+  const files = ["specs", "unit"].flatMap((d) => fs.readdirSync(path.join(ROOT, "tests", d)))
+    .filter((f) => /\.(spec\.js|test\.(mjs|cjs))$/.test(f));
+  const missing = files.filter((f) => !doc.includes(f) && !globs.some((re) => re.test(f)));
+  assert.deepEqual(missing, [],
+    "a test file exists but is not described in the docs/TESTING.md coverage table — say what it covers");
+});
+
+test("docs/TESTING.md's file counts match the files on disk", () => {
+  const doc = read("docs/TESTING.md");
+  const specs = fs.readdirSync(path.join(ROOT, "tests", "specs")).filter((f) => f.endsWith(".spec.js")).length;
+  const units = fs.readdirSync(path.join(ROOT, "tests", "unit")).filter((f) => f.endsWith(".test.mjs")).length;
+
+  // A FLOOR ("200+") is accepted for the same reason docs-integrity accepts one:
+  // an exact unit-suite count is a single integer that every agent adding a test
+  // must bump, in two documents, and seven sessions land on one branch here — it
+  // conflicted on almost every test addition. The floor still cannot exceed the
+  // truth, and still cannot fall SLACK behind it, so the drift this guards
+  // against is caught either way. Spec counts stay exact: they move rarely.
+  const SLACK = 50;
+  for (const [re, actual, what] of [
+    [/(\d+)(\+?)\s+root Playwright spec/gi, specs, "root Playwright specs"],
+    [/(\d+)(\+?)\s+`?node --test`? unit suites/gi, units, "node --test unit suites"],
+  ]) {
+    const claimed = [...doc.matchAll(re)].map((m) => ({ n: Number(m[1]), floor: m[2] === "+" }));
+    assert.ok(claimed.length, `docs/TESTING.md no longer states a count of ${what}`);
+    for (const { n, floor } of claimed) {
+      if (!floor) { assert.equal(n, actual, `docs/TESTING.md claims ${n} ${what}; tests/ holds ${actual}`); continue; }
+      assert.ok(n <= actual, `docs/TESTING.md claims ${n}+ ${what}; tests/ holds only ${actual}`);
+      assert.ok(actual - n < SLACK, `docs/TESTING.md claims ${n}+ ${what} and tests/ holds ${actual} — ${actual - n} behind, raise the floor`);
+    }
+  }
+});
+
+test("the guards row's count is the size of the guards group", () => {
+  // "the 14 CROSS-FILE guards" outlived the group by three files, in three
+  // places at once (this row, deploy.mjs's comment, bash-guard.sh's) — a number
+  // repeated in prose is a number nobody re-measures. The row is the one copy
+  // that claims to BE the group's size, so it is the one pinned; the other two
+  // were rewritten to name the group instead of counting it.
+  const want = JSON.parse(read("tests/groups.json")).groups["test:guards"].files.length;
+  const m = /\| `guards` \| the (\d+) CROSS-FILE guards/.exec(read("docs/TESTING.md"));
+  assert.ok(m, "docs/TESTING.md's `guards` row no longer states its count");
+  assert.equal(Number(m[1]), want,
+    `docs/TESTING.md says ${m[1]} cross-file guards; tests/groups.json lists ${want}`);
+});
+
+test("the manual suites stay out of default discovery", () => {
+  // tests/manual/ renders hundreds of SwiftShader frames and emits review
+  // images. Letting it into the default run would take a 3-minute group to an
+  // hour, silently — the failure mode is a timeout nobody attributes.
+  // Since 2026-10-04 the rule lives in MANUAL_IGNORE, repeated in every
+  // project (a project's testIgnore replaces the top-level one); the test
+  // "Playwright collects tests/specs/*.spec.js by default" below runs it.
+  const cfg = read("playwright.config.js");
+  assert.match(cfg, /MANUAL_IGNORE = MANUAL_RUN \? \[\] : \["\*\*\/manual\/\*\*"\]/,
+    "playwright.config.js must keep **/manual/** out of default discovery");
+  assert.equal((cfg.match(/testIgnore: (\[[^\]]*)?\.{0,3}MANUAL_IGNORE/g) || []).length, 4,
+    "the manual ignore is applied at the top level AND in each of the three projects");
+  assert.ok(fs.existsSync(path.join(ROOT, "tests/manual/README.md")),
+    "tests/manual/ needs a README saying what is in it and how to run it");
+});
+
+test("RENDER_SPECS / XR_SPECS partition root specs — every named project entry exists", () => {
+  // headless = everything NOT in RENDER_SPECS ∪ XR_SPECS; a dangling name would
+  // silently leave a GL/XR spec under the wrong concurrency or never run.
+  const cfg = read("playwright.config.js");
+  const renderBody = cfg.match(/const RENDER_SPECS = \[([\s\S]*?)\]\s*\.map/);
+  const xrBody = cfg.match(/const XR_SPECS = \[([\s\S]*?)\]\s*\.map/);
+  assert.ok(renderBody, "could not find RENDER_SPECS in playwright.config.js");
+  assert.ok(xrBody, "could not find XR_SPECS in playwright.config.js");
+  const onDisk = new Set(fs.readdirSync(path.join(ROOT, "tests", "specs"))
+    .filter((f) => f.endsWith(".spec.js")).map((f) => f.replace(/\.spec\.js$/, "")));
+  const named = [
+    ...[...renderBody[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]),
+    ...[...xrBody[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]),
+  ];
+  const dangling = named.filter((n) => !onDisk.has(n));
+  assert.deepEqual(dangling, [],
+    "RENDER_SPECS / XR_SPECS names a spec that no longer exists");
+  assert.match(cfg, /name:\s*"xr-emulated"/, "xr-emulated Playwright project required for IWER suite");
+});
+
+test("a spec that CAPTURES an image is in RENDER_SPECS", () => {
+  // The direction neither guard above covers. The two of them watch the LIST
+  // (a name with no file; a pinned project that cannot match a named spec).
+  // Nothing watched the FILES: a spec could take screenshots, boot the garage
+  // and build car meshes while sitting in the "headless — assertion-only,
+  // scale wide" project, and every existing check would stay green.
+  //
+  // That is not hypothetical. parts-liveries.spec.js did exactly this. Its
+  // three siblings (parts-budget, parts-catalog, parts-persistence) were all
+  // classified render; it alone was not, and it is the heaviest of the four —
+  // it calls page.screenshot() three times, clicks through to #carsetup and
+  // builds McLaren's meshes. Measured 2026-09-14 on this box: the 8 "Liveries
+  // — creator" tests take 122-142 s each at 2 workers, timing out 7 of 8
+  // against the 120 s cap, and 23-82 s each solo at --workers=1. Green solo,
+  // red in a batch, for two sessions running.
+  //
+  // CAPTURE is the criterion because it is the list's own first clause
+  // ("specs that take screenshots / pixel-diffs") and because it is the only
+  // half of the definition a static check can honestly decide. "Drives real GL"
+  // is NOT greppable: a scan for page boots and __apex world calls classifies
+  // 97 of 116 specs as render, sweeping in every *-foundation geometry spec,
+  // which are the fast ones. A guard that over-matches would be worse than none.
+  //
+  // Match the CALL, not the path helper: output-paths.spec.js is a unit test OF
+  // galleryPath() and names it a dozen times without ever opening a page.
+  const cfg = read("playwright.config.js");
+  const body = cfg.match(/const RENDER_SPECS = \[([\s\S]*?)\]\s*\.map/);
+  assert.ok(body, "could not find RENDER_SPECS in playwright.config.js");
+  const render = new Set([...body[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]));
+
+  const dir = path.join(ROOT, "tests", "specs");
+  const offenders = [];
+  let captured = 0;
+  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".spec.js"))) {
+    const src = fs.readFileSync(path.join(dir, file), "utf8");
+    if (!/\.screenshot\(|toHaveScreenshot/.test(src)) continue;
+    captured++;
+    const name = file.replace(/\.spec\.js$/, "");
+    if (!render.has(name)) offenders.push(name);
+  }
+  // Same discipline as the guard above: prove the input set was not empty, so a
+  // stale pattern reads as a broken pattern rather than a clean repo.
+  assert.ok(captured > 5,
+    `only ${captured} specs matched the capture pattern — the pattern is stale, not the repo clean`);
+
+  assert.deepEqual(offenders, [],
+    "these specs capture images but run in the headless project, which scales wide " +
+    "and thrashes SwiftShader — add them to RENDER_SPECS in playwright.config.js");
+});
+
+test("no test:* group pins a --project that excludes one of the specs it names", () => {
+  // The other direction of the partition, and the one that bites hardest.
+  // `test:tiny` used to pass tests/specs/logging.spec.js together with
+  // --project=render while "logging" was NOT in RENDER_SPECS: the render
+  // project is testMatch: RENDER_SPECS, so the spec matched no project and
+  // simply never ran. Playwright reports that as a pass — it has nothing to
+  // say about a file it was never asked to run — so the command AGENTS.md
+  // tells every agent to run after ANY edit was quietly a third smaller than
+  // it looked. The test above only catches a RENDER_SPECS name with no file;
+  // nothing caught a file with no matching project.
+  const cfg = read("playwright.config.js");
+  const body = cfg.match(/const RENDER_SPECS = \[([\s\S]*?)\]\s*\.map/);
+  assert.ok(body, "could not find RENDER_SPECS in playwright.config.js");
+  const render = new Set([...body[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]));
+
+  const scripts = JSON.parse(read("package.json")).scripts || {};
+  const offenders = [];
+  // The path pattern admits SUBDIRECTORIES. It used to be `tests/([a-z0-9-]+)`,
+  // which the tests/ split (AUDIT-SYNTHESIS §R2) would have stopped matching
+  // entirely — the loop body would never run, `offenders` would stay empty, and
+  // this test would have gone on passing while checking nothing. `matched`
+  // below is the part that makes that impossible to repeat: a pattern that
+  // finds nothing is a broken pattern, not a clean repo.
+  const SPEC_REF = /tests\/(?:[a-z0-9-]+\/)*([a-z0-9-]+)\.spec\.js/g;
+  let matched = 0;
+  for (const [name, cmd] of Object.entries(scripts)) {
+    const proj = cmd.match(/--project=(\w+)/);
+    if (!proj) continue;                       // no pin, both projects are eligible
+    const wants = proj[1];
+    if (wants !== "render" && wants !== "headless") continue;
+    for (const m of cmd.matchAll(SPEC_REF)) {
+      matched++;
+      const spec = m[1];
+      const inRender = render.has(spec);
+      if (wants === "render" && !inRender) offenders.push(`${name}: ${spec} is not in RENDER_SPECS`);
+      if (wants === "headless" && inRender) offenders.push(`${name}: ${spec} IS in RENDER_SPECS`);
+    }
+  }
+  // WHY the input set is empty matters more than the output set being empty.
+  //
+  // This guard is DORMANT today, measured: the only scripts carrying
+  // `--project=` is test:render, which runs a whole project without naming a
+  // single spec, so `matched` is 0. (test:headless was its twin until it was
+  // dropped on 2026-09-10.) That is the RIGHT
+  // reason to find nothing — the bug in the header was fixed by removing
+  // test:tiny's pin, and the guard is here for the shape's return.
+  //
+  // It is one character away from the WRONG reason. The old pattern was
+  // `tests/([a-z0-9-]+)`, which the tests/ split stops matching entirely, and
+  // this test would have gone on passing on the strength of a broken regex.
+  // So: if nothing matched, prove that nothing was there to match.
+  if (matched === 0) {
+    for (const [name, cmd] of Object.entries(scripts)) {
+      if (!/--project=(render|headless)\b/.test(cmd)) continue;
+      assert.ok(!/tests\//.test(cmd),
+        `${name} pins a --project AND names paths under tests/, but the spec pattern ` +
+        `matched none of them — the pattern is stale, not the repo clean`);
+    }
+  }
+
+  assert.deepEqual(offenders, [],
+    "a test:* group names a spec its pinned --project cannot match, so that spec never runs");
+});
+
+/* A GROUP MUST NOT NAME THE SAME SPEC TWICE.
+ *
+ * The disjoint-partition test above says `owner.get(f) !== g`, which means it
+ * asks whether two DIFFERENT groups claim a spec and says nothing about a group
+ * claiming one twice. tests/groups.json listed menu-traversal.spec.js on two
+ * consecutive lines in test:ui for long enough to be generated into
+ * package.json — the same merge hazard as a duplicated object key: two sessions
+ * add the identical line, git takes both sides without a conflict, and the
+ * result is valid JSON that reads as deliberate.
+ *
+ * It costs nothing at runtime (Playwright dedupes the path — measured: 150
+ * tests either way), which is precisely why nothing noticed. What it costs is
+ * the reader, who has to decide whether the repeat means something.
+ */
+test("no test group names the same spec file twice", () => {
+  const groups = JSON.parse(fs.readFileSync(path.join(ROOT, "tests", "groups.json"), "utf8"));
+  const offenders = [];
+  for (const [name, spec] of Object.entries(groups.groups || {})) {
+    const seen = new Set();
+    for (const f of spec.files || []) {
+      if (seen.has(f)) offenders.push(`${name}: ${f}`);
+      seen.add(f);
+    }
+  }
+  // toolingFast is a flat list with `//` comment entries; the same rule applies.
+  const tfSeen = new Set();
+  for (const f of groups.toolingFast || []) {
+    if (f.startsWith("//")) continue;
+    if (tfSeen.has(f)) offenders.push(`toolingFast: ${f}`);
+    tfSeen.add(f);
+  }
+  assert.deepEqual(offenders, [], "a group lists a spec twice — the generated npm script carries the repeat");
+});
+
+test("Playwright collects tests/specs/*.spec.js by default — no unit file, no manual suite", async () => {
+  /* 2026-10-04: testDir "./tests" with Playwright's default testMatch
+     collected all 493 tests/unit node:test files on a bare `npm test`, and the
+     headless project's testIgnore REPLACED the top-level `**\/manual/**`
+     (takeFirst(project, config)), so tests/manual/ came along. Asserted with
+     Playwright's own matcher and its own precedence, no browser. */
+  const { createRequire } = await import("node:module");
+  const require = createRequire(import.meta.url);
+  const { createFileMatcher } = require("playwright/lib/util");
+  const cp = await import("node:child_process");
+  const cfgPath = path.join(ROOT, "playwright.config.js");
+  const cfg = (await import(cfgPath)).default;
+  const files = [];
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+    const p = path.join(d, e.name);
+    if (e.isDirectory()) { if (e.name !== "node_modules" && !e.name.endsWith("-snapshots")) walk(p); }
+    else files.push(p);
+  } };
+  walk(path.join(ROOT, "tests"));
+  const take = (a, b, d) => (a !== undefined ? a : b !== undefined ? b : d);
+  const collected = new Set();
+  for (const proj of cfg.projects) {
+    const match = createFileMatcher(take(proj.testMatch, cfg.testMatch, "**/*.@(spec|test).?(c|m)[jt]s?(x)"));
+    const ignore = createFileMatcher(take(proj.testIgnore, cfg.testIgnore, []));
+    for (const f of files) if (match(f) && !ignore(f)) collected.add(path.relative(ROOT, f).split(path.sep).join("/"));
+  }
+  const stray = [...collected].filter((f) => !/^tests\/specs\/[^/]+\.spec\.js$/.test(f));
+  assert.deepEqual(stray, [], "default discovery reaches outside tests/specs/*.spec.js");
+  const specs = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js")).map((f) => `tests/specs/${f}`);
+  assert.deepEqual([...collected].sort(), specs.sort(), "every spec is still collected by some project");
+  // A command line that names a manual suite still runs it (tests/manual/README.md).
+  const probe = (argv) => cp.execFileSync(process.execPath, ["--input-type=module", "-e",
+    `process.argv.push(${JSON.stringify(argv)}); const m = await import(${JSON.stringify(cfgPath)}); ` +
+    `process.stdout.write(JSON.stringify([m.TEST_MATCH, m.default.projects.map((p) => p.testIgnore)]))`],
+    { cwd: ROOT, encoding: "utf8", env: { ...process.env, APEX_MANUAL_RUN: "" } });
+  const [mm, ign] = JSON.parse(probe("tests/manual/blank-scan.spec.js"));
+  assert.ok(mm.includes("manual/**/*.spec.js"), "a manual path on the command line opts that run into manual discovery");
+  assert.ok(ign.every((l) => !(l || []).includes("**/manual/**")), "…in every project");
+  const [dm] = JSON.parse(probe("tests/specs/smoke.spec.js"));
+  assert.deepEqual(dm, ["specs/**/*.spec.js"]);
+});

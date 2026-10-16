@@ -1,0 +1,178 @@
+#!/usr/bin/env node
+// @doc Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`.
+// @skill check-changes
+/**
+ * shell-ids.mjs — the shell<->JS id contract.
+ *
+ *   node tools/check/shell-ids.mjs          # report; exit 1 on a missing id
+ *   node tools/check/shell-ids.mjs --json   # {ok, missing, dynamic, counts}
+ *
+ * WHY THIS EXISTS. `js/game.js` defines `const $ = (id) =>
+ * document.getElementById(id)` and hands it out on the G facade, so most
+ * modules reach the DOM through `$("some-id")`. `$` returns null for an id
+ * that is not there, and the overwhelming majority of call sites immediately
+ * dereference — `$("mb-race").onclick = ...` — so a renamed or deleted shell
+ * id is a TypeError, not a no-op. Script tags are `defer`, so the DOM is
+ * always parsed by then: this can only fire on a rename, never on a race.
+ *
+ * The project had already found this. `js/game.js` guards ONE such call with
+ * the comment "Optional markup must not turn one missing screen into a
+ * whole-app boot failure" — and the primary menu buttons beside it are
+ * unguarded. This tool finishes that thought.
+ *
+ * WHY IT IS STATIC. tools/lib/game-vm.cjs cannot catch this: its
+ * `getElementById` MANUFACTURES an element for any id on demand (it has to, or
+ * game.js could not boot headlessly), so all 248 VM tests are blind to the
+ * whole class by construction. The check has to read the shell instead.
+ *
+ * DYNAMIC READS ARE REPORTED, NOT GUESSED. `$(domId + "-none")` takes a
+ * function parameter; its id set is not statically knowable. Those are listed
+ * and counted — the same report-don't-guess contract tools/gen/move-tree.mjs
+ * uses for paths built from separate segments — and the count is ratcheted
+ * (`dynamicIdReads` in tests/data/ratchets.json) so the unknowable set can
+ * shrink but not grow.
+ */
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+/** Lookup helpers that take an id. `el(` is deliberately NOT here: several
+ *  files use `el("div")` as a createElement wrapper, which would read as a
+ *  lookup of an id called "div". */
+const READ_RE = /(?:document\.getElementById|(?<![.\w$])\$)\(\s*"([^"]+)"\s*\)/g;
+const QS_RE = /querySelector(?:All)?\(\s*"#([A-Za-z0-9_-]+)"/g;
+/** A lookup whose argument is not a string literal — unknowable statically. */
+const DYNAMIC_RE = /(?:document\.getElementById|(?<![.\w$])\$)\(\s*(?!["'])([^)]{1,60})\)/g;
+
+// These literal reads run in the isolated preview document, never index.html.
+// Verify against that actual host rather than treating its IDs as exemptions.
+const AUXILIARY_HOSTS = {
+  "js/camera/cockpit-preview.js": { shell: "cockpit-view.html", ids: ["view", "hud", "tip", "err"] },
+};
+
+/** Ids that exist at runtime but are declared by neither the shell nor a plain
+ *  `.id =` assignment — each is built by a helper that takes the id as an
+ *  ARGUMENT, so no static scan can see the declaration. Same contract as
+ *  KNOWN_EXTERNAL_READS in tests/unit/global-registry.test.mjs: every entry is a
+ *  decision with its reason, and the list may only shrink without a note here. */
+export const RUNTIME_IDS = {
+  "apex-lazy-integrity": "bump-cache.mjs adds the full lazy-script SRI map only to staged deployments; ScriptLoader treats its absence in dev and legacy shells as optional",
+  "dh-tab-schedule":  "Data Hub hub.js builds its tab buttons as dh-tab-<id> when the lazy bundle opens; deep-link.js reads it null-guarded and retries",
+  "ps-panel":          "PhotoStudio mk() builds the photo controls panel; setup-camera uses a null-guarded read to exclude it from orbit gestures",
+  "pm-three-path":     "renderer-picker addBtn(), and only when the backend files exist — the read at paintPresent() is null-guarded",
+  "pm-car-reflect":    "renderer-picker addBtn() CAR REFLECTIONS, injected only when the three files exist — every read is null-guarded",
+  "pm-screenshots":    "renderer-picker addBtn(), same condition and same null-guarded read",
+  "pm-save-shot":      "renderer-picker addBtn()",
+  "pm-metrics":        "metrics-overlay makeMetricsBtn(), guarded by its own getElementById check",
+  "pm-metrics-page":   "metrics-overlay makeMetricsBtn()",
+  "pm-metrics-pos":    "metrics-overlay makeMetricsBtn()",
+  "pm-metrics-size":   "metrics-overlay makeMetricsBtn()",
+  "pm-metrics-logns":  "metrics-overlay makeMetricsBtn()",
+  "pm-metrics-loglvl": "metrics-overlay makeMetricsBtn()",
+  "pm-halo":           "cockpit-opts builds its rows from a table whose entries carry `id`",
+  "pm-looklatch":      "CamFeel SettingRow.build LOOK BACK LATCH; getElementById is the mount-once guard",
+  "pm-motion":         "a11y-opts SettingRow.build REDUCE MOTION; getElementById is the mount-once guard",
+  "pm-focus":          "a11y-opts SettingRow.build KEYBOARD FOCUS; getElementById is the mount-once guard",
+  "pm-cbcues":         "a11y-opts SettingRow.build COLOURBLIND CUES; getElementById is the mount-once guard",
+  "pm-hold-throttle":  "a11y-opts SettingRow.build GAS hold/toggle; getElementById is the mount-once guard",
+  "pm-hold-lookback":  "a11y-opts SettingRow.build LOOK BACK hold/toggle; getElementById is the mount-once guard",
+  "pm-xr-mode":        "xr-opts SettingRow.build creates VR MODE / VR RENDERER rows; the getElementById is the mount-once guard",
+  "fb-in-ease":        "flyby-panel selectRow() builds it from a concatenated id; the one read is null-guarded",
+  // Runtime soft-present overlay: GLX (HeadlessChrome) and TLX (WebGPU soft
+  // path) insert #game-soft; reads are null-guarded with a documented else.
+  "game-soft":         "js/render/glx/glx.js + js/render/three/tlx.js — null-guarded soft-present overlay",
+};
+
+const jsFiles = (dir, out = []) => {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) { if (!e.name.startsWith(".") && e.name !== "node_modules") jsFiles(p, out); }
+    else if (e.name.endsWith(".js")) out.push(p);
+  }
+  return out;
+};
+
+export function scan(root = ROOT) {
+  const shell = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  // Declared: the shell, plus every id JS creates at runtime — an `.id = "x"`
+  // assignment or an id="" inside an HTML string it injects.
+  // Count shell id= occurrences so a duplicate id (two elements, one name) is
+  // visible — document.getElementById only ever returns the first, which is
+  // how pm-brakecue once hid a dead steering slider behind a set-row div.
+  const shellIds = [...shell.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+  const shellCounts = new Map();
+  for (const id of shellIds) shellCounts.set(id, (shellCounts.get(id) || 0) + 1);
+  const duplicates = [...shellCounts.entries()].filter(([, n]) => n > 1)
+    .map(([id, n]) => ({ id, count: n })).sort((a, b) => a.id.localeCompare(b.id));
+  const declared = new Set(shellIds);
+  const files = jsFiles(path.join(root, "js"));
+  for (const f of files) {
+    const src = fs.readFileSync(f, "utf8");
+    for (const m of src.matchAll(/\.id\s*=\s*["'`]([A-Za-z0-9_-]+)["'`]/g)) declared.add(m[1]);
+    for (const m of src.matchAll(/\bid=\\?["']([A-Za-z0-9_-]+)\\?["']/g)) declared.add(m[1]);
+  }
+
+  const read = new Map();      // id -> first site
+  const dynamic = [];          // { file, line, expr }
+  const auxiliaryMissing = [], auxiliarySites = new Set();
+  for (const f of files) {
+    const rel = path.relative(root, f).replace(/\\/g, "/");
+    const auxiliary = AUXILIARY_HOSTS[rel];
+    const auxiliaryPath = auxiliary && path.join(root, auxiliary.shell);
+    const auxiliaryIds = new Set(auxiliaryPath && fs.existsSync(auxiliaryPath)
+      ? [...fs.readFileSync(auxiliaryPath,"utf8").matchAll(/\sid="([^"]+)"/g)].map((m)=>m[1]) : []);
+    fs.readFileSync(f, "utf8").split("\n").forEach((line, i) => {
+      for (const re of [READ_RE, QS_RE]) {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(line))) {
+          const site = `${rel}:${i + 1}`;
+          if (!read.has(m[1])) read.set(m[1], site);
+          if (auxiliary && auxiliary.ids.includes(m[1])) {
+            auxiliarySites.add(site + "|" + m[1]);
+            if (!auxiliaryIds.has(m[1]) && !auxiliaryMissing.some((v)=>v.id===m[1])) auxiliaryMissing.push({id:m[1],site});
+          }
+        }
+      }
+      DYNAMIC_RE.lastIndex = 0;
+      let d;
+      while ((d = DYNAMIC_RE.exec(line))) dynamic.push({ file: rel, line: i + 1, expr: d[1].trim() });
+    });
+  }
+
+  const missing = [...read.keys()].filter((id) => !declared.has(id) && !(id in RUNTIME_IDS) && !auxiliarySites.has(read.get(id) + "|" + id))
+    .map((id) => ({ id, site: read.get(id) })).concat(auxiliaryMissing).sort((a,b)=>a.id.localeCompare(b.id));
+  return { declared, read, missing, dynamic, duplicates,
+    counts: { declared: declared.size, read: read.size, missing: missing.length, dynamic: dynamic.length, duplicates: duplicates.length } };
+}
+
+/** The ratcheted number: lookups whose id cannot be known without running the code. */
+export const dynamicIdReads = (root = ROOT) => scan(root).dynamic.length;
+
+function main() {
+  const r = scan();
+  if (process.argv.includes("--json")) {
+    console.log(JSON.stringify({
+      ok: !r.missing.length && !r.duplicates.length,
+      missing: r.missing, duplicates: r.duplicates, dynamic: r.dynamic, counts: r.counts,
+    }, null, 2));
+    process.exitCode = (r.missing.length || r.duplicates.length) ? 1 : 0;
+    return;
+  }
+  for (const { id, site } of r.missing) {
+    console.log(`MISSING  "${id}" is looked up at ${site} but no element declares it`);
+  }
+  for (const { id, count } of r.duplicates) {
+    console.log(`DUP  id="${id}" appears ${count} times in index.html — getElementById returns only the first`);
+  }
+  console.log(`shell-ids: ${r.counts.read} ids looked up by literal, ${r.counts.declared} declared, ` +
+    `${r.counts.dynamic} built from variables (reported, not checked)` +
+    (r.counts.duplicates ? `, ${r.counts.duplicates} duplicated` : ""));
+  if (r.missing.length) console.log(`\n${r.missing.length} MISSING — a lookup that returns null, and most call sites dereference immediately.`);
+  if (r.duplicates.length) console.log(`\n${r.duplicates.length} DUPLICATE — two elements, one name; the later one is unreachable by id.`);
+  process.exitCode = (r.missing.length || r.duplicates.length) ? 1 : 0;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

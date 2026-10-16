@@ -1,112 +1,95 @@
 ---
 name: lighting-tuner
-description: Tune and validate scene lighting — the TUNE_DEFS slider knobs (via __apex.lightTune), the applyRaceSettings time-of-day branches, live lightState() probes and orbit() screenshots — no guesswork. Use when "night looks washed out", "dawn sun is too high", "floodlights aren't firing on this track", "day scene is flat", or validating a lighting change before committing. Triggers - "lighting", "night looks wrong", "floodlights", "ambient", "sun colour", "time of day", "dawn", "dusk", "applyRaceSettings", "lightTune", "lighting slider".
+description: "Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing (dusk/dawn/night gate, lamp cap), the day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, validating knobs via lightState, or baking a pasted window.LightPresets / LightEdits blob into js/lighting/presets.js. Bloom as GPU/shader defect is renderer-debug; adding or moving floodlight masts is scenery-dress."
+
 ---
 
 # Tune and validate scene lighting via __apex probes
 
-**Reach for the tuner knobs FIRST.** Nearly every hand-tuned lighting value is a
-live `TUNE_DEFS` knob (js/game/lighting.js) read via `LT.<id>` each frame — sun/ambient,
-shadows, floodlights, bloom, fog/mist, reflections, car paint, image grade.
-Prefer adjusting a knob over editing a literal in `applyRaceSettings`:
+**Reach for the tuner knobs FIRST.** Nearly every hand-tuned value is a live
+`TUNE_DEFS` knob (`js/lighting/knobs.js`) read via `LT.<id>` each frame.
 
 ```js
-__apex.lightTune()                    // current resolved knob values
-__apex.lightTune({ lampLevel: 0.4 })  // set knobs live (same as the panel sliders)
+__apex.lightTune()
+__apex.lightTune({ lampLevel: 0.4 })
 ```
 
-Knob resolution, lowest→highest precedence: `TUNE_DEFS.def` → shipped
-`js/light-presets.js` `"*"` → shipped `"track|tod|weather"` → localStorage
-`"*"` (player's GLOBAL slider edits) → legacy localStorage per-condition.
-Slider edits write the global `"*"` profile; ship a look by baking the panel's
-COPY VALUES export into `js/light-presets.js` (see the **bake-lighting**
-skill). Edit `applyRaceSettings` only for STRUCTURAL changes (new branch
-logic, per-theme behavior) — not for values a knob already owns.
+Precedence, lowest→highest: `TUNE_DEFS.def` → shipped
+`js/lighting/presets.js` `"*"` → shipped `"*|tod|wx"` (shared stamp, e.g. `"*|night|dry"`) → shipped `"track|tod|weather"` →
+shipped `"*|tod"` when `gfx.hasPerChunkLights` (all presets/device classes) → localStorage `"*"` → localStorage **`track|tod|weather`**. Live slider edits
+write the **current condition** key (`LightStore.set` → `profiles[key()]`),
+not global `"*"`. Ship a look by merging the COPY VALUES `LightEdits` delta into
+`js/lighting/presets.js` ([references/bake.md](references/bake.md)). Edit `applyRaceSettings` only
+for STRUCTURAL changes.
 
-`lightState()` returns the full resolved lighting snapshot *after*
-`applyRaceSettings` has run.  Compare before/after any change to confirm it
-actually affected the scene — don't guess from the CLAUDE.md description.
+localStorage (`apex26.lightTune`) outranks shipped presets — RESET in the
+LIGHTING TUNER drops the current track/tod/weather back to shipped. Legacy
+`"*"` profiles may still win; clear that key if a global override sticks.
 
-## lightState() fields → rendering pipeline
+**One condition, all 52 circuits.** `__apex.lightCopy()` spreads knobs tuned
+here (merged); `lightCopy("look")` sends every live value. Both persist and
+return `undo` — `lightCopy({undo})` reverts the fan-out.
 
-```js
-__apex.lightState()
-// {
-//   ambientSky:    [r,g,b]   → uAmbSky  (top-hemisphere ambient)
-//   ambientGround: [r,g,b]   → uAmbGround (bottom-hemisphere ambient)
-//   sunColor:      [r,g,b]   → directional sun (scene lighting)
-//   exposure:      number    → tone-map exposure multiplier
-//   numLights:     number    → active point lights (0 = day, >0 = floodlit)
-//   sunY:          number    → sin(elevation) — how high the sun is (1=zenith)
-//   builtNight:    bool      → meshes built for night (dark road, emissive masts)
-//   trackNight:    bool      → track's own night-default flag
-//   floodEmit:     number    → floodlight mast emissive intensity
-// }
-```
+`lightState()` is the resolved snapshot *after* `applyRaceSettings`. Compare
+before/after; don't guess from AGENTS.md.
 
-## One-off inspection
+## When NOT to Use
+
+- Isolated car paint in the studio → **playwright-probe** `references/car-studio.md` (`--refl` is not a scene
+  knob). Renderer compile / GL errors → **renderer-debug**.
 
 ```sh
-# What does Vegas look like in night vs day mode?
-node tools/apex-eval.mjs vegas "a.lightState()"
-node tools/apex-eval.mjs monaco "a.lightState()"
-
-# After calling setTimeOfDay live:
-node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw
+node tools/ci/test-bg.mjs gfx      # lighting-ab + tuner-grade + probes + tlx
+npm test -- tests/specs/lighting-ab.spec.js   # lighting-ab only
 ```
 
-## Before/after workflow (validate a code change)
+Related: **renderer-debug**, **playwright-probe** (`references/cameras.md`).
+
+## Visual A/B with slider-effect
+
+`slider-effect` classifies the live knob registry (no browser) and runs live Playwright
+A/B captures with pixel-diff outputs. Use it to confirm a knob is wired and to
+see *what region* of the frame it changes.
 
 ```sh
-# 1. Capture baseline
-node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
+# Classify — no browser, instant
+node tools/lighting/slider-effect.mjs --group LAMPS
+node tools/lighting/slider-effect.mjs --risk inert --json
 
-# 2. Edit applyRaceSettings in js/game.js (or a TUNE_DEFS default in js/game/lighting.js)
-# 3. Bump cache version, reload
+# A/B a single knob — Playwright, ~20 s
+node tools/lighting/slider-effect.mjs --live saturation
+node tools/lighting/slider-effect.mjs --live lampLevel --from 0 --to 0.55
 
-# 4. Capture after
-node tools/apex-eval.mjs monza "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
+# Full range ramp (5 shots)
+node tools/lighting/slider-effect.mjs --live contrast --shots 5
 
-# 5. Diff
-diff artifacts/tmp/before.json artifacts/tmp/after.json
+# Batch (one park per shared condition bucket)
+node tools/lighting/slider-effect.mjs --live --ids bloomMul,glareStr,neonBoost
+node tools/lighting/slider-effect.mjs --live --group "NIGHT GLOW & BLOOM"
+
+# Dry-run: print recipes without launching browser
+node tools/lighting/slider-effect.mjs --live glareStr --dry-run
 ```
 
-## Visual validation with orbit()
+Outputs per knob: `a.png`, `b.png`, `filter.png` (changed pixels only),
+`diff.png` (red = B brighter, blue = B darker), `heat.png`, `sheet.png`,
+`result.json`. Batch runs also write `summary.png` — one row per knob.
 
-```sh
-# Screenshot the same corner in day vs night to compare visually
-node tools/apex-capture.mjs cameras monza scratch/captures/apex-capture/lighting-before
-# (edit applyRaceSettings)
-node tools/apex-capture.mjs cameras monza scratch/captures/apex-capture/lighting-after
-```
+Do NOT run `--live` while `cdmcp-cli.py look-survey` holds the box.
+Do NOT launch from an agent session without an explicit ask:
+`lighting-tuner-sweep.mjs`, `ab-lighting.mjs run all`, or
+`lighting/campaign/capture.mjs` — those are human/CI lattices. Agent default
+is classify → `--live <one id>` → bake.
+Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
 
-Or via `apex-eval` in a single script:
-```js
-// In a Playwright page:
-__apex.setTimeOfDay("night");
-await sleep(1400); // wait for dark rebuild
-__apex.orbit(0.15, 45, 20, 60);  // frame turn 1
-// screenshot canvas#game
-```
+## Load on demand
 
-## What to check for common complaints
+- `lightState` fields, symptom → knob table, A/B capture, contract tests →
+  [references/symptoms.md](references/symptoms.md).
+- A pasted `window.LightPresets` / `window.LightEdits` blob (LIGHTING TUNER
+  COPY VALUES) → [references/bake.md](references/bake.md) — `scripts/bake.mjs`
+  is a FULL REPLACE, `scripts/merge-proposals.mjs` merges a delta.
 
-| Symptom | Field to check | Likely fix |
-|---|---|---|
-| "Night looks like day" | `ambientSky` too bright, `numLights` = 0 | `lightTune({ambientMul})` / night ambient cap in `applyRaceSettings`, or track doesn't trigger dark rebuild |
-| "Floodlights not firing" | `numLights === 0` on a dark track | `buildTrackLights` guard condition — check `track.def.night` flag |
-| "Floodlight masts invisible" | `floodEmit === 0` | Night emissive not applied in `buildProps`; check `lightTune({floodEmitMul})` |
-| "Dawn sun too high" | `sunY` close to 1.0 | `lightTune({sunElev: -N})` (deg offset); structural default lives in `applyRaceSettings` |
-| "Scene washed out" | `exposure` too high or `ambientGround` too bright | `lightTune({exposureMul, ambientMul})`; night branch caps ambient |
-| "Lamps too bright / too dim" | pool blow-out or dark valleys | `lightTune({lampLevel, poolEnergy, bleedMul})` |
-
-## Writing a lightstate contract test
-
-```js
-// tests/lightstate.spec.js (already created)
-// Run with: npx playwright test tests/lightstate.spec.js
-```
-
-The spec asserts: day → `numLights === 0`, night → `numLights > 0` with darker
-ambient.  After any `applyRaceSettings` edit, run this spec first — it catches
-the most common regression (accidentally lighting the night scene like day).
+The `"*|tod"` layer applies only when `gfx.hasPerChunkLights`. COPY VALUES exports
+`LightEdits` deltas; merged `lightState()` is observation, not a full export.
+The `apex-eval`/`slider-effect --live`/capture commands boot Chromium: parent session only, never a subagent (AGENTS.md rule 10).

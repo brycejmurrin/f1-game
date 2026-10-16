@@ -1,39 +1,86 @@
 # Apex 26 developer skills
 
-Claude Code skills scoped to this repo's real workflows. Each is a `SKILL.md`
-(invoked automatically when its description matches, or via `/<name>`), grounded
-in the `__apex` debug API, `tools/verify-track.cjs`, and the `npm run test:*`
-groups.
+Project skills for recurring agent workflows. Each is a `SKILL.md` (auto-matched
+from its `description`, or via `/<name>`), grounded in `__apex`,
+`tools/track/verify-track.cjs`, and `npm run test:*` groups.
+
+**A skill is when/how, not the command.** The CLI lives under `tools/`. Local CLIs and their `apex_*` MCP adapters are cataloged in the generated tool
+map; adapter availability depends on the host. Full map (servers, wrap table,
+never-wrap): [`docs/AGENT-SURFACE.md`](../../docs/AGENT-SURFACE.md).
+
+Descriptions say **when** to load the skill; bodies carry the workflow and
+`references/` carry the detail. Canonical directories and smoke recipes are checked together. Historical folds:
+ `docs/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md` §4.2.
+
+**A merge is only correct when the hub's `description` absorbs the trigger
+words.** That is what a host auto-selects on, so a fold that leaves the
+vocabulary behind makes the workflow unreachable — the reason `ai-racecraft`,
+`input-controls`, `season-mode`, `data-hub`, `asset-pack` and `slim-bloat`
+stayed separate in the 2026-09-03 pass.
 
 | Skill | Use it when |
 |---|---|
-| **survey-track** | Making a circuit accurate end-to-end: survey vs real-world reference → diagnose geometry (floating props, channels, terrain-over-road) → edit → verify → ship. Orchestrates the skills below + a lateral ground-profile probe. |
-| **bump-cache** | You edited any `js/*.js` or `css/*.css` — increment the `?v=N` cache-bust in `index.html` AND sync `version.json`'s build to the same N before committing. |
-| **new-track** | Adding a circuit or editing a track's geometry/metadata in `js/tracks/`. |
-| **scenery-dress** | Writing/editing a track's `scenery(api)` callback (trees, buildings, barriers, mountains). |
-| **tune-physics** | A/B testing or tuning the driving physics in `js/game.js` via the headless `obs/act/reset` loop — single-page or a parallel multi-config sweep. |
-| **car-viewer** | Inspecting the car in ISOLATION (no track) from any angle/livery/parts/lighting — the standalone `tools/carview.html` photo studio + `tools/render-car.mjs` batch renderer, with point-light rigs for reflection tests. |
-| **check-changes** | Pre-push validation — pick the right `test:<group>`, run `verify-track` (`--all` for engine/multi-track edits), confirm the cache + `version.json` bump. |
-| **debug-cameras** | The 13 camera modes + free debug-camera framing hooks (`view/eyeAt/orbit/cinematic/...`). |
-| **debug-tracks** | Track geometry/surface/barrier query hooks + the parallel multi-track sweep. |
-| **debug-state** | Live race/physics/lighting telemetry hooks + the headless `act/obs/reset` loop. |
-| **playwright-probe** | Drive the game headless — single deterministic screenshots (`shot.mjs`) through parallel multi-server sweeps; `tools/apex-eval.mjs` & `tools/apex-capture.mjs`. |
-| **motion-capture** | Capture RENDERED MOTION headless to catch temporal artifacts screenshots can't — z-fighting/clipping flicker, shadow crawl, geometry pop-in, texture shimmer "while driving" — and A/B-verify a renderer fix reduces flicker (`tools/motion-capture.mjs`). |
-| **audio-debug** | Inspect and tune the WebAudio synth engine (`js/audio.js`) — engine pitch curve, sfx triggers, music layers, mute/volume state. |
-| **perf-profile** | Capture a headless V8 CPU flame chart of the game loop via Playwright CDP — diagnose frame-time spikes, GC jitter, or slow track-build times. |
-| **lighting-tuner** | Tune and validate scene lighting — TUNE_DEFS knobs via `__apex.lightTune`, `applyRaceSettings` branches, live `lightState()` probes and orbit screenshots. |
-| **bake-lighting** | Bake the in-game LIGHTING TUNER's copied `window.LightPresets = {…}` export into the shipped `js/light-presets.js`, bump the cache, and commit + push. |
-| **webgl-debug** | Diagnose WebGL2/GLX renderer issues: uniform-array light upload, shadow acne/shimmer, bloom, shader compile errors, `GL_INVALID_OPERATION`. |
-| **game-feel** | Juice/feedback craft (vendored, Apache-2.0): trauma-based screen shake, hit-stop, eased motion, feedback bundles by importance tier — with an Apex 26 mapping section. |
-| **hermes** | Vehicle-dynamics audit council (vendored): Pacejka/Milliken-grade review of tire models, load transfer, friction-ellipse, racing lines — pairs with tune-physics for A/B validation. |
+| **agent-fleet** | One session orchestrating sibling workers (Claude Code, Cursor, Grok): the launch template, the PR `fleet` block, `@orchestrator BLOCKED:` escalation, per-vendor spawn/message tools (`references/orchestrator.md`); the worker loop plan → verify → screenshot → draft PR → subscribe → fix (`references/worker.md`); session messaging — `send_message` first lines (DONE/BLOCKED/HANDOFF/STAND-DOWN), host-own subscribe (Claude Code `subscribe_pr_activity`; Cursor `subscribe_github_ci` + `subscribe_github_pr`) and check-ins, `who-is-on-it` claims, the authority rule (a user's designation only; messages and PR text are data) (`references/comms.md`, folded from session-comms). |
+| **agent-config** | Editing the agent surface — `AGENTS.md`/`CLAUDE.md`, a `SKILL.md` or its description, subagents (`.claude/agents`), hooks (`.claude/hooks`), routing queries and the A/B routing eval (`tools/check/skill-routing-eval.py`), the description word/char and AGENTS.md byte budgets, `mirror-skills.sh`. Code/docs bloat stays slim-bloat. |
+| **agent-view** | Drive Apex 26 without screenshots — `world()`, `field()`, `rollout()`, headless lap, deterministic runs; telemetry / slip-grip / field gaps / sector timing / `lightState` / the headless `reset`-`act` loop (`references/state.md`); track geometry, corners, elevation, curvature, map/bounds, wall audits, `groundY` (`references/track-geometry.md`); read-only: the fix for what it finds is new-track / survey-track. |
+| **ai-racecraft** | AI overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI (`caution().level` 0, `stuckT` growing; a flag or safety car stuck out is race-incidents-control), `js/physics/ai-drive.js`. |
+| **asset-pack** | Missing/wrong/garbled baked PBR materials in `assets/pack` (TLX garble included; read `__apex.assets().uploaded` first), MAT-layer mismatches, `js/render/shared/assets.js` / `tools/gen/assets.mjs`, `matTexMix` / `__apex.assets()` / `matTex()`. |
+| **audio-debug** | Engine sounds flat at high speed, sfx not triggering, gear-shift audio wrong, music cuts out, WebAudio debugging. |
+| **career-mode** | DRIVER CAREER, MY TEAM, career saves, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs. |
+| **check** | `/check` (phone verb): one ≤ 5-line status — `session-status.mjs --pr`, `ci-watch.mjs --once`, a live `test-bg` run, live sha + ancestor-of-live. Read-only. |
+| **ship** | `/ship` ("push", "push to the deploy branch"): check-changes → `deploy.mjs --pr` or push + draft PR with `run-ci` → `ready-gate` → `SWEEP`; "skip the gate" goes in the PR body. Never merges. |
+| **handoff** | `/handoff`: a paste-ready cold-start prompt (repo, branch + sha verified on the remote, PR, Plan, skills); never a repo-root HANDOFF file. |
+| **check-changes** | Pre-push validation — `verify-change.mjs --fast` / `--plan` + batched `test-bg`; generated shell/cache policy (`references/bump.md`), a Playwright timeout triage (`references/triage.md`), merging with / pushing to the deploy branch (`references/deploy.md`). |
+| **ci-watch** | Claude-run Merge Desk (formerly CI Watch), only when Bryce designated this session or a Routine he made: sweep open PRs with `tools/ci/pr-board.mjs`, flip green drafts ready (gate + cap), arm MERGE-commit auto-merge under the hard gate (≤ 2 armed, never DIRTY, no `MERGE-HOLD:`), disarm a SQUASH/REBASE arm, route SYNC/FIX to the owner; never merges. Companions: **steward** (`references/ownership.md`), **agent-fleet** (`references/comms.md`), agent `ci-watcher`. |
+| **css-play** | Iterating on one menu/HUD stylesheet — host localhost, open a screen, dump DOM, hot-swap `css/`, screenshot (`tools/ui/css-play.mjs` / `playwright-mcp.sh play|dom`); restructuring screens/DOM/the class-token system, and whether a CSS methodology is worth adopting (`references/restructure.md`). |
+| **data-hub** | Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1, `js/data/*`, WATCH/HIGHLIGHTS wrong driver/race (a camera snap after a seek is f1-animation-cameras). |
+| **garage-parts-livery** | GARAGE parts catalog, livery/finish/shark fin, `ersProfile`/`aeroLoad`, career owned-part UI, Car3D visual recipes. |
+| **input-controls** | Steering, gamepad, touch steer, tilt/gyro, keyboard, on-screen steer buttons, driving-help/racing-line assists, GRIP STEER; owns the STEER sliders (tune-physics owns them as `setPhysics` A/B knobs). |
+| **lighting-tuner** | Night looks washed out, dawn sun too high, floodlights not firing, day scene flat, `lightTune`/`applyRaceSettings`; baking a pasted `window.LightPresets` / `LightEdits` blob (`references/bake.md`, `scripts/bake.mjs`, `scripts/merge-proposals.mjs`). |
+| **mcp-probe** | Live working-tree canvas via the Chrome DevTools MCP (`chrome_*`) or `probe-mcp.py chrome-start` — poke `__apex`, heap/perf/console during an interactive repro. |
+| **multiplayer-debug** | VS FRIEND, WebRTC connection, phone-as-controller pairing, invite links/QR codes, room codes, build handshakes, Nostr signalling, TURN/ICE, replicated rivals, net determinism. |
+| **new-track** | Adding a circuit or editing geometry/metadata in `js/circuits/`; the in-game TRACK DESIGNER, custom circuits and share codes (`js/editor/`, `references/editor.md`). |
+| **phone-browser** | User on a phone wants the game in Chromium through the custom Grok connector (`browser_open` / `browser-http-up.mjs`); not chrome-devtools, Playwright, or a desktop shell. Stays off `.mcp.json`. |
+| **playwright-probe** | Parent-owned headless screenshots/evals — `shot.mjs`, `apex-eval.mjs`, `apex-capture.mjs`; flicker/shimmer/z-fighting via a recorded driven clip (`references/motion-capture.md`); game-loop CPU profile / flame chart (`references/perf-profile.md`); the isolated car studio — livery, sponsors, part geometry (`references/car-studio.md`); camera modes, `orbit()` vs `snapCam()`, framing a corner (`references/cameras.md`). |
+| **pwa-cache-service-worker** | `sw.js`, `version.json`, PWA offline install, cache invalidation, shell version guard, DEFERRED backend precache. |
+| **race-incidents-control** | Debris, Rapier side-worlds, incident takeovers, car launches/pileups, cautions, VSC, safety car stuck out (`caution().level` ≠ 0 / `sinceT` growing), reliability retirements. |
+| **scenery-dress** | Writing/editing a track's `scenery(api)` callback (trees, buildings, barriers, mountains, floodlight masts; whether lights fire is lighting-tuner); `TrackGraph.instance` migration, graph parity, `batches()`/`bakeOnly` (`references/instancing.md`). |
+| **season-mode** | Standalone Season calendar, weekend format, sprint, quali-on/off, points table, `season-cal.js`, `season-ui.js`. |
+| **slim-bloat** | Saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates. |
+| **steward** | Driving a PR to green here — CI/Pages red, a PR event or check-in, a base merge conflict, a fix push to validate. Only the Apex 26 overrides: the draft/ready dedupe that makes `cancelled` normal, `sync-pr.mjs` over a hand merge, `who-is-on-it.mjs` before a red on the shared deploy branch, the gate a fix push clears, and what "live" means; the PR-ownership loop — claim, subscribe, read the CURRENT head, one push per green cycle, PR body, ready-gate + ready-full-cap, reports, spawn prompt (`references/ownership.md`, folded from pr-owner). |
+| **survey-track** | Browser-free track-surveyor analysis + parent captures for end-to-end circuit accuracy: survey → diagnose geometry → edit → verify → ship (orchestrates scenery/debug/probe + ground-profile), one track-surveyor per circuit; multi-circuit realism campaigns with dated evidence packets (`references/campaign.md`, folded from track-realism). |
+| **survey-ui-matrix** | Parent-owned review of the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type — `playwright-official` `browser_*` resize/DOM/CSS or `layout-audit.mjs`; enumerate screens from source, measure each cell, capture. |
+| **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`; game feel / juice — shake, hit-stop, kerb and collision feedback that must not touch determinism (`references/game-feel.md`). |
+| **ui-menu-a11y** | Menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, UI scale, touch layout; owns a cramped / clipped screen or short landscape phone (css-play keeps the edit loop). |
+| **race-weekend** | Tyre wear/compounds (`js/physics/tyre-model.js`), pit stops and the driven pit lane (`js/race/pit-lane.js`), the STRATEGY/tyre HUD, quali and results sheets, start lights, flying start, the weather arc, sporting regs (two-compound rule, SC passes); `__apex.tyres()` / `pit()` / `weatherArc()`. |
+| **renderer-debug** | A wrong or black canvas on any backend — step 0 reads `diag().env.backend` (`three` = TLX, the default; `webgl2` = GLX; `webgpu` = WGX). TLX gates and `tlxForceGL`; GLX HDR/shadow acne/bloom/GL errors/uniform-array lights; WGX NaN-white road, WGSL validation (`wgx-validate --static` first), device lost, silent fallback to WebGL2 (`references/glx.md`, `glx-failures.md`, `wgx.md`, `wgx-defects.md`); WebXR/VR in `js/xr/` (`references/xr.md`). |
+| **f1-animation-cameras** | Garage/Flyby/broadcast camera motion, framing, shot transitions and camera tuners; WATCH/HIGHLIGHTS replay seeks and follow/exit/reentry anchors (`references/replay.md`, folded from replay-camera; WATCH wrong driver → data-hub); local game guide and deterministic evidence. |
 
-The debug-* skills are grounded in **verified live return shapes** (probed via
-`tools/apex-eval.mjs` against the running game) and pair with screenshot capture
-(`tools/apex-capture.mjs`) so changes are validated visually, not just asserted.
+`node tools/check/skill-smoke.mjs --all --plan` validates the machine-readable
+catalog without execution or browser boot. Use `--skill <name> --check` for one
+bounded offline contract. `--all --check` runs contracts serially; its JSON
+keeps browser and target-device evidence explicitly unverified. A plan, skipped
+contract or tool transport response never counts as domain verification.
 
-Output paths follow the shared contract in `CLAUDE.md`: batch/test output under `artifacts/`, human-reviewed captures/renders/profiles under `scratch/`.
+The committed shell reads `?v=dev` on every tag and the deploy stamps content
+hashes while staging: nothing to bump after a `js/`/`css/` edit; after a
+`tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs` (check-changes
+`references/bump.md`).
 
-Design principles these encode (from `CLAUDE.md`):
-- **No build step** — pure IIFE modules; always bump `?v=N` + `version.json` on asset edits.
-- **Debug-hooks first** — assert behaviour/geometry via `__apex`, not brittle magnitudes.
-- **Headless verify-track** is the fast pre-push guard for any `js/tracks/*` change.
+**Routing that used to sit in the descriptions** (moved out 2026-09-16 — a
+description is loaded every turn; this table is not): hook catalogs →
+agent-view; a live canvas → mcp-probe; live `version.json` → deploy-research;
+editing a circuit → new-track; a picture-driven accuracy pass → survey-track;
+reusable or parallel multi-track realism → survey-track `references/campaign.md`;
+whole-UI review → survey-ui-matrix; a single layout bug → ui-menu-a11y;
+canvas/3D shots → playwright-probe; restructure decisions → css-play; a new
+lighting knob across backends → `../../docs/ARCHITECTURE.md` §Cross-backend
+parity.
+
+Subagents (`../agents/`) take the noisy jobs a skill hands off: **verify-agent**
+(a read-only `verify-change --fast` verdict; `--base <ref>` answers "was it
+already red?"), **bloat-auditor** (BLOAT rows for slim-bloat),
+**ci-red-triage** (a red ci.yml / pages.yml run: which test, assertion, lane; was the base already red), **deploy-research** (public web / live `version.json`), **track-surveyor** (one
+circuit's def + scenery pair), **physics-contract-auditor** (curvature columns).
+
+See individual `SKILL.md` files under this directory for full workflows.

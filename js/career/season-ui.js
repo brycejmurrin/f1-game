@@ -1,0 +1,304 @@
+/* Apex 26 — the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. Opens over #select from the CUSTOMISE button… */
+const SeasonUI = (function () {
+  "use strict";
+
+function create(G) {
+  Log.info("ui", "SeasonUI.create");
+  const { $, els } = G;
+
+  let draft = null;
+  // The calendar rows' controls, per row in draft order, from the LAST paint.
+  // build() replaces every node, so the button that was just pressed is gone
+  // and focus fell to <body>: a keyboard / screen-reader user reordering a
+  // 24-round calendar lost their place on every press. Kept as an array, not
+  // re-queried, so the refocus never depends on the pane's DOM shape.
+  let calBtns = [];
+
+  const el = Dom.el;   // js/ui/dom.js — the one createElement helper
+  function head(text, id) {
+    const h = el("h3", "sel-label", text);
+    if (id) h.id = id;
+    return h;
+  }
+  function tick() { if (G.soundOn) GameAudio.uiTick(); }
+
+  function chipRow(parent, label, id, opts, current, pick) {
+    parent.appendChild(head(label, id + "-label"));
+    const row = el("div", "chip-row");
+    row.id = id;
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-labelledby", id + "-label");
+    for (const [val, text] of opts) {
+      const b = el("button", "sel-chip" + (val === current ? " active" : ""), text);
+      b.type = "button";
+      b.setAttribute("aria-pressed", val === current ? "true" : "false");
+      b.onclick = () => { pick(val); tick(); build(); };
+      row.appendChild(b);
+    }
+    parent.appendChild(row);
+  }
+
+  function buildCalendar() {
+    const pane = $("ss-cal");
+    pane.textContent = "";
+    pane.appendChild(head(`CALENDAR — ${draft.trackIds.length}`
+      + (draft.trackIds.length === 1 ? " ROUND" : " ROUNDS")));
+    const byId = new Map(Tracks.LIST.map((t) => [t.id, t]));
+    calBtns = [];
+    draft.trackIds.forEach((id, i) => {
+      const t = byId.get(id);
+      if (!t) return;
+      const row = el("div", "season-upcoming-row");
+      row.append(el("span", "sur-rnd", `R${i + 1}`), el("span", "sur-name", t.name));
+      const perRound = draft.sprint === "rounds";
+      const sprintHere = perRound && sprintIds().indexOf(id) >= 0;
+      // Each action returns the row the SAME circuit sits on after it — or,
+      // after a remove, the neighbour that took its place — for the refocus.
+      const ctl = [
+        ["↑", "Move up", i > 0, () => { swap(i, i - 1); return i - 1; }],
+        ["↓", "Move down", i < draft.trackIds.length - 1, () => { swap(i, i + 1); return i + 1; }],
+        ["✕", "Remove", draft.trackIds.length > 1,
+          () => { draft.trackIds.splice(i, 1); return Math.min(i, draft.trackIds.length - 1); }],
+      ];
+      // SPRINT ROUNDS mode: each round says whether it sprints, and toggles.
+      if (perRound) ctl.push([sprintHere ? "SPRINT" : "GP", "Sprint weekend", true, () => { toggleSprint(id); return i; }]);
+      const btns = [];
+      ctl.forEach(([glyph, label, on, act], k) => {
+        const b = el("button", "sel-chip", glyph);
+        b.type = "button";
+        b.disabled = !on;
+        b.setAttribute("aria-label", `${label} — ${t.name}`);
+        if (k === 3) b.setAttribute("aria-pressed", sprintHere ? "true" : "false");
+        b.onclick = () => { const row = act(); tick(); build(); focusCal(row, k); };
+        row.appendChild(b);
+        btns.push(b);
+      });
+      calBtns.push(btns);
+      pane.appendChild(row);
+    });
+  }
+  // The same control on the row's new position; at either end of the list
+  // that control is disabled, so the nearest enabled sibling; a one-round
+  // calendar has none, and APPLY (a static node) is the next thing to do.
+  function focusCal(row, k) {
+    const btns = calBtns[row] || [];
+    const b = btns[k] && !btns[k].disabled ? btns[k] : btns.find((x) => !x.disabled);
+    (b || $("ss-apply")).focus();
+  }
+  function sprintIds() { return Array.isArray(draft.sprintIds) ? draft.sprintIds : (draft.sprintIds = []); }
+  function toggleSprint(id) {
+    const ids = sprintIds();
+    const at = ids.indexOf(id);
+    if (at >= 0) ids.splice(at, 1);
+    else ids.push(id);
+  }
+  function swap(a, b) {
+    const ids = draft.trackIds;
+    const t = ids[a];
+    ids[a] = ids[b];
+    ids[b] = t;
+  }
+
+  function buildPool() {
+    const pane = $("ss-pool");
+    pane.textContent = "";
+
+    pane.appendChild(head("PRESETS", "ss-presets-label"));
+    // balanced-row: eight chips wrap from local space (css/race-setup.css
+    // --balance-basis on #ss-presets) so REVERSE never sits alone on a line.
+    const pre = el("div", "chip-row balanced-row");
+    pre.id = "ss-presets";
+    pre.setAttribute("role", "group");
+    pre.setAttribute("aria-labelledby", "ss-presets-label");
+    for (const p of SeasonCal.PRESETS) {
+      const b = el("button", "sel-chip", p.label);
+      b.type = "button";
+      b.onclick = () => {
+        const next = SeasonCal.preset ? SeasonCal.preset(p.id) : { trackIds: SeasonCal.presetIds(p.id) };
+        Object.assign(draft, next);
+        if (next.sprintIds) draft.sprintIds = next.sprintIds.slice();
+        tick(); build();
+      };
+      pre.appendChild(b);
+    }
+    for (const [label, act] of [
+      ["SHUFFLE", () => { draft.trackIds = SeasonCal.shuffled(draft.trackIds); }],
+      ["REVERSE", () => { draft.trackIds = draft.trackIds.slice().reverse(); }],
+    ]) {
+      const b = el("button", "sel-chip", label);
+      b.type = "button";
+      b.onclick = () => { act(); tick(); build(); };
+      pre.appendChild(b);
+    }
+    pane.appendChild(pre);
+
+    chipRow(pane, "QUALIFYING", "ss-quali",
+      [[true, "ON"], [false, "OFF"]], draft.quali, (v) => { draft.quali = v; });
+    // ON is every round; SPRINT ROUNDS is only the rounds marked on the
+    // calendar (2026 REAL marks the real six) — toggled per row there.
+    chipRow(pane, "SPRINT RACE", "ss-sprint",
+      [[false, "OFF"], [true, "ON"], ["rounds", "SPRINT ROUNDS"]], draft.sprint, (v) => { draft.sprint = v; });
+    // Units on the chips, and no "(FULL)": the race-settings sibling's FULL is
+    // the CIRCUIT's own distance (Monaco 78, Spa 44 — game.js buildRaceSettings),
+    // while this 57 is a flat 57 laps preselected at every round — clamped down
+    // to a shorter circuit's full distance there, never raised to a longer one's.
+    chipRow(pane, "RACE DISTANCE", "ss-laps",
+      SeasonCal.LAP_OPTS.map((n) => [n, n + (n === 1 ? " LAP" : " LAPS")]),
+      draft.laps, (v) => { draft.laps = v; });
+    chipRow(pane, "POINTS", "ss-points",
+      [["modern", "25-18-15… (2010–)"], ["classic", "10-6-4… (1991–2002)"]],
+      draft.points, (v) => { draft.points = v; });
+    chipRow(pane, "FASTEST LAP POINT", "ss-fl",
+      [[false, "OFF"], [true, "+1 (2019–2024 RULE)"]],
+      draft.flPoint, (v) => { draft.flPoint = v; });
+    chipRow(pane, "DROPPED SCORES", "ss-drop",
+      SeasonCal.DROP_OPTS.map((n) => [n, n ? "DROP WORST " + n : "ALL COUNT"]),
+      draft.drop, (v) => { draft.drop = v; });
+
+    // What the two format switches actually cost, in the numbers SeasonCal will
+    // pay out — so the screen answers "how long is a sprint" and "what does a
+    // sprint win earn" without the player having to run one to find out.
+    // .sur-country is "small dim text" and nothing else — reused rather than
+    // minting a class, which the cssClasses ratchet (tests/data/ratchets.json) asks for by name.
+    const note = el("div", "sur-country");
+    note.id = "ss-note";
+    const marked = draft.trackIds.filter((id) => sprintIds().indexOf(id) >= 0).length;
+    note.textContent = (draft.sprint === "rounds"
+      ? `${marked} of ${draft.trackIds.length} rounds are sprint weekends: a sprint runs a third of the `
+        + `distance before the Grand Prix and pays ${SeasonCal.SPRINT_POINTS.join(" · ")} pts.`
+      : draft.sprint
+      ? `A sprint runs a third of the distance before the Grand Prix and pays `
+        + `${SeasonCal.SPRINT_POINTS.join(" · ")} pts. Both legs score.`
+      : "One race per round.")
+      + (draft.flPoint ? " The fastest Grand Prix lap pays one point to a top-ten finisher." : "")
+      + (draft.drop ? ` Only a driver's best ${Math.max(1, draft.trackIds.length - draft.drop)}`
+        + ` of ${draft.trackIds.length} rounds count, as until 1990.` : "");
+    pane.appendChild(note);
+
+    // The shelf. Every circuit NOT already on the calendar, classics included —
+    // a retired circuit is perfectly racable, it is simply never a round of the
+    // built-in championship (js/track/tracks.js).
+    const used = new Set(draft.trackIds);
+    const rest = Tracks.LIST.filter((t) => !t.custom && !used.has(t.id));   // the player's own circuits race solo (v1)
+    pane.appendChild(head(rest.length ? "ADD A CIRCUIT" : "EVERY CIRCUIT IS ON THE CALENDAR"));
+    for (const t of rest) {
+      const row = el("button", "track-row");
+      row.type = "button";
+      row.setAttribute("aria-label", `Add ${t.name} to the calendar`);
+      const nm = el("span", "track-row-name", t.name);
+      if (t.classic) nm.appendChild(el("span", "trb trb-classic", "CLASSIC"));
+      row.append(nm, el("span", "track-row-meta", t.country || ""));
+      row.onclick = () => { draft.trackIds.push(t.id); tick(); build(); };
+      pane.appendChild(row);
+    }
+  }
+
+  function restartsProgress() {
+    const season = G.season;
+    // Qualifying is work to protect, but not scored standings (hasProgress).
+    return !(SeasonCal.canRace(season) && SeasonCal.matchesConfig(season, draft)) && (SeasonCal.hasProgress(season)
+      || !!(season && Array.isArray(season.qualiOrder) && season.qualiOrder.length));
+  }
+
+  function build() {
+    if (!draft) return;
+    // Every chip, preset and "Add" button repaints both panes and destroys
+    // itself; keepFocus puts focus back on the same slot (the calendar's
+    // arrows still refocus exactly via focusCal, which runs after this).
+    const panes = () => { buildCalendar(); buildPool(); };
+    if (window.TopModal && TopModal.keepFocus) TopModal.keepFocus($("season-setup"), panes);
+    else panes();
+    const live = restartsProgress();
+    // #ss-apply is a STATIC shell node — unlike the rebuilt-per-paint confirm
+    // buttons, node replacement never disarms it, so an armed RESTART could
+    // survive close/reopen and fire without its warning. Every path repaints
+    // through build(), so this is the one true disarm point.
+    const ab = $("ss-apply");
+    delete ab.dataset.armed;
+    ab.classList.remove("armed");
+    ab.textContent = live ? "APPLY — RESTART SEASON" : "APPLY";
+    if (window.ScrollFade) ScrollFade.refresh();
+  }
+
+  function open() {
+    // A COPY, and a fresh one every visit: BACK has to be able to discard.
+    draft = Object.assign({}, SeasonCal.config());
+    draft.trackIds = draft.trackIds.slice();
+    draft.sprintIds = Array.isArray(draft.sprintIds) ? draft.sprintIds.slice() : [];
+    build();
+    $("season-setup").hidden = false;
+    Log.info("ui", "SeasonUI.open");
+    if (G.soundOn) GameAudio.uiSelect();
+  }
+  function close() {
+    $("season-setup").hidden = true;
+    draft = null;
+    Log.info("ui", "SeasonUI.close");
+  }
+
+  function refreshTitle() {
+    // The title door is <svg/><span>SEASON<span class="mb-sub">…</span></span>
+    // (index.html): the label is the INNER span's own text node — the button
+    // itself has none, so a direct-child search returned before writing anything.
+    const btn = $("mb-season");
+    const lab = btn && btn.querySelector && btn.querySelector("span");
+    const textNode = lab && lab.childNodes ? Array.prototype.find.call(lab.childNodes, (x) => x.nodeType === 3) : null;
+    if (!textNode) return;
+    const season = G.season;
+    const n = SeasonCal.rounds();
+    const r = (SeasonCal.hasProgress(season) && n) ? Math.min((season.round || 0) + 1, n) : 0;
+    // The trailing space is the gap between the label and the sub-line below it
+    // (index.html writes it too): without it the visible text reads "SEASONA
+    // CHAMPIONSHIP…" and the accessible name below cannot contain it (WCAG 2.5.3).
+    textNode.nodeValue = (r ? `SEASON · R${r} OF ${n}` : "SEASON") + " ";
+    // The accessible name overrides the text, so it carries the progress too;
+    // with none it is the shell's own "Season — A championship, your rules".
+    const sub = btn.querySelector(".mb-sub"), tag = sub ? String(sub.textContent || "") : "";
+    btn.setAttribute("aria-label", (r ? `Season · R${r} of ${n}` : "Season")
+      + (tag ? " — " + tag.charAt(0) + tag.slice(1).toLowerCase() : ""));
+  }
+
+  $("ss-back").onclick = () => { close(); if (G.soundOn) GameAudio.uiSelect(); };
+  $("ss-apply").onclick = () => {
+    const apply = () => {
+      Log.info("ui", "SeasonUI.apply");
+      const result = SeasonCal.applyConfig(draft);
+      if (!result.ok) {
+        // A foreign write moved the save under us. "Reopen setup" never cured
+        // it — open() does not reload, so APPLY failed for ever. Adopt the other
+        // tab's season here (load() re-arms the revision guard), and repaint so
+        // the APPLY label / RESTART confirm reflect ITS progress; the player's
+        // draft is kept for them to review and apply again.
+        G.season = SeasonCal.load();
+        build();
+        refreshTitle();
+        const note = $("ss-note");
+        if (note) {
+          note.setAttribute("role", "status");
+          note.textContent = "Season changed in another tab — loaded the latest save. Review, then APPLY again.";
+        }
+        return;
+      }
+      G.season = result.season;
+      if (!result.durable && G.announce) G.announce("SEASON IS SESSION ONLY — STORAGE IS FULL", 4, "race");
+      G.trackIdx = SeasonCal.trackIndex(G.season.round);
+      close();
+      G.buildSelect();
+      G.refreshCareerButton();
+      if (G.soundOn) GameAudio.uiSelect();
+    };
+    // Changed rules restart both scored rounds and an unscored qualifying
+    // session. Unchanged unfinished setups preserve either; completed seasons restart.
+    // build() repaints the label and disarms any previous confirmation.
+    if (restartsProgress()) {
+      if (G.soundOn) GameAudio.uiTick();
+      G.armConfirm($("ss-apply"), "RESTART? — SEASON IS LOST", apply);
+    } else apply();
+  };
+
+  return { open, close, build, refreshTitle };
+}
+
+return { create };
+})();
+Object.freeze(SeasonUI);

@@ -1,0 +1,163 @@
+# Multiplayer debug workflow — layer classify, loopback, ICE/TURN, three-player, mistakes
+
+Load from the SKILL.md index when the task needs this detail.
+
+## Contents
+- Workflow / Implementation
+- "Build mismatch" though both are on the live build
+- Rival never appears (connected, no second car)
+- Rival never moves (connected, remote car frozen)
+- Three-player (star topology)
+- Common Mistakes
+
+## Workflow / Implementation
+
+1. **Classify the failure by layer.**
+   - Lobby/UI: invite buttons, ready/start, seats, QR/scan.
+   - Signalling: invite/answer strings, Nostr or room-code rendezvous.
+   - ICE/TURN: candidates crossed, relay availability, nominated pair.
+   - Game wire: snapshot ids, authority, interpolation, countdown/start.
+
+2. **Prefer loopback before a browser/network run.**
+   - Use `NetTransport.loopback()` via `__apex.netLoopback()` to remove real ICE
+     and wall-clock timing.
+   - Pass `nowMs`, then drive `__apex.netTick(nowMs)` explicitly.
+   - Inject latency/jitter/loss only after the zero-latency path is understood.
+
+3. **Preserve authority boundaries.**
+   - A player's own car is never corrected by the host.
+   - Remote cars are posed from replicated state; local physics must early-out
+     when `netPlay.owns(c)` is **true** — `owns()` answers "the wire owns this
+     car", so it is the REMOTE cars it returns true for (`js/net/netplay.js`
+     `owns`, and the `updateCar` early-out in `js/game.js`).
+   - The host owns AI and race control and relays guest snapshots without
+     changing authority.
+   - Key rivals by content-derived ids (`wireId` / driver id), not `cars[]`
+     index; grids can differ by player.
+
+4. **Debug signalling as data crossing, not local gathering.**
+   - `lobby().wire.candidates` and `turnProbe()` describe local gather.
+   - `lobbySdp().remoteTypes` answers what the peer actually received.
+   - If remote SDP has no `relay`, inspect SDP packing/truncation and make sure
+     ICE prefetch completed before `RTCPeerConnection` construction.
+   - **Relay candidates arrive last** — historically the invite/answer cap dropped
+     them (`sdp.js` now round-robins by kind, so >=1 relay survives; still check
+     `remoteTypes` before blaming ICE). Symptom: desktop host gathers fine,
+     mobile guest never finishes ICE (`checking`/`connecting` forever). Probe ICE
+     on the **stuck peer** (usually the guest), not only the host.
+
+   - **Guest stuck ON the countdown (lights visibly lighting, never launches)
+     is NOT an ICE symptom — signalling already worked.** If the connection is
+     up (both peers show `net().active`/roles correctly), stop probing ICE and
+     look at countdown *consumption* instead: `js/game.js` reads `netStart`
+     (`{ at, hold, now() }`) each frame and derives `countT` from it
+     (grep `countT = (COUNTDOWN_S`), which drives `lightsLit` (grep
+     `lightsLit === COUNTDOWN_S`) and only clears `netStart` once
+     `lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold` — the
+     "consumed; never carry it into the next race" comment. (Grep, never a line
+     number: game.js moves every week and the three numbers that used to sit
+     here were ~800 lines stale.) A guest stuck with lights lit but the race never starting
+     means that consumption path never satisfied its exit condition — check the
+     guest's own `countT`/`lightsLit` progression via `G.countT`/`G.lightsLit`
+     (test-only accessors) or step through `netStartArm`/`netHostStart`, not the
+     ICE/candidate layer.
+   - `__apex.net().startPending` is boolean-only (`!!G.netStart`, `netHostStart()` in `js/agent/apex.js`); it cannot say why a guest is stuck, so read `countT`/`lightsLit` as above.
+
+5. **Mobile QR flow is out-of-band.**
+   - VS FRIEND only: the desktop host shows a QR; the phone guest opens the encoded URL in
+     **Safari via the Camera app** (or paste), not the in-page scan UI. Do not debug
+     mobile join by expecting the guest to use `NetScan` inside the game page.
+   - The PHONE AS CONTROLLER QR is a different page (`controller.html#pad=CODE`); see
+     [phone-nat.md](phone-nat.md).
+
+6. **Debug ICE with candidate pairs.**
+   - Run `await __apex.turnProbe()` first: no relay and dead relay are different
+     fixes.
+   - If relays exist but no connection forms, use `await __apex.lobbyPairs()`.
+   - `recv: 0` across pairs means checks leave but no answer returns; a
+     succeeded-but-not-nominated pair means something else ended first.
+
+7. **Respect build handshakes.**
+   - Handshake refuses mismatched builds because physics/track constants can
+     differ. The build it compares is the shell's own
+     `<meta name="apex-build">` (`js/net/handshake.js`, error `build_mismatch`)
+     — meta wins without fetching. An unstamped shell falls back to
+     `version.json`; `build_unknown` means neither provides build identity.
+   - If JS/CSS changed, run `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump); stale builds can make peers unable to
+     connect by design.
+
+8. **Verify in order.**
+   - Run `npm run test:net-unit` before any browser group; it covers transport,
+     SDP, rendezvous, QR, snapshot, and session contracts.
+   - Run `test:net` in the background through `tools/ci/test-bg.mjs`.
+   - Use real RTC scripts only for browser/ICE behavior that loopback cannot
+     exercise.
+
+## "Build mismatch" though both are on the live build
+
+Not an encoding bug. `b` rides inside the invite/answer payload (`handshake.js` `createInvite`/`acceptInvite` -> `checkBuild(await localBuild(), payload.b)`).
+The `#vs=` link only carries the code (`inviteUrl`/`inviteFromUrl`; a corrupt link is `corrupt_code`/`bad_code`, never `build_mismatch`). 
+So one tab's `<meta name="apex-build">` is stale: an installed PWA / service-worker-cached shell, or a tab left open across a deploy.
+- Compare `document.querySelector('meta[name=apex-build]').content` on BOTH devices with the live `index.html` (deploy-research). `res.mine`/`res.theirs` hold the numbers but the lobby shows only `res.message`, and `Log` prints just `handshake <action> fail build_mismatch`. `theirs > mine` = THIS device is stale.
+- `build_unknown` = no meta and the `version.json` fetch failed (offline phone). A link opened from Camera lands in Safari, not the installed app, so a mismatch there means Safari's cached shell.
+- Offline pins: `node --test tests/unit/net-transport.test.mjs` (checkBuild/localBuild/inviteFromUrl/withoutInviteUrl), `lobby-codes.test.mjs` (codeFrom on pasted links), `net-qr.test.mjs`; shell guard/stamp side: `service-worker.test.mjs`, `deploy-stamp.test.mjs`.
+- Fix = get the stale device onto the current shell, never relax `checkBuild`. Record: both metas, which side is older, installed app or Safari tab.
+
+## Rival never appears (connected, no second car)
+
+Connected is not seated: the link can be up while `NetPlay.start()` never bound a rival. Trace in order, stop at the first broken link:
+1. `__apex.net()`: `{ active: false }` means start failed or never ran. Read `reason`, and `__apex.logs({ns:"net"})` for `play start fail no_slot|no_track|already_active|no_transport` (`netplay.js` `start()`). 
+   `no_slot` = `pickRemoteSlot` found no free car (empty `G.cars`, or the rival's profile team is absent from THIS grid); the lobby then says "Could not find a grid slot" and quits to menu (`lobby.js` `finishStart`).
+2. `active: true` but `remotes: []`: no seat. `slotFallback` is `"team"` (right team, other seat), `"any"` (profile-less join, loopback) or `"profile-miss"` (named profile matched nobody; `docs/DEBUG-HOOKS.md` lists only the first two). A profile-less join happens when HELLO had not arrived: check the lobby's peers/profile.
+3. `remotes` has an entry but `wire` is `-1`: `G.wireId(c)` found no team index; every packet for it is dropped.
+4. Seated but not drawn where expected: `separateGrid()` lays the humans by `wireId` from the local P12 (skipped when `G.gridPreOrdered`); a grid that differs per peer stacks the rival inside you (`net-grid-separation.test.mjs`).
+5. Posed then gone: `net().stale` lists wire ids silent past `STALE_MS` (2 s); `owns()` is false for them and the local AI drives the car until a packet returns. `stale` plus `buffered: 0` = packets not arriving, so go to the "never moves" trace.
+Offline: `node --test tests/unit/net-authority.test.mjs` (slot pick, `stale` status), `net-grid-separation.test.mjs`, `net-roster.test.mjs` (hand-back to AI). Real-network behaviour is browser-only.
+
+## Rival never moves (connected, remote car frozen)
+
+Trace the path in order, stop at the first broken link:
+1. `__apex.net()` — `active`, `role`, `remotes[]` (one per rival, keyed `wire`/`driverId`), `buffered` = first remote's interpolation buffer (`remotes[i].buffered` per rival), `net` = session stats (clock sync). `remotes: []` = no grid slot bound (`slotFallback`), see `netplay.js` `status()`.
+2. `buffered` 0 while the session is alive = packets held before clock sync (session `synced()` false; see the `autoPong` comment in `apex.js` `netLoopback`) or dropped by wire id mismatch; >0 but car still = interpolation/pose (`snapshot.js`, `netplay.js`), not transport.
+3. Game side: `netPlay.owns(c)` must be true for the rival so `updateCar` early-outs (`js/game.js`, grep `netPlay.owns(c)`); it is false for a car in `net().stale` (silent past 2 s, the local AI drives it).
+Offline (no browser), single files:
+   `node --test tests/unit/net-session.test.mjs` (sync/routing), `net-snapshot.test.mjs` (interp), `net-authority.test.mjs` (who owns which car). 
+   Green rules out the exercised contracts, not every game-loop/wire combination; inspect the first failed live link next, using step 6 for ICE evidence. The whole `npm run test:net-unit` is the pre-browser gate (step 8), not needed to localise this.
+
+## Three-player (star topology)
+
+Three peers use a **star topology**: guest B and guest C each connect to the
+host; the host **relays** snapshots between them (no direct B↔C link). Invites
+are **sequential** — mint one invite, accept, then `lobbyInviteAnother()` for
+the next guest. Prefer the dedicated script:
+
+```sh
+npm run rtc:e2e-3p
+```
+
+Background-tab throttling can stall WebRTC timers in a real browser — for
+reliable 3-player debugging use `__apex.headless(true)` or the headless RTC
+scripts above rather than three background tabs.
+
+## Common Mistakes
+
+- Fixing a guest by correcting the local player's car from host state; that
+  violates the authority model.
+- Using `cars[]` index across peers; custom-team selection can change grid
+  length/order.
+- Treating local candidate counts as proof that the peer received relay
+  candidates; inspect `lobbySdp().remoteTypes`. Relay arrives last — truncation
+  drops it first (host OK, guest stuck).
+- Expecting mobile VS FRIEND guests to join via in-page scan; they open the QR URL in
+  Safari/Camera, out of band (the pad QR opens `controller.html`, see phone-nat.md).
+- Building `RTCPeerConnection` before awaiting ICE server prefetch; servers are
+  fixed at construction.
+- Letting Nostr or room-code failures throw through the lobby; rendezvous errors
+  must be typed so the UI can fall back to link/QR.
+- Creating several host invites simultaneously; the lobby intentionally makes
+  invites sequential so pasted answers are matchable by humans.
+- Running browser net tests before `test:net-unit`, making deterministic unit
+  failures look like WebRTC flake.
+- Reaching for `version.json` when a build handshake refuses: the handshake
+  reads `<meta name="apex-build">` from the shell, not the deploy stamp.
+- Debugging a guest stuck mid-countdown as an ICE problem: see step 4 (countdown consumption).

@@ -1,0 +1,153 @@
+// mcp-smoke.test.mjs — five-wrapper shell probe (no Chromium).
+import test from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { smokePlan } from "../../tools/mcp/mcp-smoke.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const SMOKE = path.join(ROOT, "tools/mcp/mcp-smoke.mjs");
+const SH = path.join(ROOT, "tools/mcp/apex-tools-mcp.sh");
+
+function run(args, extraEnv = {}) {
+  return spawnSync(process.execPath, [SMOKE, ...args], {
+    encoding: "utf8",
+    cwd: ROOT,
+    env: { ...process.env, ...extraEnv },
+    timeout: 15000,
+  });
+}
+
+test("mcp-smoke --dry-run pokes the two attached shell wrappers and never launches Chromium", () => {
+  // .mcp.json is three servers (apex-tools, playwright-official, chrome-devtools);
+  // only the first and last have a repo shell. probe / playwright / tinyfish
+  // wrappers may stay in the plan as CLI probes but are not MCP-attached.
+  const r = run(["--dry-run"]);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.ok, true);
+  assert.equal(body.dryRun, true);
+  const servers = body.plan.map((s) => s.server);
+  for (const need of ["apex-tools", "chrome-devtools"]) {
+    assert.ok(servers.includes(need), `dry-run plan missing ${need}`);
+  }
+  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".mcp.json"), "utf8"));
+  for (const gone of ["probe", "playwright", "tinyfish", "chrome-devtools-official"]) {
+    assert.equal(cfg.mcpServers[gone], undefined, `${gone} must not be MCP-attached`);
+  }
+  const argv = body.plan.flatMap((s) => s.argv).join(" ");
+  assert.doesNotMatch(argv, /\bverify\b/);
+  assert.doesNotMatch(argv, /deploy-check/);
+  assert.doesNotMatch(argv, /chrome-start/);
+  assert.doesNotMatch(argv, /test-bg/);
+  assert.doesNotMatch(argv, /playwright-mcp\.sh run/);
+  assert.ok(!body.steps?.length, "dry-run must not spawn");
+});
+
+test("smokePlan chrome (and any CLI-only wrapper it still pokes) stays status/help", () => {
+  const plan = smokePlan();
+  const chrome = plan.find((s) => s.server === "chrome-devtools");
+  assert.ok(chrome.argv.includes("status"));
+  assert.ok(!chrome.argv.includes("verify"));
+  assert.ok(!chrome.argv.includes("run"));
+  const pw = plan.find((s) => s.server === "playwright");
+  if (pw) {
+    assert.ok(pw.argv.includes("status"));
+    assert.ok(!pw.argv.includes("run"));
+  }
+  const fish = plan.find((s) => s.server === "tinyfish");
+  if (fish) {
+    assert.ok(fish.argv.includes("help"));
+    assert.ok(!fish.argv.includes("ensure"));
+  }
+});
+
+test("apex-tools-mcp.sh smoke --dry-run delegates", () => {
+  const r = spawnSync("bash", [SH, "smoke", "--dry-run"], {
+    encoding: "utf8",
+    cwd: ROOT,
+    timeout: 15000,
+  });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.dryRun, true);
+  assert.ok(body.plan.some((s) => s.server === "apex-tools"));
+});
+
+test("help names the never-wrap and the write path", () => {
+  const r = run(["--help"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Never wraps test-bg/);
+  assert.match(r.stdout, /mcp-smoke\.json/);
+  assert.match(r.stdout, /playwright status only/);
+});
+
+test("cloud-agent-install notes TinyFish key and chrome-devtools clone", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/env/cloud-agent-install.sh"), "utf8");
+  assert.match(src, /TINYFISH_API_KEY/);
+  assert.match(src, /https:\/\/agent\.tinyfish\.ai\/home/);
+  assert.match(src, /chrome-devtools-mcp\.sh" clone/);
+  assert.match(src, /tinyfish-mcp\.sh" setup/);
+  assert.match(src, /ensure_mcp_clones/);
+  assert.match(src, /APEX_SKIP_TINYFISH_SETUP/);
+  assert.ok(!src.includes("sk-" + "tinyfish-"));
+  assert.ok(!src.includes("BAKED" + "_KEY"));
+});
+
+test("mcp-smoke names the TinyFish home URL when the key is missing and never reports a fallback", () => {
+  assert.match(fs.readFileSync(SMOKE, "utf8"), /https:\/\/agent\.tinyfish\.ai\/home/);
+  const r = run(["--dry-run"], { TINYFISH_API_KEY: "" });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const body = JSON.parse(r.stdout);
+  // With no key in the shell the only legitimate source is the gitignored
+  // .env file — a "fallback" verdict would mean a tracked key came back.
+  assert.notEqual(body.tinyfishKey.via, "fallback");
+  assert.ok(["env-file", "missing"].includes(body.tinyfishKey.via), body.tinyfishKey.via);
+  if (!body.tinyfishKey.present) {
+    assert.equal(body.tinyfishKey.url, "https://agent.tinyfish.ai/home");
+    assert.match(body.warnings.join("\n"), /https:\/\/agent\.tinyfish\.ai\/home/);
+  }
+});
+
+test("tracked source never embeds a TinyFish key", () => {
+  const src = fs.readFileSync(SMOKE, "utf8");
+  assert.ok(!src.includes("sk-" + "tinyfish-"));
+  assert.match(src, /TINYFISH_API_KEY/);
+});
+
+test("smoke --real: tree tools only, judged on ok + a result, exit 0 in mock mode", async () => {
+  const { realTools, judgeReal, REAL_SKIP } = await import("../../tools/mcp/mcp-smoke.mjs");
+  const lt = spawnSync(process.execPath, [path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "list-tools"], {
+    encoding: "utf8", cwd: ROOT, env: { ...process.env, APEX_MCP_MOCK: "1" }, timeout: 15000, maxBuffer: 16e6,
+  });
+  const names = realTools(JSON.parse(lt.stdout));
+  assert.ok(names.includes("apex_status") && names.includes("apex_pick_tests"));
+  for (const n of ["apex_shot", "apex_eval", "apex_track", "apex_garage", "apex_hud_shot", ...REAL_SKIP]) assert.ok(!names.includes(n), `${n} is not a real-smoke tool`);
+  assert.equal(judgeReal({ ok: true, out: { a: 1 } }).pass, true);
+  assert.equal(judgeReal({ ok: true, out: null }).pass, false, "ok:true with nothing to show is a fail");
+  assert.equal(judgeReal({ ok: true, exit: 0, argv: [], out: null }).pass, false);
+  assert.equal(judgeReal({ ok: true, out: null, dryRun: true }).pass, true);
+  assert.equal(judgeReal({ ok: true, jobs: [], total: 0 }).pass, true, "a tool's own result keys count");
+  assert.equal(judgeReal({ ok: false, error: "x" }).pass, false);
+  const r = run(["--real", "--no-write", "--only=apex_status,apex_pick_tests"], { APEX_MCP_MOCK: "1" });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /PASS apex_status/);
+  assert.match(r.stdout, /PASS apex_pick_tests/);
+  assert.match(r.stdout, /mcp-smoke --real ok: 2\/2/);
+});
+
+// 2026-10-10: --real covered only the tree tools. --browser adds one cheap call per browser path (ui_fit, ui_shot, eval), one at a
+// time. Mock mode here: no Chromium, and the loadavg refusal (a browser call under load times the box) is skipped.
+test("smoke --real --browser adds the browser checks, opt-in, and judges them the same way", async () => {
+  const { BROWSER_CHECKS } = await import("../../tools/mcp/mcp-smoke.mjs");
+  assert.deepEqual(BROWSER_CHECKS.map(([n]) => n), ["apex_ui_fit", "apex_ui_shot", "apex_eval"]);
+  const off = run(["--real", "--no-write", "--only=apex_status"], { APEX_MCP_MOCK: "1" });
+  assert.doesNotMatch(off.stdout, /apex_ui_fit/, "no browser call without --browser");
+  const on = run(["--real", "--browser", "--no-write", "--only=apex_status,apex_ui_fit,apex_ui_shot"], { APEX_MCP_MOCK: "1" });
+  assert.equal(on.status, 0, on.stderr + on.stdout);
+  assert.match(on.stdout, /PASS apex_ui_fit/);
+  assert.match(on.stdout, /PASS apex_ui_shot/);
+  assert.match(on.stdout, /mcp-smoke --real ok: 3\/3 tools \(tree \+ browser\)/);
+});

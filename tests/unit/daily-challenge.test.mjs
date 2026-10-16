@@ -1,0 +1,236 @@
+/* daily-challenge.test.mjs — the DAILY CHALLENGE plan and record, in a VM.
+ *
+ * js/race/daily-challenge.js is pure rules over the date and a store: the plan
+ * must be the same for every player on the same UTC day and different across
+ * days; the streak counts consecutive UTC days with a lap; the share line has
+ * one shape. Loaded whole with stub Tracks / Log, like season-cal.test.mjs.
+ *
+ * Run: node --test tests/unit/daily-challenge.test.mjs   (npm run test:tooling-fast)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
+import { seedHash32 } from "../helpers/seed-hash32.mjs";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+// VM objects carry the VM realm's prototypes: compare plain-data copies.
+const host = (v) => JSON.parse(JSON.stringify(v));
+
+function load() {
+  const season = ["bahrain", "jeddah", "melbourne", "suzuka", "monaco", "montreal", "monza", "spa"]
+    .map((id) => ({ id, name: id.toUpperCase() }));
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
+    Tracks: { LIST: season.concat([{ id: "kyalami", name: "KYALAMI" }]), SEASON: season },
+  });
+  seedLog(ctx);
+  seedHash32(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx);
+  const D = vm.runInContext("DailyChallenge", ctx);
+  const stored = new Map();
+  const calls = [];
+  const G = {
+    store: { get: (k, d) => (stored.has(k) ? JSON.parse(stored.get(k)) : d), set: (k, v) => stored.set(k, JSON.stringify(v)) },
+    fmtTime: (t) => t.toFixed(3),
+    ttDistance: 4, trackIdx: -1, raceWeather: "dry", raceTimeOfDay: "default", raceLaps: 3, seed: 1,
+    flow: "gp", timeTrial: false,
+    startRace: () => calls.push("startRace"),
+  };
+  return { D, d: D.create(G), G, stored, calls };
+}
+
+test("the plan is a pure function of the UTC day — same day, same plan; adjacent days differ", () => {
+  const { D } = load();
+  const a = D.plan("2026-09-03"), b = D.plan("2026-09-03");
+  assert.deepEqual(a, b);
+  const days = ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06", "2026-09-07"];
+  const plans = days.map((d) => D.plan(d));
+  assert.ok(new Set(plans.map((p) => p.trackId + p.weather + p.tod)).size >= 5, "a week is not one plan");
+  for (const p of plans) {
+    assert.ok(["dry", "overcast", "wet", "rain", "fog"].includes(p.weather));
+    assert.ok(["default", "dawn", "day", "dusk", "night"].includes(p.tod));
+    assert.ok(p.seed > 0 && Number.isInteger(p.seed));
+  }
+  assert.equal(D.dayKey(new Date(Date.UTC(2026, 8, 3, 23, 59))), "2026-09-03", "UTC, not local");
+  assert.equal(D.prevDay("2026-03-01"), "2026-02-28");
+});
+
+test("open() stages the day's time trial by circuit ID with the day's seed, then starts", () => {
+  const { D, d, G, calls } = load();
+  const p = d.open("2026-09-03");
+  assert.equal(p.trackId, D.plan("2026-09-03").trackId);
+  assert.equal(G.timeTrial, true);
+  assert.equal(G.flow, "gp");
+  assert.equal(G.trackIdx, ["bahrain", "jeddah", "melbourne", "suzuka", "monaco", "montreal", "monza", "spa"].indexOf(p.trackId));
+  assert.equal(G.raceWeather, p.weather);
+  assert.equal(G.raceTimeOfDay, p.tod);
+  assert.equal(G.raceLaps, 4);
+  assert.equal(G.seed, p.seed);
+  assert.deepEqual(calls, ["startRace"]);
+  assert.equal(d.isActive(), true);
+  d.stop();
+  assert.equal(d.isActive(), false);
+});
+
+test("select() stages a daily class without starting the countdown", () => {
+  const { D, d, G, calls } = load();
+  const p = d.select("2026-09-03", "open");
+  assert.equal(p.trackId, D.plan("2026-09-03").trackId);
+  assert.equal(p.class, "open");
+  assert.equal(G.timeTrial, true);
+  assert.equal(G.trackIdx, ["bahrain", "jeddah", "melbourne", "suzuka", "monaco", "montreal", "monza", "spa"].indexOf(p.trackId));
+  assert.equal(G.raceWeather, p.weather);
+  assert.equal(G.raceTimeOfDay, p.tod);
+  assert.deepEqual(calls, [], "the picker owns selection; only RACE! starts");
+  assert.equal(d.isActive(), true, "NEXT may carry the armed daily into race settings");
+});
+
+test("stop() hands the session seed back: a later one-off GP does not draw off the Daily's", () => {
+  const { d, G } = load();
+  G.seed = 777;
+  d.select("2026-09-03", "open");
+  const daySeed = G.seed;
+  assert.notEqual(daySeed, 777, "precondition: the Daily staged its own seed");
+  d.select("2026-09-04", "open");   // re-selecting keeps the ORIGINAL to restore, not the first day's
+  d.stop();
+  assert.equal(G.seed, 777);
+  d.stop();   // idempotent: a second stop (quitToMenu after a results exit) changes nothing
+  assert.equal(G.seed, 777);
+});
+
+test("record() keeps the day's best and counts a streak of consecutive UTC days", () => {
+  const { d } = load();
+  assert.equal(d.record(80), null, "no active session, nothing recorded");
+  d.open("2026-09-03");
+  d.record(90.1234); d.record(88.5); d.record(95);
+  assert.equal(d.data().days["2026-09-03"].best, 88.5);
+  assert.equal(d.data().days["2026-09-03"].laps, 3);
+  assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-09-03" });
+  d.open("2026-09-04"); d.record(70);
+  assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-09-04" });
+  d.open("2026-09-06"); d.record(70);   // a missed day resets the streak
+  assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-09-06" });
+  assert.equal(d.data().days["2026-09-04"].best, 70, "earlier days are kept");
+});
+
+test("a lap on an OLDER day's plan never resets or rewinds the streak", () => {
+  // A tab left on yesterday's plan past UTC midnight, today already played in
+  // another tab: the stale lap set count 1 and moved `last` back a day (bug hunt 2026-10-05 G8).
+  const { d } = load();
+  for (const day of ["2026-10-03", "2026-10-04", "2026-10-05"]) { d.open(day); d.record(70); }
+  assert.deepEqual(host(d.data().streak), { count: 3, last: "2026-10-05" });
+  d.open("2026-10-04"); d.record(69);
+  assert.deepEqual(host(d.data().streak), { count: 3, last: "2026-10-05" }, "the streak stands");
+  assert.equal(d.data().days["2026-10-04"].best, 69, "the older day's lap still counts for that day");
+});
+
+test("liveStreak() is the streak as it stands today: a chain whose last lap is older than yesterday reads 0", () => {
+  const { d } = load();
+  const today = d.dayKey(), y = new Date(today + "T00:00:00Z");
+  const ago = (n) => { const t = new Date(y); t.setUTCDate(t.getUTCDate() - n); return t.toISOString().slice(0, 10); };
+  assert.equal(d.liveStreak(), 0, "no laps, no streak");
+  d.open(ago(3)); d.record(80); d.open(ago(2)); d.record(80);
+  assert.equal(d.data().streak.count, 2, "the stored count still says 2…");
+  assert.equal(d.liveStreak(), 0, "…but a missed yesterday has already broken it (the title read STREAK 2)");
+  d.open(ago(1)); d.record(80);
+  assert.equal(d.liveStreak(), 3, "a lap yesterday keeps it alive today");
+  d.open(today); d.record(80);
+  assert.equal(d.liveStreak(), 4);
+  d.stop();
+});
+
+test("record() keeps a 60-day window of history; the streak is untouched", () => {
+  // The per-day history is write-only (every reader asks for today), so it must
+  // not grow ~680 chars a day for ever.
+  const { d } = load();
+  d.open("2026-01-01"); d.record(90);
+  d.open("2026-03-01"); d.record(90);    // 59 days later: still inside the window
+  assert.ok(d.data().days["2026-01-01"], "a day inside the window was dropped");
+  d.open("2026-03-03"); d.record(90);    // 61 days after the first
+  const days = Object.keys(d.data().days).sort();
+  assert.deepEqual(days, ["2026-03-01", "2026-03-03"]);
+  assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-03-03" });
+  d.open("2026-03-04"); d.record(90);
+  assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-03-04" });
+});
+
+test("the share line names the day, circuit, best, medal and streak", () => {
+  const { d } = load();
+  d.open("2026-09-03"); d.record(81.345); d.record(81.1);
+  const p = d.current();
+  assert.equal(d.shareText("gold"), "APEX 26 DAILY 2026-09-03 · " + p.trackName + " · 81.100 · GOLD · STREAK 1");
+  assert.equal(d.shareText(null), "APEX 26 DAILY 2026-09-03 · " + p.trackName + " · 81.100 · STREAK 1");
+  const fresh = load();
+  fresh.d.open("2026-09-03");
+  assert.equal(fresh.d.shareText(null), "APEX 26 DAILY 2026-09-03 · " + p.trackName + " · NO LAP");
+});
+
+test("a damaged save normalises instead of throwing", () => {
+  const { d, stored } = load();
+  stored.set("daily.v1", JSON.stringify({ days: 5, streak: "x" }));
+  assert.deepEqual(host(d.data()), { days: {}, streak: { count: 0, last: null } });
+  stored.set("daily.v1", "[]");
+  assert.deepEqual(host(d.data().streak), { count: 0, last: null });
+});
+
+test("an array-shaped day history recovers and persists the next completed lap", () => {
+  const { D, d, G, stored } = load();
+  const day = "2026-10-16";
+  stored.set("daily.v1", JSON.stringify({ days: [], streak: { count: 0, last: null } }));
+  d.select(day, "open");
+  d.record(81.345);
+
+  const saved = JSON.parse(stored.get("daily.v1"));
+  assert.equal(Array.isArray(saved.days), false, "date-keyed entries must survive JSON serialization");
+  assert.deepEqual(saved.days[day], { best: 81.345, laps: 1 });
+  const reloaded = D.create(G);
+  reloaded.select(day, "open");
+  assert.equal(reloaded.shareText(null), "APEX 26 DAILY " + day + " · " + reloaded.current().trackName
+    + " · 81.345 · STREAK 1");
+  reloaded.record(82);
+  assert.deepEqual(JSON.parse(stored.get("daily.v1")).days[day], { best: 81.345, laps: 2 });
+});
+
+test("with no medal passed, the share line carries TODAY's — from today's best, not the stored ghost's", () => {
+  // results-sheet.js passed Ghost.medal(), whose records context has no day in
+  // it: a later Daily on the same circuit and conditions read another day's GOLD
+  // next to today's slower lap. Today's best against the reference pole decides.
+  const { G } = load();
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
+    Tracks: { LIST: [{ id: "spa", name: "SPA" }], SEASON: [{ id: "spa", name: "SPA" }] },
+    Quali: { medalFor: (t, pole) => (t <= pole ? "gold" : t <= pole * 1.03 ? "silver" : null) },
+  });
+  seedLog(ctx); seedHash32(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx);
+  const d = vm.runInContext("DailyChallenge", ctx).create({ ...G, referencePole: () => 82 });
+  d.open("2026-09-03");
+  d.record(84);                                   // within 3 % of pole: silver
+  assert.match(d.shareText(), / · SILVER( · |$)/);
+  d.record(81.5);                                 // beats the pole: gold
+  assert.match(d.shareText(), / · GOLD( · |$)/);
+  assert.doesNotMatch(d.shareText(null), /GOLD|SILVER/, "an explicit null still means no medal");
+  const src = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
+  assert.doesNotMatch(src, /shareText\(Ghost\.medal\(\)\)/, "the results sheet no longer passes the ghost's medal");
+});
+
+test("stop() resumes the sim stream where the Daily found it (G.simSeed(seed, stream)), not at the seed's start", () => {
+  const { d, G } = load();
+  // The real contract (js/game.js simSeed): setting the seed restarts the stream; (v, n) resumes it at n; (undefined, true) reads it.
+  let seed = 777, stream = 123456;
+  G.simSeed = (v, st) => {
+    if (v !== undefined) { seed = v; stream = typeof st === "number" ? st : v; }
+    return st === true ? stream : seed;
+  };
+  Object.defineProperty(G, "seed", { get: () => seed, set: (v) => G.simSeed(v) });
+  d.select("2026-09-03");
+  assert.notEqual(seed, 777, "precondition: the Daily took the seed over");
+  assert.equal(stream, seed, "...restarting the stream at the day's seed");
+  d.stop();
+  assert.equal(seed, 777);
+  assert.equal(stream, 123456, "the stream is back where race 1 left it");
+});

@@ -1,0 +1,86 @@
+/* start-race-latch.test.mjs — startRace() re-entrancy latch.
+ *
+ * startRace() has fire-and-forget callers (js/game.js's pm-restart and
+ * startRaceCovered, js/race/daily-challenge.js, js/race/race-settings.js — the
+ * DEFECT-LEDGER un-awaited-startRace family) and no re-entry guard of its
+ * own: a second trigger (double-click, a pm-restart while a start was still
+ * building) could re-enter startRaceBody() mid-build. The fix renames the
+ * body to startRaceBody() and wraps it in a startRace() that latches
+ * concurrent callers onto the one in-flight promise (`startRace` in js/game.js).
+ *
+ * This boots the REAL game.js in the Node VM harness (tools/lib/game-vm.cjs)
+ * — one boot, shared by both tests below (~15 s, the same cost as
+ * ai-racecraft-vm.test.mjs) — and calls the actual G.startRace() twice
+ * synchronously, so the assertion is on the real function, not a source pin.
+ *
+ * Run: node --test tests/unit/start-race-latch.test.mjs
+ */
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { createGame } = require("../../tools/lib/game-vm.cjs");
+
+let g = null;
+before(async () => { g = await createGame({ track: "monza" }); });
+after(() => { if (g) g.close(); });
+
+test("a concurrent second startRace() call shares the in-flight promise", async () => {
+  const G = g.G;
+  assert.equal(typeof G.startRace, "function", "G.startRace must be exposed");
+  const p1 = G.startRace();
+  const p2 = G.startRace();
+  assert.ok(p1 && typeof p1.then === "function", "startRace() must return a promise");
+  assert.strictEqual(p2, p1, "a concurrent caller must share the in-flight start, not begin a second build");
+  // Drain both without letting either's outcome fail the test — the latch
+  // identity is what this test is about, not whether this particular
+  // mid-test restart finishes cleanly.
+  await Promise.allSettled([p1, p2]);
+});
+
+test("a start that throws after the scenery await rejects, lands on the menu, and releases the latch", async () => {
+  // startRaceBody() does its DOM/state work after `await ensureScenery`;
+  // six callers never look at the promise, so a throw there used to leave the
+  // quali sheet closed, session "race" and no HUD under the error overlay.
+  // The wrapper's catch now routes through quitToMenu() and rethrows, so an
+  // awaited caller still sees the failure while the screen is coherent.
+  // DebrisWorld.reset() is the first call after the await (Tracks.build is
+  // skipped on a same-circuit restart, so it is not a usable throw site).
+  const { G, sandbox, apex } = g;
+  const orig = sandbox.DebrisWorld.reset;
+  sandbox.DebrisWorld.reset = () => { throw new Error("test: DebrisWorld.reset failed"); };
+  let rejected = null;
+  try { await G.startRace(); } catch (e) { rejected = e; } finally { sandbox.DebrisWorld.reset = orig; }
+  assert.ok(rejected && /DebrisWorld.reset failed/.test(String(rejected.message)), "the caller still sees the rejection");
+  assert.equal(apex.info().state, "menu", "a failed start lands on the menu, not a half-built race");
+  const p = G.startRace();
+  assert.ok(p && typeof p.then === "function", "the latch is released after a rejection");
+  await Promise.allSettled([p]);
+});
+
+test("the latch releases once the in-flight start settles", async () => {
+  const G = g.G;
+  const p1 = G.startRace();
+  await Promise.allSettled([p1]);
+  const p2 = G.startRace();
+  assert.notStrictEqual(p2, p1, "a call after the previous start settled must not reuse its stale promise");
+  await Promise.allSettled([p2]);
+});
+
+test("a delayed optional-physics prerequisite cannot start a race after the player quits", async () => {
+  const { G, sandbox, apex } = g;
+  const orig = sandbox.DebrisWorld.ready;
+  let release, asked = 0;
+  sandbox.DebrisWorld.ready = () => { asked++; return new Promise((resolve) => { release = resolve; }); };
+  try {
+    const p = G.startRace();
+    await Promise.resolve();
+    assert.equal(asked, 1, "race entry waits for optional physics before committing");
+    G.quitToMenu();
+    release(true);
+    const result = await p;
+    assert.equal(result.kind, "canceled");
+    assert.equal(apex.info().state, "menu", "late readiness must not resurrect the abandoned countdown");
+  } finally { sandbox.DebrisWorld.ready = orig; }
+});

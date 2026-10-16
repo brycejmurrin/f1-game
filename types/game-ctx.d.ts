@@ -1,0 +1,917 @@
+/* Apex 26 — the G ctx façade, as a machine-checked contract.
+
+   BEDROCK PHASE 1 (docs/research/ARCHITECTURE-REDESIGN-2026-08.md §Phase 1).
+   js/game.js owns the closure state of the whole game and hands ONE object of
+   live getters/setters + stable helpers to every extracted module
+   (`Module.create(G)`). That object is declared in exactly one place —
+   the `const G = { … }` literal in js/game.js — and until this file existed nothing
+   checked that a module's read of `G.foo` corresponded to anything there. The
+   defect class that costs is FAÇADE DRIFT: a member written but never declared
+   (the old `countT` expando), a member declared but dead (the duplicate
+   `setLightTune` key), a write to a getter-only member that silently no-ops.
+
+   HOW THIS FILE IS CHECKED — it is not documentation, it is a gate:
+     node tools/check/check-gctx.mjs        (also: tests/unit/game-ctx-surface.test.mjs)
+   1. PARITY. The tool parses `const G = {…}` out of js/game.js with espree and
+      asserts the member set here is exactly the member set there, with matching
+      writability. Add a G member without adding it here (or vice versa) and the
+      unit suite goes red in the same session that introduced the drift.
+   2. USAGE. The tool extracts every `G.<member>` reference and every
+      `const {…} = G` destructure from every manifest module whose create() takes the ctx, emits them
+      as a typed shadow file against this interface, and runs `tsc --noEmit`
+      over it. A read of a member that does not exist, or a write to a readonly
+      one, is a compile error carrying the real source file:line.
+   3. UNREAD. The reverse direction, which no type checker sees: a member no
+      module reads at all. Baselined, so a NEW one fails.
+
+   WRITABILITY RULE (mechanical, so the parity check can derive it):
+     `readonly` here  <=>  a getter with NO setter, or a plain data property.
+     writable here    <=>  an accessor pair (get + set) in game.js.
+   Plain data properties (`store`, `clamp`, the hoisted-function shorthands) are
+   assignable in JS today but are stable bindings nothing reassigns; marking them
+   readonly makes an accidental `G.clamp = …` a compile error now, and matches
+   where Phase 4's `Object.seal(G)` is going.
+
+   TYPE PRECISION — honest, not decorative. Primitives, tuples and function
+   signatures are transcribed from the code. Domain objects owned by OTHER files
+   (the built track, a car, the renderer backend, the career save) are declared
+   here only as far as this façade's own contract needs; each carries an index
+   signature and a pointer to its owner. Phase 3 types the renderer
+   (`RendererBackend`), Phase 6 tightens the rest. `unknown` is used where the
+   value genuinely is dynamic; `any` is used nowhere.
+
+   NOT A RUNTIME FILE. Nothing loads it, no `<script>` tag, no ?v=N bump.
+*/
+
+// ── Shared primitives ────────────────────────────────────────────────────────
+
+/** World-space or colour triple. +Y up, metres; colours are 0..1 linear RGB. */
+type Vec3 = [number, number, number];
+
+/** Anything whose real shape is owned by another file and not yet transcribed. */
+type Opaque = { [key: string]: unknown };
+
+// ── Domain objects the façade hands out (owners named per type) ──────────────
+
+/** A circuit data file's def object — js/circuits/<id>.js, via Tracks.LIST. */
+interface CircuitDef {
+  id: string;
+  name: string;
+  /** Track defaults to a night race when true (see loadTrack's sessionDark). */
+  night?: boolean;
+  [key: string]: unknown;
+}
+
+/** The BUILT track — centreline, meshes, graph. Owner: js/track/tracks.js. */
+interface TrackModel {
+  def: CircuitDef;
+  /** Lap length in arc metres. Every wrapS()/zone test reads this. */
+  total: number;
+  [key: string]: unknown;
+}
+
+/** A team row from Teams.LIST — js/data/teams.js. */
+interface TeamDef {
+  id: string;
+  name: string;
+  color: Vec3;
+  tier: number;
+  custom?: boolean;
+  [key: string]: unknown;
+}
+
+/** Per-car performance multipliers (human cars only) — modsFor(). */
+interface CarMods { speed: number; accel: number; cornering: number; braking: number; }
+
+/** Core result of RaceControl.lineTransition; callers own presentation effects. */
+interface LineTransition {
+  direction: -1 | 1;
+  changed: boolean;
+  lapDone: number | null;
+  flagged: boolean;
+}
+
+/** One grid car, as built by makeCars() in js/game.js. Fields listed are the
+    ones the façade's own signatures depend on; the rest is physics/AI state. */
+interface CarState {
+  team: TeamDef;
+  name: string;
+  code: string;
+  driverId: string;
+  num: number;
+  /** Role flags — see setCarRole. human without local === a networked rival. */
+  human: boolean;
+  local: boolean;
+  isPlayer: boolean;
+  mods: CarMods | null;
+  aeroLoad: number | null;
+  seat: number;
+  /** Arc position (m) and lateral offset (m, +right). */
+  s: number;
+  x: number;
+  speed: number;
+  prog: number;
+  lap: number;
+  /** Physical laps consumed for fuel; classification lap can rewind at a red flag. */
+  fuelLap?: number;
+  fuelRestartLaps?: number;
+  rank?: number;
+  /** Active-aero blend 0..1. Read this, never xOn — see docs/PHYSICS.md. */
+  aeroX: number;
+  xOn: boolean;
+  retired: boolean;
+  dnf: string | null;
+  [key: string]: unknown;
+}
+
+/** The season standings/calendar save — js/core/store.js migrateSeasonPoints. */
+type SeasonState = Opaque;
+
+/** The career save. Owner: js/career/career.js (Career.data()). */
+type CareerSave = Opaque;
+
+/** What Career.settleRound() resolved for the round just finished, or null. */
+type CareerSettlement = Opaque;
+
+/** Per-frame lighting/scene uniforms handed to the renderer — see atmosphere.js. */
+type FrameState = Opaque;
+
+/** The renderer backend handle (GLX by default; TLX/WGX when opted in).
+    Phase 3 replaces this with the authored `RendererBackend` interface. */
+type GfxBackend = Opaque;
+
+/** The cached localStorage wrapper — js/core/store.js. All keys "apex26."-prefixed. */
+interface StoreApi {
+  /** Parsed value for `k`, or `d` when absent/unreadable. */
+  get<T>(k: string, d: T): T;
+  get(k: string, d?: unknown): unknown;
+  /** `false` when the value is cached for this session but did not reach
+      localStorage (write() returns `.durable`; store.js). Most callers ignore it. */
+  set(k: string, v: unknown): boolean;
+  /** The raw string lane: bare "1"/"0" flags and ids, read live (no cache), key with or without the prefix. */
+  raw(k: string): string | null;
+  rawSet(k: string, v: string): boolean;
+  rawDel(k: string): boolean;
+  /** Bumped on every set() so memo caches can self-invalidate. */
+  rev: number;
+  /** The DOMException name once a read or write has failed, else null. */
+  broken: string | null;
+  [key: string]: unknown;
+}
+
+/** One time-trial leaderboard row — GameStore.ttBoard(trackId). */
+type TTBoardRow = Opaque;
+
+/** A free-camera override installed by __apex (view/orbit/studio/…). */
+interface DebugCam {
+  eye: Vec3;
+  target: Vec3;
+  fov: number;
+  far?: number;
+  fog?: unknown;
+  /** Radians; the FREE CAMERA's ROLL dial (js/camera/free-cam.js). Absent = level. */
+  roll?: number;
+  /** Render through the flyby's lens (FlybySeq.FAR / FOG / NEAR). */
+  cine?: boolean;
+}
+
+/** The horizon-facing sky override __apex.sky() installs, or null. */
+interface SkyViewOverride { eye: Vec3; tgt: Vec3; fov: number; }
+
+/** The car-photography lamp rig __apex.studio() installs. */
+interface StudioRig {
+  n: number; dist: number; h: number; intensity: number;
+  color: Vec3; radius: number; spin: number; fill: number;
+  /** Ambient stashed while the rig lifts it; restored by studio(false). */
+  _ambStash?: [unknown, unknown];
+}
+
+/** Test-only control override (null = read the real Input). __apex.setInput(). */
+interface TestInput { steer: number; throttle: boolean; brake: boolean; }
+
+/** A scheduled weather transition — startWeatherArc(). */
+interface WeatherArc { from: string; to: string; t: number; dur: number; seq: unknown; cell?: { c0: number; h: number; v: number; life: number; total: number } | null; sectors?: Array<{ sector: number; wet: number; raining: boolean }> | null; where?: number[] | null; }
+
+/** An ACTIVE AERO activation zone, in arc metres. Owner: js/physics/aero-zones.js. */
+interface AeroZone { start: number; end: number; len: number; }
+
+/** A pooled centreline sample (position, tangent, right, half-width). */
+interface TrackSample { p: Vec3; t: Vec3; r: Vec3; hw: number; }
+
+/** Free-fly photo camera pose. */
+interface PhotoCam { pos: Vec3; yaw: number; pitch: number; fov: number; }
+
+/** Held keys for the photo camera (WASD + up/down + page up/down). */
+type PhotoKeys = Record<string, boolean>;
+
+/** Photo-camera pointer drag state. */
+interface PhotoMouse { dx: number; dy: number; drag: boolean; px: number; py: number; pid: number | null; }
+
+/** A 2-axis photo-camera stick (move or look). */
+interface PhotoAxis { x: number; y: number; }
+
+/** The lighting profile store, keyed "track|timeOfDay|weather" (plus "*").
+    Owner: js/lighting/profiles.js; tuner.js mutates it for RESET/COPY VALUES. */
+type LightProfiles = Record<string, Record<string, unknown>>;
+
+/** The caution/flag picture race control publishes — js/race/race-control.js. */
+interface CautionInfo {
+  level: number; sector: number; frac: number; total: number;
+  sectors: [number, number, number]; sinceT: number; cause: string;
+  [key: string]: unknown;
+}
+
+/** A camera solution: where the eye is, what it looks at, and the FOV. */
+interface CamVantage { eye: Vec3; tgt: Vec3; fov: number; }
+
+/** The multiplayer session driver — js/net/netplay.js (NetPlay.create(G)). */
+type NetPlayApi = Opaque;
+
+/** The lobby/room state machine — js/net/lobby.js (NetLobby.create(G)). */
+type NetLobbyApi = Opaque;
+
+/** A countdown pending on the SESSION's clock: `at` is lights-out. */
+interface NetStart { at: number; hold: number; now(): number | null; }
+
+/** A seat another player holds, so the garage can refuse to hand it out. */
+interface PeerSeat { team: string; driver: number; }
+
+/** One row of the qualifying model's classification (cars stripped out). */
+type QualiRow = Opaque;
+
+/** The UI/HUD scale readout setScale() returns. */
+interface ScaleState { pct: number; stored: unknown; min: number; max: number; [key: string]: unknown; }
+
+/** What drawAeroFlaps() is handed in the garage: the resolved level and style. */
+
+/** A resolved parts setup for one team — Parts.resolveSetup()/getTeamParts(). */
+type PartsSetup = Opaque;
+
+/** The static DOM the shell guarantees (index.html). `$()` itself returns
+    HTMLElement | null; every id here is in the shipped shell, so the members are
+    typed non-null and a missing one is a shell bug, not a type-system concern. */
+interface GameEls {
+  hud: HTMLElement; pos: HTMLElement; lap: HTMLElement; time: HTMLElement;
+  best: HTMLElement; speed: HTMLElement; energy: HTMLElement;
+  ot: HTMLElement; aero: HTMLElement;
+  tyre: HTMLElement; tyreCode: HTMLElement; tyreFill: HTMLElement; plan: HTMLElement;
+  pitCue: HTMLElement; pitCueArrow: HTMLElement; pitCueText: HTMLElement; workBtn: HTMLElement;
+  gapA: HTMLElement; gapB: HTMLElement;
+  hudSectors: HTMLElement; hudLimits: HTMLElement;
+  flag: HTMLElement; minimap: HTMLElement;
+  lights: HTMLElement; announce: HTMLElement;
+  announceNum: HTMLElement; announceWho: HTMLElement; announceText: HTMLElement; announceLive: HTMLElement;
+  overlay: HTMLElement; audiostate: HTMLElement;
+  lighting: HTMLElement; camtune: HTMLElement; flyby: HTMLElement;
+  select: HTMLElement; selTitle: HTMLElement; selTeams: HTMLElement;
+  selTracks: HTMLElement;
+  selPreviewMap: HTMLElement; selPreviewName: HTMLElement;
+  selPreviewGp: HTMLElement; selPreviewMeta: HTMLElement;
+  selPreviewRec: HTMLElement;
+  selTrackSection: HTMLElement; selCircuitLabel: HTMLElement;
+  selBack: HTMLElement; selGo: HTMLElement;
+  customize: HTMLElement;
+  results: HTMLElement; resultsTitle: HTMLElement;
+  resultsTable: HTMLElement; resMenu: HTMLElement; resNext: HTMLElement;
+  pmStandings: HTMLElement;
+  pausebtn: HTMLElement; pausemenu: HTMLElement; pmsettings: HTMLElement; btnCam: HTMLElement;
+  howtoplay: HTMLElement; datahub: HTMLElement; soundbtn: HTMLElement;
+  btnBoost: HTMLElement; btnOT: HTMLElement; btnAero: HTMLElement; btnBrake: HTMLElement;
+  btnThrottle: HTMLElement;
+  btnSteerLeft: HTMLElement; btnSteerRight: HTMLElement;
+  shiftUp: HTMLElement; shiftDown: HTMLElement;
+  gear: HTMLElement; rpmFill: HTMLElement; tach: HTMLElement;
+}
+
+// ── Enumerated string states ─────────────────────────────────────────────────
+
+/** Screen/flow state machine — js/game.js `let state`. */
+type GameState = string;
+/** "gp" | "season" | "career" — flow is the authority, seasonMode a derived view. */
+type FlowMode = string;
+/** "race" | "tt" — session is the authority, timeTrial a derived view. */
+type SessionMode = string;
+/** "dry" | "overcast" | "wet" | "rain" | "fog" — game.js `_WX_VALID`. */
+type Weather = string;
+/** "default" | "day" | "dusk" | "dawn" | "night". */
+type TimeOfDay = string;
+/** "off" | "low" | "real" — Reliability.isLevel() gates the setter. */
+type ReliabilityLevel = string;
+/** TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js LEVELS). */
+type TyreLevel = string;
+/** The session-bound half of PitLane — PitLane.create(G)'s return. */
+interface PitSession {
+  zoneOf(): Record<string, number> | null;
+  /** The lane's speed cap in m/s at the CURRENT pace scale. */
+  limit(): number;
+  inLane(c: CarState): boolean;
+  inWindow(c: CarState): boolean;
+  /** Arm (or cancel) the stop; omit `on` to toggle. */
+  arm(c: CarState, on?: boolean): boolean;
+  update(c: CarState, dt: number): void;
+  reset(c: CarState): void;
+  info(c?: CarState): Record<string, unknown> | null;
+  setNext(c: CarState, record: unknown): void;
+  estimate(c: CarState): { lossS: number; gapS: number | null } | null;
+  choices(c: CarState): Array<{ id: string; code: string }>;
+  selectNext(c: CarState, id: string): boolean;
+  serviceCar(c: CarState): void;
+}
+/** The session-bound half of TyreModel — TyreModel.create(G)'s return. */
+interface TyreSession {
+  fit(c: CarState, record: unknown): void;
+  update(c: CarState, dt: number): void;
+  /** Lateral grip scale; exactly 1 while the setting is off. */
+  gripMul(c: CarState): number;
+  /** Traction/braking scale — a smaller share of the same drop. */
+  tractionMul(c: CarState): number;
+  fuelAccelMul(c: CarState): number;
+  fuelVmaxMul(c: CarState): number;
+  lapsOn(c: CarState): number;
+  /** Wear as a fraction of the compound's life, 0..2. */
+  spent(c: CarState): number;
+  info(c: CarState): Record<string, unknown> | null;
+  belowWindow(c: CarState | null): number;
+  severity(): number;
+  level(): TyreLevel;
+  setLevel(v: TyreLevel): TyreLevel;
+  on(): boolean;
+  classRecord(cls: string): unknown;
+  optionRecord(opt: unknown): unknown;
+}
+/** "manual" | "auto" — the ACTIVE AERO race setting. */
+type AeroMode = string;
+
+// ══ The façade ═══════════════════════════════════════════════════════════════
+
+/** The one object js/game.js hands to every extracted module. Member order and
+    grouping follow the `const G = {…}` literal in js/game.js exactly. */
+interface GameCtx {
+  // ── DOM + formatting helpers ───────────────────────────────────────────────
+  readonly $: (id: string) => HTMLElement | null;
+  readonly els: GameEls;
+  readonly fmtTime: (t: number) => string;
+  /** The DASH number for a ground speed — km/h on the pace-5 scale (see vTop). */
+  readonly dashKph: (v: number) => number;
+  readonly ttBoard: (trackId: string) => TTBoardRow[];
+  readonly teamById: (id: string) => TeamDef | undefined;
+  readonly cssCol: (c: Vec3) => string;
+
+  // ── Session identity: what is on screen and which mode it is ───────────────
+  state: GameState;
+  readonly track: TrackModel | null;
+  readonly cars: CarState[];
+  readonly player: CarState | null;
+  /** js/race/flying-start.js — the qualifying / time-trial rolling start (stop() hands the wheel back). */
+  readonly flyingStart: { update(dt: number): void; stop(): void; owns(c: CarState): boolean; active(): boolean };
+  season: SeasonState | null;
+  /** flow/session are the authority; seasonMode/timeTrial are derived views. */
+  flow: FlowMode;
+  session: SessionMode;
+  /** Read-through to js/career/career.js — one copy, never a stale mirror. */
+  readonly career: CareerSave;
+  readonly careerSettlement: CareerSettlement | null;
+  readonly openCareer: () => void;
+  readonly openCareerSlots: () => void;
+  readonly openDailyPicker: () => void;
+  readonly closeSettings: () => void;
+  readonly openWatchPhoto: () => boolean;
+  seasonMode: boolean;
+  /** The championship round in a season/career, else the session race counter. */
+  readonly seasonRound: number;
+  ttNewRecord: boolean;
+  readonly ttSessionTs: number;
+  ttRecord: number;
+  timeTrial: boolean;
+  /** THIS SESSION IS UNSCORED. Derived like timeTrial (a Time Trial is always
+   *  practice); the setter arms it for a race or a qualifying session, and
+   *  never disarms one — a session that has been rewound cannot become scored
+   *  again. Gates checkpoints and rewind in js/race/driving-coach.js and
+   *  spoils records in js/race/session-records.js. */
+  practice: boolean;
+  /** DUEL format: trim the grid to the player and one bumped rival
+   *  (js/race/duel.js). A race SETTING, so it persists between sessions. */
+  duel: boolean;
+  /** Which legend the duel rival is (`js/data/legends.js` id), or "" for the
+   *  ordinary duel against the grid's fastest car. Read only when `duel` is on. */
+  duelLegend: string;
+  readonly lapsTarget: number;
+
+  // ── Reliability: the race setting, the arming path, the manual retire ──────
+  raceReliability: ReliabilityLevel;
+  readonly armReliability: (field?: CarState[]) => CarState[];
+
+  // ── Tyres: the race setting and the live wear model ───────────────────────
+  raceTyreWear: TyreLevel;
+  /** Dirty-air wake model: off / classic (default) / cfd. */
+  raceDirtyAir: "off" | "classic" | "cfd";
+  readonly tyres: TyreSession;
+  readonly pits: PitSession;
+  /** Frames that submitted the pit-crew mesh since the last read; __apex.pit() drains it. */
+  readonly pitCrewDrawn: () => number;
+  /** Continuous track wetness 0..1 (look=drive). Local roadWetness() in game.js aliases this. */
+  readonly trackWetness: () => number;
+  readonly recordControls: () => Record<string, unknown>;
+  readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
+  readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown>; practiceGoal(): string; setPracticeGoal(id: string): boolean };
+  readonly openCoachDetails: () => void;
+  /**
+   * The radio's VOICE — js/audio/radio-voice.js. Always an object: create()
+   * hands back a frozen no-op when neither synthesis nor a recorded pack is
+   * available, so no caller needs a guard. AudioPanel owns the toggle.
+   */
+  readonly radio: { setEnabled(b: boolean): void; setVolume(v: number): number; available(): boolean; unlock(): void; stop(): void; yieldToSpotter(): boolean };
+  /**
+   * The PRE-RACE ANNOUNCER — js/audio/announcer.js. Always an object, on the
+   * same inert() deal as `radio`. AudioPanel owns its switch and voice row;
+   * the loading screen calls play()/stop() and the flyby editor preview().
+   */
+  readonly announcer: { play(info: Record<string, unknown>, budgetMs: number): boolean; preview(info: Record<string, unknown>): boolean; sample(): boolean; scriptFor(info: Record<string, unknown>): string[]; readMs(info: Record<string, unknown>): number; wrapUp(order: unknown[], info: Record<string, unknown>): boolean; stop(): void; enabled(): boolean; setEnabled(b: boolean): void; available(): boolean };
+  /**
+   * The RACE RADIO — js/race/race-radio.js: the engineer's race calls and the
+   * in-race commentary. AudioPanel drives its two settings (chatter, commentary).
+   */
+  readonly raceRadio: { update(dt: number): void; request(): string; reset(): void; setChat(v: string): string; setComm(v: string): string; chat(): string; comm(): string; trafficBusy(): boolean; debug(): Record<string, unknown> };
+  /** What the loading card describes — the flyby editor previews the same object. */
+  readonly loadingInfo: () => Record<string, unknown>;
+  /** The menu's race prep (world built, menuFinish done, program warm, car prep record), read-only — __apex.menuPrep. */
+  readonly menuPrep: () => Record<string, unknown>;
+  /** js/ui/loading-screen.js, so the flyby editor can hold the card up and move it. */
+  readonly loadingScreen: { run(info: Record<string, unknown>, go: () => void): void; stop(): void; hold(info: Record<string, unknown>): boolean; handoff(): boolean; card(): Record<string, number>; setCard(patch: Record<string, number>): Record<string, number>; resetCard(): Record<string, number>; progress(): number; active(): boolean; phase(): string };
+
+  readonly retireCar: (c: CarState, reason?: string) => void;
+  readonly ranked: CarState[];
+  readonly sectorLast: [number | null, number | null, number | null];
+
+  // ── Determinism: the sim RNG seed (setting it rewinds the stream) ──────────
+  seed: number;
+  /** `simSeed(v)` sets the seed AND restarts the stream; `simSeed(v, state)` resumes the stream at `state`; `simSeed(undefined, true)` reads the stream position. */
+  readonly simSeed: (v?: number, stream?: number | true) => number;
+  /** The race counter the reliability and weather draws hash on. A bare
+   *  passthrough (no stream rewind): VS FRIEND publishes it with the host's
+   *  settings so both peers draw the same DNFs — js/net/lobby.js. */
+  raceRound: number;
+
+  // ── Driving-model tunables (let-s in game.js; PACE re-inits the cameras) ───
+  DRIFT: number;
+  FRONT_GRIP: number;
+  /** A ground-speed SCALE, not a cap — compare speeds via vTop()/aTop() only. */
+  PACE: number;
+  PLAYER_GRIP: number;
+  ROAD_FOLLOW: number;
+  STEER_EXPO: number;
+  STEER_MAX_SLIP: number;
+  STEER_SPEED_REF: number;
+  WHEELBASE: number;
+  YAW_DAMP: number;
+  YAW_INERTIA: number;
+  raceLineAssist: number;
+
+  // ── Debug/test scratch state ──────────────────────────────────────────────
+  _lastFloodEmit: number;
+  _studioRig: StudioRig | null;
+  /** PERF-HUNT-2 S8: bumped each caution/coach/radio frame flush; null until the first flush so harness update() loops are not latched. */
+  _s8Stamp: number | null;
+  _testInput: TestInput | null;
+  builtTrackNight: boolean | null;
+
+  // ── Camera state (cam-modes.js, cam-tuner.js, photomode.js, apex.js) ───────
+  camEye: Vec3;
+  camFov: number;
+  camMode: number;
+  camCutT: number;
+  camRoll: number;
+  camTgt: Vec3;
+  hudProfile: string;
+  hudMetricsLayout: string;
+  hudMapVis: string;
+  hudGapsVis: string;
+  dbgCam: DebugCam | null;
+
+  // ── Per-frame render + race clocks ────────────────────────────────────────
+  frame: FrameState;
+  frameSky: FrameState;
+  frozen: boolean;
+  headlessMode: boolean;
+  hideMeshes: Record<string, boolean>;
+  paused: boolean;
+  raceLaps: number;
+  raceT: number;
+  /** Pending results delay; practice restores clear it for the restored field. */
+  resultT: number;
+  /** The RENDER clock (sky drift, flag cloth) — pin it for a pixel comparison. */
+  skyT: number;
+  skyHold: boolean;
+  raceTimeOfDay: TimeOfDay;
+  /** The FLYBY SHOT EDITOR's saved shot list, or null for the shipped sequence. */
+  readonly flybyShots: object[] | null;
+  /** True when the last gridUp() laid the grid from a pre-order (qualifying),
+   *  which is peer-identical — false for the pace grid, which seats the LOCAL
+   *  player at P12 and so differs per machine. js/net/netplay.js reads it. */
+  readonly gridPreOrdered: boolean;
+  /** What the LAST rendered frame's projection was built with — near, far, the
+   *  post-cap vertical FOV in radians, the fog multiplier (null = unscaled), the
+   *  cull radius, and whether it was the pre-race cinematic. Read by
+   *  __apex.camState().lens; the object is reused every frame. */
+  readonly lens: { near: number; far: number; fovY: number; fog: number | null; cull: number; cine: boolean };
+  raceWeather: Weather;
+  /** Ends the live weather session (the arc owner's endSession): __apex.race()/tt()
+   *  call it before setting raceWeather so a MIXED race's chip never overrides the
+   *  requested weather. */
+  readonly endWeatherSession: () => void;
+  sectorBests: [number, number, number];
+  readonly fieldSectorBests: [number, number, number];
+  sectorIdx: number;
+  sectorStartT: number;
+  skyViewOverride: SkyViewOverride | null;
+  trackIdx: number;
+  ttLaps: number[];
+  weatherArc: WeatherArc | null;
+
+  // ── Atmosphere state (js/lighting/atmosphere.js) ──────────────────────────────
+  _cloudBase: number;
+  _ltBase: unknown;
+  _ltFlash: number;
+  _ltNextT: number;
+
+  // ── Garage / setup preview (js/garage/setup-sheet.js) ──────────────────────────
+  livDraftOverride: unknown;
+  _spMeshKey: string;
+  setupPreviewOn: boolean;
+  readonly setupPreviewSpin: boolean;
+  readonly setupPreviewAz: number;
+  readonly setupPreviewEl: number;
+  readonly setupPreviewDist: number;
+  /** Last frame's RESOLVED turntable distance — what the camera used, which is
+   *  setupPreviewDist only when the auto-fit is off. */
+  readonly spEffDist: number;
+  /** The auto fit BEFORE its cap/clamp, so a test can see the fit diverge on a
+   *  narrow viewport rather than only the clamped symptom. */
+  readonly spEffFit: number;
+  /** Fraction of the canvas width the docked settings sheet covered. */
+  readonly spEffPanel: number;
+  readonly setupPreviewPan: Vec3;
+  readonly setupPreviewAeroX: number;
+
+  // ── Active aero: the race setting and the loaded circuit's zones ──────────
+  raceAeroMode: AeroMode;
+  readonly aeroZones: AeroZone[];
+  readonly aeroZoneAt: (s: number) => AeroZone | null;
+  /** Metres to the next zone; 0 inside one, Infinity on a circuit with none. */
+  readonly aeroZoneAhead: (s: number) => number;
+  readonly stepSetupAero: (dt: number) => void;
+  readonly setSetupView: (name: string) => void;
+  /** Orbit about and look at a car-space point (garageFrame's `target`); a preset resets it. */
+  readonly setSetupAim: (p: number[]) => void;
+  readonly setSetupFree: (on: boolean) => void;
+  readonly setupPan: (strafe: number, dolly: number) => void;
+  readonly nudgeSetupCam: (dAz: number, dEl: number, zoom?: number) => void;
+  readonly nudgeSetupZoom: (mul: number) => void;
+  readonly setSetupAero: (on: boolean, opts?: { keepCam?: boolean }) => void;
+  readonly setupPreviewXOn: boolean;
+
+  // ── Player settings persisted through store ───────────────────────────────
+  soundOn: boolean;
+  /** Re-read the assist keys game.js owns (autoThrottle) after a preset bundle in js/input/steer-tuning.js sets them, and repaint the rows that show them. */
+  readonly onAssistBundle: () => void;
+  musicEnabled: boolean;
+  unlimitedBudget: boolean;
+  teamIdx: number;
+
+  // ── Livery/parts persistence helpers (js/garage/setup-sheet.js) ────────────────
+  readonly arrToHex: (a: Vec3) => string;
+  readonly hexToArr: (h: string) => Vec3;
+  /** Arm-then-confirm for destructive buttons (the career DELETE? idiom, shared): first call arms in place and returns false, second runs `action`; disarm = the caller rebuilding the node. */
+  readonly armConfirm: (btn: HTMLElement, armedText: string, action: () => void) => boolean;
+  readonly getTeamParts: (teamId: string) => PartsSetup;
+  readonly saveTeamParts: (teamId: string, parts: PartsSetup) => void;
+  /** Re-resolve the player's fitted parts into mods, aero, ERS and the mesh-cache keys — what the garage's DONE and a race boot run; `__apex.garageParts` runs it mid-race. */
+  readonly recomputePlayerMods: () => void;
+  readonly getLiveryId: (teamId: string) => string;
+  readonly saveLiveryId: (teamId: string, id: string) => void;
+  readonly getCustomLiveries: (teamId: string) => unknown[];
+  readonly setCustomLiveries: (teamId: string, arr: unknown[]) => void;
+  readonly getLiveries: (team: TeamDef) => unknown[];
+  readonly invalidateDecalTextures: (teamId: string) => void;
+  /** Drop every procedural body/wheel GPU cache so the next warm/draw rebuilds through Car3D.build. */
+  readonly invalidateFactoryMeshCaches: () => void;
+
+  // ── Menus: selection state + the screens game.js still owns ───────────────
+  driverIdx: number;
+  difficulty: string;
+  /** AI pace mode: scripted (fixed car/driver pace) or catchup (legacy rubber band). */
+  aiPace: "scripted" | "catchup";
+  readonly store: StoreApi;
+  readonly tickUi: () => void;
+  readonly scheduleFlybyTrack: (settle?: boolean) => void;
+  /** Hydrate LAZY_CIRCUIT full def (path/payload) before build / TrackMaps. */
+  readonly ensureCircuit: (idx: number) => Promise<void>;
+  readonly buildSetup: () => void;
+  readonly setTeamPicker: (open: boolean, host?: HTMLElement) => void;
+  readonly teamSwatch: (t: TeamDef) => HTMLElement;
+  readonly openGarage: (from?: string) => void;
+  readonly openCustomize: () => void;
+  readonly openRaceSettings: (from?: string) => void;
+  /** Open #season-setup (the calendar + weekend format editor). */
+  readonly openSeasonSetup: () => void;
+  /** Rebuild #select — season-ui.js calls it after APPLY changes the calendar. */
+  readonly buildSelect: () => void;
+  /** The read-only qualifying model for the CURRENT track (__apex.qualiSim). */
+  readonly qualiSim: (playerTime?: number) => QualiRow[] | null;
+  /** Drop the in-memory qualifying classification (the persist stays), for a
+   *  screen that hand-rolls its own return to the title. */
+  readonly qualiClear: () => void;
+  readonly refreshCareerButton: () => void;
+  /** The R&D gate for the garage listing: fittable option ids, or null. */
+  readonly careerOwned: () => Set<string> | null;
+
+  // ── Photo mode + the lighting tuner's live profile object ─────────────────
+  photoMode: boolean;
+  _photoPrevScale: number;
+  photoAlt: number;
+  photoVertT: number;
+  _ltStore: LightProfiles;
+  readonly photoCam: PhotoCam;
+  readonly photoKeys: PhotoKeys;
+  readonly photoMouse: PhotoMouse;
+  readonly photoMove: PhotoAxis;
+  readonly photoLook: PhotoAxis;
+  readonly applyResMode: () => void;
+  /** Select-screen track card refresh — Menus owns it; UiScale calls it on zoom. */
+  readonly updateTrackPreview: () => void;
+  readonly ltKey: () => string;
+  readonly exitPhotoMode: () => void;
+
+  // ── Atmosphere helpers ────────────────────────────────────────────────────
+  readonly clamp: (v: number, a: number, b: number) => number;
+  readonly satAdjust: (rgb: Vec3, amt: number) => Vec3;
+  readonly isRaining: () => boolean;
+  readonly isWetRoad: () => boolean;
+  readonly initRainDrops: () => void;
+  readonly isFloodActiveSession: () => boolean;
+  readonly _nightAmbientBand: () => number;
+  readonly applyLightTune: (fromApplyRace?: boolean, opts?: { holdRebuild?: boolean }) => void;
+
+  // ── Renderer + local (s,x) <-> world conversion ───────────────────────────
+  readonly smp: TrackSample;
+  readonly smp2: TrackSample;
+  readonly canvas: HTMLCanvasElement;
+  readonly gfx: GfxBackend | null;
+  /** LOCAL predictor + Newton read — never a global search. See its comment. */
+  readonly trackFrom: (px: number, pz: number, sPredicted: number) => { s: number; x: number };
+  readonly worldFromTrack: (s: number, x: number) => { x: number; z: number };
+
+  // ── Model constants published for js/race/quali-model.js and the net layer ──────
+  /** The race-entry stopwatch (js/game.js startRace): one row per phase, in
+   *  order. `__apex.raceProfile()` reads it; the build is one row of it. */
+  readonly raceProfile: () => Array<{ n: string; ms: number }>;
+  readonly GAME_LAPS: number;
+  readonly TT_LAPS: number;
+  readonly LONG_GRIP: number;
+  readonly COUNTDOWN_S: number;
+  /** Absolute in the driving model — they do NOT scale with PACE. */
+  readonly LAT_MAX: number;
+  readonly BRAKE: number;
+  readonly vTop: () => number;
+  readonly aTop: () => number;
+  readonly applyRaceSettings: () => void;
+
+  // ── Race flow + the shared physics/energy formulas ────────────────────────
+  /**
+   * Shows a banner line. Returns true when the line will be heard — on screen
+   * now, or holding the single queue slot. Returns FALSE when it was dropped:
+   * a cinematic camera silences "info"/"coach", and a busy banner's queue slot
+   * can already be held by something higher. A caller that spends state on the
+   * line (a cooldown, a wear step) must spend it only on true.
+   */
+  readonly announce: (msg: string, dur?: number, kind?: string, still?: () => boolean) => boolean;
+  readonly applyCaution: (d: unknown) => void;
+  readonly camVantage: (mode: number, s: number, x: number, spd: number, now: number, extra?: Opaque) => CamVantage;
+  /** The interpolated pose a car is drawn at this frame (pooled; read it at once): the TV director's subject. */
+  readonly camPoseOf: (c: CarState) => { s: number; x: number; carPos: number[] | null; carHead: number };
+  readonly endRace: (forcedOrder?: CarState[]) => void;
+  readonly gridUp: (preOrder?: CarState[]) => void;
+  readonly gripMult: (c?: any) => number;
+  readonly isErsDeploying: (c: CarState) => boolean;
+  readonly cautionInfo: () => CautionInfo;
+  readonly cautionLevel: () => number;
+  readonly aeroDfMult: (c: CarState) => number;
+  readonly xVmaxGain: (c: CarState) => number;
+  readonly xDfLoss: (c: CarState) => number;
+  readonly drainFor: (c: CarState) => number;
+  readonly regenFor: (c: CarState) => number;
+  readonly otTimeFor: (c: CarState) => number;
+  readonly setCautionEnabled: (on: boolean) => void;
+  readonly otEnabled: () => boolean;
+
+  // ── Multiplayer seam (js/net/*) ──────────────────────────────────────────
+  readonly netPlay: NetPlayApi;
+  netStart: NetStart | null;
+  /** A SESSION's clock, not the page's — netplay nulls it between sessions. */
+  netNow: number | null;
+  /** The countdown clock and how many lamps are lit. */
+  countT: number;
+  lightsLit: number;
+  readonly netLobby: NetLobbyApi;
+
+  // ── Loading, lighting persistence, camera + car plumbing ─────────────────
+  readonly loadCarModel: (url: string) => Promise<unknown>;
+  readonly loadTrack: (idx: number) => void;
+  readonly persistLightTune: () => void;
+  readonly copyLightTune: (mode?: string) => unknown;
+  readonly restoreLightTune: (undo?: unknown) => unknown;
+  readonly refreshLightTunePanel: () => void;
+  readonly setCamMode: (m: number, opts?: { persist?: boolean }) => void;
+  readonly rescuePlayer: (c: CarState) => void;
+  readonly onIncidentLineCross: (c: CarState, cross: LineTransition, newS: number) => void;
+  readonly setLightTune: (id: string, v: unknown) => void;
+  readonly setWeatherLive: (w: Weather) => void;
+  /** A real replay: every car AI-flagged, this one local (camera, HUD, audio); nobody drives. */
+  readonly followCar: (c: CarState) => void;
+  readonly setPip: (c: CarState | null, camMode?: string) => void;
+  /** A mid-race jump-in: the countdown becomes the race at once (no gantry, no launch model); false outside the countdown. */
+  readonly goRolling: () => boolean;
+  /** A jump-in's rolling hand-over count, big on the gantry's plate: 4..1, "GO", or null to clear. */
+  readonly handoverCount: (v: number | string | null) => void;
+  /** Live time-of-day (read with no arg, write with tod). Rebuilds track when day/night flips. */
+  readonly setTimeOfDay: (tod?: TimeOfDay) => TimeOfDay;
+  /** Live weather (read with no arg, write with w). Same path as __apex.weather(). */
+  readonly weather: (w?: Weather) => Weather;
+  readonly snapGameCam: (paint?: number | true) => void;
+  readonly setCarRole: (c: CarState, human: boolean, local: boolean) => void;
+  readonly modsFor: (team: TeamDef, setup: PartsSetup) => CarMods;
+  readonly swapGridSlots: (a: number, b: number) => boolean;
+  /** Stable cross-peer car identity: teamIndex*2 + seat, or -1. */
+  readonly wireId: (c: CarState) => number;
+  /** UI SIZE / HUD SIZE — see __apex.uiScale. */
+  readonly setScale: (key: string, prop: string, v: number) => ScaleState;
+  /** Publish current race state to the HUD/minimap immediately. */
+  readonly refreshHud: (force?: boolean) => void;
+
+  // ── The waiting room reuses the real menus rather than reimplementing them ─
+  readonly setNetRoom: (on: boolean) => void;
+  /** Forget RACE SETTINGS' per-track draft: another writer (the Daily) staged laps/weather/time of day. */
+  readonly resetRaceDraft: () => void;
+  readonly openRaceSetup: () => void;
+  /** Ask for motion permission (iOS) and attach tilt, inside a click. */
+  readonly enableTilt: () => void;
+  readonly getSteerMode: () => string;
+  readonly netRoom: boolean;
+  /** Seats held by the OTHER players; empty off-line. */
+  readonly peerSeats: () => PeerSeat[];
+  readonly onPeerQuali: (d: unknown) => void;
+  readonly onPeerQualiLive: (d: unknown) => void;
+  readonly openQualiForNet: (done: () => void) => void;
+  readonly refreshQualiGate: () => void;
+  /** A view of raceGrid: true for "quali" | "rev10". */
+  raceQuali: boolean;
+  /** "tier" pace order | "quali" | "rev10" (F2 sprint rule) | "revchamp" | "random". */
+  raceGrid: "tier" | "quali" | "rev10" | "revchamp" | "random";
+  /** A championship's grid with qualifying off: "champ" (standings, FIA 2026 SR B2.5.4(a)) | "tier" | "revchamp" | "random". */
+  champGrid: "champ" | "tier" | "revchamp" | "random";
+  /** Time-trial medal reference: the modelled pole for this circuit (Quali.referencePole). */
+  readonly referencePole: () => number;
+  /** RED FLAG → standing restart: clears the surface, re-grids in race order, re-arms the lights. */
+  readonly redFlagRestart: () => boolean;
+  /** The day's time-trial plan (js/race/daily-challenge.js). */
+  readonly daily: any;
+  /** Fly a flag by script — level 1-3 holds it at least that high; 0 releases it (js/race/race-control.js hold). */
+  readonly holdCaution: (level: number, cause?: string) => number;
+  /** Clear race-control, incident and debris ownership before a deterministic episode restart. */
+  readonly resetEpisodeOwners: () => void;
+  /** Read-only rendered camera damping anchors and independent simulation/render clocks. */
+  readonly cameraDampingState: () => { eye: number[]; target: number[]; fov: number; previousAnchor: (number | null)[]; nextAnchor: (number | null)[]; renderFrame: number; simulationTime: number; renderTime: number; };
+  /** TT_LAPS — the time-trial distance a daily session stages (ttLaps is the lap LIST). */
+  readonly ttDistance: number;
+  /** True while an #announce message is still on screen — a coach mark waits for it. */
+  readonly announceBusy: boolean;
+  /** CHANGEABLE conditions: the weather walks from the chip's pick to wxArcPlan.to. */
+  raceChangeable: boolean;
+  /** The host's arc plan ({ to, dur }) or, solo, the seed-derived one; null when not changeable. */
+  wxArcPlan: { to: Weather; dur: number } | null;
+  readonly openGarageFrom: (from?: string) => void;
+  readonly startRace: () => void;
+  /** The pre-race screen (card, flyby, announcer) before `go` — js/race/real-race.js routes the Data Hub's JUMP IN through it. */
+  readonly raceIntro: (go: () => void) => void;
+  readonly startWeatherArc: (from: Weather, to: Weather, dur?: number) => void;
+  readonly update: (dt: number) => void;
+  /** Arc position wrapped into [0, track.total). */
+  readonly wrapS: (s: number) => number;
+  readonly quitToMenu: () => void;
+}
+
+// ── Module.create(G) ─────────────────────────────────────────────────────────
+
+/* Every js/game/*.js and js/net/*.js module is a "use strict" IIFE assigning ONE
+   global whose sole entry point is `create(ctx)`: game.js builds G, then calls
+   `const api = Module.create(G)` in load order and keeps the returned api. The
+   modules never reach back into game.js — G is the entire seam, which is why
+   typing G types the boundary.
+
+   The returned API shape is per-module and stays `Record<string, unknown>` here;
+   Phase 6 authors the individual api interfaces. What this declaration pins is
+   the part that is uniform and the part that drifts: the argument is a GameCtx,
+   so a module that reads `ctx.fooo` is a compile error against this file. */
+interface GameModuleFactory<TApi = Record<string, unknown>> {
+  create(ctx: GameCtx): TApi;
+}
+
+/* The modules constructed with the ctx itself — `X.create(G)` in game.js, plus
+   AgentView, which js/agent/apex.js builds off the ctx it was handed.
+   tools/check/check-gctx.mjs resolves every `X.create(<ctx>)` call site through
+   eslint-scope and asserts the two lists agree, so a new ctx module that is not
+   declared here fails the surface test. NOT here, deliberately: AgentRaster
+   (the AgentRaster.create call in js/agent/agentview.js hands it a bespoke bag, not the ctx) and
+   NetSession (js/net/session.js takes {transport}) — same `create()` spelling,
+   different contract. */
+declare const AeroZones: GameModuleFactory;
+// js/editor/custom-tracks.js — create(G, { load, door? }): the TRACK DESIGNER door + its lazy bundle.
+declare const CustomTracks: GameModuleFactory;
+declare const Collide: GameModuleFactory;
+declare const CarDraw: GameModuleFactory;
+declare const ShadowPass: GameModuleFactory;
+declare const GaragePrebuild: GameModuleFactory;
+declare const MirrorPass: GameModuleFactory;
+declare const AgentView: GameModuleFactory;
+declare const ApexApi: GameModuleFactory;
+declare const Atmosphere: GameModuleFactory;
+declare const AudioPanel: GameModuleFactory;
+declare const RadioVoice: GameModuleFactory;
+declare const RecordedAnnouncer: GameModuleFactory;
+declare const Announcer: GameModuleFactory;
+declare const BodyAttitude: GameModuleFactory;
+// js/fx/car-fx.js — create(G, { skids }): plank sparks + AI lock-up marks (reads G.vTop only).
+declare const CarFx: GameModuleFactory;
+declare const PlayerForces: GameModuleFactory;
+declare const BrakeCue: GameModuleFactory;
+declare const DrivingCues: GameModuleFactory;
+declare const TyreModel: GameModuleFactory;
+declare const PitLane: GameModuleFactory;
+declare const RaceEngineer: GameModuleFactory;
+declare const RaceRadio: GameModuleFactory;
+declare const CamModes: GameModuleFactory;
+declare const CamTunerPanel: GameModuleFactory;
+declare const CamTunerEditor: GameModuleFactory;
+declare const FlybyPanel: GameModuleFactory;
+declare const FlybyEditor: GameModuleFactory;
+declare const CareerUI: GameModuleFactory;
+declare const CareerScreen: GameModuleFactory;
+declare const SeasonUI: GameModuleFactory;
+declare const DebrisWorld: GameModuleFactory;
+declare const GameHud: GameModuleFactory;
+declare const GameResults: GameModuleFactory;
+declare const IncidentSim: GameModuleFactory;
+declare const LightStore: GameModuleFactory;
+declare const Menus: GameModuleFactory;
+declare const NetLobby: GameModuleFactory;
+declare const NetPlay: GameModuleFactory;
+declare const Photomode: GameModuleFactory;
+declare const FreeCam: GameModuleFactory;
+declare const ReplayBuf: GameModuleFactory;
+declare const ResultsCam: GameModuleFactory;
+declare const Quali: GameModuleFactory;
+declare const QualiSheet: GameModuleFactory;
+declare const RaceControl: GameModuleFactory;
+// The VALUE side of the WeatherArc name — js/race/weather-arc.js's factory. The
+// `interface WeatherArc` above is the arc OBJECT it hands back on G.weatherArc;
+// TypeScript keeps the two in separate declaration spaces.
+declare const WeatherArc: GameModuleFactory;
+declare const StartLights: GameModuleFactory;
+declare const MarshalPanels: GameModuleFactory;
+declare const DailyChallenge: GameModuleFactory;
+declare const RealRace: GameModuleFactory;
+declare const FlyingStart: GameModuleFactory;
+declare const JumpStartPenalty: GameModuleFactory;
+declare const Broadcast: GameModuleFactory;
+declare const RealReplay: GameModuleFactory;
+declare const TitleMenu: GameModuleFactory;
+declare const UiExperience: GameModuleFactory;
+declare const HomeWorld: GameModuleFactory;
+declare const PhotoStudio: GameModuleFactory;
+declare const WatchTransport: GameModuleFactory;
+declare const Onboard: GameModuleFactory;
+declare const Director: GameModuleFactory;
+declare const SetupCamera: GameModuleFactory;
+declare const SetupUI: GameModuleFactory;
+declare const RaceMessageHistory: GameModuleFactory;
+declare const RaceSettings: GameModuleFactory;
+declare const RivalAudio: GameModuleFactory;
+declare const CarSfx: GameModuleFactory;
+declare const VoicePack: GameModuleFactory;
+declare const Spotter: GameModuleFactory;
+declare const SteerTuning: GameModuleFactory;
+declare const TunerPanel: GameModuleFactory;
+declare const UiScale: GameModuleFactory;
+declare const DockLayout: GameModuleFactory;
+declare const HudArrange: GameModuleFactory;
+declare const KeyBinds: GameModuleFactory;
+declare const SettingsExport: GameModuleFactory;
+
+declare const SessionRecords: GameModuleFactory;
+declare const DrivingCoach: GameModuleFactory;
+declare const RaceInsights: GameModuleFactory;
+
+declare const PlatformSession: GameModuleFactory;
+
+declare const DeepLink: GameModuleFactory;
+declare const TitleFlow: GameModuleFactory;

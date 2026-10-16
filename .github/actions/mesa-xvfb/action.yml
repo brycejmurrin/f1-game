@@ -1,0 +1,46 @@
+name: Mesa llvmpipe + Xvfb
+description: >-
+  MESA LLVMPIPE, NOT SWIFTSHADER, for the browser gates (2026-09-16). MEASURED
+  on the first dispatch (run 35062479811, all four smoke shards green): corner
+  approach 17.8 s against a 214 s SwiftShader median, grid start 21.4 s vs
+  138, jump() 9.7 s vs 171, DRIVING LINE 18.4 s vs 65 — every non-blank frame
+  assertion held. llvmpipe is Mesa's software rasteriser reached through
+  ANGLE's GL backend; it needs a display to bind through (Xvfb, started here
+  and exported via DISPLAY so the pinned `npm run test:…` line in the calling
+  job is unchanged) and the launch flags APEX_GL swaps in playwright.config.js.
+  Dead in the dev container (no /dev/dri — docs/notes/CI-RENDERING-PERFORMANCE.md
+  §llvmpipe), alive on GitHub's runners. Callers keep the `gl: swiftshader`
+  opt-out on their own `if:`; this action has no opinion about it.
+runs:
+  using: composite
+  steps:
+    # BOUNDED APT (2026-09-30). The two apt calls had no limit of their own, so
+    # a stalled mirror or a held dpkg lock spent the CALLER's whole job budget:
+    # PR #537's selected-specs shard sat 31.6 min in `apt-get update/install`
+    # (job 109932275468) and was cancelled before a single spec ran — a red
+    # verdict with no test behind it. Now each call is capped (`timeout`),
+    # apt retries a failed fetch itself with a per-connection timeout, waits
+    # at most 60 s for the dpkg lock, and the pair gets three attempts; a
+    # mirror that is down for good still fails here, in minutes, named.
+    # Options: apt.conf(5) Acquire::Retries, apt-transport-http(1)
+    # Acquire::http::Timeout (https://manpages.debian.org/bookworm/apt/).
+    - shell: bash
+      run: |
+        APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=60"
+        ok=0
+        for attempt in 1 2 3; do
+          if sudo timeout 240 apt-get update -qq $APT_OPTS \
+             && sudo timeout 300 apt-get install -y -qq --no-install-recommends $APT_OPTS mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb; then
+            ok=1; break
+          fi
+          echo "::warning::mesa-xvfb: apt attempt $attempt failed or timed out; retrying"
+          sleep 10
+        done
+        if [ "$ok" != 1 ]; then echo "::error::mesa-xvfb: apt could not install Mesa/Xvfb in 3 bounded attempts (runner mirror down?)"; exit 1; fi
+        Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
+        # WAIT FOR THE DISPLAY (2026-10-04): the first Chromium launch raced a
+        # server that had not created its socket yet. Xvfb makes
+        # /tmp/.X11-unix/X99 once it accepts connections; 5 s, then say so.
+        for i in $(seq 50); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
+        [ -S /tmp/.X11-unix/X99 ] || echo "::warning::mesa-xvfb: Xvfb :99 has no socket after 5 s; the first browser launch may fail"
+        echo "DISPLAY=:99" >> "$GITHUB_ENV"

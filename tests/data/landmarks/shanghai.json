@@ -1,0 +1,10 @@
+{
+  "why": "Wave 5 + detail 2026-10-05 — Shanghai International Circuit (wing piers, lotus secondary stand, Yu pavilions, lake boardwalk). pudong emit exceeds BATCH-01 window but stays required at runtime.",
+  "ids": [
+    "shanghai-wing-east",
+    "shanghai-wing-west",
+    "shanghai-circles-stand",
+    "shanghai-yu-pavilions",
+    "shanghai-lake-boardwalk"
+  ]
+}

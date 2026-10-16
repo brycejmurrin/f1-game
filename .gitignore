@@ -1,17 +1,62 @@
 # Agent working directories (git worktrees created by background agents) and
-# local Claude settings — but keep the shared developer skills tracked.
+# local Claude settings — but keep the shared developer skills + agents tracked.
 .claude/*
 !.claude/skills/
+!.claude/agents/
+!.claude/workflows/
+!.claude/hooks/
+!.claude/settings.json
+!.claude/rules/
+!.claude/agent-memory/
+!.claude/memory/
 
-# Node
+# Node (both the real dir and the self-referential symlink worktree runs create)
 node_modules/
-
+node_modules
 # Regenerable output
 scratch/
 artifacts/
-
+# tools/ci/queue-depth.mjs --write: a live gauge, never committed
+apex-status/
+# Run screenshots. A June 2026 lap audit committed ~1,700 versions of these in
+# two days — ~750 MB that every clone still carries. Baselines belong in a
+# Playwright *-snapshots/ dir (tests/unit/committed-images.test.mjs).
+tests/ui-screenshots/
+# Playwright MCP user-data-dir (repo playwright-mcp.sh + host occupancy)
+.playwright-mcp/
 # Transient agent/debug scripts must be underscore-prefixed.
 tools/_*.mjs
-
+tools/_*.cjs
+tools/_*.js
+tools/_*.sh
+tools/_*.py
+# ...and stray dotfiles/backups a parallel agent leaves behind, which a
+# blanket `git add -A` would otherwise commit (tools/.vt-warn.cjs did).
+tools/.*
+*.bak
+*.orig
+*~
 # git worktrees for isolated agent work
 .worktrees/
+assets/pack/src/
+# Any __pycache__, not just tools/'s: the Phase 4 move put the python tools in
+# tools/mcp/, the old path-specific rule stopped matching, and the .pyc there
+# became TRACKED — which then blocked two deploys as a dirty tree.
+**/__pycache__/
+
+# Electron desktop spike — staged site + builder output (never commit)
+desktop/dist/
+desktop/dist-site/
+desktop/node_modules/
+desktop/build/THIRD-PARTY-NOTICES.txt
+
+# Codex skill mirror (bash tools/env/mirror-skills.sh) — a copy, never the source
+
+desktop/test-results/
+desktop/playwright-report/
+mobile/node_modules/
+mobile/www/
+
+# Obsidian vault settings (docs/ or the repo opened as a vault; docs/notes/SECOND-BRAIN-2026-10-14.md)
+.obsidian/
+.smart-env/

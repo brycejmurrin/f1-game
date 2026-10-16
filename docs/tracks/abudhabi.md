@@ -9,7 +9,7 @@ A showcase circuit on flat, reclaimed Yas Island — a modern leisure-and-marina
 Sunset-to-night gradient sky: warm orange-pink low band fading to deep indigo overhead `[0.95,0.45,0.25]` → `[0.06,0.05,0.14]`. Marina water = dark mirror catching warm dock lights `[0.04,0.06,0.12]` with amber speckle. Cool-white floodlit track surface `[0.88,0.92,1.0]`. Warm marina/dock and hotel-base lighting `[1.0,0.72,0.38]`. Hero accent: the Yas Hotel's animated LED shell cycling teal→magenta→amber `[0.2,0.8,0.9]` / `[0.9,0.2,0.7]` / `[1.0,0.6,0.2]`. Ferrari World roof red `[0.85,0.08,0.10]`. Desert sand floor far out `[0.7,0.55,0.35]`.
 
 ## 3. Elevation
-Essentially **flat** — sea-level reclaimed land, no real gradient. Only camber to note: the banked Turn 9 (~s 0.42) and the swept Marsa curve (~s 0.78). Model as subtle tilt, not hills.
+Near sea level but not dead flat — the road climbs gently away from the pit straight, crests over the north loop and eases back down through the marina (~9 m end to end, no gradient over ~2 %). Camber to note: the banked Turn 9 (~s 0.42) and the swept Marsa curve (~s 0.78).
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box-modelling description |
@@ -38,3 +38,18 @@ Two long straights (a 1km+ run) punctuated by tight hairpins and chicane-tight c
 - Contrast geometry: long clean straight box-chains vs. abrupt tight-hairpin clusters reads as Yas's stop-go layout.
 - Drop **Ferrari World** as one big red roof box + logo disc on the desert side mid-lap; keep the rest of the horizon flat sand under a glowing sky.
 - Ring the lap with tall **light-tower boxes** (dark pole, bright cap) to justify the night lighting.
+
+
+## Research pass — Circuit Yard R4 (2026-10)
+
+Refs: Commons SkySat aerial (2018), Ales Jungmann Yas Hotel gridshell photo,
+North Grandstand photo; Architect Magazine / Asymptote LED veil notes.
+
+- **W Yas Hotel** rebuilt as required `yas-hotel-left-tower` /
+  `yas-hotel-right-tower` + `yas-hotel-gridshell` (LED lattice over the track)
+  with `underpassPortal` bridge decks — survey f83–f92 no longer miss the hotel.
+- Marina hotel mass / pavilion tents moved out of the f58 run-off; dock lamps
+  and marina-corridor poles cleared from the f67 camera; Marsa stand at f83
+  leveled via bleacher at gap 16.
+- Palette: pale sand + paved run-off (def `pal.grass` / `pal.runoff`); marina
+  water kept dark.

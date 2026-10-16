@@ -1,0 +1,286 @@
+// A friend-race start that is cancelled or throws must release the lobby's hold
+// on qualifying saves (friendQualifying gates Quali.persistOrder).
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import { makeDom } from "../helpers/mini-dom.mjs";
+import { seedLogGlobal } from "../helpers/seed-log.mjs";
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+seedLogGlobal();
+const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
+globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");
+globalThis.NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
+globalThis.NetSession = eval(src("js/net/session.js") + ";NetSession");
+globalThis.NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
+globalThis.NetBytes = eval(src("js/net/bytes.js") + ";NetBytes");
+const NetTransport = eval(src("js/net/transport.js") + ";NetTransport");
+globalThis.NetTransport = NetTransport;
+globalThis.NetHandshake = eval(src("js/net/handshake.js") + ";NetHandshake");
+globalThis.document = { getElementById: () => null, addEventListener: () => {} };
+globalThis.Teams = { LIST: [
+  { id: "alpha", name: "Alpha", drivers: [{ code: "AL1", name: "A One", num: 1 }, { code: "AL2", name: "A Two", num: 2 }] },
+  { id: "bravo", name: "Bravo", drivers: [{ code: "BR1", name: "B One", num: 3 }, { code: "BR2", name: "B Two", num: 4 }] } ] };
+globalThis.Tracks = { LIST: Array.from({ length: 6 }, (_, i) => ({ id: "track-" + i })) };
+globalThis.ApexClipboard = eval(src("js/core/clipboard.js") + ";ApexClipboard");
+globalThis.NetQr = { draw: () => false };
+globalThis.NetScan = { supported: () => false, create: () => ({ start: async () => ({ ok: false }), stop() {} }) };
+globalThis.LobbyCodes = eval(src("js/net/lobby-codes.js") + ";LobbyCodes");
+const NetLobby = eval(src("js/net/lobby.js") + ";NetLobby");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function hostUp(startRace) {
+  const G = { teamIdx: 0, driverIdx: 0, trackIdx: 0, raceLaps: 3, raceWeather: "dry", raceTimeOfDay: "day",
+    raceQuali: true, raceGrid: "quali", difficulty: 1, raceChangeable: false, wxArcPlan: null,
+    onPeerQuali() {}, onPeerQualiLive() {}, setNetRoom() {}, store: { get: (k, d) => d, set() {} },
+    netPlay: { start: () => true }, startRace };
+  G.openQualiForNet = (done) => { G._done = done; };
+  const lobby = NetLobby.create(G);
+  let far = null;
+  lobby.setTransportFactory(() => { const p = NetTransport.loopback({ latencyMs: 0 }); far = p[1]; return p[0]; });
+  const old = NetTransport.prefetchIce; NetTransport.prefetchIce = () => null;
+  try { await lobby.host(); } finally { NetTransport.prefetchIce = old; }
+  lobby.watchForOpen(); await sleep(400);
+  const peerSays = (t, d) => { far.send("event", JSON.stringify({ t, d })); far.pump(performance.now()); };
+  peerSays("hello", { team: "bravo", driver: 1 }); await sleep(80);
+  peerSays("ready", { ready: true }); await sleep(80);
+  lobby.setReady(true); await sleep(80);
+  return { G, lobby, peerSays, far };
+}
+
+for (const [name, startRace] of [
+  ["cancelled start", async () => ({ kind: "canceled", reason: "superseded" })],
+  ["failed start", async () => { throw new Error("scenery failed"); }],
+]) {
+  test("friendQualifying after a " + name, async () => {
+    const { G, lobby } = await hostUp(startRace);
+    try {
+      assert.equal(lobby.startFromRoom(), true, "race started from the room");
+      assert.equal(lobby.qualifying(), true, "lobby owns qualifying");
+      await G._done();   // TO THE GRID -> finishStart
+      assert.equal(lobby.qualifying(), false, "qualifying flag must clear once the start is over");
+    } finally { lobby.cancel(); }
+  });
+}
+
+test("hunt fixes: SIMULATE / no valid lap still reports a time; tyres + reliability are race rules; a paused friend race brakes the car", async () => {
+  const { readFileSync } = await import("node:fs");
+  const r = (f) => readFileSync(new URL("../../" + f, import.meta.url), "utf8");
+  const game = r("js/game.js");
+  // driven(Infinity) when every lap was deleted for track limits (NO TIME), else 0.
+  assert.match(game, /quali\.simulate\(qualiNet\.driven\([^\n]*\? Infinity : 0\)\);[^\n]*\s*reportModelQuali\(\);/, "SIMULATE sends the model's time");
+  assert.match(game, /if \(!\(myLap > 0\)\) reportModelQuali\(\);/, "a lap with no valid time sends the model's time");
+  assert.match(game, /if \(c\.local && paused && netPlay\.active\(\)\) return PAUSED_NET_INPUT;/);
+  const lobby = r("js/net/lobby.js");
+  assert.match(lobby, /tyres: G\.raceTyreWear, reliab: G\.raceReliability,/);
+  // Applied in memory only (roomOnly puts the guest's save back) — behaviour
+  // pinned in net-authority.test.mjs "never overwrite the guest's SAVED choice".
+  assert.match(lobby, /if \(own\(next, "tyres"\)\) roomOnly\("tyreWear", \(\) => \{ G\.raceTyreWear = next\.tyres; \}\);/);
+});
+
+test("the HUD hides eligible garage work during a friend race and restores it when solo", () => {
+  const dom = makeDom(), els = {};
+  for (const key of ["minimap", "tyre", "workBtn", "gapA", "gapB"]) els[key] = dom.byId("hud-" + key);
+  els.minimap.getContext = () => ({});
+  const player = { rank: 1, lap: 1, lapTime: 1, best: Infinity, speed: 50, energy: 1, gear: 1, rpm: 5000, pitState: "box" };
+  let networked = true, eligible = true;
+  const G = {
+    els, player, cars: [player], ranked: [player], state: "race", lapsTarget: 3,
+    track: { total: 100, def: {} }, fmtTime: String, dashKph: (v) => v * 3.6, vTop: () => 90,
+    tyres: { on: () => true, spent: () => 0.2 },
+    pits: { commitFrac: () => 0, cue: () => null, canWork: () => eligible },
+    netPlay: { active: () => networked },
+  };
+  const sb = { document: dom.document, innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1,
+    performance: { now: () => 1000 }, Log: globalThis.Log, M4: globalThis.M4,
+    PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 } };
+  sb.window = sb;
+  const hud = vm.runInNewContext(src("js/ui/hud.js") + ";GameHud", sb).create(G);
+  const tick = () => hud.updateHud(true);
+  tick();
+  assert.equal(els.workBtn.hidden, true, "an eligible pit-box car cannot open the pausing garage in multiplayer");
+  networked = false; tick();
+  assert.equal(els.workBtn.hidden, false, "the same eligible car regains WORK ON CAR when the friend race ends");
+  eligible = false; tick();
+  assert.equal(els.workBtn.hidden, true, "solo still needs pit-work eligibility");
+  eligible = true; tick();
+  assert.equal(els.workBtn.hidden, false, "solo work returns when eligibility returns");
+  networked = true; tick();
+  assert.equal(els.workBtn.hidden, true, "rejoining a friend race hides the previously visible control");
+});
+
+test("a networked race clock is anchored to the SHARED green, so a peer that lost frames is not classified ahead", async () => {
+  const { readFileSync } = await import("node:fs");
+  const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  assert.match(game, /netGreen = netStart \? \{ base: netStart\.at - raceT \* 1000, now: netStart\.now \} : null;/,
+    "set at EVERY green (a red-flag restart re-bases on the clock it resumes from); a solo green clears it");
+  const clock = game.match(/ {2}if \(!realRace\.owns\(player\)\) raceT \+= dt;[^\n]*\n {2}if \(netGreen && !netPlay\.active\(\)\) netGreen = null;[^\n]*\n {2}if \(netGreen\) \{[\s\S]*?\n {2}\}/);
+  assert.ok(clock, "the real simulation clock and shared-green catch-up are present");
+  const body = clock[0];
+  // Run the real catch-up: 5 s in a background tab -> the local sim summed only
+  // 0.25 s (the dt clamp); wall time since green is 65 s.
+  let raceT = 60, dt = 0.25, now = 1000 + 65000, live = true;
+  let watching = false;
+  const player = {}, realRace = { owns: (c) => watching && c === player };
+  const netPlay = { active: () => live };
+  let netGreen = { base: 1000, now: () => now };
+  eval(body.replace(/^ {2}/gm, ""));
+  assert.equal(raceT, 65, "the clock carries the time the tab was away");
+  now = 1000 + 64000; raceT = 64.9; dt = 0.016;
+  eval(body.replace(/^ {2}/gm, ""));
+  assert.ok(Math.abs(raceT - 64.916) < 1e-9, "never pulled BACK: the sim clock only ever catches up");
+  // THE RIVAL LEFT, then the player paused 30 s: the race is solo now, and a
+  // solo pause must not come back as 30 s of race clock.
+  live = false; now += 30000; raceT = 70; dt = 0.016;
+  eval(body.replace(/^ {2}/gm, ""));
+  assert.ok(Math.abs(raceT - 70.016) < 1e-9, "no wall-clock catch-up once netPlay stopped");
+  assert.equal(netGreen, null, "the shared anchor is dropped for good");
+  watching = true; raceT = 90; dt = 0.25;
+  eval(body.replace(/^ {2}/gm, ""));
+  assert.equal(raceT, 90, "WATCH keeps the transport's clock instead of adding simulation time");
+});
+
+test("a reopened room code remembers the answers it already took (a guest's reposts are not a new joiner)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const lobby = readFileSync(new URL("../../js/net/lobby.js", import.meta.url), "utf8");
+  assert.match(lobby, /if \(!opts\.quiet \|\| !_answersSeen \|\| _answersSeen\.code !== code\) _answersSeen = \{ code, set: new Set\(\) \};/);
+  assert.match(lobby, /const answersSeen = _answersSeen\.set;/);
+});
+
+test("a roster peer with no string team is not a rival to wait for (bug-hunt 8.5)", () => {
+  const QualiNet = eval(src("js/race/quali-net.js") + ";QualiNet");
+  const peers = [{ team: "bravo", driver: 1 }, { driver: 1 }, { team: 7, driver: 0 }, { team: null }, null];
+  const q = QualiNet.create({
+    $: () => null, fmtTime: String, isQuali: () => false, getPlayer: () => ({ driverId: "alpha:0" }), getCars: () => [],
+    openQuali: () => {}, applyPeerQuali: () => {},
+    getNetPlay: () => ({ rivalDriverIds: () => [] }),
+    getNetLobby: () => ({ roomState: () => ({ peers }) }),
+  });
+  q.arm(() => {});
+  assert.equal(q.waiting(), true, "the real rival still gates the grid");
+  q.onPeerQuali({ driverId: "bravo:1", t: 70 });
+  assert.equal(q.waiting(), false, "…and once they have posted, nothing malformed keeps it locked");
+});
+
+// bug-hunt 2 follow-ups: a guest's BACK from the quali sheet, and the host-side relay cap.
+test("a guest that backs out of friend quali releases the host's wait on its lap", async () => {
+  const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
+  const laps = [];
+  G.onPeerQuali = (q) => laps.push(q);
+  try {
+    assert.equal(lobby.startFromRoom(), true);
+    assert.equal(lobby.qualifying(), true);
+    peerSays("qabort", null); await sleep(30);
+    assert.equal(laps.length, 1, "the host's sheet hears it");
+    assert.equal(laps[0].driverId, "bravo:1");
+    assert.equal(laps[0].t, Infinity, "no time: the wait clears, the rival grids last");
+    assert.equal(laps[0].noTime, true);
+  } finally { lobby.cancel(); }
+});
+
+test("a qabort outside friend quali does nothing", async () => {
+  const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
+  const laps = [];
+  G.onPeerQuali = (q) => laps.push(q);
+  try {
+    peerSays("qabort", null); await sleep(30);          // still in the room
+    assert.equal(laps.length, 0);
+  } finally { lobby.cancel(); }
+});
+
+test("the host drops a guest's QUALI/QLIVE flood past a small per-second cap", async () => {
+  const { G, lobby, peerSays } = await hostUp(async () => ({ ok: true }));
+  let live = 0, driven = 0;
+  G.onPeerQualiLive = () => { live++; };
+  G.onPeerQuali = () => { driven++; };
+  try {
+    assert.equal(lobby.startFromRoom(), true);
+    // ~2.5 per second is what a real client sends (quali-net.js reportLive: 400 ms).
+    for (let i = 0; i < 3; i++) peerSays("qlive", { driverId: "bravo:1", t: 5 + i, frac: 0.1 });
+    await sleep(120);
+    assert.equal(live, 3, "a real client's rate passes untouched");
+    for (let i = 0; i < 200; i++) peerSays("qlive", { driverId: "bravo:1", t: 9, frac: 0.2 });
+    await sleep(120);
+    assert.ok(live <= 12, "a flood is capped (got " + live + ")");
+    for (let i = 0; i < 50; i++) peerSays("quali", { driverId: "bravo:1", t: 80 });
+    await sleep(120);
+    assert.ok(driven < 50, "a QUALI flood is capped too (got " + driven + ")");
+  } finally { lobby.cancel(); }
+});
+
+// Flow B item 1 + ship NP-2: an AFK rival must not trap the sheet; after
+// GATE_TIMEOUT_MS the gate opens (NO LAP FROM THEM). MENU leave uses canLeave.
+function timedQualiNet(peers) {
+  const QualiNet = eval(src("js/race/quali-net.js") + ";QualiNet");
+  const btn = { disabled: false, textContent: "" };
+  let clock = 1000;
+  const q = QualiNet.create({
+    $: (id) => (id === "q-go" ? btn : null), fmtTime: String, isQuali: () => true,
+    getPlayer: () => ({ driverId: "alpha:0", lastLap: 70, best: 70 }), getCars: () => [],
+    openQuali: () => {}, applyPeerQuali: () => {},
+    getNetPlay: () => ({ rivalDriverIds: () => [] }),
+    getNetLobby: () => ({ roomState: () => ({ peers }) }),
+    now: () => clock, setTimer: () => 0, clearTimer: () => {},
+  });
+  return { q, btn, tick: (ms) => { clock += ms; q.refreshQualiGate(); } };
+}
+
+test("friend quali: after the bounded wait TO THE GRID opens (NO LAP FROM THEM)", () => {
+  const { q, btn, tick } = timedQualiNet([{ team: "bravo", driver: 1 }]);
+  q.arm(() => {});
+  q.markDone();
+  q.refreshQualiGate();
+  assert.equal(q.waiting(), true);
+  assert.equal(btn.disabled, true);
+  assert.equal(q.timedOut(), false);
+  assert.equal(q.WAIT_MS, 60000, "WAIT_MS aliases GATE_TIMEOUT_MS");
+  tick(q.WAIT_MS - 1);
+  assert.equal(q.waiting(), true, "one tick short of the bound still waits");
+  tick(2);
+  assert.equal(q.waiting(), false, "the wait is over");
+  assert.equal(q.timedOut(), true);
+  assert.equal(btn.disabled, false);
+  assert.match(btn.textContent, /NO LAP FROM THEM|TO THE GRID/);
+  // Seat absent from driven() (model fills it) — not a fake/Infinity lap (NP-2).
+  assert.equal(q.driven(70).has("bravo:1"), false);
+});
+
+test("friend quali: a late real lap after the cap still replaces the empty seat", () => {
+  const { q, btn, tick } = timedQualiNet([{ team: "bravo", driver: 1 }]);
+  q.arm(() => {});
+  q.refreshQualiGate();
+  tick(q.WAIT_MS + 1);
+  assert.equal(q.timedOut(), true);
+  q.onPeerQuali({ driverId: "bravo:1", t: 80 });
+  assert.equal(q.driven(70).get("bravo:1"), 80);
+  assert.equal(btn.textContent, "TO THE GRID", "their real time clears the timed-out label");
+});
+
+test("friend quali: leaving is open once timed out, and re-arming forgets the timeout", () => {
+  const { q, tick } = timedQualiNet([{ team: "bravo", driver: 1 }]);
+  q.arm(() => {});
+  q.markDone();
+  q.refreshQualiGate();
+  assert.equal(q.canLeave(), false, "BACK/Escape still shake while the rival may yet post");
+  tick(q.WAIT_MS + 1);
+  assert.equal(q.canLeave(), true);
+  q.arm(() => {});
+  assert.equal(q.timedOut(), false);
+  assert.equal(q.canLeave(), false);
+});
+
+test("the host tells guests it went on after friend quali (qgo), so a guest that backed out can follow", async () => {
+  const { G, lobby, peerSays, far } = await hostUp(async () => ({ ok: true }));
+  G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
+  const got = [];
+  far.onMessage((ch, data) => { try { got.push(JSON.parse(typeof data === "string" ? data : new TextDecoder().decode(data)).t); } catch (e) { /* binary */ } });
+  try {
+    assert.equal(lobby.startFromRoom(), true);
+    peerSays("qabort", null); await sleep(30);
+    await G._done();
+    for (let i = 0; i < 5; i++) { far.pump(performance.now() + 100); await sleep(30); }
+    assert.ok(got.includes("qgo"), "the aborted guest is told the host went on (got " + got.join(",") + ")");
+  } finally { lobby.cancel(); }
+});

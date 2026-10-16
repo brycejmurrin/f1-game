@@ -1,0 +1,327 @@
+/* Apex 26 — GLSL sources for the WebGL2 renderer (js/render/glx/glx.js): the small effect programs — blob shadow (SHADOW_*), skid-mark stamps (MARK_*), racing-line de… */
+"use strict";
+
+(function () {
+  const SHADOW_VS = `#version 300 es
+layout(location=0) in vec2 aPos; // unit quad, -0.5..0.5 in x/z
+uniform mat4 uModel;
+uniform mat4 uViewProj;
+uniform vec2 uSize; // w, l in meters
+out vec2 vUV;
+void main() {
+  vUV = aPos * 2.0; // -1..1
+  vec4 wp = uModel * vec4(aPos.x * uSize.x, 0.02, aPos.y * uSize.y, 1.0);
+  gl_Position = uViewProj * wp;
+}`;
+
+  const SHADOW_FS = `#version 300 es
+precision mediump float;
+in vec2 vUV;
+out vec4 outColor;
+void main() {
+  float r = length(vUV);
+  float a = 0.45 * (1.0 - smoothstep(0.25, 1.0, r));
+  // The quad's corners outside the disc blend src * 0 (SRC_ALPHA /
+  // ONE_MINUS_SRC_ALPHA, depth write off): dst unchanged. Skip them (perf
+  // hunt 2 G13, TLX blob discard). Gated on a itself, so it is exact.
+  if (a <= 0.0) discard;
+  outColor = vec4(0.0, 0.0, 0.0, a);
+}`;
+
+  // Flat rectangular skid-mark stamp (x=lateral, y=along-travel in normalised -1..1 space)
+  const MARK_FS = `#version 300 es
+precision mediump float;
+in vec2 vUV;
+out vec4 outColor;
+void main() {
+  float a = 0.38 * smoothstep(1.0, 0.4, abs(vUV.x)) * smoothstep(1.0, 0.3, abs(vUV.y));
+  outColor = vec4(0.0, 0.0, 0.0, a);
+}`;
+
+  const MARK_BATCH_VS = `#version 300 es
+layout(location=0) in vec3 aPos;   // world position (metres)
+layout(location=1) in vec2 aUV;    // -1..1 across the stamp
+uniform mat4 uViewProj;
+out vec2 vUV;
+void main() {
+  vUV = aUV;
+  gl_Position = uViewProj * vec4(aPos, 1.0);
+}`;
+
+  const DECAL_VS = `#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+layout(location=2) in vec2 aUV;
+uniform mat4 uModel;
+uniform mat4 uViewProj;
+out vec2 vUV;
+out vec3 vNrm;
+out vec3 vWorldPos;
+void main() {
+  vUV = aUV;
+  vNrm = mat3(uModel) * aNrm;
+  vec4 wp = uModel * vec4(aPos, 1.0);
+  vWorldPos = wp.xyz;
+  gl_Position = uViewProj * wp;
+}`;
+  // DECAL_FS — sponsor / number marks sit INTO the car's light, not over it.
+  // The atlas is uploaded PREMULTIPLIED (glx.js createTexture) and blended
+  // ONE / ONE_MINUS_SRC_ALPHA, so t.rgb is already colour x coverage: the mip
+  // chain averages premultiplied texels and the transparent surround no longer
+  // bleeds black fringes into the logo edges. lit = t.rgb x light keeps it
+  // premultiplied.
+  // SUN SHADOW: a 4-tap box PCF on the static sun map. Unit 0 holds it for the
+  // whole frame (or the 1x1 depth dummy when shadows are off, with uShadowP.x
+  // 0), so a logo under a bridge / gantry / tree no longer stays sun-lit. The
+  // fade, slope bias and box compensation are glsl-lit.js sampleShadow's; the
+  // Poisson/PCSS machinery is not worth it on a few hundred decal texels.
+  // FLOODLIGHT POOLS: the baked lamp light map (units 12 + 13, LampBake) read
+  // at the decal's ground position, weighted toward up-facing marks — the
+  // marks now brighten and dim with the pools the car drives through.
+  const DECAL_FS = `#version 300 es
+precision highp float;
+precision highp sampler2DShadow;
+in vec2 vUV;
+in vec3 vNrm;
+in vec3 vWorldPos;
+uniform sampler2D uTex;
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform vec3 uAmbSky;
+uniform vec3 uAmbGround;
+uniform float uGlow;
+uniform sampler2DShadow uShadowMap;  // unit 0 (the lit pass's sun map)
+uniform mat4 uLightVP;
+uniform vec4 uShadowP;               // (strength incl. key fade, texel, bias knob, range m)
+uniform vec3 uShadowCtr;             // fade anchor y
+uniform vec3 uEye;
+uniform sampler2D uLampBake;         // unit 12
+uniform sampler2D uLampBakeIdx;      // unit 13
+uniform float uBakeOn;
+uniform vec4 uBakeA;                 // (origin x, origin z, size x m, size z m)
+uniform vec3 uBakeScale;
+uniform vec3 uBakeGrid;              // (tilesX, tilesY, T)
+uniform vec2 uBakeAtlas;
+out vec4 outColor;
+float decalShadow(vec3 wp, vec3 N) {
+  if (uShadowP.x <= 0.0) return 1.0;
+  vec4 lc = uLightVP * vec4(wp, 1.0);
+  vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
+  if (sc.z >= 1.0) return 1.0;
+  float range = uShadowP.w;
+  float edgeFade = 1.0 - smoothstep(range * 0.62, range * 0.84,
+    distance(wp, vec3(uEye.x, uShadowCtr.y, uEye.z)));
+  vec2 ef = smoothstep(0.0, 0.03, sc.xy) * (1.0 - smoothstep(0.97, 1.0, sc.xy));
+  edgeFade *= ef.x * ef.y;
+  if (edgeFade <= 0.0) return 1.0;
+  float t = uShadowP.y;
+  float c = clamp(dot(N, uSunDir), 0.05, 1.0);
+  float biasTerm = clamp(t * 1.5 * (sqrt(1.0 - c * c) / c), 0.0005, 0.004) + uShadowP.z * 0.5;
+  float z = sc.z - biasTerm * (range / 80.0);
+  float o = t * 1.5 * min(1.0, 80.0 / range);
+  float sh = 0.25 * (texture(uShadowMap, vec3(sc.xy + vec2(-o, -o), z))
+                   + texture(uShadowMap, vec3(sc.xy + vec2( o, -o), z))
+                   + texture(uShadowMap, vec3(sc.xy + vec2(-o,  o), z))
+                   + texture(uShadowMap, vec3(sc.xy + vec2( o,  o), z)));
+  return max(0.0, mix(1.0, sh, uShadowP.x * edgeFade));
+}
+vec3 decalPool(vec3 wp, vec3 N) {
+  if (uBakeOn < 0.5) return vec3(0.0);
+  vec2 bUv = (wp.xz - uBakeA.xy) / uBakeA.zw;
+  if (any(lessThanEqual(bUv, vec2(0.0))) || any(greaterThanEqual(bUv, vec2(1.0)))) return vec3(0.0);
+  vec2 bG = bUv * uBakeGrid.xy;
+  vec2 bTile = clamp(floor(bG), vec2(0.0), max(uBakeGrid.xy - 1.0, vec2(0.0)));
+  vec2 bSlot = texelFetch(uLampBakeIdx, ivec2(bTile), 0).xy;
+  if (bSlot.x < 0.0) return vec3(0.0);
+  vec4 bT = textureLod(uLampBake, (bSlot + (bG - bTile) * uBakeGrid.z + 1.0) / max(uBakeAtlas, vec2(1.0)), 0.0);
+  // alpha = the height the pool was baked at: a car's marks (0-1.5 m up)
+  // share the road's pool; a deck far above or below it does not.
+  float hW = 1.0 - smoothstep(1.5, 3.0, abs(wp.y - bT.a));
+  return bT.rgb * uBakeScale * hW * (0.5 + 0.5 * N.y);
+}
+void main() {
+  vec4 t = texture(uTex, vUV);
+  if (t.a < 0.02) discard;
+  vec3 N = normalize(vNrm);
+  float ndl = max(dot(N, uSunDir), 0.0);
+  vec3 amb = mix(uAmbGround, uAmbSky, N.y * 0.5 + 0.5);
+  float sh = ndl > 0.0 ? decalShadow(vWorldPos, N) : 1.0;
+  vec3 lit = t.rgb * (amb + uSunColor * (ndl * sh) + decalPool(vWorldPos, N)) + t.rgb * uGlow;
+  outColor = vec4(lit, t.a);
+}`;
+
+  const GLOW_VS = `#version 300 es
+layout(location=0) in vec2 aCorner;   // x in {-1,+1}, y in {0,1}
+layout(location=1) in vec3 aCenter;   // lamp head world position
+layout(location=2) in vec3 aColor;    // HDR lamp colour
+layout(location=3) in float aRadius;  // halo radius (m)
+uniform mat4 uViewProj;
+uniform vec3 uEye;
+out vec2 vUV;
+out vec3 vColor;
+void main() {
+  vec3 fwd = normalize(uEye - aCenter);
+  vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd) + vec3(1e-4, 0.0, 0.0));
+  vec3 upv = cross(fwd, right);
+  vec2 c = vec2(aCorner.x, aCorner.y * 2.0 - 1.0);   // corner buffer is x±1, y 0..1
+  vec3 wp = aCenter + (right * c.x + upv * c.y) * aRadius;
+  vUV = c;
+  vColor = aColor;
+  gl_Position = uViewProj * vec4(wp, 1.0);
+}`;
+
+  const GLOW_FS = `#version 300 es
+precision highp float;
+in vec2 vUV;        // -1..1 across the halo quad
+in vec3 vColor;
+uniform float uStr;
+out vec4 outColor;
+void main() {
+  float r2 = dot(vUV, vUV);
+  float core = exp(-r2 * 28.0);   // hot centre right at the lens
+  float veil = exp(-r2 * 5.0);    // broad soft glare veil (≈0 by the quad edge)
+  float a = (core * 0.75 + veil * 0.28) * uStr;
+  outColor = vec4(vColor * a, 1.0);   // additive (blendFunc ONE, ONE)
+}`;
+
+  const PARTICLE_VS = `#version 300 es
+layout(location=0) in vec2 aCorner;   // quad corner in {-1,+1}²
+layout(location=1) in vec3 aCenter;   // particle world position
+layout(location=2) in vec3 aColor;    // tint (HDR allowed for the additive group)
+layout(location=3) in float aSize;    // half-size (m)
+layout(location=4) in float aAlpha;   // per-particle opacity
+uniform mat4 uViewProj;
+uniform vec3 uEye;
+out vec2 vUV;
+out vec3 vColor;
+out float vAlpha;
+out float vDist;    // eye distance, for the scene's fog
+void main() {
+  vec3 fwd = normalize(uEye - aCenter);
+  vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd) + vec3(1e-4, 0.0, 0.0));
+  vec3 upv = cross(fwd, right);
+  vec3 wp = aCenter + (right * aCorner.x + upv * aCorner.y) * aSize;
+  vUV = aCorner;
+  vColor = aColor;
+  vAlpha = aAlpha;
+  vDist = length(uEye - aCenter);
+  gl_Position = uViewProj * vec4(wp, 1.0);
+}`;
+
+  const PARTICLE_FS = `#version 300 es
+precision mediump float;
+in vec2 vUV;        // -1..1 across the quad
+in vec3 vColor;
+in float vAlpha;
+in float vDist;
+uniform float uAdditive;
+uniform vec3 uSunColor;     // frame key (keyMul-scaled, as the decals)
+uniform vec3 uAmbSky;       // frame hemisphere (ambientMul-scaled)
+uniform vec3 uAmbGround;
+uniform vec3 uFogColor;     // the lit pass's fog, same density semantics
+uniform float uFogDensity;
+out vec4 outColor;
+// LIT + FOGGED (2026-10-01). The alpha group (smoke, dust, spray, rain) is
+// shaded as a small sphere: the hemisphere ambient read on the quad's up
+// (top of the puff sky-lit, bottom ground-lit) plus a wrap of the key, with a
+// floodlit floor so a night puff still reads under the lamps the shader cannot
+// see. The additive group (sparks, lamps) stays emissive. Both take the lit
+// pass's exp² fog on the eye distance: an alpha puff fades toward the fog
+// colour, an emissive one fades out. Before, every particle was unlit and
+// unfogged — smoke in the Monaco tunnel as bright as smoke in the sun, and a
+// night puff glowing white beside near-black ambient (the second
+// graphics-detail survey, item 9).
+void main() {
+  float r2 = dot(vUV, vUV);
+  float fall = max(1.0 - r2, 0.0);
+  fall *= fall;                       // smooth soft-disc falloff, zero at the rim
+  float a = vAlpha * fall;
+  // Zero-alpha texels (the 21.5 % of the quad outside the disc, or a
+  // vAlpha 0 particle) leave dst unchanged in both groups — alpha group
+  // src*0 + dst*1, additive ONE/ONE adds col*0; depth and alpha writes are off
+  // (drawParticles). Skip them (perf hunt 2 G13, TLX E7a).
+  if (a == 0.0) discard;
+  vec3 col = vColor;
+  if (uAdditive < 0.5) {
+    vec3 lit = mix(uAmbGround, uAmbSky, vUV.y * 0.5 + 0.5) + uSunColor * 0.45;
+    col *= max(lit, vec3(0.18));
+  }
+  float fd = vDist * uFogDensity;
+  float fog = 1.0 - exp(-fd * fd);
+  col = mix(mix(col, uFogColor, fog), col * (1.0 - fog), uAdditive);
+  outColor = mix(vec4(col, a), vec4(col * a, 1.0), uAdditive);
+}`;
+  // DRIVING LINE ribbon (js/render/shared/driving-line.js builds the strip).
+  // The colour is F1's dynamic grammar against the PLAYER's speed: green where
+  // the car is at or under the line's speed here, amber a little over, red
+  // clearly over (brake). The ribbon is emissive above 1.0 so the HDR bloom
+  // gives it the glow every racing game's line has; a soft-edged core keeps it
+  // a line and not a slab. CORNERS mode fades the straights out through the
+  // per-vertex zone the builder smoothed.
+  const LINE_VS = `#version 300 es
+layout(location=0) in vec3 aPos;     // world position (metres)
+layout(location=1) in float aAcross; // -1 | +1 across the ribbon
+layout(location=2) in float aSpeed;  // the line's speed here (m/s)
+layout(location=3) in float aZone;   // 0 straight … 1 corner / braking
+layout(location=4) in float aAlong;  // metres along the lap (the dash pattern's clock)
+uniform mat4 uViewProj;
+out float vAcross;
+out float vSpeed;
+out float vZone;
+out float vAlong;
+void main() {
+  vAcross = aAcross; vSpeed = aSpeed; vZone = aZone; vAlong = aAlong;
+  gl_Position = uViewProj * vec4(aPos, 1.0);
+}`;
+  const LINE_FS = `#version 300 es
+precision mediump float;
+in float vAcross;
+in float vSpeed;
+in float vZone;
+in highp float vAlong;   // metres along the lap (to ~7 km): fp16 mediump steps 4 m there and broke the 5 m chevrons on phones
+uniform float uPlayerSpeed;   // m/s
+uniform float uCornersOnly;   // 1 = fade the straights out
+uniform float uPalette;       // 0 = F1 green/amber/red, 1 = colour-blind safe
+uniform float uOpacity;       // 0.65 subtle … 1 as shipped … 1.35 solid
+uniform float uStr;           // emissive strength (bloom feed)
+out vec4 outColor;
+// ARROWS: a chevron every PERIOD m pointing the way the lap runs — the tip on
+// the ribbon's centre, the wings trailing SWEEP m behind it at the edges, the
+// stroke THICK m along. Pattern space is (along, across), so the chevrons bend
+// with the road, need no derivatives for their soft edge, and are identical on
+// WGX / TLX. The F1 games' line is drawn this way.
+const float PERIOD = 5.0;
+const float SWEEP = 1.6;
+const float THICK = 1.1;
+void main() {
+  float over = uPlayerSpeed / max(vSpeed, 1.0);          // 1.0 = on the line's pace
+  // Two palettes, mixed rather than branched (uPalette is 0 or 1 and uniform,
+  // but a mix is free here and keeps every backend's version identical).
+  // F1's own grammar is green/amber/red, which is the WORST pair for the
+  // common red-green deficiencies — the two ends of the scale are the two
+  // colours a deuteranope or protanope cannot separate, on a cue that only
+  // means anything if you can read it at a glance. The alternative is the IBM
+  // design library's colour-blind-safe triple (blue #648FFF, orange #FE6100,
+  // magenta #DC267F): blue against orange is the classic safe pair, and orange
+  // against magenta separates on the BLUE channel, which both deficiencies
+  // keep. SETTINGS › LINE COLOUR picks; F1 25 ships the same choice.
+  vec3 onPace = mix(vec3(0.10, 0.95, 0.35), vec3(0.392, 0.561, 1.000), uPalette);
+  vec3 lift   = mix(vec3(1.00, 0.72, 0.10), vec3(0.996, 0.380, 0.000), uPalette);
+  vec3 brake  = mix(vec3(1.00, 0.12, 0.10), vec3(0.863, 0.149, 0.498), uPalette);
+  vec3 col = mix(onPace, lift, smoothstep(0.98, 1.06, over));
+  col = mix(col, brake, smoothstep(1.06, 1.16, over));
+  float tip = PERIOD * 0.6 - SWEEP * abs(vAcross);       // the stroke's centre line, per across
+  float d = mod(vAlong - tip, PERIOD);                   // metres past that centre line, wrapped
+  d = min(d, PERIOD - d);
+  float arrow = 1.0 - smoothstep(THICK * 0.5 - 0.18, THICK * 0.5, d);
+  float rim = 1.0 - smoothstep(0.85, 1.0, abs(vAcross));  // soft ribbon edge
+  float zone = mix(1.0, smoothstep(0.05, 0.75, vZone), uCornersOnly);   // the whole smoothed ramp is the fade
+  float a = arrow * rim * zone;
+  if (a < 0.01) discard;
+  // SETTINGS › LINE OPACITY scales the emissive feed and the coverage together,
+  // so SUBTLE loses its bloom too. The alpha is clamped because SOLID takes the
+  // 0.85 base past 1 and a source alpha over 1 over-blends.
+  outColor = vec4(col * uStr * a * uOpacity, min(a * 0.85 * uOpacity, 1.0));
+}`;
+  window.GLXShaders = Object.assign(window.GLXShaders || {}, { SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, PARTICLE_VS, PARTICLE_FS, LINE_VS, LINE_FS });
+})();

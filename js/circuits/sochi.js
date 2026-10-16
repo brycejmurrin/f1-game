@@ -1,0 +1,84 @@
+/* Apex 26 — SOCHI AUTODROM circuit definition (data only).
+   Retired circuit (`classic: true`): last Russian GP 2021.
+   Geometry from the OSM trace in `path` below. */
+(function () {
+  "use strict";
+  (window.TrackDefs = window.TrackDefs || []).push(
+  {
+    id: "sochi",
+    classic: true,
+    // Upstream ru-2014 already runs clockwise, matching the racing direction.
+    reverse: false,
+    startFrac: 0.0,
+    name: "SOCHI",
+    gp: "Russian GP",
+    country: "Russia",
+    night: false,
+    theme: "modern",
+    lengthKm: 5.8,
+    baseHW: 7.5,
+    sceneryCoordinates: "racing",
+    terrainOuter: 100,
+    dressingExclusions: [
+      // Sochi runs through the Olympic Park — paved plaza, not vegetation.
+      { kinds: ["foliage"], s0: 0.90, s1: 0.30 },
+      // No generic city blocks anywhere: the venues are bespoke modelGroups and
+      // the outer loop is broadleaf planting (brief §4), not a tower canyon.
+      { kind: "city" },
+      // Foliage may plant the outer loop but not through the arcStand rows
+      // (scenery/sochi.js: T13 left, T17 right).
+      { kind: "foliage", s0: 0.51, s1: 0.585, side: -1 },
+      { kind: "foliage", s0: 0.785, s1: 0.855, side: 1 },
+    ],
+    // Black Sea coast: soft humid light, hazy horizon, subtropical green.
+    pal: {
+      zenith:        [0.26, 0.46, 0.76],
+      horizon:       [0.80, 0.82, 0.80],
+      sun:           [1.0,  0.96, 0.84],
+      sunColor:      [1.0,  0.95, 0.82],
+      ambientSky:    [0.52, 0.56, 0.60],
+      ambientGround: [0.28, 0.29, 0.24],
+      fogColor:      [0.78, 0.80, 0.80],
+      fogDensity:    0.0030,
+      grass:         [0.22, 0.42, 0.20],
+      sunDir:        [0.44, 0.66, 0.32],
+    },
+    elevations: [
+      { s: 0.34, halfM: 420, rise: 3.5 },
+      { s: 0.68, halfM: 400, rise: -3.0 },
+    ],
+    hwZones: [
+      { s0: 0.230, s1: 0.275, hw: 6.3, ease: 0.012 },  // Turn 5-6
+      { s0: 0.4409, s1: 0.5014, hw: 6.2, ease: 0.012 },  // Turn 13-14 (index; arc 0.520-0.565)
+      { s0: 0.7514, s1: 0.8302, hw: 6.4, ease: 0.012 },  // Turn 16-17 (index; arc 0.790-0.835)
+    ],
+    bankZones: [
+      { turn: 1, angleDeg: 5.0, widthM: 260 },  // re-seated frac 0.085 (was 220 m off any apex)
+      { frac: 0.430, angleDeg: 3.0, widthM: 120 },
+      { turn: 17, angleDeg: 3.5, widthM: 120 },  // re-seated frac 0.9 (was 128 m off any apex)
+    ],
+
+    // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
+    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
+    // re-seats turns when the start line moves.
+    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
+    // researched real turn count. No researched sectors — consumers fall back to thirds.
+    sectors: [0.336, 0.665],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
+    turns: [0.0470, 0.1720, 0.1780, 0.3185, 0.3940, 0.4400, 0.4675, 0.5210, 0.5365, 0.5860, 0.7780, 0.7950, 0.8045, 0.8105, 0.8405, 0.8560, 0.9220, 0.9475],
+    furniture: { tree: "broad", fol: [0.20, 0.44, 0.20], lamp: "globe", lc: [0.94, 0.96, 1.0], treeCrown: "columnar" },  // landscaped Olympic-park planting
+    kit: { marshal: "kiosk",     rail: "jersey",      fence: "panelled",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "monopole",  hoarding: "led" },
+    standSet: ["alu", "teal", "darkSteel"],  // 2014 Olympic-park metal and glass
+    // cityStyle: neon / dayPal name TrackSceneryData.NC / .DC colours
+    // Dropped "cross": even with the city.js MIN_SEP lift, Olympic-park civic
+    // massing reads better as drum/dome/slab than + footprints (wave-6 brief).
+    cityStyle: { neon: ["white", "blue", "red", "gold", "cyan"], bias: 0.24, fh: [12, 30], bh: [22, 52],
+                 kinds: ["drum", "slab", "dome", "podium", "arch", "cylinder"], neonKinds: ["clad"], tone: { n: [0.15, 0.16, 0.19], d: [0.70, 0.71, 0.74] },
+                 dayPal: ["white", "paleblue", "steel", "bluglass", "stone", "concrete", "greyblue"] },
+    // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
+    // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.
+    // Sochi Autodrom — Sochi. Upstream ru-2014, stated 5848 m, projected 5839 m, trace winding CCW.
+    path: { len: 5839, pts: [[-755.1,249.7],[-651.9,84.2],[-622,56.7],[-588.5,31],[-551.7,11.1],[-499,-5.3],[-359.7,-42.5],[-152.9,-98.1],[68.2,-156.9],[76.3,-155.3],[87.9,-151.1],[91.2,-137.4],[96.9,-118.1],[111.2,-108.5],[206.1,-6.3],[242,20],[286.5,37.8],[340.1,42.5],[392.3,32],[436.3,9],[470.8,-23.1],[491.8,-54.6],[508.6,-92.9],[514.9,-134.3],[512,-180.5],[500,-219.8],[437.8,-348.9],[436.3,-363.6],[442.1,-375.2],[456.4,-385.7],[787.2,-582.5],[797.3,-586.6],[813,-587.2],[824.5,-580.4],[832.2,-570.3],[914,-387.2],[921.7,-356.3],[923.6,-331.1],[921.2,-303.3],[900.1,-196.8],[896.3,-187.9],[888.2,-183.6],[877.7,-180.5],[608.2,-140.1],[601.5,-137.4],[595.3,-132.2],[590.5,-125.4],[573.7,-58.7],[572.3,-48.8],[571.3,-36.2],[572.8,-25.2],[656.5,210.4],[656.5,219.9],[653.2,228.3],[646.9,236.6],[637.9,243],[553.6,277],[514.9,286],[478.5,292.8],[428.7,296.5],[384.7,295.9],[334.4,290.7],[287,281.8],[203.7,268.1],[159.2,256.6],[113.7,240.3],[64.4,220.4],[-105,143.2],[-151.5,127],[-193.6,118.1],[-240.5,113.8],[-288.8,115.9],[-333.9,124.4],[-402.8,144.3],[-415.7,141.2],[-421,132.7],[-442.5,59.3],[-452.6,48.8],[-469.8,42.5],[-488.4,43.6],[-515.3,49.8],[-545.4,65.1],[-572.2,89.2],[-594.3,120.2],[-643,190.5],[-646.6,197.8],[-644.5,205.7],[-635.4,213],[-590.9,246.1],[-582.7,257.6],[-579.9,273.9],[-585.1,288.6],[-656,398.2],[-719.1,501.7],[-769.9,579.8],[-781.4,587.2],[-795.7,583],[-909.7,533.6],[-919.1,526.6],[-924.7,508.1],[-923.5,505.2]] },
+  }
+  );
+})();

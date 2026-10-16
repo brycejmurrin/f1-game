@@ -9,7 +9,7 @@ A blisteringly fast floodlit street circuit threaded along the Red Sea Corniche,
 Warm desert night sky, near-black with a faint haze glow `[0.04, 0.04, 0.08]`. Track surface bright under cool-white LED towers `[0.9, 0.95, 1.0]`. Waterfront warmth: amber path lamps and uplit buildings `[1.0, 0.78, 0.45]`. Sea is a black mirror catching warm spangles `[0.03, 0.05, 0.10]`. Saudi-green accents on signage/walls `[0.1, 0.55, 0.25]`. The King Fahd Fountain jet glows cool-white against the sky.
 
 ## 3. Elevation
-Essentially flat — reclaimed sea-level land. The only notable feature is the banked left-hander at Turn 13 (~12% banking, ~s 0.50) and the gently banked Turn 1-3 complex (~s 0.05). Model these as subtle camber, not gradient. No hills.
+Essentially flat — reclaimed sea-level land. The notable features are the banked left-hander at Turn 13 (~12% banking, ~s 0.50), a second 6° banked sweeper just after it (~s 0.55), and the 6° banked final right onto the pit straight. Model these as camber, not gradient. No hills.
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box-modelling description |
@@ -29,7 +29,9 @@ Essentially flat — reclaimed sea-level land. The only notable feature is the b
 | 0.96 | both | near | Walls + DRS straight back to start/finish |
 
 ## 5. Track features
-The world's fastest street circuit: long flat-out sweeps and the lengthy flowing T4-T12 sequence taken near full throttle. 27 corners, more than any F1 track. Pale grey concrete canyon walls (~1.3–1.5 m) with intermittent Saudi green/gold accent stripes — not a solid green night rail. Bright sawtooth kerbs (red/white box strips). One banked corner (T13). Slim cool-white LED heads densify both sides (~every 40 m) as a light tunnel.
+The world's fastest street circuit: long flat-out sweeps and the lengthy flowing T4-T12 sequence taken near full throttle. 27 corners, more than any F1 track. Pale grey concrete canyon walls (~1.3–1.5 m) with intermittent Saudi green/gold accent stripes — not a solid green night rail. Bright sawtooth kerbs (red/white box strips). Banked corners at T13 (7°), the sweeper after it and the final right (both 6°).
+T1-3 left complex; pale grey canyon. Slim cool-white LED heads densify both
+sides (~every 40 m) as a light tunnel.
 
 ## 6. Modelling notes
 - Build a **continuous pale grey concrete canyon** on both sides for the whole lap; punctuate with intermittent green/gold stripe boxes (never a solid green wall).
@@ -38,3 +40,57 @@ The world's fastest street circuit: long flat-out sweeps and the lengthy flowing
 - Hero silhouettes by shape alone: Fountain = single thin tall glowing column far offshore; Floating Mosque; yachts = low hulls + mast spikes; skyline = inland lit-window slabs.
 - Keep the Red Sea open on the outside (R) of the early/mid lap (~s 0.05–0.40): no seaward cityFront/backdrop there — sea, mosque, and fountain must read.
 - City mass stays inland (L); only thin seaward frontage near the start/finish pocket.
+
+## Research pass — findings (not yet built)
+
+- **King Fahd's Fountain** is Jeddah's defining landmark and it is *out at sea*
+  — roughly 1 km offshore, throwing seawater **312 m** into the air, floodlit,
+  and it runs **in the evening only**. Jeddah is a night race, so it should be
+  visible: a lit vertical plume far out on the Red Sea horizon, taller than
+  anything built on the corniche. It is the tallest fountain in the world and
+  nothing else on this circuit reads as unmistakably Jeddah.
+- **The corniche itself** — the Red Sea waterfront the whole lap runs along.
+  Water should be on the seaward side for most of the circuit.
+- **Jeddah Yacht Club** and marina, at the harbour end.
+- 6.174 km, 27 corners — the fastest street circuit on the calendar; the
+  long walled canyons between corners are the defining *shape*.
+
+
+## Outcome
+
+The banked findings were **already built**: King Fahd's Fountain is modelled at
+its real 312 m as a lit offshore plume, the corniche and Red Sea run down the
+seaward side, and there is a marina with a yacht-club building.
+
+The gap was Jeddah's **architecture**. The inland side was generic modern city
+mass, and Jeddah has the one building type on the calendar that cannot be
+mistaken for anywhere else: **Al-Balad**, the UNESCO-listed old town. Tall
+narrow coral-stone tower houses, four to six storeys, packed shoulder to
+shoulder — and hung off their faces, tier upon tier of **roshan**: deep
+projecting bay windows of carved wooden lattice, traditionally painted a soft
+teal-green against the pale coral stone.
+
+**The roshan are the building.** A plain coral box is just a beige box, so the
+lattice is modelled explicitly — bay, vertical mullions, and the shallow
+pitched hood over each one (roshan are roofed). Ground floors stay blank; the
+lattice starts at first floor, as it does in Al-Balad. Sited inland and set
+well back at gap 150–200, because Al-Balad is a few km from the Corniche: this
+is the old town *on the skyline behind* the modern city, not a trackside façade.
+
+## Detail pass — 2026-10-05
+
+Survey sheet-03 DETAIL (local scenery only; shared `city.js` open-face left to
+a separate agent):
+
+1. **S/F skeleton towers** — verified: day-path neonTower frames read open.
+   Replaced with closed local `addBox` cores + neon crowns on the pit straight
+   (do not edit city.js).
+2. **King Fahd Fountain** — verified under-read from overview; thicker jet,
+   spray cone, mid-shaft LED rings, base flood ring.
+3. **Corniche** — densified seaward palm promenade + low sea-wall coping.
+4. **Unsupported canyon feet** (~11) — seated via `foundation()` under shared
+   concreteCanyon slabs on banked stretches.
+5. **Night identity** — canyon neon fascia strips, neonSign accents, denser
+   billboards + storefront neon cubes.
+6. **`tests/data/landmarks/jeddah.json`** — registers fountain, mosque, blue
+   sail, golden twins, hotel, flagpole.

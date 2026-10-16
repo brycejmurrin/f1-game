@@ -1,40 +1,66 @@
 # Per-circuit scenery API — `scenery(api)`
 
-Each circuit's bespoke surroundings live in `js/tracks/<id>.js` as a
-`scenery(api)` function (see [ARCHITECTURE.md](ARCHITECTURE.md)). The engine
-(`buildProps` in `js/tracks.js`) calls it once with an `api` of placement
-helpers, geometry primitives, and composite models. Everything emits flat-shaded
-geometry into the track's prop mesh.
+Each circuit's bespoke surroundings live in `js/circuits/scenery/<id>.js` (lazy-loaded
+split of `js/circuits/<id>.js`) as a `scenery(api)` function (see [ARCHITECTURE.md](ARCHITECTURE.md)). The engine
+(`buildProps`, split across the `js/track/scenery/nature.js` / `city.js`
+/ `structures.js` / `identity.js` modules and orchestrated by
+`js/track/scenery/build-props.js`) calls it once with an `api` of placement helpers, geometry
+primitives, and composite models. The **114-member `api` surface is a frozen
+contract** — `tests/unit/scenery-api-contract.test.mjs` fails on any rename/removal,
+because every circuit callback destructures from it. Everything emits
+flat-shaded geometry into the track's prop mesh.
 
 The per-circuit visual targets are the briefs in [docs/tracks/](tracks/); this
 is the toolkit for building them. Verify with the `__apex.view` survey camera —
 see [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
 
-> **Separate from this:** `buildProps` *also* lays down shared, theme/`def.id`-keyed
+> **Separate from this:** `buildProps` *also* lays down shared, theme-keyed
 > **city dressing** on top of each `scenery(api)` — procedural buildings, armco
-> barrier liveries, roadside trees/lamps, and per-track tarmac/verge tints. That
-> system (the `STYLES` / `BARRIER` / `FURN` maps, `neonTower`, `streetLamp`,
-> `conifer`, …) is summarised in the **City & scenery dressing** section of
-> `CLAUDE.md`. This doc covers only the per-circuit `scenery(api)` toolkit.
+> barrier liveries, roadside trees/lamps, and per-track tarmac/verge tints. The
+> per-circuit half of that system is authored IN THE DEF (`js/circuits/<id>.js`
+> is the single home of a circuit's data): `barrier` (armco livery), `furniture`
+> (tree species + lamp), `kit` (barrier/signage/marshal families, read through
+> `api.kitOf`), `standSet` (grandstand livery rotation) and `cityStyle` (the
+> city generator's palette — `neon` / `dayPal` are NAMES into
+> `TrackSceneryData.NC` / `.DC`). The generic fallbacks (`FURN_DEF`, `KIT_DEF`,
+> `THEME_DEF`, `STAND_SET_DEF`, the colour packs) stay in
+> `js/track/scenery/data.js`; the generators (`neonTower`, `streetLamp`, …) are
+> in `js/track/scenery/city.js`, `conifer` and the rest of the flora in
+> `js/track/scenery/nature.js`, and the theme tables in `js/track/scenery/themes.js`.
+> This doc covers only the per-circuit `scenery(api)` toolkit.
 
 ## Road half-width overlays (`hwZones`)
 
-CircuitPaths traces ignore segs `w:`. To squeeze a section (e.g. Baku castle),
-set on the track def:
+The centreline is the def's `path` (an OSM trace, constant `baseHW`), so the
+only way to narrow a section (e.g. Baku castle) is an overlay on the track def:
 
 ```js
 hwZones: [{ s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 }]
 ```
 
-`hw` is half-width in metres; `ease` is a soft blend shoulder in lap fraction
-(default `0.025`). Zones remapped with `startFrac`/`reverse` like elevations.
+`hw` is half-width in metres. `s0`/`s1` and `ease` are **control-point INDEX
+fractions** (`i / N` over the def's control points, `applyHwZones` in
+`js/track/core/def.js`), NOT lap (arc-length) fractions: control points are
+irregularly spaced, so a window authored as a lap fraction lands hundreds of
+metres from where it was meant (baku's 0.8232-0.8825 lands at arc 0.736-0.776).
+Convert an arc position to its control-index fraction before authoring a window.
+`ease` is the soft blend shoulder in the same index fraction (default `0.025`).
+Zones are remapped with `startFrac`/`reverse` like elevations.
 
 ---
 
 ## Positioning model
 
 Trackside helpers take `(k, side, dist, …)`:
-- `k` — node index, `0 … n-1` (a lap-fraction `s` maps to `k = Math.round(s*n)%n`).
+- `k` — node index, `0 … n-1`. `api.K(s)` maps a lap-fraction `s` to it
+  (`Math.round(s*n)%n`, UN-shifted: the wrapped helpers remap the node they
+  receive on shifted/reversed circuits, so pass `K(s)` straight through — never
+  pre-shift it). It replaces the identical local `const K = …` that 37 circuit
+  files used to declare.
+- `api.lapBounds()` — `{ cx, cz, radius }`: the lap's XZ centroid and the
+  farthest node's distance from it, for sky/horizon rings (`mountain(cx +
+  cos(a) * (radius + 400), …)`). Computed once per build and cached; it
+  replaces the centroid/max-radius loop 30 files each re-ran.
 - `side` — `-1` left, `+1` right of the racing direction.
 - `dist` — metres **beyond the road edge**.
 
@@ -45,19 +71,261 @@ World-coord primitives take an explicit `[x,y,z]`.
 `anchor()`-based helpers (walls, fences, guardrails, tyre walls, trees …) seat
 on the **actual rendered terrain ribbon** — `anchor()` raycasts the built terrain
 mesh (`terrainY`) and uses that height, falling back to the closed-form
-`groundYAt` estimate only where the ribbon doesn't cover the point (far out, or
-street circuits, which build no ribbon). This matters wherever the ribbon is
+`groundYAt` estimate only where the ribbon doesn't cover the point (far out).
+Street circuits still build a ribbon, but it starts further from the edge
+(first rail ~5 m, default `terrainOuter` 28 m — see
+[SCENERY-AND-TRACK-BUILD.md](SCENERY-AND-TRACK-BUILD.md)). This matters wherever
+the ribbon is
 **carved or sags below the flat estimate** — corner-inside verges, and the
 channel cut where an elevation mound bulges over a lower part of the track
 (see `buildTerrain`'s over-track clip): without it, props anchored to `groundYAt`
-float over the lower ground. `place()`/`prop()` still anchor to `groundYAt` and
-sink their base ~0.8 m, which hides the small estimate-vs-ribbon gap.
+float over the lower ground. `place()` now anchors to the rendered-ribbon
+raycast first — `terrainYAt(cx, cz)`, falling back to `groundYAt` only where it
+returns null — and still sinks the base ~0.8 m against any residual gap.
+
+### Coordinate contract
+
+`TrackSpace` distinguishes source-trace fractions from racing-lap fractions:
+
+```js
+TrackSpace.toRacingFrac(def, sourceFrac);
+TrackSpace.toSourceFrac(def, racingFrac);
+TrackSpace.sourceNodeToRacing(def, sourceNode, nodeCount);
+TrackSpace.sampleSource(def, racingFrac, sourceSampler);
+```
+
+Legacy scenery remains unchanged. New migrations should set
+`sceneryCoordinates: "source"` when authored against the original trace, or
+`sceneryCoordinates: "racing"` when authored after `startFrac`/`reverse`.
+Elevations, bridges, and half-width zones use source coordinates; curated
+sectors and turns remain racing-lap data.
+
+### Intentional and atomic models
+
+| Helper | Contract |
+|---|---|
+| `modelGroup(id, bounds, emit, opts?)` | preflights one complete footprint and commits staged geometry atomically; `emit(stage)` must produce a finite, non-empty group |
+| `overheadSpan(spec)` | intentional cross-track span with explicit `clearance` (minimum 4.8 m) and support-footprint checks; optional `offset` shifts the band laterally; `startLights: true` marks the start/finish span — it registers as the start gantry and `js/race/start-lights.js` hangs the countdown lamps on its deck's grid-facing face (a circuit with no gantry at its line gets them on the engine's start gate) |
+| `lampPost(spec)` | registers a light fixture the circuit has drawn itself, so it emits a real point light |
+| `waterSurface(k, side, gap, size, col, opts?)` | typed water emission to the reflective water buffer |
+| `groundPatch(k, side, gap, size, col, opts?)` | subdivided terrain-conforming patch; `opts.material` accepts an existing `MAT` id (default colour-only); `opts.collision` optionally registers its visual boundary |
+| `groundedSegments(spec)` | multi-sample connected model segments grounded at every endpoint |
+| `drape(k, side, gap, [depth, thick, len], col, opts?)` | terrain-fitted flat decal (TrackModels.drapeKit): the footprint is tiled into <= 24 m cells, each tilted to the best-fit plane of 3x3 `terrainYAt` samples, spanning `thick` under its lowest sample to `opts.h` (1 cm) over its highest; cells folded in a tight corner or nearer another part of the lap are dropped. Tops/bottoms snap to a 0.24 m lattice at residue `opts.res` (0.03 steps; +0.12 on alternate cells unless `opts.line`) so overlapping decals never share a plane. `opts.phase`, `opts.cell`, `opts.widen` |
+| `drapeRun(s, side, gap, size, col, res, span?, extra?)` | a `drape` `size[2]` m long centred on lap fraction `s`, laid one `along()` station at a time so it follows the corner; bands of one corner share `span` so their cells abut; `extra` merges into each station's opts |
+
+Use `required: true` only for a hero model whose absence must fail
+`verify-track`. Register each such id in `tests/data/landmarks/<circuit>.json`
+(`{ "why", "ids" }`, one file per circuit), which `scenery-api-contract` reads
+to hold the group required. Invalid or suppressed groups are skipped instead of uploading
+malformed buffers and appear in `__apex.modelDiagnostics()`.
+
+**`overheadSpan` lateral offset.** `offset` (metres, +right of the centreline)
+shifts a band sideways. A centred span can only ever be a flat lid; an ARCHED
+soffit needs bands that sit beside the crown and leave the middle open. Build a
+vault as concentric bands whose `clearance` DROPS as `offset` grows (Monaco's
+tunnel: crown 6.45 m at offset 0, haunches 6.05 m, springing 5.55 m). `clearance`
+still means underside height above the road datum at that node, so it is the
+offset band's own clearance — the 4.8 m minimum applies to each band, and the
+prop-over-road audits still ignore anything above 5.0 m.
+
+**`lampPost(spec)`** — `{ pos:[x,y,z], k?, side?, kind?, aim?, energy?, radius?,
+always? }`. The generic mast pass owns every ordinary lamp on every circuit and
+emits one point light per exported mast lens. `lampPost` covers the case it
+cannot: a luminaire the circuit had to model by hand because no mast could stand
+there (a tunnel soffit, a canopy underside, a portal reveal). Hand back the world
+position of the lens you drew and the light follows the same fixture-anchored
+rule as every other lamp — no light without something visible emitting it.
+
+- `pos` is a RAW WORLD position, like the `px`/`py`/`pz` arrays, and is *not*
+  remapped by the reversed-lap wrapper.
+- `kind` names an entry in track-lights.js's internal `LAMP_KINDS` table (`led`,
+  `fluor`, `halide`, `sodium`, …) and
+  sets colour, cone and volumetric weight, exactly as for a mast.
+- `aim` overrides the default beam direction. The default aims at the centre of
+  the near lane, which is right for a lamp standing *beside* the road and wrong
+  for one already over it.
+- `always: true` marks a fixture that burns in daylight. Ordinary lamps only
+  reach the shader once the session is dark; these are baked into a separate set
+  that a bright session still uploads, for the places the sun cannot reach.
+- Capped at 96 fixtures per circuit.
+
+**`floodMast` light registration.** Shared `floodMast` / `floodMastRing` register
+a `flood_bank` (cool) or `halogen` (warm) lens into `track.lampPosts` by default,
+on a separate 512-cap mast-lamp budget (not the 96 `lampPost` cap). Pass
+`opts.light: false` when the mast is accent geometry on top of the generic
+`"lamps"` dressing pass — otherwise the same stretch gets two light
+sources. Circuits that exclude `"lamps"` / `"lighting"` and use `floodMastRing`
+as the race-lighting rig leave the default on so pools anchor to the tall
+fixtures.
+
+### Scene graph (`ctx.instance`) — engine-internal, not part of the `api` contract
+
+Engine emitters are being migrated off "push primitives into the soup" and onto
+`ctx.instance(key, place, build, meta)` (`js/track/scenery/graph.js`): `build(rec)`
+records the model's primitives ONCE in canonical space (origin, identity basis),
+and each placement becomes a node carrying `{o, r, u, t, s?}`. Replay runs
+through the same guarded emitters, so geometry and on-track suppression are
+unchanged — the build simply also leaves behind `track.graph`, a description of
+what stands where.
+
+This is internal to `js/track/`: the 114-member `scenery(api)` surface a circuit
+destructures is untouched, and circuit files need no changes. Gate any migration
+with `node tools/track/graph-parity.cjs --all`. See
+[research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md).
+
+### Scenery themes and reusable kits
+
+Every `scenery(api)` receives `sceneryTheme`, `landmarkKit`, and `circuitKit`.
+Binding them never places geometry: a track must explicitly call a helper.
+Definitions may opt in with:
+
+```js
+sceneryTheme: "street",
+sceneryThemeOverrides: {
+  palette: { accent: [0.1, 0.8, 1.0] },
+  budgets: { facility: 18000 },
+},
+```
+
+Theme names are `permanent`, `street`, `desert`, `park`, and `night-event`.
+Resolution precedence, lowest to highest, is neutral defaults, the named theme,
+then `sceneryThemeOverrides`; the session context is applied last (currently
+dark sessions brighten the resolved window colour). Without an explicit name,
+street definitions use `street`, definitions whose legacy `theme` is `desert`
+use `desert`, and all others use `permanent`. Unknown names resolve to
+`neutral`. Resolution is deterministic for the same definition, time, weather,
+and overrides.
+
+All LandmarkKit forms have signature `(stage, spec) -> boolean`. `spec` requires
+finite `center:[x,y,z]` and positive `size:[w,h,d]`; `color` and `basis` pass
+through to the primitive emitters.
+
+| LandmarkKit helper | Form and bounded options |
+|---|---|
+| `roof(stage, spec)` | flat/cantilever box, or prism when `kind:"sawtooth"` |
+| `facade(stage, spec)` | separated facade bays; `bays` defaults to 6 and is capped at 24 |
+| `tower(stage, spec)` | tapered stacked tower; `levels` defaults to 4 and is capped at 12 |
+| `stadiumSection(stage, spec)` | raked seating section; `rows` defaults to 8 and is capped at 16 |
+| `arch(stage, spec)` | two posts and a lintel; optional positive `postWidth` |
+| `canopy(stage, spec)` | eight-sided mast plus roof slab; optional `mastColor` |
+
+CircuitKit helpers accept a spec containing stable `id`, racing-lap `frac`,
+`side` (`-1` or `1`), and non-negative `gap`; `size:[w,h,d]`, `required`, and
+`style` are optional. IDs are diagnostic and persistence identities: make them
+unique, stable across builds, and conventionally prefix track-owned additions
+with `kit:<track>:`. Do not derive IDs from loop order that may change.
+
+| CircuitKit helper | Facility and options |
+|---|---|
+| `pitBuilding(spec)` | garage bays plus roof; `garages` defaults to 12, maximum 24 |
+| `hospitality(spec)` | alternating modules plus canopy; `modules` defaults to 4, maximum 12 |
+| `raceControl(spec)` | six-level tower using the hero budget |
+| `pedestrianBridge(spec)` | one atomic overhead span; `clearance` defaults to 5.5 m and cannot be below 4.8 m; optional positive `span`, `thickness`, `depth` |
+| `cameraCrane(spec)` | mast and camera boom |
+| `marshalShelter(spec)` | compact shelter with roof; optional `detail: "structure"` adds columns, a bounded overhang and opaque recessed panes |
+| `recoveryBay(spec)` | service pad with canopy |
+| `serviceCompound(spec)` | bounded vehicle grid; `vehicles` defaults to 6, maximum 16 |
+| `trackSigns(spec)` | repeated sign slabs; `count` defaults to 8, maximum 64 |
+
+Complete grounded facilities emit through exactly one
+`TrackModels.modelGroup`; bridges delegate through exactly one
+`TrackModels.overheadSpan`. Staging is atomic: a rejected footprint, malformed
+or empty geometry, primitive/helper failure, exception, or exceeded vertex
+budget returns `false` and commits none of that model. Missing kit globals or
+dependencies also fail closed without preventing legacy scenery from building.
+Repeated loops are capped; no helper performs unbounded per-node emission.
+
+Default maximums are 50,000 vertices for a hero, 25,000 for a facility, and
+10,000 for repeated furniture in one sector. `raceControl` uses the hero
+budget; pit buildings, hospitality, and service compounds use the facility
+budget; camera cranes, marshal shelters, recovery bays, and track signs use the
+repeated budget. A definition can lower these through
+`sceneryThemeOverrides.budgets`; exceeding one rejects the complete staged
+model and records `reason: "vertex budget exceeded"`.
+
+### Shared dressing exclusions
+
+Generic city, foliage, and lamps can be disabled by lap sector and side. The
+windows and sides are authored in the def's SCENERY frame — the same frame as
+`wall()` / `hedge()` / `cityFront()` ranges: the engine maps each rule through
+`TrackSpace.sceneryRange` (origin shift, `sceneryCoordinates: "source"`,
+`sceneryLapMirror`) and flips `side` on a `reverse: true` lap, so a rule copied
+from a `cityFront(s0, s1, side, …)` call excludes the generic pass under exactly
+that facade. (Until 2026-09-10 rules took the origin shift alone; Monaco's
+windows were converted to source fractions so they land where they always did,
+and Singapore's now sit under its facades and over its bay instead of a third
+of a lap away.)
+Track lighting is one system: `"lamps"` is the canonical dressing kind for the
+generic mast pass (street posts and flood banks). `"floodlights"` is kept as an
+alias; `"lighting"` matches either:
+
+```js
+dressingExclusions: [
+  { kinds: ["city", "lamps"], s0: 0.12, s1: 0.24, side: 1 },
+  { kind: "foliage", s0: 0.92, s1: 0.08 }, // wraparound, both sides
+  { kind: "lamps", s0: 0, s1: 1 },         // suppress generic night masts
+  { kind: "lighting", s0: 0.40, s1: 0.55 }, // same family (alias umbrella)
+]
+```
+
+The shared furniture `streetLamp()` dressing pass is retired — the generic mast
+pass draws street-style posts / flood banks (keyed off `fz.lamp`) and fills
+`track.lampPosts`. Bespoke `floodMast` / `lampPost` register into the same list.
+`streetLamp` is engine-internal only — it is NOT on the scenery `api`
+(destructuring it in a circuit's `scenery(api)` gets `undefined` and the call
+throws; bespoke posts go through `lampPost` / `floodMast`). Tuner
+**LAMP DENSITY** scales mast spacing (~22 m at 1.0).
 
 ## What `api` gives you
 
 ### Context
 `out` (mesh accumulator), `track`, `def`, `theme`, `pal`, `n`, `ds`,
-`px/py/pz/hw` (per-node arrays), `pyMin` (lap's low point).
+`px/py/pz/hw` (per-node arrays), `pyMin` (lap's low point), plus resolved
+`sceneryTheme`, `landmarkKit`, and `circuitKit`.
+
+Also on the 114-member contract but not detailed in this doc: `MAT` (material
+ids), the math utilities `lerp` / `norm` / `cross` / `upOf`, the `night`
+session flag, `groundUnder` (world-XZ ground query — ribbon-aware, distinct
+from `terrainYAt`/`groundYAt`), the grounding helpers `seat` / `foundation` / `frameAt` / `cantilever` and
+`recordBarrier` (see SCENERY-GROUNDING.md), the emitters `cityFront`, `house`,
+`motorhome`, `forestEdge`, `signBoard`, `signDigit`, `waterBand`,
+`waterField`, and `modelDiagnostics` (also exposed as
+`__apex.modelDiagnostics()`).
+
+### Reserving ground (`indexSolid`)
+
+`indexSolid(s0, s1, side, gap, width)` books a footprint in the solid spatial
+index so later placement guards route around it. Engine emitters have always
+called it — it is why `spectatorHill`, `bleacher`, `terrace` and the rest do not
+get trees growing through them — and it is now on the circuit `api` too.
+
+Use it whenever a circuit builds a **large prop out of raw primitives**: a
+farmhouse, a campsite, a hand-rolled stand. Without it the roadside scatter and
+the treelines have no idea the ground is taken.
+
+```js
+// Book the yard — house, tower and both cypresses — BEFORE drawing any of it.
+const halfFrac = (d * 0.5 + w * 1.1) / track.total;
+indexSolid(sf - halfFrac, sf + halfFrac, side, gap - 4, w * 2.0);
+```
+
+- `gap` is the reservation's **inner face** (metres beyond the road edge) and
+  `width` its extent across; the recorded centreline sits half a width out, so
+  clearance is measured from the reserved **surface**.
+- Purely geometric. Like `indexBarrier` it never touches `barL`/`barR`, so it
+  cannot move the driving limits.
+- Remapped for `reverse` / `sceneryCoordinates: "source"` circuits exactly like
+  `recordBarrier`, whose signature it shares.
+
+**What it does and does not fix.** It steers what is placed *afterwards* and
+consults the index — chiefly the generic roadside scatter and the treelines,
+both of which are **deferred until after `def.scenery()`** precisely so they see
+the finished set. It does **not** remove planting your own `scenery()` already
+placed earlier in the same callback. Silverstone's campsites are the worked
+example: reserving their footprint does not let them move inside the circuit's
+own `hedge()`/`forestEdge()` runs, because those trees already exist by then
+(measured: clip 19 → 21 severe and coplanar to 14 when tried). Against
+authored planting, distance is still the fix.
 
 ### Placement helpers (box-based, terrain-anchored)
 | Helper | Use |
@@ -71,8 +339,9 @@ sink their base ~0.8 m, which hides the small estimate-vs-ribbon gap.
 | `every(metres, fn)` | call `fn(k)` every ~`metres` around the lap |
 | `onTrack(x, z, margin)` | true if `(x,z)` is on any tarmac — guard distant props |
 | `groundYAt(k, dist)` | terrain height `dist` beyond the edge |
+| `terrainYAt(x, z)` | terrain height at a WORLD XZ point, or `null` off the rendered ribbon. Reach for this the moment a placement walks away from the centreline: `groundYAt` is a NODE query, and its absence is what makes Trap B in docs/SCENERY-GROUNDING.md so easy to write — Spa's old-road ribbon reused one anchor's height for 248 m and left its treeline 17 m in the air |
 | `hash(i)` | deterministic 0–1 pseudo-random |
-| `ATM` / `COL` | named atmosphere & colour packs from `track-scenery-data.js` (see below) |
+| `ATM` / `COL` | named atmosphere & colour packs from `scenery/data.js` (see below) |
 
 ### Geometry primitives (world coords — non-cube shapes)
 | Primitive | Shape |
@@ -96,26 +365,65 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 ### Composite models — landscape & vegetation
 | Model | Builds |
 |---|---|
-| `mountain(x, z, baseY, w, h, opts)` | **organic** colour-zoned, snow-capped summit + foot skirt |
+| `mountain(x, z, baseY, w, h, opts)` | **organic** colour-zoned, snow-capped summit + foot skirt; `opts.profile:"massif"` (5 rings), `stretch`, `crest` opt-in; default = the original 3-ring cone |
 | `peak(x, z, baseY, w, h, col)` | simple clean pyramid summit |
-| `ridge(x, z, baseY, ang, len, w, h, col)` | mountain ridge prism along bearing `ang` (rad) |
+| `ridge(x, z, baseY, ang, len, w, h, col, opts?)` | mountain ridge prism along bearing `ang` (rad); `opts.profile:"massif"` (+`rough`, `crest`) = elongated rounded hill instead of gabled prisms |
 | `pine(k, side, dist, h, col)` | conifer: tapered trunk + 3 stacked cones |
-| `tree(k, side, dist, h, col)` | broadleaf: trunk + rounded twin-cone canopy |
+| `tree(k, side, dist, h, col, opts?)` | broadleaf; optional `crown: "lobed"`, `variant: 0..2` uses bounded opaque instance recipes with uniform scaling |
 | `palm(k, side, dist, h, frond)` | thin trunk + a crown of frond prisms |
 | `bush(k, side, dist, col)` | low rounded shrub |
 | `hedge(s0, s1, side, gap, h, col)` | continuous clipped hedge / treeline |
 
+**Species** — `pine`/`tree`/`palm`/`conifer` are four silhouettes for forty
+circuits, so a Portuguese hillside, an Argentine avenue and a Highveld plain all
+planted the same rounded cone. These five are the forms circuit files kept
+rewriting locally, promoted with an options bag. All share `tree()`'s signature
+plus a trailing `opts` — `(k, side, dist, h, col, opts)` — and are anchored,
+on-track guarded and noted like it. Choose by **silhouette**, not by palette:
+passing an autumn colour to `tree()` still gives you a `tree()` shape.
+
+| Model | Silhouette | `opts` |
+|---|---|---|
+| `cypress(k, side, dist, h, col, opts)` | columnar dark spire — Italian avenue | `{slim, trunkCol}` |
+| `stonePine(k, side, dist, h, col, opts)` | Mediterranean parasol: bare trunk + flared underside + shallow dome | `{lean, spread, trunkCol}` |
+| `broadleafFall(k, side, dist, h, col, opts)` | turning autumn crown — overlapping off-axis lobes, not one cone of colour | `{lobes, spread, barkCol}` |
+| `acacia(k, side, dist, h, col, opts)` | flat-topped veld thorn: low fork + near-horizontal umbrella | `{spread, layers, barkCol}` |
+| `plane(k, side, dist, h, col, opts)` | pollarded avenue tree — pale mottled trunk + broad flattened crown discs | `{stages, spread, trunkCol}` |
+
+**`def.furniture.tree` reaches these too.** The generic roadside scatter runs on
+every circuit and used to resolve to exactly three silhouettes — `"palm"`,
+`"fir"`, or `"broad"` for everything else — so eighteen circuits shared one tree
+shape on the one foliage pass that is guaranteed to run. The five species above
+are now valid `furniture.tree` values as well (`"cypress"`, `"stonePine"`,
+`"broadleafFall"`, `"acacia"`, `"plane"`), each with its own `canopyR()` entry
+so the scatter's fence guard clears a barrier by exactly what the species
+actually spans. Unknown names still fall back to `"broad"`, so the field stays
+backward-compatible.
+
+Note that `furniture.tree` does nothing on a circuit whose `dressingExclusions`
+suppress `"foliage"` lap-wide (imola plants its own bespoke parkland instead) —
+setting it there is a declaration of the local species, not a visible change.
+
 ### Composite models — structures
 | Model | Builds |
 |---|---|
-| `building(k, side, gap, w, h, d, opts)` | mass + window bands; 3rd arg is **clearance** `gap` (metres beyond the road edge; the emitter computes `dist = gap + w/2` so the inner face sits `gap` off the edge). `opts:{wall,window,floor,setback,roof}` |
+| `building(k, side, gap, w, h, d, opts)` | mass + window bands; 3rd arg is **clearance** `gap` (metres beyond the road edge; the emitter computes `dist = gap + w/2` so the inner face sits `gap` off the edge). `opts:{wall,window,floor,arch,kind,neon}` — see **Building forms** below |
 | `tower(k, side, dist, baseW, h, opts)` | tapered tower; `opts:{col,seg,cap,capCol,mast}` |
-| `grandstand(s, side, gap, len, shell, crowd)` | raked stand: shell + crowd + cantilever roof |
+| `grandstand(s, side, gap, len, shell, crowd)` | raked stand: shell + crowd + cantilever roof (legacy 6-arg form; delegates to `grandstandEx` with no opts) |
+| `grandstandEx(s, side, gap, len, shell, crowd, opts)` | the full stand model — see **Grandstand variants** below |
+| `spectatorHill(s0, s1, side, gap, opts)` | informal grass-bank terracing: stepped earth risers + standing crowd, no shell/roof. `opts:{rows,rise,depth,grass,riser,density,step,crowd}`; `col` stands in for `grass` when that is absent; `h` is NOT honoured (see nature.js) |
+| `bleacher(s0, s1, side, gap, opts)` | open raked seating on a bolted frame — see **Open seating** below |
+| `scaffoldStand(s0, s1, side, gap, opts)` | rented tube-and-plank temporary seating — see **Open seating** below |
+| `terrace(s0, s1, side, gap, opts)` | mass-concrete stepped terracing — see **Open seating** below |
+| `tieredBowl(s0, s1, side, gap, opts)` | stepped bowl, tiers climbing and receding — see **Open seating** below |
+| `cameraTower(k, side, gap, opts)` | lattice camera mast + railed platform + camera head. `opts:{h,col,boom,railCol}` |
+| `broadcastCompound(k, side, gap, opts)` | OB-truck row + satellite uplink dishes + link mast. `opts:{vans,dishes,mastH,vanCol,dishCol,spacing}` |
+| `sponsorHoarding(s0, s1, side, gap, opts)` | continuous trackside advertising-board run. `opts:{h,step,palette,postCol}` |
 | `billboard(k, side, gap, w, h, col)` | advertising hoarding on two posts |
 | `gantry(s, h, col)` | overhead structure spanning the track (start/scoring) |
 | `marshalPost(k, side, gap)` | orange-roofed post + flag pole |
 | `underpassPortal(s, opts)` | dark overhead slab + off-edge piers (cars pass under). `opts:{h,thick,col,pierGap,pierW,depth}` |
-| `floodMast(k, side, dist, opts)` | tall dual-arm cool-white flood + optional ground pool. `opts:{h,cool,pool,arms}` |
+| `floodMast(k, side, dist, opts)` | tall dual-arm cool-white flood + optional ground pool. `opts:{h,cool,pool,arms,light}`. Registers a point light at the lens bank unless `light:false` |
 | `floodMastRing(stepM, opts)` | both sides every ~`stepM` m; forwards `opts` to `floodMast` (`opts.dist` default 14) |
 | `ledFacadeBands(c, h, opts)` | stacked emissive frustum bands (Flame Towers / Sphere). `opts:{r,bands,cols,seg,basis}` |
 | `sailCanopy(c, basis, opts)` | disc/ellipse sail on a hub mast. `opts:{rad,rx,rz,h,col,ribs,thick}` |
@@ -126,6 +434,122 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 | `bowlSeatWall(s0, s1, side, gap, opts)` | continuous eye-height seat/crowd wall. `opts:{h,thick,shell,step,crowdCols}` |
 | `pastelStreetRow(s0, s1, side, gap, opts)` | sparse Med apartment boxes. `opts:{palette,minH,maxH,depth,step,lit,windowCol}` |
 
+### Grandstand variants (`grandstandEx`)
+
+`grandstand()` is one template, and the circuit files call it hundreds of times — with
+only `len` and two colours variable, every stand on every circuit rendered the
+same 12 m grey box. `grandstandEx` adds the shape knobs; the legacy entry point
+delegates to it, so existing calls are unchanged.
+
+| `opts` key | Effect |
+|---|---|
+| `livery` | name into `TrackSceneryData.STAND_LIVERIES` — supplies shell/roof/fascia/crowd in one go. Explicit `shell`/`crowd` args still win. |
+| `tiers` | 1–3 raked decks; each upper deck is set back and lifted with a concourse band closing the step |
+| `h` | back-shell height (default 12) |
+| `roof` | `"cantilever"` (default), `"flat"` (tight over the shell), `"truss"` (open lattice deck on cross-braces), `"none"` (uncovered bleacher) |
+| `suites` | glazed hospitality band under the roof (strictly opt-in — pass `true`) |
+| `endWalls` | closing walls at both ends (strictly opt-in — pass `true`) |
+| `pylons` | support columns under the roof's trackside edge (strictly opt-in — pass `true`) |
+| `roofCol` / `fasciaCol` / `suiteCol` | explicit colour overrides |
+
+Cantilever/flat roofs are a single slab. The only added bands are a rear
+gap-closing fascia at the roof's outer edge (over the shell, behind the crowd —
+not trackside) and a night under-roof light strip.
+
+Liveries live in `js/track/scenery/data.js`: `STAND_LIVERIES` holds the named
+families (`steel`, `darkSteel`, `concrete`, `alu`, `scaffold`, `sandstone`,
+`terracotta`, `pastel`, `crimson`, `navy`, `teal`, `orange`); each circuit's
+def names the three it rotates through in `standSet` (`js/circuits/<id>.js`),
+so a venue's stands differ from each other while staying recognisably one place.
+
+```js
+// A big two-tier main stand with hospitality suites and a truss roof
+grandstandEx(0.00, -1, 12, 120, null, null,
+  { livery: "navy", tiers: 2, roof: "truss", suites: true, endWalls: true });
+// General-admission grass bank at a fast corner — no shell, no roof
+spectatorHill(0.43, 0.52, 1, 14, { rows: 5, density: 0.6 });
+```
+
+**Cost note:** `spectatorHill` runs ~70 verts/metre (the standing bodies dominate),
+so a 350 m bank spends a facility-sized budget rather than a furniture-sized one.
+Lower `density`/`rows` or raise `step` on long runs.
+
+### Open seating (`bleacher` / `scaffoldStand` / `terrace` / `tieredBowl`)
+
+`grandstandEx` models one thing: a roofed stand with a **back shell**. Every other
+kind of seating a circuit has — a bolted bleacher, rented scaffolding,
+mass-concrete terracing, a stepped bowl — was therefore hand-rolled circuit-side,
+and the same four models were independently reinvented across fourteen files (a
+bleacher alone in ten). These are those implementations generalised. Note
+`grandstandEx({roof:"none"})` is *not* a bleacher: it still builds the 12 m shell
+wall behind the crowd.
+
+All four are **range** emitters — `(s0, s1, side, gap, opts)` — and walk the arc
+with `along()`, so they follow a corner. The hand-rolled versions were mostly
+point-anchored with a straight `len` box, which at Curva Grande or Parabolica
+cuts the chord instead of the road. All four `indexSolid()` their own footprint,
+so treelines and the roadside scatter no longer grow through them.
+
+| Model | Builds | `opts` |
+|---|---|---|
+| `bleacher` | planks on a bolted frame + back guard rail. No shell, no roof, no fascia. | `{rows, rise, setback, frame:"steel"\|"timber", frameCol, plankCol, riserCol, crowd, density, rail, step, lift}` |
+| `scaffoldStand` | scaffold tubes + timber deck + benches, legs visible below the rake; optional striped canvas awning instead of a roof | `{rows, rise, setback, tubeCol, deckCol, bench, crowd, density, awning, awningCols, step, legEvery}` |
+| `terrace` | poured flight of concrete steps, open front, retaining wall, plain back wall; optional raw earth `cut` face above the top step | `{rows, rise, depth, conc, concAlt, crowd, density, retainer, backWall, cut, cutCol, step}` |
+| `tieredBowl` | tiers climbing **and** receding in big steps, each with a crowd band + pale fascia lip; optional cantilever over the top tier | `{tiers, tierDepth, base, rise, shell:[colA,colB], fascia, crowd, density, roof, roofCol, step}` |
+
+```js
+// Bolted timber bleacher on the inside of a fast corner
+bleacher(0.09, 0.13, -1, 12, { rows: 8, frame: "timber", density: 0.7 });
+// Rented scaffolding with a period canvas awning
+scaffoldStand(0.00, 0.03, -1, 13, { rows: 5, awning: true });
+// 1950s mass-concrete terracing cut into a hillside
+terrace(0.035, 0.095, 1, 16, { rows: 8, cut: true, density: 0.6 });
+// Historic tribuna: four crimson-shelled tiers with a cantilever
+tieredBowl(0.90, 0.94, 1, 26, { tiers: 4, roof: true,
+  shell: [[0.60, 0.44, 0.42], [0.48, 0.34, 0.32]] });
+```
+
+**Crowd discipline (baked in, not the caller's problem).** A crowd is a
+continuous banded run plus **sparse speckle** standing proud of it — never one
+box per spectator. The hand-rolled versions emitted a body per ~1 m seat pitch,
+i.e. ~30 per row per bay, which is how the street circuits reached 1.8 M prop
+verts; at night the individual bodies are invisible anyway and what the eye picks
+up is the scatter of phone screens over an unbroken dark mass. The promoted
+models emit one speckle head per ~6 m, capped at 16 per segment, with a hash
+skip against `density`. Do not add your own bodies on top.
+
+**Cost note:** these run ~120–160 verts/metre with default `rows` (about half
+what the circuit-local versions cost, and roughly double `spectatorHill`). On a
+run longer than ~200 m raise `step`, or drop `rows`/`density`.
+
+### Building forms (`building` `opts.kind`)
+
+`building()` used to have exactly one massing: a plinth, a hash-picked
+`flat`/`setback`/`taper`/`spire` archetype and a sculpted crown. Meanwhile
+`neonTower()` carried a ~20-form massing library — but the only way in was the
+city generator's per-circuit `cityStyle`, so every hand-placed pit block, paddock and
+hospitality unit in the fleet came out as the same box.
+
+`opts.kind` opens that library to `building()`. **Omit it and nothing changes**;
+the default path is untouched.
+
+| `opts` key | Effect |
+|---|---|
+| `kind` | `"tiered"`, `"podium"`, `"slab"`, `"twin"`, `"jenga"`, `"cylinder"`, `"spire"`, `"pyramid"`, `"screen"`, `"clad"`, `"dome"`, `"chevron"`, `"notch"`, `"fin"`, `"antenna"`, `"cross"`, `"arch"`, `"ziggurat"`, `"drum"`, `"hall"`, `"setback"` |
+| `neon` | 0…1 neon amount for a `kind` form; `0` = a plain building with warm office windows, `1` = a full neon tower. Defaults to 0.85 on `street_night` themes, 0.32 elsewhere — a pit block is not a casino. |
+| `arch` | `"flat"`/`"setback"`/`"taper"`/`"spire"` — the ORIGINAL archetype knob, used only when no `kind` is given |
+
+`wall`/`window` carry through either path: `wall` sets the body tone (a dark
+night-tuned wall is lifted to concrete for daylight, as the default path does),
+`window` the glazing/neon tint.
+
+```js
+// A stepped-terrace paddock block instead of the usual box
+building(K(0.02), 1, 26, 30, 22, 34, { kind: "ziggurat", wall: [0.62, 0.60, 0.55] });
+// Squat arena drum behind the far hairpin
+building(K(0.55), -1, 40, 46, 26, 46, { kind: "drum" });
+```
+
 ### Composite models — barriers / track furniture
 | Model | Builds |
 |---|---|
@@ -134,9 +558,42 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 | `guardrail(s0, s1, side, gap, col)` | waist-high armco rail on posts |
 | `tyreWall(s0, s1, side, gap, capCol)` | stacked tyres + coloured conveyor cap |
 
+### Baked models from the asset pack (`api.bakedModel`)
+
+`bakedModel(id, k, side, dist, opts?) → boolean`
+
+Places a modelled asset from `assets/pack/` — either generated offline by
+`node tools/gen/assets.mjs bake-synthetic-models` (no network) or imported via
+`bake-model` / `import-models.mjs` from a glTF. Geometry is the game's own
+vertex format with a `MAT` id per vertex.
+
+`opts`: `{ scale, rotY, lift, tint:[r,g,b], mat }`. Without `rotY` the model is
+yawed to face the track (a model authored facing **+Z** looks at the road from
+either side). `tint` multiplies the baked vertex colour; `mat` overrides the
+baked per-vertex material id, so one mesh can be dressed as concrete on one
+circuit and rusted metal on another.
+
+**It returns `false` and emits nothing when the pack has no such model** — which
+is the state of a fresh checkout, since no models ship by default. Treat it as an
+enhancement and always keep the procedural fallback:
+
+```js
+if (!bakedModel("grandstand_tifosi", K(0.12), -1, 14, { scale: 1.2 }))
+  grandstand(K(0.12), -1, 14, 40);          // procedural fallback
+```
+
+(`Assets.models()` lists the ids the installed pack actually has; the old
+`api.bakedModels()` re-export was dropped — no circuit ever called it.)
+
+Never async: `ensureScenery` (`js/core/lazy-bundles.js`) loads the models a circuit's
+scenery closure names before its build (`Assets.modelsReady(ms, src)`, capped at 4 s),
+so prop placement cannot vary with network timing — the same circuit must build
+identically every time. The set is read from the closure's SOURCE, so spell every
+model id as a string literal: a computed id is never fetched and keeps its fallback.
+
 ### Atmosphere / colour packs (`api.ATM` / `api.COL`)
 
-Exported from `js/track-scenery-data.js` and exposed on the scenery `api`.
+Exported from `js/track/scenery/data.js` and exposed on the scenery `api`.
 Merge into a track `pal` or use as literal colours:
 
 | Pack | Intent |
@@ -161,7 +618,7 @@ floodMastRing(48, { h: 38, dist: 16 });
 concreteCanyon(0.40, 0.55, -1, 0.6, { stripeCol: [0.05, 0.52, 0.28] });
 ```
 
-> Verify a track builds: `node tools/verify-track.cjs <id>` (catches a scenery
+> Verify a track builds: `node tools/track/verify-track.cjs <id>` (catches a scenery
 > that throws — which silently strands the game on the menu).
 
 ## On-track guard — props must never sit on/above the racing line
@@ -174,8 +631,8 @@ whole shape is dropped (`[scenery] ... SUPPRESSED at k=...`). Composite helpers
 same for any new composite (`rejBox(centre,[w,h,d],basis)`), never a single
 `onTrack()` point, which misses a long/deep model swinging over a curving stretch.
 `RAW.*` emissions (crowd spectators) skip the guard for speed — keep them behind a
-shell. `tests/props-over-road.spec.js` audits all 24 circuits and fails on any new
-intrusion; measure one with `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots`.
+shell. `tests/specs/props-over-road.spec.js` audits every circuit and fails on any new
+intrusion; measure one with `TRACK=<id> PORT=<p> node tools/track/measure-props-over-road.mjs --shots`.
 
 ## Pattern: an encircling mountain range
 
@@ -204,7 +661,7 @@ for (const [extra, wMin, hMin, count, col] of [
 ## Workflow per track
 
 1. Read the brief in `docs/tracks/<id>.md` (landmarks by lap-fraction, palette).
-2. Rebuild `scenery(api)` in `js/tracks/<id>.js` using the models above.
+2. Rebuild `scenery(api)` in `js/circuits/<id>.js` using the models above.
 3. Survey it: `__apex.race("<id>")`, then `__apex.view(...)` aerial + trackside.
 4. Iterate, then commit.
 
@@ -212,3 +669,597 @@ for (const [extra, wMin, hMin, count, col] of [
 > required by every `add*` primitive. A missing name throws inside `buildProps`,
 > which silently leaves the game on the menu — always confirm `info().state ===
 > "race"` after `race()`.
+
+## Grounding — how props seat on the terrain
+
+Written after an exhaustive float audit of all 40 circuits (see
+`tools/track/float-audit.cjs`). It records *why* floating scenery kept recurring and
+what to build so it stops, rather than listing the individual fixes.
+
+---
+
+### 1. The structural gap
+
+The scenery system has strong **horizontal** guards and **no vertical ones**:
+
+| Axis | Guard | What it enforces |
+|---|---|---|
+| Horizontal | `onTrack(x,z,margin)` | point is clear of any tarmac |
+| Horizontal | `rejBox(c,sz,basis)` | full oriented footprint is clear of tarmac |
+| Horizontal | `blockAt(k,side,gap,halfM)` | collision boundary matches the prop |
+| Horizontal | `recordBarrier(s0,s1,side,gap)` | barrier line bookkeeping |
+| **Vertical** | **— none —** | *nothing asserts a prop meets the ground* |
+
+So "is this thing on the racing line?" is answered by the engine, while "is this
+thing standing on anything?" is left to each caller's arithmetic. Every defect
+found in the audit was vertical:
+
+- roofs floating over their buildings (7 separate sites),
+- crowds left behind when their seating riser was rejected,
+- lamp heads cantilevered off poles with no arm,
+- a beacon 1.85 m above every tall roof,
+- a village grounded from one sample for 260 m of hillside.
+
+None of these could have been caught by the existing guards, and all of them
+were caught immediately once the vertical question was asked mechanically.
+
+### 2. The two arithmetic traps
+
+**Trap A — anchor semantics differ between primitives.**
+
+| Primitive | `c` means |
+|---|---|
+| `addBox`, `addPyramid` | **centre** |
+| `addPrism`, `addCyl`, `addCone`, `addFrustum` | **base** |
+
+`addPrism(out, vadd(top, u, roofH / 2), …)` reads naturally and is wrong — it
+floats by `roofH/2`. This single confusion produced seven defects. It is now
+documented at the definition in `js/track/core/geom.js`, but documentation is a weak
+control; §3 proposes a real one.
+
+**Trap B — one ground sample reused across a wide model.**
+
+`groundYAt(k, dist)` is a *point* query. Sampling it once and reusing the result
+across a model that spans tens of metres assumes flat ground. On Imola's
+hillside that put huts up to 47 m clear of the land. Any model wider than ~15 m
+needs per-part sampling, or a foundation that spans down to the lowest corner.
+
+A third, subtler variant: `anchor()` resolves height via `terrainYAt` (the
+rendered ribbon) and falls back to `groundYAt` (closed form) off-ribbon. The two
+disagree wherever the ribbon is carved or sags, so a model straddling that
+boundary tilts or floats.
+
+#### Partial-footprint review
+
+`node tools/track/ground-audit.cjs monaco --why --json` also reports advisory
+`advisory.footprintSupport` findings. The existing grounded checks can accept a whole
+building when its centre or one corner touches terrain; the Monaco city slab
+found in an eye-level capture had a downhill corner about 9 m above the land.
+
+The advisory checks substantial `addBox` masses (at least 3 m along each local
+axis), sampling the actual bottom face at four corners, four edge midpoints and
+the centre. Tilted faces retain each sample's own Y. A warning needs at least
+three unsupported samples more than 1.2 m above terrain, road or water. Findings
+are classified as `partialFootprint` when other samples have support, or
+`unsupportedFootprint` when none do. Contact with solid boxes is checked against
+their actual faces and followed down at that sample to ground; overlapping bounds
+or a nearby building alone cannot supply support. Missing surfaces are reported
+as unjudged samples. Arbitrary meshes may contain disconnected parts, so their
+vertical bounds cannot certify solid support; known-ground gaps with ambiguous
+mesh support produce `unverifiedFootprint` review findings. Other primitive types
+also remain unverified as load-bearing volumes (several omit their bottom caps).
+Thin roofs, bridge decks, signs and cantilever arms are
+outside this mass check. Entirely detached masses are checked too, because the
+old unsupported audit's bounding-box graph can inherit false nearby support.
+
+These are review warnings, **not additional baseline counts or exit failures**.
+`audit-circuit.cjs` retains the total and three compact example findings in its ground
+result, with a command for the complete report. It prints `WARN` when findings
+are present, even when the existing baseline checks pass.
+They describe gaps in sampled footprint coverage, not structural intent: an
+intentional large cantilever can still need review. Each JSON finding includes
+world bounds, all sampled gaps/contact states, the nearest racing node/fraction,
+and nearby screenshot jobs. `--why` adds the emitting source line.
+
+```sh
+node tools/track/ground-audit.cjs monaco --why --json --shots artifacts/footprint-jobs.json > artifacts/footprint-report.json
+node tools/shot/shot.mjs --batch artifacts/footprint-jobs.json --jpeg
+```
+
+`--shots` writes three nearby orbit views for each of the three worst warnings
+per circuit. These views aid inspection; they do not guarantee visibility or
+replace the exact world bounds in the report. An empty findings list produces
+an empty job list, so skip the capture command in that case. The geometric
+approach distinguishes [bounding boxes](https://threejs.org/docs/pages/Box3.html)
+from [triangle intersections](https://threejs.org/docs/pages/Ray.html); it adds
+no browser or Three.js dependency to the audit.
+
+### 3. What to build
+
+#### 3.1 `seat()` — express intent, not arithmetic
+
+Most floating geometry is a caller trying to say *"put this on top of that"* and
+getting the offset wrong. Let them say it:
+
+```js
+// seat(prim, opts) → emits so the piece's UNDERSIDE lands at `on`
+seat.prism(out, { on: bodyTopY, at: [x, z], size: [w, h, d], basis: b, col });
+seat.box(out,   { on: roofY,    at: […],    size: […],       basis: b, col });
+```
+
+`seat.*` normalises the base/centre asymmetry in one place, so Trap A becomes
+unexpressible. `seat` (and `foundation`, §3.2, plus `cantilever`, §3.4) now
+ship on the `scenery(api)` contract — implemented in `js/track/scenery/build-props.js` and
+already used by circuit files — so new scenery uses them by default. This was
+the single highest-value change — it removes a whole bug class rather than
+instances of it.
+
+#### 3.2 `foundation()` — filler instead of hand-built plinths
+
+Several fixes this pass were "add the mass that should have been under it"
+(Shanghai's terraces, Interlagos and COTA's stands). Make that a primitive:
+
+```js
+// Fills from the model's underside down to the ground beneath its footprint,
+// sampling the corners so it stays correct on a slope.
+foundation(out, { footprint: [w, d], at: [x, z], top: y, basis: b, col });
+```
+
+Rules it should encode:
+- sample ground at all four corners **and** the centre; extend to the lowest,
+- sink `~0.3–0.8 m` below grade so the seam never shows (the existing
+  `place()` convention),
+- inherit `rejBox` so a foundation can't spill onto the track.
+
+#### 3.3 Atomic assemblies — no orphaned parts
+
+`crowdBank` emitted spectators through the unguarded `RAW` path while their
+riser went through `rejBox`, so rejecting the riser left crowds on thin air.
+The rule: **if a part is rejected, everything that rests on it must be dropped
+too.** `modelGroup(…, {required})` already gives all-or-nothing staging; the fix
+is to route composite props through it rather than emitting dependents directly.
+Where that is too invasive, the cheap version is what was applied: test the
+support first and `continue` before emitting dependents.
+
+#### 3.4 Cantilevers need visible structure
+
+A head offset from a pole (lamps, floodlight lenses, signage) must emit the arm
+that carries it. `streetLamp` does; Hungaroring's per-track copy did not, and
+168 heads hovered. Any offset > ~0.5 m from its mast needs a connecting member —
+this is also exactly the signature `float-audit` detects, so it self-polices.
+
+### 4. Measuring it — `tools/track/float-audit.cjs`
+
+Screenshots sample four points per lap and cannot prove absence. The audit runs
+the real build in a Node VM (the `verify-track` trick) but keeps the vertex
+buffers, then resolves per primitive **what it is resting on**:
+
+1. index ground triangles (`road`/`terrain`/`floor`) and interpolate exact
+   height — *not* binned vertices, which misreads cells spanned by large
+   triangles,
+2. seed: primitives whose lowest vertex touches that ground,
+3. propagate: a primitive is grounded if it overlaps (XZ, with tolerance) a
+   grounded primitive that rises to meet it,
+4. **iterate to a fixed point** — a single bottom-up pass gets cantilevers wrong,
+   because a lamp head hangs *below* the arm carrying it,
+5. what is left is genuinely unsupported.
+
+```sh
+node tools/track/float-audit.cjs <track>          # count + worst offenders
+node tools/track/float-audit.cjs <track> --why    # names each floater's SOURCE LINE
+node tools/track/float-audit.cjs --all            # exit 1 if anything floats
+```
+
+`--why` works by re-running the deterministic build with stack capture enabled
+only for the already-flagged primitives, so attribution costs nothing on the
+common path.
+
+**Validate any change to the detector by injection** — add a deliberately
+floating box to a circuit and confirm the count rises by exactly one. Three real
+bugs in this tool (a bad cell-key decode, single-pass ordering, and a fallback
+that let any neighbour vouch for a floater) were caught that way, and its early
+numbers were wrong until they were.
+
+#### Known-legitimate flags
+
+Not everything elevated is a defect. Expect these and judge them:
+- **Overhead spans** — gantries, bridge decks, footbridges (piers carry them,
+  but a wide deck's centre can read as unsupported).
+- **Suspended rides** — Abu Dhabi's `coasterLoop`, Ferris wheel rims.
+- **Water-borne props** — Monaco's yachts float on water the ground model does
+  not treat as a surface.
+
+### 5. The gate
+
+`npm run test:float` (`node tools/track/float-audit.cjs --all`) existed for a long
+time and **ran nowhere** — no CI job, no test. It could not have been wired up
+as written either: it exits 1 on any floater and 37 of the 40 circuits have
+some, so a fleet-wide gate would have been red from the day it landed. A
+detector nobody runs is a detector that does not exist.
+
+What ships now is the per-circuit ratchet this section always argued for:
+
+| | |
+|---|---|
+| caps | `tools/track/float-baseline.json` |
+| test | `tests/unit/scenery-grounding.test.mjs` |
+| runs in | `npm run test:sweeps`, which CI runs |
+
+Semantics are copied from `tests/unit/prop-clipping.test.mjs` so both axes
+behave the same: a circuit ABSENT from the baseline must read 0 (that is what
+makes a new defect or a newly added circuit fail), a listed circuit fails when
+it GROWS, there is no ALLOW hatch, and a cap sitting ABOVE the measured count
+fails as slack — because that slack silently permits regressions up to it.
+
+Two things learned wiring it up, both worth keeping:
+
+- **`--all --json` over a pipe was truncated.** `console.log` to a pipe is
+  async in Node and every exit path called `process.exit()` immediately after,
+  so the ~180 KB payload lost its tail and the consumer got
+  `SyntaxError: ... at position 219264`. It never reproduced locally because a
+  shell redirect to a FILE is a synchronous write. The emitters use
+  `fs.writeSync(1, …)` now. If you add another JSON path here, do the same.
+- **Re-baselining is the move that hollows this out.** Doing it at a MERGE is
+  legitimate — the baseline describes the tree it guards, and a merge makes a
+  different tree — but it has to come with the deltas written down. When the
+  deploy branch merged in, five circuits grew (+12, new scenery written before
+  this guard existed) and two shrank (-4, from that branch's own Monaco fix).
+  The decreases were not optional: the anti-slack test fails a cap left above
+  the measured count, precisely so a fix in one place cannot leave headroom for
+  a regression somewhere else.
+
+Don't trust a "currently clean" list in prose — run the tool. At the time of
+writing `float-baseline.json` caps two circuits above 0 (madrid 2, mexico 1); an
+earlier draft of this very section said 2, then 5, then 3 (miami, portimao,
+sepang).
+
+### 5b. The inherited 12, and where the mechanical fixes ran out
+
+Merging the deploy branch brought 12 new floaters from scenery written before
+the guard existed. Two were **Trap B and fixed mechanically**, both in one line
+once `terrainYAt(x, z)` reached the circuit API:
+
+| | cause | result |
+|---|---|---|
+| spa | one `anchor()` reused along 248 m of the old-circuit ribbon | 7 → 6 |
+| mugello | `anchor()` at the road edge, rows marching 37 m back up a hillside | 16 → 13 |
+
+The rest are **not mechanical, and three were checked and deliberately left**:
+
+- **mugello `terrazza`** — a TERRACED stand. Each row rises by design and steps
+  into the hill; re-seating its rows on the terrain flattens the terrace and
+  deletes the thing it is.
+- **montreal Expo hall** — vertical aluminium fins projecting off each tier's
+  façade. Cantilevered off a building, which is what a fin is.
+- **montreal splayed-leg structure** — frustum segments at mid-height along legs
+  that splay ~9 m out as they descend. The segments are elevated by
+  construction; only the feet should touch.
+
+The lesson for whoever picks this up: **elevated is not unsupported**, and the
+count is not the target. Applying the Trap B pattern to any of the three above
+would have improved the number and damaged the circuit. Judge each one against
+§4's known-legitimate list before touching it.
+
+### 5c. Singapore 18 → 19: three floaters that moved with a terrain fix
+
+`3ee48bc` corrected Singapore's `elevations` source-fraction remap (it had been
+solving `racing = source - startFrac` when the circuit's `reverse:true` makes
+the actual remap `racing = wrap01(startFrac - source)`), which moved the
+Sheares underpass dip and the Anderson Bridge rise onto their intended racing
+positions — a real fix, and a net improvement (38 → 19 floating clusters
+measured before → after on this circuit alone). Three of the survivors are new
+at exactly the two moved features, all in §4's known-legitimate categories,
+found by diffing `float-audit.cjs --json` before/after the commit and matching
+each surviving cluster to its source line:
+
+- **Anderson Bridge truss** (`js/circuits/singapore.js:515-522`, ~2.6–6.7 m
+  gap) — an **overhead span**: the arched truss ribs and lamp posts now sit
+  over the terrain rise that was moved here specifically to be under this
+  bridge, so the deck reads as elevated the way a bridge over a rise does.
+- **A second `makePortal` deck** (`:188`, ~7.3 m gap) — also an **overhead
+  span**, `overheadSpan`'s declared clearance over the same newly-graded
+  ground.
+- **Bay water reflection streaks** (`:475`, ~1.3–1.9 m gap) — a **water-borne
+  prop**: thin strips deliberately held 0.5 m above the water surface (see the
+  comment at that line), just over `THRESH` now that the ground height nearby
+  shifted with the terrain fix.
+
+Re-baselined `singapore: 18 → 19` per §5's rule ("doing it at a merge is
+legitimate... but it has to come with the deltas written down"). The other 16
+floating clusters on this circuit are unrelated and untouched by this pass.
+
+### 6. Clipping — the other half
+
+Grounding and clipping are the same question on different axes, and the
+horizontal side is already well served (`rejBox` footprint tests, the shoulder
+bury, the terrain over-track clip). Two gaps remain:
+
+- **Prop-vs-prop interpenetration** — now guarded and measured; see §6.1–6.2.
+  `along()` documents part of the hazard (a box longer than the true node
+  spacing shares volume with its neighbour), but that is *same-model* overlap,
+  which blends and is deliberately accepted. The damage was cross-model.
+- **Deliberate overhead geometry** bypasses footprint rejection by design and is
+  only protected by `minimumClearance`. That contract is sound; it just has to
+  be used (`overheadSpan`) rather than hand-rolled with raw boxes. The Suzuka
+  crossover regressed precisely because its deck was authored 720 m away from
+  the crossing it was meant to span, and no check related the two.
+
+#### 6.1 The detector — `tools/track/clip-audit.cjs`
+
+The old exploratory `--clip` mode is gone. It reported ~15 700 pairs on Monza
+and disclaimed its own numbers, and the fix it recommended — *"tag each
+primitive with its emitting call site and report only pairs from DIFFERENT
+models"* — **was tried and measured insufficient**: call-site identity alone
+still leaves **3 207** Monza pairs, essentially all trees from one treeline
+overlapping trees from another. That recommendation was wrong; this is what
+works.
+
+Four filters, in order, each justified by measurement:
+
+| Filter | Effect on Monza | Why |
+|---|---|---|
+| soft-material class (both `FOLIAGE`/`WOOD`) | 15 962 → 1 874 | a forest is *supposed* to interpenetrate |
+| emission adjacency (`\|q_a − q_b\| ≤ 8`) | 1 874 → 1 194 | primitives emitted back-to-back are ONE assembly — a bush's lobes, a tree's canopy tiers, a building's sections, one `along()` step's members |
+| convex point-set SAT | rejects ~42 % (Monaco ~59 %) | an AABB over a diagonal wall is a fat over-approximation, and the error is worst exactly on corners, where the defects live |
+| penetration depth ≥ 0.5 m | the reporting gate | see below |
+
+Emission order is a better model-identity proxy than the call site, and it is
+free — no stack capture. Call-site attribution stays, but for **naming** in the
+report (`--why`), not filtering.
+
+SAT runs over each primitive's **own vertices**, not an OBB rebuilt from
+constructor arguments: `addPrism` is triangular, `addPyramid`/`addCone`/
+`addFrustum` taper, and raw `emit()` polygons are arbitrary — an OBB over a cone
+over-reports about as badly as an AABB over a diagonal wall.
+
+**Severity is penetration DEPTH, not overlap volume.** Volume ranks by prop
+size; depth ranks by what a player sees. Monza's largest-volume pair (609 m³) is
+4 m deep, while Monaco's 8.8 m penetration is 2 219 m³.
+
+```sh
+node tools/track/clip-audit.cjs <track> [--why]     # defect list + call-site pairings
+node tools/track/clip-audit.cjs --all --gate        # node tools/ci/test-bg.mjs clip
+```
+
+Gated by `tests/unit/prop-clipping.test.mjs` against `tools/track/clip-baseline.json`, on
+the same ratchet semantics as `props-over-road.spec.js`: a circuit not in the
+map must read 0, a capped circuit fails when it grows, no `ALLOW` hatch.
+A cap above its measurement is stale: `clip-audit.cjs --all --lower` rewrites
+those rows down (never up). On a pull request a stale row fails only for a
+circuit the diff touches, or when the diff edits the baseline; other rows print
+an advisory, so a fix merged elsewhere does not redden unrelated PRs (#2183).
+
+#### 6.2 Blocking, not separating
+
+Where two models meet, whichever got there first wins and the later one yields.
+Overlap *within* one model is accepted — consecutive hedge or wall segments
+sharing volume through a corner apex are the same colour and material, the
+shared volume is interior, and it already blends.
+
+**Re-spacing was tried and made things worse.** `cityFront`'s row, the
+`neonTower` rows and bespoke per-track calls all step by CENTRELINE arc length
+while standing metres out from the road edge, where the true world chord shrinks
+by `(1 − curvature·distance)`; on a street circuit's corners their footprints
+share volume. Clamping each unit's width to the chord actually available took
+the fleet from **478 to 488** severe spots — narrowing a unit moves its centre,
+which relocates the collision to a different producer instead of removing it.
+`massBlocked()`/`massAdd()` replaced it: a later mass ≥82 % inside an existing
+one is simply dropped.
+
+Two rules this exposed, both load-bearing:
+
+- **Dropping geometry must not drop the driving boundary.** `building()` and
+  `neonTower()` still call `blockAt()` on the yield path — the ground is
+  occupied either way. Skipping it loosened the limit on every street circuit
+  and broke the walled-tight guarantee.
+- **The index must know a model's bulk, not just its face.** `barSegs` records
+  now carry a half-width, so `barrierClear()` measures to an obstacle's SURFACE.
+  `indexSolid()`/`indexSolidAt()` register hedges, grandstands, seat bowls and
+  placed props — which `recordBarrier` never did — so the existing
+  `clearTreeDist()` move-or-drop handles foliage against them with no new code
+  path. That one gap was ~89 % of Monza's cross-model pairs.
+
+Fleet result: **679 → 348 severe spots**, no circuit regressed.
+
+#### 6.3 `safe()` can silently delete a whole circuit's scenery
+
+Worth knowing before trusting any prop count. `Tracks.build` wraps each mesh in
+`safe(name, geo)`, which on a `validateGeometry` failure logs a `console.warn`
+and substitutes an **empty buffer**. One NaN vertex anywhere therefore costs the
+entire mesh.
+
+Silverstone shipped that way: `plantRoadsideTrees` spreads a stand over
+neighbouring nodes as `k + (i%2) - (i>1?1:0)`, which at `k=0, i=2` is node
+**−1**; `anchor()` read `undefined` off the typed arrays and the NaN propagated
+through the whole props buffer. **783 066 vertices discarded**, the circuit
+rendered with no scenery at all, and the only symptom was a warning nothing
+reads. `anchor()` now normalises its node index defensively.
+
+Check it directly rather than inferring it from vertex counts:
+
+```js
+track.geometryDiagnostics   // [{ name, ok, reason, vertices }] per mesh
+```
+
+### 7. Clipping you can fix in the RENDERER, without moving models
+
+Not every visual "clip" is a placement bug. Two classes are pure rendering:
+
+**Z-fighting on deliberately coplanar surfaces** (decals on tarmac, window
+bands on facades, kerb ribbons). The usual workaround is a small geometric lift
+— but a lift is fixed in metres while depth precision is not: the main camera
+runs a `0.3 m` near plane against a `900 m` far plane, and a non-reversed depth
+buffer spends almost all its precision in the first few metres. So a lift that
+looks right in the pit lane quantises away at distance and the decal shimmers or
+drops out.
+
+The fix is `POLYGON_OFFSET_FILL`, now supported via `opts.depthBias =
+[factor, units]` in `GLX.draw()` and used by the start line. Polygon offset
+scales with the fragment's depth slope, so it wins at every distance and
+grazing angle, costs nothing, and **moves no geometry**. Use it for any new
+decal rather than lifting the mesh.
+
+Further render-side options, in order of value if decal shimmer persists:
+per-camera near planes (implemented: every view except cockpit and hood now
+runs `near = 0.9` — a *global* raise breaks the cockpit, whose fascia sits
+0.39 m from the eye; see ARCHITECTURE.md), then reversed-Z
+with `WEBGL_clip_control` where available, and only then a logarithmic depth
+shader (it writes `gl_FragDepth` and disables early-Z, so it is a real cost).
+
+**Canopy pushing through barriers.** `float-audit.cjs <track> --foliage`
+reports foliage primitives intersecting trackside barrier-shaped geometry, with
+the penetration depth. `forestEdge()` already sizes its `dist` by canopy radius
+so it cannot reach a wall; raw per-track `tree()`/`pine()` calls at a small gap
+have no such guard, and that is where the intersections come from.
+
+⚠ Same caveat as `--clip`: the barrier side is classified by *shape and
+material* (untagged or hard-material boxes 0.5–6 m tall within 6 m of the road
+edge), which also catches marshal posts, signage and stand fronts. Suzuka
+reports 641 and Monza 1 — the ordering is meaningful, the absolute counts are
+not. Tightening it needs the same call-site tagging as `--clip`.
+
+#### The canopy contract, and where it still does not reach
+
+`canopyR(kind, h)` in `js/track/scenery/nature.js` is now the single source of truth for how
+far a species' foliage reaches sideways. Both `forestEdge()` and the FURN
+roadside scatter derive placement from it, so `dist` means *the clearance the
+canopy's inner edge gets* — not the trunk offset. Two bugs were fixed by
+introducing it:
+
+- `forestEdge()` carried its own copy of the estimate, which still described
+  `tree()`'s old `(2.9 + h*0.12)` skirt after the broadleaf crown was widened to
+  `(3.7 + h*0.14)`. Its "GUARANTEED not to clip barriers" contract was ~0.9 m
+  optimistic at h=16.
+- The FURN scatter had no allowance at all — it passed `dist` straight through
+  as a trunk offset, so any tree dropped within (barrier gap + crown radius) of
+  a catch fence grew through it. This alone was Suzuka 326 → 190 canopy hits and
+  Silverstone 7 → 1.
+
+**What the contract cannot do on its own**: the intersections it leaves are
+trees hitting barriers that belong to a *different part of the lap* — Suzuka's
+Esses inner verge and its pit straight are the same strip of ground, Spa's
+Raidillon wraps back onto Kemmel.
+
+The tempting fix is to have the scatter consult `track.barL/barR`, deferring it
+until after `def.scenery()` has recorded the per-circuit fences. **This was
+tried and reverted — it cannot work.** Those arrays hold the *driving limit*,
+i.e. the tightest lateral value, so a close fence records a SMALL clearance;
+clamping a tree against it can only ever push out to the 9 m `RUNOFF_DEFAULT`,
+never past the fence. And a per-node lateral table cannot represent a barrier
+that belongs to another node's stretch of road at all.
+
+#### The spatial barrier index
+
+The working guard asks the question in world space instead. `scanBarrier()`
+records each barrier's **face as XZ segments** into `barSegs`; `barrierClear(x,
+z, r)` answers "is any barrier face within `r` of this point" via a uniform grid
+(`BAR_CELL = 24 m`) and point-to-segment distance. It neither knows nor cares
+which node a wall came from, so the cross-lap cases above are ordinary hits.
+
+`clearTreeDist()` walks a candidate trunk outward in 1.5 m steps until its crown
+clears, up to +12 m, and **drops the tree** if nothing within reach is clear. A
+missing tree in a gap with no room for one reads as correct; a tree growing
+through a catch fence never does. Both foliage producers use it — the roadside
+scatter in `plantTree()` and the per-track treelines in `forestEdge()`.
+
+**Everything that plants foliage now runs last**, after `def.scenery()` returns:
+the scatter is deferred out of the FURN pass, and `forestEdge()` only queues its
+arguments (`deferredFoliage`) to be replayed at the end. This is not stylistic.
+A track file is written in whatever order reads well — imola plants its
+treelines at line 106 and builds the catch fences they intersect at line 387 —
+so a guard that runs at call time is usually querying an empty index. Deferring
+makes it order-independent: authors keep writing scenery in any order, and the
+foliage always sees the finished barrier set. (Deferral *alone* was tried before
+the index existed and did nothing; it needed both.) `barGrid` is invalidated on
+every new segment for the same reason.
+
+Two things this exposed that were not visible before:
+
+- **`fence()` never registered its geometry at all.** `wall`, `guardrail` and
+  `tyreWall` all called `recordBarrier`; `fence` called nothing. Catch fences
+  were the one barrier class no guard in the engine could see — and the
+  attribution pass showed they were the obstacle in most canopy intersections.
+  They now call `indexBarrier()`, which feeds the spatial index **without**
+  tightening `barL/barR`: a fence is solid enough that a tree must not grow
+  through it, but it stands back beyond the runoff, so moving the driving limit
+  out to meet it would change how the circuit drives. Keep those two concerns
+  separate — `scanBarrier`'s `tighten` flag is the seam.
+- **The generic corner tyre stacks had the mirror-image bug.** `buildProps`
+  called `markBarrier` along each stack, which moves the driving limit but never
+  tells the scenery engine that a metre-wide barrier physically stands there.
+  They now also `indexBarrier()`. The two calls answer different questions and a
+  barrier generally needs both.
+- **The `--foliage` counts were never what they looked like.** They are
+  primitive-*pair* counts: one tree overlapping one box scores once per canopy
+  tier per box, so redbull's 613 collapsed to 25 real locations. The audit now
+  prints distinct locations alongside the raw count, gates canopies by size
+  (`backdrop()`'s wooded landforms share the foliage material and are hundreds
+  of metres wide — that one false-positive class was most of redbull's count and
+  all of spa's), and `--foliage --why` attributes each hit to the call sites that
+  emitted both prims. Use `--why` before acting on any absolute number here.
+
+**The counts that remain are an upper bound, not a defect list.** The screen is
+AABB-vs-AABB. A fence panel is 0.05 m thick, but wherever the barrier runs
+diagonally its *axis-aligned* box is metres wide, so a canopy comfortably clear
+of the real panel still registers an overlap. The guard is exact — true
+point-to-segment distance against the barrier face — so where the two disagree
+it is the audit that is wrong. Each hit line now prints its lap fraction; feed
+that to `__apex.orbit(frac, az, el, dist)` and *look* before treating a number
+as a bug. Tightening this needs an oriented (or exact-geometry) test in the
+audit, which is the obvious next piece of work here.
+
+## Migrating a circuit onto the shared foundation
+
+> The migration this checklist was written for is COMPLETE — all 52 circuits
+> set `sceneryCoordinates` (51 racing, monaco source). It stays live as the
+> checklist for a NEW circuit or a foundation-touching edit to an existing one.
+
+Use one isolated track-scoped change at a time.
+
+### Coordinates and elevation
+- Choose and set `sceneryCoordinates: "source"` or `"racing"`.
+- Verify start/finish, turn landmarks, elevation peaks, bridges, and half-width zones at their intended racing fractions.
+- Replace local fraction arithmetic with `TrackSpace` conversions.
+
+### Terrain and grounding
+- Confirm `terrainOuter` is wide enough for the scene and does not cross a nearby foldback.
+- Probe both ribbon edges and major prop feet with `__apex.groundY()`.
+- Replace broad flat land boxes with `groundPatch`; use `groundedSegments` for long walls, roofs, stands, and stepped models.
+- Confirm terrain reaches the universal floor continuously and no triangle exceeds the road tolerance.
+
+### Models
+- Wrap hero composites in `modelGroup` with complete bounds and `required: true`.
+- Replace water-colored land boxes with `waterSurface`.
+- Replace raw cross-track roofs, bridges, tunnels, arches, and gantries with `overheadSpan`; assert at least 4.8 m underside clearance and safe support feet.
+- Check `__apex.modelDiagnostics()` for suppressed, invalid, unsafe, or incomplete required entries in both day and night sessions.
+
+### Collision and shared dressing
+- A circuit can opt into a folded pit roof with `pit.architecture.roofProfile`.
+  Supply two to seven `[u, frontHeightM, backHeightM]` knots, ordered strictly
+  from `u=0` to `u=1` along the actual built garage row. Heights are above its
+  local floor, from 9.6 to 18 m; they do not use scenery fractions. Optional
+  `roofColor`, `fasciaColor`, `soffitColor` and `edgeColor` are RGB triples in
+  `[0,1]`. Invalid recipes retain the ordinary garages. The crown stays within
+  the existing row and garage depth; it changes neither working lanes nor
+  doors, signs, lamps or driving bounds. This is opaque architectural dressing,
+  not a reflective-glass path or a surveyed building footprint.
+- Register collision for every solid visible boundary; use `recordBarrier(0, 1, ...)` for a full lap.
+- Enable `groundPatch({collision:true})` where a visual patch is also a solid boundary.
+- Add narrow `dressingExclusions` for waterfronts, parks, stadium interiors, open desert, and hero-model sightlines.
+- Confirm visible runoff matches `wallAt`/`wallStats().tightFrac`.
+
+### Verification
+- `node tools/track/verify-track.cjs <id>`
+- Pure foundation Node tests.
+- Focused terrain-over-road, props-over-road, wall, elevation, and track survey tests.
+- Day/night driver-eye and orbit captures.
+- `__apex.geometryDiagnostics()` contains only `ok:true` entries.
+- No non-finite geometry, unintended road intrusion, floating/sunk hero model, incomplete required model, or unsafe overhead span.
+
+The shared venue pass places up to six small race-day facilities on clear, level terrain after bespoke scenery and before foliage: a marshal shelter, recovery pickup, concession booth, service awning, medical response van and spectator shade with seating. It uses atomic model groups and reserves their footprints without changing driving limits. Circuit dressing exclusions can target `venue` or `all`; the public scenery API remains unchanged.
+
+Shared spectator-hill treads fit the spacing of the offset verge on bends. Narrow upper treads without a lower row receive a small ground-reaching pier within their footprint. Fence posts extend to rendered terrain or the underlying floor while their panels and tops retain the authored line. Broadleaf recipes check their complete trunk, branch, skirt and crown footprints before emission and try up to eight nearby outward sites while preserving their authored shape seeds. Relocated broadleaves also clear existing tree geometry, and later authored trees yield to those relocations. Palm assemblies check their emitted footprints against reserved scenery masses and try nearby clear sites before suppression. Relocations also yield to existing palms and require foliage vertices above known rendered terrain. Bush forms emit foliage material and restore the caller’s material.
+
+Motorhomes and broadcast compounds reserve a horizontal rectangle around their newly emitted vertices, including overhangs and tilted dish/mast geometry. These reservations only inform scenery placement and do not change driving boundaries. Rejected bodies leave no reservation.
+
+Silverstone camping pitches sample their own terrain; camper bodies clear the field surface and rest on small tyres. National flag sleeves meet their masts. Donington’s Collection hall rooftop plant has a curb joining it to the retained roof, Nurburgring scaffold rails have rear uprights reaching terrain, and Jerez scrub retries outward beyond the Dry Sack bank’s full footprint.

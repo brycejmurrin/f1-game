@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Apex 26 — frame cost bench</title>
+<!--
+  WHY THIS EXISTS, AND WHY IT IS A SEPARATE PAGE.
+
+  The container these agents run in has no GPU. It renders through SwiftShader,
+  headless, on a shared 4-core box, and three different instruments were tried
+  against a reported frame-rate drop before this page was written:
+
+    PerfGov.fpsEMA()               -> a flat 59.9 from two different builds at
+                                      two wildly different loads. A frame
+                                      INTERVAL, paced by a timer rather than a
+                                      compositor: it cannot see frame work.
+    CDP Performance.getMetrics     -> busy 100%, Frames 0. SwiftShader saturates
+                                      a core and headless presents nothing.
+    A render-loop source diff      -> real, but blind to shader cost, which is
+                                      exactly where a GPU regression lives.
+
+  Three constants are not three measurements. The frame rate a player feels only
+  exists on a machine with a GPU, so the instrument has to run there. This page
+  is that instrument.
+
+  It is a separate root page driving the game in a same-origin iframe rather
+  than a mode inside the game, deliberately: it adds nothing to the boot script
+  wall, nothing to game.js's line ceiling, needs no manifest/script-tag/precache
+  lockstep, and cannot cost a player a single frame — it only exists if you
+  navigate to it.
+
+  It reports an ATTRIBUTION, not a number. One fps figure from one machine says
+  "slower than what?" and nothing else. Toggling one subsystem at a time on the
+  SAME machine in the SAME run says which one got expensive, which is the
+  question an fps report actually asks.
+-->
+<style>
+  :root { color-scheme: dark; --bg:#0a0a0f; --fg:#e8e8ef; --dim:#8a8a99; --line:#23232e;
+          --accent:#39d0ff; --warn:#f6d200; --bad:#ff6b6b; --ok:#7ee787; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  header { padding:16px 20px; border-bottom:1px solid var(--line); }
+  h1 { margin:0 0 4px; font-size:17px; letter-spacing:.04em; }
+  .sub { color:var(--dim); font-size:12px; }
+  main { padding:16px 20px 40px; max-width:1100px; }
+  button { font:inherit; background:#16161f; color:var(--fg); border:1px solid var(--line);
+           border-radius:6px; padding:9px 16px; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.45; cursor:default; }
+  label { color:var(--dim); font-size:12px; margin-right:14px; }
+  select, input[type=number] { font:inherit; background:#16161f; color:var(--fg);
+           border:1px solid var(--line); border-radius:5px; padding:5px 7px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:12px 0; }
+  #status { margin:14px 0; color:var(--warn); min-height:1.5em; }
+  table { border-collapse:collapse; width:100%; margin-top:14px; font-size:13px; }
+  th, td { text-align:right; padding:6px 10px; border-bottom:1px solid var(--line); }
+  th:first-child, td:first-child { text-align:left; }
+  th { color:var(--dim); font-weight:600; font-size:11px; letter-spacing:.06em; }
+  td.delta-bad { color:var(--bad); }
+  td.delta-ok { color:var(--ok); }
+  pre { background:#101018; border:1px solid var(--line); border-radius:6px;
+        padding:12px; overflow:auto; font-size:12px; max-height:340px; }
+  .note { color:var(--dim); font-size:12px; margin-top:18px; border-left:2px solid var(--line);
+          padding-left:12px; }
+  /* The game must really render — a hidden or zero-size canvas measures nothing.
+     Keep it on-screen but small and inert. */
+  /* NOT a fixed 640x360. On a 390 px phone that overflowed the viewport
+     sideways (measured: scrollWidth 660 vs clientWidth 390), so the game
+     filled the screen and the status line and results scrolled out of reach —
+     the page read as "it just runs the game". It also meant the bench measured
+     a 640x360 canvas on a device that never renders at that size, which for a
+     fill-rate question is the wrong measurement. Fill the column instead, and
+     report the canvas actually measured. */
+  #frame { width:100%; max-width:100%; aspect-ratio:16/9; height:auto; display:block;
+           border:1px solid var(--line); border-radius:6px;
+           background:#000; margin-top:14px; }
+  @supports not (aspect-ratio: 16/9) { #frame { height:56.25vw; } }
+  #sizewarn { margin:10px 0; padding:8px 10px; border:1px solid var(--warn);
+              border-radius:6px; color:var(--warn); font-size:12px; display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>APEX 26 — FRAME COST BENCH</h1>
+  <div class="sub">Runs the real game in an iframe on <em>this</em> machine and attributes the frame time. Nothing is uploaded.</div>
+</header>
+<main>
+  <div class="row">
+    <label>circuit
+      <select id="track">
+        <option value="vegas">vegas (heaviest — 79k placements)</option>
+        <option value="monza">monza</option>
+        <option value="spa">spa</option>
+        <option value="singapore">singapore</option>
+      </select>
+    </label>
+    <label>time
+      <select id="tod">
+        <option value="night">night</option>
+        <option value="day">day</option>
+        <option value="dusk">dusk</option>
+      </select>
+    </label>
+    <label>weather
+      <select id="wx">
+        <option value="clear">clear</option>
+        <option value="rain">rain</option>
+      </select>
+    </label>
+    <label>seconds per phase <input id="secs" type="number" min="3" max="30" value="6" style="width:64px"></label>
+  </div>
+  <div class="row">
+    <button id="run">RUN BENCH</button>
+    <button id="copy" disabled>COPY RESULT</button>
+  </div>
+  <div id="status">idle</div>
+  <div id="sizewarn"></div>
+  <div id="out"></div>
+  <iframe id="frame" title="Apex 26 under test"></iframe>
+  <div class="note">
+    Every phase is measured on this same machine, back to back, with the render
+    scale pinned and the performance governor switched off — otherwise the
+    governor reacts to each phase and you measure its reaction instead of the
+    cost. BASELINE is the shipped configuration; each row after it turns exactly
+    one thing off. A large drop in median frame time when a subsystem is
+    disabled is that subsystem's cost.
+    <br><br>
+    The car is DRIVEN for the whole run, by the same closed-loop autopilot the
+    test suite uses — a braking envelope over a look-ahead scan, then pure
+    pursuit back to the centreline — starting from the grid every time so two
+    runs compare. The <b>driving</b> column is each row's alibi: a phase measured
+    while the car sat still is not a measurement of a race, whatever its median
+    says. The <b>&Delta;</b> column refuses to quote a number for a row that shed
+    nothing — a knob already at zero, a write the tuner clamped, or a pass that
+    never ran in this condition at all (lamp shadows by day). Those would
+    otherwise render as a clean 0%, which reads as "this subsystem is free".
+  </div>
+</main>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const statusEl = $("status"), outEl = $("out");
+let lastResult = null;
+
+const say = (s) => { statusEl.textContent = s; };
+
+// Frame times come from rAF deltas inside the GAME's own window, where a real
+// compositor paces the loop. Median and p95 both matter: a p95 far above the
+// median is a hitch (a rebuild, a re-bake), not a steady cost, and the two are
+// fixed by completely different things.
+// Below this many frames in a phase there is no distribution to quote.
+const MIN_FRAMES = 12;
+
+function measureIn(win, ms) {
+  return new Promise((resolve) => {
+    const t = [];
+    let last = win.performance.now();
+    const end = last + ms;
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; clearTimeout(bail); resolve(v); } };
+    // rAF IS THE MEASUREMENT AND ALSO THE ONLY THING DRIVING THIS LOOP, so if it
+    // stops the loop stops with it and the promise never settles — the page then
+    // hangs on that phase for ever with no error, which is precisely what a
+    // backgrounded tab does. A wall-clock escape hatch, generous enough never to
+    // fire on a tab that is actually rendering.
+    const bail = setTimeout(() => finish({ frames: t.length, stalled: true }), ms + 20000);
+    const tick = () => {
+      const now = win.performance.now();
+      t.push(now - last);
+      last = now;
+      if (now < end && !done) win.requestAnimationFrame(tick);
+      else {
+        // Drop the first couple: the phase change itself costs a frame or two
+        // (a knob write can force a rebuild), and that is not the steady cost.
+        // Only ever drop what we can afford to — on a slow device a 6 s phase
+        // can be a handful of frames, and dropping 3 of 4 leaves nothing.
+        const warm = Math.min(2, Math.max(0, t.length - MIN_FRAMES));
+        const s = t.slice(warm).sort((a, b) => a - b);
+        // A sample this thin cannot carry a p95, let alone a p99. SAY SO —
+        // an empty cell reads as "measured, and it was fine", which is the one
+        // thing it is not. The first version of this page resolved null here
+        // and rendered six rows of `undefined`; that is how this guard exists.
+        if (s.length < MIN_FRAMES) {
+          return finish({ frames: t.length, insufficient: true });
+        }
+        const q = (p) => +s[Math.min(s.length - 1, Math.floor(s.length * p))].toFixed(2);
+        finish({ frames: s.length, p50: q(0.5), p95: q(0.95), p99: q(0.99),
+                 fps: +(1000 / q(0.5)).toFixed(1) });
+      }
+    };
+    win.requestAnimationFrame(tick);
+  });
+}
+
+// One thing off per phase. `set` runs in the game window; `restore` puts it back
+// so the next phase starts from BASELINE again rather than compounding.
+// One thing off per phase. Each phase declares the lightTune KEYS it touches;
+// the runner snapshots their LIVE values before setting and puts exactly those
+// back afterwards, so the next phase starts from BASELINE again.
+//
+// It used to hardcode the restore (`bloomMul: 1`, `lampVolBase: 1`, …) from the
+// slider `def` in js/game/lighting.js, and that is not the shipped value. The
+// tuner store is keyed `track|timeOfDay|weather` and the AUTHORED preset for
+// each condition supplies the real number: measured on bahrain|night|dry,
+// bloomMul is 0.8 live against a def of 1.0. Restoring to the def left bloom
+// 25 % strong for every row below it — and because lightTune() PERSISTS, it
+// also wrote a permanent override into the player's own tuner store for that
+// track and condition. A diagnostic must not change what it measures, and must
+// not leave anything behind.
+const PHASES = [
+  { key: "baseline", label: "BASELINE (as shipped)", keys: [], set: () => ({}) },
+  { key: "noLampShadow", label: "lamp shadow map off", keys: ["lampShadow"],
+    // A non-zero knob does not mean the PASS ran. The lamp shadow only
+    // rasterises when a floodlight is close enough to be picked, so by day (or
+    // on a lampless circuit) this row would shed nothing while the knob still
+    // read 1 — a vacuous row that renders as an honest-looking 0%.
+    live: "lampShadow", set: () => ({ lampShadow: 0 }) },
+  { key: "noBloom", label: "bloom off", keys: ["bloomMul"],
+    set: () => ({ bloomMul: 0 }) },
+  { key: "noContact", label: "contact shadows off", keys: ["contactStr"],
+    set: () => ({ contactStr: 0 }) },
+  { key: "noMist", label: "ground mist off", keys: ["mistDensity"],
+    set: () => ({ mistDensity: 0 }) },
+  // SSAO and the god-ray march were missing, and they are two of the three
+  // heaviest passes in the tier-4 rung — SSAO is a pass plus TWO blurs, godray
+  // is a march. Without them the bench could not price the one question a
+  // player actually asks: "what would GRAPHICS: LOW save me if it shed this?"
+  { key: "noSSAO", label: "SSAO off (pass + 2 blurs)", keys: ["aoStr"],
+    set: () => ({ aoStr: 0 }) },
+  { key: "noGodray", label: "god-ray march off", keys: ["godrayBase", "godrayLowBoost"],
+    set: () => ({ godrayBase: 0, godrayLowBoost: 0 }) },
+  { key: "noLampVol", label: "lamp volumetrics off", keys: ["lampVolBase", "lampVolHaze"],
+    set: () => ({ lampVolBase: 0, lampVolHaze: 0 }) },
+  // THE ANSWER ROW. Everything the tier-4 rung sheds, off together — which is
+  // exactly what GRAPHICS: LOW does NOT do, because those five gates read
+  // PerfGov.autoTier() and autoTier excludes the user's preset (js/game.js:
+  // "autoTier 4 drops SSAO (+2 blurs) and god-ray — not GRAPHICS: LOW alone").
+  // The gap between this row and BASELINE is what a player on LOW is paying for
+  // a setting they already chose. On a phone lampVol is already off, so there
+  // the rung is bloom + SSAO + god-ray + contact.
+  { key: "tier4Rung", label: "the WHOLE tier-4 rung off (what LOW does not shed)",
+    keys: ["bloomMul", "contactStr", "aoStr", "godrayBase", "godrayLowBoost", "lampVolBase", "lampVolHaze"],
+    set: () => ({ bloomMul: 0, contactStr: 0, aoStr: 0, godrayBase: 0,
+                  godrayLowBoost: 0, lampVolBase: 0, lampVolHaze: 0 }) },
+  { key: "half", label: "render scale 0.5 (fill-rate probe)", keys: [],
+    set: () => ({}), scale: 0.5 },
+];
+
+// REACHING THE GAME'S GLOBALS FROM THIS PAGE.
+//
+// js/render/glx.js declares `const GLX`, and a script-level const is a LEXICAL
+// binding in the frame's global environment — it is NOT a property of that
+// frame's window. So `win.GLX` is undefined, always, and every reader here that
+// used it silently degraded: env.backend fell through to the hardcoded
+// "webgl2" for every run whatever actually bound, and env.three (the
+// see-through-car check, with a comment explaining why it matters) was null
+// every time. A diagnostic that cannot fail loudly is worse than no diagnostic.
+//
+// win.eval runs in THAT frame's global scope, where the lexical binding is
+// visible. Same-origin, so this is allowed.
+function gval(win, expr) {
+  try { return win.eval("(typeof (" + expr + ") !== 'undefined') ? (" + expr + ") : null"); }
+  catch (e) { return null; }
+}
+
+// Where every run starts. The grid (not mid-lap) so the field is packed and the
+// per-car draws are actually in frame.
+const START_FRAC = 0.002;
+
+// THE CAR HAS TO ACTUALLY DRIVE.
+//
+// This used to be `setInput({ throttle: true, steer: 0 })` — full throttle, zero
+// lock. That is not driving: it puts the car into the first barrier within a few
+// seconds, and every phase after that measured a car wedged against a wall, i.e.
+// exactly the stationary camera the comment at the call site says this page
+// exists to avoid. It also quietly corrupts the distribution, because a wedged
+// car trips game.js's stoppedOnTrack rescue and its teleport lands in p95/p99 as
+// a hitch that has nothing to do with the subsystem under test.
+//
+// So drive the same closed loop tests/specs/autopilot.spec.js uses: a braking
+// envelope over a dense look-ahead scan, then pure pursuit back to the
+// centreline. Two deliberate differences from the spec's copy:
+//   - it NEVER calls step(). The game's own loop is the thing being measured and
+//     has to stay in charge of the clock; the spec steps by hand because it is
+//     headless and looks at no pixel.
+//   - it runs on a FIXED 16 ms interval, not on rAF. Steering quality must not
+//     co-vary with the frame rate, or a slow phase would also be driven worse
+//     and the driving would become part of what that phase appears to cost.
+// The AI field is left in place (the spec clears it for a clean solo lap) — a
+// benchmark wants the full grid, which is most of the per-car draw cost.
+function installDriver(win, apex) {
+  const DISTS = []; for (let d = 5; d <= 160; d += 6) DISTS.push(d);
+  const VMAX = 94, A_BRAKE = 24, A_LAT = 13, KP = 2.4;
+  let vHold = 30, slow = 0, stopped = false;
+  let frames = 0, sumSpeed = 0, offFrames = 0, minSpeed = 1e9;
+  const tick = () => {
+    if (stopped) return;
+    let p, pts;
+    try { p = apex.probe(); if (!p) return; pts = apex.scan(DISTS); }
+    catch (e) { return; }
+    // Target speed as a braking ENVELOPE over the whole look-ahead, not the
+    // sharpest corner in a window: for each point take the corner speed it needs
+    // and the fastest we can be NOW and still brake to it, then take the min.
+    let kSteer = p.k;
+    const steerLook = Math.max(9, p.speed * 0.4);
+    let vT = Math.abs(p.k) > 1e-4 ? Math.sqrt(A_LAT / Math.abs(p.k)) : VMAX;
+    for (let j = 0; j < pts.length; j++) {
+      const d = DISTS[j], k = Math.abs(pts[j].k);
+      if (d <= steerLook) kSteer = pts[j].k;
+      const vCorner = k > 1e-4 ? Math.sqrt(A_LAT / k) : VMAX;
+      const vAllow = Math.sqrt(vCorner * vCorner + 2 * A_BRAKE * d);
+      if (vAllow < vT) vT = vAllow;
+    }
+    vT = Math.max(11, Math.min(VMAX, vT));
+    vHold = Math.min(vT, vHold + 0.5);
+    vT = vHold;
+    // Pure pursuit: the centreline L ahead sits ~k*L^2/2 to the side; aim there
+    // and null both bearing and heading error.
+    const L = Math.max(8, Math.min(38, p.speed * 0.6));
+    let steer = KP * (Math.atan2(kSteer * L * L * 0.5 - p.x, L) - p.angle);
+    steer = Math.max(-1, Math.min(1, steer));
+    let throttle = p.speed < vT, brake = p.speed > vT * 1.04;
+    // Wedge recovery: the grip-limited car will not rotate on more lock, so ease
+    // the lock and KEEP IT MOVING. A car allowed to stop cannot steer out.
+    if (p.speed < 3) { slow++; } else { slow = 0; }
+    if (slow > 40) { steer = Math.max(-0.4, Math.min(0.4, steer)); throttle = true; brake = false; }
+    else if (Math.abs(p.x) - p.hw > 0.4) { throttle = false; }
+    try { apex.setInput({ steer, throttle, brake }); } catch (e) {}
+    frames++; sumSpeed += p.speed;
+    if (p.speed < minSpeed) minSpeed = p.speed;
+    if (Math.abs(p.x) - p.hw > 0.2) offFrames++;
+  };
+  const id = win.setInterval(tick, 16);
+  // AND once per rendered frame. A single frame on a slow device occupies the
+  // main thread for seconds, and setInterval callbacks are coalesced away while
+  // it does — the first self-test of this page saw whole phases with ZERO driver
+  // ticks for exactly that reason, which is the case the old steer:0 hurt most.
+  // On a fast machine the interval leads and this is redundant; on a slow one it
+  // is the only steering the car gets. Ticking twice is harmless: the controller
+  // is a pure function of the current probe, not an integrator.
+  const raf = () => { if (stopped) return; tick(); win.requestAnimationFrame(raf); };
+  win.requestAnimationFrame(raf);
+  return {
+    stop() { stopped = true; win.clearInterval(id); try { apex.clearInput(); } catch (e) {} },
+    reset() { frames = 0; sumSpeed = 0; offFrames = 0; minSpeed = 1e9; },
+    // Per-phase driving health. A row measured while the car sat still is not a
+    // measurement of a race, and the reader has to be able to see that.
+    stats() {
+      return frames ? {
+        avgSpeed: +(sumSpeed / frames).toFixed(1),
+        minSpeed: +(minSpeed === 1e9 ? 0 : minSpeed).toFixed(1),
+        offTrackPct: +(100 * offFrames / frames).toFixed(0),
+      } : null;
+    },
+  };
+}
+
+let driver = null;
+
+async function run() {
+  $("run").disabled = true; $("copy").disabled = true;
+  outEl.innerHTML = ""; lastResult = null;
+  const track = $("track").value, tod = $("tod").value, wx = $("wx").value;
+  const ms = Math.max(3, Math.min(30, +$("secs").value || 6)) * 1000;
+
+  const frame = $("frame");
+  say("loading the game…");
+  await new Promise((res, rej) => {
+    frame.onload = res;
+    frame.onerror = () => rej(new Error("the game iframe failed to load"));
+    // Cache-bust the iframe so a re-run always measures the CURRENT deploy.
+    frame.src = "./index.html?bench=" + Date.now();
+  });
+
+  const win = frame.contentWindow;
+  const t0 = Date.now();
+  while (!(win.__apex && win.__apex.info)) {
+    if (Date.now() - t0 > 120000) throw new Error("__apex never appeared (the game did not boot)");
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  const apex = win.__apex;
+
+  say("building " + track + "…");
+  apex.race(track, tod, wx);
+  const t1 = Date.now();
+  while (apex.info().track == null) {
+    if (Date.now() - t1 > 300000) throw new Error("the track never finished building");
+    await new Promise((r) => setTimeout(r, 250));
+  }
+
+  // Drive, so this measures a RACE rather than a stationary camera — the report
+  // was about racing, and a parked car skips the snap-cache rebuilds that
+  // driving forces every time the eye crosses a shadow cell.
+  apex.go && apex.go();
+  // From a FIXED point every run, so two runs of this page are comparable: the
+  // grid, with the field still bunched, which is where the per-car draw cost is.
+  try { apex.jump(START_FRAC); apex.aim(0); apex.snapCam(); } catch (e) {}
+  driver = installDriver(win, apex);
+
+  // Pin scale and kill the governor. Without this every phase moves the tier and
+  // the numbers describe the governor, not the renderer.
+  apex.renderScale(1);
+  const env = {
+    build: (win.document.querySelector('meta[name="apex-build"]') || {}).content || null,
+    sha: (win.document.querySelector('meta[name="apex-sha"]') || {}).content || null,
+    backend: gval(win, "GLX && GLX.backend") || (gval(win, "GLX && GLX.__tlx") ? "three" : "webgl2"),
+    ua: navigator.userAgent,
+    dpr: window.devicePixelRatio,
+    canvas: (() => { try { const c = win.document.getElementById("game"); return c.width + "x" + c.height; } catch (e) { return null; } })(),
+    gpu: (() => {
+      try {
+        const gl = win.document.createElement("canvas").getContext("webgl2");
+        const d = gl && gl.getExtension("WEBGL_debug_renderer_info");
+        return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : null;
+      } catch (e) { return null; }
+    })(),
+    track, tod, wx, secondsPerPhase: ms / 1000,
+    // THE GOVERNOR, WHOLE. A screenshot showing "tier 4" cannot say WHY, and the
+    // three causes need three different fixes: crashStrikes >= 2 pins the floor
+    // at exactly 4 (a phone OOM-killed by an earlier build leaves that behind
+    // and only finishing races pays it off), userTier is the GRAPHICS preset,
+    // and a high floorMs means the governor learned this device is slow and
+    // stopped trying to climb back. tier() is a max() of all three, so only the
+    // parts tell you which one is binding.
+    perf: (() => { try { return apex.perf(); } catch (e) { return { err: String(e.message).slice(0, 80) }; } })(),
+    // WHICH BACKEND THREE ACTUALLY BOUND, and whether the canvas ended up
+    // alpha-composited. `canvasAlpha: true` is the see-through-car defect,
+    // read back off the live context rather than inferred from what we asked
+    // for. Null means three bound WebGPU and there is no gl to ask.
+    three: gval(win, "GLX && GLX.__tlx ? GLX.__tlx.backendState() : null"),
+  };
+
+  // SAY WHAT WAS ACTUALLY MEASURED. The iframe is a fraction of the screen, so
+  // the canvas under test is smaller than the one the player races on — and a
+  // fill-bound answer read off a smaller canvas understates the cost. Surface
+  // the ratio rather than leaving it in a JSON field nobody scrolls to.
+  try {
+    const c = win.document.getElementById("game");
+    const px = c.width * c.height;
+    const screenPx = (window.screen.width * window.devicePixelRatio) *
+                     (window.screen.height * window.devicePixelRatio);
+    const pct = Math.round(100 * px / screenPx);
+    const w = document.getElementById("sizewarn");
+    w.style.display = "block";
+    w.textContent = "measuring a " + c.width + "x" + c.height + " canvas — about " +
+      pct + "% of this screen's pixels. Deltas BETWEEN rows are valid at any size; " +
+      "the absolute ms are not your in-game frame time." +
+      (pct < 35 ? " Rotate to landscape and re-run for numbers closer to what you play." : "");
+  } catch (e) {}
+
+  say("settling…");
+  await new Promise((r) => setTimeout(r, 4000));
+
+  // BASELINE LIVENESS, sampled once before any phase changes anything. `arms` is
+  // the pass's lifetime rasterisation count (js/render/glx.js lampShadowState),
+  // so arms === 0 after settling means that pass has never run in this
+  // condition and the row below that turns it off cannot be measuring it.
+  const alive = {};
+  const lampSt = gval(win, "GLX && GLX.lampShadowState ? GLX.lampShadowState() : null");
+  alive.lampShadow = lampSt ? lampSt.arms > 0 : null;
+  alive.lampShadowState = lampSt;
+  env.alive = alive;
+
+  const rows = [];
+  for (const ph of PHASES) {
+    say("measuring: " + ph.label + " …");
+    // Snapshot the LIVE values of exactly the keys this phase touches, so the
+    // restore is what was there rather than what a slider def says.
+    let snap = null, vac = {};
+    try {
+      const live = apex.lightTune();
+      snap = {}; for (const k of ph.keys) snap[k] = live[k];
+      const patch = ph.set(apex);
+      // DID THIS PHASE ACTUALLY SHED ANYTHING? There are two ways a row measures
+      // nothing at all, and both used to render as a clean "0%" — which reads as
+      // "this subsystem is free", the one conclusion they must not support.
+      //   alreadyOff — the knob was ALREADY at the value being set, so nothing
+      //     was turned off: lamp volumetrics by day, a lamp shadow on a circuit
+      //     with no lamps, god-rays with the sun below the horizon.
+      //   refused    — the write did not stick (a clamp, or a key the tuner does
+      //     not accept for this track|tod|weather).
+      const near = (a, b) => Math.abs((+a || 0) - (+b || 0)) < 1e-6;
+      if (ph.keys.length && ph.keys.every((k) => near(live[k], patch[k]))) vac.alreadyOff = true;
+      if (ph.live && alive[ph.live] === false) vac.inert = true;
+      if (patch && Object.keys(patch).length) apex.lightTune(patch);
+      if (ph.scale != null) apex.renderScale(ph.scale);
+      const after = apex.lightTune();
+      const refused = ph.keys.filter((k) => !near(after[k], patch[k]));
+      if (refused.length) vac.refused = refused;
+      if (ph.scale != null) {
+        try { if (!near(apex.perf().scale, ph.scale)) vac.scaleRefused = true; } catch (e) {}
+      }
+    } catch (e) { rows.push({ key: ph.key, label: ph.label, error: String(e.message).slice(0, 90) }); continue; }
+    await new Promise((r) => setTimeout(r, 900));   // let the knob take effect
+    if (driver) driver.reset();                     // per-phase driving health
+    const m = await measureIn(win, ms);
+    const drive = driver ? driver.stats() : null;
+    let perf = null;
+    try {
+      const p = apex.perf();
+      // tierFloor and crashStrikes ride every row: if the tier is pinned by the
+      // strike floor it will not move across phases no matter what is shed, and
+      // that constancy is itself the answer.
+      perf = { tier: p.tier, scale: +p.scale.toFixed(2), tierFloor: p.tierFloor,
+               userTier: p.userTier, autoTier: p.autoTier, autoShed: p.autoShed,
+               strikes: p.crashStrikes, floorMs: p.floorMs };
+    } catch (e) {}
+    // Restore the SNAPSHOT, never a default: the tuner store is keyed
+    // track|timeOfDay|weather and the authored preset supplies the live number,
+    // so writing a slider `def` back both mis-prices every later row AND
+    // PERSISTS a permanent override into the player's own store. A diagnostic
+    // must not change what it measures or leave anything behind.
+    try {
+      if (snap && Object.keys(snap).length) apex.lightTune(snap);
+      if (ph.scale != null) apex.renderScale(1);
+    } catch (e) {}
+    rows.push(Object.assign({ key: ph.key, label: ph.label }, m, perf, { drive }, vac));
+    await new Promise((r) => setTimeout(r, 600));
+  }
+
+  if (driver) { driver.stop(); driver = null; }
+  lastResult = { env, rows };
+  render(lastResult);
+  const usable = rows.filter((r) => r.p50 != null).length;
+  say(usable === 0
+    ? "NO PHASE PRODUCED A USABLE SAMPLE — the numbers below are not a measurement. Raise seconds per phase."
+    : (usable < rows.length
+        ? `done, but only ${usable}/${rows.length} phases produced a usable sample.`
+        : "done — press COPY RESULT and paste it back."));
+  $("run").disabled = false; $("copy").disabled = false;
+}
+
+function render(res) {
+  const base = res.rows.find((r) => r.key === "baseline");
+  const esc = (s) => String(s == null ? "—" : s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+  const cells = res.rows.map((r) => {
+    if (r.error) return `<tr><td>${esc(r.label)}</td><td colspan="6">${esc(r.error)}</td></tr>`;
+    if (r.stalled) return `<tr><td>${esc(r.label)}</td><td colspan="6" class="delta-bad">` +
+      `requestAnimationFrame STALLED after ${r.frames} frame(s) — this tab was probably ` +
+      `backgrounded. Keep this tab focused and in front for the whole run.</td></tr>`;
+    if (r.insufficient) return `<tr><td>${esc(r.label)}</td><td colspan="6" class="delta-bad">` +
+      `only ${r.frames} frame(s) in this phase — too few to quote a median. ` +
+      `Raise "seconds per phase", or this device is rendering slower than ~${MIN_FRAMES} fps here.</td></tr>`;
+    const d = base && base.p50 ? +(100 * (r.p50 - base.p50) / base.p50).toFixed(1) : null;
+    // A row that shed NOTHING has no delta to report. Rendering its 0% beside the
+    // rows that did shed something is what would let "free" be read off noise.
+    const dead = r.alreadyOff || r.refused || r.scaleRefused || r.inert;
+    const cls = dead ? "delta-bad"
+      : (d == null || r.key === "baseline" ? "" : (d < -4 ? "delta-ok" : (d > 4 ? "delta-bad" : "")));
+    const dTxt = dead
+      ? (r.inert ? "pass never ran here — nothing shed"
+         : r.alreadyOff ? "already off — nothing shed"
+         : r.scaleRefused ? "scale refused" : "write refused: " + esc((r.refused || []).join(",")))
+      : (r.key === "baseline" ? "—" : (d == null ? "—" : (d > 0 ? "+" : "") + d + "%"));
+    // The driving column is the row's own alibi. A phase measured while the car
+    // was stationary is not a measurement of a race, whatever its median says.
+    const dr = r.drive
+      ? `${r.drive.avgSpeed} m/s` + (r.drive.avgSpeed < 8 ? " ⚠ not racing" : "") +
+        (r.drive.offTrackPct > 25 ? ` ⚠ off ${r.drive.offTrackPct}%` : "")
+      : "—";
+    const drCls = r.drive && (r.drive.avgSpeed < 8 || r.drive.offTrackPct > 25) ? "delta-bad" : "";
+    return `<tr><td>${esc(r.label)}</td><td>${r.p50}</td><td>${r.p95}</td><td>${r.p99}</td>` +
+           `<td>${r.fps}</td><td class="${drCls}">${dr}</td><td class="${cls}">${dTxt}</td></tr>`;
+  }).join("");
+  outEl.innerHTML =
+    `<table><thead><tr><th>phase</th><th>p50 ms</th><th>p95 ms</th><th>p99 ms</th>` +
+    `<th>fps (p50)</th><th>driving</th><th>Δ vs baseline</th></tr></thead><tbody>${cells}</tbody></table>` +
+    `<pre>${esc(JSON.stringify(res, null, 2))}</pre>`;
+}
+
+$("run").onclick = () => run().catch((e) => {
+  // Stop the autopilot on the failure path too, or a thrown run leaves a 16 ms
+  // interval driving the car in a hidden iframe for the life of the page.
+  if (driver) { try { driver.stop(); } catch (_) {} driver = null; }
+  say("FAILED: " + e.message);
+  $("run").disabled = false;
+});
+$("copy").onclick = async () => {
+  if (!lastResult) return;
+  const txt = JSON.stringify(lastResult, null, 2);
+  try { await navigator.clipboard.writeText(txt); say("copied to the clipboard."); }
+  catch (e) { say("clipboard refused — select the JSON below and copy it by hand."); }
+};
+</script>
+</body>
+</html>

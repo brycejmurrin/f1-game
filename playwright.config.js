@@ -1,21 +1,23 @@
 // @ts-check
 import { defineConfig, devices } from "@playwright/test";
-import fs from "fs";
 import os from "os";
+import { chromiumPath } from "./tools/lib/chromium-path.mjs";
 
-// npm scripts use tools/run-playwright.mjs to allocate a unique port per run.
-// APEX_PORT remains available for test-shards.sh and direct CLI invocations.
+// npm scripts use tools/ci/run-playwright.mjs to allocate a unique port per run.
+// APEX_PORT remains available for CI shards and direct CLI invocations.
 // Port-suffixed output prevents concurrent runs from clobbering each other.
 const PORT = Number(process.env.APEX_PORT || 3456);
 const SUF = `-${PORT}`;
 
-// Portable chromium resolution: prefer PW_CHROMIUM, else the Linux sandbox path
-// only if it actually exists on disk, else omit executablePath so Playwright
-// falls back to its own bundled browser (macOS/other dev machines).
-const SANDBOX_CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
-const CHROMIUM_PATH =
-  process.env.PW_CHROMIUM ||
-  (fs.existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : undefined);
+// Portable chromium resolution (tools/lib/chromium-path.mjs): PW_CHROMIUM wins;
+// else `chromium-<rev>` for the revision playwright-core's browsers.json names,
+// under PLAYWRIGHT_BROWSERS_PATH / ~/.cache/ms-playwright /
+// ~/Library/Caches/ms-playwright / /opt/pw-browsers; else the newest installed
+// chromium-* there (this sandbox ships 1194 while playwright 1.63 wants 1243);
+// else undefined, so Playwright falls back to its own bundled browser. The old
+// literal `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` meant every
+// Playwright bump silently changed which browser the suite ran on.
+const CHROMIUM_PATH = chromiumPath();
 
 // Shared Chromium launch (SwiftShader software-GL). Both projects use it — the
 // "headless"/"render" split is about worker concurrency, not GL capability.
@@ -26,8 +28,36 @@ const LAUNCH = {
     "--enable-unsafe-webgpu",
     "--disable-background-timer-throttling",
     "--disable-renderer-backgrounding",
+    // DO NOT ADD --disable-frame-rate-limit HERE. It was tried, to cure menu
+    // clicks that hang: Playwright's actionability poll ticks on rAF, and this
+    // page's rAF rate can collapse under SwiftShader, so uncapping the frame
+    // clock looks like the fix. Measured on an IDLE box, one browser at a time:
+    //
+    //   flags                          rAF     #mb-season click
+    //   as below                       2/s     1632 ms
+    //   + --disable-gpu-vsync          2/s     1569 ms
+    //   + --disable-frame-rate-limit   7/s    11982 ms
+    //
+    // It makes clicking SEVEN TIMES SLOWER. Uncapping tells a CPU rasteriser to
+    // render as fast as it can, and it obliges — two workers took the load
+    // average past 9 on four cores and every spec slowed with it. The rAF rate
+    // is not the lever; CPU headroom is. A menu click that hangs means the box
+    // is oversubscribed, so lower --workers rather than raise the frame rate.
   ],
 };
+
+// APEX_GL=llvmpipe: Mesa's llvmpipe through ANGLE's GL backend instead of
+// SwiftShader. CI's DEFAULT for the smoke gate, the `selected` shards and the
+// dispatched wide run since 2026-09-16 (ci.yml installs Mesa + Xvfb and sets
+// the env; `gl: swiftshader` is the opt-out) — measured 8-12x faster on the
+// rendering tests. It does NOT work in the dev container (no /dev/dri —
+// docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe 2026-09-16), so the
+// SwiftShader pin above stays the committed default for a local run and for
+// driving-model, the twins' parity anchor (ci-coverage guards both).
+if (process.env.APEX_GL === "llvmpipe") {
+  LAUNCH.args = LAUNCH.args.map((a) => (a === "--use-angle=swiftshader" ? "--use-angle=gl" : a))
+    .concat(["--use-gl=angle", "--ignore-gpu-blocklist"]);
+}
 
 // The render suite: specs that take screenshots / pixel-diffs, drive real GL
 // rendering, or assert DOM visibility. SwiftShader renders on the CPU, so past
@@ -35,29 +65,90 @@ const LAUNCH = {
 // up. These run in the "render" project (cap its workers via
 // `--project=render --workers=4`). Everything NOT in this list is a headless
 // physics/geometry/hook/data spec that scales wide — the "headless" project.
-// Keep this list exhaustive against tests/*.spec.js (a coverage-audit npm script
-// asserts every spec lands in exactly one project).
+// Keep this list exhaustive against tests/specs/*.spec.js. The guard is in
+// tests/unit/test-groups.test.mjs, NOT the coverage audit — that one asserts
+// every spec belongs to a topical `test:*` group and says nothing about which
+// PROJECT it lands in. Three tests there hold this list: a name with no file, a
+// pinned --project that excludes a spec it names, and any spec that captures an
+// image while sitting outside this list (how parts-liveries was found).
 const RENDER_SPECS = [
-  "dev-tools", "f1-track-accuracy", "hud-audit", "lighting-ab",
-  "parts-budget", "parts-catalog", "parts-persistence",
-  "ui-audit", "ui-button-touch", "ui-desktop",
-  "tracks-visual", "webgl-probes", "camera", "smoke", "season", "time-trial",
+  "dev-tools", "f1-track-accuracy", "hud-audit", "image-grade-visual",
+  "lighting-ab", "lighting-tuner-grade",
+  "garage-first-frame",
+  "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",
+  "parts-liveries",
+  "ui-audit", "ui-button-touch", "menu-survey", "menu-keyboard", "photo-studio",
+  "webgl-probes", "camera", "smoke", "season", "time-trial",
+  "material-shimmer", "instanced-draw",
+  "menu-baseline", "track-designer",
 ].map((n) => `**/${n}.spec.js`);
+
+// WebXR IWER suite — own project so failures are attributable and so the
+// SwiftShader XR launch args stay off the rest of the suite. Ignored by
+// headless/render; run via `npm run test:xr` / `--project=xr-emulated`.
+const XR_SPECS = [
+  "vr-emulated",
+  "xr-plan",
+].map((n) => `**/${n}.spec.js`);
+
+// XR launch: playwright-webxr guidance (force SwiftShader + unsafe flag).
+const XR_LAUNCH = {
+  ...(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {}),
+  args: [
+    "--use-gl=angle",
+    "--use-angle=swiftshader",
+    "--enable-unsafe-swiftshader",
+    "--enable-unsafe-webgpu",
+    "--disable-background-timer-throttling",
+    "--disable-renderer-backgrounding",
+  ],
+};
 
 // Default worker cap: every worker owns a Chromium + SwiftShader process.
 // Override with APEX_WORKERS or Playwright's --workers=N.
-const LOCAL_WORKERS = Math.max(2, Math.min(4, Math.floor(os.cpus().length / 2)));
+// ONE worker on a 4-core box — the same rule test-bg.mjs applies (AGENTS.md
+// §Verification 5). This read `max(2, …)` until 2026-09-16, so the documented
+// single-spec form, `npm test -- tests/specs/<file>.spec.js`, ran two
+// SwiftShader workers on 4 cores: the exact configuration docs/TESTING.md §3
+// measured at ~1.9x per test with false timeouts.
+const LOCAL_WORKERS = os.cpus().length <= 4 ? 1 : Math.min(4, Math.floor(os.cpus().length / 2));
 const REQUESTED_WORKERS = Number.parseInt(process.env.APEX_WORKERS || "", 10);
 const WORKERS = Number.isFinite(REQUESTED_WORKERS) && REQUESTED_WORKERS > 0
   ? REQUESTED_WORKERS
   : (process.env.CI ? 2 : LOCAL_WORKERS);
 
+// DEFAULT DISCOVERY IS tests/specs/*.spec.js, AND NOTHING ELSE (2026-10-04).
+// testDir is "./tests" with Playwright's default testMatch
+// (`**/*.@(spec|test).?(c|m)[jt]s?(x)`), so every tests/unit/*.test.mjs (493
+// node:test files) was collected by a bare `npm test`; and the headless
+// project's own testIgnore REPLACED the top-level `**/manual/**`
+// (playwright/lib/common: takeFirst(project.testIgnore, config.testIgnore)), so
+// tests/manual/ was collected too. The match is now `specs/**` and the manual
+// ignore is repeated in EVERY project.
+//
+// testDir itself stays "./tests": junit classnames, titlePath() and the
+// reporter's spec keys are testDir-relative ("specs/x.spec.js"), and
+// junit-failed.mjs, spec-timings.mjs and the flaky quarantine all prefix
+// "tests/" to them — a testDir of tests/specs would re-key every one of them.
+//
+// tests/manual/ holds the suites a HUMAN runs on purpose (the per-circuit
+// blank scan and contact sheets, the gallery emitters): hundreds of
+// SwiftShader frames or images for review, gating nothing. They run by
+// explicit path (tests/manual/README.md), so a command line that names one
+// opts that run into manual discovery. The env var carries the decision to
+// Playwright's worker processes, which re-evaluate this file without the CLI
+// arguments.
+export const MANUAL_RUN = process.env.APEX_MANUAL_RUN === "1"
+  || process.argv.some((a) => /(^|[\\/])manual[\\/].+\.spec\.js/.test(a));
+if (MANUAL_RUN) process.env.APEX_MANUAL_RUN = "1";
+export const TEST_MATCH = MANUAL_RUN ? ["specs/**/*.spec.js", "manual/**/*.spec.js"] : ["specs/**/*.spec.js"];
+export const MANUAL_IGNORE = MANUAL_RUN ? [] : ["**/manual/**"];
+
 export default defineConfig({
   testDir: "./tests",
-  // Scratch/scan suites are ad-hoc investigation scripts, not part of the
-  // regression suite — keep them out of default discovery.
-  testIgnore: ["**/inspect/**", "**/blank-scan/**", "**/galleries/**"],
-  globalSetup: './tests/global-setup.js',
+  testMatch: TEST_MATCH,
+  testIgnore: MANUAL_IGNORE,
+  globalSetup: './tests/helpers/global-setup.js',
   fullyParallel: true,
   workers: WORKERS,
   // retries:1 hides flakiness the deterministic (mocked network, headless
@@ -65,21 +156,70 @@ export default defineConfig({
   // keep one retry in CI for genuine infra blips. live-reporter reports flaky
   // (passed-on-retry) counts either way.
   retries: process.env.CI ? 1 : 0,
+  // A CI retry runs at the END of the shard, alone in one worker (Playwright
+  // ≥ 1.62, #1716): an immediate retry re-ran the failed test beside the rest
+  // of the shard, under the same SwiftShader load that timed it out, so a
+  // load-induced failure tended to fail twice. Costs only the retries' own time.
+  // https://playwright.dev/docs/api/class-testconfig#test-config-retry-strategy
+  retryStrategy: process.env.CI ? "isolated" : "immediate",
   timeout: 120_000,
+  // AND THE SAME FOR ASSERTIONS. This config declared no `expect` block, so
+  // every web-first assertion ran on Playwright's 5 s default — below the
+  // measured floor for anything that follows a UI transition here, where a
+  // screen swap costs 8.1 s (scratch/perf, idle box). Specs had started
+  // working around it one assertion at a time: lighting-tuner-grade carries a
+  // seven-line comment explaining why ONE toHaveText needed 30 s ("the
+  // assertion fired while the label was still the armed one"), while the
+  // arming assertion three lines above it kept the 5 s default and failed the
+  // same way. 20 s is ~2.5x the measured worst transition; an assertion that
+  // needs materially more than that should still say so at its own site.
+  expect: { timeout: 20_000 },
   outputDir: `artifacts/test-results${SUF}`,
   use: {
+    // AN UNBOUNDED ACTION IS WHY A STUCK CLICK READS AS A MYSTERY. Playwright's
+    // actionTimeout defaults to 0 — no limit — so a locator that never becomes
+    // actionable consumes the whole TEST budget and reports "Test timeout of
+    // Nms exceeded" without naming the element. That is exactly what three
+    // lighting-tuner-grade tests did: 552.9 / 612.9 / 625.0 s each, against caps
+    // of 360 s and then 600 s, with no clue which click was waiting. Raising the
+    // cap only bought the hang more time.
+    //
+    // 60 s is generous for an ACTION here: the slowest measured interaction on
+    // this box is a screen swap at 8.1 s (scratch/perf, idle), and captures —
+    // which legitimately take ~150 s on a night scene — are not actions and keep
+    // their own explicit timeouts. A real hang now fails in a minute, naming the
+    // locator.
+    actionTimeout: 60_000,
     baseURL: `http://127.0.0.1:${PORT}`,
     viewport: { width: 1280, height: 720 },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // The shell's CSP hashes every inline <script> and drops script-src
+    // 'unsafe-inline' (tools/gen/gen-shell.mjs SEC2-7). Playwright's
+    // addInitScript / addScriptTag({content}) inject unhashed inline scripts
+    // (fixtures.js sets __TEST_MODE + gfx/tyre pins; tlx-probes pins three;
+    // physics-hotpath injects probes). Without this, Chromium logs CSP
+    // violations as console errors and Smoke / TLX / selected shards go red
+    // while the production meta stays strict. Players are unaffected.
+    // https://playwright.dev/docs/api/class-browser#browser-new-context-option-bypass-csp
+    bypassCSP: true,
+    // Pin prefers-reduced-motion for every spec. Two reasons: determinism (the
+    // pulse/spinner animations stop mid-frame differences in screenshots), and
+    // View Transitions — menus.js's vt() goes direct under reduce, skipping
+    // startViewTransition's page SNAPSHOT, which on SwiftShader blocks the main
+    // thread ~3.2 s per screen swap (measured 2026-08-26; it starved the
+    // rAF-polled waits in menu-keyboard past their 8 s budgets). The crossfade
+    // is untestable here anyway — SwiftShader has no compositor fast path.
+    reducedMotion: "reduce",
   },
   projects: [
     {
       // Physics / geometry / hooks / data specs — assertion-only, scale wide.
-      // Everything NOT in RENDER_SPECS. Run alone (fast) with:
+      // Everything NOT in RENDER_SPECS / XR_SPECS. Run alone (fast) with:
       //   npx playwright test --project=headless --workers=8
       name: "headless",
-      testIgnore: RENDER_SPECS,
+      // A project's testIgnore REPLACES the top-level one: repeat the manual rule.
+      testIgnore: [...RENDER_SPECS, ...XR_SPECS, ...MANUAL_IGNORE],
       use: { ...devices["Desktop Chrome"], launchOptions: LAUNCH },
     },
     {
@@ -87,7 +227,16 @@ export default defineConfig({
       // CPU thrash:  npx playwright test --project=render --workers=4
       name: "render",
       testMatch: RENDER_SPECS,
+      testIgnore: MANUAL_IGNORE,
       use: { ...devices["Desktop Chrome"], launchOptions: LAUNCH },
+    },
+    {
+      // Immersive-vr via Meta IWER (tests/vendor/iwer-*.min.js). Spec-level only;
+      // Quest GPU / multiview / foveation / XRGPUBinding need a headset.
+      name: "xr-emulated",
+      testMatch: XR_SPECS,
+      testIgnore: MANUAL_IGNORE,
+      use: { ...devices["Desktop Chrome"], launchOptions: XR_LAUNCH },
     },
   ],
   webServer: {
@@ -98,7 +247,7 @@ export default defineConfig({
     url: `http://127.0.0.1:${PORT}`,
     // The npm wrapper owns an in-process server, while direct local CLI use may
     // deliberately target a manually started :3456 server. Explicit APEX_PORT
-    // runs (test-shards/CI) must own their server to avoid teardown races.
+    // runs (CI shards) must own their server to avoid teardown races.
     reuseExistingServer:
       process.env.APEX_MANAGED_SERVER === "1" ||
       process.env.APEX_REUSE_SERVER === "1" ||
@@ -111,9 +260,9 @@ export default defineConfig({
     stderr: "ignore",
   },
   reporter: [
-    // Live tail-able progress (see tests/live-reporter.js): timestamped
+    // Live tail-able progress (see tests/helpers/live-reporter.js): timestamped
     // start/end line per test, written immediately — `tail -f` friendly.
-    ["./tests/live-reporter.js"],
+    ["./tests/helpers/live-reporter.js"],
     ["html", { open: "never", outputFolder: `artifacts/report${SUF}` }],
     ["junit", { outputFile: `artifacts/test-results${SUF}/junit.xml` }],
   ],

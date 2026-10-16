@@ -1,0 +1,10 @@
+[
+{"query":"I changed the kerb and tarmac shading in js/circuits/bahrain.js and want before/after frames from the same camera at turn 1 and turn 10, saved under artifacts/, so I can compare them side by side. Please capture both states and report the file paths.","expect":"playwright-probe"},
+{"query":"can u grab a few headless shots of monza w/ chase and cockpit cam, plus run an eval to dump camState?? cam seems laggy in the chicane, not sure if its just me","expect":"playwright-probe"},
+{"query":"The white lines on the pit exit shimmer and crawl when the car drives past, like z-fighting. I need a recorded driven clip of the flicker at speed so we can see which frames it appears in and judge whether it is real.","expect":"playwright-probe"},
+{"query":"Take the isolated car studio in tools/carview.html and render the rear wing and gearbox from three angles with the number 44 livery on, checking whether the sponsor decals reflect properly on the sidepod. Save the images and list them.","expect":"playwright-probe"},
+{"query":"Our frame rate dips every few seconds on Spa during a race. Run a CPU profile of the game loop, give me the flame chart top offenders and tell me whether GC spikes explain the hitches.","expect":"playwright-probe"},
+{"query":"Add a new wing option to the GARAGE parts catalog and make the owned-part card show a livery preview. Also check the ersProfile value for the new part so career owners see it.","expect":"garage-parts-livery"},
+{"query":"Screenshot every menu screen at portrait and landscape phone sizes with UI scale 1.5 and check for clipped text and tap targets under 44px across all of them.","expect":"survey-ui-matrix"},
+{"query":"I want to drive the running game canvas interactively in Chrome, poke __apex from the console, and watch the heap and console while I repro the camera glitch on the live page.","expect":"mcp-probe"}
+]

@@ -1,0 +1,926 @@
+/* race-control.test.mjs — the caution flag state machine, in a VM.
+ *
+ * WHY THIS IS A UNIT SUITE AND NOT A SPEC. The first attempt at this was
+ * Playwright: stage a race, inject a host flag with __apex.netPeerEvent, assert
+ * it stuck. It cannot work, and the reason is the design rather than a bug —
+ * NetPlay.ownsRaceControl() is `!active || role === "host"`, so a single-player
+ * page OWNS race control and recomputes the flag every frame, clearing anything
+ * injected. Only a real loopback session can exercise the guest path, and
+ * tests/specs/multiplayer-session.spec.js already does exactly that.
+ *
+ * Everything else about the machine — the hysteresis, the per-level time caps,
+ * the drop-on-disable rule, the leader's-lap rule behind OVERTAKE — needs
+ * settled DebrisWorld hazards to drive it, which in a browser means staging
+ * debris badly and pinning the staging instead of the rule.
+ *
+ * In a VM the hazard picture is a value you hand it, so the thresholds and the
+ * clock are directly testable and the whole suite runs in milliseconds. That is
+ * the payoff of the extraction: the machine was untestable while it was 118
+ * lines in the middle of game.js, not because anyone chose that, but because
+ * there was no seam to hold it by.
+ *
+ * Run: node --test tests/unit/race-control.test.mjs   (npm run test:tooling-fast)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const DEBRIS_SRC = readFileSync(join(ROOT, "js/physics/debris-world.js"), "utf8");
+
+// The module declares `const RaceControl`, which lands in the context's global
+// LEXICAL scope rather than on the global object — so it is read back by
+// evaluating its name. Same shape as tests/unit/agentview-api-contract.test.mjs.
+function load(debris) {
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, String, Number, isNaN, isFinite, console,
+    DebrisWorld: debris,
+  });
+  seedLog(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx,
+    { filename: "js/race/race-control.js" });
+  return vm.runInContext("RaceControl", ctx);
+}
+
+/** A hazard picture: `total` on the surface, and the worst single sector. */
+function hazards(total, worstCount, sector = 1, redTotal = total) {
+  return { total, redTotal, sectors: [0, worstCount, 0], worst: { count: worstCount, sector, frac: 0.4 } };
+}
+
+/** Minimal world: single-player (owns race control), racing, empty grid. */
+function makeCtx(over = {}, savedCaution) {
+  const saved = new Map();
+  const initial = arguments.length < 2 ? true : savedCaution;
+  if (initial !== undefined) saved.set("caution", initial);
+  return Object.assign({
+    state: "race",
+    ranked: [],
+    netPlay: { active: () => false, ownsRaceControl: () => true, reportCaution() {} },
+    store: {
+      get: (k, d) => (saved.has(k) ? saved.get(k) : d),
+      set: (k, v) => saved.set(k, v),
+      _saved: saved,
+    },
+  }, over);
+}
+
+/** Run `secs` of updates at 60 Hz so the ~4 Hz hazard query actually fires. */
+function run(rc, secs) {
+  for (let t = 0; t < secs * 60; t++) rc.update(1 / 60);
+}
+
+test("a winner never ends the race while a human is still driving", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const cars = [
+    { human: false, finished: true, retired: false },
+    { human: true, finished: false, retired: false },
+  ];
+  assert.equal(finishDelay(cars, 20, 3), 0,
+    "an AI winner must not start the result countdown for an unfinished player");
+
+  cars.push({ human: true, finished: true, retired: false });
+  assert.equal(finishDelay(cars, 20, 3), 0,
+    "the first multiplayer human finishing must not remove the other human");
+});
+
+test("finishOrder ranks a missing or non-finite finishT after a real clock", () => {
+  // finishOrder used (a.finishT + a.penalty) raw: null+0 === 0 ranked a car with
+  // no finishT FIRST among same-lap finishers, and undefined penalty → NaN.
+  const { finishOrder } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const early = { id: "early", lap: 6, finishT: 100, penalty: 0 };
+  const late = { id: "late", lap: 6, finishT: 110, penalty: 0 };
+  const missing = { id: "missing", lap: 6, finishT: null, penalty: 0 };
+  const nanT = { id: "nan", lap: 6, finishT: NaN, penalty: 0 };
+  const noPen = { id: "nopen", lap: 6, finishT: 105 };   // penalty undefined
+  const ids = (arr) => arr.map((c) => c.id);
+  assert.deepEqual(ids([missing, early, late].sort(finishOrder)), ["early", "late", "missing"]);
+  assert.deepEqual(ids([nanT, early].sort(finishOrder)), ["early", "nan"]);
+  assert.deepEqual(ids([noPen, early, late].sort(finishOrder)), ["early", "nopen", "late"]);
+  assert.ok(finishOrder(early, { ...early, penalty: 5 }) < 0, "a +5 s penalty ranks later");
+});
+
+test("runOrder serves a running car's time penalty on the road, at the race's speed", () => {
+  // endRace sorted the cars still running at the flag by progress alone, so a
+  // +5 s track-limits penalty was printed on the sheet and never applied.
+  const { runOrder } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const pen = { id: "pen", prog: 10000, penalty: 5 };
+  const near = { id: "near", prog: 9950, penalty: 0 };   // 50 m back: < 5 s at 60 m/s
+  const far = { id: "far", prog: 9500, penalty: 0 };     // 500 m back: > 5 s
+  const ids = (arr) => arr.map((c) => c.id);
+  assert.deepEqual(ids([pen, near, far].sort(runOrder(60))), ["near", "pen", "far"]);
+  // No penalty anywhere: pure progress, as before.
+  const clean = [{ id: "b", prog: 5 }, { id: "a", prog: 9 }, { id: "c", prog: 1 }];
+  assert.deepEqual(ids(clean.sort(runOrder(60))), ["a", "b", "c"]);
+});
+
+test("lineTransition gives normal and incident motion the same chequered-flag rule", () => {
+  const R = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const winner = { finished: true, retired: false };
+  const c = { lap: 4, lapTime: 73.2, finished: false };
+  const cross = R.lineTransition(c, 995, 5, 10, 1000, 5, [winner, c], 411.5);
+  assert.equal(cross.direction, 1);
+  assert.equal(cross.flagged, true, "a lapped car takes the flag at its next crossing");
+  assert.equal(c.lap, 5);
+  assert.equal(c.finished, true);
+  assert.equal(c.finishT, 411.5);
+  assert.equal(cross.lapDone, 73.2);
+  assert.equal(c.lapTime, 0);
+});
+
+// updateCar adds the WHOLE step to lapTime (and raceT) before it tests the
+// line, so a lap used to be timed at the end of the step it crossed in — up to
+// 1/60 s late, and two cars crossing in one step tied on finishT. With `dt`
+// the crossing is placed inside the step: frac = (L - oldS) / ds of it had run.
+test("lineTransition times the lap to the crossing inside the step, not the step's end", () => {
+  const R = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const dt = 1 / 60;
+  // 995 -> 1005 (wraps to 5): the line is 5 m into a 10 m step, frac 0.5.
+  const c = { lap: 2, lapTime: 80 + dt, finished: false };
+  const cross = R.lineTransition(c, 995, 5, 10, 1000, 5, [c], 300 + dt, dt);
+  assert.ok(Math.abs(cross.lapDone - (80 + dt / 2)) < 1e-12, `lapDone ${cross.lapDone}`);
+  assert.ok(Math.abs(c.lapTime - dt / 2) < 1e-12, "the post-line half of the step opens the next lap");
+  assert.ok(Math.abs(cross.lapDone + c.lapTime - (80 + dt)) < 1e-12, "no time is lost or invented");
+  // …and the chequered flag is stamped at the crossing too, so two cars that
+  // cross in the SAME step are classified by who crossed first.
+  const lead = { lap: 5, lapTime: 70, finished: false };
+  const chase = { lap: 5, lapTime: 70, finished: false };
+  R.lineTransition(lead, 999, 9, 10, 1000, 5, [lead, chase], 400, dt);    // frac 0.1
+  R.lineTransition(chase, 991, 1, 10, 1000, 5, [lead, chase], 400, dt);   // frac 0.9
+  assert.ok(lead.finished && chase.finished);
+  assert.ok(lead.finishT < chase.finishT, `lead ${lead.finishT} must precede chase ${chase.finishT}`);
+  assert.ok(Math.abs(lead.finishT - (400 - dt * 0.9)) < 1e-12);
+  // A caller that did not advance the clock (the incident takeover) omits dt.
+  const inc = { lap: 2, lapTime: 50, finished: false };
+  assert.equal(R.lineTransition(inc, 995, 5, 10, 1000, 5, [inc], 0).lapDone, 50);
+  assert.equal(inc.lapTime, 0);
+});
+
+test("same-step chequered crossings follow time in every roster order, including incident motion", () => {
+  for (const reversed of [false, true]) for (const offset of [-0.25, 0, 0.25]) {
+    const R = load({ active: () => false });
+    const leader = { lap: 3, lapTime: 50, finished: false };
+    const human = { lap: 2, lapTime: 60, finished: false, human: true };
+    const cars = reversed ? [human, leader] : [leader, human];
+    const presented = [];
+    R.beginLineStep(cars);
+    for (const c of cars) {
+      const frac = c === leader ? 0.5 : 0.5 + offset;
+      const cross = R.lineTransition(c, 1000 - frac, 1 - frac, 1, 1000, 3, cars, 100, 1 / 60);
+      assert.equal(R.deferLine(c, cross, c === leader ? 0.5 : 0.5 - offset,
+        (car, event) => presented.push({ car, flagged: event.flagged, time: car.finishT })), true);
+    }
+    R.settleLineStep();
+    assert.equal(leader.finished, true, "the winner is protected before collision/incident promotion");
+    assert.equal(presented.length, 0, "presentation waits for incident crossings too");
+    R.endLineStep();
+    assert.equal(leader.finished, true);
+    assert.equal(human.finished, offset >= 0, "only a crossing at/after the winner takes the flag");
+    assert.equal(presented.length, 2, "each lap callback runs exactly once");
+    assert.equal(presented.find((e) => e.car === human).flagged, offset >= 0);
+    assert.equal(R.finishDelay(cars, 100, 3), offset >= 0 ? 2.2 : 0, "a lapped human is done at the correct crossing");
+    if (human.finished) assert.ok(Math.abs(human.finishT - (100 - (0.5 - offset) / 60)) < 1e-12);
+  }
+  // IncidentSim omits dt: its crossing is step-end, after any timed crossing.
+  const R = load({ active: () => false });
+  const winner = { lap: 3, lapTime: 50 }, incident = { lap: 2, lapTime: 60 };
+  const cars = [incident, winner];
+  R.beginLineStep(cars);
+  R.lineTransition(incident, 999, 1, 2, 1000, 3, cars, 100);
+  R.lineTransition(winner, 999, 1, 2, 1000, 3, cars, 100, 1 / 60);
+  R.endLineStep();
+  assert.equal(incident.finished, true);
+  assert.equal(incident.finishT, 100);
+});
+
+test("lineTransition undoes a backward crossing and restores the lap clock", () => {
+  const R = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const c = { lap: 3, lapTime: 0.4, _lapTimeAtLine: 81.7, finished: false };
+  const back = R.lineTransition(c, 5, 995, -10, 1000, 5, [c], 0);
+  assert.equal(back.direction, -1);
+  assert.equal(back.changed, true);
+  assert.equal(c.lap, 2);
+  assert.equal(c.lapTime, 81.7);
+
+  const forward = R.lineTransition(c, 995, 5, 10, 1000, 5, [c], 0);
+  assert.equal(forward.direction, 1);
+  assert.equal(c.lap, 3, "re-crossing advances the same lap instead of gifting one");
+  assert.equal(forward.recross, true, "…and says so, so the caller does not time that lap twice");
+  const next = R.lineTransition(c, 995, 5, 10, 1000, 5, [c], 0);
+  assert.equal(next.recross, false, "the flag is spent on one crossing");
+});
+
+test("the finish policy closes completed human races and bounded edge cases", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  assert.equal(finishDelay([
+    { human: true, finished: true, retired: false },
+    { human: true, finished: false, retired: true },
+  ], 20, 3), 2.2, "finished and retired humans are both done");
+
+  assert.equal(finishDelay([
+    { human: false, finished: true, retired: false },
+  ], 20, 3), 3.5, "AI-only harnesses retain the winner delay");
+
+  assert.equal(finishDelay([
+    { human: true, finished: false, retired: false },
+  ], 1081, 3), 0.1, "the hard cap still prevents a permanently hung race");
+});
+
+test("a Data Hub JUMP IN counts the hard cap from the clock it was seeded to, not from zero", () => {
+  // PR #402 audit: RealRace.place seeds raceT to the real race's time at the
+  // lap you join (K0 * t0 — 5 000+ s at lap 40 of Baku). On a 3-lap condensed
+  // race that already passed 360 * 3 s, so the countdown fired on the first
+  // green frame and the race ended with the player still driving.
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const you = [{ human: true, finished: false, retired: false }];
+  assert.equal(finishDelay(you, 5200, 3), 0.1, "without the origin the seeded clock trips the cap at once");
+  assert.equal(finishDelay(you, 5200, 3, 5100), 0, "100 s into a jump-in is 100 s of racing");
+  assert.equal(finishDelay(you, 5100 + 1081, 3, 5100), 0.1, "the cap still ends a hung jump-in, counted from the join");
+  const held = [{ human: true, finished: true, retired: false, finishT: 5300, penalty: 5 }, { human: false, finished: false, retired: false }];
+  assert.equal(finishDelay(held, 5301, 3, 5100), 0, "a penalty still holds the countdown after a jump-in");
+  assert.equal(finishDelay(you, 1081, 3, 0), 0.1, "an origin of 0 is the ordinary race");
+});
+
+test("a finisher's outstanding time penalty holds the countdown until the field has had that long to cross", () => {
+  // Bug-hunt 2026-09-02 (race, not landed in round 1): endRace sorts finishers
+  // by finishT + penalty, but the countdown ran from the player's crossing —
+  // a rival 3 s back against a +5 s penalty was filed as "still running".
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const you = { human: true, finished: true, retired: false, finishT: 100, penalty: 5 };
+  const rival = { human: false, finished: false, retired: false };
+  assert.equal(finishDelay([you, rival], 101, 3), 0, "the +5 s is served on the clock: no countdown at 101 s");
+  assert.equal(finishDelay([you, rival], 105, 3), 2.2, "…and it starts once the corrected time has passed");
+  assert.equal(finishDelay([you, { ...rival, retired: true }], 101, 3), 2.2, "nobody left who could cross: no hold");
+  assert.equal(finishDelay([{ ...you, penalty: 0 }, rival], 101, 3), 2.2, "no penalty, no hold (the 2.2 s policy is unchanged)");
+  const ai = { human: false, finished: true, retired: false, finishT: 100, penalty: 5 };
+  assert.equal(finishDelay([ai, rival], 101, 3), 0, "the AI-only harness holds the same way");
+  assert.equal(finishDelay([ai, rival], 106, 3), 3.5);
+  const late = { human: false, finished: true, retired: false, finishT: 1080, penalty: 5 };
+  assert.equal(finishDelay([{ human: true, finished: false, retired: false }, late], 1081, 3), 0.1,
+    "the hard cap still wins over a hold");
+});
+
+test("green with an empty track, and the level->label table", () => {
+  const rc = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx());
+  run(rc, 1);
+  const s = rc.info();
+  assert.equal(s.level, 0);
+  assert.equal(s.label, "GREEN");
+  assert.equal(s.sector, -1);
+  assert.deepEqual(s.sectors, [0, 0, 0]);
+});
+
+test("the three thresholds raise the right flag", () => {
+  // YELLOW is decided by the WORST SINGLE SECTOR; VSC and SC by the TOTAL. A
+  // machine that read only the total would fly green through a sector full of
+  // debris as long as the rest of the lap was clean.
+  for (const [total, worst, level, label] of [
+    [2, 2, 0, "GREEN"],
+    [3, 3, 1, "YELLOW"],
+    [6, 2, 2, "VSC"],
+    [10, 2, 3, "SAFETY CAR"],
+  ]) {
+    const rc = load({ active: () => true, hazards: () => hazards(total, worst) }).create(makeCtx());
+    run(rc, 1);
+    assert.equal(rc.info().level, level, `total=${total} worst=${worst}`);
+    assert.equal(rc.info().label, label);
+  }
+});
+
+test("a caution RAISES immediately but does not LOWER before the hold", () => {
+  // This asymmetry is the whole design. Debris despawns, so a flag tracking the
+  // raw count would flicker between GREEN and YELLOW several times a lap.
+  let hz = hazards(0, 0);
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx());
+
+  hz = hazards(10, 2);
+  run(rc, 0.5);
+  assert.equal(rc.info().level, 3, "raises inside half a second");
+
+  hz = hazards(0, 0);
+  run(rc, 3);
+  assert.equal(rc.info().level, 3, "still flying 3 s later — MIN_HOLD is 6 s");
+
+  run(rc, 4);
+  assert.equal(rc.info().level, 0, "cleared once the hold expires");
+});
+
+test("a stuck hazard cannot neutralise the race forever", () => {
+  // The hard cap, now real. This test previously pinned the OPPOSITE ("the
+  // flag stays — the cap only applies once the picture clears"): the cap
+  // clause was dead code because MIN_HOLD always fired first and lowering
+  // only ran when the picture had cleared, so a never-despawning hazard held
+  // a safety car for the rest of the race — exactly what the constants'
+  // comments promised could not happen.
+  const rc = load({ active: () => true, hazards: () => hazards(10, 2) }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  // SC cap is 90 s: the flag must DROP even though the hazard picture persists.
+  run(rc, 95);
+  assert.equal(rc.info().level, 0,
+    "flown for its full cap, the flag drops to green — marshals had their window");
+  // The same stale picture must not instantly re-raise (re-arm hold)…
+  run(rc, 10);
+  assert.equal(rc.info().level, 0, "re-arm hold suppresses the stale picture");
+  // …but after the hold expires the (still-present) hazards legitimately re-arm.
+  run(rc, 50);
+  assert.equal(rc.info().level, 3, "after the hold, a persistent hazard re-raises");
+});
+
+test("the cap's re-arm hold never masks an ESCALATION", () => {
+  // The hold exists to stop the SAME stale picture instantly re-flagging. It
+  // must not also swallow a genuinely worse incident: a local yellow that
+  // grows into a safety-car pile has to fly immediately, or the race runs
+  // green through a real SC-worthy event for the length of the hold.
+  let hz = hazards(0, 3);          // enough for a local YELLOW only
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().level, 1, "yellow flies");
+  run(rc, 32);                     // YELLOW_MAX is 30 s
+  assert.equal(rc.info().level, 0, "capped to green");
+
+  hz = hazards(3, 3);              // still yellow-grade: the SAME picture
+  run(rc, 1);
+  assert.equal(rc.info().level, 0, "a same-level re-raise stays suppressed");
+
+  hz = hazards(10, 2);             // now a safety-car pile — an ESCALATION
+  run(rc, 1);
+  assert.equal(rc.info().level, 3,
+    "a worse incident during the hold must still fly");
+});
+
+test("a cap-forced drop does not leak its hold into the next race", () => {
+  // reset() is reached only when the race leaves "race" state, and it used to
+  // be gated on a flag still flying — so a cap that fired near the flag left
+  // level 0 with the hold armed, and the NEXT race swallowed its first real
+  // caution. Nothing decrements the hold outside race state, so it never aged.
+  const ctx = makeCtx();
+  const rc = load({ active: () => true, hazards: () => hazards(10, 2) }).create(ctx);
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  run(rc, 95);
+  assert.equal(rc.info().level, 0, "capped to green, hold armed");
+
+  ctx.state = "results";           // chequered flag
+  run(rc, 2);
+  ctx.state = "race";              // next race starts
+  run(rc, 1);
+  assert.equal(rc.info().level, 3,
+    "the new race's first caution flies immediately — no inherited hold");
+});
+
+test("debris going inactive mid-race freezes a flying flag", () => {
+  // reset() on !DebrisWorld.active() flashed GREEN under a still-valid SC
+  // the moment the side-world paused. Freeze; leaving "race" still clears.
+  let active = true;
+  const rc = load({ active: () => active, hazards: () => hazards(10, 2) }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().level, 3, "safety car flies");
+  active = false;
+  run(rc, 2);
+  assert.equal(rc.info().level, 3, "flag stays up while debris is off");
+});
+
+test("a frozen flag still AGES — the hard cap fires even with debris trapped", () => {
+  // DebrisWorld can go inactive permanently (a trapped world.step() sets
+  // _active=false with no re-arm). The freeze must not stop sinceT, or the
+  // SC_MAX cap can never fire and the race finishes under a safety car with
+  // OVERTAKE disabled. Freeze the LEVEL, keep the clock.
+  let active = true;
+  const rc = load({ active: () => active, hazards: () => hazards(10, 2) }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().level, 3, "safety car flies");
+  active = false;
+  run(rc, 95);                     // > SC_MAX (90 s) of trapped-world time
+  assert.equal(rc.info().level, 0,
+    "hard cap dropped the flag to green while debris stayed inactive");
+});
+
+test("switching the layer off DROPS a flag already flying", () => {
+  // Not "stop computing" but "stop computing AND clear". Without the clear the
+  // HUD keeps showing a safety car nothing maintains, which reads as a stuck
+  // flag rather than a disabled feature.
+  const rc = load({ active: () => true, hazards: () => hazards(10, 2) }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  rc.setEnabled(false);
+  assert.equal(rc.info().level, 0);
+  assert.equal(rc.info().enabled, false);
+  run(rc, 2);
+  assert.equal(rc.info().level, 0, "and stays clear while disabled, hazards or not");
+});
+
+test("CAUTIONS off: a host's safety car a guest inherits on disconnect still ages out", () => {
+  // A guest with the switch off adopts the host's SC; the host drops, netplay
+  // stops and the guest owns race control again. update() returned on
+  // !enabled before the cap, so that SC stayed out for the rest of the race.
+  let owns = false;
+  const rc = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx({
+    netPlay: { active: () => !owns, ownsRaceControl: () => owns, reportCaution() {} },
+  }, false));
+  rc.apply({ level: 3, cause: "SAFETY CAR", sinceT: 0 });
+  owns = true;
+  run(rc, 2);
+  assert.equal(rc.info().level, 3, "no hazard loop lowers it early");
+  run(rc, 95);                     // > SC_MAX (90 s)
+  assert.equal(rc.info().level, 0, "the hard cap drops it");
+});
+
+test("the enabled flag reads BOTH storage formats", () => {
+  // game.js wrote this key with a raw localStorage.setItem("apex26.caution",
+  // "1" | "0"), which JSON-parses to the NUMBERS 1 and 0. A naive `!== false`
+  // reads a stored 0 as truthy and silently switches cautions back ON for every
+  // player who turned them off.
+  const debris = { active: () => true, hazards: () => hazards(0, 0) };
+  for (const [stored, expected] of [[0, false], ["0", false], [false, false],
+                                    [1, true], ["1", true], [true, true], [undefined, false]]) {
+    const ctx = makeCtx({}, stored);
+    assert.equal(load(debris).create(ctx).info().enabled, expected,
+      `stored ${JSON.stringify(stored)}`);
+  }
+});
+
+test("a guest adopts the host's flag verbatim and computes nothing itself", () => {
+  // Debris is generated locally from each car's own behaviour and is NOT
+  // replicated, so two peers genuinely see different hazards. Left to decide
+  // independently they would fly different flags for one race.
+  const ctx = makeCtx({
+    netPlay: { active: () => true, ownsRaceControl: () => false, reportCaution() {} },
+  });
+  const rc = load({ active: () => true, hazards: () => hazards(10, 2) }).create(ctx);
+  run(rc, 2);
+  assert.equal(rc.info().level, 0, "a guest runs no state machine of its own");
+
+  rc.apply({ level: 2, sector: 1, frac: 0.4, cause: "VSC", total: 7, sectors: [1, 5, 1], sinceT: 12 });
+  const s = rc.info();
+  assert.equal(s.level, 2);
+  assert.equal(s.label, "VSC");
+  assert.equal(s.cause, "VSC");
+  assert.deepEqual(s.sectors, [1, 5, 1]);
+  run(rc, 2);
+  assert.equal(rc.info().level, 2, "and holds it — the guest runs no hold timers over someone else's flag");
+});
+
+test("the host broadcasts on CHANGE only", () => {
+  // Checked at 4 Hz, changes a handful of times a race. The reliable channel is
+  // not the place for a steady drip of unchanged state.
+  const sent = [];
+  let hz = hazards(0, 0);
+  const ctx = makeCtx({
+    netPlay: { active: () => true, ownsRaceControl: () => true, reportCaution: (d) => sent.push(d) },
+  });
+  const rc = load({ active: () => true, hazards: () => hz }).create(ctx);
+  hz = hazards(10, 2);
+  run(rc, 3);                      // ~12 hazard queries, one transition
+  assert.equal(sent.length, 1, `expected one broadcast, got ${sent.length}`);
+  assert.equal(sent[0].level, 3);
+});
+
+test("OVERTAKE is off on lap 1 and under the SAFETY CAR, not a yellow or a VSC (Art. B7.2.2)", () => {
+  // The LEADER's lap, not each car's own — a field-wide switch is what race
+  // control actually throws, and gating per-car would hand a lapped driver the
+  // push while the leader still had none.
+  let hz = hazards(0, 0);
+  const ctx = makeCtx({ ranked: [{ lap: 1 }] });
+  const rc = load({ active: () => true, hazards: () => hz }).create(ctx);
+  run(rc, 1);
+  assert.equal(rc.otEnabled(), false, "opening lap");
+
+  ctx.ranked = [{ lap: 2 }];
+  assert.equal(rc.otEnabled(), true, "leader past the opening lap, track green");
+
+  // FIA 2026 Sporting Regulations Section B Iss. 07, Art. B7.2.2: only the
+  // Safety Car (c), low grip (d) and the Race Director (e) disable Overtake.
+  hz = hazards(3, 3);
+  run(rc, 1);
+  assert.equal(rc.info().level, 1);
+  assert.equal(rc.otEnabled(), true, "a local yellow does not take it away");
+
+  hz = hazards(6, 2);
+  run(rc, 1);
+  assert.equal(rc.info().level, 2);
+  assert.equal(rc.otEnabled(), true, "nor does a VSC");
+
+  hz = hazards(10, 2);
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  assert.equal(rc.otEnabled(), false, "the Safety Car does");
+
+  ctx.ranked = [];
+  assert.equal(rc.otEnabled(), false, "and an empty grid is not a leader on lap 2");
+});
+
+test("OVERTAKE stays off after the Safety Car comes in until the leader next crosses the Line (Art. B7.2.2c)", () => {
+  let hz = hazards(10, 2);
+  const leader = { lap: 5 };
+  const ctx = makeCtx({ ranked: [leader] });
+  const rc = load({ active: () => true, hazards: () => hz }).create(ctx);
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  assert.equal(rc.otEnabled(), false, "disabled under the Safety Car");
+
+  hz = hazards(0, 0);
+  run(rc, 7);   // past MIN_HOLD: the Safety Car comes in
+  assert.equal(rc.info().level, 0);
+  assert.equal(rc.otEnabled(), false, "green, but the field has not crossed the Line since");
+  leader.lap = 6;
+  assert.equal(rc.otEnabled(), true, "re-enabled at the leader's next crossing");
+
+  // A VSC ending holds nothing back.
+  hz = hazards(6, 2);
+  run(rc, 1);
+  assert.equal(rc.info().level, 2);
+  hz = hazards(0, 0);
+  run(rc, 7);
+  assert.equal(rc.info().level, 0);
+  assert.equal(rc.otEnabled(), true, "no hold after a VSC");
+
+  // reset() drops a pending hold with the rest of the race's state.
+  hz = hazards(10, 2); run(rc, 1); hz = hazards(0, 0); run(rc, 7);
+  assert.equal(rc.otEnabled(), false);
+  rc.reset();
+  assert.equal(rc.otEnabled(), true, "a new race starts without the last one's hold");
+});
+
+test("after a red flag OVERTAKE returns at the leader's first crossing after the standing restart (Art. B7.2.2b)", () => {
+  let hz = hazards(16, 2);
+  const leader = { lap: 10 };
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx({ ranked: [leader] }));
+  run(rc, 1);
+  assert.equal(rc.otEnabled(), false, "off under red");
+  hz = hazards(0, 0);
+  run(rc, 14);
+  assert.equal(rc.info().level, 0);
+  assert.equal(rc.takeRestart(), true);
+  rc.otEnabled();   // a read BEFORE the regrid must not spend the hold
+  leader.lap = 9;   // redFlagRestart rewinds the classification lap...
+  rc.rewound();     // ...and says so
+  assert.equal(rc.otEnabled(), false, "held off from the grid");
+  leader.lap = 10;
+  assert.equal(rc.otEnabled(), true, "re-enabled once the leader crosses the Line");
+});
+
+test("a red flag whose restart is declined (a car has finished) still holds OVERTAKE to the next crossing (#2166)", () => {
+  // redFlagRestart returns false once any car has finished: no re-grid, no
+  // lap rewound, so a hold that assumed the rewind was spent at once.
+  let hz = hazards(16, 2);
+  const leader = { lap: 10 };
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx({ ranked: [leader] }));
+  run(rc, 1);
+  assert.equal(rc.info().level, 4);
+  hz = hazards(0, 0);
+  run(rc, 14);
+  assert.equal(rc.info().level, 0);
+  assert.equal(rc.takeRestart(), true);
+  // game.js: clearHold(), redFlagRestart() declines, rewound() never runs.
+  rc.clearHold();
+  assert.equal(rc.otEnabled(), false, "held off: the leader has not crossed since the flag");
+  leader.lap = 11;
+  assert.equal(rc.otEnabled(), true, "re-enabled at the leader's next crossing");
+});
+
+test("game.js redFlagRestart lowers the hold only on the path that rewinds the lap", () => {
+  const body = symbolSource("function redFlagRestart()");
+  assert.match(body, /if \(state !== "race" \|\| !track \|\| cars\.some\(\(c\) => c\.finished\)\) return false;/);
+  assert.match(body, /raceCtl\.rewound\(\);/);
+  assert.ok(body.indexOf("raceCtl.rewound()") > body.indexOf("c.lap = lapNew"), "after the rewind, past the decline");
+});
+
+test("it is inert when the side-world is down or the race is not running", () => {
+  for (const over of [{ state: "menu" }, { state: "results" }]) {
+    const rc = load({ active: () => true, hazards: () => hazards(10, 2) }).create(makeCtx(over));
+    run(rc, 2);
+    assert.equal(rc.info().level, 0, `state ${over.state}`);
+  }
+  const rc = load({ active: () => false, hazards: () => hazards(10, 2) }).create(makeCtx());
+  run(rc, 2);
+  assert.equal(rc.info().level, 0, "debris side-world inactive");
+});
+
+
+// ── the RED FLAG ──────────────────────────────────────────────────────────────
+
+test("sixteen settled hazards raise RED, which outranks the safety car and holds OVERTAKE off", () => {
+  const rc = load({ active: () => true, hazards: () => hazards(16, 2) }).create(makeCtx({ ranked: [{ lap: 3 }] }));
+  run(rc, 1);
+  assert.equal(rc.info().level, 4);
+  assert.equal(rc.info().label, "RED FLAG");
+  assert.equal(rc.info().cause, "RED FLAG");
+  assert.equal(rc.info().phase, "stopping");
+  assert.equal(rc.otEnabled(), false);
+  assert.equal(rc.takeRestart(), false, "no restart while the flag is out");
+});
+
+test("one scraping car's settled debris can call a safety car but never a red flag", () => {
+  // Monaco measured 17 total after one wall scrape (RED_MIN is 16), with only
+  // 11 hazards in the pre-scrape picture. DebrisWorld now withholds those
+  // single-source shards from redTotal while preserving every lower-caution
+  // count, so the response is SC rather than a standing restart.
+  const rc = load({ active: () => true, hazards: () => hazards(17, 4, 1, 0) }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().total, 17, "the settled hazards still count for marshal response and HUD");
+  assert.equal(rc.info().level, 3);
+  assert.equal(rc.info().label, "SAFETY CAR");
+  assert.equal(rc.takeRestart(), false);
+});
+
+test("RED eligibility counts attributed shards, never source-less furniture", () => {
+  const src = fnSource(DEBRIS_SRC, "function redHazardTotal(sourceCount, sourcedTotal)");
+  const calc = new Function(src + ";return redHazardTotal;");
+  const redTotal = calc();
+  assert.equal(redTotal(1, 18), 0, "one source cannot make a pile-up");
+  assert.equal(redTotal(2, 7), 7, "two source cars qualify only their seven attributed shards");
+  assert.notEqual(redTotal(2, 7), 20, "thirteen cones/panels in total cannot pad seven shards to RED_MIN");
+});
+
+test("the red procedure: stopping, held, then exactly ONE restart request and a re-arm hold", () => {
+  const rc = load({ active: () => true, hazards: () => hazards(16, 2) }).create(makeCtx());
+  run(rc, 1);
+  run(rc, 8);
+  assert.equal(rc.info().level, 4, "the SC cap does not end a red");
+  assert.equal(rc.info().phase, "held");
+  run(rc, 6);
+  assert.equal(rc.info().level, 0, "the procedure ends the flag");
+  assert.equal(rc.info().phase, "");
+  assert.equal(rc.takeRestart(), true, "one restart request…");
+  assert.equal(rc.takeRestart(), false, "…consumed once");
+  run(rc, 5);
+  assert.equal(rc.info().level, 0, "the same (uncleared) picture cannot raise a second flag during the hold");
+  run(rc, 45);
+  assert.equal(rc.info().level, 4, "…and a picture still there after the hold flies again");
+});
+
+test("apply(): a hostile or malformed CAUTION from the host is coerced, and info() never throws", () => {
+  // Bug hunt 2026-09-22: `sinceT: "x"` was stored as-is, and info()'s
+  // sinceT.toFixed() then threw for the HUD every frame.
+  const rc = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx());
+  for (const d of [{ level: 2, sinceT: "x" }, { level: 2, sinceT: {} }, { level: "3", sinceT: 1e400, sectors: ["a", 2, null, 9] },
+                   { level: 99, sector: "2", frac: NaN, total: -5, cause: { x: 1 } }, "junk", null]) {
+    rc.apply(d);
+    const i = rc.info();
+    assert.ok(Number.isFinite(i.sinceT) && i.sinceT >= 0, JSON.stringify(d));
+    assert.ok(i.level >= 0 && i.level <= 4);
+    assert.ok(Number.isFinite(i.frac) && i.total >= 0 && typeof i.cause === "string");
+    assert.ok(i.sectors.length <= 3 && i.sectors.every(Number.isFinite));
+  }
+  rc.apply({ level: 2, sinceT: 3.5, cause: "VSC", sector: 1, sectors: [1, 2, 3] });
+  assert.equal(rc.info().level, 2);
+  assert.equal(rc.info().sinceT, 3.5);
+  assert.equal(rc.info().sector, 1);
+});
+
+test("clearHold(): once the surface is cleared at the restart, a NEW hazard is not masked by the re-arm hold", () => {
+  const rc = load({ active: () => true, hazards: () => hazards(16, 2) }).create(makeCtx());
+  run(rc, 15);
+  assert.equal(rc.takeRestart(), true);
+  rc.clearHold();   // game.js: the tick that consumes the restart clears DebrisWorld
+  run(rc, 5);
+  assert.equal(rc.info().level, 4, "a picture present after the clear flies at once — no 45 s blackout");
+});
+
+test("a networked race never goes red — it holds a SAFETY CAR instead — and reset() drops a pending restart", () => {
+  const net = { active: () => true, ownsRaceControl: () => true, reportCaution() {} };
+  const rc = load({ active: () => true, hazards: () => hazards(20, 3) }).create(makeCtx({ netPlay: net }));
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  assert.equal(rc.info().cause, "SAFETY CAR");
+  const solo = load({ active: () => true, hazards: () => hazards(20, 3) }).create(makeCtx());
+  run(solo, 15);
+  solo.reset();
+  assert.equal(solo.takeRestart(), false, "a race that ended mid-procedure carries no restart into the next");
+});
+
+test("a guest mirrors the red phase from the host's payload", () => {
+  const rc = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx());
+  rc.apply({ level: 4, cause: "RED FLAG", phase: "held", total: 16, sectors: [16, 0, 0] });
+  assert.equal(rc.info().label, "RED FLAG");
+  assert.equal(rc.info().phase, "held");
+  rc.apply({ level: 0 });
+  assert.equal(rc.info().phase, "");
+});
+
+test("hold(): a scripted flag flies past the SC cap and the MIN_HOLD drop, and hands back on release", () => {
+  // Debris inactive: the loop only ages a flag and fires the 90 s cap — a held one survives it.
+  const rc = load({ active: () => false, hazards: () => hazards(0, 0) }).create(makeCtx());
+  assert.equal(rc.hold(3, "SAFETY CAR"), 3);
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  assert.equal(rc.info().cause, "SAFETY CAR");
+  run(rc, 100);
+  assert.equal(rc.info().level, 3, "the 90 s cap does not drop a held flag");
+  assert.equal(rc.otEnabled(), false, "OVERTAKE is off under a held safety car");
+  // Debris active with a clean picture: desired GREEN never lowers a held flag.
+  const live = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx());
+  live.hold(2, "VSC");
+  run(live, 30);
+  assert.equal(live.info().level, 2);
+  assert.equal(live.info().label, "VSC");
+  // A real pile-up escalates ABOVE the hold; the hold never caps an escalation.
+  const pile = load({ active: () => true, hazards: () => hazards(12, 3) }).create(makeCtx());
+  pile.hold(2, "VSC");
+  run(pile, 1);
+  assert.equal(pile.info().level, 3, "twelve hazards is a safety car even while a VSC is held");
+  // Release: the hazard loop lowers it at its next query once the hold has aged.
+  assert.equal(live.hold(0), 0);
+  run(live, 8);
+  assert.equal(live.info().level, 0);
+  // hold(4) is refused (the red flag runs its own procedure); the level is clamped to the safety car.
+  assert.equal(live.hold(4, "RED FLAG"), 3);
+  live.hold(0);
+  run(live, 8);
+  assert.equal(live.info().level, 0);
+  // reset() drops a hold with the race.
+  live.hold(3); run(live, 1); assert.equal(live.info().level, 3);
+  live.reset(); run(live, 1);
+  assert.equal(live.info().level, 0);
+});
+
+test("hold(): a held flag flies with the CAUTIONS setting OFF, and release drops it there too", () => {
+  const rc = load({ active: () => true, hazards: () => hazards(20, 3) }).create(makeCtx({}, false));
+  run(rc, 1);
+  assert.equal(rc.info().level, 0, "the hazard loop is off: twenty hazards fly nothing");
+  rc.hold(3, "SAFETY CAR");
+  run(rc, 1);
+  assert.equal(rc.info().level, 3, "the script's flag does not depend on the debris switch");
+  assert.equal(rc.info().enabled, false);
+  rc.hold(0);
+  assert.equal(rc.info().level, 0, "nothing else would ever lower it with the loop off");
+});
+
+test("hold(): release and lowering take effect at once — with debris off, and with the switch off", () => {
+  // Debris inactive, switch on: the hazard loop never lowers a flag; hold(0) must.
+  const rc = load({ active: () => false, hazards: () => hazards(0, 0) }).create(makeCtx());
+  rc.hold(3, "SAFETY CAR"); run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  rc.hold(0);
+  assert.equal(rc.info().level, 0, "released: green now, not after the 90 s cap");
+  // SC -> VSC steps down at once.
+  rc.hold(3, "SAFETY CAR"); run(rc, 1);
+  rc.hold(2, "VSC");
+  assert.equal(rc.info().level, 2); assert.equal(rc.info().cause, "VSC");
+  // A flag ABOVE the hold (a real pile-up) is never lowered by the hold's release.
+  const pile = load({ active: () => true, hazards: () => hazards(12, 3) }).create(makeCtx());
+  pile.hold(2, "VSC"); run(pile, 1);
+  assert.equal(pile.info().level, 3);
+  pile.hold(0);
+  assert.equal(pile.info().level, 3, "the safety car for twelve hazards outlives the released hold");
+  // Switch off: SC -> VSC -> green, all immediate.
+  const off = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx({}, false));
+  off.hold(3, "SAFETY CAR"); run(off, 1);
+  off.hold(2, "VSC"); assert.equal(off.info().level, 2);
+  off.hold(0); assert.equal(off.info().level, 0);
+});
+
+test("a red flag applied with the CAUTIONS switch off still runs its procedure and asks for the restart", () => {
+  const rc = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx({}, false));
+  rc.apply({ level: 4, cause: "RED FLAG", phase: "stopping" });
+  assert.equal(rc.info().level, 4);
+  run(rc, 5);
+  assert.equal(rc.info().phase, "stopping");
+  run(rc, 4);
+  assert.equal(rc.info().phase, "held", "the field has stopped; the flag holds");
+  run(rc, 7);
+  assert.equal(rc.takeRestart(), true, "exactly one restart request at the end of the procedure");
+  assert.equal(rc.info().level, 0);
+  assert.equal(rc.info().enabled, false, "the switch stayed off throughout");
+});
+
+test("Time Trial and qualifying never raise a caution from the player's own debris", () => {
+  // Six pieces on the surface is a VSC in a race; alone on track it only
+  // slowed the lap (cautionV) with no CAUTIONS row to turn off.
+  for (const over of [{ session: "quali" }, { timeTrial: true }]) {
+    const rc = load({ active: () => true, hazards: () => hazards(6, 2) }).create(makeCtx(over));
+    run(rc, 2);
+    assert.equal(rc.info().level, 0, JSON.stringify(over));
+  }
+  // The same hazards in a race still raise the VSC (the gate is not vacuous).
+  const race = load({ active: () => true, hazards: () => hazards(6, 2) }).create(makeCtx({ session: "race", timeTrial: false }));
+  run(race, 2);
+  assert.equal(race.info().level, 2);
+});
+
+test("a caution flying when a session turns into a lone lap is dropped", () => {
+  const ctx = makeCtx({ session: "race", timeTrial: false });
+  const rc = load({ active: () => true, hazards: () => hazards(6, 2) }).create(ctx);
+  run(rc, 1);
+  assert.equal(rc.info().level, 2);
+  ctx.session = "quali";
+  run(rc, 1);
+  assert.equal(rc.info().level, 0);
+});
+
+test("scQueueFrac and holdCap read the per-tick snapshot, so cars[] order cannot change the verdict", () => {
+  const R = load({ active: () => false });
+  const total = 5000;
+  // `ahead` has already been moved this tick (live prog 1.3 m past its snapshot);
+  // `me` has not. The verdict must use the snapshot whichever one comes first.
+  const mk = () => ({
+    me: { prog: 100, speed: 50, _snapProg: 100, _snapSpeed: 50 },
+    ahead: { prog: 138.8, speed: 52, _snapProg: 137.5, _snapSpeed: 50 },
+  });
+  const vTop = 80;
+  const frac = (order) => { const w = mk(); return R.scQueueFrac(w.me, order.map((k) => w[k]), total, null, vTop); };
+  assert.equal(frac(["me", "ahead"]), frac(["ahead", "me"]));
+  const w = mk();
+  const live = ((w.ahead.prog - w.me.prog) % total) / (R.SC_PACE * vTop);
+  const snap = ((w.ahead._snapProg - w.me.prog) % total) / (R.SC_PACE * vTop);
+  const t = (g) => R.SC_PACE + (R.SC_CATCH - R.SC_PACE) * Math.min(1, Math.max(0, g - R.SC_QUEUE_GAP));
+  assert.equal(R.scQueueFrac(w.me, [w.me, w.ahead], total, null, vTop), t(snap));
+  assert.notEqual(t(snap), t(live), "the fixture must distinguish snapshot from live");
+  // The leader pick (leader out of the queue) rides the snapshot too.
+  const out = { prog: 900, retired: true, _snapProg: 900 };
+  const a = { prog: 300, _snapProg: 290 }, b = { prog: 295, _snapProg: 295 };
+  const me = { prog: 10, _snapProg: 10 };
+  assert.equal(R.scQueueFrac(me, [a, b, me, out], total, out, vTop), R.scQueueFrac(me, [b, a, me, out], total, out, vTop));
+  // holdCap: the ceiling is the snapshot speed, and the gap uses the snapshot prog.
+  // Live gap 13.3 m would read "nobody to hold behind"; the snapshot gap 10 m holds at 50.
+  const h = { me: { prog: 100, speed: 50, _snapProg: 100 }, ahead: { prog: 113.3, speed: 52, _snapProg: 110, _snapSpeed: 50 } };
+  assert.equal(R.holdCap(h.me, [h.ahead, h.me], null), 50);
+});
+
+test("settleLineStep with no or one entry never sorts, and the comparator is not rebuilt per call", () => {
+  const R = load({ active: () => false });
+  R.settleLineStep();   // empty: must not throw
+  const src = readFileSync(join(ROOT, "js/race/race-control.js"), "utf8");
+  const body = src.slice(src.indexOf("function settleLineStep"), src.indexOf("function endLineStep"));
+  assert.ok(!/=>/.test(body), "settleLineStep must not allocate an arrow comparator per call");
+});
+
+test("SOLO: a finished player waits for the AI still running, bounded by the post-finish cap", () => {
+  const { finishDelay, POST_FINISH_CAP } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  assert.equal(POST_FINISH_CAP, 75);
+  const you = { human: true, finished: true, retired: false, finishT: 100 };
+  const ai = { human: false, finished: false, retired: false };
+  const solo = { solo: true, since: -1 };
+  assert.equal(finishDelay([you, ai], 101, 3, 0, solo), 0, "an AI still on track: keep counting, no 2.2 s countdown");
+  assert.equal(solo.since, 101, "the wait is timed from the first tick the player was done");
+  assert.equal(finishDelay([you, ai], 101 + 74, 3, 0, solo), 0, "still inside the cap");
+  assert.equal(finishDelay([you, ai], 101 + 75, 3, 0, solo), 0.1, "the cap ends it: endRace classifies the runners by progress");
+  assert.equal(finishDelay([you, { ...ai, finished: true, finishT: 110 }], 111, 3, 0, { solo: true, since: -1 }), 2.2,
+    "the whole field home: today's 2.2 s");
+  assert.equal(finishDelay([you, { ...ai, retired: true }], 101, 3, 0, { solo: true, since: -1 }), 2.2, "a retired AI is not waited for");
+  assert.equal(finishDelay([you, ai], 101, 3), 2.2, "no options (net, TT, quali, harnesses): today's behaviour");
+  assert.equal(finishDelay([you, ai], 101, 3, 0, { solo: false, since: -1 }), 2.2, "net keeps the host rules");
+});
+
+test("SOLO: the wait clock restarts when the player is no longer done (a new race, a red-flag restart)", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const solo = { solo: true, since: 50 };
+  finishDelay([{ human: true, finished: false, retired: false }, { human: false, finished: false, retired: false }], 10, 3, 0, solo);
+  assert.equal(solo.since, -1);
+});
+
+test("SOLO: a retired player keeps the race running until the field finishes or the cap", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const out = { human: true, finished: false, retired: true };
+  const ai = { human: false, finished: false, retired: false };
+  const solo = { solo: true, since: -1 };
+  assert.equal(finishDelay([out, ai], 40, 3, 0, solo), 0, "the DNF no longer ends the race for everyone");
+  assert.equal(finishDelay([out, ai], 40 + 75, 3, 0, solo), 0.1, "…until the cap forces the short run");
+  assert.equal(finishDelay([out, { ...ai, finished: true, finishT: 90 }], 91, 3, 0, { solo: true, since: -1 }), 2.2,
+    "the field home: today's 2.2 s");
+  assert.equal(finishDelay([out, { ...ai, retired: true }], 40, 3, 0, { solo: true, since: -1 }), 2.2, "nobody left: no wait");
+  assert.equal(finishDelay([out, ai], 40, 3), 2.2, "net / harnesses (no post bag) keep the 2.2 s");
+});
+
+test("classify(): a flagged finisher below 90 % of the winner's laps stays in the order, ahead of slower unclassified cars", () => {
+  const RC = load(null);
+  const mk = (id, lap, prog, o = {}) => Object.assign({ id, lap, prog }, o);
+  const win = mk("W", 11, 11000, { finished: true });
+  const nc = mk("NC", 8, 8000, { finished: true });      // 7 done of 10: below the floor of 9
+  const nc2 = mk("NC2", 8, 7500, { finished: true });
+  const run = mk("R", 4, 4000);
+  const out = mk("O", 3, 3000, { retired: true });
+  const cars = [win, nc, nc2, run, out];
+  const order = RC.classify(cars, [win, nc, nc2], [run], [out]);
+  assert.equal(order.length, cars.length, "no car vanishes from the classification");
+  assert.equal(order[0], win);
+  assert.equal(nc.classified, false);
+  assert.deepEqual(order.map((c) => c.id), ["W", "NC", "NC2", "R", "O"],
+    "unclassified follow by laps (flagged finishers first), then distance");
+});
+
+test("replay flag snapshots bypass live hazards and red restarts, and normal apply/reset release ownership", () => {
+  let queries = 0;
+  const RC = load({ active: () => true, hazards: () => { queries++; return hazards(20, 20); } });
+  const G = makeCtx(), rc = RC.create(G);
+  rc.apply({ level: 4, cause: "RECORDED RED", sinceT: 99, phase: "held", replay: true });
+  G.state = "count"; run(rc, 10);
+  assert.equal(rc.info().level, 4, "a recorded flag keeps ownership through starting lights");
+  G.state = "race"; run(rc, 180);
+  assert.equal(rc.info().level, 4); assert.equal(rc.info().sinceT, 99);
+  assert.equal(rc.takeRestart(), false); assert.equal(queries, 0);
+  rc.apply({ level: 0, replay: true }); run(rc, 1);
+  assert.equal(rc.info().level, 0, "recorded green also excludes live hazards"); assert.equal(queries, 0);
+  rc.apply({ level: 4, cause: "LIVE RED" }); run(rc, 15);
+  assert.equal(rc.takeRestart(), true, "ordinary apply retains the live red procedure");
+  rc.reset(); rc.apply({ level: 0, replay: true });
+  G.state = "menu"; rc.update(1 / 60); G.state = "race";
+  run(rc, 1);
+  assert.ok(queries > 0, "leaving even a green replay releases its authority for the next race");
+});

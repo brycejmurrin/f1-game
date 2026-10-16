@@ -1,0 +1,899 @@
+"use strict";
+/* MUSIC & SOUND panel — the mixer plus the master-sound plumbing.
+   The mixer is a SettingsNav page (same sheet as DISPLAY), not its own dialog.
+   Levels persist.
+
+   Owns: the ♪ master button, MUSIC/SFX switches, both volume sliders, the
+   music-source row (ALL / DEFAULT / MY TRACKS / SPOTIFY) and the transport.
+   game.js keeps the race start/end soundbtn writes and the first-gesture
+   audio unlock — those belong to race flow, not to this panel.
+
+   create(G) wires the DOM immediately (netLobby.wire() pattern) and returns
+   { init } — game.js calls init() at the boot-restore position, AFTER
+   the saved settings are loaded but before the first frame. setSound at
+   create time would run ~2800 lines early, ahead of CamModes/DataHub. */
+var AudioPanel = (() => {
+  function create(G) {
+    Log.info("audio", "AudioPanel.create");
+    const { $, els, store } = G;
+
+    function setSound(b, fromGesture) {
+      G.soundOn = b; store.set("sound", b);
+      GameAudio.setEnabled(b);
+      if (!b) {
+        if (G.announcer && G.announcer.stop) G.announcer.stop();
+        if (G.radio && G.radio.stop) G.radio.stop();
+        if (G.radio && G.radio.pack) G.radio.pack.stop();
+      }
+      // AudioContext creation/resume must stay in the trusted click that turns
+      // sound back on (not in a promise or the boot restore below), otherwise
+      // iOS/Safari may leave it suspended. Setting the master first also makes
+      // createCtx() build the gain graph at the right level immediately.
+      if (b && fromGesture) GameAudio.init();
+      // "♪ ON" read as ambiguous — the state of what? The word makes it a
+      // labelled state (this is the MASTER gate: engine and SFX too, so
+      // SOUND, not MUSIC). index.html's static markup is the other writer
+      // and must carry the same strings.
+      els.soundbtn.textContent = b ? "♪ SOUND ON" : "♪ SOUND OFF";
+      els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
+      if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }
+      else if (G.state === "menu") GameAudio.startMusic(-1);
+      // Not under the pause menu: resume starts the engine, and in a friend race
+      // the loop keeps driving an engine started here, audibly.
+      else if ((G.state === "race" || G.state === "count") && !G.paused) {   // the countdown is the race's first seconds
+        GameAudio.startMusic(G.trackIdx);
+        GameAudio.startEngine();
+        // isRaining(), like every other startRain caller: a race whose weather
+        // arc turned wet (or dried out) is not described by the weather it gridded in.
+        if (G.isRaining()) GameAudio.startRain();
+      }
+      // SOUND is the master, so the panel's music controls follow it.
+      syncAudioPanel();
+    }
+    els.soundbtn.onclick = () => setSound(!G.soundOn, true);
+
+    // TEAM RADIO — the banner spoken aloud (js/audio/radio-voice.js). Same shape
+    // as SOUND EFFECTS above, including the ordering: the master gates it, so
+    // asking for it mid-race lifts SOUND rather than leaving a switch that reads
+    // ON over silence. OFF by default — the reasons are in radio-voice.js, and
+    // the short one is that #announce is already role="status", so a screen
+    // reader user hears every card twice if we default this on.
+    let radioOn = store.get("radioVoice", false);
+    let radioVol = store.get("volRadio", 0.8);
+    /* The announcer's switch is READ FROM THE MODULE, never mirrored here. It
+     * is the one spoken setting a second surface also flips — the flyby editor
+     * previews it — and a `let annOn` in this closure would have gone stale the
+     * moment it did, which is the exact shape of bug the lighting tuner's
+     * "read the live profile back" rule exists to prevent. */
+    const annOn = () => !!(G.announcer && G.announcer.enabled && G.announcer.enabled());
+    /* THE RACE RADIO (js/race/race-radio.js) — engineer chatter and in-race
+     * commentary. Read from the module, like the announcer; the store is the
+     * fallback only because this panel is wired at eval, before game.js has
+     * created the module (G.raceRadio is still in its TDZ then). */
+    const CHAT_VALUES = [["off", "OFF"], ["key", "KEY CALLS"], ["normal", "NORMAL"], ["chatty", "CHATTY"]];
+    const COMM_VALUES = [["off", "OFF"], ["tv", "TV CAMERAS"], ["on", "ALWAYS"]];
+    // …and the STUB (session-stub.js, until LAZY_RACE_SESSION lands) counts as
+    // absent: its setChat/setComm/setSpotter persist nothing, so a row changed
+    // before the real module existed was lost, and read back as the defaults.
+    const rr = () => { try { const r = G.raceRadio; return r && !r._stub ? r : null; } catch (e) { return null; } };
+    const chatNow = () => (rr() ? rr().chat() : store.get("radioChat", "normal"));
+    const commNow = () => (rr() ? rr().comm() : store.get("commentary", "tv"));
+    const PACK_VALUES = [["rec", "RECORDED"], ["sys", "SYSTEM"]];
+    const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
+    const recordedFor = (ch) => ch === "announcer" && G.radio && G.radio.announcerPackOn ? G.radio.announcerPackOn() : packNow() === "rec";
+    const spotNow = () => (store.get("spotter", false) !== false ? "on" : "off");
+    function setRadio(b) {
+      if (b && !G.soundOn) setSound(true, true);
+      radioOn = b; store.set("radioVoice", b);
+      if (G.radio) { G.radio.setEnabled(b); if (b) G.radio.unlock(); }   // this click IS the gesture iOS wants
+      syncAudioPanel();
+    }
+
+    function setMusic(b, fromGesture = true) {
+      // The master gates both buses and its only button lives on the title
+      // screen, so asking for music mid-race has to lift it — otherwise the
+      // switch reads ON and nothing plays.
+      // During boot, MUSIC ON is only the saved state of that bus; it must not
+      // override a separately saved master SOUND OFF. A real user click still
+      // lifts the master and unlocks WebAudio synchronously.
+      if (b && !G.soundOn && fromGesture) { setSound(true, true); }
+      G.musicEnabled = b; store.set("music", b);
+      GameAudio.setMusicEnabled(b);
+      syncAudioPanel();
+    }
+
+    let musicVol = GameAudio.setMusicVolume(store.get("volMusic", 0.6));
+    let sfxVol = GameAudio.setSfxVolume(store.get("volSfx", 0.2));
+    let sfxOn = store.get("sfx", true);
+    GameAudio.setSfxEnabled(sfxOn);
+    // MENU SOUNDS: the button blips only (uiTick/uiSelect/uiReject). Under the
+    // SFX switch, not beside it — SFX OFF silences menus too.
+    let menuSfxOn = store.get("menuSfx", true) !== false;
+    GameAudio.setUiEnabled(menuSfxOn);
+    // Restored here with the other levels rather than inside the engine: the
+    // engine owns the chain, the panel owns the persistence, and radioSting is
+    // reachable from showAnnounce before this panel is ever opened.
+    GameAudio.setRadioFx(store.get("radioFx", 1));
+    if (GameAudio.setRadioPreset) GameAudio.setRadioPreset(store.get("radioPreset", "modern"));
+
+    function setSfx(b) {
+      if (b && !G.soundOn) { setSound(true, true); }
+      sfxOn = b; store.set("sfx", b);
+      GameAudio.setSfxEnabled(b);
+      syncAudioPanel();
+    }
+
+    /* MUSIC SOURCE — ALL / DEFAULT / MY TRACKS pick which part of the local
+       library plays; SPOTIFY hands the music role to js/audio/spotify.js. It is
+       a four-way choice rather than a Spotify on/off switch because "my
+       uploads only" and "the shipped songs only" are both things people
+       actually want. */
+    let musicSrc = store.get("musicSource", "all");
+
+    function spotifyReady() {
+      return typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse &&
+        SpotifyMusic.status().state === "connected";
+    }
+
+    function setMusicSrc(v) {
+      if (v === "spotify") {
+        if (!spotifyReady()) { syncAudioPanel(); return; }   // not connected: ignore, the note says why
+        musicSrc = "spotify";
+        store.set("musicSource", musicSrc);
+        SpotifyMusic.useAsMusic(true);
+        syncAudioPanel();
+        return;
+      }
+      if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.useAsMusic) SpotifyMusic.useAsMusic(false);
+      const applied = GameAudio.setMusicSource(v);
+      musicSrc = applied;                        // refused (nothing in that set) -> keep the old one
+      store.set("musicSource", musicSrc);
+      syncAudioPanel();
+    }
+
+    function paintAudioFolds() {
+      const SRC_FOLD = { all: "ALL", builtin: "DEFAULT", user: "MY TRACKS", spotify: "SPOTIFY" };
+      const activeSrc = (typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse && SpotifyMusic.inUse())
+        ? "spotify" : ((typeof GameAudio !== "undefined" && GameAudio.musicSource)
+          ? GameAudio.musicSource() : musicSrc);
+      Dom.paintFold($("as-music-sum"), [
+        ["k", "MUSIC"],
+        [G.musicEnabled ? "on" : "off", G.musicEnabled ? "ON" : "OFF"],
+        ["val", SRC_FOLD[activeSrc] || "ALL"],
+      ]);
+      Dom.paintFold($("as-sound-sum"), [
+        ["k", "SOUND"],
+        [sfxOn ? "on" : "off", sfxOn ? "ON" : "OFF"],
+      ]);
+      const label = (list, v) => (list.find((r) => r[0] === v) || [, ""])[1];
+      Dom.paintFold($("as-radio-sum"), [
+        ["k", "TEAM RADIO"],
+        [radioOn ? "on" : "off", radioOn ? "ON" : "OFF"],
+        ["val", label(CHAT_VALUES, chatNow())],
+        [spotNow() === "on" ? "on" : "off", "SPOTTER " + (spotNow() === "on" ? "ON" : "OFF")],   // it speaks with the radio OFF: never hide its state
+      ]);
+      Dom.paintFold($("as-ann-sum"), [
+        ["k", "ANNOUNCER"],
+        [annOn() ? "on" : "off", annOn() ? "ON" : "OFF"],
+        ["val", label(COMM_VALUES, commNow())],
+      ]);
+      const prof = (typeof GameAudio !== "undefined" && GameAudio.profile) ? GameAudio.profile() : "team";
+      Dom.paintFold($("as-engine-sum"), [
+        ["k", "ENGINE TONE"],
+        ["val", (prof || "team").toUpperCase()],
+      ]);
+      const counts = (typeof GameAudio !== "undefined" && GameAudio.sourceCounts)
+        ? GameAudio.sourceCounts() : { user: 0 };
+      const n = counts.user || 0;
+      Dom.paintFold($("as-tracks-sum"), n
+        ? [["k", "YOUR TRACKS"], ["val", String(n)]]
+        : [["k", "YOUR TRACKS"]]);
+      let spKind = "off", spWord = "OFF";
+      if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.debug) {
+        const st = (SpotifyMusic.debug().state || "off");
+        if (st === "connected") { spKind = "on"; spWord = "ON"; }
+        else if (st === "configured" || st === "connecting") { spKind = "val"; spWord = "SAVED"; }
+        else if (st === "error") { spKind = "off"; spWord = "ERR"; }
+      }
+      Dom.paintFold($("as-sp-sum"), [["k", "SPOTIFY"], [spKind, spWord]]);
+    }
+
+    // SOURCE is a setting row (js/ui/setting-row.js): MY TRACKS and SPOTIFY
+    // are shown but unpickable until there is something behind them.
+    const SRC_VALUES = [["all", "ALL"], ["builtin", "DEFAULT"], ["user", "MY TRACKS"], ["spotify", "SPOTIFY"]];
+    const ONOFF = [["on", "ON"], ["off", "OFF"]];
+    function srcOn() {
+      return (typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse && SpotifyMusic.inUse())
+        ? "spotify" : GameAudio.musicSource();
+    }
+    function syncMusicSrcRow() {
+      const counts = GameAudio.sourceCounts ? GameAudio.sourceCounts() : { builtin: 0, user: 0 };
+      const spot = spotifyReady();
+      const on = srcOn();
+      SettingRow.paint($("as-src"), on, SRC_VALUES);
+      SettingRow.optionDisabled($("as-src"), "user", counts.user === 0);
+      SettingRow.optionDisabled($("as-src"), "spotify", !spot);
+      const note = $("as-src-note");
+      if (note) {
+        // The SELECTED source first: with DEFAULT lit and nothing uploaded the
+        // note must describe DEFAULT, not the disabled MY TRACKS button.
+        note.textContent = on === "spotify"
+            ? "Spotify is driving the music. The controls above drive it too."
+          : on === "user" ? "Playing your " + counts.user + " uploaded track" + (counts.user === 1 ? "" : "s") + " only."
+          : on === "builtin" ? "Playing the " + counts.builtin + " shipped tracks only."
+          : counts.user === 0
+            ? "Playing the " + counts.builtin + " shipped tracks. Add your own under YOUR TRACKS to use MY TRACKS."
+          : "Playing everything: " + counts.builtin + " shipped + " + counts.user + " of yours.";
+      }
+      paintAudioFolds();
+    }
+
+    function syncAudioPanel() {
+      const musicLive = G.musicEnabled && G.soundOn;
+      const sfxLive = sfxOn && G.soundOn;
+      SettingRow.paint($("as-music"), G.musicEnabled ? "on" : "off", ONOFF);
+      SettingRow.paint($("as-sound"), sfxOn ? "on" : "off", ONOFF);
+      SettingRow.paint($("as-ui"), menuSfxOn ? "on" : "off", ONOFF);
+      SettingRow.disable($("as-ui"), !sfxLive);
+      $("as-mvol").disabled = !musicLive;
+      $("as-svol").disabled = !sfxLive;
+      $("as-mvol").closest(".tune-row").classList.toggle("tune-off", !musicLive);
+      $("as-svol").closest(".tune-row").classList.toggle("tune-off", !sfxLive);
+      $("as-mvol").value = String(Math.round(musicVol * 10));
+      $("as-mvol-v").textContent = String(Math.round(musicVol * 10));
+      $("as-svol").value = String(Math.round(sfxVol * 10));
+      $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
+      // The radio row explains WHICH of the three reasons it is unusable for,
+      // because "greyed out" with no sentence is the worst version of this.
+      const radioReady = !!(G.radio && G.radio.available());
+      const radioLive = radioOn && G.soundOn && radioReady;
+      SettingRow.paint($("as-radio"), radioOn ? "on" : "off", ONOFF);
+      SettingRow.disable($("as-radio"), !radioReady);
+      $("as-rvol").disabled = !G.soundOn;
+      $("as-rvol").closest(".tune-row").classList.toggle("tune-off", !G.soundOn);
+      $("as-rvol").value = String(Math.round(radioVol * 10));
+      $("as-rvol-v").textContent = String(Math.round(radioVol * 10));
+      // SFX, not voice: it rides the sfx bus, so it follows the SFX switch and
+      // has nothing to do with whether a voice is installed.
+      const fx = GameAudio.radioFxLevel();
+      $("as-rfx").disabled = !(sfxOn && G.soundOn);
+      $("as-rfx").closest(".tune-row").classList.toggle("tune-off", !(sfxOn && G.soundOn));
+      $("as-rfx").value = String(Math.round(fx * 10));
+      $("as-rfx-v").textContent = String(Math.round(fx * 10));
+      // Auditioning is independent of automatic speech: TEST and voice volume
+      // remain usable when TEAM RADIO is off, for the announcer and spotter too. Built here rather than
+      // at wire time because getVoices() is empty on Chrome's first read and
+      // fills in later — opening the panel is when we know what is installed.
+      buildVoiceRows();
+      // CAPABILITY, not existence. $() here answers from a DOM that is a STUB in
+      // the node suites — tests/unit/async-lifecycle.test.mjs hands back a
+      // truthy element with only the handful of members the audio path needed
+      // before this row existed. `if (vh)` passed and vh.querySelectorAll threw,
+      // taking three unrelated audio-boot tests down with it and failing the
+      // deploy. Ask for what is about to be called.
+      const vh = $("as-voices");
+      if (vh && vh.classList) vh.classList.toggle("tune-off", !(G.soundOn && radioReady));
+      if (vh && typeof vh.querySelectorAll === "function") {
+        for (const el of vh.querySelectorAll("select,input,button")) el.disabled = !(G.soundOn && radioReady) || (packNow() === "rec" && el.tagName === "INPUT");
+      }
+      // WHY IT IS SILENT, IN A SENTENCE THE PLAYER CAN READ.
+      //
+      // The three lines below cover the reasons that are knowable before a
+      // single line is attempted. They were the whole note, and they are not
+      // enough: a device can pass all three and still never voice anything,
+      // because a speech engine that refuses a speak() does so SILENTLY — no
+      // error, no event, nothing logged. That is what an iOS engine that was
+      // never primed by a user gesture looks like, and three attempts to fix it
+      // from the outside all landed blind for want of this sentence.
+      //
+      // debug().asked vs .started is the whole diagnosis. asked 0 means WE
+      // refused and `last.reason` says why; asked without started means the
+      // PLATFORM swallowed them, and the way back is the toggle, because
+      // tapping it is a user gesture and unlock() rides on it.
+      const rnote = $("as-radio-note");
+      const dbg = (G.radio && G.radio.debug && G.radio.debug()) || null;
+      const REASON = {
+        off: "TEAM RADIO is off.",
+        "master-off": "Master sound is off.",
+        "no-api": "This browser has no speech synthesiser.",
+        "not-racing": "Nothing is read aloud outside a race — that is on purpose.",
+        empty: "That card had nothing speakable on it.",
+        "too-long": "The last line was too long for the time its card was up.",
+        "not-recorded": "That line has words no recorded voice has yet, so it stayed written.",
+        "pack-loading": "The recorded voice was still downloading.",
+      };
+      if (rnote) {
+        let note = !radioReady ? "This browser has no speech voices, so the radio stays written."
+          : !G.soundOn ? "Master sound is off — TEAM RADIO ON turns it on."
+          : "Race control, your engineer and the coach read their messages aloud. The cards are unchanged.";
+        if (radioLive && dbg) {
+          if (dbg.asked > 0 && dbg.started === 0) {
+            note = "This device accepted " + dbg.asked + " radio line" + (dbg.asked === 1 ? "" : "s") +
+              " and played none. Tap TEAM RADIO off and on — that tap is what lets the voice start.";
+          } else if (dbg.started > 0) {
+            note = "Spoken " + dbg.started + " line" + (dbg.started === 1 ? "" : "s") + " so far. " + note;
+          } else if (dbg.last && dbg.last.reason && dbg.last.reason !== "spoke" && REASON[dbg.last.reason]) {
+            note = "Last card was not read aloud: " + REASON[dbg.last.reason];
+          }
+        }
+        // A platform whose speech engine stalls the page (measured per call in
+        // js/audio/radio-voice.js): say so, and name the setting that avoids it.
+        if (radioLive && dbg && dbg.synth && dbg.synth.slow > 0) {
+          note += " This browser's speech engine held the game up (worst " + Math.round(dbg.synth.maxMs) +
+            " ms). RADIO VOICE: RECORDED never uses it.";
+        }
+        rnote.textContent = note;
+      }
+      // THE ANNOUNCER, on the same three-part gate and for the same reason: a
+      // greyed row with no sentence is the worst version of this.
+      const annReady = !!(G.announcer && G.announcer.available());
+      const annLive = G.soundOn && annReady;
+      SettingRow.paint($("as-ann"), annOn() ? "on" : "off", ONOFF);
+      SettingRow.disable($("as-ann"), !annReady);
+      const ah = $("as-ann-voice");
+      if (ah && ah.classList) ah.classList.toggle("tune-off", !annLive);
+      if (ah && typeof ah.querySelectorAll === "function") {
+        for (const el of ah.querySelectorAll("select,input,button")) el.disabled = !annLive || (recordedFor("announcer") && el.tagName === "INPUT");
+      }
+      SettingRow.paint($("as-chat"), chatNow(), CHAT_VALUES);
+      SettingRow.paint($("as-comm"), commNow(), COMM_VALUES);
+      SettingRow.paint($("as-rpack"), packNow(), PACK_VALUES);
+      if (GameAudio.radioPresets) SettingRow.paint($("as-rpreset"), GameAudio.radioPreset(), GameAudio.radioPresets());
+      SettingRow.paint($("as-spot"), spotNow(), ONOFF);
+      const cnote = $("as-chat-note");
+      if (cnote) {
+        const c = chatNow();
+        cnote.textContent = c === "off" ? "The engineer only talks tyres and pit stops."
+          : c === "key" ? "Flags, places won and lost, the last lap and the result — nothing else."
+          : c === "chatty" ? "Everything: gaps every lap, pace, battery, who is closing and how fast."
+          : "Places, gaps when a fight is on, laps to go, flags and the result. RADIO CHECK (see Controls) asks for the gaps.";
+      }
+      const anote = $("as-ann-note");
+      if (anote) anote.textContent = !annReady ? "This browser has no speech voices, so the loading card stays written."
+        : !G.soundOn ? "Master sound is off — ANNOUNCER ON turns it on."
+        : packNow() === "rec" ? "The introduction and race commentary use your recorded announcer. Unrecorded story details stay on the loading card."
+        : "The introduction and race commentary use your system voice; network-only voices are used during the introduction. VOICE VOLUME sets the level.";
+      // The master gate is what silences music when SOUND is off, and the MUSIC
+      // switch still reads ON then — so the readout names the gate that is
+      // actually shut instead of contradicting the switch beside it. The title
+      // line ellipsises (css/tuner.css .as-now-title), so the way out goes on
+      // the caption under it, which wraps.
+      const nowText = musicLive ? (GameAudio.trackName() || "—") : G.soundOn ? "Music off" : "Sound off";
+      // Same words as the SOURCE row (ALL / DEFAULT / MY TRACKS / SPOTIFY):
+      // the caption said "Built-in" for the value labelled DEFAULT.
+      const SRC_LABEL = { all: "All music", builtin: "Default", user: "My tracks", spotify: "Spotify" };
+      // srcOn(), not the panel's own `musicSrc`: when Spotify drives the
+      // soundtrack the live source is spotify while this closure's copy still
+      // reads whatever local set was picked before, so NOW PLAYING said "All
+      // music" over a Spotify track. The SOURCE row beside it already paints
+      // from the live value — this line was the one that did not.
+      const srcText = musicLive ? (SRC_LABEL[srcOn()] || "") : G.soundOn ? "" : "Master sound is off — MUSIC ON or SOUND EFFECTS ON turns it on";
+      // Two copies of the NOW PLAYING card: the MUSIC page's (as-*) and the
+      // pause menu's (pm-*), which is only shown while music is live.
+      for (const p of ["as", "pm"]) {
+        const now = $(p + "-now"), src = $(p + "-now-src"), play = $(p + "-play");
+        if (!now || !play) continue;
+        now.textContent = nowText;
+        now.title = nowText;
+        if (src) src.textContent = srcText;
+        play.innerHTML = G.musicEnabled ? "&#10074;&#10074;" : "&#9654;";
+        play.setAttribute("aria-label", G.musicEnabled ? "Pause music" : "Play music");
+        for (const id of [p + "-prev", p + "-skip"]) if ($(id)) $(id).disabled = !musicLive;
+        play.disabled = !G.soundOn;
+      }
+      const pmCard = $("pm-now-card");
+      if (pmCard) pmCard.hidden = !musicLive;
+      if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
+      syncMusicSrcRow();
+      syncTonePanel();
+      paintAudioFolds();
+    }
+
+    $("pm-audio").addEventListener("click", () => { syncAudioPanel(); });
+    /* Short viewports hide the audio scroller's scrollbar (css/settings.css) and
+     * settings-tabs.js resets scrollTop when MUSIC opens, so a <details> fold
+     * can expand with its body still below the visible pane — it looks like
+     * nothing happened. Bring opened folds back into view; refresh ScrollFade
+     * when the fade chrome wraps this pane. */
+    function audioMotionReduced() {
+      try {
+        if (typeof window !== "undefined" && window.matchMedia &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches) return true;
+        const d = typeof document !== "undefined" && document.documentElement &&
+          document.documentElement.dataset;
+        return !!(d && d.motion === "reduce");
+      } catch (e) { return false; }
+    }
+    function scrollOpenedAudioFold(det) {
+      if (!det || !det.open) return;
+      const behavior = audioMotionReduced() ? "auto" : "smooth";
+      const opts = { block: "nearest", inline: "nearest", behavior };
+      let target = null;
+      for (let i = 0; i < det.children.length; i++) {
+        const ch = det.children[i];
+        if (ch && ch.tagName !== "SUMMARY") { target = ch; break; }
+      }
+      if (!target) {
+        if (det.querySelector) target = det.querySelector("summary");
+        if (!target) target = det;
+      }
+      if (target && target.scrollIntoView) target.scrollIntoView(opts);
+      if (typeof ScrollFade !== "undefined" && ScrollFade.refresh) ScrollFade.refresh();
+    }
+    const audioInner = $("audioset-inner");
+    if (audioInner && audioInner.addEventListener) {
+      audioInner.addEventListener("toggle", (ev) => {
+        const det = ev.target;
+        if (!det || det.tagName !== "DETAILS" || !det.open) return;
+        if (audioInner.contains && !audioInner.contains(det)) return;
+        scrollOpenedAudioFold(det);
+      });
+    }
+    if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.onChange) {
+      SpotifyMusic.onChange(() => { if (!$("audioset").hidden) syncMusicSrcRow(); });
+    }
+    SettingRow.wire("as-src", { values: SRC_VALUES, read: srcOn,
+      write: (v) => { setMusicSrc(v); if (G.soundOn) GameAudio.uiTick(); } });
+    $("as-sp-open").onclick = () => {
+      if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.openPanel) SpotifyMusic.openPanel();
+    };
+    SettingRow.wire("as-music", { values: ONOFF, read: () => (G.musicEnabled ? "on" : "off"),
+      write: (v) => { setMusic(v === "on"); if (G.soundOn) GameAudio.uiTick(); } });
+    // ON enables before the tick so the tick has a context to play in; OFF
+    // ticks first, while the bus is still open.
+    SettingRow.wire("as-radio", { values: ONOFF, read: () => (radioOn ? "on" : "off"),
+      write: (v) => { if (v === "on") { setRadio(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setRadio(false); } } });
+    SettingRow.wire("as-chat", { values: CHAT_VALUES, read: chatNow,
+      write: (v) => { if (rr()) rr().setChat(v); else store.set("radioChat", v); GameAudio.uiTick(); syncAudioPanel(); } });
+    SettingRow.wire("as-rpack", { values: PACK_VALUES, read: packNow,
+      write: (v) => { if (G.radio && G.radio.setPackOn) G.radio.setPackOn(v === "rec"); store.set("radioPack", v === "rec"); GameAudio.uiTick(); syncAudioPanel(); } });
+    if (GameAudio.radioPresets) SettingRow.wire("as-rpreset", { values: GameAudio.radioPresets(), read: () => GameAudio.radioPreset(),
+      write: (v) => { store.set("radioPreset", GameAudio.setRadioPreset(v)); syncAudioPanel(); preview("radio"); } });
+    SettingRow.wire("as-spot", { values: ONOFF, read: spotNow,
+      write: (v) => { if (rr()) rr().setSpotter(v === "on"); else store.set("spotter", v === "on"); GameAudio.uiTick(); syncAudioPanel(); } });
+    SettingRow.wire("as-comm", { values: COMM_VALUES, read: commNow,
+      write: (v) => { if (rr()) rr().setComm(v); else store.set("commentary", v); GameAudio.uiTick(); syncAudioPanel(); } });
+    // THE PRE-RACE ANNOUNCER (js/audio/announcer.js). Same shape, same master
+    // lift — but its own switch, because it speaks on the loading screen and
+    // the radio speaks in the race, and a player who wants one rarely wants
+    // both. The module owns the stored value; this row only asks it.
+    SettingRow.wire("as-ann", { values: ONOFF, read: () => (annOn() ? "on" : "off"),
+      write: (v) => {
+        const want = v === "on";
+        if (want && !G.soundOn) setSound(true, true);
+        if (G.announcer && G.announcer.setEnabled) G.announcer.setEnabled(want);
+        GameAudio.uiTick();
+        syncAudioPanel();
+      } });
+    /* THE PER-CHANNEL VOICE ROWS, built rather than written into the shell: the
+     * voice list is the machine's installed voices, so the <option>s cannot be
+     * static markup. Three groups, one per speaker in RadioVoice.SPEAKERS.
+     *
+     * Built ONCE and then only re-synced. getVoices() is famously empty on the
+     * first read in Chrome and fills in later, so the rebuild is driven by the
+     * voice list actually changing — not by a timer, and not by a re-open that
+     * would throw away a half-made selection. */
+    const VOICE_CHANNELS = [
+      ["control", "RACE CONTROL", "Penalties, warnings and flags. Any of the six recorded voices."],
+      ["coach", "COACH", "Practice drills and driving advice, through a clean headset. Any of the six recorded voices."],
+      ["radio", "TEAM RADIO", "Your engineer and spotter share this voice — any of the six recorded voices. TEST plays a race call."],
+    ];
+    /* THE ANNOUNCER'S ROW IS THE SAME ROW, IN A DIFFERENT SECTION. It is a
+     * RadioVoice channel (js/audio/radio-voice.js TONE) so it gets a voice, a
+     * pitch and a rate for free — but it is NOT gated on the TEAM RADIO switch,
+     * so it cannot live under that switch's heading where every other control
+     * greys out with it. Its own <details>, its own host, one shared builder. */
+    const ANN_CHANNEL = ["announcer", "ANNOUNCER",
+      "A recorded voice — any of the six — introduces the circuit and commentates during the race. A system voice changes the pre-race welcome; race commentary follows RADIO VOICE. TEST plays the welcome."];
+    let voiceRowsFor = null;   // the voice-list length the rows were built against
+
+    function voiceRow(ch, label, blurb) {
+      const wrap = document.createElement("div");
+      wrap.className = "as-voice";
+      // PER CHANNEL: the announcer's list includes network voices, the three
+      // race channels' does not (RadioVoice.REMOTE_OK). Passing the channel is
+      // what stops this <select> offering the radio a voice it must not use —
+      // and what stops it hiding the good ones from the announcer.
+      const list = (G.radio && G.radio.voiceList && G.radio.voiceList(ch)) || [];
+      const tune = (G.radio && G.radio.tuneFor && G.radio.tuneFor(ch)) || { pitch: 1, rate: 1, name: "" };
+
+      const head = document.createElement("div");
+      head.className = "set-row";
+      const name = document.createElement("span");
+      name.className = "tune-label"; name.id = "as-v-" + ch + "-label"; name.textContent = label;
+      const sel = document.createElement("select");
+      sel.id = "as-v-" + ch;
+      sel.setAttribute("aria-labelledby", name.id);
+      // SYSTEM DEFAULT is a real choice, not a placeholder: on iOS getVoices()
+      // returns nothing and the platform picks for itself, so this is the only
+      // entry there and the pitch/rate below are what carry the channel.
+      const auto = document.createElement("option");
+      auto.value = ""; auto.textContent = list.length ? "DEFAULT" : "SYSTEM DEFAULT";
+      const recorded = (G.radio && G.radio.recordedVoices) ? G.radio.recordedVoices(ch) : [];
+      const recGroup = document.createElement("optgroup"); recGroup.label = "RECORDED";
+      for (const v of recorded) {
+        const o = document.createElement("option"); o.value = "recorded:" + v.id; o.textContent = v.name;
+        recGroup.appendChild(o);
+      }
+      if (recorded.length) sel.appendChild(recGroup);
+      const sysGroup = document.createElement("optgroup"); sysGroup.label = "SYSTEM";
+      sysGroup.appendChild(auto); sel.appendChild(sysGroup);
+      for (const v of list) {
+        const o = document.createElement("option");
+        o.value = v.name; o.textContent = v.name;
+        sysGroup.appendChild(o);
+      }
+      sel.value = recordedFor(ch) && recorded.length ? "recorded:" + G.radio.recordedVoice(ch)
+        : list.some((v) => v.name === tune.name) ? tune.name : "";
+      sel.onchange = () => {
+        if (sel.value.startsWith("recorded:")) { G.radio.setRecordedVoice(ch, sel.value.slice(9)); syncAudioPanel(); }
+        else setTune(ch, { name: sel.value });
+        preview(ch);
+      };
+      const test = document.createElement("button");
+      test.type = "button"; test.className = "cz-liv-none"; test.id = "as-v-" + ch + "-test";
+      test.textContent = "TEST";
+      test.setAttribute("aria-label", "Hear " + label);
+      test.onclick = () => preview(ch);
+      const box = document.createElement("div");
+      box.append(sel);
+      head.append(name, box);
+      // TEST gets its OWN ROW, after PITCH and RATE (tune, then hear it). Beside
+      // the <select> it could not be reached by keyboard or pad: a select owns
+      // Left/Right (MenuNav ownsArrows) and Up/Down land on the select, the
+      // nearest control in the row (menu-traversal, MUSIC & SOUND).
+      const testRow = document.createElement("div");
+      testRow.className = "set-row";
+      testRow.appendChild(test);
+
+      wrap.append(head, slider(ch, "pitch", "PITCH", tune.pitch, RadioVoice.PITCH_MIN, RadioVoice.PITCH_MAX),
+                  slider(ch, "rate", "RATE", tune.rate, RadioVoice.RATE_MIN, RadioVoice.RATE_MAX), testRow);
+      const note = document.createElement("p");
+      note.className = "as-note"; note.textContent = blurb;
+      wrap.appendChild(note);
+      return wrap;
+    }
+
+    // Sliders speak in HUNDREDTHS. The range is 0.5..1.6 for pitch and 0.6..1.35
+    // for rate — a step of 0.05 in float steps is where <input type=range> starts
+    // handing back 1.0500000000000003, and the store then carries that forever.
+    function slider(ch, key, label, value, lo, hi) {
+      const row = document.createElement("label");
+      row.className = "tune-row";
+      const cap = document.createElement("span");
+      cap.className = "tune-label";
+      const b = document.createElement("b");
+      b.id = "as-v-" + ch + "-" + key + "-v";
+      b.textContent = value.toFixed(2);
+      cap.append(document.createTextNode(label + " "), b);
+      const inp = document.createElement("input");
+      inp.type = "range"; inp.id = "as-v-" + ch + "-" + key;
+      inp.min = String(Math.round(lo * 100)); inp.max = String(Math.round(hi * 100));
+      inp.step = "5"; inp.value = String(Math.round(value * 100));
+      inp.setAttribute("aria-label", label + " for " + ch);
+      inp.oninput = () => {
+        const v = (+inp.value || 0) / 100;
+        b.textContent = v.toFixed(2);
+        setTune(ch, { [key]: v });
+      };
+      // The change, not every drag frame: speaking on `input` would queue a
+      // sample per pixel of thumb travel and the synth would stutter through
+      // them long after the drag stopped.
+      inp.onchange = () => preview(ch);
+      row.append(cap, inp);
+      return row;
+    }
+
+    const setTune = (ch, patch) => {
+      if (G.radio && G.radio.setTune) G.radio.setTune(ch, patch);
+      if (ch !== "announcer" && G.radio && G.radio.setPackOn) G.radio.setPackOn(false);
+      syncAudioPanel();
+    };
+    // TEST is an explicit audition, independent of the automatic speech switch.
+    const preview = (ch) => {
+      if (ch === "announcer" && !recordedFor(ch)) { if (G.announcer && G.announcer.sample) G.announcer.sample(); return; }
+      if (G.radio && G.radio.preview) G.radio.preview(ch);
+    };
+
+    function rememberVoiceFocus(host) {
+      const index = host.querySelectorAll ? Array.from(host.querySelectorAll("select,input,button")).indexOf(document.activeElement) : -1;
+      return () => {
+        const control = index >= 0 && host.querySelectorAll("select,input,button")[index];
+        if (control && control.focus) control.focus({ preventScroll: true });
+      };
+    }
+
+    function buildVoiceRows() {
+      buildAnnVoiceRow();
+      const host = $("as-voices");
+      // The same capability guard as the sync block below, and for the same
+      // reason: $() answers from a STUB element in the node suites, with only
+      // the members the audio path happened to need. This one escaped by luck —
+      // its harness never defines RadioVoice, so the check below returned first
+      // — and would have thrown on host.children the moment a suite loaded both.
+      if (!host || typeof host.appendChild !== "function" || !host.children) return;
+      if (typeof RadioVoice === "undefined" || typeof document === "undefined"
+          || typeof document.createElement !== "function") return;
+      const n = (G.radio && G.radio.voiceList && G.radio.voiceList().length) || 0;
+      const key = JSON.stringify([G.radio && G.radio.voiceList ? G.radio.voiceList() : [], packNow(),
+        VOICE_CHANNELS.map(([ch]) => G.radio && G.radio.recordedVoice ? G.radio.recordedVoice(ch) : "")]);
+      if (voiceRowsFor === key && host.children.length > 1) return;   // already right for this list
+      const restoreFocus = rememberVoiceFocus(host);
+      voiceRowsFor = key;
+      while (host.children.length > 1) host.removeChild(host.lastChild);
+      for (const [ch, label, blurb] of VOICE_CHANNELS) host.appendChild(voiceRow(ch, label, blurb));
+      restoreFocus();
+      const note = $("as-voices-note");
+      if (note) {
+        note.textContent = packNow() === "rec" ? "Recorded voices are generated speech. Common calls play as complete recordings. Choosing a system race voice switches race channels to SYSTEM; pitch and rate apply there."
+          : n + " system voices available. Choosing a recorded race voice returns race channels to RECORDED. The pre-race announcer has its own voice choice.";
+      }
+    }
+
+    /** The announcer's single voice row, into its own host. Same guards and the
+     *  same rebuild rule as the three above — the voice list is the machine's,
+     *  and Chrome's first getVoices() is empty. Tracked separately because the
+     *  two hosts can be built on different opens. */
+    let annRowFor = null;
+    function buildAnnVoiceRow() {
+      const host = $("as-ann-voice");
+      if (!host || typeof host.appendChild !== "function" || !host.children) return;
+      if (typeof RadioVoice === "undefined" || typeof document === "undefined"
+          || typeof document.createElement !== "function") return;
+      // ITS OWN list, and therefore its own length: the announcer's includes
+      // network voices, so keying this off the radio's local-only count would
+      // leave the row stale exactly where the two differ most (Chrome and Edge,
+      // where the local count is often 0 and the real one is dozens).
+      const key = JSON.stringify([G.radio && G.radio.voiceList ? G.radio.voiceList(ANN_CHANNEL[0]) : [], recordedFor("announcer"),
+        G.radio && G.radio.recordedVoice ? G.radio.recordedVoice("announcer") : ""]);
+      if (annRowFor === key && host.children.length > 1) return;
+      const restoreFocus = rememberVoiceFocus(host);
+      annRowFor = key;
+      while (host.children.length > 1) host.removeChild(host.lastChild);
+      host.appendChild(voiceRow.apply(null, ANN_CHANNEL));
+      restoreFocus();
+    }
+
+    // Sliders speak in TENTHS here, so 10 is the shipped 1.0 and the top of
+    // the range is 1.5 — an exact integer lands on the default, the one value
+    // the panel must always be able to return to.
+    $("as-rfx").oninput = (e) => {
+      const lvl = GameAudio.setRadioFx((+e.target.value || 0) / 10);
+      store.set("radioFx", lvl);
+      $("as-rfx-v").textContent = String(Math.round(lvl * 10));
+    };
+    $("as-rvol").oninput = (e) => {
+      radioVol = G.radio ? G.radio.setVolume((+e.target.value || 0) / 10) : (+e.target.value || 0) / 10;
+      store.set("volRadio", radioVol);
+      $("as-rvol-v").textContent = String(Math.round(radioVol * 10));
+    };
+    SettingRow.wire("as-sound", { values: ONOFF, read: () => (sfxOn ? "on" : "off"),
+      write: (v) => { if (v === "on") { setSfx(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setSfx(false); } } });
+    SettingRow.wire("as-ui", { values: ONOFF, read: () => (menuSfxOn ? "on" : "off"),
+      write: (v) => {
+        menuSfxOn = v === "on"; store.set("menuSfx", menuSfxOn);
+        GameAudio.setUiEnabled(menuSfxOn);
+        if (menuSfxOn) GameAudio.uiTick();   // ON answers with the sound it turned on; OFF stays silent
+        syncAudioPanel();
+      } });
+    // `input` not `change`: the level should follow the thumb while dragged.
+    $("as-mvol").oninput = (e) => {
+      musicVol = GameAudio.setMusicVolume((+e.target.value || 0) / 10);
+      store.set("volMusic", musicVol);
+      $("as-mvol-v").textContent = String(Math.round(musicVol * 10));
+    };
+    $("as-svol").oninput = (e) => {
+      sfxVol = GameAudio.setSfxVolume((+e.target.value || 0) / 10);
+      store.set("volSfx", sfxVol);
+      $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
+    };
+    /* ENGINE TONE — profiles, tuner sliders and layer switches over the
+       manufacturer voice. The engine owns the clamping and the timbre contract
+       (js/audio/engine.js); this is the surface and the persistence.
+
+       Each slider is an integer 0..max in the DOM mapped through {lo, step},
+       chosen per field so that an EXACT integer lands on 1.0 — a slider whose
+       centre is 0.9975 would mean the panel could not express the shipped
+       sound, which is the one value it must always be able to return to. */
+    // Same order as the shell: PITCH CURVE (idle end, whole-curve transpose,
+    // span, bend), CHARACTER, the three LIMITER knobs, the two BOOST knobs,
+    // then the LAYER levels.
+    const TONE = [
+      { k: "idle",       id: "as-t-idle",   lo: 0.50, step: 0.05 },
+      { k: "pitch",      id: "as-t-pitch",  lo: 0.60, step: 0.05 },
+      { k: "revRange",   id: "as-t-range",  lo: 0.20, step: 0.10 },
+      { k: "curve",      id: "as-t-curve",  lo: 0.40, step: 0.10 },
+      { k: "gravel",     id: "as-t-gravel", lo: 0,    step: 0.25 },
+      { k: "detune",     id: "as-t-detune", lo: 0,    step: 0.25 },
+      { k: "brightness", id: "as-t-bright", lo: 0.30, step: 0.05 },
+      { k: "sub",        id: "as-t-sub",    lo: 0,    step: 0.25 },
+      { k: "limiter",    id: "as-t-lim",    lo: 0,    step: 0.25 },
+      { k: "limRate",    id: "as-t-limrate", lo: 0.40, step: 0.10 },
+      { k: "limPitch",   id: "as-t-limsag", lo: 0,    step: 0.25 },
+      { k: "boost",      id: "as-t-boost",  lo: 0,    step: 0.04 },   // shipped 1.12 = position 28; the shell rests on 1.0 (25) like every row
+      { k: "boostPitch", id: "as-t-boostlift", lo: 0, step: 0.25 },
+      { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.02 },   // shipped 0.62 = position 31; shell 1.0 = 50
+      { k: "harvest",    id: "as-t-harvest", lo: 0,   step: 0.25 },
+      { k: "wind",       id: "as-t-wind",   lo: 0,    step: 0.25 },
+      { k: "screech",    id: "as-t-tyres",  lo: 0,    step: 0.25 },
+      { k: "brakes",     id: "as-t-brakes", lo: 0,    step: 0.25 },
+      { k: "shift",      id: "as-t-shift",  lo: 0,    step: 0.25 },
+      { k: "rivals",     id: "as-t-rivals", lo: 0,    step: 0.25 },
+      { k: "reverb",     id: "as-t-rev",    lo: 0,    step: 0.25 },
+      { k: "overrun",    id: "as-t-ovr",    lo: 0,    step: 0.25 },
+    ];
+    const TONE_LAYERS = [
+      { k: "whine",   id: "as-l-whine" },   { k: "harvest", id: "as-l-harvest" },
+      { k: "ers",     id: "as-l-ers" },     { k: "wind",    id: "as-l-wind" },
+      { k: "limiter", id: "as-l-limiter" }, { k: "screech", id: "as-l-screech" },
+      { k: "sub",     id: "as-l-sub" },     { k: "gravel",  id: "as-l-gravel" },
+      { k: "brakes",  id: "as-l-brakes" },  { k: "rivals",  id: "as-l-rivals" },
+      { k: "reverb",  id: "as-l-reverb" },  { k: "overrun", id: "as-l-overrun" },
+    ];
+    // PROFILE setting row; CUSTOM is shown, not pickable — it is the state the
+    // trim sliders leave behind.
+    const PROFILE_VALUES = [["team", "TEAM"], ["broadcast", "BROADCAST"], ["trackside", "TRACKSIDE"],
+      ["cockpit", "COCKPIT"], ["v10", "V10"], ["custom", "CUSTOM", true]];
+    const PROFILE_NOTE = {
+      team: "Follows your team's engine — the default sound.",
+      broadcast: "Bright and forward, with the turbo up and the idle clean. The TV mix.",
+      trackside: "Darker, further away, lumpier at idle, more air, tyre and brake.",
+      cockpit: "Heavy and muffled, with the rev limiter, brakes and gearbox loud. From inside the car.",
+      v10: "Low lazy idle, then a late climb to a scream. Hard fast limiter, no turbo, no hybrid.",
+    };
+    // The engine owns which profile is live — it flips itself to "custom" the
+    // moment a trim stops matching the named preset (setTune, js/audio/engine.js).
+    // The panel deliberately keeps no second copy: two records of the same fact
+    // is how the row ends up lighting a preset the tune has been edited away
+    // from. "custom" is not in profiles(), so the row simply lights nothing.
+    const toneProfile = () => GameAudio.profile();
+
+    function toneSlider(t) { return $(t.id); }
+
+    function applyStoredTone() {
+      // No need to validate the stored name first: setProfile already falls back
+      // to "team" for anything it does not recognise, so a hand-edited or
+      // stale-schema value lands on the shipped sound either way.
+      GameAudio.setProfile(store.get("sndProfile", "team"));
+      const savedTune = store.get("sndTune", null);
+      if (savedTune && typeof savedTune === "object") GameAudio.setTune(savedTune);
+      const savedLayers = store.get("sndLayers", null);
+      if (savedLayers && typeof savedLayers === "object") {
+        for (const l of TONE_LAYERS) if (typeof savedLayers[l.k] === "boolean") GameAudio.setLayer(l.k, savedLayers[l.k]);
+      }
+    }
+
+    function syncTonePanel() {
+      const tune = GameAudio.tune();
+      for (const t of TONE) {
+        const el = toneSlider(t);
+        if (!el) continue;
+        el.value = String(Math.round((tune[t.k] - t.lo) / t.step));
+        $(t.id + "-v").textContent = String(Math.round(tune[t.k] * 100));
+      }
+      const layers = GameAudio.layers();
+      for (const l of TONE_LAYERS) {
+        const b = $(l.id);
+        if (!b) continue;
+        b.classList.toggle("active", !!layers[l.k]);
+        b.setAttribute("aria-pressed", layers[l.k] ? "true" : "false");
+      }
+      SettingRow.paint($("as-p"), toneProfile(), PROFILE_VALUES);
+      // Guarded like every other lookup in this section, and for the reason
+      // js/game.js already records: optional markup must not turn one missing
+      // element into a whole-panel failure. Measured, not assumed — with the
+      // ENGINE TONE block absent these two were the only unguarded reads left,
+      // and create() threw here and took the music transport and both volume
+      // sliders down with it.
+      const note = $("as-p-note");
+      if (note) note.textContent = toneProfile() === "custom"
+        ? "Your own tune. RESET returns to your team's engine sound."
+        : (PROFILE_NOTE[toneProfile()] || "");
+      paintAudioFolds();
+    }
+
+    function setToneProfile(name) {
+      GameAudio.setProfile(name);
+      persistTone();
+      syncTonePanel();
+    }
+    function persistTone() {
+      store.set("sndProfile", toneProfile());
+      store.set("sndTune", GameAudio.tune());
+    }
+
+    SettingRow.wire("as-p", { values: PROFILE_VALUES, read: toneProfile,
+      write: (name) => { setToneProfile(name); if (G.soundOn) GameAudio.uiTick(); } });
+    for (const t of TONE) {
+      const el = toneSlider(t);
+      if (!el) continue;
+      // `input` so the engine follows the thumb — the whole point is hearing the
+      // change while dragging. The WRITE is on `change`: oninput fires per pixel
+      // of drag and every one of those would be a localStorage round-trip.
+      el.oninput = () => {
+        GameAudio.setTune({ [t.k]: t.lo + (+el.value || 0) * t.step });
+        $(t.id + "-v").textContent = String(Math.round(GameAudio.tune()[t.k] * 100));
+        syncTonePanel();   // the engine may have just flipped itself to "custom"
+      };
+      el.onchange = persistTone;
+    }
+    for (const l of TONE_LAYERS) {
+      const b = $(l.id);
+      if (!b) continue;
+      b.onclick = () => {
+        const on = !GameAudio.layers()[l.k];
+        GameAudio.setLayer(l.k, on);
+        store.set("sndLayers", GameAudio.layers());
+        syncTonePanel();
+        if (G.soundOn) GameAudio.uiTick();
+      };
+    }
+    const resetBtn = $("as-t-reset");
+    if (resetBtn) resetBtn.onclick = () => {
+      for (const l of TONE_LAYERS) GameAudio.setLayer(l.k, true);
+      store.set("sndLayers", GameAudio.layers());
+      setToneProfile("team");
+      if (G.soundOn) GameAudio.uiTick();
+    };
+
+    function audioTransport(fn) {
+      fn();
+      if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
+      syncAudioPanel();   // repaints both NOW PLAYING cards
+      if (G.soundOn) GameAudio.uiTick();
+    }
+    for (const p of ["as", "pm"]) {
+      const skip = $(p + "-skip"), prev = $(p + "-prev"), play = $(p + "-play");
+      if (skip) skip.onclick = () => audioTransport(() => GameAudio.skipTrack());
+      if (prev) prev.onclick = () => audioTransport(() => GameAudio.prevTrack());
+      if (play) play.onclick = () => { setMusic(!G.musicEnabled); if (G.soundOn) GameAudio.uiTick(); };
+    }
+    // The pause card must read the track that is playing WHEN THE MENU OPENS,
+    // and a track that ends while the menu is up advances underneath it — so
+    // repaint on open and tick while it is visible. Attribute observer, not a
+    // hook in game.js's setPaused: the panel owns its own cards.
+    const pauseMenu = $("pausemenu");
+    if (pauseMenu && typeof MutationObserver !== "undefined" && typeof setInterval === "function") {
+      let tick = 0;
+      const follow = () => {
+        if (pauseMenu.hidden) { if (tick) { clearInterval(tick); tick = 0; } return; }
+        syncAudioPanel();
+        if (!tick) tick = setInterval(syncAudioPanel, 1000);
+      };
+      new MutationObserver(follow).observe(pauseMenu, { attributes: true, attributeFilter: ["hidden"] });
+    }
+
+    function init() {
+      Log.info("audio", "AudioPanel.init sound=" + !!G.soundOn);
+      // Before setSound: it can start the engine, and the engine reads the tune
+      // on its first frame. Restoring after would run one race's worth of
+      // frames on the default voice and only correct on the next setEngine.
+      applyStoredTone();
+      // setMusic BEFORE setSound: setSound starts the menu track, and the
+      // soundtrack's own switch defaults ON — a MUSIC OFF player would fetch and
+      // decode menu.mp3 at boot before the switch was ever set.
+      setMusic(G.musicEnabled, false);
+      setSound(G.soundOn, false);
+      // A STORED "spotify" IS NOT WHAT IS PLAYING. Spotify never auto-connects,
+      // so the restore below deliberately skips it — but `musicSrc` was left
+      // holding the stored word, and the now-playing caption reads it: after a
+      // reload it said "Spotify" while the source row lit ALL and the built-in
+      // soundtrack played. Follow the audio engine for the caption instead, and
+      // leave the STORED preference alone so it still means something the next
+      // time the player connects.
+      if (musicSrc === "spotify" && !spotifyReady()) musicSrc = GameAudio.musicSource();
+      // Always rehydrate IndexedDB → playlist once LAZY_AUDIO is resident. The
+      // title wall boots without MusicLib; openSettings/ensureAudio is the first
+      // chance to restore user:<n> entries (music-library reload poll).
+      const applySrc = () => {
+        if (musicSrc && musicSrc !== "spotify") musicSrc = GameAudio.setMusicSource(musicSrc);
+        syncMusicSrcRow();
+      };
+      if (typeof MusicLib !== "undefined" && MusicLib.init) MusicLib.init().then(applySrc, applySrc);
+      else applySrc();
+    }
+
+    return { init };
+  }
+  return { create };
+})();

@@ -1,0 +1,66 @@
+[
+{
+"query": "When a car pulls into the garage for the pit-work animation it arrives about a metre short of the jack and then teleports onto it. Fix the arrival so it eases into the mark, and show me how you validated the motion deterministically.",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "the flyby intro at the start of a race cuts hard between shot 2 and shot 3 \u2014 the camera visibly jumps. can you smooth the shot transition and keep the rest of the sequence timing the same",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "Add a slider to the camera tuner that controls how far the chase camera lags behind the car on acceleration, with sensible min/max, and prove the rig still frames the car on a flat straight.",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "In Data Hub WATCH the broadcast camera swings too fast when it switches from the leader to P2 \u2014 it looks like whip-pan. Slow the follow-target blend down and keep a before/after measurement.",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "I want the cinematic roadside camera to pan with the car a bit before it passes instead of sitting static until the car is in frame. Where does that motion live and how do I change it safely?",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "After I scrub the replay timeline back 10 seconds in HIGHLIGHTS the camera keeps looking at where the car used to be for a frame or two before it catches up. Why does the anchor survive the seek?",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "In HIGHLIGHTS, seeking to a different lap makes the camera snap to a wrong position for a frame, then it settles. Validate the seek path with the offline fixture before you touch anything, then tell me which anchor is stale.",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "when i exit the replay and re-enter it the camera is still following the car i was watching before even though the picker says a different driver. whats holding the old follow target",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "WATCH playback: changing the followed driver mid-replay keeps the old framing for about a second. Trace entry \u2192 seek \u2192 follow \u2192 exit \u2192 re-entry and find where the anchor ownership breaks.",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "Replay camera discontinuity: after a seek the camera's position jumps but its target does not, so the shot swings. I need a serialized before/after of the camera state across the seek, not a screenshot.",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "The replay probe fails before it even opens a page, something about a missing ffmpeg executable. Get the replay camera lifecycle check running again in this container.",
+"expect": "f1-animation-cameras"
+},
+{
+"query": "Take six screenshots of Monza from the chase and cockpit cameras at fracs 0.1 to 0.6 so I can compare framing before and after my lighting change.",
+"expect": "playwright-probe"
+},
+{
+"query": "The car feels floaty after kerb hits and the screen shake on a wall tap is barely noticeable. Punch up the hit feedback and camera kick without changing the driving physics.",
+"expect": "tune-physics"
+},
+{
+"query": "WATCH loads last year's Monza race for the wrong driver after I change the season picker in the Data Hub. The replay itself plays fine once it loads.",
+"expect": "data-hub"
+},
+{
+"query": "Give me a cockpit and an orbit still of the car at Spa Eau Rouge, same frac, so I can check the halo framing against the broadcast reference.",
+"expect": "playwright-probe"
+},
+{
+"query": "How much does the chase camera lag behind the car through Monza's first chicane? Measure it with camState at a few fracs; don't change any code.",
+"expect": "playwright-probe"
+}
+]

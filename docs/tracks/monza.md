@@ -1,6 +1,33 @@
 # Monza — Autodromo Nazionale Monza (Italy)
 
-**Game setting:** DAY · green theme (royal park). Render: procedural colored BOXES, no textures. Objects placed by arc-fraction `s` (0.0 at start/finish, increasing in racing direction, wrapping to 1.0), Left/Right side, lateral distance band, tinted `[r,g,b]` 0–1.
+**Game setting:** DAY · green theme (royal park). This is a scenery research and
+modelling brief. The current game combines procedural meshes with baked models
+and PBR material textures; the box descriptions below describe landmark massing,
+not a texture-free renderer contract. Objects use lap fraction `s` (0.0 at
+start/finish, increasing in racing direction), Left/Right side, lateral distance
+and tinted `[r,g,b]` 0–1. Consume fraction positions through the scenery API so
+track shifting and reversal remain correct.
+
+## Accuracy references and layout limits
+
+The [2025 FIA Italian GP event documents](https://www.fia.com/news/f1-2025-italian-grand-prix-preview)
+place the first sector line 233 m before Turn 4 and the second 215 m before
+Turn 8. Measure these offsets on the built racing arc, using the curated turn
+anchors; a raw path-length denominator is not the rendered spline length.
+Driving Coach sector mastery keys include the split pair, keeping scores for
+different timing boundaries separate. Legacy sector scores remain stored but
+have no known boundary pair; full-lap and other drill records keep their keys.
+
+The FIA's [2024 Italian GP preview](https://www.fia.com/news/f1-2024-italian-grand-prix-preview)
+describes a 2.5 m gravel strip outside Turn 2 and a 2.5 m strip beside Turns
+4–5, separated from the asphalt by 1 m. These support bounded visual runoff
+margins; scenery gravel alone does not change driving traction or collision.
+
+The old banking crossing is at Serraglio, between the Lesmos and Ascari. The
+existing .70–.76 flyover row above is an unverified legacy authoring position,
+not a surveyed anchor. Do not relocate it until an aerial/map crossing is
+registered against the actual trace. The current road width and spline scale
+also need independent measured registration before adjustment.
 
 ## 1. Setting
 The "Temple of Speed," opened 1922, set inside the **Royal Villa park of Monza** — Europe's largest walled park (~688 ha) just north of Milan. Track threads through dense woodland of **umbrella pines** and tall deciduous trees, past the neoclassical **Villa Reale**, ornamental lakes, and the crumbling old banked oval (Sopraelevata).
@@ -41,3 +68,24 @@ Fairly **flat** throughout. Only minor undulations: a gentle dip and rise approa
 - One reflective blue lake slab + cream Villa box are enough to evoke the royal grounds.
 - Tilted grey ramp boxes for the Sopraelevata ruin read instantly as the historic banking.
 - Tribuna Centrale + slim podium tower frame the start/finish; thin drifting fog boxes add mood near shaded corners.
+
+## 7. Research pass — the walled estate
+
+Monza already had the pines, the Villa Reale, the Sopraelevata ruin, the park
+lake and the Milan skyline. The thing it was missing is what makes those a
+**park** rather than a forest: Monza sits inside the largest **walled** estate
+in Europe (~688 ha), ringed by a continuous 19th-century brick boundary wall
+with regular piers — the *Muro del Serraglio*. Without it the outfield read as
+open countryside.
+
+Modelling notes:
+- Run it in **three arcs** behind the treeline (gap 62–78 m), not lap-wide. The
+  wall should be something you catch *through* the pines, not a fence around
+  the racing.
+- **Brick-warm**, deliberately, so it separates from the grey concrete of the
+  Sopraelevata ruin — the other long low mass out there.
+- Panel heights vary slightly (2.5–2.85 m) with a stone cap and a pier every
+  fourth panel: this is 19th-century brickwork on undulating ground, not a
+  precast barrier.
+- One monumental **gateway** (s≈0.172, L): stone piers, capped lintel blocks,
+  and a pair of ironwork leaves standing open.

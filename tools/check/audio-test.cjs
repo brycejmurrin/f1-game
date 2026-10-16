@@ -1,0 +1,179 @@
+/*
+ * @doc Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead.
+ * @skill audio-debug
+ * Engine-audio pitch test (objective, since we can't listen).
+ *
+ * Drives GameAudio.setEngine(rev, boost, offroad, speed, gear) with controlled
+ * gear/throttle/rev values and measures the engine's actual output:
+ *   - GameAudio.rate()       exact playbackRate (ground-truth pitch multiplier;
+ *                            perceived pitch scales linearly with it)
+ *   - GameAudio.centroidHz() spectral centroid of the live output (brightness)
+ * Run in the MENU state, where the game loop doesn't call setEngine, so our
+ * controlled values aren't overwritten.
+ *
+ * Usage:
+ *   node tools/check/audio-test.cjs            # starts its own static server
+ *   node tools/check/audio-test.cjs <baseURL>  # reuse an already-running server
+ *   node tools/check/audio-test.cjs --help
+ *
+ * What to look for:
+ *   - within a gear, rate rises monotonically with rev (climb)
+ *   - the same rev reads the same rate in every gear (pitch is rpm alone)
+ *   - boost adds a few percent
+ */
+const { chromium } = require("playwright");
+const path = require("node:path");
+
+const argv = process.argv.slice(2);
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(`audio-test — objective engine-audio pitch probe (Chromium + WebAudio)
+
+  node tools/check/audio-test.cjs            # starts an in-process static server
+  node tools/check/audio-test.cjs <baseURL>  # reuse a server already listening
+  node tools/check/audio-test.cjs --help
+`);
+  process.exit(0);
+}
+
+(async () => {
+  // Chromium from harness.mjs's ladder (CHROME / PW_CHROMIUM / the known
+  // paths), like offline-precache-check: playwright's own registry pin may
+  // not be installed in a container whose egress blocks cdn.playwright.dev.
+  // Same harness starts the static server when no baseURL is passed — the
+  // prior default (localhost:8099) failed with ERR_CONNECTION_REFUSED, and
+  // `--help` was treated as a URL.
+  const harness = await import("../lib/harness.mjs");
+  const ROOT = path.resolve(__dirname, "../..");
+  let BASE = argv[0] || null;
+  let ownServer = false;
+  if (!BASE) {
+    const srv = await harness.startStaticServer(ROOT);
+    BASE = srv.url.replace(/\/$/, "");
+    ownServer = true;
+  }
+  const exe = harness.pickChromium();
+  let exitCode = 1;
+  try {
+  const b = await chromium.launch({ headless: true, ...(exe ? { executablePath: exe } : {}),
+    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"] });
+  const page = await b.newPage();
+  const errs = []; page.on("pageerror", (e) => errs.push(e.message));
+  await page.goto(BASE + "/index.html?v=" + Date.now(), { waitUntil: "networkidle" });
+  // Boot on SwiftShader takes ~35 s here (measured 2026-09-05: __apex at 34 s),
+  // and a click issued into that keeps the main thread's queue until the
+  // default 30 s timeout — the run died before any audio code ran. Wait for
+  // the boot, then treat the click as the gesture it is meant to be: the
+  // second browser below already guards it this way, and with
+  // --autoplay-policy=no-user-gesture-required the init works either way.
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 120000 });
+  await page.waitForTimeout(400);
+  try { await page.click("#mb-race", { timeout: 8000, noWaitAfter: true }); } catch (_) { /* boot still busy */ }
+  await page.waitForTimeout(400);
+  await page.evaluate(() => { GameAudio.init(); GameAudio.setEnabled(true); });
+  await page.waitForTimeout(1400);                                 // decode samples
+  await page.evaluate(() => GameAudio.startEngine());
+  await page.waitForTimeout(300);
+
+  const revs = [0, 0.25, 0.5, 0.75, 1.0];
+  const r = await page.evaluate(async (revs) => {
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+    const rate = {}, cen = {};
+    for (let g = 1; g <= 8; g++) {
+      rate[g] = []; cen[g] = [];
+      for (const rv of revs) {
+        GameAudio.setEngine(rv, 0, false, rv, g);
+        await sleep(160);
+        rate[g].push(GameAudio.rate()); cen[g].push(GameAudio.centroidHz());
+      }
+    }
+    GameAudio.setEngine(0.7, 0, false, 0.7, 6); await sleep(160); const bo = GameAudio.rate();
+    GameAudio.setEngine(0.7, 1, false, 0.7, 6); await sleep(160); const bn = GameAudio.rate();
+    // LOAD crossfade (js/audio/engine.js): the accel recording opens with
+    // longitudinal acceleration, never with rev. Same rev, same gear, ax 0 vs
+    // a full-throttle launch: pitch must be identical, brightness must rise.
+    GameAudio.setEngine(0.6, 0, false, 0.6, 4, { ax: 0 });  await sleep(260);
+    const coast = { rate: GameAudio.rate(), cen: GameAudio.centroidHz() };
+    GameAudio.setEngine(0.6, 0, false, 0.6, 4, { ax: 12 }); await sleep(260);
+    const pull = { rate: GameAudio.rate(), cen: GameAudio.centroidHz() };
+    return { rate, cen, boostOff: bo, boostOn: bn, coast, pull };
+  }, revs);
+  await b.close();
+  if (errs.length) { console.log("pageerrors:", errs.join(" | ")); return; }
+
+  console.log("playbackRate (exact pitch x)   rows=gear  cols=rev " + JSON.stringify(revs));
+  for (let g = 1; g <= 8; g++) console.log(`  g${g}: ${r.rate[g].map((x) => x.toFixed(3)).join("  ")}`);
+  console.log("spectral centroid (Hz)         rows=gear  cols=rev " + JSON.stringify(revs));
+  for (let g = 1; g <= 8; g++) console.log(`  g${g}: ${r.cen[g].map((x) => String(x).padStart(5)).join("  ")}`);
+  console.log(`throttle (g6, rev .7): rate ${r.boostOff} -> ${r.boostOn} (+${(100 * (r.boostOn / r.boostOff - 1)).toFixed(1)}%)`);
+
+  // sanity assertions
+  let ok = true;
+  for (let g = 1; g <= 8; g++) { const a = r.rate[g]; for (let i = 1; i < a.length; i++) if (a[i] < a[i - 1] - 1e-3) { ok = false; console.log(`FAIL: g${g} pitch not monotonic in rev`); } }
+  for (let g = 1; g <= 8; g++) for (let i = 0; i < revs.length; i++) if (Math.abs(r.rate[g][i] - r.rate[4][i]) > 1e-3) { ok = false; console.log(`FAIL: g${g} rev ${revs[i]} reads ${r.rate[g][i]} but g4 ${r.rate[4][i]} (pitch must be rpm alone)`); }
+  console.log(`load (g4, rev .6): coast rate ${r.coast.rate} cen ${Math.round(r.coast.cen)} Hz -> pull rate ${r.pull.rate} cen ${Math.round(r.pull.cen)} Hz`);
+  if (Math.abs(r.pull.rate - r.coast.rate) > 1e-3) { ok = false; console.log("FAIL: load must not move pitch"); }
+  if (!(r.pull.cen > r.coast.cen)) { ok = false; console.log("FAIL: pulling must read brighter than coasting"); }
+  console.log(ok ? "PASS: pitch climbs with rev and is the same at the same rev in every gear" : "CHECK FAILED");
+
+  // Per-manufacturer voices: same invariants must hold under every voice, and
+  // the timbres must actually differ (relative rate offsets + centroid spread).
+  const b2 = await chromium.launch({ headless: true, ...(exe ? { executablePath: exe } : {}),
+    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"] });
+  const page2 = await b2.newPage();
+  const errs2 = []; page2.on("pageerror", (e) => errs2.push(e.message));
+  await page2.goto(BASE + "/index.html?v=" + Date.now() + 1, { waitUntil: "networkidle" });
+  await page2.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 120000 });
+  await page2.waitForTimeout(400);
+  try { await page2.click("#mb-race", { timeout: 8000, noWaitAfter: true }); } catch (_) { /* boot still busy */ }
+  await page2.waitForTimeout(400);
+  await page2.evaluate(() => { GameAudio.init(); GameAudio.setEnabled(true); });
+  await page2.waitForTimeout(1400);
+  const VOICES = ["default", "Mercedes", "Ferrari", "Red Bull Ford", "Honda", "Audi"];
+  const vres = await page2.evaluate(async (VOICES) => {
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+    const out = {};
+    for (const v of VOICES) {
+      GameAudio.stopEngine();
+      await sleep(500);                 // let the old chain fade + tear down
+      GameAudio.setVoice(v);
+      GameAudio.startEngine();
+      await sleep(250);
+      const rates = [];
+      for (const rv of [0.2, 0.5, 0.8]) {
+        GameAudio.setEngine(rv, 0, false, rv, 5);
+        await sleep(160);
+        rates.push(GameAudio.rate());
+      }
+      GameAudio.setEngine(0.75, 0, false, 0.75, 5);
+      await sleep(400);
+      out[v] = { rates, cen: GameAudio.centroidHz(), dbg: GameAudio.debug().voice };
+    }
+    return out;
+  }, VOICES);
+  await b2.close();
+  if (errs2.length) { console.log("pageerrors (voices):", errs2.join(" | ")); return; }
+
+  console.log("voice          rates(rev .2/.5/.8)      centroid  debug");
+  for (const v of VOICES) {
+    const o = vres[v];
+    console.log(`  ${v.padEnd(13)} ${o.rates.map((x) => x.toFixed(3)).join(" ")}   ${String(o.cen).padStart(5)}  ${o.dbg}`);
+  }
+  for (const v of VOICES) {
+    const o = vres[v];
+    if (o.dbg !== v) { ok = false; console.log(`FAIL: debug().voice ${o.dbg} != ${v}`); }
+    for (let i = 1; i < o.rates.length; i++)
+      if (o.rates[i] < o.rates[i - 1] - 1e-3) { ok = false; console.log(`FAIL: ${v} pitch not monotonic`); }
+  }
+  // rateTrim must land in the actual playbackRate (relative check: Ferrari
+  // pitched ~3% over default, Audi ~2% under — allow generous tolerance).
+  const rel = (v) => vres[v].rates[1] / vres["default"].rates[1];
+  if (!(rel("Ferrari") > 1.01)) { ok = false; console.log("FAIL: Ferrari not pitched above default"); }
+  if (!(rel("Audi") < 0.995)) { ok = false; console.log("FAIL: Audi not pitched below default"); }
+  console.log(ok ? "PASS: all voices monotonic; manufacturer trims audible in rate" : "CHECK FAILED");
+  exitCode = ok ? 0 : 1;
+  } finally {
+    if (ownServer) await harness.shutdown();
+    process.exitCode = exitCode;   // early page-error returns must fail after cleanup too
+  }
+  process.exit(exitCode);
+})();

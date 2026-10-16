@@ -1,0 +1,38 @@
+{
+  "name": "apex26-desktop",
+  "productName": "Apex 26",
+  "description": "Unofficial fan racing game \u2014 desktop shell for the Apex 26 static WebGL2 site.",
+  "author": "Apex 26 contributors",
+  "homepage": "https://github.com/brycejmurrin/f1-game",
+  "private": true,
+  "main": "main.js",
+  "apexVersion": "1.0",
+  "version": "1.0.1695",
+  "scripts": {
+    "stage": "node ../tools/desktop/stage.mjs --out desktop/dist-site --stamp",
+    "sync-version": "node scripts/set-version.mjs",
+    "set-version": "node scripts/set-version.mjs",
+    "icons": "node scripts/make-icons.mjs",
+    "notices": "node scripts/notices.mjs",
+    "prebuild": "node scripts/prebuild.mjs",
+    "prestart": "npm run stage && npm run sync-version",
+    "start": "electron .",
+    "smoke": "npm run stage && npm run sync-version && electron . --smoke",
+    "pack": "npm run stage && npm run sync-version && npm run prebuild && electron-builder --config electron-builder.config.cjs --dir",
+    "dist": "npm run stage && npm run sync-version && npm run prebuild && electron-builder --config electron-builder.config.cjs",
+    "dist:linux": "npm run stage && npm run sync-version && npm run prebuild && electron-builder --config electron-builder.config.cjs --linux",
+    "dist:win": "npm run stage && npm run sync-version && npm run prebuild && electron-builder --config electron-builder.config.cjs --win",
+    "dist:mac": "npm run stage && npm run sync-version && npm run prebuild && electron-builder --config electron-builder.config.cjs --mac",
+    "test:electron": "playwright test -c playwright.config.mjs",
+    "test:electron:pack": "npm run pack:test && npm run test:electron",
+    "fuses:read": "node scripts/read-fuses.mjs",
+    "pack:test": "npm run stage && npm run sync-version && npm run prebuild && electron-builder --config electron-builder.config.cjs --dir -c.electronFuses.enableNodeCliInspectArguments=true"
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3",
+    "@playwright/test": "1.63.0",
+    "playwright": "1.63.0",
+    "@electron/fuses": "1.8.0"
+  }
+}

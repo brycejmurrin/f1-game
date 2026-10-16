@@ -1,0 +1,239 @@
+// @ts-check
+// Menu / HUD survey — the "click every button, capture every state" companion
+// to ui-audit.spec.js. ui-audit captures each PAGE; this captures the pause
+// SETTINGS sub-menu and every toggle button's STATES (STEER modes, RESOLUTION
+// values, SOUND/MUSIC/GEARS on-off, HIDE HUD), the lighting tuner, and the
+// in-race camera picker + per-mode touch controls.
+// Output: artifacts/galleries-<port>/menu-survey/
+//
+// Menu navigation is driven with in-page element.click() (via page.evaluate),
+// NOT Playwright's auto-waiting locator.click(): the game canvas renders every
+// frame, and the actionability hit-test on a button layered over that canvas can
+// spin until the test timeout even though the button is perfectly clickable.
+// In-page clicks fire the handler directly; we then poll the DOM for the result.
+//
+// Every waitForFunction here passes `polling` for the same reason: Playwright
+// polls on requestAnimationFrame by default, and a page driving the game loop
+// under SwiftShader starves that poll, so a declared timeout never gets to fire.
+// Measured 2026-08-08 — "40 HUD" reported `Timeout 10000ms exceeded` after 79s
+// under a loaded box, and passed in 38s alone. Timer polling, not a bigger bound.
+import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { galleryPath } from "../helpers/output-paths.js";
+
+const PORTRAIT  = { width: 390, height: 844 };
+const LANDSCAPE = { width: 844, height: 390 };
+
+async function waitReady(page) {
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+}
+async function shot(page, name) {
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: galleryPath("menu-survey", `${name}.png`), fullPage: false });
+}
+// Fire a button's click handler in-page (bypasses canvas hit-test flakiness).
+const clickId = (page, id) => page.evaluate((id) => document.getElementById(id).click(), id);
+const openDetails = (page, id) => page.evaluate((id) => document.querySelector(`#${id} > summary`).click(), id);
+const labelOf = (page, id) => page.evaluate((id) => document.getElementById(id).textContent || "", id);
+
+// Race + park, then reveal the pause SETTINGS sub-menu.
+async function openSettings(page, track = "bahrain", tod = "day", wx = "dry") {
+  await page.evaluate(({ track, tod, wx }) => window.__apex.race(track, tod, wx), { track, tod, wx });
+  await page.waitForFunction((t) => { try { return window.__apex.info().track === t; } catch (_) { return false; } }, track, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => {
+    window.__apex.park(0.1);
+    const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
+    document.getElementById("pausemenu").hidden = false;
+    document.getElementById("pm-settings").click();
+  });
+  // BOOT_MS, not 8 s: this opens the settings sheet over a RUNNING race, so the
+  // wait sits behind SwiftShader. It timed out here at the deployed commit
+  // 761b81418 ("36 lighting tuner"), and 8 s was never a measured budget — the
+  // peers on this fixture all read BOOT_MS, which carries the 11-33 s boot
+  // measurement behind it.
+  await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: BOOT_MS });
+  await page.waitForTimeout(200);
+}
+// Cycle a labelled toggle in-page until its text contains `want`.
+// Settings choices are setting rows (js/ui/setting-row.js): `#<id>-sel` is a
+// native select whose options are the values. Pick the option whose label
+// contains `want` the way a player would (change event), then return the
+// selected label (the old cycle helper returned the button label, and the
+// callers still `toContain` it).
+async function cycleTo(page, id, want) {
+  await page.evaluate(({ id, want }) => {
+    const sel = document.getElementById(id + "-sel");
+    const opt = [...sel.options].find((o) => o.textContent.toUpperCase().includes(want.toUpperCase()));
+    if (opt && sel.value !== opt.value) { sel.value = opt.value; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+  }, { id, want });
+  await page.waitForTimeout(120);
+  return page.evaluate((id) => {
+    const sel = document.getElementById(id + "-sel");
+    return sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : "";
+  }, id);
+}
+
+test.describe("Menu survey — settings sub-menu (portrait)", () => {
+  test.use({ viewport: PORTRAIT, hasTouch: true });
+
+  test("30 settings menu — default (steer TILT)", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSettings(page);
+    expect(await cycleTo(page, "pm-steer", "TILT")).toContain("TILT");
+    await shot(page, "portrait-30-settings-tilt");
+  });
+
+  test("31 settings menu — steer BUTTONS", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSettings(page);
+    expect(await cycleTo(page, "pm-steer", "BUTTONS")).toContain("BUTTONS");
+    await shot(page, "portrait-31-settings-steer-buttons");
+  });
+
+  test("32 settings menu — steer TOUCH", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSettings(page);
+    expect(await cycleTo(page, "pm-steer", "TOUCH")).toContain("TOUCH");
+    await shot(page, "portrait-32-settings-steer-touch");
+  });
+
+  test("33 settings menu — GEARS MANUAL (tilt)", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSettings(page);
+    expect(await cycleTo(page, "pm-steer", "TILT")).toContain("TILT"); // GEARS only active in tilt
+    expect(await cycleTo(page, "pm-gears", "MANUAL")).toContain("MANUAL");
+    await shot(page, "portrait-33-settings-gears-manual");
+  });
+
+  test("34 settings menu — SOUND + MUSIC OFF", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSettings(page);
+    await page.evaluate(() => document.getElementById("pm-audio").click());
+    // #as-music-off / #as-sound-off DO NOT EXIST, and had not for some time:
+    // this test drove the old pair of ON/OFF buttons, and the audio panel is
+    // setting ROWS now (js/ui/setting-row.js — `#<id>-sel` is a native select
+    // whose options are the values), the same shape every other test in this
+    // file already drives through cycleTo.
+    //
+    // It failed as `Cannot read properties of null (reading 'click')` after a
+    // flat 120 ms sleep, which reads like a race and is not one. Replacing the
+    // sleep with an honest wait for the control is what proved it: the wait ran
+    // the full BOOT_MS and the element still never appeared. A superseded
+    // design, not a timing bug — the third one found in this suite today.
+    await page.waitForFunction(() => document.getElementById("as-music-sel") != null
+      && document.getElementById("as-sound-sel") != null, null, { polling: 50, timeout: BOOT_MS });
+    const music = await cycleTo(page, "as-music", "OFF");
+    const sound = await cycleTo(page, "as-sound", "OFF");
+    // Assert what the player is told, in the terms the panel now uses: both
+    // rows READ off, and the collapsed summaries agree, since those are what
+    // you see with the folds shut.
+    expect(music.toUpperCase()).toContain("OFF");
+    expect(sound.toUpperCase()).toContain("OFF");
+    expect(await page.evaluate(() => ({
+      music: document.getElementById("as-music-sum").textContent.toUpperCase(),
+      sound: document.getElementById("as-sound-sum").textContent.toUpperCase(),
+    }))).toEqual({ music: expect.stringContaining("OFF"), sound: expect.stringContaining("OFF") });
+    await page.waitForTimeout(120);
+    await shot(page, "portrait-34-settings-sound-music-off");
+  });
+
+  test("35 settings menu — RESOLUTION pinned", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSettings(page);
+    expect(await cycleTo(page, "pm-res", "HIGH")).toContain("HIGH");
+    await shot(page, "portrait-35-settings-res-high");
+  });
+
+  test("36 lighting tuner", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSettings(page, "singapore", "night", "dry");
+    await clickId(page, "pm-open-display");
+    await openDetails(page, "pm-visual-tuners");
+    await clickId(page, "pm-lighting");
+    // BOOT_MS, not 8 s — the SECOND tight wait in this file and the one I missed
+    // when the helper's was raised. It opens the TUNER over a running singapore
+    // NIGHT race, which is the heaviest fixture here, and it failed on CI at
+    // 0e8bbdaeb with the apex log showing the panel opening at 35,980 ms: the
+    // sheet was never broken, the budget was. Sibling waits on this fixture all
+    // read BOOT_MS, which carries the 11-33 s SwiftShader boot measurement.
+    await page.waitForFunction(() => !document.getElementById("lighting").hidden, null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForTimeout(400);
+    // The tuner actually built its TUNE_DEFS slider rows, not just an empty shell.
+    expect(await page.evaluate(() =>
+      document.querySelectorAll("#lt-rows input[type=range]").length
+    )).toBeGreaterThan(0);
+    await shot(page, "portrait-36-lighting-tuner");
+  });
+});
+
+test.describe("Menu survey — in-race HUD + controls (landscape)", () => {
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
+
+  async function startDriving(page, mode /* "touch"|"buttons"|"tilt" */) {
+    await openSettings(page);                 // race bahrain + open settings
+    expect(await cycleTo(page, "pm-steer", mode)).toContain(mode.toUpperCase());
+    await page.evaluate(() => {
+      document.getElementById("pm-settings-close").click();
+      document.getElementById("pm-resume").click();
+      window.__apex.jump(0.1, 50, 0); window.__apex.snapCam();
+    });
+    await page.waitForTimeout(500);
+  }
+
+  test("40 HUD — touch controls", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await startDriving(page, "touch");
+    // Touch steering active: the body carries the steer-touch layout class.
+    expect(await page.evaluate(() => document.body.classList.contains("steer-touch"))).toBe(true);
+    await shot(page, "landscape-40-hud-touch");
+  });
+
+  test("41 HUD — button steering controls", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await startDriving(page, "buttons");
+    // Button steering active: the steer buttons are actually on screen.
+    await expect(page.locator("#btn-steer-left")).toBeVisible();
+    await expect(page.locator("#btn-steer-right")).toBeVisible();
+    await shot(page, "landscape-41-hud-buttons");
+  });
+
+  test("42 HUD hidden (clean screen)", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
+    await page.waitForTimeout(300);
+    await page.evaluate(() => document.body.classList.add("hud-hidden"));
+    await page.waitForTimeout(300);
+    // hud-hidden strips the readouts and shows the restore eye (css/touch-controls.css).
+    // On .desktop the whole #hud goes. On touch the race resumes under HUD: OFF, so the
+    // dock's driving buttons and PAUSE stay; only the readouts hide (hunt3 7-F2).
+    await expect(page.locator("#hud-restore")).toBeVisible();
+    if (await page.evaluate(() => document.body.classList.contains("desktop"))) {
+      await expect(page.locator("#hud")).toBeHidden();
+    } else {
+      await expect(page.locator("#hud .hud-top")).toBeHidden();
+      await expect(page.locator("#minimap")).toBeHidden();
+      await expect(page.locator("#hud-dock .hud-bottom")).toBeHidden();
+      await expect(page.locator("#hud-dock")).toBeVisible();
+      expect(await page.locator("#hud-dock .touchbtn:visible").count()).toBeGreaterThan(0);
+      await expect(page.locator("#pausebtn")).toBeVisible();
+    }
+    await shot(page, "landscape-42-hud-hidden");
+  });
+
+  test("43 camera picker grid", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await page.evaluate(() => window.__apex.race("bahrain"));
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { window.__apex.jump(0.1, 50, 0); window.__apex.snapCam(); });
+    await page.waitForTimeout(300);
+    await page.locator("#btn-cam").dispatchEvent("contextmenu");   // long-press equivalent
+    await page.locator("#campicker").waitFor({ state: "visible" });
+    // The grid built a button per camera mode and highlights exactly the current one.
+    expect(await page.locator("#campicker button").count()).toBeGreaterThanOrEqual(10);
+    expect(await page.locator("#campicker button.active").count()).toBe(1);
+    await page.waitForTimeout(300);
+    await shot(page, "landscape-43-camera-picker");
+  });
+});

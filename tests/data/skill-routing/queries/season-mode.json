@@ -1,0 +1,10 @@
+[
+{"query":"In the standalone Season SETUP screen, add a per-round sprint option so a custom calendar can hold sprints only at chosen circuits. Wire the sprintIds list through the config normalisation in season-cal.js, show the toggles in season-ui.js, and make sure older saved configs still load.","expect":"season-mode"},
+{"query":"season setup: i turned quali off + picked 'classic' points but the standings table still awards the modern 25-18-15 stuff?? also the drop-worst-rounds thing doesnt seem to apply. can u find whats wrong","expect":"season-mode"},
+{"query":"When I remove a round from my custom calendar in the season screen and start the season, the weekend keeps landing on the wrong circuit after the second race and the round counter looks off. What is going on in the calendar logic?","expect":"season-mode"},
+{"query":"The #season-setup dialog lets me pick 5, 10 or 20 laps, but after choosing a lap count and reloading, it reverts to the default. Check how LAP_OPTS is validated when the season config is loaded from storage and fix it.","expect":"season-mode"},
+{"query":"Implement the old fastest-lap bonus point option (flPoint) properly for the free-play Season: only a top-ten finisher in a Grand Prix should get it, never in a sprint. Add coverage for the edge case where the fastest lap is set by someone outside the top ten.","expect":"season-mode"},
+{"query":"In my DRIVER CAREER save the sprint weekend format is not showing up at the rounds it should, and the quali session gets skipped in year two of my contract. Career weekend flow needs fixing, sprint points are wrong for my team too.","expect":"career-mode"},
+{"query":"The Data Hub schedule tab shows the wrong season year and the standings tab is empty after the Jolpica call. Check js/data/schedule.js and standings.js and why the points table does not refresh.","expect":"data-hub"},
+{"query":"On the season setup dialog the circuit list is clipped on a small phone in landscape and the Escape key does not close it back to the menu. Keyboard focus also gets lost after toggling quali. Fix the screen fit and back behaviour.","expect":"ui-menu-a11y"}
+]

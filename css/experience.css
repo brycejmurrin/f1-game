@@ -1,0 +1,147 @@
+/* Apex 26 — readable live paddock and contextual race doors; existing primitives (Home explore tier). */
+@layer overlays {
+  /* Filled accent surfaces use contrast ink rather than the page's theme ink.
+     CAREER (solid --red) needs --menu-accent-ink. Retention / primary / explore
+     are dark plates with a red leading edge only — ember/amber ink is near
+     --bg, so without the override DAILY TIME TRIAL painted black-on-carbon
+     (shipped menuAccent ember, 2026-10-06 phone landscape). */
+  .bigbtn:not(.alt) { color: var(--menu-accent-ink, var(--text)); }
+  #overlay #mb-career .mb-sub { color: inherit; }
+  #menu-retention .bigbtn,
+  #menu-primary .bigbtn,
+  #menu-explore .bigbtn { color: var(--text); }
+  #pm-race-context { grid-column: 1 / -1; display: grid; gap: 0; line-height: 1.25; padding: calc(var(--gap) / 2) var(--gap); background: var(--carbon); border-bottom: 1px solid var(--plate-line); }
+  #pm-race-context strong { font-size: var(--fs-5); }
+  #pm-race-context :is(span, small) { color: var(--dim); font-size: var(--fs-micro); }
+  /* RACE TOOLS tray: three short chip-height tiles to a row, quieter than the
+     doors above it, so the card has one primary, two doors and a tray. */
+  #pm-quick-doors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--gap) / 2); grid-column: 1 / -1; }
+  #pm-quick-doors button { margin: 0; min-height: max(var(--chip-h), 44px); min-width: 0; font-size: var(--fs-micro); background: var(--carbon); color: var(--text); border: 1px solid var(--plate-line); border-radius: var(--r-md); padding: calc(var(--gap) / 3); transform: none; }
+  #pm-quick-doors button[hidden] { display: none; }
+  /* #pm-howto is listed with the full-span stack doors in css/dialogs.css, but
+     inside this 3-col tray a span made PHOTO sit alone and pushed HOW TO PLAY
+     + REWIND under the fold on a short landscape phone (layout-audit
+     2026-10-04). Keep every tray tile one cell so the second row is
+     PHOTO | HOW TO PLAY | REWIND & RETRY. */
+  #pm-quick-doors #pm-howto { grid-column: auto; }
+  #pm-checkpoint { font-size: var(--fs-micro); border: 1px solid var(--plate-line); padding: 0 calc(var(--gap) / 3); border-radius: var(--r-md); background: var(--carbon); min-width: 0; }
+  #pm-checkpoint[open] { grid-column: 1 / -1; }
+  #pm-checkpoint summary { min-height: max(var(--chip-h), 44px); display: flex; align-items: center; justify-content: center; cursor: pointer; text-align: center; }
+  #pm-checkpoint[open] { padding-bottom: calc(var(--gap) / 2); }
+  #pm-checkpoint button { font-size: var(--fs-micro); }
+  /* Short landscape phone (the compact pause card, css/dialogs.css): tighter tray
+     gap and the --tap-paint floors. Here, after the base rules above, because
+     this layer outranks the components layer the card's other short-landscape
+     rules sit in. */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #pm-quick-doors { gap: 2px; }
+    #pm-quick-doors button,
+    #pm-checkpoint summary { min-height: max(34px, var(--tap-paint)); padding-block: 2px; }
+  }
+  #practice-brief { background: var(--plate-on); border: 1px solid var(--red); border-radius: var(--r-md); padding: var(--gap); margin-bottom: var(--gap); font-size: var(--fs-micro); color-scheme: dark; }
+  #practice-brief p { margin-block: calc(var(--gap) / 2); color: var(--dim); }
+  /* GOAL uses the shared ‹ VALUE › row (css/settings-controls.css .set-row).
+     Cap the row so margin-left: auto cannot throw the value across the wide
+     hero; one column, so the select can hold FREE PRACTICE. color-scheme +
+     option tokens keep the native list on Apex dark chrome (not OS-light). */
+  #practice-brief select {
+    color: var(--text);
+    background: var(--plate);
+    border: 1px solid var(--plate-line);
+    border-radius: var(--r-sm);
+    color-scheme: dark;
+  }
+  #practice-brief option { color: var(--text); background: var(--plate); }
+  :root[data-ui-theme="light"] #practice-brief,
+  :root[data-ui-theme="light"] #practice-brief select { color-scheme: light; }
+  #practice-brief .set-row { margin-top: calc(var(--gap) / 2); max-width: 28rem; }
+  #practice-brief .set-row > div { margin-left: 0; }
+  #practice-brief .set-row > div > select { flex: 1 1 12rem; width: 12rem; min-width: 8rem; }
+  #home-motion { position: absolute; z-index: 2; top: var(--safe-t); left: var(--safe-l); padding: calc(var(--gap) / 2) var(--gap); min-height: var(--tap); font-size: var(--fs-micro); background: var(--carbon); color: var(--text); border: 1px solid var(--plate-line); border-radius: var(--r-md); }
+  /* Disabled still hits-tests: Playwright (and a finger) land on this chip
+     instead of HOW TO PLAY when it overlaps the door column. */
+  #home-motion:disabled { pointer-events: none; }
+  /* Live Home used to fade the left wash to transparent so the garage kept
+     reading. Ferrari white (and any bright livery) then blew out Sound, the
+     disclaimer, and the pit boards, and the SIDE shot stacked two identical
+     D_WORD banners in that clear band. Start the wash on --carbon/--scrim so
+     brand chrome stays readable; the ::before veil covers only the upper-left
+     wordmark strip so the second badge does not double. */
+  #overlay[data-home-scene]:not([data-home-scene="static"]) {
+    background: linear-gradient(90deg, color-mix(in oklab, var(--carbon) 58%, var(--scrim-heavy)), color-mix(in oklab, var(--carbon) 28%, var(--scrim)) 38%, var(--carbon) 66%);
+  }
+  #overlay[data-home-scene]:not([data-home-scene="static"])::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      linear-gradient(180deg in oklab, var(--scrim-heavy) 0%, var(--scrim) 22%, transparent 42%),
+      linear-gradient(90deg in oklab, color-mix(in oklab, var(--carbon) 70%, var(--scrim-heavy)) 0%, transparent 46%);
+  }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) #title-car { opacity: 0; }
+  #overlay[data-home-scene="photo"] { background-image: linear-gradient(90deg, color-mix(in oklab, var(--carbon) 58%, var(--scrim-heavy)), var(--carbon) 68%), var(--home-scene-image); background-size: cover; background-position: center; }
+  #overlay[data-home-scene="photo"]:not([style*="data:image"]) #title-car,
+  #overlay[data-home-scene]:not([data-home-scene="static"]):not([data-home-ready="1"]):not([data-home-scene="photo"]) #title-car { opacity: 1; }
+  #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand :is(#soundbtn, #disclaimer) {
+    background: var(--carbon);
+    color: var(--text);
+  }
+  body.photo-studio-open #overlay > :not(#title-car) { visibility: hidden; }
+  /* #title-car is the fallback until the live subject paints. Once it has,
+     the line art laid a white haze over the garage the studio frames (#1895). */
+  body.photo-studio-open #overlay[data-home-ready="1"] #title-car { display: none; }
+  body.photo-studio-open #overlay[data-home-scene] { background: transparent; pointer-events: none; }
+  body.photo-studio-open #overlay[data-home-scene]::before { content: none; }
+  /* A wide scene owns the left half; menu surfaces retain their own solid ink.
+     ONE grid row. The brand used to sit in a row of its own ABOVE the buttons
+     (column 2, centred), so on a short wide window the 210 px wordmark row
+     pushed the 600 px button column into a 350 px slot: the column started a
+     third of the way down and WATCH / PRACTICE / PHOTO and the rooms were below
+     the fold behind a scrollbar (1280x600 and a half-height laptop window,
+     2026-10-02). The brand now lives top-left over the scene, as the compact
+     layout and the static title already place it, and the buttons own the whole
+     right column: centred when they fit, scrolling only when the window is
+     shorter than the column. */
+  /* Live wide docks ANIMATE bottom-left. Classic/static stays top-left
+     on desktop (title-desktop golden). Compact-wide and tall Classic
+     have their own docks; an unscoped wide Classic rule moved the
+     chip on 1440 (menu-baseline 6%, CI 37371854254). */
+  :where(body[data-shape="wide"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #home-motion { top: auto; bottom: var(--safe-b); }
+  /* INSTALL APP lift lives in css/overlays.css, scoped to tall / compact-wide
+     / live-scene wide so desktop Classic (title-desktop golden) is untouched. */
+  :where(body[data-shape="tall"]) #overlay[data-home-scene]:not([data-home-scene="static"]) {
+    background: linear-gradient(0deg, var(--carbon) 45%, color-mix(in oklab, var(--carbon) 42%, var(--scrim-heavy)) 78%, var(--scrim));
+  }
+  /* PORTRAIT PHONE, LIVE SCENE. The scene hides the side-on drawing (opacity 0
+     above), but menus.css still places it in grid row 3, an implicit ~235 px
+     row on a 390x844 phone, so the button column stopped two-thirds down with
+     WATCH / PRACTICE behind a fade over empty carbon. Once the drawing is
+     hidden, drop it from the grid. The same pass moves the ANIMATE BACKGROUND
+     toggle off the wordmark, which it covered top-left, to the bottom as wide
+     shapes do, and ends the column above it so it covers no button. */
+  :where(body[data-shape="tall"]) #overlay[data-home-scene][data-home-ready="1"]:not([data-home-scene="static"], [data-home-scene="photo"]) #title-car { display: none; }
+  :where(body[data-shape="tall"]) #overlay[data-home-scene="photo"][style*="data:image"] #title-car { display: none; }
+  /* Same dock on tall Classic: :not(static) hid INSTALL/ANIMATE under
+     APEX 26 on a ~500px portrait (survey apex6). */
+  :where(body[data-shape="tall"]) #home-motion { top: auto; bottom: var(--safe-b); }
+  :where(body[data-shape="wide"][data-density="compact"]) #home-motion { top: auto; bottom: var(--safe-b); max-width: min(calc(50% - var(--safe-l) - var(--gap)), 22rem); }
+  /* #menu-brand / #menu-buttons cap geometry at --ui-compact-brand/scale
+     (menus.css, max-width 899 / max-height 699). #home-motion is a SIBLING,
+     so it kept `#overlay > * { zoom: var(--ui-scale) }`. At UI SIZE 200% on
+     a 852x344 phone that doubled the chip over HOW TO PLAY (Pages 37293090788:
+     disabled #home-motion intercepts #mb-help). Same cap as the brand. */
+  @media (max-width: 899px), (max-height: 699px) {
+    :where(body[data-density="compact"]) #home-motion {
+      zoom: var(--ui-compact-brand-scale);
+    }
+  }
+  /* No font-size here: a flat var(--fs-micro) overrode menus.css's compact
+     `calc(var(--fs-4) * var(--ui-compact-text))`, so UI SIZE 200% painted the
+     doors at 17.5px (ui-scale.spec "200% keeps title navigation reachable",
+     phone portrait, 2026-10-02) — the readability remainder never reached the
+     rendered scene's buttons. The shared compact size scales; this only trims
+     the height. */
+  :root[data-motion="reduce"] :is(#pm-race-context, #pm-quick-doors, #practice-brief) { animation: none; transition: none; }
+}

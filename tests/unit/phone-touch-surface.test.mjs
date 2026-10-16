@@ -1,0 +1,698 @@
+/* phone-touch-surface.test.mjs — the phone DRIVING surface, pinned as rules.
+ *
+ * 2026-09-02 phone audit (390x844 portrait / 844x390 landscape, HUD SIZE
+ * 100/150/200 %). Everything here is what a mini-DOM or a css-rules read can
+ * DEMONSTRATE; the cells that need a device screenshot are listed at the end
+ * of this comment and in docs/TESTING.md §Field notes, not asserted.
+ *
+ * CONFIRMED and fixed in the same change:
+ *   - the portrait blocker's three pills (#rotate-race / -controls / -exit)
+ *     sat on `--tap-min`, the 24px WCAG floor, on a layer that is gated to
+ *     coarse-pointer phones — 24px tall buttons at the one moment a player
+ *     has to hit one. Now `--tap` (52px on touch).
+ *   - the portrait buttons-mode `.hud-bottom` anchor added `var(--sab)` raw
+ *     inside a `zoom: var(--hud-z)` subtree, so the home-indicator inset was
+ *     multiplied by HUD SIZE. Now divided like every other anchor in the list.
+ *   - `Input.requestGyro()` latched `gyroDenied` on any rejection and never
+ *     cleared it on a later grant, so STEER read "(NO GYRO)" while tilt drove.
+ *   - Rapid menu taps now retain their native click: the shell's touchend
+ *     fallback exempts interactive controls. The regression below preserves
+ *     the background zoom guard and multi-touch driving behavior.
+ *
+ * CONFIRMED-OK and pinned so they stay that way: every `:hover` in css/ is
+ * gated on `(hover: hover) and (pointer: fine)` (css/race-setup.css and
+ * css/dialogs.css may still use `(hover: hover)` only — follow-up); every scroll container contains its overscroll;
+ * the dock's tap rungs clear 44px at both width tiers; the tallest dock
+ * column fits a 390px-tall landscape phone at HUD SIZE 200 % before fitHud's
+ * `--hud-z-dock` cap even has to act; double-tap zoom is refused on every
+ * layer; in-race chrome and the blocker are anchored inside the safe area.
+ *
+ * PLAUSIBLE (device screenshot needed — arithmetic from the CSS, not a
+ * measurement; the numbers are in the dock test below):
+ *   - 844x390 landscape, STEER TILT + GEARS AUTO (pedals LEFT), HUD SIZE
+ *     ≥ ~160 %: the pedal column's top edge rises under #minimap. fitHud's
+ *     dock cap reserves 3 x FIT_AIR of viewport height, not the corner
+ *     clusters. Pedals RIGHT (buttons / tilt+manual) meet #pausebtn from
+ *     ~185 %. Owner: js/ui/hud.js fitHud — not touched here.
+ *   - 390x844 portrait after RACE IN PORTRAIT: fitHud's top-band cap assumes
+ *     the landscape geometry (map beside the POS row), so on a 390px-wide
+ *     screen `--hud-z-top` computes to ~0.5 at EVERY HUD SIZE — the POS/LAP/
+ *     TIME/BEST row and the map paint at half size. Owner: hud.js.
+ *   - iOS + Bluetooth pad in TILT: the A press is a synthesised `.click()`,
+ *     which carries no user activation, so `requestPermission()` rejects and
+ *     the store flips to BUTTONS. The label fix above makes the next real tap
+ *     on STEER recover cleanly; the auto-flip itself is unchanged.
+ *   - RESOLVED 2026-09-15: the old index.html guard cancelled the CLICK on
+ *     the same spot within 350 ms (preventDefault on touchend), so a fast
+ *     double press registered once. Controls now retain both native clicks;
+ *     the Driving zoom matrix checks repeated steppers and BACK by touch.
+ *
+ * Run: node --test tests/unit/phone-touch-surface.test.mjs   (npm run test:tooling-fast)
+ */
+import { readCssSource } from "../helpers/css-source.mjs";
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import { cssRules, decl, declares, rulesFor, ruleFor } from "../helpers/css-rules.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
+const cssCache = new Map();
+const css = (name) => { if (!cssCache.has(name)) cssCache.set(name, cssRules(readCssSource(name))); return cssCache.get(name); };
+const CSS_FILES = fs.readdirSync(path.join(ROOT, "css")).filter((f) => f.endsWith(".css")).map((f) => "css/" + f);
+const px = (v, what) => { const m = /^(-?\d+(?:\.\d+)?)px$/.exec(String(v).trim()); assert.ok(m, `${what}: expected a px literal, got ${v}`); return +m[1]; };
+/** First argument of `max(<n>px, …)` — the literal rung a ladder token stands on. */
+const rung = (v, what) => { const m = /^max\((\d+(?:\.\d+)?)px,/.exec(String(v).trim()); assert.ok(m, `${what}: expected max(<n>px, …), got ${v}`); return +m[1]; };
+
+/* ── tap targets ─────────────────────────────────────────────────────────── */
+
+test("the portrait blocker's buttons sit on the touch rung, not the 24px WCAG floor", () => {
+  const rules = css("css/overlays.css");
+  const sel = /^#rotate-race, #rotate-controls, #rotate-exit$/;
+  assert.equal(decl(rules, sel, "min-height"), "var(--tap)",
+    "#rotate-* min-height must be --tap: --tap-min is the 24px floor, and this layer only ever shows on a phone");
+  // The layer is coarse-pointer-only, so the rung that applies is the touch one.
+  const gate = rulesFor(rules, /#rotate-device$/).find((r) => r.context.some((c) => /pointer: coarse/.test(c)));
+  assert.ok(gate, "#rotate-device is shown by a (pointer: coarse) media query");
+  assert.ok(gate.context.some((c) => /max-height:\s*956px/.test(c)),
+    "the tallest stated 956px phone portrait still gets the rotate choice");
+  const touch = rung(decl(css("css/tokens.css"), "body:not(.desktop)", "--tap"), "touch --tap");
+  assert.ok(touch >= 44, `the touch --tap rung (${touch}px) clears Apple's 44pt`);
+  const floor = rung(decl(css("css/tokens.css"), ":root", "--tap-min"), "--tap-min");
+  assert.ok(floor < 44, `sanity: --tap-min (${floor}px) is the floor the blocker used to sit on`);
+});
+
+test("the dock's tap rungs clear 44px at both width tiers", () => {
+  // Selector is comma-joined with the desktop :has stub arm — match by regex.
+  const docks = rulesFor(css("css/touch-controls.css"), /body:not\(\.desktop\) \.dock/).filter((r) => r.decls.has("--tap"));
+  assert.equal(docks.length, 2, "one base landscape dock rule and one <=700px tier");
+  for (const r of docks) {
+    const tap = rung(r.decls.get("--tap"), "dock --tap"), hold = rung(r.decls.get("--hold"), "dock --hold");
+    assert.ok(tap >= 44, `${r.context.join(" ")} --tap ${tap}px >= 44`);
+    assert.ok(hold >= tap, `held controls (${hold}px) are never smaller than tapped ones (${tap}px)`);
+    // The 24px painted floor survives BUTTON SIZE below 100 % (2026-08 axis
+    // audit). --hud-btn-scale, not --hud-scale: the dock got its own slider
+    // (2026-09-04) because it and the readouts compete for the same edges, and
+    // the floor has to divide by the axis the dock actually zooms by or it
+    // stops being a floor the moment the two part.
+    // Divided by the FLOORED axis since the dock zoom floors at 1 too: below
+    // 100 % the zoom stays 1, so the literals must not grow to compensate.
+    assert.match(r.decls.get("--tap"), /calc\(24px \/ max\(1, var\(--hud-btn-scale\)\)\)/);
+    assert.match(r.decls.get("--hold"), /calc\(24px \/ max\(1, var\(--hud-btn-scale\)\)\)/);
+    assert.match(r.selector, /body\.desktop \.dock:has\(\.touchbtn:not\(\[hidden\]\)\)/,
+      "desktop SurveyHud stubs join the same dock size ladder (aero×shift-up clear)");
+  }
+  const ov = css("css/touch-controls.css");
+  assert.equal(decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "width"), "var(--tap)");
+  assert.equal(decl(ov, /body:not\(\.desktop\) \.dock \.pedal,/, "width"), "var(--hold)");
+  // CAM and PAUSE share effective BUTTON SIZE independently of HUD bands;
+  // the minimum zoom of 1 protects the top controls' --tap rung. The restore
+  // eye stays on --tap itself.
+  // Past 150 % BUTTON SIZE PAUSE PAINTS bigger (--tap-btn, up to 200 %) while every layout reader keeps the
+  // --tap-hud band; CAM keeps the band height (its span crosses the sector plate) and moves left by PAUSE.
+  assert.equal(decl(ov, "#pausebtn", "height"), "var(--tap-btn, var(--tap-hud))", "#pausebtn grows DOWN past 150 %, floored at the band");
+  assert.equal(decl(ov, "#pausebtn", "width"), "var(--tap-hud)", "#pausebtn never widens: the top row keeps its width (640x360 BEST × CAM)");
+  assert.equal(decl(ov, "#btn-cam", "height"), "var(--tap-hud)", "#btn-cam keeps the --tap-hud band height");
+  assert.equal(decl(ov, "#btn-cam", "right"), "calc(10px + var(--tap-hud) + 4px + var(--sar))", "CAM stays where it was: PAUSE does not widen");
+  // LEFT-HANDED: #dock-right paints on the left, so it is the dock TYRES hangs from; the fit picks docks by side.
+  const hc = css("css/hud.css");
+  assert.ok(hc.some((r) => /body\.mirror-controls:not\(\.desktop\) #dock-right/.test(r.selector) && r.decls.get("anchor-name") === "--apex-dock-left"), "mirror re-points the TYRES anchor");
+  assert.match(fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8"), /function pickDocks\(\)[^\n]*mirror-controls/, "hud.js picks the docks by painted side");
+  // A TOUCH steer that starts on the radio card or start lights reaches the canvas; ARRANGE HUD still grabs the card.
+  assert.equal(decl(hc, "body:not([data-hud-arrange]) :is(#lights, #announce)", "pointer-events"), "none");
+  const tb = decl(ov, /^body:not\(\.desktop\):not\(\.bc-on\)$/, "--tap-btn");
+  assert.match(tb, /^max\(var\(--tap-hud\),/, "--tap-btn never paints under the band");
+  assert.match(tb, /var\(--dock-r-w, 0px\)/, "--tap-btn stops at the sector plate (it stands off --dock-r-w)");
+  assert.equal(decl(ov, /^body:not\(\.desktop\):not\(\.bc-on\)$/, "--hud-btn-zt"),
+    "clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 2)", "larger PAUSE/CAM typography shares the fitted dock scale up to 200%");
+  assert.equal(decl(ov, "#hud-restore", "height"), "var(--tap)", "#hud-restore rides the --tap ladder");
+  const hudCss = css("css/hud.css");
+  assert.equal(decl(hudCss, ":root", "--tap-hud"), "calc(var(--tap) * var(--hud-btn-z))");
+  const topZoom = decl(hudCss, ":root", "--hud-btn-z");
+  assert.equal(topZoom, "clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 1.5)",
+    "camera and pause share the effective dock cap, falling back to independent BUTTON SIZE");
+  assert.doesNotMatch(topZoom, /--hud-(?:scale|z-top|z-bot)\b/,
+    "top controls must not depend on a HUD readout scale or fitted band");
+  // --tap-hud is defined on :root, so test its actual base rung rather than
+  // assuming it inherits the larger touch-body --tap. The outer clamp's
+  // minimum of 1 above protects this rung even when dock fitting goes below 1.
+  const chromeTap = rung(decl(css("css/tokens.css"), ":root", "--tap"), "root chrome --tap");
+  assert.ok(chromeTap >= 44, `CAM/PAUSE retain a ${chromeTap}px base target, never under 44px`);
+});
+
+test("buttons-mode modifier taps ride the hold rung like pedals and steer", () => {
+  const ov = css("css/touch-controls.css");
+  assert.equal(decl(ov, /body\.steer-buttons:not\(\.desktop\) #grp-taps \.touchbtn/, "width"), "var(--hold)");
+  assert.equal(decl(ov, /body\.steer-buttons:not\(\.desktop\) #grp-taps \.touchbtn/, "height"), "var(--hold)");
+  assert.equal(decl(ov, /body\.steer-buttons:not\(\.desktop\) #grp-taps/, "padding-bottom"), "calc(var(--gap) * 7 / 6)");
+  // OT | BRAKE share a row in buttons mode — the right dock needs a wider
+  // column gap than the shared --gap*2/3 or the translucent circles merge.
+  // Manual (shifts | taps) and desktop stubs with a lit shift column share the arm.
+  const right = ruleFor(ov, /body\.steer-buttons:not\(\.desktop\) #dock-right/, "column-gap");
+  assert.ok(right, "buttons-mode right dock column-gap rule exists");
+  assert.equal(right.decls.get("column-gap"), "max(var(--r-lg), var(--gap))",
+    "buttons-mode right dock keeps ≥--r-lg (14px) between the taps and pedals columns");
+  assert.equal(right.decls.get("row-gap"), "calc(var(--gap) * 2 / 3)",
+    "buttons-mode right dock keeps the shared row gap when groups wrap");
+  assert.match(right.selector, /body\.manual:not\(\.desktop\) #dock-right/,
+    "manual shifts|taps get the same column floor so UP/DN clear BOOST/OT/AERO");
+});
+
+test("fixed ladder uses 12px --btn-gap so AERO / OT / BOOST do not merge", () => {
+  const src = read("css/touch-controls.css");
+  assert.match(src, /--btn-gap:\s*12px/, "fixed portrait/desktop ladder clears AERO×OT×BOOST");
+  assert.match(src, /body\.desktop \.dock:has\(\.touchbtn:not\(\[hidden\]\)\)/,
+    "desktop SurveyHud stubs join the landscape dock flex (not the fixed ladder over chips)");
+});
+
+/* ── the dock at 390px tall ──────────────────────────────────────────────── */
+
+test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, and fitHud's cap is wired as the net", () => {
+  const ov = css("css/touch-controls.css");
+  const tk = css("css/tokens.css");
+  const dock = rulesFor(ov, /body:not\(\.desktop\) \.dock/).find((r) => r.decls.has("--tap") && !r.context.some((c) => /max-width/.test(c)));
+  const tap = rung(dock.decls.get("--tap"), "--tap"), hold = rung(dock.decls.get("--hold"), "--hold");
+  // --gap on a landscape phone is the density switch's 8px, not :root's 12.
+  const dense = rulesFor(tk, ":root", { context: /orientation: landscape\) and \(max-height: 560px/ })[0];
+  assert.ok(dense, "tokens.css keeps the landscape/max-height density switch");
+  const gap = px(dense.decls.get("--gap"), "dense --gap");
+  // The dock's own spacing: gap * 2/3 between buttons, gap * 7/6 under held groups.
+  assert.equal(decl(ov, /body:not\(\.desktop\) \.dock/, "gap"), "calc(var(--gap) * 2 / 3)");
+  const held = ruleFor(ov, /^body:not\(\.desktop\) #grp-pedals,/, "padding-bottom");
+  assert.equal(held.decls.get("padding-bottom"), "calc(var(--gap) * 7 / 6)");
+  const dockGap = gap * 2 / 3, heldPad = gap * 7 / 6;
+  const tapsTilt = 3 * tap + 2 * dockGap;                 // BOOST / OT / AERO, tilt/manual: small tap rung
+  const pedals = 2 * hold + dockGap + heldPad;            // BRAKE over GAS, padded up from the edge
+  const tallestTilt = Math.max(tapsTilt, pedals);
+  const tapsButtons = 3 * hold + 2 * dockGap + heldPad;   // buttons mode: modifiers match hold size
+  const tallestButtons = Math.max(tapsButtons, pedals);
+  // The bar sits 10px + the home-indicator inset (21px on a notched iPhone) up.
+  const hudDock = ruleFor(ov, "#hud-dock", "bottom");
+  assert.match(hudDock.decls.get("bottom"), /^calc\(10px \+ var\(--sab\)\)$/);
+  const H = 390, SAB = 21;
+  for (const scale of [1, 1.5, 2]) {
+    const painted = tallestTilt * scale;
+    assert.ok(painted + 10 + SAB <= H,
+      `tilt/manual HUD SIZE ${scale * 100}%: tallest column ${painted.toFixed(0)}px + ${10 + SAB}px stays inside ${H}px`);
+  }
+  for (const scale of [1, 1.5]) {
+    const painted = tallestButtons * scale;
+    assert.ok(painted + 10 + SAB <= H,
+      `buttons HUD SIZE ${scale * 100}%: tallest column ${painted.toFixed(0)}px + ${10 + SAB}px stays inside ${H}px`);
+  }
+  // fitHud's cap: (innerHeight - 3 * FIT_AIR) / intrinsic height, written as --hud-z-dock.
+  const hud = read("js/ui/hud.js");
+  const air = +(/const FIT_AIR = (\d+)/.exec(hud) || [])[1];
+  assert.ok(air > 0, "hud.js declares FIT_AIR");
+  assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
+    "the dock zooms by the capped value, its own BUTTON SIZE slider as fallback — floored at --hud-btn-floor (the zoom at which a tap paints 44px) so a setting never shrinks a target under the HIG minimum");
+  // And fitHud compares that cap against the SAME slider — against --hud-scale
+  // it would either pin a cap that fits or drop one that does not, the moment a
+  // player set the two apart.
+  // Against what the dock actually paints at: BUTTON SIZE floored at 1 (the tap
+  // floor in css/touch-controls.css), or a cap between BUTTON SIZE and 1 is dropped.
+  assert.match(hud, /set\("--hud-z-dock", capDock, Math\.max\(btnFloor, btnScale\)\)/, "the dock cap is judged against the floored BUTTON SIZE (--hud-btn-floor, the 44px rung)");
+  assert.match(hud, /getPropertyValue\("--hud-btn-scale"\) \|\| mult/,
+    "unset controls use a fixed default independent of HUD size");
+  const capTilt = (H - 3 * air) / tallestTilt;
+  assert.ok(capTilt >= 2, `tilt/manual cap (${capTilt.toFixed(2)}) only bites past 200 % on 390px — the raw slider fits every setting`);
+  const capButtons = (H - 3 * air) / tallestButtons;
+  assert.ok(capButtons < 2 && capButtons >= 1.5,
+    `buttons cap (${capButtons.toFixed(2)}) bites before 200 % — fitHud must shrink the dock at max HUD SIZE`);
+  // NOT asserted, recorded: the corner clusters are outside that budget. At
+  // 200 % the pedal column's top edge is at y = 390 - 31 - pedals*2 ≈ 23px,
+  // level with #pausebtn (8..60) and #minimap (8..~124) — see the header.
+});
+
+/* ── zoom-compensated anchors ────────────────────────────────────────────── */
+
+test("every anchor inside a --hud-z zoom divides its safe-area inset by --hud-z", () => {
+  const hud = css("css/hud.css");
+  const zoomed = hud.filter((r) => r.decls.get("zoom") === "var(--hud-z)");
+  assert.ok(zoomed.length >= 2, "hud.css zooms the clusters by --hud-z");
+  const tokens = zoomed.flatMap((r) => r.selector.split(",").map((s) => s.trim()));
+  assert.ok(tokens.includes(".hud-bottom") && tokens.includes("#minimap"), "the zoom list names the bottom cluster and the map");
+  const last = (sel) => sel.trim().split(/\s*[>+~]\s*|\s+/).pop();
+  const offenders = [];
+  for (const file of ["css/hud.css", "css/touch-controls.css", "css/responsive.css"]) {
+    for (const r of css(file)) {
+      const hits = r.selector.split(",").map(last).filter((c) => tokens.some((t) => c === t || c.startsWith(t + ":") || c.startsWith(t + "[")));
+      if (!hits.length) continue;
+      for (const prop of ["top", "right", "bottom", "left"]) {
+        const v = r.decls.get(prop);
+        if (!v || !/var\(--sa[tlrb]\)/.test(v)) continue;
+        if (!/\/ var\(--hud-z\)/.test(v)) offenders.push(`${file} ${r.selector} { ${prop}: ${v} }`);
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], "a safe-area inset encodes hardware and must not grow with HUD SIZE");
+});
+
+/* ── touch policy across css/ ────────────────────────────────────────────── */
+
+test("every :hover rule in css/ is gated on (hover: hover) — a tap sticks :hover on iOS", () => {
+  const FOLLOW_UP = new Set(["css/race-setup.css", "css/dialogs.css"]);
+  const ungated = [];
+  const coarseHover = [];
+  // Physical files only: readCssSource concatenates race-setup into select/menus.
+  for (const file of CSS_FILES) {
+    const rules = cssRules(read(file));
+    for (const r of rules) {
+      if (!/:hover/.test(r.selector)) continue;
+      if (!r.context.some((c) => /hover\s*:\s*hover/.test(c))) ungated.push(`${file} ${r.selector}`);
+      else if (!FOLLOW_UP.has(file) && !r.context.some((c) => /pointer\s*:\s*fine/.test(c))) {
+        coarseHover.push(`${file} ${r.selector}`);
+      }
+    }
+  }
+  assert.deepEqual(ungated, [], "wrap it in @media (hover: hover) and (pointer: fine); touch uses :active (css/tokens.css policy)");
+  assert.deepEqual(coarseHover, [], "non-follow-up :hover must also sit in (pointer: fine); skip css/race-setup.css + css/dialogs.css");
+});
+
+test("JS hover-only UI skips touch / (hover: none) so a tap does not latch a tooltip", () => {
+  const sheet = read("js/garage/setup-sheet.js");
+  assert.match(sheet, /pointerenter[\s\S]{0,220}pointerType === ["']touch["']/,
+    "garage part comparison must ignore touch pointerenter");
+  assert.match(sheet, /matchMedia\(["']\(hover: none\)["']\)/,
+    "garage part comparison must skip when the device cannot hover");
+  const sched = read("js/data/schedule.js");
+  assert.match(sched, /mouseenter[\s\S]{0,280}matchMedia\(["']\(hover: none\)["']\)/,
+    "schedule overflow title must not attach on (hover: none)");
+});
+
+test("every scroll container contains its overscroll (no chaining into the page behind)", () => {
+  const missing = [];
+  for (const file of CSS_FILES) {
+    for (const r of css(file)) {
+      const ov = ["overflow", "overflow-y", "overflow-x"].map((p) => r.decls.get(p)).filter(Boolean);
+      if (!ov.some((v) => /auto|scroll/.test(v))) continue;
+      if (![...r.decls.keys()].some((k) => k.startsWith("overscroll-behavior"))) missing.push(`${file} ${r.selector}`);
+    }
+  }
+  assert.deepEqual(missing, [], "declare overscroll-behavior(-x/-y) beside the overflow that scrolls");
+});
+
+test("double-tap zoom is refused while menu pinch remains native and driving owns its gestures", () => {
+  const html = read("index.html");
+  const meta = /<meta name="viewport" content="([^"]+)">/.exec(html);
+  assert.ok(meta, "index.html has a viewport meta");
+  for (const part of ["width=device-width", "viewport-fit=cover"]) assert.ok(meta[1].includes(part), `viewport meta carries ${part}`);
+  // NO ZOOM CAP IN THE META, and that is two decisions taken for one reason.
+  // `user-scalable=no` went first: Safari ignored it, Android Chrome honoured
+  // it and blocked pinch-zoom for low-vision players (WCAG 1.4.4).
+  // `maximum-scale=1` was the same bug and was simply missed — W3C ACT rule
+  // b4f0c3 fails any maximum-scale under 2 against that same SC, iOS has
+  // ignored it since iOS 10, and Chrome Android honours it unless the player
+  // has found the "Force enable zoom" opt-in. Keeping one cap while dropping
+  // the other for an a11y reason only ever cost Android users their pinch.
+  // Nothing about DRIVING relaxed: #game and .touchbtn stay touch-action:none
+  // below; the touchend canceller kills double-tap, while Safari's gesture
+  // canceller is scoped to the driving surface so menus still pinch-zoom.
+  assert.ok(!meta[1].includes("user-scalable=no"), "viewport meta must not disable user scaling (docs/PLATFORM.md)");
+  assert.ok(!/maximum-scale/.test(meta[1]), "viewport meta must not cap zoom at all (W3C ACT b4f0c3 / WCAG 1.4.4)");
+  assert.match(html, /function killDriveGesture[\s\S]*closest\("#game,#hud"\)/,
+    "iOS pinch GestureEvents are cancelled only for driving");
+  assert.match(html, /addEventListener\("gesturestart", killDriveGesture/);
+  assert.match(html, /addEventListener\("touchend", function/, "the same-spot second tap is cancelled");
+  const tk = css("css/tokens.css");
+  assert.equal(decl(tk, "*", "touch-action"), "manipulation", "the reset drops double-tap-to-zoom everywhere");
+  assert.equal(decl(tk, "html, body", "touch-action"), "manipulation");
+  assert.equal(decl(tk, "html, body", "overscroll-behavior"), "none", "no root rubber-band");
+  assert.equal(decl(tk, "#game", "touch-action"), "none", "the canvas owns every gesture while driving");
+  assert.equal(decl(css("css/touch-controls.css"), ".touchbtn", "touch-action"), "none");
+  assert.equal(decl(css("css/components.css"), ".pane", "touch-action"), "pan-y", "menus keep native pan");
+});
+
+test("rapid control taps keep their native click while background double taps are guarded", () => {
+  const { document } = makeDom();
+  let now = 1000;
+  const script = read("index.html").match(/<script>([\s\S]*?)<\/script>/)[1];
+  vm.runInNewContext(script, { document, Date: { now: () => now } });
+  function tap(target, fingers = 0) {
+    const event = { type: "touchend", target, touches: Array(fingers).fill({}),
+      changedTouches: [{ clientX: 100, clientY: 100 }], defaultPrevented: false,
+      preventDefault() { this.defaultPrevented = true; } };
+    document.dispatchEvent(event); now += 50;
+    return event.defaultPrevented;
+  }
+  const background = document.createElement("div");
+  assert.equal(tap(background), false);
+  assert.equal(tap(background), true, "background double-tap still cancels zoom");
+  for (const tag of ["button", "a", "input", "select", "textarea", "summary", "label", "div"]) {
+    const control = document.createElement(tag);
+    if (tag === "a") control.setAttribute("href", "#help");
+    if (tag === "div") control.setAttribute("role", "button");
+    const child = document.createElement("span"); control.appendChild(child);
+    assert.equal(tap(child), false, tag + " first activation");
+    assert.equal(tap(child), false, tag + " rapid repeat activation");
+  }
+  assert.equal(tap(background), false, "a control tap resets the background gesture");
+  assert.equal(tap(background, 1), false, "another driving finger remains down");
+});
+
+test("Safari GestureEvents keep menu pinch zoom and are cancelled on the game and HUD", () => {
+  const { document } = makeDom();
+  const script = read("index.html").match(/<script>([\s\S]*?)<\/script>/)[1];
+  vm.runInNewContext(script, { document, Date });
+  const gesture = (type, target) => {
+    const event = { type, target, defaultPrevented: false,
+      preventDefault() { this.defaultPrevented = true; } };
+    document.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  const menu = document.createElement("div"); menu.id = "howtoplay"; document.body.appendChild(menu);
+  const game = document.createElement("canvas"); game.id = "game"; document.body.appendChild(game);
+  const hud = document.createElement("div"); hud.id = "hud"; document.body.appendChild(hud);
+  const hudChild = document.createElement("button"); hud.appendChild(hudChild);
+  assert.equal(gesture("gesturestart", menu), false, "Help/settings keep Safari's page pinch default");
+  assert.equal(gesture("gesturechange", game), false, "a menu pinch stays native after fingers cross the canvas");
+  gesture("gestureend", menu);
+  assert.equal(gesture("gesturestart", game), true, "the driving canvas refuses page pinch");
+  assert.equal(gesture("gesturechange", menu), true, "a driving pinch stays owned after fingers cross a menu");
+  gesture("gestureend", menu);
+  assert.equal(gesture("gesturestart", hudChild), true, "HUD descendants refuse page pinch too");
+});
+
+test("in-race chrome and the blocker are anchored inside the safe area", () => {
+  const ov = css("css/touch-controls.css");
+  const bar = ruleFor(ov, "#hud-dock", "left", { context: /orientation: landscape/ });
+  assert.ok(bar, "#hud-dock is positioned in landscape");
+  assert.match(bar.decls.get("left"), /var\(--sal\)/); assert.match(bar.decls.get("right"), /var\(--sar\)/); assert.match(bar.decls.get("bottom"), /var\(--sab\)/);
+  for (const id of ["#pausebtn", "#btn-cam", "#hud-restore"]) {
+    assert.match(decl(ov, id, "top"), /var\(--sat\)/, `${id} top clears the notch`);
+    assert.match(decl(ov, id, "right"), /var\(--sar\)/, `${id} right clears the notch`);
+  }
+  // The portrait ladder (RACE IN PORTRAIT) anchors on the same insets.
+  assert.match(decl(ov, "#btn-throttle", "left"), /var\(--sal\)/); assert.match(decl(ov, "#btn-throttle", "bottom"), /var\(--sab\)/);
+  assert.match(decl(ov, "#btn-boost", "right"), /var\(--sar\)/);
+  const blocker = decl(css("css/overlays.css"), "#rotate-device", "padding");
+  for (const t of ["--safe-t", "--safe-r", "--safe-b", "--safe-l"]) assert.ok(blocker.includes(`var(${t})`), `#rotate-device padding uses ${t}`);
+  // The insets themselves are env() reads with a 0px fallback, declared once.
+  const tk = css("css/tokens.css");
+  for (const [t, side] of [["--sat", "top"], ["--sar", "right"], ["--sab", "bottom"], ["--sal", "left"]]) {
+    assert.equal(decl(tk, ":root", t), `env(safe-area-inset-${side}, 0px)`);
+  }
+  // Title landscape: a centred 30rem #ios-install sat over RACE A FRIEND /
+  // SEASON (layout-audit ios-iphone-landscape, 2026-10-06). Park it under
+  // the brand column on compact-wide.
+  const src = read("css/touch-controls.css");
+  assert.match(
+    src,
+    /body\[data-shape="wide"\]\[data-density="compact"\]\) #ios-install \{[^}]*right:\s*auto/,
+    "compact-wide title parks #ios-install under the brand column, not over the doors",
+  );
+});
+
+test("non-HUD menu hosts pad with the safe-area tokens", () => {
+  const overlay = decl(css("css/title.css"), "#overlay", "padding");
+  for (const t of ["--safe-t", "--safe-r", "--safe-b", "--safe-l"]) {
+    assert.ok(overlay.includes(`var(${t})`), `#overlay padding uses ${t}`);
+  }
+  const screen = decl(css("css/components.css"), ".screen", "padding");
+  for (const t of ["--safe-t", "--safe-r", "--safe-b", "--safe-l"]) {
+    assert.ok(screen.includes(`var(${t})`), `.screen padding uses ${t}`);
+  }
+  const compactBtns = decl(
+    css("css/menus.css"),
+    /:where\(body\[data-density="compact"\]\) #menu-buttons/,
+    "max-height",
+  );
+  assert.match(
+    compactBtns,
+    /min\(100%,\s*calc\(100\s*\*\s*var\(--svhz\)\s*-\s*var\(--safe-t\)\s*-\s*var\(--safe-b\)/,
+    "compact title column caps to the padded overlay box, not raw svh alone",
+  );
+  const tk = css("css/tokens.css");
+  assert.match(decl(tk, ":root", "--safe-w"), /var\(--safe-l\)/);
+  assert.match(decl(tk, ":root", "--safe-h"), /var\(--safe-t\)/);
+});
+
+/* ── the tilt prompt and the input.js fixes it must keep ─────────────────── */
+
+const src = (p) => read(p).replace(/^const\b/gm, "var");
+function bootInput({ DeviceOrientationEvent, pads, console: con = console, debug = false }) {
+  const clock = { t: 0 }, intervals = [], nodes = [];
+  const listeners = new Map();
+  const on = (type, fn) => { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); };
+  const off = (type, fn) => { const l = listeners.get(type); if (!l) return; const i = l.indexOf(fn); if (i >= 0) l.splice(i, 1); };
+  const sb = {
+    Math, console: con, Object, Array, Number, String, JSON, Map, Set, Promise, Date, Error, parseFloat, parseInt, isFinite,
+    performance: { now: () => clock.t },
+    document: {
+      addEventListener() {}, removeEventListener() {}, getElementById: () => null, activeElement: null, readyState: "complete",
+      body: { classList: { contains: () => false }, appendChild(node) { nodes.push(node); } }, createElement: () => ({ style: {} }),
+    },
+    navigator: { getGamepads: () => pads(), maxTouchPoints: 5, userAgent: "node" },
+    addEventListener: on, removeEventListener: off,
+    matchMedia: () => ({ matches: true, addEventListener() {} }),
+    setTimeout: () => 0, clearTimeout() {}, setInterval: fn => { intervals.push(fn); return intervals.length; }, requestAnimationFrame: () => 0,
+    screen: { orientation: { type: "landscape-primary", angle: 0, addEventListener() {} } },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    location: { search: debug ? "?inputdebug=1" : "" },
+  };
+  if (DeviceOrientationEvent) sb.DeviceOrientationEvent = DeviceOrientationEvent;
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  const Input = vm.runInContext("Input", ctx);
+  Input.init({ addEventListener() {} }, {});
+  const count = (type) => (listeners.get(type) || []).length;
+  const fire = (type, e) => { for (const fn of [...(listeners.get(type) || [])]) fn(e); };
+  return { Input, count, fire, clock, intervals, nodes };
+}
+
+test("requestGyro: a grant clears an earlier refusal, and leaving tilt detaches the sensor", async () => {
+  let answer = () => Promise.reject(new Error("NotAllowedError: requires a user gesture"));
+  const h = bootInput({ DeviceOrientationEvent: { requestPermission: () => answer() }, pads: () => [] });
+  h.Input.setSteerMode("tilt");
+  // A request outside a user gesture (a synthesised gamepad .click()) rejects.
+  assert.equal(await h.Input.requestGyro(), false);
+  assert.equal(h.Input.gyroDenied, true, "a rejection is recorded so game.js can fall back to BUTTONS");
+  assert.equal(h.count("deviceorientation"), 0, "nothing attached on refusal");
+  // The next request comes from a real tap on STEER and is granted.
+  answer = () => Promise.resolve("granted");
+  assert.equal(await h.Input.requestGyro(), true);
+  assert.equal(h.Input.gyroDenied, false, "the grant must clear the stale refusal, or STEER keeps reading (NO GYRO)");
+  assert.equal(h.count("deviceorientation"), 1, "the sensor is attached once");
+  assert.equal(await h.Input.requestGyro(), true);
+  assert.equal(h.count("deviceorientation"), 1, "attach is idempotent");
+  // 2026-09-01 gyro-detach fix: leaving tilt stops the sensor stream.
+  h.Input.setSteerMode("buttons");
+  assert.equal(h.count("deviceorientation"), 0, "buttons mode detaches the deviceorientation listener");
+  assert.equal(h.Input.gyroSeen, false, "and forgets the last reading");
+  h.Input.setSteerMode("tilt");
+  assert.equal(h.count("deviceorientation"), 0, "re-entering tilt does not attach by itself — the prompt is game.js's gesture-bound job");
+  assert.equal(await h.Input.requestGyro(), true);
+  assert.equal(h.count("deviceorientation"), 1, "…and the next prompt re-attaches");
+});
+
+test("requestGyro: an explicit iOS \"denied\" is a refusal with nothing attached", async () => {
+  const h = bootInput({ DeviceOrientationEvent: { requestPermission: () => Promise.resolve("denied") }, pads: () => [] });
+  h.Input.setSteerMode("tilt");
+  assert.equal(await h.Input.requestGyro(), false);
+  assert.equal(h.Input.gyroDenied, true);
+  assert.equal(h.count("deviceorientation"), 0);
+});
+
+test("requestGyro without the iOS permission API attaches straight away; without the sensor it refuses", async () => {
+  const h = bootInput({ DeviceOrientationEvent: {}, pads: () => [] });
+  h.Input.setSteerMode("tilt");
+  assert.equal(await h.Input.requestGyro(), true);
+  assert.equal(h.Input.gyroDenied, false);
+  assert.equal(h.count("deviceorientation"), 1);
+  const none = bootInput({ pads: () => [] });
+  assert.equal(await none.Input.requestGyro(), false);
+  assert.equal(none.Input.gyroDenied, true, "no DeviceOrientationEvent at all is a refusal");
+});
+
+test("gamepaddisconnected re-reads the live list: a second pad keeps the pad path connected", () => {
+  const padA = { index: 0, connected: true, id: "A", axes: [0, 0, 0, 0], buttons: [] };
+  const padB = { index: 1, connected: true, id: "B", axes: [0, 0, 0, 0], buttons: [] };
+  let live = [padA, padB];
+  const h = bootInput({ DeviceOrientationEvent: {}, pads: () => live });
+  h.fire("gamepadconnected", { gamepad: padA });
+  assert.equal(h.Input.padConnected, true);
+  live = [null, padB];
+  h.fire("gamepaddisconnected", { gamepad: padA });
+  assert.equal(h.Input.padConnected, true, "pad B is still there — the 2026-09-01 disconnect fix");
+  live = [];
+  h.fire("gamepaddisconnected", { gamepad: padB });
+  assert.equal(h.Input.padConnected, false, "the last pad leaving disconnects");
+});
+
+test("requestGyro: only a RESOLVED refusal (or no sensor API) is hard-denied; a rejected call is transient", async () => {
+  // 2026-09-02 bug hunt. iOS rejects requestPermission() for lack of user
+  // activation — a gamepad A press synthesised as .click() on RACE! — with the
+  // same outward shape as the player tapping "Don't Allow". `gyroDenied`
+  // latches on both (the label's job); game.js's enableTilt() must persist
+  // steerMode="buttons" only on the hard flag, or a pad player who never saw a
+  // permission sheet ends up on BUTTONS for every later session.
+  let answer = () => Promise.reject(new Error("NotAllowedError: requires a user gesture"));
+  const h = bootInput({ DeviceOrientationEvent: { requestPermission: () => answer() }, pads: () => [] });
+  h.Input.setSteerMode("tilt");
+  assert.equal(await h.Input.requestGyro(), false);
+  assert.equal(h.Input.gyroDenied, true, "the label still reads (NO GYRO)");
+  assert.equal(h.Input.gyroHardDenied, false,
+    "a rejection outside a user gesture is not the player's answer — nothing to persist");
+  answer = () => Promise.resolve("denied");
+  assert.equal(await h.Input.requestGyro(), false);
+  assert.equal(h.Input.gyroHardDenied, true, "a resolved \"denied\" is the player's answer");
+  answer = () => Promise.resolve("granted");
+  assert.equal(await h.Input.requestGyro(), true);
+  assert.equal(h.Input.gyroHardDenied, false, "a grant clears the hard flag");
+  assert.equal(h.Input.gyroDenied, false);
+  const none = bootInput({ pads: () => [] });
+  assert.equal(await none.Input.requestGyro(), false);
+  assert.equal(none.Input.gyroHardDenied, true, "no DeviceOrientationEvent at all is as final as a denial");
+});
+
+test("a gamepad without the standard mapping is logged once, and never remapped", () => {
+  const warns = [];
+  const con = { log() {}, info() {}, debug() {}, error() {}, warn: (m) => warns.push(String(m)) };
+  const pad = { connected: true, id: "generic", mapping: "", axes: [0], buttons: new Array(17).fill(0) };
+  const h = bootInput({ DeviceOrientationEvent: {}, pads: () => [pad], console: con });
+  for (let i = 0; i < 200; i++) h.Input.poll();   // past the ~1 s recovery re-probe throttle
+  assert.equal(h.Input.padConnected, true, "precondition: the pad is read");
+  const hits = warns.filter((m) => /mapping/.test(m));
+  assert.equal(hits.length, 1, `one warning for a non-standard mapping, got ${hits.length}: ${warns.join(" | ")}`);
+  assert.match(hits[0], /"" is not "standard"/);
+  const std = { connected: true, id: "xbox", mapping: "standard", axes: [0], buttons: new Array(17).fill(0) };
+  const warns2 = [];
+  const h2 = bootInput({ DeviceOrientationEvent: {}, pads: () => [std], console: { ...con, warn: (m) => warns2.push(String(m)) } });
+  for (let i = 0; i < 200; i++) h2.Input.poll();
+  assert.equal(warns2.filter((m) => /mapping/.test(m)).length, 0, "a standard pad is silent");
+});
+
+test("HUD: OFF on touch hides the readouts but keeps the driving controls (hunt3 7-F2)", () => {
+  // pm-hidehud resumes the race. `body.hud-hidden #hud` / `.touchbtn` took the
+  // whole dock with it, so a phone resumed on auto-gas with no BRAKE.
+  const DRIVE = /(^|\s)(#hud|#hud-dock|\.dock|\.dock-grp|\.touchbtn|#btn-(?!cam$)[\w-]+|#grp-[\w-]+|#pausebtn)$/;
+  const offending = [];
+  let readoutsHidden = false;
+  for (const file of CSS_FILES) {
+    for (const r of css(file)) {
+      if (!/^none\b/.test(String(r.decls.get("display") || ""))) continue;
+      for (const part of r.selector.split(",").map((s) => s.trim())) {
+        if (!/body\.hud-hidden\b/.test(part) || /\.desktop\b/.test(part)) continue;
+        if (DRIVE.test(part)) offending.push(file + ": " + part);
+        if (/#hud > :not\(#hud-dock\)$/.test(part)) readoutsHidden = true;
+      }
+    }
+  }
+  assert.deepEqual(offending, [], "no non-.desktop body.hud-hidden rule hides the touch dock, its buttons or PAUSE");
+  assert.ok(readoutsHidden, "the readouts still go: every #hud child but the dock");
+});
+
+test("final pad disconnect neutralizes free look immediately and through recovery probes", () => {
+  const pad = { index: 0, connected: true, mapping: "standard", id: "pad", axes: [0, 0, .8, -.7], buttons: [] };
+  let live = [pad]; const h = bootInput({ pads: () => live });
+  h.fire("gamepadconnected", { gamepad: pad }); h.Input.poll();
+  assert.ok(Math.abs(h.Input.lookStick().x) > .5);
+  live = []; h.fire("gamepaddisconnected", { gamepad: pad });
+  assert.equal(h.Input.lookStick().x, 0); assert.equal(h.Input.lookStick().y, 0);
+  for (let i = 0; i < 120; i++) h.Input.poll();
+  assert.equal(h.Input.lookStick().x, 0); assert.equal(h.Input.lookStick().y, 0);
+});
+
+
+test("opt-in input debug readout names live and stale remote pedal ownership", () => {
+  const h = bootInput({ pads: () => [], debug: true });
+  h.clock.t = 1; h.Input.remoteSample({ steer: .6, thr: .8, brk: .4 });
+  const overlay = h.nodes.find(node => node.id === "input-debug"); assert.ok(overlay);
+  for (const fn of h.intervals) fn();
+  assert.match(overlay.textContent, /remote:0.8/); assert.match(overlay.textContent, /remote:0.4/);
+  assert.match(overlay.textContent, /remote:live age:0ms steer:remote/);
+  h.clock.t = 10001; for (const fn of h.intervals) fn();
+  assert.match(overlay.textContent, /remote:stale age:10000ms steer:local/);
+  assert.doesNotMatch(overlay.textContent, /remote:0.[48]/);
+});
+
+
+test("an empty pad poll clears free look without requiring a disconnect event", () => {
+  const pad = { index: 0, connected: true, mapping: "standard", id: "pad", axes: [0, 0, .8, 0], buttons: [] };
+  let live = [pad]; const h = bootInput({ pads: () => live });
+  h.fire("gamepadconnected", { gamepad: pad }); h.Input.poll();
+  assert.ok(h.Input.lookStick().x > .5); live = []; h.Input.poll();
+  assert.equal(h.Input.lookStick().x, 0);
+});
+
+test("a spare pad disconnect preserves held action edge baselines", () => {
+  const pad = { index: 0, connected: true, mapping: "standard", id: "active", axes: [0, 0, 0, 0],
+    buttons: Array.from({ length: 16 }, (_, i) => ({ pressed: i === 8, value: i === 8 ? 1 : 0 })) };
+  const spare = { index: 1, connected: true, mapping: "standard", id: "spare", axes: [0, 0, 0, 0], buttons: [] };
+  let live = [pad, spare]; const h = bootInput({ pads: () => live });
+  h.fire("gamepadconnected", { gamepad: pad }); h.Input.poll();
+  assert.equal(h.Input.consumeCameraCycle(), true);
+  live = [pad]; h.fire("gamepaddisconnected", { gamepad: spare }); h.Input.poll();
+  assert.equal(h.Input.consumeCameraCycle(), false);
+});
+
+/* ── touch-control LABEL floor (GAS/BRAKE/BOOST/OT/PAUSE/CAM) ───────────────
+ * fitHud writes --hud-z-dock (js/ui/hud.js, not touched here). The dock then
+ * `zoom`s, so an authored --fs-micro (14px) paints at 9.7px on a 390px-tall
+ * landscape phone at HUD 150% (css/touch-controls.css, 2026-10-14). The floor
+ * is a font-size max() that divides 10 CSS px by that zoom — width/height stay
+ * on --tap/--hold, so hit areas do not grow. */
+const LABEL_FLOOR_PX = 10;
+
+function paintedLabelPx(authoredPx, dockZoom) {
+  const z = Math.max(0.4, +dockZoom || 1);
+  return Math.max(authoredPx, LABEL_FLOOR_PX / z) * z;
+}
+
+test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () => {
+  const ov = css("css/touch-controls.css");
+  const land = { context: /orientation:\s*landscape/ };
+  assert.equal(decl(ov, ":root", "--touch-label-floor"), "10px",
+    "--touch-label-floor is the 10 CSS-px painted minimum");
+
+  const dock = ruleFor(ov, /body:not\(\.desktop\) \.dock/, "zoom", land);
+  assert.ok(dock, "landscape dock publishes zoom");
+  assert.equal(dock.decls.get("--touch-label-z"),
+    "var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
+    "the label-z token tracks the dock's own zoom (capped or slider)");
+
+  const tapFont = decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "font-size", land);
+  assert.match(String(tapFont), /max\(/, "tap labels clamp with max()");
+  assert.match(String(tapFont), /var\(--touch-label-floor\)/, "tap labels consume the 10px floor");
+  assert.match(String(tapFont), /var\(--touch-label-z/, "tap labels divide the floor by dock zoom");
+  assert.doesNotMatch(String(tapFont), /\bwidth\b|\bheight\b/, "the font rule does not restyle hit boxes");
+
+  const holdFont = decl(ov, /body:not\(\.desktop\) \.dock \.pedal/, "font-size", land);
+  assert.match(String(holdFont), /max\(/);
+  assert.match(String(holdFont), /var\(--touch-label-floor\)/);
+  assert.match(String(holdFont), /var\(--touch-label-z/);
+
+  const shiftFont = decl(ov, /^body:not\(\.desktop\) \.dock \.shiftbtn, body\.desktop \.dock \.shiftbtn$/, "font-size", land);
+  assert.match(String(shiftFont), /max\(15px/);
+  assert.match(String(shiftFont), /var\(--touch-label-floor\)/);
+
+  const pauseFont = decl(ov, "#pausebtn", "font-size");
+  assert.match(String(pauseFont), /var\(--touch-label-floor\)/, "PAUSE keeps the same 10px floor");
+  const camFont = decl(ov, "#btn-cam", "font-size");
+  assert.match(String(camFont), /var\(--touch-label-floor\)/, "CAM keeps the same 10px floor");
+
+  // The 9.7px case: authored 14px × dock zoom 0.69. Without the floor that
+  // paints 9.66; with it, 10. Width/height stay on --tap/--hold (not asserted
+  // as a computed box here — the selectors above never mention them).
+  assert.ok(paintedLabelPx(14, 0.69) >= LABEL_FLOOR_PX - 1e-9, "14px @ 0.69 zoom paints ≥ 10");
+  assert.ok(paintedLabelPx(14, 0.69) < 14 * 0.69 + 1, "the floor does not enlarge labels that already clear 10px by much");
+  for (const z of [0.4, 0.5, 0.69, 0.82, 1, 1.25, 1.5]) {
+    for (const authored of [11, 14, 15, 18]) {
+      assert.ok(paintedLabelPx(authored, z) + 1e-9 >= LABEL_FLOOR_PX,
+        `${authored}px × zoom ${z} must paint ≥ ${LABEL_FLOOR_PX} (got ${paintedLabelPx(authored, z)})`);
+    }
+  }
+
+  // Hit-area tokens stay size tokens — the floor must not leak into --tap/--hold.
+  const tap = dock.decls.get("--tap");
+  const hold = dock.decls.get("--hold");
+  assert.match(String(tap), /^max\(54px/);
+  assert.match(String(hold), /^max\(72px/);
+  assert.doesNotMatch(String(tap), /touch-label-floor/);
+  assert.doesNotMatch(String(hold), /touch-label-floor/);
+});

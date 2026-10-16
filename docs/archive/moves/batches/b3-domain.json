@@ -1,0 +1,29 @@
+{
+  "_doc": "Phase 2b batch b3-domain",
+  "moves": {
+    "js/game/uilayers.js": "js/ui/layers.js",
+    "js/game/topmodal.js": "js/ui/modal.js",
+    "js/game/menunav.js": "js/ui/menu-nav.js",
+    "js/game/scrollfade.js": "js/ui/scroll-fade.js",
+    "js/game/sheetshape.js": "js/ui/sheet-shape.js",
+    "js/game/ariastate.js": "js/ui/aria-state.js",
+    "js/game/css-zoom.js": "js/ui/css-zoom.js",
+    "js/game/hud.js": "js/ui/hud.js",
+    "js/game/menus.js": "js/ui/select-screen.js",
+    "js/game/results.js": "js/ui/results-sheet.js",
+    "js/game/settings-nav.js": "js/ui/settings-tabs.js",
+    "js/game/ui-scale.js": "js/ui/scale.js",
+    "js/track/maps.js": "js/ui/track-maps.js",
+    "js/game/garage-scene.js": "js/garage/scene.js",
+    "js/game/setup-ui.js": "js/garage/setup-sheet.js",
+    "js/game/carmesh.js": "js/car/car-mesh.js",
+    "js/car/teams.js": "js/data/teams.js",
+    "js/car/driver-ratings.js": "js/data/driver-ratings.js",
+    "js/game/apex.js": "js/agent/apex.js",
+    "js/game/agentview.js": "js/agent/agentview.js",
+    "js/game/agentview-raster.js": "js/agent/agentview-raster.js",
+    "js/game/particles.js": "js/fx/particles.js",
+    "js/game/skidmarks.js": "js/fx/skidmarks.js",
+    "js/game/quali-sheet.js": "js/ui/quali-sheet.js"
+  }
+}

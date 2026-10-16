@@ -1,0 +1,222 @@
+#!/usr/bin/env node
+/**
+ * gen-slider-doc.mjs — the LIGHTING TUNER slider tables, from TUNE_DEFS.
+ * @doc Regenerates the slider tables in `docs/LIGHTING-TUNER-SLIDERS.md` from `TUNE_DEFS`; `--check` fails on drift.
+ * @skill lighting-tuner
+ *
+ * docs/LIGHTING-TUNER-SLIDERS.md has said "Generated from TUNE_DEFS" since it
+ * was written, and nothing generated it — the committed ranges drifted from
+ * the registry (lampLevel was documented 0.02…2.25 against a shipped 0…0.687).
+ * This is the generator. It owns ONLY the block between
+ * `<!-- GENERATED: tune-defs -->` and `<!-- /GENERATED -->`, plus the count in
+ * the H1; every measured finding above and below the block is hand prose and
+ * stays verbatim.
+ *
+ * Columns (same set the doc always had):
+ *   id · slider (label) · range (min … max) · def · uniform (`u`) ·
+ *   preset (✓ when any shipped LightPresets condition overrides the id) ·
+ *   consumed in (basename×count of qualified `.id` reads on the shipping path,
+ *   where the RECEIVER is not a module — see the scan. A read that never spells
+ *   the id as a member is invisible to it either way: the CONTRAST slider's
+ *   real consumer is `PostCommon.knob(CT, "contrast")` in js/render/glx/post.js,
+ *   a string key, so that row reads "—" while the uniform column names it. The
+ *   column is an index into the code, not a proof of consumption:
+ *   js/ minus the deferred three/ + webgpu/ backends, minus light-presets.js
+ *   which is preset DATA, minus the TUNE_DEFS block itself)
+ *
+ * TUNE_DEFS is loaded the way tools/lighting/slider-effect.mjs loads it — js/core/log.js +
+ * the lighting files (js/lighting/knobs.js + its siblings) evaluated in a Node VM.
+ *
+ *   node tools/gen/gen-slider-doc.mjs            # write
+ *   node tools/gen/gen-slider-doc.mjs --check    # exit 1 when committed ≠ generated
+ */
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { ROOT, emit, isMain, readRepo, replaceBlock } from "./gen-lib.mjs";
+import { loadTuneDefs } from "../lighting/slider-effect.mjs";
+
+export const TARGET = "docs/LIGHTING-TUNER-SLIDERS.md";
+
+const SKIP_DIRS = ["js/render/three", "js/render/webgpu"];
+const SKIP_FILES = new Set(["js/lighting/presets.js"]);
+
+/** Hand notes that sit under a group heading, above its first table. */
+const GROUP_NOTES = {
+  LAMPS: "One tuner tab for every track lamp (street posts and flood banks). Was split as\n" +
+    "FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.",
+};
+
+function stripTuneDefs(src) {
+  const a = src.indexOf("const TUNE_DEFS = [");
+  if (a < 0) return src;
+  let i = src.indexOf("[", a), depth = 0;
+  for (; i < src.length; i++) {
+    if (src[i] === "[") depth++;
+    else if (src[i] === "]" && --depth === 0) return src.slice(0, a) + src.slice(i + 1);
+  }
+  return src;
+}
+
+function shippingFiles() {
+  const out = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) { if (!SKIP_DIRS.includes(rel)) walk(rel); }
+      else if (e.name.endsWith(".js") && !SKIP_FILES.has(rel)) out.push(rel);
+    }
+  };
+  walk("js");
+  return out.sort();
+}
+
+function loadPresets() {
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(readRepo("js/lighting/presets.js"), sandbox);
+  return sandbox.window.LightPresets || {};
+}
+
+export function collect() {
+  const defs = loadTuneDefs(ROOT);
+  const presets = loadPresets();
+  const presetIds = new Set();
+  for (const cond of Object.values(presets)) for (const id of Object.keys(cond)) presetIds.add(id);
+  // ONE pass per source file, not one regex per slider per file. The consumer
+  // column is "qualified `.id` reads" — `[ident].id\b` — and 183 sliders x
+  // ~250 files of a fresh RegExp each was 12.5 of the commit hook's 16 s
+  // (`test:guards` runs `--check` on every commit; measured 2026-09-16). Every
+  // `.member` with an identifier character before the dot is tallied once,
+  // and each slider looks its id up: the same count, because `\b` after the
+  // id is exactly "the member name ends here".
+  // THE RECEIVER MATTERS, and for one column it is the whole story. A tune is a
+  // plain record passed about as `LT` or `T`; a MODULE is a global this repo
+  // assigns at column 0. `LiveryTex.contrast(logo, field)` is a WCAG contrast
+  // RATIO and has nothing to do with the CONTRAST slider, but a bare `.contrast`
+  // tally credited it anyway — the shipped row read "scene.js×4,
+  // setup-sheet.js×3" for a slider neither file has ever touched, and a fourth
+  // file joined them the day the HUD needed a contrast ratio of its own.
+  //
+  // The exclusion set is derived from the SAME sources this already reads
+  // (`const X = (` at column 0 is how every module in this tree opens), so a
+  // module added tomorrow is excluded the day it lands and nothing here has to
+  // be maintained. Deliberately NOT tools/check/scan-globals.mjs: that is a
+  // 2.0 s espree pass over the repo, against this generator's whole 0.2 s, and
+  // `--check` runs on every commit.
+  const raw = shippingFiles().map((rel) => ({
+    rel,
+    src: rel === "js/lighting/knobs.js" ? stripTuneDefs(readRepo(rel)) : readRepo(rel),
+  }));
+  const MODULES = new Set();
+  for (const { src } of raw) {
+    for (const m of src.matchAll(/^const ([A-Za-z_$][\w$]*) = \(/gm)) MODULES.add(m[1]);
+  }
+  const sources = raw.map(({ rel, src }) => {
+    const members = new Map();
+    // A file may hold a module behind a LOCAL NAME, and one does:
+    // js/garage/setup-sheet.js keeps `const LTn = … ? LiveryTex : null` and
+    // then calls LTn.contrast(), which is a WCAG ratio wearing a name this
+    // scan has never heard of. Aliases are per FILE, so they join that file's
+    // exclusion set and nobody else's. A rebinding this regex cannot see
+    // (destructured, or handed in as a parameter) still slips through — this
+    // column is a good index, not a proof, and the header says so.
+    const local = new Set();
+    for (const a of src.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=([^\n]*)/g)) {
+      // A BARE mention of the module — the name itself, not a member off it.
+      // `const LTn = … ? LiveryTex : null` hands the module over; `const n =
+      // LT.foo ? 1 : 2` hands over a number, and aliasing that would delete a
+      // real tune read.
+      for (const id of a[2].matchAll(/([A-Za-z_$][\w$]*)(\.?)/g)) {
+        if (!id[2] && MODULES.has(id[1])) { local.add(a[1]); break; }
+      }
+    }
+    // The receiver is read by walking BACK from the dot, not by widening the
+    // regex: `LightTune.LT.particleMul` is a real read off the tune `LT`, and
+    // any pattern that anchors on "an identifier not preceded by a dot"
+    // swallows it whole and loses the slider. Walking back gives the nearest
+    // identifier — LT here, LiveryTex in `LiveryTex.contrast` — which is
+    // exactly the thing being asked "are you a module or a tune?".
+    for (const m of src.matchAll(/\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
+      let i = m.index;
+      while (i > 0 && /[A-Za-z0-9_$]/.test(src[i - 1])) i--;
+      const recv = src.slice(i, m.index);
+      if (!recv) continue;                 // `).foo` / `].foo` — as unqualified as before
+      if (MODULES.has(recv) || local.has(recv)) continue;   // a module call, not a tune read
+      members.set(m[1], (members.get(m[1]) || 0) + 1);
+    }
+    return { rel, base: path.basename(rel), members };
+  });
+  const rows = defs.map((d) => {
+    const consumed = [];
+    for (const f of sources) {
+      const n = f.members.get(d.id) || 0;
+      if (n) consumed.push(n > 1 ? `${f.base}×${n}` : f.base);
+    }
+    return {
+      id: d.id, label: d.label, group: d.group, section: d.section || "",
+      min: d.min, max: d.max, def: d.def, u: d.u || "", rebuild: !!d.rebuild,
+      preset: presetIds.has(d.id), consumed,
+    };
+  });
+  return rows;
+}
+
+const fmt = (v) => String(v);
+
+function table(rows) {
+  const out = ["| id | slider | range | def | uniform | preset | consumed in |", "|---|---|---|---|---|---|---|"];
+  for (const r of rows) {
+    out.push(`| \`${r.id}\` | ${r.label} | ${fmt(r.min)} … ${fmt(r.max)} | ${fmt(r.def)} | ${r.u ? `\`${r.u}\`` : "—"} | ${r.preset ? "✓" : " "} | ${r.consumed.join(", ") || "—"} |`);
+  }
+  return out.join("\n");
+}
+
+export function renderBlock(rows) {
+  const groups = [];
+  for (const r of rows) {
+    let g = groups.find((x) => x.name === r.group);
+    if (!g) { g = { name: r.group, rows: [] }; groups.push(g); }
+    g.rows.push(r);
+  }
+  const out = [
+    `_Generated by \`node tools/gen/gen-slider-doc.mjs\` from \`TUNE_DEFS\` in \`js/lighting/knobs.js\` — ${rows.length} sliders in ${groups.length} groups. Do not edit the tables by hand; \`--check\` guards them (\`tests/unit/generated-docs.test.mjs\`)._`,
+    "",
+  ];
+  for (const g of groups) {
+    out.push(`## ${g.name}  (${g.rows.length})`, "");
+    if (GROUP_NOTES[g.name]) out.push(GROUP_NOTES[g.name], "");
+    const sections = [];
+    for (const r of g.rows) if (!sections.includes(r.section)) sections.push(r.section);
+    if (sections.length === 1 && sections[0] === "") {
+      out.push(table(g.rows), "");
+    } else {
+      for (const s of sections) {
+        if (s) out.push(`### ${s}`, "");
+        out.push(table(g.rows.filter((r) => r.section === s)), "");
+      }
+    }
+  }
+  return out.join("\n");
+}
+
+export function render(existing) {
+  const rows = collect();
+  const titled = existing.replace(/^# LIGHTING TUNER — the \d+ sliders,/m, `# LIGHTING TUNER — the ${rows.length} sliders,`);
+  const intro = titled.replace(
+    /^Generated from `TUNE_DEFS` in `js\/game\/lighting(?:-knobs)?\.js`;[\s\S]*?\n\n/m,
+    "Generated from `TUNE_DEFS` in `js/lighting/knobs.js`; that registry is the\n" +
+    "source of truth and this table is a view of it. Regenerate rather than hand-edit:\n" +
+    "`node tools/gen/gen-slider-doc.mjs` rewrites the marked block below and `--check`\n" +
+    "(run by `tests/unit/generated-docs.test.mjs`) fails when it drifts.\n\n");
+  return replaceBlock(intro, "tune-defs", renderBlock(rows));
+}
+
+if (isMain(import.meta.url)) {
+  try {
+    process.exitCode = emit(TARGET, render(readRepo(TARGET)));
+  } catch (e) {
+    process.stderr.write(String(e.message || e) + "\n");
+    process.exitCode = 2;
+  }
+}

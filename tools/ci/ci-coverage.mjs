@@ -1,0 +1,202 @@
+// Reports CI's two different browser-test contracts: fixed specs that run in
+// @doc What does the deploy gate execute? Resolves every `npm run test:*` / by-path invocation in `ci.yml` against the specs.
+// @section runner
+// the deploy workflow, and the blocking change-aware selection on pushes/PRs.
+// A dynamic gate cannot honestly claim every non-fixed spec, so report its
+// event/base/fail-closed contract separately instead of calling those specs
+// "gated by nothing". See docs/archive/research/CAMPAIGN-2026-08.md.
+//
+//   node tools/ci/ci-coverage.mjs
+//   node tools/ci/ci-coverage.mjs --json
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
+
+const ALL_SPECS = fs.readdirSync(path.join(ROOT, "tests", "specs"))
+  .filter((f) => f.endsWith(".spec.js")).map((f) => `tests/specs/${f}`).sort();
+
+// A spec token may be a literal path or a single-star glob (tests/specs/parts-*.spec.js).
+function expand(token) {
+  if (!token.startsWith("tests/") || !token.endsWith(".spec.js")) return [];
+  if (!token.includes("*")) return ALL_SPECS.includes(token) ? [token] : [];
+  const rx = new RegExp("^" + token.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "$");
+  return ALL_SPECS.filter((s) => rx.test(s));
+}
+
+const scripts = JSON.parse(read("package.json")).scripts || {};
+// A group script resolves to the spec tokens on its command line. Groups that
+// name no spec (test:render drives a whole PROJECT) resolve to
+// nothing here and are reported as such rather than silently counted.
+const groupSpecs = (name) => {
+  const cmd = scripts[name];
+  if (!cmd) return null;
+  return [...new Set(cmd.split(/\s+/).flatMap(expand))];
+};
+
+// What ci.yml runs, in the order it runs it — PER JOB, because not every job
+// in the file is in the deploy gate. pages.yml calls ci.yml as a reusable
+// workflow and `needs: ci` consumes the AGGREGATE of every job that ran, so a
+// job is outside the gate only by being SKIPPED on the Pages call. The file's
+// convention for that is a job-level `if:` on `!inputs.concurrency_key` (the
+// input pages.yml always forwards); a job that `needs:` such a job is skipped
+// with it. Specs those jobs run are reported under their own heading, never
+// counted as deploy-gate coverage — a macOS renderer job that runs on branch
+// pushes is real coverage, but not of what ships.
+const ci = read(".github/workflows/ci.yml");
+const jobsAt = ci.search(/^jobs:\s*$/m);
+const jobsText = jobsAt >= 0 ? ci.slice(jobsAt) : "";
+const jobs = [];
+{
+  const heads = [...jobsText.matchAll(/^  ([a-z][\w-]*):\s*$/gm)];
+  heads.forEach((h, i) => {
+    const end = i + 1 < heads.length ? heads[i + 1].index : jobsText.length;
+    const body = jobsText.slice(h.index, end);
+    jobs.push({
+      name: h[1],
+      body,
+      start: h.index,
+      end,
+      runsOn: body.match(/^    runs-on:\s*(.+)$/m)?.[1]?.trim() || "",
+      ifLine: body.match(/^    if:\s*(.+)$/m)?.[1]?.trim() || "",
+      needs: (body.match(/^    needs:\s*(.+)$/m)?.[1] || "").replace(/[[\]]/g, "").split(/,\s*/).map((s) => s.trim()).filter(Boolean),
+      // A job that cannot fail the run is coverage you can READ, never coverage
+      // that GATES. The golden-menu trial is exactly that, and counting it with
+      // the two blocking gates overstated the fixed floor by half.
+      advisory: /^    continue-on-error:\s*true\s*$/m.test(body),
+    });
+  });
+  const excluded = new Set();
+  for (const j of jobs) if (/!inputs\.concurrency_key/.test(j.ifLine)) excluded.add(j.name);
+  // one pass is enough: a `needs:` chain is at most one deep here, and a longer
+  // one would be a design change worth seeing in this report
+  for (const j of jobs) if (j.needs.some((n) => excluded.has(n))) excluded.add(j.name);
+  for (const j of jobs) j.deployGate = !excluded.has(j.name);
+}
+const jobOf = (index) => jobs.find((j) => index >= jobsAt + j.start && index < jobsAt + j.end);
+
+const executed = new Set();
+// The BLOCKING subset of `executed`: the same specs minus any run by a job
+// that carries `continue-on-error: true`. The floor in
+// tests/unit/ci-coverage.test.mjs is taken on THIS number, because a trial job
+// going red changes nothing about whether the site ships.
+const blocking = new Set();
+const viaGroup = [];
+for (const m of ci.matchAll(/run:\s*npm run (test:[\w-]+)/g)) {
+  const specs = groupSpecs(m[1]);
+  if (specs === null) continue;
+  const job = jobOf(m.index);
+  const entry = { group: m[1], specs, job: job?.name || null, deployGate: job ? job.deployGate : true,
+                  advisory: job ? job.advisory : false };
+  viaGroup.push(entry);
+  if (entry.deployGate) specs.forEach((s) => { executed.add(s); if (!entry.advisory) blocking.add(s); });
+}
+const viaPath = [];
+for (const m of ci.matchAll(/run:\s*(?:npm test --|npx playwright test)\s+([^\n]+)/g)) {
+  const specs = m[1].split(/\s+/).flatMap(expand);
+  if (!specs.length) continue;
+  const job = jobOf(m.index);
+  const entry = { where: m[1].trim().slice(0, 60), specs, job: job?.name || null, deployGate: job ? job.deployGate : true,
+                  advisory: job ? job.advisory : false };
+  viaPath.push(entry);
+  if (entry.deployGate) specs.forEach((s) => { executed.add(s); if (!entry.advisory) blocking.add(s); });
+}
+
+// The renderer job: the one browser job on a hardware adapter, and the one
+// outside the gate by design (its comment in ci.yml says why). Reported as its
+// own contract so the flag rule the real GPU depends on is machine-checked.
+const rendererJob = jobs.find((j) => j.name === "renderer-macos");
+const rendererRun = rendererJob?.body.match(/run:\s*npm run (test:[\w-]+)([^\n]*)/) || null;
+const rendererGate = {
+  present: Boolean(rendererJob),
+  runsOn: rendererJob?.runsOn || "",
+  deployGate: rendererJob ? rendererJob.deployGate : false,
+  group: rendererRun?.[1] || "",
+  specs: rendererRun ? (groupSpecs(rendererRun[1]) || []) : [],
+  config: rendererRun?.[2].match(/--config=(\S+)/)?.[1] || "",
+  // the trap the census documented: this flag turns the Metal run into SwiftShader
+  vulkanAngle: /--use-angle=vulkan/.test(rendererJob?.body.replace(/^\s*#.*$/gm, "") || ""),
+  censusGated: /gpu-census\.mjs/.test(rendererJob?.body || "") && /anyHardware !== true/.test(rendererJob?.body || ""),
+};
+
+const outsideFixedGates = ALL_SPECS.filter((s) => !executed.has(s));
+// The change-aware gate is two jobs since 2026-09-10: `select` plans (base
+// resolution + the selector, delegated to tools/ci/ci-select-specs-step.sh)
+// and `selected` runs the plan as a matrix. The plan job's `if:` is the gate's
+// trigger; the step script carries the fail-closed strings, so it is read too
+// when the job delegates to it.
+// BOUNDED AT THE NEXT JOB, via the same job table every other reader uses.
+// An unbounded `ci.slice(selectAt)` reads every job appended after `select`
+// as part of it, so a later job's `continue-on-error: true` (the golden-menu
+// trial) flips this gate's reported `blocking` to false while the gate itself
+// is untouched — a parser defect that reads as a CI regression, in the one
+// report that says whether the deploy is gated (first fixed 2026-09-10 on the
+// single `selected` job; the two-job gate re-introduced it).
+const planJobBody = jobs.find((j) => j.name === "plan")?.body || "";
+const selectAt = ci.indexOf("\n  select:\n");
+const selectJob = planJobBody + "\n" + (jobs.find((j) => j.name === "select")?.body || "") + "\n" + (jobs.find((j) => j.name === "selected")?.body || "");
+const selectIf = (jobs.find((j) => j.name === "select")?.body || planJobBody).match(/^    if:\s*(.+)$/m)?.[1] || "";
+const selectStep = /ci-select-specs-step\.sh/.test(selectJob)
+  ? fs.readFileSync(path.join(ROOT, "tools/ci/ci-select-specs-step.sh"), "utf8") : "";
+const selectAll = selectJob + "\n" + selectStep;
+const selectionGate = {
+  present: Boolean(selectJob) && ci.includes("\n  selected:\n"),
+  blocking: Boolean(selectJob) && !/^    continue-on-error:\s*true\s*$/m.test(selectJob),
+  onPush: selectIf.includes("github.event_name == 'push'"),
+  onPullRequest: selectIf.includes("github.event_name == 'pull_request'"),
+  // NOT an event_name test. Inside a REUSABLE workflow the github context is
+  // the CALLER's, so `github.event_name` reads `push` on a Pages call exactly
+  // as on a direct push. `inputs` is the only caller-specific context, and
+  // pages.yml is the only caller (it passes a non-empty concurrency_key), so
+  // the gate runs in the deploy exactly when its `if:` does NOT test that key.
+  onWorkflowCall: !/inputs\.concurrency_key\s*==\s*''/.test(selectIf),
+  usesPullRequestBase: /PR_BASE:\s*\$\{\{ github\.event\.pull_request\.base\.sha/.test(selectJob),
+  failsClosedOnInvalidBase: /fail\(\).*SELECTED GATE FAILED CLOSED/.test(selectAll)
+    && /no valid comparison base/.test(selectAll)
+    && /comparison base .* is unreachable/.test(selectAll),
+  // Both dropped buckets are named as annotations (2026-10-04: DROPPED, was
+  // EXCLUDED / SKIPPED plain lines).
+  surfacesBudgetSkips: /::warning::DROPPED \(declares/.test(selectAll)
+    && /::(?:warning|error)::DROPPED \(over budget/.test(selectAll),
+};
+const report = {
+  specsOnDisk: ALL_SPECS.length,
+  specsInFixedGates: executed.size,
+  specsInBlockingFixedGates: blocking.size,
+  specsOutsideFixedGates: outsideFixedGates.length,
+  executed: [...executed].sort(),
+  blocking: [...blocking].sort(),
+  outsideFixedGates,
+  selectionGate,
+  rendererGate,
+  jobs: jobs.map((j) => ({ name: j.name, runsOn: j.runsOn, deployGate: j.deployGate })),
+  viaGroup, viaPath,
+};
+
+if (process.argv.includes("--json")) {
+  console.log(JSON.stringify(report, null, 2));
+} else {
+  console.log(`Deploy CI's fixed browser gates execute ${report.specsInFixedGates} of ` +
+    `${report.specsOnDisk} Playwright specs ` +
+    `(${((report.specsInFixedGates / report.specsOnDisk) * 100).toFixed(1)} %).`);
+  console.log(`${report.specsInBlockingFixedGates} of those ${report.specsInFixedGates} can fail the run; ` +
+    `the rest are advisory (continue-on-error).`);
+  console.log(`${report.specsOutsideFixedGates} specs are outside those fixed gates.\n`);
+  for (const g of viaGroup) if (g.specs.length && g.deployGate) console.log(`  ${g.group} (${g.job}): ${g.specs.join(", ")}`);
+  for (const p of viaPath) if (p.deployGate) console.log(`  by path (${p.job}): ${p.specs.join(", ")}`);
+  const r = report.rendererGate;
+  console.log(`\nRenderer job (${r.present ? r.runsOn : "ABSENT"}): ${r.present ? (r.deployGate ? "IN" : "OUTSIDE") + " the deploy gate" : ""}` +
+    `${r.present ? `; ${r.group} = ${r.specs.length} specs via ${r.config || "the default config"}; census-gated=${r.censusGated}; --use-angle=vulkan=${r.vulkanAngle}` : ""}`);
+  const s = report.selectionGate;
+  console.log(`\nChange-aware selected gate: ${s.blocking ? "BLOCKING" : "NON-BLOCKING"}; ` +
+    `push=${s.onPush}, pull_request=${s.onPullRequest}, workflow_call=${s.onWorkflowCall}.`);
+  console.log(`PR base=${s.usesPullRequestBase ? "explicit" : "missing"}; ` +
+    `invalid base=${s.failsClosedOnInvalidBase ? "fail-closed" : "fail-open"}; ` +
+    `budget skips=${s.surfacesBudgetSkips ? "surfaced" : "silent"}.`);
+  console.log("Exact selected coverage varies by diff and budget; outside-budget specs are named,");
+  console.log("not claimed as executed. The full suite remains a local, change-scaled run.");
+}
+
+export { report, ALL_SPECS, expand, groupSpecs };

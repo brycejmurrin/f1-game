@@ -1,0 +1,310 @@
+/* all-lights-fill.test.mjs — _fillAllLights must write the SAME bytes it used to.
+ *
+ * Of the 15 lanes per baked lamp, twelve are static (position, radius, cone
+ * dir/cos, bleed, volW, glareW) and three are not (rgb, which flicker and the
+ * warm-up ramp scale). The function rewrote all fifteen every frame, for every
+ * lamp, on both backends, whenever per-chunk lamps are on — which is now every
+ * preset in every condition. It copies the statics once per source array now.
+ *
+ * That is only safe if the invalidation is right, so this asserts the whole
+ * contract against a reference implementation that always writes everything:
+ * a flicker sequence, a source SWAP (the case a static cache gets wrong), and
+ * the generation counter that LampChunks and WGX both key their caches on.
+ *
+ * Run: node --test tests/unit/all-lights-fill.test.mjs  (npm run test:tooling-fast)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+test("tail-light selection reuses capacity through sorting, shrink and regrowth", () => {
+  const source = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
+  const anchor = "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release };";
+  assert.ok(source.includes(anchor));
+  const sampled = [];
+  const ctx = vm.createContext({
+    // tailLightEmit 1: this test is about the EMIT path's pooled selection.
+    LightKnobs: { LT: { tailRange: 160, tailLightMul: 1, brakeGlowMul: 1, tailLightEmit: 1 } },
+    LightBudget: { MAX: 48, MOBILE: 24, slots: () => 48 },
+    Tracks: { sample(_t, s, out) { sampled.push(s); out.p[2] = s; } },
+  });
+  vm.runInContext(source.replace(anchor,
+    "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release, selection: () => _tlSel.slice() };"), ctx);
+  const api = vm.runInContext("FrameLights", ctx);
+  const track = { total: 5000 }, player = { s: 0, x: 0 };
+  const cars = Array.from({ length: 22 }, (_,i) => ({ s: (21-i)*5, x: 0 }));
+  const assemble = (field) => {
+    sampled.length = 0;
+    const frame = { lights: [] };
+    api.appendCarTailLights(frame, track, field, player, false);
+    assert.equal(frame.tailCount, Math.min(5, field.length));
+    assert.equal(frame.lights.length, frame.tailCount * 15);
+    const expected = field.map((c) => c.s).sort((a,b) => a-b).slice(0,5);
+    assert.deepEqual(sampled, expected, "only the nearest current cars supply lights");
+    return api.selection();
+  };
+  const first = assemble(cars), capacity = new Set(first);
+  for (let i = 0; i < 100; i++) {
+    const rows = assemble(i % 3 === 0 ? cars.slice(0,2) : i % 3 === 1 ? [] : cars);
+    for (const row of rows) assert.ok(capacity.has(row), "a warmed selection entry was reallocated");
+    assert.equal(new Set(rows).size, rows.length, "sorting must not alias pool entries");
+  }
+  const newCars = cars.map((c) => ({ s: c.s+1, x: 2 }));
+  const rows = assemble(newCars);
+  for (const row of rows) assert.ok(newCars.includes(row.c), "a new grid must not use stale car references");
+});
+
+test("TAIL-LIGHT EMIT 0: tail-lights take no light slot but keep their halo", () => {
+  const source = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
+  const LT = { tailRange: 160, tailLightMul: 1, brakeGlowMul: 1, tailLightEmit: 0 };
+  const ctx = vm.createContext({
+    LightKnobs: { LT },
+    LightBudget: { MAX: 48, MOBILE: 24, slots: () => 16 },
+    Tracks: { sample(_t, s, out) { out.p[2] = s; } },
+  });
+  vm.runInContext(source, ctx);
+  const api = vm.runInContext("FrameLights", ctx);
+  const track = { total: 5000 }, player = { s: 0, x: 0 };
+  const cars = Array.from({ length: 22 }, (_, i) => ({ s: i * 5, x: 0 }));
+  // A full 16-slot phone set: in emit mode five lamps would be evicted.
+  const lamps = Array.from({ length: 16 * 15 }, (_, i) => i);
+  const frame = { lights: lamps.slice() };
+  api.appendCarTailLights(frame, track, cars, player, true);
+  assert.equal(frame.lights.length, 16 * 15, "no lamp evicted, no slot taken");
+  assert.deepEqual(frame.lights, lamps, "the lamp records are untouched");
+  assert.equal(frame.tailCount, 0, "per-chunk consumers see no dynamic tail-lights");
+  assert.equal(frame.glowLights.length, (16 + 5) * 15, "the halo list carries lamps + five tails");
+  assert.deepEqual(Array.from(frame.glowLights).slice(0, 16 * 15), lamps, "halo list = lamps first, tails after");
+  // And the emit path is unchanged: five evicted, five appended, halo list = lights.
+  LT.tailLightEmit = 1;
+  const f2 = { lights: lamps.slice() };
+  api.appendCarTailLights(f2, track, cars, player, true);
+  assert.equal(f2.lights.length, 16 * 15);
+  assert.equal(f2.tailCount, 5);
+  assert.equal(f2.glowLights, f2.lights);
+});
+
+// frame-lights.js is an IIFE exporting a fixed surface, and _fillAllLights is
+// internal to it. Widen the export list for the test rather than reaching past
+// the IIFE — the same shape the lamp-chunks drag guard uses. Asserting the
+// anchor first means this fails loudly if the export list is reformatted,
+// instead of silently testing nothing.
+function loadFill() {
+  const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
+  const anchor = "  return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release };";
+  assert.ok(src.includes(anchor), "frame-lights.js export list moved — update this loader");
+  const patched = src.replace(anchor,
+    "  return { setFrameLights, appendCarTailLights, _fillAllLights };");
+  const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array };
+  sb.window = sb;
+  sb.Log = { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false };
+  vm.createContext(sb);
+  // FrameLights destructures LightKnobs.LT at eval — the registry loads first;
+  // the slot budget (LightBudget) is read at call time.
+  vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8"), sb);
+  vm.runInContext(readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8"), sb);
+  vm.runInContext(patched, sb);
+  const LT = vm.runInContext("FrameLights", sb);
+  assert.equal(typeof LT._fillAllLights, "function", "_fillAllLights not exported by the patch");
+  return LT._fillAllLights;
+}
+
+// A stride-15 baked set with DISTINCT values in every lane, so a lane that is
+// silently dropped or written from the wrong offset cannot coincidentally match.
+function makeSet(n, seed) {
+  const L = [];
+  for (let i = 0; i < n; i++) for (let k = 0; k < 15; k++) L.push(seed + i * 15 + k * 0.125);
+  return L;
+}
+// The reference: what the function did before — every lane, every call.
+function reference(src, sr, sg, sb2, fl) {
+  const out = [];
+  for (let i = 0; i < src.length; i += 15) {
+    const f = fl(i);
+    for (let k = 0; k < 15; k++) out[i + k] = src[i + k];
+    out[i + 3] = src[i + 3] * sr * f[0];
+    out[i + 4] = src[i + 4] * sg * f[1];
+    out[i + 5] = src[i + 5] * sb2 * f[2];
+  }
+  return out;
+}
+
+test("every lane matches a full rewrite, across a flicker sequence and a source swap", () => {
+  const fill = loadFill();
+
+  const A = makeSet(37, 1), B = makeSet(23, 500);   // different length AND content
+  // A flicker function that actually moves, and differs per lamp and per step.
+  const mk = (step) => (o) => [1 + 0.3 * Math.sin(o + step), 1 - 0.2 * Math.cos(o * 0.5 + step),
+                               1 + 0.1 * Math.sin(o * 0.25 - step)];
+  const plan = [
+    [A, 1.0, 1.0, 1.0], [A, 1.0, 1.0, 1.0], [A, 0.7, 0.8, 0.9],
+    [B, 1.0, 1.0, 1.0],                 // SWAP — statics must be re-copied
+    [B, 0.5, 0.5, 0.5], [A, 1.0, 1.0, 1.0],   // and swapped BACK
+  ];
+  plan.forEach(([src, sr, sg, sb2], step) => {
+    const fl = mk(step);
+    const frame = {};
+    fill(frame, src, sr, sg, sb2, fl);
+    const want = reference(src, sr, sg, sb2, fl);
+    assert.equal(frame.allLights.length, want.length, `length differs at step ${step}`);
+    for (let i = 0; i < want.length; i++)
+      assert.equal(frame.allLights[i], want[i],
+        `lane ${i % 15} of lamp ${(i / 15) | 0} differs at step ${step}`);
+  });
+});
+
+test("the generation counter still moves exactly when consumers need it to", () => {
+  // LampChunks memoises on the lights ARRAY IDENTITY and WGX on this counter,
+  // so a missed bump means a stale GPU buffer and a spurious one undoes the
+  // round-7 work that stopped WGX re-uploading 64 KB a frame.
+  const fill = loadFill();
+  const A = makeSet(12, 3), B = makeSet(12, 77);
+  const steady = () => [1, 1, 1];
+  const gen = (src, sr) => { const f = {}; fill(f, src, sr, 1, 1, steady); return f.allLightsGen; };
+
+  const g0 = gen(A, 1);
+  assert.equal(gen(A, 1), g0, "an identical frame must NOT bump the generation");
+  const g1 = gen(A, 0.5);
+  assert.notEqual(g1, g0, "a colour change must bump the generation");
+  const g2 = gen(B, 0.5);
+  assert.notEqual(g2, g1, "a new source array must bump the generation");
+
+  // THE CASE THAT HIDES. A rebuild mints a new array whose COLOURS happen to
+  // match the old one but whose static lanes moved — a lamp-position knob, say.
+  // The colour comparison cannot see that, so without an explicit bump on a
+  // fresh source the generation stays put and WGX keeps a GPU buffer holding
+  // the OLD positions while the CPU side has the new ones. A first version of
+  // this test swapped in a set whose colours also differed, which made the
+  // whole hazard invisible: mutation-testing caught that, not review.
+  const C = makeSet(12, 3);                 // identical to A, then move statics
+  for (let i = 0; i < C.length; i += 15) { C[i] += 900; C[i + 6] += 5; }
+  const gA = gen(A, 1);
+  const gC = gen(C, 1);                     // same rgb lanes as A, moved positions
+  assert.notEqual(gC, gA,
+    "a new source array with unchanged colours but MOVED positions must still bump");
+  // And the buffer must be the SAME object throughout — LampChunks' identity
+  // memo and the pooling both depend on it never being reallocated.
+  const f1 = {}, f2 = {};
+  fill(f1, A, 1, 1, 1, steady);
+  fill(f2, A, 1, 1, 1, steady);
+  assert.equal(f1.allLights, f2.allLights, "the pooled buffer was replaced");
+});
+
+// perf hunt 2 F4: with the clock passed in, a frame where only the flicker moved
+// (same source, same scale, same factor function) re-tints at most every 50 ms.
+test("the flicker-only re-tint is held for 50 ms of wall clock; a scale or source change lands at once", () => {
+  const fill = loadFill();
+  const A = makeSet(9, 4), B = makeSet(9, 40);
+  let step = 0;
+  const live = (o) => [1 + 0.05 * Math.sin(o + step), 1, 1];   // ONE function whose values move, like _flLive
+  const at = (src, sr, t) => { const f = {}; fill(f, src, sr, 1, 1, live, t); return f; };
+  const same = (f, want, msg) => { for (let i = 0; i < want.length; i++) assert.equal(f.allLights[i], want[i], `${msg}: lane ${i}`); };
+
+  step = 0; const f0 = at(A, 1, 10.000); same(f0, reference(A, 1, 1, 1, live), "first fill");
+  const want0 = reference(A, 1, 1, 1, live), g0 = f0.allLightsGen;
+  step = 1; const f1 = at(A, 1, 10.016);
+  assert.equal(f1.allLightsGen, g0, "16 ms later, flicker only: no new generation");
+  same(f1, want0, "…and the previous tint is kept");
+  step = 2; const f2 = at(A, 1, 10.049);
+  assert.equal(f2.allLightsGen, g0, "49 ms: still held");
+  step = 3; const f3 = at(A, 1, 10.050);
+  assert.notEqual(f3.allLightsGen, g0, "50 ms: refreshed");
+  same(f3, reference(A, 1, 1, 1, live), "the refresh is the full current tint");
+  step = 4; const f4 = at(A, 0.5, 10.051);
+  same(f4, reference(A, 0.5, 1, 1, live), "a scale change is not held");
+  step = 5; const f5 = at(B, 0.5, 10.052);
+  same(f5, reference(B, 0.5, 1, 1, live), "a source change is not held");
+  step = 6; const f6 = at(B, 0.5, 9.0);
+  same(f6, reference(B, 0.5, 1, 1, live), "a clock that went backwards refreshes");
+  const other = (o) => [0.5, 0.5, 0.5];
+  const f7 = {}; fill(f7, B, 0.5, 1, 1, other, 9.001);
+  same(f7, reference(B, 0.5, 1, 1, other), "a different factor function (flicker settled to steady) is not held");
+});
+
+test("frame.lampSetGen moves with the lamp set and its scale, never with the flicker", () => {
+  const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
+  let now = 1000;
+  const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array, Float32Array, WeakRef,
+    performance: { now: () => now }, Number };
+  sb.window = sb;
+  sb.Log = { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false };
+  sb.Tracks = { sample(t, s, o) { return o; } };
+  vm.createContext(sb);
+  vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8"), sb);
+  vm.runInContext(readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8"), sb);
+  vm.runInContext(src, sb);
+  const FL = vm.runInContext("FrameLights", sb), LT = vm.runInContext("LightKnobs.LT", sb);
+  LT.lampFlicker = 0.1;
+  const A = makeSet(60, 2), B = makeSet(60, 9);
+  const track = { _lights: A };
+  const frame = { time: 0, perChunkLights: 0.3 };
+  const run = (scale) => { now += 16.7; frame.time += 1 / 60; FL.setFrameLights(frame, track, [], [0, 2, 0], scale, [0, 0, 1], false); return frame.lampSetGen; };
+  const g0 = run([1, 1, 1]), gens = new Set();
+  for (let i = 0; i < 30; i++) assert.equal(run([1, 1, 1]), g0, `frame ${i}: flicker alone moved lampSetGen`);
+  for (let i = 0; i < 30; i++) { run([1, 1, 1]); gens.add(frame.allLightsGen); }
+  // 30 frames at 16.7 ms = 501 ms: the whole-set re-tint ran at <= 20 Hz (was every frame).
+  assert.ok(gens.size >= 8 && gens.size <= 11, `${gens.size} allLights generations in 30 flickering frames`);
+  const g1 = run([0.8, 0.8, 0.8]);
+  assert.notEqual(g1, g0, "a scale change moves it");
+  track._lights = B;
+  assert.notEqual(run([0.8, 0.8, 0.8]), g1, "a new lamp set moves it");
+});
+
+// Folded from frame-lights-tail-budget (#1965): the two cases the tests above do
+// not reach. The emit test above feeds appendCarTailLights a hand-made lamp list;
+// this one runs the REAL cull (setFrameLights) at the phone's 24-slot budget, so
+// the eviction is measured against what the cull actually produced.
+test("phone 24-slot budget: real setFrameLights cull + emit tails stay inside the shader cap", () => {
+  const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
+  const ctx = vm.createContext({
+    performance: { now: () => 1000 },
+    Math, Float32Array, Uint32Array, Array, Object, Number,
+    Tracks: { sample(_t, s, out) { out.p[0] = 0; out.p[1] = 0; out.p[2] = s; out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.r[0] = 1; out.r[1] = 0; out.r[2] = 0; } },
+    LightKnobs: { LT: {
+      lampWarmup: 0, lampFlicker: 0, lampCull: 40, lampBehindBias: 5.25, lampCullFade: 0.35, lampReach: 1,
+      tailRange: 160, tailLightMul: 1, brakeGlowMul: 1, tailLightEmit: 1, tailFade: 0,
+    } },
+    PerfGov: { tier: () => 0 },
+  });
+  vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8") + "\n;globalThis.LightBudget = LightBudget;", ctx);
+  vm.runInContext("LightBudget.setSlots(24);", ctx);
+  vm.runInContext(src + "\n;globalThis.FrameLights = FrameLights;", ctx);
+  const FL = ctx.FrameLights;
+  const lamps = [];
+  for (let i = 0; i < 80; i++) lamps.push(0, 6, i * 8, 1.2, 0.95, 0.75, 35, 0, -1, 0, -1, 0, 0, 0, 1);
+  const track = { total: 8000, _lights: lamps };
+  const cars = Array.from({ length: 12 }, (_, i) => ({ s: (i + 1) * 4, x: 0, brakeHeat: 0 }));
+  const frame = { time: 0, perChunkLights: 0 };
+  FL.setFrameLights(frame, track, cars, [0, 1.2, 0], [0.85, 0.88, 1], [0, 0, 1], true);
+  FL.appendCarTailLights(frame, track, cars, { s: 0, x: 0 }, true);
+  const total = (frame.lights.length / 15) | 0;
+  assert.equal(total, 24, "budget is full: lamps evicted to make room for tails, never above 24");
+  assert.equal(frame.tailCount, 5, "five nearest rivals reserve tail records");
+  const start = (frame.tailStart | 0) * 15;
+  for (let j = 0; j < 5; j++) {
+    const o = start + j * 15, r = frame.lights[o + 3], g = frame.lights[o + 4], b = frame.lights[o + 5];
+    assert.ok(r > g && r > b, `tail ${j} is red-dominant: ${[r, g, b]}`);
+  }
+  assert.equal(frame.glowLights, frame.lights, "emit mode: halo list is the lit set");
+});
+
+test("lampCap with traffic never budgets above LightBudget.slots(), phone tier included", () => {
+  const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
+  const anchor = "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release };";
+  assert.ok(src.includes(anchor), "frame-lights.js export list moved — update this loader");
+  const ctx = vm.createContext({
+    LightKnobs: { LT: { lampCull: 40 } },
+    PerfGov: { tier: () => 0 },
+    performance: { now: () => 0 },
+    LightBudget: { MAX: 48, MOBILE: 24, TAIL_RESERVE: 5, slots: () => 16 },
+  });
+  vm.runInContext(src.replace(anchor, "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release, lampCap };"), ctx);
+  const api = vm.runInContext("FrameLights", ctx);
+  assert.equal(api.lampCap(10, false), 16, "TLX-lite: lampCull 40 clamped to the 16 live slots");
+  assert.equal(api.lampCap(10, true), 16, "phone tier still clamped by live slots, not MOBILE alone");
+});

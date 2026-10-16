@@ -1,0 +1,52 @@
+name: Fleet board
+
+# The backlog's phone view (tools/ci/fleet-board.mjs): syncs .github/labels.json,
+# keeps the `claimed` label derived from the claims board and open PR bodies
+# (`Closes #n`), and rewrites the pinned "Fleet board" issue.
+# Why: docs/notes/AGENT-WORK-TRACKING-2026-10-14.md.
+#
+# Every 30 minutes at :23 and :53 (Merge Desk cadence; 2026-10-14 CI-volume cut, process-review fix 1;
+# was hourly; scheduled runs queue at the top of the hour,
+# https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule),
+# and on workflow_dispatch, which `who-is-on-it.mjs --claim/--release` sends after
+# every board write. NOT `push: [claude/claims-board]`: GitHub runs a
+# push-triggered workflow from the pushed commit's tree, and the board's tree has
+# no .github/ — that trigger never fired (live test, 2026-10-14). No pull_request
+# trigger on purpose: a check on every PR head would join ci-watch's per-sha
+# verdict for no gain; a closed PR releases its issue within the hour.
+# Edits made with GITHUB_TOKEN start no workflow runs, so the board cannot loop.
+
+on:
+  schedule:
+    - cron: "23,53 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+# One fleet-board run at a time (cancel-in-progress: false). who-is-on-it.mjs
+# skips workflow_dispatch while a run is already queued, so claim bursts do not
+# stack dispatches on the same sha.
+concurrency:
+  group: fleet-board
+  cancel-in-progress: false
+
+jobs:
+  board:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng   # a push to the claims board checks out a tree with no tools
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Claims board
+        run: git fetch --depth=1 origin "claude/claims-board:refs/remotes/origin/claude/claims-board" || echo "no claims board yet"
+      - name: Board, labels, claims
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/ci/fleet-board.mjs --apply

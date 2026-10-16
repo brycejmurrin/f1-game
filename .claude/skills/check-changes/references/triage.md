@@ -1,0 +1,76 @@
+# Triage a test timeout — machine, wait, budget, or bug? (folded from the test-timeout-triage skill)
+
+A timeout on this suite usually measures the MACHINE, not the code: every
+Playwright worker is a full SwiftShader Chromium, and past ~4 busy cores they
+starve each other into 120 s timeouts that read exactly like test failures.
+Measured 2026-08-17: the same three smoke specs "failed" in three separate
+loaded runs and passed solo in 8.1 s / 69 s / 25.6 s — zero code delta.
+
+## Step 0 — "it timed out at 45 min": which timeout? (read-only, seconds)
+
+`test-bg.mjs --wait --timeout 45` exiting **124** is the WAITER giving up, not a
+test result: the group is left alive. Read the log, not the exit code:
+
+```sh
+cat /proc/loadavg                                   # >= 3 = the box was/is busy (rule 8)
+node tools/ci/test-bg.mjs --status                  # running / how it ended, elapsed, log path
+ps -eo pid,pcpu,args --sort=-pcpu | head            # who holds the CPU now; ONE busy playwright of yours is expected, a second or a sibling node suite is the load
+grep -aE '^= (run (passed|failed|timedout|interrupted)|bg exit)' artifacts/logs/<group>.log   # no line = still running (or died: --status says)
+grep -aE 'x FAIL|! retry|= FAILURES|= slowest' artifacts/logs/<group>.log | head   # per-test 78.0s-style durations; `while setting up "context"` = load
+```
+
+No `= run` line and `--status` says `running` = wait more (`--wait --timeout`
+again), do not re-run. A `= run failed` with only ~120 s timeouts on a loaded
+box goes to step 1; the load NOW is not the load THEN (compare log timestamps
+with other `artifacts/logs/*.log` mtimes).
+
+## The decision tree
+
+**1. Was the box busy?** Check the log's failure text and the timeline first.
+`Test timeout … while setting up "context"` is the classic load signature —
+the browser couldn't even boot a context. Cross-check what ELSE ran during the
+window (`/proc/loadavg` now; other `artifacts/logs/*.log` timestamps; node
+sweeps, subagents, a second Playwright process — all count).
+→ Re-run the spec ALONE: `node tools/ci/test-solo.mjs <spec> [-g "grep"]`.
+It refuses to start until the 1-min load is quiet, runs at 1 worker, and
+prints the load beside the verdict. PASS solo = contention, done — do NOT
+"fix" the test. FAIL solo = real; bisect.
+
+**2. Could the failure be a code regression at all?** Diff the tree the
+failing run served against the last passing run's tree. If the delta is
+docs/tools/tests only, a rendering-path failure is impossible — say so and
+move on (measured: a `.claude/`-markdown-only delta "broke" two smoke specs).
+
+**3. Did a `waitForFunction` overrun its declared timeout?** (3 s declared,
+100+ s observed.) That is rAF starvation: the default polling clock is
+requestAnimationFrame, which starves under SwiftShader exactly when the page
+renders. Every wait on a rendering page needs `{ polling: 100 }` —
+`tests/unit/wait-polling.test.mjs` ratchets this. If the wait still overruns
+WITH polling, the predicate may be unreachable — instrument whether it can
+ever become true before touching timeouts (the measured M6 case: the waited-on
+hook was never called on that path at all).
+
+**4. Is the budget simply undersized?** A test that takes ~100+ s even solo
+on a quiet box is NEAR its budget, not flaky (the minimap smoke spec runs
+134–174 s loaded). Raise the budget with a written reason — never widen an
+assertion tolerance to make a spec pass.
+
+**5. Passes loaded but fails solo?** (The inversion.) One worker serializes
+the whole file onto one machine-state; look for shared-page state leaks and
+order dependence — `docs/notes/TESTING-FIELD-NOTES.md` has the worked example.
+
+## Rules that prevent the class
+
+- ONE Playwright process. `verify-change.mjs` batches at **one group** per
+  batch, browser groups first. `test-bg.mjs` starts ONE group at a time by
+  default (a second is refused; `--parallel` raises the cap to
+  `floor(CORES/WORKERS)`), and refuses ANY start at 1-min loadavg >= 3.
+  Browser+browser pairing is the measured source of the entire 120 s class.
+- Everything long runs in the BACKGROUND with a log (`AGENTS.md`); check
+  `node tools/ci/test-bg.mjs --status` and `/proc/loadavg < 3` before starting.
+- Verdicts come from the log's terminal line `= run <status>  (N/M done,
+  K failed)` — match with `grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'`
+  (ERE alternation; fixed-string/BRE grep never matches) — never the process
+  table.
+- `tools/ci/verify-change.mjs` runs the whole selection serialized correctly and
+  labels timeout outcomes with the triage command.

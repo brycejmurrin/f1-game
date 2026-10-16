@@ -1,115 +1,90 @@
 ---
 name: tune-physics
-description: A/B test and tune the driving physics in js/game.js deterministically, using the __apex headless control loop (obs/act/reset), setPhysics overrides, and step/physState probes — single-page or a parallel multi-page sweep. Includes the constant-to-behavior map (WHEELBASE, STEER_*, DRIFT, ROAD_FOLLOW, FRONT_GRIP, LONG_GRIP, PACE, ...) and which test groups to re-run. Use for "the car understeers", "make turn-in snappier", "tune grip", "trail-braking feels wrong", "compare two physics settings", "A/B physics", "physics sweep", "test ROAD_FOLLOW", "does this feel better".
+description: "Use when the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, A-B physics settings, a physics sweep, ROAD_FOLLOW, or whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change physics. Skidpad/step-steer/`player-dyn` VM A/B. Camera lag → playwright-probe; gamepad/touch/tilt/steer sliders → input-controls; AI → ai-racecraft."
 ---
 
 # Tune the physics
 
-The car uses a per-axle bicycle model with a combined-slip friction ellipse. Tune
-it the way the test suite does: **deterministically, with the headless loop, and
-assert relative/behavioural facts — never brittle absolute magnitudes** (those go
-stale the moment physics is retuned).
+Per-axle bicycle model + combined-slip friction ellipse. Tune the way the
+suite does: **headless, deterministic, relative assertions** — never brittle
+absolute magnitudes.
 
-## Constant → behaviour map (live-tunable via `__apex.setPhysics({...})`)
+## Constant → behaviour (`__apex.setPhysics({...})`)
 
 | Param | Effect | Bigger = |
 |---|---|---|
-| `wheelbase` (`WHEELBASE` 3.2 m) | turn-in response | lazier turn-in |
-| `expo` (`STEER_EXPO` 2.4) | input curve shape | gentler near centre |
-| `maxSlip` (`STEER_MAX_SLIP` 0.32 rad) | max steer lock | sharper low-speed |
-| `speedRef` (`STEER_SPEED_REF` 60 m/s) | speed-sensitive lock taper | keeps lock at speed |
-| `drift` (`DRIFT` 0) | rear looseness / oversteer | more tail-out (debug only) |
-| `roadFollow` (`ROAD_FOLLOW` 0.7) | curvature steering assist | more auto-drive |
-| `frontGrip` (`FRONT_GRIP` 0.89) | front friction bias | less understeer-safe |
-| `playerGrip` (`PLAYER_GRIP` 1.15) | player grip headroom vs AI | more forgiving |
-| `yawDamp` (`YAW_DAMP` 1.0) | yaw damping | calmer rotation |
-| `yawInertia` (`YAW_INERTIA` 0.7) | rotational inertia | snappier turn-in (<1) |
-| `pace` (`PACE` 1.0) | global speed multiplier | faster everywhere |
+| `wheelbase` (`WHEELBASE`) | turn-in | lazier |
+| `expo` (`STEER_EXPO`) | input curve | gentler near centre |
+| `maxSlip` (`STEER_MAX_SLIP`, rad) | max steer lock | sharper low-speed |
+| `speedRef` (`STEER_SPEED_REF`, m/s) | lock taper | keeps lock at speed |
+| `drift` (`DRIFT`) | rear looseness | more tail-out (debug) |
+| `roadFollow` (`ROAD_FOLLOW`, ships **0** = OFF) | curvature assist | more auto-drive |
+| `frontGrip` (`FRONT_GRIP`) | front friction bias | less understeer |
+| `playerGrip` (`PLAYER_GRIP`) | player vs AI headroom | more forgiving |
+| `yawDamp` (`YAW_DAMP`) | yaw damping | calmer |
+| `yawInertia` (`YAW_INERTIA`) | rotational inertia | lazier (`<1` snappier) |
+| `pace` (`PACE`) | ground-speed scale | faster everywhere |
+| GRIP STEER (`js/physics/grip-steer.js`; notch 1 = OFF) | assist-gated steering cap at the front's peak slip | steadier front under steer |
 
-Fixed (edit `js/game.js` to change): `LONG_GRIP = 34 m/s²` (longitudinal axis of
-the traction circle — braking/accel consumes grip; `slipFactor =
-sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip → trail-braking rotation,
-hard-braking understeer), `CS_FRONT/CS_REAR`, `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
+`expo` / `maxSlip` / `speedRef` are also the player's STEER sliders (LINEARITY / STEER LOCK /
+SPEED STEER): the slider UI, defaults and migration are **input-controls**; here they are A/B knobs.
+There is no "steer gain" knob: `updateCar` (js/game.js) steers `sign(s)·|s|^expo · maxSlip · lockTaper`, where
+`lockTaper` is 1 up to 15 m/s (vStd), `1/(1 + vStd/speedRef)` from 30 m/s, and a linear blend between, so slow corners
+sit in the blend. A/B `maxSlip` (linear gain), `expo` (near centre) or `speedRef` (speed taper); turn-in understeer also
+moves with `frontGrip` and `yawInertia`.
 
-## A/B harness (deterministic, headless)
+Numbers are not quoted here (they drift): read the live values with `__apex.tuning()` (js/agent/apex.js). Boot-effective
+defaults come from `js/input/steer-tuning.js` `applySteerTuning()` (slider defaults in `js/ui/settings-export.js`) —
+the game.js literals are dead.
+`PACE` is a scale, not a cap; compare speeds via `vTop()`/`vStd()`/`aStd()`.
 
-```js
-// In page context via Playwright page.evaluate, or the dev console:
-__apex.race("suzuka");
-// wait for load, then:
-__apex.headless(true);                 // skip render; physics runs uncapped
+**The arc must not reach the driver.** With assists off, nothing derived from
+track curvature / racing line may affect the player. New `Tracks.curvature()`
+(or equivalent) reads belong in a legitimate column — AI-only, assist-gated,
+broadcast-only, or surface — see `docs/PHYSICS.md`. Do not "help" the player
+by feeding path curvature into steer/throttle when assists are off.
 
-function trial(phys) {
-  __apex.setPhysics(phys);
-  let o = __apex.reset(0.30, 60, 0);    // frac, speed, lateral → obs
-  for (let i = 0; i < 180; i++)         // 3 s of closed-loop input
-    o = __apex.act({ steer: -0.4, throttle: true, brake: false }, 1/60, 1);
-  return o;                             // o.x, o.speed, o.slipFactor, o.k, o.clearL/R, o.offT, o.wrongWay, o.reward
-}
+**`ROAD_FOLLOW` ships at `0` (OFF)** on purpose. The DRIVING HELP slider maps
+notch 1..10 to `0..0.70` (notch 1 = off). Recommending a raised default is a
+design reversal, not a tweak — flag it.
 
-const a = trial({ frontGrip: 0.89 });
-const b = trial({ frontGrip: 0.80 });
-// Compare: does the lower-frontGrip run carry less apex speed / run wider (larger |x|)?
-```
+Fixed in `js/physics/consts.js` (`PhysicsConsts`, not `setPhysics`): `LONG_GRIP`, `CS_FRONT/CS_REAR`,
+`FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
-For open-loop physics probes use `step` + `physState`/`probe` instead:
-```js
-__apex.jump(0.0, 60, 0);
-__apex.setInput({ steer: 0, throttle: true }); __apex.step(1/60, 120);
-const p = __apex.physState();          // { s, x, speed, slipFactor, axFrac, wrongWay, ... }
-```
-
-### Parallel two-page sweep (faster, fully isolated)
-
-For a multi-config sweep, run each config on its **own** headless page in
-parallel — no cross-contamination of physics state, and wall-clock is one trial,
-not N. Same loop as `trial()` above, fanned out with `Promise.all`:
-
-```js
-const CONFIGS = [0.4, 0.6, 0.8, 1.0, 1.2].map(v => ({ label:`rf=${v}`, physics:{ roadFollow:v } }));
-const results = await Promise.all(CONFIGS.map(async cfg => {
-  const page = await browser.newPage({ viewport:{ width:844, height:390 } });
-  await page.goto(`http://127.0.0.1:${port}/`);
-  await page.waitForFunction(() => window.__apex?.info().track != null);  // after race()
-  return page.evaluate(async ({ physics }) => {
-    __apex.headless(true); __apex.setPhysics(physics);
-    let o = __apex.reset(0.30, 60, 0);
-    const slips = [];
-    for (let i = 0; i < 300; i++) { o = __apex.act({ steer:-0.4, throttle:true }, 1/60, 1); slips.push(o.slipFactor ?? 1); }
-    return { finalSpeed:o.speed, avgSlip: slips.reduce((a,b)=>a+b)/slips.length, offT:o.offT, done:o.done };
-  }, cfg).then(r => ({ label: cfg.label, ...r }));
-}));
-console.table(results);   // → finalSpeed / avgSlip / offT / done per config
-```
-
-See the **playwright-probe** skill for the free-port server + `pickChromium()`
-boilerplate that wraps this. Metrics: `finalSpeed` (speed carried), `avgSlip`
-(< 1 = traction consumed, 1 = on the edge), `offT` (off-track time = stability),
-`done` (crashed out). For a harder, adaptive test, run `tests/autopilot.spec.js`
-under each config and compare lap times — it stresses the racing line in a way a
-fixed input sequence can't.
-
-> **Init order:** after `race()` + `go()`, you must `jump()` or `step(1/60,1)`
-> **before** `obs()`/`physState()` — they return null until `player.px` exists.
-> `reset()` does this for you.
-
-## Asserting in tests (the house style)
-
-Write **relative / directional** checks that survive retuning:
-- "tarmac carries more speed than grass", not "speed > 28.5".
-- "lower frontGrip runs wider (larger |x|) through the same corner".
-- "heading barely changes off-track with zero steer".
-- "reverses then recovers to forward after a spin".
-
-Re-run after any change:
 ```sh
-npm run test:physics      # physics + elevation + longitudinal regression
-npm run test:behaviour    # collision + drift + offtrack + collision-ai-fixes
-npm run test:steering     # presets + sliders + steering modes
+# Verify per AGENTS.md rule 4 and its table: prefer ONE spec (`npm test -- tests/specs/understeer-cue.spec.js`,
+# `physics-characterization.spec.js`) via test-bg.mjs, then `test-bg.mjs --wait --timeout 45`; cap two groups
+# (physics-core, collisions, aero, input; `pick-tests` names them); a whole group → remote-group.mjs on the pushed branch.
+node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>  # browser (launchChromium) — stability probe, not an A/B
 ```
-There are also standalone Playwright probes in `tools/` worth running for grip
-work: `node tools/check-grip.mjs`, `check-bank.mjs`, `check-roadfollow.mjs`,
-`check-steer.mjs` (each verifies stability / no-NaN / forward motion).
 
-If you edited `js/game.js`, bump the cache version (`bump-cache` skill) before
-committing.
+No browser (Node VM, `tools/lib/game-vm.cjs`, deterministic — the first stop for an A/B):
+
+```sh
+TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json]   # skidpad, step-steer, trail-brake, midCorner_*; no flags to set physics
+node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SHAPES
+```
+
+`player-dyn.mjs` exports `measure(g, frac)`: to A/B one setting, script it in
+`scratch/` — `createGame({track, storage: {difficulty: "normal", autoThrottle: false}})` (copy `main()`'s options), `await g.race(track)`, `g.apex.setPhysics({frontGrip: x})`,
+`measure(g, frac)` per value — and diff the JSON (read `aF`/`aR`, `uF`/`uR`, `yaw`; front
+slip past its peak with rear settled = understeer). `physics-tune-sweep.mjs` is BROWSER + long (sharded
+DOM-slider laps, `APEX_WORKERS`): not for one setting. Verdict: a directional change in the
+same tables; worked "understeers in slow corners" example → [references/understeer-recipe.md](references/understeer-recipe.md).
+
+If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)) before commit. Theory:
+`docs/PHYSICS.md`, `docs/research/steering-research.md`.
+
+## Load on demand
+
+- Worked slow-corner understeer A/B → [references/understeer-recipe.md](references/understeer-recipe.md).
+- Closed-loop trial, parallel sweep (`polling: 100`), trail-brake, house-style
+  assertions → [references/harness.md](references/harness.md).
+- **Game feel / juice** — which Apex system owns which channel, and the hard
+  line that juice is a render/audio layer that must never write `car.px/pz`,
+  `s`, `x`, `psi` or change `obs()`/`act()` determinism →
+  [references/game-feel.md](references/game-feel.md); channel table and the
+  kerb-vs-kickup mistakes in
+  [references/game-feel-workflow.md](references/game-feel-workflow.md);
+  trauma-shake math (inspiration only) in
+  [references/game-feel-feedback-recipes.md](references/game-feel-feedback-recipes.md).

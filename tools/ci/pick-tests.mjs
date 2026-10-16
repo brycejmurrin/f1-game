@@ -1,0 +1,548 @@
+#!/usr/bin/env node
+/**
+ * @doc What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`).
+ * @section runner
+ * pick-tests.mjs — "what do I actually have to run for THIS change?"
+ *
+ * Running the whole suite is ~40 minutes of SwiftShader; running nothing is how
+ * a regression ships. The honest answer is in between and it is mechanical: a
+ * changed file maps to the groups that exercise it. This prints those groups,
+ * as commands you can paste.
+ *
+ *   node tools/ci/pick-tests.mjs                 # vs the merge-base with main
+ *   node tools/ci/pick-tests.mjs --staged        # only what is staged
+ *   node tools/ci/pick-tests.mjs --since HEAD~3
+ *   node tools/ci/pick-tests.mjs js/car/parts.js js/ui/hud.js   # explicit paths
+ *   node tools/ci/pick-tests.mjs --bg            # print the background-run command
+ *   node tools/ci/pick-tests.mjs --json         # machine-readable, for CI
+ *
+ * `--json` exists because the human output is PROSE and a CI selector reading
+ * it becomes a silent consumer of an unversioned format. Two of its lines are
+ * live traps for an unanchored `test:<group>` grep: the zero-match message
+ * names `test:tiny`, and the batching lines name `tools/ci/test-bg.mjs <groups>`.
+ * The JSON shape is asserted by tests/unit/pick-tests.test.mjs, so it cannot drift
+ * out from under a consumer the way the prose can.
+ *
+ * The rules below are deliberately COARSE and biased toward running too much.
+ * A rule that is too narrow is a missed regression; a rule that is too wide
+ * costs 10-40 MINUTES of serialized SwiftShader per extra browser group —
+ * groups run one at a time on a four-core box, so "too wide" is measured in
+ * wall-clock hours, not minutes. Resolve the tension at the RUN, not the
+ * rule: when in doubt widen the rule, but cap what you actually execute
+ * (AGENTS.md's verification policy: two browser groups per change, the rest
+ * named as not-run) and prefer tools/ci/select-specs.mjs for a finer per-spec
+ * cut when the group is much bigger than the change.
+ *
+ * `tests/unit/test-groups.test.mjs` asserts every group named here exists in
+ * package.json, so a renamed script cannot leave a rule pointing at nothing.
+ */
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+// The branch `.github/workflows/pages.yml` deploys from — the repo's real trunk.
+// tests/unit/pick-tests.test.mjs asserts this against pages.yml, so the two cannot
+// drift apart silently the way a comment naming a branch would.
+export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
+// Kept in step with tools/ci/test-bg.mjs: WORKERS is its formula, and a batch
+// is ONE group because test-bg's default cap is 1 (sequential; `--parallel`
+// is the opt-in). The old cores/2 batches printed two-group commands that
+// test-bg then started only the first of.
+const CORES = os.availableParallelism ? os.availableParallelism() : (os.cpus().length || 4);
+const WORKERS = +process.env.WORKERS || (os.cpus().length <= 4 ? 1 : 2);
+const MAX_GROUPS = 1;
+
+/* [matcher, groups, why] — matcher is a RegExp over the repo-relative path.
+   Every rule that matches contributes its groups; the union is what runs. */
+export const RULES = [
+  // ── always ──────────────────────────────────────────────────────────────
+  [/^(js|css)\//, ["tiny"], "any source edit: does the page still boot"],
+  [/^(js|css|index\.html|version\.json)/, ["tooling-fast"],
+   "load order, docs integrity, api contracts — ~2 min at three files at a time, catches the structural slips"],
+
+  // ── renderer ────────────────────────────────────────────────────────────
+  // NOT "visual" — tests/manual/tracks-visual.spec.js is PARKED. It has no
+  // committed golden baselines and self-skips all 40 circuits, so the group
+  // reports `= run passed (40/40 done, 0 failed)` at 0.0 s per test while
+  // asserting nothing. Recommending it here made that vacuous green look like
+  // renderer verification: measured 2026-08-14, a chunked-draw change was very
+  // nearly signed off on it. The spec's own header states the principle — "a
+  // gate that cannot pass is worse than no gate: it trains everyone to ignore
+  // the group" — and being RECOMMENDED as a gate is how it kept getting run.
+  // tests/unit/pick-tests.test.mjs holds this to the baselines actually being
+  // absent, so generating them re-opens the question instead of leaving a
+  // stale exclusion behind.
+  [/^js\/render\/(glx\/|gfx)/, ["gfx"], "the shipped WebGL2 path and its GLSL leaves"],
+  [/^js\/render\/webgpu\//, ["gfx"], "WGX is feature-detected; GLX must still boot"],
+  [/^js\/render\/three\//, ["gfx"], "the three.js backend has its own probe spec"],
+  [/^js\/render\/shared\//, ["hooks", "gfx"], "the baked-pack loader, glTF and the lamp chunks every backend shares"],
+  [/^js\/render\/renderer-boot\.js$/, ["tiny", "hooks"], "backend selection, canary and fallback orchestration"],
+
+  // ── track engine + circuit data ─────────────────────────────────────────
+  [/^js\/track\/scenery/, ["circuits", "sweeps"], "prop placement and the full-fleet clip audits"],
+  // `scenery` belongs here and was MISSING, found by tools/ci/select-recall.mjs
+  // replaying real regressions: buildProps (street barriers, treelines, the
+  // instance() emitters) lives in js/track/scenery/build-props.js (peeled from
+  // tracks.js); BOTH scenery defects fixed on 2026-08-08 — the vegas barrier
+  // over the racing line and the buenos_aires cross-segment tree — were changes
+  // to THIS band caught by props-over-road/terrain-over-road, which lived only
+  // in `test:scenery` (now `test:circuits`).
+  // Routing it to circuit+physics+sweeps+foundation ran everything except the
+  // two specs that actually report the class of bug the file produces.
+  [/^js\/track\/core\/space\.js/, ["physics-core"], "world<->track projection (projection.spec.js)"],
+  [/^js\/track\/build-(client|worker)\.js/, ["sweeps"], "the build Worker (apex26.buildWorker): build-worker.test.mjs replays it byte-identically"],
+  [/^js\/workers\//, ["tooling"], "bitmap-decode worker + client (tests/unit/bitmap-decode-worker.test.mjs)"],
+  [/^js\/track\/(core\/|tracks\.js)/,
+   ["circuits", "physics-core", "sweeps"],
+   "road geometry reaches walls, elevation, physics, every circuit's foundation — TrackBuildProps is scenery/build-props.js"],
+  // Generated by tools/gen/bake-elevation.mjs, but geometry all the same: it
+  // supplies the road's Y for every circuit it names, so an edit re-shapes
+  // those road surfaces and everything standing on them. Same blast radius as
+  // tracks.js, hence the same three groups.
+  [/^js\/track\/circuit-elevations\.js/,
+   ["circuits", "physics-core", "sweeps"],
+   "surveyed road elevation: re-shapes the road surface of every circuit listed in it"],
+  [/^js\/circuits\/.*\.js$/, ["circuits"], "a circuit def: walls, its scenery callback, and its own foundation spec (not the dir's CLAUDE.md)"],
+  // The track designer: its def factory parity and registry tests are Node-only
+  // and run in the edit loop; the screen's browser spec (PR4) joins `modes`.
+  [/^js\/editor\//, ["tooling-fast", "modes"], "the custom track designer: its unit tests (tooling-fast) and tests/specs/track-designer.spec.js (modes)"],
+
+  // ── DIRECTORY rules (Phase 2b) ──────────────────────────────────────────
+  // js/game/ dissolved into domain directories in the 2026-09-03 move window,
+  // so a rule names a DIRECTORY rather than an alternation of filenames: a new
+  // file in js/ui/ is routed the day it lands instead of the day someone
+  // remembers to extend a regex. The blanket-route count in
+  // tests/data/ratchets.json is what catches a file no rule names.
+  [/^tools\/lib\/game-vm\.cjs/, ["game-vm"], "the Node VM game harness and its parity test"],
+  [/^tools\/lighting\/slider-effect\.mjs/, ["node-slow"], "slider-effect.test.mjs spawns this tool per test"],
+
+  // ── car ─────────────────────────────────────────────────────────────────
+  [/^js\/car\/parts\.js/, ["car", "sweeps-parts"], "the catalog, budgets, recipes and their physics; sweeps-parts is the option-resolution census (~70 s across four worker threads)"],
+  [/^js\/car\/(car3d|liveries|liverytex|crest-paths)\.js/, ["car", "node-slow"], "car mesh + livery specs; node-slow rasterises every livery and crest"],
+  // The legends table is FACT (a sourced record) plus a formula derived from
+  // it, and tests/unit/legends.test.mjs is the only thing checking the two
+  // still agree. Without this rule, editing the record selects the boot and
+  // structural groups — neither of which reads a single one of its numbers.
+  [/^js\/data\/legends\.js/, ["guards"], "the sourced record and the ratings derived from it must stay consistent"],
+  [/^js\/data\/teams\.js/, ["car", "modes"], "the grid feeds season and career"],
+  [/^js\/car\/ghost\.js/, ["modes"], "time-trial ghost"],
+  // GhostShare.decode is an untrusted-input door (#ghost= / pasted APXG1); the
+  // seeded fuzz that hammers it lives in net-unit (with the other paste/packet
+  // codecs) as well as tooling-fast.
+  [/^js\/car\/ghost-share\.js/, ["car", "net-unit"], "fuzz-untrusted-inputs + ghost-share unit"],
+  [/^js\/car\//, ["car"], "the car's mesh, livery and parts"],
+  [/^js\/garage\/pit-signs\.js/, ["circuits", "sweeps"], "the pit bay signs' atlas + decal: pit-signs.spec.js rides in test:circuits, pit-signs.test.mjs in test:sweeps"],
+  [/^js\/garage\//, ["car", "ui"], "the garage bay: the studio scene and the setup sheet the menu specs click through"],
+
+  // ── the loop and the driving model ──────────────────────────────────────
+  // js/game.js IS the physics — the bicycle model, the friction ellipse, the
+  // aero trade and the longitudinal integrator all live in it. Since the
+  // 2026-09 regroup the blast radius is four browser groups (physics-core,
+  // collisions, hooks, circuits). It was THREE until 2026-09-09, when the
+  // `driving` union was split: at 16 spec files it held 57 % of its tests in
+  // its four SLOWEST files, so Playwright's by-file --shard could hand one
+  // runner collision-ai-fixes + aero-zones (46 slow tests) and another the
+  // physics files (7 fast ones). Adding shards cannot fix an imbalance;
+  // splitting the group can. See docs/TESTING.md.
+  // AGENTS.md still caps a change at TWO browser groups — run the two most
+  // specific and name the rest as not-run.
+  [/^js\/game\.js/, ["physics-core", "collisions", "hooks", "circuits"], "the loop: physics, AI, race logic"],
+  [/^js\/physics\/consts\.js/, ["physics-core", "collisions", "hooks", "circuits"], "the driving model's immutable numbers — same blast radius as game.js"],
+  [/^js\/physics\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
+  [/^js\/physics\/grip-steer\.js/, ["input", "steering-unit"], "own-state grip-steer cap + the steering sheet that hosts it"],
+  [/^js\/audio\/driving-cues\.js/, ["steering-unit", "audio-unit"], "assist-gated braking tone + L/R corner calls"],
+  [/^js\/physics\/body-attitude\.js/, ["ui"], "a visual-only layer"],
+  // `sweeps` because debris-world's hazard query projects bodies back onto the
+  // centreline, and debris-hazard-hint.test.mjs is the circuit-rebuilding sweep
+  // that checks that projection.
+  [/^js\/physics\/incident-sim\.js/, ["collisions", "sweeps"], "the Rapier takeover is a CONTACT model"],
+  [/^js\/physics\/debris-world\.js/, ["physics-core", "sweeps"], "debris.spec.js rides in test:physics-core"],
+  [/^js\/physics\/tyre-model\.js/, ["physics-core"], "the wear model feeds the grip seam — pit-lane.spec.js and the characterization ride in test:physics-core"],
+  [/^js\/race\/pit-lane\.js/, ["physics-core", "game-vm"], "pit-lane.spec.js rides in test:physics-core; the commitment's VM twin (pit-lane-vm) in test:game-vm"],
+  [/^js\/physics\/(active-aero|aero)/, ["aero"], "the aero model — active-aero + aero-zones specs"],
+  // CONTACT AND AI (test audit T10, 2026-10-05): these routed to physics-core
+  // alone, never to the group whose subject they are — collisions-deep.spec.js
+  // drives AiDrive, and car/wall contact is what `collisions` asserts. Its
+  // specs are VM-twinned, so `game-vm` names where they actually run on CI.
+  [/^js\/physics\/(collide|contact-geometry|wall-clamp|ai-drive|ai-band|ai-corridor)\.js/, ["collisions", "game-vm"],
+   "car/wall contact and the AI driver: collisions-deep.spec.js and the collision VM twins"],
+  [/^js\/physics\//, ["physics-core"], "the driving model and what feeds it"],
+  [/^js\/race\/race-control\.js/, ["physics-core"], "race-control.spec.js rides in test:physics-core"],
+  [/^js\/race\//, ["modes", "state-unit"], "session model: quali, reliability, race control"],
+
+  // ── modes and their screens ─────────────────────────────────────────────
+  // `ui` on the season files because the SETUP screen is DOM the menu specs
+  // click through; `modes` is season+career+TT+quali.
+  // career-ui / career-backup: modes alone is not enough — career.spec.js
+  // declares over the selected-gate budget, so select-specs' SOURCE_AFFECTED
+  // elevates it to oversize when these two change (PR #611 shipped green
+  // without it). Keep this rule so pick-tests names the reason.
+  [/^js\/career\/(career-ui|career-backup)\.js/, ["modes", "state-unit"],
+   "career.spec.js — SOURCE_AFFECTED in select-specs elevates it past overBudget"],
+  [/^js\/career\/season-(cal|ui)\.js/, ["modes", "ui", "state-unit"], "calendar + weekend format"],
+  [/^js\/career\//, ["modes", "state-unit"], ""],
+
+  // ── presentation ────────────────────────────────────────────────────────
+  [/^js\/lighting\//, ["gfx"], ""],
+  [/^js\/camera\/photo-cam\.js/, ["ui"], "a visual-only layer"],
+  [/^js\/camera\/cockpit-opts\.js/, ["ui"], "DOM screens"],
+  [/^js\/camera\//, ["input"], "camera vantage, offsets and mode switching"],
+  [/^js\/audio\/spotify\.js/, ["ui", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
+  [/^js\/audio\/radio-voice\.js/, ["audio-unit", "ui"], "the spoken radio: its own policy suite, and the mixer panel that toggles it"],
+  [/^js\/audio\/voice-pack\.js/, ["audio-unit"], "the recorded radio voice: its composer, pack coverage and the RadioVoice hand-off"],
+  [/^js\/audio\/announcer\.js/, ["audio-unit", "ui"], "the pre-race announcer: its own script+voice suite, and the loading screen and settings sheet that drive it"],
+  [/^js\/audio\/panel\.js/, ["ui"], "mixer panel: audio behaviour + menu DOM"],
+  [/^js\/audio\/rivals\.js/, ["audio-unit"], "rival-audio.test.mjs and the pass-by voice pool"],
+  [/^js\/audio\/crowd\.js/, ["audio-unit"], "trackside crowd ambience bed + silence gates"],
+  [/^js\/audio\/engine\.js/, ["audio-unit"], "GameAudio init attach of the rival pass-by pool"],
+  [/^js\/audio\/ers-layer\.js/, ["audio-unit"], "MGU-K electric deploy/harvest + overtake/boost cue"],
+  [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
+  [/^js\/perf\/(metrics-overlay|race-entry-profile)\.js/, ["perf-frametime", "ui"], "frametime bench seam + metrics overlay"],
+  [/^js\/perf\/governor\.js/, ["hooks", "modes", "state-unit"], ""],
+  [/^tests\/specs\/perf-frametime\.spec\.js/, ["perf-frametime"], "SwiftShader frame-time regression lane (soft by default)"],
+  [/^tests\/helpers\/perf-frametime\.mjs/, ["perf-frametime", "tooling-fast"], "frametime baseline compare math"],
+  [/^tests\/data\/perf-frametime-baseline\.json/, ["perf-frametime"], "committed frametime baseline — regen via APEX_UPDATE_BASELINE"],
+  [/^js\/perf\//, ["ui"], "the quality preset, renderer picker and the overlays — DOM screens"],
+  [/^js\/input\//, ["input"], ""],
+  [/^js\/input\/controller-profiles\.js$/, ["steering-unit"], "controller-profiles.test.mjs — per-device maps, legacy migration and input-owner release"],
+  // PHONE AS CONTROLLER: its node suite (phone-pad.test.mjs) is in steering-unit,
+  // and the roll math it shares with input.js is asserted there too.
+  [/^js\/input\/(phone-pad|tilt-roll)\.js/, ["steering-unit"], "phone-pad.test.mjs — the wire, the roll math and the remote source over loopback"],
+  // WebXR Phase 0: seated-rig math + controller remoteSample mapping + session
+  // lifecycle. Pure Node suite (xr-phase0.test.mjs) in steering-unit / tooling-fast;
+  // the optional iwer Playwright smoke is test:xr (not selected by path alone).
+  [/^js\/xr\//, ["steering-unit", "tooling-fast"], "xr-phase0.test.mjs — rig compose, input map, sessionInit, vendored XR addons"],
+  [/^js\/ui\/scale\.js/, ["ui"], "ui-scale.spec.js"],
+  [/^js\/ui\/dock-layout\.js/, ["steering-unit", "ui"], "dock-layout.test.mjs + ui-button-touch reposition"],
+  [/^js\/ui\/hud-arrange\.js/, ["steering-unit", "ui"], "hud-arrange.test.mjs (pure drag / pinch / clash maths) + the pause-card editor"],
+  [/^js\/ui\/share-code\.js/, ["steering-unit", "ui"], "share-code.test.mjs — APXS/APXL/APXD + Continue lastSession"],
+  [/^js\/ui\//, ["ui"], "DOM screens"],
+  [/^js\/fx\//, ["ui"], "visual-only layers"],
+
+  // ── A FILE'S OWN UNIT TEST, where the generic rule above does not reach it ──
+  // Each of these has a same-named suite that lives in a group the broader rule
+  // never selects, so editing the source ran everything EXCEPT the test written
+  // to guard it. `js/ui/driving-line-opts.js` is the one that proved it: it
+  // matches "js/ui/ -> ui", its suite is in `sweeps`, and a rename of the store
+  // key it owns went green locally and red in CI on that very suite.
+  // tests/unit/pick-tests.test.mjs holds the invariant, so a thirteenth cannot
+  // appear in silence — these twelve are what it measured.
+  [/^js\/race\/race-settings\.js/, ["game-vm"], "race-settings-vm.test.mjs"],
+  [/^js\/ui\/settings-tabs\.js/, ["steering-unit", "ui"], "settings-tabs.test.mjs (the page stack + LAZY_AUDIO gate); ui for the menu specs"],
+  [/^js\/career\/custom-team\.js/, ["car"], "custom-team.spec.js"],
+  [/^js\/car\/helmets\.js/, ["garage-unit"], "helmets.test.mjs"],
+  [/^js\/car\/car-shade\.js/, ["garage-unit"], "car-shade.test.mjs"],
+  [/^js\/car\/car-materials\.js/, ["garage-unit"], "car-materials.test.mjs"],
+  [/^js\/car\/car-material-shade\.js/, ["garage-unit"], "car-materials.test.mjs"],
+  [/^js\/garage\/setup-tune\.js/, ["garage-unit"], "setup-tune.test.mjs"],
+  [/^js\/render\/shared\/driving-line\.js/, ["sweeps"], "driving-line.test.mjs"],
+  [/^js\/ui\/driving-line-opts\.js/, ["sweeps"], "driving-line-opts.test.mjs"],
+  [/^js\/ui\/debris-opts\.js/, ["state-unit"], "debris-opts.test.mjs"],
+  [/^js\/ui\/appearance-opts\.js/, ["state-unit"], "appearance-opts.test.mjs"],
+  [/^js\/ui\/a11y-opts\.js/, ["state-unit"], "a11y-opts.test.mjs"],
+  [/^js\/ui\/hud-elements\.js/, ["state-unit", "ui"], "hud-elements.test.mjs"],
+  [/^js\/ui\/hud-(relative|strategy|inputs)\.js/, ["state-unit", "ui"], "hud-relative / hud-strategy / hud-inputs .test.mjs"],
+  [/^js\/ui\/hud-tyres\.js/, ["state-unit", "ui"], "hud-tyres.test.mjs"],
+  [/^js\/ui\/hud-readouts\.js/, ["state-unit", "ui"], "hud-readouts.test.mjs"],
+  [/^js\/ui\/title-fx\.js/, ["state-unit"], "title-fx.test.mjs"],
+  [/^js\/ui\/title-layout\.js/, ["state-unit"], "title-layout.test.mjs"],
+  [/^js\/ui\/pause-opts\.js/, ["state-unit"], "pause-opts.test.mjs"],
+  [/^js\/ui\/screen-looks\.js/, ["state-unit"], "screen-looks.test.mjs (also run title-layout + pause-opts: both peek through it)"],
+  [/^js\/ui\/track-maps\.js/, ["hooks", "circuits"], "map-hooks.spec.js reads __apex.mapPts; the layout metadata is per circuit"],
+  // The SHIPPED default for any preference. Its own suite is settings-defaults
+  // .test.mjs in steering-unit, but the file reaches further than that: it
+  // outranks the call-site literal for every key it names, and some of those
+  // keys are the driving model. It briefly carried steerRate, tiltDeg,
+  // adaptiveButtons and pace, and that moved every scenario in the
+  // characterization baseline — trail-brake rotation went from -0.628 rad of
+  // yaw to exactly zero. They were dropped, so the file is handling-neutral
+  // TODAY; physics-core stays on the rule because the next key added could put
+  // them back, and this is the gate that noticed the first time.
+  [/^js\/data\/settings-defaults\.js/, ["steering-unit", "physics-core"],
+   "settings-defaults.test.mjs, plus the driving model: a steering default moves the characterization baseline"],
+  // Shipped GARAGE defaults (parts / liveries / team). Same miss-path as
+  // settings-defaults; the default team's parts kit moves the characterization
+  // baseline the same way a steering default would.
+  [/^js\/data\/garage-defaults\.js/, ["steering-unit", "physics-core"],
+   "garage-defaults.test.mjs; game-vm and physics-characterization pin factory McLaren so the baseline does not follow the garage"],
+  [/^js\/ui\/key-binds\.js/, ["steering-unit"], "key-binds.test.mjs"],
+  [/^js\/ui\/onboard\.js/, ["steering-unit"], "onboard.test.mjs"],
+  [/^js\/ui\/settings-export\.js/, ["steering-unit"], "settings-export.test.mjs"],
+
+  // ── core and the agent surface ──────────────────────────────────────────
+  [/^js\/agent\//, ["hooks", "agent-contract"], "the __apex contract and the agent view"],
+  [/^js\/core\/store\.js/, ["hooks", "modes", "state-unit"], ""],
+  [/^js\/core\/log\.js/, ["hooks", "tooling-fast"], "every module logs through it"],
+  [/^js\/core\/native/, ["mobile-unit", "hooks"], "Native detect + NativeDownload; test:mobile-unit"],
+  [/^js\/core\//, ["hooks"], "the shared floor every module stands on"],
+  [/^mobile\//, ["mobile-unit"], "Capacitor Android project + sync-web; test:mobile-unit"],
+
+  // ── the rest ────────────────────────────────────────────────────────────
+  [/^js\/net\/scan\.js/, ["lifecycle-unit"], "camera cancellation is an async ownership boundary"],
+  [/^js\/net\//, ["net-unit", "net"], "wire logic first (1 s), then the browser session"],
+  [/^js\/data\//, ["hooks", "lifecycle-unit"], "the hook contracts (data-lifecycle + telemetry-compare ride test:hooks) and the async-lifecycle twins"],
+  [/^sw\.js|^manifest\.json/, ["service-worker"], ""],
+  [/^worker\//, ["net-unit"], "the rendezvous Durable Object"],
+  // menus.css and index.html carry the menu chrome and the #title-car art, and
+  // menu-baseline.spec.js's six blessed PNGs are the ONLY thing that looks at
+  // either. Without baseline here a type-metric or art change ships unseen:
+  // that is incident 2026-09-16, where an 8 -> 9 px garage tab label went red
+  // on the deploy branch and blocked five consecutive Pages runs.
+  // carsetup/tokens/select.css paint the same blessed screens (the garage
+  // panel, the global type and colour tokens, the picker), so they ride along.
+  [/^css\/(menus|carsetup|tokens|select)\.css/, ["ui", "baseline"], "the menu chrome: only the blessed PNGs in menu-baseline.spec.js see it"],
+  [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
+  [/^js\/ui\/settings-search\.js$/, ["steering-unit"], "settings search ownership and focus regressions"],
+  // Two rules, because "script tags + DOM shell" is LOAD-BEARING: it is one of
+  // select-specs' BOOT_FALLBACK_REASONS, the strings that let node-plan.mjs
+  // drop the boot group from the VM plan when only a blanket rule named it
+  // (select() keeps the group for the browser gate since round-3 8-F2).
+  // Rewording it to mention the art would put vm-page — logging.spec.js's VM
+  // twin — back into every source edit's node plan.
+  [/^index\.html/, ["baseline"], "the #title-car art the baseline PNGs pixel-compare"],
+  [/^(index|cockpit-view)\.html/, ["tiny", "ui"], "script tags + DOM shell"],
+  [/^tools\/manifest\.cjs/, ["tooling-fast"], "load order is asserted against index.html"],
+  [/^tools\//, ["tooling-fast"], "the tools index and every tool contract live in the tooling suite"],
+  [/^assets\//, ["hooks"], "the baked pack loader"],
+  [/^tests\//, ["audit"], "every test file must belong to a topical group"],
+  [/^types\//, ["tooling-fast"], "the authored .d.ts contracts are checked by game-ctx-surface"],
+  [/^desktop\//, ["desktop-unit", "tooling-fast"], "electron-builder config, identity, notices, version"],
+  [/^(AGENTS|CLAUDE|README)\.md$|^docs\/|^\.claude\/(skills|agents|rules)\/|^\.agents\/skills\//, ["tooling-fast"], "docs integrity is a real test"],
+];
+
+/** Manifest files that ONLY the two blanket rules (tiny / tooling-fast) reach:
+ *  no rule names them or their directory, so an edit there is told "boot the
+ *  page" and nothing topical. Ratcheted by COUNT in tests/data/ratchets.json
+ *  (`blanketOnlyRoutes` on this file) rather than as a frozen path list — the
+ *  Phase 2b window moves 91 files, and a list keyed on paths would need a hand
+ *  edit per move while saying nothing a count does not. The count may shrink
+ *  (a file gains a rule) and must not grow (a new or MOVED file that fell off
+ *  every specific rule is exactly the regression a tree move causes); the
+ *  guard prints the live list so the offender names itself.
+ *  The two "always" rules are excluded on purpose. */
+export function blanketOnly(manifest = createRequire(import.meta.url)("../manifest.cjs")) {
+  const specific = RULES.slice(2);
+  const files = [
+    ...manifest.FULL, ...Object.values(manifest.DEFERRED).flat(), ...manifest.LAZY_AGENT,
+    ...manifest.LAZY_RACE, ...manifest.LAZY_SCENERY, ...manifest.LAZY_DATA, ...manifest.LAZY_NET,
+    ...(manifest.LAZY_EDITOR || []), ...(manifest.LAZY_XR || []), ...(manifest.LAZY_CAM_EDITOR || []),
+    ...(manifest.LAZY_CAREER_UI || []),
+  ];
+  return files.filter((f) => !specific.some(([re]) => re.test(f)));
+}
+
+/* A SPEC EDIT RUNS ITS OWN GROUP (test audit T10, 2026-10-05). `^tests/`
+ * routes to `audit` only — the "is every test file grouped" check — so editing
+ * a browser spec never named the group that RUNS it. The owner is read
+ * from tests/groups.json (the source package.json's scripts are generated
+ * from), globs expanded, so a regroup moves the route with the spec and no
+ * RULE can go stale. Only browser groups own a spec; the multi-group boot
+ * specs (smoke, logging, dev-tools) name every group they sit in.
+ *
+ * The CI selectors drop a group this alone named (stripSpecOwner):
+ * select-specs already runs an edited spec FIRST (rank 0) and on its own, so
+ * routing its group-mates would spend the budget on specs the diff never
+ * touched, and node-plan has no VM work an edited browser spec can change. */
+export const SPEC_OWNER_REASON = "the edited spec's own browser group (tests/groups.json)";
+let _groupsJson = null;
+const groupsJson = () => (_groupsJson ||= JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8")).groups);
+const globRe = (g) => new RegExp("^" + g.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replaceAll("*", "[^/]*") + "$");
+
+/** The browser groups (names without `test:`) whose file list holds `spec`. */
+export function specOwners(spec, groups = groupsJson()) {
+  const out = [];
+  for (const [script, v] of Object.entries(groups)) {
+    if (v?.kind !== "browser" || !script.startsWith("test:")) continue;
+    if ((v.files || []).some((g) => globRe(g).test(spec))) out.push(script.slice("test:".length));
+  }
+  return out.sort();
+}
+
+/** Undo the spec-owner routing for a CI selector: strip SPEC_OWNER_REASON
+ *  from every group and drop a group it alone named, so the selection (and
+ *  node-plan's dropBootFallback after it) sees exactly the RULES' answer. */
+export function stripSpecOwner(groups) {
+  const dropped = [];
+  for (const [g, reasons] of groups) {
+    if (!reasons.delete(SPEC_OWNER_REASON)) continue;
+    if (!reasons.size) { groups.delete(g); dropped.push(g); }
+  }
+  return dropped;
+}
+
+export function pick(files) {
+  const groups = new Map();   // group -> reasons
+  const add = (g, why) => {
+    if (!groups.has(g)) groups.set(g, new Set());
+    groups.get(g).add(why);
+  };
+  for (const f of files) {
+    for (const [re, gs, why] of RULES) {
+      if (!re.test(f)) continue;
+      for (const g of gs) add(g, why || f);
+    }
+    if (/^tests\/specs\/[^/]+\.spec\.js$/.test(f)) for (const g of specOwners(f)) add(g, SPEC_OWNER_REASON);
+  }
+  return groups;
+}
+
+// Validate the selector before consulting git or starting any verification.
+export function validateSelectionArgs(argv, flags = ["--staged", "--bg", "--json", "--help", "-h"]) {
+  const allowed = new Set(flags);
+  let sawSince = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--since") {
+      if (sawSince) throw new Error("--since may be supplied only once");
+      sawSince = true;
+      if (!argv[i + 1] || argv[i + 1].startsWith("-")) throw new Error("--since requires a ref");
+      i++;
+    } else if (a.startsWith("-") && !allowed.has(a)) throw new Error(`Unknown option: ${a}`);
+  }
+  if (argv.includes("--staged") && argv.includes("--since")) throw new Error("Choose --staged or --since");
+}
+
+export function selectionReceipt(files, scripts) {
+  const receipts = files.map((file) => {
+    const selected = pick([file]);
+    const groups = [...selected.keys()].filter((g) => scripts[`test:${g}`]).sort();
+    return { file, claimed: groups.length > 0, groups,
+      because: [...new Set(groups.flatMap((g) => [...selected.get(g)]))] };
+  });
+  const unclaimed = receipts.filter((r) => !r.claimed).map((r) => r.file);
+  return { reason: !files.length ? "none" : unclaimed.length ? (unclaimed.length === files.length ? "unmatched" : "partial") : "matched",
+    receipts, unclaimed };
+}
+
+function changedFiles(argv) {
+  const since = argv.indexOf("--since");
+  // `--since <ref>` TAKES A VALUE, and that value is not a path. Filtering on
+  // `!a.startsWith("--")` alone swallowed the ref as an explicit file, so
+  // `--since HEAD~3` reported the literal string "HEAD~3" as the only changed
+  // file, matched no rule, and printed "nothing to run" — the one answer a test
+  // selector must never give wrongly. It had never worked, and the change-aware
+  // CI design in docs/archive/research/TEST-AUDIT-2026-08.md §3 is built entirely on it.
+  //
+  // The `since >= 0` guard is not decoration: `indexOf` returns -1 when --since
+  // is ABSENT, so a bare `n !== since + 1` excludes index 0 unconditionally and
+  // the documented `pick-tests.mjs <paths>` form silently lost its first path
+  // (one path lost ALL of them and fell through to the git-diff default, which
+  // answers a different question and looks like a real answer).
+  const explicit = argv.filter((a, n) => !a.startsWith("--") && !(since >= 0 && n === since + 1));
+  if (explicit.length) return explicit;
+  const git = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
+  if (argv.includes("--staged")) return git(["diff", "--cached", "--name-only"]).split("\n").filter(Boolean);
+  if (since >= 0 && argv[since + 1]) return git(["diff", "--name-only", argv[since + 1]]).split("\n").filter(Boolean);
+  // Default: everything not yet on the branch point, plus the working tree.
+  //
+  // THE DEPLOY BRANCH IS THE BASE, not `main`. main is a stale diverged fork
+  // (AGENTS.md says so and nothing merges into it), so merge-basing against it
+  // returns an ancient commit and the "changed files" set balloons to most of
+  // the repo — which reads as "run everything", i.e. the tool silently gives up
+  // exactly when it is asked the real question. It is kept as a fallback only
+  // for a clone that has no deploy branch.
+  let base = "";
+  for (const ref of [`origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH, "origin/main", "main", "HEAD~1"]) {
+    try { base = git(["merge-base", "HEAD", ref]); break; } catch (_) { /* try the next */ }
+  }
+  const out = new Set(git(["diff", "--name-only", "HEAD"]).split("\n").filter(Boolean));
+  if (base) for (const f of git(["diff", "--name-only", base]).split("\n")) if (f) out.add(f);
+  for (const f of git(["ls-files", "--others", "--exclude-standard"]).split("\n")) if (f) out.add(f);
+  return [...out];
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const argv = process.argv.slice(2);
+
+  try { validateSelectionArgs(argv); } catch (e) { console.error(e.message); process.exit(1); }
+
+  // --help must answer without consulting git. On a clean deploy tip,
+  // changedFiles() is empty and the default prose is "no changed files" —
+  // which does not contain `group`/`test:`, so the MCP smoke in
+  // tools-runnable.test.mjs fails even though the selector itself is fine.
+  // That smoke used to pass accidentally whenever the working tree had diffs.
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(`Usage: node tools/ci/pick-tests.mjs [options] [paths…]
+  (no args)     groups for files not yet on ${DEPLOY_BRANCH}, plus the working tree
+  --staged      only staged files
+  --since <ref> files changed since <ref>
+  --bg          print tools/ci/test-bg.mjs batch commands only
+  --json        machine-readable {reason,files,groups} (asserted by pick-tests.test.mjs)
+  --help        this message
+
+Each matched path maps to one or more test:<group> scripts (see RULES).`);
+    process.exit(0);
+  }
+
+  const files = changedFiles(argv);
+
+  // --json short-circuits BEFORE any prose path, deliberately. The two early
+  // exits below ("no changed files", "no rule matched") are the cases a
+  // consumer most needs to distinguish — one means run nothing, the other means
+  // run everything — and the prose renders them as sentences that happen to
+  // contain a `test:` token. Emitting the same three fields for all outcomes is
+  // what lets CI branch on `reason` instead of grepping English.
+  if (argv.includes("--json")) {
+    const g = pick(files);
+    const pkgJ = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    const named = [...g.keys()].filter((n) => pkgJ.scripts[`test:${n}`]).sort();
+    console.log(JSON.stringify({
+      // "none" — nothing changed, run nothing. "unmatched" — files changed but
+      // no rule claimed them, so the selection is NOT trustworthy and the
+      // caller must fall back to a full run. "matched" — groups is the answer.
+      ...selectionReceipt(files, pkgJ.scripts),
+      files,
+      groups: named.map((n) => ({ group: n, script: `test:${n}`, because: [...g.get(n)][0] })),
+    }));
+    process.exit(0);
+  }
+
+  if (!files.length) {
+    console.log("no changed files — nothing to run");
+    process.exit(0);
+  }
+  const groups = pick(files);
+  console.log(`${files.length} changed file(s):`);
+  for (const f of files.slice(0, 20)) console.log(`    ${f}`);
+  if (files.length > 20) console.log(`    … and ${files.length - 20} more`);
+
+  if (!groups.size) {
+    console.log("\nno rule matched — run `npm run test:tiny` and use your judgement");
+    process.exit(0);
+  }
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  const names = [...groups.keys()].filter((g) => pkg.scripts[`test:${g}`]).sort();
+
+  const receipt = selectionReceipt(files, pkg.scripts);
+  if (receipt.unclaimed.length) console.error(`Unclaimed paths: ${receipt.unclaimed.join(", ")} — selection is ${receipt.reason}; additional verification required.`);
+  console.log(`\n${names.length} group(s) to run:`);
+  for (const g of names) console.log(`    test:${g.padEnd(14)} ${[...groups.get(g)][0]}`);
+
+  // BATCHED, because this is deliberately biased toward running too much and a
+  // wide selection pasted as one command oversubscribes the box. Every worker
+  // drives a SwiftShader Chromium, and past the core count they fail on their
+  // own timeouts — which read as a broken change rather than a busy machine.
+  // test-bg.mjs enforces the same cap, so an unbatched paste is now refused
+  // rather than silently producing fake failures; this just prints the shape it
+  // will accept. (Doing this in the suggester alone would not have been enough:
+  // the rule was in AGENTS.md and docs/TESTING.md the whole time, and this tool
+  // still handed out a nine-group command.)
+  const batches = [];
+  for (let i = 0; i < names.length; i += MAX_GROUPS) batches.push(names.slice(i, i + MAX_GROUPS));
+  const cmds = batches.map((b) => `node tools/ci/test-bg.mjs ${b.join(" ")}`);
+  if (argv.includes("--bg")) {
+    console.log("\n" + cmds.join("\n"));
+  } else {
+    console.log(`\nrun them in the background, with logs — ONE BATCH AT A TIME` +
+      ` (${CORES} cores, ${WORKERS} workers per group):`);
+    for (const c of cmds) console.log(`    ${c}`);
+  }
+  if (batches.length > 1) {
+    console.log(`\nwait for each batch before starting the next:  node tools/ci/test-bg.mjs --wait`);
+  }
+}

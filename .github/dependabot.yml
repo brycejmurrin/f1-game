@@ -1,0 +1,26 @@
+# Every third-party action in .github/workflows is pinned to a full commit sha
+# (2026-09-22): a moving `@v5` tag is whatever its owner pushes next, and the
+# Pages deploy job runs with a token that can publish. Dependabot bumps the sha
+# and the trailing `# vX.Y.Z` comment together, as a reviewable PR, so pinning
+# never becomes "frozen on a version nobody remembers".
+#
+# The target is the deploy branch, which is what every workflow runs from.
+#
+# COMPOSITE ACTIONS TOO (2026-10-14). `directory: /` scans .github/workflows
+# and a root action.yml only, so the pins inside .github/actions/*/action.yml
+# drifted (actions/cache sat on v5.1.0 there while ci.yml had v6.1.0;
+# ACTIONS-AUDIT-2026-10-14 finding 11). `directories` takes a list and globs;
+# github/codeql-action runs `directories` for github-actions the same way.
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#directories
+# https://github.blog/changelog/2024-06-25-simplified-dependabot-yml-configuration-with-multi-directory-key-directories-and-wildcard-glob-support/
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories: ["/", "/.github/actions/*"]
+    target-branch: claude/f1-game-project-26h3ng
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+    labels: ["ci"]

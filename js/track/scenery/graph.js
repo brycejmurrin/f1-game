@@ -1,0 +1,480 @@
+/* Apex 26 — TrackGraph: the scenery MODEL LIBRARY + NODE GRAPH. Why this exists --------------- buildProps emits every prop straight into one shared triangle soup… */
+const TrackGraph = (function () {
+  "use strict";
+
+  const __M = Math, __isFinite = Number.isFinite;
+
+  const isVec3 = (v) => Array.isArray(v) && v.length === 3 &&
+    __isFinite(v[0]) && __isFinite(v[1]) && __isFinite(v[2]);   // unrolled: every() paid an iterator per call at ~100k calls/build
+
+  const NODE_COLOR = "@node";
+  const WHITE = [1, 1, 1];
+  const colourOf = (op, place) =>
+    op.col === NODE_COLOR ? (place.col || WHITE) : op.col;
+
+  // world = o + R * (local * scale), R the column basis [r,u,t].
+  // Pooled output: replay consumes each result synchronously before the next op
+  // (the one retention risk, badPrimitive's diagnostics center, copies) — a
+  // fresh triple per op was ~340k arrays per build across the two replays.
+  const _xfOut = [0, 0, 0];
+  function xform(place, lc) {
+    const s = place.s;
+    const x = s ? lc[0] * s[0] : lc[0];
+    const y = s ? lc[1] * s[1] : lc[1];
+    const z = s ? lc[2] * s[2] : lc[2];
+    const r = place.r, u = place.u, t = place.t, o = place.o;
+    _xfOut[0] = o[0] + r[0] * x + u[0] * y + t[0] * z;
+    _xfOut[1] = o[1] + r[1] * x + u[1] * y + t[1] * z;
+    _xfOut[2] = o[2] + r[2] * x + u[2] * y + t[2] * z;
+    return _xfOut;
+  }
+
+  // Radial ops (cyl/cone/frustum) are round in the local XZ plane, so a
+  // non-uniform XZ scale would make them elliptical — which the primitive
+  // emitters cannot express. Take the larger of the two so the guard footprint
+  // is never UNDER-estimated (an under-estimate would let a prop reach tarmac).
+  const radScale = (s) => (s ? __M.max(__M.abs(s[0]), __M.abs(s[2])) : 1);
+  const upScale = (s) => (s ? __M.abs(s[1]) : 1);
+  // Mirrors TrackGeom.SWAY_FRAC (track-graph.test.mjs pins them equal): graph.js
+  // takes its emitters as a parameter and must not reach for the global.
+  const SWAY_FRAC = 0.45;
+  // Per-vertex material callback for a swaying op: base/up/scale place the
+  // canonical [y0, y1] range in the space the vertices are emitted in.
+  function swayAt(id, base, up, us, range) {
+    const y0 = range[0] * us, inv = 1 / __M.max(1e-6, (range[1] - range[0]) * us);
+    return (x, y, z) => {
+      const w = ((x - base[0]) * up[0] + (y - base[1]) * up[1] + (z - base[2]) * up[2] - y0) * inv;
+      return id + (w <= 0 ? 0 : w >= 1 ? 1 : w) * SWAY_FRAC;
+    };
+  }
+  const _ORIGIN = [0, 0, 0], _UP = [0, 1, 0];
+
+  function create(ctx) {
+    Log.info("track", "graph create");
+    ctx = ctx || {};
+    const raw = ctx.raw || null;
+
+    const models = new Map();   // key -> { key, ops, geo, verts, aabb }
+    const nodes = [];
+    let dropped = 0;
+    // BAKED-MESH placements (build-props bakedModel): a pack model placed N
+    // times used to be N copies in the props soup. Here it is one compacted
+    // geometry per key plus [x, y, z, yaw, scale] records, and batches() turns
+    // those into one instanced batch per key — the same record shape the
+    // backends already upload for the primitive models above.
+    const meshes = new Map();   // key -> { key, geo, verts, tris, places: [], tinted }
+
+    function recorder(ops) {
+      // undefined = "inherit whatever out._mat holds at replay time". out._mat is
+      // a persistent register, so a helper that never sets it (marshalPost) must
+      // keep inheriting; forcing 0 here would silently untexture those props.
+      let mat, sway;
+      const push = (op) => { op.mat = mat; if (sway) op.sway = sway; ops.push(op); return true; };
+      return {
+        // out._mat equivalent — stamps every op recorded after it. `sway`
+        // ([y0, y1], canonical-space heights) marks the ops after it as a wind-
+        // swaying crown: replay/bake stamp each vertex FOLIAGE + w * SWAY_FRAC
+        // (w = 0 at y0, 1 at y1) through out._matAt — js/track/core/geom.js.
+        mat(id, swayRange) { mat = id || 0; sway = swayRange || null; },
+        box: (c, sz, col) => push({ op: "box", c, sz, col }),
+        prism: (c, sz, col) => push({ op: "prism", c, sz, col }),
+        pyramid: (c, sz, col) => push({ op: "pyramid", c, sz, col }),
+        cyl: (c, rad, h, col, seg) => push({ op: "cyl", c, rad, h, col, seg }),
+        cone: (c, rad, h, col, seg) => push({ op: "cone", c, rad, h, col, seg }),
+        frustum: (c, rB, rT, h, col, seg) => push({ op: "frustum", c, rB, rT, h, col, seg }),
+      };
+    }
+
+    // This is the buffer an instanced renderer uploads ONCE per model. It is also
+    // how the model's vertex cost and AABB are measured — by construction rather
+    // than by a per-primitive vertex-count formula that would drift from geom.js.
+    function bakeCanonical(ops) {
+      if (!raw) return null;
+      const buf = { pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0, _matAt: null };
+      for (const op of ops) {
+        buf._mat = op.mat || 0;
+        buf._matAt = op.sway ? swayAt(buf._mat, _ORIGIN, _UP, 1, op.sway) : null;
+        const col = op.col === NODE_COLOR ? WHITE : op.col;
+        const v0 = buf.pos.length / 3;
+        switch (op.op) {
+          case "box": raw.addBox(buf, op.c, op.sz, col, null); break;
+          case "prism": raw.addPrism(buf, op.c, op.sz, col, null); break;
+          case "pyramid": raw.addPyramid(buf, op.c, op.sz, col, null); break;
+          case "cyl": raw.addCyl(buf, op.c, op.rad, op.h, col, op.seg, null); break;
+          case "cone": raw.addCone(buf, op.c, op.rad, op.h, col, op.seg, null); break;
+          case "frustum": raw.addFrustum(buf, op.c, op.rB, op.rT, op.h, col, op.seg, null); break;
+        }
+        // a swaying op is a crown: round its normals toward the canonical axis
+        // (the same pass nature.js's swayOff() runs on inline emission)
+        if (op.sway && raw.roundNormals) raw.roundNormals(buf, v0, _ORIGIN, _UP);
+      }
+      buf._mat = 0; buf._matAt = null;
+      return buf;
+    }
+
+    function aabbOf(geo) {
+      const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+      const p = geo && geo.pos;
+      if (!p || !p.length) return { mn: [0, 0, 0], mx: [0, 0, 0] };
+      for (let i = 0; i < p.length; i += 3) {
+        for (let a = 0; a < 3; a++) {
+          const v = p[i + a];
+          if (v < mn[a]) mn[a] = v;
+          if (v > mx[a]) mx[a] = v;
+        }
+      }
+      return { mn, mx };
+    }
+
+    // Define a model once. `build(rec)` records ops in canonical space.
+    //
+    // The canonical mesh is built LAZILY. A shipping build never needs it — the
+    // ops are replayed straight into the world — so the work only happens when
+    // something actually asks: stats(), or an instanced renderer uploading one
+    // mesh per model. It also keeps a plain build emitting EXACTLY the primitives
+    // it ships, which matters because tools/track/float-audit.cjs wraps TrackGeom's
+    // emitters and indexes them in emission order; a reference mesh baked through
+    // those same wrappers is geometry that exists nowhere in the world.
+    // Closure-scoped rather than `this`-relative so a destructured or spread model
+    // record still resolves.
+    function model(key, build) {
+      let m = models.get(key);
+      if (m) return m;
+      const ops = [];
+      build(recorder(ops));
+      let geo, aabb;
+      const meshOf = () => (geo === undefined ? (geo = bakeCanonical(ops)) : geo);
+      m = {
+        key, ops, uses: 0,
+        hasRadial: ops.some((o) => o.op === "cyl" || o.op === "cone" || o.op === "frustum"),
+        nodeColored: ops.some((o) => o.col === NODE_COLOR),
+        get geo() { return meshOf(); },
+        get aabb() { return aabb === undefined ? (aabb = aabbOf(meshOf())) : aabb; },
+        get verts() { const g = meshOf(); return g ? g.pos.length / 3 : 0; },
+      };
+      models.set(key, m);
+      return m;
+    }
+
+    function replay(m, place, emit, out) {
+      const s = place.s;
+      const rs = radScale(s), us = upScale(s);
+      const basis = [place.r, place.u, place.t];
+      let landed = 0;
+      // Deliberately does NOT save/restore out._mat: the register's trailing state
+      // is the migrated helper's business, exactly as it was when it emitted
+      // inline (pine ends on 0; marshalPost never touches it).
+      let swayed = false;
+      for (const op of m.ops) {
+        const c = xform(place, op.c);
+        if (op.mat !== undefined) out._mat = op.mat;
+        // Sway weight rides on out._matAt for this op only; cleared below so the
+        // next baked emitter never inherits a crown's callback (and the track
+        // record stays structured-cloneable — build-worker posts it whole).
+        out._matAt = op.sway ? swayAt(out._mat || 0, place.o, place.u, upScale(s), op.sway) : null;
+        if (op.sway) swayed = true;
+        const col = colourOf(op, place);
+        let ok = false;
+        const v0 = out.pos.length / 3;
+        switch (op.op) {
+          case "box":
+          case "prism":
+          case "pyramid": {
+            const sz = s ? [op.sz[0] * __M.abs(s[0]), op.sz[1] * __M.abs(s[1]), op.sz[2] * __M.abs(s[2])] : op.sz;
+            ok = op.op === "box" ? emit.addBox(out, c, sz, col, basis)
+              : op.op === "prism" ? emit.addPrism(out, c, sz, col, basis)
+                : emit.addPyramid(out, c, sz, col, basis);
+            break;
+          }
+          case "cyl": ok = emit.addCyl(out, c, op.rad * rs, op.h * us, col, op.seg, basis); break;
+          case "cone": ok = emit.addCone(out, c, op.rad * rs, op.h * us, col, op.seg, basis); break;
+          case "frustum": ok = emit.addFrustum(out, c, op.rB * rs, op.rT * rs, op.h * us, col, op.seg, basis); break;
+        }
+        // a swaying op is a crown: round its normals toward the placed axis
+        // (bakeCanonical does the same in canonical space — graph parity).
+        // Keyed on vertices landing, not `ok`: the raw emitter returns nothing.
+        if (op.sway && emit.roundNormals && out.pos.length / 3 > v0) emit.roundNormals(out, v0, place.o, place.u);
+        if (ok) landed++;
+        // A model is ONE object: a cylinder the PIT COMPLEX kept out is its
+        // footing (a pine's trunk, a mast), and nothing of it stands without
+        // that — the crown tiers, which may overhang the complex on their
+        // own, shipped without a trunk on thirty circuits. Only on a pit
+        // rejection, and only while verdicts are being decided: the remaining
+        // ops record a culled verdict so the verdict replay agrees.
+        if (!ok && op.op === "cyl" && out._pitRejected && !out._replayVerdicts) {
+          if (out._recVerdicts) for (let r = m.ops.indexOf(op) + 1; r < m.ops.length; r++) out._recVerdicts[out._vIdx++] = 0;
+          break;
+        }
+      }
+      if (swayed) out._matAt = null;
+      return landed;
+    }
+
+    function instance(key, place, build, meta, emit, out) {
+      if (!place || !isVec3(place.o) || !isVec3(place.r) || !isVec3(place.u) || !isVec3(place.t)) {
+        dropped++;
+        return 0;
+      }
+      const m = model(key, build);
+      if (!m.ops.length) { dropped++; return 0; }
+      // A pine is one object. Lower crown tiers can hit a doubled-back ribbon
+      // (Fuji 120R / 300R / 30R-45R) while the trunk and upper cones clear it,
+      // so the soup kept 10–28 m unsupported cones. Dry-run the guards; if any
+      // op would drop, plant nothing. `meta.whole` asks the same of any other
+      // all-or-nothing model (a lobed tree).
+      let whole = null;
+      if (meta && (meta.kind === "pine" || meta.whole) && emit) {
+        const verd = m._whole || (m._whole = new Uint8Array(m.ops.length));
+        out._dryRun = true;
+        out._recVerdicts = verd;
+        out._vIdx = 0;
+        const nLand = replay(m, place, emit, out);
+        out._dryRun = false; out._recVerdicts = null;
+        if (nLand !== m.ops.length) { dropped++; return 0; }
+        whole = verd;     // every op passed: these ARE the verdicts, never re-guard
+      }
+      const prefer = !!(out && out._preferInstance && emit);
+      let landed, verd = whole;
+      if (prefer && whole) {
+        landed = m.ops.length;
+      } else if (prefer) {
+        // The dry run records a per-op verdict (1=pass 0=culled 2=invalid) into
+        // a per-model scratch; the fuse/absorb replay just below consumes it so
+        // the guarded emitters skip the second round of finiteVec + road-guard
+        // grid queries — deterministic in the same (model, place) by construction.
+        out._dryRun = true;
+        out._recVerdicts = verd = m._verd || (m._verd = new Uint8Array(m.ops.length));
+        out._vIdx = 0;
+        landed = replay(m, place, emit, out);
+        out._dryRun = false; out._recVerdicts = null;
+      } else if (whole) {
+        out._replayVerdicts = whole; out._vIdx = 0;
+        landed = replay(m, place, emit, out);
+        out._replayVerdicts = null;
+      } else {
+        landed = emit ? replay(m, place, emit, out) : 0;
+      }
+      if (landed) {
+        m.uses++;
+        const full = landed === m.ops.length;
+        const s = place.s;
+        const nonUniformXZ = !!s && __M.abs(__M.abs(s[0]) - __M.abs(s[2])) > 1e-9;
+        const skipFuse = prefer && full && !(m.hasRadial && nonUniformXZ);
+        nodes.push({
+          model: key,
+          o: place.o, r: place.r, u: place.u, t: place.t,
+          s: place.s || null,
+          col: place.col || null,
+          landed,
+          full,
+          // Did this placement's TRIANGLES stay out of a buffer? Only then is
+          // an instanced draw of it a draw rather than a DUPLICATE — the
+          // `instancedOnly` half of batches() below is what reads it.
+          inst: skipFuse,
+          meta: meta || null,
+        });
+        if (prefer && !skipFuse) {
+          out._replayVerdicts = verd; out._vIdx = 0;
+          replay(m, place, emit, out);           // fuse bakeOnly into the soup
+          out._replayVerdicts = null;
+        } else if (prefer && skipFuse) {
+          out._absorbOnly = true;                // terrain seating, no triangles
+          out._replayVerdicts = verd; out._vIdx = 0;
+          replay(m, place, emit, out);
+          out._absorbOnly = false; out._replayVerdicts = null;
+        }
+      }
+      return landed;
+    }
+
+    function bake(emit, out) {
+      let landed = 0;
+      for (const node of nodes) {
+        const m = models.get(node.model);
+        if (!m) continue;
+        landed += replay(m, node, emit, out);
+      }
+      return landed;
+    }
+
+    // Register a pack mesh once per key: a COMPACTED copy (only the vertices its
+    // indices reference, remapped in first-use order — an imported kit shares
+    // one accessor across primitives and can carry 3x unreferenced vertices),
+    // with `mat` forced to one id when the placement asks. Returns the record.
+    function meshModel(key, mesh, mat) {
+      let m = meshes.get(key);
+      if (m) return m;
+      const si = mesh.idx, nv = mesh.pos.length / 3;
+      const remap = new Int32Array(nv).fill(-1);
+      const idx = new Uint32Array(si.length);
+      let n = 0;
+      for (let i = 0; i < si.length; i++) {
+        const v = si[i];
+        if (remap[v] < 0) remap[v] = n++;
+        idx[i] = remap[v];
+      }
+      const pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3), col = new Float32Array(n * 3);
+      const mt = new Float32Array(n);
+      for (let v = 0; v < nv; v++) {
+        const d = remap[v];
+        if (d < 0) continue;
+        pos[d * 3] = mesh.pos[v * 3]; pos[d * 3 + 1] = mesh.pos[v * 3 + 1]; pos[d * 3 + 2] = mesh.pos[v * 3 + 2];
+        if (mesh.nrm) { nrm[d * 3] = mesh.nrm[v * 3]; nrm[d * 3 + 1] = mesh.nrm[v * 3 + 1]; nrm[d * 3 + 2] = mesh.nrm[v * 3 + 2]; }
+        else nrm[d * 3 + 1] = 1;
+        if (mesh.col) { col[d * 3] = mesh.col[v * 3]; col[d * 3 + 1] = mesh.col[v * 3 + 1]; col[d * 3 + 2] = mesh.col[v * 3 + 2]; }
+        else { col[d * 3] = col[d * 3 + 1] = col[d * 3 + 2] = 0.7; }
+        mt[d] = mat != null ? mat : (mesh.mat ? mesh.mat[v] : 0);
+      }
+      m = { key, geo: { pos, nrm, col, mat: mt, idx }, verts: n, tris: idx.length / 3, places: [], tinted: false };
+      meshes.set(key, m);
+      return m;
+    }
+    // One placement of a registered mesh: the transform TrackGeom.addMesh applies
+    // (yaw about +Y, uniform scale, then translate) and an optional [r,g,b] tint.
+    function meshPlace(key, x, y, z, yaw, scale, tint) {
+      const m = meshes.get(key);
+      if (!m) return false;
+      m.places.push({ x, y, z, yaw, s: scale != null ? scale : 1, tint: tint || null });
+      if (tint) m.tinted = true;
+      return true;
+    }
+    function meshBatches(out) {
+      for (const m of meshes.values()) {
+        const count = m.places.length;
+        if (!count) continue;
+        const matrices = new Float32Array(count * 16);
+        const colors = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) {
+          const p = m.places[i], cs = __M.cos(p.yaw), sn = __M.sin(p.yaw), s = p.s, b = i * 16;
+          // addMesh: x' = px*cs + pz*sn + x; z' = -px*sn + pz*cs + z (column-major).
+          matrices[b] = cs * s;      matrices[b + 2] = -sn * s;
+          matrices[b + 5] = s;
+          matrices[b + 8] = sn * s;  matrices[b + 10] = cs * s;
+          matrices[b + 12] = p.x;    matrices[b + 13] = p.y;    matrices[b + 14] = p.z;
+          matrices[b + 15] = 1;
+          const c = p.tint || WHITE;
+          colors[i * 3] = c[0]; colors[i * 3 + 1] = c[1]; colors[i * 3 + 2] = c[2];
+        }
+        out.push({ model: "mesh:" + m.key, geo: m.geo, verts: m.verts, count, matrices, colors });
+      }
+    }
+
+    // Plain, this answers "what COULD be instanced" — a capability report, which
+    // is what the unit tests and tools/track/graph-parity.cjs ask for, and it is
+    // deliberately independent of whether the fuse was actually skipped.
+    //
+    // `opts.instancedOnly` narrows it to the nodes whose triangles were WITHHELD
+    // from a buffer. A caller that UPLOADS the result must ask for that set, or
+    // it draws twice everything already fused. Not hypothetical: scenery/city.js
+    // routes unlit window panes to `glassBuf`, and tracks.js only ever sets
+    // `_preferInstance` on the default props buffer — so those panes' triangles
+    // land in the GLASS MESH and the same placements came back as an instanced
+    // unit-box batch. 56,048 instances / 1.35 M verts across the roster (Vegas
+    // 22,127, Baku 12,613, Jeddah 11,617, Singapore 7,895), and on ten circuits
+    // the duplicate is the whole glass mesh vertex for vertex. Instancing them
+    // instead is not the fix: a prop batch draws with the PROPS material, and the
+    // glass mesh exists precisely to draw them with the reflective one.
+    //
+    // A withheld-triangle node is neither a batch nor something to bake, so it
+    // leaves BOTH lists here — it is already in the soup.
+    function batches(opts) {
+      const instancedOnly = !!(opts && opts.instancedOnly);
+      const byModel = new Map();
+      const bakeOnly = [];
+      for (const node of nodes) {
+        const m = models.get(node.model);
+        if (!m) continue;
+        if (instancedOnly && !node.inst) continue;
+        const s = node.s;
+        const nonUniformXZ = !!s && __M.abs(__M.abs(s[0]) - __M.abs(s[2])) > 1e-9;
+        if (!node.full || (m.hasRadial && nonUniformXZ)) { bakeOnly.push(node); continue; }
+        let list = byModel.get(node.model);
+        if (!list) byModel.set(node.model, (list = []));
+        list.push(node);
+      }
+
+      const out = [];
+      for (const [key, list] of byModel) {
+        const m = models.get(key);
+        const count = list.length;
+        const matrices = new Float32Array(count * 16);
+        const colors = m.nodeColored ? new Float32Array(count * 3) : null;
+        for (let i = 0; i < count; i++) {
+          const n = list[i], o = n.o, r = n.r, u = n.u, t = n.t, s = n.s;
+          const sx = s ? s[0] : 1, sy = s ? s[1] : 1, sz = s ? s[2] : 1;
+          const b = i * 16;
+          matrices[b]      = r[0] * sx; matrices[b + 1]  = r[1] * sx; matrices[b + 2]  = r[2] * sx;
+          matrices[b + 4]  = u[0] * sy; matrices[b + 5]  = u[1] * sy; matrices[b + 6]  = u[2] * sy;
+          // Same test as TrackGeom.addBox: the track frame is left-handed
+          // (r×u · t < 0). Canonical meshes are wound CCW-outward for a
+          // right-handed basis, so a negative-det instance matrix turns the
+          // exterior walls inside-out under GPU back-face culling (see-through
+          // UNIT_BOX masses). Negating the t column restores det > 0; a
+          // centred model occupies the same eight corners, just rewound.
+          const cr0 = r[1] * u[2] - r[2] * u[1];
+          const cr1 = r[2] * u[0] - r[0] * u[2];
+          const cr2 = r[0] * u[1] - r[1] * u[0];
+          const tz = (cr0 * t[0] + cr1 * t[1] + cr2 * t[2]) < 0 ? -sz : sz;
+          matrices[b + 8]  = t[0] * tz; matrices[b + 9]  = t[1] * tz; matrices[b + 10] = t[2] * tz;
+          matrices[b + 12] = o[0];      matrices[b + 13] = o[1];      matrices[b + 14] = o[2];
+          matrices[b + 15] = 1;
+          if (colors) {
+            const c = n.col || WHITE;
+            colors[i * 3] = c[0]; colors[i * 3 + 1] = c[1]; colors[i * 3 + 2] = c[2];
+          }
+        }
+        out.push({ model: key, geo: m.geo, verts: m.verts, count, matrices, colors });
+      }
+      meshBatches(out);   // in BOTH sets: a mesh placement is recorded only when its triangles were withheld
+      // Deterministic order: a backend uploading these must not have its draw
+      // list reshuffle between builds of the same track.
+      out.sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
+      return { batches: out, bakeOnly };
+    }
+
+    function stats() {
+      let unique = 0, fused = 0;
+      for (const m of models.values()) {
+        unique += m.verts;
+        fused += m.verts * m.uses;
+      }
+      const byKind = {};
+      const seen = new Map();   // kind -> Set of model keys
+      for (const node of nodes) {
+        const kind = (node.meta && node.meta.kind) || "(unkeyed)";
+        const m = models.get(node.model);
+        if (!m) continue;
+        let e = byKind[kind];
+        if (!e) { e = byKind[kind] = { nodes: 0, models: 0, fusedVerts: 0, uniqueVerts: 0, reuse: 0 }; seen.set(kind, new Set()); }
+        e.nodes++;
+        e.fusedVerts += m.verts;
+        const set = seen.get(kind);
+        if (!set.has(node.model)) { set.add(node.model); e.models++; e.uniqueVerts += m.verts; }
+      }
+      for (const kind in byKind) {
+        const e = byKind[kind];
+        e.reuse = e.uniqueVerts > 0 ? e.fusedVerts / e.uniqueVerts : 0;
+      }
+      let mModels = 0, mInst = 0, mUnique = 0, mFused = 0;
+      for (const m of meshes.values()) {
+        if (!m.places.length) continue;
+        mModels++; mInst += m.places.length; mUnique += m.verts; mFused += m.verts * m.places.length;
+      }
+      return {
+        models: models.size,
+        nodes: nodes.length,
+        dropped,
+        mesh: { models: mModels, instances: mInst, uniqueVerts: mUnique, fusedVerts: mFused },
+        uniqueVerts: unique,          // what an instanced renderer uploads
+        fusedVerts: fused,            // what the soup costs today
+        reuse: unique > 0 ? fused / unique : 0,
+        byKind,
+      };
+    }
+
+    return { models, nodes, meshes, model, instance, replay, bake, batches, stats, meshModel, meshPlace };
+  }
+
+  return { create, xform, NODE_COLOR, SWAY_FRAC };
+})();
+Object.freeze(TrackGraph);

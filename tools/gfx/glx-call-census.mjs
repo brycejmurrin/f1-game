@@ -1,0 +1,203 @@
+// @doc What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages.
+// @skill renderer-debug
+/* glx-call-census.mjs — what does ONE GLX frame actually cost in GL calls?
+ *
+ * docs/PERF-FINDINGS.md §"COUNT THE WORK AVOIDED, DO NOT TIME IT": a
+ * SwiftShader frame time is not evidence, but a call count is exact and
+ * transfers to real hardware. This wraps the live WebGL2 context during a
+ * RUNNING race with a full field — not a parked camera — and reports per-frame
+ * averages, so a batching or elision change can be scored before and after.
+ *
+ * Run: node tools/gfx/glx-call-census.mjs [track] [night|day] [frames]
+ */
+import { startStaticServer, launchChromium, shutdown } from "../lib/harness.mjs";
+import { exitIfHelp } from "../lib/cli-args.mjs";
+exitIfHelp(process.argv.slice(2), `usage: node tools/gfx/glx-call-census.mjs [track] [night|day] [frames] [pack] [apex26.<key>=<value> ...]
+  Per-frame GL call averages (draw / bind / upload) of ONE GLX frame mid-race with a full field (boots Chromium).`);
+const TRACK = process.argv[2] || "vegas";
+const TOD = process.argv[3] || "night";
+const FRAMES = +(process.argv[4] || 40);
+const srv = await startStaticServer(process.cwd());
+const browser = await launchChromium();
+try {
+  const page = await browser.newPage({ viewport: { width: 900, height: 500 } });
+  // Optional localStorage flags, e.g. --ls apex26.instCellCache=0 — the same
+  // escape-hatch shape gfx-probe uses, so an opt-in renderer path can be A/B'd
+  // without a rebuild.
+  const LS = process.argv.filter((a) => a.startsWith("apex26."));
+  await page.goto(srv.url + "index.html", { waitUntil: "domcontentloaded", timeout: 90000 });
+  if (LS.length) {
+    await page.evaluate((pairs) => {
+      for (const p of pairs) { const i = p.indexOf("="); localStorage.setItem(p.slice(0, i), p.slice(i + 1)); }
+    }, LS);
+    await page.goto(srv.url + "index.html", { waitUntil: "domcontentloaded", timeout: 90000 });
+  }
+  await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 90000 });
+  // race() THEN wait THEN go() — the three must not be one evaluate. startRace
+  // is async now (it awaits ensureScenery for the split scenery files), so
+  // race() returns before makeCars has staged the grid. Calling go() in that
+  // window flipped state to "race" on a game with player === null, update()
+  // threw on the first unguarded deref, and because the throw escapes tick()
+  // before the rAF re-schedule the render loop died — this tool measured a
+  // permanently blank canvas and reported it as an empty frame.
+  await page.evaluate(([t, d]) => { __apex.race(t, d, "clear"); }, [TRACK, TOD]);
+  await page.waitForFunction(() => { try { return !!__apex.info().track; } catch { return false; } },
+    null, { polling: 100, timeout: 180000 });
+  await page.evaluate(() => __apex.go());
+  await new Promise((r) => setTimeout(r, 4000));
+  // Drive, don't park: the batching questions are about the FIELD being drawn,
+  // and a parked camera can sit where half of it is culled. PACK matters even
+  // more — jump(0.30) puts the player alone on track, where a per-car batching
+  // change has exactly one car to batch and measures nothing. `pack` keeps the
+  // field bunched at the start so the per-car draws are actually there.
+  const WHERE = process.argv.includes("pack") ? 0.002 : 0.30;
+  await page.evaluate((w) => { __apex.jump(w); __apex.snapCam(); }, WHERE);
+  await new Promise((r) => setTimeout(r, 1500));
+
+  const out = await page.evaluate(async (F) => {
+    const gl = document.getElementById("game").getContext("webgl2");
+    if (!gl) return { err: "not GLX — no webgl2 context on #game" };
+    // The ORIGINAL fifteen. Kept as their own list and reported under `per` with
+    // the same shape they always had, so a new run compares directly against
+    // every number already written into docs/PERF-FINDINGS.md.
+    const METHODS = ["drawElements", "drawArrays", "drawElementsInstanced",
+                     "bindVertexArray", "useProgram", "bindTexture", "bindBuffer",
+                     "bufferSubData", "uniform4fv", "uniformMatrix4fv", "uniform1i",
+                     "uniform1f", "uniform3fv", "activeTexture", "bindFramebuffer"];
+    // THE REST OF THE MUTATION SURFACE, previously invisible. Five rounds of GLX
+    // work optimised against the fifteen above while the renderer also called
+    // these every frame — §0 costed the cull toggles once, off to the side, and
+    // they never entered a standing baseline. A call this tool cannot see is a
+    // call nobody optimises.
+    const STATE = ["uniform2f", "uniform3f", "uniform4f", "uniform1fv", "uniform2fv",
+                   "uniform1iv", "uniformMatrix3fv", "enable", "disable", "blendFunc",
+                   "blendFuncSeparate", "depthMask", "colorMask", "polygonOffset",
+                   "depthFunc", "cullFace", "frontFace", "viewport", "scissor",
+                   "clear", "texParameteri", "pixelStorei"];
+    // enable/disable are useless as one number — CULL_FACE and
+    // POLYGON_OFFSET_FILL have completely different stories. Bucket by the cap
+    // enum, resolved off the context so the names cannot drift.
+    const capName = new Map();
+    for (const n of ["CULL_FACE", "BLEND", "DEPTH_TEST", "POLYGON_OFFSET_FILL",
+                     "SCISSOR_TEST", "STENCIL_TEST", "DITHER", "RASTERIZER_DISCARD",
+                     "SAMPLE_ALPHA_TO_COVERAGE"]) {
+      if (gl[n] !== undefined) capName.set(gl[n], n);
+    }
+    try { Error.stackTraceLimit = 50; } catch (_) { /* not V8: the scan just sees fewer frames */ }
+    const C = {}, caps = {}, orig = {};
+    let subBytes = 0;
+    // WHERE do the uploaded bytes come from? A single KiB/frame total says the
+    // renderer uploads a lot and nothing about which call to go and look at —
+    // and a packed grid measured 1009 KiB/frame with no way to attribute it.
+    // One stack per bufferSubData, bucketed by the first frame inside js/,
+    // is the whole diagnosis. Only bufferSubData carries this: it is the one
+    // counter whose SIZE varies per call site, and a stack per gl call would
+    // dominate the very frame time the census is trying not to disturb.
+    const subBy = {};
+    for (const m of METHODS.concat(STATE)) {
+      if (typeof gl[m] !== "function") continue;   // never invent a counter for a method this context lacks
+      C[m] = 0; orig[m] = gl[m];
+      gl[m] = function (...a) {
+        C[m]++;
+        if (m === "bufferSubData") {
+          const src = a[2];
+          if (src && src.BYTES_PER_ELEMENT) {
+            const len = a[4] != null ? a[4] : src.length;
+            const bytes = len * src.BYTES_PER_ELEMENT;
+            subBytes += bytes;
+            // `a[4] == null` means the call passed no length — it uploads the
+            // WHOLE array whatever the visible count is. Worth seeing as its
+            // own column: that is a different bug from "uploads too often".
+            let site = "?";
+            const st = (new Error()).stack || "";
+            for (const line of st.split("\n")) {
+              // `?v=dev` sits between the .js and the line number — every shell
+              // tag carries it (AGENTS.md: the deploy rewrites it to a content
+              // hash). A regex anchoring ":<line>" straight onto ".js" matched
+              // NOTHING and bucketed every byte under "?", which is how the
+              // first attributed run came back useless.
+              const hit = line.match(/(js\/[\w./-]+\.js)(?:\?[^\s:)]*)?:(\d+)/);
+              if (hit) { site = hit[1] + ":" + hit[2]; break; }
+            }
+            const key = site + (a[4] == null ? " (FULL)" : "");
+            const e = subBy[key] || (subBy[key] = { calls: 0, bytes: 0 });
+            e.calls++; e.bytes += bytes;
+          }
+        } else if (m === "enable" || m === "disable") {
+          const k = m + ":" + (capName.get(a[0]) || ("0x" + Number(a[0]).toString(16)));
+          caps[k] = (caps[k] || 0) + 1;
+        }
+        return orig[m].apply(this, a);
+      };
+    }
+    await new Promise((res) => { let i = 0; const t = () => { if (++i >= F) return res(); requestAnimationFrame(t); }; requestAnimationFrame(t); });
+    for (const m in orig) gl[m] = orig[m];
+    const per = {}, state = {};
+    for (const m of METHODS) if (C[m]) per[m] = +(C[m] / F).toFixed(1);
+    for (const m of STATE) if (C[m]) state[m] = +(C[m] / F).toFixed(1);
+    for (const k of Object.keys(caps).sort()) state[k] = +(caps[k] / F).toFixed(1);
+    // HOW MANY CARS ARE ACTUALLY NEAR THE CAMERA — without this the per-car
+    // counts cannot be read at all, which is not a hypothetical: this field
+    // reported `null` on every run for its whole life, and two A/B censuses of
+    // a per-car draw change came back BYTE-IDENTICAL because the field was
+    // strung out around the circuit and the change had nothing to act on.
+    // Silence read as "no effect" instead of "nothing measured".
+    //
+    // It was null because it asked `__apex.field()`, which is the AGENTVIEW
+    // raster (a different shape, and lazily injected), not the car roster —
+    // so both branches missed and the catch was never even reached. And the
+    // roster length would not have helped anyway: it is 20 whether the field
+    // is packed on the grid or spread over a lap, while what a per-car change
+    // needs is how many cars are in FRONT of the camera.
+    //
+    // fieldState() gives every car's `gap` to the leader in metres, so the
+    // prog delta to the player is a difference of two gaps — no camera maths,
+    // no new hook. 200 m is generous for "could plausibly be on screen"; the
+    // point is to separate 2 from 15, not to model the frustum.
+    let near = null, roster = null;
+    try {
+      const f = __apex.fieldState ? __apex.fieldState() : null;
+      if (Array.isArray(f) && f.length) {
+        roster = f.length;
+        const me = f.find((c) => c.isPlayer);
+        if (me) near = f.filter((c) => Math.abs(c.gap - me.gap) < 200).length;
+      }
+    } catch (_) { /* no fieldState hook: reported as null, and the caller says so */ }
+    // Biggest uploader first — that is the only order anyone reads this in.
+    const uploads = Object.entries(subBy)
+      .sort((a, b) => b[1].bytes - a[1].bytes)
+      .map(([site, e]) => ({ site, callsPerFrame: +(e.calls / F).toFixed(1),
+                             kiBPerFrame: +((e.bytes / F) / 1024).toFixed(1) }));
+    return { per, state, bufferSubDataKiBPerFrame: +((subBytes / F) / 1024).toFixed(1),
+             uploadsBySite: uploads,
+             carsInField: roster, carsNearPlayer: near,
+             preset: (__apex.lightState && __apex.lightState().preset) || null };
+  }, FRAMES);
+  console.log(JSON.stringify({ track: TRACK, tod: TOD, frames: FRAMES, flags: LS, ...out }, null, 1));
+  // A PER-CAR QUESTION NEEDS CARS. Said on stderr rather than thrown: the
+  // totals are still valid for scenery, post and state-change work — it is
+  // only a per-car A/B that this frame cannot answer. `pack` is not the cure
+  // on its own either; it puts the field BEHIND a player who starts at the
+  // front, where the frustum drops them.
+  if (out.carsNearPlayer != null && out.carsNearPlayer < 3) {
+    console.error(`WARNING: only ${out.carsNearPlayer} car(s) within 200 m of the player — ` +
+      "per-car counts here measure nothing. Two censuses of a car-LOD change came back " +
+      "byte-identical for this reason (2026-09-03).");
+  }
+  // A CENSUS THAT MEASURED NOTHING MUST NOT EXIT 0. This tool printed `per: {}`
+  // with a success code for an entire session after startRace went async: the
+  // render loop was dead, every counter was zero, and "no calls" was
+  // indistinguishable from "I counted no calls". That is the same
+  // absence-reads-as-normal shape as the vacuous gpuErrors check (2g) and the
+  // readdirSync harnesses that built circuits bare — both of which shipped
+  // confident numbers about nothing. A frame with no drawElements is never a
+  // real GLX frame, so say so and fail.
+  if (out.err || !out.per || !(out.per.drawElements > 0)) {
+    console.error("CENSUS MEASURED NOTHING — " + (out.err ||
+      "0 drawElements a frame. The page rendered no geometry, so these counters " +
+      "describe a dead render loop, not the renderer. Check for a page error " +
+      "(scratch/r13-diag.mjs pattern: page.on('pageerror')) before trusting any " +
+      "number here."));
+    process.exitCode = 1;
+  }
+} finally { await browser.close(); await shutdown(); }

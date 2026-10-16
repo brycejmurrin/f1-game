@@ -1,0 +1,411 @@
+/* Apex 26 — TLXShaders.fx: the FX materials for the TLX backend (M6). TSL
+ * ports of the five tiny GLSL programs in js/render/glx/shaders/glsl-fx.js
+ * (the GLSL source of truth): blob shadow, skid trail, driving line,
+ * billboard glow/particle, car decal. */
+"use strict";
+
+(function () {
+  function fx(THREE, TSL, opts) {
+    const {
+      Fn, uniform, attribute, texture, materialReference, mrt, renderGroup, Discard, uv,
+      float, vec2, vec3, vec4,
+      positionGeometry, positionWorld, cameraPosition, normalWorld,
+      normalize, cross, dot, length, exp, max, min, mix, smoothstep, abs, floor,
+    } = TSL;
+
+    // Shared FX render state: transparent, no depth write, depth test, and the
+    // blend-stage alpha mask (dst alpha preserved — see header). additive ->
+    // ONE/ONE like the GLX glow/spark groups; else SRC_ALPHA/ONE_MINUS_SRC_ALPHA.
+    function fxMaterial(o) {
+      const m = new THREE.MeshBasicNodeMaterial();
+      m.transparent = true;
+      m.depthWrite = false;
+      m.depthTest = true;
+      m.fog = false;
+      m.blending = THREE.CustomBlending;
+      m.blendEquation = THREE.AddEquation;
+      m.blendSrc = o.additive ? THREE.OneFactor : THREE.SrcAlphaFactor;
+      m.blendDst = o.additive ? THREE.OneFactor : THREE.OneMinusSrcAlphaFactor;
+      m.blendEquationAlpha = THREE.AddEquation;
+      m.blendSrcAlpha = THREE.ZeroFactor;   // dst alpha preserved (SSR tag / canvas)
+      m.blendDstAlpha = THREE.OneFactor;
+      if (o.offset) {
+        // Decals sit ON the road: GLX's ROAD_BIAS (-4,-8) over an UNBIASED road
+        // (game.js _wmRoad* carry no depthBias). This was -12/-24 while the road
+        // itself drew at [-8,-16] (gpu-census 48, 2026-09-08); must stay beyond
+        // the road's bias, which gfx-backend-canary pins.
+        m.polygonOffset = true;
+        m.polygonOffsetFactor = -4;
+        m.polygonOffsetUnits = -8;
+      }
+      // GLX disables CULL_FACE and draws ONE pass. three splits a transparent
+      // DoubleSide material into a back pass and a front pass unless
+      // forceSinglePass is set — two draws and two pipelines per FX record, and
+      // compileAsync builds neither of them (it compiles the DoubleSide state),
+      // so the particle groups compiled both mid-race even when warmed
+      // (PERF-FINDINGS §2ah, pipeline keys differing only in side 2 vs 1/0).
+      // Every double-sided FX surface is a billboard, a road ribbon or a flat
+      // decal, where the back/front split orders nothing.
+      if (o.doubleSided) { m.side = THREE.DoubleSide; m.forceSinglePass = true; }
+      m.lights = false;
+      m.customProgramCacheKey = () => (o.key || "tlx-fx") + (m.mrtNode ? "-mrt" : "");
+      return m;
+    }
+
+    const _tagKeep = {
+      blending: THREE.CustomBlending,
+      blendSrc: THREE.ZeroFactor,
+      blendDst: THREE.OneFactor,
+      blendSrcAlpha: THREE.ZeroFactor,
+      blendDstAlpha: THREE.OneFactor,
+      blendEquation: THREE.AddEquation,
+      blendEquationAlpha: THREE.AddEquation,
+    };
+    const _fxMats = [];
+    function trackFx(m) { _fxMats.push(m); return m; }
+    // BUILD THE NODE ONCE — the unfixed sibling of docs/notes/PERF-FINDINGS.md
+    // §2p. That entry found `renderer.setMRT(TSL.mrt({...}))` inline in
+    // present() and wrote down why it cost: "A new node, a new id, a new key,
+    // a new permanent context — and every object and material re-created
+    // against it." tsl-lit.js's setSsrMrt was fixed to reuse the memoized
+    // `sharedFragment(...).mrt`; THIS one was missed, and tlx.js calls it on
+    // and off inside every present(), so a fresh mrt node was assigned to
+    // every FX material (7 fixed + up to DECAL_CACHE_CAP decals) every frame.
+    //
+    // The contents are frame-invariant — one tag channel holding the constant
+    // 1.0 — so a single node is not a cache, it is the correct lifetime, which
+    // is §2p's own argument verbatim. Measured on three's WebGPU path
+    // (montreal, 60 s, 7148 frames, backendState api:"webgpu") before this fix:
+    // three's uniform buffers +451, geometries +202, our mesh pool +1137, JS
+    // heap +17.4 MB, with 773 createBindGroup and 512 createBuffer calls
+    // arriving AFTER the warm-up window instead of settling.
+    let _ssrTagNode = null;
+    function setSsrMrt(on) {
+      if (typeof mrt !== "function") return;
+      if (on && !_ssrTagNode) _ssrTagNode = mrt({ ssrTag: float(1) }).setBlendMode("ssrTag", _tagKeep);
+      const node = on ? _ssrTagNode : null;
+      for (let i = 0; i < _fxMats.length; i++) _fxMats[i].mrtNode = node;
+    }
+
+    // Blob shadow (SHADOW_FS). The shared quad holds the unit xz footprint at
+    // y=0.02; vUV = aPos*2 (SHADOW_VS) == positionGeometry.xz*2 here.
+    const shadowMat = trackFx(fxMaterial({ offset: true, key: "tlx-fx-blob" }));
+    shadowMat.colorNode = vec3(0.0);
+    shadowMat.opacityNode = Fn(() => {
+      const uvv = vec2(positionGeometry.xz.mul(2.0)).toVar();   // anchor
+      const r = length(uvv);
+      const a = smoothstep(0.25, 1.0, r).oneMinus().mul(0.45).toVar();
+      // THE QUAD'S CORNERS (r >= 1: 1 - pi/4 = 21 % of every blob quad) have
+      // alpha exactly 0: SrcAlpha/OneMinusSrcAlpha over a black colour keeps
+      // dst, and dst alpha and the ssrTag attachment are Zero/One "keep".
+      // Discarding them is bit-identical, as the particle corners (E7a); no
+      // depth write on this pass, so early-Z is unaffected.
+      if (Discard) Discard(a.lessThanEqual(0.0));
+      return a;
+    })();
+
+    const markFalloff = (uvv) =>
+      smoothstep(float(1.0), float(0.4), abs(uvv.x))
+        .mul(smoothstep(float(1.0), float(0.3), abs(uvv.y))).mul(0.38);
+
+    const markMat = trackFx(fxMaterial({ offset: true, key: "tlx-fx-mark" }));
+    markMat.colorNode = vec3(0.0);
+    markMat.opacityNode = Fn(() => {
+      const uvv = vec2(positionGeometry.xz.mul(2.0)).toVar();   // anchor
+      return markFalloff(uvv);
+    })();
+
+    // Batched skid trail (MARK_BATCH_VS + MARK_FS): world-space positions
+    // (identity model matrix in tlx.js) + a -1..1 "uv" attribute per stamp.
+    const skidMat = trackFx(fxMaterial({ offset: true, key: "tlx-fx-skid" }));
+    skidMat.colorNode = vec3(0.0);
+    skidMat.opacityNode = Fn(() => {
+      const uvv = vec2(attribute("uv", "vec2")).toVar();        // anchor
+      return markFalloff(uvv);
+    })();
+
+    // DRIVING LINE ribbon (LINE_VS + LINE_FS): world-space strip from
+    // js/render/shared/driving-line.js (tlx.js indexes it into triangles) with
+    // per-vertex across / speed / zone attributes. Emissive ×lineStr so bloom
+    // lifts it; CORNERS mode fades the straights through the zone.
+    const lineSpeed = uniform(0.0);     // the player's speed (m/s), set per draw
+    const lineCorners = uniform(0.0);   // 1 = fade the straights out
+    const lineStr = uniform(1.6);       // emissive strength (bloom feed)
+    const linePalette = uniform(0.0);   // 0 = F1 green/amber/red, 1 = colour-blind safe
+    const lineOpacity = uniform(1.0);   // 0.65 subtle … 1 as shipped … 1.35 solid
+    const lineMat = trackFx(fxMaterial({ offset: true, doubleSided: true, key: "tlx-fx-line" }));
+    // Chevrons every PERIOD m pointing the way the lap runs (GLX LINE_FS
+    // PERIOD / SWEEP / THICK): pattern space is (along, across), so no
+    // derivatives — WebKit-safe.
+    const lineAlpha = Fn(() => {
+      const across = float(attribute("lineAcross", "float")).toVar();   // anchor
+      const zone = float(attribute("lineZone", "float")).toVar();       // anchor
+      const along = float(attribute("lineAlong", "float")).toVar();     // anchor
+      const PERIOD = float(5.0), SWEEP = float(1.6), THICK = float(1.1);
+      const tip = PERIOD.mul(0.6).sub(SWEEP.mul(abs(across)));
+      const rel = along.sub(tip);
+      const d0 = rel.sub(PERIOD.mul(floor(rel.div(PERIOD))));            // mod, positive
+      const d = min(d0, PERIOD.sub(d0));
+      const arrow = smoothstep(THICK.mul(0.5).sub(0.18), THICK.mul(0.5), d).oneMinus();
+      const rim = smoothstep(float(0.85), float(1.0), abs(across)).oneMinus();
+      const z = mix(float(1.0), smoothstep(float(0.05), float(0.75), zone), lineCorners);
+      return arrow.mul(rim).mul(z);
+    });
+    lineMat.colorNode = Fn(() => {
+      const spd = float(attribute("lineSpeed", "float")).toVar();       // anchor
+      const over = lineSpeed.div(max(spd, float(1.0)));
+      // Two palettes, mixed not branched — the same maths as GLX LINE_FS and
+      // WGSL LINE. F1's green/amber/red is the worst pair for the common
+      // red-green deficiencies (the two ends of the scale are the two colours
+      // that cannot be told apart); the alternative is the IBM colour-blind-safe
+      // triple, blue / orange / magenta.
+      const onPace = mix(vec3(0.10, 0.95, 0.35), vec3(0.392, 0.561, 1.000), linePalette);
+      const lift = mix(vec3(1.00, 0.72, 0.10), vec3(0.996, 0.380, 0.000), linePalette);
+      const brake = mix(vec3(1.00, 0.12, 0.10), vec3(0.863, 0.149, 0.498), linePalette);
+      const col = mix(mix(onPace, lift, smoothstep(float(0.98), float(1.06), over)), brake, smoothstep(float(1.06), float(1.16), over));
+      return col.mul(lineStr).mul(lineAlpha()).mul(lineOpacity);
+    })();
+    // min(), not a bare multiply: SOLID takes the 0.85 base past 1 and a source
+    // alpha over 1 over-blends (GLX LINE_FS, WGX LINE carry the same clamp).
+    lineMat.opacityNode = Fn(() => min(lineAlpha().mul(0.85).mul(lineOpacity), float(1.0)))();
+
+    // Billboard corner expansion (GLOW_VS / PARTICLE_VS, identical math). The
+    // record's centre rides in "position" so three's draw count derives
+    // naturally; corner is -1..1 (tlx.js pre-bakes GLX's y*2-1 remap at fill
+    // time). uEye == cameraPosition (tlx.js begin() sets it from frame.eye).
+    function billboardPosition(sizeNode) {
+      return Fn(() => {
+        const ctr = vec3(positionGeometry).toVar();             // anchor
+        const c = vec2(attribute("fxCorner", "vec2")).toVar();  // anchor
+        const fwd = normalize(cameraPosition.sub(ctr));
+        const right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd).add(vec3(1e-4, 0.0, 0.0)));
+        const upv = cross(fwd, right);
+        return ctr.add(right.mul(c.x).add(upv.mul(c.y)).mul(sizeNode));
+      })();
+    }
+
+    const glowStr = uniform(0.12);   // uStr — set per drawGlow call (LT.glareStr def)
+    const glowMat = trackFx(fxMaterial({ additive: true, doubleSided: true, key: "tlx-fx-glow" }));
+    glowMat.positionNode = billboardPosition(attribute("fxRadius", "float"));
+    glowMat.colorNode = Fn(() => {
+      const c = vec2(attribute("fxCorner", "vec2")).toVar();    // anchor
+      const col = vec3(attribute("fxColor", "vec3")).toVar();   // anchor
+      const r2 = dot(c, c);
+      const core = exp(r2.mul(-28.0));   // hot centre right at the lens
+      const veil = exp(r2.mul(-5.0));    // broad soft glare veil
+      const a = core.mul(0.75).add(veil.mul(0.28)).mul(glowStr);
+      return col.mul(a);                 // premultiplied for ONE/ONE
+    })();
+    glowMat.opacityNode = float(1.0);
+
+    // Lit + fogged (GLX PARTICLE_FS parity, 2026-10-01): the alpha group is
+    // shaded as a small sphere — hemisphere ambient on the quad's up plus a
+    // wrap of the key, floodlit floor 0.18 — and both groups take the lit
+    // pass's exp² fog on the eye distance (alpha → fog colour, additive → out).
+    function particleMaterial(additive) {
+      const m = fxMaterial({ additive, doubleSided: true, key: additive ? "tlx-fx-pt-add" : "tlx-fx-pt" });
+      m.positionNode = billboardPosition(attribute("fxSize", "float"));
+      const soft = Fn(() => {
+        const c = vec2(attribute("fxCorner", "vec2")).toVar();  // anchor
+        const fall = max(float(1.0).sub(dot(c, c)), 0.0).toVar();
+        // THE CORNERS OUTSIDE THE DISC (1 - pi/4 = 21 % of every particle and
+        // rain quad) blend exactly nothing: alpha 0 under SrcAlpha/OneMinus-
+        // SrcAlpha keeps dst, col*0 under One/One adds 0, and dst alpha and the
+        // ssrTag attachment are Zero/One "keep" either way. Discarding them is
+        // bit-identical and skips the 2-attachment HDR blend (TLX perf hunt E7).
+        // No depth write on this pass, so early-Z is unaffected.
+        if (Discard) Discard(fall.lessThanEqual(0.0));
+        fall.mulAssign(fall);            // soft-disc falloff, zero at the rim
+        return float(attribute("fxAlpha", "float")).mul(fall);
+      })();
+      const col = Fn(() => {
+        const c = vec3(attribute("fxColor", "vec3")).toVar();
+        if (!additive) {
+          const up = float(attribute("fxCorner", "vec2").y).mul(0.5).add(0.5);
+          const lit = mix(vec3(U.ambGround), vec3(U.ambSky), up).add(vec3(U.sunColor).mul(0.45));
+          c.mulAssign(max(lit, vec3(0.18)));
+        }
+        const fd = length(cameraPosition.sub(vec3(positionGeometry))).mul(U.fogDensity);
+        const fog = float(1.0).sub(exp(fd.mul(fd).negate()));
+        return additive ? c.mul(fog.oneMinus()) : mix(c, vec3(U.fogColor), fog);
+      })();
+      if (additive) {                    // vec4(col*a, 1) into ONE/ONE
+        m.colorNode = col.mul(soft);
+        m.opacityNode = float(1.0);
+      } else {                           // vec4(col, a) classic alpha
+        m.colorNode = col;
+        m.opacityNode = soft;
+      }
+      return m;
+    }
+
+    // Car decals (DECAL_VS/FS): sun + hemisphere lit so marks sit INTO the
+    // paint's shading; uGlow lifts them at night. opts.lit.decalLight (tsl-lit)
+    // adds the sun-map shadow and the baked floodlight pools on the lit pass's
+    // own uniforms; no lit factory = sun + ambient only, as before. Frame uniforms are fx-local
+    // (keyMul-scaled sun + ambientMul-scaled ambient, as glx.js) so the pass
+    // keeps working without the lit factory. One material per (texture, glow)
+    // pair, cached: ~2 textures/car x 2 glow states.
+    const U = {
+      sunDir:   uniform(new THREE.Vector3(0.4, 0.8, 0.4)),
+      sunColor: uniform(new THREE.Vector3(1.0, 0.98, 0.9)),   // keyMul-scaled
+      ambSky:   uniform(new THREE.Vector3(0.3, 0.32, 0.36)),  // ambientMul-scaled
+      ambGround: uniform(new THREE.Vector3(0.2, 0.19, 0.18)),
+      fogColor:  uniform(new THREE.Vector3(0.5, 0.6, 0.7)),    // the lit pass's fog (particles)
+      fogDensity: uniform(0.0),                                 // fogDensityMul-scaled
+    };
+    // Same fix as tsl-lit.js's SHARED_UNIFORMS, same pin (apex26.tlxSharedUniforms):
+    // a plain uniform() is objectGroup, so each of the ~22 decal render objects
+    // per frame (one drawDecal per car) carried its own copy of this frame block.
+    // renderGroup shares one buffer per program per render() call; the per-object
+    // texture binding stays per object, as matU does beside lit's shared U.
+    if (!(opts && opts.sharedUniforms === false)) for (const k in U) U[k].setGroup(renderGroup);
+    // After U: the particle graphs read its frame light and fog.
+    const particleMats = [trackFx(particleMaterial(false)), trackFx(particleMaterial(true))];
+
+    const decalCache = new Map();      // "texture.id|glow" -> material
+    const DECAL_CACHE_CAP = 24;
+    // Keyed on the GLOW VALUE, not on "is it lit": the graph body closes over
+    // `glow` as a JS constant, so one bucket per truthiness handed every later
+    // non-zero glow the first one's lift (garage 0.62 leaking onto the night
+    // car's 0.35). The callers use a fixed handful of values, and
+    // decalMaterialFor / fxMaterial already key on the same number.
+    const _decalGraph = new Map();
+    const DL = (opts && opts.lit && opts.lit.decalLight) || null;
+    function sharedDecal(glow) {
+      let packed = _decalGraph.get(glow);
+      if (!packed) {
+        packed = Fn(() => {
+          // The atlas is PREMULTIPLIED (tlx.js createTexture premultiplyAlpha,
+          // ONE / ONE_MINUS_SRC_ALPHA below): t.rgb x light stays premultiplied.
+          const t = materialReference("map", "texture").toVar();
+          const N = normalize(vec3(normalWorld).toVar()).toVar();
+          const wp = vec3(positionWorld).toVar();
+          const ndl = max(dot(N, U.sunDir), 0.0);
+          const sh = DL && DL.shadow ? DL.shadow(wp, N) : float(1.0);
+          const pool = DL && DL.pool ? DL.pool(wp, N) : vec3(0.0);
+          const amb = mix(vec3(U.ambGround), vec3(U.ambSky), N.y.mul(0.5).add(0.5));
+          const rgb = t.rgb.mul(amb.add(vec3(U.sunColor).mul(ndl.mul(sh))).add(pool)).add(t.rgb.mul(glow));
+          return vec4(rgb, t.a);
+        })();
+        _decalGraph.set(glow, packed);
+      }
+      return packed;
+    }
+    let _decalFrame = 0;
+    const _evicted = [];   // evicted decal materials; tlx present() flushes after paint
+    function flushEvicted() {
+      for (let i = 0; i < _evicted.length; i++) { try { _evicted[i].dispose(); } catch (_) { /* already disposed */ } }
+      _evicted.length = 0;
+    }
+    // tlx.js freeTexture: retire every decal material bound to a freed
+    // texture. Same deferred dispose as the LRU eviction below (the material
+    // may still sit in this frame's drawList); returns how many were dropped.
+    function releaseTexture(tex) {
+      let n = 0;
+      if (!tex) return n;
+      for (const [k, v] of decalCache) {
+        if (!v || v.map !== tex) continue;
+        decalCache.delete(k);
+        _evicted.push(v);
+        const fi = _fxMats.indexOf(v);
+        if (fi >= 0) _fxMats.splice(fi, 1);
+        n++;
+      }
+      return n;
+    }
+    function decalMaterialFor(tex, glow) {
+      const key = tex.id + "|" + glow;
+      let m = decalCache.get(key);
+      if (!m) {
+        if (decalCache.size >= DECAL_CACHE_CAP) {
+          // Same eviction as tlx.js materialFor: dispose is DEFERRED to
+          // present() (tlx.js calls flushEvicted after paint) — drawList
+          // still holds this material until then, and the vendored #33952
+          // backport (vendor PATCHES.md) makes the dispose itself leak-free.
+          // The texture itself is game-owned either way.
+          for (const [k, v] of decalCache) {
+            if (v && v.__tlxFrame === _decalFrame) continue;
+            decalCache.delete(k);
+            if (v) {
+              _evicted.push(v);
+              // Drop it from the per-frame setSsrMrt registry too, or every
+              // evicted decal material stays pinned (and walked) forever —
+              // the same leak tlx.js's lit.releaseMaterial closed.
+              const fi = _fxMats.indexOf(v);
+              if (fi >= 0) _fxMats.splice(fi, 1);
+            }
+            break;
+          }
+        }
+        m = fxMaterial({ doubleSided: true, key: "tlx-fx-decal-" + glow });   // GLX: cull off, depth write off
+        m.blendSrc = THREE.OneFactor;            // premultiplied atlas (GLX drawDecal ONE / ONE_MINUS_SRC_ALPHA)
+        m.alphaTest = 0.02;                      // DECAL_FS: if (t.a < 0.02) discard
+        m.map = tex;
+        const packed = sharedDecal(glow);
+        m.colorNode = packed.rgb;
+        m.opacityNode = packed.a;
+        trackFx(m);
+        decalCache.set(key, m);
+      }
+      if (m) m.__tlxFrame = _decalFrame;
+      return m;
+    }
+
+    // THE COCKPIT'S LIVE MIRROR GLASS (GLX MIRROR_GLASS_FS; tlx.js
+    // drawMirrorGlass): the mirror target on the housings' glass, in the MAIN
+    // scene pass. Unlit and OPAQUE — not an fxMaterial: it writes depth and,
+    // with no mrtNode of its own, takes the scene MRT's ssrTag 1 ("not car
+    // paint"); its alpha is 1. Sampled at (u, 1 - v): the mesh's v = 0 is the
+    // image BOTTOM (gfx.js drawMirrorGlass, GLX's convention), but three's
+    // TextureNode puts a render target's uv.y = 0 at its TOP on BOTH paths —
+    // the GLSL builder's isFlipY() flips the sample (setupUV,
+    // isRenderTargetTexture), WebGPU stores row 0 on top — the same space
+    // tsl-post's mirrorSample reads with a top-left screenCoordinate. Sampled
+    // as given, both glasses showed the rear view upside down (2026-10-13).
+    // One material per target texture — mirRT.texture survives setSize.
+    let _glassMat = null;
+    function mirrorGlassMaterial(tex) {
+      if (_glassMat && _glassMat.__tlxTex === tex) return _glassMat;
+      if (_glassMat) _evicted.push(_glassMat);   // still in this frame's drawList: present() disposes
+      const m = new THREE.MeshBasicNodeMaterial();
+      m.side = THREE.DoubleSide;
+      m.transparent = false;
+      m.depthWrite = true;
+      m.depthTest = true;
+      m.fog = false;
+      m.lights = false;
+      const st = uv();
+      m.colorNode = texture(tex, vec2(st.x, st.y.oneMinus())).rgb;
+      m.opacityNode = float(1.0);
+      m.customProgramCacheKey = () => "tlx-fx-mirror-glass";
+      m.__tlxTex = tex;
+      return (_glassMat = m);
+    }
+
+    /** begin(frame) -> decal-pass uniforms (js/render/glx/glx.js semantics: the
+     * AMBIENT and KEY LIGHT sliders re-light the sponsor marks too). */
+    function updateFrame(frame) {
+      _decalFrame++;   // new frame: last frame's decal mats are evictable again
+      const T = (frame && frame.tune) || null;
+      const k = (id, def) => (T && T[id] != null ? T[id] : def);
+      const kM = k("keyMul", 1), aM = k("ambientMul", 1);
+      const d = frame.sunDir;
+      if (d) U.sunDir.value.set(d[0], d[1], d[2]);
+      const s = frame.sunColor;
+      if (s) U.sunColor.value.set(s[0] * kM, s[1] * kM, s[2] * kM);
+      const as = frame.ambientSky || [0.3, 0.32, 0.36];
+      const ag = frame.ambientGround || [0.2, 0.19, 0.18];
+      U.ambSky.value.set(as[0] * aM, as[1] * aM, as[2] * aM);
+      U.ambGround.value.set(ag[0] * aM, ag[1] * aM, ag[2] * aM);
+      const fc = frame.fogColor;
+      if (fc) U.fogColor.value.set(fc[0], fc[1], fc[2]);
+      U.fogDensity.value = (frame.fogDensity != null ? frame.fogDensity : 0) * k("fogDensityMul", 1);
+    }
+
+    return { shadowMat, markMat, skidMat, glowMat, glowStr, lineMat, lineSpeed, lineCorners, lineStr, linePalette, lineOpacity,
+             particleMats, setSsrMrt, decalMaterialFor, releaseTexture, mirrorGlassMaterial, updateFrame, flushEvicted };
+  }
+
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { fx });
+})();

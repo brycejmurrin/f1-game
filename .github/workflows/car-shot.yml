@@ -1,0 +1,145 @@
+name: Car shot
+
+# Look at the car on a machine that can actually draw it.
+#
+# The agent container renders through llvmpipe and tools/carview.html never
+# composites there: every car-model change this repo has shipped was verified by
+# ray-casts, triangle counts and a hand-written software rasteriser, and nobody
+# had SEEN one. gpu-census answers "is there a GPU behind navigator.gpu" and
+# parks the camera trackside with no car in frame, so it does not close this
+# gap either.
+#
+# This workflow does one thing: boot tools/carview.html (the isolated studio —
+# no track, no game.js) on a runner with a real GPU and upload the frames plus
+# render-car's contact sheet. It is DISPATCH ONLY and never scheduled: it is a
+# question someone asks, not a gate, and macOS bills at a multiplier.
+#
+# render-car.mjs exits 3 when a written PNG holds fewer than a handful of
+# shades, so a run that goes green is evidence the frames have a car in them —
+# the check that a tick beside a blank file does not give you.
+
+on:
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: "render-car preset (cockpit, livery, wing, engine, brakes, ...) or 'list'"
+        required: false
+        default: "cockpit"
+      views:
+        description: "Comma-separated views instead of a preset (hero, side, top, turntable, all)"
+        required: false
+        default: ""
+      team:
+        description: "Team id (js/data/teams.js)"
+        required: false
+        default: "mclaren"
+      livery:
+        description: "Livery id (js/car/liveries.js) — blank for the team default"
+        required: false
+        default: ""
+      tod:
+        description: "Lighting: day | dusk | dawn | night | void"
+        required: false
+        default: "day"
+      image:
+        description: "Runner image — macos-latest has the GPU; ubuntu-latest is the software control"
+        required: false
+        default: "macos-latest"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: car-shot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shot:
+    runs-on: ${{ inputs.image || 'macos-latest' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+
+      # The full browser, not the headless shell: the shell is the binary the
+      # container already proves nothing with. Same reasoning as gpu-census.
+      - name: Install Chromium
+        run: npx playwright install chromium
+
+      - name: Install Chromium OS deps (Linux only)
+        if: runner.os == 'Linux'
+        run: npx playwright install-deps chromium
+
+      # The ubuntu control on Mesa llvmpipe, not SwiftShader: SwiftShader ran it
+      # into the 20-min cap twice (runs 37094281675, 37087026592). Same composite
+      # and env as browser-group.yml; render-car.mjs reads APEX_GL. Still
+      # software and still no GPU, so it stays the control it was meant to be.
+      - name: Mesa llvmpipe + Xvfb (Linux only)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/mesa-xvfb
+
+      - name: What does the OS think it has
+        continue-on-error: true
+        shell: bash
+        run: |
+          uname -a || true
+          if [ "$RUNNER_OS" = "macOS" ]; then system_profiler SPDisplaysDataType 2>&1 | head -30 || true; fi
+          if [ "$RUNNER_OS" = "Linux" ]; then ls -la /dev/dri 2>&1 || echo "no /dev/dri"; fi
+
+      # render-car.mjs takes a URL, not a server: carview.html is a static page
+      # and the repo root is the document root it expects. Run 1 spent its whole
+      # 90 s readiness wait on a 404 — the tool asks for the EXTENSIONLESS
+      # /tools/carview and http.server does not rewrite; render-car now falls
+      # back to the .html file, so either documented server works and this stays
+      # on the one already installed.
+      - name: Serve the repo root
+        shell: bash
+        run: |
+          python3 -m http.server 3456 --bind 127.0.0.1 >/tmp/serve.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -fsS -o /dev/null "http://127.0.0.1:3456/tools/carview.html" && exit 0
+            sleep 1
+          done
+          echo "server never answered"; cat /tmp/serve.log; exit 1
+
+      - name: Render
+        shell: bash
+        # Dispatch inputs reach the script through `env`, never interpolated
+        # into `run:` — a `${{ inputs.x }}` inside the script body is pasted
+        # verbatim before bash sees it, so a value with a quote or `;` is a
+        # command (import-models.yml has always done it this way).
+        env:
+          # Linux only; macOS passes --gpu=1, which ignores APEX_GL.
+          APEX_GL: ${{ runner.os == 'Linux' && 'llvmpipe' || '' }}
+          LIBGL_ALWAYS_SOFTWARE: ${{ runner.os == 'Linux' && '1' || '' }}
+          SHOT_TEAM: ${{ inputs.team || 'mclaren' }}
+          SHOT_TOD: ${{ inputs.tod || 'day' }}
+          SHOT_LIVERY: ${{ inputs.livery }}
+          SHOT_VIEWS: ${{ inputs.views }}
+          SHOT_PRESET: ${{ inputs.preset || 'cockpit' }}
+        run: |
+          ARGS="--team=$SHOT_TEAM --tod=$SHOT_TOD"
+          ARGS="$ARGS --out=scratch/renders/cars/ci --w=1100 --h=800"
+          # The GPU is the whole reason this job exists — but keep the Linux
+          # control on software GL (llvmpipe via APEX_GL), which is what it is
+          # a control FOR.
+          if [ "$RUNNER_OS" != "Linux" ]; then ARGS="$ARGS --gpu=1"; fi
+          if [ -n "$SHOT_LIVERY" ]; then ARGS="$ARGS --livery=$SHOT_LIVERY"; fi
+          if [ -n "$SHOT_VIEWS" ]; then
+            ARGS="$ARGS --views=$SHOT_VIEWS"
+          else
+            ARGS="$ARGS --preset=$SHOT_PRESET"
+          fi
+          echo "render-car $ARGS"
+          node tools/car/render-car.mjs $ARGS
+
+      - name: Upload frames
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: car-shot-${{ inputs.image || 'macos-latest' }}
+          path: scratch/renders/cars/**
+          if-no-files-found: error
+          retention-days: 14

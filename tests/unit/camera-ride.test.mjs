@@ -1,0 +1,659 @@
+/* camera-ride.test.mjs — the chase camera must not bob on a gradient.
+ *
+ * THE BUG THIS GUARDS. The chase rig used to take its vertical framing from two
+ * independent point samples of the centreline: the eye from the road `back` m
+ * behind the car, the target from the road at the car. That makes the rig's
+ * PITCH a finite difference of the elevation profile over ~12 m — the one
+ * operator that amplifies short wavelengths — and this engine puts short
+ * wavelengths in the profile deliberately (buildCenterline's "fine surface
+ * undulation", three harmonics at 30-110 m, js/track/tracks.js).
+ *
+ * On flat road that difference is a constant and invisible, which is why the
+ * report was specifically "on Monaco, going up the incline". Put a gradient
+ * under it and it stops being constant: the camera pitched up and down about
+ * once a second, riding ripples the car was meant to absorb.
+ *
+ * WHY A VM SUITE AND NOT A SPEC. GameCams.vantage is a pure function of
+ * (track, mode, s, x, speed) — the seam is already there. In a browser the
+ * elevation profile is whatever the circuit ships, so a threshold would pin
+ * Monaco's terrain rather than the rig; here the profile is an argument, so the
+ * ripple can be dialled to a known amplitude and the assertion is about the
+ * CAMERA. It also runs in milliseconds instead of minutes.
+ *
+ * The bob assertion is RELATIVE — the smoothed rig against a raw two-point rig
+ * on the same road — so it stays meaningful if the framing constants are ever
+ * retuned. Absolute framing is pinned only where it must not move at all: flat
+ * road, and a constant slope.
+ *
+ * Run: node --test tests/unit/camera-ride.test.mjs   (npm run test:tooling-fast)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+// cameras.js declares `const GameCams`, which lands in the context's lexical
+// scope rather than on the global object — read it back by evaluating its name.
+// Same shape as tests/unit/race-control.test.mjs.
+function loadGameCams(Tracks, CamTune) {
+  const globals = { Math, JSON, Object, Array, Number, console, Tracks };
+  // Pin flat chase in the harness: shipped installs get corner lead from
+  // js/camera/offsets.js, but these tests assert the ride-height math with
+  // cornerLead explicitly at 0.
+  globals.CamTune = CamTune || {
+    get: () => 0,
+    cornerLead: () => 0,
+    apply: (_, __, ___, fov) => fov,
+  };
+  const ctx = vm.createContext(globals);
+  seedLog(ctx);
+  // js/core/mat4.js first — it is the second <script> tag in the shell and the home of
+  // the shared scalar helpers (M4.clamp/lerp), which cameras.js binds at eval.
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/camera/vantage.js"), "utf8"), ctx,
+    { filename: "js/camera/vantage.js" });
+  return vm.runInContext("GameCams", ctx);
+}
+
+/* The CAMERA TUNER's HEIGHT knob, reduced to what this file needs: translate the
+   EYE only, leaving the aim point alone. That is exactly what js/camera/offsets.js
+   apply() does for `height` (the aim stays put so the car cannot leave frame). */
+function camTuneHeight(dh) {
+  return {
+    get: () => 0,
+    cornerLead: () => 0,
+    apply: (mode, eye, tgt, fov) => { eye[1] += dh; return fov; },
+  };
+}
+
+/* A straight track running along +Z with the elevation profile `heightAt(s)`.
+   Node spacing matches what buildCenterline uses (total/round(total/4) = 4 m).
+   Only what vantage() actually reads is populated. */
+function makeTrack(heightAt, { total = 4000, hw = 6 } = {}) {
+  const n = Math.round(total / 4), ds = total / n;
+  const py = new Float64Array(n), pz = new Float64Array(n), px = new Float64Array(n);
+  for (let k = 0; k < n; k++) { pz[k] = k * ds; py[k] = heightAt(k * ds); }
+  const rx = new Float64Array(n).fill(1), ry = new Float64Array(n), rz = new Float64Array(n);
+  const hws = new Float64Array(n).fill(hw);
+  return {
+    total, n, px, py, pz, rx, ry, rz, hw: hws,
+    def: { street: true },
+    // Street lateral profile, matching TrackSurface.profile: a shelf just under
+    // the road. Enough for the eye's ground clamp to be exercised, not stubbed out.
+    surface: { heightAt: (k, beyond) => py[((Math.round(k) % n) + n) % n] - 0.12 - beyond * 0.004 },
+  };
+}
+
+const lerp = (a, b, t) => a + (b - a) * t;
+function makeTracksStub(track) {
+  const at = (arr, s) => {
+    const n = track.n, L = track.total;
+    let v = s % L; if (v < 0) v += L;
+    const fi = v / L * n, i = Math.floor(fi) % n, j = (i + 1) % n;
+    return lerp(arr[i], arr[j], fi - Math.floor(fi));
+  };
+  return {
+    sample(t, s, out) {
+      out.p[0] = at(t.px, s); out.p[1] = at(t.py, s); out.p[2] = at(t.pz, s);
+      out.t[0] = 0; out.t[1] = 0; out.t[2] = 1;
+      out.r[0] = 1; out.r[1] = 0; out.r[2] = 0;
+      out.hw = at(t.hw, s);
+      return out;
+    },
+    curvature: () => 0,
+    banking: (t, s, lat, scr) => { if (scr) { scr.dy = 0; scr.roll = 0; return scr; } return { dy: 0, roll: 0 }; },
+  };
+}
+
+/* The rig as the player sees it: the free-world branch, which is the one the
+   live game takes (render() always passes carPos). Car at world (0, s) heading
+   +Z, matching makeTrack's layout. */
+function chaseAt(cams, track, s, mode = "chase") {
+  return cams.vantage(track, mode, s, 0, 60, 0, { carPos: [0, s], carHead: 0 });
+}
+const pitchOf = (v) => Math.atan2(v.tgt[1] - v.eye[1], Math.hypot(v.tgt[0] - v.eye[0], v.tgt[2] - v.eye[2])) * 180 / Math.PI;
+
+const rms = (a) => Math.sqrt(a.reduce((s, v) => s + v * v, 0) / a.length);
+
+/* Short-wavelength content: a series minus its own 60 m moving average. At
+   racing speed that band IS the bob — the hill itself lives hundreds of metres
+   out and survives the subtraction. */
+function ripple(series, stepM) {
+  const W = Math.round(30 / stepM), N = series.length, out = [];
+  for (let i = W; i < N - W; i++) {
+    let sum = 0;
+    for (let j = -W; j <= W; j++) sum += series[i + j];
+    out.push(series[i] - sum / (2 * W + 1));
+  }
+  return out;
+}
+
+// The profile that reproduces the report: Monaco's climb (a 30 m rise over a
+// 340 m half-width cosine, straight from js/circuits/monaco.js) with the
+// engine's own fine undulation on top. The 30 m harmonic is the one that
+// matters — bob scales as amplitude ÷ wavelength².
+const HILL = (s) => (Math.abs(s - 1200) < 340 ? 15 * (1 + Math.cos(Math.PI * (s - 1200) / 340)) : 0);
+const RIPPLE = (s) => 0.037 * Math.sin(s * 2 * Math.PI / 30)
+                    + 0.075 * Math.sin(s * 2 * Math.PI / 68 + 1.1)
+                    + 0.112 * Math.sin(s * 2 * Math.PI / 110 + 2.3);
+
+test("flat road: the chase rig frames exactly as its constants say", () => {
+  const track = makeTrack(() => 7.5);
+  const cams = loadGameCams(makeTracksStub(track));
+  const v = chaseAt(cams, track, 1000);
+  // eyeUp 1.35 above the road, target 0.7 above it — no gradient, no correction.
+  // (1.35 was 2.1 until 2026-09-08, when the owner's CAMERA TUNER HEIGHT became
+  // the shipped framing. Their DISTANCE is a horizontal nudge applied after the
+  // rig solves — CHASE_EYE_IN — so `back` is still 5.8 and this arithmetic,
+  // which is about the ride height, is untouched by it.)
+  assert.ok(Math.abs(v.eye[1] - (7.5 + 1.35)) < 1e-6, `eye ${v.eye[1]}`);
+  assert.ok(Math.abs(v.tgt[1] - (7.5 + 0.7)) < 1e-6, `tgt ${v.tgt[1]}`);
+});
+
+// HELI and TV SIDE framing (#770): the helicopter close and low enough not to be
+// a second overhead, TV side tracking a few metres behind with the car leading
+// the frame. A later merge resolved vantage.js to its pre-#770 side and the old
+// poses (heli 26 m back / 17 m up / 18 m out; side 25 m out, aimed at the car)
+// came back unseen. Pinned here on a flat straight, so a conflict resolution has
+// to break a test to undo them. One-shot solve (no dt): no CamFeel easing, no
+// speed climb; kA = 0, so the outside of a straight is +right (+X here). The
+// TV director and ResultsCam.cheqPose solve these same branches.
+test("heli and TV side: straight-road pose (eye height, back/out offsets, aim)", () => {
+  const Y = 7.5, s = 1000, x = 2;   // car at world (x, Y, s): +Z forward, +X right
+  const near = (got, want, what) => assert.ok(Math.abs(got - want) < 1e-6, `${what}: ${got} vs ${want}`);
+  const pose = (street, mode) => {
+    const track = makeTrack(() => Y);
+    if (!street) track.def = {};    // open circuit: no street-canyon corridor
+    const cams = loadGameCams(makeTracksStub(track));
+    const v = cams.vantage(track, mode, s, x, 60, 0, { carPos: [x, s], carHead: 0 });
+    return { eye: v.eye.slice(), tgt: v.tgt.slice(), fov: v.fov };
+  };
+  const heli = pose(false, "heli");
+  near(heli.eye[2], s - 16, "heli eye 16 m behind the car");
+  near(heli.eye[0], 12, "heli eye 12 m out");
+  near(heli.eye[1], Y + 8.5, "heli eye 8.5 m up");
+  near(heli.tgt[2], s + 6, "heli aims 6 m up the road");
+  near(heli.tgt[0], x * 0.2, "heli aim keeps a fifth of the car's lateral");
+  near(heli.tgt[1], Y + 0.7, "heli aim 0.7 m up");
+  near(heli.fov, 36, "heli lens (no CamFeel)");
+  const side = pose(false, "side");
+  near(side.eye[2], s - 6, "side eye 6 m behind the car");
+  near(side.eye[0], 14, "side eye 14 m out");
+  near(side.eye[1], Y + 3.2, "side eye 3.2 m up");
+  near(side.tgt[2], s + 14, "side aims 14 m up the road: the car leads the frame");
+  near(side.tgt[0], x * 0.3, "side aim keeps 0.3 of the car's lateral");
+  near(side.tgt[1], Y + 0.7, "side aim 0.7 m up");
+  near(side.fov, 44, "side lens (no CamFeel)");
+  // Street circuit (hw 6 → corridor 5 m): the lost width is traded for height.
+  const heliSt = pose(true, "heli"), sideSt = pose(true, "side");
+  near(heliSt.eye[0], 5, "street heli stays over the road edge");
+  near(heliSt.eye[1], Y + 8.5 + (12 - 5) * 0.45, "street heli climbs for the lost width");
+  near(sideSt.eye[0], 5, "street side stays over the road edge");
+  near(sideSt.eye[1], Y + 3.2 + (14 - 5) * 0.25, "street side climbs for the lost width");
+  near(sideSt.fov, 44 + (14 - 5) * 0.35, "street side widens for the lost width");
+});
+
+// The other half of the split above. Recorded because it is a REAL consequence
+// of the lower eye, not an accident: on a steep climb the chase eye is inside
+// (and past 9.5 % below) the terrain floor the rig is clamped to, so the floor
+// — not eyeUp — is what sets its height there. The clamp is the SOFT one, so
+// this stays continuous; what it must not do is let the eye through the ground.
+test("on a steep climb the lowered chase eye rides the terrain floor, softly", () => {
+  const FLOOR_OVER_RIDE = 0.8;   // MIN_CLEAR, js/camera/vantage.js
+  for (const g of [0.08, 0.12]) {
+    const track = makeTrack((s) => 40 + s * g);
+    const cams = loadGameCams(makeTracksStub(track));
+    const v = chaseAt(cams, track, 2000);
+    const rideHere = 40 + 2000 * g;                 // straight line: rideY IS the line
+    const raw = 40 + (2000 - 5.8) * g + 1.35;       // what the rig alone would give
+    assert.ok(v.eye[1] > raw, `climb ${g}: the floor must LIFT the eye (${v.eye[1]} vs ${raw})`);
+    assert.ok(v.eye[1] >= rideHere + FLOOR_OVER_RIDE - 1e-6,
+      `climb ${g}: never below the floor (${v.eye[1]} vs ${rideHere + FLOOR_OVER_RIDE})`);
+    assert.ok(v.eye[1] < rideHere + FLOOR_OVER_RIDE + 0.35,
+      `climb ${g}: and never lifted past the blend band`);
+  }
+});
+
+test("constant slope: unchanged from a raw two-point rig, to the millimetre", () => {
+  // The smoothing must be invisible wherever the road has no curvature — this is
+  // what makes the fix safe to apply to every circuit at once. A Hann average of
+  // a straight line is the line; the gradient of a straight line is its slope.
+  // GENTLE grades only, and that is the point of the split below: eyeUp came
+  // down to 1.35 on 2026-09-08, and the eye's clearance over the terrain floor
+  // (rideY + MIN_CLEAR 0.8) is 1.35 - 5.8*grade - 0.8 = 0.55 - 5.8*grade. Past
+  // about 3.5 % of CLIMB that is inside the soft floor's CLAMP_BLEND (0.35) and
+  // the eye is being eased upward, so a raw two-point rig is no longer what it
+  // should equal. Every grade here clears the band; the climb is its own test.
+  for (const g of [0.02, -0.05, -0.09]) {
+    const track = makeTrack((s) => 40 + s * g);
+    const cams = loadGameCams(makeTracksStub(track));
+    const v = chaseAt(cams, track, 2000);
+    const roadBehind = 40 + (2000 - 5.8) * g;      // what the old rig sampled
+    assert.ok(Math.abs(v.eye[1] - (roadBehind + 1.35)) < 1e-3,
+      `slope ${g}: eye ${v.eye[1]} vs ${roadBehind + 1.35}`);
+    assert.ok(Math.abs(v.tgt[1] - (40 + 2000 * g + 0.7)) < 1e-3,
+      `slope ${g}: tgt ${v.tgt[1]}`);
+  }
+});
+
+test("a hill with the engine's own undulation does not bob the chase pitch", () => {
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track));
+
+  const STEP = 1, pitch = [], rawPitch = [];
+  const roadY = (s) => HILL(s) + RIPPLE(s);
+  for (let s = 700; s < 1700; s += STEP) {
+    pitch.push(pitchOf(chaseAt(cams, track, s)));
+    // The rig as it was built before this fix: eye from the road 5.8 m behind,
+    // target from the road at the car. Same constants, raw samples.
+    rawPitch.push(Math.atan2((roadY(s) + 0.7) - (roadY(s - 5.8) + 1.35), 11.8) * 180 / Math.PI);
+  }
+  const bob = rms(ripple(pitch, STEP)), rawBob = rms(ripple(rawPitch, STEP));
+
+  // The raw rig has to actually bob, or this test proves nothing.
+  assert.ok(rawBob > 0.05, `the two-point reference rig should bob on this profile, got ${rawBob.toFixed(4)}°`);
+  assert.ok(bob < rawBob / 4,
+    `chase pitch bob ${bob.toFixed(4)}° must be well under the two-point rig's ${rawBob.toFixed(4)}°`);
+});
+
+test("the eye still follows the hill — smoothing is not flattening", () => {
+  // The opposite failure: a filter wide enough to kill the bob could also stop
+  // the camera climbing with the road at all. Over Monaco's 30 m rise the eye
+  // must gain essentially the whole of it.
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track));
+  const foot = chaseAt(cams, track, 800).eye[1];
+  const crest = chaseAt(cams, track, 1200).eye[1];
+  assert.ok(crest - foot > 28, `eye climbed ${(crest - foot).toFixed(2)} m of a 30 m hill`);
+});
+
+test("far chase gets the same treatment", () => {
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track));
+  const STEP = 1, pitch = [], rawPitch = [];
+  const roadY = (s) => HILL(s) + RIPPLE(s);
+  for (let s = 700; s < 1700; s += STEP) {
+    pitch.push(pitchOf(chaseAt(cams, track, s, "far")));
+    rawPitch.push(Math.atan2((roadY(s) + 1.0) - (roadY(s - 10.5) + 3.6), 19.5) * 180 / Math.PI);
+  }
+  const bob = rms(ripple(pitch, STEP)), rawBob = rms(ripple(rawPitch, STEP));
+  assert.ok(rawBob > 0.05, `reference rig should bob, got ${rawBob.toFixed(4)}°`);
+  assert.ok(bob < rawBob / 4, `far pitch bob ${bob.toFixed(4)}° vs raw ${rawBob.toFixed(4)}°`);
+});
+
+test("a camera LOWERED into the ground clamp does not ride a node staircase", () => {
+  // THE REPORTED BUG. surface.heightAt() rounds its node index, so asking it once
+  // per frame makes the clamp floor a staircase with one step per ~4 m node. At
+  // the shipped framing the eye rides ~0.5 m clear of that floor and never sees
+  // it — which is why this hid behind every default-valued test. Lower the eye
+  // with the CAMERA TUNER and it lands ON the floor, inheriting the steps: on a
+  // gradient each one is nodeSpacing x grade (0.45 m measured on Monaco),
+  // snapping ~11 times a second at racing speed. Flat road is immune (adjacent
+  // nodes are level), and a parked car is immune (nothing crosses a node), which
+  // is exactly the "fast judder only while climbing" signature.
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track), camTuneHeight(-1.5));
+
+  // Sample far finer than the 4 m node spacing, or the staircase aliases away.
+  const ys = [];
+  for (let s = 1000; s < 1120; s += 0.25) ys.push(chaseAt(cams, track, s).eye[1]);
+  const d = ys.map((v, i) => (i ? v - ys[i - 1] : 0)).slice(1);
+
+  const held = d.filter((v) => Math.abs(v) < 1e-9).length;
+  const snaps = d.filter((v) => Math.abs(v) > 0.2).length;
+  // A staircase is mostly-flat with occasional big jumps; a slide is neither.
+  assert.equal(snaps, 0, `eye snapped ${snaps} time(s), max jump ${Math.max(...d.map(Math.abs)).toFixed(3)} m`);
+  assert.ok(held < d.length * 0.25, `eye held flat for ${held}/${d.length} samples — that is a staircase`);
+
+  // ...and it must genuinely be sitting on the clamp, or the test proves nothing.
+  const free = loadGameCams(makeTracksStub(track), camTuneHeight(-1.5e-9));
+  assert.ok(chaseAt(cams, track, 1050).eye[1] > chaseAt(free, track, 1050).eye[1] - 1.5 + 0.05,
+    "the lowered eye was never actually caught by the clamp — nothing was exercised");
+});
+
+test("the camera path is C1 — no node-rate or clamp-handover acceleration spikes", () => {
+  // The two defects a position-driven judder is made of, and neither shows up in
+  // a position or even a velocity check:
+  //   1. elevation lerped between ~4 m nodes is only C0, so vertical VELOCITY
+  //      steps at every node boundary (~11 Hz at racing speed);
+  //   2. a hard max() ground clamp is C0 too, so its slope jumps every time the
+  //      eye engages or disengages the floor.
+  // Both are invisible at the shipped framing — the eye rides clear of the floor
+  // and the rig sits several degrees nose-down, so these differences are noise.
+  // Lower and shorten the rig with the CAMERA TUNER and they become the signal.
+  //
+  // The instrument is the ratio of the WORST vertical acceleration to its own
+  // rms: a smooth curve keeps that small, while a discontinuity is a spike by
+  // definition. Ratio, not an absolute bound, so the test says "no kinks" rather
+  // than pinning a particular hill's steepness.
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  for (const dh of [0, -1.5]) {
+    const cams = loadGameCams(makeTracksStub(track), dh ? camTuneHeight(dh) : null);
+    const ys = [];
+    for (let s = 950; s < 1250; s += 0.2) ys.push(chaseAt(cams, track, s).eye[1]);
+    const d1 = ys.map((v, i) => (i ? v - ys[i - 1] : 0)).slice(1);
+    const d2 = d1.map((v, i) => (i ? v - d1[i - 1] : 0)).slice(1);
+    const rms = Math.sqrt(d2.reduce((a, b) => a + b * b, 0) / d2.length);
+    const spike = Math.max(...d2.map(Math.abs)) / (rms || 1);
+    assert.ok(spike < 6,
+      `HEIGHT ${dh}: worst vertical acceleration is ${spike.toFixed(1)}x its own rms — that is a discontinuity, not a curve`);
+  }
+});
+
+test("VISOR is the cockpit eye, same aim, and the rig is anchored on the same car point", () => {
+  // The owner (2026-09-29): "start with exact cockpit bodywork, just remove
+  // the wheel first". The eye is pinned RELATIVE to cockpit's so a tuning pass
+  // on cockpit moves visor with it; the rig's origin (cockpitViewmodelAxes with
+  // visor's own offsets) must land on the SAME car point as cockpit's, so a
+  // later move of the visor eye moves the eye, never the tub.
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track));
+  assert.equal(cams.VISOR_EYE_FWD, cams.COCKPIT_EYE_FWD, "the cockpit's fore/aft seat");
+  assert.equal(cams.VISOR_EYE_UP, cams.COCKPIT_EYE_UP, "the cockpit's eye height");
+  // The game's frame is right-handed with +Y up: facing +Z (carHead 0), right is -X, so R × F = +Y.
+  const R = [-1, 0, 0], F = [0, 0, 1];
+  for (const s of [200, 1100, 1210]) {
+    // vantage() writes pooled arrays IN PLACE: copy the first sample before taking the second.
+    const c0 = chaseAt(cams, track, s, "cockpit");
+    const c = { eye: [...c0.eye], tgt: [...c0.tgt], fov: c0.fov };
+    const v = chaseAt(cams, track, s, "visor");
+    assert.ok(Math.abs(v.eye[2] - c.eye[2]) < 1e-9, `same eye fore/aft at s=${s}: ${v.eye[2] - c.eye[2]}`);
+    assert.ok(Math.abs(v.eye[1] - c.eye[1]) < 1e-9, `same eye height at s=${s}: ${v.eye[1] - c.eye[1]}`);
+    assert.ok(Math.abs(v.eye[0] - c.eye[0]) < 1e-9, `no lateral offset at s=${s}`);
+    assert.ok(Math.abs(pitchOf(v) - pitchOf(c)) < 0.05, `same aim pitch at s=${s}: ${pitchOf(v)} vs ${pitchOf(c)}`);
+    assert.ok(Math.abs(v.fov - c.fov) < 1e-9, "same speed-scaled FOV");
+    const oR = [0, 0, 0], oU = [0, 0, 0], oF = [0, 0, 0], pC = [0, 0, 0], pV = [0, 0, 0];
+    cams.cockpitViewmodelAxes(R, F, 0, c.eye, oR, oU, oF, pC);
+    cams.cockpitViewmodelAxes(R, F, 0, v.eye, oR, oU, oF, pV, cams.VISOR_EYE_FWD, cams.VISOR_EYE_UP);
+    for (let i = 0; i < 3; i++) assert.ok(Math.abs(pC[i] - pV[i]) < 1e-9, `rig origin on the same car point at s=${s} (axis ${i}): ${pC[i]} vs ${pV[i]}`);
+    // And when the visor eye moves (the planned closer/lower seat), the anchor
+    // still lands on the car: an eye 0.30 forward and 0.10 down, with offsets to match.
+    const moved = [v.eye[0], v.eye[1] - 0.10, v.eye[2] + 0.30], pM = [0, 0, 0];
+    cams.cockpitViewmodelAxes(R, F, 0, moved, oR, oU, oF, pM, cams.COCKPIT_EYE_FWD + 0.30, cams.COCKPIT_EYE_UP - 0.10);
+    for (let i = 0; i < 3; i++) assert.ok(Math.abs(pC[i] - pM[i]) < 1e-9, `a moved eye keeps the rig on the car (axis ${i})`);
+  }
+});
+
+test("VISOR draws the cockpit rig without the steering wheel, and the column and bulkhead it unclips from", () => {
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const draw = readFileSync(join(ROOT, "js/car/car-draw.js"), "utf8");
+  // The rig is anchored with the SAME seat vantage() puts the camera on: VISOR's
+  // own pair, or the chosen cockpit seat (CockpitOpts.layout).
+  assert.match(game, /GameCams\.cockpitViewmodelAxes\([^;]*GameCams\.seatFwd\(visorEye \? "visor" : "cockpit"\), GameCams\.seatUp\(visorEye \? "visor" : "cockpit"\)\);/,
+    "the rig is anchored with visor's own eye offsets");
+  assert.match(game, /drawCockpitRig\(c, _cockMat, dt, paint, visorEye\);/, "the same rig is drawn for visor, flagged wheel-less");
+  const rig = draw.slice(draw.indexOf("function drawCockpitRig("));
+  // VISOR forces the wheel-less interior and the STANDARD seat (its eye is
+  // VISOR_EYE_*) whatever the WHEEL and SEAT settings say.
+  assert.match(rig, /const wheelStyle = noWheel \? "none" : CockpitOpts\.wheel\(\), lay = CockpitOpts\.layout\(wheelStyle, noWheel \? "std" : null\);/, "visor overrides the chosen wheel and seat");
+  const cut = rig.indexOf('if (wheelStyle === "none") {');
+  assert.ok(cut > 0, "the no-wheel branch exists");
+  assert.ok(rig.indexOf("cockpitBodyMesh(c.team, c)") < cut && rig.indexOf("drawPlayerWheels(") < cut, "the body and the front wheels are drawn before it");
+  const branch = rig.slice(cut, rig.indexOf("return;", cut) + 7);
+  assert.match(branch, /G\.gfx\.draw\(getCockpitDash\(\), _rigA, opt\);/, "visor draws the column, boss and bulkhead, unrolled at the wheel mount");
+  assert.ok(rig.indexOf("getCockpitWheel(") > cut + branch.length, "the steering wheel is drawn after the branch returns, so visor never draws it");
+  // Check the fitted geometry, so a curved bulkhead can replace a square slab.
+  const ctx=vm.createContext({ GaragePrims:{ block() {} } }); seedLog(ctx);
+  vm.runInContext(readFileSync(join(ROOT,"js/car/car-mesh.js"),"utf8")+"\n;this.mesh=CarMesh;",ctx);
+  ctx.mesh.init({ createMesh:d=>d });
+  const dash=ctx.mesh.getCockpitDash(), x=[], y=[];
+  for(let i=0;i<dash.pos.length;i+=3) if(dash.pos[i+2]>0.28) {x.push(dash.pos[i]);y.push(dash.pos[i+1]);}
+  assert.ok(Math.min(...x)<=-0.35 && Math.max(...x)>=0.35, "bulkhead spans the tub");
+  assert.ok(Math.min(...y)<=-0.24 && Math.max(...y)>=0.07, "bulkhead meets the lower coaming and upper lip");
+
+});
+
+test("EVERY world-facing camera mode is C1 on a gradient", () => {
+  // chase/far were fixed first, and the rest were left on the raw sample. That
+  // was worse, not better: MEASURED at stock framing on Monaco's climb, drift
+  // read 8.6, heli 9.4 and tcam/rear/cinematic/reverse 10.2 — i.e. a player who
+  // never touched the CAMERA TUNER still got the judder, just in a different
+  // mode. This sweeps the lot so a new mode cannot quietly join them.
+  //
+  // cockpit and hood (and visor and helmet, the cockpit eye by other names)
+  // are excluded ON PURPOSE: they are bolted to the car and must match the raw
+  // profile the chassis is drawn from. Riding the car's own bumps is what an
+  // onboard camera is for.
+  const MODES = ["chase", "far", "drift", "overhead", "heli", "reverse", "side",
+                 "cinematic", "low", "tcam", "rear"];
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track));
+  const bad = [];
+  for (const mode of MODES) {
+    const ys = [];
+    for (let s = 950; s < 1250; s += 0.2) ys.push(chaseAt(cams, track, s, mode).eye[1]);
+    const d1 = ys.map((v, i) => (i ? v - ys[i - 1] : 0)).slice(1);
+    const d2 = d1.map((v, i) => (i ? v - d1[i - 1] : 0)).slice(1);
+    const rms = Math.sqrt(d2.reduce((a, b) => a + b * b, 0) / d2.length);
+    const spike = Math.max(...d2.map(Math.abs)) / (rms || 1);
+    if (!(spike < 6)) bad.push(`${mode} ${spike.toFixed(1)}x`);
+  }
+  assert.deepEqual(bad, [], `these modes step their vertical velocity at node rate: ${bad.join(", ")}`);
+});
+
+// The guaranteed clearance over the ROAD is MIN_CLEAR - FLOOR_LEAD = 0.55 m,
+// not the old 0.8: the clamp floor now references the SMOOTHED ride height
+// (so a CAMERA TUNER-lowered eye stops riding raw ripple crests through the
+// floor — see the clamp comment in cameras.js), and the smoothed reference is
+// allowed to sit at most FLOOR_LEAD = 0.25 below raw where the profile
+// genuinely drops. These synthetic cliffs are exactly that worst case. On
+// every real circuit raw-above-smooth measures <= 0.202 m (suzuka), inside
+// FLOOR_LEAD, so the smooth reference governs and the full 0.8 m holds there.
+const CLIFF_CLEAR = 0.8 - 0.25;
+
+test("the soft floor never lets the eye end up below the hard floor", () => {
+  // Softening the clamp handover must not weaken what the clamp is FOR. The
+  // blend may only ever push the eye up.
+  const track = makeTrack((s) => (s > 2000 ? -6 : 0));
+  const cams = loadGameCams(makeTracksStub(track), camTuneHeight(-4));
+  for (let s = 1900; s < 2200; s += 2) {
+    const v = chaseAt(cams, track, s);
+    const groundHere = (s > 2000 ? -6 : 0) - 0.12;
+    assert.ok(v.eye[1] >= groundHere + CLIFF_CLEAR - 1e-6,
+      `eye ${v.eye[1].toFixed(3)} below the floor ${(groundHere + CLIFF_CLEAR).toFixed(3)} at s=${s}`);
+  }
+});
+
+test("the ground clamp still catches an eye below the surface", () => {
+  // The smoothing must not cost the eye its terrain floor. A track whose road
+  // drops away sharply under the eye is the case the clamp exists for.
+  const track = makeTrack((s) => (s > 2000 ? -6 : 0));
+  const cams = loadGameCams(makeTracksStub(track));
+  for (let s = 1900; s < 2200; s += 5) {
+    const v = chaseAt(cams, track, s);
+    const groundHere = (s > 2000 ? -6 : 0) - 0.12;
+    assert.ok(v.eye[1] >= groundHere + CLIFF_CLEAR - 1e-6,
+      `eye ${v.eye[1].toFixed(3)} sank below the clamp floor ${(groundHere + CLIFF_CLEAR).toFixed(3)} at s=${s}`);
+  }
+});
+
+test("the cockpit viewmodel yaws with heading, not the road tangent", () => {
+  // THE BUG THIS GUARDS. The cockpit interior used the plain road tangent as
+  // its basis while the camera looked along c.head (+ turn-chase). Steering
+  // changed where you LOOKED and where you WENT, but the halo / wheel / nose
+  // stayed glued to the road — the body crabbed diagonally through the turn.
+  // yawVis is heading vs tangent; applying it here is the same psi the chase
+  // body already uses. Pitch/roll stay off (clipping).
+  const cams = loadGameCams(makeTracksStub(makeTrack(() => 0)));
+  assert.equal(typeof cams.cockpitViewmodelAxes, "function");
+  const sR = [1, 0, 0], sF = [0, 0, 1];
+  const eye = [0, 1, 0];
+  const outR = [0, 0, 0], outU = [0, 0, 0], outF = [0, 0, 0], outP = [0, 0, 0];
+  cams.cockpitViewmodelAxes(sR, sF, 0, eye, outR, outU, outF, outP);
+  assert.deepEqual(outF.map((n) => +n.toFixed(6)), [0, 0, 1],
+    "zero yaw stays on the road tangent");
+  assert.deepEqual(outR.map((n) => +n.toFixed(6)), [1, 0, 0]);
+  const { COCKPIT_EYE_FWD, COCKPIT_EYE_UP } = cams;
+  const recon = [
+    outP[0] + outU[0] * COCKPIT_EYE_UP + outF[0] * COCKPIT_EYE_FWD,
+    outP[1] + outU[1] * COCKPIT_EYE_UP + outF[1] * COCKPIT_EYE_FWD,
+    outP[2] + outU[2] * COCKPIT_EYE_UP + outF[2] * COCKPIT_EYE_FWD,
+  ];
+  assert.deepEqual(recon.map((n) => +n.toFixed(9)), eye,
+    "origin + FWD/UP along the yawed axes must land back on camEye");
+
+  cams.cockpitViewmodelAxes(sR, sF, Math.PI / 2, eye, outR, outU, outF, outP);
+  assert.deepEqual(outF.map((n) => +n.toFixed(6)), [1, 0, 0],
+    "+π/2 yawVis (nose right of the road) must rotate the viewmodel, not crab it");
+  assert.deepEqual(outR.map((n) => +n.toFixed(6)), [0, 0, -1]);
+
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(src, /cockpitRigOnly[\s\S]{0,400}cockpitViewmodelAxes\(smp2\.r, smp2\.t, yv, camEye/,
+    "the live cockpit draw must consume heading yaw, not a raw tangent basis");
+});
+
+test("REDUCE MOTION drops the cockpit kerb shiver, and only that", () => {
+  const track = makeTrack(() => 0);
+  const cams = loadGameCams(makeTracksStub(track));
+  const s = 1.0;   // mid-rib: sin(2π·s/KERB_RIB_M) is far from zero
+  const eyeY = (att, reduceMotion) =>
+    cams.vantage(track, "cockpit", s, 0, 60, 0, { carPos: [0, s], carHead: 0, att, reduceMotion }).eye[1];
+  const flat = eyeY({ onKerb: false }, false);
+  const shiver = eyeY({ onKerb: true }, false);
+  assert.notEqual(+shiver.toFixed(6), +flat.toFixed(6), "a kerb shivers the onboard eye by default");
+  assert.equal(+eyeY({ onKerb: true }, true).toFixed(9), +flat.toFixed(9),
+    "prefers-reduced-motion: no rib oscillation (developer.mozilla.org/docs/Web/CSS/@media/prefers-reduced-motion)");
+  assert.equal(+eyeY({ onKerb: false, baHeave: 0.01 }, true).toFixed(9), +(flat + 0.01).toFixed(9),
+    "the car's own heave still rides through");
+});
+
+// THE ONBOARD AIM FOLLOWS THE CHASSIS PITCH, with the chassis' sign. baPitch > 0
+// is brake DIVE (js/physics/body-attitude.js: -axEstSm, so braking is positive;
+// the chase rig's dolly reads it the same way). onboardAttitude added it to the
+// aim, so every bolted-on view tilted UP as the car dived into a braking zone.
+test("the bolted-on views dip under braking and lift under power, and it is the car's motion, kept under REDUCE MOTION", () => {
+  const track = makeTrack(() => 0), s = 500;
+  const cams = loadGameCams(makeTracksStub(track));
+  for (const mode of ["cockpit", "hood", "visor", "helmet", "tcam"]) {
+    const aim = (baPitch, reduceMotion) => pitchOf(cams.vantage(track, mode, s, 0, 60, 0, { carPos: [0, s], carHead: 0, att: { baPitch }, reduceMotion }));
+    for (const rm of [true, false]) {
+      assert.ok(aim(0.024, rm) < aim(0, rm), `${mode}${rm ? " (reduce motion)" : ""}: braking dips the view`);
+      assert.ok(aim(-0.024, rm) > aim(0, rm), `${mode}${rm ? " (reduce motion)" : ""}: power lifts it`);
+    }
+  }
+  const chase = (baPitch) => pitchOf(cams.vantage(track, "chase", s, 0, 60, 0, { carPos: [0, s], carHead: 0, att: { baPitch } }));
+  assert.ok(chase(0.024) < chase(0), "the chase rig's aim drops under braking too: one convention");
+});
+
+// THE HEAD MOVES INSIDE THE CAR (vantage.js HEAD_*): outward under lateral g,
+// forward and down under braking — off the SMOOTHED body attitude, so it cannot
+// jitter — and the rig anchor takes the same offset off, so the view moves and
+// the tub does not. REDUCE MOTION (and COMFORT › HEAD BOB at 0) hold it still.
+test("the driver's head shifts outward in a corner and nods under braking, inside a rig that stays on the car", () => {
+  const track = makeTrack(() => 0), s = 500;
+  const cams = loadGameCams(makeTracksStub(track));
+  const R = [-1, 0, 0], F = [0, 0, 1];   // facing +Z: right is -X (R x F = +Y)
+  const at = (att, extra = {}) => {
+    const v = cams.vantage(track, "cockpit", s, 0, 60, 0, { carPos: [0, s], carHead: 0, att, ...extra });
+    const out = { eye: [...v.eye], tgt: [...v.tgt] }, oR = [0, 0, 0], oU = [0, 0, 0], oF = [0, 0, 0], p = [0, 0, 0];
+    cams.cockpitViewmodelAxes(R, F, 0, out.eye, oR, oU, oF, p);   // the car loop anchors the rig right after
+    out.rig = p;
+    return out;
+  };
+  const H = cams.HEAD_MAX, rest = at({});
+  // A RIGHT turn leans the body's top toward -R (game.js rollTot); the head goes the same way, to the outside.
+  const corner = at({ baRoll: 0.055 });
+  const d = corner.eye.map((v, i) => v - rest.eye[i]);
+  assert.ok(Math.abs(Math.hypot(...d) - H.lat) < 1e-9 && H.lat >= 0.02 && H.lat <= 0.03, `the head moves ${(Math.hypot(...d) * 100).toFixed(1)} cm`);
+  assert.ok(-(d[0] * R[0] + d[1] * R[1] + d[2] * R[2]) > 0, "toward -R: the outside of a right-hander");
+  assert.ok(at({ baRoll: -0.055 }).eye[0] < rest.eye[0], "and the other way in a left-hander");
+  assert.deepEqual(at({ baRoll: 5 }).eye.map((v) => +v.toFixed(9)), corner.eye.map((v) => +v.toFixed(9)), "clamped at the body's own roll cap");
+  // Braking: forward and down, and the aim nods down with it.
+  const brake = at({ baPitch: 0.024 });
+  assert.ok(Math.abs(brake.eye[2] - rest.eye[2] - H.fwd) < 1e-9 && Math.abs(rest.eye[1] - brake.eye[1] - H.down) < 1e-9, "forward and down");
+  // The aim already follows the chassis pitch (onboardAttitude, kept under
+  // REDUCE MOTION); the nod is the head's own, on top of it.
+  assert.ok(pitchOf(brake) < pitchOf(at({ baPitch: 0.024 }, { reduceMotion: true })), "the head nods");
+  assert.deepEqual(at({ baPitch: -0.024 }).eye.map((v) => +v.toFixed(9)), rest.eye.map((v) => +v.toFixed(9)), "acceleration does not throw the head back into the headrest");
+  // The rig does not move: the tub, wheel and halo stay on the car point.
+  for (const moved of [corner, brake, at({ baRoll: 0.055, baPitch: 0.024 })])
+    for (let i = 0; i < 3; i++) assert.ok(Math.abs(moved.rig[i] - rest.rig[i]) < 1e-9, `the rig anchor moved with the head (axis ${i})`);
+  // REDUCE MOTION: no head shift at all (developer.mozilla.org/docs/Web/CSS/@media/prefers-reduced-motion).
+  const still = at({ baRoll: 0.055, baPitch: 0.024 }, { reduceMotion: true });
+  assert.deepEqual(still.eye.map((v) => +v.toFixed(9)), rest.eye.map((v) => +v.toFixed(9)), "prefers-reduced-motion holds the head still");
+  assert.deepEqual({ ...cams.headState() }, { lat: 0, up: 0, fwd: 0, nod: 0 }, "no offset, no nod — the chassis pitch the aim already follows is the car's, and stays");
+  assert.deepEqual(still.rig.map((v) => +v.toFixed(9)), rest.rig.map((v) => +v.toFixed(9)));
+  // COMFORT › HEAD BOB scales it.
+  const half = loadGameCams(makeTracksStub(track), { get: () => 0, cornerLead: () => 0, apply: (_, __, ___, fov) => fov, bob: () => 0.5 });
+  const hv = half.vantage(track, "cockpit", s, 0, 60, 0, { carPos: [0, s], carHead: 0, att: { baRoll: 0.055 } });
+  assert.ok(Math.abs(Math.abs(hv.eye[0] - rest.eye[0]) - H.lat / 2) < 1e-9, "HEAD BOB 0.5 halves it");
+  // A solve WITHOUT the player's attitude (the broadcast PiP, a debug preview)
+  // between the race camera and the car loop must not move the rig anchor.
+  at({ baRoll: 0.055 });
+  const before = cams.headState();
+  cams.vantage(track, "cockpit", s, 0, 60, 0, { carPos: [0, s], carHead: 0 });
+  cams.vantage(track, "heli", s, 0, 60, 0, {});
+  assert.deepEqual(cams.headState(), before, "only the call carrying att publishes the head offset");
+  // Chase and the other external cams never shift (chase's own brake dolly reads baPitch; roll is the head's alone).
+  const chase0 = cams.vantage(track, "chase", s, 0, 60, 0, { carPos: [0, s], carHead: 0, att: {} }).eye.map((v) => +v.toFixed(9));
+  const chase1 = cams.vantage(track, "chase", s, 0, 60, 0, { carPos: [0, s], carHead: 0, att: { baRoll: 0.055 } }).eye.map((v) => +v.toFixed(9));
+  assert.deepEqual(chase1, chase0, "the chase rig is not a head");
+  assert.deepEqual({ ...cams.headState() }, { lat: 0, up: 0, fwd: 0, nod: 0 }, "and switching to it zeroes the rig's head offset");
+});
+
+test("HELMET is the cockpit from inside the lid: the eye a few cm forward, the same aim and lens, the rig on the same car point", () => {
+  const track = makeTrack((s) => HILL(s) + RIPPLE(s));
+  const cams = loadGameCams(makeTracksStub(track));
+  const R = [-1, 0, 0], F = [0, 0, 1];
+  for (const s of [200, 1100, 1210]) {
+    const anchor = (mode, att) => {
+      const v = cams.vantage(track, mode, s, 0, 60, 0, { carPos: [0, s], carHead: 0, att });
+      const out = { eye: [...v.eye], tgt: [...v.tgt], fov: v.fov }, p = [0, 0, 0];
+      cams.cockpitViewmodelAxes(R, F, 0, out.eye, [0, 0, 0], [0, 0, 0], [0, 0, 0], p);
+      out.rig = p;
+      return out;
+    };
+    const c = anchor("cockpit", {}), h = anchor("helmet", {});
+    assert.ok(Math.abs(h.eye[2] - c.eye[2] - cams.HELMET_EYE_FWD) < 1e-9 && Math.abs(h.eye[0] - c.eye[0]) < 1e-9 && Math.abs(h.eye[1] - c.eye[1]) < 1e-9,
+      `s=${s}: the helmet eye is the cockpit eye moved ${cams.HELMET_EYE_FWD} m forward`);
+    assert.ok(Math.abs(pitchOf(h) - pitchOf(c)) < 0.05 && Math.abs(h.fov - c.fov) < 1e-9, "same aim and lens");
+    for (let i = 0; i < 3; i++) assert.ok(Math.abs(h.rig[i] - c.rig[i]) < 1e-9, `s=${s}: the rig sits on the same car point (axis ${i})`);
+    // A PiP / debug solve still seats the helmet eye, and leaves the rig alone.
+    const pip = cams.vantage(track, "helmet", s, 0, 60, 0, { carPos: [0, s], carHead: 0 });
+    assert.ok(Math.abs(pip.eye[2] - c.eye[2] - cams.HELMET_EYE_FWD) < 1e-9);
+  }
+  // Onboard everywhere the game asks: kerb shiver, no ground clamp, near plane, the rig, the lock.
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /const onboard = racing && \([^;]*camId === "helmet"/, "locked like the other onboard eyes (λ400)");
+  assert.match(game, /const _nearM = \([^;]*_projMode === "helmet"[^;]*\) \? 0\.3 : 0\.9;/, "the cockpit's 0.3 m near plane, or the wheel is clipped away");
+  assert.match(game, /const cockpitRigOnly = [^;]*CAM_MODES\[camMode\]\.id === "helmet"/, "the cockpit rig is drawn round it");
+  // cameraBankScale gives every mode it does not name the FULL bank (1): HELMET,
+  // like the cockpit, is in neither the 0.35 nor the 0 list.
+  const bank = game.match(/function cameraBankScale\(mode\) \{[^}]*\}/);
+  assert.ok(bank, "cameraBankScale is the banked-camera table");
+  assert.doesNotMatch(bank[0], /"helmet"|"cockpit"/, "and it rides the full bank like the cockpit");
+  const ms = readFileSync(join(ROOT, "js/camera/mode-switch.js"), "utf8");
+  const ids = [...ms.matchAll(/id:\s*"([a-z]+)"/g)].map((m) => m[1]);
+  assert.equal(ids[ids.length - 1], "helmet", "appended: apex26.camMode is an index");
+  assert.match(ms, /document\.body\.toggleAttribute\("data-helmet-cam", camId === "helmet"\);/, "the visor frame follows the mode");
+  const css = readFileSync(join(ROOT, "css/hud.css"), "utf8");
+  assert.match(css, /body\[data-helmet-cam\] #hud::before \{/, "and css/hud.css draws it");
+});
+
+// NEAR-EYE CULL. A rival is hidden only when the eye is INSIDE its body box (grown by
+// the near plane), never merely NEAR it: from the cockpit a car alongside is 2-3 m from
+// the eye, and the old 3.4 m radius made it vanish as the player drew level.
+test("near-eye cull: a rival alongside an onboard eye stays drawn; an eye inside a car hides it", () => {
+  const cams = loadGameCams(makeTracksStub(makeTrack(() => 7.5)));
+  const inside = (along, lat, up, pad) => cams.eyeInsideCar(along, lat, up, pad);
+  const onboardPad = 0.3 + 0.3, chasePad = 0.9 + 0.3;
+  // Cockpit eye (0.82 m up) beside a rival 2.5 m across, at every stage of the pass.
+  for (const along of [-3, -1.5, 0, 1.5, 3]) {
+    assert.equal(inside(along, 2.5, 0.82, onboardPad), false, "alongside at " + along + " m: drawn");
+  }
+  assert.equal(inside(1.2, 2.2, 0.82, onboardPad), false, "wheel to wheel, almost past: drawn");
+  // The chase camera's case the radius was for: the eye inside a tailgating car.
+  assert.equal(inside(0.5, 0.2, 0.9, chasePad), true, "eye inside the body: hidden");
+  assert.equal(inside(3.6, 0.4, 1.9, chasePad), true, "eye just off the nose, inside the near plane: hidden");
+  assert.equal(inside(6, 0, 2.4, chasePad), false, "chase eye 6 m back and up: drawn");
+  assert.equal(inside(0, 0, 3.0, chasePad), false, "eye above the roof: drawn");
+  // game.js uses the box, not a radius.
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /GameCams\.eyeInsideCar\(/, "the car loop's near-eye cull is the box test");
+  assert.doesNotMatch(game, /< 3\.4 \* 3\.4\) continue/, "the 3.4 m radius is gone");
+});

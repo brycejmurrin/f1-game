@@ -1,0 +1,232 @@
+@layer overlays {
+/* Apex 26 — season standings overlay, track-detail fullscreen modal + trailing orientation fixes.
+   Split from css/style.css (lines 1561-1677 of the original); the <link>
+   order in index.html preserves the original source order, so the cascade
+   is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
+/* ---------- season standings overlay ---------- */
+/* #standings is a `dialog.screen dim` (a top-layer dialog) — its sizing and
+   centring come from `dialog.screen` in css/components.css. A leftover
+   `#standings { max-width; max-height }` here used to clamp it: this file is
+   `@layer overlays`, which beats `@layer components`, so the clamp pinned the
+   whole dialog to 540px in the top-left corner instead of the centred sheet.
+   The body is already `.sheet-body.pane`; leftover height is the sheet grid
+   track. The old viewport-height cap was zoom-blind. */
+#standings-body {
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  font-size: var(--fs-micro);
+}
+
+/* ---------- track detail: a dim screen + sheet, like standings ---------- */
+/* The dialog is `class="screen dim"` — .screen already centres, pads the
+   safe area, and leaves zoom on the inner .sheet. The old inset:0 / width
+   100% / zoom-on-dialog path made this the one randomly full-bleed overlay. */
+#track-detail[hidden] { display: none; }
+/* Closed-state restatement: this file is @layer overlays, which beats the
+   components-layer `dialog.screen:not([open])` guard. css-layers.test.mjs. */
+#track-detail:not([open]) { display: none; }
+#td-inner {
+  --sheet-w: 1100px;
+  --fit-at: 280px;
+  --compact-at: 420px;
+  width: min(100%, var(--sheet-w));
+  height: min(100%, 54rem);
+  --scroll-thumb: color-mix(in oklab, var(--text) 34%, transparent);
+  --scroll-track: color-mix(in oklab, var(--surf-1) 82%, transparent);
+}
+#td-inner[data-density="compact"] #track-detail-header {
+  padding-top: 0; padding-bottom: calc(var(--pad) * 0.2);
+}
+#track-detail-header {
+  padding-inline: var(--pad);
+}
+#track-detail-name { padding-left: calc(var(--gap) * 0.4); }
+#track-detail-body {
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
+  min-height: 0; overflow: hidden;
+}
+#track-detail-canvas-wrap {
+  flex: 1 1 auto; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: calc(var(--gap) * 0.45); overflow: hidden;
+}
+/* Hard cap so the canvas can never overflow its wrap even if the JS aspect-fit
+   (openTrackDetail's rAF) measures a stale width — belt to the JS's braces.
+   object-fit: contain stops max-width/max-height from independently clamping
+   width vs height into a squashed bitmap (common under UI zoom when the wrap
+   shrinks in local px). */
+#track-detail-canvas {
+  display: block; cursor: default;
+  max-width: 100%; max-height: 100%;
+  width: auto; height: auto;
+  object-fit: contain;
+}
+#track-detail-panel {
+  display: flex; flex-direction: column; gap: 0;
+  min-width: 0; min-height: 0;
+  padding-inline: var(--pad);
+  overflow-y: auto; overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+#track-detail-panel::-webkit-scrollbar { width: 8px; }
+#track-detail-panel::-webkit-scrollbar-track { background: var(--scroll-track); }
+#track-detail-panel::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb); border-radius: var(--r-sm);
+}
+#track-detail-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-2); line-height: 1.5; }
+.tds-subtitle { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
+#track-detail-elev-wrap { padding-inline: 0; min-width: 0; }
+#track-detail-elev { display: block; width: 100%; max-width: 100%; height: 48px; box-sizing: border-box; }
+#track-detail-drs-list { font-size: var(--fs-2); color: var(--text); }
+.tdd-zone { padding: 2px 0; }
+#track-detail-drs-list span[aria-label="crossing start/finish"] {
+  color: var(--dim); letter-spacing: var(--ls-2); white-space: nowrap;
+}
+.tdc-title { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
+#track-detail-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.tdc-corner {
+  display: flex; align-items: center; gap: 5px;
+  /* below the button plate's 0.045: 27 identical plates in a wrap grid read
+     as a keypad; a readout row rests under the interactive floor */
+  background: rgba(255, 255, 255, 0.028); border-radius: var(--r-sm);
+  padding: calc(var(--gap) * 0.25) 8px; font-size: var(--fs-micro);
+}
+.tdc-num { font-weight: 700; color: var(--text); min-width: 22px; }
+.tdc-fast   { color: #4ade80; font-size: var(--fs-micro); }
+.tdc-medium { color: #facc15; font-size: var(--fs-micro); }
+.tdc-slow   { color: #fb923c; font-size: var(--fs-micro); }
+.tdc-hairpin{ color: #f87171; font-size: var(--fs-micro); }
+#track-detail-legend {
+  flex: none; align-self: stretch;
+  display: flex; flex-wrap: wrap;
+  gap: calc(var(--gap) * 0.4) var(--gap);
+  margin: 0; padding: 0; list-style: none;
+  font-size: var(--fs-2); color: var(--text);
+}
+#track-detail-legend li { display: inline-flex; align-items: center; gap: calc(var(--gap) * 0.4); }
+#track-detail-legend i {
+  width: 0.75em; height: 0.75em; border-radius: 50%; flex: none;
+  background: currentColor;
+}
+#track-detail-legend [data-leg="sector"] { color: var(--silver); }
+/* ☆ FAVOURITE (js/ui/select-screen.js openTrackDetail builds it): a chip, not a
+   full-width bar, in the panel's column. */
+#track-detail-fav { align-self: flex-start; margin-top: calc(var(--gap) * 0.5); }
+#track-detail-flags { display: flex; gap: calc(var(--gap) * 0.5); flex-wrap: wrap; margin: calc(var(--gap) * 0.5) 0 2px; }
+/* READOUTS, not controls: the base flag wore the button recipe verbatim
+   (plate fill + plate-line border), so NIGHT read as a tappable chip. The
+   borders go, and the base takes the same indigo tint .trb-night uses in the
+   circuit list — NIGHT means one thing on both screens. */
+.tdf-flag {
+  font-size: var(--fs-micro); letter-spacing: var(--ls-4); padding: 2px 7px;
+  border-radius: var(--r-xs);
+  color: #818cf8; background: rgba(129,140,248,0.15);
+}
+.tdf-street { color: #f59e0b; background: rgba(245,158,11,0.08); }
+.tdf-banked { background: rgba(129,140,248,0.08); }
+#sel-preview-map { cursor: pointer; }
+
+/* Portrait: map on top, facts scroll under it. The sheet owns height now, so
+   the dialog itself does not scroll (that was the full-bleed leftover). */
+@media (orientation: portrait) {
+  #track-detail-canvas-wrap {
+    flex: none;
+    height: min(calc(40 * var(--svhz)), 420px);
+  }
+  #track-detail-panel {
+    flex: 1 1 auto;
+    padding-top: calc(var(--gap) * 0.5);
+    border-top: 1px solid var(--card-line);
+  }
+}
+
+/* Landscape: map + a WIDER facts rail so unused wrap width is not empty black.
+   Both row branches keep `(orientation: landscape)` — css-media-disjoint. */
+@media (orientation: landscape) {
+  #track-detail-body { flex-direction: row; align-items: stretch; gap: var(--gap); }
+  #track-detail-canvas-wrap { flex: 1 1 0; min-width: 0; }
+  #track-detail-panel {
+    flex: 1 1 18rem;
+    max-width: min(24rem, 44%);
+  }
+}
+
+@media (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
+  #track-detail-body { flex-direction: row; align-items: stretch; gap: calc(var(--gap) * 1.1); }
+  #track-detail-canvas-wrap { flex: 1 1 auto; min-width: 0; }
+  #track-detail-panel {
+    flex: 1 1 20rem;
+    max-width: min(26rem, 40%);
+    padding-left: var(--pad);
+    border-left: 1px solid var(--card-line);
+  }
+  #track-detail[data-map-tall="1"] #track-detail-panel {
+    flex-basis: clamp(20rem, 38%, 28rem);
+    max-width: clamp(20rem, 38%, 28rem);
+  }
+}
+
+/* ---------- Portrait-specific HUD fixes ---------- */
+/* CHASE sits at right:58 by default which lands directly on the BEST box in portrait.
+   Stack it below PAUSE (right-aligned) so the full 4-box top bar is clear. */
+@media (orientation: portrait) {
+  #btn-cam {
+    /* DERIVED from --tap, not 55: on touch --tap is 52, so a 55 constant put
+       CHASE 5px under PAUSE. 8 + tap + 4 = 56 on desktop, 64 on touch. */
+    top: calc(8px + var(--tap-hud) + 4px + var(--sat));
+    right: calc(10px + var(--sar));
+  }
+  /* Sectors below the repositioned CHASE: 8 + 2*tap + 8. The WHOLE offset
+     divides by --hud-z (css/hud.css: #hud-sectors rides zoom). */
+  #hud-sectors { top: calc((8px + 2 * var(--tap-hud) + 8px + var(--sat)) / var(--hud-z)); }
+  /* …and the LIMITS chip with it. Without this it kept the LANDSCAPE anchor
+     while the sectors box dropped ~56px, so the chip started INSIDE it. */
+  #hud-limits { top: calc((8px + 2 * var(--tap-hud) + 8px + var(--sat)) / var(--hud-z) + 4.8em + 15px); }
+}
+
+/* Cockpit cam: gear + speed live on the steering-wheel LCD — hide the floating
+   HUD duplicates so the view reads like sitting in the car. ENERGY, OVERTAKE
+   and AERO stay: the wheel only carries unlabelled lamps for them, so hiding
+   the chips hid WHY overtake was unavailable ("OT · LAP 1", "CLOSE IN") and the
+   aero-zone distance from the default touch camera. They are not left on the
+   wheel either — the SHIPPED cockpit layout in js/ui/hud-layout.js moves them (and TYRES) to
+   either side of it, a default the player can move or RESET back to. */
+body.cockpit-cam #hud-gearbox,
+body.cockpit-cam #hud-speed { display: none; }
+/* …on a desktop. On a TOUCH device (no .desktop on <body>) the OT / AERO /
+   BOOST buttons carry those states and the pedal and steer columns leave no
+   room beside the wheel, so the chips keep their old cockpit hide — unless the
+   player placed one in MOVE & SIZE (data-hl-user, js/ui/hud-layout.js). TYRES
+   too: the shipped strip moves it 30vw left, which on a landscape phone is
+   exactly the steer column (hud-survey, 844x390: #hud-tyre [54,293 130x40] on
+   #btn-steer-left [59,260 87x87] and #btn-steer-right [153,260]).
+   Keyed on the cockpit LAYOUT set (body[data-hl-set], js/ui/hud-layout.js), not
+   on .cockpit-cam: that class needs a wheel with an LCD, and with the CLASSIC
+   or NONE wheel the strip still moves to the cockpit offsets over the steer
+   column. */
+body[data-hl-set="cockpit"]:not(.desktop) :is(#hud-energy, #hud-tyre, #hud-ot, #hud-aero, #hud-bb):not([data-hl-user]) { display: none; }
+/* HELMET (data-hl-set="helmet", js/camera/cam-groups.js HELMET_LAYOUT) is the
+   VISOR: no body.cockpit-cam, so gear and speed paint, and ENERGY / TYRES show
+   on a touch screen too, at the helmet touch offsets (hud-layout.js
+   HELMET_TOUCH: ENERGY above the wheel's top edge, TYRES in the left corner).
+   Reported 2026-10-05 from a phone: HELMET showed the top row alone. GEAR
+   takes the LCD's place and SPEED sits right of it (HELMET_TOUCH). What a
+   touch helmet still leaves out: OVERTAKE and AERO (the touch buttons carry
+   those states) and BRAKE BIAS (hidden on every touch screen) — each comes
+   back the moment the player places it. */
+body[data-hl-set="helmet"]:not(.desktop) :is(#hud-ot, #hud-aero, #hud-bb):not([data-hl-user]) { display: none; }
+
+/* The floating speed used to come back below 900×600: the wheel LCD measured
+   a few pixels at 844×390, so a phone in cockpit (the touch default) lost the
+   number. A later pass at 852×393 shows the LCD digits AND the floating
+   speed both readable — two speeds. The LCD keeps the read on cockpit
+   (body.cockpit-cam, every viewport). CLASSIC / NONE have no LCD
+   (no data-wheel-lcd, and cockpit-cam stays off), so they keep the chip.
+   HELMET still paints GEAR on the visor (HELMET_TOUCH, the opaque pill).
+   Its floating SPEED is the same duplicate once the wheel has an LCD, so
+   it hides too — a placed SPEED (data-hl-user) still shows. */
+body[data-helmet-cam][data-wheel-lcd]:not(.desktop) #hud-speed:not([data-hl-user]) { display: none; }
+} /* @layer overlays */

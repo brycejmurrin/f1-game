@@ -2,6 +2,29 @@
 
 **Setting:** DAY · Green theme (English countryside)
 
+## Architecture references and modelling limits
+
+[Populous's Silverstone project](https://populous.com/showcases/silverstone-circuit)
+describes the Wing's continuously changing angular roof and 360 m overall
+building length. Built photographs support its folded silhouette, pale soffits
+and dark edge treatment; photograph dates and exact roof heights remain unknown.
+Do not use concept renderings as evidence for as-built dimensions.
+
+The active engine pit complex supersedes the four legacy authored Wing groups
+and the separate rear wave-roof group. The latter suppression also occurs on
+the shared branch: its declared footprint intersects the garage keep-out.
+Its optional `pit.architecture.roofProfile` adds a bounded folded crown over
+the existing functional garage row. Knot positions are normalized along that
+actual row and heights are artistic estimates above its local floor. This is
+a stylized silhouette, not a 360 m reconstruction; garage doors, signs, lamps
+and working lanes retain their original positions. The Hamilton Straight main
+stand belongs opposite the Wing. Open airfield fringes use explicit tree spacing,
+while existing dense copses remain local.
+
+The landmark fractions below belong to the legacy scenery frame and must pass
+through the frame-aware API. They are not current racing-lap fractions or a
+surveyed placement plan.
+
 ## 1. Setting
 Silverstone sits on a former WWII RAF bomber airfield (RAF Silverstone, opened 1943) straddling the Northamptonshire/Buckinghamshire border, 16 km SW of Northampton. The classic triangular concrete runways still echo in the track outline. It is flat, open farmland: wide grass infield, hedgerow-divided fields, scattered tree copses (Chapel Copse, Cheese Copse), and the village of Silverstone nearby. Expansive, low-rise, agricultural — big sky, few tall structures except grandstands and The Wing.
 
@@ -18,7 +41,11 @@ Light ground fog; gentle distance haze fading greens toward grey.
 Very flat — total change ~15–20 m. Subtle dips around Abbey/Farm (s≈0.55) and a slight rise through Maggotts/Becketts (s≈0.10–0.15). Treat as near-level; use gentle grade only, no dramatic climbs.
 
 ## 4. Landmarks & surroundings by lap position
-S=0.0 at start/finish on the National pit straight; racing direction into Copse.
+S=0.0 sits at the modern Wing/pit straight (`startFrac: 0.5224`), not the
+old National pit straight 1.3 km away; racing direction into Abbey. The
+landmark table below is authored against the scenery's own
+`sceneryStartFrac: 0.0200` reference — see `docs/tracks/START-LINES.md` for
+how the two differ.
 
 | Landmark | s | Side | Dist | Box-modelling note |
 |---|---|---|---|---|
@@ -29,7 +56,7 @@ S=0.0 at start/finish on the National pit straight; racing direction into Copse.
 | Stowe corner (R) | 0.30 | R | mid | Big grey `runoffApron`; grandstand bank |
 | Club corner (R) | 0.40 | R | close | Long sweeping kerb; `runoffApron`; tiered seating |
 | The Wing (pit/paddock building) | 0.45 | R | close | Long low sweeping white-grey slab, dark glass band, thin roof fin |
-| Silverstone Wing grandstands | 0.46 | R | close | Tall stepped seating boxes flanking The Wing |
+| Hamilton Straight main grandstand | 0.48004 | L | close | Pale covered stepped seating opposite The Wing |
 | BRDC clubhouse | 0.48 | R | mid | Modest pale rectangular building set back |
 | Abbey corner (fast R) | 0.55 | R | mid | Wide `runoffApron`; advertising hoarding boxes |
 | Hedgerow-divided fields | 0.60 | both | far | Long low green strips gridding flat farmland |
@@ -48,3 +75,40 @@ Fast, flowing, high-speed flat-out sweeps (Copse, Maggotts/Becketts, Abbey) defi
 - Repeat red/white kerb boxes (`[0.85,0.15,0.15]` / `[0.92,0.92,0.92]`) at every apex.
 - Scatter dark-green copse clusters and thin hedgerow strips to grid the distant fields.
 - Pale grey overcast sky and soft fog in hollows; mute distant greens toward grey for depth.
+
+## 7. Research pass — the campsites
+
+Silverstone was already dressed with the airfield inheritance (The Wing, the
+hangar-line on Hangar Straight, the old runways, the museum, farm buildings,
+silos and hedgerows). The gap research turned up was **the weekend itself**.
+
+The British Grand Prix is a camping festival with a race attached. Woodlands,
+Whittlebury and the rest put tens of thousands of people in the fields around
+the circuit, and from the track the outfield horizon is tents, caravans and
+flags. Dressing the outfield only in farmland is correct for a Tuesday in
+February and wrong for race weekend — it left every wide shot looking like an
+empty airfield.
+
+Four fields are modelled, sited where the real ones sit relative to the lap:
+
+| s | Side | Gap | Field |
+|---|---|---|---|
+| 0.055–0.135 | R | 138 m | Copse / Maggotts side |
+| 0.300–0.395 | L | 152 m | Hangar Straight / Stowe — **Woodlands** |
+| 0.470–0.560 | R | 146 m | Vale / Club overflow |
+| 0.760–0.860 | L | 134 m | Brooklands / Luffield — **Whittlebury** |
+
+Modelling rules that matter:
+- **Beyond the farmland band** (gap 130–210), so the hedgerow/field structure
+  still reads first and the campsites sit on the horizon where they belong.
+- **A ridge tent is one prism.** That is the whole budget argument — ~780 tents
+  across four fields costs ~17 k verts. Caravans (with pull-out awnings) are
+  ~14 % of pitches, and each field gets one white catering marquee, which is
+  what distinguishes an organised site from a lay-by.
+- **Pitch spacing is in metres, not nodes.** A first cut derived the column
+  count from the node count and put one column every ~90 m — 30 tents per
+  field, which reads as a lay-by. `span * n * ds` is the field's arc length.
+- Note `terrainOuter` is 110 m here, so these sit outside the rendered ribbon
+  (as the existing far hedgerows at 150–165 m already do). The ⚠ terrain step
+  the survey flags at 110 m on frac 0.35 is **pre-existing** — the ribbon's
+  outer edge — not caused by the campsites.

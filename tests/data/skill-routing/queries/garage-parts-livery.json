@@ -1,0 +1,10 @@
+[
+{"query":"The race number on the car's sidepod is nearly invisible when a player picks a pale yellow livery, and the sponsor marks wash out too. Audit the contrast logic in js/car/liveries.js and liverytex.js and make the number, crest and sponsor marks pick a legible colour against the base paint.","expect":"garage-parts-livery"},
+{"query":"pls add a new part to the garage catalog, like a 2nd rear wing option w/ diff ersProfile and aeroLoad, and make sure Parts.CATALOG order + the 780cr budget still work. also the owned-part badge in career garage looks off","expect":"garage-parts-livery"},
+{"query":"In the garage preview the shark fin looks like a floating slab on some finishes and the matte finish turns glossy after switching teams. Find out why and fix it in the livery/Car3D recipe.","expect":"garage-parts-livery"},
+{"query":"Edit js/car/parts.js so the SIGNATURE clone of the front wing keeps only the mesh and not the stat changes, then update the FACTORY_PRESETS so each preset builds the right geometry and the setup sheet in js/garage/setup-sheet.js lists them in the right order.","expect":"garage-parts-livery"},
+{"query":"In career mode, parts I already bought still show a buy button and the price in the GARAGE sheet after I reload the save. Trace how owned parts are rendered in the career owned-part UI and fix the state so it shows as fitted/owned.","expect":"garage-parts-livery"},
+{"query":"Take isolated studio screenshots of the car from carview.html at front-three-quarter and rear, before and after my livery change, and compare the sponsor decals and wing geometry in both frames.","expect":"playwright-probe"},
+{"query":"After fitting the high-downforce rear wing the car understeers badly in slow corners and the lap times got worse. Run an A/B with the headless obs/act/reset loop to see if aeroLoad changed the handling and tune it back.","expect":"tune-physics"},
+{"query":"The lap-time digits and position number in the HUD are hard to read on the bright daytime track and get clipped on small phones. Fix the contrast and sizing of the HUD digits on that single screen.","expect":"ui-menu-a11y"}
+]

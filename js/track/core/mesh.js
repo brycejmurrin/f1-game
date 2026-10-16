@@ -1,0 +1,1572 @@
+/* Apex 26 — TrackMesh: the kerb/banking band + the road/terrain/floor mesh builders for the tracks engine. upOf() is the shared per-node up-basis, hash() the dete… */
+const TrackMesh = (function () {
+  "use strict";
+
+  const __M = Math;
+
+  const { cross, MAT } = TrackGeom;
+  // The ground material a def names (def.terrainMat), else GRASS.
+  const GROUND_MATS = { SAND: MAT.SAND, SNOW: MAT.SNOW, CONCRETE: MAT.CONCRETE };
+  const groundMatOf = (def) => GROUND_MATS[def.terrainMat] != null ? GROUND_MATS[def.terrainMat] : MAT.GRASS;
+  const { curvature, cr: catmull } = TrackSpline;
+  const lerp = M4.lerp;
+
+  function accumFaceN(nrm, pos, ia, ib, ic) {
+    const ax = pos[ia * 3], ay = pos[ia * 3 + 1], az = pos[ia * 3 + 2];
+    const ex1 = pos[ib * 3] - ax, ey1 = pos[ib * 3 + 1] - ay, ez1 = pos[ib * 3 + 2] - az;
+    const ex2 = pos[ic * 3] - ax, ey2 = pos[ic * 3 + 1] - ay, ez2 = pos[ic * 3 + 2] - az;
+    const nx = ey1 * ez2 - ez1 * ey2;
+    const ny = ez1 * ex2 - ex1 * ez2;
+    const nz = ex1 * ey2 - ey1 * ex2;
+    nrm[ia * 3] += nx; nrm[ia * 3 + 1] += ny; nrm[ia * 3 + 2] += nz;
+    nrm[ib * 3] += nx; nrm[ib * 3 + 1] += ny; nrm[ib * 3 + 2] += nz;
+    nrm[ic * 3] += nx; nrm[ic * 3 + 1] += ny; nrm[ic * 3 + 2] += nz;
+  }
+
+  function upOf(track, k) {
+    const t = [track.tx[k], track.ty[k], track.tz[k]];
+    const r = [track.rx[k], track.ry[k], track.rz[k]];
+    return cross(r, t);
+  }
+  const hash = (i) => { let x = __M.sin(i * 12.9898) * 43758.5453; return x - __M.floor(x); };
+
+  // Corner apexes: local maxima of |curvature| above thresh. Returns
+  // [{k, sign, lo, hi}] — sign is the raw curvature sign: sign>0 = LEFT turn
+  // (measured; see the bank-zone note below), so its inside is the -x side and
+  // its outside +x. lo/hi = node span where curvature stays above ~half the apex.
+  function findCorners(track, thresh) {
+    const n = track.n, ds = track.total / n;
+    const kv = new Float32Array(n), sg = new Float32Array(n);
+    for (let k = 0; k < n; k++) {
+      const c = curvature(track, k * ds);
+      kv[k] = Math.abs(c); sg[k] = Math.sign(c) || 1;
+    }
+    const sm = new Float32Array(n);
+    for (let k = 0; k < n; k++) {
+      const a = (k - 1 + n) % n, b = (k + 1) % n;
+      sm[k] = 0.25 * kv[a] + 0.5 * kv[k] + 0.25 * kv[b];
+    }
+    const corners = [];
+    for (let k = 0; k < n; k++) {
+      const a = (k - 1 + n) % n, b = (k + 1) % n;
+      if (sm[k] >= thresh && sm[k] >= sm[a] && sm[k] > sm[b]) {
+        const half = sm[k] * 0.45;
+        let lo = 0, hi = 0;
+        while (lo < n / 4 && sm[(k - lo - 1 + n) % n] > half) lo++;
+        while (hi < n / 4 && sm[(k + hi + 1) % n] > half) hi++;
+        corners.push({ k, sign: sg[k], lo, hi });
+      }
+    }
+    return corners;
+  }
+
+  // Below this the road is straight enough that its curvature SIGN carries no
+  // information — the baked LUT ripples through zero on gentle sections, so a
+  // sign read off it there is noise, not a direction. rad/m.
+  const BANK_STRAIGHT_K = 0.004;
+  const BANK_RESEAT_M = 60;
+  const BANK_MAX_EDGE_GRADE = 0.05;
+
+  // Author-driven banked corners. A track def can bank its corners three ways:
+  //   • `bankZones: [{ turn, angleDeg, widthM }]` — anchor to a curated FIA
+  //     turn apex (1-based index into def.turns). Already racing-space, so it
+  //     takes NO rotation compensation and survives any future start-line
+  //     remap. PREFER THIS: a lap fraction only means anything against the
+  //     exact centreline it was measured on.
+  //   • `bankZones: [{ frac, angleDeg, widthM }]` — an explicit fraction window
+  //     in the pre-rotation authoring space (Madrid's La Monumental), OR
+  //   • `banked: true` — WITHOUT bankZones, auto-pick the two highest-curvature
+  //     corners and bank them at ~18° (legacy fallback). Beside bankZones it
+  //     builds nothing extra — the zones win outright below — and only lights
+  //     the picker's BANKED badge (js/ui/select-screen.js), which is how
+  //     madrid and zandvoort carry both.
+  // Returns null when neither is present; otherwise per-node arrays describing how
+  // much the OUTER road edge rises (metres) and which side that outer edge is on.
+  // The lift is cosine-ramped to zero over the corner span, exactly like the
+  // localized BRIDGES bump on py — so the rest of the lap stays dead flat (no
+  // global tilt). buildRoad and buildTerrain both read this so the banked road
+  // edge and the terrain that meets it rise together; game.js makes the car,
+  // shadow and camera ride the banked surface (height + roll) so nothing floats.
+  function bankingProfile(track) {
+    const def = track.def;
+    const zones = def.bankZones;
+    if (!def.banked && !(zones && zones.length)) return null;
+    const n = track.n;
+    const ds = track.total / n;
+    if (!(ds > 0)) return null;   // zero-length loop: 12 / ds below would be an endless window
+    const lift = new Float32Array(n);
+    const bsign = new Float32Array(n);   // outer side: +1 = right edge, -1 = left
+
+    // Smoothed curvature (~±12 m). Every direction decision below reads THIS,
+    // never the raw LUT: raw curvature crosses zero repeatedly on gentle
+    // sections, so a per-node sign taken off it would flap node to node.
+    const SM = Math.max(1, Math.round(12 / ds));
+    const ksm = new Float64Array(n);
+    {
+      const raw = new Float64Array(n);
+      for (let k = 0; k < n; k++) raw[k] = curvature(track, k * ds);
+      for (let k = 0; k < n; k++) {
+        let sum = 0;
+        for (let j = -SM; j <= SM; j++) sum += raw[(k + j + n) % n];
+        ksm[k] = sum / (2 * SM + 1);
+      }
+    }
+
+    function paint(kc, lo, hi, tanA, peak) {
+      lo = Math.max(1, lo); hi = Math.max(1, hi);
+      const span = lo + hi + 1;
+      let dom = 0;
+      for (let i = -lo; i <= hi; i++) dom += ksm[(kc + i + n) % n];
+      const domSign = dom >= 0 ? 1 : -1;
+      const signed = new Float64Array(span);
+      for (let i = -lo; i <= hi; i++) {
+        const k = (kc + i + n) % n, idx = i + lo;
+        // cosine window: 1 at apex, 0 at the span edges
+        const t = i <= 0 ? (i + lo) / lo : (hi - i) / hi;
+        const w = 0.5 * (1 - Math.cos(Math.PI * Math.max(0, Math.min(1, t))));
+        const mag = (peak != null ? peak : 2 * track.hw[k] * tanA) * w;
+        // Outer edge is opposite the turn centre. +curv is a LEFT-hand turn
+        // (measured: a zero-steer run through a +k corner drifts to POSITIVE
+        // lateral, i.e. wide to the right), so its centre is left and its OUTER
+        // edge is the right one.
+        //
+        // Read PER NODE. Taking it once at kc and smearing that one sign over
+        // the whole window cambered the wrong way across every zone that spans
+        // an inflection (65 of 190 shipped zones did), and on a zone centred on
+        // a straight the single sample was pure LUT noise (37 more) — together
+        // ~650 m of road that rolled the car toward the OUTSIDE of its turn.
+        // Where the road is straight the sign means nothing, so the window's
+        // dominant direction fills in: camber is only ever adverse to a turn.
+        const kk = ksm[k];
+        const dir = Math.abs(kk) >= BANK_STRAIGHT_K ? (kk > 0 ? 1 : -1) : domSign;
+        signed[idx] = mag * dir;
+      }
+      for (let i = -lo; i <= hi; i++) {
+        const k = (kc + i + n) % n, v = signed[i + lo], a = Math.abs(v);
+        if (a > lift[k]) { lift[k] = a; bsign[k] = v >= 0 ? 1 : -1; }
+      }
+    }
+
+    // Camber that reverses — inside a zone that spans an inflection, or between
+    // two ADJACENT zones cambering opposite ways, where strongest-wins flips
+    // the winner from one node to the next — must cross THROUGH flat rather
+    // than snap between ±full lift, or the road edge gains a step no car can
+    // track (measured 0.15 m/m at Mugello and 0.12 at Shanghai before this;
+    // the code's cap is BANK_MAX_EDGE_GRADE = 0.05 — the 0.08 elsewhere is
+    // the elevation-tracks spec's looser TOLERANCE, a different number).
+    // Runs once on the assembled profile, so it catches
+    // every transition regardless of which zone produced it. Each crossing
+    // gets just enough run to hold BANK_MAX_EDGE_GRADE, and the blend may only
+    // ever REDUCE a node's lift — it never invents banking anywhere.
+    function relaxSignSteps() {
+      const signed = new Float64Array(n);
+      for (let k = 0; k < n; k++) signed[k] = lift[k] * bsign[k];
+      const cuts = [];
+      for (let k = 0; k < n; k++) {
+        const a = signed[k], b = signed[(k + 1) % n];
+        if (a === 0 || b === 0) continue;
+        if ((a > 0) !== (b > 0)) cuts.push(k);
+      }
+      if (!cuts.length) return;
+      const out = Float64Array.from(signed);
+      for (const c of cuts) {
+        const jump = Math.max(Math.abs(signed[c]), Math.abs(signed[(c + 1) % n]));
+        const R = Math.max(2, Math.ceil(jump / (2 * BANK_MAX_EDGE_GRADE * ds)));
+        for (let i = -R; i <= R; i++) {
+          const k = (c + i + n) % n;
+          let sum = 0;
+          for (let j = -R; j <= R; j++) sum += signed[(k + j + n) % n];
+          const v = sum / (2 * R + 1);
+          if (Math.abs(v) < Math.abs(out[k])) out[k] = v;
+        }
+      }
+      for (let k = 0; k < n; k++) {
+        lift[k] = Math.abs(out[k]);
+        if (out[k] !== 0) bsign[k] = out[k] > 0 ? 1 : -1;
+      }
+    }
+
+    // Explicit authored zones take precedence over the curvature auto-pick.
+    if (zones && zones.length) {
+      // bankZones fracs were authored in the pre-rotation racing/arc space. The
+      // 7a173519 start-line remap rotated racing space and compensated every
+      // other frac-keyed dressing table via `def._sceneryShift` (see
+      // buildCenterline's bridges/elevations) — but missed this one, so the
+      // authored banks landed on whatever the rotation left at the raw frac
+      // (Zandvoort's 19° Luyendyk bowl sat on a straight). Apply the same
+      // shift, with the `sceneryLapMirror` negation racing-space anchors get in
+      // TrackSpace.sceneryFrac: singapore's zones were authored against the
+      // forward traversal like the rest of its dressing, and mirrored+shifted
+      // 5 of its 6 land within 0.001 of the curated turn apexes (shift alone
+      // moves two of them AWAY from their corners).
+      const dress = def._sceneryShift || 0;
+      const mirror = def.reverse && def.sceneryLapMirror ? -1 : 1;
+      const turns = (def.turns && def.turns.length) ? def.turns : null;
+      const wrap01 = TrackSpace.wrap01;
+      const centre = new Array(zones.length).fill(null);
+      const taken = new Set();
+
+      // `turn:` anchors resolve straight off the curated apex table.
+      zones.forEach((z, i) => {
+        if (!turns || !Number.isFinite(z.turn)) return;
+        const ti = ((Math.round(z.turn) - 1) % turns.length + turns.length) % turns.length;
+        centre[i] = wrap01(turns[ti]);
+        taken.add(ti);
+      });
+
+      // Frac anchors get the rotation compensation, then a sanity re-seat.
+      // A zone whose compensated centre lands on a STRAIGHT more than
+      // BANK_RESEAT_M from any apex has missed its corner outright — the
+      // authored fraction no longer matches the centreline it was measured
+      // against, and the bank ends up as a bump in the middle of nowhere
+      // (Sochi, Watkins Glen, Estoril, Indianapolis and six more shipped that
+      // way). Those move to the nearest unclaimed apex, closest pair first so
+      // two zones never collapse onto one corner. A zone already ON a corner is
+      // left exactly where it was authored: it may deliberately sit at entry
+      // rather than apex, and re-seating it can only make it worse.
+      const loose = [];
+      zones.forEach((z, i) => {
+        if (centre[i] !== null) return;
+        const f = wrap01((z.frac || 0) * mirror + dress);
+        centre[i] = f;
+        if (!turns) return;
+        if (Math.abs(ksm[Math.round(f * n) % n]) >= BANK_STRAIGHT_K) return;
+        loose.push({ i, f });
+      });
+      if (loose.length) {
+        const cand = [];
+        for (const p of loose) {
+          turns.forEach((tf, ti) => {
+            let d = Math.abs(wrap01(tf) - p.f);
+            if (d > 0.5) d = 1 - d;
+            cand.push({ i: p.i, ti, d });
+          });
+        }
+        cand.sort((a, b) => a.d - b.d);
+        const seated = new Set();
+        for (const c of cand) {
+          if (seated.has(c.i) || taken.has(c.ti)) continue;
+          seated.add(c.i); taken.add(c.ti);
+          if (c.d * track.total > BANK_RESEAT_M) centre[c.i] = wrap01(turns[c.ti]);
+        }
+      }
+
+      zones.forEach((z, i) => {
+        const half = Math.max(1, Math.round((z.widthM || 40) / ds / 2));
+        paint(Math.round(centre[i] * n) % n, half, half,
+              Math.tan((z.angleDeg || 18) * Math.PI / 180), null);
+      });
+      relaxSignSteps();
+      return { lift, bsign };
+    }
+
+    // Legacy auto-pick: the two highest-curvature corners, banked at 18°.
+    const corners = findCorners(track, 0.006);
+    if (!corners.length) return null;
+    const scored = corners.map((c) => ({ c, k: Math.abs(curvature(track, c.k * ds)) }));
+    scored.sort((a, b) => b.k - a.k);
+    const picks = scored.slice(0, 2).map((s) => s.c);
+    const TAN18 = Math.tan(18 * Math.PI / 180);
+    const RUN = 6;                       // extra run-in/out nodes each side
+    for (const c of picks) {
+      paint(c.k, c.lo + RUN, c.hi + RUN, TAN18, 2 * track.hw[c.k] * TAN18);
+    }
+    relaxSignSteps();
+    return { lift, bsign };
+  }
+
+  // Cross-track banking offset (metres along the node's up axis) at lateral
+  // offset `o` from the centreline. THE single source of truth for the pivot:
+  // the section rotates about its own centreline, so the inner edge drops
+  // lift/2 and the outer edge rises lift/2, and anything past the tarmac clamps
+  // to the corresponding edge height.
+  //
+  // Everything laid alongside the road must use this. buildRoad applied the
+  // pivot inline while buildKerbs did not, so on Zandvoort's banked corners the
+  // road edge moved +/-2.4 m while the kerb ribbon stayed at the unbanked
+  // height — the tarmac fell away from its own kerb into a cliff on the low
+  // side and swallowed it on the high side.
+  function bankOffsetAt(track, k, o) {
+    const bp = track.bankP;
+    if (!bp) return 0;
+    const lift = bp.lift[k];
+    if (!(lift > 0)) return 0;
+    const w = track.hw[k];
+    let frac = (bp.bsign[k] * o + w) / (2 * w);
+    frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
+    return lift * (frac - 0.5);
+  }
+
+  // The banked running surface's NORMAL at node k, lateral offset `o`.
+  // Across the lap the surface leans: bankOffsetAt is linear in o over the
+  // tarmac (slope g = bsign·lift / 2w), so it runs along r + u·g — the roll
+  // banking() reports. Along the lap it twists wherever the bank ramps in and
+  // out, so the along-lap tangent is THIS column's own chord through the two
+  // neighbouring banked points (not t: on the inside of a hairpin the rail at
+  // `o` is a fraction of the centreline's length and curls away from it —
+  // Indianapolis T1, 0.55 m a node at o = 7.75). The normal is their cross
+  // product, on the u side. Away from any bank it is u, exactly as before, and
+  // the kerbs keep u: both of their rails sit outside the tarmac, on the one
+  // clamped edge height, so the strip between them is level across. Before
+  // this the road pushed u everywhere and shaded a 19° bowl (Zandvoort 0.911)
+  // as flat road.
+  function bankNormalAt(track, k, o, u, r) {
+    const bp = track.bankP;
+    if (!bp) return u;
+    const n = track.n, kp = (k - 1 + n) % n, kn = (k + 1) % n, lift = bp.lift;
+    if (!(lift[k] > 0) && !(lift[kp] > 0) && !(lift[kn] > 0)) return u;
+    const w = track.hw[k];
+    const g = (lift[k] > 0 && w > 0 && __M.abs(o) <= w) ? bp.bsign[k] * lift[k] / (2 * w) : 0;
+    const { px, py, pz, rx, ry, rz } = track;
+    const at = (j) => {
+      const uj = upOf(track, j), b = bankOffsetAt(track, j, o);
+      return [px[j] + rx[j] * o + uj[0] * b, py[j] + ry[j] * o + uj[1] * b, pz[j] + rz[j] * o + uj[2] * b];
+    };
+    const A = at(kp), B = at(kn);
+    const L = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];              // along the lap
+    const X = [r[0] + u[0] * g, r[1] + u[1] * g, r[2] + u[2] * g];  // across, +right
+    let nx = X[1] * L[2] - X[2] * L[1], ny = X[2] * L[0] - X[0] * L[2], nz = X[0] * L[1] - X[1] * L[0];
+    const len = __M.hypot(nx, ny, nz);
+    if (!(len > 1e-9)) return u;
+    const sg = (nx * u[0] + ny * u[1] + nz * u[2]) < 0 ? -1 / len : 1 / len;
+    return [nx * sg, ny * sg, nz * sg];
+  }
+
+  function buildKerbs(track, out) {
+    const { n, px, py, pz, hw } = track;
+    const pal = track.def.palette, ka = pal.kerbA, kb = pal.kerbB;
+    const ds = track.total / n;
+    // per-node kerb map (which side has a kerb) so the car can detect riding one
+    track.kerbL = new Uint8Array(n);
+    track.kerbR = new Uint8Array(n);
+    const markKerb = (k0, k1, side) => {
+      for (let i = 0; i <= k1 - k0; i++) { const k = (k0 + i + n) % n; if (side > 0) track.kerbR[k] = 1; else track.kerbL[k] = 1; }
+    };
+    // Kerb STYLE (designer / optional def.kerbStyle). Peak height stays ≤ ~9 cm
+    // so physics onKerb (binary ride detect) is unchanged; the mesh carries the
+    // look. flat = historic ribbon; sausage = taller crowned block; rumble =
+    // corrugated along the lap (sawtooth period ~0.8 m).
+    const style = track.def && track.def.kerbStyle;
+    const KW = style === "sausage" ? 1.05 : 0.9;
+    const KH0 = style === "sausage" ? 0.09 : style === "rumble" ? 0.07 : 0.06;
+    // Real kerb stripes are ~1.6 m. A `Math.round(1.6/ds)` node count
+    // COLLAPSES to 1 at the ~4 m node grid, so a 1.6 m stripe would render
+    // at one node ≈ 4 m (an 8 m red/white period). Colour is per-vertex, so the
+    // only way below node resolution is finer geometry — SUB sub-rings per node
+    // span, coloured by TRUE ARC LENGTH so the stripe is ~STRIPE_M whatever the
+    // node spacing. The node endpoints are unchanged (each span is subdivided by
+    // lerping its own two rings), so where the ribbon meets terrain is identical
+    // — the coplanar/float audits do not move.
+    const STRIPE_M = 1.6;
+    const kerbH = (arc, latT) => {
+      let h = KH0;
+      if (style === "sausage") {
+        // Two-rail sausage: road-edge lip lower, outer rail the tall block
+        // (latT 0 at road edge → 1 outer). A mid crown needs ≥3 rails.
+        h = KH0 * (0.70 + 0.30 * latT);
+      } else if (style === "rumble") {
+        // Longitudinal corrugation — hard steps every ~0.8 m of arc.
+        const step = ((Math.floor(arc / 0.8) % 2) + 2) % 2;
+        h = KH0 * (step ? 1.0 : 0.45);
+      }
+      return h;
+    };
+    // (SUB evenly spaced sub-rings, each coloured by its own arc, was the first
+    // cut: ~1.33 m apart against a 1.6 m stripe, so with per-vertex colour
+    // interpolating between rings most segments were red<->white RAMPS with an
+    // irregular period. Now a ring lands exactly on every stripe boundary and is
+    // emitted twice, see ribbon() below.)
+    const par = (m) => ((m % 2) + 2) % 2;   // stripe parity, safe for negative arcs
+    // one ribbon strip over node range, on `side` (-1 left edge, +1 right).
+    function ribbon(k0, k1, side) {
+      const count = k1 - k0;
+      const base = [];         // ring vertex indices, one per emitted ring
+      const arcs = [];         // arc length of each emitted ring, for striping
+      const dup = [];          // ring i is coincident with ring i-1 (a stripe boundary's second copy)
+      let prev = null;         // [ax,ay,az,bx,by,bz] of the previous NODE ring
+      let prevArc = 0;
+      for (let i = 0; i <= count; i++) {
+        const k = (k0 + i + n) % n;
+        const u = upOf(track, k);
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const w = hw[k];
+        // two rails; push the smaller offset first so winding matches the road
+        const oA = side > 0 ? w + 0.05 : -(w + 0.05 + KW);
+        const oB = side > 0 ? w + 0.05 + KW : -(w + 0.05);
+        const arc = k0 * ds + i * ds;   // monotone along the strip (ds-spaced nodes)
+        // latT: 0 at the road-edge rail, 1 at the outer rail (crown / profile).
+        const hA = kerbH(arc, side > 0 ? 0 : 1) + bankOffsetAt(track, k, oA);
+        const hB = kerbH(arc, side > 0 ? 1 : 0) + bankOffsetAt(track, k, oB);
+        // this node's two rail vertices, in world space
+        const cur = [px[k] + r[0]*oA + u[0]*hA, py[k] + r[1]*oA + u[1]*hA + 0.03, pz[k] + r[2]*oA + u[2]*hA,
+                     px[k] + r[0]*oB + u[0]*hB, py[k] + r[1]*oB + u[1]*hB + 0.03, pz[k] + r[2]*oB + u[2]*hB];
+        // A ring at t in [0,1] along this node span (lerped between the previous
+        // and this node's rails, so node endpoints never move), coloured by
+        // stripe PARITY, not by its own arc.
+        const emitRing = (t, parity, coincident) => {
+          const rA = prev ? [prev[0] + (cur[0]-prev[0])*t, prev[1] + (cur[1]-prev[1])*t, prev[2] + (cur[2]-prev[2])*t] : [cur[0],cur[1],cur[2]];
+          const rB = prev ? [prev[3] + (cur[3]-prev[3])*t, prev[4] + (cur[4]-prev[4])*t, prev[5] + (cur[5]-prev[5])*t] : [cur[3],cur[4],cur[5]];
+          const a = prevArc + (arc - prevArc) * t;
+          // Rumble (and any arc-keyed profile) must land on THIS ring's arc —
+          // lerping node endpoints alone would smooth the corrugation away.
+          if (style === "rumble" && prev) {
+            const hA0 = kerbH(prevArc, side > 0 ? 0 : 1), hA1 = kerbH(arc, side > 0 ? 0 : 1);
+            const hB0 = kerbH(prevArc, side > 0 ? 1 : 0), hB1 = kerbH(arc, side > 0 ? 1 : 0);
+            const hAL = hA0 + (hA1 - hA0) * t, hBL = hB0 + (hB1 - hB0) * t;
+            const hA = kerbH(a, side > 0 ? 0 : 1), hB = kerbH(a, side > 0 ? 1 : 0);
+            rA[0] += u[0] * (hA - hAL); rA[1] += u[1] * (hA - hAL); rA[2] += u[2] * (hA - hAL);
+            rB[0] += u[0] * (hB - hBL); rB[1] += u[1] * (hB - hBL); rB[2] += u[2] * (hB - hBL);
+          }
+          const ai = out.pos.length / 3;
+          out.pos.push(rA[0], rA[1], rA[2]); out.nrm.push(u[0], u[1], u[2]);
+          out.pos.push(rB[0], rB[1], rB[2]); out.nrm.push(u[0], u[1], u[2]);
+          const c = parity === 0 ? ka : kb;
+          out.col.push(c[0], c[1], c[2], c[0], c[1], c[2]);
+          if (out.mat) out.mat.push(MAT.FLAT, MAT.FLAT);
+          if (out.trk) out.trk.push(a, oA, 0, a, oB, 0);   // hw=0 → roadMarkings() skips the ribbon
+          base.push(ai); arcs.push(a); dup.push(coincident);
+        };
+        if (i === 0) {
+          emitRing(1, par(Math.floor(arc / STRIPE_M + 1e-6)), false);   // node 0: only its own ring
+        } else {
+          // CRISP STRIPES: a ring at every stripe boundary m*STRIPE_M inside
+          // (prevArc, arc], emitted TWICE at the same position — the colour
+          // ending there, then the colour starting there — so every stripe is
+          // a flat run of one colour with a hard edge (vertex colour
+          // interpolates; one ring per boundary was a ramp). Then the node's own
+          // ring, unless a boundary landed on it. The quad between the two
+          // copies is zero-area and is skipped below, never emitted.
+          const span = arc - prevArc;
+          let nodeDone = false;
+          for (let m = Math.floor(prevArc / STRIPE_M + 1e-6) + 1; m * STRIPE_M <= arc + 1e-6; m++) {
+            const t = Math.min(1, (m * STRIPE_M - prevArc) / span);
+            emitRing(t, par(m - 1), false);
+            emitRing(t, par(m), true);
+            if (t >= 1) nodeDone = true;
+          }
+          if (!nodeDone) emitRing(1, par(Math.floor(arc / STRIPE_M + 1e-6)), false);
+        }
+        prev = cur; prevArc = arc;
+      }
+      for (let i = 0; i < base.length - 1; i++) {
+        if (dup[i + 1]) continue;   // the boundary pair: coincident rings, zero-area quad
+        const a = base[i], b = base[i + 1];
+        // match buildRoad winding (top face up under BACK-face culling)
+        out.idx.push(a, a + 1, b, a + 1, b + 1, b);
+      }
+    }
+    // findCorners returns EVERY local curvature peak, and a long corner has
+    // several whose spans overlap (one corner's exit kerb also lies on the next
+    // corner's inside). One ribbon per span would stack up to 9 bit-identical
+    // copies of the same kerb quads — 55 % of all kerb triangles fleet-wide.
+    // Instead mark the covered QUADS per side and emit one ribbon per
+    // contiguous run: the union of the spans' quads, each exactly once. A quad
+    // remembers the lap (wrap) of the first span that covered it, because the
+    // stripe phase is the UNWRAPPED arc k·ds — a span from k = -3 and one from
+    // k = n-3 stripe differently unless the lap is a whole number of stripe periods.
+    const quad = { "-1": new Int8Array(n), "1": new Int8Array(n) };   // 0 = bare, else wrap + 2
+    const cover = (k0, k1, side) => {   // ribbon(k0, k1) lays quads k0..k1-1
+      const q = quad[side];
+      for (let k = k0; k < k1; k++) {
+        const i = ((k % n) + n) % n;
+        if (!q[i]) q[i] = (k - i) / n + 2;
+      }
+    };
+    for (const c of findCorners(track, 0.006)) {
+      const inside = c.sign > 0 ? -1 : 1;
+      cover(c.k - c.lo, c.k + c.hi, inside);
+      markKerb(c.k - c.lo, c.k + c.hi, inside);
+      const exLen = Math.max(2, Math.round(c.hi * 0.7));
+      cover(c.k + 1, c.k + 1 + exLen, -inside);
+      markKerb(c.k + 1, c.k + 1 + exLen, -inside);
+    }
+    for (const side of [-1, 1]) {
+      const q = quad[side];
+      const U = (i) => i + (q[i] - 2) * n;                       // unwrapped node index of quad i
+      // quad i continues quad i-1's strip when both are laid and their unwrapped
+      // indices are consecutive (at i = 0 that means the lap count stepped up).
+      const joins = (i) => { const j = (i + n - 1) % n; return q[i] && q[j] && U(i) === U(j) + 1; };
+      let s0 = 0;
+      while (s0 < n && joins(s0)) s0++;   // a strip start; always exists — U cannot rise all round the lap
+      for (let m = 0; m < n; ) {
+        const i = (s0 + m) % n;
+        if (!q[i]) { m++; continue; }
+        let len = 1;
+        while (len < n - m && joins((i + len) % n)) len++;
+        ribbon(U(i), U(i) + len, side);
+        m += len;
+      }
+    }
+  }
+
+  function onKerb(track, s, x) {
+    if (!track.kerbR) return 0;
+    const n = track.n, L = track.total;
+    const k = Math.floor((((s % L) + L) % L) / L * n) % n;
+    const hw = track.hw[k], ax = Math.abs(x);
+    if (ax < hw - 0.6 || ax > hw + 1.1) return 0;
+    if (x > 0 && track.kerbR[k]) return 1;
+    if (x < 0 && track.kerbL[k]) return 1;
+    return 0;
+  }
+
+  // The road's ROLL at arc s (radians, signed as banking().roll: + = the
+  // right edge raised). It once read the per-control-point tilt `track.bank[]`,
+  // which no circuit sets (realPoints writes 0), so it was 0 everywhere — and
+  // the AI brake planner (game.js pushLook) took its bank grip from here while
+  // the executor took banking(): every AI planned Zandvoort's 19° bowl as flat
+  // and arrived ~11 % under the speed it could carry.
+  //
+  // Same maths as banking() at x = 0 (lerp the signed lift and half-width,
+  // then atan2). Inlined on purpose: pushLook calls this at every curvature
+  // node in the look window for every AI car (~200×/step). Routing through
+  // banking() paid for a scratch write, the smooth/catmull branch, and atan2
+  // even on flat sections where the lift is 0. Measured in the game-vm on
+  // monza / zandvoort (fixed seed, 200k node-aligned samples): ~7.6× less
+  // time in bankAngle; ~10–13 % less wall time per physics step. Early-out
+  // on !signedLift keeps flat nodes (almost all of monza) off atan2.
+  function bankAngle(track, s) {
+    const bp = track.bankP;
+    if (!bp) return 0;
+    const n = track.n, L = track.total;
+    const pos = (((s % L) + L) % L) / L * n;
+    const k = Math.floor(pos) % n, j = (k + 1) % n, f = pos - Math.floor(pos);
+    const sl0 = bp.lift[k] * bp.bsign[k], sl1 = bp.lift[j] * bp.bsign[j];
+    const signedLift = sl0 + (sl1 - sl0) * f;
+    if (!signedLift) return 0;
+    const w0 = track.hw[k], w1 = track.hw[j];
+    return Math.atan2(signedLift, 2 * (w0 + (w1 - w0) * f));
+  }
+
+  // `out` (optional): a reusable { dy, roll } scratch. When supplied it's written
+  // in place and returned, so per-frame callers (once per car) avoid allocating a
+  // fresh object each call. Still returns null on non-banked sections.
+  // `smooth` (optional): interpolate the lift with Catmull-Rom instead of a
+  // straight lerp. The lerp keeps the value continuous, which is all a CAR needs
+  // — it rides the road mesh, and that mesh IS piecewise-linear through these
+  // same nodes, so matching it exactly is correct. A CAMERA is different: it has
+  // no obligation to the facets, and a C0 lift means its vertical velocity jumps
+  // at every node. MEASURED in chase through Madrid's 24 % banked bowl, at stock
+  // framing: worst vertical acceleration 27x its own rms, i.e. plainly
+  // discontinuous, and 60x the size of the residue left on Monaco's climb after
+  // the elevation was smoothed. Camera call sites opt in; nothing else changes.
+  // Signed cross-track lift at node i. Hoisted out of banking() — see the call.
+  function _signedLift(bp, i) { return bp.lift[i] * bp.bsign[i]; }
+  function banking(track, s, x, out, smooth) {
+    const bp = track.bankP;
+    if (!bp) return null;
+    const n = track.n, L = track.total;
+    const pos = (((s % L) + L) % L) / L * n;
+    const k = Math.floor(pos) % n, j = (k + 1) % n, f = pos - Math.floor(pos);
+    // Interpolate the signed cross-track lift so cars and cameras do not jump
+    // between the road mesh's ~4 m longitudinal nodes.
+    // Module-level, not a closure over `bp`. This runs once per car per physics
+    // step AND once per car in the render loop, plus both camera sites and
+    // currentCarGroundMat — ~45 calls a frame, so a per-call arrow was ~2700
+    // short-lived closures a second. The `out` scratch above was pooled for
+    // exactly this reason; this was the allocation it left behind.
+    const signedLift = smooth
+      ? catmull(_signedLift(bp, (k - 1 + n) % n), _signedLift(bp, k),
+                _signedLift(bp, j), _signedLift(bp, (k + 2) % n), f)
+      : lerp(_signedLift(bp, k), _signedLift(bp, j), f);
+    if (!signedLift) return null;
+    const w = smooth
+      ? catmull(track.hw[(k - 1 + n) % n], track.hw[k], track.hw[j], track.hw[(k + 2) % n], f)
+      : lerp(track.hw[k], track.hw[j], f);
+    const cx = x < -w ? -w : x > w ? w : x;
+    const o = out || {};
+    o.dy = signedLift * cx / (2 * w);
+    o.roll = Math.atan2(signedLift, 2 * w);
+    return o;
+  }
+
+  // Coarse XZ bucket of road-centreline node indices, built once per track and
+  // shared by buildRoad's shoulder clip, buildTerrain's over-track clip and
+  // buildProps' onRoadHit/onTrack guards. Scanning ALL n nodes per emitted
+  // vertex/primitive is O(prims·n) — tens of millions of checks on the city
+  // meshes; with the grid a query visits only the handful of nodes whose
+  // footprint can reach the query point. The grid only narrows the candidate
+  // SET to a superset of every node that could pass, so each caller's
+  // accept/reject maths and the resulting geometry are identical.
+  //
+  // CELL=10 IS NOT WORTH SPLITTING. buildTerrain's over-track clip is the one
+  // wide query (R = maxHw + 27 ~ 33 m): ~64 buckets swept for ~8 candidates.
+  // A CELL=24 grid for that query alone (bit-identical on monza/spa/suzuka/
+  // zandvoort/vegas/silverstone, all five buffers) moved isolated
+  // buildTerrain 6 / 6 / 2 / 7 / 0 percent with both grids pre-warmed — and
+  // buildTerrain is 5-15% of a build, so under 1% of load for a second grid
+  // and a per-cell cache. If you revisit this, pre-warm both arms: timing grid
+  // CONSTRUCTION in one arm only (4 / -1 / -2 / 5 / 3) biases more than the
+  // effect.
+  function nodeGrid(track) {
+    if (track._nodeGrid) return track._nodeGrid;
+    const n = track.n, px = track.px, pz = track.pz, hw = track.hw;
+    const CELL = 10, OFFSET = 2048, STRIDE = 4096;   // numeric packed key, cf. glx.createChunkedMesh
+    const map = new Map();
+    let maxHw = 0;
+    for (let k = 0; k < n; k++) {
+      if (hw[k] > maxHw) maxHw = hw[k];
+      const key = (__M.floor(px[k] / CELL) + OFFSET) * STRIDE + (__M.floor(pz[k] / CELL) + OFFSET);
+      let arr = map.get(key); if (!arr) { arr = []; map.set(key, arr); } arr.push(k);
+    }
+    const grid = { maxHw };
+    grid.query = (x, z, R, out, doSort) => {
+      let cnt = 0;
+      const x0 = __M.floor((x - R) / CELL), x1 = __M.floor((x + R) / CELL);
+      const z0 = __M.floor((z - R) / CELL), z1 = __M.floor((z + R) / CELL);
+      for (let cx = x0; cx <= x1; cx++)
+        for (let cz = z0; cz <= z1; cz++) {
+          const arr = map.get((cx + OFFSET) * STRIDE + (cz + OFFSET));
+          if (!arr) continue;
+          for (let a = 0; a < arr.length; a++) out[cnt++] = arr[a];
+        }
+      if (doSort) for (let a = 1; a < cnt; a++) { const v = out[a]; let b = a - 1; while (b >= 0 && out[b] > v) { out[b + 1] = out[b]; b--; } out[b + 1] = v; }
+      return cnt;
+    };
+    // query()'s square, narrowed to the cells of rectangle A UNION rectangle B
+    // (world [x0, x1, z0, z1]; B may be null). Cells are walked in query()'s
+    // own cx-then-cz order and each cell's nodes in insertion order, so the
+    // result is query()'s candidate list with the nodes outside A ∪ B removed
+    // and nothing reordered: a first-hit caller whose hit can only lie in A ∪ B
+    // returns the same answer. A thin box 8 km long swept a 1.6 km-wide square
+    // of 10 m cells (Monaco's open-sea sheet: 73 % of its build, hunt 2 T1).
+    grid.queryRects = (x, z, R, a, b, out) => {
+      let cnt = 0;
+      const X0 = __M.floor((x - R) / CELL), X1 = __M.floor((x + R) / CELL);
+      const Z0 = __M.floor((z - R) / CELL), Z1 = __M.floor((z + R) / CELL);
+      const ax0 = __M.max(X0, __M.floor(a[0] / CELL)), ax1 = __M.min(X1, __M.floor(a[1] / CELL));
+      const az0 = __M.max(Z0, __M.floor(a[2] / CELL)), az1 = __M.min(Z1, __M.floor(a[3] / CELL));
+      let bx0 = 1, bx1 = 0, bz0 = 1, bz1 = 0;
+      if (b) {
+        bx0 = __M.max(X0, __M.floor(b[0] / CELL)); bx1 = __M.min(X1, __M.floor(b[1] / CELL));
+        bz0 = __M.max(Z0, __M.floor(b[2] / CELL)); bz1 = __M.min(Z1, __M.floor(b[3] / CELL));
+      }
+      const aOk = ax0 <= ax1 && az0 <= az1, bOk = bx0 <= bx1 && bz0 <= bz1;
+      if (!aOk && !bOk) return 0;
+      const cx0 = aOk ? (bOk ? __M.min(ax0, bx0) : ax0) : bx0, cx1 = aOk ? (bOk ? __M.max(ax1, bx1) : ax1) : bx1;
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const inA = aOk && cx >= ax0 && cx <= ax1, inB = bOk && cx >= bx0 && cx <= bx1;
+        if (!inA && !inB) continue;
+        // One cz interval, or two ascending ones (merged when they touch).
+        let lo0, hi0, lo1 = 1, hi1 = 0;
+        if (inA && inB) {
+          const fa = az0 <= bz0;
+          lo0 = fa ? az0 : bz0; hi0 = fa ? az1 : bz1; lo1 = fa ? bz0 : az0; hi1 = fa ? bz1 : az1;
+          if (lo1 <= hi0 + 1) { if (hi1 > hi0) hi0 = hi1; lo1 = 1; hi1 = 0; }
+        } else if (inA) { lo0 = az0; hi0 = az1; } else { lo0 = bz0; hi0 = bz1; }
+        const key0 = (cx + OFFSET) * STRIDE + OFFSET;
+        for (let cz = lo0; cz <= hi0; cz++) {
+          const arr = map.get(key0 + cz);
+          if (!arr) continue;
+          for (let i = 0; i < arr.length; i++) out[cnt++] = arr[i];
+        }
+        for (let cz = lo1; cz <= hi1; cz++) {
+          const arr = map.get(key0 + cz);
+          if (!arr) continue;
+          for (let i = 0; i < arr.length; i++) out[cnt++] = arr[i];
+        }
+      }
+      return cnt;
+    };
+    track._nodeGrid = grid;
+    return grid;
+  }
+
+  function buildRoad(track) {
+    Log.info("track", "buildRoad start " + (track.def && track.def.id));
+    const { n, px, py, pz, hw } = track;
+    const pos = [], nrm = [], col = [], mat = [], trk = [];
+    const idxArr = [];
+    const grid = nodeGrid(track);              // shared node grid (also used by buildTerrain/buildProps)
+    const _cand = new Array(n);                // reusable candidate scratch for the shoulder clip
+    const pal = track.def.palette;
+    const _did = track.def.id || "";
+    let _idn = 0; for (let _i = 0; _i < _did.length; _i++) _idn += _did.charCodeAt(_i) * (_i + 3);
+    const _aBri = 0.85 + hash(_idn * 1.3) * 0.32;            // 0.85 … 1.17 brightness
+    const _aWarm = (hash(_idn * 2.7) - 0.5) * 0.05;          // warm(+R/−B) ↔ cool skew
+    const _bA = pal.asphalt || [0.17, 0.18, 0.21];
+    const asphalt = [Math.max(0, _bA[0] * _aBri + _aWarm), _bA[1] * _aBri, Math.max(0, _bA[2] * _aBri - _aWarm)];
+    // …and the PIT RIBBON is laid in this circuit's own asphalt, not a constant
+    // of its own. The two surfaces MEET — the entry road peels straight off the
+    // racing surface and the exit road blends back into it — so a hardcoded
+    // lane grey drew a hard edge across the join on every circuit whose asphalt
+    // was lighter. One colour, one surface. (buildRoad runs before
+    // buildStartLine, which is what appends the ribbon.)
+    track.asphaltCol = asphalt;
+    const _gBri = 0.86 + hash(_idn * 3.9) * 0.30;            // verge lush ↔ dry
+    const _gWarm = (hash(_idn * 4.4) - 0.5) * 0.07;
+    const _bG = pal.grass || [0.30, 0.42, 0.22];
+    const grass = [_bG[0] * _gBri + _gWarm, _bG[1] * _gBri, Math.max(0, _bG[2] * _gBri - _gWarm)];
+    const edgeMat = groundMatOf(track.def);
+    // RACING-LINE WEAR FOLLOWS THE BAKED LINE. TrackLine.bake runs before
+    // buildRoad (js/track/tracks.js), so track.line — the line's lateral offset
+    // per node, +right metres, the same frame as the column offsets — is here:
+    // a rubbered band around it (full 0.86 within 1.2 m, gone by 4 m), a
+    // slightly cleaner (lighter) surface from 4.5 m off-line, and the step
+    // columns (4/9) keep their lighter dust edge. The band is WIDE because the
+    // asphalt columns are bunched at the centre (+-0.35) and the edges (w-0.25):
+    // a tight band would miss every vertex when the line runs mid-lane. What
+    // this buys is the SIDE: through a corner the apex-side edge columns go dark
+    // and the centre lightens, where before a fixed centre band (columns 5-8)
+    // ignored the line and the rubber sat mid-road through every corner. Vertex
+    // colour only: no car reads it (docs/PHYSICS.md §Curvature channels, the
+    // mesh.js surface row). A strip decal along the line is the finer follow-up.
+    const lineX = track.line && track.line.length === n ? track.line : null;
+    const wearF = (v, k, o) => {
+      const f = (v === 4 || v === 9) ? 1.07 : 1.0;
+      if (!lineX) return (v >= 5 && v <= 8) ? f * 0.86 : f;
+      const d = __M.abs(o - lineX[k]);
+      const band = d < 1.2 ? 1 : d > 4.0 ? 0 : (4.0 - d) / 2.8;
+      const off = d < 4.5 ? 0 : d > 7.0 ? 1 : (d - 4.5) / 2.5;
+      return f * (1 - 0.14 * band + 0.035 * off);
+    };
+    // THE ROAD'S OWN VERGE IS GRASS — and on the pit side, inside the complex,
+    // that is the green strip between the racing surface and the pit wall. It
+    // is this mesh, not the lane's: the ribbon starts at the lane's inner edge
+    // and the road's outermost columns (hw + 0.4, hw + 2.2) sit inside it,
+    // drawn opaque, so no decal can cover them. Paved here instead, at the
+    // source, wherever the complex stands beside the road.
+    const _pit = track.pit && !track.pit.painted ? track.pit : null;
+    const pitPaved = (k, side) => !!_pit && side === _pit.side && _pit.w[k] > 0.01;
+    const ds = track.total / n;
+    const V = 14;
+    for (let k = 0; k < n; k++) {
+      const u = upOf(track, k);
+      const r = [track.rx[k], track.ry[k], track.rz[k]];
+      const w = hw[k];
+      let   offs = [-w - 2.2, -w - 0.4,
+                    -w, -w + 0.2, -w + 0.25,        // left edge line + step
+                    -0.35, -0.30,                    // centre line (left half)
+                    0.30, 0.35,                      // centre line (right half)
+                    w - 0.25, w - 0.2, w,            // right step + edge line
+                    w + 0.4, w + 2.2];
+      // VERGE FOLD CLAMP. A rail at offset o runs BACKWARDS over a node span when
+      // o·dot(r[k+1]-r[k], t) < -|dP| (turn radius < |o|); its quads then fold
+      // back over the neighbouring strip. On the fold side only, pull the verge
+      // columns (0/1 or 12/13) in to 0.85 of the fold limit of either
+      // neighbouring span, never inside w. RUNNING SURFACE too: where that limit is
+      // itself inside w (a centreline kink tighter than the half-width: korea,
+      // bahrain, buddh, shanghai — verify-track's "centreline" row), the fold-side
+      // edge columns (2..4 / 9..11) and the verge pull in to it (floor 0.4 m, outside
+      // the ±0.35 centre columns), so the inside edge narrows instead of inverting.
+      // Visual only: the (s, x) road model and the driving boundary still read hw.
+      for (let sp = 0; sp < 2; sp++) {
+        const ka = sp ? k : (k - 1 + n) % n, kb = sp ? (k + 1) % n : k;
+        const dx = px[kb] - px[ka], dz = pz[kb] - pz[ka], L = __M.hypot(dx, dz) || 1;
+        const drx = track.rx[kb] - track.rx[ka], drz = track.rz[kb] - track.rz[ka];
+        // Two readings of "along": the chord (the quad's own edge) and the span's
+        // start-node tangent (what verify-track's roadGeoChecks tests); a tight
+        // turn folds under the second first.
+        for (let pass = 0; pass < 2; pass++) {
+          const ux = pass ? track.tx[ka] : dx / L, uz = pass ? track.tz[ka] : dz / L;
+          const D = dx * ux + dz * uz, drt = drx * ux + drz * uz;
+          if (__M.abs(drt) < 1e-6 || D <= 0) continue;
+          const limRun = 0.85 * D / __M.abs(drt), lim = __M.max(w, limRun);
+          const v0 = drt > 0 ? 0 : 12, sg = drt > 0 ? -1 : 1;   // fold side: o·drt < 0
+          for (let v = v0; v < v0 + 2; v++) if (__M.abs(offs[v]) > lim) offs[v] = sg * lim;
+          if (limRun < w) {
+            const lr = __M.max(0.4, limRun), r0 = drt > 0 ? 0 : 9, r1 = drt > 0 ? 5 : 14;
+            for (let v = r0; v < r1; v++) if (__M.abs(offs[v]) > lr) offs[v] = sg * lr;
+          }
+        }
+      }
+      const rise = [-0.05, -0.02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.02, -0.05];
+      for (let v = 0; v < V; v++) {
+        const o = offs[v];
+        // Shared with buildKerbs so the two can never disagree about where the
+        // banked surface is — see bankOffsetAt().
+        const by = bankOffsetAt(track, k, o);
+        // …AND THE VERGE DOES NOT DIP INTO THE PIT APRON. Those outer columns
+        // drop 2 and 5 cm away from the road so a grass verge falls off the
+        // kerb; beside the complex there is no verge to fall off, and the dip
+        // put the road's edge BELOW the lane ribbon that continues from it —
+        // the crack of shadow where the two surfaces met. Level here, so the
+        // road and the lane are one surface rather than two that overlap.
+        const ri = pitPaved(k, v <= 1 ? -1 : 1) ? 0 : rise[v];
+        const wx = px[k] + r[0] * o + u[0] * (ri + by);
+        let   wy = py[k] + r[1] * o + u[1] * (ri + by) + 0.02;
+        const wz = pz[k] + r[2] * o + u[2] * (ri + by);
+        if (v === 0 || v === 1 || v === 12 || v === 13) {
+          const _cn = grid.query(wx, wz, grid.maxHw + 0.5, _cand, false);
+          for (let _ci = 0; _ci < _cn; _ci++) {
+            const j = _cand[_ci];
+            let dd = __M.abs(j - k); dd = dd < n - dd ? dd : n - dd;
+            if (dd * ds < 6) continue;
+            const ex = wx - px[j], ez = wz - pz[j];
+            const lim = hw[j] - 0.3;
+            if (ex * ex + ez * ez < lim * lim && wy > py[j] - 0.05 && wy < py[j] + 3)
+              wy = py[j] - 0.05;
+          }
+        }
+        pos.push(wx, wy, wz);
+        const nv = bankNormalAt(track, k, o, u, r);
+        nrm.push(nv[0], nv[1], nv[2]);
+        // The start/finish line is a separate chequered decal mesh (buildStartLine)
+        // laid just above the asphalt here at s=0 — far cleaner than painting a
+        // whole road segment solid white, which read as a sprayed-on blob.
+        // Per-vertex procedural material id. Until this existed the road was
+        // emitted with NO mat array at all, so the whole surface was MAT.FLAT
+        // and the material system never touched the one thing on screen for the
+        // entire race. Painted markings stay FLAT deliberately — road paint is
+        // smooth, and giving it aggregate relief makes the lines look gritty.
+        // The painted markings are NO LONGER vertex colour — roadMarkings() in
+        // the lit fragment shader draws the edge lines and the dashed centre
+        // line analytically from the (s, x, hw) in `trk`. Columns 2/3/10/11 and
+        // 6/7 still exist geometrically (they are removed in a follow-up) but
+        // now carry plain asphalt, so the shader owns the paint outright and
+        // the two cannot disagree.
+        let c, m;
+        if (v <= 1 || v >= 12) {
+          if (pitPaved(k, v <= 1 ? -1 : 1)) {
+            // The pit apron, not a verge: asphalt, and MAT.ASPHALT so the baked
+            // pack reads it as tarmac rather than laying grass over it.
+            const grain = (hash(k * 13 + v) - 0.5) * 0.016;
+            c = [asphalt[0] + grain, asphalt[1] + grain, asphalt[2] + grain];
+            m = MAT.ASPHALT;
+          } else {
+            // kerb ribbons added separately by buildKerbs; a def that names its
+            // ground material (terrainMat) carries it onto these edge columns too
+            c = grass; m = edgeMat;
+          }
+        } else {
+          // asphalt running surface: racing-line wear + subtle aggregate grain
+          const f = wearF(v, k, o), grain = (hash(k * 13 + v) - 0.5) * 0.016;
+          c = [asphalt[0] * f + grain, asphalt[1] * f + grain, asphalt[2] * f + grain];
+          m = MAT.ASPHALT;
+        }
+        col.push(c[0], c[1], c[2]);
+        mat.push(m);
+        // Track-space coords for the fragment-side marking SDF (roadMarkings()
+        // in js/render/glx/shaders/glsl-lit.js). hw > 0 is what marks a vertex as road
+        // SURFACE — the kerb ribbon and the edge skirt push hw 0 so they are
+        // skipped. Must stay in lockstep with pos: three writers append here.
+        trk.push(k * ds, o, w);
+      }
+    }
+    // SEAM RING: node 0's columns again, with s = total. The last quad used to
+    // close onto node 0 itself, so trk.s ran (n-1)·ds → 0 across ~4 m and
+    // roadMarkings()' fract(s/7) cycled ~800 times there: a grey smear (and the
+    // pit-box paint) right on the grid, every circuit. Same positions, no crack.
+    const seam = n * V;
+    for (let v = 0; v < V; v++) {
+      pos.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]);
+      nrm.push(nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2]);
+      col.push(col[v * 3], col[v * 3 + 1], col[v * 3 + 2]);
+      mat.push(mat[v]);
+      trk.push(track.total, trk[v * 3 + 1], trk[v * 3 + 2]);
+    }
+    for (let k = 0; k < n; k++) {
+      const a = k * V, b = k === n - 1 ? seam : (k + 1) * V;
+      for (let v = 0; v < V - 1; v++) {
+        idxArr.push(a + v, a + v + 1, b + v, a + v + 1, b + v + 1, b + v);
+      }
+    }
+    {
+      const surf = track.surface ||
+        (typeof TrackSurface !== "undefined" ? TrackSurface.profile(track.def, track) : null);
+      if (surf) {
+        const innerLat = surf.rails[0];
+        const topC = [grass[0] * 0.72, grass[1] * 0.72, grass[2] * 0.72];
+        const botC = [grass[0] * 0.42, grass[1] * 0.42, grass[2] * 0.42];
+        const skirt = (v) => {
+          const base = pos.length / 3;
+          const sgn = v === 0 ? -1 : 1;
+          for (let k = 0; k < n; k++) {
+            const i3 = (k * V + v) * 3;
+            const ex = pos[i3], ey = pos[i3 + 1], ez = pos[i3 + 2];
+            // Deep enough for both the seam drop and the clip trench…
+            let bottom = Math.min(surf.heightAt(k, innerLat), py[k] - 1.6) - 0.6;
+            if (py[k] - surf.ground[k] > 0.5) bottom = Math.max(bottom, py[k] - 1.2);
+            if (bottom > ey - 0.3) bottom = ey - 0.3;
+            const nx = track.rx[k] * sgn, nz = track.rz[k] * sgn;
+            pos.push(ex, ey, ez, ex, bottom, ez);
+            nrm.push(nx, 0, nz, nx, 0, nz);
+            col.push(topC[0], topC[1], topC[2], botC[0], botC[1], botC[2]);
+            mat.push(MAT.FLAT, MAT.FLAT);
+            // hw = 0: vertical seam filler, not road surface (see buildRoad).
+            trk.push(k * ds, 0, 0, k * ds, 0, 0);
+          }
+          for (let k = 0; k < n; k++) {
+            const a = base + k * 2, b = base + ((k + 1) % n) * 2;
+            idxArr.push(a, a + 1, b, a + 1, b + 1, b);
+            idxArr.push(a, b, a + 1, a + 1, b, b + 1);
+          }
+        };
+        skirt(0); skirt(13);
+      }
+    }
+    buildKerbs(track, { pos, nrm, col, mat, trk, idx: idxArr });
+    buildPitHatch(track, { pos, nrm, col, mat, trk, idx: idxArr });
+    return { pos, nrm, col, mat, trk, idx: idxArr };
+  }
+
+  function buildTerrain(track) {
+    const it = buildTerrainSteps(track);
+    for (;;) { const r = it.next(); if (r.done) return r.value; }
+  }
+
+  // Complete rows preserve the clip/face/normal order while yielding to paints.
+  function* buildTerrainSteps(track) {
+    Log.info("track", "buildTerrain start " + (track.def && track.def.id));
+    const { n, px, py, pz, hw, total } = track;
+    const pos = [], nrm = [], col = [], mat = [];
+    const idxArr = [];
+    const pal = track.def.palette, grass = pal.grass, runoff = pal.runoff;
+    const bp = track.bankP;
+    const ds = total / n;
+    const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
+    const _cand = new Array(n);                // reusable candidate scratch for the over-track clip
+    // The terrain baseline (the level distant verts settle toward) is owned by
+    // TrackSurface.profile — ribbon() reads surface.heightAt, which derives from
+    // the profile's own pyMin/floorY (surface.js).
+    // For bridge sections the terrain ribbon stays at ground level so the
+    // elevated deck floats above flat ground (supported visually by the bridge
+    // pillars in buildProps) instead of pulling the whole ground plane up with it.
+    // That carve lives in surface.js `ground[]` — and it MUST, because the bridge
+    // fracs are pre-rotation and need `def._sceneryShift` compensation. Do not
+    // re-derive it here from a raw `b.s * total`: that lands the window two thirds
+    // of a lap away — `TrackSurface.profile` in js/track/core/surface.js carries the fix.
+    // Adaptive lateral verts per side: a gravel/runoff verge at the road edge graded
+    // out to grass. The verge is gravel, not a concrete apron, which reads as a
+    // glaring light slab flanking the track.
+    // Street circuits push the ribbon further from the road edge so barriers
+    // fully hide it and it cannot visually bleed onto the road surface.
+    const surface = track.surface || TrackSurface.profile(track.def, track);
+    const NTV = surface.rails.length;
+    const isStreet = !!track.def.street;
+    const flat = !!track.def.flatTerrain;
+    // The ground beyond the runoff verge: GRASS unless the def names SAND or
+    // SNOW (the designer's desert / alpine themes; no shipped def does, so the
+    // 52 keep their bytes — tests/unit/track-foundation* and verify-track).
+    const groundMat = groundMatOf(track.def);
+    const outerW = surface.outerW;
+    const latsL = surface.rails.map((d) => -d);
+    const latsR = surface.rails.slice();
+    // flip: the right ribbon needs opposite winding to stay front-facing under BACK culling.
+    function* ribbon(lats, flip) {
+      const base = pos.length / 3;
+      for (let k = 0; k < n; k++) {
+        const r = [track.rx[k], track.ry[k], track.rz[k]];
+        const u = upOf(track, k);
+        const w = hw[k];
+        const bankLift = bp ? bp.lift[k] : 0;
+        const bankSide = bp ? bp.bsign[k] : 0;
+        for (let v = 0; v < NTV; v++) {
+          const o = (lats[v] < 0 ? -w : w) + lats[v];
+          const t = NTV <= 1 ? 1 : v / (NTV - 1);
+          const yBase = surface.heightAt(k, __M.abs(lats[v]), lats[v] < 0 ? -1 : 1);
+          let by = 0;
+          if (bankLift > 0) {
+            let frac = (bankSide * o + w) / (2 * w);
+            frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
+            by = bankLift * (frac - 0.5) * (1 - t);
+          }
+          const wx = px[k] + r[0] * o + u[0] * by;
+          const wz = pz[k] + r[2] * o + u[2] * by;
+          let wy = yBase + u[1] * by;
+          // Clip terrain that rises OVER the track. The near verge verts sit at
+          // ~road height, so on the INSIDE of a corner (and at crossings / fold-
+          // backs / elevation changes) they can hang over the tarmac of a nearby
+          // node and cover the racing surface with grass. Lower any such vert to
+          // just under that road, easing the dip with distance so it slopes under
+          // rather than stepping.
+          //
+          // Arc distance alone can't tell "my own road continuing straight" (must
+          // leave alone — don't trench the verge) from "the track that curved away
+          // right here" (must clip). The discriminator is HEADING: same tangent =
+          // same road run → skip; diverging tangent = the track bends/folds over
+          // this vert → clip, at ANY arc distance (so tight corners are caught).
+          // Only nodes within hw[j]+26 (the widest clip radius, the channel carve)
+          // of this vert can lower it — query the shared grid instead of all n.
+          // Sorted ascending so the `wy`-dependent gates evaluate in the original
+          // 0..n-1 order (this clip reads/updates `wy` as it iterates).
+          const _cn = grid.query(wx, wz, grid.maxHw + 27, _cand, true);
+          for (let _ci = 0; _ci < _cn; _ci++) {
+            const j = _cand[_ci];
+            let dd = __M.abs(j - k); dd = dd < n - dd ? dd : n - dd;
+            if (dd * ds < 6) continue;                  // always skip the vert's immediate own road
+            const ex = wx - px[j], ez = wz - pz[j];
+            const d2 = ex * ex + ez * ez;
+            const oj = ex * track.rx[j] + ez * track.rz[j];
+            const roadYj = py[j] + bankOffsetAt(track, j, oj);
+            // A vert (or the face it anchors) that lands ON another node's tarmac
+            // is buried well under that road UNCONDITIONALLY — heading-independent.
+            // This kills the green wedge where the inside verge of a corner chords
+            // across the racing line (Miami T6, s≈0.11). The same-direction skip
+            // below only protects the apron BAND outside the tarmac; a straight's
+            // own verge sits ~2 m beyond its edge so it never enters this radius.
+            const onEdge = hw[j] - 0.3;
+            if (d2 < onEdge * onEdge) {
+              if (wy > roadYj - 0.5) wy = roadYj - 0.5;
+              continue;
+            }
+            // Elevated terrain hanging over a LOWER road: an elevation mound
+            // (e.g. Miami's s≈0.42 Hard Rock rise, 280 m radius) bulges over a
+            // flat part of the track that passes near it, covering the racing
+            // line with green from up to ~20 m out — beyond the apron reach
+            // below. Carve the road's channel through it: pull terrain that sits
+            // clearly ABOVE this road down under it near the edge, easing back up
+            // to the mound's natural height further out. Heading-independent, and
+            // gated on wy>py[j]+0.3 so flat verges (always at/below grade) are
+            // untouched.
+            // Measured against j's banked surface, so a banked verge that
+            // legitimately rises with its own tarmac is not mistaken for a mound
+            // — while terrain genuinely hanging over the racing line still gets
+            // carved, banked or not.
+            // Not against the vert's OWN road run: on a descent the tarmac 10-20 m
+            // ahead sits 1-3 m lower, and this carve trenched the verge down to it
+            // (fuji's 14 % drop at s~0.47: a 2.8 m trench, the road on a grass
+            // wall). The own run is heightAt's job; same test as the dip below.
+            const _sameRun = track.tx[k] * track.tx[j] + track.tz[k] * track.tz[j] > 0.55 && dd * ds < 60;
+            if (!_sameRun && wy > roadYj + 0.3) {
+              const fr = hw[j] + 26, nr = hw[j] + 0.5;
+              if (d2 < fr * fr) {
+                const dist = __M.sqrt(d2);
+                const tt = __M.max(0, __M.min(1, (dist - nr) / (fr - nr)));
+                let tgt = (roadYj - 0.4) * (1 - tt * tt) + wy * (tt * tt);
+                // A verge must still MEET the tarmac it borders. The channel
+                // reaches 26 m to catch a broad mound (Miami's Hard Rock rise
+                // bulges over the track from ~20 m out), but on a banked corner
+                // whose lap doubles back — Zandvoort's hairpins run ~28 m apart —
+                // that reach lands on the far road's own banked verge and drags
+                // it a metre below the tarmac it belongs to, leaving a ledge
+                // along the outside of the banking.
+                //
+                // Hold the vert at its OWN section's road-edge height for the
+                // first few metres past the tarmac, releasing over 8 m so the
+                // channel still wins where the mound actually is. Verts that sit
+                // ON another road never get here: the unconditional bury above
+                // fires first and continues.
+                const ownDist = __M.abs(o) - w;
+                if (ownDist < 8) {
+                  const hold = 1 - ownDist / 8;
+                  const floorY = py[k] + bankOffsetAt(track, k, o) - 0.35;
+                  if (tgt < floorY) tgt += (floorY - tgt) * hold;
+                }
+                if (wy > tgt) wy = tgt;
+              }
+            }
+            const align = track.tx[k] * track.tx[j] + track.tz[k] * track.tz[j];
+            if (align > 0.55 && dd * ds < 60 && !(isStreet && d2 > (hw[j] + 6) * (hw[j] + 6))) continue;
+            const far = hw[j] + 12;
+            if (d2 > far * far) continue;               // not over/near this node's tarmac
+            const near = hw[j] + 1.0;
+            const dist = __M.sqrt(d2);
+            const tt = __M.max(0, __M.min(1, (dist - near) / (far - near)));
+            const target = (roadYj - 1.6) + tt * tt * 1.6;   // dip under the road (banked), easing back to grade
+            if (wy > target) wy = target;
+          }
+          pos.push(wx, wy, wz);
+          nrm.push(0, 0, 0);
+          const nz = (hash(k * 3 + v) - 0.5) * 0.04;
+          // gravel/runoff verge at the road edge, grading out to grass (no apron)
+          const gt = NTV <= 1 ? 1 : v / (NTV - 1);          // 0 inner edge → 1 far (same 1-rail guard as the position path)
+          const tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
+          col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
+          mat.push(gt < 0.22 ? MAT.ROCK : groundMat);
+        }
+        if ((k + 1) % 32 === 0 || k + 1 === n) yield;
+      }
+      const faceSafe = (ia, ib, ic) => {
+        const ax = pos[ia * 3], ay = pos[ia * 3 + 1], az = pos[ia * 3 + 2];
+        const bx = pos[ib * 3], by = pos[ib * 3 + 1], bz = pos[ib * 3 + 2];
+        const cx = pos[ic * 3], cy = pos[ic * 3 + 1], cz = pos[ic * 3 + 2];
+        const x = (ax + bx + cx) / 3, y = (ay + by + cy) / 3, z = (az + bz + cz) / 3;
+        const cn = grid.query(x, z, grid.maxHw + 1, _cand, false);
+        for (let qi = 0; qi < cn; qi++) {
+          const j = _cand[qi], ex = x - px[j], ez = z - pz[j], lim = hw[j] - 0.15;
+          if (ex * ex + ez * ez < lim * lim && y > py[j] + 0.12) return false;
+        }
+        return true;
+      };
+      const tri = (a, b, c) => { if (faceSafe(a, b, c)) idxArr.push(a, b, c); };
+      for (let k = 0; k < n; k++) {
+        const a = base + k * NTV, b = base + ((k + 1) % n) * NTV;
+        for (let v = 0; v < NTV - 1; v++) {
+          if (flip) {
+            tri(a + v, a + v + 1, b + v);
+            tri(a + v + 1, b + v + 1, b + v);
+          } else {
+            tri(a + v, b + v, a + v + 1);
+            tri(a + v + 1, b + v, b + v + 1);
+          }
+        }
+        if ((k + 1) % 128 === 0 || k + 1 === n) yield;
+      }
+
+      // REAL NORMALS for the ribbon just emitted. Every terrain vertex used to
+      // be pushed with a hardcoded (0,1,0) — but this ribbon is not flat: it
+      // tracks the road's elevation along the lap, grades down to the lap's low
+      // point at its outer edge, and is carved DOWN under the road wherever
+      // another part of the circuit passes nearby. With one up-normal
+      // everywhere, all of that geometry shaded as though it were a level
+      // plane, so a bank, an embankment and a flat verge took exactly the same
+      // amount of sun. Measured on the built mesh: monaco's ribbon averages
+      // 24.9° of real tilt, silverstone's 5.2°, none of which reached the
+      // shading. tests/unit/terrain-normals.test.mjs guards the collapse back.
+      //
+      // SCOPE, measured — this is a correctness fix, NOT a cure for the scene
+      // reading flat, which is what it was first justified as. A controlled A/B
+      // on spa (identical camera eye to 3 dp, day, dry) moved the frame's mean
+      // neighbour delta by -1.8% / +0.8% / +4.8% across chase, heli and an Eau
+      // Rouge heli — small and mixed, not the visible change that claim
+      // predicted. Most ground a player actually sees on an open circuit is
+      // either the flat floor slab or terrain past the shading-detail range,
+      // and the ribbon's steep parts are largely the carve channels beside the
+      // road, which the road itself hides. Worth having because a constant
+      // up-normal on non-flat geometry is simply wrong; not worth citing as a
+      // flatness fix.
+      //
+      // Accumulate area-weighted face normals over the strip (area weighting
+      // falls out of using the un-normalised cross product) and normalise once.
+      // Done on the FULL grid rather than per-triangle so shared vertices blend
+      // and the ribbon stays smooth instead of faceting. Cost is one pass over
+      // the strip at build time; nothing per frame.
+      for (let k = 0; k < n; k++) {
+        const a = base + k * NTV, b = base + ((k + 1) % n) * NTV;
+        for (let v = 0; v < NTV - 1; v++) {
+          accumFaceN(nrm, pos, a + v, b + v, a + v + 1);
+          accumFaceN(nrm, pos, a + v + 1, b + v, b + v + 1);
+        }
+        if ((k + 1) % 128 === 0 || k + 1 === n) yield;
+      }
+      for (let k = 0; k < n; k++) {
+        for (let v = 0; v < NTV; v++) {
+          const i3 = (base + k * NTV + v) * 3;
+          const sgn = nrm[i3 + 1] < 0 ? -1 : 1;
+          const nx = nrm[i3] * sgn, ny = nrm[i3 + 1] * sgn, nz2 = nrm[i3 + 2] * sgn;
+          const l = __M.hypot(nx, ny, nz2);
+          if (l > 1e-6) { nrm[i3] = nx / l; nrm[i3 + 1] = ny / l; nrm[i3 + 2] = nz2 / l; }
+          else { nrm[i3] = 0; nrm[i3 + 1] = 1; nrm[i3 + 2] = 0; }
+        }
+        if ((k + 1) % 128 === 0 || k + 1 === n) yield;
+      }
+    }
+    yield* ribbon(latsL, false); yield* ribbon(latsR, true);
+    return { pos, nrm, col, mat, idx: idxArr };
+  }
+
+  function buildFloor(track) {
+    Log.info("track", "buildFloor start " + (track.def && track.def.id));
+    const { n, px, py, pz } = track;
+    let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity, pyMin = Infinity;
+    for (let k = 0; k < n; k++) {
+      if (px[k] < minx) minx = px[k]; if (px[k] > maxx) maxx = px[k];
+      if (pz[k] < minz) minz = pz[k]; if (pz[k] > maxz) maxz = pz[k];
+      if (py[k] < pyMin) pyMin = py[k];
+    }
+    const margin = Math.max(1400, (maxx - minx), (maxz - minz));
+    const x0 = minx - margin, x1 = maxx + margin;
+    const z0 = minz - margin, z1 = maxz + margin;
+    const y = track.surface ? track.surface.floorY : pyMin - 1.0;
+    const pal = track.def.palette;
+    const g = pal.grass || [0.30, 0.34, 0.22];
+    const c = [g[0] * 0.88, g[1] * 0.88, g[2] * 0.88];
+    const pos = [x0, y, z0,  x1, y, z0,  x1, y, z1,  x0, y, z1];
+    const nrm = [0, 1, 0,  0, 1, 0,  0, 1, 0,  0, 1, 0];
+    const col = [c[0], c[1], c[2],  c[0], c[1], c[2],  c[0], c[1], c[2],  c[0], c[1], c[2]];
+    // Double-sided (both windings) so the up-facing ground is never back-face
+    // culled regardless of the renderer's winding convention.
+    const idx = [0, 1, 2,  0, 2, 3,   0, 2, 1,  0, 3, 2];
+    return { pos, nrm, col, idx };
+  }
+
+  // ---- STARTING GRID ----------------------------------------------------
+  //
+  // gridSlot() is the ONE definition of where slot `i` sits. js/game.js's
+  // gridUp() places the cars from it and buildGridBoxes() paints the boxes from
+  // it, so the paint cannot drift away from the cars — which it silently would
+  // if each file carried its own copy of these constants.
+  //
+  // 8 m between slots is the real FIA pitch. Pole sits 14 m before the line.
+  // The lateral stagger is symmetric here, unlike a real grid: 40% of the local
+  // half-width, capped at 3 m, P1 left.
+  // The DEFAULT box count — 11 fixed teams x 2 seats. It is a default and not a
+  // constant because the field is not always 22: selecting MY TEAM adds a car
+  // (and a MY TEAM career adds two), so the painted grid has to follow the
+  // field or the last car lines up on bare tarmac — easy to miss, because the
+  // box is behind you on the formation lap. buildGridBoxes() takes the count;
+  // callers that do not know the field (tools, the VM builds, the circuit
+  // sweeps) get this.
+  const GRID_SLOTS = 22;
+  const _gsSmp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+  function gridSlot(track, i) {
+    let s = track.total - 14 - i * 8;
+    s %= track.total; if (s < 0) s += track.total;
+    TrackSpline.sample(track, s, _gsSmp);
+    return { s, x: (i % 2 === 0 ? -1 : 1) * __M.min(_gsSmp.hw * 0.4, 3) };
+  }
+
+  // The painted boxes. APPENDED to the caller's buffers (tracks.js hands us the
+  // start-line decal's own `out`), so they ride that mesh: same decal material,
+  // same depthBias, same free path, same hideMeshes toggle, no new draw call.
+  //
+  // Open-coded quads ON PURPOSE — TrackGeom's emitters are traced by
+  // tools/track/coplanar-audit.cjs, and a grid of addBox would land in every
+  // circuit's coplanar baseline. buildStartLine open-codes for the same reason.
+  //
+  // Real geometry: a 2.7 m box (widened 20 cm in 2023), front and side lines
+  // only — it is open at the rear, and legality is judged on the front tyres
+  // being inside the front and side lines. The front line sits 2.0 m ahead of
+  // the slot, so the front axle (car-local z 1.7) is inside it. The FIA's yellow
+  // guide line goes just behind the front line, with a gap: two painted quads
+  // that OVERLAP would z-fight, and a gap is cheaper than a second lift value.
+  const BOX_HALF_W = 1.35, BOX_LEN = 5.0, BOX_FRONT = 2.0;
+  // 0.20, deliberately bolder than the ~0.10-0.12 m of the real thing, for
+  // LEGIBILITY, not because anything was broken. Measured 2026-09-01 by tinting
+  // GUIDE_COL to an unmistakable magenta and counting only those pixels in one
+  // top-down grid frame (a plain "is it yellow" test is useless here — it also
+  // matches sand and kerbs, and counted 1032 px where the true figure was 247):
+  //
+  //     paint width   guide px, far half   guide px, whole frame
+  //     0.12 m        32                   178
+  //     0.20 m        45                   247
+  //
+  // The paint reaches EVERY slot at every distance in both cases — y 13 to y 606
+  // of a 640 px frame, the full length of the grid — so there is no dropout to
+  // fix; the far boxes were simply thin enough to read as absent. Widening buys
+  // 1.4x the paint pixels, tracking the 1.67x width ratio. Depth bias was also
+  // measured here and does NOT govern these quads: [-1,-2] against [-16,-32]
+  // moved 468 of 640000 px, and a deliberately absurd [-600,-1200] moved 1261.
+  const PAINT_W = 0.20, GUIDE_GAP = 0.06, GUIDE_W = 0.20, GUIDE_OUT = 0.6;
+  const GRID_LIFT = 0.05;         // along the road normal, matching buildStartLine
+  const GUIDE_COL = [0.92, 0.78, 0.12];
+  function buildGridBoxes(track, out, slots) {
+    const n = Math.max(2, Math.round(slots > 0 ? slots : (track._gridSlots || GRID_SLOTS)));
+    const white = track.def.palette.line || [0.95, 0.95, 0.98];
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    for (let i = 0; i < n; i++) {
+      const slot = gridSlot(track, i);
+      TrackSpline.sample(track, slot.s, smp);
+      const r = TrackGeom.norm(smp.r), t = TrackGeom.norm(smp.t);
+      const u = TrackGeom.norm(cross(r, t));
+      const P = smp.p, edge = __M.max(1.0, smp.hw - 0.2);
+      // Held to the tarmac: a narrow street circuit must not get a box line
+      // painted out on the runoff. (Not M4.clamp — this is a fixed +-edge rail,
+      // and naming it `clamp` would shadow the shared one.)
+      const onRoad = (o) => __M.max(-edge, __M.min(edge, o));
+      const strip = (o0, o1, d0, d1, c) => {
+        const base = out.pos.length / 3;
+        const vert = (o, d) => {
+          out.pos.push(P[0] + r[0] * o + t[0] * d + u[0] * GRID_LIFT,
+                       P[1] + r[1] * o + t[1] * d + u[1] * GRID_LIFT,
+                       P[2] + r[2] * o + t[2] * d + u[2] * GRID_LIFT);
+          out.nrm.push(u[0], u[1], u[2]);
+          out.col.push(c[0], c[1], c[2]);
+        };
+        // Same CCW winding as the road and as buildStartLine.
+        vert(o0, d0); vert(o1, d0); vert(o0, d1); vert(o1, d1);
+        out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      };
+      const oL = onRoad(slot.x - BOX_HALF_W), oR = onRoad(slot.x + BOX_HALF_W);
+      const dF = BOX_FRONT, dB = BOX_FRONT - BOX_LEN;
+      strip(oL, oR, dF - PAINT_W, dF, white);                       // front line
+      strip(oL, oL + PAINT_W, dB, dF, white);                       // left side
+      strip(oR - PAINT_W, oR, dB, dF, white);                       // right side
+      const gF = dF - PAINT_W - GUIDE_GAP;                          // clear of the front line
+      strip(onRoad(oL - GUIDE_OUT), onRoad(oR + GUIDE_OUT), gF - GUIDE_W, gF, GUIDE_COL);
+    }
+    return out;
+  }
+
+  // ── The pit lane, as an actual second road ──────────────────────────────────
+  // The complex's TARMAC and its PAINT, built from track.pit (js/track/core/pit.js)
+  // and nothing else: the entry road peeling off the racing surface, the fast
+  // lane, the corridor, the working lane out to the garage line, and the exit
+  // road blending back — one ribbon per node, its rails the model's bands
+  // scaled by the model's easing. The wall, the platform and the garages are
+  // 3D and live in js/track/scenery/pits.js; this is what lies on the ground.
+  //
+  // APPENDED to the start-line decal's buffers, like buildGridBoxes, and for the
+  // same three reasons: it is flat paint-and-tarmac on the ground, it needs the
+  // decal's depth bias to sit over the verge without z-fighting, and riding a
+  // mesh all three backends already draw means GLX, WGX and TLX get it with no
+  // per-backend work.
+  const PIT_LIFT = 0.05;          // along the road normal, matching buildStartLine
+  // PAINT ON THE LANE — the entry/exit lines, the chevrons, the boxes — rides
+  // the ribbon's OWN surface this much higher. All of it shares the ribbon's
+  // mesh and depth bias, so geometry is the only thing between them, and it
+  // used to be none: flat planes at PIT_LIFT off one spline sample, which sat
+  // BELOW the lane on 140 of Monza's 240 box vertices (-6.5..+8.4 mm), 144 of
+  // Bahrain's and +-29 mm on Spa, the chevrons to -16 mm. pitPaint() lays each
+  // vertex on the ribbon (laneAt) and cuts the quad at every node it crosses,
+  // so no chord sags through a crease (tests/unit/pit-complex.test.mjs: >= 10 mm).
+  const PIT_PAINT = 0.015;
+  // The ribbon's vertex at node k, lateral `lat` (world-right, from the
+  // centreline): buildPitLane's rule, so laneAt() and the ribbon cannot differ.
+  function laneVert(track, k, lat, lift) {
+    const u = upOf(track, k), by = bankOffsetAt(track, k, lat) + PIT_LIFT + lift;
+    return [track.px[k] + track.rx[k] * lat + u[0] * by,
+            track.py[k] + track.ry[k] * lat + u[1] * by,
+            track.pz[k] + track.rz[k] * lat + u[2] * by];
+  }
+  // …and between nodes, lerped along the arc: the surface the ribbon's quads draw.
+  function laneAt(track, s, lat, lift) {
+    const n = track.n, L = track.total, fi = ((s % L + L) % L) / L * n;
+    const i = Math.floor(fi) % n, f = fi - Math.floor(fi);
+    const A = laneVert(track, i, lat, lift), B = laneVert(track, (i + 1) % n, lat, lift);
+    return [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f];
+  }
+  // One flat paint quad ON the lane, PIT_PAINT above it: rows at arc s + lon0
+  // and s + lon1, laterals [a0, a1] on the first and [b0, b1] on the second
+  // (b0 === b1 closes a triangle), cut at every node between. Rows ascend in
+  // arc and laterals in world-right, so every triangle faces UP like the road
+  // and the grid boxes — four of the five box quads were wound DOWN, and the
+  // decal mesh is drawn single-sided, so they were culled on every backend.
+  function pitPaint(track, out, s, lon0, lon1, a0, a1, b0, b1, col, nrm) {
+    if (lon1 < lon0) { [lon0, lon1, a0, a1, b0, b1] = [lon1, lon0, b0, b1, a0, a1]; }
+    const ds = track.total / track.n, rows = [lon0];
+    for (let c = (Math.floor((s + lon0) / ds) + 1) * ds - s; c < lon1 - 1e-4; c += ds) if (c > lon0 + 1e-4) rows.push(c);
+    rows.push(lon1);
+    let prev = null;
+    for (const lon of rows) {
+      const t = lon1 > lon0 ? (lon - lon0) / (lon1 - lon0) : 0;
+      const l0 = a0 + (b0 - a0) * t, l1 = a1 + (b1 - a1) * t;
+      const row = [laneAt(track, s + lon, Math.min(l0, l1), PIT_PAINT), laneAt(track, s + lon, Math.max(l0, l1), PIT_PAINT)];
+      if (prev) {
+        const base = out.pos.length / 3;
+        for (const P of [prev[0], prev[1], row[0], row[1]]) {
+          out.pos.push(P[0], P[1], P[2]); out.nrm.push(nrm[0], nrm[1], nrm[2]); out.col.push(col[0], col[1], col[2]);
+        }
+        out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      }
+      prev = row;
+    }
+  }
+  const PIT_LINE_W = 0.10;        // FIM §4.11.10: 10 cm lines
+  const PIT_EDGE_W = 0.15;        // the lane's wall-side edge, a little bolder
+  // The lane is laid in the CIRCUIT's asphalt (track.asphaltCol, buildRoad) and
+  // shaded from it — the ribbon and the road it peels off must be one surface.
+  // This is only the fallback for a track built without a road mesh.
+  const PIT_TARMAC = [0.135, 0.145, 0.165];
+  function buildPitLane(track, out) {
+    const p = track.pit;
+    if (!p) return out;
+    const { hw, n, total: L } = track;
+    const white = track.def.palette.line || [0.95, 0.95, 0.98];
+    const sd = p.side, o = p.off, ds = L / n;
+    // The circuit's own asphalt (buildRoad), so the lane and the road it peels
+    // off are the SAME surface; the working lane and the apron are shades of it
+    // rather than unrelated greys.
+    const road = track.asphaltCol || PIT_TARMAC;
+    const shade = (f) => [road[0] * f, road[1] * f, road[2] * f];
+    const TARMAC = shade(0.94), WORK = shade(1.12), APRON = shade(1.34);
+    // The bands at one node as [offset beyond hw, colour of the band that starts
+    // here], ascending outward. On the entry and exit roads (before the wall has
+    // grown) the lane's inner edge is DASHED — it is the track edge you may
+    // cross — and solid once the wall stands beside it.
+    const bands = (k) => {
+      const w = p.w[k];
+      if (!(w > 0.01)) return null;
+      const v = p.v[k], b = p.b ? p.b[k] : w;
+      // The CORRIDOR and the WORKING lane ride `b` — they exist where the bays
+      // do (TrackPit) — so the entry road, the exit road and the stretches
+      // between are the fast lane alone. The APRON then paves everything from
+      // the lane's outer edge to the complex's flattened FOOTPRINT: that ground
+      // is already level (js/track/core/surface.js holds it flat to `keep`) and
+      // was the circuit's own terrain, so the entrance and the exit had a strip
+      // of GRASS beside them where the lane had narrowed. A pit complex is
+      // paved end to end; this is the paving.
+      const fi = o.fastIn * v, fo = o.fastOut * w;
+      const co = fo + (o.corrOut - o.fastOut) * b, wo = co + (o.workOut - o.corrOut) * b;
+      const apron = Math.max(wo, o.outer * w + 0.3);
+      const dash = Math.floor((k * ds) / 2) % 2 === 0;
+      const innerCol = v < 0.5 ? (dash ? white : TARMAC) : white;
+      const edge = Math.min(PIT_EDGE_W, Math.max(0, fo - fi) * 0.5);
+      const lw = Math.min(PIT_LINE_W, Math.max(0, co - fo) * 0.3);
+      // …and the VERGE, from the racing surface's own edge out to the lane's
+      // inner edge, where the platform and the wall stand. That strip was bare
+      // terrain — the green band between the road and the pit wall in every
+      // shot of the entrance and the exit — because the ribbon started at
+      // `fastIn`. Paved, the complex reads as one surface from the white line
+      // to the garage line.
+      return [
+        [0, TARMAC],
+        [fi, innerCol], [fi + edge, TARMAC], [Math.max(fi + edge, fo - lw), white], [fo, TARMAC],
+        [Math.max(fo, co - lw), white], [co, WORK], [Math.max(co, wo - lw), white], [wo, APRON],
+        [apron, null],
+      ];
+    };
+    const at = (k, lat) => laneVert(track, k, lat, 0);
+    // World-right ordered laterals so the winding matches the road on either side.
+    const lat = (k, off) => sd * (hw[k] + off);
+    for (let k = 0; k < n; k++) {
+      const k2 = (k + 1) % n;
+      const a = bands(k), b = bands(k2);
+      if (!a || !b) continue;
+      const ua = upOf(track, k), ub = upOf(track, k2);
+      for (let i = 0; i + 1 < a.length; i++) {
+        const c = a[i][1];
+        if (!c) continue;
+        if (Math.abs(a[i + 1][0] - a[i][0]) < 0.02 && Math.abs(b[i + 1][0] - b[i][0]) < 0.02) continue;
+        const l0 = sd > 0 ? lat(k, a[i][0]) : lat(k, a[i + 1][0]);
+        const l1 = sd > 0 ? lat(k, a[i + 1][0]) : lat(k, a[i][0]);
+        const m0 = sd > 0 ? lat(k2, b[i][0]) : lat(k2, b[i + 1][0]);
+        const m1 = sd > 0 ? lat(k2, b[i + 1][0]) : lat(k2, b[i][0]);
+        const base = out.pos.length / 3;
+        const vert = (P, u) => {
+          out.pos.push(P[0], P[1], P[2]);
+          out.nrm.push(u[0], u[1], u[2]);
+          out.col.push(c[0], c[1], c[2]);
+        };
+        vert(at(k, l0), ua); vert(at(k, l1), ua);
+        vert(at(k2, m0), ub); vert(at(k2, m1), ub);
+        out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      }
+    }
+    return buildPitMarks(track, out);
+  }
+
+  // THE LANE'S PAINT, appended after the ribbon it lies on (buildPitLane calls
+  // it last; exported so tests/unit/pit-complex.test.mjs can measure it against
+  // the ribbon alone). Every quad goes through pitPaint(), PIT_PAINT above it.
+  function buildPitMarks(track, out) {
+    const p = track.pit;
+    if (!p) return out;
+    const { n, total: L } = track, sd = p.side, o = p.off;
+    const white = track.def.palette.line || [0.95, 0.95, 0.98];
+    // THE ENTRY LINE AND THE EXIT LINE: a continuous 10 cm line across the
+    // whole lane where the limiter comes on and where it goes off (FIM §4.11.10.1/.2).
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    for (const s of [p.sIn, p.sOut]) {
+      const k = ((Math.round((s / L) * n) % n) + n) % n;
+      if (!(p.w[k] > 0.5)) continue;
+      TrackSpline.sample(track, s, smp);
+      const uu = TrackGeom.norm(cross(TrackGeom.norm(smp.r), TrackGeom.norm(smp.t)));
+      const x0 = sd * (smp.hw + o.fastIn * p.v[k] + 0.05), x1 = sd * (smp.hw + o.workOut * p.w[k] - 0.05);
+      pitPaint(track, out, s, -0.05, 0.05, x0, x1, x0, x1, white, uu);
+    }
+    // ARROWS down the entry road: a white chevron every 12 m on the peel's
+    // own centre, pointing into the lane — the paint a driver reads before
+    // any board. Skipped while the road is still a sliver (w < 0.25).
+    for (let d = 10; d < p.entryRoadM - 4; d += 12) {
+      const s = ((p.sA + d) % L + L) % L, k = ((Math.round((s / L) * n) % n) + n) % n;
+      if (!(p.w[k] > 0.25)) continue;
+      TrackSpline.sample(track, s, smp);
+      const uu = TrackGeom.norm(cross(TrackGeom.norm(smp.r), TrackGeom.norm(smp.t)));
+      const xc = sd * (smp.hw + (o.fastIn * p.v[k] + o.workOut * p.w[k]) * 0.5);
+      pitPaint(track, out, s, -1.2, 0.5, xc - 0.16, xc + 0.16, xc - 0.16, xc + 0.16, white, uu);   // the shaft
+      pitPaint(track, out, s, 0.3, 1.4, xc - 0.7, xc + 0.7, xc, xc, white, uu);                     // the head (a triangle)
+    }
+    return out;
+  }
+
+  /** The entry hatch as pure numbers, one stripe per entry: `s` its arc
+   *  position, `x0..x1` its lateral span measured from the centreline on the
+   *  pit side (inside the road edge, never over the peel line), `w` its width.
+   *  From the road's start to where the wall's fade begins (`v` reaching 0.5),
+   *  one stripe every 2 m, 1.2 m in from the edge. Tested on its own
+   *  (tests/unit/pit-complex.test.mjs) because the painted buffer cannot
+   *  tell a stripe from a chevron. */
+  function pitHatch(track) {
+    const p = track && track.pit, out = [];
+    if (!p || p.painted || !(p.entryRoadM > 0)) return out;
+    const L = track.total, n = track.n, W = 1.2;
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    for (let d = 2; d < p.entryRoadM; d += 2) {
+      const s = ((p.sA + d) % L + L) % L, k = ((Math.round((s / L) * n) % n) + n) % n;
+      if (p.v[k] >= 0.5) break;
+      TrackSpline.sample(track, s, smp);
+      out.push({ s, x0: smp.hw - W, x1: smp.hw - 0.05, w: W });
+    }
+    return out;
+  }
+
+  /** THE HATCH, into the ROAD buffer: the FIA no-go fill on the road side of
+   *  the peel line, a 45° white stripe every 2 m over the entry road's first
+   *  stretch (pitHatch above). In the road's own buffer, not the decal's: a
+   *  stripe at PIT_LIFT in the decal mesh was invisible under SwiftShader and
+   *  visible only 15 cm up. The road draws with NO depth bias (js/game.js
+   *  _wmRoadDryD — a road pulled toward the camera hid the cars standing on
+   *  it), so only geometry keeps this above the asphalt: 2 cm over the road's
+   *  +0.02. At 1 cm a spline sample's tangent left it 5.1 mm (Spa) to 9.1 mm
+   *  (Monza) over the node-built road — 15+ mm now, measured in
+   *  tests/unit/pit-complex.test.mjs. `trk` carries hw = 0 so the
+   *  fragment-side marking SDF (roadMarkings) leaves it alone, as it does
+   *  the kerbs. Paint, not prims: nothing for the clip audit, nothing to hit. */
+  function buildPitHatch(track, out) {
+    const hatch = pitHatch(track);
+    if (!hatch.length) return out;
+    const { n, total: L } = track, sd = track.pit.side;
+    const white = track.def.palette.line || [0.95, 0.95, 0.98];
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    for (const h of hatch) {
+      const k = ((Math.round((h.s / L) * n) % n) + n) % n;
+      TrackSpline.sample(track, h.s, smp);
+      const rr = TrackGeom.norm(smp.r), tt = TrackGeom.norm(smp.t), uu = TrackGeom.norm(cross(rr, tt));
+      const P = (lon, x) => {
+        const by = bankOffsetAt(track, k, x) + 0.04;   // the road is at +0.02 (buildRoad)
+        return [smp.p[0] + rr[0] * x + tt[0] * lon + uu[0] * by,
+                smp.p[1] + rr[1] * x + tt[1] * lon + uu[1] * by,
+                smp.p[2] + rr[2] * x + tt[2] * lon + uu[2] * by, x];
+      };
+      // Laterals SORTED (lo/hi) like every road quad, so the winding faces up
+      // on either pit side; a parallelogram sheared one hatch width along.
+      const xa = Math.min(sd * h.x0, sd * h.x1), xb = Math.max(sd * h.x0, sd * h.x1);
+      const base = out.pos.length / 3;
+      for (const [lon, x] of [[-h.w, xa], [0, xb], [-h.w + 0.16, xa], [0.16, xb]]) {
+        const Q = P(lon, x);
+        out.pos.push(Q[0], Q[1], Q[2]); out.nrm.push(uu[0], uu[1], uu[2]); out.col.push(white[0], white[1], white[2]);
+        if (out.mat) out.mat.push(TrackGeom.MAT.FLAT);
+        if (out.trk) out.trk.push(h.s, x, 0);
+      }
+      out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+    }
+    return out;
+  }
+
+  // THE PAINTED BOXES, one per row entry, at the positions the model laid out —
+  // the same `row.boxes[i].s` js/race/pit-lane.js stops a car at and
+  // js/track/scenery/pits.js puts a garage door behind. Painted in the WORKING
+  // lane, 8 m long (the FIA grid slot; a real box's frontage), open at the rear
+  // like the grid, with the team's colour on the front line and along the
+  // garage edge. Colours are the grid's own (js/data/teams.js via TrackPit.row).
+  function buildPitBoxes(track, out) {
+    const p = track.pit;
+    if (!p || !p.row) return out;
+    const L = track.total, n = track.n, sd = p.side, o = p.off;
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    const white = track.def.palette.line || [0.95, 0.95, 0.98];
+    const painted = [];
+    for (const box of p.row.boxes) {
+      const s = box.s;
+      const k = ((Math.round((s / L) * n) % n) + n) % n;
+      if (!(p.w[k] > 0.98)) continue;
+      TrackSpline.sample(track, s, smp);
+      const uu = TrackGeom.norm(cross(TrackGeom.norm(smp.r), TrackGeom.norm(smp.t)));
+      // Each strip [lon0, lon1] x [lat0, lat1] in the box's own frame, laid on
+      // the lane by pitPaint (on it, above it, facing up).
+      const strip = (lon0, lon1, lat0, lat1, col) => pitPaint(track, out, s, lon0, lon1, lat0, lat1, lat0, lat1, col, uu);
+      // Bay circuits paint the working lane; a bay-less complex (jeddah, jerez,
+      // mont_tremblant) has none — the stop IS in the fast lane (TrackPit.at()
+      // workCentre), so the box is painted across it, not on the apron past the wall.
+      const lane = p.hasBays === false;
+      const wi = sd * (smp.hw + (lane ? o.fastIn * p.v[k] + 0.15 : o.corrOut + 0.3));
+      const wo = sd * (smp.hw + (lane ? o.fastOut * p.w[k] - 0.15 : o.workOut - 0.3));
+      const x0 = Math.min(wi, wo), x1 = Math.max(wi, wo);
+      const boxLen = p.row.boxLen, paint = 0.16;
+      const outer = sd > 0 ? x1 : x0;
+      const outerIn = sd > 0 ? x1 - 0.28 : x0 + 0.28;
+      strip(boxLen / 2 - paint, boxLen / 2, x0, x1, white);                     // front line
+      strip(-boxLen / 2, boxLen / 2, x0, x0 + paint, white);                    // side lines
+      strip(-boxLen / 2, boxLen / 2, x1 - paint, x1, white);
+      strip(boxLen / 2 + 0.25, boxLen / 2 + 0.55, x0, x1, box.col);             // the team's bar ahead
+      strip(-boxLen / 2, boxLen / 2, Math.min(outer, outerIn), Math.max(outer, outerIn), box.col);   // …and along the garage edge
+      painted.push(s);
+    }
+    p.row.painted = painted;
+    return out;
+  }
+
+  // Kept for the export's shape. The garages are js/track/scenery/pits.js's,
+  // built into the props mesh from the same row the boxes are painted from.
+  function buildPitGarages(track, out) {
+    return out;
+  }
+
+  // buildKerbs stays private — it is only ever appended to buildRoad's buffers.
+  return { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
+           nodeGrid, buildRoad, buildTerrain, buildTerrainSteps, buildFloor, gridSlot, buildGridBoxes,
+           buildPitLane, buildPitMarks, buildPitBoxes, buildPitGarages, pitHatch, buildPitHatch, GRID_SLOTS };
+})();
+Object.freeze(TrackMesh);

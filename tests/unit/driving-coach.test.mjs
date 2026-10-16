@@ -1,0 +1,572 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
+
+function fixture({ realInsights = false } = {}) {
+  const nodes = new Map(['pm-coach-status', 'pm-coach-tip', 'pm-coach-summary', 'pm-drill-status', 'pm-lap-report', 'pm-practice-state', 'pm-driving-trace'].map(id => [id, { textContent: '' }]));
+  // The coach SHIPS OFF (js/data/settings-defaults.js). This fake store only
+  // knows the call-site fallback, so seed OFF explicitly — these tests start
+  // from a coach the player has not enabled.
+  const saved = new Map([['drivingCoach', false]]), announcements = [];
+  // Throttle held: the default car is driving, not coasting (a coasting tip is its own test).
+  const c = { speed: 60, lapTime: 0, brakeDemand: 0, throttleDemand: 1 };
+  // A 1000 m lap with curated apexes at 100 m, 500 m and 980 m — the last one
+  // sits just before the line so the wrap is exercised.
+  const G = { player: c, track: { total: 1000, def: { turns: [0.10, 0.50, 0.98] } },
+    state: 'race', raceT: 0, paused: false, announceBusy: false,
+    vTop: () => 100, trackWetness: () => 0, cautionInfo: () => ({ level: 0 }), cautionLevel: () => 0,
+    fmtTime: t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); },
+    store: { get: (key, fallback) => saved.get(key) ?? fallback, set: (key, value) => saved.set(key, value) },
+    // practice, not timeTrial, is what gates checkpoints and rewind now — a
+    // Time Trial is simply always practice (G.practice derives it in game.js).
+    // Both are stubbed: the coach reads `practice` for the gate and `timeTrial`
+    // for the copy that distinguishes an armable session from a TT.
+    $: id => nodes.get(id) || null, timeTrial: true, practice: true, daily: { isActive: () => false }, netPlay: { active: () => false },
+    records: { invalidate() {}, config: () => ({}) }, tyres: { on: () => false },
+    // announce() returns the banner's VERDICT: false when the line never
+    // reaches the screen (a cinematic camera drops "coach"). G.heard is the
+    // knob a test turns to stand in for that camera.
+    pits: { ownedTyres: () => [], choices: () => [], estimate: () => null }, heard: true,
+    announce: (...args) => { announcements.push(args); return G.heard; } };
+  const ins = { update() {}, reset() {}, summary: () => ({}), journal: () => [], forecast: () => null, network: () => null,
+    startDrill: () => true, attempts: () => [], mastery: () => null };
+  const ctx = vm.createContext({
+    RaceInsights: { create: () => ins, DRILLS: { free: 'Free practice', sector: 'Finish this sector cleanly',
+      corner: 'Drive through the next corner', braking: 'Brake to a controlled stop', trail: 'Release the brake into a turn',
+      slalom: 'Six clean direction changes' } },
+    // A reference lap of 60 s that reaches each apex at an even 20 s: the
+    // arithmetic below is then readable by eye.
+    SettingRow: { paint() {}, disable() {}, wire() {} },
+    Ghost: { timeAt: s => ({ 100: 0, 500: 20, 980: 40 })[Math.round(s)] ?? null, bestTime: () => 60 },
+    IncidentSim: { reset() {} }, DebrisWorld: { reset() {} },
+    PhysicsConsts: { BRAKE: 22, REVISION: 'test' }
+  });
+  if (realInsights) vm.runInContext(readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), ctx);
+  vm.runInContext(readFileSync(new URL('../../js/race/driving-coach.js', import.meta.url), 'utf8'), ctx);
+  const coach = vm.runInContext('DrivingCoach', ctx).create(G);
+  const tick = (seconds, fields = {}) => {
+    Object.assign(c, fields);
+    for (let t = 0; t < seconds - 1e-9; t += .05) { G.raceT += .05; coach.update(.05); }
+  };
+  const enable = () => coach.toggle();
+  return { coach, G, c, ctx, ins: coach.insights, nodes, saved, announcements, tick, enable, drills: vm.runInContext('RaceInsights.DRILLS', ctx) };
+}
+const braking = { brakeDemand: 1, throttleDemand: 1, axEstSm: -21.7, axFrac: .64, steerAngle: .1 };   // full brake, dry: the measured plateau
+const rear = { rearUtil: .97, frontUtil: .6, slipRear: .12 };
+
+test('checkpoint retry clears an armed finish countdown before racing resumes', () => {
+  const { coach, G, c, ctx } = fixture();
+  Object.assign(c, { isPlayer: true, finished: false, retired: false, lap: 2, s: 800, prog: 1800 });
+  G.cars = [c]; G.raceT = 100; G.resultT = 0;
+  assert.equal(coach.mark(), true);
+  Object.assign(c, { finished: true, finishT: 110, lap: 3, s: 5, prog: 2005 });
+  G.raceT = 110; G.resultT = 2.1;
+  assert.equal(coach.retry(), true);
+  assert.equal(c.finished, false);
+  assert.equal(G.raceT, 100);
+  assert.equal(G.resultT, 0);
+  vm.runInContext(readFileSync(new URL('../../js/race/race-control.js', import.meta.url), 'utf8'), ctx);
+  const control = vm.runInContext('RaceControl', ctx);
+  assert.equal(control.finishDelay(G.cars, G.raceT, 2, 0), 0, 'restored field does not rearm results');
+  const game = readFileSync(new URL('../../js/game' + '.js', import.meta.url), 'utf8');
+  const binding = game.match(/get resultT\(\) \{[^\n]+/)[0];
+  const clock = vm.runInNewContext('let resultT = 2.1; const G = {' + binding + '}; G.resultT = 0; resultT;');
+  assert.equal(clock, 0, 'the facade clears the actual game countdown, not a detached property');
+});
+
+test('trace export attaches its anchor so the native document download listener sees the click', async () => {
+  const { ctx, nodes } = fixture();
+  let attached = false, clicked = false, exported;
+  const anchor = { click() { assert.equal(attached, true); clicked = true; }, remove() { attached = false; } };
+  Object.assign(ctx, {
+    Blob, URL: { createObjectURL(blob) { exported = blob; return 'blob:trace'; }, revokeObjectURL() {} },
+    setTimeout() {}, document: { body: { appendChild(a) { assert.equal(a, anchor); attached = true; } }, createElement: () => anchor },
+  });
+  nodes.get('pm-driving-trace').onclick();
+  assert.equal(clicked, true);
+  assert.equal(attached, false);
+  assert.equal(anchor.download, 'apex26-driving-trace.json');
+  assert.equal(JSON.parse(await exported.text()).physics, 'test');
+});
+
+test('native trace export awaits sharing and reports failure without opening an anchor fallback', async () => {
+  for (const cancelled of [false, true]) {
+    const { ctx, nodes, announcements } = fixture();
+    let reject, saved, calls = 0;
+    const held = new Promise((resolve, fail) => { reject = fail; });
+    Object.assign(ctx, { Blob, NativeDownload: {
+      viable: () => true,
+      saveBlob: (blob, name) => { calls++; saved = { blob, name }; return calls === 1 ? held : Promise.resolve(); },
+      isCancelled: (e) => e.message === 'Share canceled',
+    } });
+    nodes.get('pm-driving-trace').onclick();
+    nodes.get('pm-driving-trace').onclick();
+    assert.equal(calls, 1, 'a second tap cannot open an overlapping native share request');
+    assert.equal(saved.name, 'apex26-driving-trace.json');
+    assert.equal(JSON.parse(await saved.blob.text()).physics, 'test');
+    assert.equal(announcements.length, 0);
+    reject(new Error(cancelled ? 'Share canceled' : 'disk full'));
+    await new Promise(setImmediate);
+    assert.equal(announcements.at(-1)[0], cancelled ? 'TRACE EXPORT CANCELLED' : 'TRACE EXPORT FAILED');
+    nodes.get('pm-driving-trace').onclick();
+    await new Promise(setImmediate);
+    assert.equal(calls, 2, 'the guard releases after cancellation or failure');
+  }
+});
+
+test('every real practice drill has readable help and canonical goal state survives a session reset', () => {
+  const { coach, nodes, drills } = fixture({ realInsights: true });
+  assert.equal(coach.practiceGoal(), 'free');
+  for (const id of Object.keys(drills)) {
+    assert.equal(coach.setPracticeGoal(id), true, id);
+    assert.equal(coach.practiceGoal(), id);
+    const help = nodes.get('pm-drill-status').textContent;
+    assert.ok(help.length > 20, id + ': missing instructions');
+    assert.doesNotMatch(help, /undefined|null/, id);
+  }
+  const selected = coach.practiceGoal(), help = nodes.get('pm-drill-status').textContent;
+  assert.equal(coach.setPracticeGoal('missing'), false);
+  assert.equal(coach.practiceGoal(), selected);
+  assert.equal(nodes.get('pm-drill-status').textContent, help);
+  coach.reset();
+  assert.equal(coach.practiceGoal(), selected);
+});
+
+test('the practice arming method refuses career and season scoring even when called directly', () => {
+  const { coach, G, announcements } = fixture();
+  G.timeTrial = false; G.practice = false;
+  let invalidated = 0; G.records.invalidate = () => invalidated++;
+  for (const flow of ['career', 'season']) {
+    G.flow = flow;
+    assert.equal(coach.canArm(), false);
+    assert.equal(coach.armPractice(), false);
+    assert.equal(G.practice, false);
+  }
+  assert.equal(invalidated, 0);
+  assert.equal(announcements.length, 0);
+  G.flow = 'gp';
+  assert.equal(coach.canArm(), true);
+  assert.equal(coach.armPractice(), true);
+  assert.equal(G.practice, true);
+  assert.equal(invalidated, 1);
+});
+
+test('a coach switched off paints as off, saves the toggle, and paints understandable empty feedback', () => {
+  const { coach, saved, nodes, tick } = fixture();
+  tick(2, braking); assert.equal(coach.feedback().total, 0);
+  coach.paint(); assert.match(nodes.get('pm-coach-status').textContent, /Coach off/);
+  assert.equal(nodes.get('pm-coach-tip').textContent, 'Your next tip will appear here after you drive.');
+  coach.toggle(); assert.equal(saved.get('drivingCoach'), true);
+  assert.equal(coach.status().coach.state, 'watching');
+  assert.match(nodes.get('pm-coach-summary').textContent, /not a driving score/);
+});
+
+test('six recommendations use actual inputs and axle slip without changing car state', () => {
+  const { coach, c } = fixture();
+  const advice = fields => coach.advice({ ...c, ...fields });
+  assert.match(advice({ offroad: true, speed: 1 }), /REJOIN GENTLY/);
+  assert.match(advice(braking), /EASE THE BRAKE AS YOU TURN/);
+  assert.match(advice({ ...rear, throttleDemand: 1 }), /EASE THE THROTTLE/);
+  assert.match(advice({ ...rear, brakeDemand: 1, throttleDemand: 1 }), /EASE THE BRAKE GENTLY/);
+  assert.match(advice({ ...rear, throttleDemand: 0 }), /KEEP INPUTS SMOOTH/);
+  assert.match(advice({ frontUtil: .97, slipFront: .12, steerAngle: .1 }), /UNWIND/);
+  assert.equal(advice({ brakeDemand: 1, axEstSm: -8, axFrac: .24, steerAngle: .1 }), '', 'a trailed brake at a third of the ceiling is the technique, not the mistake');
+  assert.equal(advice({ brakeDemand: 0, throttleDemand: .4, axEstSm: -21.7, axFrac: .64, steerAngle: .1 }), '', 'deceleration without the pedal is not a braking tip');
+  assert.ok(coach.status().brakeUse >= 0 && coach.status().brakeUse <= 1);
+  assert.equal(advice({ rearUtil: .99, frontUtil: .6, throttleDemand: 1 }), '', 'load alone does not establish a slide');
+  assert.equal(advice({ throttleDemand: 1, brakeDemand: 1 }), '', 'normal auto-throttle with braking is not a mistake');
+  assert.equal(advice({ ...rear, throttleDemand: 1, speed: 4 }), '');
+  assert.equal(advice({ offroad: true, speed: -2 }), '');
+  assert.deepEqual(c, { speed: 60, lapTime: 0, brakeDemand: 0, throttleDemand: 1 });
+});
+
+test('coasting and X-mode tips read the pedals, the flaps and the cornering load, and coasting needs sustained evidence', () => {
+  const { coach, c, tick, enable, announcements } = fixture(); enable();
+  const advice = fields => coach.advice({ ...c, ...fields });
+  assert.match(advice({ throttleDemand: 0 }), /COASTING/);
+  assert.equal(advice({ throttleDemand: .1 }), '', 'a breath of throttle is driving');
+  assert.equal(advice({ throttleDemand: 0, brakeDemand: .1 }), '');
+  assert.equal(advice({ throttleDemand: 0, speed: 30 }), '', 'a slow car is not coasting');
+  assert.match(advice({ aeroX: 1, lateralAccel: 8 }), /CLOSE THE WING/);
+  assert.equal(advice({ aeroX: 1, lateralAccel: 2 }), '', 'open flaps on a straight are the point of X-mode');
+  assert.equal(advice({ aeroX: .2, lateralAccel: 8 }), '', 'flaps closing already');
+  assert.equal(advice({ aeroX: 1, lateralAccel: 8, speed: 30 }), '');
+  tick(1, { throttleDemand: 0 }); assert.equal(announcements.length, 0, 'a one-second lift is a corner entry');
+  tick(.3); assert.equal(announcements.length, 1); assert.equal(coach.feedback().latest.id, 'coasting');
+});
+
+test('a tip the banner never showed is not recorded as advice given', () => {
+  // The cinematic cameras silence "coach" so a film shot is not captioned. The
+  // coach's own log, its 30 s repeat block and the post-session feedback all
+  // claim to describe what the player was TOLD, so a silenced tip must leave
+  // none of them — and must still be on offer once the camera comes back.
+  const { coach, G, tick, enable, announcements } = fixture(); enable();
+  G.heard = false;
+  tick(1.4, { throttleDemand: 0 });
+  assert.ok(announcements.length > 1, 'the coach stopped offering the tip, not just saying it');
+  assert.equal(coach.feedback().latest, null, 'a tip nobody saw was logged as delivered');
+  G.heard = true;
+  const before = announcements.length;
+  tick(.05);
+  assert.equal(announcements.length, before + 1, 'a held candidate had to re-serve its whole dwell');
+  assert.equal(coach.feedback().latest.id, 'coasting');
+});
+
+test('a track-limits warning is coached at once, but not the count the coach first saw nor the reset after a penalty', () => {
+  const { coach, c, G, tick, enable, announcements } = fixture(); enable();
+  c.cutWarn = 2; tick(.5); assert.equal(announcements.length, 0, 'an existing count is history, not a new warning');
+  c.cutWarn = 3; tick(.05); assert.equal(announcements.length, 1); assert.equal(coach.feedback().latest.id, 'limits');
+  assert.match(announcements[0][0], /TRACK LIMITS/);
+  tick(9.5); c.cutWarn = 0; tick(.5); assert.equal(announcements.length, 1, 'the game announces the penalty that reset the ladder');
+  tick(21);
+  G.announceBusy = true; c.cutWarn = 1; tick(2); assert.equal(announcements.length, 1, 'held while a race message shows');
+  G.announceBusy = false; tick(.1); assert.equal(announcements.length, 2);
+  tick(31);
+  // The game's own TRACK LIMITS n/4 card holds the channel ANN_MIN_S (3 s)
+  // from the same step: a window that ran under it never reached the player.
+  G.announceBusy = true; c.cutWarn = 2; tick(3.2); G.announceBusy = false; tick(.1);
+  assert.equal(announcements.length, 3, 'the tip waits out the card that announced the warning');
+  tick(31);
+  G.announceBusy = true; c.cutWarn = 3; tick(12.5); G.announceBusy = false; tick(.5);
+  assert.equal(announcements.length, 3, 'a warning a long hold swallowed is stale');
+  assert.equal(coach.feedback().counts.find(r => r.id === 'limits').count, 3);
+});
+
+test('a tip records the curated turn it happened at, wrapping across the start line', () => {
+  const { coach, c, G, tick, enable } = fixture(); enable();
+  c.s = 100; tick(.5, braking);                       // the apex itself
+  assert.equal(coach.feedback().latest.turn, 1);
+  c.s = 975; tick(31);                                // 5 m before Turn 3's apex, and past the cooldown
+  assert.equal(coach.feedback().latest.turn, 3);
+  c.s = 5; tick(31);                                  // 25 m PAST that apex, over the line — still Turn 3
+  assert.equal(coach.feedback().latest.turn, 3);
+  c.s = 300; tick(31);                                // mid-straight: 200 m from the nearest apex, outside the 150 m window
+  assert.equal(coach.feedback().latest.turn, null, 'a tip on a straight names no turn');
+  assert.equal(JSON.stringify(coach.feedback().turns.map(r => [r.turn, r.count])), '[[3,2],[1,1]]');
+  const view = coach.feedback(); view.turns[0].count = 99;
+  assert.equal(coach.feedback().turns[0].count, 2, 'the review is a copy');
+  G.track = null; c.s = 100; tick(31);
+  assert.equal(coach.feedback().latest.turn, null, 'a circuit with no curated turns simply has no location');
+});
+
+test('the turn window is a distance, not a share of the lap, so a long circuit keeps its straights', () => {
+  const { coach, c, G, tick, enable } = fixture(); enable();
+  G.track = { total: 10000, def: { turns: [0.5] } };   // a 10 km lap with one apex, at 5000 m
+  c.s = 5100; tick(.5, braking);
+  assert.equal(coach.feedback().latest.turn, 1, '100 m past the apex is that turn on any circuit');
+  c.s = 5300; tick(31);
+  assert.equal(coach.feedback().latest.turn, null, '300 m out is 3% of this lap — a fraction window would have called it Turn 1');
+});
+
+test('a repeated tip names the practice goal that drills it, and the review reads as advice', () => {
+  const { coach, c, tick, enable, nodes } = fixture(); enable();
+  c.s = 100;
+  tick(.5, braking); assert.equal(coach.feedback().suggest, null, 'one tip is not a pattern');
+  tick(31); assert.equal(coach.feedback().suggest, null);
+  tick(31);
+  const suggest = coach.feedback().suggest;
+  assert.equal(suggest.id, 'trail'); assert.equal(suggest.mode, 'trail');
+  assert.equal(suggest.goal, 'Release the brake into a turn');
+  assert.equal(suggest.goalLabel, 'TRAIL BRAKING', 'the review names the goal the way the picker does');
+  assert.equal(suggest.count, 3);
+  coach.paint();
+  const summary = nodes.get('pm-coach-summary').textContent;
+  assert.match(summary, /3 tips recorded this session/);
+  assert.match(summary, /Most at Turn 1 \(3\)/);
+  assert.match(summary, /Braking into turns came up 3 times\. The TRAIL BRAKING practice goal drills it\./);
+  assert.match(summary, /not a driving score/);
+  coach.reset();
+  assert.equal(coach.feedback().suggest, null); assert.equal(coach.feedback().turns.length, 0);
+});
+
+test('counts rank the most repeated tip first so the panel does not ask the driver to compare numbers', () => {
+  const { coach, c, tick, enable } = fixture(); enable();
+  c.s = 300;
+  tick(.5, braking); tick(31); tick(31);                                  // three trail tips
+  tick(10, { ...rear, brakeDemand: 0, throttleDemand: 1, axEstSm: 0 });   // …and one on power, after the 8 s quiet window
+  const counts = coach.feedback().counts;
+  assert.equal(JSON.stringify(counts.map(r => [r.id, r.count])), '[["trail",3],["power",1]]');
+});
+
+// The reference lap reaches T1 at 0 s, T2 at 20 s, T3 at 40 s and the line at
+// 60 s — so every ghost segment is worth exactly 20 s and the arithmetic reads
+// by eye. `at` drives the car to an apex and returns the segment just closed.
+function lapDriver({ c, G, tick }) {
+  return (s, hold) => { if (hold) tick(hold); c.s = s; tick(.05); return G.raceT; };
+}
+
+test('the lap report differences your time against the reference at each apex, and names the worst corner', () => {
+  const { coach, c, G, tick, enable, announcements } = fixture(); enable();
+  const at = lapDriver({ c, G, tick });
+  c.s = 0; tick(.05);
+  at(105);              // T1: the anchor. Five metres past the apex, where a frame actually lands
+  at(505, 21);          // T1 -> T2 took ~21s against the reference 20s
+  at(985, 20);          // T2 -> T3 on the reference's pace
+  at(105, 23);          // T3 -> T1, across the start line, ~3s lost — and this closes the lap
+  const report = coach.status().lapReport;
+  assert.ok(report, 'a lap closed');
+  const by = Object.fromEntries(report.segments.map(r => [r.turn, r.lost]));
+  assert.ok(Math.abs(by[1] - 1) < .2, `T1 segment ${by[1]} ~ 1s`);
+  assert.ok(Math.abs(by[2]) < .2, `T2 segment ${by[2]} ~ 0s`);
+  assert.ok(Math.abs(by[3] - 3) < .2, `T3 segment ${by[3]} ~ 3s — the segment spanning the line is measured, not dropped`);
+  assert.equal(report.worst.turn, 3, 'the worst corner is named');
+  assert.ok(Math.abs(report.total - 4) < .3, `lap total ${report.total} ~ 4s`);
+  assert.equal(report.segments[0].turn, 3, 'segments are ranked worst first');
+  assert.match(announcements.at(-1)[0], /^TURN 3 COST 3\.\d\dS$/);
+  assert.equal(announcements.at(-1)[2], 'coach', 'the lap report is an advisory, not a race message');
+});
+
+test('a lap report is a copy, clears on reset, and needs a reference lap to exist at all', () => {
+  const { coach, c, G, tick, enable, nodes } = fixture(); enable();
+  const at = lapDriver({ c, G, tick });
+  coach.paint();
+  assert.match(nodes.get('pm-lap-report').textContent, /saved best on this circuit/);
+  c.s = 0; tick(.05); at(105); at(505, 21); at(985, 20); at(105, 23);
+  coach.paint();
+  const text = nodes.get('pm-lap-report').textContent;
+  assert.match(text, /Last lap: 4\.\d\ds slower than your best/);
+  assert.match(text, /Turn 3 \+3\.\d\ds, Turn 1 \+1\.\d\ds/, 'two corners, worst first');
+  assert.match(text, /exit speed is paid for at the apex/);
+  const view = coach.status().lapReport; view.worst.turn = 99;
+  assert.equal(coach.status().lapReport.worst.turn, 3, 'the report handed out is a copy');
+  coach.reset();
+  assert.equal(coach.status().lapReport, null);
+});
+
+test('a teleport cannot invent a segment, and a faster lap reads as faster', () => {
+  const { coach, c, G, tick, enable, announcements } = fixture(); enable();
+  const at = lapDriver({ c, G, tick });
+  c.s = 0; tick(.05); at(105);
+  tick(5); c.s = 905; tick(.05);        // a practice retry: 800 m of arc in one frame
+  at(105, 21);
+  assert.equal(coach.status().lapReport, null, 'the jumped lap produced no report');
+  // …and the next clean lap reports normally, faster than the reference this time.
+  at(505, 19); at(985, 19); at(105, 19);
+  const report = coach.status().lapReport;
+  assert.ok(report, 'the lap after the teleport is measured');
+  assert.ok(report.total < 0, `total ${report.total} is a gain`);
+  assert.equal(announcements.filter(a => /COST/.test(a[0])).length, 0, 'nothing is announced when no corner cost 0.2s');
+});
+
+test('only a Time Trial lap is measured, and a caution lap is dropped rather than charged to a corner', () => {
+  // A race measures against whatever ghost the last Time Trial loaded.
+  { const { coach, c, G, tick, enable } = fixture(); enable(); G.timeTrial = false;
+    const at = lapDriver({ c, G, tick });
+    c.s = 0; tick(.05); at(105); at(505, 21); at(985, 20); at(105, 23);
+    assert.equal(coach.status().lapReport, null, 'a race lap was measured against a Time Trial ghost'); }
+  // A safety car mid-lap: its 20 s are the neutralisation, not turn 2.
+  { const { coach, c, G, tick, enable, announcements } = fixture(); enable();
+    const at = lapDriver({ c, G, tick });
+    c.s = 0; tick(.05); at(105); at(505, 21);
+    G.cautionLevel = () => 3; tick(.05); G.cautionLevel = () => 0;
+    at(985, 40); at(105, 23);
+    assert.equal(coach.status().lapReport, null, 'the caution lap produced a report');
+    assert.equal(announcements.filter(a => /COST/.test(a[0])).length, 0);
+    at(505, 20); at(985, 20); at(105, 20);
+    assert.ok(coach.status().lapReport, 'the next clean lap is measured'); }
+});
+
+test('checkpoint messages name the practice goal, and the pause menu lists attempts and the saved best', () => {
+  const { coach, ins, announcements, nodes } = fixture();
+  assert.equal(coach.mark(), true); assert.match(announcements.at(-1)[0], /^PRACTICE: FREE PRACTICE — LAPS NOT SAVED$/);
+  assert.equal(coach.retry(), true); assert.match(announcements.at(-1)[0], /^TRY AGAIN: FREE PRACTICE$/);
+  ins.attempts = () => [{ clean: false, score: 3, reason: 'left the track' }, { clean: true, score: 2.5 }, { clean: true, score: 2.1 }];
+  ins.mastery = () => ({ best: 1.9, completed: 4 });
+  ins.summary = () => ({ lastDrill: { mode: 'free', clean: false, reason: 'left the track' } });
+  coach.paint();
+  assert.match(nodes.get('pm-drill-status').textContent, /retry suggested · left the track\. This session: 3 attempts, 2 clean, best 2\.1s\. Saved best: 1\.9s over 4 clean runs\.$/);
+  ins.attempts = () => []; ins.mastery = () => null; ins.summary = () => ({ lastDrill: null });
+  coach.paint();
+  assert.equal(nodes.get('pm-drill-status').textContent, 'Repeat any section at your own pace.');
+});
+
+test('retry puts the pit plan back: replan() mutates it in place, so it rides in the checkpoint with tyre and pitNext', () => {
+  const { coach, G, c } = fixture();
+  G.cars = [c];
+  c.pitPlan = { seq: ['medium', 'hard'], lapsAt: [10], stops: 1, loadK: 1 };
+  assert.equal(coach.mark(), true);
+  // pit-lane.js replan(): plan.seq / lapsAt / stops / loadK are reassigned on the live object.
+  c.pitPlan.seq = ['medium', 'soft', 'hard']; c.pitPlan.lapsAt = [4, 9]; c.pitPlan.stops = 2; c.pitPlan.loadK = 2;
+  assert.equal(coach.retry(), true);
+  assert.equal(JSON.stringify(c.pitPlan), JSON.stringify({ seq: ['medium', 'hard'], lapsAt: [10], stops: 1, loadK: 1 }), 'the plan the checkpoint saw');
+  c.pitPlan.lapsAt[0] = 3;   // a second attempt mutates the restored plan: the checkpoint must not alias it
+  assert.equal(coach.retry(), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.pitPlan.lapsAt)), [10], 'the saved plan is a copy');
+  c.pitPlan = null;
+  assert.equal(coach.retry(), true);
+  assert.equal(JSON.stringify(c.pitPlan), JSON.stringify({ seq: ['medium', 'hard'], lapsAt: [10], stops: 1, loadK: 1 }));
+});
+
+test('practice guidance says retry and rewind restore the grid and race clock', () => {
+  const { coach, nodes } = fixture();
+  assert.equal(coach.mark(), true);
+  coach.paint();
+  const live = nodes.get('pm-practice-state').textContent;
+  assert.match(live, /restores the saved grid, race clock and practice goal/);
+  assert.match(live, /steps the grid and race clock back/);
+  assert.doesNotMatch(live, /your car only|not the others/);
+  const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  assert.match(shell, /restores the saved grid, race clock and practice goal/);
+  assert.match(shell, /solo race or qualifying session can use checkpoints[\s\S]{0,160}ARM PRACTICE/);
+  assert.doesNotMatch(shell, /does not rewind the race clock|Checkpoints are unavailable in races|other cars keep the ground/);
+});
+
+test('brief transients and suspended frames cannot trigger a tip; sustained evidence can', () => {
+  const { coach, tick, enable, c, announcements } = fixture(); enable();
+  tick(.3, braking); tick(.1, { brakeDemand: 0 }); tick(.3, braking);
+  assert.equal(announcements.length, 0);
+  tick(.2); assert.equal(announcements.length, 1);
+  assert.equal(announcements[0][2], 'coach');
+  assert.equal(coach.feedback().latest.id, 'trail');
+  assert.equal(coach.status().coach.total, 1);
+  const savedCar = JSON.stringify(c); tick(.3); assert.equal(JSON.stringify(c), savedCar);
+  coach.reset(); Object.assign(c, braking); coach.update(30);
+  assert.equal(coach.feedback().total, 0);
+});
+
+test('global spacing and per-tip cooldown prevent repeated reminders', () => {
+  const { coach, tick, enable, announcements } = fixture(); enable();
+  tick(.5, braking); assert.equal(announcements.length, 1);
+  tick(7, { ...rear, brakeDemand: 0, throttleDemand: 1 }); assert.equal(announcements.length, 1);
+  tick(2); assert.equal(announcements.length, 2);
+  tick(18, { rearUtil: 0, slipRear: 0, ...braking }); assert.equal(announcements.length, 2);
+  tick(4); assert.equal(announcements.length, 3);
+  assert.equal(coach.feedback().counts.find(r => r.id === 'trail').count, 2);
+});
+
+test('cautions and race messages discard pending evidence rather than queue a stale tip', () => {
+  for (const block of ['message', 'caution', 'contact']) {
+    const { coach, G, c, tick, enable, announcements } = fixture(); enable(); tick(.4, braking);
+    if (block === 'message') G.announceBusy = true;
+    if (block === 'caution') { G.cautionInfo = () => ({ level: 1 }); G.cautionLevel = () => 1; }
+    if (block === 'contact') c.contactT = .5;
+    tick(2); assert.equal(coach.feedback().state, 'waiting'); assert.equal(announcements.length, 0);
+    G.announceBusy = false; G.cautionInfo = () => ({ level: 0 }); G.cautionLevel = () => 0; c.contactT = 0;
+    tick(.2); assert.equal(announcements.length, 0);
+    tick(.3); assert.equal(announcements.length, 1);
+  }
+});
+
+test('pause, pits, finish and retirement suppress coaching, and toggle resets pending evidence', () => {
+  for (const fields of [{ paused: true }, { pitState: 'box' }, { finished: true }, { retired: true }]) {
+    const { coach, G, c, tick, enable, announcements } = fixture(); enable();
+    if ('paused' in fields) G.paused = true; else Object.assign(c, fields);
+    tick(2, braking); assert.equal(announcements.length, 0);
+    assert.notEqual(coach.feedback().state, 'watching');
+  }
+  const { coach, tick, enable, announcements } = fixture(); enable(); tick(.4, braking);
+  coach.toggle(); coach.toggle(); tick(.2); assert.equal(announcements.length, 0);
+  tick(.3); assert.equal(announcements.length, 1);
+});
+
+test('feedback snapshots cannot corrupt session counts; reset clears history but keeps the preference', () => {
+  const { coach, tick, enable, nodes } = fixture(); enable(); tick(.5, braking);
+  const view = coach.feedback(); view.latest.text = 'changed'; view.counts[0].count = 999;
+  assert.equal(coach.feedback().total, 1); assert.notEqual(coach.feedback().latest.text, 'changed');
+  coach.paint(); assert.match(nodes.get('pm-coach-tip').textContent, /Release the brake gradually/);
+  assert.match(nodes.get('pm-coach-summary').textContent, /1 tip recorded/);
+  coach.reset(); assert.equal(coach.feedback().total, 0); assert.equal(coach.feedback().latest, null);
+  assert.equal(coach.feedback().enabled, true);
+});
+
+test('coasting advice allows cornering and a deliberate lift behind traffic, including over the line', () => {
+  const { coach, G, c } = fixture();
+  Object.assign(c, { s: 980, x: 0, throttleDemand: 0, speed: 60 });
+  assert.match(coach.advice(c), /COASTING/);
+  c.lateralAccel = 8; assert.equal(coach.advice(c), '');
+  c.lateralAccel = 0; c.steerAngle = .1; assert.equal(coach.advice(c), '');
+  c.steerAngle = 0;
+  G.cars = [c, { s: 10, x: 0 }]; assert.equal(coach.advice(c), '');
+  G.cars[1].s = 200; assert.match(coach.advice(c), /COASTING/);
+});
+
+test('coach yields to alongside traffic and does not accumulate evidence while paused', () => {
+  const { coach, G, tick, enable } = fixture(); enable();
+  G.raceRadio = { trafficBusy: () => true };
+  tick(2, braking); assert.equal(coach.feedback().total, 0);
+  assert.equal(coach.feedback().state, 'waiting');
+  G.raceRadio.trafficBusy = () => false;
+  tick(.3); G.paused = true; tick(30); G.paused = false;
+  tick(.1); assert.equal(coach.feedback().total, 0, 'pause is not sustained braking evidence');
+  tick(.15); assert.equal(coach.feedback().total, 1);
+});
+
+test('repeated corner mistakes earn a next-lap approach reminder without adding mistakes', () => {
+  const { coach, G, c, tick, enable, announcements } = fixture(); enable();
+  G.timeTrial = false;
+  Object.assign(c, { s: 500, lap: 1 });
+  tick(.6, braking);
+  tick(31, { brakeDemand: 0, steerAngle: 0, axEstSm: 0 });
+  c.lap = 2; tick(.6, braking);
+  assert.equal(coach.feedback().total, 2);
+  tick(9, { brakeDemand: 0, steerAngle: 0, axEstSm: 0 });
+  Object.assign(c, { lap: 3, s: 300 });
+  tick(.6);
+  assert.match(announcements.at(-1)[0], /TURN 2 — RELEASE THE BRAKE AS YOU TURN/);
+  assert.equal(coach.feedback().latest.reminder, true);
+  assert.equal(coach.feedback().reminders, 1);
+  assert.equal(coach.feedback().total, 2);
+  tick(31); assert.equal(coach.feedback().reminders, 1, 'one reminder per turn per lap');
+  coach.reset(); assert.equal(coach.feedback().reminders, 0);
+});
+
+test('lap-loss feedback waits for traffic and braking to clear', () => {
+  const { coach, G, c, tick, enable, announcements } = fixture(); enable();
+  const at = lapDriver({ c, G, tick });
+  c.s = 0; tick(.05); at(105); at(505, 21); at(985, 20);
+  G.raceRadio = { trafficBusy: () => true };
+  at(105, 23);
+  assert.ok(coach.status().lapReport);
+  assert.equal(announcements.length, 0);
+  G.raceRadio.trafficBusy = () => false; c.brakeDemand = .2;
+  tick(.5); assert.equal(announcements.length, 0);
+  c.brakeDemand = 0; tick(.1);
+  assert.match(announcements.at(-1)[0], /^TURN 3 COST/);
+});
+
+test('the tyre watch names the corner eating a fast-wearing set, and which end of the car', () => {
+  const { G, c, tick, enable, announcements, coach } = fixture();
+  enable(); G.timeTrial = false; G.practice = false; G.tyres = { on: () => true };
+  Object.assign(c, { lap: 2, s: 300, tyreStints: 0, tyreWear: 0.2, tyreWearF: 0.2, tyreWearR: 0.2, pitPlan: { loadK: 1.4 } });
+  tick(0.2);                                     // the watch primes on this set
+  // Turn 2 (apex at 500 m): the fronts take most of the lap's wear there.
+  for (let i = 0; i < 20; i++) { c.s = 500; c.tyreWear += 0.004; c.tyreWearF += 0.006; c.tyreWearR += 0.002; tick(0.1); }
+  for (let i = 0; i < 5; i++) { c.s = 300; c.tyreWear += 0.001; c.tyreWearF += 0.001; c.tyreWearR += 0.001; tick(0.1); }
+  c.lap = 3; tick(0.2); tick(1);
+  const said = announcements.map((a) => a[0]);
+  assert.ok(said.some((m) => /TURN 2 IS EATING THE FRONTS — BRAKE EARLIER/.test(m)), said.join(' | '));
+  assert.ok(coach.feedback().counts.some((r) => r.id === 'tyres'), 'logged for the debrief');
+  // A set wearing AT its plan is nobody's business: nothing is said.
+  const f2 = fixture(); f2.enable(); f2.G.timeTrial = false; f2.G.practice = false; f2.G.tyres = { on: () => true };
+  Object.assign(f2.c, { lap: 2, s: 300, tyreStints: 0, tyreWear: 0.2, tyreWearF: 0.2, tyreWearR: 0.2, pitPlan: { loadK: 1.0 } });
+  f2.tick(0.2);
+  for (let i = 0; i < 20; i++) { f2.c.s = 500; f2.c.tyreWear += 0.004; f2.c.tyreWearF += 0.006; f2.tick(0.1); }
+  f2.c.lap = 3; f2.tick(1.2);
+  assert.ok(!f2.announcements.some((a) => /EATING/.test(a[0])), 'no tyre line at the planned rate');
+});
+
+
+test('WATCH pause hides pit strategy and cannot choose tyres; driving restores it', () => {
+  const { coach, G, ctx, nodes } = fixture();
+  let watching = true, picked = 0, selections = 0;
+  ctx.RealRace = { status: () => ({ watch: watching }) };
+  ctx.SettingRow.disable = (row, disabled) => { if (row) row.disabled = disabled; };
+  ctx.SettingRow.wire = (row, options) => { if (row) row.write = options.write; };
+  for (const id of ['pm-pit-panel', 'pm-pit-choice', 'pm-pit-help', 'pm-pit-estimate']) nodes.set(id, { textContent: '' });
+  G.tyres.on = () => true;
+  G.pits.pickFor = () => { picked++; return { id: 'soft', code: 'C4' }; };
+  G.pits.selectNext = () => selections++;
+  const panelCoach = vm.runInContext('DrivingCoach', ctx).create(G);
+  panelCoach.paint();
+  nodes.get('pm-pit-choice').write('soft');
+  assert.equal(selections, 0, 'even a retained strategy handler cannot edit replay tyres');
+  assert.equal(nodes.get('pm-pit-panel').hidden, true);
+  assert.equal(nodes.get('pm-pit-choice').disabled, true);
+  assert.equal(picked, 0, 'WATCH does not calculate a simulated pit recommendation');
+  assert.doesNotMatch(nodes.get('pm-pit-help').textContent, /AUTO will fit/);
+  watching = false; panelCoach.paint();
+  assert.equal(nodes.get('pm-pit-panel').hidden, false);
+  assert.equal(nodes.get('pm-pit-choice').disabled, false);
+  assert.equal(picked, 1);
+});

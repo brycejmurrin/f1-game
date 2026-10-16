@@ -1,0 +1,967 @@
+/* Apex 26 — the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus ExtraRigs rival/pitwall/drone) as… */
+const GameCams = (function () {
+  "use strict";
+
+let VMAX = 72;              // injected at boot (GameCams.init) — speed normaliser
+function init(opts) {
+  Log.info("game", "GameCams.init");
+  if (opts && opts.vmax) VMAX = opts.vmax;
+}
+
+const clamp = M4.clamp, lerp = M4.lerp;       // shared scalar helpers (js/core/mat4.js)
+
+// Scratch samples reused every call (no per-frame allocation). vantage() itself
+// allocates nothing per frame either: every eye/tgt/p/aheadPt/straight/dir
+// value below is written into one of the module-level pools declared here.
+const cvA = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+const cvB = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+const _bankScr = { dy: 0, roll: 0 };   // pooled Tracks.banking out-param (ground clamp)
+// Pooled working arrays for vantage()'s per-mode eye/tgt solve — see the note
+// by _vantEye/_vantTgt below. p/aheadPt/straight/dir are read-then-consumed
+// temporaries inside a single branch, but each still gets its own pool: `p`
+// must survive past where eye/tgt start being written (several branches read
+// p again AFTER eye is computed), and aheadPt/straight/dir must never alias
+// eye/tgt/each other while their values are still live.
+const _vantP = [0, 0, 0];
+const _vantEyeW = [0, 0, 0], _vantTgtW = [0, 0, 0];
+const _aheadOut = [0, 0, 0];
+const _straightScr = [0, 0, 0];
+const _dirScr = [0, 0, 0];
+// The per-call inputs the hoisted helpers below read (set at vantage() entry),
+// so no closure is built per frame.
+let _vTrack = null, _vS = 0, _vOnboard = false;
+function _vWrapS(v) { const L = _vTrack.total; v %= L; return v < 0 ? v + L : v; }
+function _vElevY(at) { return _vOnboard ? null : centreY(_vTrack, at); }
+// Pooled return: safe because every branch of vantage() calls aheadPt() at
+// most once per invocation (the mode branches are mutually exclusive, and no
+// branch calls it twice with both results needed live at once).
+function _vAheadPt(d, h, lat) {
+  Tracks.sample(_vTrack, _vWrapS(_vS + d), cvB);
+  const lx = lat || 0;
+  const ey = _vElevY(_vS + d);
+  const o = _aheadOut;
+  o[0] = cvB.p[0] + cvB.r[0] * lx;
+  o[1] = (ey === null ? cvB.p[1] : ey) + (h || 0);
+  o[2] = cvB.p[2] + cvB.r[2] * lx;
+  return o;
+}
+
+// Cockpit eye offsets from the car origin (fwd along tangent, up in metres).
+// Shared by vantage() and the camera-anchored cockpit-rig draw in render() —
+// the rig origin is derived by SUBTRACTING these from the live camEye, so the
+// two must stay identical or the driver's eye drifts out of the cockpit.
+// -0.20, not 0.32: the rig origin IS the car origin (game.js derives it as
+// camEye − fwd·FWD − up·UP), so FWD is literally where the driver's head sits in
+// CAR-LOCAL z — and the tub is built around z 0. At 0.32 the eye sat forward of
+// the dash coaming (car3d.js builds it at z 0.60) with the survival-cell walls,
+// the halo pillar and the mirrors all BEHIND the camera: measured on Monza, the
+// "cockpit" view rendered no cockpit at all, just the nose from above, which is
+// a hood cam by another name. -0.20 puts the head back between the tub shoulders
+// where it belongs, with the coaming, halo and mirrors ahead of it in frame.
+// UP is metres above the ROAD, and car3d.js builds the tub around it: dash
+// coaming y 0.62, halo hoop 0.74-0.81, survival-cell walls topping out at 0.88.
+// At 0.99 the eye floated ABOVE all of it (live value is 0.82) — above the halo, above the shoulders
+// — which is why the "cockpit" rendered as a hovering hood cam with no car in
+// frame however far back it was pulled. 0.72 seats the driver where the tub
+// says the seat is: just over the coaming, inside the halo, between the walls.
+// (Live values today: COCKPIT_EYE_FWD -0.20, COCKPIT_EYE_UP 0.82 — the prose
+// above records why the pair moved, not the current numbers.)
+// Eye height is set by how far the driver sits ABOVE THE DECK, not by taste:
+// at 0.72 the monocoque crest (y 0.545 at z 1.05) was only 0.17 m below the
+// sightline, so the car's own nose occupied 0.7% of the frame and an onboard
+// looked like a floating dash. A real F1 eye sits ~0.30 m over the chassis top.
+// 0.82 gives 0.27 m and the nose reads as a nose. Anything moved here must be
+// re-checked with docs/notes/OCCLUSION-PROBE.md — the wheel rig (game.js _rigT), the
+// ckpt monocoque cap and the coaming are all positioned against this number.
+const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.82;
+// NEAR-EYE CULL for a RIVAL: hidden only when the camera eye sits INSIDE its body
+// (the drawn car, a little over the 4.8 x 2.0 m collider, grown by `pad` = the near
+// plane plus a margin), never a RADIUS from the car's origin: from the cockpit, visor
+// or hood a rival ALONGSIDE is 2-3 m from the eye, so a 3.4 m radius sized for the
+// chase cam hid it just as the player drew level. along / lat / up are the eye
+// MINUS the car in the car's own frame (tangent, right, up), metres.
+const CAR_BOX_HALF_L = 2.9, CAR_BOX_HALF_W = 1.0, CAR_BOX_H = 1.2;
+function eyeInsideCar(along, lat, up, pad) {
+  const p = pad > 0 ? pad : 0;
+  return Math.abs(along) < CAR_BOX_HALF_L + p && Math.abs(lat) < CAR_BOX_HALF_W + p && up > -p && up < CAR_BOX_H + p;
+}
+// VISOR: the COCKPIT WITHOUT ITS STEERING WHEEL, for a phone wheel in the hand
+// (a linked phone switches to it). game.js draws the same cockpit rig — tub,
+// halo, mirrors, front wheels, the nose ahead — with the wheel and its dash
+// left out. The eye is the cockpit's own for now; its own pair of
+// offsets exists so it can move closer/lower later without dragging the tub
+// with it (cockpitViewmodelAxes anchors the rig with these).
+const VISOR_EYE_FWD = COCKPIT_EYE_FWD, VISOR_EYE_UP = COCKPIT_EYE_UP;
+
+// The driver's eye (fwd, up) for a first-person mode: VISOR's own pair, or the
+// chosen cockpit INTERIOR's seat (CockpitOpts.layout). vantage() places the
+// camera with it and game.js anchors the rig with it, so the two cannot disagree.
+function seatFwd(mode) {
+  if (mode === "visor") return VISOR_EYE_FWD;
+  return typeof CockpitOpts !== "undefined" ? CockpitOpts.layout().eyeF : COCKPIT_EYE_FWD;
+}
+function seatUp(mode) {
+  if (mode === "visor") return VISOR_EYE_UP;
+  return typeof CockpitOpts !== "undefined" ? CockpitOpts.layout().eyeU : COCKPIT_EYE_UP;
+}
+
+// HELMET: the cockpit seen from INSIDE the driver's lid — the same rig and seat
+// as COCKPIT (seatFwd/seatUp fall through to the chosen seat), the eye a few
+// centimetres further forward where the eyes sit behind the visor, and the
+// visor's own frame round the picture (css/hud.css, body[data-helmet-cam]).
+const HELMET_EYE_FWD = 0.05;
+// THE DRIVER'S HEAD MOVES INSIDE THE CAR. Under lateral g the neck gives and
+// the head goes 2-3 cm to the OUTSIDE of the corner; under braking it nods
+// forward and down. Both read off the SMOOTHED body attitude
+// (js/physics/body-attitude.js: baRoll leans outward, ±0.055 rad at full grip;
+// baPitch > 0 is brake dive, capped 0.024) — never raw accel, so it cannot
+// jitter. It moves the EYE and not the rig: cockpitViewmodelAxes subtracts the
+// same offset, so the tub, wheel and halo stay on the car while the view shifts
+// inside them (measured clear: tests/unit/cockpit-wheels.test.mjs sweeps every
+// seat at these extremes). REDUCE MOTION and COMFORT › HEAD BOB both scale it.
+const HEAD_ROLL_MAX = 0.055, HEAD_DIVE_MAX = 0.024;   // body-attitude.js ROLL_MAX / PITCH_MAX
+const HEAD_LAT = 0.45;        // m outward per rad of body roll: 2.5 cm at full grip
+const HEAD_NOD_FWD = 0.6;     // m forward per rad of brake dive: 1.4 cm at full braking
+const HEAD_NOD_DOWN = 0.35;   // m down per rad of dive: 0.8 cm
+const HEAD_NOD_AIM = 8;       // m the 30 m aim point drops per rad of dive: a ~0.4 deg nod
+const HEAD_MAX = Object.freeze({ lat: HEAD_ROLL_MAX * HEAD_LAT, fwd: HEAD_DIVE_MAX * HEAD_NOD_FWD, down: HEAD_DIVE_MAX * HEAD_NOD_DOWN });
+// The live camera's head offset [lat (+right), up, fwd, aim drop], car frame.
+// Published only by the call that carries the player's attitude (extra.att —
+// the race camera and snapCam), so a PiP or debug solve between that call and
+// the car loop cannot move the rig anchor under it.
+const _head = [0, 0, 0, 0], _headScr = [0, 0, 0, 0];
+function headOffset(mode, extra, out) {
+  out[0] = out[1] = out[2] = out[3] = 0;
+  if (mode !== "cockpit" && mode !== "visor" && mode !== "helmet") return out;
+  if (mode === "helmet") out[2] = HELMET_EYE_FWD;
+  const a = extra.att;
+  if (!a || extra.reduceMotion) return out;
+  const k = typeof CamTune !== "undefined" && CamTune.bob ? CamTune.bob() : 1;
+  const roll = clamp(a.baRoll || 0, -HEAD_ROLL_MAX, HEAD_ROLL_MAX), dive = clamp(a.baPitch || 0, 0, HEAD_DIVE_MAX);
+  out[0] = -roll * HEAD_LAT * k;   // +roll tilts the body's top toward -R (game.js rollTot): the outside
+  out[1] = -dive * HEAD_NOD_DOWN * k;
+  out[2] += dive * HEAD_NOD_FWD * k;
+  out[3] = dive * HEAD_NOD_AIM * k;
+  return out;
+}
+function headState() { return { lat: _head[0], up: _head[1], fwd: _head[2], nod: _head[3] }; }
+
+// Cockpit viewmodel basis: same yawVis as the drawn body (heading vs road
+// tangent), origin subtracted along those axes so the eye stays at
+// (COCKPIT_EYE_FWD, COCKPIT_EYE_UP) in rig space — or at (fwd, up) when a mode
+// seats it elsewhere (VISOR), which keeps the rig on the CAR while the eye
+// moves inside it. Pitch/roll/lean stay off this basis — those shoved the eye
+// into the carbon. The live head offset (_head) comes off too, so the head
+// shift and the HELMET eye move the view and never the tub.
+// Writes into the caller-owned out* slots; nothing is allocated.
+function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP, fwd, up) {
+  const eF = (fwd == null ? COCKPIT_EYE_FWD : fwd) + _head[2], eU = (up == null ? COCKPIT_EYE_UP : up) + _head[1];
+  const cy = Math.cos(yv), sy = Math.sin(yv);
+  for (let i = 0; i < 3; i++) {
+    outF[i] = sF[i] * cy + sR[i] * sy;
+    outR[i] = sR[i] * cy - sF[i] * sy;
+  }
+  outU[0] = outR[1] * outF[2] - outR[2] * outF[1];
+  outU[1] = outR[2] * outF[0] - outR[0] * outF[2];
+  outU[2] = outR[0] * outF[1] - outR[1] * outF[0];
+  for (let i = 0; i < 3; i++)
+    outP[i] = eye[i] - outR[i] * _head[0] - outU[i] * eU - outF[i] * eF;
+}
+
+const CHASE_SIDE_FRAC = 0.3;
+// Shipped CHASE eye-in, metres along the view direction (a baked CAMERA
+// TUNER DISTANCE of -0.725). Applied after the rig solves so
+// it moves ONLY the eye, never the arc `back` samples the ride height over.
+const CHASE_EYE_IN = 0.725;
+// Shipped chase/far corner lead — blends toward road-frame aim so the rig swings
+// into bends. The tuner knob replaces this when cornerLead is stored for the mode
+// (including 0 = explicitly flat). Untuned installs get this without opening the panel.
+const CHASE_CORNER_LEAD_DEFAULT = 0.54;
+// CHASE g-response: the camera leans with longitudinal weight transfer even
+// though it is bolted to nothing. Driven by the SMOOTHED body pitch
+// (js/physics/body-attitude.js, spring ω=9, clamped ±0.024 rad ≈ 1.4°), NEVER raw
+// accel — so it cannot reintroduce the fore/aft jitter the car-frame camera
+// damping just removed. baPitch > 0 = nose-down = braking.
+const CHASE_G_DOLLY = 14;    // m of nose-IN per rad of dive (≈0.34 m at full braking)
+const CHASE_G_AIM   = 5;     // m the aim drops per rad of dive, so you watch the car dive
+
+// How the chase rigs decide their vertical framing. Two independent point
+// samples of the centreline (eye `back` m behind, target at the car) would make
+// the rig's pitch a finite DIFFERENCE of the elevation profile over ~12 m — the
+// one operator that AMPLIFIES short wavelengths, and this profile has
+// them on purpose: on top of the authored cosine bumps, buildCenterline adds a
+// "fine surface undulation" of three harmonics at 30-110 m wavelengths
+// (js/track/tracks.js) so the road isn't mathematically flat between corners.
+// The car is meant to ride that. The camera differentiating it is not.
+//
+// On flat road that difference is an invisible constant; on a hill it is not:
+// MEASURED on Monaco's climb out of Sainte Dévote (16 % over the rig's own
+// 5.8 m) two-sample pitch swung ±0.93° in the 10-60 m band — roughly 1-2 Hz at
+// racing speed, reversing every 17 m (the "camera bobs going up the incline").
+//
+// So the rig is built from ONE smoothed height and ONE smoothed gradient rather
+// than from two raw samples:
+//
+//     eyeY = rideY(s) - back * grade + eyeUp
+//
+// The pitch depends only on `grade`, so nothing differentiates the ripple. On
+// flat road and on ANY constant slope this equals the two-sample framing to the
+// millimetre (a Hann average of a straight line is the line); where the profile
+// BENDS it stays within 0.28 m of eye height and 1.0° of pitch on every circuit
+// measured, removes 78-90 % of the pitch bob band (monaco/spa/redbull/suzuka),
+// and GAINS ground-clamp margin (Spa's worst case 0.04 m → 0.15 m).
+//
+// rideY is a 7-tap Hann average 60 m wide: a null at the 30 m harmonic (which
+// carries nearly all the vertical acceleration, bob scaling as amplitude ÷
+// wavelength²) and effectively transparent to real terrain — a 340 m cosine
+// bump like Monaco's loses 7 cm at its crest. RIDE_GRADE is the half-baseline
+// the slope is measured over; ±40 m is long enough to be steady and short
+// enough that the camera pitches for the hill it is ON, not one it can't see.
+// Nothing else changes: the car, the physics, the road mesh and every other
+// camera mode still read the raw profile, so the undulation you feel through
+// the car is untouched. It just stops steering the horizon.
+//
+// Offsets are metres of arc either side; weights are 0.5(1+cos(πd/30)). The two
+// zero-weight end taps are dropped rather than summed for nothing.
+const RIDE_OFF = [-22.5, -15, -7.5, 0, 7.5, 15, 22.5];
+const RIDE_W = [0.1464, 0.5, 0.8536, 1, 0.8536, 0.5, 0.1464];
+const RIDE_WSUM = 4.0;                    // == RIDE_W summed
+const RIDE_SPAN = 60;                     // full window width, for the short-lap guard
+const RIDE_GRADE = 40;                    // half-baseline the road slope is read over
+
+// Centreline height alone at arc `s` — the height component of Tracks.sample
+// without the tangent/right/half-width lerps this never looks at. Called 21x a
+// frame in chase (three times through rideY), which is why it skips sample().
+//
+// CATMULL-ROM, not the lerp Tracks.sample uses. A linear blend between the ~4 m
+// nodes is only C0: the height is continuous but its SLOPE jumps at every node
+// boundary, so the eye's vertical VELOCITY steps ~11 times a second at racing
+// speed. On flat road that is invisible (adjacent nodes are level, so there is
+// no slope to jump) and at the shipped framing it is about a pixel — which is
+// why it survived every earlier measurement. Pull the camera DOWN and IN with
+// the CAMERA TUNER and both of those excuses evaporate: the eye-to-target
+// baseline shortens, and the rig goes near-level so pitch is driven by exactly
+// these small vertical differences instead of a healthy few degrees. MEASURED
+// at HEIGHT -1.5 / DIST -3 on Beau Rivage: 11 pitch reversals in 2.6 s with a
+// worst-to-rms acceleration ratio of 10.2, i.e. plainly discontinuous.
+//
+// Catmull-Rom is C1, so the velocity is continuous and no node rate survives at
+// all. It still passes exactly through every node, and on collinear nodes (flat
+// road, constant slope) it reproduces the straight line to floating-point — so
+// it matches a linear blend anywhere the nodes already lie on a line.
+function crY(p0, p1, p2, p3, t) {
+  const t2 = t * t, t3 = t2 * t;
+  return 0.5 * ((2 * p1) + (-p0 + p2) * t
+    + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+    + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+}
+// max(v, floor) with a C1 handover across a band of `k` metres. Outside the band
+// it IS the plain max; inside, a quadratic joins the two branches with matching
+// slope at both ends (v = floor+k and v = floor-k), which is what a hard max
+// cannot do. Only ever returns >= floor, so it never weakens the guarantee it
+// implements.
+// How far a live camera hangs off the racing line through a bend. +kA is a
+// left-hander, and +right is the outside of it. One-shot solves (no dt) and
+// Reduce Motion return 0 so a parked frame stays the shipped pose. `gain` is
+// metres at a hairpin; a fast kink gets less. A snap (and Reduce Motion) also
+// zeroes the eased state, so the first live frame eases out from the snapped
+// pose instead of from the previous race's last bend.
+const _hangOut = Object.create(null);
+const _hangFast = Object.create(null);
+const _bendSgn = Object.create(null), _bendDwell = Object.create(null);   // heli/side/cinematic held side + seconds until it may flip
+// snapGameCam's half of a cut: the CamFeel follows are reset beside this.
+function resetSmoothing() {
+  for (const k in _hangOut) delete _hangOut[k];
+  for (const k in _hangFast) delete _hangFast[k];
+  for (const k in _bendSgn) delete _bendSgn[k];
+  for (const k in _bendDwell) delete _bendDwell[k];
+}
+// Which side of the road a broadcast rig hangs on (+1 = +r, 0 = no bend seen yet), HELD so a
+// chicane cannot flip it before the last move has finished: leaving the held side needs
+// |kA| past `hi` (a Schmitt band over the entry threshold `lo`) and BEND_DWELL seconds since
+// the last flip (`neutral`: a straight reads 0 instead of holding). A one-shot solve (no dt) and a snap are stateless, as the raw threshold was.
+const BEND_DWELL = 0.7;
+function bendSide(key, kA, lo, hi, dt, snap, neutral) {
+  const raw = kA > lo ? 1 : kA < -lo ? -1 : 0;
+  if (neutral && raw === 0 && dt > 0 && !snap) { const hk1 = hangKey(key); _bendSgn[hk1] = 0; _bendDwell[hk1] = 0; return 0; }   // cinematic: a straight is its own framing and releases the hold
+  if (!(dt > 0) || snap) { if (snap) { const hk0 = hangKey(key); _bendSgn[hk0] = raw; _bendDwell[hk0] = 0; } return raw; }
+  const hk = hangKey(key), cur = _bendSgn[hk] || 0;
+  const dwell = Math.max(0, (_bendDwell[hk] || 0) - dt);
+  _bendDwell[hk] = dwell;
+  if (raw === cur) return cur;
+  if (cur === 0 || (raw !== 0 && dwell <= 0 && Math.abs(kA) > hi)) { _bendSgn[hk] = raw || cur; _bendDwell[hk] = BEND_DWELL; return raw || cur; }
+  return cur;
+}
+// The maps key by CamFeel's SCOPED key (#913's "tv:" prefix): the TV director
+// solving a car in the other bend must not read as the player's sign flip, and
+// a director cut must not zero the player's hang. CamFeel.follow scopes itself.
+function hangKey(key) {
+  return typeof CamFeel !== "undefined" && CamFeel.scopeKey ? CamFeel.scopeKey(key) : key;
+}
+function hangReset(key, lambda) {
+  const hk = hangKey(key);
+  _hangOut[hk] = 0; _hangFast[hk] = 0;
+  if (typeof CamFeel !== "undefined") CamFeel.follow(key, 0, lambda, 0);
+}
+function bendHang(key, kA, dt, reduce, gain, lambda, snap) {
+  if (!(dt > 0) || reduce || !gain) { if (snap || reduce) hangReset(key, lambda); return 0; }
+  if (!kA) { hangReset(key, lambda); return 0; }
+  const raw = clamp(kA * 18, -1, 1), hk = hangKey(key);
+  const prev = _hangOut[hk] || 0;
+  // A chicane flips sign before a hairpin-rate head can arrive, and the two
+  // sides cancel. Catch faster for a short stretch after the flip, then go
+  // back to the lazy rate. A hairpin never takes this path.
+  let fast = _hangFast[hk] || 0;
+  if (prev * raw < -0.02) fast = 0.45;
+  else fast = Math.max(0, fast - dt);
+  _hangFast[hk] = fast;
+  const lam = fast > 0 ? lambda * 3.2 : lambda;
+  const eased = typeof CamFeel !== "undefined" ? CamFeel.follow(key, raw, lam, dt) : raw;
+  _hangOut[hk] = eased;
+  return eased * gain;
+}
+// Metres the rig opens along the view as speed rises. Not a second dolly:
+// one-shot solves (no dt, and not a snap) stay on the shipped distance.
+// Far opens further and later than chase. The return is 0 at rest.
+function speedOpen(key, spN, dt, reduce, snap, metres, lambda) {
+  if (reduce || !(metres > 0)) return 0;
+  const target = clamp(spN, 0, 1) * metres;
+  if (!(dt > 0) && !snap) return 0;
+  if (typeof CamFeel === "undefined") return target;
+  if (!(dt > 0)) { CamFeel.follow(key, target, lambda, 0); return target; }
+  return CamFeel.follow(key, target, lambda, dt);
+}
+function pullBack(eye, tgt, metres) {
+  if (!(metres > 0)) return;
+  let fx = tgt[0] - eye[0], fz = tgt[2] - eye[2];
+  const fl = Math.hypot(fx, fz);
+  if (fl < 1e-4) return;
+  eye[0] -= (fx / fl) * metres;
+  eye[2] -= (fz / fl) * metres;
+}
+// 1 when the tuner has not touched CORNER HANG. 0 is a stored "hold the line".
+function hangScale(mode) {
+  if (typeof CamTune === "undefined" || typeof CamTune.cornerHang !== "function") return 1;
+  const v = CamTune.cornerHang(mode);
+  return v == null ? 1 : v;
+}
+
+function softFloor(v, floor, k) {
+  const d = v - floor;
+  if (d > k) return v;
+  if (d < -k) return floor;
+  const t = (d + k) / (2 * k);
+  return floor + k * t * t;
+}
+function centreY(track, s) {
+  const n = track.n, L = track.total, py = track.py;
+  let v = s % L; if (v < 0) v += L;
+  const fi = v / L * n;
+  const i = Math.floor(fi) % n, f = fi - Math.floor(fi);
+  const a = (i - 1 + n) % n, b = (i + 1) % n, c = (i + 2) % n;
+  return crY(py[a], py[i], py[b], py[c], f);
+}
+function rideY(track, s) {
+  if (!track.py || track.total < RIDE_SPAN * 2) return centreY(track, s);
+  let acc = 0;
+  for (let k = 0; k < RIDE_OFF.length; k++) acc += centreY(track, s + RIDE_OFF[k]) * RIDE_W[k];
+  return acc / RIDE_WSUM;
+}
+function rideGrade(track, s) {
+  if (!track.py || track.total < RIDE_GRADE * 4) return 0;
+  return (rideY(track, s + RIDE_GRADE) - rideY(track, s - RIDE_GRADE)) / (2 * RIDE_GRADE);
+}
+
+// AN ONBOARD CAMERA IS BOLTED TO THE CHASSIS, so it inherits what the chassis
+// does. js/physics/body-attitude.js already pitches, rolls and heaves the car BODY
+// under braking, power and cornering — visibly, on the mesh — but the onboard
+// eye was built purely from the road, so the one view where you sit IN the car
+// was the one view that could not feel it: brake from 300 and the world stayed
+// dead level while the car it is bolted to dived.
+//
+// These offsets are render-only and read state bodyattitude already published
+// (baPitch/baRoll/baHeave, all small and clamped there). Applied ONLY to
+// cockpit/hood — a broadcast camera is on a tripod and must stay level.
+//
+// KERB RUMBLE IS SPATIAL, not temporal: a rumble strip is a row of physical
+// ribs, so the shake is driven off arc position `s`, not a clock. That makes it
+// deterministic (no Date.now — the same rule js/physics/body-attitude.js keeps), and it
+// scales itself with speed for free, because s advances faster when you do.
+const KERB_RIB_M = 3.4;      // metres per rumble cycle as the view feels it
+const KERB_AMP = 0.011;      // m of eye travel at full scaling — a shiver, not a bounce
+function onboardAttitude(mode, eye, tgt, extra, s, spN) {
+  const a = extra.att;
+  if (!a) return;
+  const heave = a.baHeave || 0, pitch = a.baPitch || 0;
+  // REDUCE MOTION drops the rib shiver (a high-frequency oscillation); heave/pitch are the car's own motion.
+  const kerb = a.onKerb && !extra.reduceMotion ? Math.sin(s * (2 * Math.PI / KERB_RIB_M)) * KERB_AMP * spN : 0;
+  eye[1] += heave + kerb;
+  // baPitch > 0 is brake DIVE (nose down, the chase rig's convention above), so
+  // the aim DROPS with it: the view dips into a braking zone and lifts under
+  // power. It was `+ pitch * 24` — the cockpit tilted UP as the car dived.
+  tgt[1] += heave - pitch * 24;
+}
+
+const _vantEye = [0, 0, 0], _vantTgt = [0, 0, 0];
+const _vantOut = { eye: _vantEye, tgt: _vantTgt, fov: 60 };
+// The last finite pose, held when a solve goes non-finite: the render damper in game.js
+// is exponential, so ONE NaN frame would poison camEye/camTgt/camFov until the next snap.
+const _goodEye = [0, 1, 0], _goodTgt = [0, 1, 1];
+let _goodFov = 60, _nanWarned = false;
+
+// STREET-CIRCUIT CORRIDOR at arc `sAt` (half-width `hw` there): the broadcast eye stays over
+// the road edge (hw - 1, floor 4) AND inside the nearer barrier (wallAt - 0.6, e.g. Monaco's
+// pinched 3.3 m wall), so no hang/offset knob can put it behind the barrier. Infinity on open circuits.
+function _vCorr(sAt, hw) {
+  const tk = _vTrack;
+  if (!tk.def || !tk.def.street) return Infinity;
+  let c = Math.max(hw - 1.0, 4);
+  if (typeof Tracks.wallAt === "function") {
+    const w = Math.min(Tracks.wallAt(tk, sAt, 1), Tracks.wallAt(tk, sAt, -1)) - 0.6;
+    if (w < c) c = Math.max(w, 1.5);
+  }
+  return c;
+}
+// The chase/far/drift/reverse hang is added to a car-relative eye, so on a street circuit it
+// can land behind the barrier. Soft-limit the eye's lateral (C1 handover, like softFloor) to
+// the barrier on its own side, measured at the eye's own arc `sAt`. No-op on open circuits.
+function _vWallClamp(eye, sAt) {
+  const tk = _vTrack;
+  if (!tk.def || !tk.def.street || typeof Tracks.wallAt !== "function") return;
+  const w = _vWrapS(sAt);
+  Tracks.sample(tk, w, cvB);
+  const lat = (eye[0] - cvB.p[0]) * cvB.r[0] + (eye[2] - cvB.p[2]) * cvB.r[2];
+  const side = lat >= 0 ? 1 : -1, a = lat * side;
+  const cap = Math.max(Tracks.wallAt(tk, w, side) - 0.6, 1.5);
+  if (!(a > cap - 0.5)) return;
+  const d = (cap - softFloor(cap - a, 0, 0.5) - a) * side;
+  eye[0] += cvB.r[0] * d; eye[2] += cvB.r[2] * d;
+}
+
+function vantage(track, mode, s, x, spd, now, extra) {
+  extra = extra || {};
+  if (!isFinite(spd)) spd = 0;
+  if (!isFinite(x)) x = 0;
+  // The PLAYER's look-back key and free-look glance steer only the player's own camera: a solve
+  // without `att` (the PiP inset) or flagged `noLook` (the TV director's shots) must not spin.
+  const localLook = !!extra.att && !extra.noLook;
+  if (extra.att) headOffset(mode, extra, _head);   // the live camera publishes the rig's head offset
+  _vTrack = track; _vS = s;
+  const wrapS = _vWrapS;
+  const bankDy = extra.bankDy || 0;
+  const dep = extra.deploy ? 1 : 0;
+  const spN = clamp(spd / VMAX, 0, 1);
+  // COMFORT › SPEED FOV scales only the FOV speed blend; look-ahead / broadcast
+  // curvature still use full spN. Default 1 = shipped. (js/camera/offsets.js)
+  const spFov = spN * (typeof CamTune !== "undefined" && CamTune.speedFov ? CamTune.speedFov() : 1);
+  Tracks.sample(track, wrapS(s), cvA);
+  // WHICH ELEVATION A CAMERA READS. Tracks.sample lerps py between the ~4 m
+  // nodes, which is only C0 — the height is continuous but its slope jumps at
+  // every node, so any eye built on it steps its vertical velocity ~11 times a
+  // second on a gradient (see centreY). chase/far were moved onto the C1 curve
+  // when that was diagnosed; every other world-facing mode was left on the raw
+  // sample and MEASURED spiky at stock framing on Monaco's climb — drift 8.6,
+  // heli 9.4, tcam/rear/cinematic/reverse 10.2 (worst vertical acceleration as a
+  // multiple of its own rms; a smooth curve stays near 3).
+  //
+  // cockpit and hood deliberately keep the RAW sample. They are bolted to the
+  // car, the car body is drawn from the raw profile, and an eye that disagreed
+  // with the chassis by even a centimetre would float in the cockpit — matching
+  // the car matters more there than smoothness, and riding the car's own bumps
+  // is what an onboard camera is FOR.
+  const onboard = _vOnboard = mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "helmet";
+  const p = _vantP;
+  p[0] = cvA.p[0] + cvA.r[0] * x;
+  p[1] = (onboard ? cvA.p[1] : centreY(track, s)) + bankDy;
+  p[2] = cvA.p[2] + cvA.r[2] * x;
+  const t = cvA.t, r = cvA.r;
+  const aheadPt = _vAheadPt;   // hoisted, see _vAheadPt
+  // Curvature of the bend we're approaching (speed-scaled look-ahead) — drives the
+  // broadcast cams to the OUTSIDE of the corner so they shoot across the apex.
+  // ONLY those three read it, and Tracks.curvature is a real sample-and-difference,
+  // so computing it unconditionally spent that every frame in chase, cockpit, hood,
+  // tcam, rear, drift, low, overhead and reverse — i.e. in every mode anyone
+  // actually races in — to throw the answer away.
+  let kA = 0;
+  if (mode === "heli" || mode === "side" || mode === "cinematic"
+      || mode === "chase" || mode === "far" || mode === "drift"
+      || mode === "overhead" || mode === "reverse") {
+    const kHere = Tracks.curvature(track, wrapS(s));
+    const kNear = Tracks.curvature(track, wrapS(s + lerp(15, 45, spN)));
+    const kFar = Tracks.curvature(track, wrapS(s + lerp(35, 65, spN)));
+    const kAhead = Math.abs(kFar) > Math.abs(kNear) + 0.0003 ? kFar : kNear;
+    // Hold the corner you're in. Look-ahead only sets the camera up while the
+    // road under the car is still straight, so a chicane can't steal the hang
+    // for the kink 40 m further on.
+    kA = Math.abs(kHere) > 0.012 ? kHere : kAhead;
+  }
+  // Street-circuit camera corridor: city tracks run a continuous building wall a
+  // few metres past the barriers, and the wide broadcast offsets (15-25 m) put
+  // the eye INSIDE the towers — the whole view fills with a glowing facade
+  // interior. The verge strip just outside the barriers is no better: it's where
+  // the trees and lamp masts stand, so a camera there stares into foliage.
+  // Instead, on street tracks the broadcast cams stay over the ROAD EDGE itself
+  // (furniture is never on the tarmac) and trade the lost width for extra
+  // height — a crane-over-the-circuit shot. Open circuits keep the full framing.
+  let eyeS = s;   // the arc the eye actually sits at (the ground clamp reads it there)
+  let eye = _vantEyeW, tgt = _vantTgtW, fov, vantCut = false;   // pooled; every branch below writes IN PLACE
+  // RIVAL / PIT WALL / DRONE — solvers live in js/camera/extra-rigs.js so this
+  // file stays under the ratchet. They write eye/tgt and return fov; CamTune
+  // and the ground clamp below still apply exactly as for the built-ins.
+  if (mode === "rival" || mode === "pitwall" || mode === "drone") {
+    if (typeof ExtraRigs !== "undefined") {
+      fov = ExtraRigs.solve(mode, track, s, x, spd, now, extra, eye, tgt);
+    } else {
+      eye[0] = p[0] - t[0] * 8; eye[1] = p[1] + 3.5; eye[2] = p[2] - t[2] * 8;
+      tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
+      fov = 50;
+    }
+  } else if (onboard) {
+    const driver = mode !== "hood";   // a driver's eye: cockpit, visor (no wheel), helmet (inside the lid)
+    const eyeFwd = driver ? seatFwd(mode) : 0.55;   // the cockpit INTERIOR's seat (CockpitOpts.layout)
+    const eyeUp  = driver ? seatUp(mode) : 0.95;
+    if (extra.carPos) {
+      // FREE-WORLD ONBOARD. These are bolted to the CAR, so they must sit at the
+      // car and look down the CAR's nose. Built from the road (eye along the
+      // ROAD tangent, aim 30 m down the centreline), driving straight through a
+      // bend swings the view round the corner while the nose slides across the
+      // frame — the arc reaching the driver through the most immersive camera
+      // in the game.
+      // The road still supplies eye HEIGHT and the gradient the view pitches
+      // with (t[1]) — surface, not line.
+      const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
+      eye[0] = extra.carPos[0] + hx * eyeFwd; eye[1] = p[1] + eyeUp; eye[2] = extra.carPos[1] + hz * eyeFwd;
+      const aimUp = driver ? eyeUp - 0.15 : eyeUp + 1.2;
+      // TURN CHASING (SETTINGS > COCKPIT slider, js/camera/cockpit-opts.js).
+      // 0 = the car's heading and NOTHING else — AGENTS.md's "the arc must not
+      // reach the driver" state. The player opts in with the slider (shipped
+      // default: CockpitOpts LEAD_DEFAULT). This moves where the camera looks, never the car.
+      const tcL = driver && typeof CockpitOpts !== "undefined"
+        ? CockpitOpts.turnChaseLead() : 0;
+      let aimX = extra.carPos[0] + hx * 30, aimZ = extra.carPos[1] + hz * 30;
+      if (tcL > 0) {
+        const lp = aheadPt(30, aimUp, x * 0.4);
+        aimX = aimX * (1 - tcL) + lp[0] * tcL;
+        aimZ = aimZ * (1 - tcL) + lp[2] * tcL;
+      }
+      tgt[0] = aimX; tgt[1] = p[1] + aimUp + t[1] * 30; tgt[2] = aimZ;
+      fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(64, 78, spFov) + dep * 3;
+    } else {
+      eye[0] = p[0] + t[0] * eyeFwd; eye[1] = p[1] + eyeUp; eye[2] = p[2] + t[2] * eyeFwd;
+      if (driver) {
+        const straight = _straightScr;
+        straight[0] = p[0] + t[0] * 30; straight[1] = p[1] + eyeUp - 0.15 + t[1] * 30; straight[2] = p[2] + t[2] * 30;
+        const w = typeof CockpitOpts !== "undefined" ? CockpitOpts.turnChaseLead() : 0; // 0 = nose-locked; shipped 0.35
+        const lead = w > 0 ? aheadPt(30, eyeUp - 0.15, x * 0.4) : straight;
+        tgt[0] = straight[0] * (1 - w) + lead[0] * w;
+        tgt[1] = straight[1] * (1 - w) + lead[1] * w;
+        tgt[2] = straight[2] * (1 - w) + lead[2] * w;
+      } else {
+        const av = aheadPt(30, eyeUp + 1.2, x * 0.6);
+        tgt[0] = av[0]; tgt[1] = av[1]; tgt[2] = av[2];
+      }
+      fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(64, 78, spFov) + dep * 3;             // wider = faster feel
+    }
+    // The head inside the car (HEAD_* above): along the axes the rig is built
+    // on — the car's heading in the free world, the road frame otherwise
+    // (R = F x up, the track's +x-right). A solve without the player's
+    // attitude (PiP, debug previews) still seats the HELMET eye.
+    const h = extra.att ? _head : headOffset(mode, extra, _headScr);
+    if (driver && (h[0] || h[1] || h[2] || h[3])) {
+      const fx = extra.carPos ? Math.sin(extra.carHead || 0) : t[0], fz = extra.carPos ? Math.cos(extra.carHead || 0) : t[2];
+      const dx = -fz * h[0] + fx * h[2], dz = fx * h[0] + fz * h[2];
+      eye[0] += dx; eye[1] += h[1]; eye[2] += dz;
+      tgt[0] += dx; tgt[1] += h[1] - h[3]; tgt[2] += dz;
+    }
+  } else if (mode === "overhead") {
+    // Aim runs further up the road as speed rises, so the overhead shot
+    // shows the corner you're arriving at instead of a fixed patch of asphalt.
+    // The one-shot path (no dt) keeps the shipped 12 m lead.
+    const ohLead = extra.dt > 0 ? 8 + 16 * spN : 12;
+    const ohOut = bendHang("ohBend", kA, extra.dt, extra.reduceMotion, 7 * hangScale("overhead"), 2.2, extra.snap);
+    eye[0] = p[0] - t[0] * 9 + r[0] * ohOut; eye[1] = p[1] + 34; eye[2] = p[2] - t[2] * 9 + r[2] * ohOut;
+    tgt[0] = p[0] + t[0] * ohLead; tgt[1] = p[1]; tgt[2] = p[2] + t[2] * ohLead;
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 46;
+  } else if (mode === "heli") {
+    // Broadcast helicopter — corner-aware: hovers on the OUTSIDE of the
+    // upcoming bend so it looks across the apex. +kA is a LEFT bend (measured —
+    // agentview.js corner-table note) whose outside is +r.
+    // Close enough, and low enough, that this is not a second overhead: the
+    // car stays large and the horizon stays in frame. 16 m back, 8.5 m up,
+    // 12 m out, aim 6 m ahead: tests/unit/camera-ride.test.mjs pins them, so a
+    // merge cannot quietly put the 26 / 17 / 18 m overhead back.
+    // Live frames ease the side across; a hard sign flip teleported the eye
+    // across the road and the damper then swam it through the circuit.
+    eyeS = s - 16;
+    Tracks.sample(track, wrapS(eyeS), cvB);
+    const sgnRaw = bendSide("bendHeli", kA, 0.001, 0.0015, extra.dt, extra.snap) || 1;
+    const sgn = typeof CamFeel !== "undefined" ? CamFeel.follow("bendHeli", sgnRaw, 2.4, extra.dt || 0) : sgnRaw;
+    const corr = _vCorr(wrapS(eyeS), cvB.hw);
+    const hl = Math.min(12, corr);              // stay inside the street canyon
+    const hlLat = Math.min(hl * hangScale("heli"), corr);   // CORNER HANG widens the rig, never past the corridor
+    eye[0] = cvB.p[0] + cvB.r[0] * hlLat * sgn;
+    eye[1] = centreY(track, s - 16) + 8.5 + (12 - hl) * 0.45 + bankDy;
+    eye[2] = cvB.p[2] + cvB.r[2] * hlLat * sgn;
+    eye[1] += speedOpen("heliClimb", spN, extra.dt, extra.reduceMotion, extra.snap, 2.2, 1.4);
+    const heliAim = aheadPt(6, 0.7, x * 0.2);
+    tgt[0] = heliAim[0]; tgt[1] = heliAim[1]; tgt[2] = heliAim[2];
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 36 + dep * 2;
+  } else if (mode === "reverse") {
+    eyeS = s + 5.5;
+    eye[0] = p[0] + t[0] * 5.5; eye[1] = p[1] + 1.35; eye[2] = p[2] + t[2] * 5.5;
+    const revOut = bendHang("revBend", kA, extra.dt, extra.reduceMotion, 3.6 * hangScale("reverse"), 5, extra.snap);
+    eye[0] += r[0] * revOut; eye[2] += r[2] * revOut;
+    tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.9; tgt[2] = p[2] - t[2] * 26;
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(60, 72, spFov);
+  } else if (mode === "side") {
+    // TV tracking: a few metres behind the car, outside the bend, looking
+    // up the road so the car leads the frame instead of sitting dead-centre.
+    // 6 m back, 3.2 m up, 14 m out, aim 14 m ahead: pinned by
+    // tests/unit/camera-ride.test.mjs. The TV director and the results
+    // screen's chequered cut (ResultsCam.cheqPose) solve this same branch.
+    const sgnRaw = bendSide("bendSide", kA, 0.002, 0.003, extra.dt, extra.snap) || 1;
+    const sgn = typeof CamFeel !== "undefined" ? CamFeel.follow("bendSide", sgnRaw, 2.6, extra.dt || 0) : sgnRaw;
+    eyeS = s - 6;
+    Tracks.sample(track, wrapS(eyeS), cvB);
+    const corr = _vCorr(wrapS(eyeS), cvB.hw);
+    const sl = Math.min(14, corr);              // stay inside the street canyon
+    const slLat = Math.min(sl * hangScale("side"), corr);
+    eye[0] = cvB.p[0] + cvB.r[0] * sgn * slLat; eye[1] = centreY(track, s - 6) + 3.2 + (14 - sl) * 0.25 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * sgn * slLat;
+    const sideAim = aheadPt(14, 0.7, x * 0.3);   // after the eye: aheadPt reuses cvB
+    tgt[0] = sideAim[0]; tgt[1] = sideAim[1]; tgt[2] = sideAim[2];
+    // Corridor widen stays local; speed widen shares CamFeel.speedFov (mild scale).
+    const sideBase = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 44;
+    fov = sideBase + (14 - sl) * 0.35;
+  } else if (mode === "cinematic") {
+    // Outside-of-corner cinematic that gently breathes its angle instead of doing
+    // full disorienting loops. Auto-picks the outside of the bend; on a straight it
+    // slowly drifts a three-quarter angle. Angle is measured around the car from
+    // the track tangent, so the framing reads consistently corner to corner.
+    // +kA = LEFT bend → outside is +r → positive angle (same fix as heli above).
+    const cineSide = bendSide("bendCine", kA, 0.0003, 0.0015, extra.dt, extra.snap, true);
+    const baseRaw = cineSide === 0 ? 0.6 : cineSide * 1.15;
+    const base = typeof CamFeel !== "undefined" ? CamFeel.follow("bendCine", baseRaw, 2.2, extra.dt || 0) : baseRaw;
+    const a = base + Math.sin(now * 0.00022) * 0.25;
+    const corr = _vCorr(wrapS(s), cvA.hw);
+    const od = Math.min(22, corr);
+    const odLat = Math.min(od * hangScale("cinematic"), corr);
+    const dir = _dirScr;
+    dir[0] = Math.cos(a) * t[0] + Math.sin(a) * r[0]; dir[1] = 0; dir[2] = Math.cos(a) * t[2] + Math.sin(a) * r[2];
+    eye[0] = p[0] + dir[0] * odLat; eye[1] = p[1] + 6.5 + (22 - od) * 0.45; eye[2] = p[2] + dir[2] * odLat;
+    const cinAim = aheadPt(lerp(12, 22, spN), 0.85, x * 0.15);
+    tgt[0] = cinAim[0]; tgt[1] = cinAim[1]; tgt[2] = cinAim[2];
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(50, 60, spFov);
+  } else if (mode === "low") {
+    eyeS = s - 8;
+    Tracks.sample(track, wrapS(eyeS), cvB);
+    const cx = x * 0.3;
+    eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 8) + 0.55 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
+    const lowAim = aheadPt(18, 0.45, x * 0.35);
+    tgt[0] = lowAim[0]; tgt[1] = lowAim[1]; tgt[2] = lowAim[2];
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(55, 68, spFov);
+  } else if (mode === "trackside") {
+    // Fixed corner cameras that auto-switch as the subject passes (js/camera/trackside.js).
+    // FOV comes from the measured pose (or the side-like fallback); CamFeel does not override.
+    const ts = typeof TracksideCams !== "undefined" ? TracksideCams.pose(track, s, x, extra) : null;
+    if (ts) {
+      eye[0] = ts.eye[0]; eye[1] = ts.eye[1]; eye[2] = ts.eye[2];
+      tgt[0] = ts.tgt[0]; tgt[1] = ts.tgt[1]; tgt[2] = ts.tgt[2];
+      fov = ts.fov;
+      vantCut = !!ts.cut;
+    } else {
+      // No measured corners yet — fall back to TV side framing.
+      const sgn = 1;
+      const sl = Math.min(25, _vCorr(wrapS(s), cvA.hw));
+      eye[0] = p[0] + r[0] * sgn * sl; eye[1] = p[1] + 6.0; eye[2] = p[2] + r[2] * sgn * sl;
+      tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
+      fov = 44;
+    }
+  } else if (mode === "tcam") {
+    eye[0] = p[0] - t[0] * 0.52; eye[1] = p[1] + 1.46; eye[2] = p[2] - t[2] * 0.52;
+    const avT = aheadPt(20, 0.35, x * 0.5);
+    tgt[0] = avT[0]; tgt[1] = avT[1]; tgt[2] = avT[2];
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 46 + dep * 2;
+  } else if (mode === "rear") {
+    eye[0] = p[0] - t[0] * 0.95; eye[1] = p[1] + 1.38; eye[2] = p[2] - t[2] * 0.95;
+    tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.7; tgt[2] = p[2] - t[2] * 26;
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(58, 70, spFov) + dep * 2;
+  } else if (mode === "drift") {
+    // Action chase that swings to the OUTSIDE of the slide so the car's flank faces
+    // camera under oversteer, then settles directly behind once the car hooks up.
+    const slipRaw = clamp((extra.slipLat || 0) / 8, -1, 1);
+    const slipN = typeof CamFeel !== "undefined" ? CamFeel.follow("driftSlip", slipRaw, 7, extra.dt || 0) : slipRaw;
+    Tracks.sample(track, wrapS(s - 6.2), cvB);
+    const bend = bendHang("driftBend", kA, extra.dt, extra.reduceMotion, 1, 6.5, extra.snap);
+    const cx = x * 0.5 - slipN * 6.5 + bend * 5.5 * hangScale("drift");
+    eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 6.2) + 2.4 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
+    tgt[0] = p[0]; tgt[1] = p[1] + 0.75; tgt[2] = p[2];
+    fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(55, 70, spFov) + dep * 3;
+  } else {
+    const far = mode === "far";
+    // CHASE's shipped framing bakes a CAMERA TUNER profile (height -0.75,
+    // dist -0.725), so the tuner means "offset from shipped" with every def at 0.
+    // HEIGHT lands here, on eyeUp, which is what CamTune.apply does with it.
+    // DISTANCE does NOT land on `back`: `back` is also the arc the ride height
+    // and gradient are sampled over (rideEye) and the arm the three-quarter
+    // offset scales off (CHASE_SIDE_FRAC), so folding it in there would move
+    // two things the knob never touches. It is applied below exactly as the
+    // tuner applies it — along the view direction, horizontally, after the rig
+    // has solved. FAR is untouched.
+    const back  = far ? 10.5 : 5.8;
+    const eyeUp = far ? 3.6 : 1.35;
+    Tracks.sample(track, wrapS(s - back), cvB);
+    const cx = x * 0.5;
+    const lead = far ? 9 : 6;
+    const tgtUp = far ? 1.0 : 0.7;
+    const rideC = rideY(track, s), grade = rideGrade(track, s);
+    const rideEye = rideC - back * grade;          // road under the eye, smoothed
+    const rideTgtAhead = rideC + lead * grade;
+    if (extra.carPos) {
+      const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
+      const rx = hz, rz = -hx;
+      const side = back * CHASE_SIDE_FRAC;
+      eye[0] = extra.carPos[0] - hx * back + rx * side; eye[1] = rideEye + eyeUp + bankDy; eye[2] = extra.carPos[1] - hz * back + rz * side;
+      tgt[0] = extra.carPos[0] + hx * lead; tgt[1] = rideC + bankDy + tgtUp; tgt[2] = extra.carPos[1] + hz * lead;
+      // CORNER LEAD (CAMERA TUNER, opt-in, shipped 0.54 — was 0.18 before
+      // 2026-09-08). Blend the whole rig toward the road-frame chase below —
+      // eye an arc-distance back along the ROAD, aim at the curved centreline
+      // ahead — so the camera leads and swings INTO the bend, the classic chase
+      // feel. This is the one place the arc is allowed to reach the chase view,
+      // and only because the player asked for it on a slider: it moves where
+      // the camera looks, never the car (px/pz/(s,x) are untouched).
+      const leadStored = (typeof CamTune !== "undefined" && typeof CamTune.cornerLead === "function")
+        ? CamTune.cornerLead(mode) : null;
+      const lead2 = clamp(leadStored != null ? leadStored : CHASE_CORNER_LEAD_DEFAULT, 0, 1);
+      if (lead2 > 0) {
+        const eyeR0 = cvB.p[0] + cvB.r[0] * cx, eyeR1 = rideEye + eyeUp + bankDy, eyeR2 = cvB.p[2] + cvB.r[2] * cx;
+        const tgtR = aheadPt(lead, 0, x * 0.4);
+        tgtR[1] = rideTgtAhead + tgtUp;
+        // in-place lerp: each component reads its own OLD value before it is
+        // overwritten, so eye/tgt being the pooled arrays themselves is safe.
+        eye[0] = lerp(eye[0], eyeR0, lead2); eye[1] = lerp(eye[1], eyeR1, lead2); eye[2] = lerp(eye[2], eyeR2, lead2);
+        tgt[0] = lerp(tgt[0], tgtR[0], lead2); tgt[1] = lerp(tgt[1], tgtR[1], lead2); tgt[2] = lerp(tgt[2], tgtR[2], lead2);
+      }
+      // The shipped half of the DISTANCE knob (see `back` above): the eye slides
+      // CHASE_EYE_IN metres along the eye->target direction, horizontally, which
+      // is CamTune.apply()'s own `dist` arithmetic with the sign already turned
+      // round. A player's DISTANCE still stacks on top of it, from zero.
+      if (!far && CHASE_EYE_IN) {
+        let fx2 = tgt[0] - eye[0], fz2 = tgt[2] - eye[2];
+        const fl2 = Math.hypot(fx2, fz2);
+        if (fl2 > 1e-4) { eye[0] += (fx2 / fl2) * CHASE_EYE_IN; eye[2] += (fz2 / fl2) * CHASE_EYE_IN; }
+      }
+      const gP = (extra.att && extra.att.baPitch) || 0;
+      eye[0] += hx * gP * CHASE_G_DOLLY; eye[2] += hz * gP * CHASE_G_DOLLY;   // +heading = toward the car
+      tgt[1] -= gP * CHASE_G_AIM;
+    } else {
+      eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = rideEye + eyeUp + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
+      const avC = aheadPt(lead, 0, x * 0.4);   // XZ only; the height is the smoothed one
+      tgt[0] = avC[0]; tgt[1] = rideTgtAhead + tgtUp; tgt[2] = avC[2];
+    }
+    // Chase hangs outside and looks into the apex. Far does not: its length
+    // already swings it, and a second hang was cancelling that.
+    if (!far) {
+      const chaseOut = bendHang("chaseBend", kA, extra.dt, extra.reduceMotion, 4.6 * hangScale("chase"), 6, extra.snap);
+      eye[0] += r[0] * chaseOut; eye[2] += r[2] * chaseOut;
+      const aimIn = chaseOut * 0.7;
+      tgt[0] -= r[0] * aimIn; tgt[2] -= r[2] * aimIn;
+    }
+    // Open along the view with speed. Far goes further back, and later.
+    // `back` itself stays put: the ride height is sampled over that arc.
+    const openM = far ? 3.2 : 1.6;
+    const openL = far ? 1.15 : 2.6;
+    pullBack(eye, tgt, speedOpen(far ? "farOpen" : "chaseOpen", spN, extra.dt, extra.reduceMotion, extra.snap, openM, openL));
+    fov = typeof CamFeel !== "undefined"
+      ? CamFeel.modeFov(far ? "far" : "chase", spFov, dep)
+      : lerp(57, 63, spFov) + (far ? 4 : 0) + dep * 3;
+  }
+  // Start coverage on the body; explicit tuner aim and local look remain additive.
+  if (extra.frameSubject && (mode === "chase" || mode === "side" || mode === "heli" || mode === "cinematic")) {
+    tgt[0] = extra.carPos ? extra.carPos[0] : p[0];
+    tgt[1] = p[1] + 0.8;
+    tgt[2] = extra.carPos ? extra.carPos[1] : p[2];
+  }
+  // Per-mode HEIGHT/DISTANCE/SIDE/PITCH/YAW/FOV nudges from js/camera/offsets.js,
+  // applied to the solved rig rather than baked into each branch — one place to
+  // reason about, and every mode gets the same six knobs for free. A no-op (an
+  // early return inside apply() when the mode has no profile and COMFORT's FOV
+  // bias is 0) until the player actually tunes something, so an untuned install
+  // frames exactly as it did before this existed. There is no separate "anything
+  // tuned" flag: apply() decides from the merged profile itself.
+  // Deliberately BEFORE the ground clamp: a lowered eye must still be caught by
+  // the terrain floor, or a −3 m HEIGHT would render the world from inside a hill.
+  if (mode === "chase" || mode === "far" || mode === "drift" || mode === "reverse")
+    _vWallClamp(eye, mode === "far" ? s - 10.5 : mode === "chase" ? s - 5.8 : mode === "drift" ? s - 6.2 : s + 5.5);
+  if (typeof CamTune !== "undefined") fov = CamTune.apply(mode, eye, tgt, fov);
+  // FREE-LOOK (js/camera/feel.js): additive yaw/pitch on bolted-on cams, after
+  // CamTune so the tuner offsets stay the base and free-look stacks on top.
+  if (localLook && typeof CamFeel !== "undefined") CamFeel.applyFreeLook(eye, tgt);
+  /* LOOK BACK — spin the AIM about the eye, never move the eye.
+     Mode-aware via CamFeel: reverse/rear already face aft, so a flip is skipped.
+     Default is hold (mirror glance); SETTINGS › CAMERA FEEL can latch on press.
+     After CamTune + free-look so trim and glance are part of what gets mirrored;
+     before the ground clamp (eye unchanged). */
+  const _lbHeld = localLook && typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack();
+  const _lb = localLook && (typeof CamFeel !== "undefined" ? CamFeel.shouldLookBack(mode, _lbHeld) : _lbHeld);
+  if (_lb) {
+    const dx = tgt[0] - eye[0], dz = tgt[2] - eye[2];
+    tgt[0] = eye[0] - dx; tgt[2] = eye[2] - dz;
+  }
+  // Speed / brake / yaw motion. Before the ground clamp so a dip cannot put
+  // the eye under the road. No-op without a timestep.
+  if (typeof CamFeel !== "undefined" && CamFeel.drive) {
+    // drive() adds a lens delta AFTER CamTune's 20-110 clamp (heli +11, far +7): clamp again, but
+    // never pull in a FOV that arrived outside the range (trackside's long 18 deg lens).
+    const f0 = fov;
+    fov = CamFeel.drive(mode, eye, tgt, fov, extra, spN);
+    fov = clamp(fov, Math.min(f0, 20), Math.max(f0, 110));
+  }
+  // Open-circuit wall / building avoidance for broadcast cams (street circuits
+  // already use `corr`). Steps toward the road, then lifts over roofs — see
+  // js/camera/cam-avoid.js. Runs before the ground floor so a lifted eye is
+  // still caught by terrain.
+  if (typeof CamAvoid !== "undefined" && CamAvoid.applies(mode)) {
+    CamAvoid.freeEye(track, eye, cvA);
+  }
+  // The broadcast framings (heli, cinematic, roadside, low, drift) place the eye
+  // by arc offset and lateral distance with no idea what the ground does out
+  // there. On a circuit with real relief that puts the camera INSIDE a hillside
+  // or under a banked verge, and once the eye is below the surface the world
+  // renders from the inside: near faces cull as backfacing and you see straight
+  // through the terrain. Zandvoort's banked corners are the worst case — the
+  // outer edge alone stands 2.4 m above the centreline plane these offsets are
+  // measured from.
+  //
+  // Clamp the eye to the ground beneath it plus a small clearance. The ground
+  // is the same lateral profile the terrain ribbon is built from, plus the
+  // corner's banking, so this agrees with what is actually drawn. The onboard
+  // eyes (cockpit/hood/visor/helmet) are exempt — they ride the car, and their
+  // eye is already on the surface by construction.
+  if (!onboard && track.surface) {
+    const n = track.n;
+    // INTERPOLATE THE FLOOR BETWEEN NODES. surface.heightAt() rounds its node
+    // index and reads py at that node, so asking it once at Math.round(s) makes
+    // the floor a STAIRCASE with one step per ~4 m node. That is invisible while
+    // the eye rides clear of it — which it does at the shipped framing, by about
+    // half a metre on Monaco — and it is why this went unnoticed. Drop the eye
+    // into the clamp (the CAMERA TUNER's HEIGHT/DISTANCE do exactly that, which
+    // is the whole point of applying them above this) and the eye inherits the
+    // staircase: on a gradient each step is nodeSpacing x grade, MEASURED at
+    // 0.45 m on Beau Rivage, snapping ~11 times a second at racing speed. It
+    // vanishes when parked and on the flat (adjacent nodes are level there), so
+    // it reads as a fast vertical judder that only happens while climbing.
+    //
+    // Sampling both neighbours and lerping makes the floor continuous, so a
+    // lowered camera SLIDES along the terrain instead of stepping down it.
+    // js/track/core/mesh.js banking() lerps for exactly this reason ("so cars and
+    // cameras do not jump between the road mesh's ~4 m longitudinal nodes") —
+    // this clamp simply never got the same treatment.
+    // The floor is read at the EYE's own arc (reverse s+5.5, low s-8, heli s-16, side s-6), not the
+    // car's: on a crest (Spa's Raidillon) the node under the car is metres above the one under the eye.
+    // chase/far/drift keep the car's s on purpose — their reference is the smoothed ride height above.
+    const eyeAt = mode === "reverse" || mode === "low" || mode === "heli" || mode === "side" ? eyeS : s;
+    const fr = eyeAt === s ? cvA : (Tracks.sample(track, wrapS(eyeAt), cvB), cvB);
+    const pos = (((eyeAt % track.total) + track.total) % track.total) / track.total * n;
+    const k0 = Math.floor(pos) % n, kf = pos - Math.floor(pos);
+    // kPrev, NOT kA: this function's outer scope declares kA as a CURVATURE
+    // (1/m) ~200 lines up; reusing the name here for a node index was a
+    // landmine for any future edit wanting curvature inside this block.
+    const kPrev = (k0 - 1 + n) % n, k1 = (k0 + 1) % n, kB = (k0 + 2) % n;
+    // Lateral offset of the eye, measured against the INTERPOLATED frame at s
+    // (cvA still holds that sample) rather than one node's — same reason: a
+    // per-node frame steps the lateral reading too.
+    const ex = eye[0] - fr.p[0], ez = eye[2] - fr.p[2];
+    const lat = ex * fr.r[0] + ez * fr.r[2];
+    const beyond = Math.max(0, Math.abs(lat) - fr.hw);
+    const bank = Tracks.banking ? Tracks.banking(track, eyeAt, lat, _bankScr, true) : null;
+    const ground = crY(track.surface.heightAt(kPrev, beyond), track.surface.heightAt(k0, beyond),
+                       track.surface.heightAt(k1, beyond), track.surface.heightAt(kB, beyond), kf)
+                 + (bank ? bank.dy : 0);
+    // SOFT floor, not a hard max(). `eye = max(eye, floor)` is continuous but its
+    // SLOPE jumps the instant the clamp takes over, so every engage/disengage is
+    // a kink — and a camera the player has parked NEAR the floor crosses it over
+    // and over, turning one threshold into a repeating judder. MEASURED on Spa
+    // with HEIGHT -1.5 / DIST -3: a single crossing produced a vertical
+    // acceleration 18.8x the local rms, while the same rig on the same road read
+    // 2.3x untuned (it never reaches the floor). Easing over CLAMP_BLEND makes
+    // the handover C1, so the eye settles onto the terrain instead of catching
+    // on it. The eye still never ends up below the floor — the blend only ever
+    // pushes it UP, so the "never render from inside a hill" guarantee holds.
+    const MIN_CLEAR = 0.8, CLAMP_BLEND = 0.35, FLOOR_LEAD = 0.25;
+    // Over the ROAD the floor reference is the SAME smoothed ride height the
+    // chase rig frames from, not the raw profile. The raw floor undid the whole
+    // RIDE HEIGHT design for any camera parked near it: a CAMERA TUNER height
+    // below ~-1.3 m sits inside the knee on flat road, so the eye stopped
+    // following the smoothed line and rode raw ripple crests through the clamp
+    // — and on a climb the rig's -back*grade pressed it onto that raw floor
+    // just above the car ("lowered the camera and it drops on every hill").
+    // Floored on rideY instead, a clamped eye follows the C1 60 m-smoothed
+    // line: ripple-free on the flat, and on a grade it tracks the CAR's
+    // smoothed height (the clamp samples at the car's s), so the tuned framing
+    // keeps a constant ~MIN_CLEAR above the car instead of sinking below it.
+    // Safety is bounded in STRUCTURE, not by today's data: the smoothed
+    // reference may sit at most FLOOR_LEAD below the raw ground, so the eye
+    // is guaranteed ground + (MIN_CLEAR - FLOOR_LEAD) = 0.55 m of true
+    // clearance even where the smoothed line leads a genuine drop (the -6 m
+    // cliff torture case in tests/unit/camera-ride.test.mjs). On every real
+    // circuit the bound is slack: MEASURED fleet-wide, raw never stands more
+    // than 0.202 m above rideY over the road (suzuka worst), so the smooth
+    // reference governs everywhere and the full 0.8 m holds in practice.
+    // Off the road (beyond > 0: heli/roadside/cinematic) terrain is not
+    // ripple, it is relief — the raw floor stays.
+    let floorY = ground + MIN_CLEAR;
+    if (beyond === 0) {
+      const smoothG = rideY(track, eyeAt) + (bank ? bank.dy : 0);
+      floorY = Math.max(smoothG, ground - FLOOR_LEAD) + MIN_CLEAR;
+    }
+    eye[1] = softFloor(eye[1], floorY, CLAMP_BLEND);
+  }
+  if (onboard || mode === "tcam") onboardAttitude(mode, eye, tgt, extra, s, spN);
+  if (isFinite(eye[0] + eye[1] + eye[2] + tgt[0] + tgt[1] + tgt[2] + fov)) {
+    _goodEye[0] = eye[0]; _goodEye[1] = eye[1]; _goodEye[2] = eye[2];
+    _goodTgt[0] = tgt[0]; _goodTgt[1] = tgt[1]; _goodTgt[2] = tgt[2]; _goodFov = fov;
+  } else {   // hold the last finite pose: see _goodEye
+    eye = _goodEye; tgt = _goodTgt; fov = _goodFov;
+    if (!_nanWarned) { _nanWarned = true; Log.warn("game", "GameCams.vantage: non-finite pose in mode " + mode + ", holding the last good one"); }
+  }
+  _vantEye[0] = eye[0]; _vantEye[1] = eye[1]; _vantEye[2] = eye[2];
+  _vantTgt[0] = tgt[0]; _vantTgt[1] = tgt[1]; _vantTgt[2] = tgt[2];
+  _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = fov; _vantOut.cut = vantCut;
+  publishListenerBasis(mode, eye, tgt);
+  _vTrack = null;   // a per-call input: left set, it pinned the last raced world through the menu
+  return _vantOut;
+}
+
+// Read-only listener basis for rival panning (js/audio/engine.js setRivals). Refreshed
+// at the end of every vantage() solve — including TV director shots that call
+// camVantage before render. Player-track pan when external is false (onboard + chase).
+const _listener = { external: false, x: 0, z: 0, fwdX: 0, fwdZ: 1, rightX: 1, rightZ: 0, valid: false };
+function playerFrameRivalPan(modeId) {
+  if (typeof CamGroups !== "undefined" && CamGroups.isOnboard(modeId)) return true;
+  return modeId === "chase";
+}
+function publishListenerBasis(modeId, eye, tgt) {
+  _listener.external = !playerFrameRivalPan(modeId);
+  _listener.valid = !!(eye && tgt);
+  if (!_listener.valid) return;
+  _listener.x = eye[0];
+  _listener.z = eye[2];
+  let fx = tgt[0] - eye[0], fz = tgt[2] - eye[2];
+  const fl = Math.hypot(fx, fz);
+  if (fl < 1e-4) { _listener.fwdX = 0; _listener.fwdZ = 1; _listener.rightX = 1; _listener.rightZ = 0; return; }
+  fx /= fl; fz /= fl;
+  _listener.fwdX = fx; _listener.fwdZ = fz;
+  _listener.rightX = -fz; _listener.rightZ = fx;
+}
+// Debug free camera (__apex.view): copy its eye/target into the render's
+// camera vectors and publish it as the external audio listener, in one call
+// so game.js render() stays at +0 lines.
+function applyFreeCam(cam, eyeOut, tgtOut) {
+  for (let i = 0; i < 3; i++) { eyeOut[i] = cam.eye[i]; tgtOut[i] = cam.target[i]; }
+  publishListenerBasis("free", cam.eye, cam.target);
+}
+function getListenerBasis() { return _listener.valid ? _listener : null; }
+
+return { init, vantage, resetSmoothing, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, headState, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP,
+  HELMET_EYE_FWD, HEAD_MAX, CHASE_CORNER_LEAD_DEFAULT, publishListenerBasis, applyFreeCam, getListenerBasis, playerFrameRivalPan };
+})();

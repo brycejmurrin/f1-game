@@ -1,0 +1,10 @@
+[
+{"query":"In a MY TEAM career save, the R&D research facility upgrade deducts credits but the balance shown after settling the round doesn't match what careerState reports. Trace the economy path through js/career/career.js and tell me where the spend or settlement double counts, then fix it and cover it with a test.","expect":"career-mode"},
+{"query":"cant get my driver career slot 2 to load after i deleted slot 1, it just boots into a blank new career?? think the apex26.careerSlot pointer is stale or something, can u look","expect":"career-mode"},
+{"query":"Every time I retire from a race in my career the sponsor payout and the contract bonus both vanish, and next season my team offers me a worse deal than before. Something about DNF handling seems off. Figure out why.","expect":"career-mode"},
+{"query":"Career qualifying via qualiSim gives the player pole nearly every round at Monza and Spa even with a low-rated car. Look at how the ratings feed into it in js/career/career.js and rebalance so a weak MY TEAM car starts mid-pack, keeping the deterministic career rnd stream.","expect":"career-mode"},
+{"query":"I need to migrate old career saves when the regulation era changes: add a new field for the era cap to save-migrate.js so older DRIVER saves load cleanly, and add a career.spec.js case that loads a v-old save blob and checks the cap.","expect":"career-mode"},
+{"query":"In the standalone Season screen with no career open, the sprint weekend shows the wrong points table and quali-off still runs a qualifying session. Fix season-cal.js so the calendar's weekend format respects the Season SETUP toggles.","expect":"season-mode"},
+{"query":"The garage parts catalog shows an owned part from my career as locked, and the shark fin livery finish looks washed out on the cover. Fix the owned-part UI in the GARAGE and check ersProfile for that part.","expect":"garage-parts-livery"},
+{"query":"After a multi-car pile-up the safety car never deploys and two cars get retired as reliability DNFs mid-caution. Debug the race-control incident takeover so the caution ends and the field bunches up properly.","expect":"race-incidents-control"}
+]

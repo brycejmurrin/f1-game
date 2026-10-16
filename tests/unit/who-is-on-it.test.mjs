@@ -1,0 +1,260 @@
+// who-is-on-it — the claim half of the shared-branch check. The pushes half is
+// `git for-each-ref` and `git log`, read straight; the claims half has one
+// pure function (a for-each-ref line -> a claim with its age, staleness and
+// released state), one slug rule and one commit shape (an empty tree carrying
+// the text), and those are what a unit test can pin without touching the
+// remote. Importing the module must run nothing: the CLI entry is guarded on
+// argv[1]. Under a second.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
+import test from "node:test";
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseClaims, claimCommit, claimSlug, sessionId, parseBoard, nextBoard, readBoard, pushBoard, parseCatFileBatch, parseRefs, fetchRefCache, CLAIMS_BOARD, BOARD_MAX_MIN, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const NOW = 1_800_000_000;
+const DEPLOY_LIKE = "claude/f1-game-project-26h3ng";
+const line = (ageMin, slug, who, text) => `${NOW - ageMin * 60}\trefs/remotes/origin/${CLAIMS_PREFIX}${slug}\t${who}\t${text}`;
+
+test("a claim line becomes a claim with its slug, owner, text and age; newest first", () => {
+  const got = parseClaims([
+    line(30, "fix-autopilot", "Claude", "fixing the autopilot red  [claude/fix-autopilot; session abc123]"),
+    line(5, "tune-aero", "Bryce", "aero zones on Spa  [claude/tune-aero]"),
+  ].join("\n"), NOW);
+  assert.equal(got.length, 2);
+  assert.deepEqual(got.map((c) => c.slug), ["tune-aero", "fix-autopilot"], "newest first");
+  assert.equal(got[1].who, "Claude");
+  assert.equal(got[1].text, "fixing the autopilot red  [claude/fix-autopilot; session abc123]");
+  assert.equal(got[1].ageMin, 30);
+  assert.equal(got[1].stale, false);
+  assert.equal(got[1].released, false);
+});
+
+test(`a claim older than ${STALE_MIN} min is STALE, and staleness informs rather than filters`, () => {
+  const got = parseClaims([line(STALE_MIN + 1, "old", "X", "forgot to release"), line(STALE_MIN, "edge", "Y", "just inside")].join("\n"), NOW);
+  assert.equal(got.find((c) => c.slug === "old").stale, true);
+  assert.equal(got.find((c) => c.slug === "edge").stale, false);
+  assert.equal(got.length, 2, "a stale claim is still listed — the reader decides");
+});
+
+test("a released claim is a tombstone: parsed, flagged, never mistaken for a live one", () => {
+  const [c] = parseClaims(line(1, "done", "Z", `${RELEASED}  [claude/done; session s1]`), NOW);
+  assert.equal(c.released, true);
+  const [live] = parseClaims(line(1, "live", "Z", "not released yet"), NOW);
+  assert.equal(live.released, false);
+});
+
+test("an empty listing, a bare branch name and a tab inside the text all survive", () => {
+  assert.deepEqual(parseClaims("", NOW), []);
+  const [c] = parseClaims(`${NOW - 60}\t${CLAIMS_PREFIX}bare\tw\twith\ta tab`, NOW);
+  assert.equal(c.slug, "bare");
+  assert.equal(c.text, "with\ta tab");
+  assert.ok(c.ageMin >= 0);
+});
+
+test("the slug carries the SESSION, so two sessions on one branch never share a ref", () => {
+  // Keying on the branch alone was worse than no tool at all: sessions develop
+  // directly on the deploy branch, so every one resolved to the same ref and
+  // the force-push made B's claim erase A's, while A's --release tombstoned B.
+  assert.equal(claimSlug("claude/fix-autopilot", "sessAAAA"), "fix-autopilot-sessAAAA");
+  assert.notEqual(claimSlug(DEPLOY_LIKE, "sessAAAA"), claimSlug(DEPLOY_LIKE, "sessBBBB"),
+    "two sessions on the SAME branch must get different refs");
+  // ...and the old slash-folding collision is gone for the same reason.
+  assert.notEqual(claimSlug("claude/a/b", "s1"), claimSlug("claude/a--b", "s2"));
+  assert.equal(claimSlug("main", "s1"), "main-s1");
+  // Missing identity must never create a shared mutable "nosession" ref.
+  assert.equal(sessionId({}), null);
+  const id = sessionId({ APEX_SESSION_ID: "abc-123/def!" });
+  assert.match(id, /^[a-f0-9]{24}$/);
+  assert.equal(id, sessionId({ CODEX_THREAD_ID: "abc-123/def!" }));
+  assert.notEqual(id, sessionId({ APEX_SESSION_ID: "abc123def" }));
+});
+
+test("a live claim whose TEXT begins with the word released is not a tombstone", () => {
+  // `startsWith("released")` read this real claim as a release, so it vanished
+  // from the listing for every session, including the one that wrote it.
+  const [c] = parseClaims(line(1, "fix-a", "Claude",
+    "released the c1Pileup lock, now on the autopilot red  [claude/fix-a; session s1]"), NOW);
+  assert.equal(c.released, false, "a claim that merely MENTIONS releasing is still a live claim");
+  // The tombstone this tool writes is exactly the sentinel plus its tag.
+  const [t] = parseClaims(line(1, "fix-a", "Claude", `${RELEASED}  [claude/fix-a; session s1]`), NOW);
+  assert.equal(t.released, true);
+  // ...and an untagged tombstone (no session available) still counts.
+  const [u] = parseClaims(line(1, "fix-a", "Claude", RELEASED), NOW);
+  assert.equal(u.released, true);
+});
+test("a claim commit works with NO git identity configured — a CI runner must not throw", () => {
+  // CI run 4651 went red here: `git commit-tree` dies with "Author identity
+  // unknown" on a runner, and a coordination tool that cannot run on an
+  // unconfigured box is worse than one that signs the claim "unknown".
+  const saved = {};
+  for (const k of ["HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"]) {
+    saved[k] = process.env[k];
+    delete process.env[k];
+  }
+  process.env.GIT_CONFIG_GLOBAL = process.env.GIT_CONFIG_SYSTEM = "/dev/null";
+  try {
+    const sha = claimCommit("identity-free claim", "claude/unit");
+    assert.match(sha, /^[0-9a-f]{40}$/);
+    assert.match(execFileSync("git", ["cat-file", "-p", sha], { cwd: ROOT, encoding: "utf8" }), /identity-free claim/);
+  } finally {
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+});
+
+test("a claim commit is the empty tree carrying the text, the branch and the session id", () => {
+  const sha = claimCommit("unit-test claim", "claude/unit", "sess1234");
+  assert.match(sha, /^[0-9a-f]{40}$/);
+  const show = execFileSync("git", ["cat-file", "-p", sha], { cwd: ROOT, encoding: "utf8" });
+  assert.match(show, new RegExp(`^tree ${EMPTY_TREE}$`, "m"), "the empty tree — a claim never carries files");
+  assert.match(show, /unit-test claim  \[claude\/unit; session sess1234\]/);
+  assert.notEqual(claimCommit("x", "claude/unit"), sha, "the text is the message, so different text is a different commit");
+});
+
+test("a FAILED fetch must not print as an empty claim list", () => {
+  // The whole point of this tool is that a session does not start fixing what
+  // someone else already claimed. Reading stale local refs after a failed
+  // fetch and printing "nobody has claimed anything" is the 2026-09-18
+  // collision with extra steps, so the two answers must never look alike.
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/who-is-on-it.mjs"), "utf8");
+  assert.match(src, /FETCH FAILED/, "an unfetched run must say so in the CLAIMS section, not only the branch header");
+  assert.match(src, /means NOTHING WAS READ, not that nobody is on it/);
+  // and the reassuring "(none — nobody has claimed anything…)" line must be
+  // reachable ONLY when the fetch actually succeeded.
+  const empty = /if \(!active\.length\) \{\s*console\.log\(fetched\s*\?/;
+  assert.match(src, empty, "the empty-claims wording must branch on `fetched`");
+});
+
+test("the claims BOARD: one file per claim, a release removes it, a write drops day-old claims", () => {
+  const f = (slug, ageMin, text = "on it") => ({ slug, content: `${NOW - ageMin * 60}\tClaude\t${text}\n` });
+  const [c] = parseBoard([f("fix-a-s1", 30, "fixing\tthe red")], NOW);
+  assert.deepEqual([c.slug, c.who, c.text, c.ageMin, c.stale, c.released], ["fix-a-s1", "Claude", "fixing\tthe red", 30, false, false]);
+  const board = [f("a-s1", 10), f("b-s2", BOARD_MAX_MIN + 1), f("c-s3", 5)];
+  assert.deepEqual(nextBoard(board, "a-s1", null, NOW).map((x) => x.slug), ["c-s3"], "release removes mine, the day-old one goes");
+  assert.deepEqual(nextBoard(board, "d-s4", "x", NOW).map((x) => x.slug), ["a-s1", "c-s3", "d-s4"], "a claim adds, never touches another session's");
+});
+
+test("against real git: two sessions claim on one board, one releases, and a stale tip still lands", () => {
+  const dir = path.join(ROOT, "artifacts", `claims-board-test-${process.pid}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+  const g = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    g(dir, "init", "-q", "--bare", "origin.git");
+    for (const w of ["a", "b"]) { g(dir, "init", "-q", w); g(path.join(dir, w), "remote", "add", "origin", path.join(dir, "origin.git")); }
+    const A = path.join(dir, "a"), B = path.join(dir, "b");
+    const at = Math.floor(Date.now() / 1000);
+    assert.equal(pushBoard("a-s1", `${at}\tA\tclaim A\n`, { cwd: A }).ok, true, "the first write creates the board");
+    assert.equal(pushBoard("b-s2", `${at}\tB\tclaim B\n`, { cwd: B }).ok, true);
+    // A's tracking ref is now behind (it never saw B's write): pushBoard refetches.
+    assert.equal(pushBoard("a-s1", null, { cwd: A }).ok, true);
+    g(B, "fetch", "-q", "origin", `+refs/heads/${CLAIMS_BOARD}:refs/remotes/origin/${CLAIMS_BOARD}`);
+    assert.deepEqual(readBoard(`refs/remotes/origin/${CLAIMS_BOARD}`, B).map((x) => x.slug), ["b-s2"], "A released, B's claim survived");
+    assert.match(g(B, "ls-remote", "origin"), new RegExp(`refs/heads/${CLAIMS_BOARD}`), "ONE branch, however many claims");
+    // A failing plumbing step yields no object id; pushing `:<board>` would
+    // DELETE the board. pushBoard must refuse and leave the board alone.
+    const saved = process.env.GIT_OBJECT_DIRECTORY;
+    process.env.GIT_OBJECT_DIRECTORY = path.join(dir, "no-such-objects");
+    let bad;
+    try { bad = pushBoard("a-s1", `${at}\tA\tagain\n`, { cwd: A, tries: 1 }); }
+    finally { if (saved === undefined) delete process.env.GIT_OBJECT_DIRECTORY; else process.env.GIT_OBJECT_DIRECTORY = saved; }
+    assert.equal(bad.ok, false, "a failed hash-object/mktree/commit-tree is not a successful claim");
+    assert.match(bad.err, /failed/);
+    assert.match(g(B, "ls-remote", "origin"), new RegExp(`refs/heads/${CLAIMS_BOARD}`), "the board survives a failed write");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("cat-file --batch output splits into blobs by size, tabs and newlines inside intact", () => {
+  const blob = (c) => { const b = Buffer.from(c); return Buffer.concat([Buffer.from(`${"a".repeat(40)} blob ${b.length}\n`), b, Buffer.from("\n")]); };
+  const buf = Buffer.concat([blob("1\tA\tclaim é\n"), Buffer.from(`${"b".repeat(40)} missing\n`), blob("2\tB\ttwo\n")]);
+  assert.deepEqual(parseCatFileBatch(buf), ["1\tA\tclaim é\n", "", "2\tB\ttwo\n"]);
+  assert.deepEqual(parseCatFileBatch(Buffer.alloc(0)), []);
+});
+
+test("one for-each-ref listing -> branch rows; HEAD, the board and legacy claims branches dropped", () => {
+  const rows = parseRefs([
+    `${NOW}\torigin/${DEPLOY_LIKE}\tB\tabc1234\tship\tit`,
+    `${NOW}\torigin/HEAD\tB\tabc1234\tx`,
+    `${NOW}\torigin\tB\tabc1234\tx`,
+    `${NOW}\torigin/${CLAIMS_BOARD}\tB\tabc1234\tclaim`,
+    `${NOW}\torigin/${CLAIMS_PREFIX}old-s1\tB\tabc1234\tlegacy`,
+  ].join("\n"));
+  assert.deepEqual(rows, [{ t: NOW, ref: DEPLOY_LIKE, author: "B", sha: "abc1234", subject: "ship\tit" }]);
+});
+
+test("the listing hides STALE claims behind a count line; --all shows them; the fetch is commits-only", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/who-is-on-it.mjs"), "utf8");
+  assert.match(src, /stale claims? hidden|stale claim\$\{/, "a hidden stale claim is counted, never silently dropped");
+  assert.match(src, /--all to show/);
+  assert.match(src, /--filter=tree:0/, "the branch list must not pull every branch's history (40 s cold)");
+  assert.doesNotMatch(src, /run\("cat-file", "blob"/, "board blobs are read in one cat-file --batch, not one spawn each");
+  const out = execFileSync(process.execPath, ["tools/ci/who-is-on-it.mjs", "--no-fetch", "--hours", "1"], { cwd: ROOT, encoding: "utf8" });
+  assert.doesNotMatch(out, /ago {2}STALE /, "no stale row without --all");
+  const all = execFileSync(process.execPath, ["tools/ci/who-is-on-it.mjs", "--no-fetch", "--hours", "1", "--all"], { cwd: ROOT, encoding: "utf8" });
+  assert.doesNotMatch(all, /hidden — older than/, "--all hides nothing");
+});
+
+test("against real git: the commits-only mirror lists every branch of the origin", () => {
+  const dir = path.join(ROOT, "artifacts", `ref-cache-test-${process.pid}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+  const g = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    g(dir, "init", "-q", "--bare", "origin.git");
+    g(path.join(dir, "origin.git"), "config", "uploadpack.allowFilter", "true");
+    const c = claimCommit("mirror probe", "claude/unit");
+    g(ROOT, "push", "-q", path.join(dir, "origin.git"), `${c}:refs/heads/cursor/probe-1234`);
+    const cache = path.join(dir, "cache.git");
+    assert.equal(fetchRefCache(path.join(dir, "origin.git"), cache), true);
+    const rows = parseRefs(g(dir, "--git-dir", cache, "for-each-ref", "--format=%(committerdate:unix)%09%(refname:short)%09%(authorname)%09%(objectname:short)%09%(subject)", "refs/remotes/origin"));
+    assert.deepEqual(rows.map((r) => [r.ref, r.subject]), [["cursor/probe-1234", "mirror probe  [claude/unit]"]]);
+    assert.equal(fetchRefCache("", cache), false, "no origin url -> the caller falls back to a full fetch");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a board write pokes fleet.yml by REST workflow_dispatch on the deploy branch, and a failure is only a note", async () => {
+  // A push to claude/claims-board cannot trigger fleet.yml (GitHub runs a
+  // push-triggered workflow from the pushed tree, which has no .github/), so
+  // the claim tool dispatches it — measured live on #1518, 2026-10-14.
+  const { pokeFleetBoard } = await import("../../tools/ci/who-is-on-it.mjs");
+  const isQueuedQuery = (args) => args.some((a) => typeof a === "string" && a.includes("/runs?"));
+  const calls = [];
+  const fakeOk = (cmd, args) => {
+    calls.push([cmd, ...args]);
+    return { status: 0, stdout: isQueuedQuery(args) ? "0\n" : "" };
+  };
+  assert.equal(pokeFleetBoard(fakeOk), "dispatched");
+  const post = calls.find((c) => c.includes("POST"));
+  assert.deepEqual(post.slice(0, 4), ["gh", "api", "-X", "POST"]);
+  assert.match(post[4], /^repos\/[^/]+\/[^/]+\/actions\/workflows\/fleet\.yml\/dispatches$/);
+  assert.deepEqual(post.slice(5), ["-f", "ref=claude/f1-game-project-26h3ng"]);
+  assert.match(pokeFleetBoard((cmd, args) => (
+    { status: 0, stdout: isQueuedQuery(args) ? "1\n" : "" }
+  )), /already queued/);
+  assert.match(pokeFleetBoard((cmd, args) => {
+    if (isQueuedQuery(args)) return { status: 0, stdout: "0\n" };
+    return { status: 1 };
+  }), /not dispatched/);
+  assert.match(pokeFleetBoard((cmd, args) => {
+    if (isQueuedQuery(args)) return { status: 0, stdout: "0\n" };
+    return { status: null, error: new Error("ENOENT") };
+  }), /not dispatched/);
+});
+
+test("--json reaches a pipe whole: the CLI sets exitCode, never process.exit() over unflushed stdout", () => {
+  // A 232-claim board printed ~92 KB of JSON; process.exit() cut it at the
+  // 64 KiB pipe boundary, mid-string (found 2026-10-14).
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/who-is-on-it.mjs"), "utf8");
+  assert.doesNotMatch(src, /process\.exit\(main\(\)\)/);
+  assert.match(src, /process\.exitCode = main\(\)/);
+  const out = execFileSync(process.execPath, ["tools/ci/who-is-on-it.mjs", "--no-fetch", "--json", "--hours", "1"],
+    { cwd: ROOT, encoding: "utf8", maxBuffer: 64 << 20 });
+  assert.ok(Array.isArray(JSON.parse(out).claims), "the whole document parses, however large the board");
+});

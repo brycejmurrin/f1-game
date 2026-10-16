@@ -1,0 +1,2243 @@
+# Testing — operational field notes
+
+> Carved out of [`../TESTING.md`](../TESTING.md) on 2026-09-03 (tree restructure
+> Phase 5). These are DATED MEASUREMENTS of this container and of CI, not rules:
+> the rule they support is in `AGENTS.md` §Verification or in `TESTING.md` §1.
+> Cited from AGENTS.md and the skills as **TESTING field notes**.
+
+
+The measured history behind the testing gates. AGENTS.md carries the rules;
+this section carries the evidence so the rules survive re-litigation.
+
+**Audit-then-fix of the pause / settings / results sheets — what a mini-dom
+test could and could not settle (2026-09-02).** Six defects were CONFIRMED in
+Node and fixed with `tests/unit/ui-sheets-audit.test.mjs` red-before /
+green-after: RESULTS top-10 and the WORLD CHAMPION panel ranked by points alone
+while STANDINGS used `SeasonCal.rank` countback (a points tie crowned the
+field-order driver); STANDINGS titled a sprint weekend by the previous round and
+called the race being driven "NEXT" from the pause menu; the in-race two-tap
+reload confirm in `js/perf/quality-preset.js` (now `js/perf/renderer-picker.js`) never disarmed (stale "END THIS RACE
+& RELOAD?" label, and the flag outlived the race so the next race's first tap
+reloaded unasked) and wrote its question as `textContent` on the `<select>`,
+which drops the options; MUSIC & SOUND said "Music off" beside a MUSIC switch
+reading ON when the master SOUND gate was shut, captioned DEFAULT as
+"Built-in", and described the disabled MY TRACKS button instead of the selected
+source. Left as PLAUSIBLE — each needs a screenshot, in `ui` / `tiny` (neither
+run here): the RESULTS sheet carries no gap or finish-time column at all (only
+position / name / pts) — check whether a 3-lap race result reads as a
+classification without one; DSQ has no model path, so nothing renders it;
+constructors ties fall to first-to-score order (no team countback in
+`SeasonCal`, so RESULTS, STANDINGS and career agree with each other); the
+DISPLAY tab's injected order puts GRAPHICS below the renderer status paragraph —
+at `data-shape="wide"` (two-column grid) check GRAPHICS is not orphaned beside
+the paragraph; THREE PATH / SCREENSHOTS stay live under RENDERER: WEBGL2 where
+they change nothing until the renderer does; the armed question on the RENDERER
+`<select>` is an option label, so on a 393-wide portrait phone at 130% check it
+is not clipped by the select's width; "GRAPHICS: ULTRA — FULLY APPLIES AFTER A
+RELOAD" and "IN PROGRESS: ROUND 3 — …" are the longest new strings — check they
+wrap rather than ellipsise in the wide grid's ~350px column; HIDE HUD from
+SETTINGS resumes the race outright and RESTART RACE has no confirm (both
+`js/game.js`, outside this pass); with the camera picker open, Escape should
+close the picker without also pausing (the picker's handler stops propagation
+after `TopModal`'s capture pass declines it).
+
+**A probe that returns "no change" is guilty until proven innocent (2026-08-29).**
+The report was that the editor's TEAM LOGO colour did nothing on the Audi tail.
+Three offline probes ran before one of them was trustworthy. The first hashed
+every 97th byte of the atlas region — fine for a full-region tint, useless for
+Audi's mark, which is four thin ring STROKES, so it reported "no change" for a
+region that changed. The second hashed every byte but tested against a livery
+whose paint no candidate colour could clear, so all three test colours collapsed
+to the SAME `inkOn(under)` fallback and it again reported "no change" — a true
+statement about a rigged input. Only the third, on a field both marks could
+clear, separated the real answer: the fin BADGE responds to `liv.logo`, the fin
+GRAPHIC never does (that is the TAIL GRAPHIC row, `liv.finArt`), and the actual
+defect was upstream of both — `markPalette` substituted a different colour for
+the authored one whenever it fell under `MARK_FLOOR`, which for Audi's
+`[0.96,0.02,0.22]` fin is nearly every mid-tone in the picker. Measured with
+`tools/car/logo-authored-sweep.mjs`: 9015 of 12112 authored colours were overruled;
+after the authored-halo path, the shark-fin badge keeps 91.2% (was 33.9%). The
+engine cover stays lower (37.4%, was 17.2%) and that is geometry, not a bug —
+`drawTailGraphic` washes it with an alpha gradient of `stripe||c2`, so the mark
+is scored against c1 AND c2 at once, and for a near-black-plus-bright-red pair
+NO colour clears 4.2 against both. Lesson: a negative result from a probe you
+wrote is a claim about the probe until an independent positive control passes.
+
+**`child exited on SIGTERM` is a WORKER line, not the run (2026-08-17).** A
+`test:tiny` log showed `[playwright] child exited on SIGTERM` at 28/73 while
+`test-bg.mjs --status` still said `running`. The log line won the argument and a
+replacement run was started in tmux — so TWO `playwright test` processes then
+shared four cores, load average reached 15.7 against the < 3 guidance, and both
+were writing progress the whole time. `ps -o pid,ppid,lstart -p …` attributed
+them in one command; killing the older tree left the queue clean. Two lessons,
+both already rules that a plausible-looking log line talked me out of: only the
+terminal `= run …` line ends a run, and `pgrep -fa 'playwright test'` BEFORE
+starting anything is the check that makes duplication impossible. (Also: a
+`test-bg` run launched from an ephemeral shell can lose its parent — start long
+queues inside tmux, where the queue survives the shell that spawned it.)
+
+**A total-red run is almost never the code (2026-08-17).** `test:tiny` reported
+`73/73 failed` and the first line of the log said
+`browserType.launch: Executable doesn't exist … chromium_headless_shell-1228`.
+`npm install` had run with `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` — which is the
+right flag for the install step and leaves the browser absent. The specs launch
+Playwright's headless SHELL, not any system Chrome a box may ship,
+so nothing browser-driven can pass until
+`npx playwright install chromium-headless-shell` runs (2.3 MB, seconds). Read the
+FIRST failure's message before forming any hypothesis about a red run: when EVERY
+test in a group fails, the cause is upstream of the code under test — a missing
+browser, a missing `node_modules`, a dead dev server, a syntax error in a file
+every page loads. Bisecting the diff for a fault the harness is reporting
+verbatim is pure waste.
+
+**Watcher anchoring.** Anchor on the reporter's terminal line
+`= run (passed|failed|timedout|interrupted)` and NOTHING looser: the 30 s
+heartbeat lines contain `N/M done, K failed`, so a pattern like
+`[0-9]+ (passed|failed)` fires on the FIRST heartbeat — AGENTS.md recommended
+exactly that for weeks and every watcher built from it misfired. Match every
+terminal status, not just `passed`: a success-only watcher is silent through a
+crash, and silence looks like "still running". Watch the LOG, never the
+process table — a watcher whose command line contains its own grep pattern
+matches itself (`pgrep -cf "python3 -m http.server"` returned 1 on a box with
+no server; that 1 was the grep). Never `| tail` a live background run — tail
+buffers to EOF and the file stays empty. Adding `|Error:` to the UNTIL pattern
+gives early warning on the first stack trace, but re-arm for the terminal line.
+
+**Long queues (2026-08-07 measurements, seven groups, container-killed at
+80 min).** (1) `Monitor` caps at 30 minutes and `persistent: true` DOES NOT
+lift it — tried twice, both lapsed silently; pair every Monitor with a
+`Bash run_in_background` waiter on the queue's own completion marker. (2) Seed
+the seen-file when arming a de-duplicating watcher, or the first event is the
+entire backlog. (3) Make the driver resumable via terminal-marker files the
+driver writes AFTER a run returns — a fixed-list driver re-ran 86 minutes of
+banked groups after a restart. A group that started and died has no marker and
+correctly re-runs whole: a killed Playwright run banks nothing.
+(2026-08-13 addendum: name the driver's group list anything but `GROUPS` —
+that is a readonly bash builtin array and the assignment fails silently.)
+
+**One process, one browser group.** Local runs set `reuseExistingServer`, so
+a second Playwright process attaches to the first's HTTP server; killing
+either strands the survivor's specs with `net::ERR_CONNECTION_REFUSED`
+(measured: 33 false failures in a row reading like product bugs). Pairing two
+BROWSER groups in one batch runs 2 processes x 2 workers on 4 cores —
+measured on 2026-08-13 as the source of every over-budget timeout in a
+five-batch run (projection at 144-176 s vs a 120 s budget, props-over-road at
+1518 s vs its own comment predicting exactly this). Browser+node pairs are
+fine. To cover more at once, hand every spec to ONE process and raise
+`APEX_WORKERS`.
+
+**Orphans vs a second run.** Orphans from a killed run keep eating the box
+invisibly (`node tools/ci/test-bg.mjs --stop --sweep`, then kill any Chrome
+left by its LISTED pid from `ps -eo pid,pcpu,args`; `pkill -f` is hook-refused). But before concluding
+"orphans", check `ps -eo pid,etimes,args` for a LIVE `playwright test` — a
+second run you forgot is indistinguishable from orphans by process count.
+One specific orphan bites the NEXT run: a superseded/killed batch can strand
+its `python3 -m http.server 3456`, and the following direct `npx playwright
+test` then dies instantly with "Process from config.webServer was not able to
+start. Exit code: 1" (measured 2026-08-17). `pgrep -af http.server`, kill it,
+re-run — that error is the port, not the code.
+
+**A waiter is not a work slot.** Starting a browser run and then sitting in a
+blocking wait wastes the whole run's wall time (measured 2026-08-17: 17 idle
+minutes on one `--wait`). Start the run in the BACKGROUND and spend the run
+doing what it permits: docs edits, test/tools edits, log analysis, commit
+prep, subagent audits — everything except `js/`/`css/` edits and the
+`?v=N`/`version.json` bump, which stay queued until the terminal line. Check
+the log for `= run (passed|failed|timedout|interrupted)` when you come back;
+never re-enter a foreground wait just to "keep an eye on it".
+
+**`waitForFunction` on a rendering page.** Playwright polls the predicate on
+`requestAnimationFrame`; a SwiftShader page running the game loop starves the
+poll so the declared timeout never fires. MEASURED: `{ timeout: 3000 }`
+against a never-true predicate ran 109,665 ms on a parked Monza — 36x its
+bound — and overran on a menu page too. Only a THROWING predicate terminates
+promptly (11 ms). Pass `{ polling: 100, timeout: N }` on any rendering page.
+And once polling is fixed, a wait that still overruns means the CONDITION is
+unreachable, not that the page is slow — `tlx-probes`' M6 skid took four
+wrong mechanisms before anyone checked whether `skidVerts` could move
+(`skids.stamp()` runs in `render()`; the stint drove through `act()`, which
+never presents a frame). The habit that settled it: reach for an instrument
+(a wrapper logging call counts) instead of a fifth theory.
+
+**Subagent worktrees.** Worktree isolation bases new worktrees on the
+default-branch ref, and this repo's `origin/main` is a stale unrelated
+lineage (measured 2026-08-13: eight fix agents landed on a pre-restructure
+tree with an 8,409-line game.js). Every worktree brief starts with
+`git checkout -B <branch> <session SHA>` plus a fingerprint check of a
+session-known file.
+
+**WebGPU IS validatable in-container — stop shipping "read-verified" WGSL
+(2026-08-17).** For months every `js/render/webgpu/` change carried a "WGSL is
+not compilable in this container" disclaimer and shipped on read-review alone.
+That belief was FALSE, and it shipped a phone-visible defect: a
+`derivative_uniformity` violation (derivatives called behind `roadMarkings`'s
+`hw > 0.5` early return — the road surface itself) that enforcing Dawn builds
+reject (WGX silently fell back to GLX) and warning-mode phone builds executed
+as undefined values — the entire road + shoulders rendered NaN-white while
+grass, walls and cars looked fine. Two more spec violations sat alongside it:
+MSAA count 2 (WebGPU permits only 1 and 4 — invalid on EVERY device) and
+rg11b10ufloat render targets without the `rg11b10ufloat-renderable` feature.
+All three were one-line Dawn errors the moment the code ran on a real device.
+`node tools/gfx/wgx-validate.mjs` (~5 s) is that device: the FULL Playwright
+Chromium (the headless shell has no `navigator.gpu`) with `--headless=new
+--enable-unsafe-webgpu --enable-features=Vulkan --use-vulkan=swiftshader
+--use-webgpu-adapter=swiftshader` exposes a real Dawn adapter that parses
+every WGSL module and validates every pipeline. The ceiling, corrected
+2026-08-17: Dawn here EXECUTES shader work — `node tools/gfx/wgx-capture.mjs`
+returns real rendered pixels (offscreen mode; see
+`docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
+found). **Software compositor (2026-08-17, cache 1342+):** WGX soft-presents
+the final pass into a `COPY_SRC` texture and 2D-blits onto visible `#game` —
+play with this in SETTINGS ▸ SCREENSHOTS (AUTO / 2D BLIT / NATIVE) and the
+three.js counterpart SETTINGS ▸ THREE PATH (AUTO / WEBGL2 / WEBGPU).
+`node tools/gfx/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
+gate; native swapchain screenshots stay black. `GLX.capturePixels()` readback
+(`wgx-capture.mjs` → `frame.png`) is a secondary oracle and can still flake on
+SwiftShader when concurrent with display readback. Still environmental: the
+first `getCurrentTexture()` call breaks `mapAsync` device-wide (why WGX never
+touches the swapchain on software adapters), software adapters force MSAA 1,
+and the full desktop stack can LOSE the device seconds in. Validation evidence
+here is exact; visible-canvas evidence exists in-container via soft-present;
+PERFORMANCE truth still needs a real GPU.
+
+**TLX M4/M5/M9 on SwiftShader is fill-bound after the compile-storm fix
+(2026-08-17).** The 595-program TSL storm is gone (17 links / 6.1 s Monza
+load). The remaining group timeouts were GPU fill: M4 left the loop
+presenting, Playwright tore the page down, and M5's first frame sat behind a
+387% GPU process. `setTimeOfDay("night")` / a second `race()` on a live TLX
+page does not return (530 s+ hung `evaluate`, measured four times). Product
+cuts: software-GL shadow maps 512/256/256, clear-only 64px env faces, one
+cube face per frozen frame. Test cuts: M5 is day-sky only (night `uStars`
+lives on M6), M4/M5/M9 `waitForFunction` with `{ polling: 100 }`, and
+`stopRendering` at the end of M4 so the next spec is not starved. Solo
+verdict after those cuts, M4 still presenting: M4 10.0 s, M5 313.1 s,
+M9 278.9 s. After M4 calls `stopRendering`: M4 10.1 s, M5 **63.5 s**,
+M9 261.4 s, `= run passed (3/3)` in 336.4 s. M9 stays near the
+`test.slow()` 360 s budget because the env-probe wait is fill-bound on
+SwiftShader even with a quiet GPU; do not widen assertion tolerances.
+
+**Software pixels + Lavapipe on Cursor Cloud (2026-08-17).** Native WebGPU
+swapchain present stays black on SwiftShader/Lavapipe; WGX soft-presents to
+visible `#game` via a 2D blit (auto on software adapters +
+`sessionStorage apex26.wgxCapture=1`). Primary probe:
+`node tools/gfx/gfx-probe.mjs --backend webgpu|three` (checks `#game` after
+`awaitSoftPresent`). Readback oracle: `node tools/gfx/wgx-capture.mjs`. Lavapipe
+needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
+`/usr/share/vulkan/icd.d/` until that package was installed and the env
+snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
+THREE PATH: WEBGPU 2D-blits the LDR target (`readRenderTargetPixelsAsync`).
+`mappedAtCreation` uploads are shimmed to `queue.writeBuffer` so SwiftShader
+does not exhaust Dawn's mappable pool. SETTINGS ▸ WEBGPU / THREE.JS stay on
+those backends (phones and Safari included — lite stack, 8-bit swapchain);
+they must not silently bind GLX. THREE PATH AUTO may land on three
+WebGL2 (`--tlx-auto-gl` / `apex26.tlxAutoGL`) after WebGPU dies in this
+tab — still TLX, not game WEBGL2. THREE PATH: WEBGL2 remains the CI pin.
+`--backend three --tlx-webgpu --lavapipe` waits on `GLX.awaitSoftPresent`.
+
+**TLX WebGPU `configure` null was a self-poison (2026-08-18).**
+`detectSoftwareGL()` called `#game.getContext("webgl2")` after
+`renderer.init()`. three r185.1 does not claim the canvas in `init()` —
+`getContext("webgpu")+configure()` is lazy on first present(). MDN: one
+context type per canvas for life. Fix: sniff GL only when `forceWebGL`;
+the WebGPU path uses `_softAdapter`. Instanced prop colour is a geometry
+`InstancedBufferAttribute` named `color` (not `imesh.instanceColor`).
+The 2D overlay must be opaque and force blit alpha to 255 — the SSR
+car-paint tag (0.35) in HDR alpha is not compositor opacity.
+Index: `AGENTS.md` §Seeing the game / §Cursor Cloud;
+`CI-RENDERING-PERFORMANCE.md` §Measured.
+
+**TLX software-GL washout was fog-as-clear + a broken TSL sky (2026-08-18).**
+Dusk `fogColor` is beige `~[0.68,0.64,0.54]`. `begin()` used that as
+`scene.background`; when the TSL `backgroundNode` missed the whole frame
+was that beige. When the node *did* compile against the HDR target on
+SwiftShader, `screenUV`/`invViewProj` reconstruction collapsed the dome
+to horizon beige (`~[0.76,0.68,0.52]`) — kill-fog did not help because
+density was never the path. World frames now clear to `skyZenith`, and
+software GL arms `tsl-sky.js`'s zenith-only `fallbackNode` (M5
+`skyState().on` stays true). Real GPUs keep the full SKY_FS node. Same
+box, GLX was never this washed: it draws the sky as a real fullscreen
+mesh. Real-GPU TLX (user device) already looked correct; this is not a
+color-management change.
+
+**Cloud-agent `npm install` "Exit handler never called!" (2026-08-17).**
+`bld-20260817-e70b375f` failed `INSTALL` after `npm install --ignore-scripts`
+spent ~70 s hitting `https://registry.npmjs.org` with `ECONNRESET` (audit
+endpoint included), then npm 10.9.7 crashed instead of exiting on the fetch
+errors. The leftover debug log still had "http cache … cache hit" followed by
+"tarball no local data … Extracting by manifest" — metadata in `~/.npm` but
+no tarball bytes, so every package re-fetched in parallel. The same VM's
+`npm ping` still ECONNRESETs; `archive.ubuntu.com` Release files 404 through
+Envoy, so `apt-get update` cannot repair a snapshot that is missing
+`mesa-vulkan-drivers`. Cure: dashboard install → `tools/env/cloud-agent-install.sh`
+(skip npm only when `node_modules/<pkg>/package.json` exists — hollow
+directories from a crashed reify are not usable — `--no-audit
+--prefer-offline`, retries; do not fail the build on apt 404 when
+packages are already present).
+Allowlist `registry.npmjs.org`, `archive.ubuntu.com`, `security.ubuntu.com`,
+and `cdn.playwright.dev` if a cold snapshot must actually download.
+
+**Deploy-union review, zero regressions in ~340 union-run tests
+(2026-08-27).** Deploy-union review at bd9c875 / shell 1582. Five rounds from
+two lineages (perf/WGX branch; adaptive-ui-devices incl. the dialog
+migration) cross-merged through builds 1557–1582; this entry is the union's
+first browser-level verification (CI's change-aware selection never runs on
+deploy pushes — deploy tips are gated by smoke + characterization + guards
++ conditional sweeps only). Static review, three subagents: merge topology
+CLEAN (only index.html/version.json ever hand-resolved; 166/166 `?v=` hashes
+recompute at tip; line-survival regrep of every cross-lineage commit lost 0
+lines; use `git diff-tree --cc`, never `--stat`, for merge resolutions —
+first-parent diffstat reads as phantom resolutions); semantic audit CLEAN
+(hub.js dialog × data-fix union, sw.js dual rewrite, game.js A+B edits, all
+four WGX rounds present exactly once with no raw litPass state calls; unit
+suite 1366/0). Stale LOCAL deploy-branch ref (223f4cb, 44 builds behind)
+fast-forwarded to origin — anything reading the local name had been seeing
+an ancient tree. Live probe on the union: GLX default boot + race clean
+(console: only the three known-benign warns), WGX boot + race clean with
+every round's counters holding (setPipeline 41/frame, submit 1.3/frame,
+createBindGroup 0). Browser batches on the union, serial, one Playwright:
+
+- ui: `= run failed` (115/115, 3 failed) → all three triaged: ui-redesign +
+  ui-resize green solo (machine); rotation-recovery failed the 2-worker
+  solo file run too but passes at `--workers=1` on BOTH the union and the
+  pre-union baseline 4fc1167 (worktree A/B), and the live probe repro
+  (touch-emulated portrait) shows the blocker up with `#rotate-controls`
+  focused and no open top-layer dialogs — 2-worker contention flake of
+  the documented rAF-starvation family, NOT a union regression.
+- api: `= run failed` (140/140, 8 failed) → obs-act-edge pair green solo
+  (machine). headless-api's 5–6 reds REPRODUCE solo — but the pre-union
+  baseline worktree fails the same file the same way (5/24, same ~15 s
+  wait-timeout signature, wandering test subset): PRE-EXISTING
+  budget-vs-box (10 s waits vs ~21 s SwiftShader boot), not a union
+  regression. Candidate for a waits fix in the ce68d3f pattern, its own
+  change.
+- physics: `= run failed` (20/20, 2 failed) → projection spec 3/3 green
+  solo (machine). Characterization green — the re-blessed baseline holds
+  on the union.
+- collision: 45/46 → the one red (offtrack "stopped on-track throttle")
+  failed solo with the exact headless-api signature (8 s boot-wait
+  timeout at grid state, zero assertion failures) but PASSES at
+  `--workers=1`: contention family, not a union regression.
+- season + season-format: 18/18 green.
+- webgl: `= run failed` (32/32, 4 failed) at loadavg 6.5–8 during the run —
+  all four long-duration timeout-family (lighting-ab night fog 191.8 s;
+  lighting-tuner-grade COPY ALL 337.3 s; webgl-probes monaco tunnel bake
+  57.0 s; webgl-probes night ≤48 lights 74.9 s). Solo verdicts:
+  webgl-probes whole-file at `--workers=1` passed 6/6 (incl. both former
+  reds at 62/66 s vs their 57/75 s red durations); lighting-ab night-fog
+  1/1 solo (98.3 s vs 191.8 s red); lighting-tuner-grade solo 2/2 (COPY
+  ALL 148.6 s vs 337.3 s red). All four cleared — machine contention.
+- tlx: the deploy branch moved DURING the review (bd9c875..d5180be, shell
+  1582→1594: TLX hardening + car-parts/audio + the standing-reds fix
+  train incl. the rAF-starved-waits fix this review kept rediscovering as
+  contention). HEAD was an ancestor ⇒ pure fast-forward, and tlx — never
+  union-run and now carrying fresh vendored-three patches — ran on the NEW
+  tip d5180be instead of the stale one, after tooling-fast on the same tip
+  (112/112 green, 139.5 s): `= run failed` (16/16, 5 failed) at 2 workers —
+  all five in tlx-probes.spec.js, 84–124 s durations, first error a bare
+  60 s `page.waitForFunction` timeout. Whole-file solo at `--workers=1`:
+  `= run passed` (16/16, 0 failed) — the entire red set was 2-worker
+  contention on the heavier hardened TLX boots, not a regression.
+
+Operational: the container restarted THREE times mid-review, each time
+killing the background test chain (`test-bg --wait` chains die with the
+box; `artifacts/` logs and the scratchpad survive). Lesson: on this host
+run each browser group as its OWN background task so a restart costs at
+most one group, and re-read surviving logs for `= run` lines before
+re-running anything. Two watchers ALSO re-proved the self-match trap above
+in new clothes: a `while pgrep -f 'playwright test'` wait-loop matches its
+own command line and never exits, and a compound kill-then-relaunch whose
+pkill pattern appears later in the same command line kills its own shell
+(exit 144) — check (`pgrep -af 'playwright[ ]test'`) and launch in SEPARATE
+shell invocations, and anchor waits on the LOG's terminal line, never the
+process table. NOT RUN this review (named per AGENTS): foundation, sweeps
+(no track delta since last green), behaviour, debris, steering, camera,
+audio, parts, net (untouched in range), scenery, gallery, baseline,
+shimmer, map, paths, hooks, agent, circuit, fast, headless, ab, render.
+shared-road-vbuf (unblocked by the wgx-vid-repro measurement) deliberately
+deferred to its own round — a review reviews a fixed tree.
+
+**A CSS specificity defeat is invisible to every string match (2026-08-29).** A
+player reported that BRAKE lit up under the thumb and GAS did not. Both
+`:active` rules existed and had for as long as the file has, so every grep and
+every unit assertion for "the pressed rule is present" was green — and the
+pressed colour was still unreachable. `body.steer-buttons #btn-throttle` is
+(1,1,1) and `#btn-throttle:active` is (1,1,0), so two byte-identical
+restatements of the idle fill in the buttons-mode blocks beat the pressed rule
+in EVERY state. It shipped because BRAKE carried no such restatement: exactly
+one of a symmetric pair was broken, in one steering mode.
+
+The only instrument that sees this is a REAL POINTER on a REAL BROWSER —
+`page.mouse.down()` over the box, then `getComputedStyle`. `:active` cannot be
+forced from page script and cannot be matched from a file. A fixture built from
+the shell's own `<link>` order (`tools/manifest.cjs` CSS) plus the shell's own
+dock markup is enough; it needs no game boot, so it costs ~10 s rather than a
+browser group. Run it against `git show HEAD:css/overlays.css` first — an
+assertion never seen to fail is not an assertion, and this one reproduced the
+reported symptom exactly, GAS red and BRAKE green.
+
+One trap inside the instrument, which cost it a false red of its own:
+`button { transition: background 0.14s }` (css/tokens.css) means the computed
+background the instant the pointer lands is the START of the animation, so a
+working pressed colour reads identical to a missing one. Settle ~300 ms before
+reading. `opacity` carries no transition and jumped immediately, which is what
+gave the contradiction away — the same rule had applied one of its two
+declarations and apparently not the other.
+
+The durable guard is in `tests/unit/ui-journey-race.test.mjs`: no `body.<class>
+#btn-throttle` / `#btn-brake` rule may declare a `background` at all. That is a
+narrower claim than "the pressed state works", and it is the one a file can
+actually hold.
+
+**Measure the fallback before you call it broken (2026-08-29).** COPY VALUES in
+the LIGHTING TUNER reached `execCommand("copy")` only from inside the clipboard
+promise's REJECTION handler. That reads like a guaranteed failure — the copy
+command needs user activation and a rejection handler runs a microtask after the
+click — and it was written up as one. A clipboard READ-BACK said otherwise:
+with `navigator.clipboard.writeText` stubbed to reject, the shipped handler
+still put all 182,631 characters on the clipboard in Chromium, which keeps
+transient activation for about five seconds. WebKit is documented to require the
+copy during gesture processing rather than merely soon after, so the iPhone
+story may well hold — but it is UNVERIFIED here and was labelled as such in the
+code: this container's proxy blocks `cdn.playwright.dev`, so
+`npx playwright install webkit` 403s and nobody can run it. The fix (attempt the
+synchronous copy first) is right either way; the CLAIM had to be corrected.
+
+The measurable half was the payload: 182,631 characters, against 146 for the
+same tune once the export carried only the player's overrides.
+
+**A saturated main thread looks exactly like a missing element.** Driving the
+tuner in that probe, `page.locator("#lt-copy").click()` timed out with
+`waiting for locator('#lt-copy')` while `page.evaluate` in the same page
+answered instantly and reported the element present, visible and 145x46. Nothing
+was wrong with the DOM: the game's rAF loop on llvmpipe was starving
+Playwright's actionability poll. `__apex.headless(true)` before touching the
+panel fixed it outright. Reach for that before believing a locator that cannot
+find what `getElementById` can.
+
+Measured a third time 2026-09-01, on a lazily-injected bundle rather than a
+click: VS FRIEND pulling js/net took **39.7 s** with the menu flyby rendering
+and **0.1 s** with `#game` hidden — same page, same 11 files, **150 ms of
+actual fetch** in both. A wall-clock number taken from a rendering page is
+measuring llvmpipe, so decompose it (resource timings) or take a
+not-rendering control before believing it says anything about the code.
+
+Seen again 2026-08-30 with a live race running: `page.click("#rotate-race")`
+timed out after resolving the locator and logging "element is visible, enabled
+and stable", while `elementFromPoint` at the same coordinates returned that
+button. `el.click()` inside `page.evaluate` drives the real handler and is the
+right probe when the page must keep rendering.
+
+**`context.setOffline(true)` is NOT offline against `127.0.0.1`.** Chromium's
+network emulation exempts loopback, so a page under `setOffline` still reaches
+the local test server. Measured 2026-09-01 while proving the service-worker
+precache fix (`scratch/offline-check.cjs`): with `setOffline(true)` in force, a
+`fetch()` **from inside the page** for a URL no cache can hold returned
+`reachable (404)`. Asking `context.request` — a separate APIRequestContext that
+need not honour page-level emulation at all — gives the same wrong answer for a
+second reason, so a probe placed there is not even measuring the right process.
+
+The cost of not noticing is a green run that proves nothing: the first cut of
+the offline test passed **with the precache deliberately deleted**, because the
+"offline" browser simply re-fetched the missing scenery from the still-live
+server. The cure is to make the origin actually stop existing —
+`srv.closeAllConnections()` then `srv.close()` — with `setOffline(true)` kept on
+as well, because the service worker's navigate handler branches on
+`navigator.onLine` and a returning player really is flagged offline. Under that
+shape the same probe reads `blocked: Failed to fetch`, and only then does the
+number after it mean anything.
+
+Two more traps in the same test, both of which produced a false PASS first:
+
+- **Race a circuit the session has never touched.** The SW's fetch-miss handler
+  caches whatever the online phase requested, so reusing one circuit for the
+  online reference and the offline subject tests the runtime cache, not the
+  precache. The test now warms on `spa` and goes cold on `cota`.
+- **`sw.js` does not `clients.claim()`**, so the page that registers the worker
+  is not controlled by it. One reload — what a returning player does anyway —
+  is required before any cache assertion means anything.
+
+**The phone audit that a css-rules read CAN settle, and the cells it cannot
+(2026-09-02).** Audit-then-fix of the phone driving surface at 390x844 /
+844x390 and HUD SIZE 100/150/200 %, done entirely as rules over the sheets
+(`tests/helpers/css-rules.mjs`) and `Input` in a VM — no browser, so the
+verdicts split into what the numbers prove and what needs a device.
+CONFIRMED and fixed (`tests/unit/phone-touch-surface.test.mjs` pins each):
+the portrait blocker's three pills were `min-height: var(--tap-min)` — the
+24px WCAG floor, with `padding: 0 1rem` and inherited type, on a layer gated to
+`(pointer: coarse)` phones — so RACE IN PORTRAIT / OPEN CONTROLS / EXIT RACE
+painted 24px tall (now `--tap`, 52px on touch); the portrait buttons-mode
+`.hud-bottom` anchor added `var(--sab)` raw inside its `zoom: var(--hud-z)`
+subtree, the one anchor in the zoom list without the division; and
+`Input.requestGyro()` latched `gyroDenied` on ANY rejection — including the
+transient "no user gesture" kind — and never cleared it on a later grant, so
+STEER read "(NO GYRO)" while tilt was driving. CONFIRMED-OK and now guarded:
+every `:hover` in `css/` sits under `(hover: hover)`, every scroll container
+declares `overscroll-behavior`, both dock tiers clear 44px (54/72 and 48/64,
+24px painted floor below 100 %), and the tallest dock column — BOOST/OT/AERO at
+3 x 54 + 2 x 5.3 = 172.7 authored — is 345px at 200 %, inside 390 - 31, so
+`fitHud`'s `--hud-z-dock` cap ((390 - 30) / 172.7 = 2.08) never has to act on
+a 390px phone: the "BRAKE at y=-216" measurement in `js/ui/hud.js` predates
+the grouped dock and is covered. The double-tap trio (viewport
+`maximum-scale=1` + `viewport-fit=cover`, `touch-action: manipulation` on `*`,
+`#game` none, root `overscroll-behavior: none`, the inline touchend killer) is
+present and pinned. PLAUSIBLE — arithmetic says so, a device has to show it;
+the visual checks, each one screenshot:
+
+1. iPhone 844x390 landscape (notch LEFT), STEER: TILT, GEARS: AUTO, HUD SIZE
+   200 %: does the BRAKE pedal's top edge sit under `#minimap`? The dock cap
+   budgets viewport height (3 x `FIT_AIR`), not the corner clusters — at 200 %
+   the pedal column tops out at y ≈ 23px, the map spans y 8..~124. Expect
+   overlap from ~160 %; 150 % is marginal (≈3px, notched only). Owner:
+   `fitHud` in `js/ui/hud.js`.
+2. Same phone, STEER: BUTTONS (pedals RIGHT), HUD SIZE 200 %: GAS/BRAKE column
+   against `#pausebtn` (y 8..60, right edge). Expect contact from ~185 %.
+3. 390x844 portrait, tap RACE IN PORTRAIT, HUD SIZE 100 %: are POS/LAP/TIME/
+   BEST and the map painted at roughly HALF size? `fitHud`'s top-band cap uses
+   the landscape geometry (map beside the POS row: 224 + 183 > 195 half-width),
+   so `--hud-z-top` computes to ~0.5 on a 390px-wide screen at every setting.
+4. iPhone + Bluetooth pad, STEER: TILT, start the race with the pad's A button:
+   does the motion prompt appear, or does STEER silently flip to BUTTONS? The A
+   press is a synthesised `.click()` with no user activation, so
+   `requestPermission()` should reject. Then tap STEER back to TILT with a
+   finger: the prompt must appear and the label must read "STEER: TILT" with
+   no "(NO GYRO)" (the fix above).
+5. Any iPhone, SETTINGS, tap the RENDERER `›` stepper twice within ~300 ms on
+   the same spot: does it advance once or twice? The `index.html` double-tap
+   killer calls `preventDefault()` on the second touchend, which also cancels
+   its click. Out of this change's territory; a fix would exempt buttons.
+6. Any phone, HUD SIZE 60 %, landscape: BOOST/OT/AERO paint 32px — the
+   documented 24px floor, under Apple's 44. A design decision (2026-08 axis
+   audit), recorded here so it is not re-found as a bug.
+### Menu keyboard / gamepad / a11y audit (2026-09-02) — the PLAUSIBLE half
+
+The audit behind `tests/unit/menu-a11y-audit.test.mjs` enumerated every screen
+from `index.html` + `UiLayers.LAYER_IDS` and split its findings in two. The
+CONFIRMED ones (demonstrable on `tests/helpers/mini-dom.mjs`) are fixed and
+pinned in that file. The rest need a screenshot or a screen reader, and this is
+the list, each with the exact check — the browser group for all of it is `ui`:
+
+| # | screen / cell | what to look for |
+|---|---|---|
+| P1 | GARAGE, 844x390 @100% (compact stacked) | `#cs-tabs .cs-tab` is `min-height: 0; padding: 2px` there (`css/carsetup.css`). Measure `getBoundingClientRect().height` of a tab on a touch profile: the touch ladder promises ≥ 44px and this cell may pay ~26px |
+| P2 | LIGHTING / CAMERA TUNER, touch viewport | `.lt-tab` is `min-height: var(--tap-min)` (24px) + 5px padding (`css/tuner.css`) — expect ~28px tabs; decide whether a tuner is a player surface |
+| P3 | DATA HUB, `body[data-density="compact"]` and narrow | `.dh-tab` / `.dh-close` drop to `--tap-min` (24px) (`css/data.css`); measure the tab strip on 390x844 |
+| P4 | SETTINGS (`#pmsettings`), both rail shapes | ArrowDown on the horizontal tab strip now leaves it for the first panel control (focus ring should land inside `#pm-panel-*`); on the single-column rail (`aria-orientation="vertical"`) Up/Down still cycle tabs and ArrowRight is the exit — with nothing to the right it falls to DOM order (the next tab, then the panel), so check the pad can still walk into the panel. Up/Down on the strip no longer page-scroll the sheet |
+| P5 | GARAGE paired (1280x800) and stacked (844x390) | from the category rail, ArrowRight (paired) / ArrowDown (stacked) must reach the parts list and the rail's own handler must NOT snap focus back; Left/Right (stacked) still cycle categories with selection following focus |
+| P6 | SELECT / GARAGE / CAREER opened by MOUSE or TOUCH | focus now lands on the selected control at open. Chrome's `:focus-visible` heuristic should paint NO ring after a pointer open; a ring after a click is the regression to look for. The landing must not scroll `#sel-tracks` (the ALL chip is at the top) |
+| P7 | SELECT → BACK by Escape vs by pointer | Escape: the title door that opened the screen (`#mb-race`) shows a ring; pointer BACK: focus returns silently (no ring). Garage BACK returns SELECT with focus on `#sel-go` |
+| P8 | CUSTOMIZE MY TEAM | `.cz-sep` separator labels are now `var(--dim)` (was white @0.4); confirm they still read as section labels, not body text |
+| P9 | SELECT, pad only | Right from the CLASSICS chip lands on the search field; D-pad Down must now leave it for the first circuit row; Left/Right/Home/End stay in the field |
+| P10 | any settings slider | Home/End now jump the slider to min/max (ARIA slider ends) instead of the pane's first/last control |
+| P11 | title after a race, 844x390 @150% | `#menu-buttons` overflows; the `.sf-b` fade + thumb must appear (the title's own `hidden` flip now triggers ScrollFade's settle) |
+| P12 | SELECT, first arrow press | lands on the ALL filter chip (`aria-pressed`) rather than the selected circuit row — a design choice worth a look with a pad in hand |
+| P13 | SELECT / CAREER / GARAGE with a screen reader | entering announces "SELECT, region" (or GARAGE / CAREER); RESUME / RESTART / QUIT on the pause menu are NOT announced as toggles; LIGHTS OUT / FINAL LAP / FINISH are read from `#announce` (`role="status"`) without repeating |
+
+### 2026-09-02 — a 54–107 s boot on this box is the box, not the tree
+  A/B closed the question the same day: the 2026-09-01 20:23 tree (3fe7dc74,
+  before the deploy merge and the process commit) loads in 48.6 s at 852x393 on
+  this box against 59.1 s for a4a08011 and 54.2 s for HEAD — the same order for
+  every tree, so no commit of the last day moved boot time; the box (and, that
+  night, the ubuntu/windows runners: census run 21's 120 s waits, run 1881's
+  boot-guard) simply boots the game in ~50 s on software GL at that size.
+
+Symptom: desktop-viewport specs (audio-smoke, menu-keyboard's desktop describe,
+ui-scale) hit the 120 s test timeout with the game booted but the main thread
+"gone" for 30–75 s at a time; `__apex.logs()` showed build done at 4.8 s, then
+lobby create 17.7 s, AgentView.create 49.8 s, SeasonCal.engage 124.9 s. The
+same tests passed on the GitHub smoke shards (7–9 min per shard, normal).
+
+Measured with a CDP sampling profile over the first 70 s of boot on the
+working tree (`scratch/bootprofile.mjs`, 2 ms interval): 77.2 of 79.6 s is
+`(program)` — native time outside JavaScript; the largest JS self time is
+`drainGlErrors` at 333 ms. No slow or pending requests; DOMContentLoaded at
+1.1 s and `load` at 107 s (1280×800) / 54 s (852×393). A/B against a worktree
+at a4a08011 (before the UI round) at 852×393: 59 s. So the cost scales with
+the viewport, is identical before and after the round, and lives in the
+software GL path (the title flyby renders full-scale while the boot scripts
+run — the race-gated PerfGov item in ARCHITECTURE-REVIEW §7). Read a desktop
+timeout here as the box; verify desktop-viewport specs on a runner. Playwright
+was bumped to Chromium 1228 by the deploy tip (be24dc66) while this container
+has 1194: `playwright.config.js` pins the sandbox binary, a bare
+`chromium.launch()` in a scratch script needs `executablePath`.
+
+**The change-aware gate selected the two slowest boot specs for every source edit, and never carried a failure forward (2026-09-02).** Pages runs 1888 (twice) and push run 2229 went red on `boot-guard.spec.js` (PERMANENT 404: 120 s while Playwright set up the browser context) and `logging.spec.js` (the Monaco build) — both pass locally in 86 s, so the reds were runner starvation. They were selected because pick-tests' blanket rules (`/^(js|css)\//` → "any source edit: does the page still boot", `index.html` → "script tags + DOM shell") route every diff to the boot group, and inside a 10-test budget its cheapest-by-count specs are exactly those two, the slowest per test in the tree. That question was then answered by the FIXED smoke gate (four shards) on every push and deploy, so `select-specs` dropped the boot group when only the blanket rules named it (`dropBootFallback`, `bootCoveredBySmoke` in the JSON). SUPERSEDED (round-3 8-F2, 2026-10-10): the Smoke job is not a required check and is skipped on draft PRs and deploy pushes, so a boot-breaking diff could merge green. `select()` now keeps the boot group (boot-guard / dev-tools compete in the required Selected specs gate under its 180 s per-test cap; `bootCoveredBySmoke` is gone from the JSON), and only `node-plan.mjs` still calls `dropBootFallback`, to keep vm-page (logging's VM twin) off a plain source edit. Separately, the "Record failing specs" step never recorded anything: Playwright writes `<system-out>` BEFORE `<failure>`/`<error>` inside a testcase, so a "testcase immediately followed by failure" regex matched nothing, and the classname it would have captured (`specs/x.spec.js`) lacks the `tests/` prefix the selector filters on — `tools/ci/junit-failed.mjs` parses the block and normalises the path. Runner boots measured in these runs: a context that takes 120 s to create is the machine; do not widen the 45 s boot wait for it.
+
+**tooling-fast is not the deploy gate's node half (2026-09-02).** Pages run
+1889 went red on two `quali-persist` source pins that were green nowhere
+locally, because `quali-persist` lives in `test:state-unit`, which the gate's
+"Pure-node unit suites" step runs and `tooling-fast` does not (the same step
+also runs `node-slow`, the VM twins, the net/audio/agent-contract groups).
+`node tools/ci/deploy.mjs` now runs exactly that step's `npm run test:*` lines,
+parsed from `ci.yml` so the two lists cannot drift; the edit loop stays
+`tooling-fast`, and a pre-deploy run pays the extra ~4 minutes once.
+
+**Re-measured 2026-09-03 for the `?v=dev` shell (Phase 0 Commit B).** `tiny`
+went 72/73 with `smoke` › "page loads without WebGL error" at 150 s, and the
+spec ALONE on a quiet box repeated it (150 s): that test's `page.goto("/")`
+waits for `load` with no navigation timeout, so a >120 s load event reads as
+the bare "Test timeout" with the page alive in `apex-logs`. Boot probe
+(`load` event, 1280×720, one browser at a time, two rounds each) against a
+worktree at the pre-Phase-0 tip vs the working tree: 71 s / 62 s before,
+70 s / 21 s after — DOMContentLoaded ~3 s on both, the SW controlling on
+both. Neither the generated shell, the dev tokens, nor sw.js's dev-host
+network-first rule moved boot time; the deploy-side proof of the tokens is
+`pages.yml`'s `--check --root _site`, and the boot group's verdict comes from
+the runner shards (`ci.yml` `group: tiny`), not this box.
+
+### 2026-09-02 — two instruments that lie on this container
+
+**`etime`/`etimes` does not track wall clock here.** A probe polled across ten
+minutes of tool calls reported `etimes 29`, and a second read seven seconds
+later had advanced by over a minute. Every "it has been running too long, it
+must be wedged" judgement made from the process table this session was
+measuring nothing, and one of them killed a healthy run. **Poll the artifact for
+content, not the process for age** — `[ -s artifacts/x.log ] && ! pgrep …` in a
+long-bounded loop, and let the log's own terminal line be the verdict. The
+companion trap is older and already documented: a `pgrep -f`/`pkill -f` pattern
+matches the controlling shell's own command line, so use explicit PIDs.
+
+**An `await requestAnimationFrame` inside `page.evaluate()` has no timeout of
+its own.** A probe that awaited a double-rAF to measure frame liveness hung
+indefinitely with no output and no error — `evaluate` waits for the promise,
+and a throttled or stopped loop never resolves it. Playwright's test timeout is
+the outer backstop; a scratch script has none. Measure liveness with a counter
+read across two ordinary `waitForTimeout`s instead.
+
+**A screenshot of the WebGPU canvas needs `GLX.awaitSoftPresent()` first**
+(`tools/gfx/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
+un-blitted canvas and produces a confident, wrong answer — it cost one fully
+written-up "WGX mis-frames the garage" reproduction that had to be retracted
+(PERF-FINDINGS.md §2t).
+
+### 2026-09-02 — probing the DEPLOYED build, and what that probe could not show
+
+Chromium in this container cannot reach `https://brycejmurrin.github.io/f1-game/`
+— the agent proxy returns `net::ERR_TUNNEL_CONNECTION_FAILED`. The TinyFish
+fetch tool reaches it because it fetches remotely; that is not egress this
+browser has. The way to drive the SHIPPED code locally is a detached worktree at
+the deployed sha served over `npx serve`:
+
+```sh
+git worktree add --detach <scratch>/livewt <deployed-sha>
+(cd <scratch>/livewt && ln -s /home/user/f1-game/node_modules node_modules && npx serve -l 3499 .)
+LIVE_URL=http://127.0.0.1:3499/ BACKEND=webgl2 node scratch/live-probe.mjs
+```
+
+All three backends boot, race and finish clean on the deployed tree — GLX, TLX
+and WGX each `gpuErrors 0`, zero page errors, zero console errors across boot,
+track build and 25 s of held throttle.
+
+Two things that probe did NOT establish, recorded so a later session does not
+read it as coverage it isn't:
+
+- **The car barely moves, and that is the BOX.** 25 s of wall clock with
+  `setInput({throttle:true})` held reached 1.9 m/s on GLX and 2.4 on TLX, with
+  `s` unmoved to the metre. At this box's SwiftShader frame rate 25 s is a few
+  dozen physics frames. It proves input reaches physics on the shipped build; it
+  is not a driving test, and the speeds are not a measurement of anything. (WGX
+  reached 14.5 m/s over the same wall clock, which is a statement about the
+  soft-present path's cost here, not about the game.)
+- **The garage leg was vacuous.** `garageCam().on` came back `false` on all three
+  — there is no `__apex.openSetup()` and the DOM fallback selector matched
+  nothing, so the probe sampled the default `dist: 8.5` from the menu. The garage
+  screen on the deployed build is UNTESTED by this run. A probe that reports a
+  plausible number from a screen it never opened is the §R14 vacuous-measurement
+  class; it is recorded here rather than quietly dropped.
+**A renderer probe measures nothing unless it is in the TIER that runs the code**
+(2026-09-02). `apex26.forceMobileTier=1` and the GRAPHICS preset are two
+different axes, and every round of the TLX mirror-sweep work set the first and
+not the second. `forceMobileTier` forces `GLX.isMobile` — the renderer's own
+downgrades — and `GfxQuality.init()` then defaults a mobile device to MEDIUM,
+so it lands on `PerfGov.tier() === 2`. LOW is tier 4, and tier 4 is where
+`js/game.js:2434` stops chunking road ribbons and the road becomes a plain
+mesh. A defect that only touches plain geometry is invisible at tier 0 and
+tier 2, and the software probe reports a confident 4.8 % road coverage with
+zero GPU errors in every arm. Set BOTH:
+
+```sh
+node tools/gfx/gfx-probe.mjs --backend three --lite \
+  --ls apex26.forceMobileTier=1 --ls 'apex26.gfxPreset="low"' montreal
+```
+
+The preset goes through `GameStore`, so it is a JSON string and the quotes are
+part of the value. The full tier -> feature table is in
+`PERF-FINDINGS.md` §2s "Putting a probe in the configuration that exposes
+the code".
+
+### 2026-09-03 — a soft-present capture is not a frame until a second one differs
+
+Every three-WebGPU probe in this container (Dawn on Lavapipe, `gfx-probe
+--backend three --tlx-webgpu --lavapipe`) reported PASS with a dark "dusk, no
+cars, unlit road" frame that survived every route-patched source variant
+byte for byte — because it was the FIRST frame the soft-present overlay ever
+read back. `readRenderTargetPixelsAsync` on a lit frame at phone resolution
+never settled on llvmpipe, `_softReadPending` stayed true, and the 2D overlay
+kept that first (pre-lighting, pre-cars) frame while the game moved on
+underneath. Measured: `awaitSoftPresent` never resolving again after a
+camera move (120 s, three runs), timings `[19109 ms, 120007, 120013, 120004]`
+at a 480×222 viewport, identical PNGs across `nomaps` / `nopos` patches.
+
+What changed: TLX submits NO new frame while a soft-present read is in
+flight (back-pressure: 18,172 presents were queued against one completed
+read in 300 s — a copy queued behind that backlog can never land), abandons
+a readback older than 20 s or three times the last completed read (`SOFT_READ_STALE_MS`, epoch-guarded — a 2 s floor was
+tried first and abandoned EVERY llvmpipe read, which take tens of seconds),
+counts rejected reads in `backendState().softRead`, and `gfx-probe` captures
+twice around an `__apex.orbit` and FAILS when the two captures are identical
+(`frame.stale`; `--no-stale-check` opts out and says so). Two capture rules
+for anyone probing this path:
+
+- **Two captures or it is not a frame.** A single soft-present capture on a
+  slow adapter is evidence of the first readback, not the scene.
+- **Route patches need `serviceWorkers: "block"`.** sw.js precaches the
+  deferred backends, and a Playwright `page.route` never sees a fetch the
+  service worker serves — the patched file simply does not load. Put a
+  `console.log("[patch-live]")` in the patched source and assert it.
+
+The steady-state lit frame on three-WebGPU is correct here (small viewport,
+`artifacts/diag-small/canvas-0.png`: lit car, textured road), so the owner's
+black-car report on an iPhone is WebKit-specific; the GOV panel and
+`__apex.diag().env.backendState` now carry `api`, `gpuErrors` and the first
+GPU/shader error so the next phone screenshot names it.
+
+### 2026-09-03 — the census gate failed on its own script, and what the real GPU said
+
+`gpu-census.yml` run `33757119814` came back FAILURE with every game check
+green: the Verdict step is a `node -e '…'` inside a bash single-quoted string,
+and a comment in it said "three's" — the apostrophe ended the string and node
+was handed half a program (`SyntaxError: Unexpected end of input`). The gate
+failed closed this time; the same slip inside a condition could drop a clause
+and pass. `tests/unit/ci-coverage.test.mjs` now extracts every inline
+`node -e` block from the three workflows exactly as bash would and compiles it
+(`vm.Script`), and refuses any apostrophe in the body.
+
+The run itself is the real-GPU baseline after the WebKit AUTO → three-WebGL2
+change: all four legs `ok`, `gpuErrors 0` (table in
+`CI-RENDERING-PERFORMANCE.md` §There IS a real GPU). One number
+to carry: three-WebGL2 on ANGLE-Metal spent **16.2 s in a single first frame**
+(program link + synchronous Metal compile of the TSL lit program). The frames
+themselves are on Azure blob storage the container proxy denies — read them in
+the Actions UI.
+
+`tools/gfx/wgx-validate.mjs` (live run) now prepends
+`diagnostic(error, derivative_uniformity);` to every module it compiles,
+because that is WebKit's default severity and Dawn's is a console warning:
+a WGSL module that only warns here refuses to build on an iPhone and WGX falls
+back to GLX without a word. `--lax-uniformity` restores Dawn's default to
+bisect a red run. The tree passed on the first run (montreal, 90 frames,
+`gpuErrors 0`, `wgslParseErrors 0`).
+
+### 2026-09-03 — `image-grade-visual` is threshold-marginal on a real GPU
+
+**SUPERSEDED — see the 2026-09-14 entry at the end of this file.** The diagnosis
+below is wrong: the mechanism was not the render clock, it was the capture helper
+clearing the spec's camera on every screenshot.
+
+`ci.yml` run 33762205584 (dispatch, `renderer_macos: true`, tip 905ad6c): the
+Metal renderer job failed ONE spec — `image-grade-visual.spec.js › highlights
+predominantly change bright pixels`, bright/dark delta ratio 1.86 against the
+required 2.0 — and `blacks visibly change the deepest image detail` passed
+only on retry (first attempt moved the deepest pixels the wrong way). The
+single allowed re-run was green on the same commit, and the local GLX frame
+on the same tree rendered normally, so this is a flake, not a regression.
+Mechanism: the spec compares two full-page screenshots of a `park()`-frozen
+race, but the render clock keeps advancing between captures (cloud drift,
+sky), and on a 60 fps GPU the two captures are more frames apart than on
+SwiftShader. `__apex.renderClock(t)` exists to pin that and the spec does not
+call it — pin it before each capture pair when this spec is next touched.
+
+### 2026-09-03 — the iPhone's three-WebGPU failure, measured on Dawn before and after
+
+The phone's metrics `log` tab named it: every lit pipeline refused with
+WebKit's "The combined byte size of all variables in the private address
+space exceeds 8192 bytes". The fix was verified here without a phone by
+dumping every WGSL module three generates (scratch `dump-wgsl.mjs`, Dawn on
+Lavapipe, iPhone UA, `artifacts/wgsl-dump-iphone` → `artifacts/wgsl-dump-2`):
+
+| | before | after |
+|---|---|---|
+| lit fragment size | 359 434 B | 99 204 B |
+| module-scope `var<private>` in the lit fragment | 1,597 (~12.4 KB) | 1 (`output`, 16 B) |
+| `vnoise` bodies in the lit fragment | inlined per call | 1 function, 106 calls |
+| Dawn `gpuErrors` / pipelines | 0 / 24 | 0 / 24 |
+
+Dawn compiles both, which is the point: this class of defect is invisible to
+every Chromium run and only a WebKit device or a private-variable count on
+the dump can see it. When a TSL change lands, re-dump and keep the module-scope
+private sum well under 8,192 bytes; the `gfx-backend-canary` pins the patch
+and the noise layouts. The phone is the confirmation step (THREE PATH:
+WEBGPU, one lap, GOV `gfx` row `err 0`).
+
+### 2026-09-03 — the TSL layout pass, measured on the same dumps
+
+Second round of the WebKit work: `matBumpHeight` (lit) and the sky's
+`hash3`/`hash2`/`vnoise`/`fbm` took `setLayout`, so each compiles once as a
+real function instead of being inlined at every call. Dawn dump, iPhone UA,
+`artifacts/wgsl-dump-2` → `artifacts/wgsl-dump-3`:
+
+| module | before | after |
+|---|---|---|
+| lit fragment (instanced) | 99 204 B | 69 707 B |
+| lit fragment (plain) | 99 064 B | 69 567 B |
+| lit fragment (chunked) | 97 267 B | 67 770 B |
+| sky fragment | 40 601 B | 16 780 B |
+| all 33 modules | 473 731 B | 361 406 B |
+
+`main`'s node-variable count fell with it (lit 452 → 354, sky 173 → 62).
+Cumulative with `a6a1566`, the lit fragment is 359 434 B → 69 707 B. The
+figure this aims at is the census's 16.2 s three-WebGL2 first frame on
+ANGLE-Metal, which only `gpu-census.yml` can re-measure. `gpuErrors` 0 and
+24 pipelines in both dumps.
+
+### 2026-09-03 — the standing smoke boot red went green when the backends left
+
+`test-bg tiny` on the WGX/TLX spike-out commit (`cc8d138`):
+**`= run passed (73/73 done, 0 failed)`**.
+
+That is the first fully green `tiny` on this box in the restructure. The
+known-benign red every earlier run carried — `smoke.spec.js › Apex 26 — smoke ›
+page loads without WebGL error`, whose `page.goto` waits for `load` with no
+navigation timeout while this container boots in 54–154 s — did not reproduce.
+
+The likely cause is the change itself: the spike-out took `js/render/webgpu/`,
+`js/render/three/` and the 1.1 MB vendored three.js island out of the shipped
+tree, and although those files were DEFERRED (no `<script>` tag, injected only
+on an opt-in), the service worker seeded the three vendor bundles into its
+OPTIONAL precache set and the shell carried their importmap. Fewer bytes to
+fetch and parse before `load` fires is exactly the direction that moves a
+boot sitting on the edge of a timeout.
+
+Treat this as ONE observation, not a new baseline: it is a single run, the
+box's load varies, and the underlying defect (a `load` wait with no navigation
+timeout) is still there and will still bite on a slow run. The rule in
+`AGENTS.md` §Verification stands — read the FIRST failure's message before
+believing any red run. What this DOES retire is the assumption that a red
+smoke boot is unavoidable here; if it comes back, it is worth timing rather
+than waving through.
+
+## The change-aware gate can be cancelled by a spec that never had a chance
+
+**Pages #1967, run 33822785596, job 100868882762, 2026-09-04.** The run reported
+`cancelled` with zero failing jobs, in `Selected specs (change-aware gate)`:
+
+```
+running 6/32 done, 6 failed
+x FAIL 7/32 hud-layout.spec.js › notched-portrait › tilt / auto gears (134.3s)
+   Test timeout of 120000ms exceeded.
+```
+
+The job's own header derives its 26-minute cap from a worst case of "10 tests x
+120 s + ~4 min setup". It selected 32 tests and spent the whole cap failing the
+first seven, then died at the cap — and `ci.yml`'s own header already records
+that a cancelled job reads as "0 failures". Second time in one night that a
+timeout wore a cancellation's clothes; the first was `guards`.
+
+**The cause is not the budget model.** `select-specs.mjs` already has the right
+guard — `EXCLUDED (declares Ns test budget > gate 120s)` — and 32 race-fixture
+specs are excluded by it. It keys on `test.setTimeout`, and `hud-layout.spec.js`
+declared nothing, so `fit()` read "undeclared" as "fits in 120 s". It boots a
+full race (22 cars, a built circuit, the maps pass) for each of ~19 generated
+cases; the page log puts that fixture at **76-80 s before the test body starts**.
+It was never going to pass at 120 s. Fixed by declaring 300 s, the value its
+peers on the same fixture already carry, and pinned in
+`tests/unit/select-specs.test.mjs` as a RULE (above whatever the gate's cap is),
+not as the number.
+
+### …and WHY it looked affordable (added after the fix, from the CI log)
+
+The fix works — Pages #1972's gate printed, on a healthy 7m29s job:
+
+```
+fits 10 tests; selected 0 across 0 specs
+EXCLUDED (declares 300s timeout): tests/specs/hud-layout.spec.js (2 tests)
+```
+
+**"(2 tests)".** It runs 25 — 4 VIEWS x 3 steer modes x 2 gear modes, plus one
+desktop case. `declaredTests` counts literal `test(...)` calls by AST, and 24
+of those 25 come from one `test(...)` call inside two nested `for` loops.
+
+So the budget priced this spec at 2 x 79.7 s ~= 160 s. The truth is ~25 x 130 s
+~= 54 minutes. THAT is why an undeclared 120 s budget looked affordable: the
+missing declaration was the trigger, but a 12x undercount is what made the
+selector willing to take it. My first write-up above credited only the
+declaration, and that was half the story.
+
+The undercount is not unique to it. Seventeen specs of 114 generate tests in a
+loop, so for all of them `declaredTests` returns a LOWER BOUND, not a count —
+the same figure `tools/ci/select-budget.mjs` already cites from
+`tools/ci/test-observed.mjs` ("17 across 16 specs"):
+
+```
+  44 of 44 looped  ui-audit.spec.js          3 of  3  menu-baseline.spec.js
+   4 of  7 looped  hud-layout.spec.js        3 of 11  ui-scale.spec.js
+   2 of  5 looped  autopilot.spec.js         2 of  8  elevation-tracks.spec.js
+   2 of  5 looped  tracks-walls.spec.js      + 10 more with 1 each
+```
+
+Most are already excluded by a declared budget. The principled fix is that an
+unknown count should be treated as unknown rather than as small — the same
+shape as "an undeclared budget is unknown, not safe" — but that changes what
+the gate selects, and it is not a change to make on a hunch at the end of a
+long session. The damage is already bounded by `--max-failures=3`, which stops
+any such spec in ~6 minutes instead of 26.
+
+Two things this leaves open, both stated rather than guessed at:
+
+- **48 race-fixture specs still declare <= 120 s** (`maxDeclaredTimeout`, against
+  a `race(`/`loadTrack`/`goToRace` probe). Only ONE of them has been measured
+  failing. Declaring budgets for the other 47 on a heuristic would be the
+  unmeasured change this repo forbids, so they are named here and left alone.
+  The honest read is that an UNDECLARED budget is unknown, not safe — and the
+  gate currently treats the two as the same.
+- **A cancelled job writes no junit**, so `junit-failed.mjs` logged "no failures
+  to carry" and the failing-spec cache learned nothing from the run that most
+  needed remembering. The gate's fail-fast memory is blind to exactly the
+  failures that kill it.
+
+> **These two are the same gate failing from opposite ends, on the same day.**
+> Above: a spec with no declared budget was selected and blew the cap.
+> Below: a diff that touched `ratchets.json` selected nothing at all. One
+> says the selection can pick what it cannot afford; the other says it can
+> decline to pick anything. Both leave the standing gates as the whole
+> story, and neither is visible in a green check.
+
+## The change-aware gate has a coverage inversion (measured 2026-09-04)
+
+Measured on the 13-file audit push (`0f5daac..227070f`), which changed
+`js/game.js`, `car3d.js`, `career*`, `gltf.js`, `onboard.js`, `vantage.js`,
+`engine.js` and `tuner-panel.js`:
+
+```
+$ node tools/ci/select-specs.mjs --since 0f5daac
+13 changed file(s) [infra] -> groups: test:car, test:circuits, test:driving,
+                                      test:gfx, test:hooks, test:input, test:modes, test:ui
+SELECTION NOT MEANINGFUL: this diff touches 1 tracked/infra path(s)
+  (tests/data/ratchets.json) -- a change there can affect any spec, so nothing
+  is selected and the GATES own this push.
+budget fits 10 tests (retries 0, 120s/test, surviving 1 timeout); selected 0
+```
+
+and CI's "Selected specs (change-aware gate)" job accordingly skipped its
+Install-browser and Run-the-selection steps. **This is by design and the design
+is defensible** — the gates (4x Smoke, Driving model characterization, geometry
+sweeps, the parts census, the node suites) did run and did pass. But two rules
+compose into an inversion worth knowing about:
+
+1. **Touching `tests/data/ratchets.json` zeroes the selection.** Reasonable in
+   isolation. It is also the file that a large change is most likely to touch,
+   because any file crossing its ceiling forces an edit there.
+2. **The 120 s/10-test budget skips by size.** Every remaining spec printed
+   `SKIPPED (over budget)` — `camera-hooks`, `world-physics`, `longitudinal`,
+   `debris`, `drift`, `season`, `audit`, and 18 more.
+
+So a diff touching one file gets a targeted spec selection; a diff touching
+thirteen gets none. The breadth comes from the standing gates, not the
+selection, and the two are sized independently — the gates do not widen when
+the selection empties.
+
+Not proposing a change: raising the budget makes every push slower, and the
+`ratchets.json` rule exists because that file really can affect any spec. What
+is worth having is the awareness that on a big push the targeted layer
+contributes nothing, so the gates are the whole story — and it is the gates,
+not the selection, that should be argued about when deciding what a deploy has
+actually verified.
+
+
+## 2026-09-04 — the third spec family billed at a rate it cannot pay
+
+`tools/ci/select-specs.mjs` excludes a spec from the 120 s change-aware gate
+when the spec DECLARES a budget bigger than the gate's — `EXCLUDED (declares
+Ns test budget > gate 120s)`. The guard keys on `test.setTimeout` /
+`describe.configure({timeout})` / `test.slow()`, so it can only see a cost the
+spec states. A spec that is silent about a 240 s cost is billed at 120 s,
+selected, and killed at exactly "Test timeout of 120000ms exceeded" with
+nothing asserted wrong.
+
+That has now happened three times in two days:
+
+| when | spec(s) | measured | outcome |
+|---|---|---|---|
+| Pages #1967 | `hud-layout.spec.js` | 134.3 s killed / 149 s local | 6 of 7 tests red, burned the job cap, CANCELLED the deploy |
+| Pages #1974 | `parts-factory-presets` | 240.1 s | 3-failure stop; the run's only red job |
+| Pages #1974 | `multiplayer-scan-cancel` › CANCEL stops the camera | 238.2 s | same run |
+| Pages #1974 | `multiplayer-scan` › the camera reads a code | 229.7 s | same run |
+
+All four now declare 300 s — the value their peers on a race fixture already
+carry — so the gate excludes them BY NAME and reports it. That is the fix for
+these four, not for the class.
+
+**CORRECTION, from the fuller #1977 log.** Three of the four are budget kills
+("Test timeout of 120000ms exceeded", nothing asserted wrong). The fourth,
+`multiplayer-scan › the camera reads a code and puts it where it belongs`, is
+NOT — and the first read of the #1974 tail, which only showed the other two
+failures in detail, said it was. It fails an ASSERTION:
+
+    expect(locator('#vs-invite-in')).toHaveValue(…)  Expected: "APEX1.s.aB3…"  Received: ""
+    179410ms [net] info: scan stop
+    179431ms [net] warn: handshake accept fail corrupt_code
+
+That assertion carries its own `{ timeout: 45000 }`, and `test.setTimeout` does
+NOT extend an expect timeout — the two budgets are independent. The page log
+shows why it expires: `scan start` lands at 57.8 s on a starved runner (the
+decoder is 257 KB fetched on demand, on top of a SwiftShader boot and a fake-
+webcam video stream), leaving the 45 s assertion window to cover a decode that
+had not begun. The `corrupt_code` line arrives 20 ms after `scan stop`, i.e.
+during teardown, so it is a CONSEQUENCE of the abandoned scan rather than
+evidence that the QR path is broken.
+
+So the 300 s declaration is still right for this spec — it costs far more than
+the gate's 120 s and does not belong on it — but it does NOT make this test
+pass, and must not be described as having fixed it. What that one needs is a
+measurement of how long the scan actually takes to first decode on a loaded
+runner, and then either a wait budget set from that number or a fixture that
+does not pay the on-demand decoder fetch inside the assertion window. That is a
+`js/net` decision with no measurement behind it yet, so it is recorded here
+rather than guessed at.
+
+**A blanket "declare your budget" guard was considered and rejected on a
+measurement.** 65 of the 114 specs match a naive boot-heavy-fixture heuristic
+(`racePage|sharedTest|BOOT_MS|__apex.race(`) while declaring nothing, and most
+of them are legitimately cheap per test — `headless-api` runs 24 tests on ONE
+shared boot. A guard flagging 65 files would be noise, and noise is how the
+`multiplayer-session` "SKIPPED (over budget)" line sat unread for weeks.
+
+The narrower mechanism, not yet built: the gate already knows the difference
+between a test killed by ITS OWN declared budget and one killed by the gate's
+generic cap. Only the second is a budgeting mistake, and it is self-identifying
+at the moment it happens. Reporting it as a BUDGET failure that names its own
+fix ("declare `test.setTimeout` so the gate can exclude this spec") would turn
+a confusing red into an instruction, without guessing at 65 files up front.
+
+
+## BOOT_MS is an IDLE-box number, and the gate is never idle
+
+**Pages #1987, run 33881691888, 2026-09-04.** All three `rotation-recovery`
+tests failed the change-aware gate on `waitForFunction: Timeout 45000ms
+exceeded`, at 83.1 s / 74.4 s / 72.4 s. Nothing asserted was wrong. The page
+log shows the fixture stalling:
+
+```
+ 3634ms  [car] build mclaren
+77029ms  [car] build mercedes     <- a 73-second gap
+```
+
+Three parallel workers each booting a full race on one shared runner.
+
+`tests/helpers/fixtures.js` sets `BOOT_MS = 45000`, and its own comment is
+careful about where that came from: **"MEASURED on an idle container (loadavg
+0.00)"**, worst case 24.6 s. It is a good number for the box it was measured
+on. The change-aware gate is not that box — it runs several race fixtures at
+once, and the same boot takes 77 s there.
+
+**88 specs import BOOT_MS**, so this is not a one-spec problem. It is also not
+one to fix by guessing a bigger constant: the honest fix is the shape
+`smoke.spec.js` already uses after Pages #1953/#1954 — derive the wait from
+`test.info().timeout` with today's constant as the FLOOR, so nothing gets
+looser locally and CI scales up. That is an 88-import change and wants its own
+measurement on a LOADED runner, which this box cannot take reliably while it
+is itself the loaded runner.
+
+Recorded, not attempted. What IS done: `rotation-recovery.spec.js` declares
+its own measured 300 s, so the gate excludes it instead of selecting it into a
+120 s budget its boot alone cannot clear. That is the fifth spec through this
+route (hud-layout, multiplayer-scan, multiplayer-scan-cancel,
+parts-factory-presets, rotation-recovery); 43 candidates remain unmeasured.
+
+**Sixth: `parts-ers.spec.js` (2026-09-04, Pages run 2002 / 33904063866).** The
+backlog is not theoretical and it does not wait to be worked through — it fires
+whenever a diff pulls a fresh spec into the selection. A `js/garage/` change
+brought in `test:car`, the selector picked this file for the first time, and
+three of its tests failed on a plain 120 s timeout having RUN for 195.1 s,
+175.4 s and 150.9 s. Not an assertion: the state dump showed the game healthy
+(real `phys`, twelve cars built) with the first car build logged at 186218 ms.
+The whole cost is the first boot — `sharedTest` hands the same page to the rest,
+which is why two of the four take 0.2 s. Same file on this box: 4/4 green,
+slowest test 29.4 s. Runner, not code. Declared 300 s; the gate now names it
+EXCLUDED instead of going red on it, and the deploy it was blocking can move.
+
+That is the shape to expect from the remaining 42: a healthy spec, a
+deterministic false red, and a blocked deploy — one per newly-touched area.
+
+Note the containment held: `--max-failures=3` stopped the job at 3/7 in 12m18s
+against a 26-minute cap, wrote its junit, and carried the failing spec forward.
+
+**Seventh: `presets.spec.js` (2026-09-04, Pages run 2015 / 33921254382).** The
+prediction written under the sixth entry — "a healthy spec, a false red, a
+blocked deploy, one per newly-touched area" — came true within the day, and the
+newly-touched area was `css/hud.css`. The metrics-panel width work pulled this
+file into the selection for the first time and it took the deploy down with it:
+`Selected specs` failed, so `current-tip`, `deploy` and `verify-live` were all
+SKIPPED and the commit sat on the branch un-published.
+
+Two details worth keeping, because both were misleading at first glance.
+
+The failures were NOT slow tests hitting a cap. Both read `Test timeout of
+120000ms exceeded WHILE SETTING UP "context"` — Playwright never got a browser
+context, so the spec's own code never ran. The per-worker pattern says the same:
+each worker passed exactly ONE test and failed the next during setup, whereupon
+Playwright span up a fresh worker that again managed exactly one. That is worker
+churn on a loaded runner, and no assertion was ever reached.
+
+And the local run does NOT look like parts-ers. 4/4 green here, but the first
+test costs 1.7 min (102 s) of boot against the 120 s default, with the other
+three at 13.7 / 9.9 / 9.9 s. So this file was already sitting ~15 % under the cap
+on an IDLE box before the runner added anything — where parts-ers had 29.4 s
+local against 195 s on CI, a 6.6x stretch with room to spare locally. Two
+different distances from the same cliff, the same landing.
+
+Declared 300 s, so select-specs EXCLUDES it by name. Verified: the same diff now
+selects `ui-redesign.spec.js` alone, which passed on the failing run.
+
+**80 of 115 specs still declare no budget.** Every one is a deploy blocked at
+the moment some future diff first reaches it, and the cost of finding out is
+always a failed Pages run rather than a red local suite. The measurement is
+cheap — one `npx playwright test <spec>` and read the slowest line — and the
+declaration is one line. What is expensive is discovering them one deploy at a
+time, which is now three for three.
+
+
+## The `test:ui` group has NO blocking coverage on a push (2026-09-04)
+
+The route above — a spec declares its measured budget, the change-aware gate
+excludes it by name rather than selecting it into a budget it cannot clear — is
+the right behaviour and the selector is loud about it. What was never checked is
+where the excluded specs land afterwards. The answer, on a push, is nowhere.
+
+Enumerated on the deploy tip against a `css/` + `js/ui/` + `js/garage/` diff
+(`node tools/ci/select-specs.mjs --since <ref>`): groups `test:car, test:ui`,
+then
+
+```
+EXCLUDED (declares 360s test budget > gate 120s): ui-scale.spec.js
+EXCLUDED (declares 300s test budget > gate 120s): hud-layout.spec.js
+EXCLUDED (declares 300s test budget > gate 120s): ui-resize.spec.js
+EXCLUDED  … custom-team, parts-budget, parts-factory-presets,
+            parts-mesh-cache, rotation-recovery
+UNREACHABLE (declares N tests > the whole 10-test cap — this gate can NEVER
+            run it): menu-survey 11, music-library 13, parts-setup-ids 14,
+            parts-catalog 16, menu-keyboard 19, ui-button-touch 20,
+            parts-physics 69
+```
+
+Every one of those is in `test:ui` or `test:car`. Neither group runs on a push:
+ci.yml's only group step is
+
+```yaml
+- name: Boot group (nightly) / dispatched group
+  if: … && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+  … npm run "test:${GROUP:-tiny}"
+```
+
+— schedule or dispatch only, and defaulting to `tiny`, not `ui`. So the blocking
+browser coverage of a push is `smoke.spec.js` (4 shards, boot only),
+`physics-characterization.spec.js`, and whatever `Selected specs` can fit. For a
+UI diff that is: nothing.
+
+**This is not hypothetical.** `ui-scale.spec.js` was red on five landscape
+garage cases (`#cs-tab-livery` clipped to 53x6 px, 0 % visible, unreachable at
+every UI SIZE — see the 15-tabs-in-14-slots fix). It was red on 5502e403 before
+this branch touched anything, it stayed red through several deploys, and no
+blocking job ever ran it. Pages run 1998's `Selected specs` job reported
+**success having skipped "Run the selection" outright** — the gate passed by not
+looking.
+
+Three ways out, none taken here because runner spend is the owner's call:
+
+1. **A fixed job for `ui-scale.spec.js`**, the way `smoke` and
+   `physics-characterization` already have one — `FIXED_GATE_SPECS` in
+   select-specs.mjs exists for exactly "this spec has its own blocking job with
+   its own timeout policy", and those two are its only members. One runner, and
+   it is the highest-value UI spec there is: 6 screens x 5 scales x 2
+   orientations. This is the recommendation.
+2. A `ui` shard in the push matrix — four runners, full group, much more cost.
+3. Shrinking the declared timeouts to fit the 120 s gate — rejected: 300-360 s is
+   what those specs MEASURE on a loaded runner, and cutting them buys green by
+   making them flaky, which is the failure mode this whole file exists to stop.
+
+What must NOT happen is leaving it as it is on the assumption that "the gate is
+green". It is green because it declined to look, and it said so in its own log.
+
+## 2026-09-04 — the gate's timeout bounded the MEAN test, not the slowest
+
+The fourth occurrence of the family above, and the one that showed the class is
+wider than "a spec that is silent about its cost". Pages #2019 and #2020 both
+failed `Selected specs` on the same three:
+
+| spec | measured, IDLE box, one worker | gate was |
+|---|---|---|
+| `physics-fixes` › lap distance … through Monaco | **124.2 s** | 120 s |
+| `albert-park-foundation` › fountains and safe water | **110.1 s** | 120 s |
+| `abudhabi-foundation` › contracts hold at night | timed out setting up context | 120 s |
+
+All three PASS locally. Monaco was over the gate outright, so it failed every
+time the selector picked it; Albert Park sat at 92 % of budget, which any runner
+contention closes. Neither declares a budget, so the exclusion guard could not
+see them — and excluding them was not the right answer anyway, since they are
+exactly the specs the gate exists to run.
+
+**Where the 120 came from, and why it was wrong.** `select-budget.mjs` derives
+the gate from a MEASURED 79.7 s/test. That is the right input for *how many
+tests fit* and the wrong one for *the per-test timeout*, which has to clear the
+SLOWEST spec that could be selected, not the average one. The mean was 79.7 s;
+the slowest was 124.2 s. Nothing in the model made that gap visible.
+
+**Two wrong turns worth not repeating.** The first read was "starved runner" —
+the failures are all timeouts, one was `while setting up "context"` (Playwright
+could not create a context, which no game code reaches), and Albert Park's page
+log stops at 6090 ms while the test runs to 194 s. Every one of those points at
+infrastructure, and the 124.2 s local pass on an idle box refutes all of them.
+The second was that the loop was the cost: the Monaco test drives 4500 `step()`
+calls, each also drawing a frame through SwiftShader, so `headless(true)` (which
+short-circuits `render()` and touches no physics) looked like the fix. Measured:
+124.2 → **120.4 s**. Four seconds. The render was never the cost — the sibling
+test in the same file runs 100 steps and still takes 57.3 s, so ~55 s of each is
+Monaco boot + track build, which no test-side change removes.
+
+**The carry-forward cache turns one budget defect into a branch-wide red.**
+`.selected-failed.txt` is keyed by branch and re-runs the last run's failures
+FIRST. With `--max-failures=3`, three over-budget specs are hoisted to the front
+of every subsequent push, fail again, stop the job before anything behind them
+reports, and re-save themselves. #2020's own diff selected only `ui-redesign`;
+the other three came entirely from the cache. A budget defect therefore reads as
+a spreading regression on unrelated commits, which is how it cost three deploys
+before anyone measured a spec.
+
+**Fix: 120 → 180 s, and `timeout-minutes` 26 → 36** (`cap >= tests × timeout +
+setup + margin` = 10 × 180 s + ~4 min). Shrinking the selection instead was
+rejected on the model's own numbers: at 15 min surviving one failure, 180 s/
+retries-0 fits **10 tests — the same 10 as at 120 s**. The selection capacity
+does not move, because a PASSING test never reaches its timeout; only the
+worst-case ceiling does, for a case that essentially never happens. Paying
+coverage on every run to save minutes only the pathological run spends is the
+wrong trade.
+
+`select-specs.test.mjs` now pins the gate against the slowest MEASURED spec with
+25 % margin, and asserts `ci.yml` actually runs the number the selector models —
+only the workflow is the one the runner obeys.
+
+**Raising it found a FIFTH copy of the number.** `ci-coverage.test.mjs` asserted
+`--timeout=120000` as a literal and went red the moment `ci.yml` moved, so the
+guard that exists to catch drift was itself the thing that drifted. It now
+imports `SELECTED_GATE` and derives the value, as `select-specs.test.mjs` does.
+Count the copies before changing a CI constant here: `ci.yml` (the run step and
+the `timeout-minutes` derivation), `select-specs.mjs` (`SELECTED_GATE`, the
+owner), `select-budget.mjs` (the variant table), and two test files. Only the
+first is what the runner obeys; the rest have to be derived from the owner or
+they are four chances to describe a job that does not exist.
+
+## 2026-09-04 — raising a gate ENROLLED the specs that had opted out of it
+
+Immediately after the 120 -> 180 s raise above, `audio-smoke.spec.js` failed the
+change-aware gate for the first time. It had not changed, and neither had the
+audio code under it.
+
+The exclusion read `own > SELECTED_GATE.perTestTimeoutSec * 1000`. A spec
+declaring EXACTLY the gate's budget is therefore SELECTED — with zero headroom,
+on a runner slower than the box its number was measured on — and then killed at
+its own declared figure, which reads as a code failure and is not one.
+
+Five specs declare exactly 180 s and every one of them was pulled in by the
+raise: `audio-smoke` (115.5 s SOLO on an idle 4-core), `material-shimmer`, and
+the `qatar` / `spa` / `suzuka` foundations. All five had opted out of the 120 s
+gate deliberately.
+
+`>=`, not `>`. A spec that says it needs the whole budget does not fit in it,
+and the boundary then moves with the gate instead of sweeping up whatever sits
+on it. `select-specs.test.mjs` pins the rule as "never SELECTED", not "lands in
+overBudgetSpecs" — a spec can also be excluded earlier for being covered by a
+fixed gate or replayed by a VM twin, which is how `aero-zones.spec.js` (540 s)
+legitimately arrives.
+
+**The general lesson: raising a gate is not only a budget change, it is a
+MEMBERSHIP change.** Every spec that opted out by declaring a number between the
+old gate and the new one silently opts back in. Enumerate that set before
+moving the number — the one-liner is `maxDeclaredTimeout(f)` over
+`tests/specs/*.spec.js`, filtered to `> old && <= new`.
+
+**The undeclared-budget defect came back on three more specs (2026-09-05, Pages #2048).** A deploy of another session's commit (f8d5629, docs and a track tweak) failed its selected gate on both attempts on `physics-hotpath` (132-177 s, killed by its OWN `test.setTimeout(120_000)` — under the 180 s gate, so admitted), `map-hooks` (185-190 s, undeclared: it boots the default track AND Monaco) and `projection` (116-125 s for the first test, then no browser context inside the gate). A local A/B of the failing tree against its parent passed all three with identical timings, so the commit was innocent; the specs had been living under the gate by luck. Fixed the way hud-layout was: each declares 300 s (excluded by name, runs in `driving`), map-hooks waits on `awaitTrackBuild` instead of a 3 s sleep, and `tests/unit/select-specs.test.mjs` pins all three above the gate as a RULE. The lesson is the same one, so it goes in one sentence: a race-fixture spec that declares no budget, or one at or under the gate, is a deploy failure waiting for a slow runner — declare it the day you write the spec.
+
+## 2026-09-08 — the `driving` group outlives the dispatch, and two of its tests had gone stale
+
+Three AI rounds (the baked racing line, deliberate overtaking, pressure
+mistakes, then the line's own corner speed and tyre compounds) shipped on the
+VM harness and the node suites alone, with their browser groups named as
+not-run. Dispatching `ci.yml` with `group: driving` to settle that debt found
+two red tests — and neither was a physics regression. Both were tests written
+before a feature they now collide with:
+
+- **`aero-zones.spec.js` › the opening-lap OVERTAKE gate.** The test drives the
+  opening lap at full throttle with no steering, which puts the car into the
+  first-chicane barriers at 60 m/s. The broken panels are settled hazards, and
+  RACE CONTROL — ON by default since 2026-09-03 — answers YELLOW at t=14 s,
+  SAFETY CAR at t=15, RED FLAG at t=30 (traced). Every flag also switches
+  OVERTAKE off and the red flag re-grids the field, so "on iff the leader is
+  past lap 1" cannot hold. The fix is `caution(false)` plus an assertion that
+  no flag flew; the caution rule stays `race-control.spec.js`'s.
+- **`aero-zones.spec.js` › the X_VMAX_GAIN trade.** The HUMAN car tows since
+  2026-09-03 (batch 3, same 34 m window and gain as the AI). A rival inside
+  that window in one sample and not the other moved `vmaxNow` by the
+  slipstream: 1.1000 measured against the 1.0957 the flap earns. The Node twin
+  already asserted `towing === 0`; the browser spec did not. `A.rivals([])`
+  after EACH reset (not once before both — `reset()` re-seeds the field), and
+  both samples assert no tow.
+
+**The general lesson: a spec that drives a REAL lap inherits every rule added
+to the game since it was written.** Neither test mentions cautions or
+slipstream; both were silently measuring them. A test that sets a car in motion
+and then asserts one number needs to name what it is holding still.
+
+**The group's wall time is the other finding.** On the 4-shard matrix the
+`driving` group ran 22, 37, 48 and 50+ minutes — the fourth shard was still at
+18/26 (0 failed) when the run was cancelled at 14:53, the fourth such cancel on
+this branch (three are recorded in the renderer plan). So a dispatch of this
+group returns three shards and loses one to the clock. Read the shards
+individually: `actions_list` with `list_workflow_jobs` gives a per-shard
+conclusion, and a cancelled shard's log tail still says how many passed. Do not
+read the RUN's `cancelled` conclusion as a failure.
+
+## 2026-09-08 — a multi-circuit test, and why loading them into one page is worse
+
+`aero-zones` "authored circuits get the real number of zones" walked four
+circuits in ONE test. It timed out three times at 125, 135 and 152 s against a
+120 s cap while passing in 66 s run alone, which reads exactly like a code
+regression and is not one: each circuit costs a page boot (11-33 s here) plus
+its build, and once the earlier tests in the file had loaded circuits into the
+same worker the walk no longer fit. It cost two false alarms — including one
+where a 7x bake-cost cut, a real improvement, was credited with fixing it and
+then the timeout got WORSE.
+
+**The obvious optimisation is a trap.** Switching circuits with `race()` in a
+live page instead of reloading LOOKED like it would save three boots. Measured,
+both orders, on the same box:
+
+| four circuits | run 1 | run 2 |
+|---|---|---|
+| a fresh page boot each (what the test did) | 65.9 s | 65.1 s |
+| `race()` into the live page | 95.1 s | 89.1 s |
+
+Switching is **~40 % slower**. A live scene is torn down and rebuilt while the
+previous circuit's resources are still around, and on a software rasteriser
+that costs more than a clean boot. Reverted; do not re-derive it.
+
+**What worked: one test per circuit.** Same coverage, each with its own budget:
+monza 29.6 s, baku 39.0 s, qatar 26.5 s, albert_park 31.0 s — a 3x margin
+against the cap instead of half of one, and a failure names the circuit in the
+title rather than in an assertion message. Total wall time is unchanged.
+
+Related, and NOT fixable in a spec: `race-control` "the setting survives a
+reload" failed twice on CI with `Test timeout of 180000ms exceeded while
+setting up "context"` — the browser context never opened, before the test body
+ran at all, on two different branches and at commits that predate the change
+being blamed. A stall before the page exists is the runner, not the spec; the
+same test passes in 14 s elsewhere in the same run. Read the phrase "while
+setting up context" as infrastructure and look no further.
+
+
+
+## 2026-09-08 (evening) — AI off-tracks jumped fivefold and I could not pin it
+
+`scratch/race-quality-bench.mjs monza 6` reported 0.16 off-tracks per lap in
+the morning and 0.74–0.85 in the evening, with best and mean lap both a second
+slower. Monaco moved the same way (0.02 -> 0.34). That is a big regression in
+how well the field stays on the road, and it is worth someone's attention.
+
+What it is NOT, measured rather than assumed:
+
+- **Not the settings bake.** The owner's steering profile became the shipped
+  default that afternoon. Reverting all eight slider defaults to their previous
+  values and re-running gave a BIT-IDENTICAL bench — same laps, same best, same
+  offs. `applySteerTuning` writes WHEELBASE / STEER_EXPO / STEER_MAX_SLIP /
+  STEER_SPEED_REF / YAW_INERTIA, and every consumer of those sits inside
+  `if (c.human)` in updateCar. The sliders do not reach an AI car.
+- **Not that evening's racecraft work.** A blocked-blocker attack bar and a
+  switch-sides rule measured 0.74 WITH against 0.85 WITHOUT at Monza and 0.40
+  against 0.34 at Monaco — neutral, so neither shipped.
+
+What it might still be, and the trap that stopped the bisect: a worktree at
+`8040157d` (before the other sessions' racing-line relaxation and their
+heading-state lateral controller landed) reproduced the EVENING numbers
+exactly. Three separate runs across two trees agreed to the digit, so the bench
+is deterministic — which means the morning tree differed from both in something
+this bisect did not capture. **The lesson: record the SHA beside every bench
+line.** These logs carry a time and a track and nothing else, so a number from
+four hours ago cannot be re-run against its own tree, and that is the whole
+reason the attribution failed.
+
+
+## 2026-09-08 — the `ui` group had been red for days, unseen
+
+Dispatching `group: ui` over the settings-defaults change returned TEN
+failures, and nine of them had nothing to do with that change.
+
+**The nine.** Every test in `music-library.spec.js` failed on
+`expect(#audioset).toBeVisible()`. `#audioset` is a PAGE inside `<dialog
+id="pmsettings">`, and a closed dialog `display:none`s its whole subtree, so
+clicking `#pm-audio` unhid the page and Playwright still read it hidden. The
+helper now opens the settings dialog first, the way `menu-survey.spec.js`
+does; 13 of 13 pass. Confirmed pre-existing by running the same test in a
+worktree at a commit from before this session, where it failed identically.
+
+**Why nobody knew**: `test:ui` has no blocking coverage on a push (recorded
+above, 2026-09-04). A group that only runs when someone dispatches it is a
+group that rots, and the rot is invisible until the dispatch. Nine tests had
+been dead for days.
+
+**The tenth is real, mine, and still open.** `ui-redesign.spec.js` asserts the
+compact-density minimap is exactly `"96px"` and it computes `95.9929px`. A
+worktree bisect puts it precisely at the settings-defaults bake: the parent
+commit passes, the bake fails. But the minimap measures EXACTLY 96px in
+isolation under every default that bake moved — shipped, `hudMetricsLayout`
+back to auto, `camMode` back to chase, both together — so the fraction only
+appears after the test's own catalogue → garage → settings → data-table walk.
+The CSS is a literal `width: 96px`, so something in that sequence is scaling
+it by 0.0074 %, which means a `zoom` ancestor rather than a layout change.
+
+**Left failing on purpose.** The assertion could be given a tolerance and go
+green in a minute, and that is exactly the move this file exists to warn
+against: a sub-pixel that appeared with a specific commit is a thread, and
+loosening the assertion cuts it. Whoever picks it up starts from "which
+element gained a fractional zoom between those two commits".
+
+## 2026-09-08 (later) — the tenth one, pulled: zoom quantisation, not a defect
+
+The thread above ends here, and the previous entry's guess was wrong in an
+instructive way: it looked for "which element gained a fractional zoom", when
+the element had been zoomed all along and it was the ZOOM VALUE that moved.
+
+`#minimap` rides `zoom: var(--hud-z)` (css/hud.css). Chromium lays a zoomed
+subtree out on the 1/64 px LayoutUnit grid and `getComputedStyle().width`
+divides back out, so an exact answer survives only a zoom that puts the
+product on that grid. Before the bake, `--hud-scale` followed `--ui-scale`,
+which this spec leaves at 2 by the time it reaches the HUD check — and
+96 × 2 = 192 is on the grid, so it came back exactly `"96px"`. The baked
+coarse default pins `--hud-scale: 1.24`, and 96 × 1.24 = 119.04 is NOT:
+Chromium stores 119.03125, and 119.03125 / 1.24 = 95.99294. That is the whole
+fraction, to the digit, arrived at by arithmetic rather than by bisect.
+
+**Why three isolation probes said 96px.** All three ran on a pointer-FINE
+page, where the coarse block never applies and the zoom stayed 1. The failing
+read is on a coarse page — which is also why `--hud-scale` was 1.24 there and
+`1.24` appears nowhere else in `css/`. An "cannot reproduce in isolation" is a
+statement about the harness, not about the code, and here the harness differed
+in the one media query that decides the number.
+
+**The fix is a rounded read, and it is not a widened tolerance.** The rule the
+test states is which of 96 / 112 / 140 the density picks; those are 16 px
+apart, so `Math.round(parseFloat(w)) === 96` discriminates exactly as well as
+equality did, while asking for a precision the platform cannot return under a
+non-binary zoom. The dump beside it now carries `zoom`, `--hud-z-top` and both
+scales, so the next failure of this shape names its own cause.
+
+**Transferable**: any equality on `getComputedStyle().width` inside a
+`zoom`-ed subtree is a latent failure waiting for the zoom to stop being a
+clean binary. Assert the rule, at the precision the rule is stated in.
+
+## 2026-09-08 (later still) — `parts-liveries.spec.js` needs `--workers=1` here
+
+Measured, both directions, same commit, load under 2 at the start of each:
+
+| run | result |
+|---|---|
+| default workers (6) | 4 of 12 FAIL, every one `Test timeout of 120000ms exceeded` |
+| `--workers=1` | 12 of 12 pass |
+
+Not a flake and not a verdict about the code: the four that fell over are the
+creator tests, each of which opens the garage on a fully built circuit, and six
+workers were building Bahrain at once on llvmpipe. The logs say so plainly —
+`maps compute bahrain` at 7.7 s, `SetupUI.openSetup` at 20 s, then three
+`build mclaren` rounds, the last landing at 118 s against a 120 s budget. The
+page was working the whole time; it was simply sharing one software rasteriser
+six ways.
+
+This is the rule in AGENTS.md §Verification 5 with a number attached, and it is
+also a live example for the undeclared-budget question: the spec has no
+declared timeout, so it inherits 120 s, which is enough for one worker and not
+for six. Re-run this spec ALONE before believing a red run of it, and do not
+read a timeout here as a regression until it has been serialized.
+
+## 2026-09-09 — the `ui` dispatch was never "cancelled by someone". It timed out.
+
+Four `ui` dispatches have ended `cancelled`. The renderer plan recorded three of
+them as "not concurrency (dispatch runs get their own group); looks like manual
+cancels", and I repeated that guess for the fourth. It was wrong every time, and
+`.github/workflows/ci.yml` says so in its own header: **a timed-out job reports
+`cancelled` rather than `failed`.** The evidence was in the timestamps —
+shards 1, 3 and 4 of run 34279958405 started 21:21 and ended 22:11, which is
+`timeout-minutes: 50` to the minute.
+
+**Why the cap could not be met**, measured rather than assumed:
+
+| | |
+|---|---|
+| `ui` group size | 150 tests |
+| `--shard` split | 38 / 38 / 37 / 37 — even by COUNT |
+| workers | `APEX_WORKERS: 1` |
+| shard 2 | finished its group in 11.5 min |
+| shards 1, 3, 4 | still running at 50:00 |
+
+The split is even by test count and wildly uneven by COST: shard 2 drew the
+cheap specs, the others drew the race-building ones. At the ~94 s race boot this
+workflow already documents for a starved runner, 37 race-shaped tests is ~58 min
+of boot before a single assertion.
+
+**The cap belonged to a different job.** `timeout-minutes: 50` was measured for
+what a PUSH runs in that job — `smoke.spec.js` sharded four ways. The same job
+also carries the wide step (the boot group nightly, or a dispatched group), and
+that step wears the same number. The dispatch and the nightly now get their own,
+with the per-test cap (900 s) still the hang detector, so a genuinely stuck spec
+still goes red early instead of burning the larger budget.
+
+**Transferable**: `cancelled` with zero failures is a TIMEOUT until proven
+otherwise. Read the job's start and end timestamps against its cap before
+reaching for any explanation involving a person. Three sessions did not, and the
+group went unverified for six days.
+
+**Found alongside**: `test:ui` listed `menu-traversal.spec.js` twice in
+tests/groups.json, on consecutive lines, and the repeat was generated into
+package.json. Two sessions adding the identical line, merged without conflict —
+the same hazard as the duplicated `livery:` key on Williams a day earlier. It
+costs nothing at runtime (Playwright dedupes the path: 150 tests either way),
+which is why nothing caught it. The existing disjoint-partition guard says
+`owner.get(f) !== g`, so it asks only whether two DIFFERENT groups claim a spec.
+A within-group guard now sits beside it.
+
+## 2026-09-09 — `hud-layout` is 16 red, and only 5 of them are recent
+
+Measured on a quiet box, serialized, both directions:
+
+| tree | failures of 32 |
+|---|---|
+| as shipped (coarse `--hud-scale: 1.24`) | 16 |
+| same tree, coarse scales forced to 1 | 11 |
+
+So the settings-defaults bake accounts for FIVE — small-landscape tilt/touch
+(4) and minimal+cockpit — and ELEVEN fail without it: every notched-landscape
+cell, small-landscape buttons, broadcast+cockpit, broadcast+heli, and the
+minimal profile. Those eleven are not new work; they have been red for as long
+as the `ui` group has been unable to complete a run.
+
+**What actually collides**, which took three browser probes because the
+assertion asserts an empty array and the reporter truncates the contents:
+
+```
+.hud-top x .hud-gaps = 1937 px²      (gaps 200→309, top 221→631: 88 px wide)
+```
+
+Nothing else. No control overlaps another, nothing leaves the safe area.
+
+**Why the fit pass did not stop it** — the interesting half. At 852×393 with
+59 px insets, compact density:
+
+```
+top 331.4  gaps 87.9  map 96  right 47.1  half 426  sal/sar 59
+leftFor(gaps) 209.9   capLong 0.977   scale 1.24
+gapShort false   gapDrop false   --hud-z-top unset   limitsLeft TRUE
+```
+
+`capLong` (0.977) is well under the scale, so the long gaps strip does not fit
+and `_gapTight` should be true — yet neither `gapShort` nor `gapDrop` is set
+and the band is not capped either. `limitsLeft` IS set, and the same function
+writes it, so fitHud ran and simply did not take the tighten branch. That is
+the defect: the mechanism that exists to keep these two apart does not fire in
+this shape.
+
+**Deliberately not fixed here.** The fix lives in fitHud's cap arithmetic, and
+that code carries a documented oscillation history ("a strip that alternates
+between beside the band and below it… every 10 Hz tick"). Each verification is
+a ~10-minute browser run, which is not a loop in which to guess at a feedback
+system. Named, measured, and left for someone with the room to iterate.
+
+**Fixed instead**: the three empty-list assertions now carry the offending
+pairs and the fit state in their message, so the next failure says
+`.hud-top x .hud-gaps` instead of `Received + 4`.
+
+### 2026-09-09 (later) — three hypotheses eliminated, overlap still there
+
+Continuing the entry above. The fit pass's own numbers, read by a temporary
+`window.__fitDbg` at the end of fitHud:
+
+```
+gaps 16.6   gapChars 0   wLong 16.6   capLong 1.308   capNo 1.434
+capTop 1.308   scale 1.24   tight false   memo [0,0]   n 2
+```
+
+`n: 2` is the finding. **fitHud COMPLETES twice in a session.** It is called
+every ~10 Hz tick from updateHud, but returns early on an unchanged key, and
+the key stops changing. Both completions happen before anyone is close enough
+to show a gap (`gapChars 0`), so the strip is measured at 16.6 px — its own
+padding — and that becomes `wLong`, the width of the LONGEST spelling. It
+renders at 87.9. The left cluster is therefore budgeted ~71 px narrower than it
+draws, `capLong` comes out 1.308 where the true widths give 0.972, and the cap
+never fires.
+
+**Three fixes tried, all reverted, none moved the overlap:**
+
+1. `scale` is read from `root.style` — the INLINE style — so a `--hud-scale`
+   arriving from a stylesheet is invisible to the fit pass. The coarse block in
+   css/tokens.css sets 1.24, so the HUD renders at 1.24 while the pass budgets
+   1.0. Reading the computed value instead is CORRECT and changes nothing here,
+   because capLong (1.308) clears 1.24 as easily as it clears 1.
+2. The width memo records whenever the width is non-zero, and an empty strip is
+   not zero. Gating it on the strip having text is CORRECT and changes nothing
+   here, because `wLong` then falls back to the same live measurement.
+3. Rajdhani is an async `@font-face`, and the key is deliberately layout-free
+   (it keys on text LENGTH), so a font swap widens every cluster invisibly.
+   Re-fitting on `document.fonts.ready` changed nothing — in a headless run the
+   local faces are ready before the first fit.
+
+All three reverted rather than landed: three unverifiable edits to a 10 Hz
+layout function with a documented oscillation history is how that history got
+written. What is left for whoever picks this up is the question none of the
+three answered: **why does the key stop changing once the strip fills?** The
+answer is upstream of every cap in this file.
+
+## 2026-09-09 — a `cancelled` Pages badge can be sitting on top of a real failure
+
+Two consecutive deploys of the deploy branch did not publish, and only ONE of
+them looked red:
+
+| run | badge | what the JOBS said |
+|---|---|---|
+| 2163 (`ca100dc0`) | failure | `Per-circuit geometry sweeps` failed 04:17 |
+| 2164 (`d36cdf00`) | cancelled | `Per-circuit geometry sweeps` failed **04:27:29** — five minutes before anything was cancelled |
+
+Both were the same assertion, and it was neither flaky nor infrastructural:
+`tests/unit/driving-line-opts.test.mjs:94` still asserted `written.brakeCue`
+after `6ee62f21` renamed that store key to `lineBrakeCue`. The READ side of the
+test kept passing, because the module migrates the legacy key — so only the
+round-trip test went red, and the failure looked far more exotic than it was.
+
+The rule this adds to the one already in AGENTS.md §Verification 8 ("a timed-out
+job reports `cancelled`"): **a run's conclusion is the LEAST informative thing
+about it.** `cancelled` on a Pages run can mean the job hit `timeout-minutes`,
+that a newer push superseded a pending run, OR — as here — that a job had
+already failed outright and the cancel merely landed on top of the stragglers.
+Run 2164 shows all three shapes at once: a genuinely failed `sweeps` job, a
+`Smoke (2)` job whose every step reports `success` and whose conclusion is
+`cancelled`, and three downstream jobs cancelled at creation. Read
+`list_workflow_jobs` and look for the first job whose CONCLUSION is `failure`
+before forming any theory about the run.
+
+Cost of not doing that here: two deploys silently not published, and a session
+spent hypothesising about concurrency groups and billing for a one-line stale
+key in a unit test.
+
+## 2026-09-09 — `assets-api › stats() overlay` is timing-flaky, and how that was settled
+
+The test does `stats(true)`, waits 700 ms of WALL time for "at least two 250 ms
+ticks", then reads `#__apexStats`. On a starved main thread the node mounts but
+the interval callbacks have not run, so `textContent` is `""` — not
+`"stats error"`, which is what the spec's own guard would catch. Seen failing at
+loadavg 3.85 and again at 1.35, then passing on the same tree at 1.74.
+
+Worth writing down for the METHOD, not the flake. It first looked like a
+regression from a `js/game.js` change in the same tree, and the comparison that
+"proved" it was invalid: the change was tested by running the WHOLE spec file
+(stats last, after nine tests of accumulated page state) and the base by running
+`-g "stats() overlay"` ALONE. Same box, same tree otherwise, different
+invocation — so the pass and the fail were not comparable and the conclusion
+"it is mine" was unfounded.
+
+What settled it cost nothing: the change was `garageNow()`, which returns
+`performance.now()` unless `_skyHold` is true, and `assets-api.spec.js` never
+calls `renderClock`. So the new code path is provably byte-identical here. A
+re-run then confirmed 10/10. **Read the code path before buying a bisect** — the
+cheapest disproof is often that the change cannot reach the failure at all, and
+an A/B is only evidence when both sides are invoked identically.
+
+## Why the verification rules exist — the incidents behind AGENTS.md §Verification (moved 2026-09-10)
+
+`AGENTS.md` states each rule in one to three lines and points here. These are
+the measurements that put each rule there; they are dated by design.
+
+**Rule 1 — install first.** `test:tooling-fast` reported 344 pass / 18 fail on
+a fresh container and 439 / 0 after `npm install`, with no source change
+between them (2026-08-13). `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` keeps the
+install to seconds but leaves the BROWSER absent, and a missing
+`chromium-headless-shell` reads exactly like a boot regression. The SessionStart
+hook (`.claude/hooks/session-start.sh`) now does both.
+
+**Rule 3 — guards before every commit.** Judging which tests a change "needs"
+is how four failures shipped past review in one session: a suite registered in
+none of its four registries (two deploys lost to it), `tools/README.md` and
+`package.json` hand-edited when both are GENERATED, and a missing comma in a
+garage file that would have broken the whole game's boot. Every one was inside
+the 14 guards (24 now), and each cost a ~10-minute deploy cycle to discover. The Bash
+hook (`.claude/hooks/bash-guard.sh`) now runs the guards before `git commit`.
+
+**Rule 6 — `--stop`, never kill by PID.** Measured 2026-09-09: `kill -9` on the
+test-bg supervisor reached only the `npm run test:<group>` shim; npm does not
+forward the signal, so run-playwright, the Playwright runner and every Chromium
+it opened were orphaned — 8 Chromium processes at ~290 % CPU, still writing to
+the log the next run truncates, invisible to `--status` because the pid it
+held was dead, and enough to hold the box above the deploy's own load gate. Six
+commands to recover. The rule had previously said "`kill -9` it by PID" without
+mentioning `--stop`, which is what taught the wrong move.
+
+**Rule 7 — reap what you launched; never `pkill -f`.** One backgrounded probe
+script that never exited ran 113 minutes at ~350 % CPU beside two orphaned
+headless shells and put the box at loadavg 8.15 — where the deploy REFUSES
+(>= 3) and where every browser verdict becomes a measurement of the machine.
+The same day, a `pkill -f <pattern>` matched the shell that issued it (its own
+command line contained the pattern), killed the cleanup mid-command and left
+the job half done. Kill by PID from a listed set
+(`ps -eo pid,comm | awk '$2=="chrome"{print $1}'`).
+
+**Rule 8 — `cancelled` with zero failures is a timeout.** GitHub reports a
+`timeout-minutes` kill as cancelled, never as failed. Four `ui` dispatches were
+logged as "looks like manual cancels" across three sessions and six days; the
+shards had run 50:13 against a 50-minute cap. Simultaneous end times at
+DIFFERENT elapsed times is the other shape, and that one is a real run-level
+cancel (see the 2026-09-09 entry above).
+
+**Rule 10 — subagents never run browsers.** Parallelism produced ten
+confident, entirely fake failures when two groups shared four cores
+(`docs/notes/PARALLEL-WORK.md`); worktrees isolate files, not CPU, and a
+worktree checked out at a stale base measures the wrong tree.
+
+**Renderer evidence (now `.claude/rules/render-*.md`).** A mock device stayed
+green while four defects made the real WGX backend refuse to boot. Three of
+the five WGSL rules shipped a defect on the owner's iPhone in one week. Four
+hours went into a WebGPU-vs-WebGL2 "gap" in the census on 2026-09-08 before
+the harness was re-read: the two TLX legs run DIFFERENT present paths (a
+readback against a direct present), and `headless=true` printed on both.
+
+## 2026-09-10 — what the change-aware gate can never run, measured by source area
+
+The 180 s per-test rule above is a per-SPEC opt-out. Nobody had aggregated it by
+SOURCE AREA, and the aggregate is the thing worth knowing:
+
+| | |
+|---|---|
+| specs in `tests/specs/` | 116 |
+| can ever be SELECTED by the change-aware gate | 65 |
+| never — declares a per-test budget above the gate's 180 s | **51 (44%)** |
+| the gate's whole capacity, at 15 min surviving one failure | 10 tests |
+
+Routing each source directory through `pick()` and classifying its specs, FOUR
+areas come back with ZERO eligible specs — every spec they route to is excluded
+by its own declared budget:
+
+| source area | browser groups | routed specs | eligible |
+|---|---|---|---|
+| `js/render/glx/` (the SHIPPED WebGL2 path) | `gfx` | 6 | **0** |
+| `js/render/webgpu/` | `gfx` | 6 | **0** |
+| `js/render/three/` | `gfx` | 6 | **0** |
+| `js/lighting/` | `gfx` | 6 | **0** |
+
+The `gfx` group is exactly six specs — instanced-draw 420 s, webgl-probes 240 s,
+lighting-ab 420 s, image-grade-visual 480 s, lighting-tuner-grade 300 s,
+tlx-probes 540 s — and all six sit above the gate. So a push that changes the
+shipped renderer or the lighting knobs receives NO blocking browser spec: the
+change-aware gate selects nothing (measured on the shadow-pass PR: 69 specs
+routed, 0 selected), and `renderer-macos` is gated to `schedule` or an explicit
+`renderer_macos: true` dispatch. What remains is the four Smoke shards, which
+assert the page boots and `__apex` answers.
+
+That residue is weaker than it sounds. Re-breaking the shadow pass on purpose
+(see the LT entry in DEFECT-LEDGER) showed `js/perf/loop-health.js` absorbing
+the per-frame throw — 8 consecutive / 240 total, then it stops the loop — while
+`__apex.info().track` keeps answering throughout. Smoke passes; the game is
+dead within seconds of driving.
+
+**A correction, and a measurement that inverts ci.yml's stated reason.**
+An earlier draft of this note said `menu-baseline.spec.js` catches a dead render
+pass. It does not. The control run says so — the same three goldens fail on the
+fixed tree with identical pixel counts (10319 / 13520 / 49516) — and the spec
+says why: it calls `__apex.headless(true)` and hides `#game` before shooting, so
+it is a DOM identity gate by construction and can never see a renderer fault.
+Routing renderer or lighting changes to `baseline` would therefore NOT close the
+hole above. That idea is dead; the hole needs an instrument that looks at the
+canvas with a per-test budget under 180 s.
+
+The trial job did earn its minutes, though, by killing a different assumption.
+ci.yml keeps `test:baseline` out of the gate because "golden images are
+environment-sensitive… if GitHub's runner renders even slightly differently".
+Measured, that fear is three orders of magnitude too large:
+
+| golden | diff on the GitHub runner | diff in this container | between them |
+|---|---|---|---|
+| title-phone-landscape | 49,499 px | 49,516 px | **17 px** |
+| garage-phone-landscape | 10,318 px | 10,319 px | **1 px** |
+
+The runner and the dev container agree with each other to within 1-17 pixels
+and BOTH disagree with the committed PNGs by 10k-49k, against a 1% tolerance.
+The images are portable. They were STALE — three of the six had not been
+re-blessed since the UI moved, and they were failing here before any of this
+work started.
+
+**RESOLVED the same day.** What had actually moved was garage CONTENT, not
+rendering: budget 600 -> 780 cr, a new `Torque Curve` catalog entry displacing
+`Performance`, prices 30 -> 35 cr, stat chips gaining percentages, and Stock's
+description suppressed by `#cs-inner[data-density="compact"]` (which trades
+descriptions for rows on a short landscape sheet — that one had to be checked
+rather than assumed, since a missing description is what a regression would
+look like too). The three were re-blessed, and the trial job's NEXT run (3464)
+passed all six on a GitHub runner — portability confirmed by experiment, not
+just by arithmetic. The spec also now waits on `document.fonts.ready` before
+shooting: precautionary, since `font-display: swap` is a timing variable a
+screenshot suite should not carry, and NOT the diagnosis here.
+
+`test:baseline` is therefore gateable on its own merits as a DOM identity gate.
+Follow ci.yml's own prescription before wiring it in: leave the trial
+non-blocking for a few more PRs to confirm the six hold, then add the group to
+the gate. It remains a different job from covering the renderer.
+
+Reproduce the table: `maxDeclaredTimeout(f)` from `tools/ci/select-specs.mjs`
+over `tests/specs/*.spec.js`, and `pick(["<dir>/x.js"])` for the routing.
+
+## 2026-09-14 — `image-grade-visual` was never threshold-marginal: the capture helper moved the camera
+
+Nightly `ci.yml` 3623 failed one job — the Metal renderer one — on one spec:
+`image-grade-visual.spec.js › blacks visibly change the deepest image detail`,
+`crushed.signed` **+9.69** against a required **< −1**. Crushing BLACKS read as
+making the image nearly ten levels BRIGHTER. Not a regression from that commit:
+`f4ccd160` passed the nightly on the 11th (3536) and the 13th (3540) and failed
+it on the 12th (3539) with the same spec and the same assertion.
+
+The job attaches its frames, so the measurement was reproduced OFFLINE: decode
+the three attachments through the same path the spec uses (`img.decode()` →
+canvas → `getImageData`) and the numbers come back to three decimals — raised
+`+3.314` (CI `+3.321`), crushed `+9.702` (CI `+9.694`). Everything below is from
+those frames, not from a hypothesis.
+
+1. **The grade works.** Whole-frame percentiles under `blacks −0.6`: p01 4 → **1**,
+   p05 7.08 → **2.93**; under `+0.6`, 4 → **12.0** and 7.08 → **12.9**. Mean luma
+   76.58 → 75.50 crushed, → 77.52 raised. Correct in both directions.
+2. **The crushed frame is not a tone curve.** Bin pixels by BASELINE luma and
+   measure the spread of the output: the raised frame is a clean per-pixel
+   function (sd **0.86–3.15** per bin); the crushed frame is not (sd **22–48**,
+   one input luma landing anywhere in 0–166). No per-pixel grade can do that.
+3. **It is the same scene from a different camera.** Best-fit offset between
+   baseline and crushed is a uniform **dx −34 px, dy 0**, dropping the mean
+   absolute difference 22.4 → 10.8 — and it is the SAME −34 for the far scenery
+   and for the near cockpit, so there is no parallax: the camera rotated, the
+   image did not translate. (The first search was capped at ±12 px and pinned to
+   its boundary, which reads as "not a shift"; widening it found the answer.)
+4. **When.** The trace's 78 screencast frames date it to one discrete event:
+   every frame to t=155091 matches the baseline (MAD 1.87), five frames from
+   t=155158 are a completely different, panned view, and from t=155326 to the end
+   of the test it sits at the −34 state. A switch, not a drift.
+
+**Cause.** `tests/helpers/soft-capture.js` called `window.__apex.snapCam()` on
+every capture. `snapCam()` does two things: it arms an on-demand soft blit —
+which is what a capture needs — and it does `G.dbgCam = null`, documented in
+`js/agent/apex.js` as clearing any free-cam override, which is what a
+`park()`/`jump()` caller needs. So every capture in this file DESTROYED the fixed
+`eyeAt()` camera `boot()` had set and handed the frame to the live, DAMPED chase
+camera, whose pose depends on frame timing. Reproduced locally in one page load:
+`camState()` before a `pageScreenshot` is the spec's camera (fov 60, target
+[81.9, 1.04, 16.0]); after it, fov 64, target [54.6, 0.59, 31.2], `debug: false`.
+
+SwiftShader never showed it because at ~1 fps the chase camera settles before
+every capture; the Metal runner (19–40 fps in this run) does not. It is also why
+the earlier stabilisation passes did not converge — freeze physics, pin the
+render clock, wait for the asset pack, pin the scale, hold the tier, record the
+env probe each removed a real variable and left this one, because `camState()`
+was asserted once in `boot()`, BEFORE the first capture, and was already false by
+the time any frame was read.
+
+**Fix.** The helper asks first: a spec that owns the camera
+(`camState().debug === true`) gets `GLX.invalidateSoftPresent()` — the blit
+arming alone, the half `snapCam()` was wanted for here — and every other caller
+is unchanged. The camera is now part of the premise `captureState()` records, and
+the THIRD capture (crushed) is held to the whole premise instead of `post` alone,
+which is how a broken premise produced a tonal number at all.
+
+**This supersedes the 2026-09-03 entry above**, which read the same spec's
+failures as "threshold-marginal on a real GPU" and prescribed pinning
+`renderClock` before each capture pair. That pin landed and the spec kept
+failing, because the mechanism was never the clock.
+
+Two specs used the helper with a debug camera — `image-grade-visual` and
+`lighting-ab`, the two that have supplied this file's knob-independent deltas.
+Every other `snapCam()` in the suite is an explicit call by a spec that wants the
+game camera, and is untouched.
+
+### 2026-09-14 (same day) — what preserving the camera ALSO changed, and the fog it cost
+
+A debug camera is not just a viewpoint. `js/game.js` treats `dbgCam` as an
+INSPECTION camera and changes the frame with it: `frame.fogDensity` is scaled by
+`dbgCam.fog ?? 0.15`, `frame.cullDist` goes to 0 (no radial cull on desktop), the
+env-probe pass is gated off, `camRoll` is forced to 0, and `cockpitRigOnly` turns
+off. So keeping the camera alive through every capture — the fix above — did not
+merely stop the viewpoint moving; it thinned the fog in the two specs that use it.
+
+That matters for exactly one test, `lighting-ab` "night fog GLOWS around lamps",
+which samples the band where the fog factor (and so the glow's share of a pixel)
+is largest. MEASURED here, singapore night fog, the spec's own band, knobs
+alternated off/on/off/on, against the test's `on > off * 1.03` floor:
+
+| camera at the capture | on/off, pair 1 | pair 2 | headroom over 1.03 |
+|---|---|---|---|
+| debug cam, fog at the 0.15x default | 1.0627 | 1.0651 | +3.2 % / +3.4 % |
+| chase cam (what the old helper restored) | 1.4379 | 1.4167 | +39.6 % / +37.5 % |
+| **debug cam with `fog: 1`** | **1.6753** | **1.6485** | **+62.7 % / +60.1 %** |
+
+The test PASSED in all three, so a pass was never the question — the margin was.
+The fix as first committed cut the headroom about sevenfold; `fog: 1` restores it
+and then some, beating even the chase camera, because a debug camera also drops
+the radial cull and so puts MORE distant lamp-lit facades in the sampled band.
+Both specs therefore take the pose from `eyeAt()` and re-install it through
+`view({..., fog: 1})`: the frame stability the suite needs, with the atmosphere
+the player actually gets. For `image-grade-visual` that is a correctness point in
+its own right — five of its tests assert a night, an overcast and a RAIN scene
+"retain broad tonal range", which is not a claim you can make about 15 % of the
+fog.
+
+Three things an adversarial review corrected, recorded because each is a trap:
+
+- `eyeAt(frac, 0.2, 1.35)` is **not** a car-free road-level view. `park()` puts
+  the car on the centreline at that frac and the eye lands 0.2 m right of and
+  1.35 m above it — the driver's head. And `cockpitRigOnly` being false under a
+  debug camera means MORE car geometry is drawn, not less: the full external body
+  mesh and wheels render around the eye instead of the cockpit rig alone. The
+  near-black bodywork feeding the `[2,30]` population survives the change.
+- The fog term saturates (`f = 1 - exp(-fd*fd)`), and singapore night fog is
+  thick, so 0.15x is not a 44x collapse of the fog wall — it still reads f ~ 0.93
+  at 500 m. The signal thinned; it did not vanish. The table above is the honest
+  size of it.
+- `rangeChanges()` selects its pixel set from the BEFORE frame only. For
+  independent per-pixel noise that bias is negligible AND of the wrong sign — it
+  cannot produce the +9.7 that was observed — but for any spatially CORRELATED
+  residual (a sub-pixel shift, a slightly softer image) it is large and always
+  positive. That is why a 34 px yaw read as "+9.7 brighter" rather than as noise,
+  and it means this metric has well under a pixel of geometric headroom: the
+  camera has to be pinned exactly, not approximately. `eyeAt()`/`view()` write a
+  static object, so it is.
+
+## 2026-09-14 — `debris.spec` had TWO defects that alternated, and neither was the one on record
+
+The spec was carried as "red at base for environment reasons: the Rapier WASM
+fetch takes 40 s against a 30 s `waitForFunction` budget". Half right, and the
+half that was wrong sent the first fix attempt at the wrong target. A BASELINE
+run of the unmodified spec is what settled it, and running one before patching is
+the whole lesson here.
+
+**Defect 1 — the assertion measured a full buffer, not a fetch.** The baseline
+run FINISHED in 94.4 s of its 120 s budget and failed an ASSERTION, and the
+30 s wait it was supposed to blow took 16.4 s and succeeded (the log even carries
+`DebrisWorld.buildWorld cars=22` at 42033 ms). Probing what actually returns
+zero, three runs out of three:
+
+    active:true enabled:true ready:true  stepped:30  live:36
+    rapierFetches:0   resourceEntries:250
+
+`stepped` and `live` are healthy — the side-world works. The zero is
+`rapierFetches`, and `resourceEntries` is exactly **250**: Chrome's default
+resource-timing buffer, full. Once it fills, later entries are dropped silently
+(`resourcetimingbufferfull`, which nothing here listens for) — and rapier.mjs is
+imported LAZILY ~42 s in, long after the script roster and the baked asset pack
+have filled it. With the buffer raised the page measures **260** entries with
+rapier.mjs among them: it overflows the cap by TEN, which is why this read as
+flaky rather than always red. Whether it tipped over depended on which optional
+assets loaded that run.
+
+The sibling test is the better catch. "can be disabled … inert, **no rapier
+fetch**" asserts `rapierFetches === 0`, and with the buffer full that assertion
+CANNOT FAIL. The one thing that test exists to prove had been unfalsifiable.
+`performance.setResourceTimingBufferSize` in an init script fixes both directions
+at once.
+
+**Defect 2 — the budget had no margin, and only appeared once defect 1 was
+fixed.** The very next run failed differently: `Timeout 30000ms exceeded`, the
+wait measured at 34.1 s. The lazy rapier import is a 2.24 MB vendored module
+parsed and instantiated after boot on a page already rendering a race. MEASURED,
+four fresh contexts on an IDLE box, from `__apex.debris(true)` to `st.ready`:
+
+    27.9 / 28.8 / 28.8 / 28.9 s     worst 28.9
+
+1.1 s under the hand-rolled 30 s on an idle box — the same shape as the budgets
+the BOOT_MS note above was written about. `RAPIER_MS = 55000` (~1.9x worst idle,
+matching BOOT_MS's own 1.8x) with the measurements in its comment.
+
+The file timeout had to move with it or the fix relocates the failure a third
+time: the failing test measured 104.3 s while dying EARLY at 30 s, so letting the
+wait run its measured length pushes it past the config's 120 s default. 240 s,
+alongside the existing per-file caps on image-grade-visual (480 s) and
+lighting-ab (420 s).
+
+No assertion tolerance was touched. Both are load budgets, and the rule for those
+is the one fixtures.js already states: measure the slow one and give it its own
+number.
+
+**Verified:** 5/5 with both fixes, where the unmodified spec failed 1/5 and the
+buffer-only tree also failed 1/5 (differently). TWO consecutive green runs of the
+file, not one, because the complaint was flakiness and a single pass is not
+evidence against that: 5/5 at 19:33 and 5/5 at 19:40, one worker, same tree.
+## 2026-09-14 — a 60 s timeout is a SIGNATURE, not a diagnosis
+
+This file documents the rAF-actionability stall at length and the entries are
+right: `steering` ×9 and `gamepad` ×2 really were it, and the DOM-click and
+`headless(true)` fixes really do clear it. The cost of that being well
+documented is that every 60 s timeout now *looks* like it, and four in
+`ui-button-touch.spec.js` were written off twice — once in an audit table, once
+in a commit message — as "the same actionability stall, pre-existing". None of
+them was.
+
+**Two were a wrong option value.** `selectOption("button")` against a select
+whose values are `tilt|buttons|touch` (`STEER_MODES`, js/game.js). Playwright
+matches a bare string against the option's VALUE and RETRIES when nothing
+matches, so it spends the entire `actionTimeout` and reports a timeout — never
+"no such option". `{ force: true }` made it airtight: force suppresses the
+actionability checks, so the one diagnostic that would have separated "cannot
+interact" from "nothing to select" was switched off at the call site.
+
+**Two were asserting a design that shipped out from under them.** `#sel-tracks`
+became a sideways-panning strip on 2026-09-09; the cases still asked for
+`overflow-y: auto` and a vertical overflow, and measured
+`scrollHeight === clientHeight === 84`. That one at least fails fast — but it
+had been sitting in the same "pre-existing" bucket as the other two, which is
+how a stale test and a typo travelled together for a week.
+
+**The rule.** Before filing a timeout as the stall, get ONE positive signal that
+the element is actually uninteractable — `page.evaluate` finding it present and
+sized while the locator cannot, or the stall clearing under
+`__apex.headless(true)`. Absent that, a timeout means only that something was
+retried until the budget ran out, and "what was it retrying for?" is a different
+question from "why was it slow?". Where a helper selects by value, assert the
+value EXISTS first; `cycleToPauseSteerMode` in that spec now does, and a
+mismatch fails in a second naming the options that do exist. The four went from
+four 60 s timeouts to 4 passed in 2.3 min.
+
+## 2026-09-14 — swept the CORNER LEAD bug class; it was contained, and why
+
+CORNER LEAD shipped with its slider's off switch broken: the knob's registry
+`def` was 0 while `js/camera/vantage.js` fell back to `CHASE_CORNER_LEAD_DEFAULT`
+(0.54) whenever nothing was stored, and `CamTune.set()` DELETES a value equal to
+`def`. So an explicit 0 was deleted and read back as 0.54. Swept the rest of the
+tree for the same shape rather than assuming it was a one-off. It was contained.
+Recording the sweep so nobody pays for it twice, and the safe pattern it found.
+
+**The three shapes searched, and what turned up:**
+
+1. *A store that drops values equal to `def`.* `grep` for `=== d.def` / `!== d.def`
+   across `js/` hits ONLY `js/camera/offsets.js`, at two sites — `set()` (119)
+   and `sanitize()` (65). Both are cured by making `def` the shipped amount, and
+   note there were TWO: fixing `set()` alone would have left a stored 0 to be
+   dropped again on the next load.
+
+2. *A getter returning null meaning "use the shipped default", with the consumer
+   holding that constant.* `!= null ? x : CONSTANT` hits exactly two places:
+   `vantage.js:445` (CORNER LEAD, now consistent) and `lobby.js:343` (a peer id,
+   not a knob). Nothing else in the tree splits a default across two files.
+
+3. *The falsy-zero parse trap*, `parseFloat(x) || FALLBACK`, which turns a stored
+   0 into the fallback. Every hit is either `|| 0` (harmless) or has a fallback
+   where 0 is not a legitimate value. The one that looked live —
+   `sheet-shape.js:229`, `parseFloat(raw) || SHORT_DEFAULT` on `--compact-at` —
+   is not: no stylesheet sets it to 0, and `tokens.css:153` registers the
+   property with `@property … initial-value: 380px`, the same number, so the
+   `||` only catches an empty computed value.
+
+**The safe pattern, from the registry that is immune.** `js/lighting/knobs.js`
+seeds its live values FROM the registry — `for (const d of TUNE_DEFS) LT[d.id] =
+d.def;` — so a knob's default cannot disagree with what ships, because there is
+only one copy of the number. CamTune could not do that (`offsets.js` loads
+before `vantage.js`, so it cannot read the constant at eval time), which is
+exactly why it needed a test to hold the two numbers together
+(`tests/unit/camera-defaults.test.mjs`). **Prefer seeding from the registry; a
+cross-file guard is the fallback when load order forbids it.**
+
+The general rule: when a default lives in two places, one of them will be wrong,
+and the symptom is a control that silently ignores one end of its own range.
+
+### …and the two smaller sweeps from the same day (both negative)
+
+`selectOption("literal")` across `tests/`: eight call sites, all sound. Each
+either asserts the option count first (`rs-reliab-sel`, the Data Hub pickers) or
+uses a value confirmed elsewhere in the same test. Checked the two static ones
+against the source: `RS_RELIAB` really does carry `"real"`, `lapOpts` really does
+carry 5. The `ui-button-touch` typo was the only one.
+
+Stale tests from the 2026-09-09 STRIP redesign: `ui-redesign.spec.js` was updated
+with it and asserts the strip horizontally (`stripPans: scrollWidth -
+clientWidth > 1`). The only two missed were in `ui-button-touch.spec.js` — and
+that is the lesson worth keeping: **a redesign sweep follows the feature's own
+spec file, so assertions about that feature filed under an unrelated name are the
+ones left behind.** Two selection-screen cases were sitting in a file named for
+button/touch steering. When a screen is reworked, grep the id across all of
+`tests/`, not just the spec that owns the screen.
+
+## 2026-09-22 — a watcher that can never fire looks exactly like a run that never finishes
+
+Waiting on `deploy.mjs --gate-only`, the watcher was armed as:
+
+```sh
+until [ ! -e /proc/$(pgrep -f 'deploy.mj[s]' | head -1) ]; do sleep 20; done
+```
+
+It burned its entire 30-minute budget and reported "expired with no events". The
+gate had in fact passed 14 minutes in.
+
+The defect is in the absent case, which is the ONLY case the loop exists to
+detect. When the process is gone `pgrep` prints nothing, `$(...)` expands to the
+empty string, and the test becomes `[ ! -e /proc/ ]` — `/proc` exists, so the
+condition is false forever. The loop is correct exactly while the thing it
+watches is alive and broken exactly when it is not. Reproduced directly:
+
+```
+$ P=$(pgrep -f 'nosuchproc_xyz[1]' | head -1); [ ! -e /proc/$P ] && echo exit || echo loop
+loop
+```
+
+The form that works tests the string, not a path built from it:
+
+```sh
+until [ -z "$(pgrep -f 'deploy.mj[s]')" ]; do sleep 15; done
+```
+
+Both edges checked before trusting it: empty pattern exits, live pattern waits.
+The `[s]` bracket keeps the waiter's own command line from matching its pattern
+(`deploy.mj` followed by `[` is not `deploy.mjs`); it does NOT stop the wrapping
+`/bin/bash -c` of the watched command from matching, which is harmless because
+the wrapper and its child die together.
+
+Two rules come out of this, both now in AGENTS.md §Verification 4:
+
+1. **Test the absent case.** A waiter is a predicate about something NOT being
+   there, and every bug in one hides on that side. "It didn't fire" and "it
+   isn't finished yet" are the same observation from outside.
+2. **The waiter is not the verdict.** The result was still read correctly here
+   only because it was taken from the run's own log line (§Verification 5), not
+   from the watcher. A vanished process says something exited, never that it
+   passed — and a waiter that silently cannot fire will otherwise stretch a
+   finished run into an apparently hung one for as long as its timeout allows.
+
+## 2026-09-22 — what the title-screen restructure's read-only hunts found, and what ui-scale.spec cannot see
+
+Three read-only subagent passes ran while the phone restructure's gate was in
+flight (`claude/title-car-art`, c0d02384e1..f1d581065b). The findings that
+are NOT fixed in that branch, kept here so the next person on the title
+screen does not re-derive them. The classifier is `js/ui/sheet-shape.js`
+(`classifyBody`, ~L365); several comments and three commit messages cite it under a
+`game/` directory it has never lived in.
+
+Pre-existing, unfixed, each with the code that proves it:
+
+1. **The UI-SIZE geometry cap is gated in raw px while density is
+   zoom-corrected.** `@media (max-width: 899px), (max-height: 699px)` wraps
+   the `zoom: var(--ui-compact-brand-scale)` / `--ui-compact-scale` cap
+   (css/menus.css ~L680), but `data-density="compact"` comes from
+   `innerHeight / --ui-scale < 600`. A 1440x900 window at >= 152 % is compact
+   with the cap block unmatched: the wide+compact phone composition fires and
+   `#overlay > * { zoom: var(--ui-scale) }` runs uncapped — the doubled
+   geometry the cap's own comment says it exists to prevent.
+2. **The wordmark is outside the brand-text multiplier.** The compact rule
+   `:is(#audiostate, #disclaimer, #soundbtn) { font-size: calc(var(--fs-micro)
+   * var(--ui-compact-brand-text)) }` omits `#title`, whose clamp then loses
+   every dependence on `--ui-scale` once the brand zoom is capped at 1.
+   Painted on 393x852: 51.1 px at 100 %, 57.2 at 130 %, 51.1 at 160 % — it
+   SHRINKS crossing the density threshold (s = 1.42). On 852x393 it is pinned
+   at the clamp cap (48 px) from 100 % up, so adding `#title` there changes
+   nothing; the tall phone is where it matters.
+3. **Hysteresis vs `@media (orientation:)` near square.** `classifyBody`
+   flips `data-shape` at ratio 1.05 / 0.95 with memory; the orientation query
+   flips at exactly 1.0. A fresh 800x820 load is `wide` yet `orientation:
+   portrait` — css/responsive.css's portrait block paints the portrait
+   widths while the tall `#overlay` grid does not: half of each composition.
+   The comment claiming the two "agree in result" holds only outside the band.
+4. **The 699 / 700 seam.** `@media (max-width: 700px)` (art opacity 0.22) and
+   `(min-width: 700px)` (the 13/10 aspect rule) both match at exactly 700;
+   the phone rules use `max-width: 699px` while `data-shape="tall"` continues,
+   so a 700 px-wide portrait window keeps the tall grid but loses the phone
+   art box and title rung. The 899 / 900 seam is clean (both raw px).
+5. **Frame one classifies at scale 1.** Both the inline pre-paint script
+   (index.html ~L356) and `classifyBody` read `--ui-scale` from computed
+   style, and game.js restores the stored value later; sheet-shape.js says so
+   itself ("corrected later by watchScale()"). A player at a stored 200 % on
+   1440x900 paints normal, then restructures to compact — a flash, and a
+   wrong golden for anything captured before the correction.
+6. `classifyBody` has no zero guard (`classify` does): innerWidth 0 gives
+   ratio Infinity and latches `tall`.
+7. `#soundbtn { min-height: var(--tap) }` paints 52 x brand-zoom: 39 px at
+   75 % (compact, zoom 0.75) and 26 px at 50 % — under the 44 px floor the
+   token's comment cites.
+8. `--wide-at: 620px` writes `data-width`, which no stylesheet reads. Dead.
+
+Why none of this is red: `tests/specs/ui-scale.spec.js` `fits()` walks only
+`button, input, select, a[href], [role=option], [role=tab]`, flags offscreen
+and clipped-without-a-scroller, and asserts `scrollWidth - clientWidth <= 1`
+— at two viewports (852x393, 393x852) and six scales (50/100/115/130/150/200).
+No font-size, no min-height, no composition identity, no 1280x800, no square,
+no 700 px, no 75 %, and the scale is set post-boot via `__apex.uiScale`, never
+restored from the store. It caught the one thing it is built to catch (the
+180 % art box adding to scrollWidth, fixed in f1d581065b) and by design can
+see none of the eight above.
+
+Also measured, for the record: the restructure's landscape doors paint at
+17 px, not the 14 px c0d02384e1 claimed — the compact block's `calc(var(--fs-4)
+* var(--ui-compact-text))` is later at equal specificity — and every phone
+screenshot in that commit was taken at 17 px. Fixed in f1d581065b by removing
+the dead declaration rather than keeping a value that never applied.
+
+## 2026-09-30 — render on a 4-vCPU runner: four workers were red, one was not
+
+`image-grade-visual.spec.js › blacks visibly change the deepest image detail`
+failed on the render group's shard 1 in three of three browser-group.yml runs
+(llvmpipe; run 36752751997, its re-run, and 36758100445): one
+`pageScreenshot` capture waited out its 60 s `softTimeout`, and the retry
+passed, so `APEX_FAIL_ON_FLAKY=1` made the run red. `test:render` pins
+`--workers=4`, which overrode the workflow's `APEX_WORKERS: 1`, so four
+llvmpipe browsers shared a 4-vCPU `ubuntu-latest` runner.
+
+The same shard at `--workers 1` (run 36783558304, deploy-tip code): 85/85,
+no retry, "blacks" 69 s, shard 12.6 min. NOT a speed claim: the confirming
+run at the new default (36793298522) took 18.3 min for the same shard, every
+test ~1.5x slower on that runner, so one data point each way says nothing
+about wall time against four workers' 19-21 min. What held both times is the
+verdict — green, no retry.
+Contention, not a GLX capture bug (the spec pins GLX; a TLX soft-read gate
+theory was falsified by the 4-worker re-run on a patched tree, 36758100445).
+browser-group.yml now defaults `workers` to 1; `remote-group.mjs --workers N`
+overrides it. The group script's `--workers=4` still suits a many-core local box.
+
+## 2026-10-01 — a black TLX page capture in this container is the capture, not the frame
+
+Three wet-weather probes on the SwiftShader WebGL2 TLX leg (`gfx-probe --backend
+three`, `apex26.tlxForceGL=1`) and two dry ones all reported `ok:true,
+gpuErrors 0, canvas: visible presented`, yet `page-hud.png` and ten CDP
+captures of the presented canvas 350 ms apart showed only the HUD, the 2D
+overlays and the rear-view mirror over a black `#game` — PNG sizes 22-77 KB,
+all DOM. The same page on GLX (`--backend webgl2`) captures a 530 KB full wet
+scene through `#game-soft`, because GLX soft-presents under SwiftShader while
+TLX's WebGL2 leg short-circuits the soft blit off (render-tlx.md), and the
+GPU readback (`capturePixels`) reports `maxLuma=0` on this leg dry or wet.
+One earlier capture on the same leg (the rain-streaks probe) did land a full
+scene, so it is intermittent, not impossible, and nothing to retry for.
+
+What this means for a TLX look change here: a black page capture is not a
+NaN or compile verdict — the dry baseline is black the same way. Positive
+TLX evidence in this container comes from (a) the rear-view mirror in the
+page capture, a readable 2D canvas drawn by the mirror pass through the same
+TLX lit program with the previous frame's uniforms (so a rain-gated branch IS
+active there once the amount has ramped), (b) `tlx-probes.spec.js`'s
+non-blank-frame heuristic, and (c) the macOS census's two TLX legs, which are
+the real sign-off anyway. The GLX leg's `#game-soft` capture stays the way to
+SEE a wet-weather frame locally (`scratchpad` script: race → `weather("rain")`
+AFTER the build, since `race()` applies the race settings' weather → `go` →
+`jump` → 7 s for the 0.8/s rain ramp → `screenshotPresentedCanvas`).
+
+## 2026-10-14 — isolated CI retries yes, a `gl` test lock not yet (#1716)
+
+Pinned Playwright is 1.63; both options exist (`retryStrategy` since 1.62,
+https://playwright.dev/docs/api/class-testconfig#test-config-retry-strategy;
+per-test / per-describe `lock`, https://playwright.dev/docs/test-parallel —
+not settable per project or config).
+
+- **`retryStrategy: "isolated"` under CI — adopted.** Retries run after the
+  shard, one by one in one worker. The 2026-09-30 entry above is the case for
+  it: a load-induced capture timeout re-ran immediately beside the same load.
+  Cost is the retries' own time, already inside `select-budget`'s
+  `perFailureSec` (a retry is a retry either way). Local runs keep
+  `immediate` (retries are 0 there). Pinned by `browser-workers.test.mjs`.
+- **`lock: "gl"` — not adopted, not measured.** A lock only matters with
+  `workers > 1`, and every place that runs this suite is at 1 render worker:
+  `LOCAL_WORKERS` is 1 on ≤ 4 cores, `browser-group.yml` defaults `workers`
+  to 1 after the entry above, and CI's headless/render project split already
+  keeps JSON-only specs off the GL budget. Measuring it would mean
+  `LOCAL_WORKERS > 1` on a 4-core box — the configuration that entry showed
+  turns green specs red. Revisit when a runner with ≥ 8 cores runs the
+  render project: tag the render specs with `test.describe.configure({ lock:
+  "gl" })` and compare loadavg and false timeouts at `--workers=2` against
+  one worker.

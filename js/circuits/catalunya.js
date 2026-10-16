@@ -1,0 +1,88 @@
+/* Apex 26 — CIRCUIT DE BARCELONA-CATALUNYA (data only). `classic: true` keeps it off the built-in calendar, but it IS a 2026 round: the Barcelona-Catalunya GP, 12–14 Jun (the Spanish GP moved to the Madring). */
+(function () {
+  "use strict";
+  (window.TrackDefs = window.TrackDefs || []).push(
+  {
+    id: "catalunya",
+    classic: true,
+    reverse: false,
+    // The trace opens on the ~990 m main straight (measured, curvature < 0.0008 from frac 0.935), and its first vertex IS the
+    // Start/finish line. Snapped to the real one: coord 0.2 m off centreline; = trace vertex 0.
+    // 0.03 also measures straight (mean |k| 0.00036 over 120 m) but
+    // is the wrong PART of the lap. See docs/tracks/START-LINES.md.
+    startFrac: 0.0000,
+    // No sceneryStartFrac: the paddock and main straight are authored against
+    // THIS line; a 0.03 makes a 0.138 shift that stands the pit block 0.055
+    // short of T1 with pines down the pit lane. Tables tuned under that shift
+    // keep their shipped engine fracs verbatim. docs/notes/DEFECT-LEDGER.md.
+    name: "CATALUNYA",
+    gp: "Spanish GP",
+    country: "Spain",
+    night: false,
+    theme: "green",
+    lengthKm: 4.7,
+    gpLaps: 66,   // real race distance (4.657 km); lengthKm's 1 dp derives 65
+    tyreSeverity: 2.00,  // Barcelona softs 0.247 s/lap (F1 Chronicle half-season) — heaviest 2026; clamped to model max
+    baseHW: 7.5,
+    sceneryCoordinates: "racing",
+    // The main stand is the scenery's own grandstandEx(0.005, -1, 180 m); the
+    // engine's generic 7-box pit-straight stand would stand inside it (Monza).
+    ownPitStraight: true,
+    terrainOuter: 115,
+    dressingExclusions: [
+      { kinds: ["foliage"], s0: 0.92, s1: 0.12 },  // pits + main straight
+      { kind: "foliage", s0: 0.558, s1: 0.658 },            // the open infield bowl at Campsa
+    ],
+    // Dry Catalan light: hard sun, bleached scrub, dusty ochre runoff.
+    pal: {
+      zenith:        [0.20, 0.42, 0.76],
+      horizon:       [0.80, 0.80, 0.72],
+      sun:           [1.0,  0.96, 0.80],
+      sunColor:      [1.0,  0.95, 0.78],
+      ambientSky:    [0.50, 0.54, 0.60],
+      ambientGround: [0.30, 0.27, 0.20],
+      fogColor:      [0.76, 0.74, 0.66],
+      grass:         [0.30, 0.40, 0.19],
+      runoff:        [0.62, 0.48, 0.32],
+      sunDir:        [0.40, 0.70, 0.28],
+    },
+    elevations: [
+      { s: 0.2876, halfM: 380, rise: 7.0 },    // climb through Renault/Repsol
+      { s: 0.5476, halfM: 420, rise: 11.0 },   // high ground before Campsa
+      { s: 0.7276, halfM: 400, rise: -9.0 },   // Campsa drop into La Caixa
+      { s: 0.9676, halfM: 360, rise: -6.0 },   // dip along the pit straight
+    ],
+    hwZones: [
+      { s0: 0.290, s1: 0.335, hw: 6.4, ease: 0.012 },  // Seat / Wurth chicane
+      { s0: 0.660, s1: 0.705, hw: 6.3, ease: 0.012 },  // La Caixa hairpin
+      { s0: 0.9504, s1: 0.9946, hw: 6.5, ease: 0.012 },  // final chicane complex (index; arc 0.905-0.955)
+    ],
+    bankZones: [
+      { turn: 2, angleDeg: 3.5, widthM: 120 },   // Elf (T1); re-seated frac 0.1976 (was 72 m off any apex)
+      { frac: 0.3726, angleDeg: 4.0, widthM: 130 },   // Repsol
+      { turn: 8, angleDeg: 4.5, widthM: 150 },   // Campsa; re-seated frac 0.6376 (was 133 m off any apex)
+      { turn: 14, angleDeg: 3.0, widthM: 120 },   // Europcar; re-seated frac 0.9376 (was 70 m off any apex)
+    ],
+
+    // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
+    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
+    // re-seats turns when the start line moves.
+    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
+    // researched real turn count. No researched sectors — consumers fall back to thirds.
+    sectors: [0.322, 0.666],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
+    turns: [0.1576, 0.1821, 0.3446, 0.3511, 0.4321, 0.4416, 0.5251, 0.6091, 0.7266, 0.7841, 0.7911, 0.7996, 0.8061, 0.9226],
+    furniture: { tree: "stonePine",   fol: [0.16, 0.32, 0.17], lamp: "post",  lc: [0.96, 0.96, 1.0], sparse: true },  // thin Catalan umbrella pine
+    kit: { marshal: "kiosk",     rail: "wArmco",      fence: "leaning",   tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "lattice",   hoarding: "panel" },
+    standSet: ["pastel", "concrete", "terracotta"],  // bleached white render, warm Catalan trim
+    // cityStyle: neon / dayPal name TrackSceneryData.NC / .DC colours
+    cityStyle: { neon: ["gold", "red", "white", "orange"], bias: 0.14, fh: [8, 18], bh: [14, 30],
+                 kinds: ["hall", "slab", "podium", "setback", "chevron", "fin"], neonKinds: [], tone: { n: [0.20, 0.19, 0.17], d: [0.80, 0.78, 0.70] },
+                 dayPal: ["white", "cream", "sand", "terra", "ochre", "stone", "tan"] },
+    // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
+    // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.
+    // Circuit de Barcelona-Catalunya — Barcelona. Upstream es-1991, stated 4655 m, projected 4670 m, trace winding CCW.
+    path: { len: 4670, pts: [[-276.5,62.8],[-152,-134.8],[-83.2,-245.5],[-11.7,-358.5],[63.2,-478.8],[88.7,-519.5],[96.9,-528.6],[104.2,-535.1],[110.6,-538],[121.9,-539.4],[132.2,-538.7],[139.9,-536.7],[147.3,-532.7],[173.1,-516.2],[181.3,-512.6],[195.9,-509.3],[207.8,-509.3],[224.7,-513],[234.2,-519],[305.9,-572.6],[315.9,-577.6],[326.2,-581.4],[340,-586],[353.1,-588],[364.5,-588],[376.9,-587.4],[390.7,-585.6],[404.1,-581.3],[420.3,-573.2],[428.6,-567.1],[436.3,-560.4],[443.2,-554.2],[461.5,-530.2],[470.5,-511.6],[477,-490.9],[478.7,-476.3],[480.3,-458.9],[479.9,-440.5],[477.2,-421.1],[469.4,-390.1],[460.9,-365.2],[451.8,-345.6],[441.9,-330.1],[317.5,-132.2],[310,-125.2],[299.6,-119.1],[280.2,-114.3],[267.9,-115.7],[257.9,-118.7],[246.4,-125.2],[233.4,-135.6],[225.1,-145.1],[215.1,-165.1],[211.5,-180.3],[210.5,-203.8],[211.3,-217.8],[214.8,-233.6],[221.6,-249.1],[234.1,-273],[324.4,-414.3],[326.9,-423.8],[327.1,-432.2],[324.9,-442.2],[320.7,-449.1],[316.1,-454.9],[308.9,-459.9],[300,-463],[293,-464.3],[281.6,-462],[276.4,-459.9],[140.5,-398.5],[121.7,-386.8],[103,-372.4],[84.2,-354.6],[70.8,-338.5],[16.8,-253.6],[11,-241],[8.5,-232.2],[10.7,-218.2],[17.6,-205.8],[28.3,-195.9],[52.9,-181.3],[66.3,-170.4],[73.7,-162],[81.1,-151.3],[85.2,-144.1],[119.1,-63.1],[157.7,28.2],[160.8,43.9],[160.8,59.9],[159.2,72.3],[156.7,84.2],[149.1,98],[143.3,107.4],[130.8,121.1],[118.4,130.7],[-313.9,352.5],[-329,361.1],[-336.9,369.5],[-340.8,377.7],[-341.8,387.4],[-338.7,398.4],[-333.6,407],[-326.3,414.2],[-315.6,422.3],[-298.4,429.9],[-287.7,432.4],[-273,434.4],[-260.3,435],[-247.6,434.2],[-233.7,430.6],[-214.3,421.3],[-201.1,413.6],[-182.6,397.4],[-164.3,384.2],[-151.6,378.5],[-132,377.1],[-120.4,379.7],[-106.5,386.8],[-95.3,396.1],[-88.4,407],[-82.8,419.3],[-81.1,432.8],[-80.6,439.1],[-84.4,456.9],[-91.2,469.6],[-101.9,480],[-204.9,564.8],[-215.1,573.4],[-227.9,580.9],[-239.6,585],[-255.8,587.6],[-271.8,588],[-286.5,585],[-298.4,579.9],[-322.8,564.4],[-349.9,547],[-373.4,530.7],[-388.6,521.9],[-439.8,489.4],[-452.1,480.7],[-459.9,472.5],[-467,462.9],[-472.8,451.9],[-477.5,437.2],[-480.2,423.5],[-480.3,403.8],[-477.5,386.1],[-463.3,357.9]] },
+  }
+  );
+})();

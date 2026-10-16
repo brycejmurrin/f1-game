@@ -1,0 +1,1416 @@
+@layer overlays {
+/* Apex 26 — overlays styles. Load order: tools/manifest.cjs CSS. */
+/* Portrait-mode overlay: shown only during races via body.in-race class.
+   Uses a CSS media query so it works on iOS Safari where JS lock APIs fail. */
+#rotate-device {
+  display: none;
+  position: fixed; inset: 0; z-index: 9000;
+  background: #000;
+  color: #fff;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  /* max() with the safe-area pads: this overlay is gated to notched portrait
+     phones (the media query below), where a flat 2rem sat under the 47-59px
+     top inset whenever the centred stack filled the height. Unzoomed layer,
+     so the raw tokens are the correct form. */
+  padding: max(2rem, var(--safe-t)) max(2rem, var(--safe-r)) max(2rem, var(--safe-b)) max(2rem, var(--safe-l));
+  gap: 0.8rem;
+}
+.rotate-icon {
+  font-size: 3.5rem;
+  animation: rotate-hint 1.6s ease-in-out infinite alternate;
+}
+@keyframes rotate-hint {
+  from { transform: rotate(-30deg); }
+  to   { transform: rotate(30deg); }
+}
+.rotate-inner p { margin: 0; font-size: 1.1rem; letter-spacing: var(--ls-3); }
+.rotate-inner small { opacity: 0.6; font-size: 0.8rem; }
+.rotate-inner { display: grid; justify-items: center; gap: 0.8rem; max-width: 28rem; }
+/* RACE IN PORTRAIT shares the pill so the three read as one stack. It sits
+   first because it is the primary action now; a distinct fill would have cost
+   a raw colour literal the token ratchet rightly refuses, and stack order is
+   enough hierarchy for three buttons. docs/PERF-FINDINGS.md 5a. */
+#rotate-race, #rotate-controls, #rotate-exit {
+  /* --tap, not --tap-min: this layer is gated to coarse-pointer phones (the
+     media query below), and --tap-min is the 24px WCAG floor — with `padding:
+     0 1rem` and inherited type the three pills painted 24px tall, half of
+     Apple's 44pt and under the game's own 52px touch rung. Unzoomed layer, so
+     --tap here is body:not(.desktop)'s 52px as written. */
+  min-height: var(--tap); padding: 0 1rem;
+  border: 1px solid rgba(255,255,255,0.32); border-radius: var(--r-pill);
+  background: rgba(255,255,255,0.1); color: #fff;
+  font: inherit; font-weight: 800; letter-spacing: var(--ls-2);
+}
+/* outline-offset takes a <length> only — the old `medium` here made the whole
+   declaration invalid, silently dropping this rule since build 1496. 3px is
+   what `medium` resolves to; the blocker is unzoomed and unclipped, so a
+   plain outset ring is fine (no inverse floor needed on this layer). */
+#rotate-race:focus-visible, #rotate-controls:focus-visible, #rotate-exit:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* OPEN CONTROLS pauses the race and hides this blocker while How to Play is
+   up. NOT a z-index yield: #howtoplay is a showModal() <dialog>, so it lives
+   in the TOP LAYER, which outranks every z-index and inerts the document —
+   the blocker could never paint over or intercept it. What this rule really
+   does is stop the opaque #000 backdrop from filling the screen AROUND the
+   help sheet, and let syncRotateBlocker (which reads computed display) report
+   inactive so focus is not sent behind the dialog. Closing help restores the
+   blocker/focus if the phone is still portrait. */
+body.rotate-help-open #rotate-device,
+body.photo-studio-open #rotate-device { display: none !important; }
+/* Pause and the rotate gate never share paint. #pausemenu is a top-layer
+   <dialog>, but gate labels (RACE IN PORTRAIT / OPEN CONTROLS / EXIT RACE)
+   ghosted through the sheet on phone portrait (layout-audit 2026-10-04).
+   Match both the hidden seam and the native `open` flag showModal sets.
+   Also beat the portrait media rule's `display: flex` with !important.
+   body.rotate-measure lifts it for one getComputedStyle: syncRotateBlocker
+   asks "does the gate want the screen?" BEFORE it decides the pause card
+   yields — reading through this rule, the card's own presence answered "no"
+   and the gate never came back after OPEN CONTROLS › CLOSE. */
+body:not(.rotate-measure):has(#pausemenu:not([hidden])) #rotate-device,
+body:not(.rotate-measure):has(#pausemenu[open]) #rotate-device {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+/* The iOS install tip sits above the race and used to paint through the
+   pause card's translucent foot on phone portrait. */
+body:has(#pausemenu:not([hidden])) #ios-install,
+body:has(#pausemenu[open]) #ios-install,
+html:has(#pausemenu:not([hidden])) #ios-install,
+html:has(#pausemenu[open]) #ios-install {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* GUARDED ON THE DEVICE, NOT JUST THE SHAPE. `orientation: portrait` is nothing
+   more than height > width, so this opaque z-9000 sheet also fired on a rotated
+   1080x1920 monitor and on any desktop window dragged taller than it is wide —
+   mid-race, over the canvas and #pausebtn, with a mouse that has no way to
+   "rotate" anything. `pointer: coarse` asks whether this is a device you HOLD;
+   the 743px ceiling then keeps it to phones, since the narrowest iPad portrait
+   (744 CSS px, the mini) is wide enough to race in and the widest phone (430)
+   is not.
+   AND THE WINDOW, NOT JUST THE DEVICE. A coarse-pointer device can present a
+   narrow WINDOW: iPad Split View / Slide Over is a 320-507px portrait strip —
+   under 743, portrait, coarse — where "rotate your phone" is unfollowable
+   (rotating the iPad keeps the strip portrait) and the only escape was EXIT
+   RACE. Every phone portrait is ≤956px tall; the iPad strips are 1180+ tall,
+   so a height ceiling separates a held phone from a windowed slice. */
+@media (orientation: portrait) and (pointer: coarse) and (max-width: 743px) and (max-height: 956px) {
+  body.in-race:not(.rotate-ok) #rotate-device { display: flex; }
+  #rotate-race, #rotate-controls, #rotate-exit { width: min(100%, 22rem); }
+}
+
+/* ---------- results / standings rows ----------
+   The shell (header + scrolling body + pinned action bar) is the shared .sheet
+   in css/components.css, and so are the .res-* row rules now that four screens
+   use them. Only what is specific to THIS container stays here. */
+#results-table { font-size: var(--fs-micro); font-variant-numeric: tabular-nums; }
+.res-personal {
+  display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * 0.5) var(--gap);
+  padding: calc(var(--gap) * 0.8) var(--gap); margin: 0 0 var(--gap);
+  border: 1px solid var(--plate-line); border-left: 3px solid var(--red);
+  border-radius: var(--r-sm); background: var(--plate);
+}
+.res-personal strong { font-size: var(--fs-3); color: var(--text); }
+.res-personal span { color: var(--dim); }
+.res-personal button { margin-left: auto; min-height: var(--chip-h); color: var(--text); }
+#results-table > .sel-label,
+#standings-body > .sel-label { margin-top: calc(var(--gap) * 1.2); }
+#standings-body > .sel-label:first-child { margin-top: 0; }
+#res-daily-share, #res-ghost-clear {
+  display: flex;
+  width: max-content;
+  margin-top: var(--gap);
+  margin-inline: auto;
+}
+#res-ghost-clear { opacity: 0.6; }
+/* Results footage keeps only its controls over the scene. The dialog remains
+   modal so keyboard focus stays on BACK TO RESULTS / MENU / NEXT. */
+#results[data-results-playback="playing"] { align-items: end !important; background: transparent !important; }
+#results[data-results-playback="playing"]::backdrop { background: transparent !important; }
+#results[data-results-playback="playing"] > .sheet { display: flex; flex-direction: column; }
+#results[data-results-playback="playing"] > .sheet > .sheet-head,
+#results[data-results-playback="playing"] > .sheet > .sheet-body { display: none; }
+#results[data-results-playback="playing"] > .sheet > .sheet-foot {
+  width: 100%; flex-wrap: wrap !important;
+}
+
+#results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot { justify-content: center; }
+#res-settle-unsaved { margin-top: var(--gap); color: #ffd180; font-weight: 800; }
+/* THE SHORT WIDE RESULT SHEET (a landscape phone). MEASURED (layout-audit,
+   ios-iphone-landscape 734x343, 2026-10-05, tip a7d27757f): a 281 own px sheet,
+   title row 28 + MENU / NEXT bar 59, #results-table 194 over 1192 of content
+   (6.1 screens). Two changes, no content hidden:
+   - the bar joins the title row (title left, MENU / NEXT right), so the table
+     gets ~222 instead of 194;
+   - a lead-lap car's gap to the winner rides on the name line instead of a
+     second line under it (`.res-name > .q-time` is a block in the base), which
+     halves ~20 of the 22 rows. The name may wrap rather than ellipsise if a
+     long suffix ever needs it. Expected ~800 of content, ~3.6 screens. */
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-head { grid-column: 1; grid-row: 1; }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot { grid-column: 2; grid-row: 1; background: none; }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before { display: none; }
+/* NO WRAP IN THE TITLE ROW. MEASURED on 42cb42fbf (layout-audit, 734x343,
+   2026-10-05): the table box SHRANK, 194 -> 161 own. The bar sat in an `auto`
+   column, whose width comes from the bar's max-content — and the buttons'
+   `min-width: min(100%, 110px)` is a cyclic percentage there, so it counted as
+   0 and the column came out narrower than two 110px buttons. The bar wrapped
+   to two rows (~120 own) and took the head row with it. A plain length floor
+   and no wrap: the row is one button tall, and the table gets ~222. */
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot { flex-wrap: nowrap; }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot > .bigbtn { flex: 0 0 auto; min-width: calc(var(--tap) * 2); }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) > .sheet-body { grid-column: 1 / -1; grid-row: 2; }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-name { white-space: normal; overflow-wrap: anywhere; }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-name > .q-time { display: inline; margin-left: 0.6em; }
+/* AND THE ROWS LOSE THEIR SPARE PIXELS. Same run: 880 own of content after
+   the gap went inline, ~4 screens even in the full 222. The 20px swatch, not
+   the 14px name, set every row's height; at the type's own height, with the
+   block padding at a fifth of a gap, a row is ~21 own instead of ~26 —
+   ~110 own over 22 cars, nothing hidden. Expected ~3.4 screens. */
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-row { padding-block: calc(var(--gap) * 0.2); }
+#results .sheet[data-density="compact"]:not([data-shape="tall"]) .res-swatch { height: 1.1em; }
+
+/* ---------- SCREEN LOOKS: POPUPS fold (js/ui/screen-looks.js) ----------
+   SETTINGS › APPEARANCE › POPUPS: the screen's own two knobs. The shared core
+   knobs (WIDTH, DENSITY, BUTTON HEIGHT, CORNERS, BACKGROUND, HEADINGS) live in
+   css/responsive.css over the same scope; each attribute is written only off
+   the default, so the shipped pop-ups match nothing here. The scope is every
+   dimmed dialog.screen except the settings page and the two sheets with folds
+   of their own (pause, race settings) — the same 14 dialogs responsive.css
+   names, written short enough for the prelude cap in
+   tests/unit/css-comments.test.mjs. */
+
+/* POSITION — the sheet's block placement in its .screen grid (place-items:
+   center by default). #track-detail is left out on purpose: it is full-bleed
+   and a column FLEX box, where align-items is the CROSS axis — `start` would
+   shrink-wrap the circuit body back to its content, the exact feedback loop
+   css/track-detail.css stretches to break. There is no slack to move it in. */
+:root[data-look-popups-vpos="top"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { align-items: start; }
+:root[data-look-popups-vpos="bottom"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { align-items: end; }
+
+/* TABLE ROWS — the shared .res-row (standings, results, qualifying, career
+   history). TIGHT goes below even the compact tier's block padding
+   (css/career.css), so it still reads on a sheet SheetShape has compacted;
+   ROOMY floors each row at the tap height. Scoped, so the CAREER hub's own
+   championship rows (#career, a fold of its own — not a dialog) are untouched.
+   The overlays layer outranks that components-layer compact rule regardless
+   of order. */
+:root[data-look-popups-rows="tight"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) .res-row { padding-block: calc(var(--gap) * 0.2); }
+:root[data-look-popups-rows="roomy"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) .res-row { min-height: var(--tap); }
+
+#save-warning {
+  position: fixed; z-index: 8500;
+  /* var(--sat), not raw env(): the last raw inset read outside tokens.css —
+     the notch simulation overrides --sa* and could never reach this banner
+     (same fix data.css documents twice). */
+  top: max(var(--gap), var(--sat)); left: 50%;
+  transform: translateX(-50%);
+  width: min(48rem, calc(100vw - 2 * var(--gap)));
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center; gap: calc(var(--gap) / 3) var(--gap);
+  padding: var(--gap);
+  /* --r-lg and --edge/--lift-2, the real tokens: this banner shipped square
+     and shadowless because it read --r-card and --shadow-sheet, two names
+     defined NOWHERE — the one alert that appears when the player is about to
+     lose progress rendered as the least-finished surface in the app. */
+  border: 1px solid rgba(255, 209, 128, 0.72); border-radius: var(--r-lg);
+  background: rgba(25, 18, 8, 0.96); color: #fff3d6;
+  box-shadow: var(--edge), var(--lift-2);
+  font-size: var(--fs-micro);
+}
+#save-warning[hidden] { display: none; }
+/* It STANDS DOWN during a race — it sat in .hud-top's top-centre box for the
+   whole session, over POS / LAP / TIME — and under any open dialog, where the
+   modal makes it inert anyway (a button you can see and cannot press). It is
+   back the moment the race or the dialog ends; nothing is lost by waiting. */
+body.in-race #save-warning,
+body:has(dialog[open]) #save-warning { display: none; }
+/* The words stack in the first column; the three buttons span both rows. */
+#save-warning strong { grid-column: 1; color: #ffd180; letter-spacing: var(--ls-2); }
+#save-warning-detail { grid-column: 1; min-width: 0; }
+/* --tap, the house comfort floor (44 px, 52 on touch) — not --tap-min, the
+   24 px WCAG minimum: these are the only way to keep a session's progress. */
+#save-warning button {
+  min-height: var(--tap); padding: 0 var(--gap); border: 1px solid var(--plate-line);
+  border-radius: var(--r-pill); background: var(--plate-hover); color: #fff;
+  font: inherit; font-weight: 800;
+  grid-row: 1 / span 2;
+}
+/* DISMISSED: the banner folds to its own toggle (#save-dismiss, now reading
+   NOT SAVING, aria-expanded=false) in the same top-centre spot, so the warning
+   and the way back to RETRY / EXPORT stay one tap away without the full bar. */
+#save-warning[data-collapsed] { width: auto; grid-template-columns: auto; padding: calc(var(--gap) / 2); }
+#save-warning[data-collapsed] > :not(#save-dismiss) { display: none; }
+#save-warning[data-collapsed] #save-dismiss { grid-row: auto; }
+@media (max-width: 38.75rem) {
+  #save-warning:not([data-collapsed]) { grid-template-columns: 1fr 1fr 1fr; }
+  #save-warning strong, #save-warning-detail { grid-column: 1 / -1; }
+  #save-warning button { grid-row: auto; }
+}
+
+/* ---------- how to play ---------- */
+/* Section landmarks turn a very long reference into something browsable. On a
+   tall sheet the rail is a horizontal strip under the title; on a wide sheet
+   it becomes a left contents rail. The body owns the one vertical scroller
+   either way. Links never wrap into a second row of chrome. */
+#howtoplay-inner {
+  --fit-at: 200px;
+  --compact-at: 480px;
+  /* Head, contents strip, body, foot — four rows so the nav can live as a
+     sheet child (wide rail) without creating an implicit extra track. */
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+/* Strip + chip box live in css/components.css. Idle ink stays here so HTP
+   chips stay `--text` while career guide/history stay `--dim`. */
+#htp-contents a { color: var(--text); }
+#howtoplay:has(#htp-controls:target) #htp-contents a[href="#htp-controls"],
+#howtoplay:has(#htp-racing:target) #htp-contents a[href="#htp-racing"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
+#howtoplay:has(#htp-pits:target) #htp-contents a[href="#htp-pits"],
+#howtoplay:has(#htp-driving:target) #htp-contents a[href="#htp-driving"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
+#howtoplay:has(#htp-setup:target) #htp-contents a[href="#htp-setup"],
+#howtoplay:has(#htp-modes:target) #htp-contents a[href="#htp-modes"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
+#howtoplay:has(#htp-friends:target) #htp-contents a[href="#htp-friends"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
+/* Wide sheets: contents as a left rail, body is still the only vertical scroller
+   for the reference itself. data-shape is the sheet's own aspect, not viewport
+   orientation. */
+#howtoplay-inner[data-shape="wide"] {
+  grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+#howtoplay-inner[data-shape="wide"] > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
+#howtoplay-inner[data-shape="wide"] > #htp-contents {
+  grid-column: 1; grid-row: 2;
+  flex-direction: column; align-items: stretch; justify-content: flex-start;
+  overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior-x: auto; overscroll-behavior-y: contain; touch-action: pan-y;
+  padding: 0 calc(var(--gap) * 0.5) calc(var(--gap) * 0.5) var(--pad);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+#howtoplay-inner[data-shape="wide"] > #htp-contents > :first-child { margin-inline-start: 0; }
+#howtoplay-inner[data-shape="wide"] > .sheet-body { grid-column: 2; grid-row: 2; min-width: 0; }
+#howtoplay-inner[data-shape="wide"] > .sheet-foot { grid-column: 1 / -1; grid-row: 3; }
+/* Compact keeps the horizontal strip: a side rail on a short landscape sheet
+   spends the scarce axis on chrome. Density is local height, so UI SIZE 200%
+   on an 852×393 phone stays a strip even though the sheet is wide-shaped. */
+#howtoplay-inner[data-density="compact"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+#howtoplay-inner[data-density="compact"] > #htp-contents {
+  grid-column: auto; grid-row: auto;
+  flex-direction: row; align-items: center;
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; overscroll-behavior-y: auto; touch-action: pan-x;
+  padding: 0 var(--pad) calc(var(--gap) * 0.35);
+  border-right: none;
+}
+/* Keep the section strip touchable without letting zoom spend most of a short
+   phone's reading height on chips. Text still scales; hit floor follows --tap-paint. */
+#howtoplay-inner[data-density="compact"] #htp-contents a {
+  min-height: max(var(--tap-paint), 1lh);
+  padding-block: calc(var(--gap) * 0.1);
+}
+#howtoplay-inner[data-density="compact"] > .sheet-head,
+#howtoplay-inner[data-density="compact"] > .sheet-body,
+#howtoplay-inner[data-density="compact"] > .sheet-foot {
+  grid-column: auto; grid-row: auto;
+}
+#howtoplay .sheet-body {
+  /* Keep the scroll thumb in a grid row: its negative right margin creates
+     scrollable overflow in block layout after Quick Start wraps the <dl>. */
+  display: grid; grid-template-columns: minmax(0, 1fr); align-content: start;
+  font-size: var(--fs-micro); line-height: 1.45;
+  scroll-padding-block-start: var(--gap);
+}
+/* Slack so FRIENDS (and every earlier section) can sit at the scrollport top
+   when its contents-rail link is pressed — without this, the last sections
+   stop mid-pane because there is nothing below them to scroll past. */
+#howtoplay .sheet-body::after {
+  content: "";
+  display: block;
+  height: min(70vh, 28rem);
+  pointer-events: none;
+}
+#htp-controls { scroll-margin-block-start: var(--gap); }
+#htp-inputs { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
+#htp-inputs details { min-width: 0; }
+#htp-inputs p { margin-block: calc(var(--gap) * 0.5); }
+#howtoplay dl {
+  display: grid;
+  grid-template-columns: minmax(0, 0.3fr) minmax(0, 1fr);
+  column-gap: calc(var(--gap) * 1.5);
+  align-items: start;
+}
+#howtoplay dt {
+  color: var(--steel); font-weight: 700; font-style: italic; font-size: var(--fs-micro);
+  letter-spacing: var(--ls-4); padding: calc(var(--gap) * 0.5) 0 calc(var(--gap) / 6);
+  border-top: 1px solid var(--card-line);
+  white-space: normal; overflow-wrap: anywhere;
+}
+#howtoplay dt:first-child { border-top: none; }
+#howtoplay dt[id] { scroll-margin-block-start: var(--gap); }
+#howtoplay dd {
+  color: var(--text); font-size: var(--fs-micro); margin-left: 0; line-height: 1.45;
+  padding: calc(var(--gap) * 0.5) 0 calc(var(--gap) / 6);
+  border-top: 1px solid var(--card-line);
+}
+#howtoplay dd:first-of-type { border-top: none; }
+/* One term/description pair per row at every width. The former wide layout put
+   two pairs in one grid row; one long answer (ACTIVE AERO) then forced a huge
+   blank block under its short neighbour (BOOST), and both descriptions became
+   narrow newspaper columns. The pinned contents rail makes raw document depth
+   manageable without sacrificing reading order or measure. */
+/* Keep a readable description measure: the longest term must never size the
+   whole left column. On phone-sized sheets, put the term above its description.
+   At 80% a 393px phone offers ~460 own px, yet max-content headings previously
+   left only ~170px for every paragraph. UI zoom changes the sheet's own width. */
+@container sheet (max-width: 600px) {
+  #howtoplay dl { grid-template-columns: minmax(0, 1fr); }
+  #howtoplay dd { border-top: none; padding-top: 0; }
+}
+.key {
+  display: inline-block;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--r-sm);
+  padding: 0 5px;
+  font-size: var(--fs-micro);
+}
+
+/* Same trap as #lights: js/game.js only ever sets `.hidden`, and the
+   `display: flex` below would beat the UA rule that attribute relies on — on a
+   full-screen z-index-99 panel, which is the worst element in the tree to have
+   painting unconditionally. */
+#nogl[hidden] { display: none; }
+#nogl {
+  position: fixed; inset: 0; z-index: 99;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+}
+#nogl [data-gfx-recovery] {
+  width: min(92vw, 560px);
+  padding: clamp(calc(var(--pad) * 0.9), 5vw, calc(var(--pad) * 1.9));
+  text-align: center;
+}
+#nogl [data-gfx-recovery-actions] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap);
+  margin-top: var(--pad);
+}
+#nogl [data-gfx-recovery-actions] button {
+  min-height: var(--tap);
+  padding: calc(var(--gap) * 0.8) var(--gap);
+  touch-action: manipulation;
+}
+#nogl [role="status"] { min-height: 1.4em; }
+@media (max-width: 480px) {
+  #nogl [data-gfx-recovery-actions] { grid-template-columns: 1fr; }
+}
+/* NOTE: the layer's closing brace used to be HERE, so everything below — the
+   whole VS FRIEND lobby — was unlayered, and unlayered rules outrank every
+   cascade layer in the project. See tests/unit/css-layers.test.mjs. */
+
+/* ── VS FRIEND lobby ────────────────────────────────────────────────────────
+   The invite/answer codes are a few hundred characters of base64 — a full
+   ICE-gathered SDP, compressed. Nobody is going to retype that, so the boxes
+   are monospace, selectable, scrollable, and paired with copy buttons; the
+   layout assumes the code is moved by clipboard, not by eye. */
+/* #vsfriend is a top-layer <dialog class="screen"> now: showModal() stacks it
+   over the main menu (#overlay, z-index 20) and any other open sheet, so it
+   needs no z-index of its own (`:modal` outranks every z value — see
+   js/game/uilayers.js / topmodal.js for the ladder). */
+#vsfriend .vs-step { display: flex; flex-direction: column; gap: 10px; }
+#vsfriend #vs-pick > .bigbtn {
+  /* .bigbtn's menu-sized 78vw width is resolved against the viewport and then
+     zoomed again inside a sheet. At 200% it painted wider than #vs-body. These
+     are sheet actions, so size them from their actual container. */
+  width: 100%; max-width: none; margin: 0; box-sizing: border-box;
+}
+#vsfriend .vs-hint {
+  margin: calc(var(--gap) / 3) 0 0;
+  font-size: var(--fs-micro);
+  line-height: 1.35;
+  opacity: 0.75;
+}
+#vsfriend .vs-code {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fs-micro);
+}
+/* 16px floor on the EDITABLE boxes only: iOS Safari auto-zooms the page when
+   a focused input's font-size is under 16px, and the zoom STICKS after the
+   keyboard closes (the rule this repo already states at menus.css and
+   tuner.css input rules) — landing mid-WebRTC-handshake on the one screen
+   whose whole job is pasting a code. The readonly boxes keep --fs-micro and
+   their height budget; they never focus a keyboard. */
+#vsfriend .vs-code:not([readonly]) {
+  font-size: 16px;
+  line-height: 1.3;
+  /* Codes have no spaces, so without this they force the sheet wide. */
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--plate-line);
+  background: rgba(0, 0, 0, 0.35);
+  color: inherit;
+}
+#vsfriend .vs-code:focus-visible {
+  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid currentColor;
+  outline-offset: 2px;
+}
+/* SHARE and COPY side by side: they are two ways to do the same thing, and
+   stacking them read as two separate steps. Equal basis rather than auto so
+   the pair stays balanced when one label is longer ("SHARE LINK" becomes
+   "COPY LINK" with no share sheet). They wrap on a narrow phone rather than
+   squeezing the text to unreadable. */
+#vsfriend .vs-actions { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 2 / 3); }
+#vsfriend .vs-actions > .bigbtn {
+  flex: 1 1 44%;
+  margin: 0;
+  /* Sized down from the 20px menu default: in a half-width column these wrap
+     their label onto two lines and the row grows to fit. */
+  font-size: clamp(var(--fs-micro), calc(1.8 * var(--vwz)), var(--fs-4));
+  padding: 10px var(--gap);
+}
+/* The QR is the one element on this screen whose job is to be machine-read, so
+   it keeps its white quiet zone whatever the page theme is doing. An inverted
+   QR is unreadable to a large share of scanners. */
+/* PHONE AS CONTROLLER pairing block (Settings › CONTROLS, index.html): the
+   room code big and first, the QR beside it. A player read "scan the code"
+   with the code out of sight below a 320px QR (2026-09-28); now the code is
+   the first thing after the status and the QR is 200px. */
+#pm-phonepad-qr-wrap[hidden], #pm-phonepad-pair[hidden] { display: none; }
+#pm-phonepad-pair { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * 0.75); }
+#pm-phonepad-text { flex: 1 1 14rem; min-width: 0; }
+#pm-phonepad-text > .adv-help { margin: 0 0 calc(var(--gap) * 0.25); }
+#pm-phonepad-code {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: clamp(28px, calc(8 * var(--vwz)), 46px);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  line-height: 1.1;
+  margin: 0 0 calc(var(--gap) * 0.5);
+  user-select: all;
+}
+#pm-phonepad-qr-wrap { flex: 0 0 auto; margin: 0; }
+#pm-phonepad-pair #pm-phonepad-qr-wrap canvas { width: min(200px, calc(60 * var(--vwz))); }   /* beats the shared 320px rule below */
+#vsfriend .vs-qr-wrap, #pm-phonepad-qr-wrap {
+  margin: calc(var(--gap) / 3) 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--gap) * 0.5);
+}
+#vsfriend .vs-qr-wrap canvas, #pm-phonepad-qr-wrap canvas {
+  /* Sized to the SMALLER of three limits, because each one is real:
+       320px — the raster NetQr.draw is asked for. It rounds DOWN to a whole
+               number of canvas px per module, so a real invite lands near 276;
+               going much past that is stretching, not detail.
+       82vw  — a phone held in portrait, minus the sheet's padding.
+       46svh — a landscape phone has ~390px of height in TOTAL, and a QR that
+               needs scrolling to see is a QR nobody can scan.
+     The old flat 180px was the binding limit EVERYWHERE except landscape, so a
+     phone in portrait showed a 180px code with 276px of raster behind it and
+     140px of free width beside it — small for no reason. Landscape is where the
+     height cap actually bites, and it still does. */
+  width: min(320px, calc(82 * var(--vwz)), calc(46 * var(--svhz)));
+  max-width: 100%;              /* the two-column layout can be narrower than 320 */
+  height: auto;
+  image-rendering: pixelated;   /* never blur module edges; that is what breaks a scan */
+  border-radius: var(--r-sm);
+  background: #fff;
+}
+/* ---- the two-step layout ----------------------------------------------
+   Both flows are "do this, then do that", and the game is played in
+   LANDSCAPE where the sheet is short and wide. Stacked, step 2 fell entirely
+   below the fold and the screen read as "generate a code, then nothing
+   happens". Side by side, the exchange is visible in one glance. Falls back
+   to a single column below 620px, where two columns would be too narrow to
+   read a code in. */
+#vsfriend .vs-two { display: flex; flex-direction: column; gap: calc(var(--gap) * 7 / 6); }
+#vsfriend .vs-col {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) * 2 / 3);
+  min-width: 0;                 /* let the code box shrink instead of overflowing */
+  box-sizing: border-box;
+}
+/* .bigbtn is width: min(78vw, 340px) with auto margins — sized for a full-width
+   menu, not for a column. Left alone it shoots straight out of the sheet. */
+#vsfriend .vs-col > .bigbtn {
+  width: 100%;
+  margin: calc(var(--gap) / 6) 0 0;
+}
+#vsfriend .vs-col-head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--gap) * 2 / 3);
+  margin: 0;
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+/* The step number as a chip rather than "1." in prose — at a glance it reads
+   as an ordered pair of things to do, which is exactly what it is. */
+#vsfriend .vs-num {
+  flex: 0 0 auto;
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: var(--fs-micro);
+  background: rgba(255, 255, 255, 0.14);
+}
+/* ---- the waiting room ---- */
+/* A definition list, because that is what this is: four labelled facts about
+   the race. Grid rather than the default dl flow so label and value sit on one
+   line and the column stays narrow. */
+#vsfriend .vs-summary { margin: 0; display: flex; flex-direction: column; gap: calc(var(--gap) / 3); }
+#vsfriend .vs-summary > div {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  gap: calc(var(--gap) * 2 / 3);
+  align-items: baseline;
+}
+#vsfriend .vs-summary dt {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+#vsfriend .vs-summary dd { margin: 0; font-size: var(--fs-2); }
+
+#vsfriend .vs-driver {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--gap) * 2 / 3);
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
+  border-radius: var(--r-sm);
+  background: var(--plate);
+  font-size: var(--fs-micro);
+}
+/* The other players, one row each. A column rather than more fixed elements,
+   because how many there are is not known until people join. Your row plus
+   three others still has to fit a phone in landscape, which is the tightest
+   case this screen ever sees — so the list scrolls rather than pushing GARAGE
+   and START off the bottom, which would strand the room with no way out. */
+#vsfriend .vs-others {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  max-height: calc(28 * var(--svhz));
+  overflow-y: auto; overscroll-behavior-y: contain;
+}
+#vsfriend .vs-who { flex: 0 0 auto; opacity: 0.6; width: 3.2em; }
+#vsfriend .vs-car { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#vsfriend .vs-swatch { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 2px; }
+/* The 4-letter verification code (lobby.js verifyRow): read aloud and compared
+   with the other screen, so it reads like the room code, not like a label. */
+#vsfriend .vs-driver [data-verify] { flex: 0 0 auto; font-weight: 700; letter-spacing: var(--ls-3); }
+#vsfriend #vs-start[disabled] { opacity: 0.4; filter: saturate(0.3); }
+
+/* VS FRIEND waiting-room seat roster (scoped to #vsfriend). */
+#vsfriend .vs-roster-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  min-width: 0;
+}
+#vsfriend .vs-roster-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(var(--gap) * 2 / 3);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+#vsfriend .vs-player-count { font-weight: 700; opacity: 1; }
+#vsfriend .vs-roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  /* All four seats without scrolling: 4 rows + 3 gaps. Not `32 * --svhz`,
+     which is 32 % of the viewport (125 px at 844x390) and hid the guest row. */
+  max-height: calc(4 * var(--tap-paint) + var(--gap));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+#vsfriend .vs-roster-seat { margin: 0; }
+/* Landscape phone (~844×390): guest rows carry verify + Remove; keep one line,
+   each row exactly one compact tap target tall (the host's own row too). */
+#vsfriend .vs-roster .vs-driver {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  min-height: var(--tap-paint);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+#vsfriend .vs-roster .vs-who { width: 2.6em; }
+#vsfriend .vs-roster .vs-driver [data-verify] { letter-spacing: var(--ls-2); }
+#vsfriend .vs-roster .vs-driver .vs-roster-remove {
+  flex: 0 0 auto;
+  font-size: var(--fs-micro);
+  margin-left: auto;
+  white-space: nowrap;
+  min-height: var(--tap-paint);
+  padding: 0 calc(var(--gap) * 2 / 3);
+  line-height: 1.2;
+}
+#vsfriend .vs-roster-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+}
+#vsfriend .vs-roster-dot.on {
+  background: #7CFC7C;
+  box-shadow: 0 0 0 2px rgba(124, 252, 124, 0.35);
+}
+
+/* ---- room codes ---- */
+/* The code is meant to be READ ALOUD across a room, so it is the biggest thing
+   on the screen and monospaced — a proportional font makes a run of capitals
+   ambiguous at exactly the moment it matters. */
+#vsfriend .vs-bigcode {
+  display: block;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: clamp(28px, calc(8 * var(--vwz)), 46px);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  /* The letter-spacing is trailing, so without this the run reads off-centre. */
+  text-indent: 0.18em;
+  padding: 10px 0;
+}
+/* Private relay tokens are copied/shared; allow their longer secret to wrap. */
+#pm-phonepad-code[data-private="true"],
+#vsfriend .vs-bigcode[data-private="true"] {
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  text-indent: 0;
+  overflow-wrap: anywhere;
+}
+#vsfriend .vs-codebox {
+  text-align: center;
+  font-size: 22px;
+  letter-spacing: 0.16em;
+  text-indent: 0.16em;
+  text-transform: uppercase;
+}
+#vsfriend .vs-codebox[maxlength="64"] { font-size: 14px; letter-spacing: 0.02em; text-indent: 0; }
+#vsfriend #vs-code-entry { margin-top: calc(var(--gap) * 0.5); }
+
+/* Compact multiplayer is an information-dense workflow, not a splash screen.
+   Give the body the height previously spent on a second action bar and keep the
+   escape action in the title band. This matters most at UI SIZE 200%, where a
+   landscape phone has only ~170 local vertical pixels. */
+#vsfriend-inner[data-density="compact"] { position: relative; }
+/* Absolute CLOSE is --tap-paint tall; the title band must clear it
+   (ui-redesign closeInHead). Flex-centre the title so a short h2 does not
+   leave CLOSE hanging past the head bottom. */
+#vsfriend-inner[data-density="compact"] > #vs-head {
+  padding-right: calc(var(--pad) + var(--tap));
+  min-height: var(--tap-paint);
+  height: var(--tap-paint);
+  max-height: var(--tap-paint);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+/* top:0 (not pad*0.18): that inset pushed a --tap-paint CLOSE past a
+   title-sized head on 852×393 (Selected specs 2026-10-05).
+   Longhands beat .sheet-foot / compact foot padding-top from @layer
+   components — Selected specs selected-3 / packed-3 (2026-10-11) measured
+   CLOSE 0.35*pad*zoom (~5.69px) past the head band while position:absolute
+   held (ui-redesign closeInHead). Height locked to --tap-paint. Tall
+   restores the foot in dialogs.css. */
+#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot {
+  position: absolute; top: 0; right: var(--pad); z-index: 3;
+  display: flex; align-items: center;
+  box-sizing: border-box;
+  height: var(--tap-paint);
+  min-height: var(--tap-paint);
+  max-height: var(--tap-paint);
+  padding-top: 0; padding-bottom: 0;
+  padding-left: 0; padding-right: 0;
+  background: none;
+  overflow: hidden;
+}
+#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before {
+  display: none;
+}
+/* --tap-paint, not --tap-min: layout-audit 2026-10-05 ios-iphone-landscape
+   734×343 measured #vs-close at 62×26 (soft under the 52 touch floor) and
+   HOST / JOIN at 285×44. Compact cannot afford --tap's local 52 (paints
+   56.7–104); --tap-paint holds 52 painted on touch and stays --tap-min
+   with a mouse (css/tokens.css). */
+#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close {
+  min-width: var(--tap); min-height: var(--tap-paint); height: var(--tap-paint);
+  max-height: var(--tap-paint); margin: 0; padding: 0 var(--gap);
+  font-size: var(--fs-micro); line-height: 1;
+  box-sizing: border-box;
+  align-self: stretch;
+}
+#vsfriend-inner[data-density="compact"] #vs-pick {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap);
+}
+#vsfriend-inner[data-density="compact"] #vs-pick > .bigbtn {
+  min-height: var(--tap-paint); padding: var(--gap); font-size: var(--fs-2);
+}
+#vsfriend-inner[data-density="compact"] #vs-pick > .vs-hint,
+#vsfriend-inner[data-density="compact"] #vs-code-entry { margin-top: 0; grid-column: 1 / -1; }
+
+/* The viewfinder. Sized on HEIGHT first: this appears on a landscape phone with
+   ~390px to spend, and a preview that needs scrolling is a preview you cannot
+   aim. object-fit: cover so the frame is filled rather than letterboxed — the
+   decoder reads the video element's own pixels, not what CSS shows, so cropping
+   here costs nothing. */
+#vsfriend .vs-scan {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--gap) * 2 / 3);
+  margin-top: 10px;
+}
+#vsfriend .vs-scan video {
+  width: min(320px, 90%);
+  height: min(240px, calc(46 * var(--svhz)));
+  object-fit: cover;
+  border-radius: var(--r-md);
+  background: #000;
+  transform: scaleX(-1);        /* a mirrored preview is what people expect */
+}
+#vsfriend .vs-scan > .bigbtn { width: auto; margin: 0; }
+#vsfriend .vs-raw > summary {
+  cursor: pointer;
+  font-size: var(--fs-micro);
+  opacity: 0.7;
+  padding: calc(var(--gap) / 6) 0;
+}
+#vsfriend .vs-raw[open] > summary { margin-bottom: calc(var(--gap) * 0.5); }
+
+#vsfriend-inner[data-shape="wide"] .vs-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 20px;
+  align-items: start;
+}
+/* A hairline between the two steps, so they read as two things rather than
+   one wrapped list. */
+#vsfriend-inner[data-shape="wide"] .vs-two > .vs-col + .vs-col {
+  padding-left: 20px;
+  border-left: 1px solid var(--card-line);
+}
+#vsfriend .vs-status {
+  margin: var(--gap) 0 0;
+  min-height: 1.2em;          /* reserve the line so the sheet doesn't jump */
+  font-size: var(--fs-micro);
+  line-height: 1.35;
+  opacity: 0.9;
+}
+/* Failure here is usually NAT traversal, which the player can act on only if
+   we say so plainly — hence a distinct state rather than the same grey text. */
+#vsfriend .vs-status.vs-error { color: #ff8a80; opacity: 1; }
+/* INSTALL APP (js/ui/platform-session.js installChip): the browser's install
+   offer, on the title screen only; bottom-left, clear of the safe area. */
+#install-chip {
+  position: fixed; z-index: 9000;
+  left: calc(var(--sal) + var(--gap)); bottom: calc(var(--sab) + var(--gap));
+  min-height: var(--tap); padding: 0 var(--gap);
+  border-radius: var(--r-md);
+  background: var(--plate-opaque);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
+}
+/* Live Home docks ANIMATE BACKGROUND at the same bottom-left corner
+   (#home-motion, css/experience.css). Lift this chip one --tap so the
+   two never share a hit target (survey ~500px, 2026-10-05). --safe-b
+   already includes --sab, matching the toggle's dock. Desktop Classic
+   keeps ANIMATE top-left, so a bare :has(home-motion) lift would
+   still walk INSTALL on the title-desktop golden. */
+body[data-shape="tall"]:has(#home-motion:not([hidden])) #install-chip {
+  bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+}
+:where(body[data-shape="wide"][data-density="compact"]):has(#home-motion:not([hidden])) #install-chip {
+  bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+}
+body[data-shape="wide"]:has(#overlay[data-home-scene]:not([data-home-scene="static"])):has(#home-motion:not([hidden])) #install-chip {
+  bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
+}
+/* Same layer as experience.css's live-scene `padding: var(--gap)` shorthand,
+   which would otherwise wipe the leftover-row inset (menus.css is
+   @layer components and loses). Extra attrs beat the shorthand. */
+body[data-shape="tall"] #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons {
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+  scrollbar-width: none;
+}
+body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([hidden])) #overlay #menu-buttons {
+  padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+  scroll-padding-bottom: calc((var(--tap) + var(--gap)) * 2);
+}
+body[data-shape="wide"] #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons {
+  padding-bottom: calc(var(--tap) + var(--gap));
+  scroll-padding-bottom: calc(var(--tap) + var(--gap));
+}
+/* UPDATE READY (js/ui/update-check.js): a newer deploy is live. Above the
+   non-dialog layers (title, #select, #career, #carsetup), bottom-right clear
+   of the safe area, a full tap target; never shown in a race (the module hides
+   it there). The HUD chip's plate, not the team accent (nontext-contrast:
+   --accent is decoration only). */
+#update-chip {
+  position: fixed; z-index: 9000;
+  right: calc(var(--sar) + var(--gap)); bottom: calc(var(--sab) + var(--gap));
+  min-height: var(--tap); padding: 0 var(--gap);
+  border-radius: var(--r-md);
+  background: var(--plate-opaque);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
+}
+#install-chip[hidden] { display: none; }
+#update-chip[hidden] { display: none; }
+/* NOT UNDER A MODAL DIALOG. showModal() puts dialog.screen (RESULTS after
+   every race, SETTINGS, STANDINGS, DATA HUB…) in the top layer, which no
+   z-index outranks, and makes everything outside it inert — the chip sat under
+   the ::backdrop, visible and unpressable. A popover would draw above it and
+   still be inert ("except the dialog and its descendants": MDN, showModal()).
+   It stands down like #save-warning and is back when the dialog closes. */
+body:has(dialog:modal) #update-chip { display: none; }
+
+/* ===== Boot-critical-path trim (from css/responsive.css) =====
+   Same @layer overlays. These rules style title-hidden or in-race UI only,
+   so they ride print→all with the rest of overlays.css / select / hud. */
+
+/* ---------- LARGE SCREENS (iPad, desktop) ---------- */
+/* The height half of this condition now comes from data-density, measured in the
+   units the content is actually laid out in (js/ui/sheet-shape.js). Orientation
+   and width stay media queries: zoom does not distort either.
+
+   `:where()` CARRIES ZERO SPECIFICITY, and that is the whole reason it is used
+   here rather than a bare prefix. A plain `.sheet[data-density=...]` ancestor adds
+   a class and an attribute to every selector in the block, which is enough to beat
+   a LATER rule that used to win — measured: #sel-inner's height cap started
+   overriding a rule it had always lost to, and the desktop select golden moved.
+   Wrapped in :where(), these rules keep exactly the specificity they had. */
+@media (min-width: 900px) {
+  /* The select sheet is the one screen that wants to fill the space it is
+     given rather than shrink to content — it is the game's "home".
+     THE CAP IS A FRACTION WITH A FLOOR, not a flat 720. On a rotated portrait
+     monitor (1080x1920) a flat cap left the sheet 720px tall in ~1896px of
+     room — about 60 % of the screen was empty black, on the one display shape
+     that has height to spare. 78 svh follows the screen; the 720px floor keeps
+     every landscape desktop exactly as it was, because 78 % of 800-937px is
+     less than 720 anyway.
+     Measured, sheet height x the resulting `data-shape` (js/ui/sheet-shape.js):
+       1280x800   720 -> wide    (unchanged)
+       1440x900   720 -> wide    (unchanged)
+       1920x1080  842 -> wide    (0.83 ratio, still columns)
+       1080x1920 1498 -> TALL    (1.47 ratio, and bands is the right answer)
+     The rotated monitor is the only one that moves, and it moves onto the band
+     layout the shape system was built to choose — which is why this is worth
+     doing NOW and was not before: with the old orientation proxy, a taller sheet
+     there would have kept the columns and just stretched them. */
+  /* #sel-inner IS the sheet, so the condition goes ON it, not in front of it — a
+   `:where(.sheet...) #sel-inner` prefix asks for the sheet to contain itself and
+   matches nothing, which is exactly how the desktop select golden moved. */
+  /* --svhz, not bare svh: #sel-inner IS the sheet, so this height resolves
+     INSIDE `zoom: var(--ui-scale)` where raw viewport units multiply — at
+     40% the select sheet was getting 31.2svh of the intent's 78. Same trap
+     as the compensated-unit note in tokens.css. */
+  #sel-inner:where(:not([data-density="compact"])) { height: min(100%, max(720px, calc(78 * var(--svhz)))); }
+}
+
+
+/* Scale up HUD readouts on large screens so they're legible at arm's length.
+   The second clause is a 10–11" tablet in landscape (iPad 1180x820, 1194x834):
+   a screen read at arm's length that the 1200px cut handed the phone cluster
+   (28px speed, 48px gear, 128px map). The height term keeps a desktop browser
+   dragged to 1100x600 on the phone tier it fits. */
+@media (min-width: 1200px), ((min-width: 1024px) and (min-height: 740px)) {
+  .hud-box { padding: 5px 16px; }
+  .hud-value { font-size: calc(23px * var(--hud-text-boost, 1)); }
+  .hud-label { font-size: var(--fs-micro); }
+  /* minimap is 160px here — gaps dock beside it (10+160+8), top-aligned with it
+     by the base rule. MAP OFF keeps the map's corner (css/hud.css): this layer
+     wins the cascade whatever the specificity, so the override has to step
+     aside itself or the strip floats where the map was. */
+  body:not(.hud-hide-map) .hud-gaps { left: calc(178px + var(--sal) / var(--hud-z)); }
+  /* The dropped state reads the MEASURED --hud-top-h (css/hud.css), which is
+     taller here on its own; a 72px literal in this layer beat that measure and
+     the broadcast tower's. */
+  #hud-speed { font-size: calc(42px * var(--hud-text-boost, 1)); }
+  #hud-gear  { font-size: 68px; }
+  #hud-tach  { width: 150px; height: 18px; }
+  #hud-energy { width: 150px; height: 16px; }
+  /* The chips scale with the rest of the cluster. Landscape sizes them for a
+     phone (11px), and desktop now shares that grid — at arm's length on a 27"
+     monitor an 11px countdown is the one readout you cannot actually read. */
+  #hud-ot, #hud-aero { font-size: 15px; padding: 6px 12px; }
+  /* 10px off the bottom is a phone's budget, spent because a phone has no
+     height to spare. A monitor does, and at this size the cluster hugging the
+     edge reads as something that fell off the screen. */
+  #hud-dock { bottom: calc(22px + var(--sab)); }
+  #minimap { width: 160px; height: 160px; }
+}
+
+
+/* ---------- SCREEN LOOKS: per-screen APPEARANCE folds (js/ui/screen-looks.js) ----------
+   Every rule keys on an <html data-look-<screen>-<knob>> attribute that the
+   engine writes ONLY for a non-default answer, and reads ranges from the
+   matching --look-<screen>-<knob> token (v / 100). Untouched, nothing here
+   matches. In this layer on purpose: css/data.css and css/track-detail.css are
+   @layer overlays too, and a components-layer rule would silently lose.
+   The SHARED CORE knobs live here; each screen's own knobs live beside its
+   other rules (css/components.css pause block, css/data.css, css/menus.css,
+   css/career.css, css/carsetup.css, css/overlays.css).
+   POPUPS scope (one fold): `dialog.screen.dim:not(#pmsettings, #pausemenu,
+   #race-settings)` — every dimmed pop-up (standings, quali, results, the
+   team / duel pickers, season setup, VS FRIEND, customise, HOW TO PLAY,
+   music, career offers / guide / history, circuit details) except the
+   settings page itself and the two sheets with folds of their own. */
+
+/* A CLOSED dialog this file styles restates its closed state first (the
+   guard tests/unit/css-layers.test.mjs holds every winning-layer rule to:
+   layout in the hidden -> showModal seam drops child boxes for good). The
+   peek reveal below out-ranks these on purpose, for exactly as long as the
+   peek lasts — js/ui/screen-looks.js flushes the box away when it ends. */
+#pausemenu:not([open]) { display: none; }
+/* Short phone (≤400px tall): RACE TOOLS as a 2-col grid with no empty cell.
+   experience.css's #pm-quick-doors is 3-col in this same overlays layer; the
+   #pausemenu id prefix wins on specificity. An odd leftover (REWIND & RETRY
+   alone, or RECOVER when REPLAY is absent) spans the row so the tray never
+   shows a hole. Floors stay at --tap (HUD survey bc-b3058e3a). */
+@media (max-height: 400px) {
+  #pausemenu #pm-quick-doors {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  #pausemenu #pm-quick-doors > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+  #pausemenu #pm-quick-doors button,
+  #pausemenu #pm-checkpoint summary {
+    min-height: var(--tap);
+  }
+}
+#race-settings:not([open]) { display: none; }
+#standings:not([open]) { display: none; }
+#datahub:not([open]) { display: none; }
+
+/* PEEK REVEAL. The target's hidden / open attributes are never touched (every
+   layer, focus and input module keys on them); display alone puts it behind
+   the ghosted settings page, which stays modal in the top layer, so nothing
+   revealed can take a pointer or focus. A closed dialog is not in the top
+   layer, so it takes a z-index over the title screen. !important because the
+   targets carry `hidden`, and `[hidden] { display: none !important }` above
+   (this layer) is beaten only by an important rule of higher specificity. */
+:root[data-appearance-peek="pause"] #pausemenu:not([open]),
+:root[data-appearance-peek="race"] #race-settings:not([open]),
+:root[data-appearance-peek="popups"] #standings:not([open]) { display: grid !important; z-index: 30; }
+:root[data-appearance-peek="datahub"] #datahub:not([open]) { display: flex !important; z-index: 30; }
+:root[data-appearance-peek="select"] #select[hidden],
+:root[data-appearance-peek="career"] #career[hidden],
+:root[data-appearance-peek="garage"] #carsetup[hidden] { display: grid !important; }
+/* The music card is hidden until a track plays; a pause peek shows its shell
+   so MUSIC CARD has something to hide. */
+:root[data-appearance-peek="pause"]:not([data-look-pause-music="hide"]) #pm-now-card[hidden] { display: flex !important; }
+
+/* WIDTH — a share of each sheet's OWN --sheet-w cap. */
+:root[data-look-select-w] #sel-inner { width: min(100%, calc(var(--sheet-w, 520px) * var(--look-select-w, 1))); }
+:root[data-look-race-w] #race-settings > .sheet { width: min(100%, calc(var(--sheet-w, 520px) * var(--look-race-w, 1))); }
+:root[data-look-career-w] #cr-inner { width: min(100%, calc(var(--sheet-w, 520px) * var(--look-career-w, 1))); }
+:root[data-look-popups-w] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { width: min(100%, calc(var(--sheet-w, 520px) * var(--look-popups-w, 1))); }
+
+/* DENSITY — SheetShape's own compact tier (js/ui/sheet-shape.js reads
+   --compact-at off the sheet): ROOMY never goes compact, TIGHT always does.
+   1px, not 0: a zero reads as unset and falls back to the default. */
+:root[data-look-select-density="roomy"] #sel-inner,
+:root[data-look-race-density="roomy"] #race-settings > .sheet,
+:root[data-look-career-density="roomy"] #cr-inner,
+:root[data-look-garage-density="roomy"] #cs-inner { --compact-at: 1px; }
+:root[data-look-popups-density="roomy"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 1px; }
+:root[data-look-select-density="tight"] #sel-inner,
+:root[data-look-race-density="tight"] #race-settings > .sheet,
+:root[data-look-career-density="tight"] #cr-inner,
+:root[data-look-garage-density="tight"] #cs-inner { --compact-at: 99999px; }
+:root[data-look-popups-density="tight"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) > .sheet { --compact-at: 99999px; }
+
+/* BUTTON HEIGHT — the tap tokens, scaled from their shipped values
+   (--tap-0 / --chip-h-0, css/tokens.css), so the touch floor scales too. */
+:root[data-look-datahub-btn] #datahub { --tap: calc(var(--tap-0) * var(--look-datahub-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-datahub-btn, 1)); }
+:root[data-look-select-btn] #select { --tap: calc(var(--tap-0) * var(--look-select-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-select-btn, 1)); }
+:root[data-look-race-btn] #race-settings { --tap: calc(var(--tap-0) * var(--look-race-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-race-btn, 1)); }
+:root[data-look-career-btn] #career { --tap: calc(var(--tap-0) * var(--look-career-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-career-btn, 1)); }
+:root[data-look-garage-btn] #carsetup { --tap: calc(var(--tap-0) * var(--look-garage-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-garage-btn, 1)); }
+:root[data-look-popups-btn] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --tap: calc(var(--tap-0) * var(--look-popups-btn, 1)); --chip-h: calc(var(--chip-h-0) * var(--look-popups-btn, 1)); }
+
+/* CORNERS — the radius tokens every card and button reads. */
+:root[data-look-pause-corners="sharp"] #pausemenu,
+:root[data-look-datahub-corners="sharp"] #datahub,
+:root[data-look-select-corners="sharp"] #select,
+:root[data-look-race-corners="sharp"] #race-settings { --r-xs: 0px; --r-sm: 0px; --r-md: 0px; --r-lg: 0px; }
+:root[data-look-career-corners="sharp"] #career,
+:root[data-look-garage-corners="sharp"] #carsetup { --r-xs: 0px; --r-sm: 0px; --r-md: 0px; --r-lg: 0px; }
+:root[data-look-popups-corners="sharp"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --r-xs: 0px; --r-sm: 0px; --r-md: 0px; --r-lg: 0px; }
+:root[data-look-pause-corners="pill"] #pausemenu,
+:root[data-look-datahub-corners="pill"] #datahub,
+:root[data-look-select-corners="pill"] #select,
+:root[data-look-race-corners="pill"] #race-settings { --r-sm: var(--r-pill); --r-md: var(--r-pill); }
+:root[data-look-career-corners="pill"] #career,
+:root[data-look-garage-corners="pill"] #carsetup { --r-sm: var(--r-pill); --r-md: var(--r-pill); }
+:root[data-look-popups-corners="pill"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings) { --r-sm: var(--r-pill); --r-md: var(--r-pill); }
+
+/* BACKGROUND — the scrim behind the card. Dialogs paint it twice (their own
+   box and ::backdrop, which reads --pause-wash / --pause-scrim, see
+   css/components.css), so both layers move together. */
+:root[data-look-race-dim="solid"] #race-settings.screen.dim { background: var(--scrim-heavy); }
+:root[data-look-popups-dim="solid"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { background: var(--scrim-heavy); }
+:root[data-look-datahub-dim="solid"] #datahub,
+:root[data-look-select-dim="solid"] #select,
+:root[data-look-career-dim="solid"] #career { background: var(--scrim-heavy); }
+:root[data-look-race-dim="soft"] #race-settings.screen.dim { background: color-mix(in oklab, var(--scrim) 50%, transparent); }
+:root[data-look-popups-dim="soft"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { background: color-mix(in oklab, var(--scrim) 50%, transparent); }
+:root[data-look-datahub-dim="soft"] #datahub,
+:root[data-look-select-dim="soft"] #select,
+:root[data-look-career-dim="soft"] #career { background: color-mix(in oklab, var(--scrim) 50%, transparent); }
+:root[data-look-race-dim="off"] #race-settings.screen.dim { background: transparent; }
+:root[data-look-popups-dim="off"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) { background: transparent; }
+:root[data-look-datahub-dim="off"] #datahub,
+:root[data-look-select-dim="off"] #select,
+:root[data-look-career-dim="off"] #career { background: transparent; }
+:root[data-look-race-dim="solid"] #race-settings::backdrop { --pause-scrim: 0.62; }
+:root[data-look-popups-dim="solid"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail)::backdrop { --pause-scrim: 0.62; }
+:root[data-look-race-dim="soft"] #race-settings::backdrop { --pause-wash: 6%; --pause-scrim: 0.19; }
+:root[data-look-popups-dim="soft"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail)::backdrop { --pause-wash: 6%; --pause-scrim: 0.19; }
+:root[data-look-race-dim="off"] #race-settings::backdrop { --pause-wash: 0%; --pause-scrim: 0; }
+:root[data-look-popups-dim="off"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail)::backdrop { --pause-wash: 0%; --pause-scrim: 0; }
+
+/* #track-detail (a full-bleed popup) keeps its opaque page and its
+   name | close head: BACKGROUND OFF would show #select through it, and a
+   centred head pulls the close button into the middle. */
+/* HEADINGS — the sheet's title band, centred. Rows and forms keep their
+   LABEL ‹ VALUE › alignment. */
+:root[data-look-datahub-head="centre"] #datahub .sheet-head,
+:root[data-look-select-head="centre"] #select .sheet-head,
+:root[data-look-race-head="centre"] #race-settings .sheet-head { justify-content: center; text-align: center; }
+:root[data-look-career-head="centre"] #career .sheet-head,
+:root[data-look-garage-head="centre"] #carsetup .sheet-head { justify-content: center; text-align: center; }
+:root[data-look-popups-head="centre"] dialog.screen.dim:not(#pmsettings, #pausemenu, #race-settings, #track-detail) .sheet-head { justify-content: center; text-align: center; }
+
+
+} /* @layer overlays */
+
+@layer components {
+/* ---------- pane-pair: the LIST/DETAIL primitive ----------
+   #select, #carsetup and #career are all the same canonical layout — Material
+   calls it list-detail, and every adaptive UI framework ships one — and this
+   project had written it three times, in three files, with three sets of
+   hand-picked numbers. That is why fixing the garage taught us nothing about the
+   select screen, and why the "action bar steals a row from the list" bug had to
+   be found and fixed separately in each of them.
+   What every copy actually said, once the incidental differences are stripped:
+
+     - the columns live on the SHEET, never in a `@container` block, because the
+       sheet IS the query container and a container query cannot style its own
+       container
+     - every direct child spans both columns by default, so the narrow layout is
+       the plain single-column stack it always was
+     - when the pair is on, the body goes `display: contents` so the two panes
+       become grid items of the sheet itself
+     - the DETAIL pane spans the body row AND the foot row, i.e. down to the
+       sheet floor, because the action bar only ever holds buttons that belong
+       under the LIST pane
+     - the foot row is `min-content`, NOT `auto`: an auto track's growth limit is
+       max-content, and a scroller spanning into it hands over its entire content
+       height (a 24-row list once turned a 76px bar into 358px)
+
+   ON/OFF is an attribute, not a container query, for one reason: a query
+   condition cannot take a custom property, so `@container sheet (min-width:
+   400px)` and `(min-width: 620px)` are two different blocks and the shared body
+   would have to be duplicated into both — which is the exact problem being
+   solved. js/game/sheetshape.js already runs one ResizeObserver over every
+   sheet; it reads `--pair-at` and writes `data-pair`. Attributes also carry
+   specificity, which container queries do not — the tie that cost this project
+   two debugging sessions.
+   Screens tune it with five properties and nothing else:
+     --pair-at       the sheet width at which the pair turns on (default 620px)
+     --pair-compact  off = force stack when data-density=compact (default off)
+                     wide = pair when compact+horizontal, stack when compact+tall
+                     empty/on = keep reading --pair-at (safe default)
+     --pair-split    the SIDE column's track      (default minmax(0, 1fr))
+     --pair-main     the MAIN column's track      (default minmax(0, 1fr))
+     --pair-gap      the gutter between the panes (default 0.8 * --pad)
+
+   THE SLOTS ARE NAMED BY POSITION, NOT BY ROLE. `.pair-side` is the narrow
+   column with the action bar under it; `.pair-main` is the wide one that runs to
+   the sheet floor. In the canonical list-detail the side IS the list — the
+   garage's category rail, the career hub's left pane — but #select inverts it:
+   its side is the circuit PREVIEW and its main is the circuit LIST, because the
+   list is what needs the height and the preview is what needs a bounded column.
+   Naming the slots list/detail would have made that screen read as a mistake.
+
+   THE UNMEASURED STATE MUST BE A VALID LAYOUT, not a race the observer has to
+   win. `data-pair` is absent for the frame between a screen being shown and the
+   first ResizeObserver callback, so whatever the screen looks like WITHOUT the
+   attribute has to work at every width — including widths where the pair would
+   be on. #select assumed the opposite (its scroller was keyed on
+   `max-width: 619px`, i.e. "wide means split"), so in that frame a wide sheet
+   was stacked AND had no scroller, and a ~350px preview card plus the list
+   spilled past it: four clipped elements on a landscape phone, three on most
+   desktops, on every single run.
+
+   ONE RULE FOR SCREENS USING IT: gate the screen's own STACKED-layout
+   declarations with `:not([data-pair="on"])`. These placement rules are class-
+   and attribute-based (0,3,0) and a plain `#id` rule is (1,0,0), so an ungated
+   `#x-body { display: flex }` silently wins and you get a flex column laid out
+   inside two grid tracks — measured on the garage: the rail rendered 402px wide
+   in a 115px track and the option list came out 10px tall. Use `:not(... "on")`
+   rather than `[data-pair="off"]`, so the stack is also what an unmeasured sheet
+   gets in the first frame, or if the script never loads. */
+.pane-pair {
+  --pair-compact: off;
+  grid-template-columns: var(--pair-split, minmax(0, 1fr)) var(--pair-main, minmax(0, 1fr));
+  grid-template-rows: auto minmax(0, 1fr) min-content;
+  column-gap: var(--pair-gap, calc(var(--pad) * 0.8));
+}
+.pane-pair > .sheet-head,
+.pane-pair > .sheet-body,
+.pane-pair > .sheet-foot { grid-column: 1 / -1; }
+
+.pane-pair[data-pair="on"] > .sheet-body { display: contents; }
+.pane-pair[data-pair="on"] > .sheet-head { grid-column: 1 / -1; grid-row: 1; }
+.pane-pair[data-pair="on"] .pair-side   { grid-column: 1; grid-row: 2; min-height: 0; }
+.pane-pair[data-pair="on"] .pair-main { grid-column: 2; grid-row: 2 / 4; min-height: 0; }
+.pane-pair[data-pair="on"] > .sheet-foot { grid-column: 1; grid-row: 3; }
+
+/* A FOOT UNDER BOTH COLUMNS — the opt-out for a pair whose side slot is a RAIL.
+   The default above puts the action bar in the SIDE column, which is right when
+   that column is CONTENT (#select's preview card, #career's left pane) and
+   wrong when it is a narrow rail. The garage is the wrong case: its rail is
+   `minmax(112px, 27%)` (css/carsetup.css) while BACK+DONE need ~161px, so the
+   bar wrapped to two rows and — measured at 852x393, the primary play shape —
+   the foot came out 132px tall beside an 88px category rail. The action bar was
+   half again as tall as the twelve categories it sat next to, on the screen
+   with the least height in the app.
+   A slot on the primitive, not a fourth patch in carsetup.css: the same defect
+   ("the action bar steals a row from the list") has already been found three
+   times in three files, which is why .pane-pair exists at all.
+   #select and #season-setup also opt in: BACK + YOUR CAR + NEXT (and
+   BACK + APPLY) are three/two 110px buttons that wrap inside the ~50% side
+   column. Career keeps the default — a full-width foot clips UPCOMING.
+   Specificity is (0,4,0) against the primitive's (0,3,0), so it wins on its own
+   — no id, no !important. .pair-main stops spanning into row 3 because in this
+   shape the foot is underneath it too. */
+.pane-pair.pair-foot-full[data-pair="on"] > .sheet-foot { grid-column: 1 / -1; grid-row: 3; }
+.pane-pair.pair-foot-full[data-pair="on"] .pair-main { grid-row: 2; }
+
+/* ---------- classification rows ----------
+   A position, a team colour, a name and a number: the race result, the
+   championship standings, the qualifying sheet and the career hub all show the
+   same shape, and a standings table should not look like a different game
+   depending on which screen it is on.
+
+   These lived twice, scoped to #results-table (css/overlays.css) and to
+   #standings-body (css/track-detail.css) — byte-identical apart from the prefix
+   and a font-size. A third screen needing them is what made the duplication a
+   real problem rather than a tidiness one, so the rules are hoisted here
+   UNSCOPED and each container keeps only what is genuinely its own (its
+   font-size). Podium and player rows are the same three accent colours
+   everywhere: gold/silver/bronze for the top three, the HUD's lime for you. */
+.res-row {
+  display: flex; gap: 10px; padding: 8px 6px;
+  align-items: center; border-radius: var(--r-sm);
+}
+.res-row:nth-child(even) { background: rgba(255, 255, 255, 0.03); }
+/* PODIUM ROWS come BEFORE the player's row on purpose: the two are the same
+   specificity, so source order decides, and with the metals last a player who
+   finished P1-P3 lost the lime ink AND the opaque sticky ground below — the
+   metal's translucent wash let the scrolled rows show through a sticky row.
+   You win the row; the metal stays as the accent on the left rule and the
+   position cell, which name the metal outright rather than inherit the row. */
+.res-row.p1 { color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, transparent); border-left: 3px solid var(--gold); padding-left: 5px; }
+.res-row.p2 { color: var(--silver); background: color-mix(in srgb, var(--silver) 7%, transparent); border-left: 3px solid var(--silver); padding-left: 5px; }
+.res-row.p3 { color: var(--bronze); background: color-mix(in srgb, var(--bronze) 7%, transparent); border-left: 3px solid var(--bronze); padding-left: 5px; }
+.res-row.p1 .res-pos, .res-row.p2 .res-pos, .res-row.p3 .res-pos { font-weight: 700; }
+.res-row.p1 .res-pos { color: var(--gold); }
+.res-row.p2 .res-pos { color: var(--silver); }
+.res-row.p3 .res-pos { color: var(--bronze); }
+/* YOUR ROW STICKS. A championship table is a COMPARISON surface, and the
+   comparison a player actually makes is "me against the front" — which is the
+   one comparison the table stops supporting the moment your row scrolls out of
+   view. At P17 of 22 you can see the leaders or see yourself, never both.
+   Datawrapper built sticky rows for exactly this question ("Compared to what?"),
+   and it is four declarations here.
+
+   Sticky to BOTH edges: the row pins to the top while you scroll down past it
+   and to the bottom while it is still below the fold, so it is on screen at
+   every scroll position without ever leaving its true rank order.
+
+   THE BACKGROUND MUST BE OPAQUE. A sticky element paints over its siblings, and
+   the 8% tint this used to carry would have let the rows underneath show
+   through it. Composited over --surf-1 rather than left translucent, so it
+   reads identically when parked and when in flow. */
+.res-row.you {
+  color: var(--you); font-weight: 700; padding-left: 5px;
+  background: color-mix(in oklab, var(--you) 8%, var(--surf-1));
+  /* Sticky TOP only. `bottom: 0` as well parked a late (P17+) row over the
+     story podium on short phone sheets — mid-word names under a green bar on
+     portrait, and empty-looking P1–P3 slots on landscape where the bar ate
+     the whole name block (layout-audit 2026-10-04). Top-sticky still keeps
+     "me vs the front" while scrolling the classification list. */
+  position: sticky; top: 0; z-index: 1;
+}
+/* Reduced transparency swaps --surf-1's ground; keep the sticky row opaque over
+   whatever that resolves to rather than re-stating a hex here. */
+@media (prefers-reduced-transparency: reduce) {
+  .res-row.you { background: color-mix(in oklab, var(--you) 8%, var(--surf-3)); }
+}
+/* A podium class already supplies the left rule, so only a non-podium player row
+   draws its own — otherwise P1-and-you would stack two borders. */
+.res-row.you:not(.p1):not(.p2):not(.p3) { border-left: 3px solid var(--you); }
+.res-pos { width: 26px; text-align: right; color: var(--dim); font-family: var(--font-hud); font-variant-numeric: tabular-nums; }
+.res-swatch { width: 4px; height: 20px; border-radius: var(--r-xs); flex-shrink: 0; }
+/* min-width: 0 + two-line clamp: a 22-char single-token MY TEAM name (the
+   maxlength the customize form allows) cannot line-break, and a flex item's
+   default min-width: auto refuses to shrink below it — pushing the fixed 62px
+   points column past the sheet edge, where .sheet's overflow: hidden clipped
+   it silently. Prefer wrap/clamp over a single-line ellipsis; drop .res-pts
+   on narrow widths first (below) so the name keeps the column. */
+.res-name {
+  flex: 1; min-width: 0; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  white-space: normal; overflow-wrap: anywhere;
+}
+.res-name > .q-time { display: block; font-size: var(--fs-micro); }
+.res-pts { width: 62px; text-align: right; white-space: nowrap; font-family: var(--font-hud); font-variant-numeric: tabular-nums; }
+/* Narrow phone portrait (390/360): the points cell stole ~62px and cut
+   `.res-name` to "RUS  George…" — hide classification pts before the name
+   needs an ellipsis. Sibling of `.res-pos` only, so TT best-lap `.res-pts`
+   (no position cell) keeps its clock. */
+body[data-width="narrow"] #results-table > .res-row > .res-pos ~ .res-pts { display: none; }
+body[data-width="narrow"] #results-table > [data-results-part="ranking"] > .res-row > .res-pos ~ .res-pts { display: none; }
+/* TYRE STINT STRIP (js/physics/tyre-model.js stints(), drawn by results-sheet.js
+   and only while TYRE WEAR is on). A PROPORTIONAL bar, not a row of chips: each
+   segment's width is its share of the car's laps, so a glance down the column
+   compares strategies — one long segment is a car that went to the end, three
+   short ones is a car that could not. Butted, with no gap and no padding, which
+   is also why this rule adds no raw spacing to a count that asserts exact
+   equality. The segment COLOURS are the compound's own band, written inline by
+   the sheet from the tyre record, so they stay out of the CSS colour count and
+   cannot drift from the HUD's. */
+.res-stints { display: flex; width: 78px; height: 6px; border-radius: var(--r-pill); overflow: hidden; flex-shrink: 0; }
+/* A phone: the name wins the row. At 78px the strategy bar took the middle
+   third of a 390px results row and the name ellipsised to "RUS Geor…"; the
+   bar stays proportional at half the width. */
+body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
+.res-stint { height: 100%; min-width: 2px; }
+/* RESULTS SETTLE. The classification lands row by row (18 ms apart, capped at
+   the 12th row) instead of appearing; results-sheet.js writes --i per row.
+   Scoped to the results table only — #ch-body / #q-body / #standings-body
+   reuse .res-row and stay instant. Inside the no-preference query so the
+   `both` fill can never hold a row invisible for a reduced-motion reader. */
+@media (prefers-reduced-motion: no-preference) {
+  #results-table .res-row { animation: row-in 0.22s cubic-bezier(0.2, 0.7, 0.3, 1) calc(min(var(--i, 0), 12) * 18ms) both; }
+}
+@keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
+
+/* ---------- section label ---------- */
+.sel-label {
+  color: var(--steel);
+  font-size: var(--label); font-weight: 700;
+  letter-spacing: var(--ls-5);
+  margin: 0 0 calc(var(--gap) * 0.5);
+}
+/* A short accent tick before every section label. Dim uppercase text at 10-12px
+   is easy to skim past; the tick gives each section a fixed left edge for the
+   eye to run down, and it is the same skewed red mark the title and the primary
+   buttons use, so the sheets read as one family. */
+.sel-label::before {
+  content: ""; display: inline-block;
+  width: 3px; height: 0.82em;
+  margin-right: 7px; vertical-align: -0.04em;
+  background: var(--accent);
+  transform: skewX(-12deg);
+  border-radius: var(--r-xs);
+}
+
+/* ---------- term-rail (How to Play / career guide / career history) ----------
+   One strip + chip box. Idle ink and wide/compact placement stay on the
+   screen sheets: HTP is ink, guide/history are dim; placement is measured. */
+#htp-contents, #cg-contents, #ch-contents {
+  display: flex; align-items: center; justify-content: flex-start;
+  gap: calc(var(--gap) * 0.4); min-width: 0;
+  padding: 0 var(--pad) calc(var(--gap) * 0.35);
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; touch-action: pan-x;
+  scrollbar-width: none;
+}
+#htp-contents > :first-child, #cg-contents > :first-child, #ch-contents > :first-child {
+  margin-inline-start: auto;
+}
+#htp-contents::-webkit-scrollbar, #cg-contents::-webkit-scrollbar, #ch-contents::-webkit-scrollbar {
+  display: none;
+}
+#htp-contents a, #cg-contents a, #ch-contents a {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; min-height: var(--chip-h);
+  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.65);
+  border: 1px solid var(--plate-line); border-radius: var(--r-pill);
+  background: var(--plate);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
+  text-decoration: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  #htp-contents a:hover, #cg-contents a:hover, #ch-contents a:hover {
+    background: var(--plate-hover); color: var(--text);
+  }
+}
+#htp-contents a:active, #cg-contents a:active, #ch-contents a:active {
+  background: var(--plate-press); color: var(--text);
+}
+#htp-contents a:focus-visible, #cg-contents a:focus-visible, #ch-contents a:focus-visible {
+  background: var(--plate-hover); color: var(--text);
+  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
+  outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
+}
+#htp-contents a[aria-current="true"],
+#cg-contents a[aria-current="true"],
+#ch-contents a[aria-current="true"] {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
+
+/* Results stint descriptions share the driver's column and stay inside it. */
+#results .res-name [data-stint-details] { max-width: 100%; font-size: var(--fs-micro); font-weight: normal; }
+#results .res-name [data-stint-details] > summary { cursor: pointer; min-height: var(--tap); align-content: center; }
+#results .res-name [data-stint-details] > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#results .res-name [data-stint-text] { white-space: normal; overflow-wrap: anywhere; }
+
+#results .res-name:has([data-stint-details]) { display: block; -webkit-line-clamp: unset; line-clamp: unset; }
+
+} /* @layer components */

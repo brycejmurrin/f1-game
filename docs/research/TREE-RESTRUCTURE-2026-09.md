@@ -1,0 +1,803 @@
+# Tree restructuring — decision and plan of record (2026-09-03)
+
+> Errata: none yet. Landed: Phase 0 Commit A `bcf17c8`, Commit B `f2d6f44`
+> (the `?v=dev` policy, `bump-cache --apply` refusal, sw.js dev network-first
+> rule, `cache-bump-only` deleted; unit-suite count 186), deploy merge
+> `3685460` (deploy branch tip), Phase 1-lite (tests-split + physics-baseline-present
+> deleted, mcp tests split fast/`test:mcp`, module-size → `tests/data/ratchets.json` +
+> `tools/check/ratchets.mjs`; unit-suite count 185). Live checklist: §Status and remaining steps.
+
+## Context
+
+The owner asked for a fresh, deep read of the whole project with a view to a
+MAJOR tree and file restructuring, explicitly re-opening the module ratchets /
+limits and the current layout under a comprehensibility lens: is this the
+easiest structure for a human or an agent to understand and change safely?
+They also asked which tests/guards, tools and docs are still necessary and
+which to combine, delete or split.
+
+The 2026-08 panels (STRUCTURE-REDECISION, ARCHITECTURE-REDESIGN) upheld the
+current layout on migration-risk grounds and adopted "Bedrock"; Phase 0 and
+half of Phase 1 landed, Phase 2 (a generated manifest/shell) was authorized
+and never executed. Both panels named that generator as THE precondition
+for any js/ move. This plan executes the precondition first, then does the
+moves the panels deferred, and cuts the guard/test/tool/doc surface to what
+earns its keep.
+
+Method (this session, plan mode, read-only): nine Fable deep-readers (whole
+files read; ~500 numbered file:line claims) → eight Sonnet verifiers
+re-checking every claim (≈85% confirmed; every conclusion-bearing number
+below survived or is corrected) → one Fable design review of the draft.
+History is a 199-commit squash (2026-09-01..03), so churn is not evidence.
+
+Baseline (2026-09-03, branch `claude/project-structure-review-p6eu08`):
+
+| area | files | lines | note |
+|---|---|---|---|
+| js/ (all) | 214 | 131,674 | 15,507 is baked `light-presets.js` |
+| js/game.js | 1 | 9,273 | 43% comment-only lines; ceiling 9,274 |
+| js/game/ | 59 | 45,696 | six module lifecycles in one dir |
+| js/render/ | 26 | 25,883 | WGX 9,528 + TLX 7,864 deferred, opt-in only |
+| js/track + js/circuits | 20 + 80 | 9,592 + 24,970 | per-circuit data in 7 homes |
+| js/car / data / net | 8 / 8 / 11 | 6,569 / 3,738 / 5,651 | mostly clean domains |
+| index.html | 1 | 1,905 | 138 script tags; in 77 of 199 commits |
+| css/ | 11 | 9,988 | |
+| tests/unit | 188 | 45,577 | 140 in `test:tooling-fast`; 1,848 source-text pins |
+| tests/specs | 115 | 32,739 | 55 need a browser; 25 VM-portable; 11 fully twinned |
+| tests/specs *(re-measured 2026-09-04)* | **114** | **32,286** | the 115th entry was the `menu-baseline.spec.js-snapshots` DIRECTORY, not a file. **14** specs have a named VM twin (4,307 lines); 11 are twinned test-for-test |
+| tools/ | 160 | ~39,400 | flat; ~27 with no functional caller |
+| docs/ | 137 | 39,575 | 28 top-level; research 22; archive 16.5k |
+| .claude/skills | 31 skills / 75 files | 6,454 | |
+| npm scripts | 54 (43 `test*`) | | 12 topical browser groups + node groups |
+
+## Diagnosis (verified)
+
+1. **Every file costs five to seven edits.** New eager js file = file +
+   `<script>` tag at the right index + `FULL` entry in `tools/manifest.cjs`
+   + `HARD_EDGES` pair if eval-time + `bump-cache --apply` (rewrites 151
+   committed `?v=` hashes) + often a pick-tests rule + periodically a
+   `NODE_CEILING` bump in `css-class-ratchet.test.mjs` (it counts `<script>`
+   tags as shell nodes). A lazy file edits a game.js mirror array and a
+   sw.js optional-set line instead; both are guard-asserted
+   (`load-order.test.mjs:192-210, 248-355`), so omission is caught, but the
+   rosters live in three hand copies. `manifest.cjs:4-9` says index.html
+   "cannot be generated"; `bump-cache.mjs:129-135` already rewrites its
+   tags in place. index.html is in 77 of 199 commits, almost all hash bumps.
+2. **`js/game/` holds six lifecycles in one directory**: 22 `create(G)`
+   modules, 4 `init(gfx)`, 11 self-initialising DOM helpers, plain data,
+   one `create(store, cb)`, one `create(_G)` that ignores G. Confusable
+   clusters (cameras/cam-modes/cam-tune/cam-tuner; lighting/light-store/
+   light-presets/tuner; perf/loop-health/gfx-quality/gfx-debug) and files
+   that bundle unrelated screens (photomode.js owns the lighting tuner's
+   buttons; gfx-quality.js is ~55% renderer picker; cockpit-opts.js has a
+   second IIFE building the METRICS panel).
+3. **`js/game.js` is 43% prose and `G` is a mirror, not a seam.** 218
+   members: 112 have one consumer, 63 are consumed only by the dev API. Ten
+   one-line passthroughs and ~19 deferred arrows exist because the literal
+   sits mid-file. `render()` (1,726 lines) touches ~35 closure lets not on
+   G; `updateCar()` (1,286) is fenced by
+   `physics-characterization-vm`. The module-size ceiling was raised ~111×
+   and lowered 4× while game.js grew 7,970 → 9,274; the test is ~1,280
+   comment lines for 64 of code and appears in 88 of 199 commits.
+4. **Per-circuit data lives in seven homes** (def, scenery file,
+   `geo-paths.js`, `markings.js`, four id-keyed tables in
+   `scenery-data.js`, `docs/tracks/<id>.md`); `_sceneryShift` is consumed
+   at 9 sites and explained only in `space.js:53-90`; `segs` is dead in all
+   24 defs that carry it; 10 of 111 frozen scenery(api) members are used by
+   no circuit and 6 by one; the 16 foundation specs are hand-authored files
+   sharing only their import line (WRONG, re-measured 2026-09-04: they do not
+   share the import line either — THREE distinct import forms, 11 of them on
+   raw `@playwright/test`. ~65 % of their 293 assertions carry per-circuit
+   constants that must move into the data file verbatim, and six — monza, spa,
+   zandvoort, bahrain, cota, montreal — carry circuit-specific CODE, not just
+   data: they rebuild a centreline with `Tracks.buildCenterline` and apply
+   `Tracks.banking().dy` to convert a raw gap into a road-relative one. The
+   parametrisation is real but it is not one shape with 16 constants), and their entire hook set is
+   VM-computable (two VM foundation tests already exist).
+5. **The test tree encodes kind in headers, not names.** 188 flat unit
+   files: 30 structural guards, 8 ratchets with 5 different slack rules, 15
+   meta-tests of the test infrastructure, 5 MCP-wrapper tests (two for
+   unattached wrappers), 16 source-text-pin files, 70 behavioural, 13 VM
+   twins. Browser specs: 11 are twinned test-for-test by VM tests yet still
+   run (3,118 lines — both numbers CONFIRMED 2026-09-04 by reading both sides
+   of every pair; the set, however, is 14: `world-physics.spec.js` is twinned
+   5-of-6 and appears nowhere in this plan, and `new-hooks` / 
+   `physics-characterization` are handled separately below); 37 declare timeouts above the 120 s selected gate as
+   `select-specs.mjs` counts them, so never gate a deploy; 39 use raw
+   `@playwright/test` and lose the `__apex` failure attachments. Group
+   membership is a 140-entry list plus 54 npm scripts; one new test forces
+   three doc edits.
+6. **Docs and tools accrete and are policed for consistency, not size.**
+   28 top-level docs + 22 research + 16.5k archive lines; single facts in
+   3–12 places (`snapCam()` rule: 12 files / 51 lines); AGENTS.md ~28% war
+   story; 7 doc guards (1,955 lines) hold ~40 numbers and ~60 phrases.
+   tools/ is 160 flat files with three harness generations, forwarders to
+   forwarders, 8 `@skill` tags naming skills that no longer exist, ~27
+   files with no functional caller. 31 skills; 22 route to siblings by name.
+
+### In flight at the last update (2026-09-03 17:30 UTC)
+
+Read this first if you are picking the work up mid-stream — it is the only
+part of this file that goes stale by the minute.
+
+| what | where | state |
+|---|---|---|
+| `tiny` browser group on the moved tree | `artifacts/logs/tiny.log` | running, ~30/73, 0 failed. Anchor on `grep -E '= run (passed\|failed\|timedout\|interrupted)'`. The ONE known-benign red is smoke.spec's "page loads without WebGL error" — its `page.goto` waits for `load` with no navigation timeout and this box boots in 54–150 s (docs/TESTING.md §Field notes 2026-09-03). Any OTHER failure is a real move regression. |
+| `ci.yml` push run for `f1ee501` | Actions | running; batches 1 and 2 already passed their own runs |
+| `ci.yml` dispatch `group: circuits` | Actions | running. NOTE: two earlier dispatches were CANCELLED externally by Actions concurrency contention across sessions, not by a failure — if it happens again, do not re-dispatch; the push run's smoke gate is the evidence. |
+| Phase 4 agent | worktree `claude/p4-tools` | surveying (a no-caller proof per deletion comes before any edit) |
+| Phase 5 agent | worktree `claude/p5-docs` | mid doc-merge, ~66 files touched |
+
+**The next decision** is the Phase 2b deploy: `node tools/ci/deploy.mjs --plan`,
+report the union, then the real `node tools/ci/deploy.mjs` (fast-forward push, no
+PR). It matters more than the earlier deploys because other sessions develop
+directly on the deploy branch — until the move lands there, every edit they
+make to a moved file is a rename-merge for somebody. `MOVED` in
+`tools/manifest.cjs` exists to make that legible and only helps once pushed.
+
+## Where this stands (2026-09-03, end of the Phase 2b move)
+
+Sessions so far have landed 38 commits on `claude/project-structure-review-p6eu08`,
+of which Phase 0, Phase 1-lite and Phase 2a are DEPLOYED (deploy branch tip
+`bfde168`) and Phase 2b's move is pushed but not yet deployed.
+
+**What the tree looks like now vs. the diagnosis this plan opened with:**
+
+| the diagnosis said | today |
+|---|---|
+| a new eager file costs 5-7 coordinated edits | file + ONE manifest line (`gen-shell` writes the rest) |
+| index.html in 77 of 199 commits, almost all hash bumps | tags read `?v=dev`; the deploy stamps hashes; the shell changes only when markup does |
+| `js/game/` holds six module lifecycles in one directory | `js/game/` no longer exists — 16 domain directories |
+| per-circuit data lives in seven homes | the def is the single home (`js/circuits/<id>.js`) |
+| eight ratchets with five different slack rules | one mechanism: `tests/data/ratchets.json` + `tools/check/ratchets.mjs` |
+| pick-tests routes by a filename list, one `|` per file | directory rules; blanket-only routing 33 -> 1 |
+
+**The four sweep blind spots** found while moving are worth recording because
+they are the reason the move was safe rather than lucky. Each was a class of
+path reference the exact-token sweep could not see, each would have silently
+broken files, and each is now fixed IN THE TOOL with a regression test:
+a `/`-prefixed relative suffix (`"../../js/log.js"`); the sweep eating its own
+move plans and the MOVED block's historical keys; a path written as an escaped
+regex; and a path built from separate quoted segments, which is now REPORTED
+at plan time rather than guessed at. The last one paid for itself immediately:
+it named all six of batch 4's hazards before that batch ran.
+
+## Where this stands (2026-09-10, two Phase 3 carves)
+
+`js/game.js` **9,273 → 8,589 lines** (codeLines 4,559; topLets 141; gMembers
+239). Two carves landed from the Phase 3 list below, each its own PR into the
+deploy branch, each with its ratchet lowered in the same commit:
+
+| carve | file | game.js | state |
+|---|---|---|---|
+| car-draw | `js/car/car-draw.js` (686) | 9,656 → 9,041 | DEPLOYED (PR #126, Pages run 2228 green incl. verify-live) |
+| shadow-pass | `js/render/shared/shadow-pass.js` (530) | 9,041 → 8,589 | PR #127, awaiting review |
+
+**The shadow-pass carve is a deliberate departure from §3 below, which says
+`render()` stays whole.** That rule was written because both design panels
+fenced `render()` and no VM gate observes it — the risk was carving blind. What
+changed is the evidence available: the three shadow-map passes are reachable
+through instrumentable backend seams, so the carve can be PROVEN rather than
+argued. Booted, with the camera moving: 9 `shadowBegin`/`shadowEnd` with 27
+`castShadowChunked` and 342 `castShadowInstanced`; 5 `carShadowBegin`/`End`
+with 5 `carShadowKeep`; at night 6 `lampShadowBegin`/`End` with the sun pass
+correctly gated off by key luminance. The rest of `render()` still stays whole:
+what left is three self-contained passes with their own caches, not the loop.
+
+**The hazard this exposed, which every remaining carve will meet.** The moved
+code carried ~40 reads of `LT`. `LT` is not a global — game.js binds it at eval
+with `const { TUNE_DEFS, LT, buildTrackLights } = LightTune;` — so in any other
+file the name does not exist, and every sun-map rebuild would have thrown
+`ReferenceError`. No browser spec would have caught it: a pass that never runs
+raises nothing, it just stops drawing. `tests/unit/global-registry.test.mjs`'s
+call-time-reads rule caught it before any test ran.
+
+The sweep behind that: **119 of game.js's top-level names exist only as
+eval-time destructures** — `PhysicsConsts` 58 (`VMAX`, `ACCEL`, `BRAKE`…),
+`CarMesh` 15, `carDraw` 12, `GameStore` 6, `LightTune` 3, `Teams` 2. Any carve
+that moves a read of one of these must rewrite it to the owning global or take
+it through `deps`. Two things make this survivable: not one game.js local
+shares a name with a real global (158 of them), so the failure is always loud
+rather than a silently wrong value; and the guard sees the whole class. The
+residual risk it cannot see is a create-time capture of a REBINDABLE value —
+`const LT = LightTune.LT` is safe only because knobs.js declares `const LT = {}`
+and mutates in place, whereas capturing `G.gfx` at create would freeze a null.
+Rule for the remaining carves: rebindable state through the `G` getter, a
+mutated-in-place object may be captured once. Evidence: docs/notes/DEFECT-LEDGER.md.
+
+## What happens next (2026-09-10) — rough order
+
+Not a re-plan: Phase 3's carve list below still stands. This is the queue as it
+actually sits, with the verification each item needs, because two of them are
+not carves at all and one came out of the shadow-pass work.
+
+**1. Land PR #127 (shadow-pass).** Merged, verified locally (guards 170/170,
+tooling-fast 171/171), and dispatched once for the `gfx` group + Metal, which is
+the only way a renderer change gets renderer specs (see item 2). Read that run,
+separate any failure from the six already red on the deploy tip, merge.
+
+**2. The renderer coverage hole — the first instrument turned out to be the
+wrong one.** Measured in docs/notes/TESTING-FIELD-NOTES.md (2026-09-10): 51 of
+116 specs can never be selected by the change-aware gate, and FOUR areas —
+`js/render/glx/` (the shipped path), `js/render/webgpu/`, `js/render/three/`,
+`js/lighting/` — have ZERO eligible routed specs, so a push touching them gets
+no blocking browser spec at all. That hole is real and unchanged.
+
+The plan's step (b) was to route those paths to `baseline` (the six golden menu
+PNGs). **That is now ruled out on evidence**: the spec calls
+`__apex.headless(true)` and hides `#game` before it shoots, so it is a DOM
+identity gate by construction and cannot see a renderer fault. Re-breaking the
+shadow pass produced byte-identical golden failures — the goldens noticed
+nothing. Whoever picks this up next needs a CANVAS instrument with a per-test
+budget under 180 s; the six `gfx` specs (240-540 s each) are the reason the hole
+exists and cannot themselves be the fix.
+
+The trial job (step (a), landed) still paid for itself by refuting the reason
+`test:baseline` is out of the gate. ci.yml says the goldens are
+environment-sensitive; measured, the GitHub runner and this container agree to
+within 1-17 pixels while BOTH miss the committed PNGs by 10k-49k against a 1%
+tolerance. The images are portable and were STALE — three of six had not been
+re-blessed since the UI moved (garage content: budget, a new catalog entry,
+prices, percentage stat chips, and the compact-density rule hiding
+descriptions). **Re-blessed 2026-09-10, and run 3464 passed all six on a
+GitHub runner**, which confirms portability by experiment. Remaining: keep the
+trial non-blocking for a few more PRs, then gate `test:baseline` as a DOM
+identity gate. Worth doing, and a different job from covering the renderer.
+
+Until a canvas instrument exists, the interim rule stands for every renderer PR:
+**a renderer or lighting carve needs a dispatched `gfx` run
+(`renderer_macos: true`), because neither automatic gate provides one.**
+
+**3. Remaining Phase 3 carves,** in the order §3 already gives:
+garage-preview → quali-net + race-settings-ui → custom-team-ui → live weather →
+atmosphere. Each meets the eval-time destructure hazard (119 names; see the
+2026-09-10 status section) — rewrite those reads to the owning global or take
+them through `deps`, and let the call-time-reads guard confirm it.
+
+**4. Two items that are not carves** and are sequenced last because they carry
+the most risk per line changed:
+   - `tests/` guards-VM split — tests only, cheap, `tooling-fast` is the gate.
+   - three.js r186 and Rapier 0.20 — vendor bumps. Each its own PR, each with a
+     real browser group, and r186 additionally with a dispatched `gfx` +
+     Metal run: TLX is one of the four blind areas above.
+
+Phases 4 and 5 (tools/, docs/) are unchanged and still interleave with feature
+work.
+
+## Status and remaining steps (2026-09-03)
+
+Order of landing: **0 → 1-lite → 2 (splits, then the move window) → 1 → 3
+→ 4 → 5**. Each step ends green on `test:tooling-fast`, is one commit or
+one PR on the session branch, and is deployed by `node tools/ci/deploy.mjs`
+(merge the deploy tip → local gate → fast-forward push; no PRs) at the
+windows marked ⚑. Browser evidence is capped at two groups per step and
+the boot group's verdict comes from the `ci.yml` runner shards, not this
+box (`docs/TESTING.md` §Field notes 2026-09-03).
+
+- [x] **Phase 0 / Commit A** `bcf17c8` — `tools/gen/gen-shell.mjs`, marked blocks
+      in index.html / carview / sw.js, generated `js/roster.js`, game.js reads
+      `ApexRoster` (9,274 → 9,202), load-order's seven mirror tests → one drift
+      test.
+- [x] **Phase 0 / Commit B** `f2d6f44` — tags read `?v=dev`; `bump-cache
+      --apply` refuses off the staged copy; sw.js dev-host network-first;
+      `cache-bump-only` deleted; guards + 27-file prose sweep. Runner CI green
+      (smoke shards included).
+- [x] **Phase 0 deploy merge** `3685460` — deploy tip 0ea825d merged (index.html
+      → ours + gen-shell; game.js ceiling re-measured 9,307 → 9,235 on the
+      union), pushed by `deploy.mjs` (10 gate suites verified). DEPLOY-SIDE
+      PROOF: `pages.yml` run 1938 — every CI job green incl. the four smoke
+      shards, "Stamp the shell generation" (`bump-cache --apply --at N --root
+      _site` + `--check --root _site`) green, "Live version.json equals the
+      stamped build" green. The `?v=dev` policy ships.
+- [x] **Phase 1-lite** (landed 2026-09-03; no js/css change, tooling-fast 136/136 + `test:mcp` 31/31):
+  1. delete `tests-split.test.mjs` + `tools/tests-split.mjs` (+ README regen,
+     docs-integrity comment, TESTING row, carves.md, APEX-TOOLS-MCP);
+  2. delete `physics-baseline-present.test.mjs` after confirming the VM twin
+     `readFileSync`s the baseline (fails, never skips, on absence);
+  3. tinyfish-mcp / probe-mcp: keep the tools (live callers — see the phase
+     section), move the stays-tools assertions into `tests/unit/mcp-cli.test.mjs`
+     on the fast gate, move the proxy/serve assertions to a `test:mcp` node
+     group off `tooling-fast`;
+  4. `tests/data/ratchets.json` + `tools/check/ratchets.mjs` (`--check` / `--update`
+     / `--json`) + `tests/unit/ratchets.test.mjs` replace `module-size.test.mjs`;
+     metrics `lines` (all old CEILINGS files), `codeLines` (game.js, apex.js),
+     `gMembers` + `topLets` (game.js); one slack rule max(60, 4 %); history →
+     `docs/notes/CEILING-HISTORY.md`; 20-file reference sweep incl. AGENTS.md,
+     deploy.mjs + check-changes `deploy.md` merge rule, the guard pins.
+- [x] **Phase 2a — splits** DEPLOYED (`bfde168`); merged on the session branch 2026-09-03 from four
+      parallel worktree branches: lighting `e345cdd` (lighting.js → knobs /
+      track-lights / frame-lights behind a 16-line façade; the lt-* handlers
+      → tuner), quali-store `8349abf` (quali model + quali-sheet; six modules'
+      localStorage → GameStore's raw lane; store.js precedes js/game in FULL),
+      options `9beb902` (renderer-picker out of gfx-quality; cockpit-opts'
+      second IIFE + metrics-panel-style → metrics; tables.js → its owners,
+      deleted), circuits `26877e9` (geo-paths, markings and FIVE id-keyed
+      scenery tables folded into each def; `segs` deleted from 24 defs;
+      `realPoints` throws on a path-less def; verts byte-identical,
+      graph-parity 40/40 exact). Union verified: tooling-fast 137/137, game-vm 248/248, verify-track --all
+      40 OK, state-unit 89/89; `test-bg tiny` 72/73 (the one red is the boot
+      `load`-wait timeout, 147.8 s, the box — §Field notes 2026-09-03); runner
+      push run 2346 on 66b6618 green incl. the four fixed smoke shards. The
+      `ci.yml group: circuits` dispatch (run 2347) was CANCELLED externally
+      at 42 min (GitHub Actions concurrency contention across sessions, not
+      a code failure — several other runs cancelled the same window); not
+      re-dispatched, since the plain push-run smoke gate on the identical
+      commit already covered the boot group.
+      **DEPLOYED** `bfde168` (deploy tip merge — one real conflict:
+      `tests/unit/module-size.test.mjs` deleted on our side vs modified on
+      theirs; resolved by taking our deletion and running
+      `node tools/check/ratchets.mjs --update` on the union, which moved only
+      `wgx.js` 6037→6060 and `tlx.js` 3132→3144, both from their WebKit fix).
+      `node tools/ci/deploy.mjs`: 12 gate suites + verify-track on all 40
+      circuits, pushed in 1 attempt, 496 s. `pages.yml` run 1941 stamping.
+      `docs/archive/moves/phase2.json` maps 91 files for 2b.
+- [~] **Phase 2b — move DONE, phase OPEN** (spike-out + deploy still to come) — four batch commits
+      (`c78847b` core/physics/race/career 17, `ac2df8c` lighting/camera/audio/
+      perf/input 26, `5bd4fa6` ui/garage/agent/fx/data/car 24 — **js/game/ is
+      gone**, `f1ee501` render/{shared,glx} + track/{core,scenery} 24). 91
+      files into 16 domain directories; `docs/archive/moves/phase2.json` + the four
+      batch maps are the record. Verified per batch and at the end:
+      tooling-fast 138/138, game-vm 248/248, verify-track --all 40 OK,
+      gen-shell --check, check-gctx and ratchets clean; `test-bg tiny` and
+      `ci.yml group: circuits` for the browser half.
+      FOUR sweep blind spots surfaced and were fixed IN THE TOOL, each with a
+      regression test, so the next move does not re-find them:
+      (1) tokenRe's leading boundary excluded `/`, missing every path written
+      as the suffix of a longer relative path (`"../../js/log.js"`);
+      (2) the sweep walked `tools/moves/` and `manifest.cjs`'s MOVED block,
+      corrupting the move plans and the historical keys deploy.mjs reads —
+      both now excluded, MOVED protected by byte range;
+      (3) a path written as an escaped REGEX (sw.js's optional-precache stamp
+      filter) has no token to match — one instance, fixed by hand;
+      (4) a path built from separate quoted segments
+      (`path.join(ROOT, "js", "track", "geom.js")`) likewise — now REPORTED
+      by `splitSegmentMentions()` at plan time, which named all six of batch
+      4's before that batch ran.
+      Also: move-tree's own test fixture used real repo paths, so a batch
+      rewrote it — it now uses names no move map can contain (`js/zzfix/…`).
+      pick-tests RULES are DIRECTORY rules now (the plan's item, possible
+      once js/game/ emptied); blanket-only routing 33 -> 1, and the guard
+      behind it became a COUNT ratchet in ratchets.json instead of a frozen
+      16-path array that would have needed a hand edit per move.
+      The WGX/TLX spike-out later ran and was reversed; its non-executable map
+      is archived at `docs/archive/moves/spike-backends.json`.
+- [ ] **Phase 1 — test taxonomy + one ratchet mechanism** (no js change):
+      `tests/{guards,tools,node,node/twins,sweeps,browser/<group>,manual}/`,
+      `tests/groups.json` generating npm scripts / tooling-fast list /
+      TESTING §2 §5; 55 guard/meta files → 12; pin files → VM/mini-dom
+      behaviour; remaining ratchets (css-class, css-token-adoption,
+      silent-catch, wait-polling) join ratchets.json; 11 twinned browser
+      specs → nightly (delete after two green nightlies); galleries +
+      material-shimmer → manual; 16 foundation specs → one VM test +
+      `tests/data/foundation/<id>.json`; multiplayer 8 → 3, parts 10 → 3,
+      camera 4 → 1; split the >120 s tests; 23 `__apex`-only specs → VM
+      twins; CI gate fixed / selected / nightly; harness tools 18 → 7.
+      Verification: tooling-fast + `test:audit`; each rewritten spec alone;
+      ≤ 2 groups per PR.
+- [ ] **Phase 3 — game.js carves** (one PR each, `physics-characterization-vm`
+      exact before/after, ratchet lowered in the same commit): comment triage
+      → `docs/notes/GAME-JS-DECISIONS.md`; delete the 10 passthroughs + dead
+      banners (region table + banner-order test); extract boot-loaders →
+      collisions → car-draw → garage-preview → quali-net + race-settings-ui →
+      custom-team-ui → live weather → atmosphere; `hooks-documented` → the
+      espree walker. `render()` / `updateCar()` stay whole. End: `driving` +
+      `hooks` groups once.
+- [~] **Phase 4 — tools/ 160 → ~95** IN FLIGHT 2026-09-03 as a worktree agent on
+      `claude/p4-tools` off 9486be6 (writes its own `docs/archive/moves/phase4-tools.json`,
+      reads the mover's splitSegmentMentions report per batch, must prove
+      no-caller by grep before each deletion). Scope fenced to tools/ +
+      package.json + workflows + five named guards so it cannot collide with
+      the Phase 5 agent or the tests/ work. Original scope: in `tools/{lib,ci,check,gen,shot,gfx,
+      track,car,ui,lighting,mcp,net,env}/`; delete the ~27 no-caller files
+      (pins in tools-runnable / package.json first); families → one entry
+      point with subcommands; three track-build harnesses → `track-build-vm`;
+      `@skill` tags validated or dropped; README generated per directory;
+      generated-docs floor + docs-integrity walker updated; apex-tools-mcp +
+      AGENT-SURFACE in the same commit. The mcp family (tinyfish-mcp.sh,
+      tinyfish-rpc.py, probe-mcp.py, chrome-devtools-mcp.sh, mcp-cli.mjs,
+      mcp-smoke.mjs) consolidates here — that is where the Phase 1-lite
+      deferral is decided. Verification: tooling-fast.
+- [x] **Phase 5 — docs/ + agent surface** landed 2026-09-03 on
+      `claude/p5-docs`; `test:tooling-fast` 138/138, all four generators
+      byte-clean. **docs/ top level 28 → 23 files, of which 13 are documents
+      and 10 are one-line redirect stubs.** ~12 was not reachable: ten of the
+      absorbed docs are cited BY PATH from `js/`, `css/`, `tests/` or `tools/`
+      comments (PERF-FINDINGS 82 refs, ARCHITECTURE-REVIEW 12, SCENERY-GROUNDING
+      7, COCKPIT-DATUMS 3, RENDERERS 3, AGENT-WORLD-API 3, OCCLUSION-PROBE 3,
+      LAYOUT-AUDIT 3, CONSOLE-RECIPES 1, PARALLEL-WORK 1), and this phase's
+      scope excluded editing those trees. Merges: ARCHITECTURE ← RENDERERS +
+      RENDER-CLIPPING; CAREER ← PARTS; SCENERY-API ← SCENERY-GROUNDING +
+      TRACK-MIGRATION-CHECKLIST; LIGHTING (was LIGHTING-REF) ← KNOBS + PRESETS;
+      COMPONENTS ← LAYOUT-AUDIT; DEBUG-HOOKS ← AGENT-WORLD-API +
+      CONSOLE-RECIPES; PLATFORM (was iOS-OPTIMIZATION). TESTING's field notes
+      and the review's §7-8 became `notes/TESTING-FIELD-NOTES.md` and
+      `notes/DEFECT-LEDGER.md`. **The zero-citation claim was FALSE for four of
+      the five named research files** — re-grepped one by one: BROWSER-GRAPHICS
+      is the only genuine zero, CLEANUP-SWEEP and SURVEY-BUGS-PERF had one live
+      citer each (dropped, then archived), PERF-HUNT is cited by PERF-FINDINGS
+      §3 (→ notes/, not the attic), RENDERER-PERF-AUDIT has five citers
+      including `spike/backends/README.md`; it stayed at its research path, and
+      the later spike-out was reversed. `docs/research/`
+      itself could not be emptied: twelve of its files are cited by path from
+      `js/`/`tests/`/`tools/`. `look-survey/` stays (written by
+      `tools/lighting/look-survey-sheet.py`, pinned by `cdmcp-measure.test.mjs`);
+      `research/wgx-gallery/` stays (pinned by `tools/gfx/wgx-shot.mjs` and the
+      spike move map); `.claude/workflows/*.js` stays (three LIVE workflows,
+      not spent scripts). AGENTS.md 316 → 245 lines / 2858 → 2092 words — every
+      rule kept, ~770 words of evidence moved to
+      `notes/CI-RENDERING-PERFORMANCE.md` and `notes/TESTING-FIELD-NOTES.md`;
+      120 lines would have cost rules. Skills 31 → 26, not ~20: five folded
+      where the hub's `description` could absorb the trigger vocabulary
+      (car-viewer + debug-cameras → playwright-probe, game-feel → tune-physics,
+      restructure-screens-css → css-play, debug-tracks → agent-view), six kept
+      because the merge would have made them un-findable (see the reasoning
+      block in `.claude/skills/README.md`). Guard changes: `skill-progressive`
+      retargeted its fold pins and gained a STRUCTURAL check that each hub's
+      description carries the absorbed vocabulary; `docs-integrity` now walks
+      EVERY directory under docs/ for link resolution (nine dead links landed
+      with the notes/ move and nothing saw them) and exempts `docs/notes/` from
+      the archive-referrer rule, because a ledger citing its own provenance is
+      the point of a ledger.
+- [ ] **Close-out**: `docs/research/TREE-RESTRUCTURE-2026-09.md` gets its
+      errata + landed SHAs per phase; `docs/ARCHITECTURE.md` and
+      `docs/TESTING.md` describe the final tree; the `MOVED` map and the
+      two-nightly twinned specs are removed one release later.
+
+## The plan
+
+Order (from the design review): **0 → 2 → 1 → 3 → 4 → 5**, with a
+"1-lite" allowed right after 0. Rationale: js moves are the only phase with
+a conflict surface against other sessions' in-flight edits, so they land
+soonest after the enabler and in one window; test files get their path
+strings rewritten while still at stable paths (rename+modify merges are the
+failure mode); `check-gctx`/`game-vm` are rewritten once, against the final
+layout, before the game.js carves depend on them. Every phase ends green on
+`test:tooling-fast` and is revertable. AGENTS.md/CLAUDE.md and the
+`skill-progressive` phrase pins are updated in the same commit as each
+phase, or tooling-fast is red at landing.
+
+### Phase 0 — Kill the lockstep (`gen-shell`). Two commits.
+
+**Commit A (generator, byte-identical):** `tools/gen/gen-shell.mjs` (grown from
+`bump-cache.mjs`) regenerates three marked blocks from `tools/manifest.cjs`:
+the `<script>`/`<link>` block of `index.html` (`<!-- @gen-shell:scripts -->`
+markers around 1759-1904 and the `<link>` block ~70-81; the two hand
+comments inside the block become manifest comment entries or hoist above
+the marker), the same for `tools/carview.html:61-79` driven by `CARVIEW`,
+and the sw.js optional-set block (`sw.js:54-199`, plus the LAZY_AGENT filter
+at 221-223). No `importScripts` (a worker has no `window`, and
+`service-worker.test.mjs` runs sw.js in a bare vm context). A generated
+`js/roster.js` (`self.ApexRoster = Object.freeze({...})`, in `FULL` after
+`mat4.js`, HARD_EDGE to game.js) replaces `js/game.js:77-247`'s five mirror
+arrays (~150 lines out of game.js). `gen-shell --check` must pass on the
+committed tree with today's hashes before anything else changes.
+`load-order.test.mjs` loses its seven mirror tests (160-178, 248-266,
+313-363) and reduces 192-229 to "sw.js block == generated"; keeps the
+HARD_EDGES toposort, SW registration and CARVIEW checks.
+
+**Commit B (policy):** tags read `?v=dev`; `pages.yml:202` already stamps
+real hashes into `_site` and `:205 --check --root _site` stays the only
+hash guard. `bump-cache --apply` without `--at/--root` REFUSES (so a
+habitual run cannot reintroduce 151 hashes); `deploy.mjs:118` calls
+`gen-shell --write`; `bump-cache --since` and `cache-bump-only.mjs` (+test)
+are deleted. sw.js gains a DEV rule (`localhost|127.0.0.1|[::1]` →
+network-first, cache fallback) because cache-first on `?v=dev` would serve
+stale js on `npx serve` forever; asserted in `service-worker.test.mjs`.
+`css-class-ratchet` stops counting `<script>` tags (`NODE_CEILING` reset).
+Result: new file = file + one manifest line; move = `git mv` + one manifest
+line; index.html changes only when markup changes.
+
+Also touched: `.claude/hooks/protect-worktree-files.sh:23` (add roster.js,
+gen-shell.mjs), `tools/apex-tools-mcp.{mjs,json}` (`apex_bump_cache_check`),
+`tests/unit/{agent-surface,change-driver-tools,ci-coverage,deploy-stamp,
+global-registry,skill-progressive}.test.mjs`, `tools/ci/verify-change.mjs`,
+`tools/ci/tooling-fast.mjs`, check-changes/pwa-cache skills and the seven
+skills that say "bump-cache --apply", `AGENTS.md:180-206`,
+`docs/ARCHITECTURE.md:23-29 + §Deploy`, `docs/AGENT-SURFACE.md`.
+
+### Phase 1-lite — cheapest guard cuts, no file moves.
+
+Scope after the 2026-09-03 survey (one deviation from the earlier line,
+with its reason):
+
+1. **Delete** `tests/unit/tests-split.test.mjs` + `tools/tests-split.mjs`
+   (done-and-shipped migration; no functional reader — `cross-file-paths`
+   does not import it). Sweep: tooling-fast list, `tools/README.md` row
+   (regen), `docs-integrity.test.mjs` comment, `docs/TESTING.md` row,
+   `slim-bloat/references/carves.md`, `docs/research/APEX-TOOLS-MCP.md`.
+2. **Delete** `tests/unit/physics-baseline-present.test.mjs`: the VM twin
+   (`physics-characterization-vm.test.mjs`) reads the baseline with
+   `readFileSync` and FAILS on absence — the browser spec's skip path is
+   already covered by a fixed-gate test.
+3. **tinyfish-mcp / probe-mcp — tools NOT deleted here.** They have live
+   callers: `cloud-agent-install.sh` (tinyfish setup), `apex-tools-mcp.mjs`
+   (probe daemon-port discovery), `mcp-smoke.mjs`, and the `mcp-probe`
+   skill (`probe-mcp.py chrome-start` is the multi-call Chrome daemon on a
+   host with no chrome-devtools MCP). Their deletion is Phase 4's
+   mcp-family consolidation. Here: the assertions about tools that STAY
+   (`chrome-devtools-mcp.sh`, `mcp-cli.mjs`, `gfx-probe` flags, the Chrome
+   wrapper flags, the Playwright/Chrome MCP release pins) move into
+   `tests/unit/mcp-cli.test.mjs` on the fast gate; the tinyfish-proxy and
+   probe-serve assertions leave `tooling-fast` for a `test:mcp` node group
+   run by the Pages gate's node suites (13 s off the fast gate).
+4. **module-size → one ratchet mechanism.** `tests/data/ratchets.json`
+   (file → {metric → ceiling}), `tools/check/ratchets.mjs` (`--check` default,
+   `--update` snaps every ceiling to the current value, `--json`),
+   `tests/unit/ratchets.test.mjs`. Metrics: `lines` (split-newline, the old
+   metric, for every file the old CEILINGS named); `codeLines`
+   (non-comment, non-blank) for `js/game.js` and `js/agent/apex.js`;
+   `gMembers` (`scanGameCtx().members.size` from check-gctx) and `topLets`
+   (`^let ` at column 0 — 147 today) for `js/game.js`. ONE slack rule: a
+   ceiling more than max(60, 4 %) above its value fails ("lower it"). The
+   ~1,280 comment lines of ceiling history → `docs/notes/CEILING-HISTORY.md`.
+   Reference sweep (20 files): AGENTS.md conventions bullet, deploy.mjs and
+   check-changes `deploy.md` merge rule ("re-measure on the union" →
+   `node tools/check/ratchets.mjs --update` on the merged tree), tooling-fast
+   list, the tools-runnable / hooks-documented / global-registry /
+   css-class-ratchet / css-token-adoption / comment-citations pins,
+   wait-polling-lint / bloat-scan mentions, ARCHITECTURE / TESTING /
+   PERF-FINDINGS / ARCHITECTURE-REVIEW prose.
+
+Verification: tooling-fast + `npm run test:mcp` + `node tools/check/ratchets.mjs`
+clean; no browser run (no js/css change). One commit on the session
+branch; deployed with Phase 2a's splits or alone.
+
+### Phase 2 — js/ becomes domain directories; js/game/ dissolves.
+
+Protocol: (a) in-file SPLITS first, at old paths, as their own PR, deployed
+and merged before any move (a split defeats rename detection; a pure
+`git mv` merges cleanly); (b) then ALL moves, one commit per target
+directory, landed in ONE `deploy.mjs` push window (≤ 1 h) so other sessions
+absorb one rename-merge, not N; (c) `manifest.cjs` carries a `MOVED` map for
+one release and `deploy.mjs` prints the new path on a modify/delete
+conflict; (d) each move commit carries a scripted path sweep over docs,
+skills, tests and tools (docs-integrity walks all three and fails between
+commits otherwise); (e) squashed-name renames happen in the same commit as
+the move (one rename event).
+
+Splits (a): tables.js → CAM_MODES/DIFF/PAINT_* to their consumers;
+lighting.js → knobs / track-lights / frame-lights; gfx-quality.js → preset
+vs renderer picker; quali.js → model vs sheet; photomode's lt-* handlers →
+tuner-panel; cockpit-opts IIFE 2 + metrics-panel-style → metrics; the 6
+files' direct `localStorage` writes → store; `segs` deleted from 24 defs;
+`geo-paths.js` / `markings.js` / the four id-keyed `scenery-data` tables
+folded into each `js/circuits/<id>.js` (`path`, `turns`, `sectors`,
+`furniture`, `kit`, `standSet`, `barrier`), gated by `track-verts --diff`
+exact equality + `graph-parity --all`; `maps.js` → UI.
+
+Target layout (b):
+
+```
+js/core/      log.js, mat4.js (+ shared rng32), store.js, roster.js (generated)
+js/physics/   consts.js, ai-drive.js, aero-zones.js, body-attitude.js, brake-cue.js,
+              debris-world.js, incident-sim.js
+js/race/      race-control.js, reliability.js, quali-model.js
+js/career/    career.js, career-ui.js, season-cal.js, season-ui.js
+js/lighting/  knobs.js, track-lights.js, frame-lights.js, profiles.js (light-store),
+              presets.js (baked), atmosphere.js, tuner-panel.js
+js/camera/    vantage.js, offsets.js, mode-switch.js, tuner-panel.js, photo-cam.js, cockpit-opts.js
+js/audio/     engine.js, panel.js, music-lib.js, spotify.js
+js/perf/      governor.js, loop-health.js, quality-preset.js, metrics-overlay.js, gfx-debug-overlay.js
+js/input/     input.js, steer-tuning.js
+js/ui/        layers.js, modal.js, menu-nav.js, scroll-fade.js, sheet-shape.js, aria-state.js,
+              css-zoom.js, hud.js, select-screen.js, results-sheet.js, quali-sheet.js,
+              settings-tabs.js, scale.js, track-maps.js
+js/garage/    scene.js, setup-sheet.js
+js/car/       car3d.js, car-mesh.js, liveries.js, liverytex.js, crest-paths.js, parts.js, ghost.js
+js/data/      as today + teams.js, driver-ratings.js (roster data; 13 non-car consumers)
+js/net/       as today (+ stub-parity test)
+js/agent/     apex.js, agentview.js, agentview-raster.js  (LAZY_AGENT)
+js/fx/        particles.js, skidmarks.js
+js/render/    gfx.js (+ install/loader from game.js), shared/{lamp-chunks,assets,gltf}.js,
+              glx/{glx,post,shadow,chunked}.js + glx/shaders/glsl-*.js
+spike/backends/  webgpu/ (wgx.js + wgsl-*), three/ (tlx*.js + tsl-*), vendor/three-0.185.1/,
+              their tools, tests and docs — OUT of the shipped tree (owner's decision, see below)
+js/track/     engine only: core/{spline,mesh,surface,space,geom}.js,
+              scenery/{core,generic,nature,structures(+identity),city,graph,models,kits,themes,data}.js,
+              tracks.js (~600 lines: LIST/resolve/build/palettes) — split gated by graph-parity
+js/circuits/  <id>.js (def, now the single home of its data) + scenery/<id>.js (LAZY) — layout unchanged
+js/game.js    stays at root
+```
+
+Dropped from the earlier draft: per-circuit `<id>/` directories (they break
+`verify-track.cjs:147-149`, `track-build-vm.cjs:132-134` and
+`deploy.mjs:66`, which filter `readdirSync` for `.js`); folding
+`docs/tracks` briefs into scenery headers; a `wgx.js` split.
+
+**WGX/TLX spike-out (owner's decision).** Move `js/render/webgpu/`,
+`js/render/three/`, `vendor/three-0.185.1/` (1.1 MB, TLX-only), the nine
+WGX/GPU tools (`wgx-*.mjs`, `gfx-probe.mjs --tlx-webgpu` path,
+`gpu-game-check.mjs` legs, `tlx-pack-check.cjs`, `ssr-probe.mjs`,
+`webgpu-chrome-args.cjs`, `wgpu-flag-test.mjs`), `tests/unit/{webgpu-lifecycle,
+renderer-soft-lifecycle,road-lut-frame}.test.mjs`, `tests/specs/tlx-probes.spec.js`,
+`docs/research/WEBGPU-PARITY.md` and the WGX/TLX sections of
+`RENDERER-PERF-AUDIT` into `spike/backends/` (replacing today's closed
+`spike/`), with a README stating how to re-attach. In the shipped tree:
+delete `DEFERRED`/`DEFERRED_EDGES` from `manifest.cjs:370-388,480-493` and
+the roster; delete the importmap (`index.html:1745-1757`) and the sw.js
+optional entries for webgpu/three/vendor-three; `Gfx.create()` returns null
+for the `three`/`webgpu` keys (GLX fallback, already the documented
+behaviour) and the boot canary (`game.js:309-322`) simplifies; the RENDERER
+picker in `gfx-quality.js` and its 30 `apex26.*` keys shrink to WEBGL2;
+`backend-surface-parity` becomes GLX-vs-`gfx.js`-header; the
+`godray-keep-nearest` lockstep shrinks to one copy; `LampChunks` header
+(`lamp-chunks.js:1-7`) loses its WGX clause; `gpu-census.yml` legs 171-234
+and `ci.yml` renderer jobs 826-969 move with the spike or are deleted;
+AGENTS.md's two WGX/TLX verification rows (`:40-41`) and the software-pixels
+section (`:103-141`) collapse to a pointer at the spike README; skills
+`webgpu-debug` and the WGX half of `mcp-probe` move to the spike. Known
+cost, accepted: opt-in players on `apex26.gfxBackend=three|webgpu` fall
+back to WebGL2 on the next boot (the loss ladder and road-LUT fixes only
+matter to them); ~550 KB of never-parsed bytes and ~9.5k+7.9k lines leave
+the shipped tree. The GLX chain keeps the `glsl-*` renames so the naming
+parity survives if a backend is ever re-attached.
+
+Tools and guards rewritten in the same window (all read by the reviewer):
+`check-gctx.mjs:61,76-77` (recursive walk over the `create(G)` dirs, within
+its 2 s budget), `vstd-lint.mjs:52-58` + `vstd-invariant` ALLOWED keys,
+`game-vm.cjs:55,510` (SKIP path; LAZY_AGENT from manifest),
+`pick-tests.mjs:100-148` RULES → directory-level rules,
+`test-groups.test.mjs:55-77` probe list, `load-order.test.mjs:277-300`
+(recursive scan), `sw.js:221-223, 305-307` prefixes (generated),
+`global-registry.test.mjs:82-90` keys, `.cursor/rules/*.mdc` globs,
+`js/track/CLAUDE.md` (re-homed), `docs/ARCHITECTURE.md` module table
+(regenerated per directory from file headers).
+
+### Phase 1 — Test tree taxonomy and one ratchet mechanism.
+
+- Directories become the taxonomy and the group: `tests/guards/` (~22
+  after merges), `tests/tools/` (~14), `tests/node/` (~88) with
+  `tests/node/twins/` (13), `tests/sweeps/` (14), `tests/browser/<group>/`
+  (smoke, gfx, hooks, circuits, driving, car, input, ui, modes, net),
+  `tests/manual/` (ui-audit, menu-survey, hud-audit, menu-baseline,
+  material-shimmer). `tests/groups.json` = {dir, project, gate:
+  fixed|selected|nightly, budgetMin}; npm scripts, `tooling-fast`'s file
+  list and TESTING.md §2/§5 are generated from it; `test-groups.test.mjs`
+  shrinks to "every dir has an entry, every entry a script, no orphan
+  file"; `test-coverage-audit` becomes trivial.
+- Merge 55 guard/meta files into 12 (guard-syntax, guard-load, guard-css,
+  guard-docs, guard-ci, lints, spec-lints, ratchets, tool-test-selection,
+  tool-test-honesty, tool-cli-contracts, lighting-knobs). Split
+  gfx-backend-canary, webgpu-lifecycle, perf-try, source-integrity into
+  mock-behaviour vs pins; convert 11 pure-pin files to VM/mini-dom
+  behaviour. The remaining ratchets (css-class, css-token-adoption
+  [exact-equality today], silent-catch, wait-polling) join ratchets.json.
+- Browser specs: the 11 twinned specs go nightly-only now and are deleted
+  after two green nightlies (**DONE 2026-09-04**, `58ac3ee5` — they are skipped
+  on the SELECTED gate by name via `tools/ci/twinned-specs.mjs`, which also
+  holds the drift check that keeps the substitution honest: same declared test
+  count on both sides, and the twin's group must still be one the Pages gate
+  runs unconditionally, DERIVED from ci.yml rather than listed.
+  `world-physics.spec.js` is deliberately excluded until its one DOM-slider
+  test is split out — adding it would fail that count check); galleries + material-shimmer → manual; the 16
+  foundation specs → one VM-parametrised test with
+  `tests/data/foundation/<id>.json` (keep the 4 `lightState` assertions in
+  a browser — **corrected 2026-09-04**: the number is right by coincidence and
+  the SET is wrong. `lightState` has SIX assertion sites across two files, and
+  two of them (`builtNight`, set at track BUILD, not per frame) are
+  VM-computable — `new-hooks-vm` already does a day→night rebuild without a
+  browser. The four that are not are `skyStars`, `floodEmit`, `ambientSky` and
+  `numLights`, all assigned inside `render(dt)`, which the VM never runs. So the
+  residue is ONE Qatar test and ONE Vegas test, not a general lighting
+  carve-out. Also corrected: "two VM foundation tests already exist" is true
+  only weakly — the three candidates are either def-object or engine-level
+  checks with ZERO overlap with the specs' per-circuit assertions, so the
+  per-circuit hooks have no VM coverage today and this is a port, not a merge); multiplayer 8 → 3, parts 10 → 3, camera 4 → 1 (convert the
+  raw-import / 3 s-sleep specs to `sharedTest` + `racePage` first); split
+  the hidden >120 s tests (autopilot, custom-team, new-hooks Madrid,
+  parts-budget, parts-mesh-cache, ui-resize, terrain/props-over-road, career
+  by phase); convert the 23 `__apex`-only specs to VM twins (sliders.spec.js
+  reads DOM and stays). CI gate: fixed = smoke + physics-characterization-vm
+  + tests/node/twins + tooling-fast; selected = budgeted browser specs;
+  nightly = foundations, gfx, over-budget splits, macOS GPU.
+- Harness tools 18 → 7 entry points: `run-playwright`, `test-bg`
+  (run|status|solo|shards), `select` (specs|budget|recall|failed),
+  `verify`, `audit` (coverage|assert|observed|honesty|ci), `tooling-fast`,
+  `harness.mjs`.
+
+### Phase 3 — game.js: from 9,273 lines to a readable core.
+
+In crossing-count order, one PR per carve, `physics-characterization-vm`
+exact before/after, ratchet lowered in the same commit:
+
+1. Comment triage: war-story paragraphs → `docs/notes/GAME-JS-DECISIONS.md`
+   keyed by function; one-line pointers stay (~1,500 lines, no behaviour).
+2. Delete the 10 passthroughs; replace the dead banners with a region table
+   at the top of the file, guarded by a cheap banner-order test.
+3. Extract: boot-loaders (8 free refs; mostly gone after roster.js) →
+   collisions (11) → ~~car-draw (~68 refs, owns its 16 lets)~~ **done, deployed
+   (PR #126)** → garage-preview (0 new G members once car-draw exists) →
+   quali-net + race-settings-ui → custom-team-ui → live weather → atmosphere.
+   `updateCar()` stays whole. `render()` stays whole EXCEPT the three
+   shadow-map passes, which left in PR #127 with live per-pass counts as
+   evidence (see the 2026-09-10 status section): the bar for carving anything
+   else out of `render()` is the same — an instrumentable seam that proves the
+   moved work still runs, not a code read.
+4. `hooks-documented` moves to the espree walker shared with
+   `gen-hooks-table` (retires the "comment must not quote `const api = {`"
+   hazard); apex.js stays one file.
+Deferred: `G` pass 2 / `S` state object (the member-count ratchet already
+delivers the measurable half); apex.js facet split; `_sceneryShift`
+containment (semantics change with a 40-circuit blast radius — after 3).
+
+### Phase 4 — tools/ 160 → ~95 in subdirectories.
+
+`tools/{lib,ci,check,gen,shot,gfx,track,car,ui,lighting,mcp,net,env}/`.
+Delete the ~27 files with no functional caller (0-citation, self-declared
+broken, forwarders once their guard pins are dropped, unattached MCP
+wrappers, spent one-offs — list in the tools report; `ui-survey.mjs` and
+`wgx-gallery.mjs` are pinned by `tools-runnable.test.mjs:483-512` and
+`package.json`, so those pins go first). Families become one entry point
+with subcommands (`shot`, `select`, `test-bg`, `audit`, `lint`, `slim`,
+`track`, `gfx`, `ui`, `chrome`). Three track-build harnesses consolidate on
+`track-build-vm.cjs`. `@skill` header tag validated against
+`.claude/skills/` or dropped; README generated per directory;
+`generated-docs.test.mjs:63`'s ">120 rows" floor and `docs-integrity`'s
+one-level walker updated; `apex-tools-mcp.{mjs,json}` + AGENT-SURFACE in
+the same commit.
+
+### Phase 5 — docs/ and the agent surface.
+
+- docs/ top level 28 → ~12: ARCHITECTURE (+RENDERERS, RENDER-CLIPPING;
+  module tables generated per directory), TESTING (§2/§5 generated; field
+  notes out), PHYSICS, CAREER (+PARTS), MULTIPLAYER, SCENERY (+GROUNDING
+  §1-3, MIGRATION-CHECKLIST), LIGHTING (REF + generated KNOBS), UI
+  (generated COMPONENTS + LAYOUT axes + DESIGN-PRINCIPLES), PLATFORM
+  (PLATFORM-INPUT-NOTES promoted + iOS), AGENT-API (AGENT-SURFACE with a
+  generated wrap map), DEBUG-HOOKS (hand sections generated from `@doc`
+  comments). `docs/notes/` holds dated ledgers (PERF, TESTING field notes,
+  DEFECT-LEDGER from ARCHITECTURE-REVIEW §7-8, CI-RENDERING, WEBGPU-PARITY,
+  probes, the two decision records) — path-checked, never count-checked.
+  ATTIC absorbs the 5 research files with zero outside citations
+  (BROWSER-GRAPHICS, CLEANUP-SWEEP, PERF-HUNT, RENDERER-PERF-AUDIT,
+  SURVEY-BUGS-PERF), superpowers/, the 47 PNGs, workflows/*.js, raw JSON;
+  other dated research docs move to notes/ with citations retargeted
+  (PERF-FINDINGS is cited by 52 files: its path keeps a one-line stub).
+- `docs/README.md` becomes a reading order (agent: AGENTS → ARCHITECTURE →
+  TESTING §1-2 → area doc → skill; human: README → ARCHITECTURE →
+  PHYSICS/CAREER → TESTING §1).
+- AGENTS.md → ~120 lines of rules; the ~780 words of evidence move to the
+  docs they already link.
+- Skills 31 → ~20 (owner's choice): merge the pointer-only and no-references skills into
+  their cluster hub (ai-racecraft, input-controls, game-feel → physics;
+  season-mode → career; car-viewer, debug-cameras → probe; asset-pack →
+  renderers; restructure-screens-css → ui; slim-bloat → check-changes;
+  debug-tracks → tracks); keep description-triggered skills that a host
+  auto-selects. `skill-progressive` keeps its structural checks and loses
+  the ~118 prose pins. Agents (5) unchanged; workflows → archive.
+- Doc guards: keep path/link/index checks; counts become generated numbers;
+  delete the AGENTS prose pins once AGENTS is minimal.
+
+## Guards: keep / convert / delete
+
+| keep as-is | convert | delete |
+|---|---|---|
+| global-registry, scenery-api-contract, game-ctx-surface, physics-characterization-vm, graph-parity, verify-track, deploy-staging, circuit-def-fields, godray-keep-nearest, road-lut-frame, net-stub-surface, assert-audit, select recall, service-worker | load-order → gen-drift + toposort; module-size + 4 ratchets → ratchets.json; docs count regexes → generated; hooks-documented → espree; backend-surface-parity → derived from game.js `gfx.*` usage; 16 foundation specs → 1 VM test; test-groups → groups.json | tests-split, physics-baseline-present, tinyfish-mcp, probe-mcp, cache-bump-only, 11 twinned browser specs (after two green nightlies), ~20 skill-progressive prose pins, 9 off-topic pins in source-integrity |
+
+## Verification (per phase; two browser groups max, background, no js edits mid-run)
+
+- Phase 0: tooling-fast; `test:service-worker`; `node tools/lib/game-vm.cjs monza`
+  (FULL still boots headless); `tools/check/offline-precache-check.cjs` in the
+  background (it stays a tool and joins the Pages gate); `test-bg tiny` once.
+- Phase 2: per commit tooling-fast (load-order, global-registry,
+  check-gctx, docs-integrity). Phase end: `verify-track --all` (bg),
+  `test:game-vm`, `graph-parity --all`, `track-verts --diff` exact for the
+  circuit fold-in, then `test-bg tiny` once and dispatch `ci.yml` with
+  `group: circuits` (two browser groups total). Renderer spike-out: GLX
+  boot positive signal (`canvas.getContext("webgl2")` non-null after
+  `test-bg tiny`), `backend-surface-parity` rebased, one `gpu-census.yml`
+  dispatch with `census_only: true` to confirm the workflow still parses.
+- Phase 1: tooling-fast + `test:audit`; every rewritten spec runs alone;
+  never more than two groups per PR.
+- Phase 3: `physics-characterization-vm` exact per carve; `driving` +
+  `hooks` groups once at the end.
+- Phase 4/5: tooling-fast only (`generated-docs`, `agent-surface`,
+  `skill-progressive` are the guards).
+
+## Effort and critical path
+
+≈16 focused sessions: Phase 0 — 2; Phase 2 — 3 (splits PR; move window;
+tool/guard rewrites); Phase 1 — 3; Phase 3 — 4; Phase 4 — 2; Phase 5 — 2.
+Critical path 0 → 2 → 3 (the only hard chain: roster/gen-shell → stable
+dirs for check-gctx/game-vm → carves); 0 and 2 need a quiet deploy branch;
+1, 4, 5 interleave with feature work.

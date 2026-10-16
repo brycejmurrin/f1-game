@@ -1,0 +1,1211 @@
+/* Apex 26 — GameMetrics: toggleable in-game FPS / car / log overlay.
+
+   SETTINGS > DISPLAY — METRICS (on/off), PAGE (gov/car/phys/log),
+   SIDE (auto/left/right), SIZE (s/m/l), LOG NS, and LOG SHOW, folded
+   into one METRICS <details> submenu this file builds (see the bottom).
+   Log filters stay hidden unless PAGE is LOG. Or ` (backtick) / F9 on
+   the canvas. Persists as apex26.metrics. URL `?metrics=1` overrides
+   for the session without writing storage, same shape as CockpitOpts.
+
+   WHY ITS OWN FILE. This is not a quality tier. The overlay is DOM the
+   player asked for, so it lives next to the other injected SETTINGS buttons
+   (CockpitOpts) rather than growing js/game.js. The panel is created at
+   runtime — no index.html node. Layout lives in css/hud.css (#game-metrics
+   + #game-metrics-bar). AUTO side is left on a short/narrow viewport so
+   the panel cannot cover the right dock. SIZE defaults to S; the bar's
+   S/M/L chip and the SETTINGS row cycle it.
+
+   Tick is its own rAF at ~4 Hz. It never runs when OFF, and it never logs
+   per frame. Turning ON raises the Log BUFFER to debug for the session so
+   the overlay's tail actually fills; the console stays at shipped warn.
+
+   Pages stay on the canvas (no clipboard). ` / F9 toggles. While ON,
+   [ ] cycle GOV/CAR/PHYS/LOG; 1–4 jump to a page; on LOG, - = cycle
+   namespace and ; cycles the display level. */
+const GameMetrics = (function () {
+  "use strict";
+
+const KEY = "apex26.metrics";
+const PAGE_KEY = "apex26.metricsPage";
+const POS_KEY = "apex26.metricsPos";
+const SIZE_KEY = "apex26.metricsSize";
+const LOG_NS_KEY = "apex26.metricsLogNs";
+const LOG_LVL_KEY = "apex26.metricsLogLvl";
+const PAINT_MS = 250;
+const PAGES = ["gov", "car", "phys", "log"];
+const POSITIONS = ["auto", "left", "right"];
+const SIZES = ["s", "m", "l"];
+const LOG_NS = ["*", "track", "gfx", "game", "scenery", "car", "ui", "input", "net", "data", "audio", "assets"];
+const LOG_LVLS = ["warn", "info", "debug"];
+
+let _on = null;
+let _page = null;
+let _pos = null;
+let _size = null;
+let _logNs = null;
+let _logLvl = null;
+let _raf = 0;
+let _lastPaint = 0;
+let _panel = null;
+let _body = null;
+let _bar = null;
+let _btn = null;
+let _pageBtn = null;
+let _posBtn = null;
+let _sizeBtn = null;
+let _logNsBtn = null;
+let _logLvlBtn = null;
+let _keysBound = false;
+let _raisedBuffer = null;
+
+// Mirrors the HUD gap-form pattern (js/ui/hud.js): innerWidth / hudScale
+// is the slot proxy. Two display densities:
+//   WIDE  (ratio >= 480): label column + value, full rows, up to 12 rows
+//   NARROW (ratio < 480): compact, two values per line, fewer rows
+// Live layout is css/hud.css (#game-metrics[data-pos]). PANEL_STYLE is the
+// exported snapshot tests still read — do not apply it inline or it fights
+// the stylesheet (side, size, the tap bar).
+const HUD_TOP_OFFSET = "min(120px, calc(80px * var(--hud-scale, 1)))";
+const PANEL_STYLE =
+  "position:fixed;" +
+  "right:calc(8px + var(--sar, 0px));" +
+  "top:calc(12px + var(--tap, 44px) + var(--sat, 0px) + " + HUD_TOP_OFFSET + ");" +
+  "z-index:11;margin:0;padding:10px 12px;" +
+  "font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;" +
+  "color:#d8ffe0;background:rgba(4,8,6,.82);border:1px solid rgba(90,200,120,.4);" +
+  "border-radius:8px;pointer-events:none;white-space:pre;text-align:left;" +
+  "max-width:min(52ch,calc(100vw - 16px - var(--sal, 0px) - var(--sar, 0px)));" +
+  "max-height:calc(100svh - 12px - var(--tap, 44px) - var(--sat, 0px) - " +
+    HUD_TOP_OFFSET + " - max(80px, calc(72px + var(--sab, 0px))));" +
+  "overflow-y:auto;pointer-events:auto;text-shadow:0 1px 2px rgba(0,0,0,.9);" +
+  "letter-spacing:.01em";
+
+// Adaptive density: same proxy as HUD gap — innerWidth / hudScale.
+// At < 480 use the compact (narrow) layout with 2 values per line.
+function metricsRatio() {
+  try {
+    const root = document.documentElement;
+    const s = +root.style.getPropertyValue("--hud-z-top")
+      || +root.style.getPropertyValue("--hud-scale") || 1;
+    return window.innerWidth / s;
+  } catch (_) { return 800; }
+}
+
+function qFlag(re) {
+  try { return re.exec(location.search); } catch (_) { return null; }
+}
+
+function read() {
+  if (typeof DevFlags !== "undefined") return !!DevFlags.get("metrics");
+  const q = qFlag(/[?&]metrics=(1|0|on|off|true|false)/i);
+  if (q) return /^(1|on|true)$/i.test(q[1]);
+  return GameStore.store.raw(KEY) === "1";
+}
+
+function pinned(re) { return !!qFlag(re); }
+
+function readPage() {
+  const q = qFlag(/[?&]metricsPage=(gov|car|phys|log)/i);
+  if (q) return q[1].toLowerCase();
+  const v = GameStore.store.raw(PAGE_KEY);
+  if (PAGES.indexOf(v) >= 0) return v;
+  return "gov";
+}
+
+function readLogNs() {
+  const q = qFlag(/[?&]metricsLog=([A-Za-z*]+)/i);
+  if (q) {
+    const v = q[1].toLowerCase();
+    if (LOG_NS.indexOf(v) >= 0) return v;
+  }
+  const v = GameStore.store.raw(LOG_NS_KEY);
+  if (LOG_NS.indexOf(v) >= 0) return v;
+  return "*";
+}
+
+function readLogLvl() {
+  const q = qFlag(/[?&]metricsLvl=(warn|info|debug)/i);
+  if (q) return q[1].toLowerCase();
+  const v = GameStore.store.raw(LOG_LVL_KEY);
+  if (LOG_LVLS.indexOf(v) >= 0) return v;
+  return "warn";
+}
+
+function readPos() {
+  const q = qFlag(/[?&]metricsPos=(auto|left|right)/i);
+  if (q) return q[1].toLowerCase();
+  const v = GameStore.store.raw(POS_KEY);
+  if (POSITIONS.indexOf(v) >= 0) return v;
+  return "auto";
+}
+
+function pos() {
+  if (_pos === null) _pos = readPos();
+  return _pos;
+}
+
+function readSize() {
+  const q = qFlag(/[?&]metricsSize=(s|m|l)/i);
+  if (q) return q[1].toLowerCase();
+  const v = GameStore.store.raw(SIZE_KEY);
+  if (SIZES.indexOf(v) >= 0) return v;
+  return "s";
+}
+
+function size() {
+  if (_size === null) _size = readSize();
+  return _size;
+}
+
+function applySize(el) {
+  if (!el) return size();
+  el.dataset.size = size();
+  return size();
+}
+
+function resolvePos() {
+  const want = pos();
+  if (want === "left" || want === "right") return want;
+  try {
+    if (window.innerHeight <= 520 || window.innerWidth < 900) return "left";
+  } catch (_) { /* no window */ }
+  return "right";
+}
+
+function applyPos(el) {
+  if (!el) return resolvePos();
+  const side = resolvePos();
+  el.dataset.pos = side;
+  return side;
+}
+
+function on() {
+  if (_on === null) _on = read();
+  return _on;
+}
+
+function page() {
+  if (_page === null) _page = readPage();
+  return _page;
+}
+
+function logNs() {
+  if (_logNs === null) _logNs = readLogNs();
+  return _logNs;
+}
+
+function logLvl() {
+  if (_logLvl === null) _logLvl = readLogLvl();
+  return _logLvl;
+}
+
+function store(key, val, pinRe) {
+  if (pinned(pinRe)) return;
+  GameStore.store.rawSet(key, val);   // a blocked write is session-only, and store.broken says so
+}
+
+function snapshot() {
+  const pg = page();
+  const wantGov = pg === "gov";
+  const wantCar = pg === "car";
+  const wantPhys = pg === "phys";
+  const wantLog = pg === "log";
+  const out = {
+    on: on(),
+    page: page(),
+    logNs: logNs(),
+    logLvl: logLvl(),
+    fps: null, ms: null, budget: null, scale: null, tier: null, backend: "",
+    auto: null, strikes: null, tierFloor: null, gpuMs: null, loopStopped: null, loopFrames: null,
+    // What the BOUND backend says about the device: which API three/WGX
+    // actually took, how many GPU/shader errors it has raised, and the first
+    // one. A phone screenshot of this panel is the evidence a "see-through
+    // car on THREE.JS" report never carried (the pick label alone cannot tell
+    // WebGPU from WebGL2, or a rejected pipeline from a healthy one).
+    gfxApi: "", gpuErr: null, gpuFirst: "", tlx: "",
+    state: "", track: "", session: "", flow: "",
+    lapsTarget: null, quali: null, career: null, turns: null,
+    lap: null, pos: null, total: null,
+    lapTime: null, best: null, lastLap: null, raceT: null,
+    gapAhead: null, gapBehind: null, aeroX: null, sector: null,
+    speedKph: null, speedIsDash: false, dashKph: null, gndKph: null,
+    gear: null, energy: null, s: null, x: null,
+    angle: null, k: null, hw: null,
+    cam: "", caution: "", buildDone: "",
+    slipDeg: null, vLat: null, yawRate: null, slipFactor: null,
+    axEstSm: null, axFrac: null, slope: null, wrongWay: null, rescueT: null,
+    head: null, vmaxNow: null, aeroGrip: null, aeroDf: null,
+    xOn: null, xArmed: null, aeroLoad: null,
+    // physState() already RETURNS these every paint and the panel dropped them
+    // on the floor. No new data path, no sim work — the PHYS page simply never
+    // rendered eight of the fields it was already fetching. Field names match
+    // the __apex hook on purpose: a player's screenshot then maps straight onto
+    // physState() when they report something.
+    towing: null, xVmaxGain: null, xDfLoss: null,
+    drain: null, regen: null, brakeBias: null, otTime: null, otMJ: null,
+    logConsole: "", logBuffer: "", logN: 0, logShown: 0,
+    logs: [],
+  };
+  try {
+    if (wantGov && typeof LoopHealth !== "undefined") {
+      const h = LoopHealth.state();
+      out.loopStopped = h.stopped; out.loopFrames = h.frames;
+    }
+  } catch (_) { /* loop health not booted */ }
+  try {
+    if (typeof PerfGov !== "undefined") {
+      const ema = PerfGov.fpsEMA && PerfGov.fpsEMA();
+      if (ema > 0) { out.fps = +(1000 / ema).toFixed(1); out.ms = +ema.toFixed(1); }
+      if (PerfGov.floorMs) out.budget = +PerfGov.floorMs().toFixed(1);
+      if (PerfGov.tier) out.tier = PerfGov.tier();
+    }
+  } catch (_) { /* governor not booted */ }
+  try {
+    if (typeof __apex !== "undefined" && __apex.perf) {
+      const p = __apex.perf();
+      if (p && p.ok !== false) {
+        if (p.fps != null) out.fps = p.fps;
+        if (p.floorMs != null) out.budget = p.floorMs;
+        if (p.scale != null) out.scale = p.scale;
+        if (p.tier != null) out.tier = p.tier;
+        if (p.auto != null) out.auto = p.auto;
+        if (p.crashStrikes != null) out.strikes = p.crashStrikes;
+        if (p.tierFloor != null) out.tierFloor = p.tierFloor;
+      }
+    }
+  } catch (_) { /* apex not live / player not spawned */ }
+  try {
+    if (wantGov && typeof __apex !== "undefined" && __apex.gpuTimer) {
+      const g = __apex.gpuTimer();
+      if (g && g.ms != null && g.ms >= 0) out.gpuMs = +g.ms.toFixed(2);
+    }
+  } catch (_) { /* SwiftShader / no EXT */ }
+  try {
+    // liveBackend(), not readBackend(): the panel answers "what am I running",
+    // and a pick whose files left the tree is not what is running.
+    if (typeof RendererPicker !== "undefined" && RendererPicker.liveBackend)
+      out.backend = RendererPicker.liveBackend() || "";
+  } catch (_) { /* quality module absent in a VM */ }
+  try {
+    if (!out.backend) out.backend = GameStore.store.raw("apex26.gfxBackend") || "";
+    try {
+      if (typeof GLX !== "undefined") {
+        if (typeof GLX.gpuErrors === "function") out.gpuErr = GLX.gpuErrors() | 0;
+        if (typeof GLX.backendState === "function") {
+          const bs = GLX.backendState();
+          if (bs) {
+            if (bs.api) out.gfxApi = String(bs.api);
+            if (bs.gpuFirstError) out.gpuFirst = String(bs.gpuFirstError).slice(0, 72);
+            if (bs.gpuErrors != null) out.gpuErr = bs.gpuErrors | 0;
+            // TLX only: the presentation path, the readback counters, the pack
+            // and the debug switches — the fields a phone A/B needs to see.
+            if (bs.softRead) {
+              out.tlx = "blit " + (bs.softBlit ? "on" : "—") +
+                "  read g" + (bs.softRead.gen | 0) + "/f" + (bs.softRead.fails | 0) +
+                "  pack " + (bs.packLive ? "ok" : "—") +
+                "  heal " + (bs.healed ? "yes" : "—") +
+                (bs.calls != null ? "  dc " + (bs.calls | 0) : "") +
+                (bs.arrayNearest ? "  ARRAYNEAREST" : "") +
+                (bs.drawMatMode ? "  matMode " + bs.drawMatMode : "");
+            }
+          }
+        }
+      }
+    } catch (_) { /* backend not bound yet */ }
+  } catch (_) { /* storage blocked */ }
+  try {
+    if (typeof __apex !== "undefined" && __apex.info) {
+      const i = __apex.info();
+      if (i && i.ok !== false) {
+        out.state = i.state || "";
+        out.track = i.track || "";
+        out.session = i.session || i.flow || "";
+        out.flow = i.flow || "";
+        if (i.lapsTarget != null) out.lapsTarget = i.lapsTarget;
+        if (i.raceQuali != null) out.quali = i.raceQuali;
+        if (i.career != null) out.career = i.career;
+        if (i.turns != null) out.turns = i.turns;
+      }
+    }
+  } catch (_) { /* info needs a live G */ }
+  try {
+    if (wantCar && typeof __apex !== "undefined" && __apex.timing) {
+      const t = __apex.timing();
+      if (t) {
+        out.lap = t.lap;
+        out.pos = t.pos;
+        out.total = t.total;
+        out.gear = t.gear;
+        out.energy = t.energy;
+        if (t.lapTime != null) out.lapTime = t.lapTime;
+        if (t.best != null) out.best = t.best;
+        if (t.lastLap != null) out.lastLap = t.lastLap;
+        if (t.raceT != null) out.raceT = t.raceT;
+        if (t.gapAhead != null) out.gapAhead = t.gapAhead;
+        if (t.gapBehind != null) out.gapBehind = t.gapBehind;
+        if (t.aeroX != null) out.aeroX = t.aeroX;
+        if (t.sector != null) out.sector = t.sector;
+      }
+    }
+  } catch (_) { /* timing needs player.px */ }
+  // HUD km/h is dashKph (vStd*3.6), not raw ground*3.6. Keep both: a painted
+  // 0 is a real parked reading, and headless leaves the digit at 0.
+  try {
+    if (wantCar && typeof document !== "undefined") {
+      const n = document.getElementById("hud-speed-n");
+      const v = n && parseFloat(n.textContent);
+      if (isFinite(v)) { out.dashKph = v; out.speedKph = v; out.speedIsDash = true; }
+    }
+  } catch (_) { /* no HUD (VM / menu) */ }
+  // probe() is one Tracks.sample. obs() adds walls, a 3-point lookahead,
+  // field sort, and reward terms — too much for a 4 Hz overlay.
+  try {
+    if (wantCar && typeof __apex !== "undefined" && __apex.probe) {
+      const o = __apex.probe();
+      if (o) {
+        if (o.speed != null) out.gndKph = +(o.speed * 3.6).toFixed(1);
+        if (out.speedKph == null && out.gndKph != null) out.speedKph = out.gndKph;
+        if (o.s != null) out.s = o.s;
+        if (o.x != null) out.x = o.x;
+        if (o.angle != null) out.angle = o.angle;
+        if (o.k != null) out.k = o.k;
+        if (o.hw != null) out.hw = o.hw;
+      }
+    }
+  } catch (_) { /* probe needs player + track */ }
+  try {
+    if (wantPhys && typeof __apex !== "undefined" && __apex.physState) {
+      const p = __apex.physState();
+      if (p && p.ok !== false) {
+        if (p.slipDeg != null) out.slipDeg = p.slipDeg;
+        if (p.vLat != null) out.vLat = p.vLat;
+        if (p.yawRate != null) out.yawRate = p.yawRate;
+        if (p.slipFactor != null) out.slipFactor = p.slipFactor;
+        if (p.axEstSm != null) out.axEstSm = p.axEstSm;
+        if (p.axFrac != null) out.axFrac = p.axFrac;
+        if (p.slope != null) out.slope = p.slope;
+        if (p.wrongWay != null) out.wrongWay = p.wrongWay;
+        if (p.rescueT != null) out.rescueT = p.rescueT;
+        if (p.head != null) out.head = p.head;
+        if (p.vmaxNow != null) out.vmaxNow = p.vmaxNow;
+        if (p.aeroGrip != null) out.aeroGrip = p.aeroGrip;
+        if (p.aeroDf != null) out.aeroDf = p.aeroDf;
+        if (p.xOn != null) out.xOn = p.xOn;
+        if (p.xArmed != null) out.xArmed = p.xArmed;
+        if (p.aeroLoad != null) out.aeroLoad = p.aeroLoad;
+        if (p.towing != null) out.towing = p.towing;
+        if (p.xVmaxGain != null) out.xVmaxGain = p.xVmaxGain;
+        if (p.xDfLoss != null) out.xDfLoss = p.xDfLoss;
+        if (p.drain != null) out.drain = p.drain;
+        if (p.regen != null) out.regen = p.regen;
+        if (p.brakeBias != null) out.brakeBias = p.brakeBias;
+        if (p.otTime != null) out.otTime = p.otTime;
+        if (p.otMJ != null) out.otMJ = p.otMJ;
+        if (out.aeroX == null && p.aeroX != null) out.aeroX = p.aeroX;
+      }
+    }
+  } catch (_) { /* physState needs player.px */ }
+  try {
+    if (typeof __apex !== "undefined" && __apex.camera) {
+      const c = __apex.camera();
+      if (c && c.mode) out.cam = c.mode;
+    }
+  } catch (_) { /* camera hook needs CAM_MODES */ }
+  try {
+    if (typeof __apex !== "undefined" && __apex.caution) {
+      const c = __apex.caution();
+      if (c && c.label) out.caution = c.label;
+    }
+  } catch (_) { /* caution layer absent */ }
+  try {
+    if (typeof Log !== "undefined") {
+      const lv = Log.level();
+      out.logConsole = lv.console || "";
+      out.logBuffer = lv.buffer || "";
+      if (wantLog) {
+        const rec = Log.records();
+        out.logN = rec.length;
+        const ns = logNs();
+        const filt = { level: logLvl(), limit: 12 };
+        if (ns && ns !== "*") filt.ns = ns;
+        const shown = Log.records(filt);
+        out.logShown = shown.length;
+        out.logs = shown.map((r) => r.level[0] + " " + r.ns + " " + r.msg);
+      }
+      if (wantGov && out.track) {
+        const tr = Log.records({ ns: "track", level: "info" });
+        for (let i = tr.length - 1; i >= 0; i--) {
+          if (/^build done /.test(tr[i].msg) && tr[i].msg.indexOf(out.track) >= 0) {
+            out.buildDone = tr[i].msg;
+            break;
+          }
+        }
+      }
+    }
+  } catch (_) { /* log module absent */ }
+  return out;
+}
+
+function ensurePanel() {
+  if (_panel || typeof document === "undefined") return _panel;
+  const el = document.createElement("div");
+  el.id = "game-metrics";
+  el.setAttribute("aria-label", "Debug metrics");
+  const bar = document.createElement("div");
+  bar.id = "game-metrics-bar";
+  if (typeof bar.setAttribute === "function") bar.setAttribute("role", "toolbar");
+  PAGES.forEach((p) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.page = p;
+    b.textContent = p.toUpperCase();
+    bar.appendChild(b);
+  });
+  const sizeChip = document.createElement("button");
+  sizeChip.type = "button";
+  sizeChip.dataset.sizeCycle = "1";
+  sizeChip.setAttribute("aria-label", "Overlay size");
+  sizeChip.textContent = size().toUpperCase();
+  bar.appendChild(sizeChip);
+  bar.addEventListener("click", (e) => {
+    const t = e.target;
+    if (!t || !t.dataset) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (t.dataset.sizeCycle) { nextSize(1); return; }
+    if (t.dataset.page) setPage(t.dataset.page);
+  });
+  const body = document.createElement("pre");
+  body.id = "game-metrics-body";
+  el.appendChild(bar);
+  el.appendChild(body);
+  try {
+    const prof = GameStore.store.get("hudProfile", "standard");
+    if (prof === "minimal") el.dataset.compact = "1";
+  } catch (_) { /* store absent in isolated harness */ }
+  applyPos(el);
+  applySize(el);
+  document.body.appendChild(el);
+  _panel = el;
+  _bar = bar;
+  _body = body;
+  return el;
+}
+
+function fmt(v, digits) {
+  if (v == null || v === "") return "—";
+  if (typeof v === "boolean") return v ? "yes" : "no";
+  if (typeof v === "number" && digits != null) return v.toFixed(digits);
+  return String(v);
+}
+
+function fmtTime(t) {
+  if (t == null || !isFinite(t)) return "—";
+  const ms = Math.round(t * 1000);   // round first: never "1:60.000"
+  const m = Math.floor(ms / 60000);
+  const s = (ms - m * 60000) / 1000;
+  return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3);
+}
+
+// Two-column row: label (padded to L chars) then value.
+const L = 8;
+function row(label, value) { return (label + ":").padEnd(L) + " " + value; }
+// CAN THE BOX ACTUALLY HOLD THE WIDE LAYOUT? A VIEWPORT proxy
+// (`metricsRatio() < 480`) disagrees with the width's vw cap in css/hud.css,
+// so it picks the wide layout for boxes that cannot hold it and the tail is
+// CUT (white-space:pre inside overflow:hidden — lost, not scrolled).
+// MEASURED with a 20-character probe in the body's own font, both viewports:
+//   narrow longest 25 ch, wide longest 52 ch (GOV is the widest page)
+//   desktop boxes 170/221/322 px at ch 8.57 -> 19/25/37 fit
+//   phone   boxes 111/134/189 px at ch 7.35 -> 15/18/25 fit
+// Under the proxy seven of nine desktop cases and nine of nine phone cases cut.
+// WIDE_CH is that measured 52 plus one, and the CSS steps are sized in the same units.
+// The measurement forces layout, so it is cached on (font-size, box width) —
+// this runs at 4 Hz and must not reflow every paint.
+const WIDE_CH = 53;
+let _chW = 0, _chKey = "";
+function chWidth() {
+  if (!_body || typeof document === "undefined") return 0;
+  const cs = (typeof getComputedStyle === "function") ? getComputedStyle(_body) : null;
+  const key = (cs && cs.fontSize) || "";
+  if (_chW && key === _chKey) return _chW;
+  try {
+    const probe = document.createElement("span");
+    probe.textContent = "00000000000000000000";           // 20, so rounding is 1/20th
+    probe.style.cssText = "position:absolute;visibility:hidden;white-space:pre";
+    _body.appendChild(probe);
+    const w = probe.getBoundingClientRect().width / 20;
+    _body.removeChild(probe);
+    if (w > 0) { _chW = w; _chKey = key; }
+  } catch (_) { /* detached / no layout: fall through to the proxy below */ }
+  return _chW;
+}
+function fitsWide() {
+  const ch = chWidth();
+  // The GRANTED width, never the PAINTED one. Reading _body.clientWidth here
+  // latched: the panel sizes to its content, so narrow content gave a small box,
+  // a small box failed this test, and the layout could never climb back to wide
+  // — a one-way door that measured its own output. The panel's resolved width
+  // comes from the CSS step and does not depend on what was painted into it.
+  if (!ch || !_panel || typeof getComputedStyle !== "function") return metricsRatio() >= 480;
+  const cs = getComputedStyle(_panel);
+  const granted = parseFloat(cs.width) || 0;
+  if (!granted) return metricsRatio() >= 480;   // unmeasurable is UNKNOWN, not small
+  // The step is the border box; the text lives inside the padding and border.
+  const chrome = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) +
+                 (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0);
+  return Math.floor(Math.max(0, granted - chrome) / ch) >= WIDE_CH;
+}
+function sep() { return "─".repeat(24); }
+
+// Compact two-value pair for narrow screens.
+function pair(l1, v1, l2, v2) { return l1 + " " + v1 + "   " + l2 + " " + v2; }
+
+function paintOverlay() {
+  const el = ensurePanel();
+  if (!el) return;
+  if (!on()) { el.hidden = true; return; }
+  el.hidden = false;
+  const s = snapshot();
+  applyPos(el);
+  applySize(el);
+  if (_bar) {
+    const kids = _bar.children || [];
+    for (let i = 0; i < kids.length; i++) {
+      const b = kids[i];
+      if (b.dataset && b.dataset.sizeCycle) {
+        b.textContent = size().toUpperCase();
+        continue;
+      }
+      const onPage = !!(b.dataset && b.dataset.page === s.page);
+      if (b.setAttribute) b.setAttribute("aria-pressed", onPage ? "true" : "false");
+    }
+  }
+  const narrow = size() === "s" || !fitsWide();
+  const hdr = "";
+  let lines;
+
+  if (s.page === "car") {
+    if (narrow) {
+      lines = [
+        hdr,
+        pair("spd", fmt(s.dashKph) + "km/h", "g", fmt(s.gear)),
+        pair("ERS", fmt(s.energy, 2), "aero", fmt(s.aeroX, 2)),
+        pair("P",   fmt(s.pos), "lap", fmt(s.lap) + (s.lapsTarget != null ? "/" + s.lapsTarget : "")),
+        "t   " + fmtTime(s.lapTime) + "  best " + fmtTime(s.best),
+        pair("gap", fmt(s.gapAhead, 1) + "/" + fmt(s.gapBehind, 1), "S", fmt(s.sector)),
+      ];
+    } else {
+      lines = [
+        hdr,
+        sep(),
+        row("speed",  fmt(s.dashKph) + " km/h   gnd " + fmt(s.gndKph) + " km/h"),
+        row("gear",   fmt(s.gear) + "   ERS " + fmt(s.energy, 2) + "   aero " + fmt(s.aeroX, 2)),
+        row("pos",    "P" + fmt(s.pos) + (s.total != null ? "/" + s.total : "") +
+                      "   lap " + fmt(s.lap) + (s.lapsTarget != null ? "/" + s.lapsTarget : "") +
+                      "   S" + fmt(s.sector)),
+        row("time",   fmtTime(s.lapTime) + "   best " + fmtTime(s.best)),
+        row("last",   fmtTime(s.lastLap)),
+        row("gap",    fmt(s.gapAhead, 1) + " / " + fmt(s.gapBehind, 1) + " m"),
+        row("s  x",   fmt(s.s, 1) + "   " + fmt(s.x, 2) + "   k " + fmt(s.k, 4)),
+      ];
+    }
+  } else if (s.page === "phys") {
+    if (narrow) {
+      lines = [
+        hdr,
+        pair("slip", fmt(s.slipDeg, 1) + "°", "slipF", fmt(s.slipFactor, 2)),
+        pair("vLat", fmt(s.vLat, 2), "yaw", fmt(s.yawRate, 2)),
+        pair("ax",   fmt(s.axEstSm, 2), "slope", fmt(s.slope, 3)),
+        pair("vmax", fmt(s.vmaxNow, 1), "ww", fmt(s.wrongWay)),
+        pair("grip", fmt(s.aeroGrip, 3), "xOn", fmt(s.xOn)),
+        // Eight more physState() fields. Kept
+        // inside the 25-char narrow budget the width work measured — a longer
+        // line here is CUT, not scrolled.
+        pair("tow", fmt(s.towing, 2), "bb", fmt(s.brakeBias, 2)),
+        pair("xdv", fmt(s.xVmaxGain, 3), "xdf", fmt(s.xDfLoss, 3)),
+        pair("drn", fmt(s.drain, 3), "rgn", fmt(s.regen, 3)),
+        pair("ot", fmt(s.otTime, 1), "mj", fmt(s.otMJ, 2)),
+      ];
+    } else {
+      lines = [
+        hdr,
+        sep(),
+        row("slip",   fmt(s.slipDeg, 1) + "°   vLat " + fmt(s.vLat, 2) + "   slipF " + fmt(s.slipFactor, 2)),
+        row("yaw",    fmt(s.yawRate, 2) + " rad/s   ax " + fmt(s.axEstSm, 2) + "   axFrac " + fmt(s.axFrac, 2)),
+        row("slope",  fmt(s.slope, 3) + "   wrongWay " + fmt(s.wrongWay) + "   rescue " + fmt(s.rescueT, 1) + "s"),
+        row("vmax",   fmt(s.vmaxNow, 1) + " m/s   head " + fmt(s.head, 2)),
+        row("aero",   "grip " + fmt(s.aeroGrip, 3) + "   df " + fmt(s.aeroDf, 2) + "   load " + fmt(s.aeroLoad, 2)),
+        row("DRS",    "on " + fmt(s.xOn) + "   armed " + fmt(s.xArmed) + "   aeroX " + fmt(s.aeroX, 2)),
+        // X-MODE'S PRICE, not just its state. xVmaxGain / xDfLoss are what the
+        // open wing actually buys and costs; every F1 game shows DRS as a lit
+        // letter and never what it is worth. Both already come back from
+        // physState().
+        row("x cost", "vmax +" + fmt(s.xVmaxGain, 3) + "   df -" + fmt(s.xDfLoss, 3)),
+        // TOW is the slipstream the player is sitting in (0..1, folded into
+        // vmaxNow). No F1 title surfaces it; on a phone, where the aero cannot
+        // be felt, it is the difference between "hold station" and "pull out".
+        row("tow",    fmt(s.towing, 2) + "   brakeBias " + fmt(s.brakeBias, 3)),
+        // ERS FLOW rather than the level the HUD bar already shows.
+        row("ers",    "drain " + fmt(s.drain, 3) + "   regen " + fmt(s.regen, 3)),
+        row("ot",     fmt(s.otTime, 1) + " s   left " + fmt(s.otMJ, 2) + " MJ"),
+      ];
+    }
+  } else if (s.page === "log") {
+    const filterRow = fmt(s.logLvl) + "  ns:" + fmt(s.logNs) + "  " + fmt(s.logShown) + "/" + fmt(s.logN);
+    const logMax = narrow ? 36 : 50;
+    const trimLog = (str) => str.length > logMax ? str.slice(0, logMax - 1) + "\u2026" : str;
+    lines = [
+      hdr + "  = ns  ; lvl",
+      sep(),
+      row("level",  fmt(s.logConsole || null) + " / buf:" + fmt(s.logBuffer || null)),
+      row("show",   filterRow),
+      sep(),
+    ].concat(s.logs.length ? s.logs.map(trimLog) : ["(empty — raise level with ;",
+                                                     " or cycle ns with =)"]);
+  } else {
+    // GOV — most critical: fps + frame time front, then context
+    if (narrow) {
+      lines = [
+        hdr,
+        pair("fps", s.loopStopped ? "STOPPED" : fmt(s.fps), "ms", fmt(s.ms)),
+        pair("loop", s.loopStopped ? "STOPPED" : "frames", "n", fmt(s.loopFrames)),
+        pair("tier", fmt(s.tier), "auto", fmt(s.auto)),
+        pair("gfx", fmt(s.backend || null) + (s.gfxApi ? "/" + s.gfxApi : ""), "err", fmt(s.gpuErr)),
+        (s.track || "menu") + "  " + (s.caution || "GREEN"),
+      ].concat(s.gpuFirst ? [s.gpuFirst.slice(0, 40)] : []).concat(s.tlx ? [s.tlx.slice(0, 44)] : []);
+    } else {
+      lines = [
+        hdr,
+        sep(),
+        row("fps",    (s.loopStopped ? "STOPPED" : fmt(s.fps)) + "   frame " + fmt(s.ms) + " ms" +
+                      (s.gpuMs != null ? "   gpu " + s.gpuMs + " ms" : "")),
+        row("loop", (s.loopStopped ? "STOPPED" : "frames") + " " + fmt(s.loopFrames)),
+        row("budget", fmt(s.budget) + " ms   tier " + fmt(s.tier) +
+                      (s.tierFloor != null ? " (fl " + s.tierFloor + ")" : "") +
+                      "   auto " + fmt(s.auto)),
+        // err FIRST: on a phone the row's tail is what clips, and the error
+        // count is the one number a "nothing renders" screenshot must carry.
+        row("gfx",    fmt(s.backend || null) + (s.gfxApi ? "/" + s.gfxApi : "") +
+                      "   err " + fmt(s.gpuErr) + "   strikes " + fmt(s.strikes) +
+                      (s.scale != null ? "   scale " + fmt(s.scale) : "")),
+      ].concat(s.gpuFirst ? [row("gpu", s.gpuFirst)] : [])
+       .concat(s.tlx ? [row("tlx", s.tlx)] : []).concat([
+        sep(),
+        row("session", (s.track || "menu") + "  " + (s.flow || s.session || s.state || "") +
+                       "  " + (s.caution || "GREEN") + "  cam " + fmt(s.cam || null) +
+                       (s.quali ? "  quali" : "") + (s.career ? "  career" : "")),
+        row("build",  s.buildDone ? s.buildDone.replace(/^build done /, "") : "—"),
+      ]);
+    }
+  }
+  const out = _body || el;
+  out.textContent = lines.filter(Boolean).join("\n");
+}
+
+function loop(now) {
+  _raf = 0;
+  if (!on()) return;
+  if (now - _lastPaint >= PAINT_MS) {
+    _lastPaint = now;
+    paintOverlay();
+  }
+  if (typeof requestAnimationFrame === "function")
+    _raf = requestAnimationFrame(loop);
+}
+
+function startLoop() {
+  if (typeof requestAnimationFrame !== "function") return;
+  if (!_raf) _raf = requestAnimationFrame(loop);
+}
+
+/* The six SETTINGS rows are setting rows (js/ui/setting-row.js) — the same
+   LABEL ‹ VALUE › control as every other Settings pick. A harness that loads
+   this file without SettingRow (tests/unit/metrics.test.mjs) gets the old
+   one-button cycle, painted as `LABEL: VALUE`, so its stubs still drive it. */
+function isRow(el) { return !!(el && el.classList && typeof el.classList.contains === "function" && el.classList.contains("set-row")); }
+function paintRow(el, label, value) {
+  if (!el) return;
+  if (isRow(el)) { SettingRow.paint(el, value); return; }
+  el.textContent = label + ": " + String(value).toUpperCase();
+}
+function paintBtn(btn) { paintRow(btn, "OVERLAY", on() ? "on" : "off"); }
+function paintPageBtn(btn) { paintRow(btn, "PAGE", page()); }
+function paintLogNsBtn(btn) { paintRow(btn, "LOG NS", logNs()); }
+function paintLogLvlBtn(btn) { paintRow(btn, "LOG SHOW", logLvl()); }
+
+function paintSummary() {
+  const det = typeof document !== "undefined" ? document.getElementById("pm-metrics-details") : null;
+  const sum = det && det.querySelector ? det.querySelector("summary") : null;
+  if (!sum) return;
+  sum.innerHTML = '<span data-fold="k">METRICS</span><span data-fold="sep"> · </span>' +
+    (on()
+      ? '<span data-fold="on">ON</span><span data-fold="sep"> · </span><span data-fold="val">' + page().toUpperCase() + "</span>"
+      : '<span data-fold="off">OFF</span>');
+}
+
+function paintLogVisibility() {
+  const show = page() === "log";
+  if (_logNsBtn) _logNsBtn.hidden = !show;
+  if (_logLvlBtn) _logLvlBtn.hidden = !show;
+}
+
+function paintPosBtn(btn) { paintRow(btn, "SIDE", pos()); }
+function paintSizeBtn(btn) { paintRow(btn, "SIZE", size()); }
+
+function paintSettingBtns() {
+  paintBtn(_btn);
+  paintPageBtn(_pageBtn);
+  paintPosBtn(_posBtn);
+  paintSizeBtn(_sizeBtn);
+  paintLogNsBtn(_logNsBtn);
+  paintLogLvlBtn(_logLvlBtn);
+  paintLogVisibility();
+  paintSummary();
+}
+
+function raiseBuffer() {
+  try {
+    const cur = Log.level();
+    if (Log.LEVELS[cur.buffer] >= Log.DEBUG) return;
+    _raisedBuffer = { buffer: cur.buffer, bufferNs: cur.bufferNs };
+    Log.level("buffer:debug");
+    const ns = _raisedBuffer.bufferNs;
+    for (const k in ns) Log.level("buffer:" + k + ":" + ns[k]);
+  } catch (_) { /* keep shipped thresholds */ }
+}
+
+function restoreBuffer() {
+  if (!_raisedBuffer) return;
+  try {
+    Log.level("buffer:" + _raisedBuffer.buffer);
+    const ns = _raisedBuffer.bufferNs;
+    for (const k in ns) Log.level("buffer:" + k + ":" + ns[k]);
+  } catch (_) { /* leave whatever the player set */ }
+  _raisedBuffer = null;
+}
+
+// THE PANEL IS PLAYER-FACING; ITS DATA SOURCE WAS NOT. Everything on CAR and
+// PHYS comes from window.__apex, which is LAZY_AGENT: wantAgentSurface() in
+// js/game.js gates it to tests, localhost and ?apex=1 and NEVER admits a
+// player on github.io — bootAgentSurface() returns at its first line — so on the only
+// build that matters PHYS painted "—" in every row and CAR kept just the speed
+// digit it scrapes out of the HUD. MEASURED on the shipped tree, snapshot()
+// field lists with the surface present vs nulled:
+//   GOV   loses scale auto strikes tierFloor gpuMs track state flow cam
+//         caution build
+//   CAR   loses lap pos total gear energy times gaps sector s x angle k hw
+//   PHYS  loses ALL SEVENTEEN — slipDeg vLat yawRate slipFactor axEstSm
+//         axFrac slope wrongWay rescueT head vmaxNow aeroGrip aeroDf xOn
+//         xArmed aeroLoad aeroX
+// Every read sits in a try/catch against a NULL __apex, so the failure is
+// silent by construction and tests/unit/metrics.test.mjs pinned the graceful
+// degradation without anyone noticing the degradation IS the shipped panel.
+//
+// So ASK for the surface when the player opens the panel, rather than moving
+// it onto the boot wall. game.js hands us the memoised loader; a player who
+// never opens METRICS still downloads nothing, which is the one constraint
+// LAZY_AGENT exists to protect. Requested once — a refused or failed inject
+// leaves the panel exactly as degraded as it is today, never a retry loop.
+let _telemetryLoad = null;    // game.js's memoised loadAgentSurface, or null
+let _telemetryAsked = false;
+// Installed by game.js AFTER its boot await chain, which is later than the
+// DOMContentLoaded initUI that handles a player booting with METRICS already
+// on — so that path reaches ensureTelemetry() with no loader yet and correctly
+// declines WITHOUT burning the one-shot latch. Ask again here, or a panel that
+// was already on would stay degraded until it was toggled off and back on.
+function setTelemetryLoader(fn) {
+  _telemetryLoad = typeof fn === "function" ? fn : null;
+  if (_telemetryLoad && on()) ensureTelemetry();
+}
+function ensureTelemetry() {
+  if (_telemetryAsked || !_telemetryLoad) return;
+  // Already live (localhost, ?apex=1, a spec): nothing to fetch.
+  if (typeof window !== "undefined" && window.__apex) return;
+  _telemetryAsked = true;
+  try {
+    Promise.resolve(_telemetryLoad()).then(() => { paintOverlay(); }, () => { /* offline: stay degraded */ });
+  } catch (_) { /* loader threw synchronously: stay degraded */ }
+}
+
+function set(v) {
+  const next = !!v;
+  _on = next;
+  store(KEY, next ? "1" : "0", /[?&]metrics=/i);
+  try { Log.info("game", "metrics " + (next ? "on " + page() : "off")); } catch (_) { /* Log not loaded */ }
+  if (next) {
+    raiseBuffer();
+    ensureTelemetry();
+    paintOverlay();
+    startLoop();
+  } else {
+    restoreBuffer();
+    paintOverlay();
+  }
+  paintSettingBtns();
+  return next;
+}
+
+function toggle() { return set(!on()); }
+
+function setPage(name) {
+  const next = String(name || "").toLowerCase();
+  if (PAGES.indexOf(next) < 0) return page();
+  _page = next;
+  store(PAGE_KEY, next, /[?&]metricsPage=/i);
+  try { if (on()) Log.info("game", "metrics page " + next); } catch (_) { /* Log not loaded */ }
+  if (on()) paintOverlay();
+  paintSettingBtns();
+  return _page;
+}
+
+function nextPage(dir) {
+  const i = PAGES.indexOf(page());
+  const d = dir < 0 ? -1 : 1;
+  return setPage(PAGES[(i + d + PAGES.length) % PAGES.length]);
+}
+
+function setPos(name) {
+  const next = String(name || "").toLowerCase();
+  if (POSITIONS.indexOf(next) < 0) return pos();
+  _pos = next;
+  store(POS_KEY, next, /[?&]metricsPos=/i);
+  if (_panel) applyPos(_panel);
+  paintSettingBtns();
+  return _pos;
+}
+
+function nextPos(dir) {
+  const i = POSITIONS.indexOf(pos());
+  const d = dir < 0 ? -1 : 1;
+  return setPos(POSITIONS[(Math.max(0, i) + d + POSITIONS.length) % POSITIONS.length]);
+}
+
+function setSize(name) {
+  const next = String(name || "").toLowerCase();
+  if (SIZES.indexOf(next) < 0) return size();
+  _size = next;
+  store(SIZE_KEY, next, /[?&]metricsSize=/i);
+  if (_panel) applySize(_panel);
+  if (on()) paintOverlay();
+  paintSettingBtns();
+  return _size;
+}
+
+function nextSize(dir) {
+  const i = SIZES.indexOf(size());
+  const d = dir < 0 ? -1 : 1;
+  return setSize(SIZES[(Math.max(0, i) + d + SIZES.length) % SIZES.length]);
+}
+
+function setLogNs(name) {
+  const next = String(name || "").toLowerCase();
+  if (LOG_NS.indexOf(next) < 0) return logNs();
+  _logNs = next;
+  store(LOG_NS_KEY, next, /[?&]metricsLog=/i);
+  if (on()) paintOverlay();
+  paintSettingBtns();
+  return _logNs;
+}
+
+function nextLogNs(dir) {
+  const i = LOG_NS.indexOf(logNs());
+  const d = dir < 0 ? -1 : 1;
+  return setLogNs(LOG_NS[(Math.max(0, i) + d + LOG_NS.length) % LOG_NS.length]);
+}
+
+function setLogLvl(name) {
+  const next = String(name || "").toLowerCase();
+  if (LOG_LVLS.indexOf(next) < 0) return logLvl();
+  _logLvl = next;
+  store(LOG_LVL_KEY, next, /[?&]metricsLvl=/i);
+  if (on()) paintOverlay();
+  paintSettingBtns();
+  return _logLvl;
+}
+
+function nextLogLvl(dir) {
+  const i = LOG_LVLS.indexOf(logLvl());
+  const d = dir < 0 ? -1 : 1;
+  return setLogLvl(LOG_LVLS[(Math.max(0, i) + d + LOG_LVLS.length) % LOG_LVLS.length]);
+}
+
+function typingTarget(t) {
+  return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" ||
+    t.tagName === "SELECT" || t.tagName === "BUTTON" || t.isContentEditable);
+}
+
+function insertAfter(host, anchor, el) {
+  if (anchor.nextSibling) host.insertBefore(el, anchor.nextSibling);
+  else host.appendChild(el);
+  return anchor = el;
+}
+
+function uiSelect() {
+  try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); }
+  catch (_) { /* audio not up yet; the pick still applies */ }
+}
+// values: [[v, label], …]; read(): v; write(v). Falls back to a cycle button
+// where SettingRow is absent (see paintRow).
+function makeMetricsRow(id, label, title, values, read, write, paint) {
+  if (typeof SettingRow === "undefined") {
+    const b = document.createElement("button");
+    b.id = id;
+    b.type = "button";
+    b.title = title;
+    paint(b);
+    b.onclick = () => {
+      const vs = values.map((p) => p[0]);
+      write(vs[(vs.indexOf(String(read())) + 1) % vs.length]);
+      uiSelect();
+    };
+    return b;
+  }
+  const r = SettingRow.build(id, label, values);
+  r.row.title = title;
+  SettingRow.wire(r.row, { values, read, write: (v) => { write(v); uiSelect(); } });
+  return r.row;
+}
+const up = (list) => list.map((v) => [v, String(v).toUpperCase()]);
+
+function initUI() {
+  try { Log.info("game", "GameMetrics.initUI"); } catch (_) { /* Log not loaded */ }
+  if (typeof document === "undefined") return;
+  const anchor = document.getElementById("pm-hud-details")
+    || document.getElementById("pm-hidehud");
+  const host = anchor && anchor.parentNode;
+  if (host && !document.getElementById("pm-metrics")) {
+    let ins = anchor;
+    _btn = makeMetricsRow(
+      "pm-metrics", "OVERLAY",
+      "Show the live metrics overlay on the canvas. ` or F9 also toggles it. " +
+        "Each page shows different data: GOV = perf/session, CAR = timing/speed, " +
+        "PHYS = grip/forces, LOG = filtered log tail.",
+      up(["on", "off"]), () => (on() ? "on" : "off"), (v) => { set(v === "on"); }, paintBtn,
+    );
+    ins = insertAfter(host, ins, _btn);
+
+    _pageBtn = makeMetricsRow(
+      "pm-metrics-page", "PAGE",
+      "Which overlay page is shown while METRICS is ON. Pick a page before turning on, or use [ ] / 1–4 in-game.",
+      up(PAGES), page, setPage, paintPageBtn,
+    );
+    ins = insertAfter(host, ins, _pageBtn);
+
+    _posBtn = makeMetricsRow(
+      "pm-metrics-pos", "SIDE",
+      "Which side the metrics overlay docks on. AUTO is left on a short or narrow viewport so the panel cannot cover GAS/BRAKE.",
+      up(POSITIONS), pos, setPos, paintPosBtn,
+    );
+    ins = insertAfter(host, ins, _posBtn);
+
+    _sizeBtn = makeMetricsRow(
+      "pm-metrics-size", "SIZE",
+      "How large the metrics overlay is. S is the phone default. The S/M/L chip on the overlay also cycles this.",
+      up(SIZES), size, setSize, paintSizeBtn,
+    );
+    ins = insertAfter(host, ins, _sizeBtn);
+
+    _logNsBtn = makeMetricsRow(
+      "pm-metrics-logns", "LOG NS",
+      "Filter the LOG overlay tail to one namespace (* = all). = / - cycle while the overlay is up.",
+      up(LOG_NS), logNs, setLogNs, paintLogNsBtn,
+    );
+    ins = insertAfter(host, ins, _logNsBtn);
+
+    _logLvlBtn = makeMetricsRow(
+      "pm-metrics-loglvl", "LOG SHOW",
+      "How verbose the LOG overlay tail is (warn / info / debug). ; cycles while the overlay is up.",
+      up(LOG_LVLS), logLvl, setLogLvl, paintLogLvlBtn,
+    );
+    insertAfter(host, ins, _logLvlBtn);
+  }
+
+  if (typeof window !== "undefined" && !_keysBound) {
+    _keysBound = true;
+    window.addEventListener("keydown", (e) => {
+      if (e.repeat || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (typingTarget(e.target)) return;
+      if (e.key === "`" || e.code === "Backquote" || e.key === "F9") {
+        e.preventDefault();
+        toggle();
+        return;
+      }
+      if (!on()) return;
+      try {
+        if (typeof UiLayers !== "undefined" && UiLayers.anyOpen && UiLayers.anyOpen()) return;
+      } catch (_) { /* menus not booted */ }
+      if (e.key === "]" || e.key === "[") {
+        e.preventDefault();
+        nextPage(e.key === "]" ? 1 : -1);
+        return;
+      }
+      const jump = { "1": "gov", "2": "car", "3": "phys", "4": "log" };
+      if (jump[e.key]) {
+        e.preventDefault();
+        setPage(jump[e.key]);
+        return;
+      }
+      if (e.key === "=" || e.key === "-") {
+        e.preventDefault();
+        if (page() !== "log") setPage("log");
+        nextLogNs(e.key === "=" ? 1 : -1);
+        return;
+      }
+      if (e.key === ";") {
+        e.preventDefault();
+        if (page() !== "log") setPage("log");
+        nextLogLvl(1);
+      }
+    });
+    window.addEventListener("resize", () => {
+      if (_panel) { applyPos(_panel); applySize(_panel); }
+    });
+  }
+
+  if (on()) { raiseBuffer(); ensureTelemetry(); paintOverlay(); startLoop(); }
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", initUI, { once: true });
+  else initUI();
+}
+
+if (on()) raiseBuffer();
+
+// SETTINGS > DISPLAY — the METRICS submenu. Folds #pm-metrics / PAGE / SIDE /
+// SIZE / LOG NS / LOG SHOW into one <details> after the HUD fold. Layout
+// lives in css/components.css. Closed summary carries ON/page state so the
+// fold does not have to open to be read. LOG filters hide unless PAGE is LOG.
+function buildSubmenu() {
+  if (typeof document === "undefined") return;
+  const onBtn = document.getElementById("pm-metrics");   // the button — a local named like the module's on() shadowed it
+  const pageBtn = document.getElementById("pm-metrics-page");
+  const posBtn = document.getElementById("pm-metrics-pos");
+  const sizeBtn = document.getElementById("pm-metrics-size");
+  const ns = document.getElementById("pm-metrics-logns");
+  const lvl = document.getElementById("pm-metrics-loglvl");
+  if (!onBtn || document.getElementById("pm-metrics-details")) return;
+  const host = onBtn.parentNode;
+  if (!host) return;
+
+  const det = document.createElement("details");
+  det.id = "pm-metrics-details";
+  det.className = "pm-metrics-sub";
+
+  const sum = document.createElement("summary");
+  sum.className = "adv-more-btn";
+  sum.innerHTML = '<span data-fold="k">METRICS</span><span data-fold="sep"> · </span><span data-fold="off">OFF</span>';
+  sum.title = "Live FPS / car / phys / log overlay controls";
+  det.appendChild(sum);
+
+  const body = document.createElement("div");
+  body.className = "pm-metrics-sub-body";
+  body.setAttribute("role", "group");
+  body.setAttribute("aria-label", "Metrics controls");
+  // The rows' own explanations are hover-only titles; this line is the one a
+  // phone can read.
+  const help = document.createElement("p");
+  help.className = "adv-help";
+  help.textContent = "A live readout over the race for testing and tuning. OVERLAY turns it on (` or F9 in a race); PAGE picks GOV for performance, CAR for timing and speed, PHYS for grip and forces, LOG for the event log; SIDE and SIZE place it.";
+  body.appendChild(help);
+
+  [onBtn, pageBtn, posBtn, sizeBtn, ns, lvl].forEach((btn) => {
+    if (!btn) return;
+    btn.addEventListener("click", (e) => { e.stopPropagation(); });
+    body.appendChild(btn);
+  });
+  det.appendChild(body);
+
+  const fold = document.getElementById("pm-hud-details");
+  const hide = document.getElementById("pm-hidehud");
+  const place = (fold && fold.parentNode === host) ? fold
+    : (hide && hide.parentNode === host) ? hide : null;
+  if (place) {
+    if (place.nextSibling) host.insertBefore(det, place.nextSibling);
+    else host.appendChild(det);
+  } else {
+    host.appendChild(det);
+  }
+
+  paintSettingBtns();
+}
+
+function scheduleSubmenu() {
+  // A VM harness may hand this file a document with no timers (the metrics
+  // unit test does): the submenu is DOM sugar, so it simply does not build there.
+  if (typeof document === "undefined" || typeof setTimeout !== "function") return;
+  const run = () => setTimeout(buildSubmenu, 0);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run, { once: true });
+  else run();
+  setTimeout(buildSubmenu, 250);
+  setTimeout(buildSubmenu, 1000);
+}
+scheduleSubmenu();
+
+// Read-only Playwright seam: PerfGov.frameStats() + a longtask ring for
+// tests/specs/perf-frametime.spec.js. Does not touch gameplay; reset only
+// clears the governor's diagnostic history.
+let _ftLt = 0;
+let _ftObs = null;
+
+function frametimeBenchReset() {
+  try {
+    if (typeof PerfGov !== "undefined" && PerfGov.resetFrameStats) PerfGov.resetFrameStats();
+  } catch (_) { /* pre-boot harness */ }
+  _ftLt = 0;
+  if (_ftObs) {
+    try { _ftObs.disconnect(); } catch (_) { /* gone */ }
+    _ftObs = null;
+  }
+  if (typeof PerformanceObserver !== "function") return;
+  try {
+    const types = PerformanceObserver.supportedEntryTypes;
+    if (!types || types.indexOf("longtask") < 0) return;
+    _ftObs = new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) _ftLt++;
+    });
+    _ftObs.observe({ type: "longtask", buffered: true });
+  } catch (_) {
+    _ftObs = null;
+  }
+}
+
+function frametimeBenchSnapshot() {
+  const ft = (typeof PerfGov !== "undefined" && PerfGov.frameStats)
+    ? PerfGov.frameStats()
+    : { frames: 0, p50: 0, p95: 0, p99: 0, maxMs: 0 };
+  let heapUsedMB = null;
+  let heapTotalMB = null;
+  try {
+    const m = performance.memory;
+    if (m) {
+      heapUsedMB = +(m.usedJSHeapSize / (1024 * 1024)).toFixed(2);
+      heapTotalMB = +(m.totalJSHeapSize / (1024 * 1024)).toFixed(2);
+    }
+  } catch (_) { /* no performance.memory */ }
+  return {
+    p50: +(+ft.p50 || 0).toFixed(3),
+    p95: +(+ft.p95 || 0).toFixed(3),
+    p99: +(+ft.p99 || 0).toFixed(3),
+    max: +(+ft.maxMs || 0).toFixed(3),
+    frames: ft.frames || 0,
+    longTasks: _ftLt,
+    heapUsedMB,
+    heapTotalMB,
+  };
+}
+
+return {
+  KEY, PAGE_KEY, POS_KEY, SIZE_KEY, LOG_NS_KEY, LOG_LVL_KEY,
+  PAGES, POSITIONS, SIZES, LOG_NS, LOG_LVLS,
+  on, set, toggle, page, setPage, nextPage,
+  pos, setPos, nextPos, resolvePos,
+  size, setSize, nextSize,
+  logNs, setLogNs, nextLogNs, logLvl, setLogLvl, nextLogLvl,
+  snapshot, PANEL_STYLE, setTelemetryLoader,
+  frametimeBenchReset, frametimeBenchSnapshot,
+};
+})();
+Object.freeze(GameMetrics);

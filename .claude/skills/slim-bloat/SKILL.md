@@ -1,0 +1,63 @@
+---
+name: slim-bloat
+description: "Use when files, docs or the tree have grown too large for agents — saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates, or \"simplify this / too much context\". Not physics tune, circuit accuracy, CSS restructure (css-play), skill hygiene (agent-config) or pre-push verify (check-changes)."
+---
+
+# Cut agent bloat (Claude-simplify for Apex 26)
+
+Scan first. Dispatch **bloat-auditor**. Parent applies **one carve**.
+Preserve behaviour. Lower ratchets. Do not "simplify" a load-bearing
+quirk — the measured list is [references/do-not.md](references/do-not.md).
+
+## Entry
+
+```sh
+node tools/check/bloat-scan.mjs --json              # size + ratchet slack (evidence, NOT candidates)
+node tools/check/ratchets.mjs --json                # per-metric lines/codeLines/gMembers/topLets slack
+node tools/check/extract-module.mjs js/game.js <start> <end>   # free refs of ONE whole function: take its line range from grep -n first
+```
+
+Slack 0 on every row = saturated: the scan names no block. First `node tools/check/ratchets.mjs --base origin/<ship>`
+(names raises: a blocked commit may be a raise, not saturation). Seed the auditor with
+`docs/ARCHITECTURE.md` §Deferred follow-ups / §Extraction lessons (sort by boundary crossings). Candidates come
+only from `bloat-auditor` (a cohesive block with few free names — `extract-module`
+prints them as `name×count`; `let`s are the `G` accessors the carve costs).
+Done = ratchet `--update` lowers the ceiling; `ratchets.mjs` ends `all at or under`.
+
+Fat skill: the `skill` rows of `bloat-scan` (no `--json` = tab table) are the
+evidence; caps in `skill-progressive.test.mjs` are 500 for every SKILL.md,
+120 `mcp-probe`, 180 the thin-index skills. Under cap = nothing to carve; say
+so, name the largest (the first `skill` row) and stop. Over: carves.md §2.
+
+The line range must bracket WHOLE statements — it is parsed, not sliced, so a
+range that opens mid-function exits 1 on a bare `SyntaxError` that reads like a
+broken file rather than a badly chosen range.
+
+Spawn `bloat-auditor` with a **named scope** (one file, one skill, or
+`HEAD` / last-touched). It returns `BLOAT` rows only. Seed its scope with `prior-art-scout`
+(rejected / already-fixed items) and run `finding-verifier` on dead-code rows before the carve. The parent edits and
+locksteps; if `tools/manifest.cjs` changed, run `node tools/gen/gen-shell.mjs`
+([shell/cache](../check-changes/references/bump.md)).
+
+## Hard don'ts (always)
+
+1. **One carve per commit.** Extraction leftovers are the measured failure
+   (`ARCHITECTURE.md` §Reorg — copied constants, leftover `_cautionOn`).
+2. **Never raise a ratchet to hide growth.** `node tools/check/ratchets.mjs --update`
+   in the same commit as the extract. Same for skill line caps.
+3. **Never convert IIFE → ESM.** New-file lockstep: file + `<script>` +
+   `tools/manifest.cjs` (+ `HARD_EDGES` if eval-time) + `node tools/gen/gen-shell.mjs`.
+4. **Never hand the auditor a browser run.** Dead `__apex` hooks: parent
+   confirms with **mcp-probe** / `mcp-cli.mjs probe` after `apex_status`.
+   Context7 / WebFetch are fine (Agent Skills caps, library docs).
+5. **Never "simplify" physics, the timestep, or `updateCar`/`render()`.**
+   See do-not.md.
+
+Editing a skill's description, routing queries, an agent, a hook or AGENTS.md (budgets, the routing A/B) → **agent-config**.
+CSS/DOM count work → **css-play** (`references/restructure.md`). Pre-push →
+**check-changes** / `verify-agent`.
+
+## Load on demand
+
+- Measured "do not simplify" table → [references/do-not.md](references/do-not.md)
+- Carve recipes (extract / tree / comments / dead proof) → [references/carves.md](references/carves.md)

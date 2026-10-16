@@ -1,0 +1,501 @@
+/* physics-rows-vm.test.mjs — five physics rows from the 2026-09-02 bug hunt
+ * (round 2 "Not landed" → Physics), each replayed where it lives: four in the
+ * Node VM (tools/lib/game-vm.cjs — the real js/game.js, no browser) and one in
+ * the incident-gate style harness (js/physics/incident-sim.js whole, DebrisWorld
+ * mocked). Every pin was red on the code before its fix (HEAD's file swapped
+ * back in) and is green after; none moves physics-characterization-vm.
+ *
+ * Plus the 2026-09-04 drive-feel rows (turn-in triad, throttle ellipse,
+ * downhill overspeed): source pins plus one behavioural probe each.
+ * Plus the 2026-09-05 TLX M6 skid-stint premise (incidents off, |x|>8).
+ *
+ * Run: node --test tests/unit/physics-rows-vm.test.mjs   (npm run test:game-vm)
+ */
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
+
+const require = createRequire(import.meta.url);
+const { createGame } = require("../../tools/lib/game-vm.cjs");
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+let g = null, PHYS0 = null;
+// steerMode "touch" is inert until a test also makes Input report a coarse
+// pointer — the other cases drive through setInput(), which bypasses it.
+before(async () => { g = await createGame({ track: "monza", storage: { steerMode: "touch" } }); PHYS0 = { ...g.apex.tuning() }; });
+after(() => { if (g) g.close(); });
+
+async function startRace() {
+  g.apex.setPhysics(PHYS0); g.apex.headless(false);
+  await g.race("monza", "day", "dry");
+}
+
+// ---------------------------------------------------------------------------
+// Row 1 — js/physics/incident-sim.js `_lapCross`: a lap counted under a takeover
+// mirrors updateCar's crossing for the player's sector clock, and the lap it
+// starts stays incident-invalid (the clock froze while Rapier drove).
+// ---------------------------------------------------------------------------
+test("a lap counted under a takeover resets the player's sector clock and keeps the new lap invalid", () => {
+  const SRC = readFileSync(join(ROOT, "js/physics/incident-sim.js"), "utf8");
+  const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 30, vz: 0, sleeping: false };
+  const DebrisWorld = {
+    active: () => true, rapierReady: () => true, worldGen: () => 1,
+    promoteCarDynamic: () => true, demoteCarKinematic: () => {}, carBodyPose: () => pose,
+  };
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, String, Number, Map, Set, Uint8Array, isNaN, isFinite, console,
+    DebrisWorld, Tracks: { sample: () => {}, wallAt: () => 8 },
+  });
+  seedLog(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx, { filename: "js/race/race-control.js" });
+  vm.runInContext(SRC, ctx, { filename: "js/physics/incident-sim.js" });
+  const IncidentSim = vm.runInContext("IncidentSim", ctx);
+  const mk = (s) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0, yawRateCur: 0, prog: s,
+                       lap: 3, lapTime: 80, finished: false, retired: false, human: true, isPlayer: true, local: true });
+  const cars = [mk(4990), { ...mk(4993), human: false, isPlayer: false, local: false }];
+  let footS = 4990;   // where trackFrom pins the Rapier body: before the line, then past it
+  const G = { cars, player: cars[0], track: { total: 5000 }, PACE: 1, vTop: () => 72, lapsTarget: 10, raceT: 100,
+              sectorIdx: 2, sectorStartT: 55,   // the player was in S3, split clock running
+              trackFrom: () => ({ s: footS, x: 0 }), worldFromTrack: () => ({ x: 0, z: 0 }),
+              rescuePlayer: () => {}, smp: {} };
+  const sim = IncidentSim.create(G);
+  sim.setFlags({ r2Airborne: true, r3Contact: false, c1Pileup: false });
+  sim.notifyCar(cars[0], cars[1], 30);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 2, "both cars under the takeover window");
+  assert.equal(cars[0].incidentInvalidLap, true, "promote invalidates the lap in progress");
+  footS = 12;   // Rapier carried the player over s = 0
+  sim.postStep(1 / 60);
+  assert.equal(cars[0].lap, 4, "the crossing counted the lap");
+  assert.equal(cars[0].lapTime, 0, "and zeroed the lap clock, as updateCar's crossing does");
+  assert.equal(G.sectorIdx, 0, "sector clock re-armed at S1 for the player");
+  assert.equal(G.sectorStartT, 0, "sectorStartT reset with the lap clock (was timed from the stale S3 entry)");
+  // Decision, pinned: the lap begun under Rapier keeps the flag. updateCar
+  // early-outs an owned car before `lapTime += dt`, so its clock is short —
+  // clearing at handback would let it become a PB or the stored ghost.
+  assert.equal(cars[0].incidentInvalidLap, true, "the lap begun under the takeover stays invalid");
+});
+
+// ---------------------------------------------------------------------------
+// Row 2 — js/game.js `stoppedOnTrack`: the rescue's throttle gate is the
+// DRIVER's pedal. On touch/tilt onThrottle is autoThrottle() (always true), so
+// a phone player parked or boxed in a pile-up was teleported to x = 0 after 3 s.
+// ---------------------------------------------------------------------------
+test("touch auto-throttle never counts as a driver asking for a rescue; a pressed pedal still does", async () => {
+  await startRace();
+  const a = g.apex, I = g.sandbox.Input, p = g.G.player;
+  const keep = { touchControlsNeeded: I.touchControlsNeeded, throttle: I.throttle, braking: I.braking };
+  try {
+    // A phone: coarse pointer + steerMode "touch" (seeded) → autoThrottle() true.
+    I.touchControlsNeeded = () => true; I.throttle = () => false; I.braking = () => false;
+    a.clearInput();                       // live Input path, not a scripted input
+    // The pace floor keeps the auto-throttled car under the 3 m/s gate for
+    // longer than the 3 s rescue window (vmax = 72 * 0.05 = 3.6 m/s), which is
+    // the boxed-in/pile-up shape without needing a pack to hold the car.
+    a.setPhysics({ pace: 0.05 });
+    a.jump(0.0, 0, 0); g.G.raceT = 10;
+    let vMax = 0;
+    for (let i = 0; i < 300; i++) { a.step(1 / 60, 1); vMax = Math.max(vMax, p.speed); }
+    assert.ok(vMax < 3, `the scenario held the car under the rescue gate (peak ${vMax.toFixed(2)} m/s)`);
+    assert.equal(p.rescueLastT, null, "auto gas is not a driver asking: no rescue fired in 5 s");
+    // Positive control — the wedged-against-a-wall promise: the same car with
+    // the driver's pedal DOWN is rescued.
+    I.throttle = () => true;
+    a.jump(0.0, 0, 0); p.rescueT = 0;
+    for (let i = 0; i < 300; i++) a.step(1 / 60, 1);
+    assert.ok(p.rescueLastT != null, "a pressed pedal on a car going nowhere still rescues");
+  } finally {
+    Object.assign(I, keep);
+    a.setPhysics(PHYS0);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Row 2b — and the other half of that gate. In TOUCH steering the GAS button is
+// hidden (auto-throttle supplies the pedal), so there is no key, button or pad
+// for Input.throttle() to read: gating purely on the driver's pedal made this
+// rescue unreachable on exactly the devices whose players cannot press one, and
+// it is the ONLY rescue covering a car wedged at |x| < hw where beached,
+// wrongWay and wallT all stay false. Auto gas IS the driver asking there.
+// ---------------------------------------------------------------------------
+test("touch steering has no pedal to release, so auto gas rescues a wedged car — but never a car rubbing in a pack", async () => {
+  await startRace();
+  const a = g.apex, I = g.sandbox.Input, p = g.G.player;
+  const keep = { touchControlsNeeded: I.touchControlsNeeded, throttle: I.throttle, braking: I.braking };
+  try {
+    I.touchControlsNeeded = () => true; I.throttle = () => false; I.braking = () => false;
+    a.clearInput();
+    a.setPhysics(PHYS0);                  // full pace: vStd(speed) is speed
+    // WEDGED: pinned by geometry the longitudinal model cannot represent, so the
+    // car is held at a standstill while auto-throttle asks it to go. wallT stays
+    // 0 (the driver is not steering into the barrier) and |x| < hw, which is
+    // precisely the hole the other three stuck clauses leave open.
+    a.jump(0.0, 0, 0); g.G.raceT = 10; p.rescueT = 0; p.rescueLastT = null;
+    p.contactT = 0;
+    for (let i = 0; i < 300; i++) { p.speed = 0; a.step(1 / 60, 1); }
+    assert.ok(p.rescueLastT != null,
+      "a touch-steer player wedged with auto gas on is rescued — there is no pedal for them to press");
+
+    // RUBBING IN A PACK: same standstill, same auto gas, but in contact with
+    // another car. That is a pile-up shuffle, not a wedge, and teleporting the
+    // player out of it to x = 0 is the behaviour the original row removed.
+    a.jump(0.0, 0, 0); p.rescueT = 0; p.rescueLastT = null;
+    for (let i = 0; i < 300; i++) { p.speed = 0; p.contactT = 0.22; a.step(1 / 60, 1); }
+    assert.equal(p.rescueLastT, null,
+      "a car rubbing another car is shuffling in traffic, not wedged: no rescue");
+  } finally {
+    Object.assign(I, keep);
+    p.contactT = 0;
+    a.setPhysics(PHYS0);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Row 4 — js/game.js overtake proximity: the car ahead ON THE ROAD (docs/
+// PHYSICS.md "within OT_GAP of the car ahead"), not ranked[rank-2]. Since the
+// 2026 Overtake rule (B7.2.3(c), js/race/overtake-mode.js) that proximity is
+// judged AT THE DETECTION LINE and the allowance is granted at the timing line.
+// ---------------------------------------------------------------------------
+test("overtake is earned on the car ahead on the road at the detection line: a backmarker 0.55 s ahead earns it, a finished car ahead in classification does not", async () => {
+  await startRace();
+  const a = g.apex, p = g.G.player, L = g.G.track.total;
+  const det = 0.9;   // OvertakeMode.DETECT_FRAC (monza sets no otDetectFrac)
+  const before = (m) => det - m / L;
+  a.jump(before(40), 55, 0); a.setInput({ steer: 0, throttle: true });
+  for (let i = 0; i < 5; i++) a.step(1 / 60, 1);
+  const [ri] = a.rivals([{ dProg: 30, dx: 0, speed: 55 }]);
+  const r = g.G.cars[ri];
+  // The player LEADS on lap 3; the rival is a lap down, 30 m ahead on the road.
+  p.lap = 3; p.prog = 3 * L + p.s;
+  r.lap = 2; r.prog = p.prog + 30 - L;
+  for (let i = 0; i < 120 && !(p.s > det * L + 2); i++) a.step(1 / 60, 1);
+  assert.ok(p.s > det * L, `the player crossed the detection line (s=${p.s.toFixed(0)} of ${(det * L).toFixed(0)})`);
+  assert.equal(p.rank, 1, "the player leads the classification");
+  assert.ok(g.G.otEnabled(), "race-wide overtake gate open (leader past lap 1)");
+  assert.equal(p.otEarned, true, "a backmarker ~0.55 s ahead on the road at the detection line earns OVERTAKE for the leader");
+  assert.equal(p.otArmed, false, "not usable yet: the allowance is granted at the timing line");
+  // The timing line: the lap counter ticks and the allowance lands.
+  p.lap = 4; p.prog += L; r.prog += L;
+  a.step(1 / 60, 1);
+  assert.ok(Math.abs(p.otE - 0.125) < 1e-9, `0.5 MJ = 0.125 of the 4 MJ battery unit granted (otE=${p.otE})`);
+  assert.equal(p.otArmed, true, "and armed for the lap");
+  assert.equal(p.otEarned, false, "the earn is spent by the grant");
+
+  // Same rival, now the car directly ahead in classification AND on the road —
+  // but finished and coasting. Nothing to attack, so nothing is earned.
+  a.jump(before(40), 55, 0);
+  p.lap = 4; p.prog = 4 * L + p.s;
+  r.prog = p.prog + 30; r.lap = 4; r.finished = true; r.speed = 0;
+  for (let i = 0; i < 120 && !(p.s > det * L + 2); i++) a.step(1 / 60, 1);
+  assert.ok(p.s > det * L, "crossed the detection line again");
+  assert.equal(r.rank, 1, "the finished car is one place up");
+  assert.equal(p.otEarned, false, "a finished car ahead does not earn OVERTAKE");
+  a.clearInput();
+});
+
+// verify-physics #2 (2026-10-04): an AI car advanced its arc at speed·dt
+// whatever its lateral offset, so the outside of a bend was free distance and
+// the inside bought nothing; the player's trackFrom charges ground ÷ h, the
+// Frenet stretch. Now the AI pays it too (an AI-only geometry read). h is
+// recomputed here from Tracks.sample exactly as game.js frenetH does (±H_D).
+test("an AI car advances its arc at speed·dt ÷ the Frenet stretch: no free distance round the outside", async () => {
+  await startRace();
+  const a = g.apex, G = g.G, T = g.sandbox.Tracks;
+  const H_D = Number(readFileSync(join(ROOT, "js/game.js"), "utf8").match(/const H_D = ([0-9.]+);/)[1]);
+  const A = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0] }, B = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0] };
+  const fH = (s, x) => {
+    const L = G.track.total, w = (v) => ((v % L) + L) % L;
+    T.sample(G.track, w(s - H_D), A); T.sample(G.track, w(s + H_D), B);
+    const cx = B.p[0] - A.p[0], cz = B.p[2] - A.p[2];
+    return Math.hypot(cx + (B.r[0] - A.r[0]) * x, cz + (B.r[2] - A.r[2]) * x) / Math.hypot(cx, cz);
+  };
+  a.go(); a.jump(0.5, 0, 0);   // the player well away from T1
+  const ai = G.cars.find((c) => !c.human);
+  for (const c of G.cars) if (!c.human && c !== ai) c.retired = true;
+  const rows = [];
+  for (const x of [-4, 4]) {   // monza T1 is a right-hander: -x is the OUTSIDE
+    ai.s = 539.8; ai.prog = 5000 + ai.s; ai.x = x; ai.speed = 25; ai._prevS = ai.s;
+    const p0 = ai.prog, s0 = ai.s;
+    a.step(1 / 60, 1);
+    const h = fH(s0, ai.x);
+    rows.push({ x, h, ds: ai.prog - p0, ratio: (ai.prog - p0) * h / (ai.speed / 60) });
+  }
+  retireReset();
+  const [outside, inside] = rows;
+  assert.ok(outside.h > 1.02 && inside.h < 0.98, `anti-vacuity: a bend (h ${outside.h.toFixed(4)} / ${inside.h.toFixed(4)})`);
+  for (const r of rows) assert.ok(Math.abs(r.ratio - 1) < 1e-6, `x ${r.x}: arc·h / ground = ${r.ratio}`);
+  assert.ok(outside.ds < inside.ds, `the outside line covers less arc per metre (${outside.ds.toFixed(4)} vs ${inside.ds.toFixed(4)})`);
+  function retireReset() { for (const c of G.cars) c.retired = false; }
+});
+
+// verify-physics #15: a car in the PIT LANE (or retired) is not the car ahead
+// ON THE ROAD. The default detection line (0.9 of the lap) is often where pit
+// entry is, so diving into the pits within 1 s of a rival handed them the
+// allowance. A source pin: the pit state is owned by PitLane.update, which
+// clears a hand-set pitState outside the lane window, so a VM pose cannot hold a
+// car "in the lane" at monza's detection line without driving the whole stop.
+test("the overtake scan skips pit-lane and retired cars", () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const scan = src.slice(src.indexOf("let ahead = null, gapAhead = Infinity"), src.indexOf("gapAhead = ahead && c.speed > 1"));
+  assert.ok(scan.length > 50 && scan.length < 1200, "anti-vacuity: found the detection scan");
+  assert.match(scan, /Collide\.scanOtAhead/);
+  assert.match(scan, /_otSkipLane/);
+  const collide = readFileSync(join(ROOT, "js/physics/collide.js"), "utf8");
+  const onOt = collide.slice(collide.indexOf("function _onOtO"), collide.indexOf("function scanOtAhead"));
+  assert.match(onOt, /o\.finished \|\| o\.retired/);
+  assert.match(onOt, /s\.skip && s\.skip\(o\)/);
+});
+
+// ---------------------------------------------------------------------------
+// Row 5 — js/game.js slip angles in reverse: slip is measured against |vx|.
+// atan2(vLat, -4) put both axles on the tanh plateau with a sign that flipped
+// on vLat ≈ 0 — a steady slide on a straight reverse with the wheel centred.
+// ---------------------------------------------------------------------------
+test("a straight reverse crawl with the wheel centred has no lateral response", async () => {
+  await startRace();
+  const a = g.apex, p = g.G.player;
+  a.jump(0.02, 0, 0);                        // Monza start straight
+  a.setInput({ steer: 0, brake: true });     // brake at a stop = reverse crawl
+  for (let i = 0; i < 180; i++) a.step(1 / 60, 1);
+  a.clearInput();
+  assert.ok(p.speed < -4, `crawling in reverse (${p.speed.toFixed(2)} m/s)`);
+  // Measured on the old code: vLat 0.149 m/s, yawRate 0.037 rad/s, both steady.
+  assert.ok(Math.abs(p.vLat || 0) < 0.02, `no lateral slip with zero steer on a straight (vLat ${(p.vLat || 0).toFixed(3)})`);
+  assert.ok(Math.abs(p.yawRateCur || 0) < 0.01, `no yaw with zero steer on a straight (yawRate ${(p.yawRateCur || 0).toFixed(3)})`);
+});
+
+// ---------------------------------------------------------------------------
+// Row 3 — js/game.js AI brake look-ahead: the bank the AI's brakeTarget sees is
+// |bank|, the same rule as the player's bankRoll. AI-only (a legitimate
+// curvature column); a signed/adverse bank must not cut the AI while it
+// boosts the player.
+// ---------------------------------------------------------------------------
+test("the AI look-ahead bank is |bank|, like the player's bankRoll", async () => {
+  await startRace();
+  const a = g.apex, T = g.sandbox.Tracks, AD = g.sandbox.AiDrive;
+  const keepBank = T.bankAngle, keepPush = AD.pushLook;
+  const seen = [];
+  try {
+    T.bankAngle = () => -0.35;                     // an adverse (signed) bank everywhere
+    AD.pushLook = (d, k, bank) => { seen.push(bank); return keepPush(d, k, bank); };
+    a.jump(0.0, 50, 0);
+    a.step(1 / 60, 1);
+  } finally {
+    T.bankAngle = keepBank; AD.pushLook = keepPush;
+  }
+  assert.ok(seen.length > 0, "the AI look-ahead sampled the bank");
+  assert.ok(seen.every((b) => b === 0.35), `every sample is |bank| (min ${Math.min(...seen)})`);
+});
+
+// ---------------------------------------------------------------------------
+// Drive-feel 2026-09-04 — turn-in triad, throttle ellipse, downhill overspeed.
+// Source pins fail closed if someone restores 0.89 / 0.7 / vmax-faded axFrac /
+// the confiscating min(vmax*1.06) assign. Behavioural probes fail if the
+// shipped numbers do not actually rotate more, spend the circle on power, or
+// keep ERS/X leftover on a descent.
+// ---------------------------------------------------------------------------
+test("shipped turn-in is snappier than the understeer-safe 0.89 / 0.7 pair", async () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(src, /let FRONT_GRIP = 0\.94/, "FRONT_GRIP default must stay 0.94 (was 0.89)");
+  assert.match(src, /let YAW_INERTIA = 0\.58/, "YAW_INERTIA default must stay 0.58 (was 0.7)");
+  await startRace();
+  const a = g.apex;
+  const t = a.tuning();
+  assert.equal(t.frontGrip, 0.94);
+  // CAR WEIGHT is device-aware since 2026-09-08: a PHONE ships 10 (the owner's
+  // own setting, where the steering is two thumb buttons) and a POINTER device
+  // ships 5, which resolves to exactly the 0.58 this test's regex pins above.
+  // The harness has no coarse pointer, so it is the desktop car that is
+  // measured here — and the desktop car is still the snappy one the
+  // 2026-09-04 drive-feel work set.
+  assert.equal(t.yawInertia, 0.58, "a pointer device keeps CAR WEIGHT 5 -> YAW_INERTIA 0.58");
+  const yawAt = (frontGrip, yawInertia) => {
+    a.setPhysics({ frontGrip, yawInertia, pace: 1, roadFollow: 0 });
+    a.jump(0.0, 40, 0);
+    a.setInput({ steer: 1, throttle: false });
+    const h0 = a.probe().angle;
+    for (let i = 0; i < 12; i++) a.step(1 / 60, 1);
+    const h1 = a.probe().angle;
+    a.clearInput();
+    return Math.abs(h1 - h0);
+  };
+  const old = yawAt(0.89, 0.7);
+  const now = yawAt(0.94, 0.58);
+  a.setPhysics(PHYS0);
+  assert.ok(now > old * 1.04, `new triad must yaw more (now=${now.toFixed(4)} old=${old.toFixed(4)})`);
+});
+
+test("power-on spends the friction ellipse even when speed-limited", async () => {
+  // Combined-slip / axThrDemand live in PlayerForces (carve-headroom A).
+  const forces = readFileSync(join(ROOT, "js/physics/player-forces.js"), "utf8");
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(forces + game, /THR_CAP[\s\S]{0,200}THR_FLOOR|THR_FLOOR[\s\S]{0,200}THR_CAP/, "throttle demand must be the named PhysicsConsts charge (THR_FLOOR/THR_CAP/THR_VK)");
+  assert.match(forces, /axThrDemand/, "ellipse cost is throttle demand, not only faded axEst");
+  assert.doesNotMatch(forces.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
+    /axFrac[\s\S]{0,180}clamp\(1 - c\.speed/,
+    "do not restore vmax-faded axEst as the only ellipse cost");
+  await startRace();
+  const a = g.apex;
+  a.setPhysics({ pace: 1, roadFollow: 0 });
+  const sample = (throttle) => {
+    a.jump(0.28, 70, 0);
+    a.setInput({ steer: 0.5, throttle, brake: false });
+    let slip = 1;
+    for (let i = 0; i < 20; i++) {
+      a.step(1 / 60, 1);
+      slip = g.G.player.slipFactor ?? 1;
+    }
+    a.clearInput();
+    return slip;
+  };
+  const coast = sample(false);
+  const power = sample(true);
+  a.setPhysics(PHYS0);
+  assert.ok(coast > 0.97, `coasting must keep the circle (slipFactor=${coast})`);
+  assert.ok(power < coast - 0.03, `throttle must spend the circle (power=${power} coast=${coast})`);
+});
+
+test("a descent does not confiscate existing overspeed; flat throttle bleeds it", async () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.doesNotMatch(src, /c\.speed = Math\.min\(vmax \* 1\.06, c\.speed \+ a \* dt\)/,
+    "do not restore the confiscating downhill clamp");
+  assert.match(src, /c\.speed < cap/, "downhill gravity only adds below the 6% margin");
+  g.apex.setPhysics(PHYS0); g.apex.headless(false);
+  await g.race("spa", "day", "dry");
+  g.apex.setPhysics({ ...PHYS0, pace: 1, roadFollow: 0 });
+  const a = g.apex;
+  let dnAt = 0, dn = 0;
+  // Steepest descent on a near-STRAIGHT stretch: the probe drives steer 0 for
+  // 0.75 s, so a descent inside a bend (Spa's real profile drops into Eau
+  // Rouge and Pouhon on curves) measures the car leaving the road, not the
+  // downhill-overspeed rule this row pins.
+  for (let i = 0; i < 300; i++) {
+    const f = i / 300;
+    a.jump(f, 40, 0); a.step(1 / 60, 1);
+    const s = a.physState().slope;
+    const bend = Math.max(...a.scan([0, 20, 40, 60]).map((p) => Math.abs(p.k)));
+    if (bend < 0.003 && s < dn) { dn = s; dnAt = f; }
+  }
+  a.jump(dnAt, 40, 0);
+  const vmax = a.physState().vmaxNow || 72;
+  const over = vmax * 1.18;
+  a.jump(dnAt, over, 0);
+  a.setInput({ steer: 0, throttle: true });
+  let minDn = over;
+  for (let i = 0; i < 45; i++) {
+    a.step(1 / 60, 1);
+    minDn = Math.min(minDn, a.physState().speed);
+  }
+  assert.ok(minDn > vmax * 1.10, `descent must keep overspeed (min=${minDn.toFixed(2)} vmax=${vmax.toFixed(2)})`);
+  // Bleed probe on Monza's start straight — Spa's flattest LUT node is not a
+  // safe 85 m/s line (walls / grass eat the car and look like a teleport).
+  await g.race("monza", "day", "dry");
+  a.setPhysics({ ...PHYS0, pace: 1, roadFollow: 0 });
+  a.jump(0.0, over, 0);
+  a.setInput({ steer: 0, throttle: true });
+  let flatEnd = over;
+  for (let i = 0; i < 180; i++) {
+    a.step(1 / 60, 1);
+    flatEnd = a.physState().speed;
+  }
+  a.clearInput();
+  a.setPhysics(PHYS0);
+  assert.ok(flatEnd < over - 1, `flat throttle must bleed overspeed (end=${flatEnd.toFixed(2)} start=${over.toFixed(2)})`);
+  assert.ok(flatEnd > vmax * 0.95, `bleed is a drag, not a teleport (end=${flatEnd.toFixed(2)})`);
+});
+
+// ---------------------------------------------------------------------------
+// TLX M6 skid-batch premise — tests/specs/tlx-probes.spec.js. 55 frames of
+// full-lock throttle from park(0.1)/jump(70) must still be off-road and
+// moving so skids.stamp() can fire. First-contact sev is 37.8 ≥ R2_WALL_SEV
+// 34; Rapier live (macos gfx) takes the player and pins x at wallAt≈7.58.
+// Same incident({flags}) bypass as the wall rows above. Do not lower |x|>8.
+// ---------------------------------------------------------------------------
+test("TLX M6 skid stint still clears Monza hw with incidents off", async () => {
+  await startRace();
+  const a = g.apex;
+  a.incident({ flags: { r2Airborne: false, r3Contact: false, c1Pileup: false } });
+  a.headless(true);
+  a.park(0.1);
+  a.jump(0.1, 70);
+  a.act({ steer: 1, throttle: true }, 1 / 60, 55);
+  const p = a.physState();
+  a.headless(false);
+  a.incident({ flags: { r2Airborne: true, r3Contact: true, c1Pileup: true } });
+  a.setPhysics(PHYS0);
+  assert.ok(p.speed > 10, `speed ${p.speed} > 10`);
+  assert.ok(Math.abs(p.x) > 8, `|x| ${p.x} > 8 (do not lower the TLX spec gate)`);
+});
+
+// ---------------------------------------------------------------------------
+// 2026-09-16 tyre rows — the lateral curve lets go past its peak
+// (TyreModel.lateralCurve) and axle friction is load-sensitive (LOAD_SENS). The
+// probe reuses the TLX skid stint above: 55 frames of full-lock throttle from
+// 70 m/s leaves the rear at x ≈ 2.0, past the peak (π/2) and on the plateau;
+// the curve reaches its floor by x ≈ 5. The steady-corner characterisation
+// rows are the other half of this pin.
+// ---------------------------------------------------------------------------
+test("past the peak the tyre lets go: a full-lock slide settles under the limit on the curve", async () => {
+  await startRace();
+  const a = g.apex, PC = g.ctx.PhysicsConsts, TM = g.ctx.TyreModel;
+  a.incident({ flags: { r2Airborne: false, r3Contact: false, c1Pileup: false } });
+  a.headless(true);
+  a.park(0.1);
+  a.jump(0.1, 70);
+  a.act({ steer: 1, throttle: true }, 1 / 60, 55);
+  const p = g.G.player;
+  const xR = PC.CS_REAR * Math.abs(p.slipRear) / p.gripRear;   // normalised slip, DRIFT 0 so csR = CS_REAR
+  const util = Math.abs(p.forceRear) / p.gripRear;             // |F| / mu (rearUtil itself is x / peak, monotonic)
+  a.headless(false);
+  a.incident({ flags: { r2Airborne: true, r3Contact: true, c1Pileup: true } });
+  a.setPhysics(PHYS0);
+  assert.ok(p.speed > 3, `sp factor must be 1 (speed ${p.speed.toFixed(1)})`);
+  assert.ok(xR > TM.CURVE_PEAK_X, `rear must be past its peak (x=${xR.toFixed(2)})`);
+  const rear = (x) => Math.abs(TM.lateralCurve(x, TM.CURVE_FLOOR_R, TM.CURVE_FALL_W_R, TM.CURVE_HOLD_R));
+  const want = rear(xR);
+  assert.ok(Math.abs(util - want) < 0.02, `rear |F|/mu ${util.toFixed(3)} should follow the rear's curve (${want.toFixed(3)})`);
+  assert.ok(rear(9) <= TM.CURVE_FLOOR_R + 0.01 && TM.CURVE_FLOOR_R <= 0.85, `far past the peak the rear must sit at its floor (${TM.CURVE_FLOOR_R}), under the limit`);
+  assert.ok(Math.abs(TM.lateralCurve(5)) <= TM.CURVE_FLOOR + 0.01 && TM.CURVE_FLOOR < TM.CURVE_FLOOR_R, `the front falls further than the rear (${TM.CURVE_FLOOR} vs ${TM.CURVE_FLOOR_R})`);
+  assert.ok(p.rearUtil > 1, `rearUtil is x / peak and must read past 1 here (${p.rearUtil.toFixed(3)})`);
+});
+
+test("load sensitivity: both axles carry the LOAD_SENS factor, static balance is exactly 1, full braking costs ~1.3 %", () => {
+  // Axle µ formulas live in PlayerForces (carve-headroom A).
+  const src = readFileSync(join(ROOT, "js", "physics", "player-forces.js"), "utf8");
+  assert.ok(src.includes("loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1))"), "front axle lost its load-sensitivity factor");
+  assert.ok(src.includes("loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1))"), "rear axle lost its load-sensitivity factor");
+  const PC = g.ctx.PhysicsConsts, fw = PC.FRONT_WEIGHT, k = PC.LOAD_SENS;
+  const grip = (wt) => { const lf = fw + wt, lr = 1 - fw - wt; return lf * (1 - k * (lf / fw - 1)) + lr * (1 - k * (lr / (1 - fw) - 1)); };
+  assert.equal(grip(0), 1, "at rest the factor is 1 on both axles");
+  const braking = grip(0.18);   // the WT_LONG clamp's braking end (game.js: clamp(..., -0.16, 0.18))
+  assert.ok(braking < 0.995 && braking > 0.975, `full braking should cost ~1.3 % of lateral grip, got ${(100 * (1 - braking)).toFixed(2)} %`);
+});
+
+// ---------------------------------------------------------------------------
+// LOW GRIP (FIA 2026 B7.1.2(b) / B7.2.2(d)): in treaded-tyre conditions active
+// aero is PARTIAL — half the straight-mode top-speed gain, half the downforce
+// given up, half the coast-drag cut — and Overtake is off. The dry car's
+// numbers are untouched (aeroWetK is exactly 1 on slicks).
+// ---------------------------------------------------------------------------
+test("low grip halves the active-aero trade and switches Overtake off; the dry car is untouched", async () => {
+  const a = g.apex;
+  a.setPhysics(PHYS0); a.headless(false);
+  await g.race("monza", "day", "dry");
+  a.go(); a.jump(0.1, 60, 0); a.step(1 / 60, 1);
+  const dry = a.physState();
+  assert.equal(g.G.cautionInfo().lowGrip, false);
+  await g.race("monza", "day", "wet");
+  a.go(); a.jump(0.1, 60, 0); a.step(1 / 60, 1);
+  const wet = a.physState();
+  assert.equal(g.G.cautionInfo().lowGrip, true, "a wet race is a low-grip race");
+  assert.ok(Math.abs(wet.xVmaxGain - dry.xVmaxGain / 2) < 1e-4, `top-speed gain halved (${dry.xVmaxGain} -> ${wet.xVmaxGain})`);
+  assert.ok(Math.abs(wet.xDfLoss - dry.xDfLoss / 2) < 1e-4, `downforce loss halved (${dry.xDfLoss} -> ${wet.xDfLoss})`);
+  assert.equal(g.G.otEnabled(), false, "Overtake is disabled in low grip");
+  await g.race("monza", "day", "dry");
+});

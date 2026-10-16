@@ -1,0 +1,183 @@
+# 2026 launch liveries — what is sourced, and what is not
+
+> Errata (2026-09-16): the Alpine rows below record the pink crown stripe as
+> APPLIED, which was true when measured. It no longer ships. `spineTint` must
+> clear the blue cover at ≥2:1 and launch pink #FF87BC measures ~1.56:1 on
+> #0093CC, which made every crown band invisible to cover-legibility, so
+> `js/data/teams.js` now carries white. The sourcing below still stands — only
+> the applied tint changed.
+
+Written 2026-09-08, after adding the ENGINE COVER colour zone (`liv.cover`) and
+giving Ferrari a white cover and Mercedes a silver one from the owner's own
+launch photographs. The question this note answers: **which other teams should
+get a cover colour?** This note exists so the next session does not redo the
+research to reach the same conclusion — a NEGATIVE answer is recorded here just
+as carefully as a positive one, because re-deriving "no" costs the same as
+re-deriving "yes".
+
+Answered so far: Ferrari (white) and Mercedes (silver) from the owner's photos;
+Williams (black) and Audi (silver body, black cover) from launch galleries;
+Alpine (**no** — same blue as the body); Aston Martin (a dark SPINE STRIPE, not
+a cover, and the model cannot say it yet). McLaren, Racing Bulls, Haas, Red Bull
+and Cadillac are answered in the table below without needing a photograph.
+
+## The blocker, and the way round it
+
+Direct page fetches are egress-blocked in this container: formula1.com,
+williamsf1.com, mclaren.com, motorsport.com, skysports, racefans and Wikipedia
+all refuse. The FIRST pass of this note therefore inspected no photograph at
+all — every line was search-result summary text, and since no team publishes hex
+values, any colour would have been a name-to-hex guess. That is not a standard
+worth committing as the shipped look of a car, which is why the first pass
+changed nothing.
+
+**The REMOTE browser reads those hosts.** That is what settled Williams, Audi
+and Alpine, and it is the route to try first — not a local fetch, not the local
+browser, both of which the proxy denies by organization policy. Two rules came
+out of using it, and both are load-bearing:
+
+1. **Make it describe what it sees before it answers.** The first Williams run
+   confidently reported a white cover while describing a white, green and navy
+   1981 FW07C tribute — a right-looking answer about the wrong car. A confident
+   answer about the wrong car is indistinguishable from a correct one unless the
+   tool is made to say which car it is looking at.
+2. **Ask whether the angle even shows the part.** A low side-on shot cannot
+   settle a crown colour, and a tool that is not asked will guess rather than
+   say so.
+
+## Findings
+
+| team | cover | why we did nothing |
+|---|---|---|
+| Audi | **RESOLVED: silver body, carbon-black cover** — applied | The photograph settled it; see below. |
+| McLaren | sourced DISTINCT: black sweeps across the cover | **Already modelled.** McLaren's team livery carries `spineLogo: "panel"` — "a hard-edged panel down the crown with a raked leading edge" — over an anthracite `c2`. That IS the black cover sweep. |
+| Williams | **RESOLVED: black** — applied | See "What the photograph settled" below. The white-cover claim was wrong. |
+| Aston Martin | **RESOLVED and APPLIED**: dark spine stripe on a green cover | The gap this needed — a crown band coloured independently of the body stripe — is closed: `liv.spineTint`, 2026-09-09. See "What the photographs settled (Audi, Aston Martin)" below. |
+| Alpine | **RESOLVED: same blue as the body — no cover colour**; pink **crown stripe APPLIED** | Cover stays body blue. Pink crown stripe confirmed by a second text source (SI/OnSI 2026-01-23) — `spineLogo: "stripe"` + `spineTint` BWT pink. |
+| Racing Bulls | same as body (white) | **APPLIED**: `spineLogo: "streaks"` + `spineTint` blue on the white cover. |
+| Haas | same as body (white) | The cover is named only as a branding location. |
+| Red Bull | same as body (gloss blue) | Already carries its own treatment (`spineLogo: "wrap"`, `spineHeight: "dorsal"`, `finShape: "none"`). |
+| Cadillac | body is split LEFT/RIGHT | **APPLIED**: `bodySplit: "lr"` — left (x<0) primary, right (x≥0) secondary. Mesh paint recolour in Car3D. |
+
+## What the photograph settled (Williams)
+
+The first pass could not open a launch gallery and left Williams as the
+highest-risk entry. A second pass got at the images through a REMOTE browser
+(the container's own egress proxy denies these hosts by organization policy, so
+neither a direct download nor a local browser can reach them). Two things came
+out of it.
+
+**A wrong answer that announced itself.** The first automated look reported a
+white engine cover — while describing a white, green and navy car built as a
+tribute to the 1981 FW07C. That is a special-edition livery, not the gloss-blue
+2026 launch car, so the answer was discarded. The lesson is cheap and worth
+keeping: when asking a tool to read an image, make it describe what it sees, not
+just answer the question, or a confident answer about the wrong car looks
+exactly like a right one.
+
+**Then the actual launch photograph, on the official article.** The engine cover
+reads BLACK, not white. That agrees with the official release's own wording — "a
+flowing section of black, sweeping from the chassis side through to the rear of
+the car, framed by an iconic red and white keyline" — while the white is listed
+only "across the sidepod, front wing and rear wing". So the secondary source
+claiming a white cover is contradicted twice over, and Williams now carries
+`cover: [0.055, 0.058, 0.070]`.
+
+Residual uncertainty, recorded rather than hidden: "from the chassis side"
+could describe black running along the FLANK rather than over the crown, and
+this model has separate fields for those (`cover` vs `spineSide`). The
+photograph reads the crown as black, so the cover is where it went; a top-down
+shot would settle it beyond doubt.
+
+## What the photographs settled (Audi, Aston Martin)
+
+The same remote browser that settled Williams was pointed at the Audi and
+Aston Martin launch galleries.
+
+**Audi was wrong here, not merely missing a cover.** Roughly 24 gallery
+photographs show a titanium-SILVER car with a carbon-BLACK engine cover and red
+accents toward the rear; the launch report says the same in words. This tree had
+a BLACK Audi, and the comment justifying it cited no source while itself
+mentioning titanium. The earlier refusal to change it was right at the time — it
+declined to restyle a shipped livery on an inference — but direct observation is
+not inference, so the body is now silver with a black cover.
+
+**Aston Martin: the colour was known before the model could say it.** The cover
+is the same metallic green as the body, with a DARK STRIPE down its spine
+starting at the airbox. When this was written there was no field for it:
+
+- `cover` paints the WHOLE cover, which the photographs contradict.
+- `stripe` runs the full body spine — nose tip through monocoque to the cover
+  ridge — so it would darken the nose, which the photographs also contradict.
+- `spineLogo: "stripe"` draws a band on the crown ALONE, which is the right
+  extent, but `drawSpineTop` colours that band `stripe || accent`: with no
+  `stripe` it takes the accent, and Aston's accent is lime. Setting `stripe`
+  dark to fix the band re-introduces the nose problem.
+
+That was recorded as a FEATURE GAP rather than forced, because every way of
+forcing it painted something the launch car does not have.
+
+**Closed 2026-09-09: `liv.spineTint`.** The crown band now has its own colour
+key; absent, it is `stripe || accent` exactly as before, so every other livery
+is byte-identical (asserted). Aston Martin ships `spineLogo: "stripe"` with
+`spineTint` a near-black green, which is the launch car: dark band, green cover,
+green nose. An EXPLICIT pick is honoured as-is and skips the cover-contrast
+re-pick that guards the derived default — an author choosing one surface's
+colour is the same kind of decision as `cover`, and a legibility guard that
+overrode it would defeat the field. SPINE TINT is a row in the garage's livery
+editor, so it is not team-data-only.
+
+The lesson worth keeping is about the ORDER: the colour was known for a day
+before the model could express it, and writing that down as a gap — rather than
+forcing `stripe` and shipping a dark nose — is what made the fix a small,
+deliberate change instead of a wrong car nobody had a record of.
+
+## What the photograph settled (Alpine)
+
+**A NEGATIVE answer, which is still an answer.** The engine cover is the same
+blue as the rest of the body. Alpine therefore gets no `cover` colour, and the
+question is closed rather than left open for the next session to re-research.
+
+Route, recorded because it is the one that works: the container's egress proxy
+denies formula1.com, but the REMOTE browser reads it, and the launch article's
+own hero shot is a three-quarter front studio photograph that shows the top of
+the car. Asked to describe what it saw before answering (the Williams lesson,
+below), it confirmed the blue-and-pink BWT launch livery — not a special — and
+reported the cover as "primarily vibrant metallic blue, the same blue as the
+rest of the main body… NOT a different colour". Two independent texts agree by
+omission: the official F1 article calls it a continued "blue and pink colour
+scheme" with no cover callout, and The Race describes "a largely unchanged
+blue-and-pink gloss paint livery", noting only that the SIDEPODS return to the
+main blue. Nothing anywhere names a distinct cover.
+
+**Pink crown stripe — APPLIED 2026-09-09.** The F1 gallery reading of a bright
+pink band on the cover crown stayed single-source until Sports Illustrated /
+Grand Prix On SI (Ewan Gale, 23 Jan 2026) independently named “a strip of the
+engine cover” among the BWT pink zones. Alpine now ships `spineLogo: "stripe"`
++ `spineTint` = BWT pink (`color2`). The cover itself remains body blue — that
+negative answer from the launch photograph still holds.
+
+**Beware the shakedown car.** A technical article describing the A526 at
+Silverstone mentions "the use of black paint in this region" around the engine
+cover. That car ran the 2025 livery — the Barcelona launch used a showcar
+"representative of the new 2026 regulations, rather than its real A526". Two
+different cars, and the black belongs to neither the launch livery nor this
+question.
+
+## If someone picks this up
+
+Williams, Audi, Aston Martin and Alpine are all settled now. The galleries that
+did it exist
+(formula1.com "GALLERY: every angle of…", media.alpinecars.com) and need a
+session whose fetch reaches them, or an owner-supplied photograph — which is
+exactly how Ferrari and Mercedes got theirs, and why those two are the only
+covers in the tree. The container's egress denies those hosts; use a remote
+browser. Do not invent colours.
+
+**Still open (photo-grounded, no invented design):** none.
+
+**Applied this pass:**
+- Alpine pink crown stripe — second source: Sports Illustrated / Grand Prix On SI (Ewan Gale, 23 Jan 2026) names “a strip of the engine cover” in BWT pink; applied as `spineLogo: "stripe"` + `spineTint` (BWT pink). Cover itself stays body blue.
+- Cadillac L/R body — `bodySplit: "lr"` (Car3D paint recolour by sign(x)).
+- Racing Bulls blue *streaks* — `spineLogo: "streaks"` + `spineTint` (blue on white cover).
+- W17-style SIDE `slash` — restored as ONE raked stroke in `SPINE_SIDE_IDS`. Mercedes stays on `sash`.

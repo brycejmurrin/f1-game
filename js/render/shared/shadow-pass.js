@@ -1,0 +1,705 @@
+/* Apex 26 — ShadowPass: the three shadow-map passes out of js/game.js — the
+   snap-cached SUN map (terrain + road ribbons + props, rebuilt when the camera
+   crosses a light-space cell or the sun moves), the per-frame CAR map (every
+   pooled caster within reach of the anchor, the live player first), and the
+   night LAMP map (the nearest floodlight, content-keyed on the lamp and the
+   cars under it). Owns the light-space matrices, the snap keys, the caster
+   pools the render loop fills (pushCaster) and the blob-shadow flush. One
+   ShadowPass.create(G, deps) at boot; the render loop calls resolvePlayer /
+   beginFrame / pushCaster / sunPass / lampPass / flushBlobs and loadTrack calls
+   reset. Reads G.gfx / G.track / G.player / G.state / G.camEye / G.camTgt /
+   G._studioRig; teamMesh (the silhouette caster), cockpitCaster (the player's
+   first-person body, car-draw.js) and vStd come through deps. */
+"use strict";
+
+const ShadowPass = (function () {
+  function create(G, deps) {
+    Log.info("game", "ShadowPass.create");
+    // The LIVE lighting-knob values (js/lighting/knobs.js, re-exported by the
+    // LightTune façade): the same object game.js binds, mutated in place by the
+    // tuner, so one capture here reads every later slider move. In game.js this
+    // was a bare `LT` from its own eval-time destructure — a name that does not
+    // exist outside that file, which is what the call-time-reads guard caught.
+    const LT = LightTune.LT;
+    const MAT_IDENT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+    // Own frustum-plane scratch (game.js shares its _pbPlanes with the camera
+    // cull; the backends snapshot CONTENTS, so a separate set is merely tidy).
+    const _shPlanes = [0,0,0,0,0,0].map(() => new Float32Array(4));
+    const _mLView = new Float32Array(16), _mLProj = new Float32Array(16), _mLVP = new Float32Array(16);
+    // Dynamic car shadow pass scratches (per-frame car-only depth map).
+    const _mCView = new Float32Array(16), _mCProj = new Float32Array(16), _mCVP = new Float32Array(16);
+    // Nearest-floodlight spot-shadow pass scratches (per-frame 512² lamp depth map).
+    const _mFlView = new Float32Array(16), _mFlProj = new Float32Array(16), _mFlVP = new Float32Array(16);
+    // The lamp pass's caster reach [x, y, z, r] for castShadowChunked (see lampPass).
+    const _flReach = [0, 0, 0, 0];
+    // The car pass skipped its last run for want of casters (see sunPass): the
+    // map still holds an older frame's cars, so a cadence keep must not arm it.
+    let _carMapEmpty = false;
+
+    const _upX = [1, 0, 0], _upY = [0, 1, 0];   // shadow-basis up choices (read-only)
+    // lookAtTo() eye/target scratches — it reads all three vectors synchronously
+    // and retains none. CULL_NO_UPLOAD: shadow cull packs to a second buffer
+    // (GLX shadowIbo / WGX shadowInstBuf / TLX CPU pack) — camera ibo untouched.
+    const _shEye = [0, 0, 0], _shCtr = [0, 0, 0], _flEye = [0, 0, 0], _flTgt = [0, 0, 0];
+    const CULL_NO_UPLOAD = { upload: false };
+    // C3b: the lamp passes also pass the lamp reach so instanced cells beyond the
+    // radius (+8 m) skip the shadow pack — no receiver inside can see them.
+    const CULL_NO_UPLOAD_REACH = { upload: false, reach: _flReach };
+    // SUN MAP DEPTH SPAN. The eye sits SUN_BACK m up the sun axis from the
+    // anchor, near 1, far SUN_FAR: casters up to SUN_BACK-1 m toward the sun and
+    // receivers down to SUN_FAR-SUN_BACK m away from it land in the map. The old
+    // 150/320 clipped every caster more than 149 m up the sun axis — Singapore's
+    // towers (to 250 m), Baku, Vegas, Jeddah lost their tops' shadows. The side
+    // AWAY from the sun keeps its 170 m exactly; only the near side grew. Depth
+    // quantisation is linear in an ortho (569 m / 2^24 ≈ 34 µm) — immaterial; the
+    // lit shaders' biasTerm is in normalised depth, so its world size grows by
+    // 569/319 (≈0.32 → 0.57 m at the defaults). The CAR map keeps 150/320: cars
+    // are never tall. Pinned: tests/unit/shadow-pass-depth.test.mjs.
+    // PER CIRCUIT. 400/570 on every circuit (for four circuits' towers) made the
+    // lit shaders' normalised-depth bias and PCSS falloff 1.8x bigger in METRES
+    // everywhere: at a 20-degree sun, shadows detached 0.75 -> 1.34 m from the
+    // base of every barrier and hoarding. A caster h m above the ground, within
+    // the ±box footprint, sits at most hypot(h, box) up the sun axis from the
+    // anchor, so sunSpan() sizes the near side from the circuit's tallest prop
+    // (Tracks: track.propTop, above its own ground) + 10 m: every circuit that
+    // fits keeps 150/320 (and its shadows); Singapore, Shanghai,
+    // Vegas, Jeddah… get what they need, up to 400. Unknown propTop = the max.
+    const SUN_BACK_MIN = 150, SUN_BACK_MAX = 400, SUN_RECV = 170;
+    const CAR_BACK = 150, CAR_FAR = 320;   // the CAR map's eye distance and far plane (near 1)
+    // C7 A/B knob (default on): the moon-only car map takes the even-frame cadence.
+    let MOON_CADENCE = true;
+    try { MOON_CADENCE = localStorage.getItem("apex26.moonShadowCadence") !== "0"; } catch (_) { /* no storage: on */ }
+    let SUN_BACK = SUN_BACK_MAX, SUN_FAR = SUN_BACK_MAX + SUN_RECV;
+    function sunSpan(track, box) {
+      const top = track && track.propTop;
+      SUN_BACK = (typeof top === "number" && top >= 0)
+        ? Math.min(SUN_BACK_MAX, Math.max(SUN_BACK_MIN, Math.ceil(Math.hypot(top, box)) + 10)) : SUN_BACK_MAX;
+      SUN_FAR = SUN_BACK + SUN_RECV;
+    }
+    let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
+    let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
+    // Lamp-spot shadow snap: skip full rebuild when nearest flood + eye cell hold.
+    // Props dominate the cost; freezing the map for a 12 m eye cell is the night twin
+    // of the sun snap cache (cars already one-frame lag on AI mats).
+    // LAMP SHADOW SNAP KEY — the map's CONTENT, not a proxy for it. A key of
+    // (slot into frame.lights, 12 m eye cell) is wrong in both halves: the slot
+    // cannot see a lamp handover (lighting.js re-sorts that array every frame), and
+    // the eye cell is not what the map depends on at all — the props cast is culled
+    // to the LAMP's frustum, so the static half of this map is a pure function of
+    // which lamp it is. What actually varies is the lamp and the CARS cast into it.
+    let _lampShX = null, _lampShY = null, _lampShZ = null;   // the lamp, by world position (static fixture => exact match)
+    let _lampShR = null, _lampShC = null, _lampShDx = null, _lampShDy = null, _lampShDz = null;   // ...and its VP inputs (radius, cone, aim)
+    let _lampShCarKey = 0;   // quantised positions of the cars in the map
+    // A rival lamp takes the map only when its score (distance² / level, lower
+    // wins) beats the current lamp's by 20% — ~10% in range, well past the
+    // flicker's few percent (tests/unit/lamp-shadow-pick.test.mjs).
+    const LAMP_HANDOVER = 1.2;   // a parked car near the midline of two floods keeps one
+    const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shader fades by distance from this
+
+    // Deferred blob-shadow batch: instead of interleaving shadow↔body per car (which
+    // flips program+VAO+blend+depthMask twice each car), accumulate every drawn car's
+    // shadow matrix and flush them all in one state block after the body loop. Shadows
+    // are depth-tested but write no depth, so drawing them last is visually identical.
+    const _shadowMats = [];   // pool of Float32Array(16), reused across frames
+    const _shadowTeams = [];  // parallel: each car's team, for the dynamic car-shadow caster pass
+    const _shadowCars = [];   // parallel refs: the live player transform replaces its stale pooled entry
+    const _shadowCast = [];   // parallel: false = blob only, never a sun / lamp map caster (FieldLod: rivals past 50 m)
+    const _livePlayerShadowMat = new Float32Array(16);
+    const _cockpitShadowMat = new Float32Array(16);   // first-person views: the cockpit body's matrix
+    let _playerCockpit = null;   // the cockpit body mesh in cockpit / helmet / visor, else null
+    let _shadowCount = 0;
+
+    // Instanced prop shadow cast: cull to the active light frustum (sun ortho or
+    // lamp cone via gfx.shadowCullVP) before castShadowInstanced — shared by the
+    // snap-cached sun pass and the per-frame lamp pass.
+    // NO CADENCE GATE. There was one — skip odd frames at tier >= 1 — and it cost
+    // scenery shadows for nothing. The sun caller is INSIDE the snap-cached static
+    // pass, which only runs when the eye crosses its cell or the sun moves, so on the
+    // frames the gate fired the function was not being called at all: it saved zero
+    // work. What it did do was land on odd-numbered REBUILD frames, where the chunked
+    // props, terrain and road were cast into the map and the instanced batches (trees,
+    // barriers, signs, grandstand furniture) were not. That map then persists until
+    // the next rebuild, so at tier >= 1 roughly half of all snap cells rendered with
+    // every instanced prop's ground shadow missing, blinking back at the next cell.
+    // Halving the cost of a snap-cached pass means skipping a whole rebuild, never
+    // half of one.
+    function _castPropBatchesShadow(reach) {
+      const _pb = G.track.meshes.propBatches;
+      if (!_pb || !G.gfx.castShadowInstanced) return;
+      // Sharing _shPlanes with the camera cull is safe: backends snapshot CONTENTS.
+      const planes = (G.gfx.shadowCullVP && G.gfx.makeFrustumPlanes)
+        ? G.gfx.makeFrustumPlanes(G.gfx.shadowCullVP, _shPlanes) : null;
+      for (let i = 0; i < _pb.length; i++) {
+        if (planes && G.gfx.cullInstances) {
+          // upload:false → shadow pack only. WGX/GLX use a second instance buffer;
+          // TLX packs CPU-side into a second InstancedMesh. Camera ibo/cache stay.
+          G.gfx.castShadowInstanced(_pb[i], G.gfx.cullInstances(_pb[i], planes, reach ? CULL_NO_UPLOAD_REACH : CULL_NO_UPLOAD));
+        } else G.gfx.castShadowInstanced(_pb[i]);
+      }
+    }
+    // Shadow-ribbon cast — hoisted so a sun recentre does not allocate a closure
+    // (PERF-FINDINGS §2y).
+    function _castRibbonSh(geo, key, plain, allow = true) {
+      if (G.track.meshes[key] === undefined) {
+        G.track.meshes[key] = null;
+        // TIER GATE. Tracks.build() only chunks the ribbons when
+        // PerfGov.tier() < 3; above that it writes the FUSED mesh and leaves
+        // roadChunked/terrainChunked undefined. This lazy build then made a
+        // SECOND GPU copy of road and terrain anyway — measured +2.78 MiB
+        // median, +3.81 on spa — on precisely the devices that had already
+        // been told to spend less: tier() is max(crash-strike floor, the
+        // player's GRAPHICS preset, the governor's own shed), so a phone that
+        // has been killed twice and a player who picked LOW both silently paid
+        // for a duplicate.
+        //
+        // Falling through leaves the key null and the branch below casts the
+        // fused mesh instead, which is what the tier asked for.
+        const tierOk = typeof PerfGov === "undefined" || PerfGov.tier() < 3;
+        if (allow && tierOk && geo && G.gfx.createChunkedMesh) {
+          geo._keepPositions = true;
+          G.track.meshes[key] = G.gfx.createChunkedMesh(geo, 72);
+        }
+      }
+      const ch = G.track.meshes[key];
+      if (ch && ch.chunks) G.gfx.castShadowChunked(ch, MAT_IDENT);
+      else G.gfx.castShadow(plain, MAT_IDENT);
+    }
+
+    // Sun-shadow snap caches — loadTrack invalidates them so a new track whose
+    // first snapped cell + sunDir happen to match the previous track's last values
+    // does not keep the PREVIOUS track's silhouette until the camera moves a cell.
+    function reset() {
+      _shadowSnapX = _shadowSnapZ = _shadowBox = null;
+      _shadowSunX = _shadowSunY = _shadowSunZ = null;
+      _lampShX = _lampShY = _lampShZ = null; _lampShR = _lampShC = _lampShDx = _lampShDy = _lampShDz = null; _lampShCarKey = 0;
+      // The caster list is "last frame's field": without this the first frame
+      // after loadTrack casts the PREVIOUS track's cars (and keeps them alive).
+      // _shadowMats stays pooled — pushCaster overwrites it slot by slot.
+      _shadowCount = 0;
+      _shadowCars.length = 0; _shadowTeams.length = 0; _shadowCast.length = 0;
+      // The car map holds the PREVIOUS session's cars: the cadence keep must not
+      // re-arm it until a pass of this session draws it (#2180).
+      _carMapEmpty = true;
+    }
+    // The render loop: count reset before the car loop, one push per drawn car
+    // (blob shadow this frame; sun / lamp caster next frame), flush after.
+    function beginFrame() { _shadowCount = 0; }
+    function pushCaster(groundMat, team, car, cast) {
+      let _sm = _shadowMats[_shadowCount];
+      if (!_sm) { _sm = new Float32Array(16); _shadowMats[_shadowCount] = _sm; }
+      _sm.set(groundMat);
+      _shadowTeams[_shadowCount] = team;   // for next frame's AI car-shadow caster pass
+      _shadowCars[_shadowCount] = car;
+      _shadowCast[_shadowCount] = cast !== false;   // omitted = casts (the apex26.fieldLod=0 path)
+      _shadowCount++;
+    }
+    // THE PLAYER CASTS WHAT THE PLAYER SEES, WHERE IT IS DRAWN. game.js calls
+    // this once livePlayerMat holds the grounded transform, before either pass.
+    // In cockpit, helmet and visor the visible body is the cockpit build (no
+    // driver, the player's own halo) at the camera-anchored cockpit matrix. The
+    // EXTERIOR silhouette's helmet crown (~0.83 m) sits ~0.3 m over the sidepod
+    // tops, past the 0.32 m bias, and with the factory halo it stamped dark blobs
+    // on the cockpit sides with no visible caster; the cockpit build itself has
+    // no wheels and no rear assembly, a hollow half-car on the road. So
+    // deps.cockpitCaster (car-draw.js) resolves cockpitShadowMesh — the whole
+    // car, no driver, the player's own halo — at the matrix the car loop draws
+    // the cockpit body with; null = an exterior view, the silhouette as before.
+    function resolvePlayer(smp, yv) {
+      _playerCockpit = deps.cockpitCaster ? deps.cockpitCaster(G.player, smp, yv, _cockpitShadowMat) : null;
+    }
+    function _playerMat() { return _playerCockpit ? _cockpitShadowMat : _livePlayerShadowMat; }
+    function _castPlayer() {
+      G.gfx.castShadow(_playerCockpit || deps.teamMesh(G.player.team, G.player, true), _playerMat());
+    }
+    // Pooled AI caster i reaches the car map's box (r2 = _csR², see sunPass). The
+    // player's pooled entry is stale and never cast: _castPlayer draws it live.
+    function _carCastable(i, r2) {
+      const m = _shadowMats[i], dx = m[12] - _shadowCtr[0], dz = m[14] - _shadowCtr[2];
+      return dx * dx + dz * dz <= r2 && !!_shadowCast[i] && _shadowCars[i] !== G.player;
+    }
+    // Flush all accumulated car shadows in one pass — shadowProg+shadowVAO+blend+
+    // depthMask are set once for the whole field instead of ping-ponging with the
+    // lit body program every car.
+    function flushBlobs() {
+      const gfx = G.gfx;
+      for (let i = 0; i < _shadowCount; i++) gfx.drawShadow(_shadowMats[i], 2.4, 5.8);
+    }
+
+    // Sun map (snap-cached) + car map (per frame). `frame` is the render loop's
+    // per-frame lighting record (sunDir / sunColor / moonGate; shadowCtr is
+    // written here); `_frameNo` its counter; `_hasLivePlayerShadow` whether
+    // livePlayerMat carries this frame's resolved player transform.
+    function sunPass(frame, _frameNo, _hasLivePlayerShadow) {
+      // Shadow pass — render terrain + road from sun's perspective.
+      // Snap the frustum centre on the LIGHT's right/up axes to a step of sBox/4
+      // (20 m at the default 80 m box) so the map only re-renders when the camera
+      // moves a cell — and so each recentre shifts the box by an exact whole number
+      // of shadow texels (sBox/4 is SHADOW_SIZE/8 texels for any pow-2 map size).
+      // A world-XZ grid with an unsnapped camera HEIGHT does not match the
+      // sun-rotated texel grid, so every recentre would re-rasterise all shadow
+      // edges at a new sub-texel phase — a visible shimmer/jump each 16 m.
+      if (G.track) {
+        const sd = frame.sunDir;
+        const up = Math.abs(sd[1]) > 0.98 ? _upX : _upY;
+        // Light basis exactly as lookAtTo derives it: z = sd, x = norm(up×z), y = z×x.
+        const zx = sd[0], zy = sd[1], zz = sd[2];
+        let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx;
+        const xl = Math.hypot(xx, xy, xz) || 1; xx /= xl; xy /= xl; xz /= xl;
+        const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+        // SHADOW DISTANCE knob: re-render the map when the box size changes too (not
+        // only on the position snap), so the slider responds without driving.
+        const sBox = LT.shadowRange != null ? LT.shadowRange : 80;
+        sunSpan(G.track, sBox);
+        const step = sBox / 4;
+        // Forward-biased CAMERA anchor, not the raw player position: the box budget
+        // goes where you look. Centred on the car, up to sBox/8 of snap slack plus
+        // the ~10 m chase-cam offset sat BEHIND the camera, so the shader's fade had
+        // to dissolve shadows by 0.72·range (≈58 m at the default 80) to stay inside
+        // the worst-case border — the "shadow horizon" ~58 m ahead. Anchoring at
+        // camera + a forward bias makes the safe radius symmetric around the view
+        // (0.875·sBox from the anchor), letting the fade reach ~0.84·range — shadows
+        // hold ~67 m ahead of the camera at the same texel density. Height comes from
+        // the LOOK TARGET (subject/ground level — right for chase, cockpit, TV and
+        // orbit/aerial debug cams alike), NOT the camera eye: fading by eye distance
+        // erased ALL shadows from any high/aerial camera (vDist ≥ altitude).
+        // THE BIAS DIRECTION IS THE CAR'S HEADING, NOT THE VIEW. Biasing along the look
+        // direction made the FADE camera-ORIENTATION dependent: uShadowCtr swings around
+        // a 2·fBias circle on a pure yaw and sampleShadow dissolves shadows by distance
+        // from it, so a stationary shadow changed strength when the player only turned.
+        // Measured (bahrain/day, eye pinned, aim swept ±40°): a shadow 70 m ahead swung
+        // edgeFade 0.625..0.986 — 58% of its strength — while 40 m and 60 m were flat.
+        // Same class as the night lamp-cull bug, and the same rule MJP's shadow notes
+        // state: a stabilised map must not change as the camera rotates. Heading is
+        // invariant under a camera-only rotation and still points where the car is
+        // going, so the reach the bias buys is unchanged; |bias| and therefore the
+        // 0.875·sBox coverage guarantee are untouched. No player (menu flyby) falls
+        // back to the look direction, which is the only direction that exists there.
+        let fbx = G.camTgt[0] - G.camEye[0], fbz = G.camTgt[2] - G.camEye[2];
+        if (G.player && G.player.head != null) { fbx = Math.sin(G.player.head); fbz = Math.cos(G.player.head); }
+        const fbl = Math.hypot(fbx, fbz), fBias = Math.min(20, sBox * 0.3);
+        if (fbl > 1e-6) { fbx = fbx / fbl * fBias; fbz = fbz / fbl * fBias; } else { fbx = 0; fbz = 0; }
+        _shadowCtr[0] = G.camEye[0] + fbx; _shadowCtr[1] = G.camTgt[1]; _shadowCtr[2] = G.camEye[2] + fbz;
+        frame.shadowCtr = _shadowCtr;
+        const cx = _shadowCtr[0], cy = _shadowCtr[1], cz = _shadowCtr[2];
+        const lu = Math.round((xx * cx + xy * cy + xz * cz) / step) * step;
+        const lv = Math.round((yx * cx + yy * cy + yz * cz) / step) * step;
+        // Sun direction is part of the gate: a sunDir change (SUN ELEVATION/AZIMUTH
+        // sliders, a time-of-day flip) would otherwise leave the map STALE until the
+        // next cell crossing — shadows look dead while dragging, then all jump at once.
+        // PRODUCER/CONSUMER GATE. glsl-lit.js's sampleShadow opens with
+        // `if (uShadowStr <= 0.0) return 1.0;` — so when the key has faded out
+        // (overcast, wet or foggy night) NOTHING reads this map: the god-ray march
+        // is the only other reader and it is gated on uStr > 0.0, which is 0 below
+        // the same key. The consumer side of that was already taken; the PRODUCER
+        // was not, so the frame still paid a 2048² depth clear, the full terrain and
+        // road ribbons cast unchunked (44,826 verts on vegas), and shadowEnd's 512²
+        // PCSS blocker downsample — for a texture with zero readers, once per 20 m
+        // snap cell, i.e. 300+ times a lap.
+        //
+        // The predicate is NOT new: it is the identical expression already used
+        // below to gate the props cast and again at the car sun pass. Hoisted here
+        // so all three agree. When it closes, the snap cache is INVALIDATED rather
+        // than left alone — otherwise weather clearing mid-race would re-open the
+        // gate onto a stale map and hold it until the next cell crossing.
+        const _shKeyG = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+        const _shadowsRead = _shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01);
+        if (!_shadowsRead) {
+          _shadowSnapX = _shadowSnapZ = _shadowBox = null;
+          _shadowSunX = _shadowSunY = _shadowSunZ = null;
+        // NO tier >= 1 PARITY GATE ON THIS REBUILD; both forms of it were wrong.
+        // Inside _castPropBatchesShadow it published a map with road and terrain
+        // shadows but no trees or barriers, and the snap cache held that half-built
+        // map for a whole 20 m cell. Moved out here to defer the WHOLE rebuild it
+        // saves nothing: the snap keys are written inside this block, so the
+        // predicate is still true next frame and the deferred rebuild runs in full,
+        // props included. Deferral only pays when the trigger fires on CONSECUTIVE
+        // frames; two 20 m crossings one frame apart needs 1200 m/s. It bought a
+        // frame of extra shadow lag and nothing else.
+        //
+        // Nor is the saving recoverable by coarsening the snap cell: slack is
+        // step/2 against a 0.875·sBox coverage guarantee and a fade that already
+        // reaches 0.84·range, so doubling step spends the whole margin and pushes
+        // shadows through the box edge. That trade moves the fade constant with it
+        // and needs real hardware, not a gate.
+        } else if (lu !== _shadowSnapX || lv !== _shadowSnapZ || sBox !== _shadowBox ||
+            sd[0] !== _shadowSunX || sd[1] !== _shadowSunY || sd[2] !== _shadowSunZ) {
+          _shadowSnapX = lu; _shadowSnapZ = lv; _shadowBox = sBox;
+          _shadowSunX = sd[0]; _shadowSunY = sd[1]; _shadowSunZ = sd[2];
+          // Rebuild the snapped centre in world space. The along-sun component needs
+          // no snap — it only shifts depth values, which the bias absorbs.
+          const lw = zx * cx + zy * cy + zz * cz;
+          const wx = xx * lu + yx * lv + zx * lw;
+          const wy = xy * lu + yy * lv + zy * lw;
+          const wz = xz * lu + yz * lv + zz * lw;
+          _shEye[0] = wx + sd[0] * SUN_BACK; _shEye[1] = wy + sd[1] * SUN_BACK; _shEye[2] = wz + sd[2] * SUN_BACK;
+          _shCtr[0] = wx; _shCtr[1] = wy; _shCtr[2] = wz;
+          M4.lookAtTo(_mLView, _shEye, _shCtr, up);
+          // Half-size box (default ±80 m / 160 m) snapped around the anchor;
+          // sampleShadow fades shadows out by ANCHOR distance (uShadowCtr) well
+          // inside its border. Bigger = more reach, smaller = crisper contacts
+          // (texel density = 2048/box).
+          M4.orthoTo(_mLProj, -sBox, sBox, -sBox, sBox, 1.0, SUN_FAR);
+          M4.mulTo(_mLVP, _mLProj, _mLView);
+          G.gfx.shadowBegin(_mLVP);
+          // Shadow ribbons: chunk + frustum-cull against the ±shadow-box ortho
+          // (castShadowChunked). PERF-FINDINGS: ~89% of tris sit outside the box;
+          // depth half is bit-identical. Independent of LT.roadChunkLamps (lit pass).
+          // Lazy-build shares roadChunked with the lamp draw path.
+          _castRibbonSh(G.track.terrainGeo, "terrainChunked", G.track.meshes.terrain);
+          _castRibbonSh(G.track.roadGeo, "roadChunked", G.track.meshes.road, G.gfx.chunkedTrackCoords !== false);
+          // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
+          // map at NIGHT — directional sun shadows are invisible under the dim
+          // moonlight, so this is the biggest night saving. Gate on the KEY's actual
+          // BRIGHTNESS, not sunDir.y: the night moon-key is deliberately held high
+          // (sunDir.y ≈ 0.97) to drive the sky glow, so an elevation test never fired
+          // at night and the whole city rasterised into the shadow map every recentre.
+          // Cutoff 0.28 = the BOTTOM of the renderer's key-luminance strength fade
+          // (uShadowStr ramps over key 0.28→0.42): props only leave the map once the
+          // whole shadow pass has faded to zero strength. A cutoff in the MIDDLE of
+          // that band pops prop shadows out at ~50% strength on a dusk→night flip /
+          // SUN ELEVATION drag while terrain shadows linger.
+          const _shKey = _shKeyG;   // hoisted above; same expression, one source
+          // Clear-night moon shadows re-open the gate: props must be in the map for
+          // the moonlight floor to have anything to cast (snap-cached, so the night
+          // saving only goes when MOON SHADOWS is active and the sky is clear — or,
+          // above 0.5, the knob itself forces the gate open regardless of weather;
+          // see frame.moonGate above).
+          if (_shKey > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) {
+            G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
+            // Cull instanced props to the light ortho before cast — same frustum
+            // castShadowChunked already uses (shadowCullVP || sun lightVP).
+            _castPropBatchesShadow();
+          }
+          G.gfx.shadowEnd();
+        }
+        // Dynamic CAR shadow pass — every frame (cars move, so they can't live in
+        // the snap-cached static map above; that's why cars only had blob shadows).
+        // AI casts use the preceding frame's pooled transforms; the player is
+        // rebuilt above from the current interpolation state. Reusing its old matrix
+        // trailed the shadow by speed × frame time (6–12 m on low-FPS devices).
+        // ±42 m box (at the default 80 m SHADOW DISTANCE — a car shadow beyond that
+        // is sub-pixel) on the same gliding anchor, scaled proportionally with
+        // SHADOW DISTANCE above its default so the slider also reaches the car's
+        // own shadow, same depth program and key-luminance gate as the props above.
+        // WGX mobile tiers may no-op the pass (blob fallback); menu/select skip
+        // because the car loop doesn't run and its pooled AI matrices would be
+        // stale race positions.
+        // Car shadow pass: skip odd frames at low speed — the 1024² map persists
+        // one frame and parked/slow driving does not need 60 Hz updates.
+        // MOON-ONLY (key <= 0.28, where the lit pass's shadow strength is the
+        // moon's alone, <= 0.29): the even-frame cadence at ANY speed. A faint
+        // moon shadow under a lamp-lit field does not need 60 Hz; the odd frame
+        // keeps last frame's map (one frame of lag, the lamp defer's trade).
+        // apex26.moonShadowCadence=0 restores the per-frame pass for the A/B.
+        const _carSpd = G.player ? Math.abs(G.player.speed) : 0;
+        const _carShadowFrame = (_frameNo & 1) === 0 ||
+            (deps.vStd(_carSpd) > 0.15 && !(MOON_CADENCE && _shKeyG <= 0.28));
+        // The skip on the line above is a CADENCE skip, and the renderer cannot tell
+        // it from a stop. Every backend clears its armed flag in present(), which is
+        // correct when this pass stops for real (knob off, tier shed, menu, key
+        // faded) and wrong here: the map persists and is still accurate, but the LIT
+        // uniform read 0 on the skipped frames, so a parked car's own sun shadow
+        // strobed at 30 Hz. Say which kind of skip it is. A genuine stop still
+        // disarms by making no call at all, and keep() declines until the pass has
+        // run at least once (GLX and WGX do not prime these maps: an unwritten one
+        // reads fully shadowed).
+        const _carShadowWanted = G.gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 &&
+            (_hasLivePlayerShadow || _shadowCount > 0) && G.player && G.state !== "menu" &&
+            (_shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01));
+        if (_carShadowWanted && !_carShadowFrame && G.gfx.carShadowKeep && !_carMapEmpty) G.gfx.carShadowKeep();
+        if (G.gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && _carShadowFrame &&
+            (_hasLivePlayerShadow || _shadowCount > 0) && G.player && G.state !== "menu") {
+          const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+          // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
+          // the moonlight floor (or the knob's above-0.5 override) active, cars
+          // keep casting so they throw faint moon shadows too instead of popping
+          // to blob-only.
+          if (_ck > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) {
+            _shEye[0] = _shadowCtr[0] + sd[0] * CAR_BACK; _shEye[1] = _shadowCtr[1] + sd[1] * CAR_BACK; _shEye[2] = _shadowCtr[2] + sd[2] * CAR_BACK;
+            M4.lookAtTo(_mCView, _shEye, _shadowCtr, up);
+            const cBox = 42 * Math.max(1, sBox / 80);
+            M4.orthoTo(_mCProj, -cBox, cBox, -cBox, cBox, 1.0, CAR_FAR);
+            M4.mulTo(_mCVP, _mCProj, _mCView);
+            // The depth-comparison bias baked into glsl-lit.js's biasTerm was tuned for the
+            // map's texel size at the DEFAULT ±42m box; cBox growing with SHADOW DISTANCE
+            // grows the car map's real-world texel size at the same fixed 1024² resolution,
+            // so the bias needs to grow proportionally or the car self-shadows into acne
+            // (uCarBiasScale, applied in glsl-lit.js). cBox/42 == 1 at the default, matching the
+            // originally-tuned bias exactly.
+            // Skip casters that CANNOT reach the shadow volume. gfx.castShadow does
+            // no culling of its own (js/render/glx/shadow.js): it binds the VAO,
+            // uploads uModel and draws, ~22k verts per silhouette car (wheels +
+            // unsplit helmet; paint-edge splits stay on the colour body), so a
+            // caster outside the
+            // volume costs a full mesh for zero texels — and at night the field pays
+            // it twice, once here and once in the lamp pass.
+            //
+            // The radius is the box's own HORIZONTAL reach, not cBox. The ortho
+            // above is ±cBox on the light's x and y, and along the sun axis spans
+            // CAR_BACK-1 toward the sun to CAR_FAR-CAR_BACK (170 m) away from it,
+            // so a car far away but nearly aligned with a low sun legitimately
+            // lands in frame; culling at cBox would delete exactly those. The test
+            // below is a horizontal distance, and the largest horizontal distance
+            // of any box point from the anchor is reached at one of its 8 corners
+            // (a convex function over a box), so beyond that reach + 8 a caster is
+            // provably outside — no visible change, only skipped draws. The old
+            // hypot(cBox, 170) dropped one ±cBox axis: it is short of the corner
+            // by more than the +8 margin above ~108 m SHADOW DISTANCE, so rivals
+            // inside the box lost their car-map shadow; and it was loose at a high
+            // sun, where the box stands upright and reaches ~hypot(cBox, cBox).
+            let _csH2 = 0;
+            for (let v = 0; v < 8; v++) {
+              const a = v & 1 ? cBox : -cBox, b = v & 2 ? cBox : -cBox, c = v & 4 ? CAR_BACK - 1 : CAR_BACK - CAR_FAR;
+              const hx = a * xx + b * yx + c * zx, hz = a * xz + b * yz + c * zz;
+              if (hx * hx + hz * hz > _csH2) _csH2 = hx * hx + hz * hz;
+            }
+            const _csR = Math.sqrt(_csH2) + 8;   // +8: car length + mesh extent
+            const _csR2 = _csR * _csR;
+            // THE PLAYER IS GATED TOO, by the same bound. It was cast
+            // unconditionally, so a TV / broadcast / replay camera far from it
+            // still drew it, clipped, into an otherwise empty map.
+            const _cpm = _playerMat();
+            const _cpdx = _cpm[12] - _shadowCtr[0], _cpdz = _cpm[14] - _shadowCtr[2];
+            const _carPlayerIn = _hasLivePlayerShadow && _cpdx * _cpdx + _cpdz * _cpdz <= _csR2;
+            let _carAny = _carPlayerIn;
+            for (let i = 0; i < _shadowCount && !_carAny; i++) _carAny = _carCastable(i, _csR2);
+            // NO CASTER, NO PASS: no clear, no submit, and no arm, so the lit
+            // shaders skip the car-map taps — exactly what an empty map returns
+            // (cleared depth 1 passes every compare, and min(sh, 1) = sh). The
+            // map then holds an OLDER frame's cars, so the cadence keep above
+            // stays off until a pass draws it again (_carMapEmpty).
+            _carMapEmpty = !_carAny;
+            if (_carAny) {
+              G.gfx.carShadowBegin(_mCVP, cBox / 42);
+              if (_carPlayerIn) _castPlayer();
+              for (let i = 0; i < _shadowCount; i++) {
+                if (_carCastable(i, _csR2)) G.gfx.castShadow(deps.teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
+              }
+              G.gfx.carShadowEnd();
+            }
+          }
+        }
+      }
+    }
+
+    // Nearest-floodlight spot shadow map (night only).
+    // One lamp caster folded into the car key: position at 0.25 m (x, y, z) and
+    // orientation (the forward axis at 1/8), all from the column-major world matrix the cast uses.
+    function _lampCasterKey(k, m) {
+      k = (k * 31 + Math.round(m[12] * 4)) | 0;
+      k = (k * 31 + Math.round(m[13] * 4)) | 0;
+      k = (k * 31 + Math.round(m[14] * 4)) | 0;
+      // Orientation from the forward axis itself, not an angle: atan2 wraps at
+      // ±π (two keys for one heading) and carried no pitch. Components at 1/8.
+      k = (k * 31 + Math.round(m[8] * 8)) | 0;
+      k = (k * 31 + Math.round(m[9] * 8)) | 0;
+      return (k * 31 + Math.round(m[10] * 8)) | 0;
+    }
+    function lampPass(frame, _frameNo, _hasLivePlayerShadow) {
+      // Night only: ONE lamp — the nearest/strongest to the camera — gets a real
+      // per-frame 512² depth map (perspective, looking down its beam) so the car
+      // driving under it throws a radial shadow away from the mast and walls carve
+      // its pool + volumetric shaft. The other 31 lamps stay cone-shaped (no
+      // per-light shadow cost). Casters: last frame's pooled car matrices (same
+      // one-frame lag as the car sun-shadow pass) + the props/city chunks inside
+      // the lamp frustum (barriers, grandstands, buildings). Desktop only — all
+      // three backends expose lampShadowBegin; the mobile tier never creates the map.
+      if (G.gfx.lampShadowBegin && LT.lampShadow && PerfGov.tier() < 2 && frame.lights && !G._studioRig &&
+          G.player && G.state !== "menu") {
+        // Gate on the KEY being dim (true night): by day/dusk the sun owns the
+        // shadows, and a daytime-floods pool shadow would fight the sun's.
+        const _flk = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
+        if (_flk <= 0.30) {
+          const L = frame.lights, nRec = (L.length / 15) | 0;
+          // Tail-lights are the LAST frame.tailCount records and are excluded by
+          // RANGE, not by the radius literal below — which is not a filter: a tail
+          // light's radius is 8 * (1 + bAmt * 0.45), bAmt = brakeHeat * BRAKE FLARE,
+          // so it clears 12 once that shipped slider passes 1.111 (max 2.5). A
+          // hard-braking rival 15 m ahead then outscores a 40 m flood and takes the
+          // 512 map with a frustum slung off a moving car. glx/chunked.js's drawChunked guards its
+          // own slot this way; the lit path and godray never did.
+          const tailFrom = frame.tailCount > 0 ? frame.tailStart : nRec;
+          // THE PICK MUST NOT FOLLOW THE FLICKER. Scored on the emitted level
+          // (L[o+3..5] carries flicker x breathe), two floods near equal range
+          // traded first place with each lamp's sine, and every trade is a LAMP
+          // change: a full prop rebuild, the car's flood shadow and the carved
+          // beam jumping sides several times a second with the car parked.
+          // Score on frame.lampLum (frame-lights.js: the same level without the
+          // flicker; warm-up kept), and hold the current lamp while it is still a
+          // candidate unless a rival beats its score by LAMP_HANDOVER.
+          const lum = frame.lampLum && frame.lampLum.length >= tailFrom ? frame.lampLum : null;
+          let flBest = -1, flScore = Infinity, flCur = -1, flCurScore = Infinity;
+          for (let i = 0; i < nRec; i++) {
+            const o = i * 15;
+            if (i >= tailFrom) continue;   // never shadow-map a car tail-light
+            if (L[o + 6] < 12) continue;   // skip small movers (washers)
+            const dx = L[o] - G.camEye[0], dy = L[o + 1] - G.camEye[1], dz = L[o + 2] - G.camEye[2];
+            // Nearest-strongest: distance² over luminance, so a bright flood bank
+            // beats a dim work lamp at similar range.
+            const s = (dx * dx + dy * dy + dz * dz) /
+                      Math.max(lum ? lum[i] : Math.max(L[o + 3], L[o + 4], L[o + 5]), 1);
+            if (s < flScore) { flScore = s; flBest = i; }
+            if (L[o] === _lampShX && L[o + 1] === _lampShY && L[o + 2] === _lampShZ) { flCur = i; flCurScore = s; }
+          }
+          if (flCur >= 0 && flBest !== flCur && flScore * LAMP_HANDOVER >= flCurScore) flBest = flCur;
+          if (flBest >= 0) {
+            const o = flBest * 15;
+            const rad = L[o + 6];
+            // WHAT THIS MAP CONTAINS: the props (chunked + instanced), culled to the
+            // LAMP's frustum, plus every car within rad + 8 of the lamp. So it is a
+            // function of exactly two things — WHICH LAMP, and WHERE THOSE CARS ARE.
+            // Key on both and the map is always either provably current (keep it,
+            // and SAY so, or the lit pass reads a false 0) or provably stale
+            // (rebuild). A (slot, 12 m eye cell) key is not the content: the slot
+            // indexes an array lighting.js re-sorts every frame, so a lamp handover
+            // onto the same slot reads as "no change" and binds one lamp's depth
+            // under another's VP; and the eye cell is not an input to this map at
+            // all — the props cull uses the lamp frustum, not the camera's. That
+            // pair lets the flag sit false on every frame but the rebuild: the
+            // floodlight strobe (~1 armed frame in 14 once the car is moving) and a
+            // shadow that never comes back for a player parked under a flood.
+            const _lx = L[o], _ly = L[o + 1], _lz = L[o + 2];
+            // Lamp fixtures are STATIC and their coordinates are copied, not
+            // recomputed, so exact equality is the identity test — no epsilon, and
+            // no way for two distinct lamps to collide on it.
+            // Position alone is not the map's VP: POOL RADIUS / BEAM CONE knobs
+            // rebuild the set with the same positions but a new far plane / fov.
+            const _sameLamp = _lx === _lampShX && _ly === _lampShY && _lz === _lampShZ &&
+              rad === _lampShR && L[o + 11] === _lampShC &&
+              L[o + 7] === _lampShDx && L[o + 8] === _lampShDy && L[o + 9] === _lampShDz;
+            // Same bound the cast loop below uses, hoisted so the key is computed
+            // from exactly the set that gets rasterised — a key over a different set
+            // than the content is how this class of cache goes wrong.
+            const _lsR = rad + 8, _lsR2 = _lsR * _lsR;
+            // Quantised at 0.25 m: finer than a shadow edge is worth rebuilding for,
+            // coarser than the physics jitter of a stationary car. A parked field
+            // therefore holds one key indefinitely and costs no rebuilds at all,
+            // which is strictly cheaper than the 12 m cell it replaces.
+            // THE PLAYER TAKES THE SAME BOUND AS THE AI CARS (TLX-PERF-PLAN L0). It
+            // was hashed and cast unconditionally, so while driving at night the key
+            // changed every 0.25 m and the whole static prop set was re-culled,
+            // re-packed and redrawn ~30-60 times a second even with the player far
+            // outside this lamp's reach. The cast-loop argument below holds for the
+            // player exactly as for an AI car: beyond rad + 8 its shadow can only
+            // fall on fragments this lamp does not light. Position from the same
+            // resolved transform the cast uses (game.js fills it before both passes).
+            const _pm = _playerMat();
+            const _pdx = _pm[12] - _lx, _pdy = _pm[13] - _ly, _pdz = _pm[14] - _lz;
+            const _playerIn = _hasLivePlayerShadow && (_pdx * _pdx + _pdy * _pdy + _pdz * _pdz) <= _lsR2;
+            // Every caster is keyed from the SAME matrix the cast draws with, on
+            // position (0.25 m, incl. height) AND heading (1/8 rad): keyed on
+            // physics px/pz alone, a car spinning or pitching in place kept its old
+            // silhouette, and the interpolated player transform trailed the key.
+            let _carKey = _playerIn ? _lampCasterKey(1, _pm) : 0;
+            for (let i = 0; i < _shadowCount; i++) {
+              const _cm = _shadowMats[i];
+              if (_shadowCars[i] === G.player || !_shadowCast[i]) continue;
+              const _cdx = _cm[12] - _lx, _cdy = _cm[13] - _ly, _cdz = _cm[14] - _lz;
+              if (_cdx * _cdx + _cdy * _cdy + _cdz * _cdz > _lsR2) continue;
+              _carKey = _lampCasterKey(_carKey, _cm);
+            }
+            // The player is cast into this map whenever it is within reach, so while
+            // driving under a lamp the car half of the key changes every frame and a pure content key would
+            // rebuild at 60 Hz where a cell key rebuilds at ~5. Bound it: a
+            // CAR-ONLY change may be deferred one frame at tier >= 1, which is the
+            // one-frame lag this file already takes for AI casters in the sun pass
+            // and is invisible at any speed a shadow is legible at. A LAMP change
+            // never defers — that is the wrong-lamp bug, not a lag.
+            //
+            // THIS DEFER ACTUALLY SAVES, unlike the sun pass's (removed) one. There
+            // the keys were written inside the rebuild, so a deferred trigger was
+            // still true next frame and the same rebuild just happened one frame
+            // later — N triggers, N rebuilds. Here the deferred frame ARMS via the
+            // keep and skips the pass outright, so 60 content changes cost 30
+            // rebuilds. The difference is whether the skipped frame does the work.
+            const _carOnly = _sameLamp && _carKey !== _lampShCarKey;
+            if ((_sameLamp && _carKey === _lampShCarKey) ||
+                (_carOnly && PerfGov.tier() >= 1 && (_frameNo & 1) === 1)) {
+              // Provably current, or one frame behind on car positions only. Skip
+              // the pass and ARM: a cadence skip is not a stop, and only this side
+              // knows which it is — the renderer clears the flag every present().
+              if (G.gfx.lampShadowKeep) G.gfx.lampShadowKeep(flBest);
+            } else {
+            _lampShX = _lx; _lampShY = _ly; _lampShZ = _lz; _lampShCarKey = _carKey;
+            _lampShR = rad; _lampShC = L[o + 11]; _lampShDx = L[o + 7]; _lampShDy = L[o + 8]; _lampShDz = L[o + 9];
+            const fov = Math.min(2.6, 2 * Math.acos(M4.clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
+            const up = Math.abs(L[o + 8]) > 0.95 ? _upX : _upY;
+            _flEye[0] = L[o]; _flEye[1] = L[o + 1]; _flEye[2] = L[o + 2];
+            _flTgt[0] = L[o] + L[o + 7]; _flTgt[1] = L[o + 1] + L[o + 8]; _flTgt[2] = L[o + 2] + L[o + 9];
+            M4.lookAtTo(_mFlView, _flEye, _flTgt, up);
+            // Near plane 2.5 m: the light sits INSIDE its own fixture geometry (the
+            // lamp position IS the visible lens box, with the head/arm right beside
+            // it, all part of the props caster mesh) — a closer near plane renders
+            // the fixture into the map and it eclipses its own beam, blacking out
+            // the whole pool. 2.5 m clips the fixture; every real occluder (cars,
+            // walls, the mast pole below the head) is farther out than that.
+            M4.perspectiveTo(_mFlProj, fov, 1, 2.5, Math.max(rad, 10));
+            M4.mulTo(_mFlVP, _mFlProj, _mFlView);
+            // THE LAMP MAP = THE STATIC MAP + THE CARS (TLX-PERF-PLAN L1, TLX only).
+            // A car-only change copies the static props depth the backend already
+            // holds and draws the cars alone. Any other rebuild (a lamp change, the
+            // first, a stale static map) renders the props ONCE into the static map
+            // first and then copies it the same way: the props used to be drawn
+            // twice, into the lamp map and again, under the same planes, into the
+            // static map. false from lampCarsBegin (no valid static map, lampRT
+            // never rendered, a failed copy) and GLX/WGX, which have neither hook:
+            // the full pass below.
+            let _carsOnlyPass = _carOnly && G.gfx.lampCarsBegin && G.gfx.lampCarsBegin(_mFlVP, flBest);
+            // PROPS TAKE THE CARS' RADIAL BOUND. The cone's far corners reach ~4x
+            // rad, and the argument at the car loop below (a caster beyond rad can
+            // only occlude fragments this lamp does not light) holds for any
+            // caster, so castShadowChunked also drops a chunk whose AABB lies
+            // farther than _lsR from the lamp. All three backends honour the third argument
+            // (TLX C3, GLX hunt-2 G5, WGX hunt-4 C-P1).
+            _flReach[0] = L[o]; _flReach[1] = L[o + 1]; _flReach[2] = L[o + 2]; _flReach[3] = _lsR;
+            if (!_carsOnlyPass && G.gfx.lampStaticBegin && G.gfx.lampStaticBegin(_mFlVP)) {
+              G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT, _flReach);
+              _castPropBatchesShadow(_flReach);
+              G.gfx.lampStaticEnd();
+              _carsOnlyPass = !!(G.gfx.lampCarsBegin && G.gfx.lampCarsBegin(_mFlVP, flBest));
+            }
+            if (!_carsOnlyPass) G.gfx.lampShadowBegin(_mFlVP, flBest);
+            if (_playerIn) _castPlayer();
+            // Distance-cull the casters, the twin of the sun pass's _csR above — the
+            // comment there notes the field pays the caster cost TWICE at night, and
+            // this is the second half. Only 1-3 cars are ever under a lamp, so this
+            // skips ~18-20 full ~11k-vert car meshes per night frame.
+            //
+            // The bound is the LAMP RADIUS, and the argument is not the frustum (a
+            // 149-degree cone's far corners reach ~5x its far plane) but the light
+            // itself: shadow rays travel outward from the lamp, so a caster at
+            // distance D can only occlude receivers at distance > D. Both readers of
+            // this map reject beyond rad — the lit shader's lamp loop
+            // (`if (d2 > rad*rad) continue`) and the god-ray beam march — so a
+            // caster beyond rad occludes only fragments that already receive zero
+            // light from this lamp. +8 covers the car's own half-extent, so a car
+            // whose CENTRE clears the bound has no vertex inside rad.
+            // _lsR2 is the one hoisted for the content key above — the key MUST be
+            // computed over exactly the set this loop rasterises, so they share it.
+            for (let i = 0; i < _shadowCount; i++) {
+              const _lm = _shadowMats[i];
+              const _ldx = _lm[12] - L[o], _ldy = _lm[13] - L[o + 1], _ldz = _lm[14] - L[o + 2];
+              if (_ldx * _ldx + _ldy * _ldy + _ldz * _ldz > _lsR2 || !_shadowCast[i]) continue;
+              if (_shadowCars[i] !== G.player) G.gfx.castShadow(deps.teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
+            }
+            if (!_carsOnlyPass) {
+              G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT, _flReach);
+              // Lamp pass: cull against the lamp perspective frustum (castCullVP).
+              _castPropBatchesShadow(_flReach);
+            }
+            G.gfx.lampShadowEnd();
+            } // end lamp-shadow snap rebuild
+          }
+        }
+      }
+    }
+
+    return {
+      reset, beginFrame, pushCaster, flushBlobs, sunPass, lampPass, resolvePlayer,
+      livePlayerMat: _livePlayerShadowMat,
+      get count() { return _shadowCount; },
+    };
+  }
+  return { create };
+})();
+Object.freeze(ShadowPass);

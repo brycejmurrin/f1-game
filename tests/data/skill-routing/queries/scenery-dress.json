@@ -1,0 +1,10 @@
+[
+{"query": "Please dress js/circuits/spa.js with denser Ardennes forest along the Kemmel straight and Blanchimont: add tree clusters in the scenery(api) callback, keep them off the run-off and barriers, and check nothing floats or sinks where the terrain drops toward Eau Rouge.", "expect": "scenery-dress"},
+{"query": "monza scenery looks super bare, can u add some grandstands + billboards around the start/finish and a few floodlights?? also the trees by parabolica are kinda sparse", "expect": "scenery-dress"},
+{"query": "In the Baku race I see pillars hovering above the ground near the castle section and a couple of buildings that are half buried in the hill. Missing props on the far side too. Find out why and fix them.", "expect": "scenery-dress"},
+{"query": "I'm migrating the emitters in one circuit's scenery function over to TrackGraph.instance. After the change, how do I check graph parity against the old output and debug why batches() differs when bakeOnly is set?", "expect": "scenery-dress"},
+{"query": "Add a mountain range backdrop behind the Interlagos infield and make sure the mountains use the scenery api rather than a new generic table in js/track/. Also confirm the frozen api surface contract test still passes.", "expect": "scenery-dress"},
+{"query": "Compare Suzuka against real-world reference photos and satellite imagery, then work out where the layout, terrain channels and sunk water are inaccurate and fix them end to end, including props.", "expect": "survey-track"},
+{"query": "Add a flyover crossover to Suzuka's figure-8 section: raise the bridge deck elevation, adjust the palette and theme in the circuit def, and register the geometry properly.", "expect": "new-track"},
+{"query": "Does the road clip into the terrain anywhere at Spa? Run the wall and barrier audit and groundY scan and tell me where the terrain sits over the tarmac, read-only, no edits.", "expect": "agent-view"}
+]

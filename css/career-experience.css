@@ -1,0 +1,104 @@
+@layer components {
+/* Career and results share restrained team-colour storytelling. Text is always
+   present; motion reveals the card, never delays access to the result. */
+[data-career-part="nav"] {
+  display: flex; flex-wrap: nowrap; gap: var(--gap);
+  min-width: 0; overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; touch-action: pan-x;
+  scrollbar-width: none;
+}
+[data-career-part="nav"]::-webkit-scrollbar { display: none; }
+[data-career-part="nav"] .sel-chip {
+  flex: 0 0 auto;
+  font-style: normal;
+  text-transform: none;
+}
+[data-career-part="nav"] [aria-current="location"] { border-color: var(--red); background: var(--carbon); }
+.cr-nextrace { padding: 0; overflow: hidden; border-color: var(--career-team, var(--red)); }
+.cr-nextrace > img { display: block; width: 100%; aspect-ratio: 2.4; object-fit: cover; }
+.cr-nextrace > div { padding: var(--pad); }
+.cr-nextrace, [data-career-part="story"], [data-results-part="story"] { font-style: normal; }
+.cr-nextrace .cr-nr-name { margin: 0; font-style: italic; font-size: var(--fs-6); }
+[data-career-part="facts"] { display: flex; flex-wrap: wrap; gap: var(--gap); font-size: var(--label); color: var(--dim); }
+[data-career-part="objective"] { display: flex; flex-direction: column; gap: var(--gap); margin-bottom: 0; }
+[data-career-part="objective"] strong { color: var(--text); }
+[data-career-part="story"] { padding-bottom: var(--pad); }
+[data-career-part="calendar"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: var(--gap);
+  padding: var(--gap) 0 var(--pad);
+  margin: 0;
+  list-style: none;
+  overflow: visible;
+}
+[data-career-part="calendar"] > li {
+  min-width: 0;
+  display: flex; flex-direction: column; gap: var(--gap);
+  padding: var(--pad);
+  border: 1px solid var(--plate-line); background: var(--carbon);
+  font-size: var(--label);
+}
+[data-career-part="calendar"] > li[data-stage="complete"] { border-top-color: var(--career-team, var(--red)); }
+[data-career-part="calendar"] > li[aria-current] { border-color: var(--red); background: var(--carbon); }
+[data-career-part="calendar"] > li span { color: var(--dim); }
+[data-career-part="milestones"] { display: flex; flex-direction: column; gap: var(--pad); border-left: 2px solid var(--career-team, var(--red)); padding-left: var(--pad); }
+[data-career-part="milestones"] > div { display: flex; flex-direction: column; gap: var(--gap); }
+[data-career-part="milestones"] small { color: var(--dim); }
+[data-results-part="story"] { padding: var(--pad); margin-bottom: var(--pad); background: var(--carbon); border: 1px solid var(--plate-line); }
+[data-results-part="head"] { display: flex; flex-direction: column; gap: var(--gap); }
+[data-results-part="head"] > strong { font-size: var(--fs-6); font-style: italic; }
+[data-results-part="head"] > span { color: var(--dim); }
+[data-results-part="podium"] { display: flex; gap: var(--gap); padding: var(--pad) 0 0; margin: 0; list-style: none; }
+/* Podium names must stay readable. `overflow-wrap: anywhere` shattered
+   "George" into Geor/ge under the sticky player row on phone portrait, and
+   on short landscape the name line vanished so slots looked empty
+   (layout-audit 2026-10-04). Wrap only at spaces; never mid-word; keep the
+   line from being flex-shrunk away. Team labels (Mercedes-AMG, Red Bull
+   Racing) wrap the same way — never one-line ellipsis on phone portrait. */
+[data-results-part="podium"] > li {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.35);
+  padding: calc(var(--pad) * 0.7);
+  background: var(--carbon);
+  border-top: 3px solid var(--career-team, var(--red));
+  overflow: visible;
+  overflow-wrap: normal; word-break: normal; hyphens: none;
+}
+[data-results-part="podium"] > li > span:first-child { flex: 0 0 auto; color: var(--dim); font-size: var(--fs-micro); }
+[data-results-part="podium"] > li > strong {
+  flex: 0 0 auto; color: var(--text);
+  font-family: var(--font-hud); font-size: var(--fs-6);
+}
+[data-results-part="podium"] > li > strong + span {
+  flex: 0 0 auto; min-width: 0; max-width: 100%;
+  color: var(--text);
+  font-size: var(--fs-2); line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: normal; word-break: normal; hyphens: none;
+}
+[data-results-part="podium"] small {
+  flex: 0 0 auto; min-width: 0; max-width: 100%;
+  color: var(--dim);
+  font-size: var(--fs-micro); line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: normal; word-break: normal; hyphens: none;
+}
+/* Short phone landscape: the story + podium was taller than the sheet body,
+   so overflow:hidden on .sheet clipped the name row and left P1–P3 looking
+   empty. Drop the team line, tighten type/padding, keep names in view. */
+@media (orientation: landscape) and (max-height: 500px) {
+  [data-results-part="story"] { padding: calc(var(--pad) * 0.55); margin-bottom: calc(var(--pad) * 0.45); }
+  [data-results-part="podium"] { gap: calc(var(--gap) * 0.5); padding-top: calc(var(--pad) * 0.45); }
+  [data-results-part="podium"] > li { padding: calc(var(--pad) * 0.4); gap: 2px; }
+  [data-results-part="podium"] > li > strong { font-size: var(--fs-4); }
+  [data-results-part="podium"] > li > strong + span { font-size: var(--fs-micro); }
+  [data-results-part="podium"] small { display: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="reduce"]) [data-results-part="story"] { animation: career-reveal 240ms ease-out both; }
+  :root:not([data-motion="reduce"]) [data-results-part="podium"] > li { animation: career-reveal 240ms ease-out backwards; animation-delay: calc(var(--podium-place) * 55ms); }
+  :root:not([data-motion="reduce"]) [data-career-part="calendar"] > li[aria-current] { animation: career-reveal 240ms ease-out; }
+}
+@keyframes career-reveal { from { opacity: 0.7; transform: translateY(calc(var(--gap) * 0.5)); } to { opacity: 1; transform: translateY(0); } }
+}

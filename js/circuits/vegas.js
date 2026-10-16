@@ -1,0 +1,79 @@
+/* Apex 26 — LAS VEGAS circuit definition (data only). */
+(function () {
+  "use strict";
+  (window.TrackDefs = window.TrackDefs || []).push(
+  {
+    id: "vegas",
+    reverse: false, // real-world CW/CCW direction
+    // Start/finish line. Snapped to the real one: coord 0.3 m off centreline, 1 node before vertex 0 (timing line).
+    // A start line is always on a straight: docs/tracks/START-LINES.md.
+    startFrac: 0.9899,
+    sceneryStartFrac: 0.8575,
+    name: "LAS VEGAS",
+    gp: "Las Vegas GP",
+    country: "USA",
+    night: true,
+    theme: "street_night",
+    lengthKm: 6.2,
+    baseHW: 7,
+    street: true,
+    // The pit complex (TrackPit): the STREET one on the inside (left), where
+    // the purpose-built Paddock Building and this def's paddock kits stand.
+    pit: { mode: "street", side: -1 },
+    sceneryCoordinates: "racing",
+    terrainOuter: 26,
+    barrierGap: 1.0,
+    dressingExclusions: [
+      { kinds: ["city", "foliage"], s0: 0.36, s1: 0.47 },
+      // Windows are AUTHORED-frame like the row above (TrackSpace.sceneryRange adds
+      // _sceneryShift 0.8433); scenery/vegas.js sl(f) = f + 0.1567 is that same map.
+      // Hand-built Strip canyon, RACING 0.485-0.815 -> authored 0.642-0.972:
+      { kinds: ["city", "foliage"], s0: 0.642, s1: 0.972 },
+      // Sphere / Koval, RACING 0.22-0.34 -> authored 0.377-0.497 (overlaps the 0.36-0.47 row):
+      { kinds: ["city", "foliage"], s0: 0.377, s1: 0.497 },
+      { kind: "lamps", s0: 0.27, s1: 0.36, side: -1 },
+      { kind: "lamps", s0: 0.65, s1: 0.71, side: 1 },
+    ],
+    // Strip streets and parking lots in the Mojave, not lawns: the verge band
+    // (pal.runoff, MAT.ROCK at the road edge) is sidewalk/lot concrete, and the
+    // ground beyond it (pal.grass under terrainMat SAND, plus the far ground
+    // plane, which reads pal.grass) is dusty desert tan. The night pal default
+    // grass [0.14, 0.18, 0.14] on MAT.GRASS rendered as green lawn (survey 2026-10-05).
+    terrainMat: "SAND",
+    pal: { horizon: [0.28, 0.12, 0.32], zenith: [0.08, 0.04, 0.14], sunColor: [0.65, 0.50, 0.88], ambientSky: [0.42, 0.28, 0.50], ambientGround: [0.50, 0.25, 0.38], fogColor: [0.22, 0.10, 0.26], fogDensity: 0.0030, sunDir: [0.75, 0.20, 0.12], runoff: [0.30, 0.29, 0.28], grass: [0.38, 0.33, 0.26] },
+    elevations: [{ s: 0.2075, halfM: 130, rise: -1.2 }],
+    hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
+      { s0: 0.2164, s1: 0.2374, hw: 6.2, ease: 0.012 },  // racing arc 0.256-0.263 T7
+      { s0: 0.3139, s1: 0.4596, hw: 6.1, ease: 0.012 },  // racing arc 0.324-0.367 T9-T10
+      { s0: 0.5623, s1: 0.6186, hw: 6.3, ease: 0.012 },  // racing arc 0.510-0.532 T13
+      { s0: 0.8221, s1: 0.8832, hw: 6.3, ease: 0.012 },  // racing arc 0.835-0.852 T17
+    ],
+    // Public roads, so crown rather than banking: 2.5-3° on the sweeps only.
+    bankZones: [
+      { frac: 0.2080, angleDeg: 3.0, widthM: 190 },
+      { frac: 0.2664, angleDeg: 3.0, widthM: 180 },
+      { frac: 0.4893, angleDeg: 3.0, widthM: 220 },
+      { frac: 0.5949, angleDeg: 2.5, widthM: 130 },
+      { frac: 0.6481, angleDeg: 2.5, widthM: 130 },
+    ],
+
+    // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
+    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
+    // re-seats turns when the start line moves.
+    sectors: [0.291, 0.62],   // timing lines snapped onto straights, |k| < 0.0035 (was [0.3, 0.62])
+    turns: [0.0513, 0.0653, 0.0868, 0.0928, 0.1093, 0.2588, 0.3003, 0.3328, 0.3398, 0.3638, 0.4383, 0.4913, 0.5223, 0.8388, 0.8443, 0.8558, 0.9898],
+    barrier: { a: [0.97, 0.84, 0.12], b: [0.10, 0.10, 0.12], c: [0.85, 0.12, 0.48], night: [0.28, 0.10, 0.32], tyre: [0.97, 0.84, 0.12] },  // casino gold/black + neon magenta
+    furniture: { tree: "none",  fol: [0.22, 0.42, 0.18], lamp: "arm",   lc: [1.0, 0.86, 0.55] },
+    kit: { marshal: "hut",       rail: "armco",       fence: "chainlink", tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },
+    standSet: ["darkSteel", "scaffold", "alu"],
+    // cityStyle: neon / dayPal name TrackSceneryData.NC / .DC colours
+    cityStyle: { neon: ["mag", "gold", "red", "cyan", "violet", "pink", "orange"], bias: 0.62, fh: [6, 10], bh: [8, 16],
+                 kinds: ["setback", "tiered", "podium", "slab", "twin", "jenga", "dome", "fin", "ziggurat", "drum"], neonKinds: ["screen", "clad", "antenna"], tone: null,
+                 dayPal: ["charcoal", "graphite", "concrete", "darkglass", "steel", "bluglass", "gold", "bronze", "sand"] },
+    // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
+    // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.
+    path: { len: 6221, pts: [[-489.4,-759],[-544.5,-697.1],[-556.2,-684.1],[-564.6,-670],[-567.3,-653.2],[-560.2,-638.1],[-548.6,-628.5],[-527.8,-620.6],[-507.9,-617.3],[-488.8,-618.4],[-470.9,-623.8],[-431.6,-647.3],[-395.4,-683.2],[-381.5,-692.5],[-351,-699.2],[-334.5,-698.9],[-304.8,-688.9],[-288.3,-679.8],[-273,-666.8],[-247.7,-632.6],[-237.4,-603.6],[-230.4,255.7],[-235.7,268.7],[-246,275.3],[-423.6,271.9],[-476.8,272.3],[-504.6,278.7],[-515.8,288.4],[-547.2,318.9],[-561.3,338.8],[-572.1,360.3],[-579.9,379.1],[-584.6,403.5],[-587.8,432.6],[-587,449.8],[-577.2,455.9],[-551.5,458.8],[-542.5,464.4],[-534.8,476.3],[-531.7,494.9],[-533.2,508.4],[-558.1,551.4],[-562.4,562.9],[-572.8,582.7],[-569.1,603.4],[-548.8,616.8],[-511.2,621],[-229.8,628.1],[-125.8,643.2],[-91.5,659.8],[-53.5,698.8],[-21,763.8],[28.9,880.7],[60.9,914.4],[94.1,937.2],[127.8,949.6],[180.6,966.6],[240.5,978.6],[248.6,976.6],[256.5,970.6],[262.6,950.2],[268.8,936.2],[330.9,814.9],[369.6,742.8],[389.7,706.2],[410.4,671],[446.1,609.1],[482.8,525.9],[502.2,463],[523.6,390.6],[537.9,338.8],[548.6,287.3],[557.1,235],[566.2,158.5],[568.4,113.8],[570.8,60.6],[569.8,-83.6],[569.2,-165.9],[569,-228.4],[580.9,-554.8],[584.5,-722.2],[584.6,-805.8],[587.8,-906.5],[582.2,-914.6],[574.5,-917.3],[555.9,-917],[542.3,-922.2],[511.5,-953],[484.6,-968.3],[448.8,-975.3],[293,-978.6],[89.1,-976.2],[-78.6,-977.2],[-160.5,-976.1],[-227.6,-966.7],[-297.7,-953.4],[-316,-945.1],[-330.7,-935.8],[-342.5,-924.7]] },
+  }
+  );
+})();

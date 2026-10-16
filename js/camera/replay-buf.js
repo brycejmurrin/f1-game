@@ -1,0 +1,517 @@
+/* Apex 26 — INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s /
+ * 30 Hz Float32 ring of the live field (~0.5 MB / 24 cars, under a 0.7 MB cap). Pause-card scrub
+ * restores captured pose fields bit-exactly and never touches netplay authority
+ * or career settlement. RAM only — never writes the Ghost best-lap store
+ * (512 KiB budget). Sampling mirrors Ghost's cadence; tags come from car
+ * status edges and RaceInsights-shaped pushTag calls. A scrub never blends
+ * across a timeline BREAK (breakTimeline(), e.g. a red-flag re-grid) or across
+ * one car's teleport (> JUMP_M beyond what its speed covers): it snaps to the
+ * nearer real sample instead. */
+"use strict";
+const ReplayBuf = (function () {
+  const HZ = 30;
+  const WINDOW_S = 20;
+  const MAX_FRAMES = HZ * WINDOW_S;           // 600
+  const FLOATS = 9;                           // s, x, yaw, speed, px, py, pz, steer, yawVis
+  const MAX_CARS = 24;                         // MY TEAM / LEGENDS grids run 23-24 cars
+  const MAX_BYTES = 720 * 1024;               // 0.7 MB hard cap
+  const TAG_CAP = 64;
+  const JUMP_M = 50;                          // pose jump past speed*dt that no car drives: a teleport
+  const RATES = [0.25, 0.5, 1];
+  const POSE_FIELDS = ["s", "x", "head", "speed", "px", "py", "pz", "steer", "yawVis",
+    "rPrevS", "rPrevX", "rPrevPx", "rPrevPz", "rPrevHead", "rPrevYawVis"];
+
+  function frameBytes(nCars) {
+    return nCars * FLOATS * 4 + nCars + 1;    // floats + Uint8 status lane + segment-break flag
+  }
+  function budgetOk(nCars, frames) {
+    return frameBytes(nCars) * frames <= MAX_BYTES;
+  }
+  /** Largest frame count that fits under MAX_BYTES for nCars (≤ MAX_FRAMES). */
+  function capacityFor(nCars) {
+    const n = Math.max(1, Math.min(MAX_CARS, nCars | 0));
+    let frames = MAX_FRAMES;
+    while (frames > 8 && !budgetOk(n, frames)) frames = (frames * 3 / 4) | 0;
+    return frames;
+  }
+
+  // Pure: interpolate one car's floats between two frames (Ghost.at shape).
+  // `L` (the lap length, G.track.total) makes arc `s` wrap-aware: a car
+  // crossing the line goes L-1.3 -> 1.37, and a plain lerp swept it (and the
+  // camera on it) through the whole lap the other way in one sample. Without L
+  // (or L <= 0) `s` lerps plainly, as before.
+  function lerpCar(out, a, b, u, L) {
+    for (let i = 0; i < FLOATS; i++) out[i] = a[i] + (b[i] - a[i]) * u;
+    if (L > 0) {
+      let ds = b[0] - a[0];
+      if (ds > L * 0.5) ds -= L; else if (ds < -L * 0.5) ds += L;   // M4.wrapDelta, inlined: the ring is dependency-free
+      let s = a[0] + ds * u;
+      if (s < 0) s += L; else if (s >= L) s -= L;
+      out[0] = s;
+    }
+    // Heading (2) and mesh yaw (8), without allocating per sampled car.
+    for (let i = 2; i <= 8; i += 6) {
+      let delta = b[i] - a[i];
+      while (delta > Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+      out[i] = a[i] + delta * u;
+    }
+    return out;
+  }
+
+  // The caller can reserve pose ownership (for example, a recorded WATCH).
+  function create(G, eligible) {
+    Log.info("game", "ReplayBuf.create");
+    const allowed = () => (!eligible || eligible()) && !(G.netPlay && G.netPlay.active && G.netPlay.active());
+    let nCars = 0, cap = 0, head = 0, count = 0, lastSlot = -1;
+    let times = null, data = null, status = null, brk = null, breakPending = false;
+    let tags = [];
+    let scrubbing = false, liveSnap = null;
+    let scrubT = 0, scrubRate = 1, scrubPlaying = true;
+    let prevStatus = null, sheetBusy = false, sheetGeneration = 0, sheetCancelled = false;
+
+    function alloc(n) {
+      nCars = Math.max(1, Math.min(MAX_CARS, n | 0));
+      cap = capacityFor(nCars);
+      times = new Float64Array(cap);
+      data = new Float32Array(cap * nCars * FLOATS);
+      status = new Uint8Array(cap * nCars);
+      brk = new Uint8Array(cap);   // brk[f] = 1: frame f opens a new segment, never blended from the one before
+      head = 0; count = 0; lastSlot = -1; tags = [];
+      prevStatus = new Uint8Array(nCars);
+    }
+    function clear() {
+      sheetGeneration++; sheetBusy = false;
+      head = 0; count = 0; lastSlot = -1; tags = []; breakPending = false;
+      scrubbing = false; liveSnap = null; scrubPlaying = true; scrubRate = 1;
+      // prevStatus survives: a car already out when the timeline is discarded is not a fresh retirement (alloc() zeroes it).
+      hideDock();
+    }
+    function reset(cars) {
+      alloc((cars && cars.length) || (G.cars && G.cars.length) || 1);
+      clear();
+    }
+    function discardTimeline(time) {
+      if (!count || !Number.isFinite(time)) return;
+      const newest = times[(head + count - 1) % cap];
+      if (time < newest || time - newest > WINDOW_S) clear();
+    }
+    /** Explicit timeline break that keeps the history: the next recorded frame
+     *  opens a new segment and at() never interpolates into it. For a re-grid
+     *  with the clock unchanged (red-flag restart), which the time heuristics
+     *  above cannot see. Deliberately untagged: every tag becomes a results
+     *  highlight clip, and one straddling the break would show the cut. */
+    function breakTimeline() {
+      if (count) breakPending = true;
+    }
+    function writeCar(frame, i, c) {
+      const o = (frame * nCars + i) * FLOATS;
+      data[o] = c.s || 0;
+      data[o + 1] = c.x || 0;
+      data[o + 2] = c.head || 0;
+      data[o + 3] = c.speed || 0;
+      data[o + 4] = c.px || 0;
+      data[o + 5] = c.py || 0;
+      data[o + 6] = c.pz || 0;
+      data[o + 7] = c.steer || 0;
+      data[o + 8] = c.yawVis || 0;
+      status[frame * nCars + i] = (c.retired ? 1 : 0) | (c.finished ? 2 : 0);
+    }
+    function readCar(out, frame, i) {
+      const o = (frame * nCars + i) * FLOATS;
+      for (let k = 0; k < FLOATS; k++) out[k] = data[o + k];
+      return out;
+    }
+    function sample(raceT, cars) {
+      if (scrubbing || !allowed()) return false;
+      if (!cars || !cars.length) return false;
+      if (!data || Math.min(MAX_CARS, cars.length) !== nCars) reset(cars);   // >MAX_CARS must not reset every sample
+      discardTimeline(raceT);   // Practice rewind or a mid-race JUMP IN starts a new timeline.
+      // Slot gate (not wall-delta): FP-safe at exact 1/HZ spacing.
+      const slot = Math.floor((+raceT || 0) * HZ);
+      if (slot === lastSlot) return false;
+      lastSlot = slot;
+      const frame = count < cap ? count : head;
+      times[frame] = raceT;
+      brk[frame] = breakPending ? 1 : 0;
+      breakPending = false;
+      const n = Math.min(nCars, cars.length);
+      for (let i = 0; i < n; i++) {
+        writeCar(frame, i, cars[i]);
+        const st = status[frame * nCars + i];
+        const prev = prevStatus[i];
+        if ((st & 1) && !(prev & 1)) pushTag("retirement", raceT, i);
+        else if ((st & 2) && !(prev & 2)) pushTag("chequered", raceT, i);
+        prevStatus[i] = st;
+      }
+      if (count < cap) count++;
+      else head = (head + 1) % cap;
+      return true;
+    }
+    function pushTag(kind, t, carIdx) {
+      if (tags.length >= TAG_CAP) tags.shift();
+      tags.push({ kind: String(kind || ""), t: +t || 0, car: carIdx | 0 });
+    }
+    function windowInfo() {
+      if (!count) return { t0: 0, t1: 0, frames: 0, bytes: 0, cars: nCars };
+      const oldest = times[head];
+      const newest = times[(head + count - 1) % cap];
+      return {
+        t0: oldest, t1: newest, frames: count, cars: nCars,
+        bytes: frameBytes(nCars) * count,
+      };
+    }
+    function frameIndexAt(t) {
+      let best = -1, bestT = -Infinity;
+      for (let k = 0; k < count; k++) {
+        const i = (head + k) % cap;
+        const ti = times[i];
+        if (ti <= t && ti >= bestT) { bestT = ti; best = i; }
+      }
+      return best;
+    }
+    const _a = new Float32Array(FLOATS), _b = new Float32Array(FLOATS), _o = new Float32Array(FLOATS);
+    function at(t) {
+      if (!count) return null;
+      const w = windowInfo();
+      const tt = Math.max(w.t0, Math.min(w.t1, t));
+      let i0 = frameIndexAt(tt);
+      if (i0 < 0) i0 = head;
+      let i1 = i0, u = 0;
+      for (let k = 0; k < count - 1; k++) {
+        const i = (head + k) % cap;
+        if (i === i0) { i1 = (head + k + 1) % cap; break; }
+      }
+      const t0 = times[i0], t1 = times[i1];
+      if (i1 !== i0 && t1 > t0) u = (tt - t0) / (t1 - t0);
+      // Across a break or a teleport there is no motion to blend: snap to the
+      // nearer real sample (ties keep the earlier one).
+      const snapU = u > 0.5 ? 1 : 0, cut = i1 !== i0 && brk[i1] === 1;
+      const cars = [], L = (G.track && G.track.total) || 0;
+      for (let c = 0; c < nCars; c++) {
+        readCar(_a, i0, c);
+        readCar(_b, i1, c);
+        let snap = cut;
+        if (!cut && i1 !== i0) {
+          // Per-car teleport (RECOVER, an AI rescue, a debug jump): a world-space
+          // step past anything its recorded speed covers in the gap. Never
+          // clears the ring — the crash that led to a RECOVER stays watchable.
+          const reach = JUMP_M + Math.max(Math.abs(_a[3]), Math.abs(_b[3])) * Math.max(0, t1 - t0);
+          snap = Math.hypot(_b[4] - _a[4], _b[6] - _a[6]) > reach;
+        }
+        if (snap) _o.set(snapU ? _b : _a);   // the recorded floats, bit-exact
+        else lerpCar(_o, _a, _b, u, L);
+        cars.push({
+          s: _o[0], x: _o[1], head: _o[2], speed: _o[3],
+          px: _o[4], py: _o[5], pz: _o[6], steer: _o[7], yawVis: _o[8],
+          status: status[(snap && snapU ? i1 : i0) * nCars + c],
+        });
+      }
+      return { t: tt, cars };
+    }
+    function snapLive(cars) {
+      return (cars || []).map((c) => {
+        const p = {};
+        for (const k of POSE_FIELDS) if (Object.prototype.hasOwnProperty.call(c, k)) p[k] = c[k];
+        return p;
+      });
+    }
+    function restoreLive(cars, poses) {
+      for (let i = 0; i < Math.min(cars.length, poses.length); i++) {
+        for (const k of POSE_FIELDS) {
+          if (Object.prototype.hasOwnProperty.call(poses[i], k)) cars[i][k] = poses[i][k];
+          else delete cars[i][k];
+        }
+      }
+    }
+    function applyPose(cars, poses) {
+      const n = Math.min(cars.length, poses.length);
+      for (let i = 0; i < n; i++) {
+        const c = cars[i], p = poses[i];
+        c.s = p.s; c.x = p.x; c.head = p.head; c.speed = p.speed;
+        c.px = p.px; c.py = p.py; c.pz = p.pz; c.steer = p.steer;
+        // Paused frames retain renderAlpha: both interpolation endpoints must
+        // belong to this recorded pose, never the live frame we paused from.
+        c.yawVis = p.yawVis;
+        c.rPrevS = p.s; c.rPrevX = p.x; c.rPrevPx = p.px; c.rPrevPz = p.pz;
+        c.rPrevHead = p.head; c.rPrevYawVis = p.yawVis;
+      }
+      if (typeof GameAudio !== "undefined" && GameAudio.syncReplayRpms) GameAudio.syncReplayRpms(cars);   // revs follow the replayed speed
+    }
+    function beginScrub(showControls = true) {
+      if (!allowed()) return false;
+      if (!scrubbing) discardTimeline(G.raceT);   // a paused clock jump can precede the next sample
+      if (scrubbing || count < 2) return false;
+      liveSnap = snapLive(G.cars);
+      scrubbing = true;
+      scrubPlaying = true;
+      scrubRate = 1;
+      const w = windowInfo();
+      const last = lastTag();
+      scrubT = (last && last.t >= w.t0 && last.t <= w.t1) ? last.t : Math.max(w.t0, w.t1 - 5);
+      apply(scrubT);
+      if (showControls) { showDock(); paintDock(); }
+      return true;
+    }
+    function apply(t) {
+      if (!scrubbing) return false;
+      const snap = at(t);
+      if (!snap || !G.cars) return false;
+      scrubT = snap.t;
+      applyPose(G.cars, snap.cars);
+      return true;
+    }
+    // Pick recorded timestamps, not +/-1/HZ: a slow frame may skip samples.
+    function adjacentFrame(t, direction) {
+      if (!count || (direction !== -1 && direction !== 1)) return null;
+      let found = null;
+      for (let k = 0; k < count; k++) {
+        const time = times[(head + k) % cap];
+        if (direction < 0 ? time < t - 1e-9 : time > t + 1e-9) {
+          if (found === null || (direction < 0 ? time > found : time < found)) found = time;
+        }
+      }
+      return found;
+    }
+    function stepFrame(direction) {
+      if (!scrubbing || sheetBusy || !allowed() || (direction !== -1 && direction !== 1)) return false;
+      scrubPlaying = false;
+      const t = adjacentFrame(scrubT, direction);
+      if (t === null) { paintDock(); return false; }
+      const ok = apply(t);
+      if (ok) {
+        // A seek is a cut; never ease from the unrelated pre-step framing.
+        if (typeof CamFeel !== "undefined") CamFeel.resetFollow();
+        if (typeof GameCams !== "undefined") GameCams.resetSmoothing();
+      }
+      paintDock();
+      return ok;
+    }
+    function endScrub() {
+      sheetGeneration++; sheetBusy = false;
+      if (!scrubbing) return false;
+      if (liveSnap && G.cars) restoreLive(G.cars, liveSnap);
+      scrubbing = false; liveSnap = null; scrubPlaying = true;
+      hideDock();
+      return true;
+    }
+    function isScrubbing() { return scrubbing; }
+    function lastTag() {
+      return tags.length ? tags[tags.length - 1] : null;
+    }
+    function tagsOf() {
+      return tags.map((g) => ({ kind: g.kind, t: g.t, car: g.car }));
+    }
+    function jumpLastTag() {
+      const tag = lastTag();
+      if (!tag || !scrubbing) return false;
+      return apply(tag.t);
+    }
+    function tickScrub(dt) {
+      if (!scrubbing) return false;
+      if (!sheetBusy && scrubPlaying && dt > 0) {
+        const w = windowInfo();
+        scrubT = Math.min(w.t1, scrubT + dt * scrubRate);
+        apply(scrubT);
+        if (scrubT >= w.t1) scrubPlaying = false;
+      }
+      paintDock();
+      return true;
+    }
+    function statusOf() {
+      return Object.assign({
+        scrubbing, scrubT, scrubRate, scrubPlaying, tags: tags.length,
+      }, windowInfo());
+    }
+
+    async function contactSheet(tagIndex) {
+      if (sheetBusy || !allowed() || !G.paused || !scrubbing || typeof PhotoStudio === "undefined") return false;
+      const tag = tags[tagIndex], w = windowInfo();
+      if (!tag || tag.t < w.t0 || tag.t > w.t1 || w.t1 - w.t0 < 2 / HZ) return false;
+      const moment = Math.max(w.t0, Math.min(w.t1, tag.t));
+      const times = [Math.max(w.t0, moment - 1), moment, Math.min(w.t1, moment + 1)];
+      const photoPose = () => G.photoCam ? JSON.stringify([G.photoCam.pos, G.photoCam.yaw, G.photoCam.pitch, G.photoCam.fov]) : null;
+      const debugPose = () => G.dbgCam ? JSON.stringify([G.dbgCam.eye, G.dbgCam.target, G.dbgCam.fov, G.dbgCam.roll]) : null;
+      const studioOwner = () => { if (typeof PhotoStudio.state !== "function") return null; const state = PhotoStudio.state(); return JSON.stringify([state.open, state.generation]); };
+      const saved = { t: scrubT, playing: scrubPlaying, rate: scrubRate, paused: G.paused, mode: G.camMode,
+        dbg: G.dbgCam, player: G.player, photo: G.photoCam, photoMode: G.photoMode,
+        photoPose: photoPose(), dbgPose: debugPose(), studio: studioOwner() };
+      let ownedT = scrubT;
+      const generation = ++sheetGeneration; sheetBusy = true; sheetCancelled = false; scrubPlaying = false; paintDock();
+      // Check camera INPUTS/identities, not rendered eye/FOV damping outputs.
+      // A user acquiring a camera or moving the scrub owns the newer state.
+      const owns = () => generation === sheetGeneration && scrubbing && allowed() && G.paused === saved.paused &&
+        G.camMode === saved.mode && (G.dbgCam === saved.dbg || saved.photoMode && debugPose() === saved.dbgPose) && G.player === saved.player && G.photoMode === saved.photoMode &&
+        G.photoCam === saved.photo && photoPose() === saved.photoPose && debugPose() === saved.dbgPose && studioOwner() === saved.studio &&
+        scrubT === ownedT && !scrubPlaying && scrubRate === saved.rate;
+      const cancelled = () => sheetCancelled || !owns();
+      const seek = (t) => {
+        if (!owns()) throw new Error("Contact sheet ownership changed");
+        if (!apply(t)) throw new Error("Replay frame unavailable");
+        ownedT = scrubT;
+        if (typeof CamFeel !== "undefined") { CamFeel.resetFollow(); CamFeel.resetFreeLook(); CamFeel.resetLatch(); }
+        if (typeof GameCams !== "undefined") GameCams.resetSmoothing();
+      };
+      const say = (text) => { if (generation === sheetGeneration && typeof document !== "undefined") { const el = document.getElementById("pm-replay-sheet-status"); if (el) el.textContent = text; } };
+      say("Capturing before, moment and after…");
+      try { const ok = await PhotoStudio.contactSheet(times, seek, cancelled); if (cancelled()) return false; say("Contact sheet PNG download requested."); return ok; }
+      catch (e) { say(sheetCancelled ? "Capture cancelled." : "Contact sheet unavailable. Try again."); Log.warn("ui", "Contact sheet failed", e); return false; }
+      finally {
+        if (owns()) {
+          seek(saved.t); scrubPlaying = saved.playing; scrubRate = saved.rate;
+        }
+        if (generation === sheetGeneration) { sheetBusy = false; paintDock(); }
+      }
+    }
+
+    function cancelContactSheet() { sheetCancelled = true; }
+
+    // Pause-card REPLAY + scrub dock (JS-built — no shell-node growth).
+    function ensureButton() {
+      if (typeof document === "undefined") return;
+      if (document.getElementById("pm-replay")) return;
+      const resume = document.getElementById("pm-resume");
+      if (!resume || !resume.parentNode) return;
+      const b = document.createElement("button");
+      b.id = "pm-replay";
+      b.type = "button";
+      b.textContent = "REPLAY";
+      b.hidden = true;
+      b.onclick = () => {
+        if (!beginScrub()) return;
+        const menu = document.getElementById("pausemenu");
+        if (menu) menu.hidden = true;
+        Log.info("game", "ReplayBuf.scrub t=" + scrubT.toFixed(2));
+      };
+      // First tile of the pause card's RACE TOOLS tray when it exists.
+      const tray = document.getElementById("pm-quick-doors");
+      if (tray) tray.insertBefore(b, tray.firstChild);
+      else resume.parentNode.insertBefore(b, resume.nextSibling);
+    }
+    function ensureDock() {
+      if (typeof document === "undefined") return null;
+      let dock = document.getElementById("pm-replay-dock");
+      if (dock) return dock;
+      dock = document.createElement("div");
+      dock.id = "pm-replay-dock";
+      dock.hidden = true;
+      // Styled by `#pm-replay-dock` in css/dialogs.css (safe-area, wrap, tokens).
+      dock.setAttribute("role", "group");
+      dock.setAttribute("aria-label", "Instant replay");
+      dock.innerHTML =
+        '<button type="button" id="pm-replay-exit">EXIT</button>' +
+        '<button type="button" id="pm-replay-play">PAUSE</button>' +
+        '<button type="button" id="pm-replay-last">LAST</button>' +
+        '<button type="button" id="pm-replay-prev" aria-label="Previous recorded frame">← FRAME</button>' +
+        '<button type="button" id="pm-replay-next" aria-label="Next recorded frame">FRAME →</button>' +
+        '<button type="button" id="pm-replay-rate">1×</button>' +
+        '<input id="pm-replay-scrub" type="range" min="0" max="1000" value="1000" aria-label="Replay position">' +
+        '<span id="pm-replay-label">0.0</span>' +
+        '<select id="pm-replay-tag" aria-label="Contact sheet moment"></select>' +
+        '<button type="button" id="pm-replay-sheet">CONTACT SHEET PNG</button>' +
+        '<button type="button" id="pm-replay-sheet-cancel" hidden>CANCEL CAPTURE</button>' +
+        '<span id="pm-replay-sheet-status" role="status"></span>';
+      (document.body || document.documentElement).appendChild(dock);
+      dock.querySelector("#pm-replay-sheet-cancel").onclick = cancelContactSheet;
+      dock.querySelector("#pm-replay-sheet").onclick = () => contactSheet(+dock.querySelector("#pm-replay-tag").value);
+      dock.querySelector("#pm-replay-exit").onclick = () => {
+        endScrub();
+        const menu = document.getElementById("pausemenu");
+        if (menu && G.paused) menu.hidden = false;
+      };
+      dock.querySelector("#pm-replay-play").onclick = () => {
+        if (sheetBusy) return;
+        scrubPlaying = !scrubPlaying;
+        paintDock();
+      };
+      dock.querySelector("#pm-replay-prev").onclick = () => stepFrame(-1);
+      dock.querySelector("#pm-replay-next").onclick = () => stepFrame(1);
+      dock.querySelector("#pm-replay-last").onclick = () => { if (!sheetBusy) { jumpLastTag(); paintDock(); } };
+      dock.querySelector("#pm-replay-rate").onclick = () => {
+        if (sheetBusy) return;
+        const i = RATES.indexOf(scrubRate);
+        scrubRate = RATES[(i + 1) % RATES.length];
+        paintDock();
+      };
+      dock.querySelector("#pm-replay-scrub").oninput = (ev) => {
+        if (sheetBusy) return;
+        const w = windowInfo();
+        const u = (+ev.target.value || 0) / 1000;
+        scrubPlaying = false;
+        apply(w.t0 + (w.t1 - w.t0) * u);
+        paintDock();
+      };
+      return dock;
+    }
+    function showDock() {
+      const d = ensureDock();
+      if (d) d.hidden = false;
+    }
+    function hideDock() {
+      if (typeof document === "undefined") return;
+      const d = document.getElementById("pm-replay-dock");
+      if (d) d.hidden = true;
+    }
+    function paintDock() {
+      if (typeof document === "undefined" || !scrubbing) return;
+      const w = windowInfo();
+      const play = document.getElementById("pm-replay-play");
+      const rate = document.getElementById("pm-replay-rate");
+      const scrub = document.getElementById("pm-replay-scrub");
+      const label = document.getElementById("pm-replay-label");
+      if (play) play.textContent = scrubPlaying ? "PAUSE" : "PLAY";
+      if (rate) rate.textContent = scrubRate + "×";
+      if (scrub && w.t1 > w.t0) {
+        const u = (scrubT - w.t0) / (w.t1 - w.t0);
+        scrub.value = String(Math.round(Math.max(0, Math.min(1, u)) * 1000));
+      }
+      if (label) label.textContent = scrubT.toFixed(3) + "s";
+      const prevFrame = document.getElementById("pm-replay-prev"), nextFrame = document.getElementById("pm-replay-next");
+      if (prevFrame) prevFrame.disabled = sheetBusy || adjacentFrame(scrubT, -1) === null;
+      if (nextFrame) nextFrame.disabled = sheetBusy || adjacentFrame(scrubT, 1) === null;
+      const picker = document.getElementById("pm-replay-tag"), sheet = document.getElementById("pm-replay-sheet");
+      if (picker && !sheetBusy) {
+        const selected = picker.value; picker.replaceChildren();
+        tags.forEach((tag, i) => { if (tag.t < w.t0 || tag.t > w.t1) return;
+          const option = document.createElement("option"); option.value = String(i); option.textContent = tag.kind + " · " + tag.t.toFixed(1) + "s"; picker.appendChild(option); });
+        if (Array.from(picker.options || picker.children).some((o) => o.value === selected)) picker.value = selected;
+      }
+      const cancel = document.getElementById("pm-replay-sheet-cancel"); if (cancel) cancel.hidden = !sheetBusy;
+      if (picker) picker.disabled = sheetBusy;
+      if (sheet) { sheet.disabled = sheetBusy || !allowed() || !G.paused || !picker || !picker.children.length || w.t1 - w.t0 < 2 / HZ; sheet.textContent = sheetBusy ? "CAPTURING…" : "CONTACT SHEET PNG"; }
+      for (const id of ["pm-replay-play", "pm-replay-last", "pm-replay-rate", "pm-replay-scrub"]) { const el = document.getElementById(id); if (el) el.disabled = sheetBusy; }
+    }
+    function refreshButton() {
+      if (!scrubbing) discardTimeline(G.raceT);
+      ensureButton();
+      const b = typeof document !== "undefined" ? document.getElementById("pm-replay") : null;
+      if (!b) return;
+      const w = windowInfo();
+      b.hidden = !allowed() || w.frames < HZ * 3;   // need ~3 s before offering
+    }
+    /** game.js call-site helpers — keep the entry thin. */
+    function onRaceStart(cars) { reset(cars); }
+    function onTick(raceT, cars, st) {
+      if (st !== "race" && st !== "count") return;
+      sample(raceT, cars);
+    }
+    function onPause(p) {
+      if (p) { endScrub(); refreshButton(); }
+      else endScrub();
+    }
+
+    return {
+      sample, clear, breakTimeline, reset, pushTag, window: windowInfo, at,
+      beginScrub, apply, endScrub, contactSheet, cancelContactSheet, isScrubbing, lastTag, jumpLastTag, tags: tagsOf,
+      tickScrub, stepFrame, adjacentFrame, status: statusOf,
+      refreshButton, ensureButton,
+      onRaceStart, onTick, onPause,
+    };
+  }
+
+  return {
+    create, HZ, WINDOW_S, FLOATS, MAX_CARS, MAX_FRAMES, MAX_BYTES,
+    frameBytes, budgetOk, capacityFor, lerpCar,
+  };
+})();
+Object.freeze(ReplayBuf);

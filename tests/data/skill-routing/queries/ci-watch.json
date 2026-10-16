@@ -1,0 +1,10 @@
+[
+{"query":"You are CI Watch for today (I designated this session). Sweep every open PR into the deploy branch, flip the green drafts to ready, and arm MERGE-commit auto-merge where the board says ARM.","expect":"ci-watch"},
+{"query":"run the ci watch sweep: pr-board, ready the green ones, arm what's ready, tell me what you skipped","expect":"ci-watch"},
+{"query":"A PR has auto-merge armed with SQUASH instead of MERGE by some other bot. As the designated CI Watch, disable the foreign arm and re-arm with MERGE and tell me who did it.","expect":"ci-watch"},
+{"query":"Set up a routine that acts as CI Watch every hour: read the PR board, mark drafts ready when the gate passes and the full-tier cap has room.","expect":"ci-watch"},
+{"query":"Which open PRs are green drafts waiting to go ready, and does ready-full-cap leave a slot for another full-tier run? I'm CI Watch.","expect":"ci-watch"},
+{"query":"My own PR #1460 went red after my last push. Find the failing test and push a fix.","expect":"steward"},
+{"query":"Before I push my branch, which checks does the deploy itself run? Run them against my dirty tree.","expect":"check-changes"},
+{"query":"pages.yml went red on the deploy branch and I didn't cause it. Check who's on it before touching anything.","expect":"steward"}
+]

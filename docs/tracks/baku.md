@@ -2,6 +2,10 @@
 
 **Theme:** `street_night` · **Setting:** NIGHT-ish / dusk street race
 
+> The real Azerbaijan Grand Prix runs in DAYTIME (a 15:00–17:00 local start);
+> the def's `night: true` is a look choice for the neon-and-floodlight brief
+> below, not a claim about the race. Leave it unless the brief changes.
+
 ## 1. Setting
 A 6.0 km, 20-corner street circuit threading through the heart of Baku. The lap mixes wide modern boulevards along the Caspian Sea with a tight, twisting climb around the medieval walls of Içerisheher (the Old City). The Tilke-designed track wraps Government House, the Presidential Palace, and runs beneath the Flame Towers on the hill above. Two worlds collide: ancient sandstone fortress walls versus glass-and-steel Caspian-front towers.
 
@@ -44,7 +48,40 @@ Mostly flat (sea-level boulevards). One distinct climb: the Old City "Castle Sec
 ## 6. Modelling Notes
 - Contrast is the identity: cluster warm sandstone crenellated boxes (notch the top edge) in the Old City vs. cool tall glass boxes with emissive window grids on the seafront.
 - Flame Towers: three tapered shafts with **full-height LED fire** (stacked emissive orange/red/amber bands via `ledFacadeBands` when available, else inline frustum rings) plus a flame crown — readable on the skyline early in the lap, not trackside.
-- Castle Section squeeze (s≈0.42–0.50): road `w: 3.8` (~7.6 m full width on segs fallback) + sandstone walls/gates at **~1–2 m clearance** both sides.
+- Castle Section squeeze (s≈0.42–0.50): road `hwZones` squeeze to `hw: 3.8` (~7.6 m full width) + sandstone walls/gates at **~1–2 m clearance** both sides.
 - Neftchilar L: sell the Caspian **void** — reflective sea + far silhouettes only; cull mid-ground palms, cafes, near piers, and dense boulevard buildings.
 - Line the whole lap with low repeating barrier/wall boxes; punctuate with floodlight poles (thin box + bright top) for the night mood.
 - Concentrate lit boxes on the right of the long straight; keep the left visually empty.
+
+
+## Research pass — landmark wave 6 (2026-09)
+
+### Sourced (built)
+- **Palace of the Shirvanshahs** (`baku-shirvanshah-palace`): 15th-century
+  complex inside İçərişəhər; ashlar façade + family mausoleum dome (1435–36)
+  + portal. UNESCO Walled City of Baku (958).
+  Sources: https://en.wikipedia.org/wiki/Palace_of_the_Shirvanshahs ;
+  https://en.wikipedia.org/wiki/Shirvanshah's_Palace_Mausoleum ;
+  https://whc.unesco.org/en/list/958
+- **İçərişəhər wall** (`baku-icheri-sheher-wall`): crenellated limestone
+  bastion behind the T8 squeeze (hwZones `hw: 3.8` untouched). Same UNESCO
+  inscription as above.
+- **Named grandstands** (Absheron main opposite pits; Icheri Sheher at castle
+  exit; Giz Galasi / Filarmoniya / Azneft): turn *ranges* only — guides differ
+  on exact seats.
+  Sources: https://www.grandprixgrandtours.com/baku-circuit-guide/ ;
+  https://grandprixguides.com/circuit/azerbaijan
+- **Maiden Tower** / **Flame Towers** / Caspian water: kept (prior waves).
+  Maiden Tower real height 29.5 m; in-game model ~51 m — **kept** (scenic
+  scale; do not shrink without a rendered A/B). Wikipedia:
+  https://en.wikipedia.org/wiki/Maiden_Tower_(Baku)
+
+### UNCERTAIN (not built as fact)
+- Exact grandstand→seat mapping (use turn ranges).
+- Palace / wall night lighting colour — warm limestone + sparse sconces only.
+- Shrinking Maiden Tower to 29.5 m.
+
+### Audit notes
+- Prior cityFront rows through the castle climb (0.42–0.50) buried up to
+  13.9 m on the 14 m rise and coplanar-overlapped the R-side façades; those
+  runs were shortened/removed in favour of the palace + wall landmarks.

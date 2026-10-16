@@ -1,0 +1,357 @@
+// agent-surface.test.mjs — lockstep the wrap map to the MCP catalog + skills.
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const DOC = path.join(ROOT, "docs/AGENT-SURFACE.md");
+const CATALOG = path.join(ROOT, "tools/mcp/apex-tools-mcp.json");
+const SKILLS = path.join(ROOT, ".claude/skills");
+
+function read(rel) {
+  return fs.readFileSync(path.join(ROOT, rel), "utf8");
+}
+
+function parseTable(text, marker) {
+  const i = text.indexOf(marker);
+  assert.ok(i >= 0, `docs/AGENT-SURFACE.md missing ${marker}`);
+  const rows = [];
+  for (const line of text.slice(i).split("\n").slice(1)) {
+    if (!line.startsWith("|")) {
+      if (rows.length) break;
+      continue;
+    }
+    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    if (!cells[0] || /^[-:]+$/.test(cells[0]) || cells[0] === "MCP tool"
+      || cells[0] === "CLI / action") continue;
+    rows.push(cells);
+  }
+  assert.ok(rows.length > 0, `${marker} table is empty`);
+  return rows;
+}
+
+function stripTick(s) {
+  return String(s || "").replace(/^`|`$/g, "");
+}
+
+test("wrap map names match tools/mcp/apex-tools-mcp.json", () => {
+  const doc = fs.readFileSync(DOC, "utf8");
+  const wrap = parseTable(doc, "<!-- WRAP-MAP -->");
+  const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
+  const mapped = wrap.map((r) => stripTick(r[0])).sort();
+  const listed = [...catalog.tools].sort();
+  assert.deepEqual(mapped, listed, "AGENT-SURFACE wrap table drifted from apex-tools-mcp.json");
+});
+
+test("every wrap row has a real CLI (or built-in) and a real skill", () => {
+  const doc = fs.readFileSync(DOC, "utf8");
+  const wrap = parseTable(doc, "<!-- WRAP-MAP -->");
+  const missing = [];
+  for (const [mcp, cliRaw, kind, skillRaw] of wrap) {
+    assert.match(stripTick(mcp), /^apex_/, `${mcp} is not an apex_* name`);
+    assert.match(kind, /^(tree|browser)$/, `${mcp} kind must be tree|browser`);
+    const cli = stripTick(cliRaw);
+    if (cli !== "built-in") {
+      const file = path.join(ROOT, "tools", cli);
+      if (!fs.existsSync(file)) missing.push(`${mcp} CLI ${cli}`);
+    }
+    const skill = stripTick(skillRaw);
+    assert.notEqual(skill, "—", `${mcp} wrap row must name a skill`);
+    assert.notEqual(skill, "-", `${mcp} wrap row must name a skill`);
+    const dir = path.join(SKILLS, skill);
+    if (!fs.existsSync(path.join(dir, "SKILL.md"))) missing.push(`${mcp} skill ${skill}`);
+  }
+  assert.deepEqual(missing, [], "wrap map points at a missing CLI or skill");
+});
+
+test("server table names the three attached servers and the four that left", () => {
+  const doc = read("docs/AGENT-SURFACE.md");
+  for (const name of ["apex-tools", "chrome-devtools", "playwright-official"]) {
+    assert.match(doc, new RegExp(`\\*\\*${name}\\*\\*`), `AGENT-SURFACE.md must name **${name}**`);
+  }
+  // Removed 2026-09 — still documented as CLI-only so nobody re-adds them blind.
+  for (const gone of ["probe", "tinyfish", "chrome-devtools-official"]) {
+    assert.match(doc, new RegExp(`\\*\\*${gone}\\*\\*`), `AGENT-SURFACE.md must explain why **${gone}** left`);
+  }
+  assert.match(doc, /browser_\*/);
+  assert.match(doc, /playwright-mcp\.sh/);
+  assert.match(doc, /probe-mcp\.py chrome-start/);
+  assert.match(doc, /deploy-research/);
+  const cfg = JSON.parse(read(".mcp.json"));
+  assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
+    "apex-tools",
+    "chrome-devtools",
+    "playwright-official",
+  ]);
+  const cursor = JSON.parse(read(".cursor/mcp.json"));
+  assert.deepEqual(cursor, cfg, ".cursor/mcp.json must lockstep .mcp.json");
+});
+
+test("wrap map is exactly the sixteen kept wraps", () => {
+  const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
+  assert.equal(catalog.tools.length, 30,
+    "30 → 12 on 2026-09, then 12 → 10 on 2026-09-03 when apex_gfx_probe and " +
+    "apex_wgx_validate_static left with the WGX/TLX spike-out (their CLIs are in " +
+    "tools/gfx/ now), then 10 → 11 on 2026-09-10 for apex_garage, the one wrap that " +
+    "is a SESSION (garage-angles --serve), then 11 → 12 on 2026-09-24 for " +
+    "apex_frame_report (node-VM framing report, no browser), then 12 → 13 for read-only apex_doctor and 13 → 16 for read-only session checks; then 16 → 24 on 2026-10-03 for the track session, background jobs, one-cell UI tools and offline car/track audits; then 24 → 26 on 2026-10-04 for apex_hud_shot / apex_hud_survey (one CLI, hud-survey.mjs); then 26 → 27 on 2026-10-05 for apex_unit_test; then 27 → 28 on 2026-10-06 for apex_shot_survey (multi-shot track-session panel); then 28 → 29 on 2026-10-10 for apex_hud_mock (HUD layout on black, ~1 s a shot); then 29 → 30 on 2026-10-10 for apex_catalog (every valid id in one read); " +
+    "grow it on purpose, in the doc too");
+});
+
+test("never-wrap table names the load-bearing refuses", () => {
+  const doc = fs.readFileSync(DOC, "utf8");
+  const never = parseTable(doc, "<!-- NEVER-WRAP -->")
+    .map((r) => r.join(" "))
+    .join("\n");
+  for (const need of [
+    "test-bg.mjs",
+    "verify-change.mjs",
+    "--fast",
+    "bump-cache.mjs --apply",
+    "github.io",
+    "tinyfish",
+  ]) {
+    assert.match(never, new RegExp(need.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+      `never-wrap table must name ${need}`);
+  }
+});
+
+test("mcp-smoke is a CLI, not an apex_* wrap", () => {
+  const doc = read("docs/AGENT-SURFACE.md");
+  assert.match(doc, /mcp-smoke/);
+  assert.match(read("tools/README.md"), /mcp-smoke\.mjs/);
+  const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
+  assert.ok(!catalog.tools.includes("apex_mcp_smoke"));
+  assert.ok(!catalog.tools.includes("apex_smoke"));
+});
+
+test("indexes point at AGENT-SURFACE.md", () => {
+  const need = [
+    "AGENTS.md",
+    "docs/README.md",
+    ".claude/skills/README.md",
+    "tools/README.md",
+    "docs/research/APEX-TOOLS-MCP.md",
+    ".claude/skills/check-changes/SKILL.md",
+    ".claude/skills/mcp-probe/SKILL.md",
+    ".claude/agents/README.md",
+    ".cursor/rules/apex-shared.mdc",
+  ];
+  const missing = need.filter((rel) => !read(rel).includes("AGENT-SURFACE.md"));
+  assert.deepEqual(missing, [], "an index lost the AGENT-SURFACE.md pointer");
+});
+
+test("bootstrap contract is documented for Cloud + desktop", () => {
+  const doc = read("docs/AGENT-SURFACE.md");
+  assert.match(doc, /^## Bootstrap \(auto-setup\)/m);
+  assert.match(doc, /\.cursor\/environment\.json/);
+  assert.match(doc, /Integrations & MCP/);
+  assert.match(doc, /\.agents\/skills/);
+  assert.match(doc, /Codex/);
+  assert.match(doc, /Layout principles/);
+  assert.match(read("AGENTS.md"), /Available workflows/);
+  const agents = read("AGENTS.md");
+  assert.match(agents, /^## Cursor Cloud specific instructions/m);
+  assert.match(agents, /mcpServerAllowlist/);
+  assert.match(agents, /\.agents\/skills/);
+  assert.match(read("CLAUDE.md"), /@AGENTS\.md/);
+  const settings = JSON.parse(read(".claude/settings.json"));
+  assert.deepEqual(
+    [...(settings.enabledMcpjsonServers || [])].sort(),
+    ["apex-tools", "chrome-devtools", "playwright-official"],
+    ".claude/settings.json must approve the three catalog servers",
+  );
+  assert.match(doc, /enabledMcpjsonServers/);
+  // Interactive host-browser MCP → survey-ui-matrix / css-play; batch shots stay playwright-probe (CLI).
+  const hostRow = doc.split('\n').find((l) => l.includes('**playwright-official**')) || '';
+  assert.match(hostRow, /survey-ui-matrix/);
+  assert.match(hostRow, /css-play/);
+  assert.doesNotMatch(hostRow, /Skills \*\*playwright-probe\*\*/);
+
+});
+
+test("Codex skill mirror locksteps .claude/skills via symlinks", () => {
+  const claude = path.join(ROOT, ".claude/skills");
+  const codex = path.join(ROOT, ".agents/skills");
+  assert.ok(fs.existsSync(codex), ".agents/skills missing — Codex will not see project skills");
+  const names = fs.readdirSync(claude).filter((n) => {
+    try { return fs.statSync(path.join(claude, n)).isDirectory(); }
+    catch { return false; }
+  }).sort();
+  const mirrored = fs.readdirSync(codex).sort();
+  assert.deepEqual(mirrored, names, ".agents/skills must mirror every .claude/skills dir");
+  const broken = [];
+  for (const name of names) {
+    const link = path.join(codex, name);
+    const st = fs.lstatSync(link);
+    if (!st.isSymbolicLink()) {
+      broken.push(`${name} is not a symlink`);
+      continue;
+    }
+    const target = fs.readlinkSync(link);
+    if (target !== `../../.claude/skills/${name}`) {
+      broken.push(`${name} → ${target} (want ../../.claude/skills/${name})`);
+    }
+    if (!fs.existsSync(path.join(link, "SKILL.md"))) {
+      broken.push(`${name} does not resolve to SKILL.md`);
+    }
+  }
+  assert.deepEqual(broken, [], "Codex skill mirror broken");
+});
+
+test("Codex .codex/config.toml MCP servers lockstep .mcp.json", () => {
+  const cfg = JSON.parse(read(".mcp.json"));
+  const toml = read(".codex/config.toml");
+  assert.match(toml, /trusted/i);
+  const names = Object.keys(cfg.mcpServers).sort();
+  assert.deepEqual(names, ["apex-tools", "chrome-devtools", "playwright-official"]);
+  for (const name of names) {
+    assert.match(toml, new RegExp(`\\[mcp_servers\\.${name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\]`),
+      `.codex/config.toml missing [mcp_servers.${name}]`);
+    const srv = cfg.mcpServers[name];
+    assert.match(toml, new RegExp(`command\\s*=\\s*"${srv.command}"`),
+      `${name} command must match .mcp.json`);
+    for (const arg of srv.args) {
+      assert.match(toml, new RegExp(`"${arg.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}"`),
+        `${name} args must include ${arg}`);
+    }
+  }
+  assert.match(read("docs/AGENT-SURFACE.md"), /\.codex\/config\.toml/);
+  assert.match(read("AGENTS.md"), /\.codex\/config\.toml/);
+});
+
+test("MCP descriptions state tree vs browser", () => {
+  const src = read("tools/mcp/apex-tools-mcp.mjs");
+  assert.match(src, /docs\/AGENT-SURFACE\.md/);
+  const doc = fs.readFileSync(DOC, "utf8");
+  const wrap = parseTable(doc, "<!-- WRAP-MAP -->");
+  for (const [mcp, , kind] of wrap) {
+    const name = stripTick(mcp);
+    const prefix = kind === "browser" ? "Browser \\(lock first\\)" : "Tree";
+    assert.match(src, new RegExp(`name: "${name}"[\\s\\S]{0,240}description: "${prefix}`),
+      `${name} description must start with ${kind === "browser" ? "Browser (lock first)" : "Tree"}`);
+  }
+});
+
+/* ── FRONTMATTER KEYS THE HOSTS ACTUALLY READ ──────────────────────────────
+   Every key in an agent's or a skill's frontmatter is read by Claude Code, by
+   Cursor, or by the Agent Skills spec — or by nothing, silently. `readonly` and
+   `is_background` are Cursor's (Claude Code enforces read-only through `tools:`
+   and background through `background:`); `paths:` is Claude Code's file-scoped
+   auto-load. A key outside these lists is a typo or a field the docs never had,
+   and it fails here instead of being ignored forever (2026-09-22, from the
+   agent-config study: code.claude.com/docs/en/sub-agents, /skills,
+   cursor.com/docs/subagents, agentskills.io/specification). */
+const AGENT_KEYS = new Set([
+  // Claude Code sub-agents
+  "name", "description", "tools", "disallowedTools", "model", "permissionMode", "maxTurns",
+  "skills", "mcpServers", "hooks", "memory", "background", "omitClaudeMd", "effort", "isolation", "color",
+  "initialPrompt",
+  // Cursor subagents
+  "readonly", "is_background",
+]);
+const SKILL_KEYS = new Set([
+  // Claude Code skills
+  "name", "description", "allowed-tools", "model", "context", "agent", "hooks", "paths",
+  "user-invocable", "disable-model-invocation", "when_to_use", "argument-hint",
+  // Agent Skills spec (agentskills.io)
+  "license", "compatibility", "metadata",
+]);
+const frontmatterKeys = (text) => {
+  const m = /^---\n([\s\S]*?)\n---/.exec(text);
+  assert.ok(m, "missing YAML frontmatter");
+  return m[1].split("\n").filter((l) => /^[A-Za-z_-]+\s*:/.test(l)).map((l) => l.split(":")[0].trim());
+};
+
+test("every agent and skill frontmatter key is one a host documents", () => {
+  // Negative control: the misspellings Claude Code would silently ignore
+  // (fails open — a dropped disallowedTools or permissionMode is a lost guard).
+  for (const typo of ["max_turns", "disallowed-tools", "permission_mode", "isBackground", "read_only"])
+    assert.ok(!AGENT_KEYS.has(typo) && frontmatterKeys(`---\n${typo}: x\n---\n`).includes(typo), `${typo} must be caught`);
+  const bad = [];
+  for (const f of fs.readdirSync(path.join(ROOT, ".claude/agents")).filter((n) => n.endsWith(".md") && n !== "README.md")) {
+    for (const k of frontmatterKeys(fs.readFileSync(path.join(ROOT, ".claude/agents", f), "utf8")))
+      if (!AGENT_KEYS.has(k)) bad.push(`.claude/agents/${f}: ${k}`);
+  }
+  for (const d of fs.readdirSync(SKILLS).filter((n) => fs.existsSync(path.join(SKILLS, n, "SKILL.md")))) {
+    for (const k of frontmatterKeys(fs.readFileSync(path.join(SKILLS, d, "SKILL.md"), "utf8")))
+      if (!SKILL_KEYS.has(k)) bad.push(`.claude/skills/${d}/SKILL.md: ${k}`);
+  }
+  assert.deepEqual(bad, [], "a frontmatter key no host documents is silently ignored — fix the key or add it here with its source");
+});
+
+/* A forked skill runs in a subagent: `agent:` must name one that exists (a
+   file in .claude/agents/ or a host builtin), and `context: fork` must be set
+   alongside it — `agent:` without the fork is ignored, and a fork without an
+   agent runs as general-purpose by default, which is fine but must be said.
+   The three that fork are the ones whose OUTPUT is the problem (batch frames,
+   a UI matrix walk, a circuit survey): the parent gets the report, not the
+   dumps (2026-09-22). */
+const BUILTIN_AGENTS = new Set(["general-purpose", "Explore", "Plan"]);
+// Browser workflows run in the parent. survey-track stopped forking on 2026-10-14
+// when it absorbed the multi-circuit campaign (track-realism), which the parent
+// must run: the parent spawns one track-surveyor subagent per circuit instead.
+const FORKED_SKILLS = [];
+test("every skill with agent: names an existing subagent or a builtin, and forks", () => {
+  const agents = new Set(fs.readdirSync(path.join(ROOT, ".claude/agents"))
+    .filter((n) => n.endsWith(".md") && n !== "README.md").map((n) => n.replace(/\.md$/, "")));
+  const forked = [];
+  for (const d of fs.readdirSync(SKILLS).filter((n) => fs.existsSync(path.join(SKILLS, n, "SKILL.md")))) {
+    const fm = /^---\n([\s\S]*?)\n---/.exec(fs.readFileSync(path.join(SKILLS, d, "SKILL.md"), "utf8"))[1];
+    const agent = /^agent:\s*(\S+)\s*$/m.exec(fm)?.[1];
+    const fork = /^context:\s*fork\s*$/m.test(fm);
+    if (agent) assert.ok(agents.has(agent) || BUILTIN_AGENTS.has(agent), `${d}: agent: ${agent} is neither .claude/agents/${agent}.md nor a builtin`);
+    if (agent) assert.ok(fork, `${d}: agent: without context: fork is ignored`);
+    if (fork) forked.push(d);
+  }
+  assert.deepEqual(forked.sort(), [...FORKED_SKILLS].sort(), "the forked set changed — update the list and its reason here");
+});
+
+test("no skill declares paths: — it replaces description triggering instead of adding to it", () => {
+  // Measured 2026-09-30 (skill-routing eval, 216 realistic queries through the
+  // real skill set with claude -p): the four skills that carried `paths:`
+  // (webgl-debug, webgpu-debug, css-play, lighting-tuner) fired on 0 of 20
+  // should-fire queries and on 0 of their near-misses, while the 23 without it
+  // fired on 112 of 115. `/skill-doctor` listed 23 project skills, not 27. A
+  // chat-only symptom ("night looks washed out", "the GLX canvas is black")
+  // never has a matching file in play, so the field hides exactly the requests
+  // the description targets. PR #172 (2026-09-22) had re-added it as
+  // "additive"; docs/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md §Withdrawn.
+  for (const d of fs.readdirSync(SKILLS, { withFileTypes: true }).filter((e) => e.isDirectory())) {
+    const file = path.join(SKILLS, d.name, "SKILL.md");
+    if (!fs.existsSync(file)) continue;
+    const fm = /^---\n([\s\S]*?)\n---/.exec(fs.readFileSync(file, "utf8"))[1];
+    assert.doesNotMatch(fm, /^paths:/m, `${d.name}: paths: hides the skill from chat-only asks (measured 2026-09-30)`);
+  }
+});
+
+/* Saved workflows (.claude/workflows/*.js) run in the Workflow tool's async
+   harness, so `node --check` cannot parse them (top-level await/return,
+   `export const meta`). Parse each as an async function body instead, and pin
+   that every `agentType:` they name is a file in .claude/agents/ — a typo
+   there silently falls back to nothing at run time. code-survey and
+   total-audit route finders, verifiers and the prior-art seed through the
+   purpose-built agents (2026-10-14), so they must keep naming them. */
+const WORKFLOWS = path.join(ROOT, ".claude/workflows");
+test("every saved workflow parses and names only existing agentTypes", () => {
+  const agents = new Set(fs.readdirSync(path.join(ROOT, ".claude/agents"))
+    .filter((n) => n.endsWith(".md") && n !== "README.md").map((n) => n.replace(/\.md$/, "")));
+  const AsyncFunction = (async () => {}).constructor;
+  const named = {};
+  for (const f of fs.readdirSync(WORKFLOWS).filter((n) => n.endsWith(".js"))) {
+    const src = fs.readFileSync(path.join(WORKFLOWS, f), "utf8");
+    assert.match(src, /^export const meta = \{/m, `${f}: must start with export const meta`);
+    assert.doesNotThrow(() => new AsyncFunction("agent", "parallel", "pipeline", "phase", "log", "args", "budget", "workflow",
+      src.replace(/^export const meta/m, "const meta")), `${f}: does not parse as an async body`);
+    const titles = new Set([...src.matchAll(/\{\s*title:\s*'([^']+)'/g)].map((m) => m[1]));
+    for (const m of src.matchAll(/phase(?:\(|:\s*)'([^']+)'/g)) assert.ok(titles.has(m[1]), `${f}: phase '${m[1]}' has no meta.phases entry`);
+    named[f] = [...src.matchAll(/agentType\s*:\s*[^'"\n,}]*['"]([\w-]+)['"]/g)].map((m) => m[1]);
+    for (const t of named[f]) assert.ok(agents.has(t), `${f}: agentType '${t}' is not .claude/agents/${t}.md`);
+  }
+  for (const [f, want] of [["code-survey.js", ["code-hunter", "finding-verifier", "prior-art-scout"]],
+    ["total-audit.js", ["code-hunter", "finding-verifier", "prior-art-scout", "agent-surface-reviewer"]]]) {
+    for (const t of want) assert.ok((named[f] || []).includes(t), `${f}: no longer routes through ${t}`);
+  }
+});

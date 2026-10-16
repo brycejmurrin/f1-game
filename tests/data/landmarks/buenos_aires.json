@@ -1,0 +1,11 @@
+{
+  "why": "Wave 6 — Buenos Aires (Gálvez): classic pit/tower/portico + Curvón terrace, Confitería café, 27 de Febrero talud gate. Flag avenue is UNCERTAIN — generic poles only, no required modelGroup.",
+  "ids": [
+    "baires-pit-block",
+    "baires-control-tower",
+    "baires-portico",
+    "baires-terrace-curvon",
+    "baires-confiteria",
+    "baires-talud-gate"
+  ]
+}

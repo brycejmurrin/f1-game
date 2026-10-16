@@ -1,20 +1,20 @@
 {
   "mcpServers": {
+    "apex-tools": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["tools/mcp/apex-tools-mcp.sh", "serve"],
+      "timeout": 900000
+    },
+    "playwright-official": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["tools/mcp/playwright-mcp.sh", "run"]
+    },
     "chrome-devtools": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "chrome-devtools-mcp@latest",
-        "--headless",
-        "--isolated",
-        "--executablePath",
-        "/opt/pw-browsers/chromium",
-        "--memoryDebugging",
-        "--viewport",
-        "844x390",
-        "--chromeArg=--no-sandbox",
-        "--chromeArg=--use-angle=swiftshader"
-      ]
+      "type": "stdio",
+      "command": "bash",
+      "args": ["tools/mcp/chrome-devtools-mcp.sh", "run"]
     }
   }
 }

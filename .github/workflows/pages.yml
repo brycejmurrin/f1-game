@@ -1,56 +1,460 @@
 name: Deploy to GitHub Pages
 
 on:
+  # THE RELEASE TRAIN (2026-09-10, on push since 2026-10-16). This branch
+  # takes 3-131 commits a day from several agents; a deploy per push once
+  # meant a 14-job gate and a Pages deployment per commit, gates cancelling
+  # each other in bursts. The train takes the tip, gates it once, and
+  # publishes exactly that commit. Until 2026-10-16 it was started by ci.yml's
+  # `poke-train` job after a deploy-branch push's fast tier went green, by its
+  # own `rearm` job, and by the cron; the push itself starts it now (below),
+  # the single-flight group coalesces a burst, and the cron is the backstop
+  # for prose-only pushes and lost events (GitHub's scheduler runs this
+  # repository's schedules hours late). A manual dispatch is "deploy now".
+  # ON PUSH (2026-10-16, the CI/CD review #2333 finding 3). The ship-push
+  # fast tier in ci.yml reached 38 % of merges (184 pushes a day, 112 replaced
+  # while pending in `ship-fast`, 70 completed) and cost 5,587 job-minutes a
+  # day for verdicts the train repeated; poke-train only pokes from a run that
+  # completed, so most merges waited for this cron. A push now starts the
+  # train directly: the workflow-level `pages-train-<ref>` group keeps one
+  # running and ONE pending run, and a newer push replaces the pending one
+  # (GitHub's default `queue: single`; `queue: max` would gate every
+  # intermediate commit, which is the cost being removed), so a burst costs
+  # one gate per gate length and the train always takes the newest tip.
+  # The same prose paths ci.yml ignored start no train; the cron ships them.
+  # `verdict` still refuses any ref but the deploy branch and diffs the gate
+  # against the LIVE commit, never the push's previous tip (unpublished and
+  # possibly ungated, it is not a base).
   push:
-    branches: [claude/f1-game-project-26h3ng]
+    branches:
+      - claude/f1-game-project-26h3ng
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - ".claude/**"
+      - ".cursor/**"
+      - ".codex/**"
+  schedule:
+    - cron: "41 * * * *"
   workflow_dispatch:
 
+env:
+  # The ONE declaration of the deploy branch. A schedule runs on the default
+  # branch, which is this one; the verdict job refuses anything else, so a
+  # dispatch from another branch cannot publish it.
+  DEPLOY_BRANCH: claude/f1-game-project-26h3ng
+
+# Least privilege (2026-10-14): pages: write + id-token: write live on the
+# `deploy` job only, the one job deploy-pages runs in
+# (https://github.com/actions/deploy-pages#security-considerations); every
+# other job names its own, and a job that names any permission gets only those
+# (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions).
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
-# GitHub Pages serves ONE deployment at a time per environment, and the deploy
-# request lives on GitHub's backend independently of this Actions job. Cancelling
-# an in-progress run (cancel-in-progress: true) under a burst of rapid pushes
-# abandons deployments GitHub has already accepted, wedging the single-slot queue
-# so later deploys sit in `deployment_queued` until they hit the deploy-pages
-# 10-min timeout ("Timeout reached, aborting!"). false = a new push WAITS for the
-# in-flight deploy instead of killing it — the config the official Pages workflow
-# ships. Intermediate queued runs are still coalesced; the latest one wins.
+# SINGLE-FLIGHT TRAIN (2026-10-06). Workflow-level group so only one Pages
+# run occupies runners at a time on this branch (plus at most one pending
+# replacement). cancel-in-progress stays false: never kill a live publish or
+# gate mid-flight. Job-level pages-gate / pages groups remain as belt-and-
+# braces for the ci and deploy jobs. A push to the deploy branch queues here
+# too (2026-10-16): one running, one pending, the newest push replaces the
+# pending one.
 concurrency:
-  group: pages
+  group: pages-train-${{ github.ref }}
   cancel-in-progress: false
 
+# THE CONTRACT (2026-09-10): a run tests ONE commit, stages THAT commit, and
+# publishes THAT artifact — never the branch tip, never anything its own gate
+# did not see. Three rules make that livable under this branch's push rate
+# (the gate's median is 20.5 minutes, gated publish 23 min median / 73 p90,
+# measured 2026-10-14; pushes land in bursts minutes apart):
+#
+#   1. ONE TRAIN AT A TIME. The `ci` job carries a per-branch concurrency
+#      group WITHOUT cancel-in-progress: a running gate finishes, the next
+#      tick waits as the one pending run, and a further tick replaces that
+#      pending one. Bounded lag (a tick plus one gate), no starvation, no
+#      gate ever killed a spec from green. `verdict` runs outside the group
+#      and answers first whether there is anything new to publish at all.
+#   2. MONOTONIC. Before entering the environment, and again under the Pages
+#      lock, `tools/ci/pages-publishable.sh` reads the live shell's apex-sha
+#      and publishes only if it is an ancestor of this run's commit. An older
+#      run that reaches the lock after a newer one has published stops there.
+#   3. REUSE, NEVER RE-RUN THE SAME TREE. A merge made through GitHub is a
+#      new commit, so every PR merge paid the full gate a second time even
+#      when the PR run had tested the very same files. `verdict` compares
+#      tree hashes: when this commit's tree equals a parent's, and that
+#      parent has a completed successful ci.yml or pages.yml run, the gate is
+#      skipped and the run goes straight to `publishable`. The tree is the
+#      proof — same files means same workflow, same tests, same result. A
+#      merge whose base moved has a different tree and gets its own gate.
+#
+# What this replaces, and why (kept short; the runs are in the history):
+#   - 2026-08-12: workflow-level concurrency. cancel-in-progress: true starved
+#     the site (build 971 vs a 1145+ tip); false wedged every later push behind
+#     one slow pipeline. Fix: lock only the deploy job.
+#   - 2026-09-02: an exact-SHA gate ("TIP == GITHUB_SHA or skip") left the site
+#     on build 7320 for an hour while four green runs each skipped. Fix at the
+#     time: publish the branch TIP from any green ancestor run — which meant a
+#     commit could ship while its own gate was unfinished or failing. That was
+#     justified by "every push goes through deploy.mjs, which runs the node
+#     suites first"; PRs merged through GitHub do not, so the premise expired.
+#     This file's contract closes that path.
 jobs:
+  # Rule 3. Cheap (one checkout, one API call) and never cancelled: it does
+  # not share the gate's concurrency group. Any lookup failure is reuse=false,
+  # which costs exactly the gate run every commit paid before this existed.
+  verdict:
+    name: Anything new, and was this exact tree already gated?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      nothing_new: ${{ steps.live.outputs.nothing_new }}
+      since: ${{ steps.live.outputs.since }}
+      reuse: ${{ steps.v.outputs.reuse }}
+      source: ${{ steps.v.outputs.source }}
+      run: ${{ steps.v.outputs.run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0        # the parents' trees and the live commit are the whole question
+          filter: blob:none
+      - name: Refuse to run off the deploy branch
+        run: |
+          if [ "$GITHUB_REF_NAME" != "$DEPLOY_BRANCH" ]; then
+            echo "::error::pages.yml publishes $DEPLOY_BRANCH only; this run is on $GITHUB_REF_NAME"
+            exit 1
+          fi
+      # A train tick with nothing new stops here: one slot for thirty seconds
+      # instead of a 14-job gate that would end in "already live". `since` is
+      # the live commit when it is an ancestor of this one — the exact base
+      # for the sweeps and selection filters ("what changed since what is
+      # live?") — and empty otherwise, which those filters read as "run all".
+      - name: What is live, and is this tip newer?
+        id: live
+        run: |
+          set -u
+          # Built from the default env, not github.event.repository — the
+          # schedule payload is not a push payload.
+          SITE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          LIVE="$(bash tools/ci/pages-live-sha.sh "$SITE_URL")"
+          if [ -z "$LIVE" ]; then
+            echo "::warning::live apex-sha unreadable; gating the whole tip"
+            echo "nothing_new=false" >> "$GITHUB_OUTPUT"; echo "since=" >> "$GITHUB_OUTPUT"
+          elif [ "$LIVE" = "$GITHUB_SHA" ]; then
+            echo "live is already $GITHUB_SHA — nothing to publish"
+            echo "nothing_new=true" >> "$GITHUB_OUTPUT"; echo "since=$LIVE" >> "$GITHUB_OUTPUT"
+          elif git cat-file -e "${LIVE}^{commit}" 2>/dev/null && git merge-base --is-ancestor "$LIVE" "$GITHUB_SHA"; then
+            echo "live $LIVE is an ancestor; gating the diff since it"
+            echo "nothing_new=false" >> "$GITHUB_OUTPUT"; echo "since=$LIVE" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::live $LIVE is not an ancestor of $GITHUB_SHA; gating the whole tip (publishable decides later)"
+            echo "nothing_new=false" >> "$GITHUB_OUTPUT"; echo "since=" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Look for a completed successful gate on this tree
+        id: v
+        if: steps.live.outputs.nothing_new != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/ci/pages-reuse-verdict.sh "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - name: Say so in the run summary
+        env:
+          NOTHING_NEW: ${{ steps.live.outputs.nothing_new }}
+          REUSE: ${{ steps.v.outputs.reuse }}
+          SOURCE: ${{ steps.v.outputs.source }}
+          RUN: ${{ steps.v.outputs.run }}
+        run: |
+          if [ "$NOTHING_NEW" = "true" ]; then
+            echo "**Nothing new**: the live site already serves \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$REUSE" = "true" ]; then
+            echo "**Gate reused**: \`$GITHUB_SHA\` has the same tree as \`$SOURCE\`, which already passed $RUN" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "**Gate runs**: no completed successful run found for this tree" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # The deploy gate: every job in ci.yml, aggregated by `needs: ci` below.
+  # Skipped when nothing is new, or when rule 3 found the same tree gated.
+  ci:
+    needs: verdict
+    # Full gate when nothing is reusable. Tree-equal full gates (a prior run
+    # whose CI, sweeps, selected verdict and smoke jobs all concluded success)
+    # skip ci entirely. The smoke-only ship path is gone (2026-10-14;
+    # always false since 2026-10-07, when run 3112 (37689226760) published
+    # 61e0a6442 on a smoke-only pass after dispatch 3110 (37687308660) had
+    # failed the full gate on that tree — see pages-reuse-verdict.sh).
+    if: needs.verdict.outputs.nothing_new != 'true' && needs.verdict.outputs.reuse != 'true'
+    # A CALLED workflow may not request more than its caller passes, and the
+    # check happens at startup for every declared job, skipped or not. ci.yml's
+    # jobs ask for contents: read and actions: read (the fast-tier reuse and
+    # the run-listing steps); poke-train, the one job that needed actions:
+    # write, is gone (2026-10-16). Nothing here needs pages/id-token; those
+    # stay with the deploy job's own token.
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/ci.yml
+    with:
+      # The live commit, when it is an ancestor of this tip: the sweeps and
+      # selection filters diff against exactly what is live. Empty means
+      # unknown, and every filter in ci.yml reads empty as "run everything".
+      before_sha: ${{ needs.verdict.outputs.since }}
+      # A unique key keeps ci.yml's OWN concurrency group out of the way; the
+      # group that matters is the one on this job. It also tells ci.yml this
+      # is the deploy gate (full tier, never the fast one).
+      concurrency_key: pages-${{ github.run_id }}
+    # ONE TRAIN AT A TIME (rule 1 above). One group per branch, no cancel: a
+    # running gate finishes, the next tick waits, a later tick replaces the
+    # waiting one. A dispatch shares the group and queues the same way.
+    concurrency:
+      group: pages-gate-${{ github.ref }}
+      cancel-in-progress: false
+
+  # Keep runs that CANNOT publish out of the environment entirely. An
+  # environment job is itself a GitHub deployment: letting such a run enter it
+  # and then skip deploy-pages records a misleading successful deployment for
+  # bytes that were never published. The deploy job repeats this check under
+  # the Pages lock, because the answer can change while a run waits for it.
+  publishable:
+    needs: [verdict, ci]
+    # A skipped `needs` job skips its dependents unless the condition says
+    # otherwise, so this spells out the two ways in: the gate passed, or the
+    # gate was skipped BECAUSE the verdict reused an earlier pass. A failed or
+    # cancelled gate matches neither and the run stops here.
+    if: ${{ !cancelled() && needs.verdict.result == 'success' && needs.verdict.outputs.nothing_new != 'true' && (needs.ci.result == 'success' || (needs.ci.result == 'skipped' && needs.verdict.outputs.reuse == 'true')) }}
+    runs-on: ubuntu-latest
+    # A checkout and one script (2026-10-04): it had no cap (360 min default)
+    # and inherited the workflow's pages: write + id-token: write, neither of
+    # which a read of the live sha needs.
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      deploy: ${{ steps.pub.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0        # merge-base needs the history, not just the tip
+          filter: blob:none
+      - name: Is this commit still worth publishing?
+        id: pub
+        run: |
+          SITE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          echo "publish=$(bash tools/ci/pages-publishable.sh "$GITHUB_SHA" "$SITE_URL")" >> "$GITHUB_OUTPUT"
+
   deploy:
+    needs: publishable
+    # `!cancelled()` is load-bearing, not decoration: a job's implicit
+    # success() looks at every job upstream of it, TRANSITIVELY, so when the
+    # gate was skipped (nothing new, or a reused pass) this job was skipped too
+    # even though publishable ran and said yes (run 2237, 2026-09-10). The
+    # explicit result check keeps the failure semantics: a failed or skipped
+    # publishable still stops here.
+    if: ${{ !cancelled() && needs.publishable.result == 'success' && needs.publishable.outputs.deploy == 'true' }}
+    # The ONLY step that actually touches GitHub's single-slot Pages queue.
+    # cancel-in-progress stays false: a publish in flight is never interrupted,
+    # and a newer run simply queues behind it and publishes next.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    # A CAP, so a hang cannot hold the never-cancelled `pages` lock for the
+    # 360-minute default (2026-10-04). Time queued for the lock does not count;
+    # the job is a full-history checkout, staging and deploy-pages, whose own
+    # deployment `timeout` input defaults to 10 minutes — this sits above it.
+    # 30 since 2026-10-14 (process-review fix 1). Deploy job only: the `ci`
+    # gate is a reusable-workflow call (no job-level timeout allowed) whose
+    # p90 is 73 min; its jobs carry their own caps in ci.yml.
+    timeout-minutes: 30
+    # The only job that needs a Pages token: deploy-pages requests the
+    # deployment with pages: write and authenticates with an OIDC token.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+      build: ${{ steps.stamp.outputs.build }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
+      # GITHUB_SHA, checked out as-is: the commit the gate above tested is the
+      # commit that gets staged, stamped and published. Nothing here re-reads
+      # the branch tip.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The generation is 2000 + the commit count (see "Stamp the shell
+          # generation"); a depth-1 checkout would count 1.
+          fetch-depth: 0
+      # Rule 2, repeated inside the lock: a newer commit may have published
+      # while this run waited. Failure is deliberate and absolute — once an
+      # environment job exists it must not report success unless deploy-pages
+      # really publishes, and it must never publish an older tree over a newer.
+      - name: Confirm this commit may still be published (under the Pages lock)
+        run: |
+          SITE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          # --strict: under the lock an UNREADABLE live sha refuses, where the
+          # unlocked check above fails open. This is the last read before
+          # bytes go live, and "could not tell" must not publish (2026-09-22).
+          if [ "$(bash tools/ci/pages-publishable.sh "$GITHUB_SHA" "$SITE_URL" --strict)" != "true" ]; then
+            echo "::error::REFUSING DEPLOY: a newer build went live while this run waited for the Pages lock (or history diverged, or the live sha could not be read); $GITHUB_SHA is not published"
+            exit 1
+          fi
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       # Stage ONLY the runtime files. Uploading the repo root shipped a ~174 MB
       # artifact (142 MB of tests/ visual-regression snapshots + node_modules)
-      # for a ~14 MB site — slow enough to hit the 10-minute Pages deployment
-      # timeout. The game is static: html + manifest + sw.js + js/css + icons +
-      # assets is everything the browser ever requests.
+      # for what was then a ~14 MB site — slow enough to hit the 10-minute
+      # Pages deployment timeout. The staged artifact is ~140 MB today
+      # (run 38574398206, 2026-10-14), 97 MB of it assets/voice.
+      #
+      # vendor/ IS a runtime directory and was missing here until build 893.
+      # Everything reached by dynamic import lives in it — trystero (room
+      # codes), rapier (debris), jsQR (invite scanning), three.js — so each of
+      # those 404'd on the deployed site while working perfectly in every local
+      # run, because a local run serves the repo root. The room-code path was
+      # the one that reported it, as "could not load the room service".
+      #
+      # tests/unit/deploy-staging.test.mjs asserts this list covers every top-level
+      # directory the shipped code can fetch: an allow-list that has to be
+      # edited by hand fails silently and late, so it is pinned by a test
+      # rather than by this comment.
+      #
+      # .nojekyll goes up too — Pages otherwise runs the tree through Jekyll,
+      # which has its own opinions about which files deserve to exist.
+      # Allow-list lives in tools/desktop/stage-files.mjs (also used by the
+      # Electron packager). A root .html page must be named there or it 404s on
+      # the live site — bench.html on build 7377. tests/unit/deploy-staging
+      # asserts every fetchable top-level path is covered.
       - name: Stage site
+        run: node tools/desktop/stage.mjs --out _site
+      # THE SHELL GENERATION IS STAMPED HERE, NOT COMMITTED (2026-09-01).
+      # 2000 + `git rev-list --count HEAD` on a fast-forward-only branch is an
+      # integer, monotonic and unique per tip, so two sessions can never land
+      # the same build and no deploy conflicts on version.json or the
+      # index.html hashes again (before: 34 of 105 builds were introduced by
+      # 2-3 commits; 144 of the last 200 commits touched version.json). The
+      # 2000 offset keeps every stamped build above the last COMMITTED one
+      # (1689) so no client is told a lower number and refuses to reload
+      # (index.html: `v.build <= loaded` -> stay). `--root _site` rehashes the
+      # staged tags too, so the committed placeholder only has to be
+      # consistent, never current. <meta name="apex-sha"> records provenance —
+      # and is what pages-publishable.sh reads back to keep deploys monotonic.
+      # The formula lives in tools/desktop/stage.mjs (`pagesBuild`), the ONE
+      # copy the desktop and Android packagers stamp with too (2026-10-10:
+      # this step's inline bash was the only copy, so every shell shipped the
+      # committed placeholder build 1695). stage.mjs runs bump-cache --apply,
+      # places apex-sha after apex-build, and bump-cache --check — the same
+      # bytes this step's bash produced (tests/unit/deploy-staging-build).
+      - name: Stamp the shell generation
+        id: stamp
         run: |
-          mkdir -p _site
-          cp index.html version.json manifest.json sw.js _site/
-          cp -r js css icons assets _site/
+          set -eu
+          # HEAD is GITHUB_SHA: the count, the staged bytes and apex-sha all
+          # describe the one commit this run tested and is publishing.
+          PUBLISH_SHA="$GITHUB_SHA"
+          OUT=$(node tools/desktop/stage.mjs --out _site --stamp-only --sha "$PUBLISH_SHA")
+          BUILD=$(node -p 'JSON.parse(process.argv[1]).stamped' "$OUT")
+          grep -q "<meta name=\"apex-sha\" content=\"$PUBLISH_SHA\">" _site/index.html
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "stamped build $BUILD for $PUBLISH_SHA"
       # Artifact name is scoped to the RUN ATTEMPT: artifacts survive across
       # re-run attempts of the same run, so a re-run after a failed deploy left
       # multiple artifacts named "github-pages" in the run and deploy-pages@v4
       # aborted with "Multiple artifacts named github-pages were unexpectedly
       # found". A per-attempt name keeps every attempt's upload unique.
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: _site
           name: github-pages-${{ github.run_attempt }}
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
+  # The live check the container cannot do: this runner reaches github.io. A
+  # deploy is not done until the Pages CDN serves the build just stamped.
+  verify-live:
+    name: Live shell matches the published commit and build
+    needs: deploy
+    # Same transitive-skip rule as deploy: run exactly when deploy succeeded.
+    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # issues: write for the failure step only; the poll needs nothing.
+    permissions:
+      issues: write
+    steps:
+      # Recreate the exact stamped runtime tree from this deploy commit. The
+      # follow-up probe compares response bytes, not only version metadata.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Recreate the stamped runtime tree
+        env:
+          BUILD: ${{ needs.deploy.outputs.build }}
+        run: node tools/desktop/stage.mjs --out _site --stamp --at "$BUILD" --sha "$GITHUB_SHA"
+      - name: Poll the live build and commit
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+          BUILD: ${{ needs.deploy.outputs.build }}
+        run: |
+          set -eu
+          responses=$(mktemp -d)
+          trap 'rm -rf "$responses"' EXIT
+          for i in $(seq 1 24); do
+            # Complete both downloads before checking them: grep -q on a curl
+            # pipe can close early (curl 23) and still report a matching prefix.
+            if curl -fsS --output "$responses/version.json" "${PAGE_URL%/}/version.json?_=${GITHUB_RUN_ID}-$i" &&
+               curl -fsS --output "$responses/index.html" "${PAGE_URL%/}/index.html?_=${GITHUB_RUN_ID}-$i" &&
+               node -e '
+                 const fs = require("node:fs");
+                 try {
+                   const version = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+                   const html = fs.readFileSync(process.argv[2], "utf8");
+                   const build = Number(process.env.BUILD);
+                   const sha = process.env.GITHUB_SHA;
+                   const metas = [...html.matchAll(/<meta\s+name="(apex-build|apex-sha)"\s+content="([^"]*)"\s*\/?\s*>/g)];
+                   const values = name => metas.filter(m => m[1] === name).map(m => m[2]);
+                   const builds = values("apex-build"), shas = values("apex-sha");
+                   if (!Number.isInteger(build) || build < 1 || version.build !== build ||
+                       !/^[0-9a-f]{40}$/.test(sha || "") || builds.length !== 1 ||
+                       shas.length !== 1 || builds[0] !== String(build) || shas[0] !== sha) process.exit(1);
+                 } catch (_) { process.exit(1); }
+               ' "$responses/version.json" "$responses/index.html"; then
+              echo "live shell carries build $BUILD and commit $GITHUB_SHA"
+              exit 0
+            fi
+            echo "attempt $i: waiting for build $BUILD and commit $GITHUB_SHA"
+            sleep 10
+          done
+          echo "::error::live version.json never reached build $BUILD with matching shell commit $GITHUB_SHA within 4 minutes"
+          exit 1
+      - name: Verify published runtime bytes and lazy assets
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: node tools/ci/verify-live.mjs "$PAGE_URL" _site
+      # A BROKEN-BUT-LIVE BUILD MUST NOT BE SILENT (2026-09-22). deploy-pages
+      # succeeded, so the environment records a deployment and the CDN may be
+      # serving anything; a red job at the bottom of a run nobody is watching
+      # is how that goes unnoticed. One issue per failure, naming the commit,
+      # the stamped build and the run, so the next session finds it.
+      - name: Open an issue — the deploy succeeded but the live check failed
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD: ${{ needs.deploy.outputs.build }}
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Live check failed after deploy: build $BUILD (${GITHUB_SHA:0:7})" \
+            --body "$(printf '%s\n' \
+              "Pages run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} deployed commit ${GITHUB_SHA} as build ${BUILD}, but ${PAGE_URL} never served that build within 4 minutes." \
+              "" \
+              "Either the CDN is lagging (re-run verify-live) or the published shell is broken. Check \`version.json\` and the \`apex-build\` / \`apex-sha\` metas on the live site before redeploying (AGENTS.md §Watching CI and Pages; deploy-research)." \
+              "" \
+              "Opened automatically by pages.yml verify-live.")" \
+            --label ci || echo "::warning::could not open the issue (label missing or token scope); the failure above still stands"

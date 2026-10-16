@@ -1,0 +1,10 @@
+[
+{"query":"After a deploy, returning players on an installed PWA keep getting the old shell until a second reload. Please audit the shell version guard in index.html against how sw.js names its cache (CACHE_PREFIX plus build) and tell me where the network-first path for version.json could serve a stale build.","expect":"pwa-cache-service-worker"},
+{"query":"sw.js keeps old apex26-NNNN caches around lol, users r complaining storage keeps growing on their phones. can u check the activate cleanup and make sure old caches actually get deleted w/o nuking the current 1 offline","expect":"pwa-cache-service-worker"},
+{"query":"I turned airplane mode on after installing the game and now it just says graphics unavailable on reload. Something in the offline install isn't getting cached. Figure out which files the precache is missing and why.","expect":"pwa-cache-service-worker"},
+{"query":"I added a new file under js/render/three/ that is injected from ApexRoster.DEFERRED with no script tag. Make sure sw.js precaches it in the optional set so TLX works offline, and that the essential/optional split is still right.","expect":"pwa-cache-service-worker"},
+{"query":"Half my Playwright specs failed with weird reload loops and I think it's because build in version.json changed while the suite was running and the guard fired. Explain how that happens and how to stop it from happening during a run.","expect":"pwa-cache-service-worker"},
+{"query":"I edited js/render/shared/assets.js and now a few PBR layers in assets/pack look wrong on the road. The albedo arrays load but the layer order seems off vs the MAT ids. Help me work out which material index is mismatched.","expect":"asset-pack"},
+{"query":"Before I push my js and css edits, do I need to bump the cache or version.json? Also which tests should I run and how do I merge into the deploy branch safely without breaking the shell tags?","expect":"check-changes"},
+{"query":"The music drops out after a few minutes and the engine loop stops playing at high revs. The mp3 tracks from music-lib.js seem to stall. Debug the WebAudio side and why the layers cut out.","expect":"audio-debug"}
+]

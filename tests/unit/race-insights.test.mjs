@@ -1,0 +1,554 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
+function fixture() {
+  const ctx = vm.createContext({});
+  vm.runInContext(readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), ctx);
+  const saves = new Map(), announcements = [];
+  const c = { prog: 0, lap: 1, speed: 40, energy: 1, tyreWear: 0, tyreStints: 0, tyre: { id: 'soft' } };
+  const G = { player: c, raceT: 0, sectorIdx: 0, state: 'race', track: { total: 300 }, lapsTarget: 5,
+    vTop: () => 100, tyres: { on: () => true }, pits: { estimate: () => ({ lossS: 20 }) }, trackWetness: () => 0,
+    fmtTime: t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); },
+    records: { key: () => 'class' }, store: { get: (k,d) => saves.get(k) ?? d, set: (k,v) => saves.set(k,v) },
+    announce: (...args) => announcements.push(args) };
+  const api = vm.runInContext('RaceInsights', ctx).create(G);
+  const tick = (fields = {}, seconds = 1) => { Object.assign(c, fields); G.raceT += seconds; api.update(c); };
+  api.update(c);
+  return { api, c, G, saves, tick, announcements };
+}
+test('race journal records event edges in order without repeating sustained contact', () => {
+  const { api, tick } = fixture();
+  tick({ contactT: 1, penalty: 5, cutWarn: 1 }); tick({ contactT: .5 });
+  assert.deepEqual(Array.from(api.journal(), e => e.kind), ['penalty', 'limits', 'contact']);
+  tick({ contactT: 0 }); tick({ contactT: 1 });
+  assert.equal(api.journal().length, 4);
+  for (let i = 0; i < 150; i++) api.event('test', String(i));
+  const rows = api.journal(); assert.equal(rows.length, 128);
+  assert.ok(rows.every((r,i) => !i || r.seq > rows[i-1].seq));
+  rows[0].text = 'corrupt'; assert.notEqual(api.journal()[0].text, 'corrupt');
+});
+test('energy forecast requires full clean sectors, excludes the initial partial, and clears on weather change', () => {
+  const { api, G, tick } = fixture();
+  G.sectorIdx = 1; tick({ prog: 60, energy: .9 }, 2);
+  assert.equal(api.forecast().sectors[0], null);
+  G.sectorIdx = 2; tick({ prog: 150, energy: .8 }, 3);
+  G.sectorIdx = 0; tick({ prog: 240, energy: .7 }, 3);
+  G.sectorIdx = 1; tick({ prog: 330, energy: .6 }, 3);
+  assert.ok(Math.abs(api.forecast().energyPerLap - .3) < 1e-10);
+  G.trackWetness = () => .2; tick({ prog: 350 }, 1);
+  assert.equal(api.forecast().energyPerLap, null);
+});
+test('stint estimate is measured, waits half a lap and stays unknown with wear disabled', () => {
+  const { api, G, tick } = fixture();
+  tick({ prog: 140, tyreWear: .1 }, 4); assert.equal(api.forecast().remainingLaps, null);
+  tick({ prog: 150, tyreWear: .1 }); assert.ok(Math.abs(api.forecast().remainingLaps - 4.5) < 1e-10);
+  G.tyres.on = () => false; assert.equal(api.forecast().remainingLaps, null);
+  G.tyres.on = () => true; tick({ prog: 170, tyreWear: 0, tyreStints: 1 });
+  assert.equal(api.forecast().remainingLaps, null);
+});
+test('teleports cannot create tyre history or clean sector mastery', () => {
+  const { api, G, tick, saves } = fixture();
+  api.startDrill('sector'); tick({ prog: 20 });
+  G.sectorIdx = 1; tick({ prog: 800 });
+  assert.equal(api.forecast().remainingLaps, null);
+  assert.equal(api.summary().lastDrill.clean, false);
+  assert.equal(saves.has('circuitMastery'), false);
+});
+test('controlled braking drill finishes once, scores stopping distance and records bounded separate mastery', () => {
+  const { api, tick, saves, announcements } = fixture();
+  saves.set('circuitMastery', { version: 1, entries: [{ key: 'class:braking:all', best: 12, completed: '999' }] });
+  assert.equal(api.startDrill('braking'), true);
+  tick({ prog: 20, brakeDemand: 1 }); tick({ prog: 30, speed: .5 }); tick({ speed: 0 });
+  const last = api.summary().lastDrill;
+  assert.equal(last.clean, true); assert.equal(last.score, 10); assert.match(last.text, /stopped 10 m after braking from 144 km\/h/);
+  const entry = saves.get('circuitMastery').entries[0]; assert.equal(entry.completed, 1); assert.equal(entry.best, 10);
+  assert.equal(announcements.length, 1); assert.match(announcements[0][0], /PRACTICE DONE — STOPPED 10 M.*NEW BEST/);
+  assert.equal(announcements[0][2], 'practice', 'a drill verdict is its own announce tier, not a record announcement');
+  const summary = api.summary(); summary.lastDrill.clean = false; assert.equal(api.summary().lastDrill.clean, true);
+});
+test("the braking verdict measures how much distance went below the car's own hardest braking", () => {
+  const { api, tick } = fixture();
+  api.startDrill('braking');
+  // Enters at 40 m/s and peaks at 8 m/s²: v²/2a = 100 m. The stop runs 125 m
+  // because the driver eased to 4 m/s² after the first bite. Steps stay inside
+  // the teleport guard (ds <= max(20, 2·speed·dt)) or the attempt reads as a jump.
+  tick({ prog: 10, brakeDemand: 1, speed: 40, axEstSm: -8 });
+  tick({ prog: 45, brakeDemand: 1, speed: 30, axEstSm: -8 });
+  tick({ prog: 80, brakeDemand: 1, speed: 25, axEstSm: -4 });
+  tick({ prog: 115, brakeDemand: 1, speed: 20, axEstSm: -4 });
+  tick({ prog: 135, brakeDemand: 1, speed: .5, axEstSm: -4 });
+  const last = api.summary().lastDrill;
+  assert.equal(last.clean, true, last.reason); assert.equal(last.score, 125);
+  assert.equal(last.limit, 100); assert.equal(last.slack, 25);
+  assert.match(last.text, /stopped 125 m after braking from 144 km\/h · 25 m of it below your hardest braking/);
+});
+test('a stop held at the peak the whole way reports no slack, and a stop with no braking evidence reports none either', () => {
+  const { api, tick } = fixture();
+  api.startDrill('braking');
+  tick({ prog: 10, brakeDemand: 1, speed: 40, axEstSm: -10 });    // 10 m/s² held to the stop:
+  tick({ prog: 45, brakeDemand: 1, speed: 25, axEstSm: -10 });
+  tick({ prog: 75, brakeDemand: 1, speed: 15, axEstSm: -10 });
+  tick({ prog: 90, brakeDemand: 1, speed: .5, axEstSm: -10 });    // …80 m, exactly v²/2a
+  const held = api.summary().lastDrill;
+  assert.equal(held.clean, true, held.reason);
+  assert.equal(held.limit, 80); assert.equal(held.slack, 0);
+  assert.doesNotMatch(held.text, /below your hardest/);
+  tick({ speed: 40, brakeDemand: 0, axEstSm: 0 });
+  api.startDrill('braking');
+  tick({ prog: 125, brakeDemand: 1, speed: 40 });                 // no deceleration reported at all
+  tick({ prog: 145, brakeDemand: 1, speed: .5 });
+  const bare = api.summary().lastDrill;
+  assert.equal(bare.limit, null); assert.equal(bare.slack, null);
+  assert.match(bare.text, /^stopped 20 m after braking from 144 km\/h$/);
+});
+test('a brake tap followed by a coast to a stop is not a controlled stop', () => {
+  const { api, tick, saves, announcements } = fixture();
+  api.startDrill('braking'); tick({ prog: 20, brakeDemand: 1 });
+  for (let i = 1; i <= 8; i++) tick({ prog: 20 + i * 10, brakeDemand: 0, speed: 40 - i * 4.5 });
+  tick({ prog: 110, speed: .5 });
+  const last = api.summary().lastDrill;
+  assert.equal(last.clean, false); assert.equal(last.reason, 'brake released before the stop');
+  assert.equal(saves.has('circuitMastery'), false);
+  assert.match(announcements.at(-1)[0], /TRY AGAIN: BRAKE RELEASED BEFORE THE STOP/);
+  assert.match(api.journal().at(-1).text, /Retry suggested.*brake released/);
+});
+test('stopping without ever braking firmly fails the braking drill with its reason', () => {
+  const { api, tick } = fixture();
+  api.startDrill('braking'); tick({ prog: 20, brakeDemand: .2 }); tick({ prog: 30, speed: .5, brakeDemand: .2 });
+  assert.equal(api.summary().lastDrill.clean, false);
+  assert.equal(api.summary().lastDrill.reason, 'stopped without firm braking');
+});
+test('a contact marks the drill dirty with the first reason; retry clears observation history', () => {
+  const { api, tick, saves } = fixture();
+  api.startDrill('braking'); tick({ prog: 20, contactT: 1, brakeDemand: 1, offroad: true }); tick({ prog: 30, speed: .5 });
+  assert.equal(api.summary().lastDrill.clean, false); assert.equal(api.summary().lastDrill.reason, 'car contact'); assert.equal(saves.size, 0);
+  tick({ speed: 40, contactT: 0, offroad: false }); api.startDrill('braking'); tick({ prog: 50, brakeDemand: 1 }); tick({ prog: 60, speed: .5 });
+  assert.equal(api.summary().lastDrill.clean, true);
+});
+for (const mode of ['braking', 'trail']) test(`rejected ${mode} start preserves the active attempt and measured forecasts`, () => {
+  const { api, c, G, tick } = fixture();
+  api.startDrill('free'); tick({ prog: 20 });
+  G.sectorIdx = 1; tick({ prog: 60, energy: .9, tyreWear: .02 }, 2);
+  G.sectorIdx = 2; tick({ prog: 150, energy: .8, tyreWear: .05 }, 3);
+  G.sectorIdx = 0; tick({ prog: 240, energy: .7, tyreWear: .08 }, 3);
+  G.sectorIdx = 1; tick({ prog: 330, energy: .6, tyreWear: .11 }, 3);
+  c.speed = 29.9;
+  const forecast = api.forecast(), summary = api.summary(), journal = api.journal();
+  assert.ok(forecast.energyPerLap > 0);
+  assert.ok(forecast.remainingLaps > 0);
+  assert.equal(api.startDrill(mode), false);
+  assert.deepEqual(api.forecast(), forecast);
+  assert.deepEqual(api.summary(), summary);
+  assert.deepEqual(api.journal(), journal);
+});
+test('a braking drill admitted at the minimum speed can finish using its first brake sample', () => {
+  const { api, c, tick, saves } = fixture();
+  c.speed = 30;
+  assert.equal(api.startDrill('braking'), true);
+  tick({ prog: 10, brakeDemand: 1 });
+  tick({ prog: 15, speed: .5, brakeDemand: 0 });
+  assert.equal(api.summary().lastDrill.clean, true);
+  assert.equal(saves.get('circuitMastery').entries[0].completed, 1);
+});
+for (const [name, field, dirty, clear] of [['contact', 'contactT', 1, 0], ['offroad', 'offroad', true, false], ['retirement', 'retired', true, false]]) {
+  test(`a transient ${name} on the first drill sample prevents clean mastery`, () => {
+    const { api, tick, saves } = fixture();
+    api.startDrill('braking');
+    tick({ prog: 10, brakeDemand: 1, [field]: dirty });
+    tick({ prog: 15, speed: .5, brakeDemand: 0, [field]: clear });
+    assert.equal(api.summary().lastDrill.clean, false);
+    assert.equal(saves.has('circuitMastery'), false);
+  });
+}
+test('trail braking needs the car turning while braking and at the release, on a digital brake too', () => {
+  const { api, c, tick } = fixture();
+  c.speed = 30;
+  assert.equal(api.startDrill('trail'), true);
+  tick({ prog: 10, brakeDemand: 1 });
+  tick({ prog: 20, brakeDemand: 1, steerCommand: .3 });        // stick alone: the car is not turning yet
+  tick({ prog: 30, brakeDemand: 0 });
+  assert.equal(api.summary().lastDrill, null);
+  tick({ prog: 40, brakeDemand: 1, lateralAccel: 6 });         // keyboard brake stays at 1 while the car turns in
+  tick({ prog: 50, brakeDemand: 0, lateralAccel: 0 });         // released on a straight: not a trail release
+  assert.equal(api.summary().lastDrill, null);
+  tick({ prog: 60, brakeDemand: 0, lateralAccel: 5 });
+  assert.equal(api.summary().lastDrill.mode, 'trail');
+  assert.equal(api.summary().lastDrill.clean, true);
+});
+test('trail braking that ends in a stop is a failed attempt', () => {
+  const { api, c, tick } = fixture();
+  c.speed = 30; api.startDrill('trail');
+  tick({ prog: 10, brakeDemand: 1, lateralAccel: 5 }); tick({ prog: 20, brakeDemand: 1, speed: .5 });
+  assert.equal(api.summary().lastDrill.clean, false);
+  assert.equal(api.summary().lastDrill.reason, 'stopped before releasing the brake');
+});
+test('slalom counts direction changes of the car, not of the stick', () => {
+  const { api, tick, announcements } = fixture();
+  api.startDrill('slalom');
+  for (let i = 0; i <= 8; i++) tick({ prog: 10 + i * 10, steerCommand: i % 2 ? -.4 : .4 });
+  assert.equal(api.summary().drill.changes, 0, 'stick wiggle without lateral acceleration is not a direction change');
+  tick({ prog: 100, lateralAccel: 5 });
+  for (let i = 1; i <= 5; i++) tick({ prog: 100 + i * 10, lateralAccel: i % 2 ? -5 : 5 });
+  tick({ prog: 160, lateralAccel: 1 });                        // a straight between changes does not count either way
+  assert.equal(api.summary().drill.changes, 5); assert.equal(api.summary().lastDrill, null);
+  tick({ prog: 170, lateralAccel: -5 });                       // same side as before the straight: still 5
+  assert.equal(api.summary().lastDrill, null);
+  tick({ prog: 180, lateralAccel: 5 });
+  assert.equal(api.summary().lastDrill.changes, 6);
+  assert.equal(api.summary().lastDrill.clean, true);
+  assert.match(announcements.at(-1)[0], /PRACTICE DONE — .*6 DIRECTION CHANGES/);
+});
+test('a sector drill announces its time and a stationary slow car is not a direction change', () => {
+  const { api, G, tick, announcements } = fixture();
+  api.startDrill('sector'); tick({ prog: 20, lateralAccel: 5, speed: 5 }); tick({ prog: 25, lateralAccel: -5, speed: 5 });
+  assert.equal(api.summary().drill.changes, 0);
+  G.sectorIdx = 1; tick({ prog: 40, speed: 40 });
+  assert.equal(api.summary().lastDrill.clean, true); assert.equal(api.summary().lastDrill.score, 3);
+  assert.match(announcements.at(-1)[0], /PRACTICE DONE — 3\.0S/);
+});
+test('sector mastery follows timing boundaries while other saved drill scores remain valid', () => {
+  const { api, G, tick, saves } = fixture();
+  G.track.def = { sectors: [.28, .62] };
+  saves.set('circuitMastery', { version: 1, entries: [
+    { key: 'class:sector:0', best: 1, completed: 5 },
+    { key: 'class:braking:all', best: 12, completed: 2 },
+    { key: 'class:lap:all', best: 60, completed: 3 },
+  ] });
+  assert.equal(api.mastery('sector'), null, 'legacy scores have no recorded split positions');
+  api.startDrill('sector');
+  tick({ prog: 20 });
+  G.sectorIdx = 1; tick({ prog: 40 });
+  G.sectorIdx = 0;
+  assert.equal(api.mastery('sector').best, 2);
+  G.track.def.sectors = [.26536876, .58048447];
+  assert.equal(api.mastery('sector'), null, 'a moved timing line starts a separate comparison');
+  assert.equal(api.mastery('braking').best, 12);
+  assert.equal(api.mastery('lap').best, 60);
+  G.track.def.sectors = [.28, .62];
+  assert.equal(api.mastery('sector').best, 2, 'split-specific records remain stored');
+  assert.ok(saves.get('circuitMastery').entries.some(e => e.key === 'class:sector:0'),
+    'unversioned records are retained rather than deleted');
+});
+test('drill speeds read through G.dashKph, the speedometer scale, not raw m/s (PACE)', () => {
+  const { api, G, c, tick } = fixture();
+  G.dashKph = v => v / 0.84 * 3.6;          // a PACE-0.84 game: the dial reads 1/0.84 of the raw ground speed
+  api.startDrill('braking');
+  tick({ prog: 20, brakeDemand: 1 }); tick({ prog: 30, speed: .5 }); tick({ speed: 0 });
+  assert.match(api.summary().lastDrill.text, /braking from 171 km\/h/);   // 40 m/s raw would print 144
+  c.speed = 0; api.startDrill('launch');
+  tick({ prog: 0, speed: 0 }, 2); tick({ prog: 1, speed: 5, throttleDemand: 1 }); tick({ prog: 30, speed: 51 });
+  assert.match(api.summary().lastDrill.text, /^0 to 214 km\/h in /);       // half of vTop 100 through the same scale
+});
+test('launch drill needs a stopped car and is timed from the first throttle to half of top speed', () => {
+  const { api, c, tick, announcements } = fixture();
+  assert.equal(api.startDrill('launch'), false); assert.match(announcements.at(-1)[0], /STOP THE CAR/);
+  c.speed = 0; assert.equal(api.startDrill('launch'), true);
+  tick({ prog: 0, speed: 0 }, 2);                                   // sitting on the line is not timed
+  tick({ prog: 1, speed: 5, throttleDemand: 1 }); tick({ prog: 10, speed: 30 }); tick({ prog: 30, speed: 51 });
+  const last = api.summary().lastDrill;
+  assert.equal(last.clean, true); assert.equal(last.score, 2); assert.equal(last.text, '0 to 180 km/h in 2.00s');
+  assert.match(announcements.at(-1)[0], /PRACTICE DONE — 0 TO 180 KM\/H IN 2\.00S/);
+});
+test('corner drill opens on sustained cornering, bridges a chicane flip, and reports minimum and exit speed', () => {
+  const { api, tick, announcements } = fixture();
+  api.startDrill('corner');
+  tick({ prog: 10, lateralAccel: 4 }); tick({ prog: 20, lateralAccel: 0 });
+  assert.equal(api.summary().drill.phase, 0, 'a twitch does not open a corner');
+  for (let i = 0; i < 3; i++) tick({ prog: 30 + i * 10, lateralAccel: 8, speed: 30 - i * 2 });
+  assert.equal(api.summary().drill.phase, 1);
+  tick({ prog: 60, lateralAccel: 0, speed: 24 }); tick({ prog: 70, lateralAccel: 0, speed: 24 });   // unloaded through the flip
+  tick({ prog: 80, lateralAccel: -8, speed: 22 });                                              // the second half of the chicane
+  assert.equal(api.summary().drill.phase, 1, 'a quick flip stays one corner');
+  assert.equal(api.summary().lastDrill, null);
+  for (let i = 0; i < 5; i++) tick({ prog: 90 + i * 10, lateralAccel: 0, speed: 30 + i * 3 });
+  const last = api.summary().lastDrill;
+  assert.equal(last.clean, true); assert.match(last.text, /^\d+\.\ds · min 79 km\/h · exit 151 km\/h$/);
+  assert.match(announcements.at(-1)[0], /PRACTICE DONE — .*MIN 79 KM\/H · EXIT 151 KM\/H/);
+});
+test('a corner drill that stops fails with where it stopped', () => {
+  const { api, tick } = fixture();
+  api.startDrill('corner'); tick({ prog: 10, speed: .5 });
+  assert.equal(api.summary().lastDrill.reason, 'stopped before the corner');
+  tick({ speed: 30 }); api.startDrill('corner');
+  for (let i = 0; i < 3; i++) tick({ prog: 20 + i * 10, lateralAccel: 8 });
+  tick({ prog: 50, speed: .5, lateralAccel: 0 });
+  assert.equal(api.summary().lastDrill.reason, 'stopped in the corner');
+});
+test('a full-lap drill times the lap at the line, announces the start, and fails a backward crossing', () => {
+  const { api, c, tick, announcements } = fixture();
+  api.startDrill('lap'); tick({ prog: 20 }); tick({ prog: 40 });
+  c.lap = 2; tick({ prog: 60 });
+  assert.match(announcements.at(-1)[0], /LAP TIMING STARTED/); assert.equal(api.summary().lastDrill, null);
+  for (let p = 80; p <= 340; p += 20) tick({ prog: p });
+  c.lap = 3; c._lapTimeAtLine = 91.234; tick({ prog: 360 });
+  const last = api.summary().lastDrill;
+  assert.equal(last.clean, true, JSON.stringify(last)); assert.equal(last.score, 91.234); assert.equal(last.text, 'lap 1:31.23');
+  assert.match(announcements.at(-1)[0], /^PRACTICE DONE — LAP 1:31\.23$/);
+  api.startDrill('lap'); c._lapTimeAtLine = null;
+  c.lap = 4; tick({ prog: 380 }); c.lap = 3; tick({ prog: 385 }); c.lap = 4; tick({ prog: 400 });
+  assert.equal(api.summary().lastDrill.clean, false);
+  assert.equal(api.summary().lastDrill.reason, 'crossed the line backwards');
+});
+test('attempts are kept per goal as bounded copies and mastery reads the saved best for this class', () => {
+  const { api, tick } = fixture();
+  for (let i = 0; i < 12; i++) {
+    api.startDrill('braking');
+    tick({ prog: 100 * i + 10, brakeDemand: 1, speed: 40 }); tick({ prog: 100 * i + 12 + i * .5, speed: .5 }); tick({ speed: 40, brakeDemand: 0 });
+  }
+  const tries = api.attempts('braking');
+  assert.equal(tries.length, 10); assert.equal(tries[0].score, 3); assert.equal(tries.at(-1).score, 7.5);
+  assert.ok(tries.every(a => a.clean), JSON.stringify(tries.filter(a => !a.clean)));
+  tries[0].score = 99; assert.equal(api.attempts('braking')[0].score, 3);
+  assert.equal(api.attempts('slalom').length, 0);
+  assert.equal(JSON.stringify(api.mastery('braking')), '{"best":2,"completed":12}');
+  assert.equal(api.mastery('slalom'), null);
+  api.reset(); assert.equal(api.attempts('braking').length, 0);
+});
+test('network status reports measured values and clear disconnected guidance', () => {
+  const { api, G } = fixture(); assert.equal(api.network(), null);
+  G.netPlay = { status: () => ({ active: true, net: { alive: true, rtt: 60 }, remotes: [{ timing: { delayMs: 130 } }] }) };
+  assert.equal(api.network().rttMs, 60); assert.equal(api.network().delayMs, 130);
+  G.netPlay.status = () => ({ active: false, reason: 'closed' }); assert.equal(api.network().connected, false);
+});
+test('ghost speed derives from recorded arc samples and refuses time outside the lap', () => {
+  const ctx = vm.createContext({
+    Log: { info() {}, warn() {} },
+    GameStore: { store: { get: () => null, write: () => ({ durable: true }), subscribe: () => () => {} } },
+  });
+  vm.runInContext(readFileSync(new URL('../../js/car/ghost.js', import.meta.url), 'utf8'), ctx);
+  const g = vm.runInContext('Ghost', ctx); assert.equal(g.speedAt(1), null);
+  g.setTrack('test'); g.startLap(); for (let i=0;i<12;i++) g.record(i, 20*i, 0); g.finishLap(12);
+  assert.equal(g.speedAt(4.5), 20); assert.equal(g.speedAt(-1), null); assert.equal(g.speedAt(13), null);
+});
+test('the round debrief condenses the journal to what costs race craft, biggest cause first', () => {
+  const { api, c, tick } = fixture();
+  // Two warnings on lap 1, one on lap 2, a penalty and contact on lap 2.
+  tick({ cutWarn: 1 }); tick({ cutWarn: 2 });
+  c.lap = 2;
+  tick({ cutWarn: 3 }); tick({ penalty: 5 }); tick({ contactT: 1 });
+  const d = api.debrief();
+  assert.deepEqual(Array.from(d, r => r.kind), ['limits', 'penalty', 'contact'],
+    'ordered by what the kind costs in career.js, not by when it happened');
+  const limits = d.find(r => r.kind === 'limits');
+  assert.equal(limits.count, 3, 'three warnings');
+  // JSON, not deepEqual: `laps` is built inside the VM realm, so a strict
+  // deepEqual fails on the array prototype even when every element matches.
+  assert.equal(JSON.stringify(limits.laps), '[1,2]',
+    'the laps the HUD showed (js/ui/hud.js prints c.lap), de-duplicated: two to look at');
+  // A stop and a compound change are strategy, not craft, and must not appear.
+  tick({ pitState: 'entry' }); tick({ tyre: { id: 'hard' }, pitState: 'none' });
+  assert.ok(api.journal().some(e => e.kind === 'pit'), 'the journal still logs them');
+  assert.equal(api.debrief().some(r => r.kind === 'pit' || r.kind === 'tyres'), false);
+});
+test('a faultless race has an empty debrief, and reset clears it', () => {
+  const { api, tick } = fixture();
+  tick({ prog: 40 }); tick({ prog: 80 });
+  assert.equal(JSON.stringify(api.debrief()), '[]', 'nothing happened, so there is nothing to show');
+  tick({ contactT: 1 });
+  assert.equal(api.debrief().length, 1);
+  api.reset();
+  assert.equal(JSON.stringify(api.debrief()), '[]');
+});
+
+// ── the first drill that looks past the player's own car ─────────────────────
+// Every other goal judges the car alone against the road; a race start is only
+// meaningful relative to the cars you started beside.
+function gridFixture() {
+  const f = fixture();
+  // Player P2 of 3: one car up the road, one behind. prog is cumulative arc, so
+  // this is the same ordering the classification uses.
+  const lead = { prog: 20, retired: false }, back = { prog: -20, retired: false };
+  f.G.cars = [lead, f.c, back];
+  f.c.prog = 0; f.c.speed = 0;
+  return { ...f, lead, back };
+}
+
+test('a race start drill needs the grid and a field, and says which is missing', () => {
+  const { api, c, G } = gridFixture();
+  c.speed = 40;
+  assert.equal(api.startDrill('start'), false, 'refused once the car is already rolling');
+  c.speed = 0;
+  G.cars = [c];
+  assert.equal(api.startDrill('start'), false, 'refused with nobody to gain a place on');
+  G.cars = [{ prog: 20, retired: false }, c];
+  assert.equal(api.startDrill('start'), true);
+});
+
+test('a race start scores the places gained, ends at the first corner, and ranks more places as better', () => {
+  const { api, c, tick, lead } = gridFixture();
+  assert.equal(api.startDrill('start'), true, 'armed on the grid');
+  // Away cleanly and past the car that started ahead.
+  tick({ speed: 30, prog: 10, throttleDemand: 1 });
+  tick({ speed: 50, prog: 30 });
+  lead.prog = 25;                       // player is now ahead of the car that led away
+  tick({ speed: 60, prog: 45 });
+  // Into the first corner and out the other side — the same phase detector the
+  // corner drill uses, so the two agree on where a corner ends.
+  for (let i = 0; i < 3; i++) tick({ lateralAccel: 8, prog: c.prog + 10 });
+  for (let i = 0; i < 6; i++) tick({ lateralAccel: 0, prog: c.prog + 10 });
+  const last = api.summary().lastDrill;
+  assert.equal(last.mode, 'start');
+  assert.equal(last.clean, true, 'no contact, never left the track');
+  assert.equal(last.score, -1, 'ONE place gained, stored negated so mastery Math.min ranks it above zero');
+  assert.match(last.text, /gained 1 place — P2 to P1/);
+});
+
+test('a race start that never gets away fails with that reason rather than scoring zero', () => {
+  const { api, tick } = gridFixture();
+  assert.equal(api.startDrill('start'), true);
+  for (let i = 0; i < 8; i++) tick({ speed: 0 });      // stalled on the grid
+  const last = api.summary().lastDrill;
+  assert.equal(last.clean, false);
+  assert.equal(last.reason, 'the car never got away');
+});
+
+// ── the rival drills ────────────────────────────────────────────────────────
+// Every drill above judges the car against the road. These three judge it
+// against another car, and the whole difficulty is that the AI can HAND you the
+// result: it concedes on a timer (js/game.js letPassCase) whose length is a
+// straight read of the rival's awareness rating. What each test below really
+// pins is that the drill measures the driver and not that stat.
+function rivalFixture({ aheadAt = 20, behindAt = -6 } = {}) {
+  const f = fixture();
+  // _vmaxNow on every car: the cross-car pace comparison the AI itself uses.
+  // Equal here, so the pair is at parity and OVERTAKE is armable.
+  const lead = { prog: aheadAt, x: 0, retired: false, code: 'VER', _vmaxNow: 70, awareness: 0.75, letPassT: 0 };
+  const back = { prog: behindAt, x: 0, retired: false, code: 'HAM', _vmaxNow: 70, awareness: 0.75 };
+  f.G.cars = [lead, f.c, back];
+  f.c.prog = 0; f.c._vmaxNow = 70; f.c.x = 0;
+  return { ...f, lead, back };
+}
+// OVERTAKE will not arm until the pace window has samples, and the window only
+// fills from update() — which is the point: fairness is judged on history.
+const settle = (f, n = 12) => { for (let i = 0; i < n; i++) f.tick({}, 0.1); };
+
+test('the rival drills refuse with the reason, and OVERTAKE refuses a mismatched pace outright', () => {
+  const f = rivalFixture(); const { api, G, c } = f;
+  G.cars = [c];
+  assert.equal(api.startDrill('overtake'), false, 'no field at all');
+  assert.match(f.announcements.at(-1)[0], /NEEDS OTHER CARS/);
+  const f2 = rivalFixture({ aheadAt: 200 });          // far up the road, outside the wake
+  settle(f2);
+  assert.equal(f2.api.startDrill('slipstream'), false);
+  assert.match(f2.announcements.at(-1)[0], /GET INTO THE WAKE/);
+  const f3 = rivalFixture({ aheadAt: 4 });            // already on his gearbox
+  settle(f3);
+  assert.equal(f3.api.startDrill('slipstream'), false);
+  assert.match(f3.announcements.at(-1)[0], /ALREADY THERE/);
+  // THE ONE THAT MATTERS: a rival 10% quicker is not a fight, it is a stat check.
+  const f4 = rivalFixture(); f4.lead._vmaxNow = 77;
+  settle(f4);
+  assert.equal(f4.api.startDrill('overtake'), false);
+  assert.match(f4.announcements.at(-1)[0], /NOT ON YOUR PACE/);
+  // …and at parity it arms.
+  const f5 = rivalFixture(); settle(f5);
+  assert.equal(f5.api.startDrill('overtake'), true);
+});
+
+test('SLIPSTREAM scores METRES CLOSED, negated so mastery ranks more as better', () => {
+  const f = rivalFixture({ aheadAt: 30 }); settle(f);
+  assert.equal(f.api.startDrill('slipstream'), true);
+  // Close from 30 m to inside the wake, carrying a real tow the whole way.
+  for (const p of [10, 15, 18, 21, 23]) f.tick({ prog: p, towing: 1 }, 0.5);
+  const d = f.api.summary().lastDrill;
+  assert.ok(d, 'the drill ended when the wake was reached');
+  assert.equal(d.clean, true);
+  assert.ok(d.score < 0, `metres closed must be stored NEGATED, got ${d.score}`);
+  assert.ok(Math.abs(d.score) > 20, `should have closed most of 30 m, got ${-d.score}`);
+  assert.match(d.text, /closed \d+ m in [\d.]+s of tow/);
+});
+
+test('OVERTAKE fails the attempt when the AI simply let you through', () => {
+  const f = rivalFixture({ aheadAt: 10 }); settle(f);
+  assert.equal(f.api.startDrill('overtake'), true);
+  // letPassDelay = lerp(4.2, 1.8, awareness) = 2.4 s at the default 0.75.
+  f.lead.letPassT = 3;
+  f.tick({ prog: 8 }, 0.5);
+  f.tick({ prog: 14 }, 0.5);           // through and clear
+  for (let i = 0; i < 4; i++) f.tick({ prog: 16 + i }, 0.5);
+  const d = f.api.summary().lastDrill;
+  assert.ok(d, 'the pass completed');
+  assert.equal(d.clean, false, 'a pass you were given is not a pass you made');
+  assert.equal(d.reason, 'he let you through');
+});
+
+test('DEFEND needs a real attack, and banks the seconds you survived', () => {
+  const f = rivalFixture({ behindAt: -6 }); const { api, c, back } = f;
+  back._vmaxNow = 73;                  // quick enough to be a threat (2% of vTop 100)
+  settle(f);
+  assert.equal(api.startDrill('defend'), true);
+  // Nobody commits: passOf is never set, so ten seconds of "pressure" is not a
+  // defence, it is a car sitting behind you.
+  for (let i = 0; i < 12; i++) f.tick({}, 1);
+  let d = api.summary().lastDrill;
+  assert.equal(d.clean, false);
+  assert.equal(d.reason, 'he never attacked');
+  // Now a real one: passOf names the player, which is the only per-pair identity
+  // the engine carries.
+  const f2 = rivalFixture({ behindAt: -6 });
+  f2.back._vmaxNow = 73; settle(f2);
+  assert.equal(f2.api.startDrill('defend'), true);
+  f2.back.passOf = f2.c;
+  for (let i = 0; i < 8; i++) f2.tick({}, 1);
+  f2.back.passFailOf = f2.c;           // he gave up
+  for (let i = 0; i < 26; i++) f2.tick({}, 1);
+  d = f2.api.summary().lastDrill;
+  assert.equal(d.clean, true);
+  assert.ok(d.score < 0, 'seconds held are stored negated');
+  assert.match(d.text, /held P\d for [\d.]+s under attack/);
+  assert.match(d.text, /gave up the move/);
+});
+
+test('BACKMARKERS counts cars cleared and scores the TIME, not the racecraft', () => {
+  // The honest scope: a car you are 6% quicker than concedes on its own timer,
+  // so "did you out-drive him" would score the AI's awareness rating. This
+  // scores what lapping traffic costs in a race — seconds — and fails on any
+  // contact, which needs no per-pair identity to be true.
+  const f = fixture();
+  const slow = (prog) => ({ prog, x: 0, retired: false, _vmaxNow: 60, code: 'BAK' });
+  const t1 = slow(10), t2 = slow(20), t3 = slow(30);
+  f.G.cars = [t1, t2, t3, f.c];
+  f.c.prog = 0; f.c._vmaxNow = 70; f.c.x = 0;   // 14% quicker: they are traffic
+  f.api.update(f.c);
+  assert.equal(f.api.startDrill('backmarkers'), true);
+  // Drive past all three, sampled the way the game samples: a car has to be
+  // SEEN ahead before it can be counted past, which is what stops a teleport
+  // or a rewind from banking three free passes.
+  for (let p = 2; p <= 40; p += 2) f.tick({ prog: p }, 0.4);
+  const d = f.api.summary().lastDrill;
+  assert.ok(d, 'three cleared ends the drill');
+  assert.equal(d.clean, true);
+  assert.ok(d.score > 0, 'time is scored straight — less is better, no negation');
+  assert.match(d.text, /cleared 3 of 3 in [\d.]+s/);
+});
+
+test('BACKMARKERS never scores a FASTER car that merely crosses the half-lap wrap', () => {
+  // gapTo() wraps at half a lap: a quicker car 148 m "ahead" that drifts to 152 m reads as 148 m
+  // "behind" in one frame. Only cars that pass the arming filter (slower than us) are candidates.
+  const f = fixture();
+  const slow = (prog) => ({ prog, x: 0, retired: false, _vmaxNow: 60, code: 'BAK' });
+  const t1 = slow(10), t2 = slow(20);
+  const quick = { prog: 148, x: 0, retired: false, _vmaxNow: 90, code: 'FST' };
+  f.G.cars = [t1, t2, quick, f.c];
+  f.c.prog = 0; f.c._vmaxNow = 70; f.c.x = 0;
+  f.api.update(f.c);
+  assert.equal(f.api.startDrill('backmarkers'), true);
+  f.tick({}, 0.4);                 // the quick car is seen "ahead" across the wrap
+  quick.prog = 152;                // ...and now "behind"
+  f.tick({}, 0.4);
+  for (let p = 2; p <= 30; p += 2) f.tick({ prog: p }, 0.4);   // two genuine backmarkers cleared
+  const s = f.api.summary();
+  assert.equal(s.lastDrill, null, 'two of three cleared is not a finished drill');
+  assert.ok(s.drill && !s.drill.done, 'still running');
+});
+
+test('BACKMARKERS refuses when nothing ahead is actually slower', () => {
+  const f = fixture();
+  const peer = { prog: 10, x: 0, retired: false, _vmaxNow: 70 };
+  f.G.cars = [peer, f.c];
+  f.c.prog = 0; f.c._vmaxNow = 70; f.c.x = 0;
+  f.api.update(f.c);
+  assert.equal(f.api.startDrill('backmarkers'), false);
+  assert.match(f.announcements.at(-1)[0], /NO SLOWER TRAFFIC/);
+});

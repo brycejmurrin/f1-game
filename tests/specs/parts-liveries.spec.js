@@ -1,0 +1,444 @@
+// @ts-check
+// Liveries: catalog shape, the paint FINISH axis (gloss/satin/chrome), and the
+// creator's round-trip of a finish into a saved custom livery.
+//
+// FINISH is a MATERIAL, not a colour: Car3D.build remaps the body-paint surface
+// id (SURFACES.paint) to the id the lit shader already treats as matte (panel)
+// or mirror (metal). These tests pin that remap — that only PAINT moves, that
+// nothing else does, and that an absent finish leaves the mesh untouched.
+//
+// ONE BOOT PER WORKER (sharedTest): 14 boots (11 goto + 3 reloads) became
+// none. The catalog and finish tests only read modules off a live page; the
+// creator tests used to seed storage and reload so the boot would read it —
+// the same keys now go through the store (cache and disk) and #mb-race's own
+// re-read of the team. UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { galleryPath } from "../helpers/output-paths.js";
+import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared-page.js";
+
+const LANDSCAPE = { width: 844, height: 390 };
+
+async function load(page) {
+  await ensureLive(page);
+}
+
+// Team 2 (McLaren, the boot default) made the live team with nothing fitted,
+// then in through START. The creator tests forget that team's custom liveries
+// first, as their old localStorage.removeItem + reload did.
+async function openSetup(page) {
+  await toMenu(page);
+  await pinFreePlay(page, { team: 2, click: false });   // #mb-race re-reads the store
+  await page.locator("#mb-race").click();
+  await page.locator("#select").waitFor({ state: "visible" });
+  await page.locator("#sel-car").click();
+  await page.locator("#carsetup").waitFor({ state: "visible" });
+}
+
+// Creator tests need an empty custom list. forgetStored alone is a miss, so
+// GarageDefaults refills the shipped McLaren custom (CI selected-6: length 2).
+async function pinEmptyCustoms(page) {
+  const key = await page.evaluate(() => "livery.custom." + Teams.LIST[2].id);
+  await forgetStored(page, [key]);
+  await page.evaluate((k) => GameStore.store.set(k, []), key);
+}
+
+test.describe("Liveries — catalog", () => {
+  test("every livery has well-formed colours and a known finish", async ({ page }) => {
+    await load(page);
+    const bad = await page.evaluate(() => {
+      const COLOURS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "halo"];
+      const FINISHES = ["gloss", "satin", "chrome"];
+      const all = [...Liveries.UNIVERSAL, ...Object.values(Liveries.BY_TEAM).flat()];
+      const problems = [];
+      const ids = new Set();
+      for (const liv of all) {
+        if (ids.has(liv.id)) problems.push(`${liv.id}: duplicate id`);
+        ids.add(liv.id);
+        if (!liv.name) problems.push(`${liv.id}: missing name`);
+        for (const key of COLOURS) {
+          const v = liv[key];
+          if (v === undefined) continue;
+          if (!Array.isArray(v) || v.length !== 3 || v.some((c) => !(c >= 0 && c <= 1))) {
+            problems.push(`${liv.id}.${key}: not an [r,g,b] in 0..1`);
+          }
+        }
+        if (liv.finish !== undefined && !FINISHES.includes(liv.finish)) {
+          problems.push(`${liv.id}: unknown finish ${liv.finish}`);
+        }
+      }
+      return problems;
+    });
+    expect(bad).toEqual([]);
+  });
+
+  test("every team's picker leads with its own default livery", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => Teams.LIST.map((team) => {
+      const list = Liveries.forTeam(team);
+      return { id: team.id, first: list[0].id, count: list.length,
+               complete: list.every((l) => Array.isArray(l.c1) && Array.isArray(l.c2)) };
+    }));
+    for (const team of result) {
+      expect(team.first, team.id).toBe("default");
+      expect(team.complete, team.id).toBe(true);
+      expect(team.count, team.id).toBeGreaterThanOrEqual(30);
+    }
+  });
+
+  test("a custom team's stored finish reaches its default livery", async ({ page }) => {
+    await load(page);
+    const finish = await page.evaluate(() => {
+      const team = { id: "custom", color: [1, 0, 0], color2: [0, 0, 1], livery: { finish: "chrome" } };
+      return Liveries.forTeam(team)[0].finish;
+    });
+    expect(finish).toBe("chrome");
+  });
+});
+
+test.describe("Liveries — paint finish", () => {
+  test("gloss (and an absent finish) leave every paint face on the paint surface", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const count = (mesh, id) => mesh.mat.filter((m) => m === id).length;
+      const build = (livery) => Car3D.build([0.7, 0.05, 0.05], [0.9, 0.8, 0.1], { noWheels: true, livery });
+      const bare = build({});
+      const gloss = build({ finish: "gloss" });
+      return {
+        barePaint: count(bare, Car3D.SURFACES.paint),
+        glossPaint: count(gloss, Car3D.SURFACES.paint),
+        identical: JSON.stringify(Array.from(bare.mat)) === JSON.stringify(Array.from(gloss.mat)),
+      };
+    });
+    expect(result.barePaint).toBeGreaterThan(0);
+    expect(result.glossPaint).toBe(result.barePaint);
+    expect(result.identical).toBe(true);
+  });
+
+  test("satin and chrome move the paint faces — and only the paint faces", async ({ page }) => {
+    await load(page);
+    const result = await page.evaluate(() => {
+      const build = (livery) => Car3D.build([0.7, 0.05, 0.05], [0.9, 0.8, 0.1], { noWheels: true, livery });
+      const bare = build({});
+      const report = (finish) => {
+        const mesh = build({ finish });
+        const target = Car3D.FINISH_SURFACE[finish];
+        let movedFromPaint = 0, movedFromOther = 0;
+        for (let i = 0; i < mesh.mat.length; i++) {
+          if (mesh.mat[i] === bare.mat[i]) continue;
+          if (bare.mat[i] === Car3D.SURFACES.paint && mesh.mat[i] === target) movedFromPaint++;
+          else movedFromOther++;
+        }
+        return {
+          target,
+          movedFromPaint,
+          movedFromOther,
+          paintLeft: mesh.mat.filter((m) => m === Car3D.SURFACES.paint).length,
+          // geometry is untouched — a finish is a material change, not a mesh change
+          samePositions: mesh.pos.length === bare.pos.length
+            && Array.from(mesh.pos).every((v, i) => v === bare.pos[i]),
+          sameColours: Array.from(mesh.col).every((v, i) => v === bare.col[i]),
+        };
+      };
+      return { satin: report("satin"), chrome: report("chrome"),
+               ids: { panel: Car3D.SURFACES.panel, mirror: Car3D.SURFACES.mirror } };
+    });
+    expect(result.satin.target).toBe(result.ids.panel);
+    // chrome targets `mirror`, not `metal`: metalness kills the diffuse response
+    // while the shader's env lobe is gated on clearcoat, which metal has none of,
+    // so the old mapping rendered the body darker and flatter than plain gloss.
+    // See the FINISH_SURFACE comment in js/car/car3d.js.
+    expect(result.chrome.target).toBe(result.ids.mirror);
+    for (const finish of ["satin", "chrome"]) {
+      const r = result[finish];
+      expect(r.movedFromPaint, finish).toBeGreaterThan(0);
+      expect(r.movedFromOther, finish).toBe(0);
+      expect(r.paintLeft, finish).toBe(0);
+      expect(r.samePositions, finish).toBe(true);
+      expect(r.sameColours, finish).toBe(true);
+    }
+  });
+
+  test("a fitted satin livery repaints the in-race player car", async ({ page }) => {
+    await load(page);
+    // Fitted through the store, so the cache agrees with the disk — the reload
+    // this replaced was how the old seed reached the game.
+    const surfaces = await page.evaluate(async () => {
+      const team = Teams.LIST[2];
+      const satin = Liveries.forTeam(team).find((l) => l.finish === "satin");
+      GameStore.store.set("team", 2);
+      GameStore.store.set("livery." + team.id, satin.id);
+      return { livery: satin.id, teamId: team.id };
+    });
+    const result = await page.evaluate((ctx) => {
+      const team = Teams.LIST.find((t) => t.id === ctx.teamId);
+      const liv = Liveries.forTeam(team).find((l) => l.id === ctx.livery);
+      const mesh = Car3D.build(liv.c1, liv.c2, { livery: liv, teamId: team.id, noWheels: true });
+      return {
+        finish: liv.finish,
+        paint: mesh.mat.filter((m) => m === Car3D.SURFACES.paint).length,
+        panel: mesh.mat.filter((m) => m === Car3D.SURFACES.panel).length,
+      };
+    }, surfaces);
+    expect(result.finish).toBe("satin");
+    expect(result.paint).toBe(0);
+    expect(result.panel).toBeGreaterThan(0);
+  });
+});
+
+test.describe("Liveries — creator", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  // THE EDITOR MUST GET THE ROOM, not the chrome above it. The paint editor
+  // holds ~4100px of content on a landscape phone, and #cs-options is the
+  // `flex: 1 1 auto` pane it scrolls in — so every pixel #cs-header and
+  // #cs-tabs keep is a pixel of the editor. MEASURED on 844x390 before the
+  // fix: head 84 + tabs 65 = 149px of chrome over a 142px editor pane, with
+  // the editor's own CANCEL / SAVE & FIT buried at the bottom of the scroll.
+  // css/carsetup.css drops the category strip, the budget block and the stat
+  // block while a draft is open — all three are inert then (category cannot
+  // change mid-edit, and paint spends no budget and moves no stat).
+  //
+  // ASSERTED RELATIVELY, never against 260px: the oracle is "the editor
+  // outweighs the chrome above it", which survives a token or font change that
+  // moves every number here. The first attempt at the fix wrote a rule that
+  // MATCHED and then lost on specificity to the compact tier's
+  // `#cs-inner[data-pair][data-density][data-shape] #cs-tabs` — it was present
+  // in the stylesheet and did nothing. That is why this is a rendered-box
+  // assertion and not a grep for the selector.
+  test("the paint editor outweighs the garage chrome above it", async ({ page }) => {
+    await load(page);
+    await openSetup(page);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+
+    const h = (sel) => page.evaluate((s) => {
+      const e = document.querySelector(s);
+      return e ? Math.round(e.getBoundingClientRect().height) : 0;
+    }, sel);
+
+    const before = await h("#cs-options");
+    expect(before, "precondition: the option list has a box to grow from").toBeGreaterThan(0);
+
+    await page.locator(".cs-liv-create").click();
+    await expect(page.locator(".cs-liv-editor")).toBeVisible();
+
+    const [opts, tabs, head] = [await h("#cs-options"), await h("#cs-tabs"), await h("#cs-header")];
+    expect(tabs, "the category strip is inert mid-edit and must yield its height").toBe(0);
+    expect(opts, "opening the editor must GROW its pane, not shrink it").toBeGreaterThan(before);
+    expect(opts, `the editor (${opts}px) must outweigh the chrome above it (head ${head} + tabs ${tabs})`)
+      .toBeGreaterThan(head + tabs);
+  });
+
+  test("FIN SHAPE none greys out the four fin rows, and a fin brings them back", async ({ page }) => {
+    await load(page);
+    await openSetup(page);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.locator(".cs-liv-create").click();
+
+    const badgeRow = page.locator('.cs-liv-ed-row:has([data-cs-pill^="finBadge:"])');
+    const styleRow = page.locator('.cs-liv-ed-row:has([data-cs-pill^="finStyle:"])');
+    const finRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL FIN"))');
+    const artRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL GRAPHIC"))');
+    const rows = [badgeRow, styleRow, finRow, artRow];
+    // A NEW paint job starts on the TEAM'S OWN silhouette — fin-less on most 2026
+    // teams, a stepped fin on the boot team (js/data/teams.js) — so the rows open
+    // in whatever state that team ships. This test is about the dependency RULE,
+    // not about the shipped default — so it sets the fin itself rather than inheriting one.
+    await page.locator('[data-cs-pill="finShape:standard"]').click();
+    for (const r of rows) await expect(r).toHaveAttribute("aria-disabled", "false");
+    await expect(page.locator('[data-cs-pill="finBadge:logo"]')).toBeEnabled();
+
+    await page.locator('[data-cs-pill="finShape:none"]').click();
+    for (const r of rows) await expect(r).toHaveAttribute("aria-disabled", "true");
+    await expect(page.locator('[data-cs-pill="finBadge:logo"]')).toBeDisabled();
+    await expect(page.locator('[data-cs-pill="finStyle:team"]')).toBeDisabled();
+    await expect(finRow.locator('input[type="color"]')).toBeDisabled();
+    // The palette chips are rebuilt on every edit and must come back disabled too.
+    await expect(artRow.locator(".cs-liv-pal button").first()).toBeDisabled();
+    // Rows the fin does not own stay live. A row with no dependency never
+    // carries aria-disabled at all, so the assertion is "not disabled", not
+    // "disabled=false".
+    await expect(page.locator('[data-cs-pill="spineLogo:logo"]')).toBeEnabled();
+    await expect(page.locator('[data-cs-pill="spineSide:none"]')).toBeEnabled();
+    await expect(page.locator('.cs-liv-ed-row:has([data-cs-pill^="spineSide:"])')).not.toHaveAttribute("aria-disabled", "true");
+    await page.screenshot({ path: galleryPath("parts-liveries", "creator-no-fin-rows.png") });
+
+    await page.locator('[data-cs-pill="finShape:standard"]').click();
+    for (const r of rows) await expect(r).toHaveAttribute("aria-disabled", "false");
+    await expect(page.locator('[data-cs-pill="finBadge:logo"]')).toBeEnabled();
+  });
+
+  test("a plain fin greys TAIL GRAPHIC, and the CLEAN sponsor pack greys the wordmark pills", async ({ page }) => {
+    await load(page);
+    await openSetup(page);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.locator(".cs-liv-create").click();
+
+    const artRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL GRAPHIC"))');
+    // A NEW paint job starts on the TEAM'S OWN silhouette — fin-less on most 2026
+    // teams, a stepped fin on the boot team (js/data/teams.js) — so the rows open
+    // in whatever state that team ships. This test is about the dependency RULE,
+    // not about the shipped default — so it sets the fin itself rather than inheriting one.
+    await page.locator('[data-cs-pill="finShape:standard"]').click();
+    await expect(artRow).toHaveAttribute("aria-disabled", "false");
+    // Motif off + logo badge: nothing takes the colour.
+    await page.locator('[data-cs-pill="finStyle:none"]').click();
+    await expect(artRow).toHaveAttribute("aria-disabled", "true");
+    // A number badge inks with it again.
+    await page.locator('[data-cs-pill="finBadge:number"]').click();
+    await expect(artRow).toHaveAttribute("aria-disabled", "false");
+    await page.locator('[data-cs-pill="finBadge:logo"]').click();
+    await expect(artRow).toHaveAttribute("aria-disabled", "true");
+    await page.locator('[data-cs-pill="finStyle:team"]').click();
+    await expect(artRow).toHaveAttribute("aria-disabled", "false");
+
+    const wordPills = ['[data-cs-pill="spineLogo:wordmark"]', '[data-cs-pill="spineSide:wordmark"]', '[data-cs-pill="spineSide:duo"]'];
+    for (const p of wordPills) await expect(page.locator(p)).toBeEnabled();
+    await page.locator('[data-cs-pill="sponsors:clean"]').click();
+    for (const p of wordPills) await expect(page.locator(p)).toBeDisabled();
+    // Only the name-writing pills, never their rows.
+    await expect(page.locator('[data-cs-pill="spineSide:number"]')).toBeEnabled();
+    await expect(page.locator('.cs-liv-ed-row:has([data-cs-pill^="spineSide:"])')).not.toHaveAttribute("aria-disabled", "true");
+    await page.locator('[data-cs-pill="sponsors:default"]').click();
+    for (const p of wordPills) await expect(page.locator(p)).toBeEnabled();
+  });
+
+  test("WING FLAPS carbon greys the WINGS and REAR WING colours, and the stars motif is offered", async ({ page }) => {
+    await load(page);
+    await openSetup(page);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.locator(".cs-liv-create").click();
+
+    const wings = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("WINGS"))');
+    const rear = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("REAR WING"))');
+    await expect(wings).toHaveAttribute("aria-disabled", "false");
+    await expect(rear).toHaveAttribute("aria-disabled", "false");
+    await page.locator('[data-cs-pill="wingCarbon:carbon"]').click();
+    await expect(wings).toHaveAttribute("aria-disabled", "true");
+    await expect(rear).toHaveAttribute("aria-disabled", "true");
+    await expect(rear.locator('input[type="color"]')).toBeDisabled();
+    await page.locator('[data-cs-pill="wingCarbon:paint"]').click();
+    await expect(wings).toHaveAttribute("aria-disabled", "false");
+    await expect(rear).toHaveAttribute("aria-disabled", "false");
+    // ENGINE COVER is its own colour zone and is never gated by the wings.
+    const cover = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("ENGINE COVER"))');
+    await expect(cover.locator('input[type="color"]')).toBeEnabled();
+    await expect(cover).not.toHaveAttribute("aria-disabled", "true");
+    // The tail-style row offers LiveryTex's list, stars included.
+    const styles = await page.evaluate(() => LiveryTex.TAIL_STYLE_IDS.slice());
+    expect(styles).toContain("stars");
+    // TAIL STYLE only paints on a fin, and a new draft inherits the team's
+    // own 2026 shape (often fin-less), so give the car a blade before asking.
+    await page.locator('[data-cs-pill="finShape:standard"]').click();
+    await expect(page.locator('[data-cs-pill="finStyle:stars"]')).toBeEnabled();
+  });
+
+  test("a new paint job opens on the team's own silhouette, not the plain car", async ({ page }) => {
+    await load(page);
+    await openSetup(page);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.locator(".cs-liv-create").click();
+    // NEW used to default every pill to the plain 2020s shape — a standard
+    // shark fin on a standard spine — which no 2026 team runs, so a fresh
+    // paint job silently changed the car's outline before a colour was picked.
+    // It now inherits the team's own livery pills.
+    // WHICH pills is team data, so read them off the team being edited (the
+    // boot team, Teams.LIST[2], as openSetup pins it). This pinned "none" +
+    // "dorsal" for the whole grid until 2026-10-03, when the four 2026 cars
+    // that run a shark fin got one (js/data/teams.js) — McLaren's is STEPPED
+    // on a raised spine, which is still not the plain standard fin.
+    const want = await page.evaluate(() => {
+      const t = Teams.LIST[2];
+      return { id: t.id, finShape: t.livery.finShape, spineHeight: t.livery.spineHeight };
+    });
+    expect(want.finShape, "the boot team names its own fin shape").toBeTruthy();
+    expect(want.finShape, "the boot team must not ship the plain fin, or this proves nothing").not.toBe("standard");
+    const active = await page.evaluate((w) => {
+      const on = (k) => {
+        const b = document.querySelector('[data-cs-pill="' + k + '"].active');
+        return !!b;
+      };
+      return { fin: on("finShape:" + w.finShape), finStd: on("finShape:standard"),
+               spine: on("spineHeight:" + w.spineHeight) };
+    }, want);
+    expect(active.fin, `a new draft starts on the team's own fin (${want.finShape})`).toBe(true);
+    expect(active.finStd, "the plain shark fin must not be the starting shape").toBe(false);
+    expect(active.spine, `and on the team's own spine (${want.spineHeight})`).toBe(true);
+    // The fin rows follow the shape on open — live on a finned car, greyed on
+    // a fin-less one — and FIN SHAPE itself always stays live.
+    const finRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL FIN"))');
+    await expect(finRow).toHaveAttribute("aria-disabled", want.finShape === "none" ? "true" : "false");
+    await page.locator('[data-cs-pill="finShape:none"]').click();
+    await expect(finRow).toHaveAttribute("aria-disabled", "true");
+    await page.locator('[data-cs-pill="finShape:standard"]').click();
+    await expect(finRow).toHaveAttribute("aria-disabled", "false");
+  });
+
+  test("the creator offers a finish choice and saves it onto the custom livery", async ({ page }) => {
+    await load(page);
+    await pinEmptyCustoms(page);
+    await openSetup(page);
+
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.locator(".cs-liv-create").click();
+
+    // Against Car3D.FINISH_SURFACE, not a literal. This asserted 3 and the row
+    // has offered 7 since four finishes landed on 2026-08-28 (3898741) — the
+    // count is a FEATURE's size, so hard-coding it makes the next finish look
+    // like a regression. Gloss is the implicit default and has no surface id,
+    // hence the +1.
+    // BOTH LINEAGES fixed this independently and identically; the merge keeps
+    // the deploy side's wording and this side's floor. The floor is not
+    // redundant: if FINISH_SURFACE were ever emptied the computed count would
+    // be 1 and toHaveCount(1) would pass vacuously, asserting nothing.
+    const finishes = await page.evaluate(() => Object.keys(Car3D.FINISH_SURFACE).length + 1);
+    const finish = page.locator(".cs-liv-ed-finish [data-cs-finish]");
+    expect(finishes).toBeGreaterThan(3);
+    await expect(finish).toHaveCount(finishes);
+    await expect(page.locator('.cs-liv-ed-finish [data-cs-finish="gloss"]')).toHaveClass(/active/);
+
+    await page.locator('.cs-liv-ed-finish [data-cs-finish="chrome"]').click();
+    await expect(page.locator('.cs-liv-ed-finish [data-cs-finish="chrome"]')).toHaveClass(/active/);
+    await expect(page.locator('.cs-liv-ed-finish [data-cs-finish="gloss"]')).not.toHaveClass(/active/);
+    await expect(page.locator('.cs-liv-ed-finish [data-cs-finish="chrome"]')).toHaveAttribute("aria-pressed", "true");
+
+    await page.locator(".cs-liv-ed-name").fill("Chrome Test");
+    await page.screenshot({ path: galleryPath("parts-liveries", "creator-finish-row.png") });
+    await page.locator(".cs-liv-ed-save").click();
+
+    const saved = await page.evaluate(() => {
+      const team = Teams.LIST[2];
+      const list = JSON.parse(localStorage.getItem("apex26.livery.custom." + team.id) || "[]");
+      return { list, fitted: JSON.parse(localStorage.getItem("apex26.livery." + team.id) || '""') };
+    });
+    expect(saved.list).toHaveLength(1);
+    expect(saved.list[0].finish).toBe("chrome");
+    expect(saved.list[0].name).toBe("Chrome Test");
+    expect(saved.fitted).toBe(saved.list[0].id);
+  });
+
+  test("a gloss draft stores no finish field at all", async ({ page }) => {
+    await load(page);
+    await pinEmptyCustoms(page);
+    await openSetup(page);
+
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.locator(".cs-liv-create").click();
+    await page.locator(".cs-liv-ed-name").fill("Plain Test");
+    await page.locator(".cs-liv-ed-save").click();
+
+    const saved = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem("apex26.livery.custom." + Teams.LIST[2].id) || "[]"));
+    expect(saved).toHaveLength(1);
+    expect(saved[0].finish).toBeUndefined();
+  });
+
+  test("stock satin and chrome schemes are badged in the picker", async ({ page }) => {
+    await load(page);
+    await openSetup(page);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    const badges = await page.locator("#cs-options .cs-opt-tag").allTextContents();
+    expect(badges).toContain("SATIN");
+    expect(badges).toContain("CHROME");
+    await page.screenshot({ path: galleryPath("parts-liveries", "livery-picker-finishes.png") });
+  });
+});

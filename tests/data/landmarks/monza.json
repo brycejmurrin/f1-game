@@ -1,0 +1,8 @@
+{
+  "why": "Monza signature scenery — Tribuna Centrale (main straight L), podium tower + pit canopy terrace (reseated clear of onTrack / pit supersede, Jerez Ovni pattern). Villa / west-park lakes, Sopraelevata flyover + piers stay required via waterSurface / overheadSpan / template modelGroup ids (foundation spec pins them).",
+  "ids": [
+    "monza-tribuna-centrale",
+    "monza-podium-tower",
+    "monza-pit-canopy"
+  ]
+}

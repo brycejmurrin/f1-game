@@ -1,0 +1,11 @@
+{
+  "why": "Wave 6 — Kyalami Highveld landmarks (pit/race-control already required; main GS + headgear/windpump/clubhouse made explicit this wave).",
+  "ids": [
+    "kyalami-pit-block",
+    "kyalami-race-control",
+    "kyalami-main-grandstand",
+    "kyalami-headgear",
+    "kyalami-windpump",
+    "kyalami-clubhouse"
+  ]
+}

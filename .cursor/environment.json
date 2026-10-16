@@ -1,0 +1,18 @@
+{
+  "name": "Apex 26",
+  "install": "bash tools/env/cloud-agent-install.sh",
+  "mcpServerAllowlist": [
+    {
+      "name": "apex-tools",
+      "command": "*bash tools/mcp/apex-tools-mcp.sh serve"
+    },
+    {
+      "name": "chrome-devtools",
+      "command": "*bash tools/mcp/chrome-devtools-mcp.sh run"
+    },
+    {
+      "name": "playwright-official",
+      "command": "*bash tools/mcp/playwright-mcp.sh run"
+    }
+  ]
+}

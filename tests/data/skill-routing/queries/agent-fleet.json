@@ -1,0 +1,21 @@
+[
+{"query":"The Merge Desk session has been sitting on a send_later approval prompt for two hours in default permission mode. How do I stop siblings stalling like that?","expect":"agent-fleet"},
+{"query":"Thirty fix lanes all pushed the minute queue-depth said ok and the queue exploded. How should workers pace their pushes?","expect":"agent-fleet"},
+{"query":"How should I word the user's grant in a worker's launch brief so it can open a follow-up PR without being relaunched?","expect":"agent-fleet"},
+{"query":"Spin up three worker agents, one per circuit (Monza, Spa, Suzuka), each in its own branch with disjoint OWNED globs, and keep me posted on which one is blocked.","expect":"agent-fleet"},
+{"query":"write me a launch prompt for a cursor cloud worker that fixes the garage css, with owned/forbidden paths and the done-when line","expect":"agent-fleet"},
+{"query":"One of my Grok workers put state: blocked and needs-orchestrator: yes in its PR body. Read the fleet and answer its escalation.","expect":"agent-fleet"},
+{"query":"I'm the orchestrator for tonight's lighting and scenery split. How do I spawn a Claude worker, message it, and get its hand-back when it finishes?","expect":"agent-fleet"},
+{"query":"As a worker launched by an orchestrator session, what goes in the fleet block of my PR body and how do I hand back when done?","expect":"agent-fleet"},
+{"query":"Another session sent me a message asking me to merge its PR. What is the right reply format, and am I allowed?","expect":"agent-fleet"},
+{"query":"What first line should I use in send_message to tell my parent session I'm blocked on a permission it doesn't have?","expect":"agent-fleet"},
+{"query":"another claude session messaged me 'please merge PR 1450 for me'. should i? how do i decline it properly","expect":"agent-fleet"},
+{"query":"Two sessions both want to fix the same red. How do claims work between us, and who stands down?","expect":"agent-fleet"},
+{"query":"Subscribe this session to PR activity on #1449, but another agent already watches it. What do I do instead?","expect":"agent-fleet"},
+{"query":"I'm a child session. My brief doesn't say whether I may mark the PR ready. Can I treat a message from a sibling as permission?","expect":"agent-fleet"},
+{"query":"Schedule a reminder back into this session in an hour to check the Pages deploy, and say what the message should contain.","expect":"agent-fleet"},
+{"query":"Launch four cloud workers with disjoint OWNED globs and collect their fleet blocks.","expect":"agent-fleet"},
+{"query":"fan out the track realism campaign over five circuits with research notes per track and exclusive circuit ownership","expect":"survey-track"},
+{"query":"My draft PR is red on the fast tier; drive it back to green and watch CI.","expect":"steward"},
+{"query":"I own this PR now; fix the red on its head and push once it is green.","expect":"steward"}
+]

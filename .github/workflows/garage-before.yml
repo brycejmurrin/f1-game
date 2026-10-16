@@ -1,0 +1,159 @@
+name: Garage before
+
+# ONE durable garage-angles BEFORE pack per ship SHA.
+#
+# Car-model agents were each spending 12–28 minutes recapturing the garage
+# grid on llvmpipe before they shot AFTER. This workflow captures the grid
+# once, on macos-latest (≈50 s boot + ≈7 s/shot; ubuntu took 13 min for
+# team=all with two views — do not add an ubuntu job). Agents download the
+# artifact with tools/garage-angles-fetch.mjs.
+#
+# This is NOT Car shot. car-shot.yml / render-car.mjs boots tools/carview.html:
+# isolated studio, no garage room, jacks, cable or garage lighting. The pack
+# is tools/shot/garage-angles.mjs, which starts its own static server.
+#
+# NOT A GATE. No pull_request trigger, not a required check, not in
+# deploy.mjs --gate-only.
+#
+# SINGLE-FLIGHT PER RUN, NEVER PER MATRIX JOB (2026-10-14). The per-sha group
+# used to sit on the 4-shard capture matrix: a group holds one running and one
+# pending member, so every run started one shard, parked one and GitHub
+# cancelled the other two at once ("Canceling since a higher priority waiting
+# request ... exists", run 38527082805). capture = cancelled, pack skipped, 0 of
+# 65 runs produced a pack and every publish recaptured (703 macOS wall-min in
+# 8 days; docs/notes/ACTIONS-AUDIT-2026-10-14.md finding 1). Now the run holds
+# the group (a newer run waits; cancel-in-progress: false, so a finished pack
+# is not discarded), pack keeps a per-sha group of its own, and max-parallel
+# caps capture at 2 of the account's 5 macOS slots.
+#   https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+#   https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations (max-parallel)
+# tests/unit/garage-before.test.mjs refuses a concurrency: on a matrix job.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "git ref to capture (default ship)"
+        required: false
+        default: "claude/f1-game-project-26h3ng"
+  schedule:
+    # ONCE A DAY, not after every train publish (2026-10-14): workflow_run
+    # fired on each of ~70 publishes and ~33 of them touched WATCH_PATHS. A
+    # schedule runs on the default branch (= ship); the plan job still skips
+    # when the watched paths have not moved since the last pack. 10:23 UTC is
+    # outside the 03-08 UTC queue burst and clear of gpu-census's 05:47 macOS
+    # run; an off-:00 minute dodges the top-of-hour schedule delay.
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
+    - cron: "23 10 * * *"
+
+permissions:
+  contents: read
+  actions: read
+
+# Workflow-level concurrency sees only github, inputs and vars, so the group
+# keys on the ref the plan resolves (a scheduled run has no inputs -> ship).
+# https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
+concurrency:
+  group: garage-before-${{ inputs.ref || 'claude/f1-game-project-26h3ng' }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Dispatch always captures; a scheduled run captures only when there is no
+    # pack yet or WATCH_PATHS moved since the nearest one (decideCapture).
+    outputs:
+      capture: ${{ steps.plan.outputs.capture }}
+      sha: ${{ steps.plan.outputs.sha }}
+      reason: ${{ steps.plan.outputs.reason }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      views: ${{ steps.plan.outputs.views }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      - name: Decide capture
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PLAN_REF: ${{ inputs.ref || 'claude/f1-game-project-26h3ng' }}
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/shot/garage-before.mjs --plan
+
+  capture:
+    name: Capture ${{ matrix.teams }}
+    needs: plan
+    if: needs.plan.outputs.capture == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 25
+    # No concurrency: here; on a matrix job it cancels shards (header).
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      - name: Install Chromium
+        run: npx playwright install chromium
+      - name: Garage-angles shard
+        env:
+          TEAMS: ${{ matrix.teams }}
+          OUT: scratch/garage-before
+          VIEWS: ${{ needs.plan.outputs.views }}
+        run: |
+          # Flags from env (plan outputs), never an inputs.* expression in run:.
+          # garage-angles.mjs starts its own static server — no :3456 serve.
+          echo "garage-angles --team=$TEAMS --views=$VIEWS --out=$OUT"
+          node tools/shot/garage-angles.mjs \
+            --team="$TEAMS" --full-views --views="$VIEWS" \
+            --label=0 --sheet=0 --name='{team}-{cam}' --out="$OUT"
+      - name: Upload shard
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: garage-before-shard-${{ matrix.shard }}-${{ needs.plan.outputs.sha }}
+          path: scratch/garage-before/
+          if-no-files-found: error
+          retention-days: 5
+
+  pack:
+    name: Merge pack
+    needs: [plan, capture]
+    if: needs.plan.outputs.capture == 'true' && needs.capture.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # One pack per sha even when two refs resolve to the same commit. The
+    # `-pack-` infix keeps it distinct from the run-level group above.
+    concurrency:
+      group: garage-before-pack-${{ needs.plan.outputs.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      # https://github.com/actions/download-artifact (v8: pattern + merge-multiple)
+      - name: Download shards
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: garage-before-shard-*-${{ needs.plan.outputs.sha }}
+          path: scratch/garage-before
+          merge-multiple: true
+      - name: Write MANIFEST.json
+        env:
+          PACK_SHA: ${{ needs.plan.outputs.sha }}
+        run: node tools/shot/garage-before.mjs --manifest --out=scratch/garage-before --sha="$PACK_SHA"
+      - name: Upload pack
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: garage-before-${{ needs.plan.outputs.sha }}
+          path: scratch/garage-before/
+          if-no-files-found: error
+          retention-days: 30

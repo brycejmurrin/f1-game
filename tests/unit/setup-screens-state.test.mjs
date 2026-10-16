@@ -1,0 +1,784 @@
+/* setup-screens-state.test.mjs — the SETUP-family sheets (CAREER, SEASON SETUP,
+ * GARAGE) as BEHAVIOUR on tests/helpers/mini-dom.mjs.
+ *
+ * Audit 2026-09-02 (pre-race setup / season setup / garage / career). The
+ * confirmed defects, each pinned here by what the module DOES in a VM:
+ *   - CareerUI.close() left the NEW CAREER `draft` and an armed DELETE? alive
+ *     across a screen change — siblings of the draftFrom leak fixed 2026-09-01.
+ *   - SetupUI's livery creator outlived the garage: BACK/DONE (game.js
+ *     leaveGarage) never cleared csLivCreating or G.livDraftOverride, and
+ *     resolveLivery() paints that override on the player's race car.
+ *   - Units/precision: the driver-career team tile quoted a salary with no
+ *     per-round unit while the MY TEAM tile beside it says "cr / round"; the
+ *     RE-SIGN card said "cr a round" above a market list saying "cr / round";
+ *     THE CAR's "Fitted" row printed 1170 where the garage prints 1,170;
+ *     history "Points" had no unit; SEASON SETUP's RACE DISTANCE chips were
+ *     bare numbers and "57 (FULL)" is not FULL (that is the circuit's own
+ *     distance on the race-settings sibling); the sprint note's points had none.
+ *   - The factory / fitted-cap upgrade cards greyed out with no reason shown.
+ * CSS is read as RULES through tests/helpers/css-rules.mjs where a fix leans
+ * on a stylesheet fact (the suffixes above land on lines that must wrap).
+ *
+ * Run: node --test tests/unit/setup-screens-state.test.mjs   (npm run test:state-unit)
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
+import { DOM_SOURCE } from "../helpers/seed-dom.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
+// `const X = (function…` lands in the VM's lexical scope; as `var` it lands on the sandbox.
+const src = (p) => read(p).replace(/^const\b/gm, "var");
+
+function sandbox(dom, extra = {}) {
+  const sb = {
+    Math, console, Object, Array, Number, String, JSON, Map, Set, Date, parseFloat, parseInt, isFinite,
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    document: dom.document,
+    addEventListener() {}, removeEventListener() {},
+    setTimeout: () => 0, clearTimeout() {},
+    GameAudio: { uiTick() {}, uiSelect() {}, uiReject() {}, init() {} },
+    ScrollFade: { refresh() {} },
+    ...extra,
+  };
+  sb.window = sb;
+  return sb;
+}
+
+// mini-dom's `textContent = ""` does not drop children, so a pane rebuilt by
+// the module accumulates; a test that asks "what is on the pane NOW" empties
+// the pane itself first and reads only the build that follows.
+const empty = (dom, ...ids) => ids.forEach((id) => { dom.byId(id).children.length = 0; });
+const texts = (root, sel) => root.querySelectorAll(sel).map((n) => n.textContent);
+const rowValue = (root, key) => {
+  const r = root.querySelectorAll(".cr-row").find((x) => x.querySelector(".cr-row-k").textContent === key);
+  return r ? r.querySelector(".cr-row-v").textContent : null;
+};
+
+/* ── CAREER (#career): CareerUI in a VM ─────────────────────────────────── */
+
+const TEAMS = [
+  { id: "custom", name: "My Team", short: "YOU", tier: 2, custom: true, engine: "Custom",
+    color: [1, 0, 0], color2: [0, 0, 1], stats: { speed: 70, accel: 70, cornering: 70, braking: 70 },
+    drivers: [{ name: "You", code: "YOU", num: 99 }] },
+  { id: "haas", name: "Haas", short: "HAA", tier: 4, engine: "Ferrari",
+    color: [1, 1, 1], color2: [0, 0, 0], stats: { speed: 78, accel: 80, cornering: 79, braking: 81 },
+    drivers: [{ name: "Esteban Ocon", code: "OCO", num: 31 }, { name: "Oliver Bearman", code: "BEA", num: 87 }] },
+  { id: "sauber", name: "Audi", short: "AUD", tier: 3, engine: "Audi",
+    color: [0, 1, 0], color2: [0, 0, 0], stats: { speed: 82, accel: 82, cornering: 82, braking: 82 },
+    drivers: [{ name: "Nico Hulkenberg", code: "HUL", num: 27 }, { name: "Gabriel Bortoleto", code: "BOR", num: 5 }] },
+];
+
+function careerStub(opts = {}) {
+  const used = (code, teamName) => ({ used: true, code, teamName, year: 2026, round: 2, rounds: 24,
+    money: 1234, seasons: 1, wins: 0, titles: 0 });
+  const data = { driver: [used("YOU", "Haas"), { used: false }, { used: false }],
+                 myteam: [{ used: false }, { used: false }, { used: false }] };
+  let ptr = { flavour: "driver", i: 0 };
+  let career = opts.career || null;
+  const C = {
+    SLOTS: 3, FLAVOURS: ["driver", "myteam"], OBJ_BONUS: 150, OBJ_REP: 2, GRANT: 5000,
+    FACILITY_MAX: 8, FACILITY_DISCOUNT_MAX: 0.4, HISTORY_MAX: 12, RESEARCH_MULT: 3,
+    PRIZE: [900, 700, 560], START_MONEY: { driver: 1200, myteam: 2000 }, SPONSOR_KINDS: [{ pay: 400 }],
+    calls: [],
+    slots: (fl) => (fl ? [fl] : C.FLAVOURS).flatMap((f) => data[f].map((s, i) =>
+      ({ ...s, flavour: f, i, live: !!s.used && ptr.flavour === f && ptr.i === i }))),
+    slot: () => ({ ...ptr }),
+    useSlot: (f, i) => { ptr = { flavour: f, i }; C.calls.push(["useSlot", f, i]); },
+    firstFree: (f) => data[f].findIndex((s) => !s.used),
+    slotRevision: (f, i) => `${f}:${i}:1`,
+    deleteSlot: (f, i, revision) => {
+      assert.equal(revision, C.slotRevision(f, i));
+      data[f][i] = { used: false };
+      C.calls.push(["deleteSlot", f, i]);
+      return { ok: true, durable: true, reason: null };
+    },
+    active: () => career != null, data: () => career, load: () => career,
+    setCareer: (c) => { career = c; },
+    freeAgents: () => [{ name: "Yuki Nakamura", code: "NKM", num: 52, tier: 3, ask: 38 },
+                       { name: "Sam Okonkwo", code: "OKO", num: 73, tier: 4, ask: 18 }],
+    salaryFor: (t, rep) => Math.round(20 + rep * 1.2 + t.tier * 15),
+    state: () => opts.state || null,
+    conflicted: () => false, seasonDone: () => false,
+    objective: () => ({ type: "mate" }), objectiveLabel: (o) => o && o.label || "Beat your team-mate",
+    // The round's three briefs. `locked` flips the hub to the single-line form.
+    OBJ_CHOICES: 3,
+    objectiveChoices: () => [{ type: "mate", label: "Beat your team-mate" },
+                             { type: "points", label: "Score championship points" },
+                             { type: "clean", label: "Clean race" }],
+    objectivePick: () => opts.objPick || 0,
+    objectiveLocked: () => !!opts.objLocked,
+    chooseObjective: () => true,
+    budget: () => (opts.budget != null ? opts.budget : 1170),
+    freeMoney: () => false,
+    marketValue: () => 40, driverStandings: () => [], offerBar: (t) => 92 - t * 18,
+    // The season-target rungs. Mirrors js/career/career.js AMBITION — the setup
+    // form and the offers sheet both build their picker straight off it, so a
+    // stub without it throws where the real Career never would.
+    AMBITION: [{ key: "modest", name: "PLAY IT SAFE", delta: 3, rep: 3, mv: 6 },
+               { key: "expected", name: "WHAT THEY ASK", delta: 0, rep: 5, mv: 12 },
+               { key: "ambitious", name: "PROMISE MORE", delta: -3, rep: 8, mv: 20 }],
+    // A contract's goal is a KIND now, and the hub reads its label and its live
+    // progress rather than assuming a championship position. Mirrors
+    // js/career/career.js GOAL_KINDS closely enough for the hub to render.
+    goalLabel: (g) => (!g ? "" : g.type === "teamPos" ? `Take the team to P${g.value} or better in the constructors'`
+      : g.type === "beatMate" ? "Finish the season ahead of your team-mate"
+      : `Finish P${g.value} or better in the championship`),
+    goalNow: () => (opts.goalNow !== undefined ? opts.goalNow : "P7"),
+    goalOnTrack: () => (opts.goalOnTrack !== undefined ? opts.goalOnTrack : false),
+    ambition: () => (opts.amb != null ? opts.amb : 1),
+    ambitionOf: (d) => (d && Number.isInteger(d.ambition) ? d.ambition : 1),
+    setAmbition: (i) => { C.calls.push(["setAmbition", i]); return i; },
+    goalValueFor: (t, a) => 10 - a,
+    roundsTotal: () => 24, prizeFor: () => 100, researchCost: () => 0,
+  };
+  return C;
+}
+
+function loadCareerUi(careerOpts = {}, uiGlobals = {}) {
+  const dom = makeDom({ tagFor: (id) => (/^(cr-back|cr-go|cr-garage|co-back|ch-back|cg-back)$/.test(id) ? "button" : "div") });
+  const Career = careerStub(careerOpts);
+  const G = {
+    $: (id) => dom.byId(id), els: { overlay: dom.byId("overlay") },
+    soundOn: false, flow: "gp", session: "race", season: null,
+    store: { get: (k, d) => d, set() {} },
+    cssCol: () => "#fff", openCareer() {}, openGarage() {}, openRaceSettings() {}, refreshCareerButton() {}, qualiClear() {},
+    armConfirm: (btn, txt, act) => { act(); return true; },
+  };
+  const sb = sandbox(dom, {
+    Career,
+    Teams: { LIST: TEAMS, POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+             // Mirrors js/data/teams.js (see career-legends.test.mjs).
+             isReal: (t) => !!t && !t.custom && !t.legends },
+    DriverRatings: { get: () => ({ pace: 70, craft: 60 }), AXES: ["pace"] },
+    Parts: { CATALOG: [], getCost: () => (careerOpts.fitted != null ? careerOpts.fitted : 0) },
+    Tracks: { SEASON: [{ name: "Bahrain", country: "BHR" }, { name: "Jeddah", country: "KSA" },
+                       { name: "Melbourne", country: "AUS" }, { name: "Suzuka", country: "JPN" }] },
+    GameStore: { seasonDriverId: (t, i) => t + ":" + i },
+    // resume() repairs a career alias and sanitises the round; career-ui's
+    // return-to-menu goes through it now, as game.js always did.
+    SeasonCal: { hasProgress: () => false, rounds: () => 24, load: () => null },
+    Reliability: { REASONS: ["engine"], TIER_RISK: [0.02, 0.06] },
+    PhysicsConsts: { DIFF: { EASY: 1 } },
+    ...uiGlobals,
+  });
+  vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });   // Dom.el, over this sandbox's document
+  vm.runInNewContext(src("js/career/experience.js"), sb, { filename: "js/career/experience.js" });
+  vm.runInNewContext(src("js/career/career-ui.js"), sb, { filename: "js/career/career-ui.js" });
+  const ui = sb.CareerScreen.create(G);
+  return { dom, ui, Career, G, $: G.$ };
+}
+
+// Controlled reads exercise the actual picker callbacks without browser timing.
+function backupPickerUi(readerKind) {
+  const applied = [], validated = [], notices = [];
+  const h = loadCareerUi({}, {
+    CareerBackup: {
+      MAX_BYTES: 1024,
+      validate: (envelope) => { validated.push(envelope); return { ok: true }; },
+      preview: () => ({ slots: [], extras: [] }),
+      apply: (envelope) => { applied.push(envelope); return { ok: true }; },
+    },
+    FileReader: class {
+      readAsText(file) {
+        file.resolve = (text) => { this.result = text; this.onload(); };
+        file.reject = () => this.onerror();
+      }
+    },
+  });
+  h.G.announce = (message) => notices.push(message);
+  h.ui.openSlots();
+  const clickImport = (index = 0) => {
+    const button = h.$("cr-left").querySelectorAll('[data-cr-act="import"]')[index];
+    assert.ok(button);
+    button.onclick({ stopPropagation() {} });
+  };
+  const choose = (name) => {
+    const picker = h.dom.document.body.querySelector("input");
+    const file = { name, size: 100 };
+    if (readerKind === "File.text") file.text = () => new Promise((resolve, reject) => {
+      file.resolve = resolve; file.reject = reject;
+    });
+    picker.files = [file];
+    picker.onchange();
+    return file;
+  };
+  const settle = async (file, failure = false) => {
+    empty(h.dom, "cr-left", "cr-right");
+    if (failure) file.reject(new Error("read failed"));
+    else file.resolve(JSON.stringify({ filename: file.name }));
+    await Promise.resolve();
+  };
+  return { ...h, applied, validated, notices, clickImport, choose, settle };
+}
+
+for (const readerKind of ["File.text", "FileReader"]) {
+  for (const failure of [false, true]) {
+    test(`career backup: ${readerKind} ignores an older ${failure ? "failure" : "success"} after a newer selection`, async () => {
+      const h = backupPickerUi(readerKind);
+      h.clickImport();
+      const old = h.choose("old.json");
+      // Another change on the same input must also invalidate its previous read.
+      const current = h.choose("current.json");
+      await h.settle(current);
+      const review = texts(h.$("cr-left"), ".cr-note").join(" ");
+      assert.match(review, /File: current\.json/);
+      // Keep the current rendered review while the stale callback resolves.
+      if (failure) old.reject(new Error("late failure"));
+      else old.resolve(JSON.stringify({ filename: old.name }));
+      await Promise.resolve();
+      assert.equal(h.validated.length, 1, "only the selected file reaches validation");
+      assert.equal(texts(h.$("cr-left"), ".cr-note").join(" "), review);
+      assert.deepEqual(h.notices, [], "late errors cannot overwrite the current review");
+      h.clickImport();
+      assert.equal(h.applied.length, 1);
+      assert.equal(h.applied[0].filename, "current.json");
+    });
+  }
+
+  for (const exit of ["close", "openSlots", "openHub", "empty slot"]) {
+    test(`career backup: ${readerKind} discards reads after ${exit}`, async () => {
+      for (const failure of [false, true]) {
+        const h = backupPickerUi(readerKind);
+        h.clickImport();
+        const old = h.choose("old.json");
+        empty(h.dom, "cr-left", "cr-right");
+        if (exit === "empty slot") {
+          h.ui.build();
+          h.$("cr-left").querySelectorAll(".cr-slot-main")[1].onclick();
+        } else h.ui[exit]();
+        if (failure) old.reject(new Error("late failure"));
+        else old.resolve(JSON.stringify({ filename: old.name }));
+        await Promise.resolve();
+        assert.deepEqual(h.validated, []);
+        assert.deepEqual(h.notices, []);
+        assert.deepEqual(h.applied, []);
+      }
+    });
+  }
+
+  test(`career backup: opening another ${readerKind} picker cancels the pending read even before selection`, async () => {
+    const h = backupPickerUi(readerKind);
+    h.clickImport();
+    const old = h.choose("old.json");
+    h.clickImport(1);
+    await h.settle(old);
+    assert.deepEqual(h.validated, []);
+    assert.deepEqual(h.notices, []);
+    const current = h.choose("current.json");
+    await h.settle(current);
+    assert.match(texts(h.$("cr-left"), ".cr-note").join(" "), /File: current\.json/);
+    h.clickImport(1);
+    assert.equal(h.applied[0].filename, "current.json");
+  });
+
+  test(`career backup: a new ${readerKind} picker disarms the previous file while its replacement loads`, async () => {
+    const h = backupPickerUi(readerKind);
+    h.clickImport();
+    await h.settle(h.choose("first.json"));
+    assert.equal(h.$("cr-left").querySelector('[data-cr-act="import"]').textContent, "IMPORT?");
+    const next = h.$("cr-left").querySelectorAll('[data-cr-act="import"]')[1];
+    empty(h.dom, "cr-left", "cr-right");
+    next.onclick({ stopPropagation() {} });
+    const replacement = h.choose("replacement.json");
+    const buttons = h.$("cr-left").querySelectorAll('[data-cr-act="import"]');
+    assert.ok(buttons.every((button) => button.textContent === "IMPORT"), "the old confirmation is gone during the read");
+    assert.doesNotMatch(texts(h.$("cr-left"), ".cr-note").join(" "), /first\.json|Review restore/);
+    assert.deepEqual(h.applied, []);
+    await h.settle(replacement);
+    assert.equal(h.$("cr-left").querySelectorAll('[data-cr-act="import"]').filter((button) => button.textContent === "IMPORT?").length, 1);
+    assert.match(texts(h.$("cr-left"), ".cr-note").join(" "), /File: replacement\.json/);
+    h.clickImport(1);
+    assert.equal(h.applied.length, 1);
+    assert.equal(h.applied[0].filename, "replacement.json");
+  });
+
+  test(`career backup: a current ${readerKind} read failure is still announced`, async () => {
+    const h = backupPickerUi(readerKind);
+    h.clickImport();
+    await h.settle(h.choose("bad.json"), true);
+    assert.deepEqual(h.notices, ["IMPORT FAILED — BAD FILE"]);
+    assert.deepEqual(h.applied, []);
+  });
+}
+
+const hubCareer = () => ({
+  year: 2026, flavour: "driver", driver: { code: "YOU", name: "You" }, team: "haas", seat: 1,
+  deal: { team: "haas", left: 1, salary: 101, bonusPt: 16, goal: { value: 14 } },
+  season: { round: 2, pts: {}, driverCodes: {} }, fitted: {}, owned: [], tdev: {},
+  roster: null, history: [], results: [], offers: [], moves: [],
+});
+const hubState = (over = {}) => ({
+  money: 800, rep: 40, round: 2, rounds: 24, sponsor: null,
+  facility: 0, facilityCost: 1200, facilityDiscount: 0,
+  budgetCost: 900, budgetLvl: 0, budget: 1170, dnfs: 0, hire: null, offers: 0, ...over,
+});
+
+test("career: a NEW CAREER draft does not survive leaving the screen", () => {
+  const { dom, ui, $ } = loadCareerUi();
+  ui.openSlots();
+  assert.equal($("cr-title").textContent, "CAREER MODES");
+  assert.match($("cr-left").querySelectorAll(".cr-slot-main")[0].getAttribute("aria-label"),
+    /^Driver career slot 1, (?:empty|saved)/);
+  assert.match($("cr-right").querySelectorAll(".cr-slot-main")[0].getAttribute("aria-label"),
+    /^My Team slot 1, (?:empty|saved)/);
+  // Open an EMPTY driver slot -> the setup form, with a draft behind it.
+  const emptySlot = $("cr-left").querySelectorAll(".cr-slot.empty")[0];
+  emptySlot.querySelector(".cr-slot-main").onclick();
+  assert.equal($("cr-title").textContent, "NEW CAREER");
+  // MAIN MENU
+  $("cr-back").onclick();
+  assert.equal($("career").hidden, true);
+  // Re-enter through the HUB door with no career live (the path that does not
+  // go through the picker): must be the modes screen, not the abandoned form.
+  empty(dom, "cr-left", "cr-right");
+  ui.openHub();
+  assert.equal($("cr-title").textContent, "CAREER MODES",
+    "a draft abandoned at MAIN MENU came back as NEW CAREER on openHub()");
+});
+
+test("career: an armed DELETE? disarms when the screen closes", () => {
+  const { dom, ui, $, Career } = loadCareerUi();
+  ui.openSlots();
+  const del = () => $("cr-left").querySelectorAll(".cr-slot-del").at(-1);
+  del().onclick({ stopPropagation() {} });
+  assert.equal(del().textContent, "DELETE?", "first press arms");
+  $("cr-back").onclick();
+  empty(dom, "cr-left", "cr-right");
+  ui.openHub();                      // no career live -> the slot picker again
+  assert.equal(del().textContent, "DELETE", "must come back DISARMED");
+  del().onclick({ stopPropagation() {} });
+  assert.equal(Career.calls.filter((c) => c[0] === "deleteSlot").length, 0,
+    "one tap after re-entry must not delete a save");
+});
+
+test("career: driver-career team tiles carry the per-round salary unit their MY TEAM sibling shows", () => {
+  const { ui, $ } = loadCareerUi();
+  ui.openSlots();
+  $("cr-left").querySelectorAll(".cr-slot.empty")[0].querySelector(".cr-slot-main").onclick();
+  const metas = texts($("cr-left"), ".cr-teamtile-meta");
+  assert.ok(metas.length >= 2, "starter tiles rendered");
+  for (const m of metas) assert.match(m, /\d+ cr \/ round$/, m);
+});
+
+test("career hub: next race and funds sit on the left; the market ladder is on the right", () => {
+  const { ui, $ } = loadCareerUi({ career: hubCareer(), state: hubState() });
+  ui.openHub();
+  const left = $("cr-left"), right = $("cr-right");
+  assert.equal($("cr-nextrace").parentNode, left, "NEXT RACE card is the left-column action");
+  assert.equal($("cr-nextrace").querySelector(".cr-nr-round").textContent, "ROUND 3 OF 24");
+  assert.ok($("cr-nextrace").querySelector(".cr-nr-name").textContent);
+  assert.equal($("cr-funds").tagName, "DETAILS");
+  assert.equal($("cr-funds").parentNode, left);
+  assert.ok(left.contains($("cr-grant")), "#cr-grant stays in the tree inside the disclosure");
+  assert.ok(left.contains($("cr-freemoney")));
+  assert.equal($("cr-guide").parentNode, left);
+  assert.equal($("cr-ladder").parentNode, right, "WHO WOULD SIGN YOU sits with the championship");
+  assert.ok(!left.contains($("cr-ladder")));
+  assert.ok(right.querySelectorAll(".season-upcoming-row").length, "UPCOMING list stays on the right");
+  assert.equal(left.contains(right.querySelector(".season-upcoming-row") || { parentNode: null }), false);
+  assert.deepEqual(texts($("cr-header"), "button"),
+    ["Race brief", "Calendar", "Development", "Team & contract", "Career record"]);
+  assert.equal(right.querySelector("[data-career-part=calendar]").children.length, 4,
+    "season story uses the real calendar in this fixture, not a fixed 24-round mock");
+});
+
+test("career hub: THE CAR's Fitted row groups thousands like the garage readout", () => {
+  const { ui, $ } = loadCareerUi({ career: hubCareer(), state: hubState(), fitted: 1000, budget: 1170 });
+  ui.openHub();
+  assert.equal(rowValue($("cr-left"), "Fitted"), "1,000 / 1,170 cr");
+});
+
+test("career hub: a greyed-out upgrade card says how far short the balance is", () => {
+  const { ui, $ } = loadCareerUi({ career: hubCareer(), state: hubState({ money: 800 }) });
+  ui.openHub();
+  const fac = $("cr-facility"), cap = $("cr-budget");
+  assert.equal(fac.disabled, true); assert.equal(cap.disabled, true);
+  assert.match(fac.querySelector(".cr-record-cta").textContent, /SHORT 400 cr$/);
+  assert.match(cap.querySelector(".cr-record-cta").textContent, /SHORT 100 cr$/);
+  assert.match(fac.title, /400 cr/); assert.match(cap.title, /100 cr/);
+});
+
+test("career hub: an affordable upgrade card carries no shortfall and no title", () => {
+  const { ui, $ } = loadCareerUi({ career: hubCareer(), state: hubState({ money: 5000 }) });
+  ui.openHub();
+  for (const id of ["cr-facility", "cr-budget"]) {
+    assert.equal($(id).disabled, false);
+    assert.doesNotMatch($(id).querySelector(".cr-record-cta").textContent, /SHORT/);
+    assert.equal($(id).title, "");
+  }
+});
+
+test("career hub: RE-SIGN card and the market list quote wages the same way", () => {
+  const career = Object.assign(hubCareer(), { flavour: "myteam", team: "custom", seat: 0,
+    roster: [{ name: "Sam Okonkwo", salary: 18, left: 0 }] });
+  const state = hubState({ hire: { kind: "renew", name: "Sam Okonkwo", code: "OKO", ask: 22, salary: 18 } });
+  const { ui, $ } = loadCareerUi({ career, state });
+  ui.openHub();
+  assert.match($("cr-rehire").querySelector(".cr-record-line").textContent, /22 cr \/ round$/);
+  for (const w of texts($("cr-right"), ".cr-seat-who")) assert.match(w, /cr \/ round$/, w);
+});
+
+test("career history: Points carries its unit like every other points figure", () => {
+  const { ui, $ } = loadCareerUi({ career: hubCareer(), state: hubState() });
+  ui.openHub();
+  ui.openHistory();
+  assert.equal(rowValue($("ch-body"), "Points"), "0 pts");
+});
+
+test("career.css: the lines the fixes extend must wrap, not ellipsize", () => {
+  const rules = cssRules(read("css/career.css"));
+  for (const sel of [".cr-record-cta", ".cr-record-line", ".cr-teamtile-meta"]) {
+    assert.notEqual(decl(rules, sel, "white-space"), "nowrap", `${sel} must wrap`);
+    assert.equal(decl(rules, sel, "text-overflow"), null, `${sel} must not ellipsize`);
+  }
+});
+
+/* ── SEASON SETUP (#season-setup): SeasonUI in a VM ─────────────────────── */
+
+function loadSeasonUi(trackIds = ["a", "b"], cal = {}) {
+  const dom = makeDom({ tagFor: (id) => (/^(ss-back|ss-apply|mb-season)$/.test(id) ? "button" : "div") });
+  const G = {
+    $: (id) => dom.byId(id), els: {}, soundOn: false, season: null,
+    store: { get: (k, d) => d, set() {} }, buildSelect() {}, refreshCareerButton() {},
+    armConfirm: (btn, txt, act) => { act(); return true; },
+  };
+  const sb = sandbox(dom, {
+    SeasonCal: {
+      config: () => ({ trackIds: trackIds.slice(), quali: true, sprint: true, laps: 57, points: "modern", flPoint: false, drop: 0 }),
+      PRESETS: [{ id: "full", label: "FULL" }], presetIds: () => ["a"], shuffled: (x) => x,
+      LAP_OPTS: [3, 5, 10, 25, 57], SPRINT_POINTS: [8, 7, 6, 5, 4, 3, 2, 1], DROP_OPTS: [0, 2, 3],
+      canRace: () => true, matchesConfig: () => false, hasProgress: () => false, rounds: () => 2, restart: () => ({}), setConfig() {}, save() {}, trackIndex: () => 0,
+      ...cal,
+    },
+    Tracks: { LIST: [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C", country: "X" }] },
+  });
+  vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });   // Dom.el, over this sandbox's document
+  vm.runInNewContext(src("js/career/season-ui.js"), sb, { filename: "js/career/season-ui.js" });
+  return { dom, ui: sb.SeasonUI.create(G), $: G.$, G };
+}
+
+test("season setup: unchanged qualifying survives APPLY; changing rules requires a fresh confirmation", () => {
+  let calls = 0;
+  const { ui, $, G } = loadSeasonUi(["a", "b"], {
+    matchesConfig: (season, next) => !!season && season.config.laps === next.laps,
+    applyConfig: (next) => { calls++; return { ok: true, durable: true,
+      season: next.laps === G.season.config.laps ? G.season : { round: 0, config: next } }; },
+  });
+  const season = { round: 0, config: { laps: 57 }, qualiTrack: "a", qualiMode: "season",
+    qualiOrder: [{ id: "driver", t: 80, human: true }] };
+  G.season = season;
+  G.armConfirm = (btn, text, act) => {
+    if (btn.dataset.armed) act();
+    else { btn.dataset.armed = "1"; btn.classList.add("armed"); btn.textContent = text; }
+  };
+  ui.open();
+  assert.equal($("ss-apply").textContent, "APPLY");
+  $("ss-apply").onclick();
+  assert.equal(G.season, season);
+  assert.equal(calls, 1);
+  assert.equal($("season-setup").hidden, true);
+  ui.open();
+  $("ss-laps").children[0].onclick();
+  assert.equal($("ss-apply").textContent, "APPLY — RESTART SEASON");
+  $("ss-apply").onclick();
+  assert.equal(calls, 1, "the first click cannot erase qualifying");
+  assert.equal(G.season.qualiOrder.length, 1);
+  assert.equal($("season-setup").hidden, false);
+  $("ss-back").onclick();
+  ui.open();
+  assert.equal($("ss-apply").dataset.armed, undefined, "BACK discards the armed draft");
+  $("ss-laps").children[0].onclick();
+  $("ss-apply").onclick();
+  assert.equal(calls, 1, "a reopened setup must confirm again");
+  $("ss-apply").onclick();
+  assert.equal(calls, 2);
+  assert.equal(G.season.qualiOrder, undefined);
+  assert.equal(G.season.config.laps, 3);
+});
+
+test("season setup: changed rounds and sprint results still warn, and unchanged APPLY keeps the selected round", () => {
+  for (const season of [{ round: 2 }, { round: 0, stage: "race" }]) {
+    let changed = true, confirms = 0, selected = null;
+    const { ui, $, G } = loadSeasonUi(["a", "b"], {
+      matchesConfig: () => !changed,
+      hasProgress: (s) => !!s && (s.round > 0 || s.stage === "race"),
+      applyConfig: () => ({ ok: true, durable: true, season }),
+      trackIndex: (round) => { selected = round; return round; },
+    });
+    G.season = season;
+    G.armConfirm = () => { confirms++; };
+    ui.open();
+    assert.equal($("ss-apply").textContent, "APPLY — RESTART SEASON");
+    $("ss-apply").onclick();
+    assert.equal(confirms, 1);
+    changed = false; ui.build();
+    $("ss-apply").onclick();
+    assert.equal(confirms, 1);
+    assert.equal(selected, season.round, "preserving a season must not select round zero");
+  }
+});
+
+test("season setup: START NEW SEASON confirms and restarts completed standings with unchanged rules", () => {
+  let calls = 0, selected = null;
+  const completed = { round: 2, pts: { driver: 50 } };
+  const fresh = { round: 0, pts: {} };
+  const { ui, $, G } = loadSeasonUi(["a", "b"], {
+    matchesConfig: () => true,
+    canRace: (s) => !!s && s.round < 2,
+    hasProgress: (s) => !!s && s.round > 0,
+    applyConfig: () => { calls++; return { ok: true, durable: true, season: fresh }; },
+    trackIndex: (round) => { selected = round; return round < 2 ? round : -1; },
+  });
+  G.season = completed;
+  G.armConfirm = (btn, text, act) => {
+    if (btn.dataset.armed) act();
+    else { btn.dataset.armed = "1"; btn.textContent = text; }
+  };
+  ui.open();
+  assert.equal($("ss-apply").textContent, "APPLY — RESTART SEASON");
+  $("ss-apply").onclick();
+  assert.equal(calls, 0, "completed standings still need destructive confirmation");
+  assert.equal(G.season, completed);
+  $("ss-apply").onclick();
+  assert.equal(calls, 1);
+  assert.equal(G.season, fresh);
+  assert.equal(selected, 0);
+  assert.equal(G.trackIdx, 0, "the new championship selects its first circuit");
+  assert.equal($("season-setup").hidden, true);
+});
+
+test("season setup: RACE DISTANCE chips carry a unit and none claims FULL", () => {
+  const { ui, $ } = loadSeasonUi();
+  ui.open();
+  const chips = texts($("ss-laps"), ".sel-chip");
+  assert.equal(chips.length, 5);
+  for (const c of chips) assert.match(c, /^\d+ LAPS?$/, c);
+  // FULL is the circuit's own distance on the race-settings sibling (78 at
+  // Monaco, 44 at Spa); this 57 is a flat 57 laps, so it must not say FULL.
+  assert.ok(!chips.some((c) => /FULL/.test(c)), chips.join(" | "));
+});
+
+test("season setup: ↑ / ↓ / ✕ keep keyboard focus on the row they moved or removed", () => {
+  // Bug-hunt 2026-09-02 (UI, not landed in round 1): every calendar press
+  // rebuilt #ss-cal, the pressed button was gone and focus fell to <body>.
+  const { dom, ui, $ } = loadSeasonUi(["a", "b", "c"]);
+  ui.open();
+  const btn = (label) => $("ss-cal").querySelectorAll("button").findLast((b) => b.getAttribute("aria-label") === label);
+  const focused = () => dom.document.activeElement && dom.document.activeElement.getAttribute("aria-label");
+  assert.equal(dom.document.activeElement, null, "precondition: nothing focused");
+  btn("Move up — C").click();                       // C: R3 -> R2
+  assert.equal(focused(), "Move up — C", "the same control, on the row the circuit moved to");
+  btn("Move up — C").click();                       // C: R2 -> R1, where ↑ is disabled
+  assert.equal(focused(), "Move down — C", "at the top ↑ is disabled: the nearest enabled control of that row");
+  btn("Remove — C").click();                        // [a, b]: the neighbour takes R1
+  assert.equal(focused(), "Remove — A", "after a remove, the row that took its place");
+  assert.ok(dom.document.activeElement.disabled === false, "never a disabled button");
+});
+
+test("season setup: 2026 REAL marks its sprint rounds, and each round toggles", () => {
+  const { ui, $ } = loadSeasonUi(["a", "b"], {
+    PRESETS: [{ id: "full", label: "FULL" }, { id: "real2026", label: "2026 REAL" }],
+    preset: (id) => (id === "real2026" ? { trackIds: ["b", "c"], sprint: "rounds", sprintIds: ["c"] } : { trackIds: ["a"] }),
+  });
+  ui.open();
+  assert.equal($("ss-cal").querySelectorAll("button").filter((b) => /Sprint weekend/.test(b.getAttribute("aria-label") || "")).length, 0,
+    "no per-round toggles while the sprint is global");
+  $("ss-presets").querySelectorAll("button").find((b) => b.textContent === "2026 REAL").onclick();
+  // The last paint's two rows (the stub DOM keeps detached nodes queryable,
+  // which is why the focus test above reads findLast too).
+  const toggles = () => $("ss-cal").querySelectorAll("button")
+    .filter((b) => /^Sprint weekend/.test(b.getAttribute("aria-label") || "")).slice(-2);
+  assert.deepEqual(toggles().map((b) => [b.textContent, b.getAttribute("aria-pressed")]), [["GP", "false"], ["SPRINT", "true"]]);
+  assert.match($("ss-note").textContent, /^1 of 2 rounds are sprint weekends/);
+  toggles()[0].onclick();
+  assert.deepEqual(toggles().map((b) => b.textContent), ["SPRINT", "SPRINT"]);
+  assert.equal($("ss-sprint").querySelectorAll(".sel-chip.active")[0].textContent, "SPRINT ROUNDS");
+});
+
+test("season setup: the sprint note names the unit of the points it quotes", () => {
+  const { ui, $ } = loadSeasonUi();
+  ui.open();
+  assert.match($("ss-note").textContent, /8 · 7 · 6 · 5 · 4 · 3 · 2 · 1 pts\./);
+});
+
+/* ── GARAGE (#carsetup): SetupUI in a VM ────────────────────────────────── */
+
+function loadSetupUi() {
+  const dom = makeDom();
+  const observers = [];
+  const G = {
+    $: (id) => dom.byId(id), els: { select: dom.byId("select"), overlay: dom.byId("overlay") },
+    cssCol: () => "#fff", store: { get: (k, d) => (k === "garageTab" ? "livery" : d), set() {} },
+    arrToHex: () => "#112233", hexToArr: () => [0.1, 0.2, 0.3],
+    getTeamParts: () => ({}), saveTeamParts() {}, getLiveryId: () => "default", saveLiveryId() {},
+    getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => [], invalidateDecalTextures: null,
+    teamIdx: 1, driverIdx: 0, soundOn: false, careerOwned: () => false, unlimitedBudget: false,
+    peerSeats: () => [], teamSwatch: () => dom.document.createElement("span"),
+    setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
+  };
+  const sb = sandbox(dom, {
+    MutationObserver: class { constructor(cb) { this.cb = cb; observers.push(this); } observe(t, o) { this.target = t; this.opts = o; } },
+    Parts: { STAT_KEYS: [{ key: "speed", label: "SPEED" }], displayStat: (x) => x,
+             getMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), CATALOG: [], BUDGET: 780,
+             getCost: () => 0, isOptionAvailable: () => true, DEFAULTS: {}, getFactorySetup: () => ({}) },
+    Teams: { LIST: TEAMS, isReal: (t) => !!t && !t.custom && !t.legends }, Car3D: { FINISH_SURFACE: { satin: {}, chrome: {} } },
+    SetupTune: { FIELDS: [], RANGE: {}, get: () => ({ rideR: 60, rideF: 25, brakeBias: 56 }), set() {}, reset() {}, isDefault: () => true, mods: () => null, rake: () => 0 },
+    LiveryTex: { NUM_FONT_IDS: ["default", "block"], SPONSOR_PACK_IDS: ["default", "clean"] },
+    M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
+    PhysicsConsts: { WET_GRIP: { rain: [1, 1.2, 1.4] } },
+  });
+  vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: "js/garage/setup-sheet.js" });
+  return { dom, ui: sb.SetupUI.create(G), G, $: G.$, observers };
+}
+
+test("garage: the paint editor and its live-preview override die with the screen", () => {
+  const { dom, ui, G, $, observers } = loadSetupUi();
+  const mo = observers.find((o) => o.target === $("carsetup"));
+  assert.ok(mo, "SetupUI watches #carsetup's hidden attribute");
+  assert.deepEqual([...mo.opts.attributeFilter], ["hidden"]);   // spread: the VM's Array is another realm's
+
+  ui.openSetup();
+  assert.equal($("carsetup").hidden, false, "sheet is shown before / while building");
+  $("cs-options").querySelector(".cs-liv-create").onclick();          // + Create livery
+  assert.ok($("cs-options").querySelector(".cs-liv-editor"), "editor open");
+  assert.ok(G.livDraftOverride && G.livDraftOverride.teamId === "haas", "live preview override set");
+
+  $("carsetup").hidden = true;                                          // game.js leaveGarage()
+  mo.cb([]);
+  assert.equal(G.livDraftOverride, null, "the unsaved draft must not reach resolveLivery()");
+
+  empty(dom, "cs-options");
+  ui.buildSetup();
+  assert.equal($("cs-options").querySelector(".cs-liv-editor"), null, "next visit opens the swatch grid, not the editor");
+  assert.ok($("cs-options").classList.contains("cs-liv-grid"));
+});
+
+test("garage: Change Car shows the sheet with aria-busy before heavy buildSetup work", () => {
+  const rafQueue = [];
+  const dom = makeDom();
+  const g = {
+    $: (id) => dom.byId(id), els: { select: dom.byId("select"), overlay: dom.byId("overlay") },
+    cssCol: () => "#fff", store: { get: (k, d) => (k === "garageTab" ? "livery" : d), set() {} },
+    arrToHex: () => "#112233", hexToArr: () => [0.1, 0.2, 0.3],
+    getTeamParts: () => ({}), saveTeamParts() {}, getLiveryId: () => "default", saveLiveryId() {},
+    getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => [], invalidateDecalTextures: null,
+    teamIdx: 1, driverIdx: 0, soundOn: false, careerOwned: () => false, unlimitedBudget: false,
+    peerSeats: () => [], teamSwatch: () => dom.document.createElement("span"),
+    setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
+  };
+  const sb = sandbox(dom, {
+    requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
+    MutationObserver: class { constructor(cb) { this.cb = cb; } observe(t, o) { this.target = t; this.opts = o; } },
+    Parts: { STAT_KEYS: [{ key: "speed", label: "SPEED" }], displayStat: (x) => x,
+             getMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), CATALOG: [], BUDGET: 780,
+             getCost: () => 0, isOptionAvailable: () => true, DEFAULTS: {}, getFactorySetup: () => ({}) },
+    Teams: { LIST: TEAMS, isReal: (t) => !!t && !t.custom && !t.legends }, Car3D: { FINISH_SURFACE: { satin: {}, chrome: {} } },
+    SetupTune: { FIELDS: [], RANGE: {}, get: () => ({ rideR: 60, rideF: 25, brakeBias: 56 }), set() {}, reset() {}, isDefault: () => true, mods: () => null, rake: () => 0 },
+    LiveryTex: { NUM_FONT_IDS: ["default", "block"], SPONSOR_PACK_IDS: ["default", "clean"] },
+    M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
+    PhysicsConsts: { WET_GRIP: { rain: [1, 1.2, 1.4] } },
+  });
+  vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: "js/garage/setup-sheet.js" });
+  const deferred = sb.SetupUI.create(g);
+  dom.byId("select").hidden = false;
+  deferred.openSetup();
+  assert.equal(dom.byId("carsetup").hidden, false);
+  assert.equal(dom.byId("select").hidden, true);
+  assert.equal(dom.byId("carsetup").getAttribute("aria-busy"), "true");
+  assert.equal(g.setupPreviewOn, true);
+  assert.equal(dom.byId("cs-options").querySelector(".cs-liv-create"), null, "buildSetup has not run yet");
+  assert.ok(rafQueue.length >= 1);
+  const wave1 = rafQueue.splice(0, rafQueue.length); for (const fn of wave1) fn();
+  assert.ok(rafQueue.length >= 1);
+  const wave2 = rafQueue.splice(0, rafQueue.length); for (const fn of wave2) fn();
+  assert.equal(dom.byId("carsetup").getAttribute("aria-busy"), null);
+  assert.ok(dom.byId("cs-options").querySelector(".cs-liv-create"), "tabs built after the sheet painted");
+});
+
+test("garage: hiding the screen with no editor open is a no-op", () => {
+  const { ui, G, $, observers } = loadSetupUi();
+  const mo = observers.find((o) => o.target === $("carsetup"));
+  ui.openSetup();
+  $("carsetup").hidden = true;
+  mo.cb([]);
+  assert.equal(G.livDraftOverride, null);
+  assert.ok($("cs-options").classList.contains("cs-liv-grid"));
+});
+
+test("career hub: the round's brief is three pressable choices, with the taken one marked", () => {
+  const { ui, $ } = loadCareerUi({ career: hubCareer(), state: hubState(), objPick: 1 });
+  ui.openHub();
+  const picks = $("cr-left").querySelectorAll(".cr-obj-pick");
+  assert.equal(picks.length, 3, "one button per brief");
+  for (const b of picks) assert.equal(b.tagName, "BUTTON", "a line you can press must be a button");
+  const on = Array.from(picks).filter((b) => b.className.includes("on"));
+  assert.equal(on.length, 1, "exactly one brief is taken");
+  assert.equal(Array.from(picks).indexOf(on[0]), 1, "the one objectivePick() names");
+  assert.equal(on[0].getAttribute("aria-pressed"), "true");
+  assert.equal(picks[0].getAttribute("aria-pressed"), "false");
+});
+
+test("career hub: once the weekend is under way the brief is one line again", () => {
+  // Quali or a sprint has already decided part of what some briefs measure, so
+  // the hub must not offer a choice it would refuse.
+  const { ui, $ } = loadCareerUi({ career: hubCareer(), state: hubState(), objLocked: true });
+  ui.openHub();
+  assert.equal($("cr-left").querySelectorAll(".cr-obj-pick").length, 0, "no choosing");
+  assert.equal(texts($("cr-left"), ".cr-obj-line").length, 1, "the chosen brief, stated");
+});
+
+test("season setup: an APPLY that hits another tab's save reloads it, so the next APPLY can succeed", () => {
+  // The conflict note said "Reopen setup", but open() never reloads — the
+  // revision guard stayed tripped and every APPLY failed for ever.
+  let loads = 0;
+  let conflict = true;
+  const { ui, $, G } = loadSeasonUi(["a", "b"], {
+    applyConfig: () => (conflict ? { ok: false, season: null, reason: "conflict" }
+                                 : { ok: true, durable: true, season: { round: 0 } }),
+    load: () => { loads++; conflict = false; return { round: 3 }; },
+    hasProgress: (season) => !!(season && season.round),
+  });
+  ui.open();
+  $("ss-apply").onclick();
+  assert.equal(loads, 1, "the other tab's season was loaded");
+  assert.deepEqual({ ...G.season }, { round: 3 }, "…and adopted");
+  assert.match($("ss-note").textContent, /another tab — loaded the latest save/);
+  assert.equal($("ss-apply").textContent, "APPLY — RESTART SEASON", "repainted against ITS progress");
+  $("ss-apply").onclick();                       // armConfirm stub applies at once
+  assert.deepEqual({ ...G.season }, { round: 0 }, "the retry applies");
+});
+
+test("title SEASON door: refreshTitle writes the round into the label span and the accessible name, and reverts", () => {
+  // Since the title redesign the door is <svg/><span>SEASON<span class="mb-sub">…</span></span>;
+  // refreshTitle looked for a text node DIRECTLY in the button, found none and
+  // returned — the label read "SEASON" through a whole championship.
+  const shell = read("index.html");
+  assert.match(shell, /<button id="mb-season"[^>]*>(?:(?!<\/button>).)*<\/svg><span>SEASON <span class="mb-sub">A CHAMPIONSHIP, YOUR RULES<\/span><\/span><\/button>/s,
+    "the shell's door shape this test models");
+  let progress = true;
+  const { ui, $, G, dom } = loadSeasonUi(["a", "b"], { hasProgress: () => progress, rounds: () => 23 });
+  const btn = $("mb-season");
+  btn.setAttribute("aria-label", "Season — A championship, your rules");
+  const svg = dom.document.createElement("svg"), lab = dom.document.createElement("span"), sub = dom.document.createElement("span");
+  sub.className = "mb-sub"; sub.textContent = "A CHAMPIONSHIP, YOUR RULES";
+  const text = { nodeType: 3, nodeValue: "SEASON " };   // the trailing space separates label and sub-line
+  btn.appendChild(svg); btn.appendChild(lab); lab.appendChild(sub);
+  btn.childNodes = [svg, lab]; lab.childNodes = [text, sub];   // mini-dom has no text nodes: model the shell's
+  G.season = { round: 4 };
+  ui.refreshTitle();
+  assert.equal(text.nodeValue, "SEASON · R5 OF 23 ");
+  assert.deepEqual(lab.childNodes, [text, sub], "the .mb-sub line is kept");
+  assert.equal(sub.textContent, "A CHAMPIONSHIP, YOUR RULES");
+  assert.equal(btn.getAttribute("aria-label"), "Season · R5 of 23 — A championship, your rules");
+  progress = false;
+  ui.refreshTitle();
+  assert.equal(text.nodeValue, "SEASON ");
+  assert.equal(btn.getAttribute("aria-label"), "Season — A championship, your rules", "no progress: the shell's own name");
+});

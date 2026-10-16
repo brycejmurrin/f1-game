@@ -1,0 +1,8 @@
+{
+  "why": "Wave 6 — Okayama / TI Circuit Aida: 4-storey control tower (OIRC), pit garage run (superseded by engine pit complex — same as mosport/ estoril), A/B paddock club block. Dunlop bridge is overheadSpan (required at runtime; not a modelGroup so not listed here).",
+  "ids": [
+    "okayama-pit-garages",
+    "okayama-control-tower",
+    "okayama-paddock-block"
+  ]
+}

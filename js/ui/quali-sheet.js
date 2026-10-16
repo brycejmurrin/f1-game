@@ -1,0 +1,86 @@
+/* Apex 26 — the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. No timing, no ordering, no persistence — hand it `quali.rows()` and it paints. */
+const QualiSheet = (function () {
+  "use strict";
+
+const PODIUM = ["", " p1", " p2", " p3"];   // indexed by position; 4+ is ""
+
+function span(cls, text) {
+  const s = document.createElement("span");
+  s.className = cls;
+  if (text != null) s.textContent = text;
+  return s;
+}
+
+function create(G) {
+  Log.info("ui", "QualiSheet.create");
+  const { $ } = G;
+  // POLE to the thousandth, like the +0.123 gaps under it: G.fmtTime is the
+  // two-decimal HUD clock (js/game.js), and a classification printed 1:21.16
+  // over a +0.004 gap. Dom.fmtLap is the timing-sheet formatter.
+  const poleClock = (t) => (typeof Dom !== "undefined" && Dom.fmtLap ? Dom.fmtLap(t, "-") : G.fmtTime(t));
+
+  // Paint `rows` (the model's classification, car refs already dropped) into
+  // #q-table and retitle. null rows clear the table — the sheet opening on an
+  // empty model is legitimate (nothing simulated yet).
+  function build(rows) {
+    const body = $("q-table");
+    if (!body) return;
+    body.textContent = "";
+    if (!rows) return;
+    for (const r of rows) {
+      const team = Teams.LIST.find((t) => t.id === r.team);
+      const row = document.createElement("div");
+      // A rival's DRIVEN lap (r.human: a real time substituted for a simulated
+      // one) is marked — on a sheet whose whole job is "who was quick", which
+      // times are real is the one thing it must not leave out. `you` still
+      // marks the local player.
+      const driven = r.human && !r.isPlayer ? " q-real" : "";
+      row.className = `res-row${PODIUM[r.pos] || ""}${r.isPlayer ? " you" : ""}${driven}`;
+      const sw = span("res-swatch");
+      sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);
+      const nm = span("res-name", `${r.code}  ${r.name}`);
+      if (driven) nm.appendChild(span("q-real-tag", " DRIVEN"));
+      const tm = span("res-pts q-time", r.noTime ? "NO TIME" : r.pos === 1 ? poleClock(r.t) : `+${r.gap.toFixed(3)}`);
+      row.append(span("res-pos", r.pos), sw, nm, tm);
+      body.appendChild(row);
+    }
+    const title = $("q-title");
+    if (title) {
+      const you = rows.find((r) => r.isPlayer);
+      const name = G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.qualiLabel ? SeasonCal.qualiLabel(G.season) : "QUALIFYING";
+      title.textContent = you ? `${name} — P${you.pos}` : name;
+    }
+    // LICENCE BADGES: a DRIVEN pole only — a simulated time for a player who
+    // never ran a lap is not one (js/career/badges.js).
+    // The banner toast is hidden behind this sheet, so the unlock is a card on
+    // it, kept across rebuilds until the sheet closes.
+    const me = rows.find((r) => r.isPlayer);
+    if (me && me.pos === 1 && me.human && typeof Badges !== "undefined" && Badges.onPole().length) poleNew = true;
+    if (poleNew) {
+      const card = document.createElement("div"); card.className = "res-personal";
+      card.setAttribute("role", "status");
+      const head = document.createElement("strong"); head.textContent = "BADGE UNLOCKED";
+      card.append(head, span("", Badges.labelOf("pole")));
+      body.appendChild(card);
+    }
+  }
+  let poleNew = false;
+
+  function open(rows) {
+    Log.info("ui", "QualiSheet.open");
+    build(rows);
+    $("quali").hidden = false;
+    ScrollFade.refresh();
+  }
+  function close() {
+    Log.info("ui", "QualiSheet.close");
+    $("quali").hidden = true;
+    poleNew = false;
+  }
+
+  return { build, open, close };
+}
+
+return { create };
+})();
+Object.freeze(QualiSheet);

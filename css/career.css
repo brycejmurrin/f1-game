@@ -1,0 +1,954 @@
+@layer components {
+/* Apex 26 — the CAREER screen (#career): new-career setup and the season hub.
+
+   Structure is the shared vocabulary from css/components.css — this file only
+   styles what is genuinely new:
+
+     #career    .screen      — full-viewport page (NOT .dim: it replaces #select)
+     #cr-inner  .sheet       — head / body / foot; also the `sheet` query container
+     #cr-body   .sheet-body  — holds the two scroll regions
+     #cr-left   .pane        — contract + car    (scrolls, gets the scroll fade)
+     #cr-right  .pane        — calendar + championship
+
+   DENSITY comes from the tokens (--pad/--gap/--tap/--label); nothing here
+   hard-codes a padding a short phone would need to change. LAYOUT is decided by
+   a @container query on the sheet: one scrolling column when narrow, two columns
+   when there is room. Same reasoning as #select — and the same trap, so the same
+   fix: a .pane nested in a narrow flex column has nothing to size it and
+   collapses to a sliver, so when narrow the BODY becomes the scroller and the
+   panes go back to being ordinary blocks.
+
+   Championship rows deliberately reuse .res-row/.res-pos/.res-swatch/.res-name/
+   .res-pts from css/components.css, and the calendar rows reuse
+   .season-upcoming-row from css/menus.css — a standings table should not look
+   like a different game depending on which screen it is on. */
+
+#career {
+  z-index: 25;
+  background:
+    radial-gradient(120% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 12%, transparent), transparent 58%),
+    var(--scrim);
+}
+@media (prefers-reduced-transparency: reduce) {
+  #career { background: var(--scrim-heavy); }
+}
+#cr-inner { --sheet-w: 1020px; --fit-at: 300px; --compact-at: 480px; }
+#cr-inner:not([data-shape="tall"]) { --fit-at: 220px; }
+
+/* ---------- head ---------- */
+/* Title | meters on one row; the experience nav is a full-width strip under
+   them so five chips cannot wrap into the stats or crowd CAREER 2026 (apex8
+   ~500). */
+#cr-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--gap);
+  row-gap: var(--gap);
+}
+#cr-titlebar { display: flex; flex-direction: column; gap: 2px; min-width: 0; grid-column: 1; }
+#cr-header [data-career-nav],
+#cr-header [data-career-part="nav"] { grid-column: 1 / -1; }
+#cr-sub {
+  font-size: var(--label); letter-spacing: var(--ls-5); font-weight: 700;
+  color: var(--dim); text-transform: uppercase;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The three numbers that describe a career at a glance. They push to the right of
+   the title and wrap under it rather than squeezing the team name. */
+#cr-meters { display: flex; flex-wrap: wrap; gap: var(--gap); grid-column: 2; margin-left: 0; }
+@container sheet (max-width: 640px) {
+  #cr-header { grid-template-columns: minmax(0, 1fr); }
+  #cr-meters {
+    grid-column: 1; width: 100%;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  #cr-meters .cr-meter { text-align: start; }
+}
+.cr-meter { display: flex; flex-direction: column; gap: 1px; text-align: right; }
+.cr-meter-lbl { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--dim); }
+.cr-meter-val { font-family: var(--font-hud); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* ---------- body ---------- */
+/* THE STACKED LAYOUT, and it must be gated on `:not([data-pair="on"])` — see the
+   `.pane-pair` contract in css/components.css. An ungated `#cr-body` rule is
+   (1,0,0) and beats the primitive's (0,3,0), which leaves a flex column laid out
+   inside two grid tracks. Gated on `:not(... "on")` rather than `[data-pair="off"]`
+   so an unmeasured sheet — first frame, or no script at all — still stacks. */
+#cr-inner:not([data-pair="on"]) > #cr-body {
+  display: flex; flex-direction: column; gap: var(--gap);
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior-y: contain; scrollbar-gutter: stable; touch-action: pan-y;
+}
+#cr-inner:not([data-pair="on"]) #cr-left,
+#cr-inner:not([data-pair="on"]) #cr-right { overflow: visible; flex: 0 0 auto; }
+/* Two columns once there is room — and the FOOT belongs to the LEFT column only,
+   exactly as #select does it (css/menus.css). Without that, a full-width action
+   bar sits on top of the right column and clips the calendar mid-row: the first
+   build of this screen cut UPCOMING off behind GO RACING. #cr-body goes
+   `display: contents` so its two panes become grid items of the sheet itself,
+   which lets the right column span the body row AND the foot row and use the
+   sheet's whole height for scrolling.
+   The columns are declared on the sheet UNCONDITIONALLY, because a @container
+   rule cannot style the element that establishes the container — #cr-inner IS
+   the `sheet` container, so a @container block targeting it never applies. */
+/* The columns, the spans and the foot placement all come from `.pane-pair`
+   (css/components.css) now — the shared list-detail primitive that #select and
+   #carsetup also use. Only the numbers that are this screen's are left. */
+#cr-inner {
+  --pair-at: 620px;
+  --pair-split: minmax(0, 1fr);
+  --pair-main: minmax(0, 1.05fr);
+  --pair-gap: calc(var(--pad) * 0.9);
+  --pair-compact: off;
+}
+
+/* Keyed on the ATTRIBUTE, not on a second copy of the 620px threshold. Two
+   sources of truth for "are the panes split" can disagree for a frame — the
+   container query applies the instant a screen is shown, `data-pair` waits on a
+   ResizeObserver callback — and in that window a screen gets half of each
+   layout. The garage lost five category buttons off the bottom of its sheet
+   exactly that way. Only what is true WHEN THE PANES SPLIT lives here. */
+#cr-inner[data-pair="on"] #cr-left {
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
+  border-right: 1px solid var(--card-line);
+  padding: calc(var(--pad) * 0.25) calc(var(--pad) * 0.6) 0 var(--pad);
+}
+#cr-inner[data-pair="on"] #cr-right {
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
+  padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5) 0;
+}
+/* One themed thumb (.sf-scroll::before, --accent). Native gutter + grey
+   overlay stacked a second indicator beside the red bar on NEW CAREER. */
+#cr-inner[data-pair="on"] #cr-left,
+#cr-inner[data-pair="on"] #cr-right,
+#cr-inner:not([data-pair="on"]) > #cr-body {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+#cr-inner[data-pair="on"] #cr-left::-webkit-scrollbar,
+#cr-inner[data-pair="on"] #cr-right::-webkit-scrollbar,
+#cr-inner:not([data-pair="on"]) > #cr-body::-webkit-scrollbar {
+  display: none;
+}
+/* The action bar sits under the left column; border-right continues the column
+   divider to the sheet floor so the two columns read as one clean split. */
+#cr-inner[data-pair="on"] > .sheet-foot {
+  border-right: 1px solid var(--card-line);
+}
+/* CAREER MODES: BACK is the only foot action — pin it across both columns.
+   The in-career hub keeps a left-only foot so GO RACING cannot clip UPCOMING. */
+#cr-inner[data-pair="on"]:has(#cr-left .cr-slot):has(#cr-right .cr-slot) > .sheet-foot {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  border-right: 0;
+  padding-right: var(--pad);
+}
+#cr-inner[data-pair="on"]:has(#cr-left .cr-slot):has(#cr-right .cr-slot) #cr-right {
+  grid-row: 2;
+}
+
+/* ---------- SCREEN LOOKS: the CAREER fold (SETTINGS › APPEARANCE) ----------
+   js/ui/screen-looks.js stamps <html> only while a knob is off its default, so
+   with none set every rule below is inert and the screen is the shipped one.
+   Width, density, buttons, corners, backdrop and headings are the shared core
+   knobs in css/responsive.css; only the pair geometry, which is this screen's,
+   lives here. Each rule is led by `:root[...]` so it outweighs the shipped
+   `#cr-inner…` rule it adjusts by specificity, not by source order.
+
+   COLUMNS feeds the two numbers js/ui/sheet-shape.js classifyPair() reads off
+   the sheet — nothing here sets `data-pair` itself, so the stacked/paired CSS
+   above stays the single answer. SPLIT: `--pair-at: 1px` (0 or empty would mean
+   "no pair attribute at all") so any width pairs, and `--pair-compact: on` so a
+   compact sheet keeps reading --pair-at instead of being forced to stack.
+   STACKED: a threshold no sheet reaches. The engine reclassifies on change. */
+:root[data-look-career-layout="split"] #cr-inner { --pair-at: 1px; --pair-compact: on; }
+:root[data-look-career-layout="stacked"] #cr-inner { --pair-at: 99999px; }
+
+/* COLUMN ORDER: SWAPPED mirrors the pair — the calendar/championship pane takes
+   the left track and the contract pane, with the action bar still under it as
+   `.pane-pair` places it, takes the right. The tracks swap too, so each pane
+   keeps its shipped share (1.05fr for the main pane), and the divider and the
+   outer-edge padding move to the facing edges. Placement is grid-column only, so
+   DRIVER CAREER and MY TEAM (one markup, js/career/career-ui.js) both follow,
+   and the stacked layout is untouched: there is no side to swap. */
+:root[data-look-career-side="swapped"] #cr-inner[data-pair="on"] {
+  --pair-split: minmax(0, 1.05fr);
+  --pair-main: minmax(0, 1fr);
+}
+:root[data-look-career-side="swapped"] #cr-inner[data-pair="on"] #cr-left {
+  grid-column: 2;
+  border-right: 0;
+  border-left: 1px solid var(--card-line);
+  padding: calc(var(--pad) * 0.25) var(--pad) 0 calc(var(--pad) * 0.6);
+}
+:root[data-look-career-side="swapped"] #cr-inner[data-pair="on"] #cr-right {
+  grid-column: 1;
+  padding: calc(var(--pad) * 0.25) 0 calc(var(--pad) * 0.5) var(--pad);
+}
+:root[data-look-career-side="swapped"] #cr-inner[data-pair="on"] > .sheet-foot {
+  grid-column: 2;
+  border-right: 0;
+  border-left: 1px solid var(--card-line);
+}
+:root[data-look-career-side="swapped"] #cr-inner[data-pair="on"]:has(#cr-left .cr-slot):has(#cr-right .cr-slot) > .sheet-foot {
+  grid-column: 1 / -1;
+  border-left: 0;
+}
+:root[data-look-career-side="swapped"] #cr-inner[data-pair="on"]:has(#cr-left .cr-slot):has(#cr-right .cr-slot) #cr-right {
+  grid-row: 2;
+}
+
+/* LEFT COLUMN is the VISUAL left track, whichever pane COLUMN ORDER put there,
+   so the slider means what its label says in both orders. The token is a
+   percent of the sheet ("40%"); the right track takes what is left after the
+   gutter as 1fr, so the two can never overflow the sheet. Declared after the
+   swapped tracks at the same weight, so a custom width wins in both orders. */
+:root[data-look-career-split] #cr-inner[data-pair="on"] {
+  --pair-split: minmax(0, var(--look-career-split, 49%));
+  --pair-main: minmax(0, 1fr);
+}
+
+/* SHORT SHEET: `--pair-compact: off` stacks this sheet so #cr-body is the
+   scroller. Measured 852×393 @115%: pair-on left SLOT 3 and the guide CTAs
+   ~83px past #cr-inner. */
+/* Modes picker: DRIVER | MY TEAM side by side on any WIDE stacked sheet.
+   Compact-wide used to stack (we hid the unused column) and wasted the
+   axis there is plenty of; two-up + a two-line note clamp fits SLOT 1–3
+   in both columns. Tall stays one column — width is the scarce axis.
+   Hub (no .cr-slot in both panes) stays one column either way. */
+#cr-inner:not([data-pair="on"]):not([data-shape="tall"]):has(#cr-left .cr-slot):has(#cr-right .cr-slot) > #cr-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: start;
+}
+#cr-inner[data-density="compact"] .cr-slot { margin-bottom: 4px; }
+#cr-inner[data-density="compact"] .cr-slot-main {
+  padding: calc(var(--pad) * 0.35); gap: 2px;
+  min-height: max(36px, var(--tap-min));
+}
+#cr-inner:is([data-density="compact"], [data-shape="tall"]) :is(#cr-left, #cr-right) > .sel-label:first-child + .cr-note {
+  margin-bottom: 4px; font-size: var(--fs-2); line-height: 1.35;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+#cr-inner:is([data-density="compact"], [data-shape="tall"]) .cr-slot > .cr-note,
+#cr-inner:is([data-density="compact"], [data-shape="tall"]) :is(#cr-left, #cr-right) > .sel-label:not(:first-child) + .cr-note {
+  display: block; overflow: visible;
+  -webkit-line-clamp: unset; -webkit-box-orient: unset;
+}
+#cr-inner[data-density="compact"] .cr-record {
+  padding: calc(var(--pad) * 0.45); gap: 2px;
+}
+#cr-inner[data-density="compact"] .cr-record-line { display: none; }
+#cr-inner[data-density="compact"] #cr-header {
+  grid-template-columns: minmax(0, 1fr); gap: var(--gap);
+}
+#cr-inner[data-density="compact"] #cr-titlebar {
+  grid-column: 1; flex-direction: row; align-items: center; gap: var(--gap);
+}
+#cr-inner[data-density="compact"] #cr-sub {
+  flex: 1 1 180px; min-width: 0;
+  font-size: var(--fs-micro); line-height: 1.2;
+  white-space: normal; overflow: visible; text-overflow: clip;
+}
+#cr-inner[data-density="compact"] #cr-meters {
+  grid-column: 1; width: 100%; margin-left: 0; display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap);
+}
+/* Label and value on ONE line: stacked they cost ~18px of a 306px sheet. */
+#cr-inner[data-density="compact"] .cr-meter {
+  text-align: center; flex-direction: row; align-items: baseline;
+  justify-content: center; gap: 0.5em;
+}
+#cr-inner[data-density="compact"] .cr-meter-lbl {
+  font-size: var(--fs-micro);
+}
+#cr-inner[data-density="compact"] .cr-meter-val {
+  font-size: var(--fs-micro);
+}
+
+/* Section headings reuse .sel-label (css/components.css) — same dim uppercase
+   text and skewed red tick as #select and the garage. Only the rhythm between a
+   heading and the block above it is career-specific. */
+#cr-left .sel-label, #cr-right .sel-label { margin-top: var(--gap); }
+#cr-left > .sel-label:first-child, #cr-right > .sel-label:first-child { margin-top: 0; }
+.cr-note { font-size: var(--fs-2); line-height: 1.45; color: var(--dim); margin-bottom: 8px; }
+
+/* ---------- cards ---------- */
+/* THE PRESSABLE-CARD CORE, once. Five card classes wrote the same surface
+   trio byte for byte, and the five pressable ones the same button-undo
+   quintet; each class below keeps only its own layout. The record card is
+   not in the surface list because its markup composes it with the card
+   class and inherits the surface there. */
+.cr-card, .cr-flavour, .cr-teamtile, .cr-seat, .co-offer {
+  background: var(--surf-1); border: 1px solid var(--card-line); border-radius: var(--r-sm);
+}
+.cr-flavour, .cr-teamtile, .cr-seat, .co-offer, .cr-record {
+  min-height: var(--tap); text-align: left;
+  color: inherit; font: inherit; cursor: pointer;
+}
+.cr-teamtile, .cr-seat { padding: 8px calc(var(--pad) * 0.6); }
+.cr-card {
+  padding: calc(var(--pad) * 0.7); display: flex; flex-direction: column; gap: 5px;
+}
+.cr-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--gap); font-size: var(--fs-2); }
+.cr-row-k { color: var(--dim); }
+.cr-row-v { font-family: var(--font-hud); font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+
+/* The round's brief. It is the one line on the hub that changes between visits,
+   so it gets its own weight instead of being a .cr-row value — right-aligned in a
+   key/value pair, "Clean race — no track limits, no penalty" wraps into a ragged
+   column and reads as an afterthought. */
+.cr-obj-line {
+  font-size: var(--fs-2); font-weight: 700; font-style: italic; line-height: 1.35;
+  padding-bottom: 4px; border-bottom: 1px solid var(--card-line);
+}
+
+/* The three briefs to choose between. Buttons, not rows: the whole point is
+   that one of them is a decision the player makes, and a line you can press has
+   to look like one. The chosen brief keeps the .cr-obj-line weight so the card
+   reads the same as it did when the brief was dealt; the other two recede. */
+/* --tap-paint floor: layout-audit 2026-10-05 ios-iphone-landscape measured
+   each .cr-obj-pick at 548×32 / 666×32 — soft under the 52 touch floor.
+   Padding alone sized the row; --tap-paint holds 52 painted on touch and
+   stays --tap-min with a mouse (css/tokens.css). */
+.cr-obj-pick {
+  display: block; width: 100%; text-align: left;
+  font: inherit; font-size: var(--fs-2); font-style: italic; font-weight: 600;
+  color: var(--dim); background: none; border: 0;
+  border-bottom: 1px solid var(--card-line);
+  min-height: var(--tap-paint);
+  padding-block: calc(var(--gap) / 2); cursor: pointer; line-height: 1.35;
+  box-sizing: border-box;
+}
+.cr-obj-pick.on { color: var(--text); font-weight: 700; }
+.cr-obj-pick.on::before { content: "\25B8  "; color: var(--red); }
+.cr-obj-pick:not(.on)::before { content: "\00a0\00a0\00a0"; }
+/* Pointer only, with an :active twin for touch: a tap leaves :hover stuck on iOS
+   (the css/tokens.css policy phone-touch-surface enforces). */
+@media (hover: hover) and (pointer: fine) {
+  .cr-obj-pick:hover:not(.on) { color: var(--text); }
+}
+.cr-obj-pick:active:not(.on) { color: var(--text); }
+.cr-obj-pick:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+
+.cr-nextrace { align-items: flex-start; gap: 2px; }
+.cr-nr-round { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--red); font-weight: 800; }
+.cr-nr-name { font-size: 18px; font-weight: 800; font-style: italic; }
+.cr-nr-country { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); }
+
+/* ---------- new-career setup ---------- */
+.cr-flavours { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
+.sheet[data-shape="wide"] .cr-flavours { grid-template-columns: 1fr 1fr; }
+.cr-flavour {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: calc(var(--pad) * 0.7);
+}
+/* Selection reuses the .sel-chip.active / .team-tile.active treatment: an inset
+   red rule plus a red wash and glow. A border-colour swap alone reads as noise
+   at a glance — the first build of this screen looked like nothing was picked. */
+.cr-flavour.active, .cr-teamtile.active, .cr-seat.active {
+  border-color: var(--red);
+  background: var(--plate-on-strong);
+  box-shadow: inset 0 0 0 2px var(--red), var(--lift-sel);
+}
+.cr-flavour.active .cr-flavour-blurb,
+.cr-teamtile.active .cr-teamtile-meta,
+.cr-seat.active .cr-seat-who { color: color-mix(in oklab, var(--text) 82%, transparent); }
+.cr-flavour-name { font-size: 14px; font-weight: 800; font-style: italic; letter-spacing: var(--ls-3); }
+.cr-flavour-blurb { font-size: var(--fs-micro); line-height: 1.4; color: var(--dim); }
+
+.cr-teamgrid { display: grid; gap: 6px; grid-template-columns: 1fr; }
+.sheet[data-shape="wide"] .cr-teamgrid { grid-template-columns: 1fr 1fr; }
+.cr-teamtile {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto;
+  column-gap: 8px; align-items: center;
+}
+
+.cr-teamtile-sw { grid-row: 1 / 3; width: 10px; height: 30px; border-radius: 2px; border: 2px solid transparent; }
+.cr-teamtile-name { font-size: var(--fs-2); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#cr-inner[data-density="compact"] .cr-teamtile-name {
+  white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
+}
+.cr-teamtile-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-2); }
+
+.cr-form { display: flex; flex-direction: column; gap: 8px; }
+.cr-field { display: flex; align-items: center; gap: var(--gap); }
+.cr-field-lbl { font-size: var(--label); letter-spacing: var(--ls-4); color: var(--dim); width: 78px; flex: 0 0 auto; }
+.cr-input {
+  flex: 1 1 auto; min-width: 0; min-height: var(--chip-h);
+  background: var(--surf-1); border: 1px solid var(--card-line); border-radius: var(--r-sm);
+  color: inherit; font: inherit; font-weight: 700; padding: 0 10px;
+}
+/* No focus-ring override here: the tokens.css base ring applies (white, inset —
+   red measures ~2.6:1 on this page, under the 3:1 WCAG 1.4.11 floor, and an
+   outset ring gets clipped by the .pane scrollers this input sits inside). */
+
+.cr-seats { display: flex; flex-wrap: wrap; gap: 6px; }
+.cr-seat {
+  flex: 1 1 140px; display: flex; flex-direction: column; gap: 2px;
+}
+
+.cr-seat-role { font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); }
+.cr-seat-who { font-size: var(--fs-micro); color: var(--dim); }
+
+/* ---------- foot ---------- */
+/* GO is the primary action and keeps full weight; MAIN MENU and GARAGE are the
+   half-height `alt minibtn` pair, so the row reads as one action plus two exits. */
+/* Buttons pack LEFT, like #select's BACK/START. The primary used to be pushed to
+   the far end with margin-left:auto, which ran it under the column divider the
+   foot sits inside and clipped it. Sizing comes from the shared
+   `.sheet-foot .bigbtn` rule; only the wrap and the divider inset are new. */
+#cr-foot { flex-wrap: wrap; padding-right: calc(var(--pad) * 0.9); }
+/* Exits stay half-weight on EVERY density — .sheet-foot .bigbtn was promoting
+   MAIN MENU / GARAGE to the same type rung as GO RACING on roomy sheets. */
+/* --tap-paint, not --tap-min: in portrait (393x659, layout-audit 2026-10-05)
+   MAIN MENU painted 326x46 — 36 x 1.09 + padding, under the 52 touch floor.
+   --tap-paint is 52 painted on touch and --tap-min with a mouse, so the 36
+   arm still sets the half-weight look on desktop (css/tokens.css). */
+#cr-inner #cr-foot .bigbtn.alt {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-1);
+  min-height: max(36px, var(--tap-paint));
+  padding: calc(var(--gap) * 0.8) calc(var(--gap) * 0.95) calc(var(--gap) * 0.8) calc(var(--gap) * 1.1);
+  flex: 1 1 auto;
+}
+#cr-inner #cr-foot #cr-go {
+  flex: 1 1 auto;
+  letter-spacing: 0.06em;
+}
+#cr-inner[data-density="compact"] #cr-foot {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+/* A full touch target, not --tap-min: GO RACING is the hub's primary action,
+   and --tap-min painted MAIN MENU / GARAGE / GO RACING at 187x26 on the
+   landscape iPhone (734x343, layout-audit 2026-10-05) — half the 52 the
+   garage's own BACK / CLOSE GARAGE get one screen over. The height comes back
+   from the meters (one line each, above). #919 raised this to --tap, which
+   paints 56.7 at the default and 104 at UI SIZE 200%; merged to --tap-paint,
+   which paints 52 on touch at every UI SIZE and stays --tap-min with a mouse
+   (css/tokens.css), so the foot keeps one row. */
+#cr-inner[data-density="compact"] #cr-foot .bigbtn {
+  width: 100%; min-width: 0; min-height: var(--tap-paint);
+  padding-block: 0; font-size: var(--fs-micro);
+}
+/* SAVE / LOAD CAREER FILE and PROTECT LOCAL SAVES are plain <button>s
+   (js/ui/settings-export.js careerRow) sized only by the base 10px padding:
+   51 tall on a landscape iPhone (layout-audit 2026-10-05), a pixel under the
+   touch floor. Every density — the padding is the same everywhere.
+   .sel-edit-row wraps: arming LOAD to "… — OVERWRITE CAREER SAVES?" jumped
+   the plate to a new row and below the fold. Stack + a reserved two-line
+   height keeps the confirm under the pointer with no reflow. */
+#cr-career-file {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: var(--gap);
+}
+#cr-career-file > button {
+  width: 100%;
+  flex: 0 0 auto;
+  min-height: var(--tap-paint);
+  box-sizing: border-box;
+  font: inherit;
+  font-size: var(--fs-micro);
+  font-weight: 800;
+  letter-spacing: var(--ls-4);
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-pill);
+}
+#cr-career-load {
+  min-height: calc(var(--tap-paint) * 2);
+  height: calc(var(--tap-paint) * 2);
+  white-space: normal;
+  line-height: 1.15;
+}
+#cr-inner[data-density="compact"] #cr-meters {
+  margin-left: 0;
+  width: 100%;
+  justify-content: space-around;
+}
+
+/* ---------- end of season (#career-offers) ---------- */
+/* A .dim top-layer <dialog> over #career (z-index 25), the same relationship
+   #quali has to the screen that opened it — the hub is still where you are,
+   this is the decision on top of it (showModal() stacks it; no z-index needed,
+   like #results/#standings, the other "the session is over" sheets).
+   The summary card is a plain .cr-card and the headings are .sel-label: nothing
+   here needs a vocabulary of its own, only the offer rows are new. */
+#career-offers { --sheet-w: 760px; --fit-at: 300px; }
+
+/* An offer is a TILE, not a list row: it is a commitment of one to three seasons
+   and the tap target has to say so. Same grid as .cr-teamtile — colour bar, name,
+   meta under it — plus a STAY/MOVE tag, which is the thing a player actually scans
+   for. Selection state is deliberately absent: clicking one signs it, there is no
+   in-between state to show. */
+.co-offer {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto; column-gap: 10px; align-items: center;
+  width: 100%; margin-bottom: 6px;
+  padding: 10px calc(var(--pad) * 0.6);
+}
+/* :hover gated per the tokens.css policy (a tap sticks :hover on iOS);
+   :focus-visible stays outside the gate so keyboard focus works everywhere.
+   The record card shares the pair — the two are the same gesture. */
+@media (hover: hover) and (pointer: fine) {
+  .co-offer:hover, .cr-record:hover { border-color: var(--red); background: var(--plate-on); }
+}
+.co-offer:focus-visible, .cr-record:focus-visible { border-color: var(--red); background: var(--plate-on); }
+.co-offer-sw { grid-row: 1 / 3; width: 10px; height: 34px; border-radius: 2px; border: 2px solid transparent; }
+.co-offer-team { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-offer-terms { grid-column: 2 / 4; font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-2); }
+/* MOVE is the red one: leaving is the decision with consequences (a new works car,
+   a garage reseeded), staying is the safe default and reads as such. */
+.co-offer-tag {
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
+  padding: 2px 6px; border-radius: var(--r-pill);
+  background: var(--red); color: #fff;
+}
+.co-offer.staying .co-offer-tag { background: rgba(255, 255, 255, 0.14); color: var(--dim); }
+
+/* ---------- career history (#career-history) ---------- */
+/* Same relationship to the hub as #career-offers: a .dim modal laid over it, at
+   the same z-index because only one of the two is ever open. Narrower than the
+   offers sheet — a totals card and a column of season rows are both short lines,
+   and a wide sheet would strand the points column half a screen from the year. */
+#career-history { --sheet-w: 760px; --fit-at: 300px; }
+
+/* The way in, at the foot of the hub's left column. A .cr-card that happens to
+   be a button: the surface rides the card class, the button-undo quintet rides
+   the shared pressable rule above, and its hover/focus pair is merged onto
+   .co-offer's — the two are the same gesture (a card you press). */
+.cr-record { width: 100%; gap: 4px; }
+.cr-record-line { font-size: var(--fs-2); font-weight: 700; font-variant-numeric: tabular-nums; }
+/* The affordance line: dim, tracked-out and red, so the card reads as a door
+   rather than one more read-only summary in a column full of them. */
+.cr-record-cta {
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5); color: var(--red);
+}
+
+/* The position column carries a "P" here, unlike the championship block on the
+   hub where the same component numbers rows 1..5 — these rows are sorted by YEAR,
+   so a bare figure would read as an index instead of a title finish. */
+#ch-body .res-pos { width: 32px; }
+
+/* ---------- qualifying (#quali) ---------- */
+/* A .dim modal, unlike #career — it lays over whatever screen sent you here and
+   the session behind it is still the thing you are in. Rows are the shared
+   .res-row vocabulary from css/components.css; the only new part is the time
+   column, which needs tabular figures so the gaps line up as a column of
+   numbers rather than drifting with the glyph widths. */
+#quali { --sheet-w: 760px; --fit-at: 300px; }
+#q-body { min-height: 0; }
+.q-time { font-family: var(--font-hud); font-variant-numeric: tabular-nums; letter-spacing: var(--ls-1); }
+/* Pole gets the absolute lap time and everyone else a gap, so the two read
+   differently on purpose — the gaps are dimmed to keep the eye on the leader. */
+.res-row:not(.p1) .q-time { color: var(--dim); }
+.res-row.you .q-time { color: inherit; font-weight: 800; }
+/* A lap somebody actually DROVE, as opposed to one the model produced. Only
+   ever set on another human — your own row is already marked `you`. The tag
+   carries the meaning and the tint only reinforces it, because a colour on its
+   own says nothing to a player who cannot distinguish it. */
+.res-row.q-real .res-name { color: #7CFC7C; }
+.res-row.q-real .q-real-tag {
+  margin-left: 0.5em;
+  font-size: 0.62rem;
+  letter-spacing: var(--ls-4);
+  opacity: 0.75;
+}
+
+#q-foot { display: flex; flex-wrap: wrap; gap: var(--gap); align-items: center; }
+/* The pre-session state offers DRIVE or SIMULATE; the post-session state has a
+   classification and only TO THE GRID. JS flips this class rather than rebuilding
+   the foot, so focus is never yanked out from under a keyboard user. */
+#quali.q-done #q-drive, #quali.q-done #q-sim, #quali.q-done #q-back { display: none; }
+/* BACK stays after the session, relabelled MENU by JS: solo it is the only way out but TO THE GRID,
+   and in a friend race the way out of a rival who never posts. */
+#quali.q-done #q-foot #q-back { display: block; }
+#quali:not(.q-done) #q-go { display: none; }
+/* NOTE: a stray `}` here used to close `@layer components` early, leaving
+   everything below — the slot picker, sponsors, the facility, extra funds —
+   UNLAYERED, and unlayered rules outrank every layer in the project.
+   See tests/unit/css-layers.test.mjs. */
+
+/* ---------- the slot picker ---------- */
+/* Three careers can be live at once (Career.SLOTS). Each row is a CARD YOU PRESS
+   plus a DELETE beside it, laid out as a grid rather than a flex row so the
+   delete button keeps a fixed column and the summaries stay left-aligned with
+   each other whatever they contain. Same surface and radius as .cr-card, because
+   a slot is one more card in a column full of them — it just happens to be the
+   one that changes which career you are in. */
+.cr-slot {
+  /* Full-width summary, then EXPORT / IMPORT / DELETE as a tap-tall row.
+     Side-by-side autos cramped SLOT 1's copy into a sliver (apex8). */
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch; gap: 6px; margin-bottom: 6px;
+}
+.cr-slot-main {
+  grid-column: 1 / -1;
+  display: flex; flex-direction: column; gap: 3px;
+  text-align: left; cursor: pointer; color: inherit; font: inherit;
+  min-height: var(--tap); padding: calc(var(--pad) * 0.5);
+  background: var(--surf-1); border: 1px solid var(--card-line);
+  border-radius: var(--r-sm);
+  transition: border-color 0.15s, background 0.15s;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cr-slot-main:hover { border-color: var(--red); background: var(--plate-on); }
+}
+.cr-slot-main:focus-visible {
+  border-color: var(--red); background: var(--plate-on);
+}
+/* An EMPTY slot is an invitation, not a result: dashed edge and dimmed text, so
+   a column of three reads at a glance as "one career and two openings" without
+   having to compare their contents. */
+.cr-slot.empty .cr-slot-main {
+  border-style: dashed;
+  border-color: color-mix(in oklab, var(--spark) 32%, var(--card-line));
+}
+.cr-slot.empty .cr-slot-who { color: var(--dim); }
+.cr-slot.empty .cr-slot-meta {
+  color: color-mix(in oklab, var(--spark) 55%, var(--dim));
+}
+/* The career you are IN keeps the red edge permanently — after a switch, "which
+   one am I in" has to be answerable without pressing anything. */
+.cr-slot.active .cr-slot-main {
+  border-color: var(--red);
+  background: var(--plate-on);
+  box-shadow: var(--lift-sel);
+}
+.cr-slot-n {
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5); color: var(--red);
+}
+.cr-slot-who {
+  font-size: var(--fs-2); font-weight: 700; letter-spacing: var(--ls-1);
+  /* An uppercased 22-char MY TEAM save name is one unbreakable token against
+     the fixed-width DELETE beside it — same clip family as .res-name. */
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cr-slot-meta {
+  font-size: var(--fs-micro); color: var(--dim); font-variant-numeric: tabular-nums;
+}
+/* DELETE is deliberately quiet until it is armed. The first press turns it red
+   and relabels it DELETE?, which is the whole confirmation — a modal for this
+   would be a screen, and a single-tap delete would be unforgivable.
+   [data-cr-act] is EXPORT / IMPORT on the same card: same quiet chrome, no new
+   class token (cssClasses ratchet), and .cr-slot-del stays DELETE-only so
+   career.spec.js's `.cr-slot .cr-slot-del` stays a single match. */
+.cr-slot > .cr-note { grid-column: 1 / -1; }
+.cr-slot-del,
+[data-cr-act] {
+  min-width: 0;
+  width: 100%;
+  min-height: var(--tap);
+  height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  cursor: pointer;
+  font: inherit; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
+  color: var(--dim); background: transparent;
+  border: 1px solid var(--card-line); border-radius: var(--r-sm);
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cr-slot-del:hover,
+  [data-cr-act]:hover { color: var(--red); border-color: var(--red); }
+}
+.cr-slot-del:focus-visible,
+[data-cr-act]:focus-visible { color: var(--red); border-color: var(--red); }
+.cr-slot-del.armed,
+[data-cr-act].armed {
+  color: #fff; border-color: var(--red); background: var(--armed-fill);
+}
+
+/* ---------- how it works (#career-guide) ---------- */
+/* A reading sheet, so it is narrower than the hub and its prose gets a real
+   measure rather than the full 1020px the career page runs at. A top-layer
+   <dialog> over #career, like the history sheet — both are read-only modals
+   opened FROM the hub, and neither can be open at once. */
+#career-guide { --sheet-w: 760px; --fit-at: 300px; }
+/* Lower fit-at on wide-shaped sheets (zoom-corrected, not viewport orientation). */
+#career-offers .sheet,
+#career-history .sheet,
+#career-guide .sheet,
+#quali .sheet { --compact-at: 480px; }
+#career-offers .sheet:not([data-shape="tall"]),
+#career-history .sheet:not([data-shape="tall"]),
+#career-guide .sheet:not([data-shape="tall"]),
+#quali .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
+#cg-body { display: flex; flex-direction: column; gap: 4px; }
+/* Sections are a heading plus one card, and the heading owns the space above it
+   — so the gap between a card and the NEXT heading is set once here rather than
+   fought over by two margins. */
+#cg-body .sel-label { margin-top: 14px; }
+#cg-body .sel-label:first-child { margin-top: 0; }
+.cg-card { gap: 9px; }
+/* Prose, not a data row: this is the one place in career that runs sentences, so
+   it gets the line-height and measure they need. .cr-row pairs sit alongside it
+   in the same card, which is what lets a section state a rule and then price it. */
+.cg-p { margin: 0; font-size: var(--fs-micro); line-height: 1.5; color: var(--dim); }
+.cg-card .cr-row + .cg-p { margin-top: 3px; }
+
+/* ---------- the round's earnings, on the results sheet ---------- */
+/* Career only. Sits between the classification and the championship, because it
+   is what the classification MEANT — the money is the consequence of the finish,
+   and the standings are the longer story either side of it. */
+.res-settle {
+  margin: 14px 0 4px; padding: 12px 14px;
+  background: var(--surf-1); border: 1px solid var(--card-line);
+  border-left: 3px solid var(--red); border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+.res-settle-head {
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
+  color: var(--red); margin-bottom: 8px;
+}
+.res-settle-row {
+  display: flex; justify-content: space-between; gap: var(--gap);
+  font-size: var(--fs-2); color: var(--dim); padding: 2px 0;
+}
+/* Money lines are read as a column, so they get tabular figures — otherwise
+   "+900" and "+1,240" do not line up and the total looks unrelated to them. */
+.res-settle-v { font-family: var(--font-hud); font-variant-numeric: tabular-nums; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+.res-settle-row.missed .res-settle-v { color: var(--dim); font-weight: 600; }
+/* The total is the answer; everything above it is working. */
+.res-settle-row.total {
+  margin-top: 7px; padding-top: 7px;
+  border-top: 1px solid var(--card-line);
+  font-size: var(--fs-2); color: #fff; font-weight: 800;
+}
+.res-settle-row.total .res-settle-v { color: #fff; }
+.res-settle-row.rep { font-size: var(--fs-micro); }
+/* The round debrief under the race-craft line: what cost it, and which laps. It
+   is evidence for the number above, not another figure in the column, so it is
+   indented under it and its value is a lap list rather than a tabular figure.
+   padding-LEFT only: the shorthand on .res-settle-row keeps the vertical rhythm,
+   and a raw px indent here is what tools/check/tree-counts.mjs counts. */
+.res-settle-row.craft {
+  font-size: var(--fs-micro); padding-left: var(--gap);
+}
+.res-settle-row.craft .res-settle-v {
+  font-weight: 600; color: var(--dim); font-variant-numeric: normal;
+}
+
+/* ---------- the seats within reach ---------- */
+/* offerBar(tier) is already a visible ladder in the rules — this is it on
+   screen. Rows are tiers, best at the top, so the climb reads downward and the
+   line between OPEN and "needs N" is where the career currently stands. */
+.cr-ladder {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 var(--gap); align-items: baseline;
+  font-size: var(--fs-2); color: var(--dim); padding: 3px 0;
+}
+.cr-ladder-k { font-weight: 700; color: #c9c9d4; }
+/* The teams sit under their tier's label rather than beside it: three or four
+   short names would push the OPEN column out of alignment on a phone. */
+.cr-ladder-teams {
+  grid-column: 1; font-size: var(--fs-micro); letter-spacing: var(--ls-2); color: var(--dim);
+}
+.cr-ladder-v {
+  grid-column: 2; grid-row: 1 / span 2;
+  font-variant-numeric: tabular-nums; font-size: var(--fs-micro);
+  font-weight: 800; letter-spacing: var(--ls-4); align-self: center;
+}
+/* A tier you clear is a seat that will talk to you at the end of the year. */
+.cr-ladder.open .cr-ladder-k { color: #fff; }
+.cr-ladder.open .cr-ladder-v { color: var(--red); }
+
+/* ---------- extra funds ---------- */
+.cr-cheats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.cr-cheats .sel-chip { flex: 1 1 4.5rem; min-width: 0; }
+/* Practice cheats are a native disclosure on the hub. No new class: the
+   card is `.cr-card`, the label is `.sel-label`, the marker is ID-scoped. */
+#cr-funds > summary.sel-label {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--gap);
+  margin: 0;
+}
+#cr-funds > summary::-webkit-details-marker { display: none; }
+#cr-funds > summary::after {
+  content: "\25BE"; color: var(--red); font-size: var(--fs-micro); letter-spacing: var(--ls-5);
+}
+#cr-funds[open] > summary::after { content: "\25B4"; }
+
+/* Overlay leftover sheets: inherit --fit-at from the dialog. Compact packs
+   rows and wraps names; #co-body / #ch-body / #cg-body / #q-body stay the
+   only vertical scrollers. Guide/history contents rail is wide-only. */
+#career-guide .sheet:has(> #cg-contents),
+#career-history .sheet:has(> #ch-contents) {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+/* Strip + chip box live in css/components.css. Idle ink stays dim here. */
+#cg-contents a, #ch-contents a { color: var(--dim); }
+#cg-body .sel-label[id], #ch-body .sel-label[id] { scroll-margin-block-start: var(--gap); }
+
+/* :has(> #cg-contents) carries that ID's specificity, so the 4-row
+   stacked template above beats a plain [data-shape=wide] 3-row rule
+   (measured 860×560 @115%: rows 39 / 432 / 0 / 0, head at y=-52,
+   foot 10px). Restate wide with :has so the rail+body share one 1fr
+   row and the foot keeps an auto track. */
+#career-guide .sheet[data-shape="wide"]:not([data-density="compact"]):has(> #cg-contents),
+#career-history .sheet[data-shape="wide"]:not([data-density="compact"]):has(> #ch-contents) {
+  /* max-content: "THE DRIVER YOU HIRE" / "NOBODY CAN SIGN YOU" wrapped inside
+     an 11rem rail (apex7). Size the rail to the chip, not the other way. */
+  grid-template-columns: minmax(11rem, max-content) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: start;
+}
+#career-guide .sheet[data-shape="wide"] > .sheet-head,
+#career-history .sheet[data-shape="wide"] > .sheet-head {
+  grid-column: 1 / -1; grid-row: 1;
+}
+#career-guide .sheet[data-shape="wide"] > #cg-contents,
+#career-history .sheet[data-shape="wide"] > #ch-contents {
+  grid-column: 1; grid-row: 2;
+  flex-direction: column; align-items: stretch; justify-content: flex-start;
+  overflow-x: hidden; overflow-y: auto;
+  overscroll-behavior-x: auto; overscroll-behavior-y: contain; touch-action: pan-y;
+  padding: 0 calc(var(--gap) * 0.5) calc(var(--gap) * 0.5) var(--pad);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  /* Grid items default min-height:auto = min-content. The rail's chip
+     stack is taller than a short wide sheet, so the 1fr row refused to
+     shrink and the head painted 60px above the card (measured 860×560
+     @115%: head y=-52, foot crushed to 10px). */
+  min-width: 0; min-height: 0;
+}
+#career-guide .sheet[data-shape="wide"] > #cg-contents > :first-child,
+#career-history .sheet[data-shape="wide"] > #ch-contents > :first-child {
+  margin-inline-start: 0;
+}
+#career-guide .sheet[data-shape="wide"] > #cg-contents a,
+#career-history .sheet[data-shape="wide"] > #ch-contents a {
+  white-space: nowrap; text-align: left; justify-content: flex-start;
+}
+#career-guide .sheet[data-shape="wide"] > .sheet-body,
+#career-history .sheet[data-shape="wide"] > .sheet-body {
+  grid-column: 2; grid-row: 2; min-width: 0; min-height: 0;
+}
+/* Native gutter + grey overlay stacked a second indicator beside the red
+   .sf-scroll thumb (apex7 How My Team Works). Same hide as NEW CAREER. */
+#career-guide .sheet-body,
+#career-guide .sheet[data-shape="wide"] > #cg-contents {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+#career-history .sheet-body,
+#career-history .sheet[data-shape="wide"] > #ch-contents {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+#career-guide .sheet-body::-webkit-scrollbar,
+#career-guide .sheet[data-shape="wide"] > #cg-contents::-webkit-scrollbar {
+  display: none;
+}
+#career-history .sheet-body::-webkit-scrollbar,
+#career-history .sheet[data-shape="wide"] > #ch-contents::-webkit-scrollbar {
+  display: none;
+}
+#career-guide .sheet[data-shape="wide"] > .sheet-foot,
+#career-history .sheet[data-shape="wide"] > .sheet-foot {
+  grid-column: 1 / -1; grid-row: 3;
+}
+
+/* Compact keeps a stacked strip: a side rail spends the scarce axis on chrome. */
+#career-guide .sheet[data-density="compact"],
+#career-history .sheet[data-density="compact"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+#career-guide .sheet[data-density="compact"] > #cg-contents,
+#career-history .sheet[data-density="compact"] > #ch-contents {
+  grid-column: auto; grid-row: auto;
+  flex-direction: row; align-items: center;
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain; overscroll-behavior-y: auto; touch-action: pan-x;
+  padding: 0 var(--pad) calc(var(--gap) * 0.35);
+  border-right: none;
+}
+#career-guide .sheet[data-density="compact"] > .sheet-head,
+#career-guide .sheet[data-density="compact"] > .sheet-body,
+#career-guide .sheet[data-density="compact"] > .sheet-foot {
+  grid-column: auto; grid-row: auto;
+}
+#career-history .sheet[data-density="compact"] > .sheet-head,
+#career-history .sheet[data-density="compact"] > .sheet-body,
+#career-history .sheet[data-density="compact"] > .sheet-foot {
+  grid-column: auto; grid-row: auto;
+}
+
+#career-offers .sheet[data-density="compact"] .co-offer {
+  margin-bottom: calc(var(--gap) * 0.35); padding: calc(var(--pad) * 0.45); min-height: var(--tap-min);
+}
+#career-offers .sheet[data-density="compact"] .co-offer-team {
+  white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
+}
+#career-offers .sheet[data-density="compact"] .cr-card,
+#career-history .sheet[data-density="compact"] .cr-card,
+#career-guide .sheet[data-density="compact"] .cr-card {
+  padding: calc(var(--pad) * 0.45); gap: calc(var(--gap) * 0.2);
+}
+#career-offers .sheet[data-density="compact"] .cr-row,
+#career-history .sheet[data-density="compact"] .cr-row,
+#career-guide .sheet[data-density="compact"] .cr-row {
+  font-size: var(--fs-micro);
+}
+#career-history .sheet[data-density="compact"] .res-row,
+#quali .sheet[data-density="compact"] .res-row,
+#standings .sheet[data-density="compact"] .res-row,
+#results .sheet[data-density="compact"] .res-row {
+  padding: calc(var(--gap) * 0.35) calc(var(--gap) * 0.5); gap: calc(var(--gap) * 0.5); flex-wrap: wrap; align-items: flex-start;
+}
+#career-history .sheet[data-density="compact"] .res-name,
+#career-history .sheet[data-density="compact"] .res-pts {
+  white-space: normal; overflow-wrap: anywhere; width: auto; min-width: 0;
+}
+#quali .sheet[data-density="compact"] .res-name,
+#quali .sheet[data-density="compact"] .res-pts {
+  white-space: normal; overflow-wrap: anywhere; width: auto; min-width: 0;
+}
+/* THE CLASSIFICATION IS LAID OUT AS THE GRID IT IS, two cars a row, on a
+   short wide sheet. MEASURED (layout-audit, ios-iphone-landscape 734x343,
+   2026-10-05, tip a7d27757f): #q-body was a 193 own px box over 671 of rows
+   (3.5 screens) in a 550 own px sheet, each one-line row spending most of its
+   width on blank space between the name and the gap. Two columns — P1 left,
+   P2 right, as the cars line up — put 22 rows in 11 (~1.7 screens). The sheet
+   must be 500 own px wide for two ~255 px columns; a long name wraps (the
+   compact quali rule just above lets .res-name wrap), it never truncates. Cards
+   (the BADGE UNLOCKED status) span both columns. */
+@container sheet (min-width: 500px) {
+  #quali .sheet[data-density="compact"]:not([data-shape="tall"]) #q-table {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--gap);
+  }
+  #quali .sheet[data-density="compact"]:not([data-shape="tall"]) #q-table > :not(.res-row) { grid-column: 1 / -1; }
+}
+#career-guide .sheet[data-density="compact"] #cg-body { gap: calc(var(--gap) * 0.2); }
+#career-guide .sheet[data-density="compact"] #cg-body .sel-label { margin-top: calc(var(--gap) * 0.65); }
+#career-guide .sheet[data-density="compact"] .cg-card { gap: calc(var(--gap) * 0.35); }
+#career-guide .sheet[data-density="compact"] .cg-p { line-height: 1.35; }
+/* BACK / DRIVE MY LAP / SIMULATE painted 285x26 on a landscape iPhone
+   (734x343, layout-audit 2026-10-05): the screen's only actions on --tap-min.
+   --tap-paint makes them 52 painted on touch (css/tokens.css); three columns,
+   not two, so the three pre-session buttons share ONE row and the taller
+   floor grows the foot once, not twice. After the session only TO THE GRID
+   shows, spanning all three (below). */
+#quali .sheet[data-density="compact"] #q-foot {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(var(--gap) * 0.6);
+}
+#quali .sheet[data-density="compact"] #q-foot .bigbtn {
+  min-height: var(--tap-paint); min-width: 0; margin: 0;
+  padding-block: 0; font-size: var(--fs-micro);
+}
+#quali .sheet[data-density="compact"] #q-foot #q-drive,
+#quali .sheet[data-density="compact"] #q-foot #q-go { flex: 1 1 auto; }
+#quali.q-done .sheet[data-density="compact"] #q-foot #q-go { grid-column: 1 / -1; }
+#quali.q-done .sheet[data-density="compact"] #q-foot #q-back { grid-column: 1 / -1; }
+} /* @layer components */

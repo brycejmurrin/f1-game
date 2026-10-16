@@ -1,0 +1,22 @@
+{
+  "appId": "io.github.brycejmurrin.apex26",
+  "appName": "Apex 26",
+  "webDir": "www",
+  "backgroundColor": "#0c0c14",
+  "zoomEnabled": false,
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false,
+    "minWebViewVersion": 100
+  },
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "DARK",
+      "hidden": false
+    }
+  }
+}

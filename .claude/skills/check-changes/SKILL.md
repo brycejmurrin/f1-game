@@ -1,68 +1,82 @@
 ---
 name: check-changes
-description: Pre-commit/pre-push validation for Apex 26 — pick the right npm test:<group> for the files you touched, run the headless verify-track guard for any track edit, and confirm the cache-busting version was bumped. Use before committing or pushing, when asked "did I break anything?", "run the right tests", "validate my changes", or "ready to push?".
+description: "Use when asked did I break anything, run or pick the right tests for touched files, validate or pre-push check a change, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging or pushing to the deploy branch, or triaging a Playwright timeout/hang or `--wait` exit 124 (machine load vs real failure). A red Actions run is ci-red-triage; driving a PR to green is steward."
 ---
 
 # Validate changes before committing/pushing
 
-The suite is large (100+ specs, ~10+ min full). Don't run everything for every
-change — map the files you touched to the **narrowest** group that covers them,
-then add the universal guards. Inspect the diff first:
+## This tree, right now
+
+Live selection, run when the skill loads (Claude Code expands the line; Cursor and
+Codex run the command by hand — it is `pick-tests`, 0.1 s, read-only):
+
+!`node tools/ci/pick-tests.mjs 2>&1 | head -24`
+
+## Prerequisites
+
+`--fast` needs only Node modules; browser batches need the headless shell.
+The SessionStart hook installs both (AGENTS.md §Verification 1); the manual
+fallback is `bash tools/env/cloud-agent-install.sh`.
+
+The suite is slow software rendering. **One command composes the rest**
+(`pick-tests` selection, inline `verify-track` / `graph-parity` /
+`tooling-fast` / `bump-cache --check`, then `test-bg` with **one browser
+group per batch**):
 
 ```sh
-git status --short && git diff --stat
+node tools/ci/verify-change.mjs --plan       # what this change needs (JSON); explicit paths override the diff: --plan js/circuits/monza.js .claude/skills/x/SKILL.md
+node tools/ci/verify-change.mjs --fast       # no browsers — default for verify-agent
+node tools/ci/verify-change.mjs              # fast gate + start batch 1 (background)
+node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked
 ```
 
-## File → test group map
+**BEFORE A PUSH, `--fast` IS NOT THE TOP RUNG.** AGENTS.md rule 3 is a ladder
+and `verify-change` sits on rung 2: `test:tooling-fast` is a SUBSET of the unit
+files (the live figures are rule 3's, generated), and the rest have taken deploys
+red three times. The only pre-push
+check that runs what the deploy runs is
 
-| You changed… | Run |
-|---|---|
-| `js/tracks/<id>.js` (geometry/metadata) | `node tools/verify-track.cjs <id>` → `npm run test:circuit` → `npm run test:barriers` |
-| a track's `scenery(...)` | `node tools/verify-track.cjs <id>` → (full suite's `terrain-over-road.spec.js` for terrain) |
-| `js/tracks.js` (engine) or many tracks | `node tools/verify-track.cjs --all` (all 24 circuits, ~30 s) → `npm run test:circuit` |
-| collision / drift / off-track only | `npm run test:collision` (narrower than `test:behaviour`) |
-| `js/game.js` physics/AI | `npm run test:physics` + `npm run test:behaviour` (+ `test:steering` if steering) |
-| `js/game.js` `__apex` API | `npm run test:api` (dev-tools + headless + obs/act edge + new-hooks) |
-| headless loop only (fast) | `npm run test:headless` (headless-api + obs-act-edge, no render) |
-| `js/parts.js` | `npm run test:parts` |
-| `js/input.js` / steering modes | `npm run test:steering` |
-| `js/glx.js` / lighting / `css/` / UI DOM | `npm run test:ui` (slow) and/or `npm run test:visual` |
-| game modes (season / time-trial) | `npm run test:modes` |
-| broad / unsure | `npm run test:fast` (smoke + api + collision + parts, ~3 min) |
+```sh
+node tools/ci/deploy.mjs --gate-only         # pushes NOTHING; a dirty tree is fine
+```
 
-## Universal guards (always, before push)
+Use `verify-change --fast` in the edit loop and for a subagent verdict; run
+`--gate-only` once before you push. Green on rung 2 never means green on
+rung 3 (`docs/notes/PREPUSH-GATE-LADDER.md`).
 
-1. **Build guard for any track touched** — must print `OK <id>: ...`
-   (`FAIL <id>: <msg>` means the game would strand on the menu — non-negotiable):
-   ```sh
-   node tools/verify-track.cjs <id>     # one circuit
-   node tools/verify-track.cjs --all    # all 24 (tracks.js engine edits)
-   ```
-2. **Cache version bumped — BOTH files?** If you changed any `js/*.js` or
-   `css/*.css`, the `?v=N` in `index.html` must be incremented AND
-   `version.json`'s `build` must equal the same N (it force-reloads stale
-   installed PWAs — see the `bump-cache` skill):
-   ```sh
-   grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json
-   # exactly ONE ?v= line, and version.json build == that N
-   ```
-   Forgetting this ships a change users never see (stale CDN/browser cache).
-3. **Smoke** if you touched load order, `index.html`, or a core module:
-   ```sh
-   npm run test:smoke
-   ```
+`--wait` blocks for the full queue. Subagents and the default loop use `--fast` or a single
+started batch, then read the log's `= run …` verdict line (anchor and waiter: `references/triage.md` §Rules
+that prevent the class; AGENTS.md rules 4-5). Push once per verified batch: a push over a live run cancels it.
 
-## Reading failures (house rule)
+Is the tree already red? Not a `--plan` question: `node tools/ci/deploy.mjs --train`
+prints the deploy branch's last ci / pages / nightly conclusions; before blaming your
+change, `verify-agent` with `--base <ref>` answers `DELTA: same-red | new-on-session |
+already-red-on-ref`; before fixing a red you did not cause, `node tools/ci/who-is-on-it.mjs`.
+Scale the plan to AGENTS.md §Verification's table: its `batches` can list more browser
+groups than the cap; the engine / physics recipe is `references/engine-physics.md`.
 
-When a spec fails, first decide **stale expectation vs real regression**: read the
-actual `__apex` hook values the test asserts on (`physState()`, `obs()`,
-`wallStats()`, `groundY()`) and check whether the assertion still matches the
-intended design. Magnitude-threshold specs and the legacy `blank-scan/*` /
-pixel soft-asserts in `tracks-visual` drift; geometry/behaviour hooks are ground truth.
-Don't "fix" code to satisfy a threshold that itself went stale — fix the threshold,
-or confirm the behaviour is genuinely wrong first.
+Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 
-## Push
+Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
 
-Only push to the active development branch; never to `main` without review. Bump,
-verify, test, then commit + `git push -u origin <branch>`.
+```sh
+./tools/mcp/apex-tools-mcp.sh call apex_verify_change_fast '{"dryRun":true}'
+./tools/mcp/apex-tools-mcp.sh call apex_pick_tests '{}'
+./tools/mcp/apex-tools-mcp.sh call apex_bump_cache_check '{}'
+node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wrap)
+./tools/mcp/apex-tools-mcp.sh smoke
+```
+
+## Load on demand
+
+- Gate contracts, ratchets, reading a failure → [`references/guards.md`](references/guards.md)
+- A test timed out / hangs / `--wait --timeout` exited 124 / passes solo but not loaded (or vice versa) —
+  step 0 (read-only load + log anchors), the decision tree and `test-solo.mjs` → [`references/triage.md`](references/triage.md)
+- No cache bump after a `js/`/`css/` edit (`?v=dev`; the deploy stamps hashes); `gen-shell` after a manifest change (last
+  edit before commit) → [`references/bump.md`](references/bump.md)
+- Engine / physics / `js/game.js` change: which two groups, the master gate, ratchets, vstd-lint →
+  [`references/engine-physics.md`](references/engine-physics.md)
+- After `sync-pr.mjs` (HEAD is left on `sync-pr-<branch>`, not your branch) →
+  [`references/sync-pr.md`](references/sync-pr.md)
+- Merging with / pushing to the deploy branch, union sweeps, baseline
+  grow/shrink rules, Pages concurrency → [`references/deploy.md`](references/deploy.md)

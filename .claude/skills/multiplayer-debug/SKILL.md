@@ -1,0 +1,87 @@
+---
+name: multiplayer-debug
+description: "Use when VS FRIEND, phone-as-controller pairing/connection, WebRTC, invite links or QR codes, room codes, Nostr signalling, TURN/ICE, build handshakes, replicated rivals, lobby flow or net determinism break."
+---
+
+## Overview
+
+Multiplayer has local authority for the player's own car: each peer owns itself,
+the host owns AI plus race control, and the wire carries state/events rather than
+host corrections.
+
+## When to Use
+
+Use this for:
+
+- VS FRIEND lobby bugs, invites, answers, QR/scan, room codes, or seat selection.
+- WebRTC/ICE/TURN failures, missing relay candidates, or peers stuck in
+  `checking`/`connecting`.
+- Multiplayer state replication, interpolation, countdown/start sync, or dropped
+  rivals.
+- Nostr relay/rendezvous issues, or "build mismatch"/`build_unknown` refusals at pairing.
+- Tests that need the in-page loopback transport instead of a real network.
+- PHONE AS CONTROLLER pairing/connection (QR scan, room code, `controller.html`
+  joining over the VS FRIEND wire, `docs/MULTIPLAYER.md` §Phone as controller,
+  `tests/unit/phone-pad.test.mjs`). Steering/tilt response once paired stays
+  **input-controls**.
+
+Do **not** use this for:
+
+- Single-player physics, collisions, or AI behavior except where host authority
+  changes what a guest sees.
+- Career/session flow outside a networked lobby.
+- Race-control internals; use `race-incidents-control` for caution logic.
+
+## Quick Reference
+
+| Module | Role |
+|---|---|
+| `js/net/transport.js` | Two channels: `state` unreliable/unordered, `event` reliable/ordered; `loopback()` is deterministic and in-page |
+| `js/net/sdp.js` | Packs gathered SDP facts into a scannable invite code; round-robins candidates by kind so a relay survives the cap |
+| `js/net/handshake.js` | ICE -> slim SDP -> deflate -> base64url invite; refuses mismatched builds (authoritative `apex-build` meta; `version.json` fallback only when unstamped) |
+| `js/net/nostr.js` | Public Nostr rendezvous, signalling only |
+| `js/net/rendezvous.js` | Backup room-code courier; typed errors, never throws |
+| `js/net/snapshot.js` | 13 B/car snapshots, interpolation, road-following extrapolation |
+| `js/net/session.js` | Clock sync, packet routing, heartbeat |
+| `js/net/netplay.js` | Authority: own car never corrected; host relays guests and owns AI/race control |
+| `js/net/lobby.js` | VS FRIEND UI; sequential invites; profiles filed by connection |
+
+Hooks:
+
+| Hook | Use |
+|---|---|
+| `__apex.net()` | **Primary remotes/buffers inspector** — role, grid slots, clock sync, buffered packets; `{ active: false }` when solo |
+| `__apex.netLoopback(opts)` | Start one-page deterministic peer session |
+| `__apex.netPeerSend(state, atMs?, wireId?)` | Publish remote state into the local session |
+| `__apex.netTick(nowMs?)` | Pump net session by virtual time |
+| `__apex.netStartArm(nowMs, atMs?, hold?)` | Test synchronized lights-out |
+| `__apex.netHostStart()` | Exercise host start scheduling |
+| `__apex.netPeerClose()` / `netStop()` | Drop peer or end local session |
+| `__apex.lobbyInviteAnother()` | Mint a further host invite |
+| `__apex.lobbyReady(v?)`, `lobbyStart()` | Drive waiting-room controls |
+| `__apex.lobbySdp()` | Inspect SDP that actually crossed |
+| `__apex.lobbyPairs()` | Inspect ICE candidate-pair state |
+| `__apex.turnProbe(ms?)` | Probe TURN relays with relay-only gathers |
+
+Commands:
+
+```sh
+npm run test:net-unit
+node tools/ci/test-bg.mjs net
+node tools/net/rtc-e2e.mjs
+node tools/net/rtc-e2e-3p.mjs
+npm run rtc:e2e-3p-relay   # relay-only ICE
+```
+
+Read first:
+
+- `docs/MULTIPLAYER.md`
+- `docs/DEBUG-HOOKS.md` multiplayer hooks section.
+
+
+---
+
+## Load on demand
+
+- Phone pairing, corporate NAT, TURN over TCP, nostr-probe → [references/phone-nat.md](references/phone-nat.md).
+- Layer-classify workflow, loopback-first, ICE/TURN, three-player star, common mistakes → [references/workflow.md](references/workflow.md).

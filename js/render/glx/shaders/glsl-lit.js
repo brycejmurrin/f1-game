@@ -1,0 +1,1968 @@
+/*
+ * Apex 26 — GLSL sources for the WebGL2 renderer (js/render/glx/glx.js):
+ * the LIT program (LIT_VS/LIT_FS) — the scene pass: PBR sun +
+ * hemisphere ambient + 48 point lights, procedural materials, sun shadow,
+ * wet-road response, fog.
+ * Split from the old monolithic glx-shaders.js. Template strings may
+ * interpolate GLXChunks (js/render/glx/shaders/glsl-chunks.js — loads first); each file
+ * registers its programs on the shared GLXShaders global. All shader files
+ * must load BEFORE js/render/glx/glx.js (it destructures GLXShaders at eval).
+ */
+"use strict";
+
+(function () {
+  const LIT_VS = `#version 300 es
+layout(location=0) in vec3 aPos;
+// PACKED world vertex format — 28 bytes/vertex (40 with aTrk), written by
+// createMesh/createChunkedMesh in js/render/glx/. Position keeps full float32
+// (world coordinates run to ~7 km and quantising them would crack the ribbon);
+// normals and colours do not need 32 bits.
+//
+//   loc 1  SHORT x4  normalized  xyz = unit normal (1/32767), w = pad
+//   loc 2  USHORT x4 normalized  rgb = colour / COL_SCALE, a = material / MAT_SCALE
+//
+// The two scales are 65535/4369 and 65535/771 — EXACT divisors of the
+// normalized-integer denominator, so an integer material id decodes to itself
+// bit-for-bit. That matters: the FLAG branch below keys on aMat == 15 and reads
+// its fractional part, so an id that drifted to 15.99998 would make ASPHALT (16)
+// ripple like cloth, and every surfaceId == N test in the FS below is the same
+// kind of comparison. Measured headroom: colour 15.0 against a fleet maximum of
+// 3.4 (nose running lights), material 85.0 against a maximum id of 32.
+// Full rationale: js/render/shared/vertex-pack.js.
+layout(location=1) in vec4 aNrmP;
+layout(location=2) in vec4 aColMat;
+layout(location=4) in vec3 aTrk;    // road only: (arc-length s, signed lateral x, half-width). (0,0,0) elsewhere.
+#define COL_SCALE 15.0
+#define MAT_SCALE 85.0
+#define aNrm (aNrmP.xyz)
+#define aCol (aColMat.rgb * COL_SCALE)
+#define aMat (aColMat.a * MAT_SCALE)
+// INSTANCING (opt-in). Locations 5-8 are the four COLUMNS of a per-instance
+// model matrix and 9 a per-instance colour, all with vertexAttribDivisor(1).
+// They are only bound by drawInstanced(); every other draw leaves them disabled,
+// which is why uInstanced gates the matrix rather than relying on the generic
+// attribute value (a disabled vec4 reads (0,0,0,1), i.e. a degenerate mat4).
+// aICol needs no gate: GLX sets the generic value to (1,1,1) once at init, so
+// the multiply below is the identity on every non-instanced draw.
+layout(location=5) in vec4 aInst0;
+layout(location=6) in vec4 aInst1;
+layout(location=7) in vec4 aInst2;
+layout(location=8) in vec4 aInst3;
+layout(location=9) in vec3 aInstCol;
+uniform float uInstanced;   // 0 = use uModel (default), 1 = use the instance columns
+uniform mat4 uModel;
+uniform mat4 uViewProj;
+uniform float uTime;   // seconds (shared with the FS cloud-drift clock) — drives the FLAG wave + foliage sway
+uniform vec3 uWind;    // xy = unit wind direction in world xz, z = speed scale (knobs windDir / windSpeed)
+out vec3 vNrm;
+out vec3 vCol;
+out vec3 vWorldPos;
+out vec3 vObjPos;
+flat out float vMat;
+out vec3 vTrk;        // smooth (NOT flat): the marking SDF needs x/s to vary across the quad
+void main() {
+  vec3 pos = aPos;
+  // FLAG material (id 15, aMat 15.0..15.4): cloth wind-wave. The FRACTIONAL
+  // part of aMat encodes a per-vertex wave weight (0 = hoist edge pinned to
+  // the pole, 0.4 → weight 1 = free edge); a travelling two-sine ripple
+  // displaces along the face normal, so marshal flags flutter while every
+  // other material keeps the exact static path (pos == aPos).
+  // Gate on the ROUNDED id: a half-open 15.0 <= aMat < 16.0 test would also admit a
+  // neighbouring id that decoded a hair low, and fract() of that is ~1.0 — a
+  // full-amplitude wave on a building or the road. int(aMat + 0.5) is the same
+  // rounding the fragment shader already uses for every material lookup.
+  int mid = int(aMat + 0.5);
+  float mfr = clamp(aMat - float(mid), 0.0, 1.0);
+  if (mid == 15) {
+    float fw = mfr * 2.5;
+    float ph = uTime * 5.5 + aPos.x * 1.9 + aPos.z * 1.9;
+    pos += aNrm * ((sin(ph) * 0.085 + sin(ph * 2.17 + 1.3) * 0.045) * fw);
+  }
+  mat4 M = uInstanced > 0.5 ? mat4(aInst0, aInst1, aInst2, aInst3) : uModel;
+  vec4 wp = M * vec4(pos, 1.0);
+  // FOLIAGE (id 6, aMat 6.0..6.45): wind sway. The fraction is a per-vertex
+  // HEIGHT weight (TrackGeom.SWAY_FRAC = 0.45, js/track/core/geom.js: 0 at the
+  // crown's foot, 1 at the tip). GPU Gems 3 ch.16-style main bending in WORLD
+  // space — a downwind lean plus a gust front travelling along uWind.xy — scaled
+  // by weight^2 so the foot stays on the trunk, plus a small flutter along the
+  // world normal. Bare FOLIAGE (fraction 0) keeps the exact static path. Mirrored
+  // constant for constant in js/render/three/tsl-lit.js vertexMotionNode; WGX
+  // has no per-vertex mat attribute (docs/research/WEBGPU-PARITY.md).
+  if (mid == 6 && mfr > 0.002) {
+    float w = clamp(mfr / 0.45, 0.0, 1.0);
+    float spd = uWind.z;
+    float along = wp.x * uWind.x + wp.z * uWind.y;
+    float gust = uTime * (spd * 1.1 + 0.6) - along * 0.07;
+    float bend = sin(gust) * 0.55 + sin(gust * 2.31 + along * 0.19 + 1.7) * 0.25 + 0.45;
+    float amp = spd * 0.32 * w * w;
+    vec3 wn = mat3(M) * aNrm;
+    float flPh = uTime * (spd * 3.2 + 1.5) + wp.x * 1.3 + wp.z * 1.1 + wp.y * 0.7;
+    wp.xyz += vec3(uWind.x, 0.0, uWind.y) * (bend * amp) + wn * (sin(flPh) * spd * 0.05 * w);
+  }
+  vWorldPos = wp.xyz;
+  vObjPos = aPos;                 // object space: paint flake/orange-peel pattern
+                                  // is glued to the panels, not streaming in world.
+  // NOTE mat3(M), not an inverse-transpose. For non-uniform scale that is correct
+  // ONLY on an axis-aligned normal: M*e_axis picks one column, so the direction
+  // survives and normalize() erases the length. It is NOT "correct up to a
+  // length" in general — a rotated-basis or non-box model given a non-uniform
+  // scale shades wrong SILENTLY, and nothing catches it. TrackGraph's
+  // nonUniformXZ test does NOT cover this: that guard is about a cylinder's
+  // ROUND CROSS-SECTION (replay bakes via max(|sx|,|sz|), so sx!==sz would make
+  // the baked and instanced paths disagree), not about normals. Today every
+  // non-uniform instanced placement is a box, so this holds; the day one is not,
+  // this is where it breaks.
+  vNrm = mat3(M) * aNrm;
+  vCol = aCol * aInstCol;
+  vMat = aMat;                    // constant across the face (flat) — procedural material key
+  vTrk = aTrk;                    // road track-space coords; interpolated across the ribbon
+  gl_Position = uViewProj * wp;
+}`;
+
+  // Lit shader: hemisphere ambient + lambert sun (the original, tuned look) PLUS
+  // a Cook-Torrance (GGX) specular highlight on top. The diffuse + ambient base is
+  // the plain hemisphere+lambert look when uMetalness==0, so the hand-tuned
+  // vertex-colour palette is preserved; the spec term is soft-clipped so it sheens rather than
+  // blooms. Per-draw material: uRoughness / uMetalness / uSpecular.
+  const LIT_FS = `#version 300 es
+precision highp float;
+precision highp sampler2DShadow;
+in vec3 vNrm;
+in vec3 vCol;
+in vec3 vWorldPos;
+in vec3 vObjPos;
+flat in float vMat;   // procedural material id (0 = FLAT); textured in applyMaterial()
+in vec3 vTrk;         // road: (s, lateral x, half-width) — drives roadMarkings()
+uniform vec3 uEye;
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform vec3 uAmbGround;
+uniform vec3 uAmbSky;
+uniform vec3 uFogColor;
+uniform float uFogDensity;
+uniform float uEmissive;
+uniform float uAlpha;
+uniform float uRoughness;
+uniform float uMetalness;
+uniform float uSpecular;
+uniform float uDetail;
+uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specular lobe
+uniform float uCarPaint;    // 0..1 car-paint model: duotone pigment + bounded silhouette rim
+uniform float uSparkle;     // 0..1 metallic-flake glitter strength (1 in-race; low in the setup turntable to kill the "twinkle")
+uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
+uniform float uRain;
+uniform float uSpecKnee;       // SUN GLINT RANGE knob: the sun specular's soft-clip asymptote (1 = the old hard cap at 1.0)        // 0..1 rain FALLING (frame.rain): drives the puddle ripples
+// ── Baked PBR material maps (js/render/shared/assets.js) ────────────────────────────
+// TEXTURE_2D_ARRAY whose LAYER INDEX IS THE MAT ID (js/track/core/geom.js MAT). No
+// UV channel exists anywhere on the lit path and none is needed: the sample
+// reuses the procedural materials' own triplanar convention below, so a scanned
+// map lands on exactly the coordinate the noise it augments already uses.
+// uMatTexMix is a LIGHTING TUNER knob shipped at 1.0 (full baked detail);
+// __apex.matTex(0) is the A/B off-switch — at 0 nothing here executes and the
+// render is byte-identical to the pure-procedural pre-scan game.
+uniform lowp sampler2DArray uMatAlbedoTex;  // rgb = albedo reflectance, a = roughness
+uniform lowp sampler2DArray uMatNormalTex;  // rg = tangent normal xy, b = AO
+uniform float uMatTexMix;                   // ships 1.0 = full baked; 0 = pure procedural
+uniform float uMatTexScale[17];             // world metres per tile per layer; 0 = layer absent
+uniform samplerCube uEnvCube;  // live 64px env probe around the player car (one face/frame)
+uniform float uEnvStr;         // 0 until the probe's first full 6-face cycle; then the CAR tuner's envCube strength
+uniform sampler2DShadow uShadowMap;
+uniform mat4 uLightVP;
+uniform float uShadowBias;
+uniform float uShadowStr;
+uniform float uShadowTexel;
+uniform vec3 uSkyZenith;
+uniform vec3 uSkyHorizon;
+uniform float uFogHeight;
+uniform float uGroundMist;  // 0..1 low-lying drifting ground mist
+// THE PIT LANE, as four numbers: (entry s, window length, pit side, lap length).
+// The lane is PAINTED, not built — see roadMarkings(). Length <= 0 means no
+// lane, which is every circuit until the tyre setting arms one.
+uniform vec4 uPitLane;
+// YOUR PIT BOX: (how far into the window it sits, half its length, 0, 0).
+// A zero y means no box to draw — the same "length 0 = absent" convention
+// uPitLane uses, so one test covers both.
+uniform vec4 uPitBox;
+uniform float uLampFog;     // lamp-glow-in-fog strength (0 = off / day)
+uniform sampler2D uBlockerMap;  // PCSS-lite min-depth blocker map (512sq)
+uniform float uPcss;            // 1 = blocker map valid, 0 = fixed penumbra
+// Live-tunable constants (LIGHTING TUNER panel / __apex.lightTune) — defaults
+// mirror LightTune.TUNE_DEFS (js/lighting/knobs.js); uploaded per frame from frame.tune in begin().
+uniform float uBounceK;     // per-lamp bounce-fill strength (was literal 0.04)
+uniform float uMistShare;   // ground-mist share of the lamp fog glow (was 1.5)
+uniform float uLampFogClip; // lamp-fog Reinhard shoulder strength (was 0.7)
+uniform float uGlowAmp;     // emissive HDR glow push (was literal 2.3)
+uniform float uBloomBoost;  // extra HDR push per unit of OVER-WHITE albedo (neon/lens tag)
+uniform float uPcssPen;     // PCSS penumbra growth rate (was literal 80.0)
+uniform float uKeyMul;      // direct sun/key-light intensity multiplier (default 1)
+uniform float uTime;        // seconds (drives cloud-shadow drift)
+uniform float uCloudCover;  // 0..1 cloud cover (drives cloud shadows)
+uniform float uCloudSpeed;  // cloud drift-rate multiplier (matches SKY uCloudSpeed; 0 = frozen)
+uniform float uCloudShadowDim; // how darkly cloud shadows dim the sun (def 0.80)
+uniform float uCarSunGlint; // clearcoat sun-disc reflection punch on car paint (def 12.0)
+uniform float uCarSparkle;  // metallic-flake sparkle glint gain (def 1.6)
+uniform float uFogSunCore;  // tight hot core of the sun in-scatter through fog (def 0.6)
+uniform float uFogTint;     // −1 cool .. +1 warm white-balance on the distance haze
+uniform float uMistHeight;  // ground-mist layer height band (world m scale, def 0.30)
+uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only areas
+uniform float uWetDark;     // wet-asphalt darkening multiplier (def 1.0)
+uniform float uPuddles;     // PUDDLES knob: standing-water growth (def 1.0, 0 = none) — js/render/shared/puddles.js
+uniform float uLampNearClamp;  // near-field distance floor on lamp 1/d² falloff (m, def 4.0) — tames close-by wall blow-out (dual: WGSL F.params7.w)
+uniform float uWindowSunFlash; // glossy-glass dry sun-flash reflection strength (def 1.0 = shipped 0.6)
+uniform float uSkyRimGlow;     // grazing-angle atmospheric sky-rim brightening strength (def 1.0 = shipped 0.18)
+uniform float uAmbContactDark; // ambient contact-darkening depth on downward faces (def 1.0 = shipped 0.88 floor)
+uniform float uLampWallSpill;  // out-of-beam lamp reflection floor on walls/road (def 1.0 = shipped 0.16/0.30)
+uniform float uShadowRange; // sun shadow box half-size (m, def 80) — drives the receiver-distance shadow fade
+uniform vec3 uShadowCtr;    // unsnapped shadow-box snap anchor (Y = look-target height; fade uses eye XZ + this Y)
+// Dynamic CAR shadow map: car meshes only, re-rendered every frame (the static
+// map above is snap-cached and can't hold movers). 1024², box ±42 m on the anchor
+// by default — SHADOW DISTANCE can widen it, see uCarBiasScale below.
+uniform highp sampler2DShadow uCarShadowMap;
+uniform mat4 uCarLightVP;
+uniform float uCarShadowOn;
+// cBox / 42 from game.js: the car map's box grows with SHADOW DISTANCE at a fixed
+// 1024² resolution, so its real-world texel size grows too. biasTerm below was
+// tuned for the default ±42m box; scale it by this ratio for the car lookup so a
+// wider box doesn't outrun its bias into self-shadow acne. 1.0 at the default.
+uniform float uCarBiasScale;
+// Nearest-FLOODLIGHT spot shadow (night, desktop): a 512² depth map rendered
+// per frame from the single nearest lamp to the camera (perspective VP down its
+// beam). Only the light-loop slot uLampShadowIdx pays the 4-tap PCF — every
+// other lamp skips the branch, so the whole feature costs one lamp's shadow.
+uniform highp sampler2DShadow uLampShadowMap;
+// BAKED LAMP POOLS (js/lighting/lamp-bake.js): every lamp's diffuse pool on an
+// upward-facing surface, scaled per frame. A sparse RGBA16F TILE ATLAS over the
+// lamps' XZ extent: uLampBakeIdx (tilesX x tilesY, NEAREST) gives each tile's
+// slot origin in uLampBake (-1 = empty tile), a (T+2)^2 slot with a 1-texel gutter.
+uniform highp sampler2D uLampBake;
+uniform highp sampler2D uLampBakeIdx;
+uniform float uBakeOn;
+uniform vec2 uBakeOrigin;
+uniform vec2 uBakeSize;
+uniform vec3 uBakeScale;
+uniform vec3 uBakeGrid;    // (tilesX, tilesY, T texels per tile side)
+uniform vec2 uBakeAtlas;   // atlas texture size: (atlasW, 2 atlasH) — diffuse half, then bounce
+uniform vec3 uBakeShCol;   // the shadow lamp's BAKED colour (LampBake.shadowCol)
+uniform mat4 uLampShadowVP;
+uniform float uLampShadowOn;
+uniform int uLampShadowIdx;
+// Point lights (floodlights / street lights — mainly for night tracks). Packed
+// into 4 vec4s so 48 slots cost the same 192 default-block rows as the old six
+// vertical arrays at 32 (WebGL2 fragment-uniform floor is 224 rows).
+const int MAX_LIGHTS = 48;
+uniform int uNumLights;
+// ONE interleaved array, stride 4 vec4s per light:
+//   +0 xyz pos, w radius      +1 xyz colour*intensity, w out-of-beam bleed
+//   +2 xyz beam aim, w cosInner   +3 x cosOuter
+// Same 192 default-block rows as the four separate arrays this replaces, but
+// ONE uniform4fv per chunk instead of four. docs/PERF-FINDINGS.md 2d.
+uniform vec4 uLight[MAX_LIGHTS * 4];
+out vec4 outColor;
+
+const float PI = 3.14159265359;
+
+float D_GGX(float NoH, float a) {
+  float a2 = a * a;
+  float d = (NoH * NoH) * (a2 - 1.0) + 1.0;
+  return a2 / max(PI * d * d, 1e-6);
+}
+// Height-correlated Smith visibility (folds in the 1/(4 NoL NoV) denominator).
+float V_SmithGGX(float NoV, float NoL, float a) {
+  float a2 = a * a;
+  float gv = NoL * sqrt(NoV * NoV * (1.0 - a2) + a2);
+  float gl = NoV * sqrt(NoL * NoL * (1.0 - a2) + a2);
+  return 0.5 / max(gv + gl, 1e-5);
+}
+// Roughness-aware Schlick: grazing reflectance is capped at f90 = 1-roughness
+// (Frostbite trick) so rough surfaces like asphalt/grass don't pick up a wet
+// mirror sheen at the horizon, while smooth paint keeps its grazing reflection.
+vec3 F_Schlick(float VoH, vec3 f0, float f90) {
+  float v = 1.0 - VoH; float v2 = v * v;
+  return f0 + (vec3(f90) - f0) * (v2 * v2 * v);
+}
+
+// --- Procedural surface texture (value noise on world XZ; no UVs needed) ---
+${GLXChunks.surfaceNoise}
+${GLXChunks.ignoise}
+// ── Procedural per-material surface texture (triplanar, UV-free) ─────────────
+// Keyed by the flat per-vertex material id (aMat): brick, glass, concrete,
+// metal, wood, foliage, fabric, sand, grass, rock, snow, roof tile, stone,
+// rust/corrugated. No image textures, no UVs — everything below is world/
+// object-position noise. Two passes:
+//  1) applyMaterialNormal() — a REAL bump: perturbs the shading normal BEFORE
+//     the lighting terms (NoL, shadow, specular) consume it, so mortar grooves,
+//     plank seams, corrugation ridges etc. actually catch and cast light —
+//     not just an albedo tint. Called early in main(), right after the
+//     existing ground/car-paint normal relief.
+//  2) applyMaterial() — albedo + roughness modulation, called after rough is
+//     resolved (unchanged call site from the original single-pass version).
+// Both key off the SAME per-material coordinate convention (hc/y for wall-like
+// materials, wp.xz for organic/horizontal ones) so the bump and the tint line
+// up — recessed mortar reads darker AND indented, not just darker.
+
+// Scalar relief height for material mid at local coords uv (either (hc,y)
+// for wall materials or world (x,z) for horizontal/organic ones — see call
+// sites below). Sampled 3x per fragment (center + 2 offsets) for a gradient.
+float matBumpHeight(int mid, vec2 uv) {
+  float hc = uv.x, y = uv.y;
+  if (mid == 1) {          // CONCRETE: fine aggregate + a shallow form-seam groove
+    float seam = smoothstep(0.05, 0.0, abs(fract(y / 1.25) - 0.5) - 0.46);
+    return vnoise(uv * 6.0) * 0.6 - seam * 0.5;
+  } else if (mid == 2) {   // BRICK: bricks proud, mortar recessed
+    float ch = 0.20, bl = 0.42, mort = 0.06;
+    float row = floor(y / ch), off = mod(row, 2.0) * 0.5 * bl;
+    float bx = fract((hc + off) / bl), by = fract(y / ch);
+    float joint = max(smoothstep(mort, 0.0, min(bx, 1.0 - bx) * bl),
+                      smoothstep(mort, 0.0, min(by, 1.0 - by) * ch));
+    return (1.0 - joint) * 0.5 + vnoise(vec2(floor((hc + off) / bl), row) * 4.0) * 0.10;
+  } else if (mid == 4) {   // METAL: fine brushed streaks along the vertical axis
+    return vnoise(vec2(hc * 55.0, y * 3.0)) * 0.3;
+  } else if (mid == 5) {   // WOOD: plank seams recessed + grain ridges along the board
+    float seam = smoothstep(0.05, 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46);
+    return (1.0 - seam) * 0.4 + vnoise(vec2(hc * 3.0, y * 22.0)) * 0.16;
+  } else if (mid == 6) {   // FOLIAGE: lumpy per-leaf-cluster relief
+    return vnoise(uv * 3.2) * 0.5 + vnoise(uv * 11.0) * 0.3;
+  } else if (mid == 7) {   // FABRIC: woven cross-thread ridges
+    return sin(hc * 38.0) * 0.15 + sin(y * 38.0) * 0.15;
+  } else if (mid == 8) {   // SAND: dune ripple — a real raised ridge, not just shading
+    return sin(hc * 3.0 + vnoise(uv * 0.3) * 6.0) * 0.5 + vnoise(uv * 8.0) * 0.2;
+  } else if (mid == 9) {   // GRASS: fine blade-clump bump
+    return vnoise(uv * 6.0) * 0.4 + vnoise(uv * 20.0) * 0.25;
+  } else if (mid == 10) {  // ROCK: craggy multi-octave relief
+    return vnoise(uv * 1.3) * 0.6 + vnoise(uv * 4.5) * 0.3 + vnoise(uv * 15.0) * 0.15;
+  } else if (mid == 11) {  // SNOW: soft drifts + a fine sparkly crust
+    return vnoise(uv * 1.8) * 0.45 + vnoise(uv * 21.0) * 0.18;
+  } else if (mid == 12) {  // ROOF (terracotta tile): ridged overlapping courses
+    float ty = fract(y / 0.34);
+    return sin(ty * 3.14159) * 0.5 + vnoise(vec2(hc * 2.0, floor(y / 0.34)) * 3.0) * 0.08;
+  } else if (mid == 13) {  // STONE: irregular jittered blocks, deep mortar
+    vec2 cell = floor(uv * 1.3);
+    vec2 f = fract(uv * 1.3) - hash21(cell) * 0.12;
+    float d = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+    return smoothstep(0.0, 0.16, d) * 0.55 + vnoise(uv * 5.0) * 0.15;
+  } else if (mid == 14) {  // RUST / CORRUGATED METAL: real sinusoidal corrugation
+    return sin(hc * 7.5) * 0.55 + vnoise(uv * 6.0) * 0.10;
+  } else if (mid == 16) {  // ASPHALT: fine aggregate only — no macro relief
+    // Two tight octaves and nothing below ~0.1 m. A low-frequency term here
+    // would read as a rippled/bumpy road under the car and crawl at speed.
+    return vnoise(uv * 9.0) * 0.34 + vnoise(uv * 26.0) * 0.16;
+  }
+  return 0.0;
+}
+// Is this material coursed/planked/panelled (keys off the wall coord (hc, y))
+// rather than organic/horizontal (keys off world (x, z))? Shared by the
+// procedural bump below and the baked texture sample, so the two can never
+// disagree about which way a material's pattern runs — a scan landing rotated
+// 90 degrees against the noise it augments would read as a smeared mess.
+// NOTE this is a per-MATERIAL classification. applyMaterial()'s "wall" local is
+// a different thing: a per-FRAGMENT orientation test (an.y < 0.6).
+// (No backticks anywhere below this line — the GLSL is a JS template literal.)
+bool matWallLike(int mid) {
+  return mid == 1 || mid == 2 || mid == 4 || mid == 5 || mid == 7 || mid == 12 || mid == 13 || mid == 14;
+}
+// Triplanar tile coordinate for a baked material layer. Returns false when the
+// feature is off (uMatTexMix 0), the id is out of range, or this MAT simply has
+// no baked layer in the pack (scale 0) — in every one of those cases the caller
+// leaves the procedural result alone, which is the shipping look.
+bool matTexUV(int mid, out vec2 uv) {
+  if (uMatTexMix <= 0.001 || mid <= 0 || mid > 16) { uv = vec2(0.0); return false; }
+  float sc = uMatTexScale[mid];
+  if (sc <= 0.0) { uv = vec2(0.0); return false; }
+  vec3 an = abs(normalize(vNrm));
+  uv = (matWallLike(mid) ? vec2(an.x > an.z ? vWorldPos.z : vWorldPos.x, vWorldPos.y)
+                         : vWorldPos.xz) / sc;
+  return true;
+}
+// Baked NORMAL map, applied right after the procedural bump and composing with
+// it: the scan carries fine detail the noise cannot express, the noise carries
+// the macro relief that would cost a much larger texture. Both perturb N BEFORE
+// the lighting terms consume it, so a baked groove genuinely catches light.
+void applyMaterialTexNormal(int mid, inout vec3 N, float vd) {
+  vec2 uv;
+  if (!matTexUV(mid, uv)) return;
+  float fade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);   // same reach as the procedural bump
+  if (fade <= 0.005) return;
+  // The SAME grazing-angle guard applyMaterialNormal uses, and for the same
+  // reason: at a shallow angle a pixel spans many texels, the mip chain averages
+  // the tangent normal toward flat, and what is left aliases into crawling
+  // moire on a surface moving past at 80 m/s. Fade relief by the per-pixel
+  // footprint of the tile coordinate — the normal-map analog of mip-fading.
+  float fp = max(fwidth(uv.x), fwidth(uv.y));
+  float aa = clamp(1.0 - (fp - 0.02) / 0.30, 0.0, 1.0);
+  if (aa <= 0.005) return;
+  vec2 dxy = (texture(uMatNormalTex, vec3(uv, float(mid))).xy - 0.5) * 2.0;
+  // Tangent frame = the WORLD AXES the tile coordinate maps to (matTexUV, same
+  // vNrm plane pick): wall-like (hc, y) -> T along hc's axis, B = up; ground
+  // (x, z) -> T = +x, B = +z. The old up-cross-N frame was degenerate on the
+  // ground (N ~ up, so T was whatever tilt the procedural bump left) and
+  // mirrored on +x / -z faces (graphics-detail survey note, 2026-10-01).
+  vec3 an = abs(normalize(vNrm));
+  bool wall = matWallLike(mid);
+  vec3 T = wall ? (an.x > an.z ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0)) : vec3(1.0, 0.0, 0.0);
+  vec3 B = wall ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
+  // ASPHALT stays deliberately the weakest in the table — see the MAT.ASPHALT
+  // note in js/track/core/geom.js: the road is viewed edge-on for the whole race and
+  // anything with real relief crawls.
+  float amt = (mid == 16 ? 0.10 : 0.55) * uMatTexMix * fade * aa;
+  N = normalize(N + (T * dxy.x + B * dxy.y) * amt);
+}
+// Wall-like materials (coursed/planked/panelled) key off (hc, y): hc runs along
+// the wall's horizontal span, y is world-up. Organic/horizontal materials
+// (foliage, sand, grass, rock, snow) key off world (x, z), matching the
+// existing ground micro-relief above. GLASS (3) is intentionally left flat —
+// bump would blur its mirror-reflection read.
+void applyMaterialNormal(int mid, inout vec3 N, float vd) {
+  if (mid == 0 || mid == 3 || mid == 15) return;   // FLAT/GLASS/FLAG: no procedural bump
+  float bumpFade = clamp(1.0 - (vd - 22.0) / 58.0, 0.0, 1.0);
+  if (bumpFade <= 0.005) return;
+  if (matWallLike(mid)) {
+    vec3 an = abs(N);
+    float hc = an.x > an.z ? vWorldPos.z : vWorldPos.x;
+    float y = vWorldPos.y;
+    // Fade the bump by the per-pixel WORLD FOOTPRINT of the (hc,y) coord, not
+    // just camera distance. The height gradient below is a fixed-epsilon
+    // (0.05 m) 3-tap probe; when a pixel spans more than the finest brick/stone
+    // feature (~0.06 m) — which happens at a GRAZING viewing angle even up
+    // close, from foreshortening — those three taps land at effectively random
+    // points in the pattern and the perturbed normal aliases into a swirling
+    // moiré ("wavy" sheen on the shallow-angle side of a facade). fwidth()
+    // catches the grazing stretch that the distance-only bumpFade cannot; as
+    // the footprint grows the relief flattens toward the interpolated N, the
+    // normal-map analog of mip-fading high-frequency texture detail.
+    float fp = max(fwidth(hc), fwidth(y));
+    float aaFade = clamp(1.0 - (fp - 0.04) / 0.22, 0.0, 1.0);
+    if (aaFade <= 0.005) return;
+    // T = the world axis hc runs along (+z on +-x faces, +x on +-z faces), so a
+    // seam reads as a groove on every face; the old up-cross-N frame pointed the other way
+    // on +x and -z walls and turned mortar into ridges there.
+    vec3 T = an.x > an.z ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    float e = 0.05;
+    float h0 = matBumpHeight(mid, vec2(hc, y));
+    float hx = matBumpHeight(mid, vec2(hc + e, y));
+    float hy = matBumpHeight(mid, vec2(hc, y + e));
+    float amt = (mid == 2 || mid == 13) ? 0.10 : (mid == 12 || mid == 14) ? 0.09 : 0.05;
+    N = normalize(N + (T * (h0 - hx) + vec3(0.0, 1.0, 0.0) * (h0 - hy)) * (amt * bumpFade * aaFade / e));
+  } else {
+    vec2 p = vWorldPos.xz;
+    // Same grazing-angle guard the wallLike branch uses. Ground materials were
+    // exempt because you normally look DOWN at them — but the road is the one
+    // horizontal surface viewed almost edge-on at 80 m/s, where foreshortening
+    // makes a pixel span many times the probe epsilon and the 3-tap gradient
+    // aliases into crawling moiré. Fading relief by the per-pixel world
+    // footprint is the normal-map analog of mip-fading, and it only ever
+    // REDUCES bump, so head-on grass/sand/rock keep their existing look.
+    float fpG = max(fwidth(p.x), fwidth(p.y));
+    float aaG = clamp(1.0 - (fpG - 0.10) / 0.55, 0.0, 1.0);
+    if (aaG <= 0.005) return;
+    float e = 0.22;
+    float h0 = matBumpHeight(mid, p);
+    float hx = matBumpHeight(mid, p + vec2(e, 0.0));
+    float hz = matBumpHeight(mid, p + vec2(0.0, e));
+    // ASPHALT (16) is deliberately the weakest relief in the table.
+    float amt = mid == 8 ? 0.16 : mid == 10 ? 0.14 : mid == 16 ? 0.025 : 0.07;
+    N = normalize(N + vec3(h0 - hx, 0.0, h0 - hz) * (amt * bumpFade * aaG / e));
+  }
+}
+// Albedo + roughness modulation (unchanged call site: after rough is resolved).
+void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
+  // mid > 16 is a Car3D surface id (20..33, see classifiedCar in the FS). The
+  // else-if chain below runs 1..16 with NO catch-all, and matTexUV refuses
+  // anything above 16 outright, so for a car fragment this whole function was
+  // a normalize(), two clamps and a 14-way integer chain that provably cannot
+  // change albedo or rough. Bit-identical, on every car pixel of every frame.
+  // NOT done for applyMaterialNormal: matBumpHeight is likewise empty above 16,
+  // but its tail is N = normalize(N + 0), and N is not provably unit-length at
+  // that call site — skipping it would drop a normalize the lighting may lean
+  // on. Same reason the integer-pow sweep left the sky-gradient pow() in this
+  // file alone: it could not be shown bit-identical.
+  if (mid == 0 || mid > 16) return;
+  float far  = clamp(1.0 - (vd - 90.0) / 170.0, 0.0, 1.0);   // coarse tint: mid range
+  if (far <= 0.001) return;                                   // too distant to read — skip the noise
+  float near = clamp(1.0 - (vd - 26.0) / 64.0, 0.0, 1.0);    // fine detail: near field only
+  vec3 wp = vWorldPos;
+  vec3 an = abs(normalize(vNrm));
+  bool wall = an.y < 0.6;                          // roughly vertical face
+  float hc = an.x > an.z ? wp.z : wp.x;            // horizontal coord along the wall
+  float y = wp.y;
+  if (mid == 1) {            // CONCRETE — patchy panels + fine speckle + form seams
+    albedo *= 1.0 + (vnoise(wp.xz * 0.09 + y * 0.05) - 0.5) * 0.16 * far;
+    // Each "* near" / "* <fade>" noise term below runs only where its weight
+    // is > 0 (hunt 2 G4): at weight 0 the factor is 1.0 + x*0.0 == 1.0 (vnoise
+    // is ALU-only and finite). Summed terms keep their expression and take 0
+    // for the gated noise, so the rounding is unchanged. fwidth()s stay where
+    // they were.
+    if (near > 0.0) albedo *= 1.0 + (vnoise(vec2(hc, y) * 6.0) - 0.5) * 0.10 * near;
+    // AA the seam: fwidth() on the PRE-fract coordinate (fract() itself has a
+    // hard C0 seam that would spike the derivative) widens the transition band
+    // once a screen pixel spans more world-units than the seam's fixed 0.05 —
+    // otherwise the line strobes between "on/off" as the camera moves (the
+    // reported building-texture shimmer).
+    if (wall) albedo *= 1.0 - smoothstep(max(0.05, fwidth(y / 1.25)), 0.0, abs(fract(y / 1.25) - 0.5) - 0.46) * 0.14 * near;
+    rough = min(1.0, rough + 0.08 * far);
+  } else if (mid == 2) {     // BRICK — courses + staggered joints + per-brick tint
+    float ch = 0.20, bl = 0.42, mort = 0.06;
+    float row = floor(y / ch);
+    float off = mod(row, 2.0) * 0.5 * bl;
+    float bx = fract((hc + off) / bl), by = fract(y / ch);
+    // mort is a WORLD-space distance (min(bx,1-bx)*bl converts back to metres),
+    // so the AA width is the raw per-pixel footprint of hc/y — see the seam
+    // note above for why this must scale with distance/viewing angle.
+    float mortAA = max(mort, max(fwidth(hc), fwidth(y)));
+    float joint = max(smoothstep(mortAA, 0.0, min(bx, 1.0 - bx) * bl),
+                      smoothstep(mortAA, 0.0, min(by, 1.0 - by) * ch));
+    float bh = vnoise(vec2(floor((hc + off) / bl), row) * 1.3);
+    vec3 brick = albedo * (0.82 + bh * 0.42) * vec3(1.06, 0.99, 0.92);
+    vec3 mortar = mix(albedo, vec3(0.60, 0.58, 0.55), 0.6);
+    albedo = mix(brick, mortar, joint * near);
+    rough = min(1.0, rough + 0.12 * far);
+  } else if (mid == 3) {     // GLASS / CURTAIN WALL — mullion grid + per-pane variation
+    float pw = 1.6, ph = 1.4, mull = 0.11;
+    float gx = fract(hc / pw), gy = fract(y / ph);
+    // mull compares against a NORMALIZED (0..1 pane-fraction) distance here —
+    // unlike brick's mort above, gx/gy are never scaled back to metres — so the
+    // AA width must be fwidth() of the pre-fract NORMALIZED coordinate, not the
+    // raw world-space one.
+    float mullAA = max(mull, max(fwidth(hc / pw), fwidth(y / ph)));
+    float bar = max(smoothstep(mullAA, 0.0, min(gx, 1.0 - gx)),
+                    smoothstep(mullAA, 0.0, min(gy, 1.0 - gy)));
+    albedo *= 1.0 + (vnoise(vec2(floor(hc / pw), floor(y / ph)) * 1.7) - 0.5) * 0.5 * far;
+    albedo = mix(albedo, albedo * 0.32, bar * near);
+    rough = mix(rough, min(rough, 0.12), near);
+  } else if (mid == 4) {     // METAL — brushed vertical streaks, glossier
+    float brushFade = clamp(1.0 - (vd - 26.0) / 29.0, 0.0, 1.0);   // fade 40-cycle brushing over 26-55m (tighter than 'near') so it stops sparkling
+    if (brushFade > 0.0) albedo *= 1.0 + (vnoise(vec2(hc * 40.0, y * 2.0)) - 0.5) * 0.12 * brushFade;
+    rough = clamp(rough - 0.15 * far, 0.05, 1.0);
+  } else if (mid == 5) {     // WOOD — grain lines + plank seams
+    if (near > 0.0) albedo *= 1.0 + (vnoise(vec2(hc * 3.0, y * 22.0)) - 0.5) * 0.18 * near;
+    // Same normalized-space AA correction as glass's mullion grid above.
+    albedo *= 1.0 - smoothstep(max(0.05, fwidth(hc / 0.35)), 0.0, abs(fract(hc / 0.35) - 0.5) - 0.46) * 0.16 * near;
+  } else if (mid == 6) {     // FOLIAGE — dapple + green variation, breaks flat canopy
+    float dN = 0.0;
+    if (near > 0.0) dN = vnoise(wp.xz * 9.0);
+    float d = vnoise(wp.xz * 2.4 + wp.y * 1.6) * 0.6 + dN * 0.4 * near;
+    albedo *= 1.0 + (d - 0.5) * 0.34 * far;
+    albedo.g *= 1.0 + (d - 0.5) * 0.10 * far;
+  } else if (mid == 7) {     // FABRIC / CROWD / TENT — fine weave speckle
+    float weaveFade = clamp(1.0 - (vd - 26.0) / 34.0, 0.0, 1.0);   // fade 26-cycle weave over 26-60m so it stops crawling mid-range
+    if (weaveFade > 0.0) albedo *= 1.0 + (vnoise(vec2(hc, y) * 26.0) - 0.5) * 0.14 * weaveFade;
+  } else if (mid == 8) {     // SAND — fine grain + gentle dune ripple
+    float sN = 0.5;
+    if (near > 0.0) sN = vnoise(wp.xz * 5.0);
+    albedo *= 1.0 + (sN - 0.5) * 0.12 * near
+                  + sin(wp.x * 0.7 + vnoise(wp.xz * 0.2) * 6.0) * 0.05 * far;
+  } else if (mid == 9) {     // GRASS — bladed clumps + tone variation
+    float gN = 0.0;
+    if (near > 0.0) gN = vnoise(wp.xz * 14.0);
+    float g = vnoise(wp.xz * 3.5) * 0.6 + gN * 0.4 * near - 0.5;
+    albedo *= 1.0 + g * 0.22 * far;
+    albedo.g *= 1.0 + g * 0.08 * far;
+  } else if (mid == 10) {    // ROCK — craggy grey-brown, multi-scale tonal variation
+    float r = vnoise(wp.xz * 0.9 + y * 0.6) * 0.6 + vnoise(wp.xz * 4.5) * 0.4 - 0.5;
+    albedo *= 1.0 + r * 0.30 * far;
+    rough = min(1.0, rough + 0.16 * far);
+  } else if (mid == 11) {    // SNOW — bright, soft blue-shaded crevices, sparkle near
+    float s = vnoise(wp.xz * 1.6 + y * 0.4) - 0.5;
+    albedo *= 1.0 + s * 0.10 * far;
+    albedo.b *= 1.0 - s * 0.05 * far;              // shaded drifts read faintly cool
+    float sparkleFade = clamp(1.0 - (vd - 26.0) / 34.0, 0.0, 1.0);  // fade 24-cycle snow sparkle over 26-60m so it stops shimmering
+    if (sparkleFade > 0.0) albedo *= 1.0 + (vnoise(wp.xz * 24.0) - 0.5) * 0.06 * sparkleFade;
+    rough = clamp(rough - 0.10 * far, 0.05, 1.0);
+  } else if (mid == 12) {    // ROOF (terracotta tile) — ridged courses, warm tone bands
+    float ty = fract(y / 0.34);
+    float shadeAA = clamp(1.0 - fwidth(ty) * 6.0, 0.0, 1.0);           // fade tile-ridge sine when a pixel covers >~1/6 of a tile → no shimmer
+    float shade = sin(ty * 3.14159) * shadeAA;
+    albedo *= 0.88 + shade * 0.16;
+    if (near > 0.0) albedo *= 1.0 + (vnoise(vec2(hc * 2.0, floor(y / 0.34)) * 3.0) - 0.5) * 0.14 * near;
+    rough = min(1.0, rough + 0.10 * far);
+  } else if (mid == 13) {    // STONE — irregular jittered blocks, deep mortar
+    vec2 cell = floor(vec2(hc, y) * 1.3);
+    vec2 f = fract(vec2(hc, y) * 1.3) - hash21(cell) * 0.12;
+    float d = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+    // Normalized-space AA (same correction as glass/wood above): d lives in the
+    // *1.3 fract domain, so widen by fwidth() of that same pre-fract coordinate.
+    float jointAA = max(0.16, max(fwidth(hc * 1.3), fwidth(y * 1.3)));
+    float joint = smoothstep(0.0, jointAA, d);
+    vec3 block = albedo * (0.80 + hash21(cell) * 0.4);
+    vec3 mortar = mix(albedo, vec3(0.42, 0.40, 0.37), 0.65);
+    albedo = mix(mortar, block, joint * near);
+    rough = min(1.0, rough + 0.18 * far);
+  } else if (mid == 14) {    // RUST / CORRUGATED METAL — ridge shading + rust streaks
+    float ridgePhase = hc * 7.5;
+    float ridgeAA = clamp(1.0 - fwidth(ridgePhase) * 3.0, 0.0, 1.0);   // fade the corrugation sine as a pixel spans >~1/3 cycle → no crawl at distance
+    float ridge = sin(ridgePhase) * ridgeAA;
+    albedo *= 0.85 + ridge * 0.18;
+    float rust = smoothstep(0.55, 0.9, vnoise(vec2(hc * 0.8, y * 0.35) + 5.0));
+    albedo = mix(albedo, albedo * vec3(0.62, 0.42, 0.28), rust * 0.5 * far);
+    rough = min(1.0, rough + 0.14 * far);
+  } else if (mid == 16) {    // ASPHALT — aggregate speckle + broad laying/wear patches (markings: roadMarkings())
+    // Deliberately understated: this is the surface under the car for the whole
+    // race, so it gets tone variation rather than pattern. No fract()/sin()
+    // term at all — nothing here can strobe, only soften.
+    // Broad patches read as laying joints / differential wear (mid range).
+    albedo *= 1.0 + (vnoise(wp.xz * 0.035) - 0.5) * 0.10 * far;
+    // Fine aggregate grain, near field only — replaces the per-vertex hash
+    // tint that buildRoad currently bakes in at 4 m node resolution.
+    if (near > 0.0) albedo *= 1.0 + (vnoise(wp.xz * 7.0) - 0.5) * 0.13 * near;
+    // Tarmac is rough; the wet path (which runs after this) still overrides it.
+    rough = min(1.0, rough + 0.10 * far);
+  }
+  // ── Baked albedo/roughness, blended OVER the procedural result ─────────────
+  // Deliberately MULTIPLICATIVE, not a replacement: the per-track palette tint,
+  // the racing-line rubber wear and the per-vertex aggregate grain that
+  // buildRoad/buildProps bake into the vertex colour all have to survive, and
+  // a scan that replaced albedo outright would flatten 24 circuits into one.
+  // The 2.0 recentres a mid-grey (0.5) scan on "changes nothing".
+  vec2 tuv;
+  if (matTexUV(mid, tuv)) {
+    vec4 t = texture(uMatAlbedoTex, vec3(tuv, float(mid)));
+    float k = uMatTexMix * far;                 // reuse the existing distance fade
+    albedo = mix(albedo, albedo * t.rgb * 2.0, k);
+    rough  = clamp(mix(rough, t.a, k * 0.8), 0.04, 1.0);
+  }
+}
+// Road markings, evaluated analytically in TRACK space (s, lateral x, half-width)
+// rather than carried as geometry: geometric paint edges cost cross-section
+// columns, and a per-NODE dash boolean on the ~4 m node grid point-samples a 7 m
+// period, so dash lengths beat irregularly instead of an even 3.5 m on / off.
+//
+// Here the marking is a signed-distance band filtered by fwidth(), so it stays
+// a crisp edge at any distance and any viewing angle, costs no vertices, and
+// cannot alias against the geometry. Gated on half-width so only road geometry
+// paints itself — every other mesh reads aTrk = (0,0,0).
+// Lane width off the road's pit side — MUST match PitLane.laneWidth(). The lane
+// yields to the RACING SURFACE on a narrow circuit: measured across all 51
+// built circuits the pit-window half-width runs 4.93 m (Monaco) to 8.0 m, and a
+// flat 3.2 m lane would leave Monaco only 6.7 m to race on.
+const float PIT_LANE_W = 3.2;
+const float PIT_LANE_MIN = 2.4;
+const float PIT_MIN_RACING = 7.0;
+float pitLaneWidth(float hw) { return min(PIT_LANE_W, max(PIT_LANE_MIN, 2.0 * hw - PIT_MIN_RACING)); }
+void roadMarkings(inout vec3 albedo, inout float rough) {
+  float hw = vTrk.z;
+  if (hw <= 0.5) return;                     // not road surface (or no trk attribute)
+  float s = vTrk.x, x = vTrk.y;
+  const vec3 paint = vec3(0.95, 0.95, 0.97);
+  // THE PIT LANE IS NOT A TRACK MARKING, so it must not be painted like one.
+  // The first cut drew its boundary in the same white as the edge lines, 3 m
+  // inboard of one — and it read as a DOUBLED EDGE LINE, not as a lane. That is
+  // a real failure and it was measured rather than guessed: an A/B against the
+  // lane switched off moved 0.3% of a top-down frame, all of it inside a 15 px
+  // band. Blue is the colour the eye already files under "pit", and the floor
+  // tint is what makes the strip a PLACE instead of the gap between two lines.
+  const vec3 pitPaint = vec3(0.10, 0.36, 0.86);
+  const vec3 pitFloor = vec3(0.15, 0.16, 0.19);
+
+  // Lateral filter width. Clamped for the SDF band: at a grazing angle
+  // fwidth explodes and an unclamped band would smear the line into a
+  // wide grey wash. MIP uses the RAW footprint (WGX roadMarkings) so a
+  // saturated 0.30 AA ceiling keeps ~64% paint instead of erasing it.
+  float fwX = max(fwidth(x), 1e-4);
+  float aaX = min(fwX, 0.30);
+
+  // Edge lines — a 0.20 m band just inside each tarmac edge (matches the old
+  // -w .. -w+0.2 vertex columns).
+  float dEdge = abs(abs(x) - (hw - 0.10));
+  float edge = 1.0 - smoothstep(0.10 - aaX, 0.10 + aaX, dEdge);
+
+  // Dashed centre line — 0.60 m wide, 7 m period, 50% duty. Measuring distance
+  // from the dash CENTRE (0.25 of the period) keeps the band symmetric and
+  // wraps cleanly at the period seam, which a two-smoothstep gate does not.
+  float band = 1.0 - smoothstep(0.30 - aaX, 0.30 + aaX, abs(x));
+  float ph = fract(s / 7.0);
+  float aaS = clamp(fwidth(s) / 7.0, 1e-4, 0.24);
+  float dash = 1.0 - smoothstep(0.25 - aaS, 0.25 + aaS, abs(ph - 0.25));
+
+  // As a marking goes sub-pixel, fade its amplitude rather than let a
+  // half-covered band strobe — the standard minification response. Soft
+  // knee on the RAW footprint (same 0.10/0.55 as WGX).
+  float mip = clamp(1.0 - (fwX - 0.10) / 0.55, 0.0, 1.0);
+  float m = max(edge, band * dash) * mip;
+
+  // THE PIT LANE. Painted here rather than built, for the reason the whole
+  // module exists: this track engine is ONE RIBBON WITH ONE ARC COORDINATE, so
+  // a road that branches off and rejoins cannot be expressed. Two earlier cuts
+  // tried — one forced the road boundary open and put it through Monaco's
+  // buildings (lap distance jumped 250 m), the other looked for room beyond the
+  // edge and found 2.4 m at Monza, because the scenery puts a pit WALL there.
+  //
+  // So the lane is the outermost strip of the road itself across the window,
+  // separated from the racing surface by a solid line — which is what the first
+  // stretch of a real pit entry looks like anyway, before it goes behind the
+  // wall. It costs no geometry, moves no boundary, and leaves the car on
+  // tarmac, so none of the failures above can come back.
+  float pitLine = 0.0, pitFill = 0.0;
+  if (uPitLane.y > 0.0) {
+    float L = uPitLane.w;
+    // The window WRAPS the start/finish line on every circuit (it opens a few
+    // hundred metres before it and closes after), so this is a wrapped-interval
+    // test and not a compare — the same reason PitLane.inWindow is written the
+    // way it is.
+    float through = mod(s - uPitLane.x + L, L);
+    if (through <= uPitLane.y) {
+      float side = uPitLane.z;
+      float lw = pitLaneWidth(hw);
+      float lx = (hw - lw) * side;              // the boundary line's lateral position
+      // Ends: fade the LINE in quickly (2 m — long enough not to be a seam
+      // across the road, short enough that the mouth is still a mouth) and out
+      // slowly at the exit.
+      float fadeIn = smoothstep(0.0, 2.0, through);
+      float fadeOut = smoothstep(0.0, 6.0, uPitLane.y - through);
+      // Inside the lane: everything on the pit side of the boundary.
+      float inLane = step(0.0, (x - lx) * side);
+      // The boundary. WIDER than an edge line (0.20 against 0.10): this one is
+      // an instruction, not a hint about where the tarmac stops.
+      float line = (1.0 - smoothstep(0.20 - aaX, 0.20 + aaX, abs(x - lx))) * fadeIn;
+      // THE ENTRANCE, which is the thing a driver actually has to find. Without
+      // a mark the lane simply begins somewhere in a long straight and the only
+      // cue is the HUD. A bar across the mouth of the lane gives it a threshold
+      // you can see and aim at — it is deliberately NOT gated by fadeIn, since
+      // fading in the very mark that says "it starts here" is self-defeating.
+      float bar = (smoothstep(0.4, 1.0, through) - smoothstep(2.4, 3.0, through)) * inLane;
+      // YOUR BOX. The HUD counts the distance down, but a number is not a place
+      // — a driver braking at the pit limit needs something on the road to aim
+      // at. Drawn as a box outline across the lane: two transverse ends and two
+      // rails, so it reads as a bay you park IN rather than a line you cross.
+      float box = 0.0;
+      if (uPitBox.y > 0.0) {
+        float dBox = abs(through - uPitBox.x);
+        float ends = 1.0 - smoothstep(0.12, 0.30, abs(dBox - uPitBox.y));
+        float span = 1.0 - step(uPitBox.y, dBox);            // within its length
+        float dIn = abs(x - lx), dOut = abs(abs(x) - hw);
+        float rails = max(1.0 - smoothstep(0.12, 0.30, dIn),
+                          1.0 - smoothstep(0.12, 0.30, dOut));
+        box = max(ends * inLane, span * rails * inLane);
+      }
+      pitLine = max(max(line, bar), box) * fadeOut * mip;
+      pitFill = inLane * fadeIn * fadeOut;
+    }
+  }
+
+  albedo = mix(albedo, paint, m);
+  rough = mix(rough, 0.55, m);                // paint is smoother than tarmac
+  // The lane SURFACE, under its own markings: a place, not a gap between lines.
+  // Light-handed (0.35) because it must read as tarmac that happens to be the
+  // pit lane, not as a painted box.
+  albedo = mix(albedo, pitFloor, pitFill * 0.35);
+  albedo = mix(albedo, pitPaint, pitLine);
+  rough = mix(rough, 0.55, pitLine);
+}
+// Cloud cover at a world point: project the point up the sun direction to the
+// cloud deck and sample a drifting FBM — gives moving dappled cloud SHADOWS on
+// the ground (the "volumetric shading"). 0 = full sun, 1 = fully shadowed.
+float cloudFBM(vec2 p) {
+  float s = 0.0, a = 0.5;
+  for (int i = 0; i < 2; i++) { s += a * vnoise(p); p = p * 2.03 + 1.7; a *= 0.5; }  // 4→2 octaves (soft-thresholded, invisible)
+  return s;
+}
+float cloudShadow(vec3 wp) {
+  if (uCloudCover <= 0.001 || uSunDir.y <= 0.06) return 0.0;
+  float cloudY = 360.0;
+  // Floor the divisor well above the 0.06 cutoff: near that cutoff the sun ray
+  // to the cloud deck is almost grazing, so t (and the resulting cp) grows huge
+  // for a barely-changed wp — a tiny change in receiver height/position (e.g.
+  // the road's own elevation profile, or the ground point sweeping under a
+  // moving camera) gets amplified into many cycles of the cloud noise. That
+  // over-sampling of a fast-varying signal is exactly what reads as noisy
+  // "stripes" dappling the ground at dawn/dusk instead of smooth cloud shadows.
+  // Capping the amplification (rather than raising the 0.06 cutoff itself)
+  // keeps the shadow visible right down to that cutoff, just less jittery.
+  float t = (cloudY - wp.y) / max(uSunDir.y, 0.15);
+  // Drift scaled by uCloudSpeed so the ground dapple freezes/slows in lockstep
+  // with the SKY clouds (which use the same knob). Was raw uTime, so "0 = frozen
+  // sky" still left the ground shadows crawling.
+  float cT = uTime * uCloudSpeed;
+  vec2 cp = (wp.xz + uSunDir.xz * t) * 0.0052 + vec2(cT * 0.012, cT * 0.005);
+  float c = cloudFBM(cp);
+  return smoothstep(0.54 - uCloudCover * 0.40, 0.92, c) * uCloudCover;
+}
+
+float sampleShadow(vec3 wpos) {
+  // The whole function collapses to 1.0 when the pass is off: its only
+  // non-trivial exit is max(0.0, mix(1.0, sh, uShadowStr * edgeFade)), and
+  // mix(1.0, sh, 0.0) is exactly 1.0. Without this line every opaque fragment
+  // still paid up to 16 dependent texture fetches — 4 PCSS blocker taps, 8
+  // Poisson shadow taps, 4 car-map taps — and then threw the result away.
+  // glx.js drives uShadowStr to 0 whenever the key luminance falls below ~0.28
+  // without a moon floor (cloudy, wet or foggy nights — frame.moonK is forced
+  // to 0 in fog, though MOON SHADOWS pushed past 0.5 overrides this via
+  // frame.moonGate) and whenever the shadow pass is disabled outright, which
+  // is exactly the overcast-night case that is already the heaviest to render.
+  if (uShadowStr <= 0.0) return 1.0;
+  vec4 lc = uLightVP * vec4(wpos, 1.0);
+  vec3 sc = lc.xyz / lc.w * 0.5 + 0.5;
+  if (sc.z >= 1.0) return 1.0;
+  // Distance fade: dissolve shadows by RECEIVER distance from a YAW-INVARIANT
+  // origin — eye XZ, look-target Y (uShadowCtr.y). The BOX stays forward-biased
+  // (game.js: camEye + look-dir, texel allocation only). Fading from that same
+  // biased point swept the fade front around a 40 m circle on a pinned-eye yaw
+  // (docs/PERF-FINDINGS.md 2026-08-15: 58% strength swing at 70 m). Height still
+  // comes from the look target so aerial cameras do not erase ground shadows.
+  // The box covers 0.875·range from its own anchor; at the default 80 m / 20 m
+  // bias, 0.84·range from the eye lands on the 90° box edge (sqrt(70²-20²)≈67).
+  float aDist = distance(wpos, vec3(uEye.x, uShadowCtr.y, uEye.z));
+  float edgeFade = 1.0 - smoothstep(uShadowRange * 0.62, uShadowRange * 0.84, aDist);
+  // UV border fade kept as a thin safety feather only: the distance fade above
+  // completes at 0.84·range while the box guarantees 0.875·range from the anchor,
+  // so anything this feather touches is already ≤~4% strength. Keep it THIN —
+  // it is anchored to the BOX, which recentres in sBox/4 jumps, so any visible
+  // strength it gates would step 16 m at a time while driving.
+  vec2 ef = smoothstep(0.0, 0.03, sc.xy) * (1.0 - smoothstep(0.97, 1.0, sc.xy));
+  edgeFade *= ef.x * ef.y;
+  if (edgeFade <= 0.0) return 1.0;
+  float t = uShadowTexel;
+  // Slope-scale bias: gentle base + steeper slope term reduces both acne and
+  // peter-panning on angled surfaces (walls, banking kerbs). tan(acos(c)) done
+  // as sqrt(1-c²)/c (same value, no trig).
+  float cosTheta = clamp(dot(normalize(vNrm), uSunDir), 0.05, 1.0);
+  float slopeBias = t * 1.5 * (sqrt(1.0 - cosTheta * cosTheta) / cosTheta);
+  // Shared by the static map below AND the car map at the bottom — the A/B
+  // harness (tools/lighting/ab-lighting.mjs shadow.biasClamp) pins this pattern to ONE
+  // site, so keep the bias term factored here rather than repeating the clamp.
+  float biasTerm = clamp(slopeBias, 0.0005, 0.004) + uShadowBias * 0.5;
+  // BIAS MUST TRACK THE BOX, like the kernel below already does. slopeBias is
+  // built from t = 1/SHADOW_SIZE, a UV quantity, so it is blind to the world
+  // size of a texel — but that sweeps 12.5x across SHADOW DISTANCE (0.0156 m at
+  // 16, 0.195 m at 200). Unscaled it was ~25x more offset than needed at 16 and
+  // only ~2x at 200, i.e. a fixed 0.393 m of depth push at every setting (about
+  // 1.08 m of ground detachment under a 20-degree sun) with the acne margin
+  // nearly gone at the far end. Scaling here holds that margin roughly constant.
+  // Applied to the STATIC map ONLY: the car map below multiplies the same
+  // biasTerm by uCarBiasScale (= max(1, box/80) from game.js), so scaling the
+  // shared term would square the correction on cars.
+  float z = sc.z - biasTerm * (uShadowRange / 80.0);
+  // SHADOW DISTANCE compensation: the PCF/blocker offsets below are in shadow-map
+  // UV space, so their WORLD footprint = offset * (2*uShadowRange). Without this,
+  // raising SHADOW DISTANCE widened the penumbra proportionally and washed thin
+  // casters (lamp posts, kerbs) out to lit. Scale the kernel by 80/box (clamped to
+  // 1 so the crisp look at/below the default box is unchanged) to hold the world
+  // penumbra ~constant as the box grows. Anchor tracks the shadowRange def.
+  float boxK = min(1.0, 80.0 / uShadowRange);
+  // Distance LOD: full 8-tap Poisson + PCSS-lite blocker search near the camera
+  // (crisp tyre/kerb contact shadows), a cheap 4-tap disk on distant ground where
+  // the shadow is small on screen. Halves shadow bandwidth over most of the frame.
+  // Boundary SCALES with SHADOW DISTANCE (was a fixed 55.0 m) and is anchored to
+  // the SAME gliding anchor as the distance fade above (aDist, not the eye): a
+  // fixed or eye-anchored cutoff parked a hard 8-tap→4-tap / PCSS-off quality
+  // ring in the MIDDLE of still-strong shadows — and swept it across the ground
+  // as you drove. 0.80 places the switch deep into the 0.62→0.84 fade band
+  // (shadows already dimmed to ~7% strength there), so the ring is invisible at
+  // every SHADOW DISTANCE setting, and it can never jump: the anchor glides
+  // continuously with the camera.
+  bool near = aDist < uShadowRange * 0.80;
+  float R = 3.0;
+  if (near && uPcss > 0.5) {
+    // PCSS-lite: blocker search scales the Poisson radius by the receiver-blocker
+    // gap — crisp at the contact point, soft where the caster is far.
+    float bt = (1.5 / 512.0) * boxK;
+    float zb = min(min(texture(uBlockerMap, sc.xy + vec2(-bt,  bt)).r,
+                       texture(uBlockerMap, sc.xy + vec2( bt,  bt)).r),
+                   min(texture(uBlockerMap, sc.xy + vec2(-bt, -bt)).r,
+                       texture(uBlockerMap, sc.xy + vec2( bt, -bt)).r));
+    float pen = clamp((z - zb) * uPcssPen, 0.0, 1.0);
+    R = mix(1.5, 6.0, pen);
+  }
+  // Dither anchored to the SHADOW-MAP TEXEL GRID, not gl_FragCoord: screen-keyed
+  // noise re-rolls every world point's rotation each frame while driving (no TAA
+  // here to average it), boiling the penumbra — the visible "shadow flicker at
+  // speed". sc.xy is stable between recentres (the light VP is texel-snapped) and
+  // shifts by whole texels on a recentre, so this pattern is glued to the ground.
+  float ign = ignoise(floor(sc.xy / t));
+  float ang = ign * 6.2831853;
+  float cr = cos(ang), sr = sin(ang);
+  mat2 rot = mat2(cr, -sr, sr, cr) * (t * R * boxK);
+  // 4 taps always; 4 more only near the camera. Rotated per-texel so the reduced
+  // count still reads as noise, not banding.
+  float s = texture(uShadowMap, vec3(sc.xy + rot * vec2(-0.94201624, -0.39906216), z))
+          + texture(uShadowMap, vec3(sc.xy + rot * vec2( 0.94558609, -0.76890725), z))
+          + texture(uShadowMap, vec3(sc.xy + rot * vec2(-0.09418410, -0.92938870), z))
+          + texture(uShadowMap, vec3(sc.xy + rot * vec2( 0.34495938,  0.29387760), z));
+  float sh;
+  if (near) {
+    s += texture(uShadowMap, vec3(sc.xy + rot * vec2(-0.91588581,  0.45771432), z))
+       + texture(uShadowMap, vec3(sc.xy + rot * vec2(-0.81544232, -0.87912464), z))
+       + texture(uShadowMap, vec3(sc.xy + rot * vec2(-0.38277543,  0.27676845), z))
+       + texture(uShadowMap, vec3(sc.xy + rot * vec2( 0.97484398,  0.75648379), z));
+    sh = s * 0.125;
+  } else {
+    sh = s * 0.25;
+  }
+  // Dynamic CAR shadows: min-combine with the per-frame car-only map so cars
+  // cast real sun-projected shadows (direction/length correct, car-on-car
+  // works) on top of the cached static map. Same slope/constant bias SCALED by
+  // uCarBiasScale (the car map's own box/texel ratio vs. the static map's — see
+  // its declaration above); a small fixed 4-tap PCF (the map is tiny and its
+  // content moves every frame, so the static map's dither/PCSS machinery buys
+  // nothing here).
+  if (uCarShadowOn > 0.5) {
+    vec4 cc = uCarLightVP * vec4(wpos, 1.0);
+    vec3 cs = cc.xyz * 0.5 + 0.5;
+    if (cs.x > 0.0 && cs.x < 1.0 && cs.y > 0.0 && cs.y < 1.0 && cs.z < 1.0) {
+      float cz = cs.z - biasTerm * uCarBiasScale;
+      float ct = (1.0 / 1024.0) * 0.75;   // CAR_SHADOW_SIZE texel, tightened
+      float csh = ( texture(uCarShadowMap, vec3(cs.xy + vec2(-ct, -ct), cz))
+                  + texture(uCarShadowMap, vec3(cs.xy + vec2( ct, -ct), cz))
+                  + texture(uCarShadowMap, vec3(cs.xy + vec2(-ct,  ct), cz))
+                  + texture(uCarShadowMap, vec3(cs.xy + vec2( ct,  ct), cz)) ) * 0.25;
+      sh = min(sh, csh);
+    }
+  }
+  // Clamped: SHADOW DARKNESS goes to 2.0 and mix() EXTRAPOLATES above t=1 —
+  // at sh~0 the lighting factor hit -1, i.e. negative light, which the
+  // grade/tonemap renders as psychedelic orange/green in shadowed areas.
+  // Clamping crushes >1 toward black, as the knob's help text promises.
+  return max(0.0, mix(1.0, sh, uShadowStr * edgeFade));
+}
+
+void main() {
+  // Eye distance PER FRAGMENT, as TLX (tsl-lit.js vd) and WGX (wgsl-chunks.js
+  // vDist) take it. It was a vertex varying, and the interpolated length is
+  // the average of the corners' — the 4-vertex ground floor (mesh.js
+  // buildFloor, corners >= 1400 m out) read >= 1400 m under the car, so fog
+  // and ground mist painted it >= 44 % fog colour 150 m away on a clear day.
+  float vDist = length(vWorldPos - uEye);
+  vec3 N = normalize(vNrm);
+  // Puddle shape (wet block): the world xz direction of increasing track x, from
+  // derivatives taken here in uniform control flow (WGX parity; see wgsl-chunks).
+  vec2 trkRightXZ = dFdx(vWorldPos.xz) * dFdx(vTrk.y) + dFdy(vWorldPos.xz) * dFdy(vTrk.y);
+  // Two-sided lighting: cull-off single-face geometry (the wheels — tyre bands,
+  // sidewall discs, hub fans — are drawn double-sided with one face per wall)
+  // shows its BACK side through spoke gaps and on the car's far wheels. Without
+  // this the back face keeps the front normal and shades inverted, so the same
+  // part reads bright on one side of the car and dark on the other. Flip N to
+  // face the viewer on back fragments. No-op for culled meshes (their back faces
+  // are discarded before shading), so only the double-sided draws are affected.
+  if (!gl_FrontFacing) N = -N;
+  // Micro-normal relief: perturb the normal with a two-scale noise gradient so
+  // procedurally-textured ground (road/terrain, uDetail > 0) has real surface
+  // bumps — sun glints, lamp speculars and reflections break up over the surface
+  // instead of reading as one uniform polished sheet. Fades with distance (it
+  // would alias to shimmer) and with wetness (the water film levels the surface).
+  if (uDetail > 0.001) {
+    float mnFade = clamp(1.0 - (vDist - 25.0) / 70.0, 0.0, 1.0) * (1.0 - uWetness * 0.75);
+    // Footprint fade: the relief below is a fixed-epsilon (0.22 m) world-space
+    // noise-gradient normal perturbation. On the ROAD/terrain — viewed at a
+    // grazing angle while driving — one screen pixel spans many metres, so
+    // neighbouring pixels sample the gradient at unrelated noise phases and the
+    // perturbed normal aliases; because the noise is world-locked the aliased
+    // pattern CRAWLS under the car as you move, and since it feeds N·L it reads
+    // as wavy "shadows" streaming across the tarmac. The distance fade alone
+    // misses this — a grazing patch can be close (high mnFade) yet still have a
+    // metre-wide footprint — so also fade the relief out once the per-pixel
+    // footprint outgrows the ~0.2 m noise-feature scale (the same fwidth() AA
+    // used for the wall bump maps and albedo seams).
+    float mnFp = max(fwidth(vWorldPos.x), fwidth(vWorldPos.z));
+    mnFade *= clamp(1.0 - (mnFp - 0.15) / 0.70, 0.0, 1.0);
+    if (mnFade > 0.01) {
+      vec2 mnp = vWorldPos.xz * 1.7;
+      float e = 0.22;
+      float h0 = vnoise(mnp) * 0.7 + vnoise(mnp * 3.9) * 0.3;
+      float hx = vnoise(mnp + vec2(e, 0.0)) * 0.7 + vnoise(mnp * 3.9 + vec2(e * 3.9, 0.0)) * 0.3;
+      float hz = vnoise(mnp + vec2(0.0, e)) * 0.7 + vnoise(mnp * 3.9 + vec2(0.0, e * 3.9)) * 0.3;
+      // (Near-field third octave removed: 3 extra vnoise/fragment over most of
+      // the screen for fine aggregate bumps that are invisible at racing speed.)
+      N = normalize(N + vec3(h0 - hx, 0.0, h0 - hz) * ((uDetail * 0.4 * mnFade) / e));
+    }
+  }
+  // Car paint micro normal map (orange-peel): the same trick as the ground
+  // relief above, at paint scale. No colour layers — the perturbed normal
+  // feeds every standard lighting/reflection term below, so the surface
+  // ITSELF reflects: the sun streak and sky env break into a live shimmer
+  // that slides across the panels as the car moves.
+  // Geometric normal, kept UNPERTURBED for the smooth lacquer clearcoat lobe and
+  // the analytic env mirror below — orange-peel/flake live UNDER the clearcoat,
+  // they must not roughen the mirror shell (that's what read as "ghostly" before).
+  vec3 Ngeo = N;
+  // Car3D surface ids occupy 20..33, above TrackGeom's 0..15 material range.
+  // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
+  int surfaceId = int(vMat + 0.5);
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 33;
+  bool paintSurface = surfaceId == 20;
+  bool carbonSurface = surfaceId == 21;
+  bool rubberSurface = surfaceId == 22;
+  // TYRE SIDEWALL (car3d.js SURFACES.sidewall = 33): the moulded wall, its
+  // compound band and lettering are a SATIN rubber (rough ~0.6, a little more
+  // specular), not the tread's matte 0.9 — the wall and the tread separate.
+  bool sidewallSurface = surfaceId == 33;
+  bool metalSurface = surfaceId == 23;
+  bool glassSurface = surfaceId == 24;
+  bool emissiveSurface = surfaceId == 25;
+  bool panelSurface = surfaceId == 26;
+  // MIRROR: a chrome livery finish. Paint-like (it keeps the clearcoat and the
+  // env lobe, which is what actually makes a mirror) but metallic and nearly
+  // smooth, so the body reflects its surroundings instead of going matte-dark.
+  bool mirrorSurface = surfaceId == 27;
+  // Three more livery finishes, on the SAME mechanism the existing ones use:
+  // car3d.js FINISH_SURFACE remaps a painted vertex's id, so a finish costs a
+  // surface id here rather than a new uniform. CARBON needs no id at all — 21
+  // already exists and the carbon finish simply points at it.
+  bool matteSurface = surfaceId == 28;       // flat, chalky, no clearcoat
+  bool satinMetalSurface = surfaceId == 29;  // brushed-alloy sheen, half-metal
+  bool iriSurface = surfaceId == 30;         // pearlescent: hue swings with view angle
+  bool carbonFinish = surfaceId == 31;       // bare weave OVER the livery colour
+  // THE HELMET VISOR is glass-like in roughness and clearcoat but NOT a chrome
+  // mirror: see the baseRefl split in the env block below.
+  bool visorSurface = surfaceId == 32;
+  bool paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface;
+  // CARBON WEAVE — the bare finish (31) and the real carbon parts (21: floor,
+  // wings, halo). A 3.3 cm cross-hatch, faded to its mean over 10-20 m so it
+  // cannot moire at range while garage + near-track keep the twill readable
+  // (CarMaterialShade.CARBON). wvT is the twill's ANALYTIC slope (d/du, d/dv of
+  // the sin*sin, same fade): it tilts the shading normal below with no
+  // derivative, so the weave catches the light thread by thread.
+  float weave = 0.5;
+  vec2 wvT = vec2(0.0);
+  if (carbonFinish || carbonSurface) {
+    vec2 wv = vObjPos.xz * 190.0 + vObjPos.y * 190.0;
+    float wvFade = clamp(1.0 - (vDist - 10.0) / 10.0, 0.0, 1.0);
+    weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
+    wvT = vec2(cos(wv.x) * sin(wv.y), sin(wv.x) * cos(wv.y)) * wvFade;
+  }
+  float carPaint = classifiedCar ? (paintLike ? uCarPaint : 0.0) : uCarPaint;
+  // Carbon parts carry a THIN lacquer (min 0.30): F1 carbon is clear-coated, so
+  // the weave sits under a crisp sun/lamp glint. No env mirror (carPaint 0).
+  float clearcoat = classifiedCar
+    ? (paintSurface ? uClearcoat
+      : (mirrorSurface ? max(uClearcoat, 0.85)
+      : (iriSurface ? max(uClearcoat, 0.70)
+      : (satinMetalSurface ? min(uClearcoat, 0.25)
+      : (matteSurface ? 0.0
+      : ((carbonSurface || carbonFinish) ? min(uClearcoat, 0.42)
+      : ((glassSurface || visorSurface) ? uClearcoat * 0.45 : 0.0)))))))
+    : uClearcoat;
+  // PAINT gets uMetalness — the only surface through which CAR METALLIC can act:
+  // every car pixel is classified (car3d.js surfaceOf() falls back to paint),
+  // metal/mirror are pinned by the max() floors below, carbon is a constant.
+  // js/game.js's PAINT_* set
+  // metalness 0.12 on all four PAINT_* constants and its comment says the mild
+  // metalness "tints specular + reflections toward the team colour like real
+  // metallic flake, and scales the sky env down so the paint stays saturated" —
+  // which is precisely what metalness does here (f0 mix toward albedo, and the
+  // (1.0 - metalness) factors on diffuse and on envAdd). Scoped to paintSurface:
+  // rubber, glass, emissive and panel stay dielectric at 0.0.
+  float metalness = classifiedCar
+    ? (metalSurface ? max(uMetalness, 0.82)
+      : (mirrorSurface ? max(uMetalness, 0.55)
+      : (satinMetalSurface ? max(uMetalness, 0.60)
+      : (matteSurface ? 0.0
+      : (iriSurface ? max(uMetalness, 0.25)
+      : ((carbonSurface || carbonFinish) ? 0.08 : (paintSurface ? uMetalness : 0.0)))))))
+    : uMetalness;
+  float specular = classifiedCar
+    ? (rubberSurface ? 0.18 : sidewallSurface ? 0.35 : ((metalSurface || mirrorSurface) ? 1.0
+      : (satinMetalSurface ? 0.82 : (matteSurface ? 0.11
+      : ((carbonSurface || carbonFinish) ? 0.48 : (panelSurface ? 0.35 : uSpecular))))))
+    : uSpecular;
+  float emissive = classifiedCar
+    ? (emissiveSurface ? max(uEmissive, 1.0) : (paintLike ? uEmissive : 0.0))
+    : uEmissive;
+  bool envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;
+  if (carPaint > 0.001) {
+    // Two scales: coarse orange-peel waviness + fine metallic-flake sparkle.
+    // Keyed to OBJECT space so the pattern is glued to the panels instead of
+    // streaming across the bodywork as the car drives (texture-swimming).
+    // Fades with distance so it never aliases to shimmer at range.
+    float pFade = clamp(1.0 - (vDist - 18.0) / 50.0, 0.0, 1.0);
+    if (pFade > 0.01) {
+      vec2 puv = vObjPos.xz * 34.0 + vObjPos.y * 29.0;
+      vec2 fuv = vObjPos.xz * 130.0 + vObjPos.y * 111.0;
+      float pe = 0.09;
+      float pb0 = vnoise(puv) * 0.6 + vnoise(fuv) * 0.4;
+      float pbx = (vnoise(puv + vec2(pe, 0.0)) * 0.6 + vnoise(fuv + vec2(pe * 3.8, 0.0)) * 0.4) - pb0;
+      float pby = (vnoise(puv + vec2(0.0, pe)) * 0.6 + vnoise(fuv + vec2(0.0, pe * 3.8)) * 0.4) - pb0;
+      vec3 pT = normalize(cross(N, vec3(0.0, 1.0, 0.001)) + vec3(1e-4));
+      vec3 pB = cross(N, pT);
+      // 0.28 (was 0.22 / once 0.7): garage gloss shimmer under the clearcoat;
+      // clearcoat lobe + env mirror still carry the shine (CarMaterialShade.GLOSS).
+      N = normalize(N + (pT * pbx + pB * pby) * (0.28 * carPaint * pFade));
+    }
+  }
+  // SAA source: geometric N + peel, BEFORE wall/MAT bump. WGX cannot take
+  // dpdx after the non-uniform matId branch (lifecycle ratchet), so it mixes
+  // saaVarGeo with a hoisted peel. Feeding dFdx of the bumped wall N here
+  // widened roughness on every brick/concrete/corrugation seam and made
+  // WebGL2 walls read duller than WebGPU. Lighting still uses the bumped N.
+  vec3 Nsaa = N;
+  // CARBON WEAVE NORMAL: tilt N along the twill's analytic slope (wvT, faded
+  // with the weave itself), in the same N-built tangent frame the orange-peel
+  // uses. After the Nsaa snapshot, like the material bump: it is a micro-normal,
+  // and WGX cannot take dpdx of it after the surface-id branch.
+  if (carbonFinish || carbonSurface) {
+    vec3 wT = normalize(cross(N, vec3(0.0, 1.0, 0.001)) + vec3(1e-4));
+    vec3 wB = cross(N, wT);
+    N = normalize(N + (wT * wvT.x + wB * wvT.y) * 0.26);
+  }
+  // Per-material procedural bump: MUST run before V/L/H/NoL below so brick
+  // mortar/plank seams/corrugation ridges etc. actually affect the lighting
+  // response, not just an albedo tint applied after the fact.
+  applyMaterialNormal(int(vMat + 0.5), N, vDist);
+  applyMaterialTexNormal(int(vMat + 0.5), N, vDist);   // baked map composes on top (no-op at uMatTexMix 0)
+  vec3 V = normalize(uEye - vWorldPos);
+  vec3 L = uSunDir;
+  vec3 H = normalize(L + V + vec3(1e-5));   // +eps: normalize(0) NaNs when V==-L
+  float NoL = max(dot(N, L), 0.0);
+  float NoV = max(dot(N, V), 1e-4);
+  float NoH = max(dot(N, H), 0.0);
+  float VoH = max(dot(V, H), 0.0);
+
+  vec3 albedo = vCol;
+  // NO N.y-weighted "car deck mirror": on the dead-flat floor plank / front-wing
+  // planes (N.y≈1) it peaks at full strength and reads as a chrome "silver plane"
+  // under the car. The whole car is reflected uniformly by the VIEW-driven env
+  // mirror below (base reflectance on every panel + grazing rim) plus SSR.
+  // Procedural ground texture: coarse patchiness + fine aggregate grain keyed to
+  // world position, so flat asphalt/concrete/grass read as a surface rather than
+  // a solid slab. Multiplicative, so it darkens as much as it lightens.
+  float patchM = 0.5;
+  if (uDetail > 0.0) {
+    vec2 wp = vWorldPos.xz;
+    // Fade the fine high-frequency octave out with distance: at range it aliases
+    // into shimmer (and the texel footprint exceeds its wavelength anyway), so
+    // distant ground settles to flat colour while near ground keeps its grain.
+    float fineFade = clamp(1.0 - (vDist - 35.0) / 90.0, 0.0, 1.0);
+    // Fine octave only where its weight is > 0 (hunt 2 G4); 0 * 0 keeps the sum.
+    float nF = 0.0;
+    if (fineFade > 0.0) nF = vnoise(wp * 2.1);
+    float n = vnoise(wp * 0.35) * 0.60 + nF * 0.40 * fineFade;
+    albedo *= 1.0 + (n - 0.5) * uDetail;
+    // Repair patches: low-frequency resurfaced blotches darken the albedo a
+    // few percent (patchM also nudges roughness below - fresh asphalt is
+    // smoother and darker than the weathered surface around it).
+    patchM = vnoise(wp * 0.055 + 9.1);
+    float pm = smoothstep(0.52, 0.72, patchM);
+    albedo *= 1.0 - pm * 0.05 * min(uDetail * 4.0, 1.0);
+    // Sparse cracks: thin ridge-noise lines, masked by a low-frequency zone
+    // gate so only some stretches are cracked; near-field only, and the
+    // uDetail*4 gate means a wet road (detail 0.06) fades them to ~24%
+    // (the water film hides them).
+    float crackFade = clamp(1.0 - (vDist - 18.0) / 45.0, 0.0, 1.0);
+    if (crackFade > 0.01) {
+      float cr = abs(vnoise(wp * 0.9 + 3.3) * 2.0 - 1.0);
+      // AA the crack-ridge threshold — same missing-derivative bug as the
+      // building-material seams (fixed elsewhere in this file): the fixed
+      // 0.015..0.075 band is a THRESHOLD ON cr, not a world-space distance, so
+      // once a screen pixel's footprint changes cr by more than that band per
+      // pixel, the ridge line pops in/out of existence per-frame instead of
+      // fading — right in the driver's near field (crackFade only applies
+      // <~63m), reading as thin dark stripes streaming under the car as it
+      // moves through world space. fwidth(cr) widens the falloff edge to
+      // match; the fixed 0.015 inner edge (solid ridge core) is kept as-is.
+      float crAA = max(0.075, 0.015 + fwidth(cr));
+      float crack = (1.0 - smoothstep(0.015, crAA, cr))
+                  * smoothstep(0.40, 0.70, vnoise(wp * 0.11 + 7.7));
+      albedo *= 1.0 - crack * 0.30 * crackFade * min(uDetail * 4.0, 1.0);
+    }
+    albedo = max(albedo, vec3(0.0));
+  }
+  // PEARLESCENT / FLIP PAINT. A real pearl coat holds interference flakes whose
+  // reflected wavelength depends on the angle you view them at, so the panel
+  // reads one colour face-on and another at a graze. Approximated by rotating
+  // the albedo through a cosine palette driven by the view angle: cheap, stable
+  // under motion (no derivative, no texture) and it degrades to the base colour
+  // when viewed square-on, so the livery a player picked is still what they see
+  // from the front.
+  // CARBON FINISH: bodywork in bare weave. Crush the livery colour toward the
+  // dark resin and lay a fine cross-hatch over it, keeping a trace of the team
+  // tint so a red car is still identifiably that team's car in carbon. The
+  // weave itself is computed with the surface classification above.
+  if (carbonFinish) {
+    albedo = mix(albedo * 0.16 + vec3(0.030, 0.031, 0.035), albedo * 0.28, 0.25);
+    albedo *= 0.84 + 0.32 * weave;
+  } else if (carbonSurface) {
+    albedo *= 0.88 + 0.24 * weave;
+  }
+  if (iriSurface) {
+    float fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
+    vec3 shift = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + fres * 1.4));
+    // MULTIPLY the base colour rather than mixing toward the interference
+    // colour: a pearl coat tints what is under it, it does not replace it. The
+    // first pass mixed at 0.75 from fres 0.05 and turned a Ferrari mint green.
+    // Weighted to genuinely grazing angles only, so face-on stays team colour.
+    albedo *= mix(vec3(1.0), 0.60 + 0.80 * shift, smoothstep(0.30, 0.92, fres) * 0.40);
+  }
+  float rough = clamp(uRoughness, 0.04, 1.0);
+  if (carbonSurface || carbonFinish) rough = max(rough, 0.52) + (weave - 0.5) * 0.12;   // the twill's roughness ripple
+  if (rubberSurface) rough = max(rough, 0.90);
+  if (sidewallSurface) rough = clamp(rough, 0.55, 0.65);   // satin wall vs the matte tread
+  if (metalSurface) rough = min(rough, 0.18);
+  if (glassSurface || visorSurface) rough = min(rough, 0.13);
+  if (emissiveSurface) rough = max(rough, 0.32);
+  if (panelSurface) rough = max(rough, 0.72);
+  if (mirrorSurface) rough = min(rough, 0.09);
+  if (matteSurface) rough = max(rough, 0.92);
+  if (satinMetalSurface) rough = clamp(rough, 0.24, 0.40);
+  if (iriSurface) rough = min(rough, 0.22);
+  // Repair patches read glossier: fold the patch mask into roughness (max
+  // +-0.08) before the specular AA below widens it.
+  if (uDetail > 0.0) rough = clamp(rough + (patchM - 0.5) * 0.16 * min(uDetail * 4.0, 1.0), 0.04, 1.0);
+  // Procedural per-material surface texture (brick/glass/metal/wood/… ; 0 = FLAT).
+  applyMaterial(int(vMat + 0.5), albedo, rough, vDist);
+  // After the material's grain/tint so the paint sits ON the tarmac, not under it.
+  roadMarkings(albedo, rough);
+  // Specular anti-aliasing: widen roughness where the normal changes fast in
+  // screen space (geometry edges, peel on paint). Nsaa is the pre-material
+  // snapshot — same mix WGX uses (geo vs peel). Do not dFdx the bumped N.
+  vec3 saaDx = dFdx(Nsaa), saaDy = dFdy(Nsaa);
+  float saaVar = dot(saaDx, saaDx) + dot(saaDy, saaDy);
+  rough = min(1.0, sqrt(rough * rough + saaVar * 0.35));
+  float a = rough * rough;
+  vec3 f0 = mix(vec3(0.08 * specular), albedo, metalness);
+
+  // ── Wet surface (rain) ──────────────────────────────────────────────────────
+  // Rain darkens and polishes surfaces. Strongest on up-facing ground (water
+  // pools on flat tarmac); near-vertical walls stay mostly matte. A low-frequency
+  // value-noise mask carves standing puddles in the low spots that go near-mirror.
+  // wet/puddle are reused below to brighten lamp reflections + sky env.
+  float wet = 0.0;
+  float puddle = 0.0;
+  // The specular WATER FILM, as opposed to "this surface is rained on". Every
+  // reflection-side use below must key off this, not plain wet — otherwise soaked
+  // grass still mirrors the lamps and the sky.
+  float wetSheen = 0.0;
+  // NOT on a car (classifiedCar): everything below is keyed to WORLD position —
+  // value-noise puddles, ripple cells, the 0.42 tarmac absorb on every up face —
+  // so in rain the car tops wore world-space puddles that slid across the moving
+  // body. Cars take the CAR WET LOOK after this block instead.
+  if (uWetness > 0.001 && !classifiedCar) {
+    float upFace = smoothstep(0.50, 0.90, N.y);      // flat ground only
+    // Water only SHEETS on a sealed surface. The up-facing test alone put the
+    // same mirror film on the grass verges and the gravel traps as on the
+    // tarmac — flat is flat to a normal test — so a wet lap read as a flooded
+    // canal with cyan banks. Porous ground drinks the water instead: it darkens
+    // (more than tarmac, since wet soil is markedly darker) but never polishes.
+    // This is only expressible now that road/terrain carry material ids.
+    int wmid = int(vMat + 0.5);
+    float porous = (wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11) ? 1.0 : 0.0;
+    wet = uWetness * upFace;
+    // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
+    // reference (constants K, mask()); TLX tsl-lit.js and WGX wgsl-chunks.js
+    // mirror it constant for constant. Two octaves of world-space surface
+    // noise (~7.7 m, ~3.4 m): fixed real locations, never screen-space (GT7
+    // keeps puddles where they are, https://traxion.gg/gran-turismo-7-features-detailed-dynamic-weather-but-not-at-every-track/).
+    float pn = vnoise(vWorldPos.xz * 0.13 + 4.7) * 0.70 + vnoise(vWorldPos.xz * 0.29 + 11.3) * 0.30;
+    // PUDDLES FOLLOW THE ROAD SHAPE (2026-10-01). On the road ribbon (vTrk.z is
+    // the half-width, > 0 only there) the noise is weighted by where water
+    // actually stands: the crown drains to the gutters (0.75 at the centre,
+    // 1.25 at the edges), and the LOW side of a banked turn holds it. The
+    // lateral downhill is read from the geometry — the world direction of
+    // increasing lateral x, from the screen-space derivatives of vTrk.y and
+    // vWorldPos.xz, dotted with the geometric normal's tilt — so a camber
+    // pools the inside and dries the outside without any per-circuit data.
+    // Before, water pooled equally on the crown and in the gutter, and a banked
+    // turn held standing water on its high side (the second graphics-detail
+    // survey, item 13). Mirrored constant for constant on TLX and WGX.
+    float pool = 1.0;
+    if (vTrk.z > 0.5) {
+      float lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
+      float rl = length(trkRightXZ);   // derivatives hoisted next to N (uniform control flow)
+      float downhill = rl > 1e-6 ? -dot(trkRightXZ / rl, Ngeo.xz) : 0.0;   // +: the +x side lies lower
+      // The gutters and kerb hollows hold the water (rough edges fill first —
+      // iRacing Tempest, https://www.iracing.com/?p=272386): weight 0.75 on
+      // the crown → 1.25 from |lat| 0.95 out. No curvature, no racing line.
+      pool = mix(0.75, 1.25, smoothstep(0.35, 0.95, abs(lat))) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
+    }
+    // GROWTH: nothing below road wetness 0.6 (a "wet" road is damp, not
+    // flooded); from 0.6 to 1.0 the threshold falls 1.0 → 0.62 so pools spread
+    // out of the deepest spots, and the amount fades in. Drying runs it
+    // backwards: puddles shrink to their deepest spots first, then vanish.
+    // Wide, soft edges (0.20) so pools BLEND into the wet sheet.
+    float pg = clamp(smoothstep(0.6, 1.0, uWetness) * uPuddles, 0.0, 1.0);
+    float plo = 1.0 - 0.38 * pg;
+    puddle = smoothstep(plo, plo + 0.20, pn * pool) * pg * upFace;
+    // Porous ground cannot hold standing water — no pooling, and no sheen below.
+    puddle *= 1.0 - porous;
+    // RAIN RIPPLES (2026-10-01): expanding rings from drop impacts, keyed to the
+    // game clock, as a normal perturbation on the POOLED water only. N is read
+    // below by the sun/lamp GGX lobes and the sky reflection, never by the
+    // diffuse NoL computed above — right for a ripple, a specular event. Two
+    // cell grids of random impact points; each cell spawns one ring per cycle
+    // at its own phase, the ring is sin((r - v·t)·k) damped by radius and age,
+    // and the normal tilt is that sine's gradient (cos·k·r̂). Mirrored constant
+    // for constant in js/render/three/tsl-lit.js and js/render/webgpu/wgsl-chunks.js.
+    if (puddle > 0.001 && uRain > 0.001) {
+      vec2 rg = vec2(0.0);
+      for (int k = 0; k < 2; k++) {
+        float fk = float(k);
+        float sc = k == 0 ? 1.7 : 2.9;                        // ~0.6 m and ~0.35 m cells
+        vec2 rp = vWorldPos.xz * sc + fk * 7.3;
+        vec2 ci = floor(rp), cf = fract(rp) - 0.5;
+        float hh = hash21(ci + fk * 19.0);
+        float t = fract(uTime * (0.8 + 0.5 * fk) + hh);       // 0..1 ring life, staggered per cell
+        float r = length(cf) + 1e-4;
+        float ph = (r - t * 0.45) * 40.0;
+        float amp = (1.0 - t) * t * 4.0 * exp(-r * 5.0) * step(r, t * 0.45 + 0.08);   // rises, spreads, dies
+        rg += cos(ph) * (cf / r) * amp;
+      }
+      N = normalize(N + vec3(rg.x, 0.0, rg.y) * (0.10 * uRain * puddle));
+    }
+    // Water absorbs light: wet asphalt reads notably darker, puddles a touch darker
+    // (not stark, so they don't read as flat dark blobs). WET ROAD DARKEN knob
+    // scales the absorption (uWetDark 1 = shipped 0.42 floor, 0 = no darkening).
+    // Soaked grass/gravel darkens harder than tarmac and that is ALL it does.
+    // The porous coefficient must be the LARGER of the two: absorb multiplies
+    // albedo, so a bigger coefficient means a darker surface. These two were
+    // transposed — mix(A,B,porous) returns A for tarmac and B for porous, so
+    // tarmac absorbed 58% while soaked grass absorbed only 42%, leaving the
+    // verges 38% BRIGHTER than the ribbon they border. That is the mirror image
+    // of the "flooded canal with cyan banks" silhouette the porous branch was
+    // added to fix, and it contradicts both comments above ("darkens more than
+    // tarmac", "darkens harder than tarmac and that is ALL it does"). The 0.42
+    // named in the comment above is the ROAD's result (1 - 0.58), which is why
+    // the road literal stays put and only the porous one moves.
+    // Porous expressed as a FRACTION of the road result, not its own coefficient.
+    // An independent 0.72 was darker at the default (0.28 vs 0.42) but clipped to
+    // pure black at uWetDark 1.389 while the road still rendered detail until
+    // 1.724 — verges going black BEFORE the tarmac is the same silhouette break
+    // this branch exists to prevent, just with the polarity flipped. As a
+    // fraction the two saturate together and porous is strictly darker across
+    // the whole 0..2.4 range, with no clip-order to get wrong.
+    float absorbRoad = clamp(1.0 - 0.58 * uWetDark, 0.0, 1.0);
+    float absorb = mix(absorbRoad, absorbRoad * 0.66, porous);
+    albedo *= mix(1.0, absorb, wet);
+    albedo *= mix(1.0, 0.40, puddle);   // standing water: darker than the wet sheet
+    // Polish: damp sheen → mirror in the puddles. A wet sheet is glossy but not
+    // a perfect mirror except where water actually pools, so the general wet
+    // roughness stays moderate (keeps the sun specular a streak, not a flare).
+    // 0.15 was mirror-flat and turned the road into a canal; real wet asphalt
+    // keeps visible texture between the pools. Porous ground stays fully matte.
+    wetSheen = wet * (1.0 - porous);
+    rough = mix(rough, 0.30, wetSheen);
+    rough = mix(rough, 0.02, puddle);   // near-mirror inside the pool
+    a = rough * rough;
+    // Thin water film is a dielectric (~0.03 reflectance) — raise f0 toward it.
+    // Only where a film can actually form.
+    f0 = mix(f0, vec3(0.04), wetSheen * 0.6);
+  }
+  // CAR WET LOOK (2026-10-03): uniform over the body, nothing world-keyed, so it
+  // rides with the car. The lacquered/metal/glass surfaces are already wet-glossed
+  // by the PAINT_WET_* roughness (js/game.js); the DULL ones — carbon, tyre tread
+  // and sidewall, matte and satin panels — darken a little (soaked fibre and
+  // rubber) and gain a little gloss and a water-film f0. No puddles, no ripples,
+  // and wetSheen stays 0: the road's analytic wet mirror is not a car's.
+  if (uWetness > 0.001 && classifiedCar) {
+    if (carbonSurface || carbonFinish || rubberSurface || sidewallSurface || matteSurface || panelSurface) {
+      albedo *= 1.0 - 0.20 * uWetness;
+      rough *= 1.0 - 0.25 * uWetness;
+      a = rough * rough;
+      f0 = mix(f0, max(f0, vec3(0.04)), 0.6 * uWetness);
+    }
+  }
+
+  // GROUND-PROXIMITY AO (2026-10-03), AMBIENT ONLY, car BODY draws only (uCarPaint
+  // is 1 on the body/cockpit/flap draws and 0 on the separately drawn wheels; the
+  // tyre ids are excluded so a whole-car mesh matches). The car's origin sits on
+  // the road, so object-space height IS height above it: within ~0.4 m the road
+  // the low faces see is the car's own shadow. Weighted to the GROUND half of the
+  // hemisphere (x0.5 at the road) and only a touch of the sky half (x0.94), so
+  // the floor edge and lower sidepods ground the car while up faces barely move.
+  // Never touches the sun, lamps or reflections. Flaps are drawn pivot-local
+  // (objP.y ~ 0) — the sky weighting keeps their visible top within ~6%.
+  float gpao = (uCarPaint > 0.5 && !rubberSurface && !sidewallSurface)
+    ? 1.0 - smoothstep(0.02, 0.40, vObjPos.y) : 0.0;
+  vec3 amb = mix(uAmbGround * (1.0 - 0.50 * gpao), uAmbSky * (1.0 - 0.06 * gpao), N.y * 0.5 + 0.5);
+
+  // Combine the hard shadow map with soft drifting cloud shadows: the sun is
+  // dimmed where clouds pass overhead, casting moving dappled light on the track.
+  //
+  // Gated on NoL, the PER-FRAGMENT twin of the uShadowStr <= 0.0 early-out inside
+  // sampleShadow(). That one covers the frames where the whole pass is dark; this
+  // covers the fragments that FACE AWAY from the sun on a bright frame — every
+  // back-facing wall, every underside, everything on the shadow side of a car —
+  // where the result is multiplied by NoL == 0 and thrown away.
+  //
+  // The local "shadow" has exactly three readers, each provably zero-or-guarded:
+  //   972  litNoL = NoL * shadow * uKeyMul                    — NoL == 0
+  //   1147 ccCol  = ... * NoLg * shadow * ... * clearcoat     — inside clearcoat > 0.001
+  //   1210 envCC += ... * shadow                              — inside envSurface, and
+  //        envSurface (805) is (carPaint || glass) && clearcoat > 0.001, a SUBSET
+  // so "NoL > 0.0 || clearcoat > 0.001" is exactly sufficient and shadow = 1.0 on
+  // the skipped branch is bit-identical: 972 yields 0 either way, and 1147/1210
+  // are unreachable. Note 1147 uses NoLg (the GEOMETRIC normal) — that is why the
+  // clearcoat term must keep the sample alive rather than riding on NoL alone.
+  //
+  // What it skips: 4 PCSS blocker taps + 4-8 Poisson taps + 4 car-map taps, the
+  // ignoise/sin/cos dither rotation, the slope-bias normalize + sqrt, and
+  // cloudShadow's 2 vnoise. The fragments are spatially coherent (whole surfaces
+  // face away together), so warp divergence is low. This is the same argument the
+  // lamp loop already makes at 1077 — the sun path never got it.
+  float shadow = 1.0;
+  if (NoL > 0.0 || clearcoat > 0.001) {
+    shadow = sampleShadow(vWorldPos) * (1.0 - cloudShadow(vWorldPos) * uCloudShadowDim);
+  }
+  // uKeyMul (KEY LIGHT tuner slider, default 1.0) scales all DIRECT sun lighting
+  // — diffuse, GGX spec, clearcoat glint, car-paint glint — without touching
+  // ambient fill, fog in-scatter or the env-sky reflection (those keep the
+  // scene coherent when the key is dialled down).
+  float litNoL = NoL * shadow * uKeyMul;
+
+  // Base diffuse + ambient (== original lambert shader when uMetalness == 0).
+  vec3 color = albedo * (amb + uSunColor * litNoL * (1.0 - metalness));
+  // SHADOW COOLNESS: bias sun-starved (shadowed / ambient-only) pixels toward a
+  // cool blue for a sunny-day contrast look. 0 = neutral (shipped).
+  if (uShadowTintAmt > 0.001) {
+    color *= mix(vec3(1.0), vec3(0.90, 0.96, 1.12), uShadowTintAmt * clamp(1.0 - litNoL, 0.0, 1.0));
+  }
+
+
+  // ── Physically-based punctual lights (floodlights / street lamps) ─────────
+  // Each lamp is a REAL spotlight: windowed inverse-square falloff (the standard
+  // punctual-light attenuation), a true AIMED cone (per-lamp beam direction +
+  // inner/outer angles — masts tilt their beams over the road), and the SAME
+  // Cook-Torrance GGX specular the sun uses. Diffuse paints the pool; the GGX
+  // lobe gives physical highlights — elongated wet-road speculars, glass glints,
+  // car-paint sparkle — no hand-tuned lobe/glint hacks.
+  // No per-light shadows (cost); the cone shapes the light instead.
+  vec3 lampFog = vec3(0.0);
+  // BAKED LAMP POOLS: an upward-facing fragment takes EVERY lamp's diffuse pool
+  // from the light map (no nearest-N cut, so nothing pops on as you approach);
+  // each live lamp below scales its diffuse by (lampSh - bakeW) so no lamp is
+  // counted twice and the shadow-mapped floodlight still carves its shadow.
+  vec2 bUv = (vWorldPos.xz - uBakeOrigin) / uBakeSize;
+  // Alpha is the surface height the texel was baked at: a fragment off it (a
+  // bridge deck over a baked road, a roof, the lower road of a crossover, a
+  // texel with no known ground) keeps the live loop instead.
+  // Tile atlas: the indirection names this tile's slot (empty -> live loop);
+  // inside the slot the 1-texel gutter holds the neighbours, so the bilinear
+  // tap matches the full grid and never crosses into another slot. The bounce
+  // layer is the same slot atlasH rows down (+0.5 v).
+  // Gated (perf hunt 2 G2, TLX B3): only the 3 dependent TAPS move under the
+  // gate; every arithmetic statement below is the original text, so the
+  // compiler sees the same expressions (the first, fully-branched form moved
+  // the colour adds too and was not bit-identical on SwiftShader at night).
+  // Outside the gate bSlot stays -1, so bakeW takes its ': 0.0' arm, and bE/bB
+  // (0 here) are only ever read times bakeW: the same +0 the original added.
+  // At N.y <= 0.55 the original weight was smoothstep(0.55, ...) == 0 anyway.
+  // Explicit-LOD taps, legal in non-uniform flow.
+  vec2 bG = bUv * uBakeGrid.xy;
+  vec2 bTile = clamp(floor(bG), vec2(0.0), max(uBakeGrid.xy - 1.0, vec2(0.0)));
+  vec2 bSlot = vec2(-1.0);
+  vec4 bT = vec4(0.0);
+  vec3 bB = vec3(0.0);
+  if (uBakeOn > 0.5 && N.y > 0.55 && all(greaterThan(bUv, vec2(0.0))) && all(lessThan(bUv, vec2(1.0)))) {
+    bSlot = texelFetch(uLampBakeIdx, ivec2(bTile), 0).xy;
+    if (bSlot.x >= 0.0) {
+      vec2 bUvD = (bSlot + (bG - bTile) * uBakeGrid.z + 1.0) / max(uBakeAtlas, vec2(1.0));
+      bT = textureLod(uLampBake, bUvD, 0.0);
+      bB = textureLod(uLampBake, bUvD + vec2(0.0, 0.5), 0.0).rgb * uBakeScale;
+    }
+  }
+  vec3 bE = bT.rgb * uBakeScale;
+  float bakeW = (uBakeOn > 0.5 && bSlot.x >= 0.0 && all(greaterThan(bUv, vec2(0.0))) && all(lessThan(bUv, vec2(1.0))))
+    ? smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(0.75, 2.5, abs(vWorldPos.y - bT.a))) : 0.0;
+  color += albedo * bE * bakeW * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
+  // Baked LAMP BOUNCE (every lamp, per unit BOUNCE); the live bounce below
+  // steps aside by the same weight.
+  color += albedo * bB * (uBounceK * bakeW) * (1.0 - metalness);
+  for (int i = 0; i < MAX_LIGHTS; i++) {
+    if (i >= uNumLights) break;
+    int li = i * 4;
+    vec4 la = uLight[li], lb = uLight[li + 1], lc = uLight[li + 2];
+    vec3 LP = la.xyz - vWorldPos;
+    float rad = la.w;
+    // Range-reject on the SQUARED distance, before the root. On a 28-32 lamp
+    // night circuit most lamps are out of range for any given fragment, so this
+    // turns up to 32 sqrt per fragment into 32 dot products. Exact, not
+    // approximate: the two tests disagree only when d sits within an ulp of rad,
+    // and at d == rad the window below is 1 - (d/r)^4 == 0, so att == 0 and the
+    // "continue" at the bottom of the block fires anyway.
+    float d2 = dot(LP, LP);
+    if (d2 > rad * rad) continue;
+    float dist = sqrt(d2);
+    vec3 Ld = LP / max(dist, 1e-3);
+    // Physical 1/d² falloff, eased to exactly 0 at the radius by (1-(d/r)^4)^2.
+    float dn = dist / rad;
+    float win = clamp(1.0 - dn * dn * dn * dn, 0.0, 1.0);
+    // Minimum-distance floor: each lamp's raw energy (buildTrackLights) is sized
+    // so its INTENDED aim point (road centre, several metres out) reads as a
+    // nicely bloomed pool. On tight street circuits the mast sits right beside
+    // the barrier wall, much closer than that aim point — the true 1/d² falloff
+    // then overshoots the wall by 10-20x, blowing it to solid white. Clamping
+    // the near-field distance keeps the aim-point pool unchanged (dist there is
+    // already well above the floor) while taming any close-by surface.
+    float distC = max(dist, uLampNearClamp);   // LAMP NEAR CLAMP knob (def 4.0)
+    float att = (win * win) / (distC * distC + 1.0);
+    if (att < 1e-6) continue;
+    // Aimed spot cone: how deep the surface sits inside the lamp's beam.
+    // lc.xyz = beam aim, lc.w / uLight[li+3].x = (cosInner, cosOuter);
+    // lb.w is the out-of-beam floor (city skyglow spill between pools).
+    float cd = dot(-Ld, lc.xyz);
+    float beam = smoothstep(uLight[li + 3].x, lc.w, cd);
+    // ILLUMINATION follows the beam (the pool on the road)…
+    float spotD = mix(lb.w, 1.0, beam);
+    // …but the REFLECTION doesn't: the glowing lens itself is visible from far
+    // outside the beam, so a wet road streaks beneath every lamp you can see —
+    // not only inside its illumination cone. The floor is wetness-dependent:
+    // high when wet (streaks from every visible lamp), lower when dry so a dry
+    // night road keeps pool/valley contrast instead of a uniform specular sheet.
+    float spotS = mix(mix(0.16, 0.30, wetSheen) * uLampWallSpill, 1.0, beam);   // LAMP WALL SPILL knob (def 1.0 = shipped floor)
+    // Fog in-scatter: lamp irradiance reaching the fog column at this surface.
+    // Windowed 1/d2 falloff (att) with a partial out-of-beam floor so the lens
+    // glows the fog all around, brightest down the throw. Consumed by the fog
+    // and ground-mist tints below - everything here is already computed.
+    // lampFog's only consumer is gated on uLampFog > 0.0 (game.js drives it
+    // to exactly 0 in daylight), so skip the accumulate on day frames.
+    // uLampFog is a uniform, so this stays uniform control flow.
+    if (uLampFog > 0.0)
+    lampFog += lb.xyz * (att * mix(0.35, 1.0, beam));
+    float NoLl = max(dot(N, Ld), 0.0);
+    // Per-lamp SHADOW for the one mapped floodlight: cars/walls between this
+    // surface and the lamp block its pool — the radial shadow swinging around
+    // a car as it passes under a mast is the marquee night cue the sun map
+    // can't provide (no per-light shadows elsewhere; the cone shapes those).
+    // Direct terms only (diffuse pool + GGX/clearcoat specular below): the
+    // bounce fill and fog in-scatter stay unshadowed — they are indirect.
+    float lampSh = 1.0;
+    // NoLl GATE, same argument as the GGX block 30 lines below (which already
+    // makes it in prose): lampSh has exactly two readers — line 1096, where the
+    // term is multiplied by NoLl, and the specular block, which is already
+    // inside 'if (NoLl > 0.0)'. A fragment facing AWAY from this lamp therefore
+    // paid 4 dependent sampler2DShadow fetches, a mat4 transform, a perspective
+    // divide and 5 bounds compares for a result multiplied by zero. This was the
+    // last ungated per-fragment texture fetch in LIT_FS. Exactly the sun map's
+    // fix at the top of the file ('NoL > 0.0 || clearcoat > 0.001') — the lamp
+    // map never got it copied across. No new divergence class: 'NoLl > 0.0' is
+    // already branched on in this same loop body.
+    if (uLampShadowOn > 0.5 && i == uLampShadowIdx && NoLl > 0.0) {
+      vec4 lpc = uLampShadowVP * vec4(vWorldPos, 1.0);
+      if (lpc.w > 0.0) {
+        vec3 lps = lpc.xyz / lpc.w * 0.5 + 0.5;
+        if (lps.x > 0.002 && lps.x < 0.998 && lps.y > 0.002 && lps.y < 0.998 && lps.z < 1.0) {
+          // Perspective depth is nonlinear (most precision at the lens), so the
+          // receiver — the road, near the far plane — needs a slope-boosted
+          // constant bias against acne rather than the sun map's texel-scaled one.
+          float lpz = lps.z - (0.0012 + 0.004 * (1.0 - NoLl));
+          float lpt = 1.5 / 512.0;
+          lampSh = ( texture(uLampShadowMap, vec3(lps.xy + vec2(-lpt, -lpt), lpz))
+                   + texture(uLampShadowMap, vec3(lps.xy + vec2( lpt, -lpt), lpz))
+                   + texture(uLampShadowMap, vec3(lps.xy + vec2(-lpt,  lpt), lpz))
+                   + texture(uLampShadowMap, vec3(lps.xy + vec2( lpt,  lpt), lpz)) ) * 0.25;
+        }
+      }
+    }
+    // Diffuse pool — fades as the road wets so a wet surface shows the lamp's
+    // REFLECTION (SSR + the GGX lobe below), not a painted matte circle.
+    // On a baked fragment the live term steps aside (1 - bakeW) and the
+    // shadow-mapped lamp carves its shadow out of the pool in the pool's own
+    // steady colour (uBakeShCol; 1 - lampSh is 0 for every other lamp).
+    // LIVE-ONLY lamps (uLight[li+3].y = 1, LampBake.liveOnlyAt: a lens < 3 m
+    // over its ground or a < ~25 deg cone) are not in the bake: no step-aside.
+    float bakeWl = bakeW * (1.0 - uLight[li + 3].y);
+    color += albedo * (lb.xyz * (lampSh * (1.0 - bakeWl)) - uBakeShCol * ((1.0 - lampSh) * bakeWl))
+           * (att * spotD) * NoLl * (1.0 - metalness) * (1.0 - wetSheen * 0.85);
+    // Bounce fill: pool light bounced off the road washes nearby surfaces
+    // (walls, kerbs, car flanks) with the lamp tint even outside the beam -
+    // a near-free stand-in for local ambient probes. Soft NoL floor so
+    // surfaces facing away from the lamp still catch a little.
+    if (uBounceK > 0.0) {
+      color += albedo * lb.xyz * (att * uBounceK * (0.55 + 0.45 * NoLl)) * (1.0 - metalness) * (1.0 - bakeWl);
+    }
+    // GGX specular from the lamp — the same microfacet BRDF as the sun. On the
+    // wet low-roughness road this physically elongates at grazing angles (the
+    // real wet-night streak); on glass/car paint it's the city-light glint.
+    // Gated on NoLl: every term below is multiplied by NoLl at the end, so a
+    // fragment facing AWAY from this lamp (~half the lamps for any given wall
+    // or road pixel) contributed exactly 0 while still paying the full GGX +
+    // clearcoat cost — the dominant per-fragment waste on 28-32-lamp nights.
+    if (NoLl > 0.0) {
+      vec3 Hl = normalize(Ld + V);
+      float NoHl = max(dot(N, Hl), 0.0);
+      float VoHl = max(dot(V, Hl), 0.0);
+      float Dl = D_GGX(NoHl, a);
+      float Vl = V_SmithGGX(NoV, NoLl, a);
+      vec3 Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
+      vec3 radianceS = lb.xyz * (att * spotS * lampSh);
+      vec3 lspec = (Dl * Vl) * Fll * radianceS * NoLl;
+      color += lspec / (1.0 + lspec);
+      // The clearcoat lacquer catches the lamps too — crisp floodlight glints on
+      // car bodies at night, over the softer base-coat highlight.
+      if (clearcoat > 0.001) {
+        float Dcc = D_GGX(NoHl, 0.03);
+        float Vcc = V_SmithGGX(NoV, NoLl, 0.01);
+        float Fcc = F_Schlick(VoHl, vec3(0.05), 1.0).x;
+        vec3 ccl = vec3(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
+        color += 2.2 * ccl / (2.2 + ccl);
+      }
+    }
+  }
+  // (lampSh - bakeW) is negative where the shadow-mapped floodlight is occluded
+  // on a baked fragment; never let that carve below black.
+  color = max(color, vec3(0.0));
+
+  // Cook-Torrance specular, soft-clipped so highlights sheen instead of clipping.
+  // specCol is * litNoL (= NoL * …). A backface paid GGX + F_Schlick + Reinhard
+  // for a result of exactly 0. Verbatim the lamp GGX gate above. H stays live
+  // (sparkle reads it inside litNoL > 0).
+  if (NoL > 0.0) {
+    float D = D_GGX(NoH, a);
+    float Vis = V_SmithGGX(NoV, NoL, a);
+    vec3 F = F_Schlick(VoH, f0, clamp(1.0 - rough, 0.0, 1.0));
+    vec3 specCol = (D * Vis) * F * uSunColor * litNoL;
+    // Soft knee with an asymptote of uSpecKnee (def 4), not a hard Reinhard
+    // cap at 1.0: a raw GGX of 10+ used to come out at ~0.91, UNDER the day
+    // bloom threshold (0.78 is the knee, not the ceiling), so a sun glint off
+    // wet tarmac, chrome or a visor could never bloom. 1.0 restores the old cap.
+    specCol = specCol / (1.0 + specCol / uSpecKnee);
+    color += specCol;
+  }
+
+  // Specular AA for the CLEARCOAT lobes below: the base-coat saaVar above
+  // widens only the base roughness — the fixed-a clearcoat streak and the
+  // pow-400 env sun disc ran unwidened, so on curved bodywork (where the
+  // geometric normal swings fast per pixel) the tight lobes strobed frame to
+  // frame. Variance of Ngeo (NOT N — the lacquer shades on the smooth shell,
+  // and the flake micro-normal must not blur it). uClearcoat is a uniform, so
+  // the branch is uniform control flow and the derivatives stay defined.
+  float ccSaaVar = 0.0;
+  if (uClearcoat > 0.001) {
+    vec3 ccDx = dFdx(Ngeo), ccDy = dFdy(Ngeo);
+    ccSaaVar = dot(ccDx, ccDx) + dot(ccDy, ccDy);
+  }
+
+  // Clearcoat: a second, fixed-low-roughness specular lobe over the base coat —
+  // the thin lacquer shell of automotive paint. It keeps a crisp sun highlight
+  // even where the base coat is rougher, which is what gives cars their glossy
+  // showroom read. The bodywork is smooth-shaded (car3d.js lofts), so the lobe
+  // sweeps across the curved panels per-pixel instead of flashing whole facets.
+  if (clearcoat > 0.001) {
+    // Roughness ~0.19 (a=0.035): wide enough that the streak is VISIBLE sweeping
+    // the curved panels (at 0.1 the cone is ~2 degrees — sub-pixel, reads matte).
+    // Soft-clipped to a 2.6 HDR ceiling instead of 1.0: the hot core punches past
+    // the bloom threshold, so the highlight GLOWS — the actual "shiny" cue.
+    // Uses the GEOMETRIC normal (Ngeo): the lacquer shell is smooth, so the sun
+    // streak stays crisp — the flake micro-normal only roughens the base coat.
+    vec3 Hg = normalize(L + V);
+    float NoHg = max(dot(Ngeo, Hg), 0.0);
+    float NoVg = max(dot(Ngeo, V), 1e-4);
+    float NoLg = max(dot(Ngeo, L), 0.0);
+    if (NoLg > 0.0) {
+    // Widened by the geometric-normal variance (specular AA, same recipe as
+    // the base coat): flat panels keep the crisp 0.035 lobe, tight curvature
+    // fattens it just enough to stop the per-pixel strobing. Capped so a hard
+    // silhouette edge can't matte the lacquer out entirely.
+    float ccA = min(sqrt(0.035 * 0.035 + ccSaaVar * 0.25), 0.30);
+    float Dc = D_GGX(NoHg, ccA);
+    float Vc = V_SmithGGX(NoVg, NoLg, ccA);
+    float Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3(0.05), 1.0).x;
+    // uKeyMul included so KEY LIGHT dims this lobe with the rest of the direct
+    // sun (it was the one direct term missing it — a keyMul of 0 left every
+    // clearcoated car with a full-brightness sun streak).
+    vec3 ccCol = vec3(Dc * Vc * Fc) * uSunColor * NoLg * shadow * uKeyMul * clearcoat;
+    ccCol = 2.6 * ccCol / (2.6 + ccCol);
+    color += ccCol;
+    }
+  }
+
+  // Analytic clearcoat ENV mirror — the lacquer reflects a procedural sky in the
+  // reflected view ray, on EVERY paint pixel including the vertical FLANKS (the
+  // carDeck term below only mirrors up-facing decks; SSR can't reach flanks that
+  // reflect off-screen). Now a WHOLE-CAR env mirror: a base reflectance on every
+  // panel + a grazing Fresnel rim, so the entire body reads reflective (not just
+  // the silhouette). VIEW-driven (Fresnel on Ngeo), NOT N.y-driven, so it stays
+  // uniform across panel orientations instead of hot-spotting flat up-facing
+  // panels (the "silver plane" under the car). Energy-conserving: the base is DARKENED under the mirror weight first,
+  // then the reflected sky is added over it (a mirror on gloss, not a milky wash),
+  // so the livery still reads through it face-on while the car goes mirror-bright.
+  // ccTrans: what the lacquer lets THROUGH to the base (1 - the absorb below) —
+  // the metal env term further down reflects only that share.
+  float ccTrans = 1.0;
+  if (envSurface) {
+    vec3 Rg = reflect(-V, Ngeo);
+    float NoVc = max(dot(Ngeo, V), 1e-4);
+    float ccFb = 1.0 - NoVc; float ccF = ccFb * ccFb;      // fresnel², rim-concentrated (mul not pow(_,2): pow(0,2) NaNs on mobile)
+    // Mirror strength scales with a LIVE probe (uEnvStr>0). Probe-less views —
+    // the in-game SETUP MENU preview and the car-viewer with no world — have no
+    // real surroundings to mirror, so a strong analytic mirror there just washes
+    // the livery flat grey. Those keep only a gentle grazing sheen (base 0.14);
+    // in-race the live cube drives a strong, near-uniform mirror (base 0.72).
+    // The grazing Fresnel rim (0.28·ccF) stays in both — a subtle edge, not a wash.
+    float probeLive = clamp(uEnvStr, 0.0, 1.0);
+    float baseRefl = mix(0.14, 0.72, probeLive);
+    // A TINTED VISOR IS A DIELECTRIC, NOT CHROME. baseRefl is the ANGLE-
+    // INDEPENDENT mirror term — right for the rear-view mirror and a lacquered
+    // body, wrong for a visor, which is dark head-on and bright only where it
+    // rakes away. At 0.72 a near-black visor lost ~30% of its base to the
+    // absorb below and got flat sky in exchange, which is why it photographed
+    // as a pale blue band on the macos-latest GPU. Cutting the uniform term
+    // leaves the 0.28·ccF grazing rim untouched, so the visor keeps its sheen
+    // at the edges and its darkness in the middle.
+    if (visorSurface) baseRefl = mix(0.05, 0.16, probeLive);
+    float envW = clamp(clearcoat * (baseRefl + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
+    // Soft horizon: bright sky above, dark ground tone below. Was a hard step
+    // (-0.03..0.06) — on the faceted engine cover / sidepod shoulders adjacent
+    // facets straddled the line and flipped between "sky" and "ground", reading
+    // as an arbitrary light/dark panel patchwork instead of a reflection. A wide
+    // band keeps the sweep cue but blends across facet seams.
+    // When the probe is FULLY live (uEnvStr≈1) the mix below collapses to envReal,
+    // so the analytic gradient (smoothstep+mix+sqrt, ~10 ops/px on every clear-coated
+    // pixel) would be computed only to be discarded — skip it in that case. The
+    // common case (probe OFF, uEnvStr 0) still takes the analytic path and skips the
+    // cube fetch, so this only ever removes work, never adds a branch cost that matters.
+    vec3 envCC;
+    if (uEnvStr >= 0.999) {
+      // Sharp mip (rough·2.5): a crisp mirror so buildings/trees read as themselves.
+      envCC = textureLod(uEnvCube, Rg, rough * 2.5).rgb;
+    } else {
+      float horiz = smoothstep(-0.12, 0.30, Rg.y);
+      vec3 skyR = mix(uSkyHorizon * 1.2, uSkyZenith, sqrt(max(Rg.y, 0.0)));   // sqrt not pow(x,0.5): pow(0.0,0.5) NaNs on mobile
+      envCC = mix(uAmbGround * 0.6, skyR, horiz);
+      // LIVE env probe (partial fade): when the cubemap around the player car is
+      // warm, the lacquer mirrors the REAL surroundings (trees, buildings, track,
+      // sky — including everything behind the camera that SSR can never see) instead
+      // of the analytic gradient above. uEnvStr fades analytic → real, so the first
+      // frames (and the probe-less setup viewer) keep the gradient fallback.
+      if (uEnvStr > 0.001) {
+        vec3 envReal = textureLod(uEnvCube, Rg, rough * 2.5).rgb;
+        envCC = mix(envCC, envReal, clamp(uEnvStr, 0.0, 1.0));
+      }
+    }
+    // Sun disc in the mirror: pow-400 ≈ a GGX lobe of alpha ~0.0705 — widen
+    // that alpha by the same geometric variance (specular AA) and map back to
+    // an exponent, so the disc softens on tight curvature instead of strobing;
+    // flat panels keep the exact 400. Floor 32 caps how soft an edge can get.
+    float ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
+    float ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
+    envCC += uSunColor * pow(max(dot(Rg, uSunDir), 1e-4), ccDiscExp) * uCarSunGlint * shadow * uKeyMul;  // CAR SUN GLINT × KEY LIGHT — base floored 1e-4: pow(0.0,exp)=NaN on mobile GPUs (log2(0)=-Inf) → black car pixels at night; SwiftShader returns 0 so it never repro'd headless
+    ccTrans = 1.0 - envW * 0.94;
+    color *= ccTrans;                                       // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
+    vec3 addCC = envCC * envW;
+    color += addCC / (1.0 + addCC * 0.35);                 // gentle soft-clip — keeps bright reflections bright
+  }
+
+  // Metallic-flake SPARKLE — the signature "metallic paint" glitter. Each ~4.5 mm
+  // object-space cell gets a random flake tilt; a flake flashes only when its
+  // facet half-aligns with the sun (view-dependent, so the sparkle field shifts
+  // as the camera moves). HDR gain so flashes bloom. Distance-faded to nothing so
+  // it never aliases at range, AND inside 4 m: a 4.5 mm cell is several pixels
+  // there, so the cockpit's own sidepods read as white confetti, not metallic.
+  // Additive white glint — leaves the pigment alone.
+  if (carPaint > 0.001 && litNoL > 0.0 && uSparkle > 0.001) {
+    float spFade = clamp(1.0 - (vDist - 14.0) / 30.0, 0.0, 1.0) * smoothstep(1.5, 4.0, vDist) * uSparkle;
+    // Flakes live in the COLOUR coat: near-black albedo (tyres, carbon floor,
+    // wings, trim) has no metallic pigment, so gate the glitter out there — the
+    // dense white speckle on the dark parts read as dust, not sparkle.
+    spFade *= smoothstep(0.06, 0.22, max(albedo.r, max(albedo.g, albedo.b)));
+    if (spFade > 0.01) {
+      vec3 cell = floor(vObjPos * 220.0);
+      float h1 = hash21(cell.xy + cell.z * 19.7);
+      float h2 = hash21(cell.yz + cell.x * 7.3);
+      // Flake basis off the geometry normal. Ngeo is a well-defined car normal in
+      // practice (and litNoL>0 above already rejects a NaN normal), but harden the
+      // basis anyway: a fallback unit normal keeps cross()/normalize() finite even
+      // if a degenerate (zero-length) Ngeo ever reaches here, so a bad face can't
+      // spray NaN glints across the paint.
+      vec3 nN = length(Ngeo) > 1e-4 ? normalize(Ngeo) : vec3(0.0, 1.0, 0.0);
+      vec3 fT = normalize(cross(nN, vec3(0.0, 1.0, 0.001)) + vec3(1e-4));
+      vec3 fB = cross(nN, fT);
+      vec3 gN = normalize(nN + (fT * (h1 * 2.0 - 1.0) + fB * (h2 * 2.0 - 1.0)) * 0.5);
+      // Tighter alignment window + lower gain than the original (0.965 / 3.0):
+      // sparse individual glints that flash as the view moves, instead of a
+      // dense sand-grain field that made the paint read dirty/matte.
+      float glint = smoothstep(0.990, 1.0, dot(gN, H));
+      // CAR SPARKLE knob (def 1.6 = as-shipped) sets the metallic-flake glint gain.
+      color += uSunColor * litNoL * glint * uCarSparkle * carPaint * spFade;
+    }
+  }
+
+  // (Car deck mirror step 2 removed — see the note at step 1; the clearcoat ENV
+  //  mirror above now carries the car's reflection uniformly across every panel.)
+
+  // Environment reflection: when roughness is very low (wet road / glossy paint),
+  // sample the sky gradient in the reflected view direction.
+  // Roughness > 0.4 = no visible reflection; < 0.15 = mirror-like sky in road.
+  // Wetness forces the surface glossy, so this kicks in hard on rainy roads —
+  // the sky/horizon mirrors in the tarmac and the sun smears a bright streak.
+  float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
+  envBlend = max(envBlend, max(wetSheen * 0.55, puddle * 0.90));   // PUDDLES: a standing pool is a strong mirror even where SSR is shed (phones) — the analytic sky/probe carries it. Smooth analytic wet mirror: this is the COHERENT reflective base the road shows wherever the screen-space SSR march misses (grazing cockpit views miss a lot). Was 0.15 (a whisper, "SSR owns it") — but SSR is patchy at grazing angles, so the analytic sky mirror carries the wet look and SSR just adds crisp on-screen detail on top.
+  if (envBlend > 0.001) {
+    // reflect() computed here, not at the top: envBlend is ~0 for the matte
+    // majority of the scene (road/terrain/walls), where Rv was pure waste.
+    vec3 R = reflect(-V, N);
+    // Lower exponent shows more of the horizon→zenith gradient in the reflection
+    // (vertical glass mostly reflects up into a near-uniform zenith, which reads
+    // flat — this lets the brighter horizon band into the reflected sky).
+    float skyT = pow(max(R.y, 1e-4), 0.40);
+    // Tint env sample by sky gradient; also pick up a gentle sun-horizon blush
+    // when the reflected direction aligns with the sun (warm chrome/paint sheen).
+    vec3 envColor = mix(uSkyHorizon, uSkyZenith, skyT);
+    // The LIVE env probe (the 64 px cube around the player car, uEnvStr > 0
+    // once its six faces are in; shed with the probe at perf tier >= 1) replaces
+    // the two-colour gradient near the car: clouds, stands and the sun disc in
+    // wet tarmac, glass and metal, where the gradient read as a flat sheen.
+    // Faded with distance from the eye (the probe sits at the car), because a
+    // single cube is parallax-wrong far from its centre. The gradient stays
+    // the fallback everywhere the probe is off, so the look never regresses.
+    if (uEnvStr > 0.001) {
+      float probeW = clamp(uEnvStr, 0.0, 1.0) * clamp(1.0 - (vDist - 60.0) / 90.0, 0.0, 1.0);
+      if (probeW > 0.001) envColor = mix(envColor, textureLod(uEnvCube, R, rough * 2.5).rgb, probeW);
+    }
+    float envSunAlign = max(dot(R, uSunDir), 0.0);
+    envColor = mix(envColor, envColor * uSunColor * 1.15, envSunAlign * envSunAlign * (1.0 - rough));
+    // (Wet-road sun-glitter removed — SSR now reflects the real sky/sun on wet roads.)
+    // Dry glossy glass catches the sun too — a tighter, softer glint so day/dawn/dusk
+    // windows flash where they face the sun. Gated (1-wet) so wet road is unchanged;
+    // night sun is dim moonlight so this is naturally negligible after dark.
+    // * (1-wetSheen): a fully-wet road paid pow(_,22) for a result of 0.
+    if ((1.0 - wetSheen) * uWindowSunFlash * uKeyMul > 0.001) {
+      envColor += uSunColor * pow(max(envSunAlign, 1e-4), 22.0) * (1.0 - wetSheen) * envBlend * 0.6 * uWindowSunFlash * uKeyMul;   // WINDOW SUN FLASH × KEY LIGHT (def 1.0 = shipped)
+    }
+    // Roughness dampens the env contribution: rough surfaces see a blurry flat sky.
+    float roughDamp = 1.0 - rough * 0.7;
+    // Fresnel: reflection is strongest at grazing angles. On wet ground square
+    // it so the sky sheen concentrates into the far grazing band instead of
+    // flooding the whole low-camera road — near/mid tarmac stays dark and glossy.
+    // Also dim the reflected sky a touch when wet (a wet road is never as bright
+    // as the sky it mirrors).
+    float envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), 1.0).x;
+    envFresnel = mix(envFresnel, envFresnel * envFresnel, wetSheen * 0.35);   // was full square when wet, which shoved the sky sheen into the far grazing band only and left near/mid road dark (SSR was meant to cover it). Soften the squaring so the smooth analytic reflection spreads across the whole wet road — a coherent mirror everywhere, not a thin far strip.
+    vec3 envWet = envColor * (1.0 - wetSheen * 0.45 * (1.0 - puddle * 0.5));   // a puddle keeps more of the sky than the wet sheet   // keep ~55% of the sky colour on a wet road (was 10%): the analytic mirror now has to read as a real reflection, since it's the smooth base under the patchy SSR. Soft-clip below still stops it blowing to white.
+    // Soft-clip the reflection so a wet road can never blow out to a white sheet
+    // (a low dusk/dawn sun + bright twilight sky otherwise push this past 1). A
+    // Reinhard shoulder on the brightest channel keeps it bright where the scene
+    // is dim and caps it where it would over-saturate.
+    vec3 envAdd = envWet * envFresnel * envBlend * roughDamp * (1.0 - metalness);
+    float envM = max(max(envAdd.r, envAdd.g), envAdd.b);
+    color += envAdd / (1.0 + envM);
+  }
+
+  // METAL ENV REFLECTION (2026-10-03). The block above is the DIELECTRIC share
+  // (F0 0.04, x (1 - metalness)); nothing reflected the METAL share, so rims,
+  // hubs, the halo, brake hardware and the chrome/brushed finishes read as dark
+  // albedo plus a GGX sun dot. A metal mirrors its surroundings tinted by its
+  // own colour: env x Schlick(NoV, F0 = albedo), x metalness. Sky/ground split
+  // and live probe exactly as the clearcoat mirror builds envCC (no sun disc —
+  // the GGX lobe owns the sun); under a lacquer only ccTrans reaches the metal.
+  if (metalSurface || satinMetalSurface || mirrorSurface) {
+    vec3 Rm = reflect(-V, N);
+    vec3 skyM = mix(uSkyHorizon * 1.2, uSkyZenith, sqrt(max(Rm.y, 0.0)));
+    vec3 envMet = mix(uAmbGround * 0.6, skyM, smoothstep(-0.12, 0.30, Rm.y));
+    if (uEnvStr > 0.001) envMet = mix(envMet, textureLod(uEnvCube, Rm, rough * 2.5).rgb, clamp(uEnvStr, 0.0, 1.0));
+    vec3 metAdd = envMet * F_Schlick(NoV, albedo, 1.0 - rough * 0.5) * (metalness * (1.0 - rough * 0.7) * ccTrans);
+    // Dark metals (halo titanium, exhaust) need more env punch at garage range;
+    // bright hubs stay near 1× (CarMaterialShade.METAL.darkEnvBoost).
+    if (metalSurface) {
+      float metLum = dot(albedo, vec3(0.299, 0.587, 0.114));
+      metAdd *= 1.0 + (1.0 - clamp(metLum * 4.0, 0.0, 1.0)) * 0.32;
+    }
+    color += metAdd / (1.0 + max(max(metAdd.r, metAdd.g), metAdd.b));
+  }
+
+  // Sky rim / fresnel: a subtle atmospheric brightening at grazing angles,
+  // tinted by the horizon sky colour. Gives edges a little 'air' without
+  // making surfaces look wet or plastic. Damped by roughness.
+  {
+    float rf = 1.0 - NoV; float rimFresnel = rf * rf * rf;
+    float rimAmt = rimFresnel * (1.0 - rough * 0.85) * 0.18 * uSkyRimGlow;   // SKY RIM GLOW knob (def 1.0 = shipped)
+    color += uSkyHorizon * rimAmt;
+  }
+
+  // Ambient contact darkening: surfaces facing each other (concave) receive
+  // less sky light. Approximate with a bent-normal trick: upward-facing
+  // surfaces receive full ambient; downward faces lose it.
+  // This is already partially handled by hemisphere ambient (N.y), but a
+  // gentle extra crush in the darkest zones adds perceived depth.
+  {
+    float ao = pow(max(N.y * 0.5 + 0.5, 1e-4), 0.35);
+    color *= mix(1.0 - 0.12 * uAmbContactDark, 1.0, ao);   // AMBIENT CONTACT DARK knob (def 1.0 = shipped 0.88 floor)
+  }
+
+  // Emissive: lerp toward unlit albedo (self-illumination, sun-independent) and,
+  // for bright/warm surfaces (lit windows, floodlight lenses, neon), add an extra
+  // additive lift that pushes the value past 1.0 so the bloom bright-pass picks it
+  // up and the surface actually *glows* at night rather than just reading flat.
+  if (emissive > 0.0) {
+    color = mix(color, albedo, emissive);
+    // Glow weight: how "lamp-like" the albedo is. Bright (high luminance) AND
+    // warm-or-neutral colours qualify; dark/muddy colours get no lift so emissive
+    // walls don't bloom. Uses max channel for brightness, scaled smoothly in.
+    float bright = max(albedo.r, max(albedo.g, albedo.b));
+    float glow = smoothstep(0.50, 0.95, bright) * emissive;
+    // Push the glow well PAST 1.0 (HDR) so lit windows / neon / lamp lenses read
+    // as actual light SOURCES — they punch through the dark and bloom into halos,
+    // instead of sitting as flat bright paint.
+    // HDR push kept moderate (was 3.2): windows/heads GLOW, they don't glare —
+    // the night energy budget lives or dies on this multiplier.
+    // PER-MATERIAL bloom weight: albedos authored ABOVE white (the neon crown
+    // bands at ~2.5, neon-tinted panes, the LENS_NIGHT lamp albedos at
+    // 1.06-1.40 — see tracks.js) are the scenery's "this surface IS a light
+    // source" tag, while generic emissive (lit concrete, night road/terrain
+    // glow, warm office panes) sits at or under 1.0. Scaling an extra push by
+    // how far past white the albedo is lets neon/signage/lenses bloom harder
+    // WITHOUT raising uGlowAmp or lowering the global bloom threshold (both of
+    // which drag every emissive surface — and the fog — up with them).
+    float hdrTag = max(bright - 1.0, 0.0);
+    color += albedo * glow * uGlowAmp * (1.0 + hdrTag * uBloomBoost);
+  }
+
+  // Height-based fog: density falls off exponentially with altitude above eye level.
+  // uFogHeight = 0 → uniform (original behaviour); > 0 → pooling fog.
+  // Fog pow/exp + mist share sunAmount / lampFogC. When both producers are
+  // off (setup preview, carview, tuner fog=0 + mist=0) fd==0 so the mix is
+  // identity — skip the stack. Race sessions keep density > 0.
+  if (uFogDensity > 0.0 || uGroundMist > 0.001) {
+    // Sun in-scattering (Inigo Quilez): the fog is NOT a flat colour — when the
+    // view ray points toward the sun, the fog glows toward the sun's colour
+    // (forward Mie scatter), staying neutral away from it. Gives volumetric depth
+    // and makes a low warm sun bleed dramatically through dawn/dusk haze.
+    vec3 rd = -V;   // == normalize(vWorldPos - uEye); V is already normalized above
+    float sunAmount = max(dot(rd, uSunDir), 0.0);
+    // GLOWING FOG: nearby lamps tint the fog itself, so fog banks glow around
+    // floodlights and neon at night. Soft-clipped so a lamp cluster can never
+    // push the fog wall past the night bloom threshold into a white wash; the
+    // mix by f below gates it, so clear air (f near 0) gets no halo. Energy
+    // split with the godray pass: godray owns the NEAR air column (Beer-Lambert
+    // decay + range gate), this tint owns the DISTANT fog wall (f grows with
+    // distance) - the two never stack in the same regime.
+    vec3 lampFogC = vec3(0.0);
+    if (uLampFog > 0.0) {
+      vec3 lf = lampFog * uLampFog;
+      lampFogC = lf / (1.0 + max(max(lf.r, lf.g), lf.b) * uLampFogClip);
+    }
+    if (uFogDensity > 0.0) {
+      float heightAtten = uFogHeight > 0.0
+        ? exp(-max(vWorldPos.y - uEye.y, 0.0) * uFogHeight)
+        : 1.0;
+      float fd = vDist * uFogDensity * heightAtten;
+      float f = 1.0 - exp(-fd * fd);
+      // Wider exponent (4) = the warm sun-glow in the haze spreads across a broader
+      // arc of the horizon for a more dramatic sunset; an extra tight core (pow 16)
+      // adds a hot bloom right at the sun.
+      float sunAmt = max(sunAmount, 1e-4);   // floor base: pow(0.0, n) NaNs on mobile GPUs
+      // Integer powers as multiplies: pow() is exp2(log2()) — two transcendental
+      // slots, quarter-rate on most mobile ALUs — on every fogged fragment.
+      float sunAmt2 = sunAmt * sunAmt, sunAmt4 = sunAmt2 * sunAmt2;
+      float sunAmt16 = sunAmt4 * sunAmt4; sunAmt16 *= sunAmt16;
+      // In-scatter colour: the HDR sun colour capped to max component 1.0 (hue kept), so a
+      // dusk sun (>1 red) cannot wash the fog orange past the fog's own luminance.
+      vec3 fogSun = uSunColor / max(1.0, max(uSunColor.r, max(uSunColor.g, uSunColor.b)));
+      vec3 fogCol = mix(uFogColor, fogSun, sunAmt4);
+      // FOG SUN CORE knob (def 0.6 = as-shipped): the tight hot bloom right at the sun.
+      fogCol += fogSun * sunAmt16 * uFogSunCore;
+      // FOG WARM / COOL white-balance (uFogTint 0 = neutral, + warm, − cool).
+      fogCol *= vec3(1.0 + max(uFogTint, 0.0) * 0.25 - max(-uFogTint, 0.0) * 0.12,
+                     1.0 - abs(uFogTint) * 0.02,
+                     1.0 - max(uFogTint, 0.0) * 0.25 + max(-uFogTint, 0.0) * 0.18);
+      fogCol += lampFogC;
+      color = mix(color, fogCol, f);
+    }
+    // Low-lying GROUND MIST: a drifting FBM fog that pools near the surface (dawn /
+    // humid / overcast). Densest at a low datum, thinning with altitude and ramping
+    // in with distance; broken by a slow-drifting FBM so it rolls rather than a
+    // flat sheet. Tinted by the fog colour with a warm sun in-scatter.
+    if (uGroundMist > 0.001) {
+      float lowH = max(vWorldPos.y - (uEye.y - 5.0), 0.0);
+      // MIST HEIGHT BAND: taller band (bigger uMistHeight) = slower vertical falloff.
+      float band = exp(-lowH * (0.09 / max(uMistHeight, 0.05)));
+      vec2 mp = vWorldPos.xz * 0.020 + vec2(uTime * 0.010, uTime * 0.006);
+      float dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
+      float mist = uGroundMist * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
+      float mistSun = max(sunAmount, 1e-4);
+      vec3 mistCol = mix(uFogColor, uSunColor, mistSun * mistSun * mistSun) + lampFogC * uMistShare;
+      color = mix(color, mistCol, clamp(mist, 0.0, 0.45));
+    }
+  }
+  // Car-paint pixels are TAGGED in alpha (opaque draws never blend, so the
+  // channel is free): the composite SSR pass reflects the real world on car
+  // bodywork every frame — the same world-mirror the wet road gets.
+  outColor = vec4(color, carPaint > 0.001 ? 0.35 : uAlpha);
+}`;
+  window.GLXShaders = Object.assign(window.GLXShaders || {}, { LIT_VS, LIT_FS });
+})();

@@ -1,0 +1,1444 @@
+@layer components {
+/* Apex 26 — lighting tuner panel + the shared control vocabulary:
+   the `adv-`, `tune-`, `opt-` and `preset-` class prefixes.
+
+   NAMED WITHOUT THE `*` WILDCARD ON PURPOSE. This line used to read
+   `.adv-*` immediately followed by `/`, which is an accidental comment
+   TERMINATOR — so the comment ended four lines early, the prose below became a
+   selector prelude, and CSS error recovery swallowed everything up to the next
+   `{`. The rule it ate was the `:root` no-panel defaults below, the ones this
+   file's own comment promises are "0 when no panel is docked". A dropped rule
+   is not a parse error and produces no warning; the sheet just quietly stops
+   containing it. tests/unit/css-comments.test.mjs now catches the shape.
+
+   Split from css/style.css (lines 132-256 of the original); the <link>
+   order in index.html preserves the original source order, so the cascade
+   is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
+/* ---------- lighting tuner ---------- */
+/* HOW WIDE THE DOCK IS, published once.
+   The free-camera controls have to lay themselves out in whatever strip the
+   docked panel leaves — and they used to do it by repeating the panel's width
+   formula, `min(88vw, 380px)`, in css/hud.css. That was true for the tall
+   layout and wrong for the wide-and-short RAIL layout below, where the panel is
+   `min(70vw, 560px)`: 180px wider than the free-cam maths believed. On a
+   landscape phone everything positioned to clear a 380px panel therefore landed
+   ON a 560px one — the LOOK stick over the WEATHER chips, the up/down column
+   over COPY VALUES, the FOV/EXIT bar across the panel's own title.
+   One variable, declared where the width is decided, and nothing can drift
+   again. It is 0 when no panel is docked, so the free-cam layout falls back to
+   the full-width arrangement with no extra rule. */
+:root { --dock-w: 0px; --dock-px: 0px; }
+body:has(#lighting:not([hidden])),
+body:has(#camtune:not([hidden])),
+body:has(#flyby:not([hidden])),
+body:has(#freecam:not([hidden])),
+body:has(#garrival:not([hidden])) {
+  /* `88 * --vwz`, NOT `88vw`. This value is in the panel's own ZOOMED local
+     space (see --dock-px below), and a bare viewport unit resolves against the
+     UNZOOMED viewport and is then multiplied by the zoom — so 88vw paints as
+     101vw at the 1.15 that ships on a coarse pointer. Measured on a 393x852
+     phone before this: #lighting-inner declared 345.8px, painted 397.7px, and
+     with `right: 8px` its left edge landed at -14 — the panel hung off the
+     screen. #camtune-inner had the identical -14.
+     --vwz (css/tokens.css) is 1vw / --ui-scale, so `88 * --vwz` renders at
+     exactly 88vw at EVERY setting. The 380px cap needs no correction: px scale
+     correctly, and on desktop (--ui-scale 1) the cap governs anyway, so nothing
+     there moves.
+     This is the second of the two viewport-unit-inside-zoom defects
+     docs/archive/research/UI-SCALE-AND-ZOOM.md §5b deferred; --cs-sheet-w was the
+     other, fixed earlier this session. */
+  --dock-w: min(
+    calc(88 * var(--vwz)),
+    380px,
+    calc(100 * var(--vwz) - (var(--sal) + var(--sar) + 16px) / var(--ui-scale))
+  );
+  /* WHAT THE PANEL PAINTS, WHICH IS NOT WHAT IT DECLARES — use this, not
+     --dock-w, to position anything against the dock.
+     #lighting-inner is a `.sheet`, and css/components.css puts
+     `zoom: var(--ui-scale)` on every sheet, so BOTH its width and its `right`
+     inset are expressed in the zoomed local space: the panel really covers
+     (--dock-w + 8px + --sar) x --ui-scale pixels in from the right edge.
+     --ui-scale ships at 1 on every pointer (css/tokens.css); it used to be
+     1.15 under `(pointer: coarse)`, so the un-scaled arithmetic was exact on
+     every desktop and wrong by 15-30% on a touch screen — which is how the
+     free-cam LOOK stick and climb/dive column ended up sitting on the panel
+     on an iPad, and only on an iPad. The `/ var(--ui-scale)` form stays: a
+     player who raises UI SIZE still needs the dock inset in screen pixels.
+     Declared here beside --dock-w on purpose: a custom property resolves its
+     var() references against this element's own computed values, so the
+     flying override and the wide-rail override below both flow through without
+     repeating this formula. */
+  --dock-px: calc((var(--dock-w) + 8px + var(--sar)) * var(--ui-scale));
+}
+#lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner, #garrival-inner { --fit-at: 200px; }
+/* FLYING: the dock gives width back to the controls, at every size.
+   `:has()` takes the specificity of its argument, so `body:has(#lighting…)` is
+   ID-level — a plain `body.photo-mode` override loses to it no matter how many
+   classes it carries. Repeating the :has() is what makes this win.
+   The number matters as much as the selector: at 667x375 with 59px of notch on
+   each side there are 549 usable pixels, and a 380px panel leaves 151 — not one
+   thumbstick, never mind two and a climb/dive column. */
+body.photo-mode:not(.pc-nopanel):has(#lighting:not([hidden])),
+body.photo-mode:not(.pc-nopanel):has(#camtune:not([hidden])),
+body.photo-mode:not(.pc-nopanel):has(#freecam:not([hidden])) {
+  /* `46 * --vwz`, not `46vw` — same correction as the base --dock-w above and
+     for the same reason: this is consumed inside `zoom: var(--ui-scale)`, so a
+     bare viewport unit paints at 53vw on the coarse-pointer default. */
+  --dock-w: min(calc(46 * var(--vwz)), 300px);
+}
+/* …and the panel sheds the furniture it does not need while flying. A 300px
+   panel on a 393px-tall phone has ~370px of height, and the fixed head — title,
+   FREE CAMERA, the session line, two rows of TIME chips, two of WEATHER, the
+   help toggle, the category strip — plus the action bar came to ~300px of it.
+   That is the failure the rail layout was built to avoid, reintroduced by
+   forcing the tall layout: KEY LIGHT (SUN) rendered clipped behind DONE with
+   nothing left to scroll.
+   TIME and WEATHER are session SETUP — you pick dusk-and-wet before you go
+   flying, not while framing a shot — so they and the conditions readout stand
+   down and give their ~155px to the sliders, which are the reason the panel is
+   still on screen at all. */
+body.photo-mode:not(.pc-nopanel) #lt-preview,
+body.photo-mode:not(.pc-nopanel) #lt-profile,
+/* COPY ALL stands down with them, and for the same reason: it acts on the
+   condition the readout above it names, so it belongs to the setup half of the
+   panel, not to the half you use while framing. */
+body.photo-mode:not(.pc-nopanel) #lt-spread,
+body.photo-mode:not(.pc-nopanel) #ct-profile { display: none; }
+
+/* THE FLYING PANEL ON A PHONE, which is much narrower than the 300px cap makes
+   it sound. `--dock-w: min(46 * --vwz, 300px)` was chosen against a LANDSCAPE
+   phone, where 46vw of 852 is 392 and the cap governs. In PORTRAIT 46vw of 393
+   is 181, and at UI SIZE 150% the panel's own width comes out at 120 units — a
+   third of what the cap suggests, and narrower than several of the controls
+   inside it. Measured: 137.5 units at 130%, 120.5 at 150%.
+   These are the rules that survive that. They sit with the other flying
+   overrides at the top of this file so a portrait phone (which never used to
+   reach the old viewport-gated rail block) still gets a usable free-camera
+   panel. */
+/* The head wraps HERE and only here. Title (66.3 own units) plus the FREE CAMERA
+   button (77.6) want 144, and `space-between` has no answer when they do not both
+   fit — it pushes the second one out of a panel that is `overflow: hidden`, so it
+   is cut rather than scrollable to. MEASURED flying on a portrait iPhone: the
+   head's content box is 109.5 units at 130% and 91.2 at 150%, and the button hung
+   29.6 and 47.9 units past the edge.
+   Scoped, because unscoped it is a REGRESSION and the audit caught it as one.
+   Docked, `--dock-w` is min(88 * --vwz, 380) — 230.6 own units on that same
+   phone at 150% — so the two already fit and wrapping only makes the head taller,
+   which pushed #lt-rows 17px into the home-indicator inset. A rule that fixes the
+   narrow case and costs the wide one has to ask which case it is in. */
+body.photo-mode:not(.pc-nopanel) :is(#lt-head, #ct-head) { flex-wrap: wrap; }
+body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner) > .sheet-foot > :is(#lt-close, #ct-close) {
+  /* DONE is a .bigbtn and measured 113.2 own units against a 91.2-unit content
+     box, so it hung out of the panel. A grid item's automatic minimum is its
+     content — the same refusal-to-shrink that has cost this pass four separate
+     findings — so the floor has to be named. `flex: 1 1 auto` then lets the
+     three of them share what there is instead of each demanding its natural
+     width and wrapping to three rows: the foot measured 154 units tall of a
+     330-unit panel at 150%, which is half the height the sliders needed.
+     Previously only covered #lighting-inner; #camtune-inner's #ct-close was
+     missing — both tuners use the same panel shape in photo mode. */
+  min-width: 0; flex: 1 1 auto;
+}
+/* AND ON A SHORT ONE, THE FURNITURE GOES TOO. Same argument the TIME/WEATHER
+   rows above are already removed by, one step further along, because the panel
+   gets shorter than that argument anticipated. MEASURED on a landscape iPhone
+   at 150%: the panel is 191.7 own units tall and its chrome — head 64, help
+   toggle 24, category strip 24, action bar 34.7 — takes 188 of them, leaving
+   the sliders THREE POINT SEVEN. A lighting tuner showing no sliders.
+   The title is decoration on a panel you just opened by name, and the
+   explanations toggle is a preference you set once; the sliders are the reason
+   the panel is still on screen at all. Both come back the moment there is room,
+   because `data-density` is measured, not guessed.
+
+   #lighting-inner ALONE, not the `:is(#lighting-inner, #camtune-inner)` pair the
+   rest of this file uses. `#pc-toggle` is the only way into photo mode and it
+   lives in the lighting tuner; `closeLightTuner` (js/game/tuner.js) calls
+   `exitPhotoMode()` on the way out; and the camera tuner is opened from pause
+   SETTINGS, which the lighting tuner hides while it is open. The camera tuner
+   can therefore never be in this state, and naming it here would be two dead
+   selectors — plus a prelude long enough that tests/unit/css-comments.test.mjs
+   flags it as prose, which is how this scope got questioned in the first
+   place. */
+body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] h2,
+body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-help-toggle {
+  display: none;
+}
+
+/* Docked to the RIGHT edge with no backdrop: the game keeps rendering while the
+   panel is open, so the left of the screen is the live preview. */
+#lighting, #camtune, #flyby, #freecam, #garrival { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
+#lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner, #garrival-inner {
+  /* Docked, not centred: .sheet gives the head/body/foot shape and the query
+     container, and these override the sheet's centred sizing. */
+  pointer-events: auto;
+  position: fixed;
+  /* DIVIDE THE INSETS BY THE ZOOM. This panel is a .sheet, so these
+     top/right/bottom resolve INSIDE `zoom: var(--sheet-scale, --ui-scale)`
+     and a raw inset term is multiplied by it — at UI SIZE 40% the top pad
+     painted (59+8)*0.4 = 27px against a 59px notch, putting FREE CAMERA 7px
+     under the island and DONE 8px under the home bar (measured, 2026-08
+     sweep). Same doctrine as every other zoomed cluster (css/hud.css:23-32);
+     --sheet-eff-scale covers the fit-capped case. */
+  left: auto;
+  top: calc((var(--sat) + 8px) / var(--sheet-eff-scale, var(--ui-scale)));
+  right: calc((var(--sar) + 8px) / var(--sheet-eff-scale, var(--ui-scale)));
+  bottom: calc((var(--sab) + 8px) / var(--sheet-eff-scale, var(--ui-scale)));
+  transform: none;
+  width: var(--dock-w);
+  max-height: none;
+  z-index: 42;
+  background: rgba(12, 14, 20, 0.86);
+  /* Inline pad is ONE number with .lt-tabs' bleed below: the strip's
+     negative margin and re-padding must cancel this exactly. */
+  padding: calc(var(--gap) * 7 / 6) calc(var(--gap) * 1.5);
+  /* Fixed head (title / preview chips / tabs) + scrolling #lt-rows + fixed
+     RESET/COPY/DONE footer — with 80+ sliders the actions used to live at the
+     end of the scroll, a full panel-length swipe away. */
+  display: flex; flex-direction: column;
+  /* overflow-y is the LAST-RESORT scroller: normally #lt-rows absorbs everything
+     and this never engages, but if the head + footer alone outgrow the panel
+     (see the short-screen block below) the whole panel scrolls rather than
+     clipping its own footer off the bottom with no way to reach it. */
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
+}
+/* The rail is a grouping element for ONE layout (the wide-and-short block at
+   the end of this file). Everywhere else it must not exist as a box at all, or
+   it would become the flex item and the panel would size its head/tabs/rows as
+   one block instead of letting #lt-rows be the only thing that gives. */
+#lt-rail, #ct-rail, #fb-rail { display: contents; }
+
+/* min-height must be a real floor, not 0. Every other child is intrinsically
+   sized (flex-shrink can't take a flex item below its content height), so
+   #lt-rows was the ONLY item that could give — on a landscape phone the head
+   (12 wrapped tab chips = 146px on their own) plus the footer ate all 374px of
+   the panel and the rows collapsed to 0px high: 80+ sliders still in the DOM,
+   nothing left to scroll. */
+/* padding-right buys the scroll indicator its own lane. Without it the thumb
+   is drawn on the content-box edge, which is where each row's VALUE sits — the
+   0.55 beside KEY LIGHT had a red bar through it. */
+#lt-rows, #ct-rows, #fb-rows, #fc-rows {
+  /* max() with a painted floor: the 84px local minimum shrank with the sheet
+     zoom to 33.6 painted px at UI SIZE 40% — the audit's `starved` finding
+     (a scroll region under its 44 device-px threshold). 44/scale keeps the
+     painted region at the threshold; at >=100% the 84 literal wins. */
+  flex: 1 1 auto; overflow-y: auto; overscroll-behavior-y: contain;
+  min-height: max(84px, calc(44px / var(--ui-scale)));
+  touch-action: pan-y;
+  padding-right: 10px;
+}
+#lt-rows.sf-scroll::before, #ct-rows.sf-scroll::before, #fb-rows.sf-scroll::before { margin-right: -8px; }
+/* The tuner dropdowns (flyby EASE / eye-look AT, camera COPY FROM) were the
+   only native controls here with no size: 20 px tall, under the 24 px WCAG
+   target the layout audit's tapUnder24 counts. Same floor the sheets use. */
+:is(#lt-rows, #ct-rows, #fb-rows, #fc-rows, #ct-copyrow) select { min-height: var(--tap-min); }
+#lt-json, #ct-json, #fb-json { flex-shrink: 0; }
+#lighting-inner .adv-item, #camtune-inner .adv-item, #flyby-inner .adv-item { margin: 7px 0; }
+#lighting-inner .adv-help, #camtune-inner .adv-help { display: none; }        /* hidden unless "Show explanations" is on… */
+#lighting-inner.lt-show-help .adv-help,
+#camtune-inner.lt-show-help .adv-help { display: block; }   /* …then every row explains itself */
+/* The whole label is the switch — clicking the text toggles the box — so the
+   LABEL is the tap target, and at 11px type it came out 342x16. Sixteen pixels
+   fails WCAG 2.2 SC 2.5.8 (24x24) on the height axis, which matters more here
+   than the small type suggests: these panels are used mid-session, one-handed,
+   on a phone. min-height buys the target without moving anything, since the row
+   already centres its contents and had ~12px of margin to spend. */
+.lt-help-toggle {
+  display: flex; align-items: center; gap: 7px; margin: calc(var(--gap) * 2 / 3) 0 calc(var(--gap) / 3);
+  min-height: var(--tap-min);
+  font-size: var(--fs-micro); opacity: 0.8; cursor: pointer;
+}
+.lt-help-toggle input { width: auto; accent-color: var(--red); margin: 0; }
+/* Category tabs — split the 80+ sliders into one group at a time. Part of the
+   panel's fixed head (only #lt-rows scrolls), so the chips are always visible. */
+/* A balanced row derives its column count from this panel's local width. There
+   are twelve lighting categories and thirteen camera modes with labels from FX
+   to NIGHT GLOW & BLOOM; fixed two-column grids wasted desktop width and needed
+   child-count arithmetic to rescue a lonely thirteenth chip. */
+.lt-tabs {
+  display: flex; flex-wrap: wrap;
+  --balance-basis: 8rem; --balance-min: 7rem;
+  gap: calc(var(--gap) / 3);
+  margin: calc(var(--gap) / 6) calc(var(--gap) * -1.5) calc(var(--gap) * 0.5);
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 1.5) calc(var(--gap) * 2 / 3);
+  background: rgba(12, 14, 20, 0.94);
+  border-bottom: 1px solid var(--card-line);
+  flex-shrink: 0;
+}
+#lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab {
+  /* No explicit height before: padding + 10px text came to ~24, which is ON the
+     floor and therefore under it at any scale below 100%. 225 cells of the
+     1900-cell matrix failed on this one selector. */
+  /* --tap-paint on touch (52 painted px); desktop keeps --tap-min via tokens. */
+  min-height: var(--tap-paint);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: auto; margin: 0; min-width: 0;
+  padding: 5px 9px; font-size: var(--fs-micro); letter-spacing: var(--ls-2);
+  /* plate fill + line come from the button base; the pill radius is ours */
+  border-radius: var(--r-pill);
+  color: var(--text);
+  transition: background 0.12s, color 0.12s;
+  /* wraps rather than truncates: at rail width a column is ~100px and the
+     longest label needs two lines. Grid rows stretch, so both cells match. */
+  white-space: normal; text-align: center; line-height: 1.15;
+}
+@media (hover: hover) and (pointer: fine) {
+  #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover, #fb-shots .lt-tab:hover { color: var(--text); }
+}
+#lt-tabs .lt-tab:active, #ct-modes .lt-tab:active, #fb-shots .lt-tab:active { color: var(--text); }
+#lt-tabs .lt-tab.active, #ct-modes .lt-tab.active, #fb-shots .lt-tab.active {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
+.lt-group { display: none; }
+.lt-group.active { display: block; }
+/* The active tab already names the group, so drop the in-panel section header. */
+.lt-group .adv-sec { display: none; }
+.lt-section {
+  margin: 16px 0 7px;
+  padding: 0 0 calc(var(--gap) / 3);
+  color: var(--steel);
+  background: var(--grad-rule) bottom left / 100% 1px no-repeat;
+  font-size: var(--fs-micro);
+  font-weight: 800;
+  letter-spacing: var(--ls-5);
+}
+.lt-group .lt-section:first-of-type { margin-top: calc(var(--gap) * 0.5); }
+/* panel header: title + FREE CAMERA button on one line */
+#lt-head, #ct-head, #fb-head, #fc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: calc(var(--gap) / 3); }
+#lt-head h2, #ct-head h2, #fb-head h2, #fc-head h2 { margin: 0; }
+/* preview time/weather: one compact line each — small inline label + tight chips */
+.lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 3); margin: calc(var(--gap) * 0.25) 0; }
+.lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); color: var(--dim); }
+/* min-width max(42px, --tap-min), not the bare literal: 42 local px is only
+   42 PAINTED px at 100% — at UI SIZE 40% the five chips painted 21px wide
+   (2026-08-21 sweep). The token arm wins only below 100%, so the dense
+   100% layout is untouched. Height was already floored. */
+.lt-preview-row .opt-btn { flex: 1 1 0; min-width: max(42px, var(--tap-min)); min-height: var(--tap-min); margin: 0; padding: calc(var(--gap) / 3) calc(var(--gap) * 0.25); font-size: var(--fs-micro); }
+#lt-spread .opt-btn { min-height: var(--tap-paint); }
+.lt-preview-row .opt-btn.active,
+.lt-preview-row .opt-btn.on {
+  background: var(--plate-on); color: var(--text); border-color: var(--red);
+}
+/* No border-top here. The shared .sheet-foot sets `border-top: 0` and draws its
+   rule as a gradient ::before (css/components.css) — re-adding a solid border
+   painted BOTH, so these two panels were the only feet in the app with a
+   hairline and a solid line stacked at the same edge. */
+#lighting-inner .sheet-foot, #camtune-inner .sheet-foot, #flyby-inner .sheet-foot, #freecam-inner .sheet-foot, #garrival-inner .sheet-foot {
+  display: flex; gap: calc(var(--gap) * 2 / 3); flex-shrink: 0;
+  margin-top: 10px; padding-top: 10px;
+}
+#lighting-inner .sheet-foot button,
+#camtune-inner .sheet-foot button,
+#flyby-inner .sheet-foot button,
+#freecam-inner .sheet-foot button,
+#garrival-inner .sheet-foot button {
+  margin: 0;
+  /* Same WCAG floor the compact rung already carries (see its note further
+     down): these are padding-driven (~45 local px), which is 19 painted px
+     at UI SIZE 40% (2026-08-21 sweep, RESET / COPY VALUES). Inert at 100%. */
+  min-height: var(--tap-min);
+}
+/* ---------- camera tuner ----------
+   Shares the docked-panel shell, tab chips and slider rows with the lighting
+   tuner above (the selectors are extended, not duplicated); only the bits that
+   are camera-specific live here. */
+#ct-profile {
+  font-size: var(--fs-micro); letter-spacing: var(--ls-3); font-weight: 700;
+  color: var(--red); margin: calc(var(--gap) / 6) 0 calc(var(--gap) / 3);
+}
+/* A mode whose framing has been changed keeps a red outline even when it is not
+   the selected chip — the panel shows one camera at a time, so this is the only
+   way to see at a glance which of the 13 you have already tuned. */
+#ct-modes .lt-tab.tuned { border-color: var(--red); color: var(--text); }
+#ct-modes .lt-tab.tuned.active { border-color: var(--red); }
+
+/* ---------- flyby shot editor ----------
+   Same docked shell again (the selectors above are extended, not duplicated);
+   only the two things this panel has and the others do not live here: the
+   group headings that separate a shot's four poses, and the status line. */
+#fb-profile {
+  font-size: var(--fs-micro); letter-spacing: var(--ls-3); font-weight: 700;
+  color: var(--red); margin: calc(var(--gap) / 6) 0 calc(var(--gap) / 3);
+}
+/* The verdict line. It is the only place the panel can say "this eye is inside
+   a grandstand", which is the defect the sequencer exists to prevent, so it
+   turns red rather than sitting in the same grey as the shot count. */
+#fb-status {
+  font-size: var(--fs-micro); line-height: 1.35; color: var(--dim);
+  margin: 0 0 calc(var(--gap) / 3);
+  min-height: 2.7em;                 /* two lines reserved: no reflow per scrub frame */
+  overflow-wrap: anywhere;
+}
+#fb-status.fb-inside { color: var(--red); font-weight: 700; }
+#fb-scrub { margin: calc(var(--gap) / 3) 0; }
+/* ---------- free camera (js/camera/free-cam.js) ----------
+   The same dock once more; the status line reads like the flyby editor's, and
+   the button rows share one rhythm. Everything is styled by id: the panel is
+   built in JS and adds no class of its own. */
+#fc-status {
+  font-size: var(--fs-micro); line-height: 1.35; color: var(--dim);
+  margin: 0 0 calc(var(--gap) / 3);
+  min-height: 2.7em;                 /* two lines reserved: no reflow as the camera flies */
+  overflow-wrap: anywhere;
+}
+#fc-snaps, #fc-lens, #fc-copies, #fc-kit { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 3); margin: calc(var(--gap) / 2) 0; }
+#fc-snaps > button, #fc-lens > button, #fc-copies > button, #fc-kit > button { flex: 1 1 0; margin: 0; min-height: var(--tap-min); }
+#fc-lens > button[aria-pressed="true"] { background: var(--plate-on); border-color: var(--red); color: var(--text); }
+#fc-help, #fc-msg { font-size: var(--fs-micro); color: var(--dim); margin: calc(var(--gap) / 3) 0; }
+#fc-out { flex-shrink: 0; width: 100%; min-height: 6em; }
+/* Photo-kit viewport overlays (JS-built in free-cam / photo-kit). Id-only so
+   the cssClasses ratchet does not grow. Hidden unless free camera is open. */
+#fc-comp-grid, #fc-dof {
+  position: fixed; inset: 0; z-index: 41; pointer-events: none;
+}
+#fc-comp-grid[data-grid="thirds"] {
+  background:
+    linear-gradient(to right, transparent calc(33.33% - 0.5px), color-mix(in oklab, var(--text) 35%, transparent) 0, color-mix(in oklab, var(--text) 35%, transparent) calc(33.33% + 0.5px), transparent 0) 0 0 / 100% 100%,
+    linear-gradient(to right, transparent calc(66.66% - 0.5px), color-mix(in oklab, var(--text) 35%, transparent) 0, color-mix(in oklab, var(--text) 35%, transparent) calc(66.66% + 0.5px), transparent 0) 0 0 / 100% 100%,
+    linear-gradient(to bottom, transparent calc(33.33% - 0.5px), color-mix(in oklab, var(--text) 35%, transparent) 0, color-mix(in oklab, var(--text) 35%, transparent) calc(33.33% + 0.5px), transparent 0) 0 0 / 100% 100%,
+    linear-gradient(to bottom, transparent calc(66.66% - 0.5px), color-mix(in oklab, var(--text) 35%, transparent) 0, color-mix(in oklab, var(--text) 35%, transparent) calc(66.66% + 0.5px), transparent 0) 0 0 / 100% 100%;
+}
+#fc-comp-grid[data-grid="golden"] {
+  background:
+    linear-gradient(to right, transparent calc(38.2% - 0.5px), color-mix(in oklab, var(--gold) 40%, transparent) 0, color-mix(in oklab, var(--gold) 40%, transparent) calc(38.2% + 0.5px), transparent 0) 0 0 / 100% 100%,
+    linear-gradient(to right, transparent calc(61.8% - 0.5px), color-mix(in oklab, var(--gold) 40%, transparent) 0, color-mix(in oklab, var(--gold) 40%, transparent) calc(61.8% + 0.5px), transparent 0) 0 0 / 100% 100%,
+    linear-gradient(to bottom, transparent calc(38.2% - 0.5px), color-mix(in oklab, var(--gold) 40%, transparent) 0, color-mix(in oklab, var(--gold) 40%, transparent) calc(38.2% + 0.5px), transparent 0) 0 0 / 100% 100%,
+    linear-gradient(to bottom, transparent calc(61.8% - 0.5px), color-mix(in oklab, var(--gold) 40%, transparent) 0, color-mix(in oklab, var(--gold) 40%, transparent) calc(61.8% + 0.5px), transparent 0) 0 0 / 100% 100%;
+}
+#fc-dof {
+  backdrop-filter: blur(var(--fc-dof-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--fc-dof-blur, 0px));
+  -webkit-mask-image: radial-gradient(circle at 50% 45%,
+    transparent 0, transparent var(--fc-dof-clear, 40%),
+    black var(--fc-dof-soft, 70%), black 100%);
+  mask-image: radial-gradient(circle at 50% 45%,
+    transparent 0, transparent var(--fc-dof-clear, 40%),
+    black var(--fc-dof-soft, 70%), black 100%);
+}
+/* pc-uihidden hide for these overlays lives in css/hud.css with the other
+   photo-mode HIDE HUD rules — keep the class defined in one file. */
+/* EYE FROM / EYE TO / LOOK FROM / LOOK TO. Four poses of nine sliders read as
+   one undifferentiated column without them. */
+#fb-rows .fb-group {
+  font-size: var(--fs-micro); letter-spacing: var(--ls-3); font-weight: 700;
+  color: var(--red); margin: var(--gap) 0 calc(var(--gap) / 3);
+  padding-top: calc(var(--gap) / 3); border-top: 1px solid var(--card-line);
+}
+#fb-rows .fb-group:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+/* EIGHT chips share the rail, so each is ~42px and "landmark1" is one
+   unbreakable 54px word: `white-space: normal` above wraps at spaces and there
+   are none, so it overflowed its pill and printed over its neighbour. Measured
+   at 960x540; the base rule is right for the other two panels' shorter labels. */
+#fb-shots .lt-tab { overflow-wrap: anywhere; }
+/* SIX OPS, ONE ROW. As a wrapping flex row these took THREE rows (138 px) in a
+   docked panel whose height is the viewport's: at 960x540 and 844x390 that
+   pushed the shot's own controls down past the footer, which then painted over
+   them (measured; 1280x800 and 1440x900 were always clear). A six-column grid
+   is ~46 px whatever the width, and the labels are short enough to fit it —
+   each button's full meaning is in its title. */
+#fb-ops { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: calc(var(--gap) / 3); }
+#fb-ops button { min-height: var(--tap-min); padding-inline: calc(var(--gap) / 6); white-space: nowrap; }
+#lt-json, #ct-json, #fb-json {
+  /* field-sizing lets the export box grow to whatever COPY VALUES produced
+     instead of scrolling inside a fixed 72px; the height stays as the fallback
+     where it is unsupported, and the max keeps it from swallowing the panel.
+     Local `--svhz`, not `svh`: this box lives inside `zoom: var(--ui-scale)`,
+     so a viewport max at UI SIZE 200% ate slider rows.
+     THE CAP GREW WITH THE PAYLOAD. 120px was sized around an export nobody
+     could read anyway — the full file+local merge, measured at 182,569
+     characters, roughly 4,500 lines behind a 120px window. COPY VALUES now
+     emits only the player's own overrides (a few hundred bytes, ~12 lines), so
+     the box can actually SHOW its contents, which is what makes the one
+     remaining hand-select path viable on a browser that blocks the clipboard. */
+  field-sizing: content; max-height: min(calc(38 * var(--svhz)), 260px);
+  width: 100%; height: 72px; margin-top: 10px; resize: none;
+  font: 10px/1.5 ui-monospace, monospace; color: #cfe0ff;
+  background: rgba(0, 0, 0, 0.5); border: 1px solid var(--card-line);
+  border-radius: var(--r-sm); padding: calc(var(--gap) * 0.5);
+}
+.adv-sec {
+  color: var(--steel); font-size: var(--fs-micro); letter-spacing: var(--ls-4);
+  margin: calc(var(--gap) * 4 / 3) 0 calc(var(--gap) * 2 / 3); padding-bottom: calc(var(--gap) / 3);
+  border-bottom: 1px solid var(--card-line);
+}
+.adv-sec span {
+  color: color-mix(in oklab, var(--text) 45%, transparent); font-size: var(--fs-micro);
+  letter-spacing: var(--ls-1); margin-left: calc(var(--gap) * 0.5);
+}
+.adv-item { margin: 11px 0; }
+.adv-help { font-size: var(--fs-micro); opacity: 0.6; margin: calc(var(--gap) * 0.25) 0 0; line-height: 1.4; }
+.tune-row { display: block; margin: 0; }
+/* Name on the left, value on the right — and the VALUE IS THE PART THAT MUST
+   NOT BE LOST. `space-between` alone puts the name and the number on one line
+   and offers no answer when they do not both fit: the name is an anonymous flex
+   item floored at its min-content width, so it refuses to give way and the
+   number is pushed straight out of the panel. MEASURED, lighting tuner on a
+   landscape iPhone at UI SIZE 150%: MOON BRIGHTNESS's "1.00" sat 15px past
+   #lt-rows, whose overflow-x is hidden, so the slider showed a name, a track and
+   no reading. The camera tuner's DISTANCE lost "0.00m" the same way.
+   Wrapping is the whole fix: when they fit it is the row it always was, and
+   when they do not the number takes its own line — still right-aligned, by the
+   auto margin rather than by `space-between`, which does nothing once the items
+   are on separate lines. */
+.tune-label {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline;
+  /* --fs-micro (14px): at UI SIZE 90% painted type stays ≥12px. Was 12px/13px
+     on the label/value; chrome-devtools measured 10.8 / 11.7 visual. */
+  font-size: var(--fs-micro); letter-spacing: var(--ls-2); opacity: 0.9; margin-bottom: calc(var(--gap) / 6);
+}
+.tune-label b { color: var(--red); font-size: var(--fs-micro); flex: none; margin-left: auto; }
+.tune-row input[type="range"] {
+  /* --slider, not --tap-min: painted 32px hit at every UI SIZE. Native
+     accent-color chrome (not a custom thumb). See css/tokens.css. */
+  width: 100%; margin: 0; accent-color: var(--red); height: var(--slider); cursor: pointer;
+}
+/* ---------- MUSIC & SOUND panel ----------
+   Five closed folds, same disclosure language as DISPLAY. ON/OFF lives in
+   the fold body so a summary tap only opens. */
+.as-sec { margin-bottom: calc(var(--gap) * 0.45); }
+/* The rule lives on the fold, not the summary: a summary border is
+   inset by padding-inline, and --grad-rule faded out ~150px short of
+   the sheet edge. .as-sec is a block in #audioset-inner (grid-column
+   1 / -1 on the wide 2-col .pm-group). */
+#pmsettings-inner #audioset-inner,
+#pmsettings-inner #audioset .as-sec,
+#pmsettings-inner #audioset .as-sec > summary {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#pmsettings-inner #audioset .as-sec {
+  border-bottom: 1px solid var(--card-line);
+}
+#pmsettings-inner #audioset .as-sec > summary,
+#pmsettings-inner #audioset .as-sec > summary:active {
+  /* --text + no fading --grad-rule: steel italic on --surf-1 was
+     unreadable, and the gradient stopped ~70% across the sheet. */
+  color: var(--text);
+  font-style: italic;
+  opacity: 1;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  /* A FLOOR, not a height, and the values wrap: TEAM RADIO · OFF · NORMAL ·
+     SPOTTER ON is wider than a 390px phone's sheet, and a fixed height with
+     no wrap ran SPOTTER ON off the edge (layout audit, 2026-09-30). The
+     summary is a flex row of spans, so it breaks between values. */
+  height: auto;
+  min-height: var(--chip-h);
+  flex-wrap: wrap; row-gap: 0;
+  box-sizing: border-box;
+  cursor: pointer;
+  justify-content: flex-start;
+  font-size: clamp(var(--fs-2), calc(1.8 * var(--vwz)), var(--fs-4));
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+  padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
+}
+@media (hover: hover) and (pointer: fine) {
+  #pmsettings-inner #audioset .as-sec > summary:hover {
+    color: var(--text);
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+  }
+}
+#pmsettings-inner #audioset .as-sec > summary::after { content: none; }
+#pmsettings-inner #audioset .as-sec > summary::before { content: "\25BE"; }
+#pmsettings-inner #audioset .as-sec[open] > summary::before { content: "\25B4"; }
+/* NOW PLAYING card. The old row put a SKIP button first and the track name in
+   11px dim text after it, so the least important control was the most
+   prominent thing and there was no way back a track. Title leads, source is a
+   caption under it, transport is a real group on the right. */
+.as-now-card {
+  display: flex; align-items: center; gap: var(--gap);
+  margin-top: calc(var(--gap) * 0.6); padding: calc(var(--gap) * 0.7);
+  border: 1px solid var(--card-line); border-radius: var(--r-md);
+  background: rgba(255,255,255,0.04);
+}
+.as-now-meta { display: flex; flex-direction: column; gap: calc(var(--gap) / 6); min-width: 0; flex: 1 1 auto; }
+.as-now-cap { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--dim); text-transform: uppercase; }
+/* The title is the one thing worth reading here, so it gets the size. It also
+   has to truncate — uploaded file names are arbitrarily long. */
+.as-now-title {
+  font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.25;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.as-now-sub { font-size: var(--fs-micro); color: var(--dim); }
+.as-transport { display: flex; align-items: center; gap: calc(var(--gap) * 0.5); flex: 0 0 auto; }
+ /* One shape for every small square control on a settings sheet: the same
+    --chip-h plate square as a setting row's ‹ › (css/components.css .set-row).
+    Was a --tap-sm circle with a 1.22x play button — a third button shape on a
+    sheet that already had two. */
+.as-tbtn {
+  width: var(--chip-h); height: var(--chip-h); min-height: var(--chip-h);
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; font-size: 15px; line-height: 1; border-radius: var(--r-sm);
+  border: 1px solid var(--plate-line); background: var(--plate);
+  color: var(--text); cursor: pointer;
+}
+/* Play/pause is the primary action of the three: same square, filled. */
+.as-tbtn-main {
+  font-size: 16px; background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.28);
+}
+/* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
+@media (hover: hover) and (pointer: fine) {
+  .as-tbtn:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
+}
+.as-tbtn:disabled { opacity: 0.35; cursor: default; }
+.as-note { font-size: var(--fs-micro); color: var(--dim); margin: calc(var(--gap) * 0.4) 0 0; line-height: 1.35; }
+#audioset-inner, #spotifypanel-inner { --compact-at: 520px; }
+#pmsettings-inner[data-density="compact"] #audioset-inner .as-sec,
+#audioset-inner[data-density="compact"] .as-sec,
+#spotifypanel-inner[data-density="compact"] .as-sec { margin-bottom: calc(var(--gap) * 0.45); }
+#pmsettings-inner[data-density="compact"] #audioset-inner .as-sec + .as-sec,
+#audioset-inner[data-density="compact"] .as-sec + .as-sec,
+#spotifypanel-inner[data-density="compact"] .as-sec + .as-sec { padding-top: calc(var(--gap) * 0.4); }
+#pmsettings-inner[data-density="compact"] #audioset-inner .as-note,
+#audioset-inner[data-density="compact"] .as-note,
+#spotifypanel-inner[data-density="compact"] .as-note {
+  line-height: 1.2;
+  margin: 0;
+}
+
+/* MUSIC / Spotify volume only: GREY while the matching switch is off. Every
+   other range stays red, including a disabled lighting/camera knob. Grey via
+   accent-color rather than a low opacity — a ghosted control reads as "still
+   loading", a grey one reads as "off". */
+#audioset .tune-row input[type="range"]:disabled,
+#spotifypanel .tune-row input[type="range"]:disabled { accent-color: #6a6a75; }
+.tune-row.tune-off { opacity: 0.75; }
+.tune-row.tune-off .tune-label { color: var(--dim); }
+.tune-row.tune-off .tune-label b { color: var(--dim); }
+.preset-row { display: flex; gap: calc(var(--gap) * 2 / 3); margin: calc(var(--gap) / 3) 0 calc(var(--gap) * 0.5); }
+/* Settings chip rows join .balanced-row so a 4-way row wraps from local
+   width instead of shrinking SIM past the pane. The shared shrink contract
+   below still wins on every other .preset-row / .opt-row; these scoped
+   children restore the wrap basis. Was #advanced-inner only; CONTROLS and the
+   DISPLAY folds carry the same rows now (js/ui/opt-group.js). Headings stay
+   `grid-column: 1 / -1` on the wide body grid. */
+#pmsettings-inner .preset-row.balanced-row,
+#pmsettings-inner .opt-row.balanced-row {
+  --balance-basis: 6.5rem; --balance-min: 4.5rem;
+}
+#pmsettings-inner .preset-row.balanced-row > :not([hidden]),
+#pmsettings-inner .opt-row.balanced-row > :not([hidden]) {
+  flex: 1 1 var(--balance-basis);
+  min-width: min(100%, var(--balance-min));
+}
+/* THE SHRINK CONTRACT, shared by the tuner's two flexible button rows.
+   min-width: 0 defeats flex's min-content floor — without it the PRO preset's
+   one-line small ran 59px past the pane at UI SIZE 200% (measured), and the
+   4-way STEERING row pushed SIM past the panel edge on a landscape phone. */
+.preset-row .preset-btn, .opt-row .opt-btn {
+  flex: 1; min-width: 0; width: auto; margin: 0;
+  font-size: var(--fs-micro); text-align: center;
+}
+.preset-row .preset-btn {
+  display: flex; flex-direction: column; align-items: center; gap: calc(var(--gap) * 0.25);
+  padding: calc(var(--gap) * 0.75) calc(var(--gap) * 0.5);
+  /* Same zoom-honest WCAG floor as .bigbtn — 16px painted at UI SIZE 40%. */
+  min-height: var(--tap-min);
+  letter-spacing: var(--ls-3);
+}
+.preset-btn small {
+  font-size: var(--fs-micro); letter-spacing: var(--ls-1); opacity: 0.6; font-weight: normal;
+  text-transform: none; line-height: 1.2;
+}
+.preset-btn.active {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
+.preset-btn.active small { opacity: 0.85; }
+/* segmented option groups (STEERING / DRIVING HELP / RACING LINE) */
+.opt-row { display: flex; gap: calc(var(--gap) * 0.5); margin-top: calc(var(--gap) / 3); }
+.opt-row .opt-btn {
+  padding: calc(var(--gap) * 2 / 3) calc(var(--gap) / 3);
+  /* on the ladder (css/tokens.css): these measured 37px, one of ten different
+     heights for controls of the same rank */
+  min-height: var(--chip-h);
+  display: inline-flex; align-items: center; justify-content: center;
+  letter-spacing: var(--ls-1);
+}
+/* ENGINE TONE carries five profile chips and six layer switches — more than any
+   other row in this sheet, and .opt-row above does not wrap. Without this they
+   squash below the tap floor on a narrow sheet instead of moving to a second
+   line. Scoped by id, not a new class: the cssClasses ratchet has three tokens
+   of headroom and this needs none of them. */
+#as-engine-details .opt-row { flex-wrap: wrap; }
+#as-engine-details .opt-row .opt-btn { flex: 1 1 auto; min-width: var(--tap-min); }
+.opt-btn.active {
+  background: var(--plate-on); border-color: var(--red); color: var(--text);
+}
+/* THE ACTION BAR IS NOT ALLOWED OFF THE BOTTOM. #lt-rows is meant to absorb all
+   the overflow so the panel itself never scrolls (see the head of this file),
+   and when it cannot — head plus foot taller than the panel — the panel becomes
+   the scroller and takes RESET/COPY/DONE down with it. MEASURED on a 393x659
+   phone at UI SIZE 115%: the foot sat at y=842, 183px below the viewport, behind
+   178 sliders. Sticky is the invariant rather than another threshold: whatever
+   the head does at whatever zoom, the bar stays on screen.
+   `--compact-at` beside it hands this panel's own short-height threshold to
+   js/ui/sheet-shape.js — 620 to match the media query below, because the
+   viewport height that query reads is blind to `zoom` and the sheet's own height
+   at UI SIZE 115% on that phone was 557 while the query still read 659.
+   `--rail-at` is 640, above the 560px the rail-on dock grows to, so a compact
+   wide dock keeps the horizontal chip strip and the sliders keep the full
+   dock width. Rail-on only when the sheet is already wider than that dock. */
+#lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner, #garrival-inner { --compact-at: 620px; --rail-at: 640px; }
+#lighting-inner > .sheet-foot, #camtune-inner > .sheet-foot, #flyby-inner > .sheet-foot, #freecam-inner > .sheet-foot, #garrival-inner > .sheet-foot {
+  position: sticky; bottom: 0; z-index: 2;
+}
+
+/* ---------- FLYBY compact (mirrors lighting/camera short-panel; was missing) -----
+   #flyby-inner already declares --compact-at / --rail-at and ships #fb-rail for
+   the rail grid (index.html), but every compact rule below was scoped to
+   lighting+camtune only. Measured 2026-10-05 ios-iphone-landscape-safari:
+   sticky RESET/COPY VALUES covered shot tabs 3–10, #fb-rows underHW by 87px,
+   deepScroll 26 screens in an 84px band. Compact strip + static foot reclaim
+   the head; rail-on puts furniture left and sliders full-height. */
+#flyby-inner[data-density="compact"] {
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--gap) * 5 / 6) calc(var(--gap) * 7 / 6);
+  overflow: hidden;
+}
+/* Cap the furniture so RESET/COPY/DONE stay inside the panel. Without this the
+   head (status+scrub+shots+ops) plus min 84px rows push the static foot below
+   the dock — layout-audit then reports foot offscreen and #fb-rows underHW. */
+#flyby-inner[data-density="compact"] #fb-rail {
+  display: flex; flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 52%;
+  /* Y only — overflow-x:hidden false-flagged the shot strip's edge bleed as
+     clipped (layout-audit). */
+  overflow-y: auto; overscroll-behavior-y: contain;
+}
+#flyby-inner[data-density="compact"] #fb-rows {
+  flex: 1 1 auto;
+  min-height: max(84px, calc(44px / var(--ui-scale)));
+}
+#flyby-inner[data-density="compact"] #fb-head { margin-bottom: calc(var(--gap) / 6); }
+#flyby-inner[data-density="compact"] #fb-head h2 { font-size: 16px; }
+#flyby-inner[data-density="compact"] #fb-profile { font-size: var(--fs-micro); }
+#flyby-inner[data-density="compact"] #fb-status {
+  font-size: var(--fs-micro); min-height: 0; margin: 0 0 calc(var(--gap) / 6);
+}
+#flyby-inner[data-density="compact"] #fb-scrub { margin: calc(var(--gap) / 6) 0; }
+#flyby-inner[data-density="compact"] #fb-shots.lt-tabs {
+  display: flex; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  margin: 0 calc(var(--gap) * -7 / 6) calc(var(--gap) / 3);
+  padding: calc(var(--gap) * 5 / 12) calc(var(--gap) * 7 / 6) calc(var(--gap) / 2);
+  scrollbar-width: none;
+}
+#flyby-inner[data-density="compact"] #fb-shots .lt-tab {
+  white-space: nowrap; flex: 0 0 auto;
+  /* --tap-paint: 52 PAINTED px on touch (tokens.css); --tap-min alone is the
+     WCAG 24 floor and left shot chips at 32×48 under the house --tap. */
+  min-height: var(--tap-paint); min-width: var(--tap-paint);
+}
+#flyby-inner[data-density="compact"] #fb-shots::-webkit-scrollbar { display: none; }
+#flyby-inner[data-density="compact"] #fb-ops {
+  gap: calc(var(--gap) / 3); margin: calc(var(--gap) / 6) 0 calc(var(--gap) / 3);
+}
+#flyby-inner[data-density="compact"] #fb-ops button {
+  min-height: var(--tap-paint); padding: calc(var(--gap) / 3) calc(var(--gap) / 6);
+  font-size: var(--fs-micro);
+}
+/* Static foot: sticky was covering the shot strip on short docks (the same
+   rail-off compact move lighting/camera already make). */
+#flyby-inner[data-density="compact"] > .sheet-foot {
+  flex: 0 0 auto;
+  position: static;
+  margin-top: calc(var(--gap) / 2); padding-top: calc(var(--gap) / 2);
+  display: flex; flex-wrap: wrap;
+  gap: calc(var(--gap) / 2);
+}
+#flyby-inner[data-density="compact"] > .sheet-foot button {
+  flex: 1 1 auto; min-width: 0;
+  padding: calc(var(--gap) / 2) calc(var(--gap) * 5 / 6);
+  font-size: var(--fs-micro); min-height: var(--tap-paint);
+}
+body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="compact"][data-rail="on"]) {
+  --dock-w: min(calc(70 * var(--vwz)), 560px);
+}
+#flyby-inner[data-density="compact"][data-rail="on"] {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  column-gap: calc(var(--gap) * 7 / 6);
+  overflow: hidden;
+}
+#flyby-inner[data-density="compact"][data-rail="on"] #fb-rail {
+  display: flex; flex-direction: column;
+  grid-column: 1; grid-row: 1;
+  min-height: 0; overflow-y: auto; overscroll-behavior-y: contain;
+}
+#flyby-inner[data-density="compact"][data-rail="on"] #fb-rows {
+  grid-column: 2; grid-row: 1;
+  min-height: 0; max-height: none;
+}
+#flyby-inner[data-density="compact"][data-rail="on"] #fb-json { grid-column: 2; grid-row: 2; }
+#flyby-inner[data-density="compact"][data-rail="on"] > .sheet-foot {
+  grid-column: 1; grid-row: 2;
+  display: flex; flex-wrap: wrap;
+  --balance-basis: 5.5rem; --balance-min: 5rem;
+  margin-top: 0; gap: calc(var(--gap) * 5 / 12); padding: calc(var(--gap) / 2) 0 0;
+  position: static;
+}
+#flyby-inner[data-density="compact"][data-rail="on"] > .sheet-foot button {
+  margin: 0; min-width: 0;
+  padding: calc(var(--gap) * 5 / 12) calc(var(--gap) / 2);
+  font-size: var(--fs-micro);
+  min-height: var(--tap-paint);
+}
+#flyby-inner[data-density="compact"][data-rail="on"] #fb-shots.lt-tabs {
+  display: flex; flex-wrap: wrap;
+  --balance-basis: 2.5rem; --balance-min: 2.5rem;
+  overflow: visible; touch-action: manipulation;
+  margin: calc(var(--gap) / 6) 0 calc(var(--gap) / 3); padding: 0;
+  background: none; border-bottom: none;
+}
+#flyby-inner[data-density="compact"][data-rail="on"] #fb-shots .lt-tab {
+  flex: 1 1 var(--balance-basis); min-width: var(--balance-min);
+  white-space: normal; justify-content: center;
+}
+#flyby-inner[data-density="compact"][data-rail="on"] #fb-head {
+  flex-direction: column; align-items: stretch; gap: calc(var(--gap) / 3);
+}
+#flyby-inner[data-density="compact"][data-rail="on"] #fb-head h2 { font-size: 15px; }
+
+/* ---------- SHORT PANEL: compact tuner head ----------
+   The tuner is docked full-height, so when the panel is short the head is what
+   starves #lt-rows. Shrink every fixed row and — the big one — run the category
+   chips as a single horizontally-scrolling strip instead of a 5-row wrapped
+   block, which alone gives ~110px back to the sliders.
+
+   THIS USED TO BE `@media (max-height: 620px)` AND THAT WAS THE WRONG QUESTION.
+   The query reads the VIEWPORT; these panels are `.sheet` and carry
+   `zoom: var(--ui-scale)`, so their own height is the viewport's divided by the
+   scale. On a 393x659 phone at UI SIZE 115% the query read 659, declined to
+   compact anything, and the panel's own height was 573 — short by any standard
+   its own CSS would recognise. The RESET/COPY/DONE bar ended up at y=842, off a
+   659px screen, behind 178 sliders.
+
+   `data-density` is measured in the panel's own units against the `--compact-at`
+   declared above (620, matching the number this block used to hard-code), so the
+   same intent now holds at every scale. Step 2 of the migration order in
+   docs/archive/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md.
+
+   The selectors are scoped rather than the block being wrapped, because CSS
+   nesting is used nowhere in this codebase (`:is()` and `:has()` are). Both this
+   block and the wide-and-short rail block below take the SAME prefix on purpose:
+   the rail block overrides several of these rules and only wins by being later,
+   which requires equal specificity. Scoping one and not the other would have
+   silently broken the rail layout. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] {
+    padding: 10px 14px;
+    overflow: hidden; /* #lt-rows / #ct-rows is the only vertical scroller */
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rows, #ct-rows) {
+    min-height: 0;
+  }
+  /* The corner previews are three jump buttons, not a second menu: at UI SIZE
+     150% on a 734x343 phone the balanced row wrapped them into two ~70px lines
+     and #ct-rows was left 15px — every slider hidden behind MONZA / SPA /
+     MONACO (survey-ui-matrix, 2026-09-24). One equal row at the tap floor. */
+  #camtune-inner[data-density="compact"] #ct-previews { --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap; }
+  #camtune-inner[data-density="compact"] #ct-previews > button {
+    min-width: 0; min-height: var(--tap-min); padding: 0 calc(var(--gap) * 0.25);
+    font-size: var(--fs-micro); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head,
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-head { margin-bottom: 2px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head h2,
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-head h2 { font-size: 16px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-profile,
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-profile { font-size: var(--fs-micro); }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row { gap: 3px; margin: 2px 0; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-lbl { width: 46px; font-size: var(--fs-micro); }
+  /* min-height, not more padding: the short-panel branch squeezes these to 23px
+     tall, one pixel under WCAG 2.2 SC 2.5.8's 24, and a landscape phone is
+     precisely where they get tapped. 24 is the floor, and the row has the pixel
+     to give — the panel does not get shorter for it. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row .opt-btn {
+    padding: 3px 2px; font-size: var(--fs-micro); min-width: max(34px, var(--tap-min)); min-height: var(--tap-paint);
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-spread .opt-btn { min-height: var(--tap-paint); }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-help-toggle { display: none; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-help { display: none; }
+  /* Short panel: one scrolling STRIP, so back to flex — a single row that pans
+     sideways can never orphan anything, and the grid above is for the layouts
+     that wrap. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs {
+    display: flex; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    margin: 0 -14px 4px; padding: 5px 14px 6px;
+    scrollbar-width: none;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-tabs .lt-tab,
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-modes .lt-tab { white-space: nowrap; flex: 0 0 auto; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs::-webkit-scrollbar { display: none; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot { margin-top: 6px; padding-top: 6px; }
+  /* The floor applies to the shrunken foot too: 12px text in 6px padding comes to
+     ~27 own px, which is 21-23 ACTUAL px at UI SIZE 80% — RESET, COPY VALUES and
+     DONE were the last three controls under the WCAG floor in the 1900-cell run. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot button { padding: 6px 10px; font-size: var(--fs-micro); min-height: var(--tap-paint); }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-item { margin: 5px 0; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-json, #ct-json) { height: 96px; }
+
+  /* At extreme local widths a wrapped 2+1 footer becomes the largest thing in
+     the panel and its sticky position covers the tab strip. Rail-off compact
+     panels have the full dock width, so keep all three scoped actions in one
+     row and remove redundant explanatory chrome. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot {
+    position: static;
+    display: flex; flex-wrap: nowrap;
+    --balance-basis: 0px; --balance-min: 0px;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] {
+    display: grid; grid-template-columns: auto minmax(0, 1fr);
+    /* Four rows: head/tabs, the scrolling rows, COPY ALL, foot. The spread
+       row must be PLACED — display:contents lifts it into this grid, and an
+       unplaced item lands in an implicit row BELOW the foot, hanging off the
+       panel edge (seen live the day it was un-hidden). */
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    overflow: hidden;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-rail, #ct-rail) {
+    display: contents;
+  }
+  /* Compact already means the sheet is short in its own units. A viewport
+     max-height query cannot see zoom, so hide only redundant title chrome.
+     Lighting's head also owns FREE CAMERA and must remain actionable. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] #lt-head {
+    display: block; grid-column: 1; grid-row: 1; margin: 0;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-head h2, #ct-head) {
+    display: none;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] .lt-tabs {
+    grid-column: 2; grid-row: 1; min-width: 0;
+  }
+  #camtune-inner[data-density="compact"][data-rail="off"] .lt-tabs { grid-column: 1 / -1; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(#lt-rows, #ct-rows) {
+    grid-column: 1 / -1; grid-row: 2; min-height: 0;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] #lt-spread {
+    grid-column: 1 / -1; grid-row: 3;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot {
+    grid-column: 1 / -1; grid-row: 4;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] > .sheet-foot button {
+    min-width: 0; width: 100%; min-height: var(--tap-min); padding: 0;
+    font-size: var(--fs-micro); white-space: nowrap;
+  }
+  /* #lt-spread is NOT in this hide list: hiding it here removed the panel's
+     only copy-across-tracks door on exactly the device a player tunes on
+     (field report, 2026-08). The row rides .lt-preview-row, which this tier
+     already tightens, and its long help is already gone via the compact
+     .adv-help rule — one ~24px row, and #lt-rows scrolls. Photo-mode still
+     stands it down (setup vs framing, see the top of this file). */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] :is(
+    #lt-profile, #lt-preview, #ct-profile, .lt-help-toggle
+  ) {
+    display: none;
+  }
+
+/* ---------- short AND wide: put the chrome in a rail ----------
+   Compacting the head was not enough. Measured on a 852x393 phone the panel is
+   356px tall and its fixed furniture — title 39 + profile 15 + time/weather 52 +
+   help toggle 15 + category chips 39, then a 52px action bar — came to 212px of
+   chrome, 60% of the panel. #lt-rows was left with 104px to show 1402px of
+   sliders, and not one of them fitted in it whole.
+
+   So stack the furniture DOWN THE LEFT instead of across the top, the same
+   split the select and car-setup sheets use, and give the sliders the panel's
+   full height. The panel gets wider to pay for the rail; it is still docked, so
+   the scene it exists to preview keeps the rest of the screen. The category
+   chips become a vertical list here — the horizontal strip above is a
+   short-panel compromise, and this layout has the room to show them all. */
+  /* THE RAIL LAYOUT IS WIDER — AND --dock-w IS HOW EVERYTHING ELSE FINDS OUT.
+     Gated on SheetShape `data-rail`, not viewport `min-width: 720px`: at UI
+     SIZE 200% a 734px landscape viewport is ~257 local px and must stay a
+     strip, while a 852×393 phone at 100% is locally wide enough for the rail.
+     `body:has(#lighting > #lighting-inner[data-density="compact"])`, because the
+     condition is about a DESCENDANT and the declaration has to land on body.
+     This rule and the six below it were, until 2026-08-12, written as
+     `#lighting-inner[data-density="compact"] body…` — `body` as a DESCENDANT of
+     the panel, which can never match anything. All seven were inert, and CSS
+     reports nothing for a selector that simply never matches.
+     They were valid when this block was gated by `@media (max-height: 620px)`;
+     rescoping the block onto `data-density` prefixed every rule in it with the
+     panel scope, including the ones that already started at `body`. Same class
+     of mistake as the two self-nesting selectors earlier in this pass, and the
+     same cause: a mechanical prefix applied to a block whose rules did not all
+     start in the same place.
+     WHAT WAS LOST: the rail declares a 210px furniture column and expects a
+     560px panel to pay for it. With this rule dead the panel stayed at its base
+     380 — or 300 in FREE CAMERA — so the sliders got 156px, and 76px while
+     flying. That is the screenshot: KEY LIGHT (SUN) set one word per line beside
+     a full-height rail.
+     NO FEEDBACK LOOP, checked: the panel's height is fixed by its top/bottom
+     insets, so `data-density` does not depend on the width this sets. */
+  /* `:not(.photo-mode)` rather than trusting the flying override to win. It used
+     to, when this condition was `body:has(#lighting:not([hidden]))` — (1,1,1)
+     against the flying rule's (1,3,1), decided on classes. Naming the panel's
+     density inside :has() puts a SECOND id in this selector, and (2,2,1) beats
+     three classes no matter what. Stating the exclusion is what keeps the two
+     rules from being ordered by an accident of how the condition is spelled. */
+  body:not(.photo-mode):has(#lighting:not([hidden]) > #lighting-inner[data-density="compact"][data-rail="on"]),
+  body:not(.photo-mode):has(#camtune:not([hidden]) > #camtune-inner[data-density="compact"][data-rail="on"]) {
+    /* `70 * --vwz`, not `70vw` — this file's own header explains why: the value
+       is consumed inside `zoom: var(--ui-scale)`, so a bare viewport unit is
+       multiplied by the scale and paints as 80vw at the 1.15 a coarse pointer
+       ships. The base --dock-w was corrected; these two overrides were missed. */
+    --dock-w: min(calc(70 * var(--vwz)), 560px);
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] {
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    column-gap: 14px;
+    overflow: hidden;            /* the two columns scroll, never the panel */
+  }
+  /* the furniture stands up as its own column and scrolls if it has to; the
+     action bar is pinned to its foot by the auto margin */
+  /* Row 1 ONLY. This said `grid-row: 1 / -1` while the action bar below claims
+     `grid-row: 2` in the same column, so the two occupied the same cell and the
+     rail's last chips (FLOODLIGHTS, LAMP BEHAVIOUR, NIGHT GLOW & BLOOM) were
+     painted underneath RESET ALL / COPY VALUES / DONE. The rail scrolls, so it
+     never needed the second row — the foot's height is exactly what row 2 is
+     for. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] :is(#lt-rail, #ct-rail) {
+    display: flex; flex-direction: column;
+    grid-column: 1; grid-row: 1;
+    min-height: 0; overflow-y: auto; overscroll-behavior-y: contain;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] :is(#lt-rows, #ct-rows) {
+    grid-column: 2; grid-row: 1;
+    min-height: 0; max-height: none;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] :is(#lt-json, #ct-json) { grid-column: 2; grid-row: 2; }
+  /* The action bar is the foot of the RAIL, so its height comes out of the
+     rail's column and not out of the slider list beside it. The balanced row
+     fits two actions, then grows the final DONE action across the last line. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] > .sheet-foot {
+    grid-column: 1; grid-row: 2;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    --balance-basis: 5.5rem; --balance-min: 5rem;
+    margin-top: 0; gap: 5px; padding: 6px 0 0;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] > .sheet-foot button {
+    margin: 0; min-width: 0;
+    /* --tap-min, NOT 0. `min-height: 0` here was cancelling the floor the block
+       above sets, and this rule wins on both order and the child combinator — so
+       on a landscape phone (852 wide, so the rail applies) at UI SIZE 80% RESET,
+       COPY VALUES and DONE measured 21-23 ACTUAL px, under WCAG 2.5.8's 24. The
+       intent of the 0 was to let the buttons shrink in the rail, and they still
+       do: --tap-min only floors the axis a thumb needs. */
+    padding: 5px 6px; font-size: var(--fs-micro); min-height: var(--tap-min);
+    white-space: normal; line-height: 1.1;
+  }
+  /* chips wrap as a block in the rail rather than the short-panel scroll strip */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-tabs {
+    display: flex; flex-wrap: wrap;
+    --balance-basis: 5.5rem; --balance-min: 5rem;
+    overflow: visible; touch-action: manipulation;
+    margin: 2px 0 4px; padding: 0;
+    background: none; border-bottom: none;
+  }
+  /* #ct-modes too — the compact strip above sets nowrap on both chip lists, so
+     resetting only #lt-tabs left the camera-mode chips nowrap inside the rail's
+     ~100px columns. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] :is(#lt-tabs, #ct-modes) .lt-tab {
+    flex: 1 1 var(--balance-basis); min-width: var(--balance-min);
+    white-space: normal; justify-content: center;
+  }
+  /* Title on its own line: at 210px it was wrapping around the FREE CAMERA
+     button and costing the rail a whole extra line. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] #lt-head { flex-direction: column; align-items: stretch; gap: 4px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] #lt-head h2 { font-size: 15px; }
+  /* Preview choices pack from their own readable width. At the usual 210px
+     rail five choices become 3 + 2; a future added choice or narrower local
+     panel rebalances without changing a column count. */
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-preview-row {
+    display: flex; flex-wrap: wrap;
+    --balance-basis: 3.25rem; --balance-min: 3rem;
+    align-items: stretch;
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-preview-lbl { flex: 1 0 100%; width: auto; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-preview-row .opt-btn {
+    flex: 1 1 var(--balance-basis); min-width: var(--balance-min);
+  }
+
+  /* ---------- ...EXCEPT WHILE FLYING: TOP AND BOTTOM, NOT LEFT AND RIGHT ----
+     The rail exists to show twelve categories and their sliders side by side,
+     which is worth 560px when the panel IS the screen. In FREE CAMERA the
+     screen is the SCENE — --dock-w drops to 300 so two thumbsticks and a
+     climb/dive column have somewhere to live — and a 210px furniture column out
+     of 300 leaves the sliders 76. Measured: "KEY LIGHT (SUN)" set one word per
+     line, its explanation sliced by the panel edge, the toggle half off. A
+     column that narrow is not a column, so give the panel back its single-column
+     flow: furniture on top, sliders under it, action bar at the foot.
+     The height that pays for it is already found — `#lt-preview`, `#lt-profile`
+     and `#ct-profile` stand down while flying (see the top of this file), which
+     is ~155px of TIME/WEATHER setup nobody adjusts mid-shot.
+     AFTER the rail block, not before it. These beat the rail rules on
+     specificity either way, but a layout override that also comes later cannot
+     be undone by someone adding one more rail rule underneath. */
+  body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] {
+    display: flex; flex-direction: column;
+  }
+  body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rail, #ct-rail) {
+    display: contents;
+  }
+  body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-rows, #ct-rows) {
+    max-height: none;
+  }
+  body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] > .sheet-foot {
+    display: flex; flex-wrap: wrap; margin-top: 6px; padding-top: 6px;
+  }
+  /* the categories go back to the horizontal scroll strip the short panel uses:
+     a two-column chip grid down a full-width panel would spend the height the
+     sliders just got back */
+  body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-tabs {
+    /* The FULL strip, not most of it. This rule exists to undo the rail block's
+       two-column chip grid, so it has to restate the pattern — and when it was
+       written it restated it incompletely, dropping `overscroll-behavior-x` and
+       the scrollbar suppression that the identical strip 160 lines up has. A
+       flick past the last chip then chains outward, which on iOS is the
+       back-navigation gesture. Four copies of one pattern is how that happens;
+       tests/unit/scroll-strips.test.mjs now fails if a fifth diverges. */
+    display: flex; flex-wrap: nowrap;
+    overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x;
+    scrollbar-width: none;
+  }
+  body.photo-mode:not(.pc-nopanel) :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-tabs, #ct-modes) .lt-tab {
+    white-space: nowrap; flex: 0 0 auto;
+  }
+
+/* Narrow sheet, any density: one sideways strip. The compact nowrap above
+   only fires when the PANEL is short. A landscape dock can be locally
+   narrow while still tall enough to stay `data-density="normal"`, and
+   then AMBIENT & BOUNCE wraps/clips inside an 8rem balanced cell
+   (measured phone-landscape gallery). Rail-on is a 560px panel, so this
+   480 cap does not undo the vertical chip grid. */
+@container sheet (max-width: 480px) {
+  .lt-tabs {
+    display: flex; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    scrollbar-width: none;
+  }
+  #lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab { white-space: nowrap; flex: 0 0 auto; }
+  .lt-tabs::-webkit-scrollbar { display: none; }
+}
+/* At extreme UI sizes the dock can be locally narrower than its header even in
+   a wide physical viewport. Keep the action inside and let the slider pane own
+   the width rather than clipping the FREE CAMERA control. */
+@container sheet (max-width: 220px) {
+  #lt-head { flex-wrap: wrap; }
+}
+/* advanced disclosure — a native <details>/<summary>; the summary keeps the
+   look of the button it replaced (tokens.css's base `button` rule does not
+   apply to <summary>, so the button chrome is repeated here explicitly), and
+   the default triangle marker is replaced with one that flips on [open]
+   since the built-in marker cannot be positioned to match the old glyph. */
+#advanced-inner > details { margin: calc(var(--gap) * 0.35) 0 0; }
+#adv-details { margin: calc(var(--gap) * 7 / 6) 0 calc(var(--gap) / 6); }
+.adv-more-btn {
+  display: flex; align-items: center; justify-content: center; gap: calc(var(--gap) * 0.5);
+  width: 100%; list-style: none; cursor: pointer;
+  font: inherit; font-size: var(--fs-micro); letter-spacing: var(--ls-4); opacity: 0.85;
+  color: var(--text); background: var(--plate-hover);
+  border: 1px solid var(--plate-line); border-radius: var(--r-md); padding: 10px 18px;
+}
+.adv-more-btn::-webkit-details-marker { display: none; }
+.adv-more-btn::after { content: "\25BE"; }     /* ▾, flips to ▴ via [open] below */
+@media (hover: hover) and (pointer: fine) {
+  .adv-more-btn:hover { background: var(--plate-press); }
+}
+.adv-more-btn:active { background: rgba(255, 255, 255, 0.2); }
+#adv-details[open] > .adv-more-btn::after { content: "\25B4"; }
+#adv-extra { margin-top: calc(var(--gap) / 3); }
+
+/* ---------- MUSIC & SOUND: the player's own uploaded tracks ----------
+   One row per stored file. The name is the only elastic column so a long
+   filename truncates instead of pushing the play/delete buttons off the sheet —
+   they are the two things a thumb is aiming for. */
+.music-list { margin-top: calc(var(--gap) * 2 / 3); display: flex; flex-direction: column; gap: calc(var(--gap) / 3); }
+.music-row {
+  display: flex; align-items: center; gap: calc(var(--gap) * 2 / 3);
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3); border-radius: var(--r-sm);
+  background: var(--plate);
+  border: 1px solid var(--card-line);
+  font-size: var(--fs-micro);
+}
+.music-row.playing { border-color: var(--red); background: var(--plate-on); }
+.music-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.music-size { flex: 0 0 auto; font-size: var(--fs-micro); opacity: 0.5; font-variant-numeric: tabular-nums; }
+.music-row button {
+  /* max(30px, --tap-min): 30 keeps these inside the row's 44px budget at
+     >=100% (below), but painted 12px at UI SIZE 40%; the token arm only
+     wins under 100%. */
+  flex: 0 0 auto;
+  width: max(30px, var(--tap-min)); height: max(30px, var(--tap-min));
+  margin: 0; padding: 0;
+  font-size: var(--fs-micro); line-height: 1; border-radius: var(--r-sm);
+}
+.music-del { opacity: 0.7; }
+@media (hover: hover) and (pointer: fine) {
+  .music-del:hover { opacity: 1; border-color: var(--red); color: var(--red); }
+}
+.music-del:focus-visible { opacity: 1; border-color: var(--red); color: var(--red); }
+
+/* ---------- MUSIC & SOUND: Spotify (personal use) ---------- */
+/* THE PANEL'S FIELD RECIPE, once. All six inputs/selects here wrote the same
+   seven declarations byte for byte; this is their one statement. The 16px is
+   the iOS zoom floor: Safari zooms the page when a focused control sits under
+   it, and the zoom sticks after the keyboard closes. */
+#as-sp-id, #sp-search, #as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 {
+  font: inherit; font-size: 16px;
+  background: var(--plate-hover); color: var(--text);
+  border: 1px solid var(--plate-line); border-radius: var(--r-sm);
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
+}
+#as-sp-id {
+  /* Full width, not the 56-60% the customise-screen fields use: this one takes
+     a pasted 32-character id and a field that shows a third of it makes a
+     mistyped character impossible to spot. */
+  flex: 1 1 100%; min-width: 0; width: 100%;
+  min-height: var(--chip-h);   /* on the ladder, like every other field */
+}
+/* The redirect URI exists to be COPIED — and tokens.css sets user-select:none on
+   the whole app, so without this the one string the setup depends on cannot be
+   selected. It has to match the Spotify dashboard byte for byte, which is why
+   it is monospace and wraps rather than being ellipsised. */
+/* ---------- SPOTIFY player panel ---------- */
+.sp-now { display: flex; align-items: center; gap: 10px; margin-bottom: calc(var(--gap) * 2 / 3); }
+.sp-art {
+  flex: 0 0 auto; width: 56px; height: 56px; border-radius: var(--r-sm); object-fit: cover;
+  background: var(--plate);
+}
+.sp-now-txt { min-width: 0; }              /* lets the ellipsis below actually engage */
+.sp-title, .sp-artist, .sp-on { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-title { font-size: 14px; font-weight: 700; }
+.sp-artist { font-size: var(--fs-micro); opacity: 0.75; }
+.sp-on { font-size: var(--fs-micro); opacity: 0.5; letter-spacing: var(--ls-2); margin-top: calc(var(--gap) / 6); }
+.sp-bar { height: 3px; border-radius: var(--r-xs); background: var(--card-line); overflow: hidden; margin: calc(var(--gap) / 6) 0 calc(var(--gap) * 2 / 3); }
+.sp-bar-fill { height: 100%; background: var(--red); width: 0; transition: width 0.4s linear; }
+#sp-search {
+  width: 100%; margin-top: calc(var(--gap) * 0.5);
+  /* Same --chip-h floor as its twin #as-sp-id: padding-driven height painted
+     16px at UI SIZE 40% (2026-08-21 sweep). Inert at >=100%. */
+  min-height: var(--chip-h);
+}
+#sp-results:empty { display: none; }
+#as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 { width: 100%; }
+#as-sp-playlist:disabled, #as-sp-device:disabled,
+#sp-playlist2:disabled, #sp-device2:disabled { opacity: 0.45; }
+.sp-uri {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-micro);
+  word-break: break-all; opacity: 0.9;
+  -webkit-user-select: text; user-select: text; cursor: text;
+}
+#as-sp-wrap .opt-row { margin-top: calc(var(--gap) * 2 / 3); }
+/* THE GARAGE ARRIVAL TUNER is a short form, not a slider list: its rows are
+   the settings page's own .set-row, and #ga-rows is the scroller between the
+   fixed head and the RESET / DONE foot like #fb-rows in the flyby editor. */
+#ga-rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; }
+/* Room for TWO CAMERA CUT: the settings page's fixed 8rem select clipped it. */
+#ga-rows .set-row > div > select { flex: 0 1 12rem; width: 12rem; }
+/* Opened from the TITLE screen there is no race behind to preview, only the
+   menu's own buttons showing through the docked panel: fade the menu out the
+   way css/components.css does under any open dialog. */
+body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
+#ga-head h2 { margin: 0 0 calc(var(--gap) * 0.5); }
+
+/* ---------- UI Fit r5: camera tuner compact tap floor (#camtune only) ----------
+   Survey (artifacts/ui-fit-r5): on short landscape docks the shared rail-off /
+   rail-on foot rules floor buttons at --tap-min (24) with padding:0, which
+   overrides the compact --tap-paint floor set earlier in this file. Measured
+   ios-iphone-landscape-safari: #ct-close 67×27, preview chips truncated under
+   house --tap (52), #ct-copy-from select 108×26. Lighting keeps the shared
+   rules; these selectors are camera-only so a lighting pass is untouched. */
+#camtune-inner[data-density="compact"][data-rail="off"] > .sheet-foot button,
+#camtune-inner[data-density="compact"][data-rail="on"] > .sheet-foot button {
+  min-height: var(--tap-paint);
+  padding: calc(var(--gap) / 2) calc(var(--gap) * 2 / 3);
+}
+#camtune-inner[data-density="compact"] #ct-previews > button {
+  min-height: var(--tap-paint);
+}
+#camtune-inner #ct-copyrow select,
+#camtune-inner #ct-copy-from {
+  min-height: var(--tap-paint);
+}
+#camtune-inner #ct-modes .lt-tab {
+  min-width: var(--tap-paint);
+}
+
+/* ---------- UI Fit r7: camera tuner rail-off portrait (#camtune only) ----------
+   Survey (ui-fit-r5 REPORT): ios-iphone-portrait (390x844 / 360x740) clips the
+   static rail-off foot (#ct-close) and #ct-prev-* (MONACO). Compact
+   rail-off is a 2-col grid (`auto minmax(0,1fr)`) that never PLACES
+   #ct-previews. The unplaced item lands in the AUTO column, sizes that column
+   to the nowrap preview min-content, and overflow-x:hidden clips the sheet —
+   measured ios-iphone-portrait: #ct-close +20, #ct-prev-monaco +32,
+   #ct-modes +47. Lighting keeps the shared 2-col grid; camera already spans
+   tabs 1 / -1, so one minmax(0,1fr) column plus an explicit preview row
+   keeps #ct-* inside. House --tap / --tap-paint floors stay (no soft taps). */
+#camtune-inner[data-density="compact"][data-rail="off"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+#camtune-inner[data-rail="off"] #ct-previews {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  min-width: 0;
+  --balance-basis: 0px;
+  --balance-min: 0px;
+  flex-wrap: nowrap;
+}
+#camtune-inner[data-rail="off"] #ct-previews > button {
+  min-width: 0;
+  min-height: var(--tap-paint);
+  padding: 0 calc(var(--gap) * 0.25);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#camtune-inner[data-density="compact"][data-rail="off"] > .sheet-foot button {
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+  flex: 1 1 0;
+  min-height: var(--tap-paint);
+}
+#camtune-inner[data-rail="off"] > .sheet-foot button {
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+  min-height: var(--tap-paint);
+}
+#camtune-inner[data-rail="off"] > .sheet-foot #ct-close {
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--tap-paint);
+}
+#camtune-inner[data-rail="off"] #ct-modes,
+#camtune-inner[data-rail="off"] #ct-rows {
+  min-width: 0;
+}
+#camtune-inner [id^="ct-preset-"] {
+  min-width: var(--tap-paint);
+}
+#camtune-inner #ct-copy-all-btn {
+  min-height: var(--tap-paint);
+}
+
+} /* @layer components */
+
+/* ---------- UI Fit r6: lighting tuner compact tap floor (#lighting only) ----------
+   Same root as r5/camera (#1530): shared rail-off / rail-on foot rules floor
+   buttons at --tap-min with padding:0, overriding the compact --tap-paint
+   floor. Survey r5 rank 2: 16 soft taps/cell = FX tab 42×52 + 12 --slider
+   ranges + RESET/COPY/DONE ~27–29 tall. Lighting-only so the r5 camera carve
+   stays untouched. */
+@layer components {
+#lighting-inner[data-density="compact"][data-rail="off"] > .sheet-foot button,
+#lighting-inner[data-density="compact"][data-rail="on"] > .sheet-foot button {
+  min-height: var(--tap-paint);
+  padding: calc(var(--gap) / 2) calc(var(--gap) * 2 / 3);
+}
+#lighting-inner #lt-tabs .lt-tab {
+  min-width: var(--tap-paint);
+}
+}
+
+/* #pc-toggle narrow/compact overrides, OUTSIDE @layer components on purpose:
+   hud.css sets #pc-toggle unconditionally from inside @layer hud, and layer
+   order (tokens.css: reset, base, components, hud, overlays) beats specificity
+   and matched media/container conditions alike, so a components-layer override
+   here can never win. Re-declaring it in the real top-level `hud` layer (this
+   must NOT nest inside the `components` block above — nesting makes a
+   nested hud sub-layer ranked under components, not the real one) puts these
+   in the same layer as hud.css's rule, so specificity (and, for the
+   @container rule below, the :is() prefix that raises it above hud.css's
+   bare #pc-toggle) decides the winner. */
+@layer hud {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #pc-toggle {
+    padding: 6px 10px; font-size: var(--fs-micro); min-height: var(--tap-paint);
+  }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] #pc-toggle {
+    min-height: var(--tap-paint); padding: 0 var(--gap);
+    font-size: var(--fs-micro);
+  }
+  @container sheet (max-width: 220px) {
+    :is(#lighting-inner, #camtune-inner) #pc-toggle { width: 100%; min-width: 0; }
+  }
+}
+
+@layer components {
+@media (max-width: 900px) and (max-height: 500px) {
+  :is(#lighting-inner, #camtune-inner) > .sheet-foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :is(#lighting-inner, #camtune-inner) > .sheet-foot button { min-width: 0; white-space: normal; line-height: 1.1; }
+}
+}
+
+
+
+/* ---------- UI Fit r6: lighting over flyby stacked dock (#lighting / #lt-*) ----------
+   Survey rank 5: both inners are position:fixed to the same insets, so on a
+   short landscape dock they paint on top of each other and #lt-rows is
+   unusable (measured 852x344: two 380x307 sheets at 405,8). Standalone
+   lighting / camera / flyby keep their own carves; this block matches only
+   when BOTH #lighting and #flyby are open. Flyby tap floors (#1774) stay. */
+@layer components {
+  body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #lighting-inner {
+    z-index: 43;
+  }
+  body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-spread {
+    display: none;
+  }
+  body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-rows {
+    min-height: max(132px, calc(3 * 44px));
+  }
+  @media (min-width: 800px) {
+    body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) {
+      --dock-w: min(calc(40 * var(--vwz)), 360px);
+    }
+    body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #flyby-inner {
+      left: calc((var(--sal) + 8px) / var(--sheet-eff-scale, var(--ui-scale)));
+      right: auto;
+    }
+  }
+}
+
+/* ---------- UI Fit r6: flyby editor compact tap floor (#flyby / #fb-* only) ----------
+   Same root as r5/camera (#1530) and r6/lighting (#1740): compact flyby foot
+   sat on --tap-min (RESET/COPY/DONE 80–156×36–38) and pose selects
+   #fb-in-ease / #fb-in-eye*-at painted 104×26. Camera/lighting keep their
+   own carves; these selectors are flyby-only. */
+@layer components {
+#flyby-inner[data-density="compact"] > .sheet-foot button,
+#flyby-inner[data-density="compact"][data-rail="on"] > .sheet-foot button {
+  min-height: var(--tap-paint);
+  padding: calc(var(--gap) / 2) calc(var(--gap) * 2 / 3);
+}
+#flyby-inner > .sheet-foot button {
+  min-height: var(--tap-paint);
+}
+#flyby-inner #fb-rows select,
+#flyby-inner :is(#fb-in-ease, [id^="fb-in-eye"][id$="-at"], [id^="fb-in-look"][id$="-at"]) {
+  min-height: var(--tap-paint);
+}
+/* GARAGE ANGLE's plan of the bay (js/garage/arrival.js angleMap): under the
+   selector, the chosen eye lit. currentColor so it follows the panel's ink. */
+#ga-angle-map { display: block; width: 100%; max-width: 168px; margin-top: var(--gap); color: var(--text); }
+}

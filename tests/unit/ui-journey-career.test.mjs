@@ -1,0 +1,158 @@
+/* ui-journey-career.test.mjs — source canaries for leftover Career overlays.
+ *
+ * Step 4 of docs/research/UI-REDESIGN-2026-08-18.md: #career-offers,
+ * #career-history, #career-guide and #quali wrap an anonymous .sheet, so
+ * --fit-at is declared on the dialog and inherited. Compact packs rows and
+ * wraps names; guide/history contents is a rail only on data-shape=wide.
+ *
+ * Run: node --test tests/unit/ui-journey-career.test.mjs
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import vm from "node:vm";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
+
+const OVERLAYS = ["#career-offers", "#career-history", "#career-guide", "#quali"];
+
+test("career overlay dialogs declare --fit-at for the anonymous .sheet", () => {
+  const css = read("css/career.css");
+  for (const id of OVERLAYS) {
+    assert.match(css, new RegExp(id + "[^{]*\\{[^}]*--fit-at:\\s*300px"),
+      `${id} must declare --fit-at: 300px so classifyFit can read it on .sheet`);
+    assert.match(css, new RegExp(id + "[^{]*\\{[^}]*--fit-at:\\s*220px"),
+      `${id} must drop to 220px in landscape, matching Settings`);
+  }
+  assert.match(css, /#cr-inner[^{]*\{[^}]*--fit-at:\s*220px/,
+    "hub landscape --fit-at uses data-shape (not @media orientation)");
+  assert.match(css, /#cr-inner \{[^}]*--fit-at:\s*300px/,
+    "hub --fit-at must stay on #cr-inner");
+});
+
+test("career.css does not reintroduce short-viewport height layout queries", () => {
+  const css = read("css/career.css");
+  assert.doesNotMatch(css, /max-height:\s*55svh/);
+  assert.doesNotMatch(css, /orientation:\s*landscape\)\s*and\s*\(max-height/);
+  assert.doesNotMatch(css, /orientation:\s*portrait\)\s*and\s*\(max-height/);
+});
+
+test("guide and history contents rail keys on wide sheet shape, strip when compact", () => {
+  const css = read("css/career.css");
+  const js = read("js/career/career-ui.js");
+  const html = read("index.html");
+  assert.match(js, /mountContentsNav\("cg-body", "cg-contents", "Career guide sections"\)/);
+  assert.match(js, /mountContentsNav\("ch-body", "ch-contents", "Career history sections"\)/);
+  assert.match(js, /setAttribute\("aria-label", label\)/);
+  assert.match(js, /"cg-" \+ slug\(title\)/);
+  assert.match(js, /head\("CAREER TOTALS", "ch-totals"\)/);
+  assert.match(js, /head\("SEASON BY SEASON", "ch-seasons"\)/);
+  // Live survey: blurb still said SETTINGS › FILES after the door was renamed.
+  assert.match(js, /SETTINGS › BACKUP & RESTORE and GARAGE › TEAM/);
+  assert.doesNotMatch(js, /SETTINGS › FILES/);
+  assert.match(css, /#career-guide \.sheet\[data-shape="wide"\]:not\(\[data-density="compact"\]\):has\(> #cg-contents\)/);
+  assert.match(css, /#career-history \.sheet\[data-shape="wide"\]:not\(\[data-density="compact"\]\):has\(> #ch-contents\)/);
+  assert.match(css, /#career-guide \.sheet\[data-shape="wide"\] > #cg-contents/);
+  assert.match(css, /#career-history \.sheet\[data-shape="wide"\] > #ch-contents/);
+  assert.match(css, /#career-guide \.sheet\[data-shape="wide"\] > #cg-contents,[\s\S]*?min-height:\s*0/);
+  assert.match(css, /#career-guide \.sheet\[data-shape="wide"\] > \.sheet-body,[\s\S]*?min-height:\s*0/);
+  assert.match(css, /#career-guide \.sheet\[data-density="compact"\] > #cg-contents/);
+  assert.match(css, /#career-history \.sheet\[data-density="compact"\] > #ch-contents/);
+  assert.match(html, /class="sheet-body pane" id="cg-body"/);
+  assert.match(html, /class="sheet-body pane" id="ch-body"/);
+  assert.match(html, /class="sheet-body pane" id="co-body"/);
+  assert.match(html, /class="sheet-body pane" id="q-body"/);
+});
+
+test("compact overlay rows wrap names instead of ellipsizing titles and points", () => {
+  const css = read("css/career.css");
+  assert.match(css,
+    /#career-offers \.sheet\[data-density="compact"\] \.co-offer-team\s*\{[\s\S]*?white-space:\s*normal/);
+  assert.match(css,
+    /#career-history \.sheet\[data-density="compact"\] \.res-name\s*,[\s\S]*?white-space:\s*normal/);
+  assert.match(css,
+    /#quali \.sheet\[data-density="compact"\] \.res-name\s*,[\s\S]*?white-space:\s*normal/);
+  assert.match(css,
+    /#career-history \.sheet\[data-density="compact"\] \.res-pts[\s\S]*?white-space:\s*normal/);
+  assert.match(css,
+    /#quali \.sheet\[data-density="compact"\] \.res-pts[\s\S]*?white-space:\s*normal/);
+});
+
+test("compact qualifying foot keeps BACK except the existing .q-done rules", () => {
+  const css = read("css/career.css");
+  assert.match(css, /#quali\.q-done #q-drive, #quali\.q-done #q-sim, #quali\.q-done #q-back \{ display: none; \}/);
+  assert.match(css, /#quali:not\(\.q-done\) #q-go \{ display: none; \}/);
+  assert.match(css, /#quali \.sheet\[data-density="compact"\] #q-foot #q-drive/);
+  assert.match(css, /#quali \.sheet\[data-density="compact"\] #q-foot #q-go/);
+  const compactFoot = css.split("#quali .sheet[data-density=\"compact\"]")
+    .slice(1).join("#quali .sheet[data-density=\"compact\"]");
+  assert.doesNotMatch(compactFoot, /#q-back[^{]{0,80}\{\s*display:\s*none/,
+    "compact CSS must not hide BACK; only .q-done does");
+});
+
+/* Soft-tap polish (UI Fit): hub objective briefs painted 32px on phone
+ * landscape (layout-audit 2026-10-05). Floor them on --tap-paint. */
+test("career hub objective picks floor at --tap-paint", () => {
+  const css = read("css/career.css");
+  assert.match(css,
+    /\.cr-obj-pick\s*\{[^}]*min-height:\s*var\(--tap-paint\)/s,
+    "objective brief buttons must hit the painted tap floor on touch");
+});
+
+/* U01 / U03 — title-origin Esc and NEW CAREER field gate (PR #1030). */
+test("CAREER MODES records slotsOrigin; title Esc never climbs to the hub", () => {
+  const js = read("js/career/career-ui.js");
+  const title = read("js/ui/title-flow.js");
+  assert.match(js, /let slotsOrigin = "title"/);
+  assert.match(js, /slotsOrigin = origin === "hub" \? "hub" : "title"/);
+  assert.match(js, /picking && slotsOrigin === "hub" && Career\.active\(\)/);
+  assert.match(js, /openSlots\("hub"\)/);
+  assert.match(title, /careerUi\.openSlots\("title"\)/);
+});
+
+test("NEW CAREER START is gated on name / 3-letter code / number 1–99", () => {
+  const js = read("js/career/career-ui.js");
+  assert.match(js, /function draftErrors\(d\)/);
+  assert.match(js, /Enter a name/);
+  assert.match(js, /Code must be 3 letters/);
+  assert.match(js, /Number must be 1–99/);
+  assert.match(js, /\/\^\[A-Z\]\{3\}\$\//);
+  assert.match(js, /draftFieldErr = errs/);
+});
+
+test("NEW CAREER NUMBER validates the complete input value before starting", () => {
+  const source = read("js/career/career-ui.js");
+  // Execute the form's actual number input callback and its START gate together.
+  const field = source.slice(source.indexOf('    const numIn = addField("NUMBER"'), source.indexOf('    numIn.min ='));
+  const gate = source.slice(source.indexOf("  function draftErrors(d)"), source.indexOf('  $("cr-back").onclick'));
+  const ctx = { draft: { name: "Test Driver", code: "TST", num: 99 }, onInput: null,
+    addField(_label, _value, _max, onInput) { ctx.onInput = onInput; return {}; } };
+  vm.runInNewContext(field + gate + ";globalThis.errors = draftErrors;", ctx);
+  for (const value of ["1e2", "1.5", "100", "0", "-1", "", " ", "1e309", "not a number"]) {
+    ctx.onInput(value);
+    assert.equal(ctx.errors(ctx.draft).num, "Number must be 1–99", `reject ${JSON.stringify(value)}`);
+  }
+  for (const [value, expected] of [["1", 1], ["42", 42], ["99", 99], ["1e1", 10]]) {
+    ctx.onInput(value);
+    assert.equal(ctx.draft.num, expected, `preserve complete numeric value ${value}`);
+    assert.deepEqual(Object.keys(ctx.errors(ctx.draft)), [], `accept ${value}`);
+  }
+});
+
+test("save retry explicitly persists the career before reading its status", () => {
+  const source = read("js/ui/select-screen.js");
+  const retry = source.slice(source.indexOf("const retrySave ="), source.indexOf("const exportRecovery ="));
+  for (const durable of [true, false]) {
+    const calls = [];
+    const ctx = {
+      Career: { data: () => ({}), save: () => calls.push("save"), saveStatus: () => { calls.push("status"); return { durable, reason: "quota" }; } },
+      G: {}, store: { retryFailed: () => ({ retried: 0 }), broken: "quota" },
+      hideSaveWarning: () => calls.push("restored"), showSaveWarning: () => calls.push("failed"),
+    };
+    vm.runInNewContext(retry + "retrySave();", ctx);
+    assert.deepEqual(calls, ["save", "status", durable ? "restored" : "failed"]);
+  }
+});

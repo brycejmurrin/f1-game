@@ -1,0 +1,1134 @@
+/* net-transport.test.mjs — the wire, tested with no wire.
+ *
+ * js/net/transport.js and js/net/handshake.js are pure logic: no DOM, no
+ * renderer, no game state. So they get a node --test suite rather than a
+ * Playwright spec — it runs in milliseconds instead of minutes, which matters
+ * because these are the modules everything else in multiplayer sits on.
+ *
+ * The loopback transport is the reason this is testable at all. It wires two
+ * endpoints together IN PROCESS with injectable latency, jitter and loss, and
+ * it only delivers when pump(now) is called — so "what happens at 40% packet
+ * loss" is a deterministic question with a repeatable answer, rather than
+ * something that depends on how busy the machine was.
+ *
+ * Run: node --test tests/unit/net-transport.test.mjs   (npm run test:net-unit)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { deflateRawSync } from "node:zlib";
+import { seedLogGlobal } from "../helpers/seed-log.mjs";
+import { NetworkAdversary } from "../helpers/network-adversary.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+seedLogGlobal();
+const load = (rel, name) =>
+  eval(fs.readFileSync(path.join(ROOT, rel), "utf8") + ";" + name);
+
+globalThis.NetBytes = load("js/net/bytes.js", "NetBytes");   // both bind it at call time
+const NetTransport = load("js/net/transport.js", "NetTransport");
+const NetHandshake = load("js/net/handshake.js", "NetHandshake");
+
+test("network adversary can reorder headers and stall each response body", async () => {
+  const net = new NetworkAdversary();
+  const first = net.fetch("/telemetry?lap=1");
+  const second = net.fetch("/telemetry?lap=2");
+  assert.deepEqual(net.requests().map(r => r.url), ["/telemetry?lap=1", "/telemetry?lap=2"]);
+
+  // Headers for the newer request arrive first. Neither body is readable until
+  // the test explicitly releases bytes, so a consumer cannot accidentally pass
+  // because Node completed a fast local response.
+  net.respondHeaders(2);
+  const secondResponse = await second;
+  let secondDone = false;
+  const secondBody = secondResponse.text().then(value => { secondDone = true; return value; });
+  await Promise.resolve();
+  assert.equal(secondDone, false, "body must remain stalled after headers");
+  net.push(2, "new");
+  net.end(2);
+  assert.equal(await secondBody, "new");
+
+  net.respondHeaders(1);
+  net.push(1, "old");
+  net.end(1);
+  assert.equal(await (await first).text(), "old");
+});
+
+test("network adversary distinguishes request failure from a mid-body disconnect", async () => {
+  const net = new NetworkAdversary();
+  const failed = net.fetch("/retry");
+  net.fail(1, new TypeError("offline"));
+  await assert.rejects(failed, /offline/);
+
+  const dropped = net.fetch("/retry");
+  net.respondHeaders(2, { headers: { "content-type": "application/json" } });
+  net.push(2, "{\"partial\":");
+  const body = (await dropped).text();
+  net.errorBody(2, new Error("socket closed"));
+  await assert.rejects(body, /socket closed/);
+});
+
+test("network adversary aborts a pending response without leaving a delivery path", async () => {
+  const net = new NetworkAdversary();
+  const controller = new AbortController();
+  const pending = net.fetch("/slow", { signal: controller.signal });
+  controller.abort(new Error("selection changed"));
+  await assert.rejects(pending, /selection changed/);
+  assert.equal(net.request(1).aborted, true);
+  assert.throws(() => net.respondHeaders(1), /already settled/);
+});
+
+// A seeded uniform, so a loss pattern is a fact rather than a coin flip.
+function seededRnd(seed) {
+  let s = (seed >>> 0) || 1;
+  return () => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return s / 0x100000000; };
+}
+
+// ---------------------------------------------------------------------------
+// Loopback transport
+// ---------------------------------------------------------------------------
+
+test("nothing is delivered before its latency has elapsed", () => {
+  const [a, b] = NetTransport.loopback({ latencyMs: 50, rnd: seededRnd(1) });
+  const got = [];
+  b.onMessage((ch, d) => got.push(d));
+  a.pump(0); b.pump(0);              // establish both epochs
+  a.send(NetTransport.STATE, "x");
+  b.pump(10); assert.equal(got.length, 0, "arrived at 10ms");
+  b.pump(49); assert.equal(got.length, 0, "arrived at 49ms");
+  b.pump(50); assert.equal(got.length, 1, "should have arrived at 50ms");
+});
+
+test("loss hits the unreliable channel and never the reliable one", () => {
+  // 100% loss: the state channel goes silent, the event channel must not.
+  // This is the honest model — the browser genuinely does guarantee the
+  // reliable channel, so simulating loss on it would test an impossible case.
+  const [a, b] = NetTransport.loopback({ latencyMs: 0, loss: 1, rnd: seededRnd(2) });
+  let state = 0, event = 0;
+  b.onMessage((ch) => { if (ch === NetTransport.STATE) state++; else event++; });
+  for (let i = 0; i < 20; i++) {
+    a.send(NetTransport.STATE, i);
+    a.send(NetTransport.EVENT, i);
+  }
+  b.pump(1);
+  assert.equal(state, 0, "state channel should have dropped everything");
+  assert.equal(event, 20, "event channel must be lossless");
+});
+
+test("partial loss is reproducible for a given seed", () => {
+  function run() {
+    const [a, b] = NetTransport.loopback({ latencyMs: 0, loss: 0.4, rnd: seededRnd(99) });
+    const got = [];
+    b.onMessage((ch, d) => got.push(d));
+    for (let i = 0; i < 100; i++) a.send(NetTransport.STATE, i);
+    b.pump(1);
+    return got.join(",");
+  }
+  assert.equal(run(), run(), "same seed must drop the same packets");
+  const [a, b] = NetTransport.loopback({ latencyMs: 0, loss: 0.4, rnd: seededRnd(99) });
+  let n = 0;
+  b.onMessage(() => n++);
+  for (let i = 0; i < 100; i++) a.send(NetTransport.STATE, i);
+  b.pump(1);
+  assert.ok(n > 40 && n < 80, `~60 of 100 should survive 40% loss, got ${n}`);
+});
+
+test("the reliable channel preserves send order", () => {
+  const [a, b] = NetTransport.loopback({ latencyMs: 20, rnd: seededRnd(3) });
+  const got = [];
+  b.onMessage((ch, d) => got.push(d));
+  a.pump(0); b.pump(0);              // establish both epochs — see loopback()
+  for (let i = 0; i < 10; i++) a.send(NetTransport.EVENT, i);
+  b.pump(100);
+  assert.equal(got.join(","), "0,1,2,3,4,5,6,7,8,9");
+});
+
+test("traffic flows both ways and close is seen by both ends", () => {
+  const [a, b] = NetTransport.loopback({ latencyMs: 0, rnd: seededRnd(4) });
+  let toA = 0;
+  a.onMessage(() => toA++);
+  b.send(NetTransport.EVENT, "hi");
+  a.pump(1);
+  assert.equal(toA, 1, "b -> a should deliver");
+
+  const closed = [];
+  a.onClose(() => closed.push("a"));
+  b.onClose(() => closed.push("b"));
+  a.close();
+  assert.deepEqual(closed.sort(), ["a", "b"], "both ends should be notified");
+  assert.equal(a.send(NetTransport.EVENT, "x"), false, "send after close must fail");
+});
+
+test("a throwing message handler cannot take down the transport", () => {
+  // A rendering bug upstream must not read as a dropped connection.
+  const [a, b] = NetTransport.loopback({ latencyMs: 0, rnd: seededRnd(5) });
+  let second = 0;
+  b.onMessage(() => { throw new Error("handler blew up"); });
+  b.onMessage(() => second++);
+  a.send(NetTransport.EVENT, 1);
+  b.pump(1);
+  assert.equal(second, 1, "the surviving handler should still have run");
+  assert.equal(b.status, "open", "the transport should still be open");
+});
+
+test("RTC inbox pressure drops state snapshots, never reliable events", () => {
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    close() {}
+  }
+  const channel = (label) => ({ label, readyState: "open", close() {} });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    const ep = fresh.rtc({ role: "guest" });
+    const state = channel("state"), event = channel("event");
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: event });
+    state.onopen(); event.onopen();
+
+    const got = [];
+    ep.onMessage((kind, data) => got.push([kind, data]));
+    for (let i = 0; i < 80; i++) state.onmessage({ data: "s" + i });
+    for (let i = 0; i < 80; i++) event.onmessage({ data: "e" + i });
+    ep.pump();
+
+    const states = got.filter(([kind]) => kind === fresh.STATE).map(([, data]) => data);
+    const events = got.filter(([kind]) => kind === fresh.EVENT).map(([, data]) => data);
+    assert.equal(states.length, 64, "only the newest bounded snapshot window survives");
+    assert.equal(states[0], "s16");
+    assert.deepEqual(events, Array.from({ length: 80 }, (_, i) => "e" + i),
+      "reliable protocol events must remain complete and ordered");
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.localStorage;
+  }
+});
+
+test("a guest adopts only the expected data-channel labels, once each (NP-7)", () => {
+  class FakePC {
+    constructor() { this.connectionState = "new"; this.iceConnectionState = "new"; this.iceGatheringState = "new"; }
+    close() {}
+  }
+  const channel = (label) => ({ label, readyState: "open", closed: 0, bufferedAmount: 0, send() {}, close() { this.closed++; } });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    const ep = fresh.rtc({ role: "guest" });
+    const opens = [];
+    ep.onOpen(() => opens.push(1));
+    const state = channel("state"), state2 = channel("state"), alien = channel("telemetry"), event = channel("event");
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: state2 });   // duplicate
+    ep.pc.ondatachannel({ channel: alien });    // unknown
+    assert.equal(state2.closed, 1, "duplicate label is refused");
+    assert.equal(alien.closed, 1, "unknown label is refused");
+    state.onopen();
+    assert.equal(state2.onopen, undefined, "the refused channel was never wired");
+    assert.equal(opens.length, 0, "one channel open is not an open transport");
+    assert.equal(ep.status, "connecting");
+    ep.pc.ondatachannel({ channel: event });
+    event.onopen();
+    assert.equal(opens.length, 1, "open fires once both DISTINCT kinds opened");
+    assert.equal(ep.status, "open");
+    assert.equal(ep.send(fresh.EVENT, "{}"), true, "the EVENT channel is the real one");
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.localStorage;
+  }
+});
+
+test("RTC disconnects instead of dropping reliable events when its inbox overflows", () => {
+  let pcClosed = 0;
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    close() { pcClosed++; }
+  }
+  const channel = (label) => ({ label, readyState: "open", close() {} });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    const ep = fresh.rtc({ role: "guest" });
+    const state = channel("state"), event = channel("event");
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: event });
+    state.onopen(); event.onopen();
+    const closed = [];
+    ep.onClose((why) => closed.push(why));
+
+    for (let i = 0; i < 257; i++) event.onmessage({ data: "e" + i });
+
+    assert.equal(ep.status, "closed");
+    assert.deepEqual(closed, ["overflow"], "overflow must be explicit to the session");
+    assert.equal(pcClosed, 1);
+    assert.equal(ep.stats().queued, 0, "closing releases the retained payloads");
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.localStorage;
+  }
+});
+
+test("a congested outbound STATE queue drops the snapshot instead of buffering it", () => {
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    close() {}
+  }
+  // maxRetransmits:0 only drops on the network — the local SCTP queue still
+  // buffers, so a backed-up channel must refuse STATE sends (stale beats late).
+  // EVENT here stays under its own (higher) outbound cap so this test isolates
+  // STATE behaviour; EVENT backpressure has its own cases below.
+  const channel = (label, buffered) => ({
+    label, readyState: "open", bufferedAmount: buffered, sent: [],
+    send(d) { this.sent.push(d); }, close() {},
+  });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    const ep = fresh.rtc({ role: "guest" });
+    const state = channel("state", 999999), event = channel("event", 0);
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: event });
+    state.onopen(); event.onopen();
+
+    assert.equal(ep.send(fresh.STATE, "snap"), false, "backed-up STATE send must drop");
+    assert.equal(state.sent.length, 0);
+    assert.equal(ep.send(fresh.EVENT, JSON.stringify({ t: "lap", d: 1 })), true,
+      "EVENT under its own cap still delivers while STATE is backed up");
+    assert.equal(event.sent.length, 1);
+
+    state.bufferedAmount = 0;
+    assert.equal(ep.send(fresh.STATE, "snap2"), true, "a drained queue accepts again");
+    assert.equal(state.sent.length, 1);
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.localStorage;
+  }
+});
+
+test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive in order", () => {
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    close() {}
+  }
+  // EVENT used to call ch.send with no outbound backpressure (STATE alone had
+  // a bufferedAmount cap). Strategy/LAP/retire spam could grow the SCTP queue
+  // without limit. Above EVENT_BUFFER_CAP, non-critical types drop; critical
+  // types (GO/START/RESULT/BYE/…) queue and flush on bufferedamountlow, in order.
+  const channel = (label, buffered) => ({
+    label, readyState: "open", bufferedAmount: buffered, sent: [],
+    bufferedAmountLowThreshold: 0,
+    onbufferedamountlow: null,
+    send(d) { this.sent.push(d); }, close() {},
+  });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    const ep = fresh.rtc({ role: "guest" });
+    const state = channel("state", 0), event = channel("event", 999999);
+    ep.pc.ondatachannel({ channel: state });
+    ep.pc.ondatachannel({ channel: event });
+    state.onopen(); event.onopen();
+    assert.ok(typeof event.onbufferedamountlow === "function",
+      "EVENT channel must listen for bufferedamountlow to drain criticals");
+    assert.ok(event.bufferedAmountLowThreshold > 0,
+      "EVENT bufferedAmountLowThreshold must be set above zero");
+
+    // QLIVE (a live preview) and STRATEGY (re-sent every second) are the sheddable ones.
+    const lap = JSON.stringify({ t: "qlive", d: { t: 71.2 } });
+    const strategy = JSON.stringify({ t: "strategy", d: { epoch: 1 } });
+    assert.equal(ep.send(fresh.EVENT, lap), false, "non-critical QLIVE drops above EVENT cap");
+    assert.equal(ep.send(fresh.EVENT, strategy), false, "non-critical STRATEGY drops above EVENT cap");
+    assert.equal(event.sent.length, 0, "dropped non-criticals must not hit the wire");
+
+    const go = JSON.stringify({ t: "go", d: { track: "monza" } });
+    // A guest who pressed BACK during friend qualifying waits for this one-shot
+    // event before building the race; a later START cannot bring it out of the lobby.
+    const qgo = JSON.stringify({ t: "qgo", d: null });
+    const start = JSON.stringify({ t: "start", d: { at: 1, hold: 0 } });
+    const result = JSON.stringify({ t: "result", d: { order: [1] } });
+    const bye = JSON.stringify({ t: "bye", d: null });
+    assert.equal(ep.send(fresh.EVENT, go), true, "critical GO queues under pressure");
+    assert.equal(ep.send(fresh.EVENT, qgo), true, "qualifying's QGO must survive pressure too");
+    assert.equal(ep.send(fresh.EVENT, start), true, "critical START queues under pressure");
+    assert.equal(ep.send(fresh.EVENT, result), true, "critical RESULT queues under pressure");
+    assert.equal(ep.send(fresh.EVENT, bye), true, "critical BYE queues under pressure");
+    // Lost, these desync the room for good: the whole grid, a finish/retirement, the race rules.
+    const quali = JSON.stringify({ t: "quali", d: { driverId: "a", t: 71.2 } });
+    const finLap = JSON.stringify({ t: "lap", d: { lap: 3, fin: 49.9 } });
+    const settings = JSON.stringify({ t: "settings", d: { laps: 3 } });
+    for (const m of [quali, finLap, settings]) assert.equal(ep.send(fresh.EVENT, m), true, "critical " + JSON.parse(m).t + " queues");
+    assert.equal(event.sent.length, 0, "criticals wait for the buffer to drain");
+
+    // Still backed up: another LAP must keep dropping (not jump the critical queue).
+    assert.equal(ep.send(fresh.EVENT, lap), false, "non-critical stays dropped while criticals are queued");
+
+    event.bufferedAmount = 0;
+    event.onbufferedamountlow();
+    assert.deepEqual(event.sent, [go, qgo, start, result, bye, quali, finLap, settings],
+      "critical EVENTs must flush in send order once bufferedAmount drains");
+    event.onbufferedamountlow();
+    assert.equal(event.sent.filter((m) => m === qgo).length, 1,
+      "another drain notification must not send QGO twice");
+  } finally {
+    delete global.RTCPeerConnection;
+    delete global.localStorage;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// ICE configuration
+// ---------------------------------------------------------------------------
+
+test("no HARDCODED-PASSWORD relay ships, and a credentials URL becomes iceServers", async () => {
+  // Open Relay's embeddable static credentials were retired by Metered — the
+  // shipped config gathered ZERO relay candidates on a real device while STUN
+  // worked, which is worse than shipping nothing: it looks like a relay exists
+  // and diagnosis chases the wrong thing. That named constant must stay gone;
+  // build 972's replacement DERIVES an expiring credential instead (see the
+  // next test), which is a different thing wearing the same word "free".
+  assert.equal(NetTransport.OPEN_RELAY, undefined, "the dead static relay must be gone");
+
+  // The fetch path, driven with stubs: a credentials URL configured, the
+  // endpoint answering the documented {iceServers: [...]} shape.
+  const turnServer = { urls: ["turn:relay.example:443?transport=tcp"], username: "u", credential: "c" };
+  global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://app.example/api/turn?apiKey=x" : null) };
+  global.fetch = async () => ({ json: async () => ({ iceServers: [turnServer] }) });
+  try {
+    await NetTransport.prefetchIce();
+    const list = NetTransport.iceServers({});
+    assert.ok(list.some((s2) => s2.username === "u"), "fetched credentials must be merged");
+    const urls = list.flatMap((s2) => (Array.isArray(s2.urls) ? s2.urls : [s2.urls]));
+    assert.ok(urls.some((u) => u.startsWith("turn:")), "the merged entry is a relay");
+    assert.ok(urls.some((u) => u.startsWith("stun:")), "STUN still present");
+  } finally {
+    delete global.localStorage;
+    delete global.fetch;
+  }
+});
+
+// A localStorage stub for the tests that need one flag set. The real one is a
+// browser global; these modules read it directly on purpose, so that the real
+// transport and any harness behave identically.
+function withStore(map, fn) {
+  global.localStorage = { getItem: (k) => (k in map ? map[k] : null) };
+  try { return fn(); } finally { delete global.localStorage; }
+}
+
+test("NO relay ships by default, because both free ones were measured dead", () => {
+  // Two independent vantage points, each with a Google-STUN control that DID
+  // produce an srflx candidate, and zero relay candidates from Open Relay or
+  // freestun on both. A dead relay is worse than none — it looks like a relay
+  // exists and diagnosis chases the wrong thing — so the default is none, and
+  // the lobby is then telling the truth when it says so.
+  //
+  // A FRESH module instance, because prefetchIce() memoises what it fetched
+  // and an earlier test in this file configures a credentials URL. Asserting
+  // "the default" against leaked state would pass or fail on test order.
+  const fresh = load("js/net/transport.js", "NetTransport");
+  const urls = fresh.iceServers({})
+    .flatMap((s) => (Array.isArray(s.urls) ? s.urls : [s.urls]));
+  assert.ok(!urls.some((u) => /^turns?:/.test(u)),
+    "no measured-dead TURN entry is baked into the synchronous list");
+  assert.ok(urls.some((u) => /^stun:/.test(u)), "STUN is unaffected");
+  assert.equal(fresh.hasRelay(), false,
+    "before prefetchIce() resolves there is genuinely no relay, and hasRelay() "
+    + "must say so — the lobby's failure copy branches on it");
+});
+
+test("no credential endpoint ships by default, and yours overrides it", async () => {
+  // The relay is a FETCH URL with expiring credentials, not an embedded
+  // password — that is the difference between this and the Open Relay static
+  // credentials that were retired out from under build 971.
+  //
+  // It exists because two devices on ONE WI-FI could not reach each other:
+  // the only host candidate a browser offers is mDNS-obfuscated, and when
+  // that name will not resolve the sole remaining pair is srflx-to-srflx,
+  // which needs router hairpinning that many do not do.
+  const fresh = load("js/net/transport.js", "NetTransport");
+  const seen = [];
+  const turnServer = { urls: ["turn:relay.metered.example:443"], username: "u", credential: "c" };
+  global.fetch = async (u) => { seen.push(u); return { json: async () => ({ iceServers: [turnServer] }) }; };
+  try {
+    // No apex26.turnApi configured: no credential endpoint is fetched.
+    global.localStorage = { getItem: () => null };
+    await fresh.prefetchIce();
+    assert.equal(seen.length, 0, "the default path stays STUN-only");
+    assert.equal(fresh.hasRelay(), false, "no relay exists without an explicit endpoint");
+
+    // A player (or a fork) who sets their own endpoint opts in explicitly.
+    const mine = load("js/net/transport.js", "NetTransport");
+    seen.length = 0;
+    global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://mine.example/creds" : null) };
+    await mine.prefetchIce();
+    assert.deepEqual(seen, ["https://mine.example/creds"],
+      "a configured URL wins outright — never a silent fallback to ours");
+  } finally {
+    delete global.fetch; delete global.localStorage;
+  }
+});
+
+test("the coturn REST credential is derived, not hardcoded, and expires", async () => {
+  // The shared secret is published by the operator as its Nextcloud/Matrix
+  // config, and the scheme is coturn's standard one:
+  //   username   = <unix expiry>
+  //   credential = base64(HMAC-SHA1(secret, username))
+  // Pinning it against an independently computed HMAC is the point: a wrong
+  // digest, a hex-instead-of-base64, or signing the secret with the username
+  // as key all produce a credential that LOOKS right and is rejected by the
+  // relay with a 401 nobody sees.
+  const { createHmac } = await import("node:crypto");
+  const before = Math.floor(Date.now() / 1000);
+  global.localStorage = { getItem: (k) => (k === "apex26.freeTurn" ? "true" : null) };
+  let relays;
+  try {
+    await NetTransport.prefetchIce();
+    relays = NetTransport.iceServers({})
+      .filter((s) => /openrelay/.test(Array.isArray(s.urls) ? s.urls[0] : s.urls));
+  } finally { delete global.localStorage; }
+  const after = Math.floor(Date.now() / 1000);
+  assert.ok(relays.length, "opting in must produce a derived relay entry");
+
+  const { username, credential } = relays[0];
+  const expiry = Number(username);
+  assert.ok(Number.isInteger(expiry), "the username IS the expiry, as an integer");
+  assert.ok(expiry >= before + 86400 && expiry <= after + 86400,
+    "the expiry must be a day out — a credential valid forever is a password");
+
+  const want = createHmac("sha1", "openrelayprojectsecret").update(username).digest("base64");
+  assert.equal(credential, want, "credential = base64(HMAC-SHA1(secret, username))");
+
+  // Every derived entry shares one credential — they are the same host on
+  // different ports, and re-deriving per port would spend three HMACs to get
+  // the same answer.
+  for (const r of relays) assert.equal(r.credential, credential);
+  assert.ok(relays.some((r) => /:443\?transport=tcp/.test(r.urls)),
+    "443/TCP must be offered — it is what survives a corporate firewall");
+});
+
+test("opting in adds relays LAST, and hasRelay() then says so", () => {
+  // The lobby's failure copy branches on hasRelay(): "no relay is configured"
+  // and "a relay is configured and did not answer" are opposite instructions
+  // to give a stuck player, and getting it backwards sends them round a loop
+  // that cannot succeed. So the predicate is pinned, not assumed.
+  withStore({ "apex26.freeTurn": "true" }, () => {
+    assert.equal(NetTransport.hasRelay(), true);
+    const urls = NetTransport.iceServers({})
+      .flatMap((s) => (Array.isArray(s.urls) ? s.urls : [s.urls]));
+    assert.ok(urls.some((u) => /^turns?:/.test(u)), "a TURN entry appears");
+    assert.ok(urls.some((u) => /^stun:/.test(u)), "STUN is never displaced by it");
+    // Intent ordering: STUN first (it is the cheap common case), free relays
+    // LAST so anything the player configured outranks them.
+    const freeAt = urls.findIndex((u) => /freestun|openrelay/.test(u));
+    assert.ok(freeAt > 0, "the free relays are appended, never prepended");
+  });
+});
+
+test("more STUN servers than one, from different operators", () => {
+  // A single STUN server is a single point of failure for the one thing that
+  // decides whether two people can connect at all: learning your public
+  // address. When it fails you gather only LAN candidates, silently.
+  assert.ok(NetTransport.STUN.length >= 2, "one STUN server is not a plan");
+  const hosts = NetTransport.STUN.map((u) => u.split(":")[1]);
+  assert.ok(new Set(hosts.map((h) => h.split(".").slice(-2).join("."))).size >= 2,
+    "STUN servers must not all be the same operator");
+});
+
+// ---------------------------------------------------------------------------
+// Handshake codec
+// ---------------------------------------------------------------------------
+
+test("an invite code round-trips through compression", async () => {
+  const payload = {
+    v: NetHandshake.MAGIC, b: 817, k: "offer",
+    p: { team: "ferrari", driver: 0 },
+    s: "v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\na=ice-ufrag:abcd\r\n".repeat(20),
+  };
+  const code = await NetHandshake.encodeCode(payload);
+  const back = await NetHandshake.decodeCode(code);
+  assert.equal(back.ok, true);
+  assert.deepEqual(back.payload, payload);
+});
+
+test("the code is markedly smaller than the SDP it carries", async () => {
+  // The whole point of compressing: a raw gathered SDP is a miserable paste.
+  const sdp = ("a=candidate:1 1 udp 2113937151 192.168.1.10 54321 typ host generation 0\r\n").repeat(40);
+  const code = await NetHandshake.encodeCode({ v: NetHandshake.MAGIC, b: 1, k: "offer", p: null, s: sdp });
+  assert.ok(code.startsWith(NetHandshake.MAGIC + ".z."), "should have taken the compressed path");
+  assert.ok(code.length < sdp.length / 4, `expected heavy compression, got ${code.length} vs ${sdp.length}`);
+});
+
+test("garbage and truncated codes are rejected with a usable message", async () => {
+  for (const bad of ["", "hello", "APEX1.z", "NOPE.z.AAAA"]) {
+    const r = await NetHandshake.decodeCode(bad);
+    assert.equal(r.ok, false, `"${bad}" should be rejected`);
+    assert.ok(r.message && r.message.length > 10, "should explain itself to a human");
+  }
+  // Right envelope, ruined body.
+  const truncated = await NetHandshake.decodeCode("APEX1.z.####");
+  assert.equal(truncated.ok, false);
+  assert.equal(truncated.error, "corrupt_code");
+  assert.equal((await NetHandshake.decodeCode("APEX1.x.e30")).ok, false,
+    "unknown envelopes must not bypass the plain-payload size policy");
+});
+
+test("packed SDP rejects non-object payloads and missing handshake fields as corrupt", async () => {
+  const prior = globalThis.NetSdp;
+  globalThis.NetSdp = { unpack: () => "v=0\r\n" };
+  const packed = (json) => {
+    const rest = Buffer.from(JSON.stringify(json));
+    const joined = Buffer.concat([Buffer.from([0, 1, 7]), rest]);
+    return "APEX1.s." + NetBytes.bytesToB64url(deflateRawSync(joined));
+  };
+  try {
+    for (const payload of [null, "offer", [], { b: 1 }]) {
+      const decoded = await NetHandshake.decodeCode(packed(payload));
+      assert.equal(decoded.ok, false, `packed ${JSON.stringify(payload)} must be corrupt`);
+      assert.equal(decoded.error, "corrupt_code");
+    }
+    globalThis.NetSdp.unpack = () => null;
+    assert.equal((await NetHandshake.decodeCode(packed({ b: 1, k: "offer" }))).error, "corrupt_code",
+      "a packed payload without reconstructable SDP must be corrupt");
+  } finally {
+    globalThis.NetSdp = prior;
+  }
+});
+
+test("invite decoding rejects oversized encoded and plain payloads before use", async () => {
+  const tooLong = "APEX1.p." + "A".repeat(512 * 1024 + 1);
+  assert.equal((await NetHandshake.decodeCode(tooLong)).ok, false,
+    "encoded input must be bounded before atob allocates it");
+
+  // Still below the encoded ceiling, but above the decoded JSON/SDP ceiling.
+  const plain = JSON.stringify({ k: "offer", pad: "x".repeat(270 * 1024) });
+  const encoded = Buffer.from(plain).toString("base64url");
+  assert.ok(encoded.length < 512 * 1024, "fixture must exercise the decoded cap");
+  assert.equal((await NetHandshake.decodeCode("APEX1.p." + encoded)).ok, false);
+
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  for (const id of ["vs-answer-in", "vs-invite-in"]) {
+    assert.match(html, new RegExp(`<textarea id="${id}"[^>]*maxlength="524288"`),
+      `${id} must enforce the same encoded ceiling before script runs`);
+  }
+});
+
+test("whitespace from a sloppy copy/paste is tolerated", async () => {
+  const code = await NetHandshake.encodeCode({ v: NetHandshake.MAGIC, b: 1, k: "offer", p: null, s: "v=0" });
+  const mangled = "  " + code.slice(0, 10) + "\n  " + code.slice(10) + "\t\n";
+  const back = await NetHandshake.decodeCode(mangled);
+  assert.equal(back.ok, true, "a code split across lines by a chat client must still work");
+});
+
+test("a build mismatch is refused, and says which side is stale", () => {
+  assert.equal(NetHandshake.checkBuild(817, 817).ok, true);
+
+  const older = NetHandshake.checkBuild(817, 800);
+  assert.equal(older.ok, false);
+  assert.equal(older.error, "build_mismatch");
+  assert.match(older.message, /ask them to reload/i);
+
+  const newer = NetHandshake.checkBuild(800, 817);
+  assert.equal(newer.ok, false);
+  assert.match(newer.message, /reload the page to update/i);
+});
+
+// An UNKNOWN build is not a matching build. localBuild() used to answer a failed
+// version.json fetch with 0 and memoise it, so two peers who had both failed —
+// one flaky network, one service worker mid-update — compared 0 === 0 and were
+// waved through the one guard that keeps mismatched splines, barriers and tuning
+// constants off the same track. They then desynced on it, which is a far harder
+// thing to diagnose than a refusal at the lobby.
+test("an unknown build is refused, not treated as a match", () => {
+  for (const [mine, theirs] of [[null, null], [null, 817], [817, null],
+                                [undefined, 817], [817, undefined]]) {
+    const r = NetHandshake.checkBuild(mine, theirs);
+    assert.equal(r.ok, false, `checkBuild(${mine}, ${theirs}) must not pass`);
+    assert.equal(r.error, "build_unknown");
+    // The old failure mode told people to "reload the page to update", which
+    // could not work: the reload hit the same dead fetch. Say what is true.
+    assert.match(r.message, /could not confirm/i);
+  }
+
+  // A real pair of equal builds still matches — the guard above must not have
+  // swallowed the ordinary case.
+  assert.equal(NetHandshake.checkBuild(817, 817).ok, true);
+  // 0 is a LEGITIMATE build number, not the sentinel it used to double as.
+  assert.equal(NetHandshake.checkBuild(0, 0).ok, true);
+  assert.equal(NetHandshake.checkBuild(0, 817).error, "build_mismatch");
+});
+
+test("SDP survives the round trip verbatim, CRLF-terminated", () => {
+  // The regression this exists for. An earlier version stripped "regenerable"
+  // attributes and rejoined with \n, which dropped the trailing terminator —
+  // so the last line arrived unterminated and Chrome refused the whole
+  // description with "Invalid SDP line". Every attribute must survive, every
+  // line must end CRLF, and the final line must be terminated too.
+  const sdp = [
+    "v=0",
+    "o=- 4611731400430051336 2 IN IP4 127.0.0.1",
+    "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
+    "a=ice-ufrag:4ZcD",
+    "a=ice-pwd:2/1muCWoOi3uLifh0NuRHlZw",
+    "a=fingerprint:sha-256 AB:CD",
+    "a=candidate:1 1 udp 2113937151 192.168.1.10 54321 typ host",
+    "a=sctp-port:5000",
+    "a=max-message-size:262144",          // the line that was being orphaned
+  ].join("\r\n") + "\r\n";
+
+  const out = NetHandshake.normaliseSdp(sdp);
+  assert.equal(out, sdp, "the SDP must survive untouched");
+  assert.ok(out.endsWith("\r\n"), "the final line MUST be terminated");
+  assert.ok(out.includes("a=max-message-size:262144"));
+  assert.ok(!out.includes("\n\n"), "no blank lines");
+
+  // Bare-LF input (some stacks) is normalised up to CRLF rather than passed on.
+  const lf = NetHandshake.normaliseSdp("v=0\na=ice-ufrag:x\na=max-message-size:262144");
+  assert.equal(lf, "v=0\r\na=ice-ufrag:x\r\na=max-message-size:262144\r\n");
+});
+
+test("the invite link keeps the code in the fragment", () => {
+  // The fragment never leaves the browser, so the code never reaches a server
+  // log — which matters because there is no server in this design at all.
+  const code = "APEX1.z.SOMECODE";
+  assert.equal(NetHandshake.inviteFromUrl("https://x.dev/#vs=" + code), code);
+  assert.equal(NetHandshake.inviteFromUrl("https://x.dev/#a=1&vs=" + code), code);
+  // A link pasted from a message carries the message's tail: the code ends at whitespace.
+  assert.equal(NetHandshake.inviteFromUrl("https://x.dev/#vs=" + code + "\nSent from my iPhone"), code);
+  assert.equal(NetHandshake.inviteFromUrl("https://x.dev/#vs=" + code + " see you on track"), code);
+  assert.equal(NetHandshake.inviteFromUrl("https://x.dev/?vs=nope"), null,
+    "a query-string code must NOT be honoured — that one does reach the server");
+  assert.equal(
+    NetHandshake.withoutInviteUrl("https://x.dev/play?renderer=glx#keep=1&vs=" + code + "&camera=chase"),
+    "https://x.dev/play?renderer=glx#keep=1&camera=chase",
+    "consuming an invite preserves unrelated query and fragment state",
+  );
+});
+
+// ── round 8: teardown really tears down ──────────────────────────────────────
+// A peer-initiated close used to flip ep.status directly, which turned
+// shutdown() — the ONLY caller of pc.close() — into a permanent no-op: every
+// normal "the other player closed the tab" leaked a live RTCPeerConnection,
+// its ICE agent, and up to 1 MiB of inbox. These pin the routed-through-
+// shutdown contract from every close origin, and its idempotency.
+
+function pcHarness() {
+  let closed = 0;
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    close() { closed++; }
+  }
+  const channel = (label) => ({ label, readyState: "open", close() {} });
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  const fresh = load("js/net/transport.js", "NetTransport");
+  const ep = fresh.rtc({ role: "guest" });
+  const state = channel("state"), event = channel("event");
+  ep.pc.ondatachannel({ channel: state });
+  ep.pc.ondatachannel({ channel: event });
+  state.onopen(); event.onopen();
+  const done = () => { delete global.RTCPeerConnection; delete global.localStorage; };
+  return { ep, state, event, pcClosed: () => closed, done };
+}
+
+test("a peer channel close releases the RTCPeerConnection, exactly once", () => {
+  const h = pcHarness();
+  try {
+    const reasons = [];
+    h.ep.onClose((r) => reasons.push(r));
+    h.state.onclose();
+    assert.equal(h.ep.status, "closed");
+    assert.equal(h.pcClosed(), 1, "pc.close() must run on a peer-initiated close");
+    assert.deepEqual(reasons, ["peer"]);
+    h.ep.close();                       // a later local close must not double-release
+    h.event.onclose();                  // nor the second channel's close event
+    assert.equal(h.pcClosed(), 1, "shutdown must stay idempotent");
+    assert.deepEqual(reasons, ["peer"], "close fires once");
+  } finally { h.done(); }
+});
+
+test("a connectionState failure releases the RTCPeerConnection too", () => {
+  const h = pcHarness();
+  try {
+    const reasons = [];
+    h.ep.onClose((r) => reasons.push(r));
+    h.ep.pc.connectionState = "failed";
+    h.ep.pc.onconnectionstatechange();
+    assert.equal(h.pcClosed(), 1, "pc.close() must run on a connection failure");
+    assert.deepEqual(reasons, ["failed"]);
+  } finally { h.done(); }
+});
+
+test("a close inside the disconnect grace window reclaims its timer", () => {
+  // The grace timer's callback is guarded, so this was never a wrong close —
+  // but shutdown() is the one teardown, and a live 5 s timer after it kept the
+  // whole endpoint closure reachable: the leak class this round closed.
+  const h = pcHarness();
+  const realSet = global.setTimeout, realClear = global.clearTimeout;
+  const live = new Set();
+  global.setTimeout = (fn, ms) => { const id = realSet(() => { live.delete(id); fn(); }, ms); live.add(id); return id; };
+  global.clearTimeout = (id) => { live.delete(id); realClear(id); };
+  try {
+    h.ep.pc.connectionState = "disconnected";
+    h.ep.pc.onconnectionstatechange();
+    assert.equal(live.size, 1, "the disconnect grace timer was not armed");
+    h.ep.close();
+    assert.equal(live.size, 0, "shutdown left the grace timer running");
+  } finally {
+    for (const id of live) realClear(id);
+    global.setTimeout = realSet; global.clearTimeout = realClear;
+    h.done();
+  }
+});
+
+// #2195: the race's 25 s silence grace never reached the wire — the rtc
+// endpoint closed 5 s into any "disconnected" spell, so a 6–25 s outage the
+// race promises to ride out ended the session for good.
+test("a race session's timeout sets the rtc disconnect grace: 6 s stays open, 26 s closes", () => {
+  const realSet = global.setTimeout, realClear = global.clearTimeout;
+  let now = 0;
+  const timers = new Map();
+  let nextId = 1;
+  global.setTimeout = (fn, ms) => { const id = nextId++; timers.set(id, { at: now + ms, fn }); return id; };
+  global.clearTimeout = (id) => { timers.delete(id); };
+  const advance = (ms) => {
+    now += ms;
+    for (const [id, t] of [...timers]) if (t.at <= now) { timers.delete(id); t.fn(); }
+  };
+  const run = (holdMs, raceGrace) => {
+    const h = pcHarness();
+    try {
+      if (raceGrace) {
+        globalThis.NetTransport = NetTransport;
+        const NetSession = load("js/net/session.js", "NetSession");
+        const s = NetSession.create({ transport: h.ep });
+        s.setTimeoutMs(raceGrace);
+      }
+      h.ep.pc.connectionState = "disconnected";
+      h.ep.pc.onconnectionstatechange();
+      advance(holdMs);
+      return { status: h.ep.status, closed: h.pcClosed() };
+    } finally { timers.clear(); h.done(); }
+  };
+  try {
+    assert.equal(run(6000, 25000).status, "open", "a 6 s blip closed a race wire");
+    const long = run(26000, 25000);
+    assert.equal(long.status, "closed", "a 26 s outage must still close");
+    assert.equal(long.closed, 1);
+    assert.equal(run(6000, 0).status, "closed", "the lobby keeps its 5 s grace");
+  } finally { global.setTimeout = realSet; global.clearTimeout = realClear; }
+});
+
+test("rtc stamps message ARRIVAL and hands it to onMessage; loopback stays unstamped", () => {
+  // The clock-sync PONG math reads the third argument: rtc supplies a
+  // performance.now() arrival stamp recorded at inbox push (pump-time
+  // stamping put up to a frame of scheduling into every RTT sample — C-12).
+  // Loopback deliberately passes none: its wire time is epoch-relative,
+  // a different clock domain the session must not mix in.
+  const h = pcHarness();
+  try {
+    const stamps = [];
+    h.ep.onMessage((ch, data, at) => stamps.push(at));
+    const before = performance.now();
+    h.state.onmessage({ data: "x" });
+    const after = performance.now();
+    h.ep.pump();
+    assert.equal(stamps.length, 1);
+    assert.ok(stamps[0] >= before && stamps[0] <= after,
+      `arrival stamp ${stamps[0]} outside [${before}, ${after}]`);
+  } finally { h.done(); }
+
+  const [a, b] = NetTransport.loopback({ latencyMs: 0, rnd: seededRnd(7) });
+  const atArgs = [];
+  b.onMessage((ch, d, at) => atArgs.push(at));
+  a.pump(0); b.pump(0);
+  a.send(NetTransport.STATE, "y");
+  b.pump(1);
+  assert.deepEqual(atArgs, [undefined], "loopback must not invent an arrival clock");
+});
+
+// ── a malformed fetched ICE entry is not "this browser cannot do WebRTC" ─────
+// prefetchIce() only checks that each entry HAS `urls`; `urls: "garbage"`
+// passes and makes `new RTCPeerConnection` throw. rtc() then returned null,
+// the lobby said the browser could not do WebRTC, and the bad list stayed
+// cached for 55 minutes so every retry said it again.
+test("a fetched ICE entry that makes the constructor throw is dropped and rtc() retries STUN-only", async () => {
+  const seen = [];
+  class FakePC {
+    constructor(cfg) {
+      seen.push(cfg.iceServers);
+      for (const e of cfg.iceServers) {
+        const urls = Array.isArray(e.urls) ? e.urls : [e.urls];
+        if (urls.some((u) => !/^(stun|turns?):/.test(u))) throw new TypeError("bad ICE url");
+      }
+      this.connectionState = "new"; this.iceConnectionState = "new"; this.iceGatheringState = "new";
+    }
+    createDataChannel(label) { return { label, readyState: "connecting", close() {} }; }
+    close() {}
+  }
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://relay.example/creds" : null) };
+  global.fetch = async () => ({ json: async () => ({ iceServers: [{ urls: "garbage" }] }) });
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    await fresh.prefetchIce();
+    assert.ok(fresh.iceServers({}).some((e) => e.urls === "garbage"), "the bad entry was cached");
+    const ep = fresh.rtc({ role: "host" });
+    assert.ok(ep && ep.pc, "the second construction must succeed");
+    assert.equal(seen.length, 2, "one throw, one retry");
+    assert.ok(seen[1].every((e) => (Array.isArray(e.urls) ? e.urls : [e.urls]).every((u) => /^stun:/.test(u))),
+      "the retry gathers with STUN only");
+    assert.ok(!fresh.iceServers({}).some((e) => e.urls === "garbage"),
+      "the fetched list is forgotten, so the next prefetch is a fresh answer");
+    // The STUN-only retry must stamp stats().turn false — hasRelay() after a
+    // later good prefetch must not flip the already-built PC's failure copy.
+    assert.equal(ep.stats().turn, false, "STUN-only retry stamps turn:false");
+  } finally {
+    delete global.RTCPeerConnection; delete global.localStorage; delete global.fetch;
+  }
+});
+
+// ── stats().turn is the iceServers THIS PC was built with ───────────────────
+// Lobby failureMsg branches on st.turn: "a relay was offered and did not carry
+// it" vs "no relay is configured". hasRelay() is the LIVE module list — a
+// credentials fetch that lands after new RTCPeerConnection (or expires while
+// the PC still has TURN) made the copy lie. Stamp at construction.
+test("stats().turn follows the PC's iceServers, not a later hasRelay() flip", async () => {
+  class FakePC {
+    constructor() {
+      this.connectionState = "new";
+      this.iceConnectionState = "new";
+      this.iceGatheringState = "new";
+    }
+    createDataChannel(label) { return { label, readyState: "connecting", close() {} }; }
+    close() {}
+  }
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://relay.example/creds" : null) };
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    assert.equal(fresh.hasRelay(), false, "control: no relay yet");
+    const ep = fresh.rtc({ role: "host" });
+    assert.ok(ep && ep.pc);
+    assert.equal(ep.stats().turn, false, "STUN-only PC reports turn:false");
+
+    const turnServer = { urls: ["turn:relay.example:443"], username: "u", credential: "c" };
+    global.fetch = async () => ({ json: async () => ({ iceServers: [turnServer] }) });
+    await fresh.prefetchIce();
+    assert.equal(fresh.hasRelay(), true, "module list now has TURN");
+    assert.equal(ep.stats().turn, false,
+      "the already-built PC must not claim a relay it never gathered with");
+
+    const withTurn = fresh.rtc({ role: "host" });
+    assert.equal(withTurn.stats().turn, true, "a PC built after prefetch stamps turn:true");
+    assert.equal(fresh.hasRelay(), true);
+  } finally {
+    delete global.RTCPeerConnection; delete global.localStorage; delete global.fetch;
+  }
+});
+
+// ── the build is the one THIS shell is running ──────────────────────────────
+// A tab left open across a deploy fetched the NEW version.json while running
+// the OLD scripts. The shell stamps its own generation in <meta
+// name="apex-build">, and that is what the handshake now reports; the fetch
+// is the fallback for a shell with no stamp.
+test("localBuild() reads the shell's apex-build meta before it fetches", async () => {
+  let fetched = 0;
+  global.fetch = async () => { fetched++; return { json: async () => ({ build: 2000 }) }; };
+  global.document = { querySelector: (sel) => (sel === 'meta[name="apex-build"]' ? { content: " 1234 " } : null) };
+  try {
+    const fresh = load("js/net/handshake.js", "NetHandshake");
+    assert.equal(fresh.metaBuild(), 1234);
+    assert.equal(await fresh.localBuild(), 1234, "the meta wins");
+    assert.equal(fetched, 0, "and version.json is never asked");
+    global.document = { querySelector: () => null };
+    const bare = load("js/net/handshake.js", "NetHandshake");
+    assert.equal(bare.metaBuild(), null);
+    assert.equal(await bare.localBuild(), 2000, "no stamp: the fetch still answers");
+    assert.equal(fetched, 1);
+  } finally { delete global.fetch; delete global.document; }
+});
+
+// ── peekCode: the format half of decodeCode, synchronous and connection-free ──
+// The lobby runs it BEFORE it needs a transport, so a typo is refused as a
+// typo while join() is still waiting on the ICE prefetch. It must agree with
+// decodeCode on every shape decodeCode rejects without decoding.
+test("peekCode refuses the shapes decodeCode refuses, synchronously, and accepts a real code", async () => {
+  assert.equal(NetHandshake.peekCode("not-a-real-code").error, "bad_code");
+  assert.match(NetHandshake.peekCode("not-a-real-code").message, /apex invite code/i);
+  assert.equal(NetHandshake.peekCode("").error, "bad_code");
+  assert.equal(NetHandshake.peekCode("APEX1.x.e30").error, "corrupt_code", "an unknown mode is corrupt, not foreign");
+  assert.equal(NetHandshake.peekCode("APEX1.z").error, "bad_code", "two parts is not our shape");
+  const ok = NetHandshake.peekCode("APEX1.p.e30");
+  assert.equal(ok.ok, true); assert.equal(ok.mode, "p"); assert.equal(ok.body, "e30");
+  for (const bad of ["not-a-real-code", "APEX1.x.e30", "APEX1.z"]) {
+    assert.equal((await NetHandshake.decodeCode(bad)).error, NetHandshake.peekCode(bad).error, `decodeCode and peekCode agree on ${bad}`);
+  }
+});
+
+test("loopback jitter never reorders the EVENT channel: it is reliable AND ordered on the real wire", () => {
+  const [a, b] = NetTransport.loopback({ latencyMs: 40, jitterMs: 30, rnd: (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })() });
+  const got = [];
+  b.onMessage((ch, data) => { if (ch === NetTransport.EVENT) got.push(data); });
+  a.pump(0); b.pump(0);
+  for (let i = 0; i < 40; i++) a.send(NetTransport.EVENT, i);
+  for (let t = 1; t < 400; t += 5) b.pump(t);
+  assert.deepEqual(got, Array.from({ length: 40 }, (_, i) => i), "events arrive in send order under jitter");
+});
+
+test("a handler that closes the endpoint mid-pump stops the rest of that batch", () => {
+  // rtc: EV.BYE → stop() → shutdown() inside one pump; the trailing MODEL /
+  // LAP events in the same batch still reached handlers that do not check
+  // `active` — "GAME VERSIONS DIFFER" for a peer that had already left.
+  const [a, b] = NetTransport.loopback({ latencyMs: 0, rnd: () => 0.5 });
+  let seen = 0;
+  b.onMessage(() => { seen++; b.close(); });
+  a.pump(0); b.pump(0);
+  for (let i = 0; i < 5; i++) a.send(NetTransport.EVENT, i);
+  b.pump(1);
+  assert.equal(seen, 1, "nothing after the close is delivered");
+  assert.equal(b.status, "closed");
+});
+
+// ── an answer names the offer it answers (L8-a) ─────────────────────────────
+// An SDP answer carries only the answerer's credentials, so an answer to invite
+// A used to be accepted onto a newer pending invite B and spin "Connecting…"
+// for 60 s. The answer now carries `o` = hash of the offer's ufrag +
+// fingerprint, and acceptAnswer refuses a mismatch as wrong_offer.
+// ── waitForIce: completion between the pre-check and the listener must not hang ──
+// Without a re-check after addEventListener, ICE can finish in that gap and the
+// waiter sits until gatherTimeoutMs — room-code answers then race a dying courier.
+test("waitForIce re-checks after listening and honors a null icecandidate end", async () => {
+  class RacePC extends EventTarget {
+    constructor() { super(); this.iceGatheringState = "gathering"; }
+    addEventListener(type, fn, opts) {
+      super.addEventListener(type, fn, opts);
+      // Race: complete AFTER the initial === "complete" check, BEFORE any event.
+      if (type === "icegatheringstatechange") this.iceGatheringState = "complete";
+    }
+  }
+  const raced = new RacePC();
+  const t0 = Date.now();
+  assert.equal(await NetHandshake.waitForIce(raced, 4000), true,
+    "must resolve from the post-listen re-check, not the 4 s timeout");
+  assert.ok(Date.now() - t0 < 500, "must not wait out the gather timeout");
+
+  class NullEndPC extends EventTarget {
+    constructor() { super(); this.iceGatheringState = "gathering"; }
+  }
+  const nullEnd = new NullEndPC();
+  const p = NetHandshake.waitForIce(nullEnd, 4000);
+  nullEnd.dispatchEvent(Object.assign(new Event("icecandidate"), { candidate: null }));
+  assert.equal(await p, true, "a null candidate ends gathering even if state lags");
+});
+
+// ── prefetchIce: keep last-good TURN while a TTL refresh is in flight ──────────
+// Nulling fetchedIce before the replacement fetch lands forced iceServers() to
+// STUN-only mid-refresh — a PC built in that window lost the relay it still had.
+test("prefetchIce retains last-good TURN while a TTL refresh is in flight", async () => {
+  const fresh = load("js/net/transport.js", "NetTransport");
+  const turn1 = { urls: ["turn:relay.example:443"], username: "u1", credential: "c1" };
+  const turn2 = { urls: ["turn:relay.example:443"], username: "u2", credential: "c2" };
+  let now = 1_000_000;
+  const realNow = Date.now.bind(Date);
+  Date.now = () => now;
+  let fetchN = 0;
+  let resolveSecond;
+  global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://relay.example/creds" : null) };
+  global.fetch = () => {
+    fetchN++;
+    if (fetchN === 1) {
+      return Promise.resolve({ json: async () => ({ iceServers: [turn1] }) });
+    }
+    return new Promise((r) => { resolveSecond = r; });
+  };
+  try {
+    await fresh.prefetchIce();
+    assert.ok(fresh.iceServers({}).some((e) => e.username === "u1"), "first fetch lands");
+    now += 56 * 60 * 1000; // past ICE_CRED_TTL_MS (55 min)
+    const refresh = fresh.prefetchIce();
+    assert.equal(fetchN, 2, "TTL expiry starts a refresh");
+    assert.ok(fresh.iceServers({}).some((e) => e.username === "u1"),
+      "mid-refresh must still offer last-good TURN, not STUN-only");
+    assert.equal(fresh.hasRelay(), true, "hasRelay stays true while refresh hangs");
+    resolveSecond({ json: async () => ({ iceServers: [turn2] }) });
+    await refresh;
+    assert.ok(fresh.iceServers({}).some((e) => e.username === "u2"), "replacement lands");
+  } finally {
+    Date.now = realNow;
+    delete global.fetch;
+    delete global.localStorage;
+  }
+});
+
+test("acceptAnswer refuses an answer built for an older offer, and still takes an id-less one", async () => {
+  const fp = (n) => Array.from({ length: 32 }, (_, i) => ((i * n + 1) & 255).toString(16).padStart(2, "0").toUpperCase()).join(":");
+  const sdp = (ufrag, f, setup) => ["v=0", "m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
+    "a=candidate:1 1 udp 2113937151 192.168.1.10 54321 typ host", "a=ice-ufrag:" + ufrag,
+    "a=ice-pwd:abcdefghijklmnopqrstuvwx", "a=fingerprint:sha-256 " + f, "a=setup:" + setup].join("\r\n") + "\r\n";
+  const offerA = sdp("aaaa", fp(3), "actpass"), offerB = sdp("bbbb", fp(5), "actpass");
+  const hostPc = (offer) => ({ signalingState: "have-local-offer", iceGatheringState: "complete",
+    localDescription: { type: "offer", sdp: offer }, took: null,
+    async setRemoteDescription(d) { this.took = d; this.signalingState = "stable"; } });
+  const guestPc = () => ({ iceGatheringState: "complete", localDescription: null,
+    async setRemoteDescription(d) { this.remote = d; },
+    async createAnswer() { return { type: "answer", sdp: sdp("gggg", fp(7), "active") }; },
+    async setLocalDescription(d) { this.localDescription = d; } });
+  global.document = { querySelector: (sel) => (sel === 'meta[name="apex-build"]' ? { content: "817" } : null) };
+  const priorSdp = globalThis.NetSdp, priorHash = globalThis.Hash32;
+  globalThis.NetSdp = load("js/net/sdp.js", "NetSdp");
+  globalThis.Hash32 = load("js/core/hash32.js", "Hash32");
+  try {
+    const hs = load("js/net/handshake.js", "NetHandshake");
+    assert.match(hs.offerId(offerA), /^[0-9a-f]{8}$/);
+    assert.notEqual(hs.offerId(offerA), hs.offerId(offerB), "fresh ufrag+fingerprint, fresh id");
+    const inviteA = await hs.encodeCode({ b: 817, k: "offer", p: null, s: offerA });
+    const answer = await hs.acceptInvite({ pc: guestPc() }, inviteA, { team: 1 });
+    assert.equal(answer.ok, true);
+    const decoded = await hs.decodeCode(answer.code);
+    assert.equal(decoded.payload.o, hs.offerId(offerA), "the answer names offer A");
+
+    const stale = await hs.acceptAnswer({ pc: hostPc(offerB) }, answer.code);
+    assert.equal(stale.ok, false);
+    assert.equal(stale.error, "wrong_offer");
+    assert.match(stale.message, /older invite/i);
+
+    const pcA = hostPc(offerA);
+    assert.equal((await hs.acceptAnswer({ pc: pcA }, answer.code)).ok, true, "the right offer takes it");
+    assert.equal(pcA.took.type, "answer");
+    // A repost of the same answer against the same, now-answered offer is "already used", not "older invite".
+    assert.equal((await hs.acceptAnswer({ pc: pcA }, answer.code)).error, "already_answered");
+
+    // The OLD format (no `o`) still decodes and is judged as before.
+    const legacy = await hs.encodeCode({ b: 817, k: "answer", p: null, s: sdp("gggg", fp(7), "active") });
+    assert.equal((await hs.acceptAnswer({ pc: hostPc(offerB) }, legacy)).ok, true, "an id-less answer is accepted");
+  } finally {
+    delete global.document;
+    globalThis.NetSdp = priorSdp; globalThis.Hash32 = priorHash;
+    if (priorHash === undefined) delete globalThis.Hash32;
+  }
+});

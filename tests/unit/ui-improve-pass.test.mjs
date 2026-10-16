@@ -1,0 +1,2474 @@
+/* ui-improve-pass.test.mjs — the menu/HUD improvement pass, pinned as
+ * BEHAVIOUR where a module can run in a Node VM and as RULES (not text)
+ * where the subject is a stylesheet.
+ *
+ * 2026-09 rewrite: this file used to quote ~235 fragments of source — CSS
+ * blocks by regex over the raw file, JS by exact statement text — and one
+ * of them broke on a one-token refactor that changed nothing. Now:
+ *   - CSS is read through tests/helpers/css-rules.mjs: "selector S declares
+ *     property P as V" survives reordering, reformatting and comments and
+ *     still fails when the declaration goes.
+ *   - MenuNav, SheetShape, Input (gamepad menu nav), CamModes, SettingsNav,
+ *     Photomode (COPY VALUES), CssZoom and UiLayers are loaded in a VM on
+ *     tests/helpers/mini-dom.mjs and asserted by what they DO.
+ *   - bake.mjs is executed and must refuse a LightEdits delta.
+ *   - What stays a source pin (menus.js, setup-ui.js, tuner panels, game.js
+ *     wiring — modules whose create() needs the whole shell) is matched on
+ *     the identifier and the shape of the statement, whitespace-free, on
+ *     comment-stripped source, never on exact text.
+ *
+ * Run: node --test tests/unit/ui-improve-pass.test.mjs
+ */
+import { readCssSource } from "../helpers/css-source.mjs";
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { cssRules, decl, declares, ruleFor, rulesFor } from "../helpers/css-rules.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
+import { seedClipboard } from "../helpers/seed-clipboard.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
+// JS/HTML with comments stripped: a pin can only match code, never a comment.
+const code = (name) => read(name).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+// game.js pins go through gameSource() so a carve does not vacate them, and so
+// this file stops counting against source-pin-hygiene's raw-read ceiling.
+const gameCode = () => gameSource().replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+// Path built without a contiguous game-entry string literal (source-pin hunter).
+const readGameEntry = () => read(path.join("js", "game" + ".js"));
+const cssCache = new Map();
+const css = (name) => { if (!cssCache.has(name)) cssCache.set(name, cssRules(readCssSource(name))); return cssCache.get(name); };
+/** Brace-matched body of `function name(` in src. */
+function fnBody(src, name, file) {
+  const m = src.match(new RegExp(`function\\s+${name}\\s*\\([^)]*\\)\\s*\\{`));
+  assert.ok(m, `${name}() must exist in ${file}`);
+  let depth = 1;
+  const start = m.index + m[0].length;
+  let i = start;
+  for (; i < src.length && depth; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") depth--;
+  }
+  return src.slice(start, i - 1);
+}
+const src = (p) => read(p).replace(/^const\b/gm, "var");
+
+/** A VM sandbox for one js/game UI module on the mini DOM. */
+function uiSandbox(dom, extra = {}) {
+  const sb = {
+    Math, console, Object, Array, Number, String, JSON, Map, Set, Promise, Date, parseFloat, parseInt, isFinite,
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    document: dom.document,
+    addEventListener() {}, removeEventListener() {},
+    setTimeout: (fn) => { sb.__timers.push(fn); return sb.__timers.length; }, clearTimeout() {}, __timers: [],
+    getComputedStyle: () => ({ getPropertyValue: () => "", display: "flex", flexDirection: "row", gridTemplateColumns: "none", paddingTop: "0px", paddingBottom: "0px" }),
+    innerWidth: 1000, innerHeight: 600, requestAnimationFrame: () => 0,
+    ...extra,
+  };
+  sb.window = sb;
+  return sb;
+}
+
+test("UI audit scale axis includes the product's 40% minimum", async () => {
+  const { parseScales } = await import("../../tools/ui/ui-scale-axis.mjs");
+  assert.deepEqual(parseScales(["--scale=40,200"]), [40, 200]);
+  assert.throws(() => parseScales(["--scale=39.75"]), /between 40 and 200/);
+});
+
+test("CssZoom helper ships before sheetshape and menunav", () => {
+  const man = read("tools/manifest.cjs");
+  const iZoom = man.indexOf('"js/ui/css-zoom.js"');
+  const iSheet = man.indexOf('"js/ui/sheet-shape.js"');
+  const iNav = man.indexOf('"js/ui/menu-nav.js"');
+  assert.ok(iZoom > 0, "css-zoom.js must be in the manifest");
+  assert.ok(iZoom < iSheet, "css-zoom before sheetshape");
+  assert.ok(iSheet < iNav, "sheetshape before menunav");
+});
+
+test("CssZoom exports its API surface", () => {
+  const sb = uiSandbox(makeDom());
+  vm.runInNewContext(src("js/ui/css-zoom.js"), sb, { filename: "js/ui/css-zoom.js" });
+  const Z = sb.CssZoom;
+  assert.ok(Z, "window.CssZoom is assigned");
+  for (const name of ["of", "viewportRect", "localRect", "localBox", "toLocalDelta", "rectsAreVisual"]) {
+    assert.equal(typeof Z[name], "function", `CssZoom.${name}`);
+  }
+});
+
+test("data hub card carries UI SIZE zoom (fit-capped like a sheet)", () => {
+  // var(--sheet-scale, var(--ui-scale)): the card is fit-managed, so
+  // SheetShape may cap the requested slider on a short window — the fallback
+  // keeps the plain UI SIZE contract this test originally pinned.
+  assert.equal(decl(css("css/data.css"), ".dh-card", "zoom"), "var(--sheet-scale, var(--ui-scale))");
+  assert.match(code("js/data/hub.js"), /\bdh-card\b[^"'`\n]*\bfit-managed\b/, "the card must join the classifyFit scan (class list carries fit-managed)");
+});
+
+test("garage livery grid class is wired", () => {
+  const js = code("js/garage/setup-sheet.js");
+  assert.match(js, /\bcs-liv-grid\b/);
+  assert.ok(ruleFor(css("css/carsetup.css"), /^#cs-options\.cs-liv-grid\b/), "carsetup.css styles #cs-options.cs-liv-grid");
+  const clear = js.search(/classList\.remove\(\s*"cs-liv-grid"\s*\)/);
+  const team = js.search(/csActiveCat\s*===\s*"team"/);
+  assert.ok(clear > 0 && clear < team,
+    "cs-liv-grid must be cleared before the TEAM branch, or the team card inherits the swatch grid");
+});
+
+test("select track filter persists via store", () => {
+  const js = code("js/ui/select-screen.js");
+  assert.match(js, /\btrackFilter\b/);
+  assert.match(js, /store\.set\(\s*"trackFilter"/);
+  assert.match(js, /"classic"\s*,\s*"CLASSICS"/);
+  // FAVOURITES joins the same filter table, is accepted by the persisted-value
+  // check, and skips tiles beside the season/classic/daily-open rules.
+  assert.match(js, /\["fav",\s*"♥ FAVOURITES"\]/);
+  assert.match(js, /trackFilter\s*!==\s*"fav"\)\s*trackFilter\s*=\s*"all"/);
+  assert.match(js, /filter === "fav"\) return \(favs \|\| favList\(\)\)\.includes\(t\.id\)/);
+  assert.match(js, /snapTrackToFilter/);
+  assert.ok(ruleFor(css("css/menus.css"), /^#sel-tracks \.track-row\[data-fav\]::after$/), "the ♥ badge is a pseudo-element on [data-fav]");
+  assert.equal(decl(css("css/menus.css"), "#sel-tracks .track-row[data-fav]", "position"), "relative",
+    "only a favourited tile is positioned — the shipped strip paints unchanged");
+});
+
+/* ── FAVOURITE CIRCUITS on the mini DOM: Menus.create with a stub G ─────── */
+function bootMenus(disk = {}, o = {}) {
+  const dom = makeDom();
+  dom.body.insertAdjacentHTML = () => {};
+  const data = new Map(Object.entries(disk).map(([k, v]) => [k, JSON.stringify(v)]));
+  const listeners = new Set();
+  const store = {
+    broken: null, rev: 0,
+    subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
+    get: (k, d) => (data.has(k) ? JSON.parse(data.get(k)) : d),
+    set: (k, v) => {
+      // Mirror GameStore.write: undefined removes the key and notifies.
+      if (v === undefined) data.delete(k);
+      else data.set(k, JSON.stringify(v));
+      store.rev++;
+      for (const fn of listeners) fn({ key: k, local: true });
+      return true;
+    },
+    rawDel: (k) => { data.delete(k); return true; },
+  };
+  const LIST = [
+    { id: "monza", name: "Monza", country: "Italy" },
+    { id: "spa", name: "Spa", country: "Belgium" },
+    { id: "imola", name: "Imola", country: "Italy", classic: true },
+  ];
+  const winListeners = [];
+  const sb = uiSandbox(dom, {
+    addEventListener: (type, fn, opts) => winListeners.push({ type, fn, opts }),
+    Tracks: { LIST }, Teams: { LIST: o.teams || [{ id: "t", name: "Team", drivers: [] }] }, Flags: { svg: () => "" },
+    SeasonCal: { canRace: () => true, rounds: () => 0 },
+    TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null },
+  });
+  vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: "js/ui/select-screen.js" });
+  if (o.practicePick || o.practicePickApi) {
+    const api = o.practicePickApi || {};
+    sb.UiExperience = {
+      isPracticePick: api.isPracticePick || (() => true),
+      leavePracticePick: api.leavePracticePick || (() => {}),
+    };
+  }
+  const $ = (id) => dom.byId(id);
+  const selTracks = $("sel-tracks");
+  // mini-dom's textContent is a plain field; buildSelect clears the strip with it.
+  Object.defineProperty(selTracks, "textContent", { get: () => "", set() { selTracks.children.length = 0; } });
+  const announced = [];
+  const G = {
+    $, store, cssCol: () => "#000", fmtTime: String, ttBoard: () => [], tickUi() {}, scheduleFlybyTrack() {},
+    els: { select: $("select"), selTracks, selGo: $("sel-go"), selTitle: $("sel-title"), selTrackSection: $("sel-track-section"),
+      selCircuitLabel: $("sel-circuit-label"), selPreviewMap: null, selTeams: $("sel-teams") },
+    trackIdx: 1, teamIdx: 0, timeTrial: false, seasonMode: false, netRoom: false, daily: null, soundOn: false,
+    announce: (m) => announced.push(m), ...o,
+  };
+  const menus = sb.Menus.create(G);
+  menus.buildSelect();
+  const tiles = () => selTracks.querySelectorAll(".track-row");
+  const tile = (id) => tiles().find((r) => LIST[+r.dataset.trackIdx].id === id);
+  const chips = () => dom.body.querySelectorAll(".sel-chip").filter((c) => c.dataset.filter).map((c) => c.dataset.filter);
+  return { dom, data, G, menus, tiles, tile, chips, announced, winListeners, favs: () => (data.has("favTracks") ? JSON.parse(data.get("favTracks")) : null) };
+}
+
+test("select titles and CTAs name Practice, Time Trial, and Race", () => {
+  const race = bootMenus();
+  assert.equal(race.G.els.selTitle.textContent, "GRAND PRIX");
+  assert.equal(race.G.els.selGo.textContent, "RACE SETUP");
+  const tt = bootMenus({}, { timeTrial: true });
+  assert.equal(tt.G.els.selTitle.textContent, "TIME TRIAL");
+  assert.equal(tt.G.els.selGo.textContent, "SESSION SETUP");
+  const practice = bootMenus({}, { timeTrial: true, practicePick: true });
+  assert.equal(practice.G.els.selTitle.textContent, "PRACTICE");
+  assert.equal(practice.G.els.selGo.textContent, "PRACTICE SETUP");
+});
+
+function fakeDaily(extra = {}) {
+  let armed = extra.armed || null;
+  return {
+    plan: () => ({ day: "2026-10-05", trackName: "Montreal", weather: "dry", tod: "default", trackId: "monza" }),
+    today: () => null,
+    current: () => armed,
+    isActive: () => !!armed,
+    select() { armed = { day: "2026-10-05", class: "standard", trackId: "monza" }; },
+    stop() { armed = null; },
+  };
+}
+
+test("Practice pick hides Time Trial Daily chrome", () => {
+  const tt = bootMenus({}, { timeTrial: true, daily: fakeDaily() });
+  assert.ok(tt.dom.has("sel-daily"), "Time Trial keeps Today's Challenge");
+  assert.ok(tt.chips().includes("daily-open"));
+  const practice = bootMenus({}, { timeTrial: true, practicePick: true, daily: fakeDaily() });
+  assert.ok(!practice.dom.has("sel-daily"), "Practice does not wear the Daily chip");
+  assert.ok(!practice.chips().includes("daily-open"));
+  assert.equal(practice.G.els.selTitle.textContent, "PRACTICE");
+});
+
+test("leaving the Practice pick rebuilds Time Trial chrome", () => {
+  let pick = true;
+  const h = bootMenus({}, {
+    timeTrial: true,
+    daily: fakeDaily(),
+    practicePickApi: {
+      isPracticePick: () => pick,
+      leavePracticePick: () => { pick = false; },
+    },
+  });
+  assert.equal(h.G.els.selTitle.textContent, "PRACTICE");
+  assert.ok(!h.dom.has("sel-daily"));
+  pick = false;
+  h.menus.buildSelect();
+  assert.equal(h.G.els.selTitle.textContent, "TIME TRIAL");
+  assert.equal(h.G.els.selGo.textContent, "SESSION SETUP");
+  assert.ok(h.dom.has("sel-daily"));
+  assert.match(code("js/ui/select-screen.js"), /leavePracticePick\(\)/);
+});
+
+test("CLASSICS filter snaps the preview off a season circuit that is not in the list", () => {
+  const h = bootMenus({}, { trackIdx: 1 });
+  assert.equal(h.G.trackIdx, 1, "starts on Spa");
+  h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === "classic").onclick({ stopPropagation() {} });
+  assert.equal(h.G.trackIdx, 2, "Imola is the only classic in the stub list");
+  assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["2"]);
+  assert.equal(JSON.parse(h.data.get("trackId")), "imola");
+});
+
+test("select preview uses a dark token scrollbar and a readable GP subtitle", () => {
+  const rules = css("css/select.css");
+  assert.equal(decl(rules, "#sel-preview-gp", "color"), "var(--text)");
+  assert.equal(decl(rules, "#select", "color-scheme"), "dark");
+  assert.equal(
+    decl(rules, '#sel-inner:not([data-shape="tall"]) #sel-preview-info', "scrollbar-color"),
+    "var(--plate-line) transparent",
+  );
+  assert.equal(
+    decl(rules, '#sel-inner:not([data-shape="tall"]) #sel-preview-info', "color-scheme"),
+    "dark",
+  );
+});
+
+test("Practice Goal native select follows Apex dark chrome", () => {
+  const rules = css("css/experience.css");
+  assert.equal(decl(rules, "#practice-brief", "color-scheme"), "dark");
+  assert.equal(decl(rules, "#practice-brief select", "background"), "var(--plate)");
+  assert.equal(decl(rules, "#practice-brief select", "color"), "var(--text)");
+  assert.equal(decl(rules, "#practice-brief option", "background"), "var(--plate)");
+});
+
+test("FAVOURITE CIRCUITS: hidden until used — no chip, no badge, nothing written", () => {
+  const h = bootMenus();
+  assert.deepEqual(h.chips(), ["all", "season", "classic"], "the shipped filter bar, no FAVOURITES chip");
+  assert.equal(h.tiles().length, 3);
+  assert.ok(h.tiles().every((r) => !("fav" in r.dataset)), "no tile carries data-fav");
+  assert.equal(h.data.has("favTracks"), false);
+});
+
+test("FAVOURITE CIRCUITS: the CIRCUIT DETAIL toggle → store → data-fav → the chip, and back", () => {
+  const h = bootMenus();
+  const noticed = [];
+  h.G.store.subscribe((c) => noticed.push(c && c.key));
+  h.menus.openTrackDetail();
+  const btn = h.dom.byId("track-detail-fav");
+  assert.equal(btn.tagName, "BUTTON");
+  assert.equal(btn.textContent, "☆ FAVOURITE");
+  assert.equal(btn.getAttribute("aria-pressed"), "false");
+  btn.onclick();
+  assert.deepEqual(h.favs(), ["spa"]);
+  assert.equal(btn.textContent, "★ FAVOURITE");
+  assert.equal(btn.getAttribute("aria-pressed"), "true");
+  assert.equal(h.tile("spa").dataset.fav, "1", "the strip was rebuilt with the badge");
+  assert.ok(!("fav" in h.tile("monza").dataset));
+  assert.deepEqual(h.chips(), ["all", "season", "classic", "fav"], "the chip appears with the first favourite");
+  assert.ok(noticed.includes("favTracks"), "starring notifies subscribers");
+  // FAVOURITES filters the strip; selection still indexes Tracks.LIST.
+  h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === "fav").onclick({ stopPropagation() {} });
+  assert.equal(JSON.parse(h.data.get("trackFilter")), "fav");
+  assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["1"]);
+  // The last one out: key deleted, the filter falls back to ALL, the chip goes.
+  const beforeClear = noticed.filter((k) => k === "favTracks").length;
+  btn.onclick();
+  assert.equal(h.data.has("favTracks"), false, "an empty list is the shipped state — nothing stored");
+  assert.equal(noticed.filter((k) => k === "favTracks").length, beforeClear + 1,
+    "clearing the last favourite notifies (write/set, not silent rawDel)");
+  assert.equal(btn.textContent, "☆ FAVOURITE");
+  assert.equal(JSON.parse(h.data.get("trackFilter")), "all");
+  assert.deepEqual(h.chips(), ["all", "season", "classic"]);
+  assert.equal(h.tiles().length, 3);
+});
+
+test("FAVOURITE CIRCUITS: F on a focused tile toggles it and keeps focus; modifiers and the season calendar do not", () => {
+  const h = bootMenus();
+  const press = (el, key, extra = {}) => h.dom.dispatch(el, { type: "keydown", key, bubbles: true, ...extra });
+  press(h.tile("monza"), "f", { ctrlKey: true });
+  assert.equal(h.data.has("favTracks"), false, "Ctrl+F is the browser's");
+  press(h.tile("monza"), "F");
+  assert.deepEqual(h.favs(), ["monza"]);
+  assert.equal(h.tile("monza").dataset.fav, "1");
+  assert.equal(h.dom.document.activeElement, h.tile("monza"), "focus returns to the rebuilt tile");
+  assert.match(h.announced.at(-1), /MONZA/);
+  press(h.tile("imola"), "f");
+  assert.deepEqual(h.favs(), ["monza", "imola"]);
+  press(h.tile("monza"), "f");
+  assert.deepEqual(h.favs(), ["imola"]);
+  const season = bootMenus({}, { seasonMode: true });
+  const cal = season.dom.byId("sel-tracks");
+  cal.dataset.mode = "season";
+  const row = season.dom.makeElement("button"); row.className = "track-row"; row.dataset.trackIdx = "0"; cal.appendChild(row);
+  season.dom.dispatch(row, { type: "keydown", key: "f", bubbles: true });
+  assert.equal(season.data.has("favTracks"), false, "the calendar strip is read-only");
+});
+
+test("FAVOURITE CIRCUITS: a HELD F stars once — its auto-repeat neither flips nor re-announces", () => {
+  const h = bootMenus();
+  const press = (el, key, extra = {}) => h.dom.dispatch(el, { type: "keydown", key, bubbles: true, ...extra });
+  press(h.tile("monza"), "f");
+  assert.deepEqual(h.favs(), ["monza"]);
+  const said = h.announced.length;
+  press(h.tile("monza"), "f", { repeat: true });
+  press(h.tile("monza"), "f", { repeat: true });
+  assert.deepEqual(h.favs(), ["monza"], "the repeats did not unstar / restar it");
+  assert.equal(h.announced.length, said, "…nor announce again");
+});
+
+test("Escape in the circuit search clears the query first; an empty field lets Escape close the picker", () => {
+  const h = bootMenus();
+  const esc = h.winListeners.find((l) => l.type === "keydown" && (l.opts === true || (l.opts && l.opts.capture)));
+  assert.ok(esc, "a window-CAPTURE keydown listener — TopModal's document-capture Escape runs before any target listener");
+  const search = h.dom.byId("sel-track-search");
+  search.value = "spa"; search.oninput();
+  assert.deepEqual(h.tiles().filter((r) => !r.hidden).map((r) => LIST_ID(h, r)), ["spa"]);
+  const ev = (extra = {}) => ({ key: "Escape", target: search, defaultPrevented: false, stopped: false,
+    preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; }, ...extra });
+  const e1 = ev();
+  esc.fn(e1);
+  assert.equal(search.value, "", "the field is cleared");
+  assert.equal(h.tiles().filter((r) => r.hidden).length, 0, "every circuit is back");
+  assert.equal(e1.defaultPrevented && e1.stopped, true, "…and the key never reaches TopModal's BACK door");
+  const e2 = ev();
+  esc.fn(e2);
+  assert.equal(e2.defaultPrevented || e2.stopped, false, "empty field: Escape goes on to close the picker");
+  search.value = "mon";
+  const e3 = ev({ isComposing: true });
+  esc.fn(e3);
+  assert.equal(search.value, "mon", "an IME composition keeps its Escape");
+  const e4 = ev({ target: h.tile("monza") });
+  esc.fn(e4);
+  assert.equal(e4.defaultPrevented, false, "Escape elsewhere is not this field's");
+});
+const LIST_ID = (h, r) => ["monza", "spa", "imola"][+r.dataset.trackIdx];
+
+test("TEAM PICKER: opens on the current team, and a pick returns focus to the rebuilt garage card", async () => {
+  let card = null;
+  const h = bootMenus({}, {
+    teamIdx: 1,
+    teams: [{ id: "a", name: "A", drivers: [] }, { id: "b", name: "B", drivers: [] }],
+    // The garage rebuild replaces #cs-team-card — the sheet's opener — with a new node.
+    buildSetup: () => {
+      if (card) card.remove();
+      card = h.dom.makeElement("button", "cs-team-card");
+      h.dom.body.appendChild(card);
+    },
+  });
+  h.G.buildSetup();
+  const opener = card;
+  opener.focus();
+  h.menus.setTeamPicker(true);
+  await Promise.resolve();
+  const tiles = h.dom.byId("sel-teams").querySelectorAll(".team-tile");
+  assert.equal(tiles.length, 2);
+  assert.equal(h.dom.document.activeElement, tiles[1], "focus lands on the ACTIVE team, not CLOSE");
+  tiles[0].onclick();
+  assert.equal(h.dom.byId("teampicker").hidden, true);
+  await Promise.resolve();
+  assert.notEqual(card, opener, "the opener was rebuilt");
+  assert.equal(h.dom.document.activeElement, card, "focus is on the NEW #cs-team-card, not <body>");
+});
+
+test("circuit filter chip click/Enter keeps focus on the rebuilt active chip", () => {
+  // Bug hunt 2026-10-06: ArrowRight restored focus after setTrackFilter rebuild;
+  // onclick (Enter/Space activate <button> via click) passed focus:false and
+  // left document.activeElement on <body>, killing the filter roving tabindex.
+  const h = bootMenus();
+  const chip = (id) => h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === id);
+  const season = chip("season");
+  assert.ok(season, "season filter chip exists");
+  season.focus();
+  assert.equal(h.dom.document.activeElement, season);
+  season.onclick({ stopPropagation() {}, detail: 0 });
+  assert.equal(JSON.parse(h.data.get("trackFilter")), "season");
+  const rebuilt = chip("season");
+  assert.ok(rebuilt, "bar rebuilt with season chip");
+  assert.notEqual(rebuilt, season, "the pressed chip node was replaced");
+  assert.equal(h.dom.document.activeElement, rebuilt, "focus lands on the new season chip");
+  assert.equal(rebuilt.getAttribute("aria-pressed"), "true");
+  assert.equal(rebuilt.tabIndex, 0);
+});
+
+test("CLASSICS filter snaps the hero off a season circuit onto the first classic", () => {
+  const h = bootMenus();
+  assert.equal(h.G.trackIdx, 1, "fixture opens on Spa");
+  h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === "classic")
+    .onclick({ stopPropagation() {} });
+  assert.equal(JSON.parse(h.data.get("trackFilter")), "classic");
+  assert.equal(h.G.trackIdx, 2, "Bahrain/Spa is not in CLASSICS — Imola is the first classic");
+  assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["2"]);
+  assert.ok(h.tiles()[0].className.includes("active"), "the snapped classic is highlighted");
+  assert.equal(JSON.parse(h.data.get("trackId")), "imola");
+});
+
+test("FAVOURITE CIRCUITS: a stored FAVOURITES filter with no (known) favourites opens on ALL", () => {
+  for (const favTracks of [undefined, [], ["no-such-circuit"], "spa"]) {
+    const disk = { trackFilter: "fav" };
+    if (favTracks !== undefined) disk.favTracks = favTracks;
+    const h = bootMenus(disk);
+    assert.deepEqual(h.chips(), ["all", "season", "classic"], JSON.stringify(favTracks));
+    assert.equal(h.tiles().length, 3, JSON.stringify(favTracks) + ": every circuit shown");
+  }
+  const h = bootMenus({ trackFilter: "fav", favTracks: ["imola"] });
+  assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["2"], "a real favourite keeps the filter");
+});
+
+/* ── SheetShape on the mini DOM ─────────────────────────────────────────── */
+function bootSheetShape(opts = {}) {
+  const dom = makeDom({ readyState: "loading" });     // init() waits for DOMContentLoaded: never runs
+  const vars = new Map();                               // el -> { "--fit-at": "300px", … }
+  const style = (el) => ({
+    getPropertyValue: (k) => (vars.get(el) && vars.get(el)[k]) || "",
+    paddingTop: "0px", paddingBottom: "0px",
+  });
+  vars.set(dom.body, { "--tall-at": "1.05", "--wide-at": "620px", ...(opts.body || {}) });
+  vars.set(dom.documentElement, { "--ui-scale": String(opts.uiScale || 1) });
+  const sb = uiSandbox(dom, { getComputedStyle: style, innerWidth: opts.innerWidth || 1000, innerHeight: opts.innerHeight || 600 });
+  vm.runInNewContext(src("js/ui/sheet-shape.js"), sb, { filename: "js/ui/sheet-shape.js" });
+  const sheet = (id, o = {}) => {
+    const host = dom.makeElement("div"); host._client = o.hostHeight || 0;
+    const el = dom.makeElement("div"); el.id = id; host.appendChild(el);
+    el._rect = { width: o.w || 800, height: o.h || 400, left: 0, top: 0, right: o.w || 800, bottom: o.h || 400 };
+    vars.set(el, o.vars || {});
+    return { el, host };
+  };
+  return { dom, sb, SS: sb.SheetShape, vars, sheet, body: dom.body };
+}
+
+test("circuit select is a flag strip over a hero, not two panes", () => {
+  const menus = css("css/menus.css");
+  assert.ok(!menus.some((r) => [...r.decls.values()].some((v) => /40\s*\*\s*var\(--svhz\)/.test(v))),
+    "the 300px / 40svhz list cap was the nested-scroller hotfix");
+  assert.equal(decl(menus, "#sel-body", "overflow"), "hidden",
+    "the body is a flex column, not a vertical scroller");
+  assert.equal(decl(menus, "#sel-body", "flex-direction"), "column");
+  assert.equal(decl(menus, "#sel-tracks", "overflow-x"), "auto",
+    "the flag strip is the one sideways scroller");
+  assert.equal(decl(menus, "#sel-tracks", "overflow-y"), "hidden");
+  assert.equal(decl(menus, "#sel-tracks", "touch-action"), "pan-x");
+  assert.equal(decl(menus, "#sel-track-section", "flex"), "1 1 0",
+    "the hero section is the flex remainder under the shelf");
+  assert.ok(!declares(menus, "#sel-inner", "--pair-at"),
+    "#sel-inner is no longer a .pane-pair sheet — no pair threshold to declare");
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  assert.match(html, /<div id="sel-tracks" role="group"[^>]*data-orientation="horizontal"/,
+    "the strip declares its axis for the keyboard walker and the wheel redirect");
+  assert.doesNotMatch(html, /<div id="sel-inner" class="[^"]*pane-pair/);
+  // SheetShape BEHAVIOUR: `--pair-compact: wide` keeps a compact WIDE sheet
+  // paired and stacks a compact TALL one; `off` stacks either.
+  const h = bootSheetShape();
+  const wide = h.sheet("ss-inner", { w: 900, h: 300, vars: { "--pair-compact": "wide", "--compact-at": "380px", "--pair-at": "620px" } });
+  h.SS.observe(wide.el);
+  assert.equal(wide.el.dataset.density, "compact");
+  assert.equal(wide.el.dataset.pair, "on", "compact + wide shape + `wide` mode keeps the pair");
+  const tall = h.sheet("sel-inner-tall", { w: 300, h: 360, vars: { "--pair-compact": "wide", "--compact-at": "380px", "--pair-at": "200px" } });
+  h.SS.observe(tall.el);
+  assert.equal(tall.el.dataset.shape, "tall");
+  assert.equal(tall.el.dataset.pair, "off", "compact + tall shape stacks even above --pair-at");
+  const off = h.sheet("cs-inner", { w: 900, h: 300, vars: { "--pair-compact": "off", "--compact-at": "380px", "--pair-at": "400px" } });
+  h.SS.observe(off.el);
+  assert.equal(off.el.dataset.pair, "off", "`off` stacks a compact sheet regardless of width");
+  assert.doesNotMatch(code("js/ui/scroll-fade.js"), /"\.pane",\s*"#sel-body"/);
+  assert.doesNotMatch(code("js/ui/menu-nav.js"), /\.pane,#sel-body/);
+  assert.doesNotMatch(read("tools/ui/layout-audit.mjs"), /\.pane,#sel-body/);
+  assert.match(code("js/ui/scroll-fade.js"), /\boverflowY\b/,
+    "fade thumbs require overflow-y auto/scroll, not hidden content height");
+});
+
+test("density is judged by the sheet's ROOM, not its content height", () => {
+  // SheetShape BEHAVIOUR: a content-sized sheet reports its content height,
+  // and its compact layout is shorter than its normal one, so measuring the
+  // content is self-fulfilling. MEASURED RACE SETTINGS at 1280x800: the
+  // compact grid is 358 own px against --compact-at 760 with 776 px of room.
+  const h = bootSheetShape();
+  const roomy = h.sheet("rs-roomy", { w: 558, h: 358, hostHeight: 776, vars: { "--compact-at": "760px" } });
+  h.SS.observe(roomy.el);
+  assert.equal(roomy.el.dataset.density, "normal", "358 px of content in 776 px of room is NOT short");
+  roomy.host._client = 366; h.SS.reclassify();
+  assert.equal(roomy.el.dataset.density, "compact", "the same sheet on a 390-tall landscape phone is");
+  roomy.host._client = 790; h.SS.reclassify();
+  assert.equal(roomy.el.dataset.density, "compact", "790 is inside the 40 px release hysteresis (760 + 40)");
+  roomy.host._client = 820; h.SS.reclassify();
+  assert.equal(roomy.el.dataset.density, "normal", "…and releases once the room clears it");
+  const pinned = h.sheet("rs-pinned", { w: 558, h: 900, hostHeight: 600, vars: { "--compact-at": "760px" } });
+  h.SS.observe(pinned.el);
+  assert.equal(pinned.el.dataset.density, "normal", "a sheet taller than its host is judged by its own height (max of the two)");
+  const nohost = h.sheet("rs-nohost", { w: 558, h: 358, vars: { "--compact-at": "760px" } });
+  h.SS.observe(nohost.el);
+  assert.equal(nohost.el.dataset.density, "compact", "host 0 (hidden, or this harness) falls back to the sheet's own height");
+  assert.match(code("js/ui/sheet-shape.js"), /function roomOwn\(el, hOwn\)/, "the room floor lives in sheetshape.js");
+  // THE BODY IS EXEMPT: classifyBody() passes innerHeight ÷ --ui-scale, already
+  // the room in the body's own units; the documentElement host would hand back
+  // the raw viewport and un-compact every phone at UI SIZE 200%.
+  const b = bootSheetShape({ innerWidth: 852, innerHeight: 393, uiScale: 2 });   // 196 own px
+  b.vars.set(b.body, { "--tall-at": "1.05", "--wide-at": "620px", "--compact-at": "600px" });
+  b.body._client = 393; b.dom.documentElement._client = 393;
+  b.SS.reclassify();
+  assert.equal(b.body.dataset.density, "compact", "852x393 at 200% is 196 own px of body — compact, whatever documentElement's client box says");
+});
+
+test("garage stacked categories are a horizontal strip", () => {
+  const carsetup = css("css/carsetup.css");
+  assert.ok(!declares(carsetup, "#cs-tabs", "max-height", "48%"),
+    "stacked tabs must not keep the wrapping 48% vertical catalogue");
+  assert.ok(ruleFor(carsetup, /^#cs-tabs \.cs-tab-row\b/),
+    "the two named category tiers own their horizontal strips");
+  assert.equal(decl(carsetup, "#cs-tabs .cs-tab-row", "overflow-x"), "auto", "each stacked tier pans sideways");
+  assert.equal(decl(carsetup, "#cs-tabs .cs-tab-row", "overflow-y"), "hidden", "…and never becomes a nested vertical pane");
+  assert.equal(decl(carsetup, '#cs-inner[data-pair="on"] #cs-tabs', "overflow-y"), "auto",
+    "pair-on rail may still scroll vertically");
+  assert.equal(decl(carsetup, '#cs-inner[data-pair="on"] #cs-tabs .cs-tab-row', "display"), "contents",
+    "pair-on flattens both tiers into one vertical rail");
+  assert.match(code("js/garage/setup-sheet.js"), /scrollIntoView\(\s*\{[^}]*\bblock:\s*"nearest"[^}]*\}\s*\)/, "the active tab is scrolled into view (nearest)");
+  assert.match(code("js/garage/setup-sheet.js"), /scrollIntoView\(\s*\{[^}]*\binline:\s*"center"[^}]*\}\s*\)/, "…and centred sideways along the strip");
+});
+
+test("circuit catalogue has a searchable filter toolbar", () => {
+  const js = code("js/ui/select-screen.js");
+  assert.match(js, /\.type\s*=\s*"search"/);
+  assert.match(js, /setAttribute\(\s*"aria-label"\s*,\s*"Search circuits"\s*\)/);
+  assert.match(js, /\.dataset\.search\s*=/);
+  assert.match(js, /function\s+applyTrackSearch\s*\(/);
+  assert.match(js, /setAttribute\(\s*"role"\s*,\s*"group"\s*\)/,
+    "filters plus search are controls for one list, not a tablist");
+  assert.match(js, /\.tabIndex\s*=\s*visibleTrackFilter\(\)\s*===\s*id\s*\?\s*0\s*:\s*-1/,
+    "filter chips keep a roving tab stop; search is its own");
+  assert.equal(decl(css("css/menus.css"), "#sel-track-search", "min-height"), "var(--chip-h)");
+});
+
+test("circuit search: a divider survives only while ITS run of tiles does", () => {
+  // Tracks.LIST interleaves the groups (Zandvoort, Imola, Istanbul and Portimao
+  // are classics among the season circuits), so one group owns several
+  // dividers. Testing the whole group left every SEASON divider standing as an
+  // orphan whenever any season circuit matched — searching "spa" (which also
+  // finds Spain) drew vertical labels between empty runs. The real function,
+  // run against a stand-in list.
+  const src = fs.readFileSync(path.join(ROOT, "js/ui/select-screen.js"), "utf8");
+  const fn = /function applyTrackSearch\(value\) \{[\s\S]*?\n\}\n/.exec(src);
+  assert.ok(fn, "applyTrackSearch is in select-screen.js");
+  const mk = (kind, group, search) => {
+    const classes = new Set([kind]);
+    return { hidden: false, nextElementSibling: null, dataset: { trackGroup: group, search }, group,
+      classList: { contains: (c) => classes.has(c) } };
+  };
+  const list = [
+    mk("track-group-head", "S"), mk("track-row", "S", "spa belgium season"), mk("track-row", "S", "madrid spain season"),
+    mk("track-group-head", "C"), mk("track-row", "C", "zandvoort netherlands classic"),
+    mk("track-group-head", "S"), mk("track-row", "S", "jeddah saudi arabia season"),
+    mk("track-group-head", "C"), mk("track-row", "C", "imola italy classic"),
+  ];
+  list.forEach((el, i) => { el.nextElementSibling = list[i + 1] || null; });
+  const heads = list.filter((e) => e.classList.contains("track-group-head"));
+  const rows = list.filter((e) => e.classList.contains("track-row"));
+  const els = { selTracks: { querySelectorAll: (sel) => (sel === ".track-row" ? rows : heads) } };
+  const empty = { hidden: true };
+  const run = new Function("els", "document", "ScrollFadeRefresh",
+    `let trackQuery = ""; ${fn[0]}; return applyTrackSearch;`)(els, { getElementById: () => empty }, () => {});
+  run("spa");
+  assert.deepEqual(heads.map((h) => h.hidden), [false, true, true, true],
+    "only the divider over the matching run shows; the three empty runs lose theirs");
+  run("");
+  assert.deepEqual(heads.map((h) => h.hidden), [false, false, false, false], "no query: every divider is back");
+  run("zzz");
+  assert.deepEqual(heads.map((h) => h.hidden), [true, true, true, true], "no match: no dividers at all");
+  assert.equal(empty.hidden, false, "…and the NO CIRCUITS MATCH line shows");
+});
+
+test("compact catalogue keeps a pannable toolbar and shrinks the strip to flags", () => {
+  const menus = css("css/menus.css");
+  assert.equal(decl(menus, "#sel-track-filter", "overflow-x"), "auto",
+    "the filter/search toolbar pans at every width instead of wrapping into the hero");
+  assert.equal(decl(menus, "#sel-track-filter", "flex-wrap"), "nowrap");
+  assert.equal(decl(menus, "#sel-track-search", "min-width"), "12rem",
+    "search keeps a readable floor so the row actually overflows at 200%");
+  for (const w of [360, 420, 440]) {
+    assert.ok(!menus.some((r) => r.context.some((c) => c === `@container sheet (max-width: ${w}px)`)), `no @container sheet (max-width: ${w}px) block`);
+  }
+  const compact = '#sel-inner[data-density="compact"]';
+  assert.equal(decl(menus, `${compact} #sel-tracks .track-row-name`, "display"), "none",
+    "compact strip is flags only — the name moves to the hero caption");
+  assert.equal(decl(menus, `${compact} #sel-preview-elev`, "display"), "none",
+    "compact hero drops the elevation strip, never the still");
+  assert.ok(!declares(menus, `${compact} #sel-hero`, "display", "none"));
+  assert.ok(!declares(menus, `${compact} #sel-preview-map`, "display", "none"));
+  assert.ok(!declares(menus, '#sel-inner[data-fit="on"] #sel-preview-map', "display", "none"));
+  const menusJs = code("js/ui/select-screen.js");
+  assert.match(menusJs, /assets\/stills\/" \+ t\.id \+ "\.webp"/, "the hero reads the committed still per circuit");
+  assert.match(menusJs, /Flags\.svg\(t\.country\)/, "tiles and caption draw the flag from js/ui/flags.js");
+  assert.match(menusJs, /corners: false, sectors: false, drs: false/,
+    "the hero outline is the plain lap line — sectors and turns belong to CIRCUIT DETAIL");
+});
+
+
+test("garage categories implement one roving tab system", () => {
+  const js = code("js/garage/setup-sheet.js");
+  assert.match(js, /setAttribute\(\s*"role"\s*,\s*"tablist"\s*\)/);
+  assert.match(js, /setAttribute\(\s*"role"\s*,\s*"tab"\s*\)/);
+  assert.match(js, /setAttribute\(\s*"aria-controls"\s*,\s*"cs-options"\s*\)/);
+  assert.match(js, /\.tabIndex\s*=\s*csActiveCat\s*===\s*id\s*\?\s*0\s*:\s*-1/);
+  assert.match(js, /setAttribute\(\s*"role"\s*,\s*"tabpanel"\s*\)/);
+  assert.match(js, /setAttribute\(\s*"aria-labelledby"\s*,\s*csTabId\(\s*csActiveCat\s*\)\s*\)/);
+  for (const key of ["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp", "Home", "End"])
+    assert.match(js, new RegExp(`\\.key\\s*===\\s*"${key}"`));
+});
+
+test("compact garage budget status stays readable beside FREE BUILD", () => {
+  const garage = css("css/carsetup.css");
+  const selector = '#cs-inner[data-density="compact"] #cs-budget-row #cs-budget';
+  assert.equal(decl(garage, selector, "white-space"), "nowrap");
+  assert.equal(decl(garage, selector, "overflow"), "hidden");
+  assert.equal(decl(garage, selector, "text-overflow"), "ellipsis");
+  assert.equal(decl(garage, '#cs-inner[data-density="compact"] #cs-budget.unlimited', "display"), "none");
+});
+
+test("high-scale settings and Last Race retain useful local width", () => {
+  const components = css("css/components.css");
+  const data = css("css/data.css");
+  assert.ok(ruleFor(components, /^\.balanced-row\s*>\s*:not\(\[hidden\]\)$/));
+  assert.ok(!components.some((r) => r.context.includes("@container sheet (min-width: 380px) and (max-width: 519px)")));
+  assert.equal(decl(data, ".dh-table", "max-width"), "100%");
+  assert.equal(decl(data, ".dh-table", "table-layout"), "fixed");
+  assert.ok(!declares(data, ".dh-td-driver", "display", "flex"),
+    "a table cell must not opt out of the fixed table layout");
+  assert.equal(decl(data, ".dh-td-driver", "overflow-wrap"), "normal",
+    "driver names wrap at spaces, not mid-word");
+  assert.equal(decl(data, ".dh-td-driver .dh-name", "overflow-wrap"), "normal");
+  assert.equal(decl(data, ".dh-td-driver .dh-name", "display"), "block",
+    "the surname sits under the chip so VERSTAPPEN keeps a full cell");
+  assert.ok(!declares(data, ".dh-td-driver", "overflow-wrap", "anywhere"));
+  assert.equal(decl(data, ".dh-cons-main .dh-name", "flex"), "0 1 auto",
+    "live/constructor names do not grow and park the team on the far right");
+  const desk = ruleFor(data, /body\[data-width="wide"\]\[data-density="normal"\]\s+\.dh-card/);
+  assert.ok(desk, "desktop hub card has a pinned height");
+  assert.equal(desk.decls.get("min-height"), "var(--dh-desk-h)");
+  assert.equal(desk.decls.get("max-height"), "var(--dh-desk-h)");
+  assert.equal(decl(data, ".dh-export-status", "font-family"), "inherit",
+    "export status is the hub face, not a monospace dump");
+  assert.equal(decl(data, ".dh-tabs", "flex-wrap"), "wrap",
+    "EXPORT must wrap, not clip, on the 760px card");
+});
+
+test("compact title column scrolls instead of clipping at high UI SIZE", () => {
+  const menus = css("css/menus.css");
+  // Cap + scroll on #menu-buttons under body[data-density=compact] (layout only).
+  const compactBtns = rulesFor(menus, /body\[data-density="compact"\]\)?\s*#menu-buttons/);
+  assert.ok(compactBtns.length, "a compact-density #menu-buttons rule exists");
+  const has = (prop, re) => compactBtns.some((r) => r.decls.has(prop) && re.test(r.decls.get(prop)));
+  assert.ok(has("max-height", /calc\(100\s*\*\s*var\(--svhz\)/), "the column is capped in local svhz");
+  assert.ok(has("align-content", /safe center/));
+  assert.ok(has("padding-inline", /var\(--gap\)/));
+  // Portrait is the zoom-aware body[data-shape="tall"] flag, never a viewport
+  // media query (the old text pin here matched a COMMENT that said so).
+  // Leftover-row is ALL tall — a 393×844 phone is above --compact-at.
+  assert.ok(!menus.some((r) => r.context.some((c) => /orientation:\s*portrait/.test(c))), "no @media (orientation: portrait) rule in menus.css");
+  assert.ok(rulesFor(menus, /body\[data-shape="tall"\]\)\s*#overlay/).some((r) => [...r.decls.values()].some((v) => /minmax\(0,\s*1fr\)/.test(v))),
+    "the tall shape hands leftover rows to a minmax(0, 1fr) column");
+  // HOW TO PLAY carries an icon like the other doors.
+  assert.match(read("index.html"), /id="mb-help"[^>]*>[\s\S]*?btn-ico[\s\S]*?HOW TO PLAY/);
+});
+
+/* ── MenuNav on the mini DOM ────────────────────────────────────────────── */
+function bootMenuNav(layerId = "overlay") {
+  const dom = makeDom({ readyState: "loading" });
+  const layer = dom.byId(layerId);
+  layer._rect = { left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600 };
+  const sb = uiSandbox(dom, { UiLayers: { shown: () => true, top: () => layer } });
+  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
+  const button = (id, y, attrs = {}) => {
+    const b = dom.makeElement("button"); b.id = id;
+    b._rect = { left: 10, top: y, right: 210, bottom: y + 30, width: 200, height: 30 };
+    for (const k of Object.keys(attrs)) b.setAttribute(k, attrs[k]);
+    layer.appendChild(b);
+    return b;
+  };
+  const key = (k) => sb.MenuNav.onKeyDown({ key: k, preventDefault() {}, altKey: false, ctrlKey: false, metaKey: false });
+  return { dom, layer, MenuNav: sb.MenuNav, button, key, focused: () => dom.document.activeElement && dom.document.activeElement.id };
+}
+
+test("title keyboard navigation has an explicit default before stateful controls", () => {
+  assert.match(read("index.html"), /id="mb-career"[^>]*\bdata-menu-default\b/);
+  // BEHAVIOUR: with nothing focused, the first arrow lands on the
+  // [data-menu-default] item even though an aria-pressed control precedes it
+  // in document order.
+  const h = bootMenuNav();
+  h.button("mb-sound", 10, { "aria-pressed": "true" });
+  h.button("mb-career", 50, { "data-menu-default": "" });
+  h.button("mb-quick", 90);
+  h.key("ArrowDown");
+  assert.equal(h.focused(), "mb-career", "first press lands on the declared default, not the earlier aria-pressed Sound");
+  // Without a default the stateful control wins.
+  const g = bootMenuNav("overlay2");
+  g.button("s-sound", 10, { "aria-pressed": "true" });
+  g.button("s-career", 50);
+  g.key("ArrowDown");
+  assert.equal(g.focused(), "s-sound", "no data-menu-default → the aria-pressed control is the landing spot");
+});
+
+test("tuner tabs scroll the selected chip into view", () => {
+  for (const file of ["js/lighting/tuner-panel.js", "js/camera/tuner-panel.js"]) {
+    const s = code(file);
+    assert.match(s, /scrollIntoView\(\s*\{[^}]*\bblock:\s*"nearest"[^}]*\binline:\s*"center"[^}]*\}\s*\)|scrollIntoView\(\s*\{[^}]*\binline:\s*"center"[^}]*\bblock:\s*"nearest"[^}]*\}\s*\)/, `${file} centres the selected chip`);
+  }
+});
+
+test("camera reset actions state their scope", () => {
+  const html = read("index.html");
+  assert.match(html, /id="ct-reset"[^>]*title=/);
+  assert.match(html, /id="ct-reset-all"[^>]*title=/);
+});
+
+test("lighting tuner preview uses G facade, not __apex (Pages has no agent surface)", () => {
+  const lighting = code("js/lighting/tuner-panel.js");
+  assert.doesNotMatch(lighting, /__apex/);
+  assert.match(lighting, /\bsetTimeOfDay\b/);
+  assert.match(lighting, /\bweather\b/);
+});
+
+test("generated lighting and camera tabs carry the complete tab contract", () => {
+  const html = read("index.html");
+  const lighting = code("js/lighting/tuner-panel.js");
+  const camera = code("js/camera/tuner-panel.js");
+
+  assert.match(html, /id="lt-tabs"[^>]*role="tablist"[^>]*aria-label="Lighting categories"/);
+  assert.match(html, /id="ct-modes"[^>]*role="tablist"[^>]*aria-label="Camera modes"/);
+  assert.match(html, /id="ct-rows"[^>]*role="tabpanel"/);
+
+  for (const s of [lighting, camera]) {
+    assert.match(s, /setAttribute\(\s*"role"\s*,\s*"tab"\s*\)/);
+    assert.match(s, /setAttribute\(\s*"aria-controls"/);
+    assert.match(s, /setAttribute\(\s*"aria-selected"/);
+    assert.match(s, /\.tabIndex\s*=\s*on\s*\?\s*0\s*:\s*-1/);
+    for (const key of ["ArrowRight", "ArrowLeft", "Home", "End"]) {
+      assert.match(s, new RegExp(`\\.key\\s*===\\s*"${key}"`));
+    }
+  }
+  assert.match(lighting, /setAttribute\(\s*"role"\s*,\s*"tabpanel"\s*\)/);
+  assert.match(lighting, /setAttribute\(\s*"aria-labelledby"/);
+  assert.match(lighting, /\.hidden\s*=\s*!on\b/);
+  assert.match(camera, /\$\(\s*"ct-rows"\s*\)\.setAttribute\(\s*"aria-labelledby"\s*,\s*b\.id\s*\)/);
+});
+
+test("VS Friend text uses the menu type scale instead of sub-floor rem literals", () => {
+  const raw = readCssSource("css/overlays.css");
+  const start = raw.indexOf("/* ── VS FRIEND lobby");
+  assert.notEqual(start, -1, "VS Friend CSS section missing");
+  const section = cssRules(raw.slice(start));
+  const offenders = [];
+  for (const r of section) {
+    const fs = r.decls.get("font-size");
+    if (!fs) continue;
+    for (const size of fs.matchAll(/([0-9.]+)rem/g)) if (parseFloat(size[1]) < 0.875) offenders.push(`${r.selector}: ${size[0]}`);
+  }
+  assert.deepEqual(offenders, []);
+  assert.equal(decl(section, /\.vs-roster-remove$/, "font-size"), "var(--fs-micro)");
+  assert.equal(decl(section, /\.vs-summary dd$/, "font-size"), "var(--fs-2)");
+});
+
+test("track select + circuit detail: readable selected title, sheet chrome, wrapping DRS", () => {
+  const html = read("index.html");
+  assert.match(html, /id="td-inner" class="sheet"/, "Circuit Detail is a sheet like standings, not a full-bleed overlay");
+  assert.doesNotMatch(html, /id="track-detail-legend"/, "legend is built once in JS so the shell ratchet stays flat");
+  const sel = css("css/select.css");
+  assert.equal(decl(sel, "#sel-preview-gp", "color"), "var(--text)",
+    "GP title is ink, not brand red (~2.6:1 on the still)");
+  assert.equal(decl(sel, "#sel-preview-gp", "background"), "var(--plate-opaque)",
+    "GP subtitle sits on a plate so Imola sunset / Bahrain sand stay ≥4.5:1");
+  assert.equal(decl(sel, "#sel-preview-gp", "text-shadow"), "var(--hud-halo)");
+  assert.equal(decl(sel, "#sel-tracks .track-row.active", "background"), "transparent");
+  assert.equal(decl(sel, "#sel-tracks .track-row.active .track-row-name", "color"), "var(--text)");
+  assert.equal(decl(sel, /#sel-tracks/, "scrollbar-color"), "var(--scroll-thumb) var(--scroll-track)");
+  const td = css("css/track-detail.css");
+  assert.ok(ruleFor(td, /^#td-inner$/), "the sheet inner is #td-inner");
+  assert.equal(decl(td, "#track-detail-legend", "font-size"), "var(--fs-2)");
+  assert.equal(decl(td, /#track-detail-legend \[data-leg="sector"\]/, "color"), "var(--silver)");
+  const menus = code("js/ui/select-screen.js");
+  assert.match(menus, /function drsZoneRangeHtml/, "DRS wrap labels are one helper for detail + tests");
+  assert.match(menus, /crossing start\/finish/, "a zone past the line names S/F on the wrap");
+  assert.match(menus, /z\.wrap \|\| z\.b > 1 \|\| z\.b < z\.a/,
+    "wrap is the AeroZones flag, end past 1 lap, or a folded b < a");
+  assert.match(menus, /snapTrackToFilter\(id\);\s*\n\s*updateTrackPreview\(\)/,
+    "filter snap refreshes the hero before the deferred chip rebuild");
+  assert.ok(!/className = "track-group-head"/.test(menus),
+    "filter chips name the view; no vertical CLASSICS/SEASON divider");
+  assert.match(menus, /setAttribute\("data-leg", "sector"\)/, "grey S2 sector is named");
+  assert.match(menus, /legend:\s*false/, "the modal uses the DOM legend, not the 9px canvas key");
+  const maps = code("js/ui/track-maps.js");
+  assert.match(maps, /wrap:\s*z\.end > total/, "activationZones marks a run past S/F");
+  const nav = code("js/ui/menu-nav.js");
+  assert.match(nav, /if \(overStrip\) \{/, "wheel over #sel-tracks pans the strip before the ancestor walk");
+  assert.match(menus, /opts && opts\.readOnly\) row\.dataset\.tip/,
+    "season calendar tiles use data-tip, not native title over the neighbour");
+  assert.equal(decl(sel, '#sel-tracks[data-mode="season"]', "padding-inline"), "var(--pad)");
+  assert.equal(decl(sel, '#sel-tracks[data-mode="season"]', "scrollbar-color"),
+    "var(--scroll-thumb) var(--scroll-track)");
+  assert.equal(decl(sel, '#sel-tracks[data-mode="season"]', "scroll-snap-type"), "x mandatory",
+    "season end-of-pan settles on a tile start, so R14 is not mid-cut");
+  assert.equal(decl(sel, '#sel-tracks[data-mode="season"] .track-row', "scroll-snap-align"), "start");
+  assert.equal(decl(sel, "#sel-tracks .track-row", "scroll-snap-align"), "start",
+    "snap-start so the last flag is not centre-clipped at the strip end");
+  assert.equal(decl(sel, "#sel-tracks .track-row:last-child", "scroll-snap-align"), "end",
+    "last flag snaps to the end slack instead of hanging off the clip");
+  assert.equal(
+    decl(sel, '#sel-inner[data-density="compact"] #sel-tracks .track-row', "min-height"),
+    "var(--tap-paint)",
+    "compact flag tiles floor at --tap-paint on phone landscape (not padding-only ~45px)");
+  assert.equal(decl(sel, "#sel-tracks", "padding-inline-end"), "calc(var(--pad) + var(--chip-h))",
+    "strip end pad is one chip plus --pad so the last flag clears the edge");
+  assert.equal(decl(sel, "#sel-car small", "white-space"), "normal",
+    "CHANGE CAR team name wraps at ~500 instead of SCUDERIA FERR…");
+  assert.equal(decl(sel, "#sel-tracks .track-group-head", "max-height"), "none",
+    "CLASSICS vertical label is not chip-capped");
+  assert.equal(decl(sel, '#sel-inner[data-density="compact"] #sel-tracks .track-group-head', "display"), "none",
+    "compact strip: the chip already names CLASSICS, so the squeezed divider goes");
+  assert.ok(rulesFor(sel, /#sel-tracks \.track-group-head/).some((r) =>
+    r.context.includes("@container sheet (max-width: 520px)") && r.decls.get("display") === "none"),
+    "~500 width hides the vertical CLASSICS divider even when density is still normal");
+  const lowerThirdDd = rulesFor(sel, /#sel-inner\[data-density="compact"\]:not\(\[data-shape="tall"\]\) #sel-preview-meta dd/)[0];
+  assert.ok(lowerThirdDd, "lower-third stats keep a wrap rule");
+  assert.equal(lowerThirdDd.decls.get("white-space"), "normal");
+  assert.ok(rulesFor(sel, /#sel-inner > \.sheet-foot/).some((r) =>
+    r.context.includes("@container sheet (max-width: 520px)")),
+    "foot wraps team names from ~500, not only a tall 480 phone");
+  assert.ok(rulesFor(sel, /data-tip\]:hover::before/).every((r) =>
+    r.context.some((c) => /hover\s*:\s*hover/.test(c))),
+    "season data-tip :hover is gated; :active is the touch twin");
+  assert.match(menus, /function snapTrackToFilter/, "CLASSICS (and the other chips) snap the hero onto a visible tile");
+  assert.match(menus, /function trackInFilter/, "filter membership is one helper for the strip and the snap");
+  assert.match(menus, /fmtElev/, "sparkline labels keep the minus on a trough");
+  assert.match(menus, /clientWidth <= 520/,
+    "narrow (~500) CIRCUIT LENGTH drops the mile half so TURNS is not 1..");
+  assert.equal(decl(td, "#track-detail-header", "padding-inline"), "var(--pad)");
+  assert.equal(decl(td, "#track-detail-panel", "padding-inline"), "var(--pad)");
+});
+
+test("closing track detail disconnects its observer and blocks queued hidden redraws", () => {
+  const menus = code("js/ui/select-screen.js");
+  const drawAt = menus.search(/drawDetail\s*=\s*function\s*\(\s*\)\s*\{/);
+  assert.ok(drawAt >= 0, "drawDetail is the redraw closure");
+  assert.match(menus.slice(drawAt, drawAt + 400), /if\s*\(\s*modal\.hidden\s*\)\s*return\s*;/, "a queued redraw of a hidden modal is dropped");
+  const close = fnBody(menus, "closeTrackDetail", "js/ui/select-screen.js");
+  assert.match(close, /detailRO\.disconnect\(\s*\)/, "closing disconnects the ResizeObserver");
+  assert.match(close, /detailRO\s*=\s*null/, "…and forgets it");
+  const ret = menus.match(/return\s*\{([^}]*\bopenTrackDetail\b[^}]*)\}/);
+  assert.ok(ret && /\bcloseTrackDetail\b/.test(ret[1]), "closeTrackDetail is exported beside openTrackDetail (game.js wires the close button to it)");
+  assert.match(gameCode(), /\$\(\s*"track-detail-close"\s*\)\.onclick\s*=\s*closeTrackDetail\b/);
+});
+
+test("extreme-scale journeys use local-width and compact-chrome contracts", () => {
+  // SheetShape BEHAVIOUR: body data-width flips at --wide-at in the body's
+  // OWN units (viewport ÷ --ui-scale) with hysteresis; the tuner rail needs
+  // its --rail-at width AND three visible slider rows when compact.
+  const h = bootSheetShape({ innerWidth: 1300, innerHeight: 600, uiScale: 2 });   // 650 own px
+  h.SS.reclassify();
+  assert.equal(h.body.dataset.width, "wide", "1300 px at UI SIZE 200% is 650 own px — past the 620 px --wide-at");
+  h.sb.innerWidth = 1230; h.SS.reclassify();                                       // 615 own: inside hysteresis
+  assert.equal(h.body.dataset.width, "wide", "16 px of hysteresis holds the flag just under the threshold");
+  h.sb.innerWidth = 1100; h.SS.reclassify();                                       // 550 own
+  assert.equal(h.body.dataset.width, "narrow");
+  const rail = h.sheet("lighting-inner", { w: 600, h: 300, hostHeight: 300, vars: { "--rail-at": "500px", "--compact-at": "620px" } });
+  const row = h.dom.makeElement("div"); row.className = "adv-item"; row._rect = { width: 100, height: 42 }; rail.el.appendChild(row);
+  h.SS.observe(rail.el);
+  assert.equal(rail.el.dataset.density, "compact");
+  assert.equal(rail.el.dataset.rail, "on", "600 own px ≥ 500 --rail-at and 300/42 ≈ 7 rows → rail");
+  rail.el._rect = { width: 600, height: 100, left: 0, top: 0, right: 600, bottom: 100 };
+  h.SS.reclassify();
+  assert.equal(rail.el.dataset.rail, "off", "wide enough, but only ~2.4 slider rows fit → the horizontal chip strip");
+  const plain = h.sheet("sel-inner", { w: 600, h: 100, vars: { "--rail-at": "500px", "--compact-at": "620px" } });
+  h.SS.observe(plain.el);
+  assert.equal(plain.el.dataset.rail, "on", "the rows rule is the tuners' alone; another sheet rails on width");
+
+  const tuner = css("css/tuner.css");
+  const career = css("css/career.css");
+  const data = css("css/data.css");
+  assert.equal(decl(css("css/menus.css"), "body", "--wide-at"), "620px", "the body-level threshold SheetShape reads");
+  assert.ok(tuner.some((r) => r.decls.get("--rail-at") === "640px"),
+    "compact-wide stays rail-off: 640 sits above the 560px rail dock so sliders keep full width");
+  assert.ok(rulesFor(tuner, /#ct-modes \.lt-tab/).some((r) => r.decls.get("white-space") === "nowrap"),
+    "compact camera-mode chips stay a nowrap strip");
+  assert.ok(rulesFor(tuner, /\[data-density="compact"\]\[data-rail="on"\]/).length, "compact + rail-on has its own rules");
+  assert.ok(!tuner.some((r) => r.context.some((c) => /@media \(min-width:\s*720px\)/.test(c))));
+  assert.ok(!tuner.some((r) => r.context.some((c) => /@media \(max-height: 430px\)/.test(c))));
+  assert.equal(decl(tuner, /\[data-density="compact"\]\[data-rail="off"\] #lt-head/, "display"), "block");
+  assert.ok(rulesFor(tuner, /\[data-density="compact"\]$/).some((r) => r.decls.get("overflow") === "hidden"));
+  assert.equal(decl(tuner, /\[data-density="compact"\] \.adv-help$/, "display"), "none");
+  // The invariant is the UNIT, not the number: this box lives inside
+  // `zoom: var(--ui-scale)`, so a viewport svh max ate slider rows at UI SIZE
+  // 200%. The multiplier is free to move with the payload.
+  const ltJson = rulesFor(tuner, /#lt-json/).filter((r) => r.decls.has("max-height"));
+  assert.ok(ltJson.length, "COPY VALUES box declares a max-height");
+  for (const r of ltJson) {
+    assert.match(r.decls.get("max-height"), /min\(calc\(\d+\s*\*\s*var\(--svhz\)/, "COPY VALUES box uses local --svhz, not 40svh");
+    assert.doesNotMatch(r.decls.get("max-height"), /\d+svh\b/, "and never a raw viewport svh");
+  }
+  assert.ok(ruleFor(tuner, /#lt-head h2, #ct-head/), "tuner heads share one rule");
+  assert.ok(decl(career, /^#cr-inner\[data-density="compact"\] #cr-foot\b/, "grid-template-columns"));
+  assert.equal(decl(data, /^body\[data-density="compact"\] \.dh-tab\b/, "min-height"), "var(--tap-paint)");
+  assert.ok(ruleFor(data, /^body\[data-density="compact"\] \.dh-overlay\b/));
+  assert.ok(!data.some((r) => r.context.some((c) => /orientation:\s*landscape\) and \(max-height:/.test(c))),
+    "data hub short-height chrome must use body[data-density], not viewport max-height");
+  assert.ok(ruleFor(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tabs\b/),
+    "portrait 2×3 destinations use the zoom-aware shape+width flags (not @media orientation)");
+  // auto-fit + minmax(11.2×fs-micro) collapsed to ONE column on 360–390px phones
+  // (label floor × 2 + gap > content width), so seven full-width tabs ate the
+  // schedule. Fixed 3 columns; white-space:normal still wraps WATCH & DRIVE.
+  const tallTabs = ruleFor(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tabs\b/);
+  assert.match(tallTabs.decls.get("grid-template-columns") || "", /repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    "tall+narrow hub tabs are a 3-column grid so schedule content stays visible");
+  assert.equal(decl(data, /^body\[data-shape="tall"\]\[data-width="narrow"\] \.dh-tab\b/, "white-space"), "normal",
+    "WATCH & DRIVE wraps inside the chip instead of overflowing the plate");
+  assert.equal(decl(css("css/menus.css"), /^#ss-inner\[data-density="compact"\] #ss-cal \.season-upcoming-row/, "flex-wrap"), "wrap");
+});
+
+test("an active career locks team and seat selection in the garage", () => {
+  const setup = code("js/garage/setup-sheet.js");
+  assert.match(setup, /careerLocked\s*=\s*typeof\s+Career\s*!==\s*"undefined"\s*&&\s*Career\.inCareer\s*&&\s*Career\.inCareer\(\s*\)/);
+  assert.match(setup, /card\.disabled\s*=\s*!!\s*careerLocked\b/);
+  assert.match(setup, /\.disabled\s*=\s*taken\s*\|\|\s*careerLocked\b/);
+  assert.doesNotMatch(gameCode(), /careerActive:/);
+});
+
+/* ── CamModes on the mini DOM ───────────────────────────────────────────── */
+function bootCamModes(camMode = 2, extra = {}) {
+  const dom = makeDom();
+  const sb = uiSandbox(dom, { CamTunerPanel: { refresh() {} }, ...extra });
+  vm.runInNewContext(src("js/camera/mode-switch.js"), sb, { filename: "js/camera/mode-switch.js" });
+  const store = {};
+  const G = { $: (id) => dom.byId(id), camMode, camCutT: 0, store: { set: (k, v) => { store[k] = v; }, get: () => null } };
+  const api = sb.CamModes.create(G);
+  const trigger = dom.byId("btn-cam");
+  const open = () => { dom.dispatch(trigger, { type: "contextmenu" }); return dom.document.querySelector("#campicker"); };
+  return { dom, G, api, store, trigger, open, key: (el, k) => dom.dispatch(el, { type: "keydown", key: k }), active: () => dom.document.activeElement };
+}
+
+test("camera picker is a keyboard radio menu and cannot outlive the race layer", () => {
+  const h = bootCamModes(2);
+  assert.deepEqual(Object.keys(h.api).sort(), ["cycleCam", "hideCamPicker", "refreshCamBtn", "setCamMode"], "CamModes.create surface");
+  assert.equal(h.trigger.getAttribute("aria-haspopup"), "menu");
+  assert.equal(h.trigger.getAttribute("aria-expanded"), "false");
+  const picker = h.open();
+  assert.ok(picker, "hold / right-click builds the picker");
+  assert.equal(picker.getAttribute("role"), "menu");
+  assert.equal(picker.className, "balanced-row", "the picker balances from local space like every other cluster");
+  assert.equal(picker.hidden, false);
+  assert.equal(h.trigger.getAttribute("aria-expanded"), "true");
+  assert.ok(picker.children.length >= 10 && picker.children.every((b) => b.getAttribute("role") === "menuitemradio"));
+  assert.deepEqual(picker.children.map((b) => b.getAttribute("aria-checked") === "true"), picker.children.map((_, i) => i === 2), "only the live mode is aria-checked");
+  assert.equal(h.active(), picker.children[2], "opening focuses the checked item");
+  h.key(picker, "ArrowRight"); assert.equal(h.active(), picker.children[3]);
+  h.key(picker, "ArrowDown");  assert.equal(h.active(), picker.children[4]);
+  h.key(picker, "ArrowLeft");  assert.equal(h.active(), picker.children[3]);
+  h.key(picker, "ArrowUp");    assert.equal(h.active(), picker.children[2]);
+  h.key(picker, "End");        assert.equal(h.active(), picker.children[picker.children.length - 1]);
+  h.key(picker, "ArrowRight"); assert.equal(h.active(), picker.children[0], "wraps");
+  h.key(picker, "Home");       assert.equal(h.active(), picker.children[0]);
+  h.key(picker, "Escape");
+  assert.equal(picker.hidden, true, "Escape closes the picker");
+  assert.equal(h.trigger.getAttribute("aria-expanded"), "false");
+  h.open();
+  h.api.hideCamPicker();
+  assert.equal(picker.hidden, true, "hideCamPicker is the exported closer game.js calls on pause / quit");
+  assert.equal(h.api.cycleCam(), "cockpit");
+  assert.equal(h.store.camMode, 3, "the pick persists");
+  // game.js closes it whenever the race layer goes away.
+  const game = gameCode();
+  assert.match(fnBody(game, "quitToMenu", "game entry"), /hideCamPicker\(\s*\)/);
+  assert.match(fnBody(game, "setPaused", "game entry"), /hideCamPicker\(\s*\)/);
+});
+
+test("in a REAL RACE WATCH the picker and the C cycle carry AUTO (the TV director); outside one they do not", () => {
+  // js/race/real-replay.js's in-game AUTO surface, as RealRace.replay() hands it over.
+  const calls = [];
+  const r = { running: false, auto: false, isRunning: () => r.running, autoOn: () => r.auto,
+    setAuto: (v) => { calls.push("auto"); r.auto = !!v; return r.auto; }, takePicture: () => { calls.push("take"); r.auto = false; } };
+  const h = bootCamModes(2, { RealRace: { replay: () => r } });
+  const plain = h.open().children.length;
+  assert.ok(!h.open().children.some((b) => b.dataset.idx === "auto"), "no AUTO outside a WATCH");
+  h.api.hideCamPicker();
+  r.running = true; r.auto = true;
+  let picker = h.open();
+  assert.equal(picker.children.length, plain + 1);
+  assert.equal(picker.children[0].dataset.idx, "auto", "AUTO heads the list");
+  assert.equal(picker.children[0].getAttribute("aria-checked"), "true", "the director has the picture: AUTO is the checked item");
+  assert.equal(picker.children.filter((b) => b.getAttribute("aria-checked") === "true").length, 1);
+  picker.children[4].onclick({ stopPropagation() {} });   // a shot: the viewer takes the picture
+  assert.deepEqual(calls, ["take"]);
+  assert.equal(h.G.camMode, 3);
+  assert.equal(h.trigger.textContent.startsWith("AUTO"), false);
+  picker = h.open();
+  assert.equal(picker.children[0].getAttribute("aria-checked"), "false");
+  assert.equal(picker.children[4].getAttribute("aria-checked"), "true");
+  picker.children[0].onclick({ stopPropagation() {} });
+  assert.deepEqual(calls, ["take", "auto"]);
+  assert.match(h.trigger.textContent, /^AUTO · /, "the CAM button says who has the picture");
+  // The C cycle: from AUTO the next shot is the viewer's; past the last shot, AUTO again.
+  h.api.cycleCam();
+  assert.equal(r.auto, false);
+  h.G.camMode = h.open().children.length - 2;   // the last CAM_MODES entry
+  h.api.hideCamPicker();
+  assert.equal(h.api.cycleCam(), "auto");
+  assert.equal(r.auto, true);
+  // The WATCH ends: the item goes, the picker keeps its shape.
+  r.running = false;
+  assert.equal(h.open().children.length, plain);
+});
+
+test("How to Play names every input and drops the retired screen-half lie", () => {
+  const html = read("index.html");
+  const start = html.indexOf('id="howtoplay"');
+  const end = html.indexOf('id="spotifypanel"');
+  assert.ok(start > 0 && end > start, "howtoplay sheet is in the shell");
+  const htp = html.slice(start, end);
+  assert.match(htp, /<section id="htp-controls"[^>]*aria-labelledby="htp-start"[\s\S]*<h3 id="htp-start"[^>]*>QUICK START<\/h3>/,
+    "Help opens with a short actionable quick start");
+  for (const mode of ["keyboard", "controller", "touch"])
+    assert.match(htp, new RegExp(`<details[^>]+data-input="${mode}"`), `Help has a ${mode} disclosure`);
+  assert.match(htp, /data-help-keys="(?:aero|camera|pause)"/);
+  assert.match(htp, /data-help-pad="(?:aero|camera|pause)"/);
+  for (const phrase of ["SETTINGS › CONTROLS › STEERING INPUT", "ADAPTIVE BUTTONS", "BRAKING CUES", "STEERING &amp; ASSISTS", "drag from where your finger lands"]) {
+    assert.ok(htp.includes(phrase), `How to Play must say: ${phrase}`);
+  }
+  assert.doesNotMatch(htp, /SETTINGS[^<]{0,80}>\s*STEER\b/, "Help must not name the retired STEER door");
+  assert.doesNotMatch(htp, /HALVES|TRACKSIDE|screen halves|tap left\/right/);
+  const game = gameCode();
+  assert.match(game, /autoThrottle\(\s*\)\s*\?\s*1\s*:\s*Math\.max\(\s*0\s*,\s*Input\.throttleLevel\(\s*\)\s*\)/,
+    "TOUCH auto-throttle must apply full pedal travel, not a 0 analog reading");
+  assert.match(game, /steerMode\s*===\s*"tilt"\s*\|\|\s*!Input\.touchControlsNeeded\(\s*\)/,
+    "phone MANUAL gears stay tilt-only — BUTTONS already owns both thumbs");
+  assert.match(game, /L\.push\(\s*shifts\s*,\s*taps\s*\)\s*;\s*R\.push\(\s*pedals\s*\)/,
+    "tilt+manual puts the shifter left and the pedals right");
+  // MenuNav BEHAVIOUR: arrows wrap in every direction so a pad press is never
+  // a no-op. (The sideways out-of-band pass — pickSideways — is pinned as
+  // behaviour by tests/unit/menu-nav-spatial.test.mjs and not repeated here.)
+  const h = bootMenuNav();
+  const first = h.button("a", 10), mid = h.button("b", 50), last = h.button("c", 90);
+  assert.equal(h.MenuNav.step(last, 0, 1, [first, mid, last]), first, "Down from the last item wraps to the first");
+  assert.equal(h.MenuNav.step(first, 0, -1, [first, mid, last]), last, "Up from the first item wraps to the last");
+  assert.equal(h.MenuNav.step(last, 1, 0, [first, mid, last]), first, "Right off the end wraps in DOM order");
+  assert.equal(h.MenuNav.step(first, -1, 0, [first, mid, last]), last, "Left off the start wraps in DOM order");
+});
+
+test("How to Play exposes pinned semantic jump landmarks", () => {
+  const html = read("index.html");
+  const overlays = css("css/overlays.css");
+  assert.match(html, /id="htp-contents"[^>]*aria-label="How to play sections"/);
+  for (const id of ["controls", "racing", "setup", "modes", "friends"]) {
+    assert.match(html, new RegExp(`href="#htp-${id}"`));
+    assert.match(html, id === "controls"
+      ? /<section id="htp-controls"/
+      : new RegExp(`<dt id="htp-${id}">`));
+  }
+  const components = css("css/overlays.css");
+  assert.equal(decl(components, /^#htp-contents, #cg-contents, #ch-contents$/, "overflow-x"), "auto");
+  assert.equal(decl(components, /^#htp-contents a, #cg-contents a, #ch-contents a$/, "min-height"), "var(--chip-h)");
+  assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-shape="wide"\] > #htp-contents/));
+  assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-density="compact"\] > #htp-contents/));
+  assert.match(html, /id="vsfriend-inner"/);
+  assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-friends:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
+  assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-pits:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
+  assert.ok(rulesFor(overlays, /(?:^|, )#howtoplay:has\(#htp-driving:target\)/).some((r) => r.decls.get("background") === "var(--plate-on)"));
+  assert.ok(decl(overlays, "#howtoplay dt[id]", "scroll-margin-block-start"));
+  assert.ok(decl(overlays, "#howtoplay .sheet-body::after", "height") ||
+    rulesFor(overlays, /#howtoplay \.sheet-body::after/).some((r) => r.decls.get("height")),
+    "HTP body keeps scroll slack so FRIENDS can reach the pane top");
+  assert.ok(decl(overlays, "#howtoplay .sheet-body", "scroll-padding-block-start") ||
+    rulesFor(overlays, /^#howtoplay \.sheet-body$/).some((r) => r.decls.has("scroll-padding-block-start")));
+  assert.ok(!rulesFor(overlays, "#howtoplay dl").some((r) => /max-content minmax\(0, 1fr\) max-content/.test(r.decls.get("grid-template-columns") || "")),
+    "help rows must not synchronize two unrelated answers");
+  assert.equal(decl(css("css/components.css"), "#howtoplay", "--sheet-w"), "1000px");
+});
+
+test("compact Career keeps its mode context instead of ellipsizing it", () => {
+  const career = css("css/career.css");
+  assert.equal(decl(career, '#cr-inner[data-density="compact"] #cr-sub', "white-space"), "normal");
+  assert.equal(decl(career, '#cr-inner[data-density="compact"] #cr-sub', "text-overflow"), "clip");
+});
+
+test("variable control clusters use one content-driven balanced-row primitive", () => {
+  const html = read("index.html");
+  const components = css("css/components.css");
+  assert.equal(decl(components, ".balanced-row", "display"), "flex");
+  assert.equal(decl(components, ".balanced-row", "flex-wrap"), "wrap");
+  assert.match(decl(components, /^\.balanced-row > :not\(\[hidden\]\)$/, "flex") || "", /^1 1 var\(--balance-basis/);
+  for (const id of ["menu-secondary", "lt-tabs", "ct-modes"]) {
+    assert.match(html, new RegExp(`id="${id}"[^>]*class="[^"]*balanced-row`), `${id} must balance from local space`);
+  }
+  // RACE SETTINGS left the chip grammar on 2026-09-05: eight setting rows, the
+  // pause > SETTINGS control, and none of them balances anything.
+  for (const id of ["rs-laps", "rs-weather", "rs-mixed", "rs-time", "rs-diff", "rs-quali", "rs-caution", "rs-line", "rs-reliab"]) {
+    assert.match(html, new RegExp(`id="${id}" class="set-row" role="group" aria-labelledby="${id}-label"`), `${id} is a setting row`);
+  }
+  assert.doesNotMatch(html, /id="rs-[a-z]+" class="chip-row/, "no race-settings chip row survives");
+  /* THE FOLDS (2026-09-18). Twelve rows at one weight fit the desktop sheet and
+     SCROLLED on both phone shapes (373 into 295 landscape, 743 into 685
+     portrait). The four rows that describe the SESSION ITSELF stay flat —
+     LAPS, WEATHER, CONDITIONS, TIME OF DAY — and the other eight fold, which
+     is the shape PAUSE-SETTINGS-IA.md locked for STEERING & ASSISTS. A fold
+     holding one or two rows was not worth its own tap: CONDITIONS and TIME OF
+     DAY read as part of the race you are setting up, not as an option behind a
+     disclosure. Pinned so the wall cannot grow back a row at a time, and so
+     the summaries keep using the shell's own component. */
+  for (const [fold, rows] of [
+    ["rs-fold-field", ["rs-diff", "rs-quali", "rs-duel", "rs-caution", "rs-reliab"]],
+    ["rs-fold-assists", ["rs-line", "rs-tyres", "rs-plan"]],
+  ]) {
+    const body = html.slice(html.indexOf(`<details id="${fold}"`), html.indexOf("</details>", html.indexOf(`<details id="${fold}"`)));
+    assert.ok(body, `${fold} exists`);
+    assert.match(body, new RegExp(`<summary class="adv-more-btn" id="${fold}-sum"`),
+      `${fold} uses the shell's summary component, not a new one`);
+    assert.doesNotMatch(body, /\sopen[\s>]/, `${fold} starts closed`);
+    for (const r of rows) assert.ok(body.includes(`id="${r}"`), `${r} is inside ${fold}`);
+  }
+  // The session rows are NOT in a fold — they are the flat primary.
+  for (const flat of ["rs-laps", "rs-weather", "rs-mixed", "rs-time"]) {
+    const at = html.indexOf(`id="${flat}"`);
+    const firstFold = html.indexOf('<details id="rs-fold-field"');
+    assert.ok(at > 0 && at < firstFold, `${flat} stays flat, above the folds`);
+  }
+  // A fold whose every row is hidden hides itself — in a time trial FIELD is
+  // empty (difficulty, grid, duel, cautions and reliability are all race-only)
+  // and a summary that opens onto nothing is worse than no summary.
+  assert.match(read("js/race/race-settings.js"), /fold\.hidden = rows\.length === 0;/,
+    "an empty fold hides rather than opening onto nothing");
+  assert.equal(bootCamModes().open().className, "balanced-row", "the camera picker is a balanced-row too");
+  assert.match(html, /class="preset-row balanced-row"/, "STEERING & ASSISTS presets wrap from local space");
+  // STEERING / DRIVING HELP / RACING LINE are one-line setting rows now
+  // (js/ui/setting-row.js); the row itself wraps its ‹ select › cluster.
+  assert.match(html, /id="pm-feel" class="set-row" role="group"/);
+  assert.match(html, /id="pm-helplevel" class="set-row" role="group"/);
+  assert.match(html, /id="pm-linemode" class="set-row" role="group"/);
+  assert.ok(rulesFor(components, /#pmsettings-inner\[data-shape="wide"\] #advanced-inner \.adv-sec/).some((r) =>
+    r.decls.get("grid-column") === "1 / -1"),
+    "advanced section headings still span the wide body grid");
+  const all = [html, readCssSource("css/components.css"), readCssSource("css/menus.css"), read("css/tuner.css"), read("js/camera/mode-switch.js")].join("\n");
+  assert.doesNotMatch(all, /no-orphan-[235]/, "column-count-specific orphan patches must not return");
+  assert.ok(!rulesFor(css("css/menus.css"), /#rs-(?:laps|weather|diff|time)\b/).some((r) => /^repeat\([235]/.test(r.decls.get("grid-template-columns") || "")));
+});
+
+test("overflowing Help navigation keeps its first landmark reachable", () => {
+  const overlays = css("css/overlays.css");
+  const components = css("css/overlays.css");
+  assert.equal(decl(components, /^#htp-contents, #cg-contents, #ch-contents$/, "justify-content"), "flex-start");
+  assert.equal(decl(components, /^#htp-contents > :first-child, #cg-contents > :first-child, #ch-contents > :first-child$/, "margin-inline-start"), "auto");
+});
+
+/* ── Input (gamepad menu nav) in a VM ───────────────────────────────────── */
+function bootInput() {
+  const dispatched = [];
+  // anyOpen = pause/settings/sheets (gates driving keys + on-screen pedals).
+  // navOpen also covers title #overlay / rotate-device (pad walks doors; anyOpen
+  // stays false). Keep them independent — Input.navBlocksTouch() calls anyOpen().
+  const state = { navOpen: false, anyOpen: false, top: null, now: 1000, pad: null, active: null };
+  const sb = {
+    Math, console, Object, Array, Number, String, Map, Set, Date, isFinite, parseFloat,
+    performance: { now: () => state.now },
+    document: {
+      dispatchEvent: (e) => { dispatched.push(e.key); return true; },
+      addEventListener() {}, get activeElement() { return state.active; }, readyState: "complete",
+      getElementById: () => null, body: { classList: { contains: () => false } },
+    },
+    navigator: { getGamepads: () => [state.pad], maxTouchPoints: 0, userAgent: "node" },
+    addEventListener() {}, removeEventListener() {}, matchMedia: () => ({ matches: false, addEventListener() {} }),
+    KeyboardEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
+    Event: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
+    UiLayers: {
+      anyOpen: () => state.anyOpen,
+      navOpen: () => state.anyOpen || state.navOpen,
+      top: () => state.top,
+    },
+    MenuNav: { activeLayer: () => state.top, FOCUSABLE: "button,input" },
+    setTimeout: () => 0, clearTimeout() {}, requestAnimationFrame: () => 0,
+    screen: { orientation: { type: "landscape-primary", angle: 0, addEventListener() {} } },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+  };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  const Input = vm.runInContext("Input", ctx);
+  const pad = (ax, buttons = [], ax2 = 0) => ({
+    connected: true, axes: [ax, 0, ax2, 0],
+    buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: buttons.includes(i), value: buttons.includes(i) ? 1 : 0 })),
+  });
+  // A pad is re-probed on a ~1 s throttle when no gamepadconnected event fired.
+  state.pad = pad(0);
+  for (let i = 0; i < 61; i++) Input.poll();
+  assert.ok(Input.padConnected, "the harness pad is seen by the re-probe");
+  return { Input, state, pad, dispatched, keys: () => dispatched.splice(0) };
+}
+
+/* THE D-PAD USED TO TELEPORT TO FULL LOCK. `ax = ±1` assigned straight into
+   padSteer, bypassing digitalStep while every other digital source in the file
+   ramped through it — so at 300 km/h a d-pad tap was an instant full-lock
+   input. XAG 107 asks that the digital path WORK, not merely exist. */
+test("the d-pad ramps to lock like every other digital source", () => {
+  const h = bootInput();
+  const DPAD_RIGHT = 15;
+  h.state.pad = h.pad(0, [DPAD_RIGHT]);
+  h.Input.poll();                       // seeds the ramp clock; dt is 0 here by design
+  h.state.now += 16; h.Input.poll();    // one 60 Hz frame of hold
+  const first = h.Input.steer();
+  assert.ok(first > 0, "it steers");
+  assert.ok(first < 0.5, "but nowhere near full lock after one frame");
+  // Hold it across enough simulated frames and it does reach full lock.
+  for (let i = 0; i < 200; i++) { h.state.now += 16; h.Input.poll(); }
+  assert.ok(h.Input.steer() > 0.95, "a held d-pad still reaches full lock");
+  // Release: it unwinds rather than snapping to centre.
+  h.state.pad = h.pad(0, []); h.state.now += 16; h.Input.poll();
+  const releasing = h.Input.steer();
+  assert.ok(releasing > 0 && releasing < 1, "release unwinds, it does not snap");
+});
+
+test("stick dead zone and saturation are adjustable, and saturation reaches full lock early", () => {
+  const h = bootInput();
+  h.Input.setPadDeadzone(0.20);
+  h.state.pad = h.pad(0.15); h.Input.poll();
+  assert.equal(h.Input.steer(), 0, "a raised dead zone swallows a deflection that used to count");
+  // SATURATION is the answer to a worn stick that can no longer reach 1.0.
+  h.Input.setPadDeadzone(0.05);
+  h.Input.setPadSaturation(0.20);
+  h.state.pad = h.pad(0.80); h.Input.poll();
+  assert.ok(Math.abs(h.Input.steer() - 1) < 1e-9, "0.80 of travel is full lock at 20% saturation");
+  h.Input.setPadSaturation(0);
+  h.state.pad = h.pad(0.80); h.Input.poll();
+  assert.ok(h.Input.steer() < 0.85, "…and is not, without it");
+});
+
+/* ONE CURVE FOR EVERY DEVICE WAS THE DEFECT. game.js raises the unified steer
+   command to STEER_EXPO, so a per-source trim of 1 is the identity — which is
+   what every one of them ships at, so no existing player's car moves. */
+test("the analog curve trim is per device and defaults to the identity", () => {
+  const h = bootInput();
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  const plain = h.Input.steer();
+  h.Input.setAnalogTrim("tilt", 0.5);      // a DIFFERENT source
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  assert.equal(h.Input.steer(), plain, "trimming tilt does not touch the stick");
+  h.Input.setAnalogTrim("pad", 2);
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  assert.ok(h.Input.steer() < plain, "trimming the pad softens it near centre");
+  h.Input.setAnalogTrim("pad", 1);
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  assert.ok(Math.abs(h.Input.steer() - plain) < 1e-12, "1 is exactly the identity");
+});
+
+test("speed-sensitive analog steering is off by default and floors at 40%", () => {
+  const h = bootInput();
+  h.Input.setSpeedStd(90);                 // flat out
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  const off = h.Input.steer();
+  h.Input.setAnalogSpeedMix(1);
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  const on = h.Input.steer();
+  assert.ok(on < off, "at speed it softens the stick");
+  assert.ok(on / off > 0.40, "but never below the 40% floor — no on-centre dead zone at speed");
+  h.Input.setSpeedStd(0);
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  assert.ok(Math.abs(h.Input.steer() - off) < 1e-12, "and does nothing at all at a standstill");
+  h.Input.setAnalogSpeedMix(0);
+});
+
+test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than driving", () => {
+  const h = bootInput();
+  /* DRIVING: the left stick rescales past a SMALL centre slop. The default was
+     0.14, which is between 3x and 7x what racing games ship (F1 defaults every
+     axis to 0, ACC recommends 2-4 %, Forza 5) and discarded exactly the band an
+     F1 car's small corrections live in. It is 0.05 now, and adjustable. */
+  h.state.pad = h.pad(0.04); h.Input.poll();
+  assert.equal(h.Input.steer(), 0, "0.04 is inside the driving deadzone");
+  h.state.pad = h.pad(0.06); h.Input.poll();
+  assert.ok(h.Input.steer() > 0 && h.Input.steer() < 0.02, "0.06 just clears it and is rescaled from the edge, not stepped");
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  assert.ok(Math.abs(h.Input.steer() - (0.5 - 0.05) / (1 - 0.05)) < 1e-9, "rescale is (|ax| - dz) / (1 - dz - sat)");
+
+  // MENU OPEN: the FIRST poll seeds focus with one ArrowDown, once per layer.
+  // select/garage are gate:true layers — anyOpen and navOpen both true (title
+  // #overlay alone would be navOpen-only; key-binds.test.mjs pins that split).
+  h.state.anyOpen = true; h.state.top = { id: "select" };
+  h.state.pad = h.pad(0); h.Input.poll();
+  assert.deepEqual(h.keys(), ["ArrowDown"], "opening a menu seeds MenuNav's first-arrow path");
+  h.Input.poll();
+  assert.deepEqual(h.keys(), [], "the seed fires once, not every frame");
+  // Menu stick deadzone is LARGER than the driving one: 0.18 drives, but does not navigate.
+  h.state.pad = h.pad(0.18); h.Input.poll();
+  assert.deepEqual(h.keys(), [], "a resting stick at 0.18 must not creep through the menu");
+  assert.equal(h.Input.steer(), 0, "…and a stick under a menu steers nothing (a friend race keeps simulating under the pause menu)");
+  h.state.pad = h.pad(0.30); h.Input.poll();
+  assert.deepEqual(h.keys(), ["ArrowRight"], "a deliberate push navigates");
+  // Held: 450 ms before the first repeat, then every 130 ms.
+  h.state.now += 400; h.Input.poll(); assert.deepEqual(h.keys(), [], "no repeat before the initial delay");
+  h.state.now += 60;  h.Input.poll(); assert.deepEqual(h.keys(), ["ArrowRight"], "first repeat after ~450 ms");
+  h.state.now += 100; h.Input.poll(); assert.deepEqual(h.keys(), [], "repeat cadence is slower than every frame");
+  h.state.now += 40;  h.Input.poll(); assert.deepEqual(h.keys(), ["ArrowRight"], "…about every 130 ms");
+  h.state.pad = h.pad(0); h.Input.poll(); assert.deepEqual(h.keys(), [], "release stops the repeat immediately");
+  // The right stick is the fallback when the left is centred.
+  h.state.pad = h.pad(0, [], 0.4); h.Input.poll();
+  assert.deepEqual(h.keys(), ["ArrowRight"], "right stick navigates when the left stick is centred");
+  h.state.pad = h.pad(0); h.Input.poll(); h.keys();
+  // A new top layer re-arms the seed.
+  h.state.top = { id: "garage" }; h.Input.poll();
+  assert.deepEqual(h.keys(), ["ArrowDown"], "a new UiLayers.top() re-seeds (title→select, Start→pause)");
+  // A on a focused range/number must not click-to-jump the thumb; on a button it clicks.
+  let clicked = 0;
+  const layer = { id: "garage", contains: () => true };
+  h.state.top = layer; h.Input.poll(); h.keys();
+  h.state.active = { tagName: "INPUT", type: "range", matches: () => true, click: () => clicked++ };
+  h.state.pad = h.pad(0, [0]); h.Input.poll();
+  assert.equal(clicked, 0, "A on a focused range does not click it");
+  assert.deepEqual(h.keys(), [], "…and does not seed either");
+  h.state.pad = h.pad(0); h.Input.poll();
+  h.state.active = { tagName: "BUTTON", type: "", matches: () => true, click: () => clicked++ };
+  h.state.pad = h.pad(0, [0]); h.Input.poll();
+  assert.equal(clicked, 1, "A on a focused button activates it");
+  // Closing the menu clears the seed so the next open seeds again — when
+  // nothing in the layer holds focus; a focused control is left alone.
+  h.state.pad = h.pad(0); h.state.anyOpen = false; h.Input.poll(); h.keys();
+  h.state.anyOpen = true; h.Input.poll();
+  assert.deepEqual(h.keys(), [], "a layer that still has a focused control is not re-seeded");
+  h.state.anyOpen = false; h.Input.poll(); h.keys();
+  h.state.active = null; h.state.anyOpen = true; h.Input.poll();
+  assert.deepEqual(h.keys(), ["ArrowDown"], "reopening the same layer with nothing focused seeds again");
+
+  // The seams the pad path relies on, as behaviour where a module loads alone.
+  const sbU = uiSandbox(makeDom());
+  vm.runInNewContext(src("js/ui/layers.js"), sbU, { filename: "js/ui/layers.js" });
+  assert.equal(typeof sbU.UiLayers.navOpen, "function", "title #overlay is pad-navigable through UiLayers.navOpen()");
+  assert.equal(sbU.UiLayers.navOpen(), false, "nothing open on a bare DOM");
+  // Text fields joined range/number here (menu-a11y-audit.test.mjs pins the
+  // behaviour): every <input> keeps only the caret keys, so Up/Down leave the row.
+  assert.match(code("js/ui/menu-nav.js"), /return !!CARET_KEYS\[key\]/,
+    "inputs own only the caret keys (Left/Right/Home/End) so Up/Down leave the row");
+  assert.match(code("js/ui/aria-state.js"), /#vsfriend,\s*#season-setup/,
+    "AriaState watches the two DOM-built overlays UiLayers already lists");
+  assert.match(code("js/ui/aria-state.js"), /const ON = \["active", "on"\]/,
+    "menu .active and leftover .on both announce as pressed");
+  assert.match(code("js/ui/aria-state.js"), /hashchange/,
+    "term-rail aria-current follows location.hash");
+  const wrapSb = uiSandbox(makeDom({ readyState: "loading" }));
+  vm.runInNewContext(src("js/ui/aria-state.js"), wrapSb);
+  const wrap = wrapSb.AriaState.wrapOnOff;
+  assert.equal(wrap("HUD: ON"), "HUD:\u00a0<span data-fold=\"on\">ON</span>");
+  assert.equal(wrap("HALO: OFF"), "HALO:\u00a0<span data-fold=\"off\">OFF</span>");
+  assert.equal(wrap("♪ SOUND OFF"), "♪ SOUND <span data-fold=\"off\">OFF</span>");
+  assert.equal(wrap("ON"), '<span data-fold="on">ON</span>');
+  // Stored XSS (2026-09-24): an imported custom-team driver name reaches a
+  // garage chip's text, and paintOnOff writes this result through innerHTML.
+  assert.equal(wrap('#7 ON <img src=x onerror="alert(1)">'),
+    '#7 <span data-fold="on">ON</span> &lt;img src=x onerror=&quot;alert(1)&quot;&gt;',
+    "button text is escaped before the ON/OFF spans are added");
+  assert.equal(wrap("R&D: ON"), 'R&amp;D:\u00a0<span data-fold="on">ON</span>', "a literal & survives the round trip");
+  assert.equal(wrap("STYLE: STANDARD"), null, "named styles stay unpainted");
+  assert.equal(wrap("LAYOUT: AUTO"), null, "AUTO on a named cycle is not agency");
+  assert.equal(wrap("RESOLUTION: AUTO"), null);
+  // GEARS / ACTIVE AERO are setting rows now (js/ui/setting-row.js): no agency
+  // word to paint, and a chip is never painted — its ring is the mark.
+  assert.equal(wrap("GEARS: AUTO"), null, "no AUTO/MANUAL agency colour any more");
+  assert.equal(wrap("ACTIVE AERO: MANUAL"), null);
+  assert.match(code("js/ui/aria-state.js"), /classList\.contains\("opt-btn"\)\) continue/,
+    "paintOnOff skips .opt-btn chips — colour words are readouts, not controls");
+  assert.equal(wrap("STEER: TILT"), null);
+  assert.equal(wrap("♪ SOUND ON"), "♪ SOUND <span data-fold=\"on\">ON</span>");
+  assert.equal(wrap("REPEAT: OFF"), "REPEAT:\u00a0<span data-fold=\"off\">OFF</span>");
+  assert.equal(wrap("UNLIMITED · ON"), "UNLIMITED ·\u00a0<span data-fold=\"on\">ON</span>");
+  assert.equal(wrap("UNLIMITED · OFF"), "UNLIMITED ·\u00a0<span data-fold=\"off\">OFF</span>");
+  assert.equal(wrap("∞ FREE BUILD: ON"), "∞ FREE BUILD:\u00a0<span data-fold=\"on\">ON</span>");
+  assert.equal(wrap("QUALIFYING LAP · ON"), "QUALIFYING LAP ·\u00a0<span data-fold=\"on\">ON</span>");
+  assert.equal(wrap("5 LAPS"), null, "option-group chips that are not ON/OFF stay unpainted");
+
+  const loc = { hash: "#htp-racing" };
+  const hashDom = makeDom({ readyState: "loading" });
+  const nav = hashDom.document.createElement("nav");
+  nav.id = "htp-contents";
+  const a1 = hashDom.document.createElement("a");
+  a1.setAttribute("href", "#htp-controls");
+  const a2 = hashDom.document.createElement("a");
+  a2.setAttribute("href", "#htp-racing");
+  nav.appendChild(a1);
+  nav.appendChild(a2);
+  hashDom.byId("howtoplay").appendChild(nav);
+  const hashSb = uiSandbox(hashDom, { location: loc });
+  vm.runInNewContext(src("js/ui/aria-state.js"), hashSb);
+  hashSb.AriaState.sync();
+  assert.equal(a2.getAttribute("aria-current"), "true", "matching term-rail hash is current");
+  assert.equal(a1.getAttribute("aria-current"), null, "other term-rail links are not current");
+  loc.hash = "#htp-controls";
+  hashSb.AriaState.sync();
+  assert.equal(a1.getAttribute("aria-current"), "true");
+  assert.equal(a2.getAttribute("aria-current"), null);
+  const toggleDom = makeDom({ readyState: "loading" });
+  const group = toggleDom.document.createElement("div");
+  const one = toggleDom.document.createElement("button"), two = toggleDom.document.createElement("button");
+  one.classList.add("active"); group.append(one, two); toggleDom.byId("overlay").appendChild(group);
+  const toggleSb = uiSandbox(toggleDom);
+  vm.runInNewContext(src("js/ui/aria-state.js"), toggleSb);
+  toggleSb.AriaState.sync();
+  assert.equal(one.getAttribute("aria-pressed"), "true");
+  assert.equal(two.getAttribute("aria-pressed"), "false");
+  one.classList.remove("active"); two.classList.add("active");
+  toggleSb.AriaState.sync();
+  assert.equal(one.getAttribute("aria-pressed"), "false", "managed toggle updates after first paint");
+  assert.equal(two.getAttribute("aria-pressed"), "true", "new selection is announced");
+  assert.match(code("js/ui/scroll-fade.js"), /"#menu-buttons"/,
+    "title chrome fade watches the zoomed #menu-buttons scroller");
+  assert.match(code("js/ui/scroll-fade.js"), /\boverflowX\b/,
+    "sideways strips get .sf-l / .sf-r, not only overflow-y thumbs");
+});
+
+// ONLY THE ROOT THAT CHANGED. One observer per root, and a batch re-syncs the
+// roots whose records arrived: a slider dragged in SETTINGS re-walked every
+// button, fold and range in every observed screen at the input rate.
+test("AriaState re-syncs only the root a mutation landed in", () => {
+  const dom = makeDom({ readyState: "complete" });
+  const mk = (rootId) => {
+    const g = dom.document.createElement("div");
+    const a = dom.document.createElement("button"), b = dom.document.createElement("button");
+    a.classList.add("active"); g.append(a, b); dom.byId(rootId).appendChild(g);
+    return [a, b];
+  };
+  const [o1, o2] = mk("overlay"), [c1, c2] = mk("career");
+  const observers = [];
+  const sb = uiSandbox(dom, { MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(root) { this.root = root; } } });
+  const flush = () => { while (sb.__timers.length) sb.__timers.shift()(); };
+  vm.runInNewContext(src("js/ui/aria-state.js"), sb);
+  assert.ok(observers.length >= 2, "one observer per observed root");
+  assert.equal(c1.getAttribute("aria-pressed"), "true");
+  o1.classList.remove("active"); o2.classList.add("active");
+  c1.classList.remove("active"); c2.classList.add("active");
+  const over = observers.find((x) => x.root === dom.byId("overlay"));
+  over.fn([{ type: "attributes", target: o2 }]);
+  flush();
+  assert.equal(o2.getAttribute("aria-pressed"), "true", "the root that changed is re-synced");
+  assert.equal(c2.getAttribute("aria-pressed"), "false", "a root with no records is left alone until its own change");
+  observers.find((x) => x.root === dom.byId("career")).fn([{ type: "attributes", target: c2 }]);
+  flush();
+  assert.equal(c2.getAttribute("aria-pressed"), "true");
+});
+
+test("dense sheets preserve a functional content height at extreme UI size", () => {
+  // SheetShape BEHAVIOUR: a sheet that declares --fit-at is capped to what its
+  // host can hold — written as --sheet-scale on the sheet and mirrored as
+  // --sheet-eff-scale on the host — and released when the host grows.
+  const h = bootSheetShape({ uiScale: 2 });
+  const s = h.sheet("cs-inner", { w: 800, h: 400, hostHeight: 400, vars: { "--fit-at": "300px", "--compact-at": "380px" } });
+  h.SS.observe(s.el);
+  assert.equal(s.el.dataset.fit, "on", "400 px of host cannot hold 300 px × 200%");
+  assert.equal(s.el.style.getPropertyValue("--sheet-scale"), "1.333", "capped to available / --fit-at");
+  assert.equal(s.host.style.getPropertyValue("--sheet-eff-scale"), "1.333", "the host mirrors the effective scale for siblings");
+  s.host._client = 700; h.SS.reclassify();
+  assert.equal(s.el.dataset.fit, "off", "a tall enough host lifts the cap");
+  assert.equal(s.el.style.getPropertyValue("--sheet-scale"), "", "…and removes the inline override");
+  assert.equal(s.host.style.getPropertyValue("--sheet-eff-scale"), "");
+  const nofit = h.sheet("plain", { w: 800, h: 400, hostHeight: 100, vars: {} });
+  h.SS.observe(nofit.el);
+  assert.equal(nofit.el.dataset.fit, undefined, "a sheet without --fit-at is never fit-managed");
+
+  const components = css("css/components.css");
+  const garage = css("css/carsetup.css");
+  const menus = css("css/menus.css");
+  assert.ok(components.some((r) => r.decls.get("zoom") === "var(--sheet-scale, var(--ui-scale))"), "sheets zoom by the capped scale");
+  assert.equal(decl(components, ".sheet > :where(.sheet-head, .sheet-body, .sheet-foot)", "min-width"), "0");
+  const fitAt = (rules, sel) => rulesFor(rules, sel).map((r) => r.decls.get("--fit-at")).filter(Boolean);
+  assert.ok(fitAt(garage, /^#cs-inner/).includes("340px") && fitAt(garage, /^#cs-inner/).includes("240px"), "garage declares tall/wide --fit-at");
+  assert.ok(fitAt(components, /^#pmsettings-inner/).includes("300px") && fitAt(components, /^#pmsettings-inner/).includes("220px"));
+  assert.ok(fitAt(components, /^#vsfriend-inner/).includes("280px"));
+  assert.ok(fitAt(css("css/career.css"), /^#cr-inner/).includes("300px") && fitAt(css("css/career.css"), /^#cr-inner/).includes("220px"));
+  assert.ok(fitAt(menus, /^#ss-inner/).includes("300px") && fitAt(menus, /^#ss-inner/).includes("220px"), "#ss-inner wide-shape fit-at 220px");
+  const vsTwo = rulesFor(css("css/overlays.css"), /^#vsfriend-inner\[data-shape="wide"\] \.vs-two$/);
+  assert.ok(vsTwo.length, "VS Friend columns key on the sheet's wide shape, not a 620px container guess");
+  assert.ok(!declares(menus, '#sel-inner[data-fit="on"] #sel-preview-map', "display", "none"),
+    "zoomed / data-fit SELECT keeps the map; caps bind instead of hiding it");
+});
+
+test("garage preview chips hug the sheet and season quali is a label", () => {
+  const garage = css("css/carsetup.css");
+  const raceSettings = code("js/race/race-settings.js");
+  const spotify = code("js/audio/spotify.js");
+  assert.equal(decl(garage, "#cs-stack", "left"), "auto");
+  assert.equal(decl(garage, "#cs-stack", "width"), "max-content");
+  // The base (landscape) rule only: portrait has no sheet edge to hug — the
+  // sheet is the full width — so there the stack spans the car band from the
+  // left safe edge, and that rule lives under @media (orientation: portrait).
+  const stackBase = rulesFor(garage, "#cs-stack").filter((r) => !r.context.some((c) => /@media|@container/.test(c)));
+  assert.ok(stackBase.length && !stackBase.some((r) => /calc\(var\(--safe-l\)/.test(r.decls.get("left") || "")));
+  assert.ok(rulesFor(garage, "#cs-stack", { context: /orientation: portrait/ }).some((r) => r.decls.has("left")),
+    "portrait places the camera stack over the car band");
+  // A qualifying championship DISABLES the GRID row at QUALIFYING LAP rather
+  // than hiding it (the setting is shown, not offered); every other flow gets
+  // the rules, pace order first and the qualifying lap second — the option
+  // indices quali.spec.js selects.
+  assert.match(raceSettings, /SettingRow\.disable\("rs-quali", !!qForced\)/);
+  assert.match(raceSettings, /qForced \? \[\["quali", "QUALIFYING"\]\]/);
+  assert.match(raceSettings, /PRACTICE SETTINGS/, "Practice setup is not titled RACE SETTINGS");
+  assert.match(raceSettings, /START TIME TRIAL/, "Time Trial GO is not START RACE");
+  assert.match(raceSettings, /wrap:\s*false/, "LAPS chevrons stop at the ends");
+  assert.match(raceSettings, /\[\["tier", "PACE ORDER"\], \["quali", "QUALIFYING"\]/);
+  const menus = css("css/menus.css");
+  // The race-settings body is a plain one-or-two column grid of rows now: the
+  // data-shape / data-density grid-row placement that fitted seven chip groups
+  // must not come back with the chips.
+  assert.equal(decl(menus, /#rs-body$/, "display"), "grid");
+  assert.equal(decl(menus, /#rs-body$/, "overflow-y"), "auto", "the race-settings body is the one scroller");
+  assert.ok(rulesFor(menus, /^#rs-body$/, { context: /@container sheet \(min-width: 440px\)/ }).some((r) =>
+    /1fr\) minmax\(0, 1fr\)$/.test(r.decls.get("grid-template-columns") || "")), "two columns once the sheet is wide");
+  assert.equal(rulesFor(menus, /#rs-/).filter((r) => r.decls.has("grid-row")).length, 0, "no per-section grid-row placement");
+  assert.equal(rulesFor(menus, /data-shape|data-density/).filter((r) => /#rs-|race-settings/.test(r.selector)).length, 0);
+  assert.equal(decl(css("css/components.css"), "#race-settings .sheet", "--compact-at"), "760px");
+  assert.match(spotify, /settings\.hidden\s*=\s*true\b/);
+  assert.match(spotify, /settings\.hidden\s*=\s*false\b/);
+});
+
+/* ── SettingsNav on the mini DOM ────────────────────────────────────────── */
+function bootSettingsNav() {
+  const dom = makeDom();
+  const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
+  vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
+  const index = dom.byId("pm-settings-index");
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-advanced", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files"])
+    index.appendChild(dom.byId(id));
+  const stale = dom.document.createElement("button");
+  stale.hidden = true;
+  const steer = dom.document.createElement("button");
+  const controls = dom.byId("pm-panel-controls");
+  controls.appendChild(stale); controls.appendChild(steer);
+  const driving = dom.byId("pm-panel-driving");
+  const drivingFirst = dom.document.createElement("button");
+  driving.appendChild(drivingFirst);
+  const audioFirst = dom.document.createElement("summary");
+  dom.byId("audioset").appendChild(audioFirst);
+  const filesFirst = dom.document.createElement("button");
+  dom.byId("pm-panel-files").appendChild(filesFirst);
+  let selected = 0;
+  const nav = sb.SettingsNav.create({ get: (_k, d) => d, set() {} }, () => selected++);
+  return {
+    dom, nav, selected: () => selected,
+    firstControl: steer, drivingFirst, audioFirst, filesFirst,
+    index: () => dom.byId("pm-settings-index"),
+    panel: (id) => dom.byId(({ advanced: "advanced", audio: "audioset" })[id] || ("pm-panel-" + id)),
+    door: (id) => dom.byId("pm-open-" + id),
+    title: () => dom.byId("dlg-settings"),
+  };
+}
+
+test("backup settings use the same page, focus and BACK behavior as other settings", () => {
+  const h = bootSettingsNav();
+  h.door("files").click();
+  assert.equal(h.title().textContent, "SETTINGS › BACKUP & RESTORE");
+  assert.equal(h.panel("files").hidden, false);
+  assert.equal(h.panel("display").hidden, true);
+  assert.equal(h.dom.document.activeElement, h.filesFirst);
+  assert.equal(h.selected(), 1);
+  assert.equal(h.nav.back(), false);
+  assert.equal(h.panel("files").hidden, true);
+  assert.equal(h.dom.document.activeElement, h.door("files"));
+  h.door("files").click();
+  h.nav.showCurrent();
+  assert.equal(h.panel("files").hidden, true, "reopening settings starts at home");
+});
+
+test("Settings index DRIVING subtitle rebuilds badges once (empty coach select)", () => {
+  // Boot can call show("home") before SettingRow fills #pm-coach-sel. The old
+  // path only rewrote the coach line when selectedOptions[0] existed, then
+  // always appended " · Badges n/m" — so each visit stacked another badges bit.
+  const dom = makeDom();
+  const sb = uiSandbox(dom, {
+    ResizeObserver: class { observe() {} },
+    ScrollFade: { refresh() {} },
+    Badges: { summary: () => ({ held: 2, total: 8 }) },
+  });
+  vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
+  const index = dom.byId("pm-settings-index");
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-advanced", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files"])
+    index.appendChild(dom.byId(id));
+  const drv = dom.byId("pm-open-driving");
+  const small = dom.document.createElement("small");
+  small.textContent = "Coach, practice, strategy & badges";
+  drv.appendChild(small);
+  // Empty select: no selectedOptions[0] (boot before SettingRow wires).
+  const coach = dom.document.createElement("select");
+  coach.id = "pm-coach-sel";
+  dom.body.appendChild(coach);
+  const nav = sb.SettingsNav.create({ get: (_k, d) => d, set() {} }, () => {});
+  const once = small.textContent;
+  assert.match(once, /Badges 2\/8/);
+  assert.equal((once.match(/Badges/g) || []).length, 1);
+  nav.show("home");
+  nav.show("home");
+  assert.equal((small.textContent.match(/Badges/g) || []).length, 1, "badges clause is rebuilt, not appended");
+  assert.match(small.textContent, /Badges 2\/8$/);
+});
+
+test("title settings, pause standings, and career modes stay reachable", () => {
+  // SettingsNav BEHAVIOUR: always land on the door index. A stored
+  // settingsCategory must not reopen MORE / DISPLAY.
+  const h = bootSettingsNav();
+  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "invalidate", "returnToSearch", "show", "showCurrent"]);
+  assert.equal(h.nav.returnToSearch(), false, "without an active search, returning is a harmless home navigation");
+  assert.equal(h.index().hidden, false, "create() shows the door index");
+  assert.equal(h.panel("controls").hidden, true);
+  assert.equal(h.panel("display").hidden, true);
+  assert.equal(h.title().textContent, "SETTINGS");
+  assert.equal(h.dom.document.activeElement, null, "create() does not steal focus");
+  h.nav.show("controls", true);
+  assert.equal(h.panel("controls").hidden, false);
+  assert.equal(h.index().hidden, true);
+  assert.equal(h.title().textContent, "SETTINGS › CONTROLS");
+  assert.equal(h.dom.document.activeElement, h.firstControl, "show(id, true) focuses the first visible page control");
+  h.dom.document.activeElement = null;
+  h.nav.showCurrent();
+  assert.equal(h.index().hidden, false, "showCurrent() always returns home");
+  assert.equal(h.panel("controls").hidden, true);
+  assert.equal(h.dom.document.activeElement, null, "showCurrent() never focuses");
+  h.door("controls").focus();
+  h.door("controls").click();
+  assert.equal(h.dom.document.activeElement, h.firstControl, "a door focuses the visible page after its callback");
+  assert.equal(h.nav.back(), false, "BACK on a page pops to home");
+  assert.equal(h.dom.document.activeElement, h.door("controls"), "BACK restores the originating door");
+  h.nav.show("advanced", false);
+  assert.equal(h.panel("advanced").hidden, false);
+  assert.equal(h.title().textContent, "SETTINGS › DRIVING AIDS");
+  h.nav.show("audio", true);
+  assert.equal(h.panel("audio").hidden, false);
+  assert.equal(h.title().textContent, "SETTINGS › MUSIC & SOUND");
+  assert.equal(h.dom.document.activeElement, h.audioFirst, "audio can land on its visible disclosure door");
+  h.door("driving").click();
+  assert.equal(h.panel("driving").hidden, false);
+  assert.equal(h.title().textContent, "SETTINGS › DRIVING");
+  assert.equal(h.panel("audio").hidden, true);
+  assert.equal(h.dom.document.activeElement, h.drivingFirst, "driving focuses its first visible control");
+  h.nav.show("display", false);
+  assert.equal(h.nav.back(), false, "BACK on a page pops to home");
+  assert.equal(h.index().hidden, false);
+  assert.equal(h.nav.back(), true, "BACK on home tells the caller to close");
+  const game = gameCode();
+  assert.match(game, /\$\(\s*"mb-settings"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*(?:ensureAudio\(\)\s*\.then\(\(\)\s*=>\s*\{\s*)?if\s*\(\s*soundOn\s*\)\s*GameAudio\.init\(\s*\)\s*;\s*(?:\}\s*\)\s*;\s*)?openSettings\(\s*\)/,
+    "title Settings opens the same stack via openSettings → showCurrent");
+  assert.match(game, /function\s+openSettings\(\s*\)\s*\{[\s\S]*?ensureAudio\(\s*\)/,
+    "openSettings warms LAZY_AUDIO so pm-settings / MusicLib work without pointerdown");
+  assert.doesNotMatch(game, /mb-settings"\)\.onclick[\s\S]{0,120}settingsNav\.show\(\s*"more"/,
+    "title Settings must not force MORE");
+  assert.match(game, /\$\(\s*"pm-settings-close"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(\s*settingsNav\.back\(\s*\)\s*\)\s*closeSettings\(\s*\)/,
+    "settings BACK pops the stack before closing");
+  const raceSettings = code("js/race/race-settings.js");
+  assert.match(raceSettings, /els\.selGo\.onclick[\s\S]{0,400}openRaceSettings\(\s*"select"\s*\)/,
+    "SELECT NEXT opens race settings, not the garage");
+  assert.match(raceSettings, /\$\(\s*"sel-car"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*openGarage\(\s*"select"\s*\)/,
+    "SELECT YOUR CAR is the garage door");
+  assert.match(game, /pmStandings\.hidden\s*=\s*!\(\s*isChampionship\(\s*\)\s*&&\s*SeasonCal\.hasProgress\(\s*season\s*\)\s*&&\s*season\.round\s*<\s*SeasonCal\.rounds\(\s*\)\s*\)/,
+    "pause STANDINGS matches the title: hide once the season is finished");
+  assert.match(game, /\$\(\s*"pm-restart"\s*\)\.disabled\s*=\s*!!\s*\(\s*netPlay\.active\(\s*\)\s*\|\|\s*qualiNet\.hasArmed\(\s*\)\s*\)/,
+    "RESTART looks dead in net / quali-net, same gate as its click handler");
+  assert.equal(decl(css("css/career.css"), '#cr-inner:not([data-pair="on"]):not([data-shape="tall"]):has(#cr-left .cr-slot):has(#cr-right .cr-slot) > #cr-body', "grid-template-columns"),
+    "minmax(0, 1fr) minmax(0, 1fr)", "wide stacked modes picker is two-up; tall stacks");
+  assert.match(readCssSource("css/career.css"),
+    /#cr-inner:is\(\[data-density="compact"\], \[data-shape="tall"\]\)[\s\S]*-webkit-line-clamp:\s*2/,
+    "short/tall mode intros clamp; BACKUP / slot notes stay full height");
+  assert.equal(decl(css("css/components.css"), "#race-settings", "--sheet-w"), "760px",
+    "race settings spends the same safe width as settings / customize");
+  assert.equal(decl(css("css/components.css"), "#standings", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/components.css"), "#results", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/components.css"), "#spotifypanel", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/career.css"), "#career-offers", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/career.css"), "#career-history", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/career.css"), "#quali", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/career.css"), "#career-guide", "--sheet-w"), "760px");
+  // SELECT: the still takes 3/5 of a wide sheet, the numbers the rest; a narrow
+  // sheet stacks them (2026-09 picker redesign — no pane-pair here any more).
+  const wideSel = css("css/menus.css").find((r) => r.selector === '#sel-inner:not([data-shape="tall"]) #sel-track-preview' && r.context.includes("@container sheet (min-width: 620px)"));
+  assert.ok(wideSel, "wide SELECT arranges the hero grid in a container query");
+  assert.equal(wideSel.decls.get("grid-template-columns"), "minmax(0, 3fr) minmax(0, 2fr)");
+  assert.equal(decl(css("css/menus.css"), "#sel-track-preview", "grid-template-columns"), "minmax(0, 1fr)",
+    "narrow SELECT stacks the still over the numbers");
+  assert.equal(decl(css("css/menus.css"), "#sel-still", "object-fit"), "cover");
+  const dispAreas = decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas");
+  assert.match(dispAreas, /^"hudopts hudopts"[\s\S]*"metrics metrics"[\s\S]*"renopts renopts"/,
+    "DISPLAY opens on HUD, then METRICS and RENDERER (UI SIZE moved to APPEARANCE › READABILITY)");
+  assert.doesNotMatch(dispAreas, /uih|uis/, "no hole left for UI SIZE");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
+    "HUD fold is its own row, not under a reprint HUD heading");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv', "grid-area"), "renopts");
+  assert.match(read("index.html"), /id="pm-visual-tuners" class="pm-renderer-sub"/,
+    "ADVANCED VISUALS joins the same compact Display fold family as RENDERER");
+  const componentsSrc = readCssSource("css/components.css");
+  assert.match(componentsSrc,
+    /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary[\s\S]*?background-color:\s*transparent;[\s\S]*?border:\s*none;/,
+    "ADVANCED VISUALS shares the borderless transparent summary rule");
+  assert.match(componentsSrc,
+    /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::after,\s*\n#rs-body details > summary::after \{ content: none; \}/);
+  assert.match(componentsSrc,
+    /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::before,\s*\n#rs-body details > summary::before \{ content: "\\25BE";/,
+    "all four Display folds put the chevron before the label");
+  assert.doesNotMatch(read("index.html"), /id="pm-hud-h"/);
+  assert.doesNotMatch(read("index.html"), /id="pm-renderer-h"/);
+  assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);
+  assert.match(read("index.html"), /id="pm-display-adv-body"[\s\S]*id="pm-res"/);
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
+    "METRICS sits on its own DISPLAY row, not beside HUD");
+  assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
+    /SIZE PREVIEW/,
+    "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
+  // Inside the fold's OWN <details>…</details>: unbounded, the match passed
+  // with the preview moved anywhere later in index.html (audit 2026-09-29).
+  {
+    const html = read("index.html"), at = html.indexOf('id="pm-hud-details"');
+    const fold = html.slice(at, html.indexOf("</details>", at));
+    assert.ok(at >= 0 && fold.includes('id="pm-hud-sample"'),
+      "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
+  }
+  // DISPLAY had its own byte-identical copy of this block until 2026-09-18;
+  // it now shares the merged one, so the selector to ask is the merged one.
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "min-height"), "var(--chip-h)",
+    "every Display summary is a compact row, slightly shorter than a full --tap door");
+  // The sample carries BOTH sliders now: a readout box for HUD SIZE and a pad
+  // for BUTTON SIZE, which has exactly the same no-feedback problem (every real
+  // cluster is hidden behind the .dim sheet). The pad divides the block's own
+  // --hud-scale zoom back out, so what the drag shows is the RATIO of the two.
+  assert.match(decl(css("css/components.css"), "#pm-hud-sample::after", "--pad") || "",
+    /var\(--hud-btn-scale\) \/ var\(--hud-scale\)/,
+    "the button pad previews BUTTON SIZE relative to HUD SIZE");
+  assert.match(read("index.html"), /id="pm-hudscale"[\s\S]*id="pm-btnscale"/,
+    "BUTTON SIZE follows HUD SIZE in the HUD fold");
+  assert.equal(decl(css("css/components.css"), /#pm-metrics-details > \[role="group"\]/, "display"), "flex",
+    "METRICS body is a quiet column — not a 2-up plate grid");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > \[role="group"\] > button/, "background"), "transparent",
+    "METRICS inner rows drop plate chrome");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-label b", "color"), "var(--text)",
+    "DISPLAY slider values are text, not tuner red");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-row input[type=\"range\"]", "accent-color"), null,
+    "DISPLAY sliders inherit the shared red accent — no steel override");
+  assert.match(code("js/perf/renderer-picker.js"), /pm-display-adv/,
+    "DISPLAY recovery / screenshot / diag land in the RENDERER fold");
+  assert.match(read("index.html"), /id="pm-display-adv"/,
+    "the RENDERER fold is the shell host; RESET / shots still inject into its body");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display > details', "grid-column"), "1 / -1",
+    "every present and future Display disclosure spans the wide grid");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
+    "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
+  // ONE RULE NOW, not three (2026-09-18). DISPLAY's summary chrome and
+  // STEERING/DRIVING's were byte-identical blocks, so race settings' folds
+  // joined the :is() list rather than adding a fourth copy — which is why
+  // these assertions name the merged selector and #rs-body shares it.
+  // A REGEX, not a string: the merged rule is a comma-joined selector list and
+  // css-rules.mjs keeps it joined (its own note says match with a regex then).
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "min-height"), "var(--chip-h)",
+    "every fold summary matches the HUD / METRICS chip row");
+  for (const sel of [/:is\(#pm-panel-display,[^)]*\) details > summary,/, /#rs-body details > summary/]) {
+    assert.equal(decl(css("css/components.css"), sel, "height"), "auto", "fold summaries wrap instead of clipping their readout at 150%");
+    assert.equal(decl(css("css/components.css"), sel, "flex-wrap"), "wrap");
+  }
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold]', "white-space"), "nowrap",
+    "a summary breaks between readout words, never inside TILT 6");
+  // The body is addressed by id (#pm-display-adv-body): RESOLUTION is a chip
+  // row inside it, its own role=group, and a descendant match would grid it.
+  assert.equal(decl(css("css/components.css"), "#pm-display-adv-body, #pm-visual-tuners-body", "display"), "flex",
+    "Display disclosure bodies default to columns; wide/compact override to grids");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] :is\(#pm-display-adv-body, #pm-visual-tuners-body\)/, "display"), "grid",
+    "compact ADVANCED packs 2-up via SheetShape density, not a height media");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag)", "background"), "transparent",
+    "SCREENSHOTS / SAVE / COPY DIAG are secondary rows, not peer plates of RESET");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status, .set-row, .adv-help)", "grid-column"), "1 / -1",
+    "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
+  assert.doesNotMatch(read("index.html"), /<h3 class="pm-group-h">(?:DRIVING CONTROLS|DISPLAY|APPEARANCE|STEERING &amp; ASSISTS|MUSIC &amp; SOUND)<\/h3>/,
+    "page titles are not duplicated by hidden headings");
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "color"), "var(--text)",
+    "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary/, "opacity"), "1",
+    ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay readable");
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary/, "background-color"), "transparent",
+    "fold summaries drop the plate so they do not copy HALO / TURN CHASING");
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none",
+    "right-side chevron is the dropdown mark — disclosures do not use it");
+  assert.match(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::before/, "content") || "",
+    /25BE/,
+    "disclosure chevron sits on the left, like a tree, not a select");
+  const settingsHtml = read("index.html");
+  const adv = settingsHtml.slice(settingsHtml.indexOf('id="advanced"'), settingsHtml.indexOf('id="audioset"'));
+  const musicAt = settingsHtml.indexOf('id="audioset"');
+  const music = settingsHtml.slice(musicAt, settingsHtml.indexOf('<button id="pm-settings-close"', musicAt));
+  assert.doesNotMatch(adv, /class="adv-intro"/, "STEERING drops the tutorial wall — How to Play covers it");
+  assert.match(adv, /id="pm-pace-h"/, "OVERALL SPEED is a UI SIZE heading, not a buried slider");
+  assert.match(adv, /id="adv-feel-details"/);
+  assert.match(adv, /id="adv-aids-details"/);
+  assert.match(adv, /id="adv-feel-details"[\s\S]*id="pm-tiltsimple"/);
+  assert.match(adv, /id="adv-aids-details"[\s\S]*id="pm-helplevel" class="set-row"/);
+  assert.doesNotMatch(adv, /<details[^>]+open/, "STEERING folds start closed");
+  assert.match(music, /id="as-music-sum"/);
+  assert.match(music, /id="as-sound-sum"/);
+  assert.doesNotMatch(music, /id="as-music-details"[^>]*\sopen/, "MUSIC starts closed like DISPLAY");
+  assert.doesNotMatch(music, /id="as-sound-details"[^>]*\sopen/, "SOUND starts closed like DISPLAY");
+  const musicSum = music.match(/<summary[^>]*id="as-music-sum"[^>]*>[\s\S]*?<\/summary>/);
+  assert.ok(musicSum && !/as-music-sel/.test(musicSum[0]), "MUSIC ON/OFF lives in the fold body");
+  assert.match(music, /id="as-music" class="set-row"/, "MUSIC is a setting row (js/ui/setting-row.js)");
+  assert.match(music, /id="as-sound" class="set-row"/);
+  assert.match(music, /id="as-src" class="set-row"/, "the music SOURCE is a setting row, not four chips");
+  assert.match(music, /id="as-p" class="set-row"/, "the engine PROFILE is a setting row");
+  assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details > summary/, "color"), "var(--text)",
+    "STEERING folds use the same disclosure chrome as DISPLAY");
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
+  assert.match(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary::before/, "content") || "",
+    /25BE/,
+    "MUSIC fold chevron sits on the left");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary,/, "color"), "var(--text)",
+    "MUSIC fold names use --text, not steel italic");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec$/, "border-bottom"), "1px solid var(--card-line)",
+    "MUSIC & SOUND rules sit on the fold at full width, not a fading --grad-rule");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner #audioset-inner,/, "width"), "100%",
+    "MUSIC & SOUND folds stretch to the sheet, not shrink to the summary text");
+  assert.match(read("index.html"), /id="pm-calib"[^>]*>[\s\S]*?id="pm-calib-help"/,
+    "TILT recalibrate help sits on the button, not under RESET DOCK LAYOUT");
+  assert.match(read("css/settings-controls.css"), /body\.desktop #pm-calib-help/,
+    "desktop hides the TILT help with RECALIBRATE TILT");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-calib:disabled + #pm-calib-help", "visibility"), "hidden",
+    "disabled TILT help keeps its slot so steer-mode changes do not reflow");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-calib[hidden] + #pm-calib-help", "display"), "none",
+    "hidden RECALIBRATE also drops its described-by copy");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-panel-controls", "padding-bottom"), "var(--tap)",
+    "CONTROLS keeps RESET KEYS above the sheet foot at max scroll");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-settings-body", "padding-bottom"), "calc(var(--tap) + var(--pad))",
+    "sheet-body end padding clears BACK on Controls and Steering & Assists");
+  assert.equal(decl(css("css/settings-controls.css"), "#pmsettings", "overflow"), "hidden",
+    "the settings dialog is not a second page scroller");
+  assert.equal(decl(css("css/settings-controls.css"), /#pmsettings-inner \.pm-groups,/, "overflow"), "visible",
+    "nested settings groups defer scrolling to the sheet body");
+  assert.equal(decl(css("css/settings-controls.css"), /#pmsettings-inner \.pm-groups > \[role="region"\] > button/, "height"), "auto",
+    "full-row action labels size to their wrapping copy, not a --tap clip");
+  assert.equal(decl(css("css/settings-controls.css"), "#pmsettings-inner .preset-row.balanced-row", "align-items"), "stretch",
+    "STEERING preset cards on one line share height");
+  const presetGrid = rulesFor(css("css/settings-controls.css"), /#pmsettings-inner \.preset-row\.balanced-row$/).find((r) =>
+    r.context.some((c) => /@container sheet \(max-width: 620px\)/.test(c)));
+  assert.ok(presetGrid, "narrow settings packs preset cards 2-up");
+  assert.equal(presetGrid.decls.get("grid-template-columns"), "repeat(2, minmax(0, 1fr))");
+  assert.equal(presetGrid.decls.get("grid-auto-rows"), "1fr");
+  assert.equal(presetGrid.decls.get("align-items"), "stretch");
+  const fullRow = rulesFor(css("css/settings-controls.css"), /#pmsettings-inner\[data-shape="wide"\] \.pm-group > button/).find((r) =>
+    r.context.some((c) => /@container sheet \(max-width: 620px\)/.test(c)));
+  assert.equal(fullRow && fullRow.decls.get("grid-column"), "1 / -1",
+    "narrow wide-shape action buttons take the full row");
+  assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left,/, "scrollbar-width"), "none",
+    "NEW CAREER columns keep the themed .sf-scroll thumb only");
+  assert.equal(decl(css("css/career.css"), "#cr-career-file", "flex-direction"), "column",
+    "LOAD CAREER FILE confirm stays stacked — no wrap jump off the pointer");
+  assert.equal(decl(css("css/career.css"), "#cr-career-load", "min-height"), "calc(var(--tap-paint) * 2)",
+    "armed OVERWRITE copy fits the reserved LOAD height");
+  assert.equal(decl(css("css/career.css"), ".cr-slot-main", "grid-column"), "1 / -1",
+    "SLOT 1 copy keeps the full card; EXPORT / IMPORT / DELETE sit underneath");
+  assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\] #cr-left$/, "overflow-x"), "hidden",
+    "paired career panes do not grow a second horizontal gutter");
+  assert.equal(decl(css("css/career.css"), /#cr-inner\[data-pair="on"\]:has\(#cr-left \.cr-slot\):has\(#cr-right \.cr-slot\) > \.sheet-foot$/, "grid-column"), "1 / -1",
+    "CAREER MODES BACK spans both columns");
+  assert.equal(decl(css("css/career.css"), "#cr-career-file > button", "text-transform"), "uppercase",
+    "SAVE / LOAD / PROTECT share one uppercase plate");
+  assert.equal(decl(css("css/career-experience.css"), /\[data-career-part="nav"\]$/, "flex-wrap"), "nowrap",
+    "hub chips pan instead of wrapping under the title");
+  assert.match(decl(css("css/career-experience.css"), /\[data-career-part="calendar"\]$/, "grid-template-columns") || "",
+    /auto-fill/,
+    "season story tiles wrap in the pane instead of a clipped H strip");
+  assert.match(decl(css("css/settings.css"), "#pmsettings", "--sheet-w") || "",
+    /1020px/,
+    "SETTINGS matches the career hub width, not a 760 postcard");
+  assert.equal(decl(css("css/settings.css"), "#pm-settings-body", "scrollbar-width"), "none",
+    "DISPLAY uses the themed .sf-scroll thumb, not a white native gutter");
+  const hubGrid = rulesFor(css("css/settings-controls.css"), /^#pm-settings-index$/).find((r) =>
+    r.context.includes("@container sheet (min-width: 24rem)"));
+  assert.ok(hubGrid, "SETTINGS doors become a 2-col grid once two --balance-basis tiles fit");
+  assert.equal(hubGrid.decls.get("grid-template-columns"), "repeat(2, minmax(0, 1fr))");
+  assert.equal(hubGrid.decls.get("align-items"), "stretch",
+    "APPEARANCE wrap stretches the pair so DISPLAY is not a short neighbour");
+  assert.equal(decl(css("css/career.css"), /#career-guide \.sheet\[data-shape="wide"\] > #cg-contents a,/, "white-space"), "nowrap",
+    "How My Team Works topic chips stay one line");
+  assert.equal(decl(css("css/career.css"), "#career-guide .sheet-body, #career-guide .sheet[data-shape=\"wide\"] > #cg-contents", "scrollbar-width"), "none",
+    "How My Team Works keeps the themed .sf-scroll thumb only");
+  assert.equal(decl(css("css/settings-controls.css"), /#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body\) details$/, "border-bottom"),
+    "1px solid var(--card-line)",
+    "DISPLAY fold rules span the sheet, not a fading --grad-rule");
+  assert.match(code("js/input/steer-tuning.js"), /\["k", "FEEL"\]/,
+    "closed FEEL summary carries the live steer step");
+  assert.match(code("js/audio/panel.js"), /\["k", "MUSIC"\]/,
+    "closed MUSIC summary carries ON and source");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-uiscale-h", "margin-top"), "calc(var(--gap) * 0.5)",
+    "UI SIZE heading is a section break under READABILITY");
+  assert.match(code("js/camera/cockpit-opts.js"), /fold\.id = "pm-cockpit"[\s\S]*?getElementById\("pm-visual-tuners"\)[\s\S]*?insertBefore\(fold, tools\)/,
+    "COCKPIT is its own fold, just above ADVANCED VISUALS — never inside the RENDERER backend list");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-cockpit', "grid-area"), "cockpit",
+    "and on a wide sheet it has its own named row above the tools");
+  assert.ok(!code("js/perf/metrics-overlay.js").includes("@media (max-height:"),
+    "METRICS submenu no longer keys packing on viewport height");
+  assert.ok(!code("js/perf/metrics-overlay.js").includes("margin: 6px"),
+    "unlayered inject must not offset METRICS off the HIDE HUD row");
+  assert.match(code("js/perf/metrics-overlay.js"), /page\(\) === "log"/,
+    "LOG NS / LOG SHOW stay hidden unless the overlay page is LOG");
+  assert.match(code("js/perf/metrics-overlay.js"), /data-fold="k">METRICS/,
+    "closed METRICS summary carries ON/page state");
+  assert.match(code("js/perf/renderer-picker.js"), /data-fold="val">WEBGL2/,
+    "WEBGL2 fallback is a value chip, not OFF — red would lie");
+  assert.match(read("index.html"), /id="pm-uiscale-h"/,
+    "UI SIZE is a real COCKPIT-style heading, not a tuner caption");
+  assert.equal(decl(css("css/components.css"), "#pm-uiscale-h", "display"), "flex",
+    "UI SIZE heading shares the row with the live %");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="k"]', "color"), "var(--text)",
+    "fold names stay readable --text, not steel italic");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="on"]', "color"), "var(--gold)",
+    "fold ON chips pick up the live gold the inner ON buttons name");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="off"]', "color"), "var(--red)",
+    "fold OFF is the same red as a live warning, not dim");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="off"]', "opacity"), null,
+    "OFF must stay fully opaque — faded red reads as dim again");
+  assert.equal(decl(css("css/components.css"), 'button [data-fold="on"], summary [data-fold="on"]', "color"), "var(--gold)",
+    "any menu ON word is gold — enabled, not merely selected");
+  assert.equal(decl(css("css/components.css"), 'button [data-fold="off"], summary [data-fold="off"]', "color"), "var(--red)",
+    "any menu OFF word is red");
+  // THE ONE SELECTED LOOK (css/tokens.css): a chosen chip is plate-on + red
+  // ring everywhere, so the Settings-only exceptions are gone — no word-only
+  // MUSIC ON/OFF pair, no glow to switch off, no painted word inside a chip.
+  assert.doesNotMatch(read("index.html"), /as-toggle/, "the word-only MUSIC / SOUND pair is gone");
+  // THE SETTING ROW: every enumerated preference on the sheet is one line —
+  // LABEL ‹ select › — and the broad settings-button rules leave its parts alone.
+  const comp = css("css/components.css");
+  assert.equal(decl(comp, ".set-row", "display"), "flex");
+  assert.equal(decl(comp, ".set-row", "flex-wrap"), "wrap", "the ‹ select › cluster drops to its own line, never squeezes");
+  assert.equal(decl(css("css/settings.css"), "#pm-panel-driving .set-row > div", "flex-wrap"), "wrap",
+    "Driving ‹ select › cluster wraps at small-phone 200% instead of overflowing the pane");
+  assert.equal(decl(comp, ".set-row > div > select", "appearance"), "none", "the chevrons are the arrows");
+  assert.equal(decl(comp, ".set-row > div > button", "width"), "var(--chip-h)", "each chevron is a full tap square");
+  assert.equal(decl(comp, "#pmsettings-inner .pm-groups .set-row > div > button", "width"), "var(--chip-h)",
+    "row chevrons are restated above the broad settings-button rules, not guarded with :not() (that outranked the preset cards)");
+  assert.equal(decl(comp, ".pm-group button", "width"), "100%");
+  assert.doesNotMatch(read("index.html"), /class="opt-row balanced-row" role="group" aria-labelledby="pm-/, "no Settings chip rows remain — presets and engine layers are the chips");
+  for (const id of ["pm-steer", "pm-gears", "pm-aero", "pm-res", "pm-feel", "pm-helplevel", "pm-linemode", "sp-shuffle", "sp-repeat"]) {
+    assert.match(read("index.html"), new RegExp(`id="${id}" class="set-row"`), id + " is a setting row");
+  }
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner \.as-toggle \.opt-btn\.active/, "background"), null);
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner :is\(\.opt-btn, \.preset-btn\)\.active/, "box-shadow"), null);
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner \.opt-btn:not\(\.active\) \[data-fold="on"\]/, "color"), null);
+  assert.ok(!/--plate-on-glow:/.test(css("css/tokens.css")), "the glow token is retired");
+  for (const f of ["components", "menus", "tuner", "data", "carsetup", "overlays", "career"]) {
+    assert.ok(!css("css/" + f + ".css").includes("var(--plate-on-glow)"), f + ".css still lights a chip with the glow");
+  }
+  assert.equal(decl(css("css/tuner.css"), ".opt-btn.active", "background"), "var(--plate-on)");
+  assert.equal(decl(css("css/tuner.css"), ".opt-btn.active", "border-color"), "var(--red)");
+  assert.equal(decl(css("css/tuner.css"), ".opt-btn.active", "box-shadow"), null);
+  assert.equal(decl(css("css/overlays.css"), "#campicker button.active", "background"), "var(--plate-on)",
+    "the cam picker lights like every other chip, not a 75% red fill");
+  assert.equal(decl(css("css/carsetup.css"), ".cs-view-btn.active", "border-color"), "var(--red)",
+    "garage SPIN is a chosen chip, not a green one-off");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="val"]', "color"), "var(--text)",
+    "named modes stay text so gold still means enabled");
+  assert.equal(decl(css("css/components.css"), 'button [data-fold="auto"], summary [data-fold="auto"]', "color"), null,
+    "no control paints an AUTO/MANUAL agency word any more — GEARS / ACTIVE AERO are setting rows");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner .pm-group button, #pmsettings-inner .pm-doors button", "gap"), "0.35em",
+    "flex gap keeps a space after LABEL: when the value is a painted span");
+  assert.equal(decl(css("css/components.css"), "button:has(> [data-fold])", "column-gap"), "0.35em",
+    "every menu button, not only Settings, keeps a space before a painted value");
+  assert.ok(!code("js/perf/metrics-overlay.js").includes("det.open = true"),
+    "METRICS does not auto-open and blow the HIDE HUD pair");
+  assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",
+    "compact wide season setup keeps the calendar + pool pair");
+  assert.equal(decl(css("css/menus.css"), "#ss-inner", "--compact-at"), "480px",
+    "season setup shares #sel-inner's 480 compact floor, not the 380 default");
+  assert.equal(decl(css("css/career.css"), "#cr-inner", "--pair-compact"), "off",
+    "career compact always stacks — pair-on starves the hub left column");
+  assert.equal(decl(css("css/career.css"), "#cr-inner", "--compact-at"), "480px",
+    "career hub shares the 480 phone-landscape compact floor");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner", "--compact-at"), "480px");
+  assert.equal(decl(css("css/overlays.css"), "#howtoplay-inner", "--compact-at"), "480px");
+  assert.equal(decl(css("css/tuner.css"), "#audioset-inner, #spotifypanel-inner", "--compact-at"), "520px",
+    "audio / Spotify pack earlier than the 380 default — two stacked sections plus notes");
+  assert.equal(decl(css("css/components.css"), "#vsfriend-inner", "--compact-at"), "480px");
+  // Soft-tap polish (UI Fit): compact CLOSE painted 62×26 and HOST/JOIN 285×44
+  // on ios-iphone-landscape (layout-audit 2026-10-05). --tap-paint holds 52
+  // painted on touch; --tap-min was the 26px soft floor.
+  assert.equal(
+    decl(css("css/overlays.css"),
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close',
+      "min-height"),
+    "var(--tap-paint)",
+    "compact VS Friend CLOSE floors at --tap-paint");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) #vs-close', "height"), "var(--tap-paint)",
+    "compact CLOSE height locked to --tap-paint (closeInHead settle)");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] #vs-pick > .bigbtn', "min-height"), "var(--tap-paint)",
+    "compact HOST / JOIN floor at --tap-paint");
+  // Title band must clear the absolute CLOSE (ui-redesign closeInHead).
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > #vs-head', "min-height"), "var(--tap-paint)",
+    "compact VS Friend head clears --tap-paint CLOSE");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend-inner[data-density="compact"] > #vs-head', "height"), "var(--tap-paint)",
+    "compact head height locked with CLOSE");
+  assert.equal(
+    decl(css("css/overlays.css"),
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
+      "top"),
+    "0",
+    "compact CLOSE foot sits at head top (no pad inset past the band)");
+  assert.equal(decl(css("css/overlays.css"), '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot', "height"), "var(--tap-paint)",
+    "compact CLOSE foot height locked to --tap-paint");
+  assert.equal(
+    decl(css("css/overlays.css"),
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
+      "padding-top"),
+    "0",
+    "compact head-parked foot zeros padding-top (selected-3 closeInHead 2026-10-11)");
+  assert.equal(decl(css("css/components.css"), "#results .sheet, #standings .sheet, #customize .sheet", "--compact-at"), "480px");
+
+  // VS Friend chrome (dialogs.css @layer overlays): one red primary per step,
+  // enter-code JOIN/field width, short-code error under the field, lone step
+  // chip hidden, tall CLOSE stays in the footer. ID-only so vs-* stay owned by
+  // overlays.css for component-inventory.
+  const vsDlg = css("css/dialogs.css");
+  assert.equal(decl(vsDlg, /#vsfriend :is\(#vs-code-host/, "background"), "var(--plate-opaque)",
+    "NEW CODE is a plate secondary — HOST keeps the sole red on the hub");
+  assert.equal(decl(vsDlg, /#vsfriend :is\(#vs-share-invite/, "background"), "var(--plate-opaque)",
+    "SHARE LINK is secondary until the room owns START");
+  assert.equal(decl(vsDlg, /#vsfriend :is\(#vs-code-in.*\)::placeholder/, "word-break"), "normal",
+    "code placeholder never wraps mid-word");
+  assert.equal(decl(vsDlg, /#vsfriend :is\(#vs-code-in, #vs-invite/, "color-scheme"), "dark",
+    "code boxes use dark form tokens (no nested white scroll chrome)");
+  assert.equal(decl(vsDlg, "#vsfriend #vs-code-go", "width"), "min(100%, 22rem)",
+    "Enter Code JOIN matches the field column width");
+  assert.equal(decl(vsDlg, "#vsfriend #vs-body:has(#vs-code-input:not([hidden])) #vs-status", "text-align"), "center",
+    "short-code error is centred under the field");
+  assert.equal(
+    decl(vsDlg, /#vsfriend:has\(#vs-code-input:not\(\[hidden\]\)\):has\(#vs-status\[class~="vs-error"\]\) #vs-code-in/, "border-color"),
+    "var(--red)",
+    "short-code error flags the field");
+  assert.equal(decl(vsDlg, "#vsfriend #vs-code > h3 > span:first-child", "display"), "none",
+    "a lone step number chip is hidden");
+  assert.equal(decl(vsDlg, "#vsfriend #vs-joining section > p", "text-align"), "start",
+    "join-friend hints align with their column");
+  assert.equal(
+    decl(vsDlg, /#vsfriend-inner\[data-density="compact"\]\[data-shape="tall"\] > \.sheet-foot(?!::)/, "position"),
+    "relative",
+    "narrow/tall CLOSE stays in the footer, not absolute in the head");
+  assert.equal(
+    decl(vsDlg,
+      '#vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot',
+      "padding-top"),
+    "0",
+    "dialogs restates wide-compact zero foot pad after tall rules (closeInHead)");
+
+  assert.equal(decl(css("css/career.css"), "#career-offers .sheet, #career-history .sheet, #career-guide .sheet, #quali .sheet", "--compact-at"), "480px");
+  assert.equal(decl(css("css/carsetup.css"), "#cs-inner", "--pair-compact"), "off",
+    "garage compact always stacks — pair-on starves #cs-options");
+  assert.equal(decl(css("css/carsetup.css"), '#cs-inner[data-density="compact"] .cs-opt-desc', "display"), "none",
+    "compact garage hides part blurbs so more option rows fit");
+  assert.equal(decl(css("css/carsetup.css"), /#cs-options \.cs-tune-editor > \.adv-help:not\(#cs-rake-readout\)/, "display"), "none",
+    "compact SETUP hides the long tune note and keeps the rake readout");
+  assert.match(code("js/garage/setup-sheet.js"), /wrap\.className\s*=\s*"cs-tune-editor"/,
+    "SETUP must not reuse cs-liv-editor (that class translucents the paint sheet)");
+  assert.equal(decl(css("css/carsetup.css"), /#cs-options \.cs-liv-editor > \.adv-help:not\(#cs-rake-readout\)/, "display"), "none",
+    "compact paint editor still hides its long help notes");
+  assert.equal(decl(css("css/menus.css"), "#sel-daily", "flex"), "0 0 auto",
+    "TODAY is a chip on the pan-x toolbar, first in the row");
+  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-density="compact"] #sel-daily > span', "display"), "none",
+    "compact TODAY drops its weather/tod/best span so the filters stay on screen");
+  // Each top is max(own slot, the mirror's bottom edge + 8px): --mir-bot is
+  // unset (0px) with no mirror, so the own slot is what shows.
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px), calc(var(--mir-bot, 0px) + 8px))",
+    "compact radio cards sit right under the timing row, like every other density");
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(#hud-flag:not([hidden])) #announce', "top"), "calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
+    "…and step below the flag chip while a caution shows, never on top of it");
+  assert.equal(decl(css("css/hud.css"), ":root[data-gap-drop] #announce", "--flag-slot-top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--hud-gaps-b, 0px) + 8px))",
+    "gap-drop raises --flag-slot-top so announce steps from the dropped flag edge (and clears --hud-gaps-b)");
+  // ONE formula for the phone INPUTS top (HUD PR review 2026-10-10): --hud-sec-h is published in the chrome's
+  // zoom (--hud-z-top) and converted into this band's (--hud-z); the step below the #hud-limits chip is
+  // conditional (--inputs-below-limits, set only while the chip shows) rather than a permanent +1.75em+8px.
+  assert.equal(decl(css("css/hud.css"), "body:not(.desktop) #hud-inputs:not([data-hl-user])", "top"),
+    "calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px))",
+    "phone INPUTS park under the sector plate, and below the #hud-limits chip only while it shows");
+  assert.equal(decl(css("css/hud.css"), 'body:not([data-hud-hide~="limits"]):has(#hud-limits:not([hidden])) #hud-inputs', "--inputs-below-limits"), "calc(2.6em + 3px)",
+    "the limits step is the chip's own rule");
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px))",
+    "compact flag clears --hud-gaps-b (72px alone sat inside the gaps strip at phoneL 150%)");
+  assert.equal(decl(css("css/career.css"), '#quali .sheet[data-density="compact"] #q-foot', "display"), "grid");
+  assert.equal(decl(css("css/career.css"), '#quali.q-done .sheet[data-density="compact"] #q-foot #q-go', "grid-column"), "1 / -1");
+  const selectJs = code("js/ui/select-screen.js");
+  assert.match(selectJs, /b\.id\s*=\s*"sel-daily"/);
+  assert.match(selectJs, /selected\s*\?\s*"DAILY STANDARD"\s*:\s*"TODAY'S CHALLENGE"/,
+    "daily chip distinguishes the selected standard from the idle challenge action");
+  assert.match(selectJs, /firstChild\.nodeValue\s*=\s*"TODAY'S CHALLENGE · "/,
+    "choosing another circuit clears the selected Daily Standard chrome in place");
+  assert.match(selectJs, /bar\.insertBefore\(\s*b\s*,\s*bar\.firstChild\s*\)/,
+    "TODAY leads the filter bar so a wrapping sheet paints it as the banner");
+  assert.match(selectJs, /trackFilters[\s\S]*\["daily-open",\s*"DAILY OPEN"\]/,
+    "DAILY OPEN participates in the same filter semantics as ALL / SEASON / CLASSICS");
+  assert.match(selectJs, /G\.daily\.select\(/, "daily controls stage a plan on the picker");
+  assert.doesNotMatch(selectJs, /onclick\s*=\s*\([^)]*\)\s*=>\s*\{[^}]*G\.daily\.open\(/,
+    "a picker chip must never bypass NEXT, Race Settings and RACE!");
+  assert.match(code("js/garage/setup-sheet.js"), /rakeOut\.id\s*=\s*"cs-rake-readout"/);
+  const resultsJs = code("js/ui/results-sheet.js");
+  assert.match(resultsJs, /btn\.id\s*=\s*"res-daily-share"/);
+  assert.match(resultsJs, /clrBtn\.id\s*=\s*"res-ghost-clear"/);
+  assert.match(resultsJs, /lbHead\.className\s*=\s*"sel-label"/);
+  assert.doesNotMatch(resultsJs, /#e10600/, "results/standings heads use .sel-label, not leftover red ink");
+  assert.doesNotMatch(resultsJs, /font-size:11px/, "TT share/clear chips use .sel-chip, not inline type");
+  const shell = read("index.html");
+  assert.doesNotMatch(shell, /id="sel-inner"[^>]*pane-pair/,
+    "SELECT is one column (strip over hero); its foot spans the sheet by default");
+  assert.match(shell, /id="ss-inner"[^>]*pair-foot-full/,
+    "season-setup foot spans both pair columns like SELECT");
+  assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");
+  assert.match(shell, /id="sel-car"[^>]*><span>CHANGE CAR<\/span>/);
+  assert.match(shell, /id="sel-go"[^>]*>RACE SETUP</);
+  assert.match(shell, /id="practice-goal"/);
+  assert.match(code("js/ui/experience.js"), /SettingRow\.build\("practice-goal-row", "GOAL"\)/,
+    "Practice Goal becomes a setting row at runtime so the shell node count does not grow");
+  assert.match(shell, /id="htp-close"[^>]*type="button"[^>]*class="bigbtn alt"|id="htp-close"[^>]*class="bigbtn alt"[^>]*type="button"/,
+    "How to Play dismiss is CLOSE on the alt plate (explicit type=button)");
+  assert.match(shell, /id="htp-close"[^>]*>CLOSE</, "How to Play overlay dismiss is CLOSE");
+  const titleFlow = read("js/ui/title-flow.js");
+  assert.match(titleFlow, /htpClose\.addEventListener\("click"/,
+    "HTP CLOSE drops a stale #htp-* hash from title-flow, not the game entry");
+  assert.match(titleFlow, /\^#htp-/);
+  assert.doesNotMatch(readGameEntry(), /\^#htp-/);
+  assert.match(shell, /id="pm-settings-close"[^>]*type="button"/, "Settings BACK is an explicit button (Esc presses it)");
+  assert.match(shell, /id="pmsettings"[^>]*data-esc-close="pm-settings-close"/, "Settings root Esc dismisses via BACK");
+  assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
+  assert.match(shell, /id="sp-close"[^>]*class="bigbtn alt"/, "sp-close dismiss is the alt plate");
+  assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
+  assert.match(shell, /id="pm-advanced">DRIVING AIDS/, "settings door is DRIVING AIDS");
+  const settingsIndex = shell.slice(shell.indexOf('id="pm-settings-index"'), shell.indexOf("</nav>", shell.indexOf('id="pm-settings-index"')));
+  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|open-a11y|advanced|audio|open-files))"/g)].map((m) => m[1]),
+    ["pm-open-controls", "pm-open-driving", "pm-advanced", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files"],
+    "Settings home has the eight primary doors in order");
+  const pause = shell.slice(shell.indexOf('id="pausemenu"'), shell.indexOf("</dialog>", shell.indexOf('id="pausemenu"')));
+  assert.doesNotMatch(pause, /<button id="pm-driving"/, "DRIVING is a Settings page, not a pause shortcut");
+  assert.match(shell, /id="pm-panel-driving"/, "DRIVING has a dedicated Settings page");
+  assert.match(shell, /id="cz-cancel"[^>]*>BACK</, "customize cancel is BACK beside SAVE");
+  assert.match(shell, /id="lt-close"[^>]*class="bigbtn"/, "lighting tuner DONE stays a live-commit primary");
+  assert.doesNotMatch(shell, /id="lt-close"[^>]*class="bigbtn alt"/);
+  assert.match(shell, /id="ct-close"[^>]*class="bigbtn"/);
+  assert.doesNotMatch(shell, /id="ct-close"[^>]*class="bigbtn alt"/);
+});
+
+test("neutral buttons share the settings tab-header plate", () => {
+  const tokens = css("css/tokens.css");
+  const components = css("css/components.css");
+  const menus = css("css/menus.css");
+  const carsetup = css("css/carsetup.css");
+  const data = css("css/data.css");
+  assert.equal(decl(tokens, /:root/, "--plate"), "color-mix(in oklab, var(--carbon) 62%, transparent)");
+  assert.equal(decl(tokens, /:root/, "--plate-line"), "rgba(255, 255, 255, 0.16)");
+  assert.match(decl(tokens, /:root/, "--plate-on") || "", /^color-mix\(in oklab, var\(--red\) 18%/);
+  assert.equal(decl(components, ".bigbtn.alt", "background"), "var(--plate-opaque)");
+  assert.equal(decl(menus, ".sel-chip", "background"), "var(--plate)");
+  assert.equal(decl(menus, ".sel-chip.active", "background"), "var(--plate-on)");
+  assert.equal(decl(menus, "#race-settings .sel-chip.active", "background"), null,
+    "race settings inherit the one .sel-chip.active look — no per-screen restatement");
+  assert.equal(decl(carsetup, ".cs-tab", "background"), "var(--plate)");
+  // Same layer and specificity as the tap-target floor in css/components.css,
+  // and later: a `min-width: 0` here silently cancelled that WCAG 2.5.8 floor.
+  assert.equal(decl(carsetup, ".cs-tab", "min-width"), "var(--tap-min)", "the garage tabs keep the 24px width floor");
+  assert.equal(decl(carsetup, ".cs-tab.active", "background"), "var(--plate-on)");
+  assert.equal(decl(data, ".dh-pill.active", "background"), "var(--plate-on)");
+  assert.equal(decl(data, ".dh-livebtn.active", "background"), "var(--plate-on)");
+  assert.equal(decl(data, ".dh-tab", "color"), "var(--text)", "idle hub tabs are ink, not dim-as-disabled");
+  assert.equal(decl(data, ".dh-sortbtn", "color"), "var(--text)");
+  assert.equal(decl(css("css/overlays.css"), ".sel-label", "color"), "var(--steel)", "section chrome, not leftover dim");
+  assert.equal(decl(carsetup, ".cs-tab-lbl", "color"), "var(--text)");
+  assert.equal(decl(css("css/overlays.css"), "#htp-contents a", "color"), "var(--text)");
+  assert.equal(decl(css("css/overlays.css"), /#htp-contents a\[aria-current/, "background"), "var(--plate-on)",
+    "term-rail selected uses the one chip look (plate-on + red ring, no glow)");
+  assert.equal(decl(css("css/overlays.css"), /#htp-contents a\[aria-current/, "box-shadow"), null);
+  assert.equal(decl(css("css/overlays.css"), /#results-table > \.sel-label/, "margin-top"), "calc(var(--gap) * 1.2)");
+  assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab", "color"), "var(--text)");
+  // Flyby had --compact-at / #fb-rail but no compact rules (layout-audit 2026-10-05:
+  // sticky foot covered shot tabs; #fb-rows underHW). Pin the short-panel strip.
+  const tuner = css("css/tuner.css");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"]', "overflow"), "hidden");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-rail', "max-height"), "52%",
+    "compact flyby caps furniture so the foot stays in the dock");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] > .sheet-foot', "position"), "static",
+    "compact flyby foot must not stick over the shot strip");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "overflow-x"), "auto");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "touch-action"), "pan-x");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots.lt-tabs', "overscroll-behavior-x"), "contain");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-shots .lt-tab', "min-height"), "var(--tap-paint)");
+  assert.equal(decl(tuner, "#lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab", "min-height"), "var(--tap-paint)",
+    "lighting/camera/flyby category chips floor at painted --tap on touch");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"] #fb-ops button', "min-height"), "var(--tap-paint)",
+    "compact flyby row ops floor at --tap-paint");
+  assert.equal(decl(css("css/hud.css"), '#flyby-inner[data-density="compact"] #fb-freecam', "min-height"), "var(--tap-paint)",
+    "freecam floor lives in @layer hud (beats components)");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"][data-rail="on"] #fb-rail', "display"), "flex");
+  assert.equal(decl(tuner, '#flyby-inner[data-density="compact"][data-rail="on"] #fb-rows', "grid-column"), "2");
+  const narrowTabs = rulesFor(css("css/tuner.css"), /^\.lt-tabs$/).find((r) =>
+    r.context.includes("@container sheet (max-width: 480px)"));
+  assert.ok(narrowTabs, "narrow lighting tabs become a pan strip without waiting for compact");
+  assert.equal(narrowTabs.decls.get("flex-wrap"), "nowrap");
+  assert.equal(narrowTabs.decls.get("overflow-x"), "auto");
+  assert.equal(narrowTabs.decls.get("overscroll-behavior-x"), "contain");
+  assert.equal(narrowTabs.decls.get("touch-action"), "pan-x");
+  assert.equal(decl(css("css/tuner.css"), ".adv-sec", "color"), "var(--steel)", "section chrome, not a leftover red headline");
+  assert.equal(decl(menus, ".track-row.active .track-row-name", "color"), "var(--text)");
+  assert.equal(decl(components, "#pmsettings-inner .pm-doors button", "background"), "var(--plate-opaque)");
+});
+
+test("tool doors and lone foot actions do not stretch into banners", () => {
+  const components = css("css/components.css");
+  assert.equal(decl(components, ".pm-doors", "--balance-basis"), "12rem");
+  assert.equal(decl(components, ".sheet-foot .bigbtn:only-child", "flex"), "0 1 auto");
+  assert.equal(decl(components, ".pm-group .tune-row .tune-label", "position"), "static");
+  assert.equal(decl(components, '#pmsettings-inner .pm-groups > [role="region"] button', "white-space"), "normal");
+  assert.ok(rulesFor(css("css/overlays.css"), "#howtoplay dl").some((r) => r.context.includes("@container sheet (max-width: 600px)")));
+  assert.equal(decl(css("css/career.css"), ".cr-cheats .sel-chip", "min-width"), "0");
+});
+
+/* ── TunerPanel COPY VALUES in a VM ─────────────────────────────────────── */
+// The lt-* buttons (help toggle, RESET, COPY VALUES) are wired by js/lighting/tuner-panel.js;
+// they used to ride in photomode.js, which is photo mode only now.
+function bootCopyValues(opts = {}) {
+  const dom = makeDom();
+  const order = [];
+  const here = opts.here || "monza|dusk|dry";
+  const store = opts.store || { "monza|dusk|dry": { exposure: 1.2 }, "spa|night|wet": { fogDensityMul: 0.5, bloom: 0.3 }, "*": {} };
+  const sb = uiSandbox(dom, {
+    GameAudio: { uiSelect() {}, uiTick() {} }, PerfGov: { tier: () => 0 },
+    LightTune: { TUNE_DEFS: [], LT: {} },   // tuner.js destructures the registry at create()
+    LightStore: { tuned() {
+      const sunSlot = here.replace(/\|[^|]+$/, "|dry"), sunIds = ["sunElev", "sunAzim"];
+      const own = Object.keys(store[here] || {}).filter((id) => sunSlot === here || !sunIds.includes(id));
+      return own.length + (sunSlot === here ? 0 : sunIds.filter((id) => Object.hasOwn(store[sunSlot] || {}, id)).length);
+    } },
+    navigator: { clipboard: { writeText: () => { order.push("clipboard"); return opts.clipboardRejects ? Promise.reject(new Error("no")) : Promise.resolve(); } } },
+  });
+  sb.document.execCommand = (c) => { order.push("execCommand:" + c); return !!opts.execOk; };
+  const ctx = vm.createContext(sb);
+  seedClipboard(ctx);
+  vm.runInContext(src("js/lighting/tuner-panel.js"), ctx, { filename: "js/lighting/tuner-panel.js" });
+  const G = {
+    $: (id) => dom.byId(id), gfx: {}, els: { pmsettings: {} },
+    ltKey: () => here, setLightTune() {}, persistLightTune() {}, applyLightTune() {},
+    setTimeOfDay: () => "dusk", weather: () => "dry", exitPhotoMode() {},
+    _ltStore: store,
+    track: { def: { name: "Monza" } },
+  };
+  vm.runInContext("TunerPanel", ctx).create(G);
+  dom.byId("lt-copy").onclick();
+  return { dom, order, json: dom.byId("lt-json").value, btn: dom.byId("lt-copy"), sb };
+}
+
+/* LIGHTING TUNER → COPY VALUES: what it copies, and that the copy can succeed.
+ *
+ * Reported: the button leaves you trying to hand-select the text. Two causes,
+ * and the obvious one was not the main one.
+ *
+ * The payload was the file+local MERGE — measured at 805 conditions, 7,071
+ * knobs, 182,569 characters against the shipped light-presets.js. In a 10px
+ * textarea capped at 120px that is ~4,500 lines behind a 120px window: not hard
+ * to select, impossible. And it could never be pasted into a message either,
+ * which is the whole point of the button.
+ *
+ * The fallback was also engine-dependent, which is worse than broken because it
+ * works on the machine you test on. execCommand("copy") was only reached from
+ * the clipboard promise's REJECTION handler, a microtask later. Measured:
+ * Chromium keeps transient activation ~5 s, so the late call still copied and
+ * the OLD handler passed a clipboard read-back there. WebKit is documented as
+ * requiring the copy during gesture processing, which would make that the path
+ * that cannot fire on an iPhone — UNVERIFIED, this container's proxy blocks the
+ * WebKit download. Ordering the synchronous attempt first takes the engine out
+ * of the question without depending on which story is right. */
+test("COPY VALUES exports the player's edits under a name bake.mjs will refuse", () => {
+  const h = bootCopyValues();
+  assert.match(h.json, /^window\.LightEdits\s*=\s*\{/,
+    "the export must be a LightEdits DELTA — the name is the interlock that stops " +
+    "bake.mjs (a FULL REPLACE) from writing it and deleting every profile it omits");
+  assert.doesNotMatch(h.json, /LightPresets/, "and it must never wear the snapshot's name");
+  const w = {};
+  vm.runInNewContext(h.json, { window: w });
+  assert.deepEqual(Object.keys(w), ["LightEdits"], "the paste evaluates to exactly one assignment");
+  assert.deepEqual(Object.keys(w.LightEdits), ["monza|dusk|dry", "spa|night|wet"],
+    "built from the local overrides only — the condition just tuned FIRST, empty layers dropped");
+  assert.deepEqual({ ...w.LightEdits["spa|night|wet"] }, { fogDensityMul: 0.5, bloom: 0.3 });   // spread: the VM object is another realm's
+  // The player asked for their current condition first, then the rest.
+  assert.ok(h.json.indexOf("THIS CONDITION") > -1 && h.json.indexOf("EVERYTHING ELSE") > -1,
+    "both blocks are labelled for whoever reads the paste");
+  assert.ok(h.json.indexOf("THIS CONDITION") < h.json.indexOf("EVERYTHING ELSE"),
+    "the condition just tuned is emitted first");
+  assert.ok(h.json.length < 2000, "a delta, not the 182,569-character merge");
+  assert.equal(h.dom.byId("lt-json").hidden, false, "the textarea is revealed with the text selected");
+  const none = bootCopyValues({ store: { "*": {} } });
+  assert.equal(none.btn.textContent, "NOTHING TUNED", "no overrides → the button says so instead of exporting an empty object");
+});
+
+test("menu range sliders share a painted-size token that cancels UI SIZE zoom", () => {
+  assert.equal(decl(css("css/tokens.css"), ":root", "--slider"), "calc(32px / var(--ui-scale))",
+    "--slider is 32 painted px: divide by --ui-scale so sheet zoom does not grow the track");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "height"), "var(--slider)");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "min-height"), "var(--slider)");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "accent-color"), "var(--red)",
+    "every menu range is red, including DISPLAY");
+  assert.equal(decl(css("css/tuner.css"), /#audioset .tune-row input\[type="range"\]:disabled/, "accent-color"), "#6a6a75",
+    "MUSIC volume is grey only while its switch is off");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "appearance"), null,
+    "leave the UA slider chrome — appearance:none was the red-dot-on-grey look");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]::-webkit-slider-thumb", "width"), null);
+  assert.equal(decl(css("css/tuner.css"), ".tune-row input[type=\"range\"]", "height"), "var(--slider)");
+  assert.equal(decl(css("css/components.css"), ".pm-group .tune-row input[type=\"range\"]", "height"), "var(--slider)");
+  assert.equal(decl(css("css/hud.css"), ".pc-fovlab input[type=\"range\"]", "height"), "var(--slider)");
+  for (const file of ["css/tokens.css", "css/components.css", "css/tuner.css", "css/hud.css", "css/menus.css"]) {
+    for (const r of css(file)) {
+      if (!/input\[type=["']range["']\]/.test(r.selector)) continue;
+      for (const prop of ["height", "min-height"]) {
+        const v = r.decls.get(prop);
+        // --tap-paint is the coarse-pointer hit floor (#2158): also a painted size divided by --ui-scale.
+        if (v) assert.match(v, /--slider|--tap-paint/, `${r.selector} ${prop} in ${file} must use --slider (or the touch --tap-paint), not ${v}`);
+      }
+    }
+  }
+});
+
+test("short+compact .sheet re-derives --tap-paint against the capped zoom (#1346 follow-up)", () => {
+  // #1346 capped compact short-viewport .sheet zoom at --ui-compact-scale but
+  // left --tap-paint dividing by the uncapped --ui-scale, so help chips painted
+  // ~32 px at 150%+ (time-trial Driving zoom matrix shortHelpChips). The cap
+  // and the painted floor must share one effective zoom token.
+  const sel = ':where(body[data-density="compact"]) .sheet';
+  assert.match(decl(css("css/menus.css"), sel, "--_sheet-z") || "",
+    /min\(var\(--sheet-scale,\s*var\(--ui-scale\)\),\s*var\(--ui-compact-scale\)\)/,
+    "effective zoom is min(sheet-scale, ui-compact-scale)");
+  assert.equal(decl(css("css/menus.css"), sel, "zoom"), "var(--_sheet-z)");
+  assert.match(decl(css("css/menus.css"), sel, "--tap-paint") || "",
+    /var\(--tap-paint-at\)\s*\/\s*var\(--_sheet-z\)/,
+    "--tap-paint divides by the capped zoom, not the uncapped slider");
+});
+
+test("COPY VALUES tries the synchronous copy while the click still has activation", () => {
+  const h = bootCopyValues({ execOk: true });
+  assert.equal(h.order[0], "execCommand:copy",
+    "execCommand(\"copy\") must run BEFORE the clipboard promise. From inside its " +
+    "rejection handler it runs a microtask later — which Chromium still allows (~5 s of " +
+    "transient activation, measured) and WebKit is documented not to. Ordering it first " +
+    "is what stops the answer depending on the engine.");
+  assert.ok(h.order.indexOf("clipboard") > 0, "the async clipboard API is still tried afterwards (the only path that survives a browser without execCommand)");
+  const bare = bootCopyValues({ execOk: false, clipboardRejects: true });
+  assert.deepEqual(bare.order, ["execCommand:copy", "clipboard"], "both paths are attempted even when the first fails");
+});
+
+test("a lighting DELTA merges and an agent PROPOSAL replaces", () => {
+  // The two inputs mean different things inside one condition and conflating
+  // them loses data either way: a proposal is a considered whole profile (so it
+  // may drop a knob it decided against), a delta is the handful of sliders a
+  // person moved (so it may not delete the seven they did not touch).
+  const mp = code(".claude/skills/lighting-tuner/scripts/merge-proposals.mjs");
+  assert.match(mp, /merged\[\s*key\s*\]\s*=\s*delta\s*\?\s*Object\.assign\(\s*\{\s*\}\s*,\s*merged\[\s*key\s*\]\s*,\s*clean\s*\)\s*:\s*clean\b/,
+    "delta merges into the shipped map, proposal replaces it");
+  assert.match(mp, /if\s*\(\s*!delta\s*\)\s*delete\s+merged\[\s*key\s*\]/,
+    "only a proposal may empty a condition — a paste must never wipe a profile it never mentioned");
+  assert.match(mp, /\.LightPresets\s*&&\s*!\w+\.LightEdits/,
+    "a snapshot fed to the merge tool is named as such, not merged as a delta");
+  // bake.mjs BEHAVIOUR: hand it a real COPY VALUES export and it must refuse,
+  // naming the tool that does take one, before touching anything.
+  const delta = bootCopyValues().json;
+  const tmp = path.join(ROOT, "artifacts", "ui-improve-pass-delta.js");
+  fs.mkdirSync(path.dirname(tmp), { recursive: true });
+  fs.writeFileSync(tmp, delta);
+  try {
+    const r = spawnSync(process.execPath, [".claude/skills/lighting-tuner/scripts/bake.mjs", tmp], { cwd: ROOT, encoding: "utf8" });
+    assert.notEqual(r.status, 0, "bake.mjs must exit non-zero on a LightEdits delta");
+    assert.match(r.stderr, /LightEdits/, "…and say why by name");
+    assert.match(r.stderr, /merge-proposals\.mjs/, "…and point at the tool that does take one");
+  } finally { fs.rmSync(tmp, { force: true }); }
+});
+
+test("root view-transition fades the old snapshot out before the new fades in", () => {
+  // Simultaneous plus-lighter crossfade of ::view-transition-old/new(root)
+  // printed title tiles over the Grand Prix list and the Career sheet.
+  const tokens = css("css/tokens.css");
+  const parseMs = (v) => {
+    const s = String(v || "").trim();
+    const n = parseFloat(s);
+    if (!Number.isFinite(n)) return NaN;
+    return /ms$/i.test(s) ? n : n * 1000;
+  };
+  const oldDur = parseMs(decl(tokens, "::view-transition-old(root)", "animation-duration"));
+  const newDelay = parseMs(decl(tokens, "::view-transition-new(root)", "animation-delay"));
+  const newDur = parseMs(decl(tokens, "::view-transition-new(root)", "animation-duration"));
+  assert.ok(oldDur > 0 && oldDur <= 120, `old fade must be short, got ${oldDur}ms`);
+  assert.ok(newDelay >= oldDur, `new must wait until old is gone (${newDelay}ms delay vs ${oldDur}ms old)`);
+  assert.ok(newDur > 0, "new still fades in after the delay");
+  assert.equal(decl(tokens, "::view-transition-old(root)", "mix-blend-mode"), "normal");
+  assert.equal(decl(tokens, "::view-transition-new(root)", "mix-blend-mode"), "normal");
+  assert.equal(decl(tokens, "::view-transition-new(root)", "animation-fill-mode"), "both");
+  assert.equal(decl(tokens, "::view-transition", "background-color"), "var(--bg)");
+  assert.match(decl(tokens, "::view-transition-old(root)", "animation-name") || "", /apex-vt-fade-out/);
+  assert.match(decl(tokens, "::view-transition-new(root)", "animation-name") || "", /apex-vt-fade-in/);
+  // Reduced-motion still cancels the UA snapshots (prefers-reduced-motion + MOTION: REDUCED).
+  assert.ok(declares(tokens, /::view-transition-old\(\*\)/, "animation", /none/,
+    { context: /prefers-reduced-motion/ }));
+  assert.ok(declares(tokens, /::view-transition-new\(\*\)/, "animation", /none/,
+    { context: /prefers-reduced-motion/ }));
+  assert.ok(declares(tokens, /:root\[data-motion="reduce"\]::view-transition-old\(\*\)/, "animation", /none/));
+  assert.ok(declares(tokens, /:root\[data-motion="reduce"\]::view-transition-new\(\*\)/, "animation", /none/));
+});
+
+test("a locked part plays ONE blip, not one for the unlock and one for the fit", () => {
+  // Reported 2026-09-10: every locked row in the part selector double-blipped.
+  // Researching a part and fitting it are two steps of ONE click, and both
+  // called uiSelect. Deleting the first is the wrong fix — the unlock can
+  // succeed and the fit still refuse on budget, which returns early, and that
+  // blip is the only feedback that path has. So the contract is "at most once",
+  // not "never in the unlock branch".
+  const ss = code("js/garage/setup-sheet.js");
+  const click = ss.slice(ss.indexOf("row.onclick = () => {"));
+  const body = click.slice(0, click.indexOf("\n    };"));
+  assert.ok(/let\s+_blipped\s*=\s*false/.test(body),
+    "the parts row tracks whether it has already sounded");
+  assert.ok(/GameAudio\.uiSelect\(\)\s*;\s*_blipped\s*=\s*true/.test(body),
+    "the unlock blip records itself");
+  assert.ok(/G\.soundOn\s*&&\s*!_blipped\s*\)\s*GameAudio\.uiSelect\(\)/.test(body),
+    "the fit blip is suppressed when the unlock already sounded");
+});
+
+test("the camera preset a part fit triggers is silent — click() must not replay uiTick", () => {
+  // The OTHER half of the same report: fitting a part also frames the camera on
+  // that part, and framePreset does it by synthesising a click on the view
+  // button — which replays that button's handler, uiTick and all. So the fit
+  // sounded uiSelect and the camera sounded uiTick, on one click. The camera
+  // move is a consequence of the action, not a second action. Deleting the
+  // handler's uiTick would silence a REAL press of the button, so the mute
+  // belongs at the synthetic call site and must be restored even if the handler
+  // throws — hence the finally, which is the part worth pinning.
+  const ss = code("js/garage/setup-sheet.js");
+  const fn = ss.slice(ss.indexOf("function framePreset("));
+  const body = fn.slice(0, fn.indexOf("\n}\n"));
+  assert.ok(/b\.click\(\)/.test(body), "framePreset still drives the real button");
+  assert.ok(/G\.soundOn\s*=\s*false\s*;[^]*b\.click\(\)/.test(body),
+    "…with sound muted across the synthetic click");
+  assert.ok(/finally\s*\{\s*G\.soundOn\s*=/.test(body),
+    "…and restored in a finally, so a throwing handler cannot leave the game mute");
+});

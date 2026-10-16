@@ -23,9 +23,10 @@ far **Sierra Nevada** volcano ring (Popocatépetl / Iztaccíhuatl blue-grey rock
 snowcaps) reads behind a pale city sprawl.
 
 ## 3. Elevation
-Essentially **flat** — no significant gradient anywhere on the lap. The defining
-"altitude" reads visually (thin haze, washed sky), not as slope. Only a near-flat
-**banking** survives at the old Peraltada line into the final corners (`s≈0.90–0.97`).
+Near-flat — only two long, gentle swells (~5 m and ~3 m) over the lap. The defining
+"altitude" reads visually (thin haze, washed sky), not as slope. The old
+Peraltada line survives as real **banking** into the final corners (6° at
+`s≈0.97`, easing to 5° at the exit).
 
 ## 4. Landmarks & Surroundings by Lap Position
 
@@ -52,19 +53,42 @@ Essentially **flat** — no significant gradient anywhere on the lap. The defini
 - **Foro Sol stadium section (`s≈0.74–0.88`):** slow left-right-left squeezed between
   two packed baseball-stadium grandstand bowls — the iconic enclosed corridor.
 - **The Peraltada (`s≈0.90–0.97`):** the legendary banked sweep, now split into the
-  Estadio corners — model a subtle banked kerb edge.
+  Estadio corners — the road itself carries 6° of camber, easing to 5° at the exit.
 - **Kerbs:** bold red/white striped low boxes at every apex; deep at Turn 1 and Horquilla.
 
 ## 6. Modelling Notes
 - Sell the track with the **Foro Sol baseball bowl**: continuous eye-height seat
-  walls both sides, nested tiers, green/dirt bowl floor off tarmac, and clear
-  bright **entry/exit apertures** (do not wall the corridor ends shut).
+  walls both sides, nested tiers with **closed backs** (no open-shelf read), green/dirt
+  bowl floor off tarmac, and clear bright **entry/exit apertures** seated on grade.
+- Cover the midfield mustard terrain plate with **plaza / lawn / service-road**
+  patches so the overview is not a bare ochre void.
 - Keep the ground plane **green and flat** — it is a leafy park, not a desert.
   **Park-first**: dense Mixhuca `forestEdge` on the DRS/mid-lap; push/thin
   `cityFront` so CDMX sprawl sits as backdrop, not street canyon.
 - Scatter **festive accents**: pink/orange/green banner and flag boxes on stands and
-  fences for the fiesta atmosphere.
+  fences for the fiesta atmosphere; Mexican GP billboards at Foro entry/exit.
+- Pit/paddock: white hospitality suites with green/white/red fascia behind the
+  engine pit complex (not grey/orange placeholder boxes).
+- Brick/terracotta pavilion variety on the Mixhuca sports-city arcs.
 - Ring the horizon with a **far Sierra Nevada mountain ring** (cool blue-grey rock +
   snowcaps) under denser thin-air haze; keep city towers secondary and further back.
 - Lead the entry with the **lucha-libre statue** box as a small cultural Easter egg.
-- Lay a faint **banked kerb edge** through the final Peraltada/Estadio corners.
+- Bank the final Peraltada/Estadio corners with the road (6° easing to 5°), kerbs tilted with it.
+
+
+## Research pass — verified, already covered
+
+The Foro Sol stadium section, the Peralta banking, the crowd, the jacarandas
+and the **Popocatépetl / Iztaccíhuatl** twin-volcano silhouette on the
+high-altitude Sierra Nevada horizon are all modelled. The two volcanoes stand on
+TRUE compass bearings from the lap centroid (Popocatépetl 131.1°, Iztaccíhuatl
+117.9°, so Popo is the more southerly), compressed to 1.75 / 1.88 km; they were
+road-normal anchors 17° off and in swapped order until 2026-10-10.
+
+**DETAIL 2026-10-05:** closed Foro Sol terrace/bowl backs, seated portals +
+scoreboard masts, midfield plaza/lawn/service roads, brick pavilion variety,
+Mexican GP signage/crowd, and paddock suite identity.
+
+Note for a future pass: *cactus would be wrong here.* The Autódromo Hermanos
+Rodríguez is inside the urban Magdalena Mixhuca sports park at 2,240 m, not in
+desert — the generic "Mexico = cacti" instinct should be resisted.

@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit — the commit gate for EVERY agent host, not just Claude.
+# Activated by `core.hooksPath=.githooks` (package.json "prepare", run by every
+# host's `npm install`). AGENTS.md §Verification 3: a commit runs test:guards;
+# a docs-only commit runs docs-integrity alone; ratchet growth <= 40 lines is
+# auto-raised into the commit. Until 2026-10-14 this lived only in Claude
+# Code's PreToolUse hook (.claude/hooks/bash-guard.sh), so Cursor, Codex and
+# Grok Build committed unguarded (docs/notes/AGENT-GUARDS-2026-10-14.md).
+#
+# Claude Code sessions (CLAUDECODE=1) already ran the same gate in bash-guard.sh
+# before git started, so it is not run twice. APEX_SKIP_GUARDS=1 bypasses, as
+# there.
+set -u
+[ "${APEX_SKIP_GUARDS:-}" = 1 ] && exit 0
+[ -n "${CLAUDECODE:-}" ] && exit 0
+ROOT=$(git rev-parse --show-toplevel) || exit 1
+cd "$ROOT" || exit 1
+mkdir -p artifacts
+LOG=artifacts/pre-commit-guards.log
+# Tests create their own Git repositories. Keep the hook's staged-index context
+# for ratchets/git add, but do not let fixture subprocesses inherit its selectors.
+without_local_git_context() (
+  local git_name
+  while IFS= read -r git_name; do unset "$git_name"; done < <(git rev-parse --local-env-vars)
+  "$@"
+)
+if [ ! -d node_modules ]; then
+  echo "pre-commit: BLOCKED — node_modules is missing, so test:guards cannot run. Install first (npm install, or bash tools/env/cloud-agent-install.sh)." >&2
+  exit 1
+fi
+STAGED=$(git diff --cached --name-only --no-renames)
+[ -z "$STAGED" ] && exit 0
+GENERATED=" $(node tools/gen/targets.mjs 2>/dev/null | tr '\n' ' ') "
+DOCS_ONLY=1
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  case "$GENERATED" in *" $f "*) DOCS_ONLY=0; break ;; esac
+  printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$' || { DOCS_ONLY=0; break; }
+done <<LIST
+$STAGED
+LIST
+if [ "$DOCS_ONLY" = 1 ]; then
+  if ! without_local_git_context node --test tests/unit/docs-integrity.test.mjs >"$LOG" 2>&1; then
+    echo "pre-commit: BLOCKED — docs-integrity is red ($LOG):" >&2
+    grep -E 'not ok|expected|actual' "$LOG" | tail -15 >&2
+    exit 1
+  fi
+  exit 0
+fi
+if node tools/check/ratchets.mjs --auto-raise >artifacts/pre-commit-ratchets.log 2>&1; then
+  grep -q '^RAISED\|^LOWERED' artifacts/pre-commit-ratchets.log && { git add tests/data/ratchets.json; grep '^RAISED\|^LOWERED' artifacts/pre-commit-ratchets.log >&2; }
+else
+  echo "pre-commit: BLOCKED — a size ratchet is over what the auto-raise absorbs (artifacts/pre-commit-ratchets.log):" >&2
+  grep '^OVER' artifacts/pre-commit-ratchets.log >&2
+  exit 1
+fi
+# test:guards builds throwaway fixture repos; git exported GIT_DIR, GIT_INDEX_FILE
+# & co. into this hook (absolute in a linked worktree, the index.lock for -a), so
+# their git would act on THIS repo (#1807). Unset them for the suite only: the
+# ratchet auto-raise above must still stage into the commit's own index.
+# The idiom is githooks(5)'s own: https://git-scm.com/docs/githooks#_description
+# shellcheck disable=SC2046
+if ! ( unset $(git rev-parse --local-env-vars); npm run --silent test:guards ) >"$LOG" 2>&1; then
+  echo "pre-commit: BLOCKED — npm run test:guards is red (AGENTS.md §Verification 3). Last lines of $LOG:" >&2
+  grep -E 'not ok|Error|expected|actual' "$LOG" | tail -20 >&2
+  exit 1
+fi
+exit 0

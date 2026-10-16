@@ -1,0 +1,400 @@
+/* Apex 26 — RACE FACTS: what is happening in the race, as numbers and events a
+ * radio can talk about (js/race/race-radio.js is the only reader).
+ *
+ * THE TIMING LOOP. A gap in the HUD is `(a.prog - b.prog) / speed`, which is
+ * honest for a glance and useless for a sentence: it swings by a second every
+ * time either car brakes. Real timing does not divide a distance by a speed —
+ * it compares the moments two cars crossed the SAME line. So every car's clock
+ * time is written down at K checkpoints a lap, and the gap from A to B is how
+ * much later B reached the last checkpoint B has crossed. That number moves
+ * only when somebody actually gains time, which is the only time a radio should
+ * say it moved. Two laps of history per car also give the TREND for free: the
+ * gap now minus the gap one lap ago is "closing 0.3 a lap".
+ *
+ * A PASS MUST HOLD. Two cars side by side swap the prog order a dozen times in
+ * a corner; announcing each swap is how a commentator ends up yelling nonsense.
+ * A pair's order has to stay flipped for HOLD_S before it is a pass, and a
+ * swap involving a car in the pit lane is a pit stop, not an overtake.
+ *
+ * READ-ONLY. It reads cars and the G façade and writes nothing but its own
+ * state; no car field is touched, no sim RNG is drawn.
+ */
+var RaceFacts = (function () {
+  "use strict";
+
+  const K = 32;              // timing checkpoints per lap
+  const RING = K * 2;        // two laps of crossing times per car
+  const HOLD_S = 1.0;        // a changed order must hold this long to count
+  const NET_GRACE_S = 0.5;   // VS FRIEND: a remote car is drawn ~100 ms + latency behind
+  const PAIR_SPAN = 2;       // each car is compared with the next two in order
+  const BATTLE_GAP = 0.8;    // seconds — two cars this close are a fight
+  const RANK_S = 0.1;        // rank / pairs / battles at 10 Hz (checkpoints stay per step)
+
+  const inPits = (c) => !!(c && c.pitState && c.pitState !== "none");
+
+  function create() {
+    let t = 0, lapLen = 0, cars = null, nextId = 1, pairVisit = 0;
+    const st = new Map();          // car -> per-car timing + edge memory
+    const pairs = new Map();       // "id|id" -> { ahead, pend }
+    const battles = new Map();     // "id|id" -> { since, a, b }
+    const hist = new Map();        // player checkpoint -> { a, ga, b, gb, t }
+    let pitEndT = -1e9;            // when the player last left the pit lane
+    let order = [];
+    let fastest = { time: Infinity, car: null };
+    let pos = 0, pendPos = 0, pendT = 0;
+    let grid = null, started = false, caution = 0, playerHits = 0, playerSev = 0;
+    let leadLap = 0;               // the highest lap any leader has started (the leaderLap edge)
+    let rankAcc = 0, primed = false; // seconds since the last full pass; f filled once
+
+    function reset() {
+      t = 0; lapLen = 0; cars = null; nextId = 1; pairVisit = 0;
+      st.clear(); pairs.clear(); battles.clear(); hist.clear();
+      order = []; fastest = { time: Infinity, car: null };
+      pitEndT = -1e9;   // last race's pit exit must not mute this race's pace calls
+      pos = 0; pendPos = 0; pendT = 0; grid = null; started = false; caution = 0; playerHits = 0; playerSev = 0;
+      leadLap = 0; rankAcc = 0; primed = false;
+    }
+
+    function bag(c) {
+      let s = st.get(c);
+      if (!s) {
+        s = { id: nextId++, cp: -1, fresh: true, times: new Float64Array(RING), idx: new Int32Array(RING).fill(-1),
+          lap: c.lap || 0, lastLap: c.lastLap || 0, retired: !!c.retired, finished: !!c.finished,
+          stops: c.pitStops || 0, pit: inPits(c), pitT: -99, errs: c.errCount | 0 };
+        // Born Double, values kept: an integer here is a Smi field, and the first lap time / pit stamp split every
+        // bag's map mid-race and deopted gap()/timeAt() (PERF-HUNT-5).
+        const l0 = s.lastLap; s.lastLap = s.pitT = 0.5; s.lastLap = l0; s.pitT = -99;
+        st.set(c, s);
+      }
+      return s;
+    }
+
+    function timeAt(c, i) {
+      const s = st.get(c);
+      if (!s || i < 0) return null;
+      const k = i % RING;
+      return s.idx[k] === i ? s.times[k] : null;
+    }
+
+    /** Seconds from `a` (ahead) back to `b`, by the timing loop — or null until
+     *  both have crossed one line since they were first seen. A radio that
+     *  says a guessed number is worse than one that waits a checkpoint. */
+    function gap(a, b) {
+      if (!a || !b) return null;
+      const sb = st.get(b);
+      if (!sb || sb.cp < 0) return null;
+      const ta = timeAt(a, sb.cp), tb = timeAt(b, sb.cp);
+      return ta != null && tb != null ? Math.max(0, tb - ta) : null;
+    }
+
+    // By distance, with a finished car held at the prog it took the flag with
+    // (it stops there, and the field would otherwise "pass" it). NOT c.finPos:
+    // that stays 0 until endRace builds the results, so it cannot order anything
+    // mid-race. Equal distance — the lead lap all flagged — goes by flag time.
+    // A lapped car flagged at its next crossing froze a lap short, so it stays
+    // below the lead-lap cars still running to the line.
+    const distOf = (c) => {
+      const s = st.get(c);
+      return c.finished && s && s.finProg != null ? s.finProg : (c.prog || 0);
+    };
+    // EVERY RANK_S (race-radio ticks observe every step): the ranking fills
+    // the one `order` array in place with a hoisted comparator, pair / battle
+    // keys are integers. Pair records mark their last visit rather than
+    // rebuilding a membership Set each step; battle / shoved Sets are reused.
+    const _live = new Set(), _shoved = new Set();
+    const pairKey = (x, y) => x * 1048576 + y;   // ids are small ints; exact below 2^53
+    // The car's own flag time when it has one: a VS FRIEND rival is drawn
+    // ~100 ms in the past, so the tick race-facts SAW it cross is late.
+    const clockOf = (c) => (c.finishT > 0 ? c.finishT : st.get(c).finT || 0) + (c.penalty || 0);
+    const byRace = (a, b) => {
+      // TWO FLAGGED CARS go by laps, then by who took the flag first — never
+      // by distance: each froze wherever its last timestep left it past the
+      // line, up to ~1.4 m at 85 m/s, and a car flagged 20 s behind the winner
+      // could rank ahead of it and be told it won.
+      // A time penalty is served on that clock, as endRace classifies.
+      if (a.finished && b.finished) {
+        return ((b.lap || 0) - (a.lap || 0)) || (clockOf(a) - clockOf(b));
+      }
+      const d = distOf(b) - distOf(a);
+      if (Math.abs(d) > 1) return d;
+      if (a.finished !== b.finished) return a.finished ? -1 : 1;
+      if (a.finished) return clockOf(a) - clockOf(b);
+      return d;
+    };
+    function rank(list) {
+      order.length = 0;
+      for (const c of list) if (!c.retired) order.push(c);
+      order.sort(byRace);
+      return order;
+    }
+
+    // ONE answer per instance, reused every step: race-radio reads `f` and walks
+    // `ev` before the next observe, and its `last` (the request() snapshot) is
+    // the latest `f` either way. The events in `ev` are still fresh objects.
+    const _out = { f: null, ev: [] }, _fastestOut = { car: null, time: 0 }, _finishers = [];
+    // `f`'s fields in observe()'s fill order (every one is rewritten before `f` is handed out); lastLap / best / the
+    // fastest time are born Double — integer 0s made Smi fields, and the first lap time re-mapped `f` under every
+    // race-radio `still` reader (PERF-HUNT-5).
+    const _f = { t: 0, laps: 0, lap: 0, toGo: null, leaderToGo: null, pos: 0, rawPos: 0, n: 0, gridPos: null, ahead: null,
+      behind: null, gapA: null, gapB: null, rateA: null, rateB: null, leader: null, second: null, leadGap: null,
+      lastLap: 0.5, best: 0.5, fastest: null, energy: null, finished: false, retired: false, pitting: false, caution: 0, started: false };
+    _f.lastLap = _f.best = 0; _fastestOut.time = 0.5; _fastestOut.time = 0;
+    function observe(G, dt) {
+      const ev = _out.ev, finishers = _finishers;
+      ev.length = 0; finishers.length = 0; _out.f = null;
+      const p = G.player;
+      if (!p || !G.cars || !G.track) return _out;
+      if (G.cars !== cars) { reset(); cars = G.cars; }
+      lapLen = G.track.total || lapLen || 1;
+      t = G.raceT || 0;
+      const seg = lapLen / K;
+
+      // ── per car: timing loop and edges ──────────────────────────────────
+      let regrid = false; _shoved.clear();
+      for (const c of cars) {
+        const s = bag(c);
+        const i = Math.floor((c.prog || 0) / seg);
+        // FIRST SIGHT stamps nothing: the lines behind a car were crossed before
+        // anyone was watching, and stamping them "now" would invent gaps.
+        if (s.fresh) { s.fresh = false; s.cp = i; }
+        if (i < s.cp) {                             // shoved backwards: give the checkpoints back
+          s.cp = i;
+          // …and who-is-ahead with them: a re-grid or a rescue is not a pass,
+          // so the order after it is the new baseline, not a flip to call.
+          regrid = true; _shoved.add(s.id);
+          // …and the player's gap history with them. A red-flag restart puts the
+          // field back on the grid, bunched; comparing those gaps with the
+          // pre-flag ones logged at the same checkpoints read as "6.5 quicker".
+          if (c === p) hist.clear();
+        }
+        while (s.cp < i) {
+          s.cp++;
+          if (s.cp >= 0) { const k = s.cp % RING; s.times[k] = t; s.idx[k] = s.cp; }
+        }
+        if (c.retired && !s.retired) ev.push({ type: "retire", car: c, why: c.dnf || c.dnfWhy || "mechanical", pos: order.indexOf(c) + 1 });
+        s.retired = !!c.retired;
+        // AI mistake rising edge (c.errCount): radio only — never announce from
+        // the physics roll site. Skip the player (humans have no mistake model).
+        const errs = c.errCount | 0;
+        if (errs > (s.errs | 0) && !c.isPlayer && !c.human) {
+          ev.push({ type: "mistake", car: c, pos: order.indexOf(c) + 1 });
+        }
+        s.errs = errs;
+        const pit = inPits(c);
+        // The player's own stop is not pace: a gap measured across it (or across
+        // a caution, below) read as "LOSING 2.7 A LAP" — start the history again.
+        if (c === p && pit !== s.pit) { hist.clear(); if (!pit) pitEndT = t; }
+        if (pit && !s.pit) ev.push({ type: "pitIn", car: c, pos: order.indexOf(c) + 1 });
+        if (pit || s.pit) s.pitT = t;
+        s.pit = pit;
+        s.stops = c.pitStops || 0;
+        // A new lap TIME, not a new lap count on the same tick: a VS FRIEND
+        // rival's pose bumps its lap before its lap time arrives over the wire.
+        if (c.lastLap > 0 && c.lastLap !== s.lastLap) {
+          const lt = c.lastLap;
+          ev.push({ type: "lap", car: c, time: lt, pb: lt <= (c.best || Infinity) + 1e-6 });
+          if (lt < fastest.time) {
+            const prev = fastest.car;
+            fastest = { time: lt, car: c };
+            ev.push({ type: "fastest", car: c, time: lt, prev });
+          }
+        }
+        if ((c.lap || 0) > s.lap && c === p) ev.push({ type: "playerLap", lap: c.lap });
+        s.lap = c.lap || 0; s.lastLap = c.lastLap || 0;
+        if (c.finished && !s.finished) { s.finProg = c.prog || 0; s.finT = t; s.finDue = t + (c.penalty || 0) + (G.netPlay && G.netPlay.active && G.netPlay.active() ? NET_GRACE_S : 0); }
+        s.finished = !!c.finished;
+        // A car flagged with a time penalty has no place until the penalty has
+        // run out: a rival crossing inside it still beats it, and "YOU WIN THE
+        // RACE" 3 s before the results say P2 is the one call that must not be wrong.
+        if (s.finDue != null && t >= s.finDue - 1e-9) { s.finDue = null; finishers.push(c); }
+      }
+      // EVERY CAR IN: the classification is final, and endRace (race-control's
+      // finishDelay) no longer waits on a penalty — release the held finishes now
+      // or the last car home with a +5 s never hears its result.
+      let allIn = true;
+      for (let i = 0; i < cars.length; i++) if (!(cars[i].finished || cars[i].retired)) { allIn = false; break; }
+      if (allIn)
+        for (const c of cars) { const s = bag(c); if (s.finDue != null) { s.finDue = null; finishers.push(c); } }
+
+      // THE REST AT 10 Hz. Ranking, pairs and battles every physics step bought
+      // nothing — a pass must HOLD for a second, and gaps move only at a
+      // checkpoint — so they run every RANK_S on the accumulated dt (the hold
+      // timers integrate it, so a hold is as long as before). Any step with an
+      // edge to report (an event above, a re-grid, the start, a caution, a hit,
+      // a pit-lane change) runs it at once, so those events are spoken with
+      // fresh facts. The cost: a held pass / place lands up to RANK_S late, and
+      // a retire / mistake / pitIn `pos` reads a ranking up to RANK_S old.
+      rankAcc += dt;
+      const lvl = G.cautionLevel ? G.cautionLevel() | 0 : 0;
+      if (!(rankAcc >= RANK_S - 1e-9 || !primed || ev.length || finishers.length || regrid || lvl !== caution ||
+          (p.hits | 0) > playerHits || inPits(p) !== _f.pitting || (!started && G.state === "race" && t > 0))) {
+        _f.t = t; _f.energy = p.energy == null ? null : p.energy;
+        _out.f = _f;
+        return _out;
+      }
+      dt = rankAcc; rankAcc = 0; primed = true;
+      order = rank(cars);
+      // The finish position is the flagged car's place in the ranking — after
+      // ranking, so a car that just took the flag is placed by it.
+      for (const c of finishers) ev.push({ type: "finish", car: c, pos: order.indexOf(c) + 1 });
+      if (!started && G.state === "race" && t > 0) {
+        started = true;
+        grid = new Map(order.map((c, i) => [c, i + 1]));
+        ev.push({ type: "start", leader: order[0] || null });
+      }
+
+      // ── passes: a flipped pair that HOLDS ───────────────────────────────
+      // Pairs not looked at this tick are forgotten: a car that fell three
+      // places inside the hold left a stale "who is ahead", which fired as a
+      // pass — a lead change twenty seconds late — when the two met again.
+      // Only the shoved cars' pairs: one car reversing off a wall re-baselined
+      // every pass still inside its hold across the field, and they were never
+      // called. Many at once is a re-grid (red flag), which resets the lot.
+      if (regrid) {
+        if (_shoved.size > 3) pairs.clear();
+        else for (const k of pairs.keys()) if (_shoved.has(Math.floor(k / 1048576)) || _shoved.has(k % 1048576)) pairs.delete(k);
+        _shoved.clear();
+      }
+      pairVisit++;
+      for (let i = 0; i < order.length; i++) {
+        for (let j = i + 1; j <= i + PAIR_SPAN && j < order.length; j++) {
+          const a = order[i], b = order[j];
+          const ia = bag(a).id, ib = bag(b).id;
+          const key = ia < ib ? pairKey(ia, ib) : pairKey(ib, ia);
+          let r = pairs.get(key);
+          if (!r) { pairs.set(key, r = { ahead: a, pend: 0.5, key, visit: pairVisit }); r.pend = 0; continue; }
+          r.visit = pairVisit;
+          if (r.ahead === a) { r.pend = 0; continue; }
+          r.pend += dt;
+          if (r.pend < HOLD_S) continue;
+          r.ahead = a; r.pend = 0;
+          const sa = st.get(a), sb = st.get(b);
+          const pitty = inPits(a) || inPits(b) || t - sa.pitT < 4 || t - sb.pitT < 4;
+          if (started && t > 2 && !pitty && !a.finished && !b.finished) {
+            ev.push({ type: "pass", a, b, pos: i + 1 });
+          }
+        }
+      }
+
+      for (const r of pairs.values()) if (r.visit !== pairVisit) pairs.delete(r.key);   // deletion during Map iteration is defined
+
+      // ── the player's position, with the same hold ───────────────────────
+      const raw = order.indexOf(p) + 1;
+      if (!pos) pos = raw;
+      else if (raw && raw !== pos) {
+        if (raw !== pendPos) { pendPos = raw; pendT = 0; }
+        pendT += dt;
+        if (pendT >= HOLD_S) { ev.push({ type: "playerPos", pos: raw, prev: pos }); pos = raw; pendT = 0; }
+      } else { pendPos = 0; pendT = 0; }
+
+      // ── flags and contact ───────────────────────────────────────────────
+      // cautionLevel() (read above), not cautionInfo(): it is read every physics
+      // step, and info() builds an 11-field object (with a toFixed string) to read one int.
+      // A lap under the safety car or VSC is not pace either: every gap closes.
+      if (lvl !== caution) { ev.push({ type: "caution", level: lvl, prev: caution }); caution = lvl; hist.clear(); }
+      const hits = p.hits | 0;
+      // hitSev is the race's WORST impact, not this one's, so "rose" is the
+      // only honest signal that this contact was a big one.
+      const sev = p.hitSev || 0;
+      if (hits > playerHits) ev.push({ type: "hit", sev, rose: sev > playerSev });
+      playerHits = hits; playerSev = sev;
+
+      // ── the player's neighbours, and how the gaps are moving ────────────
+      const at = order.indexOf(p);
+      const ahead = at > 0 ? order[at - 1] : null;
+      const behind = at >= 0 && at + 1 < order.length ? order[at + 1] : null;
+      const gA = ahead ? gap(ahead, p) : null;
+      const gB = behind ? gap(p, behind) : null;
+      const sp = st.get(p);
+      let rateA = null, rateB = null;
+      if (sp && sp.cp >= 0) {
+        if (!hist.has(sp.cp)) {
+          hist.set(sp.cp, { a: ahead, ga: gA, b: behind, gb: gB, t });
+          hist.delete(sp.cp - RING);
+        }
+        const old = hist.get(sp.cp - K);
+        // …and the first seconds out of the lane are still the stop (a car
+        // accelerating from the limiter): no pace is read from them either.
+        if (old && old.t - pitEndT >= 5) {
+          if (ahead && old.a === ahead && old.ga != null && gA != null) rateA = gA - old.ga;
+          if (behind && old.b === behind && old.gb != null && gB != null) rateB = gB - old.gb;
+        }
+      }
+
+      // ── battles anywhere on the road ────────────────────────────────────
+      const live = _live; live.clear();
+      for (let i = 0; i + 1 < order.length; i++) {
+        const a = order[i], b = order[i + 1];
+        if (a.finished || b.finished || inPits(a) || inPits(b)) continue;
+        const g = gap(a, b);
+        if (g == null || g > BATTLE_GAP) continue;
+        const key = pairKey(bag(a).id, bag(b).id);   // ordered: a is ahead
+        live.add(key);
+        let bt = battles.get(key);
+        if (!bt) battles.set(key, bt = { since: t, a, b, pos: i + 1 });
+        bt.gap = g; bt.pos = i + 1;
+      }
+      for (const k of battles.keys()) if (!live.has(k)) battles.delete(k);
+
+      const leader = order[0] || null, second = order[1] || null;
+      // THE RACE'S LAP COUNT is the leader's, not the player's: the TV lap
+      // calls rode "playerLap", so a retired player never heard "LAST LAP!"
+      // and a lapped one heard it as the leader was taking the flag. The
+      // highest lap started, so a lead change on the same lap is not a new lap;
+      // first sight only sets the baseline.
+      if (leader && (leader.lap || 0) > leadLap) {
+        if (leadLap > 0) ev.push({ type: "leaderLap", car: leader, lap: leader.lap });
+        leadLap = leader.lap || 0;
+      }
+      const laps = G.lapsTarget || 0;
+      const leaderToGo = laps > 0 && leader ? Math.max(0, laps - (leader.lap || 0) + 1) : null;
+      // A LAPPED car is flagged at its first crossing after the leader's, so its
+      // laps to go are the leader's, not its own count: "3 LAPS LEFT" on what
+      // was really the last lap, then "2 TO GO" after the flag.
+      // When the leader will take the flag is estimated from both cars' average
+      // pace; the player's laps to go are the crossings until just after that.
+      let toGo = laps > 0 ? Math.max(0, laps - (p.lap || 0) + 1) : null;
+      // LAPPED means a lap down ON THE ROAD, not a higher lap counter (the
+      // leader has simply crossed the line first), and pace is the last LAP
+      // TIME, not distance over race time — a red-flag restart re-grids the
+      // field without resetting the clock, and read a player on lap 1 as
+      // "ONE TO GO".
+      const lapped = leader && leader !== p && !p.finished && (leader.prog || 0) - (p.prog || 0) >= lapLen;
+      if (toGo != null && lapped && leader.lastLap > 0 && p.lastLap > 0) {
+        const vL = lapLen / leader.lastLap, vP = lapLen / p.lastLap;
+        {
+          const tL = leader.finished ? 0 : Math.max(0, laps * lapLen - (leader.prog || 0)) / vL;
+          const at = (p.prog || 0) + tL * vP;
+          toGo = Math.max(1, Math.min(toGo, Math.floor(at / lapLen) - Math.floor((p.prog || 0) / lapLen) + 1));
+        }
+      }
+      const f = _f;
+      f.t = t; f.laps = laps;
+      f.lap = p.lap || 0;
+      f.toGo = toGo;
+      f.leaderToGo = leaderToGo;
+      f.pos = pos || raw; f.rawPos = raw; f.n = order.length;
+      f.gridPos = grid && grid.has(p) ? grid.get(p) : null;
+      f.ahead = ahead; f.behind = behind; f.gapA = gA; f.gapB = gB; f.rateA = rateA; f.rateB = rateB;
+      f.leader = leader; f.second = second; f.leadGap = leader && second ? gap(leader, second) : null;
+      f.lastLap = p.lastLap || 0; f.best = Number.isFinite(p.best) ? p.best : 0;
+      if (fastest.car) { _fastestOut.car = fastest.car; _fastestOut.time = fastest.time; f.fastest = _fastestOut; } else f.fastest = null;
+      f.energy = p.energy == null ? null : p.energy;
+      f.finished = !!p.finished; f.retired = !!p.retired; f.pitting = inPits(p);
+      f.caution = caution;
+      f.started = started;
+      _out.f = f;
+      return _out;
+    }
+
+    return {
+      observe, reset, gap,
+      order: () => order.slice(),
+      gridOf: (c) => (grid && grid.has(c) ? grid.get(c) : null),
+      battles: () => Array.from(battles.values()),
+    };
+  }
+
+  return Object.freeze({ create, K, HOLD_S, BATTLE_GAP });
+})();
+Object.freeze(RaceFacts);

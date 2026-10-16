@@ -1,0 +1,197 @@
+/* tlx-chunked-lifecycle — caller frees release TLX's pooled geometry owner
+ * before disposing the THREE geometry. No renderer or GPU is involved. */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
+
+const SRC = new URL("../../js/render/three/tlx-chunked.js", import.meta.url);
+const CHUNK_BINS = fs.readFileSync(new URL("../../js/render/shared/chunk-bins.js", import.meta.url), "utf8").replace(/^const\b/gm, "var");
+
+class BufferAttribute {
+  constructor(array, itemSize, normalized) {
+    this.array = array; this.itemSize = itemSize; this.normalized = !!normalized;
+  }
+}
+class Float16BufferAttribute extends BufferAttribute {}
+class BufferGeometry {
+  constructor() { this.attributes = {}; this.index = null; this.disposals = 0; }
+  setAttribute(name, value) { this.attributes[name] = value; }
+  setIndex(value) { this.index = value; }
+  dispose() { this.disposals++; }
+}
+class Vector3 { constructor(x, y, z) { this.x = x; this.y = y; this.z = z; } }
+class Sphere {}
+class Box3 {
+  constructor(min, max) { this.min = min; this.max = max; }
+  getBoundingSphere() {}
+}
+const THREE = { BufferAttribute, Float16BufferAttribute, BufferGeometry, Vector3, Sphere, Box3 };
+
+function factory(released) {
+  const sandbox = {
+    window: {}, localStorage: { getItem: () => null },
+    Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Array, Map, Math,
+    Frustum: {},
+  };
+  vm.createContext(sandbox);
+  seedLog(sandbox);
+  vm.runInContext(CHUNK_BINS, sandbox, { filename: "chunk-bins.js" });   // build() bins through ChunkBins at call time
+  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: "tlx-chunked.js" });
+  return sandbox.window.TLXShaders.chunked(THREE, {
+    isWebGPU: () => false,
+    releaseGeometry: geo => released.push(geo),
+  });
+}
+
+test("free releases and disposes a plain geometry exactly once", () => {
+  const released = [], sys = factory(released);
+  const mesh = sys.build({
+    pos: new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 1]),
+    idx: new Uint16Array([0, 1, 2]),
+  }, 72);
+  const geo = mesh.geo;
+  sys.free(mesh);
+  assert.deepEqual(released, [geo]);
+  assert.equal(geo.disposals, 1);
+  assert.equal(mesh.geo, null);
+});
+
+test("free releases every chunk geometry before dropping the handle", () => {
+  const released = [], sys = factory(released);
+  const idx = new Uint16Array(2000 * 3);
+  for (let t = 0; t < 2000; t++) {
+    const base = t % 2 ? 3 : 0;
+    idx[t * 3] = base; idx[t * 3 + 1] = base + 1; idx[t * 3 + 2] = base + 2;
+  }
+  const mesh = sys.build({
+    pos: new Float32Array([
+      0, 0, 0, 1, 0, 0, 0, 0, 1,
+      400, 0, 0, 401, 0, 0, 400, 0, 1,
+    ]),
+    idx,
+    _keepPositions: true,
+  }, 72);
+  // Copy out of the VM realm before deep comparison; the geometry identities
+  // are host objects, but Array.prototype on mesh.chunks belongs to the VM.
+  const geos = Array.from(mesh.chunks, ch => ch.geo);
+  assert.equal(geos.length, 2, "fixture spans two spatial chunks");
+  sys.free(mesh);
+  assert.deepEqual(released, geos);
+  assert.deepEqual(geos.map(g => g.disposals), [1, 1]);
+  assert.equal(mesh.chunks, null);
+  assert.equal(mesh.geo, null);
+});
+
+// DRAW MERGE (tlx-chunked.js build, PERF-FINDINGS §2ai): apex26.tlxChunkMerge
+// folds k x k lamp cells into one draw chunk. The draw chunks must carry every
+// triangle exactly once, and the lamp table must stay on the ORIGINAL cells —
+// the lit shader looks lamps up by world cell, so a merge that widened the
+// cells would squeeze more lamps under the same 24-lamp cap.
+function mergeFactory(value, constructors = {}) {
+  const sandbox = {
+    window: {}, localStorage: { getItem: (k) => (k === "apex26.tlxChunkMerge" ? value : null) },
+    Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Array, Map, Math,
+    Frustum: {}, ...constructors,
+  };
+  vm.createContext(sandbox);
+  seedLog(sandbox);
+  vm.runInContext(CHUNK_BINS, sandbox, { filename: "chunk-bins.js" });   // build() bins through ChunkBins at call time
+  vm.runInContext(fs.readFileSync(SRC, "utf8"), sandbox, { filename: "tlx-chunked.js" });
+  return sandbox.window.TLXShaders.chunked(THREE, { isWebGPU: () => false, releaseGeometry() {} });
+}
+function gridMesh() {
+  // 6 x 6 cells of 72 m, 70 small triangles in each: 2520 tris, past the
+  // 2000-tri threshold below which build() keeps one un-chunked geometry.
+  const pos = [], idx = [];
+  for (let cx = 0; cx < 6; cx++) for (let cz = 0; cz < 6; cz++) for (let t = 0; t < 70; t++) {
+    const x = cx * 72 + 5 + (t % 10) * 6, z = cz * 72 + 5 + Math.floor(t / 10) * 8, v = pos.length / 3;
+    pos.push(x, 0, z, x + 1, 0, z, x, 0, z + 1);
+    idx.push(v, v + 1, v + 2);
+  }
+  return { pos: new Float32Array(pos), idx: new Uint32Array(idx) };
+}
+const triSet = (mesh) => {
+  const all = [];
+  for (const c of mesh.chunks) { const a = c.geo.index.array; for (let i = 0; i < a.length; i += 3) all.push(a[i] + "," + a[i + 1] + "," + a[i + 2]); }
+  return all.sort();
+};
+
+test("merge 1 keeps one draw chunk per lamp cell and no separate lamp table", () => {
+  const mesh = mergeFactory("1").build(gridMesh(), 72);
+  assert.equal(mesh.chunks.length, 36);
+  assert.equal(mesh.lampCells, null);
+});
+
+test("merge 2 folds 2x2 cells per draw, keeps every triangle once, and keeps the lamp cells", () => {
+  const one = mergeFactory("1").build(gridMesh(), 72);
+  const two = mergeFactory("2").build(gridMesh(), 72);
+  assert.equal(two.chunks.length, 9, "6x6 cells -> 3x3 draw chunks");
+  assert.deepEqual(triSet(two), triSet(one), "the merged draws cover exactly the same triangles");
+  assert.equal(two.count, one.count);
+  assert.equal(two.lampCells.length, 36, "the lamp table stays on the 72 m cells");
+  const cellKeys = (cs) => Array.from(cs, (c) => c.gx + ":" + c.gz).sort();   // main-realm array: the build runs in a vm
+  assert.deepEqual(cellKeys(two.lampCells), cellKeys(one.chunks), "same cell coordinates as the unmerged chunks");
+  for (const c of two.chunks) for (let a = 0; a < 3; a++) assert.ok(c.min[a] <= c.max[a], "merged bounds are a real box");
+});
+
+test("the merge is ON by default (no stored value)", () => {
+  const mesh = mergeFactory(null).build(gridMesh(), 72);
+  assert.equal(mesh.chunks.length, 9);
+});
+
+for (const vertices of [65535, 65536]) for (const merge of [2, 3, 4]) {
+  test(`merge ${merge} builds final indices once at the ${vertices}-vertex boundary`, () => {
+    const fixture = () => {
+      const data = gridMesh(), pos = new Float32Array(vertices * 3);
+      pos.set(data.pos);
+      pos.set(data.pos.subarray(data.pos.length - 9), pos.length - 9);
+      data.pos = pos;
+      data.idx.set([vertices - 3, vertices - 2, vertices - 1], data.idx.length - 3);
+      return data;
+    };
+    const one = mergeFactory("1").build(fixture(), 72);
+    const expected = new Map();
+    for (const c of one.chunks) {
+      const key = Math.floor(c.gx / merge) + ":" + Math.floor(c.gz / merge);
+      if (!expected.has(key)) expected.set(key, []);
+      expected.get(key).push(...c.geo.index.array);
+    }
+    const IndexArray = vertices > 65535 ? Uint32Array : Uint16Array;
+    const allocations = [];
+    const tracked = new Proxy(IndexArray, { construct(target, args) {
+      allocations.push(args[0]);
+      return Reflect.construct(target, args);
+    } });
+    const sys = mergeFactory(String(merge), { [IndexArray.name]: tracked });
+    allocations.length = 0;   // exclude the factory's float-bit reinterpretation view
+    const mesh = sys.build(fixture(), 72);
+    assert.deepEqual(Array.from(mesh.chunks, c => Array.from(c.geo.index.array)), [...expected.values()],
+      "merged chunks preserve the original cell and triangle order, including high vertex indices");
+    assert.ok(mesh.chunks.every(c => c.geo.index.array instanceof IndexArray), "correct index width");
+    assert.equal(allocations.length, mesh.chunks.length, "one final index allocation per draw chunk");
+    assert.ok(allocations.every(n => typeof n === "number"), "allocate final storage directly without copying an intermediate index array");
+  });
+}
+
+// NORMAL PACK CLAMP. packAttr's range scan admits |v| <= 1.0001 (float noise on
+// normalised normals), but round(1.0001 * 32767) = 32770 overflows Int16 and
+// WRAPS to -32766 — a normal flipped into the opposite hemisphere. The pack
+// must clamp to ±32767 like VertexPack.qs.
+test("snorm16 normal pack clamps, never wraps, at the 1.0001 admission edge", () => {
+  // Float32 values just under the edge (1.0001 itself rounds ABOVE it in f32);
+  // both still round past 32767 unclamped.
+  const sys = factory([]);
+  const mesh = sys.build({
+    pos: new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 1]),
+    nrm: new Float32Array([1.00009, -1.00009, 0, 0, 1.00005, -1.00005, 0.5, -0.5, 1]),
+    idx: new Uint16Array([0, 1, 2]),
+  }, 72);
+  const a = mesh.geo.attributes.normal.array;
+  assert.equal(a.constructor.name, "Int16Array", "normals packed to Int16");
+  // WebGL2 (isWebGPU false) widens to snorm16x4 (A-W2, apex26.tlxPad4): the same clamped xyz, w 0.
+  assert.equal(mesh.geo.attributes.normal.itemSize, 4);
+  assert.deepEqual(Array.from(a),
+    [32767, -32767, 0, 0, 0, 32767, -32767, 0, Math.round(0.5 * 32767), Math.round(-0.5 * 32767), 32767, 0]);
+});

@@ -1,0 +1,410 @@
+// vstd-invariant — the PACE invariant, asserted instead of written down.
+//
+// AGENTS.md, Physics: "Adding anything that divides a speed by VMAX, or
+// compares one against a literal, means picking vTop() or vStd()." PACE is a
+// GROUND-SPEED SCALE — the OVERALL SPEED slider multiplies the car's real m/s —
+// so a threshold written against a raw speed means a different fraction of the
+// car's envelope at every setting.
+//
+// That was prose, nothing checked it, and it has escaped TWICE:
+//   A5  — the beached-rescue gate `GRASS_V * 0.6 + 1.5` was true only at PACE 1;
+//         above ~1.14 a beached car was never rescued, below ~0.57 a driver in
+//         full control was teleported to x = 0.
+//   A13 — `c.otArmed` required a bare `c.speed > 15` while the active-aero floor
+//         thirty lines below correctly read `vStd(c.speed) > X_MIN_SPEED`.
+//         Overtake armed at 42 % of top speed at pace 0.5 and 16 % at pace 1.3,
+//         against active aero's constant 35 %.
+//
+// So this is the guard, in the shape docs/ARCHITECTURE-REVIEW.md records for
+// A10 ("plus tests/unit/circuit-def-fields.test.mjs — the guard is the real fix").
+// tools/check/vstd-lint.mjs finds every `.speed` compared against a numeric literal
+// without vStd(); ALLOWED below is the set that is legitimately ABSOLUTE, each
+// with a written reason. A new absolute speed threshold cannot be added without
+// somebody writing down why it is allowed to be one.
+//
+// ── WHEN THIS TEST FAILS ──────────────────────────────────────────────────────
+// It failed because you added (or moved) a `.speed` vs literal comparison.
+// Decide which scale the number belongs on:
+//
+//   * "a fraction of what the car can do flat out" — overtake/active-aero
+//     arming, brake-disc glow at racing speed, anything the DIAL would read
+//     the same for at every pace — is on the STANDARD (pace-5) scale. Write
+//     `vStd(c.speed) > N`. See OT_MIN_SPEED / X_MIN_SPEED in js/game.js.
+//   * "crawling, stopped, reversing, or a divide-by-zero floor" is ABSOLUTE,
+//     because the bottom of the speed range is GRIP-limited, not power-limited:
+//     the AI's corner speed is sqrt(LAT_MAX·bankMu·grip / k) with no PACE in it,
+//     and REVERSE_MAX is a flat -5 m/s. Add a row to ALLOWED with the reason.
+//
+import test from "node:test";
+import assert from "node:assert/strict";
+import { speedLiteralViolations, stripNonCode, readFiles, violationKey } from "../../tools/check/vstd-lint.mjs";
+
+// ── the approved absolute sites ───────────────────────────────────────────────
+// Every row is a speed that is legitimately NOT pace-normalised, and says why.
+// `code` is the line it lives on, so moving code around does not silently widen
+// the exemption: a threshold that migrates to a new line must be re-justified.
+const ALLOWED = [
+  // ── relative closing speed between two cars in contact ──
+  // (Was: (dProg >= 0 ? b.speed - a.speed : …) > 0.5 — now uses hoisted
+  // aSp/bSp on _ct, so the .speed-literal scanner no longer sees it. The
+  // 0.5 m/s noise floor remains a relative closing-direction test.)
+
+  // ── AI traffic / stuck detection ──
+  {
+    file: "js/game.js",
+    expr: "c.speed < 7",
+    code: 'if (state === "race" && c.speed < 7 && boxed && raceCtl.level < 4) c.stuckT = (c.stuckT || 0) + dt;',
+    // "Boxed in AND going nowhere". The bottom of the speed range does not move
+    // with PACE: the AI's corner speed is sqrt(LAT_MAX·bankMu·gripMult()/kMax)
+    // and LAT_MAX is one of the deliberately-absolute force constants, so even
+    // the slowest hairpin sits well above 7 m/s at every OVERALL SPEED setting.
+    // 7 m/s therefore means "crawling" at every pace, never "a fraction of top".
+    why: "crawl detector below the GRIP-limited corner floor, which carries no PACE term",
+  },
+
+  // ── divide-by-zero guards ──
+  {
+    file: "js/game.js",
+    expr: "c.speed > 1",
+    code: "gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;",
+    // Re-keyed 2026-09-02: `ahead` is now the car ahead ON THE ROAD (a scan
+    // above this line), so the metres are already in gapAhead; the guard is the same.
+    why: "divide-by-zero guard — the same expression divides by c.speed",
+  },
+  {
+    file: "js/game.js",
+    expr: "player.speed > 1",
+    code: "const slipRaw = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;",
+    why: "divide-by-zero guard — the same expression divides by player.speed",
+  },
+
+  // ── sign tests: direction, not magnitude ──
+  {
+    file: "js/race/driving-coach.js", expr: "c.speed <= 0",
+    code: 'if (!c || c.finished || c.retired || (c.pitState && c.pitState !== "none") || c.speed <= 0) return "";',
+    why: "sign test — driving advice applies only while moving forwards; zero and reverse are excluded at every pace",
+  },
+  {
+    file: "js/game.js", expr: "c.speed > 0", code: "if (c.speed > 0) {",
+    why: "sign test — braking forwards vs. dropping into the reverse crawl",
+  },
+  {
+    file: "js/game.js", expr: "c.speed > 0",
+    code: "if (c.speed > 0) c.speed = Math.max(0, c.speed - cd * dt);",
+    why: "sign test — coast drag decelerates toward zero from the positive side",
+  },
+  {
+    file: "js/game.js", expr: "c.speed < 0",
+    code: "else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);",
+    why: "sign test — the negative half of the same coast-drag branch",
+  },
+  {
+    file: "js/game.js", expr: "c.speed > 0",
+    code: "const axEstTarget = braking ? (c.speed > 0 ? -brakeDecel : (c.speed > REVERSE_MAX ? -REVERSE_ACCEL * surfaceMu : 0))",
+    why: "sign test — brake held at a standstill is reverse (REVERSE_ACCEL), not a stop; REVERSE_MAX is the flat reverse crawl",
+  },
+  {
+    file: "js/physics/collide.js", expr: "c.speed < 0",
+    code: "function floorFwd(c, v) { return c.human && c.speed < 0 ? v : Math.max(0, v); }",
+    why: "sign test — a human already reversing keeps its sign through a contact",
+  },
+  {
+    file: "js/physics/player-forces.js", expr: "c.speed > 0",
+    code: "c.wheelLock = braking && c.speed > 0 && afF > lockOn",
+    why: "sign test — wheels lock only while rolling forwards; brake-held reverse is not a lock-up",
+  },
+  {
+    file: "js/game.js", expr: "c.speed < 0",
+    code: "if (c.speed < 0) gearMult = Math.max(gearMult, 0.7);",
+    why: "sign test — reversing sits below every gear band; hold the 1st-gear bog floor so throttle drives forward again",
+  },
+  {
+    file: "js/game.js", expr: "c.speed > 0",
+    code: "if (c.speed > 0) c.speed = Math.max(0, c.speed + a * dt);",
+    why: "sign test — uphill slope bleed applies only while moving forwards",
+  },
+  // player-forces.js dirS was `c.speed < 0 ? -1 : 1` (sign test, approved here);
+  // soft-blended to clamp(c.speed / DIR_BLEND, -1, 1) — a division, not a
+  // speed-literal comparison, so no ALLOWED row.
+  // incident-sim.js handback `dir = c.speed < 0 ? -1 : 1` removed 2026-10-04
+  // (verify-physics #5): the handback no longer keeps a settled roll's sign;
+  // its tests compare a local `v` against 0 and REVERSE_MAX, no speed literal.
+  {
+    file: "js/physics/wall-clamp.js", expr: "c.speed > 0",
+    code: "if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);",
+    why: "sign test — wall scrub bleeds toward zero from the positive side",
+  },
+  {
+    file: "js/physics/wall-clamp.js", expr: "c.speed < 0",
+    code: "else if (c.speed < 0) c.speed = Math.min(0, c.speed + scrub);",
+    why: "sign test — the negative half of the same wall-scrub branch",
+  },
+  {
+    file: "js/game.js", expr: "c.speed > 0.5", code: "if (c.speed > 0.5 && c.speed < 12)",
+    why: "sign test with a noise floor — 'the car is actually moving' before the launch window",
+  },
+
+  // ── the reverse-crawl regime: stopped / wedged / spun ──
+  // REVERSE_MAX is a flat -5 m/s and REVERSE_ACCEL a flat 5 m/s^2, neither
+  // PACE-scaled, so "stopped" and "crawling" are absolute by construction. Each
+  // of these gates exists to sit inside or just outside that crawl.
+  {
+    file: "js/game.js", expr: "c.speed < 3",
+    code: "const stoppedOnTrack = gasPressed && c.speed < 3 && raceT > 2 && !(braking && ds < -0.01);",
+    // Re-keyed 2026-09-02: gated on the DRIVER's pedal (gasPressed), not the
+    // touch auto-throttle; the 3 m/s threshold and its reason are unchanged.
+    why: "stopped detector, on the absolute scale REVERSE_MAX (-5 m/s) sets",
+  },
+  {
+    file: "js/game.js", expr: "c.speed < 4",
+    code: "(beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack);",
+    // Re-keyed 2026-09-16: the conjunction is gated on "not serving a stop"
+    // on the line above (a car held in its box is parked, not stuck).
+    // Its sibling on the very next line, `beached`, IS pace-scaled
+    // (GRASS_V * 0.6 * max(PACE, 0.05) + 1.5) — because that one must clear the
+    // grass-drag FLOOR, which is pace-scaled. This one must clear a standstill,
+    // which is not. The two being different is correct, not an oversight.
+    why: "pinned-against-a-wall standstill detector, same absolute regime as REVERSE_MAX",
+  },
+  {
+    file: "js/game.js", expr: "c.speed < 5",
+    code: "(c.speed < 5 && raceT > 2 && (!unstuckActive || digEsc) && laneQueueOk));",
+    // Re-keyed 2026-09-16: a car QUEUED in the pit lane behind a stop is held by
+    // a car, not stuck (rescuing it fired it into the parked car ahead).
+    // The `(c.contactT || 0) === 0` clause that used to sit in this conjunction
+    // was a VETO: an AI wedged against another car — the commonest way to be
+    // genuinely stuck — was the one case that could never be rescued, so the
+    // pair stayed welded for the rest of the race. Contact is now a patience
+    // knob on the delay instead (AiDrive.aiRescueDelay); the absolute-speed
+    // justification below is unchanged, because the threshold itself is.
+    // Re-keyed 2026-09-30: digOutEscalated lets rescue arm while dig-out is
+    // still on (`!unstuckActive || digEsc`); laneQueueOk keeps the pit-queue
+    // exempt unless dig-out has already failed. Same absolute crawl bound.
+    why: "AI standstill detector — exactly |REVERSE_MAX|, the absolute crawl bound",
+  },
+  // ── world-space visual emission ──
+  // These gate PARTICLES and MARKS that live in world metres, and each one's own
+  // emission velocity is real ground speed (c.speed * 0.35, 4 + c.speed * 0.22,
+  // …). At low pace the car genuinely covers less ground per second, so it
+  // genuinely throws less. Normalising the gate but not the velocity it feeds
+  // would make the two disagree. All sit below the grip-limited corner floor,
+  // i.e. they separate "crawling" from "driving" at every pace.
+  {
+    file: "js/game.js", expr: "c.speed > 10",
+    code: "skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10, dt);",
+    // The justification did not change when the SkidMarks extraction rewrote this
+    // line from an `if` into a stamp() argument — but the `code` match did, and the
+    // lint correctly reported the site as unapproved until this text followed it.
+    // That is the guard working: an approval that survives a refactor without being
+    // re-read is an approval nobody has actually re-granted.
+    why: "world-space emission gate — skid marks are laid at real ground travel",
+  },
+  {
+    file: "js/game.js", expr: "c.speed > 14",
+    code: "if (c.isPlayer && c.speed > 14 && Math.random() < dt * 22) {",
+    why: "world-space emission gate — wall-scrape sparks fly at 4 + c.speed * 0.22 real m/s",
+  },
+  {
+    file: "js/game.js", expr: "c.speed > 10",
+    code: "if (c.speed > 10) smokeI = Math.max(smokeI, clamp((_pvl - 3) / 5, 0, 1));",
+    why: "world-space emission gate — modulated by lateral slip (m/s), itself grip-limited and absolute",
+  },
+  {
+    file: "js/game.js", expr: "c.speed < 12", code: "if (c.speed > 0.5 && c.speed < 12)",
+    // The launch-wheelspin window. Pulling away from a standstill is an
+    // ACCEL/grip event in the absolute regime, and 12 m/s is below the
+    // grip-limited corner floor at every pace.
+    why: "upper bound of the launch window — the standstill/getaway regime, below the grip floor",
+  },
+  {
+    file: "js/game.js", expr: "c.speed > 10", code: "if (c.offroad && c.speed > 10) {",
+    why: "world-space emission gate — kickup flies at c.speed * 0.35 real m/s",
+  },
+
+  // ── exhaust after-fire, and the test hook that must mirror it ──
+  {
+    file: "js/game.js", expr: "c.speed > 8",
+    code: "const lifted = !!c.wasOnThrottle && !thr && c.speed > 8;",
+    why: "'not parked' floor for the lift-off after-fire — below the grip-limited corner floor",
+  },
+  {
+    file: "js/agent/apex.js", expr: "G.player.speed > 8",
+    code: "if (G.player && G._testInput && G._testInput.throttle && next && !next.throttle && G.player.speed > 8)",
+    // setInput() reproduces the `lifted` condition in js/game.js so a scripted
+    // throttle lift pops the exhaust the same way a real one does. It must use
+    // the SAME number as the site above: normalising one and not the other would
+    // make the debug hook and the driving model disagree about what a lift is.
+    why: "mirrors the exhaustPop gate in js/game.js and must carry the identical number",
+  },
+  // ── the standing-start goals: the car must be STOPPED before either arms ──
+  {
+    file: "js/race/race-insights.js",
+    expr: "Math.abs(c.speed) > 1",
+    code: 'if (["launch", "start"].includes(mode) && Math.abs(c.speed) > 1) { G.announce(mode === "start" ? "SET THIS ON THE GRID, BEFORE THE LIGHTS" : "STOP THE CAR BEFORE SETTING THIS DRILL", 2, "practice"); return false; }',
+    // A standing start is a standing start at every OVERALL SPEED setting: the
+    // gate asks "is the car still?", the same 1 m/s floor the braking goal's
+    // stop test uses, not a fraction of what the car can do.
+    // ONE test for BOTH standing-start goals (launch and start) on purpose —
+    // the RACE START drill needs the identical question, and duplicating the
+    // literal would have meant a second approval for the same physics.
+    why: "standstill test — a standing start must begin from rest, which carries no PACE term",
+  },
+  // ── named absolute constants (the UPPER_SNAKE form of the same rule) ──
+  {
+    file: "js/game.js", expr: "c.speed > REVERSE_MAX",
+    code: "const axEstTarget = braking ? (c.speed > 0 ? -brakeDecel : (c.speed > REVERSE_MAX ? -REVERSE_ACCEL * surfaceMu : 0))",
+    why: "the reverse-crawl limit: REVERSE_MAX is a flat -5 m/s, deliberately not PACE-scaled",
+  },
+  {
+    file: "js/game.js", expr: "c.speed < GRASS_V",
+    code: "function beachedAt(c) { return c.offroad && c.speed < GRASS_V * 0.6 * Math.max(PACE, 0.05) + 1.5 * Math.max(PACE, 0.05); }",
+    why: "already PACE-scaled by hand (the A5 repair): GRASS_V is a pace-1 number and the bound multiplies it by max(PACE, 0.05) to clear the pace-scaled grass-drag floor",
+  },
+  {
+    file: "js/physics/debris-world.js", expr: "(m.speed || 0) < MARBLE_MIN_SPEED",
+    code: "if ((m.speed || 0) < MARBLE_MIN_SPEED) return;",
+    why: "a debris MARBLE's own ground speed (8 m/s, 'no marbles when crawling') — world-space emission, not a car-envelope fraction",
+  },
+  {
+    file: "js/physics/wall-clamp.js", expr: "Math.abs(c.speed) >= WALL_SCRAPE_SPEED",
+    code: "const grindScrape = c.wasOnWall && Math.abs(c.speed) >= WALL_SCRAPE_SPEED;",
+    why: "standstill floor (2 m/s) — a car stopped against the barrier stays quiet at every pace",
+  },
+  {
+    file: "js/race/real-replay.js", expr: "run.speed <= SPOKEN_RATE_MAX",
+    code: "if (rr && rr.replayEvent && rr.commentates && rr.commentates() && run.speed <= SPOKEN_RATE_MAX) {",
+    why: "not a car speed at all: run.speed is the replay playback RATE (1x, 2x), above which the commentator cannot keep up",
+  },
+];
+
+// ── open findings ─────────────────────────────────────────────────────────────
+// Sites the audit could NOT justify as absolute. They are recorded rather than
+// silently exempted, and deliberately NOT fixed here: this file is the guard,
+// not the repair. Fixing one means deleting its row.
+//
+// EMPTY, and that is the point: the one finding this list ever held — the rain
+// spray's `wet && c.speed > 15` with its `clamp((c.speed - 15) / 45, 0, 1)` ramp,
+// which capped spray strength at 0.47 at pace 0.5 — was repaired as A16 in
+// docs/ARCHITECTURE-REVIEW.md and both halves now read vStd(c.speed). A row here
+// is a debt, not a licence; deleting one is what closing it looks like.
+const SUSPECT = [];
+
+const APPROVED = [...ALLOWED, ...SUSPECT];
+
+// ── unit tests: the matcher itself ────────────────────────────────────────────
+const scan = (src) => speedLiteralViolations(new Map([["synthetic.js", src]])).map((v) => v.expr);
+
+test("flags the A13 shape — a bare speed against a literal", () => {
+  assert.deepEqual(
+    scan("c.otArmed = otEnabled() && gap < OT_GAP && c.speed > 15;"),
+    ["c.speed > 15"],
+  );
+});
+
+test("accepts the A13 fix and every other vStd()-wrapped threshold", () => {
+  assert.deepEqual(scan("c.otArmed = otEnabled() && vStd(c.speed) > OT_MIN_SPEED;"), []);
+  assert.deepEqual(scan("const heating = braking && vStd(c.speed) > 12;"), []);
+  assert.deepEqual(scan("const lockTaper = 1 - vStd(Math.abs(c.speed)) / STEER_SPEED_REF;"), []);
+  assert.deepEqual(scan("if (vStd(Math.abs(c.speed)) > 25) foo();"), []);
+});
+
+test("flags every comparison operator, in both operand orders", () => {
+  assert.deepEqual(scan("if (c.speed >= 20) f();"), ["c.speed >= 20"]);
+  assert.deepEqual(scan("if (player.speed <= 4.5) f();"), ["player.speed <= 4.5"]);
+  assert.deepEqual(scan("if (15 < c.speed) f();"), ["15 < c.speed"]);
+  assert.deepEqual(scan("if (0 > c.speed) f();"), ["0 > c.speed"]);
+});
+
+test("sees through Math.abs / a || 0 default / a wrapping paren", () => {
+  assert.deepEqual(scan("const lifted = Math.abs(c.speed) > 8;"), ["Math.abs(c.speed) > 8"]);
+  assert.deepEqual(scan("if ((c.speed || 0) > 8) f();"), ["(c.speed || 0) > 8"]);
+  assert.deepEqual(scan("if (Math.max(0, c.speed) > 12) f();"), ["Math.max(0, c.speed) > 12"]);
+  assert.deepEqual(scan("if (ds < -0.03 &&\n    c.speed >\n    15) f();"), ["c.speed > 15"]);
+});
+
+test("flags a raw speed against an UPPER_SNAKE constant — the A13 shape with the number hidden behind a name", () => {
+  // `vStd(c.speed) > OT_MIN_SPEED` was fine; the same line WITHOUT vStd compares a raw
+  // ground speed to a pace-5-scale number and used to pass because only digits matched.
+  assert.deepEqual(scan("if (c.speed > OT_MIN_SPEED) f();"), ["c.speed > OT_MIN_SPEED"]);
+  assert.deepEqual(scan("c.xArmed = !braking && c.speed > X_MIN_SPEED;"), ["c.speed > X_MIN_SPEED"]);
+  assert.deepEqual(scan("if (Math.abs(c.speed) >= GRASS_V) f();"), ["Math.abs(c.speed) >= GRASS_V"]);
+  assert.deepEqual(scan("if (OT_MIN_SPEED < c.speed) f();"), ["OT_MIN_SPEED < c.speed"]);
+  // ...and the wrapped forms stay clean.
+  assert.deepEqual(scan("if (vStd(c.speed) > OT_MIN_SPEED) f();"), []);
+  assert.deepEqual(scan("if (vStd(c.speed) > X_MIN_SPEED) f();"), []);
+});
+
+test("does not flag a division, a shift, a lowercase identifier or a single-word constant", () => {
+  assert.deepEqual(scan("if (c.speed > limit) f();"), []);
+  assert.deepEqual(scan("if (c.speed > MAX) f();"), []);
+  assert.deepEqual(scan("if (c.speed > OT_MIN_SPEED.value) f();"), []);
+  assert.deepEqual(scan("const spN = clamp(c.speed / vTop(), 0, 1);"), []);
+  assert.deepEqual(scan("const n = c.speed >> 2;"), []);
+  assert.deepEqual(scan("const f = (c) => c.speed;"), []);
+});
+
+test("comments and strings are not code", () => {
+  assert.deepEqual(scan("// the old gate was c.speed > 15, see A13\nconst a = 1;"), []);
+  assert.deepEqual(scan("/* c.speed > 15 */ const a = 1;"), []);
+  assert.deepEqual(scan('Log.warn("game", "c.speed > 15");'), []);
+  assert.deepEqual(scan("Log.warn(`game`, `c.speed > 15`);"), []);
+});
+
+test("stripNonCode preserves every byte offset", () => {
+  const src = 'const a = 1; // c.speed > 15\nconst b = "c.speed > 15";\n/* x */\n';
+  const out = stripNonCode(src);
+  assert.equal(out.length, src.length);
+  assert.equal(out.split("\n").length, src.split("\n").length);
+  const [l0, l1, l2] = out.split("\n");
+  assert.equal(l0.trimEnd(), "const a = 1;");        // code kept, comment blanked
+  assert.equal(l1.replace(/ +/g, " "), 'const b = " ";');
+  assert.equal(l2.trim(), "");
+});
+
+// ── the real thing ────────────────────────────────────────────────────────────
+test("js/game.js and every manifest module that reads a speed contain only APPROVED absolute speed thresholds", () => {
+  const found = speedLiteralViolations(readFiles());
+  const approved = new Set(APPROVED.map(violationKey));
+  const unapproved = found.filter((v) => !approved.has(violationKey(v)));
+
+  assert.deepEqual(
+    unapproved.map((v) => `${v.file}:${v.line}  ${v.expr}`),
+    [],
+    "A speed compared against a numeric literal is PACE-sensitive: the OVERALL SPEED\n" +
+    "slider scales real m/s, so this threshold is a different fraction of the car's\n" +
+    "envelope at every setting. Wrap it in vStd() — or, if it is genuinely absolute\n" +
+    "(a force, a divide-by-zero floor, a sign test, the reverse crawl), add it to\n" +
+    "ALLOWED in tests/unit/vstd-invariant.test.mjs WITH the reason.",
+  );
+
+  // The exemption must not outlive the code it exempts.
+  const seen = new Set(found.map(violationKey));
+  assert.deepEqual(
+    APPROVED.filter((a) => !seen.has(violationKey(a))).map((a) => `${a.file}  ${a.expr}`),
+    [],
+    "stale entry: this site no longer exists (or its line changed). Delete the row.",
+  );
+
+  // Set comparison alone would hide a second, byte-identical copy of an already
+  // approved line, so pin the count too. (The `closing` test used to appear
+  // twice — once per collision pass — until the passes were deduplicated into
+  // pairContact(); every approved expression is unique in the source now.)
+  assert.equal(found.length, APPROVED.length);
+});
+
+test("every approved site carries a written justification", () => {
+  for (const a of APPROVED) {
+    assert.ok(a.why && a.why.length > 20, `${a.file} ${a.expr}: no justification`);
+    assert.ok(a.file && a.expr && a.code, `${a.file} ${a.expr}: incomplete row`);
+  }
+});
+
+test("open findings are recorded, not quietly exempted", () => {
+  // SUSPECT is a defect register, not a second allow-list: each row must explain
+  // the arithmetic, so "we already know" never decays into "we accepted it".
+  for (const s of SUSPECT) {
+    assert.match(s.why, /UNJUSTIFIED/, `${s.file} ${s.expr}: SUSPECT rows must say so`);
+    assert.ok(s.note && s.note.length > 200, `${s.file} ${s.expr}: needs the measured detail`);
+  }
+  assert.ok(SUSPECT.length <= 1, "a growing suspect list means the guard is being used as an allow-list");
+});

@@ -1,0 +1,128 @@
+/* Apex 26 — MONACO circuit definition (data only). */
+(function () {
+  "use strict";
+  (window.TrackDefs = window.TrackDefs || []).push(
+  {
+    id: "monaco",
+    name: "MONACO",
+    gp: "Monaco GP",
+    country: "Monaco",
+    night: false,
+    theme: "street_day",
+    lengthKm: 3.3,
+    gpLaps: 78,   // real race distance (3.337 km, 260 km regulation); lengthKm's 1 dp derives 79
+    // TYRE SEVERITY: what the SURFACE and the speeds do to a tyre, on top of the
+    // work the LAYOUT already makes it do (js/physics/tyre-model.js derives that
+    // emergently from the forces the car made). Real 2026 rate / the 0.0493 s/lap
+    // mean of the seven measured circuits — docs/research/TYRE-STRATEGY-DESIGN.md §5.5.
+    tyreSeverity: 1.01,  // Monaco 0.050 s/lap — a gentle surface against a punishing layout
+    baseHW: 5,
+    street: true,
+    // The pit complex (TrackPit): the STREET one, built on the harbour side
+    // (track right — the 2004 permanent pit building), 60 km/h, the narrowest
+    // lane in F1. Racing-space side, like every def.pit.
+    pit: { mode: "street", side: 1, limitKph: 60 },
+    terrainOuter: 28,
+    sceneryCoordinates: "source",
+    barrierGap: 2.0,
+    // SOURCE-trace fractions + source sides, like every range call in this
+    // def's scenery (sceneryCoordinates: "source", reverse: true): the engine
+    // maps them through TrackSpace.sceneryRange and flips the side, exactly as
+    // it does wall()/hedge() (racing s = startFrac - s, side' = -side).
+    // Racing windows: tunnel 0.438-0.538 (measured bore 0.449-0.524), Casino
+    // 0.108-0.178, 0.228-0.638 R, 0.938-0.078 R.
+    dressingExclusions: [
+      // Keep generic city furniture out of the tunnel and the Casino sightline.
+      { kinds: ["city", "foliage", "lighting"], s0: 0.6516, s1: 0.7516 },
+      // (racing 0.108-0.178: the Beau Rivage climb, kept as it ships.)
+      { kind: "city", s0: 0.0116, s1: 0.0816 },
+      // Casino Square as BUILT (racing 0.205-0.285, both sides): the Massenet
+      // bust, the Hôtel de Paris, the Café, the fountain and the Casino were
+      // re-seated here 2026-10-05 (scenery/monaco.js KRACE); the landmarks
+      // own the crest, no generic city or scatter between them.
+      { kinds: ["city", "foliage"], s0: 0.9046, s1: 0.9846 },
+      { kinds: ["city", "foliage"], s0: 0.5516, s1: 0.9616, side: -1 },
+      { kinds: ["city", "foliage"], s0: 0.1116, s1: 0.2516, side: -1 },
+      // Beau Rivage climb (R) — sparse cream/ochre canyon, not auto cityFront.
+      { kinds: ["city", "foliage"], s0: 0.1116, s1: 0.2016, side: 1 },
+      // Fairmont + Mirabeau climb (R): hotel / apartments own the hillside.
+      // Explicit cityFront(0.87, 0.95) used to keep emitting here (exclusions
+      // skip the GENERIC kit only). With the residual scenery origin shift,
+      // 0.8217 stopped at racing node fraction 0.368, before the hairpin.
+      // Extend through 0.430: the city slab at node 339 otherwise seats one
+      // corner on the cliff and hangs 9 m above its downhill terrain.
+      { kinds: ["city", "foliage"], s0: 0.7596, s1: 0.96, side: 1 },
+    ],
+    reverse: true,
+    // Rotate the start/finish line onto the main pit/harbour straight so the lap
+    // begins on the straight with the first corner at its end (fraction of the
+    // original trace; tuned against the reversed layout).
+    // Start/finish line. Snapped to the real one: coord 0.5 m off centreline; this trace is stored REVERSED, so its vertex 0 is not the line.
+    // 0.28 also measures straight (mean |k| 0.00298 over 120 m) but
+    // is the wrong PART of the lap. See docs/tracks/START-LINES.md.
+    startFrac: 0.2516,
+    sceneryStartFrac: 0.28,
+    pal: { horizon: [0.55, 0.68, 0.82], grass: [0.36, 0.35, 0.34], runoff: [0.42, 0.41, 0.4], fogDensity: 0.0014, sunDir: [0.22008805283522467, 0.8803522113408987, 0.4201681008672471], sun: [1, 0.98, 0.93], sunColor: [1, 0.97, 0.9] },
+    // Elevation, re-authored 2026-10-04 against THIS centreline (the old +30 m
+    // crest sat at arc 0.12, before Massenet, with Casino back at datum). The
+    // shape: the line at harbour level, the Beau Rivage climb from Ste Devote,
+    // the crest at Massenet/Casino (~+40 m — SRTM 30 m via Open Topo Data puts
+    // Casino Square ~45 m above the harbour), down Mirabeau and the Loews
+    // hairpin to Portier, the tunnel, and the harbour low through the chicane,
+    // Tabac and the pool. `s` is authored in the REVERSED source frame about
+    // sceneryStartFrac: racing arc = 0.2180 - s (mod 1; the comments give it).
+    elevations: [
+      { s: 0.0880, halfM: 250, rise: 7 },   // arc 0.130 Beau Rivage climb
+      { s: 0.9530, halfM: 600, rise: 41 },  // arc 0.265 Massenet / Casino crest
+      { s: 0.8180, halfM: 200, rise: 11 },  // arc 0.400 Mirabeau - Loews shoulder
+      { s: 0.5750, halfM: 360, rise: -4 },  // arc 0.643 tunnel exit / harbour chicane / Tabac
+    ],
+    // hwZones are SOURCE index fractions (TrackSpace.range "source": racing
+    // index = 0.2516 - s), then interpolated by arc; the arc windows below are
+    // MEASURED on the built hw (scratch/monaco-hw.cjs, 2026-10-05).
+    hwZones: [
+      // Casino Square: Massenet's apex (0.2124) through Casino corner
+      // (0.2743) — racing index 0.167-0.280 -> source 0.9712 / 0.0844, a
+      // wrap-through-zero zone (applyHwZones handles s1 < s0). The old
+      // 0.1524-0.2131 narrowed arc 0.044-0.114, Ste Devote / Beau Rivage.
+      { s0: 0.9712, s1: 0.0844, hw: 4.6, ease: 0.012 },  // arc 0.205-0.285 Massenet/Casino
+      { s0: 0.8217, s1: 0.8864, hw: 4.1, ease: 0.012 },  // arc 0.432-0.462 Loews hairpin
+      { s0: 0.7430, s1: 0.7741, hw: 4.3, ease: 0.012 },  // arc 0.485-0.510 Portier
+      { s0: 0.5579, s1: 0.5879, hw: 4.5, ease: 0.012 },  // arc 0.770-0.792 Tabac
+      { s0: 0.4848, s1: 0.5349, hw: 4.4, ease: 0.012 },  // arc 0.815-0.855 swimming pool
+      { s0: 0.3488, s1: 0.3918, hw: 4.3, ease: 0.012 },  // arc 0.930-0.955 Rascasse
+    ],
+    // Massenet and Mirabeau are TURN anchors (1-based into `turns` below): as
+    // fracs (0.1286 / 0.2961) the _sceneryShift compensation landed them on
+    // T1 Ste Devote and T4 (mid-Massenet). T3 0.2135 is Massenet's first apex
+    // (long left, +k), T7 0.3433 Mirabeau Haute (right, -k). The other three
+    // fracs measure onto T13 Tabac, T16 the pool and T18 Rascasse.
+    bankZones: [
+      { turn: 3, angleDeg: 3.0, widthM: 60 },         // Massenet
+      { turn: 7, angleDeg: 3.0, widthM: 160 },        // Mirabeau/descent
+      { frac: 0.7791, angleDeg: 3.0, widthM: 120 },   // Tabac
+      { frac: 0.8847, angleDeg: 2.5, widthM: 140 },   // swimming pool
+      { frac: 0.9417, angleDeg: 2.5, widthM: 100 },   // Rascasse
+    ],
+
+    // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
+    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
+    // re-seats turns when the start line moves.
+    sectors: [0.32, 0.68],
+    turns: [0.0666, 0.1516, 0.2135, 0.2341, 0.2535, 0.2742, 0.3433, 0.3615, 0.3834, 0.4077, 0.4344, 0.6407, 0.7171, 0.7378, 0.7645, 0.8227, 0.8640, 0.8797, 0.9064],
+    barrier: { a: [0.95, 0.95, 0.96], b: [0.86, 0.16, 0.15], c: [0.13, 0.28, 0.55], night: [0.20, 0.20, 0.24], tyre: [0.86, 0.16, 0.15] },  // red/white + Riviera navy
+    furniture: { tree: "palm",  fol: [0.25, 0.45, 0.22], lamp: "globe", lc: [1.0, 0.92, 0.70] },  // Riviera palms
+    kit: { marshal: "tent",      rail: "armco",       fence: "hoarding",  tyre: "tecpro",  board: "fascia",    gantry: "cantilever", camera: "scaffold",  hoarding: "barrierTop" },
+    standSet: ["scaffold", "pastel", "alu"],
+    // cityStyle: neon / dayPal name TrackSceneryData.NC / .DC colours
+    // Cream/ochre bias — Riviera identity; terra/pink kept sparse.
+    cityStyle: { neon: ["gold", "teal", "white", "rose"], bias: 0.10, fh: [9, 16], bh: [12, 24],
+                 kinds: ["setback", "slab", "podium", "tiered", "chevron", "dome", "hall"], neonKinds: [], tone: { n: [0.22, 0.19, 0.15], d: [0.90, 0.84, 0.70] },
+                 dayPal: ["cream", "ochre", "tan", "sand", "peach"] },
+    // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
+    // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.
+    path: { len: 3325, pts: [[-118,284.6],[-123.1,279.5],[-128.6,274.7],[-139.8,264.2],[-151.6,255],[-159.1,240.2],[-164.7,224.5],[-167.3,210.3],[-167.9,195.1],[-164,180.7],[-155.1,166.9],[-139.4,150.6],[-121.3,139.2],[-106.5,134],[-80,129.6],[-52.2,125.7],[-19,118.2],[3.7,108.9],[55.6,84.3],[73.6,77.9],[96.6,76],[130.1,70.6],[166.7,60.6],[232.2,41.3],[257.9,36.8],[286.9,33.1],[307.8,30.6],[323,29.9],[340,25.8],[347,22.4],[349.8,17.4],[349.5,9],[348.9,-4.7],[350.2,-13.7],[353,-23.9],[358.6,-40.6],[363.6,-59.1],[366.4,-85.8],[367.9,-111.5],[367.9,-145],[363.4,-196.5],[357.8,-236],[353.5,-263.2],[347.3,-288.5],[324.7,-367.1],[314.4,-395.3],[304.8,-410.2],[292.4,-430.1],[275.5,-450.9],[272.6,-459.9],[271.2,-467.2],[271,-476.3],[267.2,-480.2],[261,-484.9],[251.2,-486.3],[240.2,-486.1],[223.5,-483.4],[193.5,-475.5],[186.7,-471.5],[184.6,-464.6],[189,-451.6],[192.8,-447.4],[200.2,-444.1],[215.2,-437.1],[228.5,-429.4],[246.7,-411.1],[261.2,-390.4],[269.6,-374.6],[277.9,-354.6],[287,-328.1],[288.5,-316.4],[286.7,-310.8],[278.7,-306.9],[270.8,-301.4],[267.2,-296.5],[266.8,-290.4],[268,-285.8],[271.6,-271.5],[285.7,-189.7],[287.2,-177.8],[290.8,-169.6],[299.2,-161.9],[311.6,-152.8],[317.3,-146.5],[320.1,-139.9],[320.5,-130.4],[320.2,-91.9],[317.3,-69.5],[314.4,-56.6],[308,-38.5],[300,-20.3],[290.5,-1.7],[284.4,4.6],[276.1,6],[263.5,7.9],[218.2,15],[168.9,22.1],[69.6,35.1],[62.8,34.7],[50.3,27.6],[39,29.4],[31.1,32.2],[28.7,37.7],[27.5,43.2],[27.3,48],[24.1,53.5],[5.3,57],[-30.2,62.6],[-85.3,75.6],[-122.6,88.5],[-178.1,114.4],[-206.9,128.5],[-255.2,158],[-289,194.8],[-312.4,224.7],[-332.6,260],[-344.4,290.9],[-355.1,334.3],[-365.3,402.4],[-367.9,468.6],[-365.1,480],[-357.8,483.6],[-344,482.6],[-331.3,478.2],[-322.1,474.5],[-313.2,471.2],[-296.7,467],[-286.1,461.5],[-283.7,456.8],[-282,451.6],[-282,445],[-285.2,438.1],[-307.8,409.4],[-315.5,403.9],[-318.5,398.2],[-317.1,391.5],[-312.6,386.9],[-306.6,385.1],[-301.3,386.5],[-298,390.9],[-295.5,398.2],[-288.9,410.3],[-279.1,424],[-273.9,430.7],[-269.4,439.6],[-268.5,447.1],[-268.3,456.2],[-267.2,467.2],[-261.7,477],[-254.1,483.2],[-243.3,486.3],[-234.3,483.8],[-228.3,475.3],[-141.7,357.8],[-124.6,336.3],[-119.2,327.6],[-113.4,315.3],[-111.1,306.3],[-112.7,296.3]] },
+  }
+  );
+})();

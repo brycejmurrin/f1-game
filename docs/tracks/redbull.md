@@ -16,19 +16,22 @@ Bright, clear alpine daylight, vivid summer-green hills against forested dark-gr
 - Red Bull brand red/navy: `[0.82, 0.10, 0.16]` / `[0.10, 0.14, 0.40]`
 
 ## 3. Elevation
-Big ~55–65 m swing per lap (cosine bumps on the GPS path); the bowl makes climbs and drops very readable.
-- s≈0.00–0.12: launch uphill off the start straight, **steep climb** into Turn 1 (Niki Lauda Kurve).
-- s≈0.12–0.25: keep climbing to the **high point at Turn 3 (Remus)** — circuit's crest (~+32 m bump).
-- s≈0.25–0.55: **long descent** through Turn 4 (Schlossgold) and fast downhill sweepers (~−28 m).
-- s≈0.70–1.00: undulating final sector dropping back down into the stadium / start straight.
+Real Styrian bowl from the SRTM bake in `js/track/circuit-elevations.js`
+(~53 m peak-to-trough, grade capped at 5.5%). Continuous climb and descent —
+not three cosine bumps with flat shelves between them.
+- Launch uphill into Turn 1 (Niki Lauda); crest near Remus / Turn 3.
+- Long descent through Schlossgold and the downhill sweepers.
+- Undulating final sector back into the stadium / start straight.
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |
 |------|------|----------|-----------------|
 | 0.00 | L | near | The Wing (pit building): long low white slab box, thin floating roof-blade box on slim pillars |
-| 0.00 | R | mid | Main grandstand: tall tiered slab box, red Red Bull-tint banner strip on top |
+| 0.00 | R | mid | Start-Ziel grandstand: tall tiered slab box, red Red Bull-tint banner strip on top |
 | 0.05 | R | near | Pit-straight scoreboard / light gantry: tall thin pole-box with wide flat screen-box across the track |
-| 0.10 | L | far | Charging-bull statue: large dark bull-shape box under a tall archway box on a green hillside |
+| 0.096 | R | mid | **Steiermark / Niki Lauda Kurve stand** (`redbull-lauda-kurve-stand`): uncovered multi-tier just past T1 apex (outside), navy/red fascia, no roof |
+| 0.10 | L | far | Charging-bull statue (`redbull-bull-plaza`): dark bull under white arch on green hillside (Yellow zone / near Mitte) |
+| 0.125+ | R | mid | Red Bull climb stands: long permanent tribune after T1 exit toward Remus |
 | 0.18 | both | far | Forested Alpine mountains: stacked dark-green box ridges climbing the horizon |
 | 0.22 | R | near–mid | Remus crest amphitheatre: tiered stands + green hillside ski-jump ramp |
 | 0.30 | both | mid | T3–T4 spectator amphitheatre: stacked green hillside mounds + pines on rim |
@@ -52,3 +55,14 @@ Big ~55–65 m swing per lap (cosine bumps on the GPS path); the bowl makes clim
 - Tint grandstands and gantry banners Red Bull red/navy; concentrate stands at the start, T3 crest, and the final stadium bowl.
 - Scatter tall narrow cone-boxes as pine forest along the descending mid-sector; add a long smooth-green ski-jump-style ramp box on one far hillside.
 - Use green-tinted run-off pans rather than grey asphalt aprons to keep the alpine-green theme dominant.
+
+## Research pass — wave 6 (sourced vs uncertain)
+
+### Sourced (built)
+- **10 corners**; T1 is the **Niki Lauda Kurve** (renamed 2019); T3 Schlossgold / Remus; T9 Jochen Rindt. — https://www.redbullring.com/de/events-tickets/formel-1/formel-1-circuit/ ; https://www.formula1.com/en/latest/article/turn-1-in-austria-renamed-in-honour-of-niki-lauda.3CnJNtxF6jILY5JOKrgNpO
+- **Tribüne Steiermark** at T1 (uncovered, outside the approach / apex) — named `redbull-lauda-kurve-stand`. Official stand roster also lists Start-Ziel, Red Bull, Nord (covered, T4), Mitte, T10. — https://www.redbullring.com/en/events-tickets/moto-gp/ ; https://oversteer48.com/steiermark-grandstand-red-bull-ring-austria/
+- **Charging-bull statue** under arch (`redbull-bull-plaza`) already present near the hillside Yellow / Mitte area. — https://oversteer48.com/red-bull-ring-general-admission-views-tips-guide/
+
+### Uncertain (not built as fact)
+- Exact metre positions of every stand sector (fan-blog seating charts differ); names taken from redbullring.com.
+- Bull statue physical size (no sourced dimension) — keep silhouette-scale only.

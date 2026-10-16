@@ -1,0 +1,800 @@
+/* menu-a11y-audit.test.mjs — the 2026-09 keyboard / gamepad / a11y audit of
+ * the title menu, sub-menus and dialogs, pinned as BEHAVIOUR on
+ * tests/helpers/mini-dom.mjs where a module runs in a VM, as RULES through
+ * tests/helpers/css-rules.mjs where the subject is a stylesheet, and as
+ * lockstep checks over index.html and the layer lists.
+ *
+ * CONFIRMED findings (each fixed, each pinned here):
+ *   1. Focus was DROPPED by the screens that are not <dialog>s (#select,
+ *      #career, #carsetup, the tuners, the title): the button you pressed went
+ *      `hidden`, focus fell to <body>, BACK left it there. TopModal now keeps a
+ *      per-layer focus memory (land on open, restore on close).
+ *   2. TopModal's focus containment took the first focusable in DOM order even
+ *      when it was hidden — `focus()` on a hidden node is a silent no-op.
+ *   3. A text field owned EVERY key in MenuNav, so a pad that landed on the
+ *      circuit search box could not leave it with the D-pad; a range slider
+ *      lost Home/End (the ARIA slider ends) to the layer-wide Home/End.
+ *   4. role=tab owned every arrow, and the rails' own handlers mapped the
+ *      perpendicular axis to "next tab" (garage) or "stay" (settings) — a pad
+ *      had no route from the garage category rail to the parts list, or from
+ *      the settings tab strip to the panel under it.
+ *   5. `#customize .cz-sep` was white at 0.4 alpha: 3.75:1 over the darkest
+ *      ground, below AA for 14px text.
+ *   6. The non-dialog screens announced nothing on entry (no role, no name);
+ *      #announce (LIGHTS OUT / FINAL LAP / SAVE RESTORED …) was not a live
+ *      region, so a screen reader never heard a race or save event.
+ *   7. ScrollFade's screen list was one short of UiLayers (the title screen).
+ *
+ * Run: node --test tests/unit/menu-a11y-audit.test.mjs   (npm run test:tooling-fast)
+ */
+import { readCssSource } from "../helpers/css-source.mjs";
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
+const code = (name) => read(name).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+const src = (p) => read(p).replace(/^const\b/gm, "var");
+const HTML = read("index.html");
+
+/* ── shared harness ─────────────────────────────────────────────────────── */
+
+// Visibility the way UiLayers.shown() answers it: no hidden ancestor, a box.
+function shownIn(el) {
+  for (let n = el; n; n = n.parentNode) if (n.hidden) return false;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0;
+}
+
+// A MutationObserver that fires when the test says the attribute flipped —
+// mini-dom has no mutation records, and the ORDER of callbacks (observer
+// creation order, after every flip of the same tick) is what the focus memory
+// relies on, so flipAll() sets every attribute first and then notifies.
+function moShim() {
+  const observers = [];
+  class MutationObserver {
+    constructor(cb) { this.cb = cb; }
+    observe(el) { observers.push({ el, cb: this.cb }); }
+    disconnect() {}
+  }
+  const flipAll = (pairs) => {
+    for (const [el, hidden] of pairs) el.hidden = hidden;
+    for (const o of observers) if (pairs.some(([el]) => el === o.el)) o.cb([]);
+  };
+  return { MutationObserver, flipAll, flip: (el, hidden) => flipAll([[el, hidden]]) };
+}
+
+function sandbox(dom, extra = {}) {
+  const sb = {
+    Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet, RegExp, Promise, Date, parseFloat, parseInt, isFinite,
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    document: dom.document,
+    addEventListener() {}, removeEventListener() {},
+    setTimeout: () => 0, clearTimeout() {},
+    getComputedStyle: () => ({ getPropertyValue: () => "", overflowY: "auto", visibility: "visible", zIndex: "auto" }),
+    innerWidth: 1000, innerHeight: 600, requestAnimationFrame: () => 0,
+    ...extra,
+  };
+  sb.window = sb;
+  return sb;
+}
+
+// Layers stack in ORDER; the last visible one is on top (z-index stand-in).
+function layerStack(dom, ids) {
+  const els = ids.map((id) => { const el = dom.byId(id); el._rect = { left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600 }; return el; });
+  const UiLayers = {
+    LAYER_IDS: ids,
+    shown: shownIn,
+    top: () => { let t = null; for (const el of els) if (shownIn(el)) t = el; return t; },
+  };
+  return { els, UiLayers };
+}
+
+function control(dom, parent, id, opts = {}) {
+  const el = dom.makeElement(opts.tag || "button");
+  el.id = id;
+  if (opts.type) el.type = opts.type;
+  const x = opts.x == null ? 10 : opts.x, y = opts.y == null ? 10 : opts.y;
+  const w = opts.w == null ? 200 : opts.w, h = opts.h == null ? 30 : opts.h;
+  el._rect = { left: x, top: y, right: x + w, bottom: y + h, width: w, height: h };
+  for (const k of Object.keys(opts.attrs || {})) el.setAttribute(k, opts.attrs[k]);
+  if (opts.hidden) el.hidden = true;
+  parent.appendChild(el);
+  return el;
+}
+
+function bootMenuNav() {
+  const dom = makeDom({ readyState: "loading" });
+  const { els, UiLayers } = layerStack(dom, ["overlay"]);
+  const layer = els[0];
+  const sb = sandbox(dom, { UiLayers });
+  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
+  const key = (k, isTrusted = true) => {
+    const e = { key: k, isTrusted, altKey: false, ctrlKey: false, metaKey: false, defaultPrevented: false, stopped: false };
+    e.preventDefault = () => { e.defaultPrevented = true; };
+    e.stopPropagation = () => { e.stopped = true; };
+    sb.MenuNav.onKeyDown(e);
+    return e;
+  };
+  return { dom, layer, MenuNav: sb.MenuNav, key, add: (id, o) => control(dom, layer, id, o), focused: () => dom.document.activeElement && dom.document.activeElement.id };
+}
+
+function bootTopModal(ids) {
+  const dom = makeDom({ readyState: "loading" });
+  const { els, UiLayers } = layerStack(dom, ids);
+  const mo = moShim();
+  const sb = sandbox(dom, { UiLayers, MutationObserver: mo.MutationObserver });
+  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
+  vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: "js/ui/modal.js" });
+  const byId = Object.fromEntries(els.map((el) => [el.id, el]));
+  return { dom, sb, TopModal: sb.TopModal, layer: (id) => byId[id], flip: mo.flip, flipAll: mo.flipAll,
+    add: (parent, id, o) => control(dom, parent, id, o), focused: () => dom.document.activeElement && dom.document.activeElement.id };
+}
+
+/* ── 3. MenuNav: text fields and sliders own only their own axis ─────────── */
+
+test("MenuNav: D-pad Down leaves a focused search field; the caret keys stay with it", () => {
+  const h = bootMenuNav();
+  const search = h.add("sel-track-search", { tag: "input", type: "search", y: 10 });
+  const row = h.add("row-1", { y: 60 });
+  search.focus();
+  const down = h.key("ArrowDown");
+  assert.equal(h.focused(), "row-1", "Down leaves the text field for the row under it");
+  assert.equal(down.defaultPrevented, true, "…and the key is consumed by the menu");
+  search.focus();
+  for (const k of ["ArrowLeft", "ArrowRight", "Home", "End"]) {
+    const e = h.key(k);
+    assert.equal(h.focused(), "sel-track-search", `${k} stays with the caret`);
+    assert.equal(e.defaultPrevented, false, `${k} keeps its native default in a text field`);
+  }
+  assert.equal(h.MenuNav.ownsArrows(search, "PageDown"), false, "the page keys page the pane, not the field");
+});
+
+// #2161: a pad reaches MenuNav as an UNTRUSTED synthetic ArrowLeft/Right, which has no
+// native caret default, so a text INPUT owning it made the direction dead.
+test("MenuNav: a synthetic pad Left/Right leaves a search field; a trusted one keeps the caret", () => {
+  const h = bootMenuNav();
+  const search = h.add("sel-track-search", { tag: "input", type: "search", x: 10, y: 10, w: 150 });
+  h.add("sel-clear", { x: 200, y: 10, w: 60 });
+  search.focus();
+  const keyboard = h.key("ArrowRight", true);
+  assert.equal(h.focused(), "sel-track-search", "a hardware keyboard moves the caret");
+  assert.equal(keyboard.defaultPrevented, false, "the browser keeps the trusted caret default");
+  const pad = h.key("ArrowRight", false);
+  assert.equal(h.focused(), "sel-clear", "the pad's Right walks to the control on the right");
+  assert.equal(pad.defaultPrevented, true);
+  assert.equal(h.MenuNav.ownsArrows(search, "Home", { isTrusted: false }), true, "Home/End stay with the field");
+});
+
+test("MenuNav: trusted arrows edit a textarea, while a synthetic pad arrow can leave it", () => {
+  const h = bootMenuNav();
+  const box = h.add("vs-answer-in", { tag: "textarea", y: 10 });
+  h.add("vs-accept", { y: 60 });
+  box.focus();
+  const keyboard = h.key("ArrowDown", true);
+  assert.equal(h.focused(), "vs-answer-in", "a physical keyboard keeps multiline caret navigation");
+  assert.equal(keyboard.defaultPrevented, false, "the browser retains the trusted textarea default");
+  const pad = h.key("ArrowDown", false);
+  assert.equal(h.focused(), "vs-accept", "the untrusted gamepad arrow exits instead of becoming a dead press");
+  assert.equal(pad.defaultPrevented, true);
+});
+
+test("MenuNav: a range slider keeps Left/Right AND Home/End (ARIA slider ends); Up/Down leave", () => {
+  const h = bootMenuNav();
+  const above = h.add("above", { y: 10 });
+  const range = h.add("vol", { tag: "input", type: "range", y: 60 });
+  const below = h.add("below", { y: 110 });
+  range.focus();
+  for (const k of ["ArrowLeft", "ArrowRight", "Home", "End"]) {
+    h.key(k);
+    assert.equal(h.focused(), "vol", `${k} is the slider's own`);
+  }
+  h.key("ArrowDown");
+  assert.equal(h.focused(), "below", "Down leaves the slider row");
+  range.focus(); h.key("ArrowUp");
+  assert.equal(h.focused(), "above", "Up leaves the slider row");
+});
+
+/* ── 4. MenuNav: a tab rail owns its own axis, the other axis is the exit ── */
+
+test("MenuNav: a <select> keeps Left/Right and Home/End; Up/Down leave it for the next row", () => {
+  // Every ‹ value › row on the settings pages is a <select>. Owning all four
+  // arrows made each one an island: from ACTIVE AERO or any HUD row the
+  // keyboard reached nothing above or below without Tab, and a pad has no
+  // Tab (measured on the DISPLAY page 2026-09-08). Same rule as the slider.
+  const h = bootMenuNav();
+  const above = h.add("above", { y: 10 });
+  const sel = h.add("sel", { tag: "select", y: 60 });
+  const below = h.add("below", { y: 110 });
+  sel.focus();
+  for (const k of ["ArrowLeft", "ArrowRight", "Home", "End"]) {
+    const e = h.key(k);
+    assert.equal(h.focused(), "sel", `${k} stays with the select (it changes the value natively)`);
+    assert.equal(e.defaultPrevented, false, `${k} keeps its native default`);
+  }
+  const down = h.key("ArrowDown");
+  assert.equal(h.focused(), "below", "Down leaves for the next row");
+  assert.equal(down.defaultPrevented, true, "…and the key is consumed, so the select's value does not also change");
+  sel.focus();
+  h.key("ArrowUp");
+  assert.equal(h.focused(), "above", "Up leaves for the row above");
+  void above;
+});
+
+test("MenuNav: Down leaves a horizontal tab rail and the key stops before the rail's own handler", () => {
+  const h = bootMenuNav();
+  const list = h.dom.makeElement("div"); list.setAttribute("role", "tablist"); h.layer.appendChild(list);
+  const t1 = control(h.dom, list, "pm-tab-controls", { x: 10, y: 10, w: 90, attrs: { role: "tab", "aria-selected": "true" } });
+  control(h.dom, list, "pm-tab-display", { x: 110, y: 10, w: 90, attrs: { role: "tab" } });
+  h.add("panel-toggle", { x: 10, y: 80, w: 190 });
+  t1.focus();
+  const right = h.key("ArrowRight");
+  assert.equal(h.focused(), "pm-tab-controls", "Right along the rail is the widget's (it cycles and selects)");
+  assert.equal(right.stopped, false, "…so the event must reach the rail's keydown handler");
+  const down = h.key("ArrowDown");
+  assert.equal(h.focused(), "panel-toggle", "Down is the way out of a horizontal rail");
+  assert.equal(down.stopped, true, "the rail's handler would re-focus the tab (settings-nav) or cycle it (setup-ui): stop it");
+  assert.equal(down.defaultPrevented, true);
+});
+
+test("MenuNav: Right leaves a vertical tab rail (the paired garage) and Down stays in it", () => {
+  const h = bootMenuNav();
+  const list = h.dom.makeElement("div"); h.layer.appendChild(list);   // no role=tablist: parent is the rail
+  const t1 = control(h.dom, list, "cs-tab-aero", { x: 10, y: 10, w: 90, attrs: { role: "tab" } });
+  control(h.dom, list, "cs-tab-engine", { x: 10, y: 50, w: 90, attrs: { role: "tab" } });
+  h.add("cs-opt-1", { x: 120, y: 10, w: 200 });
+  t1.focus();
+  h.key("ArrowDown");
+  assert.equal(h.focused(), "cs-tab-aero", "Down along a column rail is the widget's");
+  const right = h.key("ArrowRight");
+  assert.equal(h.focused(), "cs-opt-1", "Right reaches the options column beside the rail");
+  assert.equal(right.stopped, true);
+});
+
+test("MenuNav: a declared aria-orientation beats the measured layout; a lone tab keeps the horizontal default", () => {
+  const h = bootMenuNav();
+  const list = h.dom.makeElement("div"); list.setAttribute("role", "tablist"); list.setAttribute("aria-orientation", "vertical");
+  h.layer.appendChild(list);
+  const t1 = control(h.dom, list, "t1", { x: 10, y: 10, w: 90, attrs: { role: "tab" } });
+  control(h.dom, list, "t2", { x: 110, y: 10, w: 90, attrs: { role: "tab" } });   // laid out as a row…
+  h.add("under", { x: 10, y: 80, w: 190 });
+  assert.equal(h.MenuNav.ownsArrows(t1, "ArrowDown"), true, "…but declared vertical: Down is the rail's");
+  assert.equal(h.MenuNav.ownsArrows(t1, "ArrowRight"), false, "and Right is the exit");
+  assert.equal(h.MenuNav.ownsArrows(t1, "Home"), true, "Home/End are always the rail's ends");
+  assert.equal(h.MenuNav.ownsArrows(t1, "PageDown"), false, "page keys page the pane");
+  // Its own layer: mini-dom's closest() also sees descendants, so a second
+  // tablist in the same layer would be found as the lone tab's rail.
+  const g = bootMenuNav();
+  const solo = g.dom.makeElement("div"); g.layer.appendChild(solo);
+  const only = control(g.dom, solo, "only", { x: 10, y: 200, w: 90, attrs: { role: "tab" } });
+  assert.equal(g.MenuNav.ownsArrows(only, "ArrowRight"), true, "a lone tab: nothing to cycle, horizontal default");
+  assert.equal(g.MenuNav.ownsArrows(only, "ArrowDown"), false);
+});
+
+test("MenuNav: a closed <details> offers its summary and none of its contents; open, the contents join", () => {
+  // The DISPLAY / STEERING / MUSIC settings pages fold their rows into
+  // <details>. Chromium keeps the closed contents' layout boxes, so the box
+  // test passed, step() chose a folded row as the nearest target, focus() on
+  // it was a silent no-op, and from BACK no arrow could move at all (measured
+  // 2026-09-08: 40 of 46 DISPLAY items unfocusable, every arrow from BACK a
+  // no-op). The summary is the way in, so it is a control.
+  const h = bootMenuNav();
+  const back = h.add("back", { y: 300 });
+  const fold = h.dom.makeElement("details");
+  fold.id = "fold"; h.layer.appendChild(fold);
+  const sum = control(h.dom, fold, "fold-sum", { tag: "summary", y: 10 });
+  const inner = control(h.dom, fold, "inner", { y: 60 });
+  // Spread: the VM realm's array would fail strict deepEqual. Sorted: mini-dom's
+  // querySelectorAll answers per selector part, not in document order.
+  const ids = () => [...h.MenuNav.items(h.layer)].map((el) => el.id).sort();
+  assert.deepEqual(ids(), ["back", "fold-sum"], "closed: the summary, not the row inside");
+  back.focus();
+  h.key("ArrowUp");
+  assert.equal(h.focused(), "fold-sum", "Up from BACK lands on the fold header, not on a row focus() would refuse");
+  fold.setAttribute("open", "");
+  assert.deepEqual(ids(), ["back", "fold-sum", "inner"], "open: the contents are targets");
+  sum.focus();
+  h.key("ArrowDown");
+  assert.equal(h.focused(), "inner", "Down from the header enters the open fold");
+  assert.ok(/\bsummary\b/.test(h.MenuNav.FOCUSABLE), "summary is in FOCUSABLE (the pad's A clicks it)");
+});
+
+test("MenuNav exports items/currentItem/ownsArrows for the focus-landing seam", () => {
+  const h = bootMenuNav();
+  for (const k of ["items", "currentItem", "ownsArrows", "FOCUSABLE"]) assert.ok(h.MenuNav[k], `MenuNav.${k}`);
+  h.add("plain", { y: 10 });
+  const chosen = h.add("chosen", { y: 50, attrs: { "aria-pressed": "true" } });
+  const hid = h.add("hid", { y: 90, hidden: true });
+  const list = h.MenuNav.items(h.layer);
+  assert.ok(!list.includes(hid), "items() skips a hidden control");
+  assert.equal(h.MenuNav.currentItem(h.layer, list), chosen, "currentItem prefers the selected control");
+});
+
+/* ── 2. TopModal: containment never lands on a hidden control ────────────── */
+
+test("repeated keyboard Escape advances one dialog page at a time", () => {
+  const dom = makeDom({ readyState: "loading", tagFor: id => id === "pmsettings" ? "dialog" : "div" });
+  const { els, UiLayers } = layerStack(dom, ["pmsettings"]);
+  const sb = sandbox(dom, { UiLayers, MutationObserver: moShim().MutationObserver });
+  vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: "js/ui/modal.js" });
+  const dlg = els[0];
+  dlg.hidden = false;
+  dlg.setAttribute("data-esc-close", "pm-settings-close");
+  const close = control(dom, dlg, "pm-settings-close");
+  let backs = 0;
+  close.onclick = () => { backs++; };
+  for (let i = 1; i <= 3; i++) {
+    const event = { key: "Escape", defaultPrevented: false, stopped: false,
+      preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
+    sb.TopModal.onEscape(event);
+    assert.equal(backs, i);
+    assert.equal(event.defaultPrevented && event.stopped, true, "native cancel cannot also pop this page");
+  }
+});
+
+test("TopModal non-dialog Tab wraps only the active layer's usable keyboard boundaries", () => {
+  const h = bootTopModal(["overlay", "hud-arrange-bar"]), bar = h.layer("hud-arrange-bar");
+  const first = h.add(bar, "first"), middle = h.add(bar, "middle"), last = h.add(bar, "last");
+  const hidden = h.add(bar, "hidden", { hidden: true }), disabled = h.add(bar, "disabled"), pointerOnly = h.add(bar, "pointer-only");
+  for (const n of [first, middle, last, hidden, disabled]) n.tabIndex = 0;
+  disabled.disabled = true; pointerOnly.tabIndex = -1;
+  h.TopModal.wireLayer(bar);
+  const tab = (extra = {}) => {
+    const e = { type: 'keydown', key: 'Tab', preventDefault() { this.defaultPrevented = true; }, ...extra };
+    bar.dispatchEvent(e); return e;
+  };
+  last.focus(); assert.equal(tab().defaultPrevented, true); assert.equal(h.focused(), 'first');
+  assert.equal(tab({ shiftKey: true }).defaultPrevented, true); assert.equal(h.focused(), 'last');
+  middle.focus(); assert.equal(tab().defaultPrevented, undefined); assert.equal(h.focused(), 'middle');
+  for (const extra of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { defaultPrevented: true }]) {
+    last.focus(); tab(extra); assert.equal(h.focused(), 'last');
+  }
+  bar.hidden = true; last.focus(); assert.equal(tab().defaultPrevented, undefined);
+});
+
+test("TopModal.onFocusIn pulls focus to the first SHOWN control, not the first in DOM order", () => {
+  const h = bootTopModal(["select"]);
+  const select = h.layer("select");
+  h.add(select, "filtered-row", { hidden: true, y: 10 });
+  h.add(select, "zero-box", { y: 40, w: 0, h: 0 });
+  h.add(select, "gone", { y: 70, attrs: { "aria-hidden": "true" } });
+  h.add(select, "visible-row", { y: 100 });
+  const stray = h.add(h.dom.body, "behind", { y: 300 });
+  stray.focus();
+  h.TopModal.onFocusIn({ target: stray });
+  assert.equal(h.focused(), "visible-row", "hidden, zero-box and aria-hidden controls are skipped");
+});
+
+test("TopModal.onFocusIn pulls focus back when Tab parks on <body> outside an open dialog", () => {
+  const dom = makeDom({
+    readyState: "loading",
+    tagFor: (id) => (id === "pmsettings" ? "dialog" : "div"),
+  });
+  const { els, UiLayers } = layerStack(dom, ["overlay", "pmsettings"]);
+  const mo = moShim();
+  const sb = sandbox(dom, { UiLayers, MutationObserver: mo.MutationObserver });
+  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
+  vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: "js/ui/modal.js" });
+  const dlg = els[1];
+  assert.equal(dlg.tagName, "DIALOG");
+  dlg.hidden = false;
+  dlg.showModal = () => { dlg.open = true; };
+  dlg.close = () => { dlg.open = false; };
+  const close = control(dom, dlg, "pm-settings-close", { y: 10 });
+  sb.TopModal.wire(dlg);
+  assert.equal(dlg.tabIndex, -1, "dialog is focusable as the wrap-around landing");
+  dom.document.activeElement = null;
+  sb.TopModal.onFocusIn({ target: dom.document.body });
+  assert.equal(dom.document.activeElement && dom.document.activeElement.id, "pm-settings-close",
+    "body focus is pulled back into the open dialog");
+  close.focus();
+  sb.TopModal.onFocusIn({ target: close });
+  assert.equal(dom.document.activeElement.id, "pm-settings-close", "in-dialog focus is left alone");
+});
+
+/* ── 1. TopModal: focus memory for the hidden-toggled screens ────────────── */
+
+test("TopModal: opening a non-dialog screen lands focus (autofocus > default > selected > first, never a text field)", () => {
+  const h = bootTopModal(["overlay", "select"]);
+  const select = h.layer("select"); select.hidden = true;
+  h.add(select, "sel-track-search", { tag: "input", type: "search", y: 10 });
+  const chip = h.add(select, "chip-all", { y: 40, attrs: { "aria-pressed": "true" } });
+  h.add(select, "sel-go", { y: 500 });
+  h.TopModal.scanLayers();
+  h.flip(select, false);
+  assert.equal(h.focused(), "chip-all", "the selected control is the landing spot (same rule as the first arrow press)");
+  chip.removeAttribute("aria-pressed");
+  h.dom.document.activeElement = null;
+  h.flip(select, true); h.flip(select, false);
+  assert.equal(h.focused(), "chip-all", "with nothing selected: the first usable control that is not a text field");
+  const auto = h.add(select, "auto", { y: 540, attrs: { autofocus: "" } });
+  h.dom.document.activeElement = null;
+  h.flip(select, true); h.flip(select, false);
+  assert.equal(h.focused(), "auto", "[autofocus] wins, as it does for a <dialog>");
+  assert.equal(h.TopModal.landing(select), auto);
+});
+
+test("TopModal: BACK returns focus to the button that opened the screen", () => {
+  const h = bootTopModal(["overlay", "select"]);
+  const overlay = h.layer("overlay"), select = h.layer("select");
+  select.hidden = true;
+  const mbRace = h.add(overlay, "mb-race", { y: 10 });
+  h.add(overlay, "mb-tt", { y: 50 });
+  h.add(select, "chip-all", { y: 10, attrs: { "aria-pressed": "true" } });
+  const selBack = h.add(select, "sel-back", { y: 500 });
+  h.TopModal.scanLayers();
+  mbRace.focus();
+  h.flipAll([[overlay, true], [select, false]]);           // mb-race → SELECT
+  assert.equal(h.focused(), "chip-all", "focus entered the screen");
+  selBack.focus();                                          // Escape presses sel-back
+  h.flipAll([[select, true], [overlay, false]]);            // SELECT → title
+  assert.equal(h.focused(), "mb-race", "focus is back on the door that opened the screen, not on <body>");
+  // Reverse callback order (the flips are one tick either way) gives the same answer.
+  const g = bootTopModal(["overlay", "select"]);
+  const o2 = g.layer("overlay"), s2 = g.layer("select"); s2.hidden = true;
+  const door = g.add(o2, "mb-tt", { y: 10 });
+  g.add(s2, "row", { y: 10 });
+  const back2 = g.add(s2, "sel-back", { y: 500 });
+  g.TopModal.scanLayers();
+  door.focus();
+  g.flipAll([[s2, false], [o2, true]]);
+  back2.focus();
+  g.flipAll([[o2, false], [s2, true]]);
+  assert.equal(g.focused(), "mb-tt");
+});
+
+test("TopModal: a screen reopens on the control it was left from (garage BACK → YOUR CAR)", () => {
+  const h = bootTopModal(["overlay", "select", "carsetup"]);
+  const overlay = h.layer("overlay"), select = h.layer("select"), garage = h.layer("carsetup");
+  select.hidden = true; garage.hidden = true;
+  const mbRace = h.add(overlay, "mb-race", { y: 10 });
+  h.add(select, "chip-all", { y: 10, attrs: { "aria-pressed": "true" } });
+  const selCar = h.add(select, "sel-car", { y: 500 });
+  const tab = h.add(garage, "cs-tab-aero", { y: 10, attrs: { role: "tab", "aria-selected": "true" } });
+  const csBack = h.add(garage, "cs-back", { y: 500 });
+  h.TopModal.scanLayers();
+  mbRace.focus();
+  h.flipAll([[overlay, true], [select, false]]);
+  selCar.focus();
+  h.flipAll([[select, true], [garage, false]]);
+  assert.equal(h.focused(), "cs-tab-aero", "the garage lands on its selected category");
+  assert.equal(tab, h.dom.document.activeElement);
+  csBack.focus();
+  h.flipAll([[garage, true], [select, false]]);
+  assert.equal(h.focused(), "sel-car", "SELECT comes back on YOUR CAR, where it was left");
+  selCar.focus();
+  // The view-transition path shows the next screen a frame later: hide first, show later.
+  h.flip(select, true); h.flip(garage, false);
+  csBack.focus();
+  h.flip(garage, true);
+  assert.equal(h.focused(), "cs-back", "with its screen still hidden, no focus is thrown at sel-car yet");
+  h.flip(select, false);
+  assert.equal(h.focused(), "sel-car", "…it lands when the screen actually shows");
+});
+
+test("TopModal: no focus is restored to a control whose screen is not up (a race started), and dialogs are left to the platform", () => {
+  const h = bootTopModal(["overlay", "select", "carsetup", "teampicker", "rotate-device", "photo-controls"]);
+  const overlay = h.layer("overlay"), select = h.layer("select"), garage = h.layer("carsetup");
+  overlay.hidden = true; garage.hidden = true;
+  const selGo = h.add(select, "sel-go", { y: 500 });
+  const done = h.add(garage, "cs-done", { y: 500 });
+  const dialog = h.layer("teampicker"); dialog.showModal = () => {}; dialog.close = () => {};
+  h.add(dialog, "tp-close", { y: 10 });
+  const rotate = h.layer("rotate-device"); rotate.hidden = true;
+  const rotateBtn = h.add(rotate, "rotate-controls", { y: 10 });
+  h.TopModal.scanLayers();
+  selGo.focus();
+  h.flipAll([[select, true], [garage, false]]);
+  done.focus();
+  h.flipAll([[garage, true]]);                              // START: everything hides, the HUD is not a layer
+  assert.equal(h.focused(), "cs-done", "focus is not thrown at sel-go inside the hidden select screen");
+  h.dom.document.activeElement = null;
+  h.flip(dialog, false);
+  assert.equal(h.focused(), null, "a <dialog> is showModal()'s business, not wired here");
+  h.flip(rotate, false);
+  assert.equal(h.focused(), null, "rotate-device manages its own focus (LAYER_SKIP)");
+  assert.notEqual(rotateBtn, h.dom.document.activeElement);
+});
+
+test("TopModal.scanLayers wires every non-dialog UiLayers layer except the two that manage themselves", () => {
+  const s = code("js/ui/modal.js");
+  assert.match(s, /"rotate-device":\s*1,\s*"photo-controls":\s*1/, "LAYER_SKIP names exactly the rotate blocker and the fly-cam");
+  assert.match(s, /el\.tagName !== "DIALOG"\) wireLayer\(el\)/, "dialogs keep showModal()/close() focus handling");
+  assert.match(s, /return \{ scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation \}/);
+});
+
+test("TopModal isolates the title menu behind dialog and non-dialog sheets", () => {
+  const h = bootTopModal(["overlay", "vsfriend", "carsetup"]);
+  const menu = h.layer("overlay"), friend = h.layer("vsfriend"), garage = h.layer("carsetup");
+  friend.hidden = true; garage.hidden = true;
+  h.TopModal.scanLayers();
+  assert.equal(h.TopModal.syncMenuIsolation(), false);
+  assert.equal(menu.inert, false);
+  assert.equal(menu.getAttribute("aria-hidden"), null);
+
+  h.flip(friend, false);
+  assert.equal(menu.inert, true, "a top dialog removes the visible title controls from interaction");
+  assert.equal(menu.getAttribute("aria-hidden"), "true");
+  h.flipAll([[friend, true], [garage, false]]);
+  assert.equal(menu.inert, true, "the non-showModal garage gets the same background isolation");
+  h.flip(garage, true);
+  assert.equal(menu.inert, false);
+  assert.equal(menu.getAttribute("aria-hidden"), null, "closing the last sheet restores the title");
+});
+
+/* ── 6. The shell: every screen has a name; announcements are live ───────── */
+
+function loadLayerIds() {
+  const sb = sandbox(makeDom());
+  vm.runInNewContext(src("js/ui/layers.js"), sb, { filename: "js/ui/layers.js" });
+  return sb.UiLayers.LAYER_IDS;
+}
+
+function openTag(id) {
+  const m = HTML.match(new RegExp(`<(div|dialog|section|aside)\\s[^>]*\\bid="${id}"[^>]*>`));
+  return m ? m[0] : null;
+}
+const ids = new Set([...HTML.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
+
+test("every layer in the shell is a named region or dialog, and #announce is a live region", () => {
+  const SKIP = {
+    overlay: "the title page itself — the document's main content, not a layer over it",
+    "photo-controls": "a toolbar of labelled buttons over the free camera, not a screen",
+    "hud-arrange-bar": "a named toolbar built by HudArrange, covered by its editor tests",
+    // Pre-race plate: role=status (not region/dialog); named via aria-label.
+    loading: "status plate — announces once, not a navigable region",
+  };
+  for (const id of loadLayerIds()) {
+    if (SKIP[id]) continue;
+    const tag = openTag(id);
+    assert.ok(tag, `#${id} is in index.html`);
+    const isDialog = tag.startsWith("<dialog");
+    assert.ok(isDialog || /\brole="(region|dialog)"/.test(tag), `#${id}: a non-dialog screen carries role=region`);
+    const by = tag.match(/aria-labelledby="([^"]+)"/);
+    const label = /aria-label="[^"]+"/.test(tag);
+    if (id === "datahub") {
+      assert.match(read("js/data/hub.js"), /setAttribute\("aria-labelledby", "dh-title"\)/, "#datahub is named at build time by hub.js");
+      continue;
+    }
+    assert.ok(by || label, `#${id} has an accessible name`);
+    if (by) for (const ref of by[1].split(/\s+/)) assert.ok(ids.has(ref), `#${id} aria-labelledby → #${ref} exists`);
+  }
+  // #loading stays role=status + data-esc="none" (Escape refused; pause via KeyP
+  // is refused in platform-session.js). Pin both so the layer list cannot drift
+  // back to a nameless / Esc-open plate.
+  const loadingTag = openTag("loading");
+  assert.ok(loadingTag, "#loading is in index.html");
+  assert.match(loadingTag, /role="status"/, "#loading announces as status");
+  assert.match(loadingTag, /aria-label="[^"]+"/, "#loading has an accessible name");
+  assert.match(loadingTag, /data-esc="none"/, "#loading refuses Escape");
+  // #announce (LIGHTS OUT, FINAL LAP, SAVE RESTORED…) is visual only; its spoken twin
+  // #announce-live is the one polite live region, so nothing is read twice.
+  assert.match(openTag("announce-live"), /role="status"[^>]*aria-live="polite"/, "#announce-live is the polite live region");
+  assert.match(openTag("announce"), /aria-hidden="true"/, "#announce is hidden from AT");
+  assert.doesNotMatch(openTag("announce"), /role="status"/, "#announce is not a second live region");
+  // Source-integrity's rule stands: no <div> claims role=dialog / aria-modal.
+  for (const id of ["select", "career", "carsetup", "lighting", "camtune"]) {
+    assert.doesNotMatch(openTag(id), /role="dialog"|aria-modal/, `#${id} is a region, not a fake modal`);
+  }
+});
+
+test("Escape/back is one behaviour: every layer names its own door, and every door exists", () => {
+  const NO_DOOR = { overlay: "the title has nothing to go back to", "rotate-device": "CSS-gated blocker; Escape falls through to pause" };
+  assert.ok(loadLayerIds().includes("loading"), "#loading is in UiLayers.LAYER_IDS so Escape/anyOpen see it");
+  for (const id of loadLayerIds()) {
+    if (id === "hud-arrange-bar") {
+      assert.match(read("js/ui/hud-arrange.js"), /setAttribute\("data-esc-close", "hud-arrange-done"\)/);
+      assert.match(read("js/ui/hud-arrange.js"), /mk\("DONE", "Done arranging the HUD", \(\) => setEditing\(false\), "hud-arrange-done"\)/);
+      continue;
+    }
+    const tag = openTag(id);
+    if (NO_DOOR[id]) { assert.doesNotMatch(tag, /data-esc/, `#${id} refuses no key and names no door`); continue; }
+    const via = tag.match(/data-esc-close="([^"]+)"/);
+    if (!via) { assert.match(tag, /data-esc="none"/, `#${id} either names a close control or refuses Escape outright`); continue; }
+    const inShell = ids.has(via[1]);
+    const built = new RegExp(`\\.id = "${via[1]}"`).test(read("js/data/hub.js"));
+    const photoDoor = id === "photo-studio" && via[1] === "ps-close" && /button\("DONE", \(\) => close\(true\), "ps-close"\)/.test(read("js/ui/photo-studio.js"));
+    assert.ok(inShell || built || photoDoor, `#${id} → #${via[1]} exists (shell or declared dynamic owner)`);
+  }
+  // Both Escape paths press the same control: the dialog `cancel` and the document keydown.
+  const tm = code("js/ui/modal.js");
+  assert.match(tm, /el\.addEventListener\("cancel"[\s\S]*?getAttribute\("data-esc-close"\)[\s\S]*?btn\.click\(\)/);
+  assert.match(tm, /function onEscape[\s\S]*?getAttribute\("data-esc-close"\)[\s\S]*?btn\.click\(\)/);
+});
+
+test("setting-row chevrons are pointer-only decoration; the named select owns accessibility", () => {
+  const rows = read("js/ui/setting-row.js");
+  assert.match(rows, /pointerOnly\(p\)/);
+  assert.match(rows, /tabIndex\s*=\s*-1/);
+  assert.match(rows, /setAttribute\("aria-hidden",\s*"true"\)/);
+  for (const tag of HTML.matchAll(/<button\b[^>]*\bdata-step="(?:-1|1)"[^>]*>/g)) {
+    assert.match(tag[0], /\baria-label="[^"]+"/, tag[0]);
+  }
+});
+
+// UI-06 (hunt2): from a disabled CUSTOM value › skipped the first option.
+test("setting-row chevrons step from a disabled CUSTOM to its real neighbours", () => {
+  const mk = (tag) => ({ tagName: tag.toUpperCase(), children: [], attrs: {}, disabled: false, value: "",
+    appendChild(c) { this.children.push(c); return c; }, replaceChildren() { this.children = []; },
+    setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
+    addEventListener() {} });
+  const ctx = { window: {}, document: { createElement: mk, getElementById: () => null } };
+  vm.createContext(ctx);
+  vm.runInContext(read("js/ui/setting-row.js"), ctx);
+  const SR = ctx.window.SettingRow;
+  const row = mk("div"), wrap = mk("div"), prev = mk("button"), sel = mk("select"), next = mk("button");
+  prev.attrs["data-step"] = "-1"; next.attrs["data-step"] = "1";
+  wrap.children = [prev, sel, next]; row.children = [wrap];
+  let cur = "custom";
+  SR.wire(row, { values: [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"], ["custom", "CUSTOM", true]],
+    read: () => cur, write: (v) => { cur = v; } });
+  next.onclick({});
+  assert.equal(cur, "off", "› from CUSTOM wraps to the first option, not the second");
+  cur = "custom"; prev.onclick({});
+  assert.equal(cur, "full", "‹ from CUSTOM is the option before it");
+  next.onclick({}); assert.equal(cur, "off", "› from FULL skips the disabled CUSTOM");
+  prev.onclick({}); assert.equal(cur, "full", "‹ from OFF skips it too");
+});
+
+test("the steering Advanced disclosure exposes button and expanded state semantics", () => {
+  const summary = HTML.match(/<summary[^>]*\bid="adv-more"[^>]*>/);
+  assert.ok(summary, "#adv-more exists");
+  assert.match(summary[0], /\brole="button"/);
+  assert.match(summary[0], /\baria-expanded="false"/);
+  assert.match(summary[0], /\baria-controls="adv-extra"/);
+  assert.match(read("js/input/steer-tuning.js"),
+    /adv-details[\s\S]*toggle[\s\S]*adv-more[\s\S]*aria-expanded/,
+    "the native details toggle mirrors its open state explicitly");
+});
+
+/* ── 7. Lockstep: the layer lists agree ──────────────────────────────────── */
+
+function stringConst(file, name) {
+  const s = code(file);
+  const m = s.match(new RegExp(`const ${name} = ([\\s\\S]*?);\\n`));
+  assert.ok(m, `${name} in ${file}`);
+  return new Function("return " + m[1])();
+}
+
+test("ScrollFade.SCREENS and AriaState.ROOTS cover every UiLayers layer that scrolls or selects", () => {
+  const layers = loadLayerIds();
+  const screens = new Set(stringConst("js/ui/scroll-fade.js", "SCREENS").split(",").map((s) => s.trim().slice(1)));
+  const roots = new Set(stringConst("js/ui/aria-state.js", "ROOTS").split(",").map((s) => s.trim().slice(1)));
+  const SKIP = {
+    "rotate-device": "CSS-gated, never toggled by `hidden`; two buttons, no scroll region, no selected state",
+    "photo-controls": "no scroll region; its buttons are actions, none carries a selected class",
+    "hud-arrange-bar": "dynamic toolbar uses native overflow and select state, no selected-class chips",
+    loading: "status plate — no scroll region, no selected chips",
+  };
+  for (const id of layers) {
+    if (SKIP[id]) continue;
+    assert.ok(screens.has(id), `ScrollFade watches #${id}'s hidden flip`);
+    assert.ok(roots.has(id), `AriaState observes #${id}`);
+  }
+  for (const id of [...screens, ...roots]) assert.ok(layers.includes(id), `#${id} is a UiLayers layer`);
+});
+
+test("circuit tiles announce the chosen one: .track-row buttons get aria-pressed from AriaState", () => {
+  // select-screen.js never writes aria-pressed on a tile itself: trackTile
+  // builds a plain <button class="track-row[ active]"> and AriaState (watching
+  // #select) mirrors `.active` onto aria-pressed. Pin both halves of that chain.
+  const tile = code("js/ui/select-screen.js").match(/function trackTile\([\s\S]*?\n}\n/);
+  assert.ok(tile, "trackTile in js/ui/select-screen.js");
+  assert.match(tile[0], /createElement\(opts && opts\.readOnly \? "div" : "button"\)/, "a pickable tile is a <button>");
+  assert.match(tile[0], /"track-row" \+ \(opts && opts\.active \? " active" : ""\)/, "the chosen tile carries .active");
+  assert.doesNotMatch(tile[0], /aria-selected|aria-checked|aria-pressed|"role"|data-aria-toggle/,
+    "a tile that claims its own semantics is skipped by AriaState (claimed())");
+  assert.match(HTML, /<div id="select"[\s\S]*?<div id="sel-tracks"/, "#sel-tracks sits inside #select");
+  // Behaviour: AriaState over a #select strip of three tiles.
+  const dom = makeDom();
+  const strip = dom.makeElement("div", "sel-tracks");
+  dom.byId("select").appendChild(strip);
+  const tiles = [0, 1, 2].map((i) => {
+    const b = dom.makeElement("button");
+    b.className = "track-row" + (i === 1 ? " active" : "");
+    for (const c of b.className.split(" ")) b.classList.add(c);
+    strip.appendChild(b);
+    return b;
+  });
+  const sb = sandbox(dom, { MutationObserver: moShim().MutationObserver });
+  vm.runInNewContext(src("js/ui/aria-state.js"), sb, { filename: "js/ui/aria-state.js" });
+  assert.deepEqual(tiles.map((b) => b.getAttribute("aria-pressed")), ["false", "true", "false"]);
+  tiles[1].classList.remove("active"); tiles[2].classList.add("active");
+  sb.AriaState.sync();
+  assert.deepEqual(tiles.map((b) => b.getAttribute("aria-pressed")), ["false", "false", "true"], "the state follows a new pick");
+});
+
+/* ── 5 + touch targets: measured from the rules, not the screen ──────────── */
+
+function lum(hex) {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+const hex2 = (n) => Math.round(n).toString(16).padStart(2, "0");
+function blend(rgba, bg) {
+  const m = rgba.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\)/);
+  if (!m) return null;
+  const a = m[4] == null ? 1 : parseFloat(m[4]);
+  const b = [1, 3, 5].map((i) => parseInt(bg.slice(i, i + 2), 16));
+  return "#" + [m[1], m[2], m[3]].map((v, i) => hex2(parseFloat(v) * a + b[i] * (1 - a))).join("");
+}
+function resolveColor(value, tokens, bg) {
+  const v = value.trim();
+  const tok = v.match(/^var\((--[\w-]+)\)$/);
+  if (tok) return resolveColor(decl(tokens, ":root", tok[1]), tokens, bg);
+  if (v.startsWith("#")) return v.length === 4 ? "#" + [...v.slice(1)].map((c) => c + c).join("") : v;
+  return blend(v, bg);
+}
+
+test("menus.css text colours clear AA over the darkest sheet ground", () => {
+  const tokens = cssRules(read("css/tokens.css"));
+  const menus = cssRules(readCssSource("css/menus.css"));
+  const bg = decl(tokens, ":root", "--bg");
+  assert.equal(bg, "#0c0c14", "the darkest ground a sheet can sit over");
+  for (const sel of ["#customize .cz-sep", "#customize .cz-row"]) {
+    const c = resolveColor(decl(menus, sel, "color"), tokens, bg);
+    assert.ok(c, `${sel} colour resolves`);
+    assert.ok(contrast(c, bg) >= 4.5, `${sel} ${decl(menus, sel, "color")} → ${c} is ${contrast(c, bg).toFixed(2)}:1 over ${bg}; AA needs 4.5:1`);
+  }
+  assert.equal(decl(menus, "#customize .cz-sep", "color"), "var(--dim)", "the separator label uses the dim-text token, not a bespoke alpha");
+});
+
+test("menu touch targets are token-sized, and the touch ladder lifts every token to ≥ 44px", () => {
+  const tokens = cssRules(read("css/tokens.css"));
+  const menus = cssRules(readCssSource("css/menus.css"));
+  const comps = cssRules(readCssSource("css/components.css"));
+  const floor = (v) => parseFloat((v || "").match(/max\((\d+)px/)?.[1] || "0");
+  // Primary controls: --tap is 44px on a mouse pointer and 52px on touch.
+  assert.ok(floor(decl(tokens, ":root", "--tap")) >= 44, `--tap ${decl(tokens, ":root", "--tap")}`);
+  assert.ok(floor(decl(tokens, "body:not(.desktop)", "--tap")) >= 44);
+  for (const sel of [".track-row", ".team-tile", "#soundbtn"]) {
+    assert.equal(decl(menus, sel, "min-height"), "var(--tap)", `${sel} is a --tap box`);
+  }
+  assert.equal(decl(comps, ".bigbtn", "min-height"), "var(--tap)", "the title doors and every sheet BACK/START are --tap boxes");
+  // Secondary chips: 40px for a mouse (chips are secondary), 46px on touch —
+  // the ≥ 44px rule holds where a finger is the pointer.
+  assert.equal(decl(menus, ".sel-chip", "min-height"), "var(--chip-h)");
+  assert.equal(decl(menus, "#sel-track-search", "min-height"), "var(--chip-h)");
+  assert.ok(floor(decl(tokens, "body:not(.desktop)", "--chip-h")) >= 44, `--chip-h on touch ${decl(tokens, "body:not(.desktop)", "--chip-h")}`);
+  assert.ok(ruleFor(menus, "#sel-track-filter .sel-chip"), "filter chips inherit the chip box (padding-only override)");
+  assert.equal(decl(menus, "#sel-track-filter .sel-chip", "min-height"), null, "…and do not shrink it");
+});
+
+// THE SESSION ONLY BANNER (#save-warning). It was injected by insertAdjacentHTML
+// as a role=alert unhidden and filled in one step (the pattern NVDA, JAWS and
+// VoiceOver miss), with 24 px buttons, no way to put it away, and no rule to
+// stand it down in a race — where it sat in .hud-top's top-centre box all
+// session. Static, spoken once, dismissible, and out of the way of the HUD.
+test("the SAVING UNAVAILABLE banner is static, spoken once, dismissible, and stands down in a race", () => {
+  const m = HTML.match(/<aside id="save-warning"([^>]*)>([\s\S]*?)<\/aside>/);
+  assert.ok(m, "index.html owns the banner (AGENTS.md: index.html owns ALL static DOM)");
+  assert.match(m[1], /\bhidden\b/, "it boots hidden");
+  assert.doesNotMatch(m[1], /role="alert"|aria-live/, "not a live region: it is spoken through #announce-live");
+  for (const id of ["save-warning-title", "save-warning-detail", "save-retry", "save-export", "save-dismiss"])
+    assert.match(m[2], new RegExp(`id="${id}"`), `#${id} is part of the static banner`);
+  assert.match(m[2], /<button id="save-dismiss" type="button" aria-expanded="true">/, "DISMISS is a disclosure toggle");
+
+  const sel = code("js/ui/select-screen.js");
+  assert.doesNotMatch(sel, /insertAdjacentHTML\([^)]*save-warning/, "the banner is no longer injected at runtime");
+  assert.match(sel, /store\.writeFailed/, "it asks whether a WRITE failed, not whether anything ever threw");
+  assert.doesNotMatch(sel, /if \(store\.broken\) showSaveWarning/, "a corrupt-key READ must not raise it");
+  assert.match(sel, /\$\("announce-live"\)/, "spoken through the always-present polite region");
+  assert.match(sel, /LiveRegion\.say\(text, "save"\)/,
+    "through LiveRegion, the region's one writer, at SAVE priority (it owns the clear-then-write beat)");
+  assert.doesNotMatch(sel, /setTimeout\(\(\) => \{ live\.textContent =/, "never times its own #announce-live write");
+  assert.match(sel, /setAttribute\("aria-expanded", on \? "false" : "true"\)/, "the toggle reports its state");
+
+  const css = cssRules(readCssSource("css/overlays.css"));
+  assert.equal(decl(css, "#save-warning button", "min-height"), "var(--tap)", "≥ 44 px (52 on touch), not the 24 px --tap-min");
+  assert.ok(ruleFor(css, /(^|, )body\.in-race #save-warning(,|$)/), "hidden during a race");
+  assert.ok(ruleFor(css, /body:has\(dialog\[open\]\) #save-warning/), "hidden under an open dialog, where it is inert");
+  assert.equal(decl(css, "#save-warning[data-collapsed] > :not(#save-dismiss)", "display"), "none", "DISMISS folds it to its toggle");
+});

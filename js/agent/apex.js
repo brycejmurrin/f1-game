@@ -1,0 +1,3322 @@
+/* Apex 26 — the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… */
+const ApexApi = (function () {
+  "use strict";
+
+function create(G) {
+// race()/tt() hand back a descriptor that is ALSO awaitable. startRace() awaits
+// ensureScenery() — the scenery closure is LAZY_SCENERY and Tracks.build is
+// synchronous — so an unawaited start lets the hook claim success while the
+// PREVIOUS track is still built (measured: booted on bahrain, `race("monaco")`
+// returned {track:"monaco"} and wallStats() then reported n=1346 /
+// street=false, bahrain's numbers; waiting does not help because nothing
+// re-reads it). Thenable, not a Promise, so the ~70 existing call
+// sites are unchanged (`r.track` still reads synchronously); a caller needing
+// the track BUILT writes `await __apex.race(id)`. The resolved value drops
+// `then` so a second await cannot recurse.
+// RACE ORDER and the SLIP BUDGET live in agentview.js (loaded first, LAZY_AGENT)
+// so obs()/physState() and world() cannot drift apart (#2172).
+const raceOrder = (cars) => AgentView.raceOrder(cars);
+// The three UI scales take a PERCENT. A fraction (1.6) or junk used to be
+// snapped and SAVED: uiScale(1.6) stored 40 %, uiScale("abc") the default.
+// null still resets; undefined reads.
+function badPct(name, v) {
+  if (v === undefined || v === null) return null;
+  if (typeof v === "number" && isFinite(v) && v > 3) return null;
+  return { ok: false, error: "bad_argument",
+           message: name + "() takes a percent; got " + JSON.stringify(v),
+           fix: "pass e.g. " + name + "(130) for 130 %, or null to reset" };
+}
+function settled(promise, out) {
+  const value = Object.assign({}, out);
+  return Object.assign({}, out, {
+    then: (res, rej) => Promise.resolve(promise).then((result) => {
+      if (result && result.kind === "canceled") return rej(new Error("Race start " + result.reason));
+      if (result === false) return rej(new Error("Race start did not reach the grid"));
+      return res(value);
+    }, rej),
+  });
+}
+// The four audio hooks share one precondition. `null` when GameAudio is there,
+// so each hook reads `return noAudio() || <the real answer>` rather than
+// repeating a three-line guard four times.
+// Per-car fields a running episode CREATES, which therefore outlive reset()
+// unless it removes them. Module scope, not an __apex member: it is an
+// implementation detail of reset(), not a hook anyone calls. Not a hand-written
+// wish list either — it is every key that differed between consecutive
+// post-reset snapshots at the same seed, and tests/specs/agent-determinism.spec.js
+// is the guard that keeps it honest.
+const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
+  "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
+  "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf",
+  "towing", "wake", "axFrac", "axFracF", "axFracR", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
+  "kerbSndT", "kerbHapT",
+  // The AI brake look-ahead cache (perf hunt 2 S6): one object per car, keyed on
+  // the node window; refilled lazily by updateCarBrakePlan, so a cold car is
+  // simply without it (CarFields predeclares it undefined).
+  "_lk",
+  // Racecraft: the next corner's signed curvature (side-by-side ownership) and
+  // the car alongside last frame (the swap-back lockout) — a stale _alPrev
+  // would arm a lockout on the first frame of the next episode.
+  "kTurn", "_alPrev", "_alPrevDp",
+  // The last three appear only on a STREET circuit with real contact — sweep
+  // tracks, not just monza.
+  "_preColS", "_preColX", "collideT", "uslipHapT", "fxSparkI",
+  // The tyre-force model (js/physics/tyre-model.js) and the smoothed
+  // control-demand fields (game.js "--- lateral ---"), every one read with a
+  // `|| 0` / Number.isFinite fallback for the cold-car case (tyre-model.js's
+  // telemetry getter, collide.js's pre-collision speed read, and this file's
+  // own tyres() hook), so undefined is a tolerated input.
+  "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
+  "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
+  "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
+  // `errCount` counts AI mistakes within ONE race, so a cold car has none (a
+  // short rollout rarely trips a mistake, so a leak goes unnoticed).
+  "errCount", "pitWorked",
+  // The lazy `c.passPlan || (c.passPlan = {})` cache in game.js's
+  // overtake-attempt block survives reset() untouched, and
+  // `!c.passPlan || c.passPlan.side` (same file) reads `.side` straight off it
+  // without AiCorridor.choose() having run yet this tick whenever the attempt
+  // gate above it is closed. A cold car has no passPlan, so that read is
+  // always true; a warm one carries last episode's `.side`, which can be 0 (a
+  // previous "no lane" verdict) and flip the same read to false — an AI
+  // overtake decision that depends on which episode number it is
+  // (tools/check/episode-diff.mjs finds these).
+  "passPlan",
+  // The race-END state. `_coastHeld` (coast() after the flag) and `lastLap`
+  // (the lap-line write) are absent on a cold car; a car classified in one
+  // episode would start the next with both. finPos/retired/dnf* are DECLARED
+  // by makeCars, so gridUp() restores their declared values instead.
+  "_coastHeld", "lastLap",
+  // Field-step pose snapshots (game.js update()): written every tick before
+  // updateCar so traffic scans read last step's poses. Absent on a cold car;
+  // a warm one would hand the next episode a stale sibling pose on frame 0.
+  "_snapProg", "_snapX", "_snapSpeed"];
+// openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
+// off, so a console probe cannot bypass the rate-limit queue. api.js is LAZY_DATA — hence the refusal.
+function apiHook(base, path, fix) {
+  if (typeof path !== "string" || path.charAt(0) !== "/")
+    return Promise.resolve({ ok: false, error: "missing_path", message: "needs a path starting with /", fix });
+  if (typeof F1API === "undefined")
+    return Promise.resolve({ ok: false, error: "no_api", message: "js/data/api.js is not loaded yet (open the DATA HUB once)", fix });
+  return F1API.request(base + path, 0, { cache: false });
+}
+
+const noAudio = () => (typeof GameAudio === "undefined"
+  ? { ok: false, error: "no_audio", message: "GameAudio is not loaded", fix: "reload the page" }
+  : null);
+// Stable bindings (functions + consts) from the game.js closure.
+const { els, smp, smp2, gfx, canvas, GAME_LAPS, TT_LAPS, LONG_GRIP,
+        applyRaceSettings, camVantage, endRace, gridUp, gripMult, isErsDeploying,
+        copyLightTune, loadCarModel, loadTrack, persistLightTune, refreshLightTunePanel,
+        restoreLightTune,
+        rescuePlayer, setCamMode, setLightTune, setWeatherLive, snapGameCam,
+        startRace, startWeatherArc, update, wrapS } = G;
+// Deferred: openCareer is declared below the G literal in game.js, so it arrives
+// as an arrow and must be read through G rather than destructured here.
+const openCareer = (...a) => G.openCareer(...a);
+const { CAM_MODES } = CamModes;
+const { TUNE_DEFS, LT } = LightTune;
+
+// The agent-facing view (js/agent/agentview.js). Composed here rather than
+// bolted onto this file: __apex stays a flat dev console, world()/trackInfo()
+// are the layer an LLM agent reads. See docs/AGENT-WORLD-API.md.
+const agentView = AgentView.create(G);
+
+// opts.clear on the free-cam hooks (orbit / cinematic / roadside / view s+side):
+// CAPTURE TOOLING only (#2253). They wrote G.dbgCam with no clearance, so the
+// track galleries shot from inside towers and through hedges. Tries place(i)
+// until the eye is outside every solid prop (FlybySeq) and the sightline to the
+// target keeps T >= 0.5 (FlybySight.transmit; a canopy is 0.8 opaque), else
+// keeps the least-blocked try and says so. The flyby planner's world, reused.
+function clearShot(n, place) {
+  if (typeof FlybySeq === "undefined" || typeof FlybySight === "undefined") return place(0) ? { T: null, tries: 1 } : null;
+  let best = 0, bestT = -1;
+  for (let i = 0; i < n; i++) {
+    const r = place(i);
+    if (!r) return null;
+    const T = FlybySeq.insideProp(G.track, r.eye, 1) ? 0 : FlybySight.transmit(G.track, r.eye, r.target).T;
+    if (T >= 0.5) return { T: +T.toFixed(2), tries: i + 1 };
+    if (T > bestT) { bestT = T; best = i; }
+  }
+  place(best);
+  return { T: +bestT.toFixed(2), tries: n, blocked: true };
+}
+const CLEAR_AZ = [0, 20, -20, 40, -40, 60, -60, 90, -90];             // orbit: swing round the subject
+const CLEAR_SIDE = [[1, 1], [1, 0.7], [1, 0.45], [-1, 1], [-1, 0.7], [-1, 0.45]];   // roadside/view: step in, then the other side
+
+let _netPeer = null;
+let _lobbyPeerTimer = null;   // keeps the fake lobby peer pumping (see lobbyFake)
+// The far end of a faked lobby connection — see lobbyFake().
+let _lobbyPeer = null;
+
+function simCareerRound() {
+  const rows = G.qualiSim(0);
+  const live = G.cars;
+  const season = G.season;
+  if (!rows || !rows.length || !live.length || !G.player || !season) return null;
+  const byId = new Map(live.map((c) => [c.driverId, c]));
+  const round = Career.round();
+
+  G.armReliability(live);
+
+  const grid = [];
+  for (let i = 0; i < rows.length; i++) {
+    const car = byId.get(rows[i].driverId);
+    if (!car) continue;
+    car.gridPos = i + 1;
+    if (car.dnfAt != null) { car.retired = true; car.dnf = car.dnfWhy; car.dnfAt = null; }
+    const rt = DriverRatings.get(car.code, car.tier, Career.devFor(car.team && car.team.id, car.seat));
+    // Race day is not qualifying. Pace order is a strong prior; craft is how much
+    // of it survives first-lap contact and a long run, so a racer moves forward
+    // and a qualifying specialist goes backwards.
+    const swing = (Career.rnd(round, "race", car.driverId) - 0.5) * 10 * (1 - rt.craft / 200);
+    car.cuts = Career.rnd(round, "cuts", car.driverId) * 100 < (100 - rt.awareness) ? 2 : 0;
+    car.penalty = 0;
+    // Race craft reads these at settlement (js/career/career.js). Drawn from the
+    // same awareness prior as the cuts above, because a simulated round that left
+    // them undefined scored a flawless 1.00 every time and a simulated career
+    // drifted apart from a driven one on reputation alone.
+    const scruffy = Career.rnd(round, "hits", car.driverId) * 100 < (100 - rt.awareness);
+    car.hits = scruffy ? 1 : 0;
+    car.hitSev = scruffy ? 0.5 : 0;
+    car.wallHits = Career.rnd(round, "wall", car.driverId) * 100 < (100 - rt.awareness) / 2 ? 1 : 0;
+    grid.push({ car, key: car.retired ? 1000 + i : i + swing });
+  }
+  if (grid.length !== live.length) return null;   // a partial map is not a result
+  grid.sort((a, b) => a.key - b.key);
+  const order = grid.map((g) => g.car);
+
+  // The championship award, exactly as endRace() does it: Career.scoreRound stages
+  // SeasonCal.award on a detached copy (pay table, classification, countback),
+  // settles the economy, and rolls the whole career back if the save is
+  // refused — so a conflicted slot can never advance the calendar without a
+  // results row. It persists itself; do NOT save beforehand.
+  order.forEach((car, i) => { car.finPos = i + 1; });
+  const settled = Career.scoreRound(order, G.player, null, null);
+  if (!settled) return null;
+  return Object.assign({ round: round + 1, podium: order.slice(0, 3).map((c) => c.code) }, settled);
+}
+
+// LAZY TRACK ENSURE — the one place the deferred boot build is forced.
+// js/game.js does not build the 3D track synchronously at boot (it schedules
+// the menu flyby build instead), so window.__apex can exist for a beat with
+// G.track === null — while every hook below, and every spec that stages a
+// camera before racing (park/jump/snapCam/probe/world/…), assumes a built
+// world. Force the build ONCE here at the API boundary rather than guard ~180
+// call sites: the first __apex call pays the synchronous build, and a player
+// who never opens the dev API never pays it at all. Placement is
+// load-bearing in BOTH directions —
+// tests/unit/hooks-documented.test.mjs slices this file at the first occurrence
+// of the api literal's opening text and reads every 2-space-indented name after
+// it as a hook, so the loop must sit above the literal AND this comment must
+// not quote that text (quoting it moves the slice and invents a hook called
+// `for`).
+function lazyTrackEnsure(o) {
+  for (const k of Object.keys(o)) {
+    const fn = o[k];
+    if (typeof fn !== "function") continue;   // tiltSim (namespace)
+    // Never under the loading screen, nor over a stepped or worker build in flight:
+    // RACE!'s intro owns the build and `track` is null by design until it lands; race()/tt() build their OWN circuit (a cold title-pick build here doubled race entry, CI 38604708051).
+    // Title boots LAZY_CIRCUIT meta stubs (_metaOnly, no path): a sync loadTrack
+    // here throws "has no path" before race()/startRace can await ensureCircuit.
+    // Leave track null; ensureScenery → ensureCircuit hydrates, then the body builds.
+    const entering = () => { const l = typeof document !== "undefined" && document.getElementById("loading"); return !!(l && !l.hidden && l.dataset && l.dataset.phase); };
+    const payloadReady = (def) => !!(Tracks.circuitPayloadResident
+      ? Tracks.circuitPayloadResident(def)
+      : (def && def.path && def.path.pts && def.path.pts.length && !def._metaOnly));
+    o[k] = function (...a) {
+      if (k !== "race" && k !== "tt" && !G.track && !entering() && !Tracks.building()
+          && !(typeof TrackBuildClient !== "undefined" && TrackBuildClient.busy())) {
+        const def = Tracks.LIST[G.trackIdx];
+        // LAZY_TRACK_BUILD: ensureScenery hydrates the circuit BESIDE the toolkit.
+        // Sync loadTrack here while the toolkit is still in flight throws
+        // "TrackBuildProps is not defined" (new-hooks "before a track is loaded"
+        // vs idle menu prep). Leave track null until the toolkit is resident —
+        // race()/startRace await ensureScenery; hooks then return null correctly.
+        const toolkitReady = typeof TrackBuildProps !== "undefined" && !!TrackBuildProps;
+        if (payloadReady(def) && toolkitReady) loadTrack(G.trackIdx);
+      }
+      return fn.apply(this, a);
+    };
+  }
+  return o;
+}
+
+// Clear the starting-lights DOM; callers reset the lit-counter themselves right after.
+function resetStartLights(hidden) {
+  els.lights.hidden = hidden;
+  for (const l of els.lights.children) l.classList.remove("on");
+}
+
+// (px, pz, head) from a sampled track point and the car's (s, x) — the
+// world-space anchor jump()/reset()/aiPlace() need. See worldFromTrack in game.js.
+function placeFromTrack(car, sampled) {
+  const rl = Math.hypot(sampled.r[0], sampled.r[2]) || 1;
+  car.px = sampled.p[0] + sampled.r[0] / rl * car.x;
+  car.pz = sampled.p[2] + sampled.r[2] / rl * car.x;
+  car.head = Math.atan2(sampled.t[0], sampled.t[2]);
+}
+
+const api = {
+  // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
+  jump(frac, speed, lateral) {
+    if (!G.player || !G.track) return false;
+    IncidentSim.release(G.player);
+    const f01 = (((frac || 0) % 1) + 1) % 1;
+    const sNew = wrapS(f01 * G.track.total);
+    // prog is CUMULATIVE (lap*total + s, negative on the grid) — shift it by the
+    // arc delta rather than assigning the raw fraction, which erased whole laps
+    // from the ranked order on a mid-race jump (measured: lap 1, 5930 → 2889).
+    G.player.prog += sNew - G.player.s;
+    // _prevS too: the next step measures ds from HERE. Left at the old s, a
+    // teleport under updateCarAdvance's 20 m threshold (pole → jump(0) is 14 m)
+    // was banked into prog a second time and crossed the line: lap 0 → 1.
+    G.player.s = sNew; G.player._prevS = sNew;
+    if (lateral !== undefined) G.player.x = lateral;
+    if (speed !== undefined) G.player.speed = speed;
+    Tracks.sample(G.track, G.player.s, smp);
+    placeFromTrack(G.player, smp);
+    G.player.vLat = 0; G.player.yawRateCur = 0;
+    // Teleport hygiene: the wall/rescue accumulators describe the OLD location.
+    // Left alone, a wedge-then-jump sequence carries ~3 s of rescueT into the
+    // new spot and fires a surprise auto-rescue mid-drive (measured).
+    G.player.rescueT = 0; G.player.wallT = 0; G.player.wasOnWall = false;
+    G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0;
+    // Sync render-interpolation anchors so lerpS(rPrevS,s,alpha)==s regardless of
+    // renderAlpha — the WORLD pair too: playerAnchor()/renderPosOf() draw the
+    // HUMAN car from those, so without them it stays lerp'd toward the
+    // pre-teleport spot once park() freezes physics.
+    AgentView.syncRenderAnchors(G.player);
+    if ((G.state === "race" || G.state === "count") && G.refreshHud) G.refreshHud(true);
+    return { s: G.player.s, total: G.track.total };
+  },
+  park(frac, lateral) {
+    if (!G.player || !G.track) return false;
+    G.skyViewOverride = null;   // clear any sky override so normal chase cam resumes
+    G.state = "race"; G.raceT = Math.max(G.raceT, 1);
+    if (G.loadingScreen && G.loadingScreen.lowerWaitPlate) G.loadingScreen.lowerWaitPlate();
+    resetStartLights(true);
+    G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
+    G.cars.forEach((c) => { if (!c.isPlayer) { c.prog -= 600; c.s = wrapS(c.s - 600); c.speed = 0; } });
+    const r = this.jump(frac, 0, lateral !== undefined ? lateral : 0);
+    G.frozen = true;   // hold the scene still for a deterministic screenshot
+    return r;
+  },
+  sky(frac, lateral) {
+    const r = this.park(frac, lateral);
+    if (!r) return false;
+    G.dbgCam = null;   // sky uses skyViewOverride, which a live view()/orbit() free-cam would otherwise mask
+    Tracks.sample(G.track, G.player.s, smp);
+    const e = [smp.p[0], smp.p[1] + 3.5, smp.p[2]];
+    const t = [
+      smp.p[0] + smp.t[0] * 20,
+      smp.p[1] + 34,            // ~58° up over 20 m → horizon low, sky dominant
+      smp.p[2] + smp.t[2] * 20,
+    ];
+    G.skyViewOverride = { eye: e, tgt: t, fov: 78 };
+    // snap immediately so the very first rendered frame is correct
+    G.camEye[0] = e[0]; G.camEye[1] = e[1]; G.camEye[2] = e[2];
+    G.camTgt[0] = t[0]; G.camTgt[1] = t[1]; G.camTgt[2] = t[2];
+    G.camFov = 75;
+    return r;
+  },
+  // repro() / repro(obj) — CAPTURE A PLAYER'S EXACT FRAME, AND PUT IT BACK.
+  //
+  // This exists because a reported cockpit artefact cost six rounds, and every
+  // one of them died the same way: the report is a screenshot, and a screenshot
+  // does not say where the reporter was standing. Each attempt guessed at the
+  // camera, the team, the time of day and the traffic, chased whatever object
+  // happened to be in THAT frame, and "fixed" something the reporter never saw.
+  // A picture says what is wrong; this says where to stand to see it.
+  //
+  // With no argument it returns a plain JSON blob a player can copy out of the
+  // console. Given that blob back it restores the same frame: the same circuit,
+  // conditions, camera MODE and CAMERA TUNER offsets, and — the part that no
+  // amount of re-racing reproduces — every car's position on track, so a rival
+  // sitting inside your cockpit is sitting there again.
+  //
+  // TEAM AND HALO ARE REPORTED, NOT RESTORED. Both are read from storage at
+  // boot (`teamIdx` in game.js, CockpitOpts.halo), so honouring them needs a reload the
+  // caller has to drive; tools/shot/repro-shot.mjs does exactly that before
+  // replaying. Returning them and refusing to half-apply them beats silently
+  // rendering the wrong car, which is the failure this whole hook is for.
+  repro(o) {
+    if (o === undefined) {
+      const cam = this.camera();
+      const meta = document.querySelector('meta[name="apex-build"]');
+      return {
+        v: 1,
+        build: meta ? meta.content : null,
+        track: this.info().track,
+        tod: G.setTimeOfDay(), wx: G.weather(),
+        // The INDEX, because that is what the boot path reads (the `teamIdx`
+        // initialiser in game.js), plus the id so a replay can assert the
+        // right car was rebuilt.
+        teamIdx: (() => { try { return +localStorage.getItem("apex26.team"); } catch (_) { return null; } })(),
+        teamId: (() => { const p = G.cars && G.cars.find((c) => c.isPlayer); return p && p.team && p.team.id; })(),
+        halo: typeof CockpitOpts !== "undefined" ? CockpitOpts.halo() : null,
+        cam: { mode: cam.mode, tune: CamTune.values(cam.mode) },
+        cars: (G.cars || []).map((c, i) => ({
+          i, me: !!c.isPlayer, team: c.team && c.team.id,
+          s: +(c.s || 0).toFixed(3), x: +(c.x || 0).toFixed(3),
+          prog: +(c.prog || 0).toFixed(3), speed: +(c.speed || 0).toFixed(3),
+        })),
+      };
+    }
+    if (!o || typeof o !== "object" || !G.track) {
+      return { ok: false, error: "invalid_repro", message: "repro(obj) needs a captured blob and a loaded track.", fix: "Call repro() with no args to capture, then repro(that) after race()." };
+    }
+    if (o.cam && o.cam.mode) { this.camera(o.cam.mode); if (o.cam.tune) this.camTune(o.cam.mode, o.cam.tune); }
+    if (o.tod) G.setTimeOfDay(o.tod);
+    if (o.wx) G.weather(o.wx);
+    // "cars[] index is not an identity" (game.js, above setCarRole): makeCars()
+    // walks Career.gridDrivers() and drops the custom team unless it was picked,
+    // so grid ORDER differs between sessions — the netcode already stopped
+    // trusting it. By rec.i alone a replay hands cars each other's positions and
+    // can drop a rival ON the player, which from an onboard cam reads as a
+    // rendering fault. Match identity instead: the player by isPlayer, the rest
+    // by index CONFIRMED against team; skip and count the rest.
+    let placed = 0, skipped = 0;
+    if (Array.isArray(o.cars)) for (const rec of o.cars) {
+      const c = (rec.me && (G.cars || []).find((k) => k.isPlayer)) || G.cars[rec.i];
+      if (!c || (rec.team && c.team && c.team.id !== rec.team)) { skipped++; continue; }
+      c.s = wrapS(rec.s); c.x = rec.x; c.prog = rec.prog; c.speed = rec.speed;
+      placed++;
+    }
+    // The player's world position is derived from s/x, so re-anchor through the
+    // same path park() uses rather than trusting stale px/pz.
+    const me = (o.cars || []).find((r) => r.me);
+    if (me && G.track.total) this.jump(me.s / G.track.total, me.speed, me.x);
+    if (G.player) { G.frozen = true; snapGameCam(); }
+    return { restored: true, cars: placed, skipped, cam: o.cam && o.cam.mode,
+             teamMatches: (() => { const p = G.cars && G.cars.find((c) => c.isPlayer);
+               return !o.teamId || (p && p.team && p.team.id === o.teamId); })() };
+  },
+  cameraState() { return G.cameraDampingState(); },
+  camera(m) {
+    if (m == null) return { mode: CAM_MODES[G.camMode].id, index: G.camMode, modes: CAM_MODES.map((c) => c.id) };
+    const i = typeof m === "number" ? m : CAM_MODES.findIndex((c) => c.id === String(m).toLowerCase());
+    if (i < 0 || i >= CAM_MODES.length) return false;
+    G.dbgCam = null;   // switching to a game camera mode leaves any view() free-cam
+    setCamMode(i);
+    // Same as jump(): SwiftShader can starve rAF / the 10 Hz HUD tick for many
+    // seconds after a camera cut (heli + field LOD). hud-bcam and --hud-top-h
+    // must publish before the caller returns, or a 5 s layout wait times out
+    // while the next frame is still drawing (hud-layout.spec broadcast+heli).
+    if ((G.state === "race" || G.state === "count") && G.refreshHud) G.refreshHud(true);
+    return { mode: CAM_MODES[G.camMode].id, index: G.camMode };
+  },
+  snapCam(paint) {
+    if (!G.player || !G.track) return;
+    G.dbgCam = null;   // snapping the game camera clears any view() free-cam override
+    snapGameCam(paint);   // truthy paint → one sync render (rAF-starved probe harnesses)
+  },
+  previewCam(mode, frac = 0, speed = 60, lat = 0) {
+    if (!G.track) return false;
+    const m = String(mode).toLowerCase();
+    if (!CAM_MODES.some((c) => c.id === m)) return false;
+    const s = (((frac % 1) + 1) % 1) * G.track.total;
+    // Pass a CAR POSE, exactly as render() and snapGameCam() do. Without one the
+    // chase/onboard rigs silently fall back to their ROAD-FRAME branch — a
+    // different rig from the one the game ever shows — so this hook previewed
+    // framing no player sees, and a camera investigation that trusted it measured
+    // the wrong code path for hours while reporting everything as clean. The pose
+    // is synthesised from the requested (s, lat) since previewCam deliberately
+    // does not move the car: centre + right*lat for the position, and the road
+    // tangent's heading, which is what a car sitting at that point would have.
+    Tracks.sample(G.track, s, smp);
+    const px = smp.p[0] + smp.r[0] * lat, pz = smp.p[2] + smp.r[2] * lat;
+    const head = Math.atan2(smp.t[0], smp.t[2]);
+    const v = camVantage(m, s, lat, speed, 0, { carPos: [px, pz], carHead: head });
+    G.dbgCam = { eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov, far: 6000 };
+    return { eye: v.eye, target: v.tgt, fov: +v.fov.toFixed(1), mode: m };
+  },
+  // flybyCam(u, shots?) — park the camera at progress `u` (0..1) through the
+  // PRE-RACE FLYBY's shot sequence (js/camera/flyby-seq.js) and report where it
+  // put the eye, what it is looking at, which shot that is, and whether the eye
+  // landed inside solid scenery. This is the authoring/inspection seam: the live
+  // sequence is driven by a phase timer that lasts a few seconds, which is not
+  // something a capture tool can aim at, so this drives the same solver
+  // deterministically through dbgCam (the override photo mode uses).
+  // Pass `shots` to preview an EDITED sequence without reloading; without it,
+  // the sequence a race would fly (the saved edit, else DEFAULT — flybyShots()).
+  // `onRoad`: the shot runs down the road, so solve() skips clearance and the
+  // unit test exempts it from containment (axis-aligned boxes of angled
+  // grandstands cross the straight) — `inside` is then no defect; `lat` is the
+  // test's own check. `lift`: metres the clearance raised the eye.
+  flybyCam(u, shots) {
+    if (!G.track || typeof FlybySeq === "undefined") return false;
+    const list = (shots && shots.length) ? shots : (G.flybyShots || FlybySeq.DEFAULT);
+    const v = FlybySeq.solve(G.track, +u || 0, list);
+    const sh = list[v.index], onRoad = !!(sh && sh.eye && FlybySeq.onRoadPose(sh.eye[0]) && FlybySeq.onRoadPose(sh.eye[1]));
+    const pr = onRoad ? Tracks.project(G.track, v.eye[0], v.eye[2], null, v.eye[1]) : null;
+    // FlybySeq.FAR/FOG, not photo mode's own numbers: this preview IS the
+    // editor's picture, and it has to be rendered the way the loading screen
+    // renders the same shot or the editor lies about the haze (it did).
+    // `cine` is the MARKER, and it is what makes the preview honest: render()
+    // reads it and builds this frame's whole lens — near, far, fog, cull, and an
+    // uncapped FOV — the way the loading screen builds it, instead of the way a
+    // debug free camera is built. Without it the preview is only a dbgCam, and
+    // a dbgCam is photo mode.
+    G.dbgCam = {
+      eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov,
+      far: FlybySeq.FAR, fog: FlybySeq.FOG, cine: true,
+    };
+    const hit = FlybySeq.insideProp(G.track, v.eye, 0);
+    return {
+      u: +(+u || 0).toFixed(4), shot: v.id, index: v.index, cut: v.cut,
+      eye: v.eye.map((n) => +n.toFixed(2)), target: v.tgt.map((n) => +n.toFixed(2)),
+      fov: +v.fov.toFixed(1), lift: +(v.lift || 0).toFixed(2),
+      onRoad, lat: pr ? +pr.lat.toFixed(2) : null,
+      inside: hit ? { kind: hit.kind, size: [hit.w, hit.h, hit.d] } : null,
+    };
+  },
+  // flybyShots() — the sequence the flyby is currently playing, as data. The
+  // authoring loop is: read this, edit it, hand it back to flybyCam(u, shots).
+  // The EDITOR's saved list when there is one, so this reports what a race would
+  // actually fly rather than what ships — they stopped being the same thing when
+  // the editor learned to save.
+  flybyShots() {
+    if (typeof FlybySeq === "undefined") return null;
+    return JSON.parse(JSON.stringify(G.flybyShots || FlybySeq.DEFAULT));
+  },
+  // camTune(mode?, obj?) — the CAMERA TUNER's per-camera-mode framing offsets
+  // (js/camera/offsets.js), the camera counterpart of lightTune(). With no args
+  // it reports every tuned mode plus the knob registry; with a mode id it
+  // returns that mode's six resolved values; with a mode id + an object of
+  // {height,dist,side,pitch,yaw,fov} it applies and persists them and re-snaps
+  // the live camera. Pass null as the object to reset that mode.
+  //   __apex.camTune("chase", { height: 0.6, dist: 2, fov: -4 })
+  camTune(mode, obj) {
+    if (mode == null) {
+      const out = { defs: CamTune.defs().map((d) => ({ id: d.id, min: d.min, max: d.max, def: d.def, unit: d.unit })), tuned: {} };  // def: cornerLead ships 0.54, not 0
+      for (const m of CamTune.tunedModes()) out.tuned[m] = CamTune.values(m);
+      return out;
+    }
+    const m = String(mode).toLowerCase();
+    if (!CAM_MODES.some((c) => c.id === m)) return false;
+    if (obj === undefined) return CamTune.values(m);
+    if (obj === null) CamTune.reset(m);
+    else if (typeof obj === "object") for (const k of Object.keys(obj)) CamTune.set(m, k, +obj[k]);
+    else return false;
+    CamTune.persist();
+    if (G.player && G.track) snapGameCam();
+    CamTunerPanel.refresh();
+    return CamTune.values(m);
+  },
+  // pitCamAuto(on?) — optional auto-cut onto PIT WALL around pit entry/exit
+  // (js/camera/extra-rigs.js). Default OFF (opt-in). Pass a boolean to set; no args to read.
+  pitCamAuto(on) {
+    if (typeof ExtraRigs === "undefined") return false;
+    return ExtraRigs.pitCamAuto(G.store, on);
+  },
+  // track reflects the ACTIVE race track — null at the menu/select even though a
+  // track is loaded for the background flyby (matches the documented contract).
+  // sectors: [s1End, s2End] racing-lap fractions; turns: curated FIA turn count.
+  // `flow`/`session` are the real mode state; timeTrial/seasonMode are the older
+  // derived booleans, kept verbatim so existing harnesses do not have to change.
+  info: () => ({
+    state: G.state, track: (G.state === "race" || G.state === "count") ? (G.track && G.track.def.id) : null,
+    n: G.track && G.track.n, total: G.track && G.track.total, timeTrial: G.timeTrial, seasonMode: G.seasonMode,
+    flow: G.flow, session: G.session, career: !!G.career,
+    // Whether this session counts, and whether it is a duel — the two facts a
+    // harness needs to read a result correctly. `practice` is derived (a Time
+    // Trial is always one), so it is NOT the same question as session === "tt".
+    practice: G.practice, duel: G.duel,
+    raceQuali: !!G.raceQuali, raceGrid: G.raceGrid,
+    lapsTarget: G.lapsTarget,
+    sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,
+    turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
+  }),
+  // `lens` is what the LAST FRAME was actually built with — near, far, the
+  // post-cap vertical FOV, the fog multiplier, the cull radius — as opposed to
+  // the camera INTENT the rest of this reports. They are different questions,
+  // and the difference is a defect class: the pre-race flyby and the flyby shot
+  // EDITOR aimed the same camera and rendered it through two different lenses
+  // for months (far 900 vs 6000, fog 1.0 vs 0.15), which reads as "why is the
+  // loading screen so much foggier than the editor" and is invisible to any
+  // hook that only reports where the camera is pointed.
+  camState: () => Object.assign(G.dbgCam
+    ? { eye: Array.from(G.dbgCam.eye), tgt: Array.from(G.dbgCam.target), fov: G.dbgCam.fov, roll: 0, debug: true }
+    : { eye: Array.from(G.camEye), tgt: Array.from(G.camTgt), fov: G.camFov, roll: G.camRoll, debug: false },
+  { lens: G.lens ? Object.assign({}, G.lens) : null }),
+  garageCam: () => ({
+    on: G.setupPreviewOn, spin: G.setupPreviewSpin,
+    az: G.setupPreviewAz, el: G.setupPreviewEl, dist: G.setupPreviewDist,
+    // dist is the ZOOM's stored distance; effDist is what the camera actually
+    // used last frame. They differ on the auto-turntable path, which is the one
+    // that can misframe — fitD is the auto fit before the clamp, so a test can
+    // see the fit diverge (fitD >> effDist) instead of only its symptom.
+    effDist: G.spEffDist, fitD: G.spEffFit, panelFrac: G.spEffPanel,
+    pan: G.setupPreviewPan.slice(),
+    // ACTIVE AERO in the garage: the switch and the FLAP TRAVEL it eases toward.
+    // Separate fields on purpose — the button label follows the switch, so a
+    // preview whose blend never moves still reads "X-MODE" while showing a car
+    // that has not changed at all.
+    xOn: G.setupPreviewXOn, aeroX: G.setupPreviewAeroX,
+  }),
+  // GARAGE PREBUILD (js/garage/prebuild.js): ready/blockers/last run ms/tap-to-first-frame ms.
+  garagePrebuild: () => (typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().state() : null),
+  // THE MENU'S RACE PREP (read-only): world/done/warmed/warmFrames/warming/cars — what RACE! will find ready.
+  menuPrep: () => (G.menuPrep ? G.menuPrep() : null),
+  garagePrewarm: (on) => (typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().setEnabled(on) : null),   // the title prebuild's A/B switch (session; apex26.garagePrewarm="off" at boot)
+  // GARAGE ACTIVE AERO, drivable without a frame loop. The preview eases inside
+  // the rAF render, and a headless page composites no frames at all, so the
+  // whole garage animation was unobservable from a test — which is exactly how
+  // "the wings do not move" reached a player instead of a spec. No argument
+  // reads the state; garageStep(dt) advances the ease by dt seconds.
+  garageAero(on, opts) {
+    if (!G.setupPreviewOn) return null;
+    if (on !== undefined) G.setSetupAero(!!on, opts);
+    return { xOn: G.setupPreviewXOn, aeroX: +G.setupPreviewAeroX.toFixed(4),
+             mode: G.setupPreviewAeroX > 0.05 ? "X" : "Z" };
+  },
+  // Off-by-default X-mode TE strip (`CarMesh.drawAeroEdge`). Real cars do not
+  // light their wings; `apex26.aeroEdge=1` is the debug latch.
+  aeroEdge(on) {
+    const KEY = "apex26.aeroEdge";
+    if (on !== undefined) {
+      try { if (on) localStorage.setItem(KEY, "1"); else localStorage.removeItem(KEY); }
+      catch (e) { /* private mode */ }
+    }
+    try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; }
+  },
+  garageStep(dt, n) {
+    if (!G.setupPreviewOn) return null;
+    const step = dt == null ? 1 / 60 : dt;
+    for (let i = 0; i < (n == null ? 1 : n); i++) G.stepSetupAero(step);
+    return this.garageAero();
+  },
+  // Switch garage car without opening #teampicker — same store writes as the tile
+  // click in select-screen.js (G.teamIdx, buildSetup, tickUi). Multi-team
+  // garage-angles surveys use this instead of the picker UI (~15 s per team).
+  garageTeam(id, seatWanted) {
+    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
+    const i = Teams.LIST.findIndex((t) => t.id === id);
+    if (i < 0) return { ok: false, error: "unknown_team", id };
+    const t = Teams.LIST[i];
+    const label = t.name.toUpperCase();
+    // An explicit SEAT (0 / 1) switches the driver — number, helmet, T-cam —
+    // on the same team too; without one the first free seat is taken.
+    const wantSeat = Number.isInteger(seatWanted) && seatWanted >= 0 && seatWanted < t.drivers.length ? seatWanted : null;
+    if (G.teamIdx === i && (wantSeat == null || wantSeat === G.driverIdx)) return { ok: true, switched: false, label, seat: G.driverIdx };
+    const taken = G.peerSeats ? G.peerSeats() : [];
+    const isTaken = (si) => taken.some((s) => s.team === t.id && s.driver === si);
+    let seat = wantSeat != null ? wantSeat : 0;
+    if (wantSeat == null) while (seat < t.drivers.length - 1 && isTaken(seat)) seat++;
+    G.teamIdx = i;
+    G.driverIdx = seat;
+    G.store.set("team", i);
+    G.store.set("driver", seat);
+    try { document.documentElement.dataset.team = t.id; } catch (_) { /* no DOM */ }
+    // Drop the preview meshes AND the key naming the one still held, or a no-op
+    // switch left setup-camera drawing a freed mesh (spMeshBust's two halves).
+    if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G._spMeshKey = ""; }
+    G.buildSetup();
+    G.tickUi();
+    return { ok: true, switched: true, label, seat };
+  },
+  // One-shot preset + framing — mirrors #cs-stack / cs-view-* / cs-pan-*: opts.target [x,y,z] car-space look-at, lamp (preset name | null), az/el/dist absolute (rad, m), pan [strafe, dolly] m, zoom/strafe/dolly/azNudge/elNudge counted clicks; eye+look [x,y,z] place the eye itself (implies clamp:false); clamp:false lifts the player's el ≥ 0 / minDist floors for this framing; view "free" keeps the current camera.
+  garageFrame(view, opts) {
+    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
+    if (!view) return { ok: false, error: "no_view" };
+    if (view !== "free") G.setSetupView(view);   // a preset resets orbit/target/pan; absolutes go on top
+    let o = opts || {};
+    const num = (v) => (Number.isFinite(v) ? v : null);
+    const xyz = (v) => Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(+n));
+    if (xyz(o.eye) && xyz(o.look)) {
+      // An explicit EYE is an orbit about the look-at point from where the eye
+      // stands: the same spherical terms the garage camera composes (game.js
+      // eye = orbit + [sin az · d · cos el, d · sin el, cos az · d · cos el]).
+      const dx = +o.eye[0] - +o.look[0], dy = +o.eye[1] - +o.look[1], dz = +o.eye[2] - +o.look[2];
+      const d = Math.hypot(dx, dy, dz) || 1e-6;
+      o = Object.assign({}, o, { target: o.look.map(Number), az: Math.atan2(dx, dz),
+        el: Math.asin(Math.max(-1, Math.min(1, dy / d))), dist: d, clamp: false });
+    }
+    G.setSetupFree(o.clamp === false);   // a dev shot may leave the player's range; the next preset restores it
+    if (Array.isArray(o.target) && o.target.length === 3) G.setSetupAim(o.target.map(Number));   // orbit + look-at, car space
+    if (o.lamp !== undefined && typeof GarageScene !== "undefined" && GarageScene.spot) GarageScene.spot(o.lamp || null);
+    if (num(o.az) != null) G.nudgeSetupCam(o.az - G.setupPreviewAz, 0, 0);
+    if (num(o.el) != null) G.nudgeSetupCam(0, o.el - G.setupPreviewEl, 0);
+    if (num(o.dist) > 0) G.nudgeSetupZoom(o.dist / G.setupPreviewDist);   // clamped by the game
+    const steps = (n, fn) => { for (let i = 0; i < Math.abs(n | 0); i++) fn(n > 0 ? 1 : -1); };
+    steps(o.azNudge != null ? o.azNudge : o.nudgeAz, (s) => G.nudgeSetupCam(0.18 * s, 0, 0));
+    steps(o.elNudge != null ? o.elNudge : o.nudgeEl, (s) => G.nudgeSetupCam(0, 0.12 * s, 0));
+    steps(o.zoom, (s) => G.nudgeSetupZoom(s > 0 ? 1 / 1.12 : 1.12));
+    steps(o.strafe, (s) => G.setupPan(0.15 * s, 0));
+    steps(o.dolly, (s) => G.setupPan(0, 0.15 * s));
+    if (Array.isArray(o.pan)) G.setupPan(+o.pan[0] || 0, +o.pan[1] || 0);
+    const c = this.garageCam();
+    return { ok: true, view, az: c.az, el: c.el, dist: c.effDist, pan: c.pan };
+  },
+  // Merge catalog part ids into the current team's garage setup and rebuild.
+  garageParts(parts) {
+    const team = Teams.LIST[G.teamIdx];
+    if (!team || !parts || typeof parts !== "object") return { ok: false, error: "bad_parts" };
+    const cur = Object.assign({}, G.getTeamParts(team.id));
+    for (const [cat, id] of Object.entries(parts)) {
+      if (id != null && id !== "") cur[cat] = id;
+    }
+    G.saveTeamParts(team.id, cur);
+    // Garage open: drop the preview, rebuild the sheet. Closed (menu / a race): DONE's recompute, so the next frame re-keys the player body, cockpit and wheel meshes.
+    if (!G.setupPreviewOn) G.recomputePlayerMods();
+    else { if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) { GarageScene.dropPreviewMeshes(); G._spMeshKey = ""; } G.buildSetup(); }
+    return { ok: true, team: team.id, parts: cur, live: !G.setupPreviewOn };
+  },
+  // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
+  meshToggle(o) { G.hideMeshes = Object.assign({}, G.hideMeshes, o || {}); return G.hideMeshes; },
+  // World position and orientation of a track node by fraction (0-1).
+  // `{ scenery: true }` asks the question a CIRCUIT FILE asks. A scenery frac
+  // is not a racing frac: transformSceneryApi wraps every node-taking helper
+  // with TrackSpace.sceneryNode, so `anchor(K(0.45))` in js/circuits/scenery/
+  // and a bare nodeAt(0.45) here land on different nodes on any circuit
+  // carrying _sceneryShift — at Montreal that is 337 against 489, 152 nodes
+  // and 600 m apart.
+  //
+  // This is not hypothetical. montreal-foundation.spec.js sampled props within
+  // 2.2 m of nodeAt(0.45) and called them the casino footbridge's piers; the
+  // piers are 600 m away, and what it had been measuring for months was the
+  // floodlight masts, which ran the whole lap every 22 m. Every careful comment
+  // in that spec about which pier landed on the rougher patch and a 5 cm
+  // tolerance failing at 6.3 cm was tuning against lamp posts. It only came to
+  // light when `lamp: "none"` started being honoured and the masts went away.
+  nodeAt(frac, opts) {
+    if (!G.track) return null;
+    if (!Number.isFinite(+frac) || frac === null || frac === "") {
+      return { ok: false, error: "bad_argument", message: "nodeAt(frac) needs a finite fraction of the lap (0-1)", fix: "pass e.g. nodeAt(0.45)" };
+    }
+    const raw = ((Math.round(frac * G.track.n) % G.track.n) + G.track.n) % G.track.n;
+    const k = opts && opts.scenery && typeof TrackSpace !== "undefined" && TrackSpace
+      ? TrackSpace.sceneryNode(G.track.def, raw, G.track.n)
+      : raw;
+    return { k, frac: +(k / G.track.n).toFixed(4), x: +G.track.px[k].toFixed(3), y: +G.track.py[k].toFixed(3), z: +G.track.pz[k].toFixed(3), tx: +G.track.tx[k].toFixed(3), tz: +G.track.tz[k].toFixed(3), rx: +G.track.rx[k].toFixed(3), rz: +G.track.rz[k].toFixed(3), hw: +G.track.hw[k].toFixed(3) };
+  },
+  // Player telemetry for steering tests: lateral offset x (m, +=right of centre),
+  // heading offset angle (rad, relative to track tangent), local curvature k
+  // (rad/m, +=LEFT turn — measured in agentview.js's corner table; spline's old
+  // "+ = right" comment was backwards), half-width hw (m), speed (m/s), arc s.
+  probe() {
+    if (!G.player || !G.track) return null;
+    const lineAt = (s) => { const ln = TrackLine.at(G.track, wrapS(s)); return ln.x * ln.w; };
+    Tracks.sample(G.track, G.player.s, smp);
+    let angle = 0;
+    if (G.player.head != null) {
+      const tAng = Math.atan2(smp.t[0], smp.t[2]);
+      angle = tAng - G.player.head;
+      // A loop, not M4.wrapDelta: player.head integrates yaw unwrapped
+      // (player-forces.js), so a lap or two in it is several turns from tAng.
+      while (angle > Math.PI) angle -= 2 * Math.PI;
+      while (angle < -Math.PI) angle += 2 * Math.PI;
+    }
+    return {
+      x: G.player.x, angle,
+      k: Tracks.curvature(G.track, G.player.s),
+      hw: smp.hw,
+      speed: G.player.speed, s: G.player.s,
+      // The racing-line assist's pursuit target (game.js updateCar): the AI
+      // line x*w at the same speed-scaled look-ahead. Where the line IS — the
+      // corner's sign alone says nothing (past an apex the line is outside).
+      lineAhead: G.track.line ? lineAt(G.player.s + Math.min(90, Math.max(25, Math.abs(G.player.speed) * 0.9))) : null,
+    };
+  },
+  // Look-ahead road sampler for closed-loop driving (the autopilot harness):
+  // curvature k (rad/m, +=LEFT) and half-width hw at distAhead metres in front of
+  // the player. Pass an array of distances to get one reading each, e.g. for
+  // picking the sharpest corner inside a braking window. Pure read — no state change.
+  scan(distAhead) {
+    if (!G.player || !G.track) return null;
+    const one = (d) => {
+      const s = wrapS(G.player.s + (d || 0));
+      Tracks.sample(G.track, s, smp);
+      return { s, k: Tracks.curvature(G.track, s), hw: smp.hw, slope: smp.t[1] || 0 };
+    };
+    return Array.isArray(distAhead) ? distAhead.map(one) : one(distAhead);
+  },
+  projTest(frac, lateral) {
+    if (!G.track) return null;
+    const s = wrapS((frac || 0) * G.track.total);
+    const lat = lateral || 0;
+    Tracks.sample(G.track, s, smp);
+    const wx = smp.p[0] + smp.r[0] * lat;
+    const wz = smp.p[2] + smp.r[2] * lat;
+    const p = Tracks.project(G.track, wx, wz, s);
+    const ds = M4.wrapDelta(p.s - s, G.track.total);   // both in [0, L), so the while-loop copy this replaced could never fold twice either
+    return { s, lat, world: [wx, wz], got: { s: p.s, lat: p.lat, dist: p.dist },
+             err: { s: ds, lat: p.lat - lat } };
+  },
+  tuning() {
+    return {
+      wheelbase: G.WHEELBASE,            // RESPONSE (shorter = snappier)
+      expo: G.STEER_EXPO,                // LINEARITY
+      maxSlip: G.STEER_MAX_SLIP,         // STEER LOCK
+      speedRef: G.STEER_SPEED_REF,       // SPEED STEER (higher = sharper at speed)
+      drift: G.DRIFT,                    // SLIDE (rear looseness)
+      roadFollow: G.ROAD_FOLLOW,         // DRIVING HELP steer-assist gain
+      playerGrip: G.PLAYER_GRIP,         // forgiveness headroom over AI grip
+      frontGrip: G.FRONT_GRIP,           // front friction bias (understeer-safety)
+      yawDamp: G.YAW_DAMP,               // yaw damping
+      yawInertia: G.YAW_INERTIA,         // rotational-inertia scale (turn-in speed)
+      pace: G.PACE,                      // OVERALL SPEED (player + AI)
+      raceLineAssist: G.raceLineAssist,                  // RACING LINE
+      maxTilt: Input.maxTilt,          // TILT SENSITIVITY (deg for full lock)
+      deadzone: Input.deadzone,        // fixed dead zone (deg) — no longer a slider
+      tiltCutoff: Input.minCutoff,     // STEER SMOOTHING (One-Euro min-cutoff, Hz)
+    };
+  },
+  physState() {
+    if (!G.player || G.player.px == null) return null;
+    const slip = Math.atan2(G.player.vLat || 0, Math.max(1, G.player.speed));
+    Tracks.sample(G.track, G.player.s, smp);
+    const { axFrac, slipFactor } = AgentView.slipBudget(G.player, LONG_GRIP, gripMult());
+    return {
+      s: G.player.s, x: G.player.x, speed: G.player.speed, prog: G.player.prog,
+      px: G.player.px, pz: G.player.pz,
+      head: G.player.head, vLat: G.player.vLat || 0,
+      yawRate: G.player.yawRateCur || 0,
+      slipDeg: slip * 180 / Math.PI, slope: smp.t[1] || 0,
+      wrongWay: !!G.player.wrongWay, rescueT: G.player.rescueT || 0, lap: G.player.lap,
+      axEstSm: +(G.player.axEstSm ?? 0).toFixed(2),
+      axFrac: +axFrac.toFixed(3),
+      slipFactor: +slipFactor.toFixed(3), driving: G.coach.status(),
+      // The DRIVEN axle's circle after the brake-bias re-split (player-forces
+      // c.slipFactor) — not the whole-car budget above. null before a tick.
+      drivenSlip: G.player.slipFactor != null ? +G.player.slipFactor.toFixed(3) : null,
+      brakeBias: G.player.brakeBias != null ? +G.player.brakeBias.toFixed(3) : null,   // the SETUP sheet's split (null = BB_REF)
+      aeroX: +(G.player.aeroX || 0).toFixed(3),
+      xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
+      vmaxNow: +(G.player._vmaxNow || 0).toFixed(3),
+      towing: +(G.player.towing || 0).toFixed(3),   // player slipstream 0..1 — folded into vmaxNow
+      wake: +(G.player.wake || 0).toFixed(3),       // dirty air 0..1 — the grip penalty, positions-only
+      aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
+      aeroDf: +G.aeroDfMult(G.player).toFixed(3),
+      aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),
+      xVmaxGain: +G.xVmaxGain(G.player).toFixed(4),
+      xDfLoss: +G.xDfLoss(G.player).toFixed(4),
+      ersDeploy: +(G.player.ersDeploy != null ? G.player.ersDeploy : 0.5).toFixed(3),
+      ersRegen: +(G.player.ersRegen != null ? G.player.ersRegen : 0.5).toFixed(3),
+      drain: +G.drainFor(G.player).toFixed(4),
+      regen: +G.regenFor(G.player).toFixed(4),
+      otTime: +G.otTimeFor(G.player).toFixed(2),
+      otMJ: +OvertakeMode.mj(G.player).toFixed(3),   // Overtake allowance left this lap (0.5 MJ when granted)
+      // TYRES (js/physics/tyre-model.js). All four are exactly at their fresh
+      // values while TYRE WEAR is off, so a spec can assert the no-op.
+      tyreCompound: G.player.tyre ? G.player.tyre.id : null,
+      tyreWear: +G.tyres.spent(G.player).toFixed(4),
+      tyreGrip: +G.tyres.gripMul(G.player).toFixed(4),
+      tyreLoad: +(G.player._tyreLoad || 0).toFixed(3),
+    };
+  },
+  // The pit lane (js/race/pit-lane.js): the resolved geometry, the limit, and
+  // this car's state in it. `arm` calls the stop (or cancels it) exactly as the
+  // PIT control does, which is how a spec drives a stop without an input device.
+  pit(arg) {
+    if (!G.pits) return null;
+    const o = arg && typeof arg === "object" ? arg : {};
+    const c = o.car != null ? (G.cars || [])[o.car] : G.player;
+    if (o.arm != null) G.pits.arm(c, !!o.arm);
+    const out = G.pits.info(c);
+    // The AI's strategy, when it has one: what it plans to do and why it last
+    // deviated. Null for the player, who plans their own race.
+    if (out && c) { out.plan = c.pitPlan || null; out.why = c.pitWhy || ""; }
+    // THE STOP, SEEN — crew mesh facts + how many frames submitted it since
+    // the last read (pitCrewDrawn clears). A browser spec asserts both the
+    // people count and a positive draw while the car is in its box.
+    if (out) {
+      const col = (c && c.team && c.team.color) || [0.30, 0.32, 0.36];
+      const mesh = (typeof CarMesh !== "undefined" && CarMesh.getCrewMesh)
+        ? CarMesh.getCrewMesh(col) : null;
+      out.crew = mesh
+        ? { people: mesh._crewPeople || 0, verts: mesh._crewVerts || mesh.count || 0 }
+        : null;
+      out.crewDrawn = typeof G.pitCrewDrawn === "function" ? G.pitCrewDrawn() : 0;
+    }
+    return out;
+  },
+  // The bay signs (js/garage/pit-signs.js): cells laid out on the row, whether
+  // the atlas and the texMesh uploaded, frames drawn and frames asked.
+  pitSigns() {
+    const t = G.track, q = t && t.pitSigns, m = t && t.meshes;
+    const s = typeof PitSigns !== "undefined" ? PitSigns.stats() : { drawn: 0, calls: 0 };
+    return { cells: q ? q.cells.length : 0, mesh: !!(m && m.pitSigns), tex: !!(m && m.pitSignTex), drawn: s.drawn, calls: s.calls };
+  },
+  // The whole tyre picture for one car (default: the player) — compound, life
+  // in laps at THIS race distance, wear, the grip it costs and the load that
+  // caused it. `field: true` returns the same record for every car, which is
+  // how a strategy spec reads the AI's stints.
+  tyres(arg) {
+    if (!G.tyres) return null;
+    const o = arg && typeof arg === "object" ? arg : {};
+    // `level` sets the TYRE WEAR setting AND the live model together, so a spec
+    // can turn wear on without the settings sheet and have it survive the next
+    // gridUp (which re-reads the setting, not the model).
+    if (o.level != null && TyreModel.isLevel(o.level)) { G.raceTyreWear = o.level; G.tyres.setLevel(o.level); }
+    // `fit` ("soft"/"medium"/"hard") changes the set exactly as a pit stop does
+    // (TyreModel.fit, which writes the stint log), so a spec that ends a race
+    // with finishRace() can meet the two-compound rule (js/race/sporting-regs.js).
+    if (o.fit && !o.field) {
+      const fc = o.car != null ? (G.cars || [])[o.car] : G.player;
+      if (fc) G.tyres.fit(fc, G.tyres.classRecord(o.fit));
+    }
+    if (o.field) {
+      return (G.cars || []).map((c) => Object.assign({ driver: c.driverId, code: c.code }, G.tyres.info(c)));
+    }
+    const c = o.car != null ? (G.cars || [])[o.car] : G.player;
+    return G.tyres.info(c);
+  },
+  // DISPLAY-ONLY damage readout (js/race/damage.js) for car `i` (default: the
+  // player): {fwL, fwR, rw, floor, knock, hits, worst, shown}. `hit` books a
+  // synthetic impact {long, lat, sev} in the car's frame (+long nose, +lat right);
+  // "reset" repairs. Nothing in physics reads it — a screenshot/test door only.
+  damage(i, hit) {
+    const c = i != null ? (G.cars || [])[i] : G.player;
+    if (!c || typeof Damage === "undefined") return null;
+    if (hit === "reset") Damage.reset(c);
+    else if (hit && typeof hit === "object") Damage.apply(Damage.get(c), +hit.long || 0, +hit.lat || 0, +hit.sev || 0);
+    return Damage.state(c);
+  },
+  wallStats() {
+    if (!G.track || !G.track.barR) return null;
+    // Sides the PIT COMPLEX owns (TrackPit.openBoundary widens them to the garages after the scenery)
+    // count as `pitSides`, not as loose: Montreal's lap-long walls read 92.8 % with them in, floor 95 %.
+    //
+    // `maxB` EXCLUDES THEM TOO: a pit-owned side is not a loose barrier for the
+    // widest-limit statistic either. With it in, 44 of the 52 circuits read
+    // maxB > 20 solely because of the garage line (monaco 14.7 against 5.9
+    // without it, hungaroring 20.1 against 17.0); without it the whole fleet
+    // sits at 17.0 or less.
+    //
+    // The pit extent is not hidden, just named: `maxPitB` reports it so it can
+    // still be bounded. null when the track has no pit-owned side at all.
+    const pit = G.track.pit, keep = pit && pit.keep;
+    let minB = Infinity, maxB = -Infinity, maxPitB = -Infinity;
+    let minOverHw = Infinity, anyNaN = false, tightSides = 0, pitSides = 0;
+    for (let k = 0; k < G.track.n; k++) {
+      const r = G.track.barR[k], l = G.track.barL[k], own = keep && keep[k] > 0 ? pit.side : 0;
+      if (!Number.isFinite(r) || !Number.isFinite(l)) anyNaN = true;
+      minB = Math.min(minB, r, l);
+      if (own > 0) maxPitB = Math.max(maxPitB, r); else maxB = Math.max(maxB, r);
+      if (own < 0) maxPitB = Math.max(maxPitB, l); else maxB = Math.max(maxB, l);
+      minOverHw = Math.min(minOverHw, r - G.track.hw[k], l - G.track.hw[k]);
+      if (own > 0) pitSides++; else if (r < G.track.hw[k] + 8.99) tightSides++;
+      if (own < 0) pitSides++; else if (l < G.track.hw[k] + 8.99) tightSides++;
+    }
+    return { minB, maxB, maxPitB: Number.isFinite(maxPitB) ? maxPitB : null,
+      minOverHw, anyNaN, tightFrac: tightSides / Math.max(1, G.track.n * 2 - pitSides),
+      pitSides, street: !!G.track.street, n: G.track.n };
+  },
+  modelDiagnostics() {
+    if (!G.track || !G.track.modelDiagnostics) return null;
+    return JSON.parse(JSON.stringify(G.track.modelDiagnostics));
+  },
+  geometryDiagnostics() {
+    if (!G.track || !G.track.geometryDiagnostics) return null;
+    return JSON.parse(JSON.stringify(G.track.geometryDiagnostics));
+  },
+  trackGeometry(keep) {
+    if (typeof keep === "boolean") Tracks.setKeepGeometry(keep);
+    if (!G.track || !G.track.roadGeo || !G.track.terrainGeo) return null;
+    return {
+      road: G.track.roadGeo, terrain: G.track.terrainGeo,
+      props: G.track.propsGeo, glass: G.track.glassGeo, water: G.track.waterGeo,
+    };
+  },
+  maxWallOvershoot() {
+    if (!G.track || !G.track.barR) return null;
+    let m = 0;
+    for (const c of G.cars) {
+      if (c.finished) continue;
+      const wr = Tracks.wallAt(G.track, c.s, 1), wl = Tracks.wallAt(G.track, c.s, -1);
+      m = Math.max(m, c.x - wr, -wl - c.x, 0);
+    }
+    return m;
+  },
+  setPhysics(o) {
+    o = o || {};
+    // Reject a poisoned patch atomically; existing finite floors remain compatible.
+    for (const key of ["drift", "pace", "speedRef", "wheelbase", "expo", "maxSlip", "roadFollow", "playerGrip", "frontGrip", "yawDamp", "yawInertia", "maxTilt", "deadzone", "tiltCutoff"]) {
+      if (o[key] != null && !Number.isFinite(o[key])) throw new TypeError("setPhysics: " + key + " must be finite");
+    }
+    for (const key of ["drift", "maxSlip", "roadFollow", "playerGrip", "frontGrip", "yawDamp"]) {
+      if (o[key] != null && o[key] < 0) throw new RangeError("setPhysics: " + key + " must be nonnegative");
+    }
+    if (G.records && Object.keys(o).length) G.records.invalidate();
+    // Floors: pace<0 drove the cap negative, expo≤0 made pow(0,expo) NaN — and
+    // a NaN reaches every field of the car with nothing to heal it.
+    const fl = (v, lo) => (Number.isFinite(v) ? Math.max(lo, v) : null);
+    if (o.drift != null) G.DRIFT = o.drift;
+    if (o.pace != null && fl(o.pace, 0.05) != null) G.PACE = fl(o.pace, 0.05);
+    if (o.speedRef != null && fl(o.speedRef, 1) != null) { G.STEER_SPEED_REF = fl(o.speedRef, 1); Input.setSteerSpeedRef(G.STEER_SPEED_REF); }
+    if (o.wheelbase != null && fl(o.wheelbase, 0.5) != null) G.WHEELBASE = fl(o.wheelbase, 0.5);
+    if (o.expo != null && fl(o.expo, 0.2) != null) G.STEER_EXPO = fl(o.expo, 0.2);
+    if (o.maxSlip != null) G.STEER_MAX_SLIP = o.maxSlip;
+    if (o.roadFollow != null) G.ROAD_FOLLOW = o.roadFollow;
+    // core dynamic-model feel levers (swept by the emulation/tuning harness)
+    if (o.playerGrip != null) G.PLAYER_GRIP = o.playerGrip;
+    if (o.frontGrip != null) G.FRONT_GRIP = o.frontGrip;
+    if (o.yawDamp != null) G.YAW_DAMP = o.yawDamp;
+    if (o.yawInertia != null && fl(o.yawInertia, 0.05) != null) G.YAW_INERTIA = fl(o.yawInertia, 0.05);
+    if (o.maxTilt != null) Input.setTiltSensitivity(o.maxTilt);
+    if (o.deadzone != null) Input.setTiltDeadzone(o.deadzone);
+    if (o.tiltCutoff != null) Input.setTiltSmoothing(o.tiltCutoff);
+    return this.tuning();
+  },
+
+  setSpeed(v) {
+    if (!G.player || G.player.px == null) return false;
+    G.player.speed = Math.max(0, Math.min(200, v));
+    return { speed: G.player.speed };
+  },
+
+  // spin(deg) — add a heading offset to the player (degrees, +CW viewed from above).
+  // Simulates a snap-oversteer or a scripted orientation change. Zeroes lateral
+  // velocity and yaw rate after rotating so the car doesn't immediately un-spin.
+  // Use spin(180) to face the wrong way, spin(-45) for a 45° drift setup.
+  spin(deg) {
+    if (!G.player || G.player.px == null) return false;
+    G.player.head = G.player.head + deg * Math.PI / 180;
+    G.player.vLat = 0;
+    G.player.yawRateCur = 0;
+    return { head: +(G.player.head * 180 / Math.PI).toFixed(1) + "°" };
+  },
+
+  nudge(dLat = 0, dSpeed = 0) {
+    if (!G.player || G.player.px == null) return false;
+    if (dLat)   G.player.vLat  = (G.player.vLat || 0) + dLat;
+    if (dSpeed) G.player.speed = Math.max(0, (G.player.speed || 0) + dSpeed);
+    return { speed: +(G.player.speed || 0).toFixed(2), vLat: +(G.player.vLat || 0).toFixed(2) };
+  },
+
+  // the FREE CAMERA panel: none = state, {eye,target,fov,roll,lens,speed} = place, {snap:"car"|"corner",n} = snap, false = exit
+  freeCam(opts) { return typeof FreeCam !== "undefined" ? FreeCam.cmd(opts) : false; },
+  view(opts) {
+    if (!G.track) return false;
+    if (opts === "chase" || (opts && opts.mode === "chase")) { G.dbgCam = null; return { mode: "chase" }; }
+    opts = opts || {};
+    // free-look: explicit eye, aimed by yaw (0 = -Z, +90 = +X) and pitch (deg)
+    if (opts.eye && (opts.yaw != null || opts.pitch != null)) {
+      const yaw = (opts.yaw || 0) * Math.PI / 180, pit = Math.min(80, Math.max(-80, opts.pitch || 0)) * Math.PI / 180;
+      const d = [Math.sin(yaw) * Math.cos(pit), Math.sin(pit), -Math.cos(yaw) * Math.cos(pit)];
+      const e = opts.eye;
+      G.dbgCam = { eye: e.slice(), target: [e[0] + d[0] * 100, e[1] + d[1] * 100, e[2] + d[2] * 100], fov: Math.min(170, Math.max(1, opts.fov || 60)), far: opts.far || 6000, fog: opts.fog };
+      return { eye: e.slice(), yaw: opts.yaw || 0, pitch: opts.pitch || 0 };
+    }
+    if (opts.eye && opts.target) {
+      G.dbgCam = { eye: opts.eye.slice(), target: opts.target.slice(), fov: Math.min(170, Math.max(1, opts.fov || 60)), far: opts.far || 6000, fog: opts.fog };
+      return G.dbgCam;
+    }
+    if (opts.s != null && opts.side != null) {
+      if (opts.clear) {
+        let res;
+        const c = clearShot(CLEAR_SIDE.length, (i) => (res = this.view(Object.assign({}, opts, { clear: false,
+          side: (opts.side === "L" ? -1 : opts.side === "R" ? 1 : (opts.side || 1)) * CLEAR_SIDE[i][0],
+          dist: (opts.dist != null ? opts.dist : 14) * CLEAR_SIDE[i][1] }))));
+        return res && Object.assign(res, { clear: c });
+      }
+      Tracks.sample(G.track, opts.s * G.track.total, smp);
+      const side = opts.side === "L" ? -1 : opts.side === "R" ? 1 : (opts.side || 1);
+      const dist = opts.dist != null ? opts.dist : 14, height = opts.height != null ? opts.height : 9;
+      const p = smp.p, r = smp.r;
+      const eye = [p[0] + r[0] * side * dist, p[1] + height, p[2] + r[2] * side * dist];
+      const target = opts.look === "in"
+        ? [p[0], p[1] + 1, p[2]]
+        : [p[0] + r[0] * side * (dist + 80), p[1] + height * 0.4, p[2] + r[2] * side * (dist + 80)];
+      G.dbgCam = { eye, target, fov: Math.min(170, Math.max(1, opts.fov || 62)), far: opts.far || 6000, fog: opts.fog };
+      return { eye, target };
+    }
+    // centre + span: a focus point at lap-fraction s, or the whole-track bbox
+    let cx, cy, cz, span;
+    if (opts.s != null) {
+      Tracks.sample(G.track, opts.s * G.track.total, smp);
+      cx = smp.p[0]; cy = smp.p[1]; cz = smp.p[2];
+      span = Math.max(10, opts.radius || 180);
+    } else {
+      let nx = Infinity, xx = -Infinity, nz = Infinity, xz = -Infinity, ny = Infinity, xy = -Infinity;
+      for (let i = 0; i < G.track.n; i++) {
+        const x = G.track.px[i], z = G.track.pz[i], y = G.track.py[i];
+        if (x < nx) nx = x; if (x > xx) xx = x; if (z < nz) nz = z; if (z > xz) xz = z;
+        if (y < ny) ny = y; if (y > xy) xy = y;
+      }
+      cx = (nx + xx) / 2; cy = (ny + xy) / 2; cz = (nz + xz) / 2;
+      span = Math.max(xx - nx, xz - nz);
+    }
+    const az = (opts.azimuth != null ? opts.azimuth : 35) * Math.PI / 180;
+    const el = Math.min(85, Math.max(5, opts.elevation != null ? opts.elevation : 55)) * Math.PI / 180;
+    const dist = span * (opts.zoom != null ? opts.zoom : 1.0) * 0.95 + 60;
+    const eye = [
+      cx + Math.cos(el) * Math.sin(az) * dist,
+      cy + Math.sin(el) * dist,
+      cz + Math.cos(el) * Math.cos(az) * dist,
+    ];
+    G.dbgCam = { eye, target: [cx, cy, cz], fov: Math.min(170, Math.max(1, opts.fov || 55)), far: Math.max(6000, dist * 4), fog: opts.fog };
+    return { eye, target: [cx, cy, cz], span: Math.round(span) };
+  },
+  eyeAt(f, lat = 0, h = 2.5, lookF, lookLat = 0, lookH = 1) {
+    if (!G.track) return false;
+    const sPos = ((f % 1) + 1) % 1 * G.track.total;
+    Tracks.sample(G.track, sPos, smp);
+    const bk = Tracks.banking(G.track, sPos, lat);
+    const eye = [smp.p[0] + smp.r[0] * lat, smp.p[1] + h + (bk ? bk.dy : 0), smp.p[2] + smp.r[2] * lat];
+    const lf = lookF == null ? f + 0.01 : lookF;
+    const lPos = ((lf % 1) + 1) % 1 * G.track.total;
+    Tracks.sample(G.track, lPos, smp2);
+    const lbk = Tracks.banking(G.track, lPos, lookLat);
+    const tgt = [smp2.p[0] + smp2.r[0] * lookLat, smp2.p[1] + lookH + (lbk ? lbk.dy : 0), smp2.p[2] + smp2.r[2] * lookLat];
+    G.dbgCam = { eye, target: tgt, fov: 60, far: 6000 };
+    return { eye, target: tgt };
+  },
+  orbit(f, az = 35, el = 18, dist = 30, h = 1.5, opts = {}) {
+    if (!G.track) return false;
+    if (opts.clear) {
+      let res;
+      const c = clearShot(CLEAR_AZ.length, (i) => (res = this.orbit(f, az + CLEAR_AZ[i], el, dist, h, Object.assign({}, opts, { clear: false }))));
+      return res && Object.assign(res, { clear: c });
+    }
+    Tracks.sample(G.track, ((f % 1) + 1) % 1 * G.track.total, smp);
+    const cx = smp.p[0], cy = smp.p[1] + h, cz = smp.p[2];
+    const a = az * Math.PI / 180, e = Math.min(85, Math.max(-30, el)) * Math.PI / 180;
+    // basis: track tangent = "ahead", right = smp.r
+    const fwd = [smp.t[0], 0, smp.t[2]], rt = [smp.r[0], 0, smp.r[2]];
+    const dir = [Math.cos(a) * fwd[0] + Math.sin(a) * rt[0], 0, Math.cos(a) * fwd[2] + Math.sin(a) * rt[2]];
+    const eye = [cx + dir[0] * Math.cos(e) * dist, cy + Math.sin(e) * dist, cz + dir[2] * Math.cos(e) * dist];
+    // Never let a low/negative elevation sink the eye under the ground (which
+    // renders the track's underside through the terrain). Floor it just above road.
+    eye[1] = Math.max(eye[1], smp.p[1] + 1.2);
+    const fov = Math.min(170, Math.max(1, opts.fov != null ? opts.fov : 55));
+    G.dbgCam = { eye, target: [cx, cy, cz], fov, far: opts.far || 6000, fog: opts.fog };
+    return { eye, target: [cx, cy, cz], fov };
+  },
+
+  // cinematic(frac, opts) — auto outside-of-corner camera.  Reads the local track
+  // curvature to put the camera on the outside of the bend so the car fills the
+  // frame naturally.  Straight sections use a three-quarter chase angle.
+  //   opts.dist  (default 60)   orbit radius
+  //   opts.el    (default 18)   elevation degrees
+  //   opts.h     (default 1.5)  look-at height above road
+  //   opts.fov   (default 52)   field of view degrees
+  //   opts.azOff (default 0)    extra azimuth twist on top of auto angle
+  // Returns the same {eye, target, fov, az} object as orbit() plus the curvature k.
+  cinematic(frac, opts = {}) {
+    if (!G.track) return false;
+    const fr = ((frac % 1) + 1) % 1;
+    const k = Tracks.curvature(G.track, fr * G.track.total);
+    // +k is a LEFT-hand bend (measured — agentview.js corner-table note), whose
+    // outside is the RIGHT side of the road; orbit()'s az>0 is the right side.
+    // So az = +sign(k)·mag puts the camera on the outside, shooting across the
+    // apex. (-sign(k) puts the cinematic cam on the INSIDE of every corner.)
+    // Strength scales with |k| up to a tight-hairpin cap so the angle doesn't over-rotate.
+    const kAbs = Math.min(Math.abs(k), 0.05);
+    const baseAz = k === 0 ? 35 : Math.sign(k) * (70 + 40 * kAbs / 0.05);
+    const az = baseAz + (opts.azOff || 0);
+    const dist = opts.dist != null ? opts.dist : 60;
+    const el   = opts.el   != null ? opts.el   : 18;
+    const h    = opts.h    != null ? opts.h    : 1.5;
+    const fov  = opts.fov  != null ? opts.fov  : 52;
+    const res  = this.orbit(fr, az, el, dist, h, { fov, far: opts.far, fog: opts.fog, clear: opts.clear });
+    return res ? Object.assign(res, { az: +az.toFixed(1), k: +k.toFixed(5) }) : false;
+  },
+
+  studio(arg = true) {
+    if (arg === false || arg === 0) {
+      if (G._studioRig && G._studioRig._ambStash) {   // restore the session ambient
+        G.frame.ambientSky = G._studioRig._ambStash[0];
+        G.frame.ambientGround = G._studioRig._ambStash[1];
+      }
+      G._studioRig = null;
+      return false;
+    }
+    const o = typeof arg === "object" && arg ? arg : {};
+    if (G._studioRig && G._studioRig._ambStash) {     // re-config: restore before re-stash
+      G.frame.ambientSky = G._studioRig._ambStash[0];
+      G.frame.ambientGround = G._studioRig._ambStash[1];
+    }
+    G._studioRig = {
+      n: o.n || 6, dist: o.dist || 7, h: o.h != null ? o.h : 4.5,
+      intensity: o.intensity != null ? o.intensity : 1.6,
+      color: o.color || [1, 1, 1], radius: o.radius || 18, spin: o.spin || 0,
+      fill: o.fill != null ? o.fill : 0.5,
+    };
+    const f = G._studioRig.fill;
+    if (f > 0) {
+      G._studioRig._ambStash = [G.frame.ambientSky, G.frame.ambientGround];
+      const mixv = (a, b) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+      G.frame.ambientSky = mixv(G.frame.ambientSky || [0, 0, 0], [0.30, 0.31, 0.35]);
+      G.frame.ambientGround = mixv(G.frame.ambientGround || [0, 0, 0], [0.20, 0.19, 0.18]);
+    }
+    return G._studioRig;
+  },
+  carOrbit(idx = 0, az = 180, el = 14, dist = 25, h = 1.0, opts = {}) {
+    if (!G.track || !G.cars || !G.cars.length) return false;
+    const c = (idx <= 0 || !G.cars[idx]) ? (G.player || G.cars[0]) : G.cars[idx];
+    if (!c) return false;
+    // World pose when mirrored (player + field); else Frenet (s, x).
+    const s = ((c.s % G.track.total) + G.track.total) % G.track.total;
+    Tracks.sample(G.track, s, smp);
+    const cx = (c.px != null) ? c.px : smp.p[0] + smp.r[0] * (c.x || 0);
+    const cz = (c.pz != null) ? c.pz : smp.p[2] + smp.r[2] * (c.x || 0);
+    const cyf = smp.p[1] + h;
+    // Heading basis: a human car has a real yaw (c.head); AI uses the tangent.
+    const hd = (c.human && c.head != null) ? c.head : Math.atan2(smp.t[0], smp.t[2]);
+    const fwdX = Math.sin(hd), fwdZ = Math.cos(hd);
+    const rtX  = Math.cos(hd), rtZ  = -Math.sin(hd);
+    const a = az * Math.PI / 180, e = Math.min(85, Math.max(-30, el)) * Math.PI / 180;
+    const dir = [-Math.cos(a) * fwdX + Math.sin(a) * rtX, 0, -Math.cos(a) * fwdZ + Math.sin(a) * rtZ];
+    const eye = [cx + dir[0] * Math.cos(e) * dist, cyf + Math.sin(e) * dist, cz + dir[2] * Math.cos(e) * dist];
+    eye[1] = Math.max(eye[1], smp.p[1] + 1.2);   // keep the eye above ground (see orbit)
+    const fov = Math.min(170, Math.max(1, opts.fov != null ? opts.fov : 55));
+    G.dbgCam = { eye, target: [cx, cyf, cz], fov, far: opts.far || 4000, fog: opts.fog };
+    return { eye, target: [cx, cyf, cz], fov, carIdx: idx, speed: +(c.speed || 0).toFixed(1) };
+  },
+  dolly(f, fwd = 0, right = 0, up = 5, opts = {}) {
+    if (!G.track) return false;
+    const fr = ((f % 1) + 1) % 1;
+    Tracks.sample(G.track, fr * G.track.total, smp);
+    const p = smp.p, t = smp.t, r = smp.r;
+    const eye = [
+      p[0] + t[0] * fwd + r[0] * right,
+      p[1] + up,
+      p[2] + t[2] * fwd + r[2] * right,
+    ];
+    const lf = ((((opts.lookF != null ? opts.lookF : f + 0.015) % 1) + 1) % 1);
+    Tracks.sample(G.track, lf * G.track.total, smp2);
+    const lr = opts.lookLat || 0, lh = opts.lookH != null ? opts.lookH : 1.5;
+    const tgt = [smp2.p[0] + smp2.r[0] * lr, smp2.p[1] + lh, smp2.p[2] + smp2.r[2] * lr];
+    G.dbgCam = { eye, target: tgt, fov: Math.min(170, Math.max(1, opts.fov || 58)), far: opts.far || 6000, fog: opts.fog };
+    return { eye, target: tgt };
+  },
+
+  roadside(f, side = 1, dist = 10, h = 2.5, opts = {}) {
+    if (!G.track) return false;
+    if (opts.clear) {
+      let res;
+      const c = clearShot(CLEAR_SIDE.length, (i) => (res = this.roadside(f, side * CLEAR_SIDE[i][0], dist * CLEAR_SIDE[i][1], h, Object.assign({}, opts, { clear: false }))));
+      return res && Object.assign(res, { clear: c });
+    }
+    const fr = ((f % 1) + 1) % 1;
+    Tracks.sample(G.track, fr * G.track.total, smp);
+    const p = smp.p, t = smp.t, r = smp.r;
+    const eye = [p[0] + r[0] * side * dist, p[1] + h, p[2] + r[2] * side * dist];
+    const la = opts.lookAhead != null ? opts.lookAhead : 30;
+    const look = opts.look || "fwd";
+    let tgt;
+    if (look === "in") {
+      tgt = [p[0] - r[0] * side * dist * 0.5, p[1] + 1, p[2] - r[2] * side * dist * 0.5];
+    } else if (look === "out") {
+      tgt = [p[0] + r[0] * side * (dist + 60), p[1] + h * 0.6, p[2] + r[2] * side * (dist + 60)];
+    } else {
+      const sign = look === "back" ? -1 : 1;
+      const lf = ((fr + sign * la / G.track.total % 1) + 1) % 1;
+      Tracks.sample(G.track, lf * G.track.total, smp2);
+      tgt = [smp2.p[0], smp2.p[1] + 1, smp2.p[2]];
+    }
+    G.dbgCam = { eye, target: tgt, fov: Math.min(170, Math.max(1, opts.fov || 58)), far: opts.far || 6000, fog: opts.fog };
+    return { eye, target: tgt, look };
+  },
+
+  tourShots(n = 12, opts = {}) {
+    if (!G.track) return [];
+    const dist    = opts.dist     != null ? opts.dist     : 80;
+    const el      = opts.el       != null ? opts.el       : 20;
+    const azOff   = opts.azOffset != null ? opts.azOffset : 35;
+    const shots   = [];
+    if (opts.atCorners) {
+      // Detect apexes (local curvature maxima) and frame each from the outside.
+      const tn = G.track.n, total = G.track.total, kv = [];
+      for (let k = 0; k < tn; k++) kv.push(Tracks.curvature(G.track, k / tn * total));
+      let apex = [];
+      for (let k = 0; k < tn; k++) {
+        const a = (k - 1 + tn) % tn, b = (k + 1) % tn, ak = Math.abs(kv[k]);
+        if (ak > 0.006 && ak >= Math.abs(kv[a]) && ak > Math.abs(kv[b])) apex.push({ k, ak });
+      }
+      apex.sort((p, q) => q.ak - p.ak);               // sharpest first
+      if (n && apex.length > n) apex = apex.slice(0, n);
+      apex.sort((p, q) => p.k - q.k);                 // then back into lap order
+      apex.forEach((c, i) => {
+        const k = kv[c.k];
+        const az = Math.sign(k) * (70 + 40 * Math.min(Math.abs(k), 0.05) / 0.05);
+        shots.push({ frac: +(c.k / tn).toFixed(4), az: +az.toFixed(1), el, dist, label: `corner-${String(i + 1).padStart(2, "0")}` });
+      });
+      return shots;
+    }
+    for (let i = 0; i < n; i++) {
+      const frac = i / n;
+      const side  = i % 2 === 0 ? 1 : -1;
+      const az    = azOff * side;
+      shots.push({ frac: +frac.toFixed(4), az, el, dist, label: `shot-${String(i).padStart(2, "0")}` });
+    }
+    return shots;
+  },
+
+  // `overRoad` is the number you want; `gap` is the trap it replaces — inside a
+  // bankZone the tarmac is not the centreline plane (Lesmo 1 lifts the outer
+  // edge 0.66 m), so terrain correctly tucked UNDER the road reads as proud of
+  // it. roadY/gap keep the raw-centreline meaning so nothing silently changes.
+  groundY(f, lat = 0) {
+    if (!G.track) return false;
+    const s = ((f % 1) + 1) % 1 * G.track.total;
+    Tracks.sample(G.track, s, smp);
+    const x = smp.p[0] + smp.r[0] * lat, z = smp.p[2] + smp.r[2] * lat;
+    const ty = Tracks.terrainY(G.track, x, z), r3 = (v) => +v.toFixed(3);
+    const bank = Tracks.banking ? Tracks.banking(G.track, s, lat) : null;
+    const dy = bank && typeof bank.dy === "number" ? bank.dy : 0, surf = smp.p[1] + dy;
+    return { x: +x.toFixed(2), z: +z.toFixed(2), roadY: r3(smp.p[1]), bankDy: r3(dy),
+      roadSurfaceY: r3(surf), terrainY: ty == null ? null : r3(ty),
+      gap: ty == null ? null : r3(ty - smp.p[1]), overRoad: ty == null ? null : r3(ty - surf) };
+  },
+  // Controlled side-by-side test: race state, two AI cars placed dead-even at a
+  // mid-track straight with overlapping lateral positions and equal speed; every
+  // other car (incl. the player) is shoved far away. Returns the two test ids.
+  // Lets a harness measure pure side-by-side jitter without pack chaos.
+  pair(frac, speed) {
+    if (!G.track) return false;
+    G.state = "race"; G.raceT = Math.max(G.raceT, 1);
+    resetStartLights(true);
+    G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
+    const f = frac == null ? 0.3 : frac, v = speed == null ? 55 : speed;
+    const prog = f * G.track.total, s = wrapS(prog);
+    const ai = G.cars.filter((c) => !c.isPlayer);
+    if (ai.length < 2) return false;   // needs ≥2 AI cars — unavailable in time trial
+    const a = ai[0], b = ai[1];
+    [a, b].forEach((c, i) => {
+      c.prog = prog; c.s = s; c.speed = v;
+      c.x = i === 0 ? 0.6 : -0.6;   // overlap within the ~2 m car width
+      c.xVis = c.x; c.lap = 0; c.finished = false;
+    });
+    G.cars.forEach((c) => { if (c !== a && c !== b) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    return { a: G.cars.indexOf(a), b: G.cars.indexOf(b) };
+  },
+  jam(n) {
+    if (!G.track) return false;
+    G.state = "race"; G.raceT = Math.max(G.raceT, 1);
+    resetStartLights(true);
+    G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
+    const ai = G.cars.filter((c) => !c.isPlayer), m = Math.min(n || 5, ai.length);
+    const prog = 0.5 * G.track.total;
+    const ids = [];
+    ai.forEach((c, i) => {
+      if (i < m) {
+        c.prog = prog + (i - m / 2) * 0.4;     // tightly stacked longitudinally
+        c.s = wrapS(c.prog); c.speed = 2; c.x = (i - m / 2) * 0.3;  // and laterally
+        c.xVis = c.x; c.lap = 0; c.finished = false; c.stuckT = 0;
+        ids.push(G.cars.indexOf(c));
+      } else { c.prog -= 800; c.s = wrapS(c.s - 800); }
+    });
+    G.cars.forEach((c) => { if (c.isPlayer) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    return ids;
+  },
+  rival(dProg, dx) {
+    if (!G.player || !G.track) return false;
+    const ai = G.cars.find((c) => !c.isPlayer);
+    if (!ai) return false;
+    ai.prog = G.player.prog + (dProg || 0);
+    ai.s = wrapS(G.player.s + (dProg || 0));
+    ai.x = G.player.x + (dx || 0);
+    ai.xVis = ai.x; ai.speed = G.player.speed; ai.finished = false; ai.lap = G.player.lap;
+    ai.launchOn = false;   // placed at speed: no standing-start reaction or getaway
+    G.cars.forEach((c) => { if (c !== ai && !c.isPlayer) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    return { rival: G.cars.indexOf(ai) };
+  },
+  rivals(list) {
+    if (!G.player || !G.track) return false;
+    const ai = G.cars.filter((c) => !c.isPlayer);
+    const used = [];
+    (list || []).forEach((spec, i) => {
+      const c = ai[i];
+      if (!c) return;
+      c.prog = G.player.prog + (spec.dProg || 0);
+      c.s = wrapS(G.player.s + (spec.dProg || 0));
+      c.x = G.player.x + (spec.dx || 0);
+      c.xVis = c.x; c.speed = spec.speed != null ? spec.speed : G.player.speed;
+      c.finished = false; c.lap = G.player.lap; c.launchOn = false;
+      used.push(c);
+    });
+    ai.forEach((c) => { if (!used.includes(c)) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
+    return used.map((c) => G.cars.indexOf(c));
+  },
+  aim(relDeg) {
+    if (!G.player || !G.track || G.player.px == null) return false;
+    Tracks.sample(G.track, G.player.s, smp);
+    G.player.head = Math.atan2(smp.t[0], smp.t[2]) + (relDeg || 0) * Math.PI / 180;
+    G.player.vLat = 0;
+    return { head: G.player.head };
+  },
+  go() {
+    if (G.flyingStart) G.flyingStart.stop();   // a rolling start's run-up (js/race/flying-start.js): the wheel is the caller's now
+    G.state = "race"; G.raceT = Math.max(G.raceT, 0.5);
+    if (G.loadingScreen && G.loadingScreen.lowerWaitPlate) G.loadingScreen.lowerWaitPlate();
+    resetStartLights(true);
+    G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
+    return G.state;
+  },
+  // EVERY numeric/boolean field on every car, raw and unrounded — the whole
+  // per-car state, not the curated slice cars() returns. Its reason for
+  // existing is EPISODE_TRANSIENTS above: reset() must leave the cars in the
+  // state a fresh page load leaves them in, and the only honest way to check
+  // that is to diff the actual objects across two resets. Strings, objects and
+  // functions are skipped (team records, driver names, the launch plan) — they
+  // are identity, not episode state, and stringifying them would swamp the
+  // diff that matters.
+  carState: () => G.cars.map((c) => {
+    const o = {};
+    for (const k in c) { const v = c[k]; if (typeof v === "number" || typeof v === "boolean") o[k] = v; }
+    return o;
+  }),
+  cars: () => G.cars.map((c, i) => ({
+    id: i, x: +c.x.toFixed(3), xv: +((c.xVis !== undefined ? c.xVis : c.x)).toFixed(3),
+    yaw: +(c.yawVis || 0).toFixed(4),
+    prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2), lap: c.lap,
+    ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
+    ax: +(c.aeroX || 0).toFixed(2), err: c.errCount | 0,
+  })),
+  // The track build TIMELINE (js/track/tracks.js, "BUILD PROFILE"): one row per
+  // phase in build order, `k` "geo" for emission and "up" for upload. It exists
+  // to answer the multithreading plan condition 2 — run 128 proved the
+  // main-thread block at race entry is JavaScript rather than upload
+  // back-pressure, and this says WHICH JavaScript, which is what decides
+  // whether moving the build off the main thread would move anything.
+  buildProfile: () => (G.track && G.track.buildProfile) || null,
+  // The RACE-ENTRY timeline (js/perf/race-entry-profile.js): raceProfile() is
+  // the legs; raceEntryProfile() adds marks + longtask ring (real-device probe —
+  // soft-blit CI is not this freeze). buildProfile() is the build slice only.
+  raceProfile: () => (G.raceProfile && G.raceProfile()) || null,
+  // Legs + marks + longtask ring (real-device probe; soft-blit CI is not this freeze).
+  raceEntryProfile: () => (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.snapshot()) || null,
+  // PerfGov frame history + longtask count for tests/specs/perf-frametime.spec.js.
+  frametimeBench(cmd) {
+    if (typeof GameMetrics === "undefined") return null;
+    if (cmd === "reset") { GameMetrics.frametimeBenchReset(); return true; }
+    if (cmd === "snapshot") return GameMetrics.frametimeBenchSnapshot();
+    return { cmds: ["reset", "snapshot"] };
+  },
+  raceEntryStages: () => (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.stageTable()) || null,
+  raceEntryStageDiff: (raceSnap, practiceSnap) => (
+    typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.diffStages
+      ? RaceEntryProfile.diffStages(raceSnap, practiceSnap)
+      : null),
+  // WEBGL_multi_draw (GLX only, apex26.multiDraw). multiDraw(true|false)
+  // toggles it live; no argument reports the COUNTED oracle — multi-draw calls
+  // issued, ranges inside them, the drawElements calls thereby avoided, and the
+  // grouping itself: visible chunks in the lamp branch, the groups a NEIGHBOUR
+  // comparison makes of them, and the groups their light SETS make (24.5 vs
+  // 15.0 a frame at vegas night). Counted, not timed — a frame rate measured in
+  // this container measures the box.
+  multiDraw: (on) => {
+    if (!gfx || !gfx.multiDraw) return { supported: false, on: false };
+    if (on !== undefined) gfx.multiDraw(!!on);
+    return gfx.multiDrawStats ? gfx.multiDrawStats() : { supported: false, on: !!on };
+  },
+  // Occlusion culling (GLX only, ships OFF behind apex26.occlusionCull).
+  // occlusionCull(true|false) toggles it live; with no argument it reports the
+  // COUNTED oracle — chunks tested against the depth buffer, chunks skipped
+  // because a query said they contribute no pixel, and queries issued. Counted
+  // and not timed on purpose: this container has no GPU, so a frame rate here
+  // measures the box (docs/notes/CI-RENDERING-PERFORMANCE.md).
+  occlusionCull: (on) => {
+    if (!gfx || !gfx.occlusionCull) return { supported: false, on: false };
+    if (on !== undefined) gfx.occlusionCull(!!on);
+    return gfx.occlusionStats ? gfx.occlusionStats() : { supported: false, on: !!on };
+  },
+  // Lap fractions of curvature-peak apexes (local maxima of |curvature|).
+  // Distinct from curated FIA turns on track.def.turns / info().turns — use those
+  // for official turn counts; this hook is for physics/parking at sharp bends.
+  corners() {
+    if (!G.track) return [];
+    const n = G.track.n, total = G.track.total, kv = [];
+    for (let k = 0; k < n; k++) kv.push(Math.abs(Tracks.curvature(G.track, k / n * total)));
+    const res = [];
+    for (let k = 0; k < n; k++) {
+      const a = (k - 1 + n) % n, b = (k + 1) % n;
+      if (kv[k] > 0.006 && kv[k] >= kv[a] && kv[k] > kv[b]) res.push(+(k / n).toFixed(4));
+    }
+    return res;
+  },
+  // Load any circuit (by index or id, e.g. "monza") and start a normal race,
+  // optionally forcing time of day ("day" | "night" | "default") and weather
+  // ("dry" | "wet" | "rain" | "overcast" | "fog"). "wet" = damp road, no rain;
+  // "rain" = wet road + falling rain. Skips menus so a harness can render any track.
+  // opts.laps: the race distance (default GAME_LAPS) — the tyre-class draw at
+  // grid-up reads it, so a long-race bench must set it HERE, not after.
+  // opts.duel: true for the one-rival practice format, or a legend id
+  // ("fangio") to make that rival the legend. It must be set HERE and not after
+  // for the same reason as laps: startRace() trims the field on the way in, so
+  // a duel asked for afterwards races a full grid. false/absent leaves the
+  // setting alone, so a harness that never mentions duel keeps today's races.
+  // opts.grid: the one-off's grid rule ("tier" | "quali" | "rev10" | "revchamp"
+  // | "random"). The rule is in-memory game state, and a guest in a friend room
+  // takes the HOST's — so on a shared page a later solo start inherited
+  // "quali", opened qualifying instead of the grid, and read as "did not reach
+  // the grid". Absent leaves the rule alone; an unknown name is ignored.
+  race(trackRef, timeOfDay, weather, opts) {
+    const i = typeof trackRef === "number"
+      ? trackRef
+      : Tracks.LIST.findIndex((t) => t.id === trackRef);
+    if (i == null || i < 0 || i >= Tracks.LIST.length) return false;
+    G.trackIdx = i;
+    G.seasonMode = false;
+    G.timeTrial = false;
+    G.raceLaps = (opts && opts.laps > 0) ? (opts.laps | 0) : GAME_LAPS;
+    // End the previous session's weather arc FIRST: startRace's restoreBase() puts a live MIXED
+    // race's chip weather back over whatever is set below (every in-game exit does this).
+    if (G.endWeatherSession) G.endWeatherSession();
+    G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
+    G.raceTimeOfDay = timeOfDay || "default";
+    if (opts && opts.grid != null) G.raceGrid = opts.grid;   // the game's setter validates the name
+    if (opts && opts.duel != null) {
+      G.duel = !!opts.duel;
+      G.duelLegend = typeof opts.duel === "string" ? opts.duel : "";
+    }
+    return settled(startRace(),
+      { track: Tracks.LIST[i].id, timeOfDay: G.raceTimeOfDay, weather: G.raceWeather });
+  },
+  // LAZY_CIRCUIT hydrate (title boots meta stubs). Specs that read path.pts
+  // without race() await this first — same gate as ensureScenery / startRace.
+  ensureCircuit: (idx) => (G.ensureCircuit ? G.ensureCircuit(idx) : Promise.resolve()),
+  tt(trackRef, timeOfDay) {
+    const i = typeof trackRef === "number"
+      ? trackRef
+      : Tracks.LIST.findIndex((t) => t.id === trackRef);
+    if (i == null || i < 0 || i >= Tracks.LIST.length) return false;
+    G.trackIdx = i;
+    G.seasonMode = false;
+    G.timeTrial = true;
+    G.raceLaps = TT_LAPS;
+    if (G.endWeatherSession) G.endWeatherSession();   // see race(): restoreBase would undo the weather below
+    G.raceWeather = "dry";
+    G.raceTimeOfDay = timeOfDay || "default";
+    return settled(startRace(), { track: Tracks.LIST[i].id, timeTrial: true });
+  },
+  career(opts) {
+    if (opts === undefined) return Career.data();
+    if (opts === true) { openCareer(); return Career.data(); }
+    Career.start(opts || {});
+    openCareer();
+    return Career.data();
+  },
+  // Compact snapshot for assertions and HUDs — never the whole save.
+  careerState: () => Career.state(),
+  careerMoney(n) {
+    const c = Career.data();
+    if (!c) return null;
+    if (n != null) { c.money = Math.max(0, n | 0); Career.save(); }
+    return c.money;
+  },
+  careerReset() { const result = Career.clear(); if (result.ok) G.refreshCareerButton(); return result; },
+  careerFreeMoney(on) { return Career.freeMoney(on); },
+  // Hand the live career credits. No argument grants Career.GRANT.
+  careerGrant(n) { return Career.grant(n); },
+  careerFacility(up) {
+    if (up) Career.upgradeFacility();
+    return { level: Career.facility(), max: Career.FACILITY_MAX,
+             cost: Career.facilityCost(), discount: Career.facilityDiscount() };
+  },
+  // The contract's season target as a RUNG the player picks, not a number the
+  // game chose. No argument reads; an index sets what the NEXT deal signs at
+  // (and re-stamps any offers on the table). `signed` is what the CURRENT deal
+  // was signed at, which differs whenever the pick moved mid-term.
+  careerAmbition(i) {
+    if (i !== undefined) Career.setAmbition(i);
+    const c = Career.data();
+    return { pick: Career.ambition(), signed: c && c.deal ? Career.ambitionOf(c.deal) : null,
+             target: c && c.deal ? c.deal.goal.value : null,
+             rungs: Career.AMBITION.map((a) => a.key) };
+  },
+  // Which regulation era the loaded career is in, and what it outlaws. The ban
+  // is derived from Parts.CATALOG, so `banned` counts real option ids rather
+  // than a hand-listed set that could rot.
+  careerEra() {
+    const e = Career.era();
+    if (!e) return null;
+    return { id: e.id, name: e.name, cats: e.cats.slice(),
+             left: Career.eraSeasonsLeft(), seasons: Career.seasonsElapsed(),
+             banned: [...Regulations.bannedIds(e.id)], cap: Career.budgetCap() };
+  },
+  careerHire(what) {
+    if (what === "renew") Career.renewHire(1);
+    else if (typeof what === "string") Career.hireDriver(what, 1);
+    return Career.hirePending();
+  },
+  careerSlots(flavour, i) {
+    if (i === undefined) return Career.slots(flavour);
+    const c = Career.useSlot(flavour, i);
+    G.refreshCareerButton();
+    return c;
+  },
+  careerSlotDelete(flavour, i) {
+    const result = Career.deleteSlot(flavour, i);
+    if (!result.ok) return result;
+    Career.load();               // land on whatever is left, anywhere
+    G.refreshCareerButton();
+    return Object.assign({}, result, { slots: Career.slots() });
+  },
+  // Settle `n` whole rounds WITHOUT driving them. The qualifying model supplies
+  // the pace order, a ratings-weighted draw turns it into a race result, and the
+  // result goes through the same championship award + Career.settleRound() the
+  // driven path uses — so the economy, the objectives and the standings are
+  // genuinely exercised rather than poked. A full season is 24 real races
+  // otherwise, which is not a test anyone will run.
+  //
+  // Needs a track and a grid loaded, because the quali model reads both: stage
+  // one weekend first (the hub -> race settings -> TO THE GRID path, or
+  // tests/specs/career.spec.js's goRacing helper). Every round is simulated on THAT
+  // circuit — the per-round variation comes from the seeded draw, not from
+  // rebuilding twenty-four tracks headlessly.
+  careerSim(n) {
+    if (!Career.data()) return null;
+    const out = [];
+    for (let i = 0; i < Math.max(1, n | 0); i++) {
+      if (Career.seasonDone()) break;
+      const r = simCareerRound();
+      if (!r) break;
+      out.push(r);
+    }
+    return out;
+  },
+  careerRollover() {
+    const out = Career.rollover();
+    if (out) G.refreshCareerButton();
+    return out;
+  },
+  reliability(level) {
+    if (level !== undefined) G.raceReliability = String(level).toLowerCase();
+    return G.raceReliability;
+  },
+  // The DRIVING LINE ribbon (RACE SETTINGS): get/set "off" | "corner" | "full"
+  // for this session (the RACE SETTINGS row is what persists, like every other
+  // hook here). The result reads the built strip so a test can assert the
+  // line exists and where it brakes without a GPU.
+  drivingLine(mode) {
+    if (mode !== undefined) DrivingLine.setMode(String(mode).toLowerCase());
+    const c = DrivingLine._cache();
+    return { mode: DrivingLine.mode(), built: c.id, samples: c.n, verts: c.count,
+             speedAt: (s) => DrivingLine.speedAt(s), zoneAt: (s) => DrivingLine.zoneAt(s) };
+  },
+  retirements: () => Reliability.plan(G.cars),
+  retire(idx, reason) {
+    const c = idx == null ? G.player : G.cars[idx | 0];
+    if (!c || !G.track) return null;
+    if (!c.retired) G.retireCar(c, reason || "engine");
+    return { idx: G.cars.indexOf(c), code: c.code, retired: true, why: c.dnf };
+  },
+  qualiSim: (playerTime) => G.qualiSim(playerTime),
+  ratings(code) {
+    const one = (c, tier, teamId, seat) => {
+      const r = DriverRatings.get(c, tier, Career.devFor(teamId, seat));
+      return Object.assign({}, r, { overall: DriverRatings.overall(r) });
+    };
+    if (code) {
+      const car = G.cars.find((x) => x.code === code);
+      return car ? one(code, car.tier, car.team && car.team.id, car.seat) : one(code, 2, null, 0);
+    }
+    const out = {};
+    Teams.LIST.forEach((t) => t.drivers.forEach((d, i) => { out[d.code] = one(d.code, t.tier, t.id, i); }));
+    return out;
+  },
+  loadCarModel: (url) => loadCarModel(url),
+  // Baked asset pack (js/render/shared/assets.js, built by tools/gen/assets.mjs)
+  // assets() — {supported, pack, uploaded, tier, layers, normal, bytes, models,
+  //   error}. `supported:false` means the active renderer has no texture-array
+  //   path (WGX/WebGPU); `pack:false` means no pack is installed. Both are
+  //   normal states in which the game renders its pure-procedural look.
+  assets: () => (typeof Assets === "undefined" ? { supported: false, pack: false, error: "no-module" }
+                                               : Assets.state()),
+  async assetLoad(tier) {
+    if (typeof Assets === "undefined") return { supported: false, pack: false, error: "no-module" };
+    if (tier === false) { Assets.unload(); return Assets.state(); }
+    Assets.unload();                                   // clear the memoised promise so a tier switch re-uploads
+    await Assets.load(tier ? { tier } : {});
+    return Assets.state();
+  },
+  // texCensus() — RESIDENT texture bytes, by kind, from the active backend.
+  //
+  // It exists because the biggest texture number in the game — ~147 MB of
+  // livery atlases, about ten times the packed world geometry — is otherwise
+  // arithmetic nothing can confirm or refute. Read it on a full grid before
+  // touching any resolution policy.
+  //
+  // `excludes` is not decoration — it names what the census does NOT count
+  // (render targets: shadow maps, post chain, env cube), so a total can never
+  // be mistaken for the whole picture. `supported:false` means the active
+  // backend has no census (WGX/TLX); that is a normal state, not an error, and
+  // it reads as such rather than as a measured zero.
+  texCensus: () => (gfx && gfx.texCensus
+    ? gfx.texCensus()
+    : { supported: false, bytes: null, count: null,
+        error: "the active backend has no texture census (GLX only)" }),
+  matTex(v) {
+    if (v !== undefined) {
+      setLightTune("matTexMix", Math.max(0, Math.min(1, +v || 0)));
+      persistLightTune();
+      if (typeof refreshLightTunePanel === "function") refreshLightTunePanel();
+      if (LT.matTexMix > 0 && typeof Assets !== "undefined") Assets.load();
+    }
+    return LT.matTexMix;
+  },
+  // envProbe(on?) — the clear path for the apex26.envProbeOff LATCH.
+  //
+  // GLX sets that key on a WebGL context loss that happened while the page was
+  // VISIBLE (the memory-pressure signal, as opposed to iOS's benign loss on
+  // backgrounding). Persisting it stops a lose→reload→lose loop on genuinely
+  // memory-tight devices, which is right — but there was one setItem, one
+  // getItem, and nothing anywhere that could clear it: no UI, no hook, no
+  // mention in the docs. A device that lost its context once kept the live
+  // env-probe reflections disabled forever, and it presents as "reflections
+  // are just worse on my phone" rather than as a setting.
+  //
+  // No argument reads the state. `true` re-enables the probe, `false` disables
+  // it. game.js latches the value at module init, so a change needs a reload —
+  // reported rather than done silently.
+  envProbe(on) {
+    const KEY = "apex26.envProbeOff";
+    const read = () => { try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; } };
+    const was = read();
+    if (on !== undefined) {
+      try { if (on) localStorage.removeItem(KEY); else localStorage.setItem(KEY, "1"); }
+      catch (e) { /* private mode / storage disabled — nothing to clear */ }
+    }
+    const off = read();
+    return { on: !off, off, changed: off !== was, needsReload: off !== was };
+  },
+  // credits() — attribution roll for every baked asset in the pack.
+  credits: () => (typeof Assets === "undefined" ? [] : Assets.credits()),
+  setInput(v) {
+    const next = v || null;
+    if (G.player && G._testInput && G._testInput.throttle && next && !next.throttle && G.player.speed > 8)
+      G.player.exhaustPop = 1;
+    G._testInput = next;
+  },
+  clearInput() { G._testInput = null; },
+  step(dt, n) {
+    const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
+    for (let i = 0; i < count; i++) {
+      // Keep the render-interpolation anchors in sync: the render-driven loop
+      // snapshots them before each step, so a manual pump must too or a frozen
+      // render afterwards lerps toward a stale pre-teleport pose.
+      AgentView.syncRenderAnchors(G.cars);
+      update(d);
+    }
+  },
+  // Deterministic tilt emulation for the autopilot harness. `step(deg, dt)` runs a
+  // raw tilt angle (deg) through the real tilt pipeline (One-Euro filter + dead
+  // zone + MAX_TILT map + slew limiter) at an explicit timestep and returns the
+  // resulting steer (-1..1); `steerToAngle(cmd)` inverts the map (steer→tilt deg)
+  // so a controller can convert its steer command into a tilt; `reset()` clears the
+  // filter/slew state between runs. Tilt params come from the sliders (tuning()).
+  tiltSim: {
+    step: (deg, dt) => Input.simTilt(deg, dt),
+    reset: () => Input.simTiltReset(),
+    steerToAngle: (cmd) => Input.steerToTilt(cmd),
+  },
+
+  // New dev / test helpers
+
+  // RED FLAG. Runs the standing-restart procedure NOW (js/race/race-control.js
+  // level 4 → game.js redFlagRestart): the surface is cleared, the field
+  // re-grids in race order on the boxes with laps and the race clock kept, and
+  // the lights re-arm. Returns {state:"count"}, or false outside a running race.
+  redFlag() {
+    const ok = !!(G.redFlagRestart && G.redFlagRestart());
+    return ok ? { state: G.state } : false;
+  },
+  // Trigger the race-results screen cleanly, as if all cars crossed the line.
+  finishRace() {
+    if (!G.track || G.state === "results" || G.state === "menu") return false;
+    // A retirement never crosses the line: it stays unfinished and classifies
+    // behind everyone who did, which is the order endRace() builds for a real
+    // flag. Waving one home here would hand a parked car a finish and points.
+    // go() floors raceT at 0.5 s; stamping that as finishT prints
+    // OFFICIAL WINNER ELAPSED 0:00.500 on every harness open. Only attach a
+    // finish clock when the race has actually run past that floor — finishT
+    // 0 omits the official elapsed line (results-sheet correctedFinish).
+    const ran = Number.isFinite(G.raceT) ? G.raceT : 0;
+    const clock = ran > 0.5 ? ran : 0;
+    G.cars.forEach((c) => { if (!c.finished && !c.retired) { c.finished = true; c.finishT = clock; } });
+    endRace(raceOrder(G.cars));
+    return { state: G.state };
+  },
+
+  freeze(v) {
+    if (v === undefined) return G.frozen;
+    G.frozen = !!v;
+    return G.frozen;
+  },
+
+  // Get or set HUD visibility. Returns current visible state.
+  hud(show) {
+    if (show === undefined) return !els.hud.hidden;
+    els.hud.hidden = !show;
+    if (show) { els.pausebtn.hidden = (G.state !== "race"); } else { els.pausebtn.hidden = true; }
+    return !els.hud.hidden;
+  },
+
+  weather(w) {
+    return G.weather(w);
+  },
+
+  weatherArc(from, to, seconds) {
+    if (from === undefined) {
+      return G.weatherArc ? { from: G.weatherArc.from, to: G.weatherArc.to, t: G.weatherArc.t,
+                            dur: G.weatherArc.dur, weather: G.raceWeather, wetness: (G.trackWetness ? G.trackWetness() : (G.frame.wetness || 0)) } : null;
+    }
+    if (from === null || from === false) { G.weatherArc = null; return null; }
+    const arc = startWeatherArc(from, to, seconds);
+    return arc ? { from: arc.from, to: arc.to, t: arc.t, dur: arc.dur, weather: G.raceWeather } : null;
+  },
+
+  setTimeOfDay(tod) {
+    return G.setTimeOfDay(tod);
+  },
+
+  resetPlayer() {
+    if (!G.player) return false;
+    rescuePlayer(G.player);
+    return this.physState();
+  },
+
+  inputState() { return Input.debugState(); },
+
+  // Detailed telemetry for a single car by index (from cars() list).
+  carAt(idx) {
+    const c = typeof idx === "number" ? G.cars[idx] : G.cars.find((x) => x.isPlayer);
+    if (!c) return null;
+    return {
+      id: G.cars.indexOf(c), driverId: c.driverId,
+      isPlayer: !!c.isPlayer, team: c.team && c.team.id,
+      code: c.code, seat: c.seat,
+      tierV: +(c.tierV || 0).toFixed(6), skill: +(c.skill || 0).toFixed(6), aeroLoad: +(c.aeroLoad != null ? c.aeroLoad : 0.5).toFixed(3), ersDeploy: +(c.ersDeploy != null ? c.ersDeploy : 0.5).toFixed(3),
+      craft: +(c.craft != null ? c.craft : 0.75).toFixed(3),
+      awareness: +(c.awareness != null ? c.awareness : 0.75).toFixed(3),
+      experience: +(c.experience != null ? c.experience : 0.75).toFixed(3), consistency: +(c.consistency != null ? c.consistency : 0.75).toFixed(3),
+      lane: +(c.lane != null ? c.lane : 0).toFixed(3),
+      stuckT: c.human ? null : +(c.stuckT || 0).toFixed(2),
+      deploying: c.human ? null : !!c.deploying,
+      ratings: DriverRatings.get(c.code, c.tier, Career.devFor(c.team && c.team.id, c.seat)),
+      x: +c.x.toFixed(3), speed: +c.speed.toFixed(2),
+      prog: +c.prog.toFixed(2), s: +c.s.toFixed(2), lap: c.lap,
+      finished: !!c.finished, finishT: c.finishT != null ? +c.finishT.toFixed(2) : null,
+      finPos: c.finPos || 0,   // classified position, 0 until the flag
+      retired: !!c.retired, dnf: c.dnf || null,
+      dnfAt: c.dnfAt != null ? +c.dnfAt.toFixed(4) : null,
+      contactT: +(c.contactT || 0).toFixed(3),
+      wrongWay: !!c.wrongWay, rescueT: +(c.rescueT || 0).toFixed(2),
+      energy: +(c.energy || 0).toFixed(3), boostOn: !!c.boostOn,
+      // OVERTAKE, alongside the aero fields below. It was unobservable: xArmed
+      // has been here since active aero landed but its older sibling never was,
+      // so "can this car use overtake right now, and why not" could only be
+      // answered by reading game.js. otEnabled is the RACE-WIDE gate (lap 1,
+      // the Safety Car / red flag and the lap after either, low grip) and is the same for every car; otArmed folds that
+      // with this car's allowance (otMJ; otEarned = under 1 s at the detection line, js/race/overtake-mode.js).
+      otArmed: !!c.otArmed, otT: +(c.otT || 0).toFixed(2), otEarned: !!c.otEarned,
+      otMJ: +OvertakeMode.mj(c).toFixed(3), otEnabled: !!G.otEnabled(),
+      aeroX: +(c.aeroX || 0).toFixed(3), xOn: !!c.xOn, xArmed: !!c.xArmed,
+      brakeHeat: +(c.brakeHeat || 0).toFixed(2), gear: c.gear || 1,
+    };
+  },
+
+  // Get or PIN the render clock (sky/cloud drift, FLAG cloth wave). It normally
+  // accumulates real frame dt, so two runs of the same frozen scene render
+  // different pixels — the reason tests/manual/tracks-visual.spec.js could never hold a
+  // baseline. Setting it makes a capture reproducible; it keeps advancing from
+  // the value you set unless `hold` is true (or the scene is headless()).
+  renderClock(t, hold) { if (t !== undefined) { G.skyT = t; G.skyHold = !!hold; } return G.skyT; },
+  // The built track's scenery SCENE GRAPH (js/track/scenery/graph.js): the model library
+  // + one node per placement, plus batches() — the backend-neutral instanced-draw
+  // handoff. Returns null before a track is built. Live object, not a copy: read
+  // it, do not mutate it.
+  trackGraph: () => (G.track && G.track.graph) || null,
+  // List all available circuit IDs and names (for iterating in test harnesses).
+  tracks: () => Tracks.LIST.map((t, i) => ({ id: t.id, name: t.name, i })),
+
+  // List all teams with engine supplier (for factory-parts and setup tests).
+  teams: () => Teams.LIST.map((t, i) => ({ id: t.id, name: t.name, engine: t.engine, i })),
+
+  // Reset mesh-visibility overrides (companion to meshToggle).
+  clearMeshes() { G.hideMeshes = {}; return G.hideMeshes; },
+  // Drop every procedural body/wheel GPU cache so the next warm/draw rebuilds
+  // through Car3D.build (parts-factory-presets and similar probes). No-op when
+  // the façade has not wired CarDraw yet.
+  clearCarMeshCaches() {
+    if (typeof G.invalidateFactoryMeshCaches === "function") G.invalidateFactoryMeshCaches();
+    return true;
+  },
+
+  // The HUD rear-view mirror (js/render/shared/mirror-pass.js): mirror() reads
+  // {mode, shown, rect, cars, drawn, cam, backend: gfx.mirrorState()};
+  // mirror("auto"|"on"|"off") sets HUD > MIRROR first. shown/rect settle on the next frame.
+  // mirror(undefined, {car, cam, mode}) aims the broadcast PiP (state().pip; drawn only
+  // under body.bc-on): car = a G.cars index or null, cam a CamModes id, mode its setting.
+  mirror: (mode, pip) => {
+    const mp = typeof MirrorPass !== "undefined" ? MirrorPass.instance() : null;
+    if (!mp) return null;
+    if (mode !== undefined) mp.setMode(mode);
+    if (pip) {
+      if (pip.mode) mp.setPipMode(pip.mode);
+      if ("car" in pip) mp.setSubject(pip.car == null ? null : G.cars[pip.car | 0] || null, pip.cam || "tcam");
+    }
+    return mp.state();
+  },
+  lightState: () => {
+    const L = G.frame.lights;
+    let meanLampRGB = null;
+    if (L && L.length >= 15) {
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i + 5 < L.length; i += 15) {
+        r += L[i + 3]; g += L[i + 4]; b += L[i + 5]; n++;
+      }
+      if (n) meanLampRGB = [r / n, g / n, b / n];
+    }
+    return {
+      ambientSky: G.frame.ambientSky && G.frame.ambientSky.slice(),
+      ambientGround: G.frame.ambientGround && G.frame.ambientGround.slice(),
+      sunColor: G.frame.sunColor && G.frame.sunColor.slice(),
+      exposure: G.frame.exposure != null ? G.frame.exposure : 1,
+      numLights: L ? L.length / 15 : 0,
+      meanLampRGB,
+      // The per-chunk twin of meanLampRGB: the mean colour of the lamp set the
+      // CHUNKED meshes are lit from. It tracks LAMP LEVEL, TEMPERATURE,
+      // FLICKER, WARM-UP and the twilight ramp (the raw baked list does not),
+      // so the two means should move together.
+      meanPerChunkRGB: (() => {
+        const A = G.frame.allLights;
+        if (!A || A.length < 15) return null;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let i = 0; i < A.length; i += 15) { r += A[i+3]; g += A[i+4]; b += A[i+5]; n++; }
+        return n ? [r / n, g / n, b / n] : null;
+      })(),
+      bakedLights: ((G.track && (G.track._lights && G.track._lights.length ? G.track._lights : G.track._alwaysLights)) || []).length / 15,
+      lampPosts: G.track && G.track.lampPosts ? G.track.lampPosts.length : 0,
+      // RESOLVED per-chunk lamp state, not the raw knobs. Three gates can zero
+      // these independently (backend capability, the live graphics tier the
+      // governor can shed mid-race, and the persisted post-context-loss latch),
+      // and without a report of which one fired "per-chunk lamps do nothing
+      // on my machine" is undiagnosable from outside. perChunkHeld
+      // names the gate when the knob is up but the frame resolved to 0.
+      perChunkLights: G.frame.perChunkLights || 0,
+      // TLX only (null elsewhere): three resolves lamps per FRAGMENT from baked
+      // textures, and `on` is the only outside proof that path is live.
+      tlxLampGrid: (gfx && typeof gfx.lampGridState === "function") ? gfx.lampGridState() : null,
+      roadChunkLamps: G.frame.roadChunkLamps || 0,
+      perChunkHeld: (() => {
+        if (!(+LT.perChunkLights > 0)) return null;          // player has it off
+        if (G.frame.perChunkLights > 0) return null;         // actually running
+        if (gfx && gfx.hasPerChunkLights === false) return "backend";
+        try { if (localStorage.getItem("apex26.perChunkOff") === "1") return "latch"; } catch (_) { /* no storage */ }
+        if (typeof PerfGov !== "undefined" && PerfGov.autoShed && PerfGov.autoShed() >= 2) return "tier";
+        return "day";   // the flood branch never ran: daylight with no daytime lamps
+      })(),
+      sunY: G.frame.sunDir ? G.frame.sunDir[1] : null,
+      builtNight: G.builtTrackNight, trackNight: G.track && G.track._night,
+      floodEmit: G._lastFloodEmit,   // actual prop-emissive ramp value this frame
+      envProbe: (gfx && gfx.envProbeReady) ? gfx.envProbeReady() : null,  // live env-cube captured?
+      fogDensity: G.frame.fogDensity,
+      fogColor: G.frame.fogColor && G.frame.fogColor.slice(),
+      skyHorizon: G.frame.skyHorizon && G.frame.skyHorizon.slice(),
+      frameSkyHorizon: G.frameSky.horizon && G.frameSky.horizon.slice(),
+      skySunColor: G.frameSky.sunColor && G.frameSky.sunColor.slice(),
+      skySunDir: G.frameSky.sunDir && G.frameSky.sunDir.slice(),
+      skyStars: G.frameSky.stars, skyMoon: G.frameSky.moon,
+      cullDist: G.frame.cullDist, cullFog: G.frame.cullFog && G.frame.cullFog.slice(),   // the HARD radius in m (0 = uncapped) + the fog wall [density, height falloff] Frustum.radialCulled also culls past
+      moonK: G.frame.moonK,         // weather-gated clear-moon floor (0 under cloud/fog/wet)
+      moonGate: G.frame.moonGate,   // max(moonK, the moonShadow>0.5 escape hatch) — what the prop/car shadow casts actually gate on
+      lampCull: LT.lampCull,        // the nearest-lamp budget lampReach competes for
+    };
+  },
+  // GPU frame-time probe: availability follows the bound backend.
+  // gpuTimer(true) starts timing, gpuTimer(false) stops, gpuTimer()
+  // reads the latest sample: { supported, on, ms, software }. ms is the GPU
+  // cost of a recent frame (-1 until a result lands). software comes from
+  // backend detection; a missing timing sample says nothing about hardware.
+  // Do not treat a negative ms as a GPU millisecond.
+  gpuTimer: (on) => {
+    if (!gfx || !gfx.gpuTimer) return { supported: false, on: false, ms: -1, software: null };
+    const st = gfx.gpuTimer(on);
+    const ms = gfx.gpuMs ? gfx.gpuMs() : -1, b = gfx.backendState ? gfx.backendState() : null;
+    return { supported: st.supported, on: st.on, ms, software: b ? !!(b.softAdapter || b.softwareGL) : null };
+  },
+  // lightTune(o?) — get or set the live lighting-tuner values (same registry as
+  // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every
+  // tunable. With an object: merges valid entries (clamped to each slider's
+  // range), persists, invalidates baked light records where needed, and returns
+  // the updated set. lightTune({wetness: 0.8}) pins road wetness instantly;
+  // lightTune({wetness: -0.05}) returns it to the weather-driven ramp.
+  lightTune(o) {
+    if (o && typeof o === "object") {
+      for (const k of Object.keys(o)) setLightTune(k, o[k]);
+      persistLightTune();
+      if (typeof refreshLightTunePanel === "function") refreshLightTunePanel();
+    }
+    const out = {};
+    for (const d of TUNE_DEFS) out[d.id] = LT[d.id];
+    return out;
+  },
+  lightCopy(arg) {
+    if (arg && typeof arg === "object") {
+      const ok = restoreLightTune(arg.undo || arg);
+      if (ok) persistLightTune();
+      if (typeof refreshLightTunePanel === "function") refreshLightTunePanel();
+      return { ok, mode: "undo" };
+    }
+    const r = copyLightTune(arg === "look" ? "look" : "edits");
+    if (r.ok) persistLightTune();
+    return r;
+  },
+  viewState() {
+    return {
+      camMode: CAM_MODES[G.camMode].id, camIndex: G.camMode,
+      frozen: G.frozen, dbgCamActive: G.dbgCam !== null, skyOverride: G.skyViewOverride !== null,
+      weather: G.raceWeather, state: G.state,
+      ...this.camState(),
+    };
+  },
+
+  // Headless / RL control loop
+
+  headless(on) {
+    if (on === undefined) return G.headlessMode;
+    G.headlessMode = !!on;
+    return G.headlessMode;
+  },
+
+  debris(arg) {
+    if (arg === undefined) return DebrisWorld.status();
+    if (typeof arg === "boolean") return DebrisWorld.setEnabled(arg);
+    if (arg && typeof arg === "object") {
+      if (arg.reset) return DebrisWorld.reset();
+      if (arg.burst) { DebrisWorld.burst(arg.burst, arg.sev); return DebrisWorld.status(); }
+      if (arg.marble && G.player) {
+        // Seeded emission at the player under a forced lock-up + slide signal.
+        DebrisWorld.tyreMarble(G.player, { lock: 1, slip: 0.5, speed: Math.max(12, Math.abs(G.player.speed || 0)) });
+        return DebrisWorld.status();
+      }
+      if (arg.flags) return DebrisWorld.groupBFlags(arg.flags);
+      if (arg.hazards) return Object.assign(DebrisWorld.status(), { hazards: DebrisWorld.hazards() });
+      if (arg.marbleGrip) return Object.assign(DebrisWorld.status(), { marbleGripFactor: DebrisWorld.marbleGrip(G.player) });
+      if (arg.positions) return Object.assign(DebrisWorld.status(), { positions: DebrisWorld.positions() });
+    }
+    return DebrisWorld.status();
+  },
+
+  incident(arg) {
+    if (arg && typeof arg === "object") {
+      if (arg.reset) return IncidentSim.reset();
+      if (arg.launch) return IncidentSim.forceLaunch();
+      if (arg.flags) return IncidentSim.setFlags(arg.flags);
+    }
+    return IncidentSim.status();
+  },
+
+  // caution(arg?) — the B1 debris caution state (local yellow / VSC / safety car),
+  // the flag machine in js/race/race-control.js over DebrisWorld.hazards();
+  // game.js applies its SC/VSC speed cap (cautionV). No arg: current state
+  //   { level (0 GREEN·1 YELLOW·2 VSC·3 SC), label, sector, frac, total,
+  //     sectors[3], sinceT, cause, enabled }.
+  //   caution({hazards:true}) → the same state plus the live DebrisWorld.hazards().
+  //   caution(true|false) or caution({enabled}) → switch the whole layer, the
+  //     SAME door the CAUTIONS race setting uses (so the chips cannot go stale
+  //     against it). Turning it off drops any flag already flying.
+  caution(arg) {
+    if (typeof arg === "boolean") G.setCautionEnabled(arg);
+    else if (arg && typeof arg === "object" && arg.enabled !== undefined)
+      G.setCautionEnabled(!!arg.enabled);
+    const st = G.cautionInfo ? G.cautionInfo() : { level: 0, label: "GREEN", enabled: false };
+    if (arg && typeof arg === "object" && arg.hazards)
+      return Object.assign(st, { hazards: DebrisWorld.hazards() });
+    return st;
+  },
+
+  // bodyAttitude(arg?) — the C2 visual-suspension springs (js/physics/body-attitude.js).
+  //   bodyAttitude()            → status { enabled, offsets:{pitch,roll,heave,enabled} }
+  //                               (offsets are the player's current render offsets,
+  //                               radians for pitch/roll, metres for heave)
+  //   bodyAttitude(true|false)  → enable/disable (persists to apex26.bodyAttitude)
+  //   bodyAttitude({reset:true})→ reset every car's springs to a settled chassis
+  //   bodyAttitude({car:idx})   → status with offsets for cars[idx] (tests)
+  // Render-only: never touches px/pz/head or (s, x); disabling forces all offsets 0.
+  bodyAttitude(arg) {
+    if (arg === undefined) return BodyAttitude.status();
+    if (typeof arg === "boolean") return BodyAttitude.setEnabled(arg);
+    if (arg && typeof arg === "object") {
+      if (arg.reset) { BodyAttitude.reset(); return BodyAttitude.status(); }
+      if (arg.car != null && G.cars && G.cars[arg.car])
+        return { enabled: BodyAttitude.active(), offsets: BodyAttitude.offsets(G.cars[arg.car]) };
+    }
+    return BodyAttitude.status();
+  },
+
+  // renderScale(v?) — adaptive-resolution control. No arg: report current state
+  // { scale, fps, auto }. Number: pin the 3D render scale (0.5–1) and disable
+  // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate
+  // win (softer 3D view; HUD stays crisp). `floorMs` is the governor's derived
+  // per-device budget (the observed floor of frame intervals — see
+  // js/perf/governor.js) rather than a hardcoded 16.7 ms; it rises to match an
+  // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
+  // judging that device against a 60 fps target it cannot reach.
+  renderScale(v) {
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold() };
+    if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
+    // A FRACTION, 0.5..1 (the opposite unit to uiScale). Unchecked, "auto"
+    // reached GLX/WGX as NaN (Math.max(0.5, NaN) is NaN: a NaN-sized buffer)
+    // and 60 silently pinned 1.0 — and every call switched the governor off.
+    if (typeof v !== "number" || !isFinite(v) || v < 0.5 || v > 1) {
+      return { ok: false, error: "bad_argument",
+               message: "renderScale() takes a fraction 0.5..1 or true; got " + JSON.stringify(v),
+               fix: "renderScale(0.75), or renderScale(true) for the adaptive governor" };
+    }
+    PerfGov.setAutoRes(false); gfx.setRenderScale(v); return this.renderScale();
+  },
+
+  // govHold(on?) — hold the governor's feature ladder at the tier it is on
+  // now (no shed, no restore). No arg: report {tierHold, tier, autoTier,
+  // autoShed}. A test that diffs two captures of one scene needs the SAME tier
+  // at both, and renderScale(v) does not give it that — pinning the scale
+  // leaves the ladder as the governor's only lever (js/perf/governor.js,
+  // _tierHold). Holds the tier, not the scale: pair with renderScale(1) when
+  // the capture size has to match too. false releases the hold.
+  govHold(on) {
+    if (on !== undefined) PerfGov.setTierHold(!!on);
+    return { tierHold: PerfGov.tierHold(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed() };
+  },
+
+  // spatialUpscale(v?) — GLX + WGX + TLX SGSR1 (docs/research/UPSCALING-2026-09.md §6–7).
+  // Flag OFF by default. Number/bool persists through GameStore's raw lane;
+  // active only when flag on AND renderScale < ~1 AND the SGSR program linked.
+  spatialUpscale(v) {
+    const has = !!(gfx && typeof gfx.setSpatialUpscale === "function" && typeof gfx.getSpatialUpscale === "function");
+    if (!has) return { on: false, active: false, scale: gfx && gfx.getRenderScale ? gfx.getRenderScale() : null, available: false };
+    if (v !== undefined) {
+      const on = !!(+v || v === true || v === "1");
+      GameStore.store.rawSet("spatialUpscale", on ? "1" : "0");
+      gfx.setSpatialUpscale(on);
+    }
+    const on = !!gfx.getSpatialUpscale();
+    const scale = gfx.getRenderScale();
+    const out = { on, active: !!(on && scale < 0.98), scale, available: true };
+    if (typeof gfx.getSpatialUpscaleGather === "function") out.gather = !!gfx.getSpatialUpscaleGather();
+    return out;
+  },
+
+  // perf() — thin governor snapshot (alias of renderScale report + tier parts).
+  perf() { return this.renderScale(); },
+
+  uiScale(v) { return badPct("uiScale", v) || G.setScale("uiScale", "--ui-scale", v); },
+  hudScale(v) { return badPct("hudScale", v) || G.setScale("hudScale", "--hud-scale", v); },
+  btnScale(v) { return badPct("btnScale", v) || G.setScale("hudBtnScale", "--hud-btn-scale", v); },
+
+  safeMode(v) {
+    if (v === undefined) return { strikes: PerfGov.strikes(), tierFloor: PerfGov.tierFloor(), tier: PerfGov.tier() };
+    if (v === false) PerfGov.clearStrikes();
+    return this.safeMode();
+  },
+
+  obs() {
+    if (!G.player || G.player.px == null || !G.track) return null;
+    Tracks.sample(G.track, G.player.s, smp);
+    const { axFrac, slipFactor } = AgentView.slipBudget(G.player, LONG_GRIP, gripMult());
+    const slip = Math.atan2(G.player.vLat || 0, Math.max(1, G.player.speed));
+    const kNow = Tracks.curvature(G.track, G.player.s);
+    const hwNow = smp.hw, slopeNow = smp.t[1] || 0;
+
+    const wallRAbs = Tracks.wallAt(G.track, G.player.s, 1);
+    const wallLAbs = Tracks.wallAt(G.track, G.player.s, -1);
+    const wallR =  wallRAbs;   // signed: right wall is at +wallR
+    const wallL = -wallLAbs;   // signed: left  wall is at  wallL (negative)
+
+    // lookahead scan at [10, 30, 60] m ahead
+    const scanDists = [10, 30, 60];
+    const scanAhead = scanDists.map((d) => {
+      const ss = wrapS(G.player.s + d);
+      Tracks.sample(G.track, ss, smp);
+      const sR = Tracks.wallAt(G.track, ss, 1), sLA = Tracks.wallAt(G.track, ss, -1);
+      return { d, k: +Tracks.curvature(G.track, ss).toFixed(5), hw: +smp.hw.toFixed(2),
+               wallR: +sR.toFixed(2), wallL: +(-sLA).toFixed(2),
+               width: +(sR + sLA).toFixed(2) };
+    });
+    // restore smp to player position
+    Tracks.sample(G.track, G.player.s, smp);
+
+    // nearest rivals by progress (leader-first order)
+    const sorted = raceOrder(G.cars);
+    const pi = sorted.findIndex((c) => c.isPlayer);
+    const rivalAhead  = pi > 0 ? sorted[pi - 1] : null;
+    const rivalBehind = pi < sorted.length - 1 ? sorted[pi + 1] : null;
+
+    const inp = G._testInput || {};
+    // A rescue teleport resets rescueT to 0 the instant it fires (threshold >3), so
+    // a rescueT>8 test could never trip. Signal "done" briefly after a rescue.
+    const done = !!G.player.wrongWay ||
+      (G.player.rescueLastT != null && (G.raceT - G.player.rescueLastT) < 0.5);
+
+    return {
+      // position & progress
+      s:       +G.player.s.toFixed(3),
+      x:       +G.player.x.toFixed(3),
+      prog:    +(G.player.prog || 0).toFixed(4),
+      lap:      G.player.lap || 0,
+      raceT:   +G.raceT.toFixed(3),
+
+      speed:     +(G.player.speed || 0).toFixed(2),
+      speedKph:  +((G.player.speed || 0) * 3.6).toFixed(1),   // TRUE ground speed
+      // What the HUD/cockpit LCD actually shows: km/h on the pace-5 scale, so the
+      // dial spans the same range at every OVERALL SPEED setting. speedKph above
+      // (and every other speed in this API) stays raw — the hooks report physics.
+      dashKph:   +G.dashKph(G.player.speed || 0).toFixed(1),
+      head:      +(G.player.head || 0).toFixed(4),
+      vLat:      +(G.player.vLat || 0).toFixed(3),
+
+      // combined-slip physics
+      axEstSm:    +(G.player.axEstSm ?? 0).toFixed(2),
+      axFrac:     +axFrac.toFixed(3),
+      slipFactor: +slipFactor.toFixed(3), driving: G.coach.status(),
+      slipDeg:    +(slip * 180 / Math.PI).toFixed(2),
+
+      // track context at player position
+      k:     +kNow.toFixed(5),
+      hw:    +hwNow.toFixed(2),
+      slope: +slopeNow.toFixed(4),
+      gripMult: gripMult(),
+      weather: G.raceWeather,
+
+      // barrier clearances (both in metres, positive = clear)
+      wallR:  +wallR.toFixed(2),
+      wallL:  +wallL.toFixed(2),
+      clearR: +(wallR - G.player.x).toFixed(2),
+      clearL: +(G.player.x - wallL).toFixed(2),
+
+      energy: +(G.player.energy || 0).toFixed(3),
+      gear: G.player.gear || 1,
+
+      aeroX:  +(G.player.aeroX || 0).toFixed(3),
+      xOn:    !!G.player.xOn,
+      xArmed: !!G.player.xArmed,
+
+      // episode state flags
+      wrongWay: !!G.player.wrongWay,
+      offT:     +(G.player.offT || 0).toFixed(2),
+      rescueT:  +(G.player.rescueT || 0).toFixed(2),
+      done,
+
+      // currently applied input (null fields = real device input)
+      input: {
+        steer:    inp.steer    !== undefined ? inp.steer    : null,
+        throttle: inp.throttle !== undefined ? !!inp.throttle : null,
+        brake:    inp.brake    !== undefined ? !!inp.brake    : null,
+      },
+
+      posInField: pi + 1,
+      gapAhead:  rivalAhead  ? +(rivalAhead.prog  - (G.player.prog || 0)).toFixed(2) : null,
+      gapBehind: rivalBehind ? +((G.player.prog || 0) - rivalBehind.prog).toFixed(2) : null,
+
+      scan: scanAhead,
+
+      // reward components (combine as you see fit)
+      reward: {
+        speed:    +(G.player.speed || 0).toFixed(2),          // m/s forward — maximise
+        offTrack: +(G.player.offT  || 0).toFixed(2),          // seconds off-track
+        wallDist: +Math.min(wallR - G.player.x, G.player.x - wallL).toFixed(2), // m to nearer wall
+        wrongWay: !!G.player.wrongWay,
+      },
+    };
+  },
+
+  act(input, dt, n) {
+    if (!G.track || !G.player) return null;
+    // TT / quali: the AI drives a 3 s run-up and ignores `input` until it hands over; an agent steps
+    // for the wheel, so end it now (go() does the same), in the countdown or already rolling.
+    if (G.flyingStart && G.flyingStart.active()) G.flyingStart.stop();
+    // auto-enter race state so physics advances even if called during countdown
+    if (G.state === "count") {
+      G.state = "race"; G.raceT = 0;
+      resetStartLights(true);
+      G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
+    }
+    if (input !== undefined) G._testInput = input || null;
+    const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
+    for (let i = 0; i < count; i++) {
+      AgentView.syncRenderAnchors(G.cars);   // all six, exactly as step() does
+      update(d);
+    }
+    return this.obs();
+  },
+
+  // Timing & field hooks
+
+  sectorState() {
+    if (!G.player || !G.track) return null;
+    const elapsed = (G.player.lapTime || 0) - G.sectorStartT;
+    return {
+      idx: G.sectorIdx,
+      elapsed: +elapsed.toFixed(3),
+      bests: G.sectorBests.map((v) => v === Infinity ? null : +v.toFixed(3)),
+      last:  G.sectorLast.map((v) => v == null     ? null : +v.toFixed(3)),
+    };
+  },
+
+  lapHistory() {
+    if (!G.player) return null;
+    return {
+      mode: G.timeTrial ? "tt" : "race",
+      laps: G.timeTrial
+        ? G.ttLaps.map((t, i) => ({ lap: i + 1, time: +t.toFixed(3) }))
+        : [],
+      best:    isFinite(G.player.best)  ? +G.player.best.toFixed(3)    : null,
+      lastLap: G.player.lastLap != null ? +G.player.lastLap.toFixed(3) : null,
+    };
+  },
+
+  timing() {
+    if (!G.player || !G.track) return null;
+    const sorted = raceOrder(G.cars);
+    const pi = sorted.findIndex((c) => c.isPlayer);
+    const ahead  = pi > 0               ? sorted[pi - 1] : null;
+    const behind = pi < sorted.length - 1 ? sorted[pi + 1] : null;
+    return {
+      raceT:         +G.raceT.toFixed(3),
+      lapTime:       +(G.player.lapTime  || 0).toFixed(3),
+      best:          isFinite(G.player.best) ? +G.player.best.toFixed(3) : null,
+      lastLap:       G.player.lastLap != null ? +G.player.lastLap.toFixed(3) : null,
+      lap:            G.player.lap || 0,
+      pos:            pi + 1,
+      total:          G.cars.length,
+      gapAhead:      ahead  ? +(ahead.prog  - (G.player.prog || 0)).toFixed(2) : null,
+      gapBehind:     behind ? +((G.player.prog || 0) - behind.prog).toFixed(2) : null,
+      energy:        +(G.player.energy || 0).toFixed(3),
+      aeroX:         +(G.player.aeroX || 0).toFixed(3),
+      gear:           G.player.gear || 1,
+      sector:         G.sectorIdx + 1,
+      sectorElapsed: +((G.player.lapTime || 0) - G.sectorStartT).toFixed(3),
+    };
+  },
+
+  fieldState() {
+    if (!G.track || !G.cars.length) return null;
+    const sorted = raceOrder(G.cars);
+    const leader = sorted[0];
+    return sorted.map((c, pos) => ({
+      pos:      pos + 1,
+      id:       G.cars.indexOf(c),
+      name:     c.name,
+      code:     c.code,
+      team:     c.team && c.team.id,
+      isPlayer: !!c.isPlayer,
+      lap:      c.lap || 0,
+      frac:     +(c.s / G.track.total).toFixed(4),
+      speed:    +c.speed.toFixed(2),
+      gap:      +(leader.prog - c.prog).toFixed(2),
+      finished: !!c.finished,
+      finishT:  c.finishT != null ? +c.finishT.toFixed(2) : null,
+      retired:  !!c.retired,
+      dnf:      c.dnf || null,
+    }));
+  },
+
+  carRoles() {
+    return G.cars.map((c, i) => ({
+      id: i, code: c.code, team: c.team && c.team.id,
+      human: !!c.human, local: !!c.local, isPlayer: !!c.isPlayer,
+      hasPose: c.px != null && c.head != null,
+      vLat: +(c.vLat || 0).toFixed(4),
+      yawRateCur: +(c.yawRateCur || 0).toFixed(4),
+      mods: c.mods ? Object.assign({}, c.mods) : null,
+      netInput: c.netInput ? Object.assign({}, c.netInput) : null,
+    }));
+  },
+
+  carRole(idx, o) {
+    const c = G.cars[idx];
+    if (!c) return false;
+    o = o || {};
+    G.setCarRole(c,
+      o.human === undefined ? !!c.human : !!o.human,
+      o.local === undefined ? !!c.local : !!o.local);
+    if (o.mods !== undefined) {
+      c.mods = o.mods
+        ? Object.assign({ speed: 1, accel: 1, cornering: 1, braking: 1 }, o.mods)
+        : null;
+    }
+    if (!c.human) c.netInput = null;   // an AI car drives itself
+    return {
+      id: idx, human: !!c.human, local: !!c.local, isPlayer: !!c.isPlayer,
+      mods: c.mods ? Object.assign({}, c.mods) : null,
+    };
+  },
+
+  // carInput(idx, {steer, throttle, brake, shiftUp?, shiftDown?, overtake?})
+  // — the controls a NON-LOCAL human car drives on, same shape as setInput().
+  // Pass null to clear (the car then coasts). Missing idx returns false;
+  // a successful clear returns { ok: true, cleared: true } so callers can
+  // tell "no such car" from "cleared". Ignored by the local car, which
+  // reads the real Input, and by AI cars, which drive themselves.
+  carInput(idx, input) {
+    const c = G.cars[idx];
+    if (!c) return false;
+    c.netInput = input || null;
+    if (input == null) return { ok: true, cleared: true };
+    return Object.assign({ ok: true }, c.netInput);
+  },
+
+  net() {
+    return G.netPlay ? G.netPlay.status() : { active: false };
+  },
+
+  netLoopback(o) {
+    o = o || {};
+    if (!G.netPlay) return { ok: false, error: "no_netplay", message: "NetPlay is not available." };
+    const pair = NetTransport.loopback({
+      latencyMs: o.latencyMs != null ? o.latencyMs : 0,
+      jitterMs: o.jitterMs || 0,
+      loss: o.loss || 0,
+      // `seed` makes loss and jitter REPRODUCIBLE. Without it a lossy spec is
+      // a coin flip that re-runs differently, which is indistinguishable from
+      // the defect it is meant to catch.
+      rnd: o.seed != null ? NetTransport.seededRnd(o.seed) : undefined,
+    });
+    _netPeer = pair[1];
+    // THE FAR END MUST ANSWER PINGS. A bare transport endpoint is not a peer:
+    // in a real connection the other browser runs NetSession too, so the near
+    // end reaches synced() inside one round trip and starts handing snapshots
+    // to the game. Without a responder synced() is false for ever, every
+    // packet lands in heldState, and net().buffered stays 0 while the session
+    // reports itself alive — which is precisely what the multiplayer-session
+    // specs were failing on (14 reds, six of them this).
+    NetSession.autoPong(_netPeer);
+    // Both endpoints must be pumped from the same moment for the loopback's
+    // wire clock to line up (see js/net/transport.js). A test passes its own
+    // t0 so the whole session runs on a virtual clock it controls.
+    const t0 = o.nowMs != null ? o.nowMs : performance.now();
+    pair[0].pump(t0); _netPeer.pump(t0);
+    const res = G.netPlay.start({
+      transport: pair[0],
+      role: o.role === "guest" ? "guest" : "host",
+      peerProfile: o.peer || null,
+      interpDelayMs: o.interpDelayMs,
+    });
+    if (!res.ok) { _netPeer = null; return res; }
+    // ...and the near end must PING at t0, not on the caller's first netTick.
+    // start() does not pump, so without this the first PING and the first
+    // snapshot ride the same pump: the snapshot arrives while synced() is
+    // still false and is held, so the very first assertion after one packet
+    // sees 0. A live session pumps every frame from the moment it connects
+    // (transport.js says so in as many words); this is that first frame.
+    G.netPlay.tick(t0);
+    return res;
+  },
+
+  netPeerSend(st, atMs, wireId) {
+    if (!_netPeer || !G.netPlay) return false;
+    const status = G.netPlay.status();
+    const cur = G.cars[status.remoteId] || {};
+    const car = Object.assign({
+      s: cur.s || 0, x: cur.x || 0, head: cur.head || 0, speed: cur.speed || 0,
+      gear: cur.gear || 1, lap: cur.lap || 0,
+      deploying: false, offroad: false, onKerb: false, braking: false,
+    }, st || {});
+    const now = atMs != null ? atMs : performance.now();
+    _netPeer.pump(now);
+    // The WIRE id, not the cars[] index. A real peer stamps its packets with
+    // G.wireId — the same number on every screen, which an index is not — so
+    // the fake peer must too, or onState has no slot to route it to.
+    const wire = wireId != null ? wireId
+      : (status.remotes && status.remotes.length && status.remotes[0].wire != null
+        ? status.remotes[0].wire : null);
+    if (wire == null) return { ok: false, error: "no_wire" };
+    const ok = _netPeer.send("state", NetSnapshot.encodeSnapshot(Math.round(now), [
+      { id: wire, car },
+    ]));
+    return ok ? { sent: car, at: Math.round(now) } : false;
+  },
+
+  // netPeerClose() — the rival's connection drops. The game must hand their
+  // car back to the AI rather than leave a driverless obstacle on track.
+  netPeerClose() {
+    if (!_netPeer) return false;
+    try { _netPeer.close(); } catch (e) {}
+    _netPeer = null;
+    return true;
+  },
+
+  lobby(o) {
+    if (!G.netLobby) return { available: false };
+    if (o && o.open) G.netLobby.open();
+    if (o && o.cancel) G.netLobby.cancel();
+    return Object.assign({ available: true }, G.netLobby.status(), {
+      profile: G.netLobby.localProfile(),
+      shown: !!(document.getElementById("vsfriend") && !document.getElementById("vsfriend").hidden),
+    });
+  },
+
+  // lobbyFake(on) — make the lobby build LOOPBACK endpoints instead of real
+  // RTCPeerConnections. Necessary, not merely convenient: an RTCPeerConnection
+  // whose ICE never completes (a sandboxed CI browser, a locked-down network)
+  // spins indefinitely, so a test that builds one does not fail — it HANGS,
+  // which is far worse. The far endpoint is kept here so the connection can be
+  // completed on demand by lobbyWatch(), which drives it to onConnected().
+  lobbyFake(on) {
+    if (!G.netLobby) return false;
+    if (!on) {
+      if (_lobbyPeerTimer != null) { clearInterval(_lobbyPeerTimer); _lobbyPeerTimer = null; }
+      _lobbyPeer = null; G.netLobby.setTransportFactory(null); return false;
+    }
+    G.netLobby.setTransportFactory((o) => {
+      const pair = NetTransport.loopback({ latencyMs: 0 });
+      _lobbyPeer = pair[1];
+      // THE FAKE PEER HAS TO STAY ALIVE. A bare endpoint answers no PINGs and
+      // sends none, so the lobby's session hears nothing after the last thing
+      // the test pushed and closes on its own 6 s timeout — the room then loses
+      // the peer with no user action at all. Measured with a probe that only
+      // watched: peerReady held true through t+5.5 s and went false at t+6.0 s.
+      // Every room/seat spec that takes more than six seconds to reach its
+      // assertion failed on that, which is why they fail on a slow box and pass
+      // on a fast one. autoPong answers the lobby's own 500 ms pings, and the
+      // 25 ms pump is what lets the far end SEE them — lobbyPeerEvent only
+      // pumps when the test happens to send something, and a real peer is
+      // running its own loop the whole time.
+      NetSession.autoPong(_lobbyPeer);
+      if (_lobbyPeerTimer != null) clearInterval(_lobbyPeerTimer);
+      _lobbyPeerTimer = setInterval(() => {
+        if (!_lobbyPeer) return;
+        try { _lobbyPeer.pump(performance.now()); } catch (e) {}
+      }, 25);
+      return Object.assign(pair[0], { role: o && o.role });
+    });
+    return true;
+  },
+
+  lobbyWatch() {
+    if (!G.netLobby) return false;
+    G.netLobby.watchForOpen();
+    return true;
+  },
+
+  lobbyPeerEvent(type, data) {
+    if (!_lobbyPeer) return false;
+    const now = performance.now();
+    _lobbyPeer.pump(now);
+    const ok = _lobbyPeer.send("event", JSON.stringify({ t: type, d: data }));
+    _lobbyPeer.pump(now);
+    return ok;
+  },
+
+  lobbyRoom() {
+    return G.netLobby ? G.netLobby.roomState() : null;
+  },
+
+  lobbyHost() {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    G.netLobby.open();
+    return G.netLobby.host();
+  },
+  lobbyJoin(inviteCode) {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    G.netLobby.open();
+    G.netLobby.join();
+    return G.netLobby.makeAnswer(inviteCode);
+  },
+  lobbyAccept(answerCode) {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    return G.netLobby.acceptAnswer(answerCode);
+  },
+
+  lobbySdp() {
+    if (!G.netLobby || !G.netLobby.sdp) return { ok: false, error: "no_lobby" };
+    const s = G.netLobby.sdp();
+    return s || { ok: false, error: "no_connection" };
+  },
+
+  async lobbyPairs() {
+    if (!G.netLobby || !G.netLobby.sdp) return { ok: false, error: "no_lobby" };
+    const s = G.netLobby.sdp();
+    const pc = s && s._pc;
+    if (!pc || !pc.getStats) return { ok: false, error: "no_connection" };
+    const stats = await pc.getStats();
+    const local = new Map(), remote = new Map(), pairs = [];
+    stats.forEach((r) => {
+      if (r.type === "local-candidate") local.set(r.id, r);
+      else if (r.type === "remote-candidate") remote.set(r.id, r);
+      else if (r.type === "candidate-pair") pairs.push(r);
+    });
+    const name = (c) => (c ? (c.candidateType || "?") + " " + (c.address || c.ip || "?")
+                             + ":" + (c.port || "?") + "/" + (c.protocol || "?") : "?");
+    return {
+      ice: s.ice, conn: s.conn,
+      pairs: pairs.map((p) => ({
+        state: p.state, nominated: !!p.nominated,
+        sent: p.requestsSent, recv: p.responsesReceived,
+        bytes: p.bytesSent,
+        local: name(local.get(p.localCandidateId)),
+        remote: name(remote.get(p.remoteCandidateId)),
+      })),
+    };
+  },
+
+  lobbyCodeHost() {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    G.netLobby.open();
+    return G.netLobby.codeHost();
+  },
+  lobbyCodeJoin(code) {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    G.netLobby.open();
+    return G.netLobby.codeJoin(code);
+  },
+
+  // turnProbe() — is a relay actually there?
+  //
+  // "Both sides found an address but the direct link was blocked" is the one
+  // failure a player cannot act on and we cannot reproduce: it needs two real
+  // networks, and every free TURN operator this game has tried either retired
+  // its embeddable credentials or answered a lookup with nothing. So the
+  // aliveness of a relay is not a thing to reason about — it is a thing to
+  // MEASURE, on the machine that has the problem.
+  //
+  // One throwaway RTCPeerConnection PER SERVER, each with
+  // iceTransportPolicy "relay". Per-server is the whole point: a combined
+  // gather says only "something worked", which is exactly the answer that
+  // leaves you shipping a dead entry alongside a live one. Relay-only is the
+  // other half — with host and srflx candidates discarded, a candidate can
+  // only have come from TURN, so `relay > 0` is proof rather than inference.
+  //
+  // Reads NetTransport.iceServers({}) so it probes what the GAME would use,
+  // including anything apex26.turn / apex26.turnApi added. A STUN-only entry
+  // is reported with ok:false and stun:true rather than skipped — "you have
+  // no relay configured" is a distinct diagnosis from "your relay is down",
+  // and it is the one the lobby copy now depends on being distinguishable.
+  turnProbe(ms) {
+    const PC = (typeof RTCPeerConnection !== "undefined") ? RTCPeerConnection : null;
+    if (!PC || typeof NetTransport === "undefined") {
+      return Promise.resolve({ ok: false, error: "no_webrtc" });
+    }
+    const wait = Math.max(1000, Number(ms) || 8000);
+    const flat = [];
+    for (const e of NetTransport.iceServers({})) {
+      const urls = Array.isArray(e.urls) ? e.urls : [e.urls];
+      for (const u of urls) flat.push({ urls: u, username: e.username, credential: e.credential });
+    }
+    const one = (srv) => new Promise((done) => {
+      const isTurn = /^turns?:/i.test(srv.urls);
+      let pc = null;
+      const out = { urls: srv.urls, relay: 0, ok: false, stun: !isTurn };
+      if (!isTurn) { out.error = "not_a_relay"; done(out); return; }
+      try {
+        pc = new PC({ iceServers: [srv], iceTransportPolicy: "relay" });
+      } catch (e) { out.error = "construct_failed"; done(out); return; }
+      const finish = () => {
+        if (!pc) return;
+        out.ok = out.relay > 0;
+        if (!out.ok && !out.error) out.error = "no_relay_candidates";
+        try { pc.close(); } catch (e) {}
+        pc = null;
+        done(out);
+      };
+      const timer = setTimeout(finish, wait);
+      pc.onicecandidate = (ev) => {
+        if (!ev.candidate) { clearTimeout(timer); finish(); return; }
+        if (/ typ relay /.test(ev.candidate.candidate)) out.relay++;
+      };
+      pc.onicecandidateerror = (ev) => {
+        if (ev && ev.errorCode && !out.error) {
+          out.error = "ice_" + ev.errorCode + (ev.errorText ? " " + ev.errorText : "");
+        }
+      };
+      try {
+        pc.createDataChannel("probe");
+        pc.createOffer().then((o) => pc && pc.setLocalDescription(o)).catch((e) => { Log.warn("apex", "turnProbe: createOffer/setLocalDescription failed:", e && e.message); });
+      } catch (e) { clearTimeout(timer); out.error = "offer_failed"; finish(); }
+    });
+    return Promise.all(flat.map(one)).then((servers) => {
+      const relays = servers.filter((s) => !s.stun);
+      return {
+        ok: relays.some((s) => s.ok),
+        servers,
+        relaysConfigured: relays.length,
+        summary: !relays.length
+          ? "No TURN relay is configured — only STUN. Cross-network play will fail whenever both sides are behind a strict NAT."
+          : relays.some((s) => s.ok)
+            ? "Relay reachable: " + relays.filter((s) => s.ok).map((s) => s.urls).join(", ")
+            : "A relay is configured but none answered: "
+              + relays.map((s) => s.urls + " (" + s.error + ")").join(", "),
+      };
+    });
+  },
+
+  lobbyInviteAnother() {
+    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
+    return G.netLobby.inviteAnother();
+  },
+  lobbyReady(v) {
+    if (!G.netLobby) return false;
+    G.netLobby.setReady(v !== false);
+    return true;
+  },
+  lobbyStart() {
+    if (!G.netLobby) return false;
+    return G.netLobby.startFromRoom();
+  },
+
+  // lobbyMods(profile) — resolve a peer profile to multipliers, locally.
+  lobbyMods(profile) {
+    return G.netLobby ? G.netLobby.modsFromProfile(profile) : null;
+  },
+
+  // lobbyFailure(wireStats, secs) — the message a failed connection produces,
+  // from a given wire state. Exposed because the real thing needs two devices
+  // on two hostile networks, which no CI can arrange — but WHICH diagnosis we
+  // draw from a given set of candidates is pure logic and must not regress.
+  lobbyFailure(st, secs) {
+    return G.netLobby ? G.netLobby.failureMsg(st, secs || 30) : null;
+  },
+
+  lobbyShare(which) {
+    if (!G.netLobby) return false;
+    return which === "answer" ? G.netLobby.shareAnswer() : G.netLobby.shareInvite();
+  },
+
+  netStartArm(nowMs, atMs, hold) {
+    if (!G.netPlay || !G.netPlay.active()) return { ok: false, error: "no_session" };
+    G.netNow = nowMs;
+    G.netStart = atMs == null
+      ? null
+      : { at: atMs, hold: hold != null ? hold : 0.5, now: () => G.netNow };
+    G.state = "count";
+    G.countT = 0;
+    G.lightsLit = 0;
+    resetStartLights(false);
+    return {
+      ok: true,
+      at: atMs != null ? atMs : null,
+      hold: G.netStart ? G.netStart.hold : null,
+      awaiting: G.netPlay.awaitingStart(),
+    };
+  },
+
+  netHostStart() {
+    if (!G.netPlay || !G.netPlay.active()) return { ok: false, error: "no_session" };
+    return { ok: !!G.netPlay.hostStart(), startPending: !!G.netStart };
+  },
+
+  netPeerEvent(type, data, atMs) {
+    if (!_netPeer) return false;
+    const now = atMs != null ? atMs : performance.now();
+    _netPeer.pump(now);
+    return _netPeer.send("event", JSON.stringify({ t: type, d: data }));
+  },
+
+  netPeerLaps() { return G.netPlay ? G.netPlay.peerLaps() : []; },
+
+  // netTick(nowMs?) — pump the session by hand. The game loop already calls
+  // this every frame, but a test must not depend on rAF actually running at a
+  // useful rate: driving it explicitly is what makes latency, loss and
+  // interpolation reproducible here, the same way step() does for physics.
+  netTick(nowMs) {
+    if (!G.netPlay) return false;
+    const now = nowMs != null ? nowMs : performance.now();
+    // PUMP THE FAKE PEER TOO. transport.js is explicit that both endpoints must
+    // pump every frame or the wire clock does not line up, and a live peer does
+    // (it is running its own loop). Only netPeerSend/netPeerEvent pumped it, so
+    // a test that merely ticks — a clock warm-up, an idle stretch — delivered
+    // nothing to the far end, its autoPong never saw a PING, and the session
+    // could not sync. The peer goes first so anything it answers is on the wire
+    // before the session's own pump collects.
+    if (_netPeer && _netPeer.pump) { try { _netPeer.pump(now); } catch (e) {} }
+    G.netPlay.tick(now);
+    return G.netPlay.status();
+  },
+
+  netStop() {
+    _netPeer = null;
+    return G.netPlay ? G.netPlay.stop("local") : false;
+  },
+
+  aiPlace(idx, frac, speed, x) {
+    if (!G.track || !G.cars[idx]) return false;
+    const c = G.cars[idx];
+    if (c.isPlayer) return false;
+    const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
+    c.s = c._prevS = wrapS(f01 * G.track.total);
+    c.prog = (c.lap || 0) * G.track.total + f01 * G.track.total;
+    if (x     !== undefined) { c.x = x; c.xVis = x; }
+    if (speed !== undefined) c.speed = speed;
+    c.vLat = 0; c.yawRateCur = 0;
+    Tracks.sample(G.track, c.s, smp2);
+    placeFromTrack(c, smp2);
+    // THE SAME TELEPORT HYGIENE jump() carries, and for the same measured
+    // reason: the wall/rescue accumulators describe the OLD location, so a car
+    // placed after a wedge brings ~3 s of rescueT with it and auto-rescues
+    // itself somewhere it was never stuck.
+    c.rescueT = 0; c.wallT = 0; c.wasOnWall = false;
+    c.wrongT = 0; c.wrongWay = false; c.offT = 0;
+    // rPrevHead with the rest: without it the yaw interpolator tweens from the
+    // old heading and the car visibly swings into place over a frame.
+    AgentView.syncRenderAnchors(c);
+    return { id: idx, frac: +(c.s / G.track.total).toFixed(4), speed: +c.speed.toFixed(2), x: +c.x.toFixed(3) };
+  },
+
+  setBoost(on) { if (G.player) G.player.boostOn = !!on; return G.player ? G.player.boostOn : false; },
+
+  aeroMode(v) {
+    if (v !== undefined) {
+      if (v !== "auto" && v !== "manual") {
+        return { ok: false, error: "bad_mode", message: 'aeroMode must be "auto" or "manual"' };
+      }
+      G.raceAeroMode = v;
+    }
+    return G.raceAeroMode;
+  },
+  aero(on) {
+    if (!G.player) return null;
+    if (on !== undefined) G.player.xOn = !!on;
+    return {
+      xOn: !!G.player.xOn,
+      xArmed: !!G.player.xArmed,
+      aeroX: +(G.player.aeroX || 0).toFixed(3),
+      mode: (G.player.aeroX || 0) > 0.05 ? "X" : "Z",
+      inZone: !!G.aeroZoneAt(G.player.s || 0),
+      zoneAhead: Math.round(G.aeroZoneAhead(G.player.s || 0)),
+      zones: G.aeroZones.length,
+      auto: G.raceAeroMode === "auto",
+    };
+  },
+  aeroZones() {
+    if (!G.track) return null;
+    return G.aeroZones.map((z) => ({
+      start: Math.round(z.start), end: Math.round(z.end), len: Math.round(z.len),
+      startFrac: +(z.start / G.track.total).toFixed(4),
+      endFrac: +((z.end % G.track.total) / G.track.total).toFixed(4),
+      midFrac: +(((z.start + z.len * 0.5) % G.track.total) / G.track.total).toFixed(4),
+    }));
+  },
+  carEffects() {
+    if (!G.player) return null;
+    const brakeGlowThreshold = 0.05;
+    const brakeHeat = +(G.player.brakeHeat || 0);
+    return {
+      exhaustFlame: (G.player.exhaustPop || 0) > 0.05,
+      brakeGlow: brakeHeat > brakeGlowThreshold,
+      ersDeploy: isErsDeploying(G.player),
+      gridLights: G.state === "count", gridStrobe: G.state === "count" && CarMesh.gridStrobe(G.countT),
+      boostFlame: false,
+      brakeHeat,
+      brakeGlowThreshold,
+    };
+  },
+  setEnergy(v) {
+    if (!G.player) return false;
+    G.player.energy = Math.max(0, Math.min(1, +v || 0));
+    return { energy: +G.player.energy.toFixed(3) };
+  },
+
+  setLap(n) {
+    if (!G.player) return false;
+    G.player.lap = Math.max(0, Math.floor(+n || 0));
+    return { lap: G.player.lap };
+  },
+
+  trackShape(n) {
+    if (!G.track) return null;
+    const steps = Math.max(4, Math.min(2000, n != null ? Math.floor(+n) : 200));
+    const xs = [], zs = [], ks = [], fracs = [];
+    for (let i = 0; i < steps; i++) {
+      const frac = i / steps;
+      const s = frac * G.track.total;
+      Tracks.sample(G.track, s, smp2);
+      xs.push(smp2.p[0]);
+      zs.push(smp2.p[2]);
+      ks.push(Tracks.curvature(G.track, s));
+      fracs.push(frac);
+    }
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minZ = Math.min(...zs), maxZ = Math.max(...zs);
+    const scaleX = maxX - minX || 1, scaleZ = maxZ - minZ || 1;
+    const scale = Math.max(scaleX, scaleZ);
+    const ox = (scale - scaleX) / scale / 2, oz = (scale - scaleZ) / scale / 2;
+    return fracs.map((f, i) => ({
+      frac: +f.toFixed(4),
+      x: +(ox + (xs[i] - minX) / scale).toFixed(4),
+      z: +(oz + (zs[i] - minZ) / scale).toFixed(4),
+      k: +ks[i].toFixed(5),
+    }));
+  },
+
+  // trackProfile(n?) — sample the circuit at n evenly-spaced points (default 100,
+  // max 1 000). Returns {frac, y, k, hw, slope} per point — useful for
+  // elevation visualisation and curvature analysis without a live race.
+  trackProfile(n) {
+    if (!G.track) return null;
+    const steps = Math.max(2, Math.min(1000, n != null ? Math.floor(+n) : 100));
+    const out = [];
+    for (let i = 0; i < steps; i++) {
+      const frac = i / steps;
+      const s = frac * G.track.total;
+      Tracks.sample(G.track, s, smp2);
+      out.push({
+        frac:  +frac.toFixed(4),
+        y:     +smp2.p[1].toFixed(3),
+        k:     +Tracks.curvature(G.track, s).toFixed(5),
+        hw:    +smp2.hw.toFixed(2),
+        slope: +(smp2.t[1] || 0).toFixed(4),
+      });
+    }
+    return out;
+  },
+
+  mapPts() {
+    return G.track ? G.track.map.slice() : null;
+  },
+
+  trackBounds() {
+    if (!G.track) return null;
+    const px = G.track.px, pz = G.track.pz, n = G.track.n;
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (let i = 0; i < n; i++) {
+      if (px[i] < minX) minX = px[i]; if (px[i] > maxX) maxX = px[i];
+      if (pz[i] < minZ) minZ = pz[i]; if (pz[i] > maxZ) maxZ = pz[i];
+    }
+    const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+    let bestD = Infinity, bestI = 0;
+    for (let i = 0; i < n; i++) {
+      const d = Math.hypot(px[i] - cx, pz[i] - cz);
+      if (d < bestD) { bestD = d; bestI = i; }
+    }
+    return {
+      minX: +minX.toFixed(1), maxX: +maxX.toFixed(1),
+      minZ: +minZ.toFixed(1), maxZ: +maxZ.toFixed(1),
+      spanX: +(maxX - minX).toFixed(1), spanZ: +(maxZ - minZ).toFixed(1),
+      centerFrac: +(bestI / n).toFixed(4),
+    };
+  },
+
+  seed(n) { if (n !== undefined) G.seed = n; return G.seed; },
+
+  reset(frac, speed, x, seed) {
+    if (!G.track || !G.player) return false;
+    G.resetEpisodeOwners();   // clear takeovers, held flags and debris before reusing car indexes
+    if (seed !== undefined) G.seed = seed;
+    gridUp();   // also clears finPos / retired / dnf / dnfAt / dnfWhy
+    // RE-ARM retirements exactly as startRaceBody does, minus its raceIndex++:
+    // the round stays put, so the (seed, round, driver) hash replans the SAME
+    // failure every episode of one seed — a car retired in episode 1 is not
+    // still parked in episode 2, and a planned failure recurs deterministically.
+    if (G.session === "race") G.armReliability(G.cars);
+    if (G.flyingStart) G.flyingStart.stop();   // an armed TT / quali run-up must not outlive the episode reset
+    G.state = "race"; G.raceT = 0;
+    resetStartLights(true);
+    G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
+    const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
+    G.player.s     = wrapS(f01 * G.track.total);
+    G.player.prog  = f01 * G.track.total;
+    G.player.speed = speed != null ? speed : 0;
+    G.player.x     = x     != null ? x     : 0;
+    G.player.xVis  = G.player.x;
+    G.player.vLat  = 0; G.player.yawRateCur = 0;
+    G.player.lap   = 0; G.player.axEstSm = 0; G.player.corridorAccel = 0;
+    // seed world-space position + heading from (s, x) immediately, same as jump()
+    Tracks.sample(G.track, G.player.s, smp);
+    placeFromTrack(G.player, smp);
+    AgentView.syncRenderAnchors(G.cars);   // sync render anchors (see jump); gridUp() moved every car
+    // Per-episode DRIVETRAIN + smoothing state. gridUp() clears the race-level
+    // fields (energy, cuts, penalty, wallT, vLat…) but not these, so without
+    // this block the engine and smoothed inputs leak across episodes: the first
+    // reset after load starts in gear 1 at idle, every later one inherits
+    // whatever gear/rpm/steering the previous run ended in. Measured as ~1 m of
+    // divergence over a 4 s rollout at identical seed and inputs — small, but it
+    // is exactly the uncontrolled variable seeding is meant to remove.
+    for (const c of G.cars) {
+      c.gear = 1; c.rpm = PhysicsConsts.IDLE_RPM; c.shiftT = 0;
+      c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.corridorAccel = 0; c.slipDeg = 0;
+      // The heading-state controller's own per-episode state (game.js
+      // "--- lateral ---"). Left alone it breaks replay determinism outright
+      // rather than by a metre: `aiBias` SNAPS to its target when null and
+      // slews when it is a number, so the first episode ends with a number and
+      // every later one starts from it (agent-determinism catches it).
+      c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
+      c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.deploying = false; c.boostOn = false; OvertakeMode.reset(c);
+      c.xOn = false; c.aeroX = 0; c.xArmed = false;
+      c.wasOnThrottle = false;
+      delete c.vertLoad;
+      // EVERY per-episode transient is DELETED, not zeroed, from ONE list —
+      // EPISODE_TRANSIENTS at the top of this file. Deleting is the point:
+      // these fields are absent on a cold car, so removing them is what makes
+      // episode N start in the state a freshly loaded page is in, which is what
+      // "the same seed replays an episode exactly" actually asks for. Zeroing
+      // leaves 0 where a first run had undefined, and those are different
+      // inputs — the same reason vertLoad above is deleted rather than set.
+      // It matters because several are read CROSS-CAR one tick stale: `_vmaxNow`
+      // is the blocker's pace AiDrive.otWant decides passes on, `accSm` its
+      // acceleration, `towing` its slipstream, `rank` its position. On the first
+      // frame a fresh session sees undefined and falls back where a replayed one
+      // sees last episode's value; that moves finishing order between replays of
+      // one seed while the player's own trace stays byte-identical, which is
+      // what agent-determinism catches. kCur, _aeroGrip, slipFactor, offroad,
+      // onKerb, contactT and _pushD feed the next tick's physics the same way,
+      // and five (accSm, kCur, _vmaxNow, passBest, kerbHapT) drift on EVERY
+      // episode, not just the first, so no amount of warm-up settles it.
+      // `lane` is the odd one out: not absent before the first episode but
+      // ALREADY ADAPTED, so it re-seeds from lanePref (the grid home line
+      // makeCars stored) rather than being deleted.
+      // KEEP THE LIST IN STEP BY MEASURING, NOT BY GUESSWORK —
+      // `node tools/check/episode-diff.mjs` dumps every primitive on all 22 cars
+      // across consecutive post-reset snapshots and names what leaked. This
+      // loop runs last, so a second list or a zeroing block ahead of it is
+      // dead code. Add to EPISODE_TRANSIENTS; never a second list.
+      c.lane = c.lanePref != null ? c.lanePref : 0;
+      c._prevS = c.s;
+      for (const k of EPISODE_TRANSIENTS) delete c[k];
+    }
+    BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
+    G._testInput = null;
+    return this.obs();
+  },
+
+  // agent-facing view
+  // world(opts) — one egocentric JSON snapshot per decision, with semantics
+  // beside the numbers. opts: { detail: "brief"|"drive"|"full" (def "drive"),
+  // horizonS: lookahead seconds (def 4), points: lookahead samples (def 5),
+  // since: seq of the payload you already hold, to get a delta back }.
+  // Unlike the hooks above this returns a typed error object, never null.
+  world(opts) { return agentView.world(opts); },
+
+  field(opts) { return agentView.field(opts); },
+
+  objective() { return agentView.objective(); },
+
+  // trackInfo({what}) — STATIC per-track data: "corners" (def) | "sectors" |
+  // "profile" | "all". Constant for a session — fetch once, never per tick.
+  trackInfo(opts) { return agentView.trackInfo(opts); },
+
+  // render({what, ...})? — the ONE optional composition aid, demoted from four
+  // peer rasters to a single call because character grids read worse than the
+  // structured numbers they are drawn from. what: "view" (the camera view, any
+  // of 13 modes, {edges}/{depth}), "map" (top-down, car-up, metric index),
+  // "circuit" (the whole track as a document), "car" (measured elevations).
+  // APPROXIMATE — for intuition and debugging; read geometry from world()/
+  // scene()/trackInfo(). The result carries an `aid` note saying so.
+  render(opts) { return agentView.render(opts); },
+
+  // awaitPresent(timeoutMs)? — wait for the next composited frame before a
+  // screenshot tool reads the canvas. HeadlessChrome hides the raw WebGL/
+  // WebGPU canvas and blits the real frame onto an overlay ON DEMAND (GLX,
+  // TLX and WGX each implement awaitSoftPresent/softPresent under the same
+  // names — game.js copies the bound backend's descriptors onto GLX, so this
+  // one call is right whichever backend is active). Exists so a capture tool
+  // never has to know GLX is a bare lexical global, not window.GLX. A no-op
+  // outside HeadlessChrome, where the canvas composites for real.
+  async awaitPresent(timeoutMs) {
+    if (typeof GLX === "undefined" || !GLX.awaitSoftPresent) return null;
+    return GLX.awaitSoftPresent(timeoutMs);
+  },
+
+  // carView({team, parts}?) — the car as JSON: team identity, livery colours,
+  // the full parts spec and its stat effects, the per-team chassis silhouette
+  // knobs, and measured geometry from a real Car3D build. Replaces the car
+  // viewer for everything except appearance itself.
+  carView(opts) { return agentView.carView(opts); },
+
+  survey(opts) { return agentView.survey(opts); },
+
+  rollout(opts) { return agentView.rollout(opts); },
+
+  agentHelp() { return agentView.agentHelp(); },
+
+  scene(opts) { return agentView.scene(opts); },
+
+  describe(id) { return agentView.describe(id); },
+
+  atmosphere() { return agentView.atmosphere(); },
+
+  query(opts) { return agentView.query(opts); },
+
+  terminal() { return agentView.terminal(); },
+
+  openf1(path) { return apiHook("https://api.openf1.org/v1", path, 'await __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024")'); },
+
+  jolpica(path) { return apiHook("https://api.jolpi.ca/ergast/f1", path, 'await __apex.jolpica("/circuits/monaco.json")'); },
+
+  logs(filter) {
+    if (typeof Log === "undefined") return [];
+    return Log.records(filter);
+  },
+
+  // audio() — the engine voice, the player tune and the layer switches in one
+  // read. `debug` is GameAudio.debug()'s existing bundle; the rest is the tuner
+  // surface (js/audio/engine.js), which had no hook at all before it had a UI.
+  //
+  //   __apex.audio()                          // { profile, voice, tune, layers, … }
+  //   __apex.audioTune({ pitch: 1.1 })        // clamped into range, returns the tune
+  //   __apex.audioProfile("cockpit")          // returns the profile actually set
+  //   __apex.audioLayer("wind", false)        // returns the layer map
+  audio() {
+    return noAudio() || { ok: true, profile: GameAudio.profile(), profiles: GameAudio.profiles(),
+      voice: GameAudio.voiceName(), voices: GameAudio.voices(),
+      tune: GameAudio.tune(), range: GameAudio.tuneRange(), defaults: GameAudio.tuneDefaults(),
+      layers: GameAudio.layers(), rate: GameAudio.rate(), limiterDepth: GameAudio.limiterDepth(), windLevel: GameAudio.windLevel(),
+      gravelDepth: GameAudio.gravelDepth(), brakeLevel: GameAudio.brakeLevel(), wastegate: GameAudio.wastegateState(), debug: GameAudio.debug() };
+  },
+  audioTune(patch) {
+    return noAudio() || GameAudio.setTune(patch);
+  },
+  audioProfile(name) {
+    return noAudio() || GameAudio.setProfile(name);
+  },
+  audioLayer(name, on) {
+    return noAudio() || GameAudio.setLayer(name, on);
+  },
+
+  // logLevel(spec?) — read or move the console/buffer thresholds.
+  //
+  // No arg reads the resolved state. A spec string applies it: `"debug"` for
+  // everything, `"scenery:debug"` for one namespace, `"buffer:debug"` to retain
+  // more without printing more. `persist` writes it to localStorage so it
+  // survives the reload — the shape to hand a player reproducing a bug.
+  //
+  //   __apex.logLevel()                      // { console, buffer, consoleNs, … }
+  //   __apex.logLevel("scenery:debug")
+  //   __apex.logLevel("debug", true)         // and remember it
+  //   __apex.logLevel(null, true)            // forget it
+  logLevel(spec, persist) {
+    if (typeof Log === "undefined") return { ok: false, error: "no_log_module" };
+    if (persist) Log.persist(spec === undefined ? null : spec);
+    else if (spec !== undefined) Log.level(spec);
+    return Log.level();
+  },
+
+  // flags() — every DevFlags registry entry and its resolved value (query → hash → storage).
+  flags() {
+    if (typeof DevFlags === "undefined") return {};
+    return DevFlags.flags();
+  },
+
+  // persistState() — is localStorage actually storing anything?
+  //
+  //   { ok, broken, keys, rev, foreign, mirror: { supported, restored, flushed, failed, pending } }
+  //      (`mirror` = the IndexedDB durable copy of the career/season keys, js/core/store.js)
+  // `ok:false` means a read or write has thrown, and `broken` names it
+  // ("QuotaExceededError", "SecurityError"). This is worth a hook of its own
+  // because the failure is otherwise INVISIBLE from inside the session: the
+  // store still caches the value it could not write, so every read for the rest
+  // of the session returns the right answer and only a reload reveals that
+  // nothing was ever saved. Safari on iOS puts the quota at 0 in Private
+  // Browsing, which is the case that actually loses a player's career.
+  persistState() {
+    const s = GameStore.store;
+    // `foreign` = cross-tab invalidations applied (store.js onForeignWrite): non-zero means a second tab is in play.
+    const m = s.mirror || {};
+    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0, mirror: { supported: !!m.supported, restored: m.restored | 0, flushed: m.flushed | 0, failed: m.failed | 0, pending: m.pending | 0 } };
+  },
+
+  // settingsFile(mode) — the SETTINGS FILE object (js/ui/settings-export.js):
+  // "changes" (default) = every preference that differs from its shipped
+  // default, with the default it replaced and the source that owns it; "all"
+  // = every preference's effective value. Never the garage, saves or accounts.
+  settingsFile(mode) { return SettingsExport.collect(mode === "all" ? "all" : "changes", G); },
+
+  // garageFile() — the GARAGE file object (js/ui/settings-export.js): parts,
+  // liveries, setup sheets and an invented team, for every team, enumerated by
+  // prefix from localStorage. Never career or season saves, lap records or
+  // anything account-shaped.
+  garageFile() { return SettingsExport.collectGarage(); },
+
+  // save(data, filename) — hand a file back out of the browser.
+  //
+  // Exists because the reverse direction is the hard one: reading state OUT of
+  // a real browser session is how anything gets diagnosed on a device the test
+  // suite cannot reach (a real GPU rather than SwiftShader, Safari/iOS, a phone).
+  // The Blob-and-click dance had been hand-written from scratch every time it
+  // was needed, slightly differently each time. Objects are JSON-stringified;
+  // strings and Blobs pass through. Returns `{ ok: true, bytes }` on success.
+  save(data, filename) {
+    try {
+      const blob = data instanceof Blob ? data
+        : new Blob([typeof data === "string" ? data : JSON.stringify(data, null, 1)],
+                   { type: typeof data === "string" ? "text/plain" : "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename || "apex-" + Date.now() + ".json";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      return { ok: true, bytes: blob.size };
+    } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+  },
+
+  // stats(on?) — a live FPS / frame-time / GPU overlay, the stats.js role.
+  //
+  // stats.js itself is a three-oriented add-on with nothing to attach to on the
+  // DEFAULT renderer (GLX is hand-written WebGL2, not three), so this reads the
+  // numbers the game already keeps — PerfGov's frame-time EMA, the adaptive
+  // render scale and its tier, and the optional GPU timer — and works
+  // identically on GLX, TLX and WGX.
+  //
+  // The render SCALE and TIER matter as much as the fps here: the performance
+  // governor holds 60 by quietly dropping resolution, so a screenshot that
+  // "looks fine at 60 fps" may be rendering at 0.6x. That is invisible without
+  // this readout, and it is a common source of "why is it blurry".
+  //
+  //   __apex.stats(true)   // show    __apex.stats(false)   // hide
+  //   __apex.stats()       // toggle, returns whether it is now on
+  stats(on) {
+    const ID = "__apexStats";
+    let el = document.getElementById(ID);
+    const want = on === undefined ? !el : !!on;
+    if (!want) {
+      if (el) { clearInterval(el._t); el.remove(); }
+      return false;
+    }
+    if (!el) {
+      el = document.createElement("div");
+      el.id = ID;
+      el.style.cssText = "position:fixed;left:6px;top:6px;z-index:99999;padding:5px 8px;" +
+        "font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;white-space:pre;" +
+        "background:rgba(0,0,0,.72);color:#7fff9f;border-radius:5px;pointer-events:none;" +
+        "text-shadow:0 1px 2px #000";
+      document.body.appendChild(el);
+      el._t = setInterval(() => {
+        try {
+          const r = this.renderScale();
+          const g = this.gpuTimer();
+          const a = (typeof Assets !== "undefined") ? Assets.state() : null;
+          el.textContent =
+            `fps   ${String(r.fps).padStart(5)}\n` +
+            `scale ${r.scale.toFixed(2)}${r.auto ? " auto" : "    "}  tier ${r.tier}\n` +
+            `gpu   ${g.supported ? (g.on ? g.ms.toFixed(1) + " ms" : "off") : "n/a"}\n` +
+            `matTex ${this.matTex().toFixed(2)}  layers ${a ? a.layers : "-"}`;
+        } catch (e) { el.textContent = "stats error: " + ((e && e.message) || e); }
+      }, 250);
+    }
+    return true;
+  },
+
+  // diag(opts?) — ONE call that snapshots everything worth having in a bug
+  // report, and (by default) downloads it as JSON.
+  //
+  // Every field here is something that had to be gathered by hand-written
+  // one-liners during the asset work, a slightly different set each time. The
+  // point is a single stable shape: paste one line, get one file, and the file
+  // always contains the same things — including the environment facts
+  // (renderer, GPU, backend, device pixel ratio) that decide whether a report
+  // is even comparable to a headless run.
+  //
+  //   __apex.diag()                 // log + download apex-diag.json
+  //   __apex.diag({download:false}) // log only
+  diag(opts) {
+    const o = opts || {};
+    const safe = (fn, fallback) => { try { return fn(); } catch (e) { return fallback !== undefined ? fallback : { error: String((e && e.message) || e) }; } };
+    let glInfo = { error: "no canvas" };
+    safe(() => {
+      const cv = document.querySelector("canvas");
+      const gl = cv && (cv.getContext("webgl2") || cv.getContext("webgl"));
+      if (!gl) return;
+      const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+      glInfo = {
+        vendor: dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+        renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+        version: gl.getParameter(gl.VERSION),
+        maxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+        maxLayers: gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS || 0x88ff),
+      };
+    });
+    const d = {
+      when: new Date().toISOString(),
+      build: safe(() => window.__APEX_BUILD, null),
+      env: {
+        ua: safe(() => navigator.userAgent, ""),
+        dpr: safe(() => window.devicePixelRatio, 0),
+        viewport: safe(() => [innerWidth, innerHeight], []),
+        backend: safe(() => {
+          const raw = localStorage.getItem("apex26.gfxBackend");
+          const p = raw === "webgl2" || raw === "three" || raw === "webgpu"
+            ? raw : (raw == null ? "three" : "webgl2");
+          let live = null;
+          try {
+            if (typeof RendererPicker !== "undefined" && RendererPicker.liveBackend) {
+              live = RendererPicker.liveBackend();
+            }
+          } catch (_) { /* picker not ready: use the session latch or pick */ }
+          if (!live) {
+            try { live = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { /* no sessionStorage */ }
+          }
+          live = live || p;
+          return live !== p ? live + " (pick: " + p + ")" : live;
+        }, "?"),   // what BOUND, not only the pick
+        backendFallback: safe(() => sessionStorage.getItem("apex26.gfxFallbackWhy"), null),   // why a WGX/TLX pick bound WebGL2 (#2285)
+        mobile: safe(() => !!(gfx && gfx.isMobile), null),
+        mobileTier: safe(() => !!(gfx && gfx.mobileTier), null),
+        hdr: safe(() => !!(gfx && gfx.hdrMode && gfx.hdrMode()), null),
+        msaa: safe(() => gfx && gfx.msaa && gfx.msaa(), null),
+        renderScale: safe(() => gfx && gfx.getRenderScale && gfx.getRenderScale(), null),
+        // The bound backend's own account of the device — api (three's
+        // WebGPU vs WebGL2), GPU/shader error count and the first message,
+        // soft-blit, baked-pack state. This is what a phone report needs.
+        gpuErrors: safe(() => (gfx && typeof gfx.gpuErrors === "function") ? gfx.gpuErrors() : null, null),
+        backendState: safe(() => (gfx && typeof gfx.backendState === "function") ? gfx.backendState() : null, null),
+      },
+      canvas: safe(() => {
+        const c = document.getElementById("game");
+        return c ? { css: [c.clientWidth, c.clientHeight], buffer: [c.width, c.height],
+                     dpr: window.devicePixelRatio } : null;
+      }, null),
+      perf: safe(() => {
+        const p = this.renderScale();
+        return { scale: p.scale, fps: p.fps, auto: p.auto, tier: p.tier, tierFloor: p.tierFloor,
+                 crashStrikes: p.crashStrikes, floorMs: p.floorMs, autoShed: p.autoShed, scaleFutile: p.scaleFutile, tierFutile: p.tierFutile };
+      }),
+      gl: glInfo,
+      // Capability probes that decide which render path is even available —
+      // a missing float colour buffer sheds the whole HDR post chain, and a
+      // LOST context explains a black screen that looks like a shader bug.
+      glCaps: safe(() => {
+        const cv = document.querySelector("canvas");
+        const gl = cv && (cv.getContext("webgl2") || cv.getContext("webgl"));
+        if (!gl) return null;
+        return {
+          maxFragUnif: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
+          colorFloat: !!gl.getExtension("EXT_color_buffer_float"),
+          colorHalf: !!gl.getExtension("EXT_color_buffer_half_float"),
+          lost: gl.isContextLost(),
+        };
+      }, null),
+      // Stored overrides. Any of these beats every shipped default and lives
+      // only on this device, which is the exact shape of a bug that reproduces
+      // for one person and nobody else. `resMode`, `gfxHigh`, `forceMobileTier`
+      // and `envProbeOff` are here because they decide the render path and were
+      // the ones actually missing; `graphics` and `renderScale` are NOT, because
+      // no such key is written anywhere in the repo — reporting them as null
+      // every time was worse than not reporting them.
+      stored: safe(() => {
+        const ls = (k) => { try { return localStorage.getItem("apex26." + k); } catch (e) { return null; } };
+        return {
+          lightTune: !!ls("lightTune"), camTune: !!ls("camTune"),
+          gfxBackend: ls("gfxBackend"), debris: ls("debris"),
+          gfxHigh: ls("gfxHigh"), resMode: ls("resMode"),
+          forceMobileTier: ls("forceMobileTier"), envProbeOff: ls("envProbeOff"),
+        };
+      }, null),
+      debris: safe(() => this.debris(), null),
+      info: safe(() => this.info()),
+      assets: safe(() => this.assets()),
+      lightTune: safe(() => this.lightTune()),
+      lightState: safe(() => this.lightState()),
+      viewState: safe(() => this.viewState()),
+      physState: safe(() => this.physState()),
+      timing: safe(() => this.timing()),
+      gpuTimer: safe(() => this.gpuTimer()),
+      // Console errors are not captured retroactively — see docs/CONSOLE-RECIPES.md
+      // for the one-liner that installs a collector BEFORE reproducing a bug.
+      errors: safe(() => (window.__apexErrors || []).slice(-40), []),
+      // Counted rather than swallowed by index.html's handler. A non-zero count
+      // is layout thrash, not a crash — but it was invisible before, and one IS
+      // firing on the live site.
+      roLoops: safe(() => window.__apexROLoops || 0, 0),
+      // Survives a deploy, unlike perf.crashStrikes — see PerfGov.crashSeen().
+      crashSeen: safe(() => PerfGov.crashSeen(), null),
+    };
+    try { Log.info("apex", d); } catch (_) {}
+    if (o.download !== false) {
+      const saved = this.save(d, o.filename || "apex-diag.json");
+      const bytes = saved && saved.bytes;
+      try { Log.info("apex", "downloaded apex-diag.json (" + bytes + " bytes)"); } catch (_) {}
+    }
+    return d;
+  },
+};
+lazyTrackEnsure(api);
+return api;
+}
+
+return { create };
+})();

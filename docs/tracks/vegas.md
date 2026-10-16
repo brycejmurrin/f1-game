@@ -46,3 +46,55 @@ Essentially flat — Strip and surrounding streets sit at one grade. Only trivia
 - Make the Strip straight feel vast — taller, denser, warmer box clusters than the Sphere sector to contrast the canyon vs. the open paddock.
 - Saturate accents (magenta/cyan/gold) but keep asphalt and sky near-black so glow pops.
 - Wet-look neon as thin emissive strips on the verge only (never centerline / tarmac pools).
+
+## Research pass — findings (not yet built)
+
+Wikipedia's own landmark list for the Las Vegas Strip Circuit: **MSG Sphere,
+Caesars Palace, Bellagio, and Paris Las Vegas**. Add from the venue's own
+materials:
+
+- **The Bellagio fountains** — the circuit runs right past the fountain lake,
+  and the Bellagio Fountain Club is built around that view. The lake, the
+  fountain jets and the arc of the hotel behind it are one composed landmark,
+  not three props.
+- **The Sphere** at T-Mobile Turn 5 — the whole exterior is an LED display, so
+  the ledFacadeBands treatment applies here more literally than anywhere else
+  on the calendar.
+- **Paris Las Vegas** — half-scale Eiffel Tower and Montgolfier balloon sign,
+  directly trackside; a very cheap and very unmistakable silhouette.
+- **East Harmon Zone** holds the Main Grandstand, opposite the pit lane, and is
+  where the pre/post-race ceremonies happen.
+
+
+## Outcome
+
+Most of the researched list was already built: the Sphere, the Bellagio hotel
+with its lake and an 18-jet fountain show spread across the full frontage,
+Caesars, the Venetian, the High Roller, the Eiffel replica / Montgolfier
+balloon, and the Harmon grandstands.
+
+**2026-10-05 — Shanghai-style frac drift.** After `startFrac` moved to 0.9899
+with `sceneryStartFrac` held at 0.8575, bare authored fracs (Sphere `K(0.30)`,
+Strip canyon `0.485–0.815`, Caesars/Bellagio/Paris) landed ~0.16 lap early —
+Sphere on Koval, Strip densify on Sands Ave — so the racing Strip read thin
+(PR #928 follow-up). Re-keyed heroes + Strip canyon through `sl()` onto the
+racing frame; registered `tests/data/landmarks/vegas.json`.
+
+**2026-10-06 — DETAIL pass.** Strengthened Sphere LED meridians (chunky ribs + magenta equator), Caesars pediment/columns, Bellagio crown + lake-edge posts, Paris tower rings, Wynn/Encore copper twins on Sands, Strip storefront pods with pylon signs + sidewalk pads, street-level Strip billboards, and far-skyline width variety. Hollow grey open-face buildings stay on shared `building()` (#1056); not closed here.
+
+**2026-10-09 — Strip setback review (PR #1221).** `dressingExclusions` are AUTHORED-frame (`TrackSpace.sceneryRange` adds
+`_sceneryShift` 0.8433), unlike the `sl()` racing fracs the hand-placed Strip uses: the Strip window is authored 0.642-0.972
+(racing 0.485-0.815) and the Sphere/Koval one authored 0.377-0.497 (racing 0.22-0.34); the first draft wrote the racing numbers
+and excluded racing 0.328-0.658 instead. With the window right, Strip towers j=1/5/7 and the Paris-side hotel are no longer
+silently `massBlocked` by generic city units. Campanile moved clear of the Venetian twin's second slab (sl 0.495), High Roller
+at lateral 132 with its screen building at gap 38 (they overlapped at 87-97 vs 72-108), mid-Strip skywalk centred on its piers.
+Tall hotel massing sits at the pit (racing 0.096 / 0.136); the S/F approach keeps billboards, the Harmon stand and low
+back-of-house `cityFront` rows (authored 0.12-0.20 = racing 0.963-0.04). The 90 m "screen" tower at racing 0.062 still yields
+to a generic unit (as before this PR); only its megascreen board stands there.
+
+**2026-10-10 — place() argument order (review F3).** `place(k, side, dist, [w, h, d], col)` rejects a box when
+`onTrack(.., sz[0]/2 + 1.5)`, and `sz[0]` is the LATERAL width. Four forecourt strips (Venetian gold fascia, the two
+Caesars strips, the Bellagio apron) had been written `[along-road length, h, depth]`, so each was culled on every build
+(`dist=18 sz[0]=95` needed dist > 49). They are now `[depth, h, length]` and all four emit (0/1 -> 1/0 each, counted per
+source line in the headless build). The Bellagio apron sits at dist 9 / 10 m deep (lateral 4-14, between kerb and the
+lake-edge posts) rather than over the lake, and the second Caesars strip's foot is sunk 0.3 m so the pair is not coplanar.

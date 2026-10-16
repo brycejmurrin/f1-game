@@ -1,0 +1,469 @@
+// @ts-check
+// Import test/expect FROM fixtures (not @playwright/test): fixtures pin
+// apex26.gfxBackend=webgl2 so this grade gate measures GLX (shared CI
+// coverage). Raw @playwright/test after TLX became default (fff8d3da1) put
+// Metal on TLX and crushed.signed fell under the -1 bound that still held on
+// GLX — see docs/notes/RENDERER-MACOS-RED-2026-09.md.
+import { test, expect, BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
+import { pageScreenshot } from "../helpers/soft-capture.js";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+
+const CAPTURE_DIR = process.env.IMAGE_GRADE_CAPTURE_DIR;
+if (CAPTURE_DIR) mkdirSync(CAPTURE_DIR, { recursive: true });
+
+// A capture of the heaviest night scene can legitimately take ~150 s here (see
+// the note on page.screenshot below), and these tests take two of them plus a
+// boot. The 120 s default cannot hold that; the job's timeout-minutes is the
+// real backstop.
+test.describe.configure({ timeout: 480_000 });
+
+const GRADE_NEUTRAL = {
+  blacks: 0, shadows: 0, midtones: 0, highlights: 0, whites: 0,
+  toe: 0, shoulder: 0,
+  liftR: 0, liftG: 0, liftB: 0,
+  gammaR: 1, gammaG: 1, gammaB: 1,
+  gainR: 1, gainG: 1, gainB: 1,
+};
+
+const GRADE_MIN = {
+  blacks: -1, shadows: -1, midtones: -1, highlights: -1, whites: -1,
+  toe: -1, shoulder: -1,
+  liftR: -0.15, liftG: -0.15, liftB: -0.15,
+  gammaR: 0.5, gammaG: 0.5, gammaB: 0.5,
+  gainR: 0.5, gainG: 0.5, gainB: 0.5,
+};
+
+const GRADE_MAX = {
+  blacks: 1, shadows: 1, midtones: 1, highlights: 1, whites: 1,
+  toe: 1, shoulder: 1,
+  liftR: 0.15, liftG: 0.15, liftB: 0.15,
+  gammaR: 2, gammaG: 2, gammaB: 2,
+  gainR: 1.5, gainG: 1.5, gainB: 1.5,
+};
+
+// lightTune()/setLightTune write a sync in-memory store (js/lighting/profiles.js
+// LT + clamp). There is nothing async to wait for — and page.waitForFunction
+// polling that store races the GLX soft-present main thread after a capture
+// (setLightTune → invalidateSoftPresent arms a sync readPixels blit; under
+// SwiftShader that can starve CDP polls past 15 s while LT already matches).
+// CI 36066863753: capturePair setTune timed out; tonal tests (no post-capture
+// setTune) passed; Metal (no soft-present stall) passed. Fixtures' webgl2 pin
+// moved this spec onto that GLX path; the WGX InstCells peel did not.
+// Verify the clamped store in the SAME evaluate as the write — keep assertion
+// bounds; do not raise settle timeouts.
+async function setTune(page, values) {
+  const check = await page.evaluate((next) => {
+    window.__apex.lightTune(next);
+    const tune = window.__apex.lightTune();
+    // Same clamp as profiles.js / the old waitForTune helper. LightTune is a
+    // classic-script global lexical (visible here; not window.LightTune).
+    const defs = LightTune.TUNE_DEFS;
+    const mismatches = [];
+    for (const [id, value] of Object.entries(next)) {
+      const d = defs.find((x) => x.id === id);
+      const want = d ? Math.min(d.max, Math.max(d.min, value)) : value;
+      const got = tune[id];
+      if (!(Math.abs(got - want) < 0.0001)) mismatches.push({ id, want, got });
+    }
+    return { mismatches, soft: (typeof GLX !== "undefined" && GLX.softPresentState)
+      ? GLX.softPresentState() : null };
+  }, values);
+  if (check.mismatches.length) {
+    throw new Error(`setTune store mismatch: ${JSON.stringify(check)}`);
+  }
+}
+
+async function boot(page, {
+  track = "bahrain", tod = "day", weather = "dry", frac = 0.1,
+  neutralGrade = true,
+} = {}) {
+  await page.setViewportSize({ width: 640, height: 360 });
+  await page.goto("/");
+  // 15_000 was below the measured worst boot on this class of box (24.6 s idle,
+  // scratch/perf/boot-budget.mjs) — see the BOOT_MS note in tests/helpers/fixtures.js.
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(({ track, tod, weather }) =>
+    window.__apex.race(track, tod, weather), { track, tod, weather });
+  await page.waitForFunction((id) => {
+    const info = window.__apex.info();
+    return info.track === id;
+  }, track, { polling: 100, timeout: Math.max(30_000, TRACK_MS) });
+  await page.evaluate(({ frac }) => {
+    window.__apex.park(frac);
+    window.__apex.hud(false);
+    // The pose from eyeAt(), re-installed through view() with fog: 1. A debug
+    // camera is an INSPECTION camera, so js/game.js thins its fog to 0.15x
+    // unless the camera carries its own `fog` — and a suite whose five
+    // REPRESENTATIVE_CONDITIONS tests assert that a night, an overcast and a
+    // RAIN scene "retain broad tonal range" must photograph the atmosphere the
+    // player gets, not 15 % of it. Same pose, same fov, only the fog restored.
+    const _v = window.__apex.eyeAt(frac, 0.2, 1.35);
+    if (_v) window.__apex.view({ eye: _v.eye, target: _v.target, fov: 60, far: 6000, fog: 1 });
+    document.body.classList.add("hud-hidden");
+    document.getElementById("hud-restore")?.style.setProperty("display", "none", "important");
+  }, { frac });
+  await page.waitForFunction(({ tod, weather }) => {
+    const info = window.__apex.info();
+    return info.state === "race" &&
+      window.__apex.weather() === weather &&
+      window.__apex.setTimeOfDay() === tod &&
+      window.__apex.camState().debug === true;
+  }, { tod, weather }, { polling: 100, timeout: 45_000 });
+  if (neutralGrade) await setTune(page, GRADE_NEUTRAL);
+  // Every test here screenshots the SAME scene twice and diffs the pair. The
+  // render clock (cloud drift, star twinkle) kept advancing between the two —
+  // on a software-GL runner at <1 FPS that is a second of cloud motion per
+  // frame, which entered the assertion as "changed pixels" (Metal CI flake,
+  // 2026-09-03). Hold it: the only thing allowed to move is the grade.
+  // FREEZE PHYSICS. park() stops the player and shoves the AI field 600 m
+  // back — and then the field RACES BACK THROUGH THE FRAME. On a 30 fps runner
+  // the ~20 s between a test's two captures is ~20 s of sim time, so the
+  // liveries and reflections that make up the bright-pixel set (Y 160-247,
+  // ~2 % of the frame) are different cars in different places; on SwiftShader
+  // at 1 fps the dt-clamped sim moves the field a few metres and nothing
+  // enters. Metal runs 3469/3477/3484 read "shadows +0.5" as brightSigned
+  // −43 with the tier HELD at 0 and the scale pinned — byte-similar across
+  // runs, attempt-dependent within one (blacks: pass, then crushed +9.7 on
+  // the retry) — which is a moving field, not a grade. freeze() pauses the
+  // physics and leaves rendering (and so the grade) live; the sky clock is
+  // held one line down.
+  await page.evaluate(() => window.__apex.freeze(true));
+  // WAIT FOR THE BAKED ASSET PACK. It uploads 9-14 s after page boot on the
+  // Metal runner (the run logs: "[assets] pack loaded layers=14" at 9078 ms /
+  // 14215 ms), and a texture-array upload REPLACES the procedural materials
+  // (albedo * tex.rgb * 2.0, AGENTS.md §Baked asset pack) — a different tonal
+  // distribution on every surface. A 30 fps box reaches a test's baseline
+  // capture inside that window; SwiftShader never does (boot alone is longer).
+  // Metal runs 3469/3477/3484/3488 read "shadows +0.5" as darkSigned +34.9,
+  // brightSigned −43.3 — the same to a decimal each time, with the tier held,
+  // the scale pinned AND physics frozen — and "blacks −1" as +10.8 BRIGHTER:
+  // knob-independent, i.e. the two captures were of two material sets. A pack
+  // that never arrives (no manifest, unsupported renderer) or fails is a
+  // legitimate end state; a pack still in flight after 90 s is pinned OFF so it
+  // cannot land between two captures (the diag says which happened).
+  await page.waitForFunction(() => {
+    const a = window.__apex.assets();
+    return !a.supported || a.uploaded || !!a.error;
+  }, null, { polling: 100, timeout: 90_000 }).catch(() => page.evaluate(() => window.__apex.matTex(0)));
+  await page.evaluate(() => window.__apex.renderClock(100, true));
+  // PIN THE RESOLUTION, for the same reason one line up. This suite diffs pixel
+  // ARRAYS, so every capture in a test has to be the same SIZE — and the
+  // governor's auto-res resizes the framebuffer whenever frames go slow, which
+  // a real-GPU runner does under contention just as readily as a software one.
+  // MEASURED on Metal (run 3464): scale 1 -> 0.7 mid-test, captures 186,624 /
+  // 147,456 / 112,896 px, worst frame 8.5 s with 98 slow of 264 — and the
+  // comparison then read NaN, because the luminance walk ran past the end of
+  // the shorter array. That reads as "the grade did nothing" and is not.
+  // renderScale(v) pins the scale AND calls PerfGov.setAutoRes(false), so the
+  // ladder stops fighting the pin (js/agent/apex.js). 1 = native: this suite is
+  // about the GRADE, not about which tier the runner deserves.
+  await page.evaluate(() => window.__apex.renderScale(1));
+  // AND HOLD THE TIER. The pin above made the next problem WORSE: with the
+  // scale lever gone the feature ladder is the governor's only lever, and on
+  // the Metal runner (26-38 fps, below its own derived floor) it stepped
+  // 0 -> 2 -> 4 between a test's baseline and its "changed" capture. "shadows
+  // +0.5" then read as highlights DARKENING by 44/255 (run 3469: darkSigned
+  // +34.8, brightSigned -44.1, gov.tier 2 then 4) — that is bloom/SSAO/SSR
+  // being shed at tier >= 2 / autoTier 4 (js/game.js po.* gates), not a grade
+  // curve. The suite passes on SwiftShader only because that box has already
+  // bottomed out at one tier before the first capture. govHold(true) freezes
+  // the ladder both ways (js/perf/governor.js _tierHold); tierAt() below reads
+  // the tier at each capture so a comparison whose premise broke says so.
+  await page.evaluate(() => window.__apex.govHold(true));
+}
+
+// The governor tier at the moment of a capture. A two-capture test asserts the
+// two are EQUAL before it compares pixels: a tier change is a different
+// picture, and the tonal delta of a different picture is not the grade.
+async function tierAt(page) {
+  return page.evaluate(() => window.__apex.govHold().tier);
+}
+
+// The soft-present generation, the physics freeze and the asset-pack state at
+// a capture, for the diag: a gen that did not advance is a stale frame, an
+// unfrozen field is moving cars, and a pack that changed between two captures
+// is two material sets (both described in boot()).
+async function captureState(page) {
+  return page.evaluate(() => {
+    const a = window.__apex.assets();
+    const sp = GLX.softPresentState();
+    // The env probe (car reflections) is the one thing left that can change a
+    // frozen, clock-held, pack-loaded frame by itself: on hardware the cube is
+    // real and its reflections brighten the dark cockpit interior; a rebuild
+    // between two captures is a knob-independent delta in exactly the dark
+    // range "blacks" reads. SwiftShader clears the faces, so never here.
+    const env = { ready: typeof GLX.envProbeReady === "function" ? GLX.envProbeReady() : null };
+    // THE CAMERA, which outranks every other premise here: a different viewpoint
+    // is a different picture, and the tonal delta of a different picture is not
+    // the grade. boot() sets a FIXED camera with eyeAt(), so this must be
+    // byte-identical at every capture of a test — and `debug` must stay true,
+    // because false means the spec no longer owns the camera and the live,
+    // damped chase camera is framing the shot (which is what the capture helper
+    // used to cause on every single capture; see tests/helpers/soft-capture.js).
+    const cam = window.__apex.camState();
+    return { gen: sp.gen, post: sp.post, env, cam, frozen: window.__apex.freeze(), state: window.__apex.info().state,
+      pack: { uploaded: a.uploaded, layers: a.layers, error: a.error, matTexMix: window.__apex.lightTune().matTexMix } };
+  });
+}
+
+// The JPEG behind the most recent pixels() call, so a failing comparison can
+// ATTACH the two frames it compared (a runner's failure artifact then carries
+// the pictures, not just the numbers — Metal runs 3469-3493 gave four
+// diagnoses' worth of numbers for "shadows" and no frame to look at).
+let _lastCapture = null;
+async function pixels(page) {
+  // 60_000 -> 150_000. The capture waits on a frame, and a software-GL runner
+  // renders singapore-night at under 1 FPS — that test timed out here at
+  // 144.5 s with a perfectly healthy page behind it (the attached apex-state
+  // shows the car parked on track). Same budget as lighting-ab's capture, for
+  // the same reason.
+  const buf = await pageScreenshot(page, { type: "jpeg", quality: 90, timeout: 150_000, softTimeout: 60_000 });
+  _lastCapture = buf;
+  return page.evaluate(async (b64) => {
+    const img = new Image();
+    img.src = "data:image/jpeg;base64," + b64;
+    await img.decode();
+    const c = document.createElement("canvas");
+    c.width = img.width; c.height = img.height;
+    const cx = c.getContext("2d");
+    cx.drawImage(img, 0, 0);
+    return Array.from(cx.getImageData(0, 0, c.width, c.height).data);
+  }, buf.toString("base64"));
+}
+
+function luminance(data, i) {
+  return 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+}
+
+function tonalChanges(before, after) {
+  let darkDelta = 0, darkCount = 0, brightDelta = 0, brightCount = 0;
+  let darkSigned = 0, brightSigned = 0;
+  for (let i = 0; i < before.length; i += 4) {
+    const y = luminance(before, i);
+    const signed = luminance(after, i) - y;
+    const delta = Math.abs(signed);
+    if (y >= 8 && y <= 55) {
+      darkDelta += delta;
+      darkSigned += signed;
+      darkCount++;
+    } else if (y >= 160 && y <= 247) {
+      brightDelta += delta;
+      brightSigned += signed;
+      brightCount++;
+    }
+  }
+  return {
+    dark: darkDelta / darkCount,
+    bright: brightDelta / brightCount,
+    darkSigned: darkSigned / darkCount,
+    brightSigned: brightSigned / brightCount,
+    darkCount,
+    brightCount,
+  };
+}
+
+function rangeChanges(before, after, low, high) {
+  let absolute = 0, signed = 0, count = 0;
+  for (let i = 0; i < before.length; i += 4) {
+    const y = luminance(before, i);
+    if (y < low || y > high) continue;
+    const change = luminance(after, i) - y;
+    absolute += Math.abs(change);
+    signed += change;
+    count++;
+  }
+  return { absolute: absolute / count, signed: signed / count, count };
+}
+
+function channelChanges(before, after) {
+  const sums = [0, 0, 0];
+  let count = 0;
+  for (let i = 0; i < before.length; i += 4) {
+    const y = luminance(before, i);
+    if (y < 8 || y > 247) continue;
+    sums[0] += Math.abs(after[i] - before[i]);
+    sums[1] += Math.abs(after[i + 1] - before[i + 1]);
+    sums[2] += Math.abs(after[i + 2] - before[i + 2]);
+    count++;
+  }
+  return sums.map((sum) => sum / count);
+}
+
+function histogramStats(data) {
+  const values = [];
+  let black = 0, white = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    values.push(luminance(data, i));
+    if (data[i] <= 1 && data[i + 1] <= 1 && data[i + 2] <= 1) black++;
+    if (data[i] >= 254 && data[i + 1] >= 254 && data[i + 2] >= 254) white++;
+  }
+  values.sort((a, b) => a - b);
+  const percentile = (p) => values[Math.floor((values.length - 1) * p)];
+  return {
+    p05: percentile(0.05),
+    p95: percentile(0.95),
+    blackClipFraction: black / values.length,
+    whiteClipFraction: white / values.length,
+  };
+}
+
+test.describe("rendered image grade", () => {
+  test.describe.configure({ mode: "serial" });
+  // NO test.setTimeout HERE. It used to say 180_000, and a per-test setTimeout
+  // OVERRIDES the file's describe.configure cap rather than being bounded by it
+  // — so this block was capped at 180 s while the file declared 480 s, and the
+  // first test timed out at exactly 180.0 s having needed 198.9 s. Because the
+  // block is `serial`, that one timeout SKIPPED the four tests after it, which
+  // is how a budget miss reads as five lost tests. MEASURED in that run: boot
+  // alone reached 51165 ms under two-worker contention (`pack loaded
+  // layers=14`), before a single pixel was read. Same defect and same cure as
+  // the three overrides removed from lighting-ab.spec.js.
+
+  // ONE two-capture comparison: baseline, tune, changed — both frames
+  // attached, the capture state (present gen, physics freeze, asset pack,
+  // post-chain path) recorded at each, and the PREMISE asserted before any
+  // tonal maths: same governor tier, same post-chain path, a newer present.
+  // Metal runs 3469-3505 failed shadows, blacks and red gain by turns with
+  // knob-INDEPENDENT deltas (blacks −1 read +9.7 brighter; red gain moved
+  // green and blue by 19.5 alongside red), and the two frames "shadows"
+  // attached on 3497 were a crisp, bloomless baseline against a soft, bloomed
+  // changed frame — two post chains, never the grade. A premise that fails
+  // here names the pass that differed; the tonal assertion never sees it.
+  async function capturePair(page, name, tune) {
+    await pixels(page);   // discard the first composited frame while render caches settle
+    const baseline = await pixels(page);
+    const baselineJpeg = _lastCapture;
+    const cap0 = await captureState(page);
+    const tier0 = await tierAt(page);
+    await setTune(page, tune);
+    const changed = await pixels(page);
+    const changedJpeg = _lastCapture;
+    const cap1 = await captureState(page);
+    const tier1 = await tierAt(page);
+    await test.info().attach(`${name}-baseline.jpg`, { body: baselineJpeg, contentType: "image/jpeg" });
+    await test.info().attach(`${name}-changed.jpg`, { body: changedJpeg, contentType: "image/jpeg" });
+    const gov = await page.evaluate(() => window.__apex.renderScale());
+    const premise = JSON.stringify({ name, tune, tier: [tier0, tier1], cap0, cap1, gov });
+    expect(tier1, "governor tier moved between captures — a tier shed, not the grade: " + premise).toBe(tier0);
+    expect(JSON.stringify(cap1.post), "the post chain took a different path for the two captures — two pipelines, not the grade: " + premise).toBe(JSON.stringify(cap0.post));
+    expect(cap1.gen, "the changed capture is not a newer present than the baseline: " + premise).toBeGreaterThan(cap0.gen);
+    expect(JSON.stringify(cap1.env), "the env probe changed state between the two captures — reflections, not the grade: " + premise).toBe(JSON.stringify(cap0.env));
+    expect(JSON.stringify(cap1.cam), "the camera moved between the two captures — two viewpoints, not the grade: " + premise).toBe(JSON.stringify(cap0.cam));
+    // AND the spec must still OWN the camera. boot() asserts camState().debug
+    // before the first capture; this asserts it is still true at one, which is
+    // the part that was false for this file's whole history. Deliberate belt and
+    // braces: the equality above only catches a lost camera if the chase camera
+    // then MOVES between two captures, which it does on a 20-40 fps GPU and does
+    // NOT on ~1 fps SwiftShader — so without this line a re-regression is once
+    // again invisible everywhere except the nightly Metal job.
+    expect(cap0.cam.debug, "the spec no longer owns the camera — something cleared the eyeAt() free-cam and the live chase camera is framing these captures: " + premise).toBe(true);
+    return { baseline, changed, cap0, tier0, premise };
+  }
+
+  test("blacks visibly change the deepest image detail", async ({ page }) => {
+    await boot(page);
+    const b = await page.evaluate(() => {
+      const d = LightTune.TUNE_DEFS.find((x) => x.id === "blacks");
+      return { min: d.min, max: d.max };
+    });
+    expect(b.max, "BLACKS has no positive travel — this test would be vacuous").toBeGreaterThan(0);
+    expect(b.min, "BLACKS has no negative travel — this test would be vacuous").toBeLessThan(0);
+    const { baseline, changed: raisedPx, cap0, tier0, premise } = await capturePair(page, "blacks-raised", { blacks: b.max });
+    const raised = rangeChanges(baseline, raisedPx, 2, 30);
+    // The third capture (crushed) holds to the same premise as the pair — ALL of
+    // it, not just the post chain. It used to check `post` alone, and that is how
+    // CI 3623 reported "crushing blacks made the image 9.7 BRIGHTER": the capture
+    // was of a camera yawed ~34 px from the baseline's, which every other guard
+    // in this file would have caught at the pair. A premise checked for two
+    // captures and not for the third is not checked.
+    await setTune(page, { blacks: b.min });
+    const crushedPx = await pixels(page);
+    await test.info().attach("blacks-crushed.jpg", { body: _lastCapture, contentType: "image/jpeg" });
+    const cap2 = await captureState(page);
+    const tier2 = await tierAt(page);
+    const p2 = JSON.stringify({ tier: [tier0, tier2], cap0, cap2 });
+    expect(tier2, "governor tier moved before the crushed capture — a tier shed, not the grade: " + p2).toBe(tier0);
+    expect(JSON.stringify(cap2.post), "the post chain took a different path for the crushed capture: " + p2).toBe(JSON.stringify(cap0.post));
+    expect(JSON.stringify(cap2.env), "the env probe changed state before the crushed capture — reflections, not the grade: " + p2).toBe(JSON.stringify(cap0.env));
+    expect(JSON.stringify(cap2.cam), "the camera moved before the crushed capture — a different viewpoint, not the grade: " + p2).toBe(JSON.stringify(cap0.cam));
+    expect(cap2.gen, "the crushed capture is not a newer present than the baseline: " + p2).toBeGreaterThan(cap0.gen);
+    const crushed = rangeChanges(baseline, crushedPx, 2, 30);
+    const diag = JSON.stringify({
+      px: [baseline.length / 4, raisedPx.length / 4, crushedPx.length / 4],
+      baseline: histogramStats(baseline), raised, crushed, premise,
+    });
+    expect(raised.count, diag).toBeGreaterThan(1000);
+    expect(raised.signed, diag).toBeGreaterThan(1);
+    expect(crushed.signed, diag).toBeLessThan(-1);
+  });
+
+  test("shadows predominantly change dark pixels", async ({ page }) => {
+    await boot(page);
+    const { baseline, changed, premise } = await capturePair(page, "shadows", { shadows: 0.5 });
+    const delta = tonalChanges(baseline, changed);
+    const diag = JSON.stringify({ px: [baseline.length / 4, changed.length / 4], delta, premise });
+    expect(delta.darkCount, diag).toBeGreaterThan(1000);
+    expect(delta.brightCount, diag).toBeGreaterThan(1000);
+    expect(delta.darkSigned, diag).toBeGreaterThan(0.5);
+    expect(delta.dark, diag).toBeGreaterThanOrEqual(delta.bright * 2);
+  });
+
+  test("highlights predominantly change bright pixels", async ({ page }) => {
+    await boot(page);
+    const { baseline, changed, premise } = await capturePair(page, "highlights", { highlights: 0.5 });
+    const delta = tonalChanges(baseline, changed);
+    const diag = JSON.stringify({ delta, premise });
+    expect(delta.bright, diag).toBeGreaterThanOrEqual(delta.dark * 2);
+  });
+
+  test("red gain predominantly changes the red channel", async ({ page }) => {
+    await boot(page);
+    const { baseline, changed, premise } = await capturePair(page, "red-gain", { gainR: 1.2 });
+    const [red, green, blue] = channelChanges(baseline, changed);
+    const diag = JSON.stringify({ red, green, blue, premise });
+    expect(red, diag).toBeGreaterThan(green * 1.5);
+    expect(red, diag).toBeGreaterThan(blue * 1.5);
+  });
+
+  test("grade extremes keep the race canvas renderable", async ({ page }) => {
+    await boot(page);
+    for (const values of [GRADE_MIN, GRADE_MAX]) {
+      await setTune(page, values);
+      const image = await pixels(page);
+      const state = await page.evaluate(() => window.__apex.info().state);
+      expect(state).toBe("race");
+      expect(image.length).toBe(640 * 360 * 4);
+      expect(new Set(image).size).toBeGreaterThan(16);
+    }
+  });
+});
+
+const REPRESENTATIVE_CONDITIONS = [
+  { track: "bahrain", tod: "day", weather: "dry", frac: 0.1 },
+  { track: "monaco", tod: "dawn", weather: "dry", frac: 0.1 },
+  { track: "silverstone", tod: "day", weather: "overcast", frac: 0.1 },
+  // Singapore night on Metal sits near 8% near-black pixels (0.0823 in run
+  // 38697298428), so it gets its own black-clip limit.
+  { track: "singapore", tod: "night", weather: "dry", frac: 0.35, blackClipMax: 0.1 },
+  { track: "spa", tod: "day", weather: "rain", frac: 0.1 },
+];
+
+for (const condition of REPRESENTATIVE_CONDITIONS) {
+  test(`${condition.track} ${condition.tod} ${condition.weather} retains broad tonal range`, async ({ page }) => {
+    // Also no override — see the note on the serial block above. These measured
+    // 131.7-164.5 s in the same group run, i.e. inside 180 s only by margin.
+    await boot(page, { ...condition, neutralGrade: false });
+    if (CAPTURE_DIR) {
+      await pageScreenshot(page, {
+        path: join(CAPTURE_DIR, `${condition.track}-${condition.tod}-${condition.weather}.png`),
+        timeout: 60_000,
+        softTimeout: 45_000,
+      });
+    }
+    const stats = histogramStats(await pixels(page));
+    expect(stats.blackClipFraction).toBeLessThan(condition.blackClipMax ?? 0.08);
+    expect(stats.whiteClipFraction).toBeLessThan(0.03);
+    expect(stats.p95 - stats.p05).toBeGreaterThan(45);
+  });
+}

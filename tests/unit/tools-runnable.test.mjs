@@ -1,0 +1,713 @@
+/* tools-runnable.test.mjs — every tool must at least PARSE, and the tool
+ * surface an agent reaches through MCP must answer.
+ *
+ * docs-integrity.test.mjs guards the tools/README index in both directions, so
+ * a tool cannot be undocumented and a row cannot be a ghost. Neither direction
+ * says the file RUNS. A tool with a syntax error is indexed, documented, and
+ * completely inaccessible — and the failure surfaces only when someone reaches
+ * for it mid-task, which is the worst moment to discover it. Measured
+ * 2026-08-17: a backtick inside a comment in a WGSL template literal took a
+ * whole module out, and only a hand-run `bash -n` caught a shell edit.
+ *
+ * PARSE ONLY for the general sweep — these tools launch browsers, write
+ * captures and hit networks, so executing them here would be its own outage.
+ * The few entry points with a side-effect-free help path are exercised for real.
+ *
+ * Run: node --test tests/unit/tools-runnable.test.mjs
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { makeClosedDbFaults, makeStorageFaults } from "../helpers/storage-faults.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const TOOLS = path.join(ROOT, "tools");
+
+function toolFiles() {
+  const out = [];
+  const walk = (dir, rel) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      // tools/_*.mjs is transient agent scratch by convention (.gitignore).
+      if (e.name.startsWith("_") || e.name === "__pycache__") continue;
+      const abs = path.join(dir, e.name);
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(abs, r);
+      else out.push({ abs, rel: r, ext: path.extname(e.name) });
+    }
+  };
+  walk(TOOLS, "");
+  return out;
+}
+
+const FILES = toolFiles();
+
+test("storage fault fixtures deterministically model denial, quota, corruption and closed IDB", () => {
+  const f = makeStorageFaults({ initial: { "apex26.save": '{"v":1}' }, quotaBytes: 20 });
+  assert.equal(f.storage.getItem("apex26.save"), '{"v":1}');
+  f.set({ read: true });
+  assert.throws(() => f.storage.getItem("apex26.save"), { name: "SecurityError" });
+  f.set({ read: false, write: true });
+  assert.throws(() => f.storage.setItem("apex26.save", "x"), { name: "SecurityError" });
+  f.set({ write: false, quotaBytes: 1 });
+  assert.throws(() => f.storage.setItem("apex26.save", "too large"), { name: "QuotaExceededError" });
+  f.set({ quotaBytes: Infinity }).corrupt("apex26.save", "not-json");
+  assert.equal(f.storage.getItem("apex26.save"), "not-json");
+  const closed = makeClosedDbFaults();
+  closed.close();
+  assert.throws(() => closed.db.transaction("kv"), { name: "InvalidStateError" });
+  assert.deepEqual(closed.events.map((e) => e.fault || e.op), ["close", "InvalidStateError"]);
+});
+
+/** Absolute path of a tool by BASENAME. tools/ is grouped into subdirectories
+ *  (lib, ci, check, gen, shot, gfx, track, car, ui, lighting, mcp, net, env)
+ *  and a tool moving between them is not a fact this file should have an
+ *  opinion about — every assertion below is about what the tool DOES. A name
+ *  that is ambiguous or absent fails loudly rather than silently skipping. */
+function tool(name) {
+  const hits = FILES.filter((f) => f.rel === name || f.rel.endsWith(`/${name}`));
+  assert.equal(hits.length, 1, `tool(${name}): expected one match, found ${hits.map((h) => h.rel).join(", ") || "none"}`);
+  return hits[0].abs;
+}
+
+test("the sweep sees the whole tools tree (a silent empty list proves nothing)", () => {
+  assert.ok(FILES.length >= 70, `expected the full tool set, walked ${FILES.length}`);
+  for (const name of ["mcp-cli.mjs", "tinyfish-mcp.sh", "manifest.cjs"]) {
+    assert.ok(FILES.some((f) => f.rel.endsWith(name)), `${name} missing from the walk`);
+  }
+});
+
+test("every JS tool parses (node --check)", () => {
+  const broken = [];
+  for (const f of FILES) {
+    if (![".mjs", ".cjs", ".js"].includes(f.ext)) continue;
+    const r = spawnSync(process.execPath, ["--check", f.abs], { encoding: "utf8" });
+    if (r.status !== 0) broken.push(`${f.rel}: ${(r.stderr || "").split("\n").find((l) => l.includes("Error")) || "exit " + r.status}`);
+  }
+  assert.deepEqual(broken, [], "a JS tool does not parse");
+});
+
+test("no tool derives a path from import.meta.url.pathname (Windows-broken)", () => {
+  // `new URL("..", import.meta.url).pathname` is `/D:/a/repo/` on Windows, and
+  // path.resolve() then prefixes the cwd's drive to give a path that cannot
+  // exist. tools/gfx/gpu-game-check.mjs is the one tool the GPU-census workflow runs
+  // on windows-latest, and this cost it every request 404ing, the game never
+  // booting, and a 5-minute timeout that reported nothing — twice, because the
+  // first diagnosis blamed the machine and raised the timeout.
+  // It also mishandles percent-encoding, so a checkout path containing a space
+  // breaks the same way on Linux. fileURLToPath is correct everywhere.
+  const bad = [];
+  for (const f of FILES) {
+    if (![".mjs", ".cjs", ".js"].includes(f.ext)) continue;
+    if (/import\.meta\.url\s*\)\s*\.pathname/.test(fs.readFileSync(f.abs, "utf8"))) bad.push(f.rel);
+  }
+  assert.deepEqual(bad, [],
+    `these tools derive a path from import.meta.url .pathname:\n  ${bad.join("\n  ")}\n\n` +
+    `Use fileURLToPath instead:\n` +
+    `  import { fileURLToPath } from "node:url";\n` +
+    `  const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\\\/]$/, "");\n` +
+    `Reason: docs/PERF-FINDINGS.md 2f.`);
+});
+
+// Comments must NOT be scanned. Every ban below has to be explainable in prose
+// beside the code that enforces it, and a scanner that matches its own
+// documentation is useless twice over: it fires on the comment describing the
+// bug, and — worse — a check written to confirm a fix was removed reports
+// success because the fix's COMMENT still quotes it. That happened in this
+// session, on this very idiom, while verifying the sabotage below.
+function stripComments(src) {
+  return src
+    .replace(/\/\*[^]*?\*\//g, " ")   // block comments (JSDoc, banners)
+    .replace(/^[ \t]*\/\/.*$/gm, " ") // whole-line // comments
+    .replace(/([^:"'`\\])\/\/.*$/gm, "$1"); // trailing // comments
+}
+
+test("the comment stripper actually strips (or every ban below is vacuous)", () => {
+  // The stripper is load-bearing for the ratchet that follows, so it gets its
+  // own proof rather than being taken on trust.
+  const src = [
+    '// (a.b || 0) > 0',
+    '/* (c.d || 0) > 0 */',
+    'const x = 1; // (e.f || 0) > 0',
+    'const keep = (g.h || 0) > 0;',
+  ].join("\n");
+  const out = stripComments(src);
+  assert.equal((out.match(/\|\| 0\) > 0/g) || []).length, 1,
+    `the stripper left commented code behind:\n${out}`);
+  assert.match(out, /const keep = \(g\.h \|\| 0\) > 0;/, "the stripper ate real code");
+});
+
+// `(x || 0) > 0` cannot tell "measured zero" from "measured nothing", and in a
+// TOOL or a WORKFLOW that comparison IS the verdict. Two shipped defects had
+// exactly this shape: `(gfx.gpuErrors || 0) > 0` passed vacuously on the GLX
+// leg from the day that leg was added, and `(env.fail || 0) > 0` sat twelve
+// lines below the comment explaining the first one, on the same object.
+// docs/PERF-FINDINGS.md 2e, 2j.
+//
+// Deliberately NOT applied to js/: `(ctx.speed || 0) > 0` in js/physics/ai-drive.js
+// is a gameplay predicate on a state object that genuinely defaults to zero, not
+// a reading from an instrument. Banning it there would be noise, and a noisy ban
+// gets widened or ignored — which is how this class survived in the first place.
+const COERCED_VERDICT = /\(\s*[A-Za-z_$][A-Za-z0-9_$.]*(\([^()]*\))?\s*(\|\||\?\?)\s*0\s*\)\s*(>=|>|<=|<|!==|!=|===|==)\s*0/;
+
+// Frozen count, the size-ratchet idiom: existing entries are tolerated
+// and named, new ones are the defect. Shrinking this is progress.
+const COERCED_TOLERATED = {
+  // `(d.cost || 0) > 0` over the parts CATALOG — product data this repo owns,
+  // read from a loaded module, not a reading taken from a running system. A
+  // part with no `cost` field costs nothing, so absent and zero are the same
+  // fact and the coercion states it rather than hiding it. Nothing downstream
+  // reports a verdict about whether the measurement happened.
+  "parts-ladder.mjs": 1,
+};
+
+test("no tool decides a verdict by comparing a coerced measurement to zero", () => {
+  const bad = [];
+  for (const f of FILES) {
+    if (![".mjs", ".cjs", ".js"].includes(f.ext)) continue;
+    const lines = stripComments(fs.readFileSync(f.abs, "utf8")).split("\n");
+    const hits = lines.map((l, i) => (COERCED_VERDICT.test(l) ? `${f.rel}:${i + 1}: ${l.trim()}` : null)).filter(Boolean);
+    const allowed = COERCED_TOLERATED[path.basename(f.rel)] || 0;
+    if (hits.length > allowed) bad.push(...hits.slice(allowed));
+  }
+  assert.deepEqual(bad, [],
+    `these tools coerce a measurement and then compare it to zero:\n  ${bad.join("\n  ")}\n\n` +
+    `An absent reading is not a zero reading. Test for absence first:\n` +
+    `  if (x == null) fail("NO count reported — this check would pass vacuously");\n` +
+    `  else if (x > 0) fail(...);\n` +
+    `Reason: docs/PERF-FINDINGS.md 2e, 2j.`);
+});
+
+test("no workflow decides a gate by comparing a coerced measurement to zero", () => {
+  // Hard zero, no tolerated list: a comparison in a workflow is always a gate.
+  const dir = path.join(ROOT, ".github/workflows");
+  const wfs = fs.readdirSync(dir).filter((f) => /\.ya?ml$/.test(f));
+  // Corpus floor, same reasoning as the tools walk above: a silent empty list
+  // proves nothing, and this one reads a directory the tools walk never enters.
+  assert.ok(wfs.length >= 3, `expected the workflow set, found ${wfs.length}`);
+  assert.ok(wfs.includes("gpu-census.yml"), "gpu-census.yml missing from the walk");
+
+  const bad = [];
+  for (const w of wfs) {
+    const lines = stripComments(fs.readFileSync(path.join(dir, w), "utf8")).split("\n");
+    lines.forEach((l, i) => { if (COERCED_VERDICT.test(l)) bad.push(`.github/workflows/${w}:${i + 1}: ${l.trim()}`); });
+  }
+  assert.deepEqual(bad, [],
+    `these workflow gates coerce a measurement and then compare it to zero:\n  ${bad.join("\n  ")}\n\n` +
+    `Absence must fail, not read as clean. Reason: docs/PERF-FINDINGS.md 2e, 2j.`);
+});
+
+test("the coerced-verdict ceiling has not been left far above the real count", () => {
+  // The other failure mode, copied from the bareCatches ratchet (tests/data/ratchets.json): fix
+  // the last instance, never lower the ceiling, and the ratchet silently stops
+  // ratcheting. Every tolerated entry must still be earning its slot.
+  const slack = [];
+  for (const [rel, allowed] of Object.entries(COERCED_TOLERATED)) {
+    // Keys are BASENAMES (the subdirectory a tool sits in is not part of the
+    // tolerance) — resolved through FILES so a renamed or deleted tool fails
+    // here instead of leaving a permanent free pass behind.
+    const f = FILES.find((x) => path.basename(x.rel) === rel);
+    assert.ok(f, `${rel} is tolerated but the walk no longer sees it — drop the entry`);
+    const lines = stripComments(fs.readFileSync(f.abs, "utf8")).split("\n");
+    const n = lines.filter((l) => COERCED_VERDICT.test(l)).length;
+    if (n < allowed) slack.push(`${rel}: ${n} left but ${allowed} tolerated — lower it to ${n}`);
+  }
+  assert.deepEqual(slack, [], "a tolerated count drifted above its file — lower it");
+});
+
+test("every shell tool parses (bash -n)", () => {
+  const broken = [];
+  for (const f of FILES) {
+    if (f.ext !== ".sh") continue;
+    const r = spawnSync("bash", ["-n", f.abs], { encoding: "utf8" });
+    if (r.status !== 0) broken.push(`${f.rel}: ${(r.stderr || "").trim().split("\n")[0]}`);
+  }
+  assert.deepEqual(broken, [], "a shell tool does not parse");
+});
+
+test("cloud-agent install is offline-tolerant (npm ECONNRESET must not fail a usable snapshot)", () => {
+  const browsers = fs.readFileSync(tool("install-browsers.sh"), "utf8");
+  const cloud = fs.readFileSync(tool("cloud-agent-install.sh"), "utf8");
+  assert.match(browsers, /--no-audit/);
+  assert.match(browsers, /--prefer-offline/);
+  assert.match(browsers, /node_modules\/playwright\/package\.json/);
+  assert.match(browsers, /node_modules\/playwright\/cli\.js/);
+  assert.match(browsers, /Exit handler never called/);
+  assert.doesNotMatch(browsers, /^set -e/m);
+  assert.match(cloud, /mesa-vulkan-drivers/);
+  assert.match(cloud, /install-browsers\.sh/);
+  assert.match(cloud, /tools\/lib\/chromium-path\.mjs/);
+  assert.match(cloud, /--path/);
+  assert.match(cloud, /node_modules\/playwright\/package\.json/);
+  assert.doesNotMatch(cloud, /^set -e/m);
+});
+
+test("every python tool parses (compile)", () => {
+  const broken = [];
+  for (const f of FILES) {
+    if (f.ext !== ".py") continue;
+    const r = spawnSync("python3", ["-c",
+      "import ast,sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])", f.abs], { encoding: "utf8" });
+    if (r.status !== 0) broken.push(`${f.rel}: ${(r.stderr || "").trim().split("\n").pop()}`);
+  }
+  assert.deepEqual(broken, [], "a python tool does not parse");
+});
+
+test("every JSON asset in tools/ parses", () => {
+  const broken = [];
+  for (const f of FILES) {
+    if (f.ext !== ".json") continue;
+    try { JSON.parse(fs.readFileSync(f.abs, "utf8")); }
+    catch (e) { broken.push(`${f.rel}: ${e.message}`); }
+  }
+  assert.deepEqual(broken, [], "a JSON asset in tools/ does not parse");
+});
+
+test("the MCP-facing entry points answer without touching a browser or a network", () => {
+  // These are what an agent reaches for first; a help path that throws reads as
+  // "the tool is gone". Each is side-effect-free by construction.
+  const cases = [
+    { cmd: process.execPath, args: [tool("mcp-cli.mjs"), "--help"], want: /probe/ },
+    { cmd: process.execPath, args: [tool("mcp-cli.mjs"), "probe", "--dry-run"], want: /new_page/ },
+    { cmd: "bash", args: [tool("tinyfish-mcp.sh"), "help"], want: /deploy-check/ },
+    { cmd: "python3", args: [tool("probe-mcp.py"), "help"], want: /chrome_/ },
+    { cmd: "bash", args: [tool("apex-tools-mcp.sh"), "help"], want: /apex_/ },
+    { cmd: "bash", args: [tool("apex-tools-mcp.sh"), "help"], want: /smoke/ },
+    { cmd: process.execPath, args: [tool("mcp-smoke.mjs"), "--help"], want: /Never wraps test-bg/ },
+    { cmd: "bash", args: [tool("playwright-mcp.sh"), "help"], want: /browser_resize/ },
+    { cmd: "bash", args: [tool("playwright-mcp.sh"), "help"], want: /css-play\.mjs/ },
+    { cmd: process.execPath, args: [tool("css-play.mjs"), "--help"], want: /hot-swap|hot swap/i },
+    // Probe-debug CLIs that used to treat --help as a run (2026-10-01 audit):
+    { cmd: process.execPath, args: [tool("cdmcp-bg.mjs"), "--help"], want: /usage:/ },
+    { cmd: "python3", args: [tool("cdmcp-cli.py"), "--help"], want: /list-tools/ },
+    { cmd: process.execPath, args: [tool("report-server.mjs"), "--help"], want: /--port/ },
+    { cmd: process.execPath, args: [tool("garage-angles.mjs"), "--help"], want: /--plan/ },
+    { cmd: process.execPath, args: [tool("garage-before.mjs"), "--help"], want: /--plan/ },
+    { cmd: process.execPath, args: [tool("garage-angles-fetch.mjs"), "--help"], want: /nearest ancestor/ },
+    { cmd: process.execPath, args: [tool("loading-probe.mjs"), "--help"], want: /PHASE ORDER|loading-probe/ },
+    { cmd: process.execPath, args: [tool("garage-frame.mjs"), "--help"], want: /garage-frame/ },
+    { cmd: process.execPath, args: [tool("flyby.mjs"), "--help"], want: /flyby/ },
+    { cmd: process.execPath, args: [tool("profile-gameloop.mjs"), "--help"], want: /cpuprofile|profile-gameloop/ },
+    { cmd: process.execPath, args: [tool("backend-compare.mjs"), "--help"], want: /backend-compare/ },
+    { cmd: process.execPath, args: [tool("apex-capture.mjs"), "--help"], want: /apex-capture/ },
+    { cmd: process.execPath, args: [tool("pit-shots.mjs"), "--help"], want: /--plan/ },
+    { cmd: process.execPath, args: [tool("motion-capture.mjs"), "--help"], want: /motion-capture|flicker/ },
+    { cmd: process.execPath, args: [tool("frame-report.mjs"), "--help"], want: /frame-report|--fleet/ },
+    { cmd: process.execPath, args: [tool("fit-audit.mjs"), "--help"], want: /fit-audit|--only/ },
+    { cmd: process.execPath, args: [tool("menu-fit.mjs"), "--help"], want: /--safe/ },
+    // Prefer an explicit path so the assertion is independent of a clean vs
+    // dirty checkout. `--help` also answers without git (see pick-tests.mjs);
+    // either shape is fine — the path form also exercises RULES → test:gfx.
+    { cmd: process.execPath, args: [tool("pick-tests.mjs"), "js/render/glx/glx.js"],
+      want: /test:gfx/ },
+    { cmd: process.execPath, args: [tool("pick-tests.mjs"), "--help"],
+      want: /group|test:/ },
+  ];
+  const failed = [];
+  for (const c of cases) {
+    const r = spawnSync(c.cmd, c.args, { encoding: "utf8", cwd: ROOT, timeout: 30000 });
+    const text = `${r.stdout || ""}\n${r.stderr || ""}`;
+    if (r.status !== 0) failed.push(`${path.basename(c.args[0])}: exit ${r.status}`);
+    else if (!c.want.test(text)) failed.push(`${path.basename(c.args[0])}: output missing ${c.want}`);
+  }
+  assert.deepEqual(failed, [], "an MCP-facing entry point does not answer");
+});
+
+test("offline-precache-check --help prints usage and does not launch Chromium", () => {
+  // Measured 2026-10-01: `--help` was taken as the warm circuit id and the
+  // check booted Playwright against warm=--help. A new agent following the
+  // PWA skill's "run it" line must get usage, not a browser.
+  const r = spawnSync(process.execPath, [tool("offline-precache-check.cjs"), "--help"],
+    { encoding: "utf8", cwd: ROOT, timeout: 10000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /usage:.*offline-precache-check\.cjs/);
+  assert.doesNotMatch(r.stdout, /\(raced online\)/, "must exit before the server/Chromium path");
+});
+
+test("garage-angles / render-car reject an unknown flag (exit 2 + usage) before Chromium; hud-mock -h is help", () => {
+  // A bare `--dry-run` used to be ignored and both tools went on to boot a
+  // browser for a multi-minute shoot. The 10 s timeout is the "no browser"
+  // assertion: a launch would not answer with exit 2 that fast.
+  const run = (file, ...args) => spawnSync(process.execPath, [tool(file), ...args],
+    { encoding: "utf8", cwd: ROOT, timeout: 10000 });
+  for (const [file, args] of [
+    ["garage-angles.mjs", ["--bogus"]],
+    ["garage-angles.mjs", ["--dry-run", "--team=redbull"]],
+    ["render-car.mjs", ["--bogus"]],
+    ["render-car.mjs", ["--tema=redbull"]],
+  ]) {
+    const r = run(file, ...args);
+    assert.equal(r.status, 2, `${file} ${args.join(" ")}: exit ${r.status} ${r.stderr}`);
+    assert.match(r.stderr, /unknown flag/, file);
+    assert.match(r.stderr, new RegExp(file.replace(".", "\\.")), `${file}: usage on stderr`);
+  }
+  // A livery field (--k=v) stays an open axis on garage-angles: --plan still plans.
+  assert.equal(run("garage-angles.mjs", "--plan", "--team=redbull", "--spineLogo=wrap").status, 0);
+  const h = run("hud-mock.mjs", "-h");
+  assert.equal(h.status, 0, h.stderr);
+  assert.match(h.stdout, /--devices/);
+  assert.equal(run("hud-mock.mjs", "--bogus").status, 1, "hud-mock: makeFlags rejects an unknown flag");
+  // render-car's allow-list must cover every flag the file reads.
+  const src = fs.readFileSync(tool("render-car.mjs"), "utf8");
+  const set = src.match(/const RC_FLAGS = new Set\(\[([\s\S]*?)\]\)/);
+  assert.ok(set, "render-car RC_FLAGS");
+  const listed = new Set([...set[1].matchAll(/'([A-Za-z0-9]+)'/g)].map((m) => m[1]));
+  const read = [...new Set([...src.matchAll(/\barg\('([A-Za-z0-9]+)'/g)].map((m) => m[1]))];
+  assert.deepEqual(read.filter((k) => !listed.has(k)), [], "an arg('…') name missing from RC_FLAGS");
+});
+
+test("chrome-devtools-mcp.sh reports its state without launching Chrome", () => {
+  // `status` is the one command that must work on a box where the local clone
+  // was never built — it is how you find out that is the case.
+  const r = spawnSync("bash", [tool("chrome-devtools-mcp.sh"), "status"],
+    { encoding: "utf8", cwd: ROOT, timeout: 30000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Chrome:/);
+  assert.match(r.stdout, /Bin:/);
+});
+
+test("playwright-mcp.sh help and status exit 0 without launching Chromium", () => {
+  const help = spawnSync("bash", [tool("playwright-mcp.sh"), "help"],
+    { encoding: "utf8", cwd: ROOT, timeout: 15000 });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /@playwright\/mcp@0\.0\.79/);
+  assert.match(help.stdout, /browser_evaluate/);
+  assert.match(help.stdout, /css-play\.mjs/);
+  assert.match(help.stdout, /\bdom\b/);
+  const st = spawnSync("bash", [tool("playwright-mcp.sh"), "status"],
+    { encoding: "utf8", cwd: ROOT, timeout: 15000 });
+  assert.equal(st.status, 0, st.stderr);
+  assert.match(st.stdout, /Package:/);
+  assert.doesNotMatch(st.stdout, /0\.0\.0\.0/);
+});
+
+test("chrome-devtools-mcp.sh help exits 0 without requiring Chromium", () => {
+  // help used to run after detect_chrome() at script load, so a Mac without
+  // /opt/pw-browsers died before printing usage. Detect belongs in run/verify.
+  const r = spawnSync("bash", [tool("chrome-devtools-mcp.sh"), "help"],
+    { encoding: "utf8", cwd: ROOT, timeout: 30000 });
+  const text = `${r.stdout}\n${r.stderr}`;
+  assert.equal(r.status, 0, text);
+  assert.match(text, /clone/);
+  assert.match(text, /status/);
+});
+
+test("self-booting capture/physics tools use harness.mjs, not a subprocess server", () => {
+  // These were the last holdouts: python -m http.server / npx serve + a
+  // sleep, or a pinned /opt/pw-browsers path. harness.mjs is the
+  // teardown-safe server+Chromium pair every other tool uses.
+  const files = [
+    "survey-track.mjs", "shot.mjs", "measure-props-over-road.mjs", "carshot.mjs",
+    "career-economy.mjs", "check-physics.mjs", "rtc-e2e.mjs", "rtc-e2e-3p.mjs",
+    "rtc-e2e-room.mjs", "profile-gameloop.mjs", "apex-capture.mjs", "motion-capture.mjs",
+    "ab-lighting.mjs", "quick-validate.mjs", "css-play.mjs",
+  ];
+  const bad = [];
+  for (const rel of files) {
+    const src = fs.readFileSync(tool(rel), "utf8");
+    if (!/from ["']\.{1,2}\/(?:lib\/)?harness\.mjs["']/.test(src))
+      bad.push(`${rel}: missing harness.mjs import`);
+    if (/spawn\(\s*["']python3["']/.test(src) || /spawn\(\s*["']npx["']/.test(src))
+      bad.push(`${rel}: still spawns a subprocess server`);
+    if (/chromium-1194/.test(src))
+      bad.push(`${rel}: pinned chromium-1194 path`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+test("no tool pins a Linux-only Chromium path as executablePath", () => {
+  // rtc-e2e used to die on a Mac with executablePath: "/opt/pw-browsers/chromium".
+  // The ladder lives in harness.mjs; everyone else must go through it.
+  const pinned = [];
+  for (const f of FILES) {
+    if (![".mjs", ".cjs", ".js"].includes(f.ext)) continue;
+    if (f.rel.endsWith("harness.mjs")) continue;
+    const src = fs.readFileSync(f.abs, "utf8");
+    if (/executablePath:\s*["']\/opt\/pw-browsers\/chromium/.test(src))
+      pinned.push(f.rel);
+  }
+  assert.deepEqual(pinned, []);
+});
+
+test("a tool waiting on the track build budgets longer than a build takes", () => {
+  // MEASURED 2026-09-21 on this container: a TLX build of monza reaches
+  // `info().track` in 16.6 s under SwiftShader — the same with and without
+  // `polling: 100`, so rAF is not starved and the budget is the whole story.
+  // TLX became the DEFAULT backend on 2026-09-18, and from that day the two
+  // tools still budgeting 15 s failed on their own default while every sibling
+  // kept working (agent.mjs 20 s, shot.mjs 120 s, ssr-probe 120 s). It reads as
+  // "the game will not boot", which is the most expensive way to be wrong.
+  const FLOOR_MS = 20000;
+  const short = [];
+  for (const f of FILES) {
+    if (![".mjs", ".cjs", ".js"].includes(f.ext)) continue;
+    const src = fs.readFileSync(f.abs, "utf8");
+    // The wait and its options can straddle a line break, so the window after
+    // the predicate is what carries the budget.
+    for (const m of src.matchAll(/info\(\)\.track\s*!=\s*null[\s\S]{0,160}?timeout:\s*([\d_]+)([\s\S]{0,120})/g)) {
+      const ms = Number(String(m[1]).replace(/_/g, ""));
+      // A CAUGHT wait is a probe, not a budget: tools/track/survey-track.mjs
+      // races up to three times and treats each timeout as "try again", which
+      // works because the second build no longer pays the one-off boot cost.
+      // Only a wait whose expiry is FATAL has to outlast a real build.
+      if (/\.catch\s*\(/.test(m[2])) continue;
+      if (ms < FLOOR_MS) short.push(`${f.rel}: ${ms} ms`);
+    }
+  }
+  assert.deepEqual(short, [],
+    `a track-build wait budgets less than ${FLOOR_MS} ms; a real build measured 16.6 s here`);
+});
+
+test("report-server: collects a POSTed bundle, and a hostile name cannot escape", async () => {
+  // The one tool here that is a SERVER and takes a filename from the network,
+  // so parse-only is not enough: the name arrives from the page, and the whole
+  // point of the collector is that a phone never has to hold a file. Two things
+  // are asserted — a bundle lands under artifacts/reports, and a traversal name
+  // lands there TOO rather than wherever it asked for.
+  const tmpRoot = path.join(ROOT, "artifacts", "tmp");
+  fs.mkdirSync(tmpRoot, { recursive: true });          // gitignored: absent in a fresh clone
+  const dir = fs.mkdtempSync(path.join(tmpRoot, "reportsrv-"));
+  // The tool refuses a root without a shell, and the ?report=1 injection has to
+  // land at a real </body>.
+  fs.writeFileSync(path.join(dir, "index.html"), "<html><body>hi</body></html>\n");
+
+  const proc = spawn(process.execPath,
+    [tool("report-server.mjs"), "--port", "0", "--host", "127.0.0.1", "--root", dir],
+    { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    // Take the port from what it PRINTS: the URLs are the tool's actual output
+    // contract (they are what you type into a phone), and --port 0 keeps
+    // parallel suites from colliding on a fixed number.
+    const printedURL = await new Promise((ok, fail) => {
+      let buf = "";
+      const t = setTimeout(() => fail(new Error("no URL printed in 15s: " + buf)), 15000);
+      proc.stdout.on("data", (d) => {
+        buf += d;
+        const m = buf.match(/http:\/\/127\.0\.0\.1:\d+\/\?report=1&token=[A-Za-z0-9_%.-]+/);
+        if (m) { clearTimeout(t); ok(new URL(m[0])); }
+      });
+      proc.on("exit", (c) => { clearTimeout(t); fail(new Error(`exited ${c}: ${buf}`)); });
+    });
+    const base = printedURL.origin;
+    const token = printedURL.searchParams.get("token");
+    const authorised = (pathname) => {
+      const url = new URL(pathname, base);
+      url.searchParams.set("token", token);
+      return url;
+    };
+
+    assert.equal((await fetch(`${base}/apex-report`)).status, 403,
+      "the LAN collector must not accept unauthenticated reads");
+    const help = await fetch(authorised("/apex-report"));
+    assert.equal(help.status, 200);
+    assert.match(await help.text(), /collector/);
+
+    // ?report=1 is the console-free path for a phone (iOS Safari has no console
+    // without a Mac and a cable). It must be opt-in: an injected button in every
+    // local page would end up in a screenshot review or a golden.
+    const plain = await fetch(authorised("/"));
+    assert.equal(await plain.text(), "<html><body>hi</body></html>\n", "plain shell must be byte-identical");
+    const injected = await fetch(authorised("/?report=1"));
+    const html = await injected.text();
+    assert.match(html, /id="apexReportBtn"/);
+    assert.match(html, /apexReportBtn[\s\S]*<\/body>/, "the button belongs inside body");
+    assert.equal(Number(injected.headers.get("content-length")), Buffer.byteLength(html),
+      "a rewritten body needs its own Content-Length");
+
+    const body = JSON.stringify({ build: 1, backend: "three", verdict: ["ok"] });
+    const post = (name) => {
+      const url = authorised("/apex-report");
+      url.searchParams.set("file", name);
+      return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    };
+
+    const good = await post("apex-report-1-three-x.json");
+    assert.equal(good.status, 200);
+    assert.equal((await good.json()).saved, "artifacts/reports/apex-report-1-three-x.json");
+
+    const evil = await post("../../../../etc/pwned.json");
+    assert.equal((await evil.json()).saved, "artifacts/reports/pwned.json",
+      "a traversal name must be reduced to its basename");
+
+    // The collector writes under the SERVED root, so the files are in the temp dir.
+    const landed = fs.readdirSync(path.join(dir, "artifacts", "reports")).sort();
+    assert.deepEqual(landed, ["apex-report-1-three-x.json", "pwned.json"]);
+    assert.equal(fs.existsSync(path.join(dir, "index.html")), true);
+  } finally {
+    proc.kill("SIGKILL");
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("apex-report never serializes credentials or URL capabilities", () => {
+  const src = fs.readFileSync(tool("apex-report.js"), "utf8");
+  assert.doesNotMatch(src, /Object\.keys\(localStorage\)/,
+    "new apex26.* keys must be excluded unless explicitly approved for diagnostics");
+  const allowlist = /const STORAGE_KEYS = \[([\s\S]*?)\];/.exec(src);
+  assert.ok(allowlist, "diagnostic storage must use an explicit allowlist");
+  assert.doesNotMatch(allowlist[1], /spotify|turn|token|verifier|credential/i,
+    "OAuth and relay credentials must never enter a report");
+  assert.match(src, /location\.origin \+ location\.pathname/);
+  assert.doesNotMatch(src, /href:\s*location\.href/,
+    "query and fragment capabilities must not enter a report");
+});
+
+test("aerial-survey.mjs is folded into survey-track --oblique", async () => {
+  assert.equal(FILES.some((f) => f.rel.endsWith("aerial-survey.mjs")), false,
+    "aerial-survey.mjs must be gone — its N/E/S/W obliques live on survey-track --oblique");
+  const src = fs.readFileSync(tool("survey-track.mjs"), "utf8");
+  assert.match(src, /--oblique/);
+  assert.match(src, /oblique\$\{name\}/);
+  assert.match(src, /dirs = \{ N: 0, E:/);
+  const { parseSurveyTrackArgs } = await import("../../tools/track/survey-track.mjs");
+  const mid = parseSurveyTrackArgs(["monaco", "--oblique", "0.1,0.5"]);
+  assert.equal(mid.id, "monaco");
+  assert.equal(mid.label, "survey");
+  assert.deepEqual(mid.fracs, [0.1, 0.5]);
+  assert.equal(mid.oblique, true);
+  const front = parseSurveyTrackArgs(["--oblique", "monaco", "0.1,0.5"]);
+  assert.deepEqual(front.fracs, [0.1, 0.5]);
+  const labeled = parseSurveyTrackArgs(["monaco", "before", "0.1,0.5", "--oblique"]);
+  assert.equal(labeled.label, "before");
+  assert.deepEqual(labeled.fracs, [0.1, 0.5]);
+});
+
+test("capture/shot.mjs clips the presented canvas instead of locator.screenshot", () => {
+  // locator.screenshot waits for element stability AND reads opacity-0 #game
+  // on HeadlessChrome GLX. survey-track / shot.mjs share screenshotPresentedCanvas.
+  const src = fs.readFileSync(tool("shot.mjs"), "utf8");
+  assert.match(src, /screenshotPresentedCanvas/);
+  assert.match(src, /timeout:\s*60000/);
+  assert.doesNotMatch(src, /locator\("canvas#game"\)\.screenshot/);
+  const callers = [...src.matchAll(/(\w+)\.screenshot\(/g)].map((m) => m[1]);
+  assert.ok(callers.every((n) => n === "page"),
+    `screenshot callers must be page, got: ${callers.join(",")}`);
+  assert.match(src, /from ["']\.{1,2}\/(?:lib\/)?harness\.mjs["']/);
+  assert.match(src, /shot-jobs\.mjs/, "batch / jpeg / raster parse stays extracted");
+  assert.match(src, /groupJobsByTrack/, "one Chromium reuses race() per track");
+});
+
+test("WGX validator distinguishes frame counts from circuit names before launching", () => {
+  for (const args of [["--frames", "2"], ["--frames=2"], ["--frames", "2", "monza"], ["monza", "--frames", "2"]]) {
+    const r = spawnSync(process.execPath, [tool("wgx-validate.mjs"), "--static", ...args], { cwd: ROOT, encoding: "utf8", timeout: 10000 });
+    assert.equal(r.status, 0, r.stderr);
+    const result = JSON.parse(r.stdout);
+    assert.equal(result.track, args.includes("monza") ? "monza" : "montreal");
+    assert.equal(result.frames, 2);
+  }
+  for (const args of [["--frames"], ["--frames", "0"], ["--frames", "2junk"], ["--frames", "1.5"], ["--unknown"], ["monza", "montreal"]]) {
+    const r = spawnSync(process.execPath, [tool("wgx-validate.mjs"), "--static", ...args], { cwd: ROOT, encoding: "utf8", timeout: 10000 });
+    assert.notEqual(r.status, 0, `invalid arguments accepted: ${args.join(" ")}`);
+  }
+});
+
+// The wgx-shot gallery test that stood here (and the wgx-validate --static
+// smoke case above) covered tools that left for tools/gfx/ in the
+// 2026-09-03 spike-out. They are not shipped tools any more, so this shipped
+// guard has nothing to say about them; they travel with the backend.
+
+test("the survey forwarders are gone — layout-audit --survey is the entry point", () => {
+  // Two stacked forwarders (ui-mcp-survey.mjs -> ui-survey.mjs -> layout-audit
+  // --survey) with nothing calling either: package.json's `ui:survey` already
+  // names layout-audit.mjs. The recipe they encoded lives in layout-audit.
+  for (const gone of ["ui-survey.mjs", "ui-mcp-survey.mjs"])
+    assert.equal(FILES.some((f) => f.rel.endsWith(gone)), false, `${gone} must stay gone`);
+  const audit = FILES.find((f) => f.rel.endsWith("layout-audit.mjs"));
+  assert.ok(audit, "layout-audit.mjs missing from the walk");
+  const src = fs.readFileSync(audit.abs, "utf8");
+  assert.match(src, /--survey/);
+  assert.match(src, /ios-iphone-landscape/);
+});
+
+// ── the AI instruments' --wear flag ─────────────────────────────────────────
+// tools/lib/game-vm.cjs seeds `tyreWear: "off"`, but the shipped default
+// (js/data/settings-defaults.js) is "real". Nothing said so, and the
+// consequence was that AiDrive.stintPlan / pitNow / compoundFor / degCost and
+// pits.think were INERT in all four AI instruments: every strategy number they
+// ever printed was a no-wear number, silently. `--wear off|light|real` is the
+// opt-in that makes the seam measurable, and these guard both halves of it —
+// that the flag exists and reaches createGame, and that the DEFAULT is still
+// off so the tables in docs/notes/AI-FIELD-RESEARCH.md stay reproducible.
+// Race instruments (boot the VM). ai-ratings.mjs is data-only and is pinned
+// separately — it must NOT invent a --wear flag that does nothing.
+const AI_INSTRUMENTS = ["ai-pace.mjs", "ai-field.mjs", "ai-tactics.mjs", "ai-line.mjs", "ai-human.mjs", "ai-band.mjs"];
+
+test("every AI instrument takes --wear and passes it into the VM's storage seed", () => {
+  for (const name of AI_INSTRUMENTS) {
+    const src = fs.readFileSync(tool(name), "utf8");
+    assert.match(src, /wearArg\s*\(\s*argv\s*\)/, `${name}: does not read the --wear flag`);
+    // The seam is the storage seed: game-vm's own `tyreWear: "off"` default is
+    // overridden per-call, so a tool that parses the flag and forgets to pass
+    // it would print "wear real" over a race with wear off.
+    assert.match(src, /createGame\(\{[^}]*storage:\s*\{[^}]*tyreWear:\s*WEAR/,
+      `${name}: --wear never reaches createGame's storage seed`);
+  }
+});
+
+test("ai-ratings is data-only (no race, no --wear) and ai-race dispatches it", () => {
+  const ratings = fs.readFileSync(tool("ai-ratings.mjs"), "utf8");
+  assert.doesNotMatch(ratings, /wearArg/, "ratings must not pretend to take --wear");
+  assert.doesNotMatch(ratings, /createGame/, "ratings must not boot the race VM");
+  assert.match(ratings, /correlationMatrix|pearson/i, "ratings must compute correlations");
+  const dispatch = fs.readFileSync(tool("ai-race.mjs"), "utf8");
+  assert.match(dispatch, /ratings:\s*"ai-ratings\.mjs"/);
+  assert.match(dispatch, /band:\s*"ai-band\.mjs"/);
+  assert.match(dispatch, /tactics:\s*"ai-tactics\.mjs"/);
+});
+
+// THE PARKED PLAYER. The VM's player has no input, so every AI-only instrument
+// raced around it sitting on its grid box (attacked 7-10x a race). The field
+// instruments take it OUT with game-vm's aiOnly(); this pins that they do.
+test("the AI-only field instruments take the player out of the field (aiOnly)", () => {
+  for (const name of ["ai-pace.mjs", "ai-field.mjs", "ai-tactics.mjs"]) {
+    assert.match(fs.readFileSync(tool(name), "utf8"), /\.aiOnly\(\)/, `${name}: races around a parked player`);
+  }
+});
+
+test("--wear defaults to off, and a bad level is refused rather than defaulted", async () => {
+  const { wearArg, WEAR_LEVELS } = await import("../../tools/lib/cli-args.mjs");
+  assert.deepEqual(WEAR_LEVELS, ["off", "light", "real"], "must match TyreModel.LEVELS");
+  assert.equal(wearArg([]), "off", "the default moved — recorded AI numbers assume wear off");
+  assert.equal(wearArg(["--track", "monza"]), "off");
+  for (const v of WEAR_LEVELS) {
+    assert.equal(wearArg(["--wear", v]), v);
+    assert.equal(wearArg([`--wear=${v}`]), v);
+  }
+  // A typo must not race on the default: an instrument that quietly measured
+  // no-wear under a "--wear=lite" heading is the whole defect again.
+  for (const bad of [["--wear", "lite"], ["--wear=REAL"], ["--wear"], ["--wear", "--json"]]) {
+    const r = spawnSync(process.execPath,
+      ["-e", `import("./tools/lib/cli-args.mjs").then(m=>m.wearArg(${JSON.stringify(bad)}))`],
+      { cwd: ROOT, encoding: "utf8", timeout: 10000 });
+    assert.equal(r.status, 1, `wearArg accepted ${bad.join(" ")}`);
+    assert.match(r.stderr, /--wear: expected one of off\|light\|real/);
+  }
+});
+
+test("the game's shipped tyreWear default is not 'off' (so off must be opt-in, not inherited)", () => {
+  // The premise of the flag. If the game ever ships "off" as the default, the
+  // instruments and the product agree by accident and this comment is wrong.
+  // Read the OWNER file: store.get's _def() answers tyreWear from
+  // js/data/settings-defaults.js, so game.js's call-site literal decides
+  // nothing (this test used to pin that literal, "light", while "real" shipped).
+  const src = fs.readFileSync(path.join(ROOT, "js/data/settings-defaults.js"), "utf8");
+  const m = src.match(/"tyreWear":\s*"(\w+)"/);
+  assert.ok(m, "js/data/settings-defaults.js no longer lists tyreWear — re-read tools/lib/cli-args.mjs wearArg");
+  assert.ok(["light", "real"].includes(m[1]),
+    `shipped tyreWear is ${m[1]} — re-read tools/lib/cli-args.mjs wearArg`);
+});
+
+test("occlusion-estimate resolves game-vm and --help exits without booting it", () => {
+  // ROOT was briefly one level too shallow (tools/check → tools), then joined
+  // tools/lib again, so createGame could not load. Pin the "../.." form and a
+  // side-effect-free --help before the VM boot.
+  const src = fs.readFileSync(tool("occlusion-estimate.mjs"), "utf8");
+  assert.match(src, /dirname\(fileURLToPath\(import\.meta\.url\)\),\s*"\.\.\/\.\."\)/);
+  assert.ok(fs.existsSync(path.join(ROOT, "tools/lib/game-vm.cjs")));
+  const r = spawnSync(process.execPath, [tool("occlusion-estimate.mjs"), "--help"],
+    { encoding: "utf8", cwd: ROOT, timeout: 10000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /usage:.*occlusion-estimate/);
+});

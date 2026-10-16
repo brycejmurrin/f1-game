@@ -1,0 +1,263 @@
+@layer overlays {
+/* The studio stays inside the existing Settings layer. Its controls never ghost. */
+#pmsettings-inner #pm-panel-appearance[data-appearance-studio]:not([hidden]) { display: block; }
+/* Sheet stays interactive while the deferred garage preview warms; busy is a cue only. */
+#pm-panel-appearance[aria-busy="true"] { cursor: progress; }
+#pm-panel-appearance[aria-busy="true"]::after {
+  content: "Loading preview…";
+  display: block;
+  margin: var(--gap) 0 0;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+  color: var(--dim);
+}
+#appearance-studio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
+#appearance-studio [data-as="photo-picker"] { margin-top: var(--gap); min-width: 0; }
+#appearance-studio [data-as="photo-picker"] select { flex: 1 1 12ch; width: 100%; min-width: 0; max-width: 100%; }
+#appearance-studio [data-as="photo-preview"] { display: block; max-width: 100%; width: min(100%, 320px); max-height: 180px; object-fit: contain; margin-block: var(--gap); border-radius: var(--r-sm); }
+#appearance-studio [data-as="photo-picker"][hidden], #appearance-studio [data-as="photo-preview"][hidden] { display: none; }
+#appearance-studio [data-as="controls"] { display: grid; gap: var(--gap); min-width: 0; }
+#appearance-studio [data-as="box"] { padding: var(--pad); border: 1px solid var(--plate-line); border-radius: var(--r-md); background: var(--surf-1); min-width: 0; }
+#appearance-studio [data-as="heading"] { margin: 0 0 var(--gap); font-size: var(--fs-2); color: var(--dim); letter-spacing: var(--ls-2); }
+#appearance-studio [data-as="row"] { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * .5); margin-block: calc(var(--gap) * .6); min-width: 0; }
+#appearance-studio [data-as="label"] { flex: 0 0 28%; font-size: var(--fs-2); }
+#appearance-studio [data-as="segment"] { display: flex; flex-wrap: wrap; flex: 1; gap: calc(var(--gap) * .25); min-width: 0; }
+#appearance-studio button, #appearance-studio input, #appearance-studio select { font-family: var(--font-ui); font-size: var(--fs-2); min-height: var(--tap-min); }
+#appearance-studio button { width: auto; height: auto; min-height: var(--tap); margin: 0; padding: calc(var(--gap) * .5) var(--gap); border: 1px solid var(--plate-line); border-radius: var(--r-sm); background: var(--plate); color: var(--text); justify-content: center; text-align: center; }
+#appearance-studio [data-as="segment"] > button { flex: 1 1 auto; min-width: var(--tap-paint); }
+#appearance-studio button[aria-pressed="true"] { background: var(--red); color: var(--menu-accent-ink, var(--text)); border-color: var(--red); box-shadow: var(--edge); }
+#appearance-studio button:focus-visible, #appearance-studio input:focus-visible, #appearance-studio select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#appearance-studio button:disabled { opacity: .45; cursor: default; }
+#appearance-studio [data-as="row"] input[type="range"] { flex: 1; min-width: 0; accent-color: var(--red); }
+#appearance-studio [data-as="row"] input[type="color"] { width: calc(var(--tap) * 1.3); border: 1px solid var(--plate-line); padding: calc(var(--gap) * .25); background: var(--plate); }
+#appearance-studio [data-as="row"] output { font-size: var(--fs-2); min-width: 4ch; font-variant-numeric: tabular-nums; }
+/* PREVIEW PRESET tiles: Sunlight bumps textSize to large and shrinks the
+   grid under zoom / narrow sheets. Labels must wrap inside the tile (not
+   clip BROADCAST / SUNLIGHT), and the selected ring must stay visible when
+   the art swatch fills most of the cell. Art colours are theme-stable —
+   sunlight used --text/--dim, which go near-black under LIGHT and hid the
+   pressed red fill. */
+#appearance-studio [data-as="preset-list"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--tap) * 2.1)), 1fr));
+  gap: calc(var(--gap) * .5);
+}
+#appearance-studio [data-as="preset-list"] button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  width: 100%;
+  min-height: max(var(--tap-paint), calc(var(--tap) * 2.35));
+  gap: calc(var(--gap) * .35);
+  padding: calc(var(--gap) * .4);
+  align-content: stretch;
+  align-items: stretch;
+  justify-content: stretch;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+#appearance-studio [data-as="preset-list"] strong {
+  font-size: 0.72em;
+  line-height: 1.15;
+  letter-spacing: var(--ls-2);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+  text-align: center;
+  max-width: 100%;
+  min-width: 0;
+  align-self: end;
+  padding-block: 0.15em 0.25em;
+}
+#appearance-studio [data-as="preset-list"] button[aria-pressed="true"] {
+  background: color-mix(in oklab, var(--red) 16%, var(--plate));
+  color: var(--text);
+  border-color: var(--red);
+  border-width: 2px;
+  box-shadow: var(--edge), 0 0 0 1px var(--red);
+}
+#appearance-studio [data-as="preset-art"] {
+  display: block;
+  width: 100%;
+  height: calc(var(--tap) * .7);
+  min-height: calc(var(--tap) * .55);
+  border-radius: var(--r-sm);
+  background: var(--studio-scene-image, var(--home-scene-image, var(--grad-primary)));
+  border: 1px solid var(--plate-line);
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+#appearance-studio [data-preset="paddock"] [data-as="preset-art"] {
+  background-color: var(--carbon);
+  background-image: linear-gradient(135deg, var(--red), var(--carbon));
+}
+#appearance-studio [data-preset="broadcast"] [data-as="preset-art"] {
+  background-image: linear-gradient(135deg, var(--red), var(--carbon));
+}
+#appearance-studio [data-preset="focus"] [data-as="preset-art"] {
+  background-image: linear-gradient(135deg, var(--surf-3), var(--carbon));
+}
+#appearance-studio [data-preset="sunlight"] [data-as="preset-art"] {
+  background-image: linear-gradient(135deg, var(--look-sunlight-hi), var(--look-sunlight-lo));
+}
+#appearance-studio [data-as="preset-list"] button[aria-pressed="true"] [data-as="preset-art"] {
+  border-color: color-mix(in oklab, var(--red) 55%, var(--plate-line));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--red) 40%, transparent);
+}
+#appearance-studio [data-as="profile-row"] { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * .5); margin-block: var(--gap); }
+#appearance-studio [data-as="profile-row"] input,
+#appearance-studio [data-as="profile-row"] select {
+  flex: 1 1 40%;
+  min-width: min(100%, 11rem);
+  padding: calc(var(--gap) * .5);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  background: var(--plate-opaque);
+  color: var(--text);
+}
+#appearance-studio [data-as="profile-row"] > button {
+  flex: 1 1 auto;
+  min-width: min(100%, 6.5rem);
+  background: var(--plate-opaque);
+  color: var(--text);
+  border-color: var(--plate-line);
+}
+#appearance-studio [data-as="note"], #appearance-studio [data-as="status"] { font-size: var(--fs-micro); color: var(--dim); line-height: 1.5; margin: var(--gap) 0 0; }
+#appearance-studio [data-as="status"] { color: var(--text); min-height: 1.5em; }
+#appearance-studio [data-as="preview-side"] { position: sticky; top: 0; min-width: 0; padding: var(--pad); background: var(--surf-1); border: 1px solid var(--plate-line); border-radius: var(--r-md); }
+#appearance-studio [data-as="preview-toolbar"] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); margin-bottom: var(--gap); }
+#appearance-studio [data-as="preview-wrap"] { display: flex; justify-content: center; background: var(--carbon); border: 1px solid var(--plate-line); border-radius: var(--r-md); overflow: hidden; }
+#appearance-studio [data-as="preview"] { position: relative; width: 100%; min-height: calc(var(--tap) * 6); aspect-ratio: 4 / 3; padding: calc(var(--pad) * 1.5); overflow: hidden; background: var(--studio-scene-image, var(--home-scene-image, var(--carbon))); background-size: cover; background-position: center; display: flex; flex-direction: column; justify-content: center; gap: var(--gap); }
+#appearance-studio [data-as="preview-wrap"][data-shape="phone"] [data-as="preview"] { width: min(100%, calc(var(--tap) * 6)); aspect-ratio: 9 / 16; padding: var(--pad); }
+#appearance-studio [data-as="preview-brand"] { font-family: var(--font-ui); font-size: var(--fs-6); font-style: italic; font-weight: 800; color: var(--red); }
+#appearance-studio [data-as="preview-content"] { max-width: 80%; padding: var(--pad); border: 1px solid var(--plate-line); background: var(--plate-opaque); color: var(--text); }
+#appearance-studio [data-as="preview-wrap"][data-shape="phone"] [data-as="preview-content"] { max-width: 100%; }
+#appearance-studio [data-as="preview-door"] { padding: calc(var(--gap) * var(--preview-density, 1)) var(--gap); margin-block: calc(var(--gap) * .5); border-inline-start: 3px solid var(--red); background: var(--surf-3); font-size: var(--fs-2); font-weight: 700; }
+#appearance-studio [data-as="preview-content"] h3 { margin: 0 0 var(--gap); font-size: var(--fs-4); }
+#appearance-studio [data-as="preview-content"] p { font-size: var(--fs-micro); margin: var(--gap) 0; }
+#appearance-studio [data-screen="hud"] { --text: var(--look-hud-ink); --dim: var(--look-hud-dim); background-color: var(--hud-ink-dark); }
+#appearance-studio [data-screen="hud"] [data-as="preview-content"] { color: var(--text); border-color: color-mix(in oklab, var(--look-hud-ink) 16%, transparent); background: color-mix(in oklab, var(--look-hud-bg) calc(var(--preview-panel-opacity, 1) * 100%), transparent); }
+#appearance-studio [data-screen="hud"] [data-as="preview-door"] { border-inline-start-color: var(--preview-hud-accent); background: color-mix(in oklab, var(--look-hud-bg) calc(var(--preview-panel-opacity, 1) * 100%), transparent); }
+#appearance-studio [data-as="preview-speed"] { font-size: var(--fs-6); font-weight: 800; }
+#pm-panel-appearance > [data-as="advanced"] { margin-top: var(--gap); padding: var(--pad); border: 1px solid var(--plate-line); border-radius: var(--r-md); }
+#pm-panel-appearance > [data-as="advanced"] > summary { min-height: var(--tap-paint); font-size: var(--fs-2); font-weight: 700; cursor: pointer; }
+#pmsettings-inner:has(#pm-panel-appearance:not([hidden])[data-appearance-studio]) { --sheet-w: calc(var(--tap) * 25); max-width: min(calc(var(--tap) * 31), calc(100 * var(--vwz) - var(--pad) * 2)); }
+@media (max-width: 900px) {
+  #appearance-studio { grid-template-columns: minmax(0, 1fr); }
+  #appearance-studio [data-as="preview-side"] { position: static; order: -1; }
+  #appearance-studio [data-as="preview-toolbar"] { gap: calc(var(--gap) * .5); }
+  #appearance-studio [data-as="preview-toolbar"] > [data-as="segment"] { flex: 1 1 100%; }
+  #appearance-studio [data-as="preview-toolbar"] button { padding: calc(var(--gap) * .4) calc(var(--gap) * .5); }
+  #appearance-studio [data-as="preview"] { min-height: calc(var(--tap) * 3); aspect-ratio: 16 / 9; }
+  #appearance-studio [data-as="preview-content"] { padding: calc(var(--pad) * .5); }
+  #appearance-studio [data-as="preview-door"] { padding: calc(var(--gap) * .35) calc(var(--gap) * .5); margin-block: calc(var(--gap) * .25); }
+  #appearance-studio [data-as="preview-wrap"][data-shape="phone"] [data-as="preview"] { max-height: calc(var(--tap) * 10); min-height: 0; }
+}
+@media (max-height: 500px) and (min-width: 641px) {
+  #appearance-studio { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+  #appearance-studio [data-as="preview-side"] { order: 0; position: sticky; top: 0; padding: calc(var(--pad) * .5); }
+  #appearance-studio [data-as="preview"] { padding: calc(var(--pad) * .5); min-height: calc(var(--tap) * 3); }
+  #appearance-studio [data-as="preview-content"] { max-width: 100%; }
+}
+/* UI Fit r6: Settings APPEARANCE studio — phone / high-scale reflow.
+   Survey rank 7: #pm-panel-appearance 300×3604 @ 390×844 and 222×5059 @
+   scale 200. Preview-first stack pushed PREVIEW PRESET tiles under BACK;
+   the studio column crushed to one 300/222 px track. Presets first on
+   tall sheets, compact preview, 2-col tiles, pad so the last tile clears
+   the foot. SheetShape data-shape (not a 900px media query) so scale 200
+   landscape still gets two columns. */
+#pm-panel-appearance[data-appearance-studio] {
+  padding-bottom: calc(var(--tap) + var(--pad));
+  scroll-padding-bottom: calc(var(--tap) + var(--pad));
+}
+#pmsettings:has(#pm-panel-appearance:not([hidden])[data-appearance-studio]) #pm-settings-body {
+  scroll-padding-bottom: calc(var(--tap) + var(--pad));
+}
+#pmsettings:has(#pm-panel-appearance:not([hidden])[data-appearance-studio]) #pmsettings-inner > .sheet-foot {
+  min-height: var(--tap);
+}
+#pmsettings-inner:has(#pm-panel-appearance:not([hidden])[data-appearance-studio]) {
+  --sheet-w: min(calc(var(--tap) * 25), calc(100 * var(--vwz) - var(--pad)));
+  max-width: min(calc(var(--tap) * 31), calc(100 * var(--vwz) - var(--pad)));
+}
+#appearance-studio { width: 100%; min-width: 0; }
+#pmsettings-inner[data-shape="tall"] #appearance-studio {
+  grid-template-columns: minmax(0, 1fr);
+}
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="controls"] { order: -1; }
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="preview-side"] {
+  order: 0;
+  position: static;
+  padding: calc(var(--pad) * .5);
+}
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="preview"] {
+  min-height: calc(var(--tap) * 2);
+  max-height: calc(var(--tap) * 4);
+  aspect-ratio: 16 / 9;
+}
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="preview-wrap"][data-shape="phone"] [data-as="preview"] {
+  max-height: calc(var(--tap) * 5);
+  min-height: 0;
+}
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="preset-list"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="preset-list"] button {
+  min-height: max(var(--tap-paint), calc(var(--tap) * 2.1));
+  min-width: var(--tap-paint);
+}
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="label"] { flex: 0 0 100%; }
+#pmsettings-inner[data-shape="wide"] #appearance-studio {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr);
+}
+#pmsettings-inner[data-shape="wide"] #appearance-studio [data-as="preview-side"] {
+  order: 0;
+  position: sticky;
+  top: 0;
+}
+#pmsettings-inner[data-shape="wide"][data-density="compact"] #appearance-studio [data-as="preset-list"] {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+#pmsettings-inner[data-shape="wide"][data-density="compact"] #appearance-studio [data-as="preset-list"] button {
+  min-height: var(--tap-paint);
+  min-width: var(--tap-paint);
+}
+/* High UI scales on short phone landscapes leave each five-column tile too
+   narrow for the preset names (CLASSIC becomes CLASS / SIC). Keep the dense
+   five-up desktop treatment, but keep long preset names intact on the phone
+   landscape sheet without changing tap floors. */
+@media (max-width: 900px) and (max-height: 500px) {
+  #pmsettings-inner[data-shape="wide"][data-density="compact"] #appearance-studio [data-as="preset-list"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  #pmsettings-inner[data-shape="wide"][data-density="compact"] #appearance-studio [data-as="preset-list"] strong {
+    font-size: .64em;
+    letter-spacing: 0;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
+}
+#appearance-studio input,
+#appearance-studio select {
+  min-height: var(--tap-paint);
+}
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="preview-brand"],
+#pmsettings-inner[data-density="compact"] #appearance-studio [data-as="preview-brand"] {
+  font-size: var(--fs-2);
+}
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="preview-door"],
+#pmsettings-inner[data-density="compact"] #appearance-studio [data-as="preview-door"] {
+  font-size: var(--fs-micro);
+  padding: calc(var(--gap) * .15) calc(var(--gap) * .5);
+  margin-block: calc(var(--gap) * .1);
+}
+#pmsettings-inner[data-shape="tall"] #appearance-studio [data-as="preview-content"],
+#pmsettings-inner[data-density="compact"] #appearance-studio [data-as="preview-content"] {
+  max-width: 100%;
+  padding: calc(var(--pad) * .2);
+}
+}

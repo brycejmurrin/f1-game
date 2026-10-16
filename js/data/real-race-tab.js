@@ -1,0 +1,1154 @@
+/* Apex 26 — DATA HUB RACE IT tab (DataRealRace.create(deps)) Turns one real Grand Prix's OpenF1 timing (drivers, laps, stints, pits, overtakes, race control, weather, classification, the pre-start position snapshot) into the compact race SCRIPT js/race/real-race.js replays, shows the race lap by lap (the order, the gaps, every pass, stop, flag and retirement), and offers a JUMP IN at any lap in any real driver's seat. */
+const DataRealRace = (function () {
+  "use strict";
+
+  const OPENF1 = "https://api.openf1.org/v1";
+  const TTL = 7 * 24 * 60 * 60 * 1000;   // a finished race never changes; the same TTL api.js gives a historic session
+  const CACHE_KEY = "apex26.realrace.v1.";   // one compact script per session key (the raw laps body is 480 KB and never cached)
+  // A script is ~45 KB; one per watched session with no eviction filled the 5 MB origin quota
+  // after ~115 sessions and starved every save. Keep the newest few (an LRU index, newest first).
+  const CACHE_LRU = "apex26.realrace.lru";
+  const CACHE_MAX = 8;
+  const SCRIPT_V = 6;   // 2: stint ages, rain by lap, the complete flag; 3: the passes; 4: real timestamps (t0, lap starts, pass/stop/flag times), where a car went out, the fastest lap, the team radio; 5: per-driver timing coverage; 6: flag ending notices separate from release
+  const DATA_CREDIT = "Timing data: OpenF1 (CC BY-NC-SA 4.0) · pace, stops, flags and the grid are the real ones; the racing is yours.";
+  const NO_TRACK_MSG = "This circuit is not in Apex 26 yet — pick another Grand Prix.";
+  const NO_RACE_MSG = "No race timing published for this weekend yet.";
+  const FETCH_FAIL_MSG = "Could not fetch the race timing — try again in a minute.";
+  const INCOMPLETE_MSG = "Timing is still coming in for this race — it plays as far as the data goes.";
+  const NO_SEAT_MSG = "no seat in this roster";
+  const API_CACHE_PREFIX = "apex26.api.";   // js/data/api.js CACHE_PREFIX — the bodies of an unfinished race are dropped so the next open refetches them
+  const RAW_PATHS = ["/sessions?", "/drivers?", "/laps?", "/stints?", "/pit?", "/overtakes?", "/race_control?", "/weather?", "/session_result?", "/position?", "/team_radio?"];
+  // The real positions (OpenF1 /location, ~3.7 Hz per car, 2-5 MB a car for a race) — fetched once
+  // per car, kept at TRACE_HZ in IndexedDB (a 22-car race is ~1.5 MB there), never in localStorage.
+  const TRACE_V = 2;
+  const TRACE_HZ = 2;
+  const TRACE_DB = "apex26.replay", TRACE_STORE = "traces";
+  const TRACE_MAX = 8;              // races kept (~1.5 MB each); the newest-first order lives in the store under TRACE_LRU
+  const TRACE_LRU = "__lru";
+  const TRACE_OPEN_MS = 4000;       // a blocked/never-settling open() degrades to "no cache"
+  const TRACE_PAD_S = 90;   // seconds of positions before lights out (the grid) and after the last lap
+  const DISTANCES = [1, 0.5, 0.2, 0.1];   // FULL, half, a fifth, a tenth of the real distance
+
+  const num = (v) => (typeof v === "number" && isFinite(v) ? v : (v != null && v !== "" && isFinite(+v) ? +v : null));
+  // A lap index sizes per-driver arrays: one fractional or huge upstream row threw
+  // (`Invalid array length`) or allocated millions of slots per driver (1e9 OOMed).
+  const MAX_GP_LAPS = 100;   // a modern GP runs 44-78 laps (Monaco 78); headroom, not a real race
+  const lapNo = (v) => { const n = num(v); return Number.isInteger(n) && n >= 1 && n <= MAX_GP_LAPS ? n : null; };
+  const arr = (v) => (Array.isArray(v) ? v : []);
+
+  // ── The script builder (pure; tests/unit/real-race-script.test.mjs) ──────
+
+  /** The session's LOCAL calendar day (date_start + gmt_offset) as YYYY-MM-DD, or null. */
+  function localDay(session) {
+    const t = Date.parse(session.date_start || session.dateStart || "");
+    if (!isFinite(t)) return null;
+    const off = String(session.gmt_offset || "00:00:00").split(":");
+    const sign = off[0].trim().startsWith("-") ? -1 : 1;
+    return new Date(t + sign * (Math.abs(+off[0]) + (+off[1] || 0) / 60) * 3600000).toISOString().slice(0, 10);
+  }
+
+  /** Game circuit for an OpenF1 session: the circuit's own name first, then the
+   *  2026 calendar by DATE (SeasonCal.REAL_2026 windows — a GP that moved venue,
+   *  like the Bahrain GP run at Sepang, is named for its GP country but sits on
+   *  the circuit the calendar gives it), then the venue aliases below (the Tracks
+   *  handoff), then the country's current-season circuit, else any of that
+   *  country, else null. F1API.placeLabel owns the display country. */
+  function trackIdFor(session, tracks) {
+    const list = arr(tracks);
+    const country = String(session.country_name || session.country || "").toLowerCase();
+    const circuit = String(session.circuit_short_name || session.circuit || "").toLowerCase();
+    const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z]/g, "");
+    if (!list.length) return null;
+    // Circuit first: a country with two circuits (Italy: Monza + Imola; USA: Miami/Austin/Vegas) tells them apart by name.
+    const byCircuit = list.find((t) => circuit && (norm(t.id) === norm(circuit) || norm(t.name) === norm(circuit)));
+    if (byCircuit) return byCircuit.id;
+    const day = localDay(session);
+    const win = day && typeof SeasonCal !== "undefined" && SeasonCal.REAL_2026
+      ? SeasonCal.REAL_2026.find((r) => day >= r.from && day <= r.to && list.some((t) => t.id === r.id)) : null;
+    if (win) return win.id;
+    const alias = { "kuala lumpur": "sepang", "monte carlo": "monaco", "sakhir": "bahrain", "melbourne": "albert_park", "spielberg": "redbull", "austin": "cota",
+                    "mexico city": "mexico", "yas marina": "abudhabi", "lusail": "qatar", "las vegas": "vegas", "spa-francorchamps": "spa",
+                    "marina bay": "singapore", "budapest": "hungaroring", "montreal": "montreal", "imola": "imola", "barcelona": "catalunya" };
+    if (alias[circuit] && list.some((t) => t.id === alias[circuit])) return alias[circuit];
+    const same = list.filter((t) => String(t.country || "").toLowerCase() === country || (country === "united states" && t.country === "USA") || (country === "united kingdom" && t.country === "UK") || (country === "united arab emirates" && t.country === "UAE"));
+    const current = same.find((t) => !t.classic);
+    return (current || same[0] || {}).id || null;
+  }
+
+  /** Time of day from the session's local start hour (date_start + gmt_offset). */
+  function todFor(session) {
+    const iso = session.date_start || session.dateStart;
+    const t = Date.parse(iso || "");
+    if (!isFinite(t)) return "default";
+    const off = String(session.gmt_offset || "00:00:00").split(":");
+    const sign = off[0].trim().startsWith("-") ? -1 : 1;
+    const h = (new Date(t).getUTCHours() + new Date(t).getUTCMinutes() / 60 + sign * (Math.abs(+off[0]) + (+off[1] || 0) / 60) + 24) % 24;
+    if (h < 7) return "dawn";
+    if (h < 17) return "day";
+    if (h < 19.5) return "dusk";
+    return "night";
+  }
+
+  /** The race's weather chip from the session's rainfall samples. */
+  function weatherFor(weatherRows) {
+    const rows = arr(weatherRows);
+    if (!rows.length) return "dry";
+    const wet = rows.filter((w) => w && num(w.rainfall) > 0).length;
+    if (!wet) return "dry";
+    return wet / rows.length > 0.5 ? "rain" : "wet";
+  }
+
+  /** Safety-car / VSC / red windows from the race-control feed, on the leader's lap. */
+  function cautionsFor(raceControl, secs) {
+    const out = [];
+    let open = null, ending = false;
+    const at = (m) => (secs ? secs(m && m.date) : null);
+    for (const m of arr(raceControl)) {
+      const msg = String(m && m.message || "").toUpperCase();
+      const lap = num(m && m.lap_number);
+      if (lap == null) continue;
+      const vsc = msg.indexOf("VIRTUAL SAFETY CAR") >= 0;
+      const sc = !vsc && msg.indexOf("SAFETY CAR") >= 0;
+      if (msg.indexOf("RED FLAG") >= 0 && (m.flag === "RED" || msg.indexOf("RED FLAG") === 0)) {
+        if (open) { if (!ending) open.to = lap; if (secs) open.tTo = at(m); out.push(open); open = null; }
+        const red = { level: 4, from: lap, to: lap, cause: "RED FLAG" };
+        if (secs) { red.tFrom = at(m); red.tTo = null; }
+        out.push(red);
+        continue;
+      }
+      if ((vsc || sc) && msg.indexOf("DEPLOYED") >= 0) {
+        if (open) { if (!ending) open.to = lap; if (secs) open.tTo = at(m); out.push(open); }
+        ending = false;
+        open = { level: vsc ? 2 : 3, from: lap, to: lap, cause: vsc ? "VSC" : "SAFETY CAR" };
+        if (secs) { open.tFrom = at(m); open.tTo = null; }
+      } else if (open && (vsc || sc) && (msg.indexOf("IN THIS LAP") >= 0 || msg.indexOf("ENDING") >= 0)) {
+        ending = true; open.to = Math.max(open.from, lap); if (secs) open.tEnding = at(m);
+      } else if (open && msg.indexOf("TRACK CLEAR") >= 0) {
+        if (!ending) open.to = Math.max(open.from, lap);
+        if (secs) open.tTo = at(m); out.push(open); open = null;
+      }
+    }
+    if (open) out.push(open);
+    return out;
+  }
+
+  /** The grid: each driver's FIRST position snapshot of the race session (taken on the grid, before the start). */
+  function gridFor(positions) {
+    const first = {};
+    for (const p of arr(positions)) {
+      const n = num(p && p.driver_number), pos = num(p && p.position);
+      if (n == null || pos == null) continue;
+      const d = String(p.date || "");
+      if (!(n in first) || d < first[n].date) first[n] = { date: d, pos };
+    }
+    const out = {};
+    for (const n in first) out[n] = first[n].pos;
+    return out;
+  }
+
+  /**
+   * raw = { session, drivers, laps, stints, pits, raceControl, weather, result, positions }
+   * (each an OpenF1 body, `session` one /sessions row). `findTeam(name)` maps
+   * an OpenF1 team name to a roster team (js/data/hub.js). `tracks` is Tracks.LIST.
+   */
+  function build(raw, findTeam, tracks) {
+    const s = raw.session || {};
+    const laps = arr(raw.laps);
+    let totalLaps = 0;
+    for (const l of laps) { const n = lapNo(l && l.lap_number); if (n > totalLaps) totalLaps = n; }
+    for (const r of arr(raw.result)) { const n = lapNo(r && r.number_of_laps); if (n > totalLaps) totalLaps = n; }
+    const grid = gridFor(raw.positions);
+    const byNum = {};
+    for (const d of arr(raw.drivers)) {
+      const n = num(d && d.driver_number);
+      if (n == null || byNum[n]) continue;
+      const team = findTeam ? findTeam(d.team_name) : null;
+      byNum[n] = { num: n, code: String(d.name_acronym || "").toUpperCase().slice(0, 3), name: String(d.full_name || d.broadcast_name || ""),
+                   team: String(d.team_name || ""), teamId: team ? team.id : null, grid: grid[n] || null,
+                   pos: null, lapsDone: 0, dnf: false, laps: new Array(totalLaps).fill(null), stints: [], pits: [] };
+    }
+    for (const l of laps) {
+      const d = byNum[num(l && l.driver_number)];
+      const n = lapNo(l && l.lap_number);
+      if (!d || !(n >= 1) || n > totalLaps) continue;
+      d.laps[n - 1] = num(l.lap_duration);
+    }
+    for (const st of arr(raw.stints)) {
+      const d = byNum[num(st && st.driver_number)];
+      if (!d) continue;
+      d.stints.push({ c: String(st.compound || "").toUpperCase(), from: num(st.lap_start) || 1, to: num(st.lap_end) || totalLaps, age: num(st.tyre_age_at_start) || 0 });
+    }
+    // Lights out: the earliest first-lap start in the field (a driver's lap 1 begins as the lights go out).
+    let t0 = NaN;
+    for (const l of laps) { if (num(l && l.lap_number) === 1) { const t = Date.parse(l.date_start || ""); if (isFinite(t) && !(t >= t0)) t0 = t; } }
+    if (!isFinite(t0)) t0 = Date.parse(s.date_start || "") || 0;
+    const secs = (iso) => { const t = Date.parse(iso || ""); return isFinite(t) ? Math.round((t - t0) / 1000 * 1000) / 1000 : null; };
+    for (const d of drivers0(byNum)) d.lapStart = new Array(totalLaps).fill(null);
+    for (const l of laps) {
+      const d = byNum[num(l && l.driver_number)];
+      const n = lapNo(l && l.lap_number);
+      if (d && n >= 1 && n <= totalLaps) d.lapStart[n - 1] = secs(l.date_start);
+    }
+    for (const p of arr(raw.pits)) {
+      const d = byNum[num(p && p.driver_number)];
+      const lap = num(p && p.lap_number);
+      if (d && lap != null) { d.pits.push(lap); (d.pitT = d.pitT || []).push(secs(p.date)); (d.pitDur = d.pitDur || []).push(num(p.lane_duration ?? p.pit_duration)); }
+    }
+    for (const r of arr(raw.result)) {
+      const d = byNum[num(r && r.driver_number)];
+      if (!d) continue;
+      d.pos = num(r.position);
+      d.lapsDone = lapNo(r.number_of_laps) || 0;
+      d.dnf = !!(r.dnf || r.dns || r.dsq) || d.pos == null;
+      d.dsq = !!r.dsq; d.dns = !!r.dns;
+    }
+    const drivers = Object.keys(byNum).map((k) => byNum[k]);
+    for (const d of drivers) {
+      d.stints.sort((a, b) => a.from - b.from);
+      if (d.pitT) { const idx = d.pits.map((_, i) => i).sort((a, b) => d.pits[a] - d.pits[b]); d.pits = idx.map((i) => d.pits[i]); d.pitT = idx.map((i) => d.pitT[i]); d.pitDur = idx.map((i) => d.pitDur[i]); }
+      else d.pits.sort((a, b) => a - b);
+      if (!d.lapsDone) d.lapsDone = d.laps.filter((t) => t > 0).length;
+      // Where and when the car went out: the incident row naming it on the lap it stopped, else the end of its last timed lap.
+      if (d.dnf && !d.dns && !d.dsq) {
+        const inc = incidentFor(raw.raceControl, d, (d.lapsDone | 0) + 1);
+        d.outWhere = inc ? inc.where : null;
+        // WHEN: the start of the lap it did not finish (the stewards' note is dated when it was posted, laps later).
+        d.outT = d.lapStart[d.lapsDone] != null ? d.lapStart[d.lapsDone] : (d.lapStart[d.lapsDone - 1] != null && d.laps[d.lapsDone - 1] > 0 ? d.lapStart[d.lapsDone - 1] + d.laps[d.lapsDone - 1] : null);
+      }
+    }
+    // The race's fastest lap.
+    let fastest = null;
+    for (const d of drivers) d.laps.forEach((t, i) => { if (t > 0 && (!fastest || t < fastest.dur)) fastest = { num: d.num, lap: i + 1, dur: t, t: d.lapStart[i] != null ? d.lapStart[i] + t : null }; });
+    // Grid order first (a driver with no snapshot goes to the back, by number), so the table reads like the grid.
+    drivers.sort((a, b) => (a.grid || 99) - (b.grid || 99) || a.num - b.num);
+    // COMPLETE means a classification with a winner and every driver's laps in:
+    // a race still running (or one OpenF1 has not finished publishing) builds,
+    // and can be played, but is never cached — the next open fetches it again.
+    const complete = totalLaps > 0 && drivers.some((d) => d.pos === 1 && d.lapsDone === totalLaps && d.laps.some((t) => t > 0)) && drivers.every((d) => {
+      const result = arr(raw.result).find((r) => r && num(r.driver_number) === d.num);
+      if (!result) return false;
+      if (d.dns) return d.lapsDone === 0;
+      // Only an explicitly published untimed opening lap is exempt, not a missing
+      // feed row. Retirees need only their classified distance, including zero.
+      const done = num(result.number_of_laps);
+      if (!Number.isInteger(done) || done < 0 || done > totalLaps) return false;
+      for (let n = 1; n <= done; n++) {
+        if (!laps.some((l) => l && num(l.driver_number) === d.num && lapNo(l.lap_number) === n &&
+          (num(l.lap_duration) > 0 || (n === 1 && l.lap_duration === null)))) return false;
+      }
+      return true;
+    });
+    return {
+      v: SCRIPT_V, source: "openf1", fetchedAt: new Date().toISOString(),
+      sessionKey: num(s.session_key), meetingKey: num(s.meeting_key), year: num(s.year),
+      name: String(s.meeting_name || s.name || ((s.country_name || "") + " Grand Prix")).trim(),
+      session: String(s.session_name || "Race"),
+      circuit: String(s.circuit_short_name || ""), country: String(s.country_name || ""),
+      trackId: trackIdFor(s, tracks), dateStart: String(s.date_start || ""),
+      tod: todFor(s), weather: weatherFor(raw.weather), rain: rainByLap(laps, raw.weather, totalLaps),
+      laps: totalLaps, drivers, cautions: cautionsFor(raw.raceControl, secs), passes: passesFor(raw.overtakes, laps, totalLaps, drivers, secs), complete,
+      t0: t0 || null, fastest,
+      radio: arr(raw.teamRadio).map((r) => ({ t: secs(r && r.date), num: num(r && r.driver_number), url: String(r && r.recording_url || "") }))
+        .filter((r) => r.t != null && r.t >= -60 && r.num != null && /^https:\/\//.test(r.url))   // t >= -60: the pre-race chatter is not the race
+        .map((r) => { const d = byNum[r.num]; let lap = 0; if (d) d.lapStart.forEach((ls, i) => { if (ls != null && ls <= r.t) lap = i + 1; }); return { t: r.t, num: r.num, lap, url: r.url }; }),
+      incidents: incidentsFor(raw.raceControl, secs),
+    };
+  }
+  function drivers0(byNum) { return Object.keys(byNum).map((k) => byNum[k]); }
+
+  /** The race-control row that names a driver's retirement on the lap it happened (or the next): {where: "TURN 1", t}. */
+  function incidentFor(raceControl, d, lap) {
+    for (const m of arr(raceControl)) {
+      const msg = String(m && m.message || "").toUpperCase();
+      const ml = num(m && m.lap_number);
+      if (ml == null || ml < lap || ml > lap + 4 || msg.indexOf("INCIDENT") < 0) continue;   // the stewards note it a few laps on
+      if (msg.indexOf("(" + d.code + ")") < 0 && !new RegExp("CARS? [^A-Z]*\\b" + d.num + "\\b").test(msg)) continue;
+      const turn = /TURN (\d+)/.exec(msg);
+      return { where: turn ? "TURN " + turn[1] : null, t: m.date || null };
+    }
+    return null;
+  }
+  /** Race control's story beyond the flags: incidents, penalties, lapped cars released, marshals — [{lap, t, text}]. */
+  function incidentsFor(raceControl, secs) {
+    const out = [];
+    for (const m of arr(raceControl)) {
+      const msg = String(m && m.message || "");
+      const lap = num(m && m.lap_number);
+      if (lap == null || !/INCIDENT|LAPPED CARS|MARSHALS|DELETED|PENALTY|OVERTAKE (ENABLED|DISABLED)/i.test(msg)) continue;
+      const t = secs ? secs(m.date) : null;
+      if (t != null && t < -60) continue;   // the pre-race notes (practice-start infringements) are not the race
+      out.push({ lap, t, text: msg.replace(/\s+/g, " ").trim().slice(0, 140) });
+    }
+    return out;
+  }
+
+  /** Every pass, on the lap the overtaking car was on: [{lap, by, over, pos}] —
+   *  OpenF1's /overtakes rows dated against that driver's lap start times. */
+  function passesFor(overtakes, laps, totalLaps, drivers, secs) {
+    // A car that stopped on lap L is "passed" by the whole field as it drops
+    // down the order (the feed logged 24 passes on Norris and Gasly the lap
+    // they retired at Baku 2026): a pass on either side of a retiring car is
+    // the retirement, not an overtake.
+    const ends = {};   // num -> the lap the car's race ended on (dnf only)
+    for (const d of arr(drivers)) if (d && d.dnf && !d.dns && !d.dsq && d.num != null) ends[d.num] = (d.lapsDone | 0) + 1;
+    const starts = {};   // num -> [lap start ms by lap]
+    for (const l of arr(laps)) {
+      const n = num(l && l.driver_number), k = lapNo(l && l.lap_number), t = Date.parse(l && l.date_start || "");   // a 1e9 index would make lapOf walk 1e9 slots
+      if (n == null || !(k >= 1) || !isFinite(t)) continue;
+      (starts[n] = starts[n] || [])[k] = t;
+    }
+    const lapOf = (n, t) => {
+      const row = starts[n];
+      let lap = 0;
+      if (row) for (let k = 1; k < row.length; k++) if (row[k] != null && row[k] <= t && k > lap) lap = k;
+      return lap;
+    };
+    const out = [];
+    for (const o of arr(overtakes)) {
+      const by = num(o && o.overtaking_driver_number), over = num(o && o.overtaken_driver_number), pos = num(o && o.position);
+      const t = Date.parse(o && o.date || "");
+      if (by == null || over == null || !isFinite(t)) continue;
+      const lap = lapOf(by, t) || lapOf(over, t) || 1;
+      if (lap > totalLaps) continue;
+      if (ends[by] <= lap || ends[over] <= lap) continue;
+      const p = { lap, by, over, pos };
+      if (secs) { p.t = secs(o.date); const st = starts[by] && starts[by][lap]; const dur = (drivers || []).find((d) => d && d.num === by); const ld = dur && dur.laps ? dur.laps[lap - 1] : null; if (st != null && ld > 0) p.frac = Math.max(0, Math.min(0.999, (t - st) / 1000 / ld)); }
+      out.push(p);
+    }
+    out.sort((a, b) => (a.t != null && b.t != null ? a.t - b.t : a.lap - b.lap));
+    return out;
+  }
+
+  // ── The race book (pure): the order at every lap, and what each lap held ──
+
+  /** The classification at the end of real lap L, from the crossing times:
+   *  [{num, t (lap time), cum, gap, interval, down, pitIn, pitOut, out}] fastest
+   *  crossing first, then the cars that had stopped by then (last lap first). */
+  function lapBoard(script, lap) {
+    const cum = typeof RealRace !== "undefined" && RealRace.cumTable ? RealRace.cumTable(script) : null;
+    if (!cum) return [];
+    const running = [], stopped = [];
+    const confidence = timingConfidence(script, cum);
+    for (const d of script.drivers || []) {
+      const row = cum[d.num];
+      const pits = d.pits || [];
+      // A classified finisher a lap or more down never reaches the later laps' crossings: its row ends at its own last
+      // lap. It is still RUNNING, `down` laps behind, not out (only a retirement stops).
+      const done = row.length - 1, down = !d.dnf && !d.dns && done >= 1 && done < lap ? lap - done : 0;
+      if (row.length > lap || down) running.push({ num: d.num, code: d.code, down, t: d.laps[lap - 1] > 0 ? d.laps[lap - 1] : null, cum: row[Math.min(lap, done)], pitIn: pits.indexOf(lap) >= 0, pitOut: pits.indexOf(lap - 1) >= 0, tyre: compoundAt(d, lap), out: false });
+      else stopped.push({ num: d.num, code: d.code, t: null, cum: null, done: row.length - 1, pitIn: false, pitOut: false, tyre: compoundAt(d, row.length - 1), out: true });
+    }
+    for (const r of running) r.approximate = !!(confidence[r.num] && confidence[r.num][Math.min(lap, cum[r.num].length - 1)]);
+    running.sort((a, b) => a.down - b.down || a.cum - b.cum);
+    stopped.sort((a, b) => b.done - a.done);
+    const lead = running.length ? running[0].cum : 0;
+    running.forEach((r, i) => {
+      r.pos = i + 1;
+      r.gapApproximate = r.approximate || !!(running[0] && running[0].approximate);
+      r.intervalApproximate = r.approximate || !!(i && running[i - 1].approximate);
+      r.gap = r.down ? null : +(r.cum - lead).toFixed(3);   // a lap down is not a time gap: the board says "+N LAP"
+      r.interval = r.down ? null : i ? +(r.cum - running[i - 1].cum).toFixed(3) : 0;
+    });
+    stopped.forEach((r, i) => { r.pos = running.length + i + 1; r.gap = null; r.interval = null; });
+    return running.concat(stopped);
+  }
+  // Display-only provenance; the cumulative times and simulator remain unchanged.
+  function timingConfidence(script, cum) {
+    const out = {};
+    for (const d of script.drivers || []) {
+      const row = cum[d.num] || []; let filled = false;
+      out[d.num] = row.map((_, i) => { if (i && !((d.laps || [])[i - 1] > 0)) filled = true; return filled; });
+    }
+    return out;
+  }
+  function compoundAt(d, lap) {
+    let c = null;
+    for (const st of d.stints || []) if (st.from <= lap) c = st.c;
+    return c ? c[0] : null;
+  }
+
+  /** Observed crossings only: never use cumTable's median-filled laps here. */
+  function pitDuel(script, aNum, aStop, bNum, bStop) {
+    const a = script.drivers.find((d) => d.num === +aNum), b = script.drivers.find((d) => d.num === +bNum);
+    const before = Math.min(+aStop, +bStop) - 1, after = Math.max(+aStop, +bStop) + 1;
+    const unavailable = (reason) => ({ available: false, reason, startLap: Math.max(1, before) });
+    if (!a || !b || a === b || !(a.pits || []).includes(+aStop) || !(b.pits || []).includes(+bStop)) return unavailable("Choose two drivers and one stop each.");
+    if (before < 1 || after > script.laps || a.dnf || b.dnf || a.dns || b.dns || a.lapsDone < after || b.lapsDone < after) return unavailable("Unavailable for retirement, lap-down or incomplete timing.");
+    const crossing = (d, lap) => {
+      const start = (d.lapStart || [])[lap - 1], duration = (d.laps || [])[lap - 1];
+      return typeof start === "number" && isFinite(start) && typeof duration === "number" && isFinite(duration) && duration > 0 ? start + duration : null;
+    };
+    // Every selected lap must be present; a missing intermediate sample can hide a lap-down interval.
+    for (let lap = before; lap <= after; lap++) {
+      const x = crossing(a, lap), y = crossing(b, lap);
+      if (x === null || y === null) return unavailable("Unavailable: missing real lap crossings.");
+      if (Math.abs(x - y) >= Math.min(a.laps[lap - 1], b.laps[lap - 1])) return unavailable("Unavailable: possible lap-down mismatch.");
+    }
+    const gapBefore = crossing(a, before) - crossing(b, before), gapAfter = crossing(a, after) - crossing(b, after);
+    return { available: true, before, after, startLap: before, gapBefore, gapAfter, change: gapAfter - gapBefore,
+      compounds: [a, b].map((d) => (compoundAt(d, before) || "—") + " → " + (compoundAt(d, after) || "—")),
+      caution: (script.cautions || []).some((c) => c.from <= after && (c.to || c.from) >= before),
+      rain: script.rain ? script.rain.slice(before, after + 1).some(Boolean) : null };
+  }
+
+  /** Download facts, separate from sporting retirement and cache identity. */
+  function traceDetails(script, traces) {
+    return script.drivers.map((d) => {
+      const raw = traces && traces.cars && traces.cars[d.num], count = raw ? Math.floor(raw.length / 3) : 0;
+      const gaps = [];
+      for (let i = 3; i < count * 3; i += 3) if (raw[i] - raw[i - 3] > 3) gaps.push([raw[i - 3], raw[i]]);
+      return { num: d.num, code: d.code, dns: !!d.dns, retired: !!d.dnf && !d.dns, count,
+        start: count ? raw[0] : null, end: count ? raw[(count - 1) * 3] : null, gaps,
+        retry: !!(traces && (traces.failed || []).includes(d.num)) };
+    });
+  }
+
+  /** One entry per real lap: who led, the passes, the stops, who went out, the
+   *  flag flying, the rain, the lap's fastest. The picker and the lap list read it. */
+  function raceBook(script) {
+    const laps = script.laps | 0;
+    const byNum = {};
+    for (const d of script.drivers || []) byNum[d.num] = d;
+    const code = (n) => (byNum[n] ? byNum[n].code : String(n));
+    const book = [];
+    for (let lap = 1; lap <= laps; lap++) {
+      const board = lapBoard(script, lap);
+      const lead = board.find((r) => !r.out);
+      const flags = (script.cautions || []).filter((w) => lap >= w.from && lap <= (w.to != null ? w.to : w.from));
+      const flag = flags.some((w) => w.level >= 4) ? "RED FLAG" : flags.some((w) => w.level === 3) ? "SAFETY CAR" : flags.some((w) => w.level === 2) ? "VSC" : "";
+      let fastest = null;
+      for (const r of board) if (r.t != null && (!fastest || r.t < fastest.t)) fastest = r;
+      book.push({
+        lap, leader: lead ? lead.code : "", flag,
+        rain: !!(Array.isArray(script.rain) && script.rain[lap]),
+        passes: (script.passes || []).filter((p) => p.lap === lap).map((p) => ({ by: code(p.by), over: code(p.over), pos: p.pos })),
+        pits: board.filter((r) => r.pitIn).map((r) => r.code),
+        out: (script.drivers || []).filter((d) => d.dnf && !d.dns && !d.dsq && (d.lapsDone | 0) + 1 === lap && (d.lapsDone | 0) < laps).map((d) => d.code),
+        fastest: fastest ? { code: fastest.code, t: fastest.t } : null,
+      });
+    }
+    return book;
+  }
+
+  function fmtLap(t) {
+    if (!(t > 0)) return "—";
+    const ms = Math.round(t * 1000), m = Math.floor(ms / 60000), sec = (ms - m * 60000) / 1000;   // round first: never "1:60.000"
+    return m + ":" + (sec < 10 ? "0" : "") + sec.toFixed(3);
+  }
+  function fmtGap(v) { return v == null ? "—" : v === 0 ? "" : "+" + v.toFixed(3); }
+
+  /** Rain lap by lap (index = real lap, true when any weather sample inside that
+   *  lap's window — the leader's lap start to the next — reports rainfall), or
+   *  null when the lap rows carry no timestamps to align the samples to. */
+  function rainByLap(laps, weatherRows, totalLaps) {
+    const starts = new Array(totalLaps + 2).fill(Infinity);
+    let any = false;
+    for (const l of arr(laps)) {
+      const n = num(l && l.lap_number), t = Date.parse(l && l.date_start || "");
+      if (n >= 1 && n <= totalLaps && isFinite(t) && t < starts[n]) { starts[n] = t; any = true; }
+    }
+    if (!any) return null;
+    for (let n = 2; n <= totalLaps; n++) if (!isFinite(starts[n])) starts[n] = starts[n - 1];   // a lap nobody timed inherits the previous start
+    const out = new Array(totalLaps + 1).fill(false);
+    for (const w of arr(weatherRows)) {
+      if (!(num(w && w.rainfall) > 0)) continue;
+      const t = Date.parse(w.date || "");
+      if (!isFinite(t)) continue;
+      for (let n = 1; n <= totalLaps; n++) {
+        const end = n < totalLaps && isFinite(starts[n + 1]) ? starts[n + 1] : Infinity;
+        if (t >= starts[n] && t < end) { out[n] = true; break; }
+      }
+    }
+    return out;
+  }
+
+  // ── Fetching: one script per session, through F1API's queue and rate window ──
+  function fetchRaw(sessionKey, fresh) {
+    const q = (path, opts) => F1API.request(OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey), TTL, fresh ? Object.assign({}, opts, { cache: false }) : opts);
+    return Promise.all([
+      q("/sessions?"), q("/drivers?"), q("/laps?", { cache: false }), q("/stints?"), q("/pit?"), q("/overtakes?"),
+      q("/race_control?"), q("/weather?"), q("/session_result?"), q("/position?"), q("/team_radio?"),
+    ]).then((r) => {
+      const session = arr(r[0])[0] || { session_key: sessionKey };
+      const raw = { session, drivers: r[1], laps: r[2], stints: r[3], pits: r[4], overtakes: r[5], raceControl: r[6], weather: r[7], result: r[8], positions: r[9], teamRadio: r[10] };
+      // The weekend's NAME lives on the meeting, not the session (F1API.meetings is the picker's cached list).
+      if (session.meeting_key == null || !session.year) return raw;
+      return F1API.meetings(session.year).then((ms) => {
+        const m = ms.find((x) => x.meetingKey === session.meeting_key);
+        if (m && m.name) session.meeting_name = m.name;
+        return raw;
+      }, () => raw);
+    });
+  }
+
+  /** Drop the cached bodies of a race that was not complete, so the next open
+   *  refetches them: api.js caches each for seven days, which would otherwise
+   *  freeze an unfinished classification for a week. */
+  function forgetRaw(sessionKey) {
+    try {
+      for (const path of RAW_PATHS) localStorage.removeItem(API_CACHE_PREFIX + OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey));
+    } catch (e) { /* no storage: nothing was cached */ }
+  }
+
+  // ── The real positions: one /location pull per car, kept in IndexedDB ──
+  // ONE connection per page, memoised (the js/core/store.js mirrorOpen pattern): a get or put
+  // each opened its own and never closed it, and a version bump would block on every one.
+  let _traceDb = null;
+  function traceDb() {
+    if (_traceDb) return _traceDb;
+    _traceDb = new Promise((res) => {
+      let settled = false, timer = null, r = null;
+      const finish = (db) => {
+        if (settled) { if (db) { try { db.close(); } catch (e) { /* late open after a block or timeout: nothing owns it */ } } return; }
+        settled = true;
+        if (timer !== null) clearTimeout(timer);
+        if (db) db.onversionchange = db.onclose = () => { try { db.close(); } catch (e) { /* already closed */ } _traceDb = null; };
+        res(db || null);
+      };
+      try { if (typeof indexedDB === "undefined" || !indexedDB) { finish(null); return; } r = indexedDB.open(TRACE_DB, 1); }
+      catch (e) { finish(null); return; }
+      r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains(TRACE_STORE)) db.createObjectStore(TRACE_STORE); };
+      r.onsuccess = () => finish(r.result);
+      r.onerror = r.onblocked = () => finish(null);
+      if (typeof setTimeout === "function") timer = setTimeout(() => finish(null), TRACE_OPEN_MS);
+    }).then((db) => { if (!db) _traceDb = null; return db; });   // never memoise a failure
+    return _traceDb;
+  }
+  function traceGet(sessionKey, script) {
+    return traceDb().then((db) => new Promise((res) => {
+      if (!db) { res(null); return; }
+      try {
+        const key = String(sessionKey), tx = db.transaction(TRACE_STORE, "readwrite"), st = tx.objectStore(TRACE_STORE);
+        let hit = null;
+        const rq = st.get(key);
+        rq.onsuccess = () => {
+          const v = rq.result;
+          if (!(v && v.v === TRACE_V && v.complete && v.cars && (!script || traceFits(v, script)))) return;
+          hit = v;
+          let order;
+          try { order = st.get(TRACE_LRU); } catch (e) { res(null); return; }
+          order.onsuccess = () => {
+            try { const prev = Array.isArray(order.result) ? order.result.map(String) : [];
+              st.put([key].concat(prev.filter((k) => k !== key)).slice(0, TRACE_MAX), TRACE_LRU); }
+            catch (e) { try { tx.abort(); } catch (_) { /* already finished */ } res(null); }
+          };
+        };
+        tx.oncomplete = () => res(hit);
+        tx.onerror = tx.onabort = () => res(null);
+      } catch (e) { res(null); }
+    }));
+  }
+  /** Store one race's positions and keep only the newest TRACE_MAX races (the photo-studio
+   *  LIMIT pattern: the read, the prune and the put share one readwrite transaction). */
+  function tracePut(traces) {
+    return traceDb().then((db) => new Promise((res) => {
+      if (!db) { res(false); return; }
+      try {
+        const key = String(traces.sessionKey);
+        const t = db.transaction(TRACE_STORE, "readwrite"), st = t.objectStore(TRACE_STORE);
+        const rq = st.get(TRACE_LRU);
+        rq.onsuccess = () => {
+          try {
+            const prev = Array.isArray(rq.result) ? rq.result.map(String) : [];
+            const order = [key].concat(prev.filter((k) => k !== key)).slice(0, TRACE_MAX);
+            for (const k of prev) if (order.indexOf(k) < 0) st.delete(k);
+            if (typeof st.getAllKeys === "function") {   // races stored before the order existed
+              const all = st.getAllKeys();
+              all.onsuccess = () => { for (const k of all.result || []) if (k !== TRACE_LRU && order.indexOf(String(k)) < 0) st.delete(k); };
+            }
+            st.put(traces, key);
+            st.put(order, TRACE_LRU);
+          } catch (e) { try { t.abort(); } catch (_) { /* already finished */ } }
+        };
+        t.oncomplete = () => res(true);
+        t.onerror = t.onabort = () => res(false);   // quota: the next visit fetches again
+      } catch (e) { res(false); }
+    }));
+  }
+  /** One car's /location rows → Float32Array [t, x, y, …] at TRACE_HZ (t seconds from t0, x/y metres). */
+  function packTrace(rows, t0) {
+    const out = [];
+    let last = -Infinity;
+    const gap = 1000 / TRACE_HZ - 50;
+    for (const r of arr(rows)) {
+      const t = r && r.date != null ? +r.date : NaN;
+      if (!isFinite(t) || t - last < gap || !(isFinite(r.x) && isFinite(r.y))) continue;
+      last = t;
+      out.push((t - t0) / 1000, r.x / 10, r.y / 10);
+    }
+    return Float32Array.from(out);
+  }
+  function traceEnd(script) {
+    let end = 0;
+    for (const d of script.drivers) arr(d.lapStart).forEach((ls, i) => { if (ls != null && d.laps[i] > 0) end = Math.max(end, ls + d.laps[i]); });
+    return end;
+  }
+  // Session identity alone is not coverage: timing can grow after a successful
+  // download. Include its clock, window, roster and completion state; legacy
+  // entries without this stamp must be fetched again rather than trusted.
+  function traceCoverage(script) {
+    return JSON.stringify([script.t0, traceEnd(script), script.complete === true,
+      script.drivers.map((d) => [d.num, !!d.dns, d.lapsDone || 0]).sort((a, b) => a[0] - b[0])]);
+  }
+  function traceFits(traces, script) {
+    return !!(traces && traces.v === TRACE_V && traces.sessionKey === script.sessionKey &&
+      traces.coverage === traceCoverage(script));
+  }
+  /** The field's positions for a script: cached, else fetched car by car (onProgress(done, total)). */
+  function fetchTraces(script, onProgress, previous) {
+    if (!script || !script.t0 || !script.drivers) return Promise.reject(new Error("no timestamps in the script"));
+    return traceGet(script.sessionKey, script).then((hit) => {
+      if (hit) return hit;
+      const t0 = script.t0;
+      const end = traceEnd(script);
+      const startISO = new Date(t0 - TRACE_PAD_S * 1000).toISOString(), endISO = new Date(t0 + (end + TRACE_PAD_S) * 1000).toISOString();
+      const traces = { v: TRACE_V, sessionKey: script.sessionKey, t0, hz: TRACE_HZ,
+        coverage: traceCoverage(script), complete: script.complete === true, cars: {}, failed: [] };
+      if (traceFits(previous, script)) {
+        for (const k in previous.cars || {}) if (!(previous.failed || []).includes(+k) && previous.cars[k].length >= 6) traces.cars[k] = previous.cars[k];
+      }
+      const minimumFloats = (d) => {
+        let seconds = 0;
+        arr(d.lapStart).forEach((start, i) => { if (start != null && d.laps[i] > 0) seconds = Math.max(seconds, start + d.laps[i]); });
+        // Require useful coverage per participating car while allowing an early
+        // retirement's shorter trace. A full-distance peer's two points are not
+        // a loaded race merely because the winner can supply the reference fit.
+        return Math.max(2, Math.min(102, Math.floor(seconds * TRACE_HZ / 2))) * 3;
+      };
+      for (const d of script.drivers) if (traces.cars[d.num] && traces.cars[d.num].length < minimumFloats(d)) delete traces.cars[d.num];
+      let done = 0;
+      const total = script.drivers.length;
+      return Promise.all(script.drivers.map((d) => (d.dns
+        ? Promise.resolve().then(() => { traces.cars[d.num] = new Float32Array(0); })
+        : Object.prototype.hasOwnProperty.call(traces.cars, d.num)
+        // This layer owns coverage-aware caching. A raw HTTP cache entry may
+        // predate the completed timing even when its URL/window is identical.
+        ? Promise.resolve() : F1API.locationData(script.sessionKey, d.num, startISO, endISO, { cache: false })
+          .then((rows) => { const car = packTrace(rows, t0); traces.cars[d.num] = car; if (car.length < minimumFloats(d)) { traces.failed.push(d.num); } }, () => { traces.failed.push(d.num); traces.cars[d.num] = new Float32Array(0); }))
+        .then(() => { done++; if (onProgress) onProgress(done, total, traces); })))
+        // A failed request is not "no positions": a hub closed mid-load (F1API.cancelAll) or a dropped
+        // connection. Such a set is NEVER cached (it would read as loaded, and every WATCH replay nothing).
+        .then(() => {
+          const participating = script.drivers.filter((d) => !d.dns);
+          // RealReplay needs >100 samples to fit a reference car to the circuit.
+          // Sparse fulfilled responses must remain retryable just like errors.
+          if (!participating.some((d) => traces.cars[d.num] && traces.cars[d.num].length > 300)) {
+            for (const d of participating) if (!traces.failed.includes(d.num)) traces.failed.push(d.num);
+          }
+          traces.complete = traces.complete && traces.failed.length === 0;
+          if (!participating.length || participating.every((d) => traces.failed.includes(d.num))) throw new Error("the positions did not load");
+          return traces.complete ? tracePut(traces).then(() => traces) : traces;
+        });
+    });
+  }
+
+  function cached(sessionKey) {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY + sessionKey);
+      const s = raw ? JSON.parse(raw) : null;
+      const ok = s && s.v === SCRIPT_V && s.complete === true && s.laps > 0 && Array.isArray(s.drivers) ? s : null;
+      if (ok) lruWrite(lruFront(sessionKey));
+      return ok;
+    } catch (e) { return null; }
+  }
+  function lruRead() {
+    try { const a = JSON.parse(localStorage.getItem(CACHE_LRU) || "[]"); return Array.isArray(a) ? a.map(String) : []; } catch (e) { return []; }
+  }
+  function lruFront(sessionKey) {
+    const k = String(sessionKey);
+    return [k].concat(lruRead().filter((x) => x !== k)).slice(0, CACHE_MAX);
+  }
+  function lruWrite(order) { try { localStorage.setItem(CACHE_LRU, JSON.stringify(order)); } catch (e) { /* quota: the order is advisory */ } }
+  /** Drop every cached script not in `keep` — indexed ones and any written before the index existed. */
+  function pruneScripts(keep) {
+    try {
+      const drop = new Set(lruRead().filter((k) => keep.indexOf(k) < 0).map((k) => CACHE_KEY + k));
+      const n = typeof localStorage.length === "number" && typeof localStorage.key === "function" ? localStorage.length : 0;
+      for (let i = 0; i < n; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf(CACHE_KEY) === 0 && keep.indexOf(k.slice(CACHE_KEY.length)) < 0) drop.add(k);
+      }
+      for (const k of drop) localStorage.removeItem(k);
+    } catch (e) { /* no storage */ }
+  }
+  function remember(script) {
+    const order = lruFront(script.sessionKey);
+    pruneScripts(order);   // before the write, so the room it frees is there for it
+    try { localStorage.setItem(CACHE_KEY + script.sessionKey, JSON.stringify(script)); lruWrite(order); } catch (e) { /* quota: the next open refetches */ }
+  }
+
+  function create(deps) {
+    const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker, invalidateOther, teamChip, fmtDateTime, findTeam, close, isOpen } = deps;
+    let bodyGen = 0;
+    let distance = 1;   // the fraction of the real distance the player races (DISTANCES)
+    let startLap = 1;   // the REAL lap the player drops into (1 = the grid)
+    let lapSession = null;   // the race startLap belongs to
+    let watchCamera = "auto";   // WATCH has its own shots (AUTO: the TV director, js/race/broadcast.js); driving preferences stay intact
+    let seatCode = null;   // the DRIVE AS pick, a driver code (null: the first seated driver)
+    let traces = null;     // the real positions for the painted script, once loaded
+    let loading = null;    // {done, total} while the positions load
+    let requestGen = 0, replayUi = null, traceError = "", partialTraces = null;
+    let driveAction = null;
+    // A download in flight leaves ~20 queued /location requests in the transport's
+    // FIFO that every other tab would wait behind; drop them (showTab cancels this
+    // tab BEFORE it starts the next tab's load).
+    function cancel() { if (loading) F1API.cancelAll(); ++bodyGen; ++requestGen; loading = null; replayUi = null; driveAction = null; traceError = ""; releaseIncomplete(); }
+    function releaseIncomplete() { partialTraces = null; if (traces && !traces.complete) traces = null; }
+
+    function tracks() { return typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST : []; }
+
+    /** The script for a session: the cache, else nine OpenF1 requests. */
+    function scriptFor(sessionKey, fresh, current) {
+      const hit = !fresh && cached(sessionKey);
+      if (hit) return Promise.resolve(Object.assign({}, hit, { provenance: "cached" }));
+      return fetchRaw(sessionKey, !!fresh).then((raw) => {
+        if (current && !current()) throw new Error("cancelled");
+        const script = build(raw, findTeam, tracks());
+        if (!script.drivers.length) throw new Error(NO_RACE_MSG);
+        if (script.complete) remember(script); else if (!fresh) forgetRaw(sessionKey);
+        return Object.assign({}, script, { provenance: "fetched" });
+      });
+    }
+
+    /** The RACE (or the Sprint the picker chose) of the selected meeting. */
+    function raceSession(meta) {
+      const isRace = (m) => m && /^(race|sprint)$/i.test(String(m.name || "")) && /race/i.test(String(m.type || ""));
+      if (isRace(meta)) return Promise.resolve(meta);
+      const mk = meta && meta.meetingKey != null ? meta.meetingKey : sel.meetingKey;
+      if (mk == null) return Promise.resolve(null);
+      return F1API.sessionsForMeeting(mk).then((ss) => {
+        const races = ss.filter(isRace);
+        return races.find((m) => /^race$/i.test(m.name)) || races[0] || null;
+      });
+    }
+
+    function loadRealRace() {
+      cancel();
+      const generation = bodyGen;
+      return ensureSession(false).then(() => {
+        const wrap = el("div");
+        if (generation !== bodyGen) return wrap;
+        wrap.appendChild(buildPicker((meta) => { renderBody(meta, body); if (invalidateOther) invalidateOther("race"); }));
+        const body = el("div");
+        wrap.appendChild(body);
+        renderBody(sel.meta, body);
+        return wrap;
+      });
+    }
+
+    function renderBody(meta, body) {
+      ++requestGen;
+      releaseIncomplete();
+      loading = null; replayUi = null; driveAction = null; traceError = "";
+      const myGen = ++bodyGen;
+      clear(body);
+      if (!meta || meta.sessionKey == null) { body.appendChild(emptyMsg(NO_RACE_MSG)); return; }
+      const slot = el("div");
+      slot.appendChild(spinner());
+      body.appendChild(slot);
+      raceSession(meta).then((race) => {
+        if (myGen !== bodyGen) return;
+        if (!race) { clear(slot); slot.appendChild(emptyMsg(NO_RACE_MSG)); return; }
+        return scriptFor(race.sessionKey).then((script) => {
+          if (myGen !== bodyGen) return;
+          clear(slot);
+          if (!script.laps || !script.drivers.length) { slot.appendChild(emptyMsg(NO_RACE_MSG)); return; }
+          paint(script, slot);
+        });
+      }).then(null, (e) => {
+        if (myGen !== bodyGen) return;
+        Log.warn("data", "real race script failed: " + (e && e.message ? e.message : e));
+        clear(slot);
+        const failure = emptyMsg(FETCH_FAIL_MSG);
+        failure.setAttribute("role", "status");
+        const retry = el("button", "dh-retry", "RETRY"); retry.type = "button";
+        retry.addEventListener("click", () => renderBody(meta, body));
+        slot.append(failure, retry);
+      });
+    }
+
+    function simLaps(script) { return Math.max(1, Math.round(script.laps * distance)); }
+
+    /** What each real lap is remembered for — the labels of the JUMP IN AT picker. */
+    function lapEvents(script) {
+      const ev = {};
+      const add = (lap, text) => { if (lap >= 1 && lap <= script.laps) (ev[lap] = ev[lap] || []).push(text); };
+      for (const w of script.cautions || []) add(w.from, w.level >= 4 ? "RED FLAG" : w.level === 3 ? "SAFETY CAR" : "VSC");
+      for (const d of script.drivers || []) { if (d.dnf && !d.dns && !d.dsq && d.lapsDone >= 0) add(d.lapsDone + 1, d.code + " out"); }
+      const rain = Array.isArray(script.rain) ? script.rain : [];
+      for (let n = 1; n <= script.laps; n++) if (rain[n] && !rain[n - 1]) add(n, "rain");
+      return ev;
+    }
+
+    /** DRIVE AS: the seat every JUMP IN uses — the drivers with a roster seat, in grid order. */
+    function seatPicker(script, seats) {
+      const field = el("label", "dh-pick-field");
+      field.appendChild(el("span", "dh-pick-label", "DRIVER"));
+      const pick = el("select", "dh-pick-select");
+      pick.setAttribute("aria-label", "DRIVER");
+      const seated = script.drivers.filter((d) => !seats || seats.has(d.num));
+      if (!seated.some((d) => d.code === seatCode)) seatCode = seated.length ? seated[0].code : null;
+      seated.forEach((d) => {
+        const op = el("option", null, (d.grid != null ? "P" + d.grid + " · " : "") + d.code + " · " + d.name);
+        op.value = d.code;
+        if (d.code === seatCode) op.selected = true;
+        pick.appendChild(op);
+      });
+      pick.addEventListener("change", () => { seatCode = pick.value || seatCode; if (driveAction) driveAction.textContent = "JUMP IN AS " + seatCode + " · L" + startLap; });
+      field.appendChild(pick);
+      return field;
+    }
+
+    function watchCameraPicker() {
+      const field = el("label", "dh-pick-field");
+      field.appendChild(el("span", "dh-pick-label", "WATCH CAMERA"));
+      const pick = el("select", "dh-pick-select");
+      pick.setAttribute("aria-label", "WATCH CAMERA");
+      for (const [value, label] of [["auto", "AUTO · TV DIRECTOR"], ["side", "TV TRACKSIDE"], ["heli", "AERIAL"], ["tcam", "T-CAM"], ["chase", "CHASE"]]) {
+        const op = el("option", null, label); op.value = value; op.selected = value === watchCamera; pick.appendChild(op);
+      }
+      pick.addEventListener("change", () => { watchCamera = pick.value; });
+      field.appendChild(pick); return field;
+    }
+
+    /** REAL POSITIONS: load the field's real x/y (OpenF1 /location) once, then WATCH the
+     *  whole race or its HIGHLIGHTS with the camera on the DRIVE AS pick — every car
+     *  where it really was. Until they load, the WATCH buttons load them first. */
+    function replayRow(script, slot) {
+      const row = el("div", "dh-rounds");
+      const have = traceFits(traces, script);
+      const canReplay = !!script.t0 && typeof RealRace !== "undefined" && !!RealRace.replay;
+      if (!canReplay) { row.appendChild(el("span", "dh-lr-meta", "Real positions need a script with timestamps — reopen the tab to refetch it.")); return row; }
+      const state = el("span", "dh-lr-meta"); state.setAttribute("role", "status");
+      row.appendChild(state);
+      const coverage = el("details", "dh-lr-meta");
+      coverage.appendChild(el("summary", null, "Downloaded feed coverage"));
+      const coverageBody = el("div"); coverage.appendChild(coverageBody); row.appendChild(coverage);
+      // A race loaded on an earlier visit is in IndexedDB: say so once it answers (a repaint, not a fetch).
+      const progress = el("progress"); progress.max = script.drivers.length;
+      progress.setAttribute("aria-label", "Download real car positions"); progress.hidden = true; row.appendChild(progress);
+      const mk = (label, aria, fn) => { const b = el("button", "dh-pill", label); b.type = "button"; b.setAttribute("aria-label", aria); b.addEventListener("click", fn); row.appendChild(b); return b; };
+      const load = mk("LOAD POSITIONS", "Load the real positions of every car", () => loadTraces(script, slot, null));
+      const highlights = mk("HIGHLIGHTS", "Watch the highlights of the race, recreated", () => watch(script, slot, 1, true));
+      const full = mk("WATCH FROM L" + startLap, "Watch the race recreated from lap " + startLap, () => watch(script, slot, startLap, false));
+      const cancel = mk("CANCEL DOWNLOAD", "Cancel the real positions download", () => {
+        requestGen++; loading = null; traceError = "Download cancelled. RETRY keeps the cars already loaded.";
+        F1API.cancelAll(); updateReplayRow();
+      });
+      replayUi = { script, slot, state, coverage, coverageBody, progress, load, highlights, full, cancel };
+      updateReplayRow();
+      const generation = requestGen;
+      if (!have && !loading) traceGet(script.sessionKey, script).then((hit) => {
+        if (generation === requestGen && (!isOpen || isOpen()) && hit && replayUi && replayUi.slot === slot && replayUi.script.sessionKey === script.sessionKey && slot.isConnected !== false && !loading) { traces = hit; traceError = ""; updateReplayRow(); }
+      });
+      return row;
+    }
+    function updateReplayRow() {
+      if (!replayUi) return;
+      const u = replayUi, sk = u.script.sessionKey, tr = traceFits(traces, u.script) ? traces : null;
+      const busy = loading && loading.sessionKey === sk, failed = tr && tr.failed ? tr.failed : [];
+      u.coverage.hidden = !tr;
+      clear(u.coverageBody);
+      if (tr) {
+        u.coverageBody.appendChild(el("p", null, "Times are seconds from lights out. Feed gaps or endings do not indicate a sporting retirement. Gaps over 3 seconds are listed."));
+        traceDetails(u.script, tr).forEach((d) => {
+          const seconds = (t) => t.toFixed(1) + "s";
+          const gaps = d.gaps.slice(0, 12).map((g) => seconds(g[0]) + "–" + seconds(g[1])).join(", ") + (d.gaps.length > 12 ? " (" + d.gaps.length + " gaps total)" : "");
+          u.coverageBody.appendChild(el("div", null, d.code + ": " + (d.dns ? "DNS" : !d.count ? "missing feed" : d.count + " samples · " + seconds(d.start) + "–" + seconds(d.end)) +
+            (d.retired ? " · classified retirement" : "") + (d.retry ? " · retry available" : "") + (gaps ? " · gaps " + gaps : "")));
+        });
+      }
+      u.state.textContent = busy ? "LOADING REAL POSITIONS · " + loading.done + " / " + loading.total + " CARS"
+        : traceError || (tr ? failed.length ? "PARTIAL POSITIONS · RETRY " + failed.map((n) => (u.script.drivers.find((d) => d.num === n) || {}).code || n).join(", ") : "REAL POSITIONS READY · " + Object.keys(tr.cars).length + " CARS"
+          : "REAL POSITIONS · ABOUT 60 MB ON FIRST LOAD · SAVED ON THIS DEVICE");
+      u.progress.hidden = !busy; if (busy) u.progress.value = loading.done;
+      u.load.hidden = !!tr && !failed.length; u.load.disabled = !!loading;
+      u.load.textContent = traceError || failed.length ? "RETRY POSITIONS" : "LOAD POSITIONS";
+      u.highlights.disabled = u.full.disabled = !!loading; u.cancel.hidden = !busy;
+    }
+    function loadTraces(script, slot, then) {
+      if (loading) return false;
+      const mine = ++requestGen;
+      const current = () => mine === requestGen && (!isOpen || isOpen()) && (!slot || slot.isConnected !== false);
+      loading = { done: 0, total: script.drivers.length, sessionKey: script.sessionKey }; traceError = ""; updateReplayRow();
+      fetchTraces(script, (done, total, tr) => {
+        if (!current()) return;
+        partialTraces = tr; loading = { done, total, sessionKey: script.sessionKey }; updateReplayRow();
+      }, traceFits(traces, script) ? traces : partialTraces)
+        .then((tr) => {
+          if (!current()) return;
+          traces = tr; partialTraces = tr; loading = null; updateReplayRow();
+          if (then) then(tr);
+        }, (e) => {
+          if (!current()) return;
+          loading = null; traceError = "Could not load real positions. Check your connection and RETRY.";
+          Log.warn("data", "real positions: " + (e && e.message || e)); updateReplayRow();
+        });
+      return true;
+    }
+    // launch() synchronously accepts a staged race or refuses it. Keep the Hub
+    // and its downloaded positions until that handoff has actually succeeded.
+    function launchRace(script, options) {
+      const generation = bodyGen, request = requestGen;
+      const current = () => generation === bodyGen && request === requestGen && (!isOpen || isOpen());
+      if (!current()) return false;
+      let accepted = false;
+      try { accepted = typeof RealRace !== "undefined" && !!RealRace.launch && !!RealRace.launch(script, options); }
+      catch (e) { Log.warn("data", "real race launch: " + (e && e.message || e)); }
+      if (!current()) return false;
+      if (!accepted) {
+        traceError = "Could not start the race. Please try again."; updateReplayRow();
+        return false;
+      }
+      traceError = "";
+      if (close) close();
+      return true;
+    }
+
+    /** WATCH / HIGHLIGHTS: the positions first (if not yet), then the replay in the DRIVE AS seat. */
+    function watch(script, slot, fromLap, reel) {
+      const myGen = bodyGen, seat = seatCode, camera = watchCamera;
+      const go = (tr) => {
+        if (myGen !== bodyGen || (slot && slot.isConnected === false)) return false;
+        if (isOpen && !isOpen()) return false;   // the positions landed after the hub closed (or a JUMP IN left it): nothing to watch from
+        startLap = fromLap;
+        Log.info("data", "real replay " + script.sessionKey + (reel ? " highlights" : " from " + fromLap) + " follow=" + seat);
+        return launchRace(script, { seat, laps: script.laps, startLap: fromLap, watch: true, camera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
+      };
+      if (traceFits(traces, script)) return go(traces);
+      return loadTraces(script, slot, go);
+    }
+
+    function pitDuelCard(script, slot) {
+      const card = el("section", "dh-livecard");
+      card.appendChild(el("h3", "dh-section", "PIT-STOP DUEL"));
+      card.appendChild(el("p", "dh-live-sub", "Observed net gap change across two stops. A negative change means the first driver gained time; this does not isolate the cause."));
+      const fields = el("div", "dh-pick-fields"), picks = [];
+      ["First driver and stop", "Second driver and stop"].forEach((label, i) => {
+        const field = el("label", "dh-pick-field"); field.appendChild(el("span", "dh-pick-label", label));
+        const pick = el("select", "dh-pick-select"); pick.setAttribute("aria-label", label);
+        const blank = el("option", null, "Choose a stop"); blank.value = ""; pick.appendChild(blank);
+        script.drivers.forEach((d) => (d.pits || []).forEach((lap) => {
+          const option = el("option", null, d.code + " · L" + lap); option.value = d.num + ":" + lap; pick.appendChild(option);
+        }));
+        field.appendChild(pick); fields.appendChild(field); picks[i] = pick;
+      });
+      card.appendChild(fields);
+      const result = el("p", "dh-lr-meta"); result.setAttribute("role", "status"); card.appendChild(result);
+      const action = el("button", "dh-pill", "WATCH STOP DUEL"); action.type = "button"; card.appendChild(action);
+      let comparison = null;
+      const refresh = () => {
+        const a = picks[0].value.split(":"), b = picks[1].value.split(":");
+        comparison = pitDuel(script, a[0], a[1], b[0], b[1]); action.disabled = !comparison.available;
+        const signed = (v) => (v >= 0 ? "+" : "") + v.toFixed(3) + "s";
+        result.textContent = comparison.available ? "Observed net gap change: " + signed(comparison.change) + " · L" + comparison.before + " " + signed(comparison.gapBefore) + " → L" + comparison.after + " " + signed(comparison.gapAfter) +
+          " · compounds " + comparison.compounds.join(" / ") + " · " + (comparison.caution ? "caution overlap" : "no recorded caution overlap") + " · " + (comparison.rain === null ? "rain data unavailable" : comparison.rain ? "rain overlap" : "no recorded rain overlap") : comparison.reason;
+      };
+      picks.forEach((pick) => pick.addEventListener("change", refresh));
+      action.addEventListener("click", () => { if (comparison && comparison.available) { const number = +picks[0].value.split(":")[0]; seatCode = script.drivers.find((d) => d.num === number).code; watch(script, slot, comparison.startLap, false); } });
+      refresh(); return card;
+    }
+
+    /** The race lap by lap: one row per lap with what it held and a JUMP IN; a
+     *  click on the lap opens its classification (gaps, intervals, lap times, sets). */
+    function lapList(script) {
+      const book = raceBook(script);
+      const wrap = el("div");
+      wrap.appendChild(el("div", "dh-lr-name", "LAP BY LAP"));
+      wrap.appendChild(el("div", "dh-lr-meta", "Every pass, stop, flag and retirement as it happened. Open a lap for the order and the gaps; JUMP IN drops you into the race as it stood at the start of that lap. JUMP IN and WATCH run at dawn, unless the race ran at night."));
+      const table = el("table", "dh-table");
+      const thead = el("thead"), hr = el("tr");
+      ["LAP", "LEADER", "WHAT HAPPENED", "FASTEST", ""].forEach((h) => hr.appendChild(el("th", null, h)));
+      thead.appendChild(hr); table.appendChild(thead);
+      const tbody = el("tbody");
+      book.forEach((b) => {
+        const tr = el("tr");
+        tr.appendChild(el("td", null, "L" + b.lap));
+        tr.appendChild(el("td", null, b.leader || "—"));
+        const bits = [];
+        if (b.flag) bits.push(b.flag);
+        if (b.rain) bits.push("RAIN");
+        b.passes.forEach((p) => bits.push(p.by + " passed " + p.over + (p.pos ? " for P" + p.pos : "")));
+        if (b.pits.length) bits.push("pit: " + b.pits.join(", "));
+        b.out.forEach((c) => bits.push(c + " OUT"));
+        tr.appendChild(el("td", null, bits.length ? bits.join(" · ") : (b.lap === 1 ? "lights out" : "")));
+        tr.appendChild(el("td", null, b.fastest ? b.fastest.code + " " + fmtLap(b.fastest.t) : "—"));
+        const cell = el("td");
+        const go = el("button", "dh-pill", b.lap === 1 ? "START" : "JUMP IN");
+        go.type = "button";
+        go.setAttribute("aria-label", "Jump in at lap " + b.lap);
+        go.addEventListener("click", (e) => { if (e && e.stopPropagation) e.stopPropagation(); startLap = b.lap; jumpIn(script, seatCode); });
+        cell.appendChild(go);
+        if (script.t0 && typeof RealRace !== "undefined" && RealRace.replay) {
+          const w = el("button", "dh-pill", "WATCH");
+          w.type = "button";
+          w.setAttribute("aria-label", "Watch the race recreated from lap " + b.lap);
+          w.addEventListener("click", (e) => { if (e && e.stopPropagation) e.stopPropagation(); watch(script, tbody.parentNode && tbody.parentNode.parentNode, b.lap, false); });
+          cell.appendChild(w);
+        }
+        tr.appendChild(cell);
+        tr.setAttribute("role", "button");
+        tr.tabIndex = 0;
+        tr.setAttribute("aria-expanded", "false");
+        let open = null;
+        const toggle = () => {
+          if (open) { open.hidden = !open.hidden; tr.setAttribute("aria-expanded", open.hidden ? "false" : "true"); return; }
+          open = boardRow(script, b.lap);
+          tr.setAttribute("aria-expanded", "true");
+          if (tr.nextSibling) tbody.insertBefore(open, tr.nextSibling); else tbody.appendChild(open);
+        };
+        tr.addEventListener("click", toggle);
+        tr.addEventListener("keydown", (e) => { if (e.target === tr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle(); } });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      return wrap;
+    }
+
+    /** The classification at the end of a lap, as one full-width row of the lap list. */
+    function boardRow(script, lap) {
+      const tr = el("tr", "dh-lap-board");
+      const td = el("td");
+      td.colSpan = 5;
+      const table = el("table", "dh-table");
+      const thead = el("thead"), hr = el("tr");
+      ["POS", "DRIVER", "GAP", "INT", "LAP", "TYRE", ""].forEach((h) => hr.appendChild(el("th", null, h)));
+      thead.appendChild(hr); table.appendChild(thead);
+      const tbody = el("tbody");
+      lapBoard(script, lap).forEach((r) => {
+        const row = el("tr");
+        if (r.pos <= 3 && !r.out) row.className = r.pos === 1 ? "dh-lr-p1" : r.pos === 2 ? "dh-lr-p2" : "dh-lr-p3";
+        row.appendChild(el("td", null, r.out ? "OUT" : "P" + r.pos));
+        row.appendChild(el("td", null, r.code));
+        row.appendChild(el("td", null, r.out ? "L" + r.done : r.down ? "+" + r.down + (r.down > 1 ? " LAPS" : " LAP") : (r.gapApproximate ? "≈" : "") + fmtGap(r.gap)));
+        row.appendChild(el("td", null, r.out ? "" : (r.intervalApproximate ? "≈" : "") + fmtGap(r.interval)));
+        row.appendChild(el("td", null, fmtLap(r.t)));
+        row.appendChild(el("td", null, r.tyre || "—"));
+        row.appendChild(el("td", null, r.pitIn ? "IN" : r.pitOut ? "OUT LAP" : ""));
+        tbody.appendChild(row);
+      });
+      table.appendChild(tbody);
+      td.appendChild(table);
+      tr.appendChild(td);
+      return tr;
+    }
+
+    /** The roster seats this script's drivers take (RealRace.mapField), or null before the game is up. */
+    function seatsFor(script) {
+      if (typeof RealRace === "undefined" || !RealRace.mapField || typeof Teams === "undefined") return null;
+      const nums = new Set(RealRace.mapField(script, Teams.LIST).map((s) => s.num));
+      return nums;
+    }
+
+    function paint(script, slot) {
+      const head = el("div");
+      head.appendChild(el("div", "dh-lr-name", (script.year ? script.year + " " : "") + script.name + (script.session !== "Race" ? " · " + script.session : "")));
+      const meta = (typeof F1API !== "undefined" && F1API.placeLabel)
+        ? F1API.placeLabel(script.circuit, script.country)
+        : [script.circuit, script.country].filter(Boolean).join(", ");
+      const winner = script.drivers.find((d) => d.pos === 1);
+      head.appendChild(el("div", "dh-lr-meta", [meta, script.dateStart ? fmtDateTime(script.dateStart) : "", script.laps + " laps",
+        winner ? "won by " + winner.name : "", script.cautions.filter((c) => c.level < 4).length + " safety car / VSC", script.weather.toUpperCase()].filter(Boolean).join(" · ")));
+      slot.appendChild(head);
+      const playable = !!script.trackId && tracks().some((t) => t.id === script.trackId);
+      if (!playable) { slot.appendChild(emptyMsg(NO_TRACK_MSG)); return; }
+      if (!script.complete) slot.appendChild(el("div", "dh-lr-meta", INCOMPLETE_MSG));
+      if (startLap > script.laps || lapSession !== script.sessionKey) startLap = 1;   // a new race starts from its grid, not the last race's lap
+      lapSession = script.sessionKey;
+      const seats = seatsFor(script);
+
+      const watchCard = el("section", "dh-livecard");
+      watchCard.appendChild(el("h3", "dh-section", "WATCH THE REAL RACE"));
+      watchCard.appendChild(el("p", "dh-live-sub", "Follow any driver with the TV director, or choose your own camera. Highlights takes you straight to the race's key moments."));
+      const pickRow = el("div", "dh-pick-fields");
+      pickRow.appendChild(seatPicker(script, seats)); pickRow.appendChild(watchCameraPicker());
+      watchCard.appendChild(pickRow); watchCard.appendChild(replayRow(script, slot)); slot.appendChild(watchCard);
+      slot.appendChild(pitDuelCard(script, slot));
+
+      const driveCard = el("section", "dh-livecard");
+      driveCard.appendChild(el("h3", "dh-section", "DRIVE THIS RACE"));
+      driveCard.appendChild(el("p", "dh-live-sub", "Take the selected driver's seat. Choose your distance; real stops and flags stay in proportion. Open RACE STORY below to start from a particular lap."));
+      // Distance controls belong to driving; WATCH always uses the real race clock.
+      const pills = el("div", "dh-rounds");
+      DISTANCES.forEach((f) => {
+        const n = Math.max(1, Math.round(script.laps * f));
+        const b = el("button", "dh-pill" + (f === distance ? " active" : ""), f === 1 ? n + " LAPS (FULL)" : n + " LAPS");
+        b.type = "button";
+        b.setAttribute("aria-pressed", f === distance ? "true" : "false");
+        b.addEventListener("click", () => { if (f !== distance) { distance = f; clear(slot); paint(script, slot); } });
+        pills.appendChild(b);
+      });
+      driveCard.appendChild(pills);
+      driveAction = el("button", "dh-livebtn", "JUMP IN AS " + (seatCode || "—") + " · L" + startLap);
+      driveAction.type = "button"; driveAction.disabled = !seatCode;
+      driveAction.addEventListener("click", () => jumpIn(script, seatCode)); driveCard.appendChild(driveAction); slot.appendChild(driveCard);
+      const story = el("details"); story.appendChild(el("summary", "adv-more-btn", "RACE STORY · EVERY LAP, PASS & PIT STOP"));
+      story.appendChild(lapList(script)); slot.appendChild(story);
+
+      const entry = el("details"); entry.appendChild(el("summary", "adv-more-btn", "ENTRY LIST · GRID, TYRES & RESULTS"));
+      const table = el("table", "dh-table");
+      const thead = el("thead"), hr = el("tr");
+      ["GRID", "DRIVER", "TEAM", "TYRES", "RESULT", ""].forEach((h) => hr.appendChild(el("th", null, h)));
+      thead.appendChild(hr); table.appendChild(thead);
+      const tbody = el("tbody");
+      script.drivers.forEach((d) => {
+        const tr = el("tr");
+        tr.appendChild(el("td", null, d.grid != null ? "P" + d.grid : "—"));
+        const who = el("td");
+        who.appendChild(teamChip(d.code, d.team));
+        who.appendChild(el("span", null, " " + d.name));
+        tr.appendChild(who);
+        tr.appendChild(el("td", null, d.team));
+        tr.appendChild(el("td", null, d.stints.map((s) => (s.c[0] || "?") + (s.to - s.from + 1)).join(" ") || "—"));
+        tr.appendChild(el("td", null, d.dsq ? "DSQ" : d.dns ? "DNS" : d.dnf ? "DNF L" + d.lapsDone : d.pos != null ? "P" + d.pos : "—"));
+        const cell = el("td");
+        const seated = !seats || seats.has(d.num);
+        const go = el("button", "dh-pill", seated ? "JUMP IN" : NO_SEAT_MSG);
+        go.type = "button";
+        go.disabled = !seated;
+        go.setAttribute("aria-label", seated ? "Race as " + d.name : d.name + ": " + NO_SEAT_MSG);
+        if (seated) go.addEventListener("click", () => { seatCode = d.code; jumpIn(script, d.code); });
+        cell.appendChild(go);
+        tr.appendChild(cell);
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      entry.appendChild(table); slot.appendChild(entry);
+      const source = el("details", "dh-footnote");
+      source.appendChild(el("summary", null, "Data source and freshness"));
+      source.appendChild(el("p", null, DATA_CREDIT));
+      source.appendChild(el("p", null, "Session " + script.sessionKey + " · " + (script.provenance === "cached" ? "Cached timing" : "Loaded OpenF1 timing") + " · assembled " + (script.fetchedAt && Number.isFinite(Date.parse(script.fetchedAt)) ? new Date(script.fetchedAt).toLocaleString() : "time unavailable for older cache") + ". ≈ gaps include reconstructed untimed laps; these are estimates, not official timing. Normal loads may reuse cached API responses; Refresh requests uncached responses."));
+      const link = el("a", null, "OpenF1 session source");
+      link.href = OPENF1 + "/sessions?session_key=" + encodeURIComponent(script.sessionKey); link.target = "_blank"; link.rel = "noopener noreferrer"; source.appendChild(link);
+      const licence = el("a", null, "CC BY-NC-SA 4.0 licence"); licence.href = "https://creativecommons.org/licenses/by-nc-sa/4.0/"; licence.target = "_blank"; licence.rel = "noopener noreferrer"; source.appendChild(licence);
+      const refresh = el("button", "dh-pill", "REFRESH THIS SESSION"); refresh.type = "button";
+      const status = el("p", null, ""); status.setAttribute("role", "status");
+      refresh.onclick = () => {
+        const generation = bodyGen; refresh.disabled = true; status.textContent = "Refreshing timing…";
+        scriptFor(script.sessionKey, true, () => generation === bodyGen && slot.isConnected !== false && (!isOpen || isOpen())).then((next) => {
+          if (generation !== bodyGen || slot.isConnected === false || (isOpen && !isOpen())) return;
+          traces = null; slot.textContent = ""; paint(next, slot);
+        }, () => { if (generation === bodyGen && slot.isConnected !== false) { refresh.disabled = false; status.textContent = "Refresh failed. The previous replay is still available."; } });
+      };
+      source.appendChild(refresh); source.appendChild(status); slot.appendChild(source);
+    }
+
+    function jumpIn(script, code) {
+      Log.info("data", "real race jump in " + script.sessionKey + " as " + code + " laps=" + simLaps(script) + " from=" + startLap);
+      const tr = traceFits(traces, script) ? traces : null;
+      return launchRace(script, { seat: code, laps: simLaps(script), startLap, traces: tr, intro: true });   // intro: the pre-race card and announcer, as RACE! has
+    }
+
+    return { loadRealRace, scriptFor, jumpIn, lapEvents, watch, loadTraces, cancel,
+             traces: () => traces, setTraces: (tr) => { traces = tr || null; return traces; },
+             setDistance: (f) => { distance = DISTANCES.includes(f) ? f : 1; return distance; },
+             setStartLap: (n) => { startLap = Math.max(1, n | 0); return startLap; },
+             setSeat: (code) => { seatCode = code || null; return seatCode; },
+             setWatchCamera: (camera) => { watchCamera = camera; return watchCamera; } };
+  }
+
+  return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, incidentFor, incidentsFor, gridFor, lapBoard, timingConfidence, raceBook, fmtLap, fetchRaw, forgetRaw, cached, remember,
+           pitDuel, traceDetails, fetchTraces, packTrace, traceGet, tracePut, SCRIPT_V, TRACE_V, TRACE_HZ, TRACE_MAX, DISTANCES, CACHE_KEY, CACHE_MAX };
+})();
+Object.freeze(DataRealRace);

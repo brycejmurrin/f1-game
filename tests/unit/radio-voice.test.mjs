@@ -1,0 +1,1198 @@
+/* radio-voice.test.mjs — the radio's VOICE, without a browser.
+ *
+ * Almost none of this feature is speech. The speaking is four lines; the rest is
+ * policy, and policy is what goes wrong. So `plan()` is a pure function — no
+ * DOM, no speechSynthesis, no clock — and this file is mostly that function.
+ *
+ * The two tests that matter most, and why:
+ *
+ *  1. BOOT MUST NOT PROBE. create() calls getVoices() ZERO times. On Chrome the
+ *     first read is empty and a listener has to fill it later; anyone who
+ *     "fixes" that by awaiting the voice list has put a speech API on the boot
+ *     path of a racing game. The assertion is a call count, so that edit fails
+ *     here rather than on a player's machine.
+ *  2. NO SHIPPED LINE OUTLIVES ITS CARD. The real announce() strings are
+ *     scraped out of js/ and planned against the real durations. A message that
+ *     is still being spoken after its card has gone is the failure this whole
+ *     module exists to prevent, and it is asserted against what actually ships
+ *     rather than against a hypothetical.
+ *
+ * Run: node --test tests/unit/radio-voice.test.mjs   (npm run test:tooling-fast)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
+// VM timers are UNREF'd: they still fire while a test awaits, but a cue the
+// module schedules seconds ahead no longer holds the process open after the
+// last assertion (measured 2026-09-24: this file sat idle for most of its run).
+const unrefTimeout = (fn, ms, ...a) => { const t = setTimeout(fn, ms, ...a); t.unref?.(); return t; };
+// The synth is only ever touched from its own task, never inside say() (the game
+// tick): a test lets that task run before it looks at what was spoken.
+const flush = () => new Promise((r) => setTimeout(r, 5));
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const read = (p) => readFileSync(join(ROOT, p), "utf8");
+
+/** A speechSynthesis stub that records every call, in order. */
+function synthStub({ voices = [] } = {}) {
+  const calls = [];
+  return {
+    calls,
+    getVoices() { calls.push({ m: "getVoices" }); return voices; },
+    speak(u) { calls.push({ m: "speak", text: u.text, voice: u.voice, rate: u.rate, volume: u.volume }); },
+    cancel() { calls.push({ m: "cancel" }); },
+    resume() { calls.push({ m: "resume" }); },
+    set onvoiceschanged(fn) { this._vc = fn; },
+  };
+}
+function load({ api = true, voices = [], stored = {} } = {}) {
+  const saved = new Map(Object.entries(stored));
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
+  seedLog(ctx);
+  const synth = api ? synthStub({ voices }) : null;
+  ctx.window = api ? { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } } : {};
+  ctx.GameAudio = { setRadioDuck() {} };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const RV = vm.runInContext("RadioVoice", ctx);
+  const G = { soundOn: true, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
+  return { RV, G, synth, saved, ctx };
+}
+const { RV } = load();
+const P = (over = {}) => RV.plan(Object.assign({ msg: "BOX BOX BOX", life: 3, kind: "info", enabled: true, soundOn: true, state: "race", api: true, volume: 1 }, over));
+
+// ── 1. It degrades, and boot never touches it ───────────────────────────────
+
+test("no speechSynthesis: create() returns an inert instance and nothing throws", () => {
+  const { RV: R, G } = load({ api: false });
+  const v = R.create(G);
+  assert.equal(v.available(), false);
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), false);
+  v.stop(); v.unlock(); v.setEnabled(true);          // all no-ops, none may throw
+  assert.equal(R.inert().say(), false);
+});
+
+test("create() never reads the voice list — boot must not wait on a speech API", () => {
+  const { RV: R, G, synth } = load({ voices: [{ name: "A", lang: "en-GB", localService: true }] });
+  const v = R.create(G);
+  assert.equal(synth.calls.filter((c) => c.m === "getVoices").length, 0,
+    "create() probed the voice list; on Chrome the first read is empty and this is how a speech API ends up on the boot path");
+  assert.equal(typeof v.say, "function");
+  assert.equal(typeof v.then, "undefined", "create() must be synchronous, not a thenable");
+});
+
+// ── 2. plan(): every refusal, by reason ─────────────────────────────────────
+
+test("plan refuses for exactly one reason at a time, and names it", () => {
+  assert.equal(P({ enabled: false }).reason, "off");
+  assert.equal(P({ soundOn: false }).reason, "master-off");
+  assert.equal(P({ api: false }).reason, "no-api");
+  // The title screen's career-conflict card is not radio.
+  assert.equal(P({ state: "menu" }).reason, "not-racing");
+  assert.equal(P({ msg: "   " }).reason, "empty");
+  assert.equal(P({ state: "count" }).speak, true, "the countdown is the race's first seconds");
+  assert.equal(P().speak, true);
+});
+
+test("a line that cannot fit its card is REFUSED, never trimmed", () => {
+  // These lines are diagnosis then instruction — "FRONTS ARE GOING — BRAKE
+  // EARLIER". Trimming keeps the diagnosis and drops the part you act on, and a
+  // truncated instruction at 300 km/h is worse than silence. Silence still
+  // leaves the card, which says everything.
+  const long = new Array(60).fill("WORD").join(" ");
+  const p = P({ msg: long, life: 3 });
+  assert.equal(p.speak, false);
+  assert.equal(p.reason, "too-long");
+  // …and a line that only just misses is sped up rather than refused.
+  const mid = new Array(10).fill("WORD").join(" ");
+  const fast = P({ msg: mid, life: 3.5 });
+  assert.equal(fast.speak, true);
+  assert.ok(fast.rate > RV.TONE.radio.rate, "the rate should have been raised to make it fit");
+  assert.ok(fast.rate <= RV.RATE_MAX);
+});
+
+// ── 3. The three speakers, and the map that must stay total ─────────────────
+
+test("every ANN_PRI kind resolves to a speaker, and the map agrees with radioWho", () => {
+  // Scraped from js/game.js, so adding a `kind` there turns the fast gate red
+  // until the radio knows about it — rather than that kind silently speaking in
+  // the engineer's voice because it fell through a default.
+  const g = read("js/game.js");
+  const kinds = [...g.match(/const ANN_PRI = \{([^}]*)\}/)[1].matchAll(/"?([a-z-]+)"?\s*:/g)].map((m) => m[1]);
+  assert.ok(kinds.length >= 7, `expected the ANN_PRI keys, got ${kinds.join(",")}`);
+  const who = g.match(/function radioWho\(kind\) \{[\s\S]*?\n\}/)[0];
+  for (const k of kinds) {
+    const speaker = RV.SPEAKERS[k];
+    assert.ok(speaker, `ANN_PRI has "${k}" but RadioVoice.SPEAKERS does not`);
+    assert.ok(RV.TONE[speaker], `speaker ${speaker} has no prosody`);
+    const label = vm.runInNewContext('(' + who + ')', {RadioVoice: RV, player: {code:'TST'}})(k);
+    assert.equal(label, {control:'RACE CONTROL',coach:'COACH',announcer:'COMMENTARY',radio:'TST · RADIO'}[speaker]);
+  }
+});
+
+// ── 4. The words, normalised ────────────────────────────────────────────────
+
+test("speakable strips what the card shows and fixes what engines mispronounce", () => {
+  const s = RV.speakable;
+  assert.equal(s("BOX BOX BOX — H"), "box box box, h");
+  assert.equal(s("+5s TRACK LIMITS"), "plus 5 seconds track limits");
+  assert.equal(s("TRACK LIMITS 2/4"), "track limits 2 of 4");
+  assert.equal(s("STOP 2.4s — P5"), "stop 2.4 seconds, P 5");
+  // Caps are kept only where they are an initialism, because several engines
+  // spell a short all-caps token letter by letter.
+  assert.match(s("DRS ENABLED"), /^DRS enabled$/);
+  // "any three capitals is a code" was the shortcut, and it spelled BOX out
+  // letter by letter. A driver code reading as a word is the acceptable cost.
+  assert.equal(s("VER HAS BOXED"), "ver has boxed");
+  assert.equal(s("…"), "");
+  assert.equal(s(null), "");
+});
+
+test("no shipped radio line outlives its card", () => {
+  // The real strings and the real durations, scraped from the tree. This is the
+  // assertion that keeps the feature honest as the corpus grows.
+  const files = ["js/game.js", "js/race/engineer.js", "js/race/pit-lane.js", "js/race/driving-coach.js",
+    "js/race/race-insights.js", "js/race/session-records.js"];
+  let checked = 0, refused = [];
+  for (const f of files) {
+    for (const m of read(f).matchAll(/announce\(\s*"([^"]{4,})"\s*,\s*([\d.]+)\s*(?:,\s*"([a-z-]+)")?\s*\)/g)) {
+      const [, msg, dur, kind] = m;
+      const life = Math.max(3, (+dur || 1.6) + 0.5);
+      const p = P({ msg, life, kind: kind || "race" });
+      checked++;
+      if (!p.speak) refused.push(`${f}: "${msg}" (${p.reason})`);
+    }
+  }
+  assert.ok(checked >= 10, `expected to find the shipped lines, found ${checked}`);
+  // A SHORT, NAMED list, the way the repo handles every other justified
+  // exception. Both of these are prose rather than radio: onboarding copy and a
+  // drill refusal, neither of which is a call about something happening now.
+  // A NEW entry here means somebody wrote a radio line nobody can hear.
+  const ALLOWED_LONG = [
+    'js/game.js: "ROOKIE — the car brakes, steers and accelerates with you. Turn it down in SETTINGS as you get quicker." (too-long)',
+    'js/race/race-insights.js: "A START DRILL NEEDS OTHER CARS ON THE GRID" (too-long)',
+  ];
+  assert.deepEqual(refused.filter((r) => !ALLOWED_LONG.includes(r)), [],
+    "these shipped lines cannot be spoken inside their card");
+});
+
+// ── 5. The speak path, at the API boundary ──────────────────────────────────
+
+test("a preempt is cancel-then-speak-then-RESUME, which is the bug workaround", async () => {
+  // Bugzilla 1522074 (open, Firefox AND Chrome): a speak() directly after a
+  // cancel() is silently dropped. Without resume() the line that goes missing
+  // is the PENALTY that interrupted, not the wear report it interrupted — the
+  // priority order inverts in the audio channel while the picture gets it
+  // right, which is worse than never speaking at all.
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true }, voices: [{ name: "A", lang: "en-GB", localService: true }] });
+  const v = R.create(G);
+  assert.equal(v.say("TYRES AT 50%", 3, "info"), true);
+  assert.equal(synth.calls.filter((c) => c.m !== "getVoices").length, 0, "nothing touches the synth inside the game tick");
+  await flush();
+  assert.equal(v.say("5 SECOND PENALTY", 3, "penalty-hit"), true);
+  await flush();
+  const seq = synth.calls.filter((c) => ["cancel", "speak", "resume"].includes(c.m)).map((c) => c.m);
+  // No cancel before the first line (nothing was speaking — a cancel on every
+  // line was synchronous IPC in every frame), and resume() only after a cancel.
+  assert.deepEqual(seq, ["speak", "cancel", "speak", "resume"]);
+  const spoken = synth.calls.filter((c) => c.m === "speak");
+  assert.match(spoken.at(-1).text, /penalty/, "the interrupting line is the one left speaking");
+});
+
+test("an empty voice list still speaks — that is the Safari path, not a refusal", async () => {
+  // Safari returns nothing from getVoices() and picks a system default itself.
+  // A design that requires a voice object before speaking is silent on Safari.
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true }, voices: [] });
+  const v = R.create(G);
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
+  await flush();
+  const spoke = synth.calls.find((c) => c.m === "speak");
+  assert.equal(spoke.voice, null, "voice = null is legal and is what Safari needs");
+});
+
+test("a REMOTE voice is never chosen — its lead-in is unbounded", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true },
+    voices: [{ name: "Google UK", lang: "en-GB", localService: false }, { name: "Local", lang: "en-GB", localService: true }] });
+  const v = R.create(G);
+  v.say("BOX BOX BOX", 3, "info");
+  await flush();
+  const spoke = synth.calls.find((c) => c.m === "speak");
+  assert.equal(spoke.voice && spoke.voice.name, "Local");
+});
+
+test("a card that will not be spoken still ends the words of the card it replaced", async () => {
+  // The shipped defaults: TEAM RADIO off, the announcer on.
+  const { RV: R, G, synth } = load();
+  G.announcer = { enabled: () => true };
+  const v = R.create(G);
+  assert.equal(v.say("GASLY MAKES THE MOVE ON BOTTAS", 4, "comm"), true);
+  await flush();
+  assert.ok(synth.calls.some((c) => c.m === "speak"), "precondition: the commentator is talking");
+  const cancels = synth.calls.filter((c) => c.m === "cancel").length;
+  assert.equal(v.say("SAFETY CAR, SAFETY CAR. NO OVERTAKING", 3, "race"), false, "precondition: TEAM RADIO off does not speak the flag");
+  await flush();
+  assert.ok(synth.calls.filter((c) => c.m === "cancel").length > cancels, "the commentary kept talking over the flag card");
+});
+
+test("the setting round-trips, and turning it off stops a line in flight", async () => {
+  const { RV: R, G, synth, saved } = load({ stored: { radioVoice: true } });
+  const v = R.create(G);
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
+  await flush();
+  v.setEnabled(false);
+  await flush();
+  assert.ok(synth.calls.some((c) => c.m === "cancel"), "disabling must silence what is already speaking");
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), false);
+  assert.equal(v.setVolume(2), 1, "volume clamps to 0..1");
+  assert.equal(v.setVolume(-1), 0);
+  // Default is OFF: a fresh store speaks nothing until asked.
+  const blank = load();
+  assert.equal(blank.RV.create(blank.G).say("BOX BOX BOX", 3, "info"), false, "the radio ships OFF");
+  assert.equal(blank.saved.has("radioVoice"), false, "create() must not write the setting; the panel owns it");
+});
+
+// ── 8. PER-CHANNEL TUNING ────────────────────────────────────────────────────
+// sameTone, not deepEqual: toneFor() builds its result inside the vm realm the
+// module is loaded in, so a strict deepEqual against a host-realm literal fails
+// on prototype identity with every value matching. That has now cost three
+// tests in this repo; compare the numbers.
+const sameTone = (got, want, msg) => {
+  assert.equal(got.pitch, want.pitch, `${msg}: pitch`);
+  assert.equal(got.rate, want.rate, `${msg}: rate`);
+};
+// The three channels were always distinct (SPEAKERS/TONE); what is new is that
+// a player may re-voice and re-tune each one. The risk is not a crash — it is a
+// stored value silencing a channel, because the tune comes out of localStorage
+// and can be stale, hand-edited, or from a machine with different voices.
+
+test("toneFor is the shipped default until a tune overrides it, per channel", () => {
+  for (const sp of Object.keys(RV.TONE)) {
+    sameTone(RV.toneFor(sp, null), RV.TONE[sp], `${sp}: no tune must be the shipped prosody`);
+    sameTone(RV.toneFor(sp, {}), RV.TONE[sp], `${sp}: an empty tune is no tune`);
+  }
+  // One channel tuned leaves the other two alone — that is what "per group" means.
+  const t = { coach: { pitch: 1.4, rate: 0.8 } };
+  sameTone(RV.toneFor("coach", t), { pitch: 1.4, rate: 0.8 }, "coach takes its tune");
+  sameTone(RV.toneFor("control", t), RV.TONE.control, "control is untouched by coach's tune");
+});
+
+test("a junk or out-of-range tune falls back rather than silencing a channel", () => {
+  // Every one of these is reachable: a hand-edited store, a save from a build
+  // with a wider range, a half-written record. None may produce a pitch or rate
+  // the speech API rejects — the card is the floor, the voice is the extra.
+  const bad = [undefined, null, NaN, "loud", Infinity, -1, 0, 99, {}, []];
+  for (const v of bad) {
+    const t = RV.toneFor("radio", { radio: { pitch: v, rate: v } });
+    assert.ok(Number.isFinite(t.pitch) && t.pitch >= RV.PITCH_MIN && t.pitch <= RV.PITCH_MAX,
+      `pitch ${String(v)} produced ${t.pitch}`);
+    assert.ok(Number.isFinite(t.rate) && t.rate >= RV.RATE_MIN && t.rate <= RV.RATE_MAX,
+      `rate ${String(v)} produced ${t.rate}`);
+  }
+  // A partial record keeps the default for the field it omits.
+  assert.equal(RV.toneFor("radio", { radio: { pitch: 1.5 } }).rate, RV.TONE.radio.rate);
+});
+
+test("a tuned rate reaches plan, and the card budget still wins over it", () => {
+  const base = { msg: "box box", life: 3, kind: "box", enabled: true, soundOn: true, state: "race", api: true };
+  assert.equal(RV.plan(base).rate, RV.TONE.radio.rate, "untuned is the shipped rate");
+  assert.equal(RV.plan({ ...base, tune: { radio: { rate: 0.7 } } }).rate, 0.7, "a tuned rate is used");
+  assert.equal(RV.plan({ ...base, tune: { radio: { pitch: 1.3 } } }).pitch, 1.3);
+  // THE BUDGET OVERRIDES THE PREFERENCE, and that is not a bug to report as
+  // "the slider does nothing": a long line at a slow rate outlives its card, so
+  // plan() lifts it to RATE_MAX and refuses only if it STILL will not fit.
+  const long = { ...base, msg: "box box box this lap we are switching to the hard tyre and expect traffic", life: 3 };
+  const slow = RV.plan({ ...long, tune: { radio: { rate: 0.6 } } });
+  assert.ok(slow.rate === RV.RATE_MAX || !slow.speak,
+    `a slow tune on a long line must be sped up or refused, got rate ${slow.rate} speak ${slow.speak}`);
+});
+
+test("the tune cannot reach a channel that does not exist", () => {
+  // SPEAKERS maps every kind onto one of three; a tune keyed by anything else
+  // is a stale save, and must not become a fourth channel by accident.
+  const t = { engineer: { pitch: 1.5, rate: 1.3 } };
+  for (const sp of Object.keys(RV.TONE)) {
+    sameTone(RV.toneFor(sp, t), RV.TONE[sp], `${sp} was moved by a tune for a channel that does not exist`);
+  }
+  // An unknown speaker resolves to the driver's channel, never to undefined.
+  sameTone(RV.toneFor("nobody", null), RV.TONE.radio, "an unknown speaker is the driver's channel");
+});
+
+test("every channel has a preview line, and it survives speakable()", () => {
+  for (const sp of Object.keys(RV.TONE)) {
+    const line = RV.SAMPLE[sp];
+    assert.ok(line && line.length > 10, `${sp}: no sample line to preview with`);
+    const said = RV.speakable(line);
+    assert.ok(said.length > 5, `${sp}: sample normalises to "${said}"`);
+    assert.ok(!/[A-Z]{2,}/.test(said.replace(/\b(DRS|ERS|VSC|SC|MGU|PB|P\d{1,2})\b/g, "")),
+      `${sp}: sample leaves an all-caps token engines spell out: "${said}"`);
+  }
+  // The control sample carries a penalty, which is the speakable() case that
+  // matters most — "+5s" must become words, not be read as punctuation.
+  assert.match(RV.speakable(RV.SAMPLE.control), /plus 5 seconds/);
+});
+
+// The INSTANCE side of tuning — the pure half is above; these are the parts that
+// touch the store and the synth, exercised through the same stub the voice tests
+// use. The VM game harness cannot reach any of this: it has no speechSynthesis,
+// so create() hands back inert() and every setter is a no-op that returns false.
+
+const LOCAL = (name, lang = "en-GB") => ({ name, lang, localService: true });
+
+test("a tune round-trips through the store, per channel, and resets", () => {
+  const { RV, G, saved } = load({ stored: { radioVoice: true } });
+  const r = RV.create(G);
+  assert.equal(r.available(), true, "the stub synth must give a live instance, not inert()");
+
+  assert.equal(r.setTune("coach", { pitch: 1.3, rate: 0.8 }), true);
+  assert.equal(r.tuneFor("coach").pitch, 1.3);
+  assert.equal(r.tuneFor("coach").rate, 0.8);
+  // The OTHER channels are untouched — the whole point of "per group".
+  assert.equal(r.tuneFor("radio").rate, RV.TONE.radio.rate);
+  assert.equal(r.tuneFor("control").pitch, RV.TONE.control.pitch);
+
+  // One key, one object — the store guard wants a key to mean one type.
+  const stored = saved.get("voiceTune");
+  assert.ok(stored && typeof stored === "object", "voiceTune must persist as one record");
+  assert.deepEqual(Object.keys(stored), ["coach"], "only the tuned channel is written");
+
+  assert.equal(r.setTune("coach", null), true, "a null patch resets");
+  assert.equal(r.tuneFor("coach").pitch, RV.TONE.coach.pitch, "reset is the shipped default again");
+  assert.equal(r.setTune("nobody", { pitch: 1.2 }), false, "an unknown channel is refused, not created");
+});
+
+test("a stored tune is read at create() and reaches the utterance", async () => {
+  const { RV, G, synth } = load({
+    voices: [LOCAL("Alpha"), LOCAL("Beta")],
+    stored: { radioVoice: true, voiceTune: { radio: { pitch: 1.25, rate: 0.9, name: "Beta" } } },
+  });
+  const r = RV.create(G);
+  r.say("box box", 9, "box");
+  await flush();
+  const spoke = synth.calls.filter((c) => c.m === "speak").pop();
+  assert.ok(spoke, "nothing was spoken");
+  assert.equal(spoke.rate, 0.9, "the stored rate must reach the utterance");
+  assert.equal(spoke.voice && spoke.voice.name, "Beta", "the stored voice must be the one chosen");
+});
+
+test("a stored voice that is no longer installed falls back, it does not silence the channel", async () => {
+  // The realistic case: the save was made on another machine, or an OS update
+  // removed a voice. Picking by NAME is what makes this recoverable at all — a
+  // stored INDEX would silently become a different voice instead.
+  const { RV, G, synth } = load({
+    voices: [LOCAL("Alpha"), LOCAL("Beta")],
+    stored: { radioVoice: true, voiceTune: { radio: { name: "A Voice That Left" } } },
+  });
+  const r = RV.create(G);
+  assert.equal(r.say("box box", 9, "box"), true, "a missing voice must not stop the line");
+  await flush();
+  const spoke = synth.calls.filter((c) => c.m === "speak").pop();
+  assert.ok(spoke.voice && spoke.voice.name, "it fell through to no voice at all");
+  assert.ok(["Alpha", "Beta"].includes(spoke.voice.name), "it must land on an installed voice");
+});
+
+test("preview speaks the channel being tuned, with the TEAM RADIO switch either way", () => {
+  const { RV, G, synth } = load({ voices: [LOCAL("Alpha")], stored: { radioVoice: true } });
+  const r = RV.create(G);
+  assert.equal(r.preview("control"), true);
+  const spoke = synth.calls.filter((c) => c.m === "speak").pop();
+  assert.match(spoke.text, /plus 5 seconds/, "the control sample is the penalty line, spoken");
+  assert.equal(spoke.rate, RV.TONE.control.rate, "…at that channel's prosody");
+
+  // A preview is NOT a say(): plan() refuses everything outside a race on
+  // purpose, and the settings panel is exactly that case.
+  //
+  // IT IS ALSO NOT GATED ON THE SWITCH, and it was until 2026-09-20. TEAM RADIO
+  // ships OFF, so in the shipped state every TEST button on the settings sheet
+  // did nothing while the copy beside them promised "TEST to hear it without
+  // starting a race" — a dead control with no explanation. Pressing TEST is the
+  // consent; the switch keeps the meaning that matters, below.
+  const off = load({ voices: [LOCAL("Alpha")], stored: { radioVoice: false } });
+  const silent = off.RV.create(off.G);
+  assert.equal(silent.preview("control"), true, "TEST must work on the sheet that offers it");
+  assert.equal(silent.say("box box", 9, "box"), false,
+    "…and OFF still means off where it counts: the radio stays silent through the race");
+});
+
+test("master sound silences a preview — that switch means silence", () => {
+  // speechSynthesis is not in the WebAudio graph, so nothing else stops it.
+  const q = load({ voices: [LOCAL("Alpha")], stored: { radioVoice: true } });
+  q.G.soundOn = false;
+  assert.equal(q.RV.create(q.G).preview("control"), false);
+});
+
+/* ── A PREEMPTED LINE MUST NOT TURN OFF THE ONE THAT REPLACED IT ─────────────
+ *
+ * Found by survey 2026-09-18, and it lands on exactly the lines this module was
+ * built for. `deadline` and the music duck are instance state, and every
+ * utterance shared ONE handler. speechSynthesis fires a cancelled line's
+ * end/error ASYNCHRONOUSLY — after the replacement has started — so the dead
+ * line's callback ran against the live one: it released the music duck under a
+ * penalty call that was still speaking, and cleared that call's hard stop, the
+ * one guarantee this module documents itself as providing ("spoken after it
+ * left the screen").
+ *
+ * The stub below models the ONE behaviour the existing synthStub does not: a
+ * cancel() ends the utterance that was speaking, on a later turn. That is not
+ * embellishment — it is the whole bug.
+ */
+function lateCancelSynth() {
+  const calls = [];
+  let speaking = null;
+  const pendingEnds = [];
+  return {
+    calls,
+    getVoices() { return []; },
+    speak(u) { calls.push({ m: "speak", text: u.text }); speaking = u; },
+    cancel() {
+      calls.push({ m: "cancel" });
+      // The browser does not call this synchronously; queue it for the test to
+      // release once the replacement line is already under way.
+      if (speaking) { pendingEnds.push(speaking); speaking = null; }
+    },
+    resume() { calls.push({ m: "resume" }); },
+    set onvoiceschanged(fn) { this._vc = fn; },
+    /** Fire every queued end/error, the way the engine eventually does. */
+    flushEnds() { const q = pendingEnds.splice(0); for (const u of q) if (u.onend) u.onend(); return q.length; },
+  };
+}
+
+function loadWithSynth(synth) {
+  const ducks = [];
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const RV = vm.runInContext("RadioVoice", ctx);
+  const G = { soundOn: true, state: "race", store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } };
+  return { voice: RV.create(G), ducks };
+}
+
+test("a cancelled line's late end does not un-duck the line that replaced it", async () => {
+  const synth = lateCancelSynth();
+  const { voice, ducks } = loadWithSynth(synth);
+  assert.equal(voice.say("Brake a little earlier here", 3, "coach"), true, "the coach line speaks");
+  await flush();
+  assert.equal(voice.say("Car 44, track limits — +5s penalty", 3, "penalty-hit"), true, "the penalty preempts it");
+  await flush();
+  const duckedBefore = ducks[ducks.length - 1];
+  assert.equal(duckedBefore, true, "the penalty is speaking, so the music is ducked");
+
+  assert.equal(synth.flushEnds(), 1, "the cancelled coach line reports its end, late");
+  assert.equal(ducks[ducks.length - 1], true,
+    "the DEAD coach line released the duck while the penalty was still speaking — the music jumps back up " +
+    "underneath the one line the player most needs to hear");
+});
+
+test("a cancelled line's late end does not disarm the replacement's hard stop", async () => {
+  const synth = lateCancelSynth();
+  const { voice } = loadWithSynth(synth);
+  voice.say("Brake a little earlier here", 3, "coach");
+  // ONE word and a 0.6 s life: budget = life - LEAD_RESERVE(0.25) = 0.35 s, which
+  // beats estimate("box") at RATE_MAX (1 / (2.4 * 1.35) = 0.31 s) so the line is
+  // actually spoken, and puts the hard stop 350 ms out — inside this test rather
+  // than behind a fake clock. A first draft asked for a 100 ms budget and plan()
+  // rightly refused to speak a 2.5 s penalty call into it, so nothing armed.
+  assert.equal(voice.say("Box", 0.6, "penalty-hit"), true, "the preempting line must actually speak");
+  synth.flushEnds();                       // the dead coach line, arriving late
+  const cancelsBefore = synth.calls.filter((c) => c.m === "cancel").length;
+  await new Promise((r) => setTimeout(r, 520));
+  const cancelsAfter = synth.calls.filter((c) => c.m === "cancel").length;
+  assert.ok(cancelsAfter > cancelsBefore,
+    "the penalty's hard stop never fired: a stale handler had cleared it, so a line whose end event never " +
+    "arrives keeps the radio open and the music ducked for the rest of the race");
+});
+
+test("an engine that ends an utterance inside speak() releases ownership without a stale deadline", () => {
+  // Claiming `current` BEFORE speak() rather than after. Some engines report a
+  // refused utterance immediately, synchronously, from inside speak() — and if
+  // the line has not been claimed yet, its OWN end runs as a stranger: the duck
+  // it just raised is never released and the radio stays open over the music
+  // for the rest of the session. Mutation-checked: move the claim after speak()
+  // and this is the test that fails.
+  const ducks = [];
+  const calls = [];
+  const synth = {
+    calls, getVoices: () => [], cancel() { calls.push({ m: "cancel" }); }, resume() {},
+    speak(u) { calls.push({ m: "speak" }); if (u.onend) u.onend(); },   // ends where it starts
+    set onvoiceschanged(fn) { this._vc = fn; },
+  };
+  const timers = new Map(); let timerId = 0;
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console,
+    setTimeout(fn) { const id = ++timerId; timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); } });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const RV = vm.runInContext("RadioVoice", ctx);
+  const voice = RV.create({ soundOn: true, state: "race",
+    store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } });
+
+  assert.equal(voice.say("Box", 3, "info"), true);
+  const [id, speak] = timers.entries().next().value; timers.delete(id); speak();
+  assert.equal(calls.filter(c => c.m === "speak").length, 1, "the deferred speech path actually ran");
+  assert.equal(voice.busy(), false);
+  assert.equal(timers.size, 0, "a finished utterance cannot later stop another channel or its duck");
+  assert.equal(ducks[ducks.length - 1], false,
+    "the utterance ended, so the duck must be released — a line whose end ran before it was claimed leaves " +
+    "the music ducked with nothing speaking");
+});
+
+/* ── THE iOS PRIMING GESTURE ─────────────────────────────────────────────────
+ *
+ * Reported 2026-09-18: on iPhone/iPad, nothing is EVER spoken — not a penalty,
+ * not the coach, not even the settings preview. Two earlier fixes in this file
+ * were both about what happens after a line starts, so neither could have
+ * helped: on iOS no line ever started.
+ *
+ * WebKit refuses speechSynthesis.speak() outside a user gesture until the engine
+ * has been primed by a speak() INSIDE one, and unlock() — called from the game's
+ * first-gesture listener and from the radio toggle's own click — is the only
+ * place that ever happens. It did `u.volume = 0; speak(u); cancel();`, which
+ * primes nothing: cancelling in the same turn discards the utterance before it
+ * is processed, and a muted utterance is not reliably counted. Every later say()
+ * runs in the race loop, outside any gesture, so every one was refused.
+ *
+ * These pin the two halves, because both are invisible on every desktop engine —
+ * which is precisely why it shipped.
+ */
+test("unlock() does not cancel the utterance that primes the engine", () => {
+  const { RV, G, synth } = load();
+  RV.create(G).unlock();
+  const seq = synth.calls.filter((c) => ["speak", "cancel"].includes(c.m)).map((c) => c.m);
+  assert.deepEqual(seq, ["speak"],
+    "a cancel() in the same turn discards the priming utterance before iOS processes it, spending the one " +
+    "gesture the platform gives us and leaving the engine locked for the rest of the session");
+});
+
+test("unlock() primes with an audible-volume utterance, not a muted one", () => {
+  const { RV, G, synth } = load();
+  RV.create(G).unlock();
+  const spoke = synth.calls.find((c) => c.m === "speak");
+  assert.ok(spoke, "unlock must speak");
+  assert.ok(spoke.volume > 0,
+    "WebKit does not reliably count a MUTED utterance as the audible speak that unlocks the engine; a space " +
+    "has no phonemes so it stays inaudible whatever the volume says");
+});
+
+test("LAZY_AUDIO: after the inert stub, create() re-primes on the next valid gesture only", () => {
+  /* Title boots G.radio as inert(); firstGesture() calls unlock() on the stub (noop). When LAZY_AUDIO
+   * binds the real module, WebKit still needs a speak() inside a user gesture — platform-session will
+   * not fire again. RadioVoice.create() must arm one-shot listeners with the same activation filters. */
+  const docListeners = new Map();
+  const doc = {
+    hidden: false,
+    getElementById: () => null,
+    addEventListener(type, fn) {
+      if (!docListeners.has(type)) docListeners.set(type, []);
+      docListeners.get(type).push(fn);
+    },
+    removeEventListener(type, fn) {
+      const arr = docListeners.get(type);
+      if (!arr) return;
+      const i = arr.indexOf(fn);
+      if (i >= 0) arr.splice(i, 1);
+    },
+  };
+  const dispatch = (type, extra = {}) => {
+    const e = Object.assign({ type }, extra);
+    for (const fn of [...(docListeners.get(type) || [])]) fn(e);
+  };
+  const primingSpeaks = (calls) => calls.filter((c) => c.m === "speak" && c.text === " ");
+
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
+  seedLog(ctx);
+  const synth = synthStub();
+  ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.document = doc;
+  ctx.MutationObserver = function () { this.observe = () => {}; };
+  ctx.GameAudio = { setRadioDuck() {} };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const RV = vm.runInContext("RadioVoice", ctx);
+  const G = { soundOn: true, state: "race", store: { get: (_k, d) => d, set: () => {} } };
+
+  RV.inert().unlock();
+  assert.equal(primingSpeaks(synth.calls).length, 0, "the inert stub must not prime speechSynthesis");
+
+  RV.create(G);
+  assert.equal(primingSpeaks(synth.calls).length, 0, "create() must not speak until the next gesture");
+
+  dispatch("keydown", { key: "Escape" });
+  assert.equal(primingSpeaks(synth.calls).length, 0, "Escape is not activation-triggering");
+
+  dispatch("click");
+  assert.equal(primingSpeaks(synth.calls).length, 1,
+    "the first valid gesture after LAZY bind must run unlock()'s priming speak");
+
+  const EVTS = ["pointerdown", "pointerup", "touchend", "keydown", "click"];
+  for (const t of EVTS) assert.equal((docListeners.get(t) || []).length, 0, `${t} listener must be removed after priming`);
+
+  dispatch("click");
+  assert.equal(primingSpeaks(synth.calls).length, 1, "already primed — no second priming speak");
+});
+
+/* ── ASKED vs STARTED: the counter that ends the guessing ────────────────────
+ *
+ * Three rounds of "still isn't working" came from one gap: a speech engine that
+ * REFUSES a speak() does it silently — no error, no event, nothing logged — so
+ * "we never asked" and "we asked and the platform swallowed it" are the same
+ * symptom from outside. They need opposite fixes. debug().asked and .started
+ * separate them, and js/audio/panel.js prints the verdict where the player can
+ * read it instead of relaying a feeling.
+ */
+test("debug() separates what we asked for from what the engine started", async () => {
+  const calls = [];
+  let pending = null;
+  const synth = {
+    getVoices: () => [], cancel() {}, resume() {},
+    speak(u) { calls.push(u); pending = u; },
+    set onvoiceschanged(fn) { this._vc = fn; },
+    /** The engine actually beginning — what iOS never does when unprimed. */
+    begin() { if (pending && pending.onstart) pending.onstart(); },
+  };
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck() {} };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const RV = vm.runInContext("RadioVoice", ctx);
+  const voice = RV.create({ soundOn: true, state: "race",
+    store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } });
+
+  assert.deepEqual([voice.debug().asked, voice.debug().started], [0, 0], "nothing attempted yet");
+
+  voice.say("Box", 3, "info");
+  await flush();
+  assert.equal(voice.debug().asked, 1, "the speak was handed to the platform");
+  assert.equal(voice.debug().started, 0,
+    "...and the engine has not begun it — which is exactly the state an unprimed iOS engine sits in for ever, " +
+    "reporting nothing, and is what the panel must be able to tell the player");
+
+  synth.begin();
+  assert.equal(voice.debug().started, 1, "onstart is the only proof a line was actually voiced");
+});
+
+test("the settings preview counts too — it speaks directly, bypassing plan()", () => {
+  // The preview is the player's one test button. If it is silent and uncounted,
+  // pressing it teaches them nothing.
+  const { RV, G, synth } = load();
+  const voice = RV.create(Object.assign({}, G, { soundOn: true }));
+  voice.setEnabled(true);
+  voice.preview("control");
+  assert.ok(voice.debug().asked > 0, "a preview must be counted like any other attempt");
+});
+
+test("every channel the radio partitions into is a considered decision in the engine", () => {
+  // TWO TABLES, ONE FACT. RadioVoice.SPEAKERS maps a `kind` onto a channel and
+  // js/audio/radio-fx.js RADIO_CH gives that channel its click, hiss and squelch.
+  // A channel added to one and forgotten in the other is silent — which is the
+  // right default, and exactly why it would never be noticed. This is what makes
+  // the silence deliberate.
+  const RV = load().RV;
+  const engine = read("js/audio/radio-fx.js");
+  const table = engine.match(/const RADIO_CH = Object\.freeze\(\{([\s\S]*?)\}\);/);
+  assert.ok(table, "could not find RADIO_CH in js/audio/radio-fx.js");
+  const voiced = new Set([...table[1].matchAll(/^\s*(\w[\w-]*):/gm)].map((m) => m[1]));
+  // `coach` is the deliberate omission: the driving coach is not on a radio.
+  // `announcer` too: in-race commentary (kind "comm") is the TV booth, not a
+  // radio transmission, so it gets no click, hiss or squelch.
+  const SILENT = new Set(["coach", "announcer"]);
+  for (const ch of new Set(Object.values(RV.SPEAKERS)))
+    assert.ok(voiced.has(ch) || SILENT.has(ch),
+      `channel "${ch}" has no entry in RADIO_CH and is not in this test's silent set — decide which`);
+  for (const ch of voiced)
+    assert.ok(!SILENT.has(ch), `"${ch}" is listed as silent here but RADIO_CH gives it a sound`);
+});
+
+test("the sting is gated on the session, exactly as plan() is", () => {
+  // showAnnounce draws MENU cards too — the title screen's save-conflict card is
+  // the one plan() names. A radio squelch under it claims a transmission that is
+  // not happening, on a screen where no car is running.
+  const game = read("js/game.js");
+  assert.match(game, /if \(state === "race" \|\| state === "count"\) GameAudio\.radioSting\(/);
+  // ...and the VOICE gets the same channel's cue length as its lead, from the
+  // engine rather than a second copy of the note table, so the words start when
+  // the figure ends instead of underneath it.
+  assert.match(game, /GameAudio\.radioLeadS\(_annCh\)/);
+  assert.match(game, /radioVoice\.say\(msg, announceT, kind, _annLead\)/);
+});
+
+test("waiting for the courtesy figure costs no shipped line its voice", () => {
+  /* THE WORDS NOW START AFTER THE CUE, which means the cue comes out of the
+   * budget — and a budget that shrinks can silence a line that used to fit.
+   * This is the measurement that says it does not. The engineer's figure is
+   * four notes (~0.425 s) and race control's is two (~0.25 s); the lead is read
+   * from js/audio/radio-fx.js so the two cannot drift.
+   *
+   * A NEW entry here means the cue just took a line off the air, and the
+   * trade has to be made deliberately rather than discovered by a player. */
+  const src = read("js/audio/radio-fx.js");
+  const table = src.match(/const RADIO_CH = Object\.freeze\(\{([\s\S]*?)\n    \}\);/);
+  assert.ok(table, "could not find RADIO_CH");
+  const leadOf = (speaker) => {
+    // up to the figure's closing "]]" — the notes are themselves arrays, so a
+    // lazy [^\]] scan stops inside the first note instead of after the last.
+    const row = table[1].match(new RegExp(speaker + ":[\\s\\S]*?tune: \\[([\\s\\S]*?\\]\\])"));
+    if (!row) return 0;
+    return 0.03 + [...row[1].matchAll(/\[\s*[\d.]+\s*,\s*([\d.]+)/g)].reduce((a, m) => a + +m[1], 0);
+  };
+  const leads = { control: leadOf("control"), radio: leadOf("radio"), coach: 0 };
+  assert.ok(leads.radio > 0.3, "the engineer's figure should be four notes: " + leads.radio);
+  assert.ok(leads.control > 0.1 && leads.control < leads.radio, "race control's is shorter: " + leads.control);
+
+  const files = ["js/game.js", "js/race/engineer.js", "js/race/pit-lane.js", "js/race/driving-coach.js",
+    "js/race/race-insights.js", "js/race/session-records.js"];
+  let checked = 0; const newlyMute = [];
+  for (const f of files) {
+    for (const m of read(f).matchAll(/announce\(\s*"([^"]{4,})"\s*,\s*([\d.]+)\s*(?:,\s*"([a-z-]+)")?\s*\)/g)) {
+      const [, msg, dur, kind0] = m, kind = kind0 || "race";
+      const life = Math.max(3, (+dur || 1.6) + 0.5);
+      const lead = leads[RV.SPEAKERS[kind] || "radio"] || 0;
+      checked++;
+      if (P({ msg, life, kind, lead: 0 }).speak && !P({ msg, life, kind, lead }).speak)
+        newlyMute.push(`${f}: "${msg}" (${life.toFixed(1)} s card, ${lead.toFixed(3)} s cue)`);
+    }
+  }
+  assert.ok(checked >= 10, `expected to find the shipped lines, found ${checked}`);
+  assert.deepEqual(newlyMute, [], "the courtesy figure silenced these lines");
+});
+
+test("a preempt during the cue cancels the line waiting behind it", () => {
+  /* The lead is a window where a speak is SCHEDULED but not yet handed over.
+   * Without clearing it, the line that was interrupted arrives on top of the
+   * line that interrupted it — the same inversion `current` prevents one step
+   * later, and the case this game produces every time a penalty cuts in.
+   *
+   * ITS OWN CLOCK, because a real setTimeout fires long after a synchronous
+   * test has returned: with the platform timer this passed whether or not
+   * stop() cancelled anything, which is a test that cannot fail. */
+  const timers = [];
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console,
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length; },
+    clearTimeout: (id) => { const t = timers[id - 1]; if (t) t.live = false; } });
+  seedLog(ctx);
+  const synth = synthStub({ voices: [{ name: "A", lang: "en-GB", localService: true }] });
+  ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck() {} };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const saved = new Map([["radioVoice", true]]);
+  const v = vm.runInContext("RadioVoice", ctx).create({
+    soundOn: true, state: "race",
+    store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, x) => saved.set(k, x) },
+  });
+  const spoke = () => synth.calls.filter((c) => c.m === "speak").length;
+  assert.equal(v.say("TYRES AT 50%", 3, "info", 0.4), true, "the wear report is scheduled behind its cue");
+  assert.equal(spoke(), 0, "...and has not been handed over yet");
+  v.stop();
+  for (const t of timers) if (t.live) t.fn();          // the clock runs on regardless
+  assert.equal(spoke(), 0, "a stop during the lead must cancel the pending speak, not let it fire");
+});
+
+test("quitting to the title ends the radio, not just the card", () => {
+  // The hiss bed was torn down only by RadioVoice's #announce observer — the
+  // VOICE's teardown, which is never registered at all on a browser without
+  // speechSynthesis. Quitting mid-transmission then left the radio running over
+  // the title screen. quitToMenu already ends every other session thing.
+  const quit = symbolSource("function quitToMenu()");
+  assert.match(quit, /GameAudio\.radioStingStop\(\)/,
+    "quitToMenu must end the sting itself rather than borrow the voice's observer");
+  assert.match(quit, /_annQueue\.length = 0/, "…on the same pass that empties the announce queue");
+  // Spotter speaks on VoicePack channel "spotter" without RadioVoice.current, so
+  // hiding #announce only calls stop() (engineer) or radioStingStop — never
+  // pack.stop(). raceRadio.update (which would pack.stop("spotter") on !race)
+  // lives AFTER `if (state !== "race") return` in update(), so the next tick
+  // never reaches it. halt() is the pause/pit contract: every pack channel.
+  assert.match(quit, /radioVoice\.halt\(\)/,
+    "quitToMenu must halt every pack channel (spotter included), not only the sting");
+});
+
+// ── Regressions from the 2026-09-24 integration audit ───────────────────────
+
+test("the radio never cancels speech that is not its own (the announcer shares the synth)", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true } });
+  synth.speaking = true;                       // the announcer is mid-read
+  const v = R.create(G);
+  v.stop();
+  v.setEnabled(false); v.setEnabled(true);
+  await flush();
+  assert.equal(synth.calls.filter((c) => c.m === "cancel").length, 0, "no global cancel while nothing of ours is queued");
+});
+
+test("a line's own preempt cancels synchronously, before anything else can start speaking", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true } });
+  const v = R.create(G);
+  v.say("TYRES AT 50%", 3, "info");
+  await flush();                               // our line is on the synth
+  v.stop();
+  const n = synth.calls.length;
+  assert.equal(synth.calls[n - 1].m, "cancel", "cancelled in the same task as stop()");
+  // Something else (the announcer's wrap-up) speaks next, in the same task:
+  synth.speak({ text: "And the winner is" });
+  await flush();
+  assert.equal(synth.calls.at(-1).m, "speak", "no deferred cancel lands after it and kills it");
+});
+
+test("the settings TEST sample is not cancelled a task later", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true } });
+  G.state = "menu";
+  const speak = synth.speak.bind(synth);
+  synth.speak = (u) => { synth.speaking = true; speak(u); };   // a real engine reports what it is saying
+  const v = R.create(G);
+  assert.equal(v.preview("radio"), true);
+  await flush();
+  const tail = synth.calls.filter((c) => c.m === "speak" || c.m === "cancel").map((c) => c.m);
+  assert.equal(tail.at(-1), "speak", `the sample is the last thing on the synth: ${tail.join(",")}`);
+});
+
+test("a line still waiting out its cue when the race ends is dropped, not read over the results", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true } });
+  const v = R.create(G);
+  assert.equal(v.say("BOX BOX BOX", 3, "info", 0.05), true);
+  G.state = "results";                         // endRace() lands before the cue finishes
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 0);
+});
+
+test("the SPOTTER row lives in the TEAM RADIO section, and the folded summary shows its state", () => {
+  const html = readFileSync(join(ROOT, "index.html"), "utf8");
+  const sec = html.slice(html.indexOf('<details id="as-radio-details"'), html.indexOf("</details>", html.indexOf('<details id="as-radio-details"')));
+  assert.ok(sec.includes('id="as-spot"'), "players look for the spotter under TEAM RADIO");
+  assert.equal((html.match(/id="as-spot"/g) || []).length, 1, "one spotter row");
+  const panel = readFileSync(join(ROOT, "js/audio/panel.js"), "utf8");
+  const fold = panel.slice(panel.indexOf('Dom.paintFold($("as-radio-sum")'), panel.indexOf("]);", panel.indexOf('Dom.paintFold($("as-radio-sum")')));
+  assert.match(fold, /"SPOTTER " \+/, "a radio switched OFF still shows SPOTTER ON/OFF without opening the section");
+});
+
+test("hunt fixes: an 'interrupted' resume() never counts as recovered; TLX stops reloading after the fallback; Escape in the garage yields to a dialog", () => {
+  const eng = readFileSync(join(ROOT, "js/audio/engine.js"), "utf8");
+  assert.match(eng, /if \(!ctx \|\| ctx\.state !== "running"\) return;\s*rebuildTries = 0;/);
+  const tlx = readFileSync(join(ROOT, "js/render/three/tlx.js"), "utf8");
+  assert.match(tlx, /if \(n === 3\) setTimeout\(function \(\) \{ try \{ location\.reload\(\); \}/);
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /function endRace\(forcedOrder\) \{[\s\S]{0,200}sessionStorage\.removeItem\("apex26\.ctxLostReloads"\)/);
+  const cam = readFileSync(join(ROOT, "js/garage/setup-camera.js"), "utf8");
+  assert.match(cam, /!document\.querySelector\("dialog\[open\], dialog\.screen:not\(\[hidden\]\)"\)/);
+});
+
+test("the pause card and a hidden tab cut the SPOTTER channel too, not only the engineer's", () => {
+  const packStops = [], listeners = {}, observers = [];
+  const pause = { hidden: true };
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synthStub(), SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck() {} };
+  ctx.VoicePack = { create: () => ({ stop: (ch) => packStops.push(ch == null ? "*" : ch), remaining: () => 0, ensure() {} }) };
+  ctx.document = {
+    hidden: false,
+    getElementById: (id) => (id === "pausemenu" ? pause : null),
+    addEventListener: (t, fn) => { listeners[t] = fn; },
+  };
+  ctx.MutationObserver = function (fn) { this.observe = (el) => observers.push({ el, fn }); };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const G = { soundOn: true, state: "race", store: { get: (k, d) => d, set() {} } };
+  vm.runInContext("RadioVoice", ctx).create(G);
+  const onPause = observers.find((o) => o.el === pause);
+  assert.ok(onPause, "the pause card is observed");
+  pause.hidden = false; onPause.fn();
+  assert.ok(packStops.includes("*"), "pause stops every pack channel (a spotter clip mid-word included)");
+  packStops.length = 0;
+  ctx.document.hidden = true; listeners.visibilitychange();
+  assert.ok(packStops.includes("*"), "hiding the tab stops every pack channel");
+});
+
+// ROTATE-BLOCK PAUSE HIDES THE CARD IN THE SAME TASK. setPaused(true) shows
+// #pausemenu; syncRotateBlocker then sets hidden again because the blocker
+// owns the screen. MutationObserver callbacks run AFTER that task, so they
+// see the card already hidden and the `if (!pause.hidden) halt()` gate
+// never fires — the engineer / spotter line, hiss bed and squelch tail
+// keep talking over a frozen race. Photo mode does the same hide. The pit
+// garage (#988) already calls halt() at the pause entry; this is that
+// contract for every setPaused(true), including the ones that leave the
+// card hidden.
+test("a rotate-block pause that re-hides the card in the same task still halts radio", () => {
+  const packStops = [], stingStops = [], ducks = [], queued = [], observers = [];
+  const pause = { _hidden: true };
+  Object.defineProperty(pause, "hidden", {
+    get() { return this._hidden; },
+    set(v) {
+      this._hidden = !!v;
+      for (const o of observers) if (o.el === pause) queued.push(o.fn);
+    },
+  });
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout: unrefTimeout, clearTimeout });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synthStub(), SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck: (b) => ducks.push(b), radioStingStop: () => stingStops.push("stop") };
+  ctx.VoicePack = { create: () => ({
+    stop: (ch) => packStops.push(ch == null ? "*" : ch), remaining: () => 0, ensure() {},
+    speak() { return true; }, ready: () => true,
+  }) };
+  ctx.document = {
+    hidden: false,
+    getElementById: (id) => (id === "pausemenu" ? pause : null),
+    addEventListener() {},
+  };
+  ctx.MutationObserver = function (fn) { this.observe = (el) => observers.push({ el, fn }); };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const G = { soundOn: true, state: "race", store: { get: (k, d) => (k === "radioVoice" ? true : k === "radioPack" ? true : d), set() {} } };
+  const v = vm.runInContext("RadioVoice", ctx).create(G);
+  assert.equal(v.say("BOX BOX BOX", 3, "info", 0.5), true);
+  assert.equal(v.busy(), true, "precondition: a line is on air");
+  assert.equal(ducks.at(-1), true, "precondition: the music is ducked under it");
+  packStops.length = 0; stingStops.length = 0;
+
+  // setPaused(true, "rotate-block") then syncRotateBlocker(false), one task:
+  pause.hidden = false;
+  const audio = symbolSource("function setPaused(p, why) {")
+    .match(/if \(p\) \{ GameAudio\.stopEngine\(\);[^}]+\}/);
+  assert.ok(audio, "setPaused still has a pause-audio line");
+  vm.runInNewContext(audio[0], {
+    p: true, radioVoice: v,
+    GameAudio: { stopEngine() {}, setSkid() {}, stopRain() {} },
+    $: () => ({ disabled: false }),
+    netPlay: { active: () => false },
+    qualiNet: { hasArmed: () => false },
+  });
+  pause.hidden = true;                                          // the blocker took the screen
+  assert.equal(pause.hidden, true, "the card is gone by the end of the task");
+  while (queued.length) queued.shift()();                       // observers run now, seeing hidden
+  assert.equal(v.busy(), false, "the line is gone — the observer never saw the card");
+  assert.ok(stingStops.length, "the hiss bed and squelch tail stop with the line");
+  assert.ok(packStops.includes("*"), "every pack channel (the spotter's too) is cut");
+  assert.equal(ducks.at(-1), false, "the music comes back up");
+  assert.equal(v.busy(), false, "resume must not restart a stale line");
+});
+
+test('every message channel uses the same speaker for its HUD label and its voice', () => {
+  const f = vm.runInNewContext('(' + symbolSource('function radioWho(kind)') + ')',
+    { RadioVoice: RV, player: { name: 'Test Driver', code: 'TST' } });
+  for (const [kind, speaker, label] of [
+    ['warning','control','RACE CONTROL'], ['warn','control','RACE CONTROL'],
+    ['penalty-hit','control','RACE CONTROL'], ['penalty-warn','control','RACE CONTROL'],
+    ['coach','coach','COACH'], ['practice','coach','COACH'], ['comm','announcer','COMMENTARY'],
+    ['info','radio','DRIVER · RADIO'], ['box','radio','DRIVER · RADIO'], ['race','radio','DRIVER · RADIO']]) {
+    assert.equal(P({ kind }).speaker, speaker, kind); assert.equal(f(kind), label, kind);
+  }
+  assert.doesNotMatch(read('js/game.js'), /hudProfile === "broadcast" \? "race" : "penalty-hit"/);
+});
+
+test('in-race commentary uses the announcer voice ladder while excluding network voices', async () => {
+  const q = load({ voices: [
+    {name:'Alex',lang:'en-US',localService:true}, {name:'Daniel',lang:'en-GB',localService:true},
+    {name:'Online Daniel',lang:'en-GB',localService:false}], stored: {voiceTune:{announcer:{name:'Online Daniel'}}} });
+  vm.runInContext(read('js/audio/announcer.js'), q.ctx);
+  q.G.announcer = { enabled: () => true };
+  const v = q.RV.create(q.G); v.say('Final lap',4,'comm'); await flush();
+  const call = q.synth.calls.find(c => c.m === 'speak');
+  assert.equal(call.voice.name,'Daniel');
+  assert.equal(call.rate, q.RV.TONE.announcer.rate);
+  v.stop();
+});
+
+test('an audition owns its utterance: stop cancels it and an old callback cannot release its replacement', () => {
+  const q = load(), utterances = [];
+  q.synth.speak = u => utterances.push(u);
+  let annStops = 0; q.G.announcer = {stop(){annStops++;}};
+  const v = q.RV.create(q.G);
+  v.preview('coach'); assert.equal(v.busy(),true);
+  const old = utterances.at(-1);
+  v.preview('control'); old.onend(); assert.equal(v.busy(),true);
+  const cancels = q.synth.calls.filter(c => c.m === 'cancel').length;
+  v.stop(); assert.equal(v.busy(),false);
+  assert.equal(q.synth.calls.filter(c => c.m === 'cancel').length,cancels+1);
+  assert.equal(annStops,2);
+});
+
+// ── Engineer key-up / key-down squelch + seeded band-pass ───────────────────
+
+test("squelchPlan puts a 40–80 ms burst at the start and end of an engineer line", () => {
+  const p = RV.squelchPlan({ enabled: true, soundOn: true, speaker: "radio", state: "race",
+    text: "box box box", secs: 1.2, seed: 7, volume: 0.8 });
+  assert.equal(p.play, true);
+  assert.ok(p.openMs >= RV.SQUELCH_MS_MIN && p.openMs <= RV.SQUELCH_MS_MAX, `open ${p.openMs}`);
+  assert.ok(p.closeMs >= RV.SQUELCH_MS_MIN && p.closeMs <= RV.SQUELCH_MS_MAX, `close ${p.closeMs}`);
+  assert.equal(p.atOpen, 0);
+  assert.equal(p.atClose, 1.2);
+  assert.deepEqual(RV.squelchPlan({ enabled: true, soundOn: true, speaker: "radio", state: "race",
+    text: "box box box", secs: 1.2, seed: 7, volume: 0.8 }), p, "same seed is the same plan");
+});
+
+test("squelchPlan is absent with TEAM RADIO off, vol 0, a pause, results, or a non-engineer channel", () => {
+  const base = { enabled: true, soundOn: true, speaker: "radio", state: "race", text: "box", secs: 1, seed: 1, volume: 0.8 };
+  assert.equal(RV.squelchPlan({ ...base, enabled: false }).reason, "off");
+  assert.equal(RV.squelchPlan({ ...base, soundOn: false }).reason, "master-off");
+  assert.equal(RV.squelchPlan({ ...base, volume: 0 }).reason, "silent");
+  assert.equal(RV.squelchPlan({ ...base, paused: true }).reason, "paused");
+  assert.equal(RV.squelchPlan({ ...base, state: "results" }).reason, "not-racing");
+  assert.equal(RV.squelchPlan({ ...base, kind: "coach", speaker: "" }).reason, "not-radio");
+  assert.equal(RV.squelchPlan({ ...base, kind: "warning", speaker: "" }).reason, "not-radio");
+  assert.equal(RV.squelchPlan({ ...base, kind: "comm", speaker: "" }).reason, "not-radio");
+  const lite = RV.squelchPlan({ ...base, mobile: true });
+  assert.equal(lite.play, true, "mobile still schedules — the card sting is not this layer");
+  assert.equal(lite.lite, true);
+});
+
+test("radioBand is a light 300–3400 Hz pair and is deterministic for a seed", () => {
+  const a = RV.radioBand(42), b = RV.radioBand(42), c = RV.radioBand(43);
+  assert.deepEqual(a, b);
+  assert.notDeepEqual(a.lo + "," + a.hi + "," + a.q, c.lo + "," + c.hi + "," + c.q);
+  assert.ok(a.lo >= RV.RADIO_LO - 20 && a.lo <= RV.RADIO_LO + 20, `lo ${a.lo}`);
+  assert.ok(a.hi >= RV.RADIO_HI - 40 && a.hi <= RV.RADIO_HI + 40, `hi ${a.hi}`);
+  assert.equal(a.freq, Math.round(Math.sqrt(a.lo * a.hi)));
+  assert.ok(a.q >= 0.32 && a.q <= 0.40, `q ${a.q}`);
+});
+
+test("an engineer say schedules open and close; a spotter cut kills the close", async () => {
+  const { RV: R, G } = load({ stored: { radioVoice: true } });
+  const v = R.create(G);
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
+  await flush();
+  const s = v.debug().squelch;
+  assert.ok(s && s.play, "engineer line arms the squelch");
+  assert.equal(s.events.join(","), "open,close");
+  assert.ok(s.fired.includes("open"), "key-up fires with the words (lead 0)");
+  assert.ok(!s.fired.includes("close"), "key-down is still waiting on the line");
+  assert.equal(s.cut, false);
+  assert.equal(v.yieldToSpotter(), true);
+  const after = v.debug().squelch;
+  assert.equal(after.cut, true, "spotter interrupt ends the squelch");
+  assert.ok(!after.fired.includes("close"), "the scheduled close must not land after the cut");
+});
+
+test("TEAM RADIO off does not schedule a squelch — ENGINEER NORMAL cards stay as they were", () => {
+  const { RV: R, G } = load();   // radioVoice ships OFF
+  const v = R.create(G);
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), false);
+  assert.equal(v.debug().squelch, null);
+  assert.equal(R.squelchPlan({ enabled: false, soundOn: true, speaker: "radio", state: "race",
+    text: "box box", secs: 1, seed: 1 }).play, false);
+});
+
+test("a coach line is spoken but does not get a radio squelch", async () => {
+  const { RV: R, G } = load({ stored: { radioVoice: true } });
+  const v = R.create(G);
+  assert.equal(v.say("Brake a little earlier here", 3, "coach"), true);
+  await flush();
+  const s = v.debug().squelch;
+  assert.equal(s.play, false);
+  assert.equal(s.reason, "not-radio");
+});
+
+function fakeAudio() {
+  const created = { filt: 0, src: 0, gain: 0 };
+  const dest = {};
+  return {
+    created, destination: dest, currentTime: 0, sampleRate: 44100, state: "running",
+    createBiquadFilter() {
+      created.filt++;
+      return { type: "", frequency: { value: 0 }, Q: { value: 0 }, connect() { return this; }, disconnect() {} };
+    },
+    createGain() {
+      created.gain++;
+      return {
+        gain: { value: 0.0001, cancelScheduledValues() {}, setValueAtTime() {},
+          linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} },
+        connect() { return this; }, disconnect() {},
+      };
+    },
+    createBufferSource() {
+      created.src++;
+      return { buffer: null, connect() {}, disconnect() {}, start() {}, stop() {} };
+    },
+    createBuffer(_ch, len, sr) {
+      return { sampleRate: sr, getChannelData: () => new Float32Array(len) };
+    },
+  };
+}
+
+test("squelch reuses a two-voice band-pass pool; a second line does not allocate new filters", async () => {
+  const actx = fakeAudio();
+  const { RV: R, G, ctx } = load({ stored: { radioVoice: true } });
+  ctx.window.RadioSquelchCtx = actx;
+  const v = R.create(G);
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
+  await flush();
+  assert.equal(actx.created.filt, 2, "pool of two band-pass nodes");
+  assert.ok(actx.created.src >= 1, "open burst used a BufferSource");
+  const srcAfterFirst = actx.created.src;
+  assert.equal(v.say("TYRES AT 50%", 3, "info"), true);
+  await flush();
+  assert.equal(actx.created.filt, 2, "filters are reused, not rebuilt per line");
+  assert.ok(actx.created.src > srcAfterFirst, "BufferSource is one-shot: a new one per burst");
+  assert.equal(v.debug().squelch.pool, 2);
+});
+
+// ── #2189: the squelch plays through GameAudio's own context and SFX bus ────
+// audioCtx() asked GameAudio.context(), which GameAudio never exported, so the
+// real path fell through: null on a phone (squelch never fired) and a second,
+// unmixed `new AudioContext()` on desktop (no master, limiter, SFX volume or
+// hide-time suspend). Every other squelch test injects window.RadioSquelchCtx
+// and so never took that path; these load the REAL engine.js beside it.
+const ENGINE_FILES = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js",
+  "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"];
+async function loadWithEngine({ mobile = false } = {}) {
+  const { createRequire } = await import("node:module");
+  const fakeAudio = createRequire(import.meta.url)("./fake-audio-vm.cjs");
+  const sb = {
+    Math, JSON, Object, Array, Number, String, Set, Map, WeakMap, Promise, Date, Error,
+    parseFloat, parseInt, isFinite, Float32Array, console,
+    setTimeout: unrefTimeout, clearTimeout,
+    document: { addEventListener() {}, getElementById: () => null, documentElement: { lang: "en" }, hidden: false },
+    addEventListener() {}, removeEventListener() {}, navigator: {},
+    fetch: () => Promise.reject(new Error("no fetch")),
+    speechSynthesis: synthStub(), SpeechSynthesisUtterance: function (t) { this.text = t; },
+  };
+  sb.window = sb;
+  if (mobile) sb.GLX = { isMobile: true };
+  const audio = fakeAudio.install(sb);
+  const ctx = vm.createContext(sb);
+  seedLog(ctx);
+  vm.runInContext(ENGINE_FILES.map(read).join("\n").replace(/^const\b/gm, "var"), ctx, { filename: "engine.js" });
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const GameAudio = vm.runInContext("GameAudio", ctx);
+  const RV = vm.runInContext("RadioVoice", ctx);
+  GameAudio.init();
+  const saved = new Map([["radioVoice", true]]);
+  const G = { soundOn: true, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
+  return { GameAudio, RV, G, made: audio.made, sb };
+}
+
+for (const mobile of [false, true]) {
+  test(`squelch rides GameAudio's context and SFX bus, one AudioContext (#2189, ${mobile ? "phone" : "desktop"})`, async () => {
+    const { GameAudio, RV: R, G, made, sb } = await loadWithEngine({ mobile });
+    assert.equal(sb.RadioSquelchCtx, undefined, "the real path, not the test hook");
+    assert.equal(typeof GameAudio.context, "function", "GameAudio exports context()");
+    const gaCtx = GameAudio.context();
+    assert.ok(gaCtx, "init built GameAudio's context");
+    assert.equal(made.length, 1, "init builds exactly one AudioContext");
+    // Record what the squelch pool's gains connect to.
+    const bus = GameAudio.sfxBus();
+    const into = [];
+    const mk = gaCtx.createGain;
+    gaCtx.createGain = () => { const g = mk(); const c = g.connect; g.connect = (t) => { into.push(t); return c(t); }; return g; };
+    let bursts = 0;
+    const mkSrc = gaCtx.createBufferSource;
+    gaCtx.createBufferSource = () => { bursts++; return mkSrc(); };
+    const v = R.create(G);
+    assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
+    await flush();
+    const s = v.debug().squelch;
+    assert.ok(s && s.play, "engineer line arms the squelch");
+    assert.equal(s.pool, mobile ? 1 : 2, "the pool was built (a phone gets the lite pool)");
+    assert.ok(s.fired.includes("open"), "the open lane fired");
+    assert.ok(bursts >= 1, "the open burst played on GameAudio's context");
+    assert.equal(made.length, 1, "no second AudioContext");
+    assert.ok(into.length && into.every((t) => t === bus), "every squelch voice lands on GameAudio's SFX bus");
+  });
+}
+
+test("the title stub exposes context() → null, and the squelch stays silent on it (#2189)", () => {
+  const sc = vm.createContext({});
+  vm.runInContext(read("js/audio/stub.js"), sc);
+  assert.equal(vm.runInContext("GameAudio.context()", sc), null);
+  assert.equal(vm.runInContext("GameAudio.sfxBus()", sc), null);
+});

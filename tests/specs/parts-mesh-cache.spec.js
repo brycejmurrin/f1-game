@@ -1,0 +1,600 @@
+// @ts-check
+// Runtime mesh-cache bounds for player/cockpit body variants and wheel pairs.
+// Instruments GLX create/free (same pattern as custom-team.spec.js) — no new
+// production debug APIs.
+//
+// TWO TESTS SHARE A PAGE, THREE KEEP THEIR OWN. sharedTest for the wheel-layer
+// geometry test (pure) and the wheel-centre probe (its own race, its own
+// counters). `freshTest` — the per-test fixture — for the three whose SUBJECT
+// is a cache starting cold: the decal test hands CarMesh.init() fake GL hooks
+// it never takes back, and the two eviction tests count builds against caches
+// that a shared page would already have warm (a warm key means no build, the
+// "wait for the Nth mesh" never resolves, and the eviction order is whatever
+// the previous test left). 5 boots became 3, and the two eviction tests then
+// went from a garage walk + race boot PER PART to one boot each (see raceOnce).
+import { sharedTest as test, test as freshTest, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { ensureLive, toMenu, pinFreePlay } from "../helpers/shared-page.js";
+
+const LANDSCAPE = { width: 844, height: 390 };
+
+async function waitReady(page) {
+  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+}
+
+async function installMeshProbe(page) {
+  await page.evaluate(() => {
+    if (window.__partsMeshProbe) return;   // idempotent across soft re-entries
+    const bodyMeshes = [];
+    const cockpitMeshes = [];
+    const wheelMeshes = [];
+    const fieldWheelMeshes = [];
+    const freed = [];
+    const bodyData = new WeakSet();
+    const cockpitData = new WeakSet();
+    const wheelData = new WeakSet();
+    const meshIds = new WeakMap();
+    let nextId = 1;
+
+    const build = Car3D.build;
+    const buildWheel = Car3D.buildWheel;
+    const buildWheelLayers = Car3D.buildWheelLayers;
+    const createMesh = GLX.createMesh;
+    const freeMesh = GLX.freeMesh;
+
+    Car3D.build = function (c1, c2, opts) {
+      const data = build(c1, c2, opts);
+      if (opts && opts.noWheels && opts.cockpit) cockpitData.add(data);
+      else if (opts && opts.noWheels && !opts.field) bodyData.add(data);
+      return data;
+    };
+    Car3D.buildWheel = function () {
+      const data = buildWheel.apply(this, arguments);
+      wheelData.add(data);
+      return data;
+    };
+    Car3D.buildWheelLayers = function () {
+      const data = buildWheelLayers.apply(this, arguments);
+      wheelData.add(data.rotating);
+      wheelData.add(data.fixed);
+      return data;
+    };
+    GLX.createMesh = function (data) {
+      const mesh = createMesh(data);
+      const id = nextId++;
+      meshIds.set(mesh, id);
+      if (bodyData.has(data)) bodyMeshes.push({ id, mesh });
+      else if (cockpitData.has(data)) cockpitMeshes.push({ id, mesh });
+      // PLAYER wheels and FIELD wheels both come through buildWheelLayers with
+      // identical arguments; game.js marks the field pair's data so this can
+      // tell them apart. Without the split every assertion below about "the
+      // player wheel cache" was really measuring both caches at once.
+      else if (wheelData.has(data)) (data._field ? fieldWheelMeshes : wheelMeshes).push({ id, mesh });
+      return mesh;
+    };
+    GLX.freeMesh = function (mesh) {
+      const id = meshIds.get(mesh);
+      if (id !== undefined) freed.push(id);
+      return freeMesh(mesh);
+    };
+
+    window.__partsMeshProbe = {
+      bodyMeshes, cockpitMeshes, wheelMeshes, fieldWheelMeshes, freed,
+      live(kind) {
+        const list = kind === "body" ? bodyMeshes
+          : kind === "cockpit" ? cockpitMeshes
+          : kind === "fieldWheel" ? fieldWheelMeshes
+          : wheelMeshes;
+        const liveIds = new Set(list.map((e) => e.id));
+        for (const id of freed) liveIds.delete(id);
+        return liveIds.size;
+      },
+      freedCount(kind) {
+        const list = kind === "body" ? bodyMeshes
+          : kind === "cockpit" ? cockpitMeshes
+          : kind === "fieldWheel" ? fieldWheelMeshes
+          : wheelMeshes;
+        const ids = new Set(list.map((e) => e.id));
+        return freed.filter((id) => ids.has(id)).length;
+      },
+    };
+  });
+}
+
+// ONE BOOT PER TEST. The eviction tests used to walk the GARAGE for every part
+// — open the sheet, click the tab, click the option, DONE, boot a race through
+// the hook, wait for the mesh, pause, quit — four times for the body test and
+// nine for the wheels. Every one of those clicks needs Playwright's
+// actionability poll, which ticks on rAF, and a page running the game loop
+// under SwiftShader starves rAF: measured 2026-09-10, 23-29 s PER CLICK with
+// one worker on an otherwise idle 4-core box, so the body test ran 258 s
+// against its 240 s budget and the wheel test 391 s against 360 s, alone,
+// with nothing asserted wrong. The garage route had already been cut once
+// (menu -> #mb-garage instead of the circuit picker, docs/TESTING.md) and it
+// was still the whole cost.
+//
+// The caches are keyed on the RESOLVED part ids (playerVisualKey,
+// playerTyreId:playerBrakeId), refreshed by recomputePlayerMods — which the
+// garage's DONE runs and a race boot runs. __apex.garageParts(parts) writes
+// the same setup the sheet writes and, with the garage closed, runs that same
+// recompute, so the NEXT FRAME of a race already running re-keys the player
+// body, the cockpit body and the wheel pair and builds the miss. No sheet, no
+// second boot, no pause/quit: the subject (a bounded GPU cache evicting in
+// order) is exactly what is left.
+async function raceOnce(page) {
+  await page.evaluate(() => {
+    window.__apex.race("monza");
+    window.__apex.park(0.1);
+    window.__apex.camera("chase");
+  });
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+}
+
+// Fit catalog part ids onto the current team mid-race. Throws on a refused
+// hook rather than letting the mesh wait below time out and blame the box.
+async function fitParts(page, parts) {
+  const r = await page.evaluate((p) => window.__apex.garageParts(p), parts);
+  if (!r || !r.ok) throw new Error("__apex.garageParts refused: " + JSON.stringify(r));
+}
+
+test.describe("Parts mesh caches — eviction bounds", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  // freshTest: CarMesh.init() below installs fake GL hooks for good.
+  freshTest("body-aware decal cache keys engine geometry and remains bounded", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    const result = await page.evaluate(() => {
+      const created = [], freed = [];
+      CarMesh.init({
+        createTexMesh(data) {
+          const mesh = { id: created.length + 1, data };
+          created.push(mesh);
+          return mesh;
+        },
+        freeMesh(mesh) { freed.push(mesh.id); },
+      });
+      const base = {
+        in: 1, inlet: 1, outlet: 1,
+        shoulderHeight: 1, undercut: 1, coke: 1,
+        tailWidth: 1, coverHeight: 1,
+      };
+      const meshes = [];
+      for (let i = 0; i < 30; i++) {
+        const engine = { ...base, podWidth: 0.72 + i * 0.018 };
+        meshes.push(CarMesh.getCarDecalMesh(2, {
+          engine: 1, _visual: { engine },
+        }));
+      }
+      const repeat = CarMesh.getCarDecalMesh(2, {
+        engine: 1, _visual: { engine: { ...base, podWidth: 0.72 + 29 * 0.018 } },
+      });
+      const fractionalAeroA = CarMesh.getCarDecalMesh(3.55, {
+        engine: 1, _visual: { engine: { ...base, podWidth: 1 } },
+      });
+      const fractionalAeroB = CarMesh.getCarDecalMesh(3.60, {
+        engine: 1, _visual: { engine: { ...base, podWidth: 1 } },
+      });
+      const live = created.filter((mesh) => !freed.includes(mesh.id));
+      return {
+        created: created.length,
+        freed: freed.length,
+        live: live.length,
+        firstFreed: freed.includes(meshes[0].id),
+        newestLive: !freed.includes(meshes.at(-1).id),
+        repeatReused: repeat === meshes.at(-1),
+        firstAndLastDiffer: meshes[0] !== meshes.at(-1),
+        fractionalAeroDiffer: fractionalAeroA !== fractionalAeroB,
+      };
+    });
+    expect(result.created).toBe(32);
+    expect(result.live).toBeLessThanOrEqual(24);
+    expect(result.freed).toBeGreaterThanOrEqual(8);
+    expect(result.firstFreed).toBe(true);
+    expect(result.newestLive).toBe(true);
+    expect(result.repeatReused).toBe(true);
+    expect(result.firstAndLastDiffer).toBe(true);
+    expect(result.fractionalAeroDiffer).toBe(true);
+  });
+
+  test("wheel assemblies separate rotating hardware from steering-only brake hardware", async ({ page }) => {
+    await ensureLive(page);   // pure geometry off the shared page
+    const layers = await page.evaluate(() => {
+      const front = Car3D.buildWheelLayers(0.32, null, [0.9, 0.1, 0.05]);
+      const rear = Car3D.buildWheelLayers(0.38, null, [0.9, 0.1, 0.05]);
+      const surfaces = Car3D.SURFACES || {};
+      const materialCount = (mesh, id) => (mesh.mat || []).filter((value) => value === id).length;
+      const bounds = (mesh) => {
+        const result = [[Infinity, -Infinity], [Infinity, -Infinity], [Infinity, -Infinity]];
+        for (let i = 0; i < mesh.pos.length; i++) {
+          result[i % 3][0] = Math.min(result[i % 3][0], mesh.pos[i]);
+          result[i % 3][1] = Math.max(result[i % 3][1], mesh.pos[i]);
+        }
+        return result;
+      };
+      return {
+        hasSurfaceRegistry: Number.isInteger(surfaces.rubber),
+        assemblies: [front, rear].map((layers) => ({
+          rotatingTriangles: layers.rotating.idx.length / 3,
+          fixedTriangles: layers.fixed.idx.length / 3,
+          rotatingBounds: bounds(layers.rotating),
+          fixedBounds: bounds(layers.fixed),
+          rotatingRubber: materialCount(layers.rotating, surfaces.rubber),
+          fixedRubber: materialCount(layers.fixed, surfaces.rubber),
+          fixedMetal: materialCount(layers.fixed, surfaces.metal),
+        })),
+      };
+    });
+    expect(layers.hasSurfaceRegistry).toBe(true);
+    for (const wheel of layers.assemblies) {
+      expect(wheel.rotatingTriangles).toBeGreaterThan(0);
+      expect(wheel.fixedTriangles).toBeGreaterThan(0);
+      expect(wheel.rotatingRubber).toBeGreaterThan(0);
+      expect(wheel.fixedRubber).toBe(0);
+      expect(wheel.fixedMetal).toBeGreaterThan(0);
+      for (const axis of [wheel.rotatingBounds[1], wheel.rotatingBounds[2]]) {
+        expect(axis[0] + axis[1]).toBeCloseTo(0, 6);
+        expect(axis[1] - axis[0]).toBeGreaterThan(0.65);
+        expect(axis[1] - axis[0]).toBeLessThanOrEqual(0.68);
+      }
+    }
+    const [front, rear] = layers.assemblies
+      .map((wheel) => wheel.rotatingBounds[0][1] - wheel.rotatingBounds[0][0]);
+    expect(front).toBeGreaterThan(0);
+    expect(rear).toBeGreaterThan(front);
+  });
+
+  // freshTest: counts builds against a COLD body/cockpit cache.
+  freshTest("player body and cockpit caches keep at most 3 visual keys and free evicted meshes", async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.goto("/");
+    await waitReady(page);
+    await installMeshProbe(page);
+
+    await page.evaluate(() => {
+      const team = Teams.LIST[parseInt(localStorage.getItem("apex26.team") ?? "2")];
+      if (team) localStorage.removeItem("apex26.parts." + team.id);
+    });
+
+    await raceOnce(page);
+    // Four engines with DIFFERENT geometry recipes, so each fit is a new visual
+    // key: the chase camera draws the player body on the next frame and the
+    // cockpit camera the cockpit body, and each miss is one build the probe
+    // counts. The first is the default already built by the boot frame.
+    const engines = ["stock", "lean_burn", "performance", "turbo"];
+    for (let i = 0; i < engines.length; i++) {
+      await fitParts(page, { engine: engines[i] });
+      await page.evaluate(() => window.__apex.camera("chase"));
+      await page.waitForFunction(
+        (min) => window.__partsMeshProbe.bodyMeshes.length >= min,
+        i + 1,
+        { polling: 100, timeout: 20_000 }
+      );
+      await page.evaluate(() => window.__apex.camera("cockpit"));
+      await page.waitForFunction(
+        (min) => window.__partsMeshProbe.cockpitMeshes.length >= min,
+        i + 1,
+        { polling: 100, timeout: 20_000 }
+      );
+    }
+
+    const stats = await page.evaluate(() => ({
+      created: window.__partsMeshProbe.bodyMeshes.length,
+      live: window.__partsMeshProbe.live("body"),
+      freed: window.__partsMeshProbe.freedCount("body"),
+      cockpitCreated: window.__partsMeshProbe.cockpitMeshes.length,
+      cockpitLive: window.__partsMeshProbe.live("cockpit"),
+      cockpitFreed: window.__partsMeshProbe.freedCount("cockpit"),
+      freedIds: window.__partsMeshProbe.freed.filter((id) =>
+        window.__partsMeshProbe.bodyMeshes.some((e) => e.id === id)
+        || window.__partsMeshProbe.cockpitMeshes.some((e) => e.id === id)),
+      oldestBodyEvicted: window.__partsMeshProbe.freed.includes(window.__partsMeshProbe.bodyMeshes[0]?.id),
+      newestBodyLive: !window.__partsMeshProbe.freed.includes(window.__partsMeshProbe.bodyMeshes.at(-1)?.id),
+      oldestCockpitEvicted: window.__partsMeshProbe.freed.includes(window.__partsMeshProbe.cockpitMeshes[0]?.id),
+      newestCockpitLive: !window.__partsMeshProbe.freed.includes(window.__partsMeshProbe.cockpitMeshes.at(-1)?.id),
+    }));
+
+    expect(stats.created).toBeGreaterThanOrEqual(4);
+    expect(stats.live).toBeLessThanOrEqual(3);
+    expect(stats.freed).toBeGreaterThanOrEqual(stats.created - 3);
+    expect(stats.cockpitCreated).toBeGreaterThanOrEqual(4);
+    expect(stats.cockpitLive).toBeLessThanOrEqual(3);
+    expect(stats.cockpitFreed).toBeGreaterThanOrEqual(stats.cockpitCreated - 3);
+    expect(new Set(stats.freedIds).size).toBe(stats.freedIds.length);
+    expect(stats.oldestBodyEvicted).toBe(true);
+    expect(stats.newestBodyLive).toBe(true);
+    expect(stats.oldestCockpitEvicted).toBe(true);
+    expect(stats.newestCockpitLive).toBe(true);
+  });
+
+  // freshTest: counts pairs against a COLD wheel cache (the default pair is
+  // combo 0; a page that has raced it already would build nothing for it).
+  freshTest("wheel mesh cache keeps at most 8 tyre/brake pairs and frees evicted pairs", async ({ page }) => {
+    test.setTimeout(360_000);
+    await page.goto("/");
+    await waitReady(page);
+    await installMeshProbe(page);
+
+    await page.evaluate(() => {
+      const team = Teams.LIST[parseInt(localStorage.getItem("apex26.team") ?? "2")];
+      if (team) localStorage.removeItem("apex26.parts." + team.id);
+    });
+
+    // 9 distinct tyre×brake keys — one more than the bound of 8
+    const combos = [
+      ["medium", "standard"],
+      ["hard", "sport"],
+      ["soft", "carbon"],
+      ["supersoft", "ceramic"],
+      ["intermediate", "drilled"],
+      ["compound_c4", "titanium"],
+      ["compound_c5", "ventilated"],
+      ["hypersoft", "brembo_evo"],
+      ["qualigum", "regen_brakes"],
+    ];
+
+    await raceOnce(page);
+    for (let i = 0; i < combos.length; i++) {
+      const [tyres, brakes] = combos[i];
+      await fitParts(page, { tyres, brakes });
+      await page.waitForFunction(
+        (min) => window.__partsMeshProbe.wheelMeshes.length >= min,
+        (i + 1) * 4,
+        { polling: 100, timeout: 20_000 }
+      );
+    }
+
+    const stats = await page.evaluate(() => ({
+      created: window.__partsMeshProbe.wheelMeshes.length,
+      live: window.__partsMeshProbe.live("wheel"),
+      freed: window.__partsMeshProbe.freedCount("wheel"),
+      freedIds: window.__partsMeshProbe.freed.filter((id) =>
+        window.__partsMeshProbe.wheelMeshes.some((e) => e.id === id)),
+      oldestPairEvicted: window.__partsMeshProbe.wheelMeshes.slice(0, 4)
+        .every((entry) => window.__partsMeshProbe.freed.includes(entry.id)),
+      newestPairLive: window.__partsMeshProbe.wheelMeshes.slice(-4)
+        .every((entry) => !window.__partsMeshProbe.freed.includes(entry.id)),
+      // The FIELD cache is a separate bound (12 pairs) with the same freer, and
+      // it used to be the one GPU cache in the tree with no cap at all.
+      fieldLive: window.__partsMeshProbe.live("fieldWheel"),
+    }));
+
+    expect(stats.created).toBeGreaterThanOrEqual(36);
+    // 32 — the PLAYER cache's own bound, and now actually measuring it. The
+    // probe tags a mesh as "wheel" by wrapping Car3D.buildWheelLayers, and BOTH
+    // wheel caches go through it: the player's (WHEEL_MESH_CACHE_MAX = 8 pairs)
+    // and the FIELD's (FIELD_WHEEL_CACHE_MAX = 12, added later, keyed by each
+    // team's FACTORY parts). The grid's 22 cars fill the field cache the moment
+    // a race draws, so every line below was measuring the sum of the two:
+    // `live` came out 64 with both at 8 pairs, and oldestPairEvicted asked
+    // whether the first four meshes ever built had been freed — field meshes,
+    // which a 12-slot cache holding a handful of factory combos never evicts.
+    // game.js marks the field pair's data so the two can be told apart; the
+    // field cache gets its own assertions below rather than being folded in.
+    expect(stats.live).toBeLessThanOrEqual(32); // 8 pairs × rotating/fixed × F/R
+    expect(stats.freed).toBeGreaterThanOrEqual(4);
+    expect(new Set(stats.freedIds).size).toBe(stats.freedIds.length);
+    expect(stats.oldestPairEvicted).toBe(true);
+    expect(stats.newestPairLive).toBe(true);
+    expect(stats.fieldLive).toBeLessThanOrEqual(48);   // 12 pairs × rotating/fixed × F/R
+  });
+
+  test("race warm-up builds the shadow casters, so lights-out builds none", async ({ page }) => {
+    // The car shadow pass fetches teamMesh(team, car, true) for every car in range
+    // on its first frame; warmCarAssets builds the same keys behind the loading
+    // cover (js/car/car-draw.js). Count silhouette builds in race() vs the frames
+    // after go(), and count caster passes so a run with shadows shed is visible.
+    await toMenu(page);
+    await page.evaluate(() => {
+      const probe = { phase: "warm", warm: 0, frames: 0, passes: 0 };
+      const build = Car3D.build;
+      Car3D.build = function (c1, c2, opts) {
+        if (opts && opts.silhouette) probe[probe.phase]++;
+        return build.apply(this, arguments);
+      };
+      const begin = GLX.carShadowBegin;
+      GLX.carShadowBegin = function () { if (probe.phase === "frames") probe.passes++; return begin.apply(this, arguments); };
+      window.__casterProbe = probe;
+      // A warm cache would make every count 0: drop it AFTER the hook (as below).
+      if (window.__apex.clearCarMeshCaches) window.__apex.clearCarMeshCaches();
+    });
+    await pinFreePlay(page);
+    await page.evaluate(async () => {
+      // headless(false) BEFORE race(): the warm-up skips casters for a headless
+      // race, because no shadow pass runs there.
+      window.__apex.headless(false);
+      await window.__apex.race("monza");
+    });
+    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
+    const probe = await page.evaluate(() => {
+      const p = window.__casterProbe;
+      p.phase = "frames";
+      window.__apex.headless(false);
+      window.__apex.go();
+      for (let i = 0; i < 30; i++) window.__apex.snapCam(1 / 60);
+      return { warm: p.warm, frames: p.frames, passes: p.passes };
+    });
+    test.info().annotations.push({ type: "casters", description: JSON.stringify(probe) });
+    expect(probe.frames, "silhouette builds after go() " + JSON.stringify(probe)).toBe(0);
+    if (probe.passes > 0) expect(probe.warm, "casters built in race() " + JSON.stringify(probe)).toBeGreaterThan(0);
+  });
+
+  test("player wheel centres stay on the road while the chassis pitches under braking", async ({ page }) => {
+    // Shared page: back to the title with the default car pinned, then the
+    // probe, then the race — the probe must be in place before the wheels build.
+    await toMenu(page);
+    // Hook BEFORE pinFreePlay / race — the probe must see buildWheelLayers and
+    // every later GLX.draw of those meshes. CI #541 (run 36741124003) timed out
+    // here with a live race HUD and a "THAT WAS A BIG ONE" radio: the field at
+    // f=0.04 turned the braking run into contact; rivals([]) below clears it.
+    await page.evaluate(() => {
+      const rotatingData = new WeakSet();
+      const rotatingMeshes = new WeakSet();
+      const centres = [];
+      const buildLayers = Car3D.buildWheelLayers;
+      const createMesh = GLX.createMesh.bind(GLX);
+      const draw = GLX.draw.bind(GLX);
+      Car3D.buildWheelLayers = function () {
+        const layers = buildLayers.apply(this, arguments);
+        rotatingData.add(layers.rotating);
+        return layers;
+      };
+      GLX.createMesh = function (data) {
+        const mesh = createMesh(data);
+        if (rotatingData.has(data)) rotatingMeshes.add(mesh);
+        return mesh;
+      };
+      GLX.draw = function (mesh, matrix) {
+        if (rotatingMeshes.has(mesh)) {
+          centres.push([matrix[12], matrix[13], matrix[14]]);
+          if (centres.length > 32) centres.splice(0, centres.length - 32);
+        }
+        return draw(mesh, matrix);
+      };
+      window.__wheelGroundProbe = centres;
+      // sharedTest (and a prior race on this worker) leaves wheelMeshCache /
+      // fieldWheelCache warm: race()'s warmCarAssets is then all cache hits
+      // (cpuMs:0), createMesh never tags rotating meshes, and snapCam(paint)
+      // draws untagged meshes → 0 probe samples for 19 s (CI selected shards
+      // 36771184315 / 36771182471; Pages 36789770575 / 36791453560 on
+      // ecc12b129 / 4cf997fdd). Same cure as parts-factory-presets.spec.js:
+      // drop caches AFTER the hook so the next warm rebuilds through it.
+      if (window.__apex.clearCarMeshCaches) window.__apex.clearCarMeshCaches();
+    });
+    await pinFreePlay(page);
+
+    await page.evaluate(async () => {
+      await window.__apex.race("monza");
+    });
+    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      window.__apex.headless(false);
+      window.__apex.go();
+      // Solo: a full field at f=0.04 turned the braking run into a multi-car
+      // hit ("THAT WAS A BIG ONE" on CI #541) and the probe never saw four
+      // clean wheel draws. Same clearField pattern as steering.spec.js.
+      try { window.__apex.rivals([]); } catch (_) { /* older builds */ }
+      // 0.04, NOT 0.10 — BRAKE ON THE STRAIGHT, not into a chicane. f = 0.10 is
+      // s ~ 579 m at monza and the Variante del Rettifilo begins around 600 m,
+      // so 90 steps of braking at 35 m/s with steer: 0 carried the car straight
+      // on into the turn-1 runoff: it finished 7.9 m off the centreline, and
+      // the four wheel centres were then measured against a surface this test
+      // never meant to sample. It read 0.0050274 against a 0.005 bound and
+      // looked like a 27-micron suspension defect; it was a car in the gravel.
+      // The main straight runs to ~600 m, so starting at 0.04 (~230 m) keeps
+      // the whole braking run on it.
+      window.__apex.jump(0.04, 35, 0);
+      window.__apex.setInput({ throttle: false, brake: true, steer: 0 });
+      window.__apex.step(1 / 60, 90);
+      // FREEZE, so the probe samples and the road reading below describe the
+      // SAME position. freeze() pauses physics and not rendering, so the draws
+      // keep coming while the car stays put; without it the car rolls on
+      // between the last captured frame and the evaluate that measures under
+      // it, and on an undulating circuit that is centimetres of drift.
+      window.__apex.freeze(true);
+    });
+    // Synchronous snapCam(dt) — not rAF / chainWindowRaf. Under a loaded
+    // selected shard XrBoot.chainWindowRaf is a no-op while _windowPending is
+    // true, and awaiting rAF alone returned 0 GLX.draw samples for 19 s
+    // (Pages change-aware gate on ecc12b129). Clear the probe in the SAME
+    // evaluate as the paints so a pending tick cannot sneak samples in before
+    // the wait starts. Same 20 s budget, no timeout raise, 0.005 bound kept.
+    await page.evaluate(() => {
+      try { window.__apex.headless(false); } catch (_) { /* harness */ }
+      window.__wheelGroundProbe.length = 0;
+      const t0 = performance.now();
+      while (window.__wheelGroundProbe.length < 4) {
+        if (performance.now() - t0 > 19_000) break;
+        window.__apex.snapCam(1 / 60);
+      }
+      if (window.__wheelGroundProbe.length < 4) {
+        throw new Error(
+          "__wheelGroundProbe got " + window.__wheelGroundProbe.length + " draws in 19 s (need ≥4)"
+        );
+      }
+    });
+
+    const probe = await page.evaluate(() => {
+      const st = window.__apex.physState();
+      const total = window.__apex.info().total;
+      const f0 = st.s / total;
+      // Height ABOVE THE ROAD UNDER EACH WHEEL, not raw world Y: the wheelbase
+      // spans ~3.6 m of road, and monza's gradient near this stop puts the
+      // front and rear contact patches at genuinely different world heights —
+      // a raw-Y spread reads that slope as "a wheel left the road" (the 2026-08
+      // 0.010-0.011 standing red). Project each wheel onto the centreline by
+      // local search and subtract its own road height.
+      // AND AT THE WHEEL'S OWN LATERAL OFFSET, on the BANKED tarmac — not on the
+      // centreline plane. That is the third time this measurement has read the
+      // road wrong, and the two notes below record the first two.
+      //
+      // groundY() returns roadY = smp.p[1], the centreline point's height, which
+      // does NOT vary with `lat` at all; the tarmac under an offset wheel is
+      // roadSurfaceY = roadY + bankDy. docs/DEBUG-HOOKS.md names this exact trap
+      // ("inside a bankZone the tarmac is not the centreline plane — Lesmo 1
+      // lifts the..."), and this braking run starts at f = 0.10 on monza, which
+      // is Lesmo. So the loop computed each wheel's `lat`, threw it away, and
+      // compared all four against a plane none of them sits on — turning the
+      // banking delta between the left and right pairs into fake ride-height
+      // spread. It read 0.0050274 against a 0.005 bound: a 27-micron overshoot
+      // that was never about the car.
+      //
+      // The bound is UNTOUCHED. Widening it is what AGENTS.md forbids, and it
+      // would have buried a real instrument bug under a rounder number.
+      const solveUnder = (wx, wz) => {
+        let best = null;
+        for (let df = -8; df <= 8; df += 0.25) {
+          const f = ((f0 + df / total) % 1 + 1) % 1;
+          const g0 = window.__apex.groundY(f, 0), g1 = window.__apex.groundY(f, 1);
+          let rx = g1.x - g0.x, rz = g1.z - g0.z;
+          const rl = Math.hypot(rx, rz) || 1; rx /= rl; rz /= rl;
+          const dx = wx - g0.x, dz = wz - g0.z;
+          const lat = dx * rx + dz * rz;
+          const along = Math.hypot(dx - lat * rx, dz - lat * rz);
+          if (!best || along < best.along) best = { along, f, lat };
+        }
+        return best;
+      };
+      const roadUnder = (wx, wz) => {
+        // Re-sample AT that lateral offset so banking is in the answer.
+        const b = solveUnder(wx, wz);
+        const at = window.__apex.groundY(b.f, b.lat);
+        return at.roadSurfaceY != null ? at.roadSurfaceY : at.roadY;
+      };
+      const wheels = window.__wheelGroundProbe.slice(-4);
+      return {
+        heights: wheels.map((c) => c[1] - roadUnder(c[0], c[2])),
+        roadY: window.__apex.groundY(f0, st.x).roadY,
+        // The car's own lateral offset, because the failure this replaced was
+        // entirely about where the car ended up rather than how it sat.
+        player: { x: +st.x.toFixed(3), s: +st.s.toFixed(2) },
+        // A spread this test rejects is a few MILLIMETRES, so "0.0050 is not
+        // < 0.005" on its own cannot say which wheel moved or why. Carry the
+        // terms: world Y, the wheel's solved lateral offset and arc miss, and
+        // the centreline/banking split of the road beneath it.
+        detail: wheels.map((c) => {
+          const d = solveUnder(c[0], c[2]);
+          const at = window.__apex.groundY(d.f, d.lat);
+          return { y: +c[1].toFixed(5), lat: +d.lat.toFixed(3), along: +d.along.toFixed(4),
+                   roadY: at.roadY, bankDy: at.bankDy, surf: at.roadSurfaceY };
+        }),
+      };
+    });
+    expect(Math.max(...probe.heights) - Math.min(...probe.heights),
+      "car " + JSON.stringify(probe.player) + " · wheels above the tarmac under each: " + JSON.stringify(probe.detail))
+      .toBeLessThan(0.005);
+    // AGAINST THE ROAD UNDER THE CAR, not against sea level. This compared the
+    // WORLD y to a bare 0.34 — AXLES.wheelY (js/car/car3d.js), which is the
+    // wheel centre height ABOVE THE ROAD — and so silently assumed monza's
+    // surface sits at y = 0. It does not: over the ~35 m the car covers while
+    // braking here the centreline runs -0.044, -0.012, -0.006, +0.110, -0.111,
+    // so 0.34 + roadY sweeps 0.23 to 0.45. The failing reading, 0.3292, is
+    // exactly 0.34 above the road at the point the car actually stopped — the
+    // wheels were grounded to the millimetre and the test was measuring the
+    // elevation profile. A +-0.005 window on that profile was a coin flip on
+    // where the car came to rest, under any braking model.
+    for (const h of probe.heights)
+      expect(h, `wheel centre above the road under that wheel (roadY at car ${probe.roadY})`)
+        .toBeCloseTo(0.34, 2);
+  });
+});

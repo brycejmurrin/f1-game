@@ -1,0 +1,1324 @@
+/* announcer.test.mjs — the PRE-RACE ANNOUNCER, without a browser.
+ *
+ * Two halves, and only one of them is speech.
+ *
+ *  1. THE SCRIPT IS DERIVED, so it has to hold for circuits nobody wrote it
+ *     for. `script()` is pure — an object in, an array of lines out — and the
+ *     tests hand it the shapes a real def actually takes: a classic with no GP,
+ *     a night race, a 7 km circuit with 10 corners and a 3 km one with 20.
+ *     Every clause it emits has to be TRUE of the numbers it was given, because
+ *     a broadcast opening that describes the wrong circuit is worse than none.
+ *  2. THE VOICE CHAIN IS A FALLBACK LADDER. "Daniel or the British guy" is an
+ *     Apple voice that exists on two platforms out of five, so the interesting
+ *     cases are all the machines that do NOT have it. `pickVoice()` is pure over
+ *     the list for exactly that reason: this file hands it macOS's voices,
+ *     Windows's, a Linux box's and an empty list.
+ *
+ * Run: node --test tests/unit/announcer.test.mjs   (npm run test:tooling-fast)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
+// VM timers are UNREF'd: they still fire while a test awaits, but a cue the
+// module schedules seconds ahead no longer holds the process open after the
+// last assertion (measured 2026-09-24: this file sat idle for most of its run).
+const unrefTimeout = (fn, ms, ...a) => { const t = setTimeout(fn, ms, ...a); t.unref?.(); return t; };
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const read = (p) => readFileSync(join(ROOT, p), "utf8");
+
+function synthStub() {
+  const calls = [];
+  return {
+    calls,
+    getVoices() { calls.push({ m: "getVoices" }); return this._voices || []; },
+    speak(u) { calls.push({ m: "speak", u, text: u.text, voice: u.voice, rate: u.rate, pitch: u.pitch, volume: u.volume }); },
+    cancel() { calls.push({ m: "cancel" }); },
+    resume() { calls.push({ m: "resume" }); },
+  };
+}
+
+/** Both modules in one context: the announcer borrows RadioVoice.speakable()
+ *  and RadioVoice.SAMPLE, so loading it alone would test a different file. */
+function load({ api = true, voices = [], stored = {}, soundOn = true, lore = true, clock = null, document = null } = {}) {
+  const saved = new Map(Object.entries(stored));
+  // `clock` (fakeClock() below) swaps in fake timers AND a fake Date, so a test
+  // can step through a 24 s budget without waiting for it.
+  const timers = clock ? { setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, Date: clock.Date }
+    : { setTimeout: unrefTimeout, clearTimeout };
+  const ctx = vm.createContext(Object.assign({ Math, JSON, Object, Array, Number, String, Set, console }, timers, document ? { document } : {}));
+  seedLog(ctx);
+  const synth = api ? synthStub() : null;
+  if (synth) synth._voices = voices;
+  ctx.window = api ? { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } } : {};
+  ctx.GameAudio = { setRadioDuck() {} };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  // The authored half. Loaded by default because the shipped game always has
+  // it; `lore: false` is how a test asks for the derived-only floor, which is
+  // what a circuit with no row still gets.
+  if (lore) vm.runInContext(read("js/data/circuit-lore.js"), ctx, { filename: "js/data/circuit-lore.js" });
+  vm.runInContext(read("js/audio/announcer-recorded.js"), ctx, { filename: "js/audio/announcer-recorded.js" });
+  vm.runInContext(read("js/audio/announcer.js"), ctx, { filename: "js/audio/announcer.js" });
+  const A = vm.runInContext("Announcer", ctx);
+  const RV = vm.runInContext("RadioVoice", ctx);
+  const G = {
+    soundOn, state: "menu", track: null,
+    store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) },
+    radio: RV.create({ soundOn, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } }),
+  };
+  return { A, RV, G, synth, saved, CircuitLore: lore ? vm.runInContext("CircuitLore", ctx) : null };
+}
+
+const { A } = load();
+const info = (over = {}) => Object.assign({
+  track: { id: "monza", name: "Monza", gp: "Italian Grand Prix", country: "Italy", lengthKm: 5.793 },
+  laps: 12, turns: 11, relief: 4, weather: "dry", tod: "day",
+}, over);
+const said = (o) => A.script(o).join(" ");
+
+// ── 1. The script says what it opens with, and describes the right circuit ──
+
+test("it opens with the game's own name, every time", () => {
+  // The line the request asked for by name. First, before the venue: it is the
+  // broadcast's identity, and a welcome that starts with the circuit is a
+  // caption rather than an opening.
+  assert.equal(A.script(info())[0], "Welcome to Apex 26.");
+  assert.equal(A.script(info({ track: {} }))[0], "Welcome to Apex 26.");
+  assert.equal(A.script(null)[0], "Welcome to Apex 26.");
+});
+
+test("it names the circuit AND the event — both, because either alone reads as a placeholder", () => {
+  assert.match(said(info()), /This is Monza, home of the Italian Grand Prix\./);
+});
+
+test("\"Bahrain GP\" is SPOKEN as a Grand Prix, not as two letters", () => {
+  // Every `gp` in js/circuits/ ends in "GP" because that is what fits a chip on
+  // the picker, and RadioVoice.speakable() lowercases any token it does not
+  // recognise — so the unexpanded string reached the synth as "italian g p".
+  // Found by printing the script from a live boot, not by reading the code.
+  const { A: An, RV } = load();
+  const line = An.script(info({ track: { name: "MONZA", gp: "Italian GP", lengthKm: 5.793 } }))[1];
+  assert.match(line, /Italian Grand Prix/);
+  assert.ok(!/\bGP\b/.test(RV.speakable(line)), RV.speakable(line));
+});
+
+test("an ALL-CAPS circuit name is title-cased for the printed script, multi-word ones included", () => {
+  // Cosmetic only — speakable() lowercases it either way — but the flyby
+  // editor PRINTS this, and "This is MONZA" reads as a placeholder there.
+  // Whole-string, not per-word: a word-length rule leaves "RED BULL RING" as is.
+  assert.match(said(info({ track: { name: "MONZA", lengthKm: 5.793 } })), /This is Monza/);
+  assert.match(said(info({ track: { name: "RED BULL RING", lengthKm: 4.318 } })), /This is Red Bull Ring/);
+  // A name that is already mixed case is left exactly alone.
+  assert.match(said(info({ track: { name: "Mont-Tremblant", lengthKm: 4.265 } })), /This is Mont-Tremblant/);
+});
+
+test("a circuit with no Grand Prix falls back to the country, not to an empty clause", () => {
+  // Every def carries a name; `gp` is optional and several classics have none.
+  const s = said(info({ track: { name: "Brands Hatch", country: "United Kingdom", lengthKm: 3.908 } }));
+  assert.match(s, /This is Brands Hatch, in the United Kingdom\./);
+  assert.ok(!/home of the \./.test(s), "an empty gp left a dangling clause");
+});
+
+test("no name and no event leaves out the venue line rather than saying 'This is .'", () => {
+  const lines = A.script(info({ track: { lengthKm: 4 } }));
+  assert.ok(!lines.some((l) => /^This is/.test(l)), lines.join(" | "));
+  assert.equal(lines[0], "Welcome to Apex 26.");
+});
+
+test("every number it speaks is the number it was given", () => {
+  const s = said(info({ track: { name: "Spa", gp: "Belgian Grand Prix", lengthKm: 7.004 }, turns: 19, laps: 8 }));
+  assert.match(s, /7\.004 kilometres/);
+  assert.match(s, /19 corners/);
+  assert.match(s, /8 laps\./);
+});
+
+test("a circuit with no built world yet omits the corner count instead of claiming zero", () => {
+  // turns comes from the BUILT track (TrackMaps.corners); before a build it is
+  // 0, and "0 corners" is the one wrong fact this script could state.
+  const s = said(info({ turns: 0 }));
+  assert.ok(!/corners/.test(s), s);
+  assert.match(s, /5\.793 kilometres\./);
+});
+
+// ── 2. The character clause is a claim about the lap, so it must track it ───
+
+test("corner DENSITY separates the circuits, not corner count", () => {
+  // Monaco is 19 corners in 3.337 km and Spa 19 in 7.004. Counting corners alone
+  // calls them the same lap, which is the whole reason this is a ratio.
+  const monaco = said(info({ track: { name: "Monaco", lengthKm: 3.337 }, turns: 19 }));
+  const monza = said(info({ track: { name: "Monza", lengthKm: 5.793 }, turns: 11 }));
+  const spa = said(info({ track: { name: "Spa", lengthKm: 7.004 }, turns: 19 }));
+  assert.match(monaco, /tight, technical lap/);
+  assert.match(monza, /fast, flowing lap/);
+  assert.match(spa, /mixes rhythm/);
+});
+
+test("relief is only mentioned when there is some, and the figure is rounded DOWN into a round number", () => {
+  assert.ok(!/climbs|rolling/.test(said(info({ relief: 3 }))), "flat ground got an elevation clause");
+  assert.match(said(info({ relief: 22 })), /rolling ground/);
+  const hilly = said(info({ relief: 103 }));
+  assert.match(hilly, /climbs and falls more than 100 metres/);
+});
+
+test("night and weather are stated, and only one of them", () => {
+  const sgp = { name: "Singapore", gp: "Singapore Grand Prix", lengthKm: 4.94, night: true };
+  assert.match(said(info({ track: sgp, tod: "default" })), /under the lights/, "a night circuit at its own time is a night race");
+  assert.doesNotMatch(said(info({ track: sgp, tod: "day" })), /under the lights/,
+    "TIME set to DAY (or a real race run in daylight) is lit by day: no floodlights in the read");
+  assert.match(said(info({ tod: "night" })), /under the lights/);
+  const wet = said(info({ weather: "rain" }));
+  assert.ok(!/under the lights/.test(wet), "a wet night is about the water, not the floodlights");
+  assert.equal(/rain|wet|grey|fog/i.test(said(info({ weather: "dry" }))), false,
+    "a dry day says nothing about the weather at all");
+});
+
+test("each weather state gets its OWN line — one clause for five conditions said nothing", () => {
+  // Before 2026-09-20 every non-dry state read "And the weather is against us",
+  // so fog, drizzle and a downpour were one sentence, and `overcast` — which is
+  // about TYRE TEMPERATURE, not adversity — read as a threat.
+  const lines = ["overcast", "wet", "rain", "fog"].map((w) => {
+    const rows = A.rows(info({ weather: w })).map((r) => r.text);
+    const hit = rows.find((l) => /rain|wet|grey|fog|water|dry part/i.test(l));
+    assert.ok(hit, `weather "${w}" produced no conditions line: ${rows.join(" | ")}`);
+    return hit;
+  });
+  assert.equal(new Set(lines).size, 4, "two weather states share a line: " + lines.join(" / "));
+});
+
+test("it ends on the same line whatever it found, so the voice never trails off", () => {
+  for (const o of [info(), info({ laps: 0 }), info({ track: {} }), info({ turns: 0, relief: 0 })]) {
+    assert.match(A.script(o).slice(-1)[0], /Let's go racing\.$/);
+  }
+});
+
+test("every line is a sentence — the synth pauses on the full stop, and a missing one runs two facts together", () => {
+  for (const l of A.script(info())) assert.match(l, /\.$/, `"${l}" is not punctuated`);
+});
+
+test("the whole script survives speakable() — it is spoken through the radio's normaliser", () => {
+  const { A: An, RV } = load();
+  const words = RV.speakable(An.script(info()).join(" "));
+  assert.ok(words.length > 40, words);
+  assert.ok(!/undefined|NaN|\[object/.test(words), words);
+});
+
+// ── 3. The voice ladder: Daniel first, then the machines without him ────────
+
+// localService, on every one: RadioVoice.voicesFor() drops REMOTE voices
+// outright (a network round trip before a line lands is not a radio), so a
+// stub without it hands the announcer an empty list and every voice assertion
+// below would pass for the wrong reason.
+const V = (name, lang) => ({ name, lang, localService: true });
+
+test("Daniel in en-GB wins outright — the voice the request named", () => {
+  const mac = [V("Alex", "en-US"), V("Daniel", "en-GB"), V("Karen", "en-AU")];
+  assert.equal(A.pickVoice(mac, "").name, "Daniel");
+});
+
+test("a Daniel in the wrong language still beats a stranger in the right one", () => {
+  // Ordered deliberately: name is the stronger signal for the ONE voice the
+  // request asked for by name, and en-GB has dozens of members.
+  assert.equal(A.pickVoice([V("Serena", "en-GB"), V("Daniel", "en-US")], "").name, "Daniel");
+});
+
+test("no Daniel: another British male, then any en-GB, then any English", () => {
+  assert.equal(A.pickVoice([V("Zira", "en-US"), V("George", "en-GB")], "").name, "George");
+  assert.equal(A.pickVoice([V("Zira", "en-US"), V("Hazel", "en-GB")], "").name, "Hazel");
+  assert.equal(A.pickVoice([V("Zira", "en-US"), V("Amelie", "fr-FR")], "").name, "Zira");
+});
+
+test("an en-GB FEMALE voice is not preferred over an en-GB one whose name says nothing", () => {
+  const list = [V("Google UK English Female", "en-GB"), V("Google UK English", "en-GB")];
+  assert.equal(A.pickVoice(list, "").name, "Google UK English");
+});
+
+test("nothing English at all returns null, and the platform picks — never a throw and never a French announcer", () => {
+  assert.equal(A.pickVoice([V("Amelie", "fr-FR"), V("Yuna", "ko-KR")], ""), null);
+  assert.equal(A.pickVoice([], ""), null);
+  assert.equal(A.pickVoice(null, ""), null);
+  assert.equal(A.pickVoice([null, undefined], ""), null);
+});
+
+test("THE PLAYER'S PICK OUTRANKS THE WHOLE LADDER — that is what the settings row is for", () => {
+  const list = [V("Daniel", "en-GB"), V("Yuna", "ko-KR")];
+  assert.equal(A.pickVoice(list, "Yuna").name, "Yuna");
+  // …but a pick for a voice this machine does not have falls back rather than
+  // silencing the channel: a save made on a Mac opened on a Windows box.
+  assert.equal(A.pickVoice(list, "Samantha").name, "Daniel");
+});
+
+// ── 4. The instance: degradation, gates, and the switch ─────────────────────
+
+test("no speechSynthesis: create() is inert and every method is safe to call", () => {
+  const { A: An, G } = load({ api: false });
+  const a = An.create(G);
+  assert.equal(a.available(), false);
+  assert.equal(a.play(info(), 1000), false);
+  assert.equal(a.preview(info()), false);
+  assert.equal(a.sample(), false);
+  assert.equal(a.scriptFor(info()).length, 0);
+  a.stop(); a.setEnabled(true);
+  assert.equal(An.inert().play(), false);
+});
+
+test("create() never reads the voice list — a speech API on the boot path is the defect radio-voice.js already pins", () => {
+  const { A: An, G, synth } = load({ voices: [V("Daniel", "en-GB")] });
+  An.create(G);
+  assert.equal(synth.calls.filter((c) => c.m === "getVoices").length, 0);
+});
+
+test("ON by default, and the stored OFF is honoured", () => {
+  assert.equal(load().A.create(load().G).enabled(), true);
+  const off = load({ stored: { announcer: false } });
+  assert.equal(off.A.create(off.G).enabled(), false);
+});
+
+test("MASTER SOUND OFF is silence, for play and preview alike — speech is outside the audio graph, so nothing else would stop it", () => {
+  const { A: An, G, synth } = load({ soundOn: false, voices: [V("Daniel", "en-GB")] });
+  const a = An.create(G);
+  assert.equal(a.play(info(), 1000), false);
+  assert.equal(a.preview(info()), false);
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 0);
+});
+
+test("the switch OFF stops play() but not preview() — pressing PLAY in the editor IS the consent", () => {
+  const { A: An, G } = load({ stored: { announcer: false }, voices: [V("Daniel", "en-GB")] });
+  const a = An.create(G);
+  assert.equal(a.play(info(), 1000), false);
+  assert.equal(a.preview(info()), true);
+});
+
+test("setEnabled writes through to the store, so the panel and the editor cannot disagree", () => {
+  const { A: An, G, saved } = load({ voices: [V("Daniel", "en-GB")] });
+  const a = An.create(G);
+  a.setEnabled(false);
+  assert.equal(saved.get("announcer"), false);
+  assert.equal(a.enabled(), false);
+  a.setEnabled(true);
+  assert.equal(saved.get("announcer"), true);
+});
+
+test("speaking picks the voice by name off the live synth, at the announcer channel's prosody", () => {
+  const { A: An, RV, G, synth } = load({ voices: [V("Alex", "en-US"), V("Daniel", "en-GB")] });
+  const a = An.create(G);
+  assert.equal(a.play(info(), 24000), true);
+  const spoke = synth.calls.find((c) => c.m === "speak");
+  assert.ok(spoke, "nothing was spoken");
+  assert.equal(spoke.voice && spoke.voice.name, "Daniel");
+  assert.equal(spoke.rate, RV.TONE.announcer.rate);
+  assert.equal(spoke.pitch, RV.TONE.announcer.pitch);
+  assert.match(spoke.text, /welcome to apex 26/i);
+});
+
+test("a cancel precedes every utterance and a resume follows it — Bugzilla 1522074, the same one the radio documents", () => {
+  const { A: An, G, synth } = load({ voices: [V("Daniel", "en-GB")] });
+  An.create(G).play(info(), 24000);
+  const order = synth.calls.map((c) => c.m).filter((m) => m !== "getVoices");
+  assert.deepEqual(order, ["cancel", "speak", "resume"], order.join(","));
+});
+
+test("VOICE VOLUME reaches it — one slider for everything the game speaks", () => {
+  const { A: An, G, synth } = load({ voices: [V("Daniel", "en-GB")], stored: { volRadio: 0.3 } });
+  An.create(G).play(info(), 24000);
+  assert.equal(synth.calls.find((c) => c.m === "speak").volume, 0.3);
+});
+
+test("synth reads the current voice volume for each new line", () => {
+  const { A: An, G, synth, saved } = load({ stored: { volRadio: 0.8 } });
+  const ann = An.create(G);
+  ann.preview(info());
+  const first = synth.calls.filter((c) => c.m === "speak").at(-1).u;
+  G.radio.setVolume(0.2); saved.set("volRadio", 0.2);
+  first.onend();
+  const second = synth.calls.filter((c) => c.m === "speak").at(-1).u;
+  assert.notEqual(first, second);
+  assert.equal(first.volume, 0.8, "already submitted speech is not rewritten");
+  assert.equal(second.volume, 0.2, "the next line follows the slider");
+  first.onend(); first.onerror({ error: "interrupted" });
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 2, "stale terminal callbacks cannot advance the next line");
+  assert.equal(ann.speaking(), true);
+  ann.stop(); second.onend();
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 2, "stop still retires the updated chain");
+});
+
+test("zero voice volume retires the synth read instead of submitting more speech", () => {
+  const { A: An, G, synth, saved } = load({ stored: { volRadio: 0.8 } });
+  const ann = An.create(G);
+  ann.preview(info());
+  const first = synth.calls.filter((c) => c.m === "speak").at(-1).u;
+  G.radio.setVolume(0); saved.set("volRadio", 0);
+  first.onend();
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 1, "no fresh utterance at zero volume");
+  assert.equal(ann.speaking(), false, "a muted read no longer holds the voice channel");
+  G.radio.setVolume(0.6); saved.set("volRadio", 0.6);
+  first.onend(); first.onerror({ error: "interrupted" });
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 1, "raising volume cannot revive retired copy");
+  ann.sample();
+  assert.equal(synth.calls.filter((c) => c.m === "speak").at(-1).volume, 0.6, "an explicit new read remains available");
+  ann.stop();
+});
+
+// ── 5. The channel this borrows has to exist ───────────────────────────────
+
+test("`announcer` is a real RadioVoice channel, with prosody and a preview line", () => {
+  // The settings row is a VOICE_CHANNELS entry like any other, which only works
+  // because the channel is in TONE — and setTune() refuses a channel that is
+  // not, so without this the player's pick would be silently dropped.
+  const { RV } = load();
+  assert.ok(RV.TONE[A.CHANNEL], "no prosody for the announcer channel");
+  assert.ok(RV.SAMPLE[A.CHANNEL], "no TEST line for the announcer channel");
+  assert.ok(RV.TONE[A.CHANNEL].rate < RV.TONE.radio.rate,
+    "the announcer reads a paragraph over a still screen; it must not be quicker than the pit call");
+  // ONE race-time kind routes here: "comm", the in-race commentary
+  // (js/race/race-radio.js) — the same broadcaster. Nothing else may, and the
+  // gate that keeps menu cards from being read aloud must still hold for it.
+  const kinds = Object.keys(RV.SPEAKERS).filter((k) => RV.SPEAKERS[k] === A.CHANNEL);
+  assert.deepEqual(kinds, ["comm"]);
+  const menu = RV.plan({ msg: "SAVE CONFLICT", life: 4, kind: "comm", enabled: true, soundOn: true, api: true, state: "menu" });
+  assert.equal(menu.reason, "not-racing");
+});
+
+/* ── THE READ IS A CHAIN OF LINES, NOT ONE BLOB ────────────────────────────── */
+
+/** Fire the pending utterance's onend, as a real engine does when it finishes. */
+function finishLine(synth) {
+  const last = synth.calls.filter((c) => c.m === "speak").at(-1);
+  if (last && last.u && last.u.onend) last.u.onend();
+}
+const spoken = (synth) => synth.calls.filter((c) => c.m === "speak").map((c) => c.text);
+
+test("the script is spoken one line per utterance, in order", () => {
+  const { A, G, synth } = load();
+  const ann = A.create(G);
+  // preview() and play() share speak(); preview just skips the player's toggle.
+  ann.preview({ track: { name: "MONZA", gp: "Italian GP", lengthKm: 5.793 }, laps: 53 });
+  assert.equal(spoken(synth).length, 1, "only the FIRST line may be handed over up front");
+  let guard = 0;
+  while (guard++ < 20) { const before = spoken(synth).length; finishLine(synth); if (spoken(synth).length === before) break; }
+  const said = spoken(synth);
+  assert.ok(said.length >= 4, "the whole script must be read, one line at a time: " + said.length);
+  assert.match(said[0], /welcome to apex 26/i, "and in order, opening with the welcome");
+  assert.match(said.at(-1), /racing/i, "…and ending with the last line of the script");
+  assert.ok(said.every((t) => !/welcome to apex 26.*monza/i.test(t)),
+    "no utterance may carry two lines — that is the join() this split replaced");
+});
+
+test("no single utterance can hit Chrome's ~14 s cap", () => {
+  // THE BUG THIS SPLIT EXISTS FOR. Chrome Desktop silently fails an utterance
+  // past roughly fourteen seconds. Joined into one blob, every real script was
+  // over: Silverstone 15.4 s, Monaco 18.1 s, Spa at night 22.2 s, a classic in
+  // the rain 26.3 s. Per line, none of them comes close.
+  const { A, RV, G, synth } = load();
+  const ann = A.create(G);
+  const rate = RV.TONE.announcer.rate;
+  const cases = [
+    { track: { name: "SILVERSTONE", gp: "British GP", lengthKm: 5.891, country: "UK" }, turns: 18, laps: 52, relief: 20 },
+    { track: { name: "SPA-FRANCORCHAMPS", gp: "Belgian GP", lengthKm: 7.004, night: true }, turns: 19, laps: 44, relief: 102 },
+    { track: { name: "BRANDS HATCH", gp: "British GP", lengthKm: 4.207, classic: true }, turns: 19, laps: 60, relief: 45, weather: "rain" },
+  ];
+  for (const info of cases) {
+    synth.calls.length = 0;
+    ann.preview(info);
+    let guard = 0;
+    while (guard++ < 30) { const n = spoken(synth).length; finishLine(synth); if (spoken(synth).length === n) break; }
+    for (const text of spoken(synth)) {
+      const secs = RV.estimate(text, rate);
+      assert.ok(secs < 14, `"${text}" is ${secs.toFixed(1)} s — Chrome drops an utterance past ~14 s`);
+    }
+  }
+});
+
+test("a stopped read does not wake up and carry on talking", () => {
+  // The queued onend of a cancelled line is the hazard: without the generation
+  // check it advances the dead chain over whatever replaced it.
+  const { A, G, synth } = load();
+  const ann = A.create(G);
+  ann.preview({ track: { name: "MONZA", gp: "Italian GP", lengthKm: 5.793 }, laps: 53 });
+  const first = spoken(synth).length;
+  ann.stop();
+  finishLine(synth);
+  finishLine(synth);
+  assert.equal(spoken(synth).length, first, "stop() must end the chain, not pause it");
+});
+
+test("a cancel from OUTSIDE the announcer ends its read instead of skipping to the next line", () => {
+  // Bug hunt 2026-09-22: RadioVoice's hide handler cancels the shared synth
+  // without bumping the announcer's generation, and the cancelled line's
+  // error advanced the chain — reading on into a hidden tab.
+  const { A, G, synth } = load();
+  const ann = A.create(G);
+  ann.preview({ track: { name: "MONZA", gp: "Italian GP", lengthKm: 5.793 }, laps: 53 });
+  const first = spoken(synth).length;
+  const u = synth.calls.filter((c) => c.m === "speak").at(-1).u;
+  u.onerror({ error: "interrupted" });
+  finishLine(synth);
+  assert.equal(spoken(synth).length, first, "an interrupted line ends the chain");
+});
+
+for (const firstEvent of ["end", "error"]) {
+  test(`a system utterance settled by ${firstEvent} cannot disturb its successor`, () => {
+    const { A, G, synth } = load();
+    const ann = A.create(G);
+    ann.preview(info());
+    const first = synth.calls.find((c) => c.m === "speak").u;
+    if (firstEvent === "end") first.onend();
+    else first.onerror({ error: "network" });
+    assert.equal(spoken(synth).length, 2, "a terminal event starts exactly the next line");
+    first.onend();
+    first.onerror({ error: "network" });
+    first.onerror({ error: "interrupted" });
+    assert.equal(spoken(synth).length, 2, "settled line events cannot skip or queue later lines");
+    assert.equal(ann.speaking(), true, "a settled line cannot retire the active line");
+    finishLine(synth);
+    assert.equal(spoken(synth).length, 3, "the active line still owns progression");
+    ann.stop();
+  });
+}
+
+test("the announcer may use a network voice; the race radio may not", () => {
+  /* The rule that made the announcer worse. A remote voice's lead-in is
+   * unbounded, which is disqualifying for a line budgeted against a card — and
+   * irrelevant to a paragraph read over a loading screen. Every Chrome voice is
+   * remote and every top-tier Microsoft voice is named "… Online (Natural)", so
+   * the local-only filter was removing the GOOD voices, not the risky ones. */
+  const voices = [
+    { name: "Microsoft Ryan Online (Natural) - English (United Kingdom)", lang: "en-GB", localService: false },
+    { name: "Microsoft George - English (United Kingdom)", lang: "en-GB", localService: true },
+  ];
+  const { RV } = load({ voices });
+  const radio = RV.create({ soundOn: true, state: "race", store: { get: (k, d) => d, set() {} } });
+  const forRadio = radio.voiceList("radio").map((v) => v.name);
+  const forAnn = radio.voiceList("announcer").map((v) => v.name);
+  assert.ok(!forRadio.some((n) => /Online \(Natural\)/.test(n)),
+    "a race-radio line cannot wait on a network round trip");
+  assert.ok(forAnn.some((n) => /Online \(Natural\)/.test(n)),
+    "the announcer has no card to miss, and this is the voice the channel is for");
+  assert.ok(forRadio.length < forAnn.length);
+  assert.equal(RV.REMOTE_OK.announcer, true);
+  assert.ok(!RV.REMOTE_OK.radio && !RV.REMOTE_OK.control && !RV.REMOTE_OK.coach);
+});
+
+test("pickVoice prefers the neural and enhanced voices over the compact ones", () => {
+  const { A } = load();
+  // Windows 11 / Edge: the Natural voices are the veryHigh tier of the curated
+  // cross-platform list, and en-GB male is Ryan or Thomas.
+  assert.match(A.pickVoice([
+    { name: "Microsoft George - English (United Kingdom)", lang: "en-GB" },
+    { name: "Microsoft Ryan Online (Natural) - English (United Kingdom)", lang: "en-GB" },
+  ], "").name, /Ryan/);
+  // macOS with the download: same character, a quality the compact voice cannot reach.
+  assert.match(A.pickVoice([
+    { name: "Daniel", lang: "en-GB" },
+    { name: "Daniel (Enhanced)", lang: "en-GB" },
+  ], "").name, /Enhanced/);
+  // Chrome desktop, where the only voices there are are remote.
+  assert.match(A.pickVoice([
+    { name: "Google US English", lang: "en-US" },
+    { name: "Google UK English Male", lang: "en-GB" },
+  ], "").name, /UK English Male/);
+  // The player's explicit pick still outranks the whole ladder.
+  assert.equal(A.pickVoice([
+    { name: "Daniel (Enhanced)", lang: "en-GB" },
+    { name: "Microsoft George - English (United Kingdom)", lang: "en-GB" },
+  ], "Microsoft George - English (United Kingdom)").name, "Microsoft George - English (United Kingdom)");
+});
+
+/* ── 6. THE SESSION, which never reached this script before ──────────────── */
+
+// Until 2026-09-20 the welcome ended "12 laps. Let's go racing." whatever was
+// about to happen: a qualifying hour, a duel with a legend, an unscored
+// practice run. js/game.js tracks every one of these; loadingInfo() simply did
+// not pass them on.
+
+const tail = (o) => A.script(o).slice(-1)[0];
+
+test("the last line names the session — and it IS the last line, whatever else was said", () => {
+  assert.match(tail(info()), /^12 laps\. Let's go racing\.$/);
+  assert.match(tail(info({ session: "quali" })), /Qualifying\./);
+  assert.match(tail(info({ session: "quali", practice: true })), /Qualifying practice\./);
+  assert.match(tail(info({ session: "tt" })), /Time trial\./);
+  assert.match(tail(info({ practice: true })), /^Practice\./);
+  assert.match(tail(info({ duel: true })), /^A duel\. Just the two of you/);
+});
+
+test("a duel names the rival when there is one to name", () => {
+  const withLegend = tail(info({ duel: true, duelLegend: "SENNA" }));
+  assert.match(withLegend, /A duel with Senna\./,
+    "the legend id is shouted for the picker's chip; a broadcast says the name");
+  assert.ok(!/SENNA/.test(withLegend), "all-caps reaches the synth as spelled-out letters");
+});
+
+test("the session outranks the laps, so a quali read never promises a race", () => {
+  const q = said(info({ session: "quali" }));
+  assert.ok(!/12 laps/.test(q), "qualifying is one lap — the race distance is not part of it");
+});
+
+/* ── 7. THE AUTHORED HALF (js/data/circuit-lore.js) ──────────────────────── */
+
+test("every circuit has a lore row, and every lore row has a circuit", () => {
+  // The failure js/audio/announcer.js's original header predicted, guarded:
+  // "written for the six somebody bothered and missing on the rest". Both
+  // directions, so a retired circuit cannot leave a dangling entry either.
+  const { CircuitLore } = load();
+  const onDisk = readdirSync(join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).map((f) => f.replace(/\.js$/, "")).sort();
+  const lore = CircuitLore.ids().sort();
+  assert.deepEqual(lore.filter((id) => !onDisk.includes(id)), [], "a lore row names no circuit");
+  assert.deepEqual(onDisk.filter((id) => !lore.includes(id)), [], "a circuit has no lore row");
+});
+
+test("every lore line is one spoken sentence the synth can read", () => {
+  const { CircuitLore } = load();
+  for (const [id, row] of Object.entries(CircuitLore.LORE)) {
+    assert.ok(row.line, `${id} has no identity line`);
+    for (const [slot, text] of Object.entries(row)) {
+      const where = `${id}.${slot}`;
+      assert.match(text, /[.!?]$/, `${where} is not punctuated — the synth runs it into the next line`);
+      assert.ok(!/\bGP\b/.test(text), `${where} says "GP"; speakable() reads that as two letters`);
+      // RadioVoice keeps a short closed set of initialisms and lowercases the
+      // rest, which several engines then spell out letter by letter.
+      const shouty = text.match(/\b[A-Z]{2,}\b/g) || [];
+      assert.deepEqual(shouty, [], `${where} carries ALL-CAPS ${shouty.join(", ")}`);
+      assert.ok(text.length < 160, `${where} is ${text.length} chars — one sentence, not a paragraph`);
+    }
+  }
+});
+
+// Baku is exempt until its night line is baked: lore lines are pre-baked TTS clips (assets/voice/*.json, tools/gen/voicepack.mjs, author-side
+// credentials), and voice-pack.test.mjs fails on an unbaked line. Drop BAKED_GAP once the voice pack is re-baked with a Baku night line.
+const BAKED_GAP = ["baku"];
+test("every night circuit has a night line, so the announcer has something to say after dark", () => {
+  const { CircuitLore } = load();
+  const nights = readdirSync(join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js"))
+    .filter((f) => /^ {4}night: true,/m.test(readFileSync(join(ROOT, "js/circuits", f), "utf8")))
+    .map((f) => f.replace(/\.js$/, ""));
+  assert.ok(nights.includes("baku") && nights.length >= 7, `only found ${nights.join(", ")}`);
+  assert.deepEqual(nights.filter((id) => !BAKED_GAP.includes(id) && !CircuitLore.LORE[id].night), [], "a night circuit has no `night` lore slot");
+});
+
+test("Baku's night line is a known gap (voice bake pending)", { todo: true }, () => {
+  const { CircuitLore } = load();
+  assert.ok(CircuitLore.LORE.baku.night, "Baku is night: true but has no night lore line");
+});
+
+// Reverted until the voice pack is re-baked: the Istanbul `corner` line IS voiced (voice-pack.test.mjs fails on any reworded line),
+// so the fix is "seems to last forever" + a bake of that line.
+test("no lore line states a duration the circuit does not have (Istanbul turn eight is seconds, not a minute)", { todo: true }, () => {
+  const { CircuitLore } = load();
+  assert.doesNotMatch(CircuitLore.LORE.istanbul.corner, /minute/);
+});
+
+test("the circuit's own line is spoken, and outranks the numbers when the budget is tight", () => {
+  const spa = info({ track: { id: "spa", name: "Spa", gp: "Belgian Grand Prix", lengthKm: 7.004 }, turns: 19 });
+  assert.match(said(spa), /Ardennes/, "Spa's identity line never reached the script");
+  assert.match(said(spa), /Eau Rouge/, "…nor the corner it is known for");
+  // The ORDERING, swept rather than asserted at one budget: for every budget
+  // that still has room for the length, the circuit's own line is there too.
+  // A listener who hears one sentence about Spa should hear the Ardennes one.
+  for (let ms = 4000; ms <= 30000; ms += 500) {
+    const kept = A.script(spa, ms).join(" ");
+    if (/7\.004 kilometres/.test(kept)) {
+      assert.match(kept, /Ardennes/, `at ${ms} ms the length survived and the circuit's own line did not`);
+    }
+  }
+});
+
+test("a wet circuit reads its OWN wet line, not the generic one", () => {
+  const spa = { id: "spa", name: "Spa", gp: "Belgian Grand Prix", lengthKm: 7.004 };
+  assert.match(said(info({ track: spa, weather: "rain" })), /rain on one half of this circuit/i);
+  // …and a circuit whose row has no wet line still gets the floor.
+  const plain = info({ track: { id: "catalunya", name: "Barcelona", gp: "Spanish Grand Prix", lengthKm: 4.7 }, weather: "rain" });
+  assert.match(said(plain), /Heavy rain/);
+});
+
+/* ── 8. THE BUDGET — the read is cut to fit, not cut off ─────────────────── */
+
+test("the script fits the flyby, and never loses the line that ends it", () => {
+  // The flyby is 24 s (js/ui/loading-screen.js FLY_MS) and the longest reads
+  // were already over it before the authored lines existed — measured at this
+  // channel's rate: a classic circuit in the rain, 26.3 s.
+  const RATE = 0.92;
+  const worst = info({
+    track: { id: "spa", name: "Spa", gp: "Belgian Grand Prix", country: "Belgium", lengthKm: 7.004, classic: true },
+    turns: 19, relief: 103, weather: "rain", laps: 44,
+  });
+  const full = A.script(worst);
+  const fitted = A.script(worst, 24000, RATE);
+  assert.ok(fitted.length < full.length, "the worst case already fits — this test is not measuring anything");
+  const secs = fitted.reduce((n, l) => n + A.seconds(l, RATE), 0);
+  assert.ok(secs <= 24, `the fitted read is ${secs.toFixed(1)} s against a 24 s flyby`);
+  assert.match(fitted.slice(-1)[0], /Let's go racing\.$/, "the cue the player waits for was dropped");
+  assert.match(fitted[0], /^Welcome to Apex 26\.$/);
+});
+
+test("an impossible budget keeps the must-haves rather than falling silent", () => {
+  // Array.from: script() builds its array inside the VM realm, so it carries
+  // that context's Array.prototype and deepStrictEqual rejects it against a
+  // host [] even when every element matches.
+  const fitted = Array.from(A.script(info(), 1), (l) => l.replace(/ .*/, ""));
+  assert.deepEqual(fitted, ["Welcome", "This", "12"],
+    "welcome, venue and session are priority 0 — a one-millisecond budget still says them");
+});
+
+/* ── THE CUE LANDS ON THE CUT ─────────────────────────────────────────────── */
+
+/** Fake timers with their own clock: tick(ms) fires every due callback in order. */
+function fakeClock() {
+  let now = 1000, seq = 0;
+  const q = [];
+  const c = {
+    now: () => now,
+    Date: { now: () => now },
+    setTimeout(fn, ms) { const id = ++seq; q.push({ id, at: now + Math.max(0, ms || 0), fn }); return id; },
+    clearTimeout(id) { const k = q.findIndex((t) => t.id === id); if (k >= 0) q.splice(k, 1); },
+    tick(ms) {
+      const end = now + ms;
+      for (;;) {
+        q.sort((a, b) => a.at - b.at || a.id - b.id);
+        if (!q.length || q[0].at > end) break;
+        const t = q.shift();
+        now = t.at;
+        t.fn();
+      }
+      now = end;
+    },
+  };
+  return c;
+}
+
+test("recorded introductions preserve voice identity, skip unknown stories and cancel pending downloads", async () => {
+  const clock = fakeClock(), calls = [];
+  let resolve;
+  const pending = new Promise((r) => { resolve = r; });
+  const G = { soundOn: true, radio: { recordedVoice: () => "bella", volume: () => 0.8, pack: {
+    load: () => pending, stop: (ch) => calls.push({ stop: ch }),
+    plan: (t, text) => text.includes("unknown") ? null : { secs: 1 },
+    speak: (id, text, o) => { calls.push({ id, text, o }); return true; },
+  } } };
+  const sb = vm.createContext({ Promise, Date: clock.Date, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, document: { hidden: false } });
+  vm.runInContext(read("js/audio/announcer-recorded.js").replace(/^const\b/gm, "var"), sb);
+  const a = sb.RecordedAnnouncer.create(G);
+  assert.equal(a.play(["Welcome", "unknown career detail", "Let's go racing"], 5000, true), true);
+  assert.equal(a.speaking(), true);
+  a.stop(); resolve(true); await pending; await Promise.resolve(); clock.tick(10000);
+  assert.equal(calls.filter((c) => c.id).length, 0, "skip retires the pending load");
+  a.play(["Welcome", "unknown career detail", "Let's go racing"], 5000, true);
+  await Promise.resolve(); clock.tick(0);
+  let spoken = calls.filter((c) => c.id);
+  assert.equal(spoken[0].id, "bella");
+  assert.equal(spoken[0].o.fx, "announcer");
+  spoken[0].o.onEnd(); clock.tick(250); clock.tick(3150);
+  spoken = calls.filter((c) => c.id);
+  assert.deepEqual(spoken.map((c) => c.text), ["Welcome", "Let's go racing"]);
+  assert.ok(spoken.every((c) => c.id === "bella"));
+  a.stop(); assert.equal(a.speaking(), false);
+});
+
+function recordedLifecycle() {
+  const clock = fakeClock(), spoken = [], pending = [], stops = [];
+  const document = { hidden: false };
+  const G = { soundOn: true, paused: false, radio: { recordedVoice: () => "bella", volume: () => 0.8, pack: {
+    load: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+    stop: (channel) => stops.push(channel), plan: () => ({ secs: 1 }),
+    speak: (_id, text, options) => { spoken.push({ text, options }); return true; },
+  } } };
+  const sb = vm.createContext({ Promise, Date: clock.Date, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout, document });
+  vm.runInContext(read("js/audio/announcer-recorded.js"), sb);
+  return { a: sb.RecordedAnnouncer.create(G), clock, spoken, pending, stops, G, document };
+}
+
+test("recorded preview aborts release ownership at every asynchronous gate", async (t) => {
+  for (const state of ["paused", "hidden", "muted"]) {
+    for (const stage of ["load", "rejection", "timer", "decode", "end"]) {
+      await t.test(`${state} during ${stage}`, async () => {
+        const { a, clock, spoken, pending, stops, G, document } = recordedLifecycle();
+        a.play(["first", "second"], 0, false);
+        if (!["load", "rejection"].includes(stage)) {
+          pending[0].resolve(true); await Promise.resolve();
+          if (stage !== "timer") clock.tick(0);
+        }
+        if (state === "paused") G.paused = true;
+        else if (state === "hidden") document.hidden = true;
+        else G.soundOn = false;
+        const before = spoken.length;
+        if (stage === "load") pending[0].resolve(true);
+        else if (stage === "rejection") pending[0].reject(new Error("load failed"));
+        else if (stage === "decode") assert.equal(spoken[0].options.valid(), false);
+        else if (stage === "end") spoken[0].options.onEnd();
+        await Promise.resolve(); await Promise.resolve(); clock.tick(0);
+        assert.equal(a.speaking(), false, "an aborted unbudgeted preview releases its ownership");
+        assert.deepEqual(stops, ["intro", "intro"], "abort stops the owned channel once");
+        G.paused = false; document.hidden = false; G.soundOn = true;
+        clock.tick(10000);
+        assert.equal(spoken.length, before, "resume cannot restart the abandoned read");
+        a.play(["replacement"], 0, false);
+        pending[1].resolve(true); await Promise.resolve(); clock.tick(0);
+        assert.equal(spoken.at(-1).text, "replacement");
+        spoken.at(-1).options.onEnd(); clock.tick(250);
+        assert.equal(a.speaking(), false, "a subsequent preview completes normally");
+      });
+    }
+  }
+});
+
+test("stale recorded callbacks cannot release a replacement preview", async (t) => {
+  for (const stage of ["load", "rejection", "decode", "end"]) {
+    await t.test(stage, async () => {
+      const { a, clock, spoken, pending, stops, G } = recordedLifecycle();
+      a.play(["old"], 0, false);
+      if (["decode", "end"].includes(stage)) {
+        pending[0].resolve(true); await Promise.resolve(); clock.tick(0);
+      }
+      const old = spoken[0];
+      a.play(["replacement"], 0, false);
+      pending[1].resolve(true); await Promise.resolve(); clock.tick(0);
+      const current = spoken.at(-1), count = spoken.length, stopCount = stops.length;
+      G.paused = true;
+      if (stage === "load") pending[0].resolve(true);
+      else if (stage === "rejection") pending[0].reject(new Error("old load failed"));
+      else if (stage === "decode") assert.equal(old.options.valid(), false);
+      else old.options.onEnd();
+      await Promise.resolve(); await Promise.resolve(); clock.tick(1000);
+      assert.equal(a.speaking(), true, "only the current generation can release ownership");
+      assert.equal(stops.length, stopCount, "old callbacks cannot stop the current channel");
+      assert.equal(spoken.length, count, "old callbacks cannot schedule another line");
+      G.paused = false; current.options.onEnd(); clock.tick(250);
+      assert.equal(a.speaking(), false);
+    });
+  }
+});
+
+function pausedRecordedAudition() {
+  const clock = fakeClock(), spoken = [];
+  const document = { hidden: false, getElementById: () => null, addEventListener() {} };
+  const { A, G } = load({ clock, document });
+  G.paused = true;
+  G.radio = { announcerPackOn: () => true, recordedVoice: () => "bella", volume: () => 0.8,
+    stop() {}, pack: { stop() {}, load: () => Promise.resolve(true), plan: () => ({ secs: 1 }),
+      speak: (_id, text, options) => { spoken.push({ text, options }); return true; } } };
+  return { ann: A.create(G), G, clock, spoken, document };
+}
+
+for (const method of ["preview", "sample"]) {
+  test(`explicit recorded ${method} plays while the race is paused`, async () => {
+    const f = pausedRecordedAudition();
+    f.ann.setEnabled(false); // explicit auditions ignore the automatic-read toggle
+    assert.equal(f.ann[method](info()), true);
+    await Promise.resolve(); f.clock.tick(0);
+    assert.equal(f.spoken.length, 1, "an accepted audition must reach the recorded pack");
+    assert.equal(f.spoken[0].options.valid(), true, "decode validity also permits this paused audition");
+    f.ann.stop();
+    for (const gate of ["sound", "hidden"]) {
+      const g = pausedRecordedAudition();
+      g.ann[method](info()); await Promise.resolve(); g.clock.tick(0);
+      if (gate === "sound") g.G.soundOn = false; else g.document.hidden = true;
+      assert.equal(g.spoken[0].options.valid(), false, `${gate} still aborts an explicit audition`);
+      assert.equal(g.ann.speaking(), false);
+      assert.equal(g.ann[method](info()), false, `${gate} also refuses a new audition`);
+    }
+  });
+}
+
+for (const method of ["play", "wrapUp"]) {
+  test(`automatic recorded ${method} still aborts while paused`, async () => {
+    const f = pausedRecordedAudition();
+    if (method === "play") f.ann.play(info(), 10000);
+    else f.ann.wrapUp([{ name: "Lando Norris", finishT: 100 }], info());
+    await Promise.resolve(); f.clock.tick(0);
+    assert.equal(f.spoken.length, 0);
+    assert.equal(f.ann.speaking(), false);
+  });
+}
+
+test("recorded introductions reserve the closing cue before adding optional colour", async () => {
+  const clock = fakeClock(), calls = [];
+  const duration = { welcome: 2, venue: 3, colour: 3, closing: 2 };
+  const G = { soundOn: true, radio: { recordedVoice: () => "bella", volume: () => 0.8, pack: {
+    load: () => Promise.resolve(true), stop() {}, plan: (_id, text) => ({ secs: duration[text] }),
+    speak: (_id, text, o) => { calls.push(text); return true; },
+  } } };
+  const sb = vm.createContext({ Promise, Date: clock.Date, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout });
+  vm.runInContext(read("js/audio/announcer-recorded.js").replace(/^const\b/gm, "var"), sb);
+  // This fake finishes each clip at its recorded duration, just like WebAudio.
+  G.radio.pack.speak = (_id, text, o) => { calls.push(text); clock.setTimeout(o.onEnd, duration[text] * 1000); return true; };
+  const a = sb.RecordedAnnouncer.create(G);
+  a.play(["welcome", "venue", "colour", "closing"], 10000, true);
+  await Promise.resolve(); clock.tick(10000);
+  assert.deepEqual(calls, ["welcome", "venue", "closing"], "optional colour cannot consume the lights-out cue's time");
+  assert.equal(a.speaking(), false);
+});
+
+test("unrecorded numbered sprints and named duels retain a recorded closing cue and its timing", async () => {
+  const clock = fakeClock(), calls = [];
+  const generic = ["the sprint, flat out from the start. let's go racing.",
+    "a duel. just the two of you, and no one else on the road.", "let's go racing."];
+  const G = { soundOn: true, radio: { recordedVoice: () => "bella", volume: () => 0.8, pack: {
+    ensure() {}, ready: () => true, load: () => Promise.resolve(true), stop() {},
+    plan: (_id, text) => generic.includes(text) ? { secs: 2 } : null,
+    speak: (_id, text) => { calls.push({ text, at: clock.now() }); return true; },
+  } } };
+  const sb = vm.createContext({ Promise, Date: clock.Date, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout });
+  vm.runInContext(read("js/audio/announcer-recorded.js").replace(/^const\b/gm, "var"), sb);
+  const a = sb.RecordedAnnouncer.create(G);
+  for (const [i, original] of ["the sprint. 5 laps, flat out from the start. let's go racing.",
+    "a duel with senna. just the two of you, and no one else on the road.", "120 laps. let's go racing."].entries()) {
+    assert.equal(a.readMs([original]), 2850);
+    const start = clock.now(); a.play([original], 5000, true);
+    await Promise.resolve(); clock.tick(2400);
+    assert.equal(calls.at(-1).text, generic[i]);
+    assert.equal(calls.at(-1).at, start + 2400, "the generic closing still lands before the flyby ends");
+    a.stop();
+  }
+});
+
+/** Finish every line as soon as it starts, recording WHEN each one started. */
+function readThrough(synth, clock, stepMs, untilMs) {
+  const starts = [];
+  let seen = 0;
+  for (let t = 0; t <= untilMs; t += stepMs) {
+    const sp = synth.calls.filter((c) => c.m === "speak");
+    // An engine fires each onend ONCE: finish only the lines that just started.
+    while (seen < sp.length) { starts.push({ text: sp[seen].text, at: clock.now() }); seen++; finishLine(synth); }
+    clock.tick(stepMs);
+  }
+  return starts;
+}
+
+test("play() holds the LAST line so it finishes ~600 ms before the flyby's budget ends", () => {
+  const clock = fakeClock();
+  const { A: An, RV, G, synth } = load({ clock });
+  const t0 = clock.now();
+  const budget = 24000;
+  assert.equal(An.create(G).play(info(), budget), true);
+  const starts = readThrough(synth, clock, 50, budget);
+  assert.ok(starts.length >= 3, "the whole script was read: " + starts.length);
+  const last = starts.at(-1);
+  assert.match(last.text, /racing/i, "the held line is the session cue");
+  // Every earlier line went straight through: each one is spoken the moment
+  // the one before it ends (one 50 ms step here), not spread across the gap.
+  for (let k = 1; k < starts.length - 1; k++) {
+    assert.ok(starts[k].at - starts[k - 1].at <= 50, `line ${k} was delayed: ${JSON.stringify(starts)}`);
+  }
+  const est = An.seconds(last.text, RV.TONE.announcer.rate) * 1000;
+  const want = t0 + budget - est - 600;
+  assert.ok(Math.abs(last.at - want) <= 50,
+    `last line started at +${last.at - t0} ms, want +${Math.round(want - t0)} ms (budget ${budget}, est ${Math.round(est)})`);
+  assert.ok(last.at - starts.at(-2).at > 1000, "…which is a real hold, not the chain's own pace");
+});
+
+test("the hold never makes the read LATER than the chain would reach the last line anyway", () => {
+  // A budget the script already fills: the target is in the past by the time
+  // the chain gets there, so the cue follows its predecessor immediately.
+  const clock = fakeClock();
+  const { A: An, G, synth } = load({ clock });
+  An.create(G).play(info(), 1500);
+  const starts = readThrough(synth, clock, 50, 1400);
+  assert.ok(starts.length >= 2, JSON.stringify(starts));
+  for (let k = 1; k < starts.length; k++) assert.ok(starts[k].at - starts[k - 1].at <= 50, JSON.stringify(starts));
+});
+
+test("preview() is NOT held — the editor's PLAY reads straight through", () => {
+  const clock = fakeClock();
+  const { A: An, G, synth } = load({ clock });
+  An.create(G).preview(info());
+  const starts = readThrough(synth, clock, 50, 2000);
+  assert.match(starts.at(-1).text, /racing/i);
+  for (let k = 1; k < starts.length; k++) assert.ok(starts[k].at - starts[k - 1].at <= 50, JSON.stringify(starts));
+});
+
+test("a stop() during the hold means the held line is never spoken", () => {
+  const clock = fakeClock();
+  const { A: An, G, synth } = load({ clock });
+  const ann = An.create(G);
+  ann.play(info(), 24000);
+  readThrough(synth, clock, 50, 3000);          // through every line but the held one
+  const before = spoken(synth).length;
+  assert.ok(!/racing/i.test(spoken(synth).at(-1)), "still holding the cue at +3 s");
+  ann.stop();
+  clock.tick(30000);
+  assert.equal(spoken(synth).length, before, "the skip that ended the flyby ended the held cue too");
+});
+
+/* ── THE STORY AND THE WRAP-UP ──────────────────────────────────────────────
+ * The same circuit read the same paragraph every visit. `info.story` carries
+ * what makes THIS race different — the seat, the championship, the target, the
+ * forecast — and every row it adds sits BELOW the must-keeps, so a squeezed
+ * budget drops the story before the welcome, the venue or the lights cue. */
+
+const STORY = {
+  driver: "Lando Norris", team: "McLaren", mate: "Oscar Piastri",
+  champ: { round: 4, rounds: 24, leader: "Max Verstappen", youPos: 3, gap: 18 },
+  goal: "Finish P5 or better in the championship",
+  forecast: { to: "rain", inS: 300 },
+};
+
+test("the story reads the seat, the championship, the target and the forecast — before the lights cue", () => {
+  const lines = A.script(info({ story: STORY }));
+  const all = lines.join(" ");
+  assert.match(all, /Lando Norris for McLaren, with Piastri in the sister car\./);
+  assert.match(all, /Round 5 of 24\. Verstappen leads the championship; you are 3rd, 18 points back\./);
+  assert.match(all, /The target this season: finish P5 or better in the championship\./);
+  assert.match(all, /Rain is on the way, in about 5 minutes\./);
+  assert.match(lines.at(-1), /Let's go racing\.$/, "the session cue stays last");
+  for (const l of lines) {
+    assert.match(l, /\.$|!$/, `"${l}" is not a sentence`);
+    assert.doesNotMatch(l, /undefined|NaN|\[object/);
+  }
+});
+
+test("leading the championship, and the final round, read as themselves", () => {
+  const lead = A.script(info({ story: { champ: { round: 9, rounds: 10, leader: "Lando Norris", youPos: 1, gap: 7 } } })).join(" ");
+  assert.match(lead, /The final round, and you lead the championship by 7 points\./);
+  const chase = A.script(info({ story: { champ: { round: 9, rounds: 10, leader: "Max Verstappen", youPos: 2, gap: 12 } } })).join(" ");
+  assert.match(chase, /It all comes down to this\./);
+  // Before a single round is scored there is no championship to talk about.
+  const r1 = A.script(info({ story: { champ: { round: 0, rounds: 24, leader: "Max Verstappen", youPos: 1, gap: 0 } } })).join(" ");
+  assert.doesNotMatch(r1, /championship/);
+});
+
+test("a forecast that matches the current weather says nothing; dry race, no rain words", () => {
+  const same = A.script(info({ weather: "rain", story: { forecast: { to: "rain", inS: 200 } } })).join(" ");
+  assert.doesNotMatch(same, /on the way/);
+  const dry = A.script(info({ story: { driver: "Lando Norris", team: "McLaren" } })).join(" ");
+  assert.doesNotMatch(dry, /rain|wet|fog/i);
+});
+
+test("the story never displaces a must-keep: at a 1 ms budget the same three lines survive", () => {
+  const kept = A.script(info({ story: STORY }), 1, 0.92);
+  assert.deepEqual(JSON.parse(JSON.stringify(kept.map((l) => l.split(" ")[0]))), ["Welcome", "This", "12"]);
+  for (const r of A.storyRows(STORY, {})) assert.ok(r.prio >= 1, `"${r.text}" is priority ${r.prio}`);
+});
+
+test("a sprint states the sprint distance, and still ends on the lights cue", () => {
+  const lines = A.script(info({ laps: 8, sprint: true }));
+  assert.match(lines.at(-1), /^The sprint\. 8 laps, flat out from the start\. Let's go racing\.$/);
+});
+
+test("the venue line rotates between visits and always opens 'This is'", () => {
+  const seen = new Set();
+  for (let v = 0; v < 3; v++) {
+    const venue = A.script(info({ variant: v }))[1];
+    assert.match(venue, /^This is /);
+    assert.match(venue, /Monza/); assert.match(venue, /Italian Grand Prix/);
+    seen.add(venue);
+  }
+  assert.equal(seen.size, 3);
+});
+
+test("the wrap-up names the winner, the margin, your race against your grid slot, and the fastest lap", () => {
+  const lines = A.wrapRows({
+    event: "the Italian GP", n: 20,
+    winner: { name: "Fernando Alonso" }, second: "Esteban Ocon", margin: 1.234,
+    you: { pos: 6, grid: 12, dnf: false }, fastest: { name: "Oscar Piastri", time: 81.456, you: false },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(lines)), [
+    "Fernando Alonso wins the Italian Grand Prix, 1.2 seconds ahead of Ocon.",
+    "You finish 6th, up 6 places from 12th on the grid.",
+    "Fastest lap to Piastri, a 1 21.5.",
+  ]);
+  const won = A.wrapRows({ event: "the Italian GP", n: 20, winner: { name: "Lando Norris" }, margin: 3.1, you: { pos: 1, grid: 4 } });
+  assert.equal(won[0], "And you win the Italian Grand Prix, 3.1 seconds clear.");
+  const podium = A.wrapRows({ event: "", n: 20, winner: { name: "Max Verstappen" }, you: { pos: 3, grid: 3 } });
+  assert.equal(podium[1], "A podium for you, 3rd.");
+  const out = A.wrapRows({ event: "", n: 20, winner: { name: "Max Verstappen" }, you: { pos: 0, dnf: true } });
+  assert.match(out[1], /retirement/);
+  const { RV } = load();
+  for (const l of lines.concat(won, podium, out)) {
+    assert.ok(RV.estimate(RV.speakable(l), 0.92) < 14, `"${l}" is too long for one utterance`);
+  }
+});
+
+test("a photo-finish margin is read as a tenth, never '0.0 seconds'", () => {
+  const txt = A.wrapRows({ event: "the British Grand Prix", n: 20, winner: { name: "Max Verstappen" },
+    second: "Lando Norris", margin: 0.04, you: { pos: 5, grid: 5 } }).join(" ");
+  assert.doesNotMatch(txt, /0\.0 seconds/);
+  assert.match(txt, /0\.1 seconds ahead of Norris/);
+});
+
+test("a margin that rounds up to ten is read as '10', never '10.0 seconds'", () => {
+  const txt = A.wrapRows({ event: "the British Grand Prix", n: 20, winner: { name: "Max Verstappen" },
+    second: "Lando Norris", margin: 9.96, you: { pos: 5, grid: 5 } }).join(" ");
+  assert.doesNotMatch(txt, /10\.0/);
+  assert.match(txt, /10 seconds ahead of Norris/);
+  assert.match(A.wrapRows({ event: "x", n: 20, winner: { name: "Max Verstappen" }, second: "Lando Norris", margin: 9.94,
+    you: { pos: 5, grid: 5 } }).join(" "), /9\.9 seconds ahead/);
+});
+
+for (const retired of [false, true]) {
+  test(`the public wrap-up reports player disqualification instead of a finish or retirement (retired=${retired})`, () => {
+    const { A: An, G, synth } = load();
+    const ann = An.create(G);
+    const winner = { name: "Lando Norris", finishT: 100, lap: 5, finPos: 1, best: 80 };
+    const you = { name: "Oscar Piastri", isPlayer: true, dsq: "two dry compounds not used", retired,
+      finishT: 104, lap: 5, finPos: 2, gridPos: 7, best: 79 };
+    // endRace appends DSQ rows and still assigns finPos; dsq does not imply retired.
+    ann.wrapUp([winner, you], info());
+    for (let i = 0; i < 8; i++) finishLine(synth);
+    const text = spoken(synth).join(" ");
+    assert.match(text, /you have been disqualified/i);
+    assert.doesNotMatch(text, /you finish|podium|up 5 places|retirement|fastest lap to you/i);
+    assert.doesNotMatch(text, /seconds ahead of piastri/i, "DSQ is not a classified runner-up");
+    ann.stop();
+  });
+}
+
+test("the public wrap-up omits a DSQ runner-up margin when the player wins", () => {
+  const { A: An, G, synth } = load();
+  const ann = An.create(G);
+  const you = { name: "You", isPlayer: true, finishT: 100, lap: 5, finPos: 1 };
+  const dsq = { name: "Oscar Piastri", dsq: "real race classification", retired: false, finishT: 104, lap: 5, finPos: 2 };
+  ann.wrapUp([you, dsq], info());
+  for (let i = 0; i < 8; i++) finishLine(synth);
+  assert.match(spoken(synth)[0], /you win/i);
+  assert.doesNotMatch(spoken(synth).join(" "), /seconds clear|ahead of/i);
+  ann.stop();
+});
+
+test("the wrap-up reads the result the stewards gave: a penalty is part of the margin, and a sprint is the sprint", async () => {
+  const { A: An, G, synth } = load();
+  G.state = "results";
+  const a = An.create(G);
+  const you = { name: "You", isPlayer: true, finishT: 100, penalty: 5, lap: 13, gridPos: 3, finPos: 1, best: 80 };
+  const ver = { name: "Max Verstappen", finishT: 107, penalty: 0, lap: 13, finPos: 2, best: 81 };
+  assert.equal(a.wrapUp([you, ver], info({ sprint: true })), true);
+  await new Promise((r) => setTimeout(r, 400));
+  const text = synth.calls.filter((c) => c.m === "speak").map((c) => c.text).join(" ");
+  assert.match(text, /win the sprint, 2\.0 seconds clear/, text);
+  assert.doesNotMatch(text, /7\.0|Grand Prix/, text);
+});
+
+test("the wrap-up credits the fastest lap among cars that took the flag, never a retired car", async () => {
+  const { A: An, G, synth } = load();
+  G.state = "results";
+  const a = An.create(G);
+  const ver = { name: "Max Verstappen", finished: true, finishT: 100, lap: 13, finPos: 1, best: 81 };
+  const you = { name: "You", isPlayer: true, finished: true, finishT: 104, lap: 13, gridPos: 3, finPos: 2, best: 80.5 };
+  const lec = { name: "Charles Leclerc", retired: true, lap: 9, finPos: 3, best: 79 };
+  assert.equal(a.wrapUp([ver, you, lec], info()), true);
+  // Lines are queued one utterance at a time: end each as it starts.
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    for (const c of synth.calls) if (c.m === "speak" && c.u && c.u.onend && !c._ended) { c._ended = true; c.u.onend(); }
+  }
+  const text = synth.calls.filter((c) => c.m === "speak").map((c) => c.text).join(" ");
+  assert.doesNotMatch(text, /fastest lap to leclerc/i, text);
+  assert.match(text, /fastest lap to you/i, text);
+});
+
+test("the wrap-up credits a fastest lap set by a car still running at the flag", async () => {
+  const { A: An, G, synth } = load();
+  G.state = "results";
+  const a = An.create(G);
+  const ver = { name: "Max Verstappen", finished: true, finishT: 100, lap: 13, finPos: 1, best: 81 };
+  const you = { name: "You", isPlayer: true, finished: true, finishT: 104, lap: 13, gridPos: 3, finPos: 2, best: 80.5 };
+  const lec = { name: "Charles Leclerc", finished: false, lap: 13, finPos: 3, best: 79 };   // 3 s back when the session closed
+  assert.equal(a.wrapUp([ver, you, lec], info()), true);
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    for (const c of synth.calls) if (c.m === "speak" && c.u && c.u.onend && !c._ended) { c._ended = true; c.u.onend(); }
+  }
+  const text = synth.calls.filter((c) => c.m === "speak").map((c) => c.text).join(" ");
+  assert.match(text, /fastest lap to (charles )?leclerc/i, text);
+});
+
+test("a flyby with no room before the grid shot plays nothing — a zero budget used to mean 'no limit'", () => {
+  const { A: An, G, synth } = load();
+  const a = An.create(G);
+  assert.equal(a.play(info(), -1), false);
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 0);
+});
+
+// ── A REAL RACE from the Data Hub (js/race/real-race.js intro()) ──────────────
+test("a real race says whose car you took and from which lap, and a rolling join is not a grid", () => {
+  const real = { title: "2024 Italian Grand Prix", driver: "Charles Leclerc", startLap: 12, realLaps: 53, watch: false, reel: false };
+  const join = said(info({ gp: real.title, real, story: { real } }));
+  assert.match(join, /You take over Charles Leclerc's car on lap 12 of 53\./, "no timing to read: the plain line");
+  assert.match(join, /A rolling start\. The car is yours in a few seconds\.$/, "a mid-race join is a rolling start, not 'N laps'");
+  assert.doesNotMatch(join, /12 laps\. Let's go racing/);
+  const r1 = { ...real, startLap: 1 };
+  const grid = said(info({ real: r1, story: { real: r1 } }));
+  assert.match(grid, /You start from Charles Leclerc's grid slot/);
+  assert.match(grid, /12 laps\. Let's go racing\.$/, "from lap 1 it is a race of the staged distance");
+  const w = { ...real, watch: true, reel: true };
+  const watch = said(info({ real: w, story: { real: w } }));
+  assert.match(watch, /Your camera follows Charles Leclerc\./);
+  assert.match(watch, /The highlights\. Sit back and watch it unfold\.$/);
+  assert.doesNotMatch(watch, /You take over|Let's go racing/, "a replay is watched, not raced");
+});
+
+test("a real race's story is the script's driver, never the roster seat's name, season or contract", () => {
+  const src = read("js/audio/announcer.js");
+  const body = src.slice(src.indexOf("function storyFor(info)"), src.indexOf("/** The results screen's read"));
+  assert.match(body, /const race = [^;]*&& !info\.real;/, "the seat / championship / goal / forecast rows stand down for a real race");
+  assert.match(body, /if \(info\.real\) st\.real = info\.real;/);
+});
+
+// THE RACE SO FAR, as RealRace.situation() reads Baku 2026 at lap 40 for Leclerc
+// (tests/unit/real-race.test.mjs pins these numbers against the real timing).
+const P = (code, name, surname, extra = {}) => ({ code, name, surname, team: "", ...extra });
+const BAKU40 = {
+  lap: 40, realLaps: 51, toGo: 12, condensed: false, grid: false,
+  leader: P("RUS", "George Russell", "Russell"),
+  top: [P("RUS", "George Russell", "Russell", { pos: 1, gap: { s: 0, lapsDown: 0 } }), P("VER", "Max Verstappen", "Verstappen", { pos: 2, gap: { s: 0.6, lapsDown: 0 } }),
+    P("PIA", "Oscar Piastri", "Piastri", { pos: 3, gap: { s: 2.5, lapsDown: 0 } })],
+  running: 16,
+  out: [P("STR", "Lance Stroll", "Stroll", { lap: 8 }), P("ALO", "Fernando Alonso", "Alonso", { lap: 21 }), P("ALB", "Alexander Albon", "Albon", { lap: 30 }),
+    P("NOR", "Lando Norris", "Norris", { lap: 36 }), P("GAS", "Pierre Gasly", "Gasly", { lap: 36 }), P("COL", "Franco Colapinto", "Colapinto", { lap: 37 })],
+  dns: [],
+  lead: { changes: [], from: P("RUS", "George Russell", "Russell"), allTheWay: true },
+  cautions: [{ kind: "safety car", from: 31, to: 35, now: false }, { kind: "safety car", from: 36, to: 38, now: false }],
+  fastest: P("RUS", "George Russell", "Russell", { time: 106.332, lap: 39 }),
+  rain: { now: false, since: 0, last: 0 },
+  passes: 107,
+  you: P("LEC", "Charles Leclerc", "Leclerc", { running: true, gridPos: 2, pos: 5, gap: { s: 3.3, lapsDown: 0 },
+    ahead: P("HAD", "Isack Hadjar", "Hadjar", { gap: 0.6 }), behind: P("HAM", "Lewis Hamilton", "Hamilton", { gap: 0.6 }),
+    tyre: { compound: "medium", age: 8, used: false }, stops: [31, 36], passesMade: 3, passesLost: 6, best: { time: 107.208, lap: 29 }, penalties: [] }),
+  leaderStops: 2,
+};
+const bakuTrack = { id: "baku", name: "Baku", gp: "Azerbaijan Grand Prix", country: "Azerbaijan", lengthKm: 6.003, night: true };
+const bakuJoin = (over = {}) => {
+  const real = { title: "2026 Azerbaijan Grand Prix", driver: "Charles Leclerc", startLap: 40, realLaps: 51, watch: false, reel: false, story: BAKU40, ...over };
+  return info({ track: bakuTrack, gp: real.title, tod: "day", real, story: { real } });
+};
+
+test("a mid-race JUMP IN reads the race as it stands: lap, leader, your place and gap, neighbours, tyres, flags, retirements", () => {
+  const lines = A.script(bakuJoin());
+  const all = lines.join(" ");
+  for (const want of [
+    "Lap 40 of 51, and 12 laps to go.",
+    "Russell leads, 0.6 seconds clear of Verstappen, with Piastri third.",
+    "You take over Charles Leclerc in fifth, 3.3 seconds off the lead, down three places from second on the grid.",
+    "Hadjar is 0.6 seconds ahead of you, and Hamilton 0.6 seconds behind.",
+    "You are on mediums, 8 laps old, after two stops, on laps 31 and 36.",
+    "Two safety cars so far: laps 31 to 35 and laps 36 to 38.",
+    "Six cars are already out, Gasly and Colapinto the latest.",
+    "Russell has led every lap.",
+    "Fastest lap so far: Russell, a 1 46.3, on lap 39.",
+    "This car has made three passes so far, and been passed six times.",
+    "A rolling start. The car is yours in a few seconds.",
+  ]) assert.ok(lines.includes(want), `missing: "${want}"\n${lines.join("\n")}`);
+  assert.doesNotMatch(all, /under the lights/, "a daytime Baku is not a night race");
+  assert.ok(lines.indexOf("Lap 40 of 51, and 12 laps to go.") < lines.indexOf("A rolling start. The car is yours in a few seconds."));
+});
+
+test("the race story outranks the circuit's own lines when the budget is short", () => {
+  const full = A.script(bakuJoin());
+  const fitted = A.script(bakuJoin(), 24000);
+  assert.ok(fitted.length < full.length, "24 s cannot hold all of it");
+  for (const keep of ["Welcome to Apex 26.", "You take over Charles Leclerc in fifth, 3.3 seconds off the lead, down three places from second on the grid.",
+    "A rolling start. The car is yours in a few seconds."]) assert.ok(fitted.includes(keep), `kept: ${keep}\n${fitted.join("\n")}`);
+  // As the budget grows the story arrives in its rank order: your place, the lap, the leader, the cars around you, then what happened.
+  const order = ["You take over Charles Leclerc in fifth", "Lap 40 of 51", "Russell leads", "Hadjar is 0.6 seconds ahead", "You are on mediums",
+    "Two safety cars so far", "Six cars are already out"];
+  const firstAt = (needle) => { for (let ms = 10000; ms <= 90000; ms += 500) if (A.script(bakuJoin(), ms).some((l) => l.startsWith(needle))) return ms; return Infinity; };
+  const at = order.map(firstAt);
+  for (let i = 1; i < at.length; i++) assert.ok(at[i] >= at[i - 1], `"${order[i]}" (${at[i]} ms) arrives before "${order[i - 1]}" (${at[i - 1]} ms)`);
+  assert.ok(at[at.length - 1] <= 60000, `the essentials fit the stretched flyby (LoadingScreen.FLY_MAX_MS, 60 s): ${at.join(", ")}`);
+  assert.ok(!fitted.includes("107 passes on track in this race so far."), "the counts go first");
+  // The circuit's lore gives way to the race: nothing in the fitted read is a circuit fact the full read ranks below the story.
+  const circuitFacts = full.filter((l) => /kilometres|corners/.test(l));
+  for (const l of circuitFacts) assert.ok(!fitted.includes(l), `a circuit fact outlived the story: ${l}`);
+});
+
+test("a WATCH names the driver where a join says 'you', and a lap-1 join reads the real grid", () => {
+  const w = A.script(bakuJoin({ watch: true })).join(" ");
+  assert.match(w, /Your camera follows Charles Leclerc, fifth, 3\.3 seconds off the lead, down three places from second on the grid\./);
+  assert.match(w, /Hadjar is 0\.6 seconds ahead, and Hamilton 0\.6 seconds behind\./);
+  assert.match(w, /Leclerc is on mediums, 8 laps old/);
+  assert.doesNotMatch(w, /You take over|\byou\b/i.test(w) ? /You take over/ : /x^/);
+  const grid = {
+    lap: 1, realLaps: 51, toGo: 51, condensed: false, grid: true, starters: 22, dns: [],
+    pole: P("RUS", "George Russell", "Russell"), front: P("LEC", "Charles Leclerc", "Leclerc"),
+    you: P("LEC", "Charles Leclerc", "Leclerc", { pos: 2, gridPos: 2, running: true, tyre: { compound: "soft", age: 0, used: false }, ahead: P("RUS", "George Russell", "Russell"), behind: P("PIA", "Oscar Piastri", "Piastri") }),
+  };
+  const g = A.script(bakuJoin({ startLap: 1, story: grid }));
+  for (const want of ["Russell is on pole, with you alongside.", "You start Charles Leclerc's car from second on the grid, on softs.", "22 cars take the start.",
+    "Everyone else races it exactly as it really ran."]) assert.ok(g.includes(want), `missing: "${want}"\n${g.join("\n")}`);
+  assert.match(g[g.length - 1], /laps\. Let's go racing\.$/);
+});
+
+test("recorded readMs only stretches the flyby for covered audio, with a bounded loading fallback", () => {
+  const b = load();
+  let ready = false;
+  const ids = [];
+  b.G.radio = { packOn: () => true, recordedVoice: () => "bella", pack: {
+    ensure: (id) => ids.push(id), ready: () => ready,
+    plan: (_id, text) => text === "welcome to apex 26." ? { secs: 2 } : null,
+  } };
+  const a = b.A.create(b.G);
+  assert.equal(a.readMs(bakuJoin()), 0, "loading keeps the ordinary flyby length");
+  ready = true;
+  assert.equal(a.readMs(bakuJoin()), 2850, "unrecorded story copy does not add silent waiting");
+  assert.deepEqual(ids, ["bella", "bella"]);
+});
+
+test("readMs is the full read's length at the channel's rate, and 0 when nothing will be said", () => {
+  const { A: An, G } = load();
+  const a = An.create(G);
+  const ms = a.readMs(bakuJoin());
+  const words = A.script(bakuJoin()).join(" ").split(/\s+/).length;
+  assert.ok(ms > (words / 2.4) * 1000 * 0.8 && ms < (words / 2.4) * 1000 * 1.6 + 10000, `${ms} ms for ${words} words`);
+  assert.ok(ms > 24000, "the race-so-far read is longer than a normal flyby — which is why it stretches (to LoadingScreen.FLY_MAX_MS, then fitted)");
+  const off = load({ stored: { announcer: false } });
+  assert.equal(off.A.create(off.G).readMs(bakuJoin()), 0, "announcer off: nothing to wait for");
+  const mute = load({ soundOn: false });
+  assert.equal(mute.A.create(mute.G).readMs(bakuJoin()), 0, "sound off: nothing to wait for");
+});
+
+test('turning off an idle announcer does not cancel a different speaker', () => {
+  const {A: An,G,synth}=load(); const ann=An.create(G);
+  const before=synth.calls.filter(c=>c.m==='cancel').length;
+  ann.stop(); ann.setEnabled(false);
+  assert.equal(synth.calls.filter(c=>c.m==='cancel').length,before);
+});
+
+test('starting an announcer audition releases the radio owner and pending cue', () => {
+  const {A: An,G}=load(); let stops=0;
+  G.radio.stop=()=>{stops++;};
+  const ann=An.create(G); assert.equal(ann.sample(),true); assert.equal(stops,1); ann.stop();
+});
+
+// ── THE FIT IS THE READ AS SPOKEN (loading-screen hunt, 2026-09-29) ──────────
+// seconds() is 2.4 words a second at the rate; a spoken read also pauses 250 ms
+// between chained lines and lands its last line 600 ms before the budget ends.
+const spokenS = (lines, rate) => lines.reduce((n, l) => n + l.split(/\s+/).filter(Boolean).length / 2.4 / rate + 0.25, 0) + 0.6;
+
+test("a fitted read fits AS SPOKEN — the pauses between lines and the landing count, or the cue is the line the cut takes", () => {
+  const rate = 0.92;
+  for (const o of [info(), info({ weather: "rain", tod: "night" }), bakuJoin()]) {
+    const must = A.script(o, 1, rate).length;
+    for (let b = 8000; b <= 60000; b += 4000) {
+      const lines = A.script(o, b, rate);
+      assert.ok(lines.length === must || spokenS(lines, rate) <= b / 1000 + 1e-9,
+        `${lines.length} lines take ${spokenS(lines, rate).toFixed(2)} s spoken, over a ${b / 1000} s budget`);
+    }
+  }
+});
+
+test("the read is fitted at the PLAYER'S announcer rate: a slow voice is trimmed to fit, a fast one keeps more", () => {
+  const count = (rate) => {
+    const { A: An, G } = load();
+    if (rate) G.radio.setTune("announcer", { rate });
+    const lines = An.create(G).scriptFor(bakuJoin(), 24000);
+    const r = rate || G.radio.tuneFor("announcer").rate;
+    const must = An.create(G).scriptFor(bakuJoin(), 1).length;
+    assert.ok(lines.length === must || spokenS(lines, r) <= 24 + 1e-9, `rate ${r}: ${spokenS(lines, r).toFixed(2)} s over 24 s`);
+    return lines.length;
+  };
+  const slow = count(0.6), dflt = count(0), fast = count(1.35);
+  assert.ok(slow < dflt, `a slow voice keeps fewer lines (${slow} vs ${dflt}) — fitted at the default it was cut mid-read at 24 s`);
+  assert.ok(fast > dflt, `a fast voice keeps more (${fast} vs ${dflt})`);
+});
+
+
+test("storm introductions warn of heavy rain and preserve the existing wet circuit read", () => {
+  const plain = info({ track: { name: "Test circuit", lengthKm: 5 }, weather: "storm" });
+  assert.match(said(plain), /heavy rain/i, "storm is wet weather, not an unmentioned dry default");
+  const spa = info({ track: { id: "spa", name: "Spa", lengthKm: 7.004 }, weather: "storm" });
+  assert.match(said(spa), /rain on one half of this circuit/i, "reuse the authored wet read and its recorded coverage");
+  assert.equal(said(spa), said({ ...spa, weather: "rain" }), "storm keeps the established heavy-rain narration");
+});

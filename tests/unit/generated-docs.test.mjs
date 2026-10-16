@@ -1,0 +1,242 @@
+/* generated-docs.test.mjs — the generated docs cannot drift from their source.
+ *
+ * Three files claimed, in prose, to be derived from the code — tools/README.md
+ * ("this index"), docs/LIGHTING-TUNER-SLIDERS.md ("Generated from TUNE_DEFS")
+ * and docs/DEBUG-HOOKS.md ("the full reference") — and nothing derived them.
+ * The slider doc carried ranges the registry had abandoned (lampLevel
+ * 0.02…2.25 against a shipped 0…0.687), the tools index had 300-word rows that
+ * nobody re-read when the tool changed, and the hook reference needed a
+ * separate ratchet just to notice a missing name.
+ *
+ * Each has a generator now (tools/gen-*.mjs) and each generator has a
+ * `--check` mode that exits 1 when the committed file is not byte-identical
+ * to a fresh regeneration. This test runs that mode, so drift is a red test
+ * rather than a stale doc: edit the SOURCE (a tool's `@doc` header line,
+ * TUNE_DEFS, apex.js), run the generator, commit both.
+ *
+ * The sanity assertions guard the generators themselves: a generator that
+ * quietly emitted an empty table would pass `--check` forever.
+ *
+ * Run: node --test tests/unit/generated-docs.test.mjs   (npm run test:tooling-fast)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+
+const GENERATORS = [
+  { tool: "tools/gen/gen-tools-readme.mjs", target: "tools/README.md" },
+  { tool: "tools/gen/gen-slider-doc.mjs", target: "docs/LIGHTING-TUNER-SLIDERS.md" },
+  { tool: "tools/gen/gen-hooks-table.mjs", target: "docs/DEBUG-HOOKS.md" },
+  { tool: "tools/gen/gen-flags-table.mjs", target: "docs/DEBUG-HOOKS.md" },
+  // No gen-ladder-figures here: since 2026-09-30 it only REPORTS (the ladder
+  // sizes are not committed — they made every two test-adding PRs conflict).
+];
+
+function check(tool) {
+  return spawnSync(process.execPath, [path.join(ROOT, tool), "--check"], { encoding: "utf8", cwd: ROOT, timeout: 60000 });
+}
+
+function block(doc, name) {
+  const open = `<!-- GENERATED: ${name} -->`, close = "<!-- /GENERATED -->";
+  const a = doc.indexOf(open), b = doc.indexOf(close, a);
+  assert.ok(a >= 0 && b > a, `${name}: generated block markers missing`);
+  return doc.slice(a, b);
+}
+
+for (const g of GENERATORS) {
+  test(`${g.target} matches a fresh \`${g.tool} --check\``, () => {
+    const r = check(g.tool);
+    assert.equal(r.status, 0,
+      `${g.target} is stale or the generator failed (exit ${r.status}).\n${r.stdout}${r.stderr}\n` +
+      `Regenerate with: node ${g.tool}`);
+  });
+}
+
+test("tools/README.md: one row per tool, every row within the @doc cap, no undefined", () => {
+  const index = read("tools/README.md");
+  // The data-files table is derived ("read by" lists), not @doc text — cap only the tool rows.
+  const toolTables = index.split("## Data files")[0];
+  const rows = toolTables.split("\n").filter((l) => /^\|\s*\*\*[^*]+\*\*\s*\|/.test(l));
+  // A ">120" floor was a flat-tools/ artefact: it could only ever notice a
+  // catastrophic empty table, and it drifts every time a tool is added or
+  // deleted. Count what is ON DISK instead — the index must have exactly one
+  // row per indexable file, so a tool that lands in a subdirectory the
+  // generator does not group is caught here as well as in the generator.
+  const onDisk = [];
+  (function walk(dir, rel) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith("_") || e.name === "__pycache__" || e.name === "README.md") continue;
+      const abs = path.join(dir, e.name), r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(abs, r);
+      else if (/\.(mjs|cjs|js|sh|py|html)$/.test(e.name)) onDisk.push(r);
+    }
+  })(path.join(ROOT, "tools"), "");
+  assert.ok(onDisk.length >= 100, `the walk saw only ${onDisk.length} tools — a silent empty list proves nothing`);
+  const listed = new Set(rows.map((l) => l.match(/^\|\s*\*\*([^*]+)\*\*/)[1]));
+  assert.deepEqual(onDisk.filter((f) => !listed.has(f)), [], "a tool on disk has no index row");
+  assert.equal(rows.length, onDisk.length,
+    `index has ${rows.length} tool rows for ${onDisk.length} files on disk`);
+
+  // Every group heading the generator emits names a real directory, and every
+  // directory with tools in it got a heading — the grouping IS the index now.
+  const headings = [...index.matchAll(/^### `tools\/([a-z/]*)`$/gm)].map((m) => m[1].replace(/\/$/, ""));
+  // Grouping is by TOP-LEVEL directory; lighting/campaign/ sits under the
+  // lighting heading, the way the generator emits it.
+  const dirs = new Set(onDisk.map((f) => (f.includes("/") ? f.slice(0, f.indexOf("/")) : "")));
+  assert.deepEqual([...dirs].filter((d) => !headings.includes(d)).sort(), [],
+    "a tools/ subdirectory has files but no group heading");
+  assert.doesNotMatch(index, /\bundefined\b/);
+  // Second cell, split on UNESCAPED pipes, escapes folded back before measuring.
+  const docCell = (l) => (l.split(/(?<!\\) \| /)[1] || "").replace(/\s*\|\s*$/, "").replace(/\\\|/g, "|");
+  const long = rows.map(docCell).filter((c) => c.length > 120);
+  assert.deepEqual(long, [], "an index row exceeds the 120-char @doc cap");
+  // Every tool row cites a real file — the generator reads them from disk.
+  for (const r of rows) {
+    const rel = r.match(/^\|\s*\*\*([^*]+)\*\*/)[1];
+    assert.ok(fs.existsSync(path.join(ROOT, "tools", rel)), `row names a missing tool: ${rel}`);
+  }
+});
+
+test("gen-tools-readme refuses an over-long @doc instead of truncating it (#1709)", async () => {
+  // In-memory fixture, never a real tool: `--check` used to print a warning,
+  // truncate the row and still exit 0, so four headers sat over the cap.
+  const { collect, DOC_MAX } = await import("../../tools/gen/gen-tools-readme.mjs");
+  const header = (doc) => `#!/usr/bin/env node\n// fixture.mjs\n// @doc ${doc}\n`;
+  const fits = "x".repeat(DOC_MAX), long = "y".repeat(DOC_MAX + 1);
+  const src = { "gen/fits.mjs": header(fits), "gen/long.mjs": header(long) };
+  const read = (rel) => src[rel];
+
+  const ok = collect({ files: ["gen/fits.mjs"], read });
+  assert.equal(ok.main.length, 1);
+  assert.equal(ok.main[0].doc, fits, "a @doc at exactly the cap is kept whole");
+
+  assert.throws(() => collect({ files: ["gen/fits.mjs", "gen/long.mjs"], read }),
+    (e) => /gen\/long\.mjs: @doc is 121 chars \(max 120\)/.test(e.message) && !/gen\/fits\.mjs/.test(e.message),
+    "an over-long @doc must fail the generator (the CLI exits 2), naming the file and its length");
+});
+
+test("tools data-file readers cover specs and CommonJS unit tests", async () => {
+  const { testReaderFiles } = await import("../../tools/gen/gen-tools-readme.mjs");
+  const files = testReaderFiles();
+  assert.ok(files.includes("tests/specs/f1-track-accuracy.spec.js"), "browser specs fell outside the scan");
+  assert.ok(files.includes("tests/unit/shared-track-foundation-characterization.test.cjs"), "CommonJS unit tests fell outside the scan");
+});
+
+test("docs/LIGHTING-TUNER-SLIDERS.md: the generated block lists every TUNE_DEFS knob", () => {
+  const doc = read("docs/LIGHTING-TUNER-SLIDERS.md");
+  const b = block(doc, "tune-defs");
+  const rows = b.split("\n").filter((l) => /^\| `[a-zA-Z0-9_]+` \|/.test(l));
+  assert.ok(rows.length >= 178, `expected ≥ 178 slider rows, found ${rows.length}`);
+  assert.doesNotMatch(b, /\bundefined\b|\bNaN\b/);
+  // The H1 count is derived from the same registry.
+  const h1 = doc.match(/^# LIGHTING TUNER — the (\d+) sliders/m);
+  assert.ok(h1, "H1 lost its slider count");
+  assert.equal(Number(h1[1]), rows.length, "H1 count disagrees with the table");
+  // Hand prose survived: the generator owns only the block.
+  assert.match(doc, /## Every slider is wired/);
+  assert.match(doc, /## Tools for exploring sliders/);
+});
+
+test("docs/DEBUG-HOOKS.md: the hook index names every __apex hook plus the agent-view surface", () => {
+  const doc = read("docs/DEBUG-HOOKS.md");
+  const b = block(doc, "hooks-table");
+  // A CELL that is undefined is the generator bug; the word inside a quoted
+  // source expression (`typeof F1API !== "undefined"`) is source, not a bug.
+  assert.doesNotMatch(b, /\|\s*undefined\s*\||\(undefined[,)]|undefined\(/);
+  const src = read("js/agent/apex.js");
+  const body = src.slice(src.indexOf("const api = {"));
+  const names = new Set();
+  for (const m of body.matchAll(/^ {2}(?:async\s+)?([a-zA-Z_$][\w$]*)\s*[(:]/gm)) names.add(m[1]);
+  assert.ok(names.size > 150, `regex saw only ${names.size} hooks`);
+  const missing = [...names].filter((n) => !new RegExp("^\\| `(?:async )?" + n.replace(/\$/g, "\\$") + "(?:\\(|`)", "m").test(b));
+  assert.deepEqual(missing, [], "a hook is in apex.js but not in the generated index");
+  const agentRows = b.split("\n").filter((l) => /^\| (perceive|detail|know|act) \|/.test(l));
+  assert.ok(agentRows.length >= 10, `expected the agentHelp() surface, found ${agentRows.length} rows`);
+  // Hand sections survived around the block.
+  assert.match(doc, /^## Catalog & meta/m);
+  assert.match(doc, /^## Agent world view/m);
+});
+
+test("the consumer column credits a slider to files that read the TUNE, not to homonyms", () => {
+  // The column tallied every `.id` member read regardless of what it was read
+  // OFF. `LiveryTex.contrast(logo, field)` is a WCAG contrast RATIO and has
+  // nothing to do with the CONTRAST slider, so the shipped row read
+  // "scene.js×4, setup-sheet.js×3" for files that have never touched it — and
+  // a HUD needing a contrast ratio of its own would have made it four.
+  //
+  // A module is a global this repo assigns at column 0; a tune is a plain
+  // record passed as LT or T. The rows below are the two shapes that used to
+  // slip through, checked against the generated doc itself.
+  const doc = read("docs/LIGHTING-TUNER-SLIDERS.md");
+  const row = (id) => {
+    const m = new RegExp("^\\| `" + id + "` \\|(.*)$", "m").exec(doc);
+    assert.ok(m, `no row for ${id}`);
+    return m[1];
+  };
+  assert.ok(!/scene\.js|setup-sheet\.js/.test(row("contrast")),
+    "the garage files read LiveryTex.contrast — a ratio, not the slider: " + row("contrast"));
+  // …and the fix must not have thrown out the true reads with them. These two
+  // are read as `LightTune.LT.particleMul` and `LT.glareStr`: a CHAINED read
+  // off a tune, and a plain one, both real.
+  assert.match(row("particleMul"), /particles\.js/, "a chained tune read was lost");
+  assert.match(row("glareStr"), /game\.js/, "a plain tune read was lost");
+});
+
+test("a slider's help text states ITS OWN ceiling, not a bound it no longer has", () => {
+  // The repo's convention: "Ceiling is N" / "Tops out at N" in a slider's help
+  // means that slider's `max`. It held for 8 of the 10 sliders that use the
+  // phrase; the two exceptions were stale, and git says exactly how.
+  //
+  // 2fa6c88e "re-derive 40 slider bounds from measured consumer saturation"
+  // lowered daySkyBlue 3 -> 2 and vignetteSoft 0.94 -> 0.69 and corrected
+  // carGloss's help in the same commit, but left those two help strings quoting
+  // the OLD ceiling. Player-facing text then promised range the control does
+  // not have. This makes the whole class self-checking so the next bounds
+  // re-derivation cannot leave a help string behind.
+  //
+  // Only the "Ceiling is" / "Tops out at" phrasing is checked. A help may name
+  // other numbers about a CONSUMER (mistDensity's "caps the bank at 0.45",
+  // vignetteSoft's own smoothstep constants) and those are not the slider's max.
+  const src = fs.readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8");
+  const bad = [];
+  const defRe = /\{\s*id:\s*"(\w+)"[^}]*?max:\s*([\d.]+)[^}]*?help:\s*"((?:[^"\\]|\\.)*)"/g;
+  let m, checked = 0;
+  while ((m = defRe.exec(src))) {
+    const [, id, max, help] = m;
+    const c = /(?:Ceiling is|Tops out at)\s+([\d.]+)/.exec(help);
+    if (!c) continue;
+    checked++;
+    if (Number(c[1]) !== Number(max)) bad.push(`${id}: help says ${c[1]}, max is ${max}`);
+  }
+  assert.ok(checked >= 8, `expected the convention on several sliders, saw ${checked}`);
+  assert.deepEqual(bad, [],
+    "a slider's stated ceiling must equal its max — re-derive the help when you re-derive the bound");
+});
+
+/* THE LADDER FIGURES are measured, not committed (2026-09-30): committed
+ * digits made every two test-adding PRs conflict. The report tool is what
+ * session-start prints and what the docs point at; this guards it (an empty
+ * table would read as "nothing is gated"). */
+test("gen-ladder-figures: the report is three real rows and the figures form a ladder", async () => {
+  const { figures, renderTable, renderLine } = await import("../../tools/gen/gen-ladder-figures.mjs");
+  const f = figures();
+  const groups = JSON.parse(read("tests/groups.json"));
+  assert.equal(f.guards, groups.groups["test:guards"].files.length);
+  assert.ok(f.guards < f.fast && f.fast < f.gate && f.gate <= f.disk, `not a ladder: ${JSON.stringify(f)}`);
+  assert.equal(f.fastLeft, f.disk - f.fast); assert.equal(f.gateLeft, f.disk - f.gate);
+  const table = renderTable(f);
+  const rows = table.split("\n").filter((l) => /^\| `/.test(l));
+  assert.equal(rows.length, 3, "guards, tooling-fast, whole gate");
+  assert.doesNotMatch(table + renderLine(f), /undefined|NaN/);
+  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/gen/gen-ladder-figures.mjs")], { encoding: "utf8", cwd: ROOT, timeout: 60000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^ladder: guards \d+ ⊂ tooling-fast \d+ ⊂ gate \d+ of \d+ unit files; \d+ specs\n$/);
+  assert.equal(fs.existsSync(path.join(ROOT, "docs/notes/PREPUSH-GATE-LADDER.md")) && read("docs/notes/PREPUSH-GATE-LADDER.md").includes("GENERATED: ladder"), false,
+    "the ladder note holds no generated block any more");
+});

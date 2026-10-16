@@ -1,0 +1,1042 @@
+/* docs-integrity.test.mjs — stop the documentation drifting from the code.
+ *
+ * Every fact in this file was WRONG when it was written, which is why it exists:
+ * CLAUDE.md advertised 46 Playwright specs against 81 on disk, five docs froze
+ * the scenery api at "84 members" against 96 in the contract, and the module
+ * layout still pointed at css/style.css and a js/glx/ tree that had been split
+ * up two reorganisations earlier. None of that is catchable by reading a diff —
+ * a doc goes stale when something ELSE changes.
+ *
+ * Scope is deliberately narrow: only claims that can be checked mechanically
+ * against the repo. Prose is not policed.
+ *
+ * Run: node --test tests/unit/docs-integrity.test.mjs   (npm run test:tooling)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import cp from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+const ls = (dir, re) => fs.readdirSync(path.join(ROOT, dir)).filter((f) => re.test(f));
+
+/* DERIVED FIGURES ARE ADVISORY OFF A PULL REQUEST (2026-09-30). The exact
+ * spec and unit counts the docs may still carry are derived from the tree, and every
+ * PR that adds a test regenerates them — correctly, against ITS base. Two such
+ * PRs merge cleanly (identical textual edits) and leave the union one file
+ * short: 14 of 15 deploy-branch reds on 2026-09-29 were exactly that, a red no
+ * push can clear except a regeneration commit, while every session read it as
+ * "the tip is broken". The same class the ratchet step already answers with
+ * `--advisory` on push. So: on a pull request these pins FAIL (the PR must
+ * regenerate); on the merged tip (a deploy-branch push, or the train) they
+ * WARN, and the next PR that touches the tree regenerates. ci.yml's guards
+ * step sets the env off pull requests only; the pin below holds it to that. */
+const FIGURES_ADVISORY = process.env.APEX_DOCS_FIGURES_ADVISORY === "1";
+const figureEqual = (actual, expected, msg) => {
+  if (FIGURES_ADVISORY && actual !== expected) {
+    console.warn(`::warning::${msg} — advisory off a pull request; the next PR regenerates it (npm run gen:docs)`);
+    return;
+  }
+  assert.equal(actual, expected, msg);
+};
+
+// A doc link resolves only if its target is IN GIT — not merely on this disk.
+// docs/README.md pointed at ../spike/backends/docs/wgx-gallery/ for a day: the
+// re-attach moved the gallery back under docs/research/ and left the SOURCE
+// directory behind, empty, and git does not track empty directories. So
+// existsSync answered yes on every machine that had run the move and no in a
+// fresh clone — the gate was green locally and red in Pages #1984, which is
+// the worst shape a guard can take. Resolving against `git ls-files` makes the
+// two answers one. Outside a checkout (a tarball, a vendored copy) there is no
+// index to consult and disk is the only answer available.
+const TRACKED = (() => {
+  let out;
+  try { out = cp.execSync("git ls-files -z", { cwd: ROOT, maxBuffer: 1 << 28 }); } catch { return null; }
+  const files = new Set(out.toString("utf8").split("\0").filter(Boolean));
+  const dirs = new Set();
+  for (const f of files) for (let d = path.dirname(f); d && d !== "."; d = path.dirname(d)) dirs.add(d);
+  return { files, dirs };
+})();
+// The .js/.mjs/.cjs files under `roots` that GIT tracks — the same answer in a
+// fresh clone as on a box with untracked scratch files, ignored output or a
+// half-finished move on disk. Outside a checkout, disk is the only answer.
+const codeFiles = (roots) => {
+  const isCode = (f) => /\.(js|mjs|cjs)$/.test(f);
+  if (TRACKED) return [...TRACKED.files].filter((f) => isCode(f) && roots.some((r) => f.startsWith(r + "/")) && fs.existsSync(path.join(ROOT, f)));
+  const files = [];
+  for (const r of roots) (function walk(dir) {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== "node_modules") walk(rel); }
+      else if (isCode(e.name)) files.push(rel);
+    }
+  })(r);
+  return files;
+};
+const linkResolves = (dir, href) => {
+  const abs = path.resolve(dir, href);
+  if (!fs.existsSync(abs)) return false;
+  if (!TRACKED) return true;
+  const rel = path.relative(ROOT, abs);
+  if (!rel || rel.startsWith("..")) return true;      // outside the repo — the index says nothing
+  return TRACKED.files.has(rel) || TRACKED.dirs.has(rel);
+};
+
+// ---------------------------------------------------------------------------
+// Docs that describe the CURRENT code. Everything else under docs/ is a dated
+// record and is exempt: docs/archive/, docs/research/, and docs/superpowers/
+// were accurate when written. Exempting historical records is the POINT of
+// keeping them — a provenance doc or implementation plan naming a file that
+// will move or has not yet been created must not churn build logs.
+//
+// `superpowers` is kept in the pattern although docs/superpowers/ was emptied
+// on 2026-09-16 (its 2026-09 plans and specs verified shipped, then moved under
+// docs/archive/superpowers/ beside the 2026-08 batch). The workflow recreates
+// that directory when it next runs, and a fresh plan names files that do not
+// exist yet by definition — so dropping the exemption would turn the next
+// planning session red. archive/ is skipped wholesale, so the archived copies
+// are covered either way.
+const LIVE_DOCS = [];
+(function walk(dir) {
+  for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+    const rel = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      if (/archive|research|tracks|superpowers/.test(e.name)) continue;
+      walk(rel);
+    } else if (e.name.endsWith(".md")) LIVE_DOCS.push(rel);
+  }
+})("docs");
+LIVE_DOCS.push("CLAUDE.md", "AGENTS.md", "README.md");
+const SKILL_DOCS = [];
+(function walkSkills(dir) {
+  for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+    const rel = path.join(dir, e.name);
+    if (e.isDirectory()) walkSkills(rel);
+    else if (e.name.endsWith(".md")) SKILL_DOCS.push(rel);
+  }
+})(".claude/skills");
+
+// Illustrative placeholders in fenced examples — these name no real file on
+// purpose ("npm test -- tests/foo.spec.js"). Keep this list SHORT; a real path
+// that stops resolving must fail, not get waved through.
+const PLACEHOLDERS = new Set([
+  "tests/foo.spec.js", "tests/a.spec.js", "tests/b.spec.js",
+  "js/circuits/<id>.js", "docs/tracks/<id>.md",
+]);
+
+// The lookbehind (rather than a bare \b) stops a path segment INSIDE a URL from
+// matching — "github.com/…/blob/main/docs/tool-reference.md" is not a claim
+// about this repo.
+//
+// `docs` is in this list because it was NOT, and that is how thirteen references
+// to the WebGPU notes, ten research files and the scenery upgrade plan
+// survived those files moving into docs/archive/ — in source comments, in CSS
+// and in other docs, none of them checked by anything.
+//
+// Extensions are ordered LONGEST-FIRST and anchored: regex alternation is
+// ordered, so a bare `js|json` matches "clip-baseline.json" as ".js" and then
+// reports a file that was never referenced. The trailing guard stops a prefix
+// match mid-extension.
+const PATH_RE = /(?<![A-Za-z0-9_./-])((?:js|tools|tests|css|assets|spike|vendor|docs)\/[A-Za-z0-9_.<>/-]+\.(?:json|mjs|cjs|css|js|md|sh))(?![A-Za-z0-9])/g;
+
+// tools/manifest.cjs's MOVED map (tools/gen/move-tree.mjs) keys itself on the
+// OLD path of every file the Phase 2b window relocates — that key is
+// SUPPOSED to be gone from disk; it is the whole reason deploy.mjs can name
+// the new path when a conflicted file was moved. Scan everything BUT that
+// object literal.
+function stripMovedBlock(text) {
+  const at = text.indexOf("const MOVED = {");
+  if (at < 0) return text;
+  const end = text.indexOf("};", at);
+  return end < 0 ? text : text.slice(0, at) + text.slice(end + 2);
+}
+
+function brokenPathsIn(file) {
+  const bad = [];
+  let text = read(file);
+  if (file === "tools/manifest.cjs") text = stripMovedBlock(text);
+  for (const m of new Set(text.match(PATH_RE) || [])) {
+    if (PLACEHOLDERS.has(m) || m.includes("<") || m.includes("*")) continue;
+    if (!fs.existsSync(path.join(ROOT, m))) bad.push(m);
+  }
+  return bad;
+}
+
+test("live docs reference only files that exist", () => {
+  const broken = [];
+  for (const doc of LIVE_DOCS)
+    for (const p of brokenPathsIn(doc)) broken.push(`${doc} -> ${p}`);
+  assert.deepEqual(broken, [],
+    "a doc points at a path that no longer exists — update the doc, or add a placeholder if it is illustrative");
+});
+
+// Source files that are ALLOWED to name a path that does not resolve, with the
+// reason. Keep this list short and justified — everything else is drift.
+const SOURCE_EXEMPT = new Map([
+  // A forward reference: tools/gen/bake-elevation.mjs GENERATES this file, and the
+  // manifest records where it would slot in. It is legitimately absent until
+  // someone bakes a profile.
+  ["js/track/circuit-elevations.js", /bake-elevation|manifest\.cjs|track\/tracks\.js|docs-integrity/],
+  // Synthetic fixture HTML fed to the service worker under test — a string it
+  // must rewrite, not a file it must find.
+  ["css/style.css", /service-worker\.test\.mjs|docs-integrity\.test\.mjs/],
+  // The scratch tree tools/gen/move-tree.mjs is tested on. The names are
+  // deliberately fictional (js/zzfix/…) so a real move's sweep can never
+  // rewrite the fixture — see the header of move-tree.test.mjs.
+  ["js/zzfix/", /move-tree\.test\.mjs|docs-integrity/],
+  ["tests/unit/zzfix.test.mjs", /move-tree\.test\.mjs|docs-integrity/],
+  ["tests/helpers/seed-zzfix.mjs", /move-tree\.test\.mjs|docs-integrity/],
+  ["docs/archive/OLD.md", /move-tree\.test\.mjs|docs-integrity/],
+  ["tools/nested/README.md", /move-tree\.test\.mjs|docs-integrity/],
+  ["tests/unit/joins.test.mjs", /move-tree\.test\.mjs|docs-integrity/],
+  // Fake package.json scripts inside the coverage-audit's own fixtures.
+  ["tests/alpha.spec.js", /test-coverage-audit\.test\.mjs|docs-integrity/],
+  ["tests/worker.test.mjs", /test-coverage-audit\.test\.mjs|docs-integrity/],
+  // A path that MUST NOT EXIST. ci-coverage.mjs's glob resolver has to return
+  // nothing for a spec that is not on disk, and the only way to test that is to
+  // name one — so this entry is not a stale reference being tolerated, it is
+  // the assertion. If someone ever creates the file, the test stops proving
+  // anything and should fail; keeping the name absurd is what prevents that.
+  ["tests/specs/there-is-no-such.spec.js", /ci-coverage\.test\.mjs|select-budget\.test\.mjs|docs-integrity/],
+  // A path that MUST NOT EXIST. perf-try.test.mjs asserts the PerfTry module
+  // was deleted after the ON paths baked in. Naming the old path is the
+  // assertion; if someone recreates the file, this exemption should go too.
+  ["js/game/perf-try.js", /perf-try\.test\.mjs|docs-integrity/],
+  ["docs/LIVE.md", /docs-integrity/],
+]);
+
+test("a `file.js:NNN` citation in a comment points inside that file", () => {
+  // Line numbers in comments are the one cross-reference nothing maintains. The
+  // renderer backends carried 77 line citations into glx.js, written when it was
+  // a monolith; the post chain and shaders were later split out into
+  // js/render/glx/ and js/render/shaders/, and 16 of those citations ended up
+  // pointing PAST THE END of the file they name.
+  //
+  // The reason to gate it rather than just fix it: the surviving set was MIXED.
+  // Some citations were still right, so a reader could not tell which to trust,
+  // and a wrong one sends them to unrelated code with every appearance of
+  // authority. Out-of-range is the half that is mechanically checkable; prefer
+  // naming a function or a symbol over a line number either way, because a
+  // citation that stays inside the file can still point at the wrong thing.
+  const files = codeFiles(["js", "tools", "tests"]);
+
+  const lineCount = new Map();
+  const lines = (rel) => {
+    if (!lineCount.has(rel)) {
+      let n = 0;
+      try { n = read(rel).split("\n").length; } catch (_) { n = -1; }
+      lineCount.set(rel, n);
+    }
+    return lineCount.get(rel);
+  };
+
+  // Citations come in two shapes and BOTH have to be checked: a full path
+  // followed by a colon and a line number, and a BARE FILENAME followed by the
+  // same. The bare shape is the one that hid — a WebGPU comment cited a
+  // four-digit line in glx.js against a file half that long, and a path-only
+  // matcher sails straight past it. Bare names resolve by basename, and only
+  // when that basename is UNIQUE in the repo (several files are named post.js,
+  // and guessing between them yields false failures, which is worse than a miss).
+  //
+  // This test flagged its own comment when that comment quoted real stale
+  // citations verbatim — correct behaviour, and the reason the examples above
+  // are described rather than written out.
+  const byBase = new Map();
+  for (const f of files) {
+    const b = path.basename(f);
+    byBase.set(b, byBase.has(b) ? null : f);   // null marks "ambiguous"
+  }
+
+  const bad = [];
+  for (const file of files) {
+    const src = read(file);
+    src.split("\n").forEach((line, i) => {
+      for (const m of line.matchAll(/(?<![A-Za-z0-9_./-])((?:(?:js|tools|tests)\/[A-Za-z0-9_./-]+|[A-Za-z0-9_-]+)\.(?:js|mjs|cjs)):(\d+)(?:-(\d+))?/g)) {
+        const cited = m[1];
+        const target = cited.includes("/") ? cited : byBase.get(cited);
+        if (!target) continue;                  // unknown or ambiguous basename
+        const hi = Number(m[3] || m[2]);
+        const n = lines(target);
+        if (n > 0 && (Number(m[2]) > n || hi > n)) {
+          bad.push(`${file}:${i + 1} cites ${m[0]} but ${target} has ${n} lines`);
+        }
+      }
+    });
+  }
+  assert.deepEqual(bad, [],
+    "a comment cites a line number past the end of the file it names — the code moved; cite a function or symbol instead");
+});
+
+test("source comments reference only files that exist", () => {
+  // A file MOVE is invisible to every reviewer of the diff that caused it: the
+  // comment in the file that points at the old location does not appear in it.
+  // The js/ -> js/<domain>/ reorganisation left 29 such pointers behind across
+  // js/, tools/ and tests/ — each one sending a reader (or an agent) to a path
+  // that has not existed for months. This is the only thing that catches them.
+  const files = codeFiles(["js", "tools", "tests"]);
+
+  const broken = [];
+  for (const file of files) {
+    for (const p of brokenPathsIn(file)) {
+      // Exact path first; then any key ending in "/" as a DIRECTORY prefix.
+      // The prefix form exists for a whole tree that does not exist yet — the
+      // tests/ split's destinations, named by the tool that plans the move and
+      // by its guard — where listing every future filename would break on the
+      // next case added and teach nobody anything.
+      const exempt = SOURCE_EXEMPT.get(p)
+        || [...SOURCE_EXEMPT].find(([k]) => k.endsWith("/") && p.startsWith(k))?.[1];
+      if (exempt && exempt.test(file)) continue;
+      broken.push(`${file} -> ${p}`);
+    }
+  }
+  assert.deepEqual(broken, [],
+    "a source comment points at a path that no longer exists — update it, or add a justified SOURCE_EXEMPT entry");
+});
+
+test("tests/manual/README.md indexes every suite in that directory, and only real ones", () => {
+  // tests/manual/ is EXCLUDED from default discovery (testIgnore in
+  // playwright.config.js), so its contents are precisely the files nothing else
+  // checks — no group names them, no coverage audit claims them. That README's
+  // table is their only index, which makes it the one place drift is invisible.
+  //
+  // It drifted the day this was written: act-probe.spec.js landed and the table
+  // did not notice. Found by opening the file, not by anything going red — the
+  // same species as every other rule in this repo that lives only in prose.
+  const dir = path.join(ROOT, "tests/manual");
+  const readme = read("tests/manual/README.md");
+  const specs = [];
+  (function walk(sub) {
+    for (const e of fs.readdirSync(path.join(dir, sub), { withFileTypes: true })) {
+      if (e.isDirectory()) walk(path.join(sub, e.name));
+      else if (e.name.endsWith(".spec.js")) specs.push(path.join(sub, e.name).split(path.sep).join("/"));
+    }
+  })("");
+
+  const missing = specs.filter((s) => !readme.includes(s) && !readme.includes(path.posix.basename(s)));
+  assert.deepEqual(missing, [],
+    "a suite in tests/manual/ is absent from its README table — nothing else indexes these files");
+
+  // The other direction: a row naming a file that has gone. An index that lists
+  // what is not there is as misleading as one that omits what is.
+  const listed = [...readme.matchAll(/`([A-Za-z0-9_/-]+\.spec\.js)`/g)].map((m) => m[1]);
+  const ghosts = listed.filter((n) => !specs.some((s) => s === n || s.endsWith(`/${n}`) || path.posix.basename(s) === n));
+  assert.deepEqual(ghosts, [], "the manual README lists a suite that no longer exists");
+});
+
+test("skills reference only files that exist", () => {
+  const broken = [];
+  for (const doc of SKILL_DOCS)
+    for (const p of brokenPathsIn(doc)) broken.push(`${doc} -> ${p}`);
+  assert.deepEqual(broken, [],
+    "a skill points at a path that no longer exists — skills are run by agents, so a dead path is a dead end");
+});
+
+test("the scenery api member count in the docs matches the frozen contract", () => {
+  const src = read("tests/unit/scenery-api-contract.test.mjs");
+  const body = src.match(/const CONTRACT = \[([\s\S]*?)\];/);
+  assert.ok(body, "could not find the CONTRACT array");
+  const actual = body[1].split(",").map((s) => s.trim()).filter((s) => s && s.startsWith('"')).length;
+
+  const wrong = [];
+  for (const doc of [...LIVE_DOCS, ...SKILL_DOCS]) {
+    for (const m of read(doc).matchAll(/(\d+)[- ]member[s]? (?:`?scenery\(api\)`?|`api`|API)/gi))
+      if (Number(m[1]) !== actual) wrong.push(`${doc}: says ${m[1]}, contract has ${actual}`);
+  }
+  assert.deepEqual(wrong, [], "the frozen scenery(api) contract grew or shrank and the docs did not follow");
+});
+
+test("the test-suite counts in the agent docs and README.md match the files on disk", () => {
+  // README was checked for circuits and part categories but NOT for suite
+  // counts, so it sat at "101 specs / 37 unit suites" against 102/38 while
+  // CLAUDE.md — the only file this test read — was correct. A guard that covers
+  // one of two copies leaves the other free to drift, which is exactly what
+  // happened.
+  const specs = ls("tests/specs", /\.spec\.js$/).length;
+  const units = ls("tests/unit", /\.test\.mjs$/).length;
+
+  let sawSpecCount = false;
+  for (const doc of ["CLAUDE.md", "AGENTS.md", "README.md", ...SKILL_DOCS]) {
+    const text = read(doc);
+    // Floors here too ("120+ Playwright specs"), for the reason the unit
+    // suites below spell out; an exact count anywhere is still pinned exactly.
+    const specClaims = [...text.matchAll(/(\d+)(\+?)\s+Playwright specs?/gi)]
+      .map((m) => ({ n: Number(m[1]), floor: m[2] === "+" }));
+    if (specClaims.length) sawSpecCount = true;
+    for (const { n, floor } of specClaims) {
+      if (!floor) { figureEqual(n, specs, `${doc} claims ${n} Playwright specs; tests/ holds ${specs}`); continue; }
+      assert.ok(n <= specs, `${doc} claims ${n}+ Playwright specs; tests/ holds only ${specs}`);
+      assert.ok(specs - n < 50, `${doc} claims ${n}+ Playwright specs and tests/ holds ${specs} — raise the floor`);
+    }
+
+    // A FLOOR ("200+ unit suites") is allowed, and is what the prose should
+    // use. An exact count is one integer that every agent adding a test has to
+    // bump, in two files — and seven sessions push to one branch here, so it
+    // conflicts every time: README.md measured +64/-64 over seven days, pure
+    // rewrite, almost all of it this number. A floor keeps the drift guard that
+    // this test exists for (the count cannot silently fall, and cannot fall
+    // FAR behind) while costing an edit once per SLACK additions instead of
+    // every one. An exact figure anywhere is still pinned exactly.
+    const SLACK = 50;
+    const unitClaims = [...text.matchAll(/(\d+)(\+?)\s+`?node --test`? unit suites/gi)]
+      .map((m) => ({ n: Number(m[1]), floor: m[2] === "+" }));
+    for (const { n, floor } of unitClaims) {
+      if (!floor) { figureEqual(n, units, `${doc} claims ${n} unit suites; tests/ holds ${units}`); continue; }
+      assert.ok(n <= units, `${doc} claims ${n}+ unit suites; tests/ holds only ${units}`);
+      assert.ok(units - n < SLACK,
+        `${doc} claims ${n}+ unit suites and tests/ holds ${units} — ${units - n} behind, raise the floor`);
+    }
+  }
+  assert.ok(sawSpecCount, "neither CLAUDE.md nor README.md states a Playwright spec count any more");
+});
+
+test("docs/TESTING.md quotes no hard spec ratio or twin count — the tools print them (#2168)", () => {
+  // Four such figures drifted at once (120 of 127 fixture adopters, 36 of 127
+  // VM-portable, "fourteen" twins listing thirteen, "11 browser specs" beside
+  // "12 specs, 129 tests"), because nothing read TESTING.md for them. The
+  // measuring tools — fixture-consumer-audit.mjs, vm-portable.mjs,
+  // twinned-specs.mjs — print the live figure; the doc names the tool.
+  const text = read("docs/TESTING.md");
+  const hits = [];
+  for (const re of [/\b\d+ of \d+ specs\b/gi,
+    /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|twenty)\s+(?:of those browser specs|browser specs whose|`?\*-vm\.test\.mjs`? TWINS)/gi,
+    /\b\d+ specs, \d+ tests\b/gi])
+    for (const m of text.matchAll(re)) hits.push(`"${m[0]}" at line ${text.slice(0, m.index).split("\n").length}`);
+  assert.deepEqual(hits, [], "name the measuring tool (fixture-consumer-audit / vm-portable / twinned-specs) instead of a count");
+});
+
+test("the gate ladder is a ladder, and no doc commits its sizes", async () => {
+  // The rung sizes ("N of M unit files", "the other N", the ladder table) were
+  // committed into five docs until 2026-09-30. Every PR that added a test file
+  // changed the same digits on the same lines, so any two such PRs conflicted
+  // (~100 % of both-parent merges on those docs, docs/notes/MERGE-HYGIENE-
+  // 2026-09-29.md). They are measured now — `node tools/gen/gen-ladder-figures.mjs`
+  // — and this checks the SHAPE the docs describe, computed the way
+  // prepush-gate-coverage.test.mjs measures the gate (without importing the
+  // generator, so a generator bug cannot agree with itself here).
+  const { TOOLING_FAST_FILES } = await import("../../tools/ci/tooling-fast.mjs");
+  const { gateNodeSuites } = await import("../../tools/ci/deploy.mjs");
+  const groups = JSON.parse(read("tests/groups.json"));
+  const fast = TOOLING_FAST_FILES.filter((e) => !e.startsWith("//"));
+  const gate = new Set(fast.map((f) => path.basename(f)));
+  for (const script of [...gateNodeSuites(), "test:sweeps-parts"]) {
+    for (const f of (groups.groups[script] || { files: [] }).files) if (f.startsWith("tests/unit/")) gate.add(path.basename(f));
+  }
+  const guards = groups.groups["test:guards"].files.length;
+  const disk = ls("tests/unit", /\.test\.(mjs|cjs)$/).length;
+  assert.ok(guards < fast.length, `test:guards (${guards}) must be a strict subset of tooling-fast (${fast.length})`);
+  assert.ok(fast.length < gate.size, `tooling-fast (${fast.length}) must be a strict subset of the gate (${gate.size})`);
+  assert.ok(gate.size <= disk, `the gate names ${gate.size} unit files; tests/unit holds ${disk}`);
+  const { figures } = await import("../../tools/gen/gen-ladder-figures.mjs");
+  const f = figures();
+  assert.deepEqual([f.fast, f.gate, f.disk], [fast.length, gate.size, disk], "the report tool measures the same ladder");
+  const SIZES = [/\d+ of \d+ unit\s+files/, /The other \d+ have taken deploys red/, /<!-- GENERATED: ladder -->/,
+    /\| `npm run test:tooling-fast` \| \d+ of \d+/];
+  for (const doc of ["AGENTS.md", "docs/notes/PREPUSH-GATE-LADDER.md", "docs/TESTING.md", ".claude/agents/verify-agent.md", "README.md"]) {
+    const text = read(doc);
+    for (const re of SIZES) assert.doesNotMatch(text, re, `${doc} commits a ladder size (${re}) — every PR adding a test file would conflict on it; point at gen-ladder-figures.mjs instead`);
+  }
+});
+
+test("ci.yml makes the derived figures advisory off pull requests, and only there", () => {
+  // The env this file reads must be set by the guards step for every event
+  // but pull_request — the merged tip cannot regenerate itself — and must not
+  // leak onto pull requests, where the PR is the one that regenerates.
+  const ci = read(".github/workflows/ci.yml");
+  const shards = [...ci.matchAll(/name: Tooling-fast shard [12]\/2[\s\S]*?run: node tools\/ci\/tooling-fast\.mjs --jobs=4 --shard=[12]\/2/g)];
+  assert.equal(shards.length, 2, "both tooling-fast shards must exist so Structural guards can split");
+  for (const m of shards) {
+    assert.match(m[0], /APEX_DOCS_FIGURES_ADVISORY: \$\{\{ github\.event_name != 'pull_request' && '1' \|\| '' \}\}/,
+      "each tooling-fast shard must set APEX_DOCS_FIGURES_ADVISORY=1 off pull requests only");
+  }
+  assert.doesNotMatch(read("package.json"), /APEX_DOCS_FIGURES_ADVISORY/, "no npm script may bake the advisory in: locally the pins fail");
+  assert.doesNotMatch(read("tools/ci/tooling-fast.mjs"), /APEX_DOCS_FIGURES_ADVISORY/, "tooling-fast must not set it either");
+});
+
+test("README's retired-classics count matches the circuits flagged classic", () => {
+  // "plus 16 retired classics" sat in README.md while js/circuits/ carried 28
+  // `classic: true` defs (and the same README's layout section said 28).
+  const classics = ls("js/circuits", /\.js$/)
+    .filter((f) => /\bclassic:\s*true\b/.test(read(path.join("js/circuits", f)))).length;
+  assert.ok(classics > 0, "no circuit is flagged classic — the regex or the flag moved");
+  const claims = [...read("README.md").matchAll(/(\d+)\s*\n?retired classics?/g)].map((m) => Number(m[1]));
+  assert.ok(claims.length >= 1, "README.md no longer states a retired-classics count");
+  for (const n of claims) assert.equal(n, classics, `README.md claims ${n} retired classics; ${classics} circuits carry classic: true`);
+  for (const m of read("README.md").matchAll(/(\d+) retired\)/g))
+    assert.equal(Number(m[1]), classics, `README.md's layout line claims ${m[1]} retired; ${classics} carry classic: true`);
+});
+
+test("README's season round list names exactly the non-classic circuits", () => {
+  // README.md sold a "24-round 2026 calendar" that named Zandvoort and Imola —
+  // both `classic: true`, so neither is in Tracks.SEASON (LIST minus classics) —
+  // and left out Istanbul and Portimão, which are. The list is one sentence,
+  // "The season rounds: A, B, …, Z." — compared as a set, accents folded, to
+  // each non-classic circuit's `name:`.
+  const fold = (n) => n.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+  const season = ls("js/circuits", /\.js$/)
+    .map((f) => read(path.join("js/circuits", f)))
+    .filter((src) => !/\bclassic:\s*true\b/.test(src))
+    .map((src) => fold((src.match(/\bname:\s*"([^"]+)"/) || [])[1] || ""))
+    .sort();
+  assert.ok(season.length > 0 && !season.includes(""), "could not read every non-classic circuit's name");
+  const m = read("README.md").match(/The season rounds:\s*([^.]+)\./);
+  assert.ok(m, "README.md no longer has a 'The season rounds: …' sentence");
+  const listed = m[1].split(",").map(fold).sort();
+  assert.deepEqual(listed, season, "README.md's season round list differs from the circuits without classic: true");
+});
+
+// A BARE `name.js` in a live doc names a file by basename alone, so the path
+// check above never sees it — which is how `debrisworld.js`, `light-presets.js`
+// and `light-store.js` outlived the files they named by weeks. Each backticked
+// bare basename must be the basename of a tracked file. Exempt: lines that say
+// they are history (historical / old / split from / was / former), and
+// docs/plans/, whose proposals name files that do not exist yet by definition
+// (the superpowers exemption above, for the same reason).
+const BARE_JS_ALLOW = new Map([
+  // An npm package (steamworks.js), not a file of ours.
+  ["steamworks.js", /DESKTOP-TEST-PLAN\.md$/],
+]);
+test("live docs name only real files in backticked bare `name.js` tokens", () => {
+  if (!TRACKED) return;                         // outside a checkout there is no index to consult
+  const bases = new Set([...TRACKED.files].map((f) => path.basename(f)));
+  const HISTORY = /historical|\bold\b|split from|\bwas\b|former/i;
+  const bad = [];
+  for (const doc of LIVE_DOCS) {
+    if (doc.startsWith(path.join("docs", "plans") + path.sep)) continue;
+    read(doc).split("\n").forEach((line, i) => {
+      if (HISTORY.test(line)) return;
+      for (const [, name] of line.matchAll(/`([A-Za-z0-9_.-]+\.js)`/g)) {
+        if (bases.has(name)) continue;
+        const allow = BARE_JS_ALLOW.get(name);
+        if (allow && allow.test(doc)) continue;
+        bad.push(`${doc}:${i + 1} ${name}`);
+      }
+    });
+  }
+  assert.deepEqual(bad, [], "a live doc names a .js file no tracked file is called — write its real path, or mark the line historical");
+});
+
+// A BARE test-file name (`foo.test.mjs`, `foo.spec.js`) is how TESTING.md's coverage
+// tables name a suite, and the path guard above only matches prefixed paths
+// (`tests/unit/…`), so a row for a suite that was reverted (material-variants.test.mjs,
+// 7d64f2bdf → e8378538b) sat in the table, unchecked. Same rule as the `name.js` test.
+// CEILING-HISTORY.md is an append-only ledger: it names suites that were later merged away.
+const BARE_TEST_ALLOW = /CEILING-HISTORY\.md$/;
+test("live docs name only real test files in backticked bare `name.test.mjs` / `name.spec.js` tokens", () => {
+  if (!TRACKED) return;
+  const bases = new Set([...TRACKED.files].map((f) => path.basename(f)));
+  const HISTORY = /historical|\bold\b|split from|\bwas\b|former/i;
+  const bad = [];
+  for (const doc of LIVE_DOCS) {
+    if (doc.startsWith(path.join("docs", "plans") + path.sep) || BARE_TEST_ALLOW.test(doc)) continue;
+    read(doc).split("\n").forEach((line, i) => {
+      // A table row that OPENS with the name is a claim that the suite exists — no
+      // "was" in its prose excuses it (the material-variants row had one).
+      const rowLead = /^\|\s*`/.test(line);
+      if (!rowLead && HISTORY.test(line)) return;
+      for (const [, name] of line.matchAll(/`([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.(?:test\.(?:mjs|cjs|js)|spec\.(?:js|mjs)))`/g)) {
+        if (!bases.has(name)) bad.push(`${doc}:${i + 1} ${name}`);
+      }
+    });
+  }
+  assert.deepEqual(bad, [], "a live doc names a test file no tracked file is called — write its real name, or mark the line historical");
+});
+
+// The three counts below all drifted in the same way and for the same reason:
+// something ELSE changed (a circuit was added, four part categories were added,
+// a knob's default was flipped) and the prose that quoted it did not move.
+test("the circuit count in the docs matches js/circuits/", () => {
+  const circuits = ls("js/circuits", /\.js$/).length;
+  for (const doc of ["CLAUDE.md", "AGENTS.md", "README.md"]) {
+    const text = read(doc);
+    for (const m of text.matchAll(/(\d+)\s+circuit data files/gi))
+      assert.equal(Number(m[1]), circuits, `${doc} claims ${m[1]} circuit data files; js/circuits/ holds ${circuits}`);
+    for (const m of text.matchAll(/verify-track\.cjs --all[^\n]*?all (\d+) circuits/gi))
+      assert.equal(Number(m[1]), circuits, `${doc} claims verify-track covers ${m[1]} circuits; js/circuits/ holds ${circuits}`);
+  }
+});
+
+test("the parts-category count in the docs matches Parts.CATALOG", () => {
+  // CLAUDE.md said "8 categories" in two places and "12 category objects" in a
+  // third, against a catalog of 12 — it contradicted itself as well as the code.
+  const src = read("js/car/parts.js");
+  const catalog = src.slice(src.indexOf("const CATALOG"), src.indexOf("const DEFAULTS"));
+  const categories = (catalog.match(/^\s{6}id: "\w+", label: "/gm) || []).length;
+  assert.ok(categories > 0, "could not count Parts.CATALOG categories");
+  for (const doc of ["CLAUDE.md", "AGENTS.md", "README.md"]) {
+    const text = read(doc);
+    for (const m of text.matchAll(/(\d+)\s+(?:part |upgrade )?categor(?:y|ies)/gi))
+      assert.equal(Number(m[1]), categories,
+        `${doc} claims ${m[1]} part categories; Parts.CATALOG has ${categories}`);
+  }
+});
+
+test("live docs and skills cite AGENTS.md as the rule owner, not CLAUDE.md", () => {
+  // CLAUDE.md is a stub. Archive/research/superpowers may still say "CLAUDE.md
+  // says" — those are dated records. Live docs that treat the stub as the
+  // working reference send agents to an empty file.
+  const owner = /CLAUDE\.md(?:'s|\s+says|\s+forbids|\s+mandates|\s+recommended|\s+documents|\s+measures|\s+asks|\s+carries the rules)|per CLAUDE\.md|contradicted CLAUDE\.md|\[`CLAUDE\.md`\]|held by a table in `CLAUDE\.md`|see \*\*Logging\*\* in `CLAUDE\.md`|summarised in CLAUDE\.md|from CLAUDE\.md\. Not a description/i;
+  const allow = /moved from CLAUDE\.md|CLAUDE\.md is a stub|imports AGENTS\.md|do not edit rules into `?CLAUDE\.md`|@AGENTS\.md|byte-for-byte|advertised \d+ Playwright|CLAUDE\.md must import/;
+  const extra = [".cursor/rules/apex-shared.mdc", "tools/README.md"];
+  const jsFiles = [];
+  (function walkJs(dir) {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) walkJs(rel);
+      else if (e.name.endsWith(".js")) jsFiles.push(rel);
+    }
+  })("js");
+  const bad = [];
+  for (const doc of [...LIVE_DOCS, ...SKILL_DOCS, ...extra, ...jsFiles]) {
+    if (doc === "CLAUDE.md") continue;
+    const isJs = doc.startsWith("js" + path.sep) || doc.startsWith("js/");
+    read(doc).split("\n").forEach((line, i) => {
+      if (allow.test(line)) return;
+      if (isJs ? /CLAUDE\.md/.test(line) : owner.test(line))
+        bad.push(`${doc}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(bad, [], "cite AGENTS.md for current rules; leave archive/research alone");
+});
+
+test("CLAUDE.md is a stub that imports AGENTS.md, not a second copy", () => {
+  // CLAUDE.md and AGENTS.md spent months as byte-for-byte duplicates, both
+  // loaded into every session (~490 lines of context for 244 of information)
+  // — and they still drifted: one lost a clause the other kept, despite this
+  // suite existing to stop exactly that. One canonical file ends the class:
+  // AGENTS.md holds the content, CLAUDE.md is a Claude Code @import stub.
+  // The line ceiling is what keeps rules from creeping back into the stub.
+  const stub = read("CLAUDE.md");
+  assert.ok(/^@AGENTS\.md$/m.test(stub),
+    "CLAUDE.md must import AGENTS.md with a line reading exactly `@AGENTS.md`");
+  const lines = stub.trim().split("\n").length;
+  assert.ok(lines <= 15,
+    `CLAUDE.md is ${lines} lines — it is a stub; rules belong in AGENTS.md`);
+});
+
+test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
+  // "Ships OFF … def: 0" survived the knob being flipped to 1.0, which inverted
+  // the meaning of the whole asset-pack section.
+  const lighting = read("js/lighting/knobs.js");
+  const def = lighting.match(/\{\s*id:\s*"matTexMix"[^}]*?\bdef:\s*([\d.]+)/);
+  assert.ok(def, "matTexMix is no longer a TUNE_DEFS entry with a def");
+  const on = Number(def[1]) > 0;
+  const agents = read("AGENTS.md");
+  const section = agents.slice(agents.indexOf("Baked asset pack"), agents.indexOf("`window.__apex` dev API"));
+  assert.ok(section, "the baked-asset-pack section moved");
+  assert.equal(/\*\*Ships ON\.\*\*/.test(section), on,
+    `matTexMix def is ${def[1]}, so the asset-pack section must say "Ships ON" iff that is > 0`);
+  assert.ok(!/`matTexMix`[^\n]*`def: 0`/.test(section) || !on,
+    "AGENTS.md still claims matTexMix has def: 0");
+  // WGX implements createTextureArray / setMaterialMaps — the old "WGX does not"
+  // trap sent agents hunting a missing port that already shipped.
+  assert.doesNotMatch(section, /WGX does not/);
+  assert.match(section, /GLX,\s*\n?TLX, and WGX implement it|GLX,\s*TLX, and WGX implement it/);
+
+  // …and the same claim, outside the slice. The check above reads only the text
+  // BETWEEN "Baked asset pack" and "`window.__apex` dev API", so the __apex hook
+  // table — which sits after that boundary — kept saying "(ships at 0)" for as
+  // long as the section above it said "Ships ON". Both were in the doc at
+  // once. Scan the WHOLE file for a shipped-default claim about this knob.
+  // THE NEEDLE MUST STILL MATCH. This scanned for "ships at <n>" and the doc
+  // now says "`matTexMix` def 1.0", so it found ZERO sites and asserted
+  // nothing — measured 2026-09-22, and it had been dead for as long as the
+  // wording has been current. A guard that silently stops matching is worse
+  // than no guard: it reports a claim is policed when nothing reads it.
+  // tools/check/twin-fidelity.mjs already applies this rule to its mutants
+  // ("a needle that no longer matches makes its mutant a silent no-op"); a
+  // doc scan earns the same floor.
+  let seen = 0;
+  for (const m of read("AGENTS.md").matchAll(/matTex\w*[^\n]*?(?:ships at|def)\s+`?([\d.]+)/gi)) {
+    seen++;
+    assert.equal(Number(m[1]), Number(def[1]),
+      `AGENTS.md says matTex ships at ${m[1]}; TUNE_DEFS has def: ${def[1]}`);
+  }
+  assert.ok(seen >= 1,
+    "no shipped-default claim about matTex found in AGENTS.md — the wording moved and this guard is dead; re-point the regex rather than leaving it matching nothing");
+});
+
+test("AGENTS.md's layout names the module-roster truth it defers to", () => {
+  // History: js/ui/sheet-shape.js and js/ui/modal.js shipped while absent
+  // from the then-exhaustive layout, so an agent reading it concluded they did
+  // not exist — and this guard required every js/game basename in the file.
+  // The 2026-08-13 slimming inverted the contract: the layout is a directory
+  // map that DEFERS enumeration to tools/manifest.cjs, so the honest assertion
+  // is that the deferral is stated (the reader is told where the roster
+  // lives), and that any module the doc still singles out by name actually
+  // exists in the manifest (no ghosts — the reverse failure mode).
+  const manifest = read("tools/manifest.cjs");
+  const agents = read("AGENTS.md");
+  assert.ok(manifest.length > 0, "tools/manifest.cjs unreadable");
+  assert.ok(/tools\/manifest\.cjs/.test(agents),
+    "AGENTS.md no longer points readers at tools/manifest.cjs for the module roster");
+  // The no-ghosts half, implemented (round 6 — this header claimed it for a
+  // year while the body was one line): any js/ module the layout section still
+  // singles out by name must exist in the manifest.
+  const layout = agents.split(/^## Layout$/m)[1].split(/^## /m)[0];
+  const named = [...new Set([...layout.matchAll(/\bjs\/[\w./-]+\.js\b/g)].map((m) => m[0]))];
+  assert.ok(named.length >= 3, `layout names ${named.length} js modules — extraction broke`);
+  const ghosts = named.filter((n) => !manifest.includes(n));
+  assert.deepEqual(ghosts, [],
+    "AGENTS.md's layout names a module absent from tools/manifest.cjs (a ghost)");
+});
+
+test("AGENTS.md names the deploy branch", () => {
+  // Three different answers were in the repo at once: the agent doc named a
+  // branch nobody was on, pages.yml deploys from a third, and nothing said so.
+  const agents = read("AGENTS.md");
+  const pages = read(".github/workflows/pages.yml");
+  const deploy = pages.match(/^\s+DEPLOY_BRANCH:\s*(\S+)\s*$/m);
+  assert.ok(deploy, "pages.yml no longer pins a deploy branch (env DEPLOY_BRANCH)");
+  const deployBranch = deploy[1].trim();
+  assert.ok(agents.includes(deployBranch),
+    `AGENTS.md must name the deploy branch (${deployBranch}) so nobody assumes their branch ships`);
+});
+
+test("every npm test:* group names specs that exist", () => {
+  const pkg = JSON.parse(read("package.json"));
+  const missing = [];
+  // Admits SUBDIRECTORIES. Before the tests/ split (AUDIT-SYNTHESIS §R2) this
+  // read `tests/[A-Za-z0-9_*-]+\.` — which stops matching the moment specs live
+  // under tests/specs/, leaving `missing` empty and this test green while
+  // checking nothing at all. `seen` below is what stops that being repeatable:
+  // this repo's groups name well over a hundred files, so a pattern that finds
+  // none of them is broken by definition.
+  let seen = 0;
+  for (const [name, cmd] of Object.entries(pkg.scripts)) {
+    if (!name.startsWith("test:")) continue;
+    for (const m of cmd.matchAll(/tests\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_*-]+\.(?:spec\.js|test\.(?:mjs|cjs))/g)) {
+      const ref = m[0];
+      seen++;
+      if (ref.includes("*")) {                       // glob: at least one match must exist
+        const re = new RegExp("^" + path.basename(ref).replace(/\*/g, ".*") + "$");
+        if (!ls(path.dirname(ref), re).length) missing.push(`${name}: glob ${ref} matches nothing`);
+      } else if (!fs.existsSync(path.join(ROOT, ref))) {
+        missing.push(`${name}: ${ref}`);
+      }
+    }
+  }
+  assert.ok(seen > 100,
+    `the spec-path pattern matched only ${seen} references across the test:* groups — ` +
+    "it has gone stale against the paths in package.json, so this test is checking nothing");
+  assert.deepEqual(missing, [], "an npm test group points at a spec that no longer exists");
+});
+
+test("every renderer backend directory is described in AGENTS.md", () => {
+  // The TLX (three.js) backend shipped an entire js/render/three/ tree while
+  // the agent doc still listed only GLX and WGX. A whole backend going
+  // undocumented is the failure mode worth catching; individual files are
+  // covered by grouped notation ("tlx-chunked/-post/-shadow.js") and are not
+  // checked here.
+  const agents = read("AGENTS.md");
+  const missing = fs.readdirSync(path.join(ROOT, "js/render"), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .filter((d) => !agents.includes(`${d}/`));
+  assert.deepEqual(missing, [], "a renderer backend/dir under js/render/ is missing from the AGENTS.md layout");
+});
+
+test("the skills index lists every skill", () => {
+  const index = read(".claude/skills/README.md");
+  const missing = fs.readdirSync(path.join(ROOT, ".claude/skills"), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .filter((s) => !index.includes(s));
+  assert.deepEqual(missing, [], "a skill exists on disk but is not in .claude/skills/README.md");
+});
+
+test("docs/README.md indexes every directory under docs/", () => {
+  // THE GAP THIS CLOSES. Two tests below already check index coverage, but
+  // only per FILE and only for two trees ("every live engineering doc",
+  // "every research doc"). A whole DIRECTORY outside those two could go
+  // unlisted and nothing noticed. Measured 2026-09-16: 33 files in three
+  // directories had zero mentions in docs/README.md (superpowers/ 15,
+  // archive/moves/ 10, archive/tools/ 8). An unindexed directory is not a
+  // broken link either, so the reference guards passed too, while a reader
+  // following the index could not find those files at all.
+  //
+  // Nested one level under archive/ as well, because that is where the index
+  // keeps its own table and where two of the three strays were.
+  const index = read("docs/README.md");
+  const dirs = [];
+  for (const top of fs.readdirSync(path.join(ROOT, "docs"), { withFileTypes: true })) {
+    if (!top.isDirectory()) continue;
+    dirs.push(`${top.name}/`);
+    if (top.name !== "archive") continue;
+    for (const sub of fs.readdirSync(path.join(ROOT, "docs/archive"), { withFileTypes: true }))
+      if (sub.isDirectory()) dirs.push(`archive/${sub.name}/`);
+  }
+  // A directory counts as indexed when the path appears anywhere in the file:
+  // some are linked as a directory row, others only through a link to a file
+  // inside them (notes/, research/). Either is discoverable, which is the point.
+  const missing = dirs.filter((d) => !index.includes(d));
+  assert.deepEqual(missing, [], "a directory under docs/ is unreachable from docs/README.md");
+});
+
+test("the agents index lists every custom subagent and gitignore tracks the dir", () => {
+  // .claude/* is ignored with an allowlist — without !.claude/agents/, a new
+  // subagent would never ship. Same shape as the skills index guard.
+  const gitignore = read(".gitignore");
+  assert.ok(
+    gitignore.includes("!.claude/agents/"),
+    ".gitignore must allowlist !.claude/agents/ so subagents are trackable",
+  );
+  const index = read(".claude/agents/README.md");
+  const agentsDir = path.join(ROOT, ".claude/agents");
+  assert.ok(fs.existsSync(agentsDir), ".claude/agents/ must exist");
+  const missing = fs.readdirSync(agentsDir)
+    .filter((f) => f.endsWith(".md") && f !== "README.md")
+    .map((f) => f.replace(/\.md$/, ""))
+    .filter((name) => !index.includes(name));
+  assert.deepEqual(missing, [], "an agent .md exists but is not in .claude/agents/README.md");
+});
+
+test("every tool named in tools/README.md exists on disk", () => {
+  // The other direction, which nothing checked. tools/README.md carried a row
+  // for `.vt-warn.cjs` — a file that is not on disk and CANNOT be, because
+  // .gitignore excludes tools/.* — so the index advertised a tool nobody could
+  // run. Deleting a tool without deleting its row leaves exactly this residue,
+  // and the disk->README test above is blind to it by construction.
+  const index = read("tools/README.md");
+  // FULLY RECURSIVE since Phase 4: tools/ nests two deep (lighting/campaign/,
+  // moves/batches/), and a one-level walk silently stopped seeing those files —
+  // which would have let a row for any of them read as a ghost.
+  const onDisk = new Set();
+  (function walk(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) { if (e.name !== "__pycache__") walk(path.join(dir, e.name)); }
+      else onDisk.add(e.name);
+    }
+  })(path.join(ROOT, "tools"));
+  const ghosts = [...index.matchAll(/^\|\s*\*\*([A-Za-z0-9_.-]+\.(?:mjs|cjs|js|sh|html|json))\*\*/gm)]
+    .map((m) => m[1])
+    .filter((f) => !onDisk.has(f));
+  assert.deepEqual(ghosts, [], "tools/README.md documents a tool that does not exist on disk");
+});
+
+test("tools/README documents live test-infra knobs and stays two-column in the runner section", () => {
+  // FLOOR_SLACK is load-bearing: an agent who only reads the index will not
+  // know fixture-consumer-audit fails when FLOOR lags actual adoption by more
+  // than 5. (SPLIT=N left with the ci/test-shards.sh fan-out on 2026-09-10.)
+  const index = read("tools/README.md");
+  assert.match(index, /FLOOR_SLACK/, "fixture-consumer upper-bound slack must be indexed");
+  const specs = index.split("\n").find((l) => l.includes("**ci/select-specs.mjs**")) || "";
+  const recall = index.split("\n").find((l) => l.includes("**ci/select-recall.mjs**")) || "";
+  assert.ok(specs, "select-specs row missing");
+  assert.ok(recall, "select-recall row missing");
+  assert.doesNotMatch(specs, /\|\s*check-changes\s*\|/,
+    "select-specs sits in the two-column runner table; do not leak the paired-skill column");
+  assert.doesNotMatch(recall, /\|\s*check-changes\s*\|/,
+    "select-recall sits in the two-column runner table; do not leak the paired-skill column");
+});
+
+test("the tools index lists every tool", () => {
+  // Underscore-prefixed scripts are transient agent scratch by convention
+  // (.gitignore: tools/_*.mjs) and are deliberately not indexed.
+  //
+  // WALKS THE WHOLE TREE since Phase 4 grouped tools/ into thirteen
+  // subdirectories, two of them nested (lighting/campaign/, moves/batches/).
+  // A one-level walk stopped at the second level and a moved tool could
+  // silently exit the index guard.
+  const index = read("tools/README.md");
+  const missing = [];
+  (function walk(dir, rel) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === "README.md" || e.name.startsWith("_") || e.name === "__pycache__") continue;
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) { walk(path.join(dir, e.name), r); continue; }
+      // A file passes when the index names its full tools-relative path, its
+      // basename, or its directory with a trailing slash (a family header
+      // covers its members). The path form is what the generator emits now.
+      if (!index.includes(r) && !index.includes(e.name) && !index.includes(`${rel}/`)) missing.push(r);
+    }
+  })(path.join(ROOT, "tools"), "");
+  assert.deepEqual(missing, [], "a tool exists on disk but is not in tools/README.md");
+});
+
+test("docs/README indexes every live engineering doc", () => {
+  const index = read("docs/README.md");
+  const missing = ls("docs", /\.md$/)
+    .filter((f) => f !== "README.md" && !index.includes(f));
+  assert.deepEqual(missing, [], "a doc under docs/ is not linked from docs/README.md");
+});
+
+test("every markdown table in docs/README.md has a header separator before body rows", () => {
+  const lines = read("docs/README.md").split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!/^\|.+\|/.test(line) || !/\|\s*$/.test(line)) continue;
+    const cells = line.split("|").slice(1, -1);
+    if (!cells.length) continue;
+    const isSeparator = cells.every((c) => /^[\s:|-]+$/.test(c));
+    if (isSeparator) continue;
+    const prev = i > 0 ? lines[i - 1] : "";
+    if (/^\|.+\|/.test(prev)) continue;
+    const next = lines[i + 1] ?? "";
+    const nextCells = next.split("|").slice(1, -1);
+    const nextIsSep = nextCells.length === cells.length
+      && nextCells.every((c) => /^[\s:|-]+$/.test(c));
+    assert.ok(nextIsSep, `docs/README.md table at line ${i + 1} must be followed by a |---| separator row`);
+  }
+});
+
+test("docs/README indexes every research doc too", () => {
+  // The walk above covers docs/ top level only, so four research docs sat
+  // unindexed for weeks (round-6 finding) — a doc nobody can find is a doc
+  // nobody reads before re-doing its work.
+  const index = read("docs/README.md");
+  const missing = ls("docs/research", /\.md$/)
+    .filter((f) => !index.includes(`research/${f}`));
+  assert.deepEqual(missing, [],
+    "a doc under docs/research/ is not linked from docs/README.md");
+});
+
+test("every relative link in EVERY live doc resolves", () => {
+  // The index links RELATIVELY ("[TESTING.md](TESTING.md)"), and the broken-path
+  // guard above only matches paths that start with a known top-level directory
+  // (js/, tools/, tests/, css/, …). So a docs-relative link pointed at nothing
+  // and no test noticed — which is exactly what happened when six WebGPU notes,
+  // ten research files and the scenery upgrade plan moved into docs/archive/ and
+  // left thirteen dead rows behind in the table that indexes them.
+  //
+  // EVERY LIVE DOC, NOT JUST THE INDEX. This walked only docs/README.md, while
+  // the four dated campaign records cite each other through TEN cross-record
+  // links (AUDIT-SYNTHESIS is cited by TEST-AUDIT, CAMPAIGN and TOTAL-AUDIT;
+  // CAMPAIGN by TEST-AUDIT and TOTAL-AUDIT; and so on). Archiving any one of
+  // them would leave dead links in the others with nothing to say so — the
+  // archive plan's whole first step is this widening, landed BEFORE any file
+  // moves, because a guard that arrives after the commit it protects has
+  // protected nothing (d6f09674's lesson, applied again). Links resolve
+  // relative to the DOC'S OWN DIRECTORY, so research/-to-research/ hops and
+  // README's rows both check under the same rule. docs/archive/ is excluded:
+  // it describes trees that no longer exist, and that is its job.
+  //
+  // EVERY DIRECTORY UNDER docs/, not three named ones (2026-09-03). Phase 5
+  // moved the dated ledgers into docs/notes/, and each arrived carrying links
+  // written relative to docs/ — `research/WEBGPU-PARITY.md`, `../AGENTS.md`,
+  // `ARCHITECTURE.md`. Nine were dead the moment the files landed and nothing
+  // said so, because this list enumerated `research` and `tracks` by name.
+  // Walking whatever is there covers the next directory on the day it appears.
+  const dead = [];
+  const docs = ["docs/README.md",
+    ...ls("docs", /\.md$/).filter((f) => f !== "README.md").map((f) => `docs/${f}`),
+  ];
+  for (const e of fs.readdirSync(path.join(ROOT, "docs"), { withFileTypes: true })) {
+    if (!e.isDirectory() || e.name === "archive") continue;   // archive: checked below
+    (function walk(rel) {
+      for (const d of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
+        const sub = `${rel}/${d.name}`;
+        if (d.isDirectory()) walk(sub);
+        else if (d.name.endsWith(".md")) docs.push(sub);
+      }
+    })(`docs/${e.name}`);
+  }
+  for (const doc of docs) {
+    const dir = path.dirname(path.join(ROOT, doc));
+    for (const m of read(doc).matchAll(/\]\(([^)#:\s]+)(?:#[^)]*)?\)/g)) {
+      const href = m[1].trim();
+      if (/^(https?:)?\/\//.test(href)) continue;        // external
+      if (!linkResolves(dir, href)) dead.push(`${doc} -> ${href}`);
+    }
+  }
+  assert.deepEqual(dead, [], "a live doc links to a path that does not exist");
+});
+
+test("every relative link inside docs/archive/ resolves", () => {
+  // Archive docs cite each other and point at repo paths that existed when
+  // written. Internal cross-links between archived records must still resolve
+  // so the provenance chain is navigable; repo-path claims are exempt above.
+  const dead = [];
+  const archiveDocs = [];
+  (function walk(dir) {
+    for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+      const rel = path.join(dir, e.name);
+      if (e.isDirectory()) walk(rel);
+      else if (e.name.endsWith(".md")) archiveDocs.push(rel);
+    }
+  })("docs/archive");
+  for (const doc of archiveDocs) {
+    const dir = path.dirname(path.join(ROOT, doc));
+    for (const m of read(doc).matchAll(/\]\(([^)#:\s]+)(?:#[^)]*)?\)/g)) {
+      const href = m[1].trim();
+      if (/^(https?:)?\/\//.test(href)) continue;
+      if (!linkResolves(dir, href)) dead.push(`${doc} -> ${href}`);
+    }
+  }
+  assert.deepEqual(dead, [], "an archived doc links to a path that does not exist");
+});
+
+test("no live doc points a reader at docs/archive/", () => {
+  // Archive is provenance. A live doc citing it is either a doc that should not
+  // have been archived, or a reference that should have been rewritten — both
+  // are worth catching. docs/README.md is the one legitimate referrer, because
+  // indexing the archive is its job.
+  //
+  // docs/notes/ is EXEMPT (2026-09-03). Those are dated ledgers, and a ledger's
+  // provenance chain is the point of it: PERF-FINDINGS §3 cites the archived
+  // perf ledger it was distilled from, the defect register cites the sweeps
+  // that closed its rows. That is a record pointing at its own history, not a
+  // reference doc sending a reader to a layout that has moved — which is what
+  // this test exists to catch. Their links still have to resolve; the walk
+  // above covers notes/, and it did not before.
+  const inNotes = (p) => p.split(path.sep).join("/").startsWith("docs/notes/");
+  const offenders = [];
+  for (const doc of LIVE_DOCS) {
+    if (doc === "docs/README.md" || inNotes(doc)) continue;
+    if (/docs\/archive\/|\.\.\/archive\//.test(read(doc))) offenders.push(doc);
+  }
+  assert.deepEqual(offenders, [],
+    "a live doc references docs/archive/ — either it should not be archived, or the reference is stale");
+});
+
+test("the data hub does not hardcode a season year", () => {
+  // js/data/api.js pinned /2026/ into four Jolpica URLs and js/data/hub.js
+  // pinned [2026, 2025, 2024, 2023] as the session-picker years. Neither would
+  // ever have thrown — the requests stay valid forever, they just describe a
+  // season that is over, and YEARS[0] is the fallback for the selected year. So
+  // from 2027 the whole hub would have quietly served the wrong season while
+  // looking like it worked. Both now read the clock; this stops the literal
+  // coming back.
+  const bad = [];
+  const api = read("js/data/api.js");
+  for (const m of api.matchAll(/JOLPICA \+ "\/(\d{4})/g)) bad.push(`js/data/api.js: JOLPICA + "/${m[1]}`);
+  const hub = read("js/data/hub.js");
+  for (const m of hub.matchAll(/const YEARS\s*=\s*\[\s*(\d{4})/g)) bad.push(`js/data/hub.js: YEARS = [${m[1]}`);
+  assert.deepEqual(bad, [],
+    "a season year is hardcoded again — derive it from the clock, or the data hub silently ages out");
+});
+
+// A dated note is true when written; the risk is a newer note and the one it
+// replaced both being found and read as current — similar-but-wrong passages
+// are what degrades a model most (Chroma "Context Rot", 2025; docs/notes/
+// SECOND-BRAIN-2026-10-14.md). So a replacement says so in a form a test can
+// hold: a line `Supersedes: [title](OLD.md)` in the new note, a line
+// `Superseded by: [title](NEW.md)` in the old one, and the old note's row in
+// docs/README.md says "superseded". Prose mentions ("supersedes §2af") are not
+// the convention and are not checked.
+test("Supersedes: / Superseded by: pairs in docs/notes are two-way and indexed", () => {
+  const dir = path.join(ROOT, "docs/notes");
+  const index = read("docs/README.md");
+  const links = (line) => [...line.matchAll(/\]\(([^)#]+\.md)\)/g)].map((m) => m[1]);
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".md"))) {
+    const text = read(`docs/notes/${f}`);
+    for (const line of text.split("\n").filter((l) => /^Supersedes:/.test(l))) {
+      const olds = links(line);
+      assert.ok(olds.length, `docs/notes/${f}: "Supersedes:" needs a markdown link to the note it replaces`);
+      for (const old of olds) {
+        const oldRel = path.posix.join("docs/notes", old);
+        assert.ok(fs.existsSync(path.join(ROOT, oldRel)), `docs/notes/${f} supersedes ${old}, which does not exist`);
+        const back = read(oldRel).split("\n").filter((l) => /^Superseded by:/.test(l)).flatMap(links);
+        assert.ok(back.includes(f), `${oldRel} needs a line "Superseded by: [..](${f})" — the old note must point at its replacement`);
+        const row = index.split("\n").find((l) => l.includes(`(notes/${path.posix.basename(old)})`));
+        if (row) assert.match(row, /superseded/i, `docs/README.md's row for notes/${old} must say it is superseded (by ${f})`);
+      }
+    }
+    for (const line of text.split("\n").filter((l) => /^Superseded by:/.test(l)))
+      for (const nu of links(line))
+        assert.ok(fs.existsSync(path.join(dir, nu)) && /^Supersedes:/m.test(read(`docs/notes/${nu}`)),
+          `docs/notes/${f} says it is superseded by ${nu}, which must exist and carry the matching "Supersedes:" line`);
+  }
+});

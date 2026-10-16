@@ -1,0 +1,940 @@
+/* The radio banner, spoken aloud by the browser's own speech synthesiser. */
+"use strict";
+// WHY THIS IS NOT PART OF GameAudio. Every line of js/audio/engine.js is a node
+// in an AudioContext graph — master → limiter → destination, sfxBus → master,
+// the per-frame music duck. speechSynthesis has NO node. It cannot be connected,
+// cannot be ducked by the limiter, is not silenced by master.gain = 0, and has a
+// completely different unlock and failure surface. Housing it in GameAudio would
+// assert a routing that does not exist, and that misconception is the single
+// most load-bearing fact about this feature.
+var RadioVoice = (function () {
+  // The three channels js/game.js radioWho already partitions `kind` into. The
+  // VOICE carries the channel, which is why speakable() below drops the WHO
+  // line: reading "RACE CONTROL. Plus five second penalty" spends a second of a
+  // three-second card on something the card already shows in colour.
+  const SPEAKERS = Object.freeze({
+    warning: "control", warn: "control", "penalty-warn": "control", "penalty-hit": "control",
+    coach: "coach", practice: "coach",
+    info: "radio", box: "radio", race: "radio",
+    // IN-RACE COMMENTARY (js/race/race-radio.js) speaks in the ANNOUNCER's
+    // voice and obeys the ANNOUNCER's switch, not TEAM RADIO's (see say()): it
+    // is the same broadcaster who opened the show over the flyby.
+    comm: "announcer",
+  });
+  // Prosody per channel: flat and official, calm and explanatory, quick and
+  // clipped. On iOS every English voice sounds the same (the platform returns
+  // no voice list and picks its own), so prosody is the ONLY differentiator
+  // there and has to carry the distinction alone.
+  const TONE = Object.freeze({
+    control: { pitch: 0.9, rate: 1.05 },
+    coach: { pitch: 1.0, rate: 0.95 },
+    radio: { pitch: 1.05, rate: 1.15 },
+    // The PRE-RACE ANNOUNCER (js/audio/announcer.js). A fourth channel here and
+    // nowhere in SPEAKERS on purpose: SPEAKERS maps a race-time `kind` onto a
+    // voice, and the announcer has no kind — it never goes through say(). What
+    // it does share is the tune: a channel in this table is a channel the
+    // settings panel can give a voice, a pitch and a rate, and that is exactly
+    // what "let the player pick the announcer's voice" needs.
+    //
+    // SLOWEST AND LOWEST of the four. The other three talk over a race and are
+    // budgeted against a card that is already fading; this one reads a scripted
+    // paragraph over a still screen, where an unhurried delivery is the whole
+    // character. 0.92 is under the coach's 0.95 and well under the engineer's.
+    announcer: { pitch: 0.95, rate: 0.92 },
+  });
+  /* PLAYER TUNING sits OVER those defaults rather than replacing them, which is
+   * what makes "reset" a delete and not a second table to keep in step. A tune
+   * is {name, pitch, rate}: `name` picks a system voice, the other two scale
+   * nothing — they ARE the pitch and rate, in the same units as TONE.
+   *
+   * Every field is optional and every field is clamped, because this comes out
+   * of localStorage: a hand-edited store, a save from a future build, or a
+   * voice that existed on the machine the save was made on and does not exist
+   * here. None of those may silence a channel — the written card is the game's
+   * floor and the voice is the extra. */
+  // One real line per channel for the settings preview — each the shape that
+  // channel actually carries, so the sample exercises the same speakable()
+  // path (a penalty's "+5s", the coach's plain prose, the pit call's caps).
+  const SAMPLE = Object.freeze({
+    control: "Car 44, track limits — +5s penalty",
+    coach: "Brake a little earlier here and get the car straight",
+    radio: "P3. Nice move",
+    announcer: "Welcome to Apex 26. This is Silverstone, home of the British Grand Prix",
+  });
+  /* WHICH CHANNELS MAY USE A NETWORK VOICE — a correctness rule, one way and a
+   * preference the other, so it is a table rather than a flag at the call site.
+   *
+   * A remote voice is synthesised over the network and its lead-in is UNBOUNDED.
+   * For the three race channels that settles it: a line budgeted against a card
+   * that is already fading cannot wait on a round trip, and arriving late is the
+   * one failure this module exists to prevent.
+   *
+   * The ANNOUNCER has no card. It reads a scripted paragraph over the loading
+   * flyby, on a still screen, cut off by its own budget — so the rule that
+   * justifies the filter simply does not apply to it, and applying it anyway was
+   * costing the thing the channel is FOR. Chrome's own voices are all remote,
+   * and every top-tier Microsoft voice is literally named "… Online (Natural)",
+   * so `localService` was not filtering out the risky voices; it was filtering
+   * out the good ones and leaving whatever low-quality local voice survived.
+   * On Chrome and Edge desktop that emptied the list outright, and the
+   * announcer's whole preference chain (js/audio/announcer.js PREFERRED) matched
+   * nothing at all. */
+  const REMOTE_OK = Object.freeze({ announcer: true });
+  /* EVERY RACE CHANNEL HAS A RECORDED VOICE (js/audio/voice-pack.js), and with
+   * RADIO VOICE: RECORDED a race never touches speech synthesis: a line no pack
+   * can say whole stays written on its card. Speech synthesis is synchronous IPC
+   * on the main thread, and on iPhone Safari each line held the game up (and
+   * took the audio session from the race) — every commentary, race control and
+   * coach line went that way while only the engineer had clips
+   * (docs/notes/VOICE-LAG-IPHONE-2026-10-01.md). SYSTEM keeps every line on
+   * speech synthesis, for a player who chose a system voice. */
+  const PACK_VOICE = Object.freeze({ radio: "george", announcer: "fable", control: "emma", coach: "heart" });
+
+  let primed = false;   // module scope: survives re-create; LAZY_AUDIO may bind after the first gesture
+
+  const PITCH_MIN = 0.5, PITCH_MAX = 1.6;
+  const RATE_MIN = 0.6;
+  const RATE_MAX = 1.35;
+  // Seconds held back for the engine's lead-in. Remote voices are excluded
+  // outright (see voicesFor), so what is left is a local engine's startup —
+  // tens of milliseconds — and this covers it with room.
+  const LEAD_RESERVE_S = 0.25;
+  const SPOTTER_DECODE_LEAD_S = 0.6;   // lead behind a spotter clip whose decode has not settled (remaining() = Infinity)
+  const WORDS_PER_S = 2.4;   // deliberately SLOW: under-estimating speech is the safe direction
+  // js/game.js showAnnounce: announceT = max(ANN_CARD_MIN_S, (dur || 1.6) + ANN_CARD_PAD_S).
+  const ANN_CARD_PAD_S = 0.5;
+  const ANN_CARD_MIN_S = 3;
+  // Courtesy-figure length from js/audio/radio-fx.js RADIO_CH (same sums as GameAudio.radioLeadS).
+  const RADIO_LEAD_S = 0.03 + 0.105 + 0.09 + 0.09 + 0.11;
+  const CONTROL_LEAD_S = 0.03 + 0.10 + 0.12;
+  // Recorded voice hard-stop slack (speakPack deadline, ms).
+  const PACK_STOP_TAIL_S = 0.4;
+  // Tokens that must keep their capitals. Everything else is lowercased before
+  // speaking, because several engines spell a short all-caps token letter by
+  // letter — "B-O-X" instead of "box". Invisible on Chrome/Windows and ruinous
+  // on some Linux and macOS voices, which is exactly why it is a pure function
+  // with a test rather than something a player discovers.
+  //
+  // AN EXPLICIT LIST, never a length rule. "any three capitals is a driver code"
+  // was the obvious shortcut and it is wrong on the most important line in the
+  // game: BOX is three capitals, and the rule spelled the pit call out letter by
+  // letter. A real initialism is a closed set; a heuristic over ALL-CAPS copy is
+  // a guess about every word that will ever be written here.
+  const KEEP_CAPS = /^(DRS|ERS|VSC|SC|MGU|PB|P\d{1,2})$/;
+
+  /** The prosody a channel actually speaks with: the shipped default, with any
+   *  stored tune laid over it and clamped. Pure — no store, no synth. */
+  function toneFor(speaker, tune) {
+    const base = TONE[speaker] || TONE.radio;
+    const t = tune && tune[speaker];
+    if (!t) return { pitch: base.pitch, rate: base.rate };
+    const num = (v, lo, hi, fb) => (Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : fb);
+    return {
+      pitch: num(t.pitch, PITCH_MIN, PITCH_MAX, base.pitch),
+      rate: num(t.rate, RATE_MIN, RATE_MAX, base.rate),
+    };
+  }
+
+  /** The words only, normalised for a speech engine. Pure; tested directly. */
+  function speakable(msg) {
+    let s = String(msg == null ? "" : msg);
+    s = s.replace(/[—–]/g, ", ").replace(/…/g, " ");
+    s = s.replace(/\s+,/g, ",");   // the dash above leaves " , " — several engines pause twice on it
+    s = s.replace(/\+(\d+)s\b/gi, "plus $1 seconds");
+    s = s.replace(/\b(\d+)s\b/gi, "$1 seconds");
+    s = s.replace(/(\d)\/(\d)/g, "$1 of $2");
+    s = s.replace(/(\d)\s*%/g, "$1 percent");   // "TYRES AT 40%": engines disagree on "%", the voice pack records the word
+    // The caps pass runs BEFORE the P-number split, not after: splitting first
+    // leaves a bare "P" that no longer matches KEEP_CAPS, and the position gets
+    // read as the letter "p".
+    s = s.replace(/[A-Z][A-Z0-9]*/g, (w) => (KEEP_CAPS.test(w) ? w : w.toLowerCase()));
+    s = s.replace(/\bP(\d+)\b/g, "P $1");
+    return s.replace(/\s+/g, " ").trim();
+  }
+
+  /** Estimated seconds to speak `text` at `rate`. */
+  const estimate = (text, rate) => (text ? text.split(" ").length : 0) / WORDS_PER_S / Math.max(0.1, rate);
+
+  /* SQUELCH + BAND — the frame around an ENGINEER line (speaker `radio`).
+   *
+   * speechSynthesis has no node (see the file header), so this cannot EQ the
+   * words. It is a short key-up / key-down static burst, band-limited like a
+   * handheld, scheduled with the utterance. The CARD's click-hiss-squelch
+   * (js/audio/radio-fx.js radioSting) is a different layer and stays there.
+   *
+   * TEAM RADIO off, volRadio 0, coach / control / announcer, the results
+   * sheet and a pause: no burst. A spotter cut cancels the scheduled close
+   * so it cannot fire over the call that replaced the line. */
+  const RADIO_LO = 300, RADIO_HI = 3400;
+  const SQUELCH_MS_MIN = 40, SQUELCH_MS_MAX = 80;
+  const SQUELCH_POOL = 2;
+
+  function hashSeed(s) {
+    if (typeof s === "number" && Number.isFinite(s)) return (s >>> 0) || 1;
+    const str = String(s == null ? "" : s);
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0 || 1;
+  }
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  /** Light 300–3400 Hz band with tiny seeded jitter. Same seed → same params. */
+  function radioBand(seed) {
+    const rnd = mulberry32(hashSeed(seed));
+    const lo = RADIO_LO + Math.round((rnd() - 0.5) * 40);
+    const hi = RADIO_HI + Math.round((rnd() - 0.5) * 80);
+    return { lo, hi, freq: Math.round(Math.sqrt(lo * hi)), q: +(0.32 + rnd() * 0.08).toFixed(3) };
+  }
+  function squelchMs(seed, lane) {
+    const rnd = mulberry32(hashSeed(seed) ^ (lane === "close" ? 0x51ed : 0x0b1e));
+    return SQUELCH_MS_MIN + Math.floor(rnd() * (SQUELCH_MS_MAX - SQUELCH_MS_MIN + 1));
+  }
+  function speakerOf(o) {
+    if (o.speaker && TONE[o.speaker]) return o.speaker;
+    return SPEAKERS[o.kind] || "radio";
+  }
+  /**
+   * Pure: whether a key-up and key-down sit around this line. `reason` on
+   * refusal, same shape as plan(). `seed` keeps the band and durations
+   * deterministic for tests.
+   */
+  function squelchPlan(o) {
+    const out = { play: false, reason: "", openMs: 0, closeMs: 0, atOpen: 0, atClose: 0, band: null, seed: 0, lite: !!o.mobile };
+    if (!o.enabled) { out.reason = "off"; return out; }
+    if (!o.soundOn) { out.reason = "master-off"; return out; }
+    if (o.volume != null && !(+o.volume > 0)) { out.reason = "silent"; return out; }
+    if (o.paused) { out.reason = "paused"; return out; }
+    if (o.state !== "race" && o.state !== "count" && !o.preRace) { out.reason = "not-racing"; return out; }
+    if (speakerOf(o) !== "radio") { out.reason = "not-radio"; return out; }
+    const seed = o.seed == null ? hashSeed(o.text || o.msg || 1) : hashSeed(o.seed);
+    const secs = Math.max(0, +o.secs || 0);
+    out.play = true; out.reason = ""; out.seed = seed;
+    out.band = radioBand(seed);
+    out.openMs = squelchMs(seed, "open");
+    out.closeMs = squelchMs(seed, "close");
+    out.atOpen = 0;
+    out.atClose = secs;
+    return out;
+  }
+  function isMobile() {
+    try { return !!(typeof GLX !== "undefined" && GLX && (GLX.isMobile || GLX.mobileTier)); }
+    catch (e) { return false; }
+  }
+
+  /**
+   * THE WHOLE POLICY, as a pure function: no DOM, no speechSynthesis, no clock.
+   * Every refusal carries a `reason`, which is what the node tests assert on.
+   */
+  function plan(o) {
+    const kind = o.kind || "race";
+    const out = { speak: false, reason: "", text: "", speaker: "radio", rate: 1, pitch: 1, volume: o.volume == null ? 1 : o.volume, budgetMs: 0, leadMs: 0 };
+    if (!o.enabled) { out.reason = "off"; return out; }
+    if (!o.soundOn) { out.reason = "master-off"; return out; }
+    if (!o.api) { out.reason = "no-api"; return out; }
+    // The radio is about something happening NOW at 300 km/h. The title
+    // screen's "SAVE CONFLICT — reload career" card is not radio and must not
+    // be read aloud at somebody browsing menus.
+    // `preRace` is the ONE exemption: the engineer's radio check over the
+    // loading flyby's last shot (js/ui/loading-screen.js), which is the race
+    // about to start, asked for by name through sayPreRace() below.
+    if (o.state !== "race" && o.state !== "count" && !o.preRace) { out.reason = "not-racing"; return out; }
+    const speaker = SPEAKERS[kind] || "radio";
+    const tone = toneFor(speaker, o.tune);
+    const text = speakable(o.msg);
+    if (!text) { out.reason = "empty"; return out; }
+    // THE CUE COMES FIRST, SO IT COMES OUT OF THE BUDGET. The radio frame opens
+    // with a courtesy figure (js/audio/engine.js radioSting) and the words
+    // belong AFTER it, the way a broadcast plays it — not over the top of it,
+    // which is what happened while the two started together. `lead` is that
+    // figure's real length, handed in by the caller rather than duplicated
+    // here, and the line has the card MINUS it to fit in.
+    const lead = Math.max(0, +o.lead || 0);
+    out.leadMs = lead * 1000;
+    const budget = (o.life || 0) - LEAD_RESERVE_S - lead;
+    let rate = tone.rate;
+    if (estimate(text, rate) > budget) rate = RATE_MAX;
+    if (estimate(text, rate) > budget) { out.reason = "too-long"; out.text = text; return out; }
+    out.speak = true; out.text = text; out.speaker = speaker;
+    out.rate = rate; out.pitch = tone.pitch; out.budgetMs = Math.max(0, budget) * 1000;
+    out.secs = estimate(text, rate);   // the words' own length, for a caller that holds a bed under them
+    return out;
+  }
+
+  /** Minimum announce card life (`announceT` in js/game.js) for a line to speak whole. */
+  function cardLifeS(o) {
+    const kind = o.kind || "race";
+    const lead = Math.max(0, o.lead != null ? +o.lead : (kind === "comm" ? 0 : (SPEAKERS[kind] === "control" ? CONTROL_LEAD_S : RADIO_LEAD_S)));
+    const text = speakable(o.msg);
+    if (!text) return ANN_CARD_MIN_S;
+    const budgetNeed = estimate(text, RATE_MAX);
+    return Math.max(ANN_CARD_MIN_S, lead + LEAD_RESERVE_S + budgetNeed);
+  }
+
+  /** `dur` for announce() so max(ANN_CARD_MIN_S, dur + ANN_CARD_PAD_S) fits plan(). */
+  function cardDurS(o) {
+    return cardLifeS(o) - ANN_CARD_PAD_S;
+  }
+
+  /** A live instance's shape, with every method a no-op. */
+  function inert() {
+    return Object.freeze({
+      say: () => false, sayPreRace: () => false, stop: () => {}, halt: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
+      setPackOn: () => {}, packOn: () => false, prepare: () => {}, busy: () => false, yieldToSpotter: () => false,
+      voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
+      recordedVoice: (sp) => PACK_VOICE[sp], recordedPack: (sp) => PACK_VOICE[sp], recordedVoices: () => [], setRecordedVoice: () => false,
+      announcerPackOn: () => false,
+      setEnabled: () => {}, setVolume: (v) => v, available: () => false,
+      debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0, squelch: null }),
+    });
+  }
+
+  function create(G) {
+    const synth = typeof window !== "undefined" && window.speechSynthesis;
+    const Utter = typeof window !== "undefined" && window.SpeechSynthesisUtterance;
+    const api = !!(synth && typeof Utter === "function");
+    const pack = typeof VoicePack !== "undefined" && typeof GameAudio !== "undefined" ? VoicePack.create(G) : null;
+    if (!api && !pack) { Log.info("audio", "RadioVoice: no speechSynthesis — the radio stays written"); return inert(); }
+    let enabled = !!G.store.get("radioVoice", false);
+    let volume = G.store.get("volRadio", 0.8);
+    // ONE store key holding all three channels, not nine flat ones: the repo
+    // guards that a key means exactly one type (store-key-types), and a channel
+    // is naturally a record. Absent keys and absent channels both mean "the
+    // shipped default", so a fresh save and a reset are the same state.
+    let tune = readTune();
+    // The recorded voice. RECORDED (the default) tries the pack first; SYSTEM
+    // keeps every line on speech synthesis, for a player who prefers the
+    // voice they picked below.
+    let packOn = G.store.get("radioPack", true) !== false;
+    let previewGen = 0;
+    const recordedVoices = (sp) => typeof VoicePack !== "undefined" && VoicePack.choices ? VoicePack.choices(sp) : [];
+    const recordedVoice = (sp) => {
+      const chosen = tune[sp] && tune[sp].pack;
+      return recordedVoices(sp).some((v) => v.id === chosen) ? chosen : PACK_VOICE[sp];
+    };
+    // The PACK the chosen voice speaks this channel from (any voice, any channel).
+    const recordedPack = (sp) => {
+      const id = recordedVoice(sp);
+      return typeof VoicePack !== "undefined" && VoicePack.packFor ? VoicePack.packFor(id, sp) || id : id;
+    };
+    // The pre-race presenter remains independent of the race-radio source.
+    const announcerPackOn = () => {
+      const t = tune.announcer || {};
+      // Older saves have system tuning without a source field. Honour that
+      // explicit choice when introducing recorded pre-race voices.
+      const source = ["recorded", "system"].includes(t.source) ? t.source
+        : t.name != null || t.pitch != null || t.rate != null ? "system" : "";
+      return !!(pack && (source === "recorded" || !source && packOn));
+    };
+    // `current` is the utterance THIS instance is speaking, and it exists because
+    // every utterance shares one handler over module state (`deadline`, the music
+    // duck). speechSynthesis fires a cancelled line's end/error ASYNCHRONOUSLY —
+    // after the replacement has already started — so without an identity check
+    // the dead line's callback cleared the LIVE line's hard stop and un-ducked
+    // the music underneath it. That lands on exactly the lines that preempt:
+    // a penalty cutting off the coach is the case this module was built for.
+    let voices = null, voicesAny = null, deadline = null, last = null, current = null;
+    // The speak waiting out the courtesy figure. A preempt during that window
+    // must cancel it, or the line it interrupted arrives on top of the line
+    // that interrupted it — the exact inversion `current` exists to prevent,
+    // one step earlier in the chain.
+    let pending = null, activeKind = "";
+    /* DID THE ENGINE ACTUALLY START? `asked` counts the speaks we HANDED to the
+     * platform; `started` counts the ones it actually began (onstart).
+     *
+     * They exist because the difference is invisible from anywhere else, and it
+     * is the difference between two opposite bugs. asked 0 means WE refused —
+     * plan() has a reason and `last` carries it. asked > 0 with started 0 means
+     * the PLATFORM refused: every line was accepted without complaint and none
+     * was ever voiced, which is what an unprimed iOS engine looks like from in
+     * here. A refused speak is not an error, fires no event and logs nothing,
+     * so without this counter the two cases are one silent symptom — which is
+     * exactly how this defect survived three attempts to fix it from the
+     * outside. The audio panel prints the verdict; see js/audio/panel.js. */
+    let asked = 0, started = 0;
+    let lastSquelch = null, squelchOpenT = null, squelchCloseT = null;
+    let noiseBuf = null, poolCtx = null, poolDest = null;
+    const squelchPool = [];   // reused bandpass+gain; BufferSource is one-shot
+    function stopSquelch(cut) {
+      if (squelchOpenT != null) { clearTimeout(squelchOpenT); squelchOpenT = null; }
+      if (squelchCloseT != null) { clearTimeout(squelchCloseT); squelchCloseT = null; }
+      if (lastSquelch && cut) lastSquelch.cut = true;
+      const ctx = poolCtx;
+      const t = ctx && ctx.currentTime != null ? ctx.currentTime : 0;
+      for (const v of squelchPool) {
+        try { v.g.gain.cancelScheduledValues(t); v.g.gain.setValueAtTime(0.0001, t); } catch (e) { /* torn down */ }
+        if (v.src) { try { v.src.stop(t); } catch (e) { /* already ended */ } v.src = null; }
+        v.busyUntil = t;
+      }
+    }
+    // GameAudio's own context and SFX bus (#2189): master, limiter, SFX volume
+    // and hide-time suspend all apply, on every device. No second AudioContext —
+    // with GameAudio still the title stub (null) the card sting stands alone.
+    function audioCtx() {
+      const w = typeof window !== "undefined" ? window : null;
+      if (w && w.RadioSquelchCtx) return w.RadioSquelchCtx;   // unit-test hook
+      if (typeof GameAudio === "undefined" || !GameAudio || typeof GameAudio.context !== "function") return null;
+      try { return GameAudio.context() || null; } catch (e) { return null; }   // mid-teardown
+    }
+    function squelchDest(ctx) {
+      let bus = null;
+      try {
+        if (GameAudio.context() === ctx && typeof GameAudio.sfxBus === "function") bus = GameAudio.sfxBus();
+      } catch (e) { /* stub or hook context */ }
+      return bus || ctx.destination || null;
+    }
+    function ensureSquelchPool(ctx) {
+      const dest = squelchDest(ctx);
+      if (poolCtx === ctx && poolDest === dest && squelchPool.length) return;
+      for (const v of squelchPool) {
+        try { v.g.disconnect(); } catch (e) { /* gone */ }
+        try { v.filt.disconnect(); } catch (e) { /* gone */ }
+      }
+      squelchPool.length = 0;
+      poolCtx = ctx;
+      poolDest = dest;
+      noiseBuf = null;
+      const n = isMobile() ? 1 : SQUELCH_POOL;
+      for (let i = 0; i < n; i++) {
+        const filt = ctx.createBiquadFilter();
+        filt.type = "bandpass";
+        const g = ctx.createGain();
+        g.gain.value = 0.0001;
+        filt.connect(g);
+        if (dest) g.connect(dest);
+        squelchPool.push({ filt, g, src: null, busyUntil: 0 });
+      }
+    }
+    function playBurst(band, durS) {
+      const ctx = audioCtx();
+      if (!ctx || !band || !(durS > 0)) return false;
+      if (ctx.state && ctx.state !== "running" && ctx.state !== "suspended") return false;
+      try { ensureSquelchPool(ctx); } catch (e) { return false; }
+      if (!squelchPool.length) return false;
+      const t = ctx.currentTime || 0;
+      let v = squelchPool[0];
+      for (let i = 1; i < squelchPool.length; i++) {
+        if (squelchPool[i].busyUntil <= t) { v = squelchPool[i]; break; }
+        if (squelchPool[i].busyUntil < v.busyUntil) v = squelchPool[i];
+      }
+      try {
+        if (!noiseBuf || noiseBuf.sampleRate !== (ctx.sampleRate || noiseBuf.sampleRate)) {
+          const sr = ctx.sampleRate || 44100;
+          const len = Math.max(1, Math.ceil(sr * 0.12));
+          noiseBuf = ctx.createBuffer(1, len, sr);
+          const d = noiseBuf.getChannelData(0);
+          for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        }
+        v.filt.frequency.value = band.freq;
+        v.filt.Q.value = band.q;
+        if (v.src) { try { v.src.stop(); v.src.disconnect(); } catch (e) { /* reuse */ } }
+        const src = ctx.createBufferSource();
+        src.buffer = noiseBuf;
+        src.connect(v.filt);
+        const peak = 0.07 * Math.max(0.15, volume);
+        v.g.gain.cancelScheduledValues(t);
+        v.g.gain.setValueAtTime(0.0001, t);
+        v.g.gain.linearRampToValueAtTime(peak, t + 0.004);
+        v.g.gain.exponentialRampToValueAtTime(0.0001, t + durS);
+        src.start(t);
+        src.stop(t + durS + 0.02);
+        v.src = src;
+        v.busyUntil = t + durS + 0.05;
+      } catch (e) { return false; }
+      return true;
+    }
+    function fireSquelch(lane) {
+      if (!lastSquelch || lastSquelch.cut || !lastSquelch.play) return;
+      lastSquelch.fired.push(lane);
+      playBurst(lastSquelch.band, (lane === "open" ? lastSquelch.openMs : lastSquelch.closeMs) / 1000);
+    }
+    function armSquelch(p) {
+      stopSquelch(false);
+      const q = squelchPlan({
+        enabled, soundOn: !!G.soundOn, volume, speaker: p.speaker, kind: activeKind,
+        state: G.state, preRace: !!p.preRace, paused: !!G.paused, mobile: isMobile(),
+        text: p.text, secs: p.secs, seed: hashSeed(p.text),
+      });
+      q.events = q.play ? ["open", "close"] : [];
+      q.fired = [];
+      q.cut = false;
+      lastSquelch = q;
+      if (!q.play) return;
+      const leadMs = Math.max(0, +p.leadMs || 0);
+      // Zero lead is the words starting NOW: fire the key-up in this task.
+      // A nested setTimeout(0) after say()'s own deferral lost the race to a
+      // 5 ms flush on a loaded CI box (Structural guards B / vm-b1 on #1739).
+      if (leadMs <= 0) fireSquelch("open");
+      else squelchOpenT = setTimeout(() => { squelchOpenT = null; fireSquelch("open"); }, leadMs);
+      squelchCloseT = setTimeout(() => { squelchCloseT = null; fireSquelch("close"); }, leadMs + q.atClose * 1000);
+    }
+    /* OFF THE FRAME. speechSynthesis calls are synchronous IPC to the platform
+     * speech service, and on real desktops they can stall the main thread —
+     * cancel() and getVoices() especially, a network ("Google") voice worse
+     * (crbug 374263394, 40720649). say() runs inside the game tick (it hangs
+     * off showAnnounce), so none of them may land in a frame (a cancel() on
+     * EVERY line plus a resume() after it would). The synth is only touched
+     * from its own task (`synthTask`), cancel()
+     * only when something is actually queued, resume() only straight after a
+     * cancel (the Bugzilla 1522074 case it exists for), and each call is timed
+     * so a player can see what their platform costs (debug().synth). */
+    // Our utterances still on the platform's queue. A Set, not a flag: a
+    // cancelled line's LATE end must not clear the mark while its replacement
+    // speaks. The synth is shared with the announcer (js/audio/announcer.js),
+    // and speechSynthesis.cancel() is global — so this module cancels only
+    // when one of ITS lines is queued, never because something else is talking.
+    const ours = new Set();
+    let synthStat = { calls: 0, maxMs: 0, slow: 0, lastWarn: -1e9 };
+    const clock = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+    function timed(name, fn) {
+      const a = clock();
+      try { return fn(); } finally {
+        const ms = clock() - a;
+        synthStat.calls++;
+        if (ms > synthStat.maxMs) synthStat.maxMs = ms;
+        if (ms > 16) {
+          synthStat.slow++;
+          if (a - synthStat.lastWarn > 10000) { synthStat.lastWarn = a; Log.warn("audio", "RadioVoice: speechSynthesis." + name + " blocked " + ms.toFixed(1) + " ms"); }
+        }
+      }
+    }
+    /** Cancel OUR line, now, if one is queued — and nothing otherwise. Synchronous
+     *  on purpose: a cancel deferred to a later task fired after whatever was
+     *  spoken in between (the settings TEST sample, the announcer's wrap-up) and
+     *  killed it. The frame cost that motivated deferring was the cancel on EVERY
+     *  line, idle or not; a preempt of our own line is rare, and that is all
+     *  that remains here. */
+    function cancelOurs() {
+      if (!ours.size) return;
+      ours.clear();
+      timed("cancel", () => { try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ } });
+      justCancelled = true;
+    }
+    let justCancelled = false;
+    function readTune() {
+      const t = G.store.get("voiceTune", null);
+      return t && typeof t === "object" ? t : {};
+    }
+    // NEVER called from create(): boot must not wait on a voice list, and on
+    // Chrome the first read is empty anyway.
+    function voicesFor(remoteOk) {
+      if (!api) return [];
+      const cached = remoteOk ? voicesAny : voices;
+      if (cached) return cached;
+      let all = [];
+      try { all = timed("getVoices", () => synth.getVoices()) || []; } catch (e) { all = []; }   // a synth mid-teardown throws
+      const lang = (typeof document !== "undefined" && document.documentElement.lang) || "en";
+      // ONE read of the platform, TWO lists: everything in this language, and
+      // the local-only subset. See REMOTE_OK above for which channel gets which
+      // — the local filter is the race radio's correctness rule and the
+      // announcer's handicap, so it is applied per channel and not here.
+      voicesAny = all.filter((v) => v && String(v.lang || "").startsWith(lang.slice(0, 2)))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      voices = voicesAny.filter((v) => v.localService);
+      return remoteOk ? voicesAny : voices;
+    }
+    // An EMPTY list is not a refusal. Safari returns nothing from getVoices()
+    // and picks a system default itself, so voice = null is the Safari path and
+    // it must still speak — prosody alone then carries the channel.
+    /* The player's pick by NAME, else the shipped spread.
+     *
+     * BY NAME AND NOT BY INDEX, because the index is not stable: the list is
+     * the machine's installed voices, so it changes with an OS update, a
+     * language pack, or simply opening the save on another computer. A stored
+     * index would silently become a different voice; a stored name that is gone
+     * falls back here to the default spread, which is the same thing a fresh
+     * save gets. A missing voice must never silence the channel. */
+    // `onCard`: a line budgeted against a radio card. REMOTE_OK's whole argument
+    // is that the announcer has NO card — but in-race commentary ("comm") does,
+    // and a network voice's round trip would be cut off by the card's deadline.
+    // So every card line takes a local voice, the announcer's included.
+    function voiceFor(speaker, onCard) {
+      const v = voicesFor(!onCard && !!REMOTE_OK[speaker]);
+      if (!v.length) return null;                       // Safari: prosody carries it alone
+      const want = tune[speaker] && tune[speaker].name;
+      if (want) {
+        const hit = v.find((x) => x && x.name === want);
+        if (hit) return hit;
+      }
+      if (speaker === "announcer" && typeof Announcer !== "undefined") {
+        const pick = Announcer.pickVoice(v, want); if (pick) return v.find(x => x.name === pick.name) || null;
+      }
+      const i = { control: 0, coach: 1, radio: 2 }[speaker] || 0;
+      return v[i % v.length];
+    }
+    function clearDeadline() { if (deadline != null) { clearTimeout(deadline); deadline = null; } }
+    function clearPending() { if (pending != null) { clearTimeout(pending); pending = null; } }
+    /** Start fetching the pack of every channel that will speak, so the first
+     *  line of each is not lost to the download. Idempotent and cheap: ensure()
+     *  is a state check once a voice is loading or ready. */
+    function ensureVoices() {
+      if (!pack) return;
+      const ann = !!(G.announcer && G.announcer.enabled && G.announcer.enabled());
+      const lap1 = [];
+      const rest = [];
+      for (const sp of Object.keys(PACK_VOICE)) {
+        const on = sp === "announcer" ? enabled && packOn || ann && announcerPackOn() : enabled && packOn;
+        if (!on) continue;
+        (sp === "radio" ? lap1 : rest).push(recordedPack(sp));
+      }
+      if (pack.ensureStaged) pack.ensureStaged([lap1, rest]);
+      else for (const id of lap1.concat(rest)) pack.ensure(id);
+    }
+    /** EVERY channel, the spotter's too: the race stopped (pause card, hidden
+     *  tab, the pit garage). stop() alone spares a spotter call mid-word.
+     *  THE PIT GARAGE IS A PAUSE WITHOUT THE CARD (game.js openPitWork), so the
+     *  #pausemenu observer below never sees it: an engineer line (the pit calls
+     *  land right there), a spotter clip and the card's hiss bed played on over
+     *  the garage, and the frozen card never ages out to stop them. It calls this. */
+    function halt() { stop(); if (pack) pack.stop(); }
+    function stop() {
+      stopVoice();
+      // The hiss bed belongs to the line, so it goes when the line does —
+      // the card-hidden and paused observers below are what stop a
+      // transmission early for a player who never turned speech on.
+      if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();
+    }
+    /** The words only: the hiss bed is the CARD's, and may already be the next one's. */
+    function stopVoice() {
+      previewGen++;
+      clearPending();
+      clearDeadline();
+      stopSquelch(true);   // a spotter cut must kill the close burst, not let it land later
+      // Before cancel(): the callback it triggers must already see itself as
+      // stale, whether the engine fires it synchronously or a turn later.
+      current = null; activeKind = "";
+      if (pack) pack.stop("radio");   // the engineer's own line only — never a spotter call mid-word
+      cancelOurs();
+      if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
+    }
+    function say(msg, life, kind, lead, preRace) {
+      const on = kind === "comm" ? !!(G.announcer && G.announcer.enabled && G.announcer.enabled()) : enabled;
+      // A spotter call on the air finishes first: the line waits it out as part
+      // of its lead, and pays for the wait out of the card's budget like the cue.
+      // remaining() is Infinity while the clip still decodes (end unknown): a
+      // bounded lead, not -Infinity of budget, or the engineer / penalty line is
+      // dropped as "too-long" with no retry.
+      const hold = pack ? pack.remaining("spotter") : 0;
+      if (hold > 0) lead = Math.max(+lead || 0, Number.isFinite(hold) ? hold + 0.08 : SPOTTER_DECODE_LEAD_S);
+      const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, preRace: !!preRace, api: true, volume, tune });
+      last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs, secs: p.secs || 0 };
+      // A card that will not be spoken still REPLACES the one on screen: its
+      // words stop with it (and its deadline, which would later cut this card's
+      // hiss bed). Not the words' sting — that is already the new card's.
+      if (!p.speak) { if (!preRace && (current || pending != null)) stopVoice(); return false; }
+      p.preRace = !!preRace;   // speakPlanned re-checks the session at speak time
+      ensureVoices();
+      stop();
+      activeKind = kind || "race";
+      if (speakPack(p)) return true;
+      // RECORDED: the card carries a line its pack cannot say (or is still
+      // fetching) — never speech synthesis in a race (PACK_VOICE above).
+      if (pack && packOn && PACK_VOICE[p.speaker]) {
+        activeKind = "";
+        last.reason = pack.ready && !pack.ready(recordedPack(p.speaker)) ? "pack-loading" : "not-recorded";
+        return false;
+      }
+      if (!api) { last.reason = "no-api"; return false; }
+      // AFTER THE CUE, NOT UNDER IT. Deferred rather than shortened: the words
+      // keep their own rate and simply start when the figure has finished.
+      // Always deferred, even with no cue: the synth is never touched in the
+      // game tick (see synthTask above). The cancel stop() scheduled runs first.
+      pending = setTimeout(() => { pending = null; speakPlanned(p); }, Math.max(0, p.leadMs));
+      return true;
+    }
+    /* THE RECORDED PATH. Same contract as speakPlanned: claims `current`,
+     * ducks the music, and the card's deadline is the hard stop. The pack
+     * schedules its own start after the courtesy figure (`leadS`), so there is
+     * no pending timer. False — the pack is off, still loading, or does not
+     * cover every word — leaves recorded-mode calls on the card. */
+    function speakPack(p, audition) {
+      const id = recordedPack(p.speaker);
+      if (!pack || (!packOn && !audition) || !id) return false;
+      pack.ensure(id);
+      const tok = { pack: true };
+      const ok = pack.speak(id, p.text, {
+        // `fx`: the channel's sound (js/audio/engine.js VOICE_CH) — the
+        // commentator is a broadcast, not a team radio.
+        leadS: p.leadMs / 1000, budgetS: p.budgetMs / 1000, channel: "radio", fx: p.speaker, volume,
+        onEnd: () => {
+          if (tok !== current) return;
+          current = null;
+          clearDeadline();
+          if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
+        },
+      });
+      if (!ok) return false;
+      current = tok;
+      if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
+      if (!audition) armSquelch(p);
+      deadline = setTimeout(stop, p.leadMs + p.budgetMs + 400);
+      return true;
+    }
+    function speakPlanned(p) {
+      // Re-checked at speak time: a line that waited out its cue across the
+      // flag must not be read over the results (and its deadline would then
+      // cancel the announcer's wrap-up). A pre-race line carries its own pass.
+      if (!p.preRace && G.state !== "race" && G.state !== "count") {
+        current = null;
+        stopSquelch(true);   // results sheet stays silent — a lead that outlived the flag
+        return false;
+      }
+      const u = new Utter(p.text);
+      u.voice = voiceFor(p.speaker, true);   // speakPlanned only ever carries a card line (say())
+      u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
+      // Only the LIVE line may release the duck and the deadline — see `current`.
+      u.onend = u.onerror = () => {
+        ours.delete(u);
+        if (u !== current) return;
+        current = null;
+        clearDeadline();
+        if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
+      };
+      // CLAIMED AND DUCKED BEFORE speak(), both for the same reason: an engine
+      // may end — or refuse — an utterance synchronously from inside speak().
+      // Claiming after it would make the line's own end run as a stranger;
+      // ducking after it would overwrite the release that end just performed and
+      // leave the music down with nothing speaking until the deadline healed it.
+      // Down-then-up is also simply the right order for the ear.
+      current = u;
+      u.onstart = () => { started++; };
+      if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
+      try {
+        asked++;
+        ours.add(u);
+        timed("speak", () => synth.speak(u));
+      } catch (e) {
+        ours.delete(u);
+        current = null;
+        if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
+        Log.info("audio", "RadioVoice speak failed");
+        return false;
+      }
+      // Bugzilla 1522074 (open, Firefox AND Chrome): a speak() directly after a
+      // cancel() is silently dropped, and resume() is the reporter's fix. We
+      // take that rather than the 500 ms delay also suggested there — 500 ms is
+      // a sixth of a three-second card, and a deferred utterance IS the
+      // "spoken after it left the screen" failure this module prevents. The
+      // preempt path is exactly a cancel-then-speak, so without this the line
+      // that goes missing is the PENALTY that interrupted, not the wear report.
+      // Only straight after a cancel — the one case it is for.
+      if (justCancelled) { justCancelled = false; timed("resume", () => { try { synth.resume(); } catch (e) { /* nothing was paused; harmless */ } }); }
+      // The hard stop, armed from the card's ACTUAL remaining life rather than a
+      // second copy of showAnnounce's expression. A duplicated constant is how
+      // "spoken after it left the screen" gets reintroduced by a later edit.
+      if (current === u) {
+        armSquelch(Object.assign({}, p, { leadMs: 0 }));   // already waited the cue
+        deadline = setTimeout(stop, p.budgetMs);
+      }
+      return true;
+    }
+    /* THE ONE GESTURE iOS GIVES US — DO NOT THROW IT AWAY.
+     *
+     * Chrome (M71+) needs sticky activation, which the game's own first-gesture
+     * listener already provides. iOS is stricter: WebKit refuses speak() from
+     * anywhere but a user gesture until the engine has been primed by a speak()
+     * inside one, and this function is the only place that ever happens.
+     *
+     * `u.volume = 0; synth.speak(u); synth.cancel();` primes nothing on
+     * iPhone or iPad. CANCELLING IN THE SAME TURN DISCARDS THE
+     * UTTERANCE BEFORE IT IS PROCESSED — the gesture is spent and the engine is
+     * no more unlocked than before — and a MUTED utterance is not reliably
+     * counted as the audible speak WebKit is looking for. Every later say()
+     * happens in the race loop, outside any gesture, so every one would be
+     * refused: on the platform that needs this most, nothing is EVER spoken.
+     *
+     * A single space carries no phonemes, so it is inaudible whatever its
+     * volume; the volume only has to be non-zero to count. Nothing is cancelled
+     * — the utterance ends in milliseconds by itself, and say() clears the queue
+     * with its own cancel() before it speaks anyway. */
+    function unlock() {
+      if (!api) return;
+      try { const u = new Utter(" "); u.volume = 0.01; synth.speak(u); primed = true; }
+      catch (e) { /* a browser that refuses the priming utterance simply does not get primed */ }
+      const ctx = audioCtx();
+      if (ctx && ctx.state === "suspended" && ctx.resume) {
+        try { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* gesture spent */ }
+      }
+    }
+    if (api && !primed && typeof document !== "undefined" && document.addEventListener) {
+      const EVTS = ["pointerdown", "pointerup", "touchend", "keydown", "click"];
+      const prime = (e) => {
+        if (e && (e.type === "keydown" ? e.key === "Escape" : e.type === "pointerdown" ? e.pointerType !== "mouse"
+          : e.type === "pointerup" ? e.pointerType === "mouse" : false)) return;
+        for (const t of EVTS) document.removeEventListener(t, prime, true);
+        if (!primed) unlock();
+      };
+      for (const t of EVTS) document.addEventListener(t, prime, true);
+    }
+    if (typeof document !== "undefined") {
+      // The card leaving the screen is the invariant, so observing it beats
+      // adding a call site to every place that can hide it — the frame loop's
+      // expiry AND quitToMenu's direct reset are both covered, with no further
+      // js/game.js edits.
+      // LITERAL ids, not a `watch(id)` helper: a dynamic getElementById is a
+      // lookup no static check can verify, and tests/unit/shell-ids.test.mjs
+      // ratchets how many of those the tree carries.
+      const card = document.getElementById("announce");
+      const pause = document.getElementById("pausemenu");
+      const observe = (el, on) => {
+        if (el && typeof MutationObserver === "function") new MutationObserver(on).observe(el, { attributes: true, attributeFilter: ["hidden"] });
+      };
+      // Only if THIS channel is speaking: synth.cancel() is global, and the card
+      // expiring a few seconds into the results screen would otherwise cut the
+      // announcer's wrap-up (js/audio/announcer.js wrapUp) mid-sentence.
+      observe(card, () => {
+        if (!card.hidden) return;
+        if (current || pending != null) stop();
+        else if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();   // the hiss bed still goes with the card
+      });
+      // The paused gate in tickBody returns BEFORE announceT is decremented, so
+      // a card frozen by a pause never ages out. Without this, Escape mid-line
+      // leaves the voice talking over a stopped game.
+      // EVERY channel here: stop() spares a spotter call mid-word on purpose (the
+      // next engineer line waits it out), but a spotter clip over a pause card or
+      // into a hidden tab talks over a stopped game.
+      const haltAll = () => halt();
+      observe(pause, () => { if (!pause.hidden) haltAll(); });
+      // iOS bricks the synthesiser until reload if it is backgrounded mid-line.
+      document.addEventListener("visibilitychange", () => { if (document.hidden) haltAll(); });
+      try { synth.onvoiceschanged = () => { voices = voicesAny = null; }; } catch (e) { /* not every engine exposes it */ }
+    }
+    Log.info("audio", "RadioVoice.create enabled=" + enabled);
+    /* SPEAK A SAMPLE, from the settings panel, where no race is running.
+     *
+     * It cannot go through say(): plan() refuses anything outside "race"/"count"
+     * on purpose — the title screen's save-conflict card must not be read at
+     * somebody browsing menus — and a preview is exactly that refused case. So
+     * this borrows the prosody and the voice and speaks directly, which is also
+     * what makes it honest: you hear the channel you are tuning, at the pitch
+     * and rate you just set, not an approximation of it.
+     *
+     * The RATE you hear is the one you chose. In a race a long line is sped up
+     * to RATE_MAX to fit its card and dropped if it still will not fit, so the
+     * preview is the floor of what you get, never the ceiling.
+     *
+     * THE TEAM RADIO SWITCH DOES NOT GATE THIS, and it used to. That switch
+     * ships OFF — it decides whether the radio talks over a RACE — so three of
+     * the four TEST buttons on the settings sheet did nothing at all in the
+     * shipped state, while the copy beside them promises "TEST to hear it
+     * without starting a race". Nothing told the player why; the button simply
+     * had no effect, which reads as broken because it is. The announcer's own
+     * TEST has always worked this way, and its comment is the argument:
+     * pressing play in a settings panel IS the consent. `enabled` keeps the one
+     * meaning that matters — say() refuses on it, so a radio turned off stays
+     * silent for the whole race, which is what a player turning it off asked
+     * for. MASTER SOUND still gates this, because that switch means silence. */
+    function preview(speaker, text) {
+      if (!G.soundOn) return false;
+      const sp = TONE[speaker] ? speaker : "radio";
+      const t = toneFor(sp, tune);
+      const words = speakable(text || SAMPLE[sp] || SAMPLE.radio);
+      if (!words) return false;
+      if (G.announcer && G.announcer.stop) G.announcer.stop();
+      stop();
+      // Preview the actual engineer source. Its tuning rows select SYSTEM;
+      // with RECORDED selected, TEST must not promise a different voice.
+      activeKind = sp === "coach" ? "coach" : sp === "control" ? "warning" : "info";
+      if (pack && (sp === "announcer" ? announcerPackOn() : packOn)) {
+        const id = recordedPack(sp), gen = previewGen;
+        const play = () => gen === previewGen && G.soundOn && speakPack({ speaker: sp, text: words, leadMs: 0, budgetMs: 15000 }, true);
+        if (pack.load && !pack.ready(id)) { pack.load(id).then((ready) => { if (ready) play(); }); return true; }
+        return !!play();
+      }
+      if (!api) return false;
+      // A TEST press is the player asking for THIS sample now, from a settings
+      // click, not a frame: whatever is speaking — an earlier sample, the
+      // announcer's own TEST — gives way, synchronously, before the speak.
+      try { synth.cancel(); } catch (e) { /* nothing queued */ }
+      const u = new Utter(words);
+      u.voice = voiceFor(sp);
+      u.rate = t.rate; u.pitch = t.pitch; u.volume = volume;
+      u.onstart = () => { started++; };
+      current = u;
+      u.onend = u.onerror = () => { ours.delete(u); if (current === u) current = null; };
+      try { asked++; ours.add(u); synth.speak(u); synth.resume(); }
+      catch (e) { ours.delete(u); if (current === u) current = null; return false; }
+      return true;
+    }
+
+    return {
+      say, stop, halt, unlock, preview,
+      /** THE PRE-RACE RADIO CHECK: one engineer line over the loading flyby's
+       *  grid-mine shot. The same plan() as every race line — TEAM RADIO off,
+       *  master sound off, or a line that will not fit its budget all refuse it
+       *  — with only the session gate lifted. No card: the loading screen owns
+       *  the screen, so `life` is the time left in the shot. Returns the line's
+       *  length in seconds, cue included (false if refused): the hiss bed is
+       *  held for the words, not for whatever is left of the flyby. */
+      sayPreRace: (msg, life, lead) => (say(msg, life, "race", lead, true) ? last.leadMs / 1000 + last.secs : false),
+      /** The installed voices a channel may be given, as plain rows for a <select>. */
+      voiceList: (speaker) => voicesFor(!!REMOTE_OK[speaker]).map((v) => ({ name: v.name, lang: v.lang })),
+      recordedVoice, recordedPack, recordedVoices, announcerPackOn,
+      setRecordedVoice(speaker, id) {
+        if (!recordedVoices(speaker).some((v) => v.id === id)) return false;
+        if (G.announcer && G.announcer.stop) G.announcer.stop();
+        stop();
+        if (pack) pack.stop("spotter");
+        tune[speaker] = Object.assign({}, tune[speaker], { pack: id });
+        if (speaker === "announcer") tune[speaker].source = "recorded";
+        G.store.set("voiceTune", tune);
+        if (speaker !== "announcer") { packOn = true; G.store.set("radioPack", true); }
+        if (pack) pack.ensure(id);
+        return true;
+      },
+      /** The stored tune, or the shipped default for a channel with none. */
+      tuneFor: (speaker) => Object.assign(toneFor(speaker, tune), { name: (tune[speaker] && tune[speaker].name) || "" }),
+      /** Patch one channel. A null patch RESETS it — see the readTune note. */
+      setTune(speaker, patch) {
+        if (!TONE[speaker]) return false;
+        if (patch == null) delete tune[speaker];
+        else tune[speaker] = Object.assign({}, tune[speaker], patch, speaker === "announcer" ? { source: "system" } : {});
+        G.store.set("voiceTune", tune);
+        return true;
+      },
+      setEnabled(b) { enabled = !!b; if (!enabled) stop(); else ensureVoices(); },
+      pack,
+      volume: () => volume,
+      setPackOn(b) {
+        if (packOn !== !!b) {
+          if (G.announcer && G.announcer.stop) G.announcer.stop();
+          stop();
+        }
+        packOn = !!b; G.store.set("radioPack", packOn); ensureVoices();
+      },
+      /** Fetch the recorded voices now (a race is about to start). */
+      prepare: ensureVoices,
+      packOn: () => !!(pack && packOn),
+      /** Is the radio talking, or about to (a line waiting out its cue)? The spotter asks before it keys up. */
+      busy: () => !!(current || pending != null),
+      // Close-range safety can cut routine chatter, never a flag, penalty or
+      // pit instruction. Cancel both live speech and a line waiting for its cue.
+      yieldToSpotter() {
+        if (!(current || pending != null)) return true;
+        if (!["info", "coach", "comm"].includes(activeKind)) return false;
+        stop(); return true;
+      },
+      setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
+      available: () => true,
+      debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started,
+        pack: pack ? Object.assign({ on: packOn }, pack.debug()) : null,
+        synth: { calls: synthStat.calls, maxMs: +synthStat.maxMs.toFixed(1), slow: synthStat.slow },
+        squelch: lastSquelch && { play: lastSquelch.play, reason: lastSquelch.reason, openMs: lastSquelch.openMs,
+          closeMs: lastSquelch.closeMs, atOpen: lastSquelch.atOpen, atClose: lastSquelch.atClose,
+          band: lastSquelch.band, seed: lastSquelch.seed, lite: lastSquelch.lite,
+          events: lastSquelch.events, fired: lastSquelch.fired, cut: lastSquelch.cut,
+          pool: squelchPool.length } }),
+    };
+  }
+
+  return { create, inert, plan, speakable, cardDurS, cardLifeS, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
+           PITCH_MIN, PITCH_MAX, RATE_MIN, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S,
+           ANN_CARD_PAD_S, ANN_CARD_MIN_S, RADIO_LEAD_S, CONTROL_LEAD_S, PACK_STOP_TAIL_S,
+           radioBand, squelchPlan, hashSeed, RADIO_LO, RADIO_HI, SQUELCH_MS_MIN, SQUELCH_MS_MAX };
+})();
+Object.freeze(RadioVoice);

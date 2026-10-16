@@ -1,0 +1,361 @@
+# Apex 26 — multiplayer (`js/net/`)
+
+Two to four players over WebRTC, with **no backend**. This was 227 lines inside
+`CLAUDE.md` — 18% of the file every agent has to read — and almost none of it is
+a convention an agent needs before editing something else. It is the reasoning
+behind a set of unobvious choices, which is what a reference doc is for.
+
+`AGENTS.md` keeps the one-paragraph summary and the rules that bind other code;
+everything below is the why.
+
+**What a player sees (RACE A FRIEND, `#vsfriend`).** HOST A RACE (`#vs-host`)
+makes an invite: a QR code, SHARE LINK and COPY CODE. JOIN A FRIEND (`#vs-join`)
+takes that invite. As a backup, room codes skip the paste: NEW CODE
+(`#vs-code-host`) shows a short code with SHARE and COPY, and a friend types it
+under ENTER CODE (`#vs-code-join` → `#vs-code-in`, JOIN). A room holds the host
+plus up to three guests (`MAX_GUESTS = 3` in `js/net/lobby.js`), so 2–4
+players. The host invites guests one at a time with INVITE ANOTHER, and the
+button reads ROOM FULL (4 PLAYERS) at the cap. How each piece works is below:
+room codes under `rendezvous.js`, the star topology under `netplay.js`, and
+the one-at-a-time invites under `lobby.js`.
+
+---
+
+### `js/net/transport.js` — `NetTransport`
+
+two channels — "state" (unreliable/unordered: snapshots + inputs; a late
+packet is worthless) and "event" (reliable/ordered: lobby, start tick, lap
+times, results). loopback() wires two endpoints IN ONE PAGE with injectable
+latency/jitter/loss so the netcode is testable with no network at all; rtc()
+is the real RTCPeerConnection. Both deliver only on pump(), so latency and
+loss are reproducible rather than wall-clock. No TURN credential ships in the
+client: browser-visible provider keys are reusable by anyone who downloads the
+game. Configure a player-owned, short-lived credentials endpoint through
+`apex26.turnApi` when relay service is needed; the default is honest STUN-only
+operation. `prefetchIce()` must be AWAITED BEFORE a connection is built
+(lobby's `readyIce()`): `iceServers` are fixed at construction, so a fetch that
+lands 200 ms later gathers STUN-only.
+
+### `js/net/sdp.js` — `NetSdp`
+
+the invite code's payload as BYTES. A gathered data-channel SDP is ~700 B of
+text and almost none of it is information — we only ever negotiate one m-line,
+so every line is either a template constant or one of five facts (fingerprint,
+ufrag, pwd, setup role, candidates). Packing those is ~90 B, which takes the
+code from ~670 chars to ~240 and is what makes it SCANNABLE rather than merely
+pasteable. It never EDITS an SDP — it extracts and rebuilds — and
+packChecked() hands the rebuild to a throwaway RTCPeerConnection BEFORE a
+human sees it, falling back to the deflated full text if this browser refuses
+our own reconstruction. TCP candidates are dropped on purpose. Candidates are
+capped at MAX_CANDS and selected ROUND-ROBIN BY KIND (RETAIN, relay first) —
+never the first N, because SDP lists them in GATHERING order and relay is
+always last, so a plain truncation drops the relay on exactly the machines
+with enough interfaces to need one
+
+### `js/net/nostr.js` — `NetNostr`
+
+the room-code rendezvous, over PUBLIC NOSTR RELAYS via a vendored Trystero
+(vendor/trystero-0.25.4, MIT, dynamic import()). Nostr and not a public MQTT
+broker because accepting arbitrary events from anonymous clients is what a
+relay is FOR — HiveMQ's and EMQX's free brokers say outright they must NOT be
+used by real applications, and an earlier build did exactly that. SIGNALLING
+ONLY: it carries the two invite/answer STRINGS and the race then runs over our
+own PC. The ONLY path is `directExchange()` (`exchange()` is an alias): our
+own WebSockets straight to the relays, reusing exactly two of Trystero's
+framing helpers (createEvent/subscribe) so the events are well-formed Nostr —
+the payload sealed with AES-GCM under a key derived from the room code
+(`NetRendezvous.seal`/`open`, v2 envelope, the slot name as AAD, called on
+every exchange), offers and answers on SEPARATE topics so neither side
+reads its own message back. The topic (the plaintext NIP-01 `x` tag) is
+`NetRendezvous.topic()` — HKDF over the PBKDF2-stretched room key, info
+`apex26-rendezvous-v<PROTOCOL>/topic|<slot>` — never a bare hash of the code:
+SHA-256 of a ~30-bit code let anyone reading public relay traffic brute-force
+live codes in minutes. The 120 000-round PBKDF2 slows that, but its salt is a
+constant, so the cost is paid ONCE for the whole 31^6 code space (~1e14
+iterations — a GPU-day), not once per room: whoever builds that table can map
+any live topic to its code, open the offer and post an answer. The room code
+is therefore a rendezvous, not an authentication; the VERIFICATION CODE under
+`rendezvous.js` below is what tells two players they are talking to each other. The full Trystero room join (its own
+RTCPeerConnection carrying the answer, which died exactly when ours started;
+its only failure signal a console.warn we had to intercept) was an opt-in
+legacy branch behind apex26.nostrTrystero and was deleted 2026-09-10 — the
+vendored tree is still the whole core graph because nostr/index.js imports the
+core barrel, but only createEvent/subscribe are called
+(tests/unit/net-trystero-api.test.mjs pins that). The host posts and waits;
+the guest passes a `reply` because it cannot answer until it has seen the
+invite. ROOM CODES ARE BEST-EFFORT AND THE INVITE LINK IS NOT: public relays
+increasingly refuse anonymous ephemeral events with a NIP-01 OK=false, and a
+refusing relay's WebSocket is still OPEN. Because we own the sockets we read
+the `["OK", id, false, why]` and `["CLOSED", subId, why]` frames first-hand
+and report `all_rejected` (advisory — the room keeps running) once every live
+relay has refused. Measured on hardware: all six shipped relays healthy,
+wellorder answering "blocked: spam not permitted", both players on spinners.
+Pick relays with tools/net/nostr-probe.mjs — which tests the only criterion
+that decides this, whether a relay accepts an ephemeral event from an UNKNOWN
+pubkey — never by reputation or uptime
+
+### `js/net/rendezvous.js` — `NetRendezvous`
+
+room codes — the BACKUP way in, and the only part of the game leaning on
+someone else's server. NOTHING TO DEPLOY: a public Nostr relay network is the
+default meeting place (js/net/nostr.js), and worker/rendezvous.js (one
+Cloudflare Durable Object per opaque room id) is an optional upgrade when its URL is
+set. On the DEFAULT public path the payload is sealed with AES-GCM under a key
+derived from the room code (`seal()`/`open()`, called by
+`NetNostr.directExchange` on every exchange). Its public routing topic derives
+from the stretched key; recovering a six-character code requires offline
+guessing through PBKDF2. The short code is still the only secret, so this public
+mode does not have the private token's entropy guarantee. ENVELOPE v2 (2026-09-10): PBKDF2 runs once per code into a memoised
+HKDF base, every envelope derives its own AES key from a random 16-byte salt
+(`[salt 16][iv 12][ct+tag]`), and the slot name ("offer"/"answer") is the
+AES-GCM additional data — so a sealed offer replayed into the answer slot fails
+the tag instead of being accepted, and two rooms under one code never share a
+key. v1 (constant salt, no AAD) is not accepted: both peers run the same build.
+Codes are minted by rejection sampling, not `byte % 31` (256 is not a multiple
+of 31, so the modulo made the first eight letters 9/8 as likely).
+
+VERIFICATION CODE (2026-10-04). Once a connection is up, both screens show a
+4-letter code on that player's row in the room (`NetRendezvous.verifyFor`):
+SHA-256 over the two DTLS fingerprints, sorted, drawn from the room-code
+alphabet. DTLS authenticates exactly those certificates, so someone who opened
+the sealed offer (see the precomputed-table note under `nostr.js`) and sat in
+the middle holds a different certificate on each leg, and the two screens
+show different codes. The host reads the code aloud and REMOVEs a guest whose
+screen disagrees. What it protects: the pairing — that the person in your room
+is the one you invited, on the room-code and the invite-link path alike. What
+it does not: the code has 31^4 ≈ 9.2e5 values, so a middleman who can grind
+that many certificates inside the connect window could collide it; and it
+keeps nobody from READING an offer (host IPs, the HELLO profile) — the room
+code's secrecy is all that does.
+
+The optional private Worker path uses a **32-character private room token**,
+randomly drawn with WebCrypto rejection sampling (>158 bits of entropy). The
+host shares it through COPY/SHARE; both players configure the same Worker URL.
+The public Nostr path still uses six-character spoken codes. The private path
+never accepts those shorter secrets and never falls back to `Math.random`.
+
+The token stays in the peers. HKDF derives a separate 256-bit routing id with
+`apex26-rendezvous-private-v3/room` as its info string. HTTP uses only
+`/v3/r/<64-lowercase-hex-id>/<offer|answer>`, not the token. Encryption keeps the
+existing salted `v2.<base64url>` AES-GCM envelope and its distinct HKDF info and
+slot AAD. The routing id therefore cannot serve as the encryption key material.
+This fixes the old `/r/<six-character-code>` route, which disclosed that material
+to the operator. Merely hashing a short code would still permit offline guessing.
+
+The Worker can observe timing, drop traffic, or replay an existing same-slot
+ciphertext; it cannot decrypt SDP or forge new authenticated contents without the
+shared token. Slot AAD rejects offer-as-answer substitution. A separate random
+owner capability permits host retries despite fresh ciphertext on every write.
+The token is disposable and the Worker expires records after two minutes.
+
+Private protocol 3 must be deployed on the Worker and used by both browsers.
+The Worker refuses legacy `/r/` requests with 426 before allocating a room. New
+clients require `X-Apex-Rendezvous: 3` (CORS-exposed) and report an actionable
+upgrade error for old Workers, rather than retrying a secret-bearing legacy path.
+Deploy the updated Worker, reload both players, and create a new token. Existing
+private room codes are intentionally incompatible; manual invite links/QR remain
+available during rollout. Phone-controller QR links carry the Worker URL beside
+the token in the fragment, which is not sent to the static host. CONNECT applies
+the relay for that document only using `setSessionUrl`, without changing saved
+preferences. That setter accepts HTTPS (or loopback HTTP for development),
+rejects credentials/query/fragment in relay URLs, and can explicitly select the
+public backend with `null`; `undefined` restores the saved preference. Every
+network call resolves to a typed error, never throws. See [the Worker deployment guide](../worker/README.md).
+
+Cryptographic API references: [WebCrypto random values](https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues)
+and [HKDF key derivation](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/deriveKey).
+
+Shown even when unconfigured: a feature that hides itself on an unset URL
+guarantees nobody discovers it
+
+### `js/net/qr.js` — `NetQr`
+
+byte-mode, level-L QR ENCODER (versions 1-20, standard mask selection). The
+invite QR holds the invite LINK, so the guest scans it with their ORDINARY
+CAMERA APP and lands in the lobby with the code already filled in; the answer
+leg, which has no link to open, is read in-page by NetScan below. Encoder
+only here; decoding is an order more code for a job the OS already does.
+Verified by jsQR (a devDependency) in
+tests/unit/net-qr.test.mjs — self-consistency proves nothing here, since a wrong mask or a
+transposed format field produces a picture that looks exactly right and cannot
+be read
+
+### `js/net/scan.js` — `NetScan`
+
+reading a QR with the device CAMERA, so the answer stops being a copy/paste.
+Two transfers are unavoidable — each side must learn the other's DTLS
+fingerprint, and generateCertificate() takes no seed — so the second one is
+scanned instead of typed. The platform's `BarcodeDetector` is used first
+wherever `getSupportedFormats()` includes `qr_code` (Android Chrome, macOS
+Safari 16+: hardware-assisted, no script inject); everywhere else a VENDORED
+jsQR (Apache-2.0, vendor/jsqr-1.4.0, injected ON DEMAND and never in the boot
+path) decodes, because BarcodeDetector exists on neither iOS Safari nor
+desktop Linux Chrome (measured), which is exactly the iOS-to-desktop pairing
+this is for. stop() kills every track
+and is wired to decode, cancel, lobby close and page-hide: a camera outliving
+its screen is a privacy bug nothing on screen would reveal
+
+### `js/net/handshake.js` — `NetHandshake`
+
+signalling with no server: vanilla ICE (gather fully, so one static string
+suffices) → slimmed SDP → deflate → base64url invite code, pasted between
+players. Embeds THIS SHELL's build — `<meta name="apex-build">`, the
+generation of the scripts actually running, with a version.json fetch only as
+the fallback for an unstamped shell (a tab left open across a deploy used to
+fetch the NEW number while running the OLD code) — and REFUSES a mismatched
+peer: different builds mean different splines, barriers and constants. Scenery
+is deliberately not checked (props never affect physics). AN ANSWER NAMES ITS
+OFFER (`o`, `offerId()`: a 32-bit hash of the offer's ICE ufrag + DTLS
+fingerprint, in the code's JSON tail so an answer without it still decodes):
+an SDP answer carries only the answerer's own credentials, so an answer to an
+older invite was accepted onto a newer pending one and ICE then spun for 60 s.
+`acceptAnswer` now refuses it as `wrong_offer` ("That answer is for an older
+invite"), and the room-code host keeps such a repost seen and silent
+
+### `js/net/snapshot.js` — `NetSnapshot`
+
+the wire format (13 B/car: s/x/head/speed/gear/ lap, quantised to 1 cm and 1
+cm/s) + the interpolation buffer. Remote cars draw ~100 ms in the past between
+two packets; a late packet EXTRAPOLATES ALONG s, which follows the road by
+construction and so cannot dead-reckon a rival into a barrier. s and head both
+wrap the short way — getting that wrong sends a car backwards down the lap
+once per lap. predict() leads sample(): contact must not be resolved against
+the delayed DRAWN pose. A second packet type, AGED (type 2, 15 B/car: the
+13 plus a u16 age in ms behind the header tick), carries cars posed at
+different moments — the host's relay — so each keeps its own stamp. Lag and
+jitter are measured from the transport's ARRIVAL stamp, not the frame that
+drained the inbox; own-car snapshots go out at a fixed 20 Hz whatever the
+frame rate (the period is advanced, not reset to `now`)
+
+### `js/net/session.js` — `NetSession`
+
+clock sync (NTP-style; keeps the LOWEST-RTT sample, since a slow reply is a
+queued reply and queuing is pure error), packet routing, typed JSON events,
+and a heartbeat, so an abandoned car can be handed back to the AI instead of
+standing still on track. A PONG is a clock sample only if it echoes an
+outstanding ping's id AND that ping's own t0 (the last eight sent are kept,
+each answered once) — the echoed t0 is what every peer timestamp is converted
+through, and it used to be taken on trust. A gap between pumps longer than
+`stallForgiveMs` is forgiven as OUR stall — except while `document.hidden`,
+where the page pumps slowly on purpose and the transport still stamps every
+arrival, so a quit peer is timed out while the tab is in the background.
+The silence that ends a session is 6 s in the lobby; NetPlay raises it to 25 s
+for a race (`setTimeoutMs`), and a rival quiet for more than 2 s is driven by
+the LOCAL AI meanwhile — never parked on the line — until its packets return
+
+### `js/net/netplay.js` — `NetPlay`
+
+the game side (NetPlay.create(G)). AUTHORITY: each peer fully owns its own
+car; the host additionally owns the AI and race control — and, since
+2026-10-04, the AI POSES: guests draw the host's AI rather than simulating
+their own (design, wire budget and the silence grace:
+[notes/MULTIPLAYER-AI-REPLICATION.md](notes/MULTIPLAYER-AI-REPLICATION.md)). So your own car is
+NEVER corrected — no rollback, no reconciliation, no host advantage — at the
+cost of the two screens disagreeing by ~1 m under heavy contact. A rival is
+POSED from replicated state, so updateCar() early-outs on netPlay.owns(c),
+exactly as it already does for an incident-sim takeover. The posed sample and
+the predicted one (`predict()`, which the contact solver reads) go through ONE
+clamp, `NetPlay.clampWire` — s to the lap, x/speed to ±200, head wrapped, lap
+to target+1. The QUALI/QLIVE receivers and senders are NetPlay's too
+(`bindQuali` / `qualiReporters`): the lobby registers the same handlers during
+qualifying, so a peer's `t` is coerced and bounded (20 s .. 1 h) at ONE site in
+both phases and stored as a number. tick() also runs
+through the paused gate: one player opening a menu cannot stop a shared world.
+AI retirements use the existing reliable LAP event, bound to the receiving
+race's epoch. The host repeats terminal AI state with its one-second strategy
+sync so a guest binding late still removes retired cars from the active field.
+RESULT carries optional `lap` and `classified` fields; guests adopt the host's
+distance and NC verdict after validating the whole classification.
+
+UP TO FOUR PLAYERS, in a STAR: the host holds one session per guest and each
+guest holds one, to the host. Rivals are a Map keyed by G.wireId(c) =
+teamIndex*2 + seat — a byte both peers compute identically, which is what lets
+a snapshot say WHICH car it describes. cars[] index cannot: makeCars() drops
+the custom team unless the local player picked it, so the grids differ in
+length and order. The host RELAYS — guests have no connection to each other,
+so it forwards every rival in ONE aged snapshot per guest (one datagram, not
+one per car — 9 sends a tick became 6 in a four-player room), unaltered and
+under each guest's own id. Authority does not move; it is a courier. A packet with
+an unknown id is DROPPED, never guessed at — which is also how a guest ignores
+its own car coming back round the relay
+
+### `js/net/lobby.js` — `NetLobby`
+
+the VS FRIEND screen. INVITES ARE SEQUENTIAL — one negotiation in flight,
+INVITE ANOTHER once a guest lands. Not a limit of the wire (createInvite and
+rtc() are per-transport) but of people: with several offers outstanding a
+pasted answer must be matched to the offer that produced it, and that is the
+one thing the person pasting cannot tell you. A guest's profile is filed under
+the CONNECTION it arrived on, never a `from` in the payload — a peer that can
+name itself can name somebody else. The exception is a guest receiving a
+RELAYED roster: there a `from` means the host is speaking for another guest,
+and trusting the host is not new trust. Without that relay a guest never
+learns the other guests exist, has no slot for them, and drops their packets.
+The two code pastes ARE the signalling server — the one thing WebRTC cannot
+start without, and the one thing two people already have between them. Opens
+the session ITSELF (the guest learns which race to load from the host, so the
+session must exist before a track does) and hands it to NetPlay once the race
+is up. The profile it sends is part IDS, never resolved multipliers — a peer
+declaring {cornering: 9} would simply be faster — and a declared setup over
+`Parts.BUDGET` resolves as the team's factory setup, because every top-tier id
+at once is a legal set of ids no garage would let a player afford. HELLO and
+READY are rate-limited per connection (five a second each; the rest are
+dropped). Its transport factory is
+injectable: an RTCPeerConnection whose ICE never completes spins forever, so a
+test that builds one HANGS rather than fails (__apex.lobbyFake)
+
+## Phone as controller (`js/input/phone-pad.js`, `controller.html`)
+
+The same wire, one seat, no race state: Settings › CONTROLS › STEER THIS
+GAME WITH A PHONE (`#pm-phonepad`, the feature called PHONE AS CONTROLLER in
+the code) mints a room code, paints a QR for `controller.html#pad=CODE`, and
+hosts the room exactly as VS FRIEND does (`NetTransport.rtc` → `NetHandshake.createInvite`
+→ `NetRendezvous.hostRoom`). The phone page joins with `swap` + `acceptInvite`
+(2.5 s gather, like the lobby's room-code guest). The phone reaches that page
+by QR, by typing the URL, or by its own door: on a coarse pointer the title
+screen shows USE AS CONTROLLER and CONTROLS shows USE THIS PHONE TO STEER
+ANOTHER SCREEN (`#mb-phonepad`, `#pm-phonepad-go`; renamed 2026-09-29 from USE
+THIS PHONE AS THE CONTROLLER, which read as a duplicate of the host button), a plain navigation to
+`controller.html` where the code is typed — `syncPointerKind()` in js/game.js
+flips both live with `body.desktop`, so a mouse never sees them. The wheel is
+LANDSCAPE ONLY (portrait shows a TURN THE PHONE card; Android locks the
+orientation behind fullscreen on the CONNECT tap, iOS has no lock) and refuses
+double-tap and pinch zoom the way index.html does (`touch-action: none` on
+every wheel element, a touchend/dblclick/GestureEvent canceller). Once the
+DataChannels open (out of a race, or paused, the dash's `state`/`paused` swap the
+wheel for a MENU PAD screen — `body.menu` shows `#menupad`: a D-pad under the
+left thumb, BACK and SELECT under the right, the title and PAUSE/RESUME between
+— whose events land on the gamepad's menu seam in js/input/input.js,
+`padNavKey` / `padActivate` / `padEscape`, so the phone walks every menu the pad
+can):
+
+| Channel | Direction | Payload |
+|---|---|---|
+| `state` (unreliable) | phone → desktop | `[1, seq, rollDeg\|null, thr, brk, heldBits]` on every `deviceorientation` (≤ ~66 Hz) and a 100 ms heartbeat; the desktop drops any `seq` older than the last applied |
+| `event` (reliable) | phone → desktop | `{t:"ev", k}` — `shiftUp shiftDown overtake boost aero camera recover radio calib pause`, and the MENU PAD's `navUp navDown navLeft navRight navSelect navBack` (a held direction repeats at 380 ms then 110 ms) |
+| `state` (unreliable) | desktop → phone | the DASH, `["H", gear, kmh, rpmFrac, lap, laps, pos, cars, ers, flagBits, caution, lastLapMs, state, teamHex]` at ~15 Hz (`HUD_MS`), sampled by `phonePadDash()` in js/game.js from the fields js/ui/hud.js reads; `PhonePad.paintHud()` draws it on the wheel's LCD (gear, speed, 15 rev LEDs, lap, position, ERS bar, OT/aero state, flag); its flag bits also carry the CONTROL MODES (`gearsAuto`, `throttleAuto`, `aeroAuto`, `aeroNone`), which the wheel turns into layout — no paddles on AUTO gears, an inert GAS plate on AUTO throttle, AERO greyed on AUTO or a circuit without zones (`controller.html?demo=auto`) |
+| `event` (reliable) | desktop → phone | `{t:"hap", ms}` — every `Input.vibrate()` while the phone is the live source |
+
+`PhonePad.link()` hands each sample to `Input.remoteSample()`, which writes the
+same `tiltRaw`/`tiltSmoothed` the local sensor does, so the One-Euro filter,
+dead zone, `MAX_TILT` and slew — every TILT slider — and RECALIBRATE act on the
+phone. The source is freshness-gated (`REMOTE_STALE_MS` 700): it sits between
+the gamepad and the on-screen modes in `Input.steer()` and simply falls out
+when the phone stops sending; a phone whose samples carry no roll (no motion
+sensor, permission refused) keeps its pedals and buttons but never takes the
+wheel (`Input.remoteSteers()`), so the local arrows or a drag still steer. Roll on both ends is `TiltRoll.rollDeg()`
+(`js/input/tilt-roll.js`). Bluetooth is not an option for a web page: no
+browser lets a phone advertise as a peripheral or an HID gamepad.
+
+The phone page is drawn as an F1 wheel laid out like the game's own tilt docks
+(`layoutDocks` in js/game.js): the LEFT grip is the gears, UP over DN (with
+gears on AUTO, OT and BOOST instead), the RIGHT grip the pedals, BRAKE over GAS
+(travel along the zone); the rim (an inline SVG) rotates with the phone's roll
+and the face buttons are the pad's remaining in-race controls,
+and `controller.html?demo` animates a sample dash with no link.
+
+Deploy notes: `controller.html` is a ROOT page (`pages.yml` stages it by name;
+`ci-coverage.test.mjs` pins that) whose tags are hashed by `bump-cache.mjs`
+like the shell's; its script list is `CONTROLLER` in `tools/manifest.cjs`,
+written by `gen-shell.mjs`. The phone runs no service worker and no store.
+Tests: `tests/unit/phone-pad.test.mjs` (both halves over the loopback transport).

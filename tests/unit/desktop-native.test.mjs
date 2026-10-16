@@ -1,0 +1,289 @@
+/* desktop-native.test.mjs — native-detect flag gates SW registration and Spotify.
+ *
+ * Run: node --test tests/unit/desktop-native.test.mjs
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import vm from "node:vm";
+import { seedStore } from "../helpers/seed-store.mjs";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const require = createRequire(import.meta.url);
+const HTML = readFileSync(join(ROOT, "index.html"), "utf8");
+const SPOTIFY = readFileSync(join(ROOT, "js/audio/spotify.js"), "utf8");
+const PRELOAD = readFileSync(join(ROOT, "desktop/preload.js"), "utf8");
+const MAIN = readFileSync(join(ROOT, "desktop/main.js"), "utf8");
+
+test("index.html skips service-worker registration when __APEX_NATIVE__.desktop", () => {
+  assert.match(HTML, /__APEX_NATIVE__/);
+  assert.match(HTML, /nativeDesktop/);
+  assert.match(HTML, /nativeCap/);
+  assert.match(HTML, /serviceWorker" in navigator && !nativeDesktop && !nativeCap/);
+  // Playwright serviceWorkers:"block" resolves register() with undefined.
+  assert.match(HTML, /if \(!r\) \{ swl\("warn", "register returned no registration"\); return; \}/);
+});
+
+test("menu-baseline waits for the controlling worker, never blocks registration", () => {
+  // ready ≠ claimed (CI 37466745467). Blocking register() overlays r.scope
+  // (CI 37463034163). Pin both so a settle rewrite cannot drop either.
+  const spec = readFileSync(join(ROOT, "tests/specs/menu-baseline.spec.js"), "utf8");
+  const code = spec.replace(/\/\/[^\n]*/g, "");
+  assert.doesNotMatch(code, /serviceWorkers:\s*["']block["']/);
+  assert.match(code, /navigator\.serviceWorker\.controller/);
+  assert.match(code, /polling:\s*100/);
+  assert.match(code, /getElementById\("mb-garage"\)/);
+});
+
+test("desktop preload exposes a frozen __APEX_NATIVE__ with desktop:true", () => {
+  assert.match(PRELOAD, /contextBridge\.exposeInMainWorld\("__APEX_NATIVE__"/);
+  assert.match(PRELOAD, /desktop:\s*true/);
+});
+
+test("desktop main uses privileged app:// via app-protocol (Range handler)", () => {
+  assert.match(MAIN, /require\(["']\.\/app-protocol["']\)/);
+  assert.match(MAIN, /registerScheme\s*\(/);
+  assert.match(MAIN, /handleScheme\s*\(/);
+  // Autoplay: no CLI flag needed (research B1.4); set webPreferences explicitly.
+  assert.doesNotMatch(MAIN, /appendSwitch\(\s*["']autoplay-policy["']/);
+  assert.match(MAIN, /autoplayPolicy:\s*["']no-user-gesture-required["']/);
+  // Soft-GL is opt-in via APEX_DESKTOP_SOFT_GL — never implied by CI= alone.
+  assert.match(MAIN, /APEX_DESKTOP_SOFT_GL/);
+  assert.match(MAIN, /enable-unsafe-webgpu/);
+  assert.doesNotMatch(MAIN, /CI\s*===\s*["']true["']/);
+  assert.doesNotMatch(MAIN, /VulkanFromANGLE|DefaultANGLEVulkan|use-vulkan/);
+  // no-sandbox only when APEX_DESKTOP_NO_SANDBOX is set (never release default).
+  assert.match(MAIN, /APEX_DESKTOP_NO_SANDBOX/);
+  assert.match(MAIN, /setWindowOpenHandler/);
+  assert.match(MAIN, /will-navigate/);
+  assert.match(MAIN, /setPermissionRequestHandler\(permissions\.requestHandler\(ORIGIN\)\)/);
+  assert.match(MAIN, /setPermissionCheckHandler\(permissions\.checkHandler\(ORIGIN\)\)/);
+  assert.doesNotMatch(MAIN, /callback\(false\)/, "no blanket deny left behind the allow-list");
+});
+
+// L8-b: the game's own permissions, for app://apex/ only. Electron routes the
+// Fullscreen API, Keyboard Lock, Pointer Lock, Screen Wake Lock, getUserMedia
+// and async clipboard writes through these handlers
+// (https://www.electronjs.org/docs/latest/api/session); a blanket deny broke
+// the pause menu's FULLSCREEN, every wake lock, QR SCAN and COPY CODE.
+test("desktop permission allow-list: exactly the six the game uses, our origin only, camera not mic", () => {
+  const P = require("../../desktop/lib/permissions.cjs");
+  const O = "app://apex";
+  assert.deepEqual([...P.ALLOWED].sort(), ["clipboard-sanitized-write", "fullscreen", "keyboardLock",
+    "media", "pointerLock", "screen-wake-lock"]);
+  assert.ok(Object.isFrozen(P.ALLOWED));
+  const req = P.requestHandler(O);
+  const ask = (perm, details, wc) => { let got; req(wc || null, perm, (v) => { got = v; }, details || {}); return got; };
+  const here = { requestingUrl: O + "/index.html", isMainFrame: true };
+  for (const perm of ["fullscreen", "keyboardLock", "pointerLock", "screen-wake-lock", "clipboard-sanitized-write"]) {
+    assert.equal(ask(perm, here), true, perm + " granted to app://apex/");
+    assert.equal(ask(perm, { requestingUrl: "https://evil.example/" }), false, perm + " refused to another origin");
+    assert.equal(ask(perm, { requestingUrl: "app://apexevil/" }), false, perm + " refused to a look-alike origin");
+  }
+  assert.equal(ask("media", { ...here, mediaTypes: ["video"] }), true, "the QR camera");
+  assert.equal(ask("media", { ...here, mediaTypes: ["audio"] }), false, "never the microphone");
+  assert.equal(ask("media", { ...here, mediaTypes: ["video", "audio"] }), false);
+  assert.equal(ask("media", here), false, "an unspecified media request is refused");
+  for (const perm of ["geolocation", "notifications", "clipboard-read", "persistent-storage", "midi", "openExternal"]) {
+    assert.equal(ask(perm, here), false, perm + " stays denied");
+  }
+  assert.equal(ask("fullscreen", { ...here, embeddingOrigin: "https://ads.example" }), false, "an embedded third party is not us");
+  // No requestingUrl: the webContents URL decides.
+  assert.equal(ask("fullscreen", {}, { getURL: () => O + "/" }), true);
+  assert.equal(ask("fullscreen", {}, { getURL: () => "https://x.example/" }), false);
+
+  const check = P.checkHandler(O);
+  assert.equal(check(null, "screen-wake-lock", O + "/", {}), true, "check handler tolerates a null webContents");
+  assert.equal(check(null, "clipboard-sanitized-write", "https://x.example/", {}), false);
+  assert.equal(check(null, "media", O + "/", { mediaType: "video" }), true);
+  assert.equal(check(null, "media", O + "/", { mediaType: "audio" }), false);
+  assert.equal(check(null, "geolocation", O + "/", {}), false);
+});
+
+test("desktop permission module ships with the app (lib/** in the builder files)", () => {
+  const cfg = require("../../desktop/electron-builder.config.cjs");
+  assert.ok(cfg.files.includes("lib/**"));
+});
+
+test("app-protocol keeps allowServiceWorkers false (cache.addAll fails on app:)", () => {
+  const PROTO = readFileSync(join(ROOT, "desktop/app-protocol.js"), "utf8");
+  assert.match(PROTO, /allowServiceWorkers:\s*false/);
+  assert.match(PROTO, /parseByteRange/);
+  assert.match(PROTO, /status:\s*206/);
+  assert.match(PROTO, /status:\s*416/);
+  assert.match(PROTO, /realpathSync/);
+  // Comments may mention net.fetch (why we avoid it); the handler body must not call it.
+  const body = PROTO.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  assert.doesNotMatch(body, /\bnet\.fetch\b/);
+});
+
+test("desktop package.json release fuses keep inspect and file-protocol extras off", () => {
+  const cfg = require("../../desktop/electron-builder.config.cjs");
+  const pkg = JSON.parse(readFileSync(join(ROOT, "desktop/package.json"), "utf8"));
+  assert.equal(cfg.electronFuses.enableNodeCliInspectArguments, false);
+  assert.equal(cfg.electronFuses.grantFileProtocolExtraPrivileges, false);
+  assert.match(pkg.scripts["pack:test"], /enableNodeCliInspectArguments=true/);
+});
+
+test("desktop workflow is PR pack-smoke + tag/dispatch release (not ship-branch push)", () => {
+  const yml = readFileSync(join(ROOT, ".github/workflows/desktop.yml"), "utf8");
+  assert.match(yml, /workflow_dispatch:/);
+  assert.match(yml, /desktop-v\*/);
+  assert.match(yml, /pull_request:/);
+  assert.match(yml, /types: \[opened, synchronize, reopened, ready_for_review\]/,
+    "a draft skipped by pack-smoke must be tested when marked ready");
+  assert.match(yml, /name: Assert inspect fuse enabled for the test pack\n\s+working-directory: desktop\n\s+shell: bash/,
+    "the Bash fuse assertion also runs on Windows");
+  assert.match(yml, /pack-smoke:/);
+  assert.match(yml, /draft == false/);
+  assert.match(yml, /pack:test/);
+  assert.match(yml, /APEX_DESKTOP_NO_SANDBOX/);
+  assert.doesNotMatch(yml, /branches:\s*\n\s*-\s*claude\/f1-game-project-26h3ng/);
+  assert.doesNotMatch(yml, /group:\s*pages\b/);
+});
+
+test("desktop workflow's pull_request paths are packaging-only (not the staged game tree)", async () => {
+  const { stagedNames } = await import("../../tools/desktop/stage-files.mjs");
+  const yml = readFileSync(join(ROOT, ".github/workflows/desktop.yml"), "utf8");
+  const block = yml.split(/\n  pull_request:\n/)[1].split(/\n  [a-z_]+:\n/)[0];
+  const paths = [...block.matchAll(/^\s+- "([^"]+)"/gm)].map((m) => m[1]);
+  assert.deepEqual(paths.sort(), [
+    ".github/workflows/desktop.yml",
+    "desktop/**",
+    "tools/desktop/**",
+  ], "pack-smoke runs when the Electron shell or stager changes, not on every js/css PR");
+  const staged = [...stagedNames()];
+  const leaked = paths.filter((p) => {
+    const name = p.replace(/\/\*\*$/, "");
+    return staged.includes(name);
+  });
+  assert.deepEqual(leaked, [], "a staged game/shell path in desktop.yml restarts Pack smoke on ordinary PRs");
+});
+
+function loadSpotify(opts = {}) {
+  const disk = new Map(opts.disk || [["apex26.spotify.clientId", "client-1"]]);
+  const sandbox = {
+    console, Promise, Date, Math, JSON, Object, Array, String, Number,
+    URL, URLSearchParams, TextEncoder, Uint8Array, Response,
+    fetch: () => Promise.reject(new Error("no network in unit test")),
+    setTimeout: () => 1, clearTimeout: () => {},
+    setInterval: () => 1, clearInterval: () => {},
+    location: {
+      origin: opts.origin || "https://game.test",
+      pathname: "/",
+      hostname: "game.test",
+      href: (opts.origin || "https://game.test") + "/",
+      search: "",
+    },
+    history: { replaceState() {} },
+    document: {
+      readyState: "complete",
+      getElementById() { return null; },
+      addEventListener() {},
+      createElement() { return {}; },
+    },
+    localStorage: {
+      getItem: (k) => disk.get(k) || null,
+      setItem: (k, v) => disk.set(k, String(v)),
+      removeItem: (k) => disk.delete(k),
+    },
+    sessionStorage: {
+      getItem: () => null, setItem: () => {}, removeItem: () => {},
+    },
+    Log: { info() {}, warn() {} },
+  };
+  if (opts.native) {
+    sandbox.__APEX_NATIVE__ = { desktop: true, platform: "linux" };
+  }
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  seedStore(ctx);
+  vm.runInContext(SPOTIFY, ctx, { filename: "js/audio/spotify.js" });
+  return sandbox.SpotifyMusic;
+}
+
+test("Spotify available() is false under __APEX_NATIVE__.desktop even with a client id", () => {
+  const web = loadSpotify({ native: false });
+  assert.equal(web.available(), true, "web build with a stored client id must stay available");
+  const desk = loadSpotify({ native: true });
+  assert.equal(desk.available(), false, "desktop must refuse Spotify OAuth");
+  assert.match(desk.status().message || desk.debug().message || "", /redirect|web build|off/i);
+});
+
+test("Spotify copy under native names the redirect-URI limitation", () => {
+  const desk = loadSpotify({ native: true });
+  // Force the off message through status after init path.
+  const st = desk.status();
+  assert.equal(st.state, "off");
+  assert.match(st.message, /browser redirect|web build/i);
+});
+
+test("cross-device links use public HTTPS in wrappers and preserve web deployment paths", async () => {
+  const publicBase = "https://brycejmurrin.github.io/f1-game/";
+  const ghost = JSON.parse(readFileSync(join(ROOT, "tests/fixtures/ghost-monza-short.json"), "utf8"));
+  for (const kind of ["web", "desktop", "android", "ios"]) {
+    const origin = { web: "https://preview.test", desktop: "app://apex", android: "https://localhost", ios: "capacitor://localhost" }[kind];
+    const sandbox = {
+      location: { origin, pathname: "/custom/index.html" },
+      TextEncoder, TextDecoder, Uint8Array, btoa, atob, URL,
+      Teams: { LIST: [{ id: "mercedes" }] }, Tracks: { LIST: [{ id: "monza" }] },
+    };
+    if (kind === "desktop") sandbox.__APEX_NATIVE__ = { desktop: true };
+    if (kind === "android" || kind === "ios") sandbox.Capacitor = { isNativePlatform: () => true, getPlatform: () => kind };
+    sandbox.window = sandbox;
+    const ctx = vm.createContext(sandbox);
+    for (const file of ["js/core/native.js", "js/net/handshake.js", "js/car/ghost-share.js", "js/ui/share-code.js"])
+      vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: file });
+    const base = kind === "web" ? origin + "/custom/index.html" : publicBase;
+    assert.equal(vm.runInContext("Native.shareBase()", ctx), base);
+    assert.equal(vm.runInContext("NetHandshake.inviteUrl('INVITE')", ctx), base + "#vs=INVITE");
+    assert.equal(vm.runInContext("NetHandshake.inviteFromUrl(NetHandshake.inviteUrl('INVITE'))", ctx), "INVITE");
+    const sharedGhost = await vm.runInContext("GhostShare", ctx).encode(ghost, { track: "monza" });
+    assert.equal(sharedGhost.ok, true);
+    assert.equal(sharedGhost.url, base + "#ghost=" + sharedGhost.code);
+    for (const [type, payload] of [
+      ["setup", { team: "mercedes", tune: { arbF: 7, arbR: 6, rideF: 22, rideR: 62, brakeBias: 56 } }],
+      ["livery", { team: "mercedes", id: "custom" }],
+      ["daily", { day: "2026-10-15", track: "monza" }],
+    ]) {
+      const shared = vm.runInContext("ShareCode", ctx).encode(type, payload);
+      assert.equal(shared.ok, true);
+      assert.equal(shared.url, base + "#share=" + shared.code);
+    }
+
+    // Drive the real platform UI callback using the generic pairing builder.
+    // The adapter must preserve relay configuration and null QR teardown.
+    const native = vm.runInContext("Native", ctx);
+    const pad = vm.runInNewContext(readFileSync(join(ROOT, "js/input/phone-pad.js"), "utf8") + ";PhonePad", {
+      location: sandbox.location, URL,
+    });
+    const nodes = new Map(), qrs = [];
+    const $ = (id) => {
+      if (!nodes.has(id)) nodes.set(id, { textContent: "", hidden: true, setAttribute() {}, scrollIntoView() {}, append() {} });
+      return nodes.get(id);
+    };
+    let pairingUi;
+    Object.assign(sandbox, {
+      PhysicsConsts: {}, CamModes: { CAM_MODES: [] },
+      document: { createElement: () => ({ setAttribute() {} }) },
+      PhonePad: { padUrl: pad.padUrl, host: (ui) => { pairingUi = ui; return { cancel() {} }; } },
+      LobbyCodes: { paintQr: (_wrap, _canvas, url) => qrs.push(url) },
+    });
+    vm.runInContext(readFileSync(join(ROOT, "js/ui/platform-session.js"), "utf8"), ctx);
+    const session = vm.runInContext("PlatformSession", ctx).create({ $, els: {}, store: {} }, { ensureNet: async () => true });
+    session.wirePhone();
+    $("pm-phonepad").onclick();
+    await new Promise(setImmediate);
+    const directory = kind === "web" ? origin + "/custom/" : publicBase;
+    assert.equal($("pm-phonepad-url").textContent, directory + "controller.html");
+    const rawUrl = pad.padUrl("ABC234", null, "https://relay.test/base");
+    pairingUi.qr(rawUrl, "ABC234");
+    assert.equal(qrs.at(-1), directory + "controller.html#pad=ABC234&relay=https%3A%2F%2Frelay.test%2Fbase");
+    assert.equal(native.canonicalOrigin(), origin, "sharing must not change storage identity");
+    pairingUi.qr(null, null);
+    assert.equal(qrs.at(-1), null);
+  }
+});

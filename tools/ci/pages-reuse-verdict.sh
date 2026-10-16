@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# @doc Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent.
+# @section runner
+#
+# pages-reuse-verdict.sh <commit-sha>
+#
+# A merge made through GitHub is a NEW commit, so every PR merge used to pay
+# the full ~15-minute gate a second time even when the PR run had tested the
+# very same files. The tree is the proof: when the merge commit's tree equals
+# a parent's tree, the same bytes were already gated — same workflow file,
+# same tests, same result — and the gate can be reused instead of re-run.
+#
+# Candidates, in order: the commit itself, then each parent whose tree hash
+# equals this commit's. A candidate counts when GitHub holds a COMPLETED,
+# SUCCESSFUL run for its exact head_sha of either ci.yml (a pull_request run,
+# or a push run on any branch EXCEPT the deploy branch — a deploy-branch push
+# is the FAST tier, guards and node suites only, and never a gate) or
+# pages.yml (an earlier deploy of the same tree). Anything else — a failed
+# run, a cancelled run, a run of another workflow, a fast-tier run, a run that
+# never happened — means "run the gate". Run 2237 (2026-09-10) reused the
+# merge commit's own fast-tier run before this exclusion existed.
+# DEPLOY_BRANCH must be set (pages.yml's workflow env); without it no push run
+# counts at all, which fails safe into the gate.
+#
+# A DRAFT PR's run is the fast tier too (2026-09-24, ci.yml decision 1c): it
+# concludes success with smoke and the geometry sweeps SKIPPED. The runs
+# listing does not say whether the PR was a draft, so a pull_request run
+# counts only when its jobs show the sweeps job actually ran and passed; a
+# jobs lookup that fails is, as everywhere here, "run the gate".
+#
+# A RUN THAT CONCLUDED SUCCESS IS NOT PROOF THE GATE RAN (2026-10-07). The
+# `CI` aggregator passes a SKIPPED job, so a pages.yml run that reused an
+# earlier pass (ci skipped) or ran smoke only still concludes success, and a
+# later tree-equal merge would chain onto it. Every candidate, of every
+# event, now counts only when its jobs show the gate itself ran and passed:
+# `CI`, `Per-circuit geometry sweeps`, `Selected specs (verdict)` and every
+# `Smoke` shard (at least one) all concluded success — not failure,
+# cancelled or skipped. The old exact-SHA "ship fast tier => smoke only"
+# shortcut (#1075) is gone for the same reason: Pages run 3112
+# (37689226760) deployed 61e0a6442 on a fast tier whose smoke, sweeps and
+# full selection never ran, right after dispatch 3110 (37687308660) FAILED
+# the full gate on that same tree (oversize-menu-baseline). Its always-false
+# ship-only output line, and the ci.yml smoke-only input it fed, were removed
+# on 2026-10-14; the fast-tier reuse (`fast_run`) went with the deploy-branch
+# fast tier on 2026-10-16 (pages.yml runs on push, CI/CD review #2333).
+#
+# A pull_request run tests GitHub's merge ref, not the PR head. That is still
+# sound here: this only reuses such a run when merging the base into the head
+# produced the head's own tree, so the earlier, older base merged into it the
+# same way. A merge whose base moved has a different tree and no candidate.
+#
+# Every failure of the lookup (no `gh`, an API error) is a `reuse=false`: the
+# cost of being wrong that way is one gate run, which is what happens today.
+#
+# stdout is GITHUB_OUTPUT lines — reuse=, source=, run= — so the workflow
+# appends it directly; the reasoning goes to stderr. Needs a checkout deep
+# enough to see the parents (fetch-depth: 0) and GH_TOKEN with actions:read.
+set -eu
+SHA="${1:?commit sha}"
+REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY}"
+
+say() { echo "$*" >&2; }
+verdict() { printf 'reuse=%s\nsource=%s\nrun=%s\n' "$1" "$2" "$3"; }
+tree_of() { git rev-parse --verify -q "$1^{tree}" 2>/dev/null; }
+# gate_ran <run-id>: prints `yes` only when the run's jobs show the full gate
+# ran and passed (see the header). Paginated: a full gate's selected matrix
+# can push the job list past one page. Any lookup failure prints nothing.
+gate_ran() {
+  gh api "repos/$REPO/actions/runs/$1/jobs?per_page=100" --paginate 2>/dev/null | node -e '
+    let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+      let jobs = [];
+      try {
+        for (const page of s.split(/(?=\{"total_count")/)) if (page.trim()) jobs.push(...(JSON.parse(page).jobs || []));
+      } catch (_) { return; }
+      const rows = jobs.map((j) => ({ name: String(j.name || "").replace(/^ci \/ /, ""), conclusion: j.conclusion }));
+      const ok = (name) => rows.some((r) => r.name === name && r.conclusion === "success")
+        && !rows.some((r) => r.name === name && r.conclusion !== "success");
+      const smoke = rows.filter((r) => r.name.startsWith("Smoke ("));
+      if (ok("CI") && ok("Per-circuit geometry sweeps") && ok("Selected specs (verdict)")
+          && smoke.length > 0 && smoke.every((r) => r.conclusion === "success")) process.stdout.write("yes");
+    });' || true
+}
+
+TREE="$(tree_of "$SHA")" || { say "::warning::$SHA is not in this checkout; running the full gate"; verdict false "" ""; exit 0; }
+
+candidates="$SHA"
+for parent in "$SHA^1" "$SHA^2"; do
+  p="$(git rev-parse --verify -q "$parent" 2>/dev/null)" || continue
+  if [ "$(tree_of "$p")" = "$TREE" ]; then
+    say "parent $p has the same tree as $SHA"
+    candidates="$candidates $p"
+  else
+    say "parent $p has a different tree"
+  fi
+done
+
+for c in $candidates; do
+  json="$(gh api "repos/$REPO/actions/runs?head_sha=$c&status=success&per_page=30" 2>/dev/null)" \
+    || { say "::warning::could not list workflow runs for $c; running the full gate"; continue; }
+  hit="$(printf '%s' "$json" | node -e '
+    let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+      let runs = []; try { runs = JSON.parse(s).workflow_runs || []; } catch (_) {}
+      const self = process.env.GITHUB_RUN_ID || "";
+      const deployBranch = process.env.DEPLOY_BRANCH || "";
+      // A push run is a full gate only OFF the deploy branch (there it was the
+      // fast tier until 2026-10-16, and never a gate). (No merge_group: ci.yml
+      // dropped that trigger on 2026-10-14 — merge queues need an
+      // organisation-owned repo.)
+      const fullPush = (r) => r.event === "push" && deployBranch !== "" && r.head_branch !== deployBranch;
+      const gate = (r) => r.status === "completed" && r.conclusion === "success" && String(r.id) !== self && (
+        (r.path === ".github/workflows/ci.yml" && (fullPush(r) || r.event === "pull_request")) ||
+        (r.path === ".github/workflows/pages.yml" && (r.event === "push" || r.event === "workflow_dispatch" || r.event === "schedule")));
+      for (const r of runs.filter(gate)) console.log(`${r.id} ${r.path} ${r.event} ${r.html_url || r.id}`);
+    });')"
+  while read -r id path event url; do
+    [ -n "$id" ] || continue
+    # Concluded success is not enough: the gate jobs must have RUN and passed
+    # (a draft PR's fast tier, a smoke-only or reused Pages run all skip them).
+    if [ "$(gate_ran "$id")" != yes ]; then
+      say "run $id ($path $event) concluded success but its gate jobs (CI, sweeps, selected verdict, smoke) did not all run and pass — not a gate"
+      continue
+    fi
+    say "REUSING the gate: $c already passed $path $event"
+    verdict true "$c" "$url"
+    exit 0
+  done <<EOF_HITS
+$hit
+EOF_HITS
+  say "no successful gate run recorded for $c"
+done
+
+# No completed gate on this tree: run it.
+say "no reusable gate for $SHA; running the full gate"
+verdict false "" ""

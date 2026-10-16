@@ -1,0 +1,20 @@
+# js/circuits/ — circuit DATA only
+
+One file per circuit (`ls js/circuits/*.js`). Engine behaviour lives in `js/track/` — if a fix
+needs code, it goes there; these files carry layout, palette, theme and metadata;
+the `scenery(api)` callback lives beside them in `js/circuits/scenery/<id>.js`,
+lazy-loaded (reference: `docs/SCENERY-API.md`).
+
+- **Script-tag order == `Tracks.LIST` == picker order.** Adding a circuit is
+  the full new-file lockstep (root AGENTS.md) — tag position matters.
+- **Frac-keyed tables respect `def._sceneryShift`** — the engine consumes
+  them via the compensated idiom; write fracs in the def's own frame and
+  never pre-compensate by hand.
+- **A hero landmark is registered in `tests/data/landmarks/<id>.json`**
+  (`{ "why": "...", "ids": [...] }`), one file per circuit: each id must be a
+  `modelGroup("<id>", …, { required: true })` in `scenery/<id>.js`
+  (scenery-api-contract). Never a shared list — that is what made every
+  scenery PR conflict with every other.
+- After ANY edit: `node tools/track/verify-track.cjs <id>` FIRST (2 s), then the
+  groups `node tools/ci/pick-tests.mjs` names. A misplaced prop or terrain
+  reading usually means a raw-frac mistake, not a geometry bug.

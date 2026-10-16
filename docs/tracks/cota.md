@@ -1,7 +1,7 @@
 # Circuit of the Americas (COTA) — Visual Design Brief
 
 **Setting:** DAY · Green theme (Texas Hill Country)
-**Layout:** 5.513 km, 20 corners, counterclockwise, ~40 m total elevation change.
+**Layout:** 5.513 km, 20 corners, counterclockwise, ~20 m total elevation change.
 
 ## 1. Setting
 A purpose-built motorsport park on 1,500 acres in the rolling hills southeast of
@@ -19,11 +19,12 @@ Light fog mood: thin warm haze low on the ridgelines, fading distant boxes to a
 pale dusty green-gray.
 
 ## 3. Elevation
-- `s≈0.08–0.12` — steep Turn 1 climb, the signature ~30 m ascent from the start
-  line to a blind hairpin apex (steepest braking zone of the year).
-- `s≈0.12–0.28` — rapid descent off T1 into the flowing Esses, rolling up-and-down.
-- `s≈0.46–0.62` — long back straight with a subtle crest ~1/3 along (briefly blind).
-- `s≈0.78–0.90` — gentle undulation through the multi-apex sweepers.
+Real Hill Country relief from the SRTM bake in `js/track/circuit-elevations.js`
+(~22 m peak-to-trough). Continuous rolling — not three sparse cosine bumps
+with ~70% of the lap dead-flat between them.
+- Steep Turn 1 climb from the start line to the blind hairpin.
+- Descent into the flowing Esses, then rolling mid-lap and back-straight crest.
+- Gentle undulation through the multi-apex sweepers.
 
 ## 4. Landmarks & Surroundings by Lap Position
 
@@ -65,3 +66,28 @@ pale dusty green-gray.
   landmark cluster.
 - Dust the mid-distance with sparse **dark-green oak/cedar clusters** over dry grass;
   fade everything into thin warm haze at the edges.
+
+## Research pass — outcome
+
+Checked the three researched figures against what was already built. COTA turned
+out to be in better shape than expected: **both** landmarks were already
+modelled and correctly sited.
+
+- **The Observation Tower** was already at T16–18 on the right, built as the
+  Miró Rivera design (pale tapered shaft, red tube veil cascading into the
+  stage canopy). ✅ position and form — but its **height was wrong**. COTA
+  publishes **251 ft (76.5 m) at the highest point, with the deck 22 storeys
+  up**. The deck was correctly at 70 m, but the crown then carried an 8 m mast
+  with a beacon at deck+16, topping out near **86 m** — ~12 % over the one
+  dimension the venue actually states. **Fixed:** the cone and finial now land
+  the tip at exactly 76.5 m.
+- **Austin360 Amphitheater** was already there and already wrapped round the
+  tower's foot (proscenium shell, three-arc fan canopy, LED video wall, PA
+  line-array towers, speckled lawn crowd). ✅ nothing to do.
+- **Turn 1's 133 ft hill — NOT changed, and deliberately so.** The def puts
+  Big Red at racing s≈0.108 with `rise: 18`, against a
+  quoted 133 ft ≈ 40.5 m. That may well be understated, but `elevations` is
+  **physics, not scenery**: it moves the racing line, lap times and the
+  reference times the AI is calibrated against. It should be changed as a
+  deliberate handling decision with a physics re-check, not folded into a
+  scenery pass. Flagged here for that separate call.

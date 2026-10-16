@@ -1,0 +1,83 @@
+/* Apex 26 — KYALAMI GRAND PRIX CIRCUIT definition (data only).
+   Retired from F1 (`classic: true`): last South African GP 1993, on the 1992
+   layout. The trace below is the 2016 rebuild's 4.5 km layout, run clockwise
+   (`reverse: true` on this source; built lap's net turning is -360°, T1
+   Crowthorne a right-hander).
+   Geometry from the OSM trace in `path` below. */
+(function () {
+  "use strict";
+  (window.TrackDefs = window.TrackDefs || []).push(
+  {
+    id: "kyalami",
+    classic: true,
+    reverse: true,
+    startFrac: 0.01,
+    name: "KYALAMI",
+    gp: "South African GP",
+    country: "South Africa",
+    night: false,
+    theme: "green",
+    lengthKm: 4.5,
+    baseHW: 7.5,
+    sceneryCoordinates: "racing",
+    // The pit complex (TrackPit): LEFT of the main straight in the (clockwise)
+    // racing direction — the OUTSIDE of the lap, as the 2016 pit building
+    // stands (IGTC 9 Hour briefing pit-lane map: pit wall and exit on the left,
+    // T1 Crowthorne a right-hander). Engine -1 here is scenery side +1, where
+    // the circuit's own paddock (scenery/kyalami.js) is built.
+    pit: { side: -1 },
+    terrainOuter: 120,
+    dressingExclusions: [
+      { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
+      { kind: "foliage", s0: 0.36, s1: 0.48 },
+    ],
+    pal: {
+      zenith:        [0.14, 0.36, 0.76],
+      horizon:       [0.76, 0.76, 0.70],
+      sun:           [1.0,  0.97, 0.86],
+      sunColor:      [1.0,  0.96, 0.84],
+      ambientSky:    [0.48, 0.52, 0.60],
+      ambientGround: [0.34, 0.30, 0.20],
+      fogColor:      [0.74, 0.74, 0.68],
+      fogDensity:    0.0022,   // thin high-altitude air — long clear sightlines
+      // Winter Highveld veld: red leads green, keeping the ground straw-gold
+      // rather than drifting toward a lush European circuit palette.
+      grass:         [0.48, 0.43, 0.20],
+      runoff:        [0.60, 0.46, 0.32],
+      sunDir:        [0.30, 0.82, 0.24],
+    },
+    elevations: [
+      { s: 0.16, halfM: 300, rise: -10.0 },  // drop away from Crowthorne
+      { s: 0.36, halfM: 340, rise: 13.0 },   // the long climb
+      { s: 0.58, halfM: 300, rise: 8.0 },    // up to the high point
+      { s: 0.80, halfM: 340, rise: -14.0 },  // the plunge back down
+    ],
+    hwZones: [
+      { s0: 0.230, s1: 0.275, hw: 6.3, ease: 0.012 },
+      { s0: 0.540, s1: 0.585, hw: 6.2, ease: 0.012 },
+      { s0: 0.9281, s1: 0.9625, hw: 6.3, ease: 0.012 },  // T1 Crowthorne (source-frame index; racing arc 0.105-0.150)
+    ],
+    bankZones: [
+      { turn: 1, angleDeg: 4.0, widthM: 120 },   // Crowthorne; re-seated frac 0.075 (was 137 m off any apex)
+      { frac: 0.400, angleDeg: 3.5, widthM: 130 },
+      { frac: 0.700, angleDeg: 4.5, widthM: 140 },
+    ],
+
+    // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
+    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
+    // re-seats turns when the start line moves.
+    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
+    // researched real turn count. No researched sectors — consumers fall back to thirds.
+    sectors: [0.333, 0.646],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
+    turns: [0.1055, 0.1650, 0.2260, 0.3910, 0.4115, 0.5255, 0.5395, 0.5475, 0.6140, 0.7020, 0.8180, 0.8625, 0.8975],
+    furniture: { tree: "acacia", fol: [0.33, 0.38, 0.21], lamp: "none", sparse: true },  // grey-green thorn; sparse keeps the veld open
+    kit: { marshal: "cabin",     rail: "cable",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
+    standSet: ["sandstone", "orange", "concrete"],  // bleached masonry, red-oxide iron, raw terracing
+    // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
+    // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.
+    // Kyalami Grand Prix Circuit — Johannesburg. Upstream za-1961, stated 4529 m, projected 4526 m, trace winding CW.
+    path: { len: 4526, pts: [[-228.2,-209.2],[-395.3,-23.5],[-417.7,-6.6],[-698.7,176.4],[-730.5,202.9],[-736,215.7],[-732.2,231.7],[-721.2,242],[-714.3,246.8],[-615.5,266.2],[-600.3,274.1],[-586.9,285.9],[-551.7,354.2],[-529.6,373.5],[-472.3,407.3],[-460.9,409.8],[-446.7,407.3],[-436.7,399.4],[-356.3,286.2],[-167.1,24.8],[-147.8,6.2],[-122.6,-8.2],[-93.6,-18.3],[-67.6,-20.7],[-40.7,-16.9],[-13.8,-7.6],[6.9,6.2],[24.5,22.8],[133.6,176.8],[146.4,184.7],[160.9,189.6],[177.8,189.6],[194,183],[205.7,171.2],[335.9,-8.2],[342.1,-22],[344.5,-35.5],[344.5,-51.8],[342.8,-67.3],[338,-80.8],[322.8,-106.3],[317.9,-122.2],[316.9,-138.8],[319,-154.6],[323.8,-172.2],[332.1,-188.5],[342.1,-202.3],[351.4,-212.6],[371.4,-227.1],[382.1,-233],[514,-285.1],[527.8,-286.9],[606.5,-294.8],[718,-328.6],[730.4,-338],[736,-352.4],[735.3,-366.2],[726.6,-380.4],[685.6,-403.5],[661.4,-409.8],[640.4,-407.7],[352.8,-277.9],[331.1,-264.8],[306.6,-243.3],[286.9,-218.2],[272.1,-186],[265.4,-160.9],[252.6,-59],[240.9,-16.6],[209.9,53.9],[192.9,64.6],[173.3,62.5],[155.7,48],[132.2,-2.4],[110.8,-33.8],[88,-58.3],[45.9,-95.3],[4.5,-125],[-0.4,-138],[-1.7,-151.5],[-22.8,-375.3],[-30,-390.1],[-43.5,-394.2],[-58.7,-392.5],[-77.3,-376.6]] },
+  }
+  );
+})();

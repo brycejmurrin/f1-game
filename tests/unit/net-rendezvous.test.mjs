@@ -1,0 +1,727 @@
+/* net-rendezvous.test.mjs — the room-code client, against a REAL relay.
+ *
+ * The relay is a throwaway node HTTP server implementing the same contract as
+ * worker/rendezvous.js: POST/GET /v3/r/<opaque-id>/<offer|answer>, 404 when nothing is
+ * there, 409 when a live offer would be overwritten. Real fetch, real status
+ * codes, real JSON — the only thing not exercised is Cloudflare itself.
+ *
+ * That matters because this module's whole job is to FAIL SOFTLY. It is the one
+ * part of the game that depends on a service somebody has to keep alive, so
+ * "the relay is down", "the relay is slow", "nobody is at that code" and "this
+ * build has no relay" must each produce a distinct, actionable result rather
+ * than an exception escaping into a click handler.
+ *
+ * Run: node --test tests/unit/net-rendezvous.test.mjs   (npm run test:net-unit)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import http from "node:http";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import { seedLogGlobal } from "../helpers/seed-log.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+seedLogGlobal();
+
+// The module reads localStorage; node has none. A two-line stand-in is enough
+// and keeps the module itself free of test-only branches.
+globalThis.localStorage = {
+  _m: new Map(),
+  getItem(k) { return this._m.has(k) ? this._m.get(k) : null; },
+  setItem(k, v) { this._m.set(k, String(v)); },
+  removeItem(k) { this._m.delete(k); },
+};
+
+globalThis.NetBytes = eval(fs.readFileSync(path.join(ROOT, "js/net/bytes.js"), "utf8") + ";NetBytes");
+globalThis.NetSdp = eval(fs.readFileSync(path.join(ROOT, "js/net/sdp.js"), "utf8") + ";NetSdp");   // verifyFor binds it at call time
+const NetRendezvous = eval(
+  fs.readFileSync(path.join(ROOT, "js/net/rendezvous.js"), "utf8") + ";NetRendezvous");
+
+test("a successful response arriving after cancellation never publishes a payload", async () => {
+  const nativeFetch = globalThis.fetch;
+  const previousUrl = NetRendezvous.baseUrl();
+  NetRendezvous.setUrl("http://127.0.0.1:9");
+  let resolve, started;
+  const entered = new Promise((r) => { started = r; });
+  globalThis.fetch = () => { started(); return new Promise((r) => { resolve = r; }); };
+  const token = { cancelled: false };
+  try {
+    const waiting = NetRendezvous.waitFor(NetRendezvous.makeCode(), "offer", token);
+    await entered;
+    token.cancelled = true;
+    resolve(new Response(JSON.stringify({ payload: "stale-offer" }), { status: 200 }));
+    const result = await waiting;
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "cancelled");
+    assert.equal(result.payload, undefined);
+  } finally { globalThis.fetch = nativeFetch; NetRendezvous.setUrl(previousUrl); }
+});
+
+// ---------------------------------------------------------------------------
+// A stand-in for worker/rendezvous.js, same contract.
+// ---------------------------------------------------------------------------
+function relay(opts = {}) {
+  const rooms = new Map();          // opaque room id -> {offer, answer}
+  const requests = [];
+  const server = http.createServer((req, res) => {
+    const seen = { path: req.url }; requests.push(seen);
+    const send = (code, obj) => {
+      res.writeHead(code, { "content-type": "application/json", "x-apex-rendezvous": "3" });
+      res.end(obj == null ? "" : JSON.stringify(obj));
+    };
+    if (opts.dead) return send(500, { error: "boom" });
+    if (opts.hang) return;          // never responds — the timeout path
+
+    const m = req.url.match(/^\/v3\/r\/([0-9a-f]{64})\/(offer|answer)$/);
+    if (!m) return send(404, { error: "not_found" });
+    const [, code, slot] = m;
+    const room = rooms.get(code) || {};
+
+    if (req.method === "GET") {
+      // flakyGets: answer the first N polls with a 429 — the transient hiccup
+      // waitFor() must ride out rather than abort the poll wait on.
+      if (opts.flakyGets > 0) { opts.flakyGets--; return send(429, { error: "rate_limited" }); }
+      if (!room[slot]) return send(404, { error: "not_found" });
+      return send(200, { payload: room[slot].payload });
+    }
+    let body = "";
+    req.on("data", (c) => { body += c; });
+    req.on("end", () => {
+      const parsed = JSON.parse(body || "{}");
+      seen.body = parsed;
+      const payload = parsed.payload;
+      const owner = parsed.owner || null;
+      // v2 envelopes only, like worker/rendezvous.js: the operator never holds
+      // a plaintext SDP, and a retry is recognised by the owner capability.
+      if (typeof payload !== "string" || !payload.startsWith("v2.")) return send(400, { error: "bad_payload" });
+      if (slot === "offer" && room.offer) {
+        const sameOwner = owner && room.offer.owner && owner === room.offer.owner;
+        if (!sameOwner) return send(409, { error: "taken" });
+      }
+      room[slot] = { payload, owner };
+      rooms.set(code, room);
+      send(200, { ok: true });
+    });
+  });
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const url = `http://127.0.0.1:${server.address().port}`;
+      NetRendezvous.setUrl(url);
+      resolve({ url, rooms, requests, close: () => new Promise((r) => server.close(r)) });
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// The code itself
+// ---------------------------------------------------------------------------
+
+test("codes avoid the characters people mishear", () => {
+  NetRendezvous.setUrl(null);
+  // The entire point is that six characters survive being read aloud. 0/O and
+  // 1/I/L are where that breaks, so they are not in the alphabet at all.
+  for (const bad of ["0", "O", "1", "I", "L"]) {
+    assert.ok(!NetRendezvous.ALPHABET.includes(bad), `${bad} should not be usable`);
+  }
+  for (let i = 0; i < 200; i++) {
+    const c = NetRendezvous.makeCode();
+    assert.equal(c.length, NetRendezvous.CODE_LEN);
+    assert.ok(NetRendezvous.valid(c), `${c} should be valid`);
+  }
+});
+
+test("codes are drawn without modulo bias", () => {
+  // 256 % 31 = 8, so `byte % 31` made the first eight letters 9/8 as likely
+  // as the rest. Rejection sampling redraws any byte at or above 248: feed
+  // the generator exactly those bytes first and they must never become a
+  // letter, while the in-range bytes that follow map straight through.
+  const orig = crypto.getRandomValues.bind(crypto);
+  const feed = [255, 254, 250, 248, 0, 31, 62, 247, 1, 2, 3];   // 4 rejects, then 7 draws
+  let cursor = 0;
+  Object.defineProperty(crypto, "getRandomValues", {
+    configurable: true,
+    value: (arr) => { for (let i = 0; i < arr.length; i++) arr[i] = feed[cursor++ % feed.length]; return arr; },
+  });
+  try {
+    const c = NetRendezvous.makeCode();
+    const A = NetRendezvous.ALPHABET;
+    assert.equal(c, A[0] + A[0] + A[0] + A[247 % 31] + A[1] + A[2], "rejected bytes vanish, the rest map in order");
+  } finally { delete crypto.getRandomValues; assert.equal(typeof orig, "function"); }
+});
+
+test("codes are not sequential or repeated", () => {
+  // A predictable code is one somebody else can already be sitting on.
+  const seen = new Set();
+  for (let i = 0; i < 500; i++) seen.add(NetRendezvous.makeCode());
+  assert.ok(seen.size > 495, `expected near-unique codes, got ${seen.size}/500`);
+});
+
+test("typing is forgiving about case and spacing, strict about the rest", () => {
+  const c = NetRendezvous.makeCode();
+  assert.equal(NetRendezvous.normalise(c.toLowerCase()), c);
+  assert.equal(NetRendezvous.normalise(` ${c.slice(0, 3)}-${c.slice(3)} `), c);
+  // But a genuinely wrong code stays wrong rather than being coerced into a
+  // DIFFERENT valid room, which would silently connect two strangers.
+  assert.equal(NetRendezvous.valid("ABC"), false);
+  assert.equal(NetRendezvous.valid("ABCDEFGH"), false);
+  assert.equal(NetRendezvous.valid(""), false);
+});
+
+// ---------------------------------------------------------------------------
+// Against the relay
+// ---------------------------------------------------------------------------
+
+test("the two halves meet at the same code", async () => {
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    assert.equal((await NetRendezvous.put(code, "offer", "APEX1.s.OFFER")).ok, true);
+    const stored = r.rooms.get(await NetRendezvous.privateRoomId(code)).offer;
+    assert.match(stored.payload, /^v2\./, "private relay must store a versioned ciphertext envelope");
+    assert.ok(!stored.payload.includes("APEX1.s.OFFER"), "SDP code must not be visible to the relay");
+    assert.match(stored.owner, /^[A-Za-z0-9_-]{16,128}$/, "offer carries a stable ownership capability");
+    const got = await NetRendezvous.get(code, "offer");
+    assert.equal(got.ok, true);
+    assert.equal(got.body.payload, "APEX1.s.OFFER");
+
+    assert.equal((await NetRendezvous.put(code, "answer", "APEX1.s.ANSWER")).ok, true);
+    const back = await NetRendezvous.get(code, "answer");
+    assert.equal(back.body.payload, "APEX1.s.ANSWER");
+  } finally { await r.close(); }
+});
+
+test("an encrypted offer retry changes ciphertext but keeps ownership", async () => {
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    assert.equal((await NetRendezvous.put(code, "offer", "SAME-OFFER")).ok, true);
+    const first = { ...r.rooms.get(await NetRendezvous.privateRoomId(code)).offer };
+    assert.equal((await NetRendezvous.put(code, "offer", "SAME-OFFER")).ok, true);
+    const second = r.rooms.get(await NetRendezvous.privateRoomId(code)).offer;
+    assert.equal(second.owner, first.owner, "a retry must prove it is the same host");
+    assert.notEqual(second.payload, first.payload, "AES-GCM must still use a fresh IV");
+    assert.equal((await NetRendezvous.get(code, "offer")).body.payload, "SAME-OFFER");
+  } finally { await r.close(); }
+});
+
+test("a plaintext (or v1) mailbox record from the relay is refused, never used as an SDP", async () => {
+  // The legacy branch let the Worker operator hand back any string as the
+  // payload. Gone: a record that is not a v2 envelope reads as corrupt and the
+  // lobby falls back to the invite link.
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    r.rooms.set(await NetRendezvous.privateRoomId(code), { offer: { payload: "LEGACY-OFFER", owner: null } });
+    const got = await NetRendezvous.get(code, "offer");
+    assert.equal(got.ok, false);
+    assert.equal(got.error, "corrupt");
+    r.rooms.set(await NetRendezvous.privateRoomId(code), { offer: { payload: "v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", owner: null } });
+    assert.equal((await NetRendezvous.get(code, "offer")).error, "corrupt");
+  } finally { await r.close(); }
+});
+
+test("the private-relay backend still trades both ways", async () => {
+  // swap() is what the lobby calls. With a private relay it is a post then a
+  // poll; with the public relay network it is a live room. Same shape either
+  // way, which is the point of the seam.
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    setTimeout(() => NetRendezvous.put(code, "answer", "THEIR-ANSWER"), 250);
+    const out = await NetRendezvous.swap({
+      code, mine: "MY-OFFER", slot: "offer", want: "answer", token: { cancelled: false },
+    });
+    assert.equal(out.ok, true);
+    assert.equal(out.payload, "THEIR-ANSWER");
+    // ...and our own half really was left for them.
+    assert.equal((await NetRendezvous.get(code, "offer")).body.payload, "MY-OFFER");
+    const firstOwner = r.rooms.get(await NetRendezvous.privateRoomId(code)).offer.owner;
+    const retry = await NetRendezvous.swap({
+      code, mine: "MY-OFFER", slot: "offer", want: "answer", token: { cancelled: false },
+    });
+    assert.equal(retry.ok, true, "the lobby's production swap path can retry its randomized envelope");
+    assert.equal(r.rooms.get(await NetRendezvous.privateRoomId(code)).offer.owner, firstOwner,
+      "a repeated host attempt must keep the original ownership capability");
+  } finally { await r.close(); }
+});
+
+test("a replier waits first, then posts what it produced", async () => {
+  // The guest cannot answer until it has seen the invite. Getting this backwards
+  // is exactly the bug the first version shipped.
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    await NetRendezvous.put(code, "offer", "THE-INVITE");
+    let saw = null;
+    const out = await NetRendezvous.swap({
+      code, slot: "answer", want: "offer", token: { cancelled: false },
+      reply: async (got) => { saw = got; return "ANSWER-TO-" + got; },
+    });
+    assert.equal(out.ok, true);
+    assert.equal(saw, "THE-INVITE", "the reply must receive what the host posted");
+    assert.equal(out.payload, "THE-INVITE");
+    assert.equal((await NetRendezvous.get(code, "answer")).body.payload, "ANSWER-TO-THE-INVITE");
+  } finally { await r.close(); }
+});
+
+test("a reply that fails reports it rather than posting nothing", async () => {
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    await NetRendezvous.put(code, "offer", "THE-INVITE");
+    const out = await NetRendezvous.swap({
+      code, slot: "answer", want: "offer", token: { cancelled: false },
+      reply: async () => null,
+    });
+    assert.equal(out.ok, false);
+    assert.equal(out.error, "reply_failed");
+  } finally { await r.close(); }
+});
+
+test("waitFor resolves as soon as the other side posts", async () => {
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    const token = { cancelled: false };
+    const pending = NetRendezvous.waitFor(code, "answer", token);
+    setTimeout(() => NetRendezvous.put(code, "answer", "LATE-ARRIVAL"), 300);
+    const got = await pending;
+    assert.equal(got.ok, true);
+    assert.equal(got.payload, "LATE-ARRIVAL");
+  } finally { await r.close(); }
+});
+
+test("waitFor stops when it is cancelled, and does not resolve later", async () => {
+  // A poll that outlives the screen that started it keeps hitting a server
+  // nobody is looking at.
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    const token = { cancelled: false };
+    const pending = NetRendezvous.waitFor(code, "answer", token);
+    setTimeout(() => { token.cancelled = true; }, 200);
+    const got = await pending;
+    assert.equal(got.ok, false);
+    assert.equal(got.error, "cancelled");
+  } finally { await r.close(); }
+});
+
+test("an empty code reports nobody there, not an error", async () => {
+  const r = await relay();
+  try {
+    const res = await NetRendezvous.get(NetRendezvous.makeCode(), "offer");
+    assert.equal(res.ok, false);
+    assert.equal(res.error, "not_found");
+    assert.match(res.message, /nobody/i);
+  } finally { await r.close(); }
+});
+
+test("a second host on a live code is refused rather than stealing the guest", async () => {
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    await NetRendezvous.put(code, "offer", "FIRST-HOST");
+    const clash = await NetRendezvous.put(code, "offer", "SECOND-HOST");
+    assert.equal(clash.ok, false);
+    assert.equal(clash.error, "taken");
+    // The first host's guest still finds the right room.
+    assert.equal((await NetRendezvous.get(code, "offer")).body.payload, "FIRST-HOST");
+  } finally { await r.close(); }
+});
+
+test("a dead relay is reported, never thrown", async () => {
+  // This is the failure that matters: the one service in the game is down and
+  // the lobby has to say so and fall back, not throw inside a click handler.
+  const r = await relay({ dead: true });
+  try {
+    const res = await NetRendezvous.get(NetRendezvous.makeCode(), "offer");
+    assert.equal(res.ok, false);
+    assert.equal(res.error, "relay");
+    assert.match(res.message, /invite link/i, "should point at the path that still works");
+  } finally { await r.close(); }
+});
+
+test("a captive portal answering 200 with HTML is 'relay', not 'offline'", async () => {
+  // A hotel network intercepts the request and returns its login page with a
+  // 200. That is not the service being unreachable — "offline" spent the
+  // poll's transient retries on it — it is this network intercepting traffic.
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end("<html><body>Welcome to the hotel Wi-Fi</body></html>");
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  NetRendezvous.setUrl("http://127.0.0.1:" + server.address().port);
+  try {
+    const res = await NetRendezvous.get(NetRendezvous.makeCode(), "offer");
+    assert.equal(res.ok, false);
+    assert.equal(res.error, "relay");
+    assert.match(res.message, /intercepting/i);
+    assert.match(res.message, /invite link/i, "should point at the path that still works");
+  } finally {
+    NetRendezvous.setUrl(null);
+    await new Promise((r) => server.close(r));
+  }
+});
+
+test("an unreachable relay is reported, never thrown", async () => {
+  const r = await relay();
+  await r.close();                                  // nothing is listening now
+  const res = await NetRendezvous.get(NetRendezvous.makeCode(), "offer");
+  assert.equal(res.ok, false);
+  assert.equal(res.error, "offline");
+});
+
+test("room codes are available with nothing configured at all", () => {
+  // The point of the public-broker backend: no deploy, no URL, no terminal.
+  // configured() is unconditionally true because the fallback always exists;
+  // usingPrivateRelay() is the one that says WHICH backend will be used.
+  NetRendezvous.setUrl(null);
+  assert.equal(NetRendezvous.configured(), true);
+  assert.equal(NetRendezvous.usingPrivateRelay(), false);
+  NetRendezvous.setUrl("https://example.invalid");
+  assert.equal(NetRendezvous.usingPrivateRelay(), true, "a set URL takes precedence");
+  NetRendezvous.setUrl(null);
+});
+
+// ---------------------------------------------------------------------------
+// The encryption that makes a PUBLIC broker safe to meet on
+// ---------------------------------------------------------------------------
+
+test("the payload round-trips under the room code", async () => {
+  const code = NetRendezvous.makeCode();
+  const secret = "APEX1.s." + "aB3-_x9Zq".repeat(20);
+  const sealed = await NetRendezvous.seal(code, secret);
+  assert.ok(sealed.length > secret.length, "should carry an IV and a tag");
+  assert.equal(await NetRendezvous.open(code, sealed), secret);
+});
+
+test("a wrong code cannot read the payload", async () => {
+  // This is the whole security claim: the broker is public, anyone may
+  // subscribe, and the code is the only secret. If a near-miss decrypted, the
+  // room code would be decoration.
+  const a = NetRendezvous.makeCode();
+  let b = NetRendezvous.makeCode();
+  while (b === a) b = NetRendezvous.makeCode();
+  const sealed = await NetRendezvous.seal(a, "APEX1.s.SECRET");
+  assert.equal(await NetRendezvous.open(b, sealed), null);
+  // Ciphertext tampering fails the GCM tag rather than yielding a mangled SDP.
+  const tampered = sealed.slice();
+  tampered[tampered.length - 1] ^= 0xff;
+  assert.equal(await NetRendezvous.open(a, tampered), null);
+});
+
+test("two seals of the same text differ", async () => {
+  // A fresh IV each time. Identical ciphertext on a public broker would leak
+  // that two people are exchanging the same invite.
+  const code = NetRendezvous.makeCode();
+  const one = await NetRendezvous.seal(code, "same");
+  const two = await NetRendezvous.seal(code, "same");
+  assert.notDeepEqual([...one], [...two]);
+});
+
+test("the envelope is bound to its slot: an offer cannot be replayed as an answer", async () => {
+  // v2 carries the slot name as AES-GCM additional data. A relay operator (or
+  // anyone who can answer for one) holding a sealed offer must not be able to
+  // hand it back through the answer slot and have the host accept it.
+  const code = NetRendezvous.makeCode();
+  const sealed = await NetRendezvous.seal(code, "APEX1.s.OFFER", "offer");
+  assert.equal(await NetRendezvous.open(code, sealed, "offer"), "APEX1.s.OFFER");
+  assert.equal(await NetRendezvous.open(code, sealed, "answer"), null, "wrong slot fails the tag");
+  assert.equal(await NetRendezvous.open(code, sealed), null, "and so does no slot at all");
+  // Fresh salt AND fresh IV per envelope, so the first 28 bytes never repeat.
+  const again = await NetRendezvous.seal(code, "APEX1.s.OFFER", "offer");
+  assert.notDeepEqual([...sealed.slice(0, 16)], [...again.slice(0, 16)], "random salt");
+  assert.notDeepEqual([...sealed.slice(16, 28)], [...again.slice(16, 28)], "random iv");
+  // Too short to hold salt + iv + tag is refused without touching WebCrypto.
+  assert.equal(await NetRendezvous.open(code, sealed.slice(0, 40), "offer"), null);
+});
+
+test("the private-relay envelope is v2 only — plaintext from the Worker is refused", async () => {
+  // The old openPrivate() returned an unversioned string AS the payload, so a
+  // relay operator could substitute any SDP. Both peers run the same build
+  // (the handshake's build check refuses anything else), so nobody legitimate
+  // can still be sending v1 or plaintext.
+  const code = NetRendezvous.makeCode();
+  const env = await NetRendezvous.sealPrivate(code, "offer", "APEX1.s.X");
+  assert.match(env, /^v2\.[A-Za-z0-9_-]+$/, "versioned, url-safe base64");
+  assert.equal(await NetRendezvous.openPrivate(code, "offer", env), "APEX1.s.X");
+  assert.equal(await NetRendezvous.openPrivate(code, "answer", env), null, "slot-bound here too");
+  assert.equal(await NetRendezvous.openPrivate(code, "offer", "APEX1.s.PLAINTEXT"), null);
+  assert.equal(await NetRendezvous.openPrivate(code, "offer", "v1." + env.slice(3)), null);
+  assert.equal(await NetRendezvous.openPrivate(code, "offer", "v2."), null);
+  assert.equal(await NetRendezvous.openPrivate(code, "offer", null), null);
+});
+
+// ── round 8: the key derives once per code ───────────────────────────────────
+test("repeated seals and opens of one code run PBKDF2 exactly once", async () => {
+  // 120 000 rounds per derivation, and the callers are hot (repost every 5 s,
+  // one per relay onopen, one per inbound frame). The memo keys on the
+  // normalised code; the wrong-code test above already proves a DIFFERENT
+  // code cannot be served the cached key.
+  // The per-envelope HKDF step is a deriveKey too, so count the PBKDF2 —
+  // which is now a deriveBits into the memoised HKDF base.
+  const orig = crypto.subtle.deriveBits.bind(crypto.subtle);
+  let derives = 0;
+  Object.defineProperty(crypto.subtle, "deriveBits", {
+    configurable: true,
+    value: (...args) => { if (args[0] && args[0].name === "PBKDF2") derives++; return orig(...args); },
+  });
+  try {
+    const code = "APEX1.z.MEMOCODE";
+    const s1 = await NetRendezvous.seal(code, "one");
+    const s2 = await NetRendezvous.seal(code, "two");
+    assert.equal(await NetRendezvous.open(code, s1), "one");
+    assert.equal(await NetRendezvous.open(code, s2), "two");
+    assert.equal(derives, 1, `PBKDF2 ran ${derives}× for one code`);
+    await NetRendezvous.seal("APEX1.z.OTHERCODE", "x");
+    assert.equal(derives, 2, "a new code derives a new key");
+  } finally {
+    delete crypto.subtle.deriveBits;
+  }
+});
+
+test("waitFor() rides out a transient 429 instead of aborting the wait", async () => {
+  const r = await relay({ flakyGets: 2 });
+  try {
+    const code = NetRendezvous.makeCode();
+    assert.equal((await NetRendezvous.put(code, "answer", "APEX1.s.ANSWER")).ok, true);
+    const got = await NetRendezvous.waitFor(code, "answer", null, null);
+    assert.equal(got.ok, true, "two rate-limited polls then the payload: " + JSON.stringify(got));
+    assert.equal(got.payload, "APEX1.s.ANSWER");
+  } finally { await r.close(); }
+});
+
+test("waitFor() still gives up on a relay that is refusing every poll", async () => {
+  const r = await relay({ flakyGets: 99 });
+  try {
+    const code = NetRendezvous.makeCode();
+    const got = await NetRendezvous.waitFor(code, "answer", null, null);
+    assert.equal(got.ok, false);
+    assert.equal(got.error, "rate_limited", "the last transient error is what comes back after the streak cap");
+  } finally { await r.close(); }
+});
+
+// ── the public Nostr topic is derived from the STRETCHED key ─────────────────
+test("the Nostr topic costs a PBKDF2 per guessed code, and the verification code is the MITM check", async () => {
+  // The `x` tag is plaintext on public relays. A topic that is a cheap hash of
+  // the code turns ~30 bits of code into a minutes-long brute force; this
+  // proves each topic is HKDF over the 120 000-round PBKDF2 output. The salt
+  // below is a CONSTANT, so that cost is paid once for the whole code space
+  // (a precomputable table), not once per room — which is why the pairing is
+  // authenticated by the verification code asserted at the end, not by the
+  // stretch.
+  const code = NetRendezvous.makeCode();
+  const offer = await NetRendezvous.topic(code, "offer");
+  const answer = await NetRendezvous.topic(code, "answer");
+  assert.match(offer, /^[0-9a-f]{20}$/, "80-bit hex topic");
+  assert.notEqual(offer, answer, "offers and answers meet on separate topics");
+  assert.equal(await NetRendezvous.topic(code.toLowerCase(), "offer"), offer, "deterministic over the normalised code");
+
+  // The old derivation must be gone.
+  const sha = new Uint8Array(await crypto.subtle.digest("SHA-256",
+    new TextEncoder().encode("room|" + code + "|offer")));
+  const oldTopic = [...sha.slice(0, 10)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  assert.notEqual(offer, oldTopic, "no longer SHA-256(room|code|slot)");
+
+  // Recompute independently: PBKDF2(code) -> HKDF(info=v<PROTOCOL>/topic|slot).
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(code), "PBKDF2", false, ["deriveBits"]);
+  const stretched = await crypto.subtle.deriveBits({ name: "PBKDF2",
+    salt: new TextEncoder().encode("apex26-rendezvous-v2"), iterations: 120000, hash: "SHA-256" }, base, 256);
+  const hk = await crypto.subtle.importKey("raw", stretched, "HKDF", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0),
+    info: new TextEncoder().encode("apex26-rendezvous-v" + NetRendezvous.PROTOCOL + "/topic|offer") }, hk, 80);
+  assert.equal(offer, [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join(""),
+    "topic = HKDF over the PBKDF2-stretched key");
+  assert.ok(NetRendezvous.PROTOCOL >= 3, "protocol bumped with the topic change");
+
+  // And a fresh code's topic runs PBKDF2 (the cost an attacker pays per guess).
+  const orig = crypto.subtle.deriveBits.bind(crypto.subtle);
+  let derives = 0;
+  Object.defineProperty(crypto.subtle, "deriveBits", {
+    configurable: true,
+    value: (...args) => { if (args[0] && args[0].name === "PBKDF2") derives++; return orig(...args); },
+  });
+  try {
+    let other = NetRendezvous.makeCode();
+    while (other === code) other = NetRendezvous.makeCode();
+    await NetRendezvous.topic(other, "offer");
+    assert.equal(derives, 1, "one PBKDF2 per new code");
+  } finally { delete crypto.subtle.deriveBits; }
+
+  // THE VERIFICATION STEP. Same pair of DTLS fingerprints on both screens ->
+  // same 4 letters (order-free, colon/case-free); a middleman's certificate on
+  // either leg -> a different code, which the host sees and REMOVEs.
+  const host = "AB:".repeat(31) + "01", guest = "cd".repeat(31) + "02", mitm = "EF:".repeat(31) + "03";
+  const onHost = await NetRendezvous.verifyCode(host, guest);
+  const onGuest = await NetRendezvous.verifyCode(guest.toUpperCase(), host.replace(/:/g, "").toLowerCase());
+  assert.equal(NetRendezvous.VERIFY_LEN, 4);
+  assert.match(onHost, new RegExp("^[" + NetRendezvous.ALPHABET + "]{4}$"), "4 letters, room-code alphabet");
+  assert.equal(onGuest, onHost, "both screens show the same code");
+  assert.notEqual(await NetRendezvous.verifyCode(host, mitm), onHost, "a middleman's leg reads differently");
+  assert.equal(await NetRendezvous.verifyCode(host, null), null, "no fingerprint, no code");
+  assert.notEqual(onHost, code.slice(0, 4), "independent of the room code");
+});
+
+test("verifyFor reads both fingerprints off a connected peer connection and never rejects", async () => {
+  const sdp = (fp) => "v=0\r\na=ice-ufrag:abcd\r\na=fingerprint:sha-256 " + fp + "\r\n";
+  const fpA = Array.from({ length: 32 }, (_, i) => (i * 7 & 255).toString(16).padStart(2, "0").toUpperCase()).join(":");
+  const fpB = Array.from({ length: 32 }, (_, i) => (i * 13 & 255).toString(16).padStart(2, "0").toUpperCase()).join(":");
+  const host = { localDescription: { sdp: sdp(fpA) }, remoteDescription: { sdp: sdp(fpB) } };
+  const guest = { localDescription: { sdp: sdp(fpB) }, remoteDescription: { sdp: sdp(fpA) } };
+  const v = await NetRendezvous.verifyFor(host);
+  assert.match(v, /^[A-Z2-9]{4}$/);
+  assert.equal(await NetRendezvous.verifyFor(guest), v, "host and guest agree");
+  assert.equal(await NetRendezvous.verifyCode(fpA, fpB), v);
+  assert.equal(await NetRendezvous.verifyFor(undefined), null, "a loopback transport has no pc");
+  assert.equal(await NetRendezvous.verifyFor({ localDescription: null }), null);
+});
+
+
+test("private room traffic never reveals the high-entropy token or a usable encryption key", async () => {
+  const r = await relay();
+  try {
+    const code = NetRendezvous.makeCode();
+    assert.equal(code.length, 32);
+    assert.ok(code.length * Math.log2(NetRendezvous.ALPHABET.length) > 158);
+    assert.equal(NetRendezvous.valid(code), true);
+    assert.equal(NetRendezvous.valid("ABC234"), false, "old private codes are rejected");
+    assert.equal((await NetRendezvous.put(code, "offer", "PRIVATE-SDP")).ok, true);
+    const captured = r.requests[0];
+    assert.match(captured.path, /^\/v3\/r\/[0-9a-f]{64}\/offer$/);
+    assert.ok(!JSON.stringify(r.requests).includes(code), "neither path nor body carries the token");
+    // An independent operator context receives ONLY what the relay sees. The
+    // old /r/<code> let it decrypt and sign replacements with these same APIs.
+    const operator = vm.createContext({ crypto, TextEncoder, TextDecoder, Uint8Array, atob, btoa });
+    const sources = ["bytes", "rendezvous"].map((name) => fs.readFileSync(path.join(ROOT, `js/net/${name}.js`), "utf8")).join("\n");
+    const rv = vm.runInContext(sources + ";NetRendezvous", operator);
+    const route = captured.path.split("/")[3];
+    assert.equal(await rv.openPrivate(route, "offer", captured.body.payload), null);
+    const forged = await rv.sealPrivate(route, "offer", "OPERATOR-SDP");
+    r.rooms.get(route).offer.payload = forged;
+    assert.equal((await NetRendezvous.get(code, "offer")).error, "corrupt");
+    assert.equal((await NetRendezvous.put("ABC234", "offer", "OLD")).error, "bad_code");
+    assert.equal((await NetRendezvous.get("ABC234", "offer")).error, "bad_code");
+    assert.equal(r.requests.length, 2, "legacy private calls never reach HTTP");
+  } finally { await r.close(); NetRendezvous.setUrl(null); }
+});
+
+test("private tokens fail closed without cryptographic randomness", () => {
+  const sandbox = vm.createContext({ TextEncoder, URL, crypto: {}, localStorage: { getItem: () => "https://private.test" } });
+  const rv = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/net/rendezvous.js"), "utf8") + ";NetRendezvous", sandbox);
+  assert.equal(rv.makeCode(), null, "Math.random is never a private-token fallback");
+});
+
+test("an old Worker requires an upgrade, never a six-character or plaintext downgrade", async () => {
+  const nativeFetch = globalThis.fetch;
+  NetRendezvous.setUrl("https://old-worker.test");
+  const requests = [];
+  try {
+    const code = NetRendezvous.makeCode();
+    for (const status of [404, 200, 426]) {
+      globalThis.fetch = async (url) => { requests.push(url); return new Response('{"ok":true}', { status }); };
+      const result = await NetRendezvous.put(code, "offer", "SDP");
+      assert.equal(result.error, "relay_version");
+      assert.match(result.message, /Update.*Worker.*invite link/);
+    }
+    assert.equal(requests.length, 3, "one request per attempt, no legacy retry");
+    assert.ok(requests.every((url) => new URL(url).pathname.startsWith("/v3/r/")));
+  } finally { globalThis.fetch = nativeFetch; NetRendezvous.setUrl(null); }
+});
+
+
+test("QR relay configuration is validated and scoped to the controller document", () => {
+  NetRendezvous.setUrl("https://saved-worker.test");
+  try {
+    assert.equal(NetRendezvous.setSessionUrl("https://qr-worker.test/base/"), true);
+    assert.equal(NetRendezvous.baseUrl(), "https://qr-worker.test/base");
+    assert.equal(localStorage.getItem(NetRendezvous.STORE_KEY), "https://saved-worker.test");
+    for (const invalid of ["http://untrusted.test", "javascript:alert(1)", "https://user:pw@worker.test",
+      "https://worker.test?secret=x", "https://worker.test#x", "/relative"]) {
+      assert.equal(NetRendezvous.setSessionUrl(invalid), false, invalid);
+      assert.equal(NetRendezvous.baseUrl(), "https://qr-worker.test/base");
+    }
+    assert.equal(NetRendezvous.setSessionUrl("http://127.0.0.1:3456/private"), true);
+    assert.equal(NetRendezvous.setSessionUrl(null), true);
+    assert.equal(NetRendezvous.usingPrivateRelay(), false, "public QR can override a saved private preference");
+    assert.equal(NetRendezvous.makeCode().length, 6);
+    NetRendezvous.setSessionUrl(undefined);
+    assert.equal(NetRendezvous.baseUrl(), "https://saved-worker.test");
+  } finally { NetRendezvous.setSessionUrl(undefined); NetRendezvous.setUrl(null); }
+});
+
+test("persistent relay configuration uses the same secure URL policy", () => {
+  NetRendezvous.setUrl("https://saved-worker.test/base/");
+  try {
+    assert.equal(NetRendezvous.baseUrl(), "https://saved-worker.test/base");
+    for (const invalid of ["http://untrusted.test", "javascript:alert(1)", "https://user:pw@worker.test",
+      "https://worker.test?secret=x", "https://worker.test#x", "/relative"]) {
+      assert.equal(NetRendezvous.setUrl(invalid), false, invalid);
+      assert.equal(NetRendezvous.baseUrl(), "https://saved-worker.test/base", "invalid input must not replace the saved relay");
+    }
+    assert.equal(NetRendezvous.setUrl("http://127.0.0.1:3456/private/"), true);
+    assert.equal(NetRendezvous.baseUrl(), "http://127.0.0.1:3456/private");
+  } finally { NetRendezvous.setUrl(null); }
+});
+
+// ── room-code join honesty: fail a missing code in ~8–15 s, not 120 s ────────
+test("POLL_TIMEOUT_MS is the ~8–15 s lobby join target, not a two-minute hang", () => {
+  assert.ok(NetRendezvous.POLL_TIMEOUT_MS >= 8000, "enough headroom for a few polls + fetch");
+  assert.ok(NetRendezvous.POLL_TIMEOUT_MS <= 15000, "fake/missing codes must not sit on Looking for…");
+});
+
+test("waitFor expired copy is actionable (no false 'couple of minutes' claim)", async () => {
+  // Advance wall time past POLL_TIMEOUT without sleeping the full window: each
+  // poll still hits a real 404 from the stand-in, but Date.now jumps so the
+  // next loop iteration sees expiry.
+  const r = await relay();
+  const realNow = Date.now;
+  let skew = 0;
+  try {
+    Date.now = () => realNow() + skew;
+    const code = NetRendezvous.makeCode();
+    // First poll at t=0 (not_found), then claim we are past the timeout.
+    const pending = NetRendezvous.waitFor(code, "offer", null, () => {
+      skew = NetRendezvous.POLL_TIMEOUT_MS + 1;
+    });
+    const got = await pending;
+    assert.equal(got.ok, false);
+    assert.equal(got.error, "expired");
+    assert.match(got.message, /double-check it/i);
+    assert.match(got.message, /fresh one/i);
+    assert.doesNotMatch(got.message, /couple of minutes/i);
+    assert.doesNotMatch(got.message, /six characters/i);
+  } finally {
+    Date.now = realNow;
+    await r.close();
+  }
+});
+
+test("a private-relay HOST keeps polling past the guest's 12 s; guests keep 12 s (bug-hunt 8.4)", async () => {
+  assert.ok(NetRendezvous.HOST_POLL_TIMEOUT_MS >= 60000, "a host is waiting for a friend who must be sent the code");
+  assert.match(fs.readFileSync(path.join(ROOT, "js/net/rendezvous.js"), "utf8"),
+    /waitFor\(code, want, token, onTick, HOST_POLL_TIMEOUT_MS\)/, "swap's host branch passes the host window");
+  const r = await relay();
+  const realNow = Date.now;
+  let skew = 0;
+  try {
+    Date.now = () => realNow() + skew;
+    const code = NetRendezvous.makeCode();
+    // Guest (no timeout argument): expired once past POLL_TIMEOUT_MS.
+    const guest = await NetRendezvous.waitFor(code, "offer", null, () => { skew = NetRendezvous.POLL_TIMEOUT_MS + 1; });
+    assert.equal(guest.error, "expired");
+    // Host: the same skew is not an expiry; only HOST_POLL_TIMEOUT_MS is.
+    skew = 0;
+    let ticks = 0;
+    const host = await NetRendezvous.waitFor(code, "offer", null, () => {
+      ticks++;
+      skew = ticks === 1 ? NetRendezvous.POLL_TIMEOUT_MS + 1 : NetRendezvous.HOST_POLL_TIMEOUT_MS + 1;
+    }, NetRendezvous.HOST_POLL_TIMEOUT_MS);
+    assert.ok(ticks >= 2, "the host was still polling after the guest's window");
+    assert.equal(host.error, "expired");
+  } finally {
+    Date.now = realNow;
+    await r.close();
+  }
+});

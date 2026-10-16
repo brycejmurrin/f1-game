@@ -1,0 +1,991 @@
+# What the AI field actually does, and what a real one does (2026-09-08)
+
+Written because "the AI bunch up" turned out to be four different things, two of
+which were my own measurement errors. Instrument: `tools/check/ai-field.mjs`.
+
+## Baselines, shipped tree, before any change
+
+| | Monza normal | Monza hard | Monaco normal |
+|---|---|---|---|
+| pace spread (`tierV * skill`) | 8.64 % | 8.64 % | 8.64 % |
+| field strings out over 240 s | 344 → 1592 m | 353 → 1440 m | 364 → **9233 m** |
+| settled passes | 29 | 24 | 16 |
+| oscillation (pairs swapping 3+ times) | **57 %** | 52 % | 29 % |
+| nose-to-tail median / longest | 2.0 / 23.3 s | 2.0 / 22.5 s | 2.5 / **92 s** |
+
+## Calibration against real F1
+
+| ours | real | ratio |
+|---|---|---|
+| 8.64 % field pace spread | 2025: whole field within **1.52 s/lap** race pace ≈ 1.7 % of a 90 s lap; widest recent seasons ≈ 4 % | **2–5× too wide** |
+| 604 → 1555 m in 240 s | ≈ 250 m over the same distance | **~4× too fast** |
+| 29 settled passes in 240 s | **30.9 overtakes per RACE** (2025); 32.8 (2024) | far too many |
+
+Sources: [motorsport.com on 2026 field spread](https://www.motorsport.com/f1/news/weds-f1s-2026-reset-spreads-field-out-to-its-widest-since-2017/10812730/),
+[F1Technical 2025 overtake counts](https://www.f1technical.net/news/28118).
+Overtake counts vary by what is counted (lap 1, pit cycles, lapped cars) — take
+the order of magnitude, not the digit.
+
+**Two opposite problems in one field.** It strings out several times too fast
+*and* individual pairs get stuck together. A constant wide pace spread can only
+integrate; that is the stringing. The oscillation is separate and is not
+explained by pace: oscillating pairs differ by 1.34 % of pace, settled pairs by
+1.20 % — indistinguishable, and one pair oscillates six times on a 1.79 % gap.
+
+## Dirty air — the missing term
+
+There was no wake penalty anywhere in the tree. The tow gave +4.5 % of top
+speed (`AiDrive.towGain`) and cost nothing, so **following was strictly and
+only beneficial**. With a median adjacent-car pace gap of 0.484 %, a slipstream
+was worth about nine grid positions of pace, unopposed — which is a mechanism
+for pairs trading places indefinitely.
+
+Real figures, for the magnitude: the FIA's own CFD has the **2025** cars losing
+roughly **20 % of downforce at 20 m and 35 % at 10 m**; the 2022 regulations
+targeted 4 % / 18 %, and the 2026 baseline is ~10 % / 20 %.
+Sources: [Formula1.com on the 2022 car](https://www.formula1.com/en/latest/article/10-things-you-need-to-know-about-the-all-new-2022-f1-car.4OLg8DrXyzHzdoGrbqp6ye),
+[The Race on the FIA CFD data](https://www.the-race.com/formula-1/exclusive-new-data-f1-aero-losses-ruining-close-racing/).
+
+**Note the direction before reaching for it.** Dirty air is what CREATES DRS
+trains. It is the right term for realism and the wrong one for "make them bunch
+up less" — measured here, it halved Monaco's absurd stringing (9233 → 4461 m)
+and cut Monza's order flips 18 %, but LENGTHENED close-following episodes
+(longest 23 → 41 s at Monza). Both effects are the same mechanic working.
+
+## Prior art worth stealing (not yet done)
+
+- **Rubber banding done properly** — Nic Melder, who wrote Codemasters' racing
+  AI, specifies a **dead zone** around the player, **forward banding** (slow the
+  cars ahead) as well as reverse, a separate **first-place band** keyed to the
+  P1–P2 gap, hard **disables at the race start** (banding into T1 is "the
+  antithesis of what we want") and when lapping, and — the important one —
+  modifying **driver skill** (braking points, corner speed) rather than power,
+  "as the drivers are still in the same cars and so no 'cheating' is happening".
+  Ours multiplies `vmax` under CATCH-UP (`aiPace`), is reverse-only, and has
+  start/lapping disables. Default AI pace is SCRIPTED (2026-10-01): no
+  gap-to-player boost — Pure / Black Rock race-scripted intent. See
+  `js/physics/ai-band.js` and docs/PHYSICS.md §AI field.
+  [Game AI Pro ch.42](https://www.gameaipro.com/GameAIPro/GameAIPro_Chapter42_A_Rubber-Banding_System_for_Gameplay_and_Race_Management.pdf).
+  Measured caveat (catch-up on): our band contributes **0.9 % for five seconds and then
+  0.00 %** unless the player is leading by hundreds of metres, so it is not the
+  cause of anything a mid-pack player sees.
+- **Narrow the spread, add a biorhythm** — skill should map onto ~98–99 %, and
+  "a 1 % variation accumulated over several laps can have a surprisingly large
+  effect"; variety comes from a slow waveform on skill instead, making a driver
+  briefly vulnerable without being permanently slower. A constant spread
+  integrates; an oscillating one does not.
+  [Game AI Pro ch.38](https://www.gameaipro.com/GameAIPro/GameAIPro_Chapter38_An_Architecture_Overview_for_AI_in_Racing_Games.pdf) §38.4.
+- **Race-pace script / positional groups** — Pure banded AI to a *scripted
+  position in the race* rather than to the player's bumper, with target points
+  that move over the race and are switched off in the final 20–25 %.
+  [Jimenez, "The Pure Advantage"](https://www.gamedeveloper.com/design/the-pure-advantage-advanced-racing-game-ai).
+- **Overtake as a utility state with hysteresis and an abort cooldown** — and
+  "not every overtaking opportunity should be taken". Ours has cooldowns on the
+  ATTACKER after a failure but nothing stops a just-passed car counter-attacking
+  immediately. [Game AI Pro ch.38](https://www.gameaipro.com/GameAIPro/GameAIPro_Chapter38_An_Architecture_Overview_for_AI_in_Racing_Games.pdf) §38.5.2.
+- **Persona axes that are not speed** — iRacing exposes Skill, Aggression,
+  **Optimism** ("believes he is more skilled than he actually is" → late braking
+  and running wide), Smoothness and Age per driver, plus a field-wide Skill
+  Range. Optimism is the cheapest believable mistake model going.
+  [iRacing AI Rosters](https://www.iracing.com/airoster-/).
+
+Out of scope: Forza's Drivatar and GT Sophy both need training pipelines this
+project does not have.
+
+## Open, with citations, from the code audit
+
+- ~~`js/game.js:4804` starts the corner look **12 m ahead**~~ — FIXED
+  2026-09-16 (`const ss0 = Math.ceil(c.s / dsN) * dsN`). The floor put the
+  nearest sample 12 m in front of the car and `brakeTarget` admits a sample at
+  `sqrt(vC² + 2·brake·0.85·d)`, so every AI carried a standing `sqrt(vC² + 449)`
+  allowance into the apex and never had to reach `vC`. **Re-measured before
+  removing it: 8.2 % of lap time at Monza** (119.55 → 129.40 s field median in
+  the VM), larger than the 6.9 % this row claimed. Removing it alone would have
+  made the field slow, so the difficulty ladder was re-cut against the corrected
+  pace: `DIFF` gained a `corner` dimension (easy 0.93 / normal 0.97 / hard 1.00)
+  so difficulty scales the AI's willingness to commit to a corner and not just
+  its ground speed. That second half is the real change: difficulty was one
+  number, and a single ground-speed scale cannot make an easy field brake early
+  and a hard field commit.
+  Monza now settles at 138.97 / 132.50 / 125.02 and Monaco at 99.25 / 96.17 /
+  92.08: monotonic, and a ~10 % easy→hard spread against the 1.6 % measured
+  here. `hard.ai` is capped at 1.030 so `0.9695 × 1.030 = 0.9986` keeps the
+  quickest AI just inside the player's top-speed scale, and `BAND_CEIL` is
+  clamped to 1 because the derived value would otherwise have licensed a
+  rubber-banded easy car to out-run the player outright.
+- ~~The AI's corner model has **no downforce term**~~ — FIXED 2026-09-09, see
+  "Downforce in the AI's corner model" below. (The first cut of this row also
+  claimed the AI was "superhuman in hairpins, 2.2× a player's grip": wrong, and
+  withdrawn. The player's `aeroGrip` is `1 + DOWNFORCE·(v/vTop)²`, which tends
+  to **1.0** as the speed goes to zero — at a Monaco hairpin the two models were
+  within ~3 %. The asymmetry was one-sided and lived entirely in the FAST
+  corners, where the player had up to 65 % more grip than the AI credited
+  itself with.)
+- ~~`js/physics/ai-drive.js:604` returns 0 whenever there is no curvature
+  18–70 m ahead, so **the AI cannot defend on a straight**~~ — ALREADY FIXED
+  when this row was re-checked on 2026-09-16; the line number had gone stale
+  and the row with it. `defendPull` has carried a straight branch since the
+  covering work: below `|kA| = 0.004` the side comes from the chaser's own
+  lateral offset (dead behind is not yet a move to cover), at three fifths of
+  the corner pull, and `defendOnce` still spends one move per straight.
+  `tests/unit/ai-drive.test.mjs` pins both directions and the dead-behind
+  no-op. Nothing to do; the row is struck rather than actioned.
+- ~~On easy, `0.851 × 1.18 = 1.004` beats `DIFF.hard.ai = 0.980`~~ — FIXED
+  2026-09-09 (`BAND_CEIL` in js/game.js caps a banded AI at the top of the
+  ladder, `DIFF.hard.ai · (1 + DIFF.hard.band)` = 0.9996). It only ever bit on
+  easy, at gaps past ~640 m, and it is a monotonicity fix rather than a
+  measurable pace change.
+  **The band now lifts corner authority too** (2026-09-16): it used to scale
+  only `vmax`, so a banded car braked and cornered exactly like the same
+  driver with a higher top speed — on a twisty track it caught up down the
+  straight and fell back through every corner. `updateCar` writes the band
+  factor to `c._bandNow` and the brake target reads
+  `diffCorner = min(1, DIFF.corner · (1 + band))`, the same ≤ 1.0 policy the
+  ladder already holds (the AI never corners past its own grip model). Easy
+  and normal reach 1.0 at their full band (0.93 × 1.18, 0.97 × 1.08); hard is
+  already there. Because `lateralScale` gates the actuator and `cornerSpeed`
+  inverts it, the lifted target stays one the car can turn at.
+
+## The AI's planner and its actuator disagree about grip (2026-09-09) — CLOSED 2026-09-14
+
+**Resolved by `bf1979d` (2026-09-14): `AiDrive.lateralScale` is now the one
+grip model both sides read, and `AiDrive.cornerSpeed` inverts its taper for
+the planner.** The "two honest directions" below were taken as a third — a
+shared function — so neither side contradicts the other. This section is
+kept as the record of the measurement that found it; the open item is gone.
+
+**A downforce term was added to the AI's corner model and then REVERTED the
+same day, because measuring it found a bigger defect underneath.** Read this
+section as the record of that, not as a description of shipped behaviour.
+
+### What was tried, and why it was wrong
+
+`js/game.js`'s `aeroGrip` is `1 + DOWNFORCE·aeroDfMult·(v/vTop)²`, so a
+PLAYER's lateral grip is 65 % higher at the top speed than at rest, while
+`brakeTarget` sized every corner off a flat `latMax`. That looked like a plain
+player/AI asymmetry, and the fix looked like giving the AI the same term.
+
+It is not, and the reason is that **the AI does not simulate lateral grip the
+way the player does at all.** The player integrates a slip model whose `muBase`
+carries `aeroGrip`. The AI takes a kinematic lateral step (`js/game.js`, the
+`c.x +=` line in `updateCar`):
+
+    c.x += steer * STEER_VMAX * aiLat * gripScale * kerbGrip * gripMult(c) * ...
+
+with `gripScale = 1 - clamp((vStd(speed) - 20)/(VMAX - 20), 0, 1) * 0.28`, and
+its yaw-rate cap is `AI_YAW_LAT * LAT_MAX * gripMult(c) / vAbs`. **Neither has
+an aero term, and `gripScale` FALLS by up to 28 % with speed.**
+
+So the change put the AI's planner and its actuator in OPPOSITE directions:
+planned grip rising 65 % with speed, available grip falling 28 %. The AI planned
+entry speeds it could not physically turn at, arrived too fast and washed out of
+the apex. `tests/unit/ai-racecraft-vm.test.mjs` caught it, and an instrumented
+A/B against the pre-change tree says it was not a threshold graze:
+
+| monza corner | before | with the aero term |
+|---|---|---|
+| s0=2068, len 128 m | apex 5.969 m inside | 5.978 m (unchanged) |
+| **s0=2451, len 52 m** | **apex 4.068 m** | **3.467 m** |
+
+0.60 m of apex depth at the SHORT corner, nothing at the long one — the shape a
+planner/actuator mismatch makes, since the long corners were bounded by other
+limits anyway.
+
+### The real defect, now measured rather than asserted
+
+**The AI's corner planner and its lateral actuator model grip differently, and
+with opposite slopes in speed.** That is worth fixing properly, and there are
+two honest directions, neither of them a one-liner:
+
+- make the PLANNER match the ACTUATOR — give `brakeTarget` the same `gripScale`
+  taper, so the AI plans for grip that falls with speed. More conservative in
+  fast corners, and it needs its own measurement pass;
+- or give the ACTUATOR aero so both rise — a much larger physics change that
+  moves every AI car's cornering everywhere and needs full re-measurement.
+
+Until one of those is done, `brakeTarget` staying on flat `latMax` is the
+CONSISTENT choice, because it at least does not contradict the actuator.
+
+### The lap-time table the reverted change produced
+
+Kept because it is real measurement and the next attempt should not have to
+re-take it. `tools/check/ai-pace.mjs`, field median, HEAD vs the aero term:
+
+| circuit | easy | normal | hard |
+|---|---|---|---|
+| monza  | 125.90 → 125.50 (−0.32 %) | 120.68 → 120.57 (−0.09 %) | 116.85 → 116.72 (−0.11 %) |
+| monaco | 83.60 → 82.27 (−1.59 %)\* | 82.20 → 82.38 (+0.22 %) | 81.93 → 81.07 (−1.05 %) |
+| spa    | 163.42 → 153.43 (−6.11 %) | 151.15 → 147.65 (−2.32 %) | 146.98 → 142.48 (−3.06 %) |
+
+\* the monaco/easy run timed only 19 of 21 cars, so its median is over a
+different sample than the base's 21 — not a pace change.
+
+Note what this table does NOT prove. Spa getting 2.3 % faster is the AI
+planning more speed, not the AI carrying more speed *well*; the apex
+measurement above is what happens to the line while that lap time falls. A
+faster lap from a planner that outruns its actuator is not an improvement, and
+this is the trap the pace instrument alone walks into — `ai-pace.mjs` and
+`ai-field.mjs` measure time, stringing and passes, and NOTHING about line
+geometry. That gap is why this reached a deploy gate instead of being caught at
+my desk.
+
+## The F1-like pace spread, and what n=5 says about this file (2026-09-09)
+
+The owner's design call: the field should look like F1 — closer, fewer passes.
+`TIER_V` and the driver-skill constants were compressed by the same factor
+(0.347) about the MEASURED FIELD MEAN, so the mean is invariant by construction
+and only the spread moves:
+
+| | before | after |
+|---|---|---|
+| tierV span | 6.16 % | 2.10 % |
+| skill span | 3.19 % | 1.10 % |
+| **product span** | **8.64 %** | **2.92 %** |
+| field mean | 0.9323 | 0.9322 |
+
+Lap time held in the SIM, not just in the arithmetic — monza normal 120.68 ->
+121.60 s (+0.76 %), spa 151.15 -> 150.15 s (-0.66 %), opposite directions, so no
+systematic shift. The difficulty steps also got more consistent between
+circuits (spa easy-vs-normal +8.12 % -> +5.47 %).
+
+### What it did to the racing — measured at n=5 on BOTH trees
+
+| monza, 240 s | baseline | compressed |
+|---|---|---|
+| strings out to | 1505 [1087–1524] m | 1122 [1053–1298] m |
+| order flips | 146 [109–165] | **200 [148–211]** |
+| settled passes | 25 [19–35] | 23 [20–38] |
+| oscillation | 88 (61 %) | 131 (68 %) |
+| nose-to-tail | 23.5 [14.8–24.4] % | 26.3 [23.8–30] % |
+
+| monaco, 240 s | baseline | compressed |
+|---|---|---|
+| strings out to | 4130 **[1337–7807]** m | 1502 **[925–4237]** m |
+| order flips | 39 [27–55] | 46 [32–78] |
+| settled passes | 22 [15–31] | 18 [16–29] |
+| oscillation | 7 (19 %) | 14 (30 %) |
+
+**Read this table for what it does NOT say.** At monaco NOTHING is established:
+every range overlaps almost completely, and the baseline stringing range alone
+spans 1337–7807 m — nearly six-fold. At monza only two effects survive the
+ranges: order flips ROSE (146 -> 200, ranges barely touching) and nose-to-tail
+time rose. Stringing did not improve provably at either circuit.
+
+### Compressed again to the FASTEST era's gap (1.46 %), and a wrong prediction
+
+The owner's follow-up: calibrate to whichever era is fastest. The ground-effect
+cars (2022-24) near-matched Monza's 2003/04 average-speed record and ran the
+tightest field F1 has had — all twenty inside ONE SECOND in 2023 Brazilian
+qualifying, ~1.4 %. (The outright fastest single laps are 2019-21, but that
+field was WIDER, Mercedes being dominant, so "fastest era" does not name one
+number by itself.) Same method, factor 0.174 from the originals, about the
+field mean: product span 8.64 % -> **1.46 %**, mean 0.9323 -> 0.9322.
+
+| monza, n=5 | baseline 8.47 % | 2.92 % | 1.43 % |
+|---|---|---|---|
+| strings out to | 1505 [1087–1524] m | 1122 [1053–1298] | 1071 [964–1157] |
+| order flips | 146 [109–165] | 200 [148–211] | 185 [155–222] |
+| settled passes | 25 [19–35] | 23 [20–38] | 32 [24–57] |
+| oscillation | 88 (61 %) | 131 (68 %) | 113 (62 %) |
+| nose-to-tail | 23.5 [14.8–24.4] % | 26.3 [23.8–30] % | **28.0 [24.8–30.5] %** |
+
+| monaco, n=5 | baseline 8.47 % | 1.43 % |
+|---|---|---|
+| strings out to | 4130 [1337–7807] m | 3872 [991–5883] |
+| order flips | 39 [27–55] | 51 [43–55] |
+| settled passes | 22 [15–31] | 21 [13–30] |
+| oscillation | 7 (19 %) | 18 (35 %) |
+| nose-to-tail | 12.3 [11.6–12.9] % | **14.7 [13.4–15.5] %** |
+
+**I predicted the flip count would rise again at 1.46 %, and it did not** — 200
+-> 185 median, ranges overlapping, so no change established between the two
+compressions. The reasoning behind the prediction ("tighter pace means more
+shuffling") was wrong and should not be built on. The likelier mechanism: at
+near-identical pace a car cannot COMPLETE a pass on raw speed, so the passes
+that happen come from ERS, the pace biorhythm and the slipstream rather than
+from one car simply out-driving another all lap.
+
+What the ranges actually establish, against the 8.47 % baseline:
+
+- **Nose-to-tail time is up at BOTH circuits with no overlap at all** — 23.5 ->
+  28.0 % at monza, 12.3 -> 14.7 % at monaco. Cars spend more of the race in
+  each other's gearbox, which is the F1 look and the point of the change.
+- Oscillation count up at monaco (7 [4–12] -> 18 [10–26]).
+- PROBABLE: flips up at monza (146 [109–165] -> 185 [155–222]); stringing down
+  at monza (overlap only 1087–1157, medians well apart).
+- NOT ESTABLISHED anywhere: settled passes, and monaco stringing — that metric
+  still ranges 991–5883 m on one tree and proves nothing.
+
+Lap time held again: monza normal 120.68 -> 121.30 s (+0.51 %), and the
+difficulty steps are intact (easy +4.31 % against +4.32 % before, hard -3.81 %
+against -3.18 %).
+
+So the SPREAD half of "like F1" is done and measured. The remaining half is
+that overtaking is not hard enough, and that is AI-side work.
+
+### The correction this forces on the rest of this file
+
+**Field stringing is too noisy to carry a claim, and this file has been
+carrying claims on it all day.** "Monaco stringing halved" in the dirty-air
+work, "strings out 4461 -> 3785 m" for the pass hysteresis, and the first
+version of THIS section's "1548 -> 1122 m" were all single runs against single
+runs. A metric whose own baseline ranges 1337–7807 m cannot resolve a 2x
+difference at n=5, let alone at n=1. Every stringing number in this file that
+is not written with a range should be read as an anecdote.
+
+The instrument was built to stop exactly this, and the error was still made
+once more after building it — comparing a single old run to a new median — which
+is why the rule now has its own line: **compare like with like, n=5 to n=5, or
+say nothing.**
+
+### Where "like F1" actually stands
+
+The spread is F1-like and that part is certain, because it is definitional.
+What is missing is the OTHER half of what makes F1 look like F1: overtaking is
+genuinely hard there. Twenty-one cars on near-identical pace with easy passing
+produce a train that trades places constantly — the monza flip count rising is
+that, and it is the honest cost of this change.
+
+`DIRTY_AIR` was tried as the lever (0.35 -> 0.60 measured flips 200 -> 165,
+settled 23 -> 29, oscillation 68 % -> 62 %) and REVERTED. It is anchored to the
+FIA's own CFD (~20 % of downforce lost at 20 m, ~35 % at 10 m) and it is
+symmetric with the player by design, so raising it past the physical reference
+to fix AI churn would make a player's car handle unphysically in traffic. The
+next lever is on the AI side — `AiDrive.otWant`'s attack thresholds, or a
+longer post-pass lockout — not the aero model.
+
+## Which AI instrument can actually resolve a change (2026-09-09)
+
+Measured with `--runs 5`, and the two tools are not in the same league.
+
+**`ai-line.mjs` — apex depth is TIGHT.** Five seeds at monza, field rebuilt each
+run:
+
+| corner | apex median | range |
+|---|---|---|
+| s=2068, len 128 m | 6.03 m | **0.042 m** |
+| s=2451, len 52 m | 3.69 m | **0.185 m** |
+| s=4685, len 288 m | 5.97 m | **0.022 m** |
+
+**`ai-field.mjs` — pass counts are WIDE.** Three seeds, 60 s at monza: settled
+passes 8 **[7–29]**, flips 25 [15–52].
+
+So the aero term's 0.60 m at s=2451 was **over 3× the widest re-race range**
+there, and 15–30× the range at the other two corners: unambiguous, and the
+paired A/B that caught it now has an error bar under it rather than an
+assertion. The pass-hysteresis "27 → 19", by contrast, sits inside a four-fold
+spread and remains unproven.
+
+The practical rule, and it inverts the order things were reached in today:
+**for a change to the AI's DRIVING MODEL, measure the line first.** It resolves
+sub-100 mm moves on a handful of runs. Field behaviour needs many runs to say
+anything about a small effect, and lap time (`ai-pace.mjs`) can move the right
+way while the driving gets worse — which is exactly what happened.
+
+One thing the range exposes that is NOT a defect to fix: `ai-racecraft-vm`'s
+apex threshold is 3.5 m, and s=2451 measures 3.69 m median in isolation with a
+0.185 m range — roughly one range-width of headroom, the tightest of the three
+corners by an order of magnitude. (In-suite it reads higher, ~4.07 m, because
+the spec runs after three other tests with the RNG stream advanced.) A future
+change could trip that corner without being wrong. The answer is to measure with
+`ai-line --runs 5` before concluding, NOT to widen the threshold — it is
+measuring a real property and it caught a real defect today.
+
+## A completed pass locks out the counter-attack (2026-09-09, SHIPPED)
+
+Independent of the reverted change above, and kept. Nothing in the pass
+machinery distinguished a completed pass from a re-pass — every cooldown was on
+the ATTACKER after a FAILURE — so the car that had just been passed attacked
+straight back. It now takes the same `2 × passCooldown` "threshold endured"
+lockout the lunge-abandon branch already uses, scaled by its OWN experience, and
+never written onto a human.
+
+`tools/check/ai-field.mjs`, normal, 240 s, re-measured with the aero term
+REVERTED so the column describes what actually ships:
+
+| | HEAD | hysteresis only (shipped) |
+|---|---|---|
+| monza flips / settled / oscillation | 109 / 27 / 59 % | 154 / 19 / 63 % |
+| monza strings out to | 1548 m | 1524 m |
+| monza nose-to-tail | 20.3 % | 23.5 % |
+| monaco flips / settled / oscillation | 28 / 15 / 18 % | 39 / 22 / 18 % |
+| monaco strings out to | 4461 m | **7807 m** |
+| monaco nose-to-tail | 13.3 % | 12.3 % |
+
+**Monaco is a clear win and Monza is ambiguous, and I am not going to pretend
+otherwise.** Monaco gains half again as many settled passes (15 → 22) at an
+unchanged 18 % oscillation share, strings the field out to 7.8 km against
+4.5 km, and cuts close-following car-time — that is the field bunching LESS,
+which was the ask. Monza goes the other way on the metric that matters most:
+settled passes fall 27 → 19 while total flips rise, i.e. more churn resolving
+into fewer clean passes, which is the opposite of what the mechanism predicts.
+
+**UPDATE, later the same day — the caveat below was too kind, and the
+instrument now says so.** `ai-field.mjs --runs N` (added 2026-09-09) seeds and
+REBUILDS the field per run. Three runs of 60 s at monza:
+
+    settled passes   8 [7–29]        order flips   25 [15–52]
+    field strings    344 [209–374] m -> 561 [308–564] m
+    nose-to-tail     24.4 [18.2–33.9] % of car-time
+
+A **four-fold** spread in settled passes across three seeds. The monza
+"27 → 19" above is comfortably inside that, so it is **not evidence of
+anything** and should not be read as the hysteresis making monza worse; nor is
+monaco's 15 → 22 established, though its other metrics all moved the same way.
+The right reading of the shipped change is: the mechanism is sound, and its
+effect size is below what a single run can resolve.
+
+Building the flag also found that the obvious implementation is a lie. Setting
+`__apex.seed()` after boot changes NOTHING — the AI's in-race decisions are
+deterministic given the field, and the randomness enters at CAR CREATION — so
+the first cut reported a range of ZERO across seeds 1/2/3. A zero range reads
+as "this metric is rock solid" when it actually meant "the knob is not
+connected", which is worse than having no instrument at all. The seed has to be
+set and the field REBUILT (`apex.seed(n)` then `race()`), which apex.js's own
+comment describes. Seed 1 + rebuild reproduces the boot field exactly, so
+`--runs 1` is unchanged and the older single-run numbers stay comparable.
+
+The original caveat, kept because it is the general rule: **every number in
+this file that is not marked with a range is a single run.**
+The sim is deterministic, so a repeat reproduces exactly — but that is
+REPRODUCIBILITY, not low variance across conditions, and a 240 s race is
+chaotic enough that one behavioural change reshuffles the whole field. Nothing
+here establishes that a 27 → 19 swing at one circuit is the change rather than
+the reshuffle. An n-run spread per condition is the missing instrument, and
+until it exists these tables should be read as direction, not magnitude.
+
+It ships anyway because the MECHANISM is principled and independently
+motivated — a completed pass being instantly undone is not racing, and the
+lockout matches the published overtake-FSM hysteresis in the prior-art section
+above — and because the alternative on the table was shipping nothing while a
+measured Monaco improvement sat unclaimed. If the Monza figure holds up under a
+proper n-run measurement, the constant is the thing to revisit first.
+
+Monza's numbers were byte-identical at `1 ×` and `2 ×` the cooldown: after a
+pass on that layout the pair separates for longer than either timer anyway, so
+the constant only bites at Monaco. `2 ×` was kept to match the existing
+lunge-abandon branch rather than introduce a second constant.
+
+## 2026-09-14 — the straight-line defence: a real defect fixed, and NO measurable benefit
+
+`e9a9f56ca` shipped a fix to `AiDrive.defendPull` and said so in its own subject:
+"the effect is UNPROVEN". This is the measurement that closes that, and the
+answer is **no measurable benefit**.
+
+**The defect was real.** On a straight the function derived the side to cover
+from curvature (`coverSide = -Math.sign(kA)`), and on a straight `kA ≈ 0`, so
+`-Math.sign(0)` is not a direction and the function returned 0. The AI never
+defended a straight at all — no covering the line into turn 1, no breaking the
+tow — and `defendOnce`'s "one defensive move per straight" limiter had nothing it
+could ever limit. The fix covers the side the attacker is lining up on.
+
+**Why the obvious experiment is worthless here, measured.** Before running
+anything real I calibrated the chaos floor: a SHAM arm — the pre-change guard
+plus a `(1 + 1e-3)` multiplier on the *corner* pull, ≤ 0.6 mm of lateral target
+on a pull that maxes at 0.635 m — against the unmodified tree, monza, seed 1,
+240 s:
+
+| | finishing order | straight-episode pass rate | lead prog |
+|---|---|---|---|
+| off | RUS, PIA, ANT, LEC, GAS … | 0.2994 | 11747.3 m |
+| sham (0.6 mm) | VER, LEC, PIA, ANT, RUS … | 0.2743 | 11735.5 m |
+
+A physically meaningless perturbation reshuffles the finish and moves the pass
+rate by **0.025**. The real change moved it by 0.054 and 0.013 on two piloted
+seeds. **The treatment effect at one seed is the size of a perturbation with no
+physical meaning**, so "run races with and without and count overtakes" cannot
+answer this question on any number of seeds this box can afford. (At `eps = 1e-9`
+the runs stayed byte-identical over 120 s, so the divergence has a threshold —
+`1e-3` is the calibration knob, `1e-9` is not.)
+
+**The instrument that can answer it.** `tools/check/defend-duel.mjs`: every other car
+retired, two AI cars staged on an auto-detected straight (the whole 18–70 m
+lookahead window under `defendPull`'s own `|kA| ≤ 0.004` for 380 m), 8 s per cell,
+**both arms run back-to-back on the same cell inside one session**, so a
+difference is the branch and not the session. The same cell reproduces to the
+digit — there is no chaos to average over.
+
+**Result — monza, drivers 0/1, 1260 cells (6 fracs × 7 gaps × 10 lateral offsets
+× 3 closing speeds):**
+
+| | ON | OFF |
+|---|---|---|
+| straight-defend samples (anti-vacuity) | **105 516** | **0** |
+| passes completed | 253 / 1260 | 259 / 1260 |
+| median defender advance per 8 s | 472.2 m | 467.7 m |
+
+| outcome flips | |
+|---|---|
+| cells changed | 28 of 1260 (2.2 %) |
+| held where it previously failed | **17** |
+| lost where it previously held | **11** |
+| one-sided binomial vs a fair coin | **p = 0.172** |
+
+Conditioning on the 469 cells where the cover actually moved the car — i.e.
+where the treatment did something — sharpens it rather than rescuing it:
+
+| | |
+|---|---|
+| flipped to defended / to passed | 11 / 7 (p = 0.240) |
+| median Δ end gap | **+0.000 m**, 154 up / 150 down |
+| median Δ defender advance | +1.10 m |
+
+**The pre-registered rule** (declared before the run: PROVEN needs ≥ 20 cells
+changed AND ≥ 4:1 toward defended, p < 0.01) is **not met** — 28 cells, 1.55:1,
+p = 0.172. The end-gap split of 154/150 is a coin.
+
+**What this licenses saying.** The branch is live and fires hard, the defect it
+fixed was real, and the cover costs the defender nothing (+1.1 m advance, +0.000 m
+gap — it is not a self-inflicted time loss). It does **not** measurably improve
+pass resistance. Keep it as a correctness fix; do not claim it as a racecraft
+improvement.
+
+Stopped after one driver pair, deliberately, because the design pre-registered
+"run one pair first and stop if it is flat". It is flat. Sweeping more pairs until
+one looked favourable would be fishing, and this file already carries one entry
+whose headline turned out to be the author's own measurement error.
+
+## 2026-09-16 — "it drives into my side": the aim, not the contact
+
+The owner's report, again: the AI runs into the player and follows its line
+regardless of who is beside it. `tools/check/ai-human.mjs` existed for this
+and could not see it, for two reasons that took most of the day.
+
+**The instrument first.** The bench's scripted player was "steered to the
+line at a bounded lateral rate" — a 5 cm/frame nudge of `player.x` that the
+car's own lateral physics swamped; a self-check added today read the player
+3.2 m off the line in corners whatever `--offset` asked for. It was measuring
+an unsteered car, and at one seed it found no encounter at all in 90 s. The
+player is now DRIVEN through the test-input path (`__apex.setInput`): a
+Stanley-style follower on the human car's yaw model (K = 4, Kh = 8 — 0.32 m
+RMS off the line over a Monza half-lap alone; a PD on position swung ±12 m),
+a drivable speed profile times `--pace` (0.97 by default, so the field comes
+THROUGH the player), re-insertion into the pack's largest gap when alone (at
+the speed of the car behind — at the pair's mean speed it was slower than the
+car behind from frame one, and the bench booked that as a rear-end), and a
+reasonable human's avoidance: never steer into a car alongside, keep the gap
+off one already inside it, match the car ahead in lane. Without that last
+rule the first driven cut chased its line straight into AI cars and 6 of 9
+first touches had the AI BEHIND the player. The bench now classifies each
+first touch (rear-end / side / diagonal, AI ahead or behind on arc) and
+prints a self-check (`playerOffsetInCornersM`, settled corners only — a
+follower lags a chicane crossing by 3–4 m at any pace, measured) that must be
+read before the rest.
+
+**Then the defect.** With that player, the shipped tree touches it 5.6 times
+per 100 s at Monza, nearly all "diagonal": overlapping by 3–4 m on arc, first
+touch at 1.95 m lateral, the car width. Every side-by-side rule — the clear
+gap election, the rub clamp, the human grace — keys on where the cars ARE
+(|dx| inside 2.8 m, i.e. 0.8 m of air), while the AI steers toward a point
+8–25 m ahead on its line. So a car half a length back and a lane over was
+aimed THROUGH until the boxes touched, and only then did anything begin.
+`AiDrive.aimIntrudes` asks the same question of the AIM: inside the other
+car's clear gap, and on their side of where we are (steering into them — as
+opposed to holding while they come to us, which stays their move and a rub,
+exactly the distinction `humanYieldT` already drew for the contact case).
+Against a human the AI concedes at the aim, without the emergency controller
+(at aim distance the heading state has time to bend the line) — there is
+nobody else in the pair who will, and a clear gap held at the aim IS the
+clean side-by-side the grace was protecting. Between AI cars the question
+stays at contact time: asked at the aim of every neighbour (the first cut)
+the player bench improved just the same, but `ai-field` on the AI-only race
+paid for it — settled passes 40 → 30 per 240 s (median of 3, every seed at
+or under the old minimum), oscillation share 0.56 → 0.62, the field strung
+out 1091 → 1238 m — two AI cars both running the election at aim distance
+concede a side-by-side neither has lost yet. `queueBrake` separately gained a light brake for a small closing
+rate inside the follow distance: +1.5 m/s reached neither of its gates (under
+the +3 threshold; aReq 2.25 with `room` floored at 0.5 m) and was carried
+into the tail of the car ahead.
+
+| Monza, 3 seeds × 240 s | tree | alongside frames | contact % of them | first touches / 100 s (per seed) | rear-end | side | diagonal |
+|---|---|---|---|---|---|---|---|
+| player on the line | shipped | 1066 | 25.0 | 5.56 (5.0 / 4.2 / 7.5) | 3.7 | 4.0 | 5.7 |
+| | aim at every neighbour (not shipped) | 800 | 18.8 | 3.06 (4.2 / 2.1 / 2.9) | 1.0 | 2.3 | 4.0 |
+| | **aim at a human + follow brake (shipped)** | 1281 | 13.3 | 4.86 (4.6 / 3.8 / 6.3) | 2.3 | 3.3 | 6.0 |
+| player 1.5 m wide | shipped | 1462 | 22.0 | 5.83 (5.0 / 5.4 / 7.1) | 2.7 | 4.3 | 7.0 |
+| | aim at every neighbour (not shipped) | 853 | 21.1 | 4.03 (6.3 / 3.8 / 2.1) | 2.7 | 3.0 | 4.0 |
+| | **aim at a human + follow brake (shipped)** | 834 | 20.3 | 3.89 (5.8 / 2.1 / 3.8) | 2.3 | 3.7 | 3.3 |
+| **Monaco**, on the line | shipped | 1865 | 47.4 | 15.41 (19.6 / 15.8 / 10.8) | 1.3 | 17.0 | 18.7 |
+| | **shipped cut** | 1390 | 38.9 | 8.33 (7.9 / 7.1 / 10.0) | 1.3 | 7.7 | 11.0 |
+| Monaco, 1.5 m wide | shipped | 1718 | 43.0 | 13.06 (15.4 / 11.7 / 12.1) | 1.7 | 17.3 | 12.3 |
+| | **shipped cut** | 1278 | 41.7 | 9.30 (12.5 / 7.1 / 8.3) | 0.0 | 10.3 | 12.0 |
+
+Monaco is where the complaint lives — three times Monza's touch rate on the
+old tree, the road too narrow for the clear gap in places — and it is where
+the cut reads clearest: first touches nearly halved on the line with no seed
+overlap, a third fewer wide, side contacts down from 17 to 8–10 per 100 s.
+Read with the per-seed spread in mind (this bench, like `ai-field`, reshuffles
+the race with every behaviour change): the every-neighbour cut is the bigger
+reduction in first touches, the shipped cut the bigger reduction in TIME
+spent touching once alongside (25 → 13 %), and both are under the old tree on
+the wide player, where the aim-through case lives.
+
+**The AI-only field, and what three seeds can and cannot say.** `ai-field`
+(Monza, 240 s, 3 seeds) read settled passes 40 [30–47] on the shipped tree,
+30 [19–30] with the aim asked of every neighbour, 33 [23–34] with it asked
+of a human only — and 36 [12–51] with ONLY the follow brake (a worktree at
+HEAD plus the new `ai-drive.js`). The last range says what §"Which AI
+instrument can actually resolve a change" already did: at n = 3 this
+instrument cannot resolve a shift of that size, so the every-neighbour cut's
+30 (every seed at or under the old minimum) is the one difference read as
+real, and the reason it was restricted; the shipped tree's 33 is not
+distinguishable from the old 40. Field median lap time (`ai-pace`, normal):
+132.0 → 132.5 s, the fastest car 127.8 → 127.1 s — noise either way. The
+collision and racecraft VM benches (57 tests), the determinism gates and the
+AiDrive unit tests are green on the shipped tree.
+
+## 2026-09-14 — the pass latch engaged outside its own release window
+
+`js/game.js` releases the pass latch when the blocker is more than 16 m ahead
+("lost it: no penalty"), but the ENGAGE condition had no gap term at all —
+`if (!c.passOf && c.passCool <= 0 && moveOn)`. So a car could commit to a pass on
+a blocker already outside the window and drop it on the next frame, with no
+cooldown to stop it re-latching the same car immediately. Both ends now read one
+constant, `AI_PASS_LATCH_M`, so they cannot drift apart again.
+
+MEASURED with `scratch/churn-probe2.mjs`, monza, **6 seeds**, 120 s, paired
+against the same tree with the bound stashed:
+
+| | before | after |
+|---|---|---|
+| engagements | 790 | **465** (−41 %) |
+| released as "lost it" | 325 | **20** (−94 %) |
+| started beyond 16 m | 49.7 % | **0** |
+| median engagement duration | 0.58 s | **1.27 s** |
+| under 1 s | 64.6 % | 44.1 % |
+| completed passes | **62** | **51** (−18 %) |
+| completion rate, engagements inside 16 m | 0.116 | 0.110 |
+
+**Read the last two rows before the first four.** The bound does exactly what it
+says structurally — no engagement now starts outside the window, and abandoned
+latches all but vanish — but the per-engagement completion rate is FLAT
+(0.116 → 0.110). This does not make the AI better at passing. It makes it stop
+attempting passes it could never complete, and that costs ~18 % of completions.
+Whether that is a gain depends on the target, and this file's own calibration says
+the field is far too pass-happy (29 settled passes per 240 s against 30.9 per real
+RACE), so fewer attempts and fewer completions is directionally right rather than
+a regression. It is a behaviour change with a real cost, not a free win.
+
+**The n=3 reading was wrong, and in the flattering direction.** At 3 seeds
+completions appeared to RISE (30 → 32) and the change looked free; at 6 seeds they
+fall 18 %. Same instrument, same track, same code. This is the third entry in this
+file to record a result that reversed when the sample grew — the others being the
+pace-spread n=5 section and the straight-line defence above — and the pattern is
+always the same: the small sample flattered the change being tested.
+
+Guards 178/178, ai-drive 57/57, ai-racecraft-vm 4/4. `js/game.js` grew 3 lines /
+1 code line for the named constant; both ceilings raised by exactly that.
+
+## 2026-09-16 — the merged tree measured, and two findings withdrawn
+
+Baselines on the deploy tip after the brake-look fix and the `corner`
+dimension (`tools/check/ai-race.mjs`, Monza, VM):
+
+- **pace** — easy 2:18.967 / normal 2:12.500 / hard 2:06.217 (medians of
+  21 cars' best-of-2); easy +4.9 %, hard −4.7 % vs normal. Matches the
+  138.97 / 132.50 / 125.02 table above. Before the fix, on 851dd02, normal
+  was 2:02.683: the AI was ten seconds a lap faster by cheating the short
+  corners, and the honest ladder now spans ~10 % easy→hard instead of ~9 %
+  with the wrong shape.
+- **field ×5** — pace spread 1.43 [1.41–1.46] %, settled passes 24 [19–52],
+  oscillation flips 105 [95–122] (63 % of 177 order flips), nose-to-tail
+  22.8 % of car-time. The 63 % oscillation share is NOT a re-pass count:
+  `ai-field` calls any pair whose prog order flips three or more times an
+  oscillation, and a pair running side by side flips prog at 4 Hz for as long
+  as it stays level. Until the instrument separates a level pair from a
+  re-pass, this number cannot back an `otWant` change, and the post-pass
+  lockout above is the shipped lever. **"Overtaking is too easy" is withdrawn
+  as a finding**: 24 settled passes in the first 240 s of a race is the
+  launch reshuffle, which the instrument's own header says not to read as a
+  pass rate.
+- **human ×5** — the AI elected to yield in 51.8 / 24.4 / 40.7 / 39.0 /
+  85.2 % of alongside frames, contact 26–61 %. **"The yield rule is a coin
+  flip" is withdrawn**: the election is deterministic on relative progress
+  (`sideYieldsA`), the branch shares vary because the seeds put the human in
+  different places, and the 0.3 s grace takes the role over every time the
+  AI is the intruder. The bench's "longest lean" was the intrusion timer's
+  maximum, which keeps counting AFTER the takeover (it clears only on
+  separation), so 1.25 s there is 0.3 s of lean plus yielding alongside; the
+  label now says so. The contact that remains is the human-elected branch —
+  a player leaning on an AI holding its own line is a rub by design, and
+  making it a concession is the pushover outcome the grace's own comment
+  rejects.
+
+## 2026-09-24 — "too easy, and they clump": the wings, the queue, and a pass cancelled on arrival
+
+Owner report: the AI is too easy and the field clumps, stuck behind each other
+following the line. Three defects, each measured in the VM before it was fixed
+(`scratch/` probes, paired against a worktree at the base commit).
+
+**1. The AI had no wings.** `AiDrive.lateralScale` fell 28 % from 20 m/s to
+the top speed while the player's grip rises 65 % over the same range
+(`aeroGrip`), so a player had roughly twice the AI's lateral grip in every fast
+corner. The 2026-09-09 attempt gave only the PLANNER aero and was reverted
+(above); this time the shared envelope carries `1 + DOWNFORCE·(v/vTop)²`, so the
+lateral step and `cornerSpeed` (which inverts it in closed form) rise together.
+The player-only `PLAYER_GRIP` headroom is not copied. The heading controller's
+YAW budget keeps the old taper (`AiDrive.yawScale`): with the wings it took
+ai-racecraft-vm's solo lateral-jerk figure 5.9 → 8.1 m/s² against a 7.5 cap; with
+the taper, 6.5. Solo laps, one mid-grid car, best of two:
+
+| | easy | normal | hard |
+|---|---|---|---|
+| monza  | 140.20 → 135.35 | 134.18 → 130.02 | 127.10 → 122.40 |
+| spa    | 175.35 → 169.08 | 168.00 → 161.07 | 160.28 → 154.22 |
+| monaco | 102.53 →  99.30 |  98.88 →  95.92 |  94.35 →  91.27 |
+
+3.2–4.1 % faster everywhere, ladder spacing kept, so `DIFF` is unchanged.
+ai-line ×3 at monza: apex depth 6.04 / 6.51 / 5.92 m (was 6.04 / 6.91 / 5.95) —
+still far inside the 3.5 m gate.
+
+**2. A queued car could never want to pass.** The queue cap pins a follower to
+the blocker's speed, and `otWant` asked for a 7 % pace edge the field's 1.4 %
+spread cannot produce. `queuePress` (seconds held by the cap behind the SAME car
+over a craft-scaled 3.5–7 s patience) lowers that margin to 30 % of itself and
+stands in for the closing rate in `attackOK`. Alongside it, `blockerVmax` had the
+blocker's X-mode gain in it while our `freeSpeed` is read before our own flap
+opens — up to 15 % of phantom pace — and is now divided back out.
+
+**3. The pass was cancelled the moment it arrived.** Instrumented abort reasons,
+monza 240 s: ~180 latches, ~20 completions, and 73–105 ended by "side closed":
+the latch dropped whenever less than a car width of road was left beyond the
+passer, checked every frame including AFTER it reached the pass lane, which
+`passTarget` places up to 0.6 m from the edge. `passSideClosed` now closes the
+side only when the room left is less than the distance still to travel (26–48).
+And a pass latched too close to the corner was always abandoned by the lunge
+rule (22–43 per run, median life 0.5–0.8 s): `passReach` refuses a move that
+cannot be half alongside by the turn-in (13–16 left, median life 2–2.8 s).
+
+**Result — "stuck in a train"** (continuous time within 16 m behind the SAME
+car, |dx| < 2.2, launch excluded, 300 s, seeds 1 / 2):
+
+| | time >5 s behind one car | longest |
+|---|---|---|
+| monza  | 4.8 / 3.8 % → 2.3 / 2.1 % | 24.1 / 18.7 → 15.4 / 11.4 s |
+| monaco | 6.2 / 6.7 % → 5.1 / 4.7 % | 12.7 / 17.0 → 15.7 / 25.2 s |
+| spa    | 4.2 / 3.2 % → 3.0 / 3.2 % | 17.6 / 17.6 → 18.2 / 10.2 s |
+
+Monza halves; monaco and spa move less, which is the right shape (monaco should
+stay hard to pass). `ai-field ×5` at monza: order flips 165 → 219, settled
+passes 32 → 30, nose-to-tail 22.6 → 23.6 % — inside the ranges, and that metric
+counts close racing as well as queueing, so it cannot see this. `ai-human ×3`:
+contact 4.6–6.3 → 0.8–6.3 per 100 s, no regression.
+
+## 2026-09-29 — "better at defending, more aware": mirrors, a cover window, blue flags, and what it bought
+
+The owner's ask, verbatim: "making our ai drivers better at defending and more aware
+of other drivers". Three defects found by reading the rule chain, then measured.
+
+**1. The AI could not see behind it past 13 m.** The traffic scan in `updateCar`
+skipped every car more than 13 m back — 0.2 s at 60 m/s — so the attacker was on the
+gearbox before the defender knew it was there. Two rules written in TIME were silently
+truncated by it: `holdLineGap` (freeze the offset under braking with a car within a
+SECOND) and the pressure timer (`pressT`, 0.6 s). `AiDrive.mirrorReach` makes the
+reach a time: 0.6–1.05 s by awareness, floored at the old 13 m, capped at 72 m.
+
+**2. The cover window was 12 m.** `defendPull`'s gate is now a time too,
+`defendWindowT` = 0.35–0.7 s by awareness, and the cover grows as the attacker closes.
+
+**3. The AI waved same-lap rivals through.** `letPassCase` moved an AI aside after
+`letPassDelay` (1.8–4.2 s, SHORTER with awareness) on the gearbox of ANY quicker car,
+the player included. It is a blue flag now (`AiDrive.letPassCase`, `lapping` = the
+chaser a lap or more ahead in progress). Staged in the VM, the case is rare in a
+same-lap fight anyway — the chaser's own `queueBrake` bleeds off the 2.5 m/s closing
+rate the gate asks for — which is why it is pinned as a pure rule, not a race.
+
+### Measured — Monza, 240 s, tyre wear off, BOTH trees (base = deploy tip 03acf9ee4)
+
+`ai-field.mjs` gained four numbers for this (attacks = an AI pass move started,
+covers = a defensive move spent, conversion = settled passes per attack, contact =
+pair footprint overlap under the 4.8 x 2.0 m collider, AI-AI only). `--runs 10`:
+
+| metric | base | change |
+|---|---|---|
+| covers | 209.5 [171–229] | **264 [233–297]** |
+| attacks | 121.5 [77–156] | 112.5 [91–166] |
+| conversion | 0.321 [0.194–0.529] | 0.32 [0.214–0.541] |
+| settled passes | 35 [27–54] | 45.5 [25–59] |
+| contact episodes | 37.5 [22–52] | 42 [29–67] |
+| contact seconds | 18 [12.5–30.25] | 22.1 [13.25–33.75] |
+| nose-to-tail % | 21.8 [16.6–26] | 21.25 [18.9–31.5] |
+| mistakes | 1 [0–4] | 2 [0–6] |
+
+`ai-human.mjs --runs 3` (scripted player at 97 % pace): contact 4.58 / 5.0 / 1.25 per
+100 s on base, 4.58 / 3.33 / 2.08 on the change; the AI took the yield role in 45 /
+61 / 36 % of alongside frames on base, 69 / 61 / 63 % on the change.
+
+`defend-duel.mjs` (staged pairs 12–40 m back, closing 2–4 m/s, 280 cells each): 83
+passes on base, 84 on the change; 1 cell flipped to defended, 2 to passed; median end
+gap +0.15 m (168 up / 70 down), defender advance +0.20 m.
+
+**What this licenses saying.** The AI now SEES and COVERS much more — the covers
+ranges do not overlap — and it no longer hands a same-lap rival the place. It does
+**not** measurably change how often an attack succeeds (conversion 0.32 both ways;
+a five-run pass read 0.32 -> 0.25 and did not survive ten), which is the 2026-09-14
+finding again: at a given pace delta, lane position barely decides a pass. AI-AI
+contact and player contact are flat inside the run-to-run range. Mistakes rose a
+notch because the pressure timer now works at the 0.6 s it was written for.
+
+**An instrument defect found on the way.** `defend-duel.mjs` hard-coded
+`ROOT = "/home/user/f1-game"`, so an A/B run from a second worktree loaded the FIRST
+checkout's code in both arms — the first comparison came back identical to the digit.
+It resolves its root from its own file now.
+
+## 2026-10-01 — "they bunch up and aren't tactical": time headway, the next corner, and the player
+
+The complaint, verbatim: "AI cars bunch up and aren't very tactical about how to
+manoeuvre around each other or me." A read-only investigation found the follow gap in
+METRES (6-8 m + a -0.8..+2.2 m pad: ~0.1 s at speed), a pass side chosen from the bend
+18-70 m ahead, a race-long attack roll per car, side-by-side left to geometry, no lockout
+outside a latched pass, no defence mid-train, a human blocker judged by its LIVE speed,
+no yielder when the rule elected the player, and no first-lap logic. Design references:
+IDM time headway (s0 + v·T); TORCS bt catch distance / inside of the next turn; MOBIL
+lane check with a threshold; "get a run"; Liniger-style defence against the attacker's
+best reply; FIA driving standards (one move, a car's width, no move under braking);
+Game AI Pro ch.38 utility + hysteresis and post-abort lockout.
+
+**The instrument first.** Every AI-only VM instrument raced around the player car PARKED
+on its grid box (no input): attacked 7-10 times a race, 11-21 % of passes within 60 m of
+it, and the leading human the rubber band banded toward. `game-vm.cjs` `aiOnly()` hands
+it to the AI and retires it (out of `ranked`, so out of every scan); ai-field, ai-pace and
+the new `tools/check/ai-tactics.mjs` call it.
+
+**What landed** (one commit each; `docs/PHYSICS.md` §Racecraft tactics has the rules):
+the follow gap as a TIME (`followGap`, s0 + v·T); the pass side from the inside of the
+NEXT corner (`kTurn`/`cornerK`, `passSideBonus`); get a run (`runExtra`, `latchLate`);
+AiCorridor looking down the target lane; a per-zone attack roll (`attemptRoll`, a hash,
+never `simRnd`); level pairs owned by the inside of the next corner and commit-or-yield
+after 2 s; a re-pass lockout on ANY flip with the passer as a wide blocker
+(`repassLock`); defending mid-train / adjacent lane / predicted side with a car's width
+left and no move under braking; a calm first 20 s (`startCalm`); a human judged by
+`paceVmax` (`paceSample`), a held line arming `humanYieldT` at a quarter rate and the
+concession held.
+
+**The headway was the cost, and it was retuned on measurement.** The first cut (T
+0.25-0.45 s, tight 0.12 s) took a third of silverstone's settled passes. Ablations,
+`ai-tactics --track silverstone --laps 4 --runs 2` (n=2: read the direction, not the
+digit):
+
+| variant | settled | conversion % | swap-back % | stuck >30 s | AI-AI contact | sbs p90 s | lap-1 <0.5 s % |
+|---|---|---|---|---|---|---|---|
+| base | 128.5 | 19.9 | 18.1 | 10.5 | 82.5 | 4.6 | 51.3 |
+| first cut (all items, T 0.25-0.45 / 0.12) | 83 | 17.2 | 8.8 | 22.5 | 31.5 | 3.9 | 38.7 |
+| a0 - wide lockout blocker | 71 | 11.8 | 18.6 | 22 | 40 | 4.3 | 38.8 |
+| a0, wanting = fully tight | 91 | 19.9 | 12.4 | 23 | 26.5 | 3.3 | 40.7 |
+| a0 - lane look-ahead | 81 | 16.2 | 9.6 | 24.5 | 25 | 4.3 | 41.7 |
+| a0 - mid-train defence | 79 | 18.1 | 9.3 | 21 | 13.5 | 3.6 | 36.7 |
+| a0 - commit-or-yield | 76.5 | 13.2 | 6.7 | 24 | 34.5 | 3.8 | 38.5 |
+| a0, OLD metre follow gap | 131 | 24.4 | 9.6 | 17.5 | 47 | 4.3 | 53.8 |
+| a0 - latchLate | 88 | 18.4 | 7.5 | 18.5 | 23 | 3.8 | 37.7 |
+| a0, fixed phaseRoll | 66 | 16.5 | 10.9 | 21 | 22.5 | 3.8 | 33.6 |
+| a0 - next-corner side bonus | 82 | 17.7 | 10 | 25 | 26 | 4 | 38.6 |
+| a0 - first-lap calm | 98.5 | 15.3 | 10.4 | 22 | 28.5 | 3.5 | 40.5 |
+| a0, 16 m queue window | 93.5 | 17.1 | 7 | 23.5 | 24 | 4 | 45.9 |
+| a0, tight 0.06 | 92.5 | 15.9 | 9.7 | 28 | 23.5 | 3.6 | 39.8 |
+| a0, T 0.2-0.35, tight 0.06 | 98 | 18.3 | 8.5 | 23 | 31.5 | 3.4 | 44.1 |
+| a0, tight 0.04 | 94 | 18.8 | 11.9 | 17.5 | 27.5 | 3.6 | 40.1 |
+| a0, T 0.1-0.2, tight 0.05 | 131 | 22 | 13 | 20.5 | 46 | 3.9 | 55 |
+| a0, T 0.06-0.15, tight 0.03 | 118.5 | 20.7 | 9.2 | 19 | 37.5 | 3.9 | 54.5 |
+| a0, T 0.15-0.3, tight 0.05 (SHIPPED) | 120 | 23.6 | 11.6 | 20.5 | 31.5 | 3.8 | 47.7 |
+
+The wide lockout blocker is what removes the swap-backs (without it 18.6 %, base 18.1);
+the per-attempt roll and the queue window are worth passes; the old metre gap alone kept
+every pass and lost the lap-1 and contact gains with it.
+
+### Measured — the shipped tree against base, `ai-tactics --laps 8 --runs 5` (medians)
+
+Base = deploy tip 2a76baf1c plus the instrument fix (`artifacts/ai-before/`), after = the
+final commit (`artifacts/ai-after/`); per-seed ranges are in those JSONs.
+
+| metric | monza before → after | silverstone before → after | monaco before → after |
+|---|---|---|---|
+| stuck >30 s (faster behind slower) | 29 → 29 | 28 → 35 | 33 → 40 |
+| swap-back % of flips | 23.4 → 11.7 | 18.3 → 11.7 | 14.5 → 13.6 |
+| settled passes | 158 → 168 | 147 → 139 | 48 → 33 |
+| attack conversion % | 22.7 → 29.7 | 18.5 → 21.6 | 4.8 → 4 |
+| side-by-side p90 s | 5.5 → 4.3 | 4.8 → 3.5 | 4.5 → 4.5 |
+| AI-AI contact episodes | 70 → 29 | 96 → 44 | 83 → 44 |
+| lap-1 intervals <0.5 s % | 57.4 → 55.2 | 57.5 → 49 | 38.6 → 21.2 |
+| lap-8 leader-to-last s | 64.7 → 65.3 | 72 → 71 | 39.3 → 40.6 |
+
+| human mode, monza | pace 0.97 before → after | pace 1.03 before → after |
+|---|---|---|
+| zero-yielder % (inside the gap >1.5 s, AI not yielding) | 7.3 → 2.5 | 0 → 0 |
+| AI-player contact /100 s | 1.4 → 0.7 | 0.1 → 0.3 |
+| AI attacks on the player | 42 → 29 | 2 → 3 |
+| ...begun in a corner | 14 → 12 | 0 → 1 |
+| AI-AI contact | 70 → 43 | 71 → 36 |
+| swap-back % | 21 → 13 | 21.7 → 13.6 |
+
+**What this licenses saying.** On the two permanent circuits the field races more cleanly
+and more decisively: swap-backs halve (pairs no longer trade places back), attacks convert
+better (monza 22.7 -> 29.7 %, silverstone 18.5 -> 21.6 %), side-by-side resolves sooner
+(p90 5.5 -> 4.3 s, 4.8 -> 3.5 s; max 28.8 -> 11.3 s at monza) and AI-AI contact halves on
+every circuit. Lap 1 is less of a train (monaco 38.6 -> 21.2 % of intervals under 0.5 s;
+silverstone 57.5 -> 49; monza only 57.4 -> 55.2). The field does not string out
+(leader-to-last after 8 laps within a second or two everywhere). Against a slower player
+(0.97) the AI concedes when it should (zero-yielder 7.3 -> 2.5 %), touches the player half
+as often (1.4 -> 0.7 per 100 s) and attacks less in corners (14 -> 12, total 42 -> 29).
+
+**What it does NOT show.** (1) "Faster car stuck behind a slower one for over 30 s" did not
+fall: flat at monza, up at silverstone (28 -> 35) and monaco (33 -> 40, range 22-42). A
+probe of those episodes on monza: 65 % of the samples have the "faster" car NOT in the
+slower car's lane and over 16 m back — running parallel at the same speed, not blocked —
+and the rated edges are 0.3-1.2 %, inside the ±0.5-1.6 % pace-phase drift. The metric
+counts a time-headway field as stuck by construction; it is not a blocked-pass count.
+(2) Monaco passes fewer (48 -> 33 settled, conversion 4.8 -> 4.0, inside the range) —
+fewer, not worse, but not more. (3) Zero-yielder is 2.5 %, not 0: the grace (0.3 s; 1.2 s
+for a held line) is the AI legitimately holding. (4) Against a FASTER scripted player
+(1.03) AI-player contact rose 0.1 -> 0.3 per 100 s; the scripted player's straight-line
+cap (55 m/s) reads as a slow `paceF`, so the AI attacks it a little more.
+
+**Coverage.** The instrument is a VM bench of AI-vs-AI and a SCRIPTED player; nothing here
+ran in a browser, and `tests/specs/` collision / physics-characterization were not run.
+
+### Street circuits: the old passing game back (same day, before shipping)
+
+The table above shipped Monaco with fewer passes (48 -> 33 settled). A street ablation
+(temporary flags, 2 seeds x 4 laps to rank, then 5 x 8 to confirm) found the time headway
+the main cost on a narrow track, then the gates that only pay on long wide straights. On a
+street circuit (`track.street`) the shipped tree keeps the METRE follow gap (8 m + the old
+awareness pad, halved; only the first-lap +0.2 s is time), the old `passReach` allowance,
+otSide's 0.3 side tiebreak, and drops the lane look-ahead, `latchLate`, `runExtra` and the
+wide re-pass blocker. The trade is plain in the 5 x 8 confirms — every variant that won
+back contact or lap 1 gave passes away, because at monaco the passes ARE the lap-1 shuffle:
+
+| monaco, 5 seeds x 8 laps | settled | conversion % | swap-back % | AI-AI contact | lap-1 <0.5 s % | stuck >30 s |
+|---|---|---|---|---|---|---|
+| base | 48 | 4.8 | 14.5 | 83 | 38.6 | 33 |
+| shipped first (all gates, street headway) | 33 | 4 | 13.6 | 44 | 21.2 | 40 |
+| old metre gap + old reach, no look-ahead / latchLate / runExtra / wide lockout | 46 | 4.3 | 12.7 | 77 | 30.5 | 36 |
+| ...and the old side bonus (SHIPPED) | 50 | 4.8 | 13 | 73 | 31.3 | 34 |
+| N1: SHIPPED + wide lockout blocker | 42 | 5.6 | 5.6 | 52 | 30.5 | 30 |
+| N1 + lap-1 extra x1.5 | 46 | 4.1 | 7.3 | 64 | 23.7 | 28 |
+| SHIPPED + lap-1 extra x1.5 | 37 | 5.5 | 17.3 | 70 | 27.6 | 25 |
+| M1: SHIPPED + lap-1 extra x2.5 | 37 | 5.5 | 13.1 | 63 | 24.8 | 24 |
+| N1 + lap-1 extra x2.5 | 38 | 4.8 | 8.7 | 51 | 21.1 | 30 |
+| M1 + 0.06 s headway | 37 | 3.6 | 16.7 | 41 | 17.6 | 28 |
+| M1 + 0.12 s headway | 35 | 5.2 | 21.3 | 49 | 15.2 | 27 |
+
+**The shipped tree against base, all four circuits** (5 seeds x 8 laps, medians; monaco
+and baku re-run on the final commit; monza and silverstone are the table above —
+their code path is unchanged, checked byte-for-byte: a 2-lap `--json` run of the final
+and the previous tree is identical on monza, silverstone and human-mode monza):
+
+| metric | monaco before → after | baku before → after | monza before → after | silverstone before → after |
+|---|---|---|---|---|
+| settled passes | 48 → 50 | 110 → 103 | 158 → 168 | 147 → 139 |
+| attack conversion % | 4.8 → 4.8 | 14.6 → 14.5 | 22.7 → 29.7 | 18.5 → 21.6 |
+| swap-back % of flips | 14.5 → 13 | 19.9 → 20.7 | 23.4 → 11.7 | 18.3 → 11.7 |
+| AI-AI contact episodes | 83 → 73 | 75 → 70 | 70 → 29 | 96 → 44 |
+| lap-1 intervals <0.5 s % | 38.6 → 31.3 | 46.8 → 42.6 | 57.4 → 55.2 | 57.5 → 49 |
+| side-by-side p90 s | 4.5 → 4.3 | 4.5 → 4.8 | 5.5 → 4.3 | 4.8 → 3.5 |
+| stuck >30 s (faster behind slower) | 33 → 34 | 32 → 42 | 29 → 29 | 28 → 35 |
+| lap-8 leader-to-last s | 39.3 → 40.2 | 60.4 → 55.6 | 64.7 → 65.3 | 72 → 71 |
+
+Monaco meets the passing bar (settled 50 >= 48, conversion 4.8 % = base, swap-back 13 %
+<= 14.5) and keeps part of its other gains (AI-AI contact 83 -> 73, lap-1 under 0.5 s
+38.6 -> 31.3 %) — not the 44 / 21 % the headway bought. Baku (a street circuit with long
+straights) sits at base: passes 110 -> 103 and conversion 14.6 -> 14.5 % inside the
+seed range, contact 75 -> 70, swap-back 19.9 -> 20.7 %, stuck >30 s 32 -> 42 (the
+measure discussed above).

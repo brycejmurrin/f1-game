@@ -1,0 +1,888 @@
+/* Apex 26 — RendererPicker: the RENDERER control in SETTINGS > DISPLAY. Owns #pm-renderer (a <select> with ‹ › steps over WEBGL2 / THREE.JS / WEBGPU) and the RENDERER fold (#pm-display-adv) whose shell body holds RESOLUTION / the picker / GRAPHICS; RESET RENDERER, THREE PATH, SCREENSHOTS, SAVE SCREENSHOT, COPY DIAG and #pm-gfx-status inject into that body. The apex26.gfxBackend / gfxWgx* / tlxForceGL / wgxCapture keys those write; the in-race two-tap reload confirm (raceGuard / ARM_MS) is shared by every reloading control.
+
+   Split out of js/perf/quality-preset.js (Phase 2a of docs/research/TREE-RESTRUCTURE-2026-09.md): that file is the GRAPHICS quality PRESET model and button; this one is which backend boots. Same load-order stance — every global read (GLX, PerfGov, GameAudio, __apex) is resolved at CALL time, never at eval, so the file has no HARD_EDGES pair and can sit anywhere in the shell. */
+const RendererPicker = (function () {
+  "use strict";
+
+// RENDERER picker. Always three stops so the WEBGPU label is visible on a
+// phone that has no navigator.gpu — picking it there flashes UNAVAILABLE
+// rather than writing a pref boot will silently ignore. THREE needs no GPU.
+// The control is a <select> plus ‹ › so a tap can jump WEBGL2 ↔ WEBGPU
+// without opening THREE (the one-way cycle forced that path).
+const BACKENDS = ["webgl2", "three", "webgpu"];
+// A stop is UNAVAILABLE when the device cannot run it OR its files are not in
+// the tree — both reach the same affordance the header describes, so the label
+// stays visible and says so instead of writing a pref boot silently ignores.
+// Derived from DEFERRED, not hardcoded, so a backend leaving or rejoining the
+// roster greys out or restores its stop with no edit here.
+const hasBackendFiles = (b) => b === "webgl2" ||
+  !!(typeof ApexRoster !== "undefined" && ApexRoster.DEFERRED &&
+     (ApexRoster.DEFERRED[b] || []).length);
+const available = (b) => hasBackendFiles(b) && (b !== "webgpu" || hasWebGPU());
+// The stored pick, or Three.js when nothing is stored — must match js/game.js's
+// boot read or SETTINGS shows a backend that is not the one bound.
+function defaultBackend() {
+  return "three";
+}
+function readBackend() {
+  const v = GameStore.store.raw("apex26.gfxBackend");
+  if (v == null) return defaultBackend();
+  if (v === "webgl2" || v === "webgpu" || v === "three") return v;
+  GameStore.store.rawSet("apex26.gfxBackend", "webgl2");
+  return "webgl2";
+}
+function backendLabel(v) { return v === "three" ? "THREE.JS" : String(v).toUpperCase(); }
+// What is actually DRAWING, as opposed to what is stored. readBackend() is the
+// PICK and must stay that way — the select's value, and the value a re-attach
+// restores — but the metrics overlay's `backend` line is a diagnostic, and it
+// reported "three" on a build that cannot load three.
+function liveBackend() {
+  if (boundIsGlx()) return "webgl2";
+  if (liveThreeApi()) return "three";
+  try {
+    const s = typeof GLX !== "undefined" && GLX && typeof GLX.backendState === "function"
+      ? GLX.backendState() : null;
+    if (s && s.api === "webgpu") return "webgpu";
+  } catch (_) { /* no live backend yet */ }
+  const pref = readBackend();
+  return available(pref) ? pref : "webgl2";
+}
+function stepBackend(cur, dir) {
+  const n = BACKENDS.length;
+  const i = BACKENDS.indexOf(cur);
+  return BACKENDS[(((i < 0 ? 0 : i) + dir) % n + n) % n];
+}
+function nextBackend(cur) { return stepBackend(cur, 1); }
+function prevBackend(cur) { return stepBackend(cur, -1); }
+function hasWebGPU() { return typeof navigator !== "undefined" && !!navigator.gpu; }
+function boundIsGlx() {
+  try { return sessionStorage.getItem("apex26.gfxBound") === "webgl2"; } catch (_) { return false; }
+}
+function isSelect(el) { return !!(el && el.tagName === "SELECT"); }
+function paintRenderer(rb) {
+  if (!rb) return;
+  const pref = readBackend();
+  const live = liveBackend();
+  // Preference is what the picker shows. Live may be GLX after a
+  // device.lost / create refuse — saying WEBGPU then was the lie.
+  const fallback = live !== pref;
+  if (isSelect(rb)) {
+    rb.value = pref;
+    const opts = rb.options || [];
+    for (let i = 0; i < opts.length; i++) {
+      const opt = opts[i];
+      let t = backendLabel(opt.value);
+      if (fallback && opt.value === pref) t += " (" + backendLabel(live) + ")";
+      opt.textContent = t;
+    }
+    paintRendererSummary(pref, fallback ? live : null);
+    return;
+  }
+  rb.textContent = fallback
+    ? ("RENDERER: " + backendLabel(pref) + " (" + backendLabel(live) + ")")
+    : ("RENDERER: " + backendLabel(pref));
+  paintRendererSummary(pref, fallback ? live : null);
+}
+function paintRendererSummary(pref, liveFallback) {
+  const sum = typeof document !== "undefined"
+    ? document.getElementById("pm-renderer-details-sum")
+    : null;
+  if (!sum) return;
+  const fallbackChip = liveFallback === "webgl2"
+    ? '<span data-fold="sep"> · </span><span data-fold="val">WEBGL2</span>'
+    : (liveFallback
+      ? '<span data-fold="sep"> · </span><span data-fold="val">' + backendLabel(liveFallback) + "</span>"
+      : "");
+  sum.innerHTML = '<span data-fold="k">RENDERER</span><span data-fold="sep"> · </span><span data-fold="val">' +
+    backendLabel(pref) + "</span>" + fallbackChip;
+}
+function markReloading(rb, next) {
+  const msg = backendLabel(next) + " — RELOADING…";
+  if (isSelect(rb) && rb.options) {
+    const opts = rb.options;
+    for (let i = 0; i < opts.length; i++) {
+      if (opts[i].value === next) { opts[i].textContent = msg; break; }
+    }
+    rb.value = next;
+    return;
+  }
+  if (rb) rb.textContent = "RENDERER: " + msg;
+}
+// A reload from the in-race SETTINGS sheet ends the race, its lap times, an
+// unsettled career round and (VS FRIEND) the peer session — with one tap and
+// no warning (2026-09-01 survey). game.js marks body[data-race] while a race
+// is up; the first tap then ARMS the control (same dataset.armed idiom as
+// game.js armConfirm) and only the second tap proceeds. Called BEFORE any
+// preference is written, so an unconfirmed tap changes nothing.
+//
+// An arm EXPIRES (ARM_MS) and `repaint` puts the real label back: otherwise an
+// unconfirmed tap leaves "END THIS RACE & RELOAD?" on the row for the rest of
+// the session, and its flag outlives the race — the first tap of the NEXT race
+// would reload with no question asked. On a <select> the question goes on the
+// option in view: setting textContent on a select replaces its options with a
+// text node and the picker paints empty while armed.
+const ARM_MS = 6000;
+function disarm(btn, repaint) {
+  try {
+    if (btn._apexArmT) { clearTimeout(btn._apexArmT); btn._apexArmT = 0; }
+    if (btn.dataset) delete btn.dataset.armed;
+    try { btn.classList.remove("armed"); } catch (_) { /* option element */ }
+  } catch (_) { /* dataset unavailable */ }
+  if (typeof repaint === "function") { try { repaint(); } catch (_) { /* label stays until the next paint */ } }
+}
+function raceGuard(btn, armedText, repaint) {
+  try {
+    if (typeof document === "undefined" || !document.body || !btn) return true;
+    if (document.body.dataset.race !== "1") {
+      // No race to protect: a flag left over from one is stale, not consent.
+      if (btn.dataset && btn.dataset.armed) disarm(btn, repaint);
+      return true;
+    }
+    // Age as well as the timer: a throttled background tab can hold the
+    // expiry back for minutes, and a tap that old is a fresh question.
+    const stale = !!btn.dataset.armed && (Date.now() - (btn._apexArmedAt || 0)) > ARM_MS;
+    if (!btn.dataset.armed || stale) {
+      btn.dataset.armed = "1";
+      btn._apexArmedAt = Date.now();
+      if (isSelect(btn) && btn.options) {
+        const opts = btn.options;
+        for (let i = 0; i < opts.length; i++) if (opts[i].value === btn.value) opts[i].textContent = armedText;
+      } else {
+        btn.textContent = armedText;
+      }
+      try { btn.classList.add("armed"); } catch (_) { /* option element */ }
+      if (btn._apexArmT) clearTimeout(btn._apexArmT);
+      btn._apexArmT = setTimeout(() => disarm(btn, repaint), ARM_MS);
+      return false;
+    }
+    if (btn._apexArmT) { clearTimeout(btn._apexArmT); btn._apexArmT = 0; }
+    delete btn.dataset.armed;
+    try { btn.classList.remove("armed"); } catch (_) { /* option element */ }
+  } catch (_) { /* dataset unavailable: proceed as before */ }
+  return true;
+}
+
+function uiSelect() {
+  try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
+}
+
+// Shared by every control that reloads after writing a renderer/backend
+// preference: disarm the crash sentinel (a settings reload must not count as
+// a crash strike) and reload once the new pref has painted.
+function reloadSoon() {
+  try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) { /* no governor in a harness */ }
+  setTimeout(() => { try { location.reload(); } catch (_) { /* file:// / test host */ } }, 350);
+}
+
+const RENDERER_LS_KEYS = [
+  "apex26.gfxBackend", "apex26.gfxBackendProbe",
+  "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
+  "apex26.gfxTlxFail",
+  // The canary's strike counter: a RESET that left it behind would hand the
+  // next boot a strike it did not earn, and retire the pick on its first
+  // real failure.
+  "apex26.gfxProbeStrikes",
+  "apex26.envProbeOff", "apex26.perChunkOff",
+  "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
+  "apex26.wgxCapture",
+];
+// wgxHoldPresent is written by WGX itself (holdSoftPresent), so a tab that
+// took the hold and never released it keeps skipping the soft-present
+// copy+map on the next boot with no way back — RESET RENDERER is that way
+// back, and it has to know the key exists. Every latch a backend WRITES
+// belongs in one of these two lists. applyBackend clears the session lane
+// too: switching backends must not inherit the previous path's hold/auto-GL
+// latches across the reload (RESET already wiped them; a pick did not).
+const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent", "apex26.gfxFallbackWhy"];
+
+function clearRendererStorage() {
+  const removed = [];
+  // Blocked storage reads as null and removes nothing: the in-memory boot still uses the empty pref.
+  for (const k of RENDERER_LS_KEYS) {
+    if (GameStore.store.raw(k) != null) { GameStore.store.rawDel(k); removed.push(k); }
+  }
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode / blocked storage */ }
+  return removed;
+}
+
+// Boot can fail before game.js wires TopModal, HELP, or the lazy Data Hub.
+// Keep the terminal screen usable without relying on any of those late paths.
+function unavailableDiagnostics() {
+  let stored = null;
+  try { stored = localStorage.getItem("apex26.gfxBackend"); } catch (_) { stored = "storage-blocked"; }
+  const valid = stored === "webgl2" || stored === "three" || stored === "webgpu";
+  return JSON.stringify({
+    renderer: { stored, requested: valid ? stored : (stored == null ? defaultBackend() : "webgl2") },
+    browser: {
+      webgl2API: typeof WebGL2RenderingContext !== "undefined",
+      webgpuAPI: typeof navigator !== "undefined" && !!navigator.gpu,
+    },
+  }, null, 2);
+}
+async function copyUnavailableDiagnostics(text) {
+  return ApexClipboard.write(text);
+}
+function closeUnavailableDialog(dialog) {
+  if (!dialog) return;
+  dialog.hidden = true;
+  if (dialog.open && typeof dialog.close === "function") {
+    try { dialog.close(); } catch (_) { /* already closed */ }
+  }
+}
+function openUnavailableDialog(dialog, closeButton, returnFocus) {
+  if (!dialog) return;
+  dialog.hidden = false;
+  if (!dialog.open && typeof dialog.showModal === "function") {
+    try { dialog.showModal(); } catch (_) { /* non-dialog harness / detached node */ }
+  }
+  if (!dialog.__apexGraphicsRecoveryWired) {
+    dialog.__apexGraphicsRecoveryWired = true;
+    if (dialog.addEventListener) dialog.addEventListener("cancel", (e) => {
+      if (e && e.preventDefault) e.preventDefault();
+      if (closeButton && closeButton.click) closeButton.click();
+      else closeUnavailableDialog(dialog);
+    });
+    if (closeButton && closeButton.addEventListener) closeButton.addEventListener("click", () => {
+      queueMicrotask(() => {
+        closeUnavailableDialog(dialog);
+        if (returnFocus && returnFocus.focus) returnFocus.focus();
+      });
+    });
+  }
+  queueMicrotask(() => { if (closeButton && closeButton.focus) closeButton.focus(); });
+}
+function showUnavailable(opts) {
+  const panel = opts && opts.panel;
+  // APEX_SURVEY_HUD=1 (#1034): keep cockpit chrome for Wave-3 shots even when
+  // gfx is dead (ctxLost / Graphics unavailable — #1033). Do not hide #hud or
+  // leave #nogl covering the survey target.
+  const survey = typeof SurveyHud !== "undefined" && SurveyHud.armed && SurveyHud.armed();
+  if (survey) {
+    if (panel) panel.hidden = true;
+    if (opts && opts.hud) { opts.hud.hidden = false; if ("inert" in opts.hud) opts.hud.inert = false; }
+    if (opts && opts.overlay) { opts.overlay.hidden = true; if ("inert" in opts.overlay) opts.overlay.inert = false; }
+    try {
+      SurveyHud.holdChrome({
+        document: typeof document !== "undefined" ? document : null,
+        els: { hud: opts && opts.hud, overlay: opts && opts.overlay, nogl: panel },
+      });
+    } catch (_) { /* holdChrome best-effort */ }
+    return;
+  }
+  if (opts && opts.hud) { opts.hud.hidden = true; opts.hud.inert = true; }
+  if (opts && opts.overlay) { opts.overlay.hidden = true; opts.overlay.inert = true; }
+  // #loading and #race-settings (a top-layer dialog) must not sit over this fallback.
+  const get = typeof document !== "undefined" && document.getElementById;
+  if (typeof get === "function") {
+    const loading = get.call(document, "loading"); if (loading) loading.hidden = true;
+    const rs = get.call(document, "race-settings"); if (rs) rs.hidden = true;
+  }
+  if (!panel) return;
+  panel.textContent = "";
+  const body = document.createElement("div");
+  const title = document.createElement("h2");
+  const detail = document.createElement("p");
+  const actions = document.createElement("div");
+  const status = document.createElement("p");
+  const buttons = ["RETRY", "USE WEBGL2", "COPY DIAGNOSTICS", "HELP", "DATA HUB"]
+    .map((label) => { const b = document.createElement("button"); b.type = "button"; b.textContent = label; return b; });
+  const [retry, webgl, diagnostics, help, data] = buttons;
+  body.setAttribute("data-gfx-recovery", ""); actions.setAttribute("data-gfx-recovery-actions", "");
+  status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
+  title.textContent = "Graphics unavailable";
+  detail.textContent = "Apex 26 could not start a compatible graphics renderer. You can retry, select the WebGL2 fallback, or use the game’s help and data tools.";
+  retry.onclick = () => { try { location.reload(); } catch (_) { /* embedded host */ } };
+  webgl.onclick = () => {
+    try { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
+    try { sessionStorage.removeItem("apex26.gfxClaimFail"); sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* blocked storage */ }
+    try { location.reload(); } catch (_) { /* embedded host */ }
+  };
+  diagnostics.onclick = async () => {
+    status.textContent = await copyUnavailableDiagnostics(unavailableDiagnostics())
+      ? "Renderer diagnostics copied." : "Could not copy diagnostics.";
+  };
+  help.onclick = () => openUnavailableDialog(opts.helpDialog, opts.helpClose, help);
+  data.onclick = async () => {
+    data.disabled = true; status.textContent = "Loading Data Hub…";
+    const ok = await opts.ensureDataHub();
+    data.disabled = false;
+    if (!ok) { status.textContent = "Data Hub could not be loaded."; return; }
+    opts.openDataHub();
+    openUnavailableDialog(opts.dataDialog, opts.dataClose, data);
+    status.textContent = "";
+  };
+  actions.append(...buttons); body.append(title, detail, actions, status); panel.appendChild(body);
+  panel.hidden = false;
+  retry.focus();
+}
+
+function applyBackend(next, rb) {
+  if (!raceGuard(rb, "RENDERER: END THIS RACE & RELOAD?", () => paintRenderer(rb))) return false;
+  Log.info("game", "RendererPicker.applyBackend " + next);
+  uiSelect();
+  if (!available(next)) {
+    if (isSelect(rb) && rb.options) {
+      const opts = rb.options;
+      for (let i = 0; i < opts.length; i++) {
+        if (opts[i].value === next) opts[i].textContent = backendLabel(next) + " (UNAVAILABLE)";
+      }
+      rb.value = readBackend();
+    } else if (rb) {
+      rb.textContent = "RENDERER: " + backendLabel(next) + " (UNAVAILABLE)";
+    }
+    setTimeout(() => { paintRenderer(rb); }, 900);
+    return false;
+  }
+  GameStore.store.rawSet("apex26.gfxBackend", next); GameStore.store.rawDel("apex26.gfxBackendProbe");
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
+  // Landing on WEBGPU by hand is the retry signal (browser update, new
+  // device state): reset the WGX loss ladder so the boot re-attempts from
+  // the sniffed baseline instead of a rung a long-dead session earned.
+  if (next === "webgpu") {
+    for (const k of ["apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail"]) GameStore.store.rawDel(k);
+  }
+  markReloading(rb, next);
+  reloadSoon();
+  return true;
+}
+
+// The row that holds the select. A setting row nests the select one level
+// down (label, then the ‹ select › cluster), so walk up to the row id.
+function rendererSlot(el) {
+  if (!el) return null;
+  for (let p = el.parentNode, n = 0; p && n < 3; p = p.parentNode, n++) {
+    if (p.id === "pm-renderer-row") return p;
+  }
+  return el;
+}
+
+const THREE_PATHS = ["auto", "webgl2", "webgpu"];
+const SHOT_MODES = ["auto", "blit", "native"];
+function cycleOf(list, cur) {
+  const i = list.indexOf(cur);
+  return list[(((i < 0 ? 0 : i) + 1) % list.length)];
+}
+function readThreePath() {
+  const v = GameStore.store.raw("apex26.tlxForceGL");   // blocked storage: null, AUTO
+  if (v === "1") return "webgl2";
+  if (v === "0") return "webgpu";
+  return "auto";
+}
+function liveThreeApi() {
+  try {
+    const tlx = typeof GLX !== "undefined" && GLX && GLX.__tlx;
+    if (tlx && typeof tlx.backendState === "function") {
+      const s = tlx.backendState();
+      if (s && (s.api === "webgpu" || s.api === "webgl2")) return s.api;
+    }
+  } catch (_) { /* paint before TLX is live */ }
+  try {
+    const g = typeof document !== "undefined" ? document.getElementById("game") : null;
+    const eng = g && typeof g.getAttribute === "function" ? g.getAttribute("data-engine") : "";
+    if (!/three\.js/i.test(eng || "")) return null;
+    if (/webgl2/i.test(eng || "")) return "webgl2";
+    if (/webgpu/i.test(eng || "")) return "webgpu";
+  } catch (_) { /* no canvas yet */ }
+  return null;
+}
+function threePathLabel(v) {
+  if (v === "webgl2") return "WEBGL2";
+  if (v === "webgpu") return "WEBGPU";
+  const live = (v === "auto") ? liveThreeApi() : null;
+  if (live === "webgpu") return "AUTO (WEBGPU)";
+  if (live === "webgl2") return "AUTO (WEBGL2)";
+  return "AUTO";
+}
+function applyThreePath(next, opts) {
+  if (readBackend() === "three" && !(opts && opts.noReload) &&
+      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-three-path") : null, "THREE PATH: END THIS RACE & RELOAD?", paintPresent)) return false;
+  // A blocked write is recorded in store.broken; the preference still paints from the in-memory read.
+  if (next === "webgl2") GameStore.store.rawSet("apex26.tlxForceGL", "1");
+  else if (next === "webgpu") GameStore.store.rawSet("apex26.tlxForceGL", "0");
+  else GameStore.store.rawDel("apex26.tlxForceGL");
+  // Same session-latch wipe as applyBackend — THREE PATH reload must not keep
+  // wgxHoldPresent / gfxClaimFail / gfxBound from the previous path.
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
+  paintPresent();
+  if (readBackend() === "three" && !(opts && opts.noReload)) {
+    const btn = typeof document !== "undefined" ? document.getElementById("pm-three-path") : null;
+    if (btn) btn.textContent = "THREE PATH: " + threePathLabel(next) + " — RELOADING…";
+    reloadSoon();
+    return true;
+  }
+  return false;
+}
+// CAR REFLECTIONS — the three.js env probe, DEFAULT OFF and measured that way.
+// Census 84 ran the WebGL2 three leg with the probe off: a flat 60 fps at scale
+// 1.0, frame times to 10.8 ms, no beat gap over 2 s. With it on, the same leg
+// dips to 10-13 fps and sheds resolution to 0.9, because the probe re-renders
+// the world SIX times per cycle every 4th frame for the whole race — a
+// sustained multiplier, not a warm-up. On the three-WebGPU path the latched
+// cube also renders the world near-black (PERF-FINDINGS 2t), which is why the
+// title says so rather than selling this as free detail.
+// Reloads like THREE PATH: tlx.js reads the flag once when the backend is
+// created, so a live toggle would paint a state the renderer is not in.
+const ENV_PROBES = ["off", "on"];
+function readEnvProbe() {
+  return GameStore.store.raw("apex26.tlxEnvProbe") === "1" ? "on" : "off";
+}
+function envProbeLabel(v) { return v === "on" ? "ON" : "OFF"; }
+function applyEnvProbe(next, opts) {
+  if (readBackend() === "three" && !(opts && opts.noReload) &&
+      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-car-reflect") : null, "CAR REFLECTIONS: END THIS RACE & RELOAD?", paintPresent)) return false;
+  if (next === "on") GameStore.store.rawSet("apex26.tlxEnvProbe", "1");
+  else GameStore.store.rawDel("apex26.tlxEnvProbe");
+  paintPresent();
+  if (readBackend() === "three" && !(opts && opts.noReload)) {
+    const btn = typeof document !== "undefined" ? document.getElementById("pm-car-reflect") : null;
+    if (btn) btn.textContent = "CAR REFLECTIONS: " + envProbeLabel(next) + " — RELOADING…";
+    reloadSoon();
+    return true;
+  }
+  return false;
+}
+function readShotMode() {
+  try {
+    const s = sessionStorage.getItem("apex26.wgxCapture");
+    if (s === "1") return "blit";
+    if (s === "0") return "native";
+  } catch (_) { /* fall through to localStorage */ }
+  const s = GameStore.store.raw("apex26.wgxCapture");   // blocked: null, AUTO
+  if (s === "1") return "blit";
+  if (s === "0") return "native";
+  return "auto";
+}
+function shotModeLabel(v) {
+  return v === "blit" ? "2D BLIT" : v === "native" ? "NATIVE" : "AUTO";
+}
+function writeShotMode(next) {
+  const v = next === "blit" ? "1" : next === "native" ? "0" : null;
+  if (v) GameStore.store.rawSet("apex26.wgxCapture", v);   // blocked: the session write below still covers this tab
+  else GameStore.store.rawDel("apex26.wgxCapture");
+  try {
+    if (v) sessionStorage.setItem("apex26.wgxCapture", v);
+    else sessionStorage.removeItem("apex26.wgxCapture");
+  } catch (_) { /* localStorage above still persists across tabs */ }
+}
+function shotReloadLive() {
+  const be = readBackend();
+  if (be === "webgpu") return true;
+  // THREE PATH: WEBGPU uses the same SCREENSHOTS key for the LDR 2D blit.
+  return be === "three" && (readThreePath() === "webgpu" || liveThreeApi() === "webgpu");
+}
+function applyShotMode(next, opts) {
+  if (shotReloadLive() && !(opts && opts.noReload) &&
+      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null, "SCREENSHOTS: END THIS RACE & RELOAD?", paintPresent)) return false;
+  // Drop inherited session latches, then write the new shot mode (which may
+  // put apex26.wgxCapture back into sessionStorage for this tab).
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
+  writeShotMode(next);
+  paintPresent();
+  if (shotReloadLive() && !(opts && opts.noReload)) {
+    const btn = typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null;
+    if (btn) btn.textContent = "SCREENSHOTS: " + shotModeLabel(next) + " — RELOADING…";
+    reloadSoon();
+    return true;
+  }
+  return false;
+}
+function presentStatus() {
+  const be = readBackend();
+  const path = readThreePath();
+  const shot = readShotMode();
+  let live = "";
+  try {
+    if (typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent()) {
+      live = " Live: 2D blit is painting #game-soft.";
+    }
+  } catch (_) { /* no live backend yet */ }
+  if (be === "webgpu") {
+    if (shot === "native") {
+      return "WEBGPU native swapchain. On a software GPU the canvas stays black — screenshots need SCREENSHOTS: 2D BLIT." + live;
+    }
+    if (shot === "blit") {
+      return "WEBGPU 2D BLIT: each frame is copied onto the canvas so screenshots work (a per-frame CPU copy — on a real GPU it applies to this tab only; a new tab is back to AUTO)." + live;
+    }
+    return "WEBGPU AUTO: software GPUs 2D-blit onto the canvas (screenshots work). A real GPU uses the native swapchain." + live;
+  }
+  if (be === "three") {
+    if (path === "webgl2") return "THREE.JS is pinned to WebGL2 — the canvas is visible and screenshots just work.";
+    if (path === "webgpu") {
+      if (shot === "native") {
+        return "THREE.JS is pinned to WebGPU, native swapchain. Software GPUs stay black — SCREENSHOTS: 2D BLIT copies the LDR target onto #game." + live;
+      }
+      if (shot === "blit") {
+        return "THREE.JS is pinned to WebGPU, 2D BLIT: the LDR target is copied onto #game (copyTextureToBuffer, never getCurrentTexture)." + live;
+      }
+      return "THREE.JS is pinned to WebGPU. AUTO 2D-blits the LDR target on software GPUs so screenshots work. SCREENSHOTS: NATIVE leaves the swapchain black." + live;
+    }
+    const api = liveThreeApi();
+    if (api === "webgpu") {
+      return "THREE.JS AUTO is WebGPU (phones/Safari use a lite stack)." + (live ? live : " Software GPUs 2D-blit the LDR target so screenshots work.");
+    }
+    if (api === "webgl2") {
+      return "THREE.JS AUTO is three WebGL2 — still TLX, not game WEBGL2. THREE PATH: WEBGPU pins three WebGPU.";
+    }
+    return "THREE.JS AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, and stays on three WebGL2 if GPU is missing, this tab already lost WebGPU, or the browser is Safari/iOS (WebKit WebGPU drew nothing on a phone — THREE PATH: WEBGPU opts back in).";
+  }
+  try {
+    if (typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent()) {
+      return "WEBGL2 paints via #game-soft under HeadlessChrome — screenshots read the 2D blit, not the WebGL swapchain. Headed players see #game." + live;
+    }
+  } catch (_) { /* no live backend yet */ }
+  return "WEBGL2 paints the GPU canvas. HeadlessChrome presents via #game-soft; headed players see #game. Screenshots just work.";
+}
+function paintPresent() {
+  const pathBtn = typeof document !== "undefined" ? document.getElementById("pm-three-path") : null;
+  if (pathBtn) pathBtn.textContent = "THREE PATH: " + threePathLabel(readThreePath());
+  const shotBtn = typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null;
+  if (shotBtn) shotBtn.textContent = "SCREENSHOTS: " + shotModeLabel(readShotMode());
+  const envBtn = typeof document !== "undefined" ? document.getElementById("pm-car-reflect") : null;
+  if (envBtn) envBtn.textContent = "CAR REFLECTIONS: " + envProbeLabel(readEnvProbe());
+  const st = typeof document !== "undefined" ? document.getElementById("pm-gfx-status") : null;
+  if (st) st.textContent = presentStatus();
+}
+function hrefFromPixels(cap) {
+  if (!cap || typeof document === "undefined" || typeof document.createElement !== "function") return null;
+  const c = document.createElement("canvas");
+  c.width = cap.width; c.height = cap.height;
+  const ctx2 = c.getContext && c.getContext("2d");
+  if (!ctx2 || typeof ctx2.putImageData !== "function") return null;
+  ctx2.putImageData(new ImageData(cap.data, cap.width, cap.height), 0, 0);
+  return c.toDataURL("image/png");
+}
+function saveScreenshot() {
+  const btn = typeof document !== "undefined" ? document.getElementById("pm-save-shot") : null;
+  const done = (ok, msg) => {
+    if (btn) btn.textContent = ok ? "SAVE SCREENSHOT — SAVED" : ("SAVE SCREENSHOT — " + (msg || "FAILED"));
+    setTimeout(() => { if (btn) btn.textContent = "SAVE SCREENSHOT"; }, 1600);
+  };
+  const run = async () => {
+    try {
+      const g = typeof document !== "undefined" ? document.getElementById("game") : null;
+      const softEl = typeof document !== "undefined" ? document.getElementById("game-soft") : null;
+      if (typeof GLX !== "undefined" && typeof GLX.awaitSoftPresent === "function") {
+        // Headed GLX has no #game-soft and no preserved drawing buffer: the canvas
+        // is only readable in the task that presented it. "frame" = resolved from
+        // inside present(), so the read below (no await in between) sees it;
+        // "stale" = nothing presented (paused), and #game would read back black.
+        const live = !softEl && !(typeof GLX.softPresent === "function" && GLX.softPresent());
+        let r = null;
+        try { r = await GLX.awaitSoftPresent(live ? 1500 : 8000, live ? "frame" : undefined); } catch (_) { /* still try the canvas */ }
+        if (live && r === "stale") { done(false, "NO LIVE FRAME"); return; }
+      }
+      let href = null;
+      // Soft-present paints #game-soft (GLX/TLX). Prefer that toDataURL; #game is
+      // often the GPU swapchain (black under software). capturePixels is fallback.
+      if (softEl && softEl.width > 0 && typeof softEl.toDataURL === "function") {
+        try { href = softEl.toDataURL("image/png"); } catch (_) { href = null; }
+      }
+      const soft = typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent();
+      let capFailed = false;
+      if (!href && soft && typeof GLX.capturePixels === "function") {
+        try {
+          const cap = await GLX.capturePixels();
+          href = hrefFromPixels(cap);
+        } catch (_) { href = null; capFailed = true; /* fall through to #game */ }
+      }
+      if (!href && softEl && typeof softEl.toDataURL === "function") {
+        try { href = softEl.toDataURL("image/png"); } catch (_) { href = null; }
+      }
+      if (!href && g && typeof g.toDataURL === "function") {
+        try { href = g.toDataURL("image/png"); } catch (_) { href = null; }
+      }
+      // Never re-await a capturePixels() that just rejected — on software
+      // adapters the post-soft-present readback flake repeats, and the user
+      // would sit through two full GPU round-trips to reach the same FAILED.
+      if (!href && !capFailed && typeof GLX !== "undefined" && typeof GLX.capturePixels === "function") {
+        const cap = await GLX.capturePixels();
+        href = hrefFromPixels(cap);
+        if (!href) { done(false, "NO 2D"); return; }
+      }
+      if (!href) { done(false, "BLANK"); return; }
+      const name = "apex26-" + readBackend() + ".png";
+      if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
+        const res = await fetch(href);
+        if (!res.ok) throw new Error("screenshot fetch HTTP " + res.status);
+        await NativeDownload.saveBlob(await res.blob(), name);
+        done(true); return;
+      }
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = name;
+      if (typeof a.click === "function") a.click();
+      done(true);
+    } catch (_) {
+      done(false, "FAILED");
+    }
+  };
+  run();
+  return true;
+}
+function ensureAdvHost() {
+  const existing = typeof document !== "undefined" ? document.getElementById("pm-display-adv-body") : null;
+  if (existing) return existing;
+  if (typeof document === "undefined" || typeof document.createElement !== "function") return null;
+  const panel = document.getElementById("pm-panel-display");
+  const slot = rendererSlot(document.getElementById("pm-renderer"));
+  const gfx = document.getElementById("pm-gfx");
+  const host = panel || (slot && slot.parentNode) || (gfx && gfx.parentNode);
+  if (!host) return null;
+
+  const details = document.createElement("details");
+  details.id = "pm-display-adv";
+  const summary = document.createElement("summary");
+  summary.id = "pm-renderer-details-sum";
+  summary.className = "adv-more-btn";
+  summary.textContent = "RENDERER · THREE.JS";
+  summary.title = "Resolution, backend, quality, recovery, screenshots, and diagnostics";
+  const body = document.createElement("div");
+  body.id = "pm-display-adv-body";
+  if (typeof body.setAttribute === "function") {
+    body.setAttribute("role", "group");
+    body.setAttribute("aria-label", "Advanced display");
+  }
+  if (typeof details.appendChild === "function") {
+    details.appendChild(summary);
+    details.appendChild(body);
+  }
+  // After GRAPHICS when it is a sibling (player quality stays on the sheet);
+  // otherwise after the renderer row. JS-built so the shell-node ratchet
+  // does not see a new tag — same reason RESET RENDERER is injected.
+  const after = (gfx && gfx.parentNode === host) ? gfx
+    : (slot && slot.parentNode === host) ? slot
+    : null;
+  if (typeof host.insertBefore === "function") host.insertBefore(details, after ? after.nextSibling : null);
+  else if (typeof host.appendChild === "function") host.appendChild(details);
+  return body;
+}
+
+function initPresentControls() {
+  if (typeof document !== "undefined" && document.getElementById("pm-three-path")) return;
+  const host = ensureAdvHost();
+  if (!host || typeof document.createElement !== "function") return;
+
+  function add(el) {
+    if (typeof host.appendChild === "function") host.appendChild(el);
+    return el;
+  }
+  function addBtn(id, title) {
+    const btn = document.createElement("button");
+    btn.id = id;
+    btn.type = "button";
+    btn.title = title;
+    return add(btn);
+  }
+
+  // THREE PATH and SCREENSHOTS steer WGX/TLX-only behaviour — the three.js GPU
+  // path, and the soft-present blit those two backends need to show a frame on
+  // a software GPU. With DEFERRED empty neither can do anything, so they are not
+  // injected at all rather than shipped inert. Derived from the roster, like the
+  // stops above, so they return with the backends and need no edit here.
+  //
+  // SAVE SCREENSHOT and COPY DIAG deliberately STAY: saveScreenshot() waits on
+  // GLX.awaitSoftPresent when the bound backend has it (GLX HeadlessChrome,
+  // WGX, TLX), prefers #game-soft when that overlay exists, then falls through
+  // to #game.toDataURL / capturePixels — and the diag copy is the phone
+  // bug-report path, which is backend-agnostic.
+  const backendTools = hasBackendFiles("three") || hasBackendFiles("webgpu");
+  const pathBtn = backendTools ? addBtn("pm-three-path",
+    "three.js GPU path. AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, except on Safari/iOS (three WebGL2). WEBGL2 / WEBGPU pin one path.") : null;
+  const envBtn = hasBackendFiles("three") ? addBtn("pm-car-reflect",
+    "Mirror the real surroundings in the car paint on the three.js backend. OFF by default: the probe re-renders the world six times per cycle and measured a drop to 10-13 fps with a resolution shed on real hardware, and on the three-WebGPU path it currently darkens the scene. OFF falls back to the analytic mirror.") : null;
+  const shotBtn = backendTools ? addBtn("pm-screenshots",
+    "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.") : null;
+  const saveBtn = addBtn("pm-save-shot",
+    "Download the visible frame as a PNG. Waits for the 2D blit first, then reads #game-soft when that overlay exists (GLX HeadlessChrome / WGX / TLX).");
+  // Paint the label now: saveScreenshot()'s done() alone would leave the
+  // button an EMPTY plate until its first click.
+  saveBtn.textContent = "SAVE SCREENSHOT";
+  // COPY DIAG: __apex.diag() as JSON on the clipboard, rather than a
+  // screenshot of the GOV panel, whose right edge clips the one number
+  // that matters; env.backendState carries api, gpuErrors, the first GPU/WGSL
+  // error, the soft-present counters, the pack state and the debug switches.
+  const diagBtn = addBtn("pm-copy-diag",
+    "Copy __apex.diag() (renderer/backend state, GPU errors, device, build) to the clipboard as JSON, to paste into a bug report.");
+  diagBtn.textContent = "COPY DIAG";
+  const status = document.createElement("p");
+  status.id = "pm-gfx-status";
+  add(status);
+
+  paintPresent();
+  try { window.addEventListener("apex-gfx-live", paintPresent); } catch (_) { /* no window */ }
+  if (pathBtn) pathBtn.onclick = function () {
+    uiSelect();
+    applyThreePath(cycleOf(THREE_PATHS, readThreePath()));
+  };
+  if (envBtn) envBtn.onclick = function () {
+    uiSelect();
+    applyEnvProbe(cycleOf(ENV_PROBES, readEnvProbe()));
+  };
+  if (shotBtn) shotBtn.onclick = function () {
+    uiSelect();
+    applyShotMode(cycleOf(SHOT_MODES, readShotMode()));
+  };
+  saveBtn.onclick = function () {
+    uiSelect();
+    saveScreenshot();
+  };
+  diagBtn.onclick = function () {
+    uiSelect();
+    copyDiag(diagBtn);
+  };
+}
+
+// The diag a player can copy. `window.__apex` is NULL on the shipped build (game.js declares it null and
+// fills it only for localhost / ?apex / devApi), so the full snapshot is dev-only; a player gets the
+// subset the picker can read without it: bound backend + its own state, stored pick, the warn/error log.
+function playerDiag() {
+  const safe = (fn) => { try { return fn(); } catch (e) { return { error: String((e && e.message) || e) }; } };
+  return {
+    when: new Date().toISOString(),
+    ua: safe(() => navigator.userAgent),
+    backend: safe(() => liveBackend()),
+    backendState: safe(() => (typeof GLX !== "undefined" && GLX && typeof GLX.backendState === "function") ? GLX.backendState() : null),
+    renderer: safe(() => JSON.parse(unavailableDiagnostics())),
+    log:safe(() => (typeof Log !== "undefined" && Log.records) ? Log.records({ level: "warn", limit: 40 }) : []),
+  };
+}
+
+// __apex.diag({download:false}) when the dev surface exists, else playerDiag() → clipboard via ApexClipboard.
+function copyDiag(btn) {
+  const label = (t) => { if (btn) btn.textContent = t; };
+  const reset = () => setTimeout(() => label("COPY DIAG"), 1600);
+  let text = "";
+  try {
+    const d = (typeof __apex !== "undefined" && __apex && typeof __apex.diag === "function") ? __apex.diag({ download: false }) : playerDiag();
+    text = d ? JSON.stringify(d, null, 1) : "";
+  } catch (e) { text = ""; }
+  if (!text) { label("COPY DIAG — NO DIAG"); reset(); return; }
+  ApexClipboard.write(text).then((ok) => {
+    if (ok) { label("COPY DIAG — COPIED"); reset(); }
+    else { label("COPY DIAG — FAILED"); reset(); }
+  });
+}
+
+function initReset() {
+  if (typeof document !== "undefined" && document.getElementById("pm-renderer-reset")) return;
+  const host = ensureAdvHost();
+  if (!host || typeof document.createElement !== "function") return;
+  // Injected, not written into index.html: same reason CockpitOpts generates
+  // its SETTINGS rows — the shell's DOM-node ratchet counts tags in the file,
+  // and this button mints no new CSS class.
+  const btn = document.createElement("button");
+  btn.id = "pm-renderer-reset";
+  btn.textContent = "RESET RENDERER";
+  btn.title = "Forget the saved renderer pick, THREE PATH, SCREENSHOTS, and crash/fallback flags, then reload on the default Three.js renderer. Pick WEBGL2 directly if THREE.JS or WEBGPU will not load.";
+  if (typeof host.appendChild === "function") host.appendChild(btn);
+  btn.onclick = () => {
+    uiSelect();
+    if (!raceGuard(btn, "RESET RENDERER: END THIS RACE & RELOAD?", () => { btn.textContent = "RESET RENDERER"; })) return;
+    clearRendererStorage();
+    btn.textContent = "RESET RENDERER — RELOADING…";
+    reloadSoon();
+  };
+}
+
+function replaceNode(old, next) {
+  if (typeof old.replaceWith === "function") { old.replaceWith(next); return true; }
+  const host = old.parentNode;
+  if (host && typeof host.replaceChild === "function") { host.replaceChild(next, old); return true; }
+  return false;
+}
+
+function mountRendererPicker(old) {
+  if (!old || isSelect(old)) return old;
+  if (typeof document === "undefined" || typeof document.createElement !== "function") return old;
+  // The same SETTING ROW shape as every other Settings pick
+  // (js/ui/setting-row.js, css/components.css .set-row): LABEL ‹ select ›.
+  // Built by hand rather than through SettingRow.build because this file also
+  // runs in harnesses that load it alone.
+  const row = document.createElement("div");
+  const label = document.createElement("span");
+  const ctl = document.createElement("div");
+  const prev = document.createElement("button");
+  const sel = document.createElement("select");
+  const next = document.createElement("button");
+  if (typeof row.appendChild !== "function" || typeof sel.appendChild !== "function") return old;
+  row.id = "pm-renderer-row";
+  row.className = "set-row";
+  if (typeof row.setAttribute === "function") { row.setAttribute("role", "group"); row.setAttribute("aria-labelledby", "pm-renderer-label"); }
+  label.id = "pm-renderer-label";
+  label.className = "tune-label";
+  label.textContent = "RENDERER";
+  prev.id = "pm-renderer-prev";
+  prev.tabIndex = -1;   // pointer-only beside the select, like SettingRow's chevrons
+  if (typeof prev.setAttribute === "function") prev.setAttribute("aria-hidden", "true");
+  prev.type = "button";
+  prev.textContent = "‹";
+  if (typeof prev.setAttribute === "function") { prev.setAttribute("data-step", "-1"); prev.setAttribute("aria-label", "Previous renderer"); }
+  sel.id = "pm-renderer";
+  sel.title = "WEBGL2 paints the GPU canvas (HeadlessChrome via #game-soft). THREE.JS is the three.js backend — use THREE PATH for WebGL2 vs WebGPU. WEBGPU is hand-written WebGPU — use SCREENSHOTS for 2D blit vs native swapchain.";
+  if (typeof sel.setAttribute === "function") sel.setAttribute("aria-labelledby", "pm-renderer-label");
+  for (let i = 0; i < BACKENDS.length; i++) {
+    const opt = document.createElement("option");
+    opt.value = BACKENDS[i];
+    opt.textContent = backendLabel(BACKENDS[i]);
+    sel.appendChild(opt);
+  }
+  next.id = "pm-renderer-next";
+  next.tabIndex = -1;   // pointer-only beside the select, like SettingRow's chevrons
+  if (typeof next.setAttribute === "function") next.setAttribute("aria-hidden", "true");
+  next.type = "button";
+  next.textContent = "›";
+  if (typeof next.setAttribute === "function") { next.setAttribute("data-step", "1"); next.setAttribute("aria-label", "Next renderer"); }
+  ctl.appendChild(prev);
+  ctl.appendChild(sel);
+  ctl.appendChild(next);
+  row.appendChild(label);
+  row.appendChild(ctl);
+  if (!replaceNode(old, row)) return old;
+  return sel;
+}
+
+function initRenderer() {
+  let rb = typeof document !== "undefined" ? document.getElementById("pm-renderer") : null;
+  if (!rb) return;
+  rb = mountRendererPicker(rb);
+  rb.hidden = false;
+  paintRenderer(rb);
+  if (rb._apexRendererWired) return;
+  rb._apexRendererWired = true;
+  try { window.addEventListener("apex-gfx-live", function () { paintRenderer(document.getElementById("pm-renderer")); paintPresent(); }); } catch (_) { /* no window */ }
+  if (isSelect(rb) && typeof rb.addEventListener === "function") {
+    rb.addEventListener("change", function () { applyBackend(rb.value, rb); });
+    const prev = document.getElementById("pm-renderer-prev");
+    const next = document.getElementById("pm-renderer-next");
+    if (prev) prev.onclick = function () { applyBackend(prevBackend(readBackend()), rb); };
+    if (next) next.onclick = function () { applyBackend(nextBackend(readBackend()), rb); };
+    return;
+  }
+  rb.onclick = function () { applyBackend(nextBackend(readBackend()), rb); };
+}
+
+function init() {
+  Log.info("game", "RendererPicker.init");
+  // Picker row first (player-facing), then the RENDERER fold that owns
+  // RESOLUTION / GRAPHICS plus RESET + present controls + status. Each
+  // inject is idempotent; the shell already has the fold.
+  initRenderer();
+  ensureAdvHost();
+  initReset();
+  initPresentControls();
+}
+
+if (typeof document !== "undefined") {
+  // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
+  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", init, { once: true });
+  else init();
+}
+
+return { BACKENDS, init,
+  nextBackend, prevBackend, applyBackend, backendLabel, readBackend, liveBackend, clearRendererStorage,
+  showUnavailable,
+  RENDERER_LS_KEYS, RENDERER_SS_KEYS,
+  THREE_PATHS, SHOT_MODES, readThreePath, applyThreePath, threePathLabel, liveThreeApi,
+  ENV_PROBES, readEnvProbe, applyEnvProbe, envProbeLabel,
+  readShotMode, applyShotMode, shotModeLabel, presentStatus, saveScreenshot, ARM_MS };
+})();

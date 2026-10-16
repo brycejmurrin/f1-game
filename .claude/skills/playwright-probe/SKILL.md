@@ -1,9 +1,28 @@
 ---
 name: playwright-probe
-description: Drive the game headless with Playwright — single deterministic screenshots (shot.mjs) through parallel multi-server sweeps (apex-eval for one-off __apex expressions, apex-capture for parallel screenshot validation), plus the environment gotchas (preinstalled Chromium executablePath, project-resolved playwright, free-port servers). Use to visually verify a scenery/livery/lighting/track change, frame a corner, or validate at scale. Triggers - "show me the track", "screenshot Monaco at the chicane", "does this look right", "before/after of my change", "screenshot all camera modes / tracks", "validate game modes", "run a parallel sweep", "exercise the debug hooks".
+description: "Use when asked for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after or GLX-vs-TLX frames (backend-compare), flicker/shimmer/z-fighting clips (motion-capture), CPU profiles / flame charts / GC spikes, the CAR STUDIO (livery, sponsors, carview.html), or camera modes (cockpit/chase/orbit/roadside, camState/viewState, framing a corner, camera lag). Not the parts catalog (garage-parts-livery), UI-fit shots (survey-ui-matrix) or a live canvas (mcp-probe)."
 ---
 
-# Headless Playwright probing (parallel)
+# Headless Playwright probing
+
+The parent owns one browser session and serialized captures. Subagents may inspect
+source, plan recipes or review artifacts; they never launch a browser (AGENTS.md rule 10, hook-enforced).
+Write captures under `artifacts/` and return paths plus explicit unverified cells.
+
+## Prerequisites
+
+The SessionStart hook installs deps and the headless shell (AGENTS.md
+§Verification 1); `browserType.launch: Executable doesn't exist` means it did
+not run — `bash tools/env/cloud-agent-install.sh`. Capture rules that differ by
+backend: WGX on SwiftShader needs `tools/gfx/gfx-probe.mjs` for the visible
+`#game` (soft-present blit), never a raw canvas screenshot; HeadlessChrome GLX
+hides `#game` (opacity 0, reads black) and blits onto `#game-soft` — await
+`awaitSoftPresent()` then capture that.
+
+Interactive resize / DOM / CSS survey is the **playwright-official** MCP
+(`browser_*`, skill `survey-ui-matrix`), not this batch harness.
+One-screen CSS edit + hot-swap + structured DOM dump is **css-play**
+(`tools/ui/css-play.mjs` / `playwright-mcp.sh play|dom`).
 
 The renderer runs deterministically headless under SwiftShader, so you can drive
 the real game and the `__apex` API from Node to validate cameras, modes, tracks,
@@ -13,119 +32,96 @@ cover most needs; drop to a custom harness for bespoke sweeps.
 ## Committed tools (use these first)
 
 ```sh
+# Same CLIs via MCP (takes scratch/apex-browser.lock; apex_status first):
+#   ./tools/mcp/apex-tools-mcp.sh call apex_eval '{"track":"monza","expr":"a.info()"}'
+#   ./tools/mcp/apex-tools-mcp.sh call apex_shot '{"track":"monza","frac":0.1}'
+#   ./tools/mcp/apex-tools-mcp.sh call apex_hud_shot '{"cam":"cockpit","preset":"clean"}'   # race HUD: shot + boxes + findings (survey-ui-matrix)
+# Plain CLIs (no MCP wrap): tools/car/carshot.mjs, tools/check/quick-validate.mjs. The wraps cannot pin a backend.
 # One-off: boot the game, evaluate an __apex expression, print JSON.
-node tools/apex-eval.mjs <track> "<expr>"        # `a` = __apex; async ok; --raw for full JSON
-node tools/apex-eval.mjs monaco "a.camera()"
-node tools/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
+node tools/shot/apex-eval.mjs <track> "<expr>"        # `a` = __apex; async ok; --raw for full JSON
+node tools/shot/apex-eval.mjs monaco "a.camera()"
+node tools/shot/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
+# apex-eval/flicker-gate default to TLX; pin a renderer with --backend three|webgl2|webgpu
+# (apex-eval) / --backend three (flicker-gate; default webgl2 = GLX). A GLX.*() read under
+# the TLX default answers for TLX. shot.mjs takes --backend three|webgl2|webgpu (default three;
+# webgl2 costs ~4 min a boot on SwiftShader vs ~40 s for TLX); the apex_eval/apex_shot MCP wraps pass none.
+node tools/shot/apex-eval.mjs monaco "a.info()" --backend webgl2
 
 # Parallel screenshot validation (writes PNGs + a blank/fail manifest):
-node tools/apex-capture.mjs cameras [track] [outdir]   # camera-mode sweep (12 of the game's 13 modes)
-node tools/apex-capture.mjs modes   [outdir]           # menu / race day,wet,night / results / time-trial
-node tools/apex-capture.mjs tracks  [outdir] [id ...]  # one orbit shot per circuit
+node tools/shot/apex-capture.mjs cameras [track] [outdir]
+node tools/shot/apex-capture.mjs modes   [outdir]
+node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
+
+# SAME framed scene on GLX vs TLX (+ numeric pixel diff, per-backend console errors):
+node tools/shot/backend-compare.mjs monaco 0.52 park --backends webgl2,three --out artifacts/cmp/before --label tunnel-exit
 ```
+
+`garage-angles` boots its own static server (no `:3456` serve). A dead local
+`DISPLAY=:N` (no `/tmp/.X11-unix/XN`) used to make WebGL null and hang on
+`__apex` — `launchChromium` clears that automatically; fallback is
+`unset DISPLAY` or `xvfb-run -a`. Details:
+[garage-parts-livery/references/garage-angles.md](../garage-parts-livery/references/garage-angles.md).
 
 ## Single framed screenshot (`shot.mjs`)
 
-For ONE deterministic shot, use the helper in this skill folder — it boots a
-server, waits for `__apex`, freezes the scene, frames the camera, writes a PNG:
+```sh
+node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png|out.jpg] \
+  [--az N] [--el N] [--dist N] [--side -1|1] [--tod day|dusk|dawn|night] [--hud] \
+  [--weather dry|wet|rain|overcast|fog] [--gpu swiftshader] \
+  [--team <id>] [--wait <s>] [--jpeg] [--raster]   # BROWSER (one Chromium; --help ok)
+# --gpu llvmpipe / APEX_GL=llvmpipe is CI-only (needs /dev/dri): here it fails fast, never falls back.
+# Many frames, one boot (JSON array / {jobs} / JSONL); same track reuses race():
+node tools/shot/shot.mjs --batch jobs.json [--jpeg] [--raster]
+```
+
+`cam` = `park` (the in-game **chase** rig: snapCam, no free-cam) | `eye` | `orbit`
+(default) | `cinematic` | `trackside`. Default out
+`scratch/captures/playwright-probe/<track>-<pct>-<cam>.png`; `.jpg` / `--jpeg`
+writes JPEG q85 (human review); `--raster` writes `__apex.render` JSON only
+(no pixels). It warns on blank frames and `free-cam inactive`. Find `frac` first
+(no browser: `turns:` in `js/circuits/<id>.js`; Spa Eau Rouge compression ~0.075).
+Speed notes: `docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md`.
+
+`trackside` here is the free-cam `view({look:"in"})`, not the `trackside` CAM_MODES rig.
+`turns:` has no tunnel/bridge entries: read the circuit file's comments (Monaco bore
+racing 0.449-0.524) or `flicker-gate.mjs --list` (sites carry racing/scenery fracs).
+
+**Before/after:** the tools serve the working tree: shoot A, apply the edit (or `git stash`), shoot B with
+the SAME args. `backend-compare` diffs GLX vs TLX within one run, not A vs B; compare the two runs'
+PNGs/manifests (`<label>-manifest.json`) yourself. Recipe: [references/recipes.md](references/recipes.md) §Tunnel before/after.
+Car-only: `garage-angles.mjs --against=<git ref>` does both in one run.
+
+## Motion and profiling (still this harness)
 
 ```sh
-node .claude/skills/playwright-probe/shot.mjs <trackId> <frac> [cam] [out.png]
-# cam = orbit | eye | cinematic | trackside | park
-node .claude/skills/playwright-probe/shot.mjs monaco 0.18 orbit  scratch/captures/playwright-probe/monaco-chicane.png
-node .claude/skills/playwright-probe/shot.mjs spa    0.07 eye    scratch/captures/playwright-probe/eau-rouge.png
+node tools/shot/motion-capture.mjs monaco 4 50      # driven clip → per-frame flicker score (trust p90)
+node tools/shot/profile-gameloop.mjs singapore render        # .cpuprofile → Chrome DevTools → Performance
 ```
 
-A blank/dark canvas comes out < ~5 KB; a real 3D frame is tens of KB (the
-suite's non-blank heuristic). For the full camera-hook reference
-(park/freeze/eyeAt/orbit/view/cinematic/carOrbit/previewCam) see
-**debug-cameras**; add `setTimeOfDay`/`weather` calls for lighting variants.
-For before/after: capture with the same `(track, frac, cam)` args on each side
-of the change so only the pixels you care about differ. Output goes under `scratch/captures/playwright-probe/` by default (and `apex-capture` defaults to `scratch/captures/apex-capture/<purpose>/`) — don't commit throwaway screenshots; visual-regression baselines
-under `tests/` are updated only via `npx playwright test --update-snapshots`.
+`flicker-gate.mjs` (still camera, fixed SITES, `--list` is no-browser) and
+`tools/track/coplanar-audit.cjs <id>` (no browser) are the z-fight pair
+motion-capture's reference points at. A still frame cannot show shimmer and a CPU chart cannot see fill-bound work —
+both references say what the numbers mean before you A/B on them.
 
-## UI screens (DOM, not canvas)
+**Image budget** (plan WS4; #2399): `Read` at most 8 images, then compact; never re-`Read` an old shot; JPEG ≤ 800 px wide for anything a model will look at; for more than 3 shots use `apex_shot_survey` / `apex_track op survey`, never a loop of `apex_shot`. A request over 32 MB kills the session and `/compact` with it.
 
-The menu/setup/results screens are DOM — follow the `tests/ui-audit.spec.js`
-pattern (navigate the menus, `page.screenshot` to `artifacts/galleries-<port>/<suite>/`) and
-use `tests/f1-api-mock.js` so the data hub renders without network egress.
-Portrait UI uses `{width:390,height:844}`; in-race shots must use **landscape**
-`{width:844,height:390}` to avoid the `#rotate-device` overlay.
+## Load on demand
 
-`apex-capture` exits non-zero and lists any shot that came back `blank:true`
-(< ~5 KB) — so a broken render fails CI-style without opening every file. Both
-tools start their own server(s) + Chromium; no setup beyond `npm install`.
-
-## Why parallel servers
-
-`python3 -m http.server` is single-threaded. For sweeps (12 camera modes, 24
-tracks, day/night/wet variants) fan pages across **multiple servers** so a slow
-asset fetch on one page doesn't stall the others. Verified: 4 servers + 4 pages
-profiled 4 circuits in ~10 s, and captured all 12 camera modes well under a
-minute. `apex-capture` already does this (`startServers(4)` + `fanout`).
-
-## Environment gotchas (already handled in the tools — replicate in custom harnesses)
-
-1. **Chromium version mismatch.** The npm `playwright` build may not match the
-   image's preinstalled browser (`npx playwright install` is blocked / wasteful).
-   Launch with the preinstalled binary:
-   ```js
-   chromium.launch({ executablePath: "/opt/pw-browsers/chromium",
-     args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu"] });
-   ```
-2. **Resolve playwright from the project** when your script lives outside it
-   (e.g. scratchpad):
-   ```js
-   import { createRequire } from "node:module";
-   const require = createRequire("/home/user/f1-game/");
-   const { chromium } = require("playwright");
-   ```
-3. **Free ports**, don't hardcode — bind `:0` and read back the port, or you'll
-   collide with a leftover server.
-4. **Wait for readiness**: `waitForFunction(() => window.__apex != null)` then
-   `race(id)` then `waitForFunction(() => __apex.info().track === id)` then a
-   ~1.6 s settle for the mesh build before probing/shooting.
-5. **Viewports**: in-race shots use **landscape** `{844,390}` (avoids the
-   `#rotate-device` overlay); DOM screens (menu/results) use a larger viewport.
-
-## Custom-harness skeleton
-
-```js
-import { createRequire } from "node:module";
-const require = createRequire("/home/user/f1-game/");
-const { chromium } = require("playwright");
-// startServers(n) -> ports; open(browser,port) -> page; race(page,id);
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium",
-  args: ["--use-angle=swiftshader","--enable-unsafe-webgpu"] });
-const results = await Promise.all(ports.map(async (p, i) => {
-  const page = await open(browser, p);
-  await race(page, TRACKS[i]);
-  return page.evaluate(() => ({ corners: __apex.corners().length, light: __apex.lightState().numLights }));
-}));
-```
-
-Use this to validate work from the camera / track / state debug skills
-(`debug-cameras`, `debug-tracks`, `debug-state`) at scale. For single
-deterministic screenshots, `shot.mjs` (above) is simpler.
-
-## Shared Playwright fixtures (`tests/fixtures.js`)
-
-When writing specs rather than ad-hoc scripts, import from the shared fixtures
-file instead of `@playwright/test` directly — it mocks Jolpica/OpenF1 API calls
-(so tests run offline), injects `window.__TEST_MODE`, and provides two extras:
-
-```js
-import { test, expect } from './fixtures.js';
-
-test('example', async ({ page, pageErrors, racePage }) => {
-  // racePage: page already navigated to '/' with __apex available (saves boilerplate)
-  // pageErrors: string[] of uncaught JS errors — assert .toHaveLength(0) after exercising logic
-  await racePage.evaluate(() => __apex.race('monza'));
-  // ...
-  expect(pageErrors).toHaveLength(0);
-});
-```
-
-`racePage` navigates to `/` and waits for `window.__apex` (10 s timeout) before
-handing the page to the test. `pageErrors` collects every `pageerror` event.
-```
+- UI/DOM shots, camera fanout, env gotchas, harness skeletons →
+  [references/recipes.md](references/recipes.md).
+- Car-only garage/angle grids (`garage-angles`, `garage-angles-fetch`) → [references/car-studio.md](references/car-studio.md).
+- Flicker / z-fighting / shadow shimmer while driving — why headless rAF
+  freezes, the `recordVideo` fix, reading `p90` →
+  [references/motion-capture.md](references/motion-capture.md).
+- Frame-budget hog, GC jitter, slow track build, flame-chart symbols →
+  [references/perf-profile.md](references/perf-profile.md).
+- **Car studio** — track-free look at just the car (`tools/carview.html`,
+  `tools/car/render-car.mjs`, team/livery/part audits) →
+  [references/car-studio.md](references/car-studio.md), preset views and the
+  `CARVIEW` API in
+  [references/car-viewer-presets.md](references/car-viewer-presets.md).
+- **Camera semantics** — the 20 built-in modes, `orbit()` vs `snapCam()` (the
+  trap that costs a shot), `camState()`/`viewState()` →
+  [references/cameras.md](references/cameras.md), free-cam table and framing
+  recipes in
+  [references/debug-cameras-framing.md](references/debug-cameras-framing.md).

@@ -1,0 +1,239 @@
+// Regression ratchet: prop-vs-prop interpenetration must not grow.
+//
+// The engine guards scenery horizontally against the ROAD (onTrack/rejBox) and
+// vertically against the GROUND (float-audit). This is the third axis — models
+// passing through each other. tools/track/clip-audit.cjs finds them; this locks the
+// count in.
+//
+// Semantics are copied from tests/specs/props-over-road.spec.js deliberately:
+//   * a circuit NOT in BASELINE must read 0 — that is what makes a NEW defect,
+//     or a newly added circuit, fail,
+//   * a circuit IN BASELINE fails when its count GROWS,
+//   * no ALLOW escape hatch.
+// A hard fleet-wide zero is not reachable in one pass, so the caps ratchet down
+// as circuits are cleaned rather than gating on an unreachable ideal.
+//
+// Pure Node — clip-audit runs the real track build in a VM with no browser, so
+// this belongs in `npm run test:tooling`, not the Playwright projects.
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
+import { staleStrictIds as staleRows } from "../../tools/lib/stale-rows.mjs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+// SEVERE spots = distinct 40 m locations where two DIFFERENT models penetrate
+// each other by >= 1 m. Spots, not pairs: a pair count swings by several when a
+// single tree moves, whereas a spot appears or disappears.
+//
+// Street circuits dominate what remains — their city generators place building
+// rows by centreline arc length, which compresses on the inside of a corner
+// until adjacent footprints share volume.
+// Kept in tools/track/clip-baseline.json so the tool's own --gate and this test can
+// never disagree about what the caps are.
+//
+// KNOWN LIMITATION behind silverstone's cap. The emission-adjacency filter
+// (|q_a - q_b| <= 8) is how the detector recognises "these primitives are one
+// assembly", and it is what makes same-model overlap — accepted as blending —
+// invisible to the report. It fails for a helper that emits MANY primitives per
+// along() step: crowdMound emits 3 earth steps plus ~10 spectators per node, so
+// consecutive steps of the same run land >8 apart in emission order and read as
+// cross-model. They are the same colour and material and the shared volume is
+// interior, so nothing is visible on screen (verified by eye at frac 0.021).
+// Widening the window would blind the detector to real defects, so the cap
+// carries the cost instead. Tightening this properly needs a real model token
+// rather than an emission-order proxy.
+//
+// estoril 101 -> 102 and indianapolis 93 -> 94 are the SAME two limitations,
+// nudged by the banking placement fix (both circuits had a bank zone re-seated
+// off a straight onto a real corner, which moves the ground the scenery beside
+// it is anchored to). Attributed with `clip-audit <id> --why`, diffed against
+// the pre-fix tree:
+//   estoril      one NEW pairing, scenery-nature.js's crowdMound x itself — two terrace
+//                treads of ONE crowdMound run, same call site, same CONCRETE
+//                material, shared volume interior. The limitation above, exactly.
+//   indianapolis NO new pairing at all; three existing city-row pairings
+//                (js/track/scenery/build-props.js x neonTower) each gained one hit — the
+//                arc-length row compression named above.
+// Neither is a new defect class and neither is visible. Raised rather than
+// chased: the alternative is re-authoring two circuits' scenery to suit a
+// detector that already documents both of these as false positives.
+//
+// 2026-08-17 pine S4 remesh (scenery-nature.js): geometry is linear in a 12 m
+// reference height so TrackGraph can instance. Tall forestEdge pines (15–40 m
+// on hockenheim / nurburgring / spa) scale their canopy width with height —
+// the old mesh kept width ~2.7 m at every h — and grow into along() prisms
+// and neighbouring crowns. clip-audit --why on hockenheim: addCone (replay
+// pine) × circuit along() prisms. Measured and locked; suzuka shrank 9→8.
+//
+// zandvoort 24 → 31 (2026-08-18): same e1c1cb2f sceneryStartFrac drop.
+// clip-audit --why: 31 severe spots (45 total, 228 pairs). Placement
+// rotated with the S/F; not a leftover-sweep or WGX change. Locked.
+//
+// indianapolis 94 → 100 (2026-08-18): same oval-stand remesh as the
+// coplanar 8→9 raise. clip-audit --why: 100 severe / 107 total from
+// 305 pairs. Dominant pairings stay the documented neonTower × city-row
+// / tree class (js/track/scenery/build-props.js); grandstandEx × neonTower appears at
+// 6 hits (max 1.80 m). More shorter bays, more existing-class contacts.
+// No new defect class. Locked to the measured count.
+//
+// baku 30 -> 31 -> 30, shanghai 15 -> 17 -> 15 (2026-09-02): RAISED, THEN
+// WITHDRAWN. 1daf4a3 un-suppressed scenery on seven circuits, and a prop that
+// now EXISTS can now overlap. Measured with --why either side of that commit:
+//   baku      the `baku < buildProps x addBox < replay` pairing moved from
+//             max 4.38 m @frac 0.390 to max 2.22 m @frac 0.487 and gained one
+//             spot; 15 call-site pairings and 53 pairs on both sides. The
+//             marshal posts (gap 3.0 -> 3.5 m, restoring 7 of 9 that onTrack
+//             was culling) reached into the city boxes they now stand beside.
+//   shanghai  three new pairings at frac 0.015-0.018, two severe (5.02 m,
+//             3.20 m), all `place < buildProps` against buildings and trees —
+//             the buildings restored from 23 suppressed to 3.
+// Both caps were raised here to unblock a deploy branch that had been red for
+// an hour, then WITHDRAWN: another session fixed the baku frontage and reverted
+// the shanghai rows (1665391) so the spots stop existing, and lowered the caps
+// (9757946). That is the silverstone 16 -> 15 outcome again and it is the right
+// one — the raise buys time, the geometry fix is the answer.
+//
+// montreal 11 -> 9, suzuka 8 -> 6, bahrain 3 -> 2 (2026-09-15): pit-lane
+// ribbon + one-hall kit dropped two spots each on Montreal/Suzuka and one
+// on Bahrain. Lowered to the measured counts so the stale-entry ratchet
+// cannot hide a later regression back up to the old cap.
+//
+// monaco 25 -> 24, bahrain 4 -> 3 (2026-09-02): the same commit's suppression
+// fixes REMOVED overlaps on these two. Lowered and STAYED lowered — the
+// stale-entry test is right that a cap above the measured count silently
+// permits regressions up to it.
+//
+// jerez 27 -> 29, mexico 88 -> 89, mont_tremblant 30 -> 32, spa 9 -> 10
+// (2026-09-16, evening): `TrackPit.window` now leaves MOUTH_RUN (20 m) of
+// straight between the last corner and the entry road's mouth, so on the 21
+// circuits whose mouth sat inside a corner the window opens later and is
+// shorter — these four among them — and the circuits' own masses stand again
+// where the complex used to supersede them, carrying the overlaps they always
+// had. The same trade, and the same class, as the coplanar note for the 2026-09
+// window shortening (tests/unit/coplanar-faces.test.mjs). Established, not
+// assumed: `clip-audit spa --why` names grandstands, motorhomes, backdrop cones
+// and nature — not one pits.js call site — and the counts read the same before
+// and after the entrance lamps moved in that commit, so the lamps are not in
+// them.
+//
+// PROCESS, and this is the second time: 1daf4a3 shipped the scenery change
+// without touching either baseline, so test:sweeps was red on the deploy branch
+// itself — exactly the failure the silverstone note above already records ("a
+// cap left behind reads exactly like a regression you caused"). It cost this
+// session a full before/after audit to establish the reds were not its own
+// renderer change. A geometry edit owns its caps.
+// brands_hatch 43 -> 42 (2026-09-22): along()'s new seam tag stops an abutting
+// run from emitting its shared end node twice, and one of those duplicate
+// panels was also an interpenetrating pair here. No prop moved — one stopped
+// being emitted twice.
+// suzuka 2 -> 1 (2026-09-24): SRTM elevation bake for the stair-step twins
+// dropped one severe cone×cyl pair; measured, not assumed.
+// portimao 51 -> 44 (2026-09-24): SRTM Algarve bake + hillside escarpment
+// ground-seat; mid-sector terrace split cleared floaters and six severe spots.
+// brands_hatch 31→34, hungaroring 2→1 (#1311 re-key), jerez 16→17, mont_tremblant 38→52,
+// zolder 39→46; singapore 6→5, spa 11→8, imola 9→8 (2026-10-01):
+// transformSceneryApi wraps every() to authored-frame k (same as along), so
+// pine/marshalPost/backdrop no longer double-shift. Caps follow the measured
+// counts — raises where correctly placed stands now overlap, lowers where the
+// double-shift had been inventing contacts.
+// 2026-10-04: Spa retains the shared elevation/registration cap of 7.
+// All seven severe locations match shared default 4f71c2b; the woodland
+// pass reduces total >=0.5m spots from 13 to 12 without adding a severe spot.
+// 2026-10-10 round-2 bug hunt (#1309): sepang 2 -> 1 and bahrain 1 -> 0 — the hwZone
+// re-key (Sepang's final hairpin) and the hairpin fold clamp moved the road off
+// two props that used to clip it. Lowered to the measured tree.
+
+mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+const BASELINE = JSON.parse(
+  readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),
+);
+
+// The sweep rebuilds every circuit (~90 s), so run it ONCE and share it.
+let cached = null;
+const sweep = () => (cached ||= JSON.parse(execFileSync(
+  process.execPath,
+  [path.join(ROOT, "tools", "track", "clip-audit.cjs"), "--all", "--json"],
+  { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+)));
+
+test("prop interpenetration stays within the per-circuit baseline", () => {
+  const results = sweep();
+  // The floor is the ROSTER, not a number typed once: `>= 24` kept passing after
+  // the roster reached 40, so the sweep could have silently dropped 16 circuits.
+  // …and the roster is the SCOPED one: APEX_CIRCUITS (ci.yml's circuit lane, a
+  // circuit-only PR) narrows the CLI's --all and this floor together.
+  const roster = createRequire(import.meta.url)("../../tools/lib/circuit-scope.cjs")
+    .scope(createRequire(import.meta.url)("../../tools/manifest.cjs").CIRCUITS).length;
+  assert.equal(results.length, roster, `expected ${roster} circuits${process.env.APEX_CIRCUITS ? ` (APEX_CIRCUITS=${process.env.APEX_CIRCUITS})` : ""}, got ${results.length}`);
+
+  const grown = [];
+  for (const r of results) {
+    const cap = Object.prototype.hasOwnProperty.call(BASELINE, r.id) ? BASELINE[r.id] : 0;
+    if (r.severe > cap) grown.push(`${r.id}: ${r.severe} severe spots > baseline ${cap}`);
+  }
+  assert.deepEqual(grown, [], `prop interpenetration grew:\n  ${grown.join("\n  ")}`);
+});
+
+// WHICH stale rows fail (#2183): tools/lib/stale-rows.mjs holds the policy,
+// shared with scenery-ground-audit. Local runs are strict for every row, a PR
+// fails only its own circuits' stale rows (or all of them when it edits the
+// baseline), the train is advisory.
+const staleStrictIds = (env = process.env, changed) =>
+  staleRows("tools/track/clip-baseline.json", env, changed);
+
+test("stale-row policy: strict locally, scoped to the diff on a PR, advisory on the train", () => {
+  const pr = { GITHUB_EVENT_NAME: "pull_request", GITHUB_BASE_REF: "ship" };
+  assert.equal(staleStrictIds({}), null, "a local run checks every row");
+  assert.deepEqual([...staleStrictIds(pr, () => ({ ref: "HEAD", files: ["js/circuits/monza.js", "js/track/scenery/build-props.js"] }))], ["monza"]);
+  assert.deepEqual([...staleStrictIds(pr, () => ({ ref: "HEAD", files: ["js/track/scenery/build-props.js"] }))], [],
+    "a shared-engine diff hard-fails no unrelated stale row");
+  assert.equal(staleStrictIds(pr, () => ({ ref: "HEAD", files: ["tools/track/clip-baseline.json"] })), null,
+    "editing the baseline makes the whole file answerable");
+  assert.equal(staleStrictIds(pr, () => null), null, "an unreadable diff fails safe");
+  for (const ev of ["push", "schedule", "workflow_dispatch", "workflow_call"])
+    assert.equal(staleStrictIds({ GITHUB_EVENT_NAME: ev }).size, 0, ev);
+});
+
+test("clip-audit --lower ratchets one row down and is idempotent", () => {
+  // APEX_CIRCUITS narrows this to the scoped circuit; one build, a few seconds.
+  const { scope } = createRequire(import.meta.url)("../../tools/lib/circuit-scope.cjs");
+  const id = scope(Object.keys(BASELINE))[0];
+  const dir = mkdtempSync(path.join(ROOT, "scratch", "clip-lower-"));
+  try {
+    const file = path.join(dir, "baseline.json");
+    writeFileSync(file, JSON.stringify({ ...BASELINE, [id]: BASELINE[id] + 3 }, null, 2) + "\n");
+    const run = () => execFileSync(process.execPath, [path.join(ROOT, "tools", "track", "clip-audit.cjs"), id, "--json", "--lower", "--baseline", file],
+      { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    const measured = JSON.parse(run())[0].severe;
+    const once = JSON.parse(readFileSync(file, "utf8"));
+    assert.equal(once[id], Math.min(measured, BASELINE[id] + 3), "the slack row drops to the measurement");
+    for (const [k, v] of Object.entries(BASELINE)) if (k !== id) assert.equal(once[k], v, `${k} untouched`);
+    const before = readFileSync(file, "utf8");
+    run();
+    assert.equal(readFileSync(file, "utf8"), before, "a second --lower changes nothing");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("baseline has no stale entries — a cap below the measured count is a lie", (t) => {
+  const measured = new Map(sweep().map((r) => [r.id, r.severe]));
+  const strict = staleStrictIds();
+  // A cap far above the real number silently permits regressions up to it.
+  const slack = [];
+  // Only the SCOPED baseline rows: under APEX_CIRCUITS the sweep measured that subset.
+  const { scope } = createRequire(import.meta.url)("../../tools/lib/circuit-scope.cjs");
+  for (const [id, cap] of Object.entries(BASELINE).filter(([id]) => scope([id]).length)) {
+    const now = measured.get(id);
+    assert.notEqual(now, undefined, `BASELINE names unknown circuit "${id}"`);
+    if (!(now < cap)) continue;
+    const line = `${id}: baseline ${cap} but measured ${now} — lower it with node tools/track/clip-audit.cjs --all --lower`;
+    if (strict === null || strict.has(id)) slack.push(line);
+    else t.diagnostic(`STALE (advisory: not in this diff) ${line}`);
+  }
+  assert.deepEqual(slack, [], `stale baseline entries:\n  ${slack.join("\n  ")}`);
+});

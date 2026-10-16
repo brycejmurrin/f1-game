@@ -2,60 +2,115 @@
 
 **[Play live on GitHub Pages &rarr;](https://brycejmurrin.github.io/f1-game/)**
 
-An unofficial Formula 1 fan game and data hub built with raw WebGL2 — no
-frameworks, no dependencies, no build step. Pure JS/CSS/HTML, runs in any
-modern browser on desktop or mobile. A sibling of
-[Neon Drift](https://github.com/brycejmurrin/driving-game): same
-zero-dependency philosophy, this time in true 3D.
+An unofficial Formula 1 fan game and data hub in pure JS/CSS/HTML — no app
+framework, no build step. WebGL2 and optional WebGPU renderers (default
+renderer vendors [three.js](https://threejs.org/) under `vendor/`; a few other
+libraries sit there too). Runs in any modern browser on desktop or mobile. A
+sibling of [Neon Drift](https://github.com/brycejmurrin/driving-game): same
+static-site spirit, this time in true 3D.
+
+Recent merges: [CHANGELOG.md](CHANGELOG.md).
 
 ## The game
 
 Race the full **2026 grid** — 11 teams, 22 cars, real drivers and liveries —
-across **24 real circuits** recreated as low-poly 3D tracks: Bahrain, Monaco,
-Silverstone, Spa, Monza, Suzuka, Singapore, COTA, Interlagos, Las Vegas, the
-brand-new Madrid Madring (with its 24%-banked Monumental curve), Zandvoort in
-its farewell year, Imola, Baku, Jeddah, Albert Park, Shanghai, Miami, Mexico
-City, Montreal, Qatar, Red Bull Ring, Hungaroring, and Abu Dhabi. Night races
-run under floodlights.
+across a **24-round season** of low-poly 3D tracks. The season rounds:
+Bahrain, Monaco, Silverstone, Spa, Monza, Suzuka, Singapore, COTA,
+Interlagos, Las Vegas, Madrid, Jeddah, Albert Park, Shanghai, Miami,
+Montreal, Red Bull Ring, Hungaroring, Baku, Mexico City, Qatar, Abu Dhabi,
+Istanbul, Portimão. Madrid is the brand-new Madring, with its 24%-banked
+Monumental curve. On top of those sit 28 retired classics (Zandvoort and
+Imola among them), 52 circuits in all.
+Night races run under floodlights.
 
 2026-regulation game mechanics:
 
 - **Electric boost** — hold BOOST to deploy battery energy; deployment tapers
   away at high speed, exactly like the 2026 power units. Recharge by braking
   and lifting.
-- **Overtake Mode** — get within 1 second of the car ahead and the OT light
-  arms; trigger it for 4 seconds of full, taper-free deployment. The DRS
-  replacement.
-- **Manual gearbox** (optional, toggle in the pause menu) — an 8-speed
-  'box with a live gear readout and tachometer. Shift up near the redline,
-  down for corner exits; the limiter makes you upshift to reach top speed.
-  Auto mode shifts for you.
+- **Active Aero** — in MANUAL, press **Z** (or **AERO** on screen) inside an
+  activation zone to open the wings (**STRAIGHT MODE**): less drag and grip;
+  braking or leaving the zone closes them. **SETTINGS › CONTROLS › ACTIVE
+  AERO: AUTO** handles the wings; the HUD shows mode and zone status. Some
+  circuits have no zones.
+- **Overtake Mode** — stay within one second of the car ahead at the circuit's
+  detection line to earn it; the allowance arms at the start/finish line for
+  that lap, then toggle **OVERTAKE** for about 3–5 seconds of taper-free
+  electric deployment (the DRS replacement). Unavailable on lap one until the
+  leader starts lap two, under safety car or red flag, in low grip, or until
+  you are close enough at the detection line—the HUD shows **OVERTAKE READY**
+  when you may deploy.
+- **Pit stops & tyre wear** — **RACE SETTINGS › TYRE WEAR** defaults to
+  **REAL** (full wear; stops matter). **LIGHT** wears about half as fast;
+  **OFF** removes the pit lane entirely. There is no pit button—hold the car
+  in the pit lane at the entry for about half a second to call the stop.
+- **Race control** — yellow flags, virtual safety car, safety car and red flag
+  are **off** by default. Turn them on in **RACE SETTINGS › CAUTIONS**.
+- **Manual gearbox** (optional, SETTINGS › CONTROLS › GEARS: MANUAL) — an
+  8-speed 'box with a live gear readout and tachometer. Shift up near the
+  redline, down for corner exits; the limiter makes you upshift to reach top
+  speed. Auto mode shifts for you.
 - Five red lights, lights out. Real points (25-18-15-12-10-8-6-4-2-1).
-- **Season mode**: all 24 rounds in calendar order with persistent
-  championship standings.
+
+### Modes
+
+Menu routes and regression journeys: [docs/USAGE-PATHS.md](docs/USAGE-PATHS.md).
+
+- **Season** — race the calendar in order with saved championship progress;
+  **SEASON SETUP** picks rounds, qualifying and sprint weekends.
+- **Career** — **DRIVER CAREER** or **MY TEAM**: qualify, race, contracts,
+  R&D and prize money across seasons ([docs/CAREER.md](docs/CAREER.md)).
+- **Multiplayer** — private **RACE A FRIEND** sessions for 2–4 players over
+  WebRTC ([docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)).
+- **WATCH** — broadcast-style replays and real-race playback from the title
+  menu; **DATA HUB › RACE IT** loads a real Grand Prix to **WATCH**,
+  **HIGHLIGHTS**, or **JUMP IN** as a real driver.
+- **REAL RACE (Data Hub RACE IT)** — OpenF1 timing drives the grid, gaps,
+  stops and safety-car windows while you drive one real driver's seat
+  ([docs/notes/REAL-RACE-2026-09-27.md](docs/notes/REAL-RACE-2026-09-27.md)).
+- **Photo Studio** — frame and capture stills from Home, the garage, a paused
+  race or a replay, with optional backgrounds (**CAPTURE & BACKGROUNDS** on
+  the title menu).
+
+**Build your own circuit** in the TRACK DESIGNER (title menu): RANDOMISE or
+draw a loop, drag its points, stamp corners, hairpins and chicanes, pick a
+theme (27, each with time of day, trees and crowd options), and let the
+designer's checks (and their FIX buttons) make it raceable —
+then SAVE it and race the full field or a time trial on it, or share it as a
+link. The designer's HOW TO tab walks through it; the long form is
+[docs/TRACK-DESIGNER.md](docs/TRACK-DESIGNER.md).
 
 ### Controls
 
-- **Mobile (tilt):** tilt the phone to steer — calibrates at the start
-  lights. On-screen **GAS** / **BRAKE** pedals (left), **BOOST** / **OT**
-  toggles (right). iOS asks motion permission on your first tap.
-- **Mobile (no gyro):** touch the left/right side of the screen to steer;
-  toggle TILT in the pause menu.
-- **Desktop:** `←`/`→` or `A`/`D` steer, `↑`/`W` throttle, `↓`/`S` brake,
-  `Space` toggle boost, `X` overtake, `C` change camera, `P`/`Esc` pause.
-  Manual gears: `E` up, `Q` down.
-- **Gamepad:** plug in or pair a controller (PS5 / Xbox / MFi — works on
-  desktop browsers and iOS&nbsp;14.5+ Safari) for low-latency analog steering.
-  Left stick steers, **RT**/**A** throttle, **LT**/**B** brake, **X** boost,
-  **Y** overtake, **RB**/**LB** shift up/down, **View/Back** camera,
-  **Menu/Start** pause. Supported pads also rumble on contact and kerbs.
-- **Camera:** the **CAM** button (top-right, next to pause) or the `C` key
-  cycle through **13 camera modes** — **CHASE** (close), **FAR** (pulled back),
-  **DRIFT**, **COCKPIT** (onboard driver's eye), **HOOD** (nose cam), and more
-  (overhead, heli, trackside, cinematic, T-cam…). Your choice is remembered.
+- **Keyboard:** `←`/`→` or `A`/`D` steer, `↑`/`W` gas, `↓`/`S` brake,
+  `Space` toggles boost, `X` overtake, `Z` active aero, `C` cycles the
+  camera, `B` look back (hold), `R` recover, `T` radio check, `M` mirror
+  on/off, `P` pause. `Esc` goes back while a menu is open and pauses the
+  race only when none is. Manual gears: `E` up, `Q` or Left Shift down
+  (either Shift key).
+- **Gamepad:** left stick or the D-pad steers. **RT**/**A** gas,
+  **LT**/**B** brake (the triggers are gradual), **X** boost, **Y**
+  overtake, D-pad up active aero, **RB**/**LB** shift up/down, **View**
+  camera, **RS** look back (hold), **LS** recover, D-pad down radio
+  check, **Menu**/**Start** pause. Mirror has no default button. Plug in
+  or pair a pad (PS5 / Xbox / MFi); supported pads rumble on contact and
+  kerbs.
+- **Mobile:** choose **SETTINGS › CONTROLS › STEERING INPUT** —
+  **TILT**, **BUTTONS** or **TOUCH** — and rotate to landscape to drive.
+  **TILT** rolls the phone to steer, calibrates at the lights, and uses
+  on-screen **GAS** and **BRAKE**; if motion permission is denied the
+  game switches to **BUTTONS**. **BUTTONS** holds an on-screen arrow
+  (slide back to ease it); the pedals sit opposite the arrows. **TOUCH**
+  is drag-to-steer from where the finger lands, with automatic gas: use
+  **BRAKE** to slow down, and a tap alone does not steer. Stuck or
+  facing the wrong way? Pause, then **RECOVER CAR**.
+- Manual gears (**SETTINGS › CONTROLS › GEARS: MANUAL**) work on desktop
+  and with **TILT**. **BUTTONS** and **TOUCH** keep gears automatic.
+- Rebind keyboard and controller actions in **SETTINGS › CONTROLS**.
 
-Throttle is manual — hold GAS to accelerate. BOOST and OVERTAKE are taps that
-toggle/activate rather than buttons you hold.
+The **CAM** button (top-right, next to pause) cycles cameras the same
+way `C` and **View** do. The choice is remembered. Boost is a tap that
+toggles; overtake is a tap that activates; look back is held.
 
 ### Handling & tuning
 
@@ -64,15 +119,18 @@ angle and saturates at a friction limit, so cornering is grip-limited — overco
 a corner and the front washes wide (understeer); loosen the rear and it steps out
 (oversteer). Brake for the corners; the car rewards a tidy line.
 
-**ADVANCED STEERING…** in the pause menu opens plain-language controls —
-**RELAX / STANDARD / PRO** presets, **STEERING** feel, **TILT SENSITIVITY**,
-**DRIVING HELP** and **RACING LINE** — with the full set of per-parameter knobs
-tucked behind an **ADVANCED** disclosure for anyone who wants them.
+**SETTINGS** (from the pause menu or title) opens pages for **CONTROLS**,
+**DRIVING**, **DRIVING AIDS**, **DISPLAY**, **APPEARANCE**, **MUSIC &
+SOUND**, and **BACKUP & RESTORE**. **DRIVING AIDS** has **RELAX /
+STANDARD / PRO** presets, **STEERING** feel, **TILT SENSITIVITY**, **DRIVING
+HELP**, **RACING LINE**, and **ADAPTIVE BUTTONS** (keys / on-screen arrows;
+default ON) — with lock, speed steer and the rest tucked behind an
+**ADVANCED** disclosure. **BRAKE CUE** lives under **SETTINGS › DRIVING**.
 
 ### Car Setup
 
 The **CAR SETUP** screen (accessible from the main menu) lets you configure
-your car across **8 upgrade categories** before each race:
+your car across **12 upgrade categories** before each race:
 
 | Category | What it affects |
 |---|---|
@@ -84,8 +142,12 @@ your car across **8 upgrade categories** before each race:
 | **ERS** | Battery deployment curve and harvest efficiency |
 | **GEARBOX** | Shift speed and ratio spread |
 | **FUEL** | Fuel load trade-off (weight vs. range) |
+| **EXHAUST** | Tailpipe layout — pipe count, bore, wastegate |
+| **FLOOR** | Floor edge, fences and skid block |
+| **COCKPIT** | Halo, mirrors and driver furniture |
+| **WHEELS** | Rim and wheel-cover treatment |
 
-Budget is **600 credits** per race. Toggle **UNLIMITED BUDGET** in the setup
+Budget is **780 credits** per race. Toggle **UNLIMITED BUDGET** in the setup
 screen to remove the cap for testing. Some parts are **factory/supplier-exclusive**
 and only appear when your team uses that power unit (Mercedes, Ferrari, Red Bull
 Ford, Honda, or Audi).
@@ -127,24 +189,39 @@ sensors require a secure context.
 ## Project layout
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module contract.
-Plain script-tag IIFE modules, in load order: `mat4` (matrix math), `glx`
-(WebGL2 renderer), `teams` (2026 grid data), `tracks` (spline → mesh circuit
-builder), `parts` (8-category upgrade catalog), `car3d` (procedural car
-geometry), `input` (keyboard/gamepad/touch/tilt), `audio` (WebAudio synth),
-`api` (Jolpica/OpenF1 clients), `data` (data hub UI), `game` (loop, physics,
-AI, race logic).
+Plain script-tag IIFE modules, grouped by domain: `js/render/` (WebGL2/WebGPU
+renderers + shaders), `js/track/` (the spline → mesh track engine),
+`js/circuits/` (the 52 circuit data files: 24 season rounds + 28 retired), `js/car/` (procedural car geometry,
+liveries, the 12-category upgrade catalog), `js/data/` (the 2026 grid,
+Jolpica/OpenF1 clients + the data hub UI), `js/input/`, `js/audio/`, `js/ui/`,
+`js/camera/`, `js/lighting/`, … (input, audio, HUD and menus, cameras,
+lighting), with `js/game.js` as the entry (loop, physics, AI, race
+logic). Load order is defined in `tools/manifest.cjs`.
 
 ## Testing & development
 
-The project ships a **Playwright test suite** with 45 specs covering physics
-regression, AI behaviour, UI screens, and visual regression:
+The project ships a **Playwright test suite** — 130+ Playwright specs — plus
+700+ `node --test` unit suites, covering rendering, physics, UI across screens,
+multiplayer, career and visual regression. The whole thing is ~40
+minutes of software rendering, so the workflow is: ask which groups a change
+needs, run those in the background, tail the log.
 
 ```sh
-npm run test:fast                            # quick subset: smoke + api + collision + offtrack + parts-physics + steering (~3 min)
-npx playwright test                          # run all specs
-npx playwright test tests/autopilot.spec.js  # single file
-node tools/verify-track.cjs --all           # headless build check for all 24 circuits (no browser needed)
+node tools/ci/pick-tests.mjs                    # which test:<group>s does this change need?
+node tools/ci/test-bg.mjs physics-core hooks    # start them in the background, one at a time
+tail -f artifacts/logs/smoke.log             # watch one live
+node tools/ci/test-bg.mjs --status              # running / how each ended
+
+npm run test:tiny                            # start here: page loads, __apex responds
+npm run test:physics-core                    # the driving model (browser; ~45 tests, mostly fast)
+npm run test:collisions                      # car-to-car + wall contact (browser; ~32 tests, the slowest set)
+npm run test:aero                            # aero-zones, active-aero, drift, understeer (browser; ~37 tests)
+npm test -- tests/specs/autopilot.spec.js          # single file
+node tools/track/verify-track.cjs --all            # headless build check, all 52 circuits (no browser)
 ```
+
+`docs/TESTING.md` is the full reference: every group, every spec, the fixtures
+and the philosophy.
 
 Development server (pick either):
 
@@ -153,7 +230,8 @@ python3 -m http.server 3456
 npx serve -l 3456 .
 ```
 
-Active development branch: `claude/f1-game-project-26h3ng`.
+Development happens on `cursor/<topic>-<hash>` feature branches; the deploy branch is
+`claude/f1-game-project-26h3ng`. No new `claude/<topic>` feature heads.
 
 A debug scripting API — `window.__apex` — is available at runtime (devtools
 console or headless harness). Full reference in
@@ -173,8 +251,12 @@ Music: free demo tracks from
 [Beatscribe's Homebrew VGM assets](https://github.com/Beatscribe/homebrew_vgm)
 ([more at beatscribe.itch.io](https://beatscribe.itch.io)), released under
 **CC0 1.0** (public domain) and downsampled for the web. See
-[`assets/music/CREDITS.txt`](assets/music/CREDITS.txt). The engine and sound
-effects are synthesized in-browser with the Web Audio API.
+[`assets/music/CREDITS.txt`](assets/music/CREDITS.txt). The engine drone is looped sample clips pitched by rpm and gear (see
+[`assets/sfx/CREDITS.txt`](assets/sfx/CREDITS.txt)); the other sound effects are
+synthesized in-browser with the Web Audio API.
+The team-radio voice is synthetic speech from
+[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (**Apache-2.0**),
+rendered offline; see [`assets/voice/CREDITS.txt`](assets/voice/CREDITS.txt).
 
 ---
 

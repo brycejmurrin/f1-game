@@ -1,0 +1,810 @@
+// agent-config.test.mjs — the host-facing agent configuration, asserted.
+//
+// Three hosts read this repo (Claude Code, Cursor, Codex) and each has its own
+// file for the same fact: MCP servers live in .mcp.json, .cursor/mcp.json and
+// .codex/config.toml; renderer rules live in .claude/rules/*.md and
+// .cursor/rules/*.mdc. Prose kept them aligned for a while and then did not
+// (a stale wgx-capture path and a "tinyfish for deploy" line survived in the
+// Cursor copies for a month). What a test asserts stays true.
+//
+// Also holds the two numbers the official guidance gives for always-loaded
+// instructions: AGENTS.md under 200 lines (imports do not reduce context),
+// and emphasis reserved for one line.
+//
+// Run: node --test tests/unit/agent-config.test.mjs   (npm run test:tooling-fast)
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { spawn, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { parse as parseYAML } from "yaml";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+const exists = (p) => fs.existsSync(path.join(ROOT, p));
+
+const stripFrontmatter = (text) => {
+  const m = text.match(/^---\n([\s\S]*?)\n---\n/);
+  return { fm: m ? m[1] : "", body: m ? text.slice(m[0].length) : text };
+};
+
+test("AGENTS.md stays under 200 lines and emphasises at most one line", () => {
+  // Claude Code memory docs: "target under 200 lines per CLAUDE.md file.
+  // Longer files consume more context and reduce adherence." Imports load in
+  // full, so the cap applies to the imported file, not the stub.
+  const text = read("AGENTS.md");
+  const lines = text.trimEnd().split("\n").length;
+  assert.ok(lines <= 200, `AGENTS.md is ${lines} lines — move procedure to a skill, evidence to docs/notes/`);
+  const important = (text.match(/\bIMPORTANT\b/g) || []).length;
+  assert.ok(important <= 1, `AGENTS.md shouts IMPORTANT ${important} times; one line, or none`);
+  // A bolded run is emphasis; the asset-pack "Ships ON." claim is test-owned
+  // (docs-integrity) and allowed. Anything beyond that is noise.
+  const bold = (text.match(/\*\*[^*\n]+\*\*/g) || []).filter((b) => !/^\*\*Ships ON\.\*\*$/.test(b));
+  assert.ok(bold.length <= 3, `AGENTS.md has ${bold.length} bold spans — "if you emphasize many lines, none stands out"`);
+  assert.ok(exists("CLAUDE.md") && /^@AGENTS\.md$/m.test(read("CLAUDE.md")));
+});
+
+test("the three MCP catalogs name the same servers with the same launch lines", () => {
+  const claude = JSON.parse(read(".mcp.json")).mcpServers;
+  const cursor = JSON.parse(read(".cursor/mcp.json")).mcpServers;
+  assert.deepEqual(cursor, claude, ".cursor/mcp.json must lockstep .mcp.json");
+  // Codex: [mcp_servers.<name>] tables with command/args. A minimal TOML read
+  // — the file is ours and stays flat.
+  const toml = read(".codex/config.toml");
+  const codex = {};
+  let cur = null;
+  for (const raw of toml.split("\n")) {
+    const line = raw.replace(/#.*$/, "").trim();
+    if (!line) continue;
+    const h = line.match(/^\[mcp_servers\.([A-Za-z0-9_-]+)\]$/);
+    if (h) { cur = codex[h[1]] = {}; continue; }
+    const kv = line.match(/^([a-z_]+)\s*=\s*(.+)$/);
+    if (kv && cur) {
+      const v = kv[2].trim();
+      cur[kv[1]] = v.startsWith("[") ? JSON.parse(v) : v.startsWith('"') ? JSON.parse(v) : Number(v);
+    }
+  }
+  assert.deepEqual(Object.keys(codex).sort(), Object.keys(claude).sort(), ".codex/config.toml names a different server set");
+  for (const [name, s] of Object.entries(claude)) {
+    assert.equal(codex[name].command, s.command, `${name}: command differs in .codex/config.toml`);
+    assert.deepEqual(codex[name].args, s.args, `${name}: args differ in .codex/config.toml`);
+  }
+  // apex_verify_change_fast runs the whole fast gate; Codex's default per-tool
+  // timeout is 60 s, which would abort it.
+  assert.ok(Number(codex["apex-tools"].tool_timeout_sec) >= 600, "apex-tools needs tool_timeout_sec >= 600 under Codex");
+  assert.doesNotMatch(toml, /(api[_-]?key|token|secret)\s*=\s*"[^"$]/i, "no credential literals in .codex/config.toml");
+  assert.doesNotMatch(read(".mcp.json"), /"(env|headers)"\s*:\s*\{[^}]*"[^"$]{16,}"/, "no credential literals in .mcp.json");
+});
+
+test("path-scoped renderer rules exist for Claude Code and Cursor with identical bodies", () => {
+  // Claude Code: .claude/rules/<x>.md with `paths:`; Cursor: .cursor/rules/<x>.mdc
+  // with `globs:`. Same body, same glob, or the two hosts drift apart.
+  for (const name of ["render-wgx", "render-tlx"]) {
+    const claude = stripFrontmatter(read(`.claude/rules/${name}.md`));
+    const cursor = stripFrontmatter(read(`.cursor/rules/${name}.mdc`));
+    assert.equal(cursor.body, claude.body, `${name}: .cursor/rules body drifted from .claude/rules`);
+    const paths = claude.fm.match(/paths:\s*\n\s*-\s*"([^"]+)"/);
+    assert.ok(paths, `${name}: .claude/rules needs a paths: list`);
+    const globs = cursor.fm.match(/globs:\s*(\S+)/);
+    assert.ok(globs, `${name}: .cursor/rules needs globs:`);
+    assert.equal(globs[1], paths[1], `${name}: paths and globs differ`);
+    assert.match(cursor.fm, /alwaysApply:\s*false/);
+    // Every js/ or tools/ path a rule cites must exist — the stale
+    // wgx-capture path lived in the Cursor copy for weeks.
+    for (const m of new Set(claude.body.match(/(?<![\w./-])(?:js|tools|docs)\/[\w./-]+\.(?:js|mjs|cjs|md)/g) || []))
+      assert.ok(exists(m), `${name} cites ${m}, which does not exist`);
+  }
+  assert.doesNotMatch(read("AGENTS.md"), /sampleCount/, "the WGSL rules moved to .claude/rules/render-wgx.md");
+});
+
+test("settings.json registers the hooks that enforce the rules, and each hook exists", () => {
+  const settings = JSON.parse(read(".claude/settings.json"));
+  const commands = [];
+  for (const [event, groups] of Object.entries(settings.hooks || {})) {
+    for (const g of groups) for (const h of g.hooks || []) commands.push({ event, matcher: g.matcher, command: h.command });
+  }
+  const byEvent = (e) => commands.filter((c) => c.event === e);
+  assert.ok(byEvent("SessionStart").some((c) => c.command.includes("session-start.sh")), "SessionStart install hook missing");
+  assert.ok(byEvent("PreToolUse").some((c) => /Write\|Edit/.test(c.matcher) && c.command.includes("protect-files.sh")),
+    "PreToolUse edit guard missing");
+  assert.ok(byEvent("PreToolUse").some((c) => c.matcher === "Bash" && c.command.includes("bash-guard.sh")),
+    "PreToolUse Bash guard missing");
+  for (const c of commands) {
+    const rel = c.command.replace(/^"?\$CLAUDE_PROJECT_DIR\//, "").replace(/"(\s.*)?$/, "");   // drop args
+    assert.ok(exists(rel), `hook ${rel} is registered but missing`);
+    assert.ok(fs.statSync(path.join(ROOT, rel)).mode & 0o111, `hook ${rel} is not executable`);
+  }
+  assert.ok(Array.isArray(settings.permissions?.allow) && settings.permissions.allow.some((p) => /test:guards|test:\*/.test(p)),
+    "the permissions allowlist must pre-approve the guard suite");
+  // The rules the hooks enforce say so, and the escape hatch is documented.
+  const agents = read("AGENTS.md");
+  for (const hook of ["session-start.sh", "protect-files.sh", "bash-guard.sh"])
+    assert.ok(agents.includes(hook), `AGENTS.md must name ${hook}`);
+  assert.match(agents, /allow-protected/);
+  for (const hook of ["protect-files.sh", "bash-guard.sh"])
+    assert.match(read(`.claude/hooks/${hook}`), /allow-protected|APEX_SKIP_GUARDS/, `${hook} needs its escape hatch`);
+});
+
+test("the Bash guard blocks every shape of the kill that orphans browsers", () => {
+  // These are RUN, not grepped: the pattern that shipped required -f as the
+  // FIRST flag, so `pkill -9 -f node` — what anyone types when a plain pkill
+  // "did not work" — walked past a guard whose whole purpose is that pkill -f
+  // matches the guard's own shell. A regex assertion would have passed on the
+  // broken pattern; only executing the hook catches it.
+  const run = (command) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  for (const cmd of [
+    "pkill -f chrome",                     // the original form
+    "pkill -9 -f node",                    // signal before -f
+    "pkill -TERM -f chrome",               // named signal before -f
+    "pkill --full playwright",             // long flag
+    "sudo pkill -f chrome",                // privileged prefix
+    "killall chrome",
+    "kill -9 $(pgrep -f chrome)",          // substitution: no literal pid
+    "pgrep -f chrome | xargs kill -9",     // pipe: no literal pid
+    // 2026-09-22: the two bypasses a review reproduced — a shell -c wrapper
+    // and an absolute path — plus the wrapper-and-path combination.
+    'sh -c "pkill -f chrome"',
+    "bash -lc 'pkill -f chrome'",
+    "/usr/bin/pkill -f chrome",
+    "env /usr/bin/pkill -9 -f node",
+    "sh -c 'echo hi; pkill -f chrome'",
+  ]) assert.equal(run(cmd).status, 2, `bash-guard must block: ${cmd}`);
+  // …and stays out of the way of ordinary work, including a command that only
+  // MENTIONS the words outside command position. The heredoc case is not
+  // hypothetical: the pgrep rule went in unanchored and blocked the very
+  // commit that added it, because the message described what it blocks. The
+  // quoted `&&` case is the false positive the same review found: `&& pkill`
+  // inside a string read as command position.
+  for (const cmd of [
+    "git status",
+    "ps -eo pid,comm",
+    'echo "pkill -f chrome"',
+    "echo 'note: && pkill -f chrome is bad'",
+    "printf '%s' 'x; /usr/bin/pkill -f chrome'",
+    // --dry-run: this row is about the pkill rule reading a heredoc body as
+    // prose. A real commit here would run the commit guard (and, since
+    // 2026-10-04, refuse on any unstaged edit in the checkout under test).
+    "git commit --dry-run -F - <<'MSG'\nthe guard now covers a pgrep -f list piped into xargs kill\nMSG",
+  ]) assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
+});
+
+test("the Bash guard refuses a browser run from inside a subagent, and only there", () => {
+  // AGENTS.md §Verification 10 was prose plus a body lint; every agent carries
+  // Bash. Hook input from a subagent names it (agent_id / agent_type, or a
+  // transcript under subagents/ — the shape this session's own transcripts
+  // have); the main session carries none of those and keeps every command.
+  const run = (command, sub) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
+    input: JSON.stringify({
+      tool_name: "Bash", tool_input: { command },
+      ...(sub ? { transcript_path: "/root/.claude/projects/p/s/subagents/agent-abc.jsonl" } : {}),
+    }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  const browser = [
+    "node tools/ci/test-bg.mjs smoke",
+    "npx playwright test tests/specs/autopilot.spec.js",
+    "npm test -- tests/specs/autopilot.spec.js",
+    "node tools/ci/verify-change.mjs --wait",
+    "node tools/ci/test-solo.mjs tests/specs/autopilot.spec.js",
+    "python3 tools/mcp/probe-mcp.py chrome-start",
+    // 2026-09-24: the path-prefix and npm-script forms walked past the guard.
+    "node ./tools/ci/test-bg.mjs smoke",
+    "node /home/user/f1-game/tools/ci/test-bg.mjs smoke",
+    "npm run test:smoke",
+    "npm run --silent test:smoke -- --workers=1",
+    "node tools/ci/verify-change.mjs",     // bare form starts batch 1 via test-bg
+  ];
+  const nodeOnly = [
+    "node tools/ci/test-bg.mjs --status",
+    "node tools/ci/test-bg.mjs --tail smoke",
+    "node tools/ci/verify-change.mjs --fast --json",
+    "node tools/ci/verify-change.mjs --plan",
+    "npm run test:guards",
+    "npm run test:tooling-fast",
+    "node --test tests/unit/ratchets.test.mjs",
+    "node tools/track/verify-track.cjs monza",
+  ];
+  for (const cmd of browser) assert.equal(run(cmd, true).status, 2, `a subagent must not run: ${cmd}`);
+  for (const cmd of nodeOnly) assert.equal(run(cmd, true).status, 0, `a subagent may run: ${cmd}`);
+  for (const cmd of browser) assert.equal(run(cmd, false).status, 0, `the main session may run: ${cmd}`);
+});
+
+test("the Bash guard blocks a bare kill of the supervisor pid test-bg records", () => {
+  // test-bg.mjs spawns `sh -c "start_s=…; npm run --silent test:<g> …; echo
+  // '[test-bg] END …'"` and registers THAT pid. The /proc cmdline walk looked
+  // for "npm run test:" — the --silent in between meant `kill <pid from
+  // --status>`, the exact incident AGENTS.md rule 6 exists for, went through.
+  const sup = spawn("sh", ["-c", "sleep 30; npm run --silent test:zz-probe; echo '[test-bg] END group=zz-probe'"],
+    { stdio: "ignore", detached: true });
+  try {
+    const r = spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
+      input: JSON.stringify({ tool_name: "Bash", tool_input: { command: `kill ${sup.pid}` } }),
+      encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+    });
+    assert.equal(r.status, 2, `bash-guard must block a kill of the test-bg supervisor: ${r.stderr}`);
+  } finally {
+    try { process.kill(-sup.pid, "SIGKILL"); } catch { /* already gone */ }
+  }
+});
+
+// A throwaway repo for the hook tests below: js/, docs/, a generated file and
+// an index.html with a @gen-shell block, one commit deep. Its file names are
+// REAL repo paths on purpose: docs-integrity fails a source string that names
+// a file the repo does not have.
+function scratchRepo(prefix) {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", prefix));
+  const g = (...a) => spawnSync("git", a, { cwd: dir, encoding: "utf8" });
+  g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+  for (const [f, body] of Object.entries({
+    "js/game.js": "var a = 1;\n", "docs/PHYSICS.md": "note\n", "tools/manifest.cjs": "export {};\n",
+    "version.json": "{}\n", "tests/data/ratchets.json": "{}\n",
+    "index.html": "<head>\n<!-- @gen-shell:scripts -->\n<script src=js/game.js></script>\n<!-- @gen-shell:end -->\n<p>hand</p>\n",
+    "package.json": JSON.stringify({ name: "x", version: "1", scripts: { "test:x": "node --test" } }, null, 2) + "\n",
+  })) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), body); }
+  g("add", "-A"); g("commit", "-qm", "init");
+  return { dir, g, rm: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("the commit guard recognises every shape of git commit, and judges what is COMMITTED", () => {
+  /* 2026-10-04 review: the commit regex matched `git( -C dir)? commit` on the
+     raw text. Ten forms walked past it, and a pathspec commit of js/ with only
+     a doc staged took the docs-only path. APEX_GUARD_PROBE=1 stops the hook
+     after it has classified the commit (and run the unstaged check), so this
+     runs the real decision without the 25 s guard suite. */
+  const repo = scratchRepo("hook-commit-");
+  const run = (command) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
+    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, APEX_GUARD_PROBE: "1" },
+  });
+  try {
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 2\n");
+    repo.g("add", "docs/PHYSICS.md");
+    for (const cmd of [
+      "git commit -m x",
+      "git -c user.name=x commit -m x",
+      "git --no-pager commit -m x",
+      'bash -c "git commit -m x"',
+      "bash -c 'git commit -m x'",
+      "env X=1 git commit -m x",
+      "GIT_AUTHOR_NAME=x git commit -m x",
+      "/usr/bin/git commit -m x",
+      "sudo -u me git commit -m x",
+      "cd . && git commit -m 'multi\nline'",
+    ]) {
+      const r = run(cmd);
+      assert.equal(r.status, 0, `${cmd}: ${r.stderr}`);
+      assert.match(r.stderr, /bash-guard probe: commit docs-only/, `the guard must SEE this commit: ${cmd}`);
+    }
+    // A pathspec naming code makes it a code commit, whatever is staged.
+    const ps = run("git commit docs/PHYSICS.md js/game.js -m x");
+    assert.match(ps.stderr, /probe: commit code paths=docs\/PHYSICS\.md js\/game\.js/, ps.stderr);
+    assert.match(run("git commit -am x").stderr, /probe: commit code/, "-a stages at commit time: never docs-only");
+    // Not commits at all: no classification, no block.
+    for (const cmd of ["echo 'git commit -m x'", "git log --oneline", "git commit --dry-run -m x",
+                       "printf '%s' 'cd x; git commit'", "APEX_SKIP_GUARDS=1 git commit -m x"]) {
+      const r = run(cmd);
+      assert.equal(r.status, 0, cmd);
+      assert.doesNotMatch(r.stderr, /probe: commit/, `not a guarded commit: ${cmd}`);
+    }
+    // STAGED, not the working tree: an unstaged code edit beside a staged one
+    // makes the guards measure content this commit does not carry.
+    fs.writeFileSync(path.join(repo.dir, "tools/manifest.cjs"), "export const t = 1;\n");
+    repo.g("add", "tools/manifest.cjs");
+    fs.writeFileSync(path.join(repo.dir, "js/game.js"), "var a = 2;\n");
+    const partial = run("git commit -m x");
+    assert.equal(partial.status, 2, "a partially staged commit must be refused");
+    assert.match(partial.stderr, /differ from what this commit holds[\s\S]*js\/game\.js/);
+    assert.equal(run("git commit -am x").status, 0, "-a commits the working tree: nothing differs");
+    assert.equal(run("git commit -m x js/game.js tools/manifest.cjs").status, 0, "a pathspec commits those paths from the working tree");
+    assert.equal(run("git -c core.pager=cat commit -m x").status, 2, "the global-option form gets the same check");
+  } finally { repo.rm(); }
+});
+
+test("the edit guard sees Bash writes: sed -i, heredocs, tee, cp into js/ or a generated file", () => {
+  /* Auto mode tells agents to edit with sed and heredocs, and the edit guard
+     was wired to Write/Edit only — so a live run's js/ and every generated file
+     were open to Bash. shellparse.py names the write targets; protect-files.py
+     applies the same rules to each. */
+  const repo = scratchRepo("hook-write-");
+  const run = (command) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/protect-files.sh")], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
+    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir },
+  });
+  const binDir = path.join(repo.dir, "bin");
+  fs.mkdirSync(binDir);
+  fs.writeFileSync(path.join(binDir, "playwright"), "sleep 30\n");
+  let fake;
+  try {
+    // No live run: source edits through Bash are ordinary work.
+    for (const cmd of ["sed -i s/1/2/ js/game.js", "cat > js/core/log.js <<'EOF'\nvar b;\nEOF", "echo x >> docs/PHYSICS.md",
+                       "sed -i 's/hand/hand 2/' index.html", "sed -i 's/\"version\": \"1\"/\"version\": \"2\"/' package.json",
+                       "ls js > /dev/null", "git commit -m 'cp a js/game.js'"]) {
+      const r = run(cmd);
+      assert.equal(r.status, 0, `${cmd}: ${r.stderr}`);
+    }
+    // Generated files, any checkout, any write shape.
+    for (const cmd of ["echo '{}' > version.json", "sed -i s/a/b/ tests/data/ratchets.json", "cp /dev/null version.json",
+                       "printf x | tee tests/data/ratchets.json", "bash -c 'echo > version.json'",
+                       "sed -i 's/src=js.game/src=js.other/' index.html", "cat > index.html <<'EOF'\nx\nEOF",
+                       "sed -i 's/test:x/test:y/' package.json", "echo '{}' > package.json"]) {
+      const r = run(cmd);
+      assert.equal(r.status, 2, `must block: ${cmd} (${r.stderr})`);
+      assert.match(r.stderr, /via Bash/, `the refusal names the Bash write: ${cmd}`);
+    }
+    // A live Playwright run in THIS checkout: js/, css/ and index.html are frozen.
+    fake = spawn("sh", [path.join(binDir, "playwright"), "test"], { cwd: repo.dir, stdio: "ignore", detached: true });
+    const t0 = Date.now();
+    while (Date.now() - t0 < 2000 && !fs.existsSync(`/proc/${fake.pid}/cmdline`)) { /* spin until /proc shows it */ }
+    for (const cmd of ["sed -i s/1/2/ js/game.js", "cat > js/core/log.js <<'EOF'\nvar b;\nEOF", "cp docs/PHYSICS.md js/",
+                       "cd js && sed -i s/1/2/ game.js", "tee -a css/tokens.css < docs/PHYSICS.md"]) {
+      const r = run(cmd);
+      assert.equal(r.status, 2, `must block during a live run: ${cmd} (${r.stderr})`);
+      assert.match(r.stderr, /Playwright run is live/);
+    }
+    assert.equal(run("echo x >> docs/PHYSICS.md").status, 0, "prose stays open during a run");
+  } finally {
+    if (fake) { try { process.kill(-fake.pid, "SIGKILL"); } catch { /* gone */ } }
+    repo.rm();
+  }
+});
+
+test("a subagent cannot reach a browser through MCP tools either", () => {
+  /* AGENTS.md §Verification 10 held for Bash only; every subagent was offered
+     playwright-official, chrome-devtools and the apex_* browser tools. Claude
+     Code runs PreToolUse hooks on MCP tool names and marks a subagent's call
+     with agent_id (https://code.claude.com/docs/en/hooks). */
+  const settings = JSON.parse(read(".claude/settings.json"));
+  const groups = settings.hooks.PreToolUse;
+  const mcp = groups.find((g) => (g.hooks || []).some((h) => h.command.includes("mcp-browser-guard.sh")));
+  assert.ok(mcp, "the MCP browser guard is registered");
+  const re = new RegExp(mcp.matcher);
+  for (const n of ["mcp__playwright-official__browser_navigate", "mcp__chrome-devtools__new_page",
+                   "mcp__apex-tools__apex_shot", "mcp__apex-tools__apex_shot_survey", "mcp__apex-tools__apex_track", "mcp__apex-tools__apex_job_start"])
+    assert.ok(re.test(n), `matcher must select ${n}`);
+  for (const n of ["mcp__apex-tools__apex_track_audit", "mcp__apex-tools__apex_status", "mcp__github__get_me", "Bash"])
+    assert.ok(!re.test(n), `matcher must leave ${n} alone`);
+  assert.ok(groups.some((g) => g.matcher === "Bash" && g.hooks.some((h) => h.command.includes("protect-files.sh"))),
+    "the edit guard runs on Bash too");
+  const run = (payload) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/mcp-browser-guard.sh")],
+    { input: JSON.stringify(payload), encoding: "utf8" });
+  assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate", agent_id: "a1" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__chrome-devtools__new_page", transcript_path: "/p/subagents/agent-x.jsonl" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate" }).status, 0, "the main session keeps its browser");
+  assert.equal(run({ tool_name: "mcp__apex-tools__apex_track_audit", agent_id: "a1" }).status, 0, "tree tools stay open to subagents");
+});
+
+test("auto memory is on, synced, and its tracked copy stays small, typed and secret-free", () => {
+  // docs/notes/AGENT-MEMORY.md: the CLI turns auto memory OFF in cloud sessions
+  // unless this env is falsy, and memory-sync.sh is the only thing that carries
+  // it across containers. The tracked copy is model-written and committed, so
+  // it gets the same limits the CLI applies (200-line index) plus a secret scan.
+  const settings = JSON.parse(read(".claude/settings.json"));
+  assert.equal(settings.env?.CLAUDE_CODE_DISABLE_AUTO_MEMORY, "0", "auto memory must be forced on (it is off in remote sessions)");
+  const cmds = (ev) => (settings.hooks?.[ev] || []).flatMap((g) => (g.hooks || []).map((h) => h.command));
+  for (const ev of ["PostToolUse", "Stop"])
+    assert.ok(cmds(ev).some((c) => /memory-sync\.sh" save$/.test(c)), `${ev} must run memory-sync.sh save`);
+  assert.match(read(".claude/hooks/session-start.sh"), /memory-sync\.sh" restore/, "session-start must restore memory");
+  assert.match(read(".gitignore"), /^!\.claude\/memory\/$/m, ".claude/memory/ must be tracked");
+  const dir = path.join(ROOT, ".claude/memory");
+  const index = read(".claude/memory/MEMORY.md");
+  assert.ok(index.split("\n").length <= 200, "MEMORY.md past 200 lines is silently truncated at load — move detail into topic files");
+  for (const [, file] of index.matchAll(/\]\(([^)]+\.md)\)/g))
+    assert.ok(fs.existsSync(path.join(dir, file)), `MEMORY.md links ${file}, which does not exist`);
+  const SECRET = /(gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|(api[_-]?key|token|password|secret)\s*[:=]\s*\S{12,})/i;
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".md"))) {
+    const text = read(`.claude/memory/${f}`);
+    assert.doesNotMatch(text, SECRET, `.claude/memory/${f} holds a secret-shaped string — memories are committed`);
+    // `type:` at the top level, or under `metadata:` — memory-sync.sh writes the
+    // latter shape (2026-09-30: it dropped a top-level `type` and this pin
+    // reddened PR #498's guards), and the auto-memory format defines both.
+    if (f !== "MEMORY.md")
+      assert.match(text, /^---\n[\s\S]*?^\s*type:\s*(user|feedback|project|reference)\s*$[\s\S]*?^---/m,
+        `.claude/memory/${f} needs frontmatter with type: user|feedback|project|reference (top level or under metadata:)`);
+  }
+});
+
+// docs/notes/SECOND-BRAIN-2026-10-14.md: GitHub Copilot Memory stores the code
+// location each fact rests on and re-checks it before use, so a fact whose
+// evidence moved stops being served. Ours is the static half of that: a
+// memory MAY carry `source: <path>[, <path>…]` (top level or under metadata:),
+// and a cited path that no longer exists fails here — the memory is stale and
+// must be rewritten or deleted, not silently recalled. Entries that are not
+// paths (`user`, `#1519`, a test name) are allowed and not checked.
+test("a memory's source: paths still exist", () => {
+  const dir = path.join(ROOT, ".claude/memory");
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".md") && n !== "MEMORY.md")) {
+    const fm = read(`.claude/memory/${f}`).match(/^---\n([\s\S]*?)\n---/)?.[1] || "";
+    const line = fm.match(/^\s*source:\s*(.+)$/m);
+    if (!line) continue;
+    for (const raw of line[1].split(",")) {
+      const rel = raw.trim().replace(/^["'`]|["'`]$/g, "").replace(/(#.*|:\d+(-\d+)?)$/, "");
+      if (!/\/|\.[a-z]{1,5}$/i.test(rel)) continue;
+      assert.ok(exists(rel), `.claude/memory/${f} cites source ${raw.trim()}, which no longer exists — rewrite or delete the memory`);
+    }
+  }
+});
+
+// Instructions are an attack surface: the 2025 "Rules File Backdoor" hid
+// prompts in agent rules files with zero-width and bidi characters that render
+// as nothing in review (docs/notes/SECOND-BRAIN-2026-10-14.md). Nothing a
+// session loads as instructions or memory may carry one.
+test("no instruction or memory file carries invisible or bidi-control characters", () => {
+  const HIDDEN = /[​-‏‪-‮⁠-⁤⁦-⁩﻿]|[\u{E0000}-\u{E007F}]/u;
+  const files = spawnSync("git", ["ls-files", "AGENTS.md", "CLAUDE.md", "*/AGENTS.md", "*/CLAUDE.md",
+    ".claude/rules", ".claude/skills", ".claude/agents", ".claude/memory", ".claude/agent-memory",
+    ".cursor/rules", ".github/pull_request_template.md"], { cwd: ROOT, encoding: "utf8" })
+    .stdout.split("\n").filter((f) => /\.(md|mdc)$/.test(f));
+  assert.ok(files.length > 20, "the instruction-file listing came back nearly empty");
+  for (const rel of files) {
+    if (fs.lstatSync(path.join(ROOT, rel)).isSymbolicLink()) continue;
+    const text = read(rel);
+    const i = text.search(HIDDEN);
+    if (i < 0) continue;
+    const ln = text.slice(0, i).split("\n").length;
+    assert.fail(`${rel}:${ln} holds U+${text.codePointAt(i).toString(16).toUpperCase().padStart(4, "0")}, an invisible/bidi control — delete it (it hides text from review)`);
+  }
+});
+
+test("the edit guard treats tests/data/ratchets.json as tool-written", () => {
+  // A ceiling moves through ratchets.mjs (--auto-raise in the commit hook,
+  // --update with a reason); a hand edit was unblocked until 2026-09-22.
+  const hook = path.join(ROOT, ".claude/hooks/protect-files.sh");
+  const run = (payload) => spawnSync("bash", [hook], {
+    input: JSON.stringify(payload), encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  const file = path.join(ROOT, "tests/data/ratchets.json");
+  assert.equal(run({ tool_name: "Edit", tool_input: { file_path: file, old_string: "a", new_string: "b" } }).status, 2);
+  assert.equal(run({ tool_name: "Write", tool_input: { file_path: file, content: "{}" } }).status, 2);
+  // ...and so is a per-branch raise fragment (#2291): the hook's --auto-raise writes it.
+  const frag = path.join(ROOT, "tests/data/ratchets.d", "cursor--x-1234.json");
+  assert.equal(run({ tool_name: "Write", tool_input: { file_path: frag, content: "{}" } }).status, 2);
+  assert.equal(run({ tool_name: "Edit", tool_input: { file_path: path.join(ROOT, "docs/PHYSICS.md"), old_string: "a", new_string: "b" } }).status, 0);
+});
+
+test("the edit guard refuses a generated package.json block through Write as well as Edit", () => {
+  // The test:* scripts are generated from tests/groups.json. The guard matched
+  // on old_string, which a whole-file Write does not carry, so a Write rewrote
+  // the generated block unguarded — the one tool call that can drop a whole
+  // test group from the gate.
+  const hook = path.join(ROOT, ".claude/hooks/protect-files.sh");
+  const pkg = path.join(ROOT, "package.json");
+  const current = read("package.json");
+  const run = (payload) => spawnSync("bash", [hook], {
+    input: JSON.stringify(payload), encoding: "utf8",
+    env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  const mangled = JSON.parse(current);
+  mangled.scripts["test:guards"] = "echo nope";
+  assert.equal(run({ tool_name: "Write", tool_input: { file_path: pkg, content: JSON.stringify(mangled, null, 2) } }).status, 2,
+    "a Write that rewrites a test:* script must be blocked");
+  assert.equal(run({ tool_name: "Edit", tool_input: { file_path: pkg, old_string: '"test:guards":', new_string: '"test:guards":' } }).status, 2,
+    "the Edit path must still be blocked");
+  // A LINKED WORKTREE has a second, wider rule in front of this one: the hook
+  // makes package.json (and index.html, manifest.cjs, sw.js) main-session-only,
+  // so an unchanged Write is refused there too — for a reason that has nothing
+  // to do with the generated block. Asserting status 0 flat made this test fail
+  // for every worktree agent on every diff (two hit it on 2026-09-22). Assert
+  // the DISTINCTION instead: outside a worktree the guard stays out of the way,
+  // inside one it says worktree, never "generated".
+  const untouched = run({ tool_name: "Write", tool_input: { file_path: pkg, content: current } });
+  const linkedWorktree = fs.statSync(path.join(ROOT, ".git")).isFile();
+  if (linkedWorktree) {
+    assert.equal(untouched.status, 2, "a worktree agent is refused package.json outright");
+    assert.match(`${untouched.stdout}${untouched.stderr}`, /worktree/i,
+      "and the refusal must be the worktree rule, not the generated-block one");
+  } else {
+    assert.equal(untouched.status, 0,
+      "a Write that leaves the generated block alone is not the guard's business");
+  }
+});
+
+test("the commit guard's docs-only fast path keeps its two exclusions", () => {
+  // A prose commit runs docs-integrity alone (1.1 s against ~25 s measured
+  // 2026-09-16) and, more to the point, never lets --auto-raise stage
+  // tests/data/ratchets.json into a commit that changed no code. Both
+  // exclusions are the whole safety of it: a GENERATED doc is prose whose
+  // source is code (generated-docs must still run), and `git commit -a` stages
+  // at commit time, so the staged list the hook reads is not what will be
+  // committed. AGENTS.md rule 3 states the rule this encodes.
+  const hook = read(".claude/hooks/bash-guard.sh");
+  assert.match(hook, /git diff --cached --name-only/, "the fast path must decide on the STAGED paths");
+  assert.match(hook, /\^\(docs\/\|\\\.claude\/skills\/\|\\\.claude\/agents\/\)\|\\\.md\$/,
+    "the docs-only path set is docs/, skills, agents and *.md — nothing wider");
+  for (const gen of ["tools/README.md", "docs/DEBUG-HOOKS.md", "docs/ARCHITECTURE.md", "docs/LIGHTING-TUNER-SLIDERS.md"])
+    assert.ok(hook.includes(gen), `${gen} is generated from code; it must fall through to the full guards`);
+  assert.match(hook, /--all/, "`git commit -a` stages at commit time: the fast path must not trust the index then");
+  assert.match(hook, /node --test tests\/unit\/docs-integrity\.test\.mjs/);
+  assert.match(read("AGENTS.md"), /docs-integrity/, "rule 3 must state the docs-only carve-out");
+});
+
+test("the Codex skill mirror is tracked symlinks and the repair script exists", () => {
+  // The deploy branch tracks .agents/skills/<name> -> ../../.claude/skills/<name>
+  // (agent-surface.test.mjs locksteps every dir); it must NOT be gitignored,
+  // or a fresh clone's Codex sees no skills. The script repairs, never copies
+  // into git.
+  assert.doesNotMatch(read(".gitignore"), /^\.agents\/?$/m, ".agents/ is the tracked Codex mirror — do not gitignore it");
+  assert.match(read(".gitignore"), /^!\.claude\/rules\/$/m, ".claude/rules/ must be tracked");
+  assert.ok(exists("tools/env/mirror-skills.sh"));
+  assert.match(read("tools/env/mirror-skills.sh"), /\.agents\/skills/);
+  assert.match(read("tools/env/mirror-skills.sh"), /ln -s/, "the repair makes symlinks, the tracked form");
+});
+
+test("env install scripts and live-run.py answer --help without side effects", () => {
+  // --help used to run the install body (npm / apt / MCP clones) or crash
+  // live-run.py with IndexError when argv was missing.
+  const cases = [
+    { cmd: "bash", args: ["tools/env/mirror-skills.sh", "--help"], want: /--check/, no: /mirrored \d+ skills/ },
+    { cmd: "bash", args: ["tools/env/install-browsers.sh", "--help"], want: /Playwright Chromium/, no: /OK: Playwright Chromium ready/ },
+    { cmd: "bash", args: ["tools/env/cloud-agent-install.sh", "--help"], want: /install-browsers/, no: /OK: cloud-agent install complete/ },
+    { cmd: "python3", args: [".claude/hooks/live-run.py", "--help"], want: /usage: live-run\.py/, no: null },
+  ];
+  for (const c of cases) {
+    const r = spawnSync(c.cmd, c.args, { encoding: "utf8", cwd: ROOT, timeout: 10000 });
+    const text = `${r.stdout || ""}\n${r.stderr || ""}`;
+    assert.equal(r.status, 0, `${c.args[0]} --help: ${text}`);
+    assert.match(text, c.want, `${c.args[0]} --help missing ${c.want}`);
+    if (c.no) assert.doesNotMatch(text, c.no, `${c.args[0]} --help ran the real body`);
+  }
+  const bare = spawnSync("python3", [".claude/hooks/live-run.py"], { encoding: "utf8", cwd: ROOT, timeout: 5000 });
+  assert.equal(bare.status, 2, "live-run.py with no root must exit 2, not IndexError");
+  assert.match(`${bare.stdout}\n${bare.stderr}`, /usage: live-run\.py/);
+});
+
+// ── THE ALWAYS-ON SURFACE HAS A BUDGET ──────────────────────────────────────
+// Rationale and evidence: docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md.
+// Measured across 1,867 repos and 247,694 instruction lifetimes (arXiv
+// 2608.11095), agentic context files grow +226% over their lifetime at +4.9 net
+// instructions per commit, and the deletion hazard FALLS with instruction age
+// (-0.032/commit) because removing a rule means reconstructing why it was added.
+// Adding is free; removing is expensive; nothing pushes back. These two caps are
+// the push-back. They are deliberately close to today's numbers so the next line
+// costs a decision, not so that they never move — raise them WITH the reason, the
+// way tests/data/ratchets.json is raised.
+test("the always-on instruction surface stays inside its budget", () => {
+  // A rule-bearing line is one that tells a session what to do. Counted crudely
+  // but CONSISTENTLY: the absolute number matters less than the direction.
+  const RULE = /\b(never|always|must|do not|don't|use |run |prefer|keep |avoid|only |refuse|blocks?|stop |edit the|read |name |push |wait )/i;
+  const ruleLines = (text) => text.split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("|---") && !l.startsWith("```") && RULE.test(l)).length;
+
+  const agents = ruleLines(read("AGENTS.md"));
+  // Reported ceiling for reliable instruction-following is ~150-200 TOTAL, and
+  // Claude Code's own system prompt already spends ~50 of them before this file
+  // is read. 75 leaves room for the skills, which add their own on invocation.
+  assert.ok(agents <= 75,
+    `AGENTS.md carries ~${agents} rule-bearing lines (budget 75) — promote one to a hook or a test, or delete it`);
+
+  // Skill DESCRIPTIONS are always loaded for routing, so they are part of the
+  // same budget even though the bodies are not (progressive disclosure).
+  const skills = fs.readdirSync(path.join(ROOT, ".claude/skills"), { withFileTypes: true })
+    .filter((d) => d.isDirectory() && exists(`.claude/skills/${d.name}/SKILL.md`));
+  let descWords = 0;
+  for (const d of skills) {
+    const { fm } = stripFrontmatter(read(`.claude/skills/${d.name}/SKILL.md`));
+    // Measure the described surface, not YAML keys, name fields or scalar
+    // quoting/folding syntax. Parsing also refuses malformed descriptions.
+    const description = parseYAML(fm)?.description;
+    assert.equal(typeof description, "string", `${d.name}: description must be a YAML string`);
+    descWords += description.split(/\s+/).filter(Boolean).length;
+  }
+  assert.ok(descWords <= 1600,
+    `${skills.length} skill descriptions cost ~${descWords} always-on words (budget 1600) — tighten one, or retire a skill`);
+});
+
+// ── BYTE AND ROUTING BUDGETS (2026-10-14, docs/notes/AGENT-GUARDS-2026-10-14.md) ──
+// Lines and words are gameable (one 2 KB line is "one line"); the hosts cap
+// BYTES and CHARS. Codex concatenates AGENTS.md from the repo root down to the
+// working directory and stops adding files at project_doc_max_bytes, 32 KiB
+// by default (https://learn.chatgpt.com/docs/agent-configuration/agents-md),
+// so a long root file silently truncates the nested one — js/track's carries
+// the test-frozen scenery contract. The 2026-10-14 trim took the root to
+// ~22.5 KB; the caps pin a margin above it (raise them only with a reason).
+const AGENTS_MAX = 28500;
+const CHAIN_MAX = 31000;
+const nestedAgents = () => spawnSync("git", ["ls-files", "*/AGENTS.md"], { cwd: ROOT, encoding: "utf8" })
+  .stdout.split("\n").filter(Boolean);
+
+test("AGENTS.md and every root-to-nested AGENTS.md chain fit Codex's project-doc byte cap", () => {
+  const rootBytes = fs.statSync(path.join(ROOT, "AGENTS.md")).size;
+  assert.ok(rootBytes <= AGENTS_MAX, `AGENTS.md is ${rootBytes} B (cap ${AGENTS_MAX}) — move a rule to a hook, a test or a skill`);
+  const nested = nestedAgents();
+  assert.ok(nested.length >= 2, "js/track and js/circuits carry nested AGENTS.md");
+  for (const rel of nested) {
+    // the chain is every AGENTS.md from the root down to this directory, joined by a blank line
+    const parts = rel.split("/").slice(0, -1);
+    const chain = ["AGENTS.md"];
+    for (let i = 1; i <= parts.length; i++) {
+      const p = [...parts.slice(0, i), "AGENTS.md"].join("/");
+      if (exists(p)) chain.push(p);
+    }
+    const bytes = chain.reduce((n, p) => n + fs.readFileSync(fs.realpathSync(path.join(ROOT, p))).length, 0) + 2 * (chain.length - 1);
+    assert.ok(bytes <= CHAIN_MAX, `${chain.join(" + ")} = ${bytes} B > ${CHAIN_MAX}: Codex truncates ${rel}`);
+  }
+});
+
+test("nested AGENTS.md files are symlinks to their sibling CLAUDE.md (one copy per directory)", () => {
+  for (const rel of nestedAgents()) {
+    const st = fs.lstatSync(path.join(ROOT, rel));
+    assert.ok(st.isSymbolicLink(), `${rel} must be a symlink, not a copy`);
+    assert.equal(fs.readlinkSync(path.join(ROOT, rel)), "CLAUDE.md", `${rel} must point at its sibling CLAUDE.md`);
+    assert.ok(exists(path.join(path.dirname(rel), "CLAUDE.md")), `${rel}: sibling CLAUDE.md missing`);
+  }
+});
+
+test("skill descriptions: a char budget, every arrow resolves, every skill has routing queries", () => {
+  const skills = fs.readdirSync(path.join(ROOT, ".claude/skills"), { withFileTypes: true })
+    .filter((d) => d.isDirectory() && exists(`.claude/skills/${d.name}/SKILL.md`)).map((d) => d.name);
+  const agents = fs.readdirSync(path.join(ROOT, ".claude/agents")).filter((f) => f.endsWith(".md") && f !== "README.md")
+    .map((f) => f.replace(/\.md$/, ""));
+  let chars = 0;
+  for (const name of skills) {
+    const desc = parseYAML(stripFrontmatter(read(`.claude/skills/${name}/SKILL.md`)).fm).description;
+    // The Agent Skills spec caps a description at 1,024 characters.
+    assert.ok(desc.length <= 1024, `${name}: description is ${desc.length} chars (spec max 1,024)`);
+    chars += desc.length;
+    for (const m of desc.matchAll(/(?:→|->)\s*(?:agent\s+)?\**`?([a-z0-9][a-z0-9-]*)/g))
+      assert.ok(skills.includes(m[1]) || agents.includes(m[1]), `${name}: "→ ${m[1]}" names no skill or agent`);
+    assert.ok(exists(`tests/data/skill-routing/queries/${name}.json`),
+      `${name} has no tests/data/skill-routing/queries/${name}.json (5 should-fire + 3 near-miss queries)`);
+  }
+  // 11,986 chars on 2026-10-14, rounded up to the next 100. Trim one to add one.
+  assert.ok(chars <= 12000, `${skills.length} skill descriptions are ${chars} chars (budget 12,000)`);
+  for (const f of fs.readdirSync(path.join(ROOT, "tests/data/skill-routing/queries"))) {
+    const rows = JSON.parse(read(`tests/data/skill-routing/queries/${f}`));
+    assert.ok(skills.includes(f.replace(/\.json$/, "")), `${f}: no such skill`);
+    for (const r of rows) assert.ok(skills.includes(r.expect) || agents.includes(r.expect), `${f}: expect "${r.expect}" is not a skill or agent`);
+  }
+});
+
+test("settings.json denies GitHub-MCP repo surgery; nothing asks (the owner, 2026-10-15)", () => {
+  const perms = JSON.parse(read(".claude/settings.json")).permissions;
+  for (const t of ["mcp__github__delete_file", "mcp__github__create_repository", "mcp__github__fork_repository"])
+    assert.ok(perms.deny.includes(t), `permissions.deny must hold ${t} (AGENTS.md: agents never merge)`);
+  // push_files / create_or_update_file sat in permissions.ask until 2026-10-15 (a commit
+  // that skips the commit hook). Bryce: "I want all tools and mcps enabled", "Fix for me".
+  assert.deepEqual(perms.ask || [], [], "no permissions.ask rule");
+  assert.ok(perms.allow.includes("mcp__github"), "the whole GitHub MCP server is pre-approved");
+  for (const t of [...perms.deny, ...(perms.ask || [])])
+    assert.ok(!perms.allow.includes(t), `${t} is both allowed and gated`);
+  const pre = JSON.parse(read(".claude/settings.json")).hooks.PreToolUse;
+  assert.ok(pre.some((g) => g.hooks.some((h) => h.command.includes("github-mcp-guard.sh"))),
+    "enable_pr_auto_merge and draft:false go through github-mcp-guard.sh");
+});
+
+test(".cursor/environment.json allowlists exactly the .mcp.json servers, with their launch lines", () => {
+  const servers = JSON.parse(read(".mcp.json")).mcpServers;
+  const allow = JSON.parse(read(".cursor/environment.json")).mcpServerAllowlist;
+  assert.deepEqual(allow.map((a) => a.name).sort(), Object.keys(servers).sort());
+  for (const a of allow) {
+    const s = servers[a.name];
+    assert.equal(a.command, `*${s.command} ${s.args.join(" ")}`, `${a.name}: allowlist command drifted from .mcp.json`);
+  }
+});
+
+// ── A MEMORY STORE THAT CANNOT EXPIRE IS A RATCHET ──────────────────────────
+// .claude/agent-memory/<name>/ is the one memory store that survives here: it is
+// in the repo and tracked (!.claude/agent-memory/ in .gitignore), unlike Claude
+// Code's auto memory under ~/.claude, which a fresh cloud container wipes every
+// session. Because it is written by an agent and read by later agents, it is the
+// exact shape the literature warns about — arXiv 2607.24300 measured agents
+// scoring their own work at >=0.70 while 15 of 35 runs fell below a random
+// baseline. verify-agent's seed already answers this ("an entry older than the
+// merge-base is re-verified, not trusted"); this makes that property a rule
+// rather than a habit, for every store that gets added later.
+test("every agent-memory store declares its schema and how an entry expires", () => {
+  const dir = path.join(ROOT, ".claude/agent-memory");
+  if (!fs.existsSync(dir)) return;                    // no stores yet is fine
+  const stores = fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory());
+  assert.ok(stores.length > 0, "an empty .claude/agent-memory/ should not be committed");
+  for (const s of stores) {
+    const rel = `.claude/agent-memory/${s.name}/MEMORY.md`;
+    assert.ok(exists(rel), `${s.name} has a memory dir but no MEMORY.md index`);
+    const text = read(rel);
+    // A schema: the store says what ONE entry looks like, so entries stay
+    // comparable and a later agent can tell a real record from a musing.
+    assert.ok(/`[^`]*—[^`]*`/.test(text),
+      `${rel} states no entry schema — a store without one accumulates prose`);
+    // An expiry/distrust rule: something that makes an old entry stop counting.
+    assert.ok(/re-verif|expire|stale|older than|no longer|re-check|recheck/i.test(text),
+      `${rel} names no way for an entry to stop being believed — that is the ratchet arXiv 2608.11095 measures`);
+    // The agent that owns it must actually declare the memory, or the file is
+    // decoration that nothing reads.
+    const agent = `.claude/agents/${s.name}.md`;
+    assert.ok(exists(agent), `${rel} has no owning subagent at ${agent}`);
+    assert.match(read(agent), /^memory:\s*(user|project|local)\s*$/m,
+      `${s.name} has a memory store but its frontmatter never declares memory:`);
+  }
+});
+
+// ── SKILL REFERENCES: ONE HOP, AND A CONTENTS BLOCK PAST 100 LINES ──────────
+// Anthropic's skill-authoring guide (platform.claude.com/docs/en/agents-and-tools/
+// agent-skills/best-practices, read 2026-10-05): a reference reached through
+// another reference may be previewed with `head -100`, so every reference links
+// directly from SKILL.md, and a reference over 100 lines opens with a table of
+// contents so a partial read still shows its scope. CLAUDE.md, AGENTS.md and
+// SKILL.md load whole on every session or invocation and are NOT covered: a
+// Contents block there spends lines the 200-line target wants back.
+test("every skill reference is linked from its SKILL.md and, past 100 lines, opens with a Contents block", () => {
+  const skillsDir = path.join(ROOT, ".claude/skills");
+  const problems = [];
+  for (const d of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+    if (!d.isDirectory() || !exists(`.claude/skills/${d.name}/references`)) continue;
+    const skillMd = read(`.claude/skills/${d.name}/SKILL.md`);
+    const refs = fs.readdirSync(path.join(skillsDir, d.name, "references")).filter((f) => f.endsWith(".md"));
+    for (const ref of refs) {
+      const rel = `.claude/skills/${d.name}/references/${ref}`;
+      if (!skillMd.includes(`references/${ref}`)) problems.push(`${rel}: not linked from SKILL.md (keep references one hop deep)`);
+      const lines = read(rel).split("\n");
+      const n = lines.length - 1;
+      if (n <= 100) continue;
+      let fence = false;
+      const h2 = [];
+      for (const l of lines) {
+        if (/^\s*(```|~~~)/.test(l)) fence = !fence;
+        else if (!fence && /^## /.test(l)) h2.push(l.slice(3).trim());
+      }
+      if (h2[0] !== "Contents") { problems.push(`${rel}: ${n} lines, its first H2 must be "## Contents"`); continue; }
+      const listed = [];
+      for (let i = lines.indexOf("## Contents") + 1; i < lines.length && !/^## /.test(lines[i]); i++) {
+        const m = lines[i].match(/^- (.+)$/);
+        if (m) listed.push(m[1].trim());
+      }
+      const want = h2.slice(1);
+      if (listed.join("\n") !== want.join("\n")) {
+        problems.push(`${rel}: Contents lists [${listed.join(" | ")}] but the H2s are [${want.join(" | ")}]`);
+      }
+    }
+  }
+  assert.deepEqual(problems, [], problems.join("\n"));
+});
+
+// 2026-10-13 retired squash: Merge Desk arms MERGE-commit auto-merge only
+// (AGENTS.md §Concurrent PRs, github-mcp-guard.sh). A day later the Merge Desk
+// subagent, Bugbot's rules, the Cursor/Grok plugin, the steward card and
+// deploy.mjs's PR notes still said "arms SQUASH" — each tool read a different
+// rule. Nothing any agent reads may tell it to squash again.
+test("no agent-facing file tells an agent to arm or merge with SQUASH", () => {
+  const files = spawnSync("git", ["ls-files", "AGENTS.md", ".claude/agents", ".claude/skills", ".claude/rules",
+    ".cursor", "cursor-plugins", ".codex", ".agents", "docs/notes/APEX-STEWARD-CARD-2026-10-05.md", "tools/ci/deploy.mjs"],
+    { cwd: ROOT, encoding: "utf8" }).stdout.split("\n").filter(Boolean)
+    .filter((f) => !fs.lstatSync(path.join(ROOT, f)).isSymbolicLink());
+  assert.ok(files.length > 20, "the agent-facing file listing came back nearly empty");
+  const STALE = /mergeMethod:\s*"SQUASH"|arms?\s+(auto-merge\s*\()?SQUASH\b|SQUASH only\b|\*\*SQUASH only\*\*/i;
+  const bad = [];
+  for (const f of files) read(f).split("\n").forEach((l, i) => { if (STALE.test(l) && !/retired/i.test(l)) bad.push(`${f}:${i + 1}: ${l.trim()}`); });
+  assert.deepEqual(bad, [], "squash is retired — Merge Desk arms MERGE (merge commit) only");
+});
+
+test("bash-guard's `if:` filters parse, and every policed command shape still reaches it (#1711)", () => {
+  /* Hook handlers take ONE permission rule in `if` (https://code.claude.com/docs/en/hooks);
+     a subcommand of a compound is matched on its own, and an unparseable command runs the
+     hook regardless. Matching here: `*` = any text, whole command. protect-files.sh on Bash
+     stays unfiltered on purpose: it polices writes (redirects, any interpreter), which no
+     verb list covers. */
+  const settings = JSON.parse(read(".claude/settings.json"));
+  const group = settings.hooks.PreToolUse.find((g) => g.matcher === "Bash");
+  const guards = group.hooks.filter((h) => h.command.includes("bash-guard.sh"));
+  assert.ok(guards.length > 0 && guards.every((h) => typeof h.if === "string"), "every bash-guard handler needs an `if`");
+  assert.ok(group.hooks.some((h) => h.command.includes("protect-files.sh") && !h.if), "protect-files keeps polling every Bash write");
+  const res = guards.map((h) => {
+    const m = /^Bash\((.+)\)$/.exec(h.if);
+    assert.ok(m, `unparseable if: ${h.if}`);
+    return new RegExp("^" + m[1].replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
+  });
+  const reaches = (cmd) => cmd.split(/&&|\|\||;|\|/).some((sub) => res.some((r) => r.test(sub.trim())));
+  for (const cmd of ["git commit -m x", "foo && git commit -m x", "FOO=1 git push -u origin b", "pkill -f chrome", "kill 123",
+    "killall node", "gh pr merge 1", "curl -X POST x/runs/1/cancel", "node tools/ci/test-bg.mjs g", "npm run test:guards",
+    "npx playwright test", "playwright test", "bash -c 'git commit'", "timeout 5 pkill -f x", "python3 x.py", "eval 'git commit'",
+    "ls | xargs rm", "/usr/bin/chromium --headless"])
+    assert.ok(reaches(cmd), `bash-guard must still run for: ${cmd}`);
+  for (const cmd of ["ls -la", "cat README.md", "grep -n foo file", "head -5 x", "sed -n 1,5p x"])
+    assert.ok(!reaches(cmd), `read-only command should skip bash-guard: ${cmd}`);
+});

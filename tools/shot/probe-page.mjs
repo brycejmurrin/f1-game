@@ -1,0 +1,622 @@
+// Shared Playwright probe helpers for menu/garage capture tools.
+// @doc Probe helpers: reduced-motion init, backend pick, garage open/settle, soft/#game CDP shot.
+import { writeFileSync } from "node:fs";
+import { WEBGPU_CHROMIUM_ARGS } from "../lib/harness.mjs";
+
+/** Chromium flags per renderer backend (must match backend-compare / gfx-probe / carshot). */
+export function chromiumArgsForBackend(backend) {
+  // --enable-unsafe-swiftshader: Chromium 1xx blocks automatic SwiftShader
+  // WebGL without it (carshot / gfx-probe already pin this; probe helpers did not).
+  if (backend === "webgpu") return [...WEBGPU_CHROMIUM_ARGS];
+  if (backend === "three") {
+    return ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
+  }
+  return ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
+}
+
+/**
+ * Runs before any page script. Pins backend/team and disables view transitions
+ * (headless compositing rejects them → index.html error overlay blocks shots).
+ * Reduced motion is forced ON by default (stable shots) — which also skips the
+ * pre-race FLYBY (js/ui/loading-screen.js has no flyby under it). Pass
+ * `motion: true` to probe the loading screen / flyby.
+ */
+export function installProbeInit(page, { backend = "webgl2", team = null, tlxForceGL = true, motion = false } = {}) {
+  return page.addInitScript(({ be, teamIdx, forceGl, keepMotion }) => {
+    try {
+      // Pin webgl2 explicitly. Clearing the key means the shipped TLX/Three
+      // default on every device, which is not the native GLX path this probe's
+      // default requests.
+      if (be === "webgl2") localStorage.setItem("apex26.gfxBackend", "webgl2");
+      else localStorage.setItem("apex26.gfxBackend", be);
+      if (be === "three" && forceGl) localStorage.setItem("apex26.tlxForceGL", "1");
+      if (be === "webgpu") {
+        localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
+        try { sessionStorage.setItem("apex26.wgxCapture", "1"); } catch (_) {}
+      }
+      if (teamIdx != null) localStorage.setItem("apex26.team", JSON.stringify(+teamIdx));
+    } catch (_) {}
+
+    if (!keepMotion) try {
+      const orig = window.matchMedia.bind(window);
+      window.matchMedia = (query) => {
+        const m = orig(query);
+        if (String(query).includes("prefers-reduced-motion")) {
+          return {
+            matches: true, media: query, onchange: null,
+            addEventListener() {}, removeEventListener() {},
+            addListener() {}, removeListener() {},
+            dispatchEvent() { return false; },
+          };
+        }
+        return m;
+      };
+    } catch (_) {}
+
+    window.addEventListener("unhandledrejection", (e) => {
+      const r = e && e.reason;
+      const msg = (r && (r.message || r)) || "";
+      if (String(msg).includes("Transition was skipped")) e.preventDefault();
+    }, true);
+  }, { be: backend, teamIdx: team, forceGl: tlxForceGL, keepMotion: !!motion });
+}
+
+/** Snapshot why boot stalled — bare waitForFunction timeouts never name WebGL. */
+export async function gotoGameBootDiag(page) {
+  return page.evaluate(() => {
+    let gl2 = false;
+    try {
+      const c = document.createElement("canvas");
+      gl2 = !!c.getContext("webgl2");
+    } catch (_) { /* ignore */ }
+    const err = document.getElementById("__err_overlay");
+    return {
+      apex: !!window.__apex,
+      race: !!(window.__apex && window.__apex.race),
+      gl2,
+      Game: typeof window.Game,
+      Teams: typeof window.Teams,
+      overlay: err && err.style.display !== "none"
+        ? (err.textContent || "").slice(0, 160) : null,
+    };
+  }).catch((e) => ({ evaluateError: String(e && e.message || e) }));
+}
+
+/** Boot wait — domcontentloaded; full load can hang on slow boxes. */
+export async function gotoGame(page, url, waitMs = 120000) {
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: waitMs });
+  try {
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, {
+      polling: 200,
+      timeout: waitMs,
+    });
+  } catch (err) {
+    const diag = await gotoGameBootDiag(page);
+    const hints = [];
+    if (diag && diag.gl2 === false) {
+      hints.push("WebGL2 missing — a stale DISPLAY kills headless SwiftShader "
+        + "(harness clears dead :N sockets; else unset DISPLAY or xvfb-run -a)");
+    }
+    if (diag && diag.overlay) hints.push("error overlay: " + diag.overlay);
+    const detail = hints.length ? hints.join("; ") : "see diag";
+    throw new Error(
+      `gotoGame: __apex never appeared within ${waitMs}ms (${detail}). diag=${JSON.stringify(diag)}`,
+      { cause: err },
+    );
+  }
+}
+
+/** One .screen visible? Resolves false on timeout instead of throwing. */
+async function screenShown(page, id, timeout) {
+  return page.waitForFunction((i) => {
+    const el = document.getElementById(i);
+    return !!el && !el.hidden;
+  }, id, { polling: 100, timeout }).then(() => true).catch(() => false);
+}
+
+/** What the page looks like right now — so a timeout names its own cause. */
+export async function uiState(page) {
+  return page.evaluate(() => {
+    const $ = (id) => document.getElementById(id);
+    const g = $("game");
+    const err = $("__err_overlay");
+    return {
+      state: window.__apex?.info?.().state ?? null,
+      screens: [...document.querySelectorAll(".screen")].filter((e) => !e.hidden).map((e) => e.id),
+      setupPreviewOn: window.__apex?.garageCam?.()?.on ?? null,
+      gameVisibility: g ? getComputedStyle(g).visibility : "absent",
+      overlay: err && err.style.display !== "none" ? (err.textContent || "").slice(0, 200) : null,
+    };
+  });
+}
+
+/**
+ * Title → garage: mb-garage when present, else race → select → YOUR CAR.
+ *
+ * The two routes end on DIFFERENT screens: #mb-garage opens #carsetup directly
+ * (game.js openGarage("menu")), while only #mb-race passes through #select
+ * (openGarage("select") behind #sel-car). Waiting for #select after a garage
+ * click can therefore never succeed — it burned the full waitMs and then failed
+ * claiming the garage never opened. So branch on the route actually taken, and
+ * when a click is swallowed (a menu still peeling, a transition mid-flight)
+ * RE-ENTER rather than wait longer: waiting cannot fix a click that never
+ * landed, and each attempt is bounded.
+ */
+export async function openGarage(page, { team = "mercedes", waitMs = 60000, tries = 3 } = {}) {
+  const step = Math.max(8000, Math.floor(waitMs / tries));
+  let route = null;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    route = await enterGarage(page, team);
+    if (route === "garage") {
+      if (await screenShown(page, "carsetup", step)) return;
+    } else if (await screenShown(page, "select", step)) {
+      await page.evaluate(() => document.getElementById("sel-car").click());
+      if (await screenShown(page, "carsetup", step)) return;
+    }
+  }
+  throw new Error(
+    `probe: #carsetup never opened via the ${route} route after ${tries} attempts — ` +
+    JSON.stringify(await uiState(page)));
+}
+
+/** Peel back to the title, pin team/driver, click in. Returns the route taken.
+ * store.team is the NUMERIC INDEX (game.js `let teamIdx = store.get("team", 0)`).
+ * Writing a team id string used to leave the boot default (McLaren) in place.
+ * `G` is NOT a window global — `#mb-garage` does not re-read the store, so the
+ * reliable pin is installProbeInit({ team: idx }) before first goto (or the
+ * TEAM-tab garageTeam() path after the bay is open). */
+function enterGarage(page, team) {
+  return page.evaluate((teamId) => {
+    const $ = (id) => document.getElementById(id);
+    const vis = (id) => { const el = $(id); return !!el && !el.hidden; };
+    const peel = () => {
+      const a = window.__apex;
+      if (a?.info?.().state !== "menu") {
+        // CONFIRM QUIT (js/ui/pause-opts.js): the first press arms, the second quits.
+        const q = $("pm-quit");
+        q?.click();
+        if (q?.classList.contains("armed")) q.click();
+        return true;
+      }
+      if (vis("carsetup")) { $("cs-back").click(); return true; }
+      if (vis("select")) { $("sel-back").click(); return true; }
+      const stray = [...document.querySelectorAll(".screen")].filter((el) => !el.hidden && el.id !== "overlay");
+      if (stray.length) { for (const el of stray) el.hidden = true; return true; }
+      if (!vis("overlay")) { $("overlay").hidden = false; return true; }
+      return false;
+    };
+    for (let i = 0; i < 12 && peel(); i++) {}
+    const S = GameStore.store;
+    const ti = Teams.LIST.findIndex((x) => x.id === teamId);
+    const idx = ti >= 0 ? ti : 2;
+    S.set("team", idx);
+    S.set("driver", 0);
+    if ($("mb-garage")) { $("mb-garage").click(); return "garage"; }
+    $("mb-race").click();
+    return "race";
+  }, team);
+}
+
+/** Step the preview loop; await soft-present when present.
+ * One page.evaluate for N steps — per-frame round-trips used to dominate
+ * multi-angle garage shoots (24× evaluate × 4 views ≈ a minute of IPC). */
+export async function settleGarage(page, { frames = 90, sleepFn, awaitMs = 12000 } = {}) {
+  const pause = sleepFn || ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const n = Math.max(0, frames | 0);
+  if (n > 0) {
+    await page.evaluate((count) => {
+      for (let i = 0; i < count; i++) window.__apex.step(1 / 60);
+    }, n);
+  }
+  // Yield so the compositor can finish the last blit before we await it.
+  if (n >= 8) await pause(30);
+  await awaitPresentedFrame(page, awaitMs);
+}
+
+/** JSON diagnostics: backend binding, garageCam, and the gap-sample geometry. */
+export async function garageDiagnostics(page) {
+  return page.evaluate(() => {
+    const a = window.__apex;
+    const el = document.getElementById("game");
+    const env = a.diag ? (a.diag({ download: false }).env || {}) : {};
+    // NO ctx.drawImage(#game) READBACK HERE. Under HeadlessChrome GLX now sets
+    // preserveDrawingBuffer and soft-blits onto #game-soft, but drawImage from
+    // the WebGL canvas outside the frame is still the wrong oracle (and older
+    // builds clear the buffer). The old gapSample did exactly that, and
+    // assertGarageInterior passes an all-black sample (its flat-wall rule needs
+    // darkFrac BELOW the floor, and black scores 1.0), so the gate that exists
+    // to reject bad frames was vacuous — it reported interior.ok on meanRgb
+    // [0,0,0]. The gate now samples the CAPTURED PNG; this returns only the
+    // geometry that sampling needs.
+    const panel = document.getElementById("cs-inner");
+    const pr = panel?.getBoundingClientRect();
+    const panelFrac = (el && el.clientWidth > 0 && pr) ? Math.min(pr.width / el.clientWidth, 0.85) : 0;
+
+    const overlay = document.getElementById("__err_overlay");
+    return {
+      backend: env.backend || (typeof GLX !== "undefined" ? GLX.backend : null),
+      gpuErrors: typeof GLX !== "undefined" && GLX.gpuErrors ? GLX.gpuErrors() : 0,
+      cam: a.garageCam ? a.garageCam() : null,
+      aspect: typeof GLX !== "undefined" ? GLX.aspect : null,
+      panelFrac,
+      canvas: el ? { w: el.width, h: el.height } : null,
+      carsetupVisible: !!(document.getElementById("carsetup") && !document.getElementById("carsetup").hidden),
+      overlay: overlay && overlay.style.display !== "none" ? overlay.textContent.slice(0, 200) : null,
+    };
+  });
+}
+
+/**
+ * Wait until #game is actually PAINTING.
+ *
+ * game.js render() (the `menuBlank` gate) sets the canvas to
+ * visibility:hidden whenever the menu has nothing to draw — an undrawn canvas
+ * keeps its LAST frame, so the garage car used to sit behind the title. It
+ * clears only once setupPreviewOn (or a race / the race-settings flyby) is up
+ * AND a render frame has run since. So #game can be attached, unhidden and a
+ * full 1440x900 rect while still being invisible, and a hidden element paints
+ * nothing into a screenshot.
+ *
+ * This is what made the webgl2 leg of garage-frame fail: locator.boundingBox()
+ * re-runs Playwright's own visibility actionability check, so it blocked the
+ * full 30 s and reported only "waiting for locator('#game')" — a message that
+ * points at the selector rather than at the render gate. Wait for the real
+ * condition, and say so when it never arrives.
+ */
+export async function waitGameVisible(page, timeout = 30000) {
+  const shown = await page.waitForFunction(() => {
+    const g = document.getElementById("game");
+    if (!g) return false;
+    const r = g.getBoundingClientRect();
+    return getComputedStyle(g).visibility !== "hidden" && r.width > 0 && r.height > 0;
+  }, null, { polling: 100, timeout }).then(() => true).catch(() => false);
+  if (!shown) {
+    throw new Error(
+      "probe: #game never became visible — game.js render() shows the canvas only " +
+      "while a race, the race-settings flyby or the garage preview is drawing; " +
+      JSON.stringify(await uiState(page)));
+  }
+}
+
+/**
+ * Wait for a NEW software present WHILE THE LOOP STILL RUNS.
+ * GLX/TLX present() drives the overlay; headless(true) skips render/present,
+ * so a freeze-then-wait can never observe gen > start and times out.
+ *
+ * Resolves true when a new frame presented, false when the wait timed out,
+ * null when the page has no soft present (a real GPU composites for itself).
+ * It never throws, so a caller that ignores the result reads whatever was
+ * blitted LAST: shot.mjs saved the menu's garage scene, or an empty canvas,
+ * as a monza frame because the first TLX present after a camera move took
+ * 17.6 s against this 8 s default (2026-10-02). Check it when that matters.
+ */
+export async function awaitPresentedFrame(page, timeoutMs = 8000) {
+  return page.evaluate(async (ms) => {
+    if (typeof GLX === "undefined" || !GLX.awaitSoftPresent) return null;
+    try { await GLX.awaitSoftPresent(ms); return true; } catch (_) { return false; }
+  }, timeoutMs);
+}
+
+const pendingCaptureTokens = new WeakMap();
+
+// Serialized into the page; keep this function independent of module locals.
+function captureTokenInPage() {
+  const gfx = typeof GLX === "undefined" ? null : GLX;
+  const soft = !!gfx?.softPresent?.();
+  const first = gfx?.softPresentState?.() || {};
+  const token = { soft, epoch: first.epoch ?? null, display: first.display || null };
+  if (soft && Number.isFinite(first.submittedGen) && Number.isFinite(first.shownGen)) {
+    return { ...token, mode: "source-generation", submitted: first.submittedGen, required: first.submittedGen + 1 };
+  }
+  if (soft && Number.isFinite(first.seq) && Number.isFinite(first.shown)) {
+    if (!gfx.invalidateSoftPresent) throw new Error("probe: copy-generation renderer cannot request a fresh scene");
+    // Bump WGX's scene token without discarding its pending map. Record this
+    // exactly once, alongside the mutation rather than in a later round-trip.
+    gfx.invalidateSoftPresent();
+    return { ...token, mode: "copy-generation", submitted: first.seq, required: first.seq + 1 };
+  }
+  if (soft && "maxPx" in first && "post" in first && Number.isFinite(first.gen)) {
+    return { ...token, mode: "synchronous-generation", submitted: first.gen, required: first.gen + 1 };
+  }
+  if (soft) return { ...token, mode: "legacy-two-presents", required: 2, before: Number.isFinite(first.gen) ? first.gen : 0 };
+  const before = window.__apex?.cameraState?.()?.renderFrame;
+  return { ...token, mode: "native-frame", required: 2, before: Number.isFinite(before) ? before : null };
+}
+
+/** Run a trusted Page.evaluate callback and mark its requested scene atomically.
+ * Returns the callback's original result, including awaited async results.
+ * Like Page.evaluate, the callback cannot reference Node-side closure values.
+ * The next awaitCaptureReady consumes the marker; repeated mutations replace it.
+ */
+export async function mutateCaptureScene(page, fn, arg) {
+  if (typeof fn !== "function") throw new Error("probe: capture scene mutation needs a function callback");
+  pendingCaptureTokens.delete(page);
+  const receipt = await page.evaluate(async ({ callback, argument, readToken }) => {
+    const mutate = new Function("return (" + callback + ")")();
+    const mark = new Function("return (" + readToken + ")")();
+    const value = await mutate(argument);
+    return { value, token: mark() };
+  }, { callback: fn.toString(), argument: arg, readToken: captureTokenInPage.toString() });
+  pendingCaptureTokens.set(page, receipt.token);
+  return receipt.value;
+}
+
+/** Strict scene freshness after camera/settings mutations, before freezing.
+ * TLX tags the rendered source of each async read, WGX tags encoded copies,
+ * and GLX reads synchronously. An older in-flight blit cannot satisfy the
+ * requested generation. Older async backends retain the two-present fallback.
+ * Native renderers must advance the game render clock or signal real presents.
+ */
+export async function awaitCaptureReady(page, { timeoutMs = 30000 } = {}) {
+  if (!(Number.isFinite(timeoutMs) && timeoutMs > 0)) throw new Error("probe: capture readiness needs a positive timeout");
+  const token = pendingCaptureTokens.get(page) || null;
+  pendingCaptureTokens.delete(page);
+  return page.evaluate(async ({ ms, token: marked, readToken }) => {
+    const gfx = typeof GLX === "undefined" ? null : GLX;
+    const soft = !!gfx?.softPresent?.();
+    const state = () => gfx?.softPresentState?.() || {};
+    const first = state();
+    // A resize, reload or renderer replacement can invalidate a marker. In
+    // that case request freshness against the current source instead.
+    const currentSubmitted = marked?.mode === "source-generation" ? first.submittedGen
+      : marked?.mode === "copy-generation" ? first.seq : first.gen;
+    const sameDisplay = !marked?.display || (Array.isArray(first.display)
+      && marked.display[0] === first.display[0] && marked.display[1] === first.display[1]);
+    const usable = marked && marked.soft === soft && sameDisplay
+      && (marked.epoch == null || marked.epoch === first.epoch)
+      && (marked.submitted == null || (Number.isFinite(currentSubmitted) && currentSubmitted >= marked.submitted));
+    const request = usable ? marked : new Function("return (" + readToken + ")")()();
+    const { mode, required } = request;
+    const deadline = Date.now() + ms;
+    const remaining = () => {
+      const budget = deadline - Date.now();
+      if (budget <= 0) throw new Error("probe: capture readiness timed out after " + ms + "ms (" + mode + ")");
+      return budget;
+    };
+    const waitSoft = async () => {
+      if (!gfx?.awaitSoftPresent) throw new Error("probe: software renderer has no presentation clock");
+      const result = await gfx.awaitSoftPresent(remaining());
+      if (!Number.isFinite(result)) throw new Error("probe: software renderer did not present a fresh frame");
+      return result;
+    };
+    let watchdog;
+    try {
+      return await Promise.race([
+        (async () => {
+          if (mode === "native-frame") {
+            const clock = () => window.__apex?.cameraState?.()?.renderFrame;
+            const now = clock();
+            const before = Number.isFinite(request.before) && now >= request.before ? request.before : now;
+            if (Number.isFinite(before)) {
+              while (!(clock() >= before + 2)) {
+                await new Promise((resolve) => setTimeout(resolve, Math.min(100, remaining())));
+              }
+              return { mode, before, shown: clock() };
+            }
+            if (!gfx?.awaitSoftPresent) throw new Error("probe: native renderer has no usable presentation clock");
+            for (let i = 0; i < required; i++) {
+              if (await gfx.awaitSoftPresent(remaining(), "frame") !== "frame")
+                throw new Error("probe: native renderer has no usable presentation clock");
+            }
+            return { mode, presents: required };
+          }
+          if (mode === "legacy-two-presents") {
+            let last = request.before;
+            for (let i = 0; i < required; i++) {
+              const gen = await waitSoft();
+              if (!(gen > last)) throw new Error("probe: software renderer returned a stale presentation generation");
+              last = gen;
+            }
+            return { mode, presents: required, shown: last };
+          }
+          const shown = () => {
+            const s = state();
+            return mode === "source-generation" ? s.shownGen
+              : mode === "copy-generation" ? s.shown : s.gen;
+          };
+          while (!(shown() >= required)) await waitSoft();
+          return { mode, required, shown: shown() };
+        })(),
+        new Promise((_, reject) => { watchdog = setTimeout(() => reject(new Error(
+          "probe: capture readiness timed out after " + ms + "ms (" + mode + ")")), ms); }),
+      ]);
+    } finally { clearTimeout(watchdog); }
+  }, { ms: timeoutMs, token, readToken: captureTokenInPage.toString() });
+}
+
+/**
+ * Clip of the canvas the compositor actually shows.
+ * HeadlessChrome GLX (and TLX-WebGPU) hide #game and blit onto #game-soft;
+ * WGX blits onto #game. locator("#game").screenshot() is the uncomposited
+ * GPU buffer — often black even with preserveDrawingBuffer.
+ */
+export async function presentedCanvasClip(page) {
+  return page.evaluate(() => {
+    const soft = document.getElementById("game-soft");
+    const game = document.getElementById("game");
+    const el = (soft && soft.width > 0) ? soft : game;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return null;
+    return { x: r.x, y: r.y, width: r.width, height: r.height, id: el.id };
+  });
+}
+
+/**
+ * Fast path: PNG/JPEG bytes from the presented canvas without CDP.
+ * Prefer `#game-soft` / carview `#view` (2D blit). Fall back to `#game` —
+ * Playwright's Desktop Chrome project spoofs a headed UA, so GLX never arms
+ * soft-present; after `__apex.headless(true)` the WebGL backbuffer keeps the
+ * last frame and toDataURL works even without preserveDrawingBuffer.
+ * Returns `{ b64, id }` or null. Optional `clip` is CSS-viewport pixels.
+ */
+export async function readSoftCanvasBytes(page, {
+  type = "png", quality = 92, preferView = false, clip = null,
+} = {}) {
+  return page.evaluate(({ fmt, q, preferView: pv, clip: cl }) => {
+    const soft = document.getElementById("game-soft");
+    const view = document.getElementById("view");
+    const game = document.getElementById("game");
+    // toDataURL ONLY READS A 2D CANVAS HONESTLY. A WebGL canvas without
+    // preserveDrawingBuffer has its buffer cleared once the frame is presented,
+    // so reading it back here returns the clear colour and whatever 2D backdrop
+    // sits under it — never the rendered frame. tools/car/render-car.mjs
+    // captured #view that way and produced a studio vignette with NO CAR, at
+    // every angle, while reporting success; the car was on screen the whole
+    // time. A canvas that refuses a 2d context is WebGL, so hand it back as
+    // null and let the caller fall through to CDP, which composites the real
+    // frame. #game-soft is the 2D blit target and reads back correctly.
+    const flat = (c) => { try { return !!(c && c.getContext("2d")); } catch (_) { return false; } };
+    const softLive = !!(soft && soft.width > 0 && soft.height > 0 && flat(soft));
+    const g = (pv && view && view.width > 0 && flat(view)) ? view
+      : softLive ? soft
+      : (view && view.width > 0 && flat(view)) ? view
+      : (game && game.width > 0 && flat(game)) ? game
+      : null;
+    if (!g || typeof g.toDataURL !== "function") return null;
+    try {
+      const mime = fmt === "jpeg" ? "image/jpeg" : "image/png";
+      const q01 = Math.min(1, Math.max(0.05, q / 100));
+      let target = g;
+      if (cl && cl.width > 0 && cl.height > 0) {
+        const r = g.getBoundingClientRect();
+        if (!(r.width > 0 && r.height > 0)) return null;
+        // WebGL #game cannot be drawImage'd into a 2D crop — crop via CDP instead.
+        if (g === game && g.getContext && g.getContext("webgl2")) return null;
+        const sx = (cl.x - r.x) * (g.width / r.width);
+        const sy = (cl.y - r.y) * (g.height / r.height);
+        const sw = cl.width * (g.width / r.width);
+        const sh = cl.height * (g.height / r.height);
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(sw));
+        c.height = Math.max(1, Math.round(sh));
+        const ctx = c.getContext("2d");
+        if (!ctx) return null;
+        ctx.drawImage(g, sx, sy, sw, sh, 0, 0, c.width, c.height);
+        target = c;
+      }
+      const url = fmt === "jpeg" ? target.toDataURL(mime, q01) : target.toDataURL(mime);
+      const b64 = url.split(",")[1] || null;
+      return b64 ? { b64, id: g.id || "canvas" } : null;
+    } catch (_) { return null; }
+  }, { fmt: type, q: quality, preferView, clip });
+}
+
+/**
+ * Compositor bytes of the presented canvas. Awaits a fresh blit first unless
+ * `skipAwait` — pass that when the caller already froze after awaitPresentedFrame
+ * (a second wait after headless(true) hangs on GLX).
+ *
+ * Order: soft/#view/#game toDataURL (fast) → CDP Page.captureScreenshot.
+ * Never Playwright's screenshot API — it waits on document.fonts.ready and that
+ * hung GHA smoke shards 2/3 after freeze.
+ *
+ * `opts.timeout` (ms) is OPTIONAL. When set, it bounds the CDP leg (and soft
+ * await when `awaitMs` omitted). Default CDP is unbounded — smoke under GHA
+ * Desktop Chrome often needs >60s for CDP when soft is unarmed; a hard 60s
+ * race turned a 339s green into a false red.
+ * `opts.clip` overrides the presented-canvas box (CSS viewport pixels).
+ * `opts.preferView` prefers carview `#view` for soft capture.
+ * `opts.forceCdp` skips the soft path (tests / known-bad soft).
+ * `opts.pauseRender` pauses the Apex render loop only during CDP fallback,
+ * restoring its prior headless state even when capture fails.
+ */
+export async function screenshotPresentedCanvas(page, opts = {}) {
+  const started = Date.now();
+  const awaitMs = opts.awaitMs != null ? opts.awaitMs
+    : (opts.timeout != null ? Math.min(opts.timeout, 30000) : 30000);
+  if (!opts.skipAwait) await awaitCaptureReady(page, { timeoutMs: awaitMs });
+  const presented = Date.now();
+
+  const type = opts.type === "jpeg" ? "jpeg" : "png";
+  const quality = opts.quality != null ? opts.quality : 92;
+  if (!opts.forceCdp) {
+    const soft = await readSoftCanvasBytes(page, {
+      type, quality, preferView: !!opts.preferView, clip: opts.clip || null,
+    });
+    if (soft) {
+      const buf = Buffer.from(soft.b64, "base64");
+      if (opts.path) writeFileSync(opts.path, buf);
+      const via = soft.id === "view" ? "view"
+        : soft.id === "game" ? "game"
+        : "game-soft";
+      return { buf, bytes: buf.length, clip: opts.clip || null, id: soft.id, via,
+        timings: { presentMs: presented - started, captureMs: Date.now() - presented } };
+    }
+  }
+
+  const box = opts.clip
+    ? { x: opts.clip.x, y: opts.clip.y, width: opts.clip.width, height: opts.clip.height, id: "clip" }
+    : await presentedCanvasClip(page);
+  if (!box) throw new Error("probe: presented canvas has no bounding box");
+  const format = type;
+  const clip = {
+    x: box.x, y: box.y,
+    width: Math.max(1, box.width), height: Math.max(1, box.height),
+    scale: 1,
+  };
+  const session = await page.context().newCDPSession(page);
+  let buf;
+  let timeoutHandle;
+  let headlessBefore;
+  try {
+    if (opts.pauseRender) headlessBefore = await page.evaluate(() => {
+      const a = window.__apex;
+      if (!a?.headless) return null;
+      const previous = a.headless(); a.headless(true); return previous;
+    });
+    const params = { format, clip, captureBeyondViewport: false };
+    // Chromium's low-compression PNG encoder is lossless. Larger files, less
+    // browser-thread encoding work; no Playwright/Chromium fork needed.
+    if (format === "png") params.optimizeForSpeed = opts.optimizeForSpeed !== false;
+    if (format === "jpeg" && opts.quality != null) params.quality = opts.quality;
+    const capture = session.send("Page.captureScreenshot", params)
+      .then(({ data }) => Buffer.from(data, "base64"));
+    // Bound CDP only when the caller asked — smoke omits timeout on purpose.
+    if (opts.timeout != null) {
+      const budget = opts.timeout;
+      buf = await Promise.race([
+        capture,
+        new Promise((_, rej) => { timeoutHandle = setTimeout(() => rej(new Error(
+          `probe: CDP captureScreenshot timed out after ${budget}ms`)), budget); }),
+      ]);
+    } else {
+      buf = await capture;
+    }
+  } finally {
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+    try { await session.detach(); } catch (_) { /* already closed */ }
+    if (headlessBefore != null) await page.evaluate((previous) => {
+      window.__apex.headless(previous);
+    }, headlessBefore).catch(() => {}); // page may have closed on failure
+  }
+  if (opts.path) writeFileSync(opts.path, buf);
+  return { buf, bytes: buf.length, clip: box, id: box.id, via: "cdp",
+    timings: { presentMs: presented - started, captureMs: Date.now() - presented } };
+}
+
+/** Fade the setup panel and capture the presented canvas for a clean garage shot.
+ * Prefer #game-soft toDataURL while the loop still runs (fast multi-angle path).
+ * Fall back to freeze + CDP Page.captureScreenshot — never the Playwright
+ * screenshot API (document.fonts.ready hung GHA smoke shards 2/3). */
+export async function screenshotGameCanvas(page, outPath, opts = {}) {
+  await page.evaluate(() => {
+    const c = document.getElementById("carsetup");
+    if (c) c.style.opacity = "0";
+  });
+  if (!opts.skipVisible) await waitGameVisible(page);
+  if (!opts.skipAwait) await awaitCaptureReady(page, { timeoutMs: opts.awaitMs ?? Math.min(opts.timeout ?? 30000, 30000) });
+  const soft = await readSoftCanvasBytes(page, { type: "png" });
+  if (soft) {
+    const buf = Buffer.from(soft.b64, "base64");
+    writeFileSync(outPath, buf);
+    return { bytes: buf.length, clip: null, via: "game-soft" };
+  }
+  // FREEZE across CDP capture — live GLX keeps the main thread hot enough that
+  // Playwright's screenshot path starved on fonts. The shared CDP path restores
+  // the previous pause state, including callers that were already frozen.
+  const shot = await screenshotPresentedCanvas(page, {
+    path: outPath, skipAwait: true, forceCdp: true, pauseRender: true, timeout: opts.timeout ?? 60000,
+  });
+  return { bytes: shot.bytes, clip: shot.clip, via: shot.via || shot.id || "cdp" };
+}

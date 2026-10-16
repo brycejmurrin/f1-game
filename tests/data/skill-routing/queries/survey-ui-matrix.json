@@ -1,0 +1,10 @@
+[
+{"query":"Before I restructure the menus, I need a systematic audit of every screen in the game across portrait, landscape and ultrawide viewports, at UI scale 0.8 to 1.5, for both mouse and touch. Enumerate screens from index.html and give me a table of clipped, truncated or overflowing cells with screenshots.","expect":"survey-ui-matrix"},
+{"query":"i tweaked responsive.css and want to be sure i didnt break any other phone/tablet shape. can u go thru all the menus on every device size, portrait+landscape, and flag whatever clips or has tiny tap targets","expect":"survey-ui-matrix"},
+{"query":"Players keep telling me that on some phones and odd window sizes text gets cut off and buttons fall off the screen, but I don't know which screens or which sizes. Can you sweep the whole UI and find where it breaks?","expect":"survey-ui-matrix"},
+{"query":"Run the layout matrix over every screen listed in tools/ui/menu-screens.mjs at HUD scale extremes with coarse pointer, measure taps below the --tap minimum and any horizontal overflow, and write up the defect table by screen, shape, scale and pointer.","expect":"survey-ui-matrix"},
+{"query":"We're shipping to a foldable and a 21:9 monitor next month. Check every menu, the pause dialog, garage, career and data hub screens on those shapes plus a short-height landscape phone, and capture evidence of any layout defects across the set.","expect":"survey-ui-matrix"},
+{"query":"The pause menu settings dialog is clipped on my phone in landscape: the close button is below the fold and the list won't scroll. Fix just that one screen so it fits and keyboard focus still works.","expect":"ui-menu-a11y"},
+{"query":"I want to collapse the duplicate button and card component families in css/components.css, drop a screen layer, and rework the class and token system across all menus. Plan and do the restructure, with before/after screenshots.","expect":"css-play"},
+{"query":"Take before and after headless screenshots of Monza and Spa from the roadside and chase cameras at a few viewport sizes so I can compare the framing of the corner.","expect":"playwright-probe"}
+]

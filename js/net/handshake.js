@@ -1,0 +1,384 @@
+/* NetHandshake — getting two browsers connected with NO server of ours. WebRTC is peer-to-peer once connected, but every connection needs a signalling exchange fi… */
+"use strict";
+
+const NetHandshake = (function () {
+  const MAGIC = "APEX1";          // format marker + version, kept human-visible
+  const CORRUPT = { ok: false, error: "corrupt_code",
+    message: "That code is incomplete or corrupted — copy the whole thing." };
+  const NO_TRANSPORT = { ok: false, error: "no_transport",
+    message: "WebRTC is unavailable in this browser." };
+  const GATHER_TIMEOUT_MS = 8000; // stop waiting for stragglers; what we have is usually enough
+  const MAX_CODE_CHARS = 512 * 1024;
+  const MAX_DECODED_BYTES = 256 * 1024;
+
+  function hsLog(action, res) {
+    if (res && res.ok) {
+      const n = res.code != null ? String(res.code).length : 0;
+      Log.info("net", "handshake " + action + " ok" + (n ? " len=" + n : ""));
+    } else {
+      Log.warn("net", "handshake " + action + " fail " + ((res && res.error) || "error"));
+    }
+    return res;
+  }
+
+  const enc = () => new TextEncoder();
+  const dec = () => new TextDecoder();
+
+  function canCompress() {
+    return typeof CompressionStream !== "undefined" && typeof Response !== "undefined";
+  }
+  async function deflateBytes(bytes) {
+    const stream = new Blob([bytes]).stream()
+      .pipeThrough(new CompressionStream("deflate-raw"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  async function inflateBytes(bytes) {
+    const reader = new Blob([bytes]).stream()
+      .pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+    const chunks = []; let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_DECODED_BYTES) { await reader.cancel(); throw new Error("inflate cap exceeded"); }
+      chunks.push(value);
+    }
+    const out = new Uint8Array(total); let o = 0;
+    for (const c of chunks) { out.set(c, o); o += c.byteLength; }
+    return out;
+  }
+  const deflate = (text) => deflateBytes(enc().encode(text));
+  const inflate = async (bytes) => dec().decode(await inflateBytes(bytes));
+
+  // PRESERVE THE SDP VERBATIM. An earlier version stripped "regenerable"
+  // attributes (rtpmap, fmtp, extmap, ssrc, msid, rtcp-fb) to shorten the
+  // paste. That was wrong twice over: every one of those is an AUDIO/VIDEO
+  // attribute that never appears in a data-channel-only offer, so it removed
+  // nothing — while the rejoin dropped the trailing line terminator, leaving
+  // the last line (typically a=max-message-size) unterminated. Chrome then
+  // refused the whole description with "Invalid SDP line", which is how this
+  // was found: on a real connection, because no loopback test can reach it.
+  //
+  // Deflate already does the size work, so there is nothing to buy back here.
+  // All this does now is normalise line endings to the CRLF the format
+  // requires, and guarantee the terminator.
+  function normaliseSdp(sdp) {
+    const lines = String(sdp || "").split(/\r\n|\n|\r/).filter((l) => l.length);
+    return lines.length ? lines.join("\r\n") + "\r\n" : "";
+  }
+
+  async function encodeCode(payload) {
+    if (canCompress()) {
+      try {
+        const packed = payload.s ? await NetSdp.packChecked(payload.s) : null;
+        if (packed) {
+          const rest = enc().encode(JSON.stringify(Object.assign({}, payload, { s: undefined })));
+          const joined = new Uint8Array(2 + packed.length + rest.length);
+          joined[0] = packed.length >> 8; joined[1] = packed.length & 0xff;
+          joined.set(packed, 2); joined.set(rest, 2 + packed.length);
+          return MAGIC + ".s." + NetBytes.bytesToB64url(await deflateBytes(joined));
+        }
+      } catch (e) { /* any trouble at all: fall through to the whole-text path */ }
+      try { return MAGIC + ".z." + NetBytes.bytesToB64url(await deflate(JSON.stringify(payload))); }
+      catch (e) { /* fall through to plain */ }
+    }
+    return MAGIC + ".p." + NetBytes.bytesToB64url(enc().encode(JSON.stringify(payload)));
+  }
+  // The FORMAT half of decodeCode, synchronous and connection-free: is this
+  // text shaped like one of our codes at all? The lobby asks this BEFORE it
+  // needs a transport, so a pasted "not-a-real-code" is refused as "not an
+  // Apex invite code" even while join() is still waiting on the TURN
+  // credential fetch — checking the transport first reports "That attempt has
+  // ended" for a typo and races the fetch on every slow network (the sandbox
+  // proxy fails it after ~2 s).
+  // Whitespace AND the invisible characters mail and chat clients slip into a
+  // long unbroken string (zero-width space/joiners, word joiner, soft hyphen,
+  // BOM): `\s` matches none of those, and one of them turns a good code into
+  // "corrupt" after atob.
+  const INVISIBLE = /[\s\u200B-\u200D\u2060\uFEFF\u00AD]+/g;
+  function peekCode(code) {
+    const input = String(code || "");
+    if (input.length > MAX_CODE_CHARS) return CORRUPT;
+    const trimmed = input.trim().replace(INVISIBLE, "");
+    if (trimmed.length > MAX_CODE_CHARS) return CORRUPT;
+    const parts = trimmed.split(".");
+    if (parts.length !== 3 || parts[0] !== MAGIC) {
+      return { ok: false, error: "bad_code", message: "That does not look like an Apex invite code." };
+    }
+    const [, mode, body] = parts;
+    if (mode !== "s" && mode !== "z" && mode !== "p") return CORRUPT;
+    return { ok: true, mode, body };
+  }
+  async function decodeCode(code) {
+    const peek = peekCode(code);
+    if (!peek.ok) return peek;
+    const { mode, body } = peek;
+    try {
+      const bytes = NetBytes.b64urlToBytes(body);
+      if (mode === "s") {
+        const raw = await inflateBytes(bytes);
+        const n = (raw[0] << 8) | raw[1];
+        const sdp = NetSdp.unpack(raw.slice(2, 2 + n));
+        if (!sdp) return CORRUPT;
+        const payload = JSON.parse(dec().decode(raw.slice(2 + n)));
+        if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
+            typeof payload.k !== "string") return CORRUPT;
+        payload.s = sdp;
+        return { ok: true, payload };
+      }
+      if (mode === "p" && bytes.byteLength > MAX_DECODED_BYTES) return CORRUPT;
+      const json = mode === "z" ? await inflate(bytes) : dec().decode(bytes);
+      const payload = JSON.parse(json);
+      if (!payload || typeof payload !== "object") return CORRUPT;
+      return { ok: true, payload };
+    } catch (e) {
+      return CORRUPT;   // decode, inflate and parse all mean the same to a player
+    }
+  }
+
+  function waitForIce(pc, timeoutMs) {
+    if (pc.iceGatheringState === "complete") return Promise.resolve(true);
+    return new Promise((resolve) => {
+      let done = false;
+      let timer = null;
+      const finish = (complete) => {
+        if (done) return;
+        done = true;
+        pc.removeEventListener("icegatheringstatechange", onChange);
+        pc.removeEventListener("icecandidate", onCand);
+        if (timer != null) clearTimeout(timer);
+        resolve(complete);
+      };
+      const onChange = () => { if (pc.iceGatheringState === "complete") finish(true); };
+      // null candidate = end of gathering (spec). Honor it even when the
+      // gathering-state event is late or missed — otherwise a finished gather
+      // between the pre-check and the listener hangs until gatherTimeoutMs.
+      const onCand = (e) => { if (!e.candidate) finish(true); };
+      pc.addEventListener("icegatheringstatechange", onChange);
+      pc.addEventListener("icecandidate", onCand);
+      // Re-check AFTER listen: completion in the gap above must not hang.
+      if (pc.iceGatheringState === "complete") { finish(true); return; }
+      timer = setTimeout(() => finish(false), timeoutMs || GATHER_TIMEOUT_MS);
+    });
+  }
+
+  // THE BUILD THIS TAB IS RUNNING, not the build the server has. The shell
+  // carries its own generation in <meta name="apex-build"> (stamped by the
+  // deploy alongside version.json), and that is the JS actually loaded. A
+  // fetch of version.json answers a different question: a tab left open
+  // across a deploy reads the NEW number while running the OLD scripts, so two
+  // such tabs would match each other's builds — and a fresh tab's — while racing
+  // on different splines. The meta is authoritative when present; the fetch
+  // is the fallback for a shell with no stamp (a local checkout serves the
+  // committed meta, which is the same generation version.json holds).
+  function metaBuild() {
+    try {
+      if (typeof document === "undefined" || !document.querySelector) return null;
+      const m = document.querySelector('meta[name="apex-build"]');
+      const n = m && m.content != null ? parseInt(String(m.content).trim(), 10) : NaN;
+      return Number.isFinite(n) ? n : null;
+    } catch (e) { return null; }
+  }
+
+  let _buildCache = null;
+  async function localBuild() {
+    if (_buildCache != null) return _buildCache;
+    const meta = metaBuild();
+    if (meta != null) { _buildCache = meta; return meta; }
+    try {
+      const r = await fetch("version.json?_=" + Date.now(), { cache: "no-store" });
+      const v = await r.json();
+      _buildCache = (v && v.build != null) ? v.build : null;
+    } catch (e) {
+      // UNKNOWN, not 0 — and deliberately NOT memoised. Writing 0 here made two
+      // peers who had both failed the fetch compare equal, waving mismatched
+      // builds straight through the only guard that stops them racing; and
+      // memoising it meant the "reload the page to update" advice below could
+      // never come true, because the reload hits the same dead fetch and the
+      // tab is stuck on 0 for its lifetime. Returning without caching lets a
+      // later attempt succeed.
+      try {
+        Log.warn("net", "version.json unreadable (" + ((e && e.message) || e) +
+                        ") — build identity unknown, refusing to pair");
+      } catch (_) { /* logging must not mask the fetch failure above */ }
+      return null;
+    }
+    return _buildCache;
+  }
+
+  // Peers must agree on the build. Everything physics-relevant — the spline,
+  // the barrier positions, the tuning constants — ships inside it.
+  function checkBuild(mine, theirs) {
+    if (mine == null || theirs == null) {
+      return {
+        ok: false,
+        error: "build_unknown",
+        message: "Could not confirm you are both on the same version. " +
+                 "Check your connection and try again.",
+        mine: mine == null ? null : mine,
+        theirs: theirs == null ? null : theirs,
+      };
+    }
+    if (mine === theirs) return { ok: true };
+    return {
+      ok: false,
+      error: "build_mismatch",
+      message: theirs > mine
+        ? "Your friend is on a newer version. Reload the page to update (an installed app: close it fully and reopen), then try again."
+        : "Your friend is on an older version. Ask them to reload the page and send a new invite, then try again.",
+      mine, theirs,
+    };
+  }
+
+  // host: createInvite() -> code, give it away, then acceptAnswer(theirCode).
+  // guest: acceptInvite(theirCode) -> code, send it back, done.
+  //
+  // `profile` is whatever the lobby needs to build the rival's car: team,
+  // driver and the parts SETUP IDS. Ids, never resolved multipliers —
+  // a peer declaring `{cornering: 9}` should be impossible, not merely rude.
+  // Gather fully, then emit. Shared by both halves so the two can never drift.
+  async function makeCode(pc, kind, profile, opts, offer) {
+    await waitForIce(pc, opts && opts.gatherTimeoutMs);
+    const payload = {
+      b: await localBuild(), k: kind,
+      p: profile || null,
+      s: normaliseSdp(pc.localDescription.sdp),
+    };
+    if (offer) payload.o = offer;
+    return encodeCode(payload);
+  }
+
+  // WHICH OFFER AN ANSWER ANSWERS. An SDP answer carries only the answerer's
+  // own ICE credentials and fingerprint, so an answer built for invite A is
+  // accepted by setRemoteDescription on a newer pending invite B — and then ICE
+  // can never pair (the guest's agent is bound to A's ufrag): 60 s of
+  // "Connecting…" and a failure message that blames the network. The answer
+  // therefore names its offer: a 32-bit hash of the offer's ICE ufrag + DTLS
+  // fingerprint, both fresh per RTCPeerConnection. It rides in the JSON tail
+  // of the code (`o`), which every decoder already ignores when unknown, so an
+  // answer without it still decodes and is judged as before.
+  function offerId(sdp) {
+    const id = NetSdp.identity ? NetSdp.identity(sdp) : null;
+    if (!id || typeof Hash32 === "undefined") return null;
+    return Hash32.fnv1a(id.ufrag + "|" + id.fp).toString(16).padStart(8, "0");
+  }
+  const WRONG_OFFER = { ok: false, error: "wrong_offer",
+    message: "That answer is for an older invite. Ask your friend to answer the latest one." };
+
+  async function createInvite(transport, profile, opts) {
+    const pc = transport && transport.pc;
+    if (!pc) return hsLog("invite", NO_TRANSPORT);
+    try {
+      await pc.setLocalDescription(await pc.createOffer());
+      const code = await makeCode(pc, "offer", profile, opts);
+      return hsLog("invite", { ok: true, code, url: inviteUrl(code) });
+    } catch (e) {
+      Log.warn("net", "handshake invite fail");
+      throw e;
+    }
+  }
+
+  async function setRemote(pc, type, sdp) {
+    if (typeof sdp !== "string" || !sdp) return false;
+    try {
+      await pc.setRemoteDescription({ type, sdp });
+      return true;
+    } catch (e) { return false; }
+  }
+
+  async function acceptInvite(transport, code, profile, opts) {
+    const parsed = await decodeCode(code);
+    if (!parsed.ok) return hsLog("accept", parsed);
+    if (parsed.payload.k !== "offer") {
+      return hsLog("accept", { ok: false, error: "wrong_code_kind", message: "That is an answer code, not an invite code." });
+    }
+    const build = checkBuild(await localBuild(), parsed.payload.b);
+    if (!build.ok) return hsLog("accept", build);
+    const pc = transport && transport.pc;
+    if (!pc) return hsLog("accept", NO_TRANSPORT);
+
+    const took = await setRemote(pc, "offer", parsed.payload.s);
+    if (!took) return hsLog("accept", CORRUPT);
+    await pc.setLocalDescription(await pc.createAnswer());
+    const out = await makeCode(pc, "answer", profile, opts, offerId(parsed.payload.s));
+    return hsLog("accept", { ok: true, code: out, peer: parsed.payload.p || null });
+  }
+
+  async function acceptAnswer(transport, code) {
+    const parsed = await decodeCode(code);          // code first — see acceptInvite
+    if (!parsed.ok) return hsLog("answer", parsed);
+    if (parsed.payload.k !== "answer") {
+      return hsLog("answer", { ok: false, error: "wrong_code_kind", message: "That is an invite code, not an answer code." });
+    }
+    const build = checkBuild(await localBuild(), parsed.payload.b);
+    if (!build.ok) return hsLog("answer", build);
+    const pc = transport && transport.pc;
+    if (!pc) return hsLog("answer", NO_TRANSPORT);
+    // Offer identity BEFORE the state check: an answer to a different offer is
+    // wrong whatever this one's state, and saying so beats "already used".
+    const wants = parsed.payload.o;
+    if (wants != null) {
+      const mine = offerId(pc.localDescription && pc.localDescription.sdp);
+      if (mine && String(wants) !== mine) return hsLog("answer", WRONG_OFFER);
+    }
+    if (pc.signalingState !== "have-local-offer") {
+      return hsLog("answer", { ok: false, error: "already_answered",
+               message: "That answer was already used, or arrived too late." });
+    }
+    const took = await setRemote(pc, "answer", parsed.payload.s);
+    if (!took) return hsLog("answer", CORRUPT);       // same rule as acceptInvite
+    return hsLog("answer", { ok: true, peer: parsed.payload.p || null });
+  }
+
+  // A code is long; a link is not something you have to explain. The code
+  // rides in the FRAGMENT so it never reaches a server, not even in a log.
+  function inviteUrl(code) {
+    try {
+      const base = typeof Native !== "undefined" && Native.shareBase ? Native.shareBase() : location.origin + location.pathname;
+      return base + "#vs=" + code;
+    } catch (e) { return null; }
+  }
+  function inviteFromUrl(href) {
+    try {
+      const h = (href != null ? String(href) : location.hash) || "";
+      const m = h.match(/[#&]vs=([^&\s]+)/);   // a link ends at whitespace: "…#vs=CODE\nSent from my iPhone"
+      // A code ends in a base64url character, never in the "." or ")" a
+      // sentence puts after the link — "Race me: …#vs=CODE." read as four
+      // dot-separated parts and was refused as not an Apex code.
+      return m ? m[1].replace(/[^A-Za-z0-9_-]+$/, "") : null;
+    } catch (e) { return null; }
+  }
+
+  // Remove only the consumed signalling secret. Query parameters and any
+  // unrelated fragment state belong to the page that opened the invite and
+  // survive the history replacement.
+  function withoutInviteUrl(href) {
+    try {
+      const url = new URL(href != null ? String(href) : location.href);
+      const kept = String(url.hash || "").replace(/^#/, "").split("&")
+        .filter((part) => part && !/^vs=/.test(part));
+      url.hash = kept.join("&");
+      return url.href;
+    } catch (e) { return null; }
+  }
+
+  function consumeInviteUrl() {
+    try {
+      if (!inviteFromUrl() || typeof history === "undefined" || !history.replaceState) return false;
+      const next = withoutInviteUrl();
+      if (!next) return false;
+      history.replaceState(history.state, "", next);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  return {
+    MAGIC,
+    encodeCode, decodeCode, peekCode, normaliseSdp,
+    localBuild, metaBuild, checkBuild, waitForIce, offerId,
+    createInvite, acceptInvite, acceptAnswer,
+    inviteUrl, inviteFromUrl, withoutInviteUrl, consumeInviteUrl,
+    INVISIBLE,
+  };
+})();
+Object.freeze(NetHandshake);

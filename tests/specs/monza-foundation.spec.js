@@ -1,0 +1,117 @@
+// @ts-check
+import { test, expect } from "@playwright/test";
+import { BOOT_MS } from "../helpers/fixtures.js";
+
+test.describe("Monza track-owned foundation migration", () => {
+  test("keeps terrain, landmarks, water, barriers, and overhead intent valid", async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.goto("/");
+    // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+    await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
+    await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
+    const result = await page.evaluate(() => {
+      const def = window.TrackDefs.find((entry) => entry.id === "monza");
+      const profile = window.__apex.trackProfile(240);
+      // Centreline-only rebuild (spline + banking, no meshes) so the probes can
+      // ask where the ROAD SURFACE is, not just where its centreline is. Same
+      // (The locally rebuilt `bankTrack` that used to stand here is gone:
+      // __apex.groundY() now applies the banking term itself. It was verified
+      // bit-identical to the live track's px/py/hw and banking(), which is why
+      // moving the arithmetic into the hook is a no-op for these numbers.)
+      const out = {
+        coordinates: def.sceneryCoordinates,
+        terrainOuter: def.terrainOuter,
+        timingOffsetsM: (() => {
+          const { sectors, total } = window.__apex.info();
+          return [(def.turns[3] - sectors[0]) * total,
+                  (def.turns[7] - sectors[1]) * total];
+        })(),
+        // 7a173519 moved the start line (startFrac 0.0125 -> 0.0), rotating
+        // racing fractions by the arc shift (+0.0867); the dip and the crest
+        // did not move physically. Re-pinned onto their measured new locations
+        // (headless VM, extremum scan): the Roggia dip bottoms at frac 0.3869
+        // (y -1.469) and the Lesmo crest peaks at 0.5646 (y +4.492).
+        roggiaY: window.__apex.nodeAt(0.3875).y,
+        lesmoY: window.__apex.nodeAt(0.565).y,
+        minY: Math.min(...profile.map((entry) => entry.y)),
+        maxY: Math.max(...profile.map((entry) => entry.y)),
+        geometry: window.__apex.geometryDiagnostics(),
+        models: window.__apex.modelDiagnostics(),
+        walls: window.__apex.wallStats(),
+        // Terrain-over-road probe, measured against the ROAD SURFACE — not
+        // against the centreline. groundY().gap is `terrainY - centrelineY`,
+        // and on a banked corner that is not where the tarmac is: frac 0.30 is
+        // inside the Lesmo 1 bankZone (6 deg across a 16 m road), so the raised
+        // edge stands 0.66 m proud of the centreline plane. Terrain correctly
+        // tucked 0.366 m UNDER that edge therefore read gap = +0.294, "terrain
+        // above road", and failed — a reference error, not a geometry defect.
+        // All twelve probes sit at |lat| = 11 m, 3 m OUTSIDE the 8 m road edge,
+        // where terrain rising with the banking is exactly what should happen.
+        // (The identical trap was fixed once already inside eyeAt(); its header
+        // has the story. groundY() itself still reports the raw centreline gap.)
+        //
+        // Tracks.banking(bankTrack, s, lat).dy is the road's own cross-slope at
+        // that point — the same term buildRoad applies via bankOffsetAt() and
+        // the in-race cameras apply to sit the car on the tarmac. Measured
+        // (2026-08, headless VM build) `overRoad` lands in [-0.369, -0.343] for
+        // all twelve: the verge sits a uniform ~0.36 m below the road edge
+        // everywhere on the lap, banked corners included. Only the four probes
+        // inside a bankZone move at all; the other eight still equal `gap`.
+        // groundY() now returns roadSurfaceY and overRoad itself, so this no
+        // longer rebuilds the banked surface locally — that duplication is the
+        // thing the durable fix removes. Same arithmetic, one owner.
+        edgeProbes: [0.04, 0.30, 0.48, 0.73, 0.78, 0.90].flatMap((frac) =>
+          [-11, 11].map((lat) => ({ frac, lat, ...window.__apex.groundY(frac, lat) }))
+        ),
+      };
+      return out;
+    });
+
+    expect(result.coordinates).toBe("racing");
+    expect(result.terrainOuter).toBe(120);
+    // FIA's 2025 map puts timing lines BEFORE T4/T8 by 233/215 m.
+    // Measure the built racing arc, which differs from raw path metadata.
+    expect(result.timingOffsetsM[0]).toBeCloseTo(233, 1);
+    expect(result.timingOffsetsM[1]).toBeCloseTo(215, 1);
+    expect(result.roggiaY).toBeLessThan(-1);
+    expect(result.lesmoY).toBeGreaterThan(4);
+    expect(result.maxY - result.minY).toBeLessThan(7);
+    expect(result.geometry.every((entry) => entry.ok)).toBe(true);
+    expect(result.geometry.find((entry) => entry.name === "water")?.vertices).toBeGreaterThan(0);
+    expect(result.models.invalid).toEqual([]);
+    expect(result.models.unsafe).toEqual([]);
+
+    const hard = [...result.models.invalid, ...result.models.suppressed, ...result.models.unsafe]
+      .filter((entry) => entry.required);
+    expect(hard).toEqual([]);
+
+    const emitted = new Map(result.models.emitted.map((entry) => [entry.id, entry]));
+    // Signature heroes reseated clear of onTrack / pit-complex supersede
+    // (2026-10-05): Tribuna Centrale L@gap22, podium tower R@gap36, pit canopy
+    // terrace behind the garages at 0.975/gap26 (was superseded at 0.99/18).
+    for (const id of [
+      "monza-tribuna-centrale",
+      "monza-podium-tower",
+      "monza-pit-canopy",
+      "monza-villa-lake",
+      "monza-west-park-lake",
+      "monza-sopraelevata-flyover",
+      "monza-sopraelevata-pier-left",
+      "monza-sopraelevata-pier-right",
+      "monza-banking-lower",
+      "monza-banking-middle",
+      "monza-banking-upper",
+    ]) {
+      expect(emitted.has(id), `${id} should be emitted`).toBe(true);
+    }
+    expect(emitted.get("monza-sopraelevata-flyover")?.clearance).toBeGreaterThanOrEqual(4.8);
+
+    expect(result.walls.anyNaN).toBe(false);
+    expect(result.walls.tightFrac).toBeGreaterThan(0.6);
+    for (const probe of result.edgeProbes) {
+      expect(probe.terrainY, `terrain missing at ${probe.frac}:${probe.lat}`).not.toBeNull();
+      expect(probe.overRoad, `terrain above road at ${probe.frac}:${probe.lat}`).toBeLessThanOrEqual(0.18);
+    }
+  });
+});

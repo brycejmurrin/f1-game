@@ -1,0 +1,120 @@
+// @ts-check
+// AI car meshes use fixed team factory visuals, independent of player saves.
+//
+// ONE BOOT PER WORKER (sharedTest): the boot-seed-reload pair became none. The
+// saved setup goes in through the store (cache and disk together) and the team
+// through #mb-race's own re-read, which is all the reload was for.
+// UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
+
+test("AI full-body meshes use deterministic factory presets instead of saved setups", async ({ page }) => {
+  // DECLARE THE BUDGET. One test, on the shared per-worker boot — so it pays
+  // the whole worker's page boot, race fixture and garage mesh build before its
+  // body starts. Silent about that cost, it was billed at the change-aware
+  // gate's generic 120 s and selected; it then failed at exactly "Test timeout
+  // of 120000ms exceeded" on Pages #1974 (run 33830189400, job 100891344583),
+  // after a MEASURED 240.1 s. Nothing asserted was wrong.
+  //
+  // 300 s clears that worst case with the ~25 % margin ci.yml's caps use, and
+  // tools/ci/select-specs.mjs now EXCLUDES this spec by name and says so
+  // instead of picking a spec it cannot pay for. A BUDGET, not a tolerance.
+  test.setTimeout(300_000);
+  await toMenu(page);
+  // Hook BEFORE pinFreePlay: #mb-race → scheduleFlybyTrack → prepareMenuCarAssets
+  // builds every factory body into teamBodies. Installing after that means
+  // race()'s warmCarAssets is all cache hits, Car3D.build never runs again, and
+  // the wait below times out at 120 s with zero captures (CI #541 run
+  // 36741124003). Capture whatever warms — menu prep or the race — the same.
+  await page.evaluate(() => {
+    const captures = {};
+    const build = Car3D.build;
+    Car3D.build = function (c1, c2, opts) {
+      // `field`, not `!noWheels`. AI bodies moved to the wheels-split draw path
+      // (teamBodyMesh builds them with noWheels: true and hangs the wheels
+      // separately), so this filter stopped matching ANY of them and the wait
+      // below simply timed out at 30 s — never reaching 11 captures, and never
+      // saying that was why. buildCarData sets `field` for exactly the factory
+      // bodies this test is about, and clears it for the player's saved-setup
+      // build, which is the distinction the filter was reaching for. The mesh
+      // probe in parts-mesh-cache.spec.js already keys off the same flag.
+      if (opts && opts.parts && opts.field) {
+        const ids = Object.assign({}, opts.parts._ids);
+        const key = Parts.CATALOG.map((cat) => ids[cat.id]).join("|");
+        captures[key] = ids;
+      }
+      return build(c1, c2, opts);
+    };
+    window.__factoryMeshCaptures = captures;
+    // sharedTest is worker-scoped across files: a prior race leaves teamBodies
+    // warm, so pinFreePlay's menu prep and race warm are all cache hits and
+    // Car3D.build never runs (CI #541 run 36744383982 on c6750d598 — still
+    // timed out after the hook-before-pinFreePlay ordering fix). Drop the
+    // caches so the next warm rebuilds through the hooked build.
+    if (window.__apex.clearCarMeshCaches) window.__apex.clearCarMeshCaches();
+  });
+  await pinFreePlay(page, {
+    team: "mclaren",
+    parts: {
+      engine: "quali_engine",
+      aero: "extreme",
+      suspension: "active",
+      brakes: "brembo_evo",
+      tyres: "hypersoft",
+      ers: "overcharge",
+      gearbox: "f1_spec",
+      fuel: "custom_formula",
+    },
+  });
+
+  await page.evaluate(async () => {
+    // Await the settled race: warmCarAssets runs inside startRaceBody. A bare
+    // race() return leaves park/aiPlace racing the async build.
+    await window.__apex.race("monza");
+    window.__apex.park(0.1);
+    for (let i = 0; i < window.__apex.cars().length; i++) {
+      window.__apex.aiPlace(i, 0.1 + i * 0.0002, 0, (i % 4 - 1.5) * 1.5);
+    }
+  });
+
+  // 120 s, INSIDE the 300 s budget above — this wait is the race("monza")
+  // build plus eleven AI body meshes, the cold part of that 240 s. At 30 s it
+  // was the one cap in the test not sized to it: nightly 2026-09-29 (run
+  // 36551639160, test:car shard 1, cold worker) hit exactly 30.0 s here and
+  // the retry passed in 15.6 s with nothing asserted wrong.
+  await page.waitForFunction(() =>
+    Object.keys(window.__factoryMeshCaptures).length >= 11,
+    null, { polling: 100, timeout: 120_000 }
+  );
+
+  const result = await page.evaluate(() => {
+    const mismatches = [];
+    // NOT `legends` EITHER, and that is not a convenience. The `legends` entry
+    // is a TEMPLATE for the player's race-as-a-legend car, pushed into
+    // Teams.LIST by CustomTeam.syncLegendsTeam() — it is not a constructor and
+    // never fields an AI body on a normal grid, so there is no capture to match
+    // and it reported as a mismatch whose `actual` was simply undefined. The
+    // filter here predates that entry existing; parts-physics.spec.js has
+    // excluded it by the same predicate all along.
+    for (const team of Teams.LIST.filter((item) => !item.custom && !item.legends)) {
+      const expected = Parts.getFactorySetup(team);
+      const actual = window.__factoryMeshCaptures[Parts.factoryKey(team)];
+      if (!actual || Parts.CATALOG.some((cat) => actual[cat.id] !== expected[cat.id])) {
+        mismatches.push({ id: team.id, expected, actual });
+      }
+    }
+    return {
+      mismatches,
+      savedAero: JSON.parse(localStorage.getItem("apex26.parts.mclaren")).aero,
+      factoryAero: Parts.getFactorySetup(Teams.LIST.find((team) => team.id === "mclaren")).aero,
+      renderedAero: window.__factoryMeshCaptures[
+        Parts.factoryKey(Teams.LIST.find((team) => team.id === "mclaren"))
+      ].aero,
+    };
+  });
+
+  expect(result.mismatches).toEqual([]);
+  expect(result.savedAero).toBe("extreme");
+  expect(result.factoryAero).not.toBe(result.savedAero);
+  expect(result.renderedAero).toBe(result.factoryAero);
+});

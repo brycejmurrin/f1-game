@@ -1,0 +1,282 @@
+// THE LEGENDS TEAM as a grid entry, separate from MY TEAM.
+//
+// The rules that matter here are the ones a refactor breaks silently: the team
+// must not collide with the custom slot, it must carry the whole roster so the
+// select screen's DRIVER picker is the legend picker, and it must still GRID
+// exactly one car. The last is the one with teeth — `drivers.length` is 12, so
+// anything that counts seats by that number puts twelve legends on a 23-box
+// grid.
+import test from "node:test";
+import assert from "node:assert/strict";
+import vm from "node:vm";
+import fs from "node:fs";
+
+function load(files) {
+  const ctx = vm.createContext({ console, Object, Math });
+  for (const f of files) vm.runInContext(fs.readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: f });
+  return (name) => vm.runInContext(name, ctx);
+}
+const get = load(["js/core/mat4.js", "js/data/legends.js"]);
+const Legends = get("Legends");
+// parts.js only where a test needs the catalog — it is the heavy load of the two.
+const loadParts = () => load(["js/core/log.js", "js/core/mat4.js", "js/car/parts.js"])("Parts");
+const Teams = load(["js/core/mat4.js", "js/data/teams.js"])("Teams");
+
+test("the Legends team is its own id, not the custom slot", () => {
+  const t = Legends.team("senna");
+  assert.equal(t.id, "legends", "sharing the custom id would overwrite the player's decals and parts sheet");
+  assert.equal(t.legends, true);
+  assert.ok(!t.custom, "it must not also read as the custom team — gridTeams() would count it twice");
+  assert.ok(!Teams.LIST.some((x) => x.id === "legends"),
+    "the base roster must stay the eleven real teams; Legends is appended at runtime");
+});
+
+test("the team carries the whole roster, so the driver picker is the legend picker", () => {
+  const t = Legends.team("senna");
+  assert.equal(t.drivers.length, Legends.LIST.length);
+  assert.deepEqual(t.drivers.map((d) => d.code), Legends.LIST.map((l) => l.code),
+    "roster order — seatOf() and a saved driverIdx both depend on it");
+});
+
+test("seatOf finds every legend, and refuses what is not one", () => {
+  Legends.LIST.forEach((l, i) => {
+    assert.equal(Legends.seatOf(l.id), i, `${l.id} is not at its own index`);
+    assert.equal(Legends.seatOf(l.code), i, `${l.code} must resolve too — the team stores a code`);
+  });
+  assert.equal(Legends.seatOf("nobody"), -1);
+  assert.equal(Legends.seatOf(undefined), -1);
+});
+
+test("the team's identity follows the legend it fields, not just its name", () => {
+  // Picking a different legend has to change the CAR, or the picker is cosmetic.
+  const a = Legends.team("fangio"), b = Legends.team("ghill");
+  assert.notEqual(a.legend, b.legend);
+  assert.notEqual(a.tier, b.tier, "a 1950s champion and a 1960s one must not share a car tier");
+  assert.notDeepEqual(a.color, b.color);
+  assert.notDeepEqual(a.stats, b.stats);
+  assert.equal(a.name, b.name, "…while the TEAM name stays Legends either way");
+});
+
+test("every legend can field the team", () => {
+  for (const l of Legends.LIST) {
+    const t = Legends.team(l.id);
+    assert.ok(t, `${l.id} cannot field the team`);
+    assert.equal(t.legend, l.id);
+    assert.equal(t.id, "legends");
+    assert.ok(t.stats && t.livery && t.color && t.color2, `${l.id}: an incomplete team record`);
+    assert.ok(t.tier >= 0 && t.tier <= 3, `${l.id}: tier ${t.tier} is off the 0..3 scale`);
+  }
+  assert.equal(Legends.team("nobody"), null);
+});
+
+// The seat rule, as js/game.js seatsFor() implements it. Held here rather than
+// only in game.js because the number it produces feeds BOTH the grid and the
+// painted boxes — a disagreement is a car on bare tarmac.
+const seatsFor = (team, driverIdx) => {
+  if (!team || !team.legends) return team.drivers;
+  const d = team.drivers || [];
+  if (!d.length) return [];
+  return [d[Math.min(Math.max(driverIdx | 0, 0), d.length - 1)]];
+};
+
+test("the team grids exactly one car, whichever legend is picked", () => {
+  const t = Legends.team("senna");
+  for (let i = 0; i < t.drivers.length; i++) {
+    const seats = seatsFor(t, i);
+    assert.equal(seats.length, 1, `driverIdx ${i} gridded ${seats.length} cars`);
+    assert.equal(seats[0].code, Legends.LIST[i].code, `driverIdx ${i} gridded the wrong legend`);
+  }
+});
+
+test("an out-of-range or junk pick still grids one car", () => {
+  // A saved driverIdx outlives a roster edit, and a shorter roster must not
+  // grid `undefined` — which reads as a car with no driver rather than a crash.
+  const t = Legends.team("senna");
+  for (const bad of [-5, 99, NaN, undefined, null]) {
+    const seats = seatsFor(t, bad);
+    assert.equal(seats.length, 1, `pick ${String(bad)} gridded ${seats.length}`);
+    assert.ok(seats[0] && seats[0].code, `pick ${String(bad)} gridded a seat with no driver`);
+  }
+});
+
+// ── THE TEAM TILE ────────────────────────────────────────────────────────────
+// A tile is built for the two names every other team has. LEGENDS carries all
+// twelve so the driver picker can offer them, and the select screen joined all
+// twelve into one line: on a real screen that overflowed the card and pushed it
+// over Aston Martin's (2026-09-17). These pin the data the tile leans on.
+
+test("only a SOURCED racing number exists; the rest are a neutral placeholder", () => {
+  // Array.from: a map() over a vm-realm array stays in that realm, and a strict
+  // deepEqual then fails on prototype identity alone with the values matching.
+  const numbered = Array.from(Legends.LIST).filter((l) => l.num);
+  assert.deepEqual(numbered.map((l) => l.code).sort(), ["MAN", "SEN"],
+    "only Senna's 12 and Mansell's 5 are sourced — a new one needs a source, not a guess");
+  for (const l of Legends.LIST) {
+    if (!l.num) continue;
+    assert.ok(l.num > 1, `${l.id}: a sourced number of 1 is indistinguishable from the placeholder`);
+  }
+});
+
+test("the tile's driver line stays one line's worth for a legend", () => {
+  // The bug was a 12-entry join. Whatever the tile shows, it must be derived
+  // from ONE seat, so the line cannot grow with the roster.
+  const t = Legends.team("senna");
+  const line = (seat) => {
+    const d = t.drivers[seat];
+    return (d.num > 1 ? "#" + d.num + " " : "") + d.name.split(" ").pop() + "  ·  " + t.engine;
+  };
+  for (let i = 0; i < t.drivers.length; i++) {
+    assert.ok(line(i).length < 48, `seat ${i} renders ${line(i).length} chars: "${line(i)}"`);
+  }
+});
+
+test("a legend wears a real marque crest or none — never a borrowed one", () => {
+  // EVERY team the game ships has a mark, and this list is read from the game
+  // rather than remembered. An earlier version hard-coded the eight in
+  // js/car/crest-paths.js and called them "hand-drawn ... and no others" —
+  // wrong twice: those eight are TRACED, and mercedes/haas/audi carry geometric
+  // constructions in js/car/liverytex.js MARK_PARTS instead. That mistake cost
+  // Fangio his Silver Arrow badge, so the set is derived now and the test would
+  // have caught the omission.
+  const HAVE = new Set(Teams.LIST.map((t) => t.id));
+  assert.ok(HAVE.has("mercedes"), "mercedes must be markable — its star and ring are drawn, not traced");
+  assert.ok(HAVE.size >= 11, `only ${HAVE.size} teams — the roster shrank under this test`);
+  let withCrest = 0;
+  for (const l of Legends.LIST) {
+    if (l.marque == null) continue;
+    withCrest++;
+    assert.ok(HAVE.has(l.marque), `${l.id}: "${l.marque}" is not a crest the game draws`);
+    // …and it must be the marque the CAR is, not a nearby one.
+    const car = l.car.toLowerCase();
+    const brand = l.marque === "redbull" ? "red bull" : l.marque;
+    assert.ok(car.includes(brand), `${l.id}: crest "${l.marque}" against car "${l.car}"`);
+  }
+  assert.ok(withCrest >= 8, `only ${withCrest} legends carry a crest — the mapping has regressed`);
+  assert.equal(Legends.team("fangio").crest, "mercedes", "the W196 is a Mercedes and the game draws that star");
+  assert.equal(Legends.team("senna").crest, "mclaren");
+  // The four with no mark are a SOURCE limit, not a to-do: Lotus, Tyrrell and
+  // Vanwall are typographic and this repo's tracer says memory is the wrong
+  // source for a mark. If one of them ever gains a real crest, flip it here.
+  for (const id of ["clark", "ghill", "stewart", "moss"]) {
+    assert.equal(Legends.team(id).crest, null, `${id}: no Lotus/Tyrrell/Vanwall mark exists to wear`);
+  }
+});
+
+test("Teams.isReal separates the eleven constructors from the two grid guests", () => {
+  // The predicate every field walk needs. The rules that award points, offer
+  // contracts, develop cars over a winter, move a lobby seat and warm the menu
+  // field all filtered on `custom` ALONE, which Legends is not — so a driver
+  // career at Haas opened with twelve legends in its own standings, and a
+  // winter wrote career.dev["legends:0..11"].
+  for (const t of Teams.LIST) assert.equal(Teams.isReal(t), true, `${t.id} is a real constructor`);
+  assert.equal(Teams.LIST.length, 11, "the base roster is the eleven; the two guests are appended at boot");
+  assert.equal(Teams.isReal(Legends.team("senna")), false, "LEGENDS is grid furniture for one screen");
+  assert.equal(Teams.isReal(Teams.DEFAULT_CUSTOM), false, "MY TEAM enters only as the team you picked");
+  assert.equal(Teams.isReal(null), false, "a missing team is not a real one — callers walk sparse arrays");
+  assert.equal(Teams.isReal(undefined), false);
+});
+
+/* ONE ERA, TWO CARS. Nine PERIOD entries carry twelve legends, so three pairs
+   share a decade — and before the per-legend override they shared a CAR: the
+   factory key that builds an AI mesh came straight off the era, so Fangio's
+   W196 and Moss's Vanwall were the same machine, as were Lauda's 312T and
+   Stewart's Tyrrell. The override is what makes a shared era still build two
+   cars, and each one is sourced in its entry. */
+test("a legend's parts override the era, so a shared decade is not a shared car", () => {
+  const P = loadParts();
+  const key = (id) => P.factoryKey(Legends.raceTeam(id));
+  for (const [a, b] of [["fangio", "moss"], ["lauda", "stewart"]]) {
+    assert.equal(Legends.LIST.find((l) => l.id === a).era,
+                 Legends.LIST.find((l) => l.id === b).era, `${a}/${b} share an era`);
+    assert.notEqual(key(a), key(b), `${a} and ${b} must not build the same car`);
+  }
+  // The override MERGES onto the era rather than replacing it: Fangio's entry
+  // names only `suspension`, and everything else is still 1950s.
+  const f = Legends.parts("fangio");
+  assert.equal(f.suspension, "torsion_bar", "the W196's torsion bars win");
+  assert.equal(f.wheels, Legends.PERIOD.front50.wheels, "…and the rest is still the era");
+  assert.equal(f.aero, "minimal");
+  // An era with no override is the era, untouched.
+  assert.deepEqual(Legends.parts("clark"), Legends.PERIOD.slim60);
+  assert.equal(Legends.parts("nobody"), null);
+});
+
+/* raceTeam must carry the MERGED setup. It read PERIOD directly once, which
+   would have handed an AI rival the era's car while the player's garage sheet
+   got the legend's — the same car wrong in two different ways. */
+test("a duel rival's factory setup is the legend's, not the bare era", () => {
+  for (const id of ["fangio", "moss", "lauda", "stewart"]) {
+    assert.deepEqual(Legends.raceTeam(id).factory, Legends.parts(id), `${id}: rival races his own car`);
+  }
+});
+
+/* EVERY LEGEND FITS THE GARAGE. parts.custom IS the player's sheet, so an
+   over-budget legend shows a negative balance and refuses every new fit. The
+   override spends, so this has to hold after it, not just before. */
+test("no legend's car exceeds the parts budget", () => {
+  const P = loadParts();
+  for (const l of Legends.LIST) {
+    const cost = P.getCost(Legends.parts(l.id), Legends.raceTeam(l.id));
+    assert.ok(cost <= P.BUDGET, `${l.id}: ${cost} over the ${P.BUDGET} budget`);
+  }
+});
+
+/* THE SAME LEGEND IS THE SAME CAR ON BOTH SIDES OF THE GRID. team() is the
+   slot the player drives and raceTeam() is the rival he duels, and only the
+   second one carried the period build: parts() had no caller until raceTeam,
+   so picking Fangio in the garage gave you a 2026 chassis in Silver Arrow
+   paint while duelling him produced the 1954 car. */
+test("a legend's period car reaches the player's slot as well as a rival's", () => {
+  const P = loadParts();
+  for (const l of Legends.LIST) {
+    const per = Legends.parts(l.id);
+    for (const [who, t] of [["player", Legends.team(l.id)], ["rival", Legends.raceTeam(l.id)]]) {
+      const fs = P.getFactorySetup(t);
+      for (const k of Object.keys(per)) {
+        assert.equal(fs[k], per[k], `${l.id}: the ${who}'s ${k} must be the period part`);
+      }
+      // A FACTORY value, not a sheet — so it must still fit the garage budget,
+      // which is what stops a legend pick showing a negative balance.
+      assert.ok(P.getCost(per, t) <= P.BUDGET, `${l.id}: ${who} over the ${P.BUDGET} budget`);
+    }
+  }
+});
+
+/* ── The two championship tables, which nothing pinned ──────────────────────
+ *
+ * A mutation sweep on 2026-09-20 inverted TIER_V and corrupted POINTS, and the
+ * whole node tier stayed green. Both are read by name in several suites — the
+ * coherence test parses the FIRST element of TIER_V out of the source with a
+ * regex — but nothing asserted either table's SHAPE, and shape is the entire
+ * content of a ladder. Inverting TIER_V makes Mercedes and Ferrari the slowest
+ * cars on the grid; nothing would have said so until somebody raced.
+ */
+test("TIER_V is a strictly descending pace ladder, fastest first", () => {
+  const V = Teams.TIER_V;
+  assert.equal(V.length, 5, "five tiers, 0 fastest .. 4 slowest — the `tier` field indexes this");
+  for (let i = 1; i < V.length; i++) {
+    assert.ok(V[i] < V[i - 1],
+      `tier ${i} (${V[i]}) must be SLOWER than tier ${i - 1} (${V[i - 1]}) — an inverted ladder ` +
+      `reverses the competitive order of the entire grid`);
+  }
+  // The spread is calibrated, not arbitrary: ~1.05% across the field, against
+  // the [1.0 .. 0.942] ladder that put it 8.64% apart — five times any real
+  // season (docs/notes/AI-FIELD-RESEARCH.md). Guard the ORDER of magnitude so
+  // a re-tune stays inside the argument the comment in teams.js makes.
+  const spread = (V[0] - V[V.length - 1]) / V[0];
+  assert.ok(spread > 0.005 && spread < 0.03,
+    `field spread is ${(spread * 100).toFixed(2)}% — outside the 0.5-3% band the ladder is calibrated to`);
+  assert.ok(V.every((v) => v > 0.9 && v < 1.0), "every tier is a scale just under 1.0");
+});
+
+test("POINTS is the 2026 top-ten ladder, descending, with no fastest-lap point", () => {
+  const P = Teams.POINTS;
+  assert.deepEqual(Array.from(P), [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+    "the scoring table decides every championship — it is a rule of the sport, not a tunable");
+  for (let i = 1; i < P.length; i++) {
+    assert.ok(P[i] < P[i - 1], `P${i + 1} must score less than P${i}`);
+  }
+  assert.equal(P.length, 10, "points to tenth place");
+  assert.ok(P[0] - P[1] > P[1] - P[2],
+    "the win must be worth a bigger step than second — that gap is why winning is the strategy");
+});

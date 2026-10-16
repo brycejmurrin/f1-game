@@ -1,0 +1,12 @@
+version: 1
+triggers:
+  drafts: true
+  frequency: everyPush
+review:
+  effort: default
+  incremental: true
+autofix:
+  mode: newBranch
+prSummary:
+  mode: comment
+  riskScore: true

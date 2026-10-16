@@ -1,136 +1,107 @@
 ---
 name: survey-track
-description: End-to-end playbook for making a circuit look accurate — survey the in-game scene against real-world reference, diagnose geometry problems (floating props, channels/steps, sunk water, terrain over the road), edit the scenery/terrain, then verify and ship. Orchestrates the component skills (scenery-dress, debug-tracks, playwright-probe, check-changes) into one loop and adds a lateral ground-profile probe. Use for "survey Monza", "make Spa more accurate", "do an accuracy pass on this track", "the trees are floating / there's a gap beside the road", "improve a circuit's realism".
+argument-hint: "<circuit ids…> [target year]"
+description: "Use when a circuit needs an end-to-end accuracy or grounding pass (gaps, terrain-over-road, channels/steps, sunk water), or a multi-circuit realism campaign (/survey-track spa monza: one surveyor per circuit). Props → scenery-dress; geometry hooks only → agent-view."
 ---
 
 # Survey & update a track
 
-The loop for taking one circuit from "roughly dressed" to "reads like the real
-place". This is the **orchestrator** — each step hands off to a focused skill or
-tool. Work one circuit at a time; the same loop applies to all 24.
+Runs in the PARENT (no fork): the parent owns web research, captures, shared
+engine work and integration, and spawns ONE **track-surveyor** subagent per
+circuit with [the delegation prompt](references/delegation.md). The surveyor
+does the browser-free measurements and source diagnosis, edits only that
+circuit's pair of files in its OWN worktree (`isolation: worktree`, so disjoint
+circuits run in parallel), and stops at `verify-track` — engine work and the
+fleet gate below are the PARENT's, after it returns.
 
-> **One command does the survey** — `node tools/survey-track.mjs <id>` self-boots the
-> game and emits the screenshots + the flagged ground-profile probe in one pass (no
-> server, one output folder). The focused skills handle the rest: **scenery-dress**
-> (edit `scenery(api)`), **debug-tracks** (deeper geometry hooks), **playwright-probe**
-> (one bespoke shot via `shot.mjs`), **check-changes** (ship).
+Several circuits (`$ARGUMENTS` = circuit ids, optional target year; every id in
+`Tracks.LIST`): the campaign procedure is [references/campaign.md](references/campaign.md)
+(research and budgets: `references/campaign-workflow.md`).
+
+## Hand-back
+
+The surveyor's edits are on its worktree branch, not in this checkout. Its report
+names the branch and path; merge it before verifying here
+(`git merge --no-ff <surveyor-branch>`, then `verify-track` on the merged tree), and
+remove the worktree once merged (`git worktree remove <path>`).
+
+```sh
+node tools/track/audit-circuit.cjs <id> --json   # ONE offline call: verify/float/clip/coplanar/props/ground vs baselines
+node tools/track/audit-circuit.cjs <id> --checks verify,ground   # a subset; run once as baseline, again after all pair edits
+```
+
+`ground` (`ground-audit.cjs`) covers buried/unsupported props; `float-audit` is
+props only, so terrain-over-road and sunk water still need the parent's
+survey captures. The checks are browser-free.
+
+For centreline measurements, load `buildContext()` from
+`tools/track/verify-track.cjs`, select the def by id, then call
+`Tracks.buildCenterline(def, { line: false })`. For retained road/terrain/prop
+geometry use `tools/lib/track-build-vm.cjs`; read its API before use. No browser
+launch/capture/automation in the surveyor, including `survey-track.mjs`,
+`ground-profile.mjs`, `tools/shot/` commands and cloudBrowser. A numerical-only
+output does not make a Chromium-backed tool browser-free.
+
+Subagent: **track-surveyor** (writes only that circuit's pair). A LAYOUT defect
+hands over to **new-track**, not dressing; routing is in the description.
 
 ## Where the truth lives
 
-1. **`docs/tracks/<id>.md`** — THE per-circuit brief (one exists for all 24). Theme
-   + palette, elevation notes, and a **landmarks-by-lap-position table** (s, side,
-   distance, box-modelling note). This is your target; start here.
-2. Need to *see* the real place? Use the `WebSearch` tool for cited descriptions; if
-   web image egress is allowed, drive a headless image search for reference photos.
-   Treat any numbers (heights/distances) as best-effort — sanity-check before they
-   drive geometry.
+1. **`docs/tracks/<id>.md`** — per-circuit brief (all 52): theme, elevation,
+   landmarks-by-lap-position. Start here.
+2. No-browser layout check: compare the BUILT centreline's `total`, apexes,
+   widths, sectors and elevation against dated evidence. `path.len` is source
+   metadata, not built length; the existing OSM comparison normalizes scale,
+   rotation and lap origin, so it cannot certify those quantities. Surveyed
+   elevation conditionally overrides authored bumps via `TrackDef.fromRaw`
+   (`js/track/core/def.js`); absent profiles do not prove flatness. `startFrac`
+   and width zones use control-index fractions, built `s/total` arc fractions,
+   and turns/sectors racing-space fractions. Respect `_sceneryShift` through
+   wrapped helpers; never pre-shift `K(s)`. A wrong LAYOUT → **new-track**.
+   Probe flags are NOT findings until confirmed off lat 0
+   ([loop.md](references/loop.md), "Artefacts" paragraph).
+3. Parent-supplied real-place photos/maps and numerical sources: retain URLs,
+   document year and uncertainty. Distinguish source claims from measurements;
+   a photograph's perspective does not establish a metre dimension or camber.
 
-## The loop
+## Short loop
 
-### 1 · Read the brief
-Open `docs/tracks/<id>.md`. List the 3–5 highest-leverage fixes from the landmark
-table and palette (what's missing, wrong-coloured, wrong-shaped, or floating).
+1. Read the brief, source pair and parent evidence — select 3–5 fixes supported
+   by a measured defect or dated source.
+2. Read the parent's baseline captures and record camera framings alongside
+   Node VM measurements. Request missing views in the hand-back; the surveyor
+   never captures them. Parent probes may include aerial/orbit/EYE and obliques.
+3. Edit dressing in `js/circuits/scenery/<id>.js` (the closure; the def
+   `js/circuits/<id>.js` is the other half of the pair). Complete all pair edits
+   before verification. New fields, terrain consumers, the `TrackDef.fromRaw`
+   copy, shared engine code, landmark registries, baselines and tests belong to
+   the parent. Coordinate edits around any live parent browser run.
+4. `verify-track.cjs <id>` — a THROW strands the game on the menu.
+5. Return changes, before/after numbers, source/year evidence, baseline deltas
+   and uncertainties. Parent captures the same framings after integration.
+6. The surveyor stops after `audit-circuit`. Parent integration, browser checks and
+   shipping follow **check-changes**.
 
-### 2 · Survey the current scene — **one command**
-Don't guess: screenshot the real game and probe its geometry in a single pass.
-```sh
-node tools/survey-track.mjs <id> before     # → scratch/captures/survey-track/<id>/ + a flagged probe table
-```
-This self-boots the game (no server needed) and produces, in one boot:
-- **screenshots** in `scratch/captures/survey-track/<id>/` — a whole-track aerial plus an **orbit**
-  and a **driver's-eye** shot at 0/25/50/75 % (the EYE shots are what expose
-  floating props and gaps). **Read the PNGs** against the brief.
-- the **lateral ground-profile probe** as a table, with the classic failure modes
-  auto-flagged:
-  - **`terrainY === "--"` sandwiched between solid readings** → a terrain *hole*;
-    props out there fall back to the closed-form `groundYAt()` estimate and **float
-    or sink** (the "channel between rings"). A trailing `--` at the outer lats is
-    just the ribbon edge — benign.
-  - **a >1 m jump between adjacent lats** → a cliff/step.
-  - `terrainY` sliding steadily more negative with distance → the ribbon is
-    **sagging** (right for a hill, wrong for a flat island level with water).
+Montreal already ships `flatTerrain: true` + `terrainOuter: 70` — survey
+before re-applying that fix.
 
-Add fractions or a label as needed: `survey-track.mjs <id> after 0.1,0.55,0.78`.
-For a quick numbers-only re-probe (no screenshots) use
-`node .claude/skills/survey-track/ground-profile.mjs <id>`. For one bespoke framing
-use `playwright-probe`'s `shot.mjs`. Deeper geometry hooks (`scan`, `wallStats`,
-`groundY`) live in **debug-tracks**; `tests/terrain-over-road.spec.js` catches the
-terrain-over-road class.
+## Parent brief and commit recipe (plan WS6; #2399)
 
-### 3 · Edit
-- **Props / dressing** (trees, buildings, barriers, water, landmarks): edit
-  `js/tracks/<id>.js` `scenery(api)` — follow **scenery-dress** and
-  `docs/SCENERY-API.md`. Anchor with `anchor()` (seats on the *rendered* ribbon),
-  not raw `groundYAt`, so props don't float where the ribbon is carved/sags.
-- **The ground itself** (how wide/flat the land is): the terrain ribbon is built by
-  `buildTerrain` in `js/tracks.js`, driven per-track by `def.terrainOuter` (ribbon
-  width) and the sag/ease model. A flat man-made island wants a **wide, level**
-  shelf out to the shoreline, not a narrow sagging verge backed by a separate slab
-  — otherwise props in the gap between them float (the Montreal case below). New
-  per-track terrain behaviour is added as a **`def` flag** read in `buildTerrain`
-  **and** mirrored in `groundYAt` so props anchor to the same surface.
-  - ⚠️ A `def` key only reaches the engine if it's copied in the `LIST = DEFS.map`
-    block near the bottom of `js/tracks.js` (it whitelists keys). Add your new key
-    there or it silently reads as `undefined`.
+- Brief checklist: every frame incl. storm weather; a "Code & scenery deep-dive"
+  section (emitter counts with verified file:line); the branch name; PR base
+  `track-survey-assets` (never the deploy branch).
+- Commit recipe: survey paths are gitignored, so `git add -f <paths>` ALONE in
+  one Bash call, then `git commit` in the next.
+- Shots: more than 3 go through `apex_shot_survey` / `apex_track op survey`, not
+  a loop of `apex_shot` (a 52-shot serial survey took 56 min).
+- **Image budget** (plan WS4; #2399): `Read` at most 8 images, then compact; never re-`Read` an old shot; JPEG ≤ 800 px wide for anything a model will look at. A request over 32 MB kills the session and `/compact` with it.
 
-### 4 · Verify the build
-```sh
-node tools/verify-track.cjs <id>     # headless build check — catches a scenery THROW
-```
-A `THROW` here strands the game on the menu. For a sweep across all circuits run
-`node tools/verify-track.cjs --all` (~30 s; see **check-changes**).
+## Load on demand
 
-### 5 · Re-survey
-Re-run the one survey command with an `after` label — same framings + probe, so you
-get a clean before/after and confirm the flags cleared:
-```sh
-node tools/survey-track.mjs <id> after
-```
-Compare `scratch/captures/survey-track/<id>/before-*.png` vs `after-*.png`; confirm the probe table
-is now flag-free and the eye shots show props on real ground.
+- Probe flags, Montreal worked example, gotchas, and the PARENT-only steps
+  (browser survey, re-survey, ship) → [references/loop.md](references/loop.md);
+  the surveyor reads only its "Surveyor steps".
 
-### 6 · Test & ship
-- Geometry guards: `npx playwright test tests/terrain-over-road.spec.js tests/tracks-walls.spec.js`
-- Visual regression (all circuits): `npm run test:visual`
-  — if your change is **intentional**, regenerate baselines with:
-  `npm run test:update -- tests/tracks-visual.spec.js` (then eyeball
-  `tests/tracks-visual.spec.js-snapshots/`). Prefer Linux/SwiftShader for CI-matching goldens.
-- **bump-cache**: increment `?v=N` in `index.html` (every `js/*`/`css/*` edit).
-  See the **bump-cache** skill / `sed -i -E 's/\?v=[0-9]+/?v=N/g' index.html`.
-- Commit with a message that says the *why*, and push. Pick the test group with
-  **check-changes**.
-
-## Worked example — Montreal "floating trees" pass
-
-The exact shape of a survey+update pass:
-1. **Brief** (`docs/tracks/montreal.md`): flat island in a river; Olympic Basin
-   flanks the back straight; trees should sit on park land.
-2. **Survey** (`survey-track.mjs montreal before`): the EYE shots showed roadside
-   trees floating over a grey void behind the wall, and the probe table showed the
-   ribbon sagging underwater then going `--`:
-   ```
-   frac   roadY        8m     12m     20m     30m     45m     70m    110m
-   0       0.00        --   -0.39   -0.53   -0.71   -0.98   -1.43   -2.15
-   ```
-   The ribbon only covered ~12–15 m then **sagged underwater** (−2.15 at 110 m);
-   beyond it `terrainY` was `--`, so trees fell back to the sunk `groundYAt` and
-   floated; the flat island slab sat at a different height → the step. Root cause:
-   a flat island modelled with a *sloping* terrain ribbon.
-3. **Edit**: gave `buildTerrain` a `flatTerrain` def flag (wide, dead-level shelf
-   out to `terrainOuter`), mirrored it in `groundYAt`, added the key to the `LIST`
-   whitelist, set `flatTerrain:true` + `terrainOuter:70` on the track, and aligned
-   the slab just under the ribbon.
-4. **Verify/re-survey/ship**: `verify-track montreal` clean; `survey-track.mjs
-   montreal after` showed a flat, flag-free profile and props on real ground;
-   `terrain-over-road` + `tracks-walls` pass; regenerated the montreal
-   `tracks-visual` baselines; bumped `?v=`; committed.
-
-## Gotchas
-- **Trees/lamps must never call `blockAt`/`markBarrier`** — they'd shrink the
-  driving boundary. Keep furniture clear of the collision edge (see scenery-dress).
-- **Probe both sides** — `ground-profile.mjs` reports whichever side has rendered
-  terrain; a one-sided lake means one side reads `--` legitimately.
-- **Intentional visual change ≠ regression** — when `tracks-visual` baselines fail
-  after a deliberate edit, regenerate them; don't chase the diff.
-- **One circuit at a time, picture-driven** — assert with screenshots + the probe,
-  not by reasoning about coordinates.
+Per-circuit research briefs describe the reference place; verify implementation
+claims against source. The baked PBR asset pack ships ON and degrades to the
+procedural fallback. A missing baked elevation entry is not a flatness verdict.
