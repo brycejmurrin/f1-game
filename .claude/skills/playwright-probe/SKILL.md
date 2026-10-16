@@ -103,6 +103,8 @@ node tools/shot/profile-gameloop.mjs singapore render        # .cpuprofile → C
 motion-capture's reference points at. A still frame cannot show shimmer and a CPU chart cannot see fill-bound work —
 both references say what the numbers mean before you A/B on them.
 
+**Image budget** (plan WS4; #2399): `Read` at most 8 images, then compact; never re-`Read` an old shot; JPEG ≤ 800 px wide for anything a model will look at; for more than 3 shots use `apex_shot_survey` / `apex_track op survey`, never a loop of `apex_shot`. A request over 32 MB kills the session and `/compact` with it.
+
 ## Load on demand
 
 - UI/DOM shots, camera fanout, env gotchas, harness skeletons →

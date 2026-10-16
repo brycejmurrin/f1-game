@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Cap concurrent ready-PR full-tier CI: refuse mark-ready when ≥N ready PRs already run full CI.
+ * @doc Count ready PRs with live full-tier CI (informational since 2026-10-16; no gate reads it).
  * @section runner
  * @skill steward
  *
@@ -9,8 +9,10 @@
  * saturates the 40-job account limit (docs/notes/CI-MERGE-BURST-2026-10-03.md).
  * Draft PRs stay on the uncapped fast tier — this tool never counts them.
  *
- * GitHub workflow concurrency can only serialize to one run per group, so the
- * desk check is the right place for a 2–3 slot cap. Default MAX_LIVE = 3.
+ * RETIRED AS A GATE (2026-10-16, CI/CD review #2333 finding 7): ci.yml's
+ * `queue: max` lanes bound the browser legs inside GitHub, the pool ran at 39
+ * of 40 slots regardless, and the cap read 13/3 with 12 ready PRs open. The
+ * count is still printed by pr-board for information. Default MAX_LIVE = 3.
  *
  *   node tools/ci/ready-full-cap.mjs              # exit 0 under cap, 1 at/over
  *   node tools/ci/ready-full-cap.mjs --json

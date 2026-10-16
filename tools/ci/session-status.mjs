@@ -147,7 +147,7 @@ export function livePrLines({ at, pr, ci, localHead, error }) {
   const out = [
     `- **PR #${pr.number} head** \`${pr.head.sha.slice(0, 9)}\` — ${pr.draft ? "draft" : "ready"} ${snap}`,
     `- **Mergeable** mergeable_state \`${pr.mergeable_state}\` ${snap}`,
-    `- **CI on that head** ${ci} ${snap}; gates: run \`node tools/ci/ready-gate.mjs\` / \`ready-full-cap.mjs\``,
+    `- **CI on that head** ${ci} ${snap}; gate: run \`node tools/ci/ready-gate.mjs\``,
   ];
   if (localHead && localHead !== pr.head.sha) out.unshift(`- **LOCAL HEAD != PR HEAD** — local \`${localHead.slice(0, 9)}\`, PR \`${pr.head.sha.slice(0, 9)}\`: push or sync before trusting anything below`);
   return out;

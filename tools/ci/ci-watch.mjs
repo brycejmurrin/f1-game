@@ -9,7 +9,8 @@
 // (or never: a `cancelled` run hid a FAILED one for five days) costs a cycle.
 // Waiting on a PR event alone is not enough either: webhooks arrive late or not
 // at all for success, and a docs-only push (paths-ignore) or a topic-branch push
-// with no PR (ci.yml runs on push for the deploy branch only) starts NO run,
+// with no PR (ci.yml runs on pull_request; the deploy branch's push starts
+// pages.yml) starts NO run,
 // which looks exactly like "still queued". So this polls the REST API and turns
 // state into events:
 //
@@ -39,8 +40,8 @@
 // run_in_background task when only the verdict matters. Exit: 0 green (or no
 // run started — a docs-only push), 1 red, 2 cancelled with no live sibling,
 // 3 no token / API unreachable, 4 superseded (a pending run replaced by a newer
-// push in the same concurrency group — ci.yml's `ship-fast` — before it ran a
-// step; re-arm on the `--sha` it names), 124 --timeout (default 120 min).
+// push in the same concurrency group — pages.yml's `pages-train-*` — before it
+// ran a step; re-arm on the `--sha` it names), 124 --timeout (default 120 min).
 //
 // Auth: GH_TOKEN or GITHUB_TOKEN, else `gh auth token` (Cloud boxes often have
 // gh logged in with no env token). Sent via curl's stdin config so it never
@@ -146,8 +147,8 @@ export function verdict(runs, jobsByRun) {
 
 /** A cancelled run that a NEWER run of the same workflow, branch and event
  *  replaced before it ran a single step: GitHub keeps one PENDING run per
- *  concurrency group, so a deploy-branch push waiting in ci.yml's shared
- *  `ship-fast` group is cancelled when the next push arrives. That is
+ *  concurrency group, so a deploy-branch push waiting in pages.yml's
+ *  `pages-train-*` group is cancelled when the next push arrives. That is
  *  superseded, not a timeout — but only when the run never started work (a
  *  run killed mid-way that happens to have a successor is still rule 8's
  *  "timeout until proven otherwise"). Returns the newer run or null. Pure. */
@@ -337,7 +338,7 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
       }
     }
     const v = verdict(runs, jobsByRun);
-    // A cancelled run replaced while pending (ci.yml's `ship-fast` group) is
+    // A cancelled run replaced while pending (pages.yml's `pages-train-*` group) is
     // superseded, not a timeout: say so, and name the run that has the tree.
     if (v.state === "cancelled") {
       const cancelled = runs.filter((x) => x.conclusion === "cancelled");
@@ -368,7 +369,7 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
         announced.add("indexing");
         report(`runs list is empty for ${sha.slice(0, 7)} but the commit has ${checks} check run(s): GitHub's run search is lagging — still waiting`);
       }
-      if (nv === "none") { report(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min and no open PR carries it (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier)`); return 0; }
+      if (nv === "none") { report(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min and no open PR carries it (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier; the deploy branch's push starts pages.yml)`); return 0; }
       if (nv === "blocked") { report(`= ci blocked — PR #${pr.number} has merge conflicts, so GitHub starts no run for ${sha.slice(0, 7)}; merge the base (sync-pr.mjs) and push`); return 1; }
       if (nv === "late") { report(`= ci none-yet — PR #${pr.number} carries ${sha.slice(0, 7)} but no run started in 10 min (mergeable_state ${pr.mergeable_state || "unknown"}: "unknown" is GitHub still computing, "dirty" starts no run); re-arm, or check the Actions tab`); return 124; }
     }
