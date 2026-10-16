@@ -207,17 +207,8 @@ export function main() {
 
   const pushCmd = `git push ${REMOTE} ${localBranch}:${branch}`;
   if (flag("--push")) {
-    // The same queue hold bash-guard.sh applies to a hand push (#2182): this
-    // push runs from a child process the hook never sees.
-    if (process.env.APEX_PUSH_HOLD !== "0") {
-      const q = spawnSync("node", ["tools/ci/queue-depth.mjs", "--push", pushCmd], { cwd: ROOT, encoding: "utf8", timeout: 90e3 });
-      const line = (q.stdout || "").trim();
-      if (q.status === 1) {
-        log(`NOT PUSHED: ${line} — verified on ${localBranch}; publish when queue-depth says ok: ${pushCmd}`);
-        return 2;
-      }
-      if (line) log(line);
-    }
+    // No queue hold (retired 2026-10-16, CI/CD review #2333 finding 7): a
+    // verified sync publishes at once.
     must(git(["push", REMOTE, `${localBranch}:${branch}`]), `push to origin/${branch}`);
     log(`pushed to origin/${branch}`);
     const back = returnTo(startedOn, localBranch);
