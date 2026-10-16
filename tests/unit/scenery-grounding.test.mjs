@@ -200,3 +200,28 @@ for (const guard of ["clear", "road", "unsupported"]) {
     }
   });
 }
+
+// Exercise the same grouping function audit() uses after support propagation.
+test("a low unsupported neighbor cannot hide a genuinely floating primitive", () => {
+  const { clusterFloatingPrimitives } = createRequire(import.meta.url)("../../tools/track/float-audit.cjs");
+  const member = (gap, name) => ({ gap, p: {
+    name, minX: 0, maxX: 1, minY: gap, maxY: gap + 1, minZ: 0, maxZ: 1,
+  } });
+  const track = { n: 1, px: [0], pz: [0] };
+  for (const members of [[member(6, "high"), member(1.1, "low")],
+                         [member(1.1, "low"), member(6, "high")]]) {
+    const { report, floating } = clusterFloatingPrimitives(members, track);
+    assert.equal(report.length, 1, "preserve neighboring-object grouping");
+    assert.equal(floating.length, 1, "6 m defect remains flagged");
+    assert.equal(floating[0], report[0]);
+    assert.equal(report[0].cells, 2, "retain both unsupported members");
+    assert.equal(report[0].minGap, 1.1);
+    assert.equal(report[0].maxGap, 6);
+    assert.match(report[0].src, /highx1/);
+    assert.match(report[0].src, /lowx1/);
+  }
+  assert.equal(clusterFloatingPrimitives([member(1.2, "boundary")], track).floating.length, 0);
+  assert.equal(clusterFloatingPrimitives([member(1.204, "above")], track).floating.length, 1,
+    "display rounding cannot erase a gap above the unchanged 1.2 m threshold");
+  assert.equal(clusterFloatingPrimitives([], track).floating.length, 0);
+});

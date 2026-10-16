@@ -149,6 +149,7 @@
   /* CHECKS rows are full-width taps on phone (layout-audit ~33px tall). */
   min-height: var(--tap-paint);
   box-sizing: border-box;
+  overflow-wrap: anywhere;
 }
 .td-issue[data-level="red"] { border-left-color: var(--slower); }
 .td-issue[data-level="amber"] { border-left-color: var(--sec-slow); }
@@ -183,6 +184,10 @@
   border: 1px solid var(--plate-line);
   border-radius: var(--r-md);
   min-width: 0;
+}
+.td-card > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .td-card canvas { width: 100%; aspect-ratio: 16 / 11; background: var(--surf-1); border-radius: var(--r-sm); }
 /* Empty MY CIRCUITS lives inside .td-grid: without a full-row span it sat in
@@ -621,6 +626,87 @@
   /* Two lines at most; the live region still announces the whole message. */
   #trackdesigner .td-foot .td-msg { flex: 1 1 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   #trackdesigner .td-foot .td-msg:empty { display: none; }
+}
+
+/* Portrait toolbar safety: the floating edit strip covered the first row of
+   control points on phones. Give it its own auto-sized row so every map point
+   remains visible and tappable; short landscape keeps the dedicated side rail
+   above. Scenery already owns this row and its live-map row below. */
+@media (max-width: 760px) and (orientation: portrait) {
+  #trackdesigner:not([data-mode="scenery"]) .td-stage {
+    grid-template-rows: auto minmax(72px, 1fr) auto;
+  }
+  #trackdesigner:not([data-mode="scenery"]) .td-stage > .td-chips[data-role="toolbar"] {
+    position: static;
+    grid-row: 1;
+    pointer-events: auto;
+  }
+  #trackdesigner:not([data-mode="scenery"]) .td-stage > canvas:not([data-role="profile"]) {
+    grid-row: 2;
+  }
+  #trackdesigner:not([data-mode="scenery"]) .td-stage > canvas[data-role="profile"] {
+    grid-row: 3;
+  }
+}
+
+/* The editor follows the workflow, while collection and help get full pages. */
+#trackdesigner [data-role="mode-bar"] { display: flex; flex-direction: row; align-items: center; gap: calc(var(--gap) / 2); min-width: 0; }
+#trackdesigner [aria-label="Designer mode"] { flex: 1; display: flex; flex-wrap: nowrap; }
+#trackdesigner [aria-label="Designer mode"] > button { flex: 1 0 auto; white-space: nowrap; }
+#trackdesigner [aria-label="Designer mode"] > button::before { content: attr(data-step); color: var(--dim); margin-inline-end: calc(var(--gap) / 3); }
+#trackdesigner .td-rail { scroll-padding-top: calc(var(--tap-paint) + var(--gap) * 2); overflow-anchor: none; }
+#trackdesigner [data-role="mode-bar"] [data-role="context-help"] { flex: none; }
+#trackdesigner .td-stage { container-type: inline-size; container-name: designer-map; }
+@media (min-height: 501px) {
+  #trackdesigner .td-stage > .td-chips[data-role="toolbar"] .sel-chip { flex: 1 1 0; min-width: 0; padding-inline: calc(var(--gap) / 3); }
+  @container designer-map (max-width: 520px) {
+    #trackdesigner .td-stage > .td-stats, #trackdesigner .td-stage > .td-hint { display: none; }
+    #trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] { height: max(56px, calc(var(--chip-h) * 1.5)); min-height: 56px; }
+  }
+}
+#trackdesigner details[data-role="inspector-section"] { display: block; border-top: 1px solid var(--plate-line); padding-block: calc(var(--gap) / 2); }
+#trackdesigner details[data-role="inspector-section"] > summary { cursor: pointer; min-height: var(--tap-paint); align-content: center; }
+#trackdesigner details[data-role="inspector-section"] > :not(summary) { margin-top: calc(var(--gap) / 2); }
+#trackdesigner summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+#trackdesigner:is([data-pane="library"], [data-pane="howto"]) .td-stage,
+#trackdesigner:is([data-pane="library"], [data-pane="howto"]) [data-role="mode-bar"] { display: none; }
+#trackdesigner:is([data-pane="library"], [data-pane="howto"]) .td-body { grid-template-rows: minmax(0, 1fr); }
+#trackdesigner:is([data-pane="library"], [data-pane="howto"]) .td-rail { grid-column: 1 / -1; grid-row: 1; container-type: normal; padding-inline: var(--gap); }
+#trackdesigner [data-pane="library"] > .td-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+#trackdesigner [data-pane="howto"] { max-width: 70em; width: 100%; align-self: center; }
+#trackdesigner [data-role="theme-summary"] { background: var(--bg); padding-block: calc(var(--gap) / 2); }
+#trackdesigner [data-role="theme-summary"] [data-role="theme-blurb"] { min-height: 0; }
+#trackdesigner [data-role="look-summary"] { overflow-wrap: anywhere; }
+#trackdesigner .td-foot { display: grid; grid-template-columns: repeat(3, minmax(0, max-content)) minmax(0, 1fr); align-items: center; gap: calc(var(--gap) / 2); }
+#trackdesigner [data-role="file-menu"] { position: relative; justify-self: end; min-width: 0; }
+#trackdesigner [data-role="file-menu"] > summary { cursor: pointer; text-align: center; }
+#trackdesigner [data-role="file-menu"] [data-role="file-actions"] { position: absolute; bottom: calc(100% + var(--gap)); right: 0; width: min(80vw, 28em); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: var(--gap); background: var(--bg); border: 1px solid var(--plate-line); border-radius: var(--r-md); z-index: 5; box-sizing: border-box; }
+#trackdesigner [data-role="workspace-status"] { grid-column: 1 / -1; align-items: center; min-width: 0; }
+#trackdesigner [data-role="workspace-status"] .td-msg { grid-column: auto; flex: 1 1 12em; }
+#trackdesigner [data-role="checks-summary"] { flex: none; font-size: var(--fs-micro); }
+#trackdesigner [data-role="checks-summary"][data-level="red"] { border-color: var(--slower); color: var(--slower); }
+#trackdesigner [data-role="checks-summary"][data-level="amber"] { border-color: var(--sec-slow); }
+@media (max-width: 760px) {
+  #trackdesigner [data-role="mode-bar"] { flex-wrap: wrap; }
+  #trackdesigner [data-role="context-help"] { min-height: var(--tap-paint); }
+  #trackdesigner [aria-label="Designer mode"] { flex-basis: 100%; }
+  #trackdesigner [data-role="context-help"] { display: none; }
+  #trackdesigner .td-foot { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  #trackdesigner [data-role="file-menu"] { justify-self: stretch; }
+  #trackdesigner [data-role="file-menu"] > summary { padding-inline: calc(var(--gap) / 3); }
+  #trackdesigner [data-role="workspace-status"] { gap: calc(var(--gap) / 3); }
+  #trackdesigner [data-role="workspace-status"] .td-msg { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  #trackdesigner:not([data-mode="scenery"]) .td-stage { grid-template-rows: minmax(72px, 1fr) auto; }
+  #trackdesigner:not([data-mode="scenery"]) .td-stage > canvas:not([data-role="profile"]) { grid-row: 1; }
+  #trackdesigner:not([data-mode="scenery"]) .td-stage > canvas[data-role="profile"] { grid-row: 2; }
+  #trackdesigner:not([data-mode="scenery"]) .td-stage > .td-chips[data-role="toolbar"] { grid-column: 2; grid-row: 1 / span 2; }
+  #trackdesigner [data-role="workspace-status"] { flex-wrap: nowrap; }
+  #trackdesigner [data-role="workspace-status"] .td-msg { min-width: 0; }
+}
+@media (max-width: 760px) and (orientation: portrait) {
+  #trackdesigner .td-body { grid-template-rows: auto minmax(0, 1.3fr) minmax(0, 1fr); }
 }
 
 }

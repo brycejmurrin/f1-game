@@ -9,10 +9,14 @@ import path from "node:path";
 import vm from "node:vm";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { parseFlags } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
 const { buildContext } = require(path.join(ROOT, "tools/track/verify-track.cjs"));
+
+parseFlags(process.argv.slice(2), ["--help"]);
+if (process.argv.includes("--help")) { console.log("usage: node tools/shot/cam-corners.mjs   # straight-vs-corner camera swing, no browser"); process.exit(0); }
 
 const TRACKS = ["monaco", "spa", "suzuka", "monza", "zandvoort"];
 const MODES = ["chase", "far", "drift", "low", "reverse", "heli", "side", "cinematic", "overhead"];

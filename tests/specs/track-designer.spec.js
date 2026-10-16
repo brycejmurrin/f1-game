@@ -18,6 +18,129 @@ async function raceAndBuild(page, id) {
 
 const LANDSCAPE = { width: 1180, height: 720 };
 
+test.describe("Touch designer workspace", () => {
+  test.use({ hasTouch: true, isMobile: true });
+  test("touch scrolling keeps the map, profile and scenery sections reachable", async ({ page }) => {
+    await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
+    const root = page.locator("#trackdesigner");
+    for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+      await page.setViewportSize(viewport);
+      await root.locator('[data-role="mode-bar"] [data-mode="edit"]').tap();
+      const stage = await root.locator('.td-stage').boundingBox();
+      const profile = await root.locator('canvas[data-role="profile"]').boundingBox();
+      const layout = await root.evaluate((e) => ({ viewport: [innerWidth, innerHeight], zoom: getComputedStyle(e).zoom,
+        regions: [...e.querySelectorAll('.sheet-head,.td-body,.td-stage,.td-rail,.td-foot')].map((r) => ({ role: r.className, height: getComputedStyle(r).height, rows: getComputedStyle(r).gridTemplateRows })),
+        rows: [...e.querySelector('.td-stage').children].map((r) => ({ role: r.dataset.role, height: getComputedStyle(r).height, min: getComputedStyle(r).minHeight, display: getComputedStyle(r).display })) }));
+      expect(profile.y + profile.height, JSON.stringify(layout)).toBeLessThanOrEqual(stage.y + stage.height + 1);
+      await root.locator('[data-role="mode-bar"] [data-mode="scenery"]').tap();
+      for (const id of ["themes", "atmosphere", "objects"]) {
+        await root.locator(`[data-scenery-section="${id}"]`).tap();
+        await expect(root.locator(`#td-scenery-panel-${id}`)).toBeVisible();
+        await root.locator('.td-rail').evaluate((e) => { e.scrollTop = e.scrollHeight; });
+      }
+      expect(await root.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+    }
+  });
+});
+
+test("workspace organization preserves controls and scroll across modes and library", async ({ page }, testInfo) => {
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
+  for (const viewport of [{ ...LANDSCAPE, scale: 1 }, { width: 390, height: 844, scale: 1 }, { width: 734, height: 343, scale: 1 }, { ...LANDSCAPE, scale: 1.5 }]) {
+    await page.setViewportSize(viewport);
+    const root = page.locator("#trackdesigner"), rail = root.locator(".td-rail");
+    await root.evaluate((e, scale) => e.style.setProperty("--ui-scale", String(scale)), viewport.scale || 1);
+    for (const id of ["draw", "edit", "elevation", "scenery", "test"]) {
+      await root.locator(`[data-role="mode-bar"] [data-mode="${id}"]`).click();
+      await expect(root).toHaveAttribute("data-mode", id);
+      await rail.evaluate((e) => { e.scrollTop = 0; });
+      await expect(root.locator('[data-role="checks-summary"]')).toBeVisible();
+      expect(await root.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+      if (id === "edit") {
+        await page.screenshot({ path: testInfo.outputPath(`workspace-${viewport.width}-${viewport.scale || 1}-edit.jpg`) });
+        const toolbar = root.locator('[data-role="toolbar"]'), map = root.locator('.td-stage > canvas:not([data-role="profile"])');
+        const t = await toolbar.boundingBox(), m = await map.boundingBox();
+        expect(t.y + t.height <= m.y + 1 || t.x >= m.x + m.width - 1).toBe(true);
+        const profile = await root.locator('.td-stage > canvas[data-role="profile"]').boundingBox();
+        const stage = await root.locator('.td-stage').boundingBox();
+        const layout = await root.locator('.td-stage').evaluate((e) => ({
+          width: getComputedStyle(e).width, height: getComputedStyle(e).height,
+          container: getComputedStyle(e).containerName,
+          rows: [...e.children].map((c) => ({ tag: c.tagName, role: c.dataset.role,
+            display: getComputedStyle(c).display, height: getComputedStyle(c).height,
+            flex: getComputedStyle(c).flex, minHeight: getComputedStyle(c).minHeight,
+            buttons: [...c.querySelectorAll('button')].map((b) => getComputedStyle(b).flex) })),
+        }));
+        expect(profile.y + profile.height, JSON.stringify(layout)).toBeLessThanOrEqual(stage.y + stage.height + 1);
+      }
+      if (id === "scenery") {
+        for (const section of ["themes", "atmosphere", "objects"]) {
+          await root.locator(`[data-scenery-section="${section}"]`).click();
+          await expect(root.locator(`#td-scenery-panel-${section}`)).toBeVisible();
+          if (section === "atmosphere") {
+            await root.getByRole("button", { name: "GOLDEN HOUR", exact: true }).click();
+            await expect(root.locator('[data-role="look-summary"]')).toContainText("DUSK");
+            await root.getByRole("button", { name: "Reset time of day, trees and crowd to theme defaults", exact: true }).click();
+            await expect(root.locator('[data-role="look-summary"]')).toContainText("AUTO");
+          }
+          await rail.evaluate((e) => { e.scrollTop = e.scrollHeight; });
+          expect(await rail.evaluate((e) => e.scrollTop + e.clientHeight >= e.scrollHeight - 1)).toBe(true);
+        }
+        await expect(root.locator('[data-role="look-summary"]')).not.toContainText("undefined");
+      }
+      await rail.evaluate((e) => { e.scrollTop = e.scrollHeight; });
+    }
+    await page.getByRole("textbox", { name: "Circuit name", exact: true }).fill("ABCDEFGHIJKLMNOPQRSTUVWX");
+    await page.getByRole("button", { name: "SAVE", exact: true }).click();
+    if (viewport.width > 760) {
+      await root.getByRole("button", { name: "Help with test", exact: true }).click();
+      await expect(root.locator('[data-help-task="test"]')).toHaveJSProperty("open", true);
+      await root.getByRole("button", { name: "OPEN TEST", exact: true }).click();
+      await expect(root).toHaveAttribute("data-mode", "test");
+    }
+    await root.getByRole("tab", { name: "MY CIRCUITS", exact: true }).click();
+    await expect(root.locator(".td-stage")).toBeHidden();
+    await expect(root.locator(".td-card > strong").first()).toHaveText("ABCDEFGHIJKLMNOPQRSTUVWX");
+    await page.screenshot({ path: testInfo.outputPath(`workspace-${viewport.width}-${viewport.scale || 1}-library.jpg`) });
+    await root.getByRole("tab", { name: "HOW TO", exact: true }).click();
+    await rail.evaluate((e) => { e.scrollTop = e.scrollHeight; });
+    const helpScroll = await rail.evaluate((e) => e.scrollTop);
+    expect(helpScroll, "the long help page must have a real scrollport").toBeGreaterThan(0);
+    // Click the pinned tabs as a user does, without scrollIntoView moving the
+    // rail before the click (which would replace the position being saved).
+    for (const name of ["DESIGN", "HOW TO"]) {
+      const box = await root.getByRole("tab", { name, exact: true }).boundingBox();
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    }
+    await expect.poll(() => rail.evaluate((e) => e.scrollTop)).toBe(helpScroll);
+    await root.locator('[data-role="file-menu"] > summary').click();
+    await expect(root.getByRole("button", { name: "EXPORT", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(root).toBeVisible();
+    await expect(root.getByRole("button", { name: "EXPORT", exact: true })).toBeHidden();
+    await root.locator('[data-role="file-menu"] > summary').click();
+    await root.dispatchEvent("cancel", { bubbles: true, cancelable: true });
+    await expect(root).toBeVisible();
+    await expect(root.getByRole("button", { name: "EXPORT", exact: true })).toBeHidden();
+    await root.locator('[data-role="checks-summary"]').click();
+    await expect(root).toHaveAttribute("data-pane", "design");
+    await expect(root).toHaveAttribute("data-mode", "test");
+    await root.getByRole("tab", { name: "MY CIRCUITS", exact: true }).click();
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("clipboard blocked for regression test"); } } });
+      document.execCommand = () => false;
+    });
+    await root.locator('[data-role="file-menu"] > summary').click();
+    await root.getByRole("button", { name: "SHARE", exact: true }).click();
+    const copy = root.getByRole("textbox", { name: "Share code or link", exact: true });
+    await expect(root).toHaveAttribute("data-pane", "design");
+    await expect(copy).toBeVisible(); await expect(copy).toBeFocused();
+    await expect(copy).toHaveValue(/#track=APXT1/);
+  }
+  expect(errors).toEqual([]);
+});
+
 async function bootClean(page) {
   // An init script runs on EVERY navigation, the reload case's included — so
   // the wipe runs once per page session, or the reload would erase what it is
@@ -455,6 +578,7 @@ test.describe("Track designer", () => {
     await openDesigner(page);
     const st = await randomiseGreen(page, 7);
     expect(st.corners.length).toBeGreaterThanOrEqual(3);
+    await page.locator('#trackdesigner details[data-role="inspector-section"] > summary', { hasText: /^TURNS$/ }).click();
     // Address the corners by name; scenery and validation have their own lists.
     const rows = page.getByRole("list", { name: "Corners, in driving order", exact: true }).locator(".td-issue");
     await expect(rows).toHaveCount(st.corners.length);

@@ -61,3 +61,16 @@ export function scanPlaywrightLines(stdout) {
   out.busy = out.suite || out.hostBrowser;
   return out;
 }
+
+// CLI, only when run directly: `--scan` classifies the live process table, anything else prints usage.
+import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (process.argv.includes("--scan")) {
+    const ps = execFileSync("ps", ["-eo", "pid,args"], { encoding: "utf8" });
+    console.log(JSON.stringify(scanPlaywrightLines(ps)));
+  } else {
+    console.log("usage: node tools/ci/playwright-occupancy.mjs --scan\n"
+      + "  Prints {live,busy,suite,hostMcp,hostBrowser,pids} for the process table as JSON (busy = a suite or a host browser).");
+  }
+}

@@ -40,6 +40,17 @@ const opt = (name) => {
   return i >= 0 ? argv[i + 1] : null;
 };
 
+// Resolve the longest existing prefix too: an output may not exist yet, but a
+// parent symlink can already point into the source tree. realpath semantics:
+// https://nodejs.org/api/fs.html#fsrealpathsyncpath-options
+function resolveExistingPath(value) {
+  try { return fs.realpathSync(value); }
+  catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    return path.join(resolveExistingPath(path.dirname(value)), path.basename(value));
+  }
+}
+
 /**
  * Refuse a destination `stageSite` must never delete (2026-10-10, S1). The
  * stage REPLACES `dest` with a recursive rmSync, and `--out .`, `--out ..`,
@@ -53,6 +64,9 @@ const opt = (name) => {
  * @param {string} root the checkout being staged
  */
 export function assertStageDest(dest, root) {
+  const realDest = resolveExistingPath(dest);
+  const realRoot = fs.realpathSync(root);
+  if (realDest !== dest || realRoot !== root) assertStageDest(realDest, realRoot);
   const rel = path.relative(dest, root);   // "" = dest is root; no ".." = dest is an ancestor of root
   if (rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))) {
     throw new Error(`stage: refusing --out ${dest}: it is the checkout (${root}) or contains it`);
@@ -86,21 +100,23 @@ export function stageSite(outDir, opts = {}) {
   const root = opts.root || ROOT;
   const dest = path.resolve(outDir);
   assertStageDest(dest, path.resolve(root));
+  // Validate the complete input before replacing a usable earlier stage.
+  for (const name of [...STAGE_ROOT_FILES, ...STAGE_DIRS]) {
+    const src = path.join(root, name);
+    const kind = STAGE_DIRS.includes(name) ? "directory" : "file";
+    if (!fs.existsSync(src) || !(kind === "directory" ? fs.statSync(src).isDirectory() : fs.statSync(src).isFile())) {
+      throw new Error(`stage: missing ${kind} ${name} (expected at ${src})`);
+    }
+  }
   fs.rmSync(dest, { recursive: true, force: true });
   fs.mkdirSync(dest, { recursive: true });
 
   for (const name of STAGE_ROOT_FILES) {
     const src = path.join(root, name);
-    if (!fs.existsSync(src)) {
-      throw new Error(`stage: missing root file ${name} (expected at ${src})`);
-    }
     fs.copyFileSync(src, path.join(dest, name));
   }
   for (const name of STAGE_DIRS) {
     const src = path.join(root, name);
-    if (!fs.existsSync(src) || !fs.statSync(src).isDirectory()) {
-      throw new Error(`stage: missing directory ${name}/ (expected at ${src})`);
-    }
     fs.cpSync(src, path.join(dest, name), { recursive: true, dereference: true });
   }
   return dest;

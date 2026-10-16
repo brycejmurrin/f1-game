@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { parseFlags } from "../lib/cli-args.mjs";
 import { fileURLToPath } from "node:url";
 import {
   buildTrackShotSurveyPlan,
@@ -20,6 +21,10 @@ import {
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const argv = process.argv.slice(2);
+if (!argv.includes("--help") && !argv.includes("-h")) {
+  parseFlags(argv, ["--count", "--dry-run", "--fracs", "--gl", "--label", "--no-index", "--no-panel", "--out",
+    "--plan-json", "--preset", "--resume", "--tod", "--track", "--tracks", "--weather"]);
+}
 const flag = (n, d) => {
   const i = argv.indexOf(n);
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d;

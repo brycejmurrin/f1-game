@@ -160,6 +160,14 @@ if (nothingToRun && args.includes("--list")) {
   process.exit(0);
 }
 
+// --help answers before the static server binds a port or a twin runs.
+if (args.includes("--help") || args.includes("-h")) {
+  console.log("usage: node tools/ci/run-playwright.mjs [playwright test options] [spec …]\n"
+    + "  Launches `playwright test` on a free port with port-suffixed report paths (the engine behind npm run test:*).\n"
+    + "  Specs with a VM twin run in node unless --with-twinned / APEX_WITH_TWINNED=1.  --help: this text; no server starts.");
+  process.exit(0);
+}
+
 const managed = process.env.APEX_PORT ? null : await startStaticServer();
 const port = process.env.APEX_PORT || String(managed.port);
 // `--last-failed` reads <outputDir>/.last-run.json, and outputDir is suffixed

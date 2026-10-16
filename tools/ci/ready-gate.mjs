@@ -232,6 +232,11 @@ export function evaluate({ sha, localOnly = false, request = api, localOpts } = 
  *  `- [ ]` (the template's placeholder) is open. HTML comments — where the
  *  template keeps its example items — are not part of the list.
  *  @returns {{ state: "none"|"open"|"done", items: number, open: string[] }} */
+/** The `= ready-gate …` line; sha is the FULL 40 chars because a session pastes it into a merge call (#2430). */
+export function verdictLine(v) {
+  return `= ready-gate ${v.state} — ${v.evidence} sha=${v.sha || ""} source=${v.source || "—"}`;
+}
+
 export function planVerdict(body) {
   const text = String(body || "").replace(/<!--[\s\S]*?-->/g, "");
   const head = /^##[ \t]+Plan\b.*$/m.exec(text);
@@ -294,7 +299,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     process.exit(3);
   }
   const v = withPlan(evaluate({ sha: resolved.sha, localOnly }), resolved.body);
-  const line = `= ready-gate ${v.state} — ${v.evidence} sha=${(v.sha || "").slice(0, 7)} source=${v.source || "—"}`;
+  const line = verdictLine(v);
   if (asJson) console.log(JSON.stringify({ ...v, pr: resolved.pr || null }, null, 2));
   else {
     if (v.planWarning) say(`warning: ${v.planWarning}`);

@@ -269,3 +269,10 @@ test("the stylesheets the blessed menu PNGs see route to baseline (incident 2026
   }
   assert.ok(!json("css/hud.css").groups.some((g) => g.group === "baseline"), "a HUD-only sheet stays ui-only");
 });
+
+test("an index.html edit selects the service-worker group (the precached shell and its boot guard)", () => {
+  const groups = json("index.html").groups.map((g) => g.group);
+  assert.ok(groups.includes("service-worker"), `index.html must pick service-worker, got ${groups}`);
+  assert.ok(groups.includes("baseline") && groups.includes("ui"), "the existing routes stay");
+  assert.ok(!json("css/hud.css").groups.some((g) => g.group === "service-worker"), "a stylesheet edit does not drag it in");
+});

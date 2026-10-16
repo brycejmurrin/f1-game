@@ -343,7 +343,12 @@ export function ciOutputs(result, { neededOnly = false } = {}) {
   };
 }
 
+const USAGE = `usage: node tools/ci/pick-unit-slices.mjs [paths…] [--since REF] [--json] [--all] [--github-output] [--needed-only] [--costs]
+  Which Pure-node CI matrix slices a diff needs; fail-safe: an unclaimed path selects every slice.
+  no paths: the diff against the deploy merge-base.   --help: this text, nothing is computed.`;
+
 function main(argv = process.argv.slice(2)) {
+  if (argv.includes("--help") || argv.includes("-h")) { console.log(USAGE); return; }
   let result;
   try {
     if (argv.includes("--all")) {

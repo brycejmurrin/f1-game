@@ -536,6 +536,7 @@
     "js/editor/followup-tools.js",
     "js/editor/scenery-panel.js",
     "js/editor/bridge-panel.js",
+    "js/editor/workspace.js",
     "js/editor/designer.js"
   ],
     LAZY_EDITOR_EDGES: [
@@ -629,6 +630,10 @@
     ],
     [
       "js/editor/bridge-panel.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/workspace.js",
       "js/editor/designer.js"
     ]
   ],

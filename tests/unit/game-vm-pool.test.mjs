@@ -78,3 +78,18 @@ test("carMeshes:false stubs the builders and refuses a caller that measures", ()
   assert.throws(() => Car3D.build("#f00", "#00f", { measure: true }), /carMeshes:false/,
     "a caller that MEASURES a car mesh must fail loudly, not read a 0-vertex car");
 });
+
+// Closing owns both worker termination and the promises returned to callers.
+test("closing a pool settles active and queued jobs before returning", async () => {
+  const closing = createPool({ size: 1 });
+  const active = closing.run({ circuit: "active-circuit", probe: () => new Promise(() => {}) });
+  const queued = closing.run({ circuit: "queued-circuit", probe: () => 42 });
+  const activeRejected = assert.rejects(active, /active-circuit.*pool closed while the job was running/);
+  const queuedRejected = assert.rejects(queued, /pool closed before the job ran/);
+  await closing.close();
+  await Promise.all([activeRejected, queuedRejected]);
+  assert.equal(closing.stats().running, 0);
+  assert.equal(closing.stats().queued, 0);
+  await assert.rejects(closing.run({ circuit: "late", probe: () => 42 }), /pool is closed/);
+  await closing.close();
+});

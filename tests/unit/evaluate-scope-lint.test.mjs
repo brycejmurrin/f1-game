@@ -51,6 +51,21 @@ test("waitForFunction is checked too — same boundary, same trap", () => {
   assert.equal(bad[0].method, "waitForFunction");
 });
 
+for (const method of ["$eval", "$$eval"]) {
+  test(`${method} checks the second argument callback for Node captures`, () => {
+    const bad = lintSource(`const LIMIT = 40;
+      await page.${method}(".car", (elements) => elements.length > LIMIT);`);
+    assert.equal(bad.length, 1);
+    assert.equal(bad[0].name, "LIMIT");
+    assert.equal(bad[0].method, method);
+  });
+
+  test(`${method} allows a value passed through its third argument`, () => {
+    assert.deepEqual(lintSource(`const LIMIT = 40;
+      await page.${method}(".car", (elements, limit) => elements.length > limit, LIMIT);`), []);
+  });
+}
+
 // The exact shape 58614db2 shipped, kept inline so this file asserts something
 // real even where the commit is unreachable. CI's guards job checked out SHALLOW
 // (`actions/checkout` with no fetch-depth) when this was written, so a
