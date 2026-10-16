@@ -4,7 +4,7 @@ Where Claude Code sessions on this repo get stuck, what they waste, and what to 
 `session_015NYY5os8qCWtYUJjRUXAUu` (Opus) at Bryce's request ("hunting through session transcripts for issues,
 ways to improve tools, ci cd, where they are getting stuck, where we may want new tools, skills or subagents"),
 with 11 Sonnet worker sessions digesting transcripts through skill `agent-fleet` `references/transcripts.md`.
-Tracking issue: #2379 (sub-issues #2380–#2389).
+Tracking issue: #2379 (sub-issues #2380–#2388).
 
 ## Method and coverage
 
@@ -145,8 +145,6 @@ handles only a live Playwright run and no doc tells a worker the sanctioned repl
 
 - Merge Desk archived `113 of your 114 open sessions` in one 216 s turn, including two live orchestrators; the
   desk id in memory (`session_01WQY3pk…`) now returns `not found` (memory corrected in this PR).
-- `who-is-on-it.mjs --release` prints only the generic "stand down or coordinate" banner, so a worker cannot
-  tell whether its release took (reproduced on the current tree).
 - Configured vs served model drift in the 2026-10-10 fleet (configured Sonnet served Opus, and the reverse).
 
 ### 11. Mining the transcripts is itself expensive
@@ -165,6 +163,7 @@ page is rejected (`Invalid before_id`). Workers fell back to metadata-only for 2
 | triage subagent hit its 20-turn limit with no report | `ci-red-triage.md` now delivers a partial report before its last two turns |
 | `apex_garage close` left its lock and Chromium alive | `apex-extras.mjs` close now returns `lockFree: true`; job cancel reports survivors |
 | Stop hook flagging `deploy.mjs`'s own merge commits | the deploy branch is protected; work lands through PRs |
+| `who-is-on-it.mjs --release` printed only the generic banner (2026-10-10) | it now prints `# released <claim> @ <sha>` first (checked on dbc5cfd5) |
 | two browser groups at once (loadavg 18), version-bump collisions, github.io egress rediscovered | rules 4–5 / `test-bg.mjs`, `?v=dev` shell, agent `deploy-research` |
 
 ## Proposals
@@ -180,9 +179,8 @@ page is rejected (`Invalid before_id`). Workers fell back to metadata-only for 2
 | 7 | tool | `deploy.mjs --wait / --status` and a generic `wait-for.mjs` (new, in tools/ci) (`--load-below`, `--file-nonempty`, `--pid-gone`) | ends hand-written pgrep/until loops and their inverted exit codes | #2386 |
 | 8 | tool | a new `pr-body.mjs` in tools/ci: render the template, tick/strike a Plan item by index without clobbering others, add labels (`run-ci`) through the REST API | removes ad-hoc python/curl body edits and Plan clobbering | #2387 |
 | 9 | process | Merge Desk re-cut sends the original worker `STAND DOWN <PR> recut by <PR>`; workers re-check `who-is-on-it` before opening a replacement | saves the 3 h duplicate cycles | #2388 |
-| 10 | tool | `who-is-on-it.mjs --release` prints `released: <claim>` or `no claim for this session` | workers can trust the release | #2389 |
-| 11 | skill | handoff convention: a handoff names branch + sha and starts with `git fetch origin <branch>`; "write a handoff prompt" is chat text unless a file is asked for; a `need_input` question on a session being archived becomes an issue | the 4 failed cold starts; lost decisions | #2379 |
-| 12 | launch | launch template asserts `permission_mode: auto` and the intended model, and the orchestrator checks both with `get_session` | the default/plan-mode stalls of finding 6 | #2379 |
+| 10 | skill | handoff convention: a handoff names branch + sha and starts with `git fetch origin <branch>`; "write a handoff prompt" is chat text unless a file is asked for; a `need_input` question on a session being archived becomes an issue | the 4 failed cold starts; lost decisions | #2379 |
+| 11 | launch | launch template asserts `permission_mode: auto` and the intended model, and the orchestrator checks both with `get_session` | the default/plan-mode stalls of finding 6 | #2379 |
 
 Lower-value items kept in the tracking issue only: tools-less worktree guard skip for image branches
 (`APEX_SKIP_GUARDS` was discovered by the model), `build-gallery.cjs` REST fallback on GraphQL 403, a
