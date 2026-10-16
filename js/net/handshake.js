@@ -334,7 +334,7 @@ const NetHandshake = (function () {
   // rides in the FRAGMENT so it never reaches a server, not even in a log.
   function inviteUrl(code) {
     try {
-      const base = location.origin + location.pathname;
+      const base = typeof Native !== "undefined" && Native.shareBase ? Native.shareBase() : location.origin + location.pathname;
       return base + "#vs=" + code;
     } catch (e) { return null; }
   }

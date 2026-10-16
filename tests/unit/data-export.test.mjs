@@ -78,7 +78,7 @@ class El {
   remove() {}
 }
 
-function boot(fetchImpl) {
+function boot(fetchImpl, nativeDownload) {
   let now = EPOCH;
   let seq = 0;
   const timers = new Map();
@@ -105,6 +105,7 @@ function boot(fetchImpl) {
     Uint8Array,
     Uint32Array,
     Blob,
+    NativeDownload: nativeDownload,
     setTimeout(fn, ms) {
       const id = ++seq;
       timers.set(id, { fn, at: now + (Number(ms) || 0) });
@@ -300,6 +301,32 @@ function assertStartlines(parsed, { year, keys }) {
 function jsonFiles(entries) {
   return entries.filter((entry) => entry.name.endsWith(".json"));
 }
+
+test("native ZIP download waits for sharing and never reports a cancelled or failed share as downloaded", async () => {
+  for (const outcome of ["success", "cancel", "failure"]) {
+    let resolve, reject, saved;
+    const held = new Promise((yes, no) => { resolve = yes; reject = no; });
+    const h = boot(openF1Fetch(() => ({ body: [] })), {
+      viable: () => true, saveBlob: (blob, name) => { saved = { blob, name }; return held; },
+    });
+    const wrap = await h.context.DataExport.create({ el: (tag, cls, text) => new El(tag, cls, text), clear() {}, isOpen: () => true }).loadExport();
+    const [gather, download] = find(wrap, "dh-export-row").children;
+    const status = find(wrap, "dh-export-status");
+    gather.click();
+    await h.pump(() => !download.disabled && gather.textContent === "Gather");
+    download.click();
+    await h.pump(() => !!saved);
+    assert.equal(saved.name, "apex-startlines-2026.zip");
+    assert.equal(saved.blob.type, "application/zip");
+    assert.equal(download.disabled, true);
+    assert.doesNotMatch(status.textContent, /Downloaded/);
+    assert.equal(h.downloadName(), null, "native ZIP must not fall back to an intercepted anchor");
+    if (outcome === "success") resolve(); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
+    await h.pump(() => !download.disabled);
+    assert.match(status.textContent, outcome === "success" ? /Downloaded apex-startlines-2026.zip/ : outcome === "cancel" ? /ZIP ERROR: Share canceled/ : /ZIP ERROR: disk full/);
+    if (outcome !== "success") assert.doesNotMatch(status.textContent, /Downloaded/);
+  }
+});
 
 test("export zip lists every circuit from the OpenF1 mock, with CRC-32 and JSON shape", async () => {
   const out = await runExport(openF1Fetch());

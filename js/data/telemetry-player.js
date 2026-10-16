@@ -206,22 +206,24 @@ const DataTelemetryPlayer = (function () {
         g.drs[i].textContent = open ? "OPEN" : "—";
         g.drs[i].classList.toggle("dh-on", open);
       }
+      // Once the reference finishes, its distance and gap clock must stop together.
+      const refT = Math.min(t, view.primary.cum.t[view.primary.cum.t.length - 1]);
       if (g.delta && view.compare) {
-        const dP = distAtT(view.primary.cum, t);
-        const delta = timeAtDist(view.compare.cum, dP) - t;   // >0: compare is behind
+        const dP = distAtT(view.primary.cum, refT);
+        const delta = timeAtDist(view.compare.cum, dP) - refT;   // >0: compare is behind
         g.delta.textContent = signed(delta, 2) + "s";
         g.delta.classList.toggle("dh-pos", delta > 0.02);
         g.delta.classList.toggle("dh-neg", delta < -0.02);
       }
       // lane board (3-4 lanes): live speed + gap to the reference for every lane
       if (g.board) {
-        const dRef = distAtT(view.primary.cum, t);
+        const dRef = distAtT(view.primary.cum, refT);
         view.laps.forEach(function (lane, i) {
           const cell = g.board[i]; if (!cell) return;
           const cc = sampleAt(lane.car, t);
           cell.spd.textContent = (cc && cc.speed !== null) ? Math.round(cc.speed) : "—";
           if (cell.ref) return;
-          const dl = timeAtDist(lane.cum, dRef) - t;   // >0: this lane is behind the ref
+          const dl = timeAtDist(lane.cum, dRef) - refT;   // >0: this lane is behind the ref
           cell.dl.textContent = signed(dl, 2);
           cell.dl.classList.toggle("dh-pos", dl > 0.02);
           cell.dl.classList.toggle("dh-neg", dl < -0.02);

@@ -13,6 +13,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import os from "node:os";
+import path from "node:path";
 import { check, readSpec, readDefaults, reviewKeys } from "../../tools/gen/settings-defaults.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 
@@ -189,9 +191,55 @@ test("readSpec() parses EVERY SPEC row, whatever optional properties it carries"
     `readSpec() parsed ${rows.length} of ${present} SPEC rows — a row shape the regex cannot see`);
   // The two that were actually lost, by name, so a regex rewrite cannot quietly
   // drop them again while keeping the count right.
-  for (const k of ["keys", "pad"]) {
+  for (const k of ["keys", "pad", "padProfiles"]) {
     assert.ok(rows.some((r) => r.k === k), `SPEC row "${k}" (it carries a changed: predicate) is missing`);
   }
   // …and the optional property the regex DID know about still resolves.
   assert.ok(rows.filter((r) => r.subsystem).length > 0, "subsystem rows stopped parsing");
+});
+
+
+test("readSpec structurally reads nested defaults and multiline callbacks without executing them", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "apex-spec-parser-"));
+  try {
+    fs.mkdirSync(path.join(root, "js/ui"), { recursive: true });
+    fs.writeFileSync(path.join(root, "js/ui/settings-export.js"), `
+      throw new Error("browser source must never execute");
+      const SPEC = [
+        { k: "profiles", lane: "json", group: "driving",
+          def: { v: 1, devices: [{ nested: ["}, src: fake", { enabled: false }] }] },
+          src: "fixture", normalize: (value) => {
+            const pattern = /[},]/;
+            return { devices: value.devices.filter((d) => pattern.test(d.id)) };
+          }, subsystem: "review nested data" },
+        { k: "adaptive", lane: "raw", group: "display", def: () => {
+            throw new Error("default must not execute");
+          }, src: "fixture" },
+        { k: "nullable", lane: "json", group: "driving", def: null, src: "fixture" },
+      ];`);
+    const rows = readSpec(root);
+    assert.deepEqual(rows.map((r) => r.k), ["profiles", "adaptive", "nullable"]);
+    assert.deepEqual(JSON.parse(JSON.stringify(vm.runInNewContext("(" + rows[0].def + ")"))), {
+      v: 1, devices: [{ nested: ["}, src: fake", { enabled: false }] }],
+    });
+    assert.equal(rows[0].subsystem, "review nested data");
+    assert.equal(rows[0].adaptive, false);
+    assert.equal(rows[1].adaptive, true);
+    assert.equal(rows[2].adaptive, true);
+    fs.writeFileSync(path.join(root, "js/ui/settings-export.js"), 'const SPEC = [{ k: "missing" }];');
+    assert.throws(() => readSpec(root), /needs literal lane|has no default/, "malformed rows fail rather than disappear");
+    const row = "{ k: 'safe', lane: 'json', group: 'audio', def: true";
+    const invalid = [
+      [row + ", ...{subsystem: 'must review', def: null}}", /unsupported dynamic property/],
+      [row + ", ['def']: null}", /unsupported dynamic property/],
+      [row + ", [unknownKey]: null}", /unsupported dynamic property/],
+      [row + ", get subsystem() { throw Error('never execute'); }}", /unsupported dynamic property/],
+      [row + ", def: null}", /duplicate property def/],
+      [row + "}," + row + "}", /duplicate SPEC key safe/],
+    ];
+    for (const [body, error] of invalid) {
+      fs.writeFileSync(path.join(root, "js/ui/settings-export.js"), "const SPEC = [" + body + "];");
+      assert.throws(() => readSpec(root), error, "unsupported semantics cannot bypass the audit");
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

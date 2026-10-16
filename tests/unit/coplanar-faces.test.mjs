@@ -31,7 +31,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { overlapArea } = createRequire(import.meta.url)("../../tools/track/coplanar-audit.cjs");
+const { overlapArea, planeGap } = createRequire(import.meta.url)("../../tools/track/coplanar-audit.cjs");
 
 // SPOTS = distinct 40 m locations carrying at least one same-facing coplanar
 // pair. Spots, not pairs, for the same reason prop-clipping uses them: a pair
@@ -323,6 +323,24 @@ test("overlapArea is the real overlap, exact on the shapes the emitters emit", (
   near(overlapArea(rect(0, 0, 1, 1), rect(2, 2, 3, 3)), 0, "disjoint squares");
   // A cross: two 0.1 m bars at right angles meet in one 0.1 x 0.1 square.
   near(overlapArea(rect(0, 0.45, 1, 0.55), rect(0.45, 0, 0.55, 1)), 0.01, "crossed bars");
+});
+
+test("planeGap is the point-to-plane separation, not |d_a - d_b| (#2205)", () => {
+  // The vegas hoarding x street-barrier pair, reduced: two parallel vertical
+  // faces 1.37 m apart, ~800 m from the origin, normals 0.11 deg apart. Each
+  // face's own d differs by ~0.7 mm, which the audit used to call the gap.
+  const face = (ang, c) => {
+    const n = [Math.cos(ang), 0, Math.sin(ang)];
+    return { n, c, d: n[0] * c[0] + n[1] * c[1] + n[2] * c[2] };
+  };
+  const th = -0.4325, a = face(th, [3.07, 0.6, 798.48]);
+  const cb = [a.c[0] - 1.37 * a.n[0], 0.6, a.c[2] - 1.37 * a.n[2]];        // 1.37 m behind a
+  // The normal tilt that cancels the 1.37 m in d: d(n.c)/dth = -sin th x + cos th z.
+  const b = face(th + 1.37 / (-Math.sin(th) * cb[0] + Math.cos(th) * cb[2]), cb);
+  assert.ok(Math.abs(a.d - b.d) < 0.02, `the fixture reproduces the false fight: |d_a - d_b| = ${Math.abs(a.d - b.d)}`);
+  assert.ok(planeGap(a, b) > 1.3, `the faces are 1.37 m apart, got ${planeGap(a, b)}`);
+  const flush = face(th, [a.c[0] - 4 * a.n[2], 0.6, a.c[2] + 4 * a.n[0]]);   // 4 m along the same plane
+  assert.ok(planeGap(a, flush) < 1e-9, "a genuinely flush neighbour still reads 0");
 });
 
 test("two crossing diagonal bars report their crossing, not their bounding boxes", () => {

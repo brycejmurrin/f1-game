@@ -106,6 +106,7 @@ const SCREENS = [
    `, "#customize"],
   ["carsetup", `document.getElementById('mb-race').click(); document.getElementById('sel-car').click()`, "#carsetup"],
   ["howtoplay", `document.getElementById('mb-help').click()`, "#howtoplay"],
+  ["settingsappearance", `document.getElementById('mb-settings').click(); await until('#pmsettings:not([hidden])',3000); document.getElementById('pm-open-appearance').click(); await until('#pm-panel-appearance:not([hidden])',3000)`, "#pmsettings"],
   ["settingsa11y", `document.getElementById('mb-settings').click(); await until('#pmsettings:not([hidden])',3000); document.getElementById('pm-open-a11y').click(); await until('#pm-panel-a11y:not([hidden])',3000)`, "#pmsettings"],
   ["pause", `window.__apex.race('bahrain'); `, "#pausemenu"],
 

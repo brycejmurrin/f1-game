@@ -4,8 +4,8 @@
  * leading one red. js/data/telemetry-player.js computes both the gauge delta and the
  * lane-board delta with the same expression and comments both the same way:
  *
- *     const delta = timeAtDist(view.compare.cum, dP) - t;   // >0: compare is behind
- *     const dl    = timeAtDist(lane.cum, dRef)     - t;     // >0: this lane is behind the ref
+ *     const delta = timeAtDist(view.compare.cum, dP) - refT;   // >0: compare is behind
+ *     const dl    = timeAtDist(lane.cum, dRef)     - refT;   // >0: this lane is behind the ref
  *
  * so `dh-pos` is the SLOWER side on each. css/data.css had
  * `.dh-laneboard-dl.dh-pos -> --slower` (right, and commented "behind the
@@ -39,12 +39,12 @@ function tokenFor(base, state) {
   return m[1].trim();
 }
 
-// Both widgets key on `timeAtDist(other, d) - t`, so positive means BEHIND.
+// Both widgets key on `timeAtDist(other, d) - refT`, so positive means BEHIND.
 const BEHIND_IS_POS = ["dh-gdelta", "dh-laneboard-dl"];
 
 test("the source really does use one sign convention for both deltas", () => {
   // If this drifts, the assertion below is measuring the wrong thing.
-  const behind = js.match(/-\s*t;\s*\/\/\s*>0:[^\n]*behind/g) || [];
+  const behind = js.match(/-\s*refT;\s*\/\/\s*>0:[^\n]*behind/g) || [];
   assert.ok(behind.length >= 2,
     `expected both deltas to be commented ">0: … behind"; found ${behind.length}`);
 });
