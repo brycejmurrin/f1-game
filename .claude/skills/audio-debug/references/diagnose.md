@@ -23,7 +23,7 @@ Load this when the engine is silent, pitch is flat, or a mute toggle did the
 | Rev limiter | 13 Hz square into `engGain.gain` above 98.5% revs, and into the core's detune for the pitch sag; DEPTH / RATE / PITCH SAG trims; `limiterDepth()` / `limiterHz()` / `limiterCents()` |
 | Limiter, top gear | The cut is a 0.5 s burst fading over 0.5 s to a steady note (`limiterHeld()` is the clock) — a car pinned at top speed has no gear to shift into. Below top gear it never fades |
 | Turbo whine + wastegate | Sine ~1500 Hz tracking rev; a falling hiss once per lift after ≥0.5 s under load (`wastegateState()`) |
-| MGU-K harvest / ERS deploy | Filtered noise when decelerating (HARVEST trim) / triangle whine while deploying + the deploy whoosh (BOOST level) and a rev lift under deploy (BOOST rev lift) |
+| MGU-K harvest / ERS deploy | Filtered noise when decelerating (HARVEST trim) / soft sine while deploying + the low-register deploy whoosh (BOOST level) and a rev lift under deploy (BOOST rev lift) |
 | Brakes | Bandpass noise, gain = deceleration × speed; `brakeLevel()` |
 | Gear shift | Saw crack + click, scaled by the SHIFT trim (`shiftState()`; silent-cue path below); the rev-cut duck is the engine's own. A DOWNSHIFT also sets `revFlare` (heel-and-toe blip: +5% playbackRate, decays over ~90 ms); an upshift has the duck but no blip |
 | Overrun | Irregular crackle one-shots on a trailing throttle (`overrunState()`) |

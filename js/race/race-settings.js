@@ -42,6 +42,29 @@ const RaceSettings = (function () {
       '<p id="rs-aipace-help" class="adv-help">SCRIPTED keeps each rival on a fixed target pace from car and driver ratings. CATCH-UP is the old rubber band: cars behind you speed up toward your gap.</p>';
     diff.parentNode.insertBefore(row, diff.nextSibling);
   }
+  /** WIND (js/race/wind.js, off/real) after DIRTY AIR, injected like AI PACE:
+   *  wind moves top speed ±4 km/h and a phone player has no other way off. */
+  function ensureWindRow($) {
+    if ($("rs-wind")) return;
+    const dirty = $("rs-dirty");
+    if (!dirty || !dirty.parentNode) return;
+    const row = document.createElement("div");
+    row.id = "rs-wind";
+    row.className = "set-row";
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-labelledby", "rs-wind-label");
+    row.innerHTML =
+      '<span class="tune-label" id="rs-wind-label">WIND</span>' +
+      "<div>" +
+      '<button id="rs-wind-prev" type="button" data-step="-1" aria-label="Previous wind">&lsaquo;</button>' +
+      '<select id="rs-wind-sel" aria-labelledby="rs-wind-label" aria-describedby="rs-wind-help"></select>' +
+      '<button id="rs-wind-next" type="button" data-step="1" aria-label="Next wind">&rsaquo;</button>' +
+      "</div>" +
+      '<p id="rs-wind-help" class="adv-help">Head and tail wind move top speed by a few km/h and gusts nudge the car sideways. OFF is still air.</p>';
+    dirty.parentNode.insertBefore(row, dirty.nextSibling);
+  }
+  const RS_WIND = [["off", "OFF"], ["real", "REAL"]];
+  const hasWind = () => typeof Wind !== "undefined";
   const DUEL_BASE = [["off", "OFF"], ["on", "FASTEST RIVAL"]];
   /* DUEL is OFF / ON / a named legend — one control rather than a second row.
    * ON keeps the original meaning (the fastest car on the grid, bumped); a
@@ -150,6 +173,7 @@ const RaceSettings = (function () {
     const fullLaps = () => (Tracks.LIST[G.trackIdx] && Tracks.LIST[G.trackIdx].gpLaps) || 57;
 
     let rsReturn = "select";
+    let searchReturn = null;
     let draftKey = "";
     let netRoom = false;
 
@@ -157,6 +181,7 @@ const RaceSettings = (function () {
 
     function buildRaceSettings() {
       ensureAiPaceRow($);
+      ensureWindRow($);
       const qualifies = !isTimeTrial() && !qualiResults() &&
         (isChampionship() ? SeasonCal.qualiNext(G.season) : gridFromQuali());
       const qName = isChampionship() && SeasonCal.qualiLabel ? SeasonCal.qualiLabel(G.season) : "QUALIFYING";
@@ -180,7 +205,7 @@ const RaceSettings = (function () {
       // never raised: SEASON SETUP's 57 LAPS became FULL (79 at Monaco) on
       // every circuit shorter than ~5.35 km. That value keeps its own chip.
       if (!tt && !lapOpts.includes(raceLaps)) {
-        if (isChampionship() && raceLaps > 0 && raceLaps < full) { lapOpts.push(raceLaps); lapOpts.sort((a, b) => a - b); }
+        if (searchReturn || (isChampionship() && raceLaps > 0 && raceLaps < full)) { lapOpts.push(raceLaps); lapOpts.sort((a, b) => a - b); }
         else { raceLaps = full; G.raceLaps = full; }
       }
       SettingRow.paint("rs-laps", raceLaps, lapOpts.map((n) => [n, !tt && n === full ? full + " (FULL)" : String(n)]));
@@ -227,6 +252,7 @@ const RaceSettings = (function () {
       SettingRow.paint("rs-tyres", G.raceTyreWear, RS_TYRES);
       $("rs-dirty").hidden = tt;
       SettingRow.paint("rs-dirty", G.raceDirtyAir, RS_DIRTY);
+      if ($("rs-wind")) { $("rs-wind").hidden = !hasWind(); if (hasWind()) SettingRow.paint("rs-wind", Wind.level(), RS_WIND); }
       SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
       paintPlan(tt, raceLaps);
       const matched = paintPresetState(full);
@@ -362,6 +388,7 @@ const RaceSettings = (function () {
       wire("rs-reliab", () => G.raceReliability, (v) => { G.raceReliability = v; store.set("reliability", v); });
       wire("rs-tyres", () => G.raceTyreWear, (v) => { G.raceTyreWear = v; });
       wire("rs-dirty", () => G.raceDirtyAir, (v) => { G.raceDirtyAir = v; });
+      if ($("rs-wind") && hasWind()) wire("rs-wind", () => Wind.level(), (v) => { store.set("wind", Wind.setLevel(v)); });
       wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
       wire("rs-plan", () => { const p = G.pits; const v = p ? p.pinnedStops(planTrackId()) : null; return v == null ? "auto" : String(v); },
            (v) => { const p = G.pits; if (p) p.setPinnedStops(v === "auto" ? null : +v, planTrackId()); });
@@ -535,6 +562,7 @@ const RaceSettings = (function () {
     }
 
     function openRaceSettings(from) {
+      searchReturn = null;
       rsReturn = from || "select";
       if (!netRoom) {
         const daily = isTimeTrial() && G.daily ? G.daily.current() : null;
@@ -560,6 +588,19 @@ const RaceSettings = (function () {
       scheduleFlybyTrack();
     }
 
+    // Search reveals the current preferences without staging a new race draft.
+    // The ordinary picker entry still owns defaulting and lap normalization.
+    function openSettingSearch(back, arrived) {
+      if (G.state !== "menu" || netRoom || isTimeTrial() || isChampionship()) return false;
+      searchReturn = back;
+      rsReturn = "pmsettings";
+      buildRaceSettings();
+      $("pmsettings").hidden = true;
+      $("race-settings").hidden = false;
+      if (arrived) arrived();
+      return true;
+    }
+
     function wireButtons() {
       els.selGo.onclick = () => {
         if (G.soundOn) GameAudio.uiSelect();
@@ -573,6 +614,7 @@ const RaceSettings = (function () {
       $("sel-car").onclick = () => openGarage("select");
       $("rs-cancel").onclick = () => {
         $("race-settings").hidden = true;
+        if (searchReturn) { const back = searchReturn; searchReturn = null; $("pmsettings").hidden = false; back(); return; }
         // Rebuilt, not just revealed: reached from results -> NEXT ROUND ->
         // qualifying -> BACK, the picker still titled the previous round.
         if (rsReturn === "select") buildSelect();
@@ -622,6 +664,7 @@ const RaceSettings = (function () {
       buildRaceSettings,
       wireRaceSettings,
       openRaceSettings,
+      openSettingSearch,
       openRaceSetup,
       setNetRoom,
       resetDraft,

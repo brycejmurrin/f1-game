@@ -1666,3 +1666,27 @@ test("release GO retains qualifying closing traffic without changing pit state",
   G.cars = [c, o]; c.pitOutT = 0;
   assert.equal(pits.cue(c).text, "MERGE — RIV CLOSING");
 });
+
+// Perf plan C-2: think() asked RaceControl.flagOut(G.cars) once per AI, a scan
+// of the whole field each time (21 a step). game.js brackets its car loop with
+// stepBegin/stepEnd, inside which the answer is read once; outside the bracket
+// (this file's direct calls, dev hooks) every think() still scans live.
+test("think() scans for the chequered flag once per step inside the car-loop bracket", () => {
+  const { pits, ctx, ai, records } = aiWeatherSession("dry");
+  let scans = 0, out = false;
+  ctx.RaceControl = { flagOut: () => { scans++; return out; } };
+  const field = Array.from({ length: 6 }, () => Object.assign(ai(0, null), { pitArmed: false, pitState: "none", pitNext: null }));
+  pits.stepBegin();
+  for (const c of field) pits.think(c);
+  pits.stepEnd();
+  assert.equal(scans, 1, "one flagOut scan for the whole step");
+  for (const c of field) pits.think(c);
+  assert.equal(scans, 7, "outside the bracket every think() scans live");
+  // The memo never outlives its step: the flag coming out is seen on the next one.
+  out = true;
+  pits.stepBegin();
+  for (const c of field) assert.equal(pits.think(c), "", "a flagged leader means no stop pays");
+  pits.stepEnd();
+  assert.equal(scans, 8);
+  assert.ok(records.soft, "fixture sanity");
+});

@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function harness({ motion, latest = undefined, realTelemetry = false, drivers = [], scheduleOnline = true,
+function harness({ motion, latest = undefined, realTelemetry = false, drivers = [], sessions, scheduleOnline = true,
                    emptyMeeting = null, emptyYear = null } = {}) {
   let docRoot = null;
   const scrolls = [];
@@ -56,7 +56,11 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
     selects() { const out = []; (function walk(n) { n.children.forEach((c) => { if (c.tagName === "SELECT") out.push(c); walk(c); }); })(this); return out; }
     focus() {}
     showModal() { this.open = true; }
-    close() { this.open = false; }
+    close() {
+      if (!this.open) return;
+      this.open = false;
+      setTimeout(() => this.dispatch("close"), 0);   // native close queues its event
+    }
     scrollIntoView(o) { scrolls.push({ id: this.id, o }); }
   }
   docRoot = new El("html");
@@ -84,7 +88,7 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   function place(id, hidden) {
     const n = new El("dialog"); n.id = id; n.hidden = hidden !== false; byId[id] = n; docRoot.appendChild(n); return n;
   }
-  const pending = [], resultKeys = [];
+  const pending = [], resultKeys = [], fastestKeys = [];
   const defer = (name, value) => new Promise((res, reject) => pending.push({ name, res: () => res(value), reject }));
   const LATEST = latest !== undefined ? latest
     : { sessionKey: 500, meetingKey: 50, year: 2026, name: "Race", type: "Race", dateStart: "2026-10-04T12:00:00Z" };
@@ -94,10 +98,10 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
     schedule: () => { scheduleCalls++; return scheduleOnline ? Promise.resolve([]) : Promise.reject(new Error("offline")); },
     latestSession: () => defer("latestSession", LATEST),
     meetings: (year) => { meetingYears.push(year); return defer("meetings", year === emptyYear ? [] : [{ meetingKey: 50, name: "Latest GP", dateStart: "2026-10-01" }, { meetingKey: 40, name: "Picked GP", dateStart: "2026-09-01" }]); },
-    sessionsForMeeting: (mk) => defer("sessions(" + mk + ")", mk === emptyMeeting ? [] : [{ sessionKey: mk * 10, meetingKey: mk, name: "Race", type: "Race", dateStart: "2026-09-01T12:00:00Z" }]),
+    sessionsForMeeting: (mk) => defer("sessions(" + mk + ")", mk === emptyMeeting ? [] : sessions || [{ sessionKey: mk * 10, meetingKey: mk, name: "Race", type: "Race", dateStart: "2026-09-01T12:00:00Z" }]),
     sessionResult: (sk) => { resultKeys.push(sk); return defer("sessionResult", []); },
     sessionDrivers: () => defer("drivers", drivers),
-    fastestLap: () => defer("fastestLap", null),
+    fastestLap: (sessionKey, num) => { fastestKeys.push({ sessionKey, num }); return defer("fastestLap", null); },
     driverStandings: () => defer("driverStandings", []), constructorStandings: () => defer("constructorStandings", []),
     weather: () => defer("weather", null), livePositions: () => defer("pos", { values: [], cursor: null }),
     liveIntervals: () => defer("int", { values: {}, cursor: null }),
@@ -136,8 +140,61 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   DataHub.init(root);
   const content = () => root.find((n) => n.id === "dh-panel");
   const tab = (id) => root.find((n) => n.id === "dh-tab-" + id).dispatch("click");
-  return { DataHub, root, content, tab, settle, get cancels() { return cancels; }, get scheduleCalls() { return scheduleCalls; }, setOnline: (v) => { scheduleOnline = v; }, setEmptyMeeting: (v) => { emptyMeeting = v; }, drain, flush, pending, resultKeys, scrolls, document, byId, place, meetingYears };
+  return { DataHub, root, content, tab, settle, api: F1API, get cancels() { return cancels; }, get scheduleCalls() { return scheduleCalls; }, setOnline: (v) => { scheduleOnline = v; }, setEmptyMeeting: (v) => { emptyMeeting = v; }, drain, flush, pending, resultKeys, fastestKeys, scrolls, document, byId, place, meetingYears };
 }
+
+function lateResults(h, cached) {
+  const url = "https://api.openf1.org/v1/session_result?session_key=500";
+  const data = [{ pos: 1, num: 44, laps: 70, points: 25, duration: 6000, gap: 0 }];
+  const at = Date.now() - 4 * 3600000;
+  const store = new Map(cached ? [["apex26.api." + url, JSON.stringify({ t: at, data })]] : []);
+  let rejectBody, requests = 0;
+  const ctx = vm.createContext({ Date, AbortController, setTimeout, clearTimeout, Log: { info() {}, warn() {} },
+    fetch: async () => ({ ok: true, status: 200, headers: { get: () => null }, json: () => {
+      requests++;
+      return requests === 1 ? new Promise((_, reject) => { rejectBody = reject; }) : Promise.resolve(data);
+    } }),
+    localStorage: { get length() { return store.size; }, key: (i) => [...store.keys()][i],
+      getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) }
+  });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/api-transport.js"), "utf8"), ctx);
+  const transport = vm.runInContext("F1Transport", ctx).create("https://api.openf1.org/v1", 7 * 86400000);
+  let finished;
+  Object.assign(h.api, { sessionResult: () => (finished = transport.request(url, 60000)),
+    staleMark: transport.staleMark, staleSince: transport.staleSince });
+  return { fail: () => rejectBody(new Error("body disconnected after headers")), get finished() { return finished; }, get requests() { return requests; }, at };
+}
+
+test("Results dates a late body-failure fallback when the nested request settles", async () => {
+  const h = harness(), transport = lateResults(h, true);
+  h.DataHub.open("results"); await h.flush(); await h.settle("latestSession");
+  assert.match(h.content().textContent, /LOADING/);
+  assert.equal(h.content().querySelector(".dh-footnote"), null, "a pending classification has no freshness claim");
+  transport.fail(); await h.drain();
+  assert.match(h.content().textContent, /offline copy/i);
+  assert.doesNotMatch(h.content().textContent, /updated just now/);
+  assert.match(h.content().textContent, /Car 44/);
+  h.tab("schedule"); await h.drain(); h.tab("results"); await h.flush();
+  assert.match(h.content().textContent, /offline copy/i, "provenance survives tab reuse");
+  h.DataHub.close();
+});
+
+test("Results offers a working RETRY after a nested body failure, including tab reentry", async () => {
+  const h = harness(), transport = lateResults(h, false);
+  h.DataHub.open("results"); await h.flush(); await h.settle("latestSession");
+  transport.fail(); await h.drain();
+  assert.ok(h.content().querySelector(".dh-retry"));
+  assert.doesNotMatch(h.content().textContent, /CACHED|updated just now/);
+  h.tab("schedule"); await h.drain(); h.tab("results"); await h.flush();
+  assert.ok(h.content().querySelector(".dh-retry"));
+  h.content().querySelector(".dh-retry").dispatch("click"); await h.drain();
+  await transport.finished; await h.flush();
+  assert.equal(transport.requests, 2);
+  assert.match(h.content().textContent, /Car 44/);
+  assert.equal(h.content().querySelector(".dh-retry"), null);
+  assert.match(h.content().textContent, /updated just now/);
+  h.DataHub.close();
+});
 
 // LIVE booted on the latest session, the player has just picked "Picked GP"
 // (sessions(40) queued) — the shared opening of both interleavings below.
@@ -316,8 +373,13 @@ async function startCompare(h) {
   chips.forEach((c) => c.dispatch("click"));
   const go = h.content().find((n) => n.classList.contains("dh-livebtn") && /COMPARE 2/.test(n.textContent));
   assert.ok(go, "COMPARE 2 LAPS is offered");
+  // Keep each mutation handler so it can be exercised against a deferred load,
+  // including summary buttons whose nodes LOAD subsequently detaches.
+  const remove = h.content().querySelector(".dh-lane-x");
+  const clear = h.content().querySelector(".dh-lane-clear");
   go.dispatch("click"); await h.flush();
   assert.equal(h.pending.filter((p) => p.name === "fastestLap").length, 2, "both lanes are fetching");
+  return { chips, remove, clear };
 }
 
 test("leaving TELEMETRY mid-COMPARE cancels the in-flight lane fetches once, and the tab rebuilds on return", async () => {
@@ -503,5 +565,75 @@ test("detached hydration cannot invalidate or strand the newly loading session t
   await h.drain();
   assert.equal(!!h.content().querySelector(".dh-loading"), false);
   assert.ok(h.content().querySelector(".dh-dchip"), "the attached tab hydrates even if the detached picker filled shared metadata first");
+  h.DataHub.close();
+});
+
+// A tray edit is a new intent even when the old provider ignores cancellation.
+// Resolve AND reject the old requests: neither completion owns the new detail.
+for (const mutation of ["chip", "remove", "clear"]) {
+  for (const outcome of ["success", "failure"]) {
+    test(`telemetry ${mutation} invalidates a pending comparison's late ${outcome}`, async () => {
+      const h = harness({ realTelemetry: true, drivers: TWO });
+      const controls = await startCompare(h);
+      const before = h.cancels;
+      (mutation === "chip" ? controls.chips[0] : controls[mutation]).dispatch("click");
+      assert.equal(h.cancels, before + 1, "the abandoned lanes release the provider queue immediately");
+      const detail = h.content().querySelector(".dh-telem-detail");
+      const selected = detail.textContent;
+      assert.match(selected, mutation === "clear" ? /Select one driver/ : /B Two/);
+      assert.equal(detail.querySelector(".dh-spinner"), null);
+      const old = h.pending.splice(0);
+      assert.equal(old.length, 2);
+      old.forEach((p) => outcome === "success" ? p.res() : p.reject(new Error("old lane failed")));
+      await h.flush(); await h.flush();
+      assert.equal(detail.textContent, selected, "late work preserves the current selection");
+      assert.equal(h.root.querySelector(".dh-tpopup"), null, "late success cannot resurrect a popup");
+      assert.equal(detail.querySelector(".dh-error"), null, "late failure cannot offer RETRY for old lanes");
+    });
+  }
+}
+
+test("a new telemetry load wins while cancelled lanes unwind, and its summary rebuild does not cancel it", async () => {
+  const h = harness({ realTelemetry: true, drivers: TWO });
+  const { chips } = await startCompare(h);
+  chips[0].dispatch("click");
+  const afterEdit = h.cancels;
+  h.content().find((n) => n.classList.contains("dh-livebtn") && n.textContent === "LOAD FASTEST LAP").dispatch("click");
+  await h.flush();
+  assert.equal(h.pending.length, 3);
+  h.pending.pop().res();                             // newest load finishes first
+  await h.flush(); await h.flush();
+  const popup = h.root.querySelector(".dh-tpopup");
+  assert.ok(popup && popup.open, "the current successful load opens its popup");
+  assert.match(popup.textContent, /B Two/);
+  assert.doesNotMatch(popup.textContent, /A One/);
+  assert.equal(h.cancels, afterEdit, "success calls syncChips without cancelling the new view");
+  const old = h.pending.splice(0);
+  old[0].res(); old[1].reject(new Error("cancelled old lane failed late"));
+  await h.flush(); await h.flush();
+  assert.equal(h.root.querySelector(".dh-tpopup"), popup, "out-of-order stale completions leave the current popup alone");
+  assert.equal(h.content().querySelector(".dh-error"), null);
+  h.DataHub.close();
+});
+
+test("tray mutation invalidation preserves a driver's cross-session comparison within one meeting", async () => {
+  const h = harness({ realTelemetry: true, drivers: TWO, sessions: [
+    { sessionKey: 499, meetingKey: 50, name: "Qualifying", type: "Qualifying" },
+    { sessionKey: 500, meetingKey: 50, name: "Race", type: "Race" }
+  ] });
+  h.DataHub.open("telemetry"); await h.drain();
+  h.content().querySelector(".dh-dchip").dispatch("click");
+  const [, session] = h.content().selects();
+  session.value = "499"; session.dispatch("change"); await h.drain();
+  h.content().querySelector(".dh-dchip").dispatch("click");
+  const go = h.content().find((n) => n.classList.contains("dh-livebtn") && /COMPARE 2/.test(n.textContent));
+  assert.ok(go, "the Race lane survives the session switch and Qualifying adds a second lane");
+  const before = h.cancels;
+  go.dispatch("click"); await h.drain();
+  assert.deepEqual(h.fastestKeys, [{ sessionKey: 500, num: 1 }, { sessionKey: 499, num: 1 }]);
+  assert.equal(h.cancels, before, "a successful current comparison is not cancelled by syncChips");
+  const popup = h.root.querySelector(".dh-tpopup");
+  assert.ok(popup && popup.open);
+  assert.match(popup.textContent, /A One R vs A One Q/);
   h.DataHub.close();
 });

@@ -9,7 +9,7 @@
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
+import { cssSpecs, specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
   MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, MAX_SPILL_SHARDS, MAX_SELECTED_JOB_MIN, MAX_TESTS_PER_JOB,
   FAT_UI_SELECTED_JOB_MIN, FAT_UI_SEC_PER_TEST, FAT_UI_MIN_PIECES,
@@ -958,14 +958,16 @@ test("a docs-only change is 'nothing to select', never 'unmatched'", () => {
   assert.equal(isDocsOnly([]), false);
 });
 
-test("DOCS_ONLY still mirrors ci.yml's paths-ignore", () => {
+test("DOCS_ONLY still mirrors the deploy push's paths-ignore (pages.yml since 2026-10-16)", () => {
   // The comment on DOCS_ONLY says these two lists move together. If someone
   // adds a path to the workflow's ignore list and not here, a deploy touching
-  // only that path fails closed again — which is the whole defect.
-  const ci = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
-  const ignored = [...ci.matchAll(/^\s*-\s+"([^"]+)"\s*$/gm)].map((m) => m[1]);
+  // only that path fails closed again — which is the whole defect. The list
+  // moved from ci.yml's push to pages.yml's push on 2026-10-16 (the train
+  // runs on push; ci.yml has no push trigger).
+  const pages = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
+  const ignored = [...pages.matchAll(/^\s*-\s+"([^"]+)"\s*$/gm)].map((m) => m[1]);
   for (const pat of ["docs/**", "**/*.md", ".claude/**", ".cursor/**"]) {
-    assert.ok(ignored.includes(pat), `ci.yml no longer ignores ${pat} — re-derive DOCS_ONLY`);
+    assert.ok(ignored.includes(pat), `pages.yml no longer ignores ${pat} — re-derive DOCS_ONLY`);
   }
   assert.equal(DOCS_ONLY.length, 4, "a pattern was added or removed without updating this pin");
 });
@@ -1215,8 +1217,7 @@ test("the browser legs do not wait on the guards aggregator, and a guards red st
   };
   assert.deepEqual(needsOf("selected"), ["select"], "the matrix starts as soon as the plan exists");
   assert.doesNotMatch(job("selected").match(/^    if: .*$/m)?.[0] || "", /needs\.guards/, "its if: must not read a job it does not need");
-  for (const j of ["selected-verdict", "ci-verdict", "poke-train"]) assert.ok(needsOf(j).includes("guards"), `${j} must still need guards`);
-  assert.match(job("poke-train"), /needs\.guards\.result == 'success'/, "a guards red pokes no train");
+  for (const j of ["selected-verdict", "ci-verdict"]) assert.ok(needsOf(j).includes("guards"), `${j} must still need guards`);
   const verdictSrc = fs.readFileSync(path.join(ROOT, "tools/ci/selected-gate-verdict.mjs"), "utf8");
   assert.match(verdictSrc, /if \(guards !== "success" && guards !== "skipped"\)/, "selected-verdict reds on a guards red");
   assert.match(job("selected-verdict"), /GUARDS: \$\{\{ needs\.guards\.result \}\}/);
@@ -1698,4 +1699,44 @@ test("helper imports and reexports propagate transitively with cycles", () => {
   const consumers = specsImporting(["tests/helpers/await-track-build.js"]);
   assert.ok(consumers.includes("tests/specs/props-over-road.spec.js"));
   assert.ok(consumers.length > 5, "fixtures reexport reaches indirect consumers");
+});
+
+test("CSS-only changes retain bounded relevant player layout coverage", () => {
+  assert.deepEqual(cssSpecs(["docs/README.md"]), []);
+  const menu = cssSpecs(["css/menus.css", "docs/README.md"]);
+  assert.ok(menu.includes("tests/specs/css-player-smoke.spec.js"));
+  assert.ok(menu.includes("tests/specs/menu-baseline.spec.js"));
+  assert.ok(!menu.includes("tests/specs/hud-layout.spec.js"));
+  for (const name of ["title", "fonts-hud", "components", "responsive", "dialogs", "dialog-platform", "overlays", "garage-experience"]) {
+    assert.ok(cssSpecs([`css/${name}.css`]).includes("tests/specs/menu-baseline.spec.js"),
+      `${name} changes the title/selector/garage identity`);
+  }
+  const hud = cssSpecs(["css/hud.css"]);
+  assert.deepEqual(hud, ["tests/specs/css-player-smoke.spec.js"]);
+  assert.ok(!hud.includes("tests/specs/menu-baseline.spec.js"));
+  assert.equal(menu.length, 2);
+  assert.equal(hud.length, 1);
+  for (const specs of [menu, hud, cssSpecs(["css/tokens.css"])]) {
+    const plan = fit(specs, DEFAULT_BUDGET_MIN);
+    assert.deepEqual(plan.skipped, [], "bounded CSS coverage fits existing shard pools");
+    assert.deepEqual(plan.overBudgetSpecs, []);
+    assert.ok(shards(plan).length > 0, "CSS coverage produces runnable jobs");
+  }
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
+  assert.match(src, /kind === "css" \? cssSpecs\(changed\) : routed/);
+  assert.doesNotMatch(src, /const lightDiff = .*kind === "css"/);
+});
+
+test("lanes: a run's legs take distinct lanes from a run-number-rotated start", async () => {
+  const { LANES, laneBase } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(laneBase({}), 0, "no run number (local, tests): lane 0 first");
+  assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633" }), 12633 % LANES);
+  const specs = ["tests/specs/multiplayer-seats.spec.js", "tests/specs/multiplayer-npeer.spec.js",
+    "tests/specs/hud-layout.spec.js", "tests/specs/ui-scale.spec.js"];
+  const base = LANES - 1;
+  const lanes = shards(fit(specs, 1, { db: EMPTY }), EMPTY, new Set(), base).map((j) => j.lane);
+  assert.ok(lanes.length >= 2, `two legs to wrap: ${lanes}`);
+  assert.ok(lanes.includes(base) && lanes.includes(0), `starts at the rotated lane and wraps: ${lanes}`);
+  assert.equal(new Set(lanes).size, lanes.length, "a run's own legs never share a lane");
+  assert.ok(lanes.every((l) => Number.isInteger(l) && l >= 0 && l < LANES), "every lane is in range");
 });

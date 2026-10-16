@@ -6,9 +6,9 @@
 "use strict";
 
 var ErsLayer = (function () {
-  const DEPLOY_HZ0 = 1880, DEPLOY_HZ_SPAN = 1720;
+  const DEPLOY_HZ0 = 720, DEPLOY_HZ_SPAN = 600;
   const HARVEST_HZ0 = 380, HARVEST_HZ_SPAN = 340;
-  const SUSTAIN_HZ = 880, CUE_HZ = 1480, CUE_PEAK = 0.055;
+  const SUSTAIN_HZ = 440, CUE_HZ = 660, CUE_PEAK = 0.018;
   const EMPTY = 1e-4, DEPLOY_GATE = 0.12, HARVEST_GATE = 0.04, CUE_REARM = 0.12;
 
   function clamp01(x) {
@@ -45,7 +45,7 @@ var ErsLayer = (function () {
     const part = o.partBias != null ? o.partBias : 1;
     const tune = o.boostTune != null ? o.boostTune : 1;
     const s = o.speed != null ? clamp01(o.speed) : 0.75;
-    return (0.012 + 0.026 * d * (0.35 + 0.65 * e)) * (0.4 + 0.6 * low)
+    return (0.005 + 0.010 * d * (0.35 + 0.65 * e)) * (0.4 + 0.6 * low)
       * part * tune * (0.42 + 0.58 * Math.max(s, 0.04));
   }
 
@@ -62,7 +62,7 @@ var ErsLayer = (function () {
     const o = opts || {};
     if (!on || !isLive(energy, o.layerOn, o.ersOn)) return 0;
     const tune = o.boostTune != null ? o.boostTune : 1;
-    return 0.006 * socK(energy) * tune;
+    return 0.003 * socK(energy) * tune;
   }
 
   function aim(param, target, t, tau, rel) {
@@ -108,11 +108,12 @@ var ErsLayer = (function () {
     ctx = ac;
     dest = bus;
     deployOsc = ctx.createOscillator();
-    deployOsc.type = "triangle";
+    deployOsc.type = "sine";
     deployOsc.frequency.value = DEPLOY_HZ0;
     deployHp = ctx.createBiquadFilter();
-    deployHp.type = "highpass";
-    deployHp.frequency.value = 1400;
+    deployHp.type = "lowpass";
+    deployHp.frequency.value = 1800;
+    deployHp.Q.value = 0.5;
     deployG = ctx.createGain();
     deployG.gain.value = 0;
     deployOsc.connect(deployHp).connect(deployG).connect(dest);
@@ -136,7 +137,7 @@ var ErsLayer = (function () {
     sustainOsc.connect(sustainG).connect(dest);
 
     cueOsc = ctx.createOscillator();
-    cueOsc.type = "triangle";
+    cueOsc.type = "sine";
     cueOsc.frequency.value = CUE_HZ;
     cueG = ctx.createGain();
     cueG.gain.value = 0;
@@ -155,24 +156,29 @@ var ErsLayer = (function () {
     aim(deployG && deployG.gain, 0, at, 0.06);
     aim(harvestG && harvestG.gain, 0, at, 0.06);
     aim(sustainG && sustainG.gain, 0, at, 0.06);
-    aim(cueG && cueG.gain, 0, at, 0.04);
+    if (cueG) {
+      cueG.gain.cancelScheduledValues(at);
+      cueG.gain.setTargetAtTime(0, at, 0.04);
+      cueG.gain._ersAim = 0;
+    }
     wasBoost = false;
   }
 
-  function fireCue(t) {
-    if (!cueG || !ctx) return;
+  function fireCue(t, tune) {
+    const peak = CUE_PEAK * (tune != null ? tune : 1);
+    if (!cueG || !ctx || !(peak > 0)) return;
     const at = t != null ? t : ctx.currentTime;
     if (at - lastCueT < CUE_REARM) return;
     lastCueT = at;
     cueFired++;
     const g = cueG.gain;
     if (g.cancelScheduledValues) g.cancelScheduledValues(at);
-    g.setTargetAtTime(CUE_PEAK, at, 0.008);
+    g.setTargetAtTime(peak, at, 0.015);
     g.setTargetAtTime(0, at + 0.04, 0.05);
     g._ersAim = 0;
   }
 
-  function cueBoost(t) { fireCue(t); }
+  function cueBoost(t, tune) { fireCue(t, tune); }
 
   function update(st) {
     if (!ctx || !deployG) return;
@@ -186,8 +192,9 @@ var ErsLayer = (function () {
     const on = isLive(energy, s.layerOn, s.ersOn);
     const dGain = on ? deployGain(deploy, energy, s) : 0;
     const hGain = on ? harvestGain(brake, energy, deploy, s) : 0;
-    const boostActive = on && !!(s.boost || s.otOn || deploy > DEPLOY_GATE);
-    if (boostActive && !wasBoost) fireCue(t);
+    const boostActive = on && s.boostTune !== 0 && !!(s.boost || s.otOn || deploy > DEPLOY_GATE);
+    if (boostActive && !wasBoost) fireCue(t, s.boostTune);
+    if ((!on || s.boostTune === 0) && wasBoost) silence(t);
     wasBoost = boostActive;
     const sGain = sustainGain(boostActive, energy, s);
     aim(deployG.gain, dGain, t, deploy > 0 ? 0.05 : 0.10);

@@ -573,14 +573,25 @@ const DrivingCoach = (function () {
       clock = 0; latest = null; log = []; clearCandidate(); lastTip.clear(); tipCounts.clear(); insights.reset();
       prevS = null; lastMark = null; segs = []; lapReport = null;
     }
-    function downloadTrace() {
-      const blob = new Blob([JSON.stringify({ physics: PhysicsConsts.REVISION, configuration: G.records.config(), rows: trace,
-        coach: feedback(), lapReport,
-        aiDecisions: (G.cars || []).filter(c => !c.human && c.passPlan).map(c => ({ driver: c.code, ...c.passPlan })),
-        journal: insights.journal(), forecast: insights.forecast(), practice: insights.summary() }, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob), a = document.createElement("a");
-      a.href = url; a.download = "apex26-driving-trace.json"; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    let traceExporting = false;
+    async function downloadTrace() {
+      if (traceExporting) return;
+      traceExporting = true;
+      try {
+        const blob = new Blob([JSON.stringify({ physics: PhysicsConsts.REVISION, configuration: G.records.config(), rows: trace,
+          coach: feedback(), lapReport,
+          aiDecisions: (G.cars || []).filter(c => !c.human && c.passPlan).map(c => ({ driver: c.code, ...c.passPlan })),
+          journal: insights.journal(), forecast: insights.forecast(), practice: insights.summary() }, null, 2)], { type: "application/json" });
+        if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
+          await NativeDownload.saveBlob(blob, "apex26-driving-trace.json");
+        } else {
+          const url = URL.createObjectURL(blob), a = document.createElement("a");
+          a.href = url; a.download = "apex26-driving-trace.json"; document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+      } catch (e) {
+        if (G.announce) G.announce(typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "TRACE EXPORT CANCELLED" : "TRACE EXPORT FAILED");
+      } finally { traceExporting = false; }
     }
     function toggle() { enabled = !enabled; pendingReport = null; clearCandidate(); G.store.set("drivingCoach", enabled); paint(); return enabled; }
     const $ = G.$;

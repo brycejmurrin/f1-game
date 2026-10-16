@@ -1,0 +1,10 @@
+[
+{"query": "write me a handoff prompt so I can continue this in a new session", "expect": "handoff"},
+{"query": "handoff", "expect": "handoff"},
+{"query": "Give me a cold-start brief for a fresh session picking this branch up", "expect": "handoff"},
+{"query": "I'm hitting context limits; produce a paste-ready prompt for the next session", "expect": "handoff"},
+{"query": "make a handoff I can paste on my phone into a new chat", "expect": "handoff"},
+{"query": "Launch a sibling worker session with OWNED globs and a launch prompt for the orchestrator.", "expect": "agent-fleet"},
+{"query": "Message the Merge Desk session with SWEEP for my PR.", "expect": "agent-fleet"},
+{"query": "Edit the SKILL.md description budget so the agent-config test passes.", "expect": "agent-config"}
+]

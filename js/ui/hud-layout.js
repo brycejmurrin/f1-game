@@ -351,10 +351,21 @@ const HudLayout = (function () {
      full on a screen that has room. translate runs in vw/vh divided by the
      band's zoom, so a screen-px correction is exactly px / innerWidth * 100. */
   const EDGE = 4;
-  function clampAxis(lo, hi, size) {
-    if (hi - lo > size - 2 * EDGE) return EDGE - lo;     // bigger than the screen: pin its start
-    if (lo < EDGE) return EDGE - lo;
-    if (hi > size - EDGE) return size - EDGE - hi;
+  // Intersect the visible viewport with hardware insets. Browser zoom and
+  // keyboards can expose only part of the layout viewport; never save this fit.
+  function screenBounds(W = window.innerWidth, H = window.innerHeight, gap = EDGE) {
+    const safe = doc && doc.documentElement && typeof getComputedStyle === "function" ? getComputedStyle(doc.documentElement) : null;
+    const inset = (name) => safe && safe.getPropertyValue ? Math.max(0, parseFloat(safe.getPropertyValue(name)) || 0) : 0;
+    const vv = typeof window !== "undefined" && window.visualViewport;
+    const x = vv && vv.width > 0 ? vv.offsetLeft || 0 : 0, y = vv && vv.height > 0 ? vv.offsetTop || 0 : 0;
+    return { left: Math.max(x, inset("--sal")) + gap, top: Math.max(y, inset("--sat")) + gap,
+      right: Math.min(W - inset("--sar"), x + (vv && vv.width > 0 ? vv.width : W)) - gap,
+      bottom: Math.min(H - inset("--sab"), y + (vv && vv.height > 0 ? vv.height : H)) - gap };
+  }
+  function clampAxis(lo, hi, min, max) {
+    if (hi - lo > max - min) return min - lo;     // bigger than the available screen: pin its start
+    if (lo < min) return min - lo;
+    if (hi > max) return max - hi;
     return 0;
   }
   // Pieces that share one NON-ZERO offset move as ONE BLOCK: clamping each on
@@ -379,6 +390,7 @@ const HudLayout = (function () {
     resetClearance();
     clearPackMarks();
     const W = window.innerWidth, H = window.innerHeight;
+    const bounds = screenBounds(W, H);
     const a = all()[shown()];
     const groups = new Map();   // "x,y" offset (or "solo:id" at 0,0) -> [{ el, e, r }]
     for (const [id, , sel] of ELEMENTS) {
@@ -399,7 +411,7 @@ const HudLayout = (function () {
     for (const g of groups.values()) {
       let l = Infinity, t = Infinity, rr = -Infinity, bb = -Infinity;
       for (const m of g) { l = Math.min(l, m.r.left); t = Math.min(t, m.r.top); rr = Math.max(rr, m.r.right); bb = Math.max(bb, m.r.bottom); }
-      const dx = clampAxis(l, rr, W), dy = clampAxis(t, bb, H);
+      const dx = clampAxis(l, rr, bounds.left, bounds.right), dy = clampAxis(t, bb, bounds.top, bounds.bottom);
       g.dx = dx; g.dy = dy;
       for (const m of g) {
         if (dx) m.el.style.setProperty("--hl-x", String(+(m.e.x + dx / W * 100).toFixed(2)));
@@ -465,26 +477,21 @@ const HudLayout = (function () {
     }
   }
 
-  /* PHONE 150% PACKER. Pure: boxes → { id: {dx, dy} } in screen px. announce
-     and flag never move. Later MOVE ids yield to earlier ones and to FIXED.
-     Dock chips (tyre/gear/speed/ERS) rank BEFORE opt-in left-column chips so
-     REL/STRATEGY slide off the dash instead of asking TYRES to drop onto the
-     steer buttons (844×390 @150%: tyre can only fall ~7 px before ctrl:steer). */
+  /* PHONE 150% PACKER. Pure: dock boxes → screen-pixel corrections.
+     The map, tower, radio, flag and touch controls stay fixed. Optional
+     readouts are placed separately by clearReadouts, never by this packer. */
   const PACK_AIR = 4;
   const PACK_SCALE_MIN = 140;
   const PACK_FIXED = Object.freeze({ announce: 1, flag: 1, map: 1, tower: 1 });
   const PACK_DOCK = Object.freeze({ tyre: 1, gearbox: 1, speed: 1, energy: 1 });
-  const PACK_MOVE = Object.freeze([
-    "tyre", "gearbox", "speed", "energy",
-    "rel", "strat", "inputs", "sectors", "limits",
-  ]);
-  function packPhoneRects(boxes, W, H) {
+  const PACK_MOVE = Object.freeze(Object.keys(PACK_DOCK));
+  function packPhoneRects(boxes, W, H, bounds = { left: PACK_AIR, top: PACK_AIR, right: W - PACK_AIR, bottom: H - PACK_AIR }) {
     const by = Object.create(null);
     const fixed = Object.create(null);
     if (!boxes || !(W > 0) || !(H > 0)) return {};
     // Portrait: keep the dock (tyre/gear/speed/ERS) planted — moving them
     // with margin at --hud-z-bot ≈ 0.6 yeeted TYRES off the top (390×844
-    // @150%). Left-column chips still pack against the planted dock.
+    // @150%). Keep the portrait dock planted.
     const dockFixed = H > W;
     for (let i = 0; i < boxes.length; i++) {
       const b = boxes[i];
@@ -510,11 +517,10 @@ const HudLayout = (function () {
     const hit = (a, b) => a.L < b.R - 0.5 && b.L < a.R - 0.5 && a.T < b.B - 0.5 && b.T < a.B - 0.5;
     const clampOn = (m) => {
       const r = rect(m);
-      if (r.L < PACK_AIR) m.dx += PACK_AIR - r.L;
-      if (r.T < PACK_AIR) m.dy += PACK_AIR - r.T;
-      if (r.R > W - PACK_AIR) m.dx -= r.R - (W - PACK_AIR);
-      if (r.B > H - PACK_AIR) m.dy -= r.B - (H - PACK_AIR);
+      m.dx += clampAxis(r.L, r.R, bounds.left, bounds.right);
+      m.dy += clampAxis(r.T, r.B, bounds.top, bounds.bottom);
     };
+    for (const id of PACK_MOVE) if (by[id] && !isFixed(id)) clampOn(by[id]);
     const separate = (moverId, obstacleId) => {
       const m = by[moverId], o = by[obstacleId];
       if (!m || !o || isFixed(moverId)) return false;
@@ -526,48 +532,15 @@ const HudLayout = (function () {
         const left = mr.R - or.L + PACK_AIR;
         const right = or.R - mr.L + PACK_AIR;
         const up = mr.B - or.T + PACK_AIR;
-        // Escape a FIXED plate (announce/flag/touch/map): left-column chips
-        // prefer LEFT (stay under the map) or UP (off a control below).
-        // Among peers: prefer a column stack — UP when the obstacle is the
-        // dock (tyre/gear) below, DOWN when stacking under a higher chip.
         let dx = 0, dy = 0;
-        const leftCol = moverId === "strat" || moverId === "rel" || moverId === "inputs"
-          || moverId === "sectors" || moverId === "limits";
-        const dockObs = obstacleId === "tyre" || obstacleId === "gearbox"
-          || obstacleId === "speed" || obstacleId === "energy";
         if (isFixed(obstacleId)) {
-          // Map/tower sit ABOVE the left column — escape DOWN (under them) or
-          // LEFT, never UP into the map. Touch discs below: prefer UP.
-          if (obstacleId === "map" || obstacleId === "tower") {
-            if (leftCol && left > 0 && mr.L - left >= PACK_AIR && left <= down) dx = -left;
-            else dy = down;
-          } else if (String(obstacleId).indexOf("ctrl:") === 0 && up > 0 && up <= Math.min(down, left, right)) dy = -up;
-          else if (leftCol && mr.L - left >= PACK_AIR && left <= Math.min(down, up, right) + 1) dx = -left;
-          else if (leftCol && up > 0 && up <= down) dy = -up;
+          // Map/tower stay above the dock; a control below can be cleared UP.
+          if (obstacleId === "map" || obstacleId === "tower") dy = down;
+          else if (String(obstacleId).indexOf("ctrl:") === 0 && up > 0 && up <= Math.min(down, left, right)) dy = -up;
           else if (left <= down) dx = -left;
           else dy = down;
-        } else if (leftCol && dockObs) {
-          // Opt-in chips yield to the dock: slide UP (or LEFT) off TYRES/GEAR.
-          if (up <= left && mr.T - up >= PACK_AIR) dy = -up;
-          else if (mr.L - left >= PACK_AIR) dx = -left;
-          else if (up <= right) dy = -up;
-          else dx = right;
-        } else if (leftCol && (obstacleId === "rel" || obstacleId === "strat"
-          || obstacleId === "inputs" || obstacleId === "sectors")) {
-          // Two left-column chips: slide horizontally. UP climbs into the map
-          // (measured: strat×rel → strat y=69 over the minimap). Stack DOWN
-          // only when neither side fits — the dock yield above already pulled
-          // both chips off TYRES when it could.
-          const leftFits = mr.L - left >= PACK_AIR;
-          const rightFits = mr.R + right <= W - PACK_AIR;
-          if (leftFits && (!rightFits || left <= right)) dx = -left;
-          else if (rightFits) dx = right;
-          else dy = down;
-        } else if (down <= left) {
-          dy = down;
-        } else {
-          dx = -left;
-        }
+        } else if (down <= left) dy = down;
+        else dx = -left;
         m.dx += dx;
         m.dy += dy;
         clampOn(m);
@@ -591,62 +564,6 @@ const HudLayout = (function () {
         }
       }
       if (!any) break;
-    }
-    // Reserve a TRACK LIMITS strip under the map when the fit left the chip
-    // on the left column (`data-limits-left`). Limits is often hidden until
-    // the survey forces it, so the packer never sees the box — without this
-    // pad REL climbs into the strip (844×390 @150%: limits×rel 2.4 px).
-    if (by.rel && by.map && W >= H) {
-      const limH = by.limits ? by.limits.h + PACK_AIR : 24;
-      const minT = by.map.y + by.map.dy + by.map.h + PACK_AIR + limH;
-      const r = by.rel;
-      if (r.y + r.dy < minT) r.dy = minT - r.y;
-      clampOn(r);
-    }
-    // Pocket snap (landscape only): at 150% phoneL STRATEGY cannot sit beside
-    // REL under the map (announce owns the mid band) or stack under REL
-    // (TYRES owns the dock). Park it RIGHT of the map and ABOVE the radio
-    // card. Portrait keeps the iterative pass — the landscape pocket lands
-    // under the timing tower (390×844 @150% survey).
-    if (by.strat && by.map && W >= H) {
-      const s = by.strat, m = by.map, ann = by.announce, rel = by.rel;
-      const still = (o) => o && hit(rect(s), rect(o));
-      if (still(ann) || still(rel) || still(by.tyre) || still(by.gearbox) || still(m)) {
-        const mapR = m.x + m.dx + m.w;
-        const mapT = m.y + m.dy;
-        const mapB = mapT + m.h;
-        const annT = ann ? ann.y : H * 0.45;
-        const annB = ann ? ann.y + ann.h : annT;
-        let tx = mapR + PACK_AIR;
-        // Prefer the pocket ABOVE the radio when strat fits; otherwise sit
-        // under the map to its right (idle announce is high — no room above).
-        let ty = Math.max(PACK_AIR, Math.min(mapT + PACK_AIR, annT - s.h - PACK_AIR));
-        if (!(ty + s.h <= annT - 0.5)) {
-          ty = Math.max(mapB + PACK_AIR, annB + PACK_AIR);
-          // Stay left of the radio when there is width; else hug map.R.
-          if (ann && ann.x - PACK_AIR - s.w >= mapR + PACK_AIR) tx = ann.x - PACK_AIR - s.w;
-        }
-        if (tx < W - PACK_AIR && ty + s.h <= H - PACK_AIR) {
-          s.dx = tx - s.x;
-          s.dy = ty - s.y;
-          clampOn(s);
-          for (let n = 0; n < 6; n++) {
-            let any = false;
-            for (const o of Object.keys(by)) {
-              if (o === "strat") continue;
-              const oj = PACK_MOVE.indexOf(o);
-              if (!isFixed(o) && oj >= 0 && oj > PACK_MOVE.indexOf("strat")) continue;
-              if (separate("strat", o)) any = true;
-            }
-            if (rel && !isFixed("rel")) {
-              for (const o of ["tyre", "gearbox", "announce", "map", "strat"]) {
-                if (by[o] && separate("rel", o)) any = true;
-              }
-            }
-            if (!any) break;
-          }
-        }
-      }
     }
     const out = Object.create(null);
     for (const id of Object.keys(by)) {
@@ -672,11 +589,7 @@ const HudLayout = (function () {
         el.style.removeProperty("translate");
         el.style.removeProperty("margin-left");
         el.style.removeProperty("margin-top");
-        if (el.hasAttribute("data-hl-pack-pos")) {
-          el.style.removeProperty("left");
-          el.style.removeProperty("top");
-          el.removeAttribute("data-hl-pack-pos");
-        }
+
       }
     }
   }
@@ -726,7 +639,7 @@ const HudLayout = (function () {
         boxes.push({ id: "ctrl:" + i, x: r.left, y: r.top, w: r.width, h: r.height, fixed: 1 });
       }
     } catch (_) { /* harness querySelectorAll stubs */ }
-    const corr = packPhoneRects(boxes, W, H);
+    const corr = packPhoneRects(boxes, W, H, screenBounds(W, H));
     if (!corr || !Object.keys(corr).length) return;
     for (const id of Object.keys(corr)) {
       const row = ELEMENTS.find((e) => e[0] === id);
@@ -734,12 +647,7 @@ const HudLayout = (function () {
       const el = doc.querySelector(row[2]);
       if (!el || !el.style) continue;
       const c = corr[id];
-      // Paint the correction. Zoomed absolute chips (#hud-strat/#hud-rel) do
-      // NOT move under an inline `translate` here (Chromium + CSS zoom: the
-      // computed translate stays on the [data-hl]/--hl path and getBounding
-      // ClientRect ignores our important translate). Nudge the used left/top
-      // by local px instead. Dock chips (tyre/gear/…) keep margin — their
-      // flow box has no absolute left/top to rewrite.
+      // Dock corrections are margins in local CSS pixels, preserving saved --hl-*.
       let z = 1;
       if (typeof el.currentCSSZoom === "number" && el.currentCSSZoom > 0) z = el.currentCSSZoom;
       else if (typeof getComputedStyle === "function") {
@@ -747,19 +655,8 @@ const HudLayout = (function () {
         if (zz > 0) z = zz;
       }
       const lx = c.dx / z, ly = c.dy / z;
-      const abs = id === "strat" || id === "rel" || id === "inputs"
-        || id === "sectors" || id === "limits" || id === "damage";
-      if (abs && typeof getComputedStyle === "function") {
-        const cs = getComputedStyle(el);
-        const curL = parseFloat(cs.left);
-        const curT = parseFloat(cs.top);
-        if (isFinite(curL)) el.style.setProperty("left", (curL + lx).toFixed(1) + "px", "important");
-        if (isFinite(curT)) el.style.setProperty("top", (curT + ly).toFixed(1) + "px", "important");
-        el.setAttribute("data-hl-pack-pos", "");
-      } else {
-        el.style.setProperty("margin-left", lx.toFixed(1) + "px", "important");
-        el.style.setProperty("margin-top", ly.toFixed(1) + "px", "important");
-      }
+      el.style.setProperty("margin-left", lx.toFixed(1) + "px", "important");
+      el.style.setProperty("margin-top", ly.toFixed(1) + "px", "important");
       el.setAttribute("data-hl-pack", "");
     }
   }
@@ -856,9 +753,7 @@ const HudLayout = (function () {
       const r = el.getBoundingClientRect();
       return r.width && r.height ? r : null;
     };
-    const safe = doc.documentElement && typeof getComputedStyle === "function" ? getComputedStyle(doc.documentElement) : null;
-    const inset = (name) => safe && safe.getPropertyValue ? Math.max(0, parseFloat(safe.getPropertyValue(name)) || 0) : 0;
-    const bounds = { left: EDGE + inset("--sal"), top: EDGE + inset("--sat"), right: W - EDGE - inset("--sar"), bottom: H - EDGE - inset("--sab") };
+    const bounds = screenBounds(W, H);
     const inside = (r) => r.left >= bounds.left && r.top >= bounds.top && r.right <= bounds.right && r.bottom <= bounds.bottom;
     const mapEl = doc.querySelector("#minimap");
     const mapBox = mapEl && !has("desktop") && has("hud-prof-broadcast") && W > H
@@ -1123,6 +1018,43 @@ const HudLayout = (function () {
   // body[data-hud-hide~=…] token for each of our ids (js/ui/hud-elements.js).
   const TOGGLE = Object.freeze({ gearbox: "gear", speed: "speed", energy: "energy", tyre: "tyre", ot: "ot", aero: "aero", bb: "bb", sectors: "sectors", limits: "limits",
     damage: "damage", rel: "rel", strat: "strat", inputs: "inputs" });
+  const VIS_ROWS = Object.freeze({
+    map: ["pm-hudmap", "hudMapVis", "on"], gaps: ["pm-hudgaps", "hudGapsVis", "on"], mirror: ["pm-hudmirror", "hudMirror", "auto"],
+  });
+  const VIS_BINARY = Object.freeze([["on", "SHOW"], ["off", "HIDE"]]);
+  const VIS_AUTO = Object.freeze([["auto", "AUTO"], ...VIS_BINARY]);
+  function visibilityIds(id) {
+    return id === "tower" ? ["pos", "lap", "time", "best", "delta"] : TOGGLE[id] ? [TOGGLE[id]] : [];
+  }
+  // Both editors use the same piece-to-preference mapping. Race messages and
+  // flags remain event-driven; layout pieces and individual toggles differ.
+  function visibility(id) {
+    const row = VIS_ROWS[id];
+    if (row) {
+      const value = store ? store.get(row[1], row[2]) : row[2];
+      return { value: VIS_AUTO.some(([v]) => v === value) ? value : row[2], choices: VIS_AUTO };
+    }
+    const ids = visibilityIds(id);
+    if (!ids.length || typeof HudElements === "undefined") return null;
+    const count = ids.filter((key) => HudElements.isOn(key)).length;
+    return count && count < ids.length
+      ? { value: "mixed", choices: [...VIS_BINARY, ["mixed", "PARTLY SHOWN", true]] }
+      : { value: count ? "on" : "off", choices: VIS_BINARY };
+  }
+  function setVisibility(id, value) {
+    const current = visibility(id);
+    if (!current || !current.choices.some(([v, , disabled]) => v === value && !disabled)) return false;
+    const row = VIS_ROWS[id];
+    if (row) {
+      // These rows own live game state, mirror resources and their summaries.
+      // Use their real change handler instead of only changing stored JSON.
+      const select = doc && doc.getElementById(row[0] + "-sel");
+      if (!select || select.disabled) return false;
+      select.value = value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    } else HudElements.setMany(visibilityIds(id), value === "on");
+    return true;
+  }
   /** Live: is element `el` drawn? (hidden attribute, display none, zero box) */
   function drawn(el) {
     if (!el || el.hidden) return false;
@@ -1146,7 +1078,8 @@ const HudLayout = (function () {
     if (live && drawn(el)) return null;
     const user = !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
     const hideAttr = doc.body && doc.body.getAttribute ? String(doc.body.getAttribute("data-hud-hide") || "") : "";
-    const off = !!TOGGLE[id] && hideAttr.split(/\s+/).indexOf(TOGGLE[id]) >= 0;
+    const ids = visibilityIds(id), hidden = hideAttr.split(/\s+/);
+    const off = ids.length > 0 && ids.every((key) => hidden.indexOf(key) >= 0);
     for (const [ids, test, reason, soft] of HIDE_RULES) {
       if (ids.indexOf(id) >= 0 && test(has, user, off, el, live)) return { reason, soft: !!soft };
     }
@@ -1189,53 +1122,36 @@ const HudLayout = (function () {
     const help = el("p", { className: "adv-help" });
     body.appendChild(help);
     const paintHelp = () => {
-      help.textContent = "Move and resize each race HUD element. You are editing the " + editingProf.toUpperCase() +
-        " style's layout: each HUD STYLE keeps its own, because BROADCAST anchors the timing tower, map and gaps differently. " +
-        "COCKPIT keeps its own layout, " +
-        "because the steering wheel covers the bottom of the screen; on a desktop its shipped layout puts OVERTAKE, AERO, ENERGY " +
-        "and TYRES beside the wheel (on a touch screen there is no room beside it, so they stay hidden until you place them). " +
-        "HELMET is the visor: the same wheel, but GEAR and SPEED paint too, and on a touch screen ENERGY sits above the wheel and TYRES in the left corner. " +
-        "An element marked HIDDEN is not drawn in the current mode, so its sliders are off. " +
-        "A PRESET is a starting point you can still tweak. In a race, hold a slider to see the HUD through this page.";
+      help.textContent = "Choose an element to show, hide, move or resize. AUTO follows the camera and HUD style. " +
+        "Editing " + editingProf.toUpperCase() + " · " + editing.toUpperCase() + ": other styles and camera layouts keep their own positions. " +
+        "Start with a preset or reset an element. In a race, hold a slider to preview the HUD.";
     };
-    // The settings page's own stepper (‹ select ›, .set-row). Like every shell
-    // stepper the arrows are pointer-only (tabindex -1, aria-hidden): the
-    // <select> owns the keys, so MenuNav walks one control per row.
-    function stepper(id, label, options, onPick) {
-      const lab = el("span", { className: "tune-label", textContent: label });
-      lab.id = id + "-label";
-      const pickEl = el("select", { attrs: { "aria-labelledby": lab.id } });
-      pickEl.id = id + "-sel";
-      for (const [v, t, off] of options) pickEl.appendChild(el("option", { value: v, textContent: t, disabled: !!off }));
-      const go = (d) => {   // skips a disabled entry (PRESET's CUSTOM is a readout, not a choice)
-        let i = pickEl.selectedIndex;
-        for (let n = 0; n < options.length; n++) {
-          i = (i + d + options.length) % options.length;
-          if (!options[i][2]) break;
-        }
-        pickEl.selectedIndex = i; onPick(pickEl.value);
-      };
-      const prev = el("button", { type: "button", textContent: "\u2039", attrs: { "aria-label": "Previous " + label.toLowerCase(), "aria-hidden": "true", tabindex: "-1" } });
-      const next = el("button", { type: "button", textContent: "\u203A", attrs: { "aria-label": "Next " + label.toLowerCase(), "aria-hidden": "true", tabindex: "-1" } });
-      prev.addEventListener("click", () => go(-1));
-      next.addEventListener("click", () => go(1));
-      pickEl.addEventListener("change", () => onPick(pickEl.value));
-      const row = el("div", { className: "set-row", attrs: { role: "group", "aria-labelledby": lab.id } },
-        [lab, el("div", null, [prev, pickEl, next])]);
-      row.id = id;
-      body.appendChild(row);
-      return pickEl;
+    // Use the settings control's native-select and disabled-option semantics.
+    function stepper(id, label, options, read, write) {
+      const built = SettingRow.build(id, label, options);
+      SettingRow.wire(built.row, { values: options, read, write });
+      body.appendChild(built.row);
+      return built.sel;
     }
-    const setPick = stepper("pm-hl-set", "LAYOUT FOR", [["cockpit", "COCKPIT CAM"], ["helmet", "HELMET CAM"], ["other", "OTHER CAMS"]], (v) => {
+    const setPick = stepper("pm-hl-set", "LAYOUT FOR", [["cockpit", "COCKPIT CAM"], ["helmet", "HELMET CAM"], ["other", "OTHER CAMS"]], () => editing, (v) => {
       editing = v; if (fold.open) preview = v; apply(); paintAll(); peek(true, 900);
     });
     const presetPick = stepper("pm-hl-preset", "PRESET",
-      PRESETS.map((p) => [p[0], p[1]]).concat([["custom", "CUSTOM", true]]), (v) => {
+      PRESETS.map((p) => [p[0], p[1]]).concat([["custom", "CUSTOM", true]]), () => presetOf(editing, editingProf), (v) => {
         applyPreset(v, editing, editingProf); paintAll(); peek(true, 900);
       });
-    const pick = stepper("pm-hl-el", "ELEMENT", ELEMENTS.map((e) => [e[0], e[1]]), (v) => {
+    const pick = stepper("pm-hl-el", "ELEMENT", ELEMENTS.map((e) => [e[0], e[1]]), () => sel, (v) => {
       sel = v; selected = sel; apply(); paintAll(); peek(true, 900);
     });
+
+    stepper("pm-hl-visibility", "VISIBILITY", [], () => visibility(sel)?.value || "", (v) => {
+      setVisibility(sel, v); paintAll(); peek(true, 900);
+    });
+    function paintVisibility() {
+      const current = visibility(sel);
+      doc.getElementById("pm-hl-visibility").hidden = !current;
+      SettingRow.paint("pm-hl-visibility", current ? current.value : "", current ? current.choices : []);
+    }
 
     const painters = [], sliders = [];
     for (const k of ["x", "y", "s"]) {
@@ -1293,7 +1209,7 @@ const HudLayout = (function () {
       if (setPick.value !== editing) setPick.value = editing;
       if (pick.value !== sel) pick.value = sel;
       for (const p of painters) p();
-      paintSum(); paintPreset(); paintHelp(); paintHidden();
+      paintSum(); paintPreset(); paintHelp(); paintVisibility(); paintHidden();
     }
     // Open: preview the layout being edited and outline the selected element.
     // Closed: the race shows the camera's layout again.
@@ -1311,7 +1227,7 @@ const HudLayout = (function () {
     host.addEventListener("change", (ev) => { if (!fold.contains(ev.target)) setTimeout(refresh, 0); });
     // SettingRow.wire stops `change` propagation and the chevrons fire none, so
     // the bubbling listener above misses those rows: follow their store keys.
-    const ROW_KEYS = ["hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror"];
+    const ROW_KEYS = ["hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudElements"];
     if (store && store.subscribe) store.subscribe((c) => {
       if (c && (ROW_KEYS.indexOf(c.key) >= 0 || (Array.isArray(c.keys) && c.keys.some((k) => ROW_KEYS.indexOf(k) >= 0)))) setTimeout(refresh, 0);
     });
@@ -1333,7 +1249,7 @@ const HudLayout = (function () {
     PACK_AIR, PACK_SCALE_MIN, PACK_FIXED, PACK_MOVE,
     get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
-    hiddenReason, originOf, packPhoneRects,
+    hiddenReason, originOf, packPhoneRects, visibilityIds, visibility, setVisibility, screenBounds,
   };
 })();
 Object.freeze(HudLayout);

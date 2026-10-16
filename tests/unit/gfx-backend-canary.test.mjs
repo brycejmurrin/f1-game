@@ -35,6 +35,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx } from "../helpers/glx-mock.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readFile = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -45,6 +46,7 @@ const read = (p) => p === "js/game.js"
 // Comment-stripped source: a pin can only match code, and a comment can
 // neither fail nor satisfy it.
 const code = (p) => (p.startsWith("css/") ? readCssSource(p) : read(p)).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+const gameUnionCode = () => gameSource().replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 /** The span between two source needles, ASSERTING BOTH EXIST FIRST.
  *
  * `src.slice(src.indexOf(a), src.indexOf(b))` is the shape that disarmed this
@@ -263,7 +265,7 @@ test("RENDERER picker lives in renderer-picker.js, not game.js or gfx-quality.js
   // The picker's own behaviour — a <select> with ‹ › steps, "WEBGPU
   // (UNAVAILABLE)" without navigator.gpu — is driven through bootPicker()
   // below; this is the ownership rule only.
-  assert.doesNotMatch(code("js/game.js"), /getElementById\(\s*"pm-renderer"\s*\)|\$\(\s*"pm-renderer"\s*\)/);
+  assert.doesNotMatch(gameUnionCode(), /getElementById\(\s*"pm-renderer"\s*\)|\$\(\s*"pm-renderer"\s*\)/);
   assert.match(code("js/perf/renderer-picker.js"), /getElementById\(\s*"pm-renderer"\s*\)/);
   // The preset file keeps the GRAPHICS button only — the split is the ownership rule.
   assert.doesNotMatch(code("js/perf/quality-preset.js"), /pm-renderer|apex26\.gfxBackend/);
@@ -758,6 +760,16 @@ test("TLX material-map ownership keeps placeholders and reports pack state", () 
   assert.match(wgx, /_releaseOwnedMatMaps/);
 });
 
+test("TLX rejects partial material readbacks so Assets can retry", () => {
+  const tlx = read("js/render/three/tlx.js");
+  const at = tlx.indexOf("function readbackTextureLayers(size, images, n, data)");
+  assert.ok(at > 0, "TLX material readback helper moved");
+  const body = tlx.slice(at, tlx.indexOf("\n      }", at));
+  assert.match(body, /const expected = \[\]/);
+  assert.match(body, /filled === expected\.length \? filled : 0/,
+    "a missing layer must reject the whole array instead of binding a zero-filled page");
+});
+
 test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgpu", () => {
   const src = read("js/perf/renderer-picker.js");
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
@@ -850,6 +862,9 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
+    // Why this tab's WGX/TLX pick bound WebGL2 (renderer-boot.js, #2285); a
+    // RESET must not leave diag() quoting a reason from before it.
+    "apex26.gfxFallbackWhy",
   ]);
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
 
@@ -4017,6 +4032,17 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // A-H4: an InstancedMesh caster (tlxCasterAttr=0) disposes; the attribute Mesh has no dispose(), so its event.
   assert.match(sh, /function disposeCaster\(m\) \{\s*try \{ if \(m\.isInstancedMesh\) m\.dispose\(\); else m\.dispatchEvent\(\{ type: "dispose" \}\); \}/);
   const tlxSrc = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const disposeInstancedObject = new Function(`return (${fnSource(tlxSrc, "function disposeInstancedObject(mesh) {")})`)();
+  const plain = { dispatches: 0, dispatchEvent(e) { this.dispatches++; this.event = e; } };
+  disposeInstancedObject(plain);
+  assert.equal(plain.dispatches, 1, "attribute-backed plain Meshes release three's render object through its dispose event");
+  assert.deepEqual(plain.event, { type: "dispose" });
+  const instanced = { isInstancedMesh: true, disposals: 0, dispose() { this.disposals++; } };
+  disposeInstancedObject(instanced);
+  assert.equal(instanced.disposals, 1, "real InstancedMesh resources use its native dispose method");
+  assert.doesNotMatch(tlxSrc, /(?:mv|batch)\.imesh\.dispose\(\)/, "freeing a batch must not call nonexistent Mesh.dispose directly");
+  assert.match(tlxSrc, /disposeInstancedObject\(mv\.imesh\);[\s\S]*?disposeInstancedObject\(batch\.imesh\);/,
+    "both the mirror and main batch use the lifecycle-aware disposer");
   assert.match(tlxSrc, /function freeInstancedBatch\(batch\) \{\s*if \(!batch\) return;\s*if \(shadowSys && shadowSys\.freeInstanced\) shadowSys\.freeInstanced\(batch\);/,
     "and TLX frees it with the batch");
   // A released geometry (freeMesh / chunked free) is parked out of every slot
@@ -4038,7 +4064,12 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
   assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
   assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 3, "releaseGeometry, prunePool and the flush all drop through it");
-  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, ""), /m\.geometry = null; m\.material = null;/,
+  const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
+  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
+    "warm probes dispose before clearing references, after pending compilation settles");
+  assert.match(warmProbe, /finally \{ if \(!--p\.pending && p\.dead\) p\.release\(\); \}/,
+    "a retired probe releases when its last compiler settles");
+  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,
     "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
   // one array per skid mark per frame.
@@ -4281,7 +4312,7 @@ test("driving feel: the player tows on car positions only, the fronts lock, ever
   assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
   // Combined-slip / wheelLock live in PlayerForces (carve-headroom A).
   const forces = read("js/physics/player-forces.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(forces, /c\.wheelLock = braking && c\.speed > 0 && axFracF > 0\.60/, "a lock-up fires only rolling forwards (brake-held reverse is not a stop), inside the REACHABLE front-axle budget: axFracF peaks at 0.638 dry / 0.887 rain (0.638 even at 62 % front bias), so a 0.92 gate can never fire and the flat-spot system behind it is dead code");
+  assert.match(forces, /c\.wheelLock = braking && c\.speed > 0 && afF > lockOn/, "a lock-up fires only rolling forwards (brake-held reverse is not a stop), on the brake-bias-scaled front fraction afF with a speed-aware onset from PhysicsConsts");
   // The planted wheels spin in the car-draw seam (js/car/car-draw.js), which reads WHEEL_R off PhysicsConsts.
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(cd, /c\.wheelSpinF = \(\(c\.wheelSpinF \|\| 0\) \+ \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt \* \(1 - \(c\.wheelLock \|\| 0\)\)\)/, "locked fronts stop turning");
@@ -5974,7 +6005,7 @@ function bootScenario({ install = true, init = true, pref = "webgl2", skip = fal
     Event: class { constructor(type) { this.type = type; } },
     location: { reload: () => events.push("reload") },
     BACKEND_FILES: { webgl2: ["glsl-chunks.js", "glx.js"] },
-    canvas: {}, _claimSkipped: skip, _createHung: false,   // start()'s closure state the sliced fallback reads
+    canvas: {}, _claimSkipped: skip, _createHung: false, pick: pref, why: "",   // start()'s closure state the sliced fallback reads
     backendPreference: () => pref,
     showGraphicsUnavailable: () => events.push("unavailable"),
     async loadBackendScripts(group) {
@@ -6340,7 +6371,7 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   assert.ok(mrt.length < 200, "the scene MRT is set right before the glass compiles");
   assert.match(warm, /renderer\.setRenderTarget\(usePost \? post\.sceneTarget\(\) : softOutRT\(\)\)/,
     "the glass compiles under the scene pass's target, where it draws");
-  assert.match(warm, /fx\.mirrorGlassMaterial\(mirRT\.texture\)[\s\S]*for \(const sx of \[1, -1\]\)[\s\S]*compileAsync\(m, camera, scene\)/,
+  assert.match(warm, /fx\.mirrorGlassMaterial\(mirRT\.texture\)[\s\S]*for \(const sx of \[1, -1\]\)[\s\S]*compileWarmProbe\(_glassProbeGeo, gm, sx\)/,
     "both winding signs of the real material");
   assert.match(warm, /"uv", new THREE\.BufferAttribute/, "on createTexMesh's layout (position / normal / uv)");
   const glass = fnBody(code("js/render/three/tsl-fx.js"), "mirrorGlassMaterial");

@@ -12,6 +12,8 @@
  */
 var CarSfx = (() => {
   const SFX = { scrub: 0, lock: 0, surface: 0, pitLim: 0, wet: false };
+  // Born Double, values kept: the 0s are Smi fields, and the first fractional level split the map (PERF-HUNT-5).
+  SFX.scrub = SFX.lock = SFX.surface = 0.5; SFX.scrub = SFX.lock = SFX.surface = 0;
 
   function create(G) {
     let lastPit = "none", lastCar = null, lastRaceT = NaN;

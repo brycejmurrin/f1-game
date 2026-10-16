@@ -253,5 +253,20 @@ const CarFields = (function () {
     return c;
   }
 
-  return { predeclare, warmShape, KEYS, GROUPS, WARM, WARM_GROUPS, MUTABLE, MUTABLE_GROUPS };
+  /** The same store-and-restore for a SCRATCH or CONTEXT object (PERF-HUNT-5): for each named field `o` has, store a
+   * double and put the original value back, so a literal's integer default (`sep: 0`) is born a Double field and
+   * the first fraction stored mid-race does not split the object's map and deopt every optimized reader. A literal
+   * `0.0` would not do (V8 stores it as a Smi). Values, sentinels and key order unchanged; never adds a key. Returns `o`. */
+  function warmDoubles(o, keys) {
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      if (!(k in o)) continue;
+      const v = o[k];
+      o[k] = 0.5;
+      o[k] = v;
+    }
+    return o;
+  }
+
+  return { predeclare, warmShape, warmDoubles, KEYS, GROUPS, WARM, WARM_GROUPS, MUTABLE, MUTABLE_GROUPS };
 })();

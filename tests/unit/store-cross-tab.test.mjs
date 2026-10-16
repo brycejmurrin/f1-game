@@ -187,6 +187,8 @@ test("a write this tab made still wins its own cache — no self-invalidation lo
 function fakeIndexedDb(seed = []) {
   const rows = new Map(seed.map(([k, v]) => [k, v]));
   const lsOk = new Map(seed.filter((e) => e.length > 2).map(([k, , ok]) => [k, ok]));   // [k, v, lsOk]
+  const baseline = new Map(seed.filter((e) => e.length > 3).map(([k, , , v]) => [k, v]));
+  const rowAt = (k) => ({ k, v: rows.get(k), lsOk: lsOk.get(k), ...(baseline.has(k) ? { baseline: baseline.get(k) } : {}) });
   let writeFailures = 0;
   let writeHolds = 0;
   let writeTransactions = 0;
@@ -207,10 +209,10 @@ function fakeIndexedDb(seed = []) {
       const writes = [];
       const t = { error: null, oncomplete: null, onerror: null, onabort: null };
       t.objectStore = () => ({
-        put(row) { writes.push(() => { rows.set(row.k, row.v); lsOk.set(row.k, row.lsOk); }); return request(row.k); },
-        delete(k) { writes.push(() => { rows.delete(k); lsOk.delete(k); }); return request(undefined); },
-        get(k) { return request(rows.has(k) ? { k, v: rows.get(k), lsOk: lsOk.get(k) } : undefined); },
-        getAll() { return request(Array.from(rows, ([k, v]) => ({ k, v, lsOk: lsOk.get(k) }))); },
+        put(row) { writes.push(() => { rows.set(row.k, row.v); lsOk.set(row.k, row.lsOk); if (Object.hasOwn(row, "baseline")) baseline.set(row.k, row.baseline); else baseline.delete(row.k); }); return request(row.k); },
+        delete(k) { writes.push(() => { rows.delete(k); lsOk.delete(k); baseline.delete(k); }); return request(undefined); },
+        get(k) { return request(rows.has(k) ? rowAt(k) : undefined); },
+        getAll() { return request(Array.from(rows.keys(), rowAt)); },
       });
       const settle = () => {
         if (fail) { if (t.onabort) t.onabort(); }
@@ -227,7 +229,7 @@ function fakeIndexedDb(seed = []) {
     },
   };
   return {
-    rows, lsOk,
+    rows, lsOk, baseline,
     failNextWrite() { writeFailures++; },
     holdNextWrite() { writeHolds++; },
     releaseNextWrite() { const settle = heldWrites.shift(); if (settle) settle(); },
@@ -442,6 +444,45 @@ test("the tab that wrote the quota-refused row can still supersede it (no rollba
   assert.equal(idb.lsOk.get(key), true, "so a reload restores nothing over the disk");
 });
 
+test("a refused career mirror cannot roll back a newer primary saved before the mirror flush", async () => {
+  for (const short of ["career.driver.0", "season"]) {
+    const key = "apex26." + short, disk = new Map(), quota = { on: false };
+    const h = loadMirrored({ disk, quota });
+    await h.store.mirror.ready;
+    h.store.set(short, { money: 100, round: 1 });
+    await h.store.mirrorFlush();
+    quota.on = true;
+    h.store.set(short, { money: 200, round: 2 });
+    await h.store.mirrorFlush();
+    const refused = h.idb.rows.get(key), original = JSON.stringify({ money: 100, round: 1 });
+    assert.equal(h.idb.baseline.get(key), original, "refused row records the bytes it failed against");
+    quota.on = false;
+    // The next primary save survives process death before its debounced mirror write.
+    const newer = JSON.stringify({ money: 300, round: 3 });
+    const next = loadMirrored({ disk: new Map([[key, newer]]), seed: [[key, refused, false, original]] });
+    await next.store.mirror.ready;
+    assert.equal(next.disk.get(key), newer);
+    assert.equal(next.store.get(short).round, 3);
+    assert.equal(next.store.mirror.restored, 0);
+    const recover = loadMirrored({ disk: new Map([[key, original]]), seed: [[key, refused, false, original]] });
+    await recover.store.mirror.ready;
+    assert.equal(recover.store.get(short).round, 2, "a genuinely refused save still recovers its original baseline");
+    await recover.store.mirrorFlush();
+  }
+});
+
+test("repeated automatic migrations keep the pre-repair baseline for genuine refused-save recovery", async () => {
+  const key = "apex26.career.driver.0", original = JSON.stringify({ money: 100 });
+  const refused = JSON.stringify({ money: 200, round: 2 });
+  const h = loadMirrored({ disk: new Map([[key, original]]), seed: [[key, refused, false, original]] });
+  h.store.write("career.driver.0", { money: 100, repaired: 1 }, { migration: true });
+  h.store.write("career.driver.0", { money: 100, repaired: 2 }, { migration: true });
+  await h.store.mirror.ready;
+  assert.equal(h.disk.get(key), refused);
+  assert.equal(h.store.get("career.driver.0").round, 2);
+  await h.store.mirrorFlush();
+});
+
 test("without indexedDB the mirror is inert and the store is unchanged", async () => {
   const { store } = load();
   assert.equal(store.mirror.supported, false);
@@ -583,6 +624,26 @@ test("write(k, undefined) removes the key instead of storing the string \"undefi
   assert.equal(again.store.broken, null);
 });
 
+test("write rejects top-level functions and Symbols without deleting the previous value", () => {
+  const { store, disk } = load();
+  store.write("u", { a: 1 });
+  const before = disk.get("apex26.u");
+
+  const fn = store.write("u", () => 1);
+  assert.equal(fn.ok, false);
+  assert.equal(fn.durable, false);
+  assert.equal(fn.reason, "TypeError");
+  assert.equal(disk.get("apex26.u"), before, "a function must not delete the saved bytes");
+  assert.deepEqual(store.get("u", null), { a: 1 }, "the prior cached value remains usable");
+
+  const symbol = store.write("u", Symbol("unsupported"));
+  assert.equal(symbol.ok, false);
+  assert.equal(symbol.durable, false);
+  assert.equal(symbol.reason, "TypeError");
+  assert.equal(disk.get("apex26.u"), before, "a Symbol must not delete the saved bytes");
+  assert.deepEqual(store.get("u", null), { a: 1 }, "the prior value remains after both rejected writes");
+});
+
 /** store.js over a disk whose setItem throws `fail.name` while it is set, with
  *  Log.warn captured. */
 function bootLogged(fail = { name: null }) {
@@ -621,6 +682,7 @@ test("writeFailed() names a failed write until that key is written durably again
 // first write, and failed localStorage writes give Career no storage event.
 function loadCareerMirrored(options = {}) {
   const h = loadMirrored(options);
+  h.ctx.Blob = Blob; // CareerBackup measures UTF-8 file bytes with the browser Blob API.
   h.ctx.Teams = {
     LIST: [{ id: "haas", tier: 4, drivers: [
       { name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 },
@@ -646,7 +708,7 @@ test("an explicit backup import before mirror restore survives Career.load migra
   h.Career.load();
   const result = h.CareerBackup.apply({ format: h.CareerBackup.FORMAT,
     slots: [{ flavour: "driver", i: 0, data: JSON.parse(savedCareer(300)) }] });
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(h.Career.data().money, 300);
   await h.store.mirror.ready;
   await h.store.mirrorFlush();

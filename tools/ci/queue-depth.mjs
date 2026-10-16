@@ -17,11 +17,14 @@
  *   node tools/ci/queue-depth.mjs --write /workspace/apex-status/queue-depth.json
  *   node tools/ci/queue-depth.mjs --push "git push -u origin cursor/x"   # skip when the push starts no CI
  *
- * HOLD (commit locally, do not push or launch) when ANY of:
+ * INFORMATIONAL since 2026-10-16 (CI/CD review #2333 finding 7): nothing refuses
+ * a push on this line any more — the pool ran at 39 of 40 slots all day and a
+ * held push only moves its wait. `hold` (exit 1) still reads when ANY of:
  *   Linux jobs in flight (queued + running) ≥ LINUX_HOLD (60; the account has 40 slots)
- *   queued jobs, any OS                     ≥ QUEUED_HOLD (10)
+ *   queued jobs, any OS                     ≥ QUEUED_HOLD (10) — runner-queued only; a `pending`
+ *                                             job waits in a CI concurrency lane and drives no hold
  *   macOS jobs in flight                    ≥ MACOS_SLOTS (5)
- *   the oldest queued Linux job's age       ≥ STARVED_AGE_MIN (10 min; #2266)
+ *   the oldest queued Linux job's age       ≥ STARVED_AGE_MIN (10 min; #2266) while < LINUX_SLOTS/2 run
  * The line also prints the OBSERVED Linux running count and the oldest queued
  * age (#2266): on 2026-10-15 ~17:30Z only 7–12 Linux jobs ran while 25–36 sat
  * queued for up to 14 min, so the account had far fewer runners than the 40
@@ -44,7 +47,14 @@
  * Anything it cannot resolve is measured as before. bash-guard.sh and
  * sync-pr.mjs --push call it this way.
  *
- * Exit: 0 ok, 1 hold, 2 bad args, 3 no token / API unreachable.
+ * THE ONE WAITER (#2383). `--wait <min>` blocks in ONE background command instead of a
+ * send_later → wake → re-run → narrate loop: it polls every `--interval` s (default 30, min 10),
+ * prints one line per poll with the in-flight/queued TREND (`134→112→72`), and exits 0 on
+ * `= queue ok`, 124 on timeout. Hysteresis: after a hold it stays "hold" until ok has held
+ * for 2 min (HYSTERESIS_MS), so one quiet poll between two bursts is not a green light.
+ * An API error is retried; three in a row exit 3.
+ *
+ * Exit: 0 ok, 1 hold, 2 bad args, 3 no token / API unreachable, 124 --wait timeout.
  *
  * REST (read 2026-10-14):
  *   https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28#list-workflow-runs-for-a-repository
@@ -88,7 +98,17 @@ const QUEUED_RUN = new Set(["queued", "pending", "requested", "waiting"]);
 export const DEFAULT_OUT = "apex-status/queue-depth.json";
 
 /** Job statuses that wait for a runner; `waiting` (an environment gate) holds no slot. */
-const QUEUED = new Set(["queued", "requested", "pending"]);
+const QUEUED = new Set(["queued", "requested"]);
+/**
+ * `pending` is a job waiting its turn in a concurrency group: ci.yml's
+ * `queue: max` smoke and selected lanes hold ready PRs' legs FIFO. It holds no
+ * runner and no push frees it, so it is counted apart (`laneWaiting`) and
+ * drives no hold. Counting it as queued froze the gauge at hold for hours on
+ * 2026-10-15 (30 "queued", oldest 101 min, while 7 of 40 runners worked).
+ * docs.github.com/en/rest/actions/concurrency-groups lists a group's members as
+ * `in_progress` / `pending`.
+ */
+const LANE_WAITING = "pending";
 
 /** macOS when any runner label names it (macos-latest, macos-14, macos-15-xlarge …). */
 export const isMac = (job) => (job?.labels || []).some((l) => /^macos/i.test(String(l)));
@@ -98,11 +118,12 @@ export const isMac = (job) => (job?.labels || []).some((l) => /^macos/i.test(Str
  * @param {Array<{status?:string, labels?:string[]}>} jobs
  */
 export function countJobs(jobs) {
-  const c = { linux: { running: 0, queued: 0, oldestQueuedAt: null }, macos: { running: 0, queued: 0, oldestQueuedAt: null } };
+  const c = { linux: { running: 0, queued: 0, oldestQueuedAt: null }, macos: { running: 0, queued: 0, oldestQueuedAt: null }, laneWaiting: 0 };
   for (const j of jobs || []) {
     if (!j) continue;
     const os = isMac(j) ? c.macos : c.linux;
     if (j.status === "in_progress") os.running++;
+    else if (j.status === LANE_WAITING) c.laneWaiting++;
     else if (QUEUED.has(j.status)) {
       os.queued++;
       const t = Date.parse(j.created_at);
@@ -135,8 +156,13 @@ export function evaluate(c, meta = {}) {
   if (macInFlight >= MACOS_SLOTS) reasons.push(`macOS jobs in flight ${n(macInFlight)} ≥ ${MACOS_SLOTS}`);
   // #2266: the 40-slot model assumes runners; a queue that does not move says
   // the pool is smaller than that, whatever the counts.
-  if (linuxAge !== null && linuxAge >= STARVED_AGE_MIN)
-    reasons.push(`oldest queued Linux job ${linuxAge} min ≥ ${STARVED_AGE_MIN} (${c.linux.running} running${c.linux.running < LINUX_SLOTS / 2 ? ": runners starved" : ""})`);
+  // The age is from the job's created_at, which includes any time it waited
+  // `pending` in a CI lane: a leg released after a long lane wait reads as old
+  // for the seconds before a runner takes it. So age alone is not starvation;
+  // it holds only while fewer than half the slots run (2026-10-15 23:27Z: hold
+  // on one 115-min "queued" job with 36 running).
+  if (linuxAge !== null && linuxAge >= STARVED_AGE_MIN && c.linux.running < LINUX_SLOTS / 2)
+    reasons.push(`oldest queued Linux job ${linuxAge} min ≥ ${STARVED_AGE_MIN} (${c.linux.running} running: runners starved)`);
   return {
     verdict: reasons.length ? "hold" : "ok",
     hold: reasons.length > 0,
@@ -144,6 +170,7 @@ export function evaluate(c, meta = {}) {
     linux: { ...c.linux, inFlight: linuxInFlight, slots: LINUX_SLOTS, oldestQueuedMin: linuxAge },
     macos: { ...c.macos, inFlight: macInFlight, slots: MACOS_SLOTS, oldestQueuedMin: macAge },
     queued,
+    laneWaiting: c.laneWaiting ?? 0,
     runsExamined,
     runsCounted,
     runsLive,
@@ -157,7 +184,8 @@ export function reportLine(v) {
   const more = v.truncated || v.runsCounted
     ? `; ${v.runsExamined} of ${v.runsLive} live runs examined${counted}${v.truncated ? ", a lower bound" : ""}` : "";
   // #2266: the observed concurrency (running) and the oldest wait, beside the model's slots.
-  const seen = `; ${v.linux.running} Linux running${v.linux.oldestQueuedMin == null ? "" : `, oldest queued ${v.linux.oldestQueuedMin}m`}`;
+  const seen = `; ${v.linux.running} Linux running${v.linux.oldestQueuedMin == null ? "" : `, oldest queued ${v.linux.oldestQueuedMin}m`}`
+    + (v.laneWaiting ? `, ${v.laneWaiting} waiting in CI lanes` : "");
   return `= queue ${v.verdict} (${v.linux.inFlight} Linux jobs in flight / ${v.linux.slots}, ${v.queued} queued, `
     + `${v.macos.inFlight} macOS / ${v.macos.slots}${seen}${more})${v.hold ? ` — ${v.reasons.join("; ")}: commit locally, do not push` : ""}`;
 }
@@ -253,8 +281,9 @@ export function pushTargets(text, current) {
 }
 
 /**
- * Does a push to `branch` start a CI run? ci.yml runs on push for the deploy
- * branch only and on pull_request otherwise; a draft without `run-ci` gets one
+ * Does a push to `branch` start a CI run? The deploy branch's push starts
+ * pages.yml (the train, which calls ci.yml); ci.yml runs on pull_request
+ * otherwise; a draft without `run-ci` gets one
  * 2-min `draft-ci-skipped` job. `ci` is null when the lookup failed.
  */
 export function pushStartsCi(branch, request = api) {
@@ -277,11 +306,52 @@ export function pushVerdict(text, current, request = api) {
   return { skip: true, why, line: `= queue skip — push starts no CI (${why}): not held` };
 }
 
+/** Minutes of continuous ok that turn a hold into a go (--wait). */
+export const HYSTERESIS_MS = 2 * 60_000;
+export const WAIT_INTERVAL_S = 30;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const arrow = (xs) => xs.slice(-8).join("→");
+
+/**
+ * Poll `measureFn` until the gauge has read ok for HYSTERESIS_MS straight (→ 0),
+ * or `minutes` pass (→ 124). Every poll reports one line ending in the
+ * in-flight / queued trend. Injectable measure, clock and sleep for tests.
+ * @returns {Promise<{code:number, trend:{inFlight:number[], queued:number[]}, last:object|null}>}
+ */
+export async function waitForOk({ minutes, intervalS = WAIT_INTERVAL_S, hysteresisMs = HYSTERESIS_MS, measureFn = measure, now = Date.now, wait = sleep, report = () => {} }) {
+  const deadline = now() + minutes * 60_000;
+  const trend = { inFlight: [], queued: [] };
+  let okSince = null, errors = 0, last = null;
+  for (;;) {
+    const v = measureFn();
+    if (v.error) {
+      if (++errors >= 3) { report(`= queue unknown — API: ${v.error} (3 polls in a row)`); return { code: 3, trend, last }; }
+    } else {
+      errors = 0; last = v;
+      trend.inFlight.push(v.linux.inFlight); trend.queued.push(v.queued);
+      okSince = v.hold ? null : (okSince ?? now());
+      const settled = okSince !== null && now() - okSince >= hysteresisMs;
+      const tail = `trend in-flight ${arrow(trend.inFlight)}, queued ${arrow(trend.queued)}`;
+      if (settled) { report(`${v.line} — ok held ${Math.round((now() - okSince) / 1000)}s; ${tail}`); return { code: 0, trend, last }; }
+      report(okSince !== null
+        ? `= queue settling (ok for ${Math.round((now() - okSince) / 1000)}s of ${Math.round(hysteresisMs / 1000)}s) — ${tail}`
+        : `${v.line.replace(/ — .*/, "")} — ${v.reasons.join("; ")}; ${tail}`);
+    }
+    if (now() + intervalS * 1000 > deadline) {
+      report(`= queue timeout — still ${last ? (last.hold ? "hold" : "settling") : "unknown"} after ${minutes} min; ${last ? `trend in-flight ${arrow(trend.inFlight)}, queued ${arrow(trend.queued)}` : "no reading"}`);
+      return { code: 124, trend, last };
+    }
+    await wait(intervalS * 1000);
+  }
+}
+
 function parseArgs(argv) {
-  const out = { json: false, write: null, push: null };
+  const out = { json: false, write: null, push: null, wait: null, interval: WAIT_INTERVAL_S };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") out.json = true;
+    else if (a === "--wait") { const n = Number(argv[++i]); if (!(n > 0)) return { error: "--wait needs a number of minutes > 0" }; out.wait = n; }
+    else if (a === "--interval") { const n = Number(argv[++i]); if (!(n >= 10)) return { error: "--interval needs seconds ≥ 10" }; out.interval = n; }
     else if (a === "--push") { if (argv[i + 1] === undefined) return { error: "--push needs the push command" }; out.push = argv[++i]; }
     else if (a === "--write") out.write = argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[++i] : DEFAULT_OUT;
     else return { error: `unknown arg: ${a}` };
@@ -291,11 +361,12 @@ function parseArgs(argv) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
-  exitIfHelp(argv, `usage: node tools/ci/queue-depth.mjs [--json] [--write [path]] [--push "<git push command>"]
+  exitIfHelp(argv, `usage: node tools/ci/queue-depth.mjs [--json] [--write [path]] [--push "<git push command>"] [--wait <min> [--interval <s>]]
 
 Counts queued + running Actions JOBS by OS against ${LINUX_SLOTS} Linux / ${MACOS_SLOTS} macOS slots.
 Hold at ≥${LINUX_HOLD} Linux in flight, ≥${QUEUED_HOLD} queued, or ≥${MACOS_SLOTS} macOS. --write defaults to ${DEFAULT_OUT}.
 --push: exit 0 with "= queue skip" when every pushed branch has no open PR or a draft without run-ci.
+--wait <min>: block (run it as ONE background task) until ok has held 2 min; prints the in-flight/queued trend each poll; exit 0 ok, 124 timeout.
 Exit 0 = ok, 1 = hold (commit locally, do not push), 2 = bad args, 3 = API/token.`);
   const args = parseArgs(argv);
   if (args.error) { console.error(`queue-depth: ${args.error}`); process.exit(2); }
@@ -303,6 +374,10 @@ Exit 0 = ok, 1 = hold (commit locally, do not push), 2 = bad args, 3 = API/token
     const cur = spawnSync("git", ["branch", "--show-current"], { cwd: ROOT, encoding: "utf8" }).stdout?.trim() || "";
     const p = pushVerdict(args.push, cur);
     if (p.skip) { console.log(p.line); process.exit(0); }
+  }
+  if (args.wait != null) {
+    const w = await waitForOk({ minutes: args.wait, intervalS: args.interval, report: (l) => console.log(l) });
+    process.exit(w.code);
   }
   const v = measure();
   if (v.error) { console.log(`= queue unknown — API: ${v.error}`); process.exit(3); }
