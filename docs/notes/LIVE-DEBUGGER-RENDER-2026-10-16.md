@@ -1,5 +1,52 @@
 # Live debugger hunt — render backends (TLX / GLX / WGX), 2026-10-16
 
+## Scope covered
+
+Lane: live render hunt (TLX / GLX / WGX), PR #2555, branch `cursor/live-debug-render-7e3a`. Live in the debugger's
+Chrome: TLX boot + 13 circuit builds, WGX boot + rebuild A/B + mirror/matTex/renderScale/resize sweep + `device.destroy()`.
+On the recording GL mock: GLX resize, mesh churn, context loss, forced shader failure. Per-scenario detail: coverage
+matrix below.
+
+## Findings
+
+| id | file:line | severity | verdict | debugger evidence | fix commit | test | issue# |
+|---|---|---|---|---|---|---|---|
+| F1 | `js/render/shared/canvas-css-size.js:25` (from `tlx.js:3666`, lease in `gfx.js:236`) | medium | CONFIRMED-LIVE | caught-exception pause in `CanvasCssSize.create`, frame 1 `TlxCreate`; `canvas` is the init-owner Proxy; in-page `new ResizeObserver(cb).observe(new Proxy(canvas,…))` throws `parameter 1 is not of type 'Element'`; `watched` stays true so only window events invalidate the CSS box | fc1926e9 | `tests/unit/init-owner-resize-observer.test.mjs` (failed 1/2 → 2/2) | — |
+| O1 | `js/render/renderer-boot.js:153` | info | BY-DESIGN | unset default boots GLX when `navigator.gpu.requestAdapter()` is null: `diag().env.backend = "webgl2 (pick: three)"`, `backendFallback = null` | — | — | — |
+| O2 | `js/render/webgpu/wgx.js:958` | low | CONFIRMED-LIVE, DevTools-only | after `device.destroy()` (device captured via a `createCommandEncoder` wrapper): `mirror().drawn` frozen at 3998, `gpuErrors` 0, no error event, no reload, `state` stays `race`, `device.lost` pending 10 s | none proposed | — | — |
+| O3 | WGX mirror pass | info | BY-DESIGN | first `mirror("on")` allocates 4 textures, later off/on adds nothing: cached for the session, not leaked | — | — | — |
+| O4 | `__apex.race()` | info | VM-ONLY (harness) | `silverstone` rejected `Race start did not reach the grid` while the GPU process was pegged; next build fine | — | — | — |
+
+## Clean areas (do not re-hunt)
+
+- WGX buffer/texture lifecycle across rebuilds, `matTex` re-upload, `renderScale`, resize: balanced, `gpuErrors` 0.
+- GLX create/delete balance on resize, `createMesh`/`freeMesh`, lost context (mock); forced all-shader failure refuses
+  cleanly and frees the program once.
+- TLX `renderer.info.memory` over 13 builds: no monotonic growth (weak: SwiftShader, partly headless).
+- Boot-canary revert after a killed Chrome is designed (`apex26.gfxProbeStrikes`, reason string in `backendFallback`).
+
+## Not run, and why
+
+TLX/GLX resize, hidden/visible, context loss in a build, quality-tier NaN breakpoints, night, mirror, matTex, and the
+WGX hidden/night rows: drawing under SwiftShader pins the GPU process (one drawing `race()` took 47 s) and headless
+Chrome cannot flip `document.hidden`. Issue #2572. No `WEBGL_lose_context` run, no NaN-conditional breakpoints, no TLX
+create-throw break (a sibling owns that fix).
+
+## js-debugger tool problems hit
+
+- `debugger_state` returns every operation since attach, so each poll grows; `debugger_detach` + `debugger_attach` resets it.
+- After a page-busy timeout `debugger_detach` reports `cleanupErrors` (timeouts) and the next `attach` can time out too;
+  a new attach worked once the page drained. The container reset between turns killed Chrome and the daemon each time.
+- With `debugger_exceptions all`, the probe's own caught exceptions pause the page and read as findings; and an
+  `evaluate` of `ResizeObserver.observe` is blocked as a side effect and returns the paused frame's EvalError text.
+- `debugger_run` results are only readable through `debugger_state` (two calls per read).
+
+## Next step
+
+Fill #2572 on a runner that can draw; read `tooling-fast` and the draft fast tier on the pushed head, then `ready-gate`.
+
+## Method
+
 Method: js-debugger MCP attached to a headless Chromium (SwiftShader, `--remote-debugging-port=9222`) serving the
 working tree on :3456. Pause on caught + uncaught exceptions while booting; then scenario scripts through
 `debugger_run`. SwiftShader: faults are real, perf numbers are not. Backends are pinned with
