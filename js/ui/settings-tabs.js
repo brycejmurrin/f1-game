@@ -16,6 +16,17 @@ const SettingsNav = (function () {
     audio: "MUSIC & SOUND",
     files: "BACKUP & RESTORE",
   };
+  const BREADCRUMBS = {
+    home: "SETTINGS",
+    controls: "SETTINGS › CONTROLS",
+    driving: "SETTINGS › DRIVING",
+    display: "SETTINGS › DISPLAY",
+    appearance: "SETTINGS › APPEARANCE",
+    a11y: "SETTINGS › ACCESSIBILITY",
+    advanced: "SETTINGS › DRIVING AIDS",
+    audio: "SETTINGS › MUSIC & SOUND",
+    files: "SETTINGS › BACKUP & RESTORE",
+  };
   let live = null;
   // Subscribers told when a page is hidden by show()/back() (the CONTROLS wheel
   // wizard disarms itself here). Module-level so a subscriber needs no instance.
@@ -141,7 +152,7 @@ const SettingsNav = (function () {
       if (current !== "home" && current !== id) fireLeave(current);
       current = id;
       const title = document.getElementById("dlg-settings");
-      if (title) title.textContent = TITLES[id];
+      if (title) title.textContent = BREADCRUMBS[id];
       if (index) index.hidden = id !== "home";
       const pages = panels();
       for (const key of Object.keys(pages)) {

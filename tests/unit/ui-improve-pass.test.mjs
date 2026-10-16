@@ -1580,7 +1580,7 @@ function bootSettingsNav() {
 test("backup settings use the same page, focus and BACK behavior as other settings", () => {
   const h = bootSettingsNav();
   h.door("files").click();
-  assert.equal(h.title().textContent, "BACKUP & RESTORE");
+  assert.equal(h.title().textContent, "SETTINGS › BACKUP & RESTORE");
   assert.equal(h.panel("files").hidden, false);
   assert.equal(h.panel("display").hidden, true);
   assert.equal(h.dom.document.activeElement, h.filesFirst);
@@ -1638,7 +1638,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   h.nav.show("controls", true);
   assert.equal(h.panel("controls").hidden, false);
   assert.equal(h.index().hidden, true);
-  assert.equal(h.title().textContent, "CONTROLS");
+  assert.equal(h.title().textContent, "SETTINGS › CONTROLS");
   assert.equal(h.dom.document.activeElement, h.firstControl, "show(id, true) focuses the first visible page control");
   h.dom.document.activeElement = null;
   h.nav.showCurrent();
@@ -1652,14 +1652,14 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(h.dom.document.activeElement, h.door("controls"), "BACK restores the originating door");
   h.nav.show("advanced", false);
   assert.equal(h.panel("advanced").hidden, false);
-  assert.equal(h.title().textContent, "DRIVING AIDS");
+  assert.equal(h.title().textContent, "SETTINGS › DRIVING AIDS");
   h.nav.show("audio", true);
   assert.equal(h.panel("audio").hidden, false);
-  assert.equal(h.title().textContent, "MUSIC & SOUND");
+  assert.equal(h.title().textContent, "SETTINGS › MUSIC & SOUND");
   assert.equal(h.dom.document.activeElement, h.audioFirst, "audio can land on its visible disclosure door");
   h.door("driving").click();
   assert.equal(h.panel("driving").hidden, false);
-  assert.equal(h.title().textContent, "DRIVING");
+  assert.equal(h.title().textContent, "SETTINGS › DRIVING");
   assert.equal(h.panel("audio").hidden, true);
   assert.equal(h.dom.document.activeElement, h.drivingFirst, "driving focuses its first visible control");
   h.nav.show("display", false);
