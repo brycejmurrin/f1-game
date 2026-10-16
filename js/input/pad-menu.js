@@ -230,6 +230,11 @@ const InputPadMenu = (function () {
       if (top !== padNavSeedLayer) {
         padNavSeedLayer = top || null;
         padNavSeeded = false;
+        // A held direction belongs to the layer it first navigated. Re-arm it
+        // when a child sheet/dialog opens so the new layer gets an immediate
+        // arrow instead of inheriting the old layer's repeat deadline.
+        padNavDir = null;
+        padNavNextT = 0;
       }
       const dir = padNavDirOf(pad);
       // Nintendo's confirm is the physical A, which the standard mapping numbers 1.
