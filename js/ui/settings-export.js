@@ -406,12 +406,12 @@ function collectTtlb() {
 }
 function applyTtlb(bag) {
   if (!bag || typeof bag !== "object" || Array.isArray(bag)) return { applied: 0, skipped: 0, rejected: 0 };
-  if (!GameStore || !GameStore.ttBoardAdd || !GameStore.ttBoard) {
+  if (!GameStore || !GameStore.ttBoardAddResult || !GameStore.ttBoard) {
     return { applied: 0, skipped: 0, rejected: 0 };
   }
   const tracks = Object.keys(bag);
   if (tracks.length > TTLB_TRACKS_MAX) return { applied: 0, skipped: tracks.length, rejected: tracks.length };
-  let applied = 0, skipped = 0, rejected = 0, lapsSeen = 0;
+  let applied = 0, skipped = 0, rejected = 0, failed = 0, lapsSeen = 0;
   for (const trackId of tracks) {
     if (!TTLB_TRACK_RE.test(trackId)) { skipped++; rejected++; continue; }
     const raw = bag[trackId];
@@ -423,13 +423,20 @@ function applyTtlb(bag) {
       if (lapsSeen >= TTLB_LAPS_MAX) { skipped++; continue; }
       lapsSeen++;
       const k = ttlbEntryKey(lap);
-      if (seen.has(k)) { skipped++; continue; }
-      GameStore.ttBoardAdd(trackId, lap);
-      seen.add(k);
-      applied++;
+      if (seen.has(k)) {
+        if (GameStore.store.failedKeys().some((f) => f.key === "ttlb." + trackId)) {
+          try { if (GameStore.ttBoardSaveResult(trackId).durable) applied++; else failed++; } catch (_) { failed++; }
+        } else skipped++;
+        continue;
+      }
+      try {
+        const result = GameStore.ttBoardAddResult(trackId, lap);
+        if (result.ok) seen.add(k);
+        if (result.durable) applied++; else failed++;
+      } catch (_) { failed++; }
     }
   }
-  return { applied, skipped, rejected };
+  return { applied, skipped, rejected, failed };
 }
 
 // THE GARAGE FILE: a SECOND file, deliberately not part of the settings one: the garage is what
@@ -527,6 +534,7 @@ function applySettings(file, G) {
   const ttlb = applyTtlb(file.ttlb);
   applied += ttlb.applied;
   skipped += ttlb.skipped;
+  failed += ttlb.failed || 0;
   return { ok: true, applied, skipped, failed, rejectedTtlb: ttlb.rejected || 0, reason: null };
 }
 // A FILE IS PLAYER INPUT AND THE GARAGE DOES NOT DEFEND ITSELF. isGarageKey

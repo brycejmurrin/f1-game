@@ -1920,7 +1920,7 @@ function redFlagRestart() {
     const rh = DriverRatings.hash32(simSeed() + ":restart:" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (rh & 0xffff) / 65536);
     c.launchOn = !c.human;
-    c.jumpStartFined = false; c.penaltyWhy = null;
+    c.jumpStartFined = false;   // another launch can earn a fine; existing same-race penalties and reasons survive
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
   seedPlayerPose();

@@ -1,0 +1,2 @@
+- Canceling a friend-race start and entering a new room now keeps that room's connections, role and messages when the old track build finishes or fails.
+- EXIT VR followed immediately by ENTER VR starts a fresh request. Late reference-space and renderer setup from the canceled attempt cannot end or detach the new session.

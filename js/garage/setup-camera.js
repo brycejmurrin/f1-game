@@ -916,10 +916,17 @@ $("cs-view-reset").onclick = () => { resetSetupCam(); if (G.soundOn) GameAudio.u
 function holdSetupCtl(id, rates, step) {
   const el = $(id);
   if (!el) return;
-  const release = () => { if (spHeld === rates) spHeld = null; };
+  let pointerId = null;
+  const release = (e) => {
+    if (e && e.type !== "blur" && e.pointerId !== pointerId) return;
+    pointerId = null;
+    if (spHeld === rates) spHeld = null;
+  };
   el.addEventListener("pointerdown", (e) => {
     if (!G.setupPreviewOn || preview || (arrival.state && arrival.state.active)) return;
+    if (pointerId !== null) return;
     e.preventDefault();
+    pointerId = e.pointerId;
     // Capture so a finger sliding off the chip still releases here. NOT
     // pointerleave for the release: setPointerCapture fires a boundary event as
     // it retargets, which would stop the motion on its very first frame.
@@ -933,6 +940,8 @@ function holdSetupCtl(id, rates, step) {
   });
   for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(ev, release);
   window.addEventListener("pointerup", release);
+  window.addEventListener("pointercancel", release);
+  window.addEventListener("blur", release);
   // Enter/Space activate as a click with detail 0 and never send a pointerdown,
   // so the keyboard gets a discrete nudge rather than nothing at all.
   el.addEventListener("click", (e) => { if (e.detail === 0) step(); });

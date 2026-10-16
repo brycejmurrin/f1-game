@@ -1,0 +1,10 @@
+{
+  "files": {
+    "js/net/lobby.js": {
+      "lines": 7
+    }
+  },
+  "tree": {
+    "waitForTimeout": -1
+  }
+}

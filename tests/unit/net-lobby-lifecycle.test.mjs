@@ -13,9 +13,9 @@ const LOBBY_CODES = await readFile(new URL("../../js/net/lobby-codes.js", import
 const NETPLAY = await readFile(new URL("../../js/net/netplay.js", import.meta.url), "utf8");
 
 function deferred() {
-  let resolve;
-  const promise = new Promise((r) => { resolve = r; });
-  return { promise, resolve };
+  let resolve, reject;
+  const promise = new Promise((r, j) => { resolve = r; reject = j; });
+  return { promise, resolve, reject };
 }
 
 function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transportStatus, handshake, parts,
@@ -2041,6 +2041,52 @@ async function guestInQuali(extra = {}, sheetUp) {
   assert.equal(h.lobby.qualifying(), true, "friend quali is armed");
   return ctx;
 }
+
+for (const outcome of ["success", "false", "canceled", "rejection"]) {
+  test(`a stale ${outcome} race build cannot consume or close a replacement room`, async () => {
+    const { h, made } = await guestInQuali();
+    const build = deferred(), calls = [];
+    h.G.startRace = () => build.promise;
+    h.G.quitToMenu = () => calls.push("quit");
+    h.G.netPlay = { start: () => { calls.push("start"); return { ok: true }; }, hostStart: () => calls.push("hostStart") };
+    const oldStart = h.G._qualiDone();
+    try {
+      h.lobby.cancel();
+      assert.equal(h.lobby.open(), true);
+      assert.equal((await h.lobby.host()).ok, true);
+      h.lobby.watchForOpen();
+      for (let i = 0; i < 40 && made.length < 2; i++) await new Promise((r) => setTimeout(r, 50));
+      assert.equal(made.length, 2, "a new transport owns a new room session");
+      made[1].deliver("hello", { team: "beta", driver: 0 });
+      const before = JSON.parse(JSON.stringify(h.lobby.status()));
+      const text = h.status.textContent;
+      if (outcome === "rejection") build.reject(new Error("old scenery failed"));
+      else build.resolve(outcome === "success" ? { ok: true } : outcome === "false" ? false : { kind: "canceled" });
+      await oldStart;
+      assert.deepEqual(calls, [], "stale work must not start networking or quit the player's new screen");
+      assert.equal(h.elements.get("vsfriend").hidden, false, "replacement room remains visible");
+      assert.deepEqual(JSON.parse(JSON.stringify(h.lobby.status())), before, "replacement role, sessions and status survive");
+      assert.equal(h.status.textContent, text, "old rejection must not replace the new room's message");
+      assert.equal(made[1].sent.some((m) => m.t === "qgo"), false, "replacement peers never receive the old start");
+    } finally { build.resolve(false); await oldStart; h.lobby.cancel(); }
+  });
+}
+
+test("a peer leaving during the same race build still releases the empty room and qualifying gate", async () => {
+  const { h, closers } = await guestInQuali();
+  const build = deferred();
+  h.G.startRace = () => build.promise;
+  h.G.netPlay = { start() { assert.fail("no networking without a peer"); } };
+  const starting = h.G._qualiDone();
+  try {
+    closers[0]();
+    build.resolve({ ok: true });
+    await starting;
+    assert.equal(h.lobby.qualifying(), false, "a real departure still releases qualifying persistence");
+    assert.equal(h.lobby.status().guests, 0);
+    assert.equal(h.elements.get("vsfriend").hidden, true);
+  } finally { build.resolve(false); await starting; h.lobby.cancel(); }
+});
 
 test("a start that throws after the quali sheet cancels and quits instead of failing silently (bug-hunt H30)", async () => {
   const { h } = await guestInQuali();
