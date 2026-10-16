@@ -338,6 +338,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-stage.test.mjs",
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/desktop-version.test.mjs",
+  // DevFlags: query/hash/storage resolution for boot toggles (js/core/dev-flags.js).
+  "tests/unit/dev-flags.test.mjs",
   "tests/unit/digital-steer.test.mjs",
   // Live TV director (js/camera/director.js): pure cut dwell/battles + dbgCam publish without car forces. ~0.05 s.
   "tests/unit/director.test.mjs",

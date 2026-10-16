@@ -1034,10 +1034,7 @@ const TLX = (function () {
       let presentW = 1, presentH = 1;
       let spatialUpscale = false;
       try {
-        const q = typeof location !== "undefined" && location.search &&
-          /(?:^|[?&])upscale=1(?:&|$)/.test(location.search);
-        const ls = typeof localStorage !== "undefined" && localStorage.getItem("apex26.spatialUpscale") === "1";
-        spatialUpscale = !!(q || ls);
+        spatialUpscale = typeof DevFlags !== "undefined" && !!DevFlags.get("upscale");
       } catch (_) { spatialUpscale = false; }
       function setSpatialUpscale(on) {
         spatialUpscale = !!on;
@@ -1086,7 +1083,7 @@ const TLX = (function () {
       // Opt-in only (?three-devtools=1): the bare globals pin the whole scene graph and would collide with any
       // future `scene`/`camera` identifier. The heap-census tooling and track-switch-memory.spec.js set the flag.
       try {
-        if (typeof location !== "undefined" && /(?:^|[?&])three-devtools=1(?:&|$)/.test(location.search || "")) {
+        if (typeof DevFlags !== "undefined" && DevFlags.get("three-devtools")) {
           window.scene = scene; window.camera = camera; window.renderer = renderer;
           window.THREE = THREE;
           Log.info("gfx", "[TLX] window.scene / camera / renderer / THREE exposed — Three.js DevTools will find the scene");
@@ -1125,8 +1122,7 @@ const TLX = (function () {
 
       const vizMode = (function () {
         try {
-          return new URL(location.href).searchParams.get("viz")
-            || localStorage.getItem("apex26.tlxViz") || null;
+          return typeof DevFlags !== "undefined" ? DevFlags.get("viz") : null;
         } catch (_) { return null; }
       })();
       const LIT_VIZ = ["mat", "normal", "lamp"];

@@ -1060,10 +1060,7 @@ const WGX = (function () {
     let presentW = 0, presentH = 0;
     let spatialUpscale = false;
     try {
-      const q = typeof location !== "undefined" && location.search &&
-        /(?:^|[?&])upscale=1(?:&|$)/.test(location.search);
-      const ls = typeof localStorage !== "undefined" && localStorage.getItem("apex26.spatialUpscale") === "1";
-      spatialUpscale = !!(q || ls);
+      spatialUpscale = typeof DevFlags !== "undefined" && !!DevFlags.get("upscale");
     } catch (_) { spatialUpscale = false; }
     let lastFrame = null;
 

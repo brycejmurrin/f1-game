@@ -124,6 +124,7 @@ const LAZY_SCENERY = CIRCUITS.map((id) => `${SCENERY_DIR}/${id}.js`);
 const FULL = [
   // Log must be first: every module below may log at evaluation time.
   "js/core/log.js",
+  "js/core/dev-flags.js",
   "js/core/mat4.js",
   "js/core/hash32.js",
   "js/core/clipboard.js",   // ApexClipboard: write/read + textarea fallback (call-time; early so panels/lobby can use it)
@@ -469,6 +470,7 @@ const SHELL_NOTES = {
 // itself uses ../js/... since it is served from /tools/).
 const CARVIEW = [
   "js/core/log.js",
+  "js/core/dev-flags.js",
   "js/core/mat4.js",
   "js/render/shared/glx-facade.js",
   "js/render/glx/shaders/glsl-chunks.js",
@@ -518,6 +520,7 @@ const CARVIEW = [
 // verification is per-id, so LIST order does not matter there).
 const TRACK_VM = [
   "js/core/log.js",
+  "js/core/dev-flags.js",
   // mat4.js is not matrix math for the VM's sake — it is the home of the shared
   // scalar helpers (M4.clamp/lerp/wrapDelta), which js/track/ binds at eval.
   // Leaving it out is how the track engine ended up with four private lerps.
@@ -1170,6 +1173,7 @@ const TRACK_WORKER_EXTRA = [
 // shared roll math, and the pad module. No game, no renderer, no store.
 const CONTROLLER = [
   "js/core/log.js",
+  "js/core/dev-flags.js",
   "js/core/hash32.js",      // NetHandshake.offerId: the answer names the offer it answers
   "js/net/bytes.js",
   "js/net/nostr.js",
