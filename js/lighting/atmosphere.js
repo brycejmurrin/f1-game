@@ -26,8 +26,14 @@ const { LT, buildTrackLights } = LightTune;
 const TUNE_DEFS = LightTune.TUNE_DEFS || [];
 
 const CLEAR_FOG_SCALE = 0.45;
-// Minimum FOG-weather density at the default FOG BOOST (3.0): exp² fog is 80 % at 300 m, 99 % at 500 m.
+// FOG-weather EFFECTIVE density band (frame.fogDensity x LT.fogDensityMul, what the shaders
+// and the chunk cull use) at the default FOG BOOST: the floor is 80 % at 300 m / 99 % at
+// 500 m; the ceiling keeps ~40 % visibility at 150 m. Both scale with the boost knob.
+// #2256: every shipped <track>|<tod>|fog row pins fogDensityMul ~2, so a pre-multiplier
+// floor x3 boost ran 0.011-0.026 effective — the frame went white within ~150 m.
 const FOG_WX_MIN_DENSITY = 0.0042;
+const FOG_WX_MAX_DENSITY = 0.0065;
+const FOG_WX_DEF_BOOST = 1.5;
 
 // ── Blended weather ──────────────────────────────────────────────────────────
 // applyRaceSettings(blendS) cross-fades the session lighting from what the
@@ -494,12 +500,18 @@ function _applyRaceBody() {
   } else if (G.raceWeather === "fog") {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
     G.frameSky.cloud = Math.min(0.85, G._cloudBase + 0.35);
-    const _fogMul = LT.fogWxMul != null ? LT.fogWxMul : 3.0;
-    // FLOOR (2026-10-15 weather survey): a bright clear-day circuit base is ~0.0008, so
-    // x3 left 0.0024 — exp² haze only ~40 % at 300 m and 87 % at 600 m, so far
-    // towers and dunes read crisp under "fog". A real mist is opaque by ~500 m. The
-    // floor scales with the FOG BOOST knob (1 = no extra haze stays honest).
-    G.frame.fogDensity = Math.max((G.frame.fogDensity || 0.0017) * _fogMul, FOG_WX_MIN_DENSITY * _fogMul / 3.0);
+    const _fogMul = LT.fogWxMul != null ? LT.fogWxMul : FOG_WX_DEF_BOOST;
+    // BAND (2026-10-15 weather survey + gallery D #2256): a bright clear-day base is
+    // ~0.0008, so far towers read crisp under "fog" without a floor; a misty dawn base
+    // (Spa 0.0043) under the per-track fogDensityMul ~2 was a white wall without a
+    // ceiling. Clamp the EFFECTIVE density (divide the preset multiplier back out), both
+    // ends scaled by the FOG BOOST knob (1 = no extra haze stays honest).
+    {
+      const _dm = LT.fogDensityMul > 0 ? LT.fogDensityMul : 1;
+      const _k = _fogMul / FOG_WX_DEF_BOOST;
+      const _eff = (G.frame.fogDensity || 0.0017) * _fogMul * _dm;
+      G.frame.fogDensity = clamp(_eff, FOG_WX_MIN_DENSITY * _k, FOG_WX_MAX_DENSITY * _k) / _dm;
+    }
     // A NIGHT fog must stay night — the same guard, for the same reason, as the
     // exposure floor below. This pale daylight grey is ~20x the night horizon
     // band ([0.04,0.03,0.06]) and fogWxMul has just TRIPLED the density on the
@@ -538,6 +550,12 @@ function _applyRaceBody() {
       _dayWetGreyDeck(G, 0.85);
       // Seamless: the sky horizon IS the fog colour (default TOD already does it above).
       G.frameSky.horizon = fc.slice(); G.frame.skyHorizon = G.frameSky.horizon;
+    } else if (_twl && G.frameSky.zenith) {
+      // Twilight fog (#2257): a saturated clear-dawn zenith sat over the pale fog bank
+      // with a hard seam. Horizon = fog colour; the zenith keeps 15 % of its hue.
+      G.frameSky.zenith = G.frameSky.zenith.map((v, i) => v + (fc[i] - v) * 0.85);
+      G.frameSky.horizon = fc.slice();
+      G.frame.skyZenith = G.frameSky.zenith; G.frame.skyHorizon = G.frameSky.horizon;
     }
   } else {
     G.frameSky.cloud = G._cloudBase;

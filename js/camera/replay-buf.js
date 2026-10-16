@@ -83,7 +83,7 @@ const ReplayBuf = (function () {
     function clear() {
       head = 0; count = 0; lastSlot = -1; tags = []; breakPending = false;
       scrubbing = false; liveSnap = null; scrubPlaying = true; scrubRate = 1;
-      if (prevStatus) prevStatus.fill(0);
+      // prevStatus survives: a car already out when the timeline is discarded is not a fresh retirement (alloc() zeroes it).
       hideDock();
     }
     function reset(cars) {

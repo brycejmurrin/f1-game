@@ -44,6 +44,43 @@ function bootScreen(stored = {}) {
   return Object.assign(vmx, { dom, G, clicks, D: ctx.TrackDesigner, DC: ctx.DesignerCanvas, root: dom.byId("trackdesigner") });
 }
 
+// The normal editor store keeps object references; SAVE mutating a cached draft
+// can therefore hide stale bytes on disk. Exercise the real store and reboot
+// from its serialized localStorage, with the autosave debounce driven by hand.
+function bootPersistedScreen(disk = new Map()) {
+  const b = bootScreen(), captured = b.ctx.GameStore.store;
+  let blocked = false, timerId = 0;
+  const timers = new Map();
+  b.ctx.setTimeout = (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; };
+  b.ctx.clearTimeout = (id) => timers.delete(id);
+  b.ctx.localStorage = {
+    get length() { return disk.size; },
+    key: (i) => [...disk.keys()][i] || null,
+    getItem: (k) => disk.get(k) ?? null,
+    setItem(k, v) {
+      if (blocked) { const e = new Error("full"); e.name = "QuotaExceededError"; throw e; }
+      disk.set(k, String(v));
+    },
+    removeItem: (k) => disk.delete(k),
+  };
+  for (const f of ["js/career/save-migrate.js", "js/core/store.js"]) {
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), b.ctx, { filename: f });
+  }
+  const store = b.ctx.GameStore.store;
+  // CustomTracks captured its store at eval; retain that reference while using
+  // the real store's serialization, cache and durability results underneath.
+  for (const k of ["get", "set", "write", "rawDel"]) captured[k] = store[k].bind(store);
+  return Object.assign(b, {
+    disk,
+    blockWrites: (v) => { blocked = v; },
+    flushDraft() {
+      const draft = [...timers.values()].find((t) => t.ms === 600);
+      assert.ok(draft, "an edit scheduled the draft autosave");
+      draft.fn();
+    },
+  });
+}
+
 test("init() builds the rail before any design exists; open() randomises a green loop; close() hides", async () => {
   const b = bootScreen();
   assert.equal(b.D.init(b.G, { custom: b.C, root: b.root }), true, "init builds into the shell dialog");
@@ -2297,6 +2334,67 @@ test("first-save history keeps its library identity without linking another impo
   assert.equal(back.id, restored.id); assert.equal(b.C.list().length, 2);
   assert.equal(b.C.get(other.id).name, "OTHER DOCUMENT", "saving the restored document does not replace the imported one");
   assert.equal(b.C.get(restored.id).name, "MY UNSAVED LABEL");
+  b.D.close();
+});
+
+test("SAVE persists the current library identity across reload, even with 24 circuits", () => {
+  for (const count of [1, 24]) {
+    const b = bootPersistedScreen();
+    b.D.init(b.G, { custom: b.C, root: b.root });
+    b.D.open({ design: design() }); b.D.preview();
+    const first = b.D.save(); assert.equal(first.durable, true);
+    for (let i = 1; i < count; i++) assert.equal(b.C.upsert(design({ seed: 100 + i })).ok, true);
+    b.D.setWidth(7.5); b.D.preview(); b.flushDraft();
+    assert.equal(JSON.parse(b.disk.get("apex26.customTrackDraft")).originId, first.id);
+    const saved = b.D.save(); assert.equal(saved.durable, true); assert.notEqual(saved.id, first.id);
+    const draft = JSON.parse(b.disk.get("apex26.customTrackDraft"));
+    assert.equal(draft.id, saved.id); assert.equal(draft.originId, saved.id);
+    // Reload directly: CLOSE would itself rewrite the draft and mask the bug.
+    const restored = bootPersistedScreen(new Map(b.disk));
+    restored.D.init(restored.G, { custom: restored.C, root: restored.root });
+    restored.D.open(); restored.D.setWidth(8); restored.D.preview();
+    const edited = restored.D.save(); assert.equal(edited.ok, true, JSON.stringify(edited));
+    assert.equal(restored.C.list().length, count, "reload edits replace rather than duplicate");
+    assert.equal(restored.C.get(saved.id), null);
+    assert.equal(restored.C.get(edited.id).baseHW, 8);
+    b.D.close(); restored.D.close();
+  }
+});
+
+test("SAVE preserves its nondurable warning and retries the draft identity when storage recovers", () => {
+  const b = bootPersistedScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open({ design: design() }); b.D.preview();
+  const first = b.D.save(); assert.equal(first.durable, true);
+  b.D.setWidth(7.5); b.D.preview(); b.flushDraft();
+  const before = b.disk.get("apex26.customTrackDraft");
+  b.blockWrites(true);
+  const failedDisk = b.D.save();
+  assert.equal(failedDisk.ok, true); assert.equal(failedDisk.durable, false);
+  assert.match(msgText(b), /storage is full.*may not survive a reload/);
+  assert.equal(b.D.state().design.originId, failedDisk.id, "the session keeps its edited circuit");
+  assert.equal(b.disk.get("apex26.customTrackDraft"), before, "failed disk writes do not change persisted identity");
+  assert.equal(JSON.parse(b.disk.get("apex26.customTracks")).items[0].id, first.id);
+  b.blockWrites(false);
+  assert.equal(b.D.save().durable, true);
+  assert.equal(JSON.parse(b.disk.get("apex26.customTrackDraft")).originId, failedDisk.id);
+  assert.equal(JSON.parse(b.disk.get("apex26.customTracks")).items[0].id, failedDisk.id);
+  b.D.close();
+});
+
+test("a refused SAVE leaves the draft's persisted library identity unchanged", () => {
+  const b = bootPersistedScreen();
+  let refuse = false;
+  const custom = { ...b.C, upsert: (d, opts) => refuse ? { ok: false, reason: "write", id: "refused-id" } : b.C.upsert(d, opts) };
+  b.D.init(b.G, { custom, root: b.root });
+  b.D.open({ design: design() }); b.D.preview(); const first = b.D.save();
+  b.D.setWidth(7.5); b.D.preview(); b.flushDraft();
+  const before = b.disk.get("apex26.customTrackDraft");
+  refuse = true;
+  assert.equal(b.D.save().ok, false);
+  assert.equal(b.D.state().design.originId, first.id);
+  assert.equal(b.disk.get("apex26.customTrackDraft"), before);
+  assert.equal(b.C.list().length, 1); assert.ok(b.C.get(first.id));
   b.D.close();
 });
 
