@@ -1081,11 +1081,12 @@ informational). GitHub bounds the LEGS
 (2026-10-15): a ready PR's `selected` legs each join one of LANES fleet-wide
 `concurrency: { group: selected-lane-<n>, queue: max }` groups (the lane is a
 field of every matrix row, `tools/ci/select-specs.mjs` LANES, its start
-rotated by run number) and its smoke shard one lane per shard index, so at
-most LANES selected legs and one smoke run
-across every ready PR at once and the rest wait FIFO without holding a runner
-or being cancelled; the train, the nightly and a dispatch get a group of
-their own per leg and never wait behind PR work. Sync with
+rotated by run number), so at most LANES selected legs run across every
+ready PR at once and the rest wait FIFO without holding a runner or being
+cancelled; the train, the nightly and a dispatch get a group of their own
+per leg and never wait behind PR work. Smoke has no lane (2026-10-16: one
+2.6-min job per run that never failed waited p90 17.5 min behind other PRs'
+smoke, the 2026-10-16 CI/CD review note (#2333) finding 6). Sync with
 `node tools/ci/sync-pr.mjs <branch>`
 once before the final CI run — do **not** enable auto-update-branch bots or a
 require-up-to-date protection rule. `tools/ci/behind-ship.mjs` (at the end of

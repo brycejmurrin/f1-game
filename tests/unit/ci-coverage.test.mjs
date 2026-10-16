@@ -1166,6 +1166,18 @@ test("the deploy-gate count includes what the renderer job runs", () => {
   assert.equal(gfx.deployGate, true);
 });
 
+test("the smoke job carries no concurrency group of its own", () => {
+  // 2026-10-15 to 10-16 every ready PR's one smoke shard shared a fleet-wide
+  // `smoke-lane-1` group: a 2.6-min job that never failed (0 of 452) waited
+  // p50 4.7 / p90 17.5 min behind other PRs' smoke and ended the critical
+  // path of 40 of 210 green ready runs (the 2026-10-16 CI/CD review note,
+  // #2333, finding 6). One job per run needs no lane; the workflow-level per-PR
+  // group already replaces a superseded run. The selected legs keep theirs.
+  const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
+  assert.doesNotMatch(smokeJob, /^\s+concurrency:/m, "smoke must not wait in a lane; one job per run, runner queue only");
+  assert.doesNotMatch(ciWorkflow, /smoke-lane/, "no fleet-wide smoke group anywhere in ci.yml");
+});
+
 test("smoke.spec.js is ONE shard on PRs and the Pages call; the wide nightly/dispatch run keeps four", () => {
   // Pages runs 1873/1876 measured smoke.spec.js at 30-37 min on one shared
   // runner — on SwiftShader. On llvmpipe (2026-09-16) the four shards did
