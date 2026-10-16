@@ -308,7 +308,12 @@ if (require.main === module) {
     console.error(`startline-probe: ${e.message}`);
     process.exit(1);
   }
-  if (asJson) { console.log(JSON.stringify(rows, null, 2)); process.exit(0); }
+  // Formatting must preserve the authored line/grid verdict. Let stdout drain
+  // naturally instead of forcing process.exit() after a potentially large JSON.
+  const unexcused = rows.flatMap((r) => r.unexcused);
+  if (unexcused.length) process.exitCode = 1;
+  if (asJson) { console.log(JSON.stringify(rows, null, 2)); }
+  else {
 
   if (calibrate) {
     console.log("CALIBRATION — first-apex hand against six undisputed Turn 1s.");
@@ -340,11 +345,10 @@ if (require.main === module) {
   console.log(`\n${bad}/${rows.length} start lines in a corner as authored` +
     (rows.some((r) => r.next) ? `; ${badAfter}/${rows.length} after the candidate values` : ""));
   // The verdict that can fail: the AUTHORED line and grid against the allowlist.
-  const unexcused = rows.flatMap((r) => r.unexcused);
   console.log(`${badGrid}/${rows.length} grids (${GRID_MAX_SLOTS} slots) reach a corner over ${GRID_K_BAR} rad/m; ` +
     `${Object.keys(GRID_CURVE_ALLOW).length} allowlisted`);
   for (const u of unexcused) console.log(`  FAIL ${u}`);
-  if (unexcused.length) process.exitCode = 1;
+  }
 }
 
 module.exports = {
