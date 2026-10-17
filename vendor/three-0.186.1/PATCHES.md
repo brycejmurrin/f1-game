@@ -293,3 +293,34 @@ bounded logging, preserved shader excerpts, and settled compilation promises.
 Present in pristine three 0.186.1. API references checked 2026-10-15:
 - https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/popErrorScope
 - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/Promise
+
+## 15. The WebGL fallback frees GL programs, shaders and VAOs (three #34597, issue #2651)
+
+iPhones run TLX on three's WebGL backend. In 0.186.1 `Pipelines._releaseProgram`
+only calls the stats-only `info.destroyProgram`, `WebGLBackend` never deletes a
+program, shader or VAO, and `vaoCache` keys on a growing attribute id, so every
+track switch leaves its VAOs, programs and shaders behind while the buffers are
+freed. `tools/gfx/gl-object-census.mjs` (WebGL2 prototype create/delete counters,
+picker mode, monza → monaco → spa × 3 on SwiftShader) measured, before the patch:
+VertexArray / Program / Shader deleted = 0 at every step, live +149 / +12 / +24
+per three-circuit cycle (about +50 / +4 / +8 per visit). Numbers after the patch:
+`docs/notes/GL-OBJECT-LEAK-2026-10-17.md`.
+
+What it does (backport of upstream #34601 and a reduced #34610):
+- `Backend` gains no-op `destroyPipeline` and `deleteVertexState`; `Pipelines` calls
+  `backend.destroyPipeline` on release and `backend.destroyProgram` beside
+  `info.destroyProgram`.
+- `WebGLBackend.destroyProgram` deletes the GL shader, `destroyPipeline` the GL program.
+- VAOs keep their attribute-id key (the stable id #34610 also relies on), plus a
+  reference count (`vaoUsed`). A render object acquires one reference the first time it
+  draws and releases it in `RenderObjects.onDispose` or before its geometry-dispose
+  handler drops `attributes`; the VAO is deleted when the last holder lets go (and the
+  state cache's bound VAO is reset first). Compute VAOs are pinned (count never drops).
+  The full #34610 re-keys and moves the logic into `WebGLVertexArrayUtils`; that part is
+  not needed for the leak and is not carried.
+- The WebGPU backend inherits the no-ops; `destroyProgram` now also runs there and only
+  drops its data-map entry.
+
+Upstream: fixed on dev for r187 (not published; npm latest is 0.186.1). Retire this
+patch at the r187 bump. References: https://github.com/mrdoob/three.js/issues/34597,
+https://github.com/mrdoob/three.js/pull/34601, https://github.com/mrdoob/three.js/pull/34610
