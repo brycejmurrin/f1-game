@@ -147,7 +147,7 @@ test("SAMPLE_SRC reads perf, memState and tolerates Safari's missing performance
 });
 
 test("every in-page source is syntactically a function body", () => {
-  for (const k of ["FACTS_SRC", "GPU_ADAPTER_SRC", "RAF_SRC", "SAMPLE_SRC", "RESET_FRAMES_SRC", "DIAG_SRC", "NO_ROTATE_SRC", "DRIVER_SRC", "FIXED_VIEW_SRC", "READY_SRC", "BOUND_SRC"]) {
+  for (const k of ["FACTS_SRC", "GPU_ADAPTER_SRC", "GLPROBE_SRC", "RAF_SRC", "SAMPLE_SRC", "RESET_FRAMES_SRC", "DIAG_SRC", "NO_ROTATE_SRC", "DRIVER_SRC", "FIXED_VIEW_SRC", "READY_SRC", "BOUND_SRC"]) {
     assert.doesNotThrow(() => new Function(L[k]), k);
   }
 });

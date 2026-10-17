@@ -159,6 +159,44 @@ export const GPU_ADAPTER_SRC = `
   navigator.gpu.requestAdapter().then((a) => done(a ? { adapter: true, shaderF16: a.features.has("shader-f16"), timestampQuery: a.features.has("timestamp-query") } : { adapter: false }),
     (e) => done({ adapter: false, error: String(e && e.message) }));`;
 
+/** Sync: what raw WebGL2 does in this Safari (no game code): context attributes as three asks for them,
+ *  then createShader / shaderSource / compile on a trivial vertex shader, then how many MORE contexts the page
+ *  can open before createShader returns null or a context is lost. Evidence for the TLX arm's
+ *  "shaderSource ... must be an instance of WebGLShader", not a cause. */
+export const GLPROBE_SRC = `
+  const out = { attempts: [] };
+  const trivial = "#version 300 es\\nvoid main(){gl_Position=vec4(0.);}";
+  const one = (attrs) => {
+    const r = { attrs: JSON.stringify(attrs) };
+    try {
+      const c = document.createElement("canvas"); c.width = 64; c.height = 64;
+      const gl = c.getContext("webgl2", attrs);
+      r.ctx = !!gl;
+      if (!gl) return r;
+      r.lost = gl.isContextLost();
+      const sh = gl.createShader(gl.VERTEX_SHADER);
+      r.shaderNull = sh === null;
+      r.err = gl.getError();
+      if (sh) { gl.shaderSource(sh, trivial); gl.compileShader(sh); r.compiled = !!gl.getShaderParameter(sh, gl.COMPILE_STATUS); }
+      r.keep = gl;
+    } catch (e) { r.threw = String(e && e.message).slice(0, 160); }
+    return r;
+  };
+  for (const attrs of [{}, { antialias: true, alpha: true, depth: true, stencil: false, powerPreference: "high-performance", preserveDrawingBuffer: false }, { antialias: false, alpha: false, powerPreference: "default" }]) {
+    const r = one(attrs); delete r.keep; out.attempts.push(r);
+  }
+  const live = [];
+  out.contexts = { opened: 0, firstBad: null };
+  for (let i = 0; i < 24; i++) {
+    const r = one({});
+    if (r.keep) live.push(r.keep);
+    out.contexts.opened = i + 1;
+    if (!r.ctx || r.shaderNull || r.lost || r.threw) { out.contexts.firstBad = { i, ctx: r.ctx, shaderNull: r.shaderNull, lost: r.lost, threw: r.threw }; break; }
+  }
+  out.contexts.heldLost = live.filter((g) => g.isContextLost()).length;
+  out.contexts.heldCount = live.length;
+  return out;`;
+
 /** Async: rAF cadence for ms milliseconds (A2). */
 export const RAF_SRC = `
   const ms = arguments[0], done = arguments[arguments.length - 1], ts = [];
@@ -331,6 +369,7 @@ export function verdict(res) {
     const bs = facts.backendState;
     rows.push(["backendState", bs ? JSON.stringify(bs).slice(0, 240) : "null (TLX not bound)"]);
     rows.push(["extensions", facts.ext ? Object.entries(facts.ext).map(([k, v]) => k + "=" + v).join(" ") : "-"]);
+    if (res.glProbe) rows.push(["raw WebGL2 probe", JSON.stringify(res.glProbe).slice(0, 700)]);
     if (!facts.webgl2) bad.push("WebGL2 unavailable on the device");
   }
   if (res && res.raf) rows.push(["rAF (menu)", (res.raf.hz == null ? "-" : res.raf.hz + " Hz") + ", median " + f1(res.raf.medianMs) + " ms"]);

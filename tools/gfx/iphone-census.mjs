@@ -18,7 +18,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { spawnSync } from "node:child_process";
 import {
-  ARMS, BOUND_SRC, DIAG_SRC, DRIVER_SRC, NO_ROTATE_SRC, FACTS_SRC, FIXED_VIEW_SRC, GPU_ADAPTER_SRC, RAF_SRC, READY_SRC,
+  ARMS, BOUND_SRC, DIAG_SRC, DRIVER_SRC, NO_ROTATE_SRC, FACTS_SRC, FIXED_VIEW_SRC, GLPROBE_SRC, GPU_ADAPTER_SRC, RAF_SRC, READY_SRC,
   RESET_FRAMES_SRC, SAMPLE_SRC, DEFAULT_URL, armSchedule, buildCapabilities, cadence, parseArms, pngStats, windowSummary,
 } from "./iphone-census-lib.mjs";
 
@@ -121,6 +121,8 @@ try {
     const m = /OS (\d+)[_.](\d+)/.exec(res.facts.ua || "");
     if (m) res.os = res.os || `${m[1]}.${m[2]}`;   // Safari freezes the minor in the UA; a hint, not the runtime build
     res.gpuAdapter = await runAsync(GPU_ADAPTER_SRC);
+    res.glProbe = await run(GLPROBE_SRC).catch((e) => ({ error: String(e && e.message) }));
+    log("glprobe", JSON.stringify(res.glProbe));
     return true;
   });
   // ── A2: rAF cadence on the menu ──
