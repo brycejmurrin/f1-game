@@ -770,7 +770,12 @@ body:has(dialog[open]) #save-warning { display: none; }
   min-height: var(--tap-paint);
   max-height: var(--tap-paint);
   padding-top: 0; padding-bottom: 0;
-  padding-left: 0; padding-right: 0;
+  /* Room for the .bigbtn skewX(-6deg) corners: each overhangs its box by
+     tan(6deg) * height / 2 (~2.7px at 52; 0.6 leaves 20% spare), and overflow:hidden shaved them
+     off — CLOSE read as clipped 3px left and right at 932x430 / 844x390
+     touch (UI inspector sweep 2026-10-17). */
+  padding-left: calc(var(--tap-paint) * tan(6deg) * 0.6);
+  padding-right: calc(var(--tap-paint) * tan(6deg) * 0.6);
   background: none;
   overflow: hidden;
 }
@@ -886,7 +891,7 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
   padding-bottom: calc((var(--tap) + var(--gap)) * 2);
   scroll-padding-bottom: calc((var(--tap) + var(--gap)) * 2);
 }
-body[data-shape="wide"] #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons {
+body[data-shape="wide"]:not([data-density="compact"]) #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-buttons {
   padding-bottom: calc(var(--tap) + var(--gap));
   scroll-padding-bottom: calc(var(--tap) + var(--gap));
 }

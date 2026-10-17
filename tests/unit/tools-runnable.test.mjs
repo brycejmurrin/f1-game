@@ -768,3 +768,10 @@ test("occlusion-estimate resolves game-vm and --help exits without booting it", 
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /usage:.*occlusion-estimate/);
 });
+
+test("profile-gameloop.mjs: page-ready waits come from APEX_PROFILE_WAIT_MS, never below 20 s", () => {
+  const src = fs.readFileSync(tool("profile-gameloop.mjs"), "utf8");
+  assert.match(src, /APEX_PROFILE_WAIT_MS/);
+  assert.doesNotMatch(src, /timeout:\s*20000/, "a literal 20 s wait would ignore the env override");
+  assert.equal((src.match(/timeout:\s*WAIT_MS/g) || []).length, 2, "both waitForFunction calls use WAIT_MS");
+});

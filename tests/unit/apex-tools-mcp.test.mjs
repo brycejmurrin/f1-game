@@ -410,6 +410,16 @@ test("playwright occupancy matches `playwright test` tokens, not MCP JSON", asyn
     "suite",
   );
   assert.equal(
+    classifyPlaywrightLine(`2430 /bin/bash -c timeout 1500 bash -c 'until grep -q done log; do sleep 15; done'; npx playwright test tests/specs/ui-scale.spec.js -g x`),
+    null,
+    "a shell whose command string merely mentions the suite is not a live suite",
+  );
+  assert.equal(classifyPlaywrightLine("77 sh -c npx playwright test --reporter=line"), null);
+  assert.equal(
+    classifyPlaywrightLine("5492 node /home/runner/work/f1-game/node_modules/.bin/playwright test tests/specs/hud-layout.spec.js")?.kind,
+    "suite",
+  );
+  assert.equal(
     classifyPlaywrightLine('12 /exec-daemon/cursor-exec-daemon --mcp-config {"playwright":{"command":"npx","args":["@playwright/mcp@latest"]}}'),
     null,
     "Cursor --mcp-config JSON is not a live Playwright process",

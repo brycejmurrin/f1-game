@@ -110,7 +110,7 @@
 /* Primary has `border: none`; rooms have a 1px .alt hairline. Matching width
    keeps the two 2-up columns on the same vertical tracks (measured 205 vs 203
    on 1280 before this). Color stays transparent on the red doors. */
-#menu-buttons :is(#menu-hero, #menu-retention, #menu-primary, #menu-explore) .bigbtn { border-color: transparent; }
+#menu-buttons :is(#menu-hero, #menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn { border-color: transparent; }
 /* width: 100% is REDUNDANT in the cascade (#menu-buttons .bigbtn at (1,1,0)
    already wins it on every branch) and KEPT on purpose: tests/unit/title-menu-even
    pins this exact declaration as the contract that 2-up cells fill, and
@@ -200,7 +200,7 @@
    keeps the shared :active press (skew + scale 0.97). The hover/press "glow"
    is ::before — a red-tinted wash faded by OPACITY, which the compositor can
    run without repainting the shadow every frame (::after is the sheen). */
-#menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn {
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn {
   background:
     linear-gradient(90deg, var(--red) 0 4px, transparent 4px) border-box,
     color-mix(in oklab, var(--carbon) 88%, var(--text) 9%);
@@ -209,7 +209,7 @@
   box-shadow: none;
   transition: transform var(--dur-1, 120ms) var(--ease-out, ease-out);
 }
-#menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn::before {
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn::before {
   content: "";
   position: absolute; inset: 0; z-index: -1;
   pointer-events: none;
@@ -220,10 +220,10 @@
   transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  #menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn:hover::before { opacity: 1; }
+  #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:hover::before { opacity: 1; }
 }
-#menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn:active::before { opacity: 1; }
-#menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:active::before { opacity: 1; }
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
 /* The hero keeps its red and its resting glow, but its hover heat is now the
    same opacity fade: the hot gradient lives on ::before, the face stays on
    --grad-primary, and box-shadow no longer TRANSITIONS (a gradient never
@@ -304,11 +304,11 @@ body { --compact-at: 600px; --wide-at: 620px; }
    stamped in the inline pre-paint script; experience.js keeps them in sync. */
 html[data-home-live] #overlay #menu-buttons { background: transparent; border: 0; padding: var(--gap); }
 html[data-home-live] #overlay[data-intro] #menu-buttons .bigbtn { animation: none; }
-html[data-home-live] #overlay :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn {
+html[data-home-live] #overlay :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn {
   background: var(--plate); border-color: var(--plate-line); transform: none; text-align: start;
   justify-content: flex-start; align-items: center; padding: var(--gap); font-style: normal; min-height: var(--tap);
 }
-html[data-home-live] #overlay :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn > span { align-items: flex-start; }
+html[data-home-live] #overlay :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn > span { align-items: flex-start; }
 html[data-home-live] #overlay #menu-secondary .bigbtn { transform: none; font-style: normal; }
 html[data-home-live] #overlay #menu-brand {
   align-self: end; position: relative; z-index: 1; isolation: isolate; overflow: hidden;
@@ -353,24 +353,21 @@ html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
    Keep #menu-buttons as the scroll box — ui-scale @200% scrolls RACE into it.
    display:contents broke that box and let brand (z-index) steal hits on DATA HUB. */
 html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
-  /* Reserve room for scaled labels: a 400px cap becomes only 200 CSS px
-     at 200% UI size and wraps the hero until RACE falls below the fold. */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
   grid-template-rows: minmax(0, 1fr);
   align-content: stretch; align-items: stretch;
-  /* 0.15: cheap 852×344 fold clearance for GARAGE. */
   row-gap: calc(var(--gap) * 0.15); column-gap: var(--gap);
   overflow-x: hidden;
 }
-html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-brand {
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-brand {
   grid-column: 1; grid-row: 1; z-index: 1; align-self: start;
   overflow: hidden; min-height: min-content;
   padding-block: calc(var(--gap) * 0.5); gap: calc(var(--gap) * 0.35);
 }
-html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay #title {
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #title {
   font-size: clamp(var(--fs-5), calc(4.2 * var(--vwz)), calc(var(--fs-6) * 2.8));
 }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-meta { margin-top: calc(var(--gap) * 0.5); }
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-meta { margin-top: calc(var(--gap) * 0.5); }
 html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
   display: grid; grid-column: 1 / -1; grid-row: 1;
   grid-template-columns: subgrid;
@@ -378,9 +375,7 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
   align-content: start; align-items: start; justify-items: stretch;
   width: auto; height: 100%; max-height: 100%; min-height: 0; align-self: stretch;
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
-  /* Above brand so zoomed secondary keeps DATA HUB hittable; empty cells pass clicks through. */
   touch-action: pan-y; z-index: 2; background: transparent;
-  /* Inline pad: CAREER skewX tip past overflow-x:hidden (B1). */
   padding-block: calc(var(--gap) * 0.5);
   padding-inline: var(--gap);
   pointer-events: none;
@@ -388,30 +383,17 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
   pointer-events: auto;
 }
-/* No group zoom: #menu-buttons zooms (ui-scale.spec 200% desktop). */
 html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) {
   width: 100%; align-self: start; justify-self: stretch;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
-  /* Row 2 col 1 under brand. #1537: height auto for 2-line labels; --tap floor stays. */
-  grid-column: 1; grid-row: 4; align-self: end; display: flex; flex-wrap: nowrap; align-items: stretch;
+  grid-column: 1; grid-row: 1 / -1; align-self: end; display: flex; flex-wrap: nowrap; align-items: stretch;
   gap: calc(var(--gap) * 0.15); min-height: var(--tap); height: auto; max-height: none;
   --balance-basis: 0%; --balance-min: 0%;
 }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn { justify-content: flex-start; white-space: normal; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary.balanced-row > :not([hidden]) {
   flex: 1 1 0; min-width: 0; width: auto;
-}
-/* #1537: clamp+wrap — nowrap ellipsis clipped TRACK DES / HOW TO P in ~74px cells. */
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
-  display: inline-flex; flex-direction: row; justify-content: flex-start; align-items: center;
-  gap: calc(var(--gap) / 8); min-height: var(--tap-paint); height: auto; max-height: none;
-  padding: calc(var(--gap) / 10) calc(var(--gap) / 8) calc(var(--gap) / 10) calc(var(--gap) / 4);
-  font-size: clamp(0.55rem, calc(1.7 * var(--vwz)), calc(var(--fs-micro) * 0.78));
-  letter-spacing: 0; line-height: 1.1; white-space: normal; text-wrap: balance;
-  overflow-wrap: anywhere; overflow: hidden; text-overflow: clip; text-align: start; min-width: 0;
-}
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn .btn-ico {
-  width: 0.85em; height: 0.85em; flex: none; margin: 0;
 }
 :where(body[data-density="compact"]) #overlay #menu-buttons .bigbtn {
   min-height: var(--tap); padding-block: calc(var(--gap) / 2);
@@ -426,7 +408,7 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
   min-height: var(--tap-paint); height: auto; max-height: none;
 }
-:where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
+html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
 /* Live Home on tall: drop #title-car from the grid before data-home-ready (deferred
    experience.css used to wait). Classic/static keeps the three-band portrait cars. */
 @media (max-width: 699px) {
@@ -826,9 +808,6 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
   white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.1;
   font-size: clamp(0.6rem, calc(2.0 * var(--vwz)), var(--fs-micro));
 }
-/* Four rooms in the narrower column wrap 3 + 1 from the 5.5rem basis, which
-   stretches the leftover into a banner; a forced 2x2 costs one ~30px row
-   (274 -> ~305 on a 343px safe height) and matches portrait. */
 :where(body[data-shape="wide"][data-density="compact"]) :is(#menu-explore, #menu-secondary) {
   --balance-basis: calc(50% - 0.5em);
   --balance-min: calc(50% - 0.5em);
@@ -841,15 +820,7 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 /* The static mode subs are the first thing to go when height is short — the
    hero's save line stays, it is state the player came back for. */
 :where(body[data-density="compact"]) :is(#menu-primary, #menu-explore) .mb-sub { display: none; }
-/* THE RETENTION PAIR STACKS ITS SUB LINE UNDER THE LABEL on a short wide
-   title. MEASURED (layout-audit, ios-iphone-landscape 734x343, 2026-10-05):
-   #mb-daily put DAILY TIME TRIAL and its sub side by side in one nowrap line,
-   and the sub painted "MONTREAL · DRY" cut to an ellipsis. Stacked, each line
-   gets the button's whole width. The height is ALWAYS two lines, whatever the
-   text — the shell's TODAY'S CHALLENGE and the booted MONTREAL · DRY · STREAK n
-   occupy the same box — so, like #mb-career-sub, the button never changes
-   height after boot (docs/PERF-FINDINGS.md 4a). Tight leading and a quarter-gap of
-   block padding keep the cost to ~8 own px over the one-line chip. */
+/* Retention pair: sub line under the label on a short wide title. */
 :where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn {
   /* Row: .btn-ico beside the label/sub stack (span is column). Column here
      used to be a no-op with one child; with icons it would grow tile height. */
@@ -857,9 +828,6 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
   padding-block: calc(var(--gap) * 0.25);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn > span { max-width: 100%; min-width: 0; line-height: 1.15; }
-/* Live-home `padding: var(--gap)` outranks the :where rule above — pin icon
-   budget here so DAILY TIME TRIAL (~153px) still fits one line on a half-width
-   chip beside CONTINUE (183 − 8 pad − 14 ico ≈ 161). */
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn {
   flex-direction: row; align-items: center; gap: 0;
   /* letter-spacing makes DAILY TIME TRIAL ~165px; 183−4 pad−12 ico ≈ 167.

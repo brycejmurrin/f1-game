@@ -98,8 +98,7 @@ const WatchTransport = (function () {
         const e = events[+v]; if (!e) return;
         // A pending drag must not overwrite this deliberate chapter jump.
         pendingSeek = null; scrubbing = false;
-        const lead = typeof RealReplay !== "undefined" ? RealReplay.LEAD_S : 8;
-        replay.seek(Math.max(0, e.t - lead));
+        replay.seekEvent(desc.events.indexOf(e));
       }
       select(chapters, "chapter", "RACE EVENT", [["", "Choose a race event"], ...events.map((e, i) =>
         [String(i), "L" + e.lap + " · " + clock(e.t) + " · " + e.text])], (v) => {

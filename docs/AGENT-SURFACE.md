@@ -503,7 +503,7 @@ The result contains a snapshot per size and consecutive diffs; geometry, compute
 layout and ancestor changes are separate from semantic/binding changes. The
 original viewport is restored even if inspection fails. Up to eight integer
 sizes are allowed (width 240–3840, height 240–2160). The helper changes viewport
-size only: pointer emulation, settings and safe-area overrides are not invented.
+size only; set pointer and safe-area for the whole session with `--touch`/`--boot`/`--safe` (below).
 Each record reports layout settlement: at least 150 ms and three matching frame
 samples, bounded to 500 elements, 120 frames and two seconds. Unstable/truncated
 samples are explicit, and quiet samples cannot rule out later async work. Resizing can
@@ -511,6 +511,29 @@ trigger native orientation/pause dialogs; they are recorded, not dismissed, and
 restoring size cannot undo application state transitions. Use the existing
 `layout-audit.mjs` matrix for scales/pointers/insets and validated replay actions
 for settings changes, scrolling, reload durability and modal navigation.
+
+**Phone emulation (inspect only).** The default session is a 1280x800 mouse
+desktop, so a phone-sized sweep without these flags reports `pointer: coarse`
+false and the desktop 24 px tap floor. For the shape a player holds:
+
+```sh
+node tools/ui/explorer.mjs inspect --screen settings --touch --boot 932x430 --safe 0,59,21,59 --viewports 932x430,844x390 --summary
+```
+
+`--touch` makes a `hasTouch`/`isMobile` context (`pointer: coarse`, 44 px tap
+floor; a resize cannot switch this). `--boot WxH` boots at that size, so
+boot-time classifiers see the phone. `--safe T,R,B,L` sets real
+`env(safe-area-inset-*)` values through CDP `Emulation.setSafeAreaInsetsOverride`
+(0–200 px each; the iPhone Pro Max landscape notch is about 0,59,21,59).
+`--summary` prints one tab-separated line per issue (screen, size, kind,
+selector, message) instead of the JSON, which is still written to `--out`.
+`provenance.emulation` records the settings. A sweep record that has not settled
+gets one more settlement budget (`settlement.retried`). Settlement also waits for finite running CSS animations on, inside or above the root (`settlement.animating`): a fade or pointer-events transition leaves geometry final while hit tests still answer `<html>`; infinite animations are ignored. If it is still moving,
+its issues carry `provisional: true`. A hit test whose visible centre lands on
+`<html>`/`<body>` is `not-hit-testable` (nothing painted takes the point), not
+`blocked` by another control. A native `<label>` counts as part of its control's
+tap target and hit area. Load ≥ 3 or a held browser lock exits **75** (retry
+later), not 1.
 
 Add `--roundtrip` to revisit sizes in reverse order (at most 15 observations,
 without duplicating the turnaround size). Every record retains bounded classifier

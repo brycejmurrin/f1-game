@@ -1782,7 +1782,7 @@ function makeCars() {
         // §6) — one axis, not a compound axis multiplied by an upgrade tier.
         // gridUp fits a fresh set from it; an AI car gets one from its class draw.
         tyreOpt: (isP || mate) ? resolvedParts.options.tyres : null,
-        tyre: null, tyreWear: 0, tyreLap0: 0, tyreStints: 0,
+        tyre: null, tyreWear: 0, tyreLap0: 0, tyreLapAdj: 0, tyrePhysicalOffset: null, tyreStints: 0,
         fuelId: resolvedParts.ids.fuel,
         fuelVisual: resolvedParts.visual.fuel,
         ...CarDraw.carVisual(team, d.num, isP || mate, getTeamParts),   // visualSetup/visStamp/visPaint/visSh: the menu prep's cache keys too

@@ -1206,3 +1206,22 @@ test("lapsOn: a stop in a box BEFORE the line is not a lap old at the next cross
   grid.lap = 2;
   assert.equal(s.lapsOn(grid), 1);
 });
+
+test("physical set age keeps pre-line pit adjustment across a red-flag scoring rewind", () => {
+  const total = 5386, s = ctxFor({ laps: 10, total });
+  s.setLevel("real");
+  const c = { lap: 4, s: total - 100, prog: 4 * total - 100, _progGift: 0 };
+  s.fit(c, T.classRecord("hard"));
+  assert.equal(s.lapsOn(c), 0, "a real-progress car leaves the pre-line box on a fresh set");
+  c.lap = 5; c.s = 0; c.prog = 4 * total;
+  assert.equal(s.lapsOn(c), 0, "the first crossing closes only the pit out-lap fragment");
+  c.lap = 6; c.prog = 5 * total; c.tyreWear = 0.4;
+  assert.equal(s.lapsOn(c), 1, "one full driven lap after that crossing ages the set once");
+  const remaining = s.lapsLeft(c);
+  c.lap--; c.prog -= total; c._progGift -= total;
+  assert.equal(s.lapsOn(c), 1, "rewinding the public classification cannot rewind physical set age");
+  assert.equal(s.lapsLeft(c), remaining, "the restart cannot restore estimated tyre life");
+  assert.equal(c.tyreWear, 0.4);
+  c.lap++; c.prog += total;
+  assert.equal(s.lapsOn(c), 2, "the next physically driven lap still ages the adjusted set normally");
+});

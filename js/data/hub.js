@@ -549,9 +549,11 @@ const DataHub = (function () {
     // releases it.
     if (sel.pinned) return Promise.resolve(sel.meta);
     if (have && !force && fresh) return Promise.resolve(sel.meta);
+    const mySelection = selectionGen;
     return F1API.latestSession(0).then(function (ses) {
-      // A pick that landed while this was in flight is the newer, explicit choice.
-      if (sel.pinned) return sel.meta;
+      // A YEAR/GP change is explicit intent even while its own request has not
+      // pinned a session yet. An older latest response cannot replace it.
+      if (mySelection !== selectionGen || sel.pinned) return sel.meta;
       if (ses && ses.sessionKey != null) {
         sel.meta = ses;
         sel.sessionKey = ses.sessionKey;

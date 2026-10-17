@@ -137,8 +137,10 @@ test("merge 2 folds 2x2 cells per draw, keeps every triangle once, and keeps the
 });
 
 test("the merge is ON by default (no stored value)", () => {
-  const mesh = mergeFactory(null).build(gridMesh(), 72);
-  assert.equal(mesh.chunks.length, 9);
+  const sizes = (v) => Array.from(mergeFactory(v).build(gridMesh(), 72).chunks, (c) => c.count);
+  assert.deepEqual(sizes(null), sizes("3"), "the default factor is 3 (cells are biased by 1024, so 6 cells straddle 3 blocks)");
+  assert.notDeepEqual(sizes(null), sizes("2"));
+  assert.ok(sizes(null).length < 36);
 });
 
 for (const vertices of [65535, 65536]) for (const merge of [2, 3, 4]) {
@@ -194,4 +196,36 @@ test("snorm16 normal pack clamps, never wraps, at the 1.0001 admission edge", ()
   assert.equal(mesh.geo.attributes.normal.itemSize, 4);
   assert.deepEqual(Array.from(a),
     [32767, -32767, 0, 0, 0, 32767, -32767, 0, Math.round(0.5 * 32767), Math.round(-0.5 * 32767), 32767, 0]);
+});
+
+// DUST MERGE (tlx-chunked.js build): cells that hold a few triangles (a ground triangle whose centroid lands in a
+// street cell) each cost a RenderObject per pass. Dust draws of one block, and the always-visible wide ones,
+// share a chunk; the triangles, the lamp cells and the big chunks are untouched.
+function dustMesh() {
+  const pos = [], idx = [];
+  const tri = (x, z, w) => { const v = pos.length / 3; pos.push(x, 0, z, x + w, 0, z, x, 0, z + 1); idx.push(v, v + 1, v + 2); };
+  for (let t = 0; t < 2000; t++) tri(4980 + (t % 50), 4980 + Math.floor(t / 50), 0.5);   // one big cell, far from the dust
+  for (let k = 0; k < 8; k++) for (let j = 0; j < 3; j++) tri(10 + k * 72, 10 + j * 72, 2);          // 24 one-triangle cells in one 576 m block
+  for (let k = 0; k < 6; k++) tri(-3000 + k * 400, -3000, 2500);                                     // 6 wide ground skirts (own box > the extent cap)
+  return { pos: new Float32Array(pos), idx: new Uint32Array(idx) };
+}
+
+test("dust merge folds one-triangle cells into shared draws and keeps every triangle once", () => {
+  const off = mergeFactory("1").build(dustMesh(), 72);
+  const on = mergeFactory("2").build(dustMesh(), 72);
+  assert.equal(off.chunks.length, 31, "merge 1 is the off-switch: one draw per cell (1 big + 24 dust + 6 wide)");
+  assert.equal(on.chunks.length, 3, "big chunk + one local dust draw + one wide dust draw");
+  assert.deepEqual(triSet(on), triSet(off), "the merged draws cover exactly the same triangles");
+  assert.equal(on.count, off.count);
+  assert.equal(on.lampCells.length, 31, "the lamp table stays on the 72 m cells");
+  const sizes = Array.from(on.chunks, (c) => c.count / 3).sort((a, b) => a - b);
+  assert.deepEqual(sizes, [6, 24, 2000], "dust groups stay under the triangle cap and the big chunk is untouched");
+});
+
+test("a dust draw's box is the union of its parts, so the cull never drops a member", () => {
+  const on = mergeFactory("2").build(dustMesh(), 72);
+  const tris = (c) => { const a = c.geo.index.array, p = dustMesh().pos, out = []; for (let i = 0; i < a.length; i++) out.push([p[a[i] * 3], p[a[i] * 3 + 1], p[a[i] * 3 + 2]]); return out; };
+  for (const c of on.chunks) for (const v of tris(c)) for (const a of [0, 2]) {
+    assert.ok(v[a] >= c.min[a] - 1e-6 && v[a] <= c.max[a] + 1e-6, "every vertex of every merged triangle sits inside the chunk box");
+  }
 });

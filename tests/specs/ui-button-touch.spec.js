@@ -1484,3 +1484,40 @@ test.describe("Arrange map clearance handoff", () => {
     await page.locator("#hud-arrange-done").click();
   });
 });
+
+test.describe("Settings Appearance — touch targets", () => {
+  test.use({ viewport: LANDSCAPE, hasTouch: true, isMobile: true });
+
+  test("ADVANCED disclosure summary is at least --tap tall", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#mb-settings").tap();
+    await page.locator("#pm-open-appearance").tap();
+    const sum = page.locator("#pmsettings details[data-as=\"advanced\"] > summary");
+    await sum.waitFor({ state: "attached", timeout: BOOT_MS });
+    await sum.scrollIntoViewIfNeeded();
+    const h = await sum.evaluate((e) => e.getBoundingClientRect().height);
+    expect(h).toBeGreaterThanOrEqual(43.5);
+  });
+});
+
+test.describe("Settings Appearance — preset names at phone landscape", () => {
+  // 932x430 is the iPhone Pro Max landscape: wider than the old 900px phone guard, so five 67px tiles clipped
+  // BROADCAST to "BROADCAS" at UI SIZE 150 (menu-fit, 2026-10-17). The phone sheet lays presets out three-up.
+  test.use({ viewport: { width: 932, height: 430 }, hasTouch: true, isMobile: true });
+
+  test("preset tiles are three-up at 932x430, UI SIZE 150", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("apex26.uiScale", "150"));
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#mb-settings").tap();
+    await page.locator("#pm-open-appearance").tap();
+    const list = page.locator('#appearance-studio [data-as="preset-list"]');
+    await list.waitFor({ state: "attached", timeout: BOOT_MS });
+    await expect(page.locator("#pmsettings-inner")).toHaveAttribute("data-density", "compact");
+    const cols = await list.evaluate((e) => getComputedStyle(e).gridTemplateColumns.split(" ").length);
+    expect(cols).toBe(3);
+  });
+});
