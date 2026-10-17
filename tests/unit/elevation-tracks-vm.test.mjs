@@ -18,7 +18,8 @@
  * the 42 per-circuit tests are independent races. They now go through
  * tools/lib/game-vm-pool.cjs: each worker boots its own game-vm and runs one
  * circuit's probe from tests/helpers/elevation-probes.cjs — the same recipe,
- * launches, step counts and thresholds — and returns a plain object. EVERY
+ * launches and thresholds, with the grade search confirming 12 profile
+ * candidates instead of 300 jump+steps — and returns a plain object. EVERY
  * assertion stayed here, so a failure still names the circuit and the number,
  * and the twin is still ONE file with 47 declared tests (tools/ci/twinned-specs
  * .mjs counts them against the spec). Measured on this 4-core box:

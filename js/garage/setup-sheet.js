@@ -159,7 +159,7 @@ const LIV_ROW_HINT = {
   podFinish: "SIDEPOD FINISH — the painted sidepods; INHERIT uses FINISH. Carbon and intake surfaces stay unchanged.",
   finFinish: "FIN FINISH — the painted shark fin; INHERIT uses FINISH. Needs a FIN SHAPE other than NONE.",
   mirrorFinish: "MIRROR FINISH — the painted mirror housings; INHERIT uses FINISH. Mirror glass is untouched.",
-  mirrorTint: "MIRROR HOUSING — the painted mirror stalks and housings. Unset = ACCENT.",
+  mirrorTint: "MIRROR HOUSING — the painted mirror stalks and housings. Unset = the stock dark carbon housing.",
   rimTint: "RIM — the wheel rim colour on all four wheels. Unset = the BRAKES part's rim colour.",
   caliperTint: "CALIPER — the brake caliper colour on all four wheels. Unset = the BRAKES part's caliper colour.",
   sidewallInk: "SIDEWALL INK — the stripe and lettering ink on the tyre sidewall. Unset = the compound band colour.",
@@ -1156,6 +1156,7 @@ function buildLiveryCreator(container, team) {
   };
   wrap.appendChild(section("COCKPIT"));
   wrap.appendChild(colorRow("HALO", "halo", true));
+  wrap.appendChild(colorRow("MIRROR HOUSING", "mirrorTint", true));
   // One pill row per single-choice field: FINISH (Car3D's surface set — this
   // array and FINISH_SURFACE were two copies and the specs held a third),
   // NUMBER FONT and SPONSORS (LiveryTex's id lists). Same nodes and classes.
@@ -1190,7 +1191,8 @@ function buildLiveryCreator(container, team) {
     return r;
   };
   pillRow("FINISH", "finish", ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "gloss");
-  for (const [label, key] of [["COVER FINISH", "coverFinish"], ["WING FINISH", "wingFinish"], ["HALO FINISH", "haloFinish"]])
+  for (const [label, key] of [["COVER FINISH", "coverFinish"], ["WING FINISH", "wingFinish"], ["HALO FINISH", "haloFinish"],
+    ["SIDEPOD FINISH", "podFinish"], ["FIN FINISH", "finFinish"], ["MIRROR FINISH", "mirrorFinish"]])
     pillRow(label, key, ["inherit", "gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "inherit");
   pillRow("WING FLAPS", "wingCarbon", ["paint", "carbon"], "paint");
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
