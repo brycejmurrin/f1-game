@@ -25,11 +25,29 @@ this container: `getExtension("EXT_disjoint_timer_query_webgl2")` is non-null), 
 `!softwareGL`, which keeps the `tlx-probes` M9 spec's `{supported:false}` on CI. iOS Safari does not expose the
 extension, so a player's phone is unaffected either way; the timer is opt-in (`__apex.gpuTimer(true)`).
 
+**Positive signal on real hardware** (gpu-census run 39071040057, this branch, macos-latest, montreal, helmet cam,
+`ls apex26.forceMobileTier=1`, 1280x720 viewport, render scale 0.9 so the scene draws 1152x648):
+
+| leg | mobileTier | gpuTimer | GPU median (n) | frame p50 / p95 | fps |
+|---|---|---|---|---|---|
+| TLX, three WebGL2 (the iPhone's path) | true | **supported, on** | **11.27 ms** (20), every render() pass | 35.5 / 75.3 ms | 25.6 |
+| GLX WebGL2 | (flag read by GLX) | supported | 11.54 ms (19), main + post only | 28.4 / 76.7 ms | 26.9 |
+| TLX, three WebGPU | true | unsupported (no adapter feature) | — | 35.3 / 75.7 ms | 24.6 |
+
+Before this branch, the same leg on run 39042826810 (desktop tier) read `supported:false`.
+
+**Reading: on the Mac's Apple GPU, the phone tier's TLX frame is not GPU-bound.** About 11 ms of GPU work sits inside a
+35 ms frame p50 (a third). The GPU spans differ: TLX's sums every render() (shadows, mirror, main, post), GLX's covers
+main + post only, so the two GPU numbers are not a like-for-like race. Whatever holds the other ~24 ms is CPU,
+compositor or the headless runner's present cadence. TLX also runs about 2.04 rAF callbacks per drawn frame against
+GLX's 1.04. That is Hunter B's lane (CPU / loop) and goes to them as a cross-over lead, not a render fix. On an iPhone
+GPU (smaller tile memory and bandwidth), the share will differ; the phone soak (#1633) decides.
+
 ## Ranked leads (survey, before building)
 | # | lead | why it ranks | status |
 |---|---|---|---|
 | 1 | TLX WebGL2 GPU timer | every GPU claim on the iPhone path needs it | fixed (this note's PR) |
-| 2 | phone-tier census on Apple GPU (`ls apex26.forceMobileTier=1`) | first GPU ms for the phone tier's pipeline | next |
+| 2 | phone-tier census on Apple GPU (`ls apex26.forceMobileTier=1`) | first GPU ms for the phone tier's pipeline | done: 11.27 ms in a 35.5 ms frame (above) |
 | 3 | mirror pass on the phone tier: 133k road triangles into ~5.4k px, plus a mip rebuild per frame | 73 % of the main pass's triangles | needs 1+2 |
 | 4 | #2649 tile-bandwidth trims (sky cache 512, godray R11F, FB invalidate) | blocked on a GPU timer | needs 1+2 |
 | 5 | per-pass GPU split (three keeps a timestamp per render()) | names the costliest pass | open |
