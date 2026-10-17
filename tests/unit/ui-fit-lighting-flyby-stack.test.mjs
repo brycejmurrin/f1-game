@@ -12,7 +12,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const css = fs.readFileSync(path.join(ROOT, "css/tuner.css"), "utf8");
 const rules = cssRules(css);
 
-const BOTH = "body:has(#lighting:not([hidden])):has(#flyby:not([hidden]))";
+const BOTH = "body:has(> #lighting:not([hidden])):has(> #flyby:not([hidden]))";
 const LT_ROWS = BOTH + " #lighting-inner[data-density=\"compact\"] #lt-rows";
 const LT_SPREAD = BOTH + " #lighting-inner[data-density=\"compact\"] #lt-spread";
 const FB_LEFT = BOTH + " #flyby-inner";
