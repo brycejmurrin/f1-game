@@ -124,19 +124,43 @@ for (const sz of [...PHONES, TABLET]) {
       expectDoorsReachable(s, "land-1");
       expect(s.inert, "title must not stay inert after a bare rotation").toBe(false);
       if (sz.land.width === 844 && sz.land.height === 390) {
-        const fit = await page.evaluate(() => {
-          const mb = document.getElementById("menu-buttons");
-          const row = (id) => getComputedStyle(document.getElementById(id)).gridRowStart;
-          const lab = mb.querySelector(".menu-destination-label");
-          return {
-            sh: mb.scrollHeight, ch: mb.clientHeight,
-            rows: [row("menu-garage"), row("menu-explore"), row("menu-create")],
-            labelDisplay: lab ? getComputedStyle(lab).display : "none",
-          };
-        });
-        expect(fit.sh, "phone-landscape Home menu must fit without scrolling").toBeLessThanOrEqual(fit.ch + 1);
-        expect(fit.rows, "compact Home grid rows must win the cascade").toEqual(["3", "4", "5"]);
-        expect(fit.labelDisplay, "compact Home group labels stay hidden").toBe("none");
+        // Live scene, then the still one (data-home-live removed): same four-row fit, no word split.
+        for (const scene of ["live", "static"]) {
+          if (scene === "static") {
+            await page.evaluate(() => AppearanceStudio.setScene("static", "still"));
+            await page.waitForFunction(() => !document.documentElement.dataset.homeLive, null, { polling: 100, timeout: 10_000 });
+            await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+          }
+          const fit = await page.evaluate(() => {
+            const mb = document.getElementById("menu-buttons");
+            const row = (id) => getComputedStyle(document.getElementById(id)).gridRowStart;
+            const lab = mb.querySelector(".menu-destination-label");
+            const broken = [];
+            for (const t of mb.querySelectorAll(".menu-destination .bigbtn")) {
+              const tr = t.getBoundingClientRect();
+              if (!tr.width) continue;
+              const walker = document.createTreeWalker(t, NodeFilter.SHOW_TEXT);
+              for (let n; (n = walker.nextNode());) {
+                if (getComputedStyle(n.parentElement).display === "none") continue;
+                for (const m of n.data.matchAll(/\S+/g)) {
+                  const rg = document.createRange(); rg.setStart(n, m.index); rg.setEnd(n, m.index + m[0].length);
+                  const lines = new Set([...rg.getClientRects()].map((r) => Math.round(r.top))).size;
+                  const wr = rg.getBoundingClientRect();
+                  if (lines > 1 || wr.right > tr.right + 1 || wr.left < tr.left - 1) broken.push(t.id + ":" + m[0]);
+                }
+              }
+            }
+            return {
+              sh: mb.scrollHeight, ch: mb.clientHeight, broken,
+              rows: [row("menu-garage"), row("menu-explore"), row("menu-create")],
+              labelDisplay: lab ? getComputedStyle(lab).display : "none",
+            };
+          });
+          expect(fit.sh, `${scene}: phone-landscape Home menu must fit without scrolling`).toBeLessThanOrEqual(fit.ch + 1);
+          expect(fit.rows, `${scene}: compact Home rows 3/3/4`).toEqual(["3", "3", "4"]);
+          expect(fit.labelDisplay, `${scene}: compact Home group labels stay hidden`).toBe("none");
+          expect(fit.broken, `${scene}: no tile label splits or overflows a word`).toEqual([]);
+        }
       }
       // Title scrollers hide the thumb whenever ScrollFade would paint one;
       // with no overflow there is no ::before rule in play.
