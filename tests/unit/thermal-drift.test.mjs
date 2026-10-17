@@ -1,5 +1,5 @@
-/* thermal-gov.test.mjs — #2652: the slow-drift detector, the governor's one early
- * step, and the opt-in 45/30 render-rate gate (js/perf/thermal-gov.js).
+/* thermal-drift.test.mjs — #2652: the slow-drift detector, the governor's one early
+ * step, and the opt-in 45/30 render-rate gate (js/perf/thermal-drift.js).
  *
  * No thermal or GPU evidence exists in this container (SwiftShader), so the drift
  * side is proven on SYNTHETIC frame-time series: drift -> step, steady -> no
@@ -8,7 +8,7 @@
  * file's subject (game.js only skips the draw); physics-characterization is the
  * gate for that.
  *
- * Run: node --test tests/unit/thermal-gov.test.mjs   (npm run test:tooling-fast)
+ * Run: node --test tests/unit/thermal-drift.test.mjs   (npm run test:tooling-fast)
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,10 +21,10 @@ import { seedStoreGlobal } from "../helpers/seed-store.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
 seedStoreGlobal();
-const TG_SRC = fs.readFileSync(path.join(ROOT, "js/perf/thermal-gov.js"), "utf8");
+const TG_SRC = fs.readFileSync(path.join(ROOT, "js/perf/thermal-drift.js"), "utf8");
 const GOV_SRC = fs.readFileSync(path.join(ROOT, "js/perf/governor.js"), "utf8");
-const ThermalGov = eval(TG_SRC + ";ThermalGov");
-globalThis.ThermalGov = ThermalGov;
+const ThermalDrift = eval(TG_SRC + ";ThermalDrift");
+globalThis.ThermalDrift = ThermalDrift;
 
 /** Feed `seconds` of frames whose interval is f(tSec); returns the frame at which feed first said due, or -1. */
 function run(d, f, seconds, t0 = 0) {
@@ -39,7 +39,7 @@ function run(d, f, seconds, t0 = 0) {
 const jitter = (i) => ((i * 7919) % 13) / 13 - 0.5;   // deterministic +-0.5
 
 test("steady frames never ask for a step, however long", () => {
-  const d = ThermalGov.drift();
+  const d = ThermalDrift.drift();
   let i = 0;
   const { firstDue } = run(d, () => 16.7 + 0.3 * jitter(i++), 1800);
   assert.equal(firstDue, -1);
@@ -48,7 +48,7 @@ test("steady frames never ask for a step, however long", () => {
 });
 
 test("a slow upward drift is flagged after the baseline minute, before any hitch", () => {
-  const d = ThermalGov.drift();
+  const d = ThermalDrift.drift();
   let i = 0;
   // minute 0-1.5 steady, then 16.7 -> 24 ms over six minutes (a heating phone)
   const f = (t) => 16.7 + 0.3 * jitter(i++) + (t < 90 ? 0 : Math.min(7.3, (t - 90) / 360 * 7.3));
@@ -60,14 +60,14 @@ test("a slow upward drift is flagged after the baseline minute, before any hitch
 });
 
 test("a single 10 s hitch window is not drift", () => {
-  const d = ThermalGov.drift();
+  const d = ThermalDrift.drift();
   let i = 0;
   const { firstDue } = run(d, (t) => 16.7 + 0.3 * jitter(i++) + (t > 100 && t < 110 ? 9 : 0), 600);
   assert.equal(firstDue, -1);
 });
 
 test("stepped() re-baselines on the cheaper state and waits a cooldown; recovery stays quiet", () => {
-  const d = ThermalGov.drift();
+  const d = ThermalDrift.drift();
   let i = 0;
   const drift = (t) => 16.7 + 0.3 * jitter(i++) + (t < 90 ? 0 : 5);
   const r = run(d, drift, 300);
@@ -82,7 +82,7 @@ test("stepped() re-baselines on the cheaper state and waits a cooldown; recovery
 });
 
 test("a step budget caps the detector (the ladder is finite)", () => {
-  const d = ThermalGov.drift();
+  const d = ThermalDrift.drift();
   let steps = 0, t = 0;
   for (let k = 0; k < 20; k++) {
     // each re-baselined stretch drifts again
@@ -93,40 +93,56 @@ test("a step budget caps the detector (the ladder is finite)", () => {
   assert.equal(steps, 4);
 });
 
-test("renderGate: draws per 60 physics ticks are exactly 60 / 45 / 30 and no frame carries more than render's own clamp", () => {
-  for (const [rate, want] of [[60, 60], [45, 45], [30, 30]]) {
-    const g = ThermalGov.renderGate(rate);
-    for (let i = 0; i < 90; i++) g.next(1 / 60, true);   // warm-up frames always draw
-    let drawn = 0, maxDt = 0;
-    for (let i = 0; i < 60; i++) { const d = g.next(1 / 60, true); if (d > 0) { drawn++; maxDt = Math.max(maxDt, d); } }
-    assert.equal(drawn, want, "rate " + rate);
-    assert.ok(maxDt <= 1 / 20 + 1e-9);
+const RR_SRC = fs.readFileSync(path.join(ROOT, "js/perf/render-rate.js"), "utf8");
+function tier(mode) {
+  globalThis.localStorage = { getItem: () => mode, setItem: () => {}, removeItem: () => {} };
+  const RenderRate = eval(RR_SRC + ";RenderRate");
+  RenderRate.init({ isMobile: true });
+  return RenderRate;
+}
+const drawsPer = (R, dt, n, racing = true) => { let d = 0, max = 0; for (let i = 0; i < n; i++) if (R.gate(dt, dt * 1000, false, racing)) { d++; max = Math.max(max, R.dt()); } return { d, max }; };
+
+test("RenderRate tier: draws per 60 physics ticks are exactly 60 / 45 / 30, no frame carries more than render's clamp", () => {
+  for (const [mode, want] of [["off", 60], ["45", 45], ["30", 30]]) {
+    const R = tier(mode);
+    drawsPer(R, 1 / 60, 90);   // warm-up frames always draw
+    const { d, max } = drawsPer(R, 1 / 60, 60);
+    assert.equal(d, want, "mode " + mode);
+    assert.ok(max <= 1 / 20 + 1e-9);
   }
 });
 
-test("renderGate: skipped time is handed to the next drawn frame (camera damping stays on the wall clock)", () => {
-  const g = ThermalGov.renderGate(30);
-  for (let i = 0; i < 90; i++) g.next(1 / 60, true);
+test("RenderRate tier: skipped time is handed to the next drawn frame (camera damping stays on the wall clock)", () => {
+  const R = tier("30");
+  drawsPer(R, 1 / 60, 90);
   let total = 0, wall = 0;
-  for (let i = 0; i < 600; i++) { wall += 1 / 60; total += g.next(1 / 60, true); }
+  for (let i = 0; i < 600; i++) { wall += 1 / 60; if (R.gate(1 / 60, 1000 / 60, false, true)) total += R.dt(); }
   assert.ok(Math.abs(total - wall) <= 1 / 30 + 1e-9, "drawn dt sums to wall time within one draw");
 });
 
-test("renderGate: a 120 Hz display still lands on the chosen rate; off-race and 60 always draw", () => {
-  const g = ThermalGov.renderGate(45);
-  for (let i = 0; i < 90; i++) g.next(1 / 120, true);
-  let drawn = 0;
-  for (let i = 0; i < 1200; i++) if (g.next(1 / 120, true) > 0) drawn++;
-  assert.ok(Math.abs(drawn - 450) <= 1, "10 s at 120 Hz draws 450 frames, got " + drawn);
-  const off = ThermalGov.renderGate(30);
-  for (let i = 0; i < 200; i++) assert.ok(off.next(1 / 60, false) > 0, "menus always draw");
-  assert.equal(ThermalGov.renderGate(7).rate(), 60, "an unknown rate falls back to 60");
-  assert.equal(ThermalGov.renderGate(30).setRate(25), false);
+test("RenderRate tier: a 120 Hz display still lands on the chosen rate; off-race, XR and the first 90 race frames always draw", () => {
+  const R = tier("45");
+  drawsPer(R, 1 / 120, 90);
+  const { d } = drawsPer(R, 1 / 120, 1200);
+  assert.ok(Math.abs(d - 450) <= 1, "10 s at 120 Hz draws 450 frames, got " + d);
+  const M = tier("30");
+  assert.equal(drawsPer(M, 1 / 60, 200, false).d, 200, "menus and pause always draw");
+  const W = tier("30");
+  assert.equal(drawsPer(W, 1 / 60, 90).d, 90, "race-entry frames");
+  const X = tier("30");
+  drawsPer(X, 1 / 60, 90);
+  let xr = 0; for (let i = 0; i < 100; i++) if (X.gate(1 / 60, 16.7, true, true)) xr++;
+  assert.equal(xr, 100, "an immersive session is never gated");
 });
 
-test("renderGate: the race-entry frames always draw (handoff card and first presents)", () => {
-  const g = ThermalGov.renderGate(30);
-  for (let i = 0; i < 90; i++) assert.ok(g.next(1 / 60, true) > 0);
+test("RenderRate tier: setMode switches at run time and refuses an unknown mode", () => {
+  const R = tier("");
+  assert.equal(R.setMode("45"), true);
+  assert.equal(R.state().tier, 45);
+  assert.equal(R.setMode("25"), false);
+  assert.equal(R.state().tier, 45);
+  assert.equal(R.setMode("auto"), true);
+  assert.equal(R.state().tier, 60);
 });
 
 // ---- governor integration --------------------------------------------------

@@ -1,7 +1,7 @@
 # Thermal drift step and the 45/30 fps render tier (#2652)
 
 Grant: Bryce to the orchestrator, 2026-10-17 ~10:00Z: "Yes spawn for 2652". Brief: `docs/notes/PERF-RESEARCH-2026-10-17.md` §2 item 5.
-Code: `js/perf/thermal-gov.js` (pure), one `driftStep()` in `js/perf/governor.js`, one gated draw in `js/game.js` `tickBody`.
+Code: `js/perf/thermal-drift.js` (pure drift detector), one `driftStep()` in `js/perf/governor.js`, and the 45/30 tier as two more modes of the cadence guard `RenderRate` (`js/perf/render-rate.js`, PR #2686) so `tickBody` has one gate.
 
 ## What shipped (both default OFF)
 - **Drift step** (`localStorage apex26.thermalDrift=1` or `__apex.thermalDrift(true)`). Frames are cut into 10 s windows; the first is
@@ -12,16 +12,16 @@ Code: `js/perf/thermal-gov.js` (pure), one `driftStep()` in `js/perf/governor.js
   no-realloc scaling API is coming (11 render-target reallocs per governor step, monza; oracle `tlx-post state().rtResizes` and the res-scale census tool
   on PR #2683), so each step costs a realloc: that is why this is off, and why the render tier (no scale
   change) is the part to favour.
-- **Render tier** (`localStorage apex26.renderRate=45|30` or `__apex.renderRate(n)`). `ThermalGov.gate.next(dt, raceActive)` earns `rate`
-  credits per second and draws when one is banked: 45 is 3 of 4 frames, 30 every 2nd on 60 Hz; 120 Hz lands on the same rate. A drawn frame
-  gets the wall time since the last draw (clamped to render's own 1/20), so camera and visual damping run on the wall clock. Physics, AI,
-  input polling, HUD updates and the governor's tick are untouched: the physics `while` loop above the gate does not know it exists.
-  The first 90 race frames always draw (handoff card, first presents); menus and pause always draw.
+- **Render tier** (`localStorage apex26.renderRate=45|30` or `__apex.renderRate("45")`; the same key as the 100 Hz guard's `off|half|auto`).
+  While racing, `RenderRate.gate` earns `rate` credits per second and draws when one is banked: 45 is 3 of 4 frames, 30 every 2nd on 60 Hz; 120 Hz
+  lands on the same rate. A drawn frame gets the wall time since the last draw (clamped to render's own 1/20), so camera and visual damping run on the
+  wall clock, and HUD smoothing gets the carried ms. Physics, AI, input polling and the governor's tick are untouched: the physics `while` loop above the
+  gate does not know it exists. The first 90 race frames always draw (handoff card, first presents); menus, pause and XR always draw.
 
 ## Evidence
-No thermal or GPU evidence exists in the SwiftShader container. `tests/unit/thermal-gov.test.mjs` proves, on synthetic series: steady and
+No thermal or GPU evidence exists in the SwiftShader container. `tests/unit/thermal-drift.test.mjs` proves, on synthetic series: steady and
 single-hitch series never step; a minutes-long rise steps after the baseline minute; `stepped()` re-baselines and recovery stays quiet; the
-cap is four; the gate draws exactly 60/45/30 per 60 ticks; skipped time is carried; a real `PerfGov` with drift on takes only scale rungs
+cap is four; RenderRate draws exactly 60/45/30 per 60 ticks; skipped time is carried; a real `PerfGov` with drift on takes only scale rungs
 and drift off never moves on a steady device. Open: a phone soak (#1633) decides whether either default should flip, and whether the p50
 signal is enough on a vsync-bound device (it reads drift only once work stops fitting the refresh interval).
 
@@ -29,5 +29,3 @@ signal is enough on a vsync-bound device (it reads drift only once work stops fi
 - Touch steering: input is sampled per physics step, not per draw, so latency does not grow; what the player SEES lags by up to one render
   frame (22 ms at 45, 33 ms at 30).
 - Skipping a draw leaves the last presented frame on the canvas (and on `#game-soft`); no clear happens.
-- The research session's cadence guard (`RenderRate`, branch `cursor/render-rate-guard-4c1e`) owns the same line; the plan is to fold this
-  tier into it as `setTier()` once it lands.

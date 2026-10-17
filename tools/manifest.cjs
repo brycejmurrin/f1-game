@@ -349,9 +349,10 @@ const FULL = [
   "js/physics/brake-cue.js",
   // driving-cues.js is LAZY_AUDIO (SteerTuning and game.js already typeof-guard it).
   "js/input/steer-tuning.js",
-  "js/perf/thermal-gov.js",    // ThermalGov: pure slow-drift detector + opt-in 45/30 render gate (#2652); before governor
+  "js/perf/thermal-drift.js",    // ThermalDrift: pure slow-drift detector + opt-in 45/30 render gate (#2652); before governor
   "js/perf/governor.js",
   "js/perf/loop-health.js",
+  "js/perf/render-rate.js",   // RenderRate: phones draw every 2nd rAF on a 100 Hz+ display (physics unchanged)
   "js/perf/spans.js",
   "js/perf/race-entry-profile.js",
   "js/perf/quality-preset.js",

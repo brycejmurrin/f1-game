@@ -8601,6 +8601,7 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 // sentinel live in js/perf/governor.js (PerfGov, initialised at boot with gfx).
 // render() gates features on PerfGov.tier(); tickBody feeds PerfGov.tick(ms).
 PerfGov.init(gfx);
+RenderRate.init({ isMobile: !!GLX.isMobile });   // phones only: halve the draw rate on a 100 Hz+ rAF (js/perf/render-rate.js)
 const PHYS_DT = PhysicsConsts.FIXED_DT;   // fixed physics step — js/physics/consts.js
 function tick(now) {
   PerfSpans.begin("frame");
@@ -8628,8 +8629,6 @@ function tick(now) {
   }
   finally { PerfSpans.end("frame"); }
 }
-// Render-rate tier (#2652): physics is fixed-step either way; this only skips draws. Default 60 = off.
-ThermalGov.gate.setRate(parseInt((() => { try { return localStorage.getItem("apex26.renderRate"); } catch (_) { return null; } })(), 10));
 function tickBody(now) {
   let dt = Math.max(0, Math.min((now - lastFrame) / 1000, 1 / 4));   // clamp big gaps (tab resume) and a non-monotonic rAF stamp
   const _dtMs = now - lastFrame;
@@ -8744,9 +8743,12 @@ function tickBody(now) {
   if (photoMode && paused && netPlay.active()) updatePhotoCam(Math.min(dt, 1 / 20));
   if (state === "results") resultsCam.tick(Math.min(dt, 1 / 20));
   if (state !== "race" && state !== "count") GameAudio.feedReplayScrub(soundOn && player, state === "results" && replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop);   // results HIGHLIGHTS: engines + field per clip; orbit, NEXT, RACE AGAIN or MENU (each ends the scrub) silences once
-  const _rdt = ThermalGov.gate.next(dt, state === "race" && !paused);   // opt-in 45/30 fps tier: 0 = skip this draw, else the wall time since the last one
-  if (_rdt > 0) { PerfSpans.begin("render"); render(Math.min(_rdt, 1 / 20)); PerfSpans.end("render"); }   // camera/visual damping at (clamped) frame dt
-  if (state === "race" || state === "count") { PerfSpans.begin("hud"); updateHud(false, _dtMs); PerfSpans.end("hud"); }
+  RenderRate.observe(_dtMs);
+  if (RenderRate.gate(dt, _dtMs, XrBoot.comfort(), state === "race" && !paused)) {   // a skipped rAF hands its dt/ms to the next drawn frame
+    dt = RenderRate.dt();
+    PerfSpans.begin("render"); render(Math.min(dt, 1 / 20)); PerfSpans.end("render");   // camera/visual damping at (clamped) frame dt
+    if (state === "race" || state === "count") { PerfSpans.begin("hud"); updateHud(false, RenderRate.ms()); PerfSpans.end("hud"); }
+  }
 }
 
 // ---------- car setup panel ----------

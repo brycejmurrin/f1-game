@@ -830,14 +830,14 @@ function tick(dtMs) {
 // finished races to pay it down one at a time. The escape hatch behind
 // __apex.safeMode(false).
 // #2652 thermal drift (opt-in, apex26.thermalDrift=1): a phone that heats up gets
-// slower minutes before frames MISS, so ThermalGov's slow-drift detector may take
+// slower minutes before frames MISS, so ThermalDrift's slow-drift detector may take
 // ONE existing rung early. It is the degrade branch minus the verify: the step is
 // a bet on the future, not on the next EMA, so a verify would revert it at once.
 // _scaleCap = cur keeps the restore gate from climbing straight back; the cap
 // ages out on unbroken headroom exactly as for a measured miss.
 let _drift = null;
 function setThermalDrift(on) {
-  _drift = on && typeof ThermalGov !== "undefined" ? ThermalGov.drift() : null;
+  _drift = on && typeof ThermalDrift !== "undefined" ? ThermalDrift.drift() : null;
 }
 function driftStep() {
   if (_pendingVerify || _govCoolMs > 0 || _govCool > 0) return false;   // mid-verify or cooling: ask again next window

@@ -2050,15 +2050,17 @@ const api = {
     return BodyAttitude.status();
   },
 
-  // renderRate(n?) — opt-in render-rate tier (#2652): 60 (default) | 45 | 30 draws per second while
-  // physics stays 60 Hz. No arg reports; a number sets it and persists apex26.renderRate.
+  // renderRate(m?) — RenderRate mode (js/perf/render-rate.js): "auto" (default; halves a 100 Hz+ phone), "off",
+  // "half", or the opt-in #2652 tier 45 | 30 draws per second while racing (physics stays 60 Hz). No arg reports;
+  // a value sets it and persists apex26.renderRate.
   // thermalDrift(on?) — the opt-in slow-drift governor step (apex26.thermalDrift); no arg reports.
-  renderRate(n) {
-    if (n !== undefined) {
-      if (!ThermalGov.gate.setRate(n)) return { ok: false, rates: ThermalGov.RATES };
-      try { localStorage.setItem("apex26.renderRate", String(n)); } catch (_) { /* session-only */ }
+  renderRate(m) {
+    if (m !== undefined) {
+      const v = String(m);
+      if (!RenderRate.setMode(v)) return { ok: false, modes: ["auto", "off", "half", "45", "30"] };
+      try { localStorage.setItem("apex26.renderRate", v); } catch (_) { /* session-only */ }
     }
-    return ThermalGov.gate.stats();
+    return RenderRate.state();
   },
   thermalDrift(on) {
     if (on !== undefined) {
