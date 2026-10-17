@@ -203,3 +203,107 @@ test("CSS inspection detaches its CDP session when the selector is ambiguous", a
   await assert.rejects(() => inspectPage(page, { styles: "button" }), /exactly one/);
   assert.equal(detached, true);
 });
+
+test("inspect CLI bounds touch, boot, safe-area and summary flags before browser acquisition", () => {
+  const o = parseOptions(["inspect", "--screen", "settings", "--touch", "--boot", "932x430", "--safe", "0,59,21,59", "--summary"]);
+  assert.equal(o.touch, true); assert.equal(o.summary, true);
+  assert.deepEqual(o.boot, { width: 932, height: 430 });
+  assert.deepEqual(o.safe, { top: 0, right: 59, bottom: 21, left: 59 });
+  const plain = parseOptions(["inspect"]);
+  assert.equal(plain.touch, false); assert.equal(plain.boot, null); assert.equal(plain.safe, null);
+  for (const args of [["inspect", "--safe", "1,2,3"], ["inspect", "--safe", "0,59,21,-1"], ["inspect", "--safe", "0,59,21,201"], ["inspect", "--safe", "a,b,c,d"],
+    ["inspect", "--boot", "932"], ["inspect", "--boot", "100x100"], ["inspect", "--touch=yes"], ["inspect", "--summary=1"],
+    ["missions", "--touch"], ["responsive", "--safe", "0,0,0,0"], ["all", "--boot", "932x430"]]) assert.throws(() => parseOptions(args), String(args));
+});
+
+test("busy box and held lock defer with exit 75, distinct from a failed probe", async () => {
+  const { loadDeferral, deferral } = await import("../../tools/ui/explorer.mjs");
+  assert.equal(loadDeferral(2.9), null);
+  assert.equal(loadDeferral(3).exitCode, 75);
+  assert.match(loadDeferral(4.2).message, /deferred/);
+  assert.equal(deferral("Browser occupied").exitCode, 75);
+});
+
+test("inspect summary prints one line per issue and marks provisional records", async () => {
+  const { summarizeInspection } = await import("../../tools/ui/explorer.mjs");
+  const report = { records: [
+    { requestedViewport: { width: 932, height: 430 }, inspection: { issues: [{ kind: "blocked", selector: "#a", message: "A covered", provisional: true }] } },
+    { requestedViewport: { width: 844, height: 390 }, inspection: { issues: [] } }] };
+  assert.equal(summarizeInspection(report, "select"), "select\t932x430\tblocked (provisional)\t#a\tA covered");
+  assert.equal(summarizeInspection({ viewport: { width: 1280, height: 800 }, issues: [] }, "settings"), "settings\tclean");
+});
+
+test("inspector counts a native label as the tap target and the bare root as not hit-testable", () => {
+  const rect = (x, y, w, h) => ({ x, y, width: w, height: h, right: x + w, bottom: y + h });
+  const row = { tagName: "LABEL", parentElement: null, textContent: "BRAKING CUES", getBoundingClientRect: () => rect(0, 0, 400, 56), contains: () => false };
+  const box = { id: "cues", tagName: "INPUT", type: "checkbox", checked: false, textContent: "", parentElement: row, labels: [row],
+    getAttribute: () => null, closest: () => null, contains: () => false, getBoundingClientRect: () => rect(4, 21, 14, 14) };
+  const html = { tagName: "HTML" };
+  let hit = row;
+  const document = { querySelectorAll: s => s.startsWith("button") ? [box] : [], elementFromPoint: () => hit,
+    documentElement: html, body: { tagName: "BODY" }, activeElement: null, getElementById: () => null };
+  html.scrollWidth = 1000; html.dataset = {};
+  const ctx = vm.createContext({ document, window: {}, innerWidth: 1000, innerHeight: 800, location: { href: "http://localhost/" }, CSS: { escape: s => s },
+    getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1", overflowX: "visible", overflowY: "visible" }), matchMedia: () => ({ matches: true }) });
+  const inspect = () => JSON.parse(JSON.stringify(vm.runInContext(`(${inspectUI.toString()})()`, ctx)));
+  const labelled = inspect();
+  assert.equal(labelled.controls[0].reachability.hit, "hits");
+  assert.equal(labelled.issues.some(i => i.kind === "tiny-target"), false, "the 400x56 label row is the target, not the 14px box");
+  box.labels = [];
+  assert.match(inspect().issues.find(i => i.kind === "tiny-target").message, /14\.0 × 14\.0/);
+  hit = html;
+  const bare = inspect();
+  assert.equal(bare.controls[0].reachability.hit, "not-hit-testable");
+  assert.deepEqual(bare.issues.filter(i => i.kind === "blocked"), []);
+  assert(bare.issues.some(i => i.kind === "not-hit-testable"));
+  hit = { tagName: "DIV", id: "cover", parentElement: null };
+  assert(inspect().issues.some(i => i.kind === "blocked" && /#cover/.test(i.message)));
+});
+
+test("responsive inspection resamples an unsettled record once, then marks its issues provisional", async () => {
+  const { inspectResponsive } = await import("../../tools/ui/explorer/inspector.mjs");
+  let settles = 0, settleScript = [false, false, true, true];
+  let current = { width: 1280, height: 800 };
+  const page = { viewportSize: () => current, setViewportSize: async v => { current = v; },
+    evaluate: async (fn, args) => {
+      if (fn.name === "settleLayout") return { stable: settleScript[settles++] ?? true, frames: 3 };
+      if (fn.name === "captureAuditEnvironment") return {};
+      return { controls: [], viewport: current, issues: [{ kind: "blocked", selector: "#x", message: "x" }] };
+    }, locator: () => ({ ariaSnapshot: async () => "" }) };
+  const report = await inspectResponsive(page, { viewports: [{ width: 932, height: 430 }, { width: 844, height: 390 }] });
+  assert.equal(settles, 3, "first record settles twice, second once");
+  assert.equal(report.records[0].settlement.retried, true);
+  assert.equal(report.records[0].inspection.provisional, true);
+  assert.equal(report.records[0].inspection.issues[0].provisional, true);
+  assert.equal(report.records[1].inspection.provisional, undefined);
+  assert.equal(report.records[1].inspection.issues[0].provisional, undefined);
+});
+
+test("single-size inspect settles before reading and keeps the settlement record", async () => {
+  const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
+  const calls = [];
+  const page = { evaluate: async (fn) => {
+      calls.push(fn.name);
+      if (fn.name === "settleLayout") return { stable: calls.filter(n => n === "settleLayout").length > 1, frames: 3 };
+      if (fn.name === "captureAuditEnvironment") return {};
+      return { controls: [], issues: [{ kind: "blocked", selector: "#x", message: "x" }] };
+    }, locator: () => ({ ariaSnapshot: async () => "" }) };
+  const { settlement, inspection } = await inspectSettled(page, { root: "#pmsettings" });
+  assert.equal(calls[0], "settleLayout", "settles before the DOM read");
+  assert.equal(settlement.retried, true); assert.equal(settlement.stable, true);
+  assert.equal(inspection.provisional, undefined);
+  assert.equal(inspection.issues[0].provisional, undefined);
+});
+
+test("an unsettled record with no animation frames is not retried (more time cannot help)", async () => {
+  const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
+  let settles = 0;
+  const page = { evaluate: async (fn) => {
+      if (fn.name === "settleLayout") { settles++; return { stable: false, frames: 0 }; }
+      if (fn.name === "captureAuditEnvironment") return {};
+      return { controls: [], issues: [{ kind: "offscreen", selector: "#x", message: "x" }] };
+    }, locator: () => ({ ariaSnapshot: async () => "" }) };
+  const { settlement, inspection } = await inspectSettled(page, {});
+  assert.equal(settles, 1); assert.equal(settlement.retried, undefined);
+  assert.equal(inspection.provisional, true); assert.equal(inspection.issues[0].provisional, true);
+});
