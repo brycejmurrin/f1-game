@@ -1,1 +1,1 @@
-1792223760	Claude	track-switch-memory Metal red: diagnose + fix (tests/specs/track-switch-memory.spec.js, js/render/three dispose)  [cursor/track-switch-metal-7c3e; session 1992bd6b3df337a39f6b00d6]
+1792234975	Claude	#2693 TLX chunked world-mesh CPU arrays (js/render/three/tlx-chunked.js, js/game.js drawWorldMeshes, js/render/shared/shadow-pass.js): force-upload then release; starts after #2637 is green; session_015qmW… (#2657) is next on tlx-chunked.js  [cursor/track-switch-metal-7c3e; session 1992bd6b3df337a39f6b00d6]
