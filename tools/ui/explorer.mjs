@@ -15,7 +15,7 @@ import { MODE_TITLES, MISSIONS, missionBrief } from "./explorer/catalog.mjs";
 import { explore } from "./explorer/modes.mjs";
 import { writeReport } from "./explorer/report.mjs";
 import { openSession } from "./explorer/browser.mjs";
-import { inspectPage, inspectResponsive, installInspector } from "./explorer/inspector.mjs";
+import { inspectSettled, inspectResponsive, installInspector } from "./explorer/inspector.mjs";
 
 import { captureAuditSource } from "./explorer/audit-evidence.mjs";
 
@@ -177,8 +177,10 @@ export async function main(argv = process.argv.slice(2)) {
         const screen = SCREENS.find(v => v.id === opts.screen);
         await screen.open(s.page);
         await installInspector(s.page);
-        const inspect = opts.viewports ? inspectResponsive : inspectPage;
-        const report = await inspect(s.page, { root: opts.selector || screen.root, styles: opts.styles, viewports: opts.viewports, roundTrip: opts.roundTrip, audits, source });
+        const args = { root: opts.selector || screen.root, styles: opts.styles, viewports: opts.viewports, roundTrip: opts.roundTrip, audits, source };
+        // A single-size inspect settles too (it used to read a page mid-transition with no record of it).
+        const report = opts.viewports ? await inspectResponsive(s.page, args)
+          : await inspectSettled(s.page, args).then(({ settlement, inspection }) => ({ ...inspection, settlement }));
         report.provenance = { sha: gitHead, screen: opts.screen, route: "catalog setup; use replay for real interaction proof",
           emulation: { touch: opts.touch, boot: opts.boot || { width: 1280, height: 800 }, safeArea: opts.safe } };
         report.errors = s.logs.errors; report.requests = s.logs.requests;

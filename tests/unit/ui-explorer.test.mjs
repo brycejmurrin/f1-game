@@ -278,3 +278,19 @@ test("responsive inspection resamples an unsettled record once, then marks its i
   assert.equal(report.records[1].inspection.provisional, undefined);
   assert.equal(report.records[1].inspection.issues[0].provisional, undefined);
 });
+
+test("single-size inspect settles before reading and keeps the settlement record", async () => {
+  const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
+  const calls = [];
+  const page = { evaluate: async (fn) => {
+      calls.push(fn.name);
+      if (fn.name === "settleLayout") return { stable: calls.filter(n => n === "settleLayout").length > 1, frames: 3 };
+      if (fn.name === "captureAuditEnvironment") return {};
+      return { controls: [], issues: [{ kind: "blocked", selector: "#x", message: "x" }] };
+    }, locator: () => ({ ariaSnapshot: async () => "" }) };
+  const { settlement, inspection } = await inspectSettled(page, { root: "#pmsettings" });
+  assert.equal(calls[0], "settleLayout", "settles before the DOM read");
+  assert.equal(settlement.retried, true); assert.equal(settlement.stable, true);
+  assert.equal(inspection.provisional, undefined);
+  assert.equal(inspection.issues[0].provisional, undefined);
+});

@@ -207,6 +207,21 @@ export async function inspectPage(page, { root, styles, source = null, audits = 
   return report;
 }
 
+/** Settle (one retry), inspect, and mark issues provisional when the layout never stopped moving. */
+export async function inspectSettled(page, { root, styles, source = null, audits = null } = {}) {
+  let settlement = await page.evaluate(settleLayout, { root });
+  // One more budget before judging: the first resize after boot often
+  // outlasts a single sample window. Still moving after that, the issues are
+  // provisional — a hit test mid-transition is not a defect.
+  if (settlement && settlement.stable === false) settlement = { ...await page.evaluate(settleLayout, { root }), retried: true };
+  const inspection = await inspectPage(page, { root, styles, source, audits });
+  if (settlement && settlement.stable === false) {
+    inspection.provisional = true;
+    for (const i of inspection.issues || []) i.provisional = true;
+  }
+  return { settlement, inspection };
+}
+
 export function diffInspections(before, after) {
   const index = report => new Map(report.controls.map(c => [c.selector, c]));
   const a = index(before), b = index(after), changed = [], layout = [];
@@ -236,16 +251,7 @@ export async function inspectResponsive(page, { viewports, root, styles, roundTr
   try {
     for (const { viewport, sourceIndex, phase } of sequence) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      let settlement = await page.evaluate(settleLayout, { root });
-      // One more budget before judging: the first resize after boot often
-      // outlasts a single sample window. Still moving after that, the record's
-      // issues are provisional — a hit test mid-transition is not a defect.
-      if (settlement && settlement.stable === false) settlement = { ...await page.evaluate(settleLayout, { root }), retried: true };
-      const inspection = await inspectPage(page, { root, styles, source, audits });
-      if (settlement && settlement.stable === false) {
-        inspection.provisional = true;
-        for (const i of inspection.issues || []) i.provisional = true;
-      }
+      const { settlement, inspection } = await inspectSettled(page, { root, styles, source, audits });
       records.push({ requestedViewport: { width: viewport.width, height: viewport.height }, sourceIndex, phase, settlement, inspection,
         diff: records.length ? diffInspections(records.at(-1).inspection, inspection) : null });
     }
