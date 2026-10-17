@@ -18,12 +18,17 @@ program links stubbed so the scene reaches steady state under SwiftShader (metho
 
 ## Reading
 
-- **The mirror pass submits 97 % of the main pass's triangles into a target of ~12,200 pixels** (207x59, against 186,624 for
+- **On the desktop "full" rung, the mirror pass submits 97 % of the main pass's triangles into a target of ~12,200 pixels** (207x59, against 186,624 for
   the main target): 172,617 triangles for 6.5 % of the pixels. Its draws are 31 against 76, so the cost is vertex work, not
   draw calls. This is the premise of #2657 (index LOD for the mirror first) measured: the triangle count is real and nearly
   unculled in the mirror. Whether it matters on an Apple GPU is a different question: Apple's tiled-vertex-buffer guidance says
   vertex count is not the thing to worry about (WWDC20 10602, see `docs/notes/PERF-RESEARCH-2026-10-17.md` §2.10 on PR #2658), so
   this is the count, not a verdict; the phone's Rendering Frames timeline decides.
+- **Phone tier (`--mobile`, forceMobileTier, mirror "lite" rung): the mirror is still 73 % of the main pass.** Monaco, 120 frames, stubbed
+  links: main 78.8 calls / 182,709 triangles at 640x360; mirror (`rt 138x39`, ~5,400 pixels) 11.8 calls / 133,282 triangles; sun shadow
+  0.06 a frame; 102 calls and 322,098 triangles per game frame. The lite rung cuts mirror calls 31 → 12 (no instanced props, 180 m
+  range) but only triangles 172k → 133k, so the remaining mass is road/kerb/barrier chunks drawn at full index density into a target
+  of ~5,400 pixels: the case for index LOD on the mirror pass (#2657) holds on the phone tier too. Count only; the phone's timeline decides.
 - Main plus mirror is 350k of the 378k triangles per game frame (93 %); the sun shadow is a rebuild-on-demand pass (0.13 a frame).
 - The post chain is 14 one-draw quads (the earlier hunt's "~15 quads"): nothing to cut by count.
 - Cross-check: the dust-merge census (`docs/notes/PERF-HUNT-TLX-2026-10-17.md`, monaco chase, after #2634) gave main 87–90 calls and mirror
@@ -31,5 +36,5 @@ program links stubbed so the scene reaches steady state under SwiftShader (metho
 
 ## Not run
 
-Other circuits, other cameras (`--camera`), `--real-link`; one run only, so no spread is claimed for the counts (they are deterministic per
+Other circuits, other cameras (`--camera`), `--real-link`, the mobile tier at a phone viewport (844x390; this run kept 640x360); one run only, so no spread is claimed for the counts (they are deterministic per
 frame up to the AI field's motion). No GPU or phone number.

@@ -18,7 +18,7 @@
 // Each pass is keyed by its render target (name + size) or "canvas"; `render.drawCalls` and `.triangles`
 // are summed per key per frame and averaged over the measured frames.
 //
-//   node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--json PATH]
+//   node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--json PATH]
 //        [--camera chase|helmet|...]   (a __apex camera mode name; default: leave the race default)
 //
 // Output: one table row per pass key: frames it ran in (of N), mean draw calls and triangles per frame it
@@ -31,7 +31,8 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
-exitIfHelp(argv, `usage: node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--camera MODE] [--json PATH]
+exitIfHelp(argv, `usage: node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--camera MODE] [--json PATH]
+  --mobile forces the phone tier (apex26.forceMobileTier=1: mirror "lite" rung etc.).
   Draw calls and triangles per render pass per frame on TLX's WebGL2 path (exact counts, not timings).
   Link calls are stubbed unless --real-link, so the scene reaches steady state quickly under SwiftShader.`);
 
@@ -47,13 +48,15 @@ const track = argv.filter((a, i) => !a.startsWith("--") && !VALUED.has(argv[i - 
 const FRAMES = Math.max(10, +flag("--frames", 120) || 120);
 const WARM = Math.max(0, +flag("--warm", 60) || 60);
 const REAL_LINK = argv.includes("--real-link");
+const MOBILE = argv.includes("--mobile");
 const CAMERA = flag("--camera", null);
 const JSON_OUT = flag("--json", null);
 const WAIT_MS = Math.max(60000, +process.env.APEX_PROFILE_WAIT_MS || 60000);
 
 /** Page-side init script: force TLX onto three's WebGL2 path and (unless --real-link) stub program links. */
-function initScript(stub) {
+function initScript({ stub, mobile }) {
   try {
+    if (mobile) localStorage.setItem("apex26.forceMobileTier", "1");
     localStorage.setItem("apex26.gfxBackend", "three");
     localStorage.setItem("apex26.tlxForceGL", "1");
     localStorage.setItem("apex26.gfxBootStepMs", "45000");
@@ -104,7 +107,7 @@ async function main() {
   const browser = await launchChromium({ args: ["--use-angle=swiftshader", "--disable-background-timer-throttling"] });
   try {
     const ctx = await browser.newContext({ viewport: { width: 640, height: 360 } });
-    await ctx.addInitScript(initScript, !REAL_LINK);
+    await ctx.addInitScript(initScript, { stub: !REAL_LINK, mobile: MOBILE });
     const page = await ctx.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(String(e).slice(0, 200)));
@@ -148,7 +151,7 @@ async function main() {
       console.log(e.pass.padEnd(34) + String(e.perFrameRan).padStart(9) + String(e.callsPerRender).padStart(14) + String(e.trisPerRender).padStart(13) + String(e.callsPerFrame).padStart(13) + String(e.trisPerFrame).padStart(12));
     }
     const summary = { track, frames: rows.frames, backend: backend.api, forceWebGL: backend.forceWebGL,
-      stubbedLinks: !REAL_LINK, callsPerFrame: +total.calls.toFixed(1), trisPerFrame: total.tris, pageErrors: errors.length };
+      stubbedLinks: !REAL_LINK, mobileTier: MOBILE, callsPerFrame: +total.calls.toFixed(1), trisPerFrame: total.tris, pageErrors: errors.length };
     console.log("= pass-census " + JSON.stringify(summary));
     if (JSON_OUT) { mkdirSync(dirname(JSON_OUT), { recursive: true }); writeFileSync(JSON_OUT, JSON.stringify({ summary, table, errors }, null, 2)); }
     if (!table.length) { console.error("no render() calls recorded"); process.exitCode = 1; }
