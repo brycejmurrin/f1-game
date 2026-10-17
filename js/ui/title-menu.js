@@ -20,11 +20,16 @@ const TitleMenu = (function () {
     };
     const hero = doc.getElementById("menu-hero");
     if (hero) { hero.setAttribute("role", "group"); hero.setAttribute("aria-label", "Continue and career"); }
-    group("menu-primary", "Play", ["mb-race", "mb-tt", "mb-vs", "mb-season", "mb-practice", "mb-standings"]);
+    // Play is a 2×2 plus PRACTICE; #menu-garage is CSS-placed as the sixth
+    // cell (bottom-right). STANDINGS is a season utility, not a play door —
+    // parking it in Play put it under the Garage tile on compact-wide Home
+    // (Playwright click timeout on #mb-standings after race→menu; ship tip
+    // 086e55bfc / nightly 39017766676). Keep it with the under-brand chips.
+    group("menu-primary", "Play", ["mb-race", "mb-tt", "mb-vs", "mb-season", "mb-practice"]);
     group("menu-garage", "Garage", ["mb-garage"]);
     group("menu-explore", "Watch & Explore", ["mb-watch", "mb-data"]);
     const create = group("menu-create", "Create", ["mb-photo", "mb-designer"]);
-    const utilities = group("menu-secondary", "Utilities", ["mb-settings", "mb-phonepad", "mb-help"]);
+    const utilities = group("menu-secondary", "Utilities", ["mb-standings", "mb-settings", "mb-phonepad", "mb-help"]);
     const shortcut = (row, id, label, page) => {
       if (doc.getElementById(id)) return;
       const button = doc.createElement("button"); button.id = id; button.type = "button";
