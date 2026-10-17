@@ -269,7 +269,8 @@ function buildCamTunePanel() {
     imp.type = "button";
     imp.textContent = "IMPORT";
     imp.title = "Paste JSON, a window.CameraEdits snippet, or an APXC1 share code into the box, then click IMPORT.";
-    actions.insertBefore(imp, $("ct-close"));
+    const close = $("ct-close");
+    actions.insertBefore(imp, close && close.parentNode === actions ? close : null);
     imp.onclick = () => {
       const ta = $("ct-json");
       ta.hidden = false;

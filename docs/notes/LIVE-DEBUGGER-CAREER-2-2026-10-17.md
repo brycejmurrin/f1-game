@@ -13,5 +13,14 @@ Call path / reachability: every product writer is string-gated (`SettingsExport.
 ## Clean (round 2)
 Angle 2: setup share code round trip decodes and applies (stored values are clamped on read by `SetupTune.get`, BY-DESIGN); designer APXT code round trips identically, 300 single-char mutations: 0 throws, 6 decoded all finite. Angle 3 live: 912 hostile-value mutations over every path (depth<=3) of a MY TEAM save through `SaveMigrate.migrateCareer`: 0 throws, only L2 non-finite. `restore-points.js` `Number(d.money)` runs on already-migrated JSON, safe.
 
+## Round B (angles 4 and 5), all CLEAN
+| area | verdict | evidence |
+|---|---|---|
+| 4 seasons driven through the real career flow (hub `#cr-go` -> quali -> race staged, then `careerSim(24)` + `careerRollover()` x4, haas seat 1) | CLEAN | 0 non-finite values in `careerState()` (depth 4) at every step; money 1200 -> 29212; rep 44 -> 98; `deal.left` reaches 0 and 2 offers are on the table (BY-DESIGN: offers only in the expiry winter). `careerSim` needs the career flow staged: `race()` gives `flow:"gp"` and returns `[]`. |
+| R&D / facility purchase at the edges | CLEAN | cost 3000 refused at money 0, bought at exactly 3000 (money -> 0, level 1, discount 0.05). `careerMoney(1e308)` and `careerMoney(-5)` both read back 0 (test hook clamps; not product). |
+| Slot switching mid-season | CLEAN | slot driver2 at round 5 (money 1777, 22 finish rows), switched to driver1, driver0, myteam0 and back: each slot kept its own round/money/pts; driver2 returned identical. |
+| Input pad setters with hostile args | TAMPER-ONLY | `Input.setPadLabelMode({toString:1})` and `setPadBinding({toString:1}, ...)` throw "Cannot convert object to primitive value" (bindings.js:281 `PAD_NAME_SETS[m]`, :252 `Number(index)`). Callers pass `store.get("padLabels")` (key-binds.js:400), which settings import validates (round 1: `{toString:1}` in every setting is refused), so only a hand-edited localStorage reaches it. js/input is outside this lane; not fixed. |
+| Static sweep of `x[k] \|\| 0` on saved maps (garage, career, season-cal) | CLEAN | other sites index by roster ids or fixed axis names, not by save-supplied keys (L2 was the only one fed by save keys). |
+
 ## Not run
-Angle 4 (R&D, contract expiry, slot switch mid-season), 5 (settings round trip beyond round 1 of 2026-10-16). Cleanup: tampered keys removed, debugger detached, exception log left active on the page (page closes with the Chrome).
+Settings-file round trip was not repeated (round 1 of 2026-10-16 covers it). A driven (not simulated) race for the economy; `modes` browser group. Cleanup: tampered keys removed, debugger detached, exception log left active on the page (page closes with the Chrome).

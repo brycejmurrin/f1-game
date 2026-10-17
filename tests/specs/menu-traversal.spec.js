@@ -69,6 +69,7 @@ const WALKER = `
     key(el) {
       const layer = document.getElementById(this.layerId);
       if (!el || el === document.body || !layer || !layer.contains(el)) return null;
+      if (el.id) return "#" + el.id;
       const s = this.sig(el);
       let n = 0;
       for (const o of layer.querySelectorAll(el.tagName)) { if (o === el) break; if (this.sig(o) === s) n++; }
@@ -78,6 +79,10 @@ const WALKER = `
     items() { return MenuNav.items(document.getElementById(this.layerId)).map((el) => this.key(el)); },
     find(k) {
       const layer = document.getElementById(this.layerId);
+      if (k && k[0] === "#") {
+        const el = document.getElementById(k.slice(1));
+        return el && layer.contains(el) ? el : null;
+      }
       for (const el of layer.querySelectorAll(MenuNav.FOCUSABLE)) if (this.key(el) === k) return el;
       return null;
     },
@@ -146,12 +151,23 @@ const click = (page, sel) => page.evaluate((s) => document.querySelector(s).clic
 const openFolds = (page) => page.evaluate(() => { for (const d of UiLayers.top().querySelectorAll("details")) d.open = true; });
 
 async function walk(page, layerId, { restore = "" } = {}) {
+  // The walk measures menu geometry, not the scene behind it. Park rendering
+  // and settle loaded fonts before the two input walks share those boxes.
+  await page.evaluate(async () => {
+    window.__apex.headless(true);
+    await document.fonts.ready;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
   expect(await page.evaluate(() => window.__aud.top()), `#${layerId} is the top layer`).toBe(layerId);
+  // The keyboard walk can activate controls that reflow the sheet; settle
+  // those changes before the controller walk measures its geometry.
+  const settle = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const kb = await page.evaluate(({ layerId, restore }) => window.__aud.walk(layerId, false, restore), { layerId, restore });
   expect(kb.all, `${layerId}: the first arrow press lands on a control of the layer`).toContain(kb.seed);
-  expect(kb.missed, `${layerId}: every control is reachable with the arrow keys`).toEqual([]);
+  expect(kb.missed, `${layerId}: every control is reachable with the arrow keys; missed: ${JSON.stringify(kb.missed)}`).toEqual([]);
+  await settle();
   const pad = await page.evaluate(({ layerId, restore }) => window.__aud.walk(layerId, true, restore), { layerId, restore });
-  expect(pad.missed, `${layerId}: every control is reachable with the D-pad`).toEqual([]);
+  expect(pad.missed, `${layerId}: every control is reachable with the D-pad; missed: ${JSON.stringify(pad.missed)}`).toEqual([]);
   return kb;
 }
 
@@ -233,13 +249,14 @@ test.describe("Menu traversal — keyboard and controller", () => {
     await leaves(page, "race-settings", async () => { await toTitle(page); await open(); }, seed);
   });
 
-  for (const [name, door] of [["CONTROLS", "#pm-open-controls"], ["DISPLAY", "#pm-open-display"], ["DRIVING AIDS", "#pm-advanced"], ["MUSIC & SOUND", "#pm-audio"]]) {
+  for (const [name, door] of [["CONTROLS", "#pm-open-controls"], ["HUD & CAMERA", "#pm-open-display"], ["DRIVING AIDS", "#pm-open-driving"], ["VISUAL STUDIO", "#pm-open-visual"], ["ADVANCED INPUT & HANDLING", "#pm-advanced"], ["MUSIC & SOUND", "#pm-audio"]]) {
     test(`settings › ${name}, every fold open`, async ({ page }) => {
       await boot(page);
       const open = async () => {
         await click(page, "#mb-settings");
         await page.waitForFunction(() => window.__aud.top() === "pmsettings" || !document.getElementById("pmsettings")?.hidden,
           null, { polling: 100, timeout: BOOT_MS });
+        if (door === "#pm-advanced") await click(page, "#pm-open-controls");
         await click(page, door);
         await page.waitForFunction(() => window.__aud.top() === "pmsettings", null, { polling: 100, timeout: BOOT_MS });
         // LAZY_AUDIO: #pm-audio may reveal async after ensureAudio; wait for the
@@ -255,7 +272,15 @@ test.describe("Menu traversal — keyboard and controller", () => {
       };
       await open();
       const { all, seed } = await walk(page, "pmsettings");
-      expect(all.length, `${name} shows its controls`).toBeGreaterThan(5);
+      if (door === "#pm-open-visual") {
+        // Race-only tuners stay disabled on title; Garage arrival and Back
+        // remain reachable alongside the disclosure header.
+        expect(all).toContain("#pm-garrival");
+        expect(all).toContain("#pm-settings-close");
+        expect(all.length).toBe(3);
+        for (const id of ["pm-lighting", "pm-camtune", "pm-flyby"])
+          await expect(page.locator("#" + id)).toBeDisabled();
+      } else expect(all.length, `${name} shows its controls`).toBeGreaterThan(5);
       await leaves(page, "pmsettings", async () => { await toTitle(page); await open(); }, seed);
     });
   }
@@ -265,11 +290,11 @@ test.describe("Menu traversal — keyboard and controller", () => {
     await click(page, "#mb-settings");
     await page.waitForFunction(() => window.__aud.top() === "pmsettings" || !document.getElementById("pmsettings")?.hidden,
       null, { polling: 100, timeout: BOOT_MS });
-    await click(page, "#pm-open-display");
+    await click(page, "#pm-open-driving");
     await page.waitForFunction(() => window.__aud.top() === "pmsettings", null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__aud.layerId = "pmsettings"; });
     const sum = await page.evaluate(() => {
-      const s = MenuNav.items(UiLayers.top()).find((el) => el.tagName === "SUMMARY" && !el.parentElement.open);
+      const s = document.querySelector("#adv-aids-details > summary");
       s.focus();
       return { id: s.id, focused: document.activeElement === s };
     });
@@ -282,7 +307,7 @@ test.describe("Menu traversal — keyboard and controller", () => {
     expect(await page.evaluate(() => document.activeElement.parentElement.open), "the pad's A opens it").toBe(true);
 
     const sel = await page.evaluate(() => {
-      const s = UiLayers.top().querySelector("details[open] select:not([disabled])");
+      const s = document.querySelector("#adv-aids-details[open] select:not([disabled])");
       s.focus();
       return { id: s.id, n: s.options.length, i: s.selectedIndex };
     });

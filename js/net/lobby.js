@@ -29,6 +29,8 @@ const NetLobby = (function () {
     const hostEvictingIds = new Set();   // guest ids the host is removing (stay in room, fresh code)
     let hostRemovedMe = false;           // guest: host sent LEFT { evicted } before the transport died
     let pollTimer = null;
+    // Clear AND null: a bare clearInterval leaves the stale handle truthy, which onFail reads as an armed watcher.
+    function stopPoll() { clearInterval(pollTimer); pollTimer = null; }
     // Pending-attempt fail tag: waitForOpen prefers this over failureMsg TURN copy.
     // 'expired' | 'no_relay' | 'ice' | null
     let failReason = null, failReasonMsg = null;
@@ -318,7 +320,7 @@ const NetLobby = (function () {
       // the relay credentials first and callers arm the watcher immediately
       // after clicking. The room then never opened: fourteen specs, and a
       // player who would have reported that the button does nothing.
-      if (transport) clearInterval(pollTimer);
+      if (transport) stopPoll();
       if (transport && !transports.has(pendingId)) {
         try { transport.close(); } catch (e) { /* already gone */ }
       }
@@ -342,7 +344,7 @@ const NetLobby = (function () {
     }
 
     function teardown() {
-      consumeHandledInvite(); clearInterval(pollTimer);
+      consumeHandledInvite(); stopPoll();
       clearInterval(pumpTimer);
       pumpTimer = null;
       for (const timer of rosterTimers.values()) clearTimeout(timer);
@@ -408,7 +410,7 @@ const NetLobby = (function () {
     }
 
     function waitForOpen() {
-      clearInterval(pollTimer);
+      stopPoll();
       const started = Date.now();
       // A TEST FLAG MUST ANNOUNCE ITSELF. iceRelayOnly forbids direct
       // connections so the TURN leg can be exercised — but it PERSISTS, and
@@ -448,15 +450,15 @@ const NetLobby = (function () {
             // bailing) would escape the timeout check below and spin this poll
             // at 4 Hz forever with no message and no failure text.
             if (Date.now() - started > CONNECT_TIMEOUT_MS) {
-              clearInterval(pollTimer);
+              stopPoll();
               sayConnectFail(null, Math.round((Date.now() - started) / 1000));
             }
             return;
           }
         }
-        if (transport !== watched && !transports.has(watchedId)) { clearInterval(pollTimer); return; }
+        if (transport !== watched && !transports.has(watchedId)) { stopPoll(); return; }
         if (watched.status === "open") {
-          clearInterval(pollTimer);
+          stopPoll();
           onConnected(watchedId, watched);
           return;
         }
@@ -467,7 +469,7 @@ const NetLobby = (function () {
         // "closed" too: the close handler above says nothing for a pending transport.
         const dead = watched.status === "closed" || (st && (st.ice === "failed" || st.connection === "failed"));
         if (dead || Date.now() - started > CONNECT_TIMEOUT_MS) {
-          clearInterval(pollTimer);
+          stopPoll();
           Log.warn("net", "connect fail " + secs + "s");
           sayConnectFail(st, secs);
           // Only this attempt. A host whose SECOND invite fails still has its
@@ -2122,7 +2124,7 @@ const NetLobby = (function () {
 
     function close() {
       invalidateOperations(); consumeHandledInvite();
-      clearInterval(pollTimer);
+      stopPoll();
       Log.info("net", "lobby close");
       stopScan();
       // Keep wake during friend quali (session stays open while lobby is hidden).

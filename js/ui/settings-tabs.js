@@ -5,28 +5,49 @@
    game.js still owns availability and all individual controls. */
 const SettingsNav = (function () {
   "use strict";
-  const TITLES = {
-    home: "SETTINGS",
-    controls: "CONTROLS",
-    driving: "DRIVING",
-    display: "DISPLAY",
-    appearance: "APPEARANCE",
-    a11y: "ACCESSIBILITY",
-    advanced: "DRIVING AIDS",
-    audio: "MUSIC & SOUND",
-    files: "BACKUP & RESTORE",
-  };
-  const BREADCRUMBS = {
-    home: "SETTINGS",
-    controls: "SETTINGS › CONTROLS",
-    driving: "SETTINGS › DRIVING",
-    display: "SETTINGS › DISPLAY",
-    appearance: "SETTINGS › APPEARANCE",
-    a11y: "SETTINGS › ACCESSIBILITY",
-    advanced: "SETTINGS › DRIVING AIDS",
-    audio: "SETTINGS › MUSIC & SOUND",
-    files: "SETTINGS › BACKUP & RESTORE",
-  };
+  // Navigation metadata has one owner. Lookup callbacks keep DOM reads lazy
+  // (shell/lazy panels need not exist at evaluation) and literal for the ratchet.
+  // parent is the default hierarchy; the live stack preserves contextual entry.
+  const routes = Object.freeze({
+    home: Object.freeze({ title: "SETTINGS", parent: null, scope: "navigation",
+      panel: () => document.getElementById("pm-settings-index"), door: null }),
+    controls: Object.freeze({ title: "CONTROLS", parent: "home", scope: "preferences",
+      panel: () => document.getElementById("pm-panel-controls"), door: () => document.getElementById("pm-open-controls") }),
+    driving: Object.freeze({ title: "DRIVING AIDS", parent: "home", scope: "preferences",
+      panel: () => document.getElementById("pm-panel-driving"), door: () => document.getElementById("pm-open-driving") }),
+    display: Object.freeze({ title: "HUD & CAMERA", parent: "home", scope: "preferences",
+      panel: () => document.getElementById("pm-panel-display"), door: () => document.getElementById("pm-open-display") }),
+    appearance: Object.freeze({ title: "APPEARANCE", parent: "home", scope: "preferences",
+      panel: () => document.getElementById("pm-panel-appearance"), door: () => document.getElementById("pm-open-appearance") }),
+    a11y: Object.freeze({ title: "ACCESSIBILITY", parent: "home", scope: "preferences",
+      panel: () => document.getElementById("pm-panel-a11y"), door: () => document.getElementById("pm-open-a11y") }),
+    advanced: Object.freeze({ title: "ADVANCED INPUT & HANDLING", parent: "controls", scope: "preferences",
+      panel: () => document.getElementById("advanced"), door: () => document.getElementById("pm-advanced") }),
+    audio: Object.freeze({ title: "MUSIC & SOUND", parent: "home", scope: "preferences",
+      panel: () => document.getElementById("audioset"), door: () => document.getElementById("pm-audio") }),
+    files: Object.freeze({ title: "SAVES & DATA", parent: "home", scope: "data",
+      panel: () => document.getElementById("pm-panel-files"), door: () => document.getElementById("pm-open-files") }),
+    graphics: Object.freeze({ title: "GRAPHICS", parent: "home", scope: "preferences",
+      panel: () => document.getElementById("pm-panel-graphics"), door: () => document.getElementById("pm-open-graphics") }),
+    visual: Object.freeze({ title: "VISUAL STUDIO", parent: "home", scope: "editor",
+      panel: () => document.getElementById("pm-panel-visual"), door: () => document.getElementById("pm-open-visual") }),
+    progress: Object.freeze({ title: "PROGRESS", parent: "home", scope: "progress",
+      panel: () => document.getElementById("pm-panel-progress"), door: () => document.getElementById("pm-open-progress") }),
+    practice: Object.freeze({ title: "PRACTICE", parent: null, scope: "session",
+      panel: () => document.getElementById("pm-panel-practice"), door: null }),
+    strategy: Object.freeze({ title: "PIT STRATEGY", parent: null, scope: "session",
+      panel: () => document.getElementById("pm-panel-strategy"), door: null }),
+    review: Object.freeze({ title: "SESSION REVIEW", parent: null, scope: "session",
+      panel: () => document.getElementById("pm-panel-review"), door: null }),
+  });
+  function panel(id) { return Object.hasOwn(routes, id) ? routes[id].panel() : null; }
+  // Preserve the upstream breadcrumb heading using the registry hierarchy.
+  function breadcrumb(id) {
+    if (!Object.hasOwn(routes, id)) id = "home";
+    const names = [];
+    for (let route = id; route; route = routes[route].parent || (route === "home" ? null : "home")) names.unshift(routes[route].title);
+    return names.join(" › ");
+  }
   let live = null;
   // Subscribers told when a page is hidden by show()/back() (the CONTROLS wheel
   // wizard disarms itself here). Module-level so a subscriber needs no instance.
@@ -42,19 +63,8 @@ const SettingsNav = (function () {
     }
   }
 
-  // Each page's panel element, looked up by its own literal id (dynamicIdReads
-  // ratchet: getElementById must never take a computed argument).
   function panels() {
-    return {
-      controls: document.getElementById("pm-panel-controls"),
-      driving: document.getElementById("pm-panel-driving"),
-      display: document.getElementById("pm-panel-display"),
-      appearance: document.getElementById("pm-panel-appearance"),
-      a11y: document.getElementById("pm-panel-a11y"),
-      advanced: document.getElementById("advanced"),
-      audio: document.getElementById("audioset"),
-      files: document.getElementById("pm-panel-files"),
-    };
+    return Object.fromEntries(Object.keys(routes).filter((id) => id !== "home").map((id) => [id, panel(id)]));
   }
 
   function create(_store, onSelect) {
@@ -63,7 +73,8 @@ const SettingsNav = (function () {
     // The index door that opened a page. A dialog does not know about focus
     // changes inside its own sheet, so keep this explicitly and restore it on
     // the same page-stack BACK path that Escape presses.
-    let originDoor = null;
+    let originDoor = null, direct = false;
+    const stack = [];
 
     const visible = (el) => {
       if (!el || el.disabled) return false;
@@ -103,7 +114,7 @@ const SettingsNav = (function () {
     // boolean `ensured` flag; keep the richer "failed" → offline note path.)
     function show(want, focus, after, audioTried) {
       const request = ++generation;
-      const id = TITLES[want] ? want : "home";
+      const id = Object.hasOwn(routes, want) ? want : "home";
       // LAZY_AUDIO: same gate as the audio door — SettingRow must wire before
       // #audioset is revealed (programmatic show("audio") included). The door
       // click goes through here too, so it asks the bundle exactly once.
@@ -131,17 +142,7 @@ const SettingsNav = (function () {
           const current = sel && sel.selectedOptions && sel.selectedOptions[0];
           if (small && current) small.textContent = prefix + ": " + current.textContent.trim();
         }
-        // DRIVING also holds LICENCE BADGES. Rebuild the subtitle in one write:
-        // when #pm-coach-sel has no selected option the coach line is skipped
-        // and a bare `+=` stacked " · Badges n/m" on every show("home").
-        const drv = document.getElementById("pm-open-driving"), drvSmall = drv && drv.querySelector("small");
-        if (drvSmall && typeof Badges !== "undefined") {
-          const coachSel = document.getElementById("pm-coach-sel");
-          const coachOpt = coachSel && coachSel.selectedOptions && coachSel.selectedOptions[0];
-          const coachBit = coachOpt ? ("Coach: " + coachOpt.textContent.trim()) : "Coach, practice, strategy & badges";
-          const b = Badges.summary();
-          drvSmall.textContent = coachBit + ` · Badges ${b.held}/${b.total}`;
-        }
+
       }
       // Capture the door before it is hidden. This also makes a programmatic
       // SettingsNav.show("audio") behave like a click when called from home.
@@ -152,7 +153,7 @@ const SettingsNav = (function () {
       if (current !== "home" && current !== id) fireLeave(current);
       current = id;
       const title = document.getElementById("dlg-settings");
-      if (title) title.textContent = BREADCRUMBS[id];
+      if (title) title.textContent = breadcrumb(id);
       if (index) index.hidden = id !== "home";
       const pages = panels();
       for (const key of Object.keys(pages)) {
@@ -169,6 +170,7 @@ const SettingsNav = (function () {
       if (id === "audio") audioNote(pages.audio, audioTried === "failed");
       // Lifecycle hooks also cover programmatic/search navigation, after lazy
       // loading, and before focus resolves newly mounted page controls.
+      if (id === "progress" && typeof Badges !== "undefined") Badges.render();
       fireEnter(id);
       const body = document.getElementById("pm-settings-body");
       if (body) body.scrollTop = 0;
@@ -195,7 +197,16 @@ const SettingsNav = (function () {
     }
 
     function back() {
-      if (current === "home") { generation++; return true; }
+      if (current === "home" || direct) { generation++; if (current !== "home") fireLeave(current); direct = false; current = "home"; return true; }
+      if (stack.length) {
+        const parent = stack.pop();
+        show(parent.page, false);
+        originDoor = parent.origin;
+        const body = document.getElementById("pm-settings-body");
+        if (body) body.scrollTop = parent.scroll;
+        quietFocus(parent.door) || focusPage(parent.page);
+        return false;
+      }
       show("home", false);
       const door = originDoor;
       originDoor = null;
@@ -203,18 +214,10 @@ const SettingsNav = (function () {
       return false;
     }
 
-    const doors = {
-      controls: document.getElementById("pm-open-controls"),
-      driving: document.getElementById("pm-open-driving"),
-      display: document.getElementById("pm-open-display"),
-      appearance: document.getElementById("pm-open-appearance"),
-      a11y: document.getElementById("pm-open-a11y"),
-      advanced: document.getElementById("pm-advanced"),
-      audio: document.getElementById("pm-audio"),
-      files: document.getElementById("pm-open-files"),
-    };
+    const doors = Object.fromEntries(Object.entries(routes).filter(([, route]) => route.door).map(([id, route]) => [id, route.door()]));
     for (const [id, door] of Object.entries(doors)) if (door) door.onclick = () => {
       if (search) search.cancel();
+      if (current !== "home") stack.push({ page: current, door, origin: originDoor, scroll: document.getElementById("pm-settings-body")?.scrollTop || 0 });
       originDoor = door;
       // LAZY_AUDIO: MUSIC & SOUND's SettingRows demote the static ‹ › chevrons.
       // show() reveals audio only after ensureAudio so MenuNav.items matches a
@@ -225,10 +228,6 @@ const SettingsNav = (function () {
     // seam owns focus when it opens, and its opener should remain authoritative.
     originDoor = null;
     show("home", false);
-    if (typeof SettingsSearch !== "undefined") SettingsSearch.register("settings-panels", [
-      { id: "resolution", label: "Resolution", page: "display", target: "pm-res-sel", aliases: "graphics picture quality sharpness" },
-      { id: "deadzone", label: "Controller dead zone", page: "advanced", target: "pm-paddz", aliases: "deadzone stick drift pad wheel centre center" },
-    ]);
     if (typeof SettingsSearch !== "undefined") search = SettingsSearch.create({
       host: document.getElementById("pm-settings-index"), show, onSelect,
       onLeave: (fn) => leaveFns.push(fn),
@@ -237,16 +236,20 @@ const SettingsNav = (function () {
       // The caller uses this on every open, including after an interrupted
       // page transition. Clear the previous door so a later BACK cannot return
       // to a stale element from an earlier dialog instance.
-      showCurrent: () => { originDoor = null; if (search) search.cancel(); show("home", false); },
-      returnToSearch: () => { show("home", false); return !!search && search.restore(); },
-      show, back, invalidate: () => { generation++; },
+      showCurrent: () => { originDoor = null; direct = false; stack.length = 0; if (search) search.cancel(); show("home", false); },
+      returnToSearch: () => { direct = false; stack.length = 0; show("home", false); return !!search && search.restore(); },
+      showDirect: (id, focus) => { direct = true; stack.length = 0; show(id, focus); },
+      current: () => current,
+      show, back, invalidate: () => { generation++; if (current !== "home") fireLeave(current); current = "home"; direct = false; stack.length = 0; },
     };
     return live;
   }
 
   return {
-    create,
+    create, routes, panel, breadcrumb,
     show: (id, focus) => { if (live) live.show(id, focus); },
+    current: () => live ? live.current() : "home",
+    showDirect: (id, focus) => { if (live) live.showDirect(id, focus); },
     invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
     onEnter: (fn) => { if (typeof fn === "function") enterFns.push(fn); },
