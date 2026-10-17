@@ -46,6 +46,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { changedPaths } from "../lib/changed-files.mjs";
+import { loadGroups } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
 import { DEPLOY_BRANCH, selectionReceipt } from "./pick-tests.mjs";
 import { TRACKED, circuitsTouched, isDocsOnly } from "./select-specs.mjs";
@@ -1405,7 +1406,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // files versus 293–562 ms alone. game-vm's unchanged 12 s boot/race wall
   // measured 40.5 s alongside other VM files versus 8.03 s alone. Run these
   // performance contracts exclusively; assertions, deadlines and pool limits stay intact.
-  const isolated = new Set((opts.isolatedFiles || ["tests/unit/car-shade.test.mjs", "tests/unit/game-vm.test.mjs"]).map(rel));
+  const isolated = new Set((opts.isolatedFiles || loadGroups().isolatedFiles || []).map(rel));
   const isolatedFiles = files.filter((file) => isolated.has(rel(file)));
   files = [...isolatedFiles, ...files.filter((file) => !isolated.has(rel(file)))];
   const ran = new Set(files.map(rel));
