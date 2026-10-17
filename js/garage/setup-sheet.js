@@ -162,7 +162,7 @@ const LIV_ROW_HINT = {
   mirrorTint: "MIRROR HOUSING — the painted mirror stalks and housings. Unset = the stock dark carbon housing.",
   rimTint: "RIM — the wheel rim colour on all four wheels. Unset = the BRAKES part's rim colour.",
   caliperTint: "CALIPER — the brake caliper colour on all four wheels. Unset = the BRAKES part's caliper colour.",
-  sidewallInk: "SIDEWALL INK — the stripe and lettering ink on the tyre sidewall. Unset = the compound band colour.",
+  sidewallInk: "SIDEWALL INK — the lettering ink on the tyre sidewall; the compound band keeps its colour. Unset = the stock dark lettering.",
   helmetBase: "HELMET BASE — the helmet shell colour. Unset = the driver's own design.",
   helmetAccent: "HELMET ACCENT — the helmet's stripe and cap colour. Unset = the driver's own design.",
   helmetStyle: "HELMET — TEAM keeps the driver's own design; other styles repaint it from HELMET BASE and ACCENT.",
@@ -1156,7 +1156,7 @@ function buildLiveryCreator(container, team) {
   };
   wrap.appendChild(section("COCKPIT"));
   wrap.appendChild(colorRow("HALO", "halo", true));
-  wrap.appendChild(colorRow("RIM", "rimTint", true)); wrap.appendChild(colorRow("CALIPER", "caliperTint", true));   // WHEELS & BRAKES section (livery-design-editor.js)
+  wrap.appendChild(colorRow("RIM", "rimTint", true)); wrap.appendChild(colorRow("CALIPER", "caliperTint", true)); wrap.appendChild(colorRow("SIDEWALL INK", "sidewallInk", true));   // WHEELS & BRAKES section (livery-design-editor.js)
   wrap.appendChild(colorRow("MIRROR HOUSING", "mirrorTint", true));
   // One pill row per single-choice field: FINISH (Car3D's surface set — this
   // array and FINISH_SURFACE were two copies and the specs held a third),
