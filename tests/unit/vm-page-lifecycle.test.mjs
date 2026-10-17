@@ -3,14 +3,16 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const adapter = new URL('../helpers/vm-page.js', import.meta.url).href;
 function child(body) {
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
-  const root = new URL('../../scratch/', import.meta.url);
+  // Repo-root scratch/ (gitignored), resolved from the root, not a relative "../../scratch/" ref (cross-file-paths).
+  const root = path.join(fileURLToPath(new URL('../../', import.meta.url)), 'scratch');
   mkdirSync(root, { recursive: true });
-  const dir = mkdtempSync(path.join(root.pathname, 'vm-lifecycle-'));
+  const dir = mkdtempSync(path.join(root, 'vm-lifecycle-'));
   const file = path.join(dir, 'control.test.mjs');
   writeFileSync(file, `import { makeVmTest } from ${JSON.stringify(adapter)}; const test = makeVmTest(); ${body}`);
   let r;
