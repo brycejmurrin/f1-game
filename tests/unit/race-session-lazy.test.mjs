@@ -159,6 +159,6 @@ test("LoadingScreen.failed shows Retry + Back to menu and resolves the choice", 
 
 test("startRace retries the race-session load on Retry and quits to menu on Back", () => {
   const g = src("js/game.js");
-  assert.match(g, /while \(!sessionOk && await LoadingScreen\.failed\(\) === "retry"\) \{ sessionOk = await ensureRaceSession\(\)/);
+  assert.match(g, /while \(!sessionOk && !stale\(\) && await LoadingScreen\.failed\(\) === "retry"\) sessionOk = await ensureRaceSession\(\)/);
   assert.match(g, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\)/);
 });
