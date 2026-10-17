@@ -310,19 +310,21 @@ var GameAudioSoundtrack = (function () {
       // MUSIC_CACHE eviction that only runs afterwards.
       if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); else musicLoadFailed(token); }, () => {}); return; }
       const ctx = host.context();
-      const _load = fetch(url)
+      const controller = typeof AbortController === "function" ? new AbortController() : null;
+      if (controller) _musicLoadControllers[url] = controller;
+      const _load = fetch(url, controller ? { signal: controller.signal } : undefined)
         .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
-        .then((ab) => (isUser ? userDecodeGate(url, ab) : ab))
+        .then((ab) => (_musicLoads[url] !== _load ? null : isUser ? userDecodeGate(url, ab) : ab))
         .then((ab) => {
           const decode = _decodeTail.then(() => {
-            if (host.context() !== ctx || !musicOn || !PLAYLIST[musicIndex] || PLAYLIST[musicIndex].url !== url) return null;
+            if (_musicLoads[url] !== _load || host.context() !== ctx || !musicOn || !PLAYLIST[musicIndex] || PLAYLIST[musicIndex].url !== url) return null;
             return new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); });
           });
           _decodeTail = decode.catch(() => null);
           return decode;
         })
         .then((buf) => {
-          if (!buf || host.context() !== ctx) return null;
+          if (!buf || _musicLoads[url] !== _load || host.context() !== ctx) return null;
           // Every track, builtin or uploaded, is cached under the same bound
           // (MUSIC_CACHE), rather than holding builtins for the life of the
           // context (five decoded songs) and re-fetching and re-decoding an
@@ -347,8 +349,11 @@ var GameAudioSoundtrack = (function () {
       _musicLoads[url] = _load;
       // Dropped on settle either way, so a later tap retries a failed load rather
       // than replaying its null forever.
-      _load.then(function () { if (_musicLoads[url] === _load) delete _musicLoads[url]; },
-                 function () { if (_musicLoads[url] === _load) delete _musicLoads[url]; });
+      const settled = () => {
+        if (_musicLoads[url] === _load) delete _musicLoads[url];
+        if (_musicLoadControllers[url] === controller) delete _musicLoadControllers[url];
+      };
+      _load.then(settled, settled);
     }
 
     function setMusicVolume(v) {
@@ -500,14 +505,19 @@ var GameAudioSoundtrack = (function () {
       if (i < 0) stopInternal(); else playIndex(i);
     }
 
-    function stopInternal() {
-      musicOn = false;
-      musicToken++;                                // cancel any in-flight load
+    function cancelMusicLoads() {
       for (const url in _musicLoadControllers) {
         try { _musicLoadControllers[url].abort(); } catch (e) { /* already settled */ }
         delete _musicLoadControllers[url];
-        delete _musicLoads[url];
       }
+      // Clearing logical ownership also handles an unavailable AbortController
+      // or a response/decode that ignores abort and settles after a restart.
+      for (const url in _musicLoads) delete _musicLoads[url];
+    }
+    function stopInternal() {
+      musicOn = false;
+      musicToken++;                                // cancel any in-flight load
+      cancelMusicLoads();
       // stop() and disconnect() get their OWN try each. Sharing one meant a throw
       // from stop() (stop-before-start is the documented case) skipped the
       // disconnect, stranding a BufferSource that keeps rendering AND pins its
@@ -553,13 +563,13 @@ var GameAudioSoundtrack = (function () {
       musicResumeBuf = hidBuf; musicResumeAt = hidAt; musicResumeOff = hidOff;
     }
     function resetContext() {
+      cancelMusicLoads();
       _decodeTail = Promise.resolve();
       stopStream(true);
       try { if (musicElNode) musicElNode.disconnect(); } catch (e) { /* the old context is closing */ }
       musicEl = musicElNode = musicElUrl = null;   // bound to the dead context
       musicGain = null;
       for (const k in musicBuffers) delete musicBuffers[k];
-      for (const k in _musicLoads) delete _musicLoads[k];
       _bufKeys.length = 0;
       musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
     }

@@ -2763,6 +2763,32 @@ test("WGX mirror-pass cull gets its own pack, buffer and cell-set key: main and 
   assert.equal(batch._mir.instBuf, mirBuf, "the mirror buffer is reused, not re-minted");
 });
 
+test("WGX post UBOs that depend only on size/knobs are not re-uploaded every frame", async () => {
+  // Bloom mip steps, blur taps and FXAA/SGSR texel sizes were written every present (about a dozen
+  // queue.writeBuffer calls of identical bytes). They are shadowed per (buffer, offset) now; a resize
+  // builds fresh buffers, so the first write after it always lands.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const frameWrites = () => {
+    const n0 = h.writes.length;
+    assert.equal(gfx.begin({}), true);
+    gfx.present({ bloom: 0.55 });
+    return h.writes.slice(n0);
+  };
+  const f1 = frameWrites(), f2 = frameWrites(), f2b = frameWrites();
+  assert.equal(f2b.length, f2.length, "steady state");
+  const bufs2 = new Set(f2.map((w) => w.buffer));
+  const dropped = [...new Set(f1.map((w) => w.buffer))].filter((b) => !bufs2.has(b));
+  assert.ok(f2.length < f1.length, `second identical present writes less (${f1.length} -> ${f2.length})`);
+  assert.ok(dropped.length >= 3, `fxaa/bloom/blur UBOs drop out of the steady-state frame (dropped ${dropped.length})`);
+  for (const b of dropped) assert.ok(b.desc.size <= 256, "only the small post UBOs are skipped");
+  gfx.setRenderScale(0.75);
+  gfx.resize();
+  const f3 = frameWrites();
+  assert.ok(f3.length > f2.length, `a resize re-uploads the size-derived UBOs (${f2.length} -> ${f3.length})`);
+});
+
 test("WGX shadow cull packs into the batch's OWN buffer and leaves the camera pack alone", async () => {
   // Bug hunt 2026-09-02: the shadow encoder rides the FRAME submit while the
   // camera cull's writeBuffer is queue-ordered before it, so a shared instBuf

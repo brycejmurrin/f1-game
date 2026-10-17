@@ -137,8 +137,10 @@ test("merge 2 folds 2x2 cells per draw, keeps every triangle once, and keeps the
 });
 
 test("the merge is ON by default (no stored value)", () => {
-  const mesh = mergeFactory(null).build(gridMesh(), 72);
-  assert.equal(mesh.chunks.length, 9);
+  const sizes = (v) => Array.from(mergeFactory(v).build(gridMesh(), 72).chunks, (c) => c.count);
+  assert.deepEqual(sizes(null), sizes("3"), "the default factor is 3 (cells are biased by 1024, so 6 cells straddle 3 blocks)");
+  assert.notDeepEqual(sizes(null), sizes("2"));
+  assert.ok(sizes(null).length < 36);
 });
 
 for (const vertices of [65535, 65536]) for (const merge of [2, 3, 4]) {

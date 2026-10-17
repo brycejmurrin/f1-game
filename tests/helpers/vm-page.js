@@ -268,8 +268,22 @@ export class VmPage {
     let done = false, val, err, bad = false;
     p.then((v) => { done = true; val = v; }, (e) => { done = true; bad = true; err = e; });
     const t0 = Date.now();
+    // Observe promise jobs before advancing the simulated page. A settled
+    // race promise must not trigger another expensive render/frame first.
+    // setImmediate drains chained promise jobs too; a single resolved await
+    // only checkpoints one position in the microtask queue.
+    const checkpoint = async () => {
+      await new Promise((r) => setImmediate(r));
+      if (Date.now() - t0 > ms) {
+        throw new Error(`vm-page: evaluate's promise did not settle in ${ms}ms ` +
+                        `(pumped ${h.record.meshes} meshes / rAF queue is drained each turn)`);
+      }
+    };
+    await checkpoint();
     while (!done) {
       h.flushTimers(true);
+      await checkpoint();
+      if (done) break;
       try {
         h.pumpFrame();
       } catch (e) {
@@ -282,11 +296,7 @@ export class VmPage {
                     `(game-vm skips GLX). This spec needs a browser. Original: ${e.message}`;
         throw e;
       }
-      await new Promise((r) => setImmediate(r));
-      if (Date.now() - t0 > ms) {
-        throw new Error(`vm-page: evaluate's promise did not settle in ${ms}ms ` +
-                        `(pumped ${h.record.meshes} meshes / rAF queue is drained each turn)`);
-      }
+      await checkpoint();
     }
     if (bad) throw err;
     return val;

@@ -1996,7 +1996,8 @@
         "tests/specs/ui-button-touch.spec.js",
         "tests/specs/ui-redesign.spec.js",
         "tests/specs/ui-resize.spec.js",
-        "tests/specs/ui-scale.spec.js"
+        "tests/specs/ui-scale.spec.js",
+        "tests/specs/watch-transport-layout.spec.js"
       ],
       "kind": "browser"
     },
@@ -2041,5 +2042,9 @@
       ],
       "kind": "browser"
     }
-  }
+  },
+  "isolatedFiles": [
+    "tests/unit/car-shade.test.mjs",
+    "tests/unit/game-vm.test.mjs"
+  ]
 }

@@ -7,7 +7,7 @@ import { galleryPath } from "../helpers/output-paths.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
-async function load(page, trackId = "monza") {
+async function load(page, trackId = "monza", opts = {}) {
   // Shared page: booted once per worker by the fixture, so this is a no-op
   // in the common case. Tests that need a VIRGIN page (asserting
   // pre-track state) keep their own explicit page.goto("/") below —
@@ -18,8 +18,10 @@ async function load(page, trackId = "monza") {
     // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   }
+  // DOM-only callers can avoid SwiftShader frames blocking every protocol call.
+  if (opts.headless) await page.evaluate(() => window.__apex.headless(true));
   await page.evaluate((id) => window.__apex.race(id), trackId);
-  // race()->loadTrack() is synchronous, so this predicate is usually already
+  // page.evaluate awaits race() completion, so this predicate is usually already
   // true — but an unpolled wait is rAF-clocked and SwiftShader can starve rAF
   // to ~2/s mid-build, so the default polling missed a true predicate for 10s
   // (measured 2026-08-27: 9-10/56 shifting failures, identical at the
@@ -28,8 +30,8 @@ async function load(page, trackId = "monza") {
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
-async function loadParked(page, frac = 0.1, trackId = "monza") {
-  await load(page, trackId);
+async function loadParked(page, frac = 0.1, trackId = "monza", opts = {}) {
+  await load(page, trackId, opts);
   await page.evaluate((f) => window.__apex.park(f), frac);
   await page.waitForTimeout(200);
 }
@@ -123,12 +125,13 @@ test.describe("__apex.finishRace()", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("transitions state to results and shows results panel", async ({ page }) => {
-    await loadParked(page);
+    await loadParked(page, 0.1, "monza", { headless: true });
     const r = await page.evaluate(() => window.__apex.finishRace());
     expect(r).not.toBe(false);
     await page.locator("#results").waitFor({ state: "visible" });
     const infoState = await page.evaluate(() => window.__apex.info().state);
     expect(infoState).toBe("results");
+    await page.evaluate(() => window.__apex.headless(false));
     await page.screenshot({ path: galleryPath("dev-tools", "dev-tools-finish-race.png") });
   });
 
@@ -140,7 +143,7 @@ test.describe("__apex.finishRace()", () => {
   });
 
   test("results table is populated after finishRace()", async ({ page }) => {
-    await loadParked(page);
+    await loadParked(page, 0.1, "monza", { headless: true });
     await page.evaluate(() => window.__apex.finishRace());
     await page.locator("#results").waitFor({ state: "visible" });
     const rows = await page.locator(".res-row").count();

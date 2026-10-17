@@ -82,6 +82,105 @@ test("pause generation invalidates frames and objects after resume and re-pause"
   paused(c); assert.notEqual(s.pause.token, first);
   await assert.rejects(s.properties(first, "locals1", 0, 10), /Stale/);
 });
+
+test("exception pauses expose bounded thrown values and own their object handles until resume", async () => {
+  const { s, c } = await attached();
+  for (const reason of ["exception", "promiseRejection"]) {
+    c.emit("Debugger.paused", { reason, data: { type: "object", subtype: "error", objectId: "thrown1", description: "Error: fixture", uncaught: true }, callFrames: [frame] });
+    const state = (await callTool(s, "debugger_state")).structuredContent;
+    assert.equal(state.pause.exception.description, "Error: fixture");
+    assert.equal(state.pause.exception.uncaught, true);
+    const token = state.pause.token;
+    assert.equal((await callTool(s, "debugger_properties", { pauseToken: token, objectId: "thrown1" })).isError, false);
+    c.emit("Debugger.resumed");
+    assert.equal(s.objects.has("thrown1"), false);
+    assert.equal((await callTool(s, "debugger_properties", { pauseToken: token, objectId: "thrown1" })).isError, true);
+  }
+  c.emit("Debugger.paused", { reason: "exception", data: { type: "string", value: "x".repeat(200000), description: "x".repeat(200000) }, callFrames: [frame] });
+  const result = await callTool(s, "debugger_state");
+  assert.equal(result.isError, false, "large thrown primitives cannot hide the resume token");
+  assert.equal(result.structuredContent.pause.exception.value.length, 2000);
+  assert.equal(result.structuredContent.pause.exception.truncated, true);
+  assert.ok(result.structuredContent.pause.token);
+});
+
+test("completed failed runs release remote Error graphs before bounded history eviction", async () => {
+  const { s, c } = await attached();
+  const retained = new Set(), groups = [];
+  c.reply = async (method, params) => {
+    if (method === "Runtime.evaluate") {
+      retained.add(params.objectGroup); groups.push(params.objectGroup);
+      return { result: { type: "object", subtype: "error", objectId: "error" + groups.length }, exceptionDetails: { text: "Uncaught" } };
+    }
+    if (method === "Runtime.releaseObjectGroup") retained.delete(params.objectGroup);
+    return {};
+  };
+  for (let i = 0; i < 20; i++) {
+    assert.equal((await callTool(s, "debugger_run", { expression: 'throw new Error("fixture")' })).isError, false);
+    await new Promise(setImmediate);
+    assert.equal(retained.size, 0, "a completed error result releases its remote object group");
+  }
+  assert.equal(new Set(groups).size, 20, "each operation owns a separate group");
+  assert.equal(s.operations.size, 10);
+  assert.equal(s.operationGroups.size, 0);
+});
+
+test("unknown execution and failed group release retain cleanup ownership until detach", async () => {
+  const { s, c } = await attached();
+  const send = c.send.bind(c); let late;
+  c.send = (method, params, timeout, onLate) => {
+    if (method === "Runtime.evaluate" && !late) late = onLate;
+    return send(method, params, timeout);
+  };
+  c.reply = async method => { if (method === "Runtime.evaluate") throw Error("response timed out"); return {}; };
+  s.run("pending()"); await new Promise(setImmediate);
+  const unknownGroup = [...s.operationGroups][0];
+  assert.ok(unknownGroup);
+  assert.equal(s.state().operations.at(-1).status, "unknown");
+  const again = s.run("again()"); await new Promise(setImmediate);
+  assert.deepEqual(again.abandoned, [1], "a new run explicitly abandons the unknown operation");
+  assert.equal(s.operations.get(1).status, "abandoned");
+  assert.ok(s.operationGroups.has(unknownGroup), "abandonment does not end the old JavaScript execution");
+  const nextUnknownGroup = [...s.operationGroups].find(group => group !== unknownGroup);
+  assert.ok(nextUnknownGroup);
+  assert.equal(c.calls.some(call => call.method === "Runtime.releaseObjectGroup"), false, "timeout does not mean execution ended");
+  await late(null, { result: { type: "number", value: 42 } });
+  assert.equal(s.operations.get(1).status, "abandoned", "a late reply cannot resurrect the abandoned operation");
+  assert.equal(s.operations.get(1).result, undefined);
+  assert.equal(s.operationGroups.has(unknownGroup), false, "its late reply still releases its remote group");
+  assert.ok(s.operationGroups.has(nextUnknownGroup), "the second unknown execution retains cleanup ownership");
+  await s.detach();
+  for (const group of [unknownGroup, nextUnknownGroup]) assert.equal(c.calls.filter(call => call.method === "Runtime.releaseObjectGroup" && call.params.objectGroup === group).length, 1);
+  assert.equal(s.operationGroups.size, 0);
+
+  const next = await attached();
+  next.c.reply = async method => {
+    if (method === "Runtime.evaluate") return { result: { type: "number", value: 42 } };
+    if (method === "Runtime.releaseObjectGroup") throw Error("temporary cleanup failure");
+    return {};
+  };
+  next.s.run("42"); await new Promise(setImmediate);
+  assert.equal(next.s.operationGroups.size, 1);
+  assert.match(next.s.state(true).operations.at(-1).cleanupError, /cleanup failure/);
+  next.c.reply = async () => ({});
+  assert.deepEqual((await next.s.detach()).cleanupErrors, []);
+  assert.equal(next.s.operationGroups.size, 0);
+});
+
+test("a final operation status waits for its remote group cleanup attempt", async () => {
+  const { s, c } = await attached(); let release;
+  c.reply = async method => {
+    if (method === "Runtime.evaluate") return { result: { type: "number", value: 42 } };
+    if (method === "Runtime.releaseObjectGroup") return new Promise(resolve => { release = resolve; });
+    return {};
+  };
+  s.run("42"); await new Promise(setImmediate);
+  assert.equal(s.state().operations.at(-1).status, "pending");
+  assert.equal(s.operationGroups.size, 1);
+  release({}); await new Promise(setImmediate);
+  assert.equal(s.state().operations.at(-1).status, "completed");
+  assert.equal(s.operationGroups.size, 0);
+});
 test("step acknowledgment alone never returns previous paused frame", async () => {
   const { s, c } = await attached(); paused(c); const token = s.pause.token;
   const r = await s.control("over", token); assert.equal(r.paused, false);
@@ -436,6 +535,37 @@ test("wrapper shell calls share attachment, breakpoint and pause state across su
     assert.equal((await shell(["status"], port)).body.connected, false);
   } finally { await daemon.close(); }
 });
+test("HTTP transports bounded source results with escaped ASCII and Unicode", async () => {
+  const { s, c } = await attached();
+  const daemon = await startDebuggerHttp({ session: s, port: 0 });
+  const port = daemon.server.address().port;
+  try {
+    for (const [character, count] of [["\"", 60], ["漢", 40]]) {
+      c.reply = async method => method === "Debugger.getScriptSource"
+        ? { scriptSource: (character.repeat(990) + "\n").repeat(count) } : {};
+      c.emit("Debugger.scriptParsed", { scriptId: "s1", url: frame.url, startLine: 0, endLine: count });
+      const result = await debuggerRequest("/mcp", { jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "debugger_source", arguments: { scriptId: "s1", count } } }, port);
+      assert.equal(result.result.isError, false);
+      assert.equal(result.result.structuredContent.source.split("\n").length, count);
+      assert.ok(result.result.structuredContent.source.includes(character.repeat(990)));
+      assert.equal(result.result.content[0].text, JSON.stringify(result.result.structuredContent));
+    }
+  } finally { await daemon.close(); }
+});
+test("HTTP reports oversized Unicode tool bodies as explicit tool errors", async () => {
+  const { s, c } = await attached();
+  c.reply = async method => method === "Debugger.getScriptSource"
+    ? { scriptSource: ("漢".repeat(990) + "\n").repeat(60) } : {};
+  c.emit("Debugger.scriptParsed", { scriptId: "s1", url: frame.url, startLine: 0, endLine: 60 });
+  const daemon = await startDebuggerHttp({ session: s, port: 0 });
+  try {
+    const result = await debuggerRequest("/mcp", { jsonrpc: "2.0", id: 1, method: "tools/call",
+      params: { name: "debugger_source", arguments: { scriptId: "s1", count: 60 } } }, daemon.server.address().port);
+    assert.equal(result.result.isError, true);
+    assert.match(result.result.structuredContent.error, /Result exceeds 128KB; narrow the request/);
+  } finally { await daemon.close(); }
+});
 test("HTTP rejects browser origins, rebound hosts, non-JSON, bad versions and oversized requests before dispatch", async () => {
   const s = new DebugSession(); let dispatched = 0;
   s.state = () => { dispatched++; return { connected: false }; };
@@ -524,14 +654,23 @@ test("T8: a run pending across a reload/navigation (or a lost target) fails as a
   c.close(); assert.equal(s.operations.get(2).status, "aborted"); assert.match(s.operations.get(2).error, /target disconnected/);
 });
 test("T9: a timed-out run stays tracked as timedOut; its late result is recorded; timeoutMs is per call", async () => {
-  const { s, c } = await attached(); let lateCb;
-  c.send = async function (method, params, timeout, late) { this.calls.push({ method, params, timeout }); if (method === "Runtime.evaluate") { lateCb = late; throw Error("Runtime.evaluate response timed out; execution may still be active"); } return {}; };
+  const { s, c } = await attached(); let lateCb, release;
+  c.send = async function (method, params, timeout, late) {
+    this.calls.push({ method, params, timeout });
+    if (method === "Runtime.evaluate") { lateCb = late; throw Error("Runtime.evaluate response timed out; execution may still be active"); }
+    if (method === "Runtime.releaseObjectGroup") return new Promise(resolve => { release = resolve; });
+    return {};
+  };
   const r = await callTool(s, "debugger_run", { expression: "slow()", awaitPromise: true, timeoutMs: 3000 });
   assert.equal(r.structuredContent.timeoutMs, 3000); await new Promise(setImmediate);
   assert.equal(c.calls.at(-1).timeout, 3000);
   assert.deepEqual([s.state().operations[0].status, s.state().operations[0].timedOut], ["unknown", true]);
-  lateCb(null, { result: { type: "number", value: 5 } });
+  const completion = lateCb(null, { result: { type: "number", value: 5 } });
+  assert.equal(s.state().operations[0].status, "unknown", "the late result is not final until remote cleanup settles");
+  assert.equal(s.operationGroups.size, 1);
+  release({}); await completion;
   const op = s.state(true).operations[0]; assert.equal(op.status, "completed"); assert.equal(op.late, true); assert.equal(op.result.result.value, 5);
+  assert.equal(s.operationGroups.size, 0);
   assert.equal((await callTool(s, "debugger_run", { expression: "x", timeoutMs: 5 })).isError, true, "below 1000 ms is out of range");
 });
 test("T9: Cdp keeps a timed-out call's id so the late response reaches the handler", async () => {

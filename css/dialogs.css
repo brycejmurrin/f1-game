@@ -671,8 +671,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     max-height: var(--tap-paint);
     padding-top: 0;
     padding-bottom: 0;
-    padding-left: 0;
-    padding-right: 0;
+    /* Skew room, as in overlays.css: the -6deg corners must not be clipped. */
+    padding-left: calc(var(--tap-paint) * tan(6deg) * 0.6);
+    padding-right: calc(var(--tap-paint) * tan(6deg) * 0.6);
     background: none;
   }
   #vsfriend #vsfriend-inner[data-density="compact"]:not([data-shape="tall"]) > .sheet-foot::before {
