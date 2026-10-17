@@ -1506,7 +1506,7 @@ const LiveryTex = (function () {
   // in Liveries.FIELDS + the paint-sheet colour rows, never here.
   const FILL_SURFACES = Object.freeze([
     { key: "patternTint", label: "DESIGN COLOUR", why: "Choose a new spine design", tops: typeof LiveryDesign !== "undefined" ? LiveryDesign.PATTERNS : [] },
-    { key: "patternSecond", label: "SECOND DESIGN COLOUR", why: "Choose a two-colour design", tops: ["gradient", "twoTone", "segments", "checker", "diamonds", "dots"] },
+    { key: "patternSecond", label: "SECOND DESIGN COLOUR", why: "Choose a two-colour design", tops: typeof LiveryDesign !== "undefined" ? LiveryDesign.SECOND_COLOR : [] },
     { key: "spineTint", label: "BAND",
       why: "Needs a SPINE TOP that paints a band (e.g. stripe, saddle, panel)",
       tops: ["saddle", "panel", "stripe", "streaks", "twin", "chevron", "wedge",

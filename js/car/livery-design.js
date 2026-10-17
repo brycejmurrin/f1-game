@@ -1,10 +1,13 @@
 /* Optional, bounded cover artwork. Coordinates are shared by crown, tail and both flanks. */
 "use strict";
 const LiveryDesign = (function () {
-  const PATTERNS = Object.freeze(["ribbon", "brokenChevron", "contours", "honeycomb", "segments", "gradient", "twoTone", "checker", "diamonds", "slashes", "pinstripes", "dots", "lightning"]);
+  const PATTERNS = Object.freeze(["ribbon", "brokenChevron", "contours", "honeycomb", "segments", "gradient", "twoTone", "checker", "diamonds", "slashes", "pinstripes", "dots", "lightning", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade", "speedlines"]);
+  const SECOND_COLOR = Object.freeze(["gradient", "twoTone", "segments", "checker", "diamonds", "dots", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade"]);
+  const LINE_PATTERNS = Object.freeze(["contours", "honeycomb", "waves", "herringbone", "circuit", "speedlines"]);
   const RANGES = Object.freeze({
     patternWidth: [20, 100, 70], patternRepeat: [2, 12, 6], patternOffset: [-40, 40, 0],
     patternTaper: [0, 80, 20], patternOpacity: [10, 100, 100],
+    patternRotation: [-180, 180, 0], patternStretch: [50, 200, 100], patternWeight: [25, 200, 100],
   });
   const PALETTES = Object.freeze([
     { name: "Midnight electric", colors: ["#101728", "#27e6bd", "#f6f4e9"] },
@@ -39,7 +42,14 @@ const LiveryDesign = (function () {
     ctx.save(); ctx.globalAlpha *= value(liv, "patternOpacity") / 100;
     ctx.beginPath(); ctx.moveTo(offset - half(0.5), 0.5); ctx.lineTo(offset + half(0.5), 0.5);
     ctx.lineTo(offset + half(2), 2); ctx.lineTo(offset - half(2), 2); ctx.closePath(); ctx.clip();
-    ctx.fillStyle = primary; ctx.strokeStyle = primary; ctx.lineWidth = 0.018;
+    const angle = value(liv, "patternRotation") * Math.PI / 180, stretch = value(liv, "patternStretch") / 100;
+    if (angle || stretch !== 1) {
+      const a = Math.cos(angle), b = Math.sin(angle), c = -b * stretch, d = a * stretch;
+      // Transform the artwork after clipping: coverage and wrap registration stay on the car.
+      ctx.transform(a, b, c, d, offset - a * offset - c * 1.25, 1.25 - b * offset - d * 1.25);
+    }
+    const weight = value(liv, "patternWeight") / 100;
+    ctx.fillStyle = primary; ctx.strokeStyle = primary; ctx.lineWidth = 0.018 * weight;
     if (kind === "ribbon") ctx.fillRect(offset - width, 0.5, width * 2, 1.5);
     else if (kind === "gradient") {
       const fill = ctx.createLinearGradient(0, 0.5, 0, 2);
@@ -98,6 +108,66 @@ const LiveryDesign = (function () {
           ctx.closePath(); ctx.fill();
         }
       }
+    } else if (kind === "waves" || kind === "speedlines") {
+      for (let row = -6; row <= 18; row++) {
+        const z = 0.5 + row * step;
+        ctx.strokeStyle = kind === "waves" && row % 2 ? secondary : primary;
+        ctx.beginPath();
+        for (let j = 0; j <= 48; j++) {
+          const x = offset - 1.8 + j * 0.075;
+          const y = z + (kind === "waves" ? Math.sin((x - offset) * 9 + row * 0.65) * step * 0.38 : (x - offset) * 0.12);
+          if (j) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.stroke();
+      }
+    } else if (kind === "sunburst") {
+      const rays = Math.round(value(liv, "patternRepeat")) * 2;
+      for (let i = 0; i < rays; i++) {
+        const a = i * Math.PI * 2 / rays, b = (i + 1) * Math.PI * 2 / rays;
+        ctx.fillStyle = i % 2 ? primary : secondary;
+        ctx.beginPath(); ctx.moveTo(offset, 1.25);
+        ctx.lineTo(offset + Math.cos(a) * 4, 1.25 + Math.sin(a) * 4);
+        ctx.lineTo(offset + Math.cos(b) * 4, 1.25 + Math.sin(b) * 4); ctx.closePath(); ctx.fill();
+      }
+    } else if (kind === "scallops") {
+      for (let row = -6; row <= 18; row++) for (let col = -10; col <= 10; col++) {
+        const x = offset + (col + (Math.abs(row) % 2) / 2) * step, z = 0.5 + row * step * 0.8;
+        ctx.fillStyle = row % 2 ? primary : secondary;
+        ctx.beginPath(); ctx.moveTo(x - step * 0.5, z);
+        for (let i = 0; i <= 5; i++) {
+          const a = Math.PI - i * Math.PI / 5;
+          ctx.lineTo(x + Math.cos(a) * step * 0.5, z + Math.sin(a) * step * 0.8);
+        }
+        ctx.closePath(); ctx.fill();
+      }
+    } else if (kind === "herringbone" || kind === "circuit") {
+      for (let row = -6; row <= 18; row++) for (let col = -12; col <= 12; col++) {
+        const x = offset + col * step, z = 0.5 + row * step;
+        ctx.strokeStyle = (col + row) % 2 ? primary : secondary;
+        ctx.beginPath(); ctx.moveTo(x, z);
+        if (kind === "herringbone") {
+          ctx.lineTo(x + step * 0.5, z + step * 0.45); ctx.lineTo(x + step, z);
+        } else {
+          ctx.lineTo(x + step * 0.65, z); ctx.lineTo(x + step * 0.65, z + step * 0.6);
+          ctx.lineTo(x + step * 0.9, z + step * 0.6);
+        }
+        ctx.stroke();
+        if (kind === "circuit") { ctx.fillStyle = ctx.strokeStyle; ctx.fillRect(x - 0.018 * weight, z - 0.018 * weight, 0.036 * weight, 0.036 * weight); }
+      }
+    } else if (kind === "shards" || kind === "pixelFade") {
+      for (let row = -6; row <= 18; row++) for (let col = -12; col <= 12; col++) {
+        const x = offset + col * step, z = 0.5 + row * step;
+        // Integer hash, no random seed or time dependence: saved paint reproduces exactly.
+        const hash = ((Math.imul(col + 29, 73856093) ^ Math.imul(row + 17, 19349663)) >>> 0) / 4294967296;
+        ctx.fillStyle = hash < 0.5 ? primary : secondary;
+        if (kind === "pixelFade") {
+          if (hash > Math.max(0.08, Math.min(1, (2.15 - z) / 1.65))) continue;
+          ctx.fillRect(x, z, step * 0.85, step * 0.85);
+        } else {
+          ctx.beginPath(); ctx.moveTo(x, z); ctx.lineTo(x + step, z + step * hash);
+          ctx.lineTo(x + step * 0.25, z + step); ctx.closePath(); ctx.fill();
+        }
+      }
     } else if (kind === "honeycomb") {
       const radius = step * 0.44, dz = Math.sqrt(3) * radius;
       for (let col = -12; col <= 12; col++) for (let row = -1; row < 18; row++) {
@@ -148,5 +218,5 @@ const LiveryDesign = (function () {
       original: () => clone(original),
     };
   }
-  return Object.freeze({ PATTERNS, RANGES, PALETTES, value, drawAtlas, history });
+  return Object.freeze({ PATTERNS, SECOND_COLOR, LINE_PATTERNS, RANGES, PALETTES, value, drawAtlas, history });
 })();
