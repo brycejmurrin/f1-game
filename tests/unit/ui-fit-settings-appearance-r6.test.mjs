@@ -66,7 +66,7 @@ test("wide compact studio keeps a 5-tile desktop row at --tap-paint", () => {
 test("short wide compact studio widens preset tiles at high-scale phone landscape", () => {
   assert.equal(
     decl(rules, WIDE_COMPACT_SHORT_LIST, "grid-template-columns", {
-      context: /@media \(max-width: 900px\) and \(max-height: 500px\)/,
+      context: /@media \(max-width: 960px\) and \(max-height: 500px\)/,
     }),
     "repeat(3, minmax(0, 1fr))",
     "short phone landscapes need readable preset names at 130–200% UI scale",
@@ -74,7 +74,7 @@ test("short wide compact studio widens preset tiles at high-scale phone landscap
 });
 
 test("short wide compact studio keeps preset words intact", () => {
-  const context = /@media \(max-width: 900px\) and \(max-height: 500px\)/;
+  const context = /@media \(max-width: 960px\) and \(max-height: 500px\)/;
   assert.equal(decl(rules, WIDE_COMPACT_SHORT_LIST + " strong", "overflow-wrap", { context }), "normal");
   assert.equal(decl(rules, WIDE_COMPACT_SHORT_LIST + " strong", "word-break", { context }), "normal");
   assert.equal(decl(rules, WIDE_COMPACT_SHORT_LIST + " strong", "hyphens", { context }), "none");
