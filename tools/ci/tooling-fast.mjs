@@ -631,6 +631,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Pure artwork and paint-editor VM regression; selected for all source edits.
   "tests/unit/livery-design.test.mjs",
   "tests/unit/livery-finish-contract.test.mjs",
+  // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
+  "tests/unit/livery-sidewall.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
   "tests/unit/livery-wheels.test.mjs",
