@@ -1,0 +1,1 @@
+1792197356	Bryce Murrin	PR #2587 inspector display:contents clipping fix and adaptive CSS diagnostics; OWNED tools/ui/explorer/inspector.mjs, tests/unit/ui-explorer.test.mjs, tests/specs/ui-scale.spec.js, docs/changelog.d/ui-inspector.md, docs/AGENT-SURFACE.md  [cursor/ui-inspector-4e8a; session e43c9808bb887bf5a131c1e1]
