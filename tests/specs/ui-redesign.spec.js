@@ -1077,3 +1077,32 @@ test("shared sheets reflow long labels and retain keyboard exits at narrow width
     }
   }
 });
+
+test("data hub constructor names stay readable in phone landscape", async ({ page }) => {
+  // 844x390 touch, the constructors column is ~385px. The H2H bars used to share
+  // the row and squeeze the team name to "Me…" / "F." / "N" (UI inspector sweep
+  // 2026-10-17); the bars must wrap instead.
+  const teams = [["Mercedes", "Andrea Kimi", "Antonelli", "ANT", "George", "Russell", "RUS"],
+    ["Ferrari", "Lewis", "Hamilton", "HAM", "Charles", "Leclerc", "LEC"],
+    ["McLaren", "Lando", "Norris", "NOR", "Oscar", "Piastri", "PIA"],
+    ["Red Bull", "Max", "Verstappen", "VER", "Isack", "Hadjar", "HAD"]];
+  const standings = (key, rows) => JSON.stringify({ MRData: { StandingsTable: { StandingsLists: [{ [key]: rows }] } } });
+  const drivers = teams.flatMap(([team, g1, f1, c1, g2, f2, c2], i) => [
+    { position: String(i * 2 + 1), points: String(300 - i * 40), wins: "1", Driver: { givenName: g1, familyName: f1, code: c1 }, Constructors: [{ name: team }] },
+    { position: String(i * 2 + 2), points: String(280 - i * 40), wins: "0", Driver: { givenName: g2, familyName: f2, code: c2 }, Constructors: [{ name: team }] }]);
+  const cons = teams.map(([team], i) => ({ position: String(i + 1), points: String(580 - i * 80), wins: String(4 - i), Constructor: { name: team } }));
+  await page.route("**/driverstandings.json", (r) => r.fulfill({ contentType: "application/json", body: standings("DriverStandings", drivers) }));
+  await page.route("**/constructorstandings.json", (r) => r.fulfill({ contentType: "application/json", body: standings("ConstructorStandings", cons) }));
+  await page.setViewportSize({ width: 844, height: 390 });
+  await waitReady(page);
+  await page.click("#mb-data");
+  await page.waitForSelector("#datahub:not([hidden])");
+  await page.click("#dh-tab-standings");
+  await page.waitForFunction(() => document.querySelectorAll(".dh-row-cons .dh-name").length === 4,
+    null, { polling: 100, timeout: 15_000 });
+  const names = await page.$$eval(".dh-row-cons .dh-name", (els) => els.map((e) => ({
+    text: e.textContent, w: e.clientWidth, sw: e.scrollWidth })));
+  for (const n of names) {
+    expect(n.sw, `${n.text} is cut off (${n.w}px of ${n.sw}px)`).toBeLessThanOrEqual(n.w + 1);
+  }
+});

@@ -42,8 +42,19 @@ finite animations to finish; one screenshot per cell in `artifacts/sweep/shots/`
 | F3 | settingsfiles | 932x430 | SAVE GARAGE FILE intercepted | clean at 932x430 and 844x390 | not-a-bug: unsettled first record (T3) |
 | — | select / garage / career | 932x430 | `blocked by html` ×38 | not re-flagged | not-a-bug (T3) |
 
-Round 2: `layout-audit.mjs` (touch, injected insets) over every non-Home screen at ios-iphone-landscape-844,
-ios-iphone-landscape and ios-iphone-landscape-safari.
+## Round 2: `layout-audit.mjs` (touch, injected insets)
+
+Every non-Home screen at ios-iphone-landscape-844, ios-iphone-landscape and ios-iphone-landscape-safari: 177 cells, 6
+flagged, 19 skipped. The skips were timeouts while a commit hook's `test:guards` ran on top of the audit (load 13.7);
+they need a rerun on a quiet box.
+
+| id | screen | viewport | flag | verdict |
+|----|--------|----------|------|---------|
+| F4 | datastandings | all, including 1280x800 | constructor `.dh-name` 0–26px wide ("Me…", "F.", "N") | **CONFIRMED-LIVE**, fixed: `css/data.css` `.dh-row-cons` name floor 6.5em + `.dh-cons-main` `min-width: auto`, so the H2H bars wrap; spec `ui-redesign.spec.js` "data hub constructor names stay readable in phone landscape" |
+| F5 | datastandings / dataresults | ios-iphone-landscape (852x393) | driver `.dh-name` ellipsis ("Max Verstappen") | to judge: 844x390 touch shot shows the driver names whole |
+| F6 | vsfriend | all three | `#vs-close` 3px past `div.sheet-foot` left/right | low: CLOSE sits in head chrome and reads whole in the 844x390 shot |
+| F7 | trackdetail | all three | legend 2px past `#track-detail-canvas-wrap` | low: 2px |
+| F8 | lightingtuner / cameratuner / flybyeditor | all three | `tapSoft` 14–27 | dev tools; not player-facing |
 
 ## Sources
 - Playwright emulation (hasTouch, isMobile): https://playwright.dev/docs/emulation
