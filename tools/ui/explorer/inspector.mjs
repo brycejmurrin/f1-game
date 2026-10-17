@@ -156,7 +156,10 @@ export function inspectUI(options = {}) {
     // The root itself answering means nothing painted takes the point (a
     // transition, pointer-events:none): not another control covering this one.
     const bare = hit && !hits && (hit === document.documentElement || hit === document.body);
-    const reachability = { scrollX, scrollY, clippedBy, hit: disabled ? "disabled" : !hit ? "not-tested" : hits ? "hits" : bare ? "not-hit-testable" : "blocked", interceptor: hit && !hits ? selector(hit) : null };
+    // A scroller edge can leave a sliver of the control visible, its centre under the sibling past the edge
+    // (customize NAME/CODE, T11): that control is scrolled away, not blocked, so a tap needs a scroll first.
+    const sliver = (scrollX || scrollY) && (right - left) * (bottom - topY) < 0.5 * r.width * r.height;
+    const reachability = { scrollX, scrollY, clippedBy, hit: disabled ? "disabled" : !hit ? "not-tested" : hits ? "hits" : bare ? "not-hit-testable" : sliver ? "needs-scroll" : "blocked", interceptor: hit && !hits ? selector(hit) : null };
     const area = labels.reduce((a, l) => { const b = l.getBoundingClientRect();
       return b.width && b.height ? { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom) } : a; },
       { x: r.x, y: r.y, right: r.right, bottom: r.bottom });

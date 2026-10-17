@@ -132,6 +132,7 @@
     "RaceWakeLock",
     "RadioLines",
     "Reliability",
+    "RenderRate",
     "RendererBoot",
     "SaveMigrate",
     "SceneryCity",

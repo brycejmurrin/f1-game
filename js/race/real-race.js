@@ -692,7 +692,7 @@ const RealRace = (function () {
           // as a ratio against tyreWear — 1/gripFor(wear) each, which cancelled
           // the worn set's whole grip loss for a dropped-in player.
           if (life > 0) { c.tyreWear = clamp(ageSim / life, 0, JUMP_MAX_WEAR); c.tyreWearF = c.tyreWear; c.tyreWearR = c.tyreWear; }
-          c.tyreLap0 = ls - Math.round(ageSim);
+          c.tyreLap0 = ls - Math.round(ageSim); c.tyreLapAdj = 0;
         }
         f.lap = c.lap; dropped++;
       }
@@ -837,7 +837,7 @@ const RealRace = (function () {
         const cls = classOf(stints[idx]);
         if (!cls || !G.tyres.classRecord) continue;
         c.tyre = G.tyres.classRecord(cls);
-        c.tyreClass = cls; c.pitStops = idx; c.tyreStints = idx + 1; c.tyreLap0 = stints[idx].from;
+        c.tyreClass = cls; c.pitStops = idx; c.tyreStints = idx + 1; c.tyreLap0 = stints[idx].from; c.tyreLapAdj = 0;
         c.tyreLog = stints.slice(0, idx + 1).map((st, i) => {
           const rec = G.tyres.classRecord(classOf(st));
           return { code: rec.code, id: rec.id, colour: rec.colour, lap0: st.from, lap1: i < idx ? stints[i + 1].from : null };

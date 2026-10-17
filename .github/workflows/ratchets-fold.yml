@@ -1,0 +1,87 @@
+name: Ratchets fold
+
+# Sum the tests/data/ratchets.d/ fragments into ratchets.json (#2538).
+#
+# `ratchets.mjs --update` / `--auto-raise` on a topic branch writes a per-branch
+# delta fragment (#2291, #2514); nothing folded them, so they piled up. This
+# runs `ratchets.mjs --fold --min-fragments=N` weekly (and on dispatch): the
+# effective ceilings do not change, only where the number lives moves. The
+# result goes to the bot branch `bot/ratchets-fold` and a PR into the deploy
+# branch, never a direct push (the deploy branch is protected).
+#
+# In-flight PRs are not touched: a fold only deletes fragments that are already
+# on the deploy branch, and a PR's own new fragment merges beside the folded
+# ratchets.json. A run is a no-op while fewer than `min_fragments` exist or
+# while an earlier fold PR is still open. A PR opened with GITHUB_TOKEN starts
+# no workflow run, so a session pushes one commit or adds the `run-ci` label to
+# get the CI check (AGENTS.md rule 12).
+#
+# Syntax: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
+# (on.schedule cron is UTC, runs from the default branch; permissions per job).
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+  workflow_dispatch:
+    inputs:
+      min_fragments:
+        description: "Fold only when at least this many fragments exist"
+        required: false
+        default: "20"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ratchets-fold
+  cancel-in-progress: false
+
+jobs:
+  fold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Skip while a fold PR is open
+        id: open
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n="$(gh pr list --repo "$GITHUB_REPOSITORY" --head bot/ratchets-fold --state open --json number --jq length)"
+          echo "open fold PRs: $n"
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+
+      - name: Fold
+        if: steps.open.outputs.n == '0'
+        env:
+          MIN_FRAGMENTS: ${{ inputs.min_fragments || '20' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case "$MIN_FRAGMENTS" in ''|*[!0-9]*) echo "::error::min_fragments must be a number"; exit 2 ;; esac
+          node tools/check/ratchets.mjs --fold "--min-fragments=$MIN_FRAGMENTS" | tee fold.log
+          # The fold moves where numbers live; the check proves none changed.
+          if git diff --quiet -- tests/data && [ -z "$(git ls-files --others --exclude-standard tests/data)" ] && [ -z "$(git ls-files --deleted tests/data)" ]; then
+            echo "nothing to fold"; exit 0
+          fi
+          node tools/check/ratchets.mjs
+          git config user.name "apex-ratchets-bot"
+          git config user.email "noreply@anthropic.com"
+          git checkout -B bot/ratchets-fold
+          git add -A tests/data
+          git commit -m "chore(ratchets): fold ratchets.d fragments into ratchets.json
+
+          $(cat fold.log)"
+          git push --force-with-lease origin bot/ratchets-fold
+          gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng --head bot/ratchets-fold \
+            --title "chore(ratchets): fold ratchets.d fragments" \
+            --body "Scheduled fold (#2538): $(cat fold.log). Every effective ceiling is unchanged. Opened by .github/workflows/ratchets-fold.yml; push once or add run-ci to start CI." \
+            || echo "::warning::PR creation failed (repo setting may forbid Actions PRs); open it from bot/ratchets-fold"

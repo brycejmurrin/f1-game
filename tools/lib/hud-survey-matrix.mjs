@@ -1,3 +1,4 @@
+import { screenshotCard, renderGallery } from "./screenshot-gallery.cjs";
 // hud-survey-matrix.mjs — the PURE half of tools/shot/hud-survey.mjs: cells,
 // matrices (quick / full / exhaustive / file) with pairwise reductions, shards,
 // the expected-visible rules, finding classification, report merge and the
@@ -921,30 +922,23 @@ export function renderFindingsMd(report) {
 const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 /** index.html — a static gallery, no external assets. Shot paths are relative to the report dir. */
 export function renderIndexHtml(report) {
-  const fs = report.findings || [];
-  const cards = (report.cells || []).map((c) => {
-    const mine = rankFindings(fs.filter((f) => f.cell === c.id));
-    const worst = mine.length ? mine[0].severity : "clean";
-    const img = c.shotRel ? `<a href="${esc(c.shotRel)}"><img loading="lazy" src="${esc(c.shotRel)}" alt="${esc(c.id)}"></a>` : `<div class="noshot">no shot</div>`;
-    const list = mine.map((f) => `<li class="s-${f.severity}"><b>${esc(f.kind)}</b> ${esc(f.detail)}</li>`).join("");
-    return `<figure class="card w-${worst}" data-sev="${worst}">${img}<figcaption><code>${esc(c.id)}</code> <span class="tag">${esc(worst)}</span><ul>${list}</ul></figcaption></figure>`;
-  }).join("\n");
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HUD survey</title><style>
-:root{--bg:#111;--fg:#eee;--card:#1c1c1c;--hi:#e5484d;--md:#f5a524;--lo:#8aa;--ok:#3a3}
-@media (prefers-color-scheme:light){:root{--bg:#f6f6f6;--fg:#111;--card:#fff}}
-body{background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,sans-serif;margin:16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px}
-.card{background:var(--card);margin:0;padding:8px;border-left:4px solid var(--ok)}
-.w-high{border-color:var(--hi)}.w-medium{border-color:var(--md)}.w-low,.w-info{border-color:var(--lo)}
-img{width:100%;height:auto;display:block}ul{margin:4px 0 0;padding-left:18px;font-size:12px}
-.s-high{color:var(--hi)}.s-medium{color:var(--md)}.tag{font-size:11px;opacity:.7}code{word-break:break-all}
-</style></head><body><h1>HUD survey — ${esc(report.meta.matrix)}</h1>
-<p>${esc(report.cells.length)} cells · ${esc(report.meta.track)} @ ${esc(report.meta.frac)} · ${esc(JSON.stringify(countBy(fs)))} · <a href="findings.md">findings.md</a> · <a href="report.json">report.json</a></p>
-<div class="grid">
-${cards}
-</div></body></html>
-`;
+  const findings = report.findings || [];
+  const groups = new Map();
+  for (const cell of report.cells || []) {
+    const mine = rankFindings(findings.filter((finding) => finding.cell === cell.id));
+    const worst = mine[0]?.severity || (cell.cellError ? "failed" : "clean");
+    if (!groups.has(worst)) groups.set(worst, []);
+    const list = mine.map((finding) => `<li><strong>${esc(finding.kind)}</strong> ${esc(finding.detail)}</li>`).join("");
+    groups.get(worst).push(screenshotCard({ title: cell.id, caption: worst, image: cell.shotRel,
+      metadata: cell.cellError ? { error: cell.cellError } : null,
+      body: list ? `<ul>${list}</ul>` : "",
+    }));
+  }
+  return renderGallery({ title: `HUD survey — ${report.meta.matrix}`,
+    summary: `${report.cells.length} cells · ${report.meta.track} @ ${report.meta.frac} · ${JSON.stringify(countBy(findings))}`,
+    groups: [...groups].map(([title, cards]) => ({ title, cards })),
+    links: '<a href="findings.md">Findings</a><a href="report.json" download>Report JSON</a>',
+  });
 }
 
 // ── self-test (no browser) ────────────────────────────────────────────────
