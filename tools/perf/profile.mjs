@@ -57,11 +57,13 @@ const VIEWPORT = { width: 320, height: 180 };
 const noBlit = () => { try { sessionStorage.setItem("apex26.wgxCapture", "0"); } catch (_) { /* blocked */ } };
 const newPage = async (browser) => { const ctx = await browser.newContext({ viewport: VIEWPORT }); if (!argv.includes("--capture")) await ctx.addInitScript(noBlit); return [ctx, await ctx.newPage()]; };
 const log = (...a) => console.error(...a);
+// Page-ready / track-load wait: APEX_PROFILE_WAIT_MS raises the 30 s floor on a loaded SwiftShader box (as profile-gameloop.mjs does).
+const WAIT_MS = Math.max(30000, +process.env.APEX_PROFILE_WAIT_MS || 30000);
 
 /** The deterministic scenario, evaluated in the page: same track, same start, same inputs on every ref. */
 async function scenario(page, nFrames) {
   await page.evaluate((t) => { window.__apex.race(t); }, track);
-  await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: 30000, polling: 100 });
+  await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: WAIT_MS, polling: 100 });
   await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); });
   return page.evaluate(async (n) => {
     const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
@@ -87,7 +89,7 @@ async function runSpans(root, label) {
     for (let r = 0; r < repeat; r++) {
       const [context, page] = await newPage(browser);
       await page.goto(srv.url);
-      await page.waitForFunction(() => window.__apex != null, null, { timeout: 30000, polling: 100 });
+      await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS, polling: 100 });
       const res = await scenario(page, frames);
       res.spans = Object.assign({}, res.spans || {}, { raf: intervalStats(res.intervals) });
       runs.push(res);
@@ -120,9 +122,9 @@ async function runTrace() {
   try {
     const [, page] = await newPage(browser);
     await page.goto(srv.url);
-    await page.waitForFunction(() => window.__apex != null, null, { timeout: 30000, polling: 100 });
+    await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS, polling: 100 });
     await page.evaluate((t) => { window.__apex.race(t); }, track);
-    await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: 30000, polling: 100 });
+    await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: WAIT_MS, polling: 100 });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); window.__apex.setInput({ throttle: true }); window.__apex.perf({ on: true, reset: true, measure: true }); });
     const cdp = await page.context().newCDPSession(page);
     const chunks = [];
