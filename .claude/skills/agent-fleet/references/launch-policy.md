@@ -42,3 +42,18 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
   because every session waited on the same `queue-depth.mjs` hold and pushed in the minute it
   released; with no hold there is nothing to pace. Push when your own cycle is green.
 - Every worker hand-back reports its head SHA; on a token failure it stops and reports. Batch small tooling/doc fixes into ONE PR; tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR resolve swarms.
+- **Cost and context (retro 2026-10-17, `docs/notes/AGENT-RETRO-2026-10-17.md`).** Three long-lived Opus sessions were 53 % of one night's
+  ≈ $660: a 750 k-context orchestrator at ≈ $0.35 per 5 s wake, a Home CSS fixer at $100 with nothing committed. The launch
+  prompt names the model and a `cost cap`; a lane that is switched to Opus keeps the Sonnet cap. An orchestrator hands off past ~300 k
+  context. Default: the fleet check-in is a fresh-session scheduled task at ≥ 15 min that stops after 2 unchanged checks; the user
+  may choose a tighter cadence (Bryce chose 5 min on 2026-10-17), and then the orchestrator follows that.
+- **Desk field.** Every launch prompt carries `merge_desk: <session id | none>`; `none` means the lane reports `SWEEP-N/A` and never runs
+  `list_sessions` to look for one (7 lanes, 24 calls, 2026-10-16).
+- **Before launching an owner:** `who-is-on-it.mjs`, armed auto-merge, PR `updated_at` < 15 min. Skip a PR that is armed and green or is
+  being driven (6 owners did no work on 2026-10-17).
+- **Hunters and perf lanes:** stop after the first zero-finding round and put the note in the single docs PR (5 of 13 debugger hunts and
+  P3 returned no defect for ≈ $41; four docs-only notes each paid a full CI run). Cap a hunter at ~3 rounds or 25 min, then FINAL.
+- **A lane that edits `.claude/**`** needs Bryce's quoted grant in its own launch prompt; a relayed grant is refused by the classifier
+  (019c5Yi lost 9 min until a typed `Approved:`).
+- **Stand-down** is a message with a 2-minute window to push a WIP findings note before any interrupt (five mid-probe lanes lost
+  findings that exist only in their transcripts, 00:13:35Z).
