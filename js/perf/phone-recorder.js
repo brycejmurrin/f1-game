@@ -23,6 +23,7 @@ const PhoneRecorder = (function () {
   const SAMPLE_MS = 120000;
   const WINDOW_FRAMES = 2048;
   const CADENCE_FRAMES = 120;
+  const QUICK_MS = 30000;
   const MAX_SAMPLES = 600;
   const MAX_EVENTS = 50;
   const MAX_SAVE_CHARS = 600000;
@@ -34,6 +35,13 @@ const PhoneRecorder = (function () {
     "4. Pause again, tap STOP, then SHARE (Files / AirDrop / Messages) or COPY.",
     "5. Optional repeats: GRAPHICS MEDIUM, and SGSR on. Same circuit each time.",
     "6. Send every file back; it holds device facts plus a sample every 2 min.",
+  ];
+  // Renderer A/B (three short runs, one per path). Shown as a second block.
+  const HOWTO_AB = [
+    "A/B: three 5-min runs, same circuit and settings, one per renderer path:",
+    "default, then SETTINGS > GRAPHICS > THREE PATH: WEBGPU, then the WEBGL2 pick.",
+    "At each start grid take a screenshot (power + volume up) before RECORD.",
+    "Each file records its renderer path in every sample. Quick facts: QUICK 30s.",
   ];
 
   const r2 = (n) => (n != null && Number.isFinite(+n) ? Math.round(+n * 100) / 100 : null);
@@ -140,6 +148,12 @@ const PhoneRecorder = (function () {
       weather: safe(() => apex.weather(), null) || null,
       preset: safe(() => w.GfxQuality.current(), null),
       cam: safe(() => apex.camera().mode, null),
+      path: safe(() => { const t = w.GLX.__tlx && w.GLX.__tlx.backendState ? w.GLX.__tlx.backendState() : w.GLX.backendState();
+        return { pick: (w.RendererPicker && w.RendererPicker.liveBackend && w.RendererPicker.liveBackend()) || "",
+          api: t && t.api || null, path: t && t.path || null, pin: t && t.pin != null ? String(t.pin) : null }; }, null),
+      // Per-subsystem JS ms/frame over the span ring's last ~8.5 s (PerfSpans is ON only while recording).
+      spans: safe(() => { const st = w.PerfSpans.stats(); const o = {};
+        for (const k of Object.keys(st)) o[k] = { p50: st[k].p50, p95: st[k].p95 }; return o; }, null),
       visibility: safe(() => document.visibilityState, null),
     };
     return o;
@@ -147,19 +161,21 @@ const PhoneRecorder = (function () {
 
   function liveEnv() {
     const w = g();
-    return {
+    const env = {
       now: () => (w.performance && w.performance.now ? w.performance.now() : Date.now()),
       wall: () => Date.now(),
       facts: liveFacts, sample: liveSample,
+      spans: (on) => safe(() => { const S = w.PerfSpans; if (!S) return null; if (on) { env._spansWas = S.isOn(); S.on(true); } else if (!env._spansWas) S.on(false); }, null),
       save: (txt) => safe(() => { if (w.GameStore && w.GameStore.store) return w.GameStore.store.rawSet(KEY, txt); w.localStorage.setItem(KEY, txt); }, null),
       load: () => safe(() => (w.GameStore && w.GameStore.store ? w.GameStore.store.raw(KEY) : w.localStorage.getItem(KEY)), null),
     };
+    return env;
   }
 
   // ---- the recorder: a state machine driven by frame(nowMs) ----------------
   function create(env) {
     env = env || liveEnv();
-    let on = false; let rec = null;
+    let on = false; let rec = null; let quick = false;
     let t0 = 0; let lastSampleAt = 0; let framesSince = 0; let totalFrames = 0;
     let lastFrameAt = 0; let deltas = [];
 
@@ -179,12 +195,14 @@ const PhoneRecorder = (function () {
       const txt = serialize();
       if (txt.length <= MAX_SAVE_CHARS) env.save(txt);
     }
-    function start() {
+    function start(opts) {
       if (on) return false;
+      quick = !!(opts && opts.quick);
+      if (env.spans) env.spans(true);
       on = true; t0 = env.now(); lastSampleAt = t0; framesSince = 0; totalFrames = 0; lastFrameAt = 0; deltas = [];
       rec = { schema: SCHEMA, startedAt: new Date(env.wall()).toISOString(), endedAt: null,
         facts: env.facts(), cadence: null, samples: [], events: [], truncated: false,
-        plan: { sampleMs: SAMPLE_MS, windowFrames: WINDOW_FRAMES } };
+        mode: quick ? "quick" : "soak", plan: { sampleMs: SAMPLE_MS, windowFrames: WINDOW_FRAMES, quickMs: QUICK_MS } };
       sample("start");
       return true;
     }
@@ -193,7 +211,7 @@ const PhoneRecorder = (function () {
       sample("stop");
       rec.endedAt = new Date(env.wall()).toISOString();
       rec.durationMin = r2((env.now() - t0) / 60000);
-      on = false; persist();
+      on = false; if (env.spans) env.spans(false); persist();
       return true;
     }
     // One call per rendered rAF frame while recording.
@@ -211,6 +229,7 @@ const PhoneRecorder = (function () {
         }
       }
       lastFrameAt = now;
+      if (quick) { if (now - t0 >= QUICK_MS) stop(); return; }
       if (framesSince >= WINDOW_FRAMES) sample("window");
       else if (now - lastSampleAt >= SAMPLE_MS) sample("timer");
     }
@@ -328,6 +347,7 @@ const PhoneRecorder = (function () {
     const r = recorder();
     const have = r.isOn() || !!r.record();
     _ui.rec.textContent = r.isOn() ? "STOP" : "RECORD";
+    _ui.quick.disabled = r.isOn();
     _ui.rec.setAttribute("aria-pressed", r.isOn() ? "true" : "false");
     _ui.share.disabled = !have; _ui.copy.disabled = !have;
     if (!_ui.status.dataset.msg) {
@@ -340,12 +360,13 @@ const PhoneRecorder = (function () {
     setTimeout(() => { if (_ui) { delete _ui.status.dataset.msg; paintUI(); } }, 4000);
   }
 
-  function onRecord() {
+  function onRecord(quick) {
     const r = recorder();
     if (r.isOn()) { r.stop(); flash("stopped · " + r.count() + " samples · tap SHARE"); }
     else {
       safe(() => { if (typeof GameMetrics !== "undefined" && GameMetrics.ensureTelemetry) GameMetrics.ensureTelemetry(); }, null);
-      r.start(); kick(); flash("recording — resume and race 15 min");
+      r.start({ quick: quick === true }); kick();
+      flash(quick === true ? "quick facts: stay on this screen 30 s" : "recording — resume and race 15 min");
     }
     paintBadge(); paintUI();
   }
@@ -381,6 +402,8 @@ const PhoneRecorder = (function () {
     const h = document.createElement("p"); h.className = "adv-help"; h.style.fontWeight = "700"; h.textContent = "PHONE TEST";
     const how = document.createElement("ol"); how.className = "adv-helpow";
     HOWTO.forEach((l) => { const li = document.createElement("li"); li.textContent = l.replace(/^\d\. /, ""); how.appendChild(li); });
+    const ab = document.createElement("ol"); ab.className = "adv-help";
+    HOWTO_AB.forEach((l) => { const li = document.createElement("li"); li.textContent = l; ab.appendChild(li); });
     const row = document.createElement("div"); row.style.margin = "0";
     const mk = (id, label, fn) => {
       const b = document.createElement("button");
@@ -388,10 +411,10 @@ const PhoneRecorder = (function () {
       b.addEventListener("click", (e) => { e.stopPropagation(); fn(); });
       row.appendChild(b); return b;
     };
-    _ui = { rec: mk("pm-phonerec-rec", "RECORD", onRecord), share: mk("pm-phonerec-share", "SHARE", onShare), copy: mk("pm-phonerec-copy", "COPY", onCopy) };
+    _ui = { rec: mk("pm-phonerec-rec", "RECORD", onRecord), quick: mk("pm-phonerec-quick", "QUICK 30s", () => onRecord(true)), share: mk("pm-phonerec-share", "SHARE", onShare), copy: mk("pm-phonerec-copy", "COPY", onCopy) };
     _ui.status = document.createElement("p"); _ui.status.className = "adv-help"; _ui.status.setAttribute("role", "status");
     _ui.link = document.createElement("p"); _ui.link.className = "adv-help";
-    [h, how, row, _ui.status, _ui.link].forEach((n) => box.appendChild(n));
+    [h, how, ab, row, _ui.status, _ui.link].forEach((n) => box.appendChild(n));
     host.appendChild(box);
     // A run that survived a tab kill is shareable without recording again.
     const r = recorder();
@@ -411,7 +434,7 @@ const PhoneRecorder = (function () {
   init();
 
   return {
-    KEY, SCHEMA, SAMPLE_MS, WINDOW_FRAMES, CADENCE_FRAMES, MAX_SAMPLES, HOWTO,
+    KEY, SCHEMA, QUICK_MS, HOWTO_AB, SAMPLE_MS, WINDOW_FRAMES, CADENCE_FRAMES, MAX_SAMPLES, HOWTO,
     create, liveEnv, numericLeaves, fileName, share, copy, download, mount,
     start: () => { const ok = recorder().start(); kick(); paintBadge(); paintUI(); return ok; },
     stop: () => { const ok = recorder().stop(); paintBadge(); paintUI(); return ok; },

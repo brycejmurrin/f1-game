@@ -183,3 +183,29 @@ test("file name carries the start stamp; how-to is six lines", () => {
   assert.equal(PR.fileName({ startedAt: "2026-10-17T10:30:00.000Z" }), "apex26-soak-20261017-103000.json");
   assert.equal(PR.HOWTO.length, 6);
 });
+
+test("quick mode records facts and stops itself at 30 s with start and stop samples only", () => {
+  const PR = load();
+  const f = fakeEnv();
+  const flips = [];
+  f.env.spans = (v) => flips.push(v);
+  const r = PR.create(f.env);
+  r.start({ quick: true });
+  let t = f.t;
+  for (let i = 0; i < 2000; i++) { t += 16.7; f.t = t; r.frame(t); if (!r.isOn()) break; }
+  assert.equal(r.isOn(), false);
+  assert.equal(r.record().mode, "quick");
+  assert.deepEqual(JSON.parse(JSON.stringify(r.record().samples.map((s) => s.trigger))), ["start", "stop"]);
+  assert.ok(r.record().durationMin >= 0.5 && r.record().durationMin < 0.6);
+  assert.deepEqual(flips, [true, false], "PerfSpans is ON only while recording");
+});
+
+test("each live sample carries the renderer path and per-subsystem span ms", () => {
+  const PerfSpans = { stats: () => ({ render: { p50: 4.1, p95: 9.2, p99: 12, n: 5 }, ai: { p50: 0.6, p95: 1.1 } }) };
+  const GLX = { __tlx: { backendState: () => ({ api: "webgl2", path: "webgl", pin: null }) } };
+  const s = load({ PerfSpans, GLX, RendererPicker: { liveBackend: () => "three" } }).liveEnv().sample();
+  assert.deepEqual(JSON.parse(JSON.stringify(s.spans)), { render: { p50: 4.1, p95: 9.2 }, ai: { p50: 0.6, p95: 1.1 } });
+  assert.deepEqual(JSON.parse(JSON.stringify(s.path)), { pick: "three", api: "webgl2", path: "webgl", pin: null });
+  const bare = load().liveEnv().sample();
+  assert.equal(bare.spans, null);
+});
