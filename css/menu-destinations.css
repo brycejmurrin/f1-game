@@ -70,34 +70,43 @@
 .dh-developer-tools { padding: 0 var(--gap) calc(var(--gap) * .5); flex-shrink: 0; }
 .dh-developer-tools > summary { cursor: pointer; color: var(--dim); min-height: var(--tap-paint); }
 .dh-developer-tools > button { margin-top: calc(var(--gap) * .3); }
-/* Dense Home: portrait and desktop share the landscape shape. Groups dissolve into one 2-column grid, so every door is one
+/* Dense Home: portrait, desktop and tablet (any viewport 520px tall or more, or portrait) share the landscape shape. Groups dissolve into one 2-column grid, so every door is one
    tile; pairs/threes/utilities are flex rows. Compact-wide (phone landscape) keeps its own rules above. */
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons {
+@media (min-height: 520px), (max-aspect-ratio: 1/1) {
+body #overlay #menu-buttons {
   --hg: calc(var(--gap) * .4); --hrow: clamp(44px, 6.4svh, 64px);
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: max-content; gap: var(--hg); align-content: start;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(max(7.5rem, calc(50% - var(--hg))), 1fr)); grid-auto-rows: max-content; gap: var(--hg); align-content: start; align-items: stretch;
 }
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons :is(#menu-hero, #menu-primary, #menu-garage) { display: contents; }
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons :is(#mb-career, #menu-retention, #menu-explore, #menu-create, #menu-secondary) { grid-column: 1 / -1; }
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create, #menu-secondary) { display: flex; flex-wrap: wrap; gap: var(--hg); width: 100%; }
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons .bigbtn {
+body #overlay #menu-buttons :is(#menu-hero, #menu-primary, #menu-garage) { display: contents; }
+body #overlay #menu-buttons :is(#mb-career, #menu-retention, #menu-explore, #menu-create, #menu-secondary) { grid-column: 1 / -1; }
+body #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create, #menu-secondary) { display: flex; flex-wrap: wrap; gap: var(--hg); width: 100%; }
+body #overlay #menu-buttons .bigbtn {
   display: flex; align-items: center; justify-content: center; gap: .4em; width: 100%; min-width: 0; min-height: var(--hrow); box-sizing: border-box;
   margin: 0; padding: calc(var(--gap) * .3) calc(var(--gap) * .5); font-size: clamp(var(--fs-micro), calc(4.3 * var(--vwz)), var(--fs-4)); line-height: 1.15; letter-spacing: 0; text-align: center;
   white-space: normal; text-wrap: balance; overflow-wrap: normal; hyphens: none; overflow: hidden;
 }
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons .bigbtn > span { align-items: center; text-align: center; max-width: 100%; }
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create, #menu-secondary) > .bigbtn { flex: 1 1 0; width: auto; }
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons .btn-ico { flex: none; margin: 0; width: .8em; height: .8em; }
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons .mb-sub { display: none; }
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons :is(#mb-career, #menu-retention) .mb-sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons #menu-secondary > .bigbtn { font-size: var(--fs-micro); min-height: max(44px, var(--tap-paint)); font-weight: 700; }
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons :is(#menu-create, #menu-secondary) .btn-ico { display: none; }
-:where(body[data-shape="tall"]) #overlay #menu-buttons #menu-secondary > .bigbtn { flex-basis: calc(50% - var(--hg)); }
+body #overlay #menu-buttons .bigbtn > span { align-items: center; text-align: center; max-width: 100%; }
+body #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create, #menu-secondary) > .bigbtn { flex: 1 1 5.5rem; width: auto; }
+body #overlay #menu-buttons .btn-ico { flex: none; margin: 0; width: .8em; height: .8em; }
+body #overlay #menu-buttons .mb-sub { display: none; }
+body #overlay #menu-buttons :is(#mb-career, #menu-retention) .mb-sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body #overlay #menu-buttons #menu-secondary > .bigbtn { font-size: var(--fs-micro); min-height: max(44px, var(--tap-paint)); font-weight: 700; }
+body #overlay #menu-buttons :is(#menu-create, #menu-secondary) .btn-ico { display: none; }
+body[data-shape="wide"] #overlay { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+body[data-shape="wide"] #overlay #menu-buttons { grid-column: 2; grid-row: 1; height: auto; max-height: 100%; pointer-events: auto; }
+body #overlay #menu-buttons :is(#mb-career, #menu-retention, #menu-explore, #menu-create, #menu-secondary) { grid-row: auto; }
+/* The floating chips (PAUSE BACKGROUND / INSTALL) only reserve floor space while they are shown. */
+body #overlay #menu-buttons { margin-bottom: 0; padding-bottom: var(--gap); scroll-padding-bottom: var(--gap); }
+body:has(:is(#home-motion, #install-chip):not([hidden])) #overlay #menu-buttons { margin-bottom: calc(var(--tap) + var(--gap) * .5); }
+body #overlay #menu-buttons #menu-create > .bigbtn { font-size: clamp(var(--fs-micro), calc(3.4 * var(--vwz)), calc(var(--fs-4) * .88)); padding-inline: calc(var(--gap) * .2); }
+body #overlay #menu-buttons #mb-career { min-height: calc(var(--hrow) * 1.2); }
+/* Scrolling is the fallback (small phone, UI SIZE 200%): the utility row stays pinned so SETTINGS is never below the fold. */
+body #overlay #menu-buttons.sf-scroll { --sfade-b: 0px; scroll-padding-bottom: calc(var(--tap) * 2.2 + var(--gap)); }
+body #overlay #menu-buttons.sf-scroll #menu-secondary { position: sticky; bottom: calc(var(--gap) * -1); z-index: 2; padding-block: calc(var(--gap) * .4); background: var(--scrim-heavy); }
+}
+body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-basis: calc(50% - var(--hg)); }
 :where(body[data-shape="tall"]) #overlay #menu-brand { padding-block: calc(var(--gap) * .5); }
 :where(body[data-shape="tall"]) #overlay #menu-meta { flex-direction: row; flex-wrap: nowrap; justify-content: center; align-items: center; margin-top: calc(var(--gap) * .3); }
 :where(body[data-shape="tall"]) #overlay #disclaimer { flex: 1 1 0; min-width: 0; text-align: start; margin: 0; }
 :where(body[data-shape="tall"]) #overlay #soundbtn { margin: 0; flex: none; }
-/* The floating chips (PAUSE BACKGROUND / INSTALL) only reserve floor space while they are shown. */
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons { margin-bottom: 0; padding-bottom: var(--gap); scroll-padding-bottom: var(--gap); }
-body:has(:is(#home-motion, #install-chip):not([hidden])) #overlay #menu-buttons { margin-bottom: calc(var(--tap) + var(--gap) * .5); }
-:where(body[data-shape="tall"], body[data-shape="wide"]:not([data-density="compact"])) #overlay #menu-buttons #mb-career { min-height: calc(var(--hrow) * 1.2); }
 }
