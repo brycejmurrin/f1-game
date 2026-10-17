@@ -53,20 +53,23 @@ cross-car wheel batching, MRT-skip and ping-pong swap hoisting.
 | 1 | **On-phone measurement kit and a 15-min thermal soak** (extends #1633; folds in the SGSR decision #1652) | unlocks all | S | high | #1633 (comment) |
 | 2 | **Tile-GPU bandwidth trims, each default-off then A/B'd**: sky cloud cache 512², godray pair R11F, depth-only shadow target (r187), `invalidateFramebuffer` audit | low–med each, additive | S each | med | filed |
 | 3 | **Allocation diet, round 2**: remaining `game.js` per-car temporaries (~60 KB/frame), `for…of` in three's `_bindUniforms` (vendor patch 15, ~16 KB/frame), HUD refit churn | med (GC pauses on JSC) | S–M | med | filed |
-| 4 | **three r187 bump** when released (node build −28–34 % CPU, depth-only RTs, pipeline-key fix) | low–med | S | high | filed |
+| 4 | **three's WebGL fallback never deletes GL programs, shaders or VAOs** (three #34597, fixed for VAOs by #34610 in r187; our vendored 0.186.1 has zero `deleteVertexArray`/`deleteProgram`/`deleteShader`): count creates vs deletes across track switches, backport as vendor patch 15 now, full r187 bump when released (also node-build CPU −28–34 %, depth-only RTs) | med–high if it holds memory (jetsam) | S | med (the leak is verified in three's source; its size in our scene is not) | filed (#2651, rewritten) |
 | 5 | **Thermal-aware governor + 45/30 fps render-rate tier** (physics stays 60 Hz) | high on long sessions | M | med | filed |
 | 6 | **Tail-frame budget scheduler** (spread lamp rebuilds, sky bake bands, HUD fits, mirror re-cull so p95/p99 stop spiking) | med (feel) | M | med | filed |
 | 7 | **Three-way phone A/B: GLX (plain WebGL2) vs TLX on three's WebGL backend vs TLX on WebGPU**; three's WebGL backend is reported ~31 % slower per `render()` and +80 % GL calls than plain WebGLRenderer (three #30560); decides whether GLX, bundles or staging are worth anything on the phone | unknown, possibly high | S to measure | low–med | filed |
 | 8 | **Resolution scaling without reallocation** (viewport-scaled render into fixed targets) | med–high (kills the governor's realloc hitch and peak-memory spike) | M–L | med | filed |
 | 9 | **Render-object diet**: 28 instanced prop variants, wheels as a batch, brake rings (A2 / D4 / H2 of earlier hunts) | med (JS per RO ≈ 7.5–8 µs) | M | med | filed |
-| 10 | **Index-LOD for distant chunks and the mirror pass** (alternate index ranges over the shared vertex buffer) | med on vertex-heavy views | M–L | low–med | filed |
+| 10 | **Index-LOD for distant chunks and the mirror pass** (alternate index ranges over the shared vertex buffer); Apple says vertex count is not a worry on its TBDR, so count first | low–med | M–L | low | filed |
 
-**three.js upgrade: not yet, then yes.** We vendor 0.186.1, which is the latest release (r186, 24 Sep 2026): there is nothing to
-catch up on today. r187 has a migration-guide section but no release as of 2026-10-17. Take it when it ships (#2651): it brings
-the node-build CPU work and depth-only render targets, and its breaking changes mostly miss us (§7a). Never a dev snapshot.
+**three.js upgrade: not a version bump today; yes when r187 ships; one backport sooner.** We vendor 0.186.1, which is the latest
+release (npm `latest` = 0.186.1, published 2026-09-24; r187 is not published as of 2026-10-17). The one thing worth not waiting for
+is the WebGL-fallback disposal fix (row 4): the fallback is exactly the iPhone path, and the vendored bundle contains no GL delete calls for
+programs, shaders or VAOs (§9a). Take the rest with r187 (node-build CPU, depth-only RTs, MSAA/depth fixes in the WebGL backend); its
+breaking changes mostly miss us (§7a). Never a dev snapshot.
 
 Ranking logic: 1 first because #2–#10 are predictions until a phone number exists. #2–#4 are small, mostly flag-gated and
-reversible. #5–#6 attack what a phone player actually feels (sustained throttle, hitches), which averages hide. #7 is cheap
+reversible; #4 is the only row with a verified upstream defect on the shipped phone path, and its size is measurable here by
+counting GL object creates and deletes (an exact oracle, no GPU needed). #5–#6 attack what a phone player actually feels (sustained throttle, hitches), which averages hide. #7 is cheap
 to measure and could re-rank everything below it. #8–#10 are structural and carry look or memory risk.
 
 ## 2. Per opportunity
@@ -117,7 +120,14 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
      comment, 2022; ◇). Likely outcome: **bloom is already R11F on the phone and the code comment is stale**; the 32-bit float
      *blend* extension `EXT_float_blend` is a different thing (about 40 % on iOS per the same survey, ◇) and we do not need it.
      The code probes at runtime, so nothing to change: read the probe on the phone (§4 A) and fix the comment.
-  5. *`invalidateFramebuffer` after resolve*: unverified whether three's WebGL backend issues it for the scene target; audit only.
+  5. *Draw order for hidden-surface removal.* WWDC20 10602 (⚑ transcript) recommends sorting draws by visibility state: opaque first, then alpha-test/discard/depth-feedback, then translucent;
+     avoid interleaving opaque and non-opaque meshes, so the GPU's hidden-surface removal stays effective. TLX gives every dynamic record `renderOrder = i` (the GLX submission index,
+     `js/render/three/tlx.js:4606,5318-5319`), so three sorts by caller order and HSR depends on how `js/game.js` emits records; decals use `alphaTest` (`js/render/three/tsl-fx.js:343`). An audit of the emit order
+     against that checklist is cheap and changes no pixels if it only moves discard/alpha draws after opaque ones. This runs through ANGLE-Metal, so treat the benefit as direction, not proof.
+  6. *Load/store actions.* Apple (⚑ 10632): load and store actions "consume the majority of your app's system bandwidth"; clear instead of load when contents are not needed; store only what you need; fewer passes means less load/store
+     traffic. Our post chain is ~15 full-screen draws and a mirror pass; three's WebGL backend does call `invalidateFramebuffer` on the MSAA resolve path and, for non-MSAA targets, on depth when three allocated it
+     (raw `src/renderers/webgl-fallback/WebGLBackend.js`, ⚑, ~lines 1640 and 1665), so the audit in item 7 below is partly answered: the scene target samples its depth later (`resolveDepthBuffer`), so depth is kept by design (`js/render/three/tlx-post.js:869`).
+  7. *Framebuffer discards, answered in part.* three's WebGL backend issues `invalidateFramebuffer` itself (see 6), so the remaining audit is only which of our own targets (post ping-pong RTs, mirror) end a pass with contents nobody reads.
      Apple's retired OpenGL ES guide for A7 and later (⚑ fetched 2026-10-17) says: "Always use framebuffer discard operations
      when your framebuffer contents are no longer needed. The penalty for not doing so is higher than it was on earlier GPUs."
      It also caps render targets at four attachments and 128/256 bits total on A7/A8 (our scene target is RGBA16F plus R8, fine)
@@ -144,6 +154,13 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
   but no primary source for JavaScriptCore's scavenger cost was found (**gap**; the research pass found only MDN notes that
   `performance.measureUserAgentSpecificMemory` is Chromium-only ◇ and `performance.memory` is Chromium-only ◇). So the phone
   GC cost is **unmeasured**; Safari's Web Inspector Allocations/JavaScript timelines are the instrument (§4).
+- **JavaScriptCore's side (third pass).** Primary: WebKit's "Understanding Garbage Collection in JavaScriptCore From Scratch" (2022-07-29, ⚑): a small eden plus an old space; "when the eden is full, an
+  eden GC is invoked"; marking is mostly concurrent, but a Space-Time Scheduler limits the mutator's time when it allocates too quickly, which the author estimates costs "at least 30 %"
+  of mutator throughput while a GC runs, with a stop-the-world fallback in the extreme ([post](https://webkit.org/blog/12967/understanding-gc-in-jsc-from-scratch/)). WebKit's Speedometer 3.0 post (2024-04-10, ⚑): WebCore now hints JSC to run GC and
+  sweeping **between rendering updates, backing off when rAF callbacks are imminent**; Eden or full GC runs early only if enough idle time remains ([post](https://webkit.org/blog/15249/optimizing-webkit-safari-for-speedometer-3-0/)). A game that is busy every frame
+  has little idle time, so its allocation rate (13.7 MB/s here) is paid inside frames. Riptide (2017-01-20, ⚑) put remaining pauses at about 1 ms; the cost is the throttling, not a long pause. That is the mechanism for #2650, still unmeasured on the phone.
+- **Caveat on the vendored `for…of` claim.** The 16 KB/frame `_bindUniforms` iterator figure came from V8's heap sampler in Chromium (hunt 5 F5). JavaScriptCore's FTL has allocation sinking and inlines `ArrayIterator.next` in `for…of` (WebKit commit "FTL should sink object allocations"; an exploit write-up, ◇),
+  so those iterators may not allocate on iOS at all. **Do the vendor patch only after a Safari JavaScript Allocations timeline (heap snapshots every 10 s, ⚑ Timelines tab help) shows it**; the `game.js` rows are plain object and array creation and survive that doubt.
 - **Win.** ~60–75 KB/frame of the 229 (≈ 30 %), if the phone shows GC at all. Without a Safari timeline it is hygiene.
 - **Measure.** `scratch/allocprobe.mjs` method (3 interleaved runs per arm, per-site rows, idle box); on the phone, the JavaScript
   Allocations timeline over 60 s of racing, before and after.
@@ -152,19 +169,40 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
   ratcheted (every added line counts; extracting scratch into `js/physics/` is the way). A vendor patch needs `vendor-three.mjs --check`.
 - **Effort.** S per site, M total.
 
-### 4. three r187 bump (when released)
+### 4. three's WebGL fallback never frees GL programs, shaders or VAOs (and the r187 bump)
 
-- **Evidence.** `docs/notes/PERF-HUNT-4-2026-10-14.md` (2026-10-14): r187 was unreleased; merged on dev: #34815 (TSL node build −28 to −34 % CPU,
-  2026-10-13), #34782 (depth-only RTs, 2026-10-06), #34726 (pipeline key uses vertex-buffer layout, a correctness fix for our many
-  packed layouts), disposal fixes #34610/#34690/#34601. Releases page (⚑ via the research agent): r184 16 Apr, r185 01 Jul, r186 24 Sep
-  2026; `compileAsync()` stopped blocking in r184, BatchedMesh visibility/geometry-ID fixes and a render-pipeline path in r186, InstancedMesh works in render
-  bundles in r185 ([releases](https://github.com/mrdoob/three.js/releases)). A web search on 2026-10-17 found **no r187 release notes**: unverified released.
-- **Where.** `vendor/three-0.186.1/`, `vendor/three-patches/patches.mjs` (patches 6, 9, 10 retire at r187 per hunt 4), canary
-  `tests/unit/gfx-backend-canary.test.mjs`, the bump recipe in `vendor/three-0.186.1/PATCHES.md`.
-- **Win.** CPU at warm (warm.scene 3.9–9.5 s on Metal per hunt 4) and phone shadow-target memory; no per-frame win claimed.
-- **Measure.** Race-entry profile (`js/perf/race-entry-profile.js`), `memState()`, then a `gpu-census.yml` leg (a software probe is not evidence, per `.claude/rules/render-tlx.md`).
-- **Risks.** Re-deriving patches; Chromium-version swizzle class of break; **do not vendor a dev snapshot** (hunt 4 verdict, still right).
-- **Effort.** S when r187 ships; the issue is `ready` but self-gates on the release.
+- **What.** three issue #34597 (opened 2026-09-17, closed 2026-09-20, milestone r187; ⚑ fetched): `Pipelines._releaseProgram` calls the
+  stats-only `info.destroyProgram` and never `backend.destroyProgram`, and `WebGLBackend.destroyProgram` only does a map delete, so
+  `gl.deleteProgram` and `gl.deleteShader` never run; `vaoCache` keys on a monotonically growing attribute id, so every scene swap
+  or re-upload creates new VAOs and `gl.deleteVertexArray` appears nowhere under `webgl-fallback/`. The reporter measured 4 create/dispose
+  cycles: programs 21 created / 0 deleted, shaders 38 / 0, VAOs 25 / 0 (a public-API reproduction), while buffers were freed (88 deleted).
+  They found it chasing an iOS WebKit GPU-process jetsam kill on an iPhone 8 (iOS 16.7), where WebGPURenderer falls back to WebGL2
+  ([#34597](https://github.com/mrdoob/three.js/issues/34597) ⚑). The fix for VAOs is PR #34610 "WebGPURenderer: Improve VAO caching and disposal"
+  (merged 2026-09-20, r187, commit d64e6bd: VAO logic moved into `WebGLVertexArrayUtils`, new backend method `deleteVertexState()`, stable attribute
+  id; ⚑). The program/shader half was not described in that PR's text; hunt 4 lists #34690, #34601 and #34603 as the program/pipeline disposal PRs (not re-fetched).
+- **Is it ours?** Yes by construction: TLX on iOS runs that exact backend (`js/render/three/tlx.js:341-348`). **Verified here:** the vendored
+  `vendor/three-0.186.1/three.webgpu.min.js` contains `deleteVertexArray` ×0, `deleteProgram` ×0, `deleteShader` ×0 (and `deleteBuffer` ×3, `deleteTexture` ×1,
+  `deleteFramebuffer` ×6). TLX already patches around one disposal problem at the other end (`js/render/three/tlx.js:6004-6022`, the `WEBGL_lose_context` mask).
+- **Why it matters on a phone.** Programs and shaders are small in number for us (hunt 5: 19 materials, no growth), so the VAO side is the
+  suspect: a track switch or a race restart re-uploads geometry under new attribute ids, so each switch adds a VAO set. Whether a VAO that is never
+  deleted keeps its attribute buffers alive in ANGLE-Metal (so that `gl.deleteBuffer` frees nothing until the VAO dies) is a **hypothesis, not
+  verified**: it is how GL object lifetimes usually work (an object attached to another object is released when the last reference goes), but no source for
+  ANGLE-Metal's `VertexArrayMtl` was read. If true, a 13–28 MB track pack could survive each switch. The earlier measured leaks (`docs/notes/PERF-FINDINGS.md` §2m–2s)
+  were attributed to other causes; hunt 5 F2 found the retained counts flat across switches, but those counts are three's `renderer.info`, not GL objects,
+  and `renderer.info.programs` is empty on the WebGL backend with stubbed links.
+- **Measure (exact, runs in this container).** Wrap `WebGL2RenderingContext.prototype.createVertexArray/deleteVertexArray/createProgram/deleteProgram/createShader/deleteShader`
+  in the stubbed-link probe of `docs/notes/TLX-PERF-HUNT-5-2026-10-16.md` §Method, switch circuits five times, print creates minus deletes. Growth per switch is the
+  finding; zero growth closes the item. On the phone, Safari's Memory timeline across 5 switches (§4 C).
+- **Fix options.** (a) vendor patch 15: backport #34610 and the program/shader deletion from the r187 branch into `vendor/three-patches/patches.mjs` (the exact-count patch generator
+  stops if the needle shape changed; the canary test pins it); (b) wait for r187. Both retire the same bytes. The r187 bump additionally brings #34815 (TSL node build −28 to −34 % CPU,
+  merged 2026-10-13), #34782 (depth-only render targets, 2026-10-06), #34726 (pipeline key includes the vertex-buffer layout) and WebGL-backend fixes: "Fix MSAA with default depth textures" (#34927),
+  "Fix FloatType depth textures with MSAA" (#34768; our desktop PCSS copy uses FloatType depth, `js/render/three/tlx-shadow.js:103`), "Use correct depth texture for clear" (#34928)
+  (merged 2026-10-03 to 2026-10-09, r187 milestone ⚑). The migration guide's 186 → 187 section (⚑) mostly misses us (§7a).
+- **Evidence for timing.** r187 is not published: npm `latest` for `three` is 0.186.1 (2026-09-24, from the registry on 2026-10-17); the releases page shows r186 as Latest.
+- **Where.** `vendor/three-0.186.1/`, `vendor/three-patches/patches.mjs`, canary `tests/unit/gfx-backend-canary.test.mjs`, recipe in `vendor/three-0.186.1/PATCHES.md`; probe under `tools/gfx/` (a new tool is outside this lane).
+- **Risks.** A patch that deletes a VAO still in use breaks rendering (the reporter's own warning: three gives no signal that a VAO is dead, so #34610 re-keys by stable id first);
+  re-deriving patches at the bump; **no dev snapshot**.
+- **Effort.** S for the count; S–M for the backport; S for the bump once r187 ships.
 
 ### 5. Thermal-aware governor and a 45/30 fps render-rate tier
 
@@ -179,6 +217,17 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
   ([manual](https://docs.unity3d.com/Packages/com.unity.adaptiveperformance@5.1/manual/user-guide.html)). WebKit bug 215745 (◇, 2020): the 30 fps Low Power Mode cap is intentional
   ([bug](https://bugs.webkit.org/show_bug.cgi?id=215745)). Our governor already treats an externally capped device as capped
   (`js/perf/governor.js:183`); (b) generalises that to a chosen rate.
+- **How much throttle to expect (third pass).** 3DMark Wild Life Extreme's 20-minute stress test reports a "stability" ratio (lowest loop over highest): iPhone 17 Pro 64 %
+  ([GSMArena](https://m.gsmarena.com/apple_iphone_17_pro-review-2887p4.php), 2025-09-30 ⚑); iPhone 17 Pro Max 65.2 % and 68.4 % over two runs and iPhone 16 Pro Max 54.7 % and 67.7 %
+  ([Tom's Guide](https://www.tomsguide.com/phones/iphones/iphone-17-pro-max-endurance-tested-does-the-new-design-actually-improve-performance), ◇ snippet; the article body did not load). So a saturated phone GPU runs roughly a third
+  slower by the end of a long session. Our game is not 3DMark, so the real loss is unmeasured, but it sets the order of magnitude the governor has to absorb. WWDC18 session 612
+  (⚑ transcript, wording approximate): "design for sustained performance"; "stay at 30 frames per second if you cannot sustain 60 for ten minutes or more"; lower intermediate
+  render-target resolution and drop post-processes under thermal pressure ([session](https://developer.apple.com/videos/play/wwdc2018/612)).
+- **rAF rate is 60 Hz by default, and our game has no render-rate cap.** Safari renders web content at 60 Hz by default on ProMotion hardware; 120 Hz needs Settings → Safari → Advanced → Feature Flags →
+  turn off "Prefer Pages Rendering Updates near 60fps" ([heise, 2026-02-12 ⚑](https://www.heise.de/en/news/Safari-browsing-with-ProMotion-Initially-deactivated-on-iPhone-Mac-Co-11174983.html);
+  WebKit bug 173434 ⚑: iPhone Pro support arrived in the iOS 18 public release per user testing; Low Power Mode caps rAF at 30). `tick(now)` runs the full render on every rAF
+  (`js/game.js:8605-8640`, no cap in `js/perf/governor.js`). A player who turns the flag off, or a future WebKit default flip, doubles GPU work and heat with no governor rung to refuse it.
+  Cheap guard in this issue: measure rAF cadence at boot and render every second rAF when it is ≥ ~100 Hz (physics already steps fixed).
 - **Win.** Even frame pacing at a lower rate beats a 60↔40 oscillation; on a throttled A-series part, halving GPU frames cuts
   heat roughly in proportion (physics and HUD cost stay). **Unmeasured on the phone.**
 - **Measure.** #1's soak: windows 1 vs 8, with and without the tier forced.
@@ -299,9 +348,11 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
   **coarser index list over the same vertices** is cheap to store and needs no new vertex data. The mirror pass draws ~148 k
   triangles against the main pass's ~176 k at the chase camera (monaco census, `docs/notes/PERF-HUNT-TLX-2026-10-17.md`) at 0.4–1.0×
   resolution (`js/render/shared/mirror-pass.js:79-82`) and is a fine first user; far chunks in the main pass are the second.
-- **Why it can matter on Apple GPUs.** A TBDR runs the whole vertex stage and bins primitives before shading, so triangle count
-  costs parameter-buffer traffic even when pixels are few; this project measured the macOS frame as GPU-bound but *not* fragment-bound
-  (19.17 ms at 0.75 MP vs 20.34 ms at 0.45 MP, `docs/notes/RENDER-PERF-PLAN-2026-09-16.md` §1). That is a Mac, not a phone.
+- **Why it might matter on Apple GPUs, and why that argument is weaker than it first looked.** Apple's TBDR documentation (⚑) says the GPU processes all the geometry of a render pass,
+  bins it into tiles, and shades only visible primitives; WWDC20 session 10602 (⚑ transcript) says the vertex stage shades every vertex and writes a Tiled Vertex Buffer, which "may cause a
+  Partial Render if full", and then: "the takeaway is for you to know that the Tiled Vertex Buffer exists, but don't worry too much over it." The same talk says bandwidth is the thing to tune.
+  So triangle count is **not** an Apple-documented bottleneck; this project measured the *Mac* frame as GPU-bound but not fragment-bound (19.17 ms at 0.75 MP vs 20.34 ms at 0.45 MP,
+  `docs/notes/RENDER-PERF-PLAN-2026-09-16.md` §1), which is not a phone. Keep this item last and count before building.
 - **Evidence.** meshoptimizer's simplifier is the standard tool; the JS module is low-level and its decoder is WASM with
   SIMD/scalar variants chosen automatically ([npm](https://npmjs.com/package/meshoptimizer), ◇). Earlier verdicts: `meshopt_simplify` at
   bake time was rejected because the repo has no build step and the pack would be 50 circuits × ~28 MB
@@ -309,8 +360,8 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
   props built at track-build time inside the existing Worker (`js/track/build-client.js`), keeping vertices and only dropping
   triangles. Quad-soup props (2.0–2.26 verts/tri) simplify poorly with edge collapse; **ground and terrain ribbons**, which are
   most of the big triangles, are the better target. #2631 (claimed) owns road chunking and mesh efficiency; coordinate before building.
-- **Win.** Unknown; the plan is to *count first*: triangles in the mirror and beyond 150 m (`tools/check/occlusion-estimate.mjs`
-  style) and only then decide.
+- **Win.** Unknown and probably small on Apple hardware; the plan is to *count first*: triangles in the mirror and beyond 150 m (`tools/check/occlusion-estimate.mjs`
+  style) and only then decide. Downgraded to low–med in §1.
 - **Measure.** Counted triangles per pass (exact, here); phone window table for the effect.
 - **Risks.** Popping and silhouette change (distance hysteresis), shadows (casters must keep full index), lamp cells and chunk AABBs
   unchanged, `ChunkBins` locality. Look change, so frozen pixel A/B and a rendered lap.
@@ -330,6 +381,9 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
 | Drop physics below 60 Hz or add AI update-rate LOD to save CPU | Breaks determinism and physics identity; no profile says CPU is the phone limit. Measure `PerfSpans` `physics` on the phone first. | AGENTS.md §Physics |
 | Chase mean fps from SwiftShader | CPU-only numbers do not prove a GPU win. | `docs/notes/MEASURING-GPU-PERF-2026-09-16.md` §6 |
 | Lower precision (`mediump`/`f16`) for lighting on the phone | Apple's retired OpenGL ES guide says medium and low precision are both computed as 16-bit floats on A7 and later (⚑), so `mediump` is *half* on native GL; but nothing found says ANGLE-Metal maps `mediump` to Metal `half` (WebKit bug 237434 is about fast-math differences, ◇), and three emits `precision highp` GLSL for node materials. Unity docs and an Apple forum thread (◇) say `half` can save power on Apple GPUs. Position and normal maths must stay `highp` (banding/shimmer). Unproven lever; Safari 26 `shader-f16` exposure unverified. Worth one experiment only after the phone shows ALU-bound frames. | Apple OpenGL ES guide for A7+ (⚑, retired); Unity metal-requirements doc (◇) |
+| GPU-driven rendering with indirect draws on Safari | Core WebGPU has no multi-draw-indirect, `indirect-first-instance` was unimplemented in WebKit (bug 251665; a fix has landed, shipping version not confirmed), and a WebKit bug filed 2026-08 reports a GPU hang from repeated indirect draws on shipping Safari 26.3 (resolved; build unconfirmed). Our phone path is WebGL2 anyway. | WebKit bugs 251665 and the 2026-08 hang report (◇ snippets) |
+| Blind Rapier upgrade or the SIMD build | We vendor `@dimforge/rapier3d-compat` 0.19.3 (`vendor/rapier-0.19.3/rapier.mjs`, 2.24 MB). npm `latest` is 0.21.0 (0.20.0 2026-08-08, 0.21.0 2026-09-25, from the registry); 0.21.0's compat `rapier.mjs` is **4.34 MB** and the SIMD build 4.62 MB (packed and measured here), nearly 2× the bytes for a lazily loaded debris world, and no changelog with a performance claim was found (the repo CHANGELOG fetched stops at 0.19.3). The README says the main build is only locally deterministic and a separate `-deterministic` build exists; the debris side-world feeds race logic (`js/physics/debris-world.js:77`), so a SIMD build that changes float results is a behaviour risk. WASM SIMD itself is supported in Safari since 16.4 (WebKit, ⚑). Measure the debris `step()` on the phone first (it was ~16 % of physics CPU in an old desktop profile, `docs/notes/PERF-FINDINGS.md` §2). | npm registry 2026-10-17; rapier.js README; WebKit "Features in Safari 16.4" (⚑) |
+| An uncapped render rate on 120 Hz displays | See §2.5: add the guard rather than rely on Safari's 60 Hz default. | heise 2026-02-12 (⚑); WebKit 173434 (⚑) |
 
 ## 4. Measurement plan for the iPhone itself
 
@@ -359,10 +413,15 @@ inferred from Rendering Frames and the §7 A/B, or an Xcode capture (E). Also re
 scale from minute 1 to minute 15 *is* the thermal effect (#5). Repeat once with GRAPHICS preset MEDIUM and once with SGSR on
 (#1652).
 
+**A2. Refresh rate.** Record the rAF cadence the page actually gets (the metrics overlay or `PerfGov.fpsEMA()` on an unloaded menu) and whether Settings → Safari → Advanced → Feature Flags →
+"Prefer Pages Rendering Updates near 60fps" is on; Safari defaults to 60 Hz web content on ProMotion iPhones (heise, 2026-02-12 ⚑) and Low Power Mode caps at 30. Everything below changes meaning at 120 Hz.
+
 **C. Safari Timelines, 60 s each.** Record **JavaScript & Events** (frame cost by function: compare with the §0 profile), **Rendering
 Frames** (frames that miss the 16.7 ms budget; the tail for #6), **CPU** (per-thread; is the main thread saturated for #9?), and
 **Memory/Allocations** over a lap (the GC question for #3, which Chromium's `performance.memory` cannot answer on Safari ◇).
-**Energy** if available on that iOS. Record on a hot phone (minute 12) as well as a cool one.
+**Layers** tab (⚑ WebKit docs): per-layer memory and the reason each layer exists, with "show compositing borders" and "paint flashing"; WebKit warns that too many layers "can have disastrous results
+on memory-constrained devices", and an Apple forum thread (⚑, 2026-04) has an iPhone 17 Pro WebContent process killed at an ActiveHard 2048 MB limit by a page with heavy CSS animations (an Apple engineer: iPhones have stricter
+jetsam limits than iPads). Use it once over the HUD during a race to count layers and repaint flashes. **Energy** if available on that iOS. Record on a hot phone (minute 12) as well as a cool one.
 
 **D. Path A/B (issue for #7).** Same race on the WebGL2 default and on THREE PATH: WEBGPU; screenshot a fixed grid view on each and
 look for the old wrong-picture failure; read `renderer.info.render.drawCalls` and `timestamp`; the measurement notes' rules apply
@@ -371,6 +430,10 @@ look for the old wrong-picture failure; read `renderer.info.render.drawCalls` an
 **E. GPU frame capture (optional).** Xcode's Metal frame capture works on a device through a Mac; Apple's guide is for native apps
 ([Capturing a Metal workload](https://developer.apple.com/tutorials/data/documentation/xcode/capturing-a-metal-workload-in-xcode.md), ◇) and no Safari-specific guide was
 found. Use it only if A–D leave a GPU question.
+
+**F. Is `mediump` really `half`? (Mac, 10 minutes).** WebKit's ANGLE can print the Metal Shading Language it generates: set `__XPC_ANGLE_METAL_PRINT_MSL_ENABLE=1` for Safari's GPU process (ANGLE's
+[MetalBackendShaders.md](https://chromium.googlesource.com/angle/angle/+/refs/heads/main/doc/MetalBackendShaders.md) ⚑; Chrome uses `--enable-angle-features=printMetalShaders`), run the game, and search the dumped lit/post shaders for `half`. Apple says Apple GPUs "are optimized for 16-bit data
+types" (fewer registers, higher occupancy, faster arithmetic, WWDC20 10632 ⚑), but three emits `highp` GLSL and nothing found says ANGLE maps it; this settles whether the §3 `mediump` row is a real lever.
 
 **Record** results in a new `docs/notes/` file per session, with device, iOS, path, preset, scale and the window table
 (frame p50/p95/p99, scale, tier, memory, minutes since start).
@@ -406,6 +469,12 @@ Legend: ⚑ fetched and read; ◇ search snippet or secondary; ✗ not found.
   KTX2 memory savings (arithmetic only: ASTC 4×4 is 8 bpp vs 32 bpp RGBA8, about 4× before mipmaps), ANGLE `mediump` → `half`
   mapping, Safari `shader-f16`, Spector.js and three.js compatibility, PCF/cascade costs on Apple GPUs, `invalidateFramebuffer`
   handling in three's WebGL backend and in ANGLE-Metal, `KHR_parallel_shader_compile` on iOS.
+- Third pass (2026-10-17): npm registry (`three` latest 0.186.1, 2026-09-24; `@dimforge/rapier3d-compat` 0.21.0, 2026-09-25; `meshoptimizer` 1.3.0; packed and measured here); three issues #30560, #34597, #30047 (⚑),
+  PRs #34610, #33413 (⚑), r187 merged-PR lists (⚑ titles only); three raw KTX2 loader and WebGL backend sources under `examples/jsm/loaders` and `src/renderers/webgl-fallback` (⚑); three `Object3D.static` doc via Context7; Apple "Tailor your apps for Apple GPUs and tile-based
+  deferred rendering" (⚑, 2026), WWDC20 10602 and 10632 transcripts (⚑), WWDC18 612 (⚑); WebKit "Understanding GC in JSC" (⚑, 2022), Speedometer 3.0 post (⚑, 2024-04-10), "Features in Safari 16.4" (⚑); WebKit bug 315186 (⚑), 300782 (⚑);
+  Apple forum thread 823061 (⚑); web3dsurvey iOS figures for ASTC, ETC2, half-float, `OES_texture_float_linear`, `KHR_parallel_shader_compile`, `MAX_TEXTURE_SIZE`, `MAX_SAMPLES` (⚑, undated); caniuse `requestIdleCallback`
+  and Compute Pressure (⚑); WebKit Web Inspector Timelines and Layers docs (⚑); Intel dynamic-resolution whitepaper (⚑ via `pdftotext`), Unity HDRP dynamic resolution (⚑), Snapdragon GSR repo (⚑); Arm/Nordeus post-processing posts (⚑, 2018);
+  GSMArena (⚑) and Tom's Guide (◇) stress tests. Still not retrieved: the Metal feature-set tables (iOS max texture size: the survey says ≥ 8192 for all iOS reports, ≥ 16383 for 99 %), ANGLE-Metal `VertexArrayMtl` buffer lifetime, any JSC guidance after 2024.
 - Our own: the notes listed in §0, `js/` and `vendor/` as of tip `37794758`.
 
 ## 6. What the second web pass changed
@@ -420,6 +489,13 @@ Legend: ⚑ fetched and read; ◇ search snippet or secondary; ✗ not found.
 | Safari WebGPU on iOS | "drew nothing on one iPhone" | plus a May 2026 26.4 black-3D regression, fixed in WebKit 2026-05-22 | §2.7 |
 | OffscreenCanvas on Safari | unverified | 16.4 (2D), 17 (`webgl2`), 26 (`webgpu`) | §3 |
 | `Object3D.static` | unused | skips three's per-object material-equality check; no `static = true` in `js/` | §2.9 |
+| three WebGL fallback disposal | not considered (hunt 4 filed "disposal fixes" as hygiene) | vendored 0.186.1 has 0 `deleteVertexArray`/`deleteProgram`/`deleteShader`; #34597 documents the leak; #34610 fixes VAOs in r187 | §2.4, new #2651 body |
+| Apple vertex-count argument | "triangle count costs on a TBDR" | Apple's own talk: "don't worry too much" about the Tiled Vertex Buffer; bandwidth is the thing | §2.10 downgraded |
+| rAF rate | assumed 60 | 60 Hz by default on ProMotion Safari, 120 Hz opt-in; we have no render cap | §2.5 |
+| Rapier | not considered | 0.19.3 vendored, 0.21.0 latest, 2× bytes, SIMD not deterministic | §3 |
+| JSC GC | "no source" | eden GC, scheduler tax ≥ 30 % while collecting, GC between frames backs off when rAF is imminent | §2.3 |
+| `for…of` iterator allocation | counted from V8 | JSC may sink it; measure with Safari's allocations timeline first | §2.3 |
+| draw order | not considered | Apple HSR checklist; TLX `renderOrder = i` leaves it to `game.js` order | §2.2 item 5 |
 
 ## 7. three.js — version, backends, unused features, other games, profiling
 
@@ -502,7 +578,49 @@ than the generic advice. Treat the "what other games do" question as answered: n
 | Safari Web Inspector Timelines (JavaScript & Events, Rendering Frames, Memory) | the only per-frame truth on the iPhone | primary tool, §4 C |
 | `tools/perf/profile.mjs` (`--mode spans|cpu|hitch|trace`, `--base`) and `PerfSpans` | span budgets and A/B with a noise rule | desktop and CI only |
 
+## 9. Third research pass — facts worth keeping, with where they bite
+
+### 9a. What an iPhone exposes to WebGL2 (survey figures, ⚑ fetched 2026-10-17, undated, sample method not stated: confirm in §4 A)
+
+| item | iOS | Safari | what it means for us |
+|---|---|---|---|
+| `EXT_color_buffer_float` | 100 % | 100 % | R11F bloom probably already on; `bloom11` needs it (`js/render/three/tlx-post.js:111-129`) |
+| `EXT_color_buffer_half_float` | 99.98 % | 99.99 % | RGBA16F HDR targets fine |
+| `OES_texture_float_linear` | **52.13 %** | 58.98 % | Do not sample FloatType textures with linear filtering: our float DataTextures use `NearestFilter` (`js/render/three/tlx.js:1498`), clean |
+| `WEBGL_multi_draw` | 99.99 % | 99.99 % | BatchedMesh uses the multi-draw path, not the per-draw loop (§2.9) |
+| `KHR_parallel_shader_compile` | 98.76 % | 99.03 % | three's `compileAsync` (`js/render/three/tlx.js:2608-3182`) really compiles in parallel on iOS: three polls `COMPLETION_STATUS_KHR` |
+| `EXT_disjoint_timer_query_webgl2` | **0.12 %** | 0.12 % | no in-page GPU timer on iPhone |
+| `WEBGL_compressed_texture_astc` / `_etc` | 99.96 % / 99.96 % | 97.59 % | KTX2 would transcode to ASTC for UASTC (three's loader priority: ASTC, BPTC, ETC2, ETC1, S3TC, PVRTC; ETC1S excludes ASTC and prefers ETC2; raw loader source ⚑); a viable format, still not needed (§3) |
+| `MAX_TEXTURE_SIZE` | ≥ 8192: 100 %; ≥ 16383: 99 % | same | no texture-size ceiling for our atlases |
+| `MAX_SAMPLES` | ≥ 4: 100 %; ≥ 8: 22 % | ≥ 4: 100 %; ≥ 8: 18 % | 4× MSAA exists; phones use FXAA by choice (`js/render/three/tlx-post.js:90`) |
+| Compute Pressure API | none | none | no thermal signal |
+| `requestIdleCallback` | disabled by default (all versions listed) | same | already handled: our callers fall back to timers (`js/car/car-draw.js:511`, `js/physics/debris-world.js:239`, `js/game.js:131`) |
+
+### 9b. Apple GPU guidance that applies through ANGLE-Metal (primary, ⚑)
+
+- Load and store actions "consume the majority of your app's system bandwidth"; clear rather than load; store only what you need; merge render passes (WWDC20 10632).
+- Draw order: opaque, then alpha-test/discard/depth-feedback, then translucent; do not interleave (WWDC20 10602).
+- Apple GPUs "are optimized for 16-bit data types": fewer registers, higher occupancy, faster arithmetic, conversions free (WWDC20 10632). Whether ANGLE emits `half` for `mediump` is unverified; §4 F dumps the MSL.
+- The Tiled Vertex Buffer and vertex binning exist; "don't worry too much over it" (WWDC20 10602). Alpha blending always happens in tile memory; MSAA resolves from tile memory.
+- A Metal pass that splits only because load/store actions differ is a wasted pass ("Render passes don't need to be split when only load and store actions change").
+
+### 9c. Memory limits on iPhone (what we can and cannot say)
+
+- WebContent processes have a soft limit of about 1.5 GB per an Apple-side commenter (◇ search result, not a documented figure); an iPhone 17 Pro (12 GB RAM) page with heavy CSS animations was killed at **ActiveHard 2048 MB** on iOS 26.3, 26.4 and 26.4.1, and an Apple frameworks engineer confirmed iPhones are stricter than iPads (Apple forum thread 823061, 2026-04, ⚑).
+- WebKit bug 300782 (NEW, ⚑): WebGL- and texture-heavy pages are killed and reloaded in a loop with no `webglcontextlost` and no JS signal; a commenter says uncollected garbage, not only live memory, can trigger it. So the page cannot detect it coming: budgets have to be conservative and measured with Safari's Memory timeline.
+- The project's own record puts a phone kill near ~100 MB on an iPhone SE (3rd gen) (`docs/notes/CI-RENDERING-PERFORMANCE.md` ~426): the old low-RAM floor; the budget for an iPhone Pro is larger and unmeasured.
+- three issue #30047 (WebGL2 canvases stay in memory on Safari, a WebKit-side bug, 2024-12 to 2025-01): a reason not to create and drop canvases.
+
+### 9d. Techniques checked and found already covered
+
+- **Cached shadow maps.** Unity HDRP's "mixed cached" shadows (static casters redrawn only on request, dynamic every frame) are the same split as our L1 lamp map and car-only rebuild (`docs/notes/TLX-PERF-PLAN.md`). Nothing missing.
+- **Bloom on tile GPUs.** Arm's post-processing case study (2018-04-17, ⚑): Dual Filtering "roughly 14× faster at 1080p" than a naive Gaussian but little gain when the blur already downsamples first; an R8 luminance bloom buffer "significantly lowers bandwidth"; cheap texture-based bloom under 1 ms. Our pyramid already downsamples and uses R11F. An R8 luminance-only bloom would be a look change; record, do not start.
+- **Dynamic resolution.** Intel's whitepaper (Doug Binks, GDC 2011, ⚑ via `pdftotext`): render into a viewport of a larger target, clamp sampled UVs with `min(uv, ratio)` and recompute the ratio from the integer viewport, draw the GUI at native resolution; at 0.5× resolution package power fell to 0.7× at constant frame rate. Unity HDRP (⚑): allocate at maximum, scale the viewport, keep the screen percentage above 50 %. SGSR1 (Qualcomm, BSD-3, ⚑) is a single pass, a 12-tap Lanczos-like filter with adaptive sharpening on one input texture, and advises drawing UI at device resolution; we already have SGSR built and `setRenderScale`'s floor is 0.5 (`js/render/three/tlx.js:4130`).
+- **WebGL call overhead on iOS.** WebGL runs in WebKit's GPU process; WebKit bugs describe batching GL commands through shared memory and synchronous IPC messages as a known hazard (◇ 2020–2022). Fewer GL calls is therefore doubly useful, which is #30560's +80 % GL calls in context (§2.7).
+- **meshoptimizer** is at 1.3.0 on npm; its simplifier is relevant only to §2.10, which is last.
+- **Playwright and CDP tracing** (Context7, `/microsoft/playwright`): `browser.startTracing(page, {categories})` drives Chromium's `Tracing.start`; default categories include `devtools.timeline`, `disabled-by-default-devtools.timeline.frame`, `disabled-by-default-v8.cpu_profiler`; our `tools/perf/profile.mjs --mode trace` is this. Desktop Chromium only: it cannot see the iPhone.
+
 ## 8. Next step
 
-Issues for items 1–10 are linked from the PR body; three.js follow-ups from §7 are listed there too. Pick the 20-minute phone session
-first (§4 A, then the three-way A/B in §2.7); it re-ranks the rest.
+Issues for items 1–10 are linked from the PR body; the three.js and third-pass follow-ups are listed there too. Order of work: (1) the 20-minute phone session
+(§4 A, A2, then the three-way A/B in §2.7); (2) the GL create/delete count across track switches (§2.4), which needs no phone and can start now; (3) the rest by the §1 table.
