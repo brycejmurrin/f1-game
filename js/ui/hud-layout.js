@@ -771,7 +771,27 @@ const HudLayout = (function () {
     // A player-placed radio is an obstacle, never another automatic candidate.
     const placedRadio = bodyAttr("data-radio-placed");
     if (placedRadio) { const r = box(doc.querySelector("#announce")); if (r) blocks.push(r); }
-    const hits = (r, b) => r.left < b.right + EDGE && r.right > b.left - EDGE && r.top < b.bottom + EDGE && r.bottom > b.top - EDGE;
+    // Scalar form of the rect-vs-block overlap test: findSlot tries ~1000 candidates, so no object or closure per try.
+    const blocked = (l, t, rt, bt) => {
+      for (let i = 0; i < blocks.length; i++) {
+        const b = blocks[i];
+        if (l < b.right + EDGE && rt > b.left - EDGE && t < b.bottom + EDGE && bt > b.top - EDGE) return true;
+      }
+      return false;
+    };
+    const findSlot = (r) => {
+      if (inside(r) && !blocked(r.left, r.top, r.right, r.bottom)) return r;
+      let bx = 0, by = 0, cost = Infinity;
+      const xs = [r.left, bounds.left, bounds.right - r.width], ys = [r.top, bounds.top, bounds.bottom - r.height];
+      for (const b of blocks) { xs.push(b.left - EDGE - r.width, b.right + EDGE); ys.push(b.top - EDGE - r.height, b.bottom + EDGE); }
+      for (const x of xs) for (const y of ys) {
+        if (x < bounds.left || y < bounds.top || x + r.width > bounds.right || y + r.height > bounds.bottom) continue;
+        if (blocked(x, y, x + r.width, y + r.height)) continue;
+        const d = (x - r.left) ** 2 + (y - r.top) ** 2;
+        if (d < cost) { bx = x; by = y; cost = d; }
+      }
+      return cost === Infinity ? null : { left: bx, top: by, right: bx + r.width, bottom: by + r.height, width: r.width, height: r.height };
+    };
     for (const id of CLEAR_READOUTS) {
       const row = rows.find((e) => e[0] === id), el = doc.querySelector(row[2]);
       // A stale lane collapse has no rectangle to place after rotation or a
@@ -788,20 +808,6 @@ const HudLayout = (function () {
       // SPEED moves only for the desktop visor, where its shipped vertical
       // offset can meet the enlarged gearbox. Everywhere else it has priority.
       if (id === "speed" && !(has("desktop") && shown() === "helmet")) { blocks.push(r); continue; }
-      const findSlot = (r) => {
-        if (inside(r) && !blocks.some((b) => hits(r, b))) return r;
-        let best = null, cost = Infinity;
-        const xs = [r.left, bounds.left, bounds.right - r.width], ys = [r.top, bounds.top, bounds.bottom - r.height];
-        for (const b of blocks) { xs.push(b.left - EDGE - r.width, b.right + EDGE); ys.push(b.top - EDGE - r.height, b.bottom + EDGE); }
-        for (const x of xs) for (const y of ys) {
-          if (x < bounds.left || y < bounds.top || x + r.width > bounds.right || y + r.height > bounds.bottom) continue;
-          const candidate = { left: x, top: y, right: x + r.width, bottom: y + r.height, width: r.width, height: r.height };
-          if (blocks.some((b) => hits(candidate, b))) continue;
-          const d = (x - r.left) ** 2 + (y - r.top) ** 2;
-          if (d < cost) { best = candidate; cost = d; }
-        }
-        return best;
-      };
       let best = findSlot(r);
       // A narrow dock lane can wrap a long call beyond the available height.
       // Let placement try the card's normal width before accepting a collision.
