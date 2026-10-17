@@ -259,6 +259,15 @@ test("defaults apply at eval: dark / ember / team data attrs", () => {
   assert.equal(dataset.hudAccent, "team");
 });
 
+test("APP ICON accepts CLASSIC and sets A-F, rejects the rest, and persists", () => {
+  const { M, written } = load();
+  assert.equal(M.appIcon(), "default");
+  assert.equal(M.setAppIcon("C"), "C"); assert.equal(written.appIcon, "C");
+  assert.equal(M.setAppIcon("Z"), "default"); assert.equal(written.appIcon, "default");
+  assert.equal(M.ICON_SETS.map((r) => r[0]).join(), "default,A,B,C,D,E,F");
+  assert.equal(load({ stored: { appIcon: "E" } }).M.appIcon(), "E");
+});
+
 test("profile restore updates live appearance caches and rows without another persistence batch", () => {
   const { M, written, dataset, rows } = load();
   M.restore({ uiTheme: "light", menuAccent: "cyan", hudAccent: "violet", menuAccentHex: "#ffffff", hudAccentHex: "#123456",
@@ -396,7 +405,7 @@ test("bad store values at load fall to shipped defaults", () => {
 
 test("DOM ready wires SettingRows and builds both swatch rows", () => {
   const { rows, byId } = load({ readyState: "complete" });
-  assert.deepEqual([...rows.keys()].sort(), ["pm-contrast", "pm-cvd", "pm-helptext", "pm-hudaccent", "pm-menuaccent", "pm-textsize", "pm-uitheme", "pm-units"]);
+  assert.deepEqual([...rows.keys()].sort(), ["pm-appicon", "pm-contrast", "pm-cvd", "pm-helptext", "pm-hudaccent", "pm-menuaccent", "pm-textsize", "pm-uitheme", "pm-units"]);
   const menuChips = byId("pm-menuaccent-swatches").children;
   const hudChips = byId("pm-hudaccent-swatches").children;
   assert.equal(menuChips.length, 8);
