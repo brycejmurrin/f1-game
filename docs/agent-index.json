@@ -1,0 +1,4951 @@
+{
+  "generatedBy": "tools/docs/gen-agent-index.mjs",
+  "apiVersion": 1,
+  "physicsVersion": 1,
+  "conventions": "metres, m/s, seconds, radians unless the key says otherwise; +x = right of centreline; +k = LEFT-hand turn; side is centreline-relative (which side of the road) EXCEPT scene()'s side, which is egocentric (which side of your nose — see its bearingDeg; its trackSide is the centreline side for cross-referencing); rival lateralM is relative to the player (+ = to your right)",
+  "hooks": [
+    {
+      "name": "atmosphere",
+      "group": "perceive",
+      "signature": "atmosphere()",
+      "summary": "WHAT IS THE LIGHT DOING — day/night, sun or moon, floodlights, fog visibility, wet road. Raw values kept for measurement"
+    },
+    {
+      "name": "awaitPresent",
+      "group": "perceive",
+      "signature": "awaitPresent(timeoutMs)?",
+      "summary": "WAIT FOR THE PIXELS — resolve once the next real frame has reached the screen; a screenshot tool taken before this resolves can read a stale or black canvas under HeadlessChrome"
+    },
+    {
+      "name": "field",
+      "group": "perceive",
+      "signature": "field({detail})",
+      "summary": "THE GRID — race order, gap-to-leader and interval. world().rivals is the egocentric nearest-few"
+    },
+    {
+      "name": "render",
+      "group": "perceive",
+      "signature": "render({what,cols,ss,...})",
+      "summary": "SHOW IT — the one optional raster, APPROXIMATE. what: 'view'|'map'|'circuit'|'car'. For intuition, not measurement"
+    },
+    {
+      "name": "scene",
+      "group": "perceive",
+      "signature": "scene({radius,kinds,limit} | {visible:true})",
+      "summary": "WHAT IS AROUND ME — named scenery by distance and bearing; {visible:true} switches to the camera's on-screen list"
+    },
+    {
+      "name": "world",
+      "group": "perceive",
+      "signature": "world({detail,horizonS,points,corners,since})",
+      "summary": "WHERE AM I — egocentric snapshot, the per-tick spine. detail brief|drive|full; `since` returns only what changed"
+    },
+    {
+      "name": "describe",
+      "group": "detail",
+      "signature": "describe(id)",
+      "summary": "EVERYTHING ABOUT ONE THING — 'prop:12' | 'corner:T3' | 'car:4' | 'span:2'. ids come back from scene()/query()/trackInfo()/field()"
+    },
+    {
+      "name": "query",
+      "group": "detail",
+      "signature": "query({kind,near,fromS,toS,limit})",
+      "summary": "A BOUNDED SLICE — filters compose; returns prototype + instances so repeated dressing costs one shape plus a position each. Narrow the filter rather than raising limit"
+    },
+    {
+      "name": "carView",
+      "group": "know",
+      "signature": "carView({team,parts,detail})",
+      "summary": "WHAT AM I DRIVING — team, parts spec + effects, chassis silhouette, measured geometry; detail:\"parts\" adds per-part boxes"
+    },
+    {
+      "name": "perf",
+      "group": "know",
+      "signature": "perf()",
+      "summary": "GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/autoShed/userTier/strikes (alias of renderScale report)"
+    },
+    {
+      "name": "spatialUpscale",
+      "group": "know",
+      "signature": "spatialUpscale(0|1)",
+      "summary": "GLX + WGX + TLX SGSR1 (flag OFF by default). active only when on AND renderScale<~1; see UPSCALING-2026-09 §6–7"
+    },
+    {
+      "name": "survey",
+      "group": "know",
+      "signature": "survey({stations,lats,reachM,limit,profile})",
+      "summary": "IS ANYTHING BROKEN — floating/buried props, props over the line, terrain through the road, holes and cliffs"
+    },
+    {
+      "name": "trackInfo",
+      "group": "know",
+      "signature": "trackInfo({what})",
+      "summary": "STATIC substrate — corners|sectors|profile|all. Fetch ONCE. Corners carry radius, apexSpeedKph, straightAfterM/exitsOntoStraight (no line), plus bankingDeg/camber,…"
+    },
+    {
+      "name": "objective",
+      "group": "act",
+      "signature": "objective()",
+      "summary": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once"
+    },
+    {
+      "name": "rollout",
+      "group": "act",
+      "signature": "rollout({seconds,dt,input,policy,policyHz,samples})",
+      "summary": "drive an interval, return a digest instead of every frame"
+    },
+    {
+      "name": "terminal",
+      "group": "act",
+      "signature": "terminal()",
+      "summary": "{done, reason} — retired|finished|wrong_way|rescued|null"
+    },
+    {
+      "name": "ego.clearLeftM/RightM",
+      "group": "fields",
+      "signature": "ego.clearLeftM/RightM",
+      "summary": "metres to the barrier each side; small = no room to defend"
+    },
+    {
+      "name": "ego.headingErrDeg",
+      "group": "fields",
+      "signature": "ego.headingErrDeg",
+      "summary": "+ = nose right of the road; steer the opposite sign to null it"
+    },
+    {
+      "name": "ego.lateralM",
+      "group": "fields",
+      "signature": "ego.lateralM",
+      "summary": "+ = right of centreline; the road runs out at halfWidthM"
+    },
+    {
+      "name": "ego.onTrack",
+      "group": "fields",
+      "signature": "ego.onTrack",
+      "summary": "false means you are on grass — grip is gone, straighten first"
+    },
+    {
+      "name": "episodeId",
+      "group": "fields",
+      "signature": "episodeId",
+      "summary": "view-local episode counter; reset increments it and clears the delta baseline"
+    },
+    {
+      "name": "nextCorner.apexSpeedKph",
+      "group": "fields",
+      "signature": "nextCorner.apexSpeedKph",
+      "summary": "roughly the fastest you can be at the apex and still hold it"
+    },
+    {
+      "name": "nextCorner.exitsOntoStraight",
+      "group": "fields",
+      "signature": "nextCorner.exitsOntoStraight",
+      "summary": "true = prioritise exit speed over entry speed here"
+    },
+    {
+      "name": "nextCorner.status",
+      "group": "fields",
+      "signature": "nextCorner.status",
+      "summary": "the braking call — BRAKE NOW means brake this instant"
+    },
+    {
+      "name": "pacenotes",
+      "group": "fields",
+      "signature": "pacenotes",
+      "summary": "the road ahead as a co-driver call: dir + severity 1-6 @ distance"
+    },
+    {
+      "name": "rivals[].closingMps",
+      "group": "fields",
+      "signature": "rivals[].closingMps",
+      "summary": "+ = the gap is shrinking, whichever side they are on"
+    },
+    {
+      "name": "rivals[].pace",
+      "group": "fields",
+      "signature": "rivals[].pace",
+      "summary": "AI skill ~0.92-1.02; a slower car will not hold the position"
+    },
+    {
+      "name": "session.seed",
+      "group": "fields",
+      "signature": "session.seed",
+      "summary": "replay this exact episode with reset(frac, speed, x, seed)"
+    },
+    {
+      "name": "terminal.reason",
+      "group": "fields",
+      "signature": "terminal.reason",
+      "summary": "why the episode ended — retired vs finished vs wrong_way vs rescued"
+    },
+    {
+      "name": "camState",
+      "group": "read",
+      "signature": "camState()",
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+    },
+    {
+      "name": "carAt",
+      "group": "read",
+      "signature": "carAt(i)",
+      "summary": "probe() physState() obs() scan() inputState() cars() carAt(i)"
+    },
+    {
+      "name": "cars",
+      "group": "read",
+      "signature": "cars()",
+      "summary": "probe() physState() obs() scan() inputState() cars() carAt(i)"
+    },
+    {
+      "name": "corners",
+      "group": "read",
+      "signature": "corners()",
+      "summary": "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()"
+    },
+    {
+      "name": "fieldState",
+      "group": "read",
+      "signature": "fieldState()",
+      "summary": "timing() sectorState() lapHistory() fieldState()"
+    },
+    {
+      "name": "gpuTimer",
+      "group": "read",
+      "signature": "gpuTimer()",
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+    },
+    {
+      "name": "groundY",
+      "group": "read",
+      "signature": "groundY(f,l)",
+      "summary": "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()"
+    },
+    {
+      "name": "info",
+      "group": "read",
+      "signature": "info()",
+      "summary": "tracks() teams() info()"
+    },
+    {
+      "name": "inputState",
+      "group": "read",
+      "signature": "inputState()",
+      "summary": "probe() physState() obs() scan() inputState() cars() carAt(i)"
+    },
+    {
+      "name": "inspector",
+      "group": "read",
+      "signature": "inspector(on)",
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+    },
+    {
+      "name": "lapHistory",
+      "group": "read",
+      "signature": "lapHistory()",
+      "summary": "timing() sectorState() lapHistory() fieldState()"
+    },
+    {
+      "name": "lightState",
+      "group": "read",
+      "signature": "lightState()",
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+    },
+    {
+      "name": "lightTune",
+      "group": "read",
+      "signature": "lightTune()",
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+    },
+    {
+      "name": "obs",
+      "group": "read",
+      "signature": "obs()",
+      "summary": "probe() physState() obs() scan() inputState() cars() carAt(i)"
+    },
+    {
+      "name": "perf",
+      "group": "read",
+      "signature": "perf({on,reset,measure})",
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+    },
+    {
+      "name": "physState",
+      "group": "read",
+      "signature": "physState()",
+      "summary": "probe() physState() obs() scan() inputState() cars() carAt(i)"
+    },
+    {
+      "name": "pitSigns",
+      "group": "read",
+      "signature": "pitSigns()",
+      "summary": "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()"
+    },
+    {
+      "name": "probe",
+      "group": "read",
+      "signature": "probe()",
+      "summary": "probe() physState() obs() scan() inputState() cars() carAt(i)"
+    },
+    {
+      "name": "scan",
+      "group": "read",
+      "signature": "scan()",
+      "summary": "probe() physState() obs() scan() inputState() cars() carAt(i)"
+    },
+    {
+      "name": "sectorState",
+      "group": "read",
+      "signature": "sectorState()",
+      "summary": "timing() sectorState() lapHistory() fieldState()"
+    },
+    {
+      "name": "teams",
+      "group": "read",
+      "signature": "teams()",
+      "summary": "tracks() teams() info()"
+    },
+    {
+      "name": "timing",
+      "group": "read",
+      "signature": "timing()",
+      "summary": "timing() sectorState() lapHistory() fieldState()"
+    },
+    {
+      "name": "trackProfile",
+      "group": "read",
+      "signature": "trackProfile()",
+      "summary": "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()"
+    },
+    {
+      "name": "tracks",
+      "group": "read",
+      "signature": "tracks()",
+      "summary": "tracks() teams() info()"
+    },
+    {
+      "name": "trackShape",
+      "group": "read",
+      "signature": "trackShape()",
+      "summary": "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()"
+    },
+    {
+      "name": "viewState",
+      "group": "read",
+      "signature": "viewState()",
+      "summary": "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure})"
+    },
+    {
+      "name": "wallStats",
+      "group": "read",
+      "signature": "wallStats()",
+      "summary": "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()"
+    },
+    {
+      "name": "act",
+      "group": "control",
+      "signature": "act({steer,throttle,brake},dt,n)",
+      "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
+    },
+    {
+      "name": "aiPlace",
+      "group": "control",
+      "signature": "aiPlace(i,frac,v,x)",
+      "summary": "aiPlace(i,frac,v,x) setEnergy(v) setLap(n)"
+    },
+    {
+      "name": "clearInput",
+      "group": "control",
+      "signature": "clearInput()",
+      "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
+    },
+    {
+      "name": "finishRace",
+      "group": "control",
+      "signature": "finishRace()",
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+    },
+    {
+      "name": "go",
+      "group": "control",
+      "signature": "go()",
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+    },
+    {
+      "name": "headless",
+      "group": "control",
+      "signature": "headless(bool)",
+      "summary": "weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool)"
+    },
+    {
+      "name": "jump",
+      "group": "control",
+      "signature": "jump(frac,speed,x)",
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+    },
+    {
+      "name": "park",
+      "group": "control",
+      "signature": "park(f)",
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+    },
+    {
+      "name": "race",
+      "group": "control",
+      "signature": "race(id)",
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+    },
+    {
+      "name": "reset",
+      "group": "control",
+      "signature": "reset(f,v,x,seed)",
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+    },
+    {
+      "name": "seed",
+      "group": "control",
+      "signature": "seed(n)",
+      "summary": "seed(n) sets the sim seed; same seed + same inputs => same result. Pin it before any A/B or the comparison is noise"
+    },
+    {
+      "name": "setEnergy",
+      "group": "control",
+      "signature": "setEnergy(v)",
+      "summary": "aiPlace(i,frac,v,x) setEnergy(v) setLap(n)"
+    },
+    {
+      "name": "setInput",
+      "group": "control",
+      "signature": "setInput(o)",
+      "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
+    },
+    {
+      "name": "setLap",
+      "group": "control",
+      "signature": "setLap(n)",
+      "summary": "aiPlace(i,frac,v,x) setEnergy(v) setLap(n)"
+    },
+    {
+      "name": "setPhysics",
+      "group": "control",
+      "signature": "setPhysics(o)",
+      "summary": "weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool)"
+    },
+    {
+      "name": "setTimeOfDay",
+      "group": "control",
+      "signature": "setTimeOfDay('night')",
+      "summary": "weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool)"
+    },
+    {
+      "name": "step",
+      "group": "control",
+      "signature": "step(dt,n)",
+      "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
+    },
+    {
+      "name": "weather",
+      "group": "control",
+      "signature": "weather('wet')",
+      "summary": "weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool)"
+    },
+    {
+      "name": "decide vs show",
+      "group": "model",
+      "signature": "decide vs show",
+      "summary": "read world()/scene()/trackInfo()/the read hooks to DECIDE; call render() only to SEE — its glyphs are approximate"
+    },
+    {
+      "name": "lean default, pull detail",
+      "group": "model",
+      "signature": "lean default, pull detail",
+      "summary": "the world is stored in FULL but never dumped — a flat serialisation is huge and reads worse. Keep the default lean and pull with describe(id)/query() where a decision needs it"
+    },
+    {
+      "name": "per tick",
+      "group": "model",
+      "signature": "per tick",
+      "summary": "world({detail:\"brief\", since:<seq>}) — ~355 bytes/step, 34x cheaper than full. detail is the big lever"
+    },
+    {
+      "name": "static vs dynamic",
+      "group": "model",
+      "signature": "static vs dynamic",
+      "summary": "trackInfo()+carView() are constant — fetch once. world()+field()+scene() are the live frame — read per decision"
+    }
+  ],
+  "groups": [
+    {
+      "id": "test",
+      "script": "test",
+      "kind": "browser",
+      "files": [],
+      "declaredTests": null,
+      "twinned": false
+    },
+    {
+      "id": "aero",
+      "script": "test:aero",
+      "kind": "browser",
+      "files": [
+        "tests/specs/active-aero.spec.js",
+        "tests/specs/aero-zones.spec.js",
+        "tests/specs/drift.spec.js",
+        "tests/specs/understeer-cue.spec.js"
+      ],
+      "declaredTests": 40,
+      "twinned": true
+    },
+    {
+      "id": "agent-contract",
+      "script": "test:agent-contract",
+      "kind": "node",
+      "files": [
+        "tests/unit/agentview-api-contract.test.mjs"
+      ],
+      "declaredTests": 6,
+      "twinned": false
+    },
+    {
+      "id": "audio-unit",
+      "script": "test:audio-unit",
+      "kind": "node",
+      "files": [
+        "tests/unit/announcer.test.mjs",
+        "tests/unit/audio-mix-improvements.test.mjs",
+        "tests/unit/audio-panel-boot.test.mjs",
+        "tests/unit/audio-recovery.test.mjs",
+        "tests/unit/audio-sample-upgrade.test.mjs",
+        "tests/unit/audio-tune.test.mjs",
+        "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/blip-voice-pool.test.mjs",
+        "tests/unit/crowd-audio.test.mjs",
+        "tests/unit/end-race-music-vm.test.mjs",
+        "tests/unit/engine-note-quality.test.mjs",
+        "tests/unit/engine-revs-replay-vm.test.mjs",
+        "tests/unit/ers-audio-layer.test.mjs",
+        "tests/unit/finish-coast-rev-vm.test.mjs",
+        "tests/unit/incident-rpm.test.mjs",
+        "tests/unit/keyboard-first-audio-vm.test.mjs",
+        "tests/unit/lazy-audio-firstbind-vm.test.mjs",
+        "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/mix-duck-radio.test.mjs",
+        "tests/unit/net-audio-revs-vm.test.mjs",
+        "tests/unit/pause-silence.test.mjs",
+        "tests/unit/photomode-hold.test.mjs",
+        "tests/unit/player-collision-side.test.mjs",
+        "tests/unit/pu-harvest-audio.test.mjs",
+        "tests/unit/radio-duration.test.mjs",
+        "tests/unit/radio-voice.test.mjs",
+        "tests/unit/real-replay-captions.test.mjs",
+        "tests/unit/rival-attach-init.test.mjs",
+        "tests/unit/rival-audio.test.mjs",
+        "tests/unit/rival-contact-sfx.test.mjs",
+        "tests/unit/rival-passby-pool.test.mjs",
+        "tests/unit/spotify-refresh.test.mjs",
+        "tests/unit/spotter-lifecycle.test.mjs",
+        "tests/unit/tyre-squeal-slip.test.mjs",
+        "tests/unit/voice-pack.test.mjs",
+        "tests/unit/wind-speed.test.mjs"
+      ],
+      "declaredTests": 571,
+      "twinned": false
+    },
+    {
+      "id": "audit",
+      "script": "test:audit",
+      "kind": "command",
+      "files": [],
+      "declaredTests": null,
+      "twinned": false
+    },
+    {
+      "id": "baseline",
+      "script": "test:baseline",
+      "kind": "browser",
+      "files": [
+        "tests/specs/menu-baseline.spec.js"
+      ],
+      "declaredTests": 6,
+      "twinned": false
+    },
+    {
+      "id": "car",
+      "script": "test:car",
+      "kind": "browser",
+      "files": [
+        "tests/specs/car-effects.spec.js",
+        "tests/specs/carview-parts.spec.js",
+        "tests/specs/custom-team.spec.js",
+        "tests/specs/garage-aero.spec.js",
+        "tests/specs/garage-first-frame.spec.js",
+        "tests/specs/garage-out-before-card.spec.js",
+        "tests/specs/garage-prebuild.spec.js",
+        "tests/specs/parts-*.spec.js"
+      ],
+      "declaredTests": 35,
+      "twinned": false
+    },
+    {
+      "id": "circuits",
+      "script": "test:circuits",
+      "kind": "browser",
+      "files": [
+        "tests/specs/*-foundation.spec.js",
+        "tests/specs/audit.spec.js",
+        "tests/specs/autopilot.spec.js",
+        "tests/specs/elevation-tracks.spec.js",
+        "tests/specs/f1-track-accuracy.spec.js",
+        "tests/specs/pit-signs.spec.js",
+        "tests/specs/props-over-road.spec.js",
+        "tests/specs/scenery-kits.spec.js",
+        "tests/specs/terrain-over-road.spec.js",
+        "tests/specs/tracks-walls-a.spec.js",
+        "tests/specs/tracks-walls-b.spec.js",
+        "tests/specs/tracks-walls.spec.js"
+      ],
+      "declaredTests": 235,
+      "twinned": true
+    },
+    {
+      "id": "clip",
+      "script": "test:clip",
+      "kind": "command",
+      "files": [],
+      "declaredTests": null,
+      "twinned": false
+    },
+    {
+      "id": "collisions",
+      "script": "test:collisions",
+      "kind": "browser",
+      "files": [
+        "tests/specs/collision*.spec.js"
+      ],
+      "declaredTests": null,
+      "twinned": false
+    },
+    {
+      "id": "desktop-unit",
+      "script": "test:desktop-unit",
+      "kind": "node",
+      "files": [
+        "tests/unit/desktop-app-protocol.test.mjs",
+        "tests/unit/desktop-builder-config.test.mjs",
+        "tests/unit/desktop-native.test.mjs",
+        "tests/unit/desktop-notices.test.mjs",
+        "tests/unit/desktop-pack-dry-run.test.mjs",
+        "tests/unit/desktop-stage.test.mjs",
+        "tests/unit/desktop-unpacked-bin.test.mjs",
+        "tests/unit/desktop-version.test.mjs",
+        "tests/unit/followup-platform.test.mjs"
+      ],
+      "declaredTests": 57,
+      "twinned": false
+    },
+    {
+      "id": "docs-guards",
+      "script": "test:docs-guards",
+      "kind": "node",
+      "files": [
+        "tests/unit/agent-config.test.mjs",
+        "tests/unit/agent-fleet.test.mjs",
+        "tests/unit/agent-surface.test.mjs",
+        "tests/unit/apex-tools-mcp.test.mjs",
+        "tests/unit/assets-pack.test.mjs",
+        "tests/unit/bash-guard-hardening.test.mjs",
+        "tests/unit/bootstrap-doctor.test.mjs",
+        "tests/unit/cdmcp-measure.test.mjs",
+        "tests/unit/change-kind.test.mjs",
+        "tests/unit/changelog-fragments.test.mjs",
+        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/component-inventory.test.mjs",
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/environment-json.test.mjs",
+        "tests/unit/f1-dev-tools.test.mjs",
+        "tests/unit/gen-arch-table.test.mjs",
+        "tests/unit/generated-docs.test.mjs",
+        "tests/unit/hooks-documented.test.mjs",
+        "tests/unit/skill-hint-hook.test.mjs",
+        "tests/unit/skill-progressive.test.mjs",
+        "tests/unit/skill-routing-eval.test.mjs",
+        "tests/unit/skill-smoke.test.mjs",
+        "tests/unit/subagent-contract-hook.test.mjs",
+        "tests/unit/test-groups.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
+      ],
+      "declaredTests": 586,
+      "twinned": false
+    },
+    {
+      "id": "float",
+      "script": "test:float",
+      "kind": "command",
+      "files": [],
+      "declaredTests": null,
+      "twinned": false
+    },
+    {
+      "id": "gallery",
+      "script": "test:gallery",
+      "kind": "browser",
+      "files": [
+        "tests/specs/ui-audit.spec.js"
+      ],
+      "declaredTests": 78,
+      "twinned": false
+    },
+    {
+      "id": "game-vm",
+      "script": "test:game-vm",
+      "kind": "node",
+      "files": [
+        "tests/unit/active-aero-vm.test.mjs",
+        "tests/unit/aero-zones-vm.test.mjs",
+        "tests/unit/agent-anchors-vm.test.mjs",
+        "tests/unit/agent-hooks-vm.test.mjs",
+        "tests/unit/agent-view-vm.test.mjs",
+        "tests/unit/ai-pack-stuck-vm.test.mjs",
+        "tests/unit/ai-pass-defend-vm.test.mjs",
+        "tests/unit/ai-queue-reach-vm.test.mjs",
+        "tests/unit/ai-racecraft-vm.test.mjs",
+        "tests/unit/ai-stuck-vm.test.mjs",
+        "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/car-fields-vm.test.mjs",
+        "tests/unit/classification-vm.test.mjs",
+        "tests/unit/collide-wall-limits.test.mjs",
+        "tests/unit/collision-ai-fixes-vm.test.mjs",
+        "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/collisions-deep-vm.test.mjs",
+        "tests/unit/collisions-vm.test.mjs",
+        "tests/unit/determinism-replay-vm.test.mjs",
+        "tests/unit/drift-vm.test.mjs",
+        "tests/unit/driving-line-pace.test.mjs",
+        "tests/unit/elevation-tracks-vm.test.mjs",
+        "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-round2-vm.test.mjs",
+        "tests/unit/game-vm-pool.test.mjs",
+        "tests/unit/game-vm.test.mjs",
+        "tests/unit/headless-api-vm.test.mjs",
+        "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
+        "tests/unit/hunt-tlx-create-undo.test.mjs",
+        "tests/unit/input-ghost-replay-vm.test.mjs",
+        "tests/unit/jump-start-vm.test.mjs",
+        "tests/unit/lockup-bench-vm.test.mjs",
+        "tests/unit/lockup-smoke-vm.test.mjs",
+        "tests/unit/longitudinal-vm.test.mjs",
+        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
+        "tests/unit/new-hooks-vm.test.mjs",
+        "tests/unit/obs-act-edge-vm.test.mjs",
+        "tests/unit/offtrack-edges-vm.test.mjs",
+        "tests/unit/offtrack-vm.test.mjs",
+        "tests/unit/pace-arming-vm.test.mjs",
+        "tests/unit/phone-pad-netplay-vm.test.mjs",
+        "tests/unit/physics-characterization-vm.test.mjs",
+        "tests/unit/physics-feel-vm.test.mjs",
+        "tests/unit/physics-rows-vm.test.mjs",
+        "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/player-dynamics-shipped-vm.test.mjs",
+        "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/quali-handoff-vm.test.mjs",
+        "tests/unit/quali-pace-parity-vm.test.mjs",
+        "tests/unit/race-flow-fixes-vm.test.mjs",
+        "tests/unit/race-settings-pitplan-key.test.mjs",
+        "tests/unit/race-settings-vm.test.mjs",
+        "tests/unit/rain-cells-vm.test.mjs",
+        "tests/unit/real-replay-vm.test.mjs",
+        "tests/unit/red-flag-fuel-vm.test.mjs",
+        "tests/unit/red-flag-pit-vm.test.mjs",
+        "tests/unit/red-flag-vm.test.mjs",
+        "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/session-entry-vm.test.mjs",
+        "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/storm-vm.test.mjs",
+        "tests/unit/track-wetness-vm.test.mjs",
+        "tests/unit/tt-lap-validity-vm.test.mjs",
+        "tests/unit/tyre-strategy-vm.test.mjs",
+        "tests/unit/wake-lock-vm.test.mjs",
+        "tests/unit/wind-vm.test.mjs",
+        "tests/unit/world-physics-vm.test.mjs"
+      ],
+      "declaredTests": 861,
+      "twinned": false
+    },
+    {
+      "id": "game-vm-a",
+      "script": "test:game-vm-a",
+      "kind": "node",
+      "files": [
+        "tests/unit/elevation-tracks-vm.test.mjs"
+      ],
+      "declaredTests": 47,
+      "twinned": false
+    },
+    {
+      "id": "game-vm-b",
+      "script": "test:game-vm-b",
+      "kind": "node",
+      "files": [
+        "tests/unit/active-aero-vm.test.mjs",
+        "tests/unit/aero-zones-vm.test.mjs",
+        "tests/unit/agent-anchors-vm.test.mjs",
+        "tests/unit/agent-hooks-vm.test.mjs",
+        "tests/unit/agent-view-vm.test.mjs",
+        "tests/unit/ai-pack-stuck-vm.test.mjs",
+        "tests/unit/ai-pass-defend-vm.test.mjs",
+        "tests/unit/ai-queue-reach-vm.test.mjs",
+        "tests/unit/ai-racecraft-vm.test.mjs",
+        "tests/unit/ai-stuck-vm.test.mjs",
+        "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/car-fields-vm.test.mjs",
+        "tests/unit/classification-vm.test.mjs",
+        "tests/unit/collide-wall-limits.test.mjs",
+        "tests/unit/collision-ai-fixes-vm.test.mjs",
+        "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/collisions-deep-vm.test.mjs",
+        "tests/unit/collisions-vm.test.mjs",
+        "tests/unit/determinism-replay-vm.test.mjs",
+        "tests/unit/drift-vm.test.mjs",
+        "tests/unit/driving-line-pace.test.mjs",
+        "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-round2-vm.test.mjs",
+        "tests/unit/game-vm-pool.test.mjs",
+        "tests/unit/game-vm.test.mjs",
+        "tests/unit/headless-api-vm.test.mjs",
+        "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
+        "tests/unit/hunt-tlx-create-undo.test.mjs",
+        "tests/unit/input-ghost-replay-vm.test.mjs",
+        "tests/unit/jump-start-vm.test.mjs",
+        "tests/unit/lockup-bench-vm.test.mjs",
+        "tests/unit/lockup-smoke-vm.test.mjs",
+        "tests/unit/longitudinal-vm.test.mjs",
+        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
+        "tests/unit/new-hooks-vm.test.mjs",
+        "tests/unit/obs-act-edge-vm.test.mjs",
+        "tests/unit/offtrack-edges-vm.test.mjs",
+        "tests/unit/offtrack-vm.test.mjs",
+        "tests/unit/pace-arming-vm.test.mjs",
+        "tests/unit/phone-pad-netplay-vm.test.mjs",
+        "tests/unit/physics-characterization-vm.test.mjs",
+        "tests/unit/physics-feel-vm.test.mjs",
+        "tests/unit/physics-rows-vm.test.mjs",
+        "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/player-dynamics-shipped-vm.test.mjs",
+        "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/quali-handoff-vm.test.mjs",
+        "tests/unit/quali-pace-parity-vm.test.mjs",
+        "tests/unit/race-flow-fixes-vm.test.mjs",
+        "tests/unit/race-settings-pitplan-key.test.mjs",
+        "tests/unit/race-settings-vm.test.mjs",
+        "tests/unit/rain-cells-vm.test.mjs",
+        "tests/unit/real-replay-vm.test.mjs",
+        "tests/unit/red-flag-fuel-vm.test.mjs",
+        "tests/unit/red-flag-pit-vm.test.mjs",
+        "tests/unit/red-flag-vm.test.mjs",
+        "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/session-entry-vm.test.mjs",
+        "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/storm-vm.test.mjs",
+        "tests/unit/track-wetness-vm.test.mjs",
+        "tests/unit/tt-lap-validity-vm.test.mjs",
+        "tests/unit/tyre-strategy-vm.test.mjs",
+        "tests/unit/wake-lock-vm.test.mjs",
+        "tests/unit/wind-vm.test.mjs",
+        "tests/unit/world-physics-vm.test.mjs"
+      ],
+      "declaredTests": 814,
+      "twinned": false
+    },
+    {
+      "id": "game-vm-b1",
+      "script": "test:game-vm-b1",
+      "kind": "node",
+      "files": [
+        "tests/unit/aero-zones-vm.test.mjs",
+        "tests/unit/agent-hooks-vm.test.mjs",
+        "tests/unit/ai-pack-stuck-vm.test.mjs",
+        "tests/unit/ai-pass-defend-vm.test.mjs",
+        "tests/unit/ai-stuck-vm.test.mjs",
+        "tests/unit/cam-avoid-vm.test.mjs",
+        "tests/unit/collisions-deep-vm.test.mjs",
+        "tests/unit/collisions-vm.test.mjs",
+        "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-round2-vm.test.mjs",
+        "tests/unit/game-vm-pool.test.mjs",
+        "tests/unit/game-vm.test.mjs",
+        "tests/unit/headless-api-vm.test.mjs",
+        "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
+        "tests/unit/hunt-tlx-create-undo.test.mjs",
+        "tests/unit/input-ghost-replay-vm.test.mjs",
+        "tests/unit/jump-start-vm.test.mjs",
+        "tests/unit/new-hooks-vm.test.mjs",
+        "tests/unit/offtrack-edges-vm.test.mjs",
+        "tests/unit/offtrack-vm.test.mjs",
+        "tests/unit/pace-arming-vm.test.mjs",
+        "tests/unit/physics-characterization-vm.test.mjs",
+        "tests/unit/player-dynamics-shipped-vm.test.mjs",
+        "tests/unit/player-dynamics-vm.test.mjs",
+        "tests/unit/quali-pace-parity-vm.test.mjs",
+        "tests/unit/race-flow-fixes-vm.test.mjs",
+        "tests/unit/race-settings-pitplan-key.test.mjs",
+        "tests/unit/real-replay-vm.test.mjs",
+        "tests/unit/red-flag-fuel-vm.test.mjs",
+        "tests/unit/red-flag-vm.test.mjs",
+        "tests/unit/track-wetness-vm.test.mjs",
+        "tests/unit/world-physics-vm.test.mjs"
+      ],
+      "declaredTests": 373,
+      "twinned": false
+    },
+    {
+      "id": "game-vm-b2",
+      "script": "test:game-vm-b2",
+      "kind": "node",
+      "files": [
+        "tests/unit/active-aero-vm.test.mjs",
+        "tests/unit/agent-anchors-vm.test.mjs",
+        "tests/unit/agent-view-vm.test.mjs",
+        "tests/unit/ai-queue-reach-vm.test.mjs",
+        "tests/unit/ai-racecraft-vm.test.mjs",
+        "tests/unit/car-fields-vm.test.mjs",
+        "tests/unit/classification-vm.test.mjs",
+        "tests/unit/collide-wall-limits.test.mjs",
+        "tests/unit/collision-ai-fixes-vm.test.mjs",
+        "tests/unit/collision-contact-vm.test.mjs",
+        "tests/unit/determinism-replay-vm.test.mjs",
+        "tests/unit/drift-vm.test.mjs",
+        "tests/unit/driving-line-pace.test.mjs",
+        "tests/unit/lockup-bench-vm.test.mjs",
+        "tests/unit/lockup-smoke-vm.test.mjs",
+        "tests/unit/longitudinal-vm.test.mjs",
+        "tests/unit/mechanics-integration-vm.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
+        "tests/unit/obs-act-edge-vm.test.mjs",
+        "tests/unit/phone-pad-netplay-vm.test.mjs",
+        "tests/unit/physics-feel-vm.test.mjs",
+        "tests/unit/physics-rows-vm.test.mjs",
+        "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/quali-handoff-vm.test.mjs",
+        "tests/unit/race-settings-vm.test.mjs",
+        "tests/unit/rain-cells-vm.test.mjs",
+        "tests/unit/red-flag-pit-vm.test.mjs",
+        "tests/unit/retired-car-obstacle-vm.test.mjs",
+        "tests/unit/session-entry-vm.test.mjs",
+        "tests/unit/speed-cap-vm.test.mjs",
+        "tests/unit/storm-vm.test.mjs",
+        "tests/unit/tt-lap-validity-vm.test.mjs",
+        "tests/unit/tyre-strategy-vm.test.mjs",
+        "tests/unit/wake-lock-vm.test.mjs",
+        "tests/unit/wind-vm.test.mjs"
+      ],
+      "declaredTests": 441,
+      "twinned": false
+    },
+    {
+      "id": "garage-unit",
+      "script": "test:garage-unit",
+      "kind": "node",
+      "files": [
+        "tests/unit/body-split.test.mjs",
+        "tests/unit/car-materials.test.mjs",
+        "tests/unit/car-shade.test.mjs",
+        "tests/unit/cover-legibility.test.mjs",
+        "tests/unit/fill-gating.test.mjs",
+        "tests/unit/fin-design.test.mjs",
+        "tests/unit/front-wing-decal.test.mjs",
+        "tests/unit/garage-followups.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/garage-panel-side.test.mjs",
+        "tests/unit/garage-sign-occlusion.test.mjs",
+        "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-contrast.test.mjs",
+        "tests/unit/livery-cover-graphics.test.mjs",
+        "tests/unit/livery-decal-surfaces.test.mjs",
+        "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-zone-finish.test.mjs",
+        "tests/unit/parts-distinct-mesh.test.mjs",
+        "tests/unit/parts-locked-equivalent.test.mjs",
+        "tests/unit/setup-trial-session.test.mjs",
+        "tests/unit/setup-tune.test.mjs",
+        "tests/unit/team-livery.test.mjs",
+        "tests/unit/team-style-relief.test.mjs",
+        "tests/unit/tyre-recipes-open-rim.test.mjs"
+      ],
+      "declaredTests": 258,
+      "twinned": false
+    },
+    {
+      "id": "gfx",
+      "script": "test:gfx",
+      "kind": "browser",
+      "files": [
+        "tests/specs/hud-mirror.spec.js",
+        "tests/specs/image-grade-visual.spec.js",
+        "tests/specs/instanced-draw.spec.js",
+        "tests/specs/lighting-ab.spec.js",
+        "tests/specs/lighting-tuner-grade.spec.js",
+        "tests/specs/render-boot.spec.js",
+        "tests/specs/tlx-probes.spec.js",
+        "tests/specs/track-switch-memory.spec.js",
+        "tests/specs/webgl-probes.spec.js"
+      ],
+      "declaredTests": 57,
+      "twinned": false
+    },
+    {
+      "id": "graph-parity",
+      "script": "test:graph-parity",
+      "kind": "command",
+      "files": [],
+      "declaredTests": null,
+      "twinned": false
+    },
+    {
+      "id": "guards",
+      "script": "test:guards",
+      "kind": "node",
+      "files": [
+        "tests/unit/agent-surface.test.mjs",
+        "tests/unit/behind-ship.test.mjs",
+        "tests/unit/change-kind.test.mjs",
+        "tests/unit/changelog-fragments.test.mjs",
+        "tests/unit/ci-coverage.test.mjs",
+        "tests/unit/ci-verdict.test.mjs",
+        "tests/unit/committed-images.test.mjs",
+        "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/game-ctx-surface.test.mjs",
+        "tests/unit/generated-docs.test.mjs",
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/html-sink-lint.test.mjs",
+        "tests/unit/legends.test.mjs",
+        "tests/unit/lexical-window-guard.test.mjs",
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/log-namespaces.test.mjs",
+        "tests/unit/merge-hygiene.test.mjs",
+        "tests/unit/nightly-group.test.mjs",
+        "tests/unit/no-bare-console.test.mjs",
+        "tests/unit/prepush-gate-coverage.test.mjs",
+        "tests/unit/ratchet-merge-hotspot.test.mjs",
+        "tests/unit/ratchets.test.mjs",
+        "tests/unit/ready-full-cap.test.mjs",
+        "tests/unit/selected-gate-verdict.test.mjs",
+        "tests/unit/shell-ids.test.mjs",
+        "tests/unit/test-coverage-audit.test.mjs",
+        "tests/unit/test-groups-generated.test.mjs",
+        "tests/unit/test-groups.test.mjs",
+        "tests/unit/title-art.test.mjs",
+        "tests/unit/tools-runnable.test.mjs",
+        "tests/unit/twin-fidelity.test.mjs",
+        "tests/unit/twinned-specs.test.mjs"
+      ],
+      "declaredTests": 418,
+      "twinned": false
+    },
+    {
+      "id": "hooks",
+      "script": "test:hooks",
+      "kind": "browser",
+      "files": [
+        "tests/specs/agent-determinism.spec.js",
+        "tests/specs/agent-drive-bench.spec.js",
+        "tests/specs/agent-view.spec.js",
+        "tests/specs/assets-api.spec.js",
+        "tests/specs/data-lifecycle.spec.js",
+        "tests/specs/dev-tools.spec.js",
+        "tests/specs/headless-api.spec.js",
+        "tests/specs/logging.spec.js",
+        "tests/specs/map-hooks.spec.js",
+        "tests/specs/new-hooks.spec.js",
+        "tests/specs/obs-act-edge.spec.js",
+        "tests/specs/output-paths.spec.js",
+        "tests/specs/persistence.spec.js",
+        "tests/specs/telemetry-compare.spec.js",
+        "tests/specs/wake-lock.spec.js"
+      ],
+      "declaredTests": 334,
+      "twinned": true
+    },
+    {
+      "id": "input",
+      "script": "test:input",
+      "kind": "browser",
+      "files": [
+        "tests/specs/camera-driving-hooks.spec.js",
+        "tests/specs/camera-hooks.spec.js",
+        "tests/specs/camera-tuner.spec.js",
+        "tests/specs/camera.spec.js",
+        "tests/specs/gamepad.spec.js",
+        "tests/specs/presets.spec.js",
+        "tests/specs/sliders.spec.js",
+        "tests/specs/steer-migration.spec.js",
+        "tests/specs/steering.spec.js",
+        "tests/specs/tilt-pipeline.spec.js",
+        "tests/specs/touch-buttons.spec.js",
+        "tests/specs/touch-pedals.spec.js",
+        "tests/specs/touch-steer.spec.js"
+      ],
+      "declaredTests": 161,
+      "twinned": false
+    },
+    {
+      "id": "lifecycle-unit",
+      "script": "test:lifecycle-unit",
+      "kind": "node",
+      "files": [
+        "tests/unit/async-lifecycle.test.mjs",
+        "tests/unit/audio-panel-settings-ui.test.mjs",
+        "tests/unit/followup-update-check.test.mjs",
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+      ],
+      "declaredTests": 51,
+      "twinned": false
+    },
+    {
+      "id": "mcp",
+      "script": "test:mcp",
+      "kind": "node",
+      "files": [
+        "tests/unit/debug-chrome.test.mjs",
+        "tests/unit/environment-json.test.mjs",
+        "tests/unit/hud-survey.test.mjs",
+        "tests/unit/js-debugger-mcp.test.mjs",
+        "tests/unit/ui-explorer-core.test.mjs",
+        "tests/unit/ui-explorer-report.test.mjs",
+        "tests/unit/ui-explorer.test.mjs",
+        "tests/unit/ui-inspector-audit.test.mjs",
+        "tests/unit/ui-inspector-css.test.mjs",
+        "tests/unit/ui-inspector-transitions.test.mjs"
+      ],
+      "declaredTests": 212,
+      "twinned": false
+    },
+    {
+      "id": "mobile-unit",
+      "script": "test:mobile-unit",
+      "kind": "node",
+      "files": [
+        "tests/unit/followup-platform.test.mjs",
+        "tests/unit/mobile-config.test.mjs",
+        "tests/unit/mobile-native-download.test.mjs",
+        "tests/unit/mobile-sync-web.test.mjs"
+      ],
+      "declaredTests": 52,
+      "twinned": false
+    },
+    {
+      "id": "modes",
+      "script": "test:modes",
+      "kind": "browser",
+      "files": [
+        "tests/specs/career-hub.spec.js",
+        "tests/specs/career-season.spec.js",
+        "tests/specs/career.spec.js",
+        "tests/specs/jump-start.spec.js",
+        "tests/specs/quali.spec.js",
+        "tests/specs/real-race.spec.js",
+        "tests/specs/season-format.spec.js",
+        "tests/specs/season.spec.js",
+        "tests/specs/time-trial.spec.js",
+        "tests/specs/track-designer.spec.js"
+      ],
+      "declaredTests": 191,
+      "twinned": true
+    },
+    {
+      "id": "net",
+      "script": "test:net",
+      "kind": "browser",
+      "files": [
+        "tests/specs/multiplayer-lobby.spec.js",
+        "tests/specs/multiplayer-npeer.spec.js",
+        "tests/specs/multiplayer-roles.spec.js",
+        "tests/specs/multiplayer-room.spec.js",
+        "tests/specs/multiplayer-scan-cancel.spec.js",
+        "tests/specs/multiplayer-scan.spec.js",
+        "tests/specs/multiplayer-seats.spec.js",
+        "tests/specs/multiplayer-session.spec.js"
+      ],
+      "declaredTests": 73,
+      "twinned": false
+    },
+    {
+      "id": "net-unit",
+      "script": "test:net-unit",
+      "kind": "node",
+      "files": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/lobby-answer-flight.test.mjs",
+        "tests/unit/lobby-codes.test.mjs",
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-grid-separation.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-nostr-sockets.test.mjs",
+        "tests/unit/net-qr.test.mjs",
+        "tests/unit/net-rendezvous.test.mjs",
+        "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-sdp.test.mjs",
+        "tests/unit/net-session.test.mjs",
+        "tests/unit/net-snapshot.test.mjs",
+        "tests/unit/net-start-arming.test.mjs",
+        "tests/unit/net-stub-surface.test.mjs",
+        "tests/unit/net-transport.test.mjs",
+        "tests/unit/net-trystero-api.test.mjs",
+        "tests/unit/rendezvous-worker.test.mjs",
+        "tests/unit/track-codec.test.mjs"
+      ],
+      "declaredTests": 488,
+      "twinned": false
+    },
+    {
+      "id": "node-slow",
+      "script": "test:node-slow",
+      "kind": "node",
+      "files": [
+        "tests/unit/cockpit-pale-surfaces.test.mjs",
+        "tests/unit/crest-marks.test.mjs",
+        "tests/unit/flyby-fleet.test.mjs",
+        "tests/unit/foundation-core-vm.test.mjs",
+        "tests/unit/slider-effect.test.mjs"
+      ],
+      "declaredTests": 62,
+      "twinned": false
+    },
+    {
+      "id": "perf-frametime",
+      "script": "test:perf-frametime",
+      "kind": "browser",
+      "files": [
+        "tests/specs/perf-frametime.spec.js",
+        "tests/specs/track-switch-release.spec.js"
+      ],
+      "declaredTests": 2,
+      "twinned": false
+    },
+    {
+      "id": "perf-race-entry",
+      "script": "test:perf-race-entry",
+      "kind": "browser",
+      "files": [
+        "tests/specs/perf-race-entry.spec.js"
+      ],
+      "declaredTests": 1,
+      "twinned": false
+    },
+    {
+      "id": "phone-recorder",
+      "script": "test:phone-recorder",
+      "kind": "browser",
+      "files": [
+        "tests/specs/phone-recorder.spec.js",
+        "tests/specs/soak-run.spec.js"
+      ],
+      "declaredTests": 2,
+      "twinned": false
+    },
+    {
+      "id": "physics-core",
+      "script": "test:physics-core",
+      "kind": "browser",
+      "files": [
+        "tests/specs/debris.spec.js",
+        "tests/specs/longitudinal.spec.js",
+        "tests/specs/offtrack.spec.js",
+        "tests/specs/physics-*.spec.js",
+        "tests/specs/pit-lane.spec.js",
+        "tests/specs/projection.spec.js",
+        "tests/specs/race-control.spec.js",
+        "tests/specs/world-physics.spec.js"
+      ],
+      "declaredTests": 38,
+      "twinned": true
+    },
+    {
+      "id": "render",
+      "script": "test:render",
+      "kind": "browser",
+      "files": [],
+      "declaredTests": null,
+      "twinned": false
+    },
+    {
+      "id": "service-worker",
+      "script": "test:service-worker",
+      "kind": "node",
+      "files": [
+        "tests/unit/service-worker.test.mjs"
+      ],
+      "declaredTests": 98,
+      "twinned": false
+    },
+    {
+      "id": "shimmer",
+      "script": "test:shimmer",
+      "kind": "command",
+      "files": [],
+      "declaredTests": null,
+      "twinned": false
+    },
+    {
+      "id": "smoke",
+      "script": "test:smoke",
+      "kind": "browser",
+      "files": [
+        "tests/specs/smoke.spec.js"
+      ],
+      "declaredTests": 10,
+      "twinned": false
+    },
+    {
+      "id": "state-unit",
+      "script": "test:state-unit",
+      "kind": "node",
+      "files": [
+        "tests/unit/a11y-opts.test.mjs",
+        "tests/unit/apex-arg-guards.test.mjs",
+        "tests/unit/apex-career-delete.test.mjs",
+        "tests/unit/appearance-opts.test.mjs",
+        "tests/unit/badges.test.mjs",
+        "tests/unit/career-ai-dev.test.mjs",
+        "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-cross-tab.test.mjs",
+        "tests/unit/career-data-audio-improvements.test.mjs",
+        "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-regulations.test.mjs",
+        "tests/unit/career-seat-rollover.test.mjs",
+        "tests/unit/career-settle.test.mjs",
+        "tests/unit/career-ui-lazy.test.mjs",
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/damage.test.mjs",
+        "tests/unit/debris-opts.test.mjs",
+        "tests/unit/duel-row.test.mjs",
+        "tests/unit/duel.test.mjs",
+        "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-control-clearance.test.mjs",
+        "tests/unit/hud-dock-pack.test.mjs",
+        "tests/unit/hud-elements.test.mjs",
+        "tests/unit/hud-fit-idempotent.test.mjs",
+        "tests/unit/hud-gap-decimals.test.mjs",
+        "tests/unit/hud-helmet-placement.test.mjs",
+        "tests/unit/hud-inputs.test.mjs",
+        "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-pins.test.mjs",
+        "tests/unit/hud-portrait-cluster.test.mjs",
+        "tests/unit/hud-radio-slot.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/hud-relative.test.mjs",
+        "tests/unit/hud-speed-parity.test.mjs",
+        "tests/unit/hud-status-stack.test.mjs",
+        "tests/unit/hud-strategy.test.mjs",
+        "tests/unit/hud-tyres.test.mjs",
+        "tests/unit/legend-parts-seed.test.mjs",
+        "tests/unit/legends-team.test.mjs",
+        "tests/unit/pause-opts.test.mjs",
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs",
+        "tests/unit/real-race-script.test.mjs",
+        "tests/unit/real-race.test.mjs",
+        "tests/unit/save-durability.test.mjs",
+        "tests/unit/screen-looks.test.mjs",
+        "tests/unit/season-cal.test.mjs",
+        "tests/unit/setup-screens-state.test.mjs",
+        "tests/unit/store-cross-tab.test.mjs",
+        "tests/unit/title-fx.test.mjs",
+        "tests/unit/title-layout.test.mjs"
+      ],
+      "declaredTests": 927,
+      "twinned": false
+    },
+    {
+      "id": "steering-unit",
+      "script": "test:steering-unit",
+      "kind": "node",
+      "files": [
+        "tests/unit/brake-cue.test.mjs",
+        "tests/unit/controller-profiles.test.mjs",
+        "tests/unit/digital-steer.test.mjs",
+        "tests/unit/dock-layout.test.mjs",
+        "tests/unit/driving-cues.test.mjs",
+        "tests/unit/editor-workspace.test.mjs",
+        "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/grip-steer.test.mjs",
+        "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/input-bindings.test.mjs",
+        "tests/unit/key-binds.test.mjs",
+        "tests/unit/low-speed-lock.test.mjs",
+        "tests/unit/onboard.test.mjs",
+        "tests/unit/pad-haptics.test.mjs",
+        "tests/unit/phone-input-improvements.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/settings-defaults.test.mjs",
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/settings-search.test.mjs",
+        "tests/unit/settings-tabs.test.mjs",
+        "tests/unit/share-code.test.mjs",
+        "tests/unit/steer-lock-taper.test.mjs",
+        "tests/unit/steer-tuning-lock.test.mjs",
+        "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs",
+        "tests/unit/touch-drag-speed.test.mjs",
+        "tests/unit/xr-opts.test.mjs",
+        "tests/unit/xr-phase0.test.mjs",
+        "tests/unit/xr-plan.test.mjs"
+      ],
+      "declaredTests": 618,
+      "twinned": false
+    },
+    {
+      "id": "sweeps",
+      "script": "test:sweeps",
+      "kind": "node",
+      "files": [
+        "tests/unit/baked-model-road-guard.test.mjs",
+        "tests/unit/build-steps.test.mjs",
+        "tests/unit/build-worker.test.mjs",
+        "tests/unit/car-front-wing-width.test.mjs",
+        "tests/unit/coplanar-faces.test.mjs",
+        "tests/unit/debris-hazard-hint.test.mjs",
+        "tests/unit/driving-line-opts.test.mjs",
+        "tests/unit/driving-line.test.mjs",
+        "tests/unit/grid-boxes.test.mjs",
+        "tests/unit/kerb-berm-surface.test.mjs",
+        "tests/unit/kerb-stripes.test.mjs",
+        "tests/unit/lamp-fixture-anchor.test.mjs",
+        "tests/unit/pit-complex.test.mjs",
+        "tests/unit/pit-signs.test.mjs",
+        "tests/unit/prop-clipping.test.mjs",
+        "tests/unit/props-over-road.test.mjs",
+        "tests/unit/props-tri-ratchet.test.mjs",
+        "tests/unit/road-under-floor.test.mjs",
+        "tests/unit/scenery-ground-audit.test.mjs",
+        "tests/unit/scenery-grounding.test.mjs",
+        "tests/unit/shared-track-foundation-characterization.test.cjs",
+        "tests/unit/spline-project-height.test.mjs",
+        "tests/unit/track-build-vm-release.test.mjs",
+        "tests/unit/track-themes-build.test.mjs",
+        "tests/unit/track-validate-fleet.test.mjs"
+      ],
+      "declaredTests": 200,
+      "twinned": false
+    },
+    {
+      "id": "sweeps-parts",
+      "script": "test:sweeps-parts",
+      "kind": "node",
+      "files": [
+        "tests/unit/parts-visual-distinctness.test.mjs"
+      ],
+      "declaredTests": 13,
+      "twinned": false
+    },
+    {
+      "id": "tiny",
+      "script": "test:tiny",
+      "kind": "browser",
+      "files": [
+        "tests/specs/boot-guard.spec.js",
+        "tests/specs/dev-tools.spec.js",
+        "tests/specs/logging.spec.js",
+        "tests/specs/smoke.spec.js"
+      ],
+      "declaredTests": 75,
+      "twinned": true
+    },
+    {
+      "id": "tooling",
+      "script": "test:tooling",
+      "kind": "command",
+      "files": [],
+      "declaredTests": null,
+      "twinned": false
+    },
+    {
+      "id": "tooling-fast",
+      "script": "test:tooling-fast",
+      "kind": "command",
+      "files": [],
+      "declaredTests": null,
+      "twinned": false
+    },
+    {
+      "id": "ui",
+      "script": "test:ui",
+      "kind": "browser",
+      "files": [
+        "tests/specs/audio-smoke.spec.js",
+        "tests/specs/browser-ui-hunt.spec.js",
+        "tests/specs/css-player-smoke.spec.js",
+        "tests/specs/hud-audit.spec.js",
+        "tests/specs/hud-layout.spec.js",
+        "tests/specs/menu-keyboard.spec.js",
+        "tests/specs/menu-survey.spec.js",
+        "tests/specs/menu-traversal.spec.js",
+        "tests/specs/music-library.spec.js",
+        "tests/specs/photo-studio.spec.js",
+        "tests/specs/rotation-recovery.spec.js",
+        "tests/specs/title-menu-rotation.spec.js",
+        "tests/specs/ui-button-touch.spec.js",
+        "tests/specs/ui-redesign.spec.js",
+        "tests/specs/ui-resize.spec.js",
+        "tests/specs/ui-scale.spec.js",
+        "tests/specs/watch-transport-layout.spec.js"
+      ],
+      "declaredTests": 254,
+      "twinned": false
+    },
+    {
+      "id": "vm-page",
+      "script": "test:vm-page",
+      "kind": "node",
+      "files": [
+        "tests/unit/adapted-specs.test.mjs"
+      ],
+      "declaredTests": 2,
+      "twinned": false
+    },
+    {
+      "id": "vm-page-a",
+      "script": "test:vm-page-a",
+      "kind": "command",
+      "files": [
+        "tests/specs/albert-park-foundation.spec.js",
+        "tests/specs/autopilot.spec.js",
+        "tests/specs/logging.spec.js",
+        "tests/specs/projection.spec.js",
+        "tests/unit/adapted-specs.test.mjs"
+      ],
+      "declaredTests": 16,
+      "twinned": true
+    },
+    {
+      "id": "vm-page-b",
+      "script": "test:vm-page-b",
+      "kind": "command",
+      "files": [
+        "tests/specs/agent-drive-bench.spec.js",
+        "tests/specs/cota-foundation.spec.js",
+        "tests/specs/imola-foundation.spec.js",
+        "tests/specs/parts-livery-contrast.spec.js",
+        "tests/specs/physics-fixes.spec.js",
+        "tests/specs/pit-lane.spec.js",
+        "tests/specs/race-control.spec.js",
+        "tests/unit/adapted-specs.test.mjs"
+      ],
+      "declaredTests": 31,
+      "twinned": true
+    },
+    {
+      "id": "xr",
+      "script": "test:xr",
+      "kind": "browser",
+      "files": [
+        "tests/specs/vr-emulated.spec.js",
+        "tests/specs/xr-plan.spec.js"
+      ],
+      "declaredTests": 10,
+      "twinned": false
+    }
+  ],
+  "circuits": [
+    {
+      "id": "bahrain",
+      "file": "js/circuits/bahrain.js",
+      "order": 0,
+      "classic": false
+    },
+    {
+      "id": "monaco",
+      "file": "js/circuits/monaco.js",
+      "order": 1,
+      "classic": false
+    },
+    {
+      "id": "silverstone",
+      "file": "js/circuits/silverstone.js",
+      "order": 2,
+      "classic": false
+    },
+    {
+      "id": "spa",
+      "file": "js/circuits/spa.js",
+      "order": 3,
+      "classic": false
+    },
+    {
+      "id": "monza",
+      "file": "js/circuits/monza.js",
+      "order": 4,
+      "classic": false
+    },
+    {
+      "id": "suzuka",
+      "file": "js/circuits/suzuka.js",
+      "order": 5,
+      "classic": false
+    },
+    {
+      "id": "singapore",
+      "file": "js/circuits/singapore.js",
+      "order": 6,
+      "classic": false
+    },
+    {
+      "id": "cota",
+      "file": "js/circuits/cota.js",
+      "order": 7,
+      "classic": false
+    },
+    {
+      "id": "interlagos",
+      "file": "js/circuits/interlagos.js",
+      "order": 8,
+      "classic": false
+    },
+    {
+      "id": "vegas",
+      "file": "js/circuits/vegas.js",
+      "order": 9,
+      "classic": false
+    },
+    {
+      "id": "madrid",
+      "file": "js/circuits/madrid.js",
+      "order": 10,
+      "classic": false
+    },
+    {
+      "id": "zandvoort",
+      "file": "js/circuits/zandvoort.js",
+      "order": 11,
+      "classic": true
+    },
+    {
+      "id": "jeddah",
+      "file": "js/circuits/jeddah.js",
+      "order": 12,
+      "classic": false
+    },
+    {
+      "id": "albert_park",
+      "file": "js/circuits/albert_park.js",
+      "order": 13,
+      "classic": false
+    },
+    {
+      "id": "shanghai",
+      "file": "js/circuits/shanghai.js",
+      "order": 14,
+      "classic": false
+    },
+    {
+      "id": "miami",
+      "file": "js/circuits/miami.js",
+      "order": 15,
+      "classic": false
+    },
+    {
+      "id": "imola",
+      "file": "js/circuits/imola.js",
+      "order": 16,
+      "classic": true
+    },
+    {
+      "id": "montreal",
+      "file": "js/circuits/montreal.js",
+      "order": 17,
+      "classic": false
+    },
+    {
+      "id": "redbull",
+      "file": "js/circuits/redbull.js",
+      "order": 18,
+      "classic": false
+    },
+    {
+      "id": "hungaroring",
+      "file": "js/circuits/hungaroring.js",
+      "order": 19,
+      "classic": false
+    },
+    {
+      "id": "baku",
+      "file": "js/circuits/baku.js",
+      "order": 20,
+      "classic": false
+    },
+    {
+      "id": "mexico",
+      "file": "js/circuits/mexico.js",
+      "order": 21,
+      "classic": false
+    },
+    {
+      "id": "qatar",
+      "file": "js/circuits/qatar.js",
+      "order": 22,
+      "classic": false
+    },
+    {
+      "id": "abudhabi",
+      "file": "js/circuits/abudhabi.js",
+      "order": 23,
+      "classic": false
+    },
+    {
+      "id": "hockenheim",
+      "file": "js/circuits/hockenheim.js",
+      "order": 24,
+      "classic": true
+    },
+    {
+      "id": "nurburgring",
+      "file": "js/circuits/nurburgring.js",
+      "order": 25,
+      "classic": true
+    },
+    {
+      "id": "catalunya",
+      "file": "js/circuits/catalunya.js",
+      "order": 26,
+      "classic": true
+    },
+    {
+      "id": "sepang",
+      "file": "js/circuits/sepang.js",
+      "order": 27,
+      "classic": true
+    },
+    {
+      "id": "istanbul",
+      "file": "js/circuits/istanbul.js",
+      "order": 28,
+      "classic": false
+    },
+    {
+      "id": "paul_ricard",
+      "file": "js/circuits/paul_ricard.js",
+      "order": 29,
+      "classic": true
+    },
+    {
+      "id": "portimao",
+      "file": "js/circuits/portimao.js",
+      "order": 30,
+      "classic": false
+    },
+    {
+      "id": "sochi",
+      "file": "js/circuits/sochi.js",
+      "order": 31,
+      "classic": true
+    },
+    {
+      "id": "mugello",
+      "file": "js/circuits/mugello.js",
+      "order": 32,
+      "classic": true
+    },
+    {
+      "id": "magny_cours",
+      "file": "js/circuits/magny_cours.js",
+      "order": 33,
+      "classic": true
+    },
+    {
+      "id": "estoril",
+      "file": "js/circuits/estoril.js",
+      "order": 34,
+      "classic": true
+    },
+    {
+      "id": "kyalami",
+      "file": "js/circuits/kyalami.js",
+      "order": 35,
+      "classic": true
+    },
+    {
+      "id": "watkins_glen",
+      "file": "js/circuits/watkins_glen.js",
+      "order": 36,
+      "classic": true
+    },
+    {
+      "id": "indianapolis",
+      "file": "js/circuits/indianapolis.js",
+      "order": 37,
+      "classic": true
+    },
+    {
+      "id": "buenos_aires",
+      "file": "js/circuits/buenos_aires.js",
+      "order": 38,
+      "classic": true
+    },
+    {
+      "id": "jacarepagua",
+      "file": "js/circuits/jacarepagua.js",
+      "order": 39,
+      "classic": true
+    },
+    {
+      "id": "fuji",
+      "file": "js/circuits/fuji.js",
+      "order": 40,
+      "classic": true
+    },
+    {
+      "id": "okayama",
+      "file": "js/circuits/okayama.js",
+      "order": 41,
+      "classic": true
+    },
+    {
+      "id": "korea",
+      "file": "js/circuits/korea.js",
+      "order": 42,
+      "classic": true
+    },
+    {
+      "id": "jerez",
+      "file": "js/circuits/jerez.js",
+      "order": 43,
+      "classic": true
+    },
+    {
+      "id": "donington",
+      "file": "js/circuits/donington.js",
+      "order": 44,
+      "classic": true
+    },
+    {
+      "id": "anderstorp",
+      "file": "js/circuits/anderstorp.js",
+      "order": 45,
+      "classic": true
+    },
+    {
+      "id": "brands_hatch",
+      "file": "js/circuits/brands_hatch.js",
+      "order": 46,
+      "classic": true
+    },
+    {
+      "id": "zolder",
+      "file": "js/circuits/zolder.js",
+      "order": 47,
+      "classic": true
+    },
+    {
+      "id": "dijon",
+      "file": "js/circuits/dijon.js",
+      "order": 48,
+      "classic": true
+    },
+    {
+      "id": "buddh",
+      "file": "js/circuits/buddh.js",
+      "order": 49,
+      "classic": true
+    },
+    {
+      "id": "mont_tremblant",
+      "file": "js/circuits/mont_tremblant.js",
+      "order": 50,
+      "classic": true
+    },
+    {
+      "id": "mosport",
+      "file": "js/circuits/mosport.js",
+      "order": 51,
+      "classic": true
+    }
+  ],
+  "modules": [
+    {
+      "path": "js/core/log.js",
+      "global": "Log",
+      "order": 0,
+      "roster": "tag"
+    },
+    {
+      "path": "js/core/dev-flags.js",
+      "global": "DevFlags",
+      "order": 1,
+      "roster": "tag"
+    },
+    {
+      "path": "js/core/mat4.js",
+      "global": "M4",
+      "order": 2,
+      "roster": "tag"
+    },
+    {
+      "path": "js/core/hash32.js",
+      "global": "Hash32",
+      "order": 3,
+      "roster": "tag"
+    },
+    {
+      "path": "js/core/clipboard.js",
+      "global": "ApexClipboard",
+      "order": 4,
+      "roster": "tag"
+    },
+    {
+      "path": "js/core/native.js",
+      "global": "Native",
+      "order": 5,
+      "roster": "tag"
+    },
+    {
+      "path": "js/core/native-download.js",
+      "global": "NativeDownload",
+      "order": 6,
+      "roster": "tag"
+    },
+    {
+      "path": "js/roster.js",
+      "global": "ApexRoster",
+      "order": 7,
+      "roster": "tag"
+    },
+    {
+      "path": "js/core/script-loader.js",
+      "global": "ScriptLoader",
+      "order": 8,
+      "roster": "tag"
+    },
+    {
+      "path": "js/core/lazy-bundles.js",
+      "global": "LazyBundles",
+      "order": 9,
+      "roster": "tag"
+    },
+    {
+      "path": "js/core/wake-lock.js",
+      "global": "RaceWakeLock",
+      "order": 10,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/glx-facade.js",
+      "global": null,
+      "order": 11,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/light-budget.js",
+      "global": "LightBudget",
+      "order": 12,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/post-common.js",
+      "global": "PostCommon",
+      "order": 13,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/canvas-css-size.js",
+      "global": "CanvasCssSize",
+      "order": 14,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/lamp-chunks.js",
+      "global": "LampChunks",
+      "order": 15,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/frustum.js",
+      "global": "Frustum",
+      "order": 16,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/inst-cells.js",
+      "global": "InstCells",
+      "order": 17,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/vertex-pack.js",
+      "global": "VertexPack",
+      "order": 18,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/chunk-bins.js",
+      "global": "ChunkBins",
+      "order": 19,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/gfx.js",
+      "global": "Gfx",
+      "order": 20,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/renderer-boot.js",
+      "global": "RendererBoot",
+      "order": 21,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/gltf.js",
+      "global": "GLTF",
+      "order": 22,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/assets.js",
+      "global": "Assets",
+      "order": 23,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/driving-line.js",
+      "global": "DrivingLine",
+      "order": 24,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/puddles.js",
+      "global": "Puddles",
+      "order": 25,
+      "roster": "tag"
+    },
+    {
+      "path": "js/data/teams.js",
+      "global": "Teams",
+      "order": 26,
+      "roster": "tag"
+    },
+    {
+      "path": "js/data/driver-ratings.js",
+      "global": "DriverRatings",
+      "order": 27,
+      "roster": "tag"
+    },
+    {
+      "path": "js/data/legends.js",
+      "global": "Legends",
+      "order": 28,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/team-identity.js",
+      "global": "CareerTeamIdentity",
+      "order": 29,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/save-migrate.js",
+      "global": "SaveMigrate",
+      "order": 30,
+      "roster": "tag"
+    },
+    {
+      "path": "js/data/settings-defaults.js",
+      "global": "SettingsDefaults",
+      "order": 31,
+      "roster": "tag"
+    },
+    {
+      "path": "js/data/garage-defaults.js",
+      "global": "GarageDefaults",
+      "order": 32,
+      "roster": "tag"
+    },
+    {
+      "path": "js/core/save-schema-registry.js",
+      "global": "SaveSchemaRegistry",
+      "order": 33,
+      "roster": "tag"
+    },
+    {
+      "path": "js/core/store.js",
+      "global": "GameStore",
+      "order": 34,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/restore-points.js",
+      "global": "CareerRestorePoints",
+      "order": 35,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/career-backup.js",
+      "global": "CareerBackup",
+      "order": 36,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/dom.js",
+      "global": "Dom",
+      "order": 37,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/title-fx.js",
+      "global": "TitleFx",
+      "order": 38,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/core/geom.js",
+      "global": "TrackGeom",
+      "order": 39,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/core/pit.js",
+      "global": "TrackPit",
+      "order": 40,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/scenery/data.js",
+      "global": "TrackSceneryData",
+      "order": 41,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/core/space.js",
+      "global": "TrackSpace",
+      "order": 42,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/core/surface.js",
+      "global": "TrackSurface",
+      "order": 43,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/scenery/graph.js",
+      "global": "TrackGraph",
+      "order": 44,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/core/spline.js",
+      "global": "TrackSpline",
+      "order": 45,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/core/line.js",
+      "global": "TrackLine",
+      "order": 46,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/core/mesh.js",
+      "global": "TrackMesh",
+      "order": 47,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/core/def.js",
+      "global": "TrackDef",
+      "order": 48,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/circuit-meta.js",
+      "global": "TrackDefs",
+      "order": 49,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/session-stub.js",
+      "global": null,
+      "order": 50,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/session-entry.js",
+      "global": "SessionEntry",
+      "order": 51,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/circuit-elevations.js",
+      "global": null,
+      "order": 52,
+      "roster": "tag"
+    },
+    {
+      "path": "js/track/tracks.js",
+      "global": "Tracks",
+      "order": 53,
+      "roster": "tag",
+      "ratchetLines": 762
+    },
+    {
+      "path": "js/track/build-client.js",
+      "global": "TrackBuildClient",
+      "order": 54,
+      "roster": "tag"
+    },
+    {
+      "path": "js/workers/bitmap-decode-client.js",
+      "global": "BitmapDecode",
+      "order": 55,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/track-maps.js",
+      "global": "TrackMaps",
+      "order": 56,
+      "roster": "tag"
+    },
+    {
+      "path": "js/editor/track-themes.js",
+      "global": "TrackThemes",
+      "order": 57,
+      "roster": "tag"
+    },
+    {
+      "path": "js/editor/props.js",
+      "global": "TrackDesignerProps",
+      "order": 58,
+      "roster": "tag"
+    },
+    {
+      "path": "js/editor/custom-tracks.js",
+      "global": "CustomTracks",
+      "order": 59,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/helmets.js",
+      "global": "Helmets",
+      "order": 60,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/car-geometry.js",
+      "global": "CarGeometry",
+      "order": 61,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/car-wheels.js",
+      "global": "CarWheels",
+      "order": 62,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/car-material-shade.js",
+      "global": "CarMaterialShade",
+      "order": 63,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/car-materials.js",
+      "global": "CarMaterials",
+      "order": 64,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/car-shade.js",
+      "global": "CarShade",
+      "order": 65,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/car-body-geom.js",
+      "global": "CarBodyGeom",
+      "order": 66,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/car3d.js",
+      "global": "Car3D",
+      "order": 67,
+      "roster": "tag",
+      "ratchetLines": 2207
+    },
+    {
+      "path": "js/input/tilt-roll.js",
+      "global": "TiltRoll",
+      "order": 68,
+      "roster": "tag"
+    },
+    {
+      "path": "js/input/bindings.js",
+      "global": "InputBindings",
+      "order": 69,
+      "roster": "tag"
+    },
+    {
+      "path": "js/input/pad-menu.js",
+      "global": "InputPadMenu",
+      "order": 70,
+      "roster": "tag"
+    },
+    {
+      "path": "js/input/haptics.js",
+      "global": "InputHaptics",
+      "order": 71,
+      "roster": "tag"
+    },
+    {
+      "path": "js/input/hold-buttons.js",
+      "global": "InputHoldButtons",
+      "order": 72,
+      "roster": "tag"
+    },
+    {
+      "path": "js/input/controller-profiles.js",
+      "global": "ControllerProfiles",
+      "order": 73,
+      "roster": "tag"
+    },
+    {
+      "path": "js/input/input.js",
+      "global": "Input",
+      "order": 74,
+      "roster": "tag"
+    },
+    {
+      "path": "js/audio/stub.js",
+      "global": "GameAudio",
+      "order": 75,
+      "roster": "tag"
+    },
+    {
+      "path": "js/data/circuit-lore.js",
+      "global": "CircuitLore",
+      "order": 76,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/parts.js",
+      "global": "Parts",
+      "order": 77,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/liveries.js",
+      "global": "Liveries",
+      "order": 78,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/custom-liveries.js",
+      "global": "CustomLiveries",
+      "order": 79,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/crest-paths.js",
+      "global": "CrestPaths",
+      "order": 80,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/livery-design.js",
+      "global": "LiveryDesign",
+      "order": 81,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/livery-graphics.js",
+      "global": "LiveryGraphics",
+      "order": 82,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/crest-draw.js",
+      "global": "LiveryCrests",
+      "order": 83,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/liverytex.js",
+      "global": "LiveryTex",
+      "order": 84,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/ghost.js",
+      "global": "Ghost",
+      "order": 85,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/ghost-share.js",
+      "global": "GhostShare",
+      "order": 86,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/input-ghost.js",
+      "global": "InputGhost",
+      "order": 87,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/race-insights.js",
+      "global": "RaceInsights",
+      "order": 88,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/driving-coach.js",
+      "global": "DrivingCoach",
+      "order": 89,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/consts.js",
+      "global": "PhysicsConsts",
+      "order": 90,
+      "roster": "tag"
+    },
+    {
+      "path": "js/lighting/knobs.js",
+      "global": "LightKnobs",
+      "order": 91,
+      "roster": "tag"
+    },
+    {
+      "path": "js/lighting/track-lights.js",
+      "global": "TrackLights",
+      "order": 92,
+      "roster": "tag"
+    },
+    {
+      "path": "js/lighting/frame-lights.js",
+      "global": "FrameLights",
+      "order": 93,
+      "roster": "tag"
+    },
+    {
+      "path": "js/lighting/lamp-bake.js",
+      "global": "LampBake",
+      "order": 94,
+      "roster": "tag"
+    },
+    {
+      "path": "js/lighting/lighting.js",
+      "global": "LightTune",
+      "order": 95,
+      "roster": "tag"
+    },
+    {
+      "path": "js/lighting/profiles.js",
+      "global": "LightStore",
+      "order": 96,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/car-mesh.js",
+      "global": "CarMesh",
+      "order": 97,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/experience.js",
+      "global": "GarageExperience",
+      "order": 98,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/scene-prims.js",
+      "global": "GaragePrims",
+      "order": 99,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/scene-equipment.js",
+      "global": "GarageEquipment",
+      "order": 100,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/scene-live.js",
+      "global": "GarageLive",
+      "order": 101,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/scene-dress.js",
+      "global": "GarageDress",
+      "order": 102,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/scene-crew.js",
+      "global": "GarageCrew",
+      "order": 103,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/scene.js",
+      "global": "GarageScene",
+      "order": 104,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/arrival.js",
+      "global": "GarageArrival",
+      "order": 105,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/surface-inspection.js",
+      "global": "GarageSurfaceInspection",
+      "order": 106,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/surface-outline.js",
+      "global": "GarageSurfaceOutline",
+      "order": 107,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/setup-camera.js",
+      "global": "SetupCamera",
+      "order": 108,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/prebuild.js",
+      "global": "GaragePrebuild",
+      "order": 109,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/pit-signs.js",
+      "global": "PitSigns",
+      "order": 110,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/body-attitude.js",
+      "global": "BodyAttitude",
+      "order": 111,
+      "roster": "tag"
+    },
+    {
+      "path": "js/fx/particles.js",
+      "global": "Particles",
+      "order": 112,
+      "roster": "tag"
+    },
+    {
+      "path": "js/fx/droplets.js",
+      "global": "Droplets",
+      "order": 113,
+      "roster": "tag"
+    },
+    {
+      "path": "js/lighting/atmosphere.js",
+      "global": "Atmosphere",
+      "order": 114,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/regulations.js",
+      "global": "Regulations",
+      "order": 115,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/ai-dev.js",
+      "global": "CareerAiDev",
+      "order": 116,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/career-planning.js",
+      "global": "CareerPlanning",
+      "order": 117,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/career.js",
+      "global": "Career",
+      "order": 118,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/season-cal.js",
+      "global": "SeasonCal",
+      "order": 119,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/badges.js",
+      "global": "Badges",
+      "order": 120,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/tyre-model.js",
+      "global": "TyreModel",
+      "order": 121,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/grip-steer.js",
+      "global": "GripSteer",
+      "order": 122,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/player-forces.js",
+      "global": "PlayerForces",
+      "order": 123,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/ai-drive.js",
+      "global": "AiDrive",
+      "order": 124,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/ai-band.js",
+      "global": "AiBand",
+      "order": 125,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/ai-corridor.js",
+      "global": "AiCorridor",
+      "order": 126,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/offsets.js",
+      "global": "CamTune",
+      "order": 127,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/extra-rigs.js",
+      "global": "ExtraRigs",
+      "order": 128,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/flyby-sight.js",
+      "global": "FlybySight",
+      "order": 129,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/flyby-seq.js",
+      "global": "FlybySeq",
+      "order": 130,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/cam-avoid.js",
+      "global": "CamAvoid",
+      "order": 131,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/trackside.js",
+      "global": "TracksideCams",
+      "order": 132,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/flyby-panel.js",
+      "global": "FlybyPanel",
+      "order": 133,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/setup-tune.js",
+      "global": "SetupTune",
+      "order": 134,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/setup-trials.js",
+      "global": "SetupTrials",
+      "order": 135,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/setup-trial-session.js",
+      "global": "SetupTrialSession",
+      "order": 136,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/setup-presets.js",
+      "global": "SetupPresets",
+      "order": 137,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/setup-experiments.js",
+      "global": "SetupExperiments",
+      "order": 138,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/livery-design-editor.js",
+      "global": "GarageLiveryDesignEditor",
+      "order": 139,
+      "roster": "tag"
+    },
+    {
+      "path": "js/garage/setup-sheet.js",
+      "global": "SetupUI",
+      "order": 140,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/experience.js",
+      "global": "CareerExperience",
+      "order": 141,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/career-ui-boot.js",
+      "global": "CareerUI",
+      "order": 142,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/season-ui.js",
+      "global": "SeasonUI",
+      "order": 143,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/flags.js",
+      "global": "Flags",
+      "order": 144,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/save-health.js",
+      "global": "SaveHealth",
+      "order": 145,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/select-screen.js",
+      "global": "Menus",
+      "order": 146,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/loading-screen.js",
+      "global": "LoadingScreen",
+      "order": 147,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/survey-hud.js",
+      "global": "SurveyHud",
+      "order": 148,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/scroll-fade.js",
+      "global": "ScrollFade",
+      "order": 149,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/css-zoom.js",
+      "global": "CssZoom",
+      "order": 150,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/sheet-shape.js",
+      "global": "SheetShape",
+      "order": 151,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/layers.js",
+      "global": "UiLayers",
+      "order": 152,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/modal.js",
+      "global": "TopModal",
+      "order": 153,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/menu-nav.js",
+      "global": "MenuNav",
+      "order": 154,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/aria-state.js",
+      "global": "AriaState",
+      "order": 155,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/setting-row.js",
+      "global": "SettingRow",
+      "order": 156,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/editor-workspace.js",
+      "global": "EditorWorkspace",
+      "order": 157,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/settings-search.js",
+      "global": "SettingsSearch",
+      "order": 158,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/settings-tabs.js",
+      "global": "SettingsNav",
+      "order": 159,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/key-binds.js",
+      "global": "KeyBinds",
+      "order": 160,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/settings-export.js",
+      "global": "SettingsExport",
+      "order": 161,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/aero-zones.js",
+      "global": "AeroZones",
+      "order": 162,
+      "roster": "tag"
+    },
+    {
+      "path": "js/fx/skidmarks.js",
+      "global": "SkidMarks",
+      "order": 163,
+      "roster": "tag"
+    },
+    {
+      "path": "js/fx/car-fx.js",
+      "global": "CarFx",
+      "order": 164,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/storm.js",
+      "global": "Storm",
+      "order": 165,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/wind.js",
+      "global": "Wind",
+      "order": 166,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/race-control.js",
+      "global": "RaceControl",
+      "order": 167,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/overtake-mode.js",
+      "global": "OvertakeMode",
+      "order": 168,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/pace-math.js",
+      "global": "PaceMath",
+      "order": 169,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/sporting-regs.js",
+      "global": "SportingRegs",
+      "order": 170,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/broadcast.js",
+      "global": "Broadcast",
+      "order": 171,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/director.js",
+      "global": "Director",
+      "order": 172,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/watch-transport.js",
+      "global": "WatchTransport",
+      "order": 173,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/real-replay.js",
+      "global": "RealReplay",
+      "order": 174,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/real-race.js",
+      "global": "RealRace",
+      "order": 175,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/rain-cells.js",
+      "global": "RainCells",
+      "order": 176,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/weather-arc.js",
+      "global": "WeatherArc",
+      "order": 177,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/forecast.js",
+      "global": "Forecast",
+      "order": 178,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/photo-kit.js",
+      "global": "PhotoKit",
+      "order": 179,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/free-cam.js",
+      "global": "FreeCam",
+      "order": 180,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/photo-cam.js",
+      "global": "Photomode",
+      "order": 181,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/replay-buf.js",
+      "global": "ReplayBuf",
+      "order": 182,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/results-cam.js",
+      "global": "ResultsCam",
+      "order": 183,
+      "roster": "tag"
+    },
+    {
+      "path": "js/lighting/tuner-panel.js",
+      "global": "TunerPanel",
+      "order": 184,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/cam-tuner-boot.js",
+      "global": "CamTunerPanel",
+      "order": 185,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/brake-cue.js",
+      "global": "BrakeCue",
+      "order": 186,
+      "roster": "tag"
+    },
+    {
+      "path": "js/input/steer-tuning.js",
+      "global": "SteerTuning",
+      "order": 187,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/thermal-drift.js",
+      "global": "ThermalDrift",
+      "order": 188,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/governor.js",
+      "global": "PerfGov",
+      "order": 189,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/loop-health.js",
+      "global": "LoopHealth",
+      "order": 190,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/render-rate.js",
+      "global": "RenderRate",
+      "order": 191,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/spans.js",
+      "global": "PerfSpans",
+      "order": 192,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/race-entry-profile.js",
+      "global": "RaceEntryProfile",
+      "order": 193,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/quality-preset.js",
+      "global": "GfxQuality",
+      "order": 194,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/renderer-picker.js",
+      "global": "RendererPicker",
+      "order": 195,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/compatibility-recovery.js",
+      "global": "GfxRecovery",
+      "order": 196,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/gfx-debug-overlay.js",
+      "global": "GfxDebug",
+      "order": 197,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/three-inspector.js",
+      "global": "ThreeInspector",
+      "order": 198,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/scale.js",
+      "global": "UiScale",
+      "order": 199,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/dock-layout.js",
+      "global": "DockLayout",
+      "order": 200,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/cockpit-opts.js",
+      "global": "CockpitOpts",
+      "order": 201,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/cockpit-preview.js",
+      "global": "CockpitPreview",
+      "order": 202,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/drive-chase.js",
+      "global": "DriveChase",
+      "order": 203,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/drive-broadcast.js",
+      "global": "DriveBroadcast",
+      "order": 204,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/drive-onboard.js",
+      "global": "DriveOnboard",
+      "order": 205,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/feel.js",
+      "global": "CamFeel",
+      "order": 206,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/driving-line-opts.js",
+      "global": "DrivingLineOpts",
+      "order": 207,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/appearance-opts.js",
+      "global": "AppearanceOpts",
+      "order": 208,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/a11y-opts.js",
+      "global": "A11yOpts",
+      "order": 209,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/hud-elements.js",
+      "global": "HudElements",
+      "order": 210,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/hud-tyres.js",
+      "global": "HudTyres",
+      "order": 211,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/hud-damage.js",
+      "global": "HudDamage",
+      "order": 212,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/live-region.js",
+      "global": "LiveRegion",
+      "order": 213,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/hud-skin.js",
+      "global": "HudSkin",
+      "order": 214,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/hud-readouts.js",
+      "global": "HudReadouts",
+      "order": 215,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/hud-relative.js",
+      "global": "HudRelative",
+      "order": 216,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/hud-strategy.js",
+      "global": "HudStrategy",
+      "order": 217,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/hud-inputs.js",
+      "global": "HudInputs",
+      "order": 218,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/cam-groups.js",
+      "global": "CamGroups",
+      "order": 219,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/hud-layout.js",
+      "global": "HudLayout",
+      "order": 220,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/hud-arrange.js",
+      "global": "HudArrange",
+      "order": 221,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/title-layout.js",
+      "global": "TitleLayout",
+      "order": 222,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/pause-opts.js",
+      "global": "PauseOpts",
+      "order": 223,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/screen-looks.js",
+      "global": "ScreenLooks",
+      "order": 224,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/debris-opts.js",
+      "global": "DebrisOpts",
+      "order": 225,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/metrics-overlay.js",
+      "global": "GameMetrics",
+      "order": 226,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/soak-run.js",
+      "global": "SoakRun",
+      "order": 227,
+      "roster": "tag"
+    },
+    {
+      "path": "js/perf/phone-recorder.js",
+      "global": "PhoneRecorder",
+      "order": 228,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/cam-comfort.js",
+      "global": "CamComfort",
+      "order": 229,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/fov-fit.js",
+      "global": "CamFovFit",
+      "order": 230,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/vantage.js",
+      "global": "GameCams",
+      "order": 231,
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/mode-switch.js",
+      "global": "CamModes",
+      "order": 232,
+      "roster": "tag"
+    },
+    {
+      "path": "js/xr/xr-opts.js",
+      "global": "XROpts",
+      "order": 233,
+      "roster": "tag"
+    },
+    {
+      "path": "js/xr/xr-boot.js",
+      "global": "XrBoot",
+      "order": 234,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/hud.js",
+      "global": "GameHud",
+      "order": 235,
+      "roster": "tag",
+      "ratchetLines": 2737
+    },
+    {
+      "path": "js/ui/results-story.js",
+      "global": "ResultsStory",
+      "order": 236,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/results-sheet.js",
+      "global": "GameResults",
+      "order": 237,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/quali-model.js",
+      "global": "Quali",
+      "order": 238,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/daily-challenge.js",
+      "global": "DailyChallenge",
+      "order": 239,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/appearance-studio.js",
+      "global": "AppearanceStudio",
+      "order": 240,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/home-world.js",
+      "global": "HomeWorld",
+      "order": 241,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/photo-studio.js",
+      "global": "PhotoStudio",
+      "order": 242,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/experience.js",
+      "global": "UiExperience",
+      "order": 243,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/share-code.js",
+      "global": "ShareCode",
+      "order": 244,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/title-menu.js",
+      "global": "TitleMenu",
+      "order": 245,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/deep-link.js",
+      "global": "DeepLink",
+      "order": 246,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/title-flow.js",
+      "global": "TitleFlow",
+      "order": 247,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/quali-net.js",
+      "global": "QualiNet",
+      "order": 248,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/race-settings.js",
+      "global": "RaceSettings",
+      "order": 249,
+      "roster": "tag"
+    },
+    {
+      "path": "js/career/custom-team.js",
+      "global": "CustomTeam",
+      "order": 250,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/quali-sheet.js",
+      "global": "QualiSheet",
+      "order": 251,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/onboard.js",
+      "global": "Onboard",
+      "order": 252,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/debris-draw.js",
+      "global": "DebrisDraw",
+      "order": 253,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/debris-world.js",
+      "global": "DebrisWorld",
+      "order": 254,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/incident-sim.js",
+      "global": "IncidentSim",
+      "order": 255,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/contact-geometry.js",
+      "global": "ContactGeometry",
+      "order": 256,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/collide.js",
+      "global": "Collide",
+      "order": 257,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/wall-end-face.js",
+      "global": "WallEndFace",
+      "order": 258,
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/wall-clamp.js",
+      "global": "WallClamp",
+      "order": 259,
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/car-fields.js",
+      "global": "CarFields",
+      "order": 260,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/field-lod.js",
+      "global": "FieldLod",
+      "order": 261,
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/car-draw.js",
+      "global": "CarDraw",
+      "order": 262,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/shadow-pass.js",
+      "global": "ShadowPass",
+      "order": 263,
+      "roster": "tag"
+    },
+    {
+      "path": "js/render/shared/mirror-pass.js",
+      "global": "MirrorPass",
+      "order": 264,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/platform-session.js",
+      "global": "PlatformSession",
+      "order": 265,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/update-check.js",
+      "global": "UpdateCheck",
+      "order": 266,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/race-message-history.js",
+      "global": "RaceMessageHistory",
+      "order": 267,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/controller-profile-controls.js",
+      "global": "ControllerProfileControls",
+      "order": 268,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/condition-cue-controls.js",
+      "global": "ConditionCueControls",
+      "order": 269,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/race-mix-controls.js",
+      "global": "RaceMixControls",
+      "order": 270,
+      "roster": "tag"
+    },
+    {
+      "path": "js/game.js",
+      "global": null,
+      "order": 271,
+      "roster": "tag",
+      "ratchetLines": 9626
+    },
+    {
+      "path": "js/render/glx/shaders/glsl-chunks.js",
+      "global": "GLXChunks",
+      "order": 272,
+      "roster": "DEFERRED:webgl2"
+    },
+    {
+      "path": "js/render/glx/shaders/glsl-lit.js",
+      "global": "GLXShaders",
+      "order": 273,
+      "roster": "DEFERRED:webgl2"
+    },
+    {
+      "path": "js/render/glx/shaders/glsl-sky.js",
+      "global": "GLXShaders",
+      "order": 274,
+      "roster": "DEFERRED:webgl2"
+    },
+    {
+      "path": "js/render/glx/shaders/glsl-fx.js",
+      "global": "GLXShaders",
+      "order": 275,
+      "roster": "DEFERRED:webgl2"
+    },
+    {
+      "path": "js/render/glx/shaders/glsl-post.js",
+      "global": "GLXShaders",
+      "order": 276,
+      "roster": "DEFERRED:webgl2"
+    },
+    {
+      "path": "js/render/glx/post.js",
+      "global": "GLXPost",
+      "order": 277,
+      "roster": "DEFERRED:webgl2"
+    },
+    {
+      "path": "js/render/glx/shadow.js",
+      "global": "GLXShadow",
+      "order": 278,
+      "roster": "DEFERRED:webgl2"
+    },
+    {
+      "path": "js/render/glx/chunked.js",
+      "global": "GLXChunked",
+      "order": 279,
+      "roster": "DEFERRED:webgl2"
+    },
+    {
+      "path": "js/render/glx/glx.js",
+      "global": "GLXBackend",
+      "order": 280,
+      "roster": "DEFERRED:webgl2",
+      "ratchetLines": 2978
+    },
+    {
+      "path": "js/render/webgpu/wgsl-chunks.js",
+      "global": "WGSLChunks",
+      "order": 281,
+      "roster": "DEFERRED:webgpu"
+    },
+    {
+      "path": "js/render/webgpu/wgsl-post.js",
+      "global": "WGSLPost",
+      "order": 282,
+      "roster": "DEFERRED:webgpu"
+    },
+    {
+      "path": "js/render/webgpu/wgsl-fx.js",
+      "global": "WGSLFx",
+      "order": 283,
+      "roster": "DEFERRED:webgpu"
+    },
+    {
+      "path": "js/render/webgpu/wgx-shadow.js",
+      "global": "WGXShadow",
+      "order": 284,
+      "roster": "DEFERRED:webgpu"
+    },
+    {
+      "path": "js/render/webgpu/wgx-chunked.js",
+      "global": "WGXChunked",
+      "order": 285,
+      "roster": "DEFERRED:webgpu"
+    },
+    {
+      "path": "js/render/webgpu/wgx-post.js",
+      "global": "WGXPost",
+      "order": 286,
+      "roster": "DEFERRED:webgpu"
+    },
+    {
+      "path": "js/render/webgpu/wgx-roadlut.js",
+      "global": "WGXRoadLut",
+      "order": 287,
+      "roster": "DEFERRED:webgpu"
+    },
+    {
+      "path": "js/render/webgpu/wgx.js",
+      "global": "WGX",
+      "order": 288,
+      "roster": "DEFERRED:webgpu"
+    },
+    {
+      "path": "js/render/three/tsl-chunks.js",
+      "global": "TLXShaders",
+      "order": 289,
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tsl-viewport.js",
+      "global": "TLXShaders",
+      "order": 290,
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tsl-lit.js",
+      "global": "TLXShaders",
+      "order": 291,
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tsl-sky.js",
+      "global": "TLXShaders",
+      "order": 292,
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tsl-fx.js",
+      "global": "TLXShaders",
+      "order": 293,
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tsl-post.js",
+      "global": "TLXShaders",
+      "order": 294,
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tlx-shadow.js",
+      "global": "TLXShaders",
+      "order": 295,
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tlx-chunked.js",
+      "global": "TLXShaders",
+      "order": 296,
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tlx-post.js",
+      "global": "TLXShaders",
+      "order": 297,
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/render/three/tlx.js",
+      "global": "TLX",
+      "order": 298,
+      "roster": "DEFERRED:three"
+    },
+    {
+      "path": "js/agent/agentview-raster.js",
+      "global": "AgentRaster",
+      "order": 299,
+      "roster": "LAZY_AGENT"
+    },
+    {
+      "path": "js/agent/agentview-corners.js",
+      "global": "AgentCorners",
+      "order": 300,
+      "roster": "LAZY_AGENT"
+    },
+    {
+      "path": "js/agent/agentview.js",
+      "global": "AgentView",
+      "order": 301,
+      "roster": "LAZY_AGENT",
+      "ratchetLines": 2584
+    },
+    {
+      "path": "js/agent/apex-net.js",
+      "global": "ApexNet",
+      "order": 302,
+      "roster": "LAZY_AGENT"
+    },
+    {
+      "path": "js/agent/apex.js",
+      "global": "ApexApi",
+      "order": 303,
+      "roster": "LAZY_AGENT",
+      "ratchetLines": 3323
+    },
+    {
+      "path": "js/lighting/presets.js",
+      "global": "LightPresets",
+      "order": 304,
+      "roster": "LAZY_RACE",
+      "ratchetLines": 7339
+    },
+    {
+      "path": "js/race/reliability.js",
+      "global": "Reliability",
+      "order": 305,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/damage.js",
+      "global": "Damage",
+      "order": 306,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/duel.js",
+      "global": "Duel",
+      "order": 307,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/session-records.js",
+      "global": "SessionRecords",
+      "order": 308,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/pit-lane.js",
+      "global": "PitLane",
+      "order": 309,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/engineer.js",
+      "global": "RaceEngineer",
+      "order": 310,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/radio-lines.js",
+      "global": "RadioLines",
+      "order": 311,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/race-facts.js",
+      "global": "RaceFacts",
+      "order": 312,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/spotter.js",
+      "global": "Spotter",
+      "order": 313,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/race-radio.js",
+      "global": "RaceRadio",
+      "order": 314,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/start-lights.js",
+      "global": "StartLights",
+      "order": 315,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/marshal-panels.js",
+      "global": "MarshalPanels",
+      "order": 316,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/flying-start.js",
+      "global": "FlyingStart",
+      "order": 317,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/jump-start-penalty.js",
+      "global": "JumpStartPenalty",
+      "order": 318,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/track/scenery/models.js",
+      "global": "TrackModels",
+      "order": 319,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/themes.js",
+      "global": "SceneryThemes",
+      "order": 320,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/landmark-kit.js",
+      "global": "LandmarkKit",
+      "order": 321,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/circuit-kit.js",
+      "global": "CircuitKit",
+      "order": 322,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/core/hidden-faces.js",
+      "global": "TrackHiddenFaces",
+      "order": 323,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/nature.js",
+      "global": "SceneryNature",
+      "order": 324,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/structures.js",
+      "global": "SceneryStructures",
+      "order": 325,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/city.js",
+      "global": "SceneryCity",
+      "order": 326,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/identity.js",
+      "global": "SceneryIdentity",
+      "order": 327,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/pits.js",
+      "global": "SceneryPits",
+      "order": 328,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/venue.js",
+      "global": "SceneryVenue",
+      "order": 329,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/guards.js",
+      "global": "SceneryGuards",
+      "order": 330,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/build-props.js",
+      "global": "TrackBuildProps",
+      "order": 331,
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/circuits/bahrain.js",
+      "global": "TrackDefs",
+      "order": 332,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/monaco.js",
+      "global": "TrackDefs",
+      "order": 333,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/silverstone.js",
+      "global": "TrackDefs",
+      "order": 334,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/spa.js",
+      "global": "TrackDefs",
+      "order": 335,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/monza.js",
+      "global": "TrackDefs",
+      "order": 336,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/suzuka.js",
+      "global": "TrackDefs",
+      "order": 337,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/singapore.js",
+      "global": "TrackDefs",
+      "order": 338,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/cota.js",
+      "global": "TrackDefs",
+      "order": 339,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/interlagos.js",
+      "global": "TrackDefs",
+      "order": 340,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/vegas.js",
+      "global": "TrackDefs",
+      "order": 341,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/madrid.js",
+      "global": "TrackDefs",
+      "order": 342,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/zandvoort.js",
+      "global": "TrackDefs",
+      "order": 343,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/jeddah.js",
+      "global": "TrackDefs",
+      "order": 344,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/albert_park.js",
+      "global": "TrackDefs",
+      "order": 345,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/shanghai.js",
+      "global": "TrackDefs",
+      "order": 346,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/miami.js",
+      "global": "TrackDefs",
+      "order": 347,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/imola.js",
+      "global": "TrackDefs",
+      "order": 348,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/montreal.js",
+      "global": "TrackDefs",
+      "order": 349,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/redbull.js",
+      "global": "TrackDefs",
+      "order": 350,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/hungaroring.js",
+      "global": "TrackDefs",
+      "order": 351,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/baku.js",
+      "global": "TrackDefs",
+      "order": 352,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/mexico.js",
+      "global": "TrackDefs",
+      "order": 353,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/qatar.js",
+      "global": "TrackDefs",
+      "order": 354,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/abudhabi.js",
+      "global": "TrackDefs",
+      "order": 355,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/hockenheim.js",
+      "global": "TrackDefs",
+      "order": 356,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/nurburgring.js",
+      "global": "TrackDefs",
+      "order": 357,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/catalunya.js",
+      "global": "TrackDefs",
+      "order": 358,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/sepang.js",
+      "global": "TrackDefs",
+      "order": 359,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/istanbul.js",
+      "global": "TrackDefs",
+      "order": 360,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/paul_ricard.js",
+      "global": "TrackDefs",
+      "order": 361,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/portimao.js",
+      "global": "TrackDefs",
+      "order": 362,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/sochi.js",
+      "global": "TrackDefs",
+      "order": 363,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/mugello.js",
+      "global": "TrackDefs",
+      "order": 364,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/magny_cours.js",
+      "global": "TrackDefs",
+      "order": 365,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/estoril.js",
+      "global": "TrackDefs",
+      "order": 366,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/kyalami.js",
+      "global": "TrackDefs",
+      "order": 367,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/watkins_glen.js",
+      "global": "TrackDefs",
+      "order": 368,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/indianapolis.js",
+      "global": "TrackDefs",
+      "order": 369,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/buenos_aires.js",
+      "global": "TrackDefs",
+      "order": 370,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/jacarepagua.js",
+      "global": "TrackDefs",
+      "order": 371,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/fuji.js",
+      "global": "TrackDefs",
+      "order": 372,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/okayama.js",
+      "global": "TrackDefs",
+      "order": 373,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/korea.js",
+      "global": "TrackDefs",
+      "order": 374,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/jerez.js",
+      "global": "TrackDefs",
+      "order": 375,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/donington.js",
+      "global": "TrackDefs",
+      "order": 376,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/anderstorp.js",
+      "global": "TrackDefs",
+      "order": 377,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/brands_hatch.js",
+      "global": "TrackDefs",
+      "order": 378,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/zolder.js",
+      "global": "TrackDefs",
+      "order": 379,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/dijon.js",
+      "global": "TrackDefs",
+      "order": 380,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/buddh.js",
+      "global": "TrackDefs",
+      "order": 381,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/mont_tremblant.js",
+      "global": "TrackDefs",
+      "order": 382,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/mosport.js",
+      "global": "TrackDefs",
+      "order": 383,
+      "roster": "LAZY_CIRCUIT"
+    },
+    {
+      "path": "js/circuits/scenery/bahrain.js",
+      "global": "TrackScenery",
+      "order": 384,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/monaco.js",
+      "global": "TrackScenery",
+      "order": 385,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/silverstone.js",
+      "global": "TrackScenery",
+      "order": 386,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/spa.js",
+      "global": "TrackScenery",
+      "order": 387,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/monza.js",
+      "global": "TrackScenery",
+      "order": 388,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/suzuka.js",
+      "global": "TrackScenery",
+      "order": 389,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/singapore.js",
+      "global": "TrackScenery",
+      "order": 390,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/cota.js",
+      "global": "TrackScenery",
+      "order": 391,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/interlagos.js",
+      "global": "TrackScenery",
+      "order": 392,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/vegas.js",
+      "global": "TrackScenery",
+      "order": 393,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/madrid.js",
+      "global": "TrackScenery",
+      "order": 394,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/zandvoort.js",
+      "global": "TrackScenery",
+      "order": 395,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/jeddah.js",
+      "global": "TrackScenery",
+      "order": 396,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/albert_park.js",
+      "global": "TrackScenery",
+      "order": 397,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/shanghai.js",
+      "global": "TrackScenery",
+      "order": 398,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/miami.js",
+      "global": "TrackScenery",
+      "order": 399,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/imola.js",
+      "global": "TrackScenery",
+      "order": 400,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/montreal.js",
+      "global": "TrackScenery",
+      "order": 401,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/redbull.js",
+      "global": "TrackScenery",
+      "order": 402,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/hungaroring.js",
+      "global": "TrackScenery",
+      "order": 403,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/baku.js",
+      "global": "TrackScenery",
+      "order": 404,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/mexico.js",
+      "global": "TrackScenery",
+      "order": 405,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/qatar.js",
+      "global": "TrackScenery",
+      "order": 406,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/abudhabi.js",
+      "global": "TrackScenery",
+      "order": 407,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/hockenheim.js",
+      "global": "TrackScenery",
+      "order": 408,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/nurburgring.js",
+      "global": "TrackScenery",
+      "order": 409,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/catalunya.js",
+      "global": "TrackScenery",
+      "order": 410,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/sepang.js",
+      "global": "TrackScenery",
+      "order": 411,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/istanbul.js",
+      "global": "TrackScenery",
+      "order": 412,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/paul_ricard.js",
+      "global": "TrackScenery",
+      "order": 413,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/portimao.js",
+      "global": "TrackScenery",
+      "order": 414,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/sochi.js",
+      "global": "TrackScenery",
+      "order": 415,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/mugello.js",
+      "global": "TrackScenery",
+      "order": 416,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/magny_cours.js",
+      "global": "TrackScenery",
+      "order": 417,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/estoril.js",
+      "global": "TrackScenery",
+      "order": 418,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/kyalami.js",
+      "global": "TrackScenery",
+      "order": 419,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/watkins_glen.js",
+      "global": "TrackScenery",
+      "order": 420,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/indianapolis.js",
+      "global": "TrackScenery",
+      "order": 421,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/buenos_aires.js",
+      "global": "TrackScenery",
+      "order": 422,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/jacarepagua.js",
+      "global": "TrackScenery",
+      "order": 423,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/fuji.js",
+      "global": "TrackScenery",
+      "order": 424,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/okayama.js",
+      "global": "TrackScenery",
+      "order": 425,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/korea.js",
+      "global": "TrackScenery",
+      "order": 426,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/jerez.js",
+      "global": "TrackScenery",
+      "order": 427,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/donington.js",
+      "global": "TrackScenery",
+      "order": 428,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/anderstorp.js",
+      "global": "TrackScenery",
+      "order": 429,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/brands_hatch.js",
+      "global": "TrackScenery",
+      "order": 430,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/zolder.js",
+      "global": "TrackScenery",
+      "order": 431,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/dijon.js",
+      "global": "TrackScenery",
+      "order": 432,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/buddh.js",
+      "global": "TrackScenery",
+      "order": 433,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/mont_tremblant.js",
+      "global": "TrackScenery",
+      "order": 434,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/circuits/scenery/mosport.js",
+      "global": "TrackScenery",
+      "order": 435,
+      "roster": "LAZY_SCENERY"
+    },
+    {
+      "path": "js/data/tab-utils.js",
+      "global": "DataTabUtils",
+      "order": 436,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/api-transport.js",
+      "global": "F1Transport",
+      "order": 437,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/api.js",
+      "global": "F1API",
+      "order": 438,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/telemetry-model.js",
+      "global": "DataTelemetryModel",
+      "order": 439,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/telemetry-render.js",
+      "global": "DataTelemetryRender",
+      "order": 440,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/telemetry-player.js",
+      "global": "DataTelemetryPlayer",
+      "order": 441,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/telemetry-view.js",
+      "global": "DataTelemetryView",
+      "order": 442,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/telemetry.js",
+      "global": "DataTelemetry",
+      "order": 443,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/export.js",
+      "global": "DataExport",
+      "order": 444,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/schedule.js",
+      "global": "DataSchedule",
+      "order": 445,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/standings.js",
+      "global": "DataStandings",
+      "order": 446,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/results.js",
+      "global": "DataResults",
+      "order": 447,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/live.js",
+      "global": "DataLive",
+      "order": 448,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/real-race-tab.js",
+      "global": "DataRealRace",
+      "order": 449,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/hub.js",
+      "global": "DataHub",
+      "order": 450,
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/net/bytes.js",
+      "global": "NetBytes",
+      "order": 451,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/nostr.js",
+      "global": "NetNostr",
+      "order": 452,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/rendezvous.js",
+      "global": "NetRendezvous",
+      "order": 453,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/sdp.js",
+      "global": "NetSdp",
+      "order": 454,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/qr.js",
+      "global": "NetQr",
+      "order": 455,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/scan.js",
+      "global": "NetScan",
+      "order": 456,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/transport.js",
+      "global": "NetTransport",
+      "order": 457,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/handshake.js",
+      "global": "NetHandshake",
+      "order": 458,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/lobby-codes.js",
+      "global": "LobbyCodes",
+      "order": 459,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/lobby-roster.js",
+      "global": "LobbyRoster",
+      "order": 460,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/snapshot.js",
+      "global": "NetSnapshot",
+      "order": 461,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/session.js",
+      "global": "NetSession",
+      "order": 462,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/netplay.js",
+      "global": "NetPlay",
+      "order": 463,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/lobby.js",
+      "global": "NetLobby",
+      "order": 464,
+      "roster": "LAZY_NET",
+      "ratchetLines": 2407
+    },
+    {
+      "path": "js/input/phone-pad.js",
+      "global": "PhonePad",
+      "order": 465,
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/audio/signal.js",
+      "global": "GameAudioSignal",
+      "order": 466,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/soundtrack.js",
+      "global": "GameAudioSoundtrack",
+      "order": 467,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/race-mix-audition.js",
+      "global": "RaceMixAudition",
+      "order": 468,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/radio-fx.js",
+      "global": "GameAudioRadioFx",
+      "order": 469,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/tone-model.js",
+      "global": "GameAudioToneModel",
+      "order": 470,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/ers-layer.js",
+      "global": "ErsLayer",
+      "order": 471,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/engine.js",
+      "global": "GameAudio",
+      "order": 472,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/music-lib.js",
+      "global": "MusicLib",
+      "order": 473,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/spotify.js",
+      "global": "SpotifyMusic",
+      "order": 474,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/rivals.js",
+      "global": "RivalAudio",
+      "order": 475,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/crowd.js",
+      "global": "CrowdAudio",
+      "order": 476,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/car-sfx.js",
+      "global": "CarSfx",
+      "order": 477,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/voice-pack.js",
+      "global": "VoicePack",
+      "order": 478,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/battle-earcon.js",
+      "global": "BattleEarcon",
+      "order": 479,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/radio-voice.js",
+      "global": "RadioVoice",
+      "order": 480,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/announcer-recorded.js",
+      "global": "RecordedAnnouncer",
+      "order": 481,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/announcer.js",
+      "global": "Announcer",
+      "order": 482,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/panel.js",
+      "global": "AudioPanel",
+      "order": 483,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/audio/driving-cues.js",
+      "global": "DrivingCues",
+      "order": 484,
+      "roster": "LAZY_AUDIO"
+    },
+    {
+      "path": "js/editor/shape.js",
+      "global": "TrackShape",
+      "order": 485,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/stamps.js",
+      "global": "TrackStamps",
+      "order": 486,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/randomise.js",
+      "global": "TrackRandom",
+      "order": 487,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/validate.js",
+      "global": "TrackValidate",
+      "order": 488,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/insight.js",
+      "global": "TrackInsight",
+      "order": 489,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/fixes.js",
+      "global": "TrackFixes",
+      "order": 490,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/codec.js",
+      "global": "TrackCodec",
+      "order": 491,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/scenery-preview.js",
+      "global": "DesignerSceneryPreview",
+      "order": 492,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/canvas.js",
+      "global": "DesignerCanvas",
+      "order": 493,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/elev-presets.js",
+      "global": "ElevPresets",
+      "order": 494,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/profile.js",
+      "global": "DesignerProfile",
+      "order": 495,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/selection-panel.js",
+      "global": "DesignerSelection",
+      "order": 496,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/followup-tools.js",
+      "global": "DesignerFollowup",
+      "order": 497,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/scenery-panel.js",
+      "global": "DesignerScenery",
+      "order": 498,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/bridge-panel.js",
+      "global": "DesignerBridges",
+      "order": 499,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/workspace.js",
+      "global": "DesignerWorkspace",
+      "order": 500,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/designer.js",
+      "global": "TrackDesigner",
+      "order": 501,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/xr/xr-plan.js",
+      "global": "XRPlan",
+      "order": 502,
+      "roster": "LAZY_XR"
+    },
+    {
+      "path": "js/xr/xr-rig.js",
+      "global": "XrRig",
+      "order": 503,
+      "roster": "LAZY_XR"
+    },
+    {
+      "path": "js/xr/xr-input.js",
+      "global": "XrInput",
+      "order": 504,
+      "roster": "LAZY_XR"
+    },
+    {
+      "path": "js/xr/xr-session.js",
+      "global": "XrSession",
+      "order": 505,
+      "roster": "LAZY_XR"
+    },
+    {
+      "path": "js/xr/apex-xr.js",
+      "global": "ApexXR",
+      "order": 506,
+      "roster": "LAZY_XR"
+    },
+    {
+      "path": "js/xr/xr-ui.js",
+      "global": "XrUi",
+      "order": 507,
+      "roster": "LAZY_XR"
+    },
+    {
+      "path": "js/camera/tuner-panel.js",
+      "global": "CamTunerEditor",
+      "order": 508,
+      "roster": "LAZY_CAM_EDITOR"
+    },
+    {
+      "path": "js/camera/flyby-editor.js",
+      "global": "FlybyEditor",
+      "order": 509,
+      "roster": "LAZY_CAM_EDITOR"
+    },
+    {
+      "path": "js/career/career-planning-ui.js",
+      "global": "CareerPlanningUI",
+      "order": 510,
+      "roster": "LAZY_CAREER_UI"
+    },
+    {
+      "path": "js/career/career-ui.js",
+      "global": "CareerScreen",
+      "order": 511,
+      "roster": "LAZY_CAREER_UI"
+    }
+  ]
+}
