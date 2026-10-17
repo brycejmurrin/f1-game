@@ -238,6 +238,7 @@ const FULL = [
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
   "js/car/crest-paths.js",
   "js/car/livery-graphics.js",
+  "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/car/ghost-share.js",
@@ -258,6 +259,7 @@ const FULL = [
   "js/garage/scene-prims.js",
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
+  "js/garage/scene-dress.js",
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "js/garage/arrival.js",
@@ -347,6 +349,7 @@ const FULL = [
   "js/input/steer-tuning.js",
   "js/perf/governor.js",
   "js/perf/loop-health.js",
+  "js/perf/spans.js",
   "js/perf/race-entry-profile.js",
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
@@ -529,6 +532,7 @@ const CARVIEW = [
   "js/car/liveries.js",
   "js/car/crest-paths.js",
   "js/car/livery-graphics.js",
+  "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/physics/consts.js",
   "js/car/car-mesh.js",
@@ -576,6 +580,7 @@ const TRACK_VM = [
   "js/garage/scene-prims.js",
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
+  "js/garage/scene-dress.js",
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "@circuits",
@@ -699,6 +704,8 @@ const HARD_EDGES = [
   ["js/garage/scene-prims.js", "js/garage/scene-equipment.js"],   // the pit equipment destructures GaragePrims at eval
   ["js/garage/scene-prims.js", "js/garage/scene-live.js"],        // the live atlas destructures GaragePrims at eval
   ["js/garage/scene-equipment.js", "js/garage/scene-live.js"],    // ...and GarageEquipment (the timing-screen housing's anchor)
+  ["js/garage/scene-prims.js", "js/garage/scene-dress.js"],       // the team dress destructures GaragePrims at eval
+  ["js/garage/scene-dress.js", "js/garage/scene.js"],             // the bay destructures GarageDress at eval
   ["js/garage/scene-prims.js", "js/garage/scene.js"],             // the bay destructures GaragePrims at eval
   ["js/garage/scene-equipment.js", "js/garage/scene.js"],         // ...GarageEquipment (the fan and screen anchors)
   ["js/garage/scene-live.js", "js/garage/scene.js"],              // ...and GarageLive (the atlas size and painters)
@@ -755,6 +762,7 @@ const HARD_EDGES = [
   // monogram because a tag moved is exactly the kind of quiet regression the
   // load-order guard exists to prevent.
   ["js/car/crest-paths.js", "js/car/liverytex.js"],
+  ["js/car/crest-draw.js", "js/car/liverytex.js"],   // liverytex destructures LiveryCrests.create(...) at eval
   ["js/core/store.js", "js/camera/offsets.js"],  // cam-tune destructures GameStore at eval
   ["js/core/store.js", "js/career/career.js"],    // career destructures GameStore at eval
   ["js/core/store.js", "js/career/season-cal.js"], // season-cal destructures GameStore at eval
@@ -910,10 +918,12 @@ const LAZY_AGENT = [
   "js/agent/agentview-raster.js",
   "js/agent/agentview-corners.js",
   "js/agent/agentview.js",
+  "js/agent/apex-net.js",
   "js/agent/apex.js",
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
+  ["js/agent/apex-net.js", "js/agent/apex.js"],   // ApexApi spreads ApexNet.hooks(...) when game.js calls ApexApi.create
   ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
 ];
 
@@ -1182,6 +1192,7 @@ const LAZY_NET = [
   "js/net/transport.js",
   "js/net/handshake.js",
   "js/net/lobby-codes.js",  // LobbyCodes: paste/copy/share/scan/QR for invite+answer (before lobby)
+  "js/net/lobby-roster.js", // LobbyRoster: the room roster's stateless DOM leaves (before lobby)
   "js/net/snapshot.js",
   "js/net/session.js",
   "js/net/netplay.js",
@@ -1245,6 +1256,7 @@ const LAZY_NET_EDGES = [
   ["js/net/scan.js", "js/net/lobby.js"],
   ["js/net/handshake.js", "js/net/lobby-codes.js"],
   ["js/net/lobby-codes.js", "js/net/lobby.js"],
+  ["js/net/lobby-roster.js", "js/net/lobby.js"],   // lobby destructures LobbyRoster inside create(), which game.js evals
 ];
 
 const DEFERRED_EDGES = [

@@ -376,6 +376,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `custom-liveries.js` | `CustomLiveries` | tag | CustomLiveries: persist / resolve / live-draft paint jobs out of js/game.js. |
 | `crest-paths.js` | `CrestPaths` | tag | team crest path data. |
 | `livery-graphics.js` | `LiveryGraphics` | tag | cover crown/tail and fin graphic painters; create receives atlas drawing and paint-selection helpers. |
+| `crest-draw.js` | `LiveryCrests` | tag | LiveryCrests: the team-mark painters of LiveryTex (traced, Mercedes, Haas, Audi, generic) and the CRESTS table. |
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
 | `ghost-share.js` | `GhostShare` | tag | GhostShare: portable APXG1 ghost envelopes and one in-memory guest rival. |
@@ -468,6 +469,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `scene-prims.js` | `GaragePrims` | tag | GaragePrims: the garage bay's mesh primitives and shared constants. |
 | `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment standing in the bay. |
 | `scene-live.js` | `GarageLive` | tag | GarageLive: the garage's LIVE atlas. |
+| `scene-dress.js` | `GarageDress` | tag | GarageDress: the team dress of the garage bay. |
 | `scene-crew.js` | `GarageCrew` | tag | GarageCrew: the pit crew in the garage on an arrival and the RACE! drive-out. |
 | `scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
 | `arrival.js` | `GarageArrival` | tag | Pit-work arrival: a render-clock sequence, independent of race simulation. |
@@ -528,6 +530,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `governor.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
 | `loop-health.js` | `LoopHealth` | tag | LoopHealth: the frame-loop fault policy and the one heartbeat that outlives the loop. |
+| `spans.js` | `PerfSpans` | tag | PerfSpans: the per-subsystem frame budget. begin(name)/end(name) bracket a phase of the frame loop (game.js tickBody: frame, input, physics, ai, collide,… |
 | `race-entry-profile.js` | `RaceEntryProfile` | tag | RaceEntryProfile: the race-entry stopwatch OUTSIDE the track build. |
 | `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
 | `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
@@ -601,6 +604,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `agentview-raster.js` | `AgentRaster` | LAZY_AGENT | AgentRaster: the text rasterisers behind the agent view's ONE optional composition aid, render({what}). frame() renders the camera view as a depth-sor… |
 | `agentview-corners.js` | `AgentCorners` | LAZY_AGENT | AgentCorners: the corner table of the agent view (buildCorners, roadShapeAt, peakFracs, corners, nextCorner, upcomingCorners). |
 | `agentview.js` | `AgentView` | LAZY_AGENT | AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … |
+| `apex-net.js` | `ApexNet` | LAZY_AGENT | ApexNet: the netplay and VS FRIEND lobby hooks of the window.__apex API (net, netLoopback, netPeer*, netTick, lobby*). |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
 
 **`js/circuits/`**
@@ -628,6 +632,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `transport.js` | `NetTransport` | LAZY_NET | NetTransport — the wire under multiplayer, and the seam that keeps the netcode testable. |
 | `handshake.js` | `NetHandshake` | LAZY_NET | NetHandshake — getting two browsers connected with NO server of ours. |
 | `lobby-codes.js` | `LobbyCodes` | LAZY_NET | lobby invite/answer paste, copy, share, scan, and QR helpers. |
+| `lobby-roster.js` | `LobbyRoster` | LAZY_NET | LobbyRoster: the stateless leaves of the VS FRIEND room's roster DOM (team lookup, css colour, span/replace/summaryRow helpers, driver/team labels, the seat… |
 | `snapshot.js` | `NetSnapshot` | LAZY_NET | NetSnapshot — what actually goes on the wire, and how a rival is drawn smoothly from packets that arrive late, out of order, or not at all. |
 | `session.js` | `NetSession` | LAZY_NET | NetSession — the layer between a transport and the game. |
 | `netplay.js` | `NetPlay` | LAZY_NET | NetPlay — the game side of multiplayer. |

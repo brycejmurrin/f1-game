@@ -464,6 +464,21 @@ export function createExtras(ctx) {
         }
         return { browser: true, argv };
       }
+      // Profiler (tools/perf/profile.mjs): a browser job, started only here so the guarded apex_job_start is its one
+      // door (a standalone apex_profile browser tool needs a .claude hook entry). The argv is built from typed fields.
+      case "profile": {
+        const mode = String(a.mode || "spans");
+        if (!["spans", "cpu", "hitch", "trace"].includes(mode)) throw Object.assign(new Error("mode"), { refuse: refuse("bad_args", "mode must be spans|cpu|hitch|trace", 'e.g. {"kind":"profile","mode":"spans"}.') });
+        const argv = nodeArgv("perf/profile.mjs", needTrack(a.track || "vegas"), "--mode", mode);
+        if (a.frames != null) argv.push("--frames", String(Math.max(10, Math.min(600, Math.trunc(Number(a.frames)) || 40))));
+        if (a.repeat != null) argv.push("--repeat", String(Math.max(1, Math.min(7, Math.trunc(Number(a.repeat)) || 1))));
+        if (a.base) {
+          const base = String(a.base);
+          if (!REF_RE.test(base) || base.startsWith("-")) throw Object.assign(new Error("base"), { refuse: refuse("bad_args", "base must be a git ref, not a flag", 'e.g. {"kind":"profile","base":"origin/main"}.') });
+          argv.push("--base", base);
+        }
+        return { browser: true, argv };
+      }
       case "ui_gallery": {
         const s = list(a.screens, "screens"), v = list(a.viewports, "viewports");
         return { browser: true, argv: nodeArgv("ui/layout-audit.mjs", "--gallery", "--jobs=1", ...(s ? [`--screens=${s}`] : []), ...(v ? [`--viewports=${v}`] : [])) };
@@ -910,6 +925,6 @@ export function createExtras(ctx) {
   };
 }
 
-export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
+export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "profile", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
 /** Key apex-tools-mcp uses to hand apex_job_start a pinned HUD argv; unreachable from JSON. */
 export const HUD_JOB_ARGV = Symbol("apex.hudJobArgv");

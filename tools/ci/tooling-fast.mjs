@@ -725,6 +725,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/perf-governor.test.mjs",
   "tests/unit/perf-race-entry.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
+  // PerfSpans ring/percentiles/off-switch + __apex.perf() in the game VM; profile lib noise rule; apex_profile argv pins.
+  "tests/unit/perf-spans.test.mjs",
   "tests/unit/perf-try.test.mjs",
   "tests/unit/phone-input-improvements.test.mjs",
   // ...and PHONE AS CONTROLLER: the wire codec, the shared roll math, and a
@@ -765,6 +767,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
+  "tests/unit/profile-lib.test.mjs",
+  "tests/unit/profile-mcp.test.mjs",
   // The branch-prune rule behind prune-branches.yml: merged-only, never an
   // open PR's head, claims on age; pure fixtures, under a second.
   "tests/unit/prune-branches.test.mjs",

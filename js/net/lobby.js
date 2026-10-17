@@ -29,6 +29,8 @@ const NetLobby = (function () {
     const hostEvictingIds = new Set();   // guest ids the host is removing (stay in room, fresh code)
     let hostRemovedMe = false;           // guest: host sent LEFT { evicted } before the transport died
     let pollTimer = null;
+    // Clear AND null: a bare clearInterval leaves the stale handle truthy, which onFail reads as an armed watcher.
+    function stopPoll() { clearInterval(pollTimer); pollTimer = null; }
     // Pending-attempt fail tag: waitForOpen prefers this over failureMsg TURN copy.
     // 'expired' | 'no_relay' | 'ice' | null
     let failReason = null, failReasonMsg = null;
@@ -318,7 +320,7 @@ const NetLobby = (function () {
       // the relay credentials first and callers arm the watcher immediately
       // after clicking. The room then never opened: fourteen specs, and a
       // player who would have reported that the button does nothing.
-      if (transport) clearInterval(pollTimer);
+      if (transport) stopPoll();
       if (transport && !transports.has(pendingId)) {
         try { transport.close(); } catch (e) { /* already gone */ }
       }
@@ -342,7 +344,7 @@ const NetLobby = (function () {
     }
 
     function teardown() {
-      consumeHandledInvite(); clearInterval(pollTimer);
+      consumeHandledInvite(); stopPoll();
       clearInterval(pumpTimer);
       pumpTimer = null;
       for (const timer of rosterTimers.values()) clearTimeout(timer);
@@ -408,7 +410,7 @@ const NetLobby = (function () {
     }
 
     function waitForOpen() {
-      clearInterval(pollTimer);
+      stopPoll();
       const started = Date.now();
       // A TEST FLAG MUST ANNOUNCE ITSELF. iceRelayOnly forbids direct
       // connections so the TURN leg can be exercised — but it PERSISTS, and
@@ -448,15 +450,15 @@ const NetLobby = (function () {
             // bailing) would escape the timeout check below and spin this poll
             // at 4 Hz forever with no message and no failure text.
             if (Date.now() - started > CONNECT_TIMEOUT_MS) {
-              clearInterval(pollTimer);
+              stopPoll();
               sayConnectFail(null, Math.round((Date.now() - started) / 1000));
             }
             return;
           }
         }
-        if (transport !== watched && !transports.has(watchedId)) { clearInterval(pollTimer); return; }
+        if (transport !== watched && !transports.has(watchedId)) { stopPoll(); return; }
         if (watched.status === "open") {
-          clearInterval(pollTimer);
+          stopPoll();
           onConnected(watchedId, watched);
           return;
         }
@@ -467,7 +469,7 @@ const NetLobby = (function () {
         // "closed" too: the close handler above says nothing for a pending transport.
         const dead = watched.status === "closed" || (st && (st.ice === "failed" || st.connection === "failed"));
         if (dead || Date.now() - started > CONNECT_TIMEOUT_MS) {
-          clearInterval(pollTimer);
+          stopPoll();
           Log.warn("net", "connect fail " + secs + "s");
           sayConnectFail(st, secs);
           // Only this attempt. A host whose SECOND invite fails still has its
@@ -1139,13 +1141,9 @@ const NetLobby = (function () {
       return true;
     }
 
-    const TEAM_OF = (p) => (p && p.team && Teams.LIST.find((t) => t.id === p.team)) || null;
-
-    function css(rgb) {
-      if (!Array.isArray(rgb)) return "#888";
-      const b = rgb.map((v) => Math.max(0, Math.min(255, Math.round(v * 255))));
-      return `rgb(${b[0]},${b[1]},${b[2]})`;
-    }
+    const { TEAM_OF, css, span, replace, summaryRow, rosterDriverName, rosterTeamShort } = LobbyRoster;
+    const rosterSeatRow = (profile, ready, peerId) => LobbyRoster.rosterSeatRow(profile, ready, peerId,
+      (li, id) => hostRemoveRow(verifyRow(li, id), id));
 
     // A seat two players are BOTH holding, for the moment before it resolves.
     // Clashes are settled after the fact: the lower-ranked player learns what
@@ -1211,74 +1209,7 @@ const NetLobby = (function () {
       return now - clashSince.get(id).at < YIELD_GRACE_MS;
     }
 
-    function span(className, text) {
-      const el = document.createElement("span");
-      el.className = className;
-      el.textContent = text;
-      return el;
-    }
-
     const ROOM_SEATS = MAX_GUESTS + 1;
-
-    function rosterDriverName(profile) {
-      const team = TEAM_OF(profile);
-      if (!team) return "Choosing…";
-      const seat = profile ? (profile.driver || 0) : 0;
-      const d = team.drivers ? team.drivers[seat] : null;
-      return d ? (d.name || d.code || "—") : "—";
-    }
-
-    function rosterTeamShort(profile) {
-      const team = TEAM_OF(profile);
-      return team ? team.short : "—";
-    }
-
-    function rosterSeatRow(profile, ready, peerId) {
-      const team = TEAM_OF(profile);
-      const full = team
-        ? `${team.name}${profile && team.drivers
-          ? " · " + ((team.drivers[profile.driver || 0] && team.drivers[profile.driver || 0].name) || "")
-          : ""}`
-        : "Still choosing a car";
-      const li = document.createElement("li");
-      li.className = "vs-driver vs-roster-seat";
-      const dot = document.createElement("span");
-      dot.className = "vs-roster-dot" + (ready ? " on" : "");
-      dot.setAttribute("role", "img");
-      dot.setAttribute("aria-label", ready ? "Ready" : "Not ready");
-      dot.title = ready ? "Ready" : "Not ready";
-      const who = span("vs-who", peerId == null ? "You" : rosterTeamShort(profile));
-      const frag = document.createDocumentFragment();
-      frag.appendChild(dot);
-      frag.appendChild(who);
-      if (team) {
-        const swatch = span("vs-swatch", "");
-        swatch.style.background = css(team.color);
-        frag.appendChild(swatch);
-      }
-      const car = span("vs-car", rosterDriverName(profile));
-      car.title = full;
-      frag.appendChild(car);
-      li.appendChild(frag);
-      let row = peerId != null ? verifyRow(li, peerId) : li;
-      if (peerId != null) row = hostRemoveRow(row, peerId);
-      return row;
-    }
-
-    function replace(el, node) {
-      while (el.firstChild) el.removeChild(el.firstChild);
-      if (node) el.appendChild(node);
-    }
-
-    function summaryRow(label, value) {
-      const row = document.createElement("div");
-      const dt = document.createElement("dt");
-      const dd = document.createElement("dd");
-      dt.textContent = label;
-      dd.textContent = String(value);
-      row.appendChild(dt); row.appendChild(dd);
-      return row;
-    }
 
     function renderRoom() {
       const e = els();
@@ -2193,7 +2124,7 @@ const NetLobby = (function () {
 
     function close() {
       invalidateOperations(); consumeHandledInvite();
-      clearInterval(pollTimer);
+      stopPoll();
       Log.info("net", "lobby close");
       stopScan();
       // Keep wake during friend quali (session stays open while lobby is hidden).

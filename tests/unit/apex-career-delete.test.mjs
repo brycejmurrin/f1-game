@@ -11,6 +11,7 @@ test("careerSlotDelete preserves conflict and session-only durability metadata",
     AgentView: { create: () => ({}) },
     Career: { deleteSlot: () => result, load: () => { loads++; }, slots: () => slots },
   });
+  vm.runInContext(fs.readFileSync(new URL("../../js/agent/apex-net.js", import.meta.url), "utf8"), context);
   vm.runInContext(fs.readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8"), context);
   const api = vm.runInContext("ApexApi", context).create({ track: {}, refreshCareerButton: () => { refreshes++; } });
   result = { ok: false, durable: false, reason: "conflict" };
@@ -32,6 +33,7 @@ function loadApex(extra, G) {
     CamModes: { CAM_MODES: [] }, LightTune: { TUNE_DEFS: [], LT: {} },
     AgentView: { create: () => ({}) },
   }, extra));
+  vm.runInContext(fs.readFileSync(new URL("../../js/agent/apex-net.js", import.meta.url), "utf8"), context);
   vm.runInContext(fs.readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8"), context);
   return vm.runInContext("ApexApi", context).create(G);
 }
