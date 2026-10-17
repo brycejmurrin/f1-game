@@ -61,10 +61,7 @@ check green on the PR's own head (one check since 2026-10-15; the fast-tier
 names before that), NOT an up-to-date branch, and every re-sync is a fresh PR run. Sync when GitHub
 reports a conflict, or when a required check is red on the tip and the fix
 is already there. A green PR merges as it stands. **Red AND conflicting:** fix the red on the branch first, then sync once, then ONE push (two pushes cancel the live run — AGENTS.md rule 4).
-Bare `sync-pr <branch>` (no flag) does the real merge and pushes nothing.
-Verify cost: clean merge, `npm run gen` rewrote nothing and the PR diff is prose or generated files only →
-`sync-pr <branch> --verify=none --push`; else the default `--verify=fast` plus `tooling-fast --changed`
-(a full ladder measured 723 s vs 110 s); CI re-gates the head.
+Bare `sync-pr <branch>` (no flag) does the real merge and pushes nothing. Prose-only clean merge: `--verify=none --push` (role-pr-owner.md).
 
 A base merge can conflict on generated files (`ratchets.json` conflicts ended
 with #2295's per-branch deltas); `sync-pr` cures those and hands back the rest. It leaves you ON
@@ -100,10 +97,7 @@ Every session's PR lands on the same deploy branch, so one red there is seen
 by all at once. **This overrides "port the fix now and push":** a fix already pushed, a
 live claim, or a live host session on it means STAND DOWN and say so. Three
 sessions fixed one bug on 2026-09-18 and the result was a revert
-(`docs/notes/SHARED-BRANCH-COORDINATION.md`).
-Also search open PR titles and branches for the failing test name before
-fixing: the first claimant fixes, everyone else comments and waits (three
-sessions opened one catalog-digest fix, #2716/#2717/#2695, 2026-10-17).
+(`docs/notes/SHARED-BRANCH-COORDINATION.md`). Also search open PR titles/branches for the failing test name: first claimant fixes, the rest wait (#2716/#2717/#2695).
 
 ## 4. Never push to the deploy branch
 
