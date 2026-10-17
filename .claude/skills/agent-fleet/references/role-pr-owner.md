@@ -10,6 +10,7 @@ restart; an in-session subagent ends with its parent's turn.
 ## Contents
 
 - Launch (orchestrator)
+- Monitoring and reporting (paste into every launch prompt)
 - The watch kit (arm at start and after every push)
 - On every wake (event, Monitor line, check-in)
 - Keep the box free (2026-10-17)
@@ -31,6 +32,27 @@ Use the orchestrator.md launch template with:
 - `STOP AT: 300k context or $<cap>` as the last line (docs-only PR: 100k); the owner checks it at every wake and hands off.
 - The relayed notes from the previous owner (head sha, last CI verdict, local
   sync state, files that conflicted).
+
+## Monitoring and reporting (paste into every launch prompt)
+
+```text
+MONITOR: you own PR #<n> (the one you open, or the CONTINUE PR) until it merges
+or STOP AT. On every wake read the PR (`pull_request_read get`), its head CI
+(`node tools/ci/ci-watch.mjs --sha <head> --once`) and mergeability, then:
+red in OWNED → fix, `tooling-fast --changed` plus the failing test, push once;
+CONFLICTING/DIRTY → `node tools/ci/sync-pr.mjs <branch>` (merge origin, no
+force, no rebase); draft with a green tip and `ready-gate.mjs --pr <n>` exit 0
+→ mark ready, then keep watching until merged.
+Do not enable auto-merge or merge: Grok Bot is the merge holder
+(role-merge-holder.md, Level 3).
+REPORT: a cloud agent has no direct channel to Grok Bot. Keep this line in the
+PR body's fleet block current:
+  fleet-status: <working|blocked|needs-decision|ready|red|done> | <one-line reason> | <UTC time>
+and post the same line as a PR comment on every state change (never on an
+unchanged state). Decisions go to Grok Bot, not Bryce: set needs-decision and
+comment `@orchestrator NEEDS-DECISION: <question>`, then wait for its reply on
+the PR. On merge: `fleet-status: done`, `state: done`, `--release` the claim.
+```
 
 ## The watch kit (arm at start and after every push)
 
