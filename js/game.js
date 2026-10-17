@@ -3637,6 +3637,7 @@ wxArc = WeatherArc.create(G, { isTimeTrial, isQuali });
 // Tyre wear, the grip it costs and the fuel that argues with it
 // (js/physics/tyre-model.js). Created before the first gridUp fits a compound.
 tyres = TyreModel.create(G);
+if (typeof SoakRun !== "undefined") SoakRun.create(G);   // AUTO SOAK (js/perf/soak-run.js): idle until PhoneRecorder's button calls start()
 const playerForces = PlayerForces.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.

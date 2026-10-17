@@ -154,6 +154,7 @@ export const ADAPTED = {
  *  reach zero without asking for a substitution that would be a hole. */
 export const BROWSER_ONLY = {
   "tests/specs/pit-signs.spec.js": "APEX_VM_PAGE=1 boots Albert Park but pitSigns().drawn stays 0 through TRACK_MS (waitForFunction 45 s) — the decal draw needs a real renderer frame, not a structural flake (measured 2026-09-30)",
+  "tests/specs/soak-run.spec.js": "AUTO SOAK drives the player from a real requestAnimationFrame loop through a live wet race build; game-vm never pumps rAF, and the unit twin tests/unit/soak-run.test.mjs already covers the controller in a VM — this copy proves the wiring into game.js",
   "tests/specs/smoke.spec.js": "the boot gate: it proves a real Chromium boots the shell, which is the one thing no VM can",
   "tests/specs/physics-characterization.spec.js": "tests/data/physics-baseline.json is a real-Chromium measurement; the VM twin asserts parity WITH it, so the browser copy is the reference",
   // The selected-gate pin for js/physics/ (same role as render-boot for js/render/).

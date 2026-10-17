@@ -539,6 +539,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `gfx-debug-overlay.js` | `GfxDebug` | tag | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
 | `three-inspector.js` | `ThreeInspector` | tag | ThreeInspector: OPT-IN dev panel, the official three.js Inspector (Performance / Memory / Timeline / Viewer / Parameters / Console) on the TLX renderer. |
 | `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
+| `soak-run.js` | `SoakRun` | tag | SoakRun: the hands-free half of PhoneRecorder (AUTO SOAK). |
 | `phone-recorder.js` | `PhoneRecorder` | tag | PhoneRecorder: a phone-only soak recorder (issue #1633). |
 
 **`js/xr/`**
