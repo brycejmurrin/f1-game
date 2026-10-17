@@ -22,6 +22,11 @@ const CarMaterials = (function () {
   const FINISH_SURFACE = Object.freeze({
     satin: 26, chrome: 27, matte: 28, carbon: 31, brushed: 29, pearl: 30,
   });
+  // RESERVED FINISH IDS (garage finishes contract, 2026-10-17). A finish row joins FINISH_SURFACE only when its
+  // shader branch exists in GLX, TLX and WGX, so the garage never offers a finish that renders as plain paint;
+  // the id is fixed here first so the slices cannot take the same one. tests/unit/livery-finish-contract.test.mjs
+  // pins that no id repeats and that every FINISH_SURFACE id is either shipped (<= 33) or reserved.
+  const FINISH_RESERVED = Object.freeze({ flake: 34, candy: 35, tinted: 36, chameleon: 37 });
   const DARK   = [0.05, 0.05, 0.05];
   // Deeper resin base so the shader weave (CarMaterialShade.CARBON) reads at
   // garage and near-track distance instead of flat charcoal paint.
@@ -78,8 +83,9 @@ const CarMaterials = (function () {
     return value === "gloss" || Object.hasOwn(FINISH_SURFACE, value) ? value : livery && livery.finish || null;
   }
   function applyFinish(out, finish, sections, livery) {
-    if (sections && livery && [livery.coverFinish, livery.wingFinish, livery.haloFinish].some((v) => v && v !== "inherit")) {
-      const fields = { engineCover: "coverFinish", frontWing: "wingFinish", rearAssembly: "wingFinish", halo: "haloFinish" };
+    if (sections && livery && [livery.coverFinish, livery.wingFinish, livery.haloFinish, livery.podFinish, livery.finFinish, livery.mirrorFinish].some((v) => v && v !== "inherit")) {
+      const fields = { engineCover: "coverFinish", frontWing: "wingFinish", rearAssembly: "wingFinish", halo: "haloFinish",
+        sidepods: "podFinish", sharkFin: "finFinish", mirrors: "mirrorFinish" };
       for (const section of sections) {
         const choice = finishOf(livery, fields[section.name]), local = FINISH_SURFACE[choice] || SURFACES.paint;
         for (let i = section.from; i < section.to; i++) if (out.mat[i] === SURFACES.paint) out.mat[i] = local;
@@ -99,7 +105,7 @@ const CarMaterials = (function () {
   const SHADE = (typeof CarMaterialShade !== "undefined") ? CarMaterialShade : null;
 
   return {
-    SURFACES, FINISH_SURFACE, SHADE, finishOf,
+    SURFACES, FINISH_SURFACE, FINISH_RESERVED, SHADE, finishOf,
     DARK, CARBON, VISOR, PANEL, TYRE, RIM, HUB, INTAKE, HALO, EXHAUST,
     TYRE_BAND, BRAKE_CALIPER,
     TCAM_IDS, tcamColour,

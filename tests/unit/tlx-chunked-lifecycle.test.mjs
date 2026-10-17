@@ -222,6 +222,25 @@ test("dust merge folds one-triangle cells into shared draws and keeps every tria
   assert.deepEqual(sizes, [6, 24, 2000], "dust groups stay under the triangle cap and the big chunk is untouched");
 });
 
+test("orphan dust whose box already spans a block shares one draw across blocks", () => {
+  // Six ground triangles, each 700 m wide (under the wide-list cap, over one
+  // 8-cell block) with centroids 900 m apart, plus one tight 2 m triangle and
+  // one dense chunk. The block pack leaves the six alone; they must share a draw.
+  const pos = [], idx = [];
+  const tri = (x, z, w) => { const v = pos.length / 3; pos.push(x, 0, z, x + w, 0, z, x, 0, z + 1); idx.push(v, v + 1, v + 2); };
+  for (let t = 0; t < 2000; t++) tri(4980 + (t % 50) * 0.5, 4980 + Math.floor(t / 50), 0.5);
+  for (let k = 0; k < 6; k++) tri(k * 900, 0, 700);
+  tri(8000, 8000, 2);
+  const data = () => ({ pos: new Float32Array(pos), idx: new Uint32Array(idx) });
+  const off = mergeFactory("1").build(data(), 72);
+  const on = mergeFactory(null).build(data(), 72);
+  assert.equal(on.chunks.length, 3, "dense chunk + one packed orphan draw + the tight triangle");
+  assert.deepEqual(triSet(on), triSet(off), "orphan packing covers exactly the same triangles");
+  assert.equal(on.lampCells.length, off.chunks.length, "the lamp table stays on the 72 m cells");
+  const sizes = Array.from(on.chunks, (c) => c.count / 3).sort((a, b) => a - b);
+  assert.deepEqual(sizes, [1, 6, 2000]);
+});
+
 test("a dust draw's box is the union of its parts, so the cull never drops a member", () => {
   const on = mergeFactory("2").build(dustMesh(), 72);
   const tris = (c) => { const a = c.geo.index.array, p = dustMesh().pos, out = []; for (let i = 0; i < a.length; i++) out.push([p[a[i] * 3], p[a[i] * 3 + 1], p[a[i] * 3 + 2]]); return out; };
