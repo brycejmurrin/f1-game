@@ -2,6 +2,21 @@
 "use strict";
 
 const TLX = (function () {
+  // three r186 Renderer.init() starts its own window rAF loop (Animation: info.reset, nodeFrame.update ->
+  // frameId, inspector) that ticks every vsync beside the game loop: 2.04 rAF callbacks per drawn frame on
+  // TLX vs 1.04 on GLX (gpu-census 39071040057), 0.12 ms each on the phone-shaped VM probe. TLX never sets
+  // an animation loop, so its context becomes a pump that begin() drains: frameId still advances once per
+  // DRAWN frame (FRAME-type nodes such as post passes key on it), an idle canvas runs no three callback,
+  // and XRManager's session swap still restores it (it saves getContext() and puts it back on end).
+  function pumpAnimation(r) {
+    const anim = r && r._animation;
+    if (!anim || typeof anim.setContext !== "function" || typeof anim.stop !== "function" || typeof anim.start !== "function") return null;
+    const pump = { cb: null };
+    pump.requestAnimationFrame = (cb) => { pump.cb = cb; return 1; };
+    pump.cancelAnimationFrame = () => { pump.cb = null; };
+    anim.stop(); anim.setContext(pump); anim.start();   // start() ticks once now and parks the next tick in the pump
+    return pump;
+  }
   let _lastFailure = null, _presentWarned = false;
   function _fail(reason) {
     _lastFailure = { reason: String(reason), at: Date.now() };
@@ -478,6 +493,7 @@ const TLX = (function () {
         try {
           await renderer.init();
           checkInit();
+          renderer.__apexPump = pumpAnimation(renderer);
         } catch (e) {
           // AUTO WebGPU→WebGL2 retry (and the outer create catch) must not keep
           // a half-booted three renderer / GPUDevice alive across the fallback.
@@ -5092,6 +5108,9 @@ const TLX = (function () {
         },
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
+          // three's per-frame tick (info.reset, nodeFrame.update), once per drawn frame — see pumpAnimation.
+          const _pump = renderer.__apexPump;
+          if (_pump && _pump.cb) { const cb = _pump.cb; _pump.cb = null; cb(performance.now()); }
           resizeNow();
           _sizeOwned = true;   // the next resize() defers to the next begin() (no rAF + cancel per frame)
           // Existing bounded retry remains synchronous. Fully warmed recovery
