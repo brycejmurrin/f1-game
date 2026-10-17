@@ -146,17 +146,21 @@ jobs:
         run: |
           mkdir -p artifacts/iphone-census
           node tools/gfx/iphone-census.mjs \
-            --url "$IC_URL" --device "$IC_SIM_DEVICE" --os "$IC_SIM_OS" --track "$IC_TRACK" \
+            --url "$IC_URL" --device "$IC_SIM_NAME" --model "$IC_SIM_DEVICE" --os "$IC_SIM_OS" --track "$IC_TRACK" \
             --soak-min "$IC_SOAK" --arms "$IC_ARMS" --rounds "$IC_ROUNDS" --window-s "$IC_WINDOW" \
             --out artifacts/iphone-census
 
       - name: Diagnostics on failure
         if: ${{ failure() }}
         continue-on-error: true
+        timeout-minutes: 5
         run: |
           xcrun simctl list devices booted
-          ls ~/Library/Logs/DiagnosticReports 2>/dev/null | head
-          log show --last 3m --predicate 'process == "safaridriver" OR process == "webinspectord"' --style compact 2>/dev/null | tail -60
+          for k in com.apple.webinspectord com.apple.mobilesafari; do
+            echo "--- $k"; xcrun simctl spawn "$IC_SIM_UDID" defaults read "$k" 2>&1 | head -30
+          done
+          echo "--- simulator-side log"
+          timeout 90 xcrun simctl spawn "$IC_SIM_UDID" log show --last 3m --style compact --predicate 'process == "webinspectord" OR process == "MobileSafari" OR process == "Safari"' 2>&1 | tail -60 || true
 
       - name: Verdict — fail the job on what the simulator reported
         if: ${{ !cancelled() }}

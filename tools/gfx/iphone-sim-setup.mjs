@@ -41,7 +41,12 @@ if (!dt) { console.error("iphone-sim-setup: no iPhone device type"); process.exi
 if (!dt.exact) console.log(`device type "${wantDevice}" not on this Xcode: using "${dt.name}"`);
 console.log(`runtime ${runtime.name} (${runtime.version}, ${runtime.identifier}); device type ${dt.name}`);
 
-const c = sh("xcrun", ["simctl", "create", "census-iphone", dt.identifier, runtime.identifier]);
+// Run 1 (39025397696) found TWO booted simulators: ours and the image's own "iPhone 17 Pro".
+// safaridriver matches on device name, so shut every other one down and give ours a
+// name nothing else has.
+const SIM_NAME = "census-iphone";
+sh("xcrun", ["simctl", "shutdown", "all"]);
+const c = sh("xcrun", ["simctl", "create", SIM_NAME, dt.identifier, runtime.identifier]);
 const udid = (c.stdout || "").trim();
 if (c.status !== 0 || !udid) { console.error("iphone-sim-setup: simctl create failed"); process.exit(1); }
 
@@ -52,7 +57,11 @@ if (c.status !== 0 || !udid) { console.error("iphone-sim-setup: simctl create fa
 const PREFS = [
   ["com.apple.webinspectord", "RemoteInspectorEnabled"],
   ["com.apple.webinspectord", "RemoteAutomationEnabled"],
+  ["com.apple.webinspectord", "WIRRemoteAutomationEnabled"],
   ["com.apple.mobilesafari", "WebKitDeveloperExtrasEnabledPreferenceKey"],
+  ["com.apple.mobilesafari", "WebInspectorEnabled"],
+  ["com.apple.mobilesafari", "RemoteAutomationEnabled"],
+  ["com.apple.mobilesafari", "WebKitRemoteAutomationEnabled"],
 ];
 sh("xcrun", ["simctl", "boot", udid]);
 sh("xcrun", ["simctl", "bootstatus", udid, "-b"]);
@@ -62,7 +71,11 @@ sh("xcrun", ["simctl", "boot", udid]);
 const bs = sh("xcrun", ["simctl", "bootstatus", udid, "-b"]);
 if (bs.status !== 0) { console.error("iphone-sim-setup: simulator did not finish booting"); process.exit(1); }
 sh("xcrun", ["simctl", "list", "devices", "booted"]);
+// Read the prefs back (a write to a domain the simulator ignores still "succeeds"), then
+// start Safari so webinspectord has an application to list before safaridriver looks.
+for (const [dom, key] of PREFS) sh("xcrun", ["simctl", "spawn", udid, "defaults", "read", dom, key]);
+sh("xcrun", ["simctl", "launch", udid, "com.apple.mobilesafari"]);
 
-const lines = [`IC_SIM_UDID=${udid}`, `IC_SIM_DEVICE=${dt.name}`, `IC_SIM_OS=${runtime.version}`];
+const lines = [`IC_SIM_UDID=${udid}`, `IC_SIM_NAME=${SIM_NAME}`, `IC_SIM_DEVICE=${dt.name}`, `IC_SIM_OS=${runtime.version}`];
 console.log(lines.join("\n"));
 if (process.env.GITHUB_ENV) fs.appendFileSync(process.env.GITHUB_ENV, lines.join("\n") + "\n");

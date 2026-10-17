@@ -27,7 +27,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(a.join(" "));
 
 const URL_ = flag("--url", DEFAULT_URL);
-const device = flag("--device", "iPhone 17 Pro");
+const device = flag("--device", "iPhone 17 Pro");   // the simulator's NAME (safari:deviceName)
+const model = flag("--model", device);          // what the summary calls it
 const os = flag("--os", "");
 const soakMin = Math.max(0, Number(flag("--soak-min", 3)));
 const arms = parseArms(flag("--arms", "tlx,tlxgpu,glx"));
@@ -37,7 +38,7 @@ const track = flag("--track", "montreal");
 const outDir = flag("--out", "artifacts/iphone-census");
 fs.mkdirSync(outDir, { recursive: true });
 
-const res = { url: URL_, device, os, track, soakMin, arms, rounds, windowS, startedAt: new Date().toISOString(), phases: {} };
+const res = { url: URL_, device: model, simName: device, os, track, soakMin, arms, rounds, windowS, startedAt: new Date().toISOString(), phases: {} };
 const save = () => fs.writeFileSync(path.join(outDir, "iphone-census.json"), JSON.stringify(res, null, 2));
 const t0 = Date.now();
 
