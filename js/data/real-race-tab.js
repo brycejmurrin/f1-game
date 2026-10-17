@@ -783,17 +783,6 @@ const DataRealRace = (function () {
 
     function simLaps(script) { return Math.max(1, Math.round(script.laps * distance)); }
 
-    /** What each real lap is remembered for — the labels of the JUMP IN AT picker. */
-    function lapEvents(script) {
-      const ev = {};
-      const add = (lap, text) => { if (lap >= 1 && lap <= script.laps) (ev[lap] = ev[lap] || []).push(text); };
-      for (const w of script.cautions || []) add(w.from, w.level >= 4 ? "RED FLAG" : w.level === 3 ? "SAFETY CAR" : "VSC");
-      for (const d of script.drivers || []) { if (d.dnf && !d.dns && !d.dsq && d.lapsDone >= 0) add(d.lapsDone + 1, d.code + " out"); }
-      const rain = Array.isArray(script.rain) ? script.rain : [];
-      for (let n = 1; n <= script.laps; n++) if (rain[n] && !rain[n - 1]) add(n, "rain");
-      return ev;
-    }
-
     /** DRIVE AS: the seat every JUMP IN uses — the drivers with a roster seat, in grid order. */
     function seatPicker(script, seats) {
       const field = el("label", "dh-pick-field");
@@ -1155,7 +1144,7 @@ const DataRealRace = (function () {
       return launchRace(script, { seat: code, laps: simLaps(script), startLap, traces: tr, intro: true });   // intro: the pre-race card and announcer, as RACE! has
     }
 
-    return { loadRealRace, scriptFor, jumpIn, lapEvents, watch, loadTraces, cancel,
+    return { loadRealRace, scriptFor, jumpIn, watch, loadTraces, cancel,
              traces: () => traces, setTraces: (tr) => { traces = tr || null; return traces; },
              setDistance: (f) => { distance = DISTANCES.includes(f) ? f : 1; return distance; },
              setStartLap: (n) => { startLap = Math.max(1, n | 0); return startLap; },
