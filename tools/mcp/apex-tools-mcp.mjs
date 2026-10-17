@@ -818,6 +818,26 @@ const CATALOG = [
     },
   },
   {
+    name: "apex_profile",
+    week: 7,
+    kind: "browser",
+    description: "Browser (lock first) — profile a circuit's frame budget (tools/perf/profile.mjs) as a BACKGROUND job (returns a jobId; the lock is held until it exits): per-subsystem p50/p95/p99 spans, `repeat` fresh pages for the spread, `base` = a git ref to A/B against. Watch with apex_job_status, read the artifact with apex_profile_query. Same run as apex_job_start kind profile. Skill: playwright-probe.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        track: { type: "string", description: "Circuit id (default vegas)." },
+        mode: { type: "string", enum: ["spans", "cpu", "hitch", "trace"], description: "Default spans." },
+        frames: { type: "integer", minimum: 10, maximum: 600, description: "Measured rAF frames (default 40)." },
+        repeat: { type: "integer", minimum: 1, maximum: 7, description: "Fresh pages; median + spread (1 = every verdict unproven)." },
+        base: { type: "string", description: "Git ref to A/B against (a worktree run)." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
     name: "apex_profile_query",
     kind: "tree",
     description: "Tree — after apex_job_start kind profile (tools/perf/profile.mjs: per-subsystem p50/p95/p99, --repeat spread, --base A/B), summarise or compare the saved profiler artifacts under artifacts/ or scratch/ (tools/perf/query.mjs): a spans JSON → table; a .cpuprofile → top-N self/total with fn / file regex filters; two spans JSONs (file + compare) → A/B delta. Never returns a raw profile. Skill: playwright-probe.",
