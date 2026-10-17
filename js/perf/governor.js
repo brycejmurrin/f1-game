@@ -384,6 +384,7 @@ function _floorTier() { return Math.max(_perfTierFloor, _userTier); }
 function init(gfx) {
   Log.info("game", "PerfGov.init");
   _gfx = gfx;
+  try { setThermalDrift(GameStore.store.raw("apex26.thermalDrift") === "1"); } catch (_) { /* storage blocked: off */ }
   // Any phone (isMobile), NOT just the memory-safe STANDARD tier (mobileTier):
   // a device that opted into GRAPHICS: HIGH is the one MOST likely to get
   // jetsam-killed, so it needs the crash sentinel + conservative restart too.
@@ -519,7 +520,7 @@ function cleanRace() {
 // disappear from diagnostics just because the next second was smooth.
 const frameHistory = new Float64Array(2048);
 let frameCursor = 0, frameCount = 0, droppedSimS = 0, physicsSteps = 0;
-function resetFrameStats() { frameCursor = 0; frameCount = 0; droppedSimS = 0; physicsSteps = 0; }
+function resetFrameStats() { if (_drift) _drift.reset(); frameCursor = 0; frameCount = 0; droppedSimS = 0; physicsSteps = 0; }
 function recordSimulation(steps, dropped) {
   physicsSteps += Math.max(0, steps || 0); droppedSimS += Math.max(0, dropped || 0);
 }
@@ -577,6 +578,7 @@ function tick(dtMs) {
   _live = true;
   // A zero / negative / NaN interval is a stamp artefact (pause -> resume: lastFrame is set in a handler, so the next rAF stamp can be earlier), not a frame: fed to the EMA and the derived floor it drags the floor under every healthy frame and trips a spurious step-down (then a revert). The history above already skips it.
   if (!(dtMs > 0)) return;
+  if (_drift && dtMs < SPIKE_MS && _drift.feed(dtMs) && driftStep()) _drift.stepped();
   // Before any smoothing: the opening window wants the raw frame, spikes and
   // all, because a spike in the first seconds IS the thing being reported.
   if (_openN < OPEN_FRAMES) {
@@ -827,6 +829,31 @@ function tick(dtMs) {
 // Forget the crash history and lift the floor NOW, without waiting for whole
 // finished races to pay it down one at a time. The escape hatch behind
 // __apex.safeMode(false).
+// #2652 thermal drift (opt-in, apex26.thermalDrift=1): a phone that heats up gets
+// slower minutes before frames MISS, so ThermalDrift's slow-drift detector may take
+// ONE existing rung early. It is the degrade branch minus the verify: the step is
+// a bet on the future, not on the next EMA, so a verify would revert it at once.
+// _scaleCap = cur keeps the restore gate from climbing straight back; the cap
+// ages out on unbroken headroom exactly as for a measured miss.
+let _drift = null;
+function setThermalDrift(on) {
+  _drift = on && typeof ThermalDrift !== "undefined" ? ThermalDrift.drift() : null;
+}
+function driftStep() {
+  if (_pendingVerify || _govCoolMs > 0 || _govCool > 0) return false;   // mid-verify or cooling: ask again next window
+  const cur = _gfx.getRenderScale ? _gfx.getRenderScale() : 1;
+  if (_autoRes && cur > 0.5 && !_scaleFutile && _gfx.setRenderScale(cur - 0.1)) {
+    _scaleCap = cur; _armCapProbe(); _govCool = 30; _downHold = _chargeCut(); _scaleMoves++;
+    return true;
+  }
+  if (!_tierHold && _perfTier < 4 && _perfTierFloor < 4 && !_tierFutile) {
+    _perfTier = Math.min(4, Math.max(_perfTier, _floorTier()) + 1); _autoShed++; _govCool = 90; _downHold = _chargeCut();
+    _scaleCap = Infinity; _armCapProbe();
+    return true;
+  }
+  return false;
+}
+
 function clearStrikes() {
   _crashStrikes = 0;
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
@@ -840,7 +867,7 @@ function clearStrikes() {
 }
 
 return {
-  init, tick, frameStats, recordSimulation, resetFrameStats, sentinelArm, sentinelResume, cleanRace, clearStrikes,
+  init, tick, setThermalDrift, thermalDrift: () => _drift && _drift.state(), frameStats, recordSimulation, resetFrameStats, sentinelArm, sentinelResume, cleanRace, clearStrikes,
   tier: () => Math.max(_perfTierFloor, _userTier, _perfTier),
   // Crash + measured only — no GRAPHICS user floor. Look-defining post
   // (bloom / SSAO / god-rays / contact / lamp volumetrics) reads this so
