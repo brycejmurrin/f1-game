@@ -188,6 +188,31 @@ function currentBranch() {
   } catch { return null; }
 }
 
+/** Files this branch changed against its merge-base with the deploy branch
+ *  (committed, staged, unstaged, untracked), or null when no base is
+ *  reachable. `APEX_RATCHETS_BASE` names the ref (tests). #2583: a delta that
+ *  lowered files the branch never touched double-lowered the shared ceilings
+ *  of every sibling PR. */
+export function changedFiles() {
+  const git = (...a) => cp.execFileSync("git", a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  const refs = [process.env.APEX_RATCHETS_BASE, `origin/${DEPLOY_BRANCH}`, DEPLOY_BRANCH].filter(Boolean);
+  for (const ref of refs) {
+    try {
+      const mb = git("merge-base", ref, "HEAD");
+      const out = [git("diff", "--name-only", mb), git("ls-files", "--others", "--exclude-standard")].join("\n");
+      return new Set(out.split("\n").filter(Boolean));
+    } catch { /* try the next ref */ }
+  }
+  return null;
+}
+
+/** A topic-branch delta may RAISE anything, but LOWER only a file the branch
+ *  changed; tree metrics are not attributable to one file and pass. */
+export function scopeToBranch(rows, touched = changedFiles()) {
+  if (!touched) return rows;
+  return rows.filter((r) => r.tree || r.value >= r.ceiling || touched.has(r.file));
+}
+
 /** Add `rows`' (value - ceiling) to this branch's fragment; delete it when
  *  every delta nets to zero. */
 async function writeFragment(name, rows) {
@@ -300,7 +325,7 @@ export async function updateCli({ dryRun = false, lowerOnly = false, absolute = 
   const name = absolute ? null : fragmentName(branch === undefined ? currentBranch() : branch);
   if (!name || dryRun) return { rows: await update(load(), { dryRun, lowerOnly }), fragment: null };
   const rows = await measure(load());
-  await writeFragment(name, updateReceipt(rows, { lowerOnly }).changes);
+  await writeFragment(name, scopeToBranch(updateReceipt(rows, { lowerOnly }).changes));
   return { rows, fragment: `${FRAG_REL}/${name}` };
 }
 
@@ -312,7 +337,7 @@ export async function updateFragment(data = load(), { branch } = {}) {
   const name = fragmentName(branch === undefined ? currentBranch() : branch);
   if (!name) throw new Error("--fragment needs a topic branch (not the deploy branch or a detached HEAD)");
   const rows = await measure(data);
-  await writeFragment(name, updateReceipt(rows).changes);
+  await writeFragment(name, scopeToBranch(updateReceipt(rows).changes));
   return rows;
 }
 
@@ -371,7 +396,7 @@ export async function autoRaise({ maxRaise = 40, dryRun = false, data = load(), 
   let rows;
   if (name) {
     rows = await measure(data);
-    await writeFragment(name, updateReceipt(rows).changes);
+    await writeFragment(name, scopeToBranch(updateReceipt(rows).changes));
   } else rows = await update(data);
   const key = (r) => `${r.file} ${r.metric}`;
   const raised = rows.filter((r) => v.over.some((o) => key(o) === key(r)));
