@@ -55,8 +55,9 @@ const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];
 
 
-// TEMPORARY DIAGNOSTIC: aggregate a CDP heap snapshot by node type+name (self size).
-async function snapAgg(cdp) {
+// TEMPORARY DIAGNOSTIC: aggregate a CDP heap snapshot by node type+name (self size), list large
+// ArrayBuffer backing stores and (given the visit-1 id set) the shortest retaining path of each new one.
+async function snapAgg(cdp, v1Ids) {
   let buf = [];
   const on = (e) => buf.push(e.chunk);
   cdp.on("HeapProfiler.addHeapSnapshotChunk", on);
@@ -64,16 +65,44 @@ async function snapAgg(cdp) {
   cdp.off("HeapProfiler.addHeapSnapshotChunk", on);
   const snap = JSON.parse(buf.join("")); buf = null;
   const f = snap.snapshot.meta.node_fields, nf = f.length, types = snap.snapshot.meta.node_types[0];
-  const ti = f.indexOf("type"), ni = f.indexOf("name"), si = f.indexOf("self_size");
-  const agg = new Map();
-  for (let i = 0; i < snap.nodes.length; i += nf) {
-    const t = types[snap.nodes[i + ti]];
+  const ti = f.indexOf("type"), ni = f.indexOf("name"), si = f.indexOf("self_size"), ii = f.indexOf("id"), ci = f.indexOf("edge_count");
+  const ef = snap.snapshot.meta.edge_fields, ne = ef.length, etypes = snap.snapshot.meta.edge_types[0];
+  const eti = ef.indexOf("type"), eni = ef.indexOf("name_or_index"), eto = ef.indexOf("to_node");
+  const agg = new Map(), ids = new Set(), big = [];
+  const N = snap.nodes.length / nf;
+  for (let n = 0; n < N; n++) {
+    const i = n * nf, t = types[snap.nodes[i + ti]];
     let nm = snap.strings[snap.nodes[i + ni]];
+    if (nm === "system / JSArrayBufferData" && snap.nodes[i + si] >= 500000) { ids.add(snap.nodes[i + ii]); if (v1Ids && !v1Ids.has(snap.nodes[i + ii])) big.push(n); }
     if (t === "string" || t === "concatenated string" || t === "sliced string") nm = "STR:" + nm.slice(0, 60).replace(/\s+/g, " ");
     else if (t === "number" || t === "hidden" || t === "synthetic") nm = t + ":" + nm.slice(0, 40);
     const k = t + "|" + nm, a = agg.get(k) || [0, 0]; a[0] += snap.nodes[i + si]; a[1]++; agg.set(k, a);
   }
-  return agg;
+  let paths = [];
+  if (v1Ids && big.length) {
+    const parent = new Int32Array(N).fill(-1), pedge = new Int32Array(N).fill(-1), seen = new Uint8Array(N);
+    const first = new Int32Array(N + 1); for (let n = 0, e = 0; n < N; n++) { first[n] = e; e += snap.nodes[n * nf + ci]; } first[N] = snap.edges.length / ne;
+    const q = [0]; seen[0] = 1;
+    for (let h = 0; h < q.length; h++) {
+      const n = q[h];
+      for (let e = first[n]; e < first[n + 1]; e++) {
+        const et = etypes[snap.edges[e * ne + eti]]; if (et === "weak") continue;
+        const to = snap.edges[e * ne + eto] / nf; if (seen[to]) continue;
+        seen[to] = 1; parent[to] = n; pedge[to] = e; q.push(to);
+      }
+    }
+    big.sort((x, y) => snap.nodes[y * nf + si] - snap.nodes[x * nf + si]);
+    for (const n of big.slice(0, 8)) {
+      const hops = []; let cur = n;
+      for (let d = 0; d < 9 && cur > 0 && parent[cur] >= 0; d++) {
+        const e = pedge[cur], et = etypes[snap.edges[e * ne + eti]], nmi = snap.edges[e * ne + eni];
+        const en = et === "element" || et === "hidden" ? "[" + nmi + "]" : snap.strings[nmi];
+        const pn = parent[cur]; hops.push(`${snap.strings[snap.nodes[pn * nf + ni]].slice(0, 30)}.${en}`); cur = pn;
+      }
+      paths.push(`${(snap.nodes[n * nf + si] / 1048576).toFixed(2)}MB <- ` + hops.join(" <- "));
+    }
+  }
+  return { agg, ids, paths };
 }
 function snapDiff(a, b) {
   const rows = [];
@@ -114,7 +143,7 @@ test("loading circuits one after another keeps one world in memory and does not 
       c.heapMin = Math.min(...reads);
       c.reads = reads;
       (heap.diag = heap.diag || []).push(`v${visit} ${id}: first ${reads[0]} reads ${reads.join("/")} geom ${c.three && c.three.geometries} tex ${c.three && c.three.textures} ro ${c.three && c.three.renderObjects}`);
-      if (id === "monza" && (visit === 1 || visit === 3)) { const g = await snapAgg(cdp); if (visit === 1) heap.snap1 = g; else heap.snapDiff = snapDiff(heap.snap1, g); }
+      if (id === "monza" && (visit === 1 || visit === 3)) { const g = await snapAgg(cdp, visit === 1 ? null : heap.ids1); if (visit === 1) { heap.snap1 = g.agg; heap.ids1 = g.ids; } else { heap.snapDiff = snapDiff(heap.snap1, g.agg) + " PATHS " + g.paths.join(" ;; "); } }
       const caches = await page.evaluate(() => { const r = window.renderer, o = {}; if (!r) return o; for (const k of Object.keys(r)) { const m = r[k]; if (!m || typeof m !== "object" || k === "info") continue; for (const k2 of Object.keys(m)) { const v = m[k2]; if (v && (v instanceof Map || v instanceof Set) && v.size > 20) o[k + "." + k2] = v.size; else if (v && (v instanceof WeakMap)) o[k + "." + k2] = "wm"; } } return o; });
       heap.diag[heap.diag.length - 1] += " CACHES " + JSON.stringify(caches);
       c.path = await page.evaluate(() => { try { const e = window.__apex.diag({ download: false }).env; return JSON.stringify({ backend: e.backend, state: e.backendState }).slice(0, 400); } catch (_) { return null; } });
