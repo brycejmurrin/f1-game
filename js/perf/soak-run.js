@@ -16,8 +16,8 @@
    road to steer the player, which the arc rule forbids in a real race. It is
    reachable ONLY through start() (a deliberate soak, never a default, never a
    setting that persists) and clears _testInput the moment it stops, so a normal
-   race and every assist-off rule are untouched. Classified in docs/PHYSICS.md's
-   column table as "soak autopilot (input synthesiser, soak-only)".
+   race and every assist-off rule are untouched. Classified in docs/PHYSICS.md §Curvature
+   channels as assist-gated (soak-only input synthesiser, gated by start()).
 
    THE PAGE MUST STAY IN THE FOREGROUND. iOS Safari pauses a hidden or locked
    page (game.js pauses on document.hidden), so a soak that is backgrounded just
@@ -72,7 +72,7 @@ const SoakRun = (function () {
     const latTarget = kSteer * L * L * 0.5;
     let steer = clamp(KP * (Math.atan2(latTarget - p.x, L) - p.angle), -1, 1);
     const offRoad = Math.abs(p.x) - p.hw > 0.4;
-    if (st.lastS != null && p.s - st.lastS < 0.05 && p.speed < 3) st.stalled++; else st.stalled = 0;
+    if (st.lastS != null && p.s - st.lastS < 0.05) st.stalled++; else st.stalled = 0;   // no progress along the arc (a standing start counts, harmlessly)
     st.lastS = p.s;
     let throttle = p.speed < vT, brake = p.speed > vT * 1.04;
     if (st.stalled > 10) { steer = clamp(steer, -0.4, 0.4); throttle = true; brake = false; }
@@ -83,10 +83,14 @@ const SoakRun = (function () {
 
   function log(msg) { try { Log.info("game", "SoakRun " + msg); } catch (_) { /* Log not loaded */ } }
 
+  // A hidden or locked page is paused by game.js and cannot soak: end the run rather than leave input held.
+  function onHidden() { if (typeof document !== "undefined" && document.hidden) finish("hidden"); }
+
   function finish(reason) {
     const G = _G; const r = _run;
     if (!r) return false;
     _run = null;
+    try { document.removeEventListener("visibilitychange", onHidden); } catch (_) { /* no document */ }
     if (r.raf) cancelAnimationFrame(r.raf);
     if (G) {
       G._testInput = null;     // the real Input owns the car again the instant the soak ends
@@ -137,12 +141,13 @@ const SoakRun = (function () {
     _run = { raf: 0, t0: performance.now(), tRace: 0, prev: 0, started: false, minutes: opts.minutes > 0 ? opts.minutes : SOAK_MIN,
       st: { hold: 30, stalled: 0, lastS: null } };
     _last = { state: "starting", reason: "" };
+    try { document.addEventListener("visibilitychange", onHidden); } catch (_) { /* no document */ }
     log("start " + (opts.track || TRACK_ID) + " wet " + _run.minutes + " min");
     return Promise.resolve(G.startRace()).then(() => {
       if (!_run) return false;
       try {   // the chase camera (js/camera/mode-switch.js CAM_MODES)
         const ix = CamModes.CAM_MODES.findIndex((m) => m.id === "chase");
-        if (ix >= 0) G.setCamMode(ix);
+        if (ix >= 0) G.setCamMode(ix, { persist: false });   // the player's saved camera stays theirs
       } catch (_) { /* camera stays as the player had it */ }
       _run.raf = requestAnimationFrame(tick);
       return true;

@@ -39,11 +39,12 @@ function rig({ curveAt = null, k = 0.02 } = {}) {
     Math, Promise, Object, Array, Number, performance: { now: () => now },
     requestAnimationFrame: (f) => { calls.raf.push(f); return calls.raf.length; },
     cancelAnimationFrame: () => { calls.cancel++; },
-    document: { getElementById: (id) => (id === "pausebtn" ? { click() { calls.pauseClicks++; } } : null) },
+    document: { hidden: false, addEventListener(t, f) { calls.vis = f; }, removeEventListener() { calls.vis = null; }, getElementById: (id) => (id === "pausebtn" ? { click() { calls.pauseClicks++; } } : null) },
     Tracks, CamModes: { CAM_MODES: [{ id: "tv" }, { id: "chase" }] },
     Log: { info() {} },
     PhoneRecorder: { start() { calls.recStart++; ctx.PhoneRecorder._on = true; }, stop() { calls.recStop++; ctx.PhoneRecorder._on = false; }, isOn: () => !!ctx.PhoneRecorder._on },
   };
+  calls.hide = () => { ctx.document.hidden = true; calls.vis(); };
   const SoakRun = vm.runInNewContext(SRC + "\n;SoakRun", ctx);
   SoakRun.create(G);
   const frame = (ms) => { now += ms; const f = calls.raf.pop(); if (f) f(now); };
@@ -127,3 +128,16 @@ test("it steers back toward the road: right of centre steers one way, left the o
   assert.ok(right * left < 0, "opposite signs");
   assert.ok(Math.abs(right) <= 1 && Math.abs(left) <= 1);
 });
+
+test("a hidden page ends the soak and hands the input back; the listener is removed on finish", async () => {
+  const { SoakRun, G, calls, frame } = rig();
+  await SoakRun.start({ minutes: 5 });
+  G.state = "race"; frame(16);
+  assert.equal(typeof calls.vis, "function", "listening only while a soak is active");
+  rigDocHidden(calls);
+  assert.equal(SoakRun.active(), false);
+  assert.equal(G._testInput, null);
+  assert.equal(SoakRun.status().reason, "hidden");
+  assert.equal(calls.vis, null);
+});
+function rigDocHidden(calls) { calls.hide(); }
