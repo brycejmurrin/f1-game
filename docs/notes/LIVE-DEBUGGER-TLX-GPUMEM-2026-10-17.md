@@ -20,7 +20,7 @@ terrain attributes (#1647 / #2693), KTX2/UASTC (#1637).
 
 | id | file:line | severity | verdict | evidence |
 |---|---|---|---|---|
-| GPUMEM-1 | `js/render/three/tlx-shadow.js:92-122` | low | BY-DESIGN | Phone sun target is 1024² depth plus an R8 colour attachment three r186 cannot omit (`textures[0]` sizes the target). R8 is 1,048,576 bytes; depth is 4,194,304. GLX's phone map is depth-only (`js/render/glx/shadow.js:106`). Depth-only targets are three r187 #34782, not vendored (0.186.1). Vendor and `js/render/three/tlx.js` are outside this lane. |
+| GPUMEM-1 | `js/render/three/tlx-shadow.js:92-122` | low | BY-DESIGN / deferred | Phone sun target is 1024² depth plus an R8 colour attachment three r186 cannot omit (`textures[0]` sizes the target). R8 is 1,048,576 bytes; depth is 4,194,304. GLX's phone map is depth-only (`js/render/glx/shadow.js:106`). Depth-only targets are three r187 #34782, not vendored (0.186.1). Orchestrator decision 2026-10-17T20:32Z (Bryce left it to the orchestrator): leave the 1 MB attachment; no three r187 vendor lane now. It rides the next routine three.js upgrade. |
 | GPUMEM-2 | `js/render/three/tlx-shadow.js:39-67` | — | BY-DESIGN | Phone sun is 1024 for every graphics preset, matching GLX. 512 would be a look change (texel density), not an unused allocation. Car and lamp maps are `null` on `isMobile \|\| mobileTier` (`:130`, `:164`). |
 | GPUMEM-3 | `js/render/three/tlx-post.js:88-129,271-301` | — | BY-DESIGN | Phone scene MSAA is the caller's 0. SSAO, bloom and godrays allocate only when the governor opens them. SSAO is R8; bloom is R11F when `EXT_color_buffer_float` is renderable. Godray stays RGBA16F because alpha carries folded SSAO (#2649, not this lane). |
 | GPUMEM-4 | `js/render/three/tlx-post.js:893-944` | — | BY-DESIGN | Scene depth is invalidated on WebGL2 when no pass reads it. A visible sun flare still samples depth, so a day frame keeps the surface. That is the reader, not a leak. |
@@ -35,10 +35,12 @@ terrain attributes (#1647 / #2693), KTX2/UASTC (#1637).
 
 No source edit. No player-facing change. No before/after byte delta.
 
-## Next lane, if anyone takes it
+## Deferred
 
-Depth-only shadow targets need a three r187 vendor bump (outside this lane),
-then a unit test that the phone sun target has no colour attachment and the
-census depth line drops the R8 megabyte. Fixed targets default-on needs the
-pixel A/B in `tools/gfx/res-scale-ab.mjs` and a phone soak, not another
-read of these files.
+GPUMEM-1 stays. Orchestrator, 2026-10-17T20:32Z: leave the 1 MB R8 colour
+attachment; do not open a three r187 vendor lane. The drop rides the next
+routine three.js upgrade. The owned JS files are handed to perf-4 (memory
+leak / WebGPU). This lane does not edit them again.
+
+Fixed targets default-on is a separate decision. It needs the pixel A/B in
+`tools/gfx/res-scale-ab.mjs` and a phone soak. Not this PR.
