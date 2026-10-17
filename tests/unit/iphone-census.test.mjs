@@ -294,3 +294,12 @@ test("requestEnv: allowlisted fields become IC_* lines, the rest is rejected", (
   const req = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/iphone-census-request.json"), "utf8"));
   assert.deepEqual(L.requestEnv(req).rejected, [], "the committed request file passes its own allowlist");
 });
+
+test("verdict: the per-arm page row carries the fallback log and visibility, so a bound-GLX arm explains itself", () => {
+  const r = good();
+  r.ab[0].diag = { hidden: true, vis: "hidden", focus: false, hasTLX: false, gfxLog: ["Gfx.bind fallback webgl2"], diag: { env: { backendState: { api: "webgl2" } } } };
+  const row = L.verdict(r).rows.find((x) => x[0] === "arm tlx r1 page");
+  assert.match(row[1], /"hidden":true/);
+  assert.match(row[1], /Gfx\.bind fallback webgl2/);
+  assert.match(row[1], /"hasTLX":false/);
+});

@@ -165,6 +165,7 @@ export const RAF_SRC = `
 export const SAMPLE_SRC = `
   const s = { t: Date.now() };
   try { const i = window.__apex.info(); s.state = i.state; s.track = i.track; } catch (e) { s.infoError = String(e && e.message); }
+  try { s.hidden = document.hidden; s.vis = document.visibilityState; s.focus = document.hasFocus(); } catch (_) { /* no document */ }
   try { s.loopFrames = typeof LoopHealth !== "undefined" ? LoopHealth.state().frames : null; } catch (_) { s.loopFrames = null; }
   try { const p = window.__apex.perf(); s.scale = p.scale; s.fps = p.fps; s.tier = p.tier; s.autoTier = p.autoTier; s.autoShed = p.autoShed; s.frameTimes = p.frameTimes; s.floorMs = p.floorMs; } catch (e) { s.perfError = String(e && e.message); }
   try { if (typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.memState) { const m = GLX.__tlx.memState(); s.mem = m; } } catch (e) { s.memError = String(e && e.message); }
@@ -177,6 +178,8 @@ export const DIAG_SRC = `
   const o = { storage: {}, session: {} };
   for (const k of ["apex26.gfxBackend", "apex26.tlxForceGL", "apex26.gfxTlxFail", "apex26.gfxWgxFail", "apex26.gfxBackendProbe"]) { try { o.storage[k] = localStorage.getItem(k); } catch (_) {} }
   for (const k of ["apex26.gfxBound", "apex26.gfxClaimFail", "apex26.tlxAutoGL"]) { try { o.session[k] = sessionStorage.getItem(k); } catch (_) {} }
+  try { o.hidden = document.hidden; o.vis = document.visibilityState; o.focus = document.hasFocus(); o.hasTLX = typeof TLX !== "undefined"; o.hasGfx = typeof Gfx !== "undefined"; } catch (_) {}
+  try { const l = window.__apex.logs ? window.__apex.logs({ ns: "gfx" }) : null; o.gfxLog = Array.isArray(l) ? l.slice(-12) : l; } catch (e) { o.logsError = String(e && e.message); }
   try { const d = window.__apex.diag({ download: false }); o.diag = JSON.parse(JSON.stringify(d, (k, v) => (typeof v === "string" && v.length > 200 ? v.slice(0, 200) : v))); } catch (e) { o.diagError = String(e && e.message); }
   return JSON.stringify(o).length > 12000 ? { storage: o.storage, session: o.session, diagError: o.diagError || "diag too large", diagKeys: o.diag ? Object.keys(o.diag) : null } : o;`;
 
@@ -336,6 +339,10 @@ export function verdict(res) {
       if (leg.png.meanLuma < 3 || leg.png.nearBlack > 0.98) bad.push(`arm ${leg.arm} round ${leg.round}: screenshot is blank (the wrong-picture class)`);
     }
     if (leg.diag && (leg.diag.storage || leg.diag.session)) rows.push([`arm ${leg.arm} r${leg.round} latches`, JSON.stringify({ ls: leg.diag.storage, ss: leg.diag.session }).slice(0, 300)]);
+    if (leg.diag) {
+      const d = leg.diag, e = d.diag && d.diag.env;
+      rows.push([`arm ${leg.arm} r${leg.round} page`, JSON.stringify({ hidden: d.hidden, vis: d.vis, focus: d.focus, hasTLX: d.hasTLX, hasGfx: d.hasGfx, gfxLog: d.gfxLog, env: e && e.backendState, diagError: d.diagError }).slice(0, 700)]);
+    }
   }
   for (const [arm, legs] of Object.entries(byArm)) {
     const p50s = legs.map((l) => l.window && l.window.p50);
