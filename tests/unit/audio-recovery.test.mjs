@@ -632,3 +632,53 @@ test("later race and same-track manual playback survive audition cleanup after r
   assert.equal(A.currentTrackId(), track, "same-ID manual selection is a new owner");
   assert.equal(mix.timers.size, 0); A.stopEngine(); A.stopMusic();
 });
+
+// Exercise the soundtrack factory with a transport that deliberately ignores
+// abort: logical ownership must protect a replacement as well as native fetch.
+function pendingSoundtrack({ abort = true } = {}) {
+  const requests = [], decodes = [], started = [];
+  const context = { state: "running", currentTime: 0,
+    createGain: () => ({ gain: { value: 0, setTargetAtTime() {} }, connect() {} }),
+    decodeAudioData(bytes, resolve) { decodes.push(bytes); resolve({ duration: 4 }); },
+    createBufferSource: () => ({ connect() {}, disconnect() {}, stop() {}, start() { started.push(this); } }) };
+  const sandbox = vm.createContext({ document: { hidden: false }, Log: { warn() {} },
+    ...(abort ? { AbortController } : {}),
+    fetch: (url, options) => new Promise((resolve) => { requests.push({ url, signal: options && options.signal, resolve }); }) });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/soundtrack.js"), "utf8"), sandbox);
+  const music = sandbox.GameAudioSoundtrack.create({ context: () => context, master: () => ({}), enabled: () => true,
+    engineRunning: () => false, sfxOk: () => true, now: () => 0, clamp01: (v) => Math.max(0, Math.min(1, v)) });
+  const deliver = (request, bytes) => request.resolve({ ok: true, arrayBuffer: () => Promise.resolve(bytes) });
+  return { music, requests, decodes, started, deliver };
+}
+
+for (const abort of [true, false]) test(`STOP retries a stalled soundtrack and rejects its late response (AbortController ${abort})`, async () => {
+  const { music, requests, decodes, started, deliver } = pendingSoundtrack({ abort });
+  music.startMusic(0);
+  assert.equal(requests.length, 1);
+  music.stopMusic();
+  if (abort) assert.equal(requests[0].signal.aborted, true, "STOP aborts the actual fetch signal");
+  music.startMusic(0);
+  assert.equal(requests.length, 2, "START owns a new request instead of reusing the stalled one");
+  deliver(requests[0], "stale bytes"); await flush();
+  assert.deepEqual(decodes, [], "an uncooperative response cannot allocate stale PCM");
+  deliver(requests[1], "replacement bytes"); await flush();
+  assert.deepEqual(decodes, ["replacement bytes"]);
+  assert.equal(started.length, 1);
+  music.stopMusic();
+});
+
+test("resetContext aborts a pending soundtrack and its late cleanup cannot erase a replacement", async () => {
+  const { music, requests, decodes, started, deliver } = pendingSoundtrack();
+  music.startMusic(0); music.resetContext();
+  assert.equal(requests[0].signal.aborted, true);
+  music.startMusic(0);
+  deliver(requests[0], "old context bytes"); await flush();
+  assert.deepEqual(decodes, []);
+  music.stopMusic();
+  assert.equal(requests[1].signal.aborted, true, "the old settlement kept the new controller registered");
+  music.startMusic(0);
+  deliver(requests[2], "current bytes"); await flush();
+  assert.deepEqual(decodes, ["current bytes"]);
+  assert.equal(started.length, 1);
+  music.stopMusic();
+});

@@ -129,27 +129,49 @@ function pollFixture(attempts) {
   fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "live-poll-"));
   try {
-    fs.writeFileSync(path.join(dir, "attempts.json"), JSON.stringify(attempts));
-    fs.writeFileSync(path.join(dir, "curl"), `#!/usr/bin/env node
-import fs from 'node:fs';
-import path from 'node:path';
-const dir = process.env.FIXTURE_DIR;
-const url = process.argv.at(-1);
-const countFile = path.join(dir, 'count');
-let count = fs.existsSync(countFile) ? Number(fs.readFileSync(countFile, 'utf8')) : 0;
-if (url.includes('/version.json?')) fs.writeFileSync(countFile, String(++count));
-const all = JSON.parse(fs.readFileSync(path.join(dir, 'attempts.json'), 'utf8'));
-const fixture = all[Math.min(count - 1, all.length - 1)];
-const version = url.includes('/version.json?');
-fs.writeFileSync(process.argv[process.argv.indexOf('--output') + 1], version ? fixture.version : fixture.html);
-process.exit(version ? (fixture.versionExit || 0) : (fixture.htmlExit || 0));
+    // Materialize the fake downloads once. Starting a fresh Node process for
+    // each fake curl paid 48 extra runtimes over a 24-attempt refusal, on top
+    // of the workflow's real Node parser; that setup cost exhausted the test's
+    // 15 s deadline under parallel structural validation.
+    attempts.forEach((fixture, i) => {
+      const attemptDir = path.join(dir, String(i + 1));
+      fs.mkdirSync(attemptDir);
+      for (const kind of ["version", "html"]) {
+        fs.writeFileSync(path.join(attemptDir, kind), fixture[kind]);
+        fs.writeFileSync(path.join(attemptDir, kind + ".exit"), String(fixture[kind + "Exit"] || 0) + "\n");
+      }
+    });
+    fs.writeFileSync(path.join(dir, "curl"), `#!/bin/sh
+set -eu
+output=
+url=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --output) output=$2; shift 2 ;;
+    *) url=$1; shift ;;
+  esac
+done
+count=0
+if [ -f "$FIXTURE_DIR/count" ]; then IFS= read -r count < "$FIXTURE_DIR/count"; fi
+case "$url" in
+  */version.json\\?*)
+    count=$((count + 1))
+    printf '%s\\n' "$count" > "$FIXTURE_DIR/count"
+    kind=version ;;
+  *) kind=html ;;
+esac
+index=$count
+if [ "$index" -gt "$FIXTURE_COUNT" ]; then index=$FIXTURE_COUNT; fi
+cp "$FIXTURE_DIR/$index/$kind" "$output"
+IFS= read -r status < "$FIXTURE_DIR/$index/$kind.exit"
+exit "$status"
 `, { mode: 0o755 });
     fs.writeFileSync(path.join(dir, "sleep"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     const result = spawnSync("/bin/bash", ["--noprofile", "--norc", "-c", livePoll], {
       cwd: ROOT, encoding: "utf8", timeout: 15000,
       // TMPDIR pinned (#2354): the poll's `mktemp -d` honours it, and a caller (sync-pr's verify step) whose TMPDIR
       // names a missing directory made `set -eu` exit before the first curl.
-      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, FIXTURE_DIR: dir, TMPDIR: dir,
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, FIXTURE_DIR: dir, FIXTURE_COUNT: String(attempts.length), TMPDIR: dir,
         PAGE_URL: "https://fixture.invalid", GITHUB_RUN_ID: "123", BUILD: "4242", GITHUB_SHA: expectedSha },
     });
     assert.ok(fs.existsSync(path.join(dir, "count")), result.stdout + result.stderr);

@@ -1119,6 +1119,45 @@ test("AQUAPLANING: the AI's lift speed sits just past onset, ordered by tread, a
   assert.equal(T.aquaInto({ tread: 0 }, 70, "rain", 1).mul, T.aquaplane(70, 1, 0), "a fitted set reads its own");
 });
 
+
+test("red-flag scoring rewinds preserve physical set age and refits reset it", () => {
+  const s = ctxFor(); s.setLevel("real");
+  const c = { lap: 2, prog: 5386 + 200 };
+  s.fit(c, T.optionRecord(TYRES.find((o) => o.id === "soft")));
+  c.lap = 6; c.prog = 5 * 5386 + 200; c.tyreWear = 0.5;
+  const before = s.info(c), lifeBefore = s.lapsLeft(c);
+  for (let i = 0; i < 2; i++) {
+    c.lap--; c.prog -= 5386; c._progGift = (c._progGift || 0) - 5386;
+    assert.equal(s.info(c).lapsOn, before.lapsOn);
+    assert.equal(s.lapsLeft(c), lifeBefore);
+    assert.equal(c.tyreWear, 0.5);
+  }
+  s.fit(c, T.optionRecord(TYRES.find((o) => o.id === "soft")));
+  assert.equal(s.info(c).lapsOn, 0);
+  c.lap++; c.prog += 5386;
+  assert.equal(s.info(c).lapsOn, 1);
+  const grid = { lap: 0, prog: -14 };
+  s.fit(grid, T.optionRecord(TYRES.find((o) => o.id === "soft")));
+  grid.lap = 1; grid.prog = 0;
+  assert.equal(s.info(grid).lapsOn, 0);
+});
+
+
+test("physical tyre clock preserves public historical/network age baseline overrides", () => {
+  const s = ctxFor();
+  const c = { lap: 6, prog: 5 * 5386 + 200 };
+  s.fit(c, T.optionRecord(TYRES.find((o) => o.id === "soft")));
+  assert.equal(s.lapsOn(c), 0);
+  c.tyreLap0 = 2; // RealRace.place / STRATEGY snapshot restores an older set.
+  assert.equal(s.lapsOn(c), 4);
+  c.prog -= 5386; c._progGift = -5386; c.lap--;
+  assert.equal(s.lapsOn(c), 4);
+  s.fit(c, c.tyre);
+  assert.equal(s.lapsOn(c), 0);
+  c.tyreLap0--;
+  assert.equal(s.lapsOn(c), 1, "baseline overrides also work after re-grid fitting");
+});
+
 // ── R1: a local shower's end must not step the temperatures ─────────────────
 // weather-arc.js ends a cell arc (arc = null, raceWeather = from) once the road is within SETTLE (0.005) of the
 // start wetness, ~7 TAU_DRY after cell.life. The temperatures held tAmb(to) all that time, then stepped
@@ -1166,4 +1205,23 @@ test("lapsOn: a stop in a box BEFORE the line is not a lap old at the next cross
   assert.equal(s.lapsOn(grid), 0, "a grid set is not a lap old at the start crossing");
   grid.lap = 2;
   assert.equal(s.lapsOn(grid), 1);
+});
+
+test("physical set age keeps pre-line pit adjustment across a red-flag scoring rewind", () => {
+  const total = 5386, s = ctxFor({ laps: 10, total });
+  s.setLevel("real");
+  const c = { lap: 4, s: total - 100, prog: 4 * total - 100, _progGift: 0 };
+  s.fit(c, T.classRecord("hard"));
+  assert.equal(s.lapsOn(c), 0, "a real-progress car leaves the pre-line box on a fresh set");
+  c.lap = 5; c.s = 0; c.prog = 4 * total;
+  assert.equal(s.lapsOn(c), 0, "the first crossing closes only the pit out-lap fragment");
+  c.lap = 6; c.prog = 5 * total; c.tyreWear = 0.4;
+  assert.equal(s.lapsOn(c), 1, "one full driven lap after that crossing ages the set once");
+  const remaining = s.lapsLeft(c);
+  c.lap--; c.prog -= total; c._progGift -= total;
+  assert.equal(s.lapsOn(c), 1, "rewinding the public classification cannot rewind physical set age");
+  assert.equal(s.lapsLeft(c), remaining, "the restart cannot restore estimated tyre life");
+  assert.equal(c.tyreWear, 0.4);
+  c.lap++; c.prog += total;
+  assert.equal(s.lapsOn(c), 2, "the next physically driven lap still ages the adjusted set normally");
 });

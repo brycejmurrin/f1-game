@@ -1496,6 +1496,26 @@ test("WATCH playable events exclude unavailable footage and NEXT cannot stick at
   replay.stop();
 });
 
+test("HIGHLIGHTS chapter jumps retain overlapping event identity instead of replaying the earlier cut", () => {
+  const { replay, options, find, drivers } = visibleTransportReplay();
+  options.traces.cars = { 1: line(0, 50, 0, -10, 200), 2: line(-20, 50, 0, -10, 200) };
+  options.script.passes = [{ t: 100, lap: 1, by: 1, over: 2 }];
+  Object.assign(drivers[1], { pits: [1], pitT: [102], stints: [{ from: 1, c: "M" }, { from: 2, c: "S" }] });
+  replay.start({ ...options, reel: true }); replay.setPaused(true);
+  const chapter = find("chapter"); chapter.value = "1"; chapter.dispatch("change");
+  assert.equal(replay.status().T, 94);
+  assert.equal(replay.status().reelIdx, 1, "the selected pit, not the earlier overlapping pass, owns the cut");
+  assert.equal(replay.status().follow, "BBB");
+  assert.equal(replay.status().paused, true);
+  replay.setPaused(false); replay.tick(11.1);
+  assert.ok(replay.status().T > 105, "the selected chapter does not rewind into itself after the earlier hold");
+  assert.equal(replay.status().reelIdx, 1);
+  const before = replay.status();
+  for (const invalid of [-1, 2, 0.5, "1"]) assert.equal(replay.seekEvent(invalid), null);
+  assert.deepEqual(replay.status(), before, "invalid chapter requests leave the replay untouched");
+  replay.stop();
+});
+
 test("HIGHLIGHTS playable bounds preserve pre-grid footage, clamp cuts and finish at the loaded endpoint", () => {
   const { replay, options, G } = transportReplay();
   options.traces.cars = { 1: line(0, 50, 0, -10, 30), 2: line(0, 45, 0, -10, 30) };
@@ -1663,5 +1683,42 @@ test("WATCH seeks and playing show recorded sets including a same-compound resto
     replay.seek(309.9); replay.setPaused(false); replay.tick(0.2);
     assert.equal(c.tyre.code, "S"); assert.equal(c.tyreStints, 2);
     G.quitToMenu();
+  } finally { g.close(); }
+});
+
+test("frame-fit spatial search preserves exhaustive nearest matches, ties, and the exact Baku fit", async () => {
+  const source = fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8");
+  const start = source.indexOf("    function index(ids, axis) {"), end = source.indexOf("    const cs = centroid(S), ct = centroid(C);");
+  assert.ok(start > 0 && end > start, "the index and unchanged ICP boundary are present");
+  // Keep the production fit and replace only its search with the previous
+  // exhaustive oracle. Compare every returned float, not a looser RMS bound.
+  const exhaustive = "    const near = (x, y) => { let b = 0, bd = Infinity; for (let i = 0; i < C.length; i++) { const dx = C[i][0] - x, dy = C[i][1] - y, d = dx * dx + dy * dy; if (d < bd) { bd = d; b = i; } } return b; };\n";
+  const load = (code) => vm.runInNewContext(code + "; RealReplay", { M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) } });
+  const linear = load(source.slice(0, start) + exhaustive + source.slice(end));
+  // Observe just the nearest indices as well, so duplicate points and exact
+  // distance ties cannot hide behind an otherwise acceptable final fit.
+  const nearest = load(source.replace("    const cs = centroid(S), ct = centroid(C);", "    return pts.map((p) => near(p[0], p[1]));"));
+  const coords = Array.from({ length: 96 }, (_, i) => [((i * 17) % 13) - 6, ((i * 7) % 11) - 5]);
+  coords.push(...coords.slice(0, 16));
+  const track = { n: coords.length, total: 1000, px: coords.map((p) => p[0]), pz: coords.map((p) => p[1]) };
+  const queries = coords.concat(Array.from({ length: 128 }, (_, i) => [(i % 17) - 8.5, (i % 19) - 9.5]), [[1e6, 1e6], [-1e6, -1e6]]);
+  const expected = queries.map(([x, y]) => {
+    let best = 0, distance = Infinity;
+    for (let i = 0; i < coords.length; i++) {
+      const dx = coords[i][0] - x, dy = coords[i][1] - y, d = dx * dx + dy * dy;
+      if (d < distance) { distance = d; best = i; }
+    }
+    return best;
+  });
+  assert.deepEqual(host(nearest.fitFrame(track, queries)), expected, "smallest original index wins every nearest-neighbour tie");
+  const g = await createGame({ track: "baku" });
+  try {
+    const R = vm.runInContext("RealReplay", g.ctx);
+    const pts = FIXTURE.locationExcerpt.rows.map((r) => [r[1] / 10, r[2] / 10]);
+    assert.deepEqual(host(R.fitFrame(g.G.track, pts)), host(linear.fitFrame(g.G.track, pts)), "same winning transform, handedness, residual, and sample count");
+    for (const refl of [1, -1]) {
+      const trace = coords.map(([x, y]) => [x * 0.8 - y * 0.6 + 150, refl * (x * 0.6 + y * 0.8) - 200]);
+      assert.deepEqual(host(R.fitFrame(track, trace)), host(linear.fitFrame(track, trace)), "same fit on a repeated, crossing centreline with handedness " + refl);
+    }
   } finally { g.close(); }
 });

@@ -700,26 +700,55 @@ const PhonePad = (function () {
     // it landed eases it off. An absolute "height on the pedal" mapping gave a
     // thumb aimed at the label of a ~150 px pedal half a brake (R3-PHONE-2).
     const releases = [], pointerReleases = [];
-    const releaseAll = () => { for (const r of releases) r(); };
+    const releaseAll = (pointersOnly) => { for (const r of releases) r(pointersOnly === true); };
     function hold(el, on, off, travel) {
       if (!el) return;
       const ids = new Set();
       const anchors = new Map();   // pointerId -> clientY at touch-down
+      const levels = new Map();    // each contact keeps its own pedal travel
       const level = (v) => { if (el.style && el.style.setProperty) el.style.setProperty("--travel", v.toFixed(2)); on(v); };
-      releases.push(() => { if (!ids.size) return; ids.clear(); anchors.clear(); el.classList.remove("on"); off(); });
+      const paintLevel = () => { let strongest = 0; for (const v of levels.values()) strongest = Math.max(strongest, v); level(strongest); };
+      releases.push((pointersOnly) => {
+        // A last-finger-up fallback says nothing about keys still held.
+        // Blur, backgrounding and disconnect still clear every input source.
+        if (pointersOnly) { for (const id of Array.from(ids)) if (typeof id !== "string") up({ pointerId: id }); return; }
+        if (!ids.size) return;
+        ids.clear(); anchors.clear(); levels.clear(); el.classList.remove("on"); if (travel) paintLevel(); else off();
+      });
       const down = (e) => {
         ids.add(e.pointerId);
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* not a pointer target */ }
         el.classList.add("on");
-        if (travel) { anchors.set(e.pointerId, e.clientY); level(1); } else on(1);
+        if (travel) { anchors.set(e.pointerId, e.clientY); levels.set(e.pointerId, 1); paintLevel(); } else on(1);
         e.preventDefault();
       };
-      const move = (e) => { if (travel && anchors.has(e.pointerId)) level(travelOf(anchors.get(e.pointerId), e.clientY)); };
+      const move = (e) => { if (travel && anchors.has(e.pointerId)) { levels.set(e.pointerId, travelOf(anchors.get(e.pointerId), e.clientY)); paintLevel(); } };
       const up = (e) => {
         anchors.delete(e.pointerId);
+        levels.delete(e.pointerId);
         if (!ids.delete(e.pointerId)) return;
-        if (!ids.size) { el.classList.remove("on"); off(); }
+        if (!ids.size) el.classList.remove("on");
+        if (travel) paintLevel(); else if (!ids.size) off();
       };
+      // Keyboard holds share the contact set, so releasing a key cannot
+      // cancel a thumb that is still down (or vice versa).
+      const keyId = (key) => key === " " || key === "Enter" ? "key:" + key : null;
+      el.addEventListener("keydown", (e) => {
+        const id = keyId(e.key);
+        if (!id || (el === dom.gas && dom.body && dom.body.classList.contains("throttle-auto"))) return;
+        e.preventDefault();
+        if (ids.has(id)) return;
+        ids.add(id); el.classList.add("on");
+        if (travel) { levels.set(id, 1); paintLevel(); } else on(1);
+      });
+      el.addEventListener("keyup", (e) => {
+        const id = keyId(e.key);
+        if (!id) return;
+        e.preventDefault(); up({ pointerId: id });
+      });
+      el.addEventListener("blur", () => {
+        for (const id of Array.from(ids)) if (typeof id === "string") up({ pointerId: id });
+      });
       el.addEventListener("pointerdown", down);
       el.addEventListener("pointermove", move);
       pointerReleases.push(up);
@@ -733,13 +762,13 @@ const PhonePad = (function () {
       el.addEventListener("contextmenu", (e) => e.preventDefault());
     }
     if (typeof document !== "undefined") {
-      // Every finger up (a pointerup that landed elsewhere), or the page hidden
-      // by a call / app switch: nothing is held, so nothing stays pinned.
-      const allUp = (e) => { if (!e.touches || !e.touches.length) releaseAll(); };
+      // The last finger up clears pointer holds, including a lost lift.
+      // Backgrounding or a window blur clears keyboard holds as well.
+      const allUp = (e) => { if (!e.touches || !e.touches.length) releaseAll(true); };
       const releasePointer = (e) => { for (const up of pointerReleases) up(e); };
       document.addEventListener("pointerup", releasePointer, true);
       document.addEventListener("pointercancel", releasePointer, true);
-      if (typeof window !== "undefined" && window.addEventListener) { window.addEventListener("pointerup", releasePointer, true); window.addEventListener("pointercancel", releasePointer, true); }
+      if (typeof window !== "undefined" && window.addEventListener) { window.addEventListener("pointerup", releasePointer, true); window.addEventListener("pointercancel", releasePointer, true); window.addEventListener("blur", releaseAll); }
       document.addEventListener("touchend", allUp, true);
       document.addEventListener("touchcancel", allUp, true);
       document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
@@ -763,13 +792,19 @@ const PhonePad = (function () {
     if (dom.steeringMode) dom.steeringMode.addEventListener("change", () => { if (!setSteeringMode(dom.steeringMode.value)) dom.steeringMode.value = steeringMode; });
     if (dom.steer) {
       let steeringPointer = null, anchorX = 0;
-      const release = (e) => { if (e && e.pointerId !== steeringPointer) return; steeringPointer = null; steer = 0; push(); };
-      releases.push(() => release()); pointerReleases.push(release);
+      const steeringKeys = new Set();
+      const release = (e) => { if (e && e.pointerId !== steeringPointer) return; steeringPointer = null; if (!e) steeringKeys.clear(); steer = steeringKeys.size ? (Array.from(steeringKeys).pop() === "ArrowLeft" ? -1 : 1) : 0; push(); };
+      releases.push((pointersOnly) => release(pointersOnly ? { pointerId: steeringPointer } : undefined)); pointerReleases.push(release);
       dom.steer.addEventListener("pointerdown", (e) => { if (steeringMode !== "touch" || steeringPointer !== null) return; steeringPointer = e.pointerId; anchorX = e.clientX; steer = 0; try { dom.steer.setPointerCapture(e.pointerId); } catch (_) { /* document release fanout still centers steering when capture is refused */ } e.preventDefault(); push(); });
       dom.steer.addEventListener("pointermove", (e) => { if (steeringPointer !== e.pointerId) return; steer = num((e.clientX - anchorX) / Math.max(40, dom.steer.getBoundingClientRect().width * 0.4), -1, 1); push(); });
       dom.steer.addEventListener("pointerup", release); dom.steer.addEventListener("pointercancel", release);
-      dom.steer.addEventListener("keydown", (e) => { if (steeringMode !== "touch" || !["ArrowLeft", "ArrowRight"].includes(e.key)) return; e.preventDefault(); steer = e.key === "ArrowLeft" ? -1 : 1; push(); });
-      dom.steer.addEventListener("keyup", (e) => { if (["ArrowLeft", "ArrowRight"].includes(e.key)) release(); });
+      dom.steer.addEventListener("keydown", (e) => { if (steeringMode !== "touch" || !["ArrowLeft", "ArrowRight"].includes(e.key)) return; e.preventDefault(); if (steeringKeys.has(e.key)) return; steeringKeys.add(e.key); steer = e.key === "ArrowLeft" ? -1 : 1; push(); });
+      dom.steer.addEventListener("keyup", (e) => {
+        if (!steeringKeys.delete(e.key)) return;
+        e.preventDefault();
+        const last = Array.from(steeringKeys).pop();
+        steer = last ? (last === "ArrowLeft" ? -1 : 1) : 0; push();
+      });
       dom.steer.addEventListener("blur", () => release());
     }
     hold(dom.gas, (v) => { thr = v; push(); }, () => { thr = 0; push(); }, true);

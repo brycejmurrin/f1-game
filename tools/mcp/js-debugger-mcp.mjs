@@ -94,8 +94,9 @@ export async function callTool(session, name, args = {}) {
     if (changesSession) session.toolBusy = true;
     try { body = await routes[name](); }
     finally { if (changesSession || name === "debugger_detach") session.toolBusy = false; }
-    if (JSON.stringify(body).length > 128000) throw Error("Result exceeds 128KB; narrow the request. The debugger action may already have completed.");
-    const content = [{ type: "text", text: JSON.stringify(body) }];
+    const serialized = JSON.stringify(body);
+    if (Buffer.byteLength(serialized, "utf8") > 128000) throw Error("Result exceeds 128KB; narrow the request. The debugger action may already have completed.");
+    const content = [{ type: "text", text: serialized }];
     if (name === "debugger_incident" && body.ok) {
       for (const [file, mimeType] of [[body.screenshot, "image/jpeg"], [body.report, "application/json"]])
         content.push({ type: "resource_link", uri: pathToFileURL(file).href, name: file.split("/").at(-1), mimeType });
