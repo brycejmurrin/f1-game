@@ -65,11 +65,9 @@ group at 41/201 after 24 min, a 12 s startup benchmark at 40 s under load).
 - A whole browser group runs on CI: `node tools/ci/remote-group.mjs <group>`
   on the pushed branch (four llvmpipe shards, ~10–15 min). Locally, one spec at
   a time via `test-bg.mjs`, never a whole group.
-- Box-health line, last line of every REPORT / READY:
-  `box load=<1-min loadavg> steal=<%> top=<busiest process>`, from
-  `cat /proc/loadavg`, the 8th `cpu` field of `/proc/stat` as a share of the
-  total, and `ps -eo pcpu,comm --sort=-pcpu | sed -n 2p`. Load above 3 for two
-  reports in a row: stop local runs and say what is running.
+- Box-health line, last line of every REPORT / READY, printed by:
+  `awk '/^cpu /{t=0;for(i=2;i<=9;i++)t+=$i;s=$9}END{getline l<"/proc/loadavg";split(l,a," ");printf "box load=%s steal=%.1f%% ",a[1],100*s/t}' /proc/stat; ps -eo pcpu,comm --sort=-pcpu | awk 'NR==2{print "top="$2" "$1"%"}'`.
+  Load above 3 for two reports in a row: stop local runs and say what is running.
 
 ## Traps that cost this role real cycles (2026-10-16)
 
