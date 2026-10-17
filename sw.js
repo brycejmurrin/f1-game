@@ -250,6 +250,8 @@ async function precacheAssetLists() {
     "icons/icon-192.png",
     "icons/icon-512.png",
     "icons/icon-maskable-512.png",
+    // In-game APP ICON picker sets (appearance-opts.js).
+    ...["A", "B", "C", "D", "E", "F"].flatMap((s) => ["icons/shortcuts/" + s + "/favicon-32.png", "icons/shortcuts/" + s + "/apple-touch-180.png"]),
     // The vendored three.js island TLX imports at runtime. Hand-authored
     // because it is reached through the importmap, not a <script> tag, so
     // the parser below cannot see it. OPTIONAL: an install must not fail
