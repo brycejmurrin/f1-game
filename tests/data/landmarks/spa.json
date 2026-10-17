@@ -1,0 +1,8 @@
+{
+  "why": "Named, inspectable Spa scenery groups from js/circuits/scenery/spa.js; the four corner locations remain separate.",
+  "ids": [
+    "spa-raidillon-gold-dual-jumbotron",
+    "spa-eau-rouge-brook-crossing",
+    "spa-timing-tower"
+  ]
+}
