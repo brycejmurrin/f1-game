@@ -503,7 +503,7 @@ function captureHarness(opts = {}) {
   });
   const src = read('js/render/three/tlx.js');
   const sb = { _captureReads: new WeakSet(), performance: { now: () => clock },
-    setTimeout: (fn) => { jobs.push(fn); }, Uint8ClampedArray, ownGL: gl, renderer: { backend: {} }, W: 2, H: 3 };
+    setTimeout: (fn) => { jobs.push(fn); }, Uint8ClampedArray, ownGL: gl, renderer: { backend: {} }, W: 2, H: 3, fixedActive: () => false, presentW: 2, presentH: 3 };
   vm.runInNewContext(`${fnSource(src, 'async function readGlCapture(gl, w, h) {')}
     const gfx = { ${fnSource(src, 'capturePixels() {')} }; globalThis.capture = () => gfx.capturePixels();`, sb);
   return { opts, gl, sb, frame, state, names, binding, laterBinding, buffers, fences, jobs,
