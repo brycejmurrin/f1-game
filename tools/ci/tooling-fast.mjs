@@ -815,6 +815,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/rain-cells.test.mjs",
   // Two PRs auto-raising one module's ceiling merge clean (ratchets.d fragments, #2291).
   "tests/unit/ratchet-merge-hotspot.test.mjs",
+  "tests/unit/ratchets-fold-schedule.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
   "tests/unit/ready-full-cap.test.mjs",
