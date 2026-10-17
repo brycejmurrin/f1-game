@@ -106,6 +106,40 @@ test("gfx-debug asks the backend whether it soft-presents before saying native (
   assert.match(unreadable, /frame\(soft\) unreadable/, "never steal or invent: a non-2D #game reads as unreadable");
 });
 
+test("gfx-debug prints the memory line a crash report can paste (#1648)", () => {
+  assert.match(SRC, /usedJSHeapSize/, "heap comes from performance.memory");
+  assert.match(SRC, /memState\(\)/, "geometries and textures come from the TLX counter");
+  assert.match(SRC, /crashStrikes/, "the governor's strike count is on the same line");
+  const img = { data: new Uint8ClampedArray([40, 40, 40, 255]) };
+  const store = { getItem: () => null };
+  const sandbox = {
+    document: { getElementById: (id) => id === "game" ? { id: "game", getAttribute: () => "three", getContext: () => null } : null, querySelector: () => null },
+    location: { search: "" }, localStorage: store, sessionStorage: store,
+    performance: { memory: { usedJSHeapSize: 80 * 1048576 }, now: () => 0 },
+    GLX: {
+      gpuErrors: () => 0,
+      __tlx: { memState: () => ({ rGeo: 12, rTex: 34, rObj: 56 }) },
+    },
+    __apex: { renderScale: () => ({ tier: 2, crashStrikes: 1 }) },
+  };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(SRC.replace(/^const GfxDebug\b/m, "var GfxDebug"), ctx);
+  const text = vm.runInContext("GfxDebug.text()", ctx);
+  assert.match(text, /mem heap=80\.0MB rObj=56 geo=12 tex=34 tier=2 crashStrikes=1/);
+});
+
+test("gpu-game-check reports heap, three memory and an opt-in A-B-A switch (#1648)", () => {
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
+  assert.match(ggc, /usedJSHeapSize/);
+  assert.match(ggc, /m\.geometries = ms\.rGeo/);
+  assert.match(ggc, /m\.textures = ms\.rTex/);
+  assert.match(ggc, /m\.rObj = ms\.rObj/);
+  assert.match(ggc, /--mem-switch/);
+  assert.match(ggc, /memSwitch/);
+  assert.match(ggc, /\[game-check\] mem heap=/);
+});
+
 test("gfx-debug can hand the reporter the text", () => {
   assert.match(SRC, /ApexClipboard\.write/, "one-click copy goes through ApexClipboard");
   const clip = read("js/core/clipboard.js");
