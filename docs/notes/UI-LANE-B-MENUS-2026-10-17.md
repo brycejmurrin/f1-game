@@ -6,7 +6,7 @@ every state of every dialog.
 
 | id | screen | file | severity | verdict | evidence |
 |---|---|---|---|---|---|
-| B1 | settings › Appearance › ADVANCED summary | `css/appearance-studio.css:153` (`--tap-min`, later @layer) | medium | CONFIRMED | painted 28 tall under touch at 844x390; the touch floor `--tap-paint` (47.7 local, 52 painted) loses on layer order. Fixed in `css/settings.css`; spec in `ui-button-touch.spec.js` fails 26.2 before, passes after |
+| B1 | settings › Appearance › ADVANCED summary | `css/appearance-studio.css:153` (`--tap-min`, later @layer) | medium | CONFIRMED | painted 28 tall under touch at 844x390; the touch floor `--tap-paint` (47.7 local, 52 painted) loses on layer order. Fixed at the source (`css/appearance-studio.css:153` now `--tap-paint`, no `!important`); spec in `ui-button-touch.spec.js` fails 26.2 before, passes after |
 | B2 | settings › Driving › `#pm-condition-cues` | `js/ui/condition-cue-controls.js:8` | low | NOT-A-BUG | the 14x57 box is the checkbox; its wrapping `<label>` is 397x57 and takes the tap |
 | B3 | Garage › Team `#cs-options` | `css/carsetup.css` | low | NOT-A-BUG (outside lane) | 5x0 clipped box is an empty pane, garage lane |
 | B4 | settings › Appearance preview label | `js/ui/appearance-studio.js:310` | — | NOT-A-BUG | "Illustrative appearance" flag is an aria-label, not visible text |

@@ -62,9 +62,6 @@
 #pm-share-code-in { width: 100%; min-width: 0; box-sizing: border-box; }
 #pm-throttle-compare, #pm-files-included { min-width: 0; }
 #pm-throttle-compare > summary, #pm-files-included > summary { min-height: var(--tap); display: list-item; cursor: pointer; padding-block: 0.5em; box-sizing: border-box; }
-/* APPEARANCE ADVANCED disclosure: appearance-studio.css (a later @layer) sets min-height: --tap-min, so the row painted 28 on touch.
-   !important is the only way a rule in this earlier layer reaches the painted tap floor the other disclosures get from components.css. */
-#pmsettings-inner details[data-as="advanced"] > summary { min-height: var(--tap-paint) !important; }
 /* Every interactive settings row is exactly --tap tall. The label overlays
    the top of the track (pointer-events: none) so the grab target stays the
    full row. */
