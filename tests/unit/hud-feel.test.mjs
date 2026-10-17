@@ -522,10 +522,10 @@ test("the number plate is the card's identity anchor, and it collapses to a stri
   assert.match(hud, /body\[data-density="compact"\] #announce \{[\s\S]*?--radio-num: 22px;/);
   // The number left the channel line when it gained the plate — one number on
   // the card, not two.
-  const g = read("js/game.js");
+  const g = read("js/race/announce-banner.js");
   assert.doesNotMatch(g.match(/function radioWho\(kind\) \{[\s\S]*?\n\}/)[0], /num/,
     "radioWho still appends the car number — the plate already shows it");
-  assert.match(g, /els\.announceNum\.textContent = radioNum\(\);/, "showAnnounce fills the plate");
+  assert.match(g, /announceNum\.textContent = radioNum\(\);/, "showAnnounce fills the plate");
 });
 
 test("coach and practice keep their own channel and priority, and practice is its own kind", () => {
@@ -533,8 +533,8 @@ test("coach and practice keep their own channel and priority, and practice is it
   // The advisory kinds are a CHANNEL on the card (the coach's colour on the
   // WHO line), never a bigger or smaller card.
   assert.match(hud, /#announce\[data-kind="coach"\] #announce-who,\n#announce\[data-kind="practice"\] #announce-who \{ color: var\(--faster\); \}/);
-  const g0 = read("js/game.js");
-  const who = vm.runInNewContext(read("js/audio/radio-voice.js") + "\n(" + g0.match(/function radioWho\(kind\) \{[\s\S]*?\n\}/)[0] + ")", { player: null });
+  const g0 = read("js/race/announce-banner.js");
+  const who = vm.runInNewContext(read("js/audio/radio-voice.js") + "\n(" + g0.match(/function radioWho\(kind\) \{[\s\S]*?\n\}/)[0] + ")", { deps: { player: () => null } });
   for (const kind of ["coach", "practice"]) assert.equal(who(kind), "COACH", kind);
   for (const kind of ["penalty-hit", "penalty-warn", "warning", "warn"]) assert.equal(who(kind), "RACE CONTROL", kind);
   // …and the channel is ALL a kind may recolour. The number plate is the
@@ -544,7 +544,7 @@ test("coach and practice keep their own channel and priority, and practice is it
   assert.doesNotMatch(hud, /#announce\[data-kind="[a-z-]+"\][^{]*#announce-num/,
     "a kind repaints the number plate — the plate is the team, the WHO line is the channel");
   // A practice verdict must not be prioritised as a record message.
-  const g = read("js/game.js");
+  const g = read("js/race/announce-banner.js");
   const pri = g.match(/const ANN_PRI = \{([^}]*)\}/)[1];
   assert.match(pri, /practice: 2/);
   assert.match(pri, /coach: 1/, "a coach tip still yields to everything else");
