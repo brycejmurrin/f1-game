@@ -7,7 +7,20 @@ export function settleLayout({ root } = {}) {
   const limits = { elements: 500, frames: 120, elapsedMs: 2000, contexts: 128, statesPerContext: 16, states: 1024, evidencePerContext: 8, valueLength: 256, selectorLength: 2048 };
   const started = performance.now(), entries = new Map(), selectors = new Map();
   const history = { contexts: [], limits, truncated: false, unknowns: [], limitation: "Sampled classification changes and revisits are observations, not confirmed bugs; quiet frames cannot rule out later changes. Context insertion/removal is not a classification transition." };
-  let previous = "", same = 0, frames = 0, states = 0, truncated = false;
+  let previous = "", same = 0, frames = 0, states = 0, truncated = false, animating = 0;
+  // Geometry alone misses a fade or a pointer-events transition: a sheet whose
+  // opacity is still animating has a final box and still answers hit tests
+  // with <html> (career/garage/track-detail at the boot size, 2026-10-17).
+  // Count finite running animations on the root, inside it or on an ancestor;
+  // infinite ones (HUD pulses) can never finish and are ignored.
+  const runningAnimations = () => {
+    try {
+      return document.getAnimations().filter(a => {
+        const t = a.effect?.target, end = a.effect?.getComputedTiming?.().endTime;
+        return a.playState === "running" && Number.isFinite(end) && !!t && (scope.contains(t) || t.contains(scope));
+      }).length;
+    } catch (_) { return 0; }
+  };
   const selector = e => {
     const parts = [];
     for (let n = e; n && n.nodeType !== 9; n = n.parentElement) {
@@ -69,8 +82,8 @@ export function settleLayout({ root } = {}) {
       finished = true; clear();
       if (truncated) history.unknowns.push("Element sampling cap reached; unsampled contexts and transitions are unknown.");
       if (history.truncated) history.unknowns.push("History or value cap reached; omitted transitions, values and revisit counts are unknown.");
-      resolve({ stable, frames, elapsedMs: Math.round(performance.now() - started), truncated: truncated || history.truncated,
-        ...(stable ? {} : { reason: "Layout did not settle within the sampling budget" }), history });
+      resolve({ stable, frames, elapsedMs: Math.round(performance.now() - started), truncated: truncated || history.truncated, animating,
+        ...(stable ? {} : { reason: animating ? "CSS animations were still running at the sampling budget" : "Layout did not settle within the sampling budget" }), history });
     };
     // rAF pauses in background tabs: the deadline must remain independent.
     // https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame
@@ -91,7 +104,8 @@ export function settleLayout({ root } = {}) {
           return [r.x, r.y, r.width, r.height, e.scrollWidth, e.scrollHeight, ...keys.map(k => e.dataset?.[k])];
         }));
         same = signature === previous ? same + 1 : 0; previous = signature;
-        if (same >= 3 && performance.now() - started >= 150) finish(true);
+        animating = runningAnimations();
+        if (same >= 3 && !animating && performance.now() - started >= 150) finish(true);
         else if (frames >= limits.frames) finish(false);
         else frame = requestAnimationFrame(sample);
       } catch (error) { finished = true; clear(); reject(error); }

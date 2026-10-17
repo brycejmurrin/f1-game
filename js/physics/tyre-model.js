@@ -774,6 +774,8 @@ const TyreModel = (function () {
       // A box BEFORE the line fits mid-lap N: the next crossing reads N+1 but is only a partial lap on this
       // set, so lapsOn would run a lap ahead (replan's loadK, wetLapsToStop, the HUD's laps left).
       c.tyreLapAdj = (c.lap || 0) >= 1 && G.track && G.track.total > 0 && (c.s || 0) > G.track.total * 0.5 ? 1 : 0;
+      const physical = physicalLaps(c);
+      c.tyrePhysicalOffset = physical == null ? null : physical - lapsDone(c.tyreLap0);
       c.tyreStints = (c.tyreStints || 0) + 1;
       // THE STINT LOG, which is what the results sheet draws. Recorded HERE
       // because fit() is the only place a set is ever changed, so the log and
@@ -960,7 +962,20 @@ const TyreModel = (function () {
     // the raw state; `spent` is what the HUD bar and the engineer read, because
     // "80% through the stint" is the thing a driver can act on.
     // Completed laps on this set: a grid set (tyreLap0 0) is not a lap old at the start crossing.
-    function lapsOn(c) { return c && c.tyre ? Math.max(0, lapsDone(c.lap) - lapsDone(c.tyreLap0) - (c.tyreLapAdj || 0)) : 0; }
+    function physicalLaps(c) {
+      const length = G.track && G.track.total;
+      return c && Number.isFinite(c.prog) && length > 0
+        ? Math.floor(Math.max(0, c.prog - (c._progGift || 0)) / length) : null;
+    }
+    function lapsOn(c) {
+      if (!c || !c.tyre) return 0;
+      const physical = physicalLaps(c);
+      // Teleports are not distance driven; tyreLap0 remains the public age baseline
+      // used by historical race drop-ins and network strategy snapshots.
+      const age = physical != null && c.tyrePhysicalOffset != null
+        ? physical - c.tyrePhysicalOffset - lapsDone(c.tyreLap0) : lapsDone(c.lap) - lapsDone(c.tyreLap0);
+      return Math.max(0, age - (c.tyreLapAdj || 0));
+    }
     function spent(c) { return c ? clamp(c.tyreWear || 0, 0, 2) : 0; }
     /** Laps this set has left before the cliff, at the rate THIS car has been
      *  wearing it: wear per completed lap on the set, or — before a lap has

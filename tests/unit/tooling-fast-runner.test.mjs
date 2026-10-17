@@ -338,3 +338,74 @@ test("a file that runs zero tests, skips every test, or calls process.exit(0) FA
     assert.match(log, /PASS .*good\.test\.mjs/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("isolated performance benchmarks run serially before ordinary files run in parallel with contiguous progress indices", async () => {
+  const dir = tmp();
+  try {
+    const events = path.join(dir, "events.jsonl");
+    const mk = (name, body) => {
+      const file = path.join(dir, name + ".test.mjs");
+      fs.writeFileSync(file, `import test from "node:test"; import assert from "node:assert/strict"; import fs from "node:fs";
+const event = action => fs.appendFileSync(${JSON.stringify(events)}, JSON.stringify({ name: ${JSON.stringify(name)}, action }) + "\\n");
+test(${JSON.stringify(name)}, async () => { event("start"); ${body} event("end"); });\n`);
+      return file;
+    };
+    const isolatedA = mk("isolated-a", "await new Promise(resolve => setTimeout(resolve, 250));");
+    const isolatedB = mk("isolated-b", "await new Promise(resolve => setTimeout(resolve, 250));");
+    const isolatedNames = new Set(["isolated-a", "isolated-b"]);
+    const markerA = path.join(dir, "a-started"), markerB = path.join(dir, "b-started");
+    const rendezvous = (own, other) => `fs.writeFileSync(${JSON.stringify(own)}, "started");
+const deadline = Date.now() + 10000;
+while (!fs.existsSync(${JSON.stringify(other)}) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+assert.ok(fs.existsSync(${JSON.stringify(other)}), "ordinary files must run concurrently");`;
+    const a = mk("ordinary-a", rendezvous(markerA, markerB));
+    const b = mk("ordinary-b", rendezvous(markerB, markerA));
+    const logPath = path.join(dir, "suite.log");
+    const result = await runToolingFast([a, isolatedA, b, isolatedB], { jobs: 2, order: "list", isolatedFiles: [isolatedA, isolatedB], logPath });
+    assert.equal(result.ok, true);
+    assert.equal(result.passed, 4); assert.equal(result.failed, 0); assert.equal(result.notStarted, 0);
+    const history = fs.readFileSync(events, "utf8").trim().split("\n").map(JSON.parse);
+    assert.deepEqual(history.slice(0, 4), [
+      { name: "isolated-a", action: "start" }, { name: "isolated-a", action: "end" },
+      { name: "isolated-b", action: "start" }, { name: "isolated-b", action: "end" },
+    ]);
+    const active = new Set(); let maxOrdinary = 0;
+    for (const event of history) {
+      if (event.action === "start") {
+        if (isolatedNames.has(event.name)) assert.equal(active.size, 0, "isolated benchmarks must not overlap any child");
+        else assert.equal([...active].some(name => isolatedNames.has(name)), false, "an ordinary child overlaps an isolated benchmark");
+        active.add(event.name); maxOrdinary = Math.max(maxOrdinary, [...active].filter(name => !isolatedNames.has(name)).length);
+      } else active.delete(event.name);
+    }
+    assert.equal(maxOrdinary, 2, "ordinary children still use both permitted slots");
+    assert.equal(active.size, 0);
+    const log = fs.readFileSync(logPath, "utf8");
+    assert.match(log, /isolated prefix=.*isolated-a\.test\.mjs,.*isolated-b\.test\.mjs before parallel pool/);
+    assert.match(log, /START 1\/4 \S*isolated-a\.test\.mjs/);
+    assert.match(log, /START 2\/4 \S*isolated-b\.test\.mjs/);
+    assert.match(log, /START 3\/4 \S*ordinary-a\.test\.mjs/);
+    assert.match(log, /START 4\/4 \S*ordinary-b\.test\.mjs/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+for (const failIsolated of [true, false]) test(`isolated scheduling counts unstarted files under bail after ${failIsolated ? "isolated" : "ordinary"} failure`, async () => {
+  const dir = tmp();
+  try {
+    const events = path.join(dir, "events");
+    const mk = (name, fail) => {
+      const file = path.join(dir, name + ".test.mjs");
+      fs.writeFileSync(file, `import test from "node:test"; import assert from "node:assert/strict"; import fs from "node:fs";
+test(${JSON.stringify(name)}, () => { fs.appendFileSync(${JSON.stringify(events)}, ${JSON.stringify(name + "\n")}); assert.equal(${fail}, false); });\n`);
+      return file;
+    };
+    const ordinary = mk("ordinary", !failIsolated), isolated = mk("isolated", failIsolated), later = mk("later", false);
+    const result = await runToolingFast([ordinary, isolated, later], { jobs: 1, order: "list", bail: true,
+      isolatedFiles: [isolated], logPath: path.join(dir, "suite.log") });
+    assert.equal(result.ok, false); assert.equal(result.failed, 1);
+    assert.equal(result.passed, failIsolated ? 0 : 1);
+    assert.equal(result.notStarted, failIsolated ? 2 : 1);
+    assert.deepEqual(fs.readFileSync(events, "utf8").trim().split("\n"), failIsolated ? ["isolated"] : ["isolated", "ordinary"]);
+    assert.match(fs.readFileSync(path.join(dir, "suite.log"), "utf8"),
+      new RegExp(`bail: stopped starting files after the first failure; ${result.notStarted} of 3 file\\(s\\) not started`));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

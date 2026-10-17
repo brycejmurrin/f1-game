@@ -29,6 +29,7 @@ function setup({ raf, events = [], startT }) {
     setLocked(v) { actions.push(["lock", v]); state.broadcast.locked = v; },
     setAuto(v) { actions.push(["auto", v]); state.broadcast.auto = v; if (v) { state.broadcast.locked = false; state.broadcast.manual = false; } },
     eventStep() {},
+    seekEvent(index) { const e = events[index]; if (e) this.seek(Math.max(startT || 0, e.t - 8)); },
     seek: (v) => { seeks.push(v); state.T = v; } };
   const ui = W.create({ camMode: 0 }, api); ui.start();
   const find = (key, p = body) => p.dataset.wt === key ? p : p.children.map((n) => find(key, n)).find(Boolean);
@@ -151,4 +152,12 @@ test("the timeline reaches footage before lights-out (#2202)", () => {
   assert.equal(seek.value, "-10", "the slider is not clamped at 0");
   t.ui.stop();
   assert.equal(setup({ raf: false }).find("seek").min, "0", "no pre-start footage: the timeline starts at 0");
+});
+
+
+test("WATCH chapter lead-in includes available footage before lights-out", () => {
+  const t = setup({ raf: false, startT: -10, events: [{ t: 3, lap: 1, text: "Opening pass" }] });
+  const chapter = t.find("chapter"); chapter.value = "0"; chapter.dispatch("change");
+  assert.deepEqual(t.seeks, [-5]);
+  t.ui.stop();
 });

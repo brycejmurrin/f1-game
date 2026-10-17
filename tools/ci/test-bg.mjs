@@ -171,6 +171,18 @@ export function outcomeOf(text) {
   if (bgExit && bgExit[1] !== "0") {
     return `failed (exit ${bgExit[1]}${detail ? `; last summary: ${detail[1]} (${detail[2]})` : ""})`;
   }
+  // --stop can terminate the supervisor shell before it writes a bg trailer.
+  // A VM twin's TAP pass (or an earlier browser shard's summary) then says
+  // nothing about the browser half that started afterwards. Require THAT
+  // phase's terminal summary, even if an exit-0 trailer is present.
+  const browserStart = [...text.matchAll(/^\[playwright\] .* (?:port=\d+ pid=\d+|browser half follows)$|^\[[\d:]+\] = run start:/gm)].pop();
+  if (browserStart && (!detail || detail.index < browserStart.index)) {
+    const phase = text.slice(browserStart.index);
+    const signal = phase.match(/^\[playwright\] child exited on (SIG\w+)$/m);
+    const fails = [...phase.matchAll(/^\[[\d:]+\] x FAIL/gm)].length;
+    if (signal) return `interrupted (${signal[1]}; ${fails} failure(s), browser summary missing)`;
+    return fails ? `died after ${fails} failure(s) (browser summary missing)` : "died before finishing (browser summary missing)";
+  }
   const pw = detail;
   if (pw) return `${pw[1]} (${pw[2]})`;
 

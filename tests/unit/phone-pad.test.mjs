@@ -596,6 +596,57 @@ function fakeEl() {
   return el;
 }
 
+test("pad(): GAS and BRAKE keep the strongest contact and clear travel on release or blur", () => {
+  const previous = { document: globalThis.document, window: globalThis.window };
+  const docListeners = {}, winListeners = {};
+  globalThis.document = { hidden: false, addEventListener(t, f) { (docListeners[t] ||= []).push(f); } };
+  globalThis.window = { addEventListener(t, f) { (winListeners[t] ||= []).push(f); } };
+  const fire = (listeners, t, e = {}) => { for (const f of listeners[t] || []) f(e); };
+  let ctl;
+  try {
+    const dom = { gas: fakeEl(), brake: fakeEl() };
+    ctl = PhonePad.pad(dom);
+    for (const [name, stateKey] of [["gas", "thr"], ["brake", "brk"]]) {
+      const pedal = dom[name];
+      const contact = (t, pointerId, clientY = 200) => pedal.dispatch(t, { pointerId, clientY });
+      const value = (expected, reason) => {
+        assert.equal(ctl.state()[stateKey], expected, name + ": " + reason);
+        assert.equal(pedal.style["--travel"], expected.toFixed(2), name + ": fill matches transmitted travel");
+      };
+      contact("pointerdown", 11);
+      contact("pointerdown", 12);
+      contact("pointermove", 12, 98);
+      value(1, "an eased second finger cannot override the full first finger");
+      contact("pointerup", 12);
+      value(1, "releasing the eased finger preserves full travel");
+      contact("pointerdown", 12);
+      contact("pointermove", 11, 98);
+      value(1, "the later full finger also wins over an eased first finger");
+      fire(docListeners, "pointerup", { pointerId: 12 });
+      value(0.12, "document release restores the surviving eased contact");
+      contact("pointercancel", 11);
+      value(0, "last cancellation clears the pedal");
+      assert.ok(!pedal.classes.has("on"));
+      contact("pointerdown", 21);
+      contact("pointerdown", 22);
+      fire(winListeners, "blur");
+      value(0, "blur clears both contacts and the fill");
+      contact("pointermove", 21, 200);
+      value(0, "a stale pointer cannot reactivate after blur");
+      contact("pointerdown", 23);
+      contact("pointermove", 23, 98);
+      value(0.12, "a new single contact retains analog travel");
+      fire(docListeners, "touchend", { touches: [] });
+      value(0, "the all-fingers-up fallback clears travel");
+    }
+  } finally {
+    if (ctl) ctl.cancel();
+    for (const [key, old] of Object.entries(previous)) {
+      if (old === undefined) delete globalThis[key]; else globalThis[key] = old;
+    }
+  }
+});
+
 test("the phone controller accepts a full private relay token and explains an incomplete one", async () => {
   const dom = { codeIn: fakeEl(), status: fakeEl() };
   dom.codeIn.maxLength = 8;
@@ -1677,4 +1728,103 @@ test("phone: a failed re-dial is retried on a backoff, and links with no CONNECT
   const total = h.timeouts.filter((t) => t.ms >= 1000).reduce((n, t) => n + t.ms, 0);
   assert.ok(total <= 90000, "the retries fit inside the game's 120 s re-host window (" + total + " ms)");
   h.ctl.cancel();
+});
+
+test("phone hold controls accept Space and Enter without cancelling another held contact", () => {
+  const dom = { gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(), body: fakeEl() };
+  dom.body.classList.contains = (name) => dom.body.classes.has(name);
+  const ctl = PhonePad.pad(dom);
+  try {
+    for (const [control, stateKey] of [[dom.gas, "thr"], [dom.brake, "brk"], [dom.lookBack, "held"]]) {
+      control.dispatch("keydown", { key: " " });
+      assert.equal(ctl.state()[stateKey], 1);
+      control.dispatch("keydown", { key: "Enter" });
+      control.dispatch("keyup", { key: " " });
+      assert.equal(ctl.state()[stateKey], 1, "the other key is still down");
+      control.dispatch("pointerdown", { pointerId: 11, clientY: 200 });
+      control.dispatch("keyup", { key: "Enter" });
+      assert.equal(ctl.state()[stateKey], 1, "the finger is still down");
+      control.dispatch("pointerup", { pointerId: 11 });
+      assert.equal(ctl.state()[stateKey], 0);
+      control.dispatch("keydown", { key: " " });
+      control.dispatch("blur");
+      assert.equal(ctl.state()[stateKey], 0, "focus loss releases the keyboard hold");
+      control.dispatch("keyup", { key: " " });
+      assert.equal(ctl.state()[stateKey], 0);
+    }
+    dom.body.classes.add("throttle-auto");
+    dom.gas.dispatch("keydown", { key: " " });
+    assert.equal(ctl.state().thr, 0, "automatic throttle retains its pointer-disabled behavior for keyboard");
+    for (const id of ["gas", "brake"]) {
+      assert.match(read("controller.html"), new RegExp('<div id="' + id + '"[^>]+tabindex="0"'), "pedal can receive keyboard focus");
+    }
+  } finally { ctl.cancel(); }
+});
+
+test("phone touch steering restores the remaining held arrow and ignores old-key repeats", async () => {
+  let receive, closed;
+  const transport = { status: "open", onMessage(f) { receive = f; }, onOpen() {}, onClose(f) { closed = f; }, send() { return true; }, pump() {}, close() { this.status = "closed"; if (closed) closed("local"); } };
+  const dom = { steer: fakeEl() };
+  const ctl = PhonePad.pad(dom, { deps: {
+    rtc: () => transport, prefetchIce: async () => null, normalise: (c) => c, valid: () => true,
+    privateRelay: () => false, swap: async () => ({ ok: true }),
+  } });
+  try {
+    await ctl.connect("ABC234");
+    receive("event", PhonePad.encodeHello("host", false, true));
+    assert.equal(ctl.setSteeringMode("touch"), true);
+    const key = (type, name, repeat = false) => dom.steer.dispatch(type, { key: name, repeat });
+    for (const [first, last, sign] of [["ArrowLeft", "ArrowRight", -1], ["ArrowRight", "ArrowLeft", 1]]) {
+      key("keydown", first); key("keydown", last);
+      assert.equal(ctl.state().steer, -sign);
+      key("keydown", first, true);
+      assert.equal(ctl.state().steer, -sign, "a repeat is not a new physical press");
+      key("keyup", last);
+      assert.equal(ctl.state().steer, sign, "the earlier key remains held");
+      key("keyup", first);
+      assert.equal(ctl.state().steer, 0);
+    }
+    key("keydown", "ArrowLeft"); key("keydown", "ArrowRight");
+    dom.steer.dispatch("blur");
+    assert.equal(ctl.state().steer, 0);
+    key("keyup", "ArrowRight");
+    assert.equal(ctl.state().steer, 0, "an old lift after blur cannot restore a cleared key");
+  } finally { ctl.cancel(); }
+});
+
+test("last-touch fallback releases fingers while preserving keyboard pedals and steering", async () => {
+  const previous = { document: globalThis.document, window: globalThis.window };
+  const listeners = {};
+  globalThis.document = { hidden: false, addEventListener(type, fn) { (listeners[type] ||= []).push(fn); } };
+  globalThis.window = { addEventListener() {} };
+  let receive, closed, ctl;
+  const transport = { status: "open", onMessage(f) { receive = f; }, onOpen() {}, onClose(f) { closed = f; }, send() { return true; }, pump() {}, close() { this.status = "closed"; if (closed) closed("local"); } };
+  const dom = { gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(), steer: fakeEl() };
+  const documentEvent = (type, event) => { for (const fn of listeners[type] || []) fn(event); };
+  try {
+    ctl = PhonePad.pad(dom, { deps: { rtc: () => transport, prefetchIce: async () => null, normalise: (c) => c, valid: () => true, privateRelay: () => false, swap: async () => ({ ok: true }) } });
+    await ctl.connect("ABC234");
+    receive("event", PhonePad.encodeHello("host", false, true));
+    ctl.setSteeringMode("touch");
+    dom.gas.dispatch("keydown", { key: " " });
+    dom.brake.dispatch("keydown", { key: "Enter" });
+    dom.steer.dispatch("keydown", { key: "ArrowLeft" });
+    for (const type of ["touchend", "touchcancel"]) {
+      dom.lookBack.dispatch("pointerdown", { pointerId: 12 });
+      assert.equal(ctl.state().held, 1);
+      documentEvent(type, { touches: [] });
+      assert.equal(ctl.state().held, 0, "lost pointer lift is still recovered");
+      assert.equal(ctl.state().thr, 1, type + " preserves held GAS key");
+      assert.equal(ctl.state().brk, 1, type + " preserves held BRAKE key");
+      assert.equal(ctl.state().steer, -1, type + " preserves held steering key");
+    }
+    globalThis.document.hidden = true;
+    documentEvent("visibilitychange", {});
+    for (const field of ["thr", "brk", "held", "steer"]) assert.equal(ctl.state()[field], 0, "backgrounding clears " + field);
+  } finally {
+    if (ctl) ctl.cancel();
+    for (const [key, old] of Object.entries(previous)) {
+      if (old === undefined) delete globalThis[key]; else globalThis[key] = old;
+    }
+  }
 });

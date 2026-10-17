@@ -447,6 +447,13 @@ Combine saved reports without launching a browser:
 Pass this object to `apex_shot_survey`. The CLI equivalent is `node tools/shot/shot-survey.mjs --reports artifacts/track-survey/monza/findings.json,artifacts/track-survey/spa/findings.json --out artifacts/track-survey/combined`.
 The output folder includes copied PNG/JPEG assets and can be shared as a ZIP. Reports may identify custom circuits; an explicit `actualTrack` or runtime `state.info.track` takes precedence over a bootstrap track ID. Captures now record their actual runtime track ID. Missing images fail the gallery build; recorded capture failures stay visible in the gallery.
 
+### three.js Inspector (TLX, opt-in)
+
+`?inspector=1` (or `__apex.inspector(true)`) loads the vendored three.js Inspector panel on the TLX renderer; it is off under the Playwright
+harness and on the deployed site, and nothing under `vendor/three-0.186.1/addons/inspector/` is fetched while it is off. `__apex.inspector()` reads
+`{on, supported, reason}`. Pin `apex26.gfxBackend=three` first, or a software-GL boot may answer `supported:false` (#2674). Reference:
+[DEBUG-HOOKS §inspector](DEBUG-HOOKS.md), notes in `docs/notes/THREE-INSPECTOR-2026-10-16.md`.
+
 ### Read-only UI inspector
 
 `node tools/ui/explorer.mjs inspect --screen settingsappearance --styles '#as-uiScale'`
@@ -528,7 +535,7 @@ boot-time classifiers see the phone. `--safe T,R,B,L` sets real
 `--summary` prints one tab-separated line per issue (screen, size, kind,
 selector, message) instead of the JSON, which is still written to `--out`.
 `provenance.emulation` records the settings. A sweep record that has not settled
-gets one more settlement budget (`settlement.retried`). If it is still moving,
+gets one more settlement budget (`settlement.retried`). Settlement also waits for finite running CSS animations on, inside or above the root (`settlement.animating`): a fade or pointer-events transition leaves geometry final while hit tests still answer `<html>`; infinite animations are ignored. If it is still moving,
 its issues carry `provisional: true`. A hit test whose visible centre lands on
 `<html>`/`<body>` is `not-hit-testable` (nothing painted takes the point), not
 `blocked` by another control. A native `<label>` counts as part of its control's

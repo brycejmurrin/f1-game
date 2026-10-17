@@ -46,6 +46,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { changedPaths } from "../lib/changed-files.mjs";
+import { loadGroups } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
 import { DEPLOY_BRANCH, selectionReceipt } from "./pick-tests.mjs";
 import { TRACKED, circuitsTouched, isDocsOnly } from "./select-specs.mjs";
@@ -1389,7 +1390,7 @@ export const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT
 /**
  * Run the structural suites one file at a time.
  * @param {string[]} [files]
- * @param {{ logPath?: string }} [opts]
+ * @param {{ logPath?: string, isolatedFiles?: string[] }} [opts]
  * @returns {{ ok: boolean, passed: number, failed: number, results: object[], notStarted: number }}
  */
 export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {}) {
@@ -1412,6 +1413,13 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // a stamp of HEAD blessed a committed tip the suite never saw (ledger M36).
   // Only a full suite stamps, so only a full suite pays for the tree hash.
   const rel = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f) : f).replace(/\\/g, "/");
+  // car-shade's unchanged CPU benchmark measured 1875 ms alongside other
+  // files versus 293–562 ms alone. game-vm's unchanged 12 s boot/race wall
+  // measured 40.5 s alongside other VM files versus 8.03 s alone. Run these
+  // performance contracts exclusively; assertions, deadlines and pool limits stay intact.
+  const isolated = new Set((opts.isolatedFiles || loadGroups().isolatedFiles || []).map(rel));
+  const isolatedFiles = files.filter((file) => isolated.has(rel(file)));
+  files = [...isolatedFiles, ...files.filter((file) => !isolated.has(rel(file)))];
   const ran = new Set(files.map(rel));
   const fullSuite = ran.size === TOOLING_FAST_FILES.length && TOOLING_FAST_FILES.every((f) => ran.has(f));
   const startHead = fullSuite ? spawnSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).stdout.trim() : "";
@@ -1424,6 +1432,8 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   emit(opts.order === "list" ? "order=list" :
     `order=longest-first (${files.length - unmeasured} with a recorded duration, ${unmeasured} unmeasured scheduled first) ` +
     `test-timeout=${fmtDur(testTimeoutMs)} file-timeout=${fmtDur(fileTimeoutMs)}`);
+
+  if (isolatedFiles.length) emit(`isolated prefix=${isolatedFiles.map(rel).join(",")} before parallel pool; order applies within each phase`);
 
   const results = [];
   let passed = 0;
@@ -1526,17 +1536,27 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // log still names every failure that was running. A red shard used to run a
   // mean 5.9 min after its first failure. The verdict line is unchanged.
   const bail = opts.bail === true;
+  const entries = files.map((file, index) => ({ file, index }));
+  const serialEntries = entries.filter((entry) => isolated.has(rel(entry.file)));
+  const parallelEntries = entries.filter((entry) => !isolated.has(rel(entry.file)));
+  let started = 0;
+  for (const entry of serialEntries) {
+    if (bail && failed > 0) break;
+    started++;
+    await runOne(entry.file, entry.index + 1);
+  }
   let next = 0;
   const worker = async () => {
     while (true) {
       if (bail && failed > 0) return;
-      const i = next++;
-      if (i >= files.length) return;
-      await runOne(files[i], i + 1);
+      const entry = parallelEntries[next++];
+      if (!entry) return;
+      started++;
+      await runOne(entry.file, entry.index + 1);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(jobs, files.length) }, worker));
-  const notStarted = bail && failed > 0 ? Math.max(0, files.length - next) : 0;
+  await Promise.all(Array.from({ length: Math.min(jobs, parallelEntries.length) }, worker));
+  const notStarted = bail && failed > 0 ? files.length - started : 0;
   if (notStarted) emit(`bail: stopped starting files after the first failure; ${notStarted} of ${files.length} file(s) not started`);
 
   const suiteDur = Date.now() - suiteStart;

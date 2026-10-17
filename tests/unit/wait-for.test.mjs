@@ -110,3 +110,16 @@ test("deploy.mjs --status / --wait read the marker log (exit 0 / 1)", () => {
   stamp(f, "done exit=1");
   assert.equal(run("--status").status, 1);
 });
+
+test("--log-matches: holds once a log line matches; names the missing verdict; bad regex is a usage error", () => {
+  const a = parseArgs(["--log-matches", "x.log", "^= run (passed|failed)"]);
+  assert.equal(a.conds[0].kind, "log");
+  const deps = { read: () => "starting\n= run passed (3)\n" };
+  assert.equal(check(a.conds, deps).ok, true);
+  const miss = check(a.conds, { read: () => "still going\n" });
+  assert.equal(miss.ok, false);
+  assert.match(miss.pending[0], /x\.log has no line matching/);
+  assert.equal(check(a.conds, { read: () => "" }).ok, false);
+  assert.throws(() => parseArgs(["--log-matches", "x.log"]), UsageError);
+  assert.throws(() => parseArgs(["--log-matches", "x.log", "("]), UsageError);
+});

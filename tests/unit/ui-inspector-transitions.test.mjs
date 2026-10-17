@@ -4,7 +4,7 @@ import { runInNewContext } from 'node:vm';
 import { settleLayout, compareSweepPaths } from '../../tools/ui/explorer/transitions.mjs';
 
 const plain = value => JSON.parse(JSON.stringify(value));
-function fixture({ children = 1, ids = true, adaptation = { pair: 'off' }, throwOnRect = false } = {}) {
+function fixture({ children = 1, ids = true, adaptation = { pair: 'off' }, throwOnRect = false, animations = null } = {}) {
   let now = 0, sequence = 0;
   const pending = new Map(), timers = new Map(), cancelled = [];
   const node = (id, tagName = 'DIV') => ({ id, tagName, nodeType: 1, dataset: {}, children: [], parentElement: null,
@@ -19,6 +19,7 @@ function fixture({ children = 1, ids = true, adaptation = { pair: 'off' }, throw
   });
   const document = { querySelector: root => root === 'body' || root === '#scope' ? scope : null,
     querySelectorAll: selector => [scope, ...scope.children].filter(e => `#${e.id}` === selector),
+    ...(animations ? { getAnimations: () => animations } : {}),
   };
   const context = { document, CSS: { escape: value => value }, performance: { now: () => now },
     requestAnimationFrame: callback => { const id = ++sequence; pending.set(id, callback); return id; },
@@ -26,7 +27,7 @@ function fixture({ children = 1, ids = true, adaptation = { pair: 'off' }, throw
     setTimeout: (callback, ms) => { const id = ++sequence; timers.set(id, { callback, at: now + ms }); return id; },
     clearTimeout: id => timers.delete(id),
   };
-  return { scope, pending, timers, cancelled,
+  return { scope, pending, timers, cancelled, animationsRef: animations,
     start: options => runInNewContext(`(${settleLayout.toString()})(${JSON.stringify(options || {})})`, context),
     frame(change, ms = 20) { now += ms; change?.(scope.children); const callbacks = [...pending.values()]; pending.clear(); for (const callback of callbacks) callback(); },
     expire() { now = 2000; for (const { callback } of [...timers.values()]) callback(); },
@@ -220,3 +221,34 @@ test('path analysis bounds records, contexts, comparisons and retained differenc
   assert(large.unknowns.length <= large.limits.unknowns);
   assert.match(large.unknowns.join(' '), /Record cap.*Comparison cap/);
 });
+
+test('a finite CSS animation on the root keeps the layout unsettled until it ends; infinite ones are ignored', async () => {
+  const animations = [];
+  const dom = fixture({ animations });
+  const fade = { playState: 'running', effect: { target: null, getComputedTiming: () => ({ endTime: 600 }) } };
+  const pulse = { playState: 'running', effect: { target: null, getComputedTiming: () => ({ endTime: Infinity }) } };
+  fade.effect.target = dom.scope.children[0]; pulse.effect.target = dom.scope.children[0];
+  animations.push(fade, pulse);
+  const promise = dom.start();
+  for (let n = 0; n < 12; n++) dom.frame();   // geometry is quiet the whole time
+  assert.equal(dom.pending.size, 1, 'still sampling: the fade is running');
+  fade.playState = 'finished';
+  for (let n = 0; n < 4; n++) dom.frame();
+  const result = plain(await promise);
+  assert.equal(result.stable, true);
+  assert.equal(result.animating, 0);
+  assert(result.frames > 12, 'it waited past the quiet geometry');
+});
+
+test('an animation still running at the budget is named as the reason', async () => {
+  const dom = fixture({ animations: [] });
+  const promise = dom.start();
+  const running = { playState: 'running', effect: { target: dom.scope, getComputedTiming: () => ({ endTime: 5000 }) } };
+  dom.frame(); runningPush(dom, running);
+  for (let n = 0; n < 4; n++) dom.frame();
+  dom.expire();
+  const result = plain(await promise);
+  assert.equal(result.stable, false); assert.equal(result.animating, 1);
+  assert.match(result.reason, /animations/);
+});
+function runningPush(dom, a) { dom.animationsRef.push(a); }

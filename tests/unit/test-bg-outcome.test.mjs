@@ -36,6 +36,27 @@ test("exit 0 keeps the rich summary; the old formats still read", () => {
   assert.equal(outcomeOf("booting…\n"), "died before finishing");
 });
 
+test("a stopped browser half never inherits its VM twin's passing TAP verdict", () => {
+  const twin = "# pass 6\n# fail 0\n[playwright] VM twin(s) passed (6) — the browser half follows\n";
+  const browser = "[playwright] main port=33461 pid=50751\n[20:41:20] = run start: 69 tests, 1 worker(s)\n";
+  const failures = "[20:49:04] x FAIL   12/69 finishRace transitions\n[20:52:25] x FAIL   14/69 finishRace table\n";
+  const interrupted = twin + browser + failures + "[playwright] child exited on SIGTERM\n";
+  assert.equal(outcomeOf(interrupted), "interrupted (SIGTERM; 2 failure(s), browser summary missing)");
+  assert.match(outcomeOf(twin + browser + "[playwright] child exited on SIGTERM\n"), /^interrupted \(SIGTERM; 0 failure/);
+  assert.match(outcomeOf(twin + browser + failures), /^died after 2 failure/, "a killed wrapper may omit its signal line too");
+  assert.match(outcomeOf(twin), /^died before finishing/, "interruption before browser launch still needs the browser verdict");
+  assert.match(outcomeOf(twin + browser + "= bg exit 0\n"), /^died before finishing/, "exit 0 cannot stand in for the missing browser summary");
+  assert.equal(outcomeOf(twin + browser + "[20:55:00] = run passed  (69/69 done, 0 failed, 0 skipped)\n= bg exit 0\n"),
+    "passed (69/69 done, 0 failed, 0 skipped)", "a completed browser half keeps its rich summary");
+});
+
+test("a later browser shard must finish after an earlier browser pass", () => {
+  const earlier = "[playwright] shared-shard port=33461 pid=50751\n[20:00:00] = run passed (1/1 done, 0 failed)\n";
+  const later = "[playwright] mega:tests/specs/smoke.spec.js port=33461 pid=50752\n";
+  assert.match(outcomeOf(earlier + later + "[playwright] child exited on SIGKILL\n"), /^interrupted \(SIGKILL/);
+  assert.match(outcomeOf(earlier + "[20:00:01] = run start: 3 tests, 1 worker(s)\n"), /^died before finishing/);
+});
+
 test("a recycled pid is not the run: liveness needs the recorded start time and boot id", () => {
   /* test-bg recorded only the pid and tested kill(pid, 0). After a restart or a
      pid wrap an unrelated process holding that pid read as a live run — `--wait`

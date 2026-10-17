@@ -27,6 +27,29 @@ function hint(stdin, mode) {
 }
 const ask = (prompt, mode) => hint(JSON.stringify({ prompt, hook_event_name: "UserPromptSubmit" }), mode);
 
+test("description reads continued YAML scalars without indexing another frontmatter field", () => {
+  const cases = [
+    ["description: Use for breakpoints\n  and paused locals.\nname: unrelated_trigger", "Use for breakpoints and paused locals."],
+    ['description: "Use for breakpoints\n  and paused locals."\nname: unrelated_trigger', "Use for breakpoints and paused locals."],
+    ["description: >-\n  Use for breakpoints\n  and paused locals.\nname: unrelated_trigger", "Use for breakpoints and paused locals."],
+    ["description: |+\n  Use for breakpoints\n  and paused locals.\nname: unrelated_trigger", "Use for breakpoints and paused locals."],
+    ["description: Use for breakpoints.\nwhen_to_use: Inspect paused\n  locals and scopes.\nname: unrelated_trigger", "Use for breakpoints. Inspect paused locals and scopes."],
+  ];
+  const code = `
+import json, sys, importlib.util, io
+from unittest.mock import patch
+spec = importlib.util.spec_from_file_location("h", ${JSON.stringify(HOOK)})
+h = importlib.util.module_from_spec(spec); spec.loader.exec_module(h)
+out = []
+for text in json.load(sys.stdin):
+    with patch("builtins.open", return_value=io.StringIO("---\\n" + text + "\\n---\\nIgnored body vocabulary.")):
+        out.append(h.description("unused"))
+print(json.dumps(out))`;
+  const result = spawnSync("python3", ["-c", code], { input: JSON.stringify(cases.map(([text]) => text)), encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), cases.map(([, expected]) => expected));
+});
+
 test("a race-weekend prompt names race-weekend first", () => {
   const r = ask("Soft tyres last the whole race; check how tyre-model.js scales stint life and the pit lane loss");
   assert.equal(r.code, 0);
