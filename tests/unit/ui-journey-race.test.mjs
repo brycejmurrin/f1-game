@@ -105,7 +105,7 @@ test("compact race HUD uses body density, not orientation + max-height queries",
 
 test("pause owns paused navigation: #campicker stands down with the dim sheet", () => {
   const hud = read("css/hud.css");
-  assert.match(hud, /body:has\(\.screen\.dim:not\(\[hidden\]\)\) #campicker \{\s*display:\s*none/);
+  assert.match(hud, /body:has\(> \.screen\.dim:not\(\[hidden\]\)\) #campicker \{\s*display:\s*none/);
 });
 
 test("sector box still clears #pausebtn via --tap-hud / --hud-z", () => {

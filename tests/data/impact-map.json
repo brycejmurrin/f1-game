@@ -1316,6 +1316,7 @@
       ],
       "*": [
         "tests/unit/global-registry.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/shell-ids.test.mjs"
       ]
@@ -2190,6 +2191,7 @@
       ],
       "*": [
         "tests/unit/legends.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
     },
@@ -2328,6 +2330,7 @@
         "tests/specs/quali.spec.js",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
     },
@@ -2344,6 +2347,7 @@
       ],
       "*": [
         "tests/unit/aero-defaults-2026.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
     },
@@ -2355,6 +2359,7 @@
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
     },
@@ -2372,6 +2377,7 @@
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/team-livery.test.mjs"
@@ -2554,6 +2560,7 @@
       ],
       "*": [
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
     },
@@ -2565,6 +2572,7 @@
       "buildWheelLayers": [
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
       "create": [
@@ -2572,6 +2580,7 @@
         "tests/unit/car-wing-foil.test.mjs"
       ],
       "tints": [
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
       "*": [
@@ -2591,6 +2600,7 @@
         "tests/unit/cockpit-pale-surfaces.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
       "buildComplete": [
@@ -2804,6 +2814,7 @@
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
       "designFor": [
@@ -2845,6 +2856,7 @@
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
@@ -3009,6 +3021,7 @@
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/factory-ai-setup.test.mjs",
         "tests/unit/legends-team.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/setup-tune.test.mjs"
       ],
@@ -3022,6 +3035,7 @@
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
       "isOptionAvailable": [
@@ -4290,6 +4304,7 @@
         "tests/unit/legends-team.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/log-namespaces.test.mjs",
@@ -4417,6 +4432,7 @@
         "tests/unit/legends-team.test.mjs",
         "tests/unit/legends.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
@@ -5025,6 +5041,7 @@
         "tests/unit/legends-team.test.mjs",
         "tests/unit/legends.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
@@ -6529,6 +6546,7 @@
         "tests/unit/livery-design.test.mjs"
       ],
       "*": [
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs"
       ]
@@ -6882,6 +6900,7 @@
         "tests/unit/garage-interior-gate.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs"

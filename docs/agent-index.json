@@ -580,10 +580,11 @@
         "tests/specs/garage-first-frame.spec.js",
         "tests/specs/garage-out-before-card.spec.js",
         "tests/specs/garage-prebuild.spec.js",
+        "tests/specs/livery-sidewall.spec.js",
         "tests/specs/livery-wheels.spec.js",
         "tests/specs/parts-*.spec.js"
       ],
-      "declaredTests": 37,
+      "declaredTests": 39,
       "twinned": false
     },
     {
@@ -974,6 +975,7 @@
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-decal-surfaces.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",
         "tests/unit/parts-distinct-mesh.test.mjs",
@@ -984,7 +986,7 @@
         "tests/unit/team-style-relief.test.mjs",
         "tests/unit/tyre-recipes-open-rim.test.mjs"
       ],
-      "declaredTests": 265,
+      "declaredTests": 272,
       "twinned": false
     },
     {
