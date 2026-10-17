@@ -121,16 +121,48 @@ function bootImportUI(opts = {}) {
 test("backup controls mount once in their own settings page, outside renderer options", () => {
   const b = bootImportUI();
   for (const id of ["pm-settings-changed", "pm-settings-all", "pm-settings-load"]) {
-    assert.equal(b.dom.byId(id).parentElement.id, "pm-panel-files");
+    assert.ok(b.dom.byId("pm-panel-files").contains(b.dom.byId(id)));
   }
   b.SettingsExport.create(b.G);
   assert.equal(b.dom.document.querySelectorAll("#pm-settings-load").length, 1);
 });
 
+test("backup action navigation exposes one section without exporting or importing", () => {
+  const b = bootImportUI({ disk: { "apex26.sound": "true" } });
+  const before = [...b.disk];
+  const host = b.dom.byId("pm-panel-files");
+  for (const active of ["save", "restore", "share", "save"]) {
+    const choice = b.dom.byId("pm-files-show-" + active);
+    choice.focus(); choice.click();
+    assert.equal(b.dom.document.activeElement, choice, "navigation retains keyboard focus");
+    for (const id of ["save", "restore", "share"]) {
+      assert.equal(b.dom.byId("pm-files-" + id).hidden, id !== active);
+      assert.equal(b.dom.byId("pm-files-show-" + id).getAttribute("aria-pressed"), String(id === active));
+      assert.equal(b.dom.byId("pm-files-show-" + id).getAttribute("aria-controls"), "pm-files-" + id);
+    }
+  }
+  assert.equal(b.dom.document.querySelector("input"), null, "navigation must not launch a file chooser");
+  assert.equal(b.reloads(), 0);
+  assert.deepEqual([...b.disk], before);
+  assert.ok(host.children.some((el) => el.getAttribute("data-help") === "keep" && /accounts are excluded/.test(el.textContent)), "backup exclusions stay visible outside optional help");
+});
+
+test("leaving Restore disarms its overwrite confirmation", () => {
+  const b = bootImportUI();
+  b.dom.byId("pm-files-show-restore").click();
+  b.button.click();
+  assert.match(b.button.textContent, /OVERWRITE SETTINGS/);
+  b.dom.byId("pm-files-show-save").click();
+  assert.equal(b.button.textContent, "LOAD SETTINGS FILE");
+  b.dom.byId("pm-files-show-restore").click();
+  b.button.click();
+  assert.equal(b.dom.document.querySelector("input"), null, "returning requires a fresh confirmation");
+});
+
 test("Files share feedback stays visible and accessible with Undo instructions", () => {
   const b = bootImportUI();
   const input = b.dom.byId("pm-share-code-in"), status = b.dom.byId("pm-share-code-status");
-  assert.equal(status.parentElement.id, "pm-panel-files");
+  assert.equal(status.parentElement.id, "pm-files-share");
   assert.equal(status.hidden, false);
   assert.equal(status.getAttribute("role"), "status");
   assert.equal(status.getAttribute("aria-live"), "polite");
@@ -138,7 +170,7 @@ test("Files share feedback stays visible and accessible with Undo instructions",
   assert.equal(status.getAttribute("data-help"), "keep");
   assert.equal(input.getAttribute("aria-describedby"), "pm-share-code-help pm-share-code-status");
   assert.match(b.dom.byId("pm-share-code-help").textContent, /paste UNDO here to restore it/);
-  assert.match(b.dom.byId("pm-share-code-help").textContent, /APXG1 \/ #ghost=/);
+  assert.match(b.dom.byId("pm-share-code-help").textContent, /Ghost recording codes and links are imported separately/);
 });
 
 for (const kind of ["setup", "livery", "daily", "undo", "invalid"]) test(`Files ${kind} share import releases the Settings modal only when navigating`, () => {
@@ -211,7 +243,7 @@ test("ensureMounted remounts after the files panel was emptied", () => {
   assert.equal(typeof b.SettingsExport.ensureMounted, "function");
   b.SettingsExport.ensureMounted();
   for (const id of ["pm-settings-changed", "pm-settings-all", "pm-settings-load"]) {
-    assert.equal(b.dom.byId(id).parentElement.id, "pm-panel-files");
+    assert.ok(b.dom.byId("pm-panel-files").contains(b.dom.byId(id)));
   }
 });
 
@@ -1066,7 +1098,7 @@ test("loading a career file migrates slots and refuses non-career keys", () => {
   const r = b.loadCareer({
     format: "apex26-career-v1",
     careers: {
-      "career.driver.0": { flavour: "driver", money: "not-a-number", driver: { name: "Ada", code: "ADA", num: 7 }, team: "mercedes" },
+      "career.driver.0": { flavour: "driver", money: 250, driver: { name: "Ada", code: "ADA", num: 7 }, team: "mercedes" },
       "career.driver.9": CAREER_SAVE,           // out of range — not a career key
       "parts.mercedes": { wing: 9 },            // garage — must not write
       careerSlot: "myteam:2",
@@ -1083,6 +1115,18 @@ test("loading a career file migrates slots and refuses non-career keys", () => {
   assert.equal(b.disk.has("apex26.parts.mercedes"), false, "career loader never writes the garage");
   assert.equal(b.disk.has("apex26.volMusic"), false, "career loader never writes settings");
   assert.equal(b.disk.has("apex26.career.driver.9"), false);
+});
+
+test("a career slot with poisoned money is skipped, not restored as a zero-credit career", () => {
+  const b = boot({ career: true });
+  const r = b.loadCareer({ format: "apex26-career-v1", careers: {
+    "career.driver.0": { flavour: "driver", money: "abc", driver: { name: "Ada", code: "ADA", num: 7 }, team: "mercedes" },
+    "career.driver.1": { flavour: "driver", money: 250, driver: { name: "Ada", code: "ADA", num: 7 }, team: "mercedes" },
+  } });
+  assert.equal(r.ok, true);
+  assert.equal(b.disk.has("apex26.career.driver.0"), false, "money:'abc' must not become a 0-credit slot");
+  assert.equal(JSON.parse(b.disk.get("apex26.career.driver.1")).money, 250);
+  assert.ok(r.skipped >= 1);
 });
 
 test("a career file of the wrong shape is refused whole", () => {
@@ -1275,7 +1319,7 @@ test("future final row refuses the entire mixed legacy import before slots or se
       "apex26.career.driver.0": JSON.stringify({ ...CAREER_SAVE, money: 100 }) } });
     const before = [...b.disk.entries()];
     const result = b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {
-      "career.driver.0": { ...CAREER_SAVE, v: 0, money: "not-a-number" },
+      "career.driver.0": { ...CAREER_SAVE, v: 0, money: "120" },
       "career.driver.1": CAREER_SAVE,
       careerSlot: "driver:0",
       ["career." + flavour + ".2"]: { ...CAREER_SAVE, flavour, v: version + 1 },
@@ -1290,12 +1334,12 @@ test("future final row refuses the entire mixed legacy import before slots or se
 test("future preflight retains legacy migration, scope and slot/selection revision gates", () => {
   const b = boot({ career: true });
   const result = b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {
-    "career.driver.0": { ...CAREER_SAVE, v: 0, money: "not-a-number" },
+    "career.driver.0": { ...CAREER_SAVE, v: 0, money: "120" },
     "career.driver.1": CAREER_SAVE, careerSlot: "driver:0",
     season: { round: 4 }, "daily.v1": { days: {} }, customTeam: { name: "Other" },
   } });
   assert.equal(result.ok, true);
-  assert.equal(JSON.parse(b.disk.get("apex26.career.driver.0")).money, 0);
+  assert.equal(JSON.parse(b.disk.get("apex26.career.driver.0")).money, 120);
   for (const i of [0, 1]) assert.equal(JSON.parse(b.disk.get("apex26.career.driver." + i)).v, b.careerVersion);
   for (const key of ["season", "daily.v1", "customTeam"]) assert.equal(b.disk.has("apex26." + key), false);
   for (const changed of ["career.driver.0", "careerSlot"]) {
@@ -1307,4 +1351,74 @@ test("future preflight retains legacy migration, scope and slot/selection revisi
     assert.equal(refused.reason, "conflict", changed);
     assert.deepEqual([...h.disk.entries()], before);
   }
+});
+
+
+test("leaving backup settings clears overwrite confirmation without duplicating lifecycle handlers", () => {
+  const leave = [];
+  const b = bootImportUI({ globals: { SettingsNav: { onLeave: fn => leave.push(fn) } } });
+  assert.equal(leave.length, 1);
+  b.SettingsExport.ensureMounted();
+  b.SettingsExport.create(b.G);
+  assert.equal(leave.length, 1);
+  b.button.click();
+  assert.match(b.button.textContent, /OVERWRITE SETTINGS/);
+  leave[0]("audio");
+  assert.match(b.button.textContent, /OVERWRITE SETTINGS/, "unrelated page leaves do not affect confirmation");
+  leave[0]("files");
+  assert.equal(b.button.textContent, "LOAD SETTINGS FILE");
+  b.button.click();
+  assert.match(b.button.textContent, /OVERWRITE SETTINGS/, "reopening requires fresh confirmation");
+  assert.equal(b.dom.document.querySelector("input"), null, "first click after returning does not open a file chooser");
+  leave[0]("files");
+  b.flushTimers();
+  assert.equal(b.button.textContent, "LOAD SETTINGS FILE");
+});
+
+
+test("Saves and Data explains separate backup scopes and reuses storage health", () => {
+  const mounts = [];
+  const b = bootImportUI({ globals: { SaveHealth: { mount: host => mounts.push(host) } } });
+  const scope = b.dom.byId("pm-settings-file-scope");
+  assert.equal(scope.getAttribute("data-help"), "keep");
+  assert.match(scope.textContent, /Both files also include saved time-trial leaderboards/);
+  assert.match(scope.textContent, /loading merges those boards/);
+  for (const excluded of ["career", "season", "photos", "personal background images", "ghosts", "replays", "accounts", "network credentials"]) assert.ok(scope.textContent.includes(excluded));
+  const other = b.dom.byId("pm-other-save-files");
+  assert.match(other.textContent, /GARAGE → TEAM → SAVE GARAGE FILE/);
+  assert.match(other.textContent, /CAREER → CAREER MODES → SAVE CAREER FILE/);
+  assert.match(other.textContent, /local history is not an exported backup/);
+  assert.equal(mounts.length, 1); assert.equal(mounts[0].id, "pm-panel-files");
+  b.SettingsExport.ensureMounted(); assert.equal(mounts.length, 1);
+});
+
+
+for (const fileReader of [false, true]) test(`leaving Saves and Data invalidates a pending import (${fileReader ? "FileReader" : "File.text"})`, async () => {
+  const leave = [];
+  const b = bootImportUI({ fileReader, globals: { SettingsNav: { onLeave: fn => leave.push(fn) } } });
+  let finish;
+  b.choose(new Promise(resolve => { finish = resolve; }));
+  leave[0]("files");
+  finish(volumeFile(0.2)); await Promise.resolve();
+  assert.equal(b.disk.has("apex26.volMusic"), false);
+  b.flushReloads(); assert.equal(b.reloads(), 0);
+});
+
+test("Saves and Data exposes independent garage and career loaders without duplicate IDs", async () => {
+  const b = bootImportUI({ career: true });
+  b.dom.body.append(b.SettingsExport.garageRow(), b.SettingsExport.careerRow());
+  for (const id of ["pm-garage-save", "pm-garage-load", "pm-career-save", "pm-career-load", "cs-garage-save", "cr-career-save"]) {
+    assert.equal(b.dom.document.querySelectorAll("#" + id).length, 1);
+  }
+  for (const [id, format, scope] of [["pm-garage-load", "apex26-settings-v1", "THE GARAGE"], ["pm-career-load", "apex26-settings-v1", "CAREER SAVES"]]) {
+    const button = b.dom.byId(id);
+    button.click(); assert.ok(button.textContent.includes("OVERWRITE " + scope));
+    button.click();
+    const picker = b.dom.document.querySelector("input");
+    picker.files = [{ text: () => Promise.resolve(JSON.stringify({ format, settings: { audio: { volMusic: 0.2 } } })) }];
+    picker.onchange(); await Promise.resolve();
+    assert.equal(b.disk.has("apex26.volMusic"), false, "domain loaders refuse settings files");
+    assert.doesNotMatch(button.textContent, /RELOADING/);
+  }
+  b.flushReloads(); assert.equal(b.reloads(), 0);
 });

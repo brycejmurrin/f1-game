@@ -303,7 +303,8 @@ test("continuous colour input coalesces expensive 3D preview rebuilds", () => {
   const apply = SHEET.slice(SHEET.indexOf("const applyPreview"), SHEET.indexOf("// MATCHING PALETTE"));
   assert.match(apply, /defer3d\s*\?\s*scheduleLivPreview\(team,\s*d\)\s*:\s*livePreviewDraft\(team,\s*d\)/);
   assert.match(SHEET, /inp\.oninput\s*=\s*\(\)\s*=>[^]*?applyPreview\(true\)/);
-  assert.match(SHEET, /inp\.onchange\s*=\s*flushLivPreview/);
+  assert.match(SHEET, /inp\.onchange\s*=\s*\(\)\s*=>\s*\{\s*applyPreview\(\);\s*flushLivPreview\(\);/,
+    "finish the undo gesture and synchronously flush the final colour");
   assert.match(SHEET, /function endLivPreview\(team\)\s*\{[^]*?cancelLivPreview\(\)/);
 });
 

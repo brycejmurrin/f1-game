@@ -238,7 +238,8 @@ test("fillArcBuckets / forArcNear are on Collide and allocation-free after warmu
   Collide.forArcNear(ranked[0], L, 72, () => { first++; }, (c) => c.prog);
   assert.ok(first >= 2, "wrap + lapped neighbours must be visited");
   const src = readFileSync(join(ROOT, "js/physics/collide.js"), "utf8");
-  assert.ok(src.includes("if (arr) arr.length = 0"), "bucket clear must reuse arrays");
+  // `arr.length = 0` drops V8's backing store, so every refill regrew it (measured: ~5 KB/frame at 22 cars).
+  assert.ok(src.includes("_arcN[id] = 0") && !src.includes("arr.length = 0"), "bucket clear must keep the arrays and reset a count");
   assert.match(src, /function fillArcBuckets/);
   assert.match(src, /function forArcNear/);
 });

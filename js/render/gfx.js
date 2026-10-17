@@ -235,6 +235,7 @@ const Gfx = (function () {
     let active = true, claimed = false;
     const canvasLease = new Proxy(canvas, {
       get(target, key) {
+        if (key === "__element") return target;   // ResizeObserver rejects a Proxy: CanvasCssSize observes the real element
         if (key === "getContext") return function (...args) {
           if (!active) return null;
           const context = target.getContext(...args);

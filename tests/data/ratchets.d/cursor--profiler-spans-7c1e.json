@@ -1,0 +1,14 @@
+{
+  "files": {
+    "js/agent/agentview.js": {
+      "lines": -4
+    },
+    "js/agent/apex.js": {
+      "codeLines": 8,
+      "lines": 13
+    },
+    "js/game.js": {
+      "codeLines": 1
+    }
+  }
+}

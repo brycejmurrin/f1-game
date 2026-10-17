@@ -247,7 +247,9 @@ const Input = (function () {
     // function the PHONE AS CONTROLLER page runs on the phone, so a remote
     // sample and a local reading agree by construction.
     const roll = TiltRoll.rollDeg(e.beta, e.gamma, TiltRoll.screenAngle());
-    if (roll === null || remoteSteers()) return; // a live phone owns the shared tilt pipeline
+    // A non-finite roll (Infinity angles from a broken sensor) would seed the One-Euro
+    // state with NaN and every later reading would stay NaN: drop it like a no-sensor event.
+    if (roll === null || !Number.isFinite(roll) || remoteSteers()) return; // a live phone owns the shared tilt pipeline
     tiltRaw = roll;
     const n = nowMs();
     const odt = lastOrientMs ? Math.min(0.1, (n - lastOrientMs) / 1000) : 0.016;

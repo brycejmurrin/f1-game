@@ -125,6 +125,9 @@ const TLX = (function () {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
     // three renderer before same-page GLX fallback claims #game.
     let _abortDisplay = null, _abortRenderer = null;
+    // Undo for the observers/listeners create() attaches, run by the catch: a create that throws after init
+    // (an initOwner superseded mid-boot) would otherwise leave them on a dead backend.
+    const _createUndo = [];
     let materialArrayDetail = null;
     const initOwner = opts && opts.initOwner;
     const checkInit = () => { if (initOwner) initOwner.check(); };
@@ -938,8 +941,10 @@ const TLX = (function () {
       };
       const _rememberFallbackLoss = (n) => { try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ } };
       try {
-        document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
-        window.addEventListener("pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
+        let onShown = null, onPageShow = null;
+        document.addEventListener("visibilitychange", onShown = function () { if (!document.hidden) _shownAt = _nowMs(); });
+        window.addEventListener("pageshow", onPageShow = function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
+        _createUndo.push(function () { document.removeEventListener("visibilitychange", onShown); window.removeEventListener("pageshow", onPageShow); });
       } catch (_) { /* no document events (harness) */ }
       renderer.onDeviceLost = function (info) {
         if (initOwner && !initOwner.active) return;
@@ -1027,16 +1032,17 @@ const TLX = (function () {
         } catch (_) { /* visibility / picker / harness; budget uses _sessLostN when storage throws */ }
       };
       try {
-        canvas.addEventListener("webglcontextrestored",
-          function () {
-            // Same two-reload budget as the loss handler: an unguarded restore
-            // reload looped on a device that loses the context every boot.
-            // Storage failure must not skip the reload (GLX: dead canvas).
-            var n = 0;
-            try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
-            if (n > 2) return;
-            try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
-          }, false);
+        let onRestored = null;
+        canvas.addEventListener("webglcontextrestored", onRestored = function () {
+          // Same two-reload budget as the loss handler: an unguarded restore
+          // reload looped on a device that loses the context every boot.
+          // Storage failure must not skip the reload (GLX: dead canvas).
+          var n = 0;
+          try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
+          if (n > 2) return;
+          try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
+        }, false);
+        _createUndo.push(function () { canvas.removeEventListener("webglcontextrestored", onRestored, false); });
       } catch (_) { /* detached/synthetic canvas in a harness: the timer above still covers it */ }
 
       // lifecycle state
@@ -1067,6 +1073,7 @@ const TLX = (function () {
       // WebGPU backend with the adapter feature; never on the WebGL2 fallback
       // (SwiftShader/CI), keeping the GLX {supported:false} shape there.
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
+      let _inspectorHold = false;   // dev Inspector owns timestamp resolution (inspectorHost below)
       function resolveGpuTimer() {
         if (!_gpuTimerOn) return;
         const epoch = _gpuTimerEpoch;
@@ -3664,6 +3671,7 @@ const TLX = (function () {
       // The WebGL2 driver's texture ceiling is a device constant: ask once.
       let _glMaxDim = -1, _glMaxTries = 0;
       const cssSizeCache = CanvasCssSize.create(_layoutCanvas, { settleFrames: 30 });
+      _createUndo.push(function () { cssSizeCache.dispose(); });
       // Window resize (game.js) and settings can fire many times per drag frame.
       // Coalesce those to one target realloc per animation frame; begin() and
       // setRenderScale force an immediate apply so the draw sees the new size.
@@ -4151,15 +4159,20 @@ const TLX = (function () {
         gpuTimer(on) {
           const sup = _gpuSupported();
           if (on !== undefined) {
-            const next = !!on && sup;
+            const next = !!on && sup && !_inspectorHold;
             if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuMs = -1; }
             _gpuTimerOn = next;
-            try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
+            if (!_inspectorHold) try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
             if (!_gpuTimerOn) _gpuMs = -1;
           }
           return { supported: sup, on: _gpuTimerOn };
         },
         gpuMs() { return _gpuMs; },
+        // Dev Inspector hand-off (js/perf/three-inspector.js): the renderer plus the gpuTimer interlock — while held,
+        // gpuTimer stays off so only the Inspector's own pass resolves timestamp queries.
+        inspectorHost() {
+          return { renderer, hold(on) { _inspectorHold = !!on; if (on) { _gpuTimerOn = false; _gpuMs = -1; _gpuTimerEpoch++; } } };
+        },
         // "Skipped for cadence, map still valid" — see tlx-shadow.js §KEEP.
         carShadowKeep() { return !!(shadowSys && shadowSys.carShadowKeep()); },
         lampShadowKeep(idx) { return !!(shadowSys && shadowSys.lampShadowKeep(idx)); },
@@ -5977,6 +5990,7 @@ const TLX = (function () {
       try { Log.info("gfx", "TLX bind ok"); } catch (_) { /* harness */ }
       return backend;
     } catch (e) {
+      for (let i = _createUndo.length - 1; i >= 0; i--) { try { _createUndo[i](); } catch (_) { /* best effort */ } }
       try {
         if (_abortDisplay && _abortDisplay.parentNode) _abortDisplay.parentNode.removeChild(_abortDisplay);
       } catch (_) { /* already detached */ }

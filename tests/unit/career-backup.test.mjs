@@ -225,6 +225,14 @@ test("hostile payloads are rejected with a reason and change nothing", () => {
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
       data: Object.assign(save({}), { driver: { name: "A", code: "YOU", num: {} } }) }] }, "driver-num"],
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0, data: [1, 2, 3] }] }, "slot-not-object"],
+    // Interpolated into the import card: a hostile toString threw inside the picker callback.
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { team: { toString: 1 } }) }] }, "team-not-string"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { year: "2026" }) }] }, "year-not-number"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { year: Infinity }) }] }, "year-not-number"],
+    [{ format: "apex26-career-backup-v1", slots: [], myTeam: { customTeam: { name: { toString: 1 } } } }, "custom-team-name"],
     // A driver career filed under a MY TEAM row (and the reverse) would load as
     // the wrong flavour in that slot set.
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "myteam", i: 2, data: save({ flavour: "driver" }) }] }, "flavour-mismatch"],
@@ -429,6 +437,16 @@ test("older backup keeps the Grand Prix stage after a zero-point sprint", () => 
     assert.equal(h.store.keyRevision("season"), revision);
     assert.equal(h.SeasonCal.stage(h.SeasonCal.load()), "race");
   }
+});
+
+test("seasonAhead compares the cleaned round: round 250 is 0, so a local round-5 season stays", () => {
+  const h = loadHarness();
+  const local = { round: 5, pts: {}, teamPts: {}, driverCodes: {} };
+  h.store.write("season", local);
+  const envelope = { format: "apex26-career-backup-v1", slots: [], season: { round: 250, pts: {}, teamPts: {}, driverCodes: {} } };
+  assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"));
+  assert.equal(h.CareerBackup.apply(envelope).applied.includes("season"), false);
+  assert.equal(h.store.get("season", null).round, 5);
 });
 
 test("sprint-stage preservation keeps paid-sprint and zero-point Grand Prix protection", () => {
@@ -1798,4 +1816,12 @@ for (const action of ["delete-arm", "delete-confirm", "close", "normal"]) test(`
   await Promise.resolve(); await Promise.resolve();
   const review = h.G.$("cr-left").querySelectorAll('[data-cr-act="import"]').some((button) => button.textContent === "IMPORT?");
   assert.equal(review, action === "normal", "abandoned file must not recreate an import review");
+});
+
+test("a {toString:1} version marker does not throw out of validate/apply", () => {
+  const h = loadHarness();
+  const payload = { format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 1,
+    data: Object.assign(save({}), { v: JSON.parse('{"toString":1}'), tally: { pts: JSON.parse('{"toString":1}') } }) }] };
+  assert.doesNotThrow(() => h.CareerBackup.validate(payload));
+  assert.doesNotThrow(() => h.CareerBackup.apply(payload, { otherFlavourConfirmed: true }));
 });

@@ -653,3 +653,20 @@ test("no AI car deploys BOOST under a VSC cap — only a free OVERTAKE push may"
   assert.ok(ticks > 0);
   assert.equal(boost, 0, `${boost} of ${ticks} AI ticks deployed BOOST under the VSC`);
 });
+
+test("an AI that still owes its second dry compound keeps its armed stop on the final lap (it is not disqualified for a cleared arm)", async () => {
+  await g.race(ID, "day", "dry", { laps: 10 });
+  const a = g.apex; a.tyres({ level: "real" }); a.go(); a.rivals([]);
+  const c = g.G.cars.find((x) => !x.human && !x.retired);
+  assert.ok(c, "an AI car");
+  assert.ok(g.G.pits.twoCompoundApplies(), "precondition: a 10-lap dry race with wear on is under the two-compound rule");
+  assert.ok((c.tyreLog || []).length <= 1, "precondition: the grid set is the only set it has run");
+  c.lap = g.G.lapsTarget; c.pitArmed = true; c.pitState = "none";
+  g.G.pits.update(c, 1 / 60);
+  assert.equal(c.pitArmed, true, "the owed stop stays armed on the final lap");
+  // Control: a car that has met the rule (two dry compounds run) is disarmed there, as before.
+  c.tyreLog = [{ code: "M", wet: false }, { code: "H", wet: false }];
+  c.pitArmed = true; c.pitState = "none";
+  g.G.pits.update(c, 1 / 60);
+  assert.equal(c.pitArmed, false, "a compliant car's final-lap stop pays nothing and is cleared");
+});

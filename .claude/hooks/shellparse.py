@@ -739,7 +739,7 @@ PW_BIN = re.compile(r"(^|/)(playwright(\.js|\.cmd)?|@playwright/test|(@?playwrig
 # apex_* tools whose CLI boots Chromium (tools/mcp/apex-tools-mcp.mjs kind
 # "browser" / week 2, plus apex_job_start); mcp-browser-guard.sh holds the same list.
 APEX_BROWSER = {"apex_eval", "apex_shot", "apex_shot_survey", "apex_agent", "apex_garage", "apex_hud_shot",
-                "apex_hud_survey", "apex_hud_mock", "apex_track", "apex_ui_fit", "apex_ui_shot", "apex_job_start"}
+                "apex_hud_survey", "apex_hud_mock", "apex_track", "apex_ui_fit", "apex_ui_shot", "apex_profile", "apex_job_start"}
 
 
 def _opts_after(args, help_only=False):

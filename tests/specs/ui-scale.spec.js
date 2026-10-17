@@ -639,6 +639,7 @@ test.describe("UI scale", () => {
         return {
           doubled, over, subs, reach,
           race: [race.top, race.bottom, race.left, race.right].map((v) => +v.toFixed(1)),
+          menu: [m.top, m.bottom, top0, menu.scrollHeight, menu.clientHeight].map((v) => +v.toFixed(1)),
           raceInView: race.top >= Math.max(0, m.top) - 1 && race.bottom <= Math.min(vh, m.bottom) + 1
             && race.left >= -1 && race.right <= vw + 1,
         };

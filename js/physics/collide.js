@@ -79,6 +79,8 @@ const Collide = (() => {
   // Arrays are reused: clear is length=0, a slot is allocated once per id.
   const _arcBuckets = [];
   const _arcBucketIds = [];
+  // Live length per bucket: truncating a bucket array frees V8's backing store, so every refill regrew it. Entries past _arcN[id] are stale.
+  const _arcN = [];
   let _arcNB = 0, _arcWidth = LCAR_MAX, _arcL = 1;
   function _arcProg(c) {
     if (c && c._snapProg != null && Number.isFinite(c._snapProg)) return c._snapProg;
@@ -87,8 +89,7 @@ const Collide = (() => {
   function _arcClear() {
     for (let i = 0; i < _arcBucketIds.length; i++) {
       const id = _arcBucketIds[i];
-      const arr = _arcBuckets[id];
-      if (arr) arr.length = 0;
+      _arcN[id] = 0;
     }
     _arcBucketIds.length = 0;
   }
@@ -106,9 +107,10 @@ const Collide = (() => {
       let b = Math.floor((((prog % L) + L) % L) / width) % nB;
       if (b < 0) b += nB;
       let arr = _arcBuckets[b];
-      if (!arr) { arr = _arcBuckets[b] = []; }
-      if (arr.length === 0) _arcBucketIds.push(b);
-      arr.push(c);
+      if (!arr) { arr = _arcBuckets[b] = []; _arcN[b] = 0; }
+      const len = _arcN[b];
+      if (len === 0) _arcBucketIds.push(b);
+      arr[len] = c; _arcN[b] = len + 1;
     }
     return nB;
   }
@@ -130,9 +132,9 @@ const Collide = (() => {
     if (!Number.isFinite(reach) || nB <= 2 * span + 1) {
       const nIds = _arcBucketIds.length;
       for (let k = 0; k < nIds; k++) {
-        const arr = _arcBuckets[_arcBucketIds[k]];
+        const bid = _arcBucketIds[k], arr = _arcBuckets[bid];
         if (!arr) continue;
-        for (let i = 0; i < arr.length; i++) {
+        for (let i = 0, n = _arcN[bid]; i < n; i++) {
           const o = arr[i];
           if (o !== c) fn(o);
         }
@@ -143,9 +145,9 @@ const Collide = (() => {
       let id = b0 + d;
       id %= nB;
       if (id < 0) id += nB;
-      const arr = _arcBuckets[id];
-      if (!arr || !arr.length) continue;
-      for (let i = 0; i < arr.length; i++) {
+      const arr = _arcBuckets[id], n = arr ? _arcN[id] : 0;
+      if (!n) continue;
+      for (let i = 0; i < n; i++) {
         const o = arr[i];
         if (o !== c) fn(o);
       }
@@ -693,21 +695,21 @@ const Collide = (() => {
       for (let k = 0; k < nIds; k++) {
         const bi = fwd === false ? nIds - 1 - k : k;
         const id = _arcBucketIds[bi];
-        const A = _arcBuckets[id];
-        if (!A || !A.length) continue;
-        for (let i = 0; i < A.length; i++) {
+        const A = _arcBuckets[id], nA = A ? _arcN[id] : 0;
+        if (!nA) continue;
+        for (let i = 0; i < nA; i++) {
           const a = A[i];
-          for (let j = i + 1; j < A.length; j++) fn(a, A[j]);
+          for (let j = i + 1; j < nA; j++) fn(a, A[j]);
         }
         // Forward neighbour only — each undirected cross edge is visited once,
         // including the wrap edge (nB-1 → 0).
         if (nB < 2) continue;
         const id2 = (id + 1) % nB;
-        const B = _arcBuckets[id2];
-        if (!B || !B.length) continue;
-        for (let i = 0; i < A.length; i++) {
+        const B = _arcBuckets[id2], nB2 = B ? _arcN[id2] : 0;
+        if (!nB2) continue;
+        for (let i = 0; i < nA; i++) {
           const a = A[i];
-          for (let j = 0; j < B.length; j++) fn(a, B[j]);
+          for (let j = 0; j < nB2; j++) fn(a, B[j]);
         }
       }
     }
@@ -722,7 +724,7 @@ const Collide = (() => {
       motionTime = G.raceT;
       // AI cars mirrored their world pose BEFORE this pass (updateCar's tail), so a
       // shove rendered one step late; snapshot so the clamp loop can re-mirror.
-      for (const c of ranked) if (!ownsPose(c) && !c.human) { c._preColS = c.s; c._preColX = c.x; }
+      for (let i = 0; i < ranked.length; i++) { const c = ranked[i]; if (!ownsPose(c) && !c.human) { c._preColS = c.s; c._preColX = c.x; } }
       sweepContacts(ranked, dt || FIXED_DT);
       // PRE-STEP CLOSING SPEED, for the restitution reference only. aSp/bSp are
       // read LIVE, and _colResolvePair mutates .speed as it goes, so in a
@@ -735,7 +737,7 @@ const Collide = (() => {
       // it is actually correcting. Only `e` moves to the snapshot.
       // Mirrors aSp/bSp for a net-owned car, whose predicted speed is the
       // reference and is not ours to mutate.
-      for (const c of ranked) if (!ownsPose(c)) c._preColSpd = c._nOk ? c._nSpd : c.speed;
+      for (let i = 0; i < ranked.length; i++) { const c = ranked[i]; if (!ownsPose(c)) c._preColSpd = c._nOk ? c._nSpd : c.speed; }
       // Side-rub speed loss for this step, in m/s: a deceleration (AiDrive.rubDecel)
       // times the step, so the headless harness's arbitrary dt scrubs per second.
       const rubScrub = AiDrive.rubDecel(!!track.street) * (dt || FIXED_DT);
@@ -787,7 +789,8 @@ const Collide = (() => {
         }
       }
       // keep everyone inside the per-side barriers after being shoved around
-      for (const c of ranked) {
+      for (let i = 0; i < ranked.length; i++) {
+        const c = ranked[i];
         if (ownsPose(c) || incidentSim.owns(c)) continue;   // the pose owner supplies its own boundary
         // The SAME boundary WallClamp.apply enforces every tick (barriers, pit wall,
         // exit wall, gantry legs), so a shove cannot leave a car past the pit wall
@@ -815,7 +818,8 @@ const Collide = (() => {
         player.px = w.x;
         player.pz = w.z;
       }
-      for (const c of ranked) {
+      for (let i = 0; i < ranked.length; i++) {
+        const c = ranked[i];
         if (ownsPose(c)) { motion.delete(c); continue; }   // no sweep from a prior driving pose after handback
         let p = motion.get(c); if (!p) { p = {}; motion.set(c, p); }
         p.prog = c.prog; p.x = c.x; p.angle = bodyAngle(c);
