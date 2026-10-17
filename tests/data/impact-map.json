@@ -2331,13 +2331,15 @@
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
-        "tests/unit/livery-design.test.mjs"
+        "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-finish-contract.test.mjs"
       ]
     },
     "js/car/car-materials.js": {
       "applyFinish": [
         "tests/unit/car-materials.test.mjs",
-        "tests/unit/livery-design.test.mjs"
+        "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-finish-contract.test.mjs"
       ],
       "finishOf": [
         "tests/unit/livery-design.test.mjs"
@@ -2625,6 +2627,7 @@
         "tests/unit/team-livery.test.mjs"
       ],
       "*": [
+        "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
@@ -2810,6 +2813,7 @@
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ]
     },
@@ -6830,6 +6834,7 @@
         "tests/unit/garage-before.test.mjs",
         "tests/unit/garage-interior-gate.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
+        "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs"
       ]
     },
