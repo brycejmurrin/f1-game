@@ -4,7 +4,7 @@ Reviewer session: orchestrator-launched, Sonnet. Every tool below was run live o
 loadavg held under 3 for browser runs) against `npx serve -l 3456 .` on the deploy tip `a5549a09`. Wall times are the tool's own `durationMs` or the
 job's `elapsedMs`. Verdicts: WORKS / BUG / DOC-GAP / SLOW.
 
-Fix PRs (draft, base the deploy branch): [profile-wait-ms](#fixes) · [debug-chrome-help](#fixes) · [ui-inspector T11](#fixes).
+Fix PRs (draft, base the deploy branch): #2676 (profile wait) · #2677 (debug-chrome help) · #2679 (UI inspector T11). This note: #2680.
 Issues: #2672 (reply size), #2673 (timing claims), #2674 (A/B comparability, inspector text, docs).
 
 ## 1. apex-tools MCP
