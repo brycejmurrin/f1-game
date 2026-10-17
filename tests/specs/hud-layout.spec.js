@@ -665,7 +665,8 @@ const HUD_INDEPENDENCE_VIEWPORTS = [
   { name: "phone-932x430", w: 932, h: 430, sal: 59, sar: 59, sat: 0, sab: 21 },
   { name: "phone-667x375", w: 667, h: 375, sal: 0, sar: 0, sat: 0, sab: 0 },
 ];
-for (const v of HUD_INDEPENDENCE_VIEWPORTS) for (const btn of [100, 175, 300]) {
+// One BUTTON SIZE per shape (100 / 175 / 300): the measured matrix of all nine was identical (2026-10-17).
+for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[100, 175, 300][i]]) {
   test.describe(`buttons steer: controls ignore HUD SIZE (${v.name}, BUTTON SIZE ${btn})`, () => {
     test.setTimeout(300_000);
     test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
