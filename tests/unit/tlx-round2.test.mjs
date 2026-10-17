@@ -268,3 +268,42 @@ test("TLX-11: present()'s failure-ladder closures are hoisted; update ranges reu
   assert.deepEqual({ ...attr.updateRanges[0] }, { start: 0, count: 48 });
   assert.ok(!/addUpdateRange\(0, n \* 16\)/.test(read("js/render/three/tlx-shadow.js")));
 });
+
+test("setRange0 rewrites the same range without length=0 between same-frame calls", () => {
+  // _blobAppend / _decalAppend / _coAppend call setRange0 once per instance
+  // before three's clearUpdateRanges. length=0 drops V8's backing store and
+  // the following push allocates a new one (~150 B) on every call.
+  const hi = TLX.indexOf("function setRange0");
+  const setRange0 = new Function(`"use strict";${TLX.slice(hi, TLX.indexOf("\n  }\n", hi) + 4)};return setRange0;`)();
+  const attr = { updateRanges: [] };
+  let pushes = 0;
+  const ur = attr.updateRanges;
+  const push = ur.push.bind(ur);
+  ur.push = (x) => { pushes++; return push(x); };
+  setRange0(attr, 16);
+  setRange0(attr, 32);
+  assert.equal(pushes, 1, "a second write before three clears must not push again");
+  assert.equal(attr.updateRanges.length, 1);
+  assert.equal(attr.updateRanges[0].count, 32);
+  assert.equal(attr.updateRanges[0].start, 0);
+});
+
+test("pruneGeoRegistry's cold walk does not allocate an iterator result per geometry", () => {
+  const m = TLX.match(/function pruneGeoRegistry\(now\) \{/);
+  assert.ok(m, "pruneGeoRegistry moved");
+  let depth = 1, i = m.index + m[0].length;
+  for (; i < TLX.length && depth; i++) {
+    if (TLX[i] === "{") depth++;
+    else if (TLX[i] === "}") depth--;
+  }
+  const body = TLX.slice(m.index + m[0].length, i - 1);
+  const _geoReg = [];
+  for (let n = 0; n < 4000; n++) _geoReg.push(new WeakRef({ n }));
+  let _geoPruneAt = -Infinity;
+  const prune = eval("(function(now){" + body + "})");
+  const before = process.memoryUsage().heapUsed;
+  prune(0);
+  const delta = process.memoryUsage().heapUsed - before;
+  assert.equal(_geoReg.length, 4000, "live refs stay");
+  assert.ok(delta < 40000, `cold prune allocated ${delta} bytes (for-of result objects)`);
+});
