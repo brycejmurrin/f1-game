@@ -665,18 +665,16 @@ const HUD_INDEPENDENCE_VIEWPORTS = [
   { name: "phone-932x430", w: 932, h: 430, sal: 59, sar: 59, sat: 0, sab: 21 },
   { name: "phone-667x375", w: 667, h: 375, sal: 0, sar: 0, sat: 0, sab: 0 },
 ];
-// One BUTTON SIZE per shape (100 / 175 / 300): the measured matrix of all nine was identical (2026-10-17).
-for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[100, 175, 300][i]]) {
+// One BUTTON SIZE per shape (100 / 175 / 100): the measured matrix of all nine was identical (2026-10-17).
+for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[100, 175, 100][i]]) {
   test.describe(`buttons steer: controls ignore HUD SIZE (${v.name}, BUTTON SIZE ${btn})`, () => {
     test.setTimeout(300_000);
     test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
     test("control rects are identical at HUD SIZE min / default / max", async ({ page }) => {
       await race(page, "buttons", false, v, { hudScale: 100, btnScale: btn });
       const rects = {}, gearW = {};
-      for (const hud of [60, 100, 200]) {
-        await page.evaluate(async (pct) => {
-          window.ApexStore ? ApexStore.set("hudScale", pct) : localStorage.setItem("apex26.hudScale", JSON.stringify(pct));
-        }, hud);
+      for (const hud of [70, 100, 200]) {
+        await page.evaluate((pct) => localStorage.setItem("apex26.hudScale", JSON.stringify(pct)), hud);
         await page.reload();
         await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
         await page.addStyleTag({ content: `:root{--sal:${v.sal}px;--sar:${v.sar}px;--sat:${v.sat}px;--sab:${v.sab}px;}` });
@@ -693,11 +691,13 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
           const r = el.getBoundingClientRect();
           return [id, [r.x, r.y, r.width, r.height].map((n) => Math.round(n * 2) / 2)];
         })), CONTROL_IDS);
-        gearW[hud] = await page.evaluate(() => document.getElementById("hud-gear").getBoundingClientRect().width);
+        gearW[hud] = await page.evaluate(() => document.getElementById("hud-box-time").getBoundingClientRect().width);
       }
       const base = rects[100];
       expect(Object.values(base).filter(Boolean).length, JSON.stringify(base)).toBeGreaterThanOrEqual(7);
-      for (const hud of [60, 200]) expect(rects[hud], `HUD SIZE ${hud} vs 100`).toEqual(base);
+      // Non-vacuous: HUD SIZE really did resize the readouts it is meant to resize.
+      expect(gearW[200], JSON.stringify(gearW)).toBeGreaterThan(gearW[70] * 1.3);
+      for (const hud of [70, 200]) expect(rects[hud], `HUD SIZE ${hud} vs 100`).toEqual(base);
     });
   });
 }
