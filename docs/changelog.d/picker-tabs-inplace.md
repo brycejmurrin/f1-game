@@ -1,0 +1,1 @@
+Fixed: Switching between the ALL / SEASON / CLASSICS / MY CIRCUITS tabs on the Grand Prix picker no longer flashes or rebuilds the circuit; the list swaps in place and the track is only prepared when you pick it or open race setup.
