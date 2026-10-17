@@ -26,6 +26,8 @@ drives it.
 → [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) → [ARCHITECTURE.md](ARCHITECTURE.md) → [PHYSICS.md](PHYSICS.md) or
 [CAREER.md](CAREER.md) → [TESTING.md](TESTING.md) §1.
 
+Local screenshot galleries: [builder and viewer workflow](notes/LOCAL-SURVEY-GALLERY.md).
+
 ## The area docs (load one on demand)
 
 | Doc | Covers |

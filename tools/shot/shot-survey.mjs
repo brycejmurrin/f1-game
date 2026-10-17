@@ -3,6 +3,7 @@
 // @doc Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON.
 // @skill survey-track
 import fs from "node:fs";
+import { SURVEY_LOCATIONS, CAMERA_RECIPES, captureIdentity, sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { parseFlags } from "../lib/cli-args.mjs";
@@ -35,10 +36,13 @@ const has = (n) => argv.includes(n);
 function usage(code = 2) {
   console.error(`usage: node tools/shot/shot-survey.mjs --tracks id[,id…] [--preset scenery|quick|dual_lite|night_pass|lap|dual|inspect|full|custom]
        [--label name] [--out dir] [--resume] [--no-panel] [--no-index] [--gl llvmpipe|swiftshader]
+       [--location spa/eau-rouge --angles overview,reverse,overhead --weathers dry,rain]
+       [--profile preview|comparison --seed N --select name,name --plan-file FILE --save-plan FILE --list-locations]
        [--fracs 0,0.5] [--count N] [--tod day|dusk|dawn|night] [--weather dry|wet|rain|overcast|fog] [--dry-run]`);
   process.exit(code);
 }
 
+if (has("--list-locations")) { console.log(JSON.stringify({ locations: SURVEY_LOCATIONS, cameras: CAMERA_RECIPES }, null, 2)); process.exit(0); }
 if (has("--help") || has("-h")) usage(0);
 
 const tracksCsv = flag("--tracks", flag("--track", ""));
@@ -49,14 +53,18 @@ const outRoot = path.resolve(ROOT, flag("--out", `artifacts/track-survey/${track
 const resume = has("--resume");
 const wantPanel = !has("--no-panel");
 const wantIndex = !has("--no-index");
-const gl = flag("--gl", process.env.APEX_GL || "");
+const gl = flag("--gl", "");
 const tod = flag("--tod", "");
 const weather = flag("--weather", "");
 const count = flag("--count", "");
 const fracsRaw = flag("--fracs", "");
 const dryRun = has("--dry-run");
 
-const planArgs = { preset, label };
+const profile = flag("--profile", "comparison");
+if (!["preview", "comparison"].includes(profile)) throw new Error("profile must be preview or comparison");
+const seed = Number(flag("--seed", "2391"));
+if (!Number.isSafeInteger(seed) || seed < 0 || seed > 4294967295) throw new Error("seed must be a integer in 0..4294967295");
+const planArgs = { preset, label, track: tracks[0], tracks };
 // --plan-json: the plan-shaping options the flags below do not name (cam/cams/az/el/dist/h/side/hud/shots/cols/sheetName)
 const planJson = flag("--plan-json", "");
 if (planJson) Object.assign(planArgs, JSON.parse(planJson), { preset, label });
@@ -64,12 +72,24 @@ if (tod) planArgs.tod = tod;
 if (weather) planArgs.weather = weather;
 if (count) planArgs.count = Number(count);
 if (fracsRaw) planArgs.fracs = fracsRaw.split(",").map(Number);
+if (has("--location")) planArgs.location = flag("--location", "");
+if (has("--angles")) planArgs.angles = flag("--angles", "").split(",");
+if (has("--weathers")) planArgs.weathers = flag("--weathers", "").split(",");
+if (has("--plan-file")) Object.assign(planArgs, JSON.parse(fs.readFileSync(flag("--plan-file", ""), "utf8")));
 const plan = buildTrackShotSurveyPlan(planArgs);
+if (has("--select")) {
+  const names = new Set(flag("--select", "").split(","));
+  for (const name of names) if (!plan.shots.some(s=>s.name===name)) throw new Error("Unknown selected shot: " + name);
+  plan.shots = plan.shots.filter(s=>names.has(s.name));
+}
+if (new Set(plan.shots.map(s=>s.name)).size !== plan.shots.length) throw new Error("Shot names must be unique");
+if (has("--save-plan")) fs.writeFileSync(flag("--save-plan", ""), JSON.stringify({preset:"custom",label,shots:plan.shots},null,2));
+const source = sourceIdentity(ROOT);
 const estimateMs = estimateSurveyMs(plan.shots.length, tracks.length);
 
 if (dryRun) {
   console.log(JSON.stringify({
-    ok: true, dryRun: true, tracks, out: outRoot, preset: plan.preset, label: plan.label,
+    ok: true, dryRun: true, profile, seed, source, tracks, out: outRoot, preset: plan.preset, label: plan.label,
     shotsPerTrack: plan.shots.length, estimateMs, resume, gl: gl || undefined, shots: plan.shots,
   }, null, 2));
   process.exit(0);
@@ -81,25 +101,13 @@ writeSurveyProgress(outRoot, {
   shotsPerTrack: plan.shots.length, estimateMs, trackIndex: 0, shotIndex: 0,
 });
 
-function mesaLikely() {
-  try {
-    return fs.existsSync("/usr/lib/x86_64-linux-gnu/dri/swrast_dri.so")
-      || fs.existsSync("/usr/lib/x86_64-linux-gnu/dri/llvmpipe_dri.so");
-  } catch { return false; }
-}
-
-function sessionEnv() {
-  const env = { ...process.env };
-  const want = gl || (mesaLikely() && !env.APEX_GL ? "llvmpipe" : env.APEX_GL);
-  if (want === "llvmpipe" || want === "swiftshader") env.APEX_GL = want;
-  return env;
-}
+function sessionEnv() { return surveyGlEnvironment(process.env, gl); }
 
 function runSession(track, outDir) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [
       path.join(ROOT, "tools/shot/track-session.mjs"),
-      "--serve", "--track", track, "--out", outDir,
+      "--serve", "--track", track, "--out", outDir, "--profile", profile, "--seed", String(seed),
     ], { cwd: ROOT, env: sessionEnv(), stdio: ["pipe", "pipe", "pipe"] });
     const state = { buf: "", pending: new Map(), seq: 0, ready: false, track, out: outDir };
     const fail = (e) => { try { child.kill("SIGTERM"); } catch { /* */ } reject(e); };
@@ -114,7 +122,7 @@ function runSession(track, outDir) {
           state.ready = !!msg.ready;
           if (!msg.ready) fail(new Error(msg.error || "track session not ready"));
           else resolve({
-            child, state,
+            child, state, boot: msg,
             send(cmd, timeoutMs = 240000) {
               return new Promise((res, rej) => {
                 const id = ++state.seq;
@@ -151,8 +159,13 @@ for (let ti = 0; ti < tracks.length; ti++) {
   const track = tracks[ti];
   const outDir = tracks.length === 1 ? outRoot : path.join(outRoot, track);
   fs.mkdirSync(outDir, { recursive: true });
-  const { pending, resumed, invalid } = filterResumeShots(outDir, plan.shots, resume);
-  for (const bad of invalid) console.error(`shot-survey: ${track}/${bad.name}.png is not a valid image (${bad.reason}); recapturing`);
+  const identityContext = { extension: profile === "preview" ? "jpg" : "png", identities: Object.fromEntries(plan.shots.map(s=>[s.name,captureIdentity({ source, track, shot:s, profile, seed, gpu:sessionEnv().APEX_GPU })])) };
+  const { pending, resumed, invalid } = filterResumeShots(outDir, plan.shots, resume, identityContext);
+  for (const bad of invalid) console.error(`shot-survey: ${track}/${bad.name}.${identityContext.extension} is not a valid image (${bad.reason}); recapturing`);
+  const invalidNames = new Set(invalid.map((b) => b.name));
+  for (const s of pending) {
+    if (!invalidNames.has(s.name) && fs.existsSync(path.join(outDir, `${s.name}.${identityContext.extension}`))) throw new Error("Existing capture does not match this plan/revision; choose a new output directory: " + s.name);
+  }
   writeSurveyProgress(outRoot, {
     state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length, invalid,
     shotsPerTrack: plan.shots.length, estimateMs,
@@ -168,6 +181,7 @@ for (let ti = 0; ti < tracks.length; ti++) {
   try {
     if (pending.length) {
       sess = await runSession(track, outDir);
+      fs.writeFileSync(path.join(outDir, "session.json"), JSON.stringify({source,profile,seed,...sess.boot},null,2));
       for (let si = 0; si < pending.length; si++) {
         const s = pending[si];
         writeSurveyProgress(outRoot, {
@@ -177,7 +191,7 @@ for (let ti = 0; ti < tracks.length; ti++) {
         let reply;
         try {
           reply = await sess.send({
-            shot: s.name, frac: s.frac, cam: s.cam, az: s.az, el: s.el, dist: s.dist,
+            ...s, shot: s.name, frac: s.frac, cam: s.cam, az: s.az, el: s.el, dist: s.dist,
             h: s.h, side: s.side, tod: s.tod, weather: s.weather, hud: s.hud,
           });
         } catch (e) {
@@ -185,7 +199,8 @@ for (let ti = 0; ti < tracks.length; ti++) {
           continue;
         }
         if (reply.ok) {
-          const row = { ...s, track, png: reply.png, spread: reply.spread, kb: reply.kb };
+          const row = { ...s, track, png: reply.png, spread: reply.spread, kb: reply.kb, timings: reply.timings };
+          fs.writeFileSync(reply.png + ".capture.json", JSON.stringify({ identity:identityContext.identities[s.name], source, profile, seed, job:{...s,track}, timings:reply.timings, frame:reply.frame, state:{plugin:{renderer:sess.boot.diagnostics}} },null,2));
           row.flags = scoreShotFindings(row);
           captured.push(row);
         } else failed.push({ ...s, track, error: reply.error || "shot failed" });
@@ -252,7 +267,7 @@ writeSurveyProgress(outRoot, {
 
 const summary = {
   ok: !hardFail && trackResults.every((t) => !t.error && (t.captured > 0 || t.skipped)),
-  tracks, out: outRoot, preset: plan.preset, label: plan.label,
+  tracks, out: outRoot, preset: plan.preset, label: plan.label, source, profile, seed,
   estimateMs, compareIndex, trackResults,
   hint: hardFail
     ? "Retry with --resume to skip finished cells; check progress.json / findings.json."
