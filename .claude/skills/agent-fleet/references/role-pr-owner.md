@@ -41,9 +41,10 @@ open review threads), then act in this order without asking:
 1. CONFLICTING → `node tools/ci/sync-pr.mjs <branch>` (delete a stale local
    `sync-pr-<branch>` first), resolve keeping both sides, run
    `node tools/ci/tooling-fast.mjs --changed --jobs=3`, push once.
-   Verify by diff size: a clean merge where gen rewrote nothing →
-   `sync-pr <branch> --verify=none --push` (CI re-gates the head); otherwise
-   `tooling-fast --changed`. The default full ladder took 723 s vs 110 s.
+   Verify by diff size: a clean merge where gen rewrote nothing and the PR
+   diff is prose or generated files only → `sync-pr <branch> --verify=none --push`
+   (CI re-gates the head); otherwise leave the default `--verify=fast` and run
+   `tooling-fast --changed` (a full ladder measured 723 s vs 110 s).
 2. Red job → agent `ci-red-triage`; fix within OWNED, `tooling-fast --changed`
    plus the failing test alone, push once.
    A red the base also has: port the fix if one exists, else one PR comment

@@ -57,7 +57,7 @@ STAND-DOWN <PR> <who is pushing>
 
 Rotation is routine: an owner hands off at ~350 k context, the orchestrator at
 300 k (owners reached 400-550 k, $15-25, before anyone rotated). The HANDOFF
-message body, so the successor starts cold with no questions:
+message body (after the one-line `HANDOFF <PR> …` first line above), so the successor starts cold with no questions:
 
 ```
 HANDOFF <session> → <successor or orchestrator>, context <k>
