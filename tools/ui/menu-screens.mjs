@@ -174,6 +174,9 @@ export const SCREENS = [
       await p.waitForTimeout(400);
       // iPad landscape: Playwright actionability times out on #cs-team-card while
       // the element is present (menu-mock *, 2026-10-10). Same door as the player.
+      // The TEAM tab renders the card after the tab click; a fixed 400 ms lost
+      // that race on a touch boot at 932x430 and clicked nothing (2026-10-17).
+      await p.waitForSelector("#cs-team-card", { state: "attached", timeout: 15000 });
       await p.evaluate(() => document.getElementById("cs-team-card")?.click());
       await p.waitForSelector("#teampicker:not([hidden])", { timeout: 15000 }); } },
   { id: "racesettings", name: "Race settings", root: "#race-settings", open: async (p) => {
@@ -270,6 +273,7 @@ export const SCREENS = [
       await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
         t.find((e) => /TEAM/i.test(e.textContent))?.click(); });
       await p.waitForTimeout(400);
+      await p.waitForSelector("#cs-customize", { state: "attached", timeout: 15000 });   // same race as teampicker
       await p.evaluate(() => document.getElementById("cs-customize")?.click());
       await p.waitForSelector("#customize:not([hidden])", { timeout: 15000 }); } },
 
