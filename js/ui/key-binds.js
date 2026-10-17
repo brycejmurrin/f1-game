@@ -641,6 +641,7 @@ function create(G) {
     };
     button.onclick = () => {
       if (running) { stopPreview(); return; }
+      for (const section of sections) section.disarm(false, false);
       cancelStick(); if (abortWheel) abortWheel();
       running = true; panel.hidden = false;
       button.textContent = "STOP CONTROL CHECK";

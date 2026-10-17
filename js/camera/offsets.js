@@ -11,7 +11,7 @@ const clamp = M4.clamp;                       // shared scalar helper (js/core/m
 const GLOBAL_MODE = "_global";               // reserved id — never a real CAM_MODES entry
 
 // The knobs, in panel order. `def` is what the mode ships with, and set() stores
-// a knob only while it differs from that — so RESET is exact and an untouched
+// explicit per-mode values, including defaults, until RESET; an untouched
 // install carries nothing. For the six GEOMETRIC offsets below that def is 0,
 // because each is a DELTA on the rig js/camera/vantage.js solved: zero means
 // "shipped framing". CORNER LEAD is the exception and its def is the shipped
@@ -39,7 +39,7 @@ const CAM_TUNE_DEFS = [
   // which cameras show the slider.
   // def MUST equal CHASE_CORNER_LEAD_DEFAULT in js/camera/vantage.js (0.54), and
   // tests/unit/camera-defaults.test.mjs holds the two together. This is not cosmetic:
-  // set() DELETES a knob whose value equals its def, and an unstored cornerLead
+  // an unstored cornerLead
   // means "use the shipped default". With def 0 the two readings of zero
   // collided — dragging the slider to 0 deleted the key, so the rig fell back to
   // 0.54 and the ONE END OF THE RANGE THE HELP TEXT PROMISES ("0 locks flat
@@ -121,12 +121,12 @@ let _store = {};
 let _global = {};
 let _comfort = {};
 
-function sanitizeProf(src) {
+function sanitizeProf(src, keepDefaults = false) {
   const prof = {};
   if (!src || typeof src !== "object") return prof;
   for (const d of CAM_TUNE_DEFS) {
     const v = src[d.id];
-    if (typeof v === "number" && isFinite(v) && v !== d.def) prof[d.id] = clamp(v, d.min, d.max);
+    if (typeof v === "number" && isFinite(v) && (keepDefaults || v !== d.def)) prof[d.id] = clamp(v, d.min, d.max);
   }
   return prof;
 }
@@ -135,7 +135,7 @@ function sanitize(raw) {
   if (!raw || typeof raw !== "object") return out;
   for (const mode of Object.keys(raw)) {
     if (mode === GLOBAL_MODE) continue;   // global lives in its own store key
-    const prof = sanitizeProf(raw[mode]);
+    const prof = sanitizeProf(raw[mode], true);
     if (Object.keys(prof).length) out[mode] = prof;
   }
   return out;
@@ -259,7 +259,7 @@ function set(mode, id, v) {
   if (!d || !mode || mode === GLOBAL_MODE || typeof v !== "number" || !isFinite(v)) return false;
   v = clamp(v, d.min, d.max);
   const prof = _store[mode] || (_store[mode] = {});
-  if (v === d.def) delete prof[id]; else prof[id] = v;
+  prof[id] = v;
   if (!Object.keys(prof).length) delete _store[mode];
   return true;
 }
@@ -342,7 +342,7 @@ function applyPreset(id) {
   else if (p.modes) {
     _store = {};
     for (const m of Object.keys(p.modes)) {
-      const prof = sanitizeProf(p.modes[m]);
+      const prof = sanitizeProf(p.modes[m], true);
       if (Object.keys(prof).length) _store[m] = prof;
     }
   }

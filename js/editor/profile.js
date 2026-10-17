@@ -71,9 +71,8 @@ const DesignerProfile = (function () {
     const hAt = (sM) => { const n = tr.n; return hs[((Math.round(sM / tr.total * n) % n) + n) % n]; };
     function grip(i) {
       const sM = ticks[i] != null ? ticks[i] : 0;
-      const base = hAt(sM);
-      const shown = (liveH && liveH[i] != null) ? base + (liveH[i] - (nodeH[i] || 0)) : base;
-      return { x: X(sM), y: Y(shown) };
+      // heightsShown already includes the live drag displacement.
+      return { x: X(sM), y: Y(hAt(sM)) };
     }
 
     let destroyed = false;
