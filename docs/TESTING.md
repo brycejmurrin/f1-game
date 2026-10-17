@@ -1566,7 +1566,6 @@ what it covers.
 | `webgl-probes.spec.js` | renderer / GL capability contract |
 | `instanced-draw.spec.js` | the GLX consumer of `TrackGraph.batches()` |
 | `lighting-ab.spec.js` | lighting A/B invariants — the always-on companion to the offline campaign |
-| `lighting-campaign.test.mjs` | the offline A/B campaign's own tables (tracks, TODs, weathers, shards, slider groups) |
 | `lighting-tuner-grade.spec.js` | the LIGHTING TUNER's image-grade panel |
 | `image-grade-visual.spec.js` | image-grade output, pixel-side |
 | `image-grade-shaders.test.mjs` | image-grade shader maths, unit-side |

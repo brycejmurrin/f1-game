@@ -214,7 +214,7 @@ test("bump-cache: --check catches drift, --apply hashes assets and keeps the gen
   // is every CI run. It passed locally only because an earlier run had created
   // the directory, and read as flaky in a fresh one because whichever suite got
   // there first created it for the rest. Same fix, same idiom, as
-  // tests/unit/lighting-campaign.test.mjs: own the mkdir, and use artifacts/tmp.
+  // the since-deleted lighting-campaign test: own the mkdir, and use artifacts/tmp.
   const tmpRoot = path.join(ROOT, "artifacts", "tmp");
   fs.mkdirSync(tmpRoot, { recursive: true });
   const dir = fs.mkdtempSync(path.join(tmpRoot, "bumpfix-"));
