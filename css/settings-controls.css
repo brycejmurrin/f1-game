@@ -153,7 +153,7 @@
    and the bottom of the button clipped at max scroll. Extra tap+pad on
    the shared body also covers STEERING & ASSISTS (AIDS open under BACK). */
 #pm-panel-controls { padding-bottom: var(--tap); }
-#pm-settings-body { min-height: 0; padding-bottom: calc(var(--tap) + var(--pad)); }
+#pm-settings-body { padding-bottom: calc(var(--tap) + var(--pad)); }
 /* The dialog already hides overflow (dialog-platform.css). Nested groups
    must not become a second scroller — at 500x385 the pane AND the page
    both showed a bar, and the last fold sat under BACK. */
@@ -303,9 +303,7 @@
   grid-template-areas:
     "hudopts hudopts"
     "metrics metrics"
-    "renopts renopts"
-    "cockpit cockpit"
-    "visual visual";
+    "cockpit cockpit";
   grid-auto-flow: dense;
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
@@ -320,15 +318,7 @@
   align-self: start;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv {
-  grid-area: renopts;
-}
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-cockpit { grid-area: cockpit; margin: 0; min-width: 0; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-visual-tuners {
-  grid-area: visual;
-  margin: 0;
-  min-width: 0;
-}
 /* DISPLAY sliders (and APPEARANCE's UI SIZE) are settings rows, not tuner
    rows: steel label, text value (tuner red is the loud bit), no extra
    tap-height padding around a track that is already --slider. */
@@ -487,12 +477,12 @@
    made HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
 /* Rule on the fold, not a fading --grad-rule on the summary: DISPLAY
    (and the same disclosure family) stopped ~150px short of the sheet. */
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details {
+:is(#pmsettings-inner .pm-group, #rs-body) details {
   width: 100%;
   border-bottom: 1px solid var(--card-line);
 }
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary,
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary:active {
+:is(#pmsettings-inner .pm-group, #rs-body) details > summary,
+:is(#pmsettings-inner .pm-group, #rs-body) details > summary:active {
   /* --text, not --steel: steel italic on --surf-1 is the low-contrast
      accordion complaint. ON/OFF readout chips keep gold/red below. */
   color: var(--text);
@@ -507,7 +497,7 @@
   box-sizing: border-box;
 }
 @media (hover: hover) and (pointer: fine) {
-  :is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary:hover,
+  :is(#pmsettings-inner .pm-group) details > summary:hover,
   #rs-body details > summary:hover {
     color: var(--text);
     background-color: transparent;
@@ -516,13 +506,13 @@
     box-shadow: none;
   }
 }
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary::after,
+:is(#pmsettings-inner .pm-group) details > summary::after,
 #rs-body details > summary::after { content: none; }
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary::before,
+:is(#pmsettings-inner .pm-group) details > summary::before,
 #rs-body details > summary::before { content: "\25BE"; }
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details[open] > summary::before,
+:is(#pmsettings-inner .pm-group) details[open] > summary::before,
 #rs-body details[open] > summary::before { content: "\25B4"; }
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary,
+:is(#pmsettings-inner .pm-group) details > summary,
 #rs-body details > summary {
   height: auto;
   min-height: var(--chip-h);
@@ -667,14 +657,9 @@ button:has(> [data-fold]) {
    the only button in this foot, so nothing needs to out-shout anything.) */
 
 /* ---------- advanced steering ----------
-   A real grid, not the `inline-block; width: calc(50% - 8px)` this used to be.
-   Inline-block items flow on LINE BOXES, so one tall control (a two-line
-   explanation) dragged the next item down to clear it and the second column
-   came out ragged, with holes. auto-fill also means the column COUNT follows
-   the room: two on a landscape phone, three on a tablet or desktop, without
-   naming either width here.
-   The section headings inside the ADVANCED disclosure span the full width so
-   the list still reads as grouped rather than as one undifferentiated field. */
+   Range controls own Left/Right for adjustment. Keep one reading column so
+   Up/Down and the controller D-pad reach every input, including short rows
+   whose neighbours have longer help text. Section headings retain the groups. */
 #pmsettings-inner[data-shape="wide"] #advanced-inner,
 #pmsettings-inner[data-shape="wide"] #audioset-inner {
   grid-column: 1 / -1;
@@ -683,15 +668,12 @@ button:has(> [data-fold]) {
 #pmsettings-inner[data-shape="wide"] #advanced-inner,
 #pmsettings-inner[data-shape="wide"] #advanced-inner #adv-extra {
   display: grid;
-  /* min(...) floor: a bare `minmax(215px, …)` cannot shrink below 215 even
-     when the container is narrower, and overflows it. Shape, not a 620px
-     container guess — fit-cap can shrink local width while the sheet stays
-     wide. See #sel-teams in css/menus.css for the measurement. */
-  grid-template-columns: repeat(auto-fill, minmax(min(215px, 100%), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   column-gap: var(--pad); row-gap: calc(var(--gap) * 0.5);
   align-content: start;
 }
-#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-item { margin: 0; min-width: 0; }
+#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-item { margin: 0; min-width: 0; grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-driving .preset-row,
 #pmsettings-inner[data-shape="wide"] #advanced-inner .preset-row { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #advanced-inner details,
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-sec { grid-column: 1 / -1; }

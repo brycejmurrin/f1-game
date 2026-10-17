@@ -1,5 +1,5 @@
 {
-  "_doc": "sha256[0..16) of Tracks.LIST metadata and materialised points; tests/unit/track-def-factory.test.mjs recomputes the canon. 2026-10-14 Monaco: extend hairpin cliff city/foliage exclusion to remove the floating city slab (metadata only; materialised road points unchanged). 2026-10-14 fuji: Circuit Yard scenery realism (#1502) — green runoff + fogDensity 0.0022 (palette only; points unchanged). Earlier 2026-10-11 on merge of race-runtime-hunt base: miami from #1365 scenery, monaco from this PR (bankZones Massenet/Mirabeau as turn 3 / turn 7; points unchanged). Earlier 2026-10-10 for monaco alone; earlier 2026-10-10 (round-2 bug hunt, train A) for the 28 circuits whose authored defs changed: 12 hwZones re-keyed onto the corner they name, the korea/buddh/bahrain hairpin fold clamp, and the splineAlpha plumb (copied only when authored, so the other 24 hashes are unchanged). Earlier: 2026-10-05 for Buddh/Fuji/Korea chord samples that clear Catmull-Rom tarmac folds (and Buddh sparse / Korea tree:none furniture); Hungaroring, Imola and Spa hashes from track-realism batch two (corner/sector/aero metadata).",
+  "_doc": "sha256[0..16) of Tracks.LIST metadata and materialised points; tests/unit/track-def-factory.test.mjs recomputes the canon. 2026-10-17 cota: one path point added on the T1-exit chord ([267.7,-506.6]) so the #2499 climb's resampling leaves no centreline kink at T1 (#2209; points change by design).2026-10-14 Monaco: extend hairpin cliff city/foliage exclusion to remove the floating city slab (metadata only; materialised road points unchanged). 2026-10-14 fuji: Circuit Yard scenery realism (#1502) — green runoff + fogDensity 0.0022 (palette only; points unchanged). Earlier 2026-10-11 on merge of race-runtime-hunt base: miami from #1365 scenery, monaco from this PR (bankZones Massenet/Mirabeau as turn 3 / turn 7; points unchanged). Earlier 2026-10-10 for monaco alone; earlier 2026-10-10 (round-2 bug hunt, train A) for the 28 circuits whose authored defs changed: 12 hwZones re-keyed onto the corner they name, the korea/buddh/bahrain hairpin fold clamp, and the splineAlpha plumb (copied only when authored, so the other 24 hashes are unchanged). Earlier: 2026-10-05 for Buddh/Fuji/Korea chord samples that clear Catmull-Rom tarmac folds (and Buddh sparse / Korea tree:none furniture); Hungaroring, Imola and Spa hashes from track-realism batch two (corner/sector/aero metadata).",
   "hashes": {
     "abudhabi": "634013de52542929",
     "albert_park": "f59c0a4861f890ee",
@@ -10,7 +10,7 @@
     "buddh": "d0038cbc72b3bc71",
     "buenos_aires": "b60d68190c4fe8a3",
     "catalunya": "dd369dbeb0f13310",
-    "cota": "fda643aa95d68d10",
+    "cota": "2c59696cab6e4ae6",
     "dijon": "7fcbcb2e6260402a",
     "donington": "1ac2f6a040a79349",
     "estoril": "4d6754ea45692be9",

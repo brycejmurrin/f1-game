@@ -26,7 +26,7 @@ const F1API = (function () {
   let latestSessionKey = null;
   const sessionDates = {};              // sessionKey -> date_start ISO (seen sessions)
   const meetingDates = {};              // meetingKey -> date_start ISO (seen meetings)
-  const { request, cancelAll, cacheEntryT, staleMark, staleSince } = F1Transport.create(OPENF1, TTL_HISTORIC);
+  const { request, cancelAll, cacheEntryT, staleMark, staleSince, forget } = F1Transport.create(OPENF1, TTL_HISTORIC);
 
   function num(v) {
     const n = typeof v === "number" ? v : parseFloat(v);
@@ -518,6 +518,7 @@ const F1API = (function () {
     placeLabel,
     cacheEntryT,
     staleMark,
-    staleSince
+    staleSince,
+    forget
   };
 })();

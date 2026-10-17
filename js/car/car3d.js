@@ -1516,7 +1516,8 @@ const Car3D = (function () {
     const aLvl = aeroStyle && aeroStyle.lvl != null
       ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
     const ws = wingOf(teamStyle);
-    out.flapInfo = { aLvl, style: Object.assign({}, aeroStyle, { wingStyle: ws }), col: wingCol, finish: liv.finish, surface: wingCarbon ? "carbon" : "paint" };
+    out.flapInfo = { aLvl, style: Object.assign({}, aeroStyle, { wingStyle: ws }), col: wingCol,
+      finish: CarMaterials.finishOf(liv, "wingFinish"), surface: wingCarbon ? "carbon" : "paint" };
 
     const nb = numberBoard(aLvl, aeroStyle);
     for (const s of [-1, 1]) {
@@ -2147,13 +2148,13 @@ const Car3D = (function () {
       }
     }
 
-    CarMaterials.applyFinish(out, liv.finish);
+    if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
+    CarMaterials.applyFinish(out, liv.finish, sections, liv);
 
     shadeFlags.round = false;
     shadeFlags.coverHi = true;
     if (shade && !sil) CarShade.smooth(out, { skip: [SURFACES.emissive] });   // a shadow caster keeps the shape; depth never reads normals
-    // Close the last section and measure each from the vertices it emitted.
-    if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
+    // Measure each closed section from the vertices it emitted.
     if (opts && opts.measure) out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity,
           z0 = Infinity, z1 = -Infinity;

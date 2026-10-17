@@ -24,6 +24,7 @@
       "js/render/webgpu/wgx-shadow.js",
       "js/render/webgpu/wgx-chunked.js",
       "js/render/webgpu/wgx-post.js",
+      "js/render/webgpu/wgx-roadlut.js",
       "js/render/webgpu/wgx.js"
     ],
     "three": [
@@ -112,6 +113,10 @@
       "js/render/webgpu/wgx.js"
     ],
     [
+      "js/render/webgpu/wgx-roadlut.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
       "js/render/three/tsl-chunks.js",
       "js/render/three/tsl-lit.js"
     ],
@@ -146,12 +151,22 @@
   ],
     LAZY_AGENT: [
     "js/agent/agentview-raster.js",
+    "js/agent/agentview-corners.js",
     "js/agent/agentview.js",
+    "js/agent/apex-net.js",
     "js/agent/apex.js"
   ],
     LAZY_EDGES: [
     [
       "js/agent/agentview-raster.js",
+      "js/agent/agentview.js"
+    ],
+    [
+      "js/agent/apex-net.js",
+      "js/agent/apex.js"
+    ],
+    [
+      "js/agent/agentview-corners.js",
       "js/agent/agentview.js"
     ]
   ],
@@ -468,6 +483,7 @@
     "js/net/transport.js",
     "js/net/handshake.js",
     "js/net/lobby-codes.js",
+    "js/net/lobby-roster.js",
     "js/net/snapshot.js",
     "js/net/session.js",
     "js/net/netplay.js",
@@ -513,6 +529,10 @@
     ],
     [
       "js/net/lobby-codes.js",
+      "js/net/lobby.js"
+    ],
+    [
+      "js/net/lobby-roster.js",
       "js/net/lobby.js"
     ]
   ],
@@ -787,6 +807,7 @@
     "js/garage/scene-prims.js",
     "js/garage/scene-equipment.js",
     "js/garage/scene-live.js",
+    "js/garage/scene-dress.js",
     "js/garage/scene-crew.js",
     "js/garage/scene.js",
     "js/circuits/bahrain.js",

@@ -67,7 +67,7 @@ export const SLOT = 16;
 /** WGX's real bake, loaded with no device — __roadLutTable is pure. */
 export function loadBake() {
   const P = require(path.join(ROOT, "tools/manifest.cjs")).PATHS;
-  const src = readFileSync(path.join(ROOT, P.WGX), "utf8");
+  const src = readFileSync(path.join(ROOT, P.WGX_ROADLUT), "utf8") + "\n" + readFileSync(path.join(ROOT, P.WGX), "utf8");
   const ctx = vm.createContext({
     Math, Object, Array, Float32Array, Uint32Array, Number, isFinite, Map, Set, JSON, console,
   });

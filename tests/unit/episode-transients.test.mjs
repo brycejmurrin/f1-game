@@ -66,8 +66,8 @@ test("reset() clears retirements and classification and re-arms the same reliabi
     assert.equal(G.cars[3].retired, false, "a car retired last episode is back on the grid");
     assert.equal(G.cars[3].dnf, null);
     assert.equal(G.cars[5].finPos, 0, "finPos restored to makeCars' 0");
-    assert.equal("_coastHeld" in G.cars[5], false, "absent on a cold car");
-    assert.equal("lastLap" in G.cars[5], false, "absent on a cold car");
+    assert.equal(G.cars[5]._coastHeld, undefined, "reads undefined, as on a cold car");
+    assert.equal(G.cars[5].lastLap, undefined, "reads undefined, as on a cold car");
     assert.equal(JSON.stringify(A.retirements()), plan, "the same seed replans the same failures");
   } finally { g.close(); }
 });

@@ -230,8 +230,8 @@ async function openLightingPhotoMode(page) {
   await openPauseSettings(page);
   // Menu clicks stay as locator.click: the pause menu parks the render loop, so
   // Playwright's stability checks are cheap here (lighting-tuner-grade's table).
-  await page.locator("#pm-open-display").click();
-  await page.locator("#pm-visual-tuners > summary").click();
+  await page.locator("#pm-open-visual").click();
+  await expect(page.locator("#pm-visual-tuners")).toHaveAttribute("open", "");
   // openSettings() re-runs syncSettingsAvailability; after go() the door is live.
   await page.waitForFunction(() => {
     const b = document.getElementById("pm-lighting");
@@ -240,6 +240,8 @@ async function openLightingPhotoMode(page) {
   await page.locator("#pm-lighting").click();
   await page.waitForFunction(() => document.body.classList.contains("lt-open"),
     null, { polling: 100, timeout: BOOT_MS });
+  // Free Camera remains on the toolbar even when compact tools are folded.
+  await expect(page.locator("#lighting .ew-toolbar #pc-toggle")).toBeVisible();
   // Opening the tuner starts the live-preview render path — #pc-toggle must
   // use clickLive or the actionability poll pays for SwiftShader frames.
   await clickLive(page, "pc-toggle");
@@ -301,14 +303,18 @@ test.describe("Lighting tuner — pause lifecycle", () => {
       const panel = document.getElementById("lighting-inner").getBoundingClientRect();
       const t = document.getElementById("pc-toggle").getBoundingClientRect();
       const hit = document.elementFromPoint(t.x + t.width / 2, t.y + t.height / 2);
-      return { barRight: bar.right, panelLeft: panel.left, hit: hit && hit.closest("#pc-toggle") ? "pc-toggle" : hit && hit.id };
+      return { barRight: bar.right, panelLeft: panel.left, hit: hit && hit.closest("#pc-toggle") ? "pc-toggle" : hit && hit.id,
+        covered: hit && !hit.closest("#pc-toggle") ? hit.tagName + "." + String(hit.className) + " in #" + (hit.closest("[id]") || {}).id : null,
+        rects: { toggle: [t.x, t.y, t.width, t.height].map(Math.round), hit: hit ? [hit.getBoundingClientRect().x, hit.getBoundingClientRect().y, hit.getBoundingClientRect().width, hit.getBoundingClientRect().height].map(Math.round) : null,
+          panel: [panel.x, panel.y, panel.width, panel.height].map(Math.round), bar: [bar.x, bar.y, bar.width, bar.height].map(Math.round) },
+        view: document.getElementById("lighting-inner").dataset.editorView, body: document.body.className } ;
     });
     expect(geo.barRight, JSON.stringify(geo)).toBeLessThan(geo.panelLeft);
-    expect(geo.hit).toBe("pc-toggle");
+    expect(geo.hit, JSON.stringify(geo)).toBe("pc-toggle");
   });
 
   // …and pressing it again walks the real route back out, one screen per press.
-  test("Escape walks free cam -> tuner -> display -> settings -> pause -> racing", async ({ page }) => {
+  test("Escape walks free cam -> tuner -> visual studio -> settings -> pause -> racing", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await openLightingPhotoMode(page);
@@ -317,22 +323,24 @@ test.describe("Lighting tuner — pause lifecycle", () => {
       return {
         photo: document.body.classList.contains("photo-mode"),
         lighting: !$("lighting").hidden,
-        display: !$("pm-panel-display").hidden,
+        // Tuners hide Settings while preserving their originating page.
+        visual: !$("pmsettings").hidden && !$("pm-panel-visual").hidden,
         settingsHome: !$("pm-settings-index").hidden,
         settings: !$("pmsettings").hidden,
         pause: !$("pausemenu").hidden,
       };
     });
+    const expectAt = async (want) => { const got = await where(); expect(got, "got " + JSON.stringify(got)).toEqual(want); };
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: true, display: false, settingsHome: false, settings: false, pause: false });
+    await expectAt({ photo: false, lighting: true, visual: false, settingsHome: false, settings: false, pause: false });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, display: true, settingsHome: false, settings: true, pause: false });
+    await expectAt({ photo: false, lighting: false, visual: true, settingsHome: false, settings: true, pause: false });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, display: false, settingsHome: true, settings: true, pause: false });
+    await expectAt({ photo: false, lighting: false, visual: false, settingsHome: true, settings: true, pause: false });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, display: false, settingsHome: false, settings: false, pause: true });
+    await expectAt({ photo: false, lighting: false, visual: false, settingsHome: false, settings: false, pause: true });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, display: false, settingsHome: false, settings: false, pause: false });
+    await expectAt({ photo: false, lighting: false, visual: false, settingsHome: false, settings: false, pause: false });
   });
 
   /* ESCAPE MUST BE ABLE TO PAUSE AT ALL, which is not as obvious as it sounds:
@@ -584,7 +592,7 @@ test.describe("Pause settings — stable layout", () => {
     await cycleToPauseSteerMode(page, "tilt");
     await page.waitForTimeout(200);
 
-    const ids = ["pm-steer", "pm-calib", "pm-gears", "pm-aero", "pm-settings-close"];
+    const ids = ["pm-steer", "pm-calib", "adv-feel-details", "pm-advanced", "pm-settings-close"];
     const grab = () => page.evaluate((ids) => {
       const out = {};
       for (const id of ids) {
@@ -604,8 +612,8 @@ test.describe("Pause settings — stable layout", () => {
     // replaces the old SOUND toggle here: it is a same-grid setting row, so it
     // still proves the tap landed on the control the thumb was aimed at.
     await page.locator("#pm-settings-close").click();
-    await page.locator("#pm-open-display").click();
-    await page.locator("#pm-display-adv > summary").click();
+    await page.locator("#pm-open-graphics").click();
+    await expect(page.locator("#pm-display-adv")).toHaveAttribute("open", "");
     const resBefore = await page.locator("#pm-res-sel").inputValue();
     await page.locator("#pm-res-next").click();
     await expect(page.locator("#pm-res-sel")).not.toHaveValue(resBefore);
@@ -1434,7 +1442,7 @@ test("HOW TO PLAY names every way to play", async ({ page }) => {
     expect(body).toContain(mode);
   // The title screen's own buttons are the list it has to keep up with.
   const buttons = await page.evaluate(() =>
-    [...document.querySelectorAll("#menu-hero button, #menu-primary button, #menu-explore button")]
+    [...document.querySelectorAll("#menu-hero button, #menu-primary button, #menu-garage button, #menu-explore button, #menu-create button")]
       .map((b) => b.innerText.trim()).filter(Boolean));
   expect(buttons.length).toBeGreaterThan(3);
   expect(buttons.some((t) => /WATCH/i.test(t))).toBe(true);

@@ -338,16 +338,25 @@ body:has(dialog[open]) #save-warning { display: none; }
   font-size: var(--fs-micro); line-height: 1.45;
   scroll-padding-block-start: var(--gap);
 }
-/* Slack so FRIENDS (and every earlier section) can sit at the scrollport top
-   when its contents-rail link is pressed — without this, the last sections
-   stop mid-pane because there is nothing below them to scroll past. */
+/* Keep a small trailing reading gap. A viewport-sized spacer left a whole
+   blank screen at scroll end; the last anchor can remain visible lower in the
+   pane instead of forcing it to the top with empty content underneath. */
 #howtoplay .sheet-body::after {
   content: "";
   display: block;
-  height: min(70vh, 28rem);
+  height: var(--gap);
   pointer-events: none;
 }
 #htp-controls { scroll-margin-block-start: var(--gap); }
+/* REPEAT CONTROL REMINDERS (js/ui/key-binds.js) lives inside the zoomed sheet
+   body, so plain button padding at --fs-micro painted ~14px tall at UI SIZE
+   40%. --tap-paint holds the painted floor (52 touch, 24 mouse) at any zoom;
+   full width + wrapping keeps the long label inside a 320px phone. */
+#htp-controls-refresher {
+  display: block; width: 100%; box-sizing: border-box;
+  min-height: var(--tap-paint); margin-block-start: var(--gap);
+  white-space: normal; overflow-wrap: anywhere;
+}
 #htp-inputs { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
 #htp-inputs details { min-width: 0; }
 #htp-inputs p { margin-block: calc(var(--gap) * 0.5); }

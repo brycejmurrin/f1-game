@@ -227,10 +227,10 @@ function flapRig() {
   };
   M.CarMesh.init(gfx);
   const st = { col: [0.8, 0.1, 0.1], finish: null };
-  const draw = new Function("wingColorOf", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld",
+  const draw = new Function("wingColorOf", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarMaterials",
     symbolSource("function drawAeroFlaps(") + "\nreturn drawAeroFlaps;")(
-    () => st.col, (v, a, b) => Math.min(b, Math.max(a, v)), () => ({ finish: st.finish }),
-    M.Car3D, M.CarMesh, gfx, new Float32Array(16));
+    () => st.col, (v, a, b) => Math.min(b, Math.max(a, v)), () => ({ finish: st.finish, wingFinish: st.wingFinish }),
+    M.Car3D, M.CarMesh, gfx, new Float32Array(16), M.CarMaterials);
   return { M, made, draws, freed, draw, st };
 }
 const FLAP_TEAM = { id: "t" }, FLAP_PAINT = { paint: 1 }, FLAP_LVL = 2;
@@ -453,4 +453,17 @@ test("drawPlayerWheels' lite gate follows c._lodTier (hysteresis), wheelsLite on
   assert.equal(run(ctx, { isPlayer: false, _lodTier: 0 }, at(9), true), true, "bare (mirror / PiP) is always lite");
   const off = loadLod(0);
   assert.equal(run(off, { isPlayer: false, _lodTier: 2 }, at(500)), false, "FieldLod off ignores a stale tier");
+});
+
+
+test("moving and resting flap draws use the regional wing finish over the body finish", () => {
+  const r = flapRig(); r.st.finish = "matte"; r.st.wingFinish = "chrome";
+  for (const blend of [0, 0.5, 1]) {
+    r.draws.length = 0; r.draw(FLAP_TEAM, FLAP_LVL, blend, FLAP_MAT, FLAP_PAINT, null);
+    assert.ok(r.draws.length > 0);
+    for (const draw of r.draws) {
+      assert.ok(draw.mesh.d.mat.includes(r.M.CarMaterials.FINISH_SURFACE.chrome));
+      assert.ok(!draw.mesh.d.mat.includes(r.M.CarMaterials.FINISH_SURFACE.matte));
+    }
+  }
 });

@@ -9,6 +9,7 @@ escalations and stop workers that stall. You do not implement, merge or arm.
 - Launch template (every vendor; SKILL.md §Launch policy makes these fields mandatory)
 - Authority, permissions and modes (the 2026-10-15 track-survey fleet)
 - Per-vendor adapters (sources in the design note)
+- Roles and hand-offs (2026-10-17)
 - Reading the fleet
 - Answering an escalation
 - Never
@@ -186,6 +187,19 @@ launching Cursor workers uses the Cursor API column (needs a key).
   `check_run` completions and bot-authored reviews, so a worker that only
   waits on it sits idle through a red. Read CI with `ci-watch.mjs --once` on
   every timer wake.
+
+## Roles and hand-offs (2026-10-17)
+
+Launch by role (SKILL.md §roles): a hunter finds and fixes, then sends
+`NEW-PR <#> <branch> <sha> <summary>` and drops the PR; you start one PR owner
+per PR (role-pr-owner.md) within minutes, quoting the user's grants; the owner
+replies `ARMED`, drives the PR, and sends `DONE <PR> <merge sha>`; you verify
+two parents and archive the owner, never the hunter. With no live Merge Desk
+you are the merge holder (role-merge-holder.md). Spawning stays here by
+default: a grandchild acting on a quote of a quote is relayed authority, and
+the auto-mode classifier refused relayed `.claude` edits, CI re-runs and merges
+on 2026-10-16. `.claude/**` edits are done by you or approved by the user in
+the acting session.
 
 ## Reading the fleet
 

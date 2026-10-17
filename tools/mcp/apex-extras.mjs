@@ -463,6 +463,21 @@ export function createExtras(ctx) {
         }
         return { browser: true, argv };
       }
+      // Profiler (tools/perf/profile.mjs): a browser job, started by apex_job_start or the direct apex_profile tool (both
+      // guarded as browser tools). The argv is built from typed fields.
+      case "profile": {
+        const mode = String(a.mode || "spans");
+        if (!["spans", "cpu", "hitch", "trace"].includes(mode)) throw Object.assign(new Error("mode"), { refuse: refuse("bad_args", "mode must be spans|cpu|hitch|trace", 'e.g. {"kind":"profile","mode":"spans"}.') });
+        const argv = nodeArgv("perf/profile.mjs", needTrack(a.track || "vegas"), "--mode", mode);
+        if (a.frames != null) argv.push("--frames", String(Math.max(10, Math.min(600, Math.trunc(Number(a.frames)) || 40))));
+        if (a.repeat != null) argv.push("--repeat", String(Math.max(1, Math.min(7, Math.trunc(Number(a.repeat)) || 1))));
+        if (a.base) {
+          const base = String(a.base);
+          if (!REF_RE.test(base) || base.startsWith("-")) throw Object.assign(new Error("base"), { refuse: refuse("bad_args", "base must be a git ref, not a flag", 'e.g. {"kind":"profile","base":"origin/main"}.') });
+          argv.push("--base", base);
+        }
+        return { browser: true, argv };
+      }
       case "ui_gallery": {
         const s = list(a.screens, "screens"), v = list(a.viewports, "viewports");
         return { browser: true, argv: nodeArgv("ui/layout-audit.mjs", "--gallery", "--jobs=1", ...(s ? [`--screens=${s}`] : []), ...(v ? [`--viewports=${v}`] : [])) };
@@ -899,6 +914,14 @@ export function createExtras(ctx) {
       apex_shot_survey: (a) => handleShotSurvey(a),
       apex_track: (a) => handleTrack(a),
       apex_job_start: (a) => jobStart(a),
+      // The profiler's direct door: a browser-kind tool (guard lists name it) whose run is the profile job, so the lock is
+      // taken for the job's life and apex_job_status watches it.
+      apex_profile: (a) => {
+        const r = jobStart({ ...a, kind: "profile" });
+        let b; try { b = JSON.parse(r.content[0].text); } catch { return r; }
+        if (b.ok === false || b.dryRun || b.mock) return r;
+        return toolResult({ ...b, routed: "apex_job_start profile", hint: "Runs in the background: apex_job_status {jobId, wait:100} until state is done; then apex_profile_query on the artifact named in the log." });
+      },
       apex_job_status: (a) => jobStatusWait(a),
       apex_job_cancel: (a) => jobCancel(a),
       apex_ui_fit: (a, o) => uiFit(a, o),
@@ -909,6 +932,6 @@ export function createExtras(ctx) {
   };
 }
 
-export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
+export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "profile", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
 /** Key apex-tools-mcp uses to hand apex_job_start a pinned HUD argv; unreachable from JSON. */
 export const HUD_JOB_ARGV = Symbol("apex.hudJobArgv");

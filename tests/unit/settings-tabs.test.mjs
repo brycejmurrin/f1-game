@@ -78,7 +78,7 @@ test("onLeave(fn) is called with the page id when back() / show() hides a page",
 test("settings title acts as a breadcrumb on the page stack", () => {
   const h = boot({ ensure: () => Promise.resolve(true), stub: false });
   h.nav.show("advanced", false);
-  assert.equal(h.dom.byId("dlg-settings").textContent, "SETTINGS › DRIVING AIDS");
+  assert.equal(h.dom.byId("dlg-settings").textContent, "SETTINGS › CONTROLS › ADVANCED INPUT & HANDLING");
   h.nav.back();
   assert.equal(h.dom.byId("dlg-settings").textContent, "SETTINGS");
 });
@@ -93,5 +93,72 @@ test("late audio completion cannot supersede newer navigation or a closed sessio
     resolve(true); await tick(); await tick();
     assert.equal(h.dom.byId("dlg-settings").textContent, title);
     assert.equal(h.audio.hidden, true); assert.deepEqual(selections, []);
+  }
+});
+
+
+test("session tools return directly to their caller and close invalidates page work", () => {
+  const { nav, ctx, dom } = boot({ ensure: () => Promise.resolve(true) });
+  const leaves = [];
+  ctx.SettingsNav.onLeave(id => leaves.push(id));
+  nav.showDirect("practice", true);
+  assert.equal(ctx.SettingsNav.current(), "practice");
+  assert.equal(dom.byId("pm-panel-practice").hidden, false);
+  assert.equal(nav.back(), true);
+  assert.deepEqual(leaves, ["practice"]);
+  nav.show("files", false);
+  nav.invalidate();
+  assert.deepEqual(leaves, ["practice", "files"]);
+  assert.equal(nav.current(), "home");
+});
+
+test("new destinations reveal only their own panel and normal Back returns home", () => {
+  const { nav, dom } = boot({ ensure: () => Promise.resolve(true) });
+  for (const id of ["graphics", "visual", "progress", "strategy", "review"]) {
+    nav.show(id, false);
+    assert.equal(dom.byId("pm-panel-" + id).hidden, false);
+    assert.equal(dom.byId("pm-panel-display").hidden, true);
+    assert.equal(nav.back(), false);
+    assert.equal(nav.current(), "home");
+  }
+});
+
+
+test("Advanced input returns to Controls and restores its launcher's focus and scroll", () => {
+  const { nav, dom } = boot({ ensure: () => Promise.resolve(true) });
+  const controls = dom.byId("pm-panel-controls"), advanced = dom.byId("pm-advanced");
+  controls.appendChild(advanced);
+  nav.show("controls", false);
+  dom.byId("pm-settings-body").scrollTop = 120;
+  advanced.onclick();
+  assert.equal(nav.current(), "advanced");
+  assert.equal(nav.back(), false);
+  assert.equal(nav.current(), "controls");
+  assert.equal(dom.document.activeElement, advanced);
+  assert.equal(dom.byId("pm-settings-body").scrollTop, 120);
+  assert.equal(nav.back(), false);
+  assert.equal(nav.current(), "home");
+});
+
+test("frozen route metadata owns titles, panels, doors and default hierarchy", () => {
+  const { ctx, dom, nav } = boot({ ensure: () => Promise.resolve(true) });
+  const api = ctx.SettingsNav;
+  assert.ok(Object.isFrozen(api.routes));
+  assert.equal(api.routes.advanced.parent, "controls");
+  assert.equal(api.routes.strategy.scope, "session");
+  assert.equal(api.routes.controls.scope, "preferences");
+  assert.equal(api.panel("unknown"), null);
+  assert.equal(api.panel("__proto__"), null);
+  assert.equal(api.breadcrumb("unknown"), "SETTINGS");
+  assert.equal(api.breadcrumb("display"), "SETTINGS › HUD & CAMERA");
+  assert.equal(api.breadcrumb("strategy"), "SETTINGS › PIT STRATEGY");
+  for (const [id, route] of Object.entries(api.routes)) {
+    assert.ok(Object.isFrozen(route));
+    assert.equal(api.panel(id), route.panel());
+    if (route.parent) assert.ok(api.routes[route.parent]);
+    if (id === "audio") continue;
+    nav.show(id);
+    assert.equal(dom.byId("dlg-settings").textContent, api.breadcrumb(id));
+    if (route.door) assert.equal(typeof route.door().onclick, "function");
   }
 });
