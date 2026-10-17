@@ -1158,6 +1158,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 6: Track Designer tool-strip labels wrap+balance and
   // floor taps at --tap (survey r5 rank 4; 36–57px clip on 390×844 / 844×390).
   "tests/unit/ui-fit-trackdesigner-toolbar-r6.test.mjs",
+  "tests/unit/ui-fixer-uncommitted.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-inspector-audit.test.mjs",
   "tests/unit/ui-inspector-css.test.mjs",
