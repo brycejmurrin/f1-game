@@ -171,7 +171,7 @@ test("narrow title column hides the native bar and reserves a tap under the last
   );
   assert.match(
     menus,
-    /has\(#home-motion:not\(\[hidden\]\)\):has\(#install-chip:not\(\[hidden\]\)\) #overlay #menu-buttons/,
+    /has\(#home-motion:not\(\[hidden\]\)\):has\(> #install-chip:not\(\[hidden\]\)\) #overlay #menu-buttons/,
     "two bottom chips share one :has so INSTALL cannot cover the last door",
   );
   assert.match(

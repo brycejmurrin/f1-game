@@ -279,6 +279,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-comments.test.mjs",
   "tests/unit/css-critical-path.test.mjs",
   "tests/unit/css-faces.test.mjs",
+  "tests/unit/css-has-scope.test.mjs",
   "tests/unit/css-layers.test.mjs",
   "tests/unit/css-media-disjoint.test.mjs",
   "tests/unit/css-play.test.mjs",

@@ -79,6 +79,6 @@ test("the garage stands down under its own dialogs: customize/teampicker fade #c
   // canvas keeps its frustum while the dialog is up.
   const css = readCssSource("css/components.css");
   assert.match(css,
-    /body:has\(#customize:not\(\[hidden\]\)\) #carsetup,\s*\nbody:has\(#teampicker:not\(\[hidden\]\)\) #carsetup \{\s*\n\s*opacity:\s*0;\s*\n\s*pointer-events:\s*none;/,
+    /body:has\(> #customize:not\(\[hidden\]\)\) #carsetup,\s*\nbody:has\(> #teampicker:not\(\[hidden\]\)\) #carsetup \{\s*\n\s*opacity:\s*0;\s*\n\s*pointer-events:\s*none;/,
     "#carsetup must fade under #customize and #teampicker like every other dialog host");
 });
