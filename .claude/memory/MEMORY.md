@@ -32,3 +32,4 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Merge level 3](merge-level-3.md) — since 2026-10-17 04:19Z the orchestrator arms/merges fleet PRs when ready + full-tier green + no conflict + no MERGE-HOLD; never Bryce's Cursor PRs
 - [Rejected design: hold immediately](rejected-design-hold-immediately.md) — on an in-session rejection or "wait", MERGE-HOLD the PR and tell the orchestrator first; "wait" pauses me, not the fleet (#2611 merged under a 2 h-late hold)
 - [Lanes keep working](lanes-keep-working.md) — 2026-10-17: lanes pull deploy and take the next item in their area after a dry round; no FINAL unless the area is empty
+- [Fixers may screenshot](fixers-may-screenshot.md) — stuck UI fixer: allow screenshots (no loops), 15-min cap then push with a named known-red, or the orchestrator finishes it
