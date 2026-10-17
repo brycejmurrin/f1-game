@@ -2950,6 +2950,15 @@ not wired CarDraw yet. Pair with a hook installed *before* `pinFreePlay` /
 __apex.clearCarMeshCaches();
 ```
 
+### `renderRate(mode?) → RenderRate.state()`
+RenderRate mode (js/perf/render-rate.js). No arg reports `{mode, tier, half, active, emaMs, skipped, drawn}`. A value sets it and persists
+`apex26.renderRate`: `"auto"` (default; halves a 100 Hz+ phone), `"off"`, `"half"`, or the opt-in #2652 tier `"45"` / `"30"` draws per second
+while racing (physics stays 60 Hz). An unknown mode returns `{ok:false, modes}`.
+
+### `thermalDrift(on?) → {baseline, ema, due, steps, windows, cooling} | null`
+The opt-in slow-drift governor step (js/perf/thermal-drift.js, #2652). No arg reports the detector (null when off); `true`/`false` sets it and persists
+`apex26.thermalDrift`. On, a minutes-long rise of the frame-time p50 over the first-minute baseline takes ONE existing governor rung early.
+
 ### `renderScale(v?) → {scale, fps, floorMs, auto, tier, autoTier, autoShed, userTier, tierFloor, crashStrikes, open, frameTimes}`
 Adaptive-resolution control. No arg: report the current state. A number in
 `0.5–1` (a FRACTION — the opposite unit to `uiScale`) pins the 3D render scale
