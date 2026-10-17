@@ -325,6 +325,8 @@ on all 52 circuits, plus curated named scenery with source-located fractions.
 | `apex_profile` | `perf/profile.mjs` | browser | playwright-probe |
 | `apex_profile_query` | `perf/query.mjs` | tree | playwright-probe |
 
+Not wrapped as their own `apex_*` tool: `profile.mjs --mode hitch|trace` (hitch wraps `gfx/frame-hitch.mjs`, trace writes a Perfetto JSON; `--base <ref>` prints `incomparable` when the base lacks the `apex26.wgxCapture` key, #2674) and the three.js Inspector (`?inspector=1`, `__apex.inspector()`, see §three.js Inspector below).
+
 Timing (#2673): `apex_agent` cold-boots a browser on every call (`help` ~4 s, `world` `detail:brief` ~100 s on SwiftShader), so repeated reads go through `apex_track op:eval` on a persistent session. `apex_job_status {wait}` is held by the host to ~120 s whatever the schema allows: pass `wait` ≤ 100. HUD job `estimateMs` scales by boot groups and cells (`killAfterMs` is the generous kill budget, not an estimate).
 
 Pins the wrap always applies (you cannot override them):

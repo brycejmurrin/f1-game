@@ -114,11 +114,13 @@ test.describe("Boot guard — a module that failed to load", () => {
     const navs = trackNavs(page);
     await page.route(MODULE, (route) => route.fulfill({ status: 404, body: "x" }));
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    // Keep the text the poll matched: a second read could land mid-navigation
+    // (overlayText -> null) and fail toContain on a healthy page.
+    let text = null;
     await expect
-      .poll(() => overlayText(page), { timeout: 45_000 })
+      .poll(async () => (text = await overlayText(page)), { timeout: 45_000 })
       .toContain("Module failed to load");
 
-    const text = await overlayText(page);
     // The CAUSE, not the symptom. Downstream ReferenceErrors fire in a cascade
     // and each would overwrite the overlay; the root-cause message is pinned so
     // the player is told which file never arrived rather than which global was

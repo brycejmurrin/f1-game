@@ -2408,4 +2408,20 @@ body.desktop #hud-inputs:not([data-hl-user]) {
 /* Pause review is a still, labelled chart independent of the live HUD scale. */
 #pausemenu .input-review { grid-column: 1 / -1; flex-basis: 100%; min-width: 0; width: 100%; }
 .input-review-canvas { display: block; width: 100%; max-width: 100%; height: auto; }
+/* PHONE TEST recorder (js/perf/phone-recorder.js): a tiny non-interactive REC
+   badge low-left inside the safe area, and the how-to + buttons in the METRICS fold. */
+#phone-rec-badge {
+  position: fixed; z-index: 11; pointer-events: none;
+  left: calc(var(--sal, 0px) + .5em); bottom: calc(var(--sab, 0px) + .25em);
+  padding: 0 .4em; border-radius: .3em; opacity: .8;
+  font: 600 10px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text); background: var(--red);
+}
+#phone-rec-badge[hidden] { display: none; }
+#pm-phonerec > div { display: flex; gap: .5em; flex-wrap: wrap; }
+#pm-phonerec button { flex: 1 1 0; min-height: 44px; min-width: 88px; }
+#pm-phonerec button:disabled { opacity: .45; }
+#pm-phonerec ol { padding-left: 1.4em; }
+#pm-phonerec a { display: inline-block; min-height: 44px; line-height: 44px; }
+
 } /* @layer hud */

@@ -15,7 +15,7 @@
  * bitmask tests on recorded arguments must compare against the mock's own
  * `gl.CONST` values (see `enums`).
  *
- *   const h = bootGlx();            // opts: { aniso, parallel, userAgent, ls: { key: value } }
+ *   const h = bootGlx();            // opts: { aniso, parallel, userAgent, webdriver, overlay, ls: { key: value } }
  *   h.GLX.begin(h.frame());  h.reset();  h.GLX.begin(h.frame());
  *   h.count("uniform1f")                 // → 1 (only uTime moves)
  *
@@ -35,6 +35,30 @@ const FILES = [...MANIFEST.FULL.slice(0, MANIFEST.FULL.indexOf("js/render/gfx.js
   ...MANIFEST.DEFERRED.webgl2];
 const SOURCES = FILES.map((f) => [f, fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var")]);
 
+
+/** A recording stand-in for the #game-soft overlay: pass as `bootGlx({ overlay })`.
+ *  `made` lists every canvas GLX created through document.createElement; each
+ *  keeps its id, size, style, attributes, 2D getContext args and a putImageData count. */
+export function recordingOverlay() {
+  const made = [];
+  return {
+    made,
+    make() {
+      const el = {
+        id: "", width: 0, height: 0, style: {}, attrs: {}, puts: 0, ctxArgs: null,
+        setAttribute(k, v) { el.attrs[k] = v; },
+        getContext(type, a) {
+          el.ctxArgs = [type, a];
+          return { createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }), putImageData() { el.puts++; } };
+        },
+      };
+      made.push(el);
+      return el;
+    },
+    /** The soft-present overlay, once GLX has made it. */
+    get soft() { return made.find((e) => e.id === "game-soft") || null; },
+  };
+}
 
 export function bootGlx(opts = {}) {
   const calls = opts.calls || [];
@@ -113,9 +137,14 @@ export function bootGlx(opts = {}) {
     isFinite, isNaN, parseFloat, parseInt, performance,
     setTimeout: (fn) => { sandbox.__timers.push(fn); return sandbox.__timers.length; },
     clearTimeout: noop, __timers: [],
-    document: { hidden: false, addEventListener: noop, createElement: () => ({ getContext: () => null, width: 0, height: 0 }) },
+    document: {
+      hidden: false, addEventListener: noop,
+      // opts.overlay: createElement answers a recording 2D canvas (the #game-soft overlay).
+      createElement: () => (opts.overlay ? opts.overlay.make() : { getContext: () => null, width: 0, height: 0 }),
+      body: { appendChild: noop },
+    },
     localStorage: storage(), sessionStorage: storage(),
-    navigator: { userAgent: opts.userAgent || "node glx-mock", maxTouchPoints: 0 },
+    navigator: { userAgent: opts.userAgent || "node glx-mock", maxTouchPoints: 0, webdriver: !!opts.webdriver },
     screen: { width: 1280, height: 720 }, devicePixelRatio: 1, innerWidth: 1280, innerHeight: 720,
     location: { reload: noop }, matchMedia: () => ({ matches: false, addEventListener: noop }),
     ResizeObserver: class { observe() {} disconnect() {} },
