@@ -1,0 +1,1 @@
+1792220451	Bryce Murrin	#2631 TLX road-specific chunk coordinates and profiler pass names; own js/render/three/{tlx.js,tlx-chunked.js,tsl-lit.js}, matching tests/docs. Parent browser only; no physics or CPU-array lifecycle changes.  [cursor/tlx-road-culling-6e92; session 48cd597fd43cad0cbdde6611]
