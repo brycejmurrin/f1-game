@@ -3603,6 +3603,23 @@ const WGX = (function () {
       // chunk's lamp slice. drawChunked overwrites when per-chunk is active.
       d[base + 32] = 0; d[base + 33] = 0; d[base + 34] = 0;
     }
+    // Post-pass uniforms that are a pure function of the render size / knobs (bloom mip steps, blur taps, FXAA and
+    // SGSR texel sizes) were re-uploaded every frame (~12 writeBuffer calls of unchanged bytes). Shadow the last
+    // bytes written per (buffer, byte offset) and skip a write that would store the same values. A fresh buffer
+    // has no shadow, so its first write always lands; this is the ONLY writer of the buffers it is used on.
+    const _uboShadow = new WeakMap();
+    function _writeUBOIfChanged(buf, off, data, n) {
+      let sh = _uboShadow.get(buf);
+      const need = (off >> 2) + n;
+      if (!sh) { sh = new Float32Array(Math.max(need, buf.size >> 2)).fill(NaN); _uboShadow.set(buf, sh); }
+      else if (sh.length < need) { const g = new Float32Array(need).fill(NaN); g.set(sh); sh = g; _uboShadow.set(buf, sh); }
+      const base = off >> 2;
+      let same = true;
+      for (let i = 0; i < n; i++) if (sh[base + i] !== data[i]) { same = false; break; }
+      if (same) return;
+      for (let i = 0; i < n; i++) sh[base + i] = data[i];
+      device.queue.writeBuffer(buf, off, data, 0, n);
+    }
     // One (or ranged) writeBuffer for every slot filled this pass — call before
     // litPass.end(). writeBuffer is queue-ordered before submit, so draws
     // recorded earlier still see the data.
@@ -3803,13 +3820,13 @@ const WGX = (function () {
         const s = postScratch;
         s[0] = sx; s[1] = 0; s[2] = 0; s[3] = 0;
         let off = ((_blurWriteSlot++) % slots) * stride;
-        device.queue.writeBuffer(blurUBO, off, s, 0, _Post.BLUR_UNIFORM_BYTES / 4);
+        _writeUBOIfChanged(blurUBO, off, s, _Post.BLUR_UNIFORM_BYTES / 4);
         let p = encoder.beginRenderPass({ colorAttachments: [{ view: tmpView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
         p.setPipeline(pipe); p.setBindGroup(0, srcBG, [off]); p.draw(3, 1, 0, 0); p.end();
         s[0] = 0; s[1] = sy;
         off = ((_blurWriteSlot++) % slots) * stride;
-        device.queue.writeBuffer(blurUBO, off, s, 0, _Post.BLUR_UNIFORM_BYTES / 4);
+        _writeUBOIfChanged(blurUBO, off, s, _Post.BLUR_UNIFORM_BYTES / 4);
         p = encoder.beginRenderPass({ colorAttachments: [{ view: srcView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
         p.setPipeline(pipe); p.setBindGroup(0, tmpBG, [off]); p.draw(3, 1, 0, 0); p.end();
@@ -4533,7 +4550,7 @@ const WGX = (function () {
           const s = postScratch;
           s[0] = 1 / src.w; s[1] = 1 / src.h; s[2] = i === 0 ? threshold : 0; s[3] = i === 0 ? 2 : i === 1 ? 1 : 0;
           s[4] = o.exposure != null ? o.exposure : 1.0; s[5] = s[6] = s[7] = 0;
-          device.queue.writeBuffer(bloomDownUBO[i], 0, s, 0, _Post.BLOOM_DOWN_UNIFORM_BYTES / 4);
+          _writeUBOIfChanged(bloomDownUBO[i], 0, s, _Post.BLOOM_DOWN_UNIFORM_BYTES / 4);
           const p = encoder.beginRenderPass({ colorAttachments: [{ view: bloomLv[i].view,
             loadOp: "clear", clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
           p.setPipeline(pBloomDown); p.setBindGroup(0, bloomDownBG[i]); p.draw(3, 1, 0, 0); p.end();
@@ -4545,7 +4562,7 @@ const WGX = (function () {
         for (let i = useLv - 2; i >= 0; i--) {
           const s = postScratch;
           s[0] = 1 / bloomLv[i + 1].w; s[1] = 1 / bloomLv[i + 1].h; s[2] = spread; s[3] = 0;
-          device.queue.writeBuffer(bloomUpUBO[i], 0, s, 0, _Post.BLOOM_UP_UNIFORM_BYTES / 4);
+          _writeUBOIfChanged(bloomUpUBO[i], 0, s, _Post.BLOOM_UP_UNIFORM_BYTES / 4);
           const last = i === 0;
           const p = encoder.beginRenderPass({ colorAttachments: [{ view: bloomLv[i].view,
             loadOp: last ? "clear" : "load",
@@ -4658,7 +4675,7 @@ const WGX = (function () {
         const useUpscale = !!(pSGSR && sgsrUBO && aaView && sgsrBG && wantSpatialUpscale());
         const s = postScratch;
         s[0] = 1 / tw; s[1] = 1 / th; s[2] = 0; s[3] = 0;
-        device.queue.writeBuffer(fxaaUBO, 0, s, 0, _Post.FXAA_UNIFORM_BYTES / 4);
+        _writeUBOIfChanged(fxaaUBO, 0, s, _Post.FXAA_UNIFORM_BYTES / 4);
         const fxaaView = useUpscale ? aaView : currentView;
         const fxaaPipe = useUpscale ? (pFXAALdr || pFXAA) : pFXAA;
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: fxaaView, loadOp: "clear",
@@ -4671,7 +4688,7 @@ const WGX = (function () {
         // FXAA output. uViewport is SOURCE (render) size.
         if (useUpscale) {
           s[0] = 1 / tw; s[1] = 1 / th; s[2] = tw; s[3] = th;
-          device.queue.writeBuffer(sgsrUBO, 0, s, 0, _Post.SGSR_UNIFORM_BYTES / 4);
+          _writeUBOIfChanged(sgsrUBO, 0, s, _Post.SGSR_UNIFORM_BYTES / 4);
           const p2 = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "clear",
             clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
           p2.setPipeline(pSGSR); p2.setBindGroup(0, sgsrBG); p2.draw(3, 1, 0, 0);
