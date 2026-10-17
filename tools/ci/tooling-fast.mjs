@@ -631,6 +631,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Pure artwork and paint-editor VM regression; selected for all source edits.
   "tests/unit/livery-design.test.mjs",
   "tests/unit/livery-finish-contract.test.mjs",
+  "tests/unit/livery-helmet-style.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   "tests/unit/load-order.test.mjs",
   // The LOADING CARD's geometry: the three numbers the flyby editor authors,
