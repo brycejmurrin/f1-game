@@ -15,26 +15,26 @@ Otherwise canonical survey filenames are parsed, with `--circuit` as a fallback.
 The output directory must not exist: rebuilding never deletes earlier evidence.
 Choose a new output path for each run. Outputs default to `artifacts/gallery/tracks`.
 
-Open the generated `index.html` locally. It embeds its manifest, uses relative
-image links, and needs no server. Circuit/view/time/weather filters, search,
-Reset, native keyboard-activatable cards and a modal viewer work offline.
-Arrow keys move through the filtered set; Escape closes and returns focus to the
-card. Thumbnails retain their original aspect ratio. Save image downloads the
-compressed viewing copy, not the original capture. Share the entire output
-folder, not only its HTML file.
+Open the generated `index.html` locally. Captures, captions and camera metadata
+are rendered into the document before it opens. Circuit links and image expansion
+use native HTML and CSS; no JavaScript or server is needed. Select an image to
+enlarge it and select it again to close. Capture details expand separately. The
+original aspect ratio is preserved. Share the entire output folder, including
+its media files, rather than only its `index.html`.
 
 Without `--input`, legacy survey-branch aggregation remains available. Generated
 survey images belong on `track-survey-assets`, never the game deployment branch.
 
-Modal behavior follows the native dialog API:
-https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal
+Native disclosure and circuit navigation follow:
+https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details
+https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Selectors/:target
 
 For a single downloadable file, add `--standalone`. Share `gallery.html` from
-that output directory: its compressed WebP viewing copies are embedded once
-and reused by both the grid and modal. No image server or adjacent media folder
-is needed. `index.html` remains the smaller folder-based alternative with lazy
-thumbnails. Standalone files load all encoded image bytes up front, so use the
-folder version for large archives. `--standalone` rejects `--skip-images`.
+that output directory: its compressed WebP viewing copies are embedded once.
+No image server or adjacent media folder is needed. `index.html` remains the
+folder-based alternative. Images load lazily; standalone files still include
+all encoded image bytes, so prefer the folder version for large archives.
+`--standalone` rejects `--skip-images`.
 
 ## Choose views before a large capture batch
 
@@ -76,10 +76,12 @@ node tools/track/build-gallery.cjs --input artifacts/spa-preview --circuit spa -
 node tools/shot/shot-survey.mjs --tracks spa --plan-file artifacts/spa-plan.json --select spa-eau-rouge-overview-dry --profile comparison --seed 2391 --out artifacts/spa-finals
 ```
 
-The gallery can export selected captures as `selected-plan.json`; pass that file
-to `--plan-file` instead of selecting names manually. Export one circuit at a
-time. Select exactly two images for a split comparison. The page reports differing
-requested framing; comparisons are visual evidence, not a pixel regression gate.
+Each capture and circuit has a prebuilt JSON recipe download when job metadata
+is present. Pass that file to `--plan-file`; use `--select` to choose specific
+shot names. Large circuits are split into plans of at most 32 shots, with unique
+names so repeated captures cannot overwrite each other. Circuit groups place views side by side for review. Script-only
+search, selection export and comparison sliders are not part of the portable
+page.
 The original camera, source identity and timings remain in `manifest.json` and
 per-image `.capture.json` receipts. FOV and world-space target overrides work
 with debug cameras; lateral offset and look-at lap fraction require `eye`.

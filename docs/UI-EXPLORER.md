@@ -68,9 +68,11 @@ discoverability problems.
 
 ## Reviewing evidence
 
-The HTML uses local relative assets and inline script/style, so it works through
-`file://`. Search and status filters cover observations and findings; expand an
-observation for actions, DOM state, console errors and replay instructions.
+The HTML uses local relative assets and inline styles, with no JavaScript, so it
+works through `file://` and script-disabled previews. Capability links navigate
+to observations; status badges retain the coverage result. Expand an observation
+for actions, DOM state, console errors and replay instructions. Report JSON and
+embedded JSON downloads use ordinary links.
 Open `*.trace.zip` using Playwright Trace Viewer. Import
 `settings-performance.trace.json` into Chrome DevTools Performance.
 Screenshots are visual evidence; DOM findings are advisory, not screenshot-based

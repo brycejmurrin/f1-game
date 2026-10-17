@@ -43,12 +43,18 @@ export function verdict(base, head, key = "p50", name = "") {
   return d < 0 ? "WIN" : "REGRESS";
 }
 
-export function diff(baseAgg, headAgg) {
+/** True when a ref's source reads the `apex26.wgxCapture` switch profile.mjs sets to turn the per-frame software
+ *  readback off. A base without it still pays the readback, so its numbers are not comparable with HEAD's. */
+export const supportsCaptureKey = (sources) => sources.some((t) => typeof t === "string" && t.includes("apex26.wgxCapture"));
+
+/** `incomparable` replaces every judged verdict (info/n-a rows keep theirs): the arms ran different capture modes. */
+export function diff(baseAgg, headAgg, { incomparable = false } = {}) {
+  const judge = (b, h, key, name) => { const v = verdict(b, h, key, name); return incomparable && (v === "noise" || v === "WIN" || v === "REGRESS" || v === "unproven") ? "incomparable" : v; };
   const names = [...new Set([...Object.keys(baseAgg), ...Object.keys(headAgg)])];
   return names.map((name) => {
     const b = baseAgg[name], h = headAgg[name];
     const dp50 = b && h ? r2(h.p50 - b.p50) : null, dp95 = b && h ? r2(h.p95 - b.p95) : null;
-    return { name, base: b || null, head: h || null, dp50, dp95, pct50: b && h && b.p50 ? r2(((h.p50 - b.p50) / b.p50) * 100) : null, verdict: verdict(b, h, "p50", name), verdict95: verdict(b, h, "p95", name) };
+    return { name, base: b || null, head: h || null, dp50, dp95, pct50: b && h && b.p50 ? r2(((h.p50 - b.p50) / b.p50) * 100) : null, verdict: judge(b, h, "p50", name), verdict95: judge(b, h, "p95", name) };
   });
 }
 
