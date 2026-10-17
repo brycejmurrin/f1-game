@@ -61,5 +61,13 @@ check-in and stop.
 - A red you inherit from the deploy tip is cured by syncing after the tip fix
   merges, not by editing tests.
 
+## A PR that edits `.claude/**`
+
+The auto-mode classifier refuses a child's `.claude` edits on a relayed grant
+("Self-Modification", 2026-10-16). An owner of such a PR watches and syncs it,
+but a fix that needs a `.claude` edit goes back to the orchestrator (whose
+session holds the user's grant) or waits for the user to approve it in the
+owner's own session. Say which in the REPORT line; do not work around it.
+
 Never: merge, arm or disarm auto-merge, cancel an Actions run, force-push or
 rebase, quarantine or skip a test, start a session.
