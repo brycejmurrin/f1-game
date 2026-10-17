@@ -634,6 +634,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-tier.test.mjs",
   // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
   "tests/unit/livery-wheels.test.mjs",
+  "tests/unit/livery-zone-finish.test.mjs",
   "tests/unit/load-order.test.mjs",
   // The LOADING CARD's geometry: the three numbers the flyby editor authors,
   // clamped out of localStorage before they reach a CSS custom property, where
