@@ -282,14 +282,23 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
         }
         window.__apex.clearInput();
 
-        // Scan the lap for the steepest descent and climb (road pitch via slope).
+        // Steepest descent and climb, off the profile sampled above. A
+        // jump+step at all 300 samples was ~0.5–1 s; the tangent ranks the
+        // grid and one 40 m/s step only shifts the physics slope by a sample
+        // or two, so the six steepest each way are the ones still confirmed.
+        // Same cut as tests/helpers/elevation-probes.cjs (the VM twin).
+        const ranked = [];
+        for (let i = 0; i < prof.length; i++) ranked.push({ f: i / 300, slope: prof[i].slope });
+        ranked.sort((a, b) => a.slope - b.slope);
         let dnAt = 0, dn = 0, upAt = 0, up = 0;
-        for (let i = 0; i < 300; i++) {
-          const f = i / 300;
-          window.__apex.jump(f, 40, 0); window.__apex.step(1 / 60, 1);
+        const seen = new Set();
+        for (const c of ranked.slice(0, 6).concat(ranked.slice(-6))) {
+          if (seen.has(c.f)) continue;
+          seen.add(c.f);
+          window.__apex.jump(c.f, 40, 0); window.__apex.step(1 / 60, 1);
           const s = window.__apex.physState().slope;
-          if (s < dn) { dn = s; dnAt = f; }
-          if (s > up) { up = s; upAt = f; }
+          if (s < dn) { dn = s; dnAt = c.f; }
+          if (s > up) { up = s; upAt = c.f; }
         }
 
         // Descent at top speed: gravity must not push meaningfully past the flat

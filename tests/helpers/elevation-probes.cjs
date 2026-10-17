@@ -6,7 +6,8 @@
  * calls it against its own game-vm handle; with APEX_VM_POOL=0 the same file
  * calls the same functions in-process against the parent's handle. Two copies
  * would be two recipes, and the whole claim of a twin is that it runs the
- * browser spec's launches, step counts and thresholds unchanged.
+ * browser spec's launches and thresholds. The grade search confirms the six
+ * steepest samples each way instead of all 300; the corner sweep is unchanged.
  *
  * SO: every function here is SELF-CONTAINED. It may read only its arguments —
  * `g` (the game-vm handle), `o` (the job options, including `o.circuit` and the
@@ -63,13 +64,25 @@ const GRADIENT = async function gradient(g, o, state) {
   }
   A.clearInput();
 
+  // Steepest descent and climb. `prof` is already the 300-point grid. A
+  // jump+step at every sample cost ~0.5–1 s and was the smaller half of the
+  // probe; the geometric tangent ranks that grid, and one 40 m/s step only
+  // moves the physics slope by a sample or two. The six steepest descents
+  // and six steepest climbs are still read with jump+step — that slope is
+  // what the descent and climb runs below were written against. Top-4 matched
+  // dn/dnAt/up/upAt on monaco, spa and monza (2026-10-17); six is the margin.
+  const ranked = [];
+  for (let i = 0; i < prof.length; i++) ranked.push({ f: i / 300, slope: prof[i].slope });
+  ranked.sort((a, b) => a.slope - b.slope);
   let dnAt = 0, dn = 0, upAt = 0, up = 0;
-  for (let i = 0; i < 300; i++) {
-    const f = i / 300;
-    A.jump(f, 40, 0); A.step(1 / 60, 1);
+  const seen = new Set();
+  for (const c of ranked.slice(0, 6).concat(ranked.slice(-6))) {
+    if (seen.has(c.f)) continue;
+    seen.add(c.f);
+    A.jump(c.f, 40, 0); A.step(1 / 60, 1);
     const s = A.physState().slope;
-    if (s < dn) { dn = s; dnAt = f; }
-    if (s > up) { up = s; upAt = f; }
+    if (s < dn) { dn = s; dnAt = c.f; }
+    if (s > up) { up = s; upAt = c.f; }
   }
 
   A.jump(dnAt, flatMax, 0);
