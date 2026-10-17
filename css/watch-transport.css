@@ -79,7 +79,6 @@ body:has(.screen:not([hidden])) .watch-transport, body.photo-mode .watch-transpo
   .watch-transport [data-wt="chapter-field"] { flex: 1 1 0; }
   .watch-transport [data-wt="chapter-jump"] { flex: 0 0 auto; }
 }
-}
 @media (max-width: 480px) {
   .watch-transport { left: max(calc(var(--gap) * 2 / 3), var(--sal)); right: max(calc(var(--gap) * 2 / 3), var(--sar)); padding: calc(var(--gap) * 2 / 3); }
   .watch-transport [data-wt="driver-field"], .watch-transport [data-wt="camera-field"] { flex: 1 1 40%; }
