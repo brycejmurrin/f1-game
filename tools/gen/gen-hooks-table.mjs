@@ -106,6 +106,25 @@ function summarise(block, name) {
   return s.replace(/\|/g, "\\|");
 }
 
+/** Hook clusters peeled out of apex.js: `...ApexNet.hooks(G, …)` in `api` names a file whose `hooks()` returns the hook object. */
+export const PEELED = { ApexNet: "js/agent/apex-net.js" };
+
+function peeledHooks(spread) {
+  const a = spread.argument;
+  const callee = a && a.type === "CallExpression" && a.callee.type === "MemberExpression" ? a.callee : null;
+  const file = callee && callee.object.type === "Identifier" && callee.property.name === "hooks" ? PEELED[callee.object.name] : null;
+  if (!file) return null;
+  const src = readRepo(file);
+  const ast = parse(src);
+  const fn = find(ast, (n) => n.type === "FunctionDeclaration" && n.id && n.id.name === "hooks");
+  const ret = fn && find(fn.body, (n) => n.type === "ReturnStatement" && n.argument && n.argument.type === "ObjectExpression");
+  if (!ret) throw new Error(`${file}: could not find the object returned by hooks()`);
+  return ret.argument.properties.map((p) => {
+    if (p.type !== "Property") throw new Error(`${file}:${p.loc.start.line}: unexpected ${p.type} in the hook object`);
+    return { name: keyName(p), line: p.loc.start.line, file, ...signature(src, p), summary: summarise(commentAbove(ast.comments, p.loc.start.line), keyName(p)) };
+  });
+}
+
 export function collectHooks() {
   const src = readRepo(APEX);
   const ast = parse(src);
@@ -115,6 +134,8 @@ export function collectHooks() {
   const comments = ast.comments;
   const hooks = [];
   for (const p of decl.init.properties) {
+    const peeled = p.type === "SpreadElement" && peeledHooks(p);
+    if (peeled) { hooks.push(...peeled); continue; }
     if (p.type !== "Property") throw new Error(`${APEX}:${p.loc.start.line}: unexpected ${p.type} in api — spreads hide hooks from the index`);
     const s = signature(src, p);
     const summary = summarise(commentAbove(comments, p.loc.start.line), keyName(p));

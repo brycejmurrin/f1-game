@@ -16,8 +16,13 @@ const SaveMigrate = (function () {
   // Guarded: the node VM harnesses load this file without js/core/log.js.
   function log(level, msg) { if (typeof Log !== "undefined") Log[level]("game", msg); }
 
+  // Number() throws on an object whose toString/valueOf is not callable
+  // ({"toString":1} survives JSON.parse); a hostile save must coerce, not crash the load.
+  function toNum(value) {
+    try { return Number(value); } catch (_) { return NaN; }
+  }
   function finiteNumber(value) {
-    const n = Number(value);
+    const n = toNum(value);
     return Number.isFinite(n) ? n : 0;
   }
 
@@ -135,7 +140,7 @@ const SaveMigrate = (function () {
     const out = {};
     if (!o || typeof o !== "object") return out;
     for (const k of Object.keys(o)) {
-      if (!Array.isArray(o[k])) continue;
+      if (k === "__proto__" || !Array.isArray(o[k])) continue;
       out[k] = o[k].map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
     }
     return out;
@@ -144,7 +149,7 @@ const SaveMigrate = (function () {
     const out = {};
     if (!o || typeof o !== "object") return out;
     for (const k of Object.keys(o)) {
-      if (!Array.isArray(o[k])) continue;
+      if (k === "__proto__" || !Array.isArray(o[k])) continue;
       out[k] = o[k].map((v) => (Number.isInteger(v) && v > 0 ? v : 0));
     }
     return out;
@@ -192,7 +197,7 @@ const SaveMigrate = (function () {
       ? season.teamPts : {};
     season.teamPts = {};
     Object.entries(oldTeams).forEach(([id, value]) => {
-      const n = Number(value);
+      const n = toNum(value);
       if (id && isFinite(n)) season.teamPts[id] = Math.max(0, n);
     });
     season.finishes = finishMap(season.finishes);
@@ -220,7 +225,7 @@ const SaveMigrate = (function () {
     const team = typeof Teams !== "undefined" && Teams && Array.isArray(Teams.LIST)
       ? Teams.LIST.find((t) => t && t.id === teamId) : null;
     const n = team && Array.isArray(team.drivers) && team.drivers.length ? team.drivers.length : 2;
-    const i = Math.trunc(Number(seat)) || 0;
+    const i = Math.trunc(toNum(seat)) || 0;
     return Math.max(0, Math.min(n - 1, i));
   }
 
@@ -269,7 +274,7 @@ const SaveMigrate = (function () {
       if (career != null) log("warn", "Career save rejected: not an object type=" + (Array.isArray(career) ? "array" : typeof career));
       return null;
     }
-    const version = Number(career.v);
+    const version = toNum(career.v);
     if (version > CAREER_V) {
       log("warn", "Career save requires a newer build (v" + version + "); update the game to open it. Save preserved.");
       return null;
@@ -278,9 +283,9 @@ const SaveMigrate = (function () {
     while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); log("info", "Career save migrated v" + v + "->v" + (v + 1)); v++; }
     career.v = CAREER_V;
     career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
-    career.year = career.year | 0 || 2026;
+    career.year = finiteNumber(career.year) | 0 || 2026;
     career.money = finiteNumber(career.money);
-    career.rep = Math.max(0, Math.min(100, Number(career.rep) || 0));
+    career.rep = Math.max(0, Math.min(100, toNum(career.rep) || 0));
     // Driver identity is read by title/cards and by rating lookups. Keep a
     // malformed existing slot recoverable: JSON can persist objects/functions'
     // JSON-safe cousins in these leaves, and a later template interpolation
@@ -302,7 +307,7 @@ const SaveMigrate = (function () {
     // MY TEAM's player is always seat 0; a DRIVER seat is clamped to the row.
     career.seat = career.flavour === "myteam" ? 0 : clampSeat(career.seat, career.team);
     career.deal = cleanDeal(career.deal);
-    career.seed = career.seed | 0;
+    career.seed = finiteNumber(career.seed) | 0;
     // A plain object or the empty season: a number or string here (a hand edit,
     // a partial write) made remapPoints' `season.round =` throw in strict mode,
     // and Career.load() runs at boot uncaught — one bad slot stopped the game.
@@ -334,8 +339,8 @@ const SaveMigrate = (function () {
     // was, so a save written before the choice existed keeps the brief it had.
     career.objPick = career.objPick && typeof career.objPick === "object"
       && !Array.isArray(career.objPick) ? career.objPick : null;
-    career.budgetLvl = Math.max(0, career.budgetLvl | 0);
-    career.facility = career.facility | 0;
+    career.budgetLvl = Math.max(0, finiteNumber(career.budgetLvl) | 0);
+    career.facility = finiteNumber(career.facility) | 0;
     career.moves = rows(career.moves);
     // MY TEAM's hired seat: rows or null — `roster: {}` threw in wageBill().
     // Its numbers as cleanDeal's: wageBill() sums `salary`, and one "x" turned
@@ -364,7 +369,7 @@ const SaveMigrate = (function () {
       career.winterReport = { year: winter.year, eraChanged: winter.eraChanged === true, explanation: typeof winter.explanation === "string" ? winter.explanation.slice(0, 500) : "", carBuildsChanged: winter.carBuildsChanged === true,
         team: winter.team && typeof winter.team === "object" ? { id: text(winter.team.id), before: stat(winter.team.before), after: stat(winter.team.after) } : null,
         drivers: rows(winter.drivers).slice(0, 2).map((d) => { const axes = {}; for (const key of ["pace", "craft", "awareness", "consistency", "experience"]) { const a = d.axes && d.axes[key] || {}; const before = stat(a.before), after = stat(a.after); axes[key] = { before, after, delta: after - before }; } return { code: text(d.code), name: text(d.name), player: d.player === true, axes }; }),
-        teams: rows(winter.teams).slice(0, 3).map((t) => { const before = stat(t.before), after = stat(t.after); return { id: text(t.id), name: text(t.name), before, after, delta: after - before, rankBefore: Math.max(1, Math.min(30, t.rankBefore | 0)), rankAfter: Math.max(1, Math.min(30, t.rankAfter | 0)) }; }) };
+        teams: rows(winter.teams).slice(0, 3).map((t) => { const before = stat(t.before), after = stat(t.after); return { id: text(t.id), name: text(t.name), before, after, delta: after - before, rankBefore: Math.max(1, Math.min(30, finiteNumber(t.rankBefore) | 0)), rankAfter: Math.max(1, Math.min(30, finiteNumber(t.rankAfter) | 0)) }; }) };
     } else delete career.winterReport;
     return career;
   }

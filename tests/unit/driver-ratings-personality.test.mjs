@@ -122,3 +122,14 @@ test("a persisted code of constructor / __proto__ / toString is unrated, never N
   assert.equal(DR.get("FER2", 0).pace, 87, "a HIRES row is still found");
   assert.equal(DR.get("VER", 0).pace, 96, "a BASE row is still found");
 });
+
+test("get() applies only finite NUMBER deltas (a saved career's string / Infinity delta is ignored)", () => {
+  const DR = loadDR();
+  assert.equal(DR.get("HAD", 2, { pace: 5 }).pace, 87);
+  assert.equal(DR.get("HAD", 2, { pace: 500 }).pace, 100);
+  assert.equal(DR.get("HAD", 2, { pace: -500 }).pace, 1);
+  assert.equal(DR.get("HAD", 2, { pace: "5" }).pace, 82, "a string delta must not concatenate to 825");
+  const base = DR.get("HAD", 2);
+  const bad = DR.get("HAD", 2, { pace: Infinity, craft: NaN, awareness: -Infinity, aggression: Infinity, optimism: "9" });
+  assert.deepEqual(JSON.parse(JSON.stringify(bad)), JSON.parse(JSON.stringify(base)));
+});

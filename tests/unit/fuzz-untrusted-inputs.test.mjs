@@ -146,6 +146,7 @@ function bootLobbyAndHandshake() {
   const lobbyCtx = vm.createContext(lobbySb);
   seedClipboard(lobbyCtx);
   vm.runInContext(read("js/net/lobby-codes.js").replace(/^const\b/gm, "var"), lobbyCtx, { filename: "lobby-codes.js" });
+  vm.runInContext(read("js/net/lobby-roster.js").replace(/^const\b/gm, "var"), lobbyCtx, { filename: "lobby-roster.js" });
   const LobbyCodes = vm.runInContext("LobbyCodes", lobbyCtx);
   return { LobbyCodes, NetHandshake, NetSdp, NetBytes };
 }
@@ -567,7 +568,7 @@ test("LiveryTex.setTeamLogo refuses a decompression-bomb emblem before any draw"
   ctx.globalThis = ctx;
   vm.createContext(ctx);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js",
-                   "js/car/livery-graphics.js", "js/car/liverytex.js"])
+                   "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const LT = vm.runInContext("LiveryTex", ctx);
   let marks = 0;

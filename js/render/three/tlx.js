@@ -1073,6 +1073,7 @@ const TLX = (function () {
       // WebGPU backend with the adapter feature; never on the WebGL2 fallback
       // (SwiftShader/CI), keeping the GLX {supported:false} shape there.
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
+      let _inspectorHold = false;   // dev Inspector owns timestamp resolution (inspectorHost below)
       function resolveGpuTimer() {
         if (!_gpuTimerOn) return;
         const epoch = _gpuTimerEpoch;
@@ -4158,15 +4159,20 @@ const TLX = (function () {
         gpuTimer(on) {
           const sup = _gpuSupported();
           if (on !== undefined) {
-            const next = !!on && sup;
+            const next = !!on && sup && !_inspectorHold;
             if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuMs = -1; }
             _gpuTimerOn = next;
-            try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
+            if (!_inspectorHold) try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
             if (!_gpuTimerOn) _gpuMs = -1;
           }
           return { supported: sup, on: _gpuTimerOn };
         },
         gpuMs() { return _gpuMs; },
+        // Dev Inspector hand-off (js/perf/three-inspector.js): the renderer plus the gpuTimer interlock — while held,
+        // gpuTimer stays off so only the Inspector's own pass resolves timestamp queries.
+        inspectorHost() {
+          return { renderer, hold(on) { _inspectorHold = !!on; if (on) { _gpuTimerOn = false; _gpuMs = -1; _gpuTimerEpoch++; } } };
+        },
         // "Skipped for cadence, map still valid" — see tlx-shadow.js §KEEP.
         carShadowKeep() { return !!(shadowSys && shadowSys.carShadowKeep()); },
         lampShadowKeep(idx) { return !!(shadowSys && shadowSys.lampShadowKeep(idx)); },
