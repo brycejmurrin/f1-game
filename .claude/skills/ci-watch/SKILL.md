@@ -56,6 +56,9 @@ ARM a PR only when ALL hold; any miss is WAIT (say which):
 - Tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR
   resolve swarms; batch small tooling/doc fixes into one PR.
 - Never cancel another session's CI runs; they re-run them.
+- Pages starvation: each merge replaces the PENDING Pages train (the live site
+  stayed ~45 min stale on 2026-10-17). After a merge, if one is pending and none
+  running, batch further merges until it starts; a RUNNING train is never cancelled.
 
 ## One sweep
 
@@ -71,7 +74,7 @@ ARM a PR only when ALL hold; any miss is WAIT (say which):
 | FOREIGN-ARM | A SQUASH or REBASE arm: `mcp__github__disable_pr_auto_merge`, then re-arm with MERGE only if the hard gate holds. Tell the user which actor armed it if known. |
 | SYNC | Not yours to push. If a live session owns the PR (`node tools/ci/who-is-on-it.mjs`, recent pushes), `send_message` it `HANDOFF`/`BLOCKED` per `agent-fleet` `references/comms.md`. Otherwise run `node tools/ci/needs-sync.mjs <branch>` (the board prints its verdict under the table; `no` = leave it, a green PR merges as it stands) and only for `conflict`/`stale-red` `node tools/ci/sync-pr.mjs <branch>` (merge ship, never rebase or force-push; `--push` only after it verified). Run it in a worktree, not a checkout another session uses. Never arm it while DIRTY. |
 | FIX | Same ownership check. A live owner gets the failing job names by message. Otherwise hand to the `ci-red-triage` agent for the test and assertion, then fix per `steward` (and its `references/ownership.md`). A `cancelled` with a live sibling is the draft/ready dedupe, not a red (`steward` §1). |
-| WAIT | Nothing. Cap full, CI running, gate pending, 2 already armed, `MERGE-HOLD:` set. |
+| WAIT | Nothing. CI running, gate pending, 2 already armed, `MERGE-HOLD:` set. |
 | NONE | Nothing: armed with MERGE and healthy. |
 
 2a. Re-cut / supersede / close of a PR another session owns: in the same sweep
