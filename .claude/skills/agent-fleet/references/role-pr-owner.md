@@ -7,6 +7,15 @@ archives it on `DONE`. Why a session and not a subagent: the owner must keep
 a subscription, a CI watch and timers alive for hours and survive a container
 restart; an in-session subagent ends with its parent's turn.
 
+## Contents
+
+- Launch (orchestrator)
+- The watch kit (arm at start and after every push)
+- On every wake (event, Monitor line, check-in)
+- Keep the box free (2026-10-17)
+- Traps that cost this role real cycles (2026-10-16)
+- A PR that edits `.claude/**`
+
 ## Launch (orchestrator)
 
 Use the orchestrator.md launch template with:
@@ -19,6 +28,7 @@ Use the orchestrator.md launch template with:
   plus the grant that created the owner role. If the user already ordered the
   merge and the orchestrator armed it, say "auto-merge is armed (MERGE); leave
   it" — the owner still never arms or merges.
+- `STOP AT: 300k context or $<cap>` as the last line (docs-only PR: 100k); the owner checks it at every wake and hands off.
 - The relayed notes from the previous owner (head sha, last CI verdict, local
   sync state, files that conflicted).
 
@@ -35,12 +45,20 @@ Use the orchestrator.md launch template with:
 
 ## On every wake (event, Monitor line, check-in)
 
+A wake that only echoes your own action (subscription confirmed, ready marked,
+your own comment) ends the turn with no tool call; call `ReadNotifications`
+only when a notice says one is pending.
+
 Read the live PR first (`pull_request_read get`, `ci-watch --sha <head> --once`,
 open review threads), then act in this order without asking:
 
 1. CONFLICTING → `node tools/ci/sync-pr.mjs <branch>` (delete a stale local
    `sync-pr-<branch>` first), resolve keeping both sides, run
    `node tools/ci/tooling-fast.mjs --changed --jobs=3`, push once.
+   Verify by diff size: a clean merge where gen rewrote nothing and the PR
+   diff is prose or generated files only → `sync-pr <branch> --verify=none --push`
+   (CI re-gates the head); otherwise leave the default `--verify=fast` and run
+   `tooling-fast --changed` (a full ladder measured 723 s vs 110 s).
 2. Red job → agent `ci-red-triage`; fix within OWNED, `tooling-fast --changed`
    plus the failing test alone, push once.
    A red the base also has: port the fix if one exists, else one PR comment
@@ -49,6 +67,13 @@ open review threads), then act in this order without asking:
 4. Draft and green → `node tools/ci/ready-gate.mjs --pr <n>`; mark ready only
    when it exits 0 AND `ci-watch` shows `= ci passed` (ready-gate reads the
    structural guards; it has exited 0 while `CI` was red).
+   A draft or unlabelled run can say `passed` with 16 of 17 jobs skipped: put
+   the `run-ci` label on first, and cite in every READY the run id, the job ids
+   that RAN (not skipped) and the tests>0 line. A `workflow_dispatch` pass is
+   not a verdict on the PR head.
+   `ready-full-cap.mjs` is advisory (no desk cap, AGENTS.md): on REFUSE send ONE
+   line `CAP? <PR>` to the orchestrator and mark ready on its "go"; never arm a
+   timer for a cap refusal.
 
 Send `REPORT owner-<PR> <sha> <verdict>` at each push or red, `READY <PR> <sha>`
 when it goes ready, and `DONE <PR> <merge sha>` when it merges; then delete the
@@ -72,6 +97,10 @@ group at 41/201 after 24 min, a 12 s startup benchmark at 40 s under load).
 
 ## Traps that cost this role real cycles (2026-10-16)
 
+- `.claude/memory/*` shows modified after the memory-sync hook: not yours, not
+  in any PR. Before a checkout `git stash push -q -- .claude/memory`; never
+  commit it or mention it in a REPORT. Push before any long browser run (26
+  commits were held through one, 2026-10-17).
 - A ratchets delta that LOWERS ceilings for files the PR does not touch turns
   the merge ref red when the base moves. Carry rows only for files in the diff.
 - `sync-pr.mjs` refuses a clean-behind branch; that is correct. Sync only on

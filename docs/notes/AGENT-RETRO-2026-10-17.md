@@ -150,3 +150,11 @@ H5 — `bash-guard.sh` hook timeout in `.claude/settings.json`: raise the `git c
 
 ## Not done / out of scope here
 CI workflow changes (finding 10) and game code are issues only. No quarantine edits. Sessions read, never messaged.
+
+## Agent-surface follow-up (Bryce, 2026-10-17 ~11:45Z)
+
+Ten findings from the fleet run, landed as one-liners in skills and role templates (AGENTS.md untouched):
+grants and next item named in the launch brief, cost cap / effort check, `get_session` before assigning (orchestrator.md);
+HANDOFF template and 350 k / 300 k rotation (comms.md); `run-ci` and run id + ran-job ids in every READY, sync verify by diff
+size (role-pr-owner.md, steward); one owner per red tip (steward §3, orchestrator.md); retired-rule grep (check-changes);
+Pages-train batching (ci-watch, orchestrator.md); PRs with no live owner on the wake list (orchestrator.md).

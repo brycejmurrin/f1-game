@@ -150,6 +150,27 @@ test("Results preserves complete driver and team names without table overflow", 
   });
 });
 
+test("Results never ellipsises a driver surname on a phone at UI SIZE 200%", async ({ page }) => {
+  // 844x390 @200%: the driver column (~106px) is narrower than the unbreakable
+  // surname HULKENBERG; the shared .dh-name ellipsis cut it to "HULKENBE…"
+  // (UI-G survey 2026-10-17). The surname must wrap inside its cell instead.
+  await page.setViewportSize({ width: 844, height: 390 });
+  await dataReady(page);
+  await page.evaluate(() => {
+    document.body.dataset.width = "narrow"; document.body.dataset.density = "compact"; document.body.dataset.shape = "wide";
+    document.documentElement.style.setProperty("--ui-scale", "2");
+    document.getElementById("datahub").style.zoom = "2";
+  });
+  await page.getByRole("tab", { name: "RESULTS" }).click();
+  await expect(page.locator(".dh-td-driver").first()).toContainText("Andrea Kimi Antonelli");
+  await page.evaluate(() => { document.querySelector(".dh-td-driver .dh-name").textContent = "Nico HULKENBERG"; });
+  const names = await page.$$eval(".dh-td-driver .dh-name", (els) => els.map((e) => ({
+    text: e.textContent, w: e.clientWidth, sw: e.scrollWidth })));
+  for (const n of names) {
+    expect(n.sw, `${n.text} is cut off (${n.w}px of ${n.sw}px)`).toBeLessThanOrEqual(n.w + 1);
+  }
+});
+
 test("Live uses the hub content as its only stacked scroll owner", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await dataReady(page);

@@ -246,15 +246,16 @@ export class DebugSession {
   }
   // T1: anonymous/eval scripts (empty URL) used to fill the 200-row cap and hide game.js.
   // Named URLs sort first; `filter` is a substring (or a regex with regex:true).
-  async scriptsList(filter = "", { regex = false, includeAnonymous = false } = {}) {
+  async scriptsList(filter = "", { regex = false, includeAnonymous = false, limit = 50 } = {}) {
     this.connected();
     let test = s => s.url.includes(filter);
     if (regex) { const re = new RegExp(filter); test = s => re.test(s.url); }
     const rows = [...this.scripts.values()].filter(s => (includeAnonymous || s.url) && test(s));
     rows.sort((a, b) => (a.url ? 0 : 1) - (b.url ? 0 : 1));
-    const out = { scripts: rows.slice(0, 200), total: rows.length, truncated: rows.length > 200,
+    const cap = Math.min(200, Math.max(1, Math.floor(+limit) || 50));
+    const out = { scripts: rows.slice(0, cap), total: rows.length, truncated: rows.length > cap,
       anonymousHidden: includeAnonymous ? 0 : [...this.scripts.values()].filter(s => !s.url && test(s)).length };
-    if (out.truncated) out.note = "More than 200 matches: narrow filter (or use regex:true).";
+    if (out.truncated) out.note = `${rows.length} matches, showing ${cap}: narrow filter (or use regex:true), or raise limit (max 200).`;
     return out;
   }
   // T12: accept a script URL (+ endLine) instead of a scriptId; the newest parse of that URL wins.

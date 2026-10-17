@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy, resolveSha, hollowDraft, cancelledExternal, supersededByPr, fileState, waitingJobs } from "../../tools/ci/ci-watch.mjs";
+import { inheritedNotes, baseRunFor, latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy, resolveSha, hollowDraft, cancelledExternal, supersededByPr, fileState, waitingJobs } from "../../tools/ci/ci-watch.mjs";
 import { githubToken, NO_TOKEN_HINT } from "../../tools/ci/github-token.mjs";
 
 const run = (id, name, status, conclusion, created) => ({ id, name, status, conclusion, created_at: created });
@@ -566,4 +566,27 @@ test("a run cancelled once is reported once per process pair: floor line names t
   const r = await watch(fixture([old], {}), { since: Date.parse("2026-10-16T08:00:00Z") });
   assert.equal(r.code, 124);
   assert.match(r.lines.at(-1), /dispatch ci\.yml/);
+});
+
+test("inheritedNotes (#2665): says `base red since <sha>` only when the deploy tip's same job is red, and names a quarantined test", () => {
+  const j = job(5, "smoke (TLX)", "completed", "failure");
+  const baseRun = { id: 77, head_sha: "abcdef1234567" };
+  const red = inheritedNotes({ job: j, baseRun, baseJobs: [job(1, "smoke (TLX)", "completed", "failure")] });
+  assert.equal(red.length, 1); assert.match(red[0], /base red since abcdef1 .*run #77/);
+  assert.deepEqual(inheritedNotes({ job: j, baseRun, baseJobs: [job(1, "smoke (TLX)", "completed", "success")] }), [], "green on the tip: this PR's own red");
+  assert.deepEqual(inheritedNotes({ job: j, baseRun: null, baseJobs: null }), [], "no base answer, no claim");
+  const q = [{ spec: "tests/specs/hud-mirror.spec.js", title: "HUD rear-view mirror › TLX", owner: "bryce", expires: "2026-11-15" }];
+  const flaky = inheritedNotes({ job: j, annos: ["    tests/specs/hud-mirror.spec.js:12 boom"], quarantine: q });
+  assert.match(flaky[0], /in flaky-quarantine\.json: tests\/specs\/hud-mirror\.spec\.js.*expires 2026-11-15/);
+  assert.deepEqual(inheritedNotes({ job: j, annos: ["    tests/specs/season.spec.js:1 x"], quarantine: q }), []);
+});
+
+test("baseRunFor reads the deploy branch's newest completed run once per workflow and survives a failing lookup", () => {
+  const calls = [];
+  const request = (p) => { calls.push(p); return p.includes("/jobs") ? { json: { jobs: [job(1, "a", "completed", "failure")] } } : { json: { workflow_runs: [{ id: 9, head_sha: "f".repeat(40) }] } }; };
+  const r = baseRunFor(424242, request);
+  assert.equal(r.baseRun.id, 9); assert.equal(r.baseJobs.length, 1);
+  assert.match(calls[0], /branch=claude%2Ff1-game-project-26h3ng&status=completed&per_page=1/);
+  baseRunFor(424242, request); assert.equal(calls.length, 2, "cached");
+  assert.deepEqual(baseRunFor(424243, () => { throw new Error("rate limit"); }), { baseRun: null, baseJobs: null });
 });

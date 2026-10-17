@@ -658,6 +658,8 @@ export function createExtras(ctx) {
         try {
           const o = ctx.splitOut(fs.readFileSync(logAbs, "utf8"));
           if (o.out != null) v.out = capJobOut(o.out, logRel);
+          // The tail of a finished job that parsed IS the out (a hud_shot dump came back twice, ~10 KB each): keep one.
+          if (v.out != null && j.state === "done") delete v.tail;
         } catch { /* no log */ }
       }
     }
