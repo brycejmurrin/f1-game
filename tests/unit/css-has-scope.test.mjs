@@ -1,0 +1,86 @@
+// css-has-scope — `body:has(#x)` walks the WHOLE document; `body:has(> #x)` asks body's children.
+//
+// Each `body:has(#lighting:not([hidden]))` is re-matched whenever body's style is
+// invalidated, and an unscoped argument is a descendant search over every node
+// (~4.9k, pmsettings alone ~2.9k). DevTools trace, phone 852x393 touch race, GLX,
+// headless: UpdateLayoutTree 5.6-6.4 ms/frame, ahead of all JS; scoping the
+// body-child arguments to `> #x` cut it to 3.6-4.0 (docs/notes/PERF-HUNT-CPU-2026-10-17.md).
+// The child combinator is the same match ONLY while #x stays a direct child of
+// <body>, so this pins both directions: every scoped id IS a body child in
+// index.html, and a body child is never searched for unscoped again.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
+
+// Parent tag + classes of every element in index.html, by a tag-depth walk
+// (void elements, comments and raw-text tags skipped). Static: the shell owns all DOM.
+function shellElements(html) {
+  const VOID = new Set("area base br col embed hr img input link meta source track wbr".split(" "));
+  const RAW = new Set(["script", "style", "template", "textarea", "title"]);
+  const re = /<!--[\s\S]*?-->|<(\/?)([a-zA-Z][\w-]*)([^>]*)>/g;
+  const stack = [], out = [];
+  let m;
+  while ((m = re.exec(html))) {
+    if (m[0].startsWith("<!--")) continue;
+    const tag = m[2].toLowerCase(), attrs = m[3];
+    if (m[1] === "/") { const i = stack.lastIndexOf(tag); if (i >= 0) stack.length = i; continue; }
+    const id = /\sid\s*=\s*"([^"]+)"/.exec(attrs), cls = /\sclass\s*=\s*"([^"]*)"/.exec(attrs);
+    out.push({ tag, parent: stack[stack.length - 1], id: id && id[1], classes: cls ? cls[1].split(/\s+/) : [] });
+    if (VOID.has(tag) || attrs.trim().endsWith("/")) continue;
+    if (RAW.has(tag)) { const end = html.indexOf("</" + tag, re.lastIndex); re.lastIndex = end < 0 ? html.length : end; continue; }
+    stack.push(tag);
+  }
+  return out;
+}
+
+const ELS = shellElements(read("index.html"));
+const BODY_KIDS = new Set(ELS.filter((e) => e.parent === "body" && e.id).map((e) => e.id));
+const CSS = fs.readdirSync(path.join(ROOT, "css")).filter((f) => f.endsWith(".css")).map((f) => ["css/" + f, read("css/" + f)]);
+// `body…:has(` / `html…:has(` and the argument's leading text.
+const HAS = /\b(html|body)(?:[.:[][^\s,{]*?)?:has\(\s*([^)]*)/g;
+
+test("the shell walk is not vacuous", () => {
+  for (const id of ["hud", "pmsettings", "pausemenu", "overlay", "lighting"]) assert.ok(BODY_KIDS.has(id), id);
+  assert.ok(!BODY_KIDS.has("hud-limits"), "#hud-limits lives inside #hud");
+});
+
+test("every scoped :has(> #id) / :has(> body > #id) names a direct child of <body>", () => {
+  const bad = [];
+  let n = 0;
+  for (const [file, src] of CSS) for (const m of src.matchAll(HAS)) {
+    const s = m[2].trim();
+    const id = (m[1] === "html" ? /^>\s*body\s*>\s*#([\w-]+)/ : /^>\s*#([\w-]+)/).exec(s);
+    if (!id) continue;
+    n++;
+    if (!BODY_KIDS.has(id[1])) bad.push(`${file}: ${m[0]} — #${id[1]} is not a <body> child in index.html`);
+  }
+  assert.ok(n >= 20, `expected the scoped rules, found ${n}`);
+  assert.deepEqual(bad, [], "the child combinator stopped matching: move the element back, or drop the `>`");
+});
+
+test("scoped :has(> .screen…) holds: every .screen is a <body> child and none is built in JS", () => {
+  const screens = ELS.filter((e) => e.classes.includes("screen"));
+  assert.ok(screens.length >= 10, "screens found");
+  assert.deepEqual(screens.filter((e) => e.parent !== "body").map((e) => e.id || e.tag), []);
+  const js = [];
+  const walk = (dir) => { for (const f of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+    const rel = dir + "/" + f.name;
+    if (f.isDirectory()) { if (f.name !== "vendor") walk(rel); } else if (f.name.endsWith(".js") && /["'\s]screen["'\s]/.test(read(rel)) && /classList\.add\(\s*["']screen["']|className\s*=\s*["'][^"']*\bscreen\b/.test(read(rel))) js.push(rel);
+  } };
+  walk("js");
+  assert.deepEqual(js, [], "a .screen built at runtime may not be a body child");
+});
+
+test("a <body> child is never searched for unscoped (write `:has(> #id…)`)", () => {
+  const bad = [];
+  for (const [file, src] of CSS) for (const m of src.matchAll(HAS)) {
+    const id = /^#([\w-]+)/.exec(m[2].trim());
+    if (id && BODY_KIDS.has(id[1])) bad.push(`${file}: ${m[0]}`);
+  }
+  assert.deepEqual(bad, []);
+});

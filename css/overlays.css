@@ -68,18 +68,18 @@ body.photo-studio-open #rotate-device { display: none !important; }
    asks "does the gate want the screen?" BEFORE it decides the pause card
    yields — reading through this rule, the card's own presence answered "no"
    and the gate never came back after OPEN CONTROLS › CLOSE. */
-body:not(.rotate-measure):has(#pausemenu:not([hidden])) #rotate-device,
-body:not(.rotate-measure):has(#pausemenu[open]) #rotate-device {
+body:not(.rotate-measure):has(> #pausemenu:not([hidden])) #rotate-device,
+body:not(.rotate-measure):has(> #pausemenu[open]) #rotate-device {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
 }
 /* The iOS install tip sits above the race and used to paint through the
    pause card's translucent foot on phone portrait. */
-body:has(#pausemenu:not([hidden])) #ios-install,
-body:has(#pausemenu[open]) #ios-install,
-html:has(#pausemenu:not([hidden])) #ios-install,
-html:has(#pausemenu[open]) #ios-install {
+body:has(> #pausemenu:not([hidden])) #ios-install,
+body:has(> #pausemenu[open]) #ios-install,
+html:has(> body > #pausemenu:not([hidden])) #ios-install,
+html:has(> body > #pausemenu[open]) #ios-install {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -876,7 +876,7 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])) #install-chip {
 :where(body[data-shape="wide"][data-density="compact"]):has(#home-motion:not([hidden])) #install-chip {
   bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
 }
-body[data-shape="wide"]:has(#overlay[data-home-scene]:not([data-home-scene="static"])):has(#home-motion:not([hidden])) #install-chip {
+body[data-shape="wide"]:has(> #overlay[data-home-scene]:not([data-home-scene="static"])):has(#home-motion:not([hidden])) #install-chip {
   bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
 }
 /* Same layer as experience.css's live-scene `padding: var(--gap)` shorthand,

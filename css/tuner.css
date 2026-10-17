@@ -28,11 +28,11 @@
    again. It is 0 when no panel is docked, so the free-cam layout falls back to
    the full-width arrangement with no extra rule. */
 :root { --dock-w: 0px; --dock-px: 0px; }
-body:has(#lighting:not([hidden])),
-body:has(#camtune:not([hidden])),
-body:has(#flyby:not([hidden])),
-body:has(#freecam:not([hidden])),
-body:has(#garrival:not([hidden])) {
+body:has(> #lighting:not([hidden])),
+body:has(> #camtune:not([hidden])),
+body:has(> #flyby:not([hidden])),
+body:has(> #freecam:not([hidden])),
+body:has(> #garrival:not([hidden])) {
   /* `88 * --vwz`, NOT `88vw`. This value is in the panel's own ZOOMED local
      space (see --dock-px below), and a bare viewport unit resolves against the
      UNZOOMED viewport and is then multiplied by the zoom — so 88vw paints as
@@ -72,15 +72,15 @@ body:has(#garrival:not([hidden])) {
 }
 #lighting-inner, #camtune-inner, #flyby-inner, #freecam-inner, #garrival-inner { --fit-at: 200px; }
 /* FLYING: the dock gives width back to the controls, at every size.
-   `:has()` takes the specificity of its argument, so `body:has(#lighting…)` is
+   `:has()` takes the specificity of its argument, so `body:has(> #lighting…)` is
    ID-level — a plain `body.photo-mode` override loses to it no matter how many
    classes it carries. Repeating the :has() is what makes this win.
    The number matters as much as the selector: at 667x375 with 59px of notch on
    each side there are 549 usable pixels, and a 380px panel leaves 151 — not one
    thumbstick, never mind two and a climb/dive column. */
-body.photo-mode:not(.pc-nopanel):has(#lighting:not([hidden])),
-body.photo-mode:not(.pc-nopanel):has(#camtune:not([hidden])),
-body.photo-mode:not(.pc-nopanel):has(#freecam:not([hidden])) {
+body.photo-mode:not(.pc-nopanel):has(> #lighting:not([hidden])),
+body.photo-mode:not(.pc-nopanel):has(> #camtune:not([hidden])),
+body.photo-mode:not(.pc-nopanel):has(> #freecam:not([hidden])) {
   /* `46 * --vwz`, not `46vw` — same correction as the base --dock-w above and
      for the same reason: this is consumed inside `zoom: var(--ui-scale)`, so a
      bare viewport unit paints at 53vw on the coarse-pointer default. */
@@ -770,7 +770,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   padding: calc(var(--gap) / 2) calc(var(--gap) * 5 / 6);
   font-size: var(--fs-micro); min-height: var(--tap-paint);
 }
-body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="compact"][data-rail="on"]) {
+body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="compact"][data-rail="on"]) {
   --dock-w: min(calc(70 * var(--vwz)), 560px);
 }
 #flyby-inner[data-density="compact"][data-rail="on"] {
@@ -974,7 +974,7 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
      Gated on SheetShape `data-rail`, not viewport `min-width: 720px`: at UI
      SIZE 200% a 734px landscape viewport is ~257 local px and must stay a
      strip, while a 852×393 phone at 100% is locally wide enough for the rail.
-     `body:has(#lighting > #lighting-inner[data-density="compact"])`, because the
+     `body:has(> #lighting > #lighting-inner[data-density="compact"])`, because the
      condition is about a DESCENDANT and the declaration has to land on body.
      This rule and the six below it were, until 2026-08-12, written as
      `#lighting-inner[data-density="compact"] body…` — `body` as a DESCENDANT of
@@ -994,13 +994,13 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
      NO FEEDBACK LOOP, checked: the panel's height is fixed by its top/bottom
      insets, so `data-density` does not depend on the width this sets. */
   /* `:not(.photo-mode)` rather than trusting the flying override to win. It used
-     to, when this condition was `body:has(#lighting:not([hidden]))` — (1,1,1)
+     to, when this condition was `body:has(> #lighting:not([hidden]))` — (1,1,1)
      against the flying rule's (1,3,1), decided on classes. Naming the panel's
      density inside :has() puts a SECOND id in this selector, and (2,2,1) beats
      three classes no matter what. Stating the exclusion is what keeps the two
      rules from being ordered by an accident of how the condition is spelled. */
-  body:not(.photo-mode):has(#lighting:not([hidden]) > #lighting-inner[data-density="compact"][data-rail="on"]),
-  body:not(.photo-mode):has(#camtune:not([hidden]) > #camtune-inner[data-density="compact"][data-rail="on"]) {
+  body:not(.photo-mode):has(> #lighting:not([hidden]) > #lighting-inner[data-density="compact"][data-rail="on"]),
+  body:not(.photo-mode):has(> #camtune:not([hidden]) > #camtune-inner[data-density="compact"][data-rail="on"]) {
     /* `70 * --vwz`, not `70vw` — this file's own header explains why: the value
        is consumed inside `zoom: var(--ui-scale)`, so a bare viewport unit is
        multiplied by the scale and paints as 80vw at the 1.15 a coarse pointer
@@ -1264,7 +1264,7 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
 /* Opened from the TITLE screen there is no race behind to preview, only the
    menu's own buttons showing through the docked panel: fade the menu out the
    way css/components.css does under any open dialog. */
-body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
+body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
 #ga-head h2 { margin: 0 0 calc(var(--gap) * 0.5); }
 
 /* ---------- UI Fit r5: camera tuner compact tap floor (#camtune only) ----------
@@ -1408,20 +1408,20 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
    lighting / camera / flyby keep their own carves; this block matches only
    when BOTH #lighting and #flyby are open. Flyby tap floors (#1774) stay. */
 @layer components {
-  body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #lighting-inner {
+  body:has(#lighting:not([hidden])):has(> #flyby:not([hidden])) #lighting-inner {
     z-index: 43;
   }
-  body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-spread {
+  body:has(#lighting:not([hidden])):has(> #flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-spread {
     display: none;
   }
-  body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-rows {
+  body:has(#lighting:not([hidden])):has(> #flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-rows {
     min-height: max(132px, calc(3 * 44px));
   }
   @media (min-width: 800px) {
-    body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) {
+    body:has(#lighting:not([hidden])):has(> #flyby:not([hidden])) {
       --dock-w: min(calc(40 * var(--vwz)), 360px);
     }
-    body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #flyby-inner {
+    body:has(#lighting:not([hidden])):has(> #flyby:not([hidden])) #flyby-inner {
       left: calc((var(--sal) + 8px) / var(--sheet-eff-scale, var(--ui-scale)));
       right: auto;
     }
