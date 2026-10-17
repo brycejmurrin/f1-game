@@ -294,3 +294,16 @@ test("single-size inspect settles before reading and keeps the settlement record
   assert.equal(inspection.provisional, undefined);
   assert.equal(inspection.issues[0].provisional, undefined);
 });
+
+test("an unsettled record with no animation frames is not retried (more time cannot help)", async () => {
+  const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
+  let settles = 0;
+  const page = { evaluate: async (fn) => {
+      if (fn.name === "settleLayout") { settles++; return { stable: false, frames: 0 }; }
+      if (fn.name === "captureAuditEnvironment") return {};
+      return { controls: [], issues: [{ kind: "offscreen", selector: "#x", message: "x" }] };
+    }, locator: () => ({ ariaSnapshot: async () => "" }) };
+  const { settlement, inspection } = await inspectSettled(page, {});
+  assert.equal(settles, 1); assert.equal(settlement.retried, undefined);
+  assert.equal(inspection.provisional, true); assert.equal(inspection.issues[0].provisional, true);
+});

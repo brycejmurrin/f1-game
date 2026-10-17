@@ -213,7 +213,8 @@ export async function inspectSettled(page, { root, styles, source = null, audits
   // One more budget before judging: the first resize after boot often
   // outlasts a single sample window. Still moving after that, the issues are
   // provisional — a hit test mid-transition is not a defect.
-  if (settlement && settlement.stable === false) settlement = { ...await page.evaluate(settleLayout, { root }), retried: true };
+  // No frames at all (rAF paused, e.g. a background tab) cannot settle with more time: no retry.
+  if (settlement && settlement.stable === false && settlement.frames > 0) settlement = { ...await page.evaluate(settleLayout, { root }), retried: true };
   const inspection = await inspectPage(page, { root, styles, source, audits });
   if (settlement && settlement.stable === false) {
     inspection.provisional = true;
