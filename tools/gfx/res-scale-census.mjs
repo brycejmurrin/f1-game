@@ -19,7 +19,7 @@ import { censusInitScript, waitFrames } from "../lib/mem-census.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const o = { track: "monza", scales: [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.7, 1], settle: 4, json: null, ls: {} };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], next = () => argv[++i];
@@ -90,4 +90,4 @@ async function main() {
     shutdown();
   }
 }
-main().catch((e) => { console.error(e); process.exit(1); });
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main().catch((e) => { console.error(e); process.exit(1); });
