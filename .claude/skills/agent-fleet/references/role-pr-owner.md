@@ -46,7 +46,7 @@ force, no rebase); draft with a green tip and `ready-gate.mjs --pr <n>` exit 0
 Do not enable auto-merge or merge: Grok Bot is the merge holder
 (role-merge-holder.md, Level 3).
 REPORT: a cloud agent has no direct channel to Grok Bot. Keep this line in the
-PR body's fleet block current:
+PR body current, just under the fleet block (not inside it):
   fleet-status: <working|blocked|needs-decision|ready|red|done> | <one-line reason> | <UTC time>
 and post the same line as a PR comment on every state change (never on an
 unchanged state). Decisions go to Grok Bot, not Bryce: set needs-decision and

@@ -55,12 +55,14 @@ owned: <globs from the launch prompt>
 state: planning | implementing | verifying | pr-open | fixing | blocked | done
 blocker: <one line, or none>
 needs-orchestrator: yes | no
-fleet-status: <working|blocked|needs-decision|ready|red|done> | <one-line reason> | <UTC time>
 ```
 
-`fleet-status:` is the cloud worker's report line (role-pr-owner.md
-§Monitoring and reporting): the orchestrator reads it from the PR body and the
-matching PR comment; no script parses it yet.
+A cloud worker also keeps one report line in the PR body, under the block
+rather than inside it, and posts the same line as a PR comment on every change
+(role-pr-owner.md §Monitoring and reporting):
+`fleet-status: <working|blocked|needs-decision|ready|red|done> | <one-line reason> | <UTC time>`.
+The orchestrator reads it from the body and the matching comment; no script
+parses it yet.
 
 Quota park: `state: blocked`, `blocker: quota until <reset>`, `needs-orchestrator: no`
 (`references/worker.md` §Quota park).
