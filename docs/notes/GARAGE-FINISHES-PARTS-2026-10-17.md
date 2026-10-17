@@ -44,7 +44,7 @@ The sheet (committed on `track-survey-assets`, not here — repo rule: no new do
 `node tools/car/render-car.mjs --team=ferrari --preset=livery --finish=<f>` (one small tooling change: `finish` is now
 a forwarded `render-car` flag; `carview.html` already honoured `?finish=`).
 
-IMAGE-LINK-PENDING
+Sheet: <https://github.com/brycejmurrin/f1-game/blob/014ff2d6c2268e6c3f7840074c37788ce905204b/gallery/garage-finishes/garage-finishes-current.jpg?raw=1> (branch `cursor/garage-finishes-survey-4f2a`, based on `track-survey-assets`).
 
 Findings from the sheet:
 
