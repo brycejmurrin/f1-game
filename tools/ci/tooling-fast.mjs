@@ -633,6 +633,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-finish-contract.test.mjs",
   "tests/unit/livery-helmet-style.test.mjs",
   "tests/unit/livery-tier.test.mjs",
+  // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
+  "tests/unit/livery-wheels.test.mjs",
+  "tests/unit/livery-zone-finish.test.mjs",
   "tests/unit/load-order.test.mjs",
   // The LOADING CARD's geometry: the three numbers the flyby editor authors,
   // clamped out of localStorage before they reach a CSS custom property, where
@@ -930,6 +933,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ship-filter-paths.test.mjs",
   // shot.mjs --batch / --jpeg / --raster parse (no Chromium).
   "tests/unit/shot-jobs.test.mjs",
+  // Shared survey runner: CLI and MCP manifests match, and colliding gallery names stay distinct.
+  "tests/unit/shot-survey-runner.test.mjs",
   // The physics step's functions (update, updateCar…) compile under 48 KB of bytecode — TurboFan's
   // cap is 61,440 B and past it the whole race runs deoptimized (PERF-HUNT-2 S11); one node child, ~2 s.
   "tests/unit/sim-bytecode-budget.test.mjs",

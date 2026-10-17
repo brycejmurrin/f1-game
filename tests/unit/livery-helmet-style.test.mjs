@@ -82,6 +82,8 @@ test("the garage lists the HELMET pill row, both colour rows and an editor secti
   const ed = fs.readFileSync(new URL("../../js/garage/livery-design-editor.js", import.meta.url), "utf8");
   assert.ok(sheet.includes('pillRow("HELMET", "helmetStyle"'));
   assert.ok(sheet.includes('colorRow("HELMET BASE", "helmetBase", true)') && sheet.includes('colorRow("HELMET ACCENT", "helmetAccent", true)'));
+  // the editor only collects rows that are on the page: a row built but never appended is invisible
+  assert.ok(sheet.includes("wrap.appendChild(lidBaseRow); wrap.appendChild(lidAccentRow);"), "helmet colour rows are appended");
   assert.ok(ed.includes('section("HELMET"') && ed.includes('"helmetStyle", "helmetBase", "helmetAccent"'));
   assert.deepEqual(Array.from(H.STYLES), ["team", "solid", "cap", "band", "stripe", "chevron"]);
 });

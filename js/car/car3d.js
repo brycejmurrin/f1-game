@@ -1144,6 +1144,14 @@ const Car3D = (function () {
     // inboard of that volume AND above its ceiling — reported as "floating".
     const mz = ckpt ? 0.92 : 0.24;
     const mScale = Math.max(0.85, Math.min(1.35, cockpitStyle.mirror || 1));
+    // MIRROR HOUSING (liv.mirrorTint) / MIRROR FINISH (liv.mirrorFinish): the housing is carbon
+    // today, which applyFinish never touches, so a tint or an explicit finish makes the housing
+    // and stalk PAINT (the finish remap only rewrites paint ids). Both unset = today's mesh.
+    const mTint = _ckAcc(liv.mirrorTint) || null;
+    const mFin = liv.mirrorFinish;
+    const mPaint = !!mTint || (!!mFin && (mFin === "gloss" || Object.hasOwn(CarMaterials.FINISH_SURFACE, mFin)));
+    const mHouseC = mTint || [0.09, 0.09, 0.11], mHouseS = mPaint ? SURFACES.paint : SURFACES.carbon;
+    const mStalkC = mTint || DARK;
     const mx = ((ckpt ? 0.60 : 0.34) + (mSty === 1 ? 0.035 : 0)) * mScale;
     const msx = (ckpt ? 0.54 : 0.30) * mScale;
     const mY = (ckpt ? 0.780 : 0.735) + (mSty === 2 ? -0.032 : 0);
@@ -1164,7 +1172,7 @@ const Car3D = (function () {
       addBlock(out, [
         [xi, sB + aY, mz - (ckpt ? 0.026 : 0.045)], [xi, sB + aY, mz + (ckpt ? 0.026 : 0.045)], [xi, sB + sR + aY, mz + (ckpt ? 0.026 : 0.045)], [xi, sB + sR + aY, mz - (ckpt ? 0.026 : 0.045)],
         [xo, (ckpt ? stalkTop-0.016 : sB+sR*.75+aY), stalkZ - (ckpt ? 0.012 : 0.020)], [xo, (ckpt ? stalkTop-0.016 : sB+sR*.75+aY), stalkZ + (ckpt ? 0.012 : 0.020)],  [xo, stalkTop, stalkZ + (ckpt ? 0.012 : 0.020)], [xo, stalkTop, stalkZ - (ckpt ? 0.012 : 0.020)],
-      ], DARK);
+      ], mStalkC);
       // Glass goes on the face TOWARD the viewer (-z). At mz+0.066 it sits
       // 8 mm BEYOND the housing's own back face, and the driver AND the chase
       // camera see carbon, never the reflective surface.
@@ -1177,7 +1185,7 @@ const Car3D = (function () {
       (shadeFlags.round ? (o, q, c, f, sf) => CarShade.housing(o, q, c, addTri, sf) : addBlock)(out, [
         [xIn, hy0, mz - 0.03], [xOut, hy0, mz - 0.03 + toe], [xOut, hy1, mz - 0.03 + toe], [xIn, hy1, mz - 0.03],
         [xIn+s*(ckpt ? 0.018 : 0), hy0+(ckpt ? 0.008 : 0), mz + 0.03], [xOut-s*(ckpt ? 0.018 : 0), hy0+(ckpt ? 0.008 : 0), mz + 0.03 + toe], [xOut-s*(ckpt ? 0.018 : 0), hy1-(ckpt ? 0.008 : 0), mz + 0.03 + toe], [xIn+s*(ckpt ? 0.018 : 0), hy1-(ckpt ? 0.008 : 0), mz + 0.03],
-      ], [0.09, 0.09, 0.11], null, SURFACES.carbon);
+      ], mHouseC, null, mHouseS);
       // Recessed glass and carbon bezel share the housing's cant. A flat
       // glass box on a swept housing reads as a detached grey rectangle.
       const face = (inset, z, depth) => {
@@ -2115,8 +2123,9 @@ const Car3D = (function () {
     if (!noWheels) {
       const tyreBand = tyreStyle && tyreStyle.band || TYRE_BAND[tier("tyres")];
       // Per-option caliper accent peeking through the rim spokes, else tier.
-      const caliperColor = brakeStyle ? brakeStyle.cal : BRAKE_CALIPER[brakesT];
-      const rimColor = brakeStyle && brakeStyle.rim;   // premium alloy rims (else default dark)
+      const wt = CarWheels.tints(liv);   // livery rimTint / caliperTint override the brakes catalog (unset = null)
+      const caliperColor = wt.cal || (brakeStyle ? brakeStyle.cal : BRAKE_CALIPER[brakesT]);
+      const rimColor = wt.rim || (brakeStyle && brakeStyle.rim);   // premium alloy rims (else default dark)
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32,
           tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle);
