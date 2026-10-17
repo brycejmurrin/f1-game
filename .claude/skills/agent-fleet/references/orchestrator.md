@@ -210,6 +210,7 @@ the acting session.
   the specs `pick-tests` / `select-specs` name) and run the full `tooling-fast`
   once before a code push (AGENTS.md rule 3). At most one merge from the deploy branch per PR per hour unless the PR
   is `dirty` / conflicting or `needs-sync.mjs` says `stale-red` (`sync-pr.mjs`); being N commits behind is no reason.
+- Per wake, flag runaways before reading PRs: collect each sibling's `get_session` reply (plus cumulative `cost_usd` from its `result` events) into a JSON array and run `node tools/ci/fleet-flags.mjs <file>`. It prints cost, context, configured vs served model, connection and age, and flags served≠configured, cost over the brief's cap (default $15), context over 300k, and a `working` session disconnected or silent for 30 min (#2666).
 - A worker is **stalled** when its state has not changed and its branch has
   not moved for ~90 min, or it passed its caps. Ask once, then interrupt and
   relaunch with NEW evidence or a narrower OWNED, never the same prompt.

@@ -368,6 +368,7 @@
     "// fleet-board: the derived `claimed` label, the PR closing-keyword parse and the",
     "// pinned board body, all pure; < 1 s. It guards the backlog's phone view.",
     "tests/unit/fleet-board.test.mjs",
+    "tests/unit/fleet-flags.test.mjs",
     "// The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on",
     "// synthetic frames, plus its site table: ~0.1 s, no browser. The gate itself",
     "// runs only in ci.yml's non-blocking flicker-gate job.",
@@ -691,6 +692,8 @@
     "// phone sample reaching Input's tilt pipeline over the in-process loopback",
     "// transport — same VM harness, no browser, ~0.3 s.",
     "tests/unit/phone-pad.test.mjs",
+    "// PhoneRecorder (#1633): sampler cadence, JSON serializer, SHARE/COPY fallbacks. VM, < 0.5 s.",
+    "tests/unit/phone-recorder.test.mjs",
     "tests/unit/phone-touch-surface.test.mjs",
     "tests/unit/photo-kit.test.mjs",
     "tests/unit/photo-studio.test.mjs",
@@ -1798,6 +1801,12 @@
     "test:perf-race-entry": {
       "files": [
         "tests/specs/perf-race-entry.spec.js"
+      ],
+      "kind": "browser"
+    },
+    "test:phone-recorder": {
+      "files": [
+        "tests/specs/phone-recorder.spec.js"
       ],
       "kind": "browser"
     },

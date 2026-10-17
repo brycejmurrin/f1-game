@@ -244,6 +244,21 @@ test("manifest.json: id keeps the installed identity, screenshots and shortcuts 
   }
 });
 
+// #1612: shortcuts get their own 96px icon (not the 192 install icon) and the manifest declares a language.
+test("manifest.json: lang is set and every shortcut icon is a shipped 96x96 PNG", () => {
+  const m = JSON.parse(read("manifest.json"));
+  assert.equal(m.lang, "en");
+  for (const sc of m.shortcuts) {
+    assert.ok(sc.icons && sc.icons.length, sc.name + " has an icon");
+    for (const ic of sc.icons) {
+      assert.equal(ic.sizes, "96x96");
+      const buf = fs.readFileSync(path.join(ROOT, ic.src));
+      assert.equal(buf.readUInt32BE(16), 96, ic.src + " width");
+      assert.equal(buf.readUInt32BE(20), 96, ic.src + " height");
+    }
+  }
+});
+
 test("INSTALL APP: beforeinstallprompt is stashed, prompt() only from the tap, once; appinstalled hides it", async () => {
   const ps = read("js/ui/platform-session.js");
   const body = ps.slice(ps.indexOf("(function installChip()"), ps.indexOf("})();", ps.indexOf("(function installChip()")) + 5);

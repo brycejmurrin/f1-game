@@ -22,7 +22,7 @@
  *   NONE         armed (MERGE) and healthy
  *   WAIT         anything else: ci running, gate pending/absent, a
  *                MERGE-HOLD, MAX_ARMED already armed, Plan items open
- * The cap (ready-full-cap.mjs, MAX_LIVE = 3) is REPORTED, never a WAIT: since
+ * The cap (ready-full-cap.mjs, MAX_LIVE = 8) is REPORTED, never a WAIT: since
  * 2026-10-16 (CI/CD review #2333 finding 7) GitHub's own `queue: max` lanes
  * bound the browser legs, and the cap sat at 13/3 while 12 ready PRs were open.
  * Each ARM counts toward MAX_ARMED (2 repo-wide, any method). The

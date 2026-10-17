@@ -1204,7 +1204,7 @@ return {
   pos, setPos, nextPos, resolvePos,
   size, setSize, nextSize,
   logNs, setLogNs, nextLogNs, logLvl, setLogLvl, nextLogLvl,
-  snapshot, PANEL_STYLE, setTelemetryLoader,
+  snapshot, PANEL_STYLE, setTelemetryLoader, ensureTelemetry,
   frametimeBenchReset, frametimeBenchSnapshot,
 };
 })();
