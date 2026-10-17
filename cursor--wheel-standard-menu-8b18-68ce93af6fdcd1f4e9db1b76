@@ -1,1 +1,0 @@
-1792117228	Bryce Murrin	Finish residual standard-mapped inverted wheel menu navigation after merged #2262; owns pad-menu standard path, existing key-binds wheel regression, own changelog fragment. Primary owns browser/integration; full gate final VM suites running on 61eba8d87.  [cursor/wheel-standard-menu-8b18; session 68ce93af6fdcd1f4e9db1b76]
