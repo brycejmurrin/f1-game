@@ -1588,6 +1588,21 @@ test("the instancing gate is declared through the cache, never bracketed per dra
   assert.equal(binds.length, 2, "a new useProg(litProg) site must also declare uInstanced — see PERF-FINDINGS 2e");
 });
 
+test("begin() does not re-bind the per-pass sampler units when nothing changed", () => {
+  // Units 6 (env cube), 7 (blocker), 8 (car shadow) and 9 (lamp shadow) were re-bound by every begin() — an
+  // activeTexture + bindTexture + activeTexture(0) triple each, on the main, mirror and env-face passes. A texture
+  // binding is context state: only a different texture object needs a bind.
+  const h = bootGlx();
+  const cubeBinds = () => h.count("bindTexture", (a) => a[0] === h.gl.TEXTURE_CUBE_MAP);
+  h.GLX.begin(h.frame());
+  assert.ok(cubeBinds() >= 1, "the first begin() binds the env cube (dummy) to unit 6");
+  h.reset();
+  h.GLX.begin(h.frame());
+  h.GLX.begin(h.frame());
+  assert.equal(cubeBinds(), 0, "later begins skip an unchanged unit-6 binding");
+  assert.equal(h.count("activeTexture", (a) => a[0] === h.gl.TEXTURE6), 0, "…and never select unit 6 for it");
+});
+
 test("uModel goes through the redundancy cache, not a raw upload", () => {
   // PERF-FINDINGS 2h: uModel was 103.2 uploads/frame for 50.3 distinct values,
   // because drawChunked calls litMaterial once per chunk RUN and every run of

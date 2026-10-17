@@ -227,6 +227,19 @@ const GLXBackend = (function () {
   // its only writer on this program; post.js's godray pass writes its OWN
   // program's uNumLights through a different location and cannot collide.
   let _luNL = -1;
+  // Texture-unit bind cache for the per-pass samplers begin() points at (6 env cube, 7 blocker, 8 car shadow, 9 lamp
+  // shadow). A texture binding is context state that survives every pass, yet begin() re-bound all four (an
+  // activeTexture + bindTexture + activeTexture(0) triple each) on every main / mirror / env-face pass. The cache holds
+  // the object bound to each unit; a recreated texture is a different object, and a relink / context restore clears
+  // it beside _luNL. Every writer of these units must go through bindUnit or sync the cache (envFaceEnd does).
+  const _unitTex = [], _unitTgt = [];
+  function bindUnit(n, target, tex) {
+    if (_unitTex[n] === tex && _unitTgt[n] === target) return;
+    gl.activeTexture(gl.TEXTURE0 + n);
+    gl.bindTexture(target, tex);
+    gl.activeTexture(gl.TEXTURE0);
+    _unitTex[n] = tex; _unitTgt[n] = target;
+  }
   let _envUnitSet = false;   // uEnvCube -> unit 6 uploaded since the last link (begin() does it ONCE, not every frame)
 
   // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
@@ -977,6 +990,7 @@ const GLXBackend = (function () {
     // state, not VAO state, so setting it once here covers every mesh.
     gl.vertexAttrib3f(9, 1, 1, 1);
     _luNL = -1;   // a relink resets every uniform on the program — see the cache's note
+    _unitTex.length = 0; _unitTgt.length = 0;   // …and a context restore drops every binding
     _envUnitSet = false;   // uEnvCube's sampler unit is program state: re-point it once after this link
     litU = locs(litProg, ["uModel", "uInstanced", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
@@ -1687,6 +1701,7 @@ const GLXBackend = (function () {
       gl.bindTexture(gl.TEXTURE_CUBE_MAP, envTex);
       gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
       gl.activeTexture(gl.TEXTURE0);
+      _unitTex[6] = envTex; _unitTgt[6] = gl.TEXTURE_CUBE_MAP;   // keep bindUnit's view of unit 6 true
     }
   }
 
@@ -1923,9 +1938,7 @@ const GLXBackend = (function () {
       gl.bindTexture(gl.TEXTURE_2D, SHD.mapTex);
       ufI(litU.uShadowMap, _litUf, "u.shadow", 0);
       if (SHD.pcssEnabled) {
-        gl.activeTexture(gl.TEXTURE7);
-        gl.bindTexture(gl.TEXTURE_2D, SHD.blockerTex);
-        gl.activeTexture(gl.TEXTURE0);
+        bindUnit(7, gl.TEXTURE_2D, SHD.blockerTex);
       }
       uf1(litU.uPcss, _litUf, "pcss", SHD.pcssEnabled ? 1.0 : 0.0);
       // The three light VPs change only on a shadow snap; every begin()
@@ -1968,9 +1981,7 @@ const GLXBackend = (function () {
       // the car caster pass (carShadowBegin). The texture is always bound while
       // enabled so the sampler2DShadow stays complete even when gated off.
       if (SHD.carEnabled) {
-        gl.activeTexture(gl.TEXTURE8);
-        gl.bindTexture(gl.TEXTURE_2D, SHD.carTex);
-        gl.activeTexture(gl.TEXTURE0);
+        bindUnit(8, gl.TEXTURE_2D, SHD.carTex);
         ufI(litU.uCarShadowMap, _litUf, "u.carShadow", 8);
         ufM4(litU.uCarLightVP, _litUf, "carLightVP", SHD.carLightVP);
         uf1(litU.uCarShadowOn, _litUf, "carShadowOn", SHD.carArmed ? 1.0 : 0.0);
@@ -1984,9 +1995,7 @@ const GLXBackend = (function () {
       // default unit 0, which holds the static sun map — the SAME sampler type,
       // so the program stays valid and the gated branch never samples it.
       if (SHD.lampEnabled) {
-        gl.activeTexture(gl.TEXTURE9);
-        gl.bindTexture(gl.TEXTURE_2D, SHD.lampTex);
-        gl.activeTexture(gl.TEXTURE0);
+        bindUnit(9, gl.TEXTURE_2D, SHD.lampTex);
         ufI(litU.uLampShadowMap, _litUf, "u.lampShadow", 9);
         ufM4(litU.uLampShadowVP, _litUf, "lampLightVP", SHD.lampLightVP);
         // SHD.lampIdx is a slot of the FORWARD frame.lights; the mirror re-ranks its
@@ -2055,9 +2064,7 @@ const GLXBackend = (function () {
     // strict drivers. Bind the real cube only when it's live and not the current
     // render target (feedback guard); the dummy covers every other case.
     ensureEnvDummy();
-    gl.activeTexture(gl.TEXTURE6);
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, (envTex && !_envActive) ? envTex : envDummyTex);
-    gl.activeTexture(gl.TEXTURE0);
+    bindUnit(6, gl.TEXTURE_CUBE_MAP, (envTex && !_envActive) ? envTex : envDummyTex);
     // uEnvStr stays 0 until the first full 6-face cycle (probe still black), and
     // frame.noEnv forces it off for probe-less views (the SETUP MENU preview)
     // even when a stale cube lingers from a prior race — so the menu car reads
