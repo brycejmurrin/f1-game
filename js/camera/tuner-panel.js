@@ -21,7 +21,6 @@ function syncContext() {
   const team = typeof Teams !== "undefined" && Teams.LIST && Teams.LIST[G.teamIdx];
   CamTune.setContext(trackId, team && team.id);
 }
-function persistScope() { return _scope === "mode" ? "modes" : _scope; }
 function framingValue(d, mode) {
   if (_scope === "global") return CamTune.getGlobal(d.id);
   if (_scope === "track" || _scope === "car") return CamTune.getScoped(_scope, mode, d.id);
@@ -136,6 +135,8 @@ function buildTools(host) {
     b.onclick = () => {
       CamTune.applyPreset(id);
       CamTune.persist();
+      CamTune.persist("track");
+      CamTune.persist("car");
       applyLive();
       refreshCamTunePanel();
     };
@@ -225,7 +226,8 @@ function buildTools(host) {
     inp.setAttribute("aria-label", d.label);
     inp.oninput = () => {
       setComfort(d, parseFloat(inp.value));
-      CamTune.persist(_scope === "track" || _scope === "car" ? _scope : "comfort");
+      if (_scope === "track" || _scope === "car") CamTune.persist(_scope);
+      else CamTune.persist("comfort");
       b.textContent = fmtCt(d, comfortValue(d));
       applyLive();
     };
@@ -290,8 +292,10 @@ function buildCamTunePanel() {
       inp.id = "ct-in-" + d.id;
       inp.setAttribute("aria-label", d.label);
       inp.oninput = () => {
-        setFraming(d, curMode(), parseFloat(inp.value));
-        CamTune.persist(persistScope());
+        if (_scope === "mode") CamTune.set(curMode(), d.id, parseFloat(inp.value));
+        else setFraming(d, curMode(), parseFloat(inp.value));
+        if (_scope === "track" || _scope === "car") CamTune.persist(_scope);
+        else CamTune.persist(_scope === "global" ? "global" : "modes");
         const v = framingValue(d, curMode());
         b.textContent = fmtCt(d, v);
         updateCtProfileLabel();
@@ -329,6 +333,8 @@ function buildCamTunePanel() {
         return;
       }
       CamTune.persist();
+      CamTune.persist("track");
+      CamTune.persist("car");
       applyLive();
       refreshCamTunePanel();
       imp.textContent = "IMPORTED ✓";
@@ -445,7 +451,10 @@ $("ct-reset").onclick = () => {
   else CamTune.reset(curMode());
   CamTune.persist(); applyLive(); refreshCamTunePanel();
 };
-$("ct-reset-all").onclick = () => { CamTune.resetAll(); CamTune.persist(); applyLive(); refreshCamTunePanel(); $("ct-json").hidden = true; };
+$("ct-reset-all").onclick = () => {
+  CamTune.resetAll(); CamTune.persist(); CamTune.persist("track"); CamTune.persist("car");
+  applyLive(); refreshCamTunePanel(); $("ct-json").hidden = true;
+};
 $("ct-help-on").onchange = () => {
   document.getElementById("camtune-inner").classList.toggle("lt-show-help", $("ct-help-on").checked);
 };

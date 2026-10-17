@@ -178,14 +178,15 @@ loadComfort(store.get(KEY_COMFORT, null));
 loadTrack(store.get(KEY_TRACK, null));
 loadCar(store.get(KEY_CAR, null));
 
-// `which` = "modes" | "global" | "comfort" | "track" | "car" writes only that store (the sliders fire
-// this on every input event); no argument writes all three (presets, import, reset).
+// `which` = "modes" | "global" | "comfort" | "track" | "car" writes only that
+// store (the sliders fire on every input event). No argument retains the
+// original three-store contract; scoped callers persist track/car explicitly.
 function persist(which) {
   if (!which || which === "modes") store.set(KEY, _store);
   if (!which || which === "global") store.set(KEY_GLOBAL, _global);
   if (!which || which === "comfort") store.set(KEY_COMFORT, _comfort);
-  if (!which || which === "track") store.set(KEY_TRACK, _tracks);
-  if (!which || which === "car") store.set(KEY_CAR, _cars);
+  if (which === "track") store.set(KEY_TRACK, _tracks);
+  if (which === "car") store.set(KEY_CAR, _cars);
 }
 
 function setContext(trackId, carId) {
@@ -200,7 +201,7 @@ function scopeMap(scope) { return scope === "track" ? _tracks : scope === "car" 
 function refreshStoredContext() {
   const trackId = store.get("trackId", null);
   if (typeof trackId === "string" && trackId) _context.track = trackId;
-  const team = store.get("team", null);
+  const team = store.get("team", 2);
   if (Number.isInteger(team) && typeof Teams !== "undefined" && Teams.LIST && Teams.LIST[team]) {
     _context.car = Teams.LIST[team].id;
   }
@@ -321,7 +322,7 @@ function exportPack() {
   const comfort = sanitizeComfort(_comfort);   // only non-defaults
   const tracks = exportScopes(_tracks);
   const cars = exportScopes(_cars);
-  const pack = { v: 2 };
+  const pack = { v: 1 };
   if (Object.keys(modes).length) pack.modes = modes;
   if (Object.keys(global).length) pack.global = global;
   if (Object.keys(comfort).length) pack.comfort = comfort;
