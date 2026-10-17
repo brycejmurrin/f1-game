@@ -551,6 +551,19 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await expect(page.locator('#overlay')).toBeVisible();
         await page.locator('#mb-help').scrollIntoViewIfNeeded();
         await press('#mb-help');
+        // The sheet reopens with the shape/density it had at the PREVIOUS UI
+        // SIZE; SheetShape reclassifies it a frame or two later (fit cap, then
+        // density). An anchor jump taken before that lands in the old layout,
+        // and the reflow then carries #htp-driving out of the pane (desktop
+        // 200%, run 38985530584: wide rail -> compact strip, ratio 0). Jump
+        // only once a classify pass changes nothing.
+        await page.waitForFunction(() => {
+          const el = document.getElementById('howtoplay-inner');
+          if (!el || !el.dataset.shape || !el.dataset.density) return false;
+          const before = el.dataset.shape + '|' + el.dataset.density;
+          window.SheetShape.reclassify();
+          return before === el.dataset.shape + '|' + el.dataset.density;
+        }, null, {polling:100, timeout:10000});
         await press('#htp-contents a[href="#htp-driving"]');
         await expect(page.locator('#htp-driving')).toBeInViewport();
         await expect(page.locator('#htp-contents a[href="#htp-driving"]')).toHaveAttribute('aria-current','true');
