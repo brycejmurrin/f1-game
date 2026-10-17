@@ -702,6 +702,56 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
   });
 }
 
+// A plate the player DRAGS beside BOOST, above the pedals (iPhone 15, BUTTON SIZE 237 %): the dock pass
+// tested columns only, squeezed it to 48 px every fit, clearControls restored it, and the HUD flickered
+// larger <-> smaller (Bryce, 2026-10-17). It shares the pedals' columns, not their rows, so it must keep its
+// own width, stay off every tap target, and hold one size across ticks.
+test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test("keeps its width and does not resize across ticks", async ({ page }) => {
+    // The SHIPPED look (no PIN_PREVIOUS_LOOK): its text size is what makes the filled plate wider than 48 px.
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      for (const [k, val] of Object.entries({ steerMode: "buttons", hudScale: 122, hudBtnScale: 237.3, radioChat: "off", commentary: "off" })) localStorage.setItem("apex26." + k, JSON.stringify(val));
+    });
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    // Filled split times (a fresh race shows "-"), as on lap 2.
+    await page.addStyleTag({ content: ":root{--sal:59px;--sar:59px;--sat:0px;--sab:21px;} #hud-sectors .sec-val::after { content: ' 31.234'; }" });
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.go());
+    await page.waitForFunction(() => document.getElementById("hud-sectors").getBoundingClientRect().height > 65,
+      null, { polling: 100, timeout: 30_000 });
+    // DRAGGED THERE, not dropped: the old pass was bistable; a finger drag crosses both positions.
+    for (const [x, y] of [[23, 5], [25, 10]]) {
+      await page.evaluate(([x, y]) => { HudLayout.set("sectors", { x, y }); GameHud.invalidateFit(); }, [x, y]);
+      await page.evaluate(() => new Promise((r) => setTimeout(r, 600)));
+    }
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 1500))); // let fitHud + the pack follow-up settle
+    const seen = await page.evaluate(() => new Promise((resolve) => {
+      const out = new Set(), sec = document.getElementById("hud-sectors"), t0 = performance.now();
+      const iv = setInterval(() => {
+        const r = sec.getBoundingClientRect();
+        out.add([r.left, r.top, r.width, r.height].map(Math.round).join(",") + " mw=" + sec.style.maxWidth);
+        if (performance.now() - t0 > 3000) { clearInterval(iv); resolve([...out]); }
+      }, 50);
+    }));
+    expect(seen, "one plate state across 3 s of HUD ticks: " + JSON.stringify(seen)).toHaveLength(1);
+    const st = await page.evaluate(() => {
+      const sec = document.getElementById("hud-sectors"), r = sec.getBoundingClientRect();
+      const hits = [...document.querySelectorAll(".touchbtn")].filter((b) => !b.hidden).map((b) => [b.id, b.getBoundingClientRect()])
+        .filter(([, b]) => b.width && r.left < b.right && b.left < r.right && r.top < b.bottom && b.top < r.bottom).map(([id]) => id);
+      return { w: r.width, mw: sec.style.maxWidth, hits };
+    });
+    expect(st.mw, JSON.stringify(st)).toBe("");
+    expect(st.w, JSON.stringify(st)).toBeGreaterThan(52);
+    expect(st.hits, JSON.stringify(st)).toEqual([]);
+  });
+});
+
 // TILT was left out of #1191's steer-buttons dock standoff: at HUD 150% the
 // sector strip still sat on BOOST (844×390 survey). Same --dock-r-w + anchor
 // tether, without regressing the buttons/touch cases above.

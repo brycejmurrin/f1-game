@@ -1758,6 +1758,14 @@ function fitHud() {
     const mapR = els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null;
     const mapClear = mapR && mapR.width ? mapR.right + margin : 0;
     const secEl = els.hudSectors;
+    // A PLATE ONLY INTRUDES FROM THE LEFT, AND ONLY ON SHARED ROWS. Shrinking a right-anchored plate
+    // clears a group its right edge reaches into; it does nothing for a plate the player DRAGGED beside
+    // BOOST, above the pedals. Testing `right > group.left` alone squeezed that plate to 48 px, the
+    // wrapped split times grew it 139 px tall into BRAKE's rows, the next fit released it, and the HUD
+    // flipped larger <-> smaller every tick (iPhone 15, BUTTON SIZE 237 %, 2026-10-17). A plate
+    // inside or right of a group is hud-layout.js clearControls' to move, not this pass's to squeeze.
+    const rowHit = (a, b) => a.top < b.bottom && b.top < a.bottom;
+    const intrudes = (a, b) => rowHit(a, b) && a.left < b.left && a.right > b.left - margin;
     if (secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
     for (let pass = 0; pass < 4; pass++) {
       const secR = secEl.getBoundingClientRect();
@@ -1766,7 +1774,7 @@ function fitHud() {
       for (const g of _dockR.children) {
         const r = g.getBoundingClientRect();
         if (!(r.width && r.height)) continue;
-        if (secR.right > r.left - margin) worst = Math.max(worst, secR.right - (r.left - margin));
+        if (intrudes(secR, r)) worst = Math.max(worst, secR.right - (r.left - margin));
       }
       if (!(worst > 0.5)) break;
       const zSec = zPaint() || 1;
@@ -1779,7 +1787,7 @@ function fitHud() {
     for (const g of _dockR.children) {
       const r = g.getBoundingClientRect();
       if (!(r.width && r.height)) continue;
-      if (secR.right > r.left - margin) worst = Math.max(worst, secR.right - (r.left - margin));
+      if (intrudes(secR, r)) worst = Math.max(worst, secR.right - (r.left - margin));
     }
     if (worst > 0.5) {
       const brLeft = boostRightLeft();
@@ -1797,7 +1805,7 @@ function fitHud() {
     let onDock = false;
     for (const g of _dockR.children) {
       const r = g.getBoundingClientRect();
-      if (r.width && r.height && secR.right > r.left - margin && secR.left < r.right - margin) { onDock = true; break; }
+      if (r.width && r.height && rowHit(secR, r) && secR.right > r.left - margin && secR.left < r.right - margin) { onDock = true; break; }
     }
     if (!onDock && secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
   }

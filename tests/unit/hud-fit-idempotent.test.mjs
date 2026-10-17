@@ -619,3 +619,17 @@ test("fitHud tracer: off by default it logs nothing; on, it logs one line per CH
   assert.equal(new Set(on).size, on.length, "a repeated state is not logged twice");
   assert.ok(on.length < 5, "a settled fit logs fewer lines than ticks: " + JSON.stringify(on));
 });
+
+test("fitHud dock pass: a sector plate ABOVE the dock is not on it (agrees with HudLayout.clearControls), a plate level with it still yields", () => {
+  const run = (top) => {
+    const h = bootFlipHarness();
+    const sec = h.$("hud-sectors");
+    sec.hidden = false;
+    sec._rect = h.R(h.W - 160, top, 140, 72);   // right edge inside the dock's columns
+    h.invalidate();
+    for (let i = 0; i < 3; i++) h.tick();
+    return sec.style.getPropertyValue("max-width") || (sec.style.maxWidth || "");
+  };
+  assert.equal(run(100), "", "plate above the buttons: no max-width clamp (the clamp ping-pongs with clearControls' --hl-x)");
+  assert.notEqual(run(240), "", "plate level with the buttons still shrinks away from them");
+});
