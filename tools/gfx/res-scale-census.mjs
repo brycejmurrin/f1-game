@@ -20,7 +20,7 @@ import { censusInitScript, waitFrames } from "../lib/mem-census.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function parseArgs(argv) {
-  const o = { track: "monza", scales: [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.7, 1], settle: 8, json: null, ls: {} };
+  const o = { track: "monza", scales: [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.7, 1], settle: 4, json: null, ls: {} };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], next = () => argv[++i];
     if (a === "--track") o.track = next();
@@ -61,7 +61,7 @@ async function main() {
     await page.waitForFunction(() => window.__apex && window.__apex.info && typeof Tracks !== "undefined", null, { polling: 100, timeout: 120000 });
     await page.evaluate((id) => { window.__apex.race(id); }, o.track);
     await page.waitForFunction((id) => { try { const i = window.__apex.info(); return i.track === id && (i.state === "race" || i.state === "count"); } catch (_) { return false; } }, o.track, { polling: 100, timeout: 240000 });
-    await waitFrames(page, 30);
+    await waitFrames(page, 8, 400000);
     const read = () => page.evaluate(() => {
       const t = window.GLX && window.GLX.__tlx;
       const ps = t && t.postState ? t.postState() : null;
@@ -73,7 +73,7 @@ async function main() {
     let prev = base;
     for (const s of o.scales) {
       const ms = await page.evaluate((v) => { const t0 = performance.now(); window.__apex.renderScale(v); return +(performance.now() - t0).toFixed(2); }, s);
-      await waitFrames(page, o.settle);
+      await waitFrames(page, o.settle, 400000);
       const r = await read();
       rows.push({ step: "scale", scale: s, callMs: ms, ...r, dResizes: r.rtResizes - prev.rtResizes });
       prev = r;
