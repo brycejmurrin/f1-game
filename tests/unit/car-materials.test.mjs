@@ -193,38 +193,43 @@ test("tinted chrome: mirror response + livery-hue reflection, same numbers in GL
       new RegExp(`addCC\\.mulAssign\\(mix\\(vec3\\(1\\.0\\), albedo\\.div\\(max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\)\\), ${T.envTint}\\)\\);`)],
   };
   for (const [name, res] of Object.entries(pins)) for (const re of res) assert.match(src[name], re, `${name}: tinted chrome drifted: ${re}`);
+  // the whole lit colour takes the hue after the metal block (T.finalTint): a red car stays red instead of washing pink
+  assert.equal(T.finalTint, true);
+  const hue = `albedo / max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\)`;
+  assert.match(src.GLX, new RegExp(`if \\(tintedSurface\\) color \\*= ${hue};`));
+  assert.match(src.WGX, new RegExp(`if \\(tintedSurface\\) \\{ color = color \\* \\(${hue}\\); \\}`));
+  assert.match(src.TLX, new RegExp(`If\\(tintedSurface, \\(\\) => \\{\\s*color\\.mulAssign\\(albedo\\.div\\(max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\)\\)\\);`));
   // the mirror response it inherits (chrome 27) is unchanged
   assert.match(src.GLX, /mirrorSurface \? max\(uClearcoat, 0\.85\)/);
   assert.match(src.GLX, /if \(mirrorSurface\) rough = min\(rough, 0\.09\);/);
 });
 
-test("chameleon: stronger pearl sweep + fixed second hue, same numbers in GLX / TLX / WGX; pearl 30 untouched", () => {
+test("chameleon: team hue face-on, fixed flip hue at grazing angles on the LIT colour, same numbers in GLX / TLX / WGX; pearl 30 untouched", () => {
   const { CarMaterialShade } = loadMaterials();
   const H = CarMaterialShade.CHAMELEON;
   const src = shaderSources();
   const f2 = (v) => v.toFixed(2);
-  const [r, g, b] = H.secondHue.map(f2);
+  const lit = (v) => (Number.isInteger(v) ? v.toFixed(1) : String(v));   // 1 -> "1.0", 0.25 -> "0.25": the spelling the shaders use
+  const [r, g, b] = H.flipHue.map(lit);
+  const lo = f2(H.flipFresLo), hi = f2(H.flipFresHi), w = f2(H.flipWeight);
   const pins = {
     GLX: [/bool chamSurface = surfaceId == 37;/, /bool iriSurface = surfaceId == 30 \|\| chamSurface;/,
-      new RegExp(`fres \\* ${H.paletteFreq}\\)\\)`),
-      new RegExp(`mix\\(vec3\\(1\\.0\\), ${f2(H.paletteLo)} \\+ ${f2(H.paletteGain)} \\* shift, smoothstep\\(${f2(H.sweepFresLo)}, ${f2(H.sweepFresHi)}, fres\\) \\* ${f2(H.sweepWeight)}\\)`),
-      new RegExp(`vec3\\(${r}, ${g}, ${b}\\) \\* max\\(chamL \\* ${H.lumGain}, ${f2(H.lumFloor)}\\), smoothstep\\(${f2(H.secondFresLo)}, ${f2(H.secondFresHi)}, fres\\) \\* ${f2(H.secondWeight)}\\)`)],
+      new RegExp(`chamFlip = smoothstep\\(${lo}, ${hi}, fres\\);`),
+      new RegExp(`if \\(chamSurface\\) color \\*= mix\\(chamHue, vec3\\(${r}, ${g}, ${b}\\), chamFlip \\* ${w}\\);`)],
     WGX: [/let chamSurface = surfaceId == 37;/, /let iriSurface = surfaceId == 30 \|\| chamSurface;/,
-      new RegExp(`vec3<f32>\\(fres \\* ${H.paletteFreq}\\)\\)\\)`),
-      new RegExp(`${f2(H.paletteLo)} \\+ ${f2(H.paletteGain)} \\* shift, vec3<f32>\\(smoothstep\\(${f2(H.sweepFresLo)}, ${f2(H.sweepFresHi)}, fres\\) \\* ${f2(H.sweepWeight)}\\)`),
-      new RegExp(`vec3<f32>\\(${r}, ${g}, ${b}\\) \\* max\\(chamL \\* ${H.lumGain}, ${f2(H.lumFloor)}\\), vec3<f32>\\(smoothstep\\(${f2(H.secondFresLo)}, ${f2(H.secondFresHi)}, fres\\) \\* ${f2(H.secondWeight)}\\)`)],
+      new RegExp(`chamFlip = smoothstep\\(${lo}, ${hi}, fres\\);`),
+      new RegExp(`if \\(chamSurface\\) \\{ color = color \\* mix\\(chamHue, vec3<f32>\\(${r}, ${g}, ${b}\\), vec3<f32>\\(chamFlip \\* ${w}\\)\\); \\}`)],
     TLX: [/const chamSurface = surfaceId\.equal\(37\.0\)\.toVar\(\);/, /const iriSurface = surfaceId\.equal\(30\.0\)\.or\(chamSurface\)\.toVar\(\);/,
-      new RegExp(`fres\\.mul\\(${H.paletteFreq}\\)`),
-      new RegExp(`shift\\.mul\\(${f2(H.paletteGain)}\\)\\.add\\(${f2(H.paletteLo)}\\),\\s*smoothstep\\(${f2(H.sweepFresLo)}, ${f2(H.sweepFresHi)}, fres\\)\\.mul\\(${f2(H.sweepWeight)}\\)`),
-      new RegExp(`vec3\\(${r}, ${g}, ${b}\\)\\.mul\\(max\\(chamL\\.mul\\(${H.lumGain}\\), ${f2(H.lumFloor)}\\)\\),\\s*smoothstep\\(${f2(H.secondFresLo)}, ${f2(H.secondFresHi)}, fres\\)\\.mul\\(${f2(H.secondWeight)}\\)`)],
+      new RegExp(`chamFlip\\.assign\\(smoothstep\\(${lo}, ${hi}, fres\\)\\);`),
+      new RegExp(`color\\.mulAssign\\(mix\\(chamHue, vec3\\(${r}, ${g}, ${b}\\), chamFlip\\.mul\\(${w}\\)\\)\\);`)],
   };
   for (const [name, res] of Object.entries(pins)) for (const re of res) assert.match(src[name], re, `${name}: chameleon drifted: ${re}`);
   // pearl 30 keeps its own constants (1.4 sweep, 0.30..0.92 window, 0.40 weight) in every backend
   assert.match(src.GLX, /fres \* 1\.4\)\);[\s\S]{0,400}smoothstep\(0\.30, 0\.92, fres\) \* 0\.40/);
   assert.match(src.WGX, /fres \* 1\.4\)\)\);[\s\S]{0,500}smoothstep\(0\.30, 0\.92, fres\) \* 0\.40/);
   assert.match(src.TLX, /fres\.mul\(1\.4\)[\s\S]{0,400}smoothstep\(0\.30, 0\.92, fres\)\.mul\(0\.40\)/);
-  // the chameleon must actually be stronger than pearl
-  assert.ok(H.sweepWeight > 0.40 && H.sweepFresLo < 0.30 && H.paletteFreq > 1.4);
+  // the flip window sits in the grazing half and keeps the face-on colour
+  assert.ok(H.flipFresLo > 0.5 && H.flipWeight < 1.0);
 });
 
 // ---- Garage finishes S4: metallic flake (34) and candy (35) -------------------------------------------------

@@ -1581,15 +1581,14 @@
           const cdL = dot(albedo, vec3(0.299, 0.587, 0.114));
           albedo.assign(max(mix(vec3(cdL), albedo, 1.35), vec3(0.0)).mul(0.62));
         });
+        const chamFlip = float(0.0).toVar();
+        const chamHue = vec3(1.0).toVar();
         If(chamSurface, () => {
+          // CHAMELEON: team hue face-on, flip toward a fixed blue at grazing angles, applied to the lit colour after the metal block
+          // (mirrors js/render/glx/shaders/glsl-lit.js; CarMaterialShade.CHAMELEON).
           const fres = clamp(dot(N, V), 0.0, 1.0).oneMinus().toVar();
-          const shift = vec3(0.0, 0.33, 0.67).add(fres.mul(2.2)).mul(6.2831853)
-            .cos().mul(0.5).add(0.5).toVar();
-          albedo.assign(albedo.mul(mix(vec3(1.0), shift.mul(1.10).add(0.45),
-            smoothstep(0.06, 0.60, fres).mul(0.80))));
-          const chamL = dot(albedo, vec3(0.299, 0.587, 0.114));
-          albedo.assign(mix(albedo, vec3(0.10, 0.42, 0.95).mul(max(chamL.mul(1.8), 0.10)),
-            smoothstep(0.10, 0.55, fres).mul(0.70)));
+          chamFlip.assign(smoothstep(0.58, 1.00, fres));
+          chamHue.assign(albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)));
         }).ElseIf(iriSurface, () => {
           const fres = clamp(dot(N, V), 0.0, 1.0).oneMinus().toVar();
           const shift = vec3(0.0, 0.33, 0.67).add(fres.mul(1.4)).mul(6.2831853)
@@ -2128,6 +2127,13 @@
             metAdd.mulAssign(clamp(metLum.mul(4.0), 0.0, 1.0).oneMinus().mul(0.32).add(1.0));
           });
           color.addAssign(metAdd.div(max(max(metAdd.r, metAdd.g), metAdd.b).add(1.0)));
+        });
+        // TINTED CHROME / CHAMELEON: the white lit terms take the livery hue (mirrors glsl-lit.js).
+        If(tintedSurface, () => {
+          color.mulAssign(albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)));
+        });
+        If(chamSurface, () => {
+          color.mulAssign(mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip.mul(0.90)));
         });
 
         // sky rim fresnel (js/render/glx/shaders/glsl-lit.js)

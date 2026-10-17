@@ -1199,12 +1199,13 @@ void main() {
     float cdL = dot(albedo, vec3(0.299, 0.587, 0.114));
     albedo = max(mix(vec3(cdL), albedo, 1.35), vec3(0.0)) * 0.62;
   }
+  float chamFlip = 0.0; vec3 chamHue = vec3(1.0);
   if (chamSurface) {
+    // CHAMELEON keeps the team hue face-on and flips toward a fixed blue at grazing angles. The flip is applied to the LIT colour
+    // at the end of the metal block (CarMaterialShade.CHAMELEON), because the clearcoat/metal env terms are white and wash any albedo-only blend.
     float fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
-    vec3 shift = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + fres * 2.2));
-    albedo *= mix(vec3(1.0), 0.45 + 1.10 * shift, smoothstep(0.06, 0.60, fres) * 0.80);
-    float chamL = dot(albedo, vec3(0.299, 0.587, 0.114));
-    albedo = mix(albedo, vec3(0.10, 0.42, 0.95) * max(chamL * 1.8, 0.10), smoothstep(0.10, 0.55, fres) * 0.70);
+    chamFlip = smoothstep(0.58, 1.00, fres);
+    chamHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
   } else if (iriSurface) {
     float fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
     vec3 shift = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + fres * 1.4));
@@ -1887,6 +1888,10 @@ void main() {
     }
     color += metAdd / (1.0 + max(max(metAdd.r, metAdd.g), metAdd.b));
   }
+  // TINTED CHROME: every white term above (sun glint, sky rim, lacquer and metal env) takes the livery hue, so the coat reflects in the
+  // car's colour instead of washing to pink (CarMaterialShade.TINTED.finalTint).
+  if (tintedSurface) color *= albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
+  if (chamSurface) color *= mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip * 0.90);
 
   // Sky rim / fresnel: a subtle atmospheric brightening at grazing angles,
   // tinted by the horizon sky colour. Gives edges a little 'air' without

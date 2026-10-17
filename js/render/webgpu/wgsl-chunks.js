@@ -1234,12 +1234,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let cdL = dot(albedo, vec3<f32>(0.299, 0.587, 0.114));
     albedo = max(mix(vec3<f32>(cdL), albedo, vec3<f32>(1.35)), vec3<f32>(0.0)) * 0.62;
   }
+  var chamFlip = 0.0;
+  var chamHue = vec3<f32>(1.0);
   if (chamSurface) {
+    // CHAMELEON: team hue face-on, flip toward a fixed blue at grazing angles, applied to the lit colour after the metal block
+    // (mirrors js/render/glx/shaders/glsl-lit.js; CarMaterialShade.CHAMELEON).
     let fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
-    let shift = 0.5 + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + vec3<f32>(fres * 2.2)));
-    albedo = albedo * mix(vec3<f32>(1.0), 0.45 + 1.10 * shift, vec3<f32>(smoothstep(0.06, 0.60, fres) * 0.80));
-    let chamL = dot(albedo, vec3<f32>(0.299, 0.587, 0.114));
-    albedo = mix(albedo, vec3<f32>(0.10, 0.42, 0.95) * max(chamL * 1.8, 0.10), vec3<f32>(smoothstep(0.10, 0.55, fres) * 0.70));
+    chamFlip = smoothstep(0.58, 1.00, fres);
+    chamHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
   } else if (iriSurface) {
     let fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
     let shift = 0.5 + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + vec3<f32>(fres * 1.4)));
@@ -1757,6 +1759,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     }
     color = color + metAdd / (1.0 + max(max(metAdd.r, metAdd.g), metAdd.b));
   }
+  // TINTED CHROME / CHAMELEON: the white lit terms take the livery hue (mirrors glsl-lit.js).
+  if (tintedSurface) { color = color * (albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)); }
+  if (chamSurface) { color = color * mix(chamHue, vec3<f32>(0.25, 0.55, 1.0), vec3<f32>(chamFlip * 0.90)); }
 
   // Sky rim / fresnel (GLX js/render/glx/shaders/glsl-lit.js): grazing-angle atmospheric
   // brightening tinted by the horizon. SKY RIM GLOW = params9.w (def 1.0).
