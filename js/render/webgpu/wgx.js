@@ -2667,7 +2667,9 @@ const WGX = (function () {
           .catch(() => { /* the sync path in _generateMips still builds it */ });
       } catch (_) { /* ditto */ }
     }
-    function _generateMips(tex, layers) {
+    // intoEnc: record the ladder into a caller's open encoder (no submit of its own) — the mirror folds it into the
+    // submit that wrote level 0, saving a createCommandEncoder + queue.submit per mirror frame.
+    function _generateMips(tex, layers, intoEnc) {
       if (!tex || !device) return;
       const w0 = tex.width | 0, h0 = tex.height | 0;
       const levels = tex.mipLevelCount | 0;
@@ -2701,14 +2703,14 @@ const WGX = (function () {
           }
           tex.__wgxMipLadder = ladder;
         }
-        const enc = device.createCommandEncoder();
+        const enc = intoEnc || device.createCommandEncoder();
         for (let i = 0; i < ladder.length; i++) {
           const st = ladder[i];
           const p = enc.beginRenderPass({ colorAttachments: [{ view: st.dstView, loadOp: "clear",
             clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
           p.setPipeline(pipe); p.setBindGroup(0, st.bg); p.draw(3); p.end();
         }
-        device.queue.submit([enc.finish()]);
+        if (!intoEnc) device.queue.submit([enc.finish()]);
       } catch (_) { /* mip blit is best-effort; caller still has mip 0 */ }
     }
 
@@ -4016,9 +4018,9 @@ const WGX = (function () {
       if (!_mirEncoder) return;
       try {
         if (litPass) { _flushLitRings(); litPass.end(); }
+        _generateMips(mirTex, 1, _mirEncoder);   // recorded after the pass that wrote level 0, in the same submit
         device.queue.submit([_mirEncoder.finish()]);
         _mirRenders++;
-        _generateMips(mirTex, 1);   // its own submit, after the pass that wrote level 0
       } finally {
         litPass = null; encoder = null; _mirEncoder = null;
       }
