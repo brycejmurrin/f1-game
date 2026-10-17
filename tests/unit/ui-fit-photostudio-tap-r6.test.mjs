@@ -10,13 +10,13 @@ import { cssRules, decl } from "../helpers/css-rules.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const css = fs.readFileSync(path.join(ROOT, "css/photo-studio.css"), "utf8");
 const rules = cssRules(css);
-const SELECTS = "#ps-panel :is(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard)";
+const SELECTS = "#ps-panel :is(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard, #ps-tod, #ps-weather)";
 
 test("Photo Studio setting-row selects floor at --tap-paint", () => {
   assert.match(
     css,
-    /#ps-panel :is\(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard\)\s*\{[^}]*min-height:\s*var\(--tap-paint\)/s,
-    "#ps-subject / #ps-aspect / #ps-grid-select / #ps-postcard must paint at --tap-paint, not --chip-h",
+    /#ps-panel :is\(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard, #ps-tod, #ps-weather\)\s*\{[^}]*min-height:\s*var\(--tap-paint\)/s,
+    "#ps-subject / #ps-aspect / #ps-grid-select / #ps-postcard / #ps-tod / #ps-weather must paint at --tap-paint, not --chip-h",
   );
   assert.equal(decl(rules, SELECTS, "min-height"), "var(--tap-paint)");
 });
