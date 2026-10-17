@@ -656,6 +656,50 @@ test.describe("buttons steer high HUD scale", () => {
   });
 });
 
+// BUTTONS mode: the touch controls follow BUTTON SIZE only. HUD SIZE resizes the
+// readouts and must not move or resize a single control (Bryce, 2026-10-17).
+const CONTROL_IDS = ["btn-steer-left", "btn-steer-right", "btn-throttle", "btn-brake",
+  "btn-boost", "btn-ot", "btn-aero", "pausebtn", "btn-cam"];
+const HUD_INDEPENDENCE_VIEWPORTS = [
+  { name: "phone-844x390", w: 844, h: 390, sal: 0, sar: 0, sat: 0, sab: 0 },
+  { name: "phone-932x430", w: 932, h: 430, sal: 59, sar: 59, sat: 0, sab: 21 },
+  { name: "phone-667x375", w: 667, h: 375, sal: 0, sar: 0, sat: 0, sab: 0 },
+];
+for (const v of HUD_INDEPENDENCE_VIEWPORTS) {
+  test.describe(`buttons steer: controls ignore HUD SIZE (${v.name})`, () => {
+    test.setTimeout(300_000);
+    test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
+    test("control rects are identical at HUD SIZE min / default / max", async ({ page }) => {
+      await race(page, "buttons", false, v, { hudScale: 100, btnScale: 125 });
+      const rects = {};
+      for (const hud of [60, 100, 200]) {
+        await page.evaluate(async (pct) => {
+          window.ApexStore ? ApexStore.set("hudScale", pct) : localStorage.setItem("apex26.hudScale", JSON.stringify(pct));
+        }, hud);
+        await page.reload();
+        await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+        await page.addStyleTag({ content: `:root{--sal:${v.sal}px;--sar:${v.sar}px;--sat:${v.sat}px;--sab:${v.sab}px;}` });
+        await page.evaluate(() => window.__apex.race("monza"));
+        await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+        await page.evaluate(() => window.__apex.go());
+        await page.waitForFunction(() => { const b = document.getElementById("pausebtn"); return !!b && !b.hidden; },
+          null, { polling: 100, timeout: BOOT_MS });
+        await page.evaluate(() => window.GameHud && GameHud.invalidateFit && GameHud.invalidateFit());
+        await page.evaluate(() => new Promise((r) => setTimeout(r, 1500))); // let fitHud settle
+        rects[hud] = await page.evaluate((ids) => Object.fromEntries(ids.map((id) => {
+          const el = document.getElementById(id);
+          if (!el || el.hidden) return [id, null];
+          const r = el.getBoundingClientRect();
+          return [id, [r.x, r.y, r.width, r.height].map((n) => Math.round(n * 2) / 2)];
+        })), CONTROL_IDS);
+      }
+      const base = rects[100];
+      expect(Object.values(base).filter(Boolean).length, JSON.stringify(base)).toBeGreaterThanOrEqual(7);
+      for (const hud of [60, 200]) expect(rects[hud], `HUD SIZE ${hud} vs 100`).toEqual(base);
+    });
+  });
+}
+
 // TILT was left out of #1191's steer-buttons dock standoff: at HUD 150% the
 // sector strip still sat on BOOST (844×390 survey). Same --dock-r-w + anchor
 // tether, without regressing the buttons/touch cases above.
