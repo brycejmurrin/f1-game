@@ -107,3 +107,37 @@ test("CLI exits 2 when NEEDS is unset, empty or {} and 1 when everything was ski
   assert.equal(run({ NEEDS: JSON.stringify({ guards: { result: "skipped" }, smoke: { result: "skipped" } }) }), 1, "all skipped");
   assert.equal(run({ NEEDS: JSON.stringify({ guards: { result: "success" } }) }), 0);
 });
+
+// #2664: a job skipped by `if:` reports success, so a hollow full-tier run could read green.
+test("REQUIRE_SUCCESS: a required job that was skipped or missing fails the aggregator; others may still skip", () => {
+  const needs = { "guards-a": { result: "success" }, guards: { result: "success" }, select: { result: "success" }, smoke: { result: "skipped" }, "driving-model": { result: "skipped" } };
+  assert.equal(verdict(needs).ok, true, "without a requirement a skip is a pass (draft fast tier)");
+  const strict = verdict(needs, { require: ["guards-a", "guards", "select", "smoke"] });
+  assert.equal(strict.ok, false);
+  assert.deepEqual(strict.bad, ["smoke: required to succeed on a full-tier run, got skipped"]);
+  assert.match(verdict(needs, { require: ["nope"] }).bad[0], /nope: required .* got missing/);
+  assert.equal(verdict({ ...needs, smoke: { result: "success" } }, { require: ["smoke", "select"] }).ok, true, "driving-model may skip on the full tier");
+});
+
+test("the CLI reads REQUIRE_SUCCESS: the same needs JSON passes bare and fails strict (a replayed hollow draft-tier run)", () => {
+  // shape of a real draft fast-tier run (run 39026875787: 8 jobs ran, smoke / sweeps / node-suites skipped)
+  const needs = JSON.stringify({ "guards-a": { result: "success" }, "guards-b": { result: "success" }, guards: { result: "success" }, select: { result: "success" },
+    smoke: { result: "skipped" }, sweeps: { result: "skipped" }, "node-suites": { result: "skipped" }, "selected-verdict": { result: "success" } });
+  const run = (extra) => {
+    try { execFileSync("node", ["tools/ci/ci-verdict.mjs"], { cwd: ROOT, env: { ...process.env, NEEDS: needs, ...extra }, stdio: "pipe" }); return 0; }
+    catch (e) { return e.status; }
+  };
+  assert.equal(run({}), 0);
+  assert.equal(run({ REQUIRE_SUCCESS: "guards-a,guards-b,guards,select,smoke" }), 1);
+});
+
+test("ci.yml wiring (#2664): REQUIRE_SUCCESS only on a non-draft PR run, naming jobs ci-verdict needs; the draft fast tier is not named `CI`", async () => {
+  const fs = await import("node:fs");
+  const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  const body = wf.split("\n  ci-verdict:\n")[1];
+  const m = /REQUIRE_SUCCESS: \$\{\{ \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\) && '([^']+)' \|\| '' \}\}/.exec(body);
+  assert.ok(m, "REQUIRE_SUCCESS must be set only when the run is a non-draft pull_request");
+  const needs = body.split("needs:")[1].split("if:")[0];
+  for (const j of m[1].split(",")) assert.match(needs, new RegExp(`- ${j}\\b`), `required job ${j} must be in ci-verdict's needs`);
+  assert.match(body, /'CI \(draft fast tier\)' \|\| 'CI' \}\}/, "a draft run's success must not carry the required name");
+});

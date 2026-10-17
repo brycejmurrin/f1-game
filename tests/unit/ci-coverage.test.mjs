@@ -341,8 +341,8 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
   assert.ok(body, "ci-verdict job missing");
   // The required-check display name stays the stable `CI` on every real run;
   // only a label-noise run (all jobs skipped, #2184) is named otherwise.
-  assert.match(body, /^    name: \$\{\{ \(github\.event_name == 'pull_request' && github\.event\.action == 'labeled' && [^\n]* && 'CI label event \(ignored\)' \|\| [^\n]*'CI draft \(opted out\)' \|\| 'CI' \}\}$/m,
-    "the required-check display name must be the stable `CI`");
+  assert.match(body, /^    name: \$\{\{ \(github\.event_name == 'pull_request' && github\.event\.action == 'labeled' && [^\n]* && 'CI label event \(ignored\)' \|\| [^\n]*'CI draft \(opted out\)' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && 'CI \(draft fast tier\)' \|\| 'CI' \}\}$/m,
+    "the required-check display name must be the stable `CI` on a non-draft run; a draft fast tier is named apart (#2664)");
   assert.match(body, /if: \$\{\{ .*!cancelled\(\).*\}\}/);
   assert.match(body, /run: node tools\/ci\/ci-verdict\.mjs/);
   assert.match(body, /NEEDS: \$\{\{ toJSON\(needs\) \}\}/);
