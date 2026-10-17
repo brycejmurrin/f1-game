@@ -916,10 +916,12 @@ const LAZY_AGENT = [
   "js/agent/agentview-raster.js",
   "js/agent/agentview-corners.js",
   "js/agent/agentview.js",
+  "js/agent/apex-net.js",
   "js/agent/apex.js",
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
+  ["js/agent/apex-net.js", "js/agent/apex.js"],   // ApexApi spreads ApexNet.hooks(...) when game.js calls ApexApi.create
   ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
 ];
 
