@@ -9,6 +9,8 @@
 //   node tools/ci/sync-pr.mjs <branch> --verify=none|fast|full   # default fast
 //   node tools/ci/sync-pr.mjs <branch> --force-clean-behind     # sync although needs-sync.mjs says `no`
 //   node tools/ci/sync-pr.mjs <branch> --resume --from=<stage>   # re-verify the kept sync-pr-<branch>
+//   node tools/ci/sync-pr.mjs <branch> --stop                    # stop that branch's running sync (whole process tree; no pkill -f)
+//   --wait-load=<min>  wait up to N min (default 10) for loadavg < 2.8 instead of refusing at once (0 = refuse at once)
 //
 // STAGED, TIMED, DIFF-AWARE VERIFY (#2186, 2026-10-15). It ran tooling-fast at
 // --jobs=1 and EVERY ci.yml node suite (game-vm-a/b1/b2, vm-page, node-slow …)
@@ -49,11 +51,13 @@
 // the merge is a real merge commit, so the branch stays valid for whoever has
 // it checked out (mirrors deploy.mjs's own "no history was rewritten").
 import { spawnSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, plan, preflight, mergeDeployTip, gateNodeSuites, touchedCircuits, changedPaths } from "./deploy.mjs";
 import { plan as nodePlan } from "./node-plan.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
+import { register, release, stop as stopRun } from "../lib/run-pid.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -134,6 +138,19 @@ export function cachedPlan(prBranch, readGit = git) {
     theirCommits: must(readGit(["log", "--oneline", `${head}..${tip}`]), "cached commits").split("\n").filter(Boolean) };
 }
 
+/** A leftover local sync-pr-<branch> with nothing of its own on it (no commit that is on neither the PR branch nor the
+ *  deploy tip) is a dead attempt: delete it and carry on instead of exiting (#2663: one stale branch cost ~1 h). */
+export function staleSyncBranch(localBranch, prBranch, readGit = git) {
+  const n = readGit(["rev-list", "--count", localBranch, `^${REMOTE}/${prBranch}`, `^${REMOTE}/${DEPLOY_BRANCH}`]);
+  if (n.code !== 0) return { stale: false, why: "could not compare" };
+  return +n.out === 0 ? { stale: true, why: "no commits of its own" } : { stale: false, why: `${n.out} commit(s) of its own — an interrupted sync; --resume it or rename it` };
+}
+
+/** True when origin/<branch> holds a commit our merge result does not contain: someone pushed meanwhile. */
+export function remoteMoved(localBranch, prBranch, readGit = git) {
+  return readGit(["merge-base", "--is-ancestor", `${REMOTE}/${prBranch}`, localBranch]).code !== 0;
+}
+
 /** Put the working tree back on `startedOn` and SAY WHERE IT IS (2026-10-04).
  *  The failure path logged "tree left on <sync branch>" and then ran an
  *  unchecked `git checkout startedOn`: when that checkout worked the log was
@@ -152,7 +169,7 @@ export function returnTo(startedOn, keptBranch, readGit = git) {
 export function main() {
   if (flag("--help") || flag("-h")) { usage(); return 0; }
   if (!branch) { usage(); return 1; }
-  const unknown = argv.find((a) => a.startsWith("-") && !["--plan", "--push", "--resume", "--force-clean-behind"].includes(a) && !/^--(verify|from)=/.test(a));
+  const unknown = argv.find((a) => a.startsWith("-") && !["--plan", "--push", "--resume", "--force-clean-behind", "--stop"].includes(a) && !/^--(verify|from|wait-load)=/.test(a));
   if (unknown || argv.filter((a) => !a.startsWith("-")).length !== 1) throw new Error(`Invalid arguments${unknown ? ": " + unknown : ""}`);
   if (flag("--plan") && flag("--push")) throw new Error("--plan cannot be combined with --push");
   let verify = opt("--verify") ?? "fast";
@@ -162,6 +179,19 @@ export function main() {
   if (branch === DEPLOY_BRANCH) { log(`REFUSED: ${branch} is the deploy branch itself — use deploy.mjs, not sync-pr.mjs`); return 3; }
 
   if (flag("--plan")) { console.log(JSON.stringify(cachedPlan(branch), null, 2)); return 0; }
+  const lockName = `sync-pr-${branch}`;
+  if (flag("--stop")) {
+    return stopRun(lockName).then((r) => { log(r.state === "stopped" ? `stopped pid ${r.pid} (${r.killed} processes)` : r.state === "stale" ? `the registered sync (pid ${r.pid}) is already gone` : `no registered sync for ${branch}`); return 0; });
+  }
+  const lock = register(lockName);
+  if (!lock.ok) { log(`REFUSED: another sync of ${branch} is running here (pid ${lock.pid}); wait, or stop it with: node tools/ci/sync-pr.mjs ${branch} --stop`); return 3; }
+  process.on("exit", () => release(lockName));
+  // A busy box is a reason to wait, not to refuse (#2663: refused at 4.14 on a box that was idle seconds later).
+  const waitMin = opt("--wait-load") === null ? 10 : Math.max(0, +opt("--wait-load") || 0);
+  if (waitMin > 0 && os.loadavg()[0] >= 2.8) {
+    log(`loadavg ${os.loadavg()[0].toFixed(2)} >= 2.8 — waiting up to ${waitMin} min for it to drop`);
+    spawnSync("node", ["tools/ci/wait-for.mjs", "--load-below", "2.8", "--timeout", String(waitMin)], { cwd: ROOT, stdio: "inherit" });
+  }
 
   const resume = flag("--resume");
   if (!resume) must(git(["fetch", "--no-tags", REMOTE, branch, DEPLOY_BRANCH]), "fetch");
@@ -183,10 +213,18 @@ export function main() {
     if (!exists) throw new Error(`--resume: no local ${localBranch} to resume (run without --resume)`);
     if (startedOn !== localBranch) must(git(["checkout", localBranch]), `checkout ${localBranch}`);
   } else {
-    if (exists) throw new Error(`Local branch ${localBranch} already exists; inspect or rename it before syncing, or --resume it`);
+    if (exists) {
+      const st = staleSyncBranch(localBranch, branch);
+      if (!st.stale) throw new Error(`Local branch ${localBranch} already exists (${st.why})`);
+      log(`removing stale ${localBranch} (${st.why})`);
+      if (startedOn === localBranch) must(git(["checkout", "--detach"]), "leave the stale sync branch");
+      must(git(["branch", "-D", localBranch]), "delete stale sync branch");
+    }
     must(git(["checkout", "-b", localBranch, `${REMOTE}/${branch}`]), "checkout PR branch");
   }
 
+  // Re-fetch right before the merge: the first fetch is minutes old by now and other sessions land commits continuously.
+  if (!resume) must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "re-fetch deploy tip");
   const p = resume ? null : plan();
   const tip = p ? p.tip : must(git(["rev-parse", `${REMOTE}/${DEPLOY_BRANCH}`]), "deploy tip");
   const resumeCmd = (stage) => `node tools/ci/sync-pr.mjs ${branch} --resume${stage ? ` --from=${stage}` : ""}${verify !== "fast" ? ` --verify=${verify}` : ""}${flag("--push") ? " --push" : ""}`;
@@ -219,7 +257,13 @@ export function main() {
   const pushCmd = `git push ${REMOTE} ${localBranch}:${branch}`;
   if (flag("--push")) {
     // No queue hold (retired 2026-10-16, CI/CD review #2333 finding 7): a
-    // verified sync publishes at once.
+    // verified sync publishes at once. Re-fetch first: another session may have pushed a base merge to this branch.
+    git(["fetch", "--no-tags", REMOTE, branch]);
+    if (remoteMoved(localBranch, branch)) {
+      log(`STOPPED: origin/${branch} gained commits while this sync ran (another session pushed); re-run sync-pr to merge them — nothing pushed`);
+      log(returnTo(startedOn, localBranch).line);
+      return 1;
+    }
     must(git(["push", REMOTE, `${localBranch}:${branch}`]), `push to origin/${branch}`);
     log(`pushed to origin/${branch}`);
     const back = returnTo(startedOn, localBranch);
@@ -232,6 +276,6 @@ export function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { process.exit(main()); }
+  try { const r = main(); if (r && typeof r.then === "function") r.then((c) => process.exit(c), (e) => { log("ERROR " + e.message); process.exit(1); }); else process.exit(r); }
   catch (e) { log("ERROR " + (e && e.message ? e.message : e)); process.exit(1); }
 }
