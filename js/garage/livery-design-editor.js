@@ -136,7 +136,7 @@ const GarageLiveryDesignEditor = (function () {
     }
     section("COLOUR PALETTE", "Changes body primary, accent and adjustable-pattern colours. Other painted surfaces keep their colours.", [], [palettes]);
     section("BODY PAINT & BASE FINISH", "Main body, nose and sidepods. FINISH is the whole-car default; regional INHERIT buttons use it.",
-      ["finish", "c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod", "lower", "upper", "bodySplit"]);
+      ["finish", "c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod", "podFinish", "lower", "upper", "bodySplit"]);
     section("ENGINE COVER — SHAPE & PAINT", "The raised cover behind the cockpit. Shape, vents, base colour and finish.",
       ["cover", "coverFinish", "spineHeight", "coverVents"]);
     section("SPINE TOP — ARTWORK & COLOURS", "Artwork along the top of the engine cover. Select one design; only the colour controls it uses are enabled.",
@@ -148,10 +148,10 @@ const GarageLiveryDesignEditor = (function () {
     section("WINGS", "Front and rear wing paint. Carbon flaps keep their carbon material; WING FINISH applies to painted wing surfaces.",
       ["wingCarbon", "wing", "rearWing", "wingFinish"]);
     section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
-      ["finShape", "fin", "finStyle", "finArt", "finBadge"]);
+      ["finShape", "fin", "finFinish", "finStyle", "finArt", "finBadge"]);
     section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
       ["logo", "logo2", "logo3", "numFont", "sponsors"], [api.markNote]);
-    section("COCKPIT & CAMERA", "Halo paint and finish, plus the small T-cam housing above the driver.", ["halo", "haloFinish", "tcam"]);
+    section("COCKPIT & CAMERA", "Halo, mirror and T-cam: paint, finish and mirror housing colour.", ["halo", "haloFinish", "mirrorTint", "mirrorFinish", "tcam"]);
     section("WHEELS & BRAKES", "Paint-only wheel colours, applied to all four wheels. NONE keeps the BRAKES and TYRES parts' own colours.", ["rimTint", "caliperTint", "sidewallInk"]);
     section("REVIEW & SAVE", "Undo or compare your edits, then name and save this paint job.", [], [historyRow, status, api.nameRow, api.saveRow]);
     // One SPINE TOP selection, divided by purpose rather than a wall of pills.
