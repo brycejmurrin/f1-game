@@ -847,6 +847,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/render-final-contracts.test.mjs",
   // render() lighting-prep pure-move: renderLightingPrep owns sky/lightning/lamps; call-order pin. ~0.05 s.
   "tests/unit/render-lighting-prep.test.mjs",
+  // RenderRate (#2652): a phone halves the draw rate on a 100 Hz+ rAF; desktop and XR never; no time lost. VM, ~0.1 s.
+  "tests/unit/render-rate.test.mjs",
   "tests/unit/renderer-boot-timeout.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
   // Instant-replay ring (js/camera/replay-buf.js): budget, wrap, restore, solo/net scrub gates. ~0.05 s.
