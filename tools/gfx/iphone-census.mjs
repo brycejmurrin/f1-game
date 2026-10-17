@@ -88,7 +88,7 @@ async function waitReady(timeoutMs = 180000) {
 }
 
 async function startRace() {
-  const r = await run(`return window.__apex.race(arguments[0], "day", "dry")`, track);
+  const r = await run(`return window.__apex.race(arguments[0], "day", "dry", { laps: 50 })`, track);
   if (!r) throw new Error("__apex.race(" + track + ") returned false");
   const end = Date.now() + 120000;
   while (Date.now() < end) {

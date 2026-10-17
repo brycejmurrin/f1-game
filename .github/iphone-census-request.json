@@ -1,5 +1,5 @@
 {
-  "//": "Run 6: rotate gate hidden (portrait sim paused the race), WebGPU arm skipped without an adapter. Edit this file on a cursor/** branch and push to run iphone-census.yml on that branch (a topic-branch workflow cannot be dispatched). Fields: url, device, os_version, track, soak_minutes, arms, rounds, window_seconds; empty = default.",
+  "//": "Run 7: race laps 50 so soak windows have samples. Edit this file on a cursor/** branch and push to run iphone-census.yml on that branch (a topic-branch workflow cannot be dispatched). Fields: url, device, os_version, track, soak_minutes, arms, rounds, window_seconds; empty = default.",
   "soak_minutes": "3",
   "arms": "tlx,tlxgpu,glx",
   "rounds": "1"
