@@ -2050,6 +2050,24 @@ const api = {
     return BodyAttitude.status();
   },
 
+  // renderRate(n?) — opt-in render-rate tier (#2652): 60 (default) | 45 | 30 draws per second while
+  // physics stays 60 Hz. No arg reports; a number sets it and persists apex26.renderRate.
+  // thermalDrift(on?) — the opt-in slow-drift governor step (apex26.thermalDrift); no arg reports.
+  renderRate(n) {
+    if (n !== undefined) {
+      if (!ThermalGov.gate.setRate(n)) return { ok: false, rates: ThermalGov.RATES };
+      try { localStorage.setItem("apex26.renderRate", String(n)); } catch (_) { /* session-only */ }
+    }
+    return ThermalGov.gate.stats();
+  },
+  thermalDrift(on) {
+    if (on !== undefined) {
+      PerfGov.setThermalDrift(!!on);
+      try { localStorage.setItem("apex26.thermalDrift", on ? "1" : "0"); } catch (_) { /* session-only */ }
+    }
+    return PerfGov.thermalDrift();
+  },
+
   // renderScale(v?) — adaptive-resolution control. No arg: report current state
   // { scale, fps, auto }. Number: pin the 3D render scale (0.5–1) and disable
   // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate
