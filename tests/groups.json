@@ -999,6 +999,8 @@
     "// Round-2 TLX: post chain retries after death, shadowStr 0 when the sun pass failed, DPR cap on mobileTier, caster geometry clone, warm-guarded releaseGeometry, true-LRU materials, pack CPU copy dropped, devtools-gated globals.",
     "tests/unit/tlx-round2.test.mjs",
     "tests/unit/tlx-texture-release.test.mjs",
+    "// Fixed render targets (#2655): the viewport helper + the raw-screenUV canary. VM + source scan, ~0.1 s.",
+    "tests/unit/tlx-viewport.test.mjs",
     "// tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).",
     "tests/unit/tolerance-diff.test.mjs",
     "tests/unit/tooling-fast-runner.test.mjs",

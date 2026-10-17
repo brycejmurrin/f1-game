@@ -30,6 +30,6 @@ Oracle for the "after": 0 resizes per step at any scale in [0.5, 1] once the cap
 Touching sky, post (about 50 sites), shadow dither, mirror, capture and SGSR in files three sibling sessions are also editing
 (#2661, #2649, #2656), each verification a 5–40 min SwiftShader cycle, does not fit the cap, and the issue itself sequences this after
 the phone soak (#1633) that shows steps really hitch on a device. Recommended plan for whoever takes it: (1) flag `apex26.tlxFixedTargets`,
-(2) a new viewport module (not yet created) owning per-target ratio uniforms and a `remapUV`/`clampUV` helper, (3) migrate passes in the order
+(2) a `tsl-viewport.js` module owning per-target ratio uniforms and a `remapUV`/`clampUV` helper, (3) migrate passes in the order
 bright → bloom → blur/SSAO → composite → FXAA → SGSR, comparing each against legacy scale 0.7 frames (same-tree noise floor),
 (4) sky/SSR/godray last. Measure with the probe above.

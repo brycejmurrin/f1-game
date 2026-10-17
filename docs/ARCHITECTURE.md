@@ -594,6 +594,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `tsl-chunks.js` | `TLXShaders` | DEFERRED:three | TLXShaders.chunks: shared TSL leaves for the three.js backend. |
+| `tsl-viewport.js` | `TLXShaders` | DEFERRED:three | TLXShaders.viewport: the ONE place TLX maps a screen position to a texture position when a render target is drawn into a SUB-VIEWPORT of a fixed, larger… |
 | `tsl-lit.js` | `TLXShaders` | DEFERRED:three | TLXShaders.lit: the TSL lit-shader core for the TLX backend (M3). |
 | `tsl-sky.js` | `TLXShaders` | DEFERRED:three | TLXShaders.sky: the procedural sky for the TLX backend (M5). |
 | `tsl-fx.js` | `TLXShaders` | DEFERRED:three | TLXShaders.fx: the FX materials for the TLX backend (M6). |

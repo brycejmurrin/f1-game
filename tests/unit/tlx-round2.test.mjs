@@ -138,7 +138,7 @@ test("TLX-01: begin() retries a dead post chain on a 2 s timer, 3-strike cap and
   assert.ok(stateStart>0&&stateEnd>stateStart&&deathStart>0&&deathEnd>deathStart&&retryStart>bi&&retryEnd>retryStart,"post lifecycle extraction anchors remain production-owned");
   let now=100, builds=0, resizes=0, disposals=0, direct=0;
   const candidate=()=>({dispose(){disposals++;},resize(w,h){assert.equal(w,640);assert.equal(h,360);resizes++;}});
-  const c=vm.createContext({post:candidate(),painted:false,_warmPending:null,W:640,H:360,
+  const c=vm.createContext({post:candidate(),painted:false,_warmPending:null,W:640,H:360,presentW:640,presentH:360,
     performance:{now:()=>now},_cancelSoftBlits(){},paintCanvas(){direct++;},persistFail(){},buildPost(){builds++;return candidate();}});
   vm.runInContext(TLX.slice(stateStart,stateEnd)+";globalThis.status=()=>({strikes:_postStrikes,rebuild:_postRebuild,retryAt:_postRetryAt,health:_postHealth});",c);
   for(let strike=1;strike<=4;strike++){
