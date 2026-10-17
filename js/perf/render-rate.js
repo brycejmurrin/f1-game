@@ -80,3 +80,5 @@ const RenderRate = (function () {
     state: () => ({ mode, mobile, half, active: active(), emaMs: +ema.toFixed(2), skipped, drawn }),
   };
 })();
+
+Object.freeze(RenderRate);
