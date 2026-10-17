@@ -401,7 +401,7 @@ test("destination grouping preserves original controls and routes shortcuts thro
   const menu = new Node(); menu.id = "menu-buttons";
   const walk = (node, id) => node.id === id ? node : node.children.map((n) => walk(n, id)).find(Boolean);
   const doc = { getElementById: (id) => walk(menu, id), createElement: (tag) => new Node(tag) };
-  for (const id of ["menu-hero", "menu-primary", "menu-explore", "menu-secondary", "mb-practice", "mb-watch", "mb-garage", "mb-settings", "mb-designer", "mb-data", "mb-help"]) {
+  for (const id of ["menu-hero", "menu-primary", "menu-explore", "menu-secondary", "mb-practice", "mb-standings", "mb-watch", "mb-garage", "mb-settings", "mb-designer", "mb-data", "mb-help"]) {
     const n = new Node(); n.id = id; menu.appendChild(n);
   }
   const practice = doc.getElementById("mb-practice"); let practiced = 0;
@@ -412,6 +412,8 @@ test("destination grouping preserves original controls and routes shortcuts thro
   const organize = vm.runInContext("TitleMenu.organize", ctx);
   organize(doc); organize(doc);
   assert.equal(practice.parentNode.id, "menu-primary"); practice.click(); assert.equal(practiced, 1);
+  // STANDINGS stays in Utilities — Garage owns the sixth Play cell on compact Home.
+  assert.equal(doc.getElementById("mb-standings").parentNode.id, "menu-secondary");
   assert.equal(doc.getElementById("mb-garage").parentNode.id, "menu-garage");
   assert.equal(doc.getElementById("mb-watch").parentNode.id, "menu-explore");
   assert.equal(doc.getElementById("mb-designer").parentNode.id, "menu-create");
