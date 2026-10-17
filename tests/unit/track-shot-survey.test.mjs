@@ -6,6 +6,7 @@ import zlib from "node:zlib";
 import path from "node:path";
 import {
   buildTrackShotSurveyPlan,
+  buildSurveyPlans,
   estimateSurveyMs,
   filterResumeShots,
   pngProblem,
@@ -93,6 +94,54 @@ function tinyPng() {
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr),
     chunk("IDAT", zlib.deflateSync(Buffer.from([0, 255, 0, 0]))), chunk("IEND", Buffer.alloc(0))]);
 }
+
+test('named batches partition tracks and reject missing, duplicate and oversized selections', () => {
+  const args = { locations: ['spa/eau-rouge', 'monaco/turn-1', 'spa/raidillon'], angles: ['overview', 'entry'] };
+  const plans = buildSurveyPlans(args, ['spa', 'monaco']);
+  assert.equal(plans.get('spa').shots.length, 4);
+  assert.equal(plans.get('monaco').shots.length, 2);
+  assert.ok(plans.get('spa').shots.every(s => s.location.startsWith('spa/')));
+  const name = plans.get('monaco').shots[0].name;
+  const selected = buildSurveyPlans({ ...args, select: [name] }, ['spa', 'monaco']);
+  assert.equal(selected.get('spa').shots.length, 0);
+  assert.deepEqual(selected.get('monaco').shots.map(s => s.name), [name]);
+  assert.throws(() => buildSurveyPlans({ ...args, select: ['missing'] }, ['spa', 'monaco']), /Unknown selected shot/);
+  assert.throws(() => buildSurveyPlans({ ...args, locations: [...args.locations, 'fuji/turn-1'] }, ['spa', 'monaco']), /does not match/);
+  assert.throws(() => buildSurveyPlans({ ...args, locations: ['spa/eau-rouge'] }, ['spa', 'monaco']), /No locations/);
+  assert.throws(() => buildSurveyPlans({ locations: ['spa/eau-rouge', 'spa/eau-rouge'] }, ['spa']), /unique/);
+  assert.throws(() => buildSurveyPlans({ locations: ['spa/eau-rouge'], location: 'spa/raidillon' }, ['spa']), /not both/);
+  assert.throws(() => buildSurveyPlans({ locations: ['spa/eau-rouge', 'spa/raidillon'], angles: ['overview','reverse','overhead','entry','apex','exit'], weathers: ['dry','wet','rain'] }, ['spa']), /max 32/);
+});
+
+test('native custom scenery targets preserve content ids and reject unsupported scenery', async () => {
+  const { loadSurveyDesigns } = await import('../../tools/lib/custom-survey-locations.mjs');
+  const { design } = await import('../helpers/editor-vm.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'survey-custom-')), file = path.join(dir, 'designs.json');
+  const row = design({ props: [{ kind: 'pond', s: .25, side: 1, gap: 30 }, { kind: 'pond', s: .75, side: -1, gap: 40 }] });
+  const write = items => fs.writeFileSync(file, JSON.stringify({ format: 'apex26.tracks', v: 1, items }));
+  try {
+    write([row]);
+    const custom = loadSurveyDesigns(file), id = custom.designs[0].id;
+    assert.deepEqual(normalizeSurveyTracks({ track: id }), [id]);
+    const targets = custom.locations.get(id);
+    assert.deepEqual(targets.map(l => l.id), [`${id}/pond-1`, `${id}/pond-2`]);
+    assert.ok(targets.every(l => l.target.length === 3 && l.target.every(Number.isFinite)));
+    assert.match(targets[0].verification, /placement anchor/);
+    assert.ok(targets[0].target[2] > 400 && targets[0].target[2] < 450, 'infield pond centre includes its 30m half-width beyond the road-edge gap');
+    const plan = buildTrackShotSurveyPlan({ track: id, customDesigns: custom, location: `${id}/pond-2`, angles: ['overhead'] });
+    assert.deepEqual(plan.shots[0].target, targets[1].target);
+    assert.ok(plan.shots[0].dist > 110, 'water framing accounts for the full footprint');
+    write(custom.designs);
+    assert.equal(loadSurveyDesigns(file).designs[0].id, id);
+    assert.notEqual(loadSurveyDesigns(file).digest, custom.digest, 'input changes invalidate resume');
+    write([{ ...row, props: [{ kind: 'future-prop', s: .2 }] }]);
+    assert.throws(() => loadSurveyDesigns(file), /Unsupported scenery/);
+    write([{ ...row, theme: 'future-theme' }]);
+    assert.throws(() => loadSurveyDesigns(file), /Unsupported theme/);
+    write([{ ...row, id: 'custom-00000000' }]);
+    assert.throws(() => loadSurveyDesigns(file), /id mismatch/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
 
 test("filterResumeShots and findings helpers", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-survey-"));
