@@ -108,7 +108,7 @@ export class DebugSession {
     const image = Buffer.from(data.data || "", "base64");
     if (image.length < 4 || image.length > 6 * 1024 * 1024 || image[0] !== 0xff || image[1] !== 0xd8)
       throw Error("Incident screenshot was not a valid bounded JPEG (6 MiB limit)");
-    const dir = fileURLToPath(new URL("../../scratch/debug-incidents/", import.meta.url));
+    const dir = fileURLToPath(new URL("../../", import.meta.url)) + "scratch/debug-incidents";
     mkdirSync(dir, { recursive: true });
     const id = randomUUID(), imagePath = `${dir}/${id}.jpg`, reportPath = `${dir}/${id}.json`;
     const report = { version: 1, observedAt, target: { ...this.target, url: pageUrl }, exception,
