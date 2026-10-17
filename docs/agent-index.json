@@ -580,9 +580,10 @@
         "tests/specs/garage-first-frame.spec.js",
         "tests/specs/garage-out-before-card.spec.js",
         "tests/specs/garage-prebuild.spec.js",
+        "tests/specs/livery-wheels.spec.js",
         "tests/specs/parts-*.spec.js"
       ],
-      "declaredTests": 35,
+      "declaredTests": 37,
       "twinned": false
     },
     {
@@ -973,6 +974,7 @@
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-decal-surfaces.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",
         "tests/unit/parts-distinct-mesh.test.mjs",
         "tests/unit/parts-locked-equivalent.test.mjs",
@@ -982,7 +984,7 @@
         "tests/unit/team-style-relief.test.mjs",
         "tests/unit/tyre-recipes-open-rim.test.mjs"
       ],
-      "declaredTests": 258,
+      "declaredTests": 265,
       "twinned": false
     },
     {
@@ -1072,9 +1074,10 @@
         "tests/specs/output-paths.spec.js",
         "tests/specs/persistence-dom.spec.js",
         "tests/specs/telemetry-compare.spec.js",
+        "tests/specs/telemetry-fit.spec.js",
         "tests/specs/wake-lock.spec.js"
       ],
-      "declaredTests": 275,
+      "declaredTests": 277,
       "twinned": true
     },
     {
@@ -1109,7 +1112,7 @@
         "tests/unit/followup-update-check.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
-      "declaredTests": 51,
+      "declaredTests": 52,
       "twinned": false
     },
     {
@@ -1356,6 +1359,7 @@
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/real-race-script.test.mjs",
+        "tests/unit/real-race-tab-gap-refresh.test.mjs",
         "tests/unit/real-race.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/screen-looks.test.mjs",
@@ -1365,7 +1369,7 @@
         "tests/unit/title-fx.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
-      "declaredTests": 927,
+      "declaredTests": 931,
       "twinned": false
     },
     {
@@ -1497,6 +1501,7 @@
         "tests/specs/menu-traversal.spec.js",
         "tests/specs/music-library.spec.js",
         "tests/specs/persistence.spec.js",
+        "tests/specs/photo-studio-conditions.spec.js",
         "tests/specs/photo-studio.spec.js",
         "tests/specs/rotation-recovery.spec.js",
         "tests/specs/title-menu-rotation.spec.js",
@@ -1506,7 +1511,7 @@
         "tests/specs/ui-scale.spec.js",
         "tests/specs/watch-transport-layout.spec.js"
       ],
-      "declaredTests": 317,
+      "declaredTests": 322,
       "twinned": true
     },
     {

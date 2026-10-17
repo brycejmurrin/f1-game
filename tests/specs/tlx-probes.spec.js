@@ -555,7 +555,7 @@ test.describe("TLX — boot", () => {
     expect(errors).toEqual([]);
   });
 
-  test("M9 gpuTimer is contract-legal on the WebGL2 fallback (SwiftShader)", async ({ page }) => {
+  test("M9 gpuTimer is contract-legal on WebGL2 (off on software GL, live on real GL)", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("monza"));
@@ -565,15 +565,18 @@ test.describe("TLX — boot", () => {
       const on = GLX.gpuTimer(true);
       const ms = GLX.gpuMs();
       GLX.gpuTimer(false);
-      return { before, on, ms };
+      const bs = GLX.backendState ? GLX.backendState() : {};
+      return { before, on, ms, software: !!bs.softwareGL };   // the gate's own flag (tlx.js _gpuSupported)
     });
-    // tlxForceGL pins three on WebGL2 (SwiftShader in CI): no timestamp-query
-    // feature, so the timer reports unsupported and never turns on — the exact
-    // {supported:false} shape GLX returns on SwiftShader. gpuMs stays -1.
+    // tlxForceGL pins three on WebGL2. SwiftShader (Linux CI) DOES expose
+    // EXT_disjoint_timer_query_webgl2 (three's WebGL timestamp-query), but TLX
+    // refuses the timer on software GL: a software GPU time is no evidence.
+    // Real GL (the macos-latest Metal leg) takes the timer: supported, and it
+    // turns on. gpuMs is -1 either way here — results land frames later.
     expect(typeof st.before.supported).toBe("boolean");
-    expect(st.before.supported).toBe(false);
-    expect(st.on.supported).toBe(false);
-    expect(st.on.on).toBe(false);      // can't enable an unsupported timer
+    expect(st.before.supported).toBe(!st.software);
+    expect(st.on.supported).toBe(!st.software);
+    expect(st.on.on).toBe(!st.software);   // can't enable an unsupported timer
     expect(st.ms).toBe(-1);
   });
 

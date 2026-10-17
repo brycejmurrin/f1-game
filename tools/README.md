@@ -205,6 +205,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON: `apex-eval.mjs monza '__apex.corners()'`. | playwright-probe |
 | **shot/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | playwright-probe |
 | **shot/baked-scenery.mjs** | Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`. | playwright-probe / scenery-dress |
+| **shot/build-gallery.cjs** | Survey gallery entries stay distinct when shot names collide, including the image each card points at. | survey-track |
 | **shot/cam-corners.mjs** | Straight-vs-corner camera swing on Monaco, Spa, Suzuka, Monza, and Zandvoort. | — |
 | **shot/cam-motion.mjs** | Chase/far/heli speed-open and per-mode corner pose, from the rig not a second dolly. | — |
 | **shot/capture-benchmark.mjs** | Sequential cold-scene benchmark across GPU/browser/profile combinations; records unsupported cells. | playwright-probe |
@@ -224,6 +225,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/hud-live-sample.mjs** | Sample moved HUD pieces every few ms in an unfrozen race after position jumps; report time spent off screen. | survey-ui-matrix |
 | **shot/hud-mock.mjs** | Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; one boot per pointer type, ~1 s a shot. | survey-ui-matrix |
 | **shot/hud-survey.mjs** | Race-HUD survey: devices x cameras x presets/themes/scale → overlaps, missing, offscreen, tiny text + shots, gallery. | survey-ui-matrix |
+| **shot/lib/survey-runner.mjs** | Shared shot-survey runner: identical plans, failure state and gallery rows for CLI and MCP. | survey-track |
 | **shot/loading-probe.mjs** | Tap RACE! headless; record preparation, garage, flyby and first presented race frame. `--settle ms --invalidate`. | — |
 | **shot/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | playwright-probe |
 | **shot/pit-shots.mjs** | Pit-lane shot set, one boot per circuit: entry, exit, lane overview and each team's box, from the resolved geometry. | playwright-probe |
