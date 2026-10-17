@@ -462,6 +462,40 @@ values with candidate declarations/source lines; they do not guess cascade winne
 Known limits and truncation are recorded in JSON. No new browser controller,
 framework, hosted service, WebMCP dependency or settings mutation is required.
 
+Adaptive CSS diagnostics include each control's computed sizing, wrapping, zoom,
+font and container properties, with deduplicated ancestor boxes and scroll metrics
+(`layoutContexts`, at most 12 ancestors per control / 256 unique contexts).
+Contexts also retain `data-shape/density/pair/rail/fit` classifications and
+sheet-scale/fit/compact/pair/rail threshold tokens used by the game's adaptive CSS.
+`display:contents` ancestors are marked boxless and do not cause false clipping;
+outer real clips still apply. Clipping checks continue beyond the context limit.
+`adaptive` records the visual viewport, pointer/orientation/motion media matches,
+root scale/safe-area/tap tokens and selected appearance attributes. CSS custom
+properties retain browser serialization; a `calc()` token is not a measured inset.
+
+Use a bounded sweep to compare the SAME open state across sizes:
+
+```sh
+node tools/ui/explorer.mjs inspect --screen garage --styles '#cs-tab-team' --viewports 390x844,844x390,1280x800
+```
+
+Or import `inspectResponsive` and call
+`await inspectResponsive(page,{root:'#carsetup',viewports:[{width:390,height:844},{width:844,height:390}]})`.
+The result contains a snapshot per size and consecutive diffs; geometry, computed
+layout and ancestor changes are separate from semantic/binding changes. The
+original viewport is restored even if inspection fails. Up to eight integer
+sizes are allowed (width 240–3840, height 240–2160). The helper changes viewport
+size only: pointer emulation, settings and safe-area overrides are not invented.
+Each record reports layout settlement: at least 150 ms and three matching frame
+samples, bounded to 500 elements, 120 frames and two seconds. Unstable/truncated
+samples are explicit, and quiet samples cannot rule out later async work. Resizing can
+trigger native orientation/pause dialogs; they are recorded, not dismissed, and
+restoring size cannot undo application state transitions. Use the existing
+`layout-audit.mjs` matrix for scales/pointers/insets and validated replay actions
+for settings changes, scrolling, reload durability and modal navigation.
+
 API references: [Chrome CSS domain](https://chromedevtools.github.io/devtools-protocol/tot/CSS/),
 [Playwright accessibility snapshots](https://playwright.dev/docs/aria-snapshots),
-[Playwright traces](https://playwright.dev/docs/trace-viewer).
+[Playwright traces](https://playwright.dev/docs/trace-viewer),
+[MDN visual viewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport),
+[MDN box generation](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Display/Visual_formatting_model#the_principal_box).

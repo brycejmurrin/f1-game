@@ -24,8 +24,10 @@ export function inspectUI(options = {}) {
     const s = getComputedStyle(e), r = e.getBoundingClientRect();
     return s.display !== "none" && s.visibility !== "hidden" && Number(s.opacity) > 0 && r.width > 0 && r.height > 0;
   };
+  const selectors = new WeakMap();
   const selector = e => {
     if (!e) return null;
+    if (selectors.has(e)) return selectors.get(e);
     const parts = [];
     for (let n = e; n && n.nodeType !== 9; n = n.parentElement) {
       if (n.id && document.querySelectorAll(`#${CSS.escape(n.id)}`).length <= 1) { parts.unshift(`#${CSS.escape(n.id)}`); break; }
@@ -33,7 +35,7 @@ export function inspectUI(options = {}) {
       const siblings = n.parentElement ? [...n.parentElement.children].filter(c => c.tagName === n.tagName) : [n];
       parts.unshift(`${tag}:nth-of-type(${siblings.indexOf(n) + 1})`);
     }
-    return parts.join(" > ");
+    const result = parts.join(" > "); selectors.set(e, result); return result;
   };
   const name = e => {
     const ids = (e.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean);
@@ -45,6 +47,10 @@ export function inspectUI(options = {}) {
     (e.tagName === "INPUT" ? ({ range: "slider", checkbox: "checkbox", radio: "radio", number: "spinbutton", search: "searchbox",
       button: "button", submit: "button", reset: "button" })[e.type] || "textbox" : e.tagName.toLowerCase());
   const box = e => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+  const css = (style, properties) => Object.fromEntries(properties.split(" ").map(k => [k, style.getPropertyValue?.(k).trim() || null]));
+  const layoutProperties = "display position box-sizing width height min-width min-height max-width max-height overflow-x overflow-y zoom transform font-size line-height white-space flex-direction flex-wrap grid-template-columns gap container-type container-name --sheet-scale --sheet-eff-scale --fit-at --compact-at --pair-at --rail-at --tall-at";
+  const adaptation = e => Object.fromEntries(["shape", "density", "pair", "rail", "fit"].filter(k => e.dataset?.[k] !== undefined).map(k => [k, e.dataset[k]]));
+  const layoutContexts = new Map(); let layoutContextsTruncated = false;
   const scalar = value => typeof value === "number" && Number.isFinite(value) || typeof value === "boolean" || typeof value === "string" ? value : null;
   const stored = key => {
     try { return typeof GameStore !== "undefined" ? { status: "read", value: GameStore.store.get(key, null) } : { status: "unavailable", value: null }; }
@@ -109,9 +115,19 @@ export function inspectUI(options = {}) {
     let left = Math.max(0, r.x), right = Math.min(innerWidth, r.right), topY = Math.max(0, r.y), bottom = Math.min(innerHeight, r.bottom);
     let scrollX = false, scrollY = false;
     let reachableX = [r.x, r.right], reachableY = [r.y, r.bottom];
-    const clippedBy = [];
+    const clippedBy = [], layoutAncestors = [];
     for (let p = e.parentElement; p; p = p.parentElement) {
       const s = getComputedStyle(p), b = p.getBoundingClientRect();
+      if (layoutAncestors.length < 12) {
+        const key = selector(p);
+        if (!layoutContexts.has(key) && layoutContexts.size < 256) layoutContexts.set(key, { selector: key, box: box(p),
+          boxGenerated: s.display !== "contents", adaptation: adaptation(p), computed: css(s, layoutProperties),
+          scroll: { left: p.scrollLeft, top: p.scrollTop, width: p.scrollWidth, height: p.scrollHeight, clientWidth: p.clientWidth, clientHeight: p.clientHeight } });
+        if (layoutContexts.has(key)) layoutAncestors.push(key); else layoutContextsTruncated = true;
+      } else layoutContextsTruncated = true;
+      // display:contents has no principal box. Its zero rect cannot clip children;
+      // continue walking so an outer real scrolling/clipping box still counts.
+      if (s.display === "contents") continue;
       const sx = /(auto|scroll)/.test(s.overflowX) && p.scrollWidth > p.clientWidth + 1;
       const sy = /(auto|scroll)/.test(s.overflowY) && p.scrollHeight > p.clientHeight + 1;
       if (/(auto|scroll|hidden|clip)/.test(s.overflowX)) {
@@ -135,7 +151,8 @@ export function inspectUI(options = {}) {
     const c = { selector: sel, role: role(e), name: label, disabled, checked: e.checked, expanded: e.getAttribute("aria-expanded"),
       pressed: e.getAttribute("aria-pressed"), selected: e.getAttribute("aria-selected"), open: e.tagName === "SUMMARY" ? e.parentElement?.open : undefined,
       value: e.type === "password" || /password|secret|token/i.test(e.name || "") ? "[redacted]" : typeof e.value === "string" ? e.value.slice(0, 512) : e.value,
-      min: e.min || null, max: e.max || null, step: e.step || null, box: box(e), reachability, binding: binding(e) };
+      min: e.min || null, max: e.max || null, step: e.step || null, box: box(e), reachability, binding: binding(e),
+      layout: css(getComputedStyle(e), layoutProperties), layoutAncestors };
     controls.push(c);
     const issue = (kind, message) => issues.push({ kind, selector: sel, message });
     if (!label) issue("unnamed", "Visible control has no name in this DOM screening.");
@@ -146,14 +163,21 @@ export function inspectUI(options = {}) {
     if (c.binding.status === "mismatch") issue("binding-mismatch", `${label || sel}: DOM value differs from its live binding.`);
   }
   if (document.documentElement.scrollWidth > innerWidth + 2) issues.push({ kind: "overflow", selector: "html", message: "Document has horizontal overflow." });
+  const rootStyle = getComputedStyle(document.documentElement), vv = window.visualViewport;
+  const media = ["(orientation: portrait)", "(pointer: coarse)", "(hover: hover)", "(prefers-reduced-motion: reduce)", "(forced-colors: active)"];
+  const adaptive = { visualViewport: vv ? { width: vv.width, height: vv.height, offsetLeft: vv.offsetLeft, offsetTop: vv.offsetTop, scale: vv.scale } : null,
+    devicePixelRatio: window.devicePixelRatio || null, media: Object.fromEntries(media.map(q => [q, matchMedia(q).matches])),
+    rootTokens: css(rootStyle, "--ui-scale --hud-scale --hud-btn-scale --safe-t --safe-r --safe-b --safe-l --safe-w --safe-h --tap-min --tap-paint"),
+    preferences: Object.fromEntries(["uiTheme", "menuAccent", "hudAccent", "textSize", "uiContrast", "cvd", "menuHelp", "motion"].filter(k => document.documentElement.dataset[k] !== undefined).map(k => [k, document.documentElement.dataset[k]])) };
   return { version: 1, readOnly: true, title: document.title, url: location.href, root: options.root || null,
     roots: [...new Set(roots)], topLayer: top ? selector(top) : null, topLayerSource: "focused-dialog; stacking order not inferred",
     dialogs: [...document.querySelectorAll('dialog[open],[role="dialog"]')].filter(visible).map(e => e.id || name(e)),
     viewport: { width: innerWidth, height: innerHeight, textScale: Number(document.documentElement.dataset.explorerTextScale || 100) },
+    adaptive, layoutContexts: [...layoutContexts.values()], layoutContextsTruncated,
     controls, issues, totalControls: candidates.length, truncated: candidates.length > limit,
     focus: document.activeElement ? { selector: selector(document.activeElement), name: name(document.activeElement), tag: document.activeElement.tagName } : null,
     errorOverlay: [...document.querySelectorAll('#__err_overlay,#vite-error-overlay')].filter(visible).map(e => e.textContent.slice(0, 1000)),
-    game: { devAPI: !!window.__apex }, limitations: ["DOM names are screening; accessibility snapshot is authoritative", "Only explicit scale/appearance/camera/lighting bindings are mapped", "No game dev hooks invoked: some getters lazily build tracks"] };
+    game: { devAPI: !!window.__apex }, limitations: ["DOM names are screening; accessibility snapshot is authoritative", "Only explicit scale/appearance/camera/lighting bindings are mapped", "No game dev hooks invoked: some getters lazily build tracks", "CSS tokens retain browser serialization, including unresolved calc expressions; visual viewport metadata does not prove virtual keyboard behavior", "Layout ancestry is bounded to 12 ancestors per control and 256 unique contexts; clipping still checks every ancestor"] };
 }
 
 export async function installInspector(page) { return page.evaluate(inspectUI, { install: true }); }
@@ -175,7 +199,7 @@ export async function inspectPage(page, { root, styles } = {}) {
     const matched = await session.send("CSS.getMatchedStylesForNode", { nodeId });
     const computed = await session.send("CSS.getComputedStyleForNode", { nodeId });
     const rules = matched.matchedCSSRules || [];
-    const properties = new Set("display position overflow overflow-x overflow-y width height min-width min-height max-width max-height box-sizing z-index zoom transform pointer-events visibility opacity font-size color background-color grid-template-columns grid-template-rows flex flex-direction gap".split(" "));
+    const properties = new Set("display position overflow overflow-x overflow-y width height min-width min-height max-width max-height box-sizing z-index zoom transform pointer-events visibility opacity font-size line-height white-space color background-color grid-template-columns grid-template-rows flex flex-direction flex-wrap gap container-type container-name".split(" "));
     report.styles = { selector: styles, computed: computed.computedStyle.filter(p => properties.has(p.name)),
       inline: matched.inlineStyle?.cssProperties || [],
       rules: rules.slice(0, 80).map(({ rule, matchingSelectors }) => ({ selectors: matchingSelectors.map(i => rule.selectorList.selectors[i].text),
@@ -190,11 +214,67 @@ export async function inspectPage(page, { root, styles } = {}) {
 export function diffInspections(before, after) {
   const index = report => new Map(report.controls.map(c => [c.selector, c]));
   const a = index(before), b = index(after), changed = [], layout = [];
-  const semantics = c => { const { box, reachability, ...rest } = c; return rest; };
+  const semantics = c => { const { box, reachability, layout, layoutAncestors, ...rest } = c; return rest; };
   for (const [selector, control] of b) if (a.has(selector)) {
     if (JSON.stringify(semantics(a.get(selector))) !== JSON.stringify(semantics(control))) changed.push({ selector, before: semantics(a.get(selector)), after: semantics(control) });
-    if (JSON.stringify([a.get(selector).box, a.get(selector).reachability]) !== JSON.stringify([control.box, control.reachability])) layout.push(selector);
+    if (JSON.stringify([a.get(selector).box, a.get(selector).reachability, a.get(selector).layout, a.get(selector).layoutAncestors]) !== JSON.stringify([control.box, control.reachability, control.layout, control.layoutAncestors])) layout.push(selector);
   }
+  const contexts = new Map((before.layoutContexts || []).map(c => [c.selector, c]));
+  const layoutContexts = (after.layoutContexts || []).filter(c => JSON.stringify(contexts.get(c.selector)) !== JSON.stringify(c)).map(c => c.selector);
+  layoutContexts.push(...[...contexts.keys()].filter(k => !(after.layoutContexts || []).some(c => c.selector === k)));
   return { added: [...b.keys()].filter(k => !a.has(k)), removed: [...a.keys()].filter(k => !b.has(k)), changed: changed.slice(0, 100), changedTotal: changed.length, truncated: changed.length > 100, layout,
+    layoutContexts,
+    viewportChanged: JSON.stringify(before.viewport) !== JSON.stringify(after.viewport), environmentChanged: JSON.stringify(before.adaptive) !== JSON.stringify(after.adaptive),
     focusChanged: JSON.stringify(before.focus) !== JSON.stringify(after.focus), rootsChanged: JSON.stringify(before.roots) !== JSON.stringify(after.roots), issues: after.issues };
+}
+
+/** Explicit viewport mutation only. Reuse the current tab/state; never guess a screen's opener or change saved settings. */
+export async function inspectResponsive(page, { viewports, root, styles } = {}) {
+  if (!Array.isArray(viewports) || viewports.length < 1 || viewports.length > 8 || viewports.some(v => !v || !Number.isInteger(v.width) || !Number.isInteger(v.height) || v.width < 240 || v.width > 3840 || v.height < 240 || v.height > 2160))
+    throw new RangeError("viewports must contain 1..8 sizes: integer width 240..3840, height 240..2160");
+  const originalViewport = page.viewportSize();
+  if (!originalViewport) throw new Error("Viewport sweep requires an explicit, restorable Playwright viewport");
+  const records = [];
+  try {
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      const settlement = await page.evaluate(({ root }) => {
+        const scope = document.querySelector(root || "body");
+        if (!scope) throw new Error(`Inspector root missing: ${root}`);
+        const started = performance.now(); let previous = "", same = 0, frames = 0;
+        // Shape/fit classifiers use ResizeObserver and later rAF deliveries. A
+        // two-frame screenshot can catch a zero-height intermediate strip.
+        return new Promise((resolve, reject) => {
+          let frame = null, truncated = false;
+          const clear = () => { clearTimeout(deadline); if (frame !== null) cancelAnimationFrame(frame); };
+          const finish = stable => { clear(); resolve({ stable, frames, elapsedMs: Math.round(performance.now() - started), truncated,
+            ...(stable ? {} : { reason: "Layout did not settle within the sampling budget" }) }); };
+          // rAF can stop entirely in background tabs; its callback cannot own
+          // the deadline. Cancel the pending callback on both exit paths.
+          const deadline = setTimeout(() => finish(false), 2000);
+          const sample = () => {
+            try {
+              frames++;
+              const elements = [scope, ...scope.querySelectorAll('.sheet,[data-shape],[data-density],button,input,select,[role="tab"]')];
+              truncated ||= elements.length > 500;
+              const signature = JSON.stringify(elements.slice(0, 500).map(e => {
+                const r = e.getBoundingClientRect();
+                return [r.x, r.y, r.width, r.height, e.scrollWidth, e.scrollHeight, ...["shape", "density", "pair", "rail", "fit"].map(k => e.dataset[k])];
+              }));
+              same = signature === previous ? same + 1 : 0; previous = signature;
+              if (same >= 3 && performance.now() - started >= 150) finish(true);
+              else if (frames >= 120) finish(false);
+              else frame = requestAnimationFrame(sample);
+            } catch (e) { clear(); reject(e); }
+          };
+          frame = requestAnimationFrame(sample);
+        });
+      }, { root });
+      const inspection = await inspectPage(page, { root, styles });
+      records.push({ requestedViewport: { width: viewport.width, height: viewport.height }, settlement, inspection,
+        diff: records.length ? diffInspections(records.at(-1).inspection, inspection) : null });
+    }
+  } finally { await page.setViewportSize(originalViewport); }
+  return { version: 1, mode: "viewport-sweep", originalViewport, restoredViewport: true, records,
+    limitations: ["Only viewport size is changed; pointer, safe-area, scale and appearance settings remain those of the current page", "Stability samples up to 500 elements for at most 120 frames / two seconds; quiet samples cannot rule out later asynchronous changes", "Resize handlers can change application state; restoring viewport does not undo those transitions", "Advisories are not functional passes or confirmed CSS defects"] };
 }

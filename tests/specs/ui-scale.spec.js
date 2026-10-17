@@ -921,6 +921,8 @@ test("UI inspector catches hit interception, inherited disability and axis-speci
     <div id="scroll"><button id="wide">Offscreen</button><div style="height:300px"></div></div>
     <div style="width:100px;overflow:hidden"><div style="width:300px;margin-left:200px;overflow-x:auto"><button id="unreachable">Unreachable</button><div style="width:600px;height:1px"></div></div></div>
     <button id="duplicate">First</button><button id="duplicate">Second</button>
+    <div id="contents" style="display:contents;overflow:hidden"><button id="contents-action" style="width:160px;height:50px">Visible action</button></div>
+    <div id="outer-clip" style="width:80px;overflow:hidden"><div style="display:contents;overflow:hidden"><button id="contents-clipped" style="width:200px">Really clipped</button></div></div>
     <button aria-pressed="false">Whine</button>`);
   await page.evaluate(() => { window.__apex = { info() { throw new Error("Inspector invoked a lazy game hook"); } }; });
   await installInspector(page);
@@ -931,11 +933,89 @@ test("UI inspector catches hit interception, inherited disability and axis-speci
   expect(before.issues.some(i => i.kind === "blocked" && i.selector === "#blocked")).toBe(true);
   expect(before.issues.some(i => i.kind === "offscreen" && i.selector === "#wide")).toBe(true);
   expect(before.issues.some(i => i.kind === "clipped" && i.selector === "#unreachable")).toBe(true);
+  expect(before.controls.find(c => c.selector === "#contents-action").reachability.clippedBy).toEqual([]);
+  expect(before.controls.find(c => c.selector === "#contents-action").reachability.hit).toBe("hits");
+  expect(before.controls.find(c => c.selector === "#contents-clipped").reachability.clippedBy).toContainEqual({ selector: "#outer-clip", axis: "x" });
+  await page.locator("#contents-action").evaluate(e => { e.addEventListener("click", () => { e.dataset.clicked = "yes"; }); });
+  await page.locator("#contents-action").click();
+  await expect(page.locator("#contents-action")).toHaveAttribute("data-clicked", "yes");
   for (const c of before.controls.filter(c => ["First", "Second"].includes(c.name))) expect(await page.locator(c.selector).count()).toBe(1);
   const toggle = before.controls.find(c => c.name === "Whine");
   expect(toggle.selector).toBeTruthy(); await page.locator(toggle.selector).click();
   await page.locator(toggle.selector).evaluate(e => e.setAttribute("aria-pressed", "true"));
   expect((await page.evaluate(inspectUI)).controls.find(c => c.selector === toggle.selector).pressed).toBe("true");
+});
+
+test("UI inspector explains adaptive CSS changes without confusing layout with setting changes", async ({ page }, testInfo) => {
+  const { inspectResponsive } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { writeFileSync } = await import("node:fs");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setContent(`<style>
+    :root{--ui-scale:1.25;--safe-l:47px;--safe-r:47px}body{margin:0;padding:10px}#sheet{box-sizing:border-box;width:100%;max-width:800px;overflow:auto}
+    #row{display:flex;flex-wrap:nowrap;gap:12px}button{min-width:200px;height:50px}
+    @media(max-width:500px){#row{flex-direction:column;flex-wrap:wrap}#sheet{max-height:140px}}
+    </style><main id="sheet"><div id="row"><button id="first">First action</button><button>Second action</button><button>Third action</button></div></main>`);
+  const report = await inspectResponsive(page, { root: "#sheet", styles: "#row", viewports: [{ width: 1280, height: 800 }, { width: 390, height: 844 }, { width: 844, height: 390 }] });
+  expect(page.viewportSize()).toEqual({ width: 1280, height: 800 });
+  expect(report.records.every(r => r.settlement.stable && !r.settlement.truncated)).toBe(true);
+  const phone = report.records[1].inspection;
+  expect(phone.viewport.width).toBe(390);
+  expect(phone.adaptive.visualViewport.width).toBeCloseTo(390);
+  expect(phone.adaptive.rootTokens["--safe-l"]).toBe("47px");
+  expect(phone.adaptive.rootTokens["--ui-scale"]).toBe("1.25");
+  const row = phone.layoutContexts.find(c => c.selector === "#row");
+  expect(row.computed["flex-direction"]).toBe("column");
+  expect(phone.layoutContexts.find(c => c.selector === "#sheet").scroll.height).toBeGreaterThan(140);
+  expect(phone.controls.find(c => c.selector === "#first").reachability.scrollY).toBe(true);
+  expect(phone.styles.rules.some(r => r.media?.some(m => m.active && m.text.includes("500px")))).toBe(true);
+  expect(report.records[1].diff.changed).toEqual([]);
+  expect(report.records[1].diff.layoutContexts).toContain("#row");
+  expect(report.records[1].diff.environmentChanged).toBe(true);
+  expect(report.records[2].inspection.layoutContexts.find(c => c.selector === "#row").computed["flex-direction"]).toBe("row");
+  writeFileSync(testInfo.outputPath("adaptive-inspection.json"), JSON.stringify(report, null, 2));
+});
+
+test("UI inspector keeps flattened Garage tabs actionable through a viewport sweep", async ({ page }, testInfo) => {
+  const { inspectResponsive } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { writeFileSync } = await import("node:fs");
+  const errors = []; page.on("pageerror", e => errors.push(e.message));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/"); await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => { __apex.agentHelp(); __apex.headless(true); });
+  await page.locator("#mb-garage").click();
+  await expect(page.locator('#carsetup:not([aria-busy="true"])')).toBeVisible();
+  const report = await inspectResponsive(page, { root: "#carsetup", styles: "#cs-tab-team", viewports: [{ width: 1280, height: 800 }, { width: 390, height: 844 }, { width: 844, height: 390 }] });
+  for (const r of report.records) {
+    const tab = r.inspection.controls.find(c => c.selector === "#cs-tab-team");
+    expect(tab).toBeTruthy();
+    expect(r.settlement.stable).toBe(true);
+    expect(tab.reachability.hit).toBe("hits");
+    const boxless = r.inspection.layoutContexts.filter(c => !c.boxGenerated && c.computed.display === "contents");
+    expect(boxless.length).toBeGreaterThan(0);
+    expect(tab.reachability.clippedBy.filter(c => boxless.some(b => b.selector === c.selector))).toEqual([]);
+    expect(r.inspection.errorOverlay).toEqual([]);
+  }
+  await page.locator("#cs-tab-team").click();
+  await expect(page.locator("#cs-tab-team")).toHaveAttribute("aria-selected", "true");
+  writeFileSync(testInfo.outputPath("garage-adaptive-inspection.json"), JSON.stringify(report, null, 2));
+  expect(errors).toEqual([]);
+});
+
+test("UI inspector bounds settlement when animation frames do not arrive", async ({ page }) => {
+  const { inspectResponsive } = await import("../../tools/ui/explorer/inspector.mjs");
+  await page.setContent('<button id="action">Still inspectable</button>');
+  const original = page.viewportSize();
+  await page.evaluate(() => {
+    window.__cancelledFrames = [];
+    window.requestAnimationFrame = () => 1234;
+    window.cancelAnimationFrame = id => window.__cancelledFrames.push(id);
+  });
+  const report = await inspectResponsive(page, { viewports: [{ width: 390, height: 844 }] });
+  expect(report.records[0].settlement.stable).toBe(false);
+  expect(report.records[0].settlement.frames).toBe(0);
+  expect(report.records[0].inspection.controls.some(c => c.selector === "#action")).toBe(true);
+  expect(await page.evaluate(() => window.__cancelledFrames)).toEqual([1234]);
+  expect(page.viewportSize()).toEqual(original);
 });
 
 test("UI inspector maps camera and lighting tuner inputs without invoking game hooks", async ({ page }, testInfo) => {

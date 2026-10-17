@@ -15,7 +15,7 @@ import { MODE_TITLES, MISSIONS, missionBrief } from "./explorer/catalog.mjs";
 import { explore } from "./explorer/modes.mjs";
 import { writeReport } from "./explorer/report.mjs";
 import { openSession } from "./explorer/browser.mjs";
-import { inspectPage, installInspector } from "./explorer/inspector.mjs";
+import { inspectPage, inspectResponsive, installInspector } from "./explorer/inspector.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const HELP = `UI explorer — one Chromium, bounded captures, offline HTML evidence.
@@ -27,6 +27,7 @@ const HELP = `UI explorer — one Chromium, bounded captures, offline HTML evide
   node tools/ui/explorer.mjs brief --url <reachable-preview> [--mission first-race]
   node tools/ui/explorer.mjs report <report.json> --out DIR
   node tools/ui/explorer.mjs inspect --screen settingsappearance [--selector '#pmsettings'] [--styles '#as-uiScale']
+    [--viewports 390x844,844x390,1280x800]   # 1..8 bounded sizes; restores the original viewport
   node tools/ui/explorer.mjs --list|--help
 Flags: --url URL --out DIR --modes a,b --scenario FILE --max-shots 0..25
        --max-attempts 1..30 --track ID --frac 0..1 --repro FILE --reference IMAGE
@@ -35,7 +36,7 @@ Browser-free commands: --help, --list, brief, report. Native motion; isolated sa
 Reports distinguish guided missions from exported blind Browser Use briefs.
 Exit 0: probes completed (inspect advisories); 1: failed probe; 2: invalid invocation.
 `;
-const FLAGS = ["--out", "--url", "--modes", "--scenario", "--max-shots", "--max-attempts", "--track", "--frac", "--repro", "--reference", "--mission", "--scene-views", "--scene-backend", "--screen", "--selector", "--styles", "--list", "--help"];
+const FLAGS = ["--out", "--url", "--modes", "--scenario", "--max-shots", "--max-attempts", "--track", "--frac", "--repro", "--reference", "--mission", "--scene-views", "--scene-backend", "--screen", "--selector", "--styles", "--viewports", "--list", "--help"];
 
 export function parseOptions(argv) {
   const f = makeFlags(argv, FLAGS);
@@ -69,7 +70,15 @@ export function parseOptions(argv) {
   if (!f.has("--help") && !f.has("--list") && !["brief", "report", "inspect"].includes(command) && (!modes.length || modes.some((m) => !MODE_TITLES[m]))) throw new Error("Unknown or empty --modes");
   const screen = flag("--screen", "title"), selector = flag("--selector", null), styles = flag("--styles", null);
   if (!SCREENS.some(s => s.id === screen)) throw new Error("Unknown --screen; use --list");
-  if (command !== "inspect" && ["--screen", "--selector", "--styles"].some(k => f.has(k))) throw new Error("--screen/--selector/--styles require inspect");
+  if (command !== "inspect" && ["--screen", "--selector", "--styles", "--viewports"].some(k => f.has(k))) throw new Error("--screen/--selector/--styles/--viewports require inspect");
+  const viewportText = flag("--viewports", null);
+  const viewports = viewportText === null ? null : viewportText.split(",").map(size => {
+    if (!/^\d+x\d+$/.test(size)) throw new Error("--viewports requires sizes such as 390x844,844x390");
+    const [width, height] = size.split("x").map(Number);
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 240 || width > 3840 || height < 240 || height > 2160) throw new Error("--viewports: width 240..3840, height 240..2160");
+    return { width, height };
+  });
+  if (viewports && (viewports.length < 1 || viewports.length > 8)) throw new Error("--viewports accepts 1..8 sizes");
   for (const s of [selector, styles]) if (s !== null && (!s.trim() || s.length > 512)) throw new Error("Selectors must contain 1..512 characters");
   const url = flag("--url", null);
   if (url) { const u = new URL(url); if (!["http:", "https:"].includes(u.protocol) || u.username || u.password) throw new Error("--url requires http(s) without embedded credentials"); }
@@ -82,7 +91,7 @@ export function parseOptions(argv) {
   const relative = path.relative(ROOT, outDir);
   const outside = relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative);
   if (!outside && !/^(artifacts|scratch)([\\/]|$)/.test(relative)) throw new Error("Inside the repository, --out must be under artifacts/ or scratch/");
-  return { command, file: positional[1] || flag("--scenario", null), help: f.has("--help"), list: f.has("--list"), modes: [...new Set(modes)], url, screen, selector, styles,
+  return { command, file: positional[1] || flag("--scenario", null), help: f.has("--help"), list: f.has("--list"), modes: [...new Set(modes)], url, screen, selector, styles, viewports,
     outDir, maxShots: numeric("--max-shots", 25, 0, 25, true), maxAttempts: numeric("--max-attempts", 8, 1, 30, true),
     track, sceneViews, sceneBackend, frac: numeric("--frac", 0.4, 0, 1), repro: flag("--repro", null), reference: flag("--reference", null), mission: flag("--mission", "first-race") };
 }
@@ -128,7 +137,8 @@ export async function main(argv = process.argv.slice(2)) {
         const screen = SCREENS.find(v => v.id === opts.screen);
         await screen.open(s.page);
         await installInspector(s.page);
-        const report = await inspectPage(s.page, { root: opts.selector || screen.root, styles: opts.styles });
+        const inspect = opts.viewports ? inspectResponsive : inspectPage;
+        const report = await inspect(s.page, { root: opts.selector || screen.root, styles: opts.styles, viewports: opts.viewports });
         report.provenance = { sha: gitHead, screen: opts.screen, route: "catalog setup; use replay for real interaction proof" };
         report.errors = s.logs.errors; report.requests = s.logs.requests;
         fs.mkdirSync(opts.outDir, { recursive: true });
