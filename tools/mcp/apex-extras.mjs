@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 import sharp from "sharp";
+import { surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import {
   buildTrackShotSurveyPlan,
   estimateSurveyMs,
@@ -27,6 +28,7 @@ import {
   writeCompareIndex,
   writeSurveyFindings,
   writeSurveyIndex,
+  writeSurveyGalleryFromReports,
   writeSurveyProgress,
 } from "../lib/track-shot-survey.mjs";
 
@@ -128,12 +130,7 @@ export function createExtras(ctx) {
       sess.child.stdin.write(JSON.stringify({ id, ...cmd }) + "\n");
     });
   }
-  function surveyGlEnv(args = {}) {
-    const env = { ...process.env };
-    const want = args.gl || env.APEX_GL || (fs.existsSync("/usr/lib/x86_64-linux-gnu/dri/swrast_dri.so") ? "llvmpipe" : "");
-    if (want === "llvmpipe" || want === "swiftshader") env.APEX_GL = want;
-    return env;
-  }
+  function surveyGlEnv(args = {}) { return surveyGlEnvironment(process.env, args.gl); }
   async function trackOpen(args) {
     const track = needTrack(args.track || "monza");
     const out = assertSafeOut(args.out || `artifacts/track-session/${track}`);
@@ -181,10 +178,19 @@ export function createExtras(ctx) {
   /** The plan options shot-survey.mjs has no flag for; the async job carries them as --plan-json. */
   const pickPlanArgs = (a) => {
     const o = {};
-    for (const k of ["cam", "cams", "az", "el", "dist", "h", "side", "hud", "shots", "cols", "sheetName", "weather"]) if (a[k] != null) o[k] = a[k];
+    for (const k of ["cam", "cams", "az", "el", "dist", "h", "side", "hud", "shots", "cols", "sheetName", "weather", "location", "angles", "weathers", "camera"]) if (a[k] != null) o[k] = a[k];
     return o;
   };
   async function handleShotSurvey(args = {}) {
+    if (args.reports != null) {
+      if (!Array.isArray(args.reports) || !args.reports.length || args.reports.length > 12)
+        return refuse("bad_args", "reports needs 1–12 findings.json paths", "Pass reports[] and an output directory; no browser is started.");
+      const reports = args.reports.map((file) => assertSafeOut(file));
+      const out = assertSafeOut(args.out || "artifacts/track-survey/gallery");
+      if (args.dryRun) return toolResult({ ok: true, dryRun: true, reports, out, browser: false });
+      try { return toolResult({ ok: true, browser: false, out, indexHtml: writeSurveyGalleryFromReports(out, reports, { validateAssetPath: assertSafeOut }) }); }
+      catch (e) { if (e.refuse) return e.refuse; return refuse("gallery_failed", String(e.message || e), "Check report paths and their captured image files."); }
+    }
     let tracks;
     try {
       tracks = normalizeSurveyTracks(args).map((id) => needTrack(id));
@@ -203,13 +209,13 @@ export function createExtras(ctx) {
     const wantIndex = args.index !== false;
     const resume = !!args.resume;
     const estimateMs = estimateSurveyMs(plan.shots.length, tracks.length);
-    const asJob = shouldSurveyAsync(args, plan, tracks.length);
+    const asJob = !!(args.location || args.profile || args.seed != null || args.resume) || shouldSurveyAsync(args, plan, tracks.length);
 
     if (args.dryRun) {
       return toolResult({
         ok: true, dryRun: true, track: tracks[0], tracks, out: outRoot, ...plan,
         // Every option the real run reads, so a dry run shows what would happen (and a test can see an option is wired).
-        options: { panel: wantPanel, index: wantIndex, resume, gl: args.gl ?? null, async: args.async ?? null, closeSession: args.closeSession !== false && !args.keepSession, keepSession: !!args.keepSession },
+        options: { profile: args.profile || "comparison", seed: args.seed ?? 2391, panel: wantPanel, index: wantIndex, resume, gl: args.gl ?? null, async: args.async ?? null, closeSession: args.closeSession !== false && !args.keepSession, keepSession: !!args.keepSession },
         estimateMs, asyncDefault: asJob, resume,
         hint: asJob
           ? "Long/multi-track: omit async:false to get a jobId via shot_survey; watch apex_job_status."
@@ -239,6 +245,7 @@ export function createExtras(ctx) {
         count: args.count,
         fracs: args.fracs,
         planArgs: pickPlanArgs(args),
+        profile: args.profile, seed: args.seed,
       });
     }
 
@@ -272,7 +279,7 @@ export function createExtras(ctx) {
           let reply;
           try {
             reply = await sessSend({
-              shot: s.name, frac: s.frac, cam: s.cam, az: s.az, el: s.el, dist: s.dist,
+              ...s, shot: s.name, frac: s.frac, cam: s.cam, az: s.az, el: s.el, dist: s.dist,
               h: s.h, side: s.side, tod: s.tod, weather: s.weather, hud: s.hud,
             }, 240000);
           } catch (e) {
@@ -281,7 +288,7 @@ export function createExtras(ctx) {
           }
           if (reply.ok) {
             sess.shots++;
-            const row = { ...s, track, png: reply.png, spread: reply.spread, kb: reply.kb };
+            const row = { ...s, track: reply.track || track, png: reply.png, spread: reply.spread, kb: reply.kb };
             row.flags = scoreShotFindings(row);
             captured.push(row);
           } else failed.push({ ...s, track, error: reply.error || "shot failed" });
@@ -300,15 +307,15 @@ export function createExtras(ctx) {
         let indexHtml = null;
         if (wantIndex && captured.length) {
           indexHtml = writeSurveyIndex(out, {
-            track, label: plan.label, preset: plan.preset, shots: captured, panelPng, ok: captured.length,
+            track: captured[0]?.track || track, label: plan.label, preset: plan.preset, shots: captured, panelPng, ok: captured.length,
           });
         }
         const findings = writeSurveyFindings(out, {
-          ok: failed.length === 0 && captured.length > 0,
-          track, label: plan.label, preset: plan.preset, shots: captured, panelPng, indexHtml,
+          ok: failed.length === 0 && captured.length > 0, failed: failed.length, failures: failed,
+          track: captured[0]?.track || track, label: plan.label, preset: plan.preset, shots: captured, panelPng, indexHtml,
         });
         trackResults.push({
-          track, out, captured: captured.length, failed: failed.length,
+          track: captured[0]?.track || track, out, captured: captured.length, failed: failed.length,
           panel: panelPng, indexHtml, findings: findings.file, findingsSummary: findings.findings,
           shots: captured, failures: failed.length ? failed : undefined,
         });
@@ -319,9 +326,9 @@ export function createExtras(ctx) {
         compareIndex = writeCompareIndex(outRoot, {
           label: plan.label, preset: plan.preset,
           tracks: trackResults.map((t) => ({
-            track: t.track, captured: t.captured,
+            track: t.track, captured: t.captured, failed: t.failed, failures: t.failures, shots: t.shots,
             panel: t.panel ? path.relative(outRoot, t.panel) : null,
-            relIndex: t.indexHtml ? path.relative(outRoot, t.indexHtml) : `${t.track}/index.html`,
+            relIndex: t.indexHtml ? path.relative(outRoot, t.indexHtml) : null,
           })),
         });
       }
@@ -373,7 +380,7 @@ export function createExtras(ctx) {
     }
     const cmd = {};
     if (op === "shot") {
-      Object.assign(cmd, { shot: args.name || true, frac: args.frac, cam: args.cam, az: args.az, el: args.el, dist: args.dist, h: args.h, side: args.side, tod: args.tod, hud: args.hud });
+      Object.assign(cmd, { shot: args.name || true, frac: args.frac, cam: args.cam, az: args.az, el: args.el, dist: args.dist, h: args.h, fov: args.fov, lat: args.lat, lookFrac: args.lookFrac, target: args.lookTarget, side: args.side, tod: args.tod, hud: args.hud });
     } else if (op === "eval") {
       if (typeof args.expr !== "string" || !args.expr) return refuse("bad_args", "eval needs expr", 'Pass {"op":"eval","expr":"a.corners()"}.');
       cmd.eval = args.expr;
@@ -438,6 +445,8 @@ export function createExtras(ctx) {
           "--preset", preset,
           "--label", label,
           "--out", out,
+          ...(a.profile ? ["--profile", String(a.profile)] : []),
+          ...(a.seed != null ? ["--seed", String(a.seed)] : []),
           ...(a.resume ? ["--resume"] : []),
           ...(a.panel === false ? ["--no-panel"] : []),
           ...(a.index === false ? ["--no-index"] : []),

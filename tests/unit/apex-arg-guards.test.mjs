@@ -74,3 +74,18 @@ test("reset() / seed() / garageParts() refuse non-finite or non-string input bef
   api.garageParts({ aero: Infinity, engine: {}, brakes: "carbon" });
   assert.deepEqual({ ...saved }, { aero: "a", brakes: "carbon" });
 });
+
+test("go() refuses when no race() built a player and grid (#2532)", () => {
+  const G = { player: null, cars: [], track: {}, state: "menu", raceT: 0 };
+  const api = loadApex(G);
+  assert.equal(api.go(), false);
+  assert.equal(G.state, "menu");
+  assert.equal(G.raceT, 0);
+});
+
+test("go() still starts a built race", () => {
+  const G = { player: { px: 0 }, cars: [{}], track: {}, state: "countdown", raceT: 0, lightsLit: 5, flyingStart: null, els: { lights: { hidden: false, children: [] } } };
+  const api = loadApex(G);
+  assert.equal(api.go(), "race");
+  assert.equal(G.raceT, 0.5);
+});

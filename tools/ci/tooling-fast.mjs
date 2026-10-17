@@ -166,6 +166,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // GL-aware capture / remote-group worker defaults (llvmpipe vs SwiftShader).
   "tests/unit/browser-workers.test.mjs",
   "tests/unit/build-client-drop.test.mjs",
+  "tests/unit/build-gallery.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
   "tests/unit/cam-motion.test.mjs",
@@ -549,6 +550,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-inputs.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
+  "tests/unit/hud-minimap-pitmark.test.mjs",
   // Behaviour pins that must survive the band allocator (PR #1375 audit; todo = known red on ship).
   "tests/unit/hud-pins.test.mjs",
   // Portrait phone bottom cluster: TYRES stays in the column (landscape-only
@@ -624,6 +626,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
   // livery-contrast (9.7 s) and cover-legibility (7.4 s) stay CI-only.
   "tests/unit/livery-decal-surfaces.test.mjs",
+  // Pure artwork and paint-editor VM regression; selected for all source edits.
+  "tests/unit/livery-design.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   "tests/unit/load-order.test.mjs",
   // The LOADING CARD's geometry: the three numbers the flyby editor authors,
@@ -1154,6 +1158,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // floor taps at --tap (survey r5 rank 4; 36–57px clip on 390×844 / 844×390).
   "tests/unit/ui-fit-trackdesigner-toolbar-r6.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
+  "tests/unit/ui-inspector-audit.test.mjs",
+  "tests/unit/ui-inspector-css.test.mjs",
+  "tests/unit/ui-inspector-transitions.test.mjs",
   "tests/unit/ui-journey-career.test.mjs",
   "tests/unit/ui-journey-race.test.mjs",
   "tests/unit/ui-journey-session.test.mjs",

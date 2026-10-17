@@ -47,6 +47,12 @@ function url(src) {
   const h = m && Object.prototype.hasOwnProperty.call(m, src) ? m[src] : null;
   return src + "?v=" + (typeof h === "string" && /^[0-9a-f]{12}$/.test(h) ? h : ((typeof window !== "undefined" && window.__APEX_BUILD) || 0));
 }
+// A hung lazy file (a stalled phone connection) never fires load OR error, so
+// the caller's loading card waited forever (#2582). After SLOW_MS `opts.onSlow`
+// fires (the UI may say "still loading"); after DEADLINE_MS the file counts as
+// failed, exactly like onerror, so every caller's existing fallback and its
+// memo-clear-on-failure retry path run. Overridable per load: opts.slowMs / deadlineMs.
+const SLOW_MS = 10000, DEADLINE_MS = 25000;
 function create() {
 const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
 function loadBackendScripts(files, edges, opts) {
@@ -84,13 +90,28 @@ function loadBackendScripts(files, edges, opts) {
     // global IS the fallback), so a reload would throw away a working
     // degradation path — and loop, since the one-shot guard already cleared.
     if (el.dataset) el.dataset.apexLazy = "1";   // guarded: a stubbed element has none
+    const slowMs = (opts && opts.slowMs) || SLOW_MS, deadlineMs = (opts && opts.deadlineMs) || DEADLINE_MS;
+    let slowT = null, deadT = null;
+    const W = typeof window !== "undefined" ? window : null, timed = !!(W && typeof W.setTimeout === "function");   // window timers only: inert/fake-timer test contexts opt out
+    const settle = (ok) => { if (timed) { W.clearTimeout(slowT); W.clearTimeout(deadT); } resolve(ok); };
+    if (timed) {
+    slowT = W.setTimeout(() => {
+      try { if (opts && opts.onSlow) opts.onSlow(src); } catch (_) { /* UI hook only */ }
+    }, slowMs);
+    deadT = W.setTimeout(() => {
+      if (typeof Log !== "undefined") Log.warn("game", "lazy load timed out after " + deadlineMs + " ms: " + src);
+      el.onload = el.onerror = null;
+      if (el.remove) el.remove();
+      settle(false);
+    }, deadlineMs);
+    }
     el.onload = () => {
       let ready = true;
       try { if (opts && opts.ready) ready = !!opts.ready(src); }
       catch (e) { ready = false; }
-      resolve(ready);
+      settle(ready);
     };
-    el.onerror = () => { if (el.remove) el.remove(); resolve(false); };
+    el.onerror = () => { if (el.remove) el.remove(); settle(false); };
     document.head.appendChild(el);
   });
   };

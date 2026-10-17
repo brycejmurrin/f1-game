@@ -2,18 +2,18 @@
  * player-dynamics-vm.test.mjs: the same pinned bench (tools/check/player-dyn.mjs)
  * on the car a fresh browser boots, createGame({ seat: "shipped" }) — no garage
  * seed, so team / parts. / setup. come from GameStore's miss path into
- * js/data/garage-defaults.js (Mercedes and its signature kit, 2026-10-14).
+ * js/data/garage-defaults.js (uploaded Red Bull signature kit, 2026-10-16).
  *
  * The pin twin locks the driving model's SHAPES on an empty-sheet McLaren; this
  * one locks what the player actually drives. Measured on this tree (monza,
  * FRAC 0, `node tools/check/player-dyn.mjs --json --seat shipped`) after the
  * capacity-scaled brake ellipse fix (trail-brake-turnin):
- *   brake from vTop 60.5 m/s   3.39 g, 1.82 s, 54.3 m
- *   accel                      t100 4.02 s, t200 14.37 s
- *   step steer 50 m/s / 0.5    final yaw 0.447 rad/s
- *   turn-in 55 m/s / 0.75      yaw 1.037 coasting vs 0.965 braking (≥0.6×)
- *   skidpad 60 m/s / 0.8       5.35 g
- *   full lock 45 m/s           yawMax 1.60 rad/s, rear slip max 12.5°
+ *   brake from vTop 60.5 m/s   3.39 g, 1.82 s, 54.2 m
+ *   accel                      t100 3.32 s, t200 13.73 s
+ *   step steer 50 m/s / 0.5    final yaw 0.448 rad/s
+ *   turn-in 55 m/s / 0.75      yaw 1.035 coasting vs 0.963 braking (≥0.6×)
+ *   skidpad 60 m/s / 0.8       5.42 g
+ *   full lock 45 m/s           yawMax 1.63 rad/s, rear slip max 12.7°
  * The bands below sit ~8-15 % around those, so a deliberate retune or a new
  * GarageDefaults export moves them on purpose, not by noise. One pin shape
  * still does NOT hold here: at 45 m/s full lock the front never reaches its
@@ -63,7 +63,10 @@ test("braking and acceleration sit in the shipped car's measured bands", () => {
   within(b.g_avg, 3.1, 3.7, `${top} g_avg`);
   within(b.t_s, 1.6, 2.05, `${top} t_s`);
   within(m["brake_55.6"].g_avg, 3.1, 3.7, "brake_55.6 g_avg");
-  within(m.accel.t100, 3.6, 4.5, "accel t100");
+  // The uploaded default changes the actual boot car from Mercedes to Red
+  // Bull. Re-centre the measured band around 3.32 s; its width shrinks from
+  // 0.9 to 0.7 s. Driving-model and handling assertions stay independent.
+  within(m.accel.t100, 3.0, 3.7, "accel t100");
   within(m.accel.t200, 12.5, 16.5, "accel t200");
 });
 

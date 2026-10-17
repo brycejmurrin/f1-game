@@ -426,7 +426,7 @@ test.describe("Track designer", () => {
     await page.getByRole("searchbox", { name: "Find a scenery theme" }).fill("no matching scenery");
     await expect(page.locator('#trackdesigner [data-role="theme-results"]')).toContainText("No themes found");
     await page.getByRole("button", { name: "Clear theme search and filters" }).click();
-    await expect(page.locator('#trackdesigner [data-theme]:not([hidden])')).toHaveCount(27);
+    await expect(page.locator('#trackdesigner [data-theme]:not([hidden])')).toHaveCount(30);
     await page.locator('#trackdesigner [data-theme="blossom"]').click();
     const u0 = await page.evaluate(() => TrackDesigner.state().undo);
     await page.getByRole("tab", { name: "ATMOSPHERE", exact: true }).click();
@@ -861,7 +861,7 @@ test.describe("Track designer", () => {
   });
 });
 
-test("designer workspaces author bridges and water on desktop and phone", async ({ page }, testInfo) => {
+test("designer workspaces author bridges, water and landscapes on desktop and phone", async ({ page }, testInfo) => {
   const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
   await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
   for (const [size, viewport] of [["desktop", { width: 1280, height: 800 }], ["phone", { width: 390, height: 844 }]]) {
@@ -906,11 +906,35 @@ test("designer workspaces author bridges and water on desktop and phone", async 
     });
     expect(waterFootprints, "authored water reaches the map preview").toBeGreaterThan(0);
     await page.screenshot({ path: testInfo.outputPath(size + "-water.png") });
+    await page.locator('[data-object-category="terrain"]').click();
+    for (const kind of ["mountain", "snowpeak", "hill", "dune", "rocks"]) await expect(page.locator('[data-prop="' + kind + '"]')).toBeVisible();
+    const search = page.getByRole("searchbox", { name: "Find a scenery object" });
+    await search.fill("snowy");
+    await expect(page.locator('[data-prop="snowpeak"]')).toBeVisible();
+    await expect(page.locator('[data-prop="mountain"]')).toBeHidden();
+    await search.fill("");
+    await page.locator('[data-prop="snowpeak"]').click();
+    await page.getByRole("button", { name: "Place the selected prop at the selected control point", exact: true }).click();
+    expect(await page.evaluate(() => TrackDesigner.state().design.props.filter((p) => p.kind === "snowpeak").length)).toBe(size === "desktop" ? 1 : 2);
+    await page.locator('[data-scenery-section="themes"]').click();
+    await page.locator('[data-theme="fjord"]').click();
+    expect(await page.evaluate(() => TrackDesigner.state().design.theme)).toBe("fjord");
+    await page.locator('[data-scenery-section="objects"]').click();
+    await page.screenshot({ path: testInfo.outputPath(size + "-terrain.png") });
+
     await mode("test").click();
     await expect(page.getByRole("textbox", { name: "Circuit name", exact: true })).toBeVisible();
     await expect(page.getByRole("list", { name: "Design checks", exact: true })).toBeVisible();
     await expect(bridges).toBeHidden();
     expect(await page.locator("#trackdesigner").evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
   }
+  await page.getByRole("button", { name: "SAVE", exact: true }).click();
+  const savedId = await page.evaluate(() => TrackDesigner.state().design.originId);
+  await page.reload();
+  await page.waitForFunction(() => window.__apex && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+  const saved = await page.evaluate((id) => CustomTracks.get(id), savedId);
+  expect(saved.theme).toBe("fjord");
+  expect(saved.props.filter((p) => p.kind === "snowpeak")).toHaveLength(2);
+  await raceAndBuild(page, savedId);
   expect(errors).toEqual([]);
 });

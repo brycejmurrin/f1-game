@@ -766,7 +766,15 @@ var PitLane = (function () {
       const d = toEntry(c);
       if (!(d > 0)) return Infinity;
       const lim = limit();
-      return Math.sqrt(lim * lim + 2 * ENTRY_BRAKE * Math.max(0, d - 4));
+      // The curve ends at the START of the entry road, not at the line: the
+      // peel to the lane happens ON the road, and a car let through it at 25-30
+      // m/s (the curve's value 30 m out) cannot move 9 m sideways in 30 m — it
+      // met the wall at the road's end clamped to its track face (x -7.8, 8 of
+      // 21 on a Suzuka weather stop), was not in the lane at the line, and went
+      // round again, every lap. On the road itself: the limit.
+      const p = G.track && G.track.pit;
+      const road = p && !p.painted ? p.entryRoadM || 0 : 0;
+      return Math.sqrt(lim * lim + 2 * ENTRY_BRAKE * Math.max(0, d - road - 4));
     }
 
     /** The EXIT ROAD's hold: the limit until the blend has brought a serviced

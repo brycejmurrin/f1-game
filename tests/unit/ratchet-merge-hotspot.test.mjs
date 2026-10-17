@@ -34,7 +34,7 @@ function repo() {
   const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
   const tool = (...a) => cp.execFileSync(process.execPath, ["tools/check/ratchets.mjs", ...a],
-    { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GITHUB_EVENT_NAME: "", GITHUB_ACTIONS: "" } });
+    { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GITHUB_EVENT_NAME: "", GITHUB_ACTIONS: "", APEX_RATCHETS_BASE: "ship" } });
   git("init", "-q", "-b", "ship");
   git("config", "user.email", "t@example.invalid"); git("config", "user.name", "t"); git("config", "commit.gpgsign", "false");
   for (const t of TOOLS) write(t, fs.readFileSync(path.join(ROOT, t), "utf8"));
@@ -212,4 +212,22 @@ test("two PRs raising the same TREE metric as fragments merge clean in either or
   assert.equal(row.ceiling, 5, "the merged tip's effective tree ceiling is the sum of both deltas");
   r.tool("--fold");
   assert.equal(JSON.parse(r.tool("--json")).rows.find((x) => x.tree && x.metric === "bareCatches").ceiling, 5, "fold keeps the tree ceiling");
+});
+
+// #2583: a delta lowered every ratcheted file, touched or not, so sibling PRs
+// double-lowered shared ceilings. Only files the branch changed may be lowered.
+test("--update on a topic branch lowers only files the branch changed", (t) => {
+  const r = repo();
+  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  // Headroom the branch did not create: the tip shrank apex.js past its ceiling.
+  const apex = path.join(r.dir, "js/agent/apex.js");
+  fs.writeFileSync(apex, fs.readFileSync(apex, "utf8").split("\n").slice(0, 150).join("\n") + "\n");
+  r.git("add", "-A"); r.git("commit", "-qm", "tip shrinks apex");
+  r.git("checkout", "-q", "-b", "cursor/sib-1111");
+  const f = path.join(r.dir, "js/ui/hud.js");
+  fs.writeFileSync(f, fs.readFileSync(f, "utf8").split("\n").slice(0, 170).join("\n") + "\n");
+  r.tool("--update");
+  const frag = JSON.parse(fs.readFileSync(path.join(r.dir, "tests/data", "ratchets.d", "cursor--sib-1111.json"), "utf8"));
+  assert.ok(frag.files["js/ui/hud.js"], "the touched file is lowered");
+  assert.equal(frag.files["js/agent/apex.js"], undefined, "an untouched file is not");
 });

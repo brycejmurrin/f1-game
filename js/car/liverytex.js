@@ -1069,7 +1069,8 @@ const LiveryTex = (function () {
   // the title sponsor running along the spine, an exposed-carbon panel, or the
   // race number. All paint into REGIONS.crest, so the strip in car-mesh drapes
   // them over the rounded crown like the crest.
-  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "streaks", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number", "cap", "ridge", "fade"];
+  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "streaks", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number", "cap", "ridge", "fade",
+    ...(typeof LiveryDesign !== "undefined" ? LiveryDesign.PATTERNS : [])];
   // WRAP: one shape in CAR space painted into every region it crosses, so the
   // paint job goes over the spine and down both flanks as a single graphic —
   // the RB22's sun and bull. The car-space → region maps are car-mesh's:
@@ -1504,6 +1505,8 @@ const LiveryTex = (function () {
   // chassis mesh along the sidepod board line and recolours one side. They live
   // in Liveries.FIELDS + the paint-sheet colour rows, never here.
   const FILL_SURFACES = Object.freeze([
+    { key: "patternTint", label: "DESIGN COLOUR", why: "Choose a new spine design", tops: typeof LiveryDesign !== "undefined" ? LiveryDesign.PATTERNS : [] },
+    { key: "patternSecond", label: "SECOND DESIGN COLOUR", why: "Choose a two-colour design", tops: ["gradient", "twoTone", "segments", "checker", "diamonds", "dots"] },
     { key: "spineTint", label: "BAND",
       why: "Needs a SPINE TOP that paints a band (e.g. stripe, saddle, panel)",
       tops: ["saddle", "panel", "stripe", "streaks", "twin", "chevron", "wedge",
@@ -1785,6 +1788,9 @@ const LiveryTex = (function () {
     // first, the brand mark over them, lettering and numbers over everything —
     // so the crown's flank graphic is deferred to sit between the two classes.
     let paintFlankBull = null;
+    // New wrap art sits above the base fills and below lettering, using one shared surface map.
+    const paintDesign = typeof LiveryDesign !== "undefined" && LiveryDesign.PATTERNS.includes(spineLogo)
+      ? () => LiveryDesign.drawAtlas(ctx, colors, REGIONS, FLANK, eachFlank) : null;
     const spineSideRaw = colors.spineSide || "none";
     const spineSide = SPINE_SIDE_IDS.includes(spineSideRaw) ? spineSideRaw : "none";
     if (spineLogo === "logo") {
@@ -1992,7 +1998,10 @@ const LiveryTex = (function () {
     // Force a halo on the saddle: inkFlank.worst is high against bandC, so
     // haloIf would skip — and that is exactly when the aft letters leave the
     // panel onto the cover.
-    const flankHalo = (ink) => spineLogo === "saddle" ? haloFor(ink) : haloIf(ink);
+    // Adjustable wraps cross both bare paint and arbitrary colours/gradients.
+    // A contrasting keyline keeps lettering readable across every boundary.
+    const designWrap = !!paintDesign && colors.patternPlacement === "wrap";
+    const flankHalo = (ink) => spineLogo === "saddle" || designWrap ? haloFor(ink) : haloIf(ink);
     // ...and a band painted ON that flank has to clear IT, not the cover. bandC
     // is scored against coverPaint, so wherever the crown design has repainted
     // the flank — the saddle in stripe||accent, the wrap in the sun's colour —
@@ -2075,6 +2084,7 @@ const LiveryTex = (function () {
     // The crown's flank graphic takes its place in the stack (see the layer
     // note where paintFlankBull is declared).
     if (paintFlankBull && !SIDE_FILL[spineSide]) { paintFlankBull(); paintFlankBull = null; }
+    if (paintDesign && !SIDE_FILL[spineSide]) paintDesign();
     if (spineSide === "logo" || spineSide === "emblem") {
       // logo / emblem: paintTeamMark — same logo / logo2 / logo3 routing as the
       // parts livery tiles (paintSwatch), not a separate flank palette.
@@ -2184,9 +2194,9 @@ const LiveryTex = (function () {
           return;
         }
         drawWordmark(ctx, names[0] || "", sbox(F, 0.40, 0.96, 0.14, 0.50), inkFlank,
-          { align: "center", pad: 8, halo: haloIf(inkFlank) });
+          { align: "center", pad: 8, halo: flankHalo(inkFlank) });
         drawWordmark(ctx, names[1] || "", sbox(F, 0.05, 0.35, 0.16, 0.46), inkFlank,
-          { align: "center", pad: 6, halo: haloIf(inkFlank) });
+          { align: "center", pad: 6, halo: flankHalo(inkFlank) });
       });
     } else if (spineSide === "title") {
       // Title sponsor ON a contrasting board — distinct from bare wordmark / PLATE.
@@ -2464,6 +2474,7 @@ const LiveryTex = (function () {
       });
     }
     if (paintFlankBull) { paintFlankBull(); paintFlankBull = null; }
+    if (paintDesign && SIDE_FILL[spineSide]) paintDesign();
 
     // Sponsor wordmarks (names resolved above, by the spine).
     if (names.length) {   // `clean` leaves every wordmark region as paint

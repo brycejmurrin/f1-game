@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import vm from 'node:vm';
 import { EventEmitter } from 'node:events';
 import sharp from 'sharp';
-import { screenshotPresentedCanvas, awaitCaptureReady, mutateCaptureScene } from '../../tools/shot/probe-page.mjs';
+import { screenshotPresentedCanvas, awaitCaptureReady, mutateCaptureScene, withCaptureRendering, screenshotNativeCanvas } from '../../tools/shot/probe-page.mjs';
 import { poolMap, startWorkerPool, waitCaptureFrame, openPage } from '../../tools/shot/apex-capture.mjs';
 import { parseCssPlayArgs, screenClicks, SCREENS, swapStylesheet } from '../../tools/ui/css-play.mjs';
 import { menuReady, previewMapSettled } from '../../tools/ui/menu-readiness.mjs';
@@ -885,4 +885,79 @@ test('WebGPU capture launch uses the verified software adapter pins and refuses 
   assert.ok(launch.args.includes('--use-webgpu-adapter=swiftshader'));
   assert.ok(launch.args.includes('--use-vulkan=swiftshader'));
   assert.throws(() => captureLaunchOptions(parseCaptureOptions(['--gpu', 'llvmpipe']), { backend: 'webgpu' }), /WebGL-only/);
+});
+
+
+test('garage capture uses actual native presents when the race camera clock is stationary', async () => {
+  let presents = 0, paused = false;
+  const window = { __apex: { garageCam: () => ({ on: true }), cameraState: () => ({ renderFrame: 0 }),
+    headless: (value) => value == null ? paused : (paused = value) } };
+  const GLX = { softPresent: () => false, awaitSoftPresent: async (_timeout, signal) => {
+    assert.equal(signal, 'frame'); assert.equal(paused, false); presents++; return 'frame';
+  } };
+  const page = { evaluate: (fn, payload) => vm.runInNewContext('(' + fn.toString() + ')(payload)',
+    { window, GLX, payload, setTimeout, clearTimeout, Date }) };
+  const result = await awaitCaptureReady(page, { timeoutMs: 100, pauseRender: true });
+  assert.equal(result.presents, 2); assert.equal(presents, 2); assert.equal(paused, true);
+  paused = false; GLX.awaitSoftPresent = async () => 'stale';
+  await assert.rejects(awaitCaptureReady(page, { timeoutMs: 100 }), /no usable presentation clock/);
+});
+
+test('isolated car capture uses the viewer draw clock instead of a race camera clock', async () => {
+  let frame = 2;
+  const window = { CARVIEW: { get frame() { return frame++; } }, __apex: { cameraState: () => ({ renderFrame: 0 }) } };
+  const page = { evaluate: (fn, payload) => vm.runInNewContext('(' + fn.toString() + ')(payload)',
+    { window, GLX: { softPresent: () => false }, payload, setTimeout, clearTimeout, Date }) };
+  const result = await awaitCaptureReady(page, { timeoutMs: 100 });
+  assert.equal(result.mode, 'native-frame'); assert.ok(result.shown >= result.before + 2);
+});
+
+test('capture rendering restores a live or paused owner after success or capture failure', async () => {
+  for (const previous of [true, false]) for (const fail of [true, false]) {
+    let paused = previous;
+    const window = { __apex: { headless: (value) => value == null ? paused : (paused = value) } };
+    const page = { evaluate: (fn, payload) => vm.runInNewContext('(' + fn.toString() + ')(payload)', { window, payload }) };
+    const run = withCaptureRendering(page, async () => {
+      assert.equal(paused, false);
+      window.__apex.headless(true);
+      if (fail) throw new Error('capture rejected');
+      return 'captured';
+    });
+    if (fail) await assert.rejects(run, /capture rejected/); else assert.equal(await run, 'captured');
+    assert.equal(paused, previous);
+  }
+});
+
+
+test('native readback is submitted before pausing and restores its owner on failure', async () => {
+  for (const before of [false, true]) {
+    let paused = before, reads = 0;
+    const window = { __apex: { headless: (value) => value == null ? paused : (paused = value) } };
+    const GLX = { softPresent: () => false, awaitSoftPresent: async (_ms, signal) => {
+      assert.equal(signal, 'frame'); assert.equal(paused, false); return 'frame';
+    }, capturePixels: () => { reads++; assert.equal(paused, false); return Promise.reject(new Error('readback failed')); } };
+    const page = { evaluate: (fn, payload) => vm.runInNewContext('(' + fn.toString() + ')(payload)',
+      { window, GLX, payload, setTimeout, clearTimeout }) };
+    await assert.rejects(screenshotNativeCanvas(page), /readback failed/);
+    assert.equal(reads, 1); assert.equal(paused, before);
+    GLX.awaitSoftPresent = async () => 'stale';
+    await assert.rejects(screenshotNativeCanvas(page), /did not present/);
+    assert.equal(reads, 1); assert.equal(paused, before);
+    GLX.softPresent = () => true;
+    assert.equal(await screenshotNativeCanvas(page), null);
+    assert.equal(paused, before);
+  }
+});
+
+test('timed-out native presentation cannot later start a readback or pause its owner', async () => {
+  let paused = false, complete, reads = 0;
+  const window = { __apex: { headless: (value) => value == null ? paused : (paused = value) } };
+  const GLX = { softPresent: () => false, awaitSoftPresent: () => new Promise((resolve) => { complete = resolve; }),
+    capturePixels: () => { reads++; throw new Error('late readback'); } };
+  const page = { evaluate: (fn, payload) => vm.runInNewContext('(' + fn.toString() + ')(payload)',
+    { window, GLX, payload, setTimeout, clearTimeout }) };
+  await assert.rejects(screenshotNativeCanvas(page, { timeout: 5 }), /timed out/);
+  assert.equal(paused, false); complete('frame');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reads, 0); assert.equal(paused, false);
 });

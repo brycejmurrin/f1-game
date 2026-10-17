@@ -19,11 +19,12 @@ its follow-up PRs, not PR numbers.
 2. Hunt live. Every finding row: id, `file:line`, severity, verdict
    (CONFIRMED-LIVE / VM-ONLY / CODE-TRACED / REFUTED / BY-DESIGN), evidence.
 3. A confirmed finding: fix with a unit test that fails before and passes
-   after, tooling-fast, push a DRAFT PR with the `run-ci` label, then send
+   after, `tooling-fast --changed`, push a DRAFT PR with the `run-ci` label, then send
    `NEW-PR <#> <branch> <head sha> <one-line summary>` and stop touching that
    PR (no subscription, no sync, no ready-gate, no further push).
 4. Send `REPORT <lane> <PR#|none> <sha> <note path>` with the changed rows
-   after each round.
+   after each round, ending with the box-health line (role-pr-owner.md §Keep
+   the box free; whole browser groups go to `remote-group.mjs`, not local).
 5. Start the next round on a fresh branch from the deploy tip.
 
 ## Stopping rule

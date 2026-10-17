@@ -433,6 +433,20 @@ drive a target during a Playwright group. Detach before ending the session.
 The complete [tool reference and debugging workflow](research/AGENT-JS-DEBUGGER-MCP.md)
 covers discovery, breakpoints, locals, stepping, exception pauses and cleanup.
 
+
+### Combined track survey galleries
+
+`apex_shot_survey {"tracks":["monza","spa"],"preset":"quick","out":"artifacts/track-survey/weekend"}` captures each track serially and writes one root `index.html` containing every view, grouped by circuit. Per-track galleries and findings remain available. Long capture batches return an asynchronous job ID as before.
+
+Combine saved reports without launching a browser:
+
+```json
+{"reports":["artifacts/track-survey/monza/findings.json","artifacts/track-survey/spa/findings.json"],"out":"artifacts/track-survey/combined"}
+```
+
+Pass this object to `apex_shot_survey`. The CLI equivalent is `node tools/shot/shot-survey.mjs --reports artifacts/track-survey/monza/findings.json,artifacts/track-survey/spa/findings.json --out artifacts/track-survey/combined`.
+The output folder includes copied PNG/JPEG assets and can be shared as a ZIP. Reports may identify custom circuits; an explicit `actualTrack` or runtime `state.info.track` takes precedence over a bootstrap track ID. Captures now record their actual runtime track ID. Missing images fail the gallery build; recorded capture failures stay visible in the gallery.
+
 ### Read-only UI inspector
 
 `node tools/ui/explorer.mjs inspect --screen settingsappearance --styles '#as-uiScale'`
@@ -498,7 +512,34 @@ restoring size cannot undo application state transitions. Use the existing
 `layout-audit.mjs` matrix for scales/pointers/insets and validated replay actions
 for settings changes, scrolling, reload durability and modal navigation.
 
+Add `--roundtrip` to revisit sizes in reverse order (at most 15 observations,
+without duplicating the turnaround size). Every record retains bounded classifier
+history, final state and return-cycle evidence. `paths` compares the same size
+across directions, including classified sheets without controls. Differences can
+be intentional hysteresis; absent, replaced or bounded contexts remain unknown.
+History records at most 128 contexts, 16 states each and 1,024 states total.
+
+`--styles` also reports inherited candidate declarations and source lines, plus
+browser-reported container-query metadata and actual container identity/geometry
+when supported. Query conditions have no CDP active result and remain explicitly
+unevaluated. Shadow/slot ancestry and optional API failures remain unavailable.
+These records do not establish inheritance, condition truth or cascade winners.
+
+Use `--audit artifacts/fit-audit/audit.json` to attach existing native fit-audit,
+layout-audit or menu-fit evidence (input at most 5 MiB). Producers now capture
+source identity and root, viewport, pointer, scales, insets and appearance.
+Only matching complete provenance is comparable; old reports remain incomparable,
+and setup failures remain skipped. Dirty worktrees require equal content
+fingerprints. Findings retain producer measurements and map only to uniquely
+identified controls or contexts. Audit measurement rules are not duplicated.
+Layout-audit's content-visibility override is recorded as an adjustment, so its
+geometry reports remain incomparable with an untouched inspector page. The tool
+does not change page styles to manufacture a match. A comparable empty cell is
+an absence of native findings, not a functional pass.
+
 API references: [Chrome CSS domain](https://chromedevtools.github.io/devtools-protocol/tot/CSS/),
+[current CDP schema](https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol/master/json/browser_protocol.json),
+[Chromium inherited style traversal](https://raw.githubusercontent.com/chromium/chromium/main/third_party/blink/renderer/core/inspector/inspector_style_resolver.cc),
 [Playwright accessibility snapshots](https://playwright.dev/docs/aria-snapshots),
 [Playwright traces](https://playwright.dev/docs/trace-viewer),
 [MDN visual viewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport),
