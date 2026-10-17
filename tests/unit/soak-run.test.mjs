@@ -17,7 +17,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/perf/soak-run.js"), "utf8");
 
 function rig({ curveAt = null, k = 0.02 } = {}) {
-  const calls = { raf: [], cancel: 0, recStart: 0, recStop: 0, paused: [], startRace: 0 };
+  const calls = { raf: [], cancel: 0, recStart: 0, recStop: 0, pauseClicks: 0, startRace: 0 };
   let now = 0;
   const G = {
     state: "menu", paused: false, seasonMode: true, timeTrial: true, duel: true,
@@ -25,7 +25,7 @@ function rig({ curveAt = null, k = 0.02 } = {}) {
     track: { total: 5000 }, smp: { t: [0, 0, 1], hw: 7 },
     camMode: 0, raceLaps: 3, _testInput: null,
     wrapS: (s) => s % 5000,
-    closeSettings() {}, setPaused(v, why) { calls.paused.push([v, why]); },
+    closeSettings() {},
     setCamMode(i) { G.camMode = i; },
     startRace() { calls.startRace++; G.state = "count"; return Promise.resolve(); },
     endWeatherSession() {},
@@ -39,6 +39,7 @@ function rig({ curveAt = null, k = 0.02 } = {}) {
     Math, Promise, Object, Array, Number, performance: { now: () => now },
     requestAnimationFrame: (f) => { calls.raf.push(f); return calls.raf.length; },
     cancelAnimationFrame: () => { calls.cancel++; },
+    document: { getElementById: (id) => (id === "pausebtn" ? { click() { calls.pauseClicks++; } } : null) },
     Tracks, CamModes: { CAM_MODES: [{ id: "tv" }, { id: "chase" }] },
     Log: { info() {} },
     PhoneRecorder: { start() { calls.recStart++; ctx.PhoneRecorder._on = true; }, stop() { calls.recStop++; ctx.PhoneRecorder._on = false; }, isOn: () => !!ctx.PhoneRecorder._on },
@@ -84,7 +85,7 @@ test("it finishes on time: clears _testInput, pauses, stops the recorder, and ca
   assert.equal(SoakRun.active(), false);
   assert.equal(G._testInput, null);
   assert.equal(calls.recStop, 1);
-  assert.deepEqual(JSON.parse(JSON.stringify(calls.paused[calls.paused.length - 1])), [true, "soak-complete"]);
+  assert.equal(calls.pauseClicks, 1, "the game's own pause button parks the car under the menu");
   assert.equal(SoakRun.status().state, "done");
 });
 

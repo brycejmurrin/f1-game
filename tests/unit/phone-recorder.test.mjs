@@ -209,3 +209,19 @@ test("each live sample carries the renderer path and per-subsystem span ms", () 
   const bare = load().liveEnv().sample();
   assert.equal(bare.spans, null);
 });
+
+test("reads game modules that are top-level consts, not window properties (the real page shape)", () => {
+  const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number, Date, Promise, Map, isFinite, setTimeout });
+  ctx.globalThis = ctx;
+  // `const` at script top level is lexical: invisible as ctx.PerfGov, visible to bare-name lookups.
+  vm.runInContext(`const PerfGov = { frameStats: () => ({ frames: 77, p50: 16, p95: 20, p99: 30, maxMs: 40 }), fpsEMA: () => 16.7, floorMs: () => 16.7,
+    tier: () => 1, userTier: () => 0, autoShed: () => 0, autoRes: () => true, scaleFutile: () => false, tierFutile: () => false };
+    const GLX = { getRenderScale: () => 0.9 }; const GfxQuality = { current: () => "high" };`, ctx);
+  assert.equal(ctx.PerfGov, undefined, "the premise: not a property of the global object");
+  const PR = vm.runInContext(SRC + "\n;PhoneRecorder", ctx);
+  const s = PR.liveEnv().sample();
+  assert.equal(s.frame.frames, 77);
+  assert.equal(s.renderScale, 0.9);
+  assert.equal(s.tier, 1);
+  assert.equal(s.preset, "high");
+});

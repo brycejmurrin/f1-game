@@ -90,7 +90,8 @@ const SoakRun = (function () {
     if (r.raf) cancelAnimationFrame(r.raf);
     if (G) {
       G._testInput = null;     // the real Input owns the car again the instant the soak ends
-      try { G.setPaused(true, "soak-" + reason); } catch (_) { /* pause is a courtesy */ }
+      // The game's own PAUSE button (G has no setPaused member; the pause menu then shows SHARE's panel).
+      try { const b = document.getElementById("pausebtn"); if (b && !G.paused) b.click(); } catch (_) { /* pause is a courtesy */ }
     }
     try { if (typeof PhoneRecorder !== "undefined" && PhoneRecorder.isOn()) PhoneRecorder.stop(); } catch (_) { /* recorder gone */ }
     _last = { state: "done", reason, minutes: +((performance.now() - r.t0) / 60000).toFixed(2) };
@@ -128,12 +129,11 @@ const SoakRun = (function () {
     if (i < 0) return Promise.resolve(false);
     try {
       if (G.closeSettings) G.closeSettings();
-      G.setPaused(false, "soak-start");
       G.trackIdx = i; G.seasonMode = false; G.timeTrial = false; G.duel = false;
       G.raceLaps = LAPS;
       if (G.endWeatherSession) G.endWeatherSession();
       G.raceWeather = "wet"; G.raceTimeOfDay = "default";
-    } catch (_) { return Promise.resolve(false); }
+    } catch (e) { try { Log.warn("game", "SoakRun start refused: " + (e && e.message)); } catch (_) { /* Log not loaded */ } return Promise.resolve(false); }
     _run = { raf: 0, t0: performance.now(), tRace: 0, prev: 0, started: false, minutes: opts.minutes > 0 ? opts.minutes : SOAK_MIN,
       st: { hold: 30, stalled: 0, lastS: null } };
     _last = { state: "starting", reason: "" };
