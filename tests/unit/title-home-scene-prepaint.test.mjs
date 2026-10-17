@@ -53,7 +53,7 @@ test("live Home grid geometry lives in blocking css/menus.css", () => {
   );
 });
 
-test("compact-wide live Home grid-places #menu-secondary under the brand", () => {
+test("compact-wide live Home grid-places #menu-secondary under the door stack", () => {
   // Source pin: #menu-buttons spans the overlay with subgrid so #menu-secondary
   // can sit under #menu-brand while remaining the title scroll box (no DOM move).
   assert.match(
@@ -73,8 +73,8 @@ test("compact-wide live Home grid-places #menu-secondary under the brand", () =>
   );
   assert.match(
     menus,
-    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[\s\S]*grid-column:\s*1;[\s\S]*grid-row:\s*1 \/ -1;[\s\S]*min-height:\s*var\(--tap\)/,
-    "parks #menu-secondary under the brand (bottom of the column, clear of the sound chip) with a --tap floor (#1537: height auto for 2-line labels)",
+    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[\s\S]*grid-column:\s*2;[\s\S]*grid-row:\s*5;[\s\S]*min-height:\s*var\(--tap\)/,
+    "parks #menu-secondary as the bottom row of the door column (Oct 6 look) with a --tap floor (#1537: height auto for 2-line labels)",
   );
   assert.match(
     menus,

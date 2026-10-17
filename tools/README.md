@@ -43,6 +43,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/cli-args.mjs** | Shared CLI flag reader: both `--name=v` and `--name v`, and an unknown flag is an ERROR not a shrug. | — |
 | **lib/conflict-cure.mjs** | Pure resolvers for deploy/sync-pr conflict cures: keep both sides' hand edits in index.html and package.json. | — |
 | **lib/css-source.mjs** | Reads logical stylesheet families in manifest order for source audits and ratchets. | — |
+| **lib/custom-survey-locations.mjs** | Native custom-design imports and source-located authored scenery targets (no browser). | — |
 | **lib/deploy-status.mjs** | deploy.mjs verdict markers (`= deploy start/done` in artifacts/logs/deploy.log) and the reader for --status/--wait. | — |
 | **lib/flicker-metric.mjs** | Pure per-pixel temporal-instability metric for `shot/flicker-gate.mjs`: luma, flip masks, 8-connected clusters, verdict. | playwright-probe |
 | **lib/flyby-audit.cjs** | Fleet audit of the pre-race FLYBY path (FlybySeq.solve) in the node VM: jumps, lift, ground, grid sightline, pan rate. | playwright-probe |
@@ -59,6 +60,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/pack-assets.cjs** | Node loader for assets/pack: `parseModel` (mirrors assets.js) and `packAssets()` (the `Assets.modelSync` surface). | asset-pack |
 | **lib/proxy-fetch.mjs** | A `fetch` honouring HTTPS_PROXY (curl-backed when Node would bypass the agent proxy) for GitHub API callers in tools/. | — |
 | **lib/road-position-checks.cjs** | Position-based road-ribbon checks (running width/advance, skirt depth+attachment, vertical continuity) for verify-track. | — |
+| **lib/screenshot-gallery.cjs** | Shared offline screenshot pages: native navigation, image expansion and responsive cards, without scripts. | — |
 | **lib/session-contracts.mjs** | Normalize hosted tool envelopes and diagnose session capability prerequisites without calling remote services. | check-changes |
 | **lib/solid-in-road.cjs** | Solid-in-road audit: `solidsInRoad(track, prims)` lists shipped prop/glass prims whose XZ hull stands on tarmac. | scenery-dress |
 | **lib/stuck-census.mjs** | Per-car AI stuck / rescue event tracker (pure; the VM loop lives in tools/check/ai-stuck.mjs). | ai-racecraft |
@@ -207,6 +209,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/garage-frame.mjs** | Garage turntable screenshot + garageCam() JSON for WebGPU/WebGL2 A/B. | — |
 | **shot/garage-interior.mjs** | PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture. | — |
 | **shot/garage-tap.mjs** | GARAGE tap from the title, prebuild ON vs OFF on one tree: tap-to-first-frame ms (__apex.garagePrebuild). | playwright-probe |
+| **shot/gen-scenery-locations.cjs** | Regenerate/check the all-circuit emitted-scenery screenshot location catalog. | — |
 | **shot/hud-live-sample.mjs** | Sample moved HUD pieces every few ms in an unfrozen race after position jumps; report time spent off screen. | survey-ui-matrix |
 | **shot/hud-mock.mjs** | Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; one boot per pointer type, ~1 s a shot. | survey-ui-matrix |
 | **shot/hud-survey.mjs** | Race-HUD survey: devices x cameras x presets/themes/scale → overlaps, missing, offscreen, tiny text + shots, gallery. | survey-ui-matrix |
@@ -217,6 +220,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | playwright-probe |
 | **shot/replay-camera-probe.mjs** | Offline-fixture live-render camera discontinuity probe across replay entry, seek, follow, exit and reentry. | f1-animation-cameras |
 | **shot/repro-shot.mjs** | Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header. | playwright-probe |
+| **shot/scenery-source-hash.cjs** | Fingerprint all scenery geometry/build inputs used by the named screenshot catalog. | — |
 | **shot/shot-jobs.mjs** | Pure helpers for shot.mjs: CLI/batch job parse, output format, track grouping. | — |
 | **shot/shot-survey.mjs** | Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON. | survey-track |
 | **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
@@ -248,8 +252,11 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/glx-call-census.mjs** | What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages. | renderer-debug |
 | **gfx/gpu-census.mjs** | Does this machine have a real GPU? Launches full Chromium per flag set and reports the adapter (`census_only` in CI). | — |
 | **gfx/gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | — |
+| **gfx/gpu-mem-census.mjs** | GPU-resident bytes by format after boot: textures, renderbuffers and buffers, from wrapped WebGL2 allocation calls. | renderer-debug / playwright-probe |
 | **gfx/knob-ab.mjs** | Visual knob A/B: same frame with a lightTune knob ON twice (noise floor) and OFF; fails unless ON vs OFF beats noise. | renderer-debug |
 | **gfx/mem-census.mjs** | Memory census: heap after GC, live tracks, three render objects and decoded audio per track load (picker or race path). | mcp-probe / check-changes |
+| **gfx/pass-census.mjs** | Draw calls and triangles per render pass (main, mirror, sun/lamp shadow, post) per frame: the exact count behind #2657. | renderer-debug / playwright-probe |
+| **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |
@@ -286,7 +293,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/startline-snap.cjs** | Derives `startFrac` from a real start/finish coordinate: projects into the def's `path`, snaps to the nearest segment. | new-track |
 | **track/stitch-osm-ring.mjs** | Stitches OpenStreetMap `highway=raceway` ways into ONE closed ring for import-circuit-path.mjs. | new-track |
 | **track/survey-gallery-lib.cjs** | Shared helpers for build-gallery / pr-survey-panel: survey branch list, raw GitHub URLs, git blobs. | — |
-| **track/survey-gallery-page.cjs** | Offline survey gallery page: filters, accessible lightbox and keyboard navigation. | — |
+| **track/survey-gallery-page.cjs** | Offline circuit gallery: pre-rendered captures, native circuit navigation and recipe downloads. | — |
 | **track/survey-track.mjs** | One-command circuit survey: aerial/orbit/driver-eye shots per spot plus a flagged ground-profile probe; `--oblique`. | survey-track |
 | **track/track-accuracy-validator.mjs** | Shape-error maths (`MAX_SHAPE_ERROR`, `signedArea`, …) shared by the circuit-accuracy tests. | new-track |
 | **track/track-verts.cjs** | Per-circuit vertex + model-diagnostics dump for exact before/after diffing (`--diff before.json`). | agent-view |
@@ -333,7 +340,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/explorer/css-evidence.mjs** | Bounded CDP inherited and container CSS candidates with explicit unavailable evidence. | — |
 | **ui/explorer/inspector.mjs** | Read-only UI inspection: semantic controls, explicit live bindings, hit tests, CDP styles and state differences. | — |
 | **ui/explorer/modes.mjs** | Eight UI exploration modes sharing bounded evidence, replay and a real navigation graph. | — |
-| **ui/explorer/report.mjs** | Offline UI explorer HTML evidence report with filters, linked state graph and safe local artifacts. | — |
+| **ui/explorer/report.mjs** | Offline UI explorer evidence report with native navigation, linked state graph and safe local artifacts. | — |
 | **ui/explorer/transitions.mjs** | Bounded adaptive classification histories and forward/reverse viewport path comparisons. | — |
 | **ui/fit-audit.mjs** | The NUMBERS fit audit over viewports × interface scales: tap targets, legibility floor, clipped-without-scroll. | ui-menu-a11y |
 | **ui/layout-audit.mjs** | ONE CLI for menu geometry + PNG/DOM capture: clip/tap/overflow matrix, `--gallery`, `--screen=ID`, `--survey`. | survey-ui-matrix |
@@ -500,6 +507,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
 | **mcp/js-debugger-mcp.json** | `tests/unit/js-debugger-mcp.test.mjs` |
+| **shot/scenery-locations.json** | `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/track-shot-survey.test.mjs` |
 | **track/clip-baseline.json** | `ci/select-specs.mjs`, `lib/stale-rows.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/audit-circuit.test.mjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |

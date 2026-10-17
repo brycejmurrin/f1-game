@@ -51,3 +51,13 @@ test("summariseCpu: self vs total, fn filter", () => {
   assert.equal(upd.selfPct, 25); assert.equal(upd.totalPct, 100); assert.equal(col.selfPct, 75);
   assert.equal(summariseCpu(profile, { fn: "^coll" }).bySelf.length, 1);
 });
+
+test("incomparable: arms with different capture modes never read as noise/WIN/REGRESS", async () => {
+  const { supportsCaptureKey } = await import("../../tools/perf/lib.mjs");
+  assert.equal(supportsCaptureKey(["x", 'sessionStorage.getItem("apex26.wgxCapture")']), true);
+  assert.equal(supportsCaptureKey(["x", ""]), false);
+  const base = aggregate([run(1300), run(1200), run(1400)]), head = aggregate([run(54), run(50), run(60)]);
+  assert.equal(diff(base, head)[0].verdict, "WIN");
+  const r = diff(base, head, { incomparable: true })[0];
+  assert.equal(r.verdict, "incomparable"); assert.equal(r.verdict95, "incomparable");
+});
