@@ -3,6 +3,7 @@
 // @skill survey-track
 import fs from "node:fs";
 import path from "node:path";
+import { cameraControls, scenarioShots } from "./survey-scenarios.mjs";
 import zlib from "node:zlib";
 
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
@@ -116,6 +117,8 @@ export function assertUniqueShotNames(shots) {
 
 /** Machine-readable plan for a survey run (no I/O). */
 export function buildTrackShotSurveyPlan(args = {}) {
+  if (!args.location && (args.angles || args.weathers || args.camera)) throw new Error("angles/weathers/camera require a named location");
+  if (args.location) args = { ...args, preset: "custom", shots: scenarioShots(args) };
   const label = normLabel(args.label ?? args.prefix ?? "survey");
   const presetKey = args.preset == null || args.preset === "" ? "scenery" : String(args.preset);
   const presetDef = presetKey === "custom" ? null : SURVEY_PRESETS[presetKey];
@@ -144,6 +147,8 @@ export function buildTrackShotSurveyPlan(args = {}) {
         h: s.h == null ? null : Number(s.h),
         side: s.side == null ? 1 : Number(s.side),
         hud: !!s.hud,
+        ...cameraControls(s),
+        ...(s.location ? { location: s.location, angle: s.angle, verification: s.verification } : {}),
       };
     });
     if (shots.length > MAX_SURVEY_SHOTS) throw new Error(`shots max ${MAX_SURVEY_SHOTS}`);
@@ -249,17 +254,21 @@ export function pngProblem(file) {
 
 /** Split a plan into cells to capture and cells already on disk. A cell only counts as resumed when its PNG is
  *  structurally sound; an unsound one is listed in `invalid` (with why) and recaptured. */
-export function filterResumeShots(outDir, shots, resume = false) {
+export function filterResumeShots(outDir, shots, resume = false, context = null) {
   if (!resume) return { pending: shots.slice(), resumed: [], invalid: [] };
   const pending = [];
   const resumed = [];
   const invalid = [];
   for (const s of shots) {
-    const png = shotPngPath(outDir, s.name);
+    const png = context?.extension ? path.join(outDir, `${s.name}.${context.extension}`) : shotPngPath(outDir, s.name);
+    let matches = !context;
+    if (context) { try { matches = JSON.parse(fs.readFileSync(png + ".capture.json", "utf8")).identity === context.identities[s.name]; } catch {} }
     if (!fs.existsSync(png)) { pending.push(s); continue; }
-    const why = pngProblem(png);
+    // An unsound PNG is recaptured whatever its receipt says (#1982); other formats (preview JPEG) are judged by identity alone.
+    const why = png.endsWith(".png") ? pngProblem(png) : null;
     if (why) { invalid.push({ name: s.name, reason: why }); pending.push(s); }
-    else resumed.push({ ...s, png, resumed: true });
+    else if (matches) resumed.push({ ...s, png, resumed: true });
+    else pending.push(s);
   }
   return { pending, resumed, invalid };
 }

@@ -206,7 +206,7 @@ test("part and livery ids match the source export verbatim", () => {
   }
   assert.equal(Object.keys(def).length, Object.keys(exp.garage).length);
   // Spot-check the ids the player-facing brief called out.
-  assert.equal(def.team, 0);
+  assert.equal(def.team, 3);
   assert.equal(def["livery.haas"], "custom_17893761682261");
   assert.equal(def["parts.mercedes"].engine, "sig_mercedes_zero");
   assert.equal(def["parts.racingbulls"].tyres, "sig_rb_street");
@@ -224,14 +224,14 @@ test("garage-defaults.js loads before the store in the manifest", () => {
 test("game.js keeps the McLaren call-site; GarageDefaults still wins on a miss", () => {
   // store.get("team", 0) on js/game.js reroutes test:circuits+collisions and
   // dropped 21 selected specs (PR #1021 run 37472255445). The miss-path team
-  // is GarageDefaults.team (0, Mercedes); the call-site stays 2 so a game.js
+  // is GarageDefaults.team (3, Red Bull); the call-site stays 2 so a game.js
   // edit is not required to ship the garage.
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   assert.match(game, /store\.get\("team", 2\)/);
   assert.doesNotMatch(game, /store\.get\("team", 0\)/);
   const { GameStore, GarageDefaults } = load();
   assert.equal(GameStore.store.get("team", 2), GarageDefaults.get("team"));
-  assert.equal(GarageDefaults.get("team"), 0);
+  assert.equal(GarageDefaults.get("team"), 3);
 });
 
 test("pinFactorySeat lives on factory-seat.js, not the fixtures re-export", () => {
@@ -378,10 +378,9 @@ test("a fresh install fields the first legend in his own period car, not the shi
   } finally { g.close(); }
 });
 
-test("a shipped setup sheet is the team's WORKS sheet: a fresh install does not read TUNED", () => {
-  // setup.mercedes shipped {arbF 6, arbR 5} against SetupTune.DEFAULTS {7, 7}, so
-  // SetupTune.isDefault("mercedes") was false from the first boot: the SETUP tab
-  // said TUNED and carried a small unasked-for handling offset.
+test("a fresh garage preserves the uploaded setup sheet, including deliberate tuning", () => {
+  // The supplied Default.json intentionally tunes Mercedes ARBs to 6 / 5.
+  // Preserve that setup rather than silently substituting the WORKS sheet.
   const { def } = readDefaults();
   const ctx = vm.createContext({
     Math, console, Object, Array, Number, JSON, isFinite,
@@ -396,7 +395,9 @@ test("a shipped setup sheet is the team's WORKS sheet: a fresh install does not 
   assert.ok(shipped.length > 0);
   for (const k of shipped) {
     const id = k.slice("setup.".length);
-    assert.equal(S.isDefault(id), true, `${k} must equal SetupTune.defaults("${id}")`);
+    for (const [field, value] of Object.entries(def[k])) {
+      assert.equal(S.get(id)[field], value, `${k}.${field} must preserve the uploaded value`);
+    }
   }
+  assert.equal(S.isDefault("mercedes"), false, "the uploaded Mercedes tune differs from WORKS");
 });
-

@@ -1343,6 +1343,7 @@ const api = {
   },
   go() {
     if (G.flyingStart) G.flyingStart.stop();   // a rolling start's run-up (js/race/flying-start.js): the wheel is the caller's now
+    if (!G.player || !G.cars.length) return false;   // no race() built a grid: "race" with zero cars is a dead tick loop (#2532)
     G.state = "race"; G.raceT = Math.max(G.raceT, 0.5);
     if (G.loadingScreen && G.loadingScreen.lowerWaitPlate) G.loadingScreen.lowerWaitPlate();
     resetStartLights(true);
