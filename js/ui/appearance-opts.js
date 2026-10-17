@@ -19,6 +19,7 @@ const AppearanceOpts = (function () {
   const K_TEXT = "textSize";
   const K_CONTRAST = "uiContrast";
   const K_CVD = "cvdMode";
+  const K_ICON = "appIcon";
   const K_UNITS = "speedUnits";
   const K_HELP = "menuHelp";
 
@@ -31,6 +32,9 @@ const AppearanceOpts = (function () {
   // Units are display-only: physics and every stored number stay in km/h.
   const TEXT_SIZES = [["normal", "NORMAL"], ["large", "LARGE"], ["larger", "LARGER"]];
   const CONTRASTS = [["off", "OFF"], ["high", "HIGH"]];
+  // PWA ICON SET (#1612): swaps the in-page favicon + apple-touch-icon. The home-screen
+  // icon is fixed when the app is installed, so the row says to re-add it. Assets: icons/shortcuts/<A-F>/.
+  const ICON_SETS = [["default", "CLASSIC"], ["A", "A · DARK"], ["B", "B · RED"], ["C", "C · LIGHT"], ["D", "D · RED DISC"], ["E", "E · CYAN"], ["F", "F · YELLOW"]];
   const CVD_MODES = [["off", "OFF"], ["deutan", "DEUTERANOPIA"], ["protan", "PROTANOPIA"], ["tritan", "TRITANOPIA"]];
   const UNITS = [["kmh", "KM/H"], ["mph", "MPH"]];
   // HELP TEXT: HIDE drops the grey .adv-help explanations inside the settings
@@ -82,6 +86,7 @@ const AppearanceOpts = (function () {
   let textSize = oneOf(store.get(K_TEXT, "large"), TEXT_SIZES, "large");
   let contrast = oneOf(store.get(K_CONTRAST, "high"), CONTRASTS, "high");
   let cvdMode = oneOf(store.get(K_CVD, "off"), CVD_MODES, "off");
+  let appIcon = oneOf(store.get(K_ICON, "default"), ICON_SETS, "default");
   let units = oneOf(store.get(K_UNITS, "kmh"), UNITS, "kmh");
   let help = oneOf(store.get(K_HELP, "on"), HELPS, "on");
 
@@ -327,6 +332,7 @@ const AppearanceOpts = (function () {
     applyReadability();
     applyMenuAccent();
     applyHudAccent();
+    applyIcon();
     syncCustomRows();
   }
 
@@ -393,6 +399,21 @@ const AppearanceOpts = (function () {
     paintRow("pm-contrast", contrast);
     return contrast;
   }
+  function applyIcon() {
+    const d = typeof document !== "undefined" ? document : null;
+    if (!d || !d.querySelector) return;
+    const set = (sel, href) => { const l = d.querySelector(sel); if (l) l.setAttribute("href", href); };
+    const base = appIcon === "default" ? null : "icons/shortcuts/" + appIcon + "/";
+    set('link[rel="icon"]', base ? base + "favicon-32.png" : "icons/icon-180.png");
+    set('link[rel="apple-touch-icon"]', base ? base + "apple-touch-180.png" : "icons/icon-180.png");
+  }
+  function setAppIcon(v) {
+    appIcon = oneOf(v, ICON_SETS, "default");
+    store.set(K_ICON, appIcon);
+    applyIcon();
+    paintRow("pm-appicon", appIcon);
+    return appIcon;
+  }
   function setCvdMode(v) {
     cvdMode = oneOf(v, CVD_MODES, "off");
     store.set(K_CVD, cvdMode);
@@ -450,11 +471,12 @@ const AppearanceOpts = (function () {
     textSize = oneOf(v.textSize, TEXT_SIZES, "large");
     contrast = oneOf(v.uiContrast, CONTRASTS, "high");
     cvdMode = oneOf(v.cvdMode, CVD_MODES, "off");
+    appIcon = oneOf(v.appIcon, ICON_SETS, "default");
     units = oneOf(v.speedUnits, UNITS, "kmh");
     help = oneOf(v.menuHelp, HELPS, "on");
     applyAll();
     for (const [id, value] of [["pm-uitheme", theme], ["pm-menuaccent", menuAccent], ["pm-hudaccent", hudAccent],
-      ["pm-textsize", textSize], ["pm-contrast", contrast], ["pm-cvd", cvdMode], ["pm-units", units], ["pm-helptext", help]]) paintRow(id, value);
+      ["pm-textsize", textSize], ["pm-contrast", contrast], ["pm-cvd", cvdMode], ["pm-appicon", appIcon], ["pm-units", units], ["pm-helptext", help]]) paintRow(id, value);
   }
 
   function initUI() {
@@ -478,6 +500,19 @@ const AppearanceOpts = (function () {
         contrastRow.parentNode.insertBefore(help, built.row.nextSibling);
       }
     }
+    if (!byId("pm-appicon")) {
+      const anchor = byId("pm-cvd-help") || byId("pm-contrast");
+      if (anchor && anchor.parentNode && SettingRow.build) {
+        const built = SettingRow.build("pm-appicon", "APP ICON", ICON_SETS);
+        const note = document.createElement("p");
+        note.className = "adv-help";
+        note.id = "pm-appicon-help";
+        note.textContent = "Changes the tab and share icon now. An installed home-screen icon is fixed when added: remove it and re-add to home screen to apply.";
+        anchor.parentNode.insertBefore(built.row, anchor.nextSibling);
+        anchor.parentNode.insertBefore(note, built.row.nextSibling);
+      }
+    }
+    if (byId("pm-appicon")) SettingRow.wire("pm-appicon", { values: ICON_SETS, read: () => appIcon, write: (v) => setAppIcon(v) });
     SettingRow.wire("pm-uitheme", {
       values: THEMES,
       read: () => theme,
@@ -528,11 +563,13 @@ const AppearanceOpts = (function () {
   }
 
   return {
-    K_THEME, K_MENU, K_HUD, K_MENU_HEX, K_HUD_HEX, K_TEXT, K_CONTRAST, K_CVD, K_UNITS, K_HELP,
-    THEMES, ACCENTS, PRESET_HEX, CSS_MENU_PRESETS, TEXT_SIZES, CONTRASTS, CVD_MODES, UNITS, HELPS,
+    K_THEME, K_MENU, K_HUD, K_MENU_HEX, K_HUD_HEX, K_TEXT, K_CONTRAST, K_CVD, K_ICON, K_UNITS, K_HELP,
+    THEMES, ACCENTS, PRESET_HEX, CSS_MENU_PRESETS, TEXT_SIZES, CONTRASTS, CVD_MODES, ICON_SETS, UNITS, HELPS,
     textSize: () => textSize,
     contrast: () => contrast,
     cvdMode: () => cvdMode,
+    appIcon: () => appIcon,
+    setAppIcon,
     units: () => units,
     help: () => help,
     speed, unitLabel, setTextSize, setContrast, setCvdMode, setUnits, setHelp,

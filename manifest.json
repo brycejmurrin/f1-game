@@ -1,5 +1,6 @@
 {
   "id": "/f1-game/",
+  "lang": "en",
   "name": "Apex 26",
   "short_name": "Apex 26",
   "description": "Unofficial F1 fan game & data hub — 2026 grid, a 24-round season plus 28 classic circuits in 3D WebGL, tilt to steer, plus live championship data.",
@@ -64,8 +65,8 @@
       "url": "./?go=race",
       "icons": [
         {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192",
+          "src": "icons/shortcut-96.png",
+          "sizes": "96x96",
           "type": "image/png"
         }
       ]
@@ -77,8 +78,8 @@
       "url": "./?go=daily",
       "icons": [
         {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192",
+          "src": "icons/shortcut-96.png",
+          "sizes": "96x96",
           "type": "image/png"
         }
       ]
@@ -90,8 +91,8 @@
       "url": "./?go=nextgp",
       "icons": [
         {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192",
+          "src": "icons/shortcut-96.png",
+          "sizes": "96x96",
           "type": "image/png"
         }
       ]
@@ -103,8 +104,8 @@
       "url": "controller.html",
       "icons": [
         {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192",
+          "src": "icons/shortcut-96.png",
+          "sizes": "96x96",
           "type": "image/png"
         }
       ]
@@ -116,8 +117,8 @@
       "url": "./?go=garage",
       "icons": [
         {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192",
+          "src": "icons/shortcut-96.png",
+          "sizes": "96x96",
           "type": "image/png"
         }
       ]

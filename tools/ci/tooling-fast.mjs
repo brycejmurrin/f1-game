@@ -26,6 +26,7 @@
  *   node tools/ci/tooling-fast.mjs                  # full suite, serial
  *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy>: affected files only
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
+ *   node tools/ci/tooling-fast.mjs --stop           # stop the registered run's whole process tree (artifacts/run/tooling-fast.json); never pkill -f / a PID kill
  *   node tools/ci/tooling-fast.mjs --bail           # stop STARTING files after the first failure (CI guard shards)
  *   node tools/ci/tooling-fast.mjs tests/unit/x…    # subset (same logging)
  *   … --order=list                                   # list order, not longest-first
@@ -420,6 +421,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
   // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
   "tests/unit/fleet-board.test.mjs",
+  "tests/unit/fleet-flags.test.mjs",
   // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
   // synthetic frames, plus its site table: ~0.1 s, no browser. The gate itself
   // runs only in ci.yml's non-blocking flicker-gate job.
@@ -616,7 +618,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/light-store-cond-layer.test.mjs",
   "tests/unit/light-store-copy.test.mjs",
   "tests/unit/light-store-perchunk-pin.test.mjs",
-  "tests/unit/lighting-campaign.test.mjs",
   "tests/unit/lighting-reapply.test.mjs",
   "tests/unit/lighting-rebuild.test.mjs",
   "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -873,6 +874,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",
   "tests/unit/road-position-checks.test.mjs",
+  "tests/unit/run-pid.test.mjs",
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
   "tests/unit/save-durability.test.mjs",
@@ -993,6 +995,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.
   "tests/unit/suzuka-crossover-span.test.mjs",
   "tests/unit/sweep-shards.test.mjs",
+  "tests/unit/sync-pr-robust.test.mjs",
   "tests/unit/team-livery.test.mjs",
   "tests/unit/team-style-relief.test.mjs",
   "tests/unit/telemetry-trace.test.mjs",
@@ -1166,6 +1169,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 6: Track Designer tool-strip labels wrap+balance and
   // floor taps at --tap (survey r5 rank 4; 36–57px clip on 390×844 / 844×390).
   "tests/unit/ui-fit-trackdesigner-toolbar-r6.test.mjs",
+  "tests/unit/ui-fixer-uncommitted.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-inspector-audit.test.mjs",
   "tests/unit/ui-inspector-css.test.mjs",
@@ -1695,10 +1699,13 @@ export function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
 export function selectToolingFastChanged(changed, opts = {}) {
   const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
   const tfSet = new Set(allFiles);
+  // `changed` is the real diff size on EVERY path (it used to exist only on `empty`/`matched`, so a whole-floor
+  // fallback printed `changed=0`); `because` names the first path that forced the fallback (#2663 follow-up).
   const full = (reason, extra = {}) => ({
     files: [...allFiles],
     reason,
     shards: shardsCoveringFiles(allFiles, allFiles),
+    changed: changed.length,
     ...extra,
   });
 
@@ -1707,16 +1714,15 @@ export function selectToolingFastChanged(changed, opts = {}) {
   if (isDocsOnly(changed)) {
     const docsTests = allFiles.filter((f) => DOCS_FAST_TESTS.test(f));
     const files = docsTests.length ? docsTests : allFiles;
-    return { files, reason: "docs-only", shards: shardsCoveringFiles(files, allFiles) };
+    return { files, reason: "docs-only", shards: shardsCoveringFiles(files, allFiles), changed: changed.length };
   }
 
   const circ = circuitsTouched(changed, opts.ref || "");
   const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
-  if (tracked.length) return full("tracked", { tracked });
+  if (tracked.length) return full("tracked", { tracked, because: tracked[0] });
 
-  if (changed.some((f) => TOOLING_FAST_CHANGED_RUN_ALL.some((re) => re.test(f)))) {
-    return full("run-all-path");
-  }
+  const runAll = changed.find((f) => TOOLING_FAST_CHANGED_RUN_ALL.some((re) => re.test(f)));
+  if (runAll) return full("run-all-path", { because: runAll });
 
   let scripts = opts.scripts;
   if (!scripts) {
@@ -1727,7 +1733,7 @@ export function selectToolingFastChanged(changed, opts = {}) {
     }
   }
   const receipt = selectionReceipt(changed, scripts);
-  if (receipt.reason === "unmatched") return full("unmatched", { unclaimed: receipt.unclaimed });
+  if (receipt.reason === "unmatched") return full("unmatched", { unclaimed: receipt.unclaimed, because: (receipt.unclaimed || [])[0] });
 
   const selected = new Set();
   const index = opts.pinIndex || pinIndex();
@@ -1761,13 +1767,21 @@ export function selectToolingFastChanged(changed, opts = {}) {
   return { files, reason: "matched", shards: shardsCoveringFiles(files, allFiles), changed: changed.length };
 }
 
+/** The `--changed` header line: reason, the REAL diff size, the files chosen, and the path that forced a fallback. */
+export function changedHeader(meta, fileCount) {
+  return `[tooling-fast] --changed reason=${meta.reason} changed=${meta.changed ?? 0} files=${fileCount}` +
+    `${meta.because ? ` because=${meta.because}` : ""} shards=${(meta.shards || []).join(",") || "none"}`;
+}
+export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against origin/${DEPLOY_BRANCH} — nothing was selected, nothing verified (exit 3).\n` +
+  `  Commit or stage your edit, \`git fetch origin ${DEPLOY_BRANCH}\` if the ref is stale, or run without --changed for the whole floor.`;
+
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
 export const TOOLING_FAST_FLAGS = Object.freeze([
-  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--help", "-h",
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--stop", "--help", "-h",
 ]);
 
-export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--changed] [--bail] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--bail] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
        node tools/ci/tooling-fast.mjs --help`;
 
 /** Split a file list across CI jobs (`--shard=1/2`). Stride, not contiguous. */
@@ -1803,6 +1817,7 @@ export function parseToolingFastArgv(argv) {
     files: args.length ? args : null, // null = full TOOLING_FAST_FILES
     changed: argv.includes("--changed"),
     bail: argv.includes("--bail"),
+    stop: argv.includes("--stop"),
     jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
     order: val("order"),
     record: argv.includes("--record"),
@@ -1825,14 +1840,30 @@ if (isMain) {
     console.log(TOOLING_FAST_USAGE);
     process.exit(0);
   }
+  if (parsed.stop) {
+    // The sanctioned stop (#2663): the registered run's whole process tree, never `pkill -f` or a hand-typed PID.
+    const { stop } = await import("../lib/run-pid.mjs");
+    const r = await stop("tooling-fast");
+    console.log(r.state === "stopped" ? `[tooling-fast] stopped pid ${r.pid} (${r.killed} processes${r.forced ? `, ${r.forced} killed hard` : ""})`
+      : r.state === "stale" ? `[tooling-fast] the registered run (pid ${r.pid}) is already gone` : "[tooling-fast] no registered run");
+    process.exit(0);
+  }
+  {
+    const { register, release } = await import("../lib/run-pid.mjs");
+    if (register("tooling-fast").ok) process.on("exit", () => release("tooling-fast"));   // a nested run (a test) leaves the outer's record alone
+  }
   let files0 = parsed.files;
   let changedMeta = null;
   if (parsed.changed) {
     changedMeta = selectToolingFastChanged(changedVsDeploy());
     files0 = changedMeta.files;
-    console.log(`[tooling-fast] --changed reason=${changedMeta.reason} ` +
-      `changed=${changedMeta.changed ?? 0} ` +
-      `files=${files0.length} shards=${changedMeta.shards.join(",") || "none"}`);
+    console.log(changedHeader(changedMeta, files0.length));
+    if (changedMeta.reason === "empty") {
+      // An empty diff selects zero files and the runner printed `= run passed (0 passed, 0 failed)` with exit 0: a
+      // vacuous green that read as proof. Nothing was verified, so say so and fail (exit 3, distinct from a test failure).
+      console.error(EMPTY_DIFF_MESSAGE);
+      process.exit(3);
+    }
   } else if (!files0) {
     files0 = [...TOOLING_FAST_FILES];
   }
