@@ -116,20 +116,8 @@
    pins this exact declaration as the contract that 2-up cells fill, and
    asserts `width: auto` never appears here. A pin is worth more than a line. */
 #menu-buttons :is(#menu-primary, #menu-explore, #menu-secondary).balanced-row > .bigbtn { width: 100%; min-width: 0; }
-/* A DOOR IS NEVER NARROWER THAN ITS LONGEST WORD. min-width: 0 above lets a
-   cell shrink past its content — and .bigbtn is overflow: hidden, so the label
-   is CUT rather than wrapped (a flex item that clips gets no automatic
-   minimum). MEASURED 2026-10-05 (layout-audit, ios-iphone-landscape 734x343,
-   UI SIZE 150 %): the compact column zooms at most 1.25 while the type takes
-   the rest (x 1.2), so a 2x2 cell is ~99 own px and SEASON + its icon needs
-   ~101 — RACE A FRIEND, SEASON and PRACTICE ran 12 / 18 / 2 px past their
-   doors; USE AS CONTROLLER's icon was cut at 130 % and 150 %, and on an
-   upright iPad (834x1194) the five-across room row gave it ~102 for ~114.
-   min-content is the label's longest word plus the icon and padding: where it
-   fits the 2x2 nothing moves (every 100 % layout, both goldens), and where it
-   does not, the balanced row wraps that door onto a line of its own at full
-   width instead of clipping it. The rooms other than USE AS CONTROLLER keep
-   min-width: 0 — their labels already fit the cell they get. */
+/* A DOOR IS NEVER NARROWER THAN ITS LONGEST WORD: min-content lets the balanced
+   row wrap a door onto its own line instead of clipping its label. */
 #menu-buttons :is(#menu-primary, #menu-explore).balanced-row > .bigbtn,
 #menu-buttons #menu-secondary.balanced-row > #mb-phonepad { min-width: min-content; }
 /* apex9 ~752–768: 5-across rooms wrapped TRACK DESIGNER / HOW TO PLAY
@@ -387,7 +375,7 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
   width: 100%; align-self: start; justify-self: stretch;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
-  grid-column: 1; grid-row: 1 / -1; align-self: end; display: flex; flex-wrap: nowrap; align-items: stretch;
+  grid-column: 2; grid-row: 5; align-self: start; display: flex; flex-wrap: nowrap; align-items: stretch;
   gap: calc(var(--gap) * 0.15); min-height: var(--tap); height: auto; max-height: none;
   --balance-basis: 0%; --balance-min: 0%;
 }
