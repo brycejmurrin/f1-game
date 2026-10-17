@@ -309,10 +309,14 @@ export function writeSurveyFindings(outDir, meta) {
   const body = {
     ok: meta.ok !== false,
     track: meta.track,
+    actualTrack: meta.actualTrack || meta.state?.info?.track,
+    state: meta.state?.info ? { info: meta.state.info } : undefined,
     tracks: meta.tracks,
     label: meta.label,
     preset: meta.preset,
     captured: shots.length,
+    failed: meta.failed ?? (Array.isArray(meta.failures) ? meta.failures.length : 0),
+    failures: meta.failures,
     flagged: flagged.length,
     shots,
     panel: meta.panelPng || null,
@@ -351,27 +355,81 @@ figcaption{font:11px/1.3 monospace;margin-top:4px;color:#9aa3b2}
   return file;
 }
 
-/** Multi-track compare gallery (relative paths into per-track dirs). */
+const htmlEscape = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+const galleryTrack = (row) => row.actualTrack || row.state?.info?.track || row.track || "Unknown track";
+const failedCount = (row) => Math.max(Number(row.failed) || 0, Array.isArray(row.failures) ? row.failures.length : 0, row.error ? 1 : 0);
+const galleryPath = (outDir, file) => {
+  const relative = path.isAbsolute(file) ? path.relative(outDir, file) : file;
+  return relative.split(path.sep).map(encodeURIComponent).join("/");
+};
+
+/** Multi-track gallery. Rows may include shots as well as the legacy index/panel links. */
 export function writeCompareIndex(outDir, meta) {
-  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
   const tracks = meta.tracks || [];
-  const sections = tracks.map((t) => {
-    const rel = esc(t.relIndex || `${t.track}/index.html`);
-    const panel = t.panel ? `<p><a href="${esc(t.panel)}">${esc(path.basename(t.panel))}</a></p>` : "";
-    return `<section><h2><a href="${rel}">${esc(t.track)}</a> — ${t.captured ?? 0} shot(s)</h2>${panel}</section>`;
+  const count = (row) => row.captured ?? row.shots?.length ?? 0;
+  const sections = tracks.map((t, i) => {
+    const track = galleryTrack(t);
+    const rel = t.relIndex === null ? null : galleryPath(outDir, t.relIndex || `${t.track || track}/index.html`);
+    const indexLink = rel ? ` · <a href="${htmlEscape(rel)}">Track index</a>` : "";
+    const panel = t.panel ? `<p><a href="${htmlEscape(galleryPath(outDir, t.panel))}">Contact sheet</a></p>` : "";
+    const shots = (t.shots || []).map((shot) => {
+      const image = shot.png || shot.file || `${shot.name}.png`;
+      const file = htmlEscape(galleryPath(outDir, image));
+      const details = [shot.cam, shot.frac == null ? null : `lap ${Number.isFinite(Number(shot.frac)) ? (Number(shot.frac) * 100).toFixed(1) + "%" : shot.frac}`, shot.tod, shot.weather].filter(Boolean).join(" · ");
+      const caption = [shot.name || "View", details].filter(Boolean).join(" — ");
+      return `<figure><a href="${file}"><img src="${file}" loading="lazy" alt="${htmlEscape(track + " — " + caption)}"></a><figcaption>${htmlEscape(caption)}</figcaption></figure>`;
+    }).join("\n");
+    const failures = (Array.isArray(t.failures) ? t.failures : []).map((failure) => `<li>${htmlEscape(typeof failure === "string" ? failure : [failure.name, failure.error || failure.message || JSON.stringify(failure)].filter(Boolean).join(": "))}</li>`).join("");
+    const error = t.error ? `<p class="failure">${htmlEscape(t.error)}</p>` : "";
+    return `<section id="track-${i + 1}"><h2>${htmlEscape(t.label || track)}</h2><p class="meta">${htmlEscape(track)} · ${count(t)} captured · ${failedCount(t)} failed${t.preset ? " · " + htmlEscape(t.preset) : ""}${indexLink}</p>${panel}${error}${failures ? `<ul class="failure">${failures}</ul>` : ""}<div class="grid">${shots}</div></section>`;
   }).join("\n");
   const html = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>compare shot survey</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${htmlEscape(meta.label || "Track survey gallery")}</title>
 <style>
-body{font:14px/1.4 system-ui,sans-serif;margin:1rem;background:#14161c;color:#e6e9ef}
-a{color:#8ec7ff} section{margin:1rem 0;padding:0.75rem 0;border-bottom:1px solid #2a2f3a}
+*{box-sizing:border-box}body{font:15px/1.5 system-ui,sans-serif;margin:0;padding:clamp(12px,3vw,36px);background:#14161c;color:#e6e9ef;overflow-wrap:anywhere}
+a{color:#8ec7ff}section{margin:2rem 0;padding:1rem 0;border-top:1px solid #39404d}h1,h2{line-height:1.2}.meta,figcaption{color:#b6bfce}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:20px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:6px;background:#000}figcaption{font-size:13px;margin-top:7px}.failure{color:#ffb4a8}nav{display:flex;flex-wrap:wrap;gap:8px 18px}
 </style></head><body>
-<h1>compare — ${esc(meta.label || "survey")}</h1>
-<p>preset ${esc(meta.preset || "custom")}; ${tracks.length} track(s).</p>
+<h1>${htmlEscape(meta.label || "Track survey gallery")}</h1>
+<p>${tracks.length} track(s) · ${tracks.reduce((n, t) => n + count(t), 0)} captured · ${tracks.reduce((n, t) => n + failedCount(t), 0)} failed · preset ${htmlEscape(meta.preset || "custom")}</p>
+<nav aria-label="Tracks">${tracks.map((t, i) => `<a href="#track-${i + 1}">${htmlEscape(t.label || galleryTrack(t))}</a>`).join("")}</nav>
 ${sections}
 </body></html>`;
   fs.mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, "index.html");
   fs.writeFileSync(file, html);
   return file;
+}
+
+/** Assemble existing findings reports without a browser; copy images for a portable folder. */
+export function writeSurveyGalleryFromReports(outDir, reportPaths, { validateAssetPath } = {}) {
+  if (!Array.isArray(reportPaths) || !reportPaths.length) throw new Error("Survey gallery requires at least one findings report");
+  const copies = [];
+  const rows = reportPaths.map((reportPath, reportIndex) => {
+    const reportFile = path.resolve(reportPath);
+    let report;
+    try { report = JSON.parse(fs.readFileSync(reportFile, "utf8")); }
+    catch (error) { throw new Error(`Cannot read survey report ${reportFile}: ${error.message}`); }
+    if (!report || !Array.isArray(report.shots)) throw new Error(`Invalid survey report ${reportFile}: shots must be an array`);
+    const copyAsset = (image, assetIndex) => {
+      const source = path.resolve(path.dirname(reportFile), image);
+      if (validateAssetPath) validateAssetPath(source);
+      if (!/\.(png|jpe?g)$/i.test(source)) throw new Error(`Unsupported survey image ${source}: expected PNG or JPEG`);
+      if (!fs.existsSync(source) || !fs.statSync(source).isFile()) throw new Error(`Missing survey image ${source} (report ${reportFile})`);
+      const basename = path.basename(source).replace(/[^A-Za-z0-9._-]/g, "_");
+      const file = `assets/${reportIndex + 1}-${assetIndex}-${basename}`;
+      copies.push({ source, file });
+      return file;
+    };
+    const shots = report.shots.map((shot, i) => ({ ...shot, png: copyAsset(shot.png || shot.file || `${shot.name}.png`, i + 1) }));
+    const panel = report.panel || report.panelPng;
+    return { ...report, track: galleryTrack(report), shots, captured: shots.length, panel: panel ? copyAsset(panel, "panel") : null, relIndex: null };
+  });
+  // Validate the entire input before writing so missing images cannot leave a partial gallery.
+  validateAssetPath?.(path.join(outDir, "index.html"));
+  validateAssetPath?.(path.join(outDir, "assets"));
+  for (const { file } of copies) validateAssetPath?.(path.join(outDir, file));
+  fs.mkdirSync(path.join(outDir, "assets"), { recursive: true });
+  for (const { source, file } of copies) fs.copyFileSync(source, path.join(outDir, file));
+  return writeCompareIndex(outDir, { label: "Track survey gallery", preset: "reports", tracks: rows });
 }

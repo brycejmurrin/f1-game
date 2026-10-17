@@ -5,10 +5,11 @@ const DesignerScenery = (function () {
   "use strict";
   const CATEGORIES = Object.freeze({
     all: null,
-    nature: ["parkland", "alpine", "autumn", "tuscany", "savanna", "ardennes", "winter", "jungle", "lakeside", "moorland", "vineyard", "blossom", "volcanic"],
-    coast: ["harbour", "marina", "coast", "twilight", "lakeside", "shipyard", "island", "volcanic"],
+    nature: ["parkland", "alpine", "autumn", "tuscany", "savanna", "ardennes", "winter", "jungle", "lakeside", "moorland", "vineyard", "blossom", "volcanic", "fjord", "redwood"],
+    coast: ["harbour", "marina", "coast", "twilight", "lakeside", "shipyard", "island", "volcanic", "fjord"],
+    mountain: ["alpine", "winter", "canyon", "volcanic", "fjord", "redwood"],
     city: ["harbour", "marina", "tilke", "airfield", "metropolis", "shipyard", "stadium"],
-    desert: ["oasis", "desertnight", "canyon", "saltflat"],
+    desert: ["oasis", "desertnight", "canyon", "saltflat", "badlands"],
     night: ["desertnight", "marina", "twilight", "stadium"],
   });
   const PRESETS = Object.freeze({
@@ -106,19 +107,24 @@ const DesignerScenery = (function () {
     const library = group("1 · CHOOSE AN OBJECT"); library.dataset.role = "object-library";
     const objectFilters = el("div", "td-chips"); objectFilters.dataset.role = "object-filters";
     objectFilters.setAttribute("role", "group"); objectFilters.setAttribute("aria-label", "Object categories");
-    const waterKinds = ["water", "pond", "lake", "river"];
-    const nature = ["trees", "palms", "hedge", "pines", "bushes", ...waterKinds];
+    const objectSearch = el("input", "td-input"); objectSearch.type = "search";
+    objectSearch.placeholder = "Find an object…"; objectSearch.setAttribute("aria-label", "Find a scenery object");
+    const objectCount = el("div", "td-hint"); objectCount.setAttribute("role", "status"); objectCount.dataset.role = "object-results";
     function filterObjects() {
       for (const b of objectFilters.children) pressed(b, b.dataset.objectCategory === objectCategory);
+      const query = objectSearch.value.trim().toLowerCase(); let n = 0;
       for (const b of props.children) {
-        const kind = b.dataset.prop;
-        b.hidden = objectCategory === "water" ? !waterKinds.includes(kind) : objectCategory !== "all" && (nature.includes(kind) ? "nature" : "venue") !== objectCategory;
+        const kind = b.dataset.prop, text = TrackDesignerProps.LABELS[kind] + " " + TrackDesignerProps.DESCRIPTIONS[kind];
+        b.hidden = (objectCategory !== "all" && !TrackDesignerProps.CATEGORIES[objectCategory].includes(kind)) || !text.toLowerCase().includes(query);
+        if (!b.hidden) n++;
       }
+      objectCount.textContent = n ? n + " objects" : "No objects found. Try another search or category.";
     }
-    for (const [id, label] of [["all", "ALL"], ["nature", "NATURE"], ["water", "WATER"], ["venue", "RACE VENUE"]]) {
+    for (const [id, label] of [["all", "ALL"], ["nature", "NATURE"], ["terrain", "TERRAIN"], ["water", "WATER"], ["venue", "RACE VENUE"]]) {
       const b = btn(label, "sel-chip", () => { objectCategory = id; filterObjects(); });
       b.dataset.objectCategory = id; objectFilters.appendChild(b);
     }
+    objectSearch.addEventListener("input", filterObjects);
     const props = el("div", "td-chips"); props.dataset.role = "props";
     props.setAttribute("role", "group"); props.setAttribute("aria-label", "Scenery props");
     for (const id of TrackDesignerProps.KINDS) {
@@ -126,7 +132,7 @@ const DesignerScenery = (function () {
     }
     const selectedObject = el("div", "td-hint"); selectedObject.dataset.role = "selected-object";
     selectedObject.setAttribute("role", "status");
-    library.append(objectFilters, props);
+    library.append(objectSearch, objectFilters, props, objectCount);
     const placementGroup = group("2 · PLACE OBJECTS"); placementGroup.dataset.role = "object-placement";
     const sides = el("div", "td-chips"); sides.dataset.role = "prop-side";
     sides.setAttribute("role", "group"); sides.setAttribute("aria-label", "Track side in driving direction");
@@ -277,6 +283,7 @@ const DesignerScenery = (function () {
       if (range) hint.textContent = "Even spacing from start to end in driving order. Earlier end points cross the start line. " + amount + " objects · " + room + " slots left.";
       if (amount > room) hint.textContent += " Reduce positions or choose one side to fit the limit.";
       if (range && state.span < 0) hint.textContent += " Choose an end point first.";
+      if (TrackDesignerProps.CATEGORIES.terrain.includes(kind) || TrackDesignerProps.CATEGORIES.water.includes(kind)) hint.textContent += " Landscape objects that overlap the road are hidden. Use an open area or increase the gap. Terrain objects decorate the ground without changing road elevation.";
       remove.disabled = !c[kind];
       const key = JSON.stringify(d.props || []);
       if (key !== lastProps) {

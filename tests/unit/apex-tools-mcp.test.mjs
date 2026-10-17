@@ -2092,3 +2092,58 @@ test("browserTimeoutMs: 180 s, 420 s for an apex_agent call that changes weather
   assert.equal(browserTimeoutMs("apex_shot", { tod: "night" }), 180000, "only apex_agent rebuilds the scene on a tod");
   assert.ok(browserTimeoutMs("apex_agent", { weather: "wet" }) > 269000, "above the measured duration");
 });
+
+
+test("apex_shot_survey reports rebuilds portable multi-custom-track HTML without a browser", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "survey-gallery-test-"));
+  try {
+    const reports = ["custom-first", "custom-second"].map((track, i) => {
+      const image = path.join(dir, `image-${i}.jpg`);
+      fs.writeFileSync(image, "JPEG fixture");
+      const report = path.join(dir, `report-${i}.json`);
+      fs.writeFileSync(report, JSON.stringify({ track: "monza", actualTrack: track, shots: [{ name: "aerial", file: image, cam: "orbit", frac: 0.5, tod: "day" }] }));
+      return report;
+    });
+    const out = path.join(dir, "gallery");
+    const r = callCli("apex_shot_survey", { reports, out });
+    assert.equal(r.status, 0, r.stderr);
+    const body = JSON.parse(r.stdout);
+    assert.equal(body.ok, true);
+    assert.equal(body.browser, false);
+    const html = fs.readFileSync(body.indexHtml, "utf8");
+    assert.match(html, /custom-first/);
+    assert.match(html, /custom-second/);
+    assert.equal(fs.readdirSync(path.join(out, "assets")).length, 2);
+    const cli = spawnSync(process.execPath, [path.join(ROOT, "tools/shot/shot-survey.mjs"), "--reports", reports.join(","), "--out", path.join(dir, "cli-gallery")], { cwd: ROOT, encoding: "utf8", timeout: 15000 });
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.equal(JSON.parse(cli.stdout).browser, false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("apex_shot_survey report images cannot escape artifact roots", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "survey-gallery-test-"));
+  try {
+    const report = path.join(dir, "report.json");
+    fs.writeFileSync(report, JSON.stringify({ track: "custom-a", shots: [{ name: "bad", file: path.join(ROOT, "outside.jpg") }] }));
+    const r = callCli("apex_shot_survey", { reports: [report], out: path.join(dir, "gallery") });
+    assert.equal(JSON.parse(r.stdout).ok, false);
+    assert.match(JSON.stringify(JSON.parse(r.stdout)), /artifacts|scratch/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+
+test("saved gallery cannot write through an assets directory symlink", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "survey-gallery-symlink-"));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "apex-gallery-outside-"));
+  try {
+    const image = path.join(dir, "source.jpg"), report = path.join(dir, "report.json"), out = path.join(dir, "out");
+    fs.writeFileSync(image, "JPEG fixture");
+    fs.writeFileSync(report, JSON.stringify({ track: "custom-a", shots: [{ name: "view", file: image }] }));
+    fs.mkdirSync(out);
+    fs.symlinkSync(outside, path.join(out, "assets"), "dir");
+    const r = callCli("apex_shot_survey", { reports: [report], out });
+    assert.equal(JSON.parse(r.stdout).ok, false);
+    assert.equal(fs.readdirSync(outside).length, 0);
+    assert.equal(fs.existsSync(path.join(out, "index.html")), false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(outside, { recursive: true, force: true }); }
+});
