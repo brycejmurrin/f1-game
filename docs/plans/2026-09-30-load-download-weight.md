@@ -285,10 +285,18 @@ tier green → **do not merge** (Bryce's merge worker).
 - Raising ratchets, quarantines, tolerances, or skipping tests
 - Merging PRs (Bryce's worker)
 
-## Final report checklist (fill as slices land)
+## Final report
 
-- Plan PR + head SHA
-- Slice PRs + head SHAs + draft/ready
-- Shipped vs deferred
-- Before/after: race-entry contiguous / total longtask ms (device, backend,
-  circuit); SW install-critical MB and file count
+| slice | PR | landed revision | status |
+|---|---|---|---|
+| Plan | #563 | `61dcb4872` | shipped |
+| 1 — race-entry attribution | #571 | `d2375da1` | shipped |
+| 2 — warm under handoff | #575 | `e86df65a9` | shipped |
+| 3 — SW install-critical pool | #584 | `7729463ca` | shipped |
+| 4 — upscaler decision | — | — | deferred; still requires its own real-GPU A/B |
+
+The matched real-Metal race-entry table for vegas and spa is recorded in
+`docs/notes/LIVE-DEBUGGER-RENDER-GPU-EVIDENCE-2026-10-17.md`. The before arm
+is slice 1 and the after arm is slice 2, keeping the attribution instrument
+identical. Slice 3's install-critical byte/file-count result remains deferred
+because #1651 asks only for race-entry evidence.
