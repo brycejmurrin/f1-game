@@ -114,3 +114,16 @@ test("apex26.renderRate overrides the device class", () => {
   const junk = load({ mobile: false, store: { "apex26.renderRate": "banana" } });
   assert.equal(junk.state().mode, "auto");
 });
+
+test("physics is untouched: the fixed-step loop runs before the gate and the gate wraps only render + HUD", () => {
+  const g = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const body = g.slice(g.indexOf("function tickBody("));
+  const step = body.indexOf("update(PHYS_DT)");
+  const gate = body.indexOf("RenderRate.gate(");
+  assert.ok(step > 0 && gate > step, "update(PHYS_DT) precedes RenderRate.gate in tickBody");
+  assert.equal(g.split("RenderRate.gate(").length - 1, 1, "exactly one gate site");
+  const block = body.slice(gate, body.indexOf("\n}\n", gate));
+  assert.ok(!/update\(|physAcc|stepPhys/.test(block), "gated block holds no physics");
+  assert.match(block, /render\(/);
+  assert.match(block, /updateHud\(/);
+});
