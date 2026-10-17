@@ -47,6 +47,7 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
   prompt names the model and a `cost cap`; a lane that is switched to Opus keeps the Sonnet cap. An orchestrator hands off past ~300 k
   context. Default: the fleet check-in is a fresh-session scheduled task at ≥ 15 min that stops after 2 unchanged checks; the user
   may choose a tighter cadence (Bryce chose 5 min on 2026-10-17), and then the orchestrator follows that.
+- **Size stop.** Every launch prompt ends `STOP AT: 300k context or $<cap>` (orchestrator.md hard line 12); the session self-checks `get_session` `context_usage` at each wake.
 - **Desk field.** Every launch prompt carries `merge_desk: <session id | none>`; `none` means the lane reports `SWEEP-N/A` and never runs
   `list_sessions` to look for one (7 lanes, 24 calls, 2026-10-16).
 - **Before launching an owner:** `who-is-on-it.mjs`, armed auto-merge, PR `updated_at` < 15 min. Skip a PR that is armed and green or is
