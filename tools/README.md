@@ -253,6 +253,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | — |
 | **gfx/knob-ab.mjs** | Visual knob A/B: same frame with a lightTune knob ON twice (noise floor) and OFF; fails unless ON vs OFF beats noise. | renderer-debug |
 | **gfx/mem-census.mjs** | Memory census: heap after GC, live tracks, three render objects and decoded audio per track load (picker or race path). | mcp-probe / check-changes |
+| **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |
