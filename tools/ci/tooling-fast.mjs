@@ -631,6 +631,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Pure artwork and paint-editor VM regression; selected for all source edits.
   "tests/unit/livery-design.test.mjs",
   "tests/unit/livery-finish-contract.test.mjs",
+  // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
+  "tests/unit/livery-sidewall.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
   "tests/unit/livery-wheels.test.mjs",
@@ -834,6 +836,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // flag windows. Pure rules in a VM, ~0.3 s together.
   "tests/unit/ready-gate.test.mjs",
   "tests/unit/real-race-script.test.mjs",
+  // WATCH recording-gap cache (#2465): explicit refresh replaces a stale interior hole and keeps a pit stop and a red flag. VM, under a second.
+  "tests/unit/real-race-tab-gap-refresh.test.mjs",
   "tests/unit/real-race.test.mjs",
   // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
   "tests/unit/real-replay-captions.test.mjs",

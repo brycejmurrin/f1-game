@@ -616,17 +616,19 @@ const DataRealRace = (function () {
     // race is not full coverage. Retirements use their own last timed lap.
     return car[0] <= start + 5 && car[car.length - 3] >= end - 5;
   }
-  /** The field's positions for a script: cached, else fetched car by car (onProgress(done, total)). */
-  function fetchTraces(script, onProgress, previous) {
+  /** The field's positions for a script: cached, else fetched car by car (onProgress(done, total)).
+   *  options.refresh skips IndexedDB and the in-memory recording and downloads every car again. */
+  function fetchTraces(script, onProgress, previous, options) {
+    const refresh = !!(options && options.refresh);
     if (!script || !script.t0 || !script.drivers) return Promise.reject(new Error("no timestamps in the script"));
-    return traceGet(script.sessionKey, script).then((hit) => {
+    return (refresh ? Promise.resolve(null) : traceGet(script.sessionKey, script)).then((hit) => {
       if (hit) return hit;
       const t0 = script.t0;
       const end = traceEnd(script);
       const startISO = new Date(t0 - TRACE_PAD_S * 1000).toISOString(), endISO = new Date(t0 + (end + TRACE_PAD_S) * 1000).toISOString();
       const traces = { v: TRACE_V, sessionKey: script.sessionKey, t0, hz: TRACE_HZ,
         coverage: traceCoverage(script), complete: script.complete === true, cars: {}, failed: [] };
-      if (traceFits(previous, script)) {
+      if (!refresh && traceFits(previous, script)) {
         for (const k in previous.cars || {}) if (!(previous.failed || []).includes(+k) && previous.cars[k].length >= 6) traces.cars[k] = previous.cars[k];
       }
       for (const d of script.drivers) if (traces.cars[d.num] && !usableTrace(traces.cars[d.num], d)) delete traces.cars[d.num];
@@ -649,6 +651,8 @@ const DataRealRace = (function () {
           if (!participating.some((d) => traces.cars[d.num] && traces.cars[d.num].length > 300)) {
             for (const d of participating) if (!traces.failed.includes(d.num)) traces.failed.push(d.num);
           }
+          // A partial refresh must not replace a recording the player can already watch.
+          if (refresh && traces.failed.length) throw new Error("the positions refresh did not load every car");
           traces.complete = traces.complete && traces.failed.length === 0;
           if (!participating.length || participating.every((d) => traces.failed.includes(d.num))) throw new Error("the positions did not load");
           return traces.complete ? tracePut(traces).then(() => traces) : traces;
@@ -701,7 +705,7 @@ const DataRealRace = (function () {
     let seatCode = null;   // the DRIVE AS pick, a driver code (null: the first seated driver)
     let traces = null;     // the real positions for the painted script, once loaded
     let loading = null;    // {done, total} while the positions load
-    let requestGen = 0, replayUi = null, traceError = "", partialTraces = null;
+    let requestGen = 0, replayUi = null, traceError = "", partialTraces = null, traceWork = Promise.resolve();
     let driveAction = null;
     // A download in flight leaves ~20 queued /location requests in the transport's
     // FIFO that every other tab would wait behind; drop them (showTab cancels this
@@ -831,7 +835,7 @@ const DataRealRace = (function () {
       const progress = el("progress"); progress.max = script.drivers.length;
       progress.setAttribute("aria-label", "Download real car positions"); progress.hidden = true; row.appendChild(progress);
       const mk = (label, aria, fn) => { const b = el("button", "dh-pill", label); b.type = "button"; b.setAttribute("aria-label", aria); b.addEventListener("click", fn); row.appendChild(b); return b; };
-      const load = mk("LOAD POSITIONS", "LOAD POSITIONS — real positions of every car", () => loadTraces(script, slot, null));
+      const load = mk("LOAD POSITIONS", "LOAD POSITIONS — real positions of every car", () => loadTraces(script, slot, null, !!(traceFits(traces, script) && !(traces.failed || []).length && traceDetails(script, traces).some((d) => d.gaps.length))));
       const highlights = mk("HIGHLIGHTS", "Watch the highlights of the race, recreated", () => watch(script, slot, 1, true));
       const full = mk("WATCH FROM L" + startLap, "Watch the race recreated from lap " + startLap, () => watch(script, slot, startLap, false));
       const cancel = mk("CANCEL DOWNLOAD", "Cancel the real positions download", () => {
@@ -865,20 +869,21 @@ const DataRealRace = (function () {
         : traceError || (tr ? failed.length ? "PARTIAL POSITIONS · RETRY " + failed.map((n) => (u.script.drivers.find((d) => d.num === n) || {}).code || n).join(", ") : "REAL POSITIONS READY · " + Object.keys(tr.cars).length + " CARS"
           : "REAL POSITIONS · ABOUT 60 MB ON FIRST LOAD · SAVED ON THIS DEVICE");
       u.progress.hidden = !busy; if (busy) u.progress.value = loading.done;
-      u.load.hidden = !!tr && !failed.length; u.load.disabled = !!loading;
-      u.load.textContent = traceError || failed.length ? "RETRY POSITIONS" : "LOAD POSITIONS";
-      u.load.setAttribute("aria-label", u.load.textContent + " — real positions of every car");
+      const gaps = tr && traceDetails(u.script, tr).some((d) => d.gaps.length);
+      u.load.hidden = !!tr && !failed.length && !gaps; u.load.disabled = !!loading;
+      u.load.textContent = tr && !failed.length && gaps ? "REFRESH POSITIONS · ABOUT 60 MB" : traceError || failed.length ? "RETRY POSITIONS" : "LOAD POSITIONS";
+      u.load.setAttribute("aria-label", tr && !failed.length && gaps ? "Refresh all real positions, about 60 megabytes; the previous recording remains available if refresh fails" : u.load.textContent + " — real positions of every car");
       u.highlights.disabled = u.full.disabled = !!loading; u.cancel.hidden = !busy;
     }
-    function loadTraces(script, slot, then) {
+    function loadTraces(script, slot, then, refresh = false) {
       if (loading) return false;
       const mine = ++requestGen;
       const current = () => mine === requestGen && (!isOpen || isOpen()) && (!slot || slot.isConnected !== false);
       loading = { done: 0, total: script.drivers.length, sessionKey: script.sessionKey }; traceError = ""; updateReplayRow();
-      fetchTraces(script, (done, total, tr) => {
+      traceWork = fetchTraces(script, (done, total, tr) => {
         if (!current()) return;
         partialTraces = tr; loading = { done, total, sessionKey: script.sessionKey }; updateReplayRow();
-      }, traceFits(traces, script) ? traces : partialTraces)
+      }, traceFits(traces, script) ? traces : partialTraces, { refresh })
         .then((tr) => {
           if (!current()) return;
           traces = tr; partialTraces = tr; loading = null; updateReplayRow();
@@ -1145,7 +1150,7 @@ const DataRealRace = (function () {
     }
 
     return { loadRealRace, scriptFor, jumpIn, watch, loadTraces, cancel,
-             traces: () => traces, setTraces: (tr) => { traces = tr || null; return traces; },
+             traces: () => traces, positionsSettled: () => traceWork, setTraces: (tr) => { traces = tr || null; return traces; },
              setDistance: (f) => { distance = DISTANCES.includes(f) ? f : 1; return distance; },
              setStartLap: (n) => { startLap = Math.max(1, n | 0); return startLap; },
              setSeat: (code) => { seatCode = code || null; return seatCode; },
