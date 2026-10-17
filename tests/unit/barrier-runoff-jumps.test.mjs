@@ -15,6 +15,14 @@ const {
   syntheticCliff,
   featherBarrierEnds,
 } = require(path.join(ROOT, "tools/track/barrier-jumps.cjs"));
+const {
+  assertFleetCaps,
+  measureTrack,
+  probeFleet,
+} = require(path.join(ROOT, "tests/helpers/barrier-runoff-probe.cjs"));
+const CAPS = require(path.join(ROOT, "tests/data/ratchets.json")).barrierRunoffJumpCaps;
+const INITIAL_CAPS = Object.freeze({ open: 7.9, street: 9.75 });
+let fleetRows;
 
 // Geometry assertions need full builds, but the audit context also retains every
 // emitted buffer. Release both owners after each check, including failed checks.
@@ -29,12 +37,47 @@ function withTrack(env, def, check) {
   }
 }
 
+function measuredFleet() {
+  if (!fleetRows) {
+    const { buildContext } = require(path.join(ROOT, "tools/lib/track-build-vm.cjs"));
+    fleetRows = probeFleet(buildContext());
+  }
+  return fleetRows;
+}
+
 test("synthetic one-node cliff of 7.9 is detected as maxAdj / maxWallStep", () => {
   // Open-circuit identity: RUNOFF_DEFAULT 9 − (tyreGap 2.2 − WALL_CLEAR 1.1) = 7.9.
   // Float32Array stores 7.9 imprecisely — compare with a centimetre tolerance.
   const arr = syntheticCliff(20, 5, 16.2, 8.3, 1);
   assert.ok(Math.abs(maxAdjDelta(arr) - 7.9) < 1e-5, `maxAdj=${maxAdjDelta(arr)}`);
   assert.ok(maxWallAtStep(arr) > 7.5, `maxWallStep=${maxWallAtStep(arr)}`);
+});
+
+test("fleet cap rejects a synthetic over-cap jump", () => {
+  const hw = new Float32Array(4);
+  const barL = new Float32Array(4);
+  const barR = new Float32Array([0, CAPS.open + 1, 0, 0]);
+  const row = measureTrack(
+    { id: "synthetic-over-cap", street: false },
+    { barL, barR, hw, n: hw.length, pit: null },
+  );
+  assert.throws(() => assertFleetCaps([row], CAPS), /synthetic-over-cap \(open\)/);
+});
+
+test("barrier jump caps are lower-only", () => {
+  assert.deepEqual(Object.keys(CAPS).sort(), ["open", "street"]);
+  for (const className of Object.keys(INITIAL_CAPS)) {
+    assert.ok(Number.isFinite(CAPS[className]) && CAPS[className] > 0, `${className} cap must be positive`);
+    assert.ok(CAPS[className] <= INITIAL_CAPS[className],
+      `${className} cap ${CAPS[className]} raised above initial ${INITIAL_CAPS[className]}`);
+  }
+});
+
+test("fleet: every circuit, including pit edges, stays within its class cap", () => {
+  const rows = measuredFleet();
+  assert.ok(rows.length >= 50, `only ${rows.length} circuits probed`);
+  assert.deepEqual(new Set(rows.map((row) => row.className)), new Set(["open", "street"]));
+  assertFleetCaps(rows, CAPS);
 });
 
 test("a 3-node authored ramp stays under 3 m (helper sanity)", () => {
@@ -142,26 +185,11 @@ test("fleet: the NON-pit side inside the pit window has no clearance step over 1
   // inside the window (silverstone, miami, abudhabi, nurburgring, magny_cours,
   // brands_hatch; 23 circuits over 1.5 m) and WallClamp turned each into a
   // sideways snap of c.x. Would fail on the base for those circuits.
-  const { buildContext } = require(path.join(ROOT, "tools/lib/track-build-vm.cjs"));
-  const env = buildContext(), { Tracks } = env;
-  const bad = [];
-  let checked = 0;
-  for (const def of Tracks.LIST) {
-    withTrack(env, def, (track) => {
-      const pit = track.pit;
-      if (!pit || pit.painted) return;
-      const opp = pit.side > 0 ? track.barL : track.barR;
-      let worst = 0;
-      for (let k = 0; k < track.n; k++) {
-        const j = (k + 1) % track.n;
-        if (!(pit.keep[k] > 0 || pit.keep[j] > 0)) continue;
-        worst = Math.max(worst, Math.abs((opp[k] - track.hw[k]) - (opp[j] - track.hw[j])));
-      }
-      checked++;
-      if (worst >= 1.5) bad.push(`${def.id} ${worst.toFixed(2)}`);
-    });
-  }
-  assert.ok(checked >= 40, `only ${checked} pit complexes checked`);
+  const rows = measuredFleet();
+  const pitRows = rows.filter((row) => row.hasPitComplex);
+  const bad = pitRows.filter((row) => row.nonPitWindowMax >= 1.5)
+    .map((row) => `${row.id} ${row.nonPitWindowMax.toFixed(2)}`);
+  assert.ok(pitRows.length >= 40, `only ${pitRows.length} pit complexes checked`);
   assert.deepEqual(bad, [], `non-pit side steps >= 1.5 m inside the pit window: ${bad.join(", ")}`);
 });
 
