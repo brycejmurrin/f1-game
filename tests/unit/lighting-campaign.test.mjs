@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   TRACKS, TODS, WEATHERS, CAMERA_FRACTIONS, SHARDS, SLIDER_GROUPS, REGIONS,
   conditionKey, enumerateConditions, validateConfig,
@@ -56,6 +57,9 @@ const CAPTURE_MODULE_PATH = CAPTURE_MODULE_URL.pathname;
 async function importCaptureModule() {
   return import(CAPTURE_MODULE_URL);
 }
+
+// Repo-root scratch/ (gitignored): resolved from the root, not a relative "../../scratch/" ref (cross-file-paths).
+const SCRATCH = join(fileURLToPath(new URL("../../", import.meta.url)), "scratch");
 
 test("lighting campaign enumerates the complete unique matrix", () => {
   const rows = enumerateConditions();
@@ -636,8 +640,8 @@ test("hard gates report white clipping, narrow tonal range, and page errors", ()
 
 test("campaign screenshot decode preserves opaque RGB/RGBA pixels without a browser round trip", async () => {
   const { readPngPixels } = await importCaptureModule();
-  await mkdir(new URL("../../scratch/", import.meta.url), { recursive: true });
-  const dir = await mkdtemp(join(new URL("../../scratch/", import.meta.url).pathname, "lighting-pixels-"));
+  await mkdir(SCRATCH, { recursive: true });
+  const dir = await mkdtemp(join(SCRATCH, "lighting-pixels-"));
   const rgba = Buffer.from([0, 0, 0, 255, 37, 101, 219, 255, 128, 128, 128, 255, 255, 255, 255, 255]);
   try {
     for (const channels of [3, 4]) {
@@ -655,8 +659,8 @@ test("campaign screenshot decode preserves opaque RGB/RGBA pixels without a brow
 
 test("campaign decode retains browser colour/alpha semantics for other PNG encodings", async () => {
   const { readPngPixels } = await importCaptureModule();
-  await mkdir(new URL("../../scratch/", import.meta.url), { recursive: true });
-  const dir = await mkdtemp(join(new URL("../../scratch/", import.meta.url).pathname, "lighting-pixels-"));
+  await mkdir(SCRATCH, { recursive: true });
+  const dir = await mkdtemp(join(SCRATCH, "lighting-pixels-"));
   const rgba = Buffer.from([37, 101, 219, 128, 255, 128, 0, 0]);
   try {
     const fixtures = {
