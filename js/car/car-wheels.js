@@ -255,7 +255,9 @@ const CarWheels = (function () {
           }
         }
       }
-      const BAND = inkColor || bandColor || [0.85, 0.10, 0.08];   // inkColor: livery sidewallInk (unset = the compound band)
+      // The band is always the compound colour (it is how a tyre reads at a glance, the
+      // player's and the AI teammate's alike); livery sidewallInk paints the lettering rings below.
+      const BAND = bandColor || [0.85, 0.10, 0.08];
       const bandWidth = tyreStyle && tyreStyle.bandWidth != null ? tyreStyle.bandWidth : 0.09;
       for (const bs of [[x0, -1], [x1, 1]]) {
         const xb = bs[0] + bs[1] * 0.004;
@@ -269,7 +271,8 @@ const CarWheels = (function () {
       }
       // Raised sidewall lettering ring(s): proud dark annulus inboard of the band
       // (0.006 out vs the band's 0.004, so the two faces never share a plane).
-      const sidewall = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.sidewall) || 0)));
+      // A tyre option with no lettering still gets one ring when sidewallInk is set, so the ink always shows.
+      const sidewall = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.sidewall) || 0))) || (inkColor ? 1 : 0);
       if (sidewall > 0) {
         const SW = inkColor || [0.16, 0.16, 0.17];
         const rings = sidewall === 2 ? [[0.700, 0.740], [0.775, 0.805]] : [[0.700, 0.740]];

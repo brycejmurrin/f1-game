@@ -1,7 +1,7 @@
-// livery-sidewall — livery sidewallInk (GARAGE FINISHES/PARTS slice S5): the compound BAND stripe and the
-// raised sidewall LETTERING rings take the livery ink on all four wheels. Unset must be byte-identical to
-// today (geometry, surface ids AND colour arrays); set changes colour arrays only, and only band/lettering
-// vertices. Real js/car sources in a node vm, no browser.
+// livery-sidewall — livery sidewallInk (GARAGE FINISHES/PARTS slice S5): the raised sidewall LETTERING rings
+// take the livery ink on all four wheels; the compound BAND keeps its colour so the tyre stays readable.
+// Unset must be byte-identical to today (geometry, surface ids AND colour arrays); set on a lettered tyre
+// changes colour arrays only, and only lettering vertices. Real js/car sources in a node vm, no browser.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -56,7 +56,7 @@ test("unset ink: standalone wheels are byte-identical to today's call", () => {
   for (const k of ["rotating", "fixed"]) assert.equal(JSON.stringify(today[k]), JSON.stringify(viaTints[k]));
 });
 
-test("set ink: only band and lettering vertices recolour, all to the ink; geometry and surface ids unchanged", () => {
+test("set ink: only lettering vertices recolour, all to the ink; the compound band keeps its colour; geometry unchanged", () => {
   const base = wheelsOf({}), inked = wheelsOf({ sidewallInk: INK });
   for (const k of ["rotating", "fixed"]) assert.equal(plain(base[k]), plain(inked[k]), `${k}: geometry or surface ids moved`);
   assert.equal(changed(base.fixed, inked.fixed).length, 0, "ink touched the fixed layer");
@@ -67,13 +67,30 @@ test("set ink: only band and lettering vertices recolour, all to the ink; geomet
     assert.ok(same(colAt(inked.rotating, i), INK), `vertex ${i} is not the ink`);
     was.add(JSON.stringify(colAt(base.rotating, i).map((x) => +x.toFixed(4))));
   }
-  assert.deepEqual([...was].sort(), [JSON.stringify(BAND), JSON.stringify(SW_DEF)].sort(), "expected exactly the band and lettering colours to be replaced");
-  // every vertex that WAS band or lettering colour on a rubber surface is now ink (nothing missed)
+  assert.deepEqual([...was], [JSON.stringify(SW_DEF)], "expected exactly the lettering colour to be replaced");
   const RUBBER = Car3D.SURFACES.rubber;
+  let bands = 0;
   for (let i = 0; i < base.rotating.col.length / 3; i++) {
     const c = colAt(base.rotating, i).map((x) => +x.toFixed(4));
-    if (base.rotating.mat[i] === RUBBER && (same(c, BAND) || same(c, SW_DEF))) assert.ok(diff.includes(i), `band/lettering vertex ${i} kept its colour`);
+    if (base.rotating.mat[i] !== RUBBER) continue;
+    // every lettering vertex is now ink (nothing missed)
+    if (same(c, SW_DEF)) assert.ok(diff.includes(i), `lettering vertex ${i} kept its colour`);
+    // the compound band is how a tyre reads at a glance: the ink never touches it
+    if (same(c, BAND)) { bands++; assert.ok(!diff.includes(i), `compound band vertex ${i} took the ink`); }
   }
+  assert.ok(bands > 0, "the tyre has a compound band to keep");
+});
+
+test("a tyre option with no lettering gets one inked ring only when sidewallInk is set; its band is untouched", () => {
+  const bare = { ...tyre, sidewall: 0 };
+  const build = (liv) => { const t = CarWheels.tints(liv); return Car3D.buildWheelLayers(0.32, BAND, brake && brake.cal, brake && brake.rim, false, bare, brake, wheel, t.ink); };
+  const today = Car3D.buildWheelLayers(0.32, BAND, brake && brake.cal, brake && brake.rim, false, bare, brake, wheel);
+  assert.equal(JSON.stringify(today.rotating), JSON.stringify(build({}).rotating), "unset ink adds nothing");
+  const inked = build({ sidewallInk: INK }).rotating, n = (m) => m.col.length / 3;
+  assert.ok(n(inked) > n(today.rotating), "an inked bare tyre gains a lettering ring");
+  const count = (m, c) => { let k = 0; for (let i = 0; i < n(m); i++) if (same(colAt(m, i).map((x) => +x.toFixed(4)), c)) k++; return k; };
+  assert.equal(count(inked, BAND), count(today.rotating, BAND), "band vertex count unchanged");
+  assert.ok(count(inked, INK) > 0);
 });
 
 test("ink composes with rim/caliper tints on disjoint vertices", () => {

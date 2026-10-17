@@ -1,5 +1,5 @@
 // @ts-check
-// Livery sidewallInk (garage slice S5): paint-only tyre band stripe + sidewall lettering ink.
+// Livery sidewallInk (garage slice S5): paint-only tyre sidewall lettering ink; the compound band keeps its colour.
 // Unset = today's wheels byte for byte; set = colour arrays only, on all four wheels.
 // The node twin is tests/unit/livery-sidewall.test.mjs; this pins the same contract on the live
 // page's real globals. UNRUN at authoring (no browser in the authoring session): the parent
@@ -8,7 +8,7 @@ import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared-page.js";
 
 test.describe("Livery sidewall ink", () => {
-  test("sidewallInk recolours the four wheels' band and lettering and nothing else", async ({ page }) => {
+  test("sidewallInk recolours the four wheels' lettering, keeps the compound band, and nothing else", async ({ page }) => {
     await ensureLive(page);
     const r = await page.evaluate(() => {
       const team = Teams.LIST[2];
@@ -18,8 +18,13 @@ test.describe("Livery sidewall ink", () => {
       const tinted = build({ sidewallInk: [1, 1, 0] });
       const same = (a, b, k) => a[k].length === b[k].length && a[k].every((v, i) => v === b[k][i]);
       const A = Car3D.AXLES, centres = [[0.79, A.frontZ], [0.76, A.rearZ]].flatMap(([x, z]) => [[x, z], [-x, z]]);
+      // the factory compound band colour, as the mesh stores it (Float32)
+      const band = (parts._visual && parts._visual.tyres && parts._visual.tyres.band || []).map(Math.fround);
+      const isBand = (m, i) => band.length === 3 && m.col[i * 3] === band[0] && m.col[i * 3 + 1] === band[1] && m.col[i * 3 + 2] === band[2];
       const off = [], corners = new Set();
+      let bandVerts = 0, bandInked = 0;
       for (let i = 0; i < none.col.length / 3; i++) {
+        if (isBand(none, i)) { bandVerts++; if (!isBand(tinted, i)) bandInked++; }
         if (none.col[i * 3] === tinted.col[i * 3] && none.col[i * 3 + 1] === tinted.col[i * 3 + 1] && none.col[i * 3 + 2] === tinted.col[i * 3 + 2]) continue;
         const x = none.pos[i * 3], y = none.pos[i * 3 + 1], z = none.pos[i * 3 + 2];
         if (!centres.some(([cx, cz]) => Math.hypot(x - cx, y - A.wheelY, z - cz) < 0.45)) off.push(i);
@@ -30,6 +35,7 @@ test.describe("Livery sidewall ink", () => {
         geometryIdentical: ["pos", "nrm", "mat", "idx"].every((k) => same(none, tinted, k)),
         colourChanged: !same(none, tinted, "col"),
         offWheel: off.length,
+        bandVerts, bandInked,
         corners: [...corners].sort(),
         key: CarWheels.tints({ sidewallInk: [1, 1, 0] }).key,
         emptyKey: CarWheels.tints({}).key,
@@ -39,6 +45,9 @@ test.describe("Livery sidewall ink", () => {
     expect(r.geometryIdentical).toBe(true);
     expect(r.colourChanged).toBe(true);
     expect(r.offWheel).toBe(0);
+    // the compound band stays readable on an inked car (player and AI teammate alike)
+    expect(r.bandVerts).toBeGreaterThan(0);
+    expect(r.bandInked).toBe(0);
     expect(r.corners).toEqual(["LB", "LF", "RB", "RF"]);
     expect(r.emptyKey).toBe("");
     expect(r.key).not.toBe("");
