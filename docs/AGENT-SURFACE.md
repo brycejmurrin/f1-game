@@ -430,3 +430,74 @@ to the parent's existing local Chrome, never launches a browser, and must not
 drive a target during a Playwright group. Detach before ending the session.
 The complete [tool reference and debugging workflow](research/AGENT-JS-DEBUGGER-MCP.md)
 covers discovery, breakpoints, locals, stepping, exception pauses and cleanup.
+
+### Read-only UI inspector
+
+`node tools/ui/explorer.mjs inspect --screen settingsappearance --styles '#as-uiScale'`
+opens the existing catalog route in one isolated Chromium and writes
+`artifacts/ui-explorer/inspection.json` plus JSON stdout. Use `--selector` to scope
+controls and `--styles` for one element's browser-computed CSS and matched source
+rules. `--help` and `--list` remain browser-free. Catalog setup is not evidence
+that every door or control is actionable; use the explorer's validated `replay`
+scenarios for real interaction paths and Playwright traces.
+
+For an existing local Playwright page, import `installInspector`, `inspectPage`
+and `diffInspections` from `tools/ui/explorer/inspector.mjs`. After
+`await installInspector(page)`, `__apex.ui.inspect({root:'#pmsettings'})` is a
+read-only dev-page namespace. Reinstall after navigation. It is not shipped in
+the game or added to its production module roster. It does not call the general
+`__apex` getters, which may lazily load a circuit.
+
+Reports include role/name/value/pressed/selected/open, native disabled state,
+unique selectors, focus/focused dialog, range bounds, axis-specific scrolling, clipping
+and hit interception. Explicit adapters cover UI/HUD/button scale, opacity,
+appearance selects, camera offsets/comfort and live lighting inputs. `saved:null`
+means no override when storage is readable; `unavailable` and `unmapped` are not
+passes. Camera offsets do not prove rendered framing; lighting profile persistence
+and pixels remain unverified by this probe. Other controls explicitly stay unmapped.
+Move the actual control, compare DOM/live/saved values, then reload to verify durability.
+
+`diffInspections(before,after)` separates semantic/binding changes from geometry
+movement; replay action timings include these diffs. The DOM name/role screening
+is supplemented by Playwright's accessibility snapshot. CSS reports pair computed
+values with candidate declarations/source lines; they do not guess cascade winners.
+Known limits and truncation are recorded in JSON. No new browser controller,
+framework, hosted service, WebMCP dependency or settings mutation is required.
+
+Adaptive CSS diagnostics include each control's computed sizing, wrapping, zoom,
+font and container properties, with deduplicated ancestor boxes and scroll metrics
+(`layoutContexts`, at most 12 ancestors per control / 256 unique contexts).
+Contexts also retain `data-shape/density/pair/rail/fit` classifications and
+sheet-scale/fit/compact/pair/rail threshold tokens used by the game's adaptive CSS.
+`display:contents` ancestors are marked boxless and do not cause false clipping;
+outer real clips still apply. Clipping checks continue beyond the context limit.
+`adaptive` records the visual viewport, pointer/orientation/motion media matches,
+root scale/safe-area/tap tokens and selected appearance attributes. CSS custom
+properties retain browser serialization; a `calc()` token is not a measured inset.
+
+Use a bounded sweep to compare the SAME open state across sizes:
+
+```sh
+node tools/ui/explorer.mjs inspect --screen garage --styles '#cs-tab-team' --viewports 390x844,844x390,1280x800
+```
+
+Or import `inspectResponsive` and call
+`await inspectResponsive(page,{root:'#carsetup',viewports:[{width:390,height:844},{width:844,height:390}]})`.
+The result contains a snapshot per size and consecutive diffs; geometry, computed
+layout and ancestor changes are separate from semantic/binding changes. The
+original viewport is restored even if inspection fails. Up to eight integer
+sizes are allowed (width 240–3840, height 240–2160). The helper changes viewport
+size only: pointer emulation, settings and safe-area overrides are not invented.
+Each record reports layout settlement: at least 150 ms and three matching frame
+samples, bounded to 500 elements, 120 frames and two seconds. Unstable/truncated
+samples are explicit, and quiet samples cannot rule out later async work. Resizing can
+trigger native orientation/pause dialogs; they are recorded, not dismissed, and
+restoring size cannot undo application state transitions. Use the existing
+`layout-audit.mjs` matrix for scales/pointers/insets and validated replay actions
+for settings changes, scrolling, reload durability and modal navigation.
+
+API references: [Chrome CSS domain](https://chromedevtools.github.io/devtools-protocol/tot/CSS/),
+[Playwright accessibility snapshots](https://playwright.dev/docs/aria-snapshots),
+[Playwright traces](https://playwright.dev/docs/trace-viewer),
+[MDN visual viewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport),
+[MDN box generation](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Display/Visual_formatting_model#the_principal_box).

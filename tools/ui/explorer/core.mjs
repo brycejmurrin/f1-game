@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 const ID = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
 const STATES = ['visible', 'hidden', 'attached', 'detached'];
 const ROLES = new Set(('alert alertdialog application article banner blockquote button caption cell checkbox code columnheader combobox complementary contentinfo definition deletion dialog directory document emphasis feed figure form generic grid gridcell group heading img insertion link list listbox listitem log main marquee math meter menu menubar menuitem menuitemcheckbox menuitemradio navigation none note option paragraph presentation progressbar radio radiogroup region row rowgroup rowheader scrollbar search searchbox separator slider spinbutton status strong subscript superscript switch tab table tablist tabpanel term textbox time timer toolbar tooltip tree treegrid treeitem').split(' '));
-const SEMANTIC = ['id', 'selector', 'role', 'name', 'label', 'type', 'disabled', 'checked', 'value', 'expanded', 'selected', 'open'];
+const SEMANTIC = ['id', 'selector', 'role', 'name', 'label', 'type', 'disabled', 'checked', 'value', 'expanded', 'pressed', 'selected', 'open'];
 const fail = message => { throw new TypeError(message); };
 const object = (value, label) => {
   if (!value || typeof value !== 'object' || Array.isArray(value) || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) fail(`${label} must be an object`);
@@ -115,7 +115,7 @@ function oracle(input) {
     case 'layout': {
       fields(input, ['type', 'kind', 'selector'], 'layout oracle');
       const result = { type: input.type };
-      if (input.kind !== undefined) result.kind = choice(input.kind, ['offscreen', 'unnamed', 'overflow', 'tiny-target'], 'kind');
+      if (input.kind !== undefined) result.kind = choice(input.kind, ['offscreen', 'unnamed', 'overflow', 'tiny-target', 'clipped', 'blocked', 'binding-mismatch'], 'kind');
       if (input.selector !== undefined) result.selector = selector(input.selector);
       return result;
     }
