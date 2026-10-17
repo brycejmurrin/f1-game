@@ -12,7 +12,7 @@
  * RETIRED AS A GATE (2026-10-16, CI/CD review #2333 finding 7): ci.yml's
  * `queue: max` lanes bound the browser legs inside GitHub, the pool ran at 39
  * of 40 slots regardless, and the cap read 13/3 with 12 ready PRs open. The
- * count is still printed by pr-board for information. Default MAX_LIVE = 3.
+ * count is still printed by pr-board for information. Default MAX_LIVE = 8 (Bryce 2026-10-17: "Raise the ready pr cap"; 40 Linux slots).
  *
  *   node tools/ci/ready-full-cap.mjs              # exit 0 under cap, 1 at/over
  *   node tools/ci/ready-full-cap.mjs --json
@@ -32,7 +32,7 @@ export const REPO = "brycejmurrin/f1-game";
 export const DEPLOY = "claude/f1-game-project-26h3ng";
 export const CI_PATH = ".github/workflows/ci.yml";
 /** Max ready PRs allowed to hold an in-progress or queued full-tier ci.yml run. */
-export const MAX_LIVE = 3;
+export const MAX_LIVE = 8;
 /** Run statuses that hold or wait for runners (the REST `status` filter's live values). */
 export const LIVE_RUN_STATUSES = ["in_progress", "queued", "pending", "waiting", "requested"];
 

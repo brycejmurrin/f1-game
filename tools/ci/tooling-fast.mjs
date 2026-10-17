@@ -420,6 +420,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // fleet-board: the derived `claimed` label, the PR closing-keyword parse and the
   // pinned board body, all pure; < 1 s. It guards the backlog's phone view.
   "tests/unit/fleet-board.test.mjs",
+  "tests/unit/fleet-flags.test.mjs",
   // The rendered flicker gate's metric (tools/lib/flicker-metric.mjs) on
   // synthetic frames, plus its site table: ~0.1 s, no browser. The gate itself
   // runs only in ci.yml's non-blocking flicker-gate job.
@@ -1695,10 +1696,13 @@ export function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
 export function selectToolingFastChanged(changed, opts = {}) {
   const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
   const tfSet = new Set(allFiles);
+  // `changed` is the real diff size on EVERY path (it used to exist only on `empty`/`matched`, so a whole-floor
+  // fallback printed `changed=0`); `because` names the first path that forced the fallback (#2663 follow-up).
   const full = (reason, extra = {}) => ({
     files: [...allFiles],
     reason,
     shards: shardsCoveringFiles(allFiles, allFiles),
+    changed: changed.length,
     ...extra,
   });
 
@@ -1707,16 +1711,15 @@ export function selectToolingFastChanged(changed, opts = {}) {
   if (isDocsOnly(changed)) {
     const docsTests = allFiles.filter((f) => DOCS_FAST_TESTS.test(f));
     const files = docsTests.length ? docsTests : allFiles;
-    return { files, reason: "docs-only", shards: shardsCoveringFiles(files, allFiles) };
+    return { files, reason: "docs-only", shards: shardsCoveringFiles(files, allFiles), changed: changed.length };
   }
 
   const circ = circuitsTouched(changed, opts.ref || "");
   const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
-  if (tracked.length) return full("tracked", { tracked });
+  if (tracked.length) return full("tracked", { tracked, because: tracked[0] });
 
-  if (changed.some((f) => TOOLING_FAST_CHANGED_RUN_ALL.some((re) => re.test(f)))) {
-    return full("run-all-path");
-  }
+  const runAll = changed.find((f) => TOOLING_FAST_CHANGED_RUN_ALL.some((re) => re.test(f)));
+  if (runAll) return full("run-all-path", { because: runAll });
 
   let scripts = opts.scripts;
   if (!scripts) {
@@ -1727,7 +1730,7 @@ export function selectToolingFastChanged(changed, opts = {}) {
     }
   }
   const receipt = selectionReceipt(changed, scripts);
-  if (receipt.reason === "unmatched") return full("unmatched", { unclaimed: receipt.unclaimed });
+  if (receipt.reason === "unmatched") return full("unmatched", { unclaimed: receipt.unclaimed, because: (receipt.unclaimed || [])[0] });
 
   const selected = new Set();
   const index = opts.pinIndex || pinIndex();
@@ -1760,6 +1763,14 @@ export function selectToolingFastChanged(changed, opts = {}) {
   if (!files.length) return full("no-listed-match");
   return { files, reason: "matched", shards: shardsCoveringFiles(files, allFiles), changed: changed.length };
 }
+
+/** The `--changed` header line: reason, the REAL diff size, the files chosen, and the path that forced a fallback. */
+export function changedHeader(meta, fileCount) {
+  return `[tooling-fast] --changed reason=${meta.reason} changed=${meta.changed ?? 0} files=${fileCount}` +
+    `${meta.because ? ` because=${meta.because}` : ""} shards=${(meta.shards || []).join(",") || "none"}`;
+}
+export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against origin/${DEPLOY_BRANCH} — nothing was selected, nothing verified (exit 3).\n` +
+  `  Commit or stage your edit, \`git fetch origin ${DEPLOY_BRANCH}\` if the ref is stale, or run without --changed for the whole floor.`;
 
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
@@ -1830,9 +1841,13 @@ if (isMain) {
   if (parsed.changed) {
     changedMeta = selectToolingFastChanged(changedVsDeploy());
     files0 = changedMeta.files;
-    console.log(`[tooling-fast] --changed reason=${changedMeta.reason} ` +
-      `changed=${changedMeta.changed ?? 0} ` +
-      `files=${files0.length} shards=${changedMeta.shards.join(",") || "none"}`);
+    console.log(changedHeader(changedMeta, files0.length));
+    if (changedMeta.reason === "empty") {
+      // An empty diff selects zero files and the runner printed `= run passed (0 passed, 0 failed)` with exit 0: a
+      // vacuous green that read as proof. Nothing was verified, so say so and fail (exit 3, distinct from a test failure).
+      console.error(EMPTY_DIFF_MESSAGE);
+      process.exit(3);
+    }
   } else if (!files0) {
     files0 = [...TOOLING_FAST_FILES];
   }
