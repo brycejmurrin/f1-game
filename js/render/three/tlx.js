@@ -4879,7 +4879,8 @@ const TLX = (function () {
         capturePixels() {
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (gl && typeof gl.readPixels === "function") {
-            return readGlCapture(gl, W, H);
+            // Fixed targets: the canvas is present-sized whatever the render scale (W x H is the logical rect).
+            return fixedActive() ? readGlCapture(gl, presentW, presentH) : readGlCapture(gl, W, H);
           }
           const rt = _captureRT();
           if (!rt || typeof renderer.readRenderTargetPixelsAsync !== "function") {
