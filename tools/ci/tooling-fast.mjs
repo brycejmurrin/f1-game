@@ -939,6 +939,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // skill-routing-eval.py against a fake `claude` on PATH (no model calls), ~1.5 s.
   "tests/unit/skill-routing-eval.test.mjs",
   "tests/unit/skill-smoke.test.mjs",
+  // SoakRun (AUTO SOAK): idle until start, input-only driver, soak-gated, ends and hands the input back. VM, < 0.5 s.
+  "tests/unit/soak-run.test.mjs",
   // Round-2: removeTrack frees its MUSIC_CACHE slot.
   "tests/unit/soundtrack-cache.test.mjs",
   "tests/unit/source-integrity.test.mjs",
@@ -1010,6 +1012,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/test-groups.test.mjs",
   "tests/unit/test-observed.test.mjs",
   "tests/unit/tex-census.test.mjs",
+  "tests/unit/thermal-drift.test.mjs",
   "tests/unit/three-inspector.test.mjs",
   // ...and THROTTLE = LATCH, which shares digital-steer's VM harness and runs
   // in 0.1 s: the pedal is the one control that can be left ON, so the drop on

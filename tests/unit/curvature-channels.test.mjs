@@ -54,7 +54,7 @@ const SITES = {
   "js/agent/agentview.js": 2, "js/agent/apex.js": 9, "js/audio/driving-cues.js": 4,
   "js/camera/extra-rigs.js": 2, "js/camera/vantage.js": 3, "js/editor/validate.js": 1,
   "js/game.js": 10, "js/physics/aero-zones.js": 1, "js/physics/brake-cue.js": 1,
-  "js/physics/debris-world.js": 1, "js/race/pit-lane.js": 1, "js/race/quali-model.js": 1,
+  "js/perf/soak-run.js": 2, "js/physics/debris-world.js": 1, "js/race/pit-lane.js": 1, "js/race/quali-model.js": 1,
   "js/race/real-race.js": 1, "js/render/shared/driving-line.js": 5, "js/track/core/mesh.js": 3,
   "js/track/scenery/build-props.js": 3, "js/track/scenery/pits.js": 2, "js/track/tracks.js": 3,
   "js/ui/track-maps.js": 5,

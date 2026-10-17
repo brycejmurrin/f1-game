@@ -3637,6 +3637,7 @@ wxArc = WeatherArc.create(G, { isTimeTrial, isQuali });
 // Tyre wear, the grip it costs and the fuel that argues with it
 // (js/physics/tyre-model.js). Created before the first gridUp fits a compound.
 tyres = TyreModel.create(G);
+if (typeof SoakRun !== "undefined") SoakRun.create(G);   // AUTO SOAK (js/perf/soak-run.js): idle until PhoneRecorder's button calls start()
 const playerForces = PlayerForces.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.
@@ -8744,7 +8745,7 @@ function tickBody(now) {
   if (state === "results") resultsCam.tick(Math.min(dt, 1 / 20));
   if (state !== "race" && state !== "count") GameAudio.feedReplayScrub(soundOn && player, state === "results" && replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop);   // results HIGHLIGHTS: engines + field per clip; orbit, NEXT, RACE AGAIN or MENU (each ends the scrub) silences once
   RenderRate.observe(_dtMs);
-  if (RenderRate.gate(dt, _dtMs, XrBoot.comfort())) {   // a skipped rAF hands its dt/ms to the next drawn frame
+  if (RenderRate.gate(dt, _dtMs, XrBoot.comfort(), state === "race" && !paused)) {   // a skipped rAF hands its dt/ms to the next drawn frame
     dt = RenderRate.dt();
     PerfSpans.begin("render"); render(Math.min(dt, 1 / 20)); PerfSpans.end("render");   // camera/visual damping at (clamped) frame dt
     if (state === "race" || state === "count") { PerfSpans.begin("hud"); updateHud(false, RenderRate.ms()); PerfSpans.end("hud"); }

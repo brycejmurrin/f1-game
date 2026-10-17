@@ -349,6 +349,7 @@ const FULL = [
   "js/physics/brake-cue.js",
   // driving-cues.js is LAZY_AUDIO (SteerTuning and game.js already typeof-guard it).
   "js/input/steer-tuning.js",
+  "js/perf/thermal-drift.js",    // ThermalDrift: pure slow-drift detector + opt-in 45/30 render gate (#2652); before governor
   "js/perf/governor.js",
   "js/perf/loop-health.js",
   "js/perf/render-rate.js",   // RenderRate: phones draw every 2nd rAF on a 100 Hz+ display (physics unchanged)
@@ -387,6 +388,7 @@ const FULL = [
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
+  "js/perf/soak-run.js",       // SoakRun: AUTO SOAK, the hands-free soak (drives the player INPUT only; soak-gated; before game.js binds it)
   "js/perf/phone-recorder.js", // PhoneRecorder: SETTINGS > METRICS > PHONE TEST (RECORD / SHARE soak JSON, #1633); reads PerfGov/GLX, writes neither
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
   "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
