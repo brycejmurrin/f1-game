@@ -47,3 +47,40 @@ build (`tools/gen/assets.mjs`): bake `<id>.lod1.bin` at 1 % attribute-aware erro
 - Draw calls: `scratch/drawcalls.mjs` (untracked), method as in `TLX-PERF-HUNT-5-2026-10-16.md` §Method; env
   `MERGE=n` sets `apex26.tlxChunkMerge`.
 - LOD survey: `scratch/mo/lod-survey.mjs` and `lod-attr.mjs` (untracked; `npm install meshoptimizer@1` in that dir).
+
+## Follow-up: is any meshopt LOD worth building? (measured, not built)
+
+Bryce: "Try both" (model LOD and a chunk-level LOD). Session quota read `allowed_warning`, so no sibling session
+was launched (launch-policy quota gate); both were sized here before writing any code.
+
+**Model LOD — too small.** Headless VM build of every circuit (`tools/lib/track-build-vm.cjs`,
+`track.modelInstances`): baked pack models are 51 310 of 14 451 935 props triangles season-wide (0.4 %), on five
+circuits only — silverstone 24 790 (6 % of its props), spa 8 816 (2 %), monza 8 260 (3 %), vegas 6 132 (2 %),
+monaco 3 312 (1 %). The −64 % above is therefore ~0.26 % of props triangles overall. The live frame agrees: the
+instanced batches on screen are 12–46-triangle props, not models.
+
+**Chunk-level LOD of the props soup — real cut per chunk, little of it far away.** Offline, per 144 m cell,
+attribute-aware `simplifyWithAttributes` on the VM-built props soup at an ABSOLUTE error:
+
+| circuit | props tris | 0.1 m | 0.25 m | 0.5 m | 1 m | simplify time (node) |
+|---|---|---|---|---|---|---|
+| monaco | 256 198 | −38 % | −58 % | −72 % | −85 % | 3.1 s |
+| spa | 399 542 | −18 % | −29 % | −42 % | −54 % | 4.5 s |
+| vegas | 342 747 | −36 % | −58 % | −79 % | −89 % | 3.2 s |
+
+But the visible chunk triangles sit close (live main pass, chase camera, day; AABB distance to the eye):
+
+| circuit | < 200 m | 200–450 m | 450–800 m | > 800 m | main-pass total |
+|---|---|---|---|---|---|
+| monaco | 37.1 k | 28.1 k | 2.0 k | 0 | 174 k |
+| spa | 0.4 k | 14.1 k | 12.3 k | 0.4 k | 178 k |
+| vegas | 34.6 k | 10.5 k | 7.2 k | 7.8 k | 173 k |
+
+0.5 m is ~1 px at ~470 m (1080p, 60° fov), so a look-safe switch sits near 450 m: it would remove ~1.2 k (monaco),
+~7.6 k (spa) and ~9 k (vegas) triangles, **1–5 % of the main pass**, for a look change, +3–4.5 s of simplification
+per track build (or a build-worker/offline bake in lane P3), a vendored wasm library and a census. Pulling the
+switch to 200 m at 0.25 m error (~1.3 px) reaches ~10 % on monaco at visible popping risk. Verdict: **not built**.
+Vertex count is not what binds this renderer (draw calls and per-object CPU are, rounds 1–2); revisit only if a
+hardware census shows a vertex-bound device.
+
+Repro: `scratch/models-vm.cjs`, `scratch/mo/soup-lod.mjs`, the `BANDS` line of `scratch/drawcalls.mjs` (untracked).
