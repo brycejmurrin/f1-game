@@ -37,7 +37,6 @@ const SoakRun = (function () {
   let _run = null;                     // { raf, t0, started, ... } while active
   let _last = { state: "idle", reason: "" };
 
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   function wrapPi(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
 
   // The road under the player, as probe()/scan() in js/agent/apex.js read it.
@@ -70,12 +69,12 @@ const SoakRun = (function () {
     st.hold = Math.min(vT, st.hold + 30 * dt); vT = st.hold;   // ease the target up from a standstill
     const L = Math.max(8, Math.min(38, p.speed * 0.6));
     const latTarget = kSteer * L * L * 0.5;
-    let steer = clamp(KP * (Math.atan2(latTarget - p.x, L) - p.angle), -1, 1);
+    let steer = M4.clamp(KP * (Math.atan2(latTarget - p.x, L) - p.angle), -1, 1);
     const offRoad = Math.abs(p.x) - p.hw > 0.4;
     if (st.lastS != null && p.s - st.lastS < 0.05) st.stalled++; else st.stalled = 0;   // no progress along the arc (a standing start counts, harmlessly)
     st.lastS = p.s;
     let throttle = p.speed < vT, brake = p.speed > vT * 1.04;
-    if (st.stalled > 10) { steer = clamp(steer, -0.4, 0.4); throttle = true; brake = false; }
+    if (st.stalled > 10) { steer = M4.clamp(steer, -0.4, 0.4); throttle = true; brake = false; }
     else if (offRoad) throttle = false;
     if (st.stalled > 420 && G.rescuePlayer) { st.stalled = 0; try { G.rescuePlayer(); } catch (_) { /* no rescue: keep trying */ } }
     return { steer, throttle, brake };

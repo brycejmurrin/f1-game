@@ -41,7 +41,7 @@ function rig({ curveAt = null, k = 0.02 } = {}) {
     cancelAnimationFrame: () => { calls.cancel++; },
     document: { hidden: false, addEventListener(t, f) { calls.vis = f; }, removeEventListener() { calls.vis = null; }, getElementById: (id) => (id === "pausebtn" ? { click() { calls.pauseClicks++; } } : null) },
     Tracks, CamModes: { CAM_MODES: [{ id: "tv" }, { id: "chase" }] },
-    Log: { info() {} },
+    Log: { info() {} }, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) },   // the shared clamp soak-run.js calls
     PhoneRecorder: { start() { calls.recStart++; ctx.PhoneRecorder._on = true; }, stop() { calls.recStop++; ctx.PhoneRecorder._on = false; }, isOn: () => !!ctx.PhoneRecorder._on },
   };
   calls.hide = () => { ctx.document.hidden = true; calls.vis(); };
