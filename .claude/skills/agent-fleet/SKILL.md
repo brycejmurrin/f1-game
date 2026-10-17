@@ -57,6 +57,13 @@ blocker: <one line, or none>
 needs-orchestrator: yes | no
 ```
 
+A cloud worker also keeps one report line in the PR body, under the block
+rather than inside it, and posts the same line as a PR comment on every change
+(role-pr-owner.md §Monitoring and reporting):
+`fleet-status: <working|blocked|needs-decision|ready|red|done> | <one-line reason> | <UTC time>`.
+The orchestrator reads it from the body and the matching comment;
+`tools/ci/pr-board.mjs` shows it as the FLEET column (state, age, reason).
+
 Quota park: `state: blocked`, `blocker: quota until <reset>`, `needs-orchestrator: no`
 (`references/worker.md` §Quota park).
 
@@ -67,7 +74,9 @@ reference §Escalate).
 ## Rules that bind both roles
 
 - Nobody in the fleet merges or arms auto-merge: Merge Desk arms (merge commit
-  only, ≤ 2 armed) and Grok Bot may merge (AGENTS.md §Concurrent PRs). With
+  only, ≤ 2 armed); Grok Bot, the sole coordinator (orchestrator, merge holder,
+  ship/Pages watcher), merges or arms only at the level recorded in
+  references/role-merge-holder.md, the single source for it. With
   no live desk, the orchestrator arms only at the merge level the user set in
   its own session (references/role-merge-holder.md). A hold
   is a PR-body line starting `MERGE-HOLD:`, never "do not merge" wording.
