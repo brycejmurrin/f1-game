@@ -195,6 +195,7 @@ export const GLPROBE_SRC = `
   }
   out.contexts.heldLost = live.filter((g) => g.isContextLost()).length;
   out.contexts.heldCount = live.length;
+  for (const g of live) { try { const x = g.getExtension("WEBGL_lose_context"); if (x) x.loseContext(); } catch (e) { /* best effort */ } }
   return out;`;
 
 /** Async: rAF cadence for ms milliseconds (A2). */

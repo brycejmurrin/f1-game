@@ -121,8 +121,6 @@ try {
     const m = /OS (\d+)[_.](\d+)/.exec(res.facts.ua || "");
     if (m) res.os = res.os || `${m[1]}.${m[2]}`;   // Safari freezes the minor in the UA; a hint, not the runtime build
     res.gpuAdapter = await runAsync(GPU_ADAPTER_SRC);
-    res.glProbe = await run(GLPROBE_SRC).catch((e) => ({ error: String(e && e.message) }));
-    log("glprobe", JSON.stringify(res.glProbe));
     return true;
   });
   // ── A2: rAF cadence on the menu ──
@@ -186,6 +184,13 @@ try {
     });
     if (!ph.ok) leg.error = ph.error;
   }
+  // Raw WebGL2 evidence LAST, on a blank page: it opens 24 contexts, which evicts the game's own (run 8).
+  await phase("glprobe", async () => {
+    await driver.get("about:blank");
+    res.glProbe = await run(GLPROBE_SRC);
+    log("glprobe", JSON.stringify(res.glProbe));
+    return true;
+  });
   res.status = "done";
 } finally {
   res.wallMin = +((Date.now() - t0) / 60000).toFixed(1);
