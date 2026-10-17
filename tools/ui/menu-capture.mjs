@@ -14,6 +14,7 @@
 // CLI: node tools/ui/layout-audit.mjs --gallery | --screen=ID | --list | --report
 import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 import fs from "node:fs";
+import { escapeHtml as galleryEscape, screenshotCard, renderGallery } from "../lib/screenshot-gallery.cjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -230,49 +231,21 @@ export async function runMenuShot(opts = {}) {
 }
 
 export function writeCaptureIndex(outDir, rows) {
-  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-  const values = (key) => [...new Set(rows.map((r) => r[key]).filter(Boolean))].sort();
-  const options = (key) => values(key).map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
-  const items = rows.map((r) => {
-    if (r.skipped || !r.shot) {
-      return `<tr data-screen="${esc(r.screen)}" data-viewport="${esc(r.viewport)}" class="skipped"><td>${esc(r.screen)}</td><td>${esc(r.viewport)}</td>` +
-        `<td colspan="2"><strong>SKIPPED</strong>${r.skipped ? ` — ${esc(r.skipped)}` : ""}</td></tr>`;
-    }
-    const dom = r.dom ? `<a href="${esc(r.dom)}">dom</a>` : "";
-    return `<tr data-screen="${esc(r.screen)}" data-viewport="${esc(r.viewport)}"><td>${esc(r.screen)}</td><td>${esc(r.viewport)}</td>` +
-      `<td><a href="${esc(r.shot)}"><img src="${esc(r.shot)}" alt="" style="max-width:280px;border:1px solid #333"></a></td>` +
-      `<td>${dom}</td></tr>`;
-  }).join("\n");
-  fs.writeFileSync(path.join(outDir, "index.html"), `<!doctype html><meta charset="utf-8">
-<title>Apex 26 menu gallery</title>
-<style>
- body{background:#0b0b10;color:#e8e8ee;font:13px/1.5 ui-sans-serif,system-ui;padding:24px}
- h1{font-size:18px} table{border-collapse:collapse;margin-top:16px;width:100%}
- th,td{border:1px solid #26262e;padding:8px 10px;vertical-align:top}
- th{font-weight:600;color:#a9a9b6;font-size:11px;text-align:left}
- a{color:#7fd89a} img{display:block} .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:16px 0}
- label{display:grid;gap:3px;color:#a9a9b6;font-size:11px} select,input,button{background:#171720;color:#e8e8ee;border:1px solid #454553;border-radius:4px;padding:6px}
- .skipped{color:#ffb27d}.skipped strong{color:#ff6b3d}
-</style>
-<h1>APEX 26 — MENU SCREENSHOT + DOM GALLERY</h1>
-<p>Fast capture: one boot per viewport, resumable shards, parallel <code>--jobs</code>.</p>
-<div class="filters">
- <label>Screen <select id="filter-screen"><option value="">All screens</option>${options("screen")}</select></label>
- <label>Viewport <select id="filter-viewport"><option value="">All viewports</option>${options("viewport")}</select></label>
- <label>Search <input id="filter-search" type="search" placeholder="screen or viewport"></label>
- <button id="filter-reset" type="button">Reset</button>
- <output id="filter-count" aria-live="polite"></output>
-</div>
-<table><thead><tr><th>Screen</th><th>Viewport</th><th>Screenshot</th><th>DOM / status</th></tr></thead>
-<tbody id="gallery-rows">${items}</tbody></table>
-<script>
-(() => {
- const rows=[...document.querySelectorAll('#gallery-rows tr')], screen=document.querySelector('#filter-screen'), viewport=document.querySelector('#filter-viewport'), search=document.querySelector('#filter-search'), count=document.querySelector('#filter-count');
- const apply=()=>{const q=search.value.trim().toLowerCase(), shown=rows.filter(row=>{const ok=(!screen.value||row.dataset.screen===screen.value)&&(!viewport.value||row.dataset.viewport===viewport.value)&&(!q||row.textContent.toLowerCase().includes(q)); row.hidden=!ok; return ok;}); count.textContent=shown.length+' of '+rows.length+' cells';};
- [screen,viewport,search].forEach(el=>el.addEventListener('input',apply));
- document.querySelector('#filter-reset').addEventListener('click',()=>{screen.value='';viewport.value='';search.value='';apply();}); apply();
-})();
-</script>`);
+  const screens = new Map();
+  for (const row of rows) {
+    if (row.skipped || !row.shot) continue;
+    if (!screens.has(row.screen)) screens.set(row.screen, []);
+    screens.get(row.screen).push(screenshotCard({ title: row.viewport, image: row.shot,
+      caption: row.screen, links: row.dom ? `<a href="${galleryEscape(row.dom)}">DOM snapshot</a>` : "",
+    }));
+  }
+  const skipped = rows.filter((row) => row.skipped || !row.shot);
+  const skippedList = skipped.length ? `<details open><summary>SKIPPED (${skipped.length})</summary><ul>${skipped.map((row) =>
+    `<li>${galleryEscape(row.screen)} · ${galleryEscape(row.viewport)}${row.skipped ? ` — ${galleryEscape(row.skipped)}` : ""}</li>`).join("")}</ul></details>` : "";
+  fs.writeFileSync(path.join(outDir, "index.html"), renderGallery({ title: "Apex menu screenshots", links: skippedList,
+    summary: `${rows.filter((row) => row.shot && !row.skipped).length} captures · ${screens.size} screens`,
+    groups: [...screens].map(([title, cards]) => ({ title, cards })),
+  }));
 }
 
 /**
