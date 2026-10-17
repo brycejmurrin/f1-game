@@ -1062,7 +1062,17 @@ const TLX = (function () {
         return spatialUpscale;
       }
       function getSpatialUpscale() { return spatialUpscale; }
+      // FIXED TARGETS (#2655, apex26.tlxFixedTargets, default OFF): the post targets
+      // are allocated once at the present size and a resolution step only moves the
+      // logical rect inside them (tlx-post.js / tsl-viewport.js). The canvas then
+      // stays present-sized and the final pass upscales whenever the logical size is
+      // not the present size — the "upscale" below means that, SGSR or a plain
+      // bilinear read (tlx-post.js decides from userSpatialUpscale).
+      let fixedTargets = false;
+      try { fixedTargets = localStorage.getItem("apex26.tlxFixedTargets") === "1"; } catch (_) { /* no storage: off */ }
+      function fixedActive() { return fixedTargets && !!(post && post.fixedOk && post.fixedOk()); }
       function wantSpatialUpscale() {
+        if (fixedActive()) return W !== presentW || H !== presentH;
         return spatialUpscale && renderScale < 0.98 && !!(post && post.spatialOk && post.spatialOk());
       }
       function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
@@ -1219,8 +1229,14 @@ const TLX = (function () {
         const old = post; post = null;
         _cancelSoftBlits();
         try { if (old.dispose) old.dispose(); } catch (_) { /* best effort */ }
-        post = buildPost(); if (post) post.resize(W, H);
+        post = buildPost(); if (post) post.resize(W, H, presentW, presentH);
       }
+      // One viewport mapper for the sky (scene pass) and the post chain; identity
+      // helpers when the flag is off, so the graphs are the shipped ones.
+      const vport = (fixedTargets && window.TLXShaders && TLXShaders.viewport)
+        ? TLXShaders.viewport(THREE, TSL, { enabled: true }) : null;
+      if (!vport) fixedTargets = false;
+      const sceneView = vport ? vport.view() : null;
       function buildPost() {
       let post = null;   // shadows the session's `post`: the caller assigns the result
       try {
@@ -1229,6 +1245,7 @@ const TLX = (function () {
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode, ssrTag: _wantTag(),
               softDest: function () { return softOutRT(); },
               wantSpatialUpscale, getPresentSize,
+              fixedTargets, vp: vport, userSpatialUpscale: getSpatialUpscale,
               // SCENE MSAA: on the desktop WebGL2 backend only, sized by the
               // GRAPHICS preset exactly like glx/post.js (4x on ULTRA, 2x
               // below, clamped to what the HDR format supports). The WebGL
@@ -1586,7 +1603,7 @@ const TLX = (function () {
       try {
         if (window.TLXShaders && TLXShaders.sky) {
           if (!chunks && TLXShaders.chunks) chunks = TLXShaders.chunks(THREE, TSL);
-          sky = TLXShaders.sky(THREE, TSL, { chunks, cache: _skyCacheOn, cacheSize: _skyCacheSize });
+          sky = TLXShaders.sky(THREE, TSL, { chunks, cache: _skyCacheOn, cacheSize: _skyCacheSize, vp: vport, sceneView });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: sky factory failed, flat clear only —", e); } catch (_) {}
@@ -3723,9 +3740,11 @@ const TLX = (function () {
         }
         const rw = Math.max(1, Math.round(presentW * renderScale));
         const rh = Math.max(1, Math.round(presentH * renderScale));
-        const up = wantSpatialUpscale();
-        const cwBuf = up ? presentW : rw;
-        const chBuf = up ? presentH : rh;
+        const fixedNow = fixedActive();
+        const up = fixedNow ? (rw !== presentW || rh !== presentH) : wantSpatialUpscale();
+        // Fixed: the drawing buffer is present-sized at EVERY scale (it is never resized by a step).
+        const cwBuf = (up || fixedNow) ? presentW : rw;
+        const chBuf = (up || fixedNow) ? presentH : rh;
         const sizeChanged = rw !== W || rh !== H ||
           (_displayCanvas && (_displayCanvas.width !== cwBuf || _displayCanvas.height !== chBuf)) ||
           (renderer.domElement && (renderer.domElement.width !== cwBuf || renderer.domElement.height !== chBuf));
@@ -3741,7 +3760,10 @@ const TLX = (function () {
           _gpuLastResize = { at: performance.now(), width: rw, height: rh };
           // setSize drives the WebGPU/WebGL drawing buffer; when upscaling the
           // canvas is present-sized while post RTs stay at W×H (render).
-          renderer.setSize(cwBuf, chBuf, false);    // false: CSS keeps sizing the canvas
+          // Fixed: setSize rewrites canvas.width (a drawing-buffer reallocation) — only when it differs.
+          if (!fixedNow || !renderer.domElement || renderer.domElement.width !== cwBuf || renderer.domElement.height !== chBuf) {
+            renderer.setSize(cwBuf, chBuf, false);    // false: CSS keeps sizing the canvas
+          }
           if (_displayCanvas && (_displayCanvas.width !== cwBuf || _displayCanvas.height !== chBuf)) {
             _displayCanvas.width = cwBuf;
             _displayCanvas.height = chBuf;
@@ -3750,7 +3772,8 @@ const TLX = (function () {
             _postRebuild = false; post = buildPost();
             if (!post) postFailure("Post-processing reconstruction failed");
           }
-          if (post) post.resize(rw, rh);
+          if (sceneView) sceneView.set(rw, rh);
+          if (post) post.resize(rw, rh, presentW, presentH);
         }
       }
       function resize() {
@@ -5052,7 +5075,7 @@ const TLX = (function () {
           // needs exclusive compiler state; see the recorded recovery design gap.
           if (_postRebuild && !post && !_warmPending
               && (typeof performance !== "undefined" ? performance.now() : Date.now()) >= _postRetryAt) {
-            _postRebuild = false; post = buildPost(); if (post) post.resize(W, H);
+            _postRebuild = false; post = buildPost(); if (post) post.resize(W, H, presentW, presentH);
             else postFailure("Post-processing reconstruction failed");
           }
           _tagSwap();

@@ -296,6 +296,7 @@ async function precacheAssetLists() {
     "js/render/webgpu/wgx-roadlut.js",
     "js/render/webgpu/wgx.js",
     "js/render/three/tsl-chunks.js",
+    "js/render/three/tsl-viewport.js",
     "js/render/three/tsl-lit.js",
     "js/render/three/tsl-sky.js",
     "js/render/three/tsl-fx.js",

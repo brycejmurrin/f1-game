@@ -69,6 +69,9 @@
       fract, floor, dot, mix, smoothstep, clamp, pow, exp,
       abs, max, min, normalize, length, sin, atan, step,
     } = TSL;
+    // The 0..1 image uv of the scene pass: screenUV, or (fixed targets, #2655)
+    // the fragment over the LOGICAL scene size (tsl-viewport.js).
+    const imageUV = (ctx && ctx.vp && ctx.sceneView) ? ctx.vp.uv(ctx.sceneView) : screenUV;
 
     /* SKY-family noise (GLXChunks.hash + GLXChunks.vnoise, verbatim) */
     const hash3 = Fn(([pIn]) => {
@@ -478,7 +481,9 @@
     /* the fragment (SKY_VS ray math + SKY_FS in js/render/glx/shaders/glsl-sky.js) */
     const node = Fn(() => {
       // ANCHORS: screenUV + the whole ray chain, unconditional
-      const suv = vec2(screenUV).toVar();
+      // Fixed targets: the scene is drawn into a top-left sub-rect of its target,
+      // so the 0..1 image uv is the fragment over the LOGICAL scene size (VP).
+      const suv = vec2(imageUV).toVar();
       // NDC: screenUV is top-left origin -> flip y (SKY_VS's p covers -1..1).
       const p = vec2(suv.x.mul(2.0).sub(1.0), float(1.0).sub(suv.y).mul(2.0).sub(1.0)).toVar();
       // SKY_VS: unproject both z planes through uInvViewProj, dir = far - near.
@@ -769,7 +774,7 @@
     // or a flat zenith lid. Mix the same zenith/horizon uniforms the full
     // node reads, keyed on screen Y (top-left origin on both backends).
     const fallbackNode = Fn(() => {
-      const t = smoothstep(0.08, 0.88, screenUV.y);
+      const t = smoothstep(0.08, 0.88, imageUV.y);
       return vec4(mix(U.zenith, U.horizon, t), 1.0);
     })();
 
