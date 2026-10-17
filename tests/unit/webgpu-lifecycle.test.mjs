@@ -2723,6 +2723,44 @@ test("a capture NEVER reconfigures the swapchain inside an encoded frame", async
   assert.ok(cfgAt >= 0 && encAt > cfgAt, "the reconfigure must precede this frame's encoder");
 });
 
+test("WGX mirror-pass cull gets its own pack, buffer and cell-set key: main and mirror no longer evict each other", async () => {
+  // Measured live (Monza, 20 frames): the rear-view pass and the main pass cull the same prop batches with
+  // different frustums into ONE instBuf under ONE cell-set key, so every cull missed and rewrote the buffer
+  // (43 queue.writeBuffer + repacks per frame). Inside mirrorBegin..mirrorEnd the cull targets batch._mir.
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mats = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1]);
+  const batch = gfx.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  const all = (d) => Array.from({ length: 6 }, () => [0, 0, 0, d]);
+  // plane (-1,0,0,60): x <= 60 survives, so only the first cell
+  const one = [[-1, 0, 0, 60], ...Array.from({ length: 5 }, () => [0, 0, 0, 1e6])];
+  const w0 = h.writes.filter((w) => w.buffer === batch.instBuf).length;   // the creation upload, if the mock counts it
+  const mainWrites = () => h.writes.filter((w) => w.buffer === batch.instBuf).length - w0;
+  assert.equal(gfx.cullInstances(batch, all(1e6)), 2, "main cull sees both cells");
+  assert.equal(mainWrites(), 1);
+  assert.equal(gfx.mirrorBegin({}, 64, 16), true);
+  assert.equal(gfx.cullInstances(batch, one), 1, "mirror frustum keeps one cell");
+  assert.ok(batch._mir && batch._mir.instBuf && batch._mir.instBuf !== batch.instBuf, "the mirror pack has its own buffer");
+  const mirBuf0 = batch._mir.instBuf;
+  const mirWrites = () => h.writes.filter((w) => w.buffer === mirBuf0).length - 1;   // minus the creation upload
+  assert.equal(mirWrites(), 1, "one upload into the mirror buffer");
+  assert.equal(mainWrites(), 1, "the mirror cull did not touch the main instBuf");
+  assert.equal(batch._cellKeyN, 2, "…nor the main cell-set key");
+  gfx.mirrorEnd();
+  const mirBuf = batch._mir.instBuf;
+  for (let f = 0; f < 3; f++) {
+    assert.equal(gfx.cullInstances(batch, all(2e6 + f)), 2, "main cull again");
+    assert.equal(gfx.mirrorBegin({}, 64, 16), true);
+    assert.equal(gfx.cullInstances(batch, one), 1);
+    gfx.mirrorEnd();
+  }
+  assert.equal(mainWrites(), 1, "three more frames: every main cull is a cache hit");
+  assert.equal(mirWrites(), 1, "…and every mirror cull too");
+  assert.equal(batch._mir.instBuf, mirBuf, "the mirror buffer is reused, not re-minted");
+});
+
 test("WGX shadow cull packs into the batch's OWN buffer and leaves the camera pack alone", async () => {
   // Bug hunt 2026-09-02: the shadow encoder rides the FRAME submit while the
   // camera cull's writeBuffer is queue-ordered before it, so a shared instBuf
