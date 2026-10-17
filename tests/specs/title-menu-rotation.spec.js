@@ -123,6 +123,21 @@ for (const sz of [...PHONES, TABLET]) {
       expectNoStuckKb(s, "land-1");
       expectDoorsReachable(s, "land-1");
       expect(s.inert, "title must not stay inert after a bare rotation").toBe(false);
+      if (sz.land.width === 844 && sz.land.height === 390) {
+        const fit = await page.evaluate(() => {
+          const mb = document.getElementById("menu-buttons");
+          const row = (id) => getComputedStyle(document.getElementById(id)).gridRowStart;
+          const lab = mb.querySelector(".menu-destination-label");
+          return {
+            sh: mb.scrollHeight, ch: mb.clientHeight,
+            rows: [row("menu-garage"), row("menu-explore"), row("menu-create")],
+            labelDisplay: lab ? getComputedStyle(lab).display : "none",
+          };
+        });
+        expect(fit.sh, "phone-landscape Home menu must fit without scrolling").toBeLessThanOrEqual(fit.ch + 1);
+        expect(fit.rows, "compact Home grid rows must win the cascade").toEqual(["3", "4", "5"]);
+        expect(fit.labelDisplay, "compact Home group labels stay hidden").toBe("none");
+      }
       // Title scrollers hide the thumb whenever ScrollFade would paint one;
       // with no overflow there is no ::before rule in play.
       if (s.mbSfScroll) {
