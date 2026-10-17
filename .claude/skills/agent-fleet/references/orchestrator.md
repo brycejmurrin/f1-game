@@ -67,7 +67,7 @@ before every `create_session`:
    that says "no PR" contradicts AGENTS.md rule 12; say who opens it instead.
 5. The full deliverable checklist in the FIRST brief (sections, weathers and
    frames, docs, the commit recipe) so no round-two message is needed.
-6. The PUSH line (green-cycle push; the slot is retired).
+6. The PUSH line (green-cycle push; the slot is retired): push BEFORE any browser run or wait over ~10 min.
 7. The `USER GRANTS:` quote and `Do not enable auto-merge or merge.`
 8. Every anticipated action AND path in `USER GRANTS:` (`js/game.js`, workflow
    dispatch, `.claude/**`, a ratchets row), and the worker's NEXT item named
@@ -80,6 +80,12 @@ before every `create_session`:
 10. `get_session` on any session before assigning it a PR or message: a dead
    one fails `not found` (#2717's owner), and a foreign Cursor one is reached
    through its PR.
+11. Fleet-wide asks: read `get_session` (`post_turn_summary`, `context_usage`,
+   `usage`) for every roster id first and message only sessions whose summary
+   is stale > 15 min. Copy ids from `list_sessions`, never retype them. One
+   message per ask; a correction is `RETRACT <ask>`, never a second broadcast.
+   No peer fan-out ("send to every session below"): replies go to the
+   orchestrator only (three asks in four minutes cost ~21 wakes each, 2026-10-17).
 
 ### Pre-launch quota check (#2380)
 

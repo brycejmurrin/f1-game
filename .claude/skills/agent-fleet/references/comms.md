@@ -64,6 +64,7 @@ HANDOFF <session> → <successor or orchestrator>, context <k>
 PRs: <#> head <sha7> CI <READ verdict: run id, jobs that ran, tests>  (one per line)
 Branches without a PR: <branch @ sha7 | none>
 Claims: <who-is-on-it text | none>   Grants in force: <quoted, UTC>
+last-lines: <PR> <sha7> <READY|REPORT|DONE> <UTC>   (each owner's last, so no one resends)
 Next step: <one exact command or action>
 ```
 
