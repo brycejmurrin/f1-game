@@ -22,7 +22,6 @@ const InputHaptics = (function () {
       triggerHapticsOn = !!on;
       if (pulses.length) mixDirty = true;
     }
-    function triggerHapticsEnabled() { return triggerHapticsOn; }
     function actuatorHas(a, effect) {
       return !!(a && a.effects && typeof a.effects.includes === "function" && a.effects.includes(effect));
     }
@@ -205,7 +204,7 @@ const InputHaptics = (function () {
       }
     }
 
-    return { setHaptics, setTriggerHaptics, triggerHapticsEnabled, hapticsSupported,
+    return { setHaptics, setTriggerHaptics, hapticsSupported,
       triggerRumbleSupported, primeHaptics, vibrate, rumble, flush, scale: () => hapticScale };
   }
 
