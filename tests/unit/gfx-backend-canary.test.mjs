@@ -34,7 +34,7 @@ import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
-import { bootGlx } from "../helpers/glx-mock.mjs";
+import { bootGlx, recordingOverlay } from "../helpers/glx-mock.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -1588,6 +1588,21 @@ test("the instancing gate is declared through the cache, never bracketed per dra
   assert.equal(binds.length, 2, "a new useProg(litProg) site must also declare uInstanced — see PERF-FINDINGS 2e");
 });
 
+test("begin() does not re-bind the per-pass sampler units when nothing changed", () => {
+  // Units 6 (env cube), 7 (blocker), 8 (car shadow) and 9 (lamp shadow) were re-bound by every begin() — an
+  // activeTexture + bindTexture + activeTexture(0) triple each, on the main, mirror and env-face passes. A texture
+  // binding is context state: only a different texture object needs a bind.
+  const h = bootGlx();
+  const cubeBinds = () => h.count("bindTexture", (a) => a[0] === h.gl.TEXTURE_CUBE_MAP);
+  h.GLX.begin(h.frame());
+  assert.ok(cubeBinds() >= 1, "the first begin() binds the env cube (dummy) to unit 6");
+  h.reset();
+  h.GLX.begin(h.frame());
+  h.GLX.begin(h.frame());
+  assert.equal(cubeBinds(), 0, "later begins skip an unchanged unit-6 binding");
+  assert.equal(h.count("activeTexture", (a) => a[0] === h.gl.TEXTURE6), 0, "…and never select unit 6 for it");
+});
+
 test("material uniforms survive begin(): a second pass with the same material uploads none", () => {
   // The nine material caches were reset in every begin(), so each pass (main, mirror, env face) re-sent up to nine
   // uniform1f on its first lit draw. A WebGL uniform is program state and litMaterial is its only writer, so only a
@@ -2904,40 +2919,89 @@ test("GLX keeps the drawing buffer under HeadlessChrome so captures see the car"
     "preserveDrawingBuffer must follow the headless UA sniff, not a bare true");
 });
 
-test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
+test("GLX soft-presents under HeadlessChrome so CDP sees the car", async () => {
   // preserveDrawingBuffer alone is not enough on SwiftShader: in-frame
   // readPixels has picture, chrome_take_screenshot of the garage gap is
   // still solid black. WGX already 2D-blits; GLX must too under the same UA.
-  const src = code("js/render/glx/glx.js");
-  assert.match(src, /_softPresent\s*=\s*headlessUa/,
-    "soft-present must arm from the HeadlessChrome sniff");
-  assert.match(src, /navigator\.webdriver/,
-    "webdriver arms soft when the project UA hides HeadlessChrome");
-  assert.match(src, /drawingBufferWidth/,
-    "softBlit must size from the drawing buffer (present size under spatial upscale)");
-  assert.match(src, /game-soft/,
-    "soft-present needs a 2D overlay canvas id for CDP/page shots");
-  assert.match(src, /putImageData/,
-    "soft-present must blit readPixels into the 2D overlay");
-  assert.match(src, /awaitSoftPresent/,
-    "garage settle / SAVE SCREENSHOT wait on awaitSoftPresent");
-  assert.match(src, /if\s*\(\s*!_softPresentWaiters\.length\s*&&\s*!_softCaptureDue\s*\)\s*return/,
-    "soft-present must read back only when a capture explicitly waits for it");
-  assert.match(src, /softPresent:\s*\(\)\s*=>\s*!!_softPresent/,
-    "softPresent() capability bit for renderer-picker / probes");
-  assert.match(src, /function invalidateSoftPresent\(/,
-    "snapCam calls gfx.invalidateSoftPresent — GLX must define it (WGX already does)");
-  assert.match(src, /invalidateSoftPresent,/,
-    "invalidateSoftPresent must be on the GLX export surface");
-  const awaitFn = span(src, "function awaitSoftPresent", "function init(canvasEl)", "awaitSoftPresent");
-  assert.match(awaitFn, /const start = _softBlitGen/,
-    "GLX must wait for a newer blit, not return the last gen already on the overlay");
-  assert.doesNotMatch(awaitFn, /_softLastMaxPx\s*>=\s*8\s*&&\s*_softBlitGen\s*>\s*0/,
-    "a stale early-return makes SAVE SCREENSHOT byte-identical across a camera move");
-  assert.match(awaitFn, /_softPresentWaiters\.push\(waiter\)/,
-    "timeout splice must find the same function push() stored");
-  assert.doesNotMatch(awaitFn, /_softPresentWaiters\.push\(wrap\)/,
-    "do not push a wrapper the timeout cannot indexOf");
+  // BEHAVIOUR on the recording WebGL2 mock (tests/helpers/glx-mock.mjs): the
+  // arming rule, the overlay canvas, and what a capture waits for.
+  const lit = (h) => { h.answers.readPixels = (...a) => { a[6].fill(200); }; };
+  const frame = (h) => { h.GLX.begin(h.frame()); h.GLX.present({}); };
+
+  // Arming: HeadlessChrome UA or navigator.webdriver arms it; a player does not;
+  // SCREENSHOTS = NATIVE (apex26.wgxCapture "0") keeps the player's path.
+  const armed = (o) => { const overlay = recordingOverlay(); const h = bootGlx({ ...o, overlay }); return { h, overlay }; };
+  const hl = armed({ userAgent: "Mozilla/5.0 HeadlessChrome/120" });
+  assert.equal(hl.h.GLX.softPresent(), true, "the HeadlessChrome sniff arms soft-present");
+  assert.equal(hl.h.contextAttrs[0].attrs.preserveDrawingBuffer, true, "the buffer is kept for the readback");
+  assert.equal(armed({ webdriver: true }).h.GLX.softPresent(), true, "webdriver arms it when the project UA hides HeadlessChrome");
+  const player = armed({});
+  assert.equal(player.h.GLX.softPresent(), false, "a headed player keeps the fast default");
+  assert.equal(player.overlay.soft, null, "and gets no overlay canvas");
+  assert.equal(player.h.contextAttrs[0].attrs.preserveDrawingBuffer, false);
+  assert.equal(armed({ webdriver: true, ls: { "apex26.wgxCapture": "0" } }).h.GLX.softPresent(), false,
+    "SCREENSHOTS = NATIVE under automation stays off");
+
+  // The overlay: a 2D canvas #game-soft, aria-hidden, opaque (alpha:false),
+  // see-through until it holds a frame, then revealed.
+  const { h, overlay } = hl;
+  const soft = overlay.soft;
+  assert.ok(soft, "soft-present needs a 2D overlay canvas id for CDP/page shots");
+  assert.equal(soft.attrs["aria-hidden"], "true");
+  assert.equal(soft.ctxArgs[0], "2d");
+  assert.equal(soft.ctxArgs[1].alpha, false);
+  assert.match(soft.style.cssText, /opacity:\s*0\b/, "hidden until it has something to show, never a black lid over a working renderer");
+  assert.equal(typeof h.GLX.invalidateSoftPresent, "function", "snapCam calls gfx.invalidateSoftPresent — GLX must define it");
+
+  // A dim read-back neither draws nor notifies, and keeps the waiter queued.
+  h.answers.readPixels = (...a) => { a[6].fill(0); };
+  const waitDim = h.GLX.awaitSoftPresent(50);
+  let dimDone = false; waitDim.then(() => { dimDone = true; }, () => { dimDone = true; });
+  frame(h);
+  await Promise.resolve();
+  assert.equal(soft.puts, 0, "a near-black frame does not wipe the overlay");
+  assert.equal(dimDone, false, "the waiter is re-queued, not resolved or dropped");
+  // The next lit blit wakes it, at the drawing-buffer (present) size.
+  lit(h);
+  h.answers.drawingBufferWidth = 800; h.answers.drawingBufferHeight = 450;
+  frame(h);
+  const gen1 = await waitDim;
+  assert.equal(soft.puts, 1);
+  assert.deepEqual([soft.width, soft.height], [800, 450], "softBlit sizes from the drawing buffer (present size under spatial upscale)");
+  assert.match(soft.style.opacity, /^1$/, "the first real frame reveals the overlay");
+
+  // No capture waiting: present reads nothing back.
+  h.reset();
+  frame(h);
+  assert.equal(h.count("readPixels"), 0, "soft-present reads back only when a capture explicitly waits for it");
+  assert.equal(soft.puts, 1);
+
+  // A wait needs a NEWER blit, not the generation already on the overlay.
+  let stale = false;
+  const waitNew = h.GLX.awaitSoftPresent(50); waitNew.then(() => { stale = true; });
+  await Promise.resolve();
+  assert.equal(stale, false, "a stale early-return makes SAVE SCREENSHOT byte-identical across a camera move");
+  frame(h);
+  const gen2 = await waitNew;
+  assert.ok(gen2 > gen1, "the wait resolves on the next blit");
+
+  // invalidateSoftPresent arms exactly one blit without any waiter.
+  h.GLX.invalidateSoftPresent();
+  const putsBefore = soft.puts;
+  frame(h);
+  assert.equal(soft.puts, putsBefore + 1, "invalidateSoftPresent arms one blit");
+  frame(h);
+  assert.equal(soft.puts, putsBefore + 1, "and only one");
+
+  // A timed-out waiter is removed from the queue (the timeout splices the
+  // function push() stored), so a later present does no capture work for it.
+  const waitLost = h.GLX.awaitSoftPresent(5);
+  const timers = h.sandbox.__timers;
+  timers[timers.length - 1]();   // the mock stores setTimeout callbacks; fire this wait's timeout
+  await assert.rejects(waitLost, /awaitSoftPresent timeout/);
+  h.reset();
+  frame(h);
+  assert.equal(h.count("readPixels"), 0, "no wrapper left behind for the timeout to miss");
 });
 
 test("menuBlank hides #game-soft with #game", () => {
@@ -3457,8 +3521,66 @@ test("TLX InstancedMesh preserves vertex colour and owns a capped placement tint
     "shadow InstancedMesh must not set instanceColor — the lit geo already has instanceTint");
 });
 
+test("GLX cull cache only hits the transform pack resident in the GPU buffer (behaviour)", () => {
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mats = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1]);
+  const planes = (d, over = {}) => Array.from({ length: 6 }, (_, i) => over[i] || [0, 0, 0, d]);
+  const flat = (P) => P.flatMap((p) => Array.from(p));
+  const uploads = (h) => h.count("bufferSubData");
+
+  // Frustum identity: with the cell-set key off, the plane snapshot is the only
+  // key. x/y/z/d are ALL compared (the old x/d-only hash collided), and the
+  // cached count belongs to the resident pack (a narrower frustum's count must
+  // not leak into the next hit).
+  const off = bootGlx({ ls: { "apex26.instCellCache": "0" } });
+  const b0 = off.GLX.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  const full = planes(1e6);
+  off.reset();
+  assert.equal(off.GLX.cullInstances(b0, full), 2);
+  assert.equal(uploads(off), 1, "a fresh frustum packs and uploads");
+  off.reset();
+  assert.equal(off.GLX.cullInstances(b0, planes(1e6)), 2);
+  assert.equal(uploads(off), 0, "an identical frustum is a hit");
+  for (const [k, name] of [[0, "x"], [1, "y"], [2, "z"], [3, "d"]]) {
+    off.GLX.cullInstances(b0, full);   // make the full frustum resident
+    const p = [0, 0, 0, 1e6]; p[k] += 1e-3;
+    off.reset();
+    off.GLX.cullInstances(b0, planes(1e6, { 3: p }));
+    assert.equal(uploads(off), 1, `a frustum differing only in plane ${name} repacks`);
+  }
+  const narrow = planes(1e6, { 0: [1, 0, 0, -60] });   // x >= 60: only the second instance
+  assert.equal(off.GLX.cullInstances(b0, narrow), 1);
+  assert.equal(off.GLX.cullInstances(b0, planes(1e6)), 2, "returning to the wide frustum re-counts instead of replaying the narrow count");
+
+  // Cell-set key on (default): a hit on an unchanged survivor set must NOT stamp
+  // the plane snapshot, which has to keep describing the frustum that physically
+  // wrote the buffer.
+  const on = bootGlx();
+  const b1 = on.GLX.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  on.GLX.cullInstances(b1, planes(1e6));
+  const written = flat(planes(1e6));
+  assert.deepEqual(Array.from(b1._cullPlanes), written);
+  const other = planes(2e6);   // a different frustum, same surviving cells
+  on.reset();
+  assert.equal(on.GLX.cullInstances(b1, other), 2);
+  assert.equal(uploads(on), 0, "the same surviving cell set is a hit: no re-upload");
+  assert.deepEqual(Array.from(b1._cullPlanes), written, "a cell-set hit leaves the plane snapshot describing the frustum that wrote the buffer");
+
+  // A full-set shadow cast restores srcMatrices into the shared buffer, so the
+  // resident camera pack (and its cell-set key) must be forgotten.
+  on.GLX.lampShadowBegin(new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]), 0);
+  on.GLX.castShadowInstanced(b1);
+  on.GLX.lampShadowEnd();
+  assert.equal(b1._cullPlanes, null, "the full-set restore invalidates the resident cull pack");
+  assert.equal(b1._cellKeyN, -1, "and the cell-set key");
+  on.reset();
+  assert.equal(on.GLX.cullInstances(b1, planes(1e6)), 2);
+  assert.equal(uploads(on), 1, "the next camera cull re-packs rather than hitting bytes that are back in source order");
+});
+
 test("instanced cull cache only hits the transform pack resident in the GPU buffer", () => {
-  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
+  // GLX is driven as behaviour in the test above; WGX and TLX cannot boot in Node, so they stay source pins.
+  for (const file of ["js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
     const src = read(file).replace(/^[ \t]*\/\/.*$/gm, "");
     // fnBody, never a fixed window: the three backends' cullInstances are 1559
     // / 2446 / 2497 chars, so one 2800 window over-read all three by a
@@ -3497,10 +3619,7 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
       `inst-cells.js ${fn}(): the cell-set key must not touch the plane snapshot`);
   }
   assert.match(fnBody(cells, "sameKey"), /_cellKeyN\s*!==\s*kN/, "inst-cells.js sameKey compares the cell count first");
-  const glShadow = read("js/render/glx/shadow.js");
   const wgxSh = read("js/render/webgpu/wgx-shadow.js");
-  assert.match(glShadow, /bufferSubData\([^]*?batch\._cullPlanes\s*=\s*null/,
-    "GLX full-set shadow restore must invalidate the resident cull pack");
   // WGX (bug hunt 2026-09-02): the shadow pass packs into the batch's OWN
   // buffer and never writes instBuf, so there is nothing to invalidate — and
   // writing instBuf here WAS the bug: the shadow encoder rides the frame
@@ -3520,16 +3639,8 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     "cullInstances must recognise the shadow cull (upload:false)");
   assert.match(wgxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?writeBuffer\(batch\.shadowInstBuf/,
     "the shadow cull uploads to shadowInstBuf and leaves the camera pack/cache alone");
-  // GLX caught up (2026-09-09): same upload:false contract, WebGL2 buffer names.
-  const glx = read("js/render/glx/glx.js");
-  // 6000, not 4200: the lamp-reach filter + shadow cell-set key (PERF-HUNT-2 G5) sit before the shadow upload.
-  const glxCull = glx.slice(glx.indexOf("function cullInstances(batch, planes, opts)"), glx.indexOf("function cullInstances(batch, planes, opts)") + 6000);
-  assert.match(glxCull, /const shadow = !!\(opts && opts\.upload === false\);/,
-    "GLX cullInstances must recognise upload:false");
-  assert.match(glxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?batch\.shadowIbo/,
-    "GLX shadow cull uploads to shadowIbo and leaves the camera pack/cache alone");
-  assert.match(glShadow, /batch\.shadowIbo && batch\._shadowN === n/,
-    "GLX castShadowInstanced draws from shadowIbo when the light cull packed it");
+  // GLX (same upload:false contract, WebGL2 buffer names) is behaviour: "GLX shadow cull
+  // upload:false leaves the camera pack and cache alone" and the lamp-reach test drive it.
 
   // AND THE SEPARATION IS ONLY HALF OF IT. shadowInstBuf is per BATCH, not per
   // LIGHT, and the sun, car and lamp passes all reach it through one caller
@@ -4990,41 +5101,67 @@ test("three still re-reads attribute.array after upload (why the release fix is 
 // bytes from 50.0 to 28.6 MB. The risk is not that it fails loudly — it is
 // that it quietly shifts a value the shader BRANCHES on.
 test("the attribute packer proves its precondition instead of assuming it", () => {
-  const ch = read("js/render/three/tlx-chunked.js");
+  // BEHAVIOUR: the real packer from tlx-chunked.js, loaded in a VM against a THREE stub whose
+  // BufferAttribute derives `count` from the array it is GIVEN, like three's does.
+  class BufferAttribute { constructor(array, itemSize, normalized) { this.array = array; this.itemSize = itemSize; this.normalized = !!normalized; this.count = array.length / itemSize; } }
+  class Float16BufferAttribute extends BufferAttribute { get isFloat16BufferAttribute() { return true; } }
+  const THREE = { BufferAttribute, Float16BufferAttribute };
+  const packer = (ls = {}, throws = false) => {
+    const sb = { window: {}, Frustum: {}, Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Math,
+      localStorage: { getItem: (k) => { if (throws) throw new Error("blocked"); return k in ls ? ls[k] : null; } } };
+    vm.createContext(sb);
+    vm.runInContext(readFile("js/render/three/tlx-chunked.js"), sb, { filename: "tlx-chunked.js" });
+    return sb.window.TLXShaders;
+  };
+  const half = (h) => { const e = (h >> 10) & 31, m = h & 1023; return e === 0 ? m * 2 ** -24 : (1 + m / 1024) * 2 ** (e - 15); };
+  // What the shader reads back: half-float attributes hold half bits, a widened/Float32 one holds the value.
+  const val = (a, i) => (a.isFloat16BufferAttribute ? half(a.array[i]) : a.array[i]);
+  // apex26.tlxPad4=0: the narrow strides, so every branch builds its own attribute (A-W2 pad-4 widening is tlx-hunt4b's).
+  const P = packer({ "apex26.tlxPad4": "0" });
+  const f32 = (...v) => Float32Array.from(v);
 
-  // A blanket quantise is the bug. Colours carry emissive to 3.4 and MAT ids
-  // are not whole (measured 15.4) — both must be range-scanned and kept wider
-  // when they do not fit, never clamped into the small type.
-  assert.match(ch, /function packAttr\(/, "packAttr is gone — TLX is back to Float32 everything");
-  assert.match(ch, /if \(kind === "unorm"\) \{ if \(v < 0 \|\| v > 1\) \{ fits = false; break; \} \}/,
-    "the unorm range scan is gone — an emissive colour above 1 would be clamped");
-  assert.match(ch, /\(v \| 0\) !== v/,
-    "the id check no longer rejects fractional MAT — 15.4 would round to a different material");
+  // A blanket quantise is the bug. Colours carry emissive to 3.4 and MAT ids are not whole
+  // (measured 15.4) — both are range-scanned and kept wider when they do not fit, never clamped.
+  const tame = P.packAttr(THREE, f32(0, 0.5, 1, 0.25, 0.75, 0.125), 6, 3, "unorm", false);
+  assert.ok(tame.array instanceof Uint8Array && tame.normalized, "an in-range colour packs to normalised bytes");
+  const hdr = P.packAttr(THREE, f32(2.6, 1.05, 0.25), 3, 3, "unorm", false);
+  assert.equal(hdr.isFloat16BufferAttribute, true, "an emissive colour above 1 is not clamped into bytes");
+  assert.ok(Math.abs(val(hdr, 0) - 2.6) < 0.01, "and its value survives");
+  const whole = P.packAttr(THREE, f32(0, 3, 7, 255), 4, 1, "id", false);
+  assert.ok(!(whole.array instanceof Uint8Array) && !(whole.array instanceof Int16Array) && Math.abs(val(whole, 3) - 255) < 0.1,
+    "whole ids stay a FLOAT format — a bare integer array binds as an integer attribute and ANGLE/Metal refuses every draw");
+  const ids = P.packAttr(THREE, f32(0, 3, 15.4, 255), 4, 1, "id", false);
+  assert.ok(Math.abs(val(ids, 2) - 15.4) < 0.01, "a fractional MAT id keeps its fraction — 15.4 must not round to another material");
+  assert.ok(Math.abs(val(P.packAttr(THREE, f32(0, 300, 2.5, 7), 4, 1, "id", false), 1) - 300) < 0.2, "an id above 255 is not clamped");
+  // Constructor, not a post-hoc assignment: count comes from the array it is given, so a
+  // half-float attribute built empty and filled later would draw NOTHING.
+  assert.equal(hdr.count, 1);
+  assert.equal(ids.count, 4, "half-float attributes carry their count, or the mesh silently draws nothing");
 
-  // `trk` must NEVER go half-float: its arc length reaches 5382 m, where a
-  // half's 11-bit mantissa is worth about ±2.6 m and road markings need far
-  // better. The half path is restricted to unorm/id for exactly that reason.
-  assert.match(ch, /kind === "unorm" \|\| kind === "id"/,
-    "the half-float path is no longer restricted — trk arc length would lose metres");
+  // `trk` must NEVER go half-float: its arc length reaches 5382 m, where a half's mantissa is
+  // worth about ±2.6 m and road markings need far better.
+  const trk = P.packAttr(THREE, f32(0, 13.7, 5382, 27.4, 41.1, 5000.5), 6, 3, null, false);
+  assert.ok(trk.array instanceof Float32Array && !trk.isFloat16BufferAttribute, "trk stays Float32");
+  assert.equal(trk.array[2], 5382);
+  assert.equal(P.packAttr(THREE, f32(0, 1, NaN), 3, 3, "unorm", false).isFloat16BufferAttribute, undefined, "non-finite data stays Float32");
 
-  // Constructor, not a post-hoc assignment: BufferAttribute derives `count`
-  // from the array it is GIVEN, so `new Float16BufferAttribute([], n)` followed
-  // by `.array = h` leaves count 0 and the mesh draws NOTHING. That was a real
-  // bug in this function's first draft.
-  assert.match(ch, /return new THREE\.Float16BufferAttribute\(h, itemSize\);/,
-    "half-float attributes must be built through the constructor or count stays 0");
-  assert.ok(!/Float16BufferAttribute\(\[\]/.test(ch),
-    "an empty-array Float16BufferAttribute leaves count 0 — the mesh silently draws nothing");
-  // WebGPU has no 1- or 3-wide 8/16-bit vertex format: a packed 3-wide colour
-  // reached createRenderPipeline as 'float16x3' and TLX REFUSED on Metal
-  // (gpu-census 21/22, 2026-09-02; PERF-FINDINGS 2n). The pack must keep
-  // those widths Float32 under the renderer's isWebGPU.
-  assert.match(ch, /function packAttr\(THREE, src, len, itemSize, kind, fmt24\)/,
-    "packAttr lost its fmt24 (WebGPU vertex-format) parameter");
-  assert.match(ch, /if \(fmt24 && itemSize !== 2 && itemSize !== 4\) kind = null;/,
-    "under fmt24, 1- and 3-wide attributes must stay Float32 — 'float16x3' is not a GPUVertexFormat");
-  assert.match(ch, /packAttr\(THREE, src, len, itemSize, kind, fmt24\(\)\)/,
-    "attrOrZero no longer passes the per-build fmt24 rule");
+  // WebGPU has no 1- or 3-wide 8/16-bit vertex format: a packed 3-wide colour reached
+  // createRenderPipeline as 'float16x3' and TLX REFUSED on Metal. Under fmt24 those widths stay Float32.
+  const col3 = P.packAttr(THREE, f32(0, 0.5, 1), 3, 3, "unorm", true);
+  assert.ok(col3.array instanceof Float32Array && col3.itemSize === 3, "fmt24: a 3-wide colour stays Float32");
+  const id1 = P.packAttr(THREE, f32(3), 1, 1, "id", true);
+  assert.ok(id1.array instanceof Float32Array && id1.itemSize === 1, "fmt24: a 1-wide id stays Float32");
+
+  // The shared zero buffer: an absent attribute must not cost a per-mesh array.
+  const z1 = P.packAttr(THREE, null, 3000, 3, "unorm", false), z2 = P.packAttr(THREE, null, 3000, 3, "unorm", false);
+  assert.equal(z1.array.buffer, z2.array.buffer, "absent attributes share one zero buffer");
+  assert.ok(z1.array.every((v) => v === 0));
+
+  // An off-switch that defaults ON, and fails to the SAFE side when storage is blocked.
+  assert.ok(packer({ "apex26.tlxPack": "0" }).packAttr(THREE, f32(0, 0.5, 1), 3, 3, "unorm", false).array instanceof Float32Array, "apex26.tlxPack=0 keeps Float32 for A/B");
+  assert.ok(packer({}, true).packAttr(THREE, f32(0, 0.5, 1), 3, 3, "unorm", false).array instanceof Uint8Array, "blocked storage leaves packing on");
+
+  // Wiring that needs TLX itself (three.js cannot load here) stays a source pin.
   const tlxSrc = read("js/render/three/tlx.js");
   // buildGeometry (the non-chunked meshes) packs through the same function
   // under the alias _pk — both call sites must carry the rule, or the props
@@ -5035,14 +5172,6 @@ test("the attribute packer proves its precondition instead of assuming it", () =
     "buildGeometry's fmt24 must read the live backend");
   assert.match(tlxSrc, /TLXShaders\.chunked\(THREE, \{\s*isWebGPU: \(\) => !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\),\s*releaseGeometry,\s*\}\)/,
     "tlx.js must hand the chunked factory its format rule and geometry-owner release callback");
-
-  // The shared zero buffer is only safe while nothing writes it.
-  assert.match(ch, /function _zeros\(len\)/, "the shared zero buffer is gone — absent trk goes back to 5.88 MB of per-mesh zeros");
-
-  // An off-switch that defaults ON, and fails to the SAFE side when storage
-  // is blocked (packing is the verified path, so its default is 'on').
-  assert.match(ch, /localStorage\.getItem\("apex26\.tlxPack"\) !== "0"/,
-    "the apex26.tlxPack escape hatch is gone");
 });
 
 test("the packing round-trip check is wired to the shader's own decisions", () => {
