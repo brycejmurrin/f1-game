@@ -2,6 +2,30 @@
 "use strict";
 
 const CarWheels = (function () {
+  // LIVERY WHEEL TINTS (livery rimTint / caliperTint): paint-only overrides of the brakes catalog
+  // colours for ALL four wheels. A field is a [r,g,b] 0..1 array (resolved livery) or "#rrggbb".
+  // Unset = NO_TINTS = today's catalog colour. `key` joins every wheel mesh cache key so a livery
+  // change rebuilds the wheels; "" when nothing is set (keys stay byte-identical).
+  const _tintMemo = new WeakMap();
+  const NO_TINTS = Object.freeze({ rim: null, cal: null, ink: null, key: "" });
+  function tintColour(v) {
+    if (!v) return null;
+    if (Array.isArray(v)) return v.length >= 3 && v.slice(0, 3).every(Number.isFinite) ? [v[0], v[1], v[2]] : null;
+    const m = typeof v === "string" && /^#?([0-9a-f]{6})$/i.exec(v);
+    if (!m) return null;
+    const n = parseInt(m[1], 16);
+    return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+  }
+  const q255 = (c) => c ? c.map((x) => Math.round(x * 255)).join(",") : "";
+  function tints(liv) {
+    if (!liv || typeof liv !== "object") return NO_TINTS;
+    let t = _tintMemo.get(liv);
+    if (t) return t;
+    const rim = tintColour(liv.rimTint), cal = tintColour(liv.caliperTint);
+    t = !rim && !cal ? NO_TINTS : Object.freeze({ rim, cal, ink: null, key: "|w" + q255(rim) + ";" + q255(cal) });
+    _tintMemo.set(liv, t);
+    return t;
+  }
   function create(context) {
     const { SURFACES, TYRE, INTAKE } = context;
     const { addTri, addQuad, addBox, addSpan } = context.geometry;
@@ -491,6 +515,6 @@ const CarWheels = (function () {
     return { addWheel, buildWheel, buildWheelLayers };
   }
 
-  return { create };
+  return { create, tints };
 })();
 Object.freeze(CarWheels);

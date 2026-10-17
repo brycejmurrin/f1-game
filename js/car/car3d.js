@@ -2115,8 +2115,9 @@ const Car3D = (function () {
     if (!noWheels) {
       const tyreBand = tyreStyle && tyreStyle.band || TYRE_BAND[tier("tyres")];
       // Per-option caliper accent peeking through the rim spokes, else tier.
-      const caliperColor = brakeStyle ? brakeStyle.cal : BRAKE_CALIPER[brakesT];
-      const rimColor = brakeStyle && brakeStyle.rim;   // premium alloy rims (else default dark)
+      const wt = CarWheels.tints(liv);   // livery rimTint / caliperTint override the brakes catalog (unset = null)
+      const caliperColor = wt.cal || (brakeStyle ? brakeStyle.cal : BRAKE_CALIPER[brakesT]);
+      const rimColor = wt.rim || (brakeStyle && brakeStyle.rim);   // premium alloy rims (else default dark)
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32,
           tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle);
