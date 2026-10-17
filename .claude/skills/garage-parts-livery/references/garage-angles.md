@@ -257,6 +257,19 @@ test` suite or the host Playwright MCP's *launched* Chromium is up; the idle
 `@playwright/mcp` server that Cloud attaches for the whole session is
 reported (`apex_status` → `playwright.hostMcp`) and no longer blocks.
 
+### Backend and shipped liveries
+
+Use `--backend=three` for TLX or `--backend=webgl2` for GLX (the existing default).
+The requested backend is checked against the live binding. `--livery=shipped`
+selects each team's shipped livery, including saved custom liveries; `default`
+still selects the catalog paint. MCP `apex_garage {op:"open", backend:"three",
+livery:"shipped"}` forwards the same choices.
+
+The page stays paused between captures. Scene edits mark a new source generation,
+then one strict readiness barrier runs before the screenshot. Native garage
+captures wait on actual renderer presents rather than the stationary race camera
+clock. Failed captures restore the caller's rendering state.
+
 ### Output
 
 | flag | meaning |
