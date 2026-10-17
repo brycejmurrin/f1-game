@@ -32,7 +32,7 @@ import { aliveRun } from "../ci/test-bg.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
-  expandMatrix, parseShard, shardCells, estimateMinutes, validateOffsets,
+  expandMatrix, parseShard, shardCells, estimateMinutes, validateOffsets, filterOnly, bootGroups,
 } from "../lib/hud-survey-matrix.mjs";
 import { pathToFileURL } from "node:url";
 
@@ -540,7 +540,7 @@ const CATALOG = [
   {
     name: "apex_agent",
     week: 2,
-    description: "Browser (lock first) — agent.mjs world/track/scene/rollout via harness. Skill: agent-view.",
+    description: "Browser (lock first) — agent.mjs world/track/scene/rollout via harness. COLD-BOOTS a browser on EVERY call (help 4 s, world detail:brief ~100 s on SwiftShader); for repeated reads use apex_track op:eval on a persistent session. Skill: agent-view.",
     inputSchema: {
       type: "object",
       properties: {
@@ -756,7 +756,7 @@ const CATALOG = [
       type: "object",
       properties: {
         matrix: { type: "string", description: "quick (default) | full | leads | exhaustive (needs shard) | path to a matrix JSON under scratch/ or artifacts/." },
-        only: { type: "array", items: { type: "string" }, description: "Keep cells whose id contains any of these substrings." },
+        only: { type: "array", items: { type: "string" }, description: "Keep cells whose CELL id contains any of these substrings (e.g. phoneL-chase, not a device id like phone-landscape-844x390; a miss lists the valid ids)." },
         shard: { type: "string", description: "i/n — one balanced shard of the matrix (whole boot groups)." },
         backend: { type: "string", enum: ["three", "webgl2"], description: "Renderer every cell boots (default three = TLX; webgl2 = GLX)." },
         noShots: { type: "boolean", description: "Measure only, no PNGs." },
@@ -934,11 +934,11 @@ const CATALOG = [
     name: "apex_job_status",
     week: 7,
     kind: "tree",
-    description: "Tree — a background job's state (running | done | failed | cancelled), elapsed time, log tail and, once finished, its parsed JSON result in out. `wait` (1–300 s) blocks until it finishes (waitedS / stillRunning); capped results carry topFindings. No jobId lists every job this server started. Skill: check-changes.",
+    description: "Tree — a background job's state (running | done | failed | cancelled), elapsed time, log tail and, once finished, its parsed JSON result in out. `wait` (1–300 s) blocks until it finishes (waitedS / stillRunning) but the host moves any call past ~120 s to a background task, so use wait ≤ 100; capped results carry topFindings. No jobId lists every job this server started. Skill: check-changes.",
     inputSchema: { type: "object", additionalProperties: false, properties: { jobId: { type: "string" },
       state: { type: "string", enum: ["running", "done", "failed", "cancelled"], description: "No jobId: list only jobs in this state." },
       limit: { type: "integer", minimum: 1, maximum: 200, description: "No jobId: newest N jobs (default 20)." },
-      wait: { type: "integer", minimum: 1, maximum: 300, description: "With jobId: hold the call up to N seconds until the job is no longer running (no polling loop); the reply says waitedS / stillRunning." },
+      wait: { type: "integer", minimum: 1, maximum: 300, description: "With jobId: hold the call up to N seconds until the job is no longer running (no polling loop); the reply says waitedS / stillRunning. The host backgrounds a call after ~120 s: pass ≤ 100." },
       dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
   },
   {
@@ -1511,6 +1511,24 @@ function hudMockMock(argv) {
   const summary = { ok: true, out: rel, report: path.join(rel, "report.json"), index: path.join(rel, "index.md"), sheet: path.join(rel, "sheet.jpg"),
     durationMs: 0, cells: [{ id: "mock-cell", shot: path.join(rel, "mock-cell.png"), overlaps: [{ pair: "damage+inputs", px2: 120 }], unsafe: [], minFont: [["tower", 12]], smallTaps: [], errors: [] }] };
   return hudMockResult(toolResult({ ok: true, mock: true, exit: 0, argv, stdout: "", stderr: "", out: summary, durationMs: 0 }));
+}
+
+/** What a HUD job really costs, for `estimateMs` (the kill budget below is deliberately generous and is NOT an
+ *  estimate). Measured on this box with one cell (2026-10-17): hud_shot 57 s, hud_mock 39 s, hud_survey --only 47 s.
+ *  hud_survey scales by boot groups and cells: ~40 s per boot + ~7 s per cell (one-sample calibration, #2673). */
+export function hudEstimateMs(name, args = {}, expand = expandMatrix) {
+  if (name === "apex_hud_shot") return 60000;
+  if (name === "apex_hud_mock") return 40000;
+  try {
+    const m = args.matrix || "quick";
+    if (["quick", "full", "leads", "exhaustive"].includes(m)) {
+      let cells = expand(m, args.track ? { track: args.track } : {}).cells;
+      if (Array.isArray(args.only) && args.only.length) cells = filterOnly(cells, args.only);
+      if (args.shard) { const sh = parseShard(args.shard); cells = shardCells(cells, sh.i, sh.n); }
+      return bootGroups(cells).length * 40000 + cells.length * (args.noShots ? 3000 : 7000);
+    }
+  } catch { /* unknown matrix: fall through */ }
+  return 60000;
 }
 
 /** Budget: twice the CLI's own estimate for the named matrix (+ 5 min), capped at 90 min. */
@@ -2505,7 +2523,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     const r = extras().handlers.apex_job_start({ kind, [HUD_JOB_ARGV]: argv });   // sync: returns the jobId at once
     const body = JSON.parse(r.content[0].text);
     if (body.ok === false) return r;
-    return toolResult({ ...body, routed: `apex_job_start ${kind}`, estimateMs: HUD_TIMEOUT_MS(name, args),
+    return toolResult({ ...body, routed: `apex_job_start ${kind}`, estimateMs: hudEstimateMs(name, args), killAfterMs: HUD_TIMEOUT_MS(name, args),
       hint: "Runs in the background: apex_job_status {jobId} until state is done; findings land in out / the log. async:false blocks instead." });
   }
   if (hud) {

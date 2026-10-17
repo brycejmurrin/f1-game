@@ -6,9 +6,11 @@
 //   node tools/ci/sync-pr.mjs <branch> --plan   # print the plan, run nothing
 //   node tools/ci/sync-pr.mjs <branch>          # fetch, merge, verify, leave the result on a local branch
 //   node tools/ci/sync-pr.mjs <branch> --push   # same, then push to origin/<branch>
-//   node tools/ci/sync-pr.mjs <branch> --verify=none|fast|full   # default fast
+//   node tools/ci/sync-pr.mjs <branch> --verify=none|fast|full   # default fast = tooling-fast --changed; full = the whole floor
 //   node tools/ci/sync-pr.mjs <branch> --force-clean-behind     # sync although needs-sync.mjs says `no`
 //   node tools/ci/sync-pr.mjs <branch> --resume --from=<stage>   # re-verify the kept sync-pr-<branch>
+//   node tools/ci/sync-pr.mjs <branch> --stop                    # stop that branch's running sync (whole process tree; no pkill -f)
+//   --wait-load=<min>  wait up to N min (default 10) for loadavg < 2.8 instead of refusing at once (0 = refuse at once)
 //
 // STAGED, TIMED, DIFF-AWARE VERIFY (#2186, 2026-10-15). It ran tooling-fast at
 // --jobs=1 and EVERY ci.yml node suite (game-vm-a/b1/b2, vm-page, node-slow …)
@@ -49,11 +51,13 @@
 // the merge is a real merge commit, so the branch stays valid for whoever has
 // it checked out (mirrors deploy.mjs's own "no history was rewritten").
 import { spawnSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, plan, preflight, mergeDeployTip, gateNodeSuites, touchedCircuits, changedPaths } from "./deploy.mjs";
 import { plan as nodePlan } from "./node-plan.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
+import { register, release, stop as stopRun } from "../lib/run-pid.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -93,7 +97,10 @@ export function verifyStages({ verify, changed, circuits, suites, planFor = node
   const skip = new Set();
   if (verify === "fast" && changed) { const p = planFor(changed); if (!p.all) for (const s of p.skip) skip.add(s); }
   return [
-    { name: "tooling-fast", cmd: "node", args: ["tools/ci/tooling-fast.mjs", "--jobs=3"], timeoutMs: STAGE_TIMEOUT_MS["tooling-fast"] },
+    // fast: only the unit files the merged branch's OWN diff reaches (`--changed` diffs HEAD against its merge-base with the
+    // deploy tip, which after the merge is the tip: the PR's paths plus whatever `npm run gen` rewrote); a diff that
+    // touches a run-all path falls back to the whole floor by itself. full: the whole ladder.
+    { name: "tooling-fast", cmd: "node", args: ["tools/ci/tooling-fast.mjs", ...(verify === "full" ? [] : ["--changed"]), "--jobs=3"], timeoutMs: STAGE_TIMEOUT_MS["tooling-fast"] },
     ...suites.filter((s) => !skip.has(s)).map((s) => ({ name: s, cmd: "npm", args: ["run", s], timeoutMs: STAGE_TIMEOUT_MS.node })),
     ...circuits.map((id) => ({ name: `verify-track:${id}`, cmd: "node", args: ["tools/track/verify-track.cjs", id], timeoutMs: STAGE_TIMEOUT_MS["verify-track"] })),
   ].map((st) => ({ ...st, skipped: [...skip] }));
@@ -117,7 +124,7 @@ function usage() {
     "  --plan    print head/tip/conflicts for that branch against the deploy tip, run nothing",
     "  --push    on a clean verify, push the result to origin/<branch> (default: leaves it on a local sync-pr-<branch> branch for review);",
     "            a push that starts CI waits while queue-depth.mjs holds (APEX_PUSH_HOLD=0 when the user asked for it now)",
-    "  --verify  fast (default): tooling-fast --jobs=3 + the node suites node-plan.mjs needs for the branch's own diff;",
+    "  --verify  fast (default): tooling-fast --changed --jobs=3 (the branch's own diff; ~2 min vs ~12 min whole) + the node suites node-plan.mjs needs for it;",
     "            full: every ci.yml node suite; none: only after a clean merge that regenerated nothing",
     "  --force-clean-behind  sync although needs-sync.mjs says `no` (clean-behind is not a reason; exit 4 without it)",
     "  --resume  re-verify the kept sync-pr-<branch> (no fetch, no merge); --from=<stage> starts at that stage",
@@ -132,6 +139,19 @@ export function cachedPlan(prBranch, readGit = git) {
   return { branch: prBranch, head, tip, fastForward, source: "cached-remote-refs", conflicts: null,
     conflictsChecked: false, note: "Refs may be stale. Exact merge conflicts are checked during sync; plan changes nothing.",
     theirCommits: must(readGit(["log", "--oneline", `${head}..${tip}`]), "cached commits").split("\n").filter(Boolean) };
+}
+
+/** A leftover local sync-pr-<branch> with nothing of its own on it (no commit that is on neither the PR branch nor the
+ *  deploy tip) is a dead attempt: delete it and carry on instead of exiting (#2663: one stale branch cost ~1 h). */
+export function staleSyncBranch(localBranch, prBranch, readGit = git) {
+  const n = readGit(["rev-list", "--count", localBranch, `^${REMOTE}/${prBranch}`, `^${REMOTE}/${DEPLOY_BRANCH}`]);
+  if (n.code !== 0) return { stale: false, why: "could not compare" };
+  return +n.out === 0 ? { stale: true, why: "no commits of its own" } : { stale: false, why: `${n.out} commit(s) of its own — an interrupted sync; --resume it or rename it` };
+}
+
+/** True when origin/<branch> holds a commit our merge result does not contain: someone pushed meanwhile. */
+export function remoteMoved(localBranch, prBranch, readGit = git) {
+  return readGit(["merge-base", "--is-ancestor", `${REMOTE}/${prBranch}`, localBranch]).code !== 0;
 }
 
 /** Put the working tree back on `startedOn` and SAY WHERE IT IS (2026-10-04).
@@ -152,7 +172,7 @@ export function returnTo(startedOn, keptBranch, readGit = git) {
 export function main() {
   if (flag("--help") || flag("-h")) { usage(); return 0; }
   if (!branch) { usage(); return 1; }
-  const unknown = argv.find((a) => a.startsWith("-") && !["--plan", "--push", "--resume", "--force-clean-behind"].includes(a) && !/^--(verify|from)=/.test(a));
+  const unknown = argv.find((a) => a.startsWith("-") && !["--plan", "--push", "--resume", "--force-clean-behind", "--stop"].includes(a) && !/^--(verify|from|wait-load)=/.test(a));
   if (unknown || argv.filter((a) => !a.startsWith("-")).length !== 1) throw new Error(`Invalid arguments${unknown ? ": " + unknown : ""}`);
   if (flag("--plan") && flag("--push")) throw new Error("--plan cannot be combined with --push");
   let verify = opt("--verify") ?? "fast";
@@ -162,6 +182,19 @@ export function main() {
   if (branch === DEPLOY_BRANCH) { log(`REFUSED: ${branch} is the deploy branch itself — use deploy.mjs, not sync-pr.mjs`); return 3; }
 
   if (flag("--plan")) { console.log(JSON.stringify(cachedPlan(branch), null, 2)); return 0; }
+  const lockName = `sync-pr-${branch}`;
+  if (flag("--stop")) {
+    return stopRun(lockName).then((r) => { log(r.state === "stopped" ? `stopped pid ${r.pid} (${r.killed} processes)` : r.state === "stale" ? `the registered sync (pid ${r.pid}) is already gone` : `no registered sync for ${branch}`); return 0; });
+  }
+  const lock = register(lockName);
+  if (!lock.ok) { log(`REFUSED: another sync of ${branch} is running here (pid ${lock.pid}); wait, or stop it with: node tools/ci/sync-pr.mjs ${branch} --stop`); return 3; }
+  process.on("exit", () => release(lockName));
+  // A busy box is a reason to wait, not to refuse (#2663: refused at 4.14 on a box that was idle seconds later).
+  const waitMin = opt("--wait-load") === null ? 10 : Math.max(0, +opt("--wait-load") || 0);
+  if (waitMin > 0 && os.loadavg()[0] >= 2.8) {
+    log(`loadavg ${os.loadavg()[0].toFixed(2)} >= 2.8 — waiting up to ${waitMin} min for it to drop`);
+    spawnSync("node", ["tools/ci/wait-for.mjs", "--load-below", "2.8", "--timeout", String(waitMin)], { cwd: ROOT, stdio: "inherit" });
+  }
 
   const resume = flag("--resume");
   if (!resume) must(git(["fetch", "--no-tags", REMOTE, branch, DEPLOY_BRANCH]), "fetch");
@@ -183,10 +216,18 @@ export function main() {
     if (!exists) throw new Error(`--resume: no local ${localBranch} to resume (run without --resume)`);
     if (startedOn !== localBranch) must(git(["checkout", localBranch]), `checkout ${localBranch}`);
   } else {
-    if (exists) throw new Error(`Local branch ${localBranch} already exists; inspect or rename it before syncing, or --resume it`);
+    if (exists) {
+      const st = staleSyncBranch(localBranch, branch);
+      if (!st.stale) throw new Error(`Local branch ${localBranch} already exists (${st.why})`);
+      log(`removing stale ${localBranch} (${st.why})`);
+      if (startedOn === localBranch) must(git(["checkout", "--detach"]), "leave the stale sync branch");
+      must(git(["branch", "-D", localBranch]), "delete stale sync branch");
+    }
     must(git(["checkout", "-b", localBranch, `${REMOTE}/${branch}`]), "checkout PR branch");
   }
 
+  // Re-fetch right before the merge: the first fetch is minutes old by now and other sessions land commits continuously.
+  if (!resume) must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "re-fetch deploy tip");
   const p = resume ? null : plan();
   const tip = p ? p.tip : must(git(["rev-parse", `${REMOTE}/${DEPLOY_BRANCH}`]), "deploy tip");
   const resumeCmd = (stage) => `node tools/ci/sync-pr.mjs ${branch} --resume${stage ? ` --from=${stage}` : ""}${verify !== "fast" ? ` --verify=${verify}` : ""}${flag("--push") ? " --push" : ""}`;
@@ -201,6 +242,7 @@ export function main() {
       }
     } else if (verify === "none") throw new Error("--resume --verify=none verifies nothing; drop --resume and push by hand");
     const stages = verifyStages({ verify, changed: changedPaths(tip), circuits: touchedCircuits(tip), suites: verify === "none" ? [] : gateNodeSuites() });
+    log(`verify=${verify}: ${stages.map((st) => st.name).join(" → ") || "nothing"}; if it stops, resume with: ${resumeCmd(stages[0]?.name || null)}`);
     if (stages[0]?.skipped.length) log(`verify=${verify}: node-plan skips ${stages[0].skipped.join(", ")} for this diff (CI re-gates the pushed head)`);
     if (!stages.length) log("verify=none: clean merge, nothing regenerated — CI gates the pushed head");
     const r = runStages(stages, { from });
@@ -219,7 +261,13 @@ export function main() {
   const pushCmd = `git push ${REMOTE} ${localBranch}:${branch}`;
   if (flag("--push")) {
     // No queue hold (retired 2026-10-16, CI/CD review #2333 finding 7): a
-    // verified sync publishes at once.
+    // verified sync publishes at once. Re-fetch first: another session may have pushed a base merge to this branch.
+    git(["fetch", "--no-tags", REMOTE, branch]);
+    if (remoteMoved(localBranch, branch)) {
+      log(`STOPPED: origin/${branch} gained commits while this sync ran (another session pushed); re-run sync-pr to merge them — nothing pushed`);
+      log(returnTo(startedOn, localBranch).line);
+      return 1;
+    }
     must(git(["push", REMOTE, `${localBranch}:${branch}`]), `push to origin/${branch}`);
     log(`pushed to origin/${branch}`);
     const back = returnTo(startedOn, localBranch);
@@ -232,6 +280,6 @@ export function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { process.exit(main()); }
+  try { const r = main(); if (r && typeof r.then === "function") r.then((c) => process.exit(c), (e) => { log("ERROR " + e.message); process.exit(1); }); else process.exit(r); }
   catch (e) { log("ERROR " + (e && e.message ? e.message : e)); process.exit(1); }
 }

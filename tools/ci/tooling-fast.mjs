@@ -26,6 +26,7 @@
  *   node tools/ci/tooling-fast.mjs                  # full suite, serial
  *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy>: affected files only
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
+ *   node tools/ci/tooling-fast.mjs --stop           # stop the registered run's whole process tree (artifacts/run/tooling-fast.json); never pkill -f / a PID kill
  *   node tools/ci/tooling-fast.mjs --bail           # stop STARTING files after the first failure (CI guard shards)
  *   node tools/ci/tooling-fast.mjs tests/unit/x…    # subset (same logging)
  *   … --order=list                                   # list order, not longest-first
@@ -617,7 +618,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/light-store-cond-layer.test.mjs",
   "tests/unit/light-store-copy.test.mjs",
   "tests/unit/light-store-perchunk-pin.test.mjs",
-  "tests/unit/lighting-campaign.test.mjs",
   "tests/unit/lighting-reapply.test.mjs",
   "tests/unit/lighting-rebuild.test.mjs",
   "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -874,6 +874,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",
   "tests/unit/road-position-checks.test.mjs",
+  "tests/unit/run-pid.test.mjs",
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
   "tests/unit/save-durability.test.mjs",
@@ -994,6 +995,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Suzuka figure-8 green span must sit flush on the lifted ribbon (clearance ≤ 0.5 m) — a prior overheadSpan at clearance 8.6 hung ~8 m above the SRTM-baked back-straight. Pure verify-track diagnostics, ~2 s.
   "tests/unit/suzuka-crossover-span.test.mjs",
   "tests/unit/sweep-shards.test.mjs",
+  "tests/unit/sync-pr-robust.test.mjs",
   "tests/unit/team-livery.test.mjs",
   "tests/unit/team-style-relief.test.mjs",
   "tests/unit/telemetry-trace.test.mjs",
@@ -1168,6 +1170,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 6: Track Designer tool-strip labels wrap+balance and
   // floor taps at --tap (survey r5 rank 4; 36–57px clip on 390×844 / 844×390).
   "tests/unit/ui-fit-trackdesigner-toolbar-r6.test.mjs",
+  "tests/unit/ui-fixer-uncommitted.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-inspector-audit.test.mjs",
   "tests/unit/ui-inspector-css.test.mjs",
@@ -1776,10 +1779,10 @@ export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against 
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
 export const TOOLING_FAST_FLAGS = Object.freeze([
-  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--help", "-h",
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--stop", "--help", "-h",
 ]);
 
-export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--changed] [--bail] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--bail] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
        node tools/ci/tooling-fast.mjs --help`;
 
 /** Split a file list across CI jobs (`--shard=1/2`). Stride, not contiguous. */
@@ -1815,6 +1818,7 @@ export function parseToolingFastArgv(argv) {
     files: args.length ? args : null, // null = full TOOLING_FAST_FILES
     changed: argv.includes("--changed"),
     bail: argv.includes("--bail"),
+    stop: argv.includes("--stop"),
     jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
     order: val("order"),
     record: argv.includes("--record"),
@@ -1836,6 +1840,18 @@ if (isMain) {
   if (parsed.help) {
     console.log(TOOLING_FAST_USAGE);
     process.exit(0);
+  }
+  if (parsed.stop) {
+    // The sanctioned stop (#2663): the registered run's whole process tree, never `pkill -f` or a hand-typed PID.
+    const { stop } = await import("../lib/run-pid.mjs");
+    const r = await stop("tooling-fast");
+    console.log(r.state === "stopped" ? `[tooling-fast] stopped pid ${r.pid} (${r.killed} processes${r.forced ? `, ${r.forced} killed hard` : ""})`
+      : r.state === "stale" ? `[tooling-fast] the registered run (pid ${r.pid}) is already gone` : "[tooling-fast] no registered run");
+    process.exit(0);
+  }
+  {
+    const { register, release } = await import("../lib/run-pid.mjs");
+    if (register("tooling-fast").ok) process.on("exit", () => release("tooling-fast"));   // a nested run (a test) leaves the outer's record alone
   }
   let files0 = parsed.files;
   let changedMeta = null;

@@ -2221,3 +2221,21 @@ test("slimBody (#2672): doctor keeps failures + pass count, unit_test keeps coun
   const sel = slimBody("apex_select_specs", { out: { selected: [{ file: "x" }], shards: [{ name: "s1", specs: "a.js b.js" }] } });
   assert.deepEqual(sel.out.shards, [{ name: "s1", specCount: 2 }]);
 });
+
+test("hudEstimateMs (#2673): tracks measured cost and scales with cells; the kill budget is not the estimate", async () => {
+  const { hudEstimateMs } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const { expandMatrix } = await import("../../tools/lib/hud-survey-matrix.mjs");
+  assert.ok(hudEstimateMs("apex_hud_shot", {}) <= 90000 && hudEstimateMs("apex_hud_mock", {}) <= 90000);
+  const id = expandMatrix("quick", {}).cells[0].id;
+  const one = hudEstimateMs("apex_hud_survey", { matrix: "quick", only: [id] });
+  const all = hudEstimateMs("apex_hud_survey", { matrix: "quick" });
+  assert.ok(one <= 90000, `one cell ~47 s measured, got ${one}`);
+  assert.ok(all > one * 3, "the full quick matrix costs several times one cell");
+  assert.ok(all < 20 * 60000, "and far less than the old 18-minute claim for one cell");
+});
+
+test("tool descriptions state the host ceiling and the per-call boot (#2673)", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "utf8");
+  assert.match(src, /name: "apex_job_status"[\s\S]{0,400}~120 s/);
+  assert.match(src, /name: "apex_agent"[\s\S]{0,300}COLD-BOOTS/);
+});
