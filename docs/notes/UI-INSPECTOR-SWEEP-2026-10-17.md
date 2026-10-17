@@ -81,7 +81,7 @@ All 57 non-Home screens. Every flag was re-checked live before any fix.
 | #2628 | inspector `--touch/--boot/--safe/--summary`, settle-retry, label targets, exit 75 (closes #2624) | merged |
 | #2638 | occupancy: a shell mentioning `playwright test` is not a suite (F15) | merged (`086e55bf`) |
 | #2639 | VS Friend CLOSE skew corners (F6) | open, ready for review |
-| #2640 | inspector settle waits for CSS animations; catalog garage-card race (F9, F10) | open, ready for review |
+| #2640 | inspector settle waits for CSS animations; catalog garage-card race (F9, F10) | merged (`0010dbe2`) |
 | #2641 | team picker rows (F11) | open, ready for review |
 
 ## Sources
