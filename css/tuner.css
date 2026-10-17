@@ -994,7 +994,7 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
      NO FEEDBACK LOOP, checked: the panel's height is fixed by its top/bottom
      insets, so `data-density` does not depend on the width this sets. */
   /* `:not(.photo-mode)` rather than trusting the flying override to win. It used
-     to, when this condition was `body:has(> #lighting:not([hidden]))` — (1,1,1)
+     to, when this condition was `body:has(#lighting:not([hidden]))` — (1,1,1)
      against the flying rule's (1,3,1), decided on classes. Naming the panel's
      density inside :has() puts a SECOND id in this selector, and (2,2,1) beats
      three classes no matter what. Stating the exclusion is what keeps the two
@@ -1408,20 +1408,20 @@ body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none;
    lighting / camera / flyby keep their own carves; this block matches only
    when BOTH #lighting and #flyby are open. Flyby tap floors (#1774) stay. */
 @layer components {
-  body:has(#lighting:not([hidden])):has(> #flyby:not([hidden])) #lighting-inner {
+  body:has(> #lighting:not([hidden])):has(> #flyby:not([hidden])) #lighting-inner {
     z-index: 43;
   }
-  body:has(#lighting:not([hidden])):has(> #flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-spread {
+  body:has(> #lighting:not([hidden])):has(> #flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-spread {
     display: none;
   }
-  body:has(#lighting:not([hidden])):has(> #flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-rows {
+  body:has(> #lighting:not([hidden])):has(> #flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-rows {
     min-height: max(132px, calc(3 * 44px));
   }
   @media (min-width: 800px) {
-    body:has(#lighting:not([hidden])):has(> #flyby:not([hidden])) {
+    body:has(> #lighting:not([hidden])):has(> #flyby:not([hidden])) {
       --dock-w: min(calc(40 * var(--vwz)), 360px);
     }
-    body:has(#lighting:not([hidden])):has(> #flyby:not([hidden])) #flyby-inner {
+    body:has(> #lighting:not([hidden])):has(> #flyby:not([hidden])) #flyby-inner {
       left: calc((var(--sal) + 8px) / var(--sheet-eff-scale, var(--ui-scale)));
       right: auto;
     }

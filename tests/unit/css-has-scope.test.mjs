@@ -41,8 +41,26 @@ function shellElements(html) {
 const ELS = shellElements(read("index.html"));
 const BODY_KIDS = new Set(ELS.filter((e) => e.parent === "body" && e.id).map((e) => e.id));
 const CSS = fs.readdirSync(path.join(ROOT, "css")).filter((f) => f.endsWith(".css")).map((f) => ["css/" + f, read("css/" + f)]);
-// `body…:has(` / `html…:has(` and the argument's leading text.
-const HAS = /\b(html|body)(?:[.:[][^\s,{]*?)?:has\(\s*([^)]*)/g;
+// Every `:has(` on a body / html compound — the second `:has(` of a chained
+// `body:has(…):has(…)` included — as [whole match, "html"|"body", argument head].
+// The compound is found by walking back from `:has(` at bracket depth 0 to a
+// space, combinator, comma or brace (a lazy regex skipped the first of a chain).
+function* hasArgs(src) {
+  for (let i = src.indexOf(":has("); i >= 0; i = src.indexOf(":has(", i + 5)) {
+    let j = i, depth = 0;
+    while (j > 0) {
+      const c = src[j - 1];
+      if (c === ")" || c === "]") depth++;
+      else if (c === "(" || c === "[") { if (depth === 0) break; depth--; }
+      else if (depth === 0 && /[\s,{}>~+]/.test(c)) break;
+      j--;
+    }
+    const tag = /^(html|body)\b/.exec(src.slice(j, i));
+    if (!tag) continue;
+    const arg = /^\s*([^)]*)/.exec(src.slice(i + 5))[1];
+    yield [src.slice(j, i + 5) + arg, tag[1], arg];
+  }
+}
 
 test("the shell walk is not vacuous", () => {
   for (const id of ["hud", "pmsettings", "pausemenu", "overlay", "lighting"]) assert.ok(BODY_KIDS.has(id), id);
@@ -52,7 +70,7 @@ test("the shell walk is not vacuous", () => {
 test("every scoped :has(> #id) / :has(> body > #id) names a direct child of <body>", () => {
   const bad = [];
   let n = 0;
-  for (const [file, src] of CSS) for (const m of src.matchAll(HAS)) {
+  for (const [file, src] of CSS) for (const m of hasArgs(src)) {
     const s = m[2].trim();
     const id = (m[1] === "html" ? /^>\s*body\s*>\s*#([\w-]+)/ : /^>\s*#([\w-]+)/).exec(s);
     if (!id) continue;
@@ -78,7 +96,7 @@ test("scoped :has(> .screen…) holds: every .screen is a <body> child and none 
 
 test("a <body> child is never searched for unscoped (write `:has(> #id…)`)", () => {
   const bad = [];
-  for (const [file, src] of CSS) for (const m of src.matchAll(HAS)) {
+  for (const [file, src] of CSS) for (const m of hasArgs(src)) {
     const id = /^#([\w-]+)/.exec(m[2].trim());
     if (id && BODY_KIDS.has(id[1])) bad.push(`${file}: ${m[0]}`);
   }
