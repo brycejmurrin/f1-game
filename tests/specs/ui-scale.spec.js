@@ -1014,6 +1014,9 @@ test("UI inspector bounds settlement when animation frames do not arrive", async
   const report = await inspectResponsive(page, { viewports: [{ width: 390, height: 844 }] });
   expect(report.records[0].settlement.stable).toBe(false);
   expect(report.records[0].settlement.frames).toBe(0);
+  // No frames arrive, so a second settlement budget cannot help: no retry, issues provisional.
+  expect(report.records[0].settlement.retried).toBeUndefined();
+  expect(report.records[0].inspection.provisional).toBe(true);
   expect(report.records[0].inspection.controls.some(c => c.selector === "#action")).toBe(true);
   expect(await page.evaluate(() => window.__cancelledFrames)).toEqual([1234]);
   expect(page.viewportSize()).toEqual(original);

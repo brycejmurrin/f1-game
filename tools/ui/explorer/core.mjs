@@ -115,7 +115,7 @@ function oracle(input) {
     case 'layout': {
       fields(input, ['type', 'kind', 'selector'], 'layout oracle');
       const result = { type: input.type };
-      if (input.kind !== undefined) result.kind = choice(input.kind, ['offscreen', 'unnamed', 'overflow', 'tiny-target', 'clipped', 'blocked', 'binding-mismatch'], 'kind');
+      if (input.kind !== undefined) result.kind = choice(input.kind, ['offscreen', 'unnamed', 'overflow', 'tiny-target', 'clipped', 'blocked', 'not-hit-testable', 'binding-mismatch'], 'kind');
       if (input.selector !== undefined) result.selector = selector(input.selector);
       return result;
     }
