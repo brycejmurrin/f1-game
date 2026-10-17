@@ -72,7 +72,7 @@ test("loading circuits one after another keeps one world in memory and does not 
   expect(backend, "this spec measures the shipped TLX backend").toBe("three");
 
   const heap = {}, readings = [];
-  for (let visit = 1; visit <= 3; visit++) {
+  for (let visit = 1; visit <= 5; visit++) {
     for (const id of CIRCUITS) {
       await pickTrack(page, id);
       await waitUntilDrawn(page, id);
@@ -86,6 +86,8 @@ test("loading circuits one after another keeps one world in memory and does not 
       c.heapMin = Math.min(...reads);
       c.reads = reads;
       (heap.diag = heap.diag || []).push(`v${visit} ${id}: first ${reads[0]} reads ${reads.join("/")} geom ${c.three && c.three.geometries} tex ${c.three && c.three.textures} ro ${c.three && c.three.renderObjects}`);
+      const caches = await page.evaluate(() => { const r = window.renderer, o = {}; if (!r) return o; for (const k of Object.keys(r)) { const m = r[k]; if (!m || typeof m !== "object" || k === "info") continue; for (const k2 of Object.keys(m)) { const v = m[k2]; if (v && (v instanceof Map || v instanceof Set) && v.size > 20) o[k + "." + k2] = v.size; else if (v && (v instanceof WeakMap)) o[k + "." + k2] = "wm"; } } return o; });
+      heap.diag[heap.diag.length - 1] += " CACHES " + JSON.stringify(caches);
       c.path = await page.evaluate(() => { try { const e = window.__apex.diag({ download: false }).env; return JSON.stringify({ backend: e.backend, state: e.backendState }).slice(0, 400); } catch (_) { return null; } });
       console.log(`[mem] visit ${visit} ${id} heap reads ${reads.join(" ")} geom ${c.three && c.three.geometries} tex ${c.three && c.three.textures} ro ${c.three && c.three.renderObjects} path ${c.path}`);
       expect(c.aliveTracks, `visit ${visit} to ${id}: built tracks still reachable after GC`).toEqual([id]);
@@ -104,7 +106,7 @@ test("loading circuits one after another keeps one world in memory and does not 
   heap.path = readings.length ? readings[0].path : null;
   expect(0, "DIAG " + heap.diag.join(" | ") + " PATH " + (await page.evaluate(() => { try { const e = window.__apex.diag({ download: false }).env; return JSON.stringify({ b: e.backend, s: e.backendState }).slice(0, 500); } catch (x) { return String(x); } }))).toBe(1);
   for (const id of CIRCUITS) {
-    const grew = heap[id][3] - heap[id][2];
+    const grew = heap[id][5] - heap[id][2];
     expect(grew, `${id}: heap ${heap[id].slice(1).join(" → ")} MB across three visits`).toBeLessThanOrEqual(GROWTH_MB);
   }
 });
