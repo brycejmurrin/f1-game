@@ -10,3 +10,4 @@ Improved: Fit replay footage with an exact spatial index and reduce deployment-t
 Improved: Run the car-smoothing and game boot/race performance benchmarks without neighboring test workloads while retaining both performance budgets and behavior assertions.
 
 Improved: Apply the shared performance-test isolation policy to generated Node groups as well as structural checks, preserving npm forwarding of --flag/--flag=value options and fail-fast exits.
+Fixed: Observe settled VM page promises before advancing unrelated timers or rendered frames, while retaining the evaluate deadline and animation-frame pumping.
