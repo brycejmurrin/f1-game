@@ -90,15 +90,15 @@ un-ignores `.claude/memory/`, so the hook output is a tracked-file diff in every
 ```
 Structural fix (tools lane, not a template): have `memory-sync.sh save` run only at SessionEnd, or `git update-index --skip-worktree` the two paths.
 
-### 4. `tooling-fast --changed` silently runs the full floor (CONFIRMED, ~12 min per occurrence)
+### 4. `tooling-fast --changed` fell back to the full floor (CONFIRMED observation, cause NOT CONFIRMED, ~12 min per occurrence)
 Tools lane: "662-file run fell back to full floor; ~12 min" (orchestrator reply `33a00c24…`), and again `--changed reason=tracked changed=0 files=664` at
 loadavg 4.52 with 1 failure inherited from the tip (user `7bdead21-419c-44a8-93c7-2bb2cad4baf3`). The rule says load < 3 before a long run.
-Cause in the transcript: the branch was already committed, so the working-tree diff was empty. `references/worker.md` and role-pr-owner "Keep the box free":
-```
-- `tooling-fast --changed` diffs the WORKING TREE: right after a commit it sees 0 files and runs all 664. Use
-  `node tools/ci/tooling-fast.mjs --changed --base origin/claude/f1-game-project-26h3ng --jobs=3` after committing.
-```
-(PLAUSIBLE: the flag name; verify against `tooling-fast.mjs --help` before editing.)
+Correction (orchestrator, 12:16Z): my first draft blamed an empty working-tree diff and proposed a `--base` flag. That was wrong: `tooling-fast.mjs --help` has no `--base`, and
+`--changed` already diffs against `merge-base HEAD origin/<deploy>` (`tools/ci/tooling-fast.mjs:1683-1685`, usage line 27), so committing first does not matter.
+What the code says: `reason=tracked` means at least one changed path matched the TRACKED fail-safe list and `selectToolingFastChanged` returns `full("tracked", …)`
+(`tooling-fast.mjs:1712-1713`); the `changed=0` in the log is just the field `full()` leaves empty (`changedMeta.changed ?? 0`, line 1832), not a count of changed files. I did not
+read which tracked path the lane had touched, so the cause in that transcript is NOT CONFIRMED. Fix is in the tool, not a card: print the paths that forced the fallback,
+e.g. `--changed reason=tracked because=<first 3 of tracked>`, so a lane can see it is about to pay 12 minutes and can drop or split the change first (tools lane).
 
 ### 5. Holding 26 commits through a long browser run (CONFIRMED, risk not minutes)
 014m73tf ran `tlx-probes` via `npm test --retries=0` (not `test-bg.mjs`; stop-guard said "not started by test-bg", user `622e2e6e-7f34-4a54-ba2b-184a24b958a1`)
@@ -143,7 +143,7 @@ Recommendation: do not change `.claude/agents/*` on this evidence. Add `by_type`
 
 ## Ranking (saved time or money, descending, est.)
 1. Fleet-wide asks protocol (finding 1): $5–10 per incident, plus 4 minutes of every owner.
-2. `--changed` base after commit (finding 4): ~12 min each, recurring per lane.
+2. Name the path that forces the `--changed` full-floor fallback (finding 4): ~12 min each, recurring per lane; cause of the observed case NOT CONFIRMED.
 3. Orchestrator rotation enforcement (covered by #2727; evidence: 648k context, $18.84, `01At8xam…`).
 4. Cap advisory (finding 2): ~5 min and a timer per owner until #2724 lands.
 5. memory-sync stash trap (finding 3): ~1 turn per wake per session; structural fix removes it.
