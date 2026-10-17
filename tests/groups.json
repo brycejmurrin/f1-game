@@ -1799,7 +1799,8 @@
     },
     "test:perf-frametime": {
       "files": [
-        "tests/specs/perf-frametime.spec.js"
+        "tests/specs/perf-frametime.spec.js",
+        "tests/specs/track-switch-release.spec.js"
       ],
       "kind": "browser"
     },

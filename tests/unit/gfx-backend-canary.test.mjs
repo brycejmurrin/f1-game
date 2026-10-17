@@ -4202,7 +4202,7 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // AT ONCE: a slot is otherwise parked only by its target's next pass, which
   // cannot run while the next track builds — so every chunk geometry of the
   // old track stayed reachable through a hidden caster across the build peak.
-  assert.match(sh, /function releaseGeometry\(geo\) \{[\s\S]*?for \(const pl of pools\.values\(\)\)[\s\S]*?if \(m\.geometry !== geo\) continue;\s*m\.visible = false; m\.geometry = parkedGeo;\s*try \{ m\.dispatchEvent\(\{ type: "dispose" \}\); \}/,
+  assert.match(sh, /function releaseGeometry\(geo\) \{[\s\S]*?for \(const pl of pools\.values\(\)\)[\s\S]*?if \(m\.geometry !== geo && !\(m\.geometry === parkedGeo && m\.__lastGeo === geo\)\) continue;[^\n]*\n\s*m\.visible = false; m\.geometry = parkedGeo; m\.__lastGeo = null;\s*try \{ m\.dispatchEvent\(\{ type: "dispose" \}\); \}/,
     "shadowSys.releaseGeometry parks every slot still pointing at the geometry AND drops its render object");
   assert.match(sh, /releaseGeometry,\n/, "and exports it");
   assert.match(tlxSrc, /function releaseGeometry\(geo\) \{[\s\S]*?meshByGeo\.delete\(geo\);\s*if \(shadowSys && shadowSys\.releaseGeometry\) shadowSys\.releaseGeometry\(geo\);/,
