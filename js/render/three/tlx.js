@@ -3768,11 +3768,11 @@ const TLX = (function () {
             _displayCanvas.width = cwBuf;
             _displayCanvas.height = chBuf;
           }
+          if (sceneView) sceneView.set(rw, rh);
           if (_postRebuild && !post) {
             _postRebuild = false; post = buildPost();
             if (!post) postFailure("Post-processing reconstruction failed");
           }
-          if (sceneView) sceneView.set(rw, rh);
           if (post) post.resize(rw, rh, presentW, presentH);
         }
       }

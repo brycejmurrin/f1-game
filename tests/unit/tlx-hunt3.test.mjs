@@ -119,7 +119,7 @@ test("R3: tlx.js sets the ssrTag MRT only on a tagged chain (present + warm), an
   const warm = TLX.slice(TLX.indexOf("function startProgramWarm(opts) {"), TLX.indexOf("const ENV_PROBE_TRIES"));
   assert.match(warm, /const useTag = usePost && \(!post\.tagOn \|\| post\.tagOn\(\)\);/);
   assert.doesNotMatch(warm, /setSsrMrt\(usePost\)|usePost \? _ssrMrtNode\(\)/, "the warm compiles the MRT variant present() will use");
-  assert.match(TLX, /function _tagSwap\(\) \{\s*if \(!post \|\| !post\.tagOn \|\| _warmPending \|\| post\.tagOn\(\) === _wantTag\(\)\) return;[\s\S]{0,200}post = buildPost\(\); if \(post\) post\.resize\(W, H\);/,
+  assert.match(TLX, /function _tagSwap\(\) \{\s*if \(!post \|\| !post\.tagOn \|\| _warmPending \|\| post\.tagOn\(\) === _wantTag\(\)\) return;[\s\S]{0,200}post = buildPost\(\); if \(post\) post\.resize\(W, H, presentW, presentH\);/,
     "a GRAPHICS change that moves the rule rebuilds the chain");
   const b = TLX.indexOf("        begin(frame) {");
   assert.match(TLX.slice(b, b + 1200), /_tagSwap\(\);/, "begin() runs the swap before the scene records");
@@ -300,7 +300,7 @@ test("R5: apex26.tlxSkyCache512 is off by default, '1' = mobileTier only, 'all' 
   assert.equal(size("1", false), 0, "'1' leaves desktop alone");
   assert.equal(size("1", true), 512);
   assert.equal(size("all", false), 512, "'all' is the desktop A/B lever");
-  assert.match(TLX, /TLXShaders\.sky\(THREE, TSL, \{ chunks, cache: _skyCacheOn, cacheSize: _skyCacheSize \}\)/);
+  assert.match(TLX, /TLXShaders\.sky\(THREE, TSL, \{ chunks, cache: _skyCacheOn, cacheSize: _skyCacheSize, vp: vport, sceneView \}\)/);
   // The real sky factory honours the size (its NUMBERS block derives W and the texel from S).
   vm.runInThisContext(read("js/render/three/tsl-sky.js"), { filename: "tsl-sky.js" });
   for (const [cacheSize, want] of [[512, 512], [0, 768]]) {
