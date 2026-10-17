@@ -5,7 +5,7 @@
 // Run: node --test tests/unit/ratchets.test.mjs   (npm run test:tooling-fast)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, measure, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
+import { load, measure, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES } from "../../tools/check/ratchets.mjs";
 
 test("every ratcheted metric is at or under its ceiling", async () => {
   const v = verdict(await measure());
@@ -269,4 +269,14 @@ test("15-F10: --base blocks a loosened slack and a deleted entry whose file stil
   const rows = diffRatchets({ files: { "fixture-gone": { lines: 1 } } }, { files: {} });
   assert.equal(rows.length, 1);
   assert.equal(rows[0].kind, "gone");
+});
+
+test("baked data files are excluded from the size ratchet (#1659)", () => {
+  assert.ok(EXCLUDED_FILES.has("js/lighting/presets.js"));
+  const base = { files: { "js/lighting/presets.js": { lines: 7339 }, "js/net/lobby.js": { lines: 2407 } }, tree: {} };
+  const frag = { name: "x.json", data: { files: { "js/lighting/presets.js": { lines: 50 }, "js/net/lobby.js": { lines: 10 } } } };
+  const out = applyFragments(base, [frag]);
+  assert.equal(out.files["js/lighting/presets.js"], undefined, "an excluded row is dropped, with or without a fragment delta");
+  assert.equal(out.files["js/net/lobby.js"].lines, 2417, "other rows still take their deltas");
+  assert.equal(load().files["js/lighting/presets.js"], undefined, "the live ceilings carry no row for it");
 });

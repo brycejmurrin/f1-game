@@ -2680,7 +2680,7 @@ async function startRaceBody() {
   }
   if (stale()) return false; if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
   rlap("scenery");
-  const sessionOk = await ensureRaceSession(); if (stale()) return false;   // LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
+  let sessionOk = await ensureRaceSession(); while (!sessionOk && !stale() && await LoadingScreen.failed() === "retry") sessionOk = await ensureRaceSession(); if (stale()) return false;   // #2625 RETRY re-runs the load, BACK falls through; LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
   if (!sessionOk) { loadingScreen.stop(); quitToMenu(); announce("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"); return false; }   // the stubs have no retirements or pit stops, and TT data would be lost silently
   await ensureAudio(); if (stale()) return false;   // LAZY_AUDIO — stub until first race/gesture; real engine before startEngine (false = silent race; the loader logged it)
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line
@@ -3637,6 +3637,7 @@ wxArc = WeatherArc.create(G, { isTimeTrial, isQuali });
 // Tyre wear, the grip it costs and the fuel that argues with it
 // (js/physics/tyre-model.js). Created before the first gridUp fits a compound.
 tyres = TyreModel.create(G);
+if (typeof SoakRun !== "undefined") SoakRun.create(G);   // AUTO SOAK (js/perf/soak-run.js): idle until PhoneRecorder's button calls start()
 const playerForces = PlayerForces.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.
@@ -8744,7 +8745,7 @@ function tickBody(now) {
   if (state === "results") resultsCam.tick(Math.min(dt, 1 / 20));
   if (state !== "race" && state !== "count") GameAudio.feedReplayScrub(soundOn && player, state === "results" && replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop);   // results HIGHLIGHTS: engines + field per clip; orbit, NEXT, RACE AGAIN or MENU (each ends the scrub) silences once
   RenderRate.observe(_dtMs);
-  if (RenderRate.gate(dt, _dtMs, XrBoot.comfort())) {   // a skipped rAF hands its dt/ms to the next drawn frame
+  if (RenderRate.gate(dt, _dtMs, XrBoot.comfort(), state === "race" && !paused)) {   // a skipped rAF hands its dt/ms to the next drawn frame
     dt = RenderRate.dt();
     PerfSpans.begin("render"); render(Math.min(dt, 1 / 20)); PerfSpans.end("render");   // camera/visual damping at (clamped) frame dt
     if (state === "race" || state === "count") { PerfSpans.begin("hud"); updateHud(false, RenderRate.ms()); PerfSpans.end("hud"); }

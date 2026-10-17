@@ -162,3 +162,22 @@ test("save from an unrelated PostToolUse edit does nothing", () => {
     assert.equal(r.get(r.live, "a.md"), topic("a", "a"), "only an edit inside the live dir triggers a sync");
   } finally { r.done(); }
 });
+
+test("H2: synced memory files are hidden from git status after save, and `unmark` shows them again", () => {
+  const r = rig();
+  try {
+    const main = path.join(r.dir, "repo");
+    const git = (...a) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "-C", main, ...a], { encoding: "utf8" });
+    r.put(r.repo, "a.md", topic("a", "v1"));
+    git("add", "-A"); git("commit", "-qm", "init");
+    r.run("restore");
+    r.put(r.live, "a.md", topic("a", "edited by this session"));
+    r.run("save");
+    assert.equal(r.get(r.repo, "a.md"), topic("a", "edited by this session"), "the edit still reaches the tracked copy");
+    assert.equal(git("status", "--porcelain", "--", ".claude").trim(), "", "the Stop hook's `git status`/`git diff` sees a clean tree");
+    r.run("unmark");
+    assert.match(git("status", "--porcelain", "--", ".claude"), /\.claude\/memory\/a\.md/, "after unmark the edit rides the next commit");
+    git("add", "-A"); git("commit", "-qm", "memory rides");
+    assert.match(git("show", "--stat", "HEAD"), /a\.md/);
+  } finally { r.done(); }
+});

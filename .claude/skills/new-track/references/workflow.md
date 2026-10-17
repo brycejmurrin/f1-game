@@ -71,17 +71,11 @@ Load from the SKILL.md index when the task needs this detail.
         circuits and the map are the same SET, so a circuit with no reference
         feature fails outright.
      3. `tools/check/offline-precache-check.cjs` — the scenery-file count,
-     4. `tests/unit/lighting-campaign.test.mjs` — `TRACKS.length`, `rows.length`
-        (count x 20, in two tests), the unique-key sets, `SHARDS.flat()`, and the
-        `rows.slice(-6)` literal, which pins whichever circuit is LAST and breaks
-        purely from appending,
-     5. `tools/lighting/campaign/config.mjs` — `TRACKS`, one `SHARDS` entry, and
-        three `CAMERA_FRACTIONS`,
-     6. `js/ui/flags.js` if the country is new — `tests/unit/flags.test.mjs`
+     4. `js/ui/flags.js` if the country is new — `tests/unit/flags.test.mjs`
         fails on a circuit whose country has no drawn flag,
-     7. `tests/data/landmarks/<id>.json` for a hero landmark (`js/circuits/AGENTS.md`),
+     5. `tests/data/landmarks/<id>.json` for a hero landmark (`js/circuits/AGENTS.md`),
         and a `docs/tracks/<id>.md` note,
-     8. the `tools/track/*-baseline.json` audits (clip, coplanar, float; props-tris is a ratchet) at EXACTLY the measured
+     6. the `tools/track/*-baseline.json` audits (clip, coplanar, float; props-tris is a ratchet) at EXACTLY the measured
         value. A cap above the measurement fails as loudly as one below, and an
         absent id means a cap of 0 — so omit the row when the circuit measures
         clean rather than writing a 0.

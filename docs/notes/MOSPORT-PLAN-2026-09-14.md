@@ -207,11 +207,11 @@ Two things to get right and one trap:
    `tests/data/f1-circuit-reference.geojson` (the spec asserts the two are the
    same SET, so a circuit with no feature fails outright);
 3. `tools/check/offline-precache-check.cjs` — the scenery-file count;
-4. `tests/unit/lighting-campaign.test.mjs` — `TRACKS.length`, `rows.length`
+4. the lighting-campaign test (deleted, #2176) — `TRACKS.length`, `rows.length`
    (52 × 20 = 1040, in two tests), the unique-key sets, `SHARDS.flat()`, and the
    `rows.slice(-6)` literal, which pins whichever circuit is LAST and breaks
    purely from appending;
-5. `tools/lighting/campaign/config.mjs` — `TRACKS`, one `SHARDS` entry, three
+5. `lighting/campaign/config.mjs` (deleted, #2176) — `TRACKS`, one `SHARDS` entry, three
    `CAMERA_FRACTIONS`;
 6. `js/ui/flags.js` — **nothing to do.** `"Canada": "ca"` is already in `CODES`
    with a drawn recipe (Montréal and Mont-Tremblant both use it). This is the

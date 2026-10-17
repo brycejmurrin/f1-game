@@ -60,6 +60,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/pack-assets.cjs** | Node loader for assets/pack: `parseModel` (mirrors assets.js) and `packAssets()` (the `Assets.modelSync` surface). | asset-pack |
 | **lib/proxy-fetch.mjs** | A `fetch` honouring HTTPS_PROXY (curl-backed when Node would bypass the agent proxy) for GitHub API callers in tools/. | — |
 | **lib/road-position-checks.cjs** | Position-based road-ribbon checks (running width/advance, skirt depth+attachment, vertical continuity) for verify-track. | — |
+| **lib/run-pid.mjs** | Pidfile + tree kill behind `tooling-fast.mjs --stop` and `sync-pr.mjs --stop`; no pgrep -f, no hand-typed PID. | — |
 | **lib/screenshot-gallery.cjs** | Shared offline screenshot pages: native navigation, image expansion and responsive cards, without scripts. | — |
 | **lib/session-contracts.mjs** | Normalize hosted tool envelopes and diagnose session capability prerequisites without calling remote services. | check-changes |
 | **lib/solid-in-road.cjs** | Solid-in-road audit: `solidsInRoad(track, prims)` lists shipped prop/glass prims whose XZ hull stands on tarmac. | scenery-dress |
@@ -84,6 +85,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/ci-watch.mjs** | Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line. | steward |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
 | **ci/fleet-board.mjs** | Fleet board: pinned issue of ready/claimed/blocked issues, PRs, live claims; mirrors the `claimed` label; syncs labels. | ci-watch |
+| **ci/fleet-flags.mjs** | Flags model drift, cost over cap, context over 300k and stalled "working" sessions from get_session JSON. | agent-fleet |
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
 | **ci/handback.mjs** | Verifies a PR head's CI + ready-gate, prints one SWEEP and one DONE line, lists check-ins to delete. | agent-fleet |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
@@ -359,11 +361,6 @@ The lighting tuner: A/B harnesses, slider effectiveness, and the batch campaign 
 | Tool | Does | Paired skill |
 |---|---|---|
 | **lighting/ab-lighting.mjs** | A/B harness for every tunable lighting constant — each knob rendered committed vs swapped; out → `scratch/captures/`. | lighting-tuner |
-| **lighting/campaign/capture.mjs** | lighting-campaign: the Playwright capture leg — static server, campaign page, configured views per condition. | lighting-tuner |
-| **lighting/campaign/config.mjs** | lighting-campaign: the condition lattice (TODS × WEATHERS × TRACKS), shards, camera fractions, slider groups. | lighting-tuner |
-| **lighting/campaign/io.mjs** | lighting-campaign: JSONL record store (schema `apex26.lighting-campaign/v1`) — validate, append, merge fragments. | lighting-tuner |
-| **lighting/campaign/metrics.mjs** | lighting-campaign: per-region pixel metrics and the gate evaluation against `config.mjs` GATES. | lighting-tuner |
-| **lighting/campaign/tune.mjs** | lighting-campaign: candidate values, sensitivity classification, and the minimal per-condition tune profile. | lighting-tuner |
 | **lighting/lighting-tuner-sweep.mjs** | Does each LIGHTING TUNER slider change the image? Sharded, resumable, paired A→B→A' sampling per (condition, knob). | lighting-tuner |
 | **lighting/look-survey-sheet.py** | 4×5 tod×weather contact sheet from `artifacts/lighting/shots/<id>/` → `docs/look-survey/<id>_grid.png`; `--ready`. | mcp-probe |
 | **lighting/pit-canopy-evidence.mjs** | Bahrain pit night A/B: canopy lamps on vs patched off; PNGs + lightState under artifacts/pit-canopy-night/. | — |

@@ -16,6 +16,7 @@
     "test:circuits": "node tools/ci/run-playwright.mjs tests/specs/*-foundation.spec.js tests/specs/audit.spec.js tests/specs/autopilot.spec.js tests/specs/elevation-tracks.spec.js tests/specs/f1-track-accuracy.spec.js tests/specs/pit-signs.spec.js tests/specs/props-over-road.spec.js tests/specs/scenery-kits.spec.js tests/specs/terrain-over-road.spec.js tests/specs/tracks-walls-a.spec.js tests/specs/tracks-walls-b.spec.js tests/specs/tracks-walls.spec.js",
     "test:collisions": "node tools/ci/run-playwright.mjs tests/specs/collision*.spec.js",
     "test:aero": "node tools/ci/run-playwright.mjs tests/specs/active-aero.spec.js tests/specs/aero-zones.spec.js tests/specs/drift.spec.js tests/specs/understeer-cue.spec.js",
+    "test:phone-recorder": "node tools/ci/run-playwright.mjs tests/specs/phone-recorder.spec.js tests/specs/soak-run.spec.js",
     "test:perf-frametime": "node tools/ci/run-playwright.mjs tests/specs/perf-frametime.spec.js tests/specs/track-switch-release.spec.js",
     "test:physics-core": "node tools/ci/run-playwright.mjs tests/specs/debris.spec.js tests/specs/longitudinal.spec.js tests/specs/offtrack.spec.js tests/specs/physics-*.spec.js tests/specs/pit-lane.spec.js tests/specs/projection.spec.js tests/specs/race-control.spec.js tests/specs/world-physics.spec.js",
     "test:car": "node tools/ci/run-playwright.mjs tests/specs/car-effects.spec.js tests/specs/carview-parts.spec.js tests/specs/custom-team.spec.js tests/specs/garage-aero.spec.js tests/specs/garage-first-frame.spec.js tests/specs/garage-out-before-card.spec.js tests/specs/garage-prebuild.spec.js tests/specs/parts-*.spec.js",
@@ -73,8 +74,7 @@
     "physics:sweep": "node tools/check/physics-tune-sweep.mjs",
     "wgx:capture": "node tools/gfx/gfx-probe.mjs --backend webgpu",
     "prepare": "git config core.hooksPath .githooks || true",
-    "test:perf-race-entry": "node tools/ci/run-playwright.mjs tests/specs/perf-race-entry.spec.js",
-    "test:phone-recorder": "node tools/ci/run-playwright.mjs tests/specs/phone-recorder.spec.js"
+    "test:perf-race-entry": "node tools/ci/run-playwright.mjs tests/specs/perf-race-entry.spec.js"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

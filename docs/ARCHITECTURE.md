@@ -530,6 +530,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
+| `thermal-drift.js` | `ThermalDrift` | tag | ThermalDrift: a pure, clock-free helper for a phone that throttles over a long session (#2652). |
 | `governor.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
 | `loop-health.js` | `LoopHealth` | tag | LoopHealth: the frame-loop fault policy and the one heartbeat that outlives the loop. |
 | `render-rate.js` | `RenderRate` | tag | RenderRate: draw every second requestAnimationFrame when a PHONE's display delivers rAF at 100 Hz or more. |
@@ -540,6 +541,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `gfx-debug-overlay.js` | `GfxDebug` | tag | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
 | `three-inspector.js` | `ThreeInspector` | tag | ThreeInspector: OPT-IN dev panel, the official three.js Inspector (Performance / Memory / Timeline / Viewer / Parameters / Console) on the TLX renderer. |
 | `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
+| `soak-run.js` | `SoakRun` | tag | SoakRun: the hands-free half of PhoneRecorder (AUTO SOAK). |
 | `phone-recorder.js` | `PhoneRecorder` | tag | PhoneRecorder: a phone-only soak recorder (issue #1633). |
 
 **`js/xr/`**

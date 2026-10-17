@@ -2050,6 +2050,26 @@ const api = {
     return BodyAttitude.status();
   },
 
+  // renderRate(m?) — RenderRate mode (js/perf/render-rate.js): "auto" (default; halves a 100 Hz+ phone), "off",
+  // "half", or the opt-in #2652 tier 45 | 30 draws per second while racing (physics stays 60 Hz). No arg reports;
+  // a value sets it and persists apex26.renderRate.
+  // thermalDrift(on?) — the opt-in slow-drift governor step (apex26.thermalDrift); no arg reports.
+  renderRate(m) {
+    if (m !== undefined) {
+      const v = String(m);
+      if (!RenderRate.setMode(v)) return { ok: false, modes: ["auto", "off", "half", "45", "30"] };
+      try { localStorage.setItem("apex26.renderRate", v); } catch (_) { /* session-only */ }
+    }
+    return RenderRate.state();
+  },
+  thermalDrift(on) {
+    if (on !== undefined) {
+      PerfGov.setThermalDrift(!!on);
+      try { localStorage.setItem("apex26.thermalDrift", on ? "1" : "0"); } catch (_) { /* session-only */ }
+    }
+    return PerfGov.thermalDrift();
+  },
+
   // renderScale(v?) — adaptive-resolution control. No arg: report current state
   // { scale, fps, auto }. Number: pin the 3D render scale (0.5–1) and disable
   // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate

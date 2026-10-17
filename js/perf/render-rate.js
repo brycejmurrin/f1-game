@@ -11,6 +11,9 @@
    Device class only: desktop 144 Hz monitors keep every frame, and an immersive XR
    session (its own rAF, its own rate) is never gated. apex26.renderRate = "off" never
    skips, "half" forces it on any device (the test and A/B handle), unset/"auto" = phones.
+   "45" / "30" are the opt-in render-rate TIER (#2652): while racing, draw 3-of-4 or every 2nd
+   frame by earning rate/second credits against the wall clock, so a 120 Hz display lands on
+   the same rate; the first WARM_FRAMES race frames always draw (handoff card, first presents).
    The cadence is read off the rAF interval, which skipping does not change, so a 30 Hz
    Low Power Mode device or a 60 Hz display never trips it. Enter: the interval EMA stays
    under ENTER_MS for ENTER_FRAMES in a row; leave: it climbs over LEAVE_MS.
@@ -25,7 +28,11 @@ const RenderRate = (function () {
   const EMA_A = 0.1;
   const MAX_SANE_MS = 100;   // a tab resume or stall is not a cadence sample
 
-  let mode = "auto";         // "auto" | "off" | "half"
+  const MODES = ["auto", "off", "half", "45", "30"];
+  const WARM_FRAMES = 90;    // race-entry frames the tier never skips
+  const MAX_GAP_S = 1 / 20;  // render()'s own dt clamp: one drawn frame never carries more
+  let mode = "auto";         // one of MODES
+  let credit = 0, live = 0;  // tier: banked draw credit, consecutive racing frames seen
   let mobile = false;
   let ema = 16.7;
   let fast = 0;
@@ -39,12 +46,22 @@ const RenderRate = (function () {
     mobile = !!(opts && opts.isMobile);
     let v = "";
     try { v = localStorage.getItem(KEY) || ""; } catch (_) { /* no storage: auto */ }
-    mode = v === "off" || v === "half" ? v : "auto";
+    mode = MODES.indexOf(v) >= 0 ? v : "auto";
+    credit = 0; live = 0;
     ema = 16.7; fast = 0; half = false; phase = 0; accDt = 0; accMs = 0; skipped = 0; drawn = 0;
   }
 
+  const tierRate = () => mode === "45" ? 45 : mode === "30" ? 30 : 0;
+
+  /** Set the mode at run time (the __apex.renderRate hook). Persisting is the caller's. */
+  function setMode(v) {
+    if (MODES.indexOf(v) < 0) return false;
+    mode = v; credit = 0; live = 0; phase = 0; accDt = 0; accMs = 0;
+    return true;
+  }
+
   function active() {
-    return mode === "half" || (mode === "auto" && mobile && half);
+    return tierRate() > 0 || mode === "half" || (mode === "auto" && mobile && half);
   }
 
   /** One rAF interval in ms (call every tick, drawn or not). */
@@ -61,8 +78,18 @@ const RenderRate = (function () {
   /** True when this rAF should draw. After a true, dt() / ms() hold the time to render
    *  and update the HUD with (this frame's plus any skipped frame's). `presenting` is
    *  XrBoot.comfort(): an immersive session is never gated. */
-  function gate(dt, ms, presenting) {
-    if (presenting || !active()) {
+  function gate(dt, ms, presenting, racing) {
+    const rate = tierRate();
+    if (rate && !presenting) {
+      if (!racing) { live = 0; credit = 0; } else {
+        accDt += dt; accMs += ms;
+        let draw = live++ < WARM_FRAMES;
+        if (!draw) { credit = Math.min(2, credit + dt * rate); draw = credit >= 1 - 1e-6; if (draw) credit -= 1; }
+        if (draw) { outDt = Math.min(accDt, MAX_GAP_S); outMs = accMs; accDt = 0; accMs = 0; drawn++; return true; }
+        skipped++; return false;
+      }
+    }
+    if (presenting || !active() || rate) {
       outDt = dt + accDt; outMs = ms + accMs; accDt = 0; accMs = 0; phase = 0; drawn++;
       return true;
     }
@@ -73,11 +100,11 @@ const RenderRate = (function () {
   }
 
   return {
-    init, observe, gate,
+    init, observe, gate, setMode,
     dt: () => outDt,
     ms: () => outMs,
     active,
-    state: () => ({ mode, mobile, half, active: active(), emaMs: +ema.toFixed(2), skipped, drawn }),
+    state: () => ({ mode, tier: tierRate() || 60, mobile, half, active: active(), emaMs: +ema.toFixed(2), skipped, drawn }),
   };
 })();
 

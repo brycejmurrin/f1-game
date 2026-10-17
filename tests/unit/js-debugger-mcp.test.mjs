@@ -374,6 +374,8 @@ test("T1: scripts hide anonymous rows by default, list named URLs first, report 
   let r = await s.scriptsList("game.js");
   assert.deepEqual(r.scripts.map(x => x.scriptId), ["g"]); assert.equal(r.total, 1); assert.equal(r.truncated, false);
   r = await s.scriptsList("", { includeAnonymous: true });
+  assert.equal(r.scripts.length, 50); assert.equal(r.truncated, true);   // default limit (#2672)
+  r = await s.scriptsList("", { includeAnonymous: true, limit: 200 });
   assert.equal(r.scripts.length, 200); assert.equal(r.total, 251); assert.equal(r.truncated, true); assert.equal(r.scripts[0].scriptId, "g");
   r = await s.scriptsList("js/(game|core)\\.js", { regex: true }); assert.equal(r.total, 1);
   assert.equal((await s.scriptsList("")).anonymousHidden, 250);
