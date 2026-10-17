@@ -16,7 +16,7 @@ const TrackThemes = (function () {
     "tuscany", "coast", "savanna", "ardennes", "airfield", "canyon", "winter", "twilight",
     "jungle", "lakeside", "moorland", "metropolis",
     // Slice I — append only; share-code indexes the first twenty unchanged.
-    "shipyard", "saltflat", "vineyard", "stadium", "island", "blossom", "volcanic"];
+    "shipyard", "saltflat", "vineyard", "stadium", "island", "blossom", "volcanic", "fjord", "badlands", "redwood"];
 
   const pal = (base, extra) => Object.assign({}, base || {}, extra || {});
   const rgb = (c, m) => [c[0] * m, c[1] * m, c[2] * m];
@@ -295,6 +295,28 @@ const TrackThemes = (function () {
     pal: { grass: [0.24, 0.27, 0.22], runoff: [0.34, 0.34, 0.36], zenith: [0.24, 0.42, 0.64], horizon: [0.62, 0.70, 0.76], fog: [0.56, 0.64, 0.70], sunColor: [0.96, 0.94, 0.90] },
     terrainOuter: 150, flatTerrain: false, elevStyle: "hilly",
     furniture: { tree: "acacia", fol: [0.28, 0.34, 0.20], lamp: "none", sparse: true }, standSet: ["alu", "darkSteel", "concrete"],
+  };
+
+  PRESETS.fjord = {
+    label: "NORDIC FJORD", blurb: "Cold blue water beneath snowy granite mountains, dark conifers and silver stands.",
+    swatch: ["#326b88", "#dce8eb"], theme: "green", sceneryTheme: "park", night: false, street: false,
+    pal: pal(ATM.alpineGreen, { grass: [0.22, 0.36, 0.28], runoff: [0.48, 0.52, 0.50], horizon: [0.72, 0.82, 0.88], fog: [0.68, 0.78, 0.84] }),
+    terrainOuter: 160, flatTerrain: false, elevStyle: "hilly",
+    furniture: { tree: "fir", fol: [0.14, 0.28, 0.24], lamp: "none" }, standSet: ["alu", "darkSteel", "concrete"],
+  };
+  PRESETS.badlands = {
+    label: "RED ROCK BADLANDS", blurb: "Rust-red buttes, sandstone ridges, dry scrub and warm desert sunlight.",
+    swatch: ["#a65438", "#d6af72"], theme: "desert", sceneryTheme: "desert", night: false, street: false,
+    pal: pal(ATM.dustyBowl, { grass: [0.52, 0.32, 0.20], runoff: [0.68, 0.42, 0.28], horizon: [0.88, 0.70, 0.52], fog: [0.82, 0.64, 0.48] }),
+    terrainOuter: 150, flatTerrain: true, elevStyle: "rolling", terrainMat: "SAND",
+    furniture: { tree: "acacia", fol: [0.36, 0.38, 0.20], lamp: "none", sparse: true }, standSet: ["sandstone", "terracotta", "concrete"],
+  };
+  PRESETS.redwood = {
+    label: "REDWOOD VALLEY", blurb: "Towering evergreen forest, fern-green hills, timber cottages and soft coastal haze.",
+    swatch: ["#234d38", "#997452"], theme: "green", sceneryTheme: "park", night: false, street: false,
+    pal: pal(ATM.alpineGreen, { grass: [0.20, 0.34, 0.18], runoff: [0.48, 0.42, 0.30], horizon: [0.76, 0.82, 0.74], fog: [0.68, 0.76, 0.68] }),
+    terrainOuter: 150, flatTerrain: false, elevStyle: "rolling",
+    furniture: { tree: "fir", fol: [0.16, 0.32, 0.22], lamp: "none" }, standSet: ["darkSteel", "concrete", "steel"],
   };
 
   const clone = (v) => (v == null ? v : JSON.parse(JSON.stringify(v)));
@@ -791,6 +813,23 @@ const TrackThemes = (function () {
     ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.1, gap: 45, col: [0.24, 0.30, 0.18], col2: [0.30, 0.34, 0.22], pineFrac: 0, hMin: 5, hMax: 9, density: 0.2 })],
     ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 1, second: false, livery: "alu" })],
     ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 9, rMin: 850, rMax: 1400, w0: 600, w1: 360, h0: 210, h1: 160, rough: 0.35, snowline: 1.6, rock: [0.28, 0.28, 0.31], forest: [0.22, 0.27, 0.20] })],
+  ];
+  DRESS.fjord = [
+    ["shore", (api, sv, h) => shore(api, sv, h, { col: [0.14, 0.34, 0.46], second: false, size: [650, 0.2, 900] })],
+    ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.18, gap: 42, col: [0.14, 0.28, 0.24], col2: [0.18, 0.34, 0.28], pineFrac: 1, hMin: 12, hMax: 22, density: 0.24 })],
+    ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 11, hills: 1, second: false, livery: "alu" })],
+    ["horizon", (api, sv, h) => horizon(api, sv, h, { mountain: true, count: 10, rMin: 900, rMax: 1450, w0: 700, w1: 400, h0: 280, h1: 180, snowline: 0.4, rock: [0.38, 0.44, 0.48], forest: [0.18, 0.30, 0.24] })],
+  ];
+  DRESS.badlands = [
+    ["buttes", (api, sv, h) => buttes(api, sv, h, { count: 10, rMin: 650, rMax: 1250 })],
+    ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 22, rMin: 230, rMax: 400, len: 180, wid: 48, h0: 22, h1: 20, cols: [[0.58, 0.30, 0.20], [0.68, 0.40, 0.26]] })],
+    ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 10, hills: 1, second: false, livery: "sandstone" })],
+  ];
+  DRESS.redwood = [
+    ["belts", (api, sv, h) => belts(api, sv, h, { coverage: 0.4, gap: 48, col: [0.14, 0.30, 0.20], col2: [0.20, 0.36, 0.24], pineFrac: 1, hMin: 26, hMax: 40, density: 0.22 })],
+    ["stands", (api, sv, h) => stands(api, sv, h, { tiers: 1, h: 10, hills: 2, second: false, livery: "darkSteel" })],
+    ["horizon", (api, sv, h) => horizon(api, sv, h, { count: 20, rMin: 220, rMax: 400, h0: 20, h1: 14, cols: [[0.20, 0.34, 0.22], [0.24, 0.38, 0.24]] })],
+    ["village", (api, sv, h) => village(api, sv, h, { count: 4, walls: [[0.56, 0.42, 0.28], [0.64, 0.50, 0.34]], roof: [0.30, 0.30, 0.28], roofType: "gable" })],
   ];
   /** Three hangars (corrugated-metal box, gable roof, dark door facing the
    *  track) and a control tower on the outside of the second-longest straight

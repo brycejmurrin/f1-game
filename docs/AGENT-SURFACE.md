@@ -433,6 +433,20 @@ drive a target during a Playwright group. Detach before ending the session.
 The complete [tool reference and debugging workflow](research/AGENT-JS-DEBUGGER-MCP.md)
 covers discovery, breakpoints, locals, stepping, exception pauses and cleanup.
 
+
+### Combined track survey galleries
+
+`apex_shot_survey {"tracks":["monza","spa"],"preset":"quick","out":"artifacts/track-survey/weekend"}` captures each track serially and writes one root `index.html` containing every view, grouped by circuit. Per-track galleries and findings remain available. Long capture batches return an asynchronous job ID as before.
+
+Combine saved reports without launching a browser:
+
+```json
+{"reports":["artifacts/track-survey/monza/findings.json","artifacts/track-survey/spa/findings.json"],"out":"artifacts/track-survey/combined"}
+```
+
+Pass this object to `apex_shot_survey`. The CLI equivalent is `node tools/shot/shot-survey.mjs --reports artifacts/track-survey/monza/findings.json,artifacts/track-survey/spa/findings.json --out artifacts/track-survey/combined`.
+The output folder includes copied PNG/JPEG assets and can be shared as a ZIP. Reports may identify custom circuits; an explicit `actualTrack` or runtime `state.info.track` takes precedence over a bootstrap track ID. Captures now record their actual runtime track ID. Missing images fail the gallery build; recorded capture failures stay visible in the gallery.
+
 ### Read-only UI inspector
 
 `node tools/ui/explorer.mjs inspect --screen settingsappearance --styles '#as-uiScale'`

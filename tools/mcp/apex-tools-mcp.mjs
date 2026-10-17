@@ -443,7 +443,7 @@ const CATALOG = [
     name: "apex_shot_survey",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — multi-shot scenery survey via one track-session boot per circuit. Presets: quick (4), dual_lite (8), night_pass, lap, dual, inspect, scenery/full (12). Long or multi-track runs default to async (returns jobId; watch apex_job_status). Options: tracks[], resume, async, gl llvmpipe|swiftshader (llvmpipe is CI-only: needs /dev/dri, which cloud containers lack — use swiftshader locally), weather dry|wet|rain|overcast|fog, progress/findings JSON. Skill: survey-track.",
+    description: "Browser (lock first) — multi-shot scenery survey via one track-session boot per circuit. Presets: quick (4), dual_lite (8), night_pass, lap, dual, inspect, scenery/full (12). Long or multi-track runs default to async (returns jobId; watch apex_job_status). Options: tracks[], resume, async, gl llvmpipe|swiftshader (llvmpipe is CI-only: needs /dev/dri, which cloud containers lack — use swiftshader locally), weather dry|wet|rain|overcast|fog, progress/findings JSON and combined HTML with every view. Pass reports[] to combine saved surveys into a portable gallery without Chromium. Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -455,6 +455,7 @@ const CATALOG = [
         seed: { type: "integer", minimum: 0 },
         camera: { type: "object", additionalProperties: false, properties: { fov: {type:"number",minimum:10,maximum:120}, h:{type:"number"}, dist:{type:"number"}, az:{type:"number"}, el:{type:"number"} } },
         track: { type: "string", description: "Circuit id (or use tracks[])." },
+        reports: { type: "array", minItems: 1, maxItems: 12, items: { type: "string" }, description: "Existing findings.json paths under artifacts/ or scratch/. Builds one portable HTML gallery without starting a browser; preserves custom track identities." },
         tracks: {
           type: "array",
           items: { type: "string" },
@@ -1136,7 +1137,7 @@ schemaFor("apex_select_specs").required = ["since"];
 schemaFor("apex_graph_parity").required = ["base"];
 schemaFor("apex_graph_parity").anyOf = [{ required: ["id"] }, { required: ["all"], properties: { all: { const: true } } }];
 schemaFor("apex_frame_report").required = ["track"];
-schemaFor("apex_shot_survey").anyOf = [{ required: ["track"] }, { required: ["tracks"] }];   // the handler refuses without one; say so in the schema
+schemaFor("apex_shot_survey").anyOf = [{ required: ["track"] }, { required: ["tracks"] }, { required: ["reports"] }];   // the handler refuses without one; say so in the schema
 bound("apex_graph_parity", "id", { enum: knownCircuits() });
 bound("apex_pick_tests", "files", { items: { type: "string", minLength: 1, maxLength: 4096 } });
 bound("apex_select_specs", "budgetMin", { exclusiveMinimum: 0, maximum: 120 });

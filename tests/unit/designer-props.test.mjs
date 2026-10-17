@@ -9,9 +9,9 @@ import { bootEditor, design, plain, ellipse, read } from "../helpers/editor-vm.m
 
 test("KINDS / CAPS / sanitize: known kinds only, per-kind and total caps", () => {
   const { P } = bootEditor();
-  assert.equal(P.KINDS.join(","), "stand,gantry,trees,water,flood,billboard,palms,hedge,pines,bushes,marshal,camera,pond,lake,river");
+  assert.equal(P.KINDS.slice(0, 15).join(","), "stand,gantry,trees,water,flood,billboard,palms,hedge,pines,bushes,marshal,camera,pond,lake,river");
   assert.equal(P.TOTAL, 16);
-  assert.ok(P.KINDS.length <= 16, "kind indices fit the share-code nibble");
+  assert.ok(P.KINDS.length <= 256, "kind indices fit the share-code byte");
   assert.equal(P.KINDS.indexOf("water"), 3, "legacy water retains its codec index");
   assert.equal(P.CAPS.water, 4);
   assert.equal(P.sanitize(null), null);
@@ -286,4 +286,62 @@ test("new water bodies reject full-footprint road crossings including river tips
   tr.pz[2] = tr.pz[3] = 20;
   for (const kind of ["pond", "lake"]) assert.equal(P.dress(api, tr, [{ ...prop, kind }]), 0, kind + " uses the same full-footprint guard");
   assert.equal(P.dress(api, tr, [{ ...prop, kind: "water" }]), 0, "legacy water uses the same full-footprint road guard as newer water bodies");
+});
+
+
+test("expanded objects share, reload, and dress through native scenery APIs", async () => {
+  const b = bootEditor(), { P, C, CD } = b, calls = {};
+  const api = { K: () => 0, pyMin: -2, anchor: () => ({ c: [400, 3, 0] }) };
+  for (const method of ["mountain", "ridge", "waterSurface", "forestEdge", "ferrisWheel", "house"]) api[method] = (...a) => (calls[method] ||= []).push(a);
+  const kinds = ["mountain", "snowpeak", "hill", "dune", "rocks", "lagoon", "canal", "blossom", "wheel", "cottage"];
+  assert.deepEqual(plain(P.KINDS.slice(15)), kinds, "append-only codec indexes");
+  const props = kinds.map((kind, i) => ({ kind, s: i / 12, side: -1, gap: P.DEFAULT_GAP[kind] }));
+  assert.equal(P.dress(api, { n: 100, total: 5000 }, props), kinds.length);
+  assert.equal(calls.mountain.length, 3); assert.equal(calls.ridge.length, 2);
+  assert.equal(calls.mountain[1][5].snowline, 0.55);
+  assert.equal(calls.ridge[0][8].profile, "massif");
+  assert.equal(calls.mountain[0][2], -3, "mountain base is seated at the floor");
+  assert.equal(calls.waterSurface.length, 2); assert.notDeepEqual(calls.waterSurface[0][3], calls.waterSurface[1][3]);
+  assert.equal(calls.ferrisWheel[0][3], 22); assert.equal(calls.house[0][6].roofType, "gable");
+  assert.equal(calls.forestEdge[0][4].pineFrac, 0);
+  assert.equal(P.dress({}, { n: 100 }, props), 0, "missing render APIs degrade safely");
+  for (const theme of ["fjord", "badlands", "redwood"]) {
+    const d = C.sanitize(design({ theme, props })), back = await CD.decode(await CD.encode(d));
+    assert.equal(back.ok, true, back.reason); assert.equal(back.id, d.id); assert.equal(back.design.theme, theme);
+    assert.deepEqual(plain(back.design.props), plain(d.props));
+    C.upsert(d); C.sync(); assert.deepEqual(plain(C.get(d.id).props), plain(d.props));
+  }
+  assert.equal(new Set(Object.values(P.CATEGORIES).flat()).size, P.KINDS.length, "all kinds belong to a category");
+});
+
+test("landscape footprints reject another road section before native or preview emission", () => {
+  const { P } = bootEditor(), calls = [];
+  const tr = { n: 6, px: [0, -100, -100, 500, 500, -100], pz: [0, 0, 100, 100, 500, 500],
+    rx: Array(6).fill(1), rz: Array(6).fill(0), hw: Array(6).fill(7) };
+  const api = { track: tr, K: () => 0, pyMin: 0, anchor: () => ({ c: [200, 0, 0] }), mountain: (...a) => calls.push(a), ridge: (...a) => calls.push(a) };
+  for (const kind of P.CATEGORIES.terrain) {
+    const p = { kind, s: 0, side: 1, gap: 30 };
+    tr.pz[2] = tr.pz[3] = 20;
+    assert.equal(P.dress(api, tr, [p]), 0, kind + " rejects a crossing between distant road vertices");
+    tr.pz[2] = tr.pz[3] = 400;
+    assert.equal(P.dress(api, tr, [p]), 1, kind + " emits when its skirt clears the lap");
+  }
+  assert.equal(calls.length, P.CATEGORIES.terrain.length);
+});
+
+test("landscapes reach the real engine and overhead preview without failed dressers", () => {
+  const b = bootEditor();
+  vm.runInContext(read("js/editor/scenery-preview.js").replace(/^const\b/gm, "var"), b.ctx);
+  for (const kind of b.P.KINDS.slice(15)) {
+    const d = b.C.sanitize(design({ props: [{ kind, s: 0, side: -1, gap: 100 }] }));
+    const def = b.ctx.TrackDef.fromRaw(b.C.toRaw(d));
+    const tr = b.Tracks.buildCenterline(def, { line: false });
+    const scene = b.ctx.DesignerSceneryPreview.plan(d, tr);
+    assert.ok(scene && scene.items.length + scene.ground.length > 0, kind + " preview builds");
+    let placed = 0;
+    def.scenery = (api) => { placed = b.P.dress(api, b.T.survey(api), d.props); };
+    const native = b.Tracks.build(def);
+    assert.equal(placed, 1, kind + " authored object emits through real APIs");
+    assert.ok(native.meshes.props.verts > 0, kind + " race mesh builds");
+  }
 });

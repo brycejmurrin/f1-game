@@ -18,6 +18,7 @@ import {
   writeCompareIndex,
   writeSurveyFindings,
   writeSurveyIndex,
+  writeSurveyGalleryFromReports,
   writeSurveyProgress,
 } from "../lib/track-shot-survey.mjs";
 
@@ -25,7 +26,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, 
 const argv = process.argv.slice(2);
 if (!argv.includes("--help") && !argv.includes("-h")) {
   parseFlags(argv, ["--count", "--dry-run", "--fracs", "--gl", "--label", "--no-index", "--no-panel", "--out",
-    "--plan-json", "--preset", "--resume", "--tod", "--track", "--tracks", "--weather"]);
+    "--plan-json", "--preset", "--reports", "--resume", "--tod", "--track", "--tracks", "--weather"]);
 }
 const flag = (n, d) => {
   const i = argv.indexOf(n);
@@ -38,12 +39,22 @@ function usage(code = 2) {
        [--label name] [--out dir] [--resume] [--no-panel] [--no-index] [--gl llvmpipe|swiftshader]
        [--location spa/eau-rouge --angles overview,reverse,overhead --weathers dry,rain]
        [--profile preview|comparison --seed N --select name,name --plan-file FILE --save-plan FILE --list-locations]
-       [--fracs 0,0.5] [--count N] [--tod day|dusk|dawn|night] [--weather dry|wet|rain|overcast|fog] [--dry-run]`);
+       [--reports findings.json[,findings.json…]] [--fracs 0,0.5] [--count N] [--tod day|dusk|dawn|night] [--weather dry|wet|rain|overcast|fog] [--dry-run]`);
   process.exit(code);
 }
 
 if (has("--list-locations")) { console.log(JSON.stringify({ locations: SURVEY_LOCATIONS, cameras: CAMERA_RECIPES }, null, 2)); process.exit(0); }
 if (has("--help") || has("-h")) usage(0);
+
+// Rebuild a portable gallery from saved surveys without booting Chromium.
+if (has("--reports")) {
+  const reports = flag("--reports", "").split(",").map((s) => s.trim()).filter(Boolean).map((s) => path.resolve(ROOT, s));
+  if (!reports.length) throw new Error("--reports needs at least one findings.json path");
+  const out = path.resolve(ROOT, flag("--out", "artifacts/track-survey/gallery"));
+  if (has("--dry-run")) console.log(JSON.stringify({ ok: true, dryRun: true, reports, out, browser: false }));
+  else console.log(JSON.stringify({ ok: true, browser: false, indexHtml: writeSurveyGalleryFromReports(out, reports), out }));
+  process.exit(0);
+}
 
 const tracksCsv = flag("--tracks", flag("--track", ""));
 const tracks = normalizeSurveyTracks({ tracks: tracksCsv.split(",").map((s) => s.trim()).filter(Boolean) });
@@ -199,7 +210,7 @@ for (let ti = 0; ti < tracks.length; ti++) {
           continue;
         }
         if (reply.ok) {
-          const row = { ...s, track, png: reply.png, spread: reply.spread, kb: reply.kb, timings: reply.timings };
+          const row = { ...s, track: reply.track || track, png: reply.png, spread: reply.spread, kb: reply.kb, timings: reply.timings };
           fs.writeFileSync(reply.png + ".capture.json", JSON.stringify({ identity:identityContext.identities[s.name], source, profile, seed, job:{...s,track}, timings:reply.timings, frame:reply.frame, state:{plugin:{renderer:sess.boot.diagnostics}} },null,2));
           row.flags = scoreShotFindings(row);
           captured.push(row);
@@ -218,23 +229,22 @@ for (let ti = 0; ti < tracks.length; ti++) {
     let indexHtml = null;
     if (wantIndex && captured.length) {
       indexHtml = writeSurveyIndex(outDir, {
-        track, label: plan.label, preset: plan.preset, shots: captured, panelPng, ok: captured.length,
+        track: captured[0]?.track || track, label: plan.label, preset: plan.preset, shots: captured, panelPng, ok: captured.length,
       });
     }
-    if (captured.length) {
+    {
       const findings = writeSurveyFindings(outDir, {
-        ok: failed.length === 0,
-        track, label: plan.label, preset: plan.preset, shots: captured, panelPng, indexHtml,
+        ok: failed.length === 0, failed: failed.length, failures: failed,
+        track: captured[0]?.track || track, label: plan.label, preset: plan.preset, shots: captured, panelPng, indexHtml,
       });
       trackResults.push({
-        track, out: outDir, captured: captured.length, failed: failed.length,
+        track: captured[0]?.track || track, out: outDir, captured: captured.length, failed: failed.length,
+        shots: captured,
         panel: panelPng, indexHtml, findings: findings.file, failures: failed.length ? failed : undefined,
         relIndex: indexHtml ? path.relative(outRoot, indexHtml) : `${track}/index.html`,
       });
-    } else {
-      trackResults.push({ track, out: outDir, captured: 0, failed: failed.length || 1, skipped: !failed.length });
-      hardFail = true;
     }
+    if (!captured.length) hardFail = true;
     if (failed.length) hardFail = true;
   } catch (e) {
     hardFail = true;
@@ -249,11 +259,11 @@ let compareIndex = null;
 if (tracks.length > 1 && wantIndex) {
   compareIndex = writeCompareIndex(outRoot, {
     label: plan.label, preset: plan.preset,
-    tracks: trackResults.filter((t) => t.indexHtml || t.panel).map((t) => ({
+    tracks: trackResults.map((t) => ({
       track: t.track,
-      captured: t.captured,
+      captured: t.captured, failed: t.failed, failures: t.failures, shots: t.shots, error: t.error,
       panel: t.panel ? path.relative(outRoot, t.panel) : null,
-      relIndex: t.relIndex || `${t.track}/index.html`,
+      relIndex: t.indexHtml ? (t.relIndex || `${t.track}/index.html`) : null,
     })),
   });
 }
