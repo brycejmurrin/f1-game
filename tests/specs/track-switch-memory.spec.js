@@ -54,6 +54,34 @@ const MIN_RENDER_OBJECTS = 40;
 const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];
 
+
+// TEMPORARY DIAGNOSTIC: aggregate a CDP heap snapshot by node type+name (self size).
+async function snapAgg(cdp) {
+  let buf = [];
+  const on = (e) => buf.push(e.chunk);
+  cdp.on("HeapProfiler.addHeapSnapshotChunk", on);
+  await cdp.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false });
+  cdp.off("HeapProfiler.addHeapSnapshotChunk", on);
+  const snap = JSON.parse(buf.join("")); buf = null;
+  const f = snap.snapshot.meta.node_fields, nf = f.length, types = snap.snapshot.meta.node_types[0];
+  const ti = f.indexOf("type"), ni = f.indexOf("name"), si = f.indexOf("self_size");
+  const agg = new Map();
+  for (let i = 0; i < snap.nodes.length; i += nf) {
+    const t = types[snap.nodes[i + ti]];
+    let nm = snap.strings[snap.nodes[i + ni]];
+    if (t === "string" || t === "concatenated string" || t === "sliced string") nm = "STR:" + nm.slice(0, 60).replace(/\s+/g, " ");
+    else if (t === "number" || t === "hidden" || t === "synthetic") nm = t + ":" + nm.slice(0, 40);
+    const k = t + "|" + nm, a = agg.get(k) || [0, 0]; a[0] += snap.nodes[i + si]; a[1]++; agg.set(k, a);
+  }
+  return agg;
+}
+function snapDiff(a, b) {
+  const rows = [];
+  for (const [k, v] of b) { const o = a.get(k) || [0, 0]; if (v[0] - o[0] > 150000) rows.push([v[0] - o[0], v[1] - o[1], k]); }
+  rows.sort((x, y) => y[0] - x[0]);
+  return rows.slice(0, 25).map((r) => `${(r[0] / 1048576).toFixed(2)}MB +${r[1]} ${r[2].slice(0, 90)}`).join(" ;; ");
+}
+
 test("loading circuits one after another keeps one world in memory and does not grow", async ({ page }) => {
   // Six picker builds on software GL: 92-123 s measured, past the 120 s
   // default. The build wait itself is bounded by pickTrack's timeout.
@@ -86,6 +114,7 @@ test("loading circuits one after another keeps one world in memory and does not 
       c.heapMin = Math.min(...reads);
       c.reads = reads;
       (heap.diag = heap.diag || []).push(`v${visit} ${id}: first ${reads[0]} reads ${reads.join("/")} geom ${c.three && c.three.geometries} tex ${c.three && c.three.textures} ro ${c.three && c.three.renderObjects}`);
+      if (id === "monza" && (visit === 1 || visit === 3)) { const g = await snapAgg(cdp); if (visit === 1) heap.snap1 = g; else heap.snapDiff = snapDiff(heap.snap1, g); }
       const caches = await page.evaluate(() => { const r = window.renderer, o = {}; if (!r) return o; for (const k of Object.keys(r)) { const m = r[k]; if (!m || typeof m !== "object" || k === "info") continue; for (const k2 of Object.keys(m)) { const v = m[k2]; if (v && (v instanceof Map || v instanceof Set) && v.size > 20) o[k + "." + k2] = v.size; else if (v && (v instanceof WeakMap)) o[k + "." + k2] = "wm"; } } return o; });
       heap.diag[heap.diag.length - 1] += " CACHES " + JSON.stringify(caches);
       c.path = await page.evaluate(() => { try { const e = window.__apex.diag({ download: false }).env; return JSON.stringify({ backend: e.backend, state: e.backendState }).slice(0, 400); } catch (_) { return null; } });
@@ -104,7 +133,7 @@ test("loading circuits one after another keeps one world in memory and does not 
   }
   // TEMPORARY DIAGNOSTIC (remove before ready): surface every reading in the failure text.
   heap.path = readings.length ? readings[0].path : null;
-  expect(0, "DIAG " + heap.diag.join(" | ") + " PATH " + (await page.evaluate(() => { try { const e = window.__apex.diag({ download: false }).env; return JSON.stringify({ b: e.backend, s: e.backendState }).slice(0, 500); } catch (x) { return String(x); } }))).toBe(1);
+  expect(0, "SNAPDIFF " + heap.snapDiff + " DIAG " + heap.diag.join(" | ") + " PATH " + (await page.evaluate(() => { try { const e = window.__apex.diag({ download: false }).env; return JSON.stringify({ b: e.backend, s: e.backendState }).slice(0, 500); } catch (x) { return String(x); } }))).toBe(1);
   for (const id of CIRCUITS) {
     const grew = heap[id][5] - heap[id][2];
     expect(grew, `${id}: heap ${heap[id].slice(1).join(" → ")} MB across three visits`).toBeLessThanOrEqual(GROWTH_MB);
