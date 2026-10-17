@@ -3980,6 +3980,7 @@ const WGX = (function () {
     // (mipmapFilter linear — linearSampler has none). _generateMips rebuilds the
     // chain after each mirror submit.
     let mirSampleView = null, _mirSamp = null;
+    let _mirPassSeq = 0;   // bumped per mirrorBegin: a batch's mirror instance view is valid only for the pass that culled it
     let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true;   // flip false: the broadcast PiP
     let _mirInPass = 0, _mirDone = false;   // P2: insets drawn inside the final pass; this frame's inset is already drawn
     let _mirUBO = null, _mirBG = null;
@@ -4018,6 +4019,7 @@ const WGX = (function () {
       _writeFrame(frame, true);   // true: no forward lamp-shadow slot in the mirror's re-ranked list
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
       if (SHD) SHD.flushPending();   // this frame's shadow maps land before the mirror samples them
+      _mirPassSeq++;
       _mirEncoder = device.createCommandEncoder();
       litPass = _mirEncoder.beginRenderPass({
         colorAttachments: [{ view: mirView, clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
@@ -4991,28 +4993,45 @@ const WGX = (function () {
     // larger, and the snap-cached sun map froze the wrong silhouettes (bug
     // hunt 2026-09-02). Two buffers also let the camera cull's cell-set cache
     // hit across frames instead of missing on every light-cull rewrite.
+    function _mirrorView(batch) {
+      let v = batch._mir;
+      if (!v) {
+        if (batch._mirFail || !batch._instPacked || !batch.instBuf || batch.instBuf === identInstanceBuf) return null;
+        const packed = new Float32Array(batch._instPacked);   // a COPY, not zeros: lanes 16..18 are the 1,1,1 tint a batch without srcColors never rewrites
+        let ib;
+        try { ib = _mkBuffer(packed, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST); } catch (e) { batch._mirFail = true; _allocFail("mirrorInstances", e); return null; }
+        v = batch._mir = { cells: batch.cells, srcMatrices: batch.srcMatrices, srcColors: batch.srcColors, instances: batch.instances,
+          _instPacked: packed, instBuf: ib, visible: 0, _pass: -1 };
+      }
+      v._pass = _mirPassSeq;
+      return v;
+    }
     function cullInstances(batch, planes, opts) {
       if (!batch || !batch.cells) return batch ? batch.instances : 0;
       const shadow = !!(opts && opts.upload === false);
-      let samePack = !shadow && !!batch._cullPlanes;
+      // MIRROR PASS: the rear-view pass culls the same batches with its own frustum. One shared instBuf + one
+      // cell-set key made the main and mirror culls evict each other every frame (a full repack + writeBuffer
+      // per batch per pass, measured 43/frame on Monza). The mirror gets its own pack, buffer and key.
+      const tb = (!shadow && _mirEncoder && _mirrorView(batch)) || batch;
+      let samePack = !shadow && !!tb._cullPlanes;
       if (samePack) {
         let po = 0;
         for (let pi = 0; pi < 6 && samePack; pi++) {
           const p = planes[pi];
           for (let k = 0; k < 4; k++, po++) {
-            if (batch._cullPlanes[po] !== p[k]) { samePack = false; break; }
+            if (tb._cullPlanes[po] !== p[k]) { samePack = false; break; }
           }
         }
       }
-      if (samePack) { batch.visible = batch._cullN; return batch._cullN; }
+      if (samePack) { tb.visible = tb._cullN; return tb._cullN; }
       // CELL-SET KEY (js/render/shared/inst-cells.js — docs/PERF-FINDINGS 2c).
       // Skips the copy loop and the writeBuffer, not the AABB sweep.
       // NOT writing _cullPlanes on a hit is load-bearing.
-      const cs = batch.cells, cn = cs.length;
-      const ks = InstCells.scratchKeys(batch, cn);
+      const cs = tb.cells, cn = cs.length;
+      const ks = InstCells.scratchKeys(tb, cn);
       let kN = InstCells.collectVisible(planes, cs, ks, Frustum.aabbInFrustum);
-      if (!shadow && InstCells.enabled() && InstCells.sameKey(batch, ks, kN)) {
-        batch.visible = batch._cullN; return batch._cullN;
+      if (!shadow && InstCells.enabled() && InstCells.sameKey(tb, ks, kN)) {
+        tb.visible = tb._cullN; return tb._cullN;
       }
       // LAMP REACH (opts.reach = [x, y, z, r], the lamp passes' shadow culls; hunt 4 C-P1, the port of
       // GLX's hunt-2 G5 = TLX C3b): a cell wholly beyond the lamp radius occludes no receiver the lit loop
@@ -5032,9 +5051,9 @@ const WGX = (function () {
           if (same) return batch._shadowN;
         }
       }
-      const src = batch.srcMatrices;
-      const dst = shadow ? (_shadowPackFor(batch) || batch._instPacked) : batch._instPacked;
-      const sc = shadow ? null : batch.srcColors;   // depth pipelines ignore tint lanes
+      const src = tb.srcMatrices;
+      const dst = shadow ? (_shadowPackFor(batch) || batch._instPacked) : tb._instPacked;
+      const sc = shadow ? null : tb.srcColors;   // depth pipelines ignore tint lanes
       let n = 0;
       for (let ci = 0; ci < kN; ci++) {
         const idx = cs[ks[ci]].idx;
@@ -5065,17 +5084,17 @@ const WGX = (function () {
         } else batch._shKeyN = -1;
         return n;
       }
-      batch.visible = n;
-      if (n && batch.instBuf && batch.instBuf !== identInstanceBuf) {
-        device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
+      tb.visible = n;
+      if (n && tb.instBuf && tb.instBuf !== identInstanceBuf) {
+        device.queue.writeBuffer(tb.instBuf, 0, dst, 0, n * 20);
       }
-      const snap = batch._cullPlanes || (batch._cullPlanes = new Float64Array(24));
+      const snap = tb._cullPlanes || (tb._cullPlanes = new Float64Array(24));
       for (let pi = 0, po = 0; pi < 6; pi++) {
         const p = planes[pi];
         for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
       }
-      batch._cullN = n;
-      if (InstCells.enabled()) InstCells.recordKey(batch, ks, kN);
+      tb._cullN = n;
+      if (InstCells.enabled()) InstCells.recordKey(tb, ks, kN);
       return n;
     }
     // Caller-packed instance set (DebrisWorld's Rapier pools: transforms new
@@ -5105,7 +5124,9 @@ const WGX = (function () {
     }
     function drawInstanced(batch, opts) {
       if (!litPass || !batch || !batch.vbuf || !batch.instances) return;
-      const n = batch.visible === undefined ? batch.instances : batch.visible;
+      const mv = _mirEncoder && batch._mir;
+      const src = mv && mv._pass === _mirPassSeq ? mv : batch;   // this mirror pass's own cull, else the main pack
+      const n = src.visible === undefined ? batch.instances : src.visible;
       if (n <= 0) return;
       const slot = _drawSlot++;
       if (slot >= MAX_DRAWS) return;
@@ -5122,13 +5143,14 @@ const WGX = (function () {
       _setBG0(litPass, _activeFrameBG);
       _dynOff[0] = slot * DRAW_STRIDE;
       litPass.setBindGroup(1, drawBindGroup, _dynOff);
-      _bindLitVerts(litPass, batch.vbuf, batch.instBuf || identInstanceBuf, batch.attrBG);
+      _bindLitVerts(litPass, batch.vbuf, src.instBuf || identInstanceBuf, batch.attrBG);
       _drawGeom(litPass, batch, n);
     }
     function freeInstancedBatch(batch) {
       if (!batch) return;
       if (batch.instBuf && batch.instBuf !== identInstanceBuf) _freeBuf(batch.instBuf);
       if (batch.shadowInstBuf) { _freeBuf(batch.shadowInstBuf); batch.shadowInstBuf = null; }
+      if (batch._mir) { _freeBuf(batch._mir.instBuf); batch._mir = null; }
       batch._shadowPacked = null; batch._shKeyN = -1;
       freeMesh(batch);
     }

@@ -307,3 +307,21 @@ test("an unsettled record with no animation frames is not retried (more time can
   assert.equal(settles, 1); assert.equal(settlement.retried, undefined);
   assert.equal(inspection.provisional, true); assert.equal(inspection.issues[0].provisional, true);
 });
+
+test("inspector: a control whose centre is under a sibling past a scroller edge reads needs-scroll, not blocked (T11)", () => {
+  const rect = (x, y, w, h) => ({ x, y, width: w, height: h, right: x + w, bottom: y + h });
+  const scroller = { tagName: "DIV", id: "body", parentElement: null, scrollHeight: 500, clientHeight: 200, getBoundingClientRect: () => rect(0, 0, 400, 200) };
+  const input = { id: "name", tagName: "INPUT", type: "text", value: "", textContent: "", parentElement: scroller, labels: [],
+    getAttribute: () => null, closest: () => null, contains: () => false, getBoundingClientRect: () => rect(10, 199, 300, 40) };
+  const overlay = { tagName: "DIV", id: "footer", parentElement: null };
+  const document = { querySelectorAll: s => s.startsWith("button") ? [input] : [], documentElement: { tagName: "HTML", scrollWidth: 400, dataset: {} },
+    body: { tagName: "BODY" }, activeElement: null, getElementById: () => null, elementFromPoint: () => overlay };
+  const ctx = vm.createContext({ document, window: {}, innerWidth: 400, innerHeight: 200, location: { href: "http://localhost/" }, CSS: { escape: s => s },
+    getComputedStyle: p => ({ display: "block", visibility: "visible", opacity: "1", overflowX: "visible", overflowY: p === scroller ? "auto" : "visible" }), matchMedia: () => ({ matches: true }) });
+  const inspect = () => JSON.parse(JSON.stringify(vm.runInContext(`(${inspectUI.toString()})()`, ctx)));
+  const sliver = inspect();
+  assert.equal(sliver.controls[0].reachability.hit, "needs-scroll");
+  assert.deepEqual(sliver.issues.filter(i => i.kind === "blocked"), []);
+  input.getBoundingClientRect = () => rect(10, 100, 300, 40); // fully inside the scroller: a real overlay stays blocked
+  assert.equal(inspect().controls[0].reachability.hit, "blocked");
+});
