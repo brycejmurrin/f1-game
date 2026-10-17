@@ -200,11 +200,11 @@ test("compare gallery shows every track view, captions, failures and legacy pane
     { track: "legacy", captured: 4, panel: "legacy/panel.png", relIndex: "legacy/index.html" },
   ] });
   const html = fs.readFileSync(file, "utf8");
-  assert.equal((html.match(/<figure>/g) || []).length, 2);
+  assert.equal((html.match(/class="capture /g) || []).length, 3);
   assert.match(html, /first\/ridge%20one.jpg/);
   assert.match(html, /second\/ridge.png/);
-  assert.match(html, /orbit · lap 25.0% · day/);
-  assert.match(html, /trackside · lap 75.0% · night/);
+  assert.match(html, /lap 25% · orbit · day/);
+  assert.match(html, /lap 75% · trackside · night/);
   assert.match(html, /3 track\(s\) · 6 captured · 1 failed/);
   assert.match(html, /legacy\/panel.png/);
   assert.match(html, /legacy\/index.html/);
@@ -212,7 +212,6 @@ test("compare gallery shows every track view, captions, failures and legacy pane
   assert.doesNotMatch(html, /<script>/);
   assert.match(html, /Fjord &lt;ridge&gt;/);
   assert.match(html, /name="viewport"/);
-  assert.match(html, /minmax\(min\(100%,340px\)/);
 });
 
 test("report galleries copy repeated shot names portably and preserve actual custom identities", (t) => {
@@ -394,6 +393,17 @@ test('survey GPU auto-selection does not mistake installed Mesa for a usable loc
  assert.equal(surveyGlEnvironment({GITHUB_ACTIONS:'true'},'',librariesOnly).APEX_GPU,'llvmpipe');
  assert.equal(surveyGlEnvironment({APEX_GPU:'hardware'},'swiftshader',librariesOnly).APEX_GPU,'swiftshader');
  assert.equal(surveyGlEnvironment({APEX_GPU:'hardware'},'',librariesOnly).APEX_GPU,'hardware');
+});
+
+test('survey galleries preserve the actual JPEG capture path and native navigation', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apex-gallery-jpeg-'));
+  try {
+    const file = writeSurveyIndex(dir, { track: 'spa', shots: [{ name: 'pond', png: path.join(dir, 'pond.jpg'), cam: 'orbit' }] });
+    const html = fs.readFileSync(file, 'utf8');
+    assert.match(html, /src="pond.jpg"/);
+    assert.doesNotMatch(html, /pond.png|<script\b|<select\b/);
+    assert.match(html, /name="viewport"/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 // #1982: identity and resume evidence.

@@ -956,7 +956,19 @@ const LoadingScreen = (function () {
     };
   }
 
-  return { create, isAutomation, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
+  /** ScriptLoader's onSlow (#2625): a lazy file has not landed after 10 s. Reuses the card's
+   *  subtitle line (#ld-gp) rather than adding DOM; a no-op while the card is down. The
+   *  failure at 25 s keeps the existing error path. Static, so a bundle loader needs no instance. */
+  const SLOW_TEXT = "SLOW CONNECTION — still loading…";
+  function slowNotice() {
+    if (typeof document === "undefined" || !document.getElementById) return false;
+    const r = document.getElementById("loading"), gp = document.getElementById("ld-gp");
+    if (!r || r.hidden || !gp) return false;
+    gp.textContent = SLOW_TEXT;
+    return true;
+  }
+
+  return { create, slowNotice, SLOW_TEXT, isAutomation, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
     packSettled, warmPresentReady,
     gridLayout, gridField, gridColour, gridInk, isGridShot, GRID_ROW_MIN };
 })();

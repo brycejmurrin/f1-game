@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const {
+  writeCaptureIndex,
   cellFileBase,
   cellPaths,
   cellRecorded,
@@ -67,11 +68,20 @@ test("layout-audit --help names gallery and survey", () => {
   assert.match(r.stdout, /--screen=/);
 });
 
-test("gallery index exposes screen and viewport filters", () => {
-  const source = fs.readFileSync(path.join(ROOT, "tools/ui/menu-capture.mjs"), "utf8");
-  assert.match(source, /id="filter-screen"/);
-  assert.match(source, /id="filter-viewport"/);
-  assert.match(source, /id="filter-search"/);
-  assert.match(source, /data-screen=/);
-  assert.match(source, /SKIPPED/);
+test('menu screenshot report renders responsive native screen navigation and DOM links', () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, 'artifacts', 'menu-static-'));
+  try {
+    writeCaptureIndex(dir, [
+      { screen: 'garage', viewport: 'phone', shot: 'garage.png', dom: 'garage.dom.json' },
+      { screen: 'settings', viewport: 'desktop', shot: 'settings.png' },
+      { screen: 'career', viewport: 'phone', skipped: 'boot failed' },
+    ]);
+    const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
+    assert.doesNotMatch(html, /<script\b|<table\b|<select\b/);
+    assert.match(html, /href="#gallery-2"/);
+    assert.match(html, /href="garage.dom.json"/);
+    assert.match(html, /name="viewport"/);
+    assert.equal((html.match(/class="capture /g) || []).length, 2);
+    assert.match(html, /SKIPPED \(1\)[\s\S]*career · phone — boot failed/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
