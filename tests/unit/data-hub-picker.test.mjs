@@ -637,3 +637,41 @@ test("tray mutation invalidation preserves a driver's cross-session comparison w
   assert.match(popup.textContent, /A One R vs A One Q/);
   h.DataHub.close();
 });
+
+// hunt F4: a second open() while the hub is up overwrote returnFocus with an element inside the dialog, so
+// close() focused something hidden instead of the control the player opened the hub from.
+test("a double open() keeps the focus origin of the FIRST open", async () => {
+  const h = harness();
+  let focused = null;
+  const origin = h.document.createElement("button"); origin.id = "mb-data"; origin.focus = () => { focused = origin; };
+  h.root.parentNode.appendChild(origin);
+  h.document.activeElement = origin;
+  h.DataHub.open("schedule"); await h.drain();
+  const inside = h.root.find((n) => n.id === "dh-panel");
+  h.document.activeElement = inside;                  // focus moved into the dialog
+  h.DataHub.open(); await h.drain();
+  h.DataHub.close();
+  assert.equal(focused, origin, "close() returns focus to where the first open came from");
+});
+
+// hunt F5: forgetRaw() cleared only localStorage, but a body over 256K (an unfinished race's /position grid)
+// lives in the transport's memory cache alone, so the stale copy kept being served after the "forget".
+test("transport.forget(url) drops an oversize body from memory as well as localStorage", async () => {
+  const url = "https://api.openf1.org/v1/position?session_key=777";
+  const big = [{ d: "x".repeat(300 * 1024) }];
+  let fetches = 0;
+  const store = new Map();
+  const ctx = vm.createContext({ Date, AbortController, setTimeout, clearTimeout, Log: { info() {}, warn() {} },
+    fetch: async () => { fetches++; return { ok: true, status: 200, headers: { get: () => null }, json: async () => big }; },
+    localStorage: { get length() { return store.size; }, key: (i) => [...store.keys()][i],
+      getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/api-transport.js"), "utf8"), ctx);
+  const transport = vm.runInContext("F1Transport", ctx).create("https://api.openf1.org/v1", 7 * 86400000);
+  await transport.request(url, 60000);
+  await transport.request(url, 60000);
+  assert.equal(fetches, 1, "the second read is served from the memory cache");
+  assert.equal(typeof transport.forget, "function", "the transport exposes forget(url)");
+  transport.forget(url);
+  await transport.request(url, 60000);
+  assert.equal(fetches, 2, "after forget() the body is fetched again");
+});

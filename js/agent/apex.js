@@ -2455,7 +2455,7 @@ const api = {
     if (c.isPlayer) return false;
     const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
     c.s = c._prevS = wrapS(f01 * G.track.total);
-    c.prog = (c.lap || 0) * G.track.total + f01 * G.track.total;
+    c.prog = ((c.lap || 0) - 1) * G.track.total + c.s;   // the engine's (lap-1)*L + s (see NetPlay's prog rebuild)
     if (x     !== undefined) { c.x = x; c.xVis = x; }
     if (speed !== undefined) c.speed = speed;
     c.vLat = 0; c.yawRateCur = 0;
@@ -2654,7 +2654,7 @@ const api = {
       c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.deploying = false; c.boostOn = false; OvertakeMode.reset(c);
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false;
-      delete c.vertLoad;
+      if ("vertLoad" in c) c.vertLoad = undefined;   // a CarFields key: a delete would make the car a dictionary
       // EVERY per-episode transient is DELETED, not zeroed, from ONE list —
       // EPISODE_TRANSIENTS at the top of this file. Deleting is the point:
       // these fields are absent on a cold car, so removing them is what makes
@@ -2682,7 +2682,9 @@ const api = {
       // dead code. Add to EPISODE_TRANSIENTS; never a second list.
       c.lane = c.lanePref != null ? c.lanePref : 0;
       c._prevS = c.s;
-      for (const k of EPISODE_TRANSIENTS) delete c[k];
+      // Reset to `undefined`, never `delete`: a delete (of a non-last key) drops all 22 cars to V8 dictionary
+      // mode (undoes PERF-HUNT-2 #1), and an absent key reads the same as an undefined one (car-fields.js header).
+      for (const k of EPISODE_TRANSIENTS) if (k in c) c[k] = undefined;
     }
     BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
     agentView.beginEpisode();
