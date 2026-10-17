@@ -143,6 +143,12 @@ test("inspect CLI validates routes and selector budgets before browser acquisiti
   assert.throws(() => parseOptions(["responsive", "--viewports", "390x844"]));
 });
 
+test("inspect CLI bounds round-trip and audit inputs before browser acquisition", () => {
+  const options = parseOptions(["inspect", "--viewports", "390x844,844x390", "--roundtrip", "--audit", "artifacts/audit.json"]);
+  assert.equal(options.roundTrip, true); assert.equal(options.audit, "artifacts/audit.json");
+  for (const args of [["inspect", "--roundtrip"], ["inspect", "--viewports", "390x844", "--roundtrip=false"], ["inspect", "--audit="], ["missions", "--audit", "x.json"], ["inspect", "--audit"]]) assert.throws(() => parseOptions(args));
+});
+
 test("inspector diffs separate semantic changes from movement and include runtime bindings", async () => {
   const { diffInspections } = await import("../../tools/ui/explorer/inspector.mjs");
   const control = { selector: "#size", value: "100", box: { x: 0 }, binding: { runtime: 100 } };
@@ -176,6 +182,12 @@ test("responsive inspection validates before mutation and restores viewport even
   assert.deepEqual(changes, [...viewports, original]);
   assert.equal(report.records[1].diff.viewportChanged, true);
   assert.equal(report.records[0].diff, null);
+  const roundTrip = await inspectResponsive(page, { viewports, roundTrip: true });
+  assert.deepEqual(roundTrip.records.map(r => r.phase), ["forward", "forward", "reverse"]);
+  assert.deepEqual(roundTrip.records.map(r => r.sourceIndex), [0, 1, 0]);
+  assert.deepEqual(changes.slice(-4), [...viewports, viewports[0], original]);
+  assert.ok(roundTrip.paths);
+
   fail = true;
   await assert.rejects(() => inspectResponsive(page, { viewports }), /Root disappeared/);
   assert.deepEqual(current, original);

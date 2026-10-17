@@ -29,6 +29,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
+import { captureAuditEnvironment, captureAuditSource, captureAuditSelectors, auditFindingSelectors } from "./explorer/audit-evidence.mjs";
 import { fileURLToPath } from "node:url";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 // The data hub is the only screen whose content comes off the network. Reuse the
@@ -277,6 +278,10 @@ async function shot(page, file) {
 (async () => {
   const srv = await startStaticServer(ROOT);
   const report = {};
+  const source = await captureAuditSource(ROOT);
+  const metadata = async (page, root, result) => ({ ...result, producer: "menu-fit",
+    environment: await page.evaluate(captureAuditEnvironment, { root, source }).catch(() => null),
+    selectorIndex: await page.evaluate(captureAuditSelectors, { root, selectors: auditFindingSelectors(result) }).catch(() => ({})), units: "CSS px" });
   try {
     const browser = await launchChromium({ args: ["--use-angle=swiftshader"] });
     for (const viewport of sizes) {
@@ -322,19 +327,19 @@ async function shot(page, file) {
             await settle(page);
           }
           const res = await page.evaluate(AUDIT, [sel, SAFE]);
-          report[tag][name] = res;
+          report[tag][name] = await metadata(page, sel, res);
           await shot(page, `${tag}${SAFE_TAG}-${name}.png`);
           // settings sub-page too
           if (name === "pause") {
             await page.evaluate(() => document.getElementById("pm-settings").click());
             await sleep(300);
             await settle(page);
-            report[tag]["pause-settings"] = await page.evaluate(AUDIT, ["#pmsettings", SAFE]);
+            report[tag]["pause-settings"] = await metadata(page, "#pmsettings", await page.evaluate(AUDIT, ["#pmsettings", SAFE]));
             await shot(page, `${tag}${SAFE_TAG}-pause-settings.png`);
             await page.evaluate(() => document.getElementById("pm-advanced").click());
             await sleep(300);
             await settle(page);
-            report[tag]["advanced"] = await page.evaluate(AUDIT, ["#advanced", SAFE]);
+            report[tag]["advanced"] = await metadata(page, "#advanced", await page.evaluate(AUDIT, ["#advanced", SAFE]));
             await shot(page, `${tag}${SAFE_TAG}-advanced.png`);
           }
           } catch (e) {
