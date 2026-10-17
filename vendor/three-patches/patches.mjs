@@ -294,7 +294,7 @@ export const PATCHES = [
       "#34601 (backend.destroyProgram / destroyPipeline delete the shader and program) and a reduced " +
       "#34610: the VAO cache stays keyed by attribute ids, each render object holds one counted " +
       "reference, and the VAO is deleted when the last holder is released (render object dispose or " +
-      "geometry dispose). Compute VAOs are pinned, never released.",
+      "geometry dispose or exchange). Compute VAOs are pinned, never released.",
     upstream: "fixed on dev for r187 (#34601 program/pipeline, #34610 VAO, issue #34597); npm latest is still 0.186.1",
     edits: [
       {
@@ -320,6 +320,11 @@ export const PATCHES = [
       {
         find: "\t\t\t// clear geometry cache attributes\n\n\t\t\tthis.attributes = null;\n",
         replace: "\t\t\tthis.renderer.backend.deleteVertexState( this );\n\n\t\t\t// clear geometry cache attributes\n\n\t\t\tthis.attributes = null;\n",
+        count: 1,
+      },
+      {
+        find: "\t\tthis.geometry = geometry;\n\t\tthis.attributes = null;\n",
+        replace: "\t\tthis.renderer.backend.deleteVertexState( this );\n\n\t\tthis.geometry = geometry;\n\t\tthis.attributes = null;\n",
         count: 1,
       },
       {
