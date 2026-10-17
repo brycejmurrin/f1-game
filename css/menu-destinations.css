@@ -68,6 +68,6 @@
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .bigbtn { font-size: clamp(.7rem, calc(1.7*var(--vwz)), calc(var(--fs-4)*var(--ui-compact-text, 1))); }
 @media (max-width: 700px) { :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .btn-ico { display: none; } }
 .dh-developer-tools { padding: 0 var(--gap) calc(var(--gap) * .5); flex-shrink: 0; }
-.dh-developer-tools > summary { cursor: pointer; color: var(--dim); min-height: var(--tap-min); }
+.dh-developer-tools > summary { cursor: pointer; color: var(--dim); min-height: var(--tap-paint); }
 .dh-developer-tools > button { margin-top: calc(var(--gap) * .3); }
 }

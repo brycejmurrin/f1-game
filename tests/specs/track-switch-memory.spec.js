@@ -18,15 +18,21 @@
 //      the CURRENT attachment state; +14 MB a round, 65 orphans after 3 rounds).
 //      Measured: the unfixed tree has 2 orphans at the first monaco reading,
 //      the fixed tree 0 at every reading.
-//   3. BOUNDED: the heap at the third visit to a circuit is within GROWTH_MB of
-//      the second visit. The first visit is warm-up (lazy chunked copies,
-//      program caches) and is excluded. The #773 leak grew ~34 MB over the two
-//      picks between those readings.
+//   3. BOUNDED: across five visits the heap grows by at most GROWTH_MB in the
+//      SMALLEST interval after the second visit (sustainedGrowthMB). A leak
+//      grows every interval (#773: ~17 MB a pick; 2026-10-04: 14-26 MB a round).
+//      Visit 1 is warm-up and the warm-up can finish a visit later: monza's terrain / road /
+//      shadow-caster meshes are chunked lazily at draw time (game.js
+//      drawWorldMeshes, shadow-pass.js; PerfGov.tier() < 3, built once per track,
+//      freed with it) and the ~13 MB of CPU vertex data they keep lands at visit
+//      2 or 3 depending on what the picker's warm frames drew. On Metal the old
+//      check (visit 3 against visit 2) failed whenever it landed at 3.
+//      Measured: docs/notes/TRACK-SWITCH-METAL-2026-10-17.md.
 //
 // TLX on purpose: the shared fixtures pin GLX (cheaper under SwiftShader), but
 // the leak lived in TLX and TLX is what players run.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
-import { censusInitScript, censusAfterGc, pickTrack, settle, waitFrames, waitUntilDrawn } from "../../tools/lib/mem-census.mjs";
+import { censusInitScript, censusAfterGc, pickTrack, settle, sustainedGrowthMB, waitFrames, waitUntilDrawn } from "../../tools/lib/mem-census.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 
 // Three CLI runs of the fixed tree (tools/gfx/mem-census.mjs, picker path, TLX,
@@ -51,13 +57,14 @@ test.use({ viewport: { width: 960, height: 540 } });
 // waitUntilDrawn waits for the "menu warm drawn <id>" Log record (not the
 // render-object count — that can read the previous scene; run 37330132243).
 const MIN_RENDER_OBJECTS = 40;
+const VISITS = 5;
 const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];
 
 test("loading circuits one after another keeps one world in memory and does not grow", async ({ page }) => {
-  // Six picker builds on software GL: 92-123 s measured, past the 120 s
-  // default. The build wait itself is bounded by pickTrack's timeout.
-  test.setTimeout(360000);
+  // Ten picker builds on software GL (six took 92-123 s, past the 120 s
+  // default). The build wait itself is bounded by pickTrack's timeout.
+  test.setTimeout(480000);
   await page.addInitScript(() => {
     try { localStorage.setItem("apex26.gfxBackend", "three"); } catch (_) {}
     // software GL on a busy runner: TLX init measured > 8 s (run 38660546141) — give it room so the pick is actually TLX
@@ -72,7 +79,7 @@ test("loading circuits one after another keeps one world in memory and does not 
   expect(backend, "this spec measures the shipped TLX backend").toBe("three");
 
   const heap = {}, readings = [];
-  for (let visit = 1; visit <= 3; visit++) {
+  for (let visit = 1; visit <= VISITS; visit++) {
     for (const id of CIRCUITS) {
       await pickTrack(page, id);
       await waitUntilDrawn(page, id);
@@ -92,7 +99,9 @@ test("loading circuits one after another keeps one world in memory and does not 
     }
   }
   for (const id of CIRCUITS) {
-    const grew = heap[id][3] - heap[id][2];
-    expect(grew, `${id}: heap ${heap[id].slice(1).join(" → ")} MB across three visits`).toBeLessThanOrEqual(GROWTH_MB);
+    const series = heap[id].slice(1);
+    const { intervals, min } = sustainedGrowthMB(series);
+    expect(min, `${id}: heap ${series.join(" → ")} MB across ${VISITS} visits; growth per visit after the second: ${intervals.join(", ")} (the smallest must be within the bound)`)
+      .toBeLessThanOrEqual(GROWTH_MB);
   }
 });
