@@ -4,6 +4,16 @@ Scope: `node tools/ui/explorer.mjs inspect --screen <id> --viewports 932x430,844
 over every catalog screen except `title` (Home is owned by #2611). Tool owned by #2613, so the
 findings in §Tool gaps are proposals, not edits.
 
+## History (git)
+- `87cf319b5` (2026-10-15) added the explorer. `openSession({ touch })` and the touch `responsive`
+  mode (settings only: 390x844, 844x390, 844x344) come from this commit.
+- `56de57fe9` (#2587) added `inspect`, which calls `openSession(browser, url)` with no options, so
+  touch never reached it. That makes T1 a wiring fix, not new plumbing.
+- `85e657bac` refined CSS inspection and boxless clipping. It is already on the deploy tip.
+- #2613 (`80f2aba95`, open) records `pointer.coarse/fine/hover/maxTouchPoints` to join with the
+  native audits. It does **not** add a touch mode, safe-area override, provisional flags or a
+  deferral exit code, so T1–T4 below are not covered by it.
+
 ## Tool gaps (measured on the deploy tip, Chromium 1194, Playwright 1.63.0)
 
 | # | Gap | Evidence | Proposal |
