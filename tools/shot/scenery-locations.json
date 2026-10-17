@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "87823243d8791ac4ffaca210b4cd9a7a70bd851b6909684123fb3e490dca8626",
+  "sourceDigest": "4fd057a015da69a35e9ad3d9e1291e031a3ac9253ab35f18993b64d94b2e77dd",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -213,11 +213,11 @@
       "track": "bahrain",
       "name": "Sakhir Tower",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.019304,
+      "frac": 0.020059,
       "target": [
-        308.12,
-        21.21,
-        146.4
+        307.97,
+        21.18,
+        150.46
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 69,
@@ -234,7 +234,7 @@
       "target": [
         412.13,
         6.67,
-        46.3
+        46.31
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 31,
@@ -247,11 +247,11 @@
       "track": "bahrain",
       "name": "Control Tower",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.007411,
+      "frac": 0.008154,
       "target": [
-        334.52,
-        12.4,
-        83.09
+        334.37,
+        12.41,
+        87.08
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 45,
@@ -264,11 +264,11 @@
       "track": "bahrain",
       "name": "University Grandstand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.184788,
+      "frac": 0.184925,
       "target": [
-        -52.88,
+        -53.21,
         6.53,
-        496.99
+        496.93
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 33.2,
@@ -281,11 +281,11 @@
       "track": "bahrain",
       "name": "Schumacher Corner",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.101707,
+      "frac": 0.101783,
       "target": [
-        377.57,
-        2.35,
-        600.54
+        377.42,
+        2.36,
+        600.9
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 21,
@@ -298,11 +298,11 @@
       "track": "bahrain",
       "name": "Beyon Grandstand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.780259,
+      "frac": 0.78084,
       "target": [
-        -76.2,
-        3.96,
-        -309.32
+        -73.79,
+        3.92,
+        -310.57
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 45,
@@ -839,14 +839,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.168,
       "target": [
-        -402.22,
-        -7.95,
-        308.67
+        -402.5,
+        -7.93,
+        308.68
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/fuji.js anchor K(0.168)",
-      "projectedFrac": 0.345419,
-      "nearestRoadDistanceM": 48.3,
+      "projectedFrac": 0.345215,
+      "nearestRoadDistanceM": 48.1,
       "viewDistanceM": 144.9,
       "source": "tests/data/landmarks/fuji.json; js/circuits/scenery/fuji.js"
     },
@@ -858,14 +858,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.12,
       "target": [
-        3038.57,
+        3038.35,
         378.05,
-        90.34
+        90.38
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "docs/tracks/fuji.md §4 skyline viewing station",
-      "projectedFrac": 0.89832,
-      "nearestRoadDistanceM": 2449.6,
+      "projectedFrac": 0.89823,
+      "nearestRoadDistanceM": 2449.5,
       "viewDistanceM": 3193.5,
       "source": "tests/data/landmarks/fuji.json; js/circuits/scenery/fuji.js"
     },
@@ -3091,15 +3091,15 @@
       "track": "sochi",
       "name": "Fisht Stadium",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.14609,
+      "frac": 0.146053,
       "target": [
-        -27.14,
+        -26.6,
         13.51,
-        12.98
+        13.56
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 139.4,
-      "viewDistanceM": 139.4,
+      "nearestRoadDistanceM": 140.2,
+      "viewDistanceM": 140.2,
       "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
     },
     {
@@ -3108,11 +3108,11 @@
       "track": "sochi",
       "name": "Bolshoy Dome",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.149763,
+      "frac": 0.149761,
       "target": [
-        -7.26,
+        -6.69,
         8.13,
-        5.76
+        5.54
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 137.5,
@@ -3127,13 +3127,13 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.225,
       "target": [
-        298.42,
+        298.95,
         4.29,
-        165.02
+        165.07
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.225)",
-      "projectedFrac": 0.653059,
+      "projectedFrac": 0.652932,
       "nearestRoadDistanceM": 117.2,
       "viewDistanceM": 127.5,
       "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
@@ -3146,14 +3146,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.115,
       "target": [
-        -208.68,
-        19.53,
-        24.07
+        -208.17,
+        19.52,
+        23.94
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.115)",
-      "projectedFrac": 0.74347,
-      "nearestRoadDistanceM": 92.9,
+      "projectedFrac": 0.743356,
+      "nearestRoadDistanceM": 93.1,
       "viewDistanceM": 103.5,
       "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
     },
@@ -3165,14 +3165,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.29,
       "target": [
-        620.66,
+        620.55,
         6.19,
-        -254.8
+        -255.11
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.290)",
       "projectedFrac": 0.512767,
-      "nearestRoadDistanceM": 112.3,
+      "nearestRoadDistanceM": 112.6,
       "viewDistanceM": 128.3,
       "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
     },
@@ -3184,14 +3184,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.062,
       "target": [
-        -510.75,
+        -510.29,
         7.48,
-        68.13
+        67.97
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.062)",
-      "projectedFrac": 0.80627,
-      "nearestRoadDistanceM": 16.9,
+      "projectedFrac": 0.806172,
+      "nearestRoadDistanceM": 17,
       "viewDistanceM": 65.5,
       "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
     },
@@ -3203,9 +3203,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.986179,
       "target": [
-        -843.12,
+        -842.93,
         20.93,
-        314.09
+        313.39
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 37.5,
@@ -3220,14 +3220,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.245,
       "target": [
-        502.87,
+        503.25,
         4.8,
-        151.75
+        151.52
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.245)",
-      "projectedFrac": 0.564559,
-      "nearestRoadDistanceM": 125,
+      "projectedFrac": 0.564496,
+      "nearestRoadDistanceM": 124.5,
       "viewDistanceM": 159.5,
       "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
     },
@@ -3239,9 +3239,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.008268,
       "target": [
-        -683.43,
+        -683.17,
         6.99,
-        264.98
+        264.48
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 69.5,
