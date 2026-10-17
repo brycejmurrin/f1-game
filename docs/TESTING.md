@@ -2188,6 +2188,7 @@ what it covers.
 | `perf-frametime.test.mjs` | the frametime baseline compare helpers (`tests/helpers/perf-frametime.mjs`): percentile math and large-regression thresholds only |
 | `loop-health.test.mjs` | `js/perf/loop-health.js` fault policy (VM + seedLog, controllable clock): RUN_CAP 8 consecutive faults stops the loop; TOTAL_CAP 240 stops even when clean frames reset the run; a quiet stretch past QUIET_RESET_MS expires the total tally; a clean frame pays the run back so a later streak starts fresh; a stopped loop does not expire |
 | `perf-spans.test.mjs` | `js/perf/spans.js`: off-by-default, p50/p95/p99 ring maths, nesting, ring wrap, LoAF feature detection, and `__apex.perf()` filling `ai`/`collide` in the game VM |
+| `fleet-flags.test.mjs` | `tools/ci/fleet-flags.mjs`: model drift (served≠configured), cost over cap, context over 300k, stalled-while-working flags from `get_session` JSON |
 | `profile-lib.test.mjs` | `tools/perf/lib.mjs` + `query.mjs`: median/spread aggregation, a delta inside the spread is noise, `--repeat 1` is unproven, cpuprofile self/total |
 | `profile-mcp.test.mjs` | `apex_profile` / `apex_profile_query` dryRun argv pins (mode, repeat, base ref, artifacts-only path) |
 | `race-entry-profile.test.mjs` | `js/perf/race-entry-profile.js`: race-entry legs match the old `raceProfile` stopwatch, named marks record handoff/warm/present readiness once, synthetic and `PerformanceObserver` longtasks feed `blockMs`/`maxBlockMs`, and `tickFrame` ends the window two frames after `present:ready` |
