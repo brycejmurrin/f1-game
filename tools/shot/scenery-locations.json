@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "b3d4acb1ee6a41d918f68b7004fd9730c986afdffcf2171f5a9589f176bd0402",
+  "sourceDigest": "8f6e6c3125b9dd0a57a2fae2f163796599f54a07cc83030eb6db35a0199cb3c5",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -1493,12 +1493,12 @@
       "frac": 0.002,
       "target": [
         -9.37,
-        13.35,
-        -144.43
+        13.34,
+        -144.42
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/jerez.js anchor K(sl(0.002))",
-      "projectedFrac": 0.661939,
+      "projectedFrac": 0.662128,
       "nearestRoadDistanceM": 30.9,
       "viewDistanceM": 33.5,
       "source": "tests/data/landmarks/jerez.json; js/circuits/scenery/jerez.js"
@@ -1509,11 +1509,11 @@
       "track": "jerez",
       "name": "Control Tower",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.011851,
+      "frac": 0.01184,
       "target": [
-        -41.65,
-        21.74,
-        -177.58
+        -41.64,
+        21.73,
+        -177.57
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 31.5,
@@ -1526,11 +1526,11 @@
       "track": "jerez",
       "name": "Lorenzo Corner",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.825019,
+      "frac": 0.825221,
       "target": [
-        499.73,
+        499.77,
         4.99,
-        -199.59
+        -199.29
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 23.5,
@@ -1543,11 +1543,11 @@
       "track": "jerez",
       "name": "Dani Pedrosa",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.25733,
+      "frac": 0.258058,
       "target": [
-        -74.94,
-        13.23,
-        363.88
+        -74.68,
+        13.16,
+        363.5
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 25.5,
