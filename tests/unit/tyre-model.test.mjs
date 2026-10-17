@@ -1143,3 +1143,27 @@ test("R1: ambient and track temperature are continuous across a local shower's e
   // The ramp itself is unchanged: at cell.life the temperature is still the rain end's.
   assert.equal(temps(cell.life - 1, false)[1], temps(cell.life, false)[1] + 0, "held at `to` until the shower passes");
 });
+
+test("lapsOn: a stop in a box BEFORE the line is not a lap old at the next crossing", () => {
+  const s = ctxFor({ laps: 10 });
+  const rec = T.classRecord("hard");
+  // Box after the line: fitted early in lap 4, a whole lap later (lap 5) it has run one lap.
+  const after = { lap: 4, s: 40 };
+  s.fit(after, rec);
+  after.lap = 5;
+  assert.equal(s.lapsOn(after), 1, "post-line box: the next crossing closes a full lap");
+  // Box before the line: fitted at the end of lap 4, the crossing into lap 5 is a partial lap.
+  const before = { lap: 4, s: 5386 - 100 };
+  s.fit(before, rec);
+  before.lap = 5;
+  assert.equal(s.lapsOn(before), 0, "pre-line box: the crossing is not a completed lap on this set");
+  before.lap = 6;
+  assert.equal(s.lapsOn(before), 1, "…the following crossing is the first full lap");
+  // The grid set (lap 0, on the grid before the line) is unchanged.
+  const grid = { lap: 0, s: 5386 - 14 };
+  s.fit(grid, rec);
+  grid.lap = 1;
+  assert.equal(s.lapsOn(grid), 0, "a grid set is not a lap old at the start crossing");
+  grid.lap = 2;
+  assert.equal(s.lapsOn(grid), 1);
+});
