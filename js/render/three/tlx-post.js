@@ -292,8 +292,10 @@
     // three r184 leaked RT textures on setSize(); r185 (#33511) disposes them.
     // Keep the explicit texture disposals so a stale vendor cannot regress the
     // "black frame after resize" report; double-dispose is safe.
+    let _rtResizes = 0;   // state().rtResizes: target reallocations (#2655 evidence)
     function rtSetSize(rt, w, h) {
       if (rt.width === w && rt.height === h) return;
+      _rtResizes++;
       rt.setSize(w, h);
       try {
         const ts = rt.textures || (rt.texture ? [rt.texture] : []);
@@ -984,6 +986,7 @@
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],
+        rtResizes: _rtResizes,
       }),
       // Drop last-presented block flags (Home garage / mid-warm frames must
       // not satisfy a race probe that waits on shafts/bloom before Singapore

@@ -1690,9 +1690,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "RESTART looks dead in net / quali-net, same gate as its click handler");
   assert.equal(decl(css("css/career.css"), '#cr-inner:not([data-pair="on"]):not([data-shape="tall"]):has(#cr-left .cr-slot):has(#cr-right .cr-slot) > #cr-body', "grid-template-columns"),
     "minmax(0, 1fr) minmax(0, 1fr)", "wide stacked modes picker is two-up; tall stacks");
-  assert.match(readCssSource("css/career.css"),
-    /#cr-inner:is\(\[data-density="compact"\], \[data-shape="tall"\]\)[\s\S]*-webkit-line-clamp:\s*2/,
-    "short/tall mode intros clamp; BACKUP / slot notes stay full height");
+  assert.doesNotMatch(readCssSource("css/career.css"), /-webkit-line-clamp:\s*2/,
+    "mode intros wrap in full (no ellipsis at UI SIZE 150/200, Bryce 2026-10-17)");
   assert.equal(decl(css("css/components.css"), "#race-settings", "--sheet-w"), "760px",
     "race settings spends the same safe width as settings / customize");
   assert.equal(decl(css("css/components.css"), "#standings", "--sheet-w"), "760px");
