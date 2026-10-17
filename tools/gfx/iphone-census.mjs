@@ -15,10 +15,11 @@
 // --no-save; it is deliberately not a package.json dependency). No secrets.
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 import { spawnSync } from "node:child_process";
 import {
-  ARMS, BOUND_SRC, DRIVER_SRC, FACTS_SRC, FIXED_VIEW_SRC, GPU_ADAPTER_SRC, RAF_SRC, READY_SRC,
-  RESET_FRAMES_SRC, SAMPLE_SRC, DEFAULT_URL, armSchedule, buildCapabilities, cadence, parseArms, windowSummary,
+  ARMS, BOUND_SRC, DIAG_SRC, DRIVER_SRC, FACTS_SRC, FIXED_VIEW_SRC, GPU_ADAPTER_SRC, RAF_SRC, READY_SRC,
+  RESET_FRAMES_SRC, SAMPLE_SRC, DEFAULT_URL, armSchedule, buildCapabilities, cadence, parseArms, pngStats, windowSummary,
 } from "./iphone-census-lib.mjs";
 
 const argv = process.argv.slice(2);
@@ -138,6 +139,7 @@ try {
         windows.push({ minute: +(i * every / 60).toFixed(1), ...w, mem: s.mem || null, jsHeapMB: s.jsHeapMB ?? null });
         log("soak", i + "/" + n, "p50", w.p50, "scale", w.scale, "tier", w.tier);
       }
+      res.soakDiag = await run(DIAG_SRC).catch((e) => ({ error: String(e && e.message) }));
       res.soak = { windows, driver: await run(`return window.__icDrive ? window.__icDrive.stats() : null`) };
       return true;
     });
@@ -158,11 +160,15 @@ try {
       const samples = await sampleWindow(windowS, 15);
       leg.window = windowSummary(samples);
       leg.mem = (samples[samples.length - 1] || {}).mem || null;
+      leg.diag = await run(DIAG_SRC).catch((e) => ({ error: String(e && e.message) }));
+      leg.driver = await run(`return window.__icDrive ? window.__icDrive.stats() : null`).catch(() => null);
       await run(FIXED_VIEW_SRC);
       await sleep(2500);   // frames reach the compositor before the capture
       const png = await driver.takeScreenshot();
       const file = `shot-${arm}-r${round}.png`;
-      fs.writeFileSync(path.join(outDir, file), Buffer.from(png, "base64"));
+      const pngBuf = Buffer.from(png, "base64");
+      fs.writeFileSync(path.join(outDir, file), pngBuf);
+      leg.png = pngStats(pngBuf, zlib);
       leg.shot = file;
       // The whole simulator screen too (best effort): shows what the WebDriver capture can crop.
       const sf = `sim-${arm}-r${round}.png`;

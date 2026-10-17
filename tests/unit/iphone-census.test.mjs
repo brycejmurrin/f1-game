@@ -144,12 +144,12 @@ test("SAMPLE_SRC reads perf, memState and tolerates Safari's missing performance
 });
 
 test("every in-page source is syntactically a function body", () => {
-  for (const k of ["FACTS_SRC", "GPU_ADAPTER_SRC", "RAF_SRC", "SAMPLE_SRC", "RESET_FRAMES_SRC", "DRIVER_SRC", "FIXED_VIEW_SRC", "READY_SRC", "BOUND_SRC"]) {
+  for (const k of ["FACTS_SRC", "GPU_ADAPTER_SRC", "RAF_SRC", "SAMPLE_SRC", "RESET_FRAMES_SRC", "DIAG_SRC", "DRIVER_SRC", "FIXED_VIEW_SRC", "READY_SRC", "BOUND_SRC"]) {
     assert.doesNotThrow(() => new Function(L[k]), k);
   }
 });
 
-const leg = (arm, round, p50, extra = {}) => ({ arm, round, expectBound: L.ARMS[arm].expectBound, bound: L.ARMS[arm].expectBound, shot: `shot-${arm}-r${round}.png`, window: { p50, p95: p50 + 5, p99: p50 + 12, frames: 500, scale: 1, tier: 0 }, ...extra });
+const leg = (arm, round, p50, extra = {}) => ({ arm, round, expectBound: L.ARMS[arm].expectBound, bound: L.ARMS[arm].expectBound, shot: `shot-${arm}-r${round}.png`, png: { w: 393, h: 852, meanLuma: 90, nearBlack: 0.05 }, window: { p50, p95: p50 + 5, p99: p50 + 12, frames: 500, scale: 1, tier: 0 }, ...extra });
 const good = () => ({
   device: "iPhone 17 Pro", os: "26", url: "https://x/", sessionId: "abc", wallMin: 12.3,
   facts: { ua: "UA", dpr: 3, hasNavigatorGpu: true, webgl2: true, ext: { EXT_color_buffer_float: true, EXT_disjoint_timer_query_webgl2: false }, backendState: { api: "webgl2" } },
@@ -187,10 +187,41 @@ test("verdict: a missing facts block, failed arm, or no p50 fails; a slow phone 
   assert.match(L.verdict(r4).bad.join("\n"), /soak recorded no windows/);
 });
 
-test("verdict: a pin that did not hold is reported on the row, not hidden", () => {
-  const r = good(); r.ab[1].bound = "tlx:webgl2";
-  const row = L.verdict(r).rows.find((x) => x[0] === "arm tlxgpu r1 bound");
-  assert.match(row[1], /WANTED tlx:webgpu, GOT tlx:webgl2/);
+test("verdict: a pin that did not hold FAILS and is named on its row", () => {
+  const r = good(); r.ab[1].bound = "glx:webgl2";
+  const v = L.verdict(r);
+  assert.match(v.rows.find((x) => x[0] === "arm tlxgpu r1 bound")[1], /WANTED tlx:webgpu, GOT glx:webgl2/);
+  assert.match(v.bad.join("\n"), /arm tlxgpu round 1: wanted tlx:webgpu, bound glx:webgl2/);
+});
+
+test("verdict: a hollow run (p50 0, a car that never moved, a blank frame) is not a PASS", () => {
+  const r = good();
+  r.soak.windows.forEach((w) => { w.p50 = 0; w.state = "menu"; });
+  r.soak.driver.distM = 0;
+  r.ab[0].window.p50 = 0;
+  r.ab[2].png = { w: 393, h: 852, meanLuma: 0.4, nearBlack: 1 };
+  const bad = L.verdict(r).bad.join("\n");
+  assert.match(bad, /soak is hollow.*"menu"/);
+  assert.match(bad, /covered 0 m/);
+  assert.match(bad, /arm tlx round 1: hollow window/);
+  assert.match(bad, /arm glx round 1: screenshot is blank/);
+});
+
+import zlib from "node:zlib";
+function makePng(w, h, rgb) {
+  const crc = (b) => { let c, t = []; for (let n = 0; n < 256; n++) { c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } let x = 0xffffffff; for (const v of b) x = t[(x ^ v) & 255] ^ (x >>> 8); return (x ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const row = Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: w }, () => rgb).flat())]);
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(Buffer.concat(Array(h).fill(row)))), chunk("IEND", Buffer.alloc(0))]);
+}
+
+test("pngStats: tells a drawn frame from a black one, returns null for non-PNG", () => {
+  const black = L.pngStats(makePng(8, 6, [0, 0, 0]), zlib);
+  assert.deepEqual([black.w, black.h, black.meanLuma, black.nearBlack], [8, 6, 0, 1]);
+  const sky = L.pngStats(makePng(8, 6, [100, 150, 220]), zlib);
+  assert.ok(sky.meanLuma > 100 && sky.nearBlack === 0, JSON.stringify(sky));
+  assert.equal(L.pngStats(Buffer.from("not a png at all"), zlib), null);
 });
 
 test("windowSummary takes the last sample's own ring", () => {

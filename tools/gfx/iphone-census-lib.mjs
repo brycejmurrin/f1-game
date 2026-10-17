@@ -164,10 +164,21 @@ export const RAF_SRC = `
 /** One sample (B-lite / D): the governor view, memory counts, frame window. */
 export const SAMPLE_SRC = `
   const s = { t: Date.now() };
+  try { const i = window.__apex.info(); s.state = i.state; s.track = i.track; } catch (e) { s.infoError = String(e && e.message); }
+  try { s.loopFrames = typeof LoopHealth !== "undefined" ? LoopHealth.state().frames : null; } catch (_) { s.loopFrames = null; }
   try { const p = window.__apex.perf(); s.scale = p.scale; s.fps = p.fps; s.tier = p.tier; s.autoTier = p.autoTier; s.autoShed = p.autoShed; s.frameTimes = p.frameTimes; s.floorMs = p.floorMs; } catch (e) { s.perfError = String(e && e.message); }
   try { if (typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.memState) { const m = GLX.__tlx.memState(); s.mem = m; } } catch (e) { s.memError = String(e && e.message); }
   try { s.jsHeapMB = performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null; } catch (_) { /* Safari has none */ }
   return s;`;
+
+/** Per-arm evidence for "why did THIS backend bind": the pins as stored, the
+ *  fallback latches, and the game's own diag() (renderer, GPU errors, pack). */
+export const DIAG_SRC = `
+  const o = { storage: {}, session: {} };
+  for (const k of ["apex26.gfxBackend", "apex26.tlxForceGL", "apex26.gfxTlxFail", "apex26.gfxWgxFail", "apex26.gfxBackendProbe"]) { try { o.storage[k] = localStorage.getItem(k); } catch (_) {} }
+  for (const k of ["apex26.gfxBound", "apex26.gfxClaimFail", "apex26.tlxAutoGL"]) { try { o.session[k] = sessionStorage.getItem(k); } catch (_) {} }
+  try { const d = window.__apex.diag({ download: false }); o.diag = JSON.parse(JSON.stringify(d, (k, v) => (typeof v === "string" && v.length > 200 ? v.slice(0, 200) : v))); } catch (e) { o.diagError = String(e && e.message); }
+  return JSON.stringify(o).length > 12000 ? { storage: o.storage, session: o.session, diagError: o.diagError || "diag too large", diagKeys: o.diag ? Object.keys(o.diag) : null } : o;`;
 
 /** Reset the governor's frame ring so the next sample is the window's own. */
 export const RESET_FRAMES_SRC = `try { if (typeof PerfGov !== "undefined" && PerfGov.resetFrameStats) PerfGov.resetFrameStats(); return true; } catch (e) { return String(e && e.message); }`;
@@ -219,6 +230,46 @@ export const FIXED_VIEW_SRC = `
 /** Boot gate: the game answers and a race is loaded. */
 export const READY_SRC = `return !!(window.__apex && window.__apex.info && window.__apex.info().state);`;
 
+// ───────────────────────── screenshot sanity ─────────────────────────
+
+/** Mean luma and the share of near-black pixels of an 8-bit non-interlaced PNG
+ *  (what WebDriver's takeScreenshot returns), so the Verdict can tell a drawn
+ *  frame from a blank one without a person opening the artifact. null if the
+ *  PNG is not that shape. */
+export function pngStats(buf, zlib) {
+  try {
+    if (buf.readUInt32BE(0) !== 0x89504e47) return null;
+    let off = 8, w = 0, h = 0, depth = 0, ct = 0, il = 0; const idat = [];
+    while (off + 8 <= buf.length) {
+      const len = buf.readUInt32BE(off), type = buf.toString("latin1", off + 4, off + 8), d = buf.subarray(off + 8, off + 8 + len);
+      if (type === "IHDR") { w = d.readUInt32BE(0); h = d.readUInt32BE(4); depth = d[8]; ct = d[9]; il = d[12]; }
+      else if (type === "IDAT") idat.push(d);
+      else if (type === "IEND") break;
+      off += 12 + len;
+    }
+    const bpp = { 0: 1, 2: 3, 4: 2, 6: 4 }[ct];
+    if (!bpp || depth !== 8 || il !== 0 || !w || !h) return null;
+    const raw = zlib.inflateSync(Buffer.concat(idat)), stride = w * bpp, cur = Buffer.alloc(stride), prev = Buffer.alloc(stride);
+    let sum = 0, dark = 0, n = 0;
+    for (let y = 0; y < h; y++) {
+      const f = raw[y * (stride + 1)], row = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
+      for (let i = 0; i < stride; i++) {
+        const a = i >= bpp ? cur[i - bpp] : 0, b = prev[i], c = i >= bpp ? prev[i - bpp] : 0;
+        let v = row[i];
+        if (f === 1) v += a; else if (f === 2) v += b; else if (f === 3) v += (a + b) >> 1;
+        else if (f === 4) { const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c); v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+        cur[i] = v & 255;
+      }
+      for (let x = 0; x < w; x += 2) {   // every other pixel is plenty for a mean
+        const j = x * bpp, l = bpp >= 3 ? 0.2126 * cur[j] + 0.7152 * cur[j + 1] + 0.0722 * cur[j + 2] : cur[j];
+        sum += l; n++; if (l < 8) dark++;
+      }
+      cur.copy(prev);
+    }
+    return { w, h, meanLuma: +(sum / n).toFixed(1), nearBlack: +(dark / n).toFixed(3) };
+  } catch (_) { return null; }
+}
+
 // ───────────────────────── summary / verdict ─────────────────────────
 
 const f1 = (v) => (v == null || !Number.isFinite(v) ? "-" : (+v).toFixed(1));
@@ -237,6 +288,8 @@ export function windowSummary(samples) {
     scale: last ? last.scale : null,
     tier: last ? last.tier : null,
     p50Series: ok.map((s) => s.frameTimes.p50),
+    loopFrames: (() => { const f = samples.map((x) => x && x.loopFrames).filter((x) => Number.isFinite(x)); return f.length > 1 ? f[f.length - 1] - f[0] : null; })(),
+    state: last ? last.state : null,
   };
 }
 
@@ -262,6 +315,8 @@ export function verdict(res) {
   if (soak) {
     const ws = soak.windows || [];
     if (!ws.length) bad.push("soak recorded no windows");
+    else if (ws.every((w) => !(w.p50 > 0))) bad.push("soak is hollow: every window's frame p50 is 0 (the frame ring never filled: race not ticking, state " + JSON.stringify(ws[ws.length - 1].state) + ")");
+    if (soak.driver && !(soak.driver.distM > 0)) bad.push("soak driver covered 0 m: the scripted car never moved");
     for (const w of ws) rows.push(["soak +" + w.minute + "m (host GPU)", `p50 ${f1(w.p50)} p95 ${f1(w.p95)} p99 ${f1(w.p99)} ms, scale ${w.scale}, tier ${w.tier}`]);
     if (soak.driver) rows.push(["soak driver", `${soak.driver.distM} m, ${soak.driver.offRoadFrames} off-road frames` + (soak.driver.error ? ", error " + soak.driver.error : "")]);
   }
@@ -271,7 +326,16 @@ export function verdict(res) {
     (byArm[leg.arm] = byArm[leg.arm] || []).push(leg);
     if (leg.error) { bad.push(`arm ${leg.arm} round ${leg.round}: ${leg.error}`); continue; }
     if (leg.window == null || leg.window.p50 == null) bad.push(`arm ${leg.arm} round ${leg.round}: no frame p50`);
-    if (leg.bound && leg.expectBound && leg.bound !== leg.expectBound) rows.push([`arm ${leg.arm} r${leg.round} bound`, `WANTED ${leg.expectBound}, GOT ${leg.bound} (the pin did not hold; the number below is the bound path's)`]);
+    else if (!(leg.window.p50 > 0)) bad.push(`arm ${leg.arm} round ${leg.round}: hollow window, frame p50 is ${leg.window.p50} (state ${JSON.stringify(leg.window.state)})`);
+    if (leg.expectBound && leg.bound !== leg.expectBound) {
+      rows.push([`arm ${leg.arm} r${leg.round} bound`, `WANTED ${leg.expectBound}, GOT ${leg.bound} (the pin did not hold)`]);
+      bad.push(`arm ${leg.arm} round ${leg.round}: wanted ${leg.expectBound}, bound ${leg.bound}: this arm did not measure what it names`);
+    }
+    if (leg.png) {
+      rows.push([`shot ${leg.arm} r${leg.round}`, `${leg.png.w}x${leg.png.h} mean luma ${leg.png.meanLuma}, near-black ${(leg.png.nearBlack * 100).toFixed(0)}%`]);
+      if (leg.png.meanLuma < 3 || leg.png.nearBlack > 0.98) bad.push(`arm ${leg.arm} round ${leg.round}: screenshot is blank (the wrong-picture class)`);
+    }
+    if (leg.diag && (leg.diag.storage || leg.diag.session)) rows.push([`arm ${leg.arm} r${leg.round} latches`, JSON.stringify({ ls: leg.diag.storage, ss: leg.diag.session }).slice(0, 300)]);
   }
   for (const [arm, legs] of Object.entries(byArm)) {
     const p50s = legs.map((l) => l.window && l.window.p50);
