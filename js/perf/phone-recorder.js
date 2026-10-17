@@ -412,7 +412,7 @@ const PhoneRecorder = (function () {
     const box = document.createElement("div");
     box.id = "pm-phonerec"; box.setAttribute("role", "group"); box.setAttribute("aria-label", "Phone test recorder");
     const h = document.createElement("p"); h.className = "adv-help"; h.style.fontWeight = "700"; h.textContent = "PHONE TEST";
-    const how = document.createElement("ol"); how.className = "adv-helpow";
+    const how = document.createElement("ol"); how.className = "adv-help";
     HOWTO.forEach((l) => { const li = document.createElement("li"); li.textContent = l.replace(/^\d\. /, ""); how.appendChild(li); });
     const ab = document.createElement("ol"); ab.className = "adv-help";
     HOWTO_AB.forEach((l) => { const li = document.createElement("li"); li.textContent = l; ab.appendChild(li); });
