@@ -145,7 +145,8 @@ test("loading circuits one after another keeps one world in memory and does not 
       (heap.diag = heap.diag || []).push(`v${visit} ${id}: first ${reads[0]} reads ${reads.join("/")} geom ${c.three && c.three.geometries} tex ${c.three && c.three.textures} ro ${c.three && c.three.renderObjects}`);
       if (id === "monza" && (visit === 1 || visit === 3)) { const g = await snapAgg(cdp, visit === 1 ? null : heap.ids1); if (visit === 1) { heap.snap1 = g.agg; heap.ids1 = g.ids; } else { heap.snapDiff = snapDiff(heap.snap1, g.agg) + " PATHS " + g.paths.join(" ;; "); } }
       const caches = await page.evaluate(() => { const r = window.renderer, o = {}; if (!r) return o; for (const k of Object.keys(r)) { const m = r[k]; if (!m || typeof m !== "object" || k === "info") continue; for (const k2 of Object.keys(m)) { const v = m[k2]; if (v && (v instanceof Map || v instanceof Set) && v.size > 20) o[k + "." + k2] = v.size; else if (v && (v instanceof WeakMap)) o[k + "." + k2] = "wm"; } } return o; });
-      heap.diag[heap.diag.length - 1] += " CACHES " + JSON.stringify(caches);
+      const mirror = await page.evaluate(() => { try { return GLX.__tlx.memState().mirror; } catch (_) { return null; } });
+      heap.diag[heap.diag.length - 1] += " MIRROR " + JSON.stringify(mirror) + " CACHES " + JSON.stringify(caches).slice(0, 120);
       c.path = await page.evaluate(() => { try { const e = window.__apex.diag({ download: false }).env; return JSON.stringify({ backend: e.backend, state: e.backendState }).slice(0, 400); } catch (_) { return null; } });
       console.log(`[mem] visit ${visit} ${id} heap reads ${reads.join(" ")} geom ${c.three && c.three.geometries} tex ${c.three && c.three.textures} ro ${c.three && c.three.renderObjects} path ${c.path}`);
       expect(c.aliveTracks, `visit ${visit} to ${id}: built tracks still reachable after GC`).toEqual([id]);
