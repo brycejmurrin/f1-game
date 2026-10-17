@@ -171,7 +171,7 @@ test("orbit / agent-view read the mirrored world pose for the field", () => {
   assert.match(apex, /const cx = \(c\.px != null\) \? c\.px/);
   assert.match(apex, /const cz = \(c\.pz != null\) \? c\.pz/);
   assert.doesNotMatch(apex, /c\.human && c\.px != null/);
-  assert.match(apex, /error: "no_wire"/);
+  assert.match(read("js/agent/apex-net.js"), /error: "no_wire"/);
   assert.match(apex, /error: "invalid_repro"/);
   assert.match(apex, /ok: true, cleared: true/);
   assert.match(apex, /return \{ ok: true, bytes: blob\.size \}/);

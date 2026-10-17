@@ -21,8 +21,6 @@
   grid-template-columns: minmax(0, 1fr);
   gap: var(--gap);
   align-items: start;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
   scrollbar-width: none;
 }
 #pm-settings-body::-webkit-scrollbar { display: none; }
@@ -52,6 +50,18 @@
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
 .pm-group button { margin: 0; width: 100%; }
+/* This is one action page, not independent preferences to auto-place in
+   the shared wide-screen two-column grid. Keep navigation above its content. */
+#pmsettings-inner #pm-panel-files { display: flex; flex-direction: column; align-items: stretch; gap: var(--gap); }
+/* Backup actions stay discoverable without a long mixed import/export page. */
+#pmsettings-inner #pm-files-nav { display: flex; flex-wrap: wrap; gap: var(--gap); width: 100%; max-width: none; }
+#pmsettings-inner #pm-files-nav button { flex: 1 1 7rem; width: auto; height: auto; min-height: var(--tap); white-space: normal; }
+#pm-files-nav button[aria-pressed="true"] { border-color: var(--red); background: var(--plate-on); }
+#pm-files-save, #pm-files-restore, #pm-files-share { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+#pm-files-save[hidden], #pm-files-restore[hidden], #pm-files-share[hidden] { display: none; }
+#pm-share-code-in { width: 100%; min-width: 0; box-sizing: border-box; }
+#pm-throttle-compare, #pm-files-included { min-width: 0; }
+#pm-throttle-compare > summary, #pm-files-included > summary { min-height: var(--tap); display: list-item; cursor: pointer; padding-block: 0.5em; box-sizing: border-box; }
 /* Every interactive settings row is exactly --tap tall. The label overlays
    the top of the track (pointer-events: none) so the grab target stays the
    full row. */

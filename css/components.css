@@ -149,6 +149,8 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 /* ---------- sheet: head / body / foot ---------- */
 .sheet {
   display: grid;
+  min-width: 0; min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
   /* body is the only flexible row, and minmax(0,…) lets it actually shrink —
      without the 0 floor a long list forces the sheet past the screen instead
      of scrolling inside it */
@@ -257,18 +259,14 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   /* White title + red leading rail (box-shadow on .sheet-head): brand keeps
      Warm Red scarce — rail/tick/P1 only, not headline ink. */
   color: var(--text); margin: 0;
+  overflow-wrap: anywhere;
   font-size: clamp(15px, calc(3.6 * var(--vhz)), 24px);
   font-weight: 700; font-style: italic;
   letter-spacing: var(--ls-3);
   text-transform: uppercase;
 }
 .sheet-body {
-  /* Grid items default to min-width:auto, so a max-content child can widen the
-     BODY track even while the sheet itself stays viewport-sized. At 200% UI
-     size the How-to-Play definition grid did exactly that: the sheet painted
-     369px wide while its body/head/foot painted about 749px and were clipped.
-     The sheet owns horizontal containment; its body must be allowed to shrink
-     to that track and let its own content wrap/scroll. */
+  /* Shrink within the sheet track; the pane owns scrolling and wrapping. */
   min-width: 0;
   min-height: 0;
   padding: calc(var(--pad) * 0.25) var(--pad) calc(var(--pad) * 0.5);
@@ -295,6 +293,10 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   /* Darker than the body and shaded from the top, so the action bar reads as
      the plate the sheet stands on rather than one more band of content. */
   background: linear-gradient(180deg in oklab, color-mix(in oklab, var(--red) 8%, rgba(0, 0, 0, 0.30)), rgba(8, 8, 13, 0.80) 60%);
+}
+/* Shared exits must wrap translated labels inside the available footer. */
+.sheet-foot > :where(button, a) {
+  max-width: 100%; white-space: normal; overflow-wrap: anywhere;
 }
 .sheet-foot::before {
   content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
@@ -347,6 +349,8 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 }
 /* ---------- pane: a scroll region ---------- */
 .pane {
+  min-width: 0; min-height: 0;
+  scroll-padding-block: var(--gap);
   overflow-y: auto;
   /* overflow-x is pinned to hidden ON PURPOSE. Setting only overflow-y computes
      the other axis from `visible` to `auto`, which quietly makes the region

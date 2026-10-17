@@ -257,6 +257,9 @@ const DataHub = (function () {
       return;
     }
     if (want && TABS.some(function (t) { return t.id === want; })) active = want;
+    // Already open: switch tab only. A second open would overwrite returnFocus with an element INSIDE the
+    // dialog, and close() would then focus something hidden instead of where the player came from.
+    if (openFlag) { showTab(active); return; }
     returnFocus = document.activeElement;
     Log.info("data", "hub open");
     root.hidden = false;

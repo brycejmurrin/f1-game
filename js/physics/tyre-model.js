@@ -826,9 +826,17 @@ const TyreModel = (function () {
     // dictionary-mode object (a hash probe + getter call per read), so it reads each value once and hands
     // them down — ambient was read twice per car through trackTemp() (PERF-HUNT-2 S4/S7). Same arithmetic.
     function ambient() { return ambientAt(G.weatherArc, G.raceWeather); }
+    // Progress of the temperature blend. A local shower (arc.cell) outlives its ramp and then dries back to the
+    // start weather with weather-arc.js's TAU_DRY lag; holding f = 1 until the arc let go stepped the air 13 -> 30 C
+    // and the asphalt 14 -> 48 C in one tick (R1, LIVE-DEBUGGER-RACE-2026-10-16).
+    const TAU_DRY = 36;
+    function arcFrac(arc) {
+      if (arc.cell && arc.t >= arc.cell.life) return Math.exp(-(arc.t - arc.cell.life) / TAU_DRY);
+      return clamp(arc.t / arc.dur, 0, 1);
+    }
     function ambientAt(arc, weather) {
       if (arc && arc.dur > 0 && arc.from && arc.to) {
-        const f = clamp(arc.t / arc.dur, 0, 1);
+        const f = arcFrac(arc);
         return tAmb(arc.from) + (tAmb(arc.to) - tAmb(arc.from)) * f;
       }
       return tAmb(weather);
@@ -837,7 +845,7 @@ const TyreModel = (function () {
     function trackTemp() { const arc = G.weatherArc, weather = G.raceWeather; return trackTempAt(arc, weather, ambientAt(arc, weather)); }
     function trackTempAt(arc, weather, a) {
       if (arc && arc.dur > 0 && arc.from && arc.to) {
-        const f = clamp(arc.t / arc.dur, 0, 1);
+        const f = arcFrac(arc);
         const d = tTrackDelta(arc.from) + (tTrackDelta(arc.to) - tTrackDelta(arc.from)) * f;
         return a + d;
       }

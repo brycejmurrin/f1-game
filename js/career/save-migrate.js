@@ -143,7 +143,7 @@ const SaveMigrate = (function () {
     const out = {};
     if (!o || typeof o !== "object") return out;
     for (const k of Object.keys(o)) {
-      if (!Array.isArray(o[k])) continue;
+      if (k === "__proto__" || !Array.isArray(o[k])) continue;
       out[k] = o[k].map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
     }
     return out;
@@ -152,7 +152,7 @@ const SaveMigrate = (function () {
     const out = {};
     if (!o || typeof o !== "object") return out;
     for (const k of Object.keys(o)) {
-      if (!Array.isArray(o[k])) continue;
+      if (k === "__proto__" || !Array.isArray(o[k])) continue;
       out[k] = o[k].map((v) => (Number.isInteger(v) && v > 0 ? v : 0));
     }
     return out;

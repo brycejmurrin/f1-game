@@ -225,6 +225,16 @@ test("hostile payloads are rejected with a reason and change nothing", () => {
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
       data: Object.assign(save({}), { driver: { name: "A", code: "YOU", num: {} } }) }] }, "driver-num"],
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0, data: [1, 2, 3] }] }, "slot-not-object"],
+    // Interpolated into the import card: a hostile toString threw inside the picker callback.
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { team: { toString: 1 } }) }] }, "team-not-string"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { year: "2026" }) }] }, "year-not-number"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { year: { toString: "oops" } }) }] }, "year-not-number"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { year: Infinity }) }] }, "year-not-number"],
+    [{ format: "apex26-career-backup-v1", slots: [], myTeam: { customTeam: { name: { toString: 1 } } } }, "custom-team-name"],
     // A driver career filed under a MY TEAM row (and the reverse) would load as
     // the wrong flavour in that slot set.
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "myteam", i: 2, data: save({ flavour: "driver" }) }] }, "flavour-mismatch"],
@@ -429,6 +439,16 @@ test("older backup keeps the Grand Prix stage after a zero-point sprint", () => 
     assert.equal(h.store.keyRevision("season"), revision);
     assert.equal(h.SeasonCal.stage(h.SeasonCal.load()), "race");
   }
+});
+
+test("seasonAhead compares the cleaned round: round 250 is 0, so a local round-5 season stays", () => {
+  const h = loadHarness();
+  const local = { round: 5, pts: {}, teamPts: {}, driverCodes: {} };
+  h.store.write("season", local);
+  const envelope = { format: "apex26-career-backup-v1", slots: [], season: { round: 250, pts: {}, teamPts: {}, driverCodes: {} } };
+  assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"));
+  assert.equal(h.CareerBackup.apply(envelope).applied.includes("season"), false);
+  assert.equal(h.store.get("season", null).round, 5);
 });
 
 test("sprint-stage preservation keeps paid-sprint and zero-point Grand Prix protection", () => {
@@ -1831,11 +1851,15 @@ test("backup imports repair malformed JSON numeric leaves without mutating the e
   const envelope = { format: h.CareerBackup.FORMAT, slots: [
     { flavour: "driver", i: 0, data: save({ money: 777 }) },
     { flavour: "driver", i: 1, data: Object.assign(save({ money: 888 }), {
-      rep: poisoned, year: poisoned, deal: { salary: poisoned },
+      // Preview-visible year must stay a valid scalar; the importer rejects
+      // malformed years before migration so the review card can render safely.
+      rep: poisoned, deal: { salary: poisoned },
     }) },
   ] };
   const original = JSON.stringify(envelope);
-  assert.equal(h.CareerBackup.apply(envelope).durable, true);
+  const result = h.CareerBackup.apply(envelope);
+  assert.equal(result.ok, true, result.reason);
+  assert.equal(result.durable, true);
   assert.equal(h.store.get("career.driver.0").money, 777);
   assert.equal(h.store.get("career.driver.1").money, 888);
   assert.equal(h.store.get("career.driver.1").deal.salary, 0);
@@ -1883,4 +1907,12 @@ test("apply migrates each planned row exactly once before writing any destinatio
   assert.equal(h.store.get("career.driver.1").money, 888);
   h.CareerBackup.writeSlot("driver", 2, save({ money: 999 }));
   assert.deepEqual(calls, [777, 888, 999], "the public single-slot writer still migrates its input");
+});
+
+test("a {toString:1} version marker does not throw out of validate/apply", () => {
+  const h = loadHarness();
+  const payload = { format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 1,
+    data: Object.assign(save({}), { v: JSON.parse('{"toString":1}'), tally: { pts: JSON.parse('{"toString":1}') } }) }] };
+  assert.doesNotThrow(() => h.CareerBackup.validate(payload));
+  assert.doesNotThrow(() => h.CareerBackup.apply(payload, { otherFlavourConfirmed: true }));
 });

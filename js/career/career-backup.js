@@ -83,6 +83,16 @@ const CareerBackup = (function () {
     if (data.fitted != null && (typeof data.fitted !== "object" || Array.isArray(data.fitted))) {
       return { ok: false, reason: "fitted-not-object" };
     }
+    // team and year are interpolated into the import card; an object with a
+    // hostile toString throws "Cannot convert object to primitive value" there.
+    if (data.team != null && typeof data.team !== "string") return { ok: false, reason: "team-not-string" };
+    if (data.year != null && (typeof data.year !== "number" || !Number.isFinite(data.year))) {
+      return { ok: false, reason: "year-not-number" };
+    }
+    const ct = data.myTeamIdentity && data.myTeamIdentity.customTeam;
+    if (ct != null && (!isObj(ct) || (ct.name != null && typeof ct.name !== "string"))) {
+      return { ok: false, reason: "custom-team-name" };
+    }
     return { ok: true };
   }
 
@@ -264,6 +274,10 @@ const CareerBackup = (function () {
     }
     // Malformed VALUES inside myTeam are dropped per key at apply, not fatal.
     if (raw.myTeam != null && !isObj(raw.myTeam)) return { ok: false, reason: "myteam-not-object" };
+    if (raw.myTeam && raw.myTeam.customTeam != null && (!isObj(raw.myTeam.customTeam)
+        || (raw.myTeam.customTeam.name != null && typeof raw.myTeam.customTeam.name !== "string"))) {
+      return { ok: false, reason: "custom-team-name" };
+    }
     // Ghosts must never ride along — refuse a file that smuggles them in.
     if (raw.ghost != null || raw.ghosts != null || raw["ghost.v1"] != null) {
       return { ok: false, reason: "ghosts-forbidden" };
@@ -655,6 +669,8 @@ const CareerBackup = (function () {
   }
   function seasonAhead(local, incoming) {
     if (!isObj(local)) return false;
+    // apply() writes the CLEANED season (round > 200 -> 0); compare that, not the raw file.
+    if (isObj(incoming)) { const c = cleanExtra("season", incoming); if (c && c.value) incoming = Object.assign({}, incoming, { round: c.value.round }); }
     const a = local.round | 0, b = incoming.round | 0;
     return a !== b ? a > b : seasonPts(local) > seasonPts(incoming)
       || qualifyingAhead(local, incoming) || sprintAhead(local, incoming);

@@ -3435,7 +3435,7 @@ const G = {
     autoThrottleOpt = store.get("autoThrottle", autoThrottleOpt);
     throttleLatchOpt = store.get("throttleLatch", throttleLatchOpt);
     Input.setThrottleLatch(throttleLatchOpt);
-    SettingRow.paint($("pm-throttlemode"), autoThrottleOpt ? "auto" : (throttleLatchOpt ? "latch" : "hold"));
+    paintThrottleMode();
     refreshGearsBtn();
     if (state === "race" || state === "count") showTouchControls(true);
     announce("ROOKIE — the car brakes, steers and accelerates with you. Turn it down in SETTINGS as you get quicker.", 4, "coach");
@@ -4727,14 +4727,14 @@ function update(dt) {
   RaceControl.beginLineStep(cars); pits.stepBegin();
   parked.length = 0;
   for (const c of cars) if (c.retired && c.parkedOnRoad) parked.push(c);
-  for (const c of cars) updateCar(c, dt, ranked);
+  PerfSpans.begin("ai"); for (const c of cars) updateCar(c, dt, ranked); PerfSpans.end("ai");   // per-car step: AI + player
   pits.stepEnd();
   if (jumpStartPenalty.reactWindowOpen()) {
     for (const c of cars) jumpStartPenalty.tickReaction(c);
   }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
 
-  collide.resolveCollisions(parked.length ? ranked.concat(parked) : ranked, dt);
+  PerfSpans.begin("collide"); collide.resolveCollisions(parked.length ? ranked.concat(parked) : ranked, dt); PerfSpans.end("collide");
 
   // Rapier debris side-world: reads car poses (kinematic mirrors), owns only
   // its own shards, writes NOTHING back to gameplay. Inert unless enabled.
@@ -8602,6 +8602,7 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 PerfGov.init(gfx);
 const PHYS_DT = PhysicsConsts.FIXED_DT;   // fixed physics step — js/physics/consts.js
 function tick(now) {
+  PerfSpans.begin("frame");
   try {
     tickBody(now); LoopHealth.clean();
     XrBoot.afterTick(tick);   // no-op while immersive-vr owns session.rAF; deduped on EXIT
@@ -8624,6 +8625,7 @@ function tick(now) {
     if (_backendBound && !_backendProved) armBackendProbe();
     throw e;
   }
+  finally { PerfSpans.end("frame"); }
 }
 function tickBody(now) {
   let dt = Math.max(0, Math.min((now - lastFrame) / 1000, 1 / 4));   // clamp big gaps (tab resume) and a non-monotonic rAF stamp
@@ -8631,7 +8633,7 @@ function tickBody(now) {
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race.
   if (!paused && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
-  Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick();
+  PerfSpans.begin("input"); Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick(); PerfSpans.end("input");
   onboard.tick(dt);   // coach marks; the TV director ticks after the physics step (below)
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
@@ -8712,6 +8714,7 @@ function tickBody(now) {
   if (!frozen && track && (state === "race" || state === "count")) {   // track: null mid stepped switch (K1)
     physAcc += simTime;
     let steps = 0;
+    PerfSpans.begin("physics");
     while (physAcc >= PHYS_DT && steps < 5) {
       // snapshot each car's pre-step arc/lateral position so render can interpolate
       // between the last two physics steps (snapshotting every step leaves rPrev*
@@ -8725,6 +8728,7 @@ function tickBody(now) {
       _audioParamStep = physAcc - PHYS_DT < PHYS_DT || steps === 4;   // this frame's last step
       update(PHYS_DT); physAcc -= PHYS_DT; steps++;
     }
+    PerfSpans.end("physics");
     _audioParamStep = true;   // any other update() caller (the __apex step hooks) sets them
     const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;   // only what the line below drops; the sub-step remainder carries
     PerfGov.recordSimulation(steps, dropped);
@@ -8733,12 +8737,12 @@ function tickBody(now) {
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
-  director.tick(dt);   // TV director (dbgCam only): after the step, on the pose render draws (camPoseOf)
+  PerfSpans.begin("camera"); director.tick(dt); PerfSpans.end("camera");   // TV director (dbgCam only): after the step, on the pose render draws (camPoseOf)
   if (photoMode && paused && netPlay.active()) updatePhotoCam(Math.min(dt, 1 / 20));
   if (state === "results") resultsCam.tick(Math.min(dt, 1 / 20));
   if (state !== "race" && state !== "count") GameAudio.feedReplayScrub(soundOn && player, state === "results" && replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop);   // results HIGHLIGHTS: engines + field per clip; orbit, NEXT, RACE AGAIN or MENU (each ends the scrub) silences once
-  render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
-  if (state === "race" || state === "count") updateHud(false, _dtMs);
+  PerfSpans.begin("render"); render(Math.min(dt, 1 / 20)); PerfSpans.end("render");   // camera/visual damping at (clamped) frame dt
+  if (state === "race" || state === "count") { PerfSpans.begin("hud"); updateHud(false, _dtMs); PerfSpans.end("hud"); }
 }
 
 // ---------- car setup panel ----------
@@ -8750,6 +8754,17 @@ function tickBody(now) {
 // js/ui/select-screen.js (Menus.create(G) — wired after the G façade).
 
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
+
+function paintThrottleMode() {
+  const mode = autoThrottleOpt ? "auto" : (throttleLatchOpt ? "latch" : "hold");
+  SettingRow.paint($("pm-throttlemode"), mode);
+  const note = $("pm-throttle-note");
+  if (note) note.textContent = {
+    hold: "HOLD: keep your thumb on GAS.",
+    latch: "LATCH: tap GAS to accelerate; tap again to lift.",
+    auto: "AUTO: steer and brake; throttle is automatic.",
+  }[mode];
+}
 
 // STEERING INPUT row (js/ui/setting-row.js) and the one-line note under it.
 // The note is ALWAYS present — its text changes, it is never hidden — so a
@@ -9440,9 +9455,11 @@ SettingRow.wire("pm-throttlemode", { values: SettingRow.labels(["hold", "latch",
     store.set("autoThrottle", autoThrottleOpt);
     store.set("throttleLatch", throttleLatchOpt);
     Input.setThrottleLatch(throttleLatchOpt);
+    paintThrottleMode();
     refreshGearsBtn();
     if (state === "race" || state === "count") showTouchControls(true);
   } });
+paintThrottleMode();
 SettingRow.wire("pm-mirror", { values: SettingRow.labels(["off", "on"]),
   read: () => (mirrorControls ? "on" : "off"),
   write: (v) => { mirrorControls = v === "on"; store.set("mirrorControls", mirrorControls); applyMirrorControls(); } });
