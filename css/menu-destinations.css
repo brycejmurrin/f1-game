@@ -1,0 +1,51 @@
+@layer responsive {
+/* Destination groups share the title's existing scroller and layout editor. */
+#menu-buttons .menu-destination-label {
+  margin: 0; padding-top: .3em; color: var(--dim); font-size: .75rem;
+  font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+}
+#menu-buttons > .menu-destination {
+  width: 100%; max-width: none; gap: calc(var(--gap) * .7);
+  --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap));
+}
+#menu-buttons > .menu-destination > .bigbtn { width: 100%; min-width: 0; }
+/* Newly named groups keep the label/subtitle stack of the original mode rows. */
+#menu-buttons > .menu-destination > .bigbtn > span {
+  display: inline-flex; flex-direction: column; align-items: center;
+  min-width: 0; max-width: 100%; gap: calc(var(--gap) / 6);
+}
+#menu-buttons > .menu-destination .mb-sub {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+}
+:where(body[data-density="compact"]) #menu-buttons > .menu-destination .mb-sub { display: none; }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons > .menu-destination > .bigbtn {
+  display: flex; align-items: center; justify-content: center; gap: .4em;
+  font-size: calc(var(--fs-4) * var(--ui-compact-text, 1));
+  white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons > .menu-destination .btn-ico { margin: 0; flex: none; }
+:root[data-title-btns="stack"] #menu-buttons > .menu-destination {
+  --balance-basis: 100%; --balance-min: 100%;
+}
+:root[data-title-btns="row"] #menu-buttons > .menu-destination {
+  --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap;
+}
+/* Create inherits what its doors had in Watch & Explore: label over subtitle, and wrapping
+   instead of a nowrap subtitle running past a half-width door (200% zoom, 1280 wide). */
+#menu-create .bigbtn { white-space: normal; text-wrap: balance; overflow-wrap: anywhere; }
+#menu-create .mb-sub { white-space: normal; overflow-wrap: anywhere; }
+/* Compact Home: groups share the right track; Utilities stay under the brand. */
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
+  grid-template-rows: repeat(5, max-content);
+}
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > .menu-destination-label { display: none; }
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-garage, #menu-create) {
+  width: 100%; align-self: start; justify-self: stretch; grid-column: 2; gap: calc(var(--gap) * 0.3);
+}
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-garage { grid-row: 3; }
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { grid-row: 4; }
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create { grid-row: 5; }
+.dh-developer-tools { padding: 0 var(--gap) calc(var(--gap) * .5); flex-shrink: 0; }
+.dh-developer-tools > summary { cursor: pointer; color: var(--dim); min-height: var(--tap-min); }
+.dh-developer-tools > button { margin-top: calc(var(--gap) * .3); }
+}

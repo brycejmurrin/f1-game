@@ -65,9 +65,9 @@ Verdict path: dispatch `gpu-census.yml` on `macos-latest` and read its Verdict s
   `apex_job_start` door (poll `apex_job_status`). It reuses the browser lock the other job kinds take.
 - `apex_profile_query {file, compare?, top?, fn?, fileFilter?}` — tree kind: summarise a saved spans JSON or `.cpuprofile`, or
   compare two spans JSONs. Artifacts under `artifacts/` or `scratch/` only; never a raw profile.
-- A standalone `apex_profile` browser tool was built and dropped: `bash-guard-hardening.test.mjs` requires every browser-kind
-  MCP tool in the `.claude/settings.json` matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`, which this lane may not edit.
-  Follow-up (needs a `.claude` owner): add `profile` to those three lists, then promote `apex_profile` to a direct tool.
+- `apex_profile {track, mode, frames, repeat, base}` — the same job as a direct browser-kind tool (2026-10-16, Bryce granted the
+  `.claude` edit): `profile` is in the `.claude/settings.json` matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`, which
+  `bash-guard-hardening.test.mjs` requires of every browser-kind tool. It returns a jobId and holds the browser lock until the job exits.
 
 ## Measured on this container (SwiftShader), 2026-10-16
 

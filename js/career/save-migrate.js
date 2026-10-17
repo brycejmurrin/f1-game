@@ -185,11 +185,11 @@ const SaveMigrate = (function () {
     Object.entries(oldPts).forEach(([key, value]) => {
       const driver = roster.find((candidate) => candidate.id === key || candidate.code === key);
       const id = driver ? driver.id : key;
-      nextPts[id] = Math.min(Number.MAX_VALUE, (nextPts[id] || 0) + Math.max(0, finiteNumber(value)));
+      nextPts[id] = Math.min(Number.MAX_VALUE, (Object.hasOwn(nextPts, id) ? nextPts[id] : 0) + Math.max(0, finiteNumber(value)));
       // A STORED code wins: award() files the player's seat as "YOU", market
       // moves and MY TEAM hires re-label seats, and rewriting them from the
       // shipped roster on every load named the player's row after the AI.
-      if (!codes[id]) codes[id] = driver ? driver.code : key;
+      if (!Object.hasOwn(codes, id) || !codes[id]) codes[id] = driver ? driver.code : key;
     });
     roster.forEach((driver) => {
       if (Object.prototype.hasOwnProperty.call(nextPts, driver.id) && !codes[driver.id]) codes[driver.id] = driver.code;

@@ -1322,6 +1322,7 @@ what it covers.
 | `save-durability.test.mjs` | Foreign-write retry ownership, bounded authored mirrors, restore revisions and active-career races, native recovery feedback, cache-only cleanup. |
 | `session-contracts.test.mjs` | Hosted-result error propagation, conflicting plugin metadata, explicit Drive file transport, native document routing and truthful session capability diagnostics; pure local adapters, no service writes. |
 | `bootstrap-doctor.test.mjs` | Real YAML skill headers, helper references, mirror repair, protected shell interval checks, Chromium discovery and read-only environment diagnostics. |
+| `apex-arg-guards.test.mjs` | `__apex` hooks refuse non-finite arguments (jump/act/step/reset/camera/careerGrant/…) before they write NaN into player, camera or career state. |
 | `apex-career-delete.test.mjs` | Career slot deletion preserves storage durability and failure results through the agent API. |
 | `lazy-bundles-prefetch.test.mjs` | real `lazy-bundles.js` under a scripted loader: the boot scenery prefetch never leaves an unhandled rejection; a partially loaded race-session / audio / net group is repaired on retry (per-file loaded sets, the ready hook once); evaluated net scripts are never re-injected; a throwing post-load hook clears the memo; `ensureScenery` resolves false after one retry |
 | `lazy-track-build.test.mjs` | LAZY_TRACK_BUILD (13 build-only track files ~535 KB): not on FULL, stays on TRACK_VM; `ensureScenery` awaits `ensureTrackBuild` before the first Tracks.build; reinject marks TrackBuildProps / TrackModels / TrackHiddenFaces resident |
@@ -1331,6 +1332,7 @@ what it covers.
 | `skill-routing-eval.test.mjs` | `tools/check/skill-routing-eval.py` against a fake `claude` first on PATH (canned stream-json, no model calls): strict first-tool verdict, `--grace` late Skill detection, `--alias` rescoring, `--runs` majority + k/N agreement, `--only`, `--root` cwd, the version/model header and the `--compare` base→head table (legacy bare-list input too). |
 | `skill-smoke.test.mjs` | Every canonical skill has a bounded recipe with expected results and prerequisites; skipped browser or credential work never reports as tested. |
 | `capture-tools-regressions.test.mjs` | Capture option and path bounds, plan immutability, black-scene rejection, renderer identity, and lifecycle evidence through actual cancellation and cleanup. |
+| `editor-workspace.test.mjs` | Shared tuner Preview/Edit controls, compact toolbar and caller restoration |
 | `appearance-studio.test.mjs` | Visual-only preset/profile scopes, undo, normalization, durability and reduced motion. |
 | `appearance-sunlight-chrome.test.mjs` | Sunlight/Broadcast Appearance chrome CSS pins: preset label wrap + selected ring, theme-stable sunlight/broadcast art (not `--text`/`--dim`), light `--gold` for Sound ON contrast, light `.sheet-foot`, race-chrome gold restatement. |
 | `career-experience.test.mjs` | Career facility/achievement context, calendar and canonical result story. |

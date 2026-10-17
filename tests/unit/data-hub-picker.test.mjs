@@ -660,6 +660,22 @@ for (const pick of ["year", "meeting"]) test(`an older latest response cannot re
   h.DataHub.close();
 });
 
+test("developer export stays directly reachable outside player tab navigation", async () => {
+  const h = harness();
+  const exp = h.root.find((n) => n.id === "dh-tab-export");
+  assert.equal(exp.parentNode.tagName, "DETAILS");
+  assert.equal(exp.getAttribute("role"), null);
+  const strip = h.root.find((n) => n.classList.contains("dh-tabs"));
+  assert.equal(strip.children.length, 6);
+  assert.ok(strip.children.every((n) => n.getAttribute("role") === "tab"));
+  h.DataHub.open("export"); await h.drain();
+  assert.equal(exp.parentNode.open, true);
+  assert.equal(h.content().getAttribute("role"), "region");
+  assert.equal(h.content().getAttribute("aria-labelledby"), exp.id);
+  h.tab("schedule"); await h.drain();
+  assert.equal(h.content().getAttribute("role"), "tabpanel");
+});
+
 // hunt F4: a second open() while the hub is up overwrote returnFocus with an element inside the dialog, so
 // close() focused something hidden instead of the control the player opened the hub from.
 test("a double open() keeps the focus origin of the FIRST open", async () => {

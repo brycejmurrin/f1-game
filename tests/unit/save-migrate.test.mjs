@@ -176,6 +176,15 @@ test("invalid driver points and overflowing legacy aliases stay finite and idemp
   assert.equal(JSON.stringify(overflow), snap);
 });
 
+test("remapPoints: a pts key naming an Object.prototype member stays a finite number", () => {
+  const SM = load();
+  const s = SM.remapPoints(JSON.parse(`{"pts":{"toString":3,"constructor":4,"valueOf":"x","haas:0":25}}`));
+  for (const k of ["toString", "constructor", "valueOf"]) assert.ok(Number.isFinite(s.pts[k]), k + " -> " + s.pts[k]);
+  assert.equal(s.pts.toString, 3);
+  assert.equal(s.pts.constructor, 4);
+  assert.equal(s.pts.valueOf, 0);
+});
+
 test("a stored display code is never overwritten from the shipped roster on load", () => {
   // award() files the player's seat as "YOU" (and market moves / MY TEAM hires
   // re-label seats); remapPoints reset it to the shipped seat code on every
