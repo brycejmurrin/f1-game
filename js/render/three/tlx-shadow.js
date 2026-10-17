@@ -330,6 +330,7 @@
         castScene.add(m);
       }
       m.geometry = mesh.geo;
+      m.__lastGeo = mesh.geo;   // parking swaps m.geometry but three's RenderObject keeps this one until the slot renders again
       if (model) m.matrix.fromArray(model); else m.matrix.identity();
       m.matrixWorld.copy(m.matrix);
       m.visible = true;
@@ -473,8 +474,8 @@
       for (const pl of pools.values()) {
         for (let i = 0; i < pl.pool.length; i++) {
           const m = pl.pool[i];
-          if (m.geometry !== geo) continue;
-          m.visible = false; m.geometry = parkedGeo;
+          if (m.geometry !== geo && m.__lastGeo !== geo) continue;   // an already-parked slot's RenderObject still holds __lastGeo (#2693)
+          m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null;
           try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
         }
       }
