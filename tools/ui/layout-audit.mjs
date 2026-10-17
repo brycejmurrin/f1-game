@@ -34,6 +34,7 @@
 //
 // --scale joins the viewport axis (`ios-iphone-landscape@130`). Raise --jobs=N
 // only when /proc/loadavg first field is under ~3.
+import { styles as galleryStyles, escapeHtml as galleryEscape } from "../lib/screenshot-gallery.cjs";
 import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -944,9 +945,9 @@ if (skipped.length) {
 }
 
 function writeIndex(rows) {
-  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const esc = galleryEscape;
   const cellHtml = (r) => {
-    if (r.skipped) return `<td class="skip" title="${esc(r.skipped)}">skipped</td>`;
+    if (r.skipped) return `<td class="skip"><details><summary>Skipped</summary><p>${esc(r.skipped)}</p></details></td>`;
     const issues = (r.clipped || []).length + (r.offscreen || []).length + (r.errors || []).length
       + (r.docOverflowX ? 1 : 0) + (r.tinyTaps || []).length + (r.underHardware || []).length
       + (r.starved || []).length;
@@ -962,8 +963,8 @@ function writeIndex(rows) {
       ...(r.tinyTaps || []).slice(0, 4).map((t) => `under WCAG 24px: ${t.el} ${t.w}x${t.h}`),
       ...(r.smallTaps || []).slice(0, 4).map((t) => `below house tap floor ${t.el} ${t.w}x${t.h}`),
     ].join("\n");
-    const shot = r.shot ? `<a href="${r.shot}">shot</a>` : "";
-    return `<td class="${cls}" title="${esc(detail)}">${issues || "&check;"} ${shot}</td>`;
+    const shot = r.shot ? `<a href="${esc(r.shot)}">Screenshot</a>` : "";
+    return `<td class="${cls}">${detail ? `<details><summary>${issues || "Review"} findings</summary><pre>${esc(detail)}</pre></details>` : "&check;"} ${shot}</td>`;
   };
   const vps = [...new Set(rows.map((r) => r.viewport))];
   const scr = [...new Set(rows.map((r) => r.screen))];
@@ -971,7 +972,7 @@ function writeIndex(rows) {
   const body = scr.map((s) => `<tr><th>${esc(s)}</th>` +
     vps.map((v) => cellHtml(rows.find((r) => r.screen === s && r.viewport === v) || { skipped: "not run" })).join("") +
     "</tr>").join("\n");
-  fs.writeFileSync(path.join(OUT, "index.html"), `<!doctype html><meta charset="utf-8">
+  fs.writeFileSync(path.join(OUT, "index.html"), `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Apex 26 layout audit</title>
 <style>
  body{background:#0b0b10;color:#e8e8ee;font:13px/1.5 ui-sans-serif,system-ui;padding:24px}
@@ -981,13 +982,15 @@ function writeIndex(rows) {
  td.ok{background:#12301c;color:#7fd89a} td.warn{background:#3a3212;color:#e2c766}
  td.bad{background:#3a1414;color:#ff9c9c;font-weight:700} td.skip{background:#1a1a20;color:#6b6b78}
  p{color:#9a9aa5;max-width:70ch}
-</style>
-<h1>APEX 26 — LAYOUT AUDIT</h1>
+${galleryStyles}
+body{padding:24px;max-width:1480px;margin:auto}td{min-width:110px}td details{font-weight:400}
+</style></head><body>
+<h1>Apex layout audit</h1>
 <p>One cell per screen x viewport. Green means nothing clipped, nothing off screen,
 no horizontal overflow and no page errors. Amber means every finding is a control
 below the house <code>--tap</code> floor but at or above WCAG 2.2 SC 2.5.8's
 24&times;24 &mdash; a preference, not a defect. Red is the count of real findings,
-tap targets under 24px among them &mdash; hover a cell for the list.</p>
+tap targets under 24px among them &mdash; expand a cell for the list.</p>
 <p><b>STARVED</b> is the one finding here that is not about position. A scroll
 region crushed to a couple of pixels is in exactly the right place &mdash; it
 clips nothing, overflows nothing, sits inside its parent &mdash; and every other
@@ -995,8 +998,8 @@ check scores it green. It has cost three investigations, always the same shape:
 <code>scrollHeight</code> says there is content, <code>clientHeight</code> says
 there is nowhere to put it.</p>
 <p>Grey means SKIPPED: the cell was never measured, so it is not a pass and not a
-finding. Hover it for the reason. A click timeout there is usually the box, not
+finding. Expand it for the reason. A click timeout there is usually the box, not
 the app &mdash; re-run that cell alone at <code>--jobs=1</code> before drawing any
 conclusion from it.</p>
-<table><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`);
+<div class="table-scroll"><table><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div></body></html>`);
 }

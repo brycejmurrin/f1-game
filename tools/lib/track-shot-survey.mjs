@@ -2,6 +2,7 @@
 // @doc Shot-survey plans: presets, resume filters, findings/progress JSON, HTML galleries (apex-extras / shot-survey).
 // @skill survey-track
 import fs from "node:fs";
+import { escapeHtml as galleryEscape, screenshotCard, renderGallery } from "./screenshot-gallery.cjs";
 import path from "node:path";
 import { cameraControls, scenarioShots } from "./survey-scenarios.mjs";
 
@@ -298,52 +299,50 @@ export function writeSurveyFindings(outDir, meta) {
   return { file, findings: body };
 }
 
-/** Static HTML gallery beside the PNGs (relative img paths). */
+const galleryPath = (outDir, file) => {
+  const relative = path.isAbsolute(file) ? path.relative(outDir, file) : file;
+  return relative.split(path.sep).map(encodeURIComponent).join("/");
+};
+
+function surveyCards(outDir, shots, track) {
+  return shots.map((shot) => screenshotCard({
+    title: shot.name || "View",
+    caption: [shot.track || track, shot.frac != null ? `lap ${Math.round(shot.frac * 100)}%` : "", shot.cam, shot.tod, shot.weather].filter(Boolean).join(" · "),
+    image: galleryPath(outDir, shot.png || shot.file || `${shot.name}.png`),
+    metadata: shot,
+  }));
+}
+
+/** Static HTML gallery beside the captures; actual JPEG/PNG paths are preserved. */
 export function writeSurveyIndex(outDir, meta) {
-  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-  const rows = (meta.shots || []).map((s) => {
-    const file = `${esc(s.name)}.png`;
-    const cap = `${s.name} · ${s.track || meta.track} · frac ${s.frac} · ${s.cam} · ${s.tod}${s.weather ? ` · ${s.weather}` : ""}`;
-    return `<figure><a href="${file}"><img src="${file}" loading="lazy" alt="${esc(cap)}"></a><figcaption>${esc(cap)}</figcaption></figure>`;
-  }).join("\n");
-  const panel = meta.panelPng ? `<p>Panel: <a href="${esc(path.basename(meta.panelPng))}">${esc(path.basename(meta.panelPng))}</a></p>` : "";
-  const html = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>${esc(meta.track || "track")} shot survey</title>
-<style>
-body{font:14px/1.4 system-ui,sans-serif;margin:1rem;background:#14161c;color:#e6e9ef}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
-figure{margin:0} img{width:100%;height:auto;border-radius:4px;background:#000}
-figcaption{font:11px/1.3 monospace;margin-top:4px;color:#9aa3b2}
-</style></head><body>
-<h1>${esc(meta.track || "")} — ${esc(meta.label || "survey")}</h1>
-<p>${meta.ok ?? meta.shots?.length ?? 0} shot(s), preset ${esc(meta.preset || "custom")}. ${panel}</p>
-<div class="grid">${rows}</div>
-</body></html>`;
-  const file = path.join(outDir, "index.html");
+  const links = meta.panelPng ? `<a href="${galleryEscape(galleryPath(outDir, meta.panelPng))}">Contact sheet</a>` : "";
+  const html = renderGallery({ title: `${meta.track || "Track"} — ${meta.label || "survey"}`,
+    summary: `${meta.ok ?? meta.shots?.length ?? 0} captures · ${meta.preset || "custom"}`,
+    groups: [{ title: meta.track || "Track", cards: surveyCards(outDir, meta.shots || [], meta.track), links }],
+  });
   fs.mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, "index.html");
   fs.writeFileSync(file, html);
   return file;
 }
 
-/** Multi-track compare gallery (relative paths into per-track dirs). */
+/** Combined gallery; supports both captured frames and legacy panel/index rows. */
 export function writeCompareIndex(outDir, meta) {
-  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
   const tracks = meta.tracks || [];
-  const sections = tracks.map((t) => {
-    const rel = esc(t.relIndex || `${t.track}/index.html`);
-    const panel = t.panel ? `<p><a href="${esc(t.panel)}">${esc(path.basename(t.panel))}</a></p>` : "";
-    return `<section><h2><a href="${rel}">${esc(t.track)}</a> — ${t.captured ?? 0} shot(s)</h2>${panel}</section>`;
-  }).join("\n");
-  const html = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>compare shot survey</title>
-<style>
-body{font:14px/1.4 system-ui,sans-serif;margin:1rem;background:#14161c;color:#e6e9ef}
-a{color:#8ec7ff} section{margin:1rem 0;padding:0.75rem 0;border-bottom:1px solid #2a2f3a}
-</style></head><body>
-<h1>compare — ${esc(meta.label || "survey")}</h1>
-<p>preset ${esc(meta.preset || "custom")}; ${tracks.length} track(s).</p>
-${sections}
-</body></html>`;
+  const groups = tracks.map((track) => {
+    const title = track.actualTrack || track.track || "Unknown track";
+    const links = [];
+    if (track.relIndex !== null) links.push(`<a href="${galleryEscape(galleryPath(outDir, track.relIndex || `${title}/index.html`))}">Track index</a>`);
+    if (track.panel) links.push(`<a href="${galleryEscape(galleryPath(outDir, track.panel))}">Contact sheet</a>`);
+    const cards = surveyCards(outDir, track.shots || [], title);
+    if (!cards.length && track.panel) cards.push(screenshotCard({ title: "Contact sheet", image: galleryPath(outDir, track.panel) }));
+    const failures = [...(track.failures || []), ...(track.error ? [track.error] : [])];
+    return { title: track.label || title, cards, links: links.join(" "),
+      description: `${track.captured ?? track.shots?.length ?? 0} captured · ${Math.max(Number(track.failed) || 0, failures.length)} failed`,
+      extra: failures.length ? `<details><summary>Capture failures</summary><pre>${galleryEscape(JSON.stringify(failures, null, 2))}</pre></details>` : "",
+    };
+  });
+  const html = renderGallery({ title: `Track surveys — ${meta.label || "compare"}`, summary: `${tracks.length} tracks · ${meta.preset || "custom"}`, groups });
   fs.mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, "index.html");
   fs.writeFileSync(file, html);

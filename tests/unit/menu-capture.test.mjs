@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const {
+  writeCaptureIndex,
   cellFileBase,
   cellPaths,
   cellRecorded,
@@ -65,4 +66,20 @@ test("layout-audit --help names gallery and survey", () => {
   assert.match(r.stdout, /--gallery/);
   assert.match(r.stdout, /--survey/);
   assert.match(r.stdout, /--screen=/);
+});
+
+test('menu screenshot report renders responsive native screen navigation and DOM links', () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, 'artifacts', 'menu-static-'));
+  try {
+    writeCaptureIndex(dir, [
+      { screen: 'garage', viewport: 'phone', shot: 'garage.png', dom: 'garage.dom.json' },
+      { screen: 'settings', viewport: 'desktop', shot: 'settings.png' },
+    ]);
+    const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
+    assert.doesNotMatch(html, /<script\b|<table\b|<select\b/);
+    assert.match(html, /href="#gallery-2"/);
+    assert.match(html, /href="garage.dom.json"/);
+    assert.match(html, /name="viewport"/);
+    assert.equal((html.match(/class="capture /g) || []).length, 2);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

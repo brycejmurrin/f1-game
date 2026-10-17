@@ -269,3 +269,14 @@ test('survey GPU auto-selection does not mistake installed Mesa for a usable loc
  assert.equal(surveyGlEnvironment({APEX_GPU:'hardware'},'swiftshader',librariesOnly).APEX_GPU,'swiftshader');
  assert.equal(surveyGlEnvironment({APEX_GPU:'hardware'},'',librariesOnly).APEX_GPU,'hardware');
 });
+
+test('survey galleries preserve the actual JPEG capture path and native navigation', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apex-gallery-jpeg-'));
+  try {
+    const file = writeSurveyIndex(dir, { track: 'spa', shots: [{ name: 'pond', png: path.join(dir, 'pond.jpg'), cam: 'orbit' }] });
+    const html = fs.readFileSync(file, 'utf8');
+    assert.match(html, /src="pond.jpg"/);
+    assert.doesNotMatch(html, /pond.png|<script\b|<select\b/);
+    assert.match(html, /name="viewport"/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

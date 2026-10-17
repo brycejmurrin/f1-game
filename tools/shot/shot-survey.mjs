@@ -257,7 +257,7 @@ for (let ti = 0; ti < tracks.length; ti++) {
       });
       trackResults.push({
         track, out: outDir, captured: captured.length, failed: failed.length,
-        panel: panelPng, indexHtml, findings: findings.file, failures: failed.length ? failed : undefined,
+        panel: panelPng, indexHtml, shots: captured, findings: findings.file, failures: failed.length ? failed : undefined,
         relIndex: indexHtml ? path.relative(outRoot, indexHtml) : `${track}/index.html`,
       });
     } else {
@@ -280,11 +280,12 @@ let compareIndex = null;
 if (tracks.length > 1 && wantIndex) {
   compareIndex = writeCompareIndex(outRoot, {
     label: plan.label, preset: plan.preset,
-    tracks: trackResults.filter((t) => t.indexHtml || t.panel).map((t) => ({
+    tracks: trackResults.map((t) => ({
       track: t.track,
       captured: t.captured,
+      shots: t.shots, failed: t.failed, failures: t.failures, error: t.error,
       panel: t.panel ? path.relative(outRoot, t.panel) : null,
-      relIndex: t.relIndex || `${t.track}/index.html`,
+      relIndex: t.indexHtml ? t.relIndex || `${t.track}/index.html` : null,
     })),
   });
 }

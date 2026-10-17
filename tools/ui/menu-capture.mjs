@@ -14,6 +14,7 @@
 // CLI: node tools/ui/layout-audit.mjs --gallery | --screen=ID | --list | --report
 import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 import fs from "node:fs";
+import { escapeHtml as galleryEscape, screenshotCard, renderGallery } from "../lib/screenshot-gallery.cjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -229,27 +230,19 @@ export async function runMenuShot(opts = {}) {
   }
 }
 
-function writeCaptureIndex(outDir, rows) {
-  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-  const items = rows.filter((r) => !r.skipped && r.shot).map((r) => {
-    const dom = r.dom ? `<a href="${esc(r.dom)}">dom</a>` : "";
-    return `<tr><td>${esc(r.screen)}</td><td>${esc(r.viewport)}</td>` +
-      `<td><a href="${esc(r.shot)}"><img src="${esc(r.shot)}" alt="" style="max-width:280px;border:1px solid #333"></a></td>` +
-      `<td>${dom}</td></tr>`;
-  }).join("\n");
-  fs.writeFileSync(path.join(outDir, "index.html"), `<!doctype html><meta charset="utf-8">
-<title>Apex 26 menu gallery</title>
-<style>
- body{background:#0b0b10;color:#e8e8ee;font:13px/1.5 ui-sans-serif,system-ui;padding:24px}
- h1{font-size:18px} table{border-collapse:collapse;margin-top:16px;width:100%}
- th,td{border:1px solid #26262e;padding:8px 10px;vertical-align:top}
- th{font-weight:600;color:#a9a9b6;font-size:11px;text-align:left}
- a{color:#7fd89a}
-</style>
-<h1>APEX 26 — MENU SCREENSHOT + DOM GALLERY</h1>
-<p>Fast capture: one boot per viewport, resumable shards, parallel <code>--jobs</code>.</p>
-<table><thead><tr><th>Screen</th><th>Viewport</th><th>Screenshot</th><th>DOM</th></tr></thead>
-<tbody>${items}</tbody></table>`);
+export function writeCaptureIndex(outDir, rows) {
+  const screens = new Map();
+  for (const row of rows) {
+    if (row.skipped || !row.shot) continue;
+    if (!screens.has(row.screen)) screens.set(row.screen, []);
+    screens.get(row.screen).push(screenshotCard({ title: row.viewport, image: row.shot,
+      caption: row.screen, links: row.dom ? `<a href="${galleryEscape(row.dom)}">DOM snapshot</a>` : "",
+    }));
+  }
+  fs.writeFileSync(path.join(outDir, "index.html"), renderGallery({ title: "Apex menu screenshots",
+    summary: `${rows.filter((row) => row.shot && !row.skipped).length} captures · ${screens.size} screens`,
+    groups: [...screens].map(([title, cards]) => ({ title, cards })),
+  }));
 }
 
 /**

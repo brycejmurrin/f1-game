@@ -108,6 +108,7 @@
 // busy box, and on this container the same two-shot walk measured 240.9 s and
 // 286.4 s on consecutive teams. The loadavg is read once and warned about for
 // the same reason — see AGENTS.md §Verification.
+import { screenshotCard, renderGallery } from "../lib/screenshot-gallery.cjs";
 import vm from "node:vm";
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync, readFileSync, renameSync, existsSync, rmSync, statSync, realpathSync, watch as fsWatch } from "node:fs";
@@ -842,23 +843,15 @@ async function labelPng(file, title, sub) {
 
 /** Auto-refreshing HTML gallery — one card per shot as it lands (`--live`). */
 function writeLiveGallery(shots, file, heading) {
-  const cards = shots.map((s, i) => {
-    const fn = basename(s.png);
-    const title = `${s.team} · ${s.name} · ${s.view}`;
-    return `<figure style="margin:0;background:#1a1d24;border-radius:8px;overflow:hidden">`
-      + `<img src="${fn}" style="width:100%;display:block" loading="lazy" alt="${esc(title)}"/>`
-      + `<figcaption style="padding:8px 10px;font:12px/1.3 monospace;color:#c8cdd8">`
-      + `#${i + 1} ${esc(title)}</figcaption></figure>`;
-  }).join("\n");
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">`
-    + `<meta http-equiv="refresh" content="3">`
-    + `<title>${esc(heading)} (${shots.length})</title>`
-    + `<style>body{margin:0;padding:16px;background:#0d0f14;color:#e8eaed;font-family:system-ui,sans-serif}`
-    + `h1{font-size:16px;font-weight:600;margin:0 0 12px}`
-    + `.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}</style>`
-    + `</head><body><h1>${esc(heading)} — ${shots.length} shot(s)</h1>`
-    + `<div class="grid">${cards}</div></body></html>`;
-  writeFileSync(file, html);
+  const teams = new Map();
+  for (const shot of shots) {
+    if (!teams.has(shot.team)) teams.set(shot.team, []);
+    teams.get(shot.team).push(screenshotCard({ title: shot.name, caption: `${shot.team} · ${shot.view}`, image: basename(shot.png) }));
+  }
+  writeFileSync(file, renderGallery({ title: heading, summary: `${shots.length} captures · live refresh every 3 seconds`,
+    head: '<meta http-equiv="refresh" content="3">',
+    groups: [...teams].map(([title, cards]) => ({ title, cards })),
+  }));
 }
 
 /** A labelled grid of frames. `items` is [{png, title, sub}]. */
