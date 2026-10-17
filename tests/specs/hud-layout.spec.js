@@ -665,13 +665,13 @@ const HUD_INDEPENDENCE_VIEWPORTS = [
   { name: "phone-932x430", w: 932, h: 430, sal: 59, sar: 59, sat: 0, sab: 21 },
   { name: "phone-667x375", w: 667, h: 375, sal: 0, sar: 0, sat: 0, sab: 0 },
 ];
-for (const v of HUD_INDEPENDENCE_VIEWPORTS) {
-  test.describe(`buttons steer: controls ignore HUD SIZE (${v.name})`, () => {
+for (const v of HUD_INDEPENDENCE_VIEWPORTS) for (const btn of [100, 175, 300]) {
+  test.describe(`buttons steer: controls ignore HUD SIZE (${v.name}, BUTTON SIZE ${btn})`, () => {
     test.setTimeout(300_000);
     test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
     test("control rects are identical at HUD SIZE min / default / max", async ({ page }) => {
-      await race(page, "buttons", false, v, { hudScale: 100, btnScale: 125 });
-      const rects = {};
+      await race(page, "buttons", false, v, { hudScale: 100, btnScale: btn });
+      const rects = {}, gearW = {};
       for (const hud of [60, 100, 200]) {
         await page.evaluate(async (pct) => {
           window.ApexStore ? ApexStore.set("hudScale", pct) : localStorage.setItem("apex26.hudScale", JSON.stringify(pct));
@@ -692,6 +692,7 @@ for (const v of HUD_INDEPENDENCE_VIEWPORTS) {
           const r = el.getBoundingClientRect();
           return [id, [r.x, r.y, r.width, r.height].map((n) => Math.round(n * 2) / 2)];
         })), CONTROL_IDS);
+        gearW[hud] = await page.evaluate(() => document.getElementById("hud-gear").getBoundingClientRect().width);
       }
       const base = rects[100];
       expect(Object.values(base).filter(Boolean).length, JSON.stringify(base)).toBeGreaterThanOrEqual(7);
