@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "5a0efff0b4fc3e61dc2065ffc157eda279a000f2898837845af4460f1f7d92cf",
+  "sourceDigest": "65a166a828244607b916917cbe7ae2984d5d337cc466424a1513846cc3db6f4f",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -623,15 +623,15 @@
       "track": "cota",
       "name": "Amphitheater",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.772724,
+      "frac": 0.760073,
       "target": [
-        359.49,
-        0.32,
-        -2.63
+        359.57,
+        -0.07,
+        -2.48
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 86.3,
-      "viewDistanceM": 86.3,
+      "nearestRoadDistanceM": 86.5,
+      "viewDistanceM": 86.5,
       "source": "tests/data/landmarks/cota.json; js/circuits/scenery/cota.js"
     },
     {
@@ -642,9 +642,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.100291,
       "target": [
-        377.5,
-        6.1,
-        -347.16
+        377.31,
+        6.83,
+        -348.35
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 56,
