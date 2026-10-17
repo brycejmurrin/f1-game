@@ -28,6 +28,14 @@ minor + major GC objects included) over 40 Monza frames on WGX: ~49 MB sampled =
 `updateCarLateral` (171 KB/frame), `updateCar` (103 KB/frame) and a `Math.max` call site (98 KB/frame) in the game loop
 (issue #2650 now carries those numbers). A pooled descriptor would also make the mock harness's `recordPass` log alias.
 
+## GLX is at its floor on Monza day (after #2697), so the remaining #2688 GLX rows are not worth a PR
+Attributed GLX census (Monza, webgl2, per frame, top sites after #2697): `bindVertexArray` 66 at `drawInstanced` (one VAO per
+prop batch; only batch merging would change it, a data/scenery change not a backend one) + 7 in chunked; `uModel`
+`uniformMatrix4fv` 14 (one per distinct model matrix, already cached, 2h); every remaining `uniform1f` site is 2-5 per frame
+(the per-material lanes, already value-cached). The decal constant-state and particle frame-uniform rows from the GLX hunter
+report are each below 3 calls per frame in this scene (they do not appear in the top 28 sites), so they are dropped.
+CI on #2697: `ci-watch` = ci passed (17 jobs, 0 failed, 9 skipped), draft/fast tier.
+
 ## Still open (#2688)
 GLX: decal constant state (`uTex`, `uGlow`, unit-5 bind, blendFunc pair per decal), particle frame uniforms re-sent for both
 blend groups, `LampBake.liveOnlyAt` linear scan, closure in per-chunk `drawChunked`. WGX: drawDecal group-1 bind filter,
