@@ -314,12 +314,14 @@
      * indices reference the full shared vertex array). The returned handle
      * also works as a plain mesh (top-level geo = chunk 0) so a stray
      * draw()/castShadow() won't crash — js/render/glx/chunked.js semantics. */
-    // apex26.tlxChunkMerge: 2 (default) = 2x2 lamp cells per draw; 1 = one
+    // apex26.tlxChunkMerge: 3 (default) = 3x3 lamp cells per draw; 1 = one
     // draw per cell, the pre-2026-09-24 shape and the off switch. Read once;
     // see DRAW MERGE in build(). Montreal on Lavapipe WebGPU: 471 -> 181
     // chunks, ~2.5x fewer visible per frame, night frames pixel-identical to
-    // merge 1 at a frozen state (PERF-FINDINGS §2ai).
-    let mergeK = 2;
+    // merge 1 at a frozen state (PERF-FINDINGS §2ai). 2 -> 3 (2026-10-17): monaco
+    // 144 -> 123 and spa 177 -> 150 draw calls a frame for +2 % triangles
+    // (docs/notes/PERF-HUNT-TLX-2026-10-17.md round 2).
+    let mergeK = 3;
     try { const v = +localStorage.getItem("apex26.tlxChunkMerge"); if (v >= 1 && v <= 4) mergeK = v | 0; } catch (_) { /* no storage: 1 */ }
     function build(data, cellSize) {
       const cell = ChunkBins.cellSize(cellSize);
