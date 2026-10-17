@@ -1810,6 +1810,7 @@ what it covers.
 | `net-seed-sync-vm.test.mjs` | two real game VMs: a host that raced and quit re-seeds its sim stream in `beginRace`, so its AI skills and grid match a guest that adopted its seed (and the unrewound host provably diverges) |
 | `net-lobby-friend-quali.test.mjs` | a cancelled or failed friend-race start clears the lobby's qualifying hold (real lobby over a loopback transport) |
 | `rendezvous-worker.test.mjs` | the actual Durable Object request boundary, including declared and streamed oversized bodies |
+| `netplay-resilience.test.mjs` | race-phase resilience contracts: a dropped driver reclaims the same wire/car and resyncs state; a seatless spectator receives field state but cannot publish authoritative inputs or events |
 
 ### Tooling & repo contracts
 

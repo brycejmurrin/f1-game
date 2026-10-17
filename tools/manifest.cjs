@@ -1206,6 +1206,7 @@ const LAZY_NET = [
   "js/net/lobby-roster.js", // LobbyRoster: the room roster's stateless DOM leaves (before lobby)
   "js/net/snapshot.js",
   "js/net/session.js",
+  "js/net/spectate.js",
   "js/net/netplay.js",
   "js/net/lobby.js",
   // PHONE AS CONTROLLER rides the same wire (rtc + handshake + rendezvous), so
@@ -1258,6 +1259,7 @@ const CONTROLLER = [
 // not one module gathering the rest.
 const LAZY_NET_EDGES = [
   ["js/net/snapshot.js", "js/net/session.js"],
+  ["js/net/spectate.js", "js/net/netplay.js"],
   ["js/net/sdp.js", "js/net/handshake.js"],
   ["js/net/qr.js", "js/net/lobby-codes.js"],
   ["js/net/qr.js", "js/net/lobby.js"],
