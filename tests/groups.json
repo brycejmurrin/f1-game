@@ -1999,7 +1999,8 @@
         "tests/specs/ui-button-touch.spec.js",
         "tests/specs/ui-redesign.spec.js",
         "tests/specs/ui-resize.spec.js",
-        "tests/specs/ui-scale.spec.js"
+        "tests/specs/ui-scale.spec.js",
+        "tests/specs/watch-transport-layout.spec.js"
       ],
       "kind": "browser"
     },

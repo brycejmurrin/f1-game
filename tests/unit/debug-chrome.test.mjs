@@ -45,3 +45,12 @@ test("--headless-game plan: about:blank, then the game, wait for __apex, then he
   assert.deepEqual(plan.map(x => Object.keys(x)[0]), ["navigate", "navigate", "waitFor", "evaluate"]);
   assert.equal(plan[0].navigate, "about:blank"); assert.equal(plan[1].navigate, "http://127.0.0.1:3456/"); assert.equal(plan[3].evaluate, "__apex.headless(true)");
 });
+
+test("`start --help` prints usage and exits 0 without launching Chromium", async () => {
+  const { main } = await import("../../tools/mcp/debug-chrome.mjs");
+  const out = [], log = console.log;
+  console.log = (...a) => out.push(a.join(" "));
+  try { assert.equal(await main(["start", "--help"]), 0); } finally { console.log = log; }
+  assert.match(out.join("\n"), /debug-chrome — own a headless Chromium/);
+  assert.ok(!out.join("\n").includes('"started"'), "no browser was started");
+});

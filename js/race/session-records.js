@@ -25,9 +25,26 @@ var SessionRecords = (function () {
         car: c && [c.team.id, c.tierV, c.mods, c.aeroLoad, c.ersDeploy, c.ersRegen, c.tread, c.brakeBias, c.rollBalance],
         tune: PHYS.map(k => G[k]), controls: G.recordControls(), weather: G.weatherArc ? G.weatherArc.from : G.raceWeather,
         weatherPlan: G.weatherArc ? [G.weatherArc.from, G.weatherArc.to, G.weatherArc.dur] : null,
-        tyreWear: G.raceTyreWear, difficulty: G.difficulty, tod: G.raceTimeOfDay };
+        tyreWear: G.session === "tt" ? "off" : G.raceTyreWear, difficulty: G.difficulty, tod: G.raceTimeOfDay };
     }
     function current() { return Ghost.contextKey(config()); }
+    // Only the hidden GP wear preference differed in these historical TT keys.
+    // Probe through each module so its normal validation/compatibility still applies.
+    function comparableKeys() {
+      const cfg = config();
+      return G.session === "tt" ? ["off", "light", "real"].map(tyreWear => Ghost.contextKey({ ...cfg, tyreWear })) : [current()];
+    }
+    function selectGhost(module, id, keys) {
+      let selected = keys[0], best = Infinity;
+      for (const candidate of keys) {
+        module.setTrack(id, candidate);
+        if ((!module.compatible || module.compatible(module.envelope())) && module.bestTime() < best) { best = module.bestTime(); selected = candidate; }
+      }
+      return selected;
+    }
+    function comparableBoard(id) {
+      return comparableKeys().flatMap(context => GameStore.ttBoard(id, context)).sort((a, b) => a.t - b.t);
+    }
     function inputMeta() {
       return {
         seed: G.seed >>> 0 || 1,
@@ -38,17 +55,18 @@ var SessionRecords = (function () {
     }
     function begin() {
       key = current(); revision = G.store.rev; spoiled = false;
-      Ghost.setTrack(G.track.def.id, key);
+      const keys = comparableKeys();
+      Ghost.setTrack(G.track.def.id, selectGhost(Ghost, G.track.def.id, keys));
       if (typeof InputGhost !== "undefined") {
-        InputGhost.setTrack(G.track.def.id, key);
+        InputGhost.setTrack(G.track.def.id, selectGhost(InputGhost, G.track.def.id, keys));
         InputGhost.startLap(inputMeta());
       }
-      const b = GameStore.ttBoard(G.track.def.id, key);
+      const b = comparableBoard(G.track.def.id);
       G.ttRecord = b.length ? b[0].t : Infinity;
       if (typeof GhostShare !== "undefined" && GhostShare.hasGuest(G.track.def.id)) {
         const guest = GhostShare.guest();
         if (guest !== comparedGuest || key !== comparedKey) {
-          G.announce(GhostShare.contextNotice(guest.context, key), 6, "info");
+          G.announce(GhostShare.contextNotice(keys.includes(guest.context) ? key : guest.context, key), 6, "info");
           comparedGuest = guest; comparedKey = key;
         }
       }
@@ -113,7 +131,7 @@ var SessionRecords = (function () {
       const line = record ? (won ? won + " — NEW RECORD " : "NEW RECORD ") + G.fmtTime(lapTime) : won;
       if (line) G.announce(line, record && won ? 2.6 : 2, "info");
     }
-    function board(id) { return GameStore.ttBoard(id, id === Ghost.track() ? Ghost.context() : undefined); }
+    function board(id) { return id === Ghost.track() ? comparableBoard(id) : GameStore.ttBoard(id); }
     return { begin, current, config, sample, sampleInput, accept, board, invalidate, finish, prepareDaily, restoreDaily, key: () => key };
   }
   return { create, PHYS };

@@ -109,3 +109,46 @@ to track scenery; this does not add a fake replay or garage scene adapter.
 API references checked during implementation:
 - https://playwright.dev/docs/screenshots
 - https://nodejs.org/api/perf_hooks.html
+
+## Target a turn on any circuit
+
+`apex_locations {"track":"monaco"}` lists authored turn markers, start/finish
+and sector boundaries alongside any curated named scenery. The same catalog is
+available with `shot-survey.mjs --list-locations --track monaco`. All 52 circuit
+definitions supply turn markers in racing-lap coordinates. For example:
+
+```sh
+bash tools/mcp/apex-tools-mcp.sh call apex_locations '{"track":"monaco","search":"turn-1"}'
+bash tools/mcp/apex-tools-mcp.sh call apex_shot_survey '{"track":"monaco","location":"monaco/turn-1","angles":["entry","apex","exit"],"dryRun":true}'
+```
+
+Turn numbers are the game's authored marker indices, not official corner names.
+
+## Target an emitted landmark on any circuit
+
+`apex_locations {"track":"singapore","search":"merlion"}` finds a required
+scenery model that actually emitted. The catalog generator builds each circuit
+in a VM and reads the model's emitted bounds. A source-backed viewing station
+is used where the scenery code or circuit brief provides one; otherwise the
+model centre is projected to the nearest point on the built racing lap. This
+avoids confusing source/scenery fractions with racing fractions on reversed or
+shifted circuits. `stationMethod`, `viewpointSource`, `projectedFrac`,
+`nearestRoadDistanceM`, and `viewDistanceM` make the choice inspectable. The
+screenshot plan aims at the model centre. Distant nearest-road candidates are
+flagged as uncertain. The catalog's source digest catches stale coordinates
+when a circuit or projection engine changes. Regenerate with
+`node tools/shot/gen-scenery-locations.cjs` and check with `--check`.
+
+```sh
+bash tools/mcp/apex-tools-mcp.sh call apex_locations '{"track":"singapore","search":"merlion"}'
+bash tools/mcp/apex-tools-mcp.sh call apex_shot_survey '{"track":"singapore","location":"singapore/merlion","angles":["overview","entry"],"dryRun":true}'
+```
+
+The emitted-model catalog covers all 52 circuits. Spa's four curated corner
+names remain separate from its emitted scenery models. Registered models that
+did not emit are listed in the generator's `omitted` section and are not
+selectable. A projection is a camera
+candidate, not proof that the object is visible or geographically accurate;
+far skyline models, wide assemblies and crossings especially need rendered
+review. The MCP tool format follows
+the [MCP tools specification](https://modelcontextprotocol.io/specification/2025-06-18/server/tools).

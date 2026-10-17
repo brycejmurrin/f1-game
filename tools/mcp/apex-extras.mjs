@@ -546,19 +546,18 @@ export function createExtras(ctx) {
     } catch (e) { log(`job manifest write failed: ${e.message}`); }
   };
   const exitFileFor = (log) => log.replace(/\.log$/, ".exit");
-  const pidAlive = (pid) => {
-    if (!pid) return false;
-    try { process.kill(pid, 0); return true; } catch { return false; }
-  };
   const refreshDiskJob = (meta) => {
     if (!meta || meta.state !== "running") return meta;
-    if (pidAlive(meta.pid)) return meta;
-    // Parent may have exited before the child's exit handler ran: the sh wrapper left the real code beside the log.
+    // The one-shot caller may die before its exit handler runs. The wrapper's
+    // .exit is authoritative even when its orphaned shell remains a zombie:
+    // kill(pid, 0) reports that zombie as alive and otherwise pins two slots.
     let exit = meta.exit;
+    let recordedExit = false;
     try {
       const code = Number(fs.readFileSync(exitFileFor(path.join(ROOT, meta.log)), "utf8"));
-      if (Number.isInteger(code)) exit = code;
+      if (Number.isInteger(code)) { exit = code; recordedExit = true; }
     } catch { /* no exit file: a job from before the wrapper, or the sh itself was killed */ }
+    if (!recordedExit && alive(meta.pid)) return meta;
     if (exit == null) try {
       const text = fs.readFileSync(path.join(ROOT, meta.log), "utf8");
       const last = text.trim().split("\n").filter(Boolean).pop() || "";
