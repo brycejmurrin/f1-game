@@ -87,6 +87,24 @@ export async function censusAfterGc(page, cdp) {
   return page.evaluate(readCensus);
 }
 
+/** Leak verdict over the forced-GC heap readings (MB) of repeated visits to ONE
+ *  circuit, `heaps[0]` the first visit. The first visit is warm-up and the step
+ *  into the second is excluded; of the intervals after that the SMALLEST is the
+ *  growth. A leak adds its per-pick growth to EVERY interval (#773: ~17 MB a pick;
+ *  2026-10-04: 14-26 MB a round), while a bounded one-time warm-up step lands in
+ *  at most a few of them — on Metal's WebGPU path the live world's CPU vertex
+ *  mirrors are kept once TLX's mirror pass has compiled and the step lands at
+ *  visit 2 or 3 (docs/notes/TRACK-SWITCH-METAL-2026-10-17.md), so a single
+ *  interval compared against the bound failed on timing alone. Needs >= 3 readings. */
+export function sustainedGrowthMB(heaps) {
+  if (!Array.isArray(heaps) || heaps.length < 3 || heaps.some((h) => typeof h !== "number" || !isFinite(h))) {
+    throw new Error("sustainedGrowthMB needs >= 3 finite heap readings, got " + JSON.stringify(heaps));
+  }
+  const intervals = [];
+  for (let i = 2; i < heaps.length; i++) intervals.push(+(heaps[i] - heaps[i - 1]).toFixed(1));
+  return { intervals, min: Math.min(...intervals) };
+}
+
 /** Wait until the page has drawn `n` more animation frames (the new world is
  *  on screen and its programs built), bounded by `timeoutMs`. */
 export async function waitFrames(page, n = 15, timeoutMs = 120000) {
