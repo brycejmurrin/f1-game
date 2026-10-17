@@ -322,7 +322,7 @@ function highlightsRig({ sound = true } = {}) {
   const rivalAudio = { collect(p) { field.collects++; return cars.filter((c) => c !== p).map((c, k) => ({ lat: 3, arc: 4 + k, rev: 0.7, approach: 0, slot: k })); } };
   const noop = () => {};
   const tickCtx = vm.createContext({
-    Math, performance: { now: () => 0 }, lastFrame: 0, paused: false, state: "results",
+    Math, performance: { now: () => 0 }, PerfSpans: { begin() {}, end() {} }, lastFrame: 0, paused: false, state: "results",
     gfx: { warming: () => false }, Input: { poll: noop, clearEdges: noop, setTimeScale: noop }, BrakeCue: { tick: noop }, onboard: { tick: noop },
     netPlay: { tick: noop, active: () => false }, netStart: null, countT: 0, startLights: { countCredit: () => 0 }, PerfGov: { tick: noop, recordSimulation: noop }, UiExperience: { resumeHolding: () => false },
     director: { tick: noop, reset: noop }, mirrorPass: { preparing: () => false }, replayBuf, resultsCam, raceT: 3,
@@ -343,7 +343,7 @@ test("game.js feeds feedReplayScrub from the results tick, off the race/count fr
   const line = TICK.slice(TICK.lastIndexOf("\n", at) + 1, TICK.indexOf("\n", at));
   assert.match(line, /^\s*if \(state !== "race" && state !== "count"\) GameAudio\.feedReplayScrub\(/,
     "never on race/count frames: a RACE AGAIN that inherits the montage engine is not cut on the grid");
-  assert.ok(TICK.indexOf("resultsCam.tick(") < at && at < TICK.indexOf("render(Math.min(dt, 1 / 20));               // camera"),
+  assert.ok(TICK.indexOf("resultsCam.tick(") < at && at < TICK.indexOf("render(Math.min(dt, 1 / 20)); PerfSpans.end(\"render\");"),
     "after resultsCam.tick (the clip's pose is applied), before render");
   assert.ok(TICK.indexOf("replayBuf.onTick(raceT, cars, state);") < at, "outside the paused branch");
   assert.match(TICK, /GameAudio\.feedReplayScrub\(soundOn && player, replayBuf\.isScrubbing\(\), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop\); return;/,

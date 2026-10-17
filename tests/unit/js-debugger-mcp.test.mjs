@@ -2,9 +2,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { readFileSync } from "node:fs";
+import { readFileSync, unlinkSync } from "node:fs";
 import { Cdp, localUrl } from "../../tools/mcp/js-debugger-cdp.mjs";
 import { DebugSession } from "../../tools/mcp/js-debugger-session.mjs";
 import { callTool, handleRpc, TOOLS } from "../../tools/mcp/js-debugger-mcp.mjs";
@@ -13,8 +13,8 @@ import { startDebuggerHttp, debuggerRequest, debuggerPort, httpRefusal } from ".
 
 class FakeCdp extends EventEmitter {
   calls = []; closed = false;
-  async send(method, params) {
-    this.calls.push({ method, params });
+  async send(method, params, timeout) {
+    this.calls.push({ method, params, timeout });
     if (this.reply) return this.reply(method, params);
     if (method === "Debugger.setBreakpointByUrl") return { breakpointId: "bp1", locations: [] };
     return {};
@@ -36,12 +36,43 @@ test("loopback validation refuses remote/rebinding/credentials and wrong protoco
   for (const u of ["http://127.0.0.1:9222", "http://localhost:9222", "http://[::1]:9222"]) assert.equal(localUrl(u).protocol, "http:");
 });
 test("tools expose actual debugger operations; malformed arguments fail before attachment", async () => {
-  assert.equal(TOOLS.length, 13);
+  assert.equal(TOOLS.length, 19);
   const s = new DebugSession();
   for (const [name, args] of [["debugger_breakpoint", { url: "x", line: 0 }], ["debugger_control", { action: "unknown" }],
     ["debugger_source", { scriptId: "s1", count: 201 }], ["debugger_state", { surprise: true }], ["debugger_evaluate", { pauseToken: "x", expression: "x", allowSideEffects: "true" }]]) {
     const r = await callTool(s, name, args); assert.equal(r.isError, true); assert.doesNotMatch(r.content[0].text, /Attach a target/);
   }
+});
+test("incident bundles the latest exception, local page state and bounded screenshot", async () => {
+  const { s, c } = await attached();
+  await s.exceptionLogControl({ action: "start" });
+  c.emit("Debugger.paused", { reason: "exception", data: { description: "boom", uncaught: true }, callFrames: [frame] });
+  c.reply = async (method, params) => method === "Runtime.evaluate"
+    ? { result: { value: params.expression === "location.href" ? "about:blank" : { available: true, info: { track: "monza" } } } }
+    : method === "Page.captureScreenshot" ? { data: Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64") } : {};
+  const result = await callTool(s, "debugger_incident", {});
+  assert.equal(result.isError, false);
+  assert.equal(result.structuredContent.exception.message, "boom");
+  assert.equal(result.structuredContent.scene.info.track, "monza");
+  assert.deepEqual(readFileSync(result.structuredContent.screenshot), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+  assert.equal(result.content.filter(x => x.type === "resource_link").length, 2);
+  assert.equal(c.calls.find(x => x.method === "Page.captureScreenshot").params.captureBeyondViewport, false);
+  unlinkSync(result.structuredContent.screenshot); unlinkSync(result.structuredContent.report);
+  paused(c);
+  const refused = await callTool(s, "debugger_incident", {});
+  assert.equal(refused.isError, true);
+  assert.match(refused.structuredContent.error, /Resume before/);
+  await s.detach();
+});
+test("incident refuses a page that navigated away from loopback after attachment", async () => {
+  const { s, c } = await attached();
+  c.reply = async method => method === "Runtime.evaluate"
+    ? { result: { value: "https://example.com/private" } } : {};
+  const result = await callTool(s, "debugger_incident", {});
+  assert.equal(result.isError, true);
+  assert.match(result.structuredContent.error, /loopback|127\.0\.0\.1|localhost/i);
+  assert.equal(c.calls.some(x => x.method === "Page.captureScreenshot"), false);
+  await s.detach();
 });
 test("pause generation invalidates frames and objects after resume and re-pause", async () => {
   const { s, c } = await attached(); paused(c);
@@ -178,13 +209,160 @@ test("async expression can await its promise without blocking MCP control", asyn
   c.reply = async () => ({ result: { value: 42 } });
   s.run("Promise.resolve(42)", true); await new Promise(setImmediate);
   assert.equal(c.calls.find(x => x.method === "Runtime.evaluate").params.awaitPromise, true);
-  assert.equal(s.state().operations[0].result.result.value, 42);
+  assert.equal(s.state(true).operations[0].result.result.value, 42);
 });
-test("unknown timed-out execution blocks subsequent run until detach", async () => {
+test("tool responses carry only the latest operation result, not the last ten", async () => {
+  const { s, c } = await attached(); c.reply = async () => ({ result: { type: "string", value: "x".repeat(3000) } });
+  for (let i = 0; i < 4; i++) { s.run(`op${i}()`); await new Promise(setImmediate); }
+  const ops = (await callTool(s, "debugger_state")).structuredContent.operations;
+  assert.equal(ops.length, 4); assert.deepEqual(ops.slice(0, 3).map(o => Object.keys(o).sort()), Array(3).fill(["id", "status"]));
+  assert.ok(ops[3].result);
+  assert.ok(!JSON.stringify(s.state()).includes("xxxx"), "attach/control responses carry no results");
+});
+test("a run paused on a breakpoint reports paused, then pending after resume, never unknown", async () => {
+  const { s, c } = await attached(); let finish;
+  c.reply = async method => {
+    if (method === "Runtime.evaluate") { paused(c); return new Promise(r => { finish = r; }); }
+    return {};
+  };
+  s.run("fixture()"); await new Promise(setImmediate);
+  assert.equal(s.state().operations[0].status, "paused");
+  assert.equal(c.calls.find(x => x.method === "Runtime.evaluate").timeout, 600000);
+  c.emit("Debugger.resumed"); assert.equal(s.state().operations[0].status, "pending");
+  finish({ result: { value: 1 } }); await new Promise(setImmediate); assert.equal(s.state().operations[0].status, "completed");
+});
+test("a slow Debugger.disable on detach is a warning, not a failed cleanup", async () => {
+  const { s, c } = await attached();
+  c.reply = async method => { if (method === "Debugger.disable") throw Error("Debugger.disable response timed out; execution may still be active"); return {}; };
+  const r = await callTool(s, "debugger_detach");
+  assert.equal(r.isError, false); assert.deepEqual(r.structuredContent.cleanupErrors, []);
+  assert.match(r.structuredContent.cleanupWarnings[0], /Debugger\.disable/); assert.equal(r.structuredContent.detached, true);
+});
+test("a failed breakpoint removal on detach stays an error", async () => {
+  const { s, c } = await attached(); await s.setBreakpoint(frame.url, 4);
+  c.reply = async method => { if (method === "Debugger.removeBreakpoint") throw Error("timed out"); return { breakpointId: "bp1", locations: [] }; };
+  assert.equal((await callTool(s, "debugger_detach")).isError, true);
+});
+test("dead endpoint and missing tool name give actionable messages", async () => {
+  const { targets } = await import("../../tools/mcp/js-debugger-cdp.mjs");
+  await assert.rejects(targets("http://127.0.0.1:1"), /Cannot reach Chrome at http:\/\/127\.0\.0\.1:1/);
+  const r = spawnSync(process.execPath, ["tools/mcp/js-debugger-cli.mjs", "call"], { encoding: "utf8" });
+  assert.match(r.stdout, /call needs a tool name/);
+  await assert.rejects(debuggerRequest("/healthz", null, 1), /on port 1|nothing listening on 127\.0\.0\.1:1/);
+});
+test("T5: a timed-out (unknown) or pending run no longer blocks; it is marked abandoned and its late result dropped", async () => {
   const { s, c } = await attached(); c.reply = async () => { throw Error("response timed out; execution may still be active"); };
   s.run("forever()"); await new Promise(setImmediate);
-  assert.equal(s.state().operations[0].status, "unknown"); assert.throws(() => s.run("again()"), /unknown/);
+  assert.equal(s.state().operations[0].status, "unknown");
+  let late; c.reply = () => new Promise(resolve => { late = resolve; });
+  const second = s.run("again()"); assert.deepEqual(second.abandoned, [1]);
+  assert.equal(s.state().operations[0].status, "abandoned");
+  const third = s.run("third()"); assert.deepEqual(third.abandoned, [2]);
+  late({ result: { value: 1 } }); await new Promise(setImmediate);
+  assert.equal(s.state().operations.find(o => o.id === 2).status, "abandoned", "late result must not resurrect an abandoned run");
 });
+test("T6: debugger_run is documented as always mutating and refuses allowSideEffects with a pointer to debugger_evaluate", async () => {
+  const run = TOOLS.find(t => t.name === "debugger_run"), ev = TOOLS.find(t => t.name === "debugger_evaluate");
+  assert.match(run.description, /ALWAYS mutating/); assert.match(run.description, /no allowSideEffects/);
+  assert.ok(ev.inputSchema.properties.allowSideEffects); assert.ok(!run.inputSchema.properties.allowSideEffects);
+  const { s } = await attached(); const r = await callTool(s, "debugger_run", { expression: "1", allowSideEffects: true });
+  assert.equal(r.isError, true); assert.match(r.structuredContent.error, /only on debugger_evaluate/);
+});
+test("T1: scripts hide anonymous rows by default, list named URLs first, report total/truncated, and eviction keeps game.js", async () => {
+  const { s, c } = await attached();
+  for (let i = 0; i < 250; i++) c.emit("Debugger.scriptParsed", { scriptId: "a" + i, url: "", startLine: 0, endLine: 1 });
+  c.emit("Debugger.scriptParsed", { scriptId: "g", url: "http://127.0.0.1:3456/js/game.js?v=dev", startLine: 0, endLine: 9 });
+  let r = await s.scriptsList("game.js");
+  assert.deepEqual(r.scripts.map(x => x.scriptId), ["g"]); assert.equal(r.total, 1); assert.equal(r.truncated, false);
+  r = await s.scriptsList("", { includeAnonymous: true });
+  assert.equal(r.scripts.length, 200); assert.equal(r.total, 251); assert.equal(r.truncated, true); assert.equal(r.scripts[0].scriptId, "g");
+  r = await s.scriptsList("js/(game|core)\\.js", { regex: true }); assert.equal(r.total, 1);
+  assert.equal((await s.scriptsList("")).anonymousHidden, 250);
+  for (let i = 0; i < 2100; i++) c.emit("Debugger.scriptParsed", { scriptId: "b" + i, url: "", startLine: 0, endLine: 1 });
+  assert.ok(s.scripts.has("g"), "2000-entry eviction must drop anonymous scripts before a named one");
+});
+test("T1: an unresolved breakpoint warns loudly and suggests the exact parsed URL", async () => {
+  const { s, c } = await attached();
+  c.emit("Debugger.scriptParsed", { scriptId: "g", url: "http://127.0.0.1:3456/js/game.js?v=dev", startLine: 0, endLine: 9 });
+  const bp = await s.setBreakpoint("http://127.0.0.1:3456/js/game.js", 5);
+  assert.deepEqual(bp.locations, []); assert.match(bp.warning, /NO LOCATIONS/); assert.match(bp.warning, /game\.js\?v=dev/);
+  const r = await callTool(s, "debugger_breakpoint", { url: "http://127.0.0.1:3456/never.js", line: 1 });
+  assert.match(r.structuredContent.warning, /not parsed yet/);
+});
+test("T4: setting a breakpoint at an owned location removes the old CDP breakpoint by id first, even when unresolved", async () => {
+  const { s, c } = await attached(); let n = 0;
+  c.reply = async method => method === "Debugger.setBreakpointByUrl" ? { breakpointId: "same", locations: [] } : {};
+  const a = await s.setBreakpoint(frame.url, 4, 3, "x === 1"); assert.deepEqual(a.locations, []);
+  const b = await s.setBreakpoint(frame.url, 4, 3, "x === 2");
+  const seq = c.calls.map(x => x.method).filter(m => m.includes("Breakpoint"));
+  assert.deepEqual(seq, ["Debugger.setBreakpointByUrl", "Debugger.removeBreakpoint", "Debugger.setBreakpointByUrl"]);
+  assert.equal(b.condition, "x === 2"); assert.equal(s.breakpoints.size, 1);
+  assert.deepEqual(c.calls.find(x => x.method === "Debugger.removeBreakpoint").params, { breakpointId: "same" });
+  c.reply = async method => { if (method === "Debugger.removeBreakpoint") throw Error("cdp down"); return { breakpointId: "same", locations: [] }; };
+  await assert.rejects(s.setBreakpoint(frame.url, 4, 3, "x === 3"), /old condition may still be armed/);
+  assert.equal(s.breakpoints.get("same").condition, "x === 2", "a failed remove must not claim the new condition");
+});
+test("A1: logpoint condition never pauses, records into a page ring, and read/clear go through Runtime.evaluate", async () => {
+  const { s, c } = await attached();
+  const r = await callTool(s, "debugger_logpoint", { url: frame.url, line: 4, expression: "speed * 2" });
+  assert.equal(r.isError, false); const call = c.calls.find(x => x.method === "Debugger.setBreakpointByUrl");
+  assert.match(call.params.condition, /return false\}\)\(\)$/); assert.match(call.params.condition, /speed \* 2/);
+  // Execute the generated condition for real, in a scope that defines `speed`.
+  const run = (speed) => new Function("speed", "globalThis_", `return ${call.params.condition.replaceAll("globalThis", "globalThis_")}`)(speed, globalThis_);
+  var globalThis_ = {}; assert.equal(run(2), false); run(NaN); run(Infinity);
+  const ring = globalThis_.__apexDbgLog[r.structuredContent.id];
+  assert.deepEqual(ring.items.map(i => i.v), [4, "NaN", "Infinity"]); assert.equal(ring.n, 3);
+  for (let i = 0; i < 150; i++) run(i); assert.equal(ring.items.length, 100, "ring is bounded"); assert.equal(ring.n, 153);
+  c.reply = async (method, params) => { assert.equal(method, "Runtime.evaluate"); return { result: { value: { lp1: { hits: 3, retained: 3, items: [{ i: 1, v: "NaN" }] } } } }; };
+  const read = await callTool(s, "debugger_logpoint_read", { clear: true });
+  assert.equal(read.structuredContent.logpoints[0].hits, 3); assert.match(c.calls.at(-1).params.expression, /clear/);
+  paused(c); assert.equal((await callTool(s, "debugger_logpoint_read", {})).isError, true);
+});
+test("A2: exception log records message/location/top-5 stack and auto-resumes without surfacing a pause", async () => {
+  const { s, c } = await attached();
+  assert.equal((await callTool(s, "debugger_exception_log", { action: "read" })).isError, true);
+  await s.exceptionLogControl({ action: "start", state: "all", max: 2 });
+  assert.deepEqual(c.calls.at(-1), { method: "Debugger.setPauseOnExceptions", params: { state: "all" }, timeout: undefined });
+  const frames = Array.from({ length: 8 }, (_, i) => ({ ...frame, functionName: "f" + i, callFrameId: "cf" + i }));
+  for (let i = 0; i < 3; i++) c.emit("Debugger.paused", { reason: "exception", data: { description: "TypeError: boom " + (i % 2) + "\n    at x", uncaught: i === 2 }, callFrames: frames });
+  assert.equal(s.pause, null, "no visible pause"); assert.equal(c.calls.filter(x => x.method === "Debugger.resume").length, 3);
+  const r = await s.exceptionLogControl({ action: "read" });
+  assert.equal(r.total, 3); assert.equal(r.entries.length, 2, "bounded ring"); assert.equal(r.entries[1].stack.length, 5);
+  assert.match(r.entries[1].message, /^TypeError: boom 0$/); assert.match(r.entries[1].at, /fixture\.js:4$/); assert.equal(r.counts["TypeError: boom 0"], 2);
+  c.emit("Debugger.paused", { reason: "other", callFrames: [frame] }); assert.ok(s.pause, "non-exception pauses still surface");
+  assert.equal((await s.exceptionLogControl({ action: "clear" })).cleared, true);
+  assert.equal((await s.exceptionLogControl({ action: "read" })).total, 0);
+  await s.exceptionLogControl({ action: "stop" }); assert.equal(c.calls.at(-1).params.state, "none"); assert.equal(s.exceptionLog, null);
+});
+test("A3: listeners counts by type via DOMDebugger.getEventListeners and releases the object group", async () => {
+  const { s, c } = await attached();
+  c.reply = async (method, params) => {
+    if (method === "Runtime.evaluate") return { result: { objectId: "w1" } };
+    if (method === "DOMDebugger.getEventListeners") return { listeners: [{ type: "keydown", scriptId: "s1", lineNumber: 1, columnNumber: 0 }, { type: "keydown", scriptId: "s1", lineNumber: 2, columnNumber: 0 }, { type: "resize", scriptId: "s1", lineNumber: 3, columnNumber: 0 }] };
+    return {};
+  };
+  c.emit("Debugger.scriptParsed", { scriptId: "s1", url: frame.url, startLine: 0, endLine: 9 });
+  const r = await callTool(s, "debugger_listeners", { target: "#hud", detail: 2 });
+  assert.deepEqual(r.structuredContent.byType, { keydown: 2, resize: 1 }); assert.equal(r.structuredContent.total, 3);
+  assert.equal(r.structuredContent.listeners[0].url, frame.url); assert.equal(r.structuredContent.listeners.length, 2);
+  assert.match(c.calls.find(x => x.method === "Runtime.evaluate").params.expression, /querySelector\("#hud"\)/);
+  assert.ok(c.calls.some(x => x.method === "Runtime.releaseObjectGroup" && x.params.objectGroup === "apex-dbg-listeners"));
+});
+test("A4: instances queries the prototype, reads the array length and releases the group", async () => {
+  const { s, c } = await attached();
+  c.reply = async (method, params) => {
+    if (method === "Runtime.evaluate") return { result: { objectId: "p1" } };
+    if (method === "Runtime.queryObjects") { assert.equal(params.prototypeObjectId, "p1"); return { objects: { objectId: "arr1" } }; }
+    if (method === "Runtime.callFunctionOn") { assert.equal(params.objectId, "arr1"); return { result: { value: 7 } }; }
+    return {};
+  };
+  const r = await callTool(s, "debugger_instances", { expression: "AudioNode" });
+  assert.equal(r.structuredContent.count, 7);
+  assert.ok(c.calls.some(x => x.method === "Runtime.releaseObjectGroup" && x.params.objectGroup === "apex-dbg-instances"));
+  c.reply = async () => ({ result: {}, exceptionDetails: { text: "x" } });
+  assert.equal((await callTool(s, "debugger_instances", { expression: "Nope" })).isError, true);
+});
+
 test("CDP timeout and close reject pending calls without claiming cancellation", async () => {
   const socket = new EventTarget(); socket.readyState = 1; socket.send = () => {}; socket.close = () => {};
   const c = new Cdp(socket, 5);
@@ -195,7 +373,7 @@ test("JSON-RPC protocol responds to initialize/list/ping, not notifications", as
   const s = new DebugSession();
   const request = method => ({ jsonrpc: "2.0", id: 1, method });
   assert.equal((await handleRpc(s, request("initialize"))).result.serverInfo.name, "js-debugger-mcp");
-  assert.equal((await handleRpc(s, request("tools/list"))).result.tools.length, 13);
+  assert.equal((await handleRpc(s, request("tools/list"))).result.tools.length, 19);
   assert.equal(await handleRpc(s, { jsonrpc: "2.0", method: "notifications/initialized" }), null);
   assert.equal((await handleRpc(s, request("missing"))).error.code, -32601);
   assert.equal((await handleRpc(s, [])).error.code, -32600);
@@ -216,7 +394,7 @@ test("real stdio subprocess discovery and malformed JSON recovery, no browser la
   child.stdin.end('bad json\n{"jsonrpc":"2.0","id":1,"method":"initialize"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"debugger_state","arguments":null}}\n');
   const [code] = await once(child, "exit"); assert.equal(code, 0, err);
   const rows = out.trim().split("\n").map(JSON.parse); assert.equal(rows.length, 4); assert.equal(rows[0].error.code, -32700);
-  assert.equal(rows.find(r => r.id === 2).result.tools.length, 13);
+  assert.equal(rows.find(r => r.id === 2).result.tools.length, 19);
   assert.equal(rows.find(r => r.id === 3).error.code, -32602);
 });
 test("project catalogs launch the separate debugger wrapper and discover its tools", async () => {
@@ -230,7 +408,7 @@ test("project catalogs launch the separate debugger wrapper and discover its too
   assert.equal((await once(child, "exit"))[0], 0, err);
   const rows = out.trim().split("\n").map(JSON.parse);
   assert.equal(rows.find(r => r.id === 1).result.serverInfo.name, "js-debugger-mcp");
-  assert.equal(rows.find(r => r.id === 2).result.tools.length, 13);
+  assert.equal(rows.find(r => r.id === 2).result.tools.length, 19);
   assert.equal(rows.find(r => r.id === 3).result.structuredContent.connected, false);
 });
 
@@ -299,7 +477,7 @@ test("wrapper validates port and missing-daemon calls fail without creating a se
   const daemon = await startDebuggerHttp({ port: 0 }); const port = daemon.server.address().port; await daemon.close();
   const result = await shell(["call", "debugger_state", "{}"], port);
   assert.equal(result.code, 1); assert.match(result.body.error, /start js-debugger-mcp.sh serve-http/);
-  assert.equal((await shell(["list-tools"], port)).body.length, 13);
+  assert.equal((await shell(["list-tools"], port)).body.length, 19);
 });
 test("daemon shutdown drops incomplete uploads before cleaning up a paused target", { timeout: 3000 }, async () => {
   const { s, c } = await attached(); paused(c);
@@ -312,4 +490,152 @@ test("daemon shutdown drops incomplete uploads before cleaning up a paused targe
     assert.deepEqual(result.cleanupErrors, []); assert.equal(c.closed, true);
     assert.ok(c.calls.some(x => x.method === "Debugger.resume"));
   } finally { req.destroy(); await daemon.close(); }
+});
+
+test("T7: targets lists worker/service_worker rows on request, attach accepts them (including blob: workers)", async () => {
+  const rows = [{ type: "page", id: "p", url: "http://127.0.0.1:3456/", title: "g", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/p" },
+    { type: "service_worker", id: "sw", url: "http://127.0.0.1:3456/sw.js", title: "sw", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/sw" },
+    { type: "worker", id: "w", url: "blob:http://127.0.0.1:3456/abc", title: "", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/w" },
+    { type: "iframe", id: "f", url: "http://127.0.0.1:3456/f", title: "" }];
+  const srv = http.createServer((q, r) => r.end(JSON.stringify(rows.map(x => ({ ...x, webSocketDebuggerUrl: x.webSocketDebuggerUrl?.replace(":9222", ":" + srv.address().port) })))));
+  await new Promise(r => srv.listen(0, "127.0.0.1", r));
+  const endpoint = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const { targets: t } = await import("../../tools/mcp/js-debugger-cdp.mjs");
+    assert.deepEqual((await t(endpoint)).map(x => x.id), ["p"]);
+    assert.deepEqual((await t(endpoint, "service_worker")).map(x => [x.id, x.type]), [["sw", "service_worker"]]);
+    assert.deepEqual((await t(endpoint, "all")).map(x => x.id), ["p", "sw", "w"]);
+    await assert.rejects(t(endpoint, "browser"), /targetType/);
+    const c = new FakeCdp();
+    const s = new DebugSession({ open: async () => c });
+    await s.attach(endpoint, "w"); assert.equal(s.state().target.type, "worker");
+    await s.detach(); await s.attach(endpoint, "sw"); assert.equal(s.state().target.id, "sw");
+    const r = await callTool(s, "debugger_targets", { endpoint, targetType: "worker" });
+    assert.deepEqual(r.structuredContent.targets.map(x => x.id), ["w"]);
+  } finally { srv.close(); }
+});
+test("T8: a run pending across a reload/navigation (or a lost target) fails as aborted instead of staying pending", async () => {
+  const { s, c } = await attached(); c.reply = () => new Promise(() => {});
+  s.run("longAsync()", true);
+  c.emit("Runtime.executionContextsCleared");
+  const op = s.state().operations[0]; assert.equal(op.status, "aborted");
+  assert.match(s.operations.get(1).error, /aborted: context destroyed/);
+  const next = s.run("again()"); assert.equal(next.abandoned, undefined, "aborted run must not block or count as abandoned");
+  c.close(); assert.equal(s.operations.get(2).status, "aborted"); assert.match(s.operations.get(2).error, /target disconnected/);
+});
+test("T9: a timed-out run stays tracked as timedOut; its late result is recorded; timeoutMs is per call", async () => {
+  const { s, c } = await attached(); let lateCb;
+  c.send = async function (method, params, timeout, late) { this.calls.push({ method, params, timeout }); if (method === "Runtime.evaluate") { lateCb = late; throw Error("Runtime.evaluate response timed out; execution may still be active"); } return {}; };
+  const r = await callTool(s, "debugger_run", { expression: "slow()", awaitPromise: true, timeoutMs: 3000 });
+  assert.equal(r.structuredContent.timeoutMs, 3000); await new Promise(setImmediate);
+  assert.equal(c.calls.at(-1).timeout, 3000);
+  assert.deepEqual([s.state().operations[0].status, s.state().operations[0].timedOut], ["unknown", true]);
+  lateCb(null, { result: { type: "number", value: 5 } });
+  const op = s.state(true).operations[0]; assert.equal(op.status, "completed"); assert.equal(op.late, true); assert.equal(op.result.result.value, 5);
+  assert.equal((await callTool(s, "debugger_run", { expression: "x", timeoutMs: 5 })).isError, true, "below 1000 ms is out of range");
+});
+test("T9: Cdp keeps a timed-out call's id so the late response reaches the handler", async () => {
+  const socket = new EventTarget(); socket.readyState = 1; socket.send = () => {}; socket.close = () => {};
+  const c = new Cdp(socket, 5); let got;
+  await assert.rejects(c.send("Runtime.evaluate", {}, 5, (e, r) => { got = [e, r]; }), /timed out/);
+  assert.equal(c.pending.size, 1);
+  socket.dispatchEvent(Object.assign(new Event("message"), { data: JSON.stringify({ id: 1, result: { result: { value: 9 } } }) }));
+  assert.deepEqual(got, [null, { result: { value: 9 } }]); assert.equal(c.pending.size, 0);
+});
+test("T10: state reports pageUnresponsive when a long run blocks Runtime.evaluate; cancel terminates the script", async () => {
+  const { s, c } = await attached();
+  c.send = async function (method, params, timeout) {
+    this.calls.push({ method, params, timeout });
+    if (method === "Runtime.evaluate" && params.expression === "1") throw Error("Runtime.evaluate response timed out");
+    if (method === "Runtime.evaluate") return new Promise(() => {});
+    return {};
+  };
+  s.run("for(;;){}"); s.operations.get(1).startedAt -= 5000;
+  const st = (await callTool(s, "debugger_state")).structuredContent;
+  assert.equal(st.pageUnresponsive, true); assert.match(st.pageNote, /cancel/);
+  const cancelled = await callTool(s, "debugger_control", { action: "cancel" });
+  assert.equal(c.calls.at(-1).method, "Runtime.terminateExecution"); assert.equal(cancelled.isError, false);
+  assert.equal(s.operations.get(1).status, "cancelled");
+  s.run("quick()"); // fresh pending op younger than 2 s is not probed
+  c.send = async () => { throw Error("must not probe"); };
+  assert.equal((await callTool(s, "debugger_state")).structuredContent.pageUnresponsive, undefined);
+});
+test("T11: a lost target reads detached: target gone; a deliberate detach does not", async () => {
+  const { s, c } = await attached(); c.close();
+  const st = s.state(); assert.equal(st.connected, false); assert.match(st.detached, /^target gone: CDP connection closed/);
+  const b = await attached(); await b.s.detach(); assert.equal(b.s.state().detached, undefined);
+  const d = await attached(); d.c.emit("Inspector.detached", { reason: "target_closed" }); d.c.close();
+  assert.equal(d.s.state().detached, "target gone: target_closed");
+});
+test("T2: debugger_state carries only the latest operation's result, however many ran (fixed in #2535)", async () => {
+  const { s, c } = await attached(); c.reply = async () => ({ result: { type: "string", value: "x".repeat(3000) } });
+  for (let i = 0; i < 12; i++) { s.run("r" + i); await new Promise(setImmediate); }
+  const ops = s.state(true).operations; assert.equal(ops.length, 10);
+  assert.equal(ops.filter(o => o.result).length, 1); assert.ok(ops.at(-1).result);
+  assert.ok(JSON.stringify(ops).length < 6000, "response size must not grow with the number of past runs");
+});
+test("T12: attach remembers the last endpoint; common parameter aliases are accepted and every rejection names the right key", async () => {
+  const { s, c } = await attached(); await s.detach();
+  assert.equal((await callTool(new DebugSession(), "debugger_attach", { targetId: "t" })).structuredContent.error.includes("endpoint is required"), true);
+  s.discover = async () => [{ type: "page", id: "t", url: "about:blank", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/t" }];
+  await s.listTargets("http://127.0.0.1:9222");
+  const c2 = new FakeCdp(); s.open = async () => c2;
+  assert.equal((await callTool(s, "debugger_attach", { targetId: "t" })).isError, false, "endpoint omitted after debugger_targets");
+  paused(c2); const token = s.pause.token;
+  c2.reply = async () => ({ result: { type: "number", value: 1 } });
+  const ev = await callTool(s, "debugger_evaluate", { pauseToken: token, frameIndex: 0, expression: "1" });
+  assert.equal(ev.isError, false); assert.equal(c2.calls.at(-1).params.callFrameId, "frame1");
+  const bad = await callTool(s, "debugger_evaluate", { pauseToken: token, expression: "1", bogus: 1 });
+  assert.match(bad.structuredContent.error, /Unknown argument: bogus; valid arguments: pauseToken, frame, expression, allowSideEffects/);
+  assert.match((await callTool(s, "debugger_evaluate", { expression: "1" })).structuredContent.error, /Missing argument: pauseToken \(Current pause\.token/);
+  assert.equal((await callTool(s, "debugger_exceptions", { mode: "none" })).isError, false);
+  assert.deepEqual(c2.calls.at(-1), { method: "Debugger.setPauseOnExceptions", params: { state: "none" }, timeout: undefined });
+  c2.emit("Debugger.scriptParsed", { scriptId: "s1", url: frame.url, startLine: 0, endLine: 20 });
+  c2.reply = async () => ({ scriptSource: Array.from({ length: 20 }, (_, i) => "line" + (i + 1)).join("\n") });
+  const src = (await callTool(s, "debugger_source", { url: frame.url, startLine: 3, endLine: 5 })).structuredContent;
+  assert.equal(src.source, "3: line3\n4: line4\n5: line5");
+  assert.match((await callTool(s, "debugger_source", {})).structuredContent.error, /needs scriptId, or url/);
+});
+test("T13: detach always drops the local session, even when every CDP call hangs, and the daemon can attach again", async () => {
+  const { s, c } = await attached(); await s.setBreakpoint(frame.url, 4); paused(c);
+  c.send = () => new Promise(() => {}); // wedged page: no CDP answer ever
+  s.toolBusy = true; // a stuck command must not block the recovery path
+  const r = await callTool(s, "debugger_detach", {});
+  assert.equal(r.structuredContent.detached, true); assert.ok(r.structuredContent.cleanupErrors.length, "failures are reported");
+  assert.equal(s.cdp, null); assert.equal(s.breakpoints.size, 0); assert.equal(s.pause, null); assert.equal(s.state().connected, false);
+  const c2 = new FakeCdp(); s.open = async () => c2;
+  await s.attach("http://127.0.0.1:9222", "t"); assert.equal(s.state().connected, true);
+}, { timeout: 15000 });
+test("T14a: a pause whose resumed event never arrived does not block debugger_run; a live pause still does", async () => {
+  const { s, c } = await attached(); paused(c);
+  c.reply = async method => { if (method === "Debugger.evaluateOnCallFrame") throw Error("Invalid call frame id"); return {}; };
+  const ok = await callTool(s, "debugger_run", { expression: "1" }); assert.equal(ok.isError, false); assert.equal(s.pause, null);
+  paused(c); c.reply = async () => ({ result: { value: 0 } });
+  const live = await callTool(s, "debugger_run", { expression: "1" }); assert.equal(live.isError, true); assert.match(live.structuredContent.error, /while paused/);
+  // synthetic frameless pause (iframe destroyed): resume probe says the thread is not paused
+  c.emit("Runtime.executionContextDestroyed", { executionContextId: 99 }); assert.deepEqual(s.pause.frames, []);
+  c.reply = async method => { if (method === "Debugger.resume") throw Error("Can only perform operation while paused."); return {}; };
+  assert.equal((await callTool(s, "debugger_run", { expression: "2" })).isError, false);
+});
+test("T14b: a refused paused evaluate (e.g. localStorage read) says to retry with allowSideEffects:true", async () => {
+  const { s, c } = await attached(); paused(c);
+  c.reply = async () => ({ result: { type: "object" }, exceptionDetails: { text: "Uncaught", exception: { description: "EvalError: Possible side-effect in debug-evaluate" } } });
+  const r = await callTool(s, "debugger_evaluate", { pauseToken: s.pause.token, expression: "localStorage.getItem('apex26.x')" });
+  assert.equal(r.isError, true); assert.match(r.structuredContent.hint, /allowSideEffects:true/);
+  const ok = await callTool(s, "debugger_evaluate", { pauseToken: s.pause.token, expression: "localStorage.getItem('apex26.x')", allowSideEffects: true });
+  assert.equal(ok.structuredContent.hint, undefined);
+});
+test("boot lane: a non-matching or invalid filter returns nothing / a clear error, never everything", async () => {
+  const { s, c } = await attached();
+  c.emit("Debugger.scriptParsed", { scriptId: "g", url: "http://127.0.0.1:3456/js/game.js", startLine: 0, endLine: 9 });
+  c.emit("Debugger.scriptParsed", { scriptId: "h", url: "http://127.0.0.1:3456/js/hud.js", startLine: 0, endLine: 9 });
+  assert.equal((await s.scriptsList("")).total, 2);
+  const none = await s.scriptsList("no-such-script.js"); assert.deepEqual([none.scripts, none.total], [[], 0]);
+  assert.equal((await s.scriptsList("^http.*/hud\\.js$", { regex: true })).scripts[0].scriptId, "h");
+  const bad = await callTool(s, "debugger_scripts", { filter: "(", regex: true }); assert.equal(bad.isError, true); assert.match(bad.structuredContent.error, /regular expression/i);
+});
+test("boot lane: attaching a non-local page is refused with a message that says why", async () => {
+  const c = new FakeCdp();
+  const s = new DebugSession({ discover: async () => [{ type: "page", id: "t", url: "https://brycejmurrin.github.io/f1-game/", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/t" }], open: async () => c });
+  await assert.rejects(s.attach("http://127.0.0.1:9222", "t"), /only attaches pages served from 127\.0\.0\.1, localhost or \[::1\] \(local repros only/);
 });

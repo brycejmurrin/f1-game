@@ -41,7 +41,9 @@ const WallClamp = (function () {
     const lim = ContactGeometry.wallLimits(track, c.s, c.x, _lim, postLim);
     const wallR = lim.r, wallL = lim.l, laneMin = lim.laneMin, pitSd = lim.side;
     let xPinned = false;   // did the barrier clamp c.x? (see the writeback below)
-    if (c.x > wallR || c.x < -wallL) {
+    // A wall that steps inward along s is an END FACE, not a side wall (#1623): hold s, scrub, keep x.
+    if ((c.x > wallR || c.x < -wallL) && WallEndFace.apply(c, track, lim, dt)) xPinned = true;
+    else if (c.x > wallR || c.x < -wallL) {
       const into = c.x > wallR ? 1 : -1;          // +1 = hit right wall, -1 = left
       // Debris hook (render-only side-world): the pre-clamp overshoot is the
       // lateral speed into the wall × dt — the impact severity. First frame only.

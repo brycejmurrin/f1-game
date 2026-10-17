@@ -41,6 +41,14 @@ Chrome with remote debugging, using your platform's Chrome executable:
 google-chrome --remote-debugging-port=9222 --user-data-dir=/absolute/path/to/f1-game/scratch/debug-chrome
 ```
 
+In the Cloud container use the discovered Chromium (`node tools/lib/chromium-path.mjs --path`,
+normally `/opt/pw-browsers/chromium-*/chrome-linux/chrome`), headless and without a sandbox:
+
+```sh
+"$(node tools/lib/chromium-path.mjs --path)" --headless=new --no-sandbox --remote-debugging-port=9222 \
+  --user-data-dir=scratch/debug-chrome http://127.0.0.1:3456/ &
+```
+
 Navigate that browser to `http://127.0.0.1:3456/`. Only attach to an authorized
 local reproduction in this dedicated profile. The debugger supports HTTP
 loopback pages and `about:blank`, not GitHub Pages, browser extensions, workers,
@@ -109,18 +117,24 @@ mode, pass the same name and a JSON argument object to the wrapper's `call`.
 
 | Tool | Use |
 | --- | --- |
-| `debugger_targets` | List page IDs in an existing loopback Chrome debugging endpoint. |
+| `debugger_targets` | List page IDs in an existing loopback Chrome debugging endpoint. `targetType: service_worker\|worker\|all` also lists `sw.js` and worker targets (each has its own WebSocket; attach works the same, `blob:` worker URLs included). |
 | `debugger_attach` | Attach the exact selected page ID; does not launch Chrome. |
-| `debugger_state` | Read attachment, current pause token/stack/scopes and background operation status. |
-| `debugger_scripts` | Find parsed script IDs, optionally filtering by URL substring. |
-| `debugger_source` | Read a bounded source excerpt using one-based line numbers. |
-| `debugger_breakpoint` | Set an exact-URL breakpoint with one-based line/column and optional condition. |
+| `debugger_state` | Read attachment, current pause token/stack/scopes and background operation status. Adds `detached: "target gone: …"` after a lost target and `pageUnresponsive` (+`pageNote`) when a run pending > 2 s blocks the page. |
+| `debugger_incident` | After an exception, save its latest log entry, current `__apex` scene state, and a JPEG of the attached local page in `scratch/debug-incidents/`. Returns links to the image and JSON report. It rechecks the current URL before and after capture, refusing a page that navigated away from loopback. The page must be running; the image is taken *after* the exception, so it is not the failing frame. No browser is launched. |
+| `debugger_scripts` | Find parsed script IDs. Named URLs first; anonymous/eval scripts hidden unless `includeAnonymous:true`; `filter` is a substring (`regex:true` for a regex). Reports `total` and `truncated` (200-row cap). |
+| `debugger_source` | Read a bounded source excerpt using one-based line numbers. Needs a `scriptId` (from `debugger_scripts`, or a stack frame in `pause.frames[].scriptId`), never a URL. |
+| `debugger_breakpoint` | Set an exact-URL breakpoint with one-based line/column and optional condition. Setting the same location again removes the old CDP breakpoint by id first. `locations:[]` returns a `warning` with the exact parsed URLs to try. |
 | `debugger_remove_breakpoint` | Remove a breakpoint owned by this debugger session. |
-| `debugger_control` | Request pause, resume, step over, step into or step out; inspect state afterward. |
+| `debugger_control` | Request pause, resume, step over/into/out, or `cancel` (`Runtime.terminateExecution`: ends the running script, marks pending ops `cancelled`); inspect state afterward. |
 | `debugger_exceptions` | Set exception pauses to `none`, `uncaught` or `all`. |
 | `debugger_evaluate` | Inspect an expression in a paused frame; side effects require explicit opt-in. |
 | `debugger_properties` | Read current-pause object property descriptors without invoking getters. |
-| `debugger_run` | Trigger potentially mutating JavaScript without blocking later inspect/resume calls. |
+| `debugger_run` | Trigger JavaScript without blocking later inspect/resume calls. **Always mutating**: it has no `allowSideEffects` (only `debugger_evaluate` has one, default off). A new run abandons a pending/unknown one. |
+| `debugger_logpoint` | Non-pausing breakpoint recording an expression per hit into a bounded page-side ring (NaN tracing in hot loops). |
+| `debugger_logpoint_read` | Read (optionally clear) logpoint hits: total count plus the newest values. |
+| `debugger_exception_log` | `start`/`read`/`clear`/`stop`: collect caught and uncaught exceptions without pausing (auto-resume). |
+| `debugger_listeners` | Count event listeners by type on `window`, `document` or a selector. |
+| `debugger_instances` | Count live objects for a constructor/prototype expression (`Runtime.queryObjects`). |
 | `debugger_detach` | Remove owned breakpoints, reset exception mode, release objects and attempt resume/detach. |
 
 For game bugs, first reproduce with `__apex` hooks (see `docs/DEBUG-HOOKS.md`).
@@ -161,6 +175,32 @@ For the task workflow and measured traps, load the project skill
    Check `cleanupErrors`; command acknowledgment and an observed resumed event
    are reported separately. Unexpected socket loss cannot guarantee a resume.
 
+### Starting a pause in the game
+
+`race()` with no argument returns `false`, and `go()` alone leaves
+`state:"race"` with zero cars (#2532), so no breakpoint in the car loop fires.
+Start a real race first, in one `debugger_run`, then break in the tick:
+
+```js
+debugger_run {expression:"(async()=>{ __apex.headless(true); const r = __apex.race('bahrain','day','dry'); await __apex.go(); return r; })()", awaitPromise:true}
+debugger_breakpoint {url:"<game.js URL from debugger_scripts>", line:<a line in the tick>}
+```
+
+Read `debugger_state` until `paused:true`. `race()` returns `false` when the
+circuit id is unknown; check `__apex.info().track` before trusting a pause.
+
+### Slow commands under software rendering
+
+With full software GL (SwiftShader, no GPU) each frame takes long enough that
+`attach`, `detach` and `debugger_exceptions` can answer
+`response timed out; execution may still be active` **although the command
+applied**. Read `debugger_state` (or re-send the idempotent command) rather than
+assuming failure. Call `__apex.headless(true)` first: commands then take about
+0.2 s. A `Debugger.disable` timeout during `debugger_detach` is reported as
+`cleanupWarnings` (closing the CDP session disables the domain anyway); a failed
+`setPauseOnExceptions`, `removeBreakpoint` or `resume` stays a `cleanupErrors`
+entry and `isError`.
+
 ### Lessons from real game sessions
 
 - Discover the exact loaded URL, including its query string; a script can use a
@@ -179,24 +219,134 @@ For the task workflow and measured traps, load the project skill
 - Use real game functions with explicit synthetic inputs for branch inspection,
   and label that evidence separately from a physical device or user interaction.
 
+## Non-pausing tools (logpoints, exception log, counts)
+
+For hot code and leak hunts, where a pause at 60 fps is useless. All run on the
+attached page and need it **running** (resume first).
+
+- **`debugger_logpoint {url,line,expression}`**: `Debugger.setBreakpointByUrl` with a
+  generated condition that pushes `expression`'s value (evaluated in the frame, so
+  locals work) into `globalThis.__apexDbgLog[id]` and returns `false`, so it never
+  pauses. Ring size `maxHits` (default 100, max 300), values truncated at `maxChars`
+  (default 200); non-finite numbers are kept as `"NaN"`/`"Infinity"`, a throwing
+  expression records `!err: …`. Read with `debugger_logpoint_read {id?,clear?,limit?}`
+  (`hits` is the total, `items` the newest retained). Remove with
+  `debugger_remove_breakpoint {id:<breakpointId>}`. The ring dies with a reload; the
+  breakpoint survives and starts a new ring.
+- **`debugger_exception_log`**: `start {state:"all"|"uncaught", max}` sets
+  pause-on-exceptions and auto-resumes every `exception`/`promiseRejection` pause
+  (recording message, `url:line`, top-5 stack, `uncaught`, and per-message counts).
+  `read`, `clear`, `stop` (resets pause-on-exceptions to `none`). While active, exception
+  pauses never surface, so do not use `debugger_exceptions` for manual pauses.
+- **`debugger_listeners {target,detail?}`**: `DOMDebugger.getEventListeners` on `window`,
+  `document` or `document.querySelector(target)`; returns `byType` counts. Compare across restarts.
+- **`debugger_instances {expression}`**: evaluates a constructor (uses `.prototype`) or
+  prototype expression, then `Runtime.queryObjects` plus a `.length` read; V8 collects
+  garbage first, subclasses count, the object group is released.
+
+CDP contracts used (all from the protocol viewer
+<https://chromedevtools.github.io/devtools-protocol/>; the pages are a script app,
+so the machine-readable
+[js_protocol.json](https://github.com/ChromeDevTools/devtools-protocol/blob/master/json/js_protocol.json) and
+[browser_protocol.json](https://github.com/ChromeDevTools/devtools-protocol/blob/master/json/browser_protocol.json)
+were read for parameters):
+[`Debugger.setBreakpointByUrl`/`paused`/`resume`](https://chromedevtools.github.io/devtools-protocol/tot/Debugger/)
+(`paused.reason` includes `exception` and `promiseRejection`),
+[`DOMDebugger.getEventListeners {objectId,depth?,pierce?}`](https://chromedevtools.github.io/devtools-protocol/tot/DOMDebugger/#method-getEventListeners),
+[`Runtime.queryObjects {prototypeObjectId,objectGroup?}`](https://chromedevtools.github.io/devtools-protocol/tot/Runtime/#method-queryObjects),
+[`Runtime.callFunctionOn`/`releaseObjectGroup`](https://chromedevtools.github.io/devtools-protocol/tot/Runtime/).
+
+## Starting the browser: `debug-chrome.mjs`
+
+The debugger never launches Chrome. The parent can use a CLI (not an MCP tool):
+
+```sh
+node tools/mcp/debug-chrome.mjs start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu] [--device phone-landscape|desktop] [--headless-game]
+node tools/mcp/debug-chrome.mjs status   # endpoint, PIDs, page targets
+node tools/mcp/debug-chrome.mjs stop     # kills exactly the PIDs it recorded
+```
+
+`start` runs `python3 -m http.server 3456` (unless something already serves it) and
+Chromium with `--headless=new --no-sandbox --remote-debugging-port=9222
+--remote-debugging-address=127.0.0.1 --user-data-dir=scratch/debug-chrome
+--use-angle=swiftshader --enable-unsafe-swiftshader --window-size=844,390`. PIDs and logs
+live in `artifacts/debug-chrome/`. It refuses to start while a `playwright test`/test-bg
+run is live or `loadavg >= 3`. `stop` checks each PID's command line still carries the
+launch marker before signalling its process group, so a reused PID is skipped.
+
 ## Limits and ownership
 
 - Parent owns the one browser. Never run this beside a Playwright test group or
   launch a second Chrome MCP browser. Attach does not reserve or launch Chrome;
   the existing owner controls its lifetime. Use only one debugger controller.
 - Evaluation is code execution. Paused evaluation defaults to
-  `throwOnSideEffect:true`; `allowSideEffects:true`, `debugger_run` and breakpoint
+  `throwOnSideEffect:true`; `allowSideEffects:true` (a `debugger_evaluate` flag only),
+  `debugger_run` (always mutating, no flag; passing one is an error) and breakpoint
   conditions can mutate state. This is not a sandbox or an authorization layer.
 - CDP command deadlines do not cancel JavaScript. A running evaluation returns
-  `unknown` if its response times out; another run is refused until detach.
+  `unknown` if its response times out (10 minutes). A new `debugger_run` is then
+  allowed and marks the old operation `abandoned` (its late result is dropped; the
+  page JavaScript it started keeps running: there is no `cancel`, and no
+  `Runtime.terminateExecution`). A run is still refused while the page is paused.
+  A run stopped at a breakpoint reports `paused`, and `pending` again after resume.
   No automatic `Runtime.terminateExecution` is used.
 - Keep captures bounded: first10 frames/6 scopes per frame,200 script rows,
-  100 breakpoints (first20 summarized),10 operation results,4KB per stored result,
+  100 breakpoints (first 20 summarized), 10 operation rows (only the newest carries its
+  result, so a response does not re-send old ones), 4KB per stored result,
   128KB per tool response, and8MiB per CDP message. Large results are explicitly
   truncated so they cannot hide the pause token needed to resume.
 - JS heap/profiling remains in Chrome DevTools MCP. This debugger does not
   measure GPU performance. Hardware timing requires a real GPU; software
   renderer stalls are not player-performance conclusions.
+
+## Field notes 2026-10-16
+
+Defects the live-debugger fleet hit (issue #2534 and the lane reports), each with its fix and the
+test that fails on the #2535 head and passes now (`tests/unit/js-debugger-mcp.test.mjs` unless noted;
+`smoke` = `bash tools/mcp/js-debugger-mcp.sh smoke`).
+
+| # | Problem | Fix | Test |
+|---|---|---|---|
+| T1 | The 200-row `debugger_scripts` cap filled with anonymous scripts and dropped `game.js`; breakpoint `locations` came back `[]` | `filter` (+`regex`), `includeAnonymous:false` default, named URLs first, `total`/`truncated`; anonymous scripts evicted first from the 2000-row table; empty `locations` returns a `warning` with the exact parsed URLs | `T1:` ×2, smoke |
+| T2 | `debugger_state` replayed every past result | Fixed in #2535 (latest op only); confirmed, size pinned | `T2:` |
+| T4 | Remove, then set again left the old condition armed | A same-location set removes the old CDP breakpoint by id first (also when unresolved) and refuses if that fails. The exact Chrome trigger was not reproduced; this is defensive | `T4:` |
+| T5 | A timed-out/unknown run blocked every run until detach | A new run marks it `abandoned` (late result dropped). There is no cancel of the *abandoned* op; see `cancel` below | `T5:`, smoke |
+| T6 | `allowSideEffects` only on `debugger_evaluate`; asymmetry easy to trip on | Documented in both descriptions; `debugger_run` is always mutating and rejects the flag with a pointer | `T6:` |
+| T7 | Service-worker and worker targets were invisible | `targetType` on `debugger_targets`; attach accepts them | `T7:`, smoke |
+| T8 | A run pending across a reload never completed | `executionContextsCleared`/`globalObjectCleared`/disconnect mark it `aborted: context destroyed` | `T8:`, smoke |
+| T9 | `awaitPromise` past the deadline read `unknown`, result lost | `timeoutMs` per call; the op stays tracked with `timedOut:true`, and a late result is recorded (`late:true`). Page JS is **not** cancelled by a timeout or detach | `T9:` ×2, smoke |
+| T10 | A long loop wedged the page and the tool | `debugger_state` probes the page when a run is pending > 2 s and reports `pageUnresponsive`; `debugger_control cancel` ends the script | `T10:`, smoke |
+| T11 | Attachment lost when Chrome died/the container resumed, silently | `detached: "target gone: <reason>"` in state; `debug-chrome status` reports `chromeAlive`, `cdpResponding`, `viewport` | `T11:`, smoke |
+| T12 | Guessable parameters cost failed calls (`endpoint` again, `frameIndex`, `mode`, `source` by URL) | `attach` remembers the last endpoint; aliases `frameIndex`→`frame`, `mode`→`state`, `token`→`pauseToken`; `debugger_source {url,startLine,endLine}`; every rejection lists the valid argument names and a missing one is described | `T12:`, smoke |
+| T13 | After a timed-out evaluate, detach/attach failed and needed a daemon restart | `detach` always drops the local session under one 4 s deadline (reports `cleanupErrors`, never waits behind a stuck command) so the daemon stays attachable | `T13:` |
+| T14 | (a) A stale pause blocked `debugger_run`; (b) a `localStorage` read was refused with no hint | (a) `debugger_run` probes the pause (`evaluateOnCallFrame`, or `resume` for a frameless one) and clears it when the page is no longer stopped; (b) the refusal carries a `hint` to retry with `allowSideEffects:true` (V8 treats storage reads as side-effecting) | `T14a:`, `T14b:`, smoke |
+| V | `--window-size=844,390` gave an 844x198 viewport | `debug-chrome start --device phone-landscape\|desktop` runs a holder holding `Emulation.setDeviceMetricsOverride` + touch emulation, and prints the measured `innerWidth x innerHeight` | `tests/unit/debug-chrome.test.mjs` |
+
+**Chunk long loops.** A run that holds the main thread (a `race()` loop, `headless(false)` for
+minutes) blocks every `Runtime.evaluate`, so state reads show `pageUnresponsive`. Run work in bounded
+chunks (one `debugger_run` per few seconds of simulation, `awaitPromise` for each), and use `cancel` as
+the escape hatch; it can leave game state half-updated, so reload after it.
+
+**Keep `headless(true)` for logic hunts.** Un-headless software GLX pegs the GPU process at about
+350% CPU and CDP stops answering, so every tool times out. `__apex.headless(true)` suppresses drawing,
+not simulation, and keeps the page responsive; only turn drawing on for a visual question.
+
+**Reloading the game.** Reloading mid-render pegs the SwiftShader GPU process (load average 17 seen).
+`debug-chrome start --headless-game` launches on `about:blank`, navigates to the game, then calls
+`__apex.headless(true)` as soon as `__apex` exists. To reload by hand, do the same sequence:
+`about:blank`, the game URL, `__apex.headless(true)`.
+
+**Local pages only.** `debugger_attach` refuses any page not served from `127.0.0.1`, `localhost` or
+`[::1]` (and `about:blank`): this debugger is for local repros, never the deployed site. The refusal
+says so and points at `debug-chrome start`.
+
+**Keep the page visible.** A hidden or backgrounded tab gets no animation frames, so `race()` and any
+`requestAnimationFrame`-driven wait never finish. Do not background the debug page; `debug-chrome`'s
+holder also sets `Emulation.setFocusEmulationEnabled`. A script filter that matches nothing returns
+`total:0`, never the full list.
+
+**Emulation lifetime.** CDP emulation overrides end with the session that set them. The holder process
+keeps one session open for that reason; `stop` ends it with the browser.
 
 ## Validation
 
@@ -204,6 +354,7 @@ For the task workflow and measured traps, load the project skill
 node --test tests/unit/js-debugger-mcp.test.mjs
 ./tools/mcp/js-debugger-mcp.sh list-tools
 ./tools/mcp/js-debugger-mcp.sh smoke
+node --test tests/unit/debug-chrome.test.mjs
 ```
 
 The last command is **parent-only**, acquires the repository browser lock,

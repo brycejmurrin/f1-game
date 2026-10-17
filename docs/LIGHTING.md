@@ -2,7 +2,7 @@
 
 Three sections: the light-record / shader / time-of-day **reference**, the
 hand-tuned **knobs** and how to A/B them, and the per-track **presets**. The
-185 tuner sliders are generated separately into
+191 tuner sliders are generated separately into
 [`LIGHTING-TUNER-SLIDERS.md`](LIGHTING-TUNER-SLIDERS.md).
 
 `js/render/glx/glx.js` owns the shaders and light upload; `js/lighting/atmosphere.js`
@@ -508,7 +508,7 @@ Don't re-specify a `"*"` value in a per-condition preset unless you're deliberat
 
 _(from `TUNE_DEFS` in `js/lighting/knobs.js`. Focus on the per-condition-relevant ones; leave the rest at default.)_
 
-_Ranges + defaults below were re-synced from `TUNE_DEFS` (2026-09-29; 111 of the 185 knobs are listed, the rest are in `LIGHTING-TUNER-SLIDERS.md`, which is generated and always exact). Some
+_Ranges + defaults below were re-synced from `TUNE_DEFS` (2026-09-29; 111 of the 191 knobs are listed, the rest are in `LIGHTING-TUNER-SLIDERS.md`, which is generated and always exact). Some
 knobs (e.g. `ssaoRadius`, `mistShare`, `carClearcoat`, `wetness`, `blackLift`,
 `chromAb`, `grain`, `sharpen`, `speedBlur`) are repair/stylistic and rarely need a
 per-condition preset — focus on the ones the intent notes above call out._

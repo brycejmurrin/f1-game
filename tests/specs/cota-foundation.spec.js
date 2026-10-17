@@ -101,10 +101,11 @@ test.describe("COTA shared-foundation migration", () => {
     });
 
     expect(pageErrors).toHaveLength(0);
-    // SRTM bake (~22 m Hill Country). Peak is the T1 climb crest near SF, not
-    // the authored back-straight cosine bump that used to pin peakFrac ~0.52.
-    expect(result.range).toBeGreaterThan(18);
-    expect(result.range).toBeLessThan(26);
+    // SRTM bake (~31 m Hill Country; per-circuit bake override, #2208). Peak is the T1
+    // climb crest near SF, not the authored back-straight cosine bump that used to pin
+    // peakFrac ~0.52. The old 22 m bake flattened the T1 hill to ~10 m.
+    expect(result.range).toBeGreaterThan(28);
+    expect(result.range).toBeLessThan(36);
     expect(result.peakFrac).toBeGreaterThan(0.04);
     expect(result.peakFrac).toBeLessThan(0.12);
     expect(result.propMax).toBeLessThanOrEqual(0.20);

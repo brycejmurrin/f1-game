@@ -33,13 +33,36 @@ callers; the Chrome CDP endpoint is a separate address supplied by its owner.
 Starting a process does not attach tools to the chat; project MCP changes need
 client reload/trust. Never edit global agent instructions for this workflow.
 
+## Get a Chrome to attach to
+
+```sh
+node tools/mcp/debug-chrome.mjs start     # static server 3456 + headless Chromium on 9222; refuses beside a test run
+node tools/mcp/debug-chrome.mjs status    # endpoint + targets;  stop: kills only its own PIDs
+```
+
+Not an MCP tool: the debugger still never launches Chrome.
+
+## Without pausing (hot loops, leaks)
+
+`debugger_logpoint` (value per hit into a bounded ring, read with `debugger_logpoint_read`),
+`debugger_exception_log` (start/read/clear/stop), `debugger_listeners` and
+`debugger_instances` (counts across restarts). `debugger_run` is always mutating (no
+`allowSideEffects`; only `debugger_evaluate` has it) and a new run abandons a hung one.
+`debugger_scripts` hides anonymous scripts and reports `total`/`truncated`.
+
+Long runs: chunk long loops (a `race()` loop or minutes of `headless(false)` blocks the page;
+`debugger_state` then shows `pageUnresponsive`; `debugger_control cancel` ends the script, then reload).
+A `timeoutMs` deadline leaves the op `timedOut` but tracked; page JS is not cancelled and its late
+result still lands. `debugger_targets targetType:"service_worker"|"worker"` reaches `sw.js` and workers.
+`debug-chrome start --device phone-landscape|desktop` guarantees the viewport (see `status`).
+
 ## Reproduce → pause → inspect → resume
 
 1. Call `debugger_targets` with the real CDP `endpoint`; attach its exact
    `targetId` using `debugger_attach`. On a game page establish identity with
    `__apex.info()` and call `__apex.agentHelp()` once per page session.
-2. Narrow `debugger_scripts` by file name, then use `debugger_source` to find
-   the statement. Preserve the returned URL including its query suffix.
+2. Narrow `debugger_scripts` by file name, then use `debugger_source` (it needs
+   that row's `scriptId`, not a URL) to find the statement. Preserve the returned URL including its query suffix.
    Source lines/columns are one-based; frame indices are zero-based.
 3. Set `debugger_breakpoint` at that URL/line, optionally with a condition
    isolating the reproduction from background animation calls. Conditions run
@@ -60,6 +83,12 @@ client reload/trust. Never edit global agent instructions for this workflow.
 7. Resume before browser actions that require page JavaScript. Read the
    operation's final result in state; a timeout leaves execution unknown and
    does not cancel JavaScript. Detach before trying a new run in that case.
+
+To get a pause in the game, start a real race inside the run: `race()` with no
+argument returns false and `go()` alone leaves zero cars. Recipe and the Cloud
+Chromium launch line are in the reference. Under software GL, `attach`, `detach`
+and `debugger_exceptions` can time out yet apply; `__apex.headless(true)` makes
+them take about 0.2 s. A run stopped at a breakpoint reads `paused`, not `unknown`.
 
 Paused evaluation blocks side effects by default. Only use
 `allowSideEffects:true` or mutating `debugger_run` for the intended local

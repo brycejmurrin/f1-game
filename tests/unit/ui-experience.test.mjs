@@ -60,8 +60,8 @@ test('task doors retain canonical close and settings destinations', () => {
     "setDoorLabel must tolerate game-vm's detached querySelector stub");
   assert.doesNotMatch(code,/photoButton\.textContent\s*=/);
   assert.match(html,/id="photo-studio"[^>]*data-esc-close="ps-close"/);
-  assert.match(code,/openSettingsPage\("driving", "pm-pit-panel"\)/);
-  assert.match(code,/openSettingsPage\("driving", "pm-session-review"\)/);
+  assert.match(code,/openSettingsPage\("strategy", "pm-pit-panel"\)/);
+  assert.match(code,/openSettingsPage\("review", "pm-session-review"\)/);
 });
 
 test('Home varies real environments and shots per visit, preserving the shot through redraws', () => {

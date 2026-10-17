@@ -1,0 +1,2 @@
+Fixed: the agent API's aiPlace() ranks a placed car on the engine's lap convention (it was one lap ahead), and reset() no longer drops every car to slow V8 dictionary mode.
+Fixed: reopening the Data Hub while it is open no longer sends focus into the hidden dialog on close; a stale oversize race grid is dropped from memory when an unfinished race is forgotten; a room code that expires after a failed connect is taken down with the right copy.

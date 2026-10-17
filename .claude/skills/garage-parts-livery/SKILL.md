@@ -38,12 +38,12 @@ Field catalog — `Parts.CATALOG` order, SIGNATURE / `FACTORY_PRESETS`, `ersProf
 ## When NOT to Use
 
 - Pure driving feel → **tune-physics**. Career economy with no parts edit →
-  **career-mode**. Isolated car shots → **playwright-probe** (`references/car-studio.md`). Cache bump →
+  **career-mode**. Isolated car shots → **playwright-probe** (`references/car-studio.md`). Batch garage shot contract → [`references/shot-cli.md`](references/shot-cli.md). Cache bump →
   `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)).
 - A live, driven-by-hand look at the Garage/LIVERY screen (as opposed to a
   batch `garage-angles.mjs` run) → **mcp-probe** against the local server,
   clicking category tabs / livery swatches directly — see
-  `.claude/skills/mcp-probe/references/recipes.md` § "Driving a UI screen" and
+  `.claude/skills/mcp-probe/references/recipes.md` (index) → [`chrome.md`](../mcp-probe/references/chrome.md) and
   `.claude/skills/mcp-probe/references/traps-chrome.md` for the click-timeout and soft-present-wait
   gotchas specific to that screen.
 

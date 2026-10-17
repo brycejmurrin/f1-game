@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Thirty `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Thirty-two `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -154,7 +154,7 @@ auto-load them — then use the Fallback column.
 | **apex-tools** | `apex_*` | Pin safe flags on committed `tools/` CLIs against the **working tree** (the wrap map below is the count). Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
 | **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **survey-ui-matrix**, **css-play**. Batch shots → **playwright-probe** (CLI, not this MCP). | `bash tools/mcp/playwright-mcp.sh run` (stdio) |
 | **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
-| **js-debugger** | `debugger_*` | Parent-owned source debugging of an existing local Chrome page: breakpoints, pause/step, stack/locals and resume. Does not launch a browser. Setup: [Agent JS debugger](research/AGENT-JS-DEBUGGER-MCP.md). | `tools/mcp/js-debugger-mcp.sh serve-http`, then `call <debugger_tool> '{…}'` against that persistent session |
+| **js-debugger** | `debugger_*` | Parent-owned source debugging of an existing local Chrome page: breakpoints, pause/step, stack/locals and resume; non-pausing logpoints, exception log, incident screenshot, listener and instance counts. Does not launch a browser (`node tools/mcp/debug-chrome.mjs start` does, as a CLI). Setup: [Agent JS debugger](research/AGENT-JS-DEBUGGER-MCP.md). | `tools/mcp/js-debugger-mcp.sh serve-http`, then `call <debugger_tool> '{…}'` against that persistent session |
 
 **Removed 2026-09 (CLI only now, not MCP-attached):**
 
@@ -252,7 +252,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Thirty tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Thirty-two tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -283,6 +283,8 @@ the tool when the 3D frame behind the HUD matters.
 29 → 30 on 2026-10-10 for `apex_catalog` (built-in): every valid id the other tools
 accept (tracks, cams, tods, shot presets, HUD devices/cams, job kinds, UI screens
 and viewports) in one read, sourced from the tools' own schemas so it cannot drift.
+30 → 31 on 2026-10-16 for `apex_profile_query` (`perf/query.mjs`: summarise or compare saved profile artifacts, tree kind). The profiler run itself is `apex_job_start` kind `profile` (`perf/profile.mjs`, a browser job behind the already-guarded job door).
+31 → 32 on 2026-10-16 for `apex_profile`, the same job as a direct browser-kind tool (`profile` joined the settings matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`); it returns a jobId and holds the browser lock until the job exits.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -317,6 +319,8 @@ and viewports) in one read, sourced from the tools' own schemas so it cannot dri
 | `apex_hud_shot` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
 | `apex_hud_survey` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
 | `apex_hud_mock` | `shot/hud-mock.mjs` | browser | survey-ui-matrix |
+| `apex_profile` | `perf/profile.mjs` | browser | playwright-probe |
+| `apex_profile_query` | `perf/query.mjs` | tree | playwright-probe |
 
 Pins the wrap always applies (you cannot override them):
 
@@ -442,3 +446,74 @@ Combine saved reports without launching a browser:
 
 Pass this object to `apex_shot_survey`. The CLI equivalent is `node tools/shot/shot-survey.mjs --reports artifacts/track-survey/monza/findings.json,artifacts/track-survey/spa/findings.json --out artifacts/track-survey/combined`.
 The output folder includes copied PNG/JPEG assets and can be shared as a ZIP. Reports may identify custom circuits; an explicit `actualTrack` or runtime `state.info.track` takes precedence over a bootstrap track ID. Captures now record their actual runtime track ID. Missing images fail the gallery build; recorded capture failures stay visible in the gallery.
+
+### Read-only UI inspector
+
+`node tools/ui/explorer.mjs inspect --screen settingsappearance --styles '#as-uiScale'`
+opens the existing catalog route in one isolated Chromium and writes
+`artifacts/ui-explorer/inspection.json` plus JSON stdout. Use `--selector` to scope
+controls and `--styles` for one element's browser-computed CSS and matched source
+rules. `--help` and `--list` remain browser-free. Catalog setup is not evidence
+that every door or control is actionable; use the explorer's validated `replay`
+scenarios for real interaction paths and Playwright traces.
+
+For an existing local Playwright page, import `installInspector`, `inspectPage`
+and `diffInspections` from `tools/ui/explorer/inspector.mjs`. After
+`await installInspector(page)`, `__apex.ui.inspect({root:'#pmsettings'})` is a
+read-only dev-page namespace. Reinstall after navigation. It is not shipped in
+the game or added to its production module roster. It does not call the general
+`__apex` getters, which may lazily load a circuit.
+
+Reports include role/name/value/pressed/selected/open, native disabled state,
+unique selectors, focus/focused dialog, range bounds, axis-specific scrolling, clipping
+and hit interception. Explicit adapters cover UI/HUD/button scale, opacity,
+appearance selects, camera offsets/comfort and live lighting inputs. `saved:null`
+means no override when storage is readable; `unavailable` and `unmapped` are not
+passes. Camera offsets do not prove rendered framing; lighting profile persistence
+and pixels remain unverified by this probe. Other controls explicitly stay unmapped.
+Move the actual control, compare DOM/live/saved values, then reload to verify durability.
+
+`diffInspections(before,after)` separates semantic/binding changes from geometry
+movement; replay action timings include these diffs. The DOM name/role screening
+is supplemented by Playwright's accessibility snapshot. CSS reports pair computed
+values with candidate declarations/source lines; they do not guess cascade winners.
+Known limits and truncation are recorded in JSON. No new browser controller,
+framework, hosted service, WebMCP dependency or settings mutation is required.
+
+Adaptive CSS diagnostics include each control's computed sizing, wrapping, zoom,
+font and container properties, with deduplicated ancestor boxes and scroll metrics
+(`layoutContexts`, at most 12 ancestors per control / 256 unique contexts).
+Contexts also retain `data-shape/density/pair/rail/fit` classifications and
+sheet-scale/fit/compact/pair/rail threshold tokens used by the game's adaptive CSS.
+`display:contents` ancestors are marked boxless and do not cause false clipping;
+outer real clips still apply. Clipping checks continue beyond the context limit.
+`adaptive` records the visual viewport, pointer/orientation/motion media matches,
+root scale/safe-area/tap tokens and selected appearance attributes. CSS custom
+properties retain browser serialization; a `calc()` token is not a measured inset.
+
+Use a bounded sweep to compare the SAME open state across sizes:
+
+```sh
+node tools/ui/explorer.mjs inspect --screen garage --styles '#cs-tab-team' --viewports 390x844,844x390,1280x800
+```
+
+Or import `inspectResponsive` and call
+`await inspectResponsive(page,{root:'#carsetup',viewports:[{width:390,height:844},{width:844,height:390}]})`.
+The result contains a snapshot per size and consecutive diffs; geometry, computed
+layout and ancestor changes are separate from semantic/binding changes. The
+original viewport is restored even if inspection fails. Up to eight integer
+sizes are allowed (width 240–3840, height 240–2160). The helper changes viewport
+size only: pointer emulation, settings and safe-area overrides are not invented.
+Each record reports layout settlement: at least 150 ms and three matching frame
+samples, bounded to 500 elements, 120 frames and two seconds. Unstable/truncated
+samples are explicit, and quiet samples cannot rule out later async work. Resizing can
+trigger native orientation/pause dialogs; they are recorded, not dismissed, and
+restoring size cannot undo application state transitions. Use the existing
+`layout-audit.mjs` matrix for scales/pointers/insets and validated replay actions
+for settings changes, scrolling, reload durability and modal navigation.
+
+API references: [Chrome CSS domain](https://chromedevtools.github.io/devtools-protocol/tot/CSS/),
+[Playwright accessibility snapshots](https://playwright.dev/docs/aria-snapshots),
+[Playwright traces](https://playwright.dev/docs/trace-viewer),
+[MDN visual viewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport),
+[MDN box generation](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Display/Visual_formatting_model#the_principal_box).

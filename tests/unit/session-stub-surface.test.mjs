@@ -173,3 +173,19 @@ test("RadioVoice.inert() carries sayPreRace like the real inert (loading-screen 
   assert.equal(typeof stubGlobal("RadioVoice").inert().sayPreRace, "function");
   assert.equal(stubGlobal("RadioVoice").inert().sayPreRace("x", 1, 0), false);
 });
+
+test("the stub AudioPanel paints a saved SOUND OFF on the title button before the real panel lands", () => {
+  // Until the first gesture loads LAZY_AUDIO, index.html's static "SOUND ON" is all the player sees: a
+  // muted player reloaded to a button that claimed the opposite, and tapping it turned the sound ON.
+  const mk = (soundOn) => {
+    const btn = { textContent: "♪ SOUND ON", attrs: { "aria-pressed": "true" }, setAttribute(k, v) { this.attrs[k] = v; } };
+    stubGlobal("AudioPanel").create({ els: { soundbtn: btn }, store: G0.store, soundOn });
+    return btn;
+  };
+  const off = mk(false);
+  assert.equal(off.textContent, "♪ SOUND OFF");
+  assert.equal(off.attrs["aria-pressed"], "false");
+  const on = mk(true);
+  assert.equal(on.textContent, "♪ SOUND ON");
+  assert.equal(on.attrs["aria-pressed"], "true");
+});

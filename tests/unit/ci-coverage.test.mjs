@@ -426,20 +426,28 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   const nodeIf = (node.match(/^    if: (.*)$/m) || [])[1] || "";
   assert.match(nodeIf, /needs\.select\.outputs\.any_node == 'true' \|\| github\.event_name != 'pull_request'/,
     "node-suites may skip at the job level only on a pull request with no needed slice");
+  // Decisions D1/D2 (the CI selection plan, PR #2560 §6): no draft
+  // (run-ci or not) and no Pages call runs the node slices; ready PRs, the
+  // nightly and dispatch do.
+  assert.ok(nodeIf.includes("&& !(github.event_name == 'pull_request' && github.event.pull_request.draft) &&"),
+    "node-suites skips every draft, run-ci included");
+  assert.match(nodeIf, /inputs\.concurrency_key == ''/, "node-suites skips on the Pages call");
   const steps = node.split(/\n      - /).slice(1);
-  const setup = steps.filter((st) => /^uses: actions\/checkout@|^uses: \.\/\.github\/actions\/setup-apex|^name: Plan the slices for this diff|^name: Was this head already green as a draft\?/.test(st));
-  assert.equal(setup.length, 4, "checkout, the reuse question, setup-apex and the plan step");
+  const setup = steps.filter((st) => /^uses: actions\/checkout@|^uses: \.\/\.github\/actions\/setup-apex|^name: Plan the slices for this diff/.test(st));
+  assert.equal(setup.length, 3, "checkout, setup-apex and the plan step");
+  assert.doesNotMatch(node, /reuse-draft-fast\.sh|steps\.reuse\./, "no draft run exists to reuse, so node-suites asks no reuse question");
   for (const st of setup) assert.match(st, /\n        if: matrix\.needed != 'false'/, "an unneeded row skips: " + st.split("\n")[0]);
   assert.match(node, /if \[ "\$\{\{ matrix\.needed \}\}" = "false" \]; then[\s\S]*?exit 0/, "the suites step exits 0 for an unneeded row");
   assert.match(node, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.slices\) \}\}/);
   const driving = (ciWorkflow.split("\n  driving-model:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.match(driving, /^    needs: \[select\]$/m);
   assert.match(driving, /needs\.select\.outputs\.driving == 'true'/);
+  assert.match(driving, /^    if: .*inputs\.concurrency_key == ''/m, "driving-model skips on the Pages call (decision D2)");
   // No plumbing job is left in front of the fast tier: every job that used to
   // wait on `reuse-draft` asks the question itself, as a step.
   const jobs = parseYAML(ciWorkflow).jobs;
   for (const id of ["reuse-draft", "unit-plan", "ship-filter", "renderer-filter", "xr-filter"]) assert.ok(!jobs[id], `${id} is a step now, not a job`);
-  for (const id of ["guards-a", "guards-b", "node-suites", "sweeps-parts", "driving-model"]) {
+  for (const id of ["guards-a", "guards-b", "sweeps-parts", "driving-model"]) {
     const st = jobs[id].steps.find((x) => x.id === "reuse");
     assert.ok(st && /reuse-draft-fast\.sh/.test(st.run), `${id} asks the reuse question itself`);
     assert.deepEqual(jobs[id].permissions, { contents: "read", actions: "read" }, `${id} needs actions:read for the runs lookup`);
@@ -1609,7 +1617,9 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   assert.ok(shipFilter.includes(fastTier), "the ship filter step sits out the fast tier with the same expression");
   assert.ok(sweepsJob.includes(fastTier), "sweeps sit out the fast tier");
   assert.doesNotMatch(ciWorkflow, /smoke_only/, "the always-false smoke_only input and its guards are gone (2026-10-14)");
-  for (const name of ["guards-a", "guards-b", "guards", "node-suites", "driving-model", "select"]) {
+  // node-suites left the draft fast tier on 2026-10-16 (decision D1): it keeps
+  // the shared draft/label predicate and adds its own draft skip (pinned above).
+  for (const name of ["guards-a", "guards-b", "guards", "driving-model", "select"]) {
     const job = ciWorkflow.slice(ciWorkflow.indexOf(`\n  ${name}:\n`));
     const head = job.slice(0, job.indexOf("\n    steps:"));
     assert.ok(head.includes(PR_ACTIVE), `${name} must skip draft synchronize unless run-ci`);
