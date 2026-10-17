@@ -1,0 +1,18 @@
+{
+  "files": {
+    "js/agent/agentview.js": {
+      "lines": -4
+    },
+    "js/agent/apex.js": {
+      "codeLines": 3,
+      "lines": 7
+    },
+    "js/game.js": {
+      "codeLines": -2,
+      "lines": -3
+    }
+  },
+  "tree": {
+    "waitForTimeout": -2
+  }
+}

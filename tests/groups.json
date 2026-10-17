@@ -55,6 +55,7 @@
     "// ladder on the platforms that do not have Daniel.",
     "tests/unit/announcer.test.mjs",
     "tests/unit/apca-timing.test.mjs",
+    "tests/unit/apex-arg-guards.test.mjs",
     "tests/unit/apex-career-delete.test.mjs",
     "tests/unit/apex-tools-mcp.test.mjs",
     "tests/unit/appearance-opts.test.mjs",
@@ -1814,6 +1815,7 @@
     "test:state-unit": {
       "files": [
         "tests/unit/a11y-opts.test.mjs",
+        "tests/unit/apex-arg-guards.test.mjs",
         "tests/unit/apex-career-delete.test.mjs",
         "tests/unit/appearance-opts.test.mjs",
         "tests/unit/badges.test.mjs",
