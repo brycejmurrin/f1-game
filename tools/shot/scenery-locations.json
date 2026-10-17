@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "2fa86dfb1cf020ba13945475cc5fc4f2e6e4dd46da2cde0d39dff17f525d6629",
+  "sourceDigest": "91625fc7d96adaea3405f1125cc4385530e2c6330ed122607526f4f224fa4ecf",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -213,11 +213,11 @@
       "track": "bahrain",
       "name": "Sakhir Tower",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.019304,
+      "frac": 0.020059,
       "target": [
-        308.12,
-        21.21,
-        146.4
+        307.97,
+        21.18,
+        150.46
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 69,
@@ -234,7 +234,7 @@
       "target": [
         412.13,
         6.67,
-        46.3
+        46.31
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 31,
@@ -247,11 +247,11 @@
       "track": "bahrain",
       "name": "Control Tower",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.007411,
+      "frac": 0.008154,
       "target": [
-        334.52,
-        12.4,
-        83.09
+        334.37,
+        12.41,
+        87.08
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 45,
@@ -264,11 +264,11 @@
       "track": "bahrain",
       "name": "University Grandstand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.184788,
+      "frac": 0.184925,
       "target": [
-        -52.88,
+        -53.21,
         6.53,
-        496.99
+        496.93
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 33.2,
@@ -281,11 +281,11 @@
       "track": "bahrain",
       "name": "Schumacher Corner",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.101707,
+      "frac": 0.101783,
       "target": [
-        377.57,
-        2.35,
-        600.54
+        377.42,
+        2.36,
+        600.9
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 21,
@@ -298,11 +298,11 @@
       "track": "bahrain",
       "name": "Beyon Grandstand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.780259,
+      "frac": 0.78084,
       "target": [
-        -76.2,
-        3.96,
-        -309.32
+        -73.79,
+        3.92,
+        -310.57
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 45,
@@ -485,11 +485,11 @@
       "track": "buenos_aires",
       "name": "Pit Block",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.975447,
+      "frac": 0.975423,
       "target": [
-        72.32,
+        72.31,
         1.67,
-        -52.11
+        -52.09
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 59.5,
@@ -504,13 +504,13 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.995,
       "target": [
-        14.14,
+        14.13,
         6.82,
         9.99
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/buenos_aires.js anchor K(0.995)",
-      "projectedFrac": 0.193579,
+      "projectedFrac": 0.193762,
       "nearestRoadDistanceM": 67.6,
       "viewDistanceM": 73.5,
       "source": "tests/data/landmarks/buenos_aires.json; js/circuits/scenery/buenos_aires.js"
@@ -521,11 +521,11 @@
       "track": "buenos_aires",
       "name": "Portico",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.928344,
+      "frac": 0.928276,
       "target": [
-        278.96,
+        278.92,
         8.59,
-        -153.6
+        -153.55
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 55.8,
@@ -538,11 +538,11 @@
       "track": "buenos_aires",
       "name": "Curvón Terrace",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.379472,
+      "frac": 0.37983,
       "target": [
-        -377.46,
-        6.83,
-        188.21
+        -377.49,
+        6.84,
+        188.52
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 35,
@@ -555,15 +555,15 @@
       "track": "buenos_aires",
       "name": "Confiteria",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.745641,
+      "frac": 0.744802,
       "target": [
-        108.23,
-        2.1,
-        -215.4
+        106.62,
+        2.09,
+        -205.71
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 40.6,
-      "viewDistanceM": 40.6,
+      "nearestRoadDistanceM": 40.5,
+      "viewDistanceM": 40.5,
       "source": "tests/data/landmarks/buenos_aires.json; js/circuits/scenery/buenos_aires.js"
     },
     {
@@ -572,11 +572,11 @@
       "track": "buenos_aires",
       "name": "Talud Gate",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.83475,
+      "frac": 0.834594,
       "target": [
-        305.88,
+        306.02,
         3.86,
-        -415.55
+        -415.57
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 54.4,
@@ -623,11 +623,11 @@
       "track": "cota",
       "name": "Amphitheater",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.760073,
+      "frac": 0.760076,
       "target": [
-        359.57,
+        359.61,
         -0.07,
-        -2.48
+        -2.39
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 86.5,
@@ -642,9 +642,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.100291,
       "target": [
-        377.31,
+        377.32,
         6.83,
-        -348.35
+        -348.29
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 56,
@@ -839,14 +839,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.168,
       "target": [
-        -402.22,
-        -7.95,
-        308.67
+        -402.5,
+        -7.93,
+        308.68
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/fuji.js anchor K(0.168)",
-      "projectedFrac": 0.345419,
-      "nearestRoadDistanceM": 48.3,
+      "projectedFrac": 0.345215,
+      "nearestRoadDistanceM": 48.1,
       "viewDistanceM": 144.9,
       "source": "tests/data/landmarks/fuji.json; js/circuits/scenery/fuji.js"
     },
@@ -858,14 +858,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.12,
       "target": [
-        3038.57,
+        3038.35,
         378.05,
-        90.34
+        90.38
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "docs/tracks/fuji.md §4 skyline viewing station",
-      "projectedFrac": 0.89832,
-      "nearestRoadDistanceM": 2449.6,
+      "projectedFrac": 0.89823,
+      "nearestRoadDistanceM": 2449.5,
       "viewDistanceM": 3193.5,
       "source": "tests/data/landmarks/fuji.json; js/circuits/scenery/fuji.js"
     },
@@ -875,11 +875,11 @@
       "track": "hockenheim",
       "name": "Motodrom Screen",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.881596,
+      "frac": 0.882272,
       "target": [
-        437.41,
+        437.37,
         9.98,
-        -321.85
+        -321.88
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 46.6,
@@ -894,8 +894,8 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.828194,
       "target": [
-        458.46,
-        12.03,
+        458.42,
+        12.01,
         -76.67
       ],
       "stationMethod": "nearest-road-projection",
@@ -911,9 +911,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.934802,
       "target": [
-        431.99,
-        9.19,
-        -491.58
+        431.96,
+        9.21,
+        -491.57
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 37.4,
@@ -926,11 +926,11 @@
       "track": "hockenheim",
       "name": "Nord Tribune",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.054623,
+      "frac": 0.054625,
       "target": [
-        744.38,
-        6.8,
-        -20.9
+        744.39,
+        6.81,
+        -20.87
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 32.2,
@@ -945,13 +945,13 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.89,
       "target": [
-        345.2,
-        2.27,
-        -277.35
+        345.23,
+        2.26,
+        -277.32
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/hockenheim.js anchor K(0.890)",
-      "projectedFrac": 0.782608,
+      "projectedFrac": 0.782634,
       "nearestRoadDistanceM": 32.2,
       "viewDistanceM": 52.6,
       "source": "tests/data/landmarks/hockenheim.json; js/circuits/scenery/hockenheim.js"
@@ -996,11 +996,11 @@
       "track": "imola",
       "name": "Partenza Stands",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.02473,
+      "frac": 0.024731,
       "target": [
-        -261.56,
-        1.98,
-        414.56
+        -261.53,
+        1.76,
+        414.57
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 48.2,
@@ -1013,11 +1013,11 @@
       "track": "imola",
       "name": "Racetrack Tower",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.989327,
+      "frac": 0.990147,
       "target": [
-        -425.44,
-        17.04,
-        301.18
+        -421.44,
+        17.05,
+        301.21
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 55,
@@ -1030,10 +1030,10 @@
       "track": "imola",
       "name": "Senna Memorial",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.074693,
+      "frac": 0.074692,
       "target": [
-        -12.51,
-        3.59,
+        -12.39,
+        3.45,
         379.33
       ],
       "stationMethod": "nearest-road-projection",
@@ -1049,14 +1049,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.355,
       "target": [
-        749.48,
-        3.66,
-        -445.04
+        749.51,
+        3.51,
+        -443.94
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/imola.js anchor R(0.355)",
-      "projectedFrac": 0.378715,
-      "nearestRoadDistanceM": 31.6,
+      "projectedFrac": 0.378609,
+      "nearestRoadDistanceM": 32.7,
       "viewDistanceM": 91,
       "source": "tests/data/landmarks/imola.json; js/circuits/scenery/imola.js"
     },
@@ -1066,15 +1066,15 @@
       "track": "imola",
       "name": "Tamburello Tribute Wall",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.08124,
+      "frac": 0.082059,
       "target": [
-        17.01,
-        1.76,
-        369.04
+        20.78,
+        1.77,
+        368.9
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 37.6,
-      "viewDistanceM": 37.6,
+      "nearestRoadDistanceM": 37.7,
+      "viewDistanceM": 37.7,
       "source": "tests/data/landmarks/imola.json; js/circuits/scenery/imola.js"
     },
     {
@@ -1085,9 +1085,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.00491,
       "target": [
-        264.4,
+        264.36,
         24.52,
-        -77.52
+        -77.59
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 70,
@@ -1102,9 +1102,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.030446,
       "target": [
-        303.27,
+        303.17,
         17.79,
-        26.13
+        26.05
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 32,
@@ -1117,11 +1117,11 @@
       "track": "indianapolis",
       "name": "Main Stands",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.999994,
+      "frac": 0.999995,
       "target": [
-        366.52,
+        366.49,
         6.93,
-        -98.45
+        -98.46
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 32.3,
@@ -1134,9 +1134,9 @@
       "track": "indianapolis",
       "name": "Museum",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.801925,
+      "frac": 0.801923,
       "target": [
-        46.97,
+        47.17,
         2.83,
         -624.76
       ],
@@ -1223,15 +1223,15 @@
       "track": "istanbul",
       "name": "Turn8 Hospitality",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.477169,
+      "frac": 0.476771,
       "target": [
-        -784.64,
-        7.23,
-        516.36
+        -786.04,
+        7.22,
+        507.74
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 57.5,
-      "viewDistanceM": 57.5,
+      "nearestRoadDistanceM": 57.6,
+      "viewDistanceM": 57.6,
       "source": "tests/data/landmarks/istanbul.json; js/circuits/scenery/istanbul.js"
     },
     {
@@ -1240,7 +1240,7 @@
       "track": "istanbul",
       "name": "Stone Portal",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.911937,
+      "frac": 0.91187,
       "target": [
         622.44,
         7.14,
@@ -1493,12 +1493,12 @@
       "frac": 0.002,
       "target": [
         -9.37,
-        13.34,
-        -144.42
+        13.35,
+        -144.43
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/jerez.js anchor K(sl(0.002))",
-      "projectedFrac": 0.662128,
+      "projectedFrac": 0.661939,
       "nearestRoadDistanceM": 30.9,
       "viewDistanceM": 33.5,
       "source": "tests/data/landmarks/jerez.json; js/circuits/scenery/jerez.js"
@@ -1509,11 +1509,11 @@
       "track": "jerez",
       "name": "Control Tower",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.01184,
+      "frac": 0.011851,
       "target": [
-        -41.64,
-        21.73,
-        -177.57
+        -41.65,
+        21.74,
+        -177.58
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 31.5,
@@ -1526,11 +1526,11 @@
       "track": "jerez",
       "name": "Lorenzo Corner",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.825221,
+      "frac": 0.825019,
       "target": [
-        499.77,
+        499.73,
         4.99,
-        -199.29
+        -199.59
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 23.5,
@@ -1543,11 +1543,11 @@
       "track": "jerez",
       "name": "Dani Pedrosa",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.258058,
+      "frac": 0.25733,
       "target": [
-        -74.68,
-        13.16,
-        363.5
+        -74.94,
+        13.23,
+        363.88
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 25.5,
@@ -1857,9 +1857,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.720133,
       "target": [
-        127.28,
-        8.23,
-        1.42
+        126.89,
+        8.25,
+        1.22
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 30,
@@ -1874,9 +1874,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.935,
       "target": [
-        656,
+        656.01,
         6.35,
-        327.79
+        327.78
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/mexico.js anchor K(0.935)",
@@ -1893,9 +1893,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.800373,
       "target": [
-        456.13,
+        455.64,
         16.07,
-        46.36
+        46.09
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 54,
@@ -1910,9 +1910,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.010268,
       "target": [
-        397.31,
+        397.3,
         4.59,
-        328.1
+        328.09
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 50,
@@ -1925,15 +1925,15 @@
       "track": "mexico",
       "name": "Palacio Deportes",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.5994,
+      "frac": 0.59952,
       "target": [
-        -227.69,
+        -227.64,
         11.94,
-        -321.4
+        -321.91
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 83,
-      "viewDistanceM": 83.1,
+      "nearestRoadDistanceM": 83.5,
+      "viewDistanceM": 83.5,
       "source": "tests/data/landmarks/mexico.json; js/circuits/scenery/mexico.js"
     },
     {
@@ -2235,9 +2235,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.004846,
       "target": [
-        610.37,
+        610.38,
         7.39,
-        -194.64
+        -194.63
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 30,
@@ -2253,7 +2253,7 @@
       "frac": 0,
       "target": [
         539.29,
-        26.33,
+        26.32,
         -229.33
       ],
       "stationMethod": "nearest-road-projection",
@@ -2269,9 +2269,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.975059,
       "target": [
-        563.68,
+        563.69,
         4.67,
-        -372.15
+        -372.17
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 34,
@@ -2386,15 +2386,15 @@
       "track": "nurburgring",
       "name": "Burg Nurburg",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.681681,
+      "frac": 0.682067,
       "target": [
-        785.62,
+        785.63,
         87.28,
-        1026.16
+        1025.87
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 802.7,
-      "viewDistanceM": 802.7,
+      "nearestRoadDistanceM": 802.5,
+      "viewDistanceM": 802.5,
       "source": "tests/data/landmarks/nurburgring.json; js/circuits/scenery/nurburgring.js"
     },
     {
@@ -2403,11 +2403,11 @@
       "track": "nurburgring",
       "name": "Coca Cola Kurve",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.859937,
+      "frac": 0.859828,
       "target": [
-        -552.43,
+        -552.68,
         2.06,
-        656.72
+        657.01
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 21.5,
@@ -2420,11 +2420,11 @@
       "track": "nurburgring",
       "name": "Race Control",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.988435,
+      "frac": 0.988426,
       "target": [
-        -45.48,
+        -45.5,
         10.47,
-        234.12
+        234.14
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 45.5,
@@ -2488,11 +2488,11 @@
       "track": "paul_ricard",
       "name": "Beausset Hill",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.745328,
+      "frac": 0.745322,
       "target": [
-        -844.21,
-        0.05,
-        -694.5
+        -844.94,
+        0.06,
+        -695.01
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 76.8,
@@ -2507,9 +2507,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.940096,
       "target": [
-        -377.35,
-        2.12,
-        -303.67
+        -377.32,
+        2.11,
+        -303.59
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 29.6,
@@ -2522,11 +2522,11 @@
       "track": "paul_ricard",
       "name": "Aerodrome",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.429737,
+      "frac": 0.42975,
       "target": [
-        100.15,
-        3.07,
-        375.34
+        100.39,
+        3.14,
+        375.43
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 158,
@@ -2539,11 +2539,11 @@
       "track": "paul_ricard",
       "name": "Airfield Tower",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.458961,
+      "frac": 0.458949,
       "target": [
-        -51.72,
-        8.66,
-        297.27
+        -51.34,
+        8.72,
+        297.43
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 138.1,
@@ -2558,14 +2558,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.235,
       "target": [
-        1010.39,
-        2.53,
-        657.03
+        1010.25,
+        2.47,
+        657.05
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/paul_ricard.js anchor K(0.235)",
-      "projectedFrac": 0.262027,
-      "nearestRoadDistanceM": 24.4,
+      "projectedFrac": 0.262095,
+      "nearestRoadDistanceM": 24.3,
       "viewDistanceM": 128,
       "source": "tests/data/landmarks/paul_ricard.json; js/circuits/scenery/paul_ricard.js"
     },
@@ -2577,14 +2577,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.235,
       "target": [
-        1027.52,
-        0.26,
-        654.52
+        1027.36,
+        0.1,
+        654.54
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/paul_ricard.js anchor K(0.235)",
-      "projectedFrac": 0.260331,
-      "nearestRoadDistanceM": 33.7,
+      "projectedFrac": 0.260334,
+      "nearestRoadDistanceM": 33.6,
       "viewDistanceM": 129.2,
       "source": "tests/data/landmarks/paul_ricard.json; js/circuits/scenery/paul_ricard.js"
     },
@@ -2630,14 +2630,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.415,
       "target": [
-        -53.4,
+        -53.41,
         24.53,
-        306.38
+        306.39
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/portimao.js anchor K(0.415)",
-      "projectedFrac": 0.464531,
-      "nearestRoadDistanceM": 22.5,
+      "projectedFrac": 0.464525,
+      "nearestRoadDistanceM": 22.4,
       "viewDistanceM": 109.5,
       "source": "tests/data/landmarks/portimao.json; js/circuits/scenery/portimao.js"
     },
@@ -2647,11 +2647,11 @@
       "track": "qatar",
       "name": "Pit Slab",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.000013,
+      "frac": 0.000014,
       "target": [
-        475.35,
-        20.24,
-        -377.68
+        475.34,
+        19.76,
+        -377.69
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 48,
@@ -2664,11 +2664,11 @@
       "track": "qatar",
       "name": "Paddock Media Centre",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.925074,
+      "frac": 0.925019,
       "target": [
-        307.33,
-        7.42,
-        -747.02
+        307.14,
+        7.65,
+        -747.22
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 80,
@@ -2681,11 +2681,11 @@
       "track": "qatar",
       "name": "Turn 1 VVIP Canopy",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.051924,
+      "frac": 0.051964,
       "target": [
-        617.11,
-        7.75,
-        -136.05
+        617.16,
+        7.74,
+        -135.98
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 56,
@@ -2698,11 +2698,11 @@
       "track": "qatar",
       "name": "Lusail Hill",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.067507,
+      "frac": 0.067558,
       "target": [
-        552.02,
+        552.06,
         3.92,
-        -4.81
+        -4.73
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 64,
@@ -2715,15 +2715,15 @@
       "track": "qatar",
       "name": "Katara Towers",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.758932,
+      "frac": 0.759343,
       "target": [
-        -296.8,
-        53.9,
-        -752.95
+        -296.86,
+        53.91,
+        -752.55
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 229,
-      "viewDistanceM": 229,
+      "nearestRoadDistanceM": 228.6,
+      "viewDistanceM": 228.6,
       "source": "tests/data/landmarks/qatar.json; js/circuits/scenery/qatar.js"
     },
     {
@@ -2732,15 +2732,15 @@
       "track": "qatar",
       "name": "Lusail Stadium",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.84436,
+      "frac": 0.844704,
       "target": [
-        -148.55,
-        21.4,
-        -794.28
+        -148.61,
+        21.41,
+        -793.87
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 152.3,
-      "viewDistanceM": 152.3,
+      "nearestRoadDistanceM": 152.2,
+      "viewDistanceM": 152.2,
       "source": "tests/data/landmarks/qatar.json; js/circuits/scenery/qatar.js"
     },
     {
@@ -2749,11 +2749,11 @@
       "track": "qatar",
       "name": "Hospitality Villas 1",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.954749,
+      "frac": 0.954715,
       "target": [
-        371.36,
-        6.82,
-        -599.08
+        371.39,
+        6.63,
+        -599.16
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 64,
@@ -2904,7 +2904,7 @@
       "track": "shanghai",
       "name": "Yu Pavilions",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.00996,
+      "frac": 0.009959,
       "target": [
         43.69,
         2.93,
@@ -3091,15 +3091,15 @@
       "track": "sochi",
       "name": "Fisht Stadium",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.14609,
+      "frac": 0.146053,
       "target": [
-        -27.14,
+        -26.6,
         13.51,
-        12.98
+        13.56
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 139.4,
-      "viewDistanceM": 139.4,
+      "nearestRoadDistanceM": 140.2,
+      "viewDistanceM": 140.2,
       "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
     },
     {
@@ -3108,11 +3108,11 @@
       "track": "sochi",
       "name": "Bolshoy Dome",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.149763,
+      "frac": 0.149761,
       "target": [
-        -7.26,
+        -6.69,
         8.13,
-        5.76
+        5.54
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 137.5,
@@ -3127,13 +3127,13 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.225,
       "target": [
-        298.42,
+        298.95,
         4.29,
-        165.02
+        165.07
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.225)",
-      "projectedFrac": 0.653059,
+      "projectedFrac": 0.652932,
       "nearestRoadDistanceM": 117.2,
       "viewDistanceM": 127.5,
       "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
@@ -3146,14 +3146,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.115,
       "target": [
-        -208.68,
-        19.53,
-        24.07
+        -208.17,
+        19.52,
+        23.94
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.115)",
-      "projectedFrac": 0.74347,
-      "nearestRoadDistanceM": 92.9,
+      "projectedFrac": 0.743356,
+      "nearestRoadDistanceM": 93.1,
       "viewDistanceM": 103.5,
       "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
     },
@@ -3165,14 +3165,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.29,
       "target": [
-        620.66,
+        620.55,
         6.19,
-        -254.8
+        -255.11
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.290)",
       "projectedFrac": 0.512767,
-      "nearestRoadDistanceM": 112.3,
+      "nearestRoadDistanceM": 112.6,
       "viewDistanceM": 128.3,
       "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
     },
@@ -3184,14 +3184,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.062,
       "target": [
-        -510.75,
+        -510.29,
         7.48,
-        68.13
+        67.97
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.062)",
-      "projectedFrac": 0.80627,
-      "nearestRoadDistanceM": 16.9,
+      "projectedFrac": 0.806172,
+      "nearestRoadDistanceM": 17,
       "viewDistanceM": 65.5,
       "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
     },
@@ -3203,9 +3203,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.986179,
       "target": [
-        -843.12,
+        -842.93,
         20.93,
-        314.09
+        313.39
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 37.5,
@@ -3220,14 +3220,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.245,
       "target": [
-        502.87,
+        503.25,
         4.8,
-        151.75
+        151.52
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.245)",
-      "projectedFrac": 0.564559,
-      "nearestRoadDistanceM": 125,
+      "projectedFrac": 0.564496,
+      "nearestRoadDistanceM": 124.5,
       "viewDistanceM": 159.5,
       "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
     },
@@ -3239,9 +3239,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.008268,
       "target": [
-        -683.43,
+        -683.17,
         6.99,
-        264.98
+        264.48
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 69.5,
@@ -3254,11 +3254,11 @@
       "track": "spa",
       "name": "Raidillon Gold Dual Jumbotron",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.116664,
+      "frac": 0.116668,
       "target": [
-        -53.37,
-        -14.03,
-        670.61
+        -53.42,
+        -14.02,
+        670.55
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/spa.js anchor K(0.159)",
@@ -3273,11 +3273,11 @@
       "track": "spa",
       "name": "Eau Rouge Brook Crossing",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.141664,
+      "frac": 0.141668,
       "target": [
-        -213.65,
+        -213.73,
         -25.08,
-        581.64
+        581.56
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/spa.js anchor K(0.184)",
@@ -3292,11 +3292,11 @@
       "track": "spa",
       "name": "Timing Tower",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.942664,
+      "frac": 0.942668,
       "target": [
-        186.84,
+        187.17,
         4.73,
-        509.5
+        513.29
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/spa.js timingTower K(0.985)",
@@ -3549,11 +3549,11 @@
       "track": "zolder",
       "name": "Main Grandstand",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.011999,
+      "frac": 0.011994,
       "target": [
-        -171.41,
+        -171.79,
         5.65,
-        78.99
+        78.8
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 34.8,
@@ -3566,15 +3566,15 @@
       "track": "zolder",
       "name": "Start/Finish Museum",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.035566,
+      "frac": 0.035105,
       "target": [
-        -172.05,
-        1.89,
-        41.15
+        -174.66,
+        1.6,
+        42.18
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 41.4,
-      "viewDistanceM": 41.4,
+      "nearestRoadDistanceM": 44,
+      "viewDistanceM": 44,
       "source": "tests/data/landmarks/zolder.json; js/circuits/scenery/zolder.js"
     },
     {
@@ -3583,15 +3583,15 @@
       "track": "zolder",
       "name": "Villeneuve Poles",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.050967,
+      "frac": 0.050448,
       "target": [
-        -61.52,
-        2.59,
-        35.73
+        -61.76,
+        2.6,
+        35.68
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 53.1,
-      "viewDistanceM": 53.1,
+      "nearestRoadDistanceM": 52.9,
+      "viewDistanceM": 53,
       "source": "tests/data/landmarks/zolder.json; js/circuits/scenery/zolder.js"
     },
     {
@@ -3600,16 +3600,16 @@
       "track": "zolder",
       "name": "Sterrenwacht",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.023997,
+      "frac": 0.023891,
       "target": [
-        -36.94,
-        2.17,
-        90.11
+        -40.83,
+        2.57,
+        101.22
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/zolder.js anchor K(0.1802)",
-      "projectedFrac": 0.595913,
-      "nearestRoadDistanceM": 54.1,
+      "projectedFrac": 0.598495,
+      "nearestRoadDistanceM": 52,
       "viewDistanceM": 79.5,
       "source": "tests/data/landmarks/zolder.json; js/circuits/scenery/zolder.js"
     }
