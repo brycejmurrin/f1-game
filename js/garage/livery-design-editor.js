@@ -5,7 +5,8 @@ const GarageLiveryDesignEditor = (function () {
   const LABELS = { ribbon: "Ribbon", brokenChevron: "Broken chevrons", contours: "Contour lines",
     honeycomb: "Honeycomb", segments: "Segmented panels", gradient: "Gradient", twoTone: "Two-tone sweep",
     checker: "Checkered flag", diamonds: "Diamond tiles", slashes: "Diagonal slashes",
-    pinstripes: "Pinstripes", dots: "Rivet dots", lightning: "Lightning bolts" };
+    pinstripes: "Pinstripes", dots: "Rivet dots", lightning: "Lightning bolts", waves: "Wave bands", sunburst: "Sunburst rays", scallops: "Scallop scales",
+    herringbone: "Herringbone weave", circuit: "Circuit traces", shards: "Angular shards", pixelFade: "Pixel fade", speedlines: "Speed lines" };
   function attach(root, draft, api) {
     let h = sessions.get(draft);
     if (!h) { h = LiveryDesign.history(draft); sessions.set(draft, h); }
@@ -62,7 +63,7 @@ const GarageLiveryDesignEditor = (function () {
       const r = insert(api.pillRow(label, key, values, fallback));
       patternRows.push({ row: r, when: () => key !== "patternSide" || draft.patternPlacement === "wrap" });
     }
-    const rangeLabels = { patternWidth: "DESIGN WIDTH", patternRepeat: "REPEATS", patternOffset: "SIDE OFFSET", patternTaper: "TAIL TAPER", patternOpacity: "OPACITY" };
+    const rangeLabels = { patternWidth: "DESIGN WIDTH", patternRepeat: "REPEATS", patternOffset: "SIDE OFFSET", patternTaper: "TAIL TAPER", patternOpacity: "OPACITY", patternRotation: "ROTATION", patternStretch: "LENGTH STRETCH", patternWeight: "LINE WEIGHT" };
     for (const [key, limits] of Object.entries(LiveryDesign.RANGES)) {
       const r = document.createElement("label"); r.className = "tune-row";
       const label = document.createElement("span"), text = document.createElement("span"), output = document.createElement("b");
@@ -73,8 +74,8 @@ const GarageLiveryDesignEditor = (function () {
       input.oninput = () => { draft[key] = input.value; api.changed(true); };
       input.onchange = () => { api.changed(); api.flush(); };
       r.append(label, input); insert(r);
-      patternRows.push({ row: r, when: () => key !== "patternRepeat" || !["ribbon", "gradient", "twoTone"].includes(draft.spineLogo) });
-      bindings.push(() => { input.value = LiveryDesign.value(draft, key); output.textContent = input.value + (key === "patternRepeat" ? "" : "%"); });
+      patternRows.push({ row: r, when: () => key === "patternWeight" ? LiveryDesign.LINE_PATTERNS.includes(draft.spineLogo) : key !== "patternRepeat" || !["ribbon", "gradient", "twoTone"].includes(draft.spineLogo) });
+      bindings.push(() => { input.value = LiveryDesign.value(draft, key); output.textContent = input.value + (key === "patternRepeat" ? "" : key === "patternRotation" ? "°" : "%"); });
     }
     bindings.push(() => {
       const enabled = LiveryDesign.PATTERNS.includes(draft.spineLogo);
@@ -107,11 +108,11 @@ const GarageLiveryDesignEditor = (function () {
     const reset = button("RESET SETTINGS", () => {
       for (const [key, limits] of Object.entries(LiveryDesign.RANGES)) draft[key] = String(limits[2]);
       draft.patternPlacement = "crown"; draft.patternSide = "both";
-      api.changed(); status.textContent = "Design size, placement and opacity reset. Colours and selected design are kept. Undo restores your settings.";
+      api.changed(); status.textContent = "Design size, placement, rotation, stretch, line weight and opacity reset. Colours and selected design are kept. Undo restores your settings.";
     }, actions);
     bindings.push(() => {
       reset.disabled = !LiveryDesign.PATTERNS.includes(draft.spineLogo);
-      swap.disabled = !["gradient", "twoTone", "segments", "checker", "diamonds", "dots"].includes(draft.spineLogo);
+      swap.disabled = !LiveryDesign.SECOND_COLOR.includes(draft.spineLogo);
     });
     // Keep each setting and its paint beside the part it changes. Move the
     // original nodes, so their handlers, dependency rules and keyboard state survive.
@@ -140,7 +141,7 @@ const GarageLiveryDesignEditor = (function () {
       ["cover", "coverFinish", "spineHeight", "coverVents"]);
     section("SPINE TOP — ARTWORK & COLOURS", "Artwork along the top of the engine cover. Select one design; only the colour controls it uses are enabled.",
       ["spineLogo", "patternTint", "patternSecond", "spineTint", "saddleTint", "sunTint", "bandTint2"]);
-    section("SPINE PATTERN — SIZE & PLACEMENT", "Adjustable patterns only. CROWN paints the top and tail; WRAP extends onto the selected cover sides.",
+    section("SPINE PATTERN — SIZE & PLACEMENT", "Rotate or stretch adjustable artwork and tune its coverage. LINE WEIGHT applies to stroked designs. CROWN paints the top and tail; WRAP extends onto the selected cover sides.",
       ["patternPlacement", "patternSide", ...Object.keys(LiveryDesign.RANGES)], [actionRow]);
     section("COVER SIDES & TAIL LINK", "Side artwork and its fills. COVER BIND links top and side graphics; FIN HANDOFF controls the transition to the tail.",
       ["spineSide", "sideTint", "plateTint", "coverBind", "finHandoff"]);

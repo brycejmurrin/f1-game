@@ -101,6 +101,7 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           coverBind: "independent", finHandoff: "match", bodySplit: "off",
                           patternPlacement: "crown", patternSide: "both", patternWidth: "70", patternRepeat: "6",
                           patternOffset: "0", patternTaper: "20", patternOpacity: "100",
+                          patternRotation: "0", patternStretch: "100", patternWeight: "100",
                           coverFinish: "inherit", wingFinish: "inherit", haloFinish: "inherit" };
 // WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
 // named a SURFACE, so the sheet could not answer its own first question: what
@@ -145,8 +146,11 @@ const LIV_ROW_HINT = {
   patternOffset: "SIDE OFFSET — shift the new spine pattern across the cover.",
   patternTaper: "TAIL TAPER — narrow the pattern toward the rear of the cover.",
   patternOpacity: "OPACITY — transparency of the new spine artwork over its base paint.",
-  patternTint: "DESIGN COLOUR — ribbon, chevrons, contours, honeycomb, panels, gradient or sweep on the crown and selected cover flanks. Unset = ACCENT.",
-  patternSecond: "SECOND DESIGN COLOUR — gradients, two-tone sweeps, panels, checks, diamonds and dots. Unset = PRIMARY.",
+  patternRotation: "ROTATION — turn the artwork within its painted area. Wrap sides remain aligned with the crown.",
+  patternStretch: "LENGTH STRETCH — compress or extend the artwork along the engine cover.",
+  patternWeight: "LINE WEIGHT — thickness of contour, honeycomb, wave, herringbone, circuit and speed-line strokes.",
+  patternTint: "DESIGN COLOUR — adjustable artwork on the crown and selected cover flanks. Unset = ACCENT.",
+  patternSecond: "SECOND DESIGN COLOUR — two-colour patterns, including gradients, waves, sunbursts, scallops, herringbone, circuits, shards and pixel fade. Unset = PRIMARY.",
   coverFinish: "COVER FINISH — painted engine cover and airbox; INHERIT uses FINISH. Carbon and intake surfaces stay unchanged.",
   wingFinish: "WING FINISH — painted front and rear wing assemblies, including moving flaps. Carbon stays carbon.",
   haloFinish: "HALO FINISH — the painted halo; INHERIT uses FINISH.",
@@ -1254,7 +1258,7 @@ let _livPrevDraft = null;
 // These never land in Car3D.build. A drag still invalidates the decal atlas;
 // it must not also throw away the preview mesh (a full car rebuild on a phone).
 const MESH_FREE_DRAFT = { logo: 1, logo2: 1, logo3: 1, sponsors: 1, numFont: 1, finStyle: 1, finBadge: 1, name: 1, patternTint: 1, patternSecond: 1, patternPlacement: 1, patternSide: 1,
-  patternWidth: 1, patternRepeat: 1, patternOffset: 1, patternTaper: 1, patternOpacity: 1 };
+  patternWidth: 1, patternRepeat: 1, patternOffset: 1, patternTaper: 1, patternOpacity: 1, patternRotation: 1, patternStretch: 1, patternWeight: 1 };
 function draftSkipsMesh(prev, next) {
   if (!prev) return false;
   const seen = Object.create(null);

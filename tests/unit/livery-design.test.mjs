@@ -151,7 +151,7 @@ test("design fields survive draft, stored livery and live resolver round-trips",
   vm.runInContext(sheet.slice(sheet.indexOf("const LIV_DRAFT_COLORS"), sheet.indexOf("function csTabId")), ctx);
   const liv = { id: "test", name: "Ribbon", c1: [0, 0, 0], c2: [1, 1, 1], spineLogo: "segments",
     patternTint: [1, 0, 0], patternSecond: [0, 1, 0], patternPlacement: "wrap", patternSide: "left",
-    patternWidth: "80", patternRepeat: "9", patternOffset: "-12", patternTaper: "40", patternOpacity: "60",
+    patternWidth: "80", patternRepeat: "9", patternOffset: "-12", patternTaper: "40", patternOpacity: "60", patternRotation: "-37", patternStretch: "140", patternWeight: "180",
     coverFinish: "matte", wingFinish: "chrome", haloFinish: "gloss" };
   ctx.input = liv;
   const result = vm.runInContext('Object.assign({ id: input.id, c1: input.c1, c2: input.c2 }, livDraftTo(livDraftFrom(input, input.name), false))', ctx);
@@ -192,7 +192,7 @@ test("existing SPINE TOP controls drive undo, palettes and pattern adjustments w
   const { root, draft, editor, previews, click, spineRow, nextRow, bodyRow, nameRow } = editorFixture();
   assert.equal(root.querySelectorAll("select, details").length, 0, "no parallel design, surface or preset menus");
   assert.equal(root.querySelectorAll('[data-liv-design-tools]').length, 0);
-  assert.equal(spineRow.querySelectorAll("button").length, 14, "thirteen additions share the existing SPINE TOP row");
+  assert.equal(spineRow.querySelectorAll("button").length, 22, "all adjustable patterns share the existing SPINE TOP row");
   const rows = Array.from(root.children), width = root.querySelectorAll("input").find((input) => input.dataset.livField === "patternWidth");
   assert.ok(rows.indexOf(width.parentNode) > rows.indexOf(spineRow));
   assert.ok(rows.indexOf(width.parentNode) < rows.indexOf(nextRow), "adjustments stay after SPINE TOP and before cover-side controls");
@@ -250,7 +250,41 @@ test("surface sections and spine families preserve one button per choice and lab
   assert.equal(spineRow.querySelector('[role="group"]').getAttribute("aria-label"), "SPINE TOP");
   assert.deepEqual(spineRow.querySelectorAll(".cs-liv-ed-sec").map((el) => el.textContent), ["MARKS & IDENTITY", "FIXED GRAPHICS", "ADJUSTABLE PATTERNS"]);
   const buttons = spineRow.querySelectorAll("button"), ids = buttons.map((b) => b.dataset.csPill);
-  assert.equal(ids.length, 14); assert.equal(new Set(ids).size, ids.length, "grouping moves original buttons without duplication");
+  assert.equal(ids.length, 22); assert.equal(new Set(ids).size, ids.length, "grouping moves original buttons without duplication");
   const swatches = root.querySelectorAll('.cs-liv-swatch');
   assert.equal(swatches.length, 9); assert.ok(swatches.every((swatch) => swatch.getAttribute("aria-hidden") === "true"));
+});
+
+
+test("neutral transform controls preserve existing paint and changed transforms register every surface", () => {
+  const { D } = load();
+  for (const spineLogo of D.PATTERNS) {
+    const liv = { spineLogo, patternPlacement: "wrap" }, a = drawing(), b = drawing();
+    D.drawAtlas(a.ctx, liv, a.regions, a.flank, a.each);
+    D.drawAtlas(b.ctx, { ...liv, patternRotation: "0", patternStretch: "100", patternWeight: "100" }, b.regions, b.flank, b.each);
+    assert.deepEqual(b.ops, a.ops, spineLogo + " default paint unchanged");
+    assert.deepEqual(b.transforms, a.transforms);
+  }
+  const a = drawing();
+  D.drawAtlas(a.ctx, { spineLogo: "waves", patternPlacement: "wrap", patternRotation: "90", patternStretch: "150" }, a.regions, a.flank, a.each);
+  assert.equal(a.transforms.length, 8);
+  const art = a.transforms.filter((_, i) => i % 2);
+  for (const m of art) assert.deepEqual(m, art[0], "one artwork transform shared by crown, tail and flanks");
+  const m = art[0];
+  assert.ok(Math.abs(m[0]) < 1e-9); assert.equal(m[1], 1); assert.equal(m[2], -1.5);
+  assert.ok(Math.abs(m[2] * 1.25 + m[4]) < 1e-9, "rotation keeps the centre of the design fixed");
+});
+
+test("new design controls support undo, redo, reset and meaningful line-weight availability", () => {
+  const { root, draft, click } = editorFixture();
+  const input = (key) => root.querySelectorAll("input").find((el) => el.dataset.livField === key);
+  click("WAVE BANDS");
+  for (const [key, value] of [["patternRotation", "35"], ["patternStretch", "150"], ["patternWeight", "175"]]) {
+    const el = input(key); assert.equal(el.disabled, false); el.value = value; el.oninput(); el.onchange();
+    assert.equal(draft[key], value); click("UNDO"); assert.notEqual(draft[key], value); click("REDO"); assert.equal(draft[key], value);
+  }
+  click("RESET SETTINGS"); assert.equal(draft.patternRotation, "0"); assert.equal(draft.patternStretch, "100"); assert.equal(draft.patternWeight, "100");
+  click("UNDO"); assert.equal(draft.patternRotation, "35"); assert.equal(draft.patternWeight, "175");
+  click("ANGULAR SHARDS"); assert.equal(input("patternWeight").disabled, true);
+  click("CIRCUIT TRACES"); assert.equal(input("patternWeight").disabled, false);
 });
