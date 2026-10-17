@@ -73,6 +73,12 @@ test("the pickers reach every corner, a normalised one-shot list, and name the h
   assert.equal(FP.fieldLabel("corner", "y"), FP.FIELD.y.label);
 });
 
+test("#1575: radius-authored editor fields display their live metre equivalent", () => {
+  assert.equal(FP.metricValue("distR", 1.2, 500), "600 m");
+  assert.equal(FP.metricValue("yR", 0.3, 500), "150 m");
+  assert.equal(FP.metricValue("x", 4, 500), null);
+});
+
 test("the module freezes and exports its pure operations", () => {
   assert.ok(Object.isFrozen(FP), "FlybyPanel is frozen");
   for (const fn of ["create", "addShot", "duplicateShot", "deleteShot", "moveShot",

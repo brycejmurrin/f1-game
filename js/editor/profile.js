@@ -285,12 +285,17 @@ const DesignerProfile = (function () {
         g.fillStyle = it.level === "red" ? (COL.red || "#ff4d4d") : (COL.amber || "#ffb020"); g.fill();
       }
       const touch = ptype === "touch";
+      // A dense polygon (a built-in circuit has hundreds of points) would paint a
+      // solid band of full-size grips over the profile: shrink idle dots to the
+      // point spacing; hit targets stay full size (hit() is by x alone).
+      const gap = W / viewSpan / Math.max(1, ticks.length), dense = gap < 2 * GRIP_R * (touch ? 1.7 : 1);
       for (let i = 0; i < ticks.length; i++) {
         const p = grip(i), on = i === sel || inGroup(i);
         if (p.x < 0 || p.x > W) continue;
-        const r = (on ? GRIP_R + 2 : GRIP_R) * (touch ? GRIP_R_TOUCH / GRIP_R : 1);
-        // Soft hit halo so touch targets read as ≥44 px.
-        if (touch || on) {
+        const full = (on ? GRIP_R + 2 : GRIP_R) * (touch ? GRIP_R_TOUCH / GRIP_R : 1);
+        const r = on ? full : Math.max(1.5, Math.min(full, gap * 0.4));
+        // Soft hit halo so touch targets read as ≥44 px (selected only when dense).
+        if ((touch && !dense) || on) {
           g.beginPath(); g.arc(p.x, p.y, (touch ? HIT_TOUCH : HIT_PX) / 2, 0, Math.PI * 2);
           g.fillStyle = on ? "rgba(225,6,0,0.14)" : "rgba(246,246,249,0.06)"; g.fill();
         }
