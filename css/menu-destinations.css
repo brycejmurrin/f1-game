@@ -20,8 +20,9 @@
 :where(body[data-density="compact"]) #menu-buttons > .menu-destination .mb-sub { display: none; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons > .menu-destination > .bigbtn {
   display: flex; align-items: center; justify-content: center; gap: .4em;
-  font-size: calc(var(--fs-4) * var(--ui-compact-text, 1));
-  white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
+  font-size: max(.6rem, min(calc(var(--fs-4) * var(--ui-compact-text, 1)), calc(1.6 * var(--vwz) * var(--ui-compact-text, 1))),
+    calc(var(--fs-4) * var(--ui-compact-text, 1) * clamp(0, calc((var(--ui-compact-text, 1) - 1) * 2), 1)));
+  white-space: normal; text-wrap: balance; overflow-wrap: normal; hyphens: none; line-height: 1.15;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons > .menu-destination .btn-ico { margin: 0; flex: none; }
 :root[data-title-btns="stack"] #menu-buttons > .menu-destination {
@@ -34,17 +35,31 @@
    instead of a nowrap subtitle running past a half-width door (200% zoom, 1280 wide). */
 #menu-create .bigbtn { white-space: normal; text-wrap: balance; overflow-wrap: anywhere; }
 #menu-create .mb-sub { white-space: normal; overflow-wrap: anywhere; }
-/* Compact Home: groups share the right track; Utilities stay under the brand. */
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
-  grid-template-rows: repeat(5, max-content);
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
+  grid-template-rows: repeat(4, max-content); row-gap: calc(var(--gap) * .3); --home-g: calc(var(--gap) * .3);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > .menu-destination-label { display: none; }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-garage, #menu-create) {
-  width: 100%; align-self: start; justify-self: stretch; grid-column: 2; gap: calc(var(--gap) * 0.3);
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > .menu-destination-label { display: none; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) {
+  display: flex; flex-wrap: wrap; width: 100%; grid-column: 2; align-self: start; gap: var(--home-g);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-garage { grid-row: 3; }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { grid-row: 4; }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create { grid-row: 5; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention {
+  display: flex; flex: 2.4 1 10em; min-width: 0; gap: var(--home-g);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn { flex: 1 1 0; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn {
+  flex: 1 1 5em; width: auto; min-width: 0; padding-inline: calc(var(--gap) / 8); letter-spacing: 0;
+}
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-primary .btn-ico { display: none; }
+@media (max-height: 460px) {
+  :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .mb-sub { display: none; }
+}
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero #mb-career { flex-grow: 1.6; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero { grid-row: 1; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-primary { grid-row: 2; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-garage, #menu-explore) { grid-row: 3; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-garage { width: calc((100% - 2 * var(--home-g)) / 3); justify-self: start; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { width: calc((100% - 2 * var(--home-g)) * 2 / 3 + var(--home-g)); justify-self: end; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create { grid-row: 4; }
 .dh-developer-tools { padding: 0 var(--gap) calc(var(--gap) * .5); flex-shrink: 0; }
 .dh-developer-tools > summary { cursor: pointer; color: var(--dim); min-height: var(--tap-min); }
 .dh-developer-tools > button { margin-top: calc(var(--gap) * .3); }

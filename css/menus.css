@@ -352,7 +352,7 @@ html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
 /* Compact-wide live Home: subgrid-place #menu-secondary under brand (no DOM move).
    Keep #menu-buttons as the scroll box — ui-scale @200% scrolls RACE into it.
    display:contents broke that box and let brand (z-index) steal hits on DATA HUB. */
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
   /* Reserve room for scaled labels: a 400px cap becomes only 200 CSS px
      at 200% UI size and wraps the hero until RACE falls below the fold. */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
@@ -362,16 +362,16 @@ html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #ov
   row-gap: calc(var(--gap) * 0.15); column-gap: var(--gap);
   overflow-x: hidden;
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-brand {
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-brand {
   grid-column: 1; grid-row: 1; z-index: 1; align-self: start;
   overflow: hidden; min-height: min-content;
   padding-block: calc(var(--gap) * 0.5); gap: calc(var(--gap) * 0.35);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #title {
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay #title {
   font-size: clamp(var(--fs-5), calc(4.2 * var(--vwz)), calc(var(--fs-6) * 2.8));
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-meta { margin-top: calc(var(--gap) * 0.5); }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-meta { margin-top: calc(var(--gap) * 0.5); }
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
   display: grid; grid-column: 1 / -1; grid-row: 1;
   grid-template-columns: subgrid;
   grid-template-rows: max-content max-content max-content max-content;
@@ -385,27 +385,24 @@ html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #ov
   padding-inline: var(--gap);
   pointer-events: none;
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
   pointer-events: auto;
 }
 /* No group zoom: #menu-buttons zooms (ui-scale.spec 200% desktop). */
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) {
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) {
   width: 100%; align-self: start; justify-self: stretch;
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero { grid-column: 2; grid-row: 1; gap: calc(var(--gap) * 0.3); }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-primary { grid-column: 2; grid-row: 2; gap: calc(var(--gap) * 0.3); }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { grid-column: 2; grid-row: 3; gap: calc(var(--gap) * 0.3); }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
   /* Row 2 col 1 under brand. #1537: height auto for 2-line labels; --tap floor stays. */
-  grid-column: 1; grid-row: 2; display: flex; flex-wrap: nowrap; align-items: stretch;
+  grid-column: 1; grid-row: 4; align-self: end; display: flex; flex-wrap: nowrap; align-items: stretch;
   gap: calc(var(--gap) * 0.15); min-height: var(--tap); height: auto; max-height: none;
   --balance-basis: 0%; --balance-min: 0%;
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary.balanced-row > :not([hidden]) {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary.balanced-row > :not([hidden]) {
   flex: 1 1 0; min-width: 0; width: auto;
 }
 /* #1537: clamp+wrap — nowrap ellipsis clipped TRACK DES / HOW TO P in ~74px cells. */
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
   display: inline-flex; flex-direction: row; justify-content: flex-start; align-items: center;
   gap: calc(var(--gap) / 8); min-height: var(--tap-paint); height: auto; max-height: none;
   padding: calc(var(--gap) / 10) calc(var(--gap) / 8) calc(var(--gap) / 10) calc(var(--gap) / 4);
@@ -413,23 +410,23 @@ html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #ov
   letter-spacing: 0; line-height: 1.1; white-space: normal; text-wrap: balance;
   overflow-wrap: anywhere; overflow: hidden; text-overflow: clip; text-align: start; min-width: 0;
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn .btn-ico {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn .btn-ico {
   width: 0.85em; height: 0.85em; flex: none; margin: 0;
 }
-html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-buttons .bigbtn {
+:where(body[data-density="compact"]) #overlay #menu-buttons .bigbtn {
   min-height: var(--tap); padding-block: calc(var(--gap) / 2);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-primary, #menu-explore, #menu-hero) .bigbtn {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-primary, #menu-explore, #menu-hero) .bigbtn {
   min-height: max(var(--tap-min), var(--tap-paint));
   padding-block: calc(var(--gap) * 0.3);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn {
   padding-block: calc(var(--gap) * 0.4);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
   min-height: var(--tap-paint); height: auto; max-height: none;
 }
-html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
+:where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
 /* Live Home on tall: drop #title-car from the grid before data-home-ready (deferred
    experience.css used to wait). Classic/static keeps the three-band portrait cars. */
 @media (max-width: 699px) {
@@ -722,7 +719,7 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
    ratio of zoom-corrected dimensions equals the ratio of raw dimensions — but
    data-shape is combinable with data-density in one selector and is consistent
    with the sheet-level data-shape convention everywhere else. */
-:where(body[data-shape="wide"][data-density="compact"]) #overlay {
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
   /* The doors do not need half the screen. At 1fr 1fr the column measured
      417px of a 932px phone (2026-09-22, iPhone 15 Pro Max) with every label
      sitting in ~90px of slack, while the title art behind the brand column had
@@ -863,13 +860,13 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
 /* Live-home `padding: var(--gap)` outranks the :where rule above — pin icon
    budget here so DAILY TIME TRIAL (~153px) still fits one line on a half-width
    chip beside CONTINUE (183 − 8 pad − 14 ico ≈ 161). */
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn {
   flex-direction: row; align-items: center; gap: 0;
   /* letter-spacing makes DAILY TIME TRIAL ~165px; 183−4 pad−12 ico ≈ 167.
      Token pad (not raw px) so the rawSpacing ratchet stays flat. */
   padding-inline: calc(var(--gap) / 8);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn .btn-ico {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn .btn-ico {
   margin: 0; flex: none; width: 0.6em; height: 0.6em;
 }
 /* Desktop live-home: drop .btn-ico's 0.5em margin so the label keeps width. */
