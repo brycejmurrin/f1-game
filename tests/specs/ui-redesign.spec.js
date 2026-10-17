@@ -1023,6 +1023,30 @@ test("settings offers concise throttle help and separate backup actions", async 
   await expect(page.locator("#pm-share-code-status")).not.toBeEmpty();
 });
 
+test.describe("team picker on a landscape phone (isMobile)", () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
+
+  test("team picker tiles grow to their wrapped text instead of spilling", async ({ page }) => {
+    // The picker tiles wrap their driver pairing (css/select.css); implicit auto
+    // rows held them at the 52px min-height, so the text overflowed the tile
+    // and painted over the next row (UI inspector sweep 2026-10-17).
+    await waitReady(page);
+    await page.click("#mb-garage"); await page.waitForSelector("#carsetup:not([hidden])");
+    await page.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
+      (t.find((e) => /TEAM/i.test(e.textContent)) || t[0])?.click(); });
+    await page.waitForSelector("#cs-team-card", { state: "attached" });
+    await page.evaluate(() => document.getElementById("cs-team-card").click());
+    await page.waitForSelector("#teampicker:not([hidden])");
+    await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"
+      || !Number.isFinite(a.effect?.getComputedTiming?.().endTime)), null, { polling: 100, timeout: 10_000 });
+    const spill = await page.evaluate(() => [...document.querySelectorAll("#sel-teams > .team-tile")].map(t => {
+      const r = t.getBoundingClientRect(), b = t.querySelector(".tm-body").getBoundingClientRect();
+      return { name: t.querySelector(".tm-name")?.textContent, over: Math.max(r.top - b.top, b.bottom - r.bottom) };
+    }).filter(x => x.over > 0.5));
+    expect(spill, "no team tile's text extends past the tile").toEqual([]);
+  });
+});
+
 test("shared sheets reflow long labels and retain keyboard exits at narrow widths", async ({ page }) => {
   await waitReady(page);
   // 320 CSS pixels is the layout width of a 1280px window at 400% zoom.
