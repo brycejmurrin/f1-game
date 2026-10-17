@@ -4,24 +4,19 @@
 // @skill survey-track
 import fs from "node:fs";
 import { loadSurveyDesigns } from "../lib/custom-survey-locations.mjs";
-import { SURVEY_LOCATIONS, CAMERA_RECIPES, listSurveyLocations, captureIdentity, sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
+import { SURVEY_LOCATIONS, CAMERA_RECIPES, listSurveyLocations, sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { parseFlags } from "../lib/cli-args.mjs";
 import { fileURLToPath } from "node:url";
 import {
-  buildSurveyPlans,
   estimateSurveyMs,
-  filterResumeShots,
   surveyTerminalState,
   normalizeSurveyTracks,
-  scoreShotFindings,
-  writeCompareIndex,
-  writeSurveyFindings,
-  writeSurveyIndex,
   writeSurveyGalleryFromReports,
   writeSurveyProgress,
 } from "../lib/track-shot-survey.mjs";
+import { prepareSurveyPlans, runSurvey } from "./lib/survey-runner.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const argv = process.argv.slice(2);
@@ -101,7 +96,7 @@ if (has("--plan-file")) Object.assign(planArgs, JSON.parse(fs.readFileSync(flag(
 if (has('--select')) planArgs.select = flag('--select', '').split(',');
 const profile = flag('--profile', planArgs.location || planArgs.locations ? 'preview' : 'comparison');
 if (!['preview', 'comparison'].includes(profile)) throw new Error('profile must be preview or comparison');
-const plans = buildSurveyPlans(planArgs, tracks);
+const plans = prepareSurveyPlans(planArgs, tracks);
 const plan = plans.get(tracks[0]);
 for (const p of plans.values()) if (new Set(p.shots.map(s=>s.name)).size !== p.shots.length) throw new Error("Shot names must be unique");
 if (has('--save-plan') && planArgs.locations && tracks.length > 1) throw new Error('Save named-location plans one track at a time');
@@ -193,121 +188,32 @@ function runSession(track, outDir) {
   });
 }
 
-const trackResults = [];
-let hardFail = false;
 let sess = null;
-
-try {
-for (let ti = 0; ti < tracks.length; ti++) {
-  const track = tracks[ti];
-  const plan = plans.get(track);
-  if (!plan.shots.length) continue;
-  const outDir = tracks.length === 1 ? outRoot : path.join(outRoot, track);
-  fs.mkdirSync(outDir, { recursive: true });
-  const identityContext = { extension: profile === "preview" ? "jpg" : "png", identities: Object.fromEntries(plan.shots.map(s=>[s.name,captureIdentity({ source, track, shot:s, profile, seed, gpu:sessionEnv().APEX_GPU })])) };
-  const { pending, resumed, invalid } = filterResumeShots(outDir, plan.shots, resume, identityContext);
-  for (const bad of invalid) console.error(`shot-survey: ${track}/${bad.name}.${identityContext.extension} is not a valid image (${bad.reason}); recapturing`);
-  const invalidNames = new Set(invalid.map((b) => b.name));
-  for (const s of pending) {
-    if (!invalidNames.has(s.name) && fs.existsSync(path.join(outDir, `${s.name}.${identityContext.extension}`))) throw new Error("Existing capture does not match this plan/revision; choose a new output directory: " + s.name);
-  }
-  writeSurveyProgress(outRoot, {
-    state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length, invalid,
-    shotsPerTrack: plan.shots.length, estimateMs,
-  });
-
-  const captured = resumed.map((s) => ({ ...s, track, flags: scoreShotFindings(s) }));
-  const failed = [];
-  let panelPng = null;
-  const existingPanel = path.join(outDir, `${plan.sheetName}.png`);
-  if (fs.existsSync(existingPanel)) panelPng = existingPanel;
-
-  try {
-    if (pending.length) {
-      let sessionRecord;
-      if (!sess) { sess = await runSession(track, outDir); sessionRecord = { ...sess.boot, reusedSession: false }; }
-      else {
-        const switched = await sess.send({ track, out: outDir });
-        if (!switched.ok) throw new Error(switched.error || 'track switch failed');
-        sessionRecord = { ...switched, reusedSession: true, bootMs: 0, profile, diagnostics: sess.boot.diagnostics };
-      }
-      fs.writeFileSync(path.join(outDir, "session.json"), JSON.stringify({source,profile,seed,...sessionRecord},null,2));
-      for (let si = 0; si < pending.length; si++) {
-        const s = pending[si];
-        writeSurveyProgress(outRoot, {
-          state: "shooting", track, tracks, trackIndex: ti, shotIndex: si,
-          shot: s.name, pendingLeft: pending.length - si, captured: captured.length,
-        });
-        let reply;
-        try {
-          reply = await sess.send({
-            ...s, shot: s.name, frac: s.frac, cam: s.cam, az: s.az, el: s.el, dist: s.dist,
-            h: s.h, side: s.side, tod: s.tod, weather: s.weather, hud: s.hud,
-          });
-        } catch (e) {
-          failed.push({ ...s, track, error: String(e.message || e) });
-          continue;
-        }
-        if (reply.ok) {
-          const row = { ...s, track: reply.track || track, png: reply.png, spread: reply.spread, kb: reply.kb, timings: reply.timings };
-          fs.writeFileSync(reply.png + ".capture.json", JSON.stringify({ identity:identityContext.identities[s.name], source, profile, seed, job:{...s,track}, timings:reply.timings, frame:reply.frame, state:{plugin:{renderer:sess.boot.diagnostics}} },null,2));
-          row.flags = scoreShotFindings(row);
-          captured.push(row);
-        } else failed.push({ ...s, track, error: reply.error || "shot failed" });
-      }
-      if (wantPanel && captured.length) {
-        try {
-          const sh = await sess.send({ sheet: plan.sheetName, cols: plan.cols || 0 });
-          if (sh.ok) panelPng = sh.png;
-        } catch (e) {
-          process.stderr.write(`[shot-survey] panel failed: ${e.message}\n`);
-        }
-      }
+const host = {
+  log(line) { process.stderr.write(line.endsWith("\n") ? line : line + "\n"); },
+  async sessionFor(track, outDir) {
+    if (!sess) {
+      sess = await runSession(track, outDir);
+      sess.record = { ...sess.boot, reusedSession: false };
+      return sess;
     }
-
-    let indexHtml = null;
-    if (wantIndex && captured.length) {
-      indexHtml = writeSurveyIndex(outDir, {
-        track: captured[0]?.track || track, label: plan.label, preset: plan.preset, shots: captured, panelPng, ok: captured.length,
-      });
-    }
-    {
-      const findings = writeSurveyFindings(outDir, {
-        ok: failed.length === 0, failed: failed.length, failures: failed,
-        track: captured[0]?.track || track, label: plan.label, preset: plan.preset, shots: captured, panelPng, indexHtml,
-      });
-      trackResults.push({
-        track: captured[0]?.track || track, out: outDir, captured: captured.length, failed: failed.length,
-        panel: panelPng, indexHtml, shots: captured, findings: findings.file, failures: failed.length ? failed : undefined,
-        relIndex: indexHtml ? path.relative(outRoot, indexHtml) : `${track}/index.html`,
-      });
-    }
-    if (!captured.length) hardFail = true;
-    if (failed.length) hardFail = true;
-  } catch (e) {
-    hardFail = true;
-    trackResults.push({ track, out: outDir, error: String(e.message || e) });
-    process.stderr.write(`[shot-survey] ${track}: ${e.message || e}\n`);
-    if (sess) { await sess.close(); sess = null; }
-  } finally {
-    if (has('--cold-sessions') && sess) { await sess.close(); sess = null; }
-  }
-}
-} finally { if (sess) await sess.close(); }
-
-let compareIndex = null;
-if (tracks.length > 1 && wantIndex) {
-  compareIndex = writeCompareIndex(outRoot, {
-    label: plan.label, preset: plan.preset,
-    tracks: trackResults.map((t) => ({
-      track: t.track,
-      captured: t.captured,
-      shots: t.shots, failed: t.failed, failures: t.failures, error: t.error,
-      panel: t.panel ? path.relative(outRoot, t.panel) : null,
-      relIndex: t.indexHtml ? t.relIndex || `${t.track}/index.html` : null,
-    })),
-  });
-}
+    const switched = await sess.send({ track, out: outDir });
+    if (!switched.ok) throw new Error(switched.error || "track switch failed");
+    sess.record = { ...switched, reusedSession: true, bootMs: 0, profile, diagnostics: sess.boot.diagnostics };
+    return sess;
+  },
+  async close() {
+    if (!sess) return;
+    const cur = sess;
+    sess = null;
+    await cur.close();
+  },
+};
+const run = await runSurvey({
+  tracks, plans, outRoot, resume, wantPanel, wantIndex, profile, seed, source,
+  gpu: sessionEnv().APEX_GPU, coldSessions: has("--cold-sessions"), estimateMs,
+}, host);
+const { trackResults, hardFail, compareIndex } = run;
 
 writeSurveyProgress(outRoot, {
   state: surveyTerminalState(trackResults, hardFail), tracks, trackResults: trackResults.map((t) => ({

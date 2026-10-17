@@ -70,11 +70,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
  *  before it was added; the count check below is what keeps that true. */
 export const TWINNED = {
   "tests/specs/active-aero.spec.js":        "tests/unit/active-aero-vm.test.mjs",
+  "tests/specs/agent-determinism.spec.js":  "tests/unit/agent-determinism-vm.test.mjs",
   "tests/specs/agent-view.spec.js":         "tests/unit/agent-view-vm.test.mjs",
   "tests/specs/aero-zones.spec.js":         "tests/unit/aero-zones-vm.test.mjs",
   "tests/specs/collision-ai-fixes.spec.js": "tests/unit/collision-ai-fixes-vm.test.mjs",
   "tests/specs/collisions-deep.spec.js":    "tests/unit/collisions-deep-vm.test.mjs",
   "tests/specs/collisions.spec.js":         "tests/unit/collisions-vm.test.mjs",
+  "tests/specs/dev-tools.spec.js":          "tests/unit/dev-tools-vm.test.mjs",
   "tests/specs/drift.spec.js":              "tests/unit/drift-vm.test.mjs",
   "tests/specs/elevation-tracks.spec.js":   "tests/unit/elevation-tracks-vm.test.mjs",
   "tests/specs/headless-api.spec.js":       "tests/unit/headless-api-vm.test.mjs",
@@ -82,6 +84,7 @@ export const TWINNED = {
   "tests/specs/longitudinal.spec.js":       "tests/unit/longitudinal-vm.test.mjs",
   "tests/specs/obs-act-edge.spec.js":       "tests/unit/obs-act-edge-vm.test.mjs",
   "tests/specs/offtrack.spec.js":           "tests/unit/offtrack-vm.test.mjs",
+  "tests/specs/persistence.spec.js":        "tests/unit/persistence-vm.test.mjs",
   "tests/specs/wake-lock.spec.js":          "tests/unit/wake-lock-vm.test.mjs",
   "tests/specs/world-physics.spec.js":      "tests/unit/world-physics-vm.test.mjs",
 };
