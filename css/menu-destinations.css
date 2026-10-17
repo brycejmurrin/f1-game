@@ -104,6 +104,12 @@ body #overlay #menu-buttons #mb-career { min-height: calc(var(--hrow) * 1.2); }
 body #overlay #menu-buttons.sf-scroll { --sfade-b: 0px; scroll-padding-bottom: calc(var(--tap) * 2.2 + var(--gap)); }
 body #overlay #menu-buttons.sf-scroll #menu-secondary { position: sticky; bottom: calc(var(--gap) * -1); z-index: 2; padding-block: calc(var(--gap) * .4); background: var(--scrim-heavy); }
 }
+/* Where the compact zoom cap is active (see menus.css), text takes the residual UI SIZE multiplier and the columns widen with it. */
+@media ((max-width: 899px) or (max-height: 699px)) and ((min-height: 520px) or (max-aspect-ratio: 1/1)) {
+body[data-density="compact"] #overlay #menu-buttons { grid-template-columns: repeat(auto-fit, minmax(max(calc(7.5rem * var(--ui-compact-text, 1)), calc(50% - var(--hg))), 1fr)); }
+body[data-density="compact"] #overlay #menu-buttons :is(#menu-retention, #menu-explore) > .bigbtn { flex-basis: calc(7.5rem * var(--ui-compact-text, 1)); }
+body[data-density="compact"] #overlay #menu-buttons .bigbtn { font-size: max(calc(clamp(var(--fs-micro), calc(4.3 * var(--vwz)), var(--fs-4)) * var(--ui-compact-text, 1)), calc(var(--fs-4) * var(--ui-compact-text, 1) * clamp(0, calc((var(--ui-compact-text, 1) - 1) * 2), 1))); }
+}
 body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-basis: calc(50% - var(--hg)); }
 :where(body[data-shape="tall"]) #overlay #menu-brand { padding-block: calc(var(--gap) * .5); }
 :where(body[data-shape="tall"]) #overlay #menu-meta { flex-direction: row; flex-wrap: nowrap; justify-content: center; align-items: center; margin-top: calc(var(--gap) * .3); }
