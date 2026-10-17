@@ -564,18 +564,17 @@ test.describe("Track designer", () => {
     expect(roundTrip.format).toBe("apex26.track");
     expect(roundTrip.ok).toBe(true);
     expect(roundTrip.pts).toEqual(st.design.pts);
-    // SAVE it, close, and come back in from the picker's EDIT IN DESIGNER chip.
+    // SAVE it, close, and come back in from the picker's EDIT chip.
     const saved = await page.evaluate(() => TrackDesigner.save());
     expect(saved.ok).toBe(true);
     await page.evaluate(() => { TrackDesigner.close(); CustomTracks.select(TrackDesigner.state().library[0]); });
     await page.evaluate(() => window.__apex.headless(true));
     await page.locator("#mb-race").click();
     await expect(page.locator('.track-row[aria-pressed="true"]')).toHaveAttribute("data-kind", "custom");
-    // A script click, as menu-baseline does: at compact density the facts row
-    // is display:none by design, and headless(true) stops the frames
+    // A script click, as menu-baseline does: headless(true) stops the frames
     // Playwright's actionability wait needs; the chip's wiring is the subject.
     const chip = await page.evaluate(() => {
-      const b = [...document.querySelectorAll("#sel-preview-facts button")].find((x) => /EDIT IN DESIGNER/.test(x.textContent || ""));
+      const b = document.getElementById("sel-edit-chip");
       if (!b) return null;
       b.click();
       return b.getAttribute("aria-label");
@@ -833,7 +832,7 @@ test.describe("Track designer", () => {
       for (let j = 0; j < tr.n; j++) { const d = (tr.px[j] - p[0]) ** 2 + (tr.pz[j] - p[1]) ** 2; if (d < best) { best = d; k = j; } }
       return { s: k * tr.total / tr.n, total: tr.total };
     });
-    // A script click, as the EDIT IN DESIGNER chip above: headless(true) stops the frames actionability waits for.
+    // A script click, as the picker's EDIT chip above: headless(true) stops the frames actionability waits for.
     const pressed = await page.evaluate(() => {
       const b = [...document.querySelectorAll("#trackdesigner .td-rail button")].find((x) => x.textContent === "TEST HERE");
       if (!b || b.getAttribute("aria-disabled") !== "false") return false;
