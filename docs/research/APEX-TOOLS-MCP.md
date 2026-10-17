@@ -323,7 +323,7 @@ other occupants. One-sided is acceptable if `apex_status` reports them
 | `rtc-e2e` / `rtc-e2e-3p` / `rtc-e2e-room` / `nostr-probe` | Real network / minutes / host stack |
 | TinyFish keys / `tinyfish-mcp.sh` / `.env` | Probe owns `tinyfish_*`; key is shell / gitignored `.env` / tracked `TINYFISH_KEY_FALLBACK` (`TINYFISH_NO_FALLBACK=1`; custom key: https://agent.tinyfish.ai/home) |
 | `chrome_*` / `tinyfish_*` names or passthrough | Mixing catalogs is how apex-wrap shipped 0 tools |
-| `lighting-tuner-sweep`, `lighting-campaign/`, `ab-lighting`, `physics-tune-sweep` | Long, sharded, resumable; not a one-shot MCP call |
+| `lighting-tuner-sweep`, `ab-lighting`, `physics-tune-sweep` | Long, sharded, resumable; not a one-shot MCP call |
 | `report-server.mjs` | Binds `0.0.0.0`, LAN URLs |
 | `cdmcp-*`, `mcp-cli.mjs`, `chrome-devtools-mcp.sh` | Probe / chrome-devtools |
 | `playwright-mcp.sh` / `@playwright/mcp` | Interactive UI survey; not an apex_* wrap |
