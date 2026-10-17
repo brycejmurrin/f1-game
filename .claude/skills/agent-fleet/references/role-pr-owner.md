@@ -39,8 +39,9 @@ open review threads), then act in this order without asking:
 
 1. CONFLICTING → `node tools/ci/sync-pr.mjs <branch>` (delete a stale local
    `sync-pr-<branch>` first), resolve keeping both sides, run
-   `npm run test:tooling-fast` in the background, push once.
-2. Red job → agent `ci-red-triage`; fix within OWNED, tooling-fast, push once.
+   `node tools/ci/tooling-fast.mjs --changed --jobs=3`, push once.
+2. Red job → agent `ci-red-triage`; fix within OWNED, `tooling-fast --changed`
+   plus the failing test alone, push once.
    A red the base also has: port the fix if one exists, else one PR comment
    naming it, and at most one re-run for infra.
 3. Review comments → skill `steward`.
@@ -50,7 +51,23 @@ open review threads), then act in this order without asking:
 
 Send `REPORT owner-<PR> <sha> <verdict>` at each push or red, `READY <PR> <sha>`
 when it goes ready, and `DONE <PR> <merge sha>` when it merges; then delete the
-check-in and stop.
+check-in and stop. End every REPORT and READY with the box-health line below.
+
+## Keep the box free (2026-10-17)
+
+Each session is its own 4-core VM; every stall measured that night was the
+session saturating itself (full tooling-fast past the 30-min cap, a local `ui`
+group at 41/201 after 24 min, a 12 s startup benchmark at 40 s under load).
+
+- Edit loop: `node tools/ci/tooling-fast.mjs --changed --jobs=3` plus the
+  failing test alone. The full 650-file `test:tooling-fast` is CI's job (the
+  ready tier runs it); run it locally only when CI is unavailable.
+- A whole browser group runs on CI: `node tools/ci/remote-group.mjs <group>`
+  on the pushed branch (four llvmpipe shards, ~10–15 min). Locally, one spec at
+  a time via `test-bg.mjs`, never a whole group.
+- Box-health line, last line of every REPORT / READY, printed by:
+  `awk '/^cpu /{t=0;for(i=2;i<=9;i++)t+=$i;s=$9}END{getline l<"/proc/loadavg";split(l,a," ");printf "box load=%s steal=%.1f%% ",a[1],100*s/t}' /proc/stat; ps -eo pcpu,comm --sort=-pcpu | awk 'NR==2{print "top="$2" "$1"%"}'`.
+  Load above 3 for two reports in a row: stop local runs and say what is running.
 
 ## Traps that cost this role real cycles (2026-10-16)
 
