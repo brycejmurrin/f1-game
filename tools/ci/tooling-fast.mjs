@@ -834,6 +834,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // flag windows. Pure rules in a VM, ~0.3 s together.
   "tests/unit/ready-gate.test.mjs",
   "tests/unit/real-race-script.test.mjs",
+  // WATCH recording-gap cache (#2465): explicit refresh replaces a stale interior hole and keeps a pit stop and a red flag. VM, under a second.
+  "tests/unit/real-race-tab-gap-refresh.test.mjs",
   "tests/unit/real-race.test.mjs",
   // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
   "tests/unit/real-replay-captions.test.mjs",
