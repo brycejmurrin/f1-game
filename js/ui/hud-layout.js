@@ -742,6 +742,7 @@ const HudLayout = (function () {
       }
     }
   }
+  let _blkBounds = new Float64Array(128);
   function clearReadouts(W = window.innerWidth, H = window.innerHeight) {
     if (!doc.querySelectorAll) return;
     resetClearance();
@@ -772,10 +773,18 @@ const HudLayout = (function () {
     const placedRadio = bodyAttr("data-radio-placed");
     if (placedRadio) { const r = box(doc.querySelector("#announce")); if (r) blocks.push(r); }
     // Scalar form of the rect-vs-block overlap test: findSlot tries ~1000 candidates, so no object or closure per try.
+    // Obstacle bounds (already inflated by EDGE) live in a reused Float64Array, synced lazily as `blocks` grows:
+    // reading DOMRect doubles in a ~1000-try loop boxed a heap number per read.
+    let synced = 0;
     const blocked = (l, t, rt, bt) => {
-      for (let i = 0; i < blocks.length; i++) {
-        const b = blocks[i];
-        if (l < b.right + EDGE && rt > b.left - EDGE && t < b.bottom + EDGE && bt > b.top - EDGE) return true;
+      while (synced < blocks.length) {
+        if ((synced + 1) * 4 > _blkBounds.length) { const g = new Float64Array(_blkBounds.length * 2); g.set(_blkBounds); _blkBounds = g; }
+        const b = blocks[synced], o = synced * 4;
+        _blkBounds[o] = b.left - EDGE; _blkBounds[o + 1] = b.right + EDGE; _blkBounds[o + 2] = b.top - EDGE; _blkBounds[o + 3] = b.bottom + EDGE;
+        synced++;
+      }
+      for (let o = 0, e = synced * 4; o < e; o += 4) {
+        if (l < _blkBounds[o + 1] && rt > _blkBounds[o] && t < _blkBounds[o + 3] && bt > _blkBounds[o + 2]) return true;
       }
       return false;
     };
