@@ -6337,7 +6337,6 @@
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/menu-baseline.spec.js",
         "tests/specs/multiplayer-seats.spec.js",
-        "tests/specs/persistence.spec.js",
         "tests/specs/steer-migration.spec.js",
         "tests/specs/steering.spec.js",
         "tests/unit/agent-config.test.mjs",
