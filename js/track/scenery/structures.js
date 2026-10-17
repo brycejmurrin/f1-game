@@ -854,8 +854,21 @@ const SceneryStructures = (function () {
         const tbSeg = rowSeg(topBack) || seg;                                            // the back wall stands on the outermost arc
         if (opts.backWall !== false) {
           out._mat = MAT.CONCRETE;
-          addBox(out, vadd(vadd(a.c, a.r, topBack), a.u, topH * 0.5),
-                 [0.7, topH, tbSeg], concAlt, b);                                          // plain back wall
+          // The wall stands rows*dep beyond the anchor, where the verge can fall away. At full
+          // length neighbouring walls overlapped and carried each other; cut to the chord they
+          // stand alone, so take the foot down to the lowest terrain under the wall (jerez's
+          // Angel Nieto bowl wrap floated 1.2-1.3 m, ground-audit --why).
+          const wc = vadd(a.c, a.r, topBack);
+          let drop = 0;
+          if (typeof terrainYAt === "function") {
+            for (const o of [-0.5, 0, 0.5]) {
+              const p = vadd(wc, a.t, o * tbSeg), ty = terrainYAt(p[0], p[2]);
+              if (ty != null) drop = Math.max(drop, (p[1] - ty) / Math.max(0.5, a.u[1]));
+            }
+          }
+          const wallH = topH + drop;
+          addBox(out, vadd(wc, a.u, topH - wallH * 0.5),
+                 [0.7, wallH, tbSeg], concAlt, b);                                       // plain back wall
         }
         if (opts.cut) {
           out._mat = 0;
