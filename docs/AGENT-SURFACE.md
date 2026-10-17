@@ -528,7 +528,7 @@ boot-time classifiers see the phone. `--safe T,R,B,L` sets real
 `--summary` prints one tab-separated line per issue (screen, size, kind,
 selector, message) instead of the JSON, which is still written to `--out`.
 `provenance.emulation` records the settings. A sweep record that has not settled
-gets one more settlement budget (`settlement.retried`). If it is still moving,
+gets one more settlement budget (`settlement.retried`). Settlement also waits for finite running CSS animations on, inside or above the root (`settlement.animating`): a fade or pointer-events transition leaves geometry final while hit tests still answer `<html>`; infinite animations are ignored. If it is still moving,
 its issues carry `provisional: true`. A hit test whose visible centre lands on
 `<html>`/`<body>` is `not-hit-testable` (nothing painted takes the point), not
 `blocked` by another control. A native `<label>` counts as part of its control's

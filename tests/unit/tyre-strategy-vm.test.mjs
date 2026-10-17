@@ -53,6 +53,7 @@ test("a NO STOP plan becomes a stop when the set is going faster than planned â€
   assert.match(G.pits.planInfo(p).text, /NO STOP/, "the precondition: the plan says NO STOP");
   // Three laps in and 90 % gone: the pace the reported bug describes.
   p.lap = 4; p.tyreLap0 = 1; p.fuelLap = 4; p.tyreWear = 0.9; p.tyreWearF = 0.9; p.tyreWearR = 0.9;
+  p.prog = 3 * G.track.total + p.s;       // elapsed driving, not a scoring-only rewind
   p._planLap = 3;                             // the re-cut is due on this lap
   g.step(3);
   assert.ok(p.pitPlan.stops >= 1, `the live re-cut adds a stop: ${JSON.stringify(p.pitPlan)}`);
@@ -88,6 +89,8 @@ test("an AI re-cuts its own plan from the wear it measures, quietly", async () =
     const before = c.pitPlan.lapsAt[0];
     // Four laps on the set and 80 % gone: far faster than any 25-lap plan.
     c.lap = 5; c.tyreLap0 = 1; c.fuelLap = 5; c.tyreWear = 0.8; c.tyreWearF = 0.8; c.tyreWearR = 0.8;
+    c.prog = 4 * G.track.total + c.s;     // keep physical distance consistent with four driven laps
+    assert.equal(G.tyres.lapsOn(c), 4, "four physically driven laps on the set");
     c.pitArmed = false; c.pitState = "none"; c._planLap = 4;
     G.pits.update(c, 1 / 60);
     assert.ok(c.pitPlan.lapsAt[0] < before, `the stop comes forward: L${before} -> L${c.pitPlan.lapsAt[0]}`);
@@ -111,6 +114,8 @@ test("an AI set wearing at the planned, fuel-adjusted rate is not re-cut", async
   const fuel = 1 - (lap - onSet / 2) / 50;
   const w = onSet / nominal * (1 + A.STRAT.FUEL_WEAR * fuel);   // exactly the plan's rate, with its fuel
   c.lap = lap; c.tyreLap0 = 1; c.fuelLap = lap; c.tyreWear = w; c.tyreWearF = w; c.tyreWearR = w;
+  c.prog = onSet * G.track.total + c.s;   // this fixture represents eight driven laps on the grid set
+  assert.equal(G.tyres.lapsOn(c), onSet, "eight physically driven laps on the set");
   c.pitArmed = false; c.pitState = "none"; c._planLap = lap - 1; c._recutLap = null;
   G.pits.update(c, 1 / 60);
   assert.ok(Math.abs(c.pitPlan.loadK - 1) < 0.08, `loadK at the planned rate: ${c.pitPlan.loadK}`);
@@ -308,6 +313,8 @@ test("player wet advice uses remaining set life and keeps wet stints", async () 
     G.tyres.fit(c, G.tyres.classRecord(cls));
     c.tyreLog = c.tyreLog.slice(-1); c.tyreLog[0].lap0 = 0;
     c.tyreLap0 = 0; c.lap = 4;
+    c.prog = 3 * G.track.total + c.s;  // three driven laps, not just a scoring-lap change
+    assert.equal(G.tyres.lapsOn(c), 3, "three physically driven laps on the wet set");
     c.tyreWear = c.tyreWearF = c.tyreWearR = 0.5;
     c._planLap = 3;
     assert.equal(G.tyres.lapsLeft(c), 3, "three laps of this set remain, seven to race");
@@ -370,6 +377,8 @@ test("future player wet stints include the fuel they will carry", async () => {
   G.tyres.fit(c, G.tyres.classRecord("wet"));
   c.tyreLog = c.tyreLog.slice(-1); c.tyreLog[0].lap0 = 0;
   c.tyreLap0 = 0; c.lap = 4;
+  c.prog = 3 * G.track.total + c.s;  // measured wear needs the distance driven on this set
+  assert.equal(G.tyres.lapsOn(c), 3, "three physically driven laps before the wet re-cut");
   c.tyreWear = c.tyreWearF = c.tyreWearR = 0.8;
   c.pitPlan.pin = null;
   G.pits.replan(c);

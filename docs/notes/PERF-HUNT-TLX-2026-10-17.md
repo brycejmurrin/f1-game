@@ -65,3 +65,32 @@ four browser groups are left to CI; the fix only changes how index buffers are g
 
 - Mirror pass 37–47 draws, sun rebuild 49: both drop with the same chunk list (counted above), no separate change.
 - Post chain: 15 full-screen draws at 1 call each; nothing to cut without changing the look (`TLX-PERF-HUNT-2026-10-11.md` §D).
+
+## Round 2: chunk draw merge factor 2 -> 3 (branch `cursor/tlx-perf-r2-9b3e`)
+
+Re-census after the dust merge (monaco, chase): the main pass is 89 draws, of which 40 are still chunked-world
+(29 + 11 in a second record); the other ~49 are single unique meshes (sky, road, cars, props). Checked and dry:
+the 195 ms `set` self time under `render/gfx.js:247` (the canvas-lease Proxy) is ONE `setSize` from a governor step
+(canvas width/height set once in 100 frames, counted by wrapping the setters), not per-frame work; `shownLayer`
+(`ui/layers.js`, 143 ms) is the HUD lane's.
+
+`apex26.tlxChunkMerge` already accepts 3 and 4, and 2 was never compared with them. Same tree, `MERGE=n`
+env on the probe (localStorage `apex26.tlxChunkMerge`), 3 alternating runs per arm, 150 frames, stubbed links:
+
+| circuit | merge | draw calls/frame p50 | render JS p50 ms (3 runs) | render JS mean ms | main-pass triangles |
+|---|---|---|---|---|---|
+| monaco | 2 | 144, 144, 144 | 9.7, 8.1, 8.5 | 10.8, 9.2, 9.7 | 172.6 k |
+| monaco | 3 | 123, 124, 123 | 7.6, 7.2, 7.1 | 8.3, 7.8, 7.8 | 175.4 k (+1.7 %) |
+| spa | 2 | 178, 177, 177 | 8.8, 9.8, 9.3 | 10.6, 11.1, 10.9 | 179.3 k |
+| spa | 3 | 151, 150, 150 | 7.9, 8.3, 7.8 | 9.6, 10.0, 9.9 | 183.4 k (+2.3 %) |
+
+Draw calls −14 % on both (exact); p50 ranges disjoint on both circuits. Merge 4 buys less and costs more
+triangles (monaco +8 %, 186 k), so the default moves to 3 only. The lamp table stays on the 72 m cells
+(`lampCells`), so night lighting does not depend on the factor.
+
+Pixel identity (`shot.mjs`, deploy tip vs this tree, one-job batches): monaco 0.1 park day 921 600 of 921 600 px
+identical (max diff 0). Vegas 0.2 park night: base vs this tree 961 px > 5 levels; base vs a second base run 60 978
+px > 5 levels (night frames move with lamp flicker and AI lights), i.e. the difference is inside the same-tree floor.
+
+Not run: `gpu-census.yml` (hardware effect of ~2 % more triangles in fewer draws), `gfx-probe`, browser groups.
+Off-switch unchanged: `apex26.tlxChunkMerge=2` restores the previous shape, `=1` the original.

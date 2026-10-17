@@ -16,13 +16,16 @@ const SaveMigrate = (function () {
   // Guarded: the node VM harnesses load this file without js/core/log.js.
   function log(level, msg) { if (typeof Log !== "undefined") Log[level]("game", msg); }
 
-  // Number() throws on an object whose toString/valueOf is not callable
-  // ({"toString":1} survives JSON.parse); a hostile save must coerce, not crash the load.
-  function toNum(value) {
-    try { return Number(value); } catch (_) { return NaN; }
+  // Disk JSON may contain objects with non-callable toString/valueOf fields.
+  // Coerce scalar legacy numbers only; object coercion can throw during boot.
+  function scalarNumber(value) {
+    if (value !== null && value !== undefined && typeof value !== "number"
+        && typeof value !== "string" && typeof value !== "boolean") return NaN;
+    return Number(value);
   }
+
   function finiteNumber(value) {
-    const n = toNum(value);
+    const n = scalarNumber(value);
     return Number.isFinite(n) ? n : 0;
   }
 
@@ -197,7 +200,7 @@ const SaveMigrate = (function () {
       ? season.teamPts : {};
     season.teamPts = {};
     Object.entries(oldTeams).forEach(([id, value]) => {
-      const n = toNum(value);
+      const n = scalarNumber(value);
       if (id && isFinite(n)) season.teamPts[id] = Math.max(0, n);
     });
     season.finishes = finishMap(season.finishes);
@@ -225,7 +228,7 @@ const SaveMigrate = (function () {
     const team = typeof Teams !== "undefined" && Teams && Array.isArray(Teams.LIST)
       ? Teams.LIST.find((t) => t && t.id === teamId) : null;
     const n = team && Array.isArray(team.drivers) && team.drivers.length ? team.drivers.length : 2;
-    const i = Math.trunc(toNum(seat)) || 0;
+    const i = Math.trunc(scalarNumber(seat)) || 0;
     return Math.max(0, Math.min(n - 1, i));
   }
 
@@ -274,7 +277,7 @@ const SaveMigrate = (function () {
       if (career != null) log("warn", "Career save rejected: not an object type=" + (Array.isArray(career) ? "array" : typeof career));
       return null;
     }
-    const version = toNum(career.v);
+    const version = scalarNumber(career.v);
     if (version > CAREER_V) {
       log("warn", "Career save requires a newer build (v" + version + "); update the game to open it. Save preserved.");
       return null;
@@ -285,7 +288,7 @@ const SaveMigrate = (function () {
     career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
     career.year = finiteNumber(career.year) | 0 || 2026;
     career.money = finiteNumber(career.money);
-    career.rep = Math.max(0, Math.min(100, toNum(career.rep) || 0));
+    career.rep = Math.max(0, Math.min(100, finiteNumber(career.rep)));
     // Driver identity is read by title/cards and by rating lookups. Keep a
     // malformed existing slot recoverable: JSON can persist objects/functions'
     // JSON-safe cousins in these leaves, and a later template interpolation

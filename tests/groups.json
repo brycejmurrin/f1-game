@@ -2041,5 +2041,9 @@
       ],
       "kind": "browser"
     }
-  }
+  },
+  "isolatedFiles": [
+    "tests/unit/car-shade.test.mjs",
+    "tests/unit/game-vm.test.mjs"
+  ]
 }

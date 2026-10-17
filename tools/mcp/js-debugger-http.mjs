@@ -102,7 +102,9 @@ export async function debuggerRequest(path, body, port = debuggerPort()) {
     for (;;) {
       const { done, value } = await reader.read(); if (done) break;
       size += value.length;
-      if (size > 256000) { await reader.cancel(); throw Error("Debugger response exceeds 256000 bytes"); }
+      // A 128KB tool body appears twice; escaping content.text can add a third
+      // body's worth of bytes. Leave room for that and the JSON-RPC envelope.
+      if (size > 512000) { await reader.cancel(); throw Error("Debugger response exceeds 512000 bytes"); }
       chunks.push(Buffer.from(value));
     }
   } finally { reader.releaseLock(); }

@@ -5,3 +5,4 @@ New: Adaptive CSS reports include viewport, scale, safe-area tokens and ancestor
 New: Adaptive inspection records bounded classification histories, forward/reverse path differences, inherited/container CSS candidates and provenance-checked native audit findings.
 New: UI inspection can emulate a touch phone (`--touch`, `--boot`, real safe-area insets via `--safe`) and print a one-line-per-issue `--summary`; a busy box exits 75.
 Fixed: Inspector no longer reports controls as blocked from an unsettled first layout or a bare-page hit test, and counts a native label as part of its control's tap target.
+Fixed: Inspector layout settlement waits for finite CSS animations (a fading sheet no longer reads as unclickable), and the team picker and livery editor catalog routes wait for their garage card instead of a fixed delay.

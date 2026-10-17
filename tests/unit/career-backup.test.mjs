@@ -231,6 +231,8 @@ test("hostile payloads are rejected with a reason and change nothing", () => {
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
       data: Object.assign(save({}), { year: "2026" }) }] }, "year-not-number"],
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { year: { toString: "oops" } }) }] }, "year-not-number"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
       data: Object.assign(save({}), { year: Infinity }) }] }, "year-not-number"],
     [{ format: "apex26-career-backup-v1", slots: [], myTeam: { customTeam: { name: { toString: 1 } } } }, "custom-team-name"],
     // A driver career filed under a MY TEAM row (and the reverse) would load as
@@ -1816,6 +1818,95 @@ for (const action of ["delete-arm", "delete-confirm", "close", "normal"]) test(`
   await Promise.resolve(); await Promise.resolve();
   const review = h.G.$("cr-left").querySelectorAll('[data-cr-act="import"]').some((button) => button.textContent === "IMPORT?");
   assert.equal(review, action === "normal", "abandoned file must not recreate an import review");
+});
+
+for (const failsWith of ["throw", "null"]) test(`late ${failsWith} migration failure refuses the whole import before persistence`, () => {
+  const h = loadHarness();
+  fillSix(h);
+  const envelope = h.CareerBackup.build();
+  envelope.slots[0].data.money = 777;
+  envelope.slots[5].data.money = 888;
+  envelope.badges = { got: { pole: 100 } };
+  const original = JSON.stringify(envelope), before = [...h.disk.entries()];
+  const beforeRevision = h.store.rev;
+  vm.runInContext(`(() => {
+    const migrate = SaveMigrate.migrateCareer;
+    SaveMigrate = Object.assign({}, SaveMigrate, { migrateCareer(c) {
+      if (c.money === 888) { ${failsWith === "throw" ? 'throw new TypeError("corrupt numeric leaf");' : 'return null;'} }
+      return migrate(c);
+    } });
+  })()`, h.ctx);
+  const result = h.CareerBackup.apply(envelope, { liveSlot: "myteam:2" });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "migrate-failed");
+  assert.equal(result.slot, "myteam:2");
+  assert.deepEqual([...h.disk.entries()], before, "slots, selection and extras remain unchanged");
+  assert.equal(h.store.rev, beforeRevision, "no cache write or mirror queue was started");
+  assert.equal(JSON.stringify(envelope), original, "preflight never mutates the imported envelope");
+});
+
+test("backup imports repair malformed JSON numeric leaves without mutating the envelope", () => {
+  const h = loadHarness();
+  const poisoned = JSON.parse('{"toString":"oops"}');
+  const envelope = { format: h.CareerBackup.FORMAT, slots: [
+    { flavour: "driver", i: 0, data: save({ money: 777 }) },
+    { flavour: "driver", i: 1, data: Object.assign(save({ money: 888 }), {
+      // Preview-visible year must stay a valid scalar; the importer rejects
+      // malformed years before migration so the review card can render safely.
+      rep: poisoned, deal: { salary: poisoned },
+    }) },
+  ] };
+  const original = JSON.stringify(envelope);
+  const result = h.CareerBackup.apply(envelope);
+  assert.equal(result.ok, true, result.reason);
+  assert.equal(result.durable, true);
+  assert.equal(h.store.get("career.driver.0").money, 777);
+  assert.equal(h.store.get("career.driver.1").money, 888);
+  assert.equal(h.store.get("career.driver.1").deal.salary, 0);
+  assert.equal(h.store.get("career.driver.1").rep, 0);
+  assert.equal(h.store.get("career.driver.1").year, 2026);
+  assert.equal(JSON.stringify(envelope), original);
+});
+
+test("object schema versions are refused before coercion or any import write", () => {
+  for (const v of [{ toString: "oops" }, [], true]) {
+    const h = loadHarness();
+    fillSix(h);
+    const envelope = h.CareerBackup.build();
+    envelope.slots[5].data.v = v;
+    const before = [...h.disk.entries()];
+    assert.equal(h.CareerBackup.validate(envelope).reason, "invalid-version");
+    assert.equal(h.CareerBackup.apply(envelope).reason, "invalid-version");
+    assert.deepEqual([...h.disk.entries()], before);
+  }
+});
+
+test("apply migrates each planned row exactly once before writing any destination", () => {
+  const h = loadHarness(), calls = [];
+  h.ctx.migrationCalls = calls;
+  vm.runInContext(`(() => {
+    const migrate = SaveMigrate.migrateCareer;
+    SaveMigrate = Object.assign({}, SaveMigrate, { migrateCareer(c) {
+      migrationCalls.push(c.money);
+      // A later migration must still see every destination's original value.
+      if (c.money === 888 && GameStore.store.get("career.driver.0", null) !== null) {
+        throw new Error("a destination was written before migration finished");
+      }
+      return migrate(c);
+    } });
+  })()`, h.ctx);
+  const envelope = { format: h.CareerBackup.FORMAT, slots: [
+    { flavour: "driver", i: 0, data: save({ money: 777 }) },
+    { flavour: "driver", i: 1, data: save({ money: 888 }) },
+  ] };
+  const result = h.CareerBackup.apply(envelope);
+  assert.equal(result.ok, true);
+  assert.equal(result.durable, true);
+  assert.deepEqual(calls, [777, 888], "prepared rows are never migrated again during persistence");
+  assert.equal(h.store.get("career.driver.0").money, 777);
+  assert.equal(h.store.get("career.driver.1").money, 888);
+  h.CareerBackup.writeSlot("driver", 2, save({ money: 999 }));
+  assert.deepEqual(calls, [777, 888, 999], "the public single-slot writer still migrates its input");
 });
 
 test("a {toString:1} version marker does not throw out of validate/apply", () => {

@@ -578,6 +578,8 @@ const CarDraw = (function () {
     // per-call key or "rev|legality" string (this runs per drawn car per frame).
     const _aeroLevelCache = [new Map(), new Map()];
     const _aeroCustom = new Map();   // team.id -> Map(stamp -> state); hit path allocates nothing
+    const AERO_CUSTOM_CACHE_MAX = 32;
+    let _aeroCustomTick = 0;
     function teamDecalState(team, usePlayerSetup, setup, stamp) {
       if (setup) {
         let byTeam = _aeroCustom.get(team.id);
@@ -585,12 +587,22 @@ const CarDraw = (function () {
         const leg = Parts.legalityKey();
         const key = stamp || "";
         const c = byTeam.get(key);
-        if (c && c.leg === leg) return c;
+        if (c && c.leg === leg) { c.lastUse = ++_aeroCustomTick; return c; }
         const parts = Parts.getVisualTiers(setup, team);
         const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2,
                         aero: Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null,
-                        parts, rev: -1, leg, fwKey: null };
+                        parts, rev: -1, leg, fwKey: null, lastUse: ++_aeroCustomTick };
         byTeam.set(key, state);
+        // Career upgrades change the stamp for years of builds. Retain the
+        // recent recipes, including both seats of every active team, rather
+        // than keeping every historical visual tier graph for the tab's life.
+        if (byTeam.size > AERO_CUSTOM_CACHE_MAX) {
+          let oldestKey, oldestUse = Infinity;
+          for (const [k, cached] of byTeam) {
+            if (cached.lastUse < oldestUse) { oldestKey = k; oldestUse = cached.lastUse; }
+          }
+          byTeam.delete(oldestKey);
+        }
         return state;
       }
       const cache = _aeroLevelCache[usePlayerSetup ? 1 : 0];

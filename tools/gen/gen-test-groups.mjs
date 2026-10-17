@@ -37,8 +37,14 @@ export function loadGroups(file = GROUPS) {
 export const filesOnly = (entries) => entries.filter((e) => !e.startsWith("//"));
 
 /** The command line one group runs, rebuilt from its definition. */
-export function commandFor(def) {
+export function commandFor(def, isolatedFiles = [], name) {
   if (def.kind === "command") return def.cmd;
+  if (def.kind === "node" && (def.files || []).some((file) => isolatedFiles.includes(file))) {
+    if (!name) throw new Error("an isolated node group needs its manifest name");
+    // Keep the generated roster visible to coverage audits. npm's forwarded
+    // arguments follow -- and the wrapper passes them to every phase.
+    return ["node tools/ci/run-node-group.mjs", name, ...def.files, "--"].join(" ");
+  }
   const head = def.kind === "browser" ? "node tools/ci/run-playwright.mjs" : "node --test";
   return [head, ...(def.flags || []), ...(def.files || [])].join(" ");
 }
@@ -48,7 +54,7 @@ export function renderPkg(doc, pkgText) {
   const pkg = JSON.parse(pkgText);
   for (const [name, def] of Object.entries(doc.groups)) {
     if (!(name in pkg.scripts)) throw new Error(`groups.json names ${name}, package.json has no such script — add it or drop the group`);
-    pkg.scripts[name] = commandFor(def);
+    pkg.scripts[name] = commandFor(def, doc.isolatedFiles, name);
   }
   // A `test:*` script whose group left groups.json is DELETED here, not
   // refused: groups.json is the single source, so removing a group has to be

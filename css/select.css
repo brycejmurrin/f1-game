@@ -798,6 +798,12 @@
 #sel-teams {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  /* max-content, not the implicit auto: the tiles wrap (above), and auto rows
+     resolved to the 52px min-height while the wrapped body was ~75-88px, so
+     names sat on the tile's top edge and driver lines spilled over the next
+     row (844x390 touch, UI inspector sweep 2026-10-17; 7 of 12 tiles).
+     max-content sizes each row to its tallest tile; the pane already scrolls. */
+  grid-auto-rows: max-content;
   gap: calc(var(--gap) * 0.7);
   align-content: start;
 }

@@ -53,9 +53,15 @@ def description(path):
         return ""
     text = []
     for key in ("description", "when_to_use"):
-        km = re.search(r"^%s:\s*(.*)$" % key, m.group(1), re.M)
+        # A plain or quoted YAML scalar may continue on indented lines. Block
+        # scalars (>|) carry the same description words for routing purposes.
+        # Stop at the next top-level key, rather than silently dropping most
+        # of a folded description such as check-changes' timeout vocabulary.
+        km = re.search(r"^%s:[ \t]*(.*(?:\n[ \t]+[^\n]*)*)" % key, m.group(1), re.M)
         if km:
-            text.append(km.group(1).strip().strip("\"'"))
+            scalar = km.group(1).strip()
+            scalar = re.sub(r"^[>|][+-]?(?:\n|$)", "", scalar)
+            text.append(" ".join(scalar.split()).strip("\"'"))
     joined = " ".join(text)
     # drop redirect clauses: "Not X (→ y)", "camera lag → playwright-probe;"
     joined = re.sub(r"[^.;:]*→[^.;]*[.;]?", " ", joined)

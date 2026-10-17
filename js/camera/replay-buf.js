@@ -83,7 +83,7 @@ const ReplayBuf = (function () {
     const allowed = () => (!eligible || eligible()) && !(G.netPlay && G.netPlay.active && G.netPlay.active());
     let nCars = 0, cap = 0, head = 0, count = 0, lastSlot = -1;
     let times = null, data = null, status = null, brk = null, breakPending = false;
-    let tags = [];
+    let tags = [], tagPicker = null, tagOptionsKey = null;
     let scrubbing = false, liveSnap = null;
     let scrubT = 0, scrubRate = 1, scrubPlaying = true;
     let prevStatus = null, sheetBusy = false, sheetGeneration = 0, sheetCancelled = false;
@@ -503,10 +503,15 @@ const ReplayBuf = (function () {
       if (nextFrame) nextFrame.disabled = sheetBusy || adjacentFrame(scrubT, 1) === null;
       const picker = document.getElementById("pm-replay-tag"), sheet = document.getElementById("pm-replay-sheet");
       if (picker && !sheetBusy) {
-        const selected = picker.value; picker.replaceChildren();
-        tags.forEach((tag, i) => { if (tag.t < w.t0 || tag.t > w.t1) return;
-          const option = document.createElement("option"); option.value = String(i); option.textContent = tag.kind + " · " + tag.t.toFixed(1) + "s"; picker.appendChild(option); });
-        if (Array.from(picker.options || picker.children).some((o) => o.value === selected)) picker.value = selected;
+        const visible = tags.map((tag, i) => [i, tag]).filter(([, tag]) => tag.t >= w.t0 && tag.t <= w.t1);
+        const key = JSON.stringify(visible.map(([i, tag]) => [i, tag.kind, tag.t]));
+        if (picker !== tagPicker || key !== tagOptionsKey) {
+          const selected = picker.value; picker.replaceChildren();
+          visible.forEach(([i, tag]) => {
+            const option = document.createElement("option"); option.value = String(i); option.textContent = tag.kind + " · " + tag.t.toFixed(1) + "s"; picker.appendChild(option); });
+          if (Array.from(picker.options || picker.children).some((o) => o.value === selected)) picker.value = selected;
+          tagPicker = picker; tagOptionsKey = key;
+        }
       }
       const cancel = document.getElementById("pm-replay-sheet-cancel"); if (cancel) cancel.hidden = !sheetBusy;
       if (picker) picker.disabled = sheetBusy;
