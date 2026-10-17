@@ -46,6 +46,18 @@ const PhoneRecorder = (function () {
 
   const r2 = (n) => (n != null && Number.isFinite(+n) ? Math.round(+n * 100) / 100 : null);
   const g = () => (typeof globalThis !== "undefined" ? globalThis : (typeof window !== "undefined" ? window : {}));
+  // The game's modules are top-level `const`s: lexical globals, NOT window properties, so
+  // window.PerfGov is undefined on a real page. Read them by name through typeof, over window.
+  function scope() {
+    const w = {};
+    if (typeof PerfGov !== "undefined") w.PerfGov = PerfGov;
+    if (typeof PerfSpans !== "undefined") w.PerfSpans = PerfSpans;
+    if (typeof GLX !== "undefined") w.GLX = GLX;
+    if (typeof GfxQuality !== "undefined") w.GfxQuality = GfxQuality;
+    if (typeof RendererPicker !== "undefined") w.RendererPicker = RendererPicker;
+    if (typeof GameStore !== "undefined") w.GameStore = GameStore;
+    return w;
+  }
   function safe(fn, dflt) { try { const v = fn(); return v === undefined ? dflt : v; } catch (_) { return dflt; } }
 
   // Numeric leaves of a small object (depth <= 2), flattened as "a" / "a.b".
@@ -95,7 +107,7 @@ const PhoneRecorder = (function () {
   }
 
   function liveFacts() {
-    const w = g(); const nav = w.navigator || {};
+    const w = g(); const L = scope(); const nav = w.navigator || {};
     const f = {
       ua: nav.userAgent || "", platform: nav.platform || "",
       dpr: w.devicePixelRatio || 1,
@@ -105,15 +117,15 @@ const PhoneRecorder = (function () {
       hwConcurrency: nav.hardwareConcurrency || null, deviceMemory: nav.deviceMemory || null,
       webgpu: !!nav.gpu, webgpuF16: null,
       build: safe(() => document.querySelector('meta[name="apex-build"]').content, null),
-      backend: safe(() => (w.RendererPicker && w.RendererPicker.liveBackend && w.RendererPicker.liveBackend()) || "", ""),
+      backend: safe(() => (L.RendererPicker && L.RendererPicker.liveBackend && L.RendererPicker.liveBackend()) || "", ""),
       backendState: safe(() => {
-        const GLX = w.GLX;
+        const GLX = L.GLX;
         const t = GLX && GLX.__tlx && GLX.__tlx.backendState ? GLX.__tlx.backendState()
           : (GLX && GLX.backendState && GLX.backendState());
         return t ? numericLeaves(t) : null;
       }, null),
       backendPick: safe(() => {
-        const GLX = w.GLX; const t = GLX && GLX.__tlx && GLX.__tlx.backendState && GLX.__tlx.backendState();
+        const GLX = L.GLX; const t = GLX && GLX.__tlx && GLX.__tlx.backendState && GLX.__tlx.backendState();
         if (!t) return null;
         const o = {};
         for (const k of ["api", "path", "pin", "forceWebGL", "softBlit", "packLive"]) if (t[k] !== undefined) o[k] = typeof t[k] === "object" ? String(t[k]) : t[k];
@@ -131,28 +143,28 @@ const PhoneRecorder = (function () {
   }
 
   function liveSample() {
-    const w = g(); const PG = w.PerfGov; const apex = w.__apex;
+    const w = g(); const L = scope(); const PG = L.PerfGov; const apex = w.__apex;
     const fs = safe(() => PG.frameStats(), null) || {};
     const o = {
       frame: { frames: fs.frames | 0, p50: r2(fs.p50), p95: r2(fs.p95), p99: r2(fs.p99), max: r2(fs.maxMs),
         droppedSimS: r2(fs.droppedSimS) },
       fpsEMA: r2(safe(() => 1000 / PG.fpsEMA(), null)),
       floorMs: r2(safe(() => PG.floorMs(), null)),
-      renderScale: r2(safe(() => w.GLX.getRenderScale(), null)),
+      renderScale: r2(safe(() => L.GLX.getRenderScale(), null)),
       tier: safe(() => PG.tier(), null), userTier: safe(() => PG.userTier(), null),
       autoShed: safe(() => PG.autoShed(), null), autoRes: safe(() => PG.autoRes(), null),
       scaleFutile: safe(() => PG.scaleFutile(), null), tierFutile: safe(() => PG.tierFutile(), null),
-      mem: safe(() => { const m = w.GLX && w.GLX.__tlx && w.GLX.__tlx.memState && w.GLX.__tlx.memState(); return m ? numericLeaves(m) : null; }, null),
+      mem: safe(() => { const m = L.GLX && L.GLX.__tlx && L.GLX.__tlx.memState && L.GLX.__tlx.memState(); return m ? numericLeaves(m) : null; }, null),
       heapMB: safe(() => r2(w.performance.memory.usedJSHeapSize / 1048576), null),
       circuit: safe(() => apex.info().track, null) || null,
       weather: safe(() => apex.weather(), null) || null,
-      preset: safe(() => w.GfxQuality.current(), null),
+      preset: safe(() => L.GfxQuality.current(), null),
       cam: safe(() => apex.camera().mode, null),
-      path: safe(() => { const t = w.GLX.__tlx && w.GLX.__tlx.backendState ? w.GLX.__tlx.backendState() : w.GLX.backendState();
-        return { pick: (w.RendererPicker && w.RendererPicker.liveBackend && w.RendererPicker.liveBackend()) || "",
+      path: safe(() => { const t = L.GLX.__tlx && L.GLX.__tlx.backendState ? L.GLX.__tlx.backendState() : L.GLX.backendState();
+        return { pick: (L.RendererPicker && L.RendererPicker.liveBackend && L.RendererPicker.liveBackend()) || "",
           api: t && t.api || null, path: t && t.path || null, pin: t && t.pin != null ? String(t.pin) : null }; }, null),
       // Per-subsystem JS ms/frame over the span ring's last ~8.5 s (PerfSpans is ON only while recording).
-      spans: safe(() => { const st = w.PerfSpans.stats(); const o = {};
+      spans: safe(() => { const st = L.PerfSpans.stats(); const o = {};
         for (const k of Object.keys(st)) o[k] = { p50: st[k].p50, p95: st[k].p95 }; return o; }, null),
       visibility: safe(() => document.visibilityState, null),
     };
@@ -160,14 +172,14 @@ const PhoneRecorder = (function () {
   }
 
   function liveEnv() {
-    const w = g();
+    const w = g(); const L = scope();
     const env = {
       now: () => (w.performance && w.performance.now ? w.performance.now() : Date.now()),
       wall: () => Date.now(),
       facts: liveFacts, sample: liveSample,
-      spans: (on) => safe(() => { const S = w.PerfSpans; if (!S) return null; if (on) { env._spansWas = S.isOn(); S.on(true); } else if (!env._spansWas) S.on(false); }, null),
-      save: (txt) => safe(() => { if (w.GameStore && w.GameStore.store) return w.GameStore.store.rawSet(KEY, txt); w.localStorage.setItem(KEY, txt); }, null),
-      load: () => safe(() => (w.GameStore && w.GameStore.store ? w.GameStore.store.raw(KEY) : w.localStorage.getItem(KEY)), null),
+      spans: (on) => safe(() => { const S = L.PerfSpans; if (!S) return null; if (on) { env._spansWas = S.isOn(); S.on(true); } else if (!env._spansWas) S.on(false); }, null),
+      save: (txt) => safe(() => { if (L.GameStore && L.GameStore.store) return L.GameStore.store.rawSet(KEY, txt); w.localStorage.setItem(KEY, txt); }, null),
+      load: () => safe(() => (L.GameStore && L.GameStore.store ? L.GameStore.store.raw(KEY) : w.localStorage.getItem(KEY)), null),
     };
     return env;
   }

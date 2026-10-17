@@ -39,6 +39,8 @@ test.describe("phone recorder — RECORD, advance, SHARE", () => {
     expect(rec.facts.gl.ok).toBe(true);
     expect(rec.cadence.frames).toBe(120);
     expect(rec.samples.length).toBeGreaterThanOrEqual(2);
+    expect(rec.samples[0].tier).not.toBeNull();   // PerfGov is a lexical const, reachable only by bare name
+    expect(rec.samples[0].renderScale).not.toBeNull();
     expect(rec.samples[0].trigger).toBe("start");
     expect(rec.samples[rec.samples.length - 1].trigger).toBe("stop");
     expect(rec.endedAt).toBeTruthy();
