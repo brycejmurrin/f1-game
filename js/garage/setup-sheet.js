@@ -1156,7 +1156,7 @@ function buildLiveryCreator(container, team) {
   };
   wrap.appendChild(section("COCKPIT"));
   wrap.appendChild(colorRow("HALO", "halo", true));
-  wrap.appendChild(colorRow("RIM", "rimTint", true)); wrap.appendChild(colorRow("CALIPER", "caliperTint", true));   // WHEELS & BRAKES section (livery-design-editor.js)
+  wrap.appendChild(colorRow("RIM", "rimTint", true)); wrap.appendChild(colorRow("CALIPER", "caliperTint", true)); wrap.appendChild(colorRow("SIDEWALL INK", "sidewallInk", true));   // WHEELS & BRAKES section (livery-design-editor.js)
   wrap.appendChild(colorRow("MIRROR HOUSING", "mirrorTint", true));
   // One pill row per single-choice field: FINISH (Car3D's surface set — this
   // array and FINISH_SURFACE were two copies and the specs held a third),
