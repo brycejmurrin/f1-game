@@ -1,1 +1,0 @@
-1792167917	Bryce Murrin	Agent JavaScript debugger MCP: new tools/mcp/js-debugger* and cdp transport, focused unit/manual tests, opt-in MCP config and setup docs. No game runtime/source edits, no existing PR edits, parent owns browser validation.  [cursor/agent-debugger-mcp-ed7f; session 53024c2c65f79bf5fa76a663]
