@@ -106,6 +106,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ladder on the platforms that do not have Daniel.
   "tests/unit/announcer.test.mjs",
   "tests/unit/apca-timing.test.mjs",
+  "tests/unit/apex-arg-guards.test.mjs",
   "tests/unit/apex-career-delete.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
@@ -377,6 +378,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // racecraft harder than pace, and asLegend hands over the legend's OWN
   // axes rather than bumping whoever was fastest. Pure module load, ~0.1 s.
   "tests/unit/duel.test.mjs",
+  "tests/unit/editor-workspace.test.mjs",
   // ElevPresets (js/editor/elev-presets.js): Flat / Rolling / Hilly → per-node
   // heights[]; sanitize pads missing heights to flat zeros. Pure VM, ~0.05 s.
   "tests/unit/elev-presets.test.mjs",

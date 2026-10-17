@@ -1192,8 +1192,10 @@ var PitLane = (function () {
       // think() guards ARMING on the last lap / a flagged leader, but an AI that
       // armed on lap L-1 and missed its entry (it comes in next time round) was
       // still armed past it: the stop paid nothing and was taken anyway.
+      // …EXCEPT a car that still owes its second dry compound: a stop re-cut late (or a missed pass at a
+      // pre-line box) lands in the final lap, and clearing it there ends in applyCompoundRule's DSQ.
       if (!c.human && c.pitArmed && st === "none" &&
-          ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars)))) clearArm(c);
+          ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget && !owesCompound(c)) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars)))) clearArm(c);
       const zz = z(), L = zoneFor.total;   // zoneFor IS G.track here: enabled() above saw z() non-null (one façade read, PERF-HUNT-2 S7)
       if (st === "out" && c.pitOutT > 0) c.pitOutT = Math.max(0, c.pitOutT - dt);   // the GO chip's clock
       // Every plan is re-cut once per lap (replan): the player's reference, and
@@ -1532,6 +1534,9 @@ var PitLane = (function () {
       return Math.max(0, (G.lapsTarget || 0) - ((c && c.lap) || 0) + 1);
     }
     /** The player still owes the second compound with the race nearly run. */
+    function owesCompound(c) {
+      return !!c && twoCompoundApplies() && typeof SportingRegs !== "undefined" && SportingRegs.compoundShort(c.tyreLog);
+    }
     function compoundDue(c) {
       if (!c || !twoCompoundApplies() || typeof SportingRegs === "undefined") return false;
       return lapsToFlag(c) <= COMPOUND_WARN_LAPS && SportingRegs.compoundShort(c.tyreLog);

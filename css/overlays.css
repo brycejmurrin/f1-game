@@ -348,6 +348,15 @@ body:has(dialog[open]) #save-warning { display: none; }
   pointer-events: none;
 }
 #htp-controls { scroll-margin-block-start: var(--gap); }
+/* REPEAT CONTROL REMINDERS (js/ui/key-binds.js) lives inside the zoomed sheet
+   body, so plain button padding at --fs-micro painted ~14px tall at UI SIZE
+   40%. --tap-paint holds the painted floor (52 touch, 24 mouse) at any zoom;
+   full width + wrapping keeps the long label inside a 320px phone. */
+#htp-controls-refresher {
+  display: block; width: 100%; box-sizing: border-box;
+  min-height: var(--tap-paint); margin-block-start: var(--gap);
+  white-space: normal; overflow-wrap: anywhere;
+}
 #htp-inputs { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
 #htp-inputs details { min-width: 0; }
 #htp-inputs p { margin-block: calc(var(--gap) * 0.5); }
