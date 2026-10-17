@@ -351,6 +351,7 @@ const FULL = [
   "js/input/steer-tuning.js",
   "js/perf/governor.js",
   "js/perf/loop-health.js",
+  "js/perf/render-rate.js",   // RenderRate: phones draw every 2nd rAF on a 100 Hz+ display (physics unchanged)
   "js/perf/spans.js",
   "js/perf/race-entry-profile.js",
   "js/perf/quality-preset.js",

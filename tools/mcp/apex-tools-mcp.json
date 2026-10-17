@@ -2,7 +2,7 @@
   "name": "apex-tools",
   "serverInfo": {
     "name": "apex-tools-mcp",
-    "version": "1.14.0"
+    "version": "1.15.0"
   },
   "prefix": "apex_",
   "stdio": {
@@ -28,6 +28,7 @@
     "apex_bump_cache_check",
     "apex_status",
     "apex_catalog",
+    "apex_locations",
     "apex_doctor",
     "apex_eval",
     "apex_shot",

@@ -27,12 +27,11 @@
 :root[data-title-btns="row"] #menu-buttons > .menu-destination {
   --balance-basis: 0px; --balance-min: 0px; flex-wrap: nowrap;
 }
-/* Create inherits what its doors had in Watch & Explore: label over subtitle, and wrapping
-   instead of a nowrap subtitle running past a half-width door (200% zoom, 1280 wide). */
+/* Create: label over subtitle, wrapping (200% zoom, 1280 wide). */
 #menu-create .bigbtn { white-space: normal; text-wrap: balance; overflow-wrap: anywhere; }
 #menu-create .mb-sub { white-space: normal; overflow-wrap: anywhere; }
-/* Compact Home (Oct-15 shape): hero column, 2-up doors, chips under the brand. */
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { grid-template-rows: repeat(4, max-content); row-gap: calc(var(--gap)*.2); --home-g: calc(var(--gap)*.2); padding-block: calc(var(--gap)/4); }
+/* Compact Home (Oct-15 shape). */
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { grid-template-rows: repeat(5, max-content); row-gap: calc(var(--gap)*.15); --home-g: calc(var(--gap)*.2); padding-block: calc(var(--gap)/8); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-retention, #menu-explore, #menu-create) { display: flex; width: 100%; gap: var(--home-g); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero { flex-direction: column; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) { grid-column: 2; align-self: start; }
@@ -43,27 +42,30 @@
   font-size: max(calc(var(--fs-4)*.9*var(--ui-compact-text, 1)), calc(var(--fs-4)*var(--ui-compact-text, 1)*clamp(0, calc((var(--ui-compact-text, 1) - 1)*2), 1)));
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn > span { align-items: center; }
-@media (max-height: 400px) {
-  :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-retention) .mb-sub { display: none; }
-  :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn { min-height: 44px; }
+@media (max-height: 460px) {
+  #overlay #menu-buttons #menu-retention .mb-sub { display: none; }
+  :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn { min-height: 40px; font-size: max(calc(min(var(--fs-4)*.84, 15.5px)*var(--ui-compact-text, 1)), calc(var(--fs-4)*var(--ui-compact-text, 1)*clamp(0, calc((var(--ui-compact-text, 1) - 1)*2), 1))); }
+  :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn { white-space: nowrap; font-size: max(calc(min(var(--fs-4)*.74, var(--fs-micro))*var(--ui-compact-text, 1)), calc(var(--fs-4)*var(--ui-compact-text, 1)*clamp(0, calc((var(--ui-compact-text, 1) - 1)*2), 1))); }
 }
+@media (max-height: 400px) { #overlay #menu-buttons #menu-hero .mb-sub { display: none; } }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero { grid-row: 1; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-primary { grid-row: 2; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-garage { grid-row: 2; align-self: end; justify-self: end; width: calc(50% - var(--home-g)/2); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { grid-row: 3; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create { grid-row: 4; }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { --home-chips-top: 254px; grid-row: 1/-1; align-self: start; margin-top: var(--home-chips-top); }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { --home-chips-top: 140px; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { grid-column: 2; grid-row: 5; align-self: start; width: 100%; min-height: 0; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .mb-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; display: block; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn {
-  display: inline-flex; justify-content: flex-start; align-items: center; gap: calc(var(--gap)/8);
-  font-size: clamp(.6rem, calc(1.9*var(--vwz)), var(--fs-micro)); line-height: 1.1; text-align: start;
-  padding: calc(var(--gap)/10) calc(var(--gap)/8) calc(var(--gap)/10) calc(var(--gap)/4); min-height: 44px; box-sizing: border-box;
+  display: inline-flex; justify-content: center; align-items: center; gap: calc(var(--gap)/8);
+  font-size: clamp(.7rem, calc(1.6*var(--vwz)), var(--fs-micro)); line-height: 1.05; text-align: center; font-style: normal; font-weight: 700;
+  padding: calc(var(--gap)/10) calc(var(--gap)/8); min-height: 32px; box-sizing: border-box;
   height: auto; max-height: none; min-width: 0; letter-spacing: 0; white-space: normal; text-wrap: balance; overflow-wrap: normal; overflow: hidden;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn .btn-ico { width: .85em; height: .85em; flex: none; margin: 0; }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #mb-phonepad .btn-ico { display: none; }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .bigbtn { font-size: clamp(.7rem, calc(2*var(--vwz)), calc(var(--fs-4)*var(--ui-compact-text, 1))); }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .btn-ico { display: none; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn:not([hidden]) { flex: 1 1 auto; min-width: min-content; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary:has(#mb-standings:not([hidden])) > .bigbtn { font-size: clamp(.6rem, calc(1.25*var(--vwz)), var(--fs-micro)); }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .bigbtn { font-size: clamp(.7rem, calc(1.7*var(--vwz)), calc(var(--fs-4)*var(--ui-compact-text, 1))); }
 @media (max-width: 700px) { :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .btn-ico { display: none; } }
 .dh-developer-tools { padding: 0 var(--gap) calc(var(--gap) * .5); flex-shrink: 0; }
 .dh-developer-tools > summary { cursor: pointer; color: var(--dim); min-height: var(--tap-min); }

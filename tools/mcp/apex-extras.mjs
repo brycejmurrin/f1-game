@@ -17,8 +17,10 @@ import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 import sharp from "sharp";
 import { surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
+import { loadSurveyDesigns } from "../lib/custom-survey-locations.mjs";
 import {
   buildTrackShotSurveyPlan,
+  buildSurveyPlans,
   estimateSurveyMs,
   filterResumeShots,
   surveyTerminalState,
@@ -178,7 +180,7 @@ export function createExtras(ctx) {
   /** The plan options shot-survey.mjs has no flag for; the async job carries them as --plan-json. */
   const pickPlanArgs = (a) => {
     const o = {};
-    for (const k of ["cam", "cams", "az", "el", "dist", "h", "side", "hud", "shots", "cols", "sheetName", "weather", "location", "angles", "weathers", "camera"]) if (a[k] != null) o[k] = a[k];
+    for (const k of ["cam", "cams", "az", "el", "dist", "h", "side", "hud", "shots", "cols", "sheetName", "weather", "location", "locations", "angles", "weathers", "camera"]) if (a[k] != null) o[k] = a[k];
     return o;
   };
   async function handleShotSurvey(args = {}) {
@@ -191,15 +193,16 @@ export function createExtras(ctx) {
       try { return toolResult({ ok: true, browser: false, out, indexHtml: writeSurveyGalleryFromReports(out, reports, { validateAssetPath: assertSafeOut }) }); }
       catch (e) { if (e.refuse) return e.refuse; return refuse("gallery_failed", String(e.message || e), "Check report paths and their captured image files."); }
     }
-    let tracks;
+    let tracks, customDesigns;
     try {
-      tracks = normalizeSurveyTracks(args).map((id) => needTrack(id));
+      customDesigns = args.designs ? loadSurveyDesigns(path.resolve(ROOT, args.designs)) : null;
+      tracks = normalizeSurveyTracks(args).map((id) => customDesigns?.locations.has(id) ? id : needTrack(id));
     } catch (e) {
       if (e.refuse) return e.refuse;
       return refuse("bad_args", String(e.message || e), "Pass track or tracks[] with Tracks.LIST ids.");
     }
-    let plan;
-    try { plan = buildTrackShotSurveyPlan(args); }
+    let plan, plans;
+    try { plans = buildSurveyPlans({ ...args, customDesigns }, tracks); plan = plans.get(tracks[0]); }
     catch (e) { return refuse("bad_args", String(e.message || e), "See apex_shot_survey inputSchema."); }
     const label = plan.label;
     const outRoot = assertSafeOut(args.out || (tracks.length === 1
@@ -208,14 +211,16 @@ export function createExtras(ctx) {
     const wantPanel = args.panel !== false;
     const wantIndex = args.index !== false;
     const resume = !!args.resume;
-    const estimateMs = estimateSurveyMs(plan.shots.length, tracks.length);
-    const asJob = !!(args.location || args.profile || args.seed != null || args.resume) || shouldSurveyAsync(args, plan, tracks.length);
+    const estimateMs = estimateSurveyMs(Math.max(...[...plans.values()].map(p => p.shots.length)), tracks.length);
+    const profile = args.profile || (args.location || args.locations ? 'preview' : 'comparison');
+    const asJob = !!(args.location || args.locations || args.designs || args.profile || args.seed != null || args.resume) || shouldSurveyAsync(args, plan, tracks.length);
 
     if (args.dryRun) {
       return toolResult({
         ok: true, dryRun: true, track: tracks[0], tracks, out: outRoot, ...plan,
         // Every option the real run reads, so a dry run shows what would happen (and a test can see an option is wired).
-        options: { profile: args.profile || "comparison", seed: args.seed ?? 2391, panel: wantPanel, index: wantIndex, resume, gl: args.gl ?? null, async: args.async ?? null, closeSession: args.closeSession !== false && !args.keepSession, keepSession: !!args.keepSession },
+        ...(args.locations && tracks.length > 1 ? { plans: Object.fromEntries(plans) } : {}),
+        options: { profile, seed: args.seed ?? 2391, panel: wantPanel, index: wantIndex, resume, gl: args.gl ?? null, async: args.async ?? null, closeSession: args.closeSession !== false && !args.keepSession, keepSession: !!args.keepSession },
         estimateMs, asyncDefault: asJob, resume,
         hint: asJob
           ? "Long/multi-track: omit async:false to get a jobId via shot_survey; watch apex_job_status."
@@ -245,7 +250,7 @@ export function createExtras(ctx) {
         count: args.count,
         fracs: args.fracs,
         planArgs: pickPlanArgs(args),
-        profile: args.profile, seed: args.seed,
+        profile, seed: args.seed, designs: args.designs, select: args.select,
       });
     }
 
@@ -426,10 +431,11 @@ export function createExtras(ctx) {
       case "shot_survey": {
         let tracks;
         try {
+          const custom = a.designs ? loadSurveyDesigns(path.resolve(ROOT, a.designs)) : null;
           tracks = normalizeSurveyTracks({
             track: a.track,
             tracks: a.tracks == null ? undefined : (Array.isArray(a.tracks) ? a.tracks : String(a.tracks).split(",")),
-          }).map((id) => needTrack(id));
+          }).map((id) => custom?.locations.has(id) ? id : needTrack(id));
         } catch (e) {
           if (e.refuse) throw e;
           throw Object.assign(new Error("tracks"), { refuse: refuse("bad_args", String(e.message || e), "shot_survey needs track or tracks.") });
@@ -446,6 +452,8 @@ export function createExtras(ctx) {
           "--label", label,
           "--out", out,
           ...(a.profile ? ["--profile", String(a.profile)] : []),
+          ...(a.designs ? ['--designs', path.resolve(ROOT, a.designs)] : []),
+          ...(a.select ? ['--select', a.select.join(',')] : []),
           ...(a.seed != null ? ["--seed", String(a.seed)] : []),
           ...(a.resume ? ["--resume"] : []),
           ...(a.panel === false ? ["--no-panel"] : []),
@@ -546,19 +554,18 @@ export function createExtras(ctx) {
     } catch (e) { log(`job manifest write failed: ${e.message}`); }
   };
   const exitFileFor = (log) => log.replace(/\.log$/, ".exit");
-  const pidAlive = (pid) => {
-    if (!pid) return false;
-    try { process.kill(pid, 0); return true; } catch { return false; }
-  };
   const refreshDiskJob = (meta) => {
     if (!meta || meta.state !== "running") return meta;
-    if (pidAlive(meta.pid)) return meta;
-    // Parent may have exited before the child's exit handler ran: the sh wrapper left the real code beside the log.
+    // The one-shot caller may die before its exit handler runs. The wrapper's
+    // .exit is authoritative even when its orphaned shell remains a zombie:
+    // kill(pid, 0) reports that zombie as alive and otherwise pins two slots.
     let exit = meta.exit;
+    let recordedExit = false;
     try {
       const code = Number(fs.readFileSync(exitFileFor(path.join(ROOT, meta.log)), "utf8"));
-      if (Number.isInteger(code)) exit = code;
+      if (Number.isInteger(code)) { exit = code; recordedExit = true; }
     } catch { /* no exit file: a job from before the wrapper, or the sh itself was killed */ }
+    if (!recordedExit && alive(meta.pid)) return meta;
     if (exit == null) try {
       const text = fs.readFileSync(path.join(ROOT, meta.log), "utf8");
       const last = text.trim().split("\n").filter(Boolean).pop() || "";
