@@ -523,7 +523,7 @@ test("the number plate is the card's identity anchor, and it collapses to a stri
   // The number left the channel line when it gained the plate — one number on
   // the card, not two.
   const g = read("js/race/announce-banner.js");
-  assert.doesNotMatch(g.match(/function radioWho\(kind\) \{[\s\S]*?\n\}/)[0], /num/,
+  assert.doesNotMatch(g.match(/function radioWho\(kind\) \{[\s\S]*?\n\s*\}/)[0], /num/,
     "radioWho still appends the car number — the plate already shows it");
   assert.match(g, /announceNum\.textContent = radioNum\(\);/, "showAnnounce fills the plate");
 });
@@ -534,7 +534,7 @@ test("coach and practice keep their own channel and priority, and practice is it
   // WHO line), never a bigger or smaller card.
   assert.match(hud, /#announce\[data-kind="coach"\] #announce-who,\n#announce\[data-kind="practice"\] #announce-who \{ color: var\(--faster\); \}/);
   const g0 = read("js/race/announce-banner.js");
-  const who = vm.runInNewContext(read("js/audio/radio-voice.js") + "\n(" + g0.match(/function radioWho\(kind\) \{[\s\S]*?\n\}/)[0] + ")", { deps: { player: () => null } });
+  const who = vm.runInNewContext(read("js/audio/radio-voice.js") + "\n(" + g0.match(/function radioWho\(kind\) \{[\s\S]*?\n\s*\}/)[0] + ")", { deps: { player: () => null } });
   for (const kind of ["coach", "practice"]) assert.equal(who(kind), "COACH", kind);
   for (const kind of ["penalty-hit", "penalty-warn", "warning", "warn"]) assert.equal(who(kind), "RACE CONTROL", kind);
   // …and the channel is ALL a kind may recolour. The number plate is the
