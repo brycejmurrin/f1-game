@@ -121,7 +121,7 @@ test("every ANN_PRI kind resolves to a speaker, and the map agrees with radioWho
   // Scraped from js/game.js, so adding a `kind` there turns the fast gate red
   // until the radio knows about it — rather than that kind silently speaking in
   // the engineer's voice because it fell through a default.
-  const g = read("js/game.js");
+  const g = read("js/race/announce-banner.js");
   const kinds = [...g.match(/const ANN_PRI = \{([^}]*)\}/)[1].matchAll(/"?([a-z-]+)"?\s*:/g)].map((m) => m[1]);
   assert.ok(kinds.length >= 7, `expected the ANN_PRI keys, got ${kinds.join(",")}`);
   const who = g.match(/function radioWho\(kind\) \{[\s\S]*?\n\}/)[0];
@@ -129,7 +129,7 @@ test("every ANN_PRI kind resolves to a speaker, and the map agrees with radioWho
     const speaker = RV.SPEAKERS[k];
     assert.ok(speaker, `ANN_PRI has "${k}" but RadioVoice.SPEAKERS does not`);
     assert.ok(RV.TONE[speaker], `speaker ${speaker} has no prosody`);
-    const label = vm.runInNewContext('(' + who + ')', {RadioVoice: RV, player: {code:'TST'}})(k);
+    const label = vm.runInNewContext('(' + who + ')', {RadioVoice: RV, deps: { player: () => ({ code: 'TST' }) }})(k);
     assert.equal(label, {control:'RACE CONTROL',coach:'COACH',announcer:'COMMENTARY',radio:'TST · RADIO'}[speaker]);
   }
 });
@@ -969,7 +969,7 @@ test("a rotate-block pause that re-hides the card in the same task still halts r
 
 test('every message channel uses the same speaker for its HUD label and its voice', () => {
   const f = vm.runInNewContext('(' + symbolSource('function radioWho(kind)') + ')',
-    { RadioVoice: RV, player: { name: 'Test Driver', code: 'TST' } });
+    { RadioVoice: RV, deps: { player: () => ({ name: 'Test Driver', code: 'TST' }) } });
   for (const [kind, speaker, label] of [
     ['warning','control','RACE CONTROL'], ['warn','control','RACE CONTROL'],
     ['penalty-hit','control','RACE CONTROL'], ['penalty-warn','control','RACE CONTROL'],
