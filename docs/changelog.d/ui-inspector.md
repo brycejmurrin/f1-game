@@ -2,3 +2,4 @@ Fixed: UI exploration now notices toggle changes, reports native control roles a
 New: Read-only developer UI inspection with live setting bindings, hit-test and CSS diagnostics, and replay state differences.
 Fixed: Boxless display:contents ancestors no longer falsely clip usable controls in inspector reports; outer real clipping remains detectable.
 New: Adaptive CSS reports include viewport, scale, safe-area tokens and ancestor layout/scroll context, with bounded viewport sweeps that restore the original size.
+New: Adaptive inspection records bounded classification histories, forward/reverse path differences, inherited/container CSS candidates and provenance-checked native audit findings.

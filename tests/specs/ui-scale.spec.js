@@ -1047,3 +1047,81 @@ test("UI inspector maps camera and lighting tuner inputs without invoking game h
   expect(light.binding.saved.status).toBe("unmapped");
   writeFileSync(testInfo.outputPath("tuner-inspection.json"), JSON.stringify({ camera: cameraAfter, lighting }, null, 2));
 });
+
+test("UI inspector observes intentional hysteresis on forward and reverse paths", async ({ page }, testInfo) => {
+  const { inspectResponsive } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { writeFileSync } = await import("node:fs");
+  await page.setViewportSize({ width: 380, height: 600 });
+  await page.setContent('<main id="sheet" data-pair="off">Text-only classified sheet</main>');
+  await page.evaluate(() => {
+    const sheet = document.getElementById("sheet");
+    const update = () => { if (innerWidth >= 400) sheet.dataset.pair = "on"; else if (innerWidth <= 390) sheet.dataset.pair = "off"; };
+    window.addEventListener("resize", update); update();
+  });
+  const report = await inspectResponsive(page, { root: "#sheet", roundTrip: true, viewports: [380, 395, 405].map(width => ({ width, height: 600 })) });
+  expect(report.records.map(r => r.phase)).toEqual(["forward", "forward", "forward", "reverse", "reverse"]);
+  expect(report.records.every(r => r.settlement.stable)).toBe(true);
+  expect(report.paths.differencesTotal).toBe(1);
+  const difference = report.paths.comparisons.find(c => c.requestedViewport.width === 395).differences[0];
+  expect(difference).toEqual({ selector: "#sheet", forward: { pair: "off" }, reverse: { pair: "on" } });
+  expect(page.viewportSize()).toEqual({ width: 380, height: 600 });
+  writeFileSync(testInfo.outputPath("hysteresis-inspection.json"), JSON.stringify(report, null, 2));
+});
+
+test("UI inspector records bounded alternating classification evidence", async ({ page }) => {
+  const { settleLayout } = await import("../../tools/ui/explorer/transitions.mjs");
+  await page.setContent('<main id="sheet" data-density="roomy"><button>Action</button></main>');
+  await page.evaluate(() => {
+    window.__stopAlternating = false;
+    const toggle = () => { if (window.__stopAlternating) return; const e = document.getElementById("sheet"); e.dataset.density = e.dataset.density === "roomy" ? "compact" : "roomy"; requestAnimationFrame(toggle); };
+    requestAnimationFrame(toggle);
+  });
+  let result;
+  try { result = await page.evaluate(settleLayout, { root: "#sheet" }); }
+  finally { await page.evaluate(() => { window.__stopAlternating = true; }); }
+  expect(result.stable).toBe(false);
+  expect(result.frames).toBeLessThanOrEqual(120);
+  const context = result.history.contexts.find(c => c.selector === "#sheet");
+  expect(context.alternating).toBeGreaterThan(0);
+  expect(context.states.length).toBeLessThanOrEqual(result.history.limits.statesPerContext);
+  expect(context.evidence.length).toBeLessThanOrEqual(result.history.limits.evidencePerContext);
+});
+
+test("UI inspector exposes named container and inherited candidate sources", async ({ page }, testInfo) => {
+  const { inspectPage } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { writeFileSync } = await import("node:fs");
+  await page.setContent(`<style>
+    #panel{container:panel / inline-size;width:400px;--adaptive-gap:17px}
+    #row{display:flex;gap:var(--adaptive-gap)}
+    @container panel (min-width:300px){#row{flex-direction:column}}
+    </style><main id="panel"><div id="row"><button>First</button><button>Second</button></div></main>`);
+  const report = await inspectPage(page, { root: "#panel", styles: "#row" });
+  expect(report.styles.computed.find(p => p.name === "flex-direction").value).toBe("column");
+  const inherited = report.styles.inherited.find(a => a.ancestor.id === "panel");
+  expect(inherited).toBeTruthy();
+  expect(inherited.rules.some(r => r.declarations.some(d => d.name === "--adaptive-gap" && d.value === "17px"))).toBe(true);
+  const query = report.styles.rules.flatMap(r => r.containerQueries || []).find(q => q.name === "panel");
+  expect(query).toBeTruthy();
+  expect(query.condition.status).toBe("unavailable");
+  expect(query.container.status).toBe("available");
+  expect(query.container.node.id).toBe("panel");
+  expect(query.container.geometry.width).toBeCloseTo(400);
+  writeFileSync(testInfo.outputPath("container-inherited-inspection.json"), JSON.stringify(report, null, 2));
+});
+
+test("UI inspector joins native findings only for matching rendered provenance", async ({ page }) => {
+  const { inspectPage } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { captureAuditEnvironment, captureAuditSelectors } = await import("../../tools/ui/explorer/audit-evidence.mjs");
+  await page.setContent(`<style>:root{--ui-scale:1;--hud-scale:1;--hud-btn-scale:1;--sat:0px;--sar:0px;--sab:0px;--sal:0px;--safe-t:0px;--safe-r:0px;--safe-b:0px;--safe-l:0px;--gut:0px}</style><main id="sheet"><button id="tiny" style="width:12px;height:12px">X</button></main>`);
+  const source = { sha: "a".repeat(40), dirty: false, fingerprint: null };
+  const environment = await page.evaluate(captureAuditEnvironment, { root: "#sheet", source });
+  const selectorIndex = await page.evaluate(captureAuditSelectors, { root: "#sheet", selectors: ["#tiny"] });
+  const box = await page.locator("#tiny").boundingBox();
+  const row = { screen: "fixture", environment, selectorIndex, tap: [{ el: "#tiny", w: box.width, h: box.height, sev: "tiny" }], spacing: [], type: [], overflow: [], marker: [] };
+  const audits = { producer: "fit-audit", rows: [row, { ...row, error: "setup failed" }, { ...row, environment: { ...environment, pointer: { ...environment.pointer, coarse: !environment.pointer.coarse } } }] };
+  const report = await inspectPage(page, { root: "#sheet", source, audits });
+  expect(report.auditEvidence.cells.map(c => c.status)).toEqual(["comparable", "skipped", "incomparable"]);
+  expect(report.auditEvidence.findings).toHaveLength(1);
+  expect(report.auditEvidence.findings[0].mapping.status).toBe("mapped");
+  expect(report.auditEvidence.findings[0].mapping.selector).toBe("#tiny");
+});

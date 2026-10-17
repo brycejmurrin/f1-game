@@ -1,3 +1,6 @@
+import { settleLayout, compareSweepPaths } from "./transitions.mjs";
+import { collectCssEvidence } from "./css-evidence.mjs";
+import { captureAuditEnvironment, joinAuditFindings } from "./audit-evidence.mjs";
 // @doc Read-only UI inspection: semantic controls, explicit live bindings, hit tests, CDP styles and state differences.
 // Browser APIs: https://chromedevtools.github.io/devtools-protocol/tot/CSS/
 // https://playwright.dev/docs/trace-viewer — interaction traces remain owned by explorer replay.
@@ -183,31 +186,13 @@ export function inspectUI(options = {}) {
 export async function installInspector(page) { return page.evaluate(inspectUI, { install: true }); }
 
 /** Browser-computed values plus matched source declarations; never guesses cascade winners. */
-export async function inspectPage(page, { root, styles } = {}) {
+export async function inspectPage(page, { root, styles, source = null, audits = null } = {}) {
   const report = await page.evaluate(inspectUI, { root });
   const aria = await page.locator(root || "body").ariaSnapshot({ timeout: 10000 });
   report.accessibility = aria.slice(0, 64000); report.accessibilityTruncated = aria.length > 64000;
-  if (!styles) return report;
-  const session = await page.context().newCDPSession(page), sheets = new Map();
-  session.on("CSS.styleSheetAdded", ({ header }) => sheets.set(header.styleSheetId, header.sourceURL));
-  try {
-    await session.send("DOM.enable"); await session.send("CSS.enable");
-    const { root: doc } = await session.send("DOM.getDocument");
-    const { nodeIds } = await session.send("DOM.querySelectorAll", { nodeId: doc.nodeId, selector: styles });
-    if (nodeIds.length !== 1) throw new Error("--styles must identify exactly one element");
-    const nodeId = nodeIds[0];
-    const matched = await session.send("CSS.getMatchedStylesForNode", { nodeId });
-    const computed = await session.send("CSS.getComputedStyleForNode", { nodeId });
-    const rules = matched.matchedCSSRules || [];
-    const properties = new Set("display position overflow overflow-x overflow-y width height min-width min-height max-width max-height box-sizing z-index zoom transform pointer-events visibility opacity font-size line-height white-space color background-color grid-template-columns grid-template-rows flex flex-direction flex-wrap gap container-type container-name".split(" "));
-    report.styles = { selector: styles, computed: computed.computedStyle.filter(p => properties.has(p.name)),
-      inline: matched.inlineStyle?.cssProperties || [],
-      rules: rules.slice(0, 80).map(({ rule, matchingSelectors }) => ({ selectors: matchingSelectors.map(i => rule.selectorList.selectors[i].text),
-        source: sheets.get(rule.styleSheetId) || null, line: rule.style.range ? rule.style.range.startLine + 1 : null,
-        declarations: rule.style.cssProperties.filter(p => !p.disabled).slice(0, 64).map(({ name, value, important }) => ({ name, value: value.slice(0, 2048), important: !!important })),
-        media: rule.media?.map(({ text, mediaList }) => ({ text, active: mediaList?.some(m => m.active) })) })),
-      truncated: rules.length > 80, limitation: "Matched rules are candidates; computed values are authoritative. This is not a cascade-winner solver." };
-  } finally { await session.detach(); }
+  report.environment = await page.evaluate(captureAuditEnvironment, { root: root || "body", source });
+  if (styles) report.styles = await collectCssEvidence(page, { selector: styles });
+  if (audits !== null) report.auditEvidence = joinAuditFindings(report, audits);
   return report;
 }
 
@@ -229,52 +214,24 @@ export function diffInspections(before, after) {
 }
 
 /** Explicit viewport mutation only. Reuse the current tab/state; never guess a screen's opener or change saved settings. */
-export async function inspectResponsive(page, { viewports, root, styles } = {}) {
+export async function inspectResponsive(page, { viewports, root, styles, roundTrip = false, source = null, audits = null } = {}) {
   if (!Array.isArray(viewports) || viewports.length < 1 || viewports.length > 8 || viewports.some(v => !v || !Number.isInteger(v.width) || !Number.isInteger(v.height) || v.width < 240 || v.width > 3840 || v.height < 240 || v.height > 2160))
     throw new RangeError("viewports must contain 1..8 sizes: integer width 240..3840, height 240..2160");
+  if (typeof roundTrip !== "boolean") throw new TypeError("roundTrip must be boolean");
   const originalViewport = page.viewportSize();
   if (!originalViewport) throw new Error("Viewport sweep requires an explicit, restorable Playwright viewport");
-  const records = [];
+  const records = [], sequence = viewports.map((viewport, sourceIndex) => ({ viewport, sourceIndex, phase: "forward" }));
+  if (roundTrip) for (let i = viewports.length - 2; i >= 0; i--) sequence.push({ viewport: viewports[i], sourceIndex: i, phase: "reverse" });
   try {
-    for (const viewport of viewports) {
+    for (const { viewport, sourceIndex, phase } of sequence) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      const settlement = await page.evaluate(({ root }) => {
-        const scope = document.querySelector(root || "body");
-        if (!scope) throw new Error(`Inspector root missing: ${root}`);
-        const started = performance.now(); let previous = "", same = 0, frames = 0;
-        // Shape/fit classifiers use ResizeObserver and later rAF deliveries. A
-        // two-frame screenshot can catch a zero-height intermediate strip.
-        return new Promise((resolve, reject) => {
-          let frame = null, truncated = false;
-          const clear = () => { clearTimeout(deadline); if (frame !== null) cancelAnimationFrame(frame); };
-          const finish = stable => { clear(); resolve({ stable, frames, elapsedMs: Math.round(performance.now() - started), truncated,
-            ...(stable ? {} : { reason: "Layout did not settle within the sampling budget" }) }); };
-          // rAF can stop entirely in background tabs; its callback cannot own
-          // the deadline. Cancel the pending callback on both exit paths.
-          const deadline = setTimeout(() => finish(false), 2000);
-          const sample = () => {
-            try {
-              frames++;
-              const elements = [scope, ...scope.querySelectorAll('.sheet,[data-shape],[data-density],button,input,select,[role="tab"]')];
-              truncated ||= elements.length > 500;
-              const signature = JSON.stringify(elements.slice(0, 500).map(e => {
-                const r = e.getBoundingClientRect();
-                return [r.x, r.y, r.width, r.height, e.scrollWidth, e.scrollHeight, ...["shape", "density", "pair", "rail", "fit"].map(k => e.dataset[k])];
-              }));
-              same = signature === previous ? same + 1 : 0; previous = signature;
-              if (same >= 3 && performance.now() - started >= 150) finish(true);
-              else if (frames >= 120) finish(false);
-              else frame = requestAnimationFrame(sample);
-            } catch (e) { clear(); reject(e); }
-          };
-          frame = requestAnimationFrame(sample);
-        });
-      }, { root });
-      const inspection = await inspectPage(page, { root, styles });
-      records.push({ requestedViewport: { width: viewport.width, height: viewport.height }, settlement, inspection,
+      const settlement = await page.evaluate(settleLayout, { root });
+      const inspection = await inspectPage(page, { root, styles, source, audits });
+      records.push({ requestedViewport: { width: viewport.width, height: viewport.height }, sourceIndex, phase, settlement, inspection,
         diff: records.length ? diffInspections(records.at(-1).inspection, inspection) : null });
     }
   } finally { await page.setViewportSize(originalViewport); }
-  return { version: 1, mode: "viewport-sweep", originalViewport, restoredViewport: true, records,
+  return { version: 1, mode: "viewport-sweep", roundTrip, originalViewport, restoredViewport: true, records,
+    ...(roundTrip ? { paths: compareSweepPaths(records) } : {}),
     limitations: ["Only viewport size is changed; pointer, safe-area, scale and appearance settings remain those of the current page", "Stability samples up to 500 elements for at most 120 frames / two seconds; quiet samples cannot rule out later asynchronous changes", "Resize handlers can change application state; restoring viewport does not undo those transitions", "Advisories are not functional passes or confirmed CSS defects"] };
 }
