@@ -227,10 +227,16 @@ export function evaluate({ sha, localOnly = false, request = api, localOpts } = 
 }
 
 /** The PR body's `## Plan` checklist (AGENTS.md rule 12). An item is OPEN when
- *  it is neither ticked (`[x]`) nor struck (`~~dropped~~ — why`); an empty
+ *  it is neither ticked (`[x]`), struck (`~~dropped~~ — why`) nor deferred
+ *  (`[~]`, or text starting `Deferred:`); an empty
  *  `- [ ]` (the template's placeholder) is open. HTML comments — where the
  *  template keeps its example items — are not part of the list.
  *  @returns {{ state: "none"|"open"|"done", items: number, open: string[] }} */
+/** The `= ready-gate …` line; sha is the FULL 40 chars because a session pastes it into a merge call (#2430). */
+export function verdictLine(v) {
+  return `= ready-gate ${v.state} — ${v.evidence} sha=${v.sha || ""} source=${v.source || "—"}`;
+}
+
 export function planVerdict(body) {
   const text = String(body || "").replace(/<!--[\s\S]*?-->/g, "");
   const head = /^##[ \t]+Plan\b.*$/m.exec(text);
@@ -238,10 +244,10 @@ export function planVerdict(body) {
   const rest = text.slice(head.index + head[0].length);
   const next = /^##[ \t]/m.exec(rest);
   const section = next ? rest.slice(0, next.index) : rest;
-  const items = [...section.matchAll(/^[ \t]*[-*][ \t]+\[([ xX])\][ \t]*(.*)$/gm)];
+  const items = [...section.matchAll(/^[ \t]*[-*][ \t]+\[([ xX~])\][ \t]*(.*)$/gm)];
   if (!items.length) return { state: "none", items: 0, open: [] };
   const open = items
-    .filter(([, mark, t]) => mark === " " && !/^~~/.test(t.trim()))
+    .filter(([, mark, t]) => mark === " " && !/^~~/.test(t.trim()) && !/^(\*\*)?Deferred:/i.test(t.trim()))
     .map(([, , t]) => t.trim() || "(empty item)");
   return { state: open.length ? "open" : "done", items: items.length, open };
 }
@@ -293,7 +299,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     process.exit(3);
   }
   const v = withPlan(evaluate({ sha: resolved.sha, localOnly }), resolved.body);
-  const line = `= ready-gate ${v.state} — ${v.evidence} sha=${(v.sha || "").slice(0, 7)} source=${v.source || "—"}`;
+  const line = verdictLine(v);
   if (asJson) console.log(JSON.stringify({ ...v, pr: resolved.pr || null }, null, 2));
   else {
     if (v.planWarning) say(`warning: ${v.planWarning}`);

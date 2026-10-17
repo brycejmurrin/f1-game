@@ -14,6 +14,10 @@ import { validateScenario } from "./explorer/core.mjs";
 import { MODE_TITLES, MISSIONS, missionBrief } from "./explorer/catalog.mjs";
 import { explore } from "./explorer/modes.mjs";
 import { writeReport } from "./explorer/report.mjs";
+import { openSession } from "./explorer/browser.mjs";
+import { inspectSettled, inspectResponsive, installInspector } from "./explorer/inspector.mjs";
+
+import { captureAuditSource } from "./explorer/audit-evidence.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const HELP = `UI explorer — one Chromium, bounded captures, offline HTML evidence.
@@ -24,15 +28,18 @@ const HELP = `UI explorer — one Chromium, bounded captures, offline HTML evide
   node tools/ui/explorer.mjs scene --repro scene.repro.json [--reference image.jpg]
   node tools/ui/explorer.mjs brief --url <reachable-preview> [--mission first-race]
   node tools/ui/explorer.mjs report <report.json> --out DIR
+  node tools/ui/explorer.mjs inspect --screen settingsappearance [--selector '#pmsettings'] [--styles '#as-uiScale']
+    [--viewports 390x844,844x390,1280x800] [--roundtrip] [--audit FILE]   # 1..8 bounded sizes; restores the original viewport
+    [--touch] [--boot 932x430] [--safe 0,59,21,59] [--summary]   # touch context, boot size, env(safe-area-inset-*) T,R,B,L; one line per issue
   node tools/ui/explorer.mjs --list|--help
 Flags: --url URL --out DIR --modes a,b --scenario FILE --max-shots 0..25
        --max-attempts 1..30 --track ID --frac 0..1 --repro FILE --reference IMAGE
        --scene-views original,45,225 --scene-backend webgl2|three
 Browser-free commands: --help, --list, brief, report. Native motion; isolated saves.
 Reports distinguish guided missions from exported blind Browser Use briefs.
-Exit 0: probes completed (inspect advisories); 1: failed probe; 2: invalid invocation.
+Exit 0: probes completed (inspect advisories); 1: failed probe; 2: invalid invocation; 75: deferred (load >= 3 or browser lock held), retry later.
 `;
-const FLAGS = ["--out", "--url", "--modes", "--scenario", "--max-shots", "--max-attempts", "--track", "--frac", "--repro", "--reference", "--mission", "--scene-views", "--scene-backend", "--list", "--help"];
+const FLAGS = ["--out", "--url", "--modes", "--scenario", "--max-shots", "--max-attempts", "--track", "--frac", "--repro", "--reference", "--mission", "--scene-views", "--scene-backend", "--screen", "--selector", "--styles", "--viewports", "--roundtrip", "--audit", "--touch", "--boot", "--safe", "--summary", "--list", "--help"];
 
 export function parseOptions(argv) {
   const f = makeFlags(argv, FLAGS);
@@ -47,14 +54,14 @@ export function parseOptions(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith("--")) {
-      if (!a.includes("=") && !["--help", "--list"].includes(a)) {
+      if (!a.includes("=") && !["--help", "--list", "--roundtrip", "--touch", "--summary"].includes(a)) {
         if (!argv[i + 1] || argv[i + 1].startsWith("--")) throw new Error(`${a} requires a value`);
         i++;
       }
     } else positional.push(a);
   }
   const command = positional[0] || "all";
-  if (!["all", "replay", "brief", "report", ...Object.keys(MODE_TITLES)].includes(command)) throw new Error(`Unknown command ${command}`);
+  if (!["all", "replay", "brief", "report", "inspect", ...Object.keys(MODE_TITLES)].includes(command)) throw new Error(`Unknown command ${command}`);
   if (positional.length > (["replay", "minimize", "report"].includes(command) ? 2 : 1)) throw new Error("Unexpected positional argument");
   if (f.has("--scenario") && !["all", "missions", "replay", "minimize"].includes(command)) throw new Error("--scenario is supported by missions, replay, minimize or all");
   const numeric = (name, fallback, min, max, integer = false) => {
@@ -63,7 +70,34 @@ export function parseOptions(argv) {
     return n;
   };
   const modes = String(flag("--modes", command === "all" ? Object.keys(MODE_TITLES).join(",") : command === "replay" ? "missions" : command)).split(",").map((v) => v.trim()).filter(Boolean);
-  if (!f.has("--help") && !f.has("--list") && !["brief", "report"].includes(command) && (!modes.length || modes.some((m) => !MODE_TITLES[m]))) throw new Error("Unknown or empty --modes");
+  if (!f.has("--help") && !f.has("--list") && !["brief", "report", "inspect"].includes(command) && (!modes.length || modes.some((m) => !MODE_TITLES[m]))) throw new Error("Unknown or empty --modes");
+  const screen = flag("--screen", "title"), selector = flag("--selector", null), styles = flag("--styles", null);
+  if (!SCREENS.some(s => s.id === screen)) throw new Error("Unknown --screen; use --list");
+  const inspectOnly = ["--screen", "--selector", "--styles", "--viewports", "--roundtrip", "--audit", "--touch", "--boot", "--safe", "--summary"];
+  if (command !== "inspect" && inspectOnly.some(k => f.has(k))) throw new Error(`${inspectOnly.join("/")} require inspect`);
+  const size = (text, name) => {
+    if (!/^\d+x\d+$/.test(text)) throw new Error(`${name} requires sizes such as 390x844,844x390`);
+    const [width, height] = text.split("x").map(Number);
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 240 || width > 3840 || height < 240 || height > 2160) throw new Error(`${name}: width 240..3840, height 240..2160`);
+    return { width, height };
+  };
+  const viewportText = flag("--viewports", null);
+  const viewports = viewportText === null ? null : viewportText.split(",").map(v => size(v, "--viewports"));
+  for (const b of ["--touch", "--summary"]) if (argv.some(a => a.startsWith(b + "="))) throw new Error(`${b} is a boolean flag without a value`);
+  const bootText = flag("--boot", null), boot = bootText === null ? null : size(bootText, "--boot");
+  const safeText = flag("--safe", null);
+  let safe = null;
+  if (safeText !== null) {
+    const parts = safeText.split(",");
+    if (parts.length !== 4 || parts.some(v => !/^\d+$/.test(v) || Number(v) > 200)) throw new Error("--safe requires four integer insets 0..200 as top,right,bottom,left");
+    const [top, right, bottom, left] = parts.map(Number); safe = { top, right, bottom, left };
+  }
+  if (viewports && (viewports.length < 1 || viewports.length > 8)) throw new Error("--viewports accepts 1..8 sizes");
+  if (argv.some(a => a.startsWith("--roundtrip="))) throw new Error("--roundtrip is a boolean flag without a value");
+  if (f.has("--roundtrip") && !viewports) throw new Error("--roundtrip requires --viewports");
+  const audit = flag("--audit", null);
+  if (audit !== null && !audit.trim()) throw new Error("--audit requires a file");
+  for (const s of [selector, styles]) if (s !== null && (!s.trim() || s.length > 512)) throw new Error("Selectors must contain 1..512 characters");
   const url = flag("--url", null);
   if (url) { const u = new URL(url); if (!["http:", "https:"].includes(u.protocol) || u.username || u.password) throw new Error("--url requires http(s) without embedded credentials"); }
   const track = flag("--track", "monaco"); if (!/^[a-z0-9_-]+$/i.test(track)) throw new Error("Invalid --track");
@@ -75,9 +109,27 @@ export function parseOptions(argv) {
   const relative = path.relative(ROOT, outDir);
   const outside = relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative);
   if (!outside && !/^(artifacts|scratch)([\\/]|$)/.test(relative)) throw new Error("Inside the repository, --out must be under artifacts/ or scratch/");
-  return { command, file: positional[1] || flag("--scenario", null), help: f.has("--help"), list: f.has("--list"), modes: [...new Set(modes)], url,
+  return { command, file: positional[1] || flag("--scenario", null), help: f.has("--help"), list: f.has("--list"), modes: [...new Set(modes)], url, screen, selector, styles, viewports, roundTrip: f.has("--roundtrip"), audit,
+    touch: f.has("--touch"), boot, safe, summary: f.has("--summary"),
     outDir, maxShots: numeric("--max-shots", 25, 0, 25, true), maxAttempts: numeric("--max-attempts", 8, 1, 30, true),
     track, sceneViews, sceneBackend, frac: numeric("--frac", 0.4, 0, 1), repro: flag("--repro", null), reference: flag("--reference", null), mission: flag("--mission", "first-race") };
+}
+
+/** Retryable refusals exit 75 (EX_TEMPFAIL) so a batch can tell "try later" from a failed probe (1). */
+export function deferral(reason) { return Object.assign(new Error(reason), { exitCode: 75 }); }
+export function loadDeferral(load = os.loadavg()[0]) {
+  return load >= 3 ? deferral("Browser deferred: load average is >=3; do not start another software-rendered run") : null;
+}
+
+/** One line per issue: screen, viewport, kind, selector, message; provisional when the layout never settled. */
+export function summarizeInspection(report, screen) {
+  const records = report.records || [{ requestedViewport: report.viewport, inspection: report }];
+  const lines = [];
+  for (const r of records) {
+    const v = r.requestedViewport ? `${r.requestedViewport.width}x${r.requestedViewport.height}` : "?";
+    for (const i of r.inspection?.issues || []) lines.push([screen, v, i.kind + (i.provisional ? " (provisional)" : ""), i.selector, i.message].join("\t"));
+  }
+  return lines.length ? lines.join("\n") : `${screen}\tclean`;
 }
 
 function readJSON(file) {
@@ -106,15 +158,38 @@ export async function main(argv = process.argv.slice(2)) {
   const blob = opts.repro ? readJSON(opts.repro) : null;
   const sceneRepro = blob?.repro || blob;
   if (sceneRepro && (typeof sceneRepro !== "object" || Array.isArray(sceneRepro))) throw new Error("--repro must contain an __apex.repro() object");
-  if (os.loadavg()[0] >= 3) throw new Error("Browser deferred: load average is >=3; do not start another software-rendered run");
+  const audits = opts.audit ? readJSON(opts.audit) : null;
+  const source = opts.command === "inspect" ? await captureAuditSource(ROOT) : null;
+  const busy = loadDeferral(); if (busy) throw busy;
   const { acquireLock, releaseLock } = await import("../mcp/apex-tools-mcp.mjs");
-  const refused = acquireLock("ui-explorer"); if (refused) throw new Error(`Browser occupied: ${JSON.stringify(refused)}`);
+  const refused = acquireLock("ui-explorer"); if (refused) throw deferral(`Browser occupied: ${JSON.stringify(refused)}`);
   let browser;
   try {
     const server = opts.url ? null : await startStaticServer(ROOT);
     const url = opts.url || server.url;
     browser = await launchChromium({ args: chromiumArgsForBackend("three") });
     let gitHead = "unknown"; try { gitHead = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim(); } catch { /* metadata only */ }
+    if (opts.command === "inspect") {
+      const s = await openSession(browser, url, { touch: opts.touch, ...(opts.boot ? { viewport: opts.boot } : {}) });
+      try {
+        // Real env(safe-area-inset-*) values (CDP Emulation.setSafeAreaInsetsOverride), not injected tokens.
+        if (opts.safe) await (await s.context.newCDPSession(s.page)).send("Emulation.setSafeAreaInsetsOverride", { insets: opts.safe });
+        const screen = SCREENS.find(v => v.id === opts.screen);
+        await screen.open(s.page);
+        await installInspector(s.page);
+        const args = { root: opts.selector || screen.root, styles: opts.styles, viewports: opts.viewports, roundTrip: opts.roundTrip, audits, source };
+        // A single-size inspect settles too (it used to read a page mid-transition with no record of it).
+        const report = opts.viewports ? await inspectResponsive(s.page, args)
+          : await inspectSettled(s.page, args).then(({ settlement, inspection }) => ({ ...inspection, settlement }));
+        report.provenance = { sha: gitHead, screen: opts.screen, route: "catalog setup; use replay for real interaction proof",
+          emulation: { touch: opts.touch, boot: opts.boot || { width: 1280, height: 800 }, safeArea: opts.safe } };
+        report.errors = s.logs.errors; report.requests = s.logs.requests;
+        fs.mkdirSync(opts.outDir, { recursive: true });
+        fs.writeFileSync(path.join(opts.outDir, "inspection.json"), JSON.stringify(report, null, 2));
+        console.log(opts.summary ? summarizeInspection(report, opts.screen) : JSON.stringify(report, null, 2));
+        return s.logs.errors.some(e => e.kind === "pageerror") ? 1 : 0;
+      } finally { await s.context.close(); }
+    }
     if (opts.reference) {
       const ext = path.extname(opts.reference).toLowerCase();
       if (![".jpg", ".jpeg", ".png", ".webp"].includes(ext) || fs.statSync(opts.reference).size > 10 * 1024 * 1024) throw new Error("Reference must be an image <=10 MiB");
@@ -130,4 +205,4 @@ export async function main(argv = process.argv.slice(2)) {
   } finally { if (browser) await browser.close().catch(() => {}); await shutdown(); releaseLock(); }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().then((code) => { process.exitCode = code; }).catch((e) => { console.error(e.message); process.exitCode = 1; });
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().then((code) => { process.exitCode = code; }).catch((e) => { console.error(e.message); process.exitCode = e.exitCode || 1; });

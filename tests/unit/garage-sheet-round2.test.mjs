@@ -21,10 +21,11 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 // `const X = (…)()` is script-scope in a VM: re-declare as var so the sandbox object sees it.
 const src = (f) => read(f).replace(/^const\b/gm, "var");
 
-function harness({ career = false, era = null, unlimited = false, stored = {}, tab = "engine", tdev = 0, team: teamId = "mercedes", tweakTeam } = {}) {
+function harness({ career = false, era = null, unlimited = false, stored = {}, tab = "engine", tdev = 0, team: teamId = "mercedes", tweakTeam, liveries = [] } = {}) {
   const dom = makeDom();
   dom.document.createTextNode = (t) => { const e = dom.document.createElement("span"); e.textContent = t; return e; };
   const saved = [];
+  let fittedLivery = "default";
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Map, Set, Date, parseFloat, parseInt, isFinite,
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
@@ -34,11 +35,14 @@ function harness({ career = false, era = null, unlimited = false, stored = {}, t
   sb.window = sb;
   vm.createContext(sb);
   const run = (f) => vm.runInContext(src(f), sb, { filename: f });
-  for (const f of ["js/core/mat4.js", "js/car/parts.js", "js/data/teams.js", "js/career/regulations.js"]) run(f);
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/car/parts.js", "js/data/teams.js", "js/career/regulations.js"]) run(f);
   run("js/garage/experience.js");
   if (era) sb.Parts.setLegality(sb.Regulations.legalityFor(era), era);
-  sb.PhysicsConsts = { WET_GRIP: { rain: [1, 1.2, 1.4] } };
-  sb.SetupTune = { FIELDS: [], RANGE: {}, get: () => ({ rideR: 60, rideF: 25, brakeBias: 56 }), set() {}, reset() {}, isDefault: () => true, mods: () => null, rake: () => 0 };
+  const tuneStore = new Map();
+  sb.GameStore = { store: { get: (key, fallback) => tuneStore.has(key) ? tuneStore.get(key) : fallback,
+    set: (key, value) => value === undefined ? tuneStore.delete(key) : tuneStore.set(key, value) } };
+  run("js/garage/setup-tune.js");
+  run("js/garage/setup-experiments.js");
   sb.LiveryTex = { NUM_FONT_IDS: ["default"], SPONSOR_PACK_IDS: ["default"] };
   sb.Car3D = { FINISH_SURFACE: {} };
   sb.GarageScene = { pulse() {} };
@@ -57,7 +61,7 @@ function harness({ career = false, era = null, unlimited = false, stored = {}, t
     arrToHex: () => "#112233", hexToArr: () => [0.1, 0.2, 0.3],
     getTeamParts: () => parts,
     saveTeamParts: (id, p) => { saved.push(JSON.stringify(p)); if (p !== parts) { for (const k of Object.keys(parts)) delete parts[k]; Object.assign(parts, p); } },
-    getLiveryId: () => "default", saveLiveryId() {}, getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => [],
+    getLiveryId: () => fittedLivery, saveLiveryId: (_team, id) => { fittedLivery = id; }, getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => liveries,
     invalidateDecalTextures: null, teamIdx: sb.Teams.LIST.indexOf(team), driverIdx: 0, soundOn: false,
     careerOwned: () => owned, unlimitedBudget: unlimited, peerSeats: () => [],
     teamSwatch: () => dom.document.createElement("span"), setTeamPicker() {}, openCustomize() {},
@@ -168,7 +172,7 @@ function sceneBoard({ unlimited = false, owned = false, tdev = 0 } = {}) {
     document, LiveryTex: {}, Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
   for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/track/core/geom.js", "js/track/core/pit.js",
-                   "js/garage/scene-prims.js", "js/garage/scene-equipment.js", "js/garage/scene-live.js",
+                   "js/garage/scene-prims.js", "js/garage/scene-equipment.js", "js/garage/scene-live.js", "js/garage/scene-dress.js",
                    "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const team = vm.runInContext('Teams.LIST.find(t => t.id === "mercedes")', ctx);
@@ -221,4 +225,36 @@ test("the setup turntable gives the Legends slot its own helmet key and a per-le
   const cam = read("js/garage/setup-camera.js");
   assert.match(cam, /helmetKey: team\.legends && seat \? seat\.code : undefined/, "Car3D.build gets the legend's code");
   assert.match(cam, /\(team\.legends && seat \? ":" \+ seat\.code : ""\)/, "ten legends share num 1: the mesh key carries the code");
+});
+
+// These two flows replace focused DOM. Add the two browser semantics the
+// minimal fixture deliberately omits: reflected data-* and textContent detach.
+function choiceDom(h) {
+  const create = h.dom.document.createElement;
+  h.dom.document.createElement = (tag) => {
+    const e = create(tag);
+    e.dataset = new Proxy(e.dataset, { set(data, key, value) { data[key] = String(value); e.setAttribute("data-" + String(key).replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()), value); return true; } });
+    return e;
+  };
+  const pane = h.dom.byId("cs-options"); let text = "";
+  Object.defineProperty(pane, "textContent", { get: () => text, set(value) {
+    text = String(value);
+    if (pane.contains(h.dom.document.activeElement)) h.dom.document.activeElement = h.dom.body;
+    while (pane.firstChild) pane.removeChild(pane.firstChild);
+  } });
+  return pane;
+}
+test("driver confirmation restores focus to the newly selected chip after replacement", () => {
+  const h = harness({ tab: "team" }), pane = choiceDom(h); h.ui.buildSetup();
+  const old = pane.querySelector('[data-cs-driver="1"]'); old.focus(); old.click();
+  const selected = pane.querySelector('[data-cs-driver="1"]');
+  assert.notEqual(old, selected, "the choice DOM really was replaced");
+  assert.equal(h.dom.document.activeElement, selected); assert.equal(selected.getAttribute("aria-pressed"), "true");
+});
+test("fitting a livery restores focus by data identity even for an imported id with CSS punctuation", () => {
+  const liveries = [{ id: "default", name: "Works", c1: [0,0,0], c2: [1,1,1] }, { id: 'paint"[]#', name: "Imported", c1: [1,0,0], c2: [0,0,1] }];
+  const h = harness({ tab: "livery", liveries }), pane = choiceDom(h); h.ui.buildSetup();
+  const old = pane.querySelectorAll("[data-cs-livery]").find((e) => e.dataset.csLivery === liveries[1].id); old.focus(); old.click();
+  const selected = pane.querySelectorAll("[data-cs-livery]").find((e) => e.dataset.csLivery === liveries[1].id);
+  assert.notEqual(old, selected); assert.equal(h.dom.document.activeElement, selected); assert.equal(selected.getAttribute("aria-pressed"), "true");
 });

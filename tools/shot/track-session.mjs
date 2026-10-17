@@ -36,10 +36,12 @@ import { awaitCaptureReady, mutateCaptureScene, installProbeInit, screenshotPres
 import { parseCaptureOptions, captureContextOptions, captureLaunchOptions, captureScreenshotOptions,
   captureExtension, applyCaptureProfile } from "./capture-options.mjs";
 import { captureBrowserDiagnostics, assertCaptureGpuCapability, startCaptureTrace } from "./capture-diagnostics.mjs";
+import { parseFlags } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const options = parseCaptureOptions(process.argv.slice(2));
 const argv = options.positionals;
+parseFlags(argv, ["--serve", "--track", "--out", "--backend"]);
 const flag = (n, d) => { const i = argv.indexOf(n); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
 const BOOT_MS = 45000, TRACK_MS = 60000, PRESENT_MS = 90000;
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
@@ -133,7 +135,7 @@ async function shot(op) {
     }
     if (a.step) a.step(1 / 60, 4);
     const vs = a.viewState ? a.viewState() : null, cs = a.camState ? a.camState() : null;
-    return { dbgCamActive: !!(vs && vs.dbgCamActive) || !!(cs && cs.debug), camState: cs };
+    return { track: a.info().track, dbgCamActive: !!(vs && vs.dbgCamActive) || !!(cs && cs.debug), camState: cs };
   }, args);
   const sceneDone = performance.now();
   const readiness = await awaitCaptureReady(page, { timeoutMs: PRESENT_MS });
@@ -155,9 +157,9 @@ async function shot(op) {
   writeFileSync(png, cap.buf);
   const writeDone = performance.now();
   const prev = shots.findIndex((s) => s.name === name);
-  const rec = { name, png, frac, cam, tod, weather, track };
+  const rec = { name, png, frac, cam, tod, weather, track: frame.track || track };
   if (prev >= 0) shots[prev] = rec; else shots.push(rec);
-  return { timings: { sceneMs: sceneDone-shotStarted, readyMs: readyDone-sceneDone, captureMs: imageDone-readyDone, evidenceMs: writeStarted-imageDone, writeMs: writeDone-writeStarted, totalMs: performance.now()-shotStarted }, png, spread: +spread.toFixed(1), kb: +(cap.buf.length / 1024).toFixed(1), frame, readiness, pixels, scope: scope === "page" || args.hud ? "page" : "scene", profile: options.profile };
+  return { track: rec.track, timings: { sceneMs: sceneDone-shotStarted, readyMs: readyDone-sceneDone, captureMs: imageDone-readyDone, evidenceMs: writeStarted-imageDone, writeMs: writeDone-writeStarted, totalMs: performance.now()-shotStarted }, png, spread: +spread.toFixed(1), kb: +(cap.buf.length / 1024).toFixed(1), frame, readiness, pixels, scope: scope === "page" || args.hud ? "page" : "scene", profile: options.profile };
 }
 
 const pngOf = (ref) => {

@@ -26,7 +26,7 @@ node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval '...'
 ```
 
 HUD/menu glitch repro: serve `python3 -m http.server 3456`, `chrome-start`, navigate
-`http://127.0.0.1:3456/`, `__apex.race(id); go()` (recipes.md § Setup), then
+`http://127.0.0.1:3456/`, `__apex.race(id); go()` ([references/chrome.md](references/chrome.md)), then
 `take_snapshot` (DOM/a11y text, cheap) before any screenshot; the HUD is DOM, so
 `awaitPresent()` matters only if the 3D behind it must be current. Done = the
 glitch reproduced as a snapshot/`evaluate_script` value (element text/rect), then
@@ -68,8 +68,9 @@ vs playwright-official).
    hidden swapchain: `await __apex.awaitPresent()` in a live session, or
    `node tools/gfx/gfx-probe.mjs --backend webgpu <track>` (TLX: `--backend three`).
    Never call `getCurrentTexture()` on software adapters. Commands and traps:
-   `references/recipes.md` § Probing a specific renderer.
+   [`references/renderer.md`](references/renderer.md).
 5. Long fetch/search → `deploy-research` subagent, not the parent context.
+6. **Image budget** (plan WS4; #2399): `Read` at most 8 images, then compact; never re-`Read` an old shot; JPEG ≤ 800 px wide for anything a model will look at; for more than 3 shots use `apex_shot_survey` / `apex_track op survey`. A request over 32 MB kills the session and `/compact` with it.
 
 **Chrome-client pick one:** attached `chrome_*` / `probe-mcp.py chrome-start` for
 live canvas; `mcp-cli.mjs probe --backend …` for batched renderer recipes;
@@ -85,10 +86,15 @@ beside an active Playwright run. UI matrix → `tools/ui/layout-audit.mjs` (not 
   [traps-camera.md](references/traps-camera.md) (`snapCam` / free-cam),
   [traps-scene.md](references/traps-scene.md) (soft-present / lights / `scene()`).
 - HUD/DOM stops updating (pit stop, lap change) → [`references/hud-freeze.md`](references/hud-freeze.md).
-- Chrome setup, A/B ports, heap/perf, post-deploy recipes → read
-  [`references/recipes.md`](references/recipes.md).
+- Chrome setup, A/B ports, heap/perf → [`references/chrome.md`](references/chrome.md).
+- Public-web research → [`references/research.md`](references/research.md).
+- Real-device reports → [`references/device-report.md`](references/device-report.md).
+- Offline capability checks → [`references/offline.md`](references/offline.md).
+- The complete recipe index → [`references/recipes.md`](references/recipes.md).
 - Renderer probe flags (`--backend`, secure context, `gfxBound`) →
-  `references/recipes.md` § Renderer.
+  [`references/renderer.md`](references/renderer.md).
+
+Chrome DevTools naming: use `chrome_click` for the underlying `click` action.
 
 ## One-line summary
 

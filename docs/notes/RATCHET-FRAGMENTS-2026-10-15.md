@@ -41,3 +41,20 @@ line) solved DIFFERENT modules; no layout of an absolute number can solve the SA
   (`docs/changelog.d/README.md`): one Merge Desk fold PR when the fragments pile up.
 - The deploy branch or a detached HEAD still writes absolutes: nothing merges into either except through a PR.
 - The fragments are tool-written: `protect-files.py` refuses a hand edit, like ratchets.json.
+
+## Raising a tree-wide metric (#2337, 2026-10-16)
+`--auto-raise` never raises a tree metric (cssClasses, rawColor, bareCatches …: shrink-only). A deliberate raise used
+to go through `--update`, which rewrites `ratchets.json` and re-conflicts every other PR raising the same line. Use
+`node tools/check/ratchets.mjs --update --fragment --reason="<why>"` instead: it measures, writes the delta to
+`tests/data/ratchets.d/<branch>.json` (the `tree` section) and leaves `ratchets.json` alone; repeat the reason in the
+commit. `--reason` is required, and the flag refuses the deploy branch and a detached HEAD. Two PRs doing this merge clean in
+either order (`tests/unit/ratchet-merge-hotspot.test.mjs`, last test); `npm run fold` folds the tree deltas like file deltas.
+
+## Delta scope (#2583, 2026-10-17)
+
+A topic-branch `--update` / `--auto-raise` delta may raise any row but lowers only
+files in `git diff --name-only <merge-base>` (plus untracked) against the deploy
+branch (`APEX_RATCHETS_BASE` overrides the ref). Before, every sibling PR
+subtracted the same untouched headroom from `game.js`/`apex.js`/`agentview.js`,
+and the merged tree went over its ceiling. Tree metrics are not attributable to a
+file and are still written. Shrink on the tip is captured by `--fold` or a tip-side `--update`.

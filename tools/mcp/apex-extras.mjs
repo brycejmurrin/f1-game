@@ -21,12 +21,14 @@ import {
   buildTrackShotSurveyPlan,
   estimateSurveyMs,
   filterResumeShots,
+  surveyTerminalState,
   normalizeSurveyTracks,
   scoreShotFindings,
   shouldSurveyAsync,
   writeCompareIndex,
   writeSurveyFindings,
   writeSurveyIndex,
+  writeSurveyGalleryFromReports,
   writeSurveyProgress,
 } from "../lib/track-shot-survey.mjs";
 
@@ -180,6 +182,15 @@ export function createExtras(ctx) {
     return o;
   };
   async function handleShotSurvey(args = {}) {
+    if (args.reports != null) {
+      if (!Array.isArray(args.reports) || !args.reports.length || args.reports.length > 12)
+        return refuse("bad_args", "reports needs 1–12 findings.json paths", "Pass reports[] and an output directory; no browser is started.");
+      const reports = args.reports.map((file) => assertSafeOut(file));
+      const out = assertSafeOut(args.out || "artifacts/track-survey/gallery");
+      if (args.dryRun) return toolResult({ ok: true, dryRun: true, reports, out, browser: false });
+      try { return toolResult({ ok: true, browser: false, out, indexHtml: writeSurveyGalleryFromReports(out, reports, { validateAssetPath: assertSafeOut }) }); }
+      catch (e) { if (e.refuse) return e.refuse; return refuse("gallery_failed", String(e.message || e), "Check report paths and their captured image files."); }
+    }
     let tracks;
     try {
       tracks = normalizeSurveyTracks(args).map((id) => needTrack(id));
@@ -244,9 +255,9 @@ export function createExtras(ctx) {
         const track = tracks[ti];
         const out = tracks.length === 1 ? outRoot : assertSafeOut(path.join(outRoot, track));
         fs.mkdirSync(out, { recursive: true });
-        const { pending, resumed } = filterResumeShots(out, plan.shots, resume);
+        const { pending, resumed, invalid } = filterResumeShots(out, plan.shots, resume);
         writeSurveyProgress(outRoot, {
-          state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length, estimateMs,
+          state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length, invalid, estimateMs,
         });
 
         if (!sess || sess.track !== track || sess.out !== out) {
@@ -277,7 +288,7 @@ export function createExtras(ctx) {
           }
           if (reply.ok) {
             sess.shots++;
-            const row = { ...s, track, png: reply.png, spread: reply.spread, kb: reply.kb };
+            const row = { ...s, track: reply.track || track, png: reply.png, spread: reply.spread, kb: reply.kb };
             row.flags = scoreShotFindings(row);
             captured.push(row);
           } else failed.push({ ...s, track, error: reply.error || "shot failed" });
@@ -296,15 +307,15 @@ export function createExtras(ctx) {
         let indexHtml = null;
         if (wantIndex && captured.length) {
           indexHtml = writeSurveyIndex(out, {
-            track, label: plan.label, preset: plan.preset, shots: captured, panelPng, ok: captured.length,
+            track: captured[0]?.track || track, label: plan.label, preset: plan.preset, shots: captured, panelPng, ok: captured.length,
           });
         }
         const findings = writeSurveyFindings(out, {
-          ok: failed.length === 0 && captured.length > 0,
-          track, label: plan.label, preset: plan.preset, shots: captured, panelPng, indexHtml,
+          ok: failed.length === 0 && captured.length > 0, failed: failed.length, failures: failed,
+          track: captured[0]?.track || track, label: plan.label, preset: plan.preset, shots: captured, panelPng, indexHtml,
         });
         trackResults.push({
-          track, out, captured: captured.length, failed: failed.length,
+          track: captured[0]?.track || track, out, captured: captured.length, failed: failed.length,
           panel: panelPng, indexHtml, findings: findings.file, findingsSummary: findings.findings,
           shots: captured, failures: failed.length ? failed : undefined,
         });
@@ -315,13 +326,16 @@ export function createExtras(ctx) {
         compareIndex = writeCompareIndex(outRoot, {
           label: plan.label, preset: plan.preset,
           tracks: trackResults.map((t) => ({
-            track: t.track, captured: t.captured,
+            track: t.track, captured: t.captured, failed: t.failed, failures: t.failures, shots: t.shots,
             panel: t.panel ? path.relative(outRoot, t.panel) : null,
-            relIndex: t.indexHtml ? path.relative(outRoot, t.indexHtml) : `${t.track}/index.html`,
+            relIndex: t.indexHtml ? path.relative(outRoot, t.indexHtml) : null,
           })),
         });
       }
-      writeSurveyProgress(outRoot, { state: "done", tracks, estimateMs, compareIndex });
+      writeSurveyProgress(outRoot, {
+        state: surveyTerminalState(trackResults), tracks, estimateMs, compareIndex,
+        trackResults: trackResults.map((t) => ({ track: t.track, captured: t.captured, failed: t.failed, error: t.error })),
+      });
 
       const captured = trackResults.reduce((n, t) => n + t.captured, 0);
       const failed = trackResults.reduce((n, t) => n + t.failed, 0);
@@ -456,6 +470,21 @@ export function createExtras(ctx) {
           throw Object.assign(new Error(kind), {
             refuse: refuse("bad_args", `${kind} jobs start from apex_${kind} (its default route)`, `Call apex_${kind}; it returns a jobId unless async:false.`),
           });
+        }
+        return { browser: true, argv };
+      }
+      // Profiler (tools/perf/profile.mjs): a browser job, started by apex_job_start or the direct apex_profile tool (both
+      // guarded as browser tools). The argv is built from typed fields.
+      case "profile": {
+        const mode = String(a.mode || "spans");
+        if (!["spans", "cpu", "hitch", "trace"].includes(mode)) throw Object.assign(new Error("mode"), { refuse: refuse("bad_args", "mode must be spans|cpu|hitch|trace", 'e.g. {"kind":"profile","mode":"spans"}.') });
+        const argv = nodeArgv("perf/profile.mjs", needTrack(a.track || "vegas"), "--mode", mode);
+        if (a.frames != null) argv.push("--frames", String(Math.max(10, Math.min(600, Math.trunc(Number(a.frames)) || 40))));
+        if (a.repeat != null) argv.push("--repeat", String(Math.max(1, Math.min(7, Math.trunc(Number(a.repeat)) || 1))));
+        if (a.base) {
+          const base = String(a.base);
+          if (!REF_RE.test(base) || base.startsWith("-")) throw Object.assign(new Error("base"), { refuse: refuse("bad_args", "base must be a git ref, not a flag", 'e.g. {"kind":"profile","base":"origin/main"}.') });
+          argv.push("--base", base);
         }
         return { browser: true, argv };
       }
@@ -894,6 +923,14 @@ export function createExtras(ctx) {
       apex_shot_survey: (a) => handleShotSurvey(a),
       apex_track: (a) => handleTrack(a),
       apex_job_start: (a) => jobStart(a),
+      // The profiler's direct door: a browser-kind tool (guard lists name it) whose run is the profile job, so the lock is
+      // taken for the job's life and apex_job_status watches it.
+      apex_profile: (a) => {
+        const r = jobStart({ ...a, kind: "profile" });
+        let b; try { b = JSON.parse(r.content[0].text); } catch { return r; }
+        if (b.ok === false || b.dryRun || b.mock) return r;
+        return toolResult({ ...b, routed: "apex_job_start profile", hint: "Runs in the background: apex_job_status {jobId, wait:100} until state is done; then apex_profile_query on the artifact named in the log." });
+      },
       apex_job_status: (a) => jobStatusWait(a),
       apex_job_cancel: (a) => jobCancel(a),
       apex_ui_fit: (a, o) => uiFit(a, o),
@@ -904,6 +941,6 @@ export function createExtras(ctx) {
   };
 }
 
-export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
+export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "profile", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
 /** Key apex-tools-mcp uses to hand apex_job_start a pinned HUD argv; unreachable from JSON. */
 export const HUD_JOB_ARGV = Symbol("apex.hudJobArgv");

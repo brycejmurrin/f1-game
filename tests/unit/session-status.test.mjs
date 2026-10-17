@@ -29,11 +29,12 @@ test("ciSummary: running beats failure beats success, newest run per workflow on
 
 test("livePrLines: head, draft/ready, mergeable_state, CI — each stamped as a snapshot", () => {
   const md = livePrLines({ at: AT, localHead: SHA, pr: { number: 7, draft: true, mergeable_state: "clean", head: { sha: SHA } }, ci: "running" }).join("\n");
-  assert.match(md, /PR #7 head\*\* `aaaaaaaaa` — draft/);
+  assert.match(md, /PR #7 head\*\* `a{40}` — draft/);
   assert.match(md, /mergeable_state `clean`/);
   assert.match(md, /CI.*running/);
   assert.equal((md.match(/snapshot read 2026-10-10T08:00:00Z/g) || []).length, 3);
-  assert.match(md, /ready-gate\.mjs.*ready-full-cap\.mjs/);
+  assert.match(md, /ready-gate\.mjs/);
+  assert.doesNotMatch(md, /ready-full-cap/, "the ready cap was retired 2026-10-16");
   assert.doesNotMatch(md, /LOCAL HEAD != PR HEAD/);
 });
 
@@ -69,8 +70,19 @@ test("parseVerdict takes the LAST terminal line, never a heartbeat", () => {
 });
 
 test("parseVerdict names a run that died before its reporter's summary", () => {
-  assert.match(parseVerdict(". running 3/40 done, 0 failed\n= bg exit 137"), /exited 137 \(no reporter summary\)/);
+  assert.equal(parseVerdict(". running 3/40 done, 0 failed\n= bg exit 137"), "failed (exit 137; no reporter summary)");
   assert.match(parseVerdict(". running 3/40 done, 0 failed"), /no verdict yet/);
+});
+
+test("parseVerdict accepts reporter prefixes but never echoed summaries", () => {
+  assert.equal(parseVerdict("[09:12:34] = run passed (40/40 done, 0 failed)"), "passed (40/40 done, 0 failed)");
+  assert.match(parseVerdict("Error: expected = run passed\n[tooling-fast]   | = run passed"), /no verdict yet/);
+});
+
+test("parseVerdict respects the latest exit and a compound group's failed second half", () => {
+  assert.equal(parseVerdict("= bg exit 0\n= bg exit 137"), "failed (exit 137; no reporter summary)");
+  assert.equal(parseVerdict("= run passed (2 passed)\n= bg exit 137"), "failed (exit 137; last summary: passed (2 passed))");
+  assert.equal(parseVerdict("= run failed (1 failed)\n= bg exit 1\n= run passed (1 passed)\n= bg exit 0"), "passed (1 passed)");
 });
 
 test("toMarkdown flags unpushed commits, dirt and a live run", () => {

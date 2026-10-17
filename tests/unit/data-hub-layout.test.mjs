@@ -29,6 +29,14 @@ test(".dh-content hides native scrollbar; ScrollFade owns the thumb", () => {
   assert.match(DATA_CSS, /\.dh-content::-webkit-scrollbar\s*\{\s*display:\s*none/);
 });
 
+test("narrow dashboard metric labels wrap inside auto-fit cells", () => {
+  const label = ruleFor(rules, /body\[data-width="narrow"\]\s+\.dh-glabel/);
+  assert.ok(label, "narrow metric label rule");
+  assert.equal(label.decls.get("white-space"), "normal");
+  assert.equal(label.decls.get("overflow-wrap"), "anywhere");
+  assert.equal(label.decls.get("line-height"), "1.15");
+});
+
 test("session/GP selects meet the card tap-paint floor", () => {
   assert.equal(decl(rules, ".dh-pick-select", "min-height"), "var(--tap-paint)");
 });

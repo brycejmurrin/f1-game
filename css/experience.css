@@ -9,7 +9,9 @@
   #overlay #mb-career .mb-sub { color: inherit; }
   #menu-retention .bigbtn,
   #menu-primary .bigbtn,
-  #menu-explore .bigbtn { color: var(--text); }
+  #menu-garage .bigbtn,
+  #menu-explore .bigbtn,
+  #menu-create .bigbtn { color: var(--text); }
   #pm-race-context { grid-column: 1 / -1; display: grid; gap: 0; line-height: 1.25; padding: calc(var(--gap) / 2) var(--gap); background: var(--carbon); border-bottom: 1px solid var(--plate-line); }
   #pm-race-context strong { font-size: var(--fs-5); }
   #pm-race-context :is(span, small) { color: var(--dim); font-size: var(--fs-micro); }

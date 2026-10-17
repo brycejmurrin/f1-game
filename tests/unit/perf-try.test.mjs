@@ -317,7 +317,7 @@ test("GLSL / WGSL / TSL keep only the gated ON path", () => {
 
 test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   const html = read("index.html");
-  // Mount point in the DISPLAY › RENDERER fold: GfxQuality.replaceChilds this
+  // Mount point in the GRAPHICS › RENDERER fold: GfxQuality.replaceChilds this
   // with SettingRow at init. The live label is `GRAPHICS: ${preset}` in
   // js/perf/quality-preset.js — HIGH remains the desktop default preset.
   assert.match(html, /id="pm-gfx"[^>]*>GRAPHICS: HIGH/);
@@ -331,7 +331,8 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   const nav = read("js/ui/settings-tabs.js");
-  assert.match(nav, /controls: document\.getElementById\("pm-open-controls"\)/);
+  assert.match(nav, /controls: Object\.freeze\(\{[\s\S]*?door: \(\) => document\.getElementById\("pm-open-controls"\)/);
+  assert.match(nav, /Object\.entries\(routes\).*route\.door\(\)/);
   assert.match(nav, /for \(const \[id, door\] of Object\.entries\(doors\)\) if \(door\) door\.onclick = \(\) => \{/);
   assert.match(nav, /show\(id, true, \(\) => \{ if \(onSelect\) onSelect\(id\); \}(, true)?\)/);   // the door passes `ensured` since the LAZY_AUDIO busy-loop fix (bug-hunt 2.1)  assert.match(read("js/ui/scale.js"), /if \(uiEl\) uiEl\.oninput/);
   assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);

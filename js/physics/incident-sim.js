@@ -6,6 +6,8 @@ const IncidentSim = (function () {
   // fallback for a bare test VM that loads this file without PhysicsConsts.
   const FIXED_DT = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.FIXED_DT) || 1 / 60;
 
+  const _boundary = {}, _boundaryPost = {};
+
   let G = null;             // game.js ctx façade (live getters + trackFrom/worldFromTrack helpers)
 
   // flags (all DEFAULT ON, each its own disable flag)
@@ -19,6 +21,10 @@ const IncidentSim = (function () {
   let _seq = 0;             // deterministic incident sequence counter
   let _tick = 0;            // ticks this module has stepped (deterministic clock)
   let _promoted = 0, _handbacks = 0, _fallbacks = 0, _lastKind = "";
+  // Notifications/clusters rejected, except car-count filters/caps/failures.
+  // Fixed counters: only status() allocates a public copy.
+  const _rejected = { inactive: 0, disabledKind: 0, belowThreshold: 0, incidentCap: 0,
+    ownershipFilter: 0, eligibilityFilter: 0, takeoverCap: 0, failedPromotion: 0 };
   let _forced = 0;          // one-shot manual trigger requested via __apex
 
   // Closing speeds scale with OVERALL SPEED (PACE is a ground-speed scale), so
@@ -125,20 +131,24 @@ const IncidentSim = (function () {
     _incidents = []; _owned.clear(); _cand.length = 0;
     if (G && G.cars) for (const c of G.cars) if (c) c._incidentOwned = false;
     _seq = 0; _tick = 0; _promoted = 0; _handbacks = 0; _fallbacks = 0; _lastKind = ""; _forced = 0;
+    for (const key in _rejected) _rejected[key] = 0;
     return status();
   }
 
   // Wall contact. sev is the DebrisWorld severity (xOver*60 + speed*0.15).
   function notifyWall(c, side, sev) {
-    if (!active() || !_r2 || !c) return;
-    if (!fin(sev) || sev < R2_WALL_SEV) return;
+    if (!c) return;
+    if (!active()) { _rejected.inactive++; return; }
+    if (!_r2) { _rejected.disabledKind++; return; }
+    if (!fin(sev) || sev < R2_WALL_SEV) { _rejected.belowThreshold++; return; }
     const i = G.cars ? G.cars.indexOf(c) : -1;
     if (i < 0) return;
     _cand.push({ a: i, b: -1, sev, kind: "wall" });
   }
   function notifyCar(a, b, relV) {
-    if (!active() || !(_r2 || _r3 || _c1) || !a || !b) return;
-    if (!fin(relV) || relV < R3_CAR_V * Math.max(G.PACE, 0.05)) return;
+    if (!a || !b) return;
+    if (!active()) { _rejected.inactive++; return; }
+    if (!fin(relV) || relV < R3_CAR_V * Math.max(G.PACE, 0.05)) { _rejected.belowThreshold++; return; }
     const cars = G.cars; if (!cars) return;
     const ia = cars.indexOf(a), ib = cars.indexOf(b);
     if (ia < 0 || ib < 0) return;
@@ -183,20 +193,25 @@ const IncidentSim = (function () {
 
     // Promote car-car clusters.
     for (const [root, set] of clusters) {
-      if (_incidents.length >= MAX_INCIDENTS) break;
-      let idxs = [...set].filter((i) => !_owned.has(i) && cars[i] && !cars[i].finished && !cars[i].retired);
+      if (_incidents.length >= MAX_INCIDENTS) { _rejected.incidentCap++; continue; }
+      let idxs = [...set].filter((i) => {
+        if (_owned.has(i)) { _rejected.ownershipFilter++; return false; }
+        if (!cars[i] || cars[i].finished || cars[i].retired) { _rejected.eligibilityFilter++; return false; }
+        return true;
+      });
       if (!idxs.length) continue;
       const relV = maxRelV.get(root) || 0;
       let kind;
-      if (idxs.length >= C1_MIN_CARS) { if (!_c1) continue; kind = "c1"; }
-      else if (relV >= R2_CAR_V * Math.max(G.PACE, 0.05)) { if (!_r2) continue; kind = "r2"; }
-      else { if (!_r3) continue; kind = "r3"; }
-      if (idxs.length > MAX_TAKEOVER) idxs = idxs.slice(0, MAX_TAKEOVER);
+      if (idxs.length >= C1_MIN_CARS) { if (!_c1) { _rejected.disabledKind++; continue; } kind = "c1"; }
+      else if (relV >= R2_CAR_V * Math.max(G.PACE, 0.05)) { if (!_r2) { _rejected.disabledKind++; continue; } kind = "r2"; }
+      else { if (!_r3) { _rejected.disabledKind++; continue; } kind = "r3"; }
       startIncident(kind, idxs, relV, dt);
     }
     for (const [i, sev] of wallCand) {
-      if (!_r2 || _owned.has(i) || !cars[i] || cars[i].finished || cars[i].retired) continue;
-      if (_incidents.length >= MAX_INCIDENTS) break;
+      if (!_r2) { _rejected.disabledKind++; continue; }
+      if (_owned.has(i)) { _rejected.ownershipFilter++; continue; }
+      if (!cars[i] || cars[i].finished || cars[i].retired) { _rejected.eligibilityFilter++; continue; }
+      if (_incidents.length >= MAX_INCIDENTS) { _rejected.incidentCap++; continue; }
       startIncident("r2", [i], sev, dt);
     }
   }
@@ -216,7 +231,10 @@ const IncidentSim = (function () {
     const promoted = [];
     for (const i of idxs) {
       const c = cars[i];
-      if (!c) continue;
+      if (!c || _owned.has(i) || c.finished || c.retired) continue;
+      // One budget across clusters, walls and earlier windows. Count every denied
+      // eligible attempt; failed promotions leave room for the next candidate.
+      if (_owned.size >= MAX_TAKEOVER) { _rejected.takeoverCap++; continue; }
       // AI cars never write `head` (only the grid, coast and rescue do), so
       // it is the grid's 0 for the whole race and the launch velocity pointed
       // along world +Z whatever the road did — the mirror pose in debrisworld
@@ -249,7 +267,7 @@ const IncidentSim = (function () {
       const ang = { x: rollX, y: yaw, z: rollZ };
       let ok = false;
       try { ok = DebrisWorld.promoteCarDynamic(i, lin, ang); } catch (e) { ok = false; }
-      if (!ok) continue;
+      if (!ok) { _rejected.failedPromotion++; continue; }
       snap.set(i, snapOf(c));
       good.set(i, snapOf(c));
       settle.set(i, 0);
@@ -304,10 +322,10 @@ const IncidentSim = (function () {
         try { tf = G.trackFrom(px, pz, c.s); } catch (e) { tf = null; }
         if (!tf || !fin(tf.s) || !fin(tf.x)) { handbackCar(inc, i, true); continue; }
         if (G.track && typeof Tracks !== "undefined" && Tracks.wallAt) {
-          const wr = Tracks.wallAt(G.track, tf.s, 1);
-          const wl = Tracks.wallAt(G.track, tf.s, -1);
-          if (fin(wr) && tf.x > wr) tf.x = wr;
-          if (fin(wl) && tf.x < -wl) tf.x = -wl;
+          const lim = ContactGeometry.wallLimits(G.track, tf.s, tf.x, _boundary, _boundaryPost, c);
+          if (fin(lim.r) && tf.x > lim.r) tf.x = lim.r;
+          if (fin(lim.l) && tf.x < -lim.l) tf.x = -lim.l;
+          if (fin(lim.laneMin) && lim.laneMin > 0 && tf.x * lim.side < lim.laneMin) tf.x = lim.laneMin * lim.side;
         }
         // INVERT the promote, do not approximate it. startIncident maps
         // (speed, vLat) into the world with `vWx = spd*fx - vLat*fz;
@@ -515,6 +533,7 @@ const IncidentSim = (function () {
       lastKind: _lastKind,
       promoted: _promoted, handbacks: _handbacks, fallbacks: _fallbacks,
       seq: _seq, stepped: _tick,
+      rejected: { ..._rejected },
     };
   }
 

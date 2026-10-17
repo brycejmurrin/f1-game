@@ -70,6 +70,9 @@ test("guide and history contents rail keys on wide sheet shape, strip when compa
 test("compact overlay rows wrap names instead of ellipsizing titles and points", () => {
   const css = read("css/career.css");
   assert.match(css,
+    /#career-offers \.sheet\[data-density="compact"\] \.co-offer\s*\{[^}]*min-height:\s*var\(--tap-paint\)/s,
+    "career offer choices must keep the painted touch floor in compact mode");
+  assert.match(css,
     /#career-offers \.sheet\[data-density="compact"\] \.co-offer-team\s*\{[\s\S]*?white-space:\s*normal/);
   assert.match(css,
     /#career-history \.sheet\[data-density="compact"\] \.res-name\s*,[\s\S]*?white-space:\s*normal/);

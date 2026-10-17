@@ -73,7 +73,19 @@ const CarMaterials = (function () {
       out.col[i * 3] = c[0]; out.col[i * 3 + 1] = c[1]; out.col[i * 3 + 2] = c[2];
     }
   }
-  function applyFinish(out, finish) {
+  function finishOf(livery, field) {
+    const value = livery && livery[field];
+    return value === "gloss" || Object.hasOwn(FINISH_SURFACE, value) ? value : livery && livery.finish || null;
+  }
+  function applyFinish(out, finish, sections, livery) {
+    if (sections && livery && [livery.coverFinish, livery.wingFinish, livery.haloFinish].some((v) => v && v !== "inherit")) {
+      const fields = { engineCover: "coverFinish", frontWing: "wingFinish", rearAssembly: "wingFinish", halo: "haloFinish" };
+      for (const section of sections) {
+        const choice = finishOf(livery, fields[section.name]), local = FINISH_SURFACE[choice] || SURFACES.paint;
+        for (let i = section.from; i < section.to; i++) if (out.mat[i] === SURFACES.paint) out.mat[i] = local;
+      }
+      return;
+    }
     const finishSurface = FINISH_SURFACE[finish];
     if (finishSurface) {
       for (let i = 0; i < out.mat.length; i++) {
@@ -87,7 +99,7 @@ const CarMaterials = (function () {
   const SHADE = (typeof CarMaterialShade !== "undefined") ? CarMaterialShade : null;
 
   return {
-    SURFACES, FINISH_SURFACE, SHADE,
+    SURFACES, FINISH_SURFACE, SHADE, finishOf,
     DARK, CARBON, VISOR, PANEL, TYRE, RIM, HUB, INTAKE, HALO, EXHAUST,
     TYRE_BAND, BRAKE_CALIPER,
     TCAM_IDS, tcamColour,

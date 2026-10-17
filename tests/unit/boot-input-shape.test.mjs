@@ -71,7 +71,7 @@ test("idxOr rejects every non-index, not just out-of-range numbers", () => {
 // the previous custom entry matches on "custom", so a renamed team would have
 // every sync push ANOTHER car onto the grid.
 test("a corrupt custom team is repaired, not pushed into Teams.LIST as it lies", () => {
-  const src = extractFn(read("js/career/custom-team.js"), "loadCustomTeam", "js/career/custom-team.js");
+  const src = ["identityGet", "loadCustomTeam"].map((name) => extractFn(read("js/career/custom-team.js"), name, "js/career/custom-team.js")).join("\n");
   // The repair itself is Teams.sanitizeCustom (js/data/teams.js) — run the
   // shipped one, not a copy.
   const ctx = vm.createContext({});
@@ -111,7 +111,7 @@ test("a corrupt custom team is repaired, not pushed into Teams.LIST as it lies",
 // and aria-state.js paintOnOff once wrote one back through innerHTML
 // (2026-09-24). The load is the second wall: rebuilt to the dialog's limits.
 test("a loaded custom team is capped to the dialog's limits (malicious store)", () => {
-  const src = extractFn(read("js/career/custom-team.js"), "loadCustomTeam", "js/career/custom-team.js");
+  const src = ["identityGet", "loadCustomTeam"].map((name) => extractFn(read("js/career/custom-team.js"), name, "js/career/custom-team.js")).join("\n");
   const ctx = vm.createContext({});
   vm.runInContext(read("js/data/teams.js"), ctx, { filename: "js/data/teams.js" });
   const Teams = vm.runInContext("Teams", ctx);

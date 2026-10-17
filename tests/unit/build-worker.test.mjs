@@ -136,7 +136,7 @@ test("a second build in the SAME worker, after its buffers were transferred, sti
 test("replay stamps _keepPositions when the page asked for trackGeometry", async () => {
   const def = Tracks.LIST.find((d) => d.id === "monza");
   worker.posted.length = 0;
-  await worker.send({ type: "build", seq: 91, idx: MANIFEST.CIRCUITS.indexOf("monza"), id: "monza", opts: { chunkRibbons: true, retainGraph: false } });
+  await worker.send({ type: "build", seq: 91, idx: MANIFEST.CIRCUITS.indexOf("monza"), id: "monza", opts: { chunkRibbons: true, retainGraph: false, retainGeometry: true } });
   const msg = worker.posted[0];
   assert.equal(msg.type, "built", msg.message);
   // Foundation specs call __apex.trackGeometry(true) before race; the worker's

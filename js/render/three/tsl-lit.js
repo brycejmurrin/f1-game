@@ -342,7 +342,7 @@
     function updateFrame(frame, mirror) {
       const T = (frame && frame.tune) || null;
       const k = (id, def) => (T && T[id] != null ? T[id] : def);
-      const s3 = (u, a, m) => { if (a) u.value.set(a[0] * (m || 1), a[1] * (m || 1), a[2] * (m || 1)); };
+      const s3 = (u, a, m) => { if (a) u.value.set(a[0] * (m ?? 1), a[1] * (m ?? 1), a[2] * (m ?? 1)); };
       s3(U.sunDir, frame.sunDir);
       s3(U.sunColor, frame.sunColor);
       setLampBake(frame.lampBake, frame.lampBakeScale);

@@ -105,7 +105,7 @@ test("XrRig recenter defines the seated origin in the base space, not an inverse
   assert.deepEqual({ ...off.orientation }, { x: 0, y: 0, z: 0, w: 1 });
 });
 
-test("XrInput.mapFrame: right trigger thr, left brake, stick steer, squeeze held, edges", () => {
+test("XrInput.mapFrame: right trigger thr, left brake, stick steer, stable squeeze gaze, edges", () => {
   const { XrInput } = bootXr();
   const latch = { primary: false, secondary: false };
   const sources = [
@@ -114,7 +114,7 @@ test("XrInput.mapFrame: right trigger thr, left brake, stick steer, squeeze held
       gamepad: {
         buttons: [
           { value: 0.8 }, // trigger
-          { value: 1 },   // squeeze → held
+          { value: 1 },   // squeeze leaves seated gaze stable
           { value: 0 },
           { value: 0 },
           { value: 0 }, // A
@@ -142,7 +142,7 @@ test("XrInput.mapFrame: right trigger thr, left brake, stick steer, squeeze held
   assert.ok(m.sample.thr > 0.7);
   assert.ok(m.sample.brk > 0.5);
   assert.ok(m.sample.roll > 0.5);
-  assert.equal(m.sample.held, 1);
+  assert.equal(m.sample.held, 0);
   assert.equal(m.recenter, false);
   assert.equal(m.events.length, 0);
 
@@ -411,10 +411,16 @@ function xrHarness(options = {}) {
     const m = mul(mul(ry, rx), rz); m[12] = x; m[13] = y; m[14] = z;
     return m;
   };
-  const makeSpace = (origin = M4.ident()) => ({
-    origin,
-    getOffsetReferenceSpace(t) { return makeSpace(mul(origin, t.matrix)); },
-  });
+  const makeSpace = (origin = M4.ident()) => {
+    const events = new Map();
+    return {
+      origin, events,
+      addEventListener(name, fn) { events.set(name, fn); },
+      removeEventListener(name, fn) { if (events.get(name) === fn) events.delete(name); },
+      fireReset(transform) { const fn = events.get('reset'); if (fn) fn({ target: this, transform }); },
+      getOffsetReferenceSpace(t) { return makeSpace(mul(origin, t.matrix)); },
+    };
+  };
   ctx.XRRigidTransform = class {
     constructor(p, q) {
       this.matrix = pose(p.x, p.y, p.z, 2 * Math.atan2(q.y, q.w));
@@ -598,6 +604,86 @@ test('XR ended during pending reference or renderer attachment cannot resume pre
     if (phase === 'attach') assert.equal(h.stats().detachments, 2, 'late attachment also cleaned up');
   }
 });
+
+for (const phase of ['reference', 'attach']) for (const outcome of ['resolve', 'reject']) for (const presenting of [false, true]) {
+  test(`XR immediate retry survives stale ${phase} ${outcome} while replacement ${presenting ? 'presents' : 'starts'}`, async () => {
+    const pending = deferred(), entered = deferred(), replacementAttach = deferred();
+    let references = 0, attachments = 0;
+    const h = xrHarness({
+      reference: (_type, base) => {
+        if (phase === 'reference' && references++ === 0) { entered.resolve(base); return pending.promise; }
+        return Promise.resolve(base);
+      },
+      attach: () => {
+        if (phase === 'attach' && attachments++ === 0) { entered.resolve(); return pending.promise; }
+        return replacementAttach.promise;
+      },
+    });
+    const xr = h.ctx.XrSession, old = xr.start();
+    const base = await entered.promise;
+    await xr.end();
+    const replacement = xr.start();
+    assert.notEqual(replacement, old, 'retry owns a new startup immediately');
+    await new Promise((r) => setImmediate(r));
+    assert.equal(h.stats().requestCount, 2, 'retry requested a new immersive session before old work settled');
+    const newer = h.sessions[1], detachments = h.stats().detachments;
+    if (presenting) { replacementAttach.resolve(); assert.equal(await replacement, newer); }
+    if (outcome === 'reject') pending.reject(new Error('old startup failed'));
+    else pending.resolve(base);
+    assert.equal(await old, null);
+    if (!presenting) assert.equal(xr.start(), replacement, 'old finally must not clear the replacement startup promise');
+    assert.equal(xr.getSession(), newer, 'late completion/error cannot end the newer session');
+    assert.equal(h.stats().detachments, detachments, 'late cleanup cannot detach the newer renderer session');
+    assert.equal(xr.lastError(), null, 'stale error is not reported against a fresh attempt');
+    replacementAttach.resolve();
+    assert.equal(await replacement, newer);
+    assert.equal(xr.isPresenting(), true);
+    assert.equal(newer.frames.size, 1);
+    h.fire(newer);
+    assert.equal(xr.frameCount(), 1, 'new XR frame clock still advances');
+    await xr.end();
+  });
+}
+
+for (const phase of ['compatible', 'renderState']) {
+  test(`TLX late XR ${phase} completion cannot overwrite or detach a replacement renderer session`, async () => {
+    const pending = deferred(), entered = deferred();
+    let calls = 0;
+    const source = read('js/render/three/tlx.js');
+    // Execute the shipped ownership methods, with only native GL/XR operations replaced by controlled promises.
+    const begin = source.indexOf('async attachXrSession(session) {');
+    const end = source.indexOf('/** XRWebGLLayer.fixedFoveation', begin);
+    assert.ok(begin > 0 && end > begin, 'actual TLX attach/detach methods found');
+    const ctx = vm.createContext({
+      ownGL: { makeXRCompatible() {
+        if (phase === 'compatible' && calls++ === 0) { entered.resolve(); return pending.promise; }
+        return Promise.resolve();
+      } },
+      renderer: {}, canvas: {}, _xrActive: false,
+      XRWebGLLayer: class { constructor(session) { this.session = session; this.framebuffer = {}; } },
+    });
+    seedLog(ctx);
+    const gfx = vm.runInContext(`({ ${source.slice(begin, end)} })`, ctx);
+    const first = { updateRenderState() {
+      if (phase === 'renderState') { entered.resolve(); return pending.promise; }
+      return Promise.resolve();
+    } };
+    const old = gfx.attachXrSession(first);
+    await entered.promise;
+    gfx.detachXrSession();
+    const newer = { updateRenderState: async () => {} };
+    const layer = await gfx.attachXrSession(newer);
+    assert.equal(gfx._xrSession, newer);
+    pending.resolve();
+    assert.equal(await old, null, 'canceled renderer attach reports no adoption');
+    assert.equal(gfx._xrSession, newer, 'late attach cannot install the old native session');
+    assert.equal(gfx._xrLayer, layer, 'new session retains its own base layer');
+    assert.equal(ctx._xrActive, true);
+    gfx.detachXrSession();
+    assert.equal(gfx._xrSession, null);
+    assert.equal(ctx._xrActive, false);
+  });
+}
 
 test('XR reference, attachment and frame-request failures release ownership and keep one window loop', async () => {
   for (const options of [
@@ -826,4 +912,144 @@ test("XrInput prefers only a usable left stick and otherwise accepts the right c
   for (const sources of [[left, right], [right, left]]) assert.ok(XrInput.mapFrame(sources).sample.roll < -0.7);
   left.gamepad.axes[2] = 0;
   assert.equal(XrInput.mapFrame([right, left]).sample.roll, 0, "a centered usable left stick retains preference");
+});
+
+
+test('XR overlay menu navigation is granted-only, edge-triggered and releases driving', () => {
+  const { XrInput } = bootXr();
+  const src = [{ handedness: 'left', gamepad: { axes: [0, 0, 0.8, 0], buttons: Array.from({ length: 6 }, () => ({ value: 1 })) } }];
+  const latch = { primary: false, secondary: false };
+  let m = XrInput.mapFrame(src, latch, { menuOpen: true, overlay: true });
+  assert.deepEqual(Array.from(m.events), ['navSelect', 'navBack', 'navRight']);
+  assert.equal(m.recenter, false);
+  assert.deepEqual({ ...m.sample }, { roll: 0, thr: 0, brk: 0, held: 0 });
+  assert.equal(XrInput.mapFrame(src, latch, { menuOpen: true, overlay: true }).events.length, 0);
+  src[0].gamepad.axes[2] = 0;
+  XrInput.mapFrame(src, latch, { menuOpen: true, overlay: true });
+  src[0].gamepad.axes[2] = -0.8;
+  assert.deepEqual(Array.from(XrInput.mapFrame(src, latch, { menuOpen: true, overlay: true }).events), ['navLeft']);
+  m = XrInput.mapFrame(src, null, { menuOpen: true, overlay: false });
+  assert.deepEqual(Array.from(m.events), ['pause']);
+  assert.equal(m.recenter, true);
+  assert.equal(m.sample.brk, 0);
+});
+
+test('XR eye list is borrowed and shrinks exactly for a mono frame', async () => {
+  const h = xrHarness(), xr = h.ctx.XrSession;
+  await xr.start(); h.fire();
+  const eyes = xr.eyeFrames(null, h.frame());
+  const left = eyes[0];
+  const stereoFrame = h.frame();
+  const mono = { getViewerPose(space) { const p = stereoFrame.getViewerPose(space); p.views.length = 1; return p; } };
+  assert.equal(xr.eyeFrames(null, mono), eyes);
+  assert.equal(eyes.length, 1);
+  assert.equal(eyes[0], left);
+  assert.equal(xr.eyeFrames(null, h.frame()), eyes);
+  assert.equal(eyes.length, 2);
+  h.tracking(false);
+  assert.equal(xr.eyeFrames(null, h.frame()), null);
+  await xr.end();
+  assert.equal(eyes.length, 0);
+});
+
+test('XR session asks for DOM overlay only when a document root exists', () => {
+  const h = xrHarness();
+  assert.equal(h.ctx.XrSession.sessionInit(false).domOverlay, undefined);
+  h.ctx.document = { body: {} };
+  const init = h.ctx.XrSession.sessionInit(false);
+  assert.equal(init.domOverlay.root, h.ctx.document.body);
+  assert.ok(init.optionalFeatures.includes('dom-overlay'));
+});
+
+
+test('nonidentity runtime reset waits for explicit recenter and cleans its base listener', async () => {
+  const h = xrHarness(), xr = h.ctx.XrSession;
+  const lost = [];
+  h.ctx.Input = { remoteLost: () => lost.push(1), remoteSample() {}, remoteEvent() {} };
+  await xr.start(); h.fire();
+  const base = h.sessions[0].base;
+  const reset = h.pose(3, 0.4, -2, 0.8, 0.2, -0.1);
+  base.origin = reset;
+  const lostBeforeReset = lost.length;
+  base.fireReset({ matrix: reset });
+  assert.equal(lost.length, lostBeforeReset + 1, "reset releases XR input independently of earlier disconnect frames");
+  assert.equal(xr.eyeFrames(null, h.frame()), null);
+  h.fire();
+  assert.equal(xr.eyeFrames(null, h.frame()), null, 'no automatic compensation or recenter guessed');
+  h.tracking(false);
+  assert.equal(xr.recenter(), true);
+  h.fire();
+  assert.equal(xr.eyeFrames(null, h.frame()), null);
+  h.tracking(true); h.fire();
+  assert.equal(xr.eyeFrames(null, h.frame()).length, 2);
+  const lostBeforeEnd = lost.length;
+  await xr.end();
+  assert.equal(lost.length, lostBeforeEnd + 1, 'session end releases its XR source');
+  assert.equal(base.events.has('reset'), false);
+  base.fireReset();
+  assert.equal(lost.length, lostBeforeEnd + 1, 'stale base has no callback');
+});
+
+test('immersive cockpit blocks keyboard and latched look-back while flat cockpit still turns', () => {
+  const ctx = bootXr();
+  let immersive = false, held = true, latched = false;
+  ctx.XrBoot = { comfort: () => immersive };
+  ctx.Input = { lookingBack: () => held };
+  ctx.CamFeel = { shouldLookBack: (_, down) => down || latched, modeFov: () => 64, applyFreeLook() {} };
+  ctx.Tracks = {
+    sample(_, s, out) { out.p[0] = 0; out.p[1] = 0; out.p[2] = s; out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.r[0] = 1; out.r[1] = 0; out.r[2] = 0; return out; },
+    banking: (_, __, ___, out) => { out.dy = 0; out.roll = 0; return out; },
+  };
+  vm.runInContext(read('js/camera/vantage.js').replace(/^const\b/gm, 'var'), ctx);
+  const track = { total: 100, n: 4, py: [0, 0, 0, 0], def: {} };
+  const direction = () => { const v = ctx.GameCams.vantage(track, 'cockpit', 10, 0, 0, 0, { att: {}, carPos: [0, 10], carHead: 0 }); return v.tgt[2] - v.eye[2]; };
+  assert.ok(direction() < 0, 'flat key look-back remains available');
+  immersive = true;
+  assert.ok(direction() > 0, 'immersive key cannot rotate seated gaze');
+  held = false; latched = true;
+  assert.ok(direction() > 0, 'pre-existing flat latch cannot rotate immersive gaze');
+  immersive = false;
+  assert.ok(direction() < 0, 'flat latch is restored after XR');
+});
+
+test("XR driving source choice preserves phone ownership and absent sticks do not claim steering", () => {
+  const { XrInput } = bootXr();
+  let owner = "phone", latest = { thr: .7, steer: .2 }, samples = 0; const events = [];
+  const input = {
+    remoteSample(s) { samples++; owner = s.source || "remote"; latest = s; },
+    remoteLost(source) { if (!source || source === owner) { owner = null; latest = null; } },
+    remoteEvent(e) { events.push(e); },
+  };
+  const pad = { handedness: "right", targetRayMode: "tracked-pointer", gamepad: { axes: [0,0,.5,0], buttons: [{ value: .8 }, {}, {}, {}, {}, { value: 1 }] } };
+  XrInput.inject(input, XrInput.mapFrame([pad], {}, { driving: false }));
+  assert.equal(owner, "phone"); assert.equal(latest.thr, .7); assert.equal(samples, 0);
+  assert.deepEqual(events, ["pause"], "pause stays available with existing controls");
+  XrInput.inject(input, XrInput.mapFrame([]));
+  assert.equal(owner, "phone", "disconnect cannot clear a newer phone sample");
+  XrInput.inject(input, XrInput.mapFrame([pad]));
+  assert.equal(owner, "xr"); assert.equal(latest.thr, .8); assert.ok(latest.steer > 0);
+  XrInput.inject(input, XrInput.mapFrame([]));
+  assert.equal(owner, null, "disconnect releases our previous held pedals");
+  const noStick = { handedness: "right", gamepad: { axes: [], buttons: [{ value: .5 }] } };
+  XrInput.inject(input, XrInput.mapFrame([noStick]));
+  assert.equal(latest.thr, .5); assert.equal(Object.hasOwn(latest, "steer"), false);
+  assert.equal(Object.hasOwn(latest, "roll"), false, "pedals-only never enters tilt either");
+});
+
+test("live XR session obeys existing-controls choice and teardown preserves a newer phone sample", async () => {
+  const h = xrHarness(); let mode = "existing", owner = "phone", samples = 0;
+  h.ctx.XROpts = { xrInput: () => mode };
+  h.ctx.Input = {
+    remoteSample(s) { owner = s.source; samples++; },
+    remoteLost(source) { if (source === owner) owner = null; }, remoteEvent() {},
+  };
+  await h.ctx.XrSession.start();
+  h.sessions[0].inputSources = [{ handedness: "right", gamepad: { axes: [0,0,.5,0], buttons: [{ value: .5 }] } }];
+  h.fire();
+  assert.equal(owner, "phone"); assert.equal(samples, 0);
+  mode = "controllers"; h.fire();
+  assert.equal(owner, "xr"); assert.equal(samples, 1);
+  owner = "phone";
+  await h.ctx.XrSession.end();
+  assert.equal(owner, "phone", "session-end releases only its own source");
 });

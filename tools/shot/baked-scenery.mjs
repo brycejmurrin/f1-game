@@ -10,6 +10,8 @@
  *
  *   node tools/shot/baked-scenery.mjs
  *   node tools/shot/baked-scenery.mjs --out artifacts/galleries/my-run
+ *   node tools/shot/baked-scenery.mjs --limit=1        # cheap smoke: first framing only
+ *   node tools/shot/baked-scenery.mjs --help           # usage, no Chromium
  *
  * Does NOT call snapCam after orbit/view (see mcp-probe / DEBUG-HOOKS).
  */
@@ -22,14 +24,23 @@ import {
   startStaticServer,
 } from "../lib/harness.mjs";
 import { resolveRepoDefault } from "../lib/output-paths.mjs";
+import { parseFlags } from "../lib/cli-args.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
-const outFlag = process.argv.indexOf("--out");
-const outDir = outFlag >= 0 && process.argv[outFlag + 1]
-  ? resolve(process.argv[outFlag + 1])
-  : resolveRepoDefault(ROOT, "artifacts", "galleries", "baked-scenery");
+const cli = parseFlags(process.argv.slice(2), ["--out", "--limit", "--help"]);
+if (cli.has("--help")) {
+  console.log("usage: node tools/shot/baked-scenery.mjs [--out DIR] [--limit=N]\n"
+    + "  --out DIR   gallery directory (default artifacts/galleries/baked-scenery)\n"
+    + "  --limit=N   shoot only the first N framings (smoke: --limit=1)\n"
+    + "  --help      this text; launches no Chromium");
+  process.exit(0);
+}
+const outArg = cli.flag("--out");
+const outDir = outArg ? resolve(outArg) : resolveRepoDefault(ROOT, "artifacts", "galleries", "baked-scenery");
+const limit = cli.has("--limit") ? Number(cli.flag("--limit")) : Infinity;
+if (!(limit >= 1)) { console.error("baked-scenery: --limit must be a number >= 1"); process.exit(1); }
 
 mkdirSync(outDir, { recursive: true });
 
@@ -86,6 +97,8 @@ const SHOTS = [
     az: -70, el: 20, dist: 90, tod: "dusk",
   },
 ];
+
+SHOTS.splice(limit);
 
 const srv = await startStaticServer(ROOT);
 const browser = await launchChromium({

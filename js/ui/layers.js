@@ -226,6 +226,15 @@ window.UiLayers = (function () {
      so driving keys are not swallowed on a freshly-loaded page. The pad
      still needs to move the title doors; overlay is hidden in-race. */
   function navOpen() {
+    const now = clock();
+    if (navMemo !== null && now - navMemoAt < NAV_MEMO_MS && !navDirty()) return navMemo;
+    navMemo = navOpenNow();
+    navMemoAt = now;
+    if (navObs) { navDirty(); navStale = false; } // watch before trusting; a write after the read above is caught by the next call
+    return navMemo;
+  }
+
+  function navOpenNow() {
     if (anyOpen()) return true;
     // Only these two layers are gate:false, so once anyOpen() is false the old
     // top() lookup could name nothing else. It is a 33-selector querySelectorAll
@@ -236,6 +245,59 @@ window.UiLayers = (function () {
     // portrait mid-race had d-pad/A spent on boost/shift behind the opaque
     // blocker and NO reachable way to press OPEN CONTROLS or EXIT RACE.
     return shownLayer(document.getElementById("overlay")) || shownLayer(document.getElementById("rotate-device"));
+  }
+
+  /* navOpen() IS ASKED SEVERAL TIMES A TICK (remoteDrivingBlocked() from
+     lookingBack, the remote pedals, the steer path, the pad poll), and #rotate-device is
+     hidden by CSS (`display: none`), never by the hidden attribute, so the
+     `el.hidden` shortcut cannot skip it: every call paid getComputedStyle plus
+     getBoundingClientRect, which flush style and layout that the HUD's own
+     writes dirty every frame. gpu-census run 38985693871: shownLayer was
+     3.3-5.7 % of all sampled CPU on every backend.
+     So the answer is memoised for NAV_MEMO_MS and dropped the
+     moment something that could change it is written: a MutationObserver on
+     the layers (and body/html, whose classes drive `body.in-race ...
+     #rotate-device`) is drained with takeRecords(), which is synchronous and
+     forces no layout, so a layer opened and asked about in the same task is
+     still seen. Resize/orientation (media queries) drop it too. The time
+     bound is the net for anything the observer cannot see (a stylesheet
+     arriving). No MutationObserver (isolated VM) means no memo. */
+  const NAV_MEMO_MS = 250;
+  let navMemo = null;
+  let navMemoAt = 0;
+  let navObs = null;
+  let navStale = false;
+  const navWatched = new WeakSet();
+  const NAV_ATTRS = ["hidden", "class", "style", "open", "inert"];
+  const clock = () => (typeof performance !== "undefined" && performance.now ? performance.now() : 0);
+
+  function navWatch(el, subtree) {
+    if (!navObs || !el || navWatched.has(el)) return;
+    navWatched.add(el);
+    navObs.observe(el, { attributes: true, attributeFilter: NAV_ATTRS, subtree });
+  }
+
+  function navDirty() {
+    if (!navObs) return true;
+    if (navObs.takeRecords().length) navStale = true;
+    // Layers created since the last look join the watch before the memo is trusted.
+    for (const el of gateEls()) navWatch(el, true);
+    navWatch(document.getElementById("overlay"), true);
+    navWatch(document.getElementById("rotate-device"), true);
+    const stale = navStale;
+    navStale = false;
+    return stale;
+  }
+
+  if (typeof MutationObserver === "function" && typeof window !== "undefined" && window.addEventListener) {
+    navObs = new MutationObserver(() => { navStale = true; });
+    const root = document.documentElement;
+    navWatch(root, false);
+    if (document.body) navWatch(document.body, false);
+    else document.addEventListener("DOMContentLoaded", () => { navWatch(document.body, false); navStale = true; }, { once: true });
+    const drop = () => { navStale = true; };
+    window.addEventListener("resize", drop);
+    window.addEventListener("orientationchange", drop);
   }
 
   /* IN A RACE means the game loop is simulating — `state === "race" || "count"`,

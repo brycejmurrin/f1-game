@@ -164,7 +164,8 @@ function main() {
     if (r.parseError) { console.log(`  PARSE ${r.file}: ${r.parseError}`); continue; }
     console.log(`  ${String(r.sites.length).padStart(3)}  ${r.file}`);
   }
-  console.log("\nFix: pass null before { polling: 100, timeout: N }. Options belong in");
+  console.log("\nREPORT ONLY: this CLI exits 0 whatever it finds; the count is held by the ratchet (tests/data/ratchets.json).");
+  console.log("Fix: pass null before { polling: 100, timeout: N }. Options belong in");
   console.log("argument three; timer polling avoids render-loop rAF starvation.");
 }
 

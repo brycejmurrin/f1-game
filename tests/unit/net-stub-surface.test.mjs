@@ -10,7 +10,7 @@
  * suite would see it: every unit test runs in Node with no game.js, and every
  * browser spec loads the agent surface, which pulls the REAL net bundle. So
  * this guard derives the required surface from the CALL SITES — grep the tree
- * for netPlay.<m> / netLobby.<m> outside js/net and js/agent/apex.js — rather
+ * for netPlay.<m> / netLobby.<m> outside js/net and js/agent/apex.js / apex-net.js — rather
  * than from a hand-written roster that would drift the moment a call site is
  * added. Adding a call to a method the stub lacks turns this red.
  */
@@ -47,7 +47,7 @@ function stubKeys(name) {
 function calledMethods(receiver) {
   const hits = new Map();
   for (const rel of jsFiles("js")) {
-    if (rel.startsWith("js/net/") || rel === "js/agent/apex.js") continue;
+    if (rel.startsWith("js/net/") || rel === "js/agent/apex.js" || rel === "js/agent/apex-net.js") continue;
     const src = readFileSync(join(ROOT, rel), "utf8")
       // Strip comments so prose naming a method is not read as a call site.
       .replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");

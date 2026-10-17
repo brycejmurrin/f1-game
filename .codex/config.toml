@@ -1,5 +1,5 @@
 # Codex CLI project config — loaded only once you mark this project trusted.
-# Mirrors the three MCP servers in .mcp.json (Claude Code) and .cursor/mcp.json
+# Mirrors the MCP servers in .mcp.json (Claude Code) and .cursor/mcp.json
 # (Cursor); tests/unit/agent-config.test.mjs locksteps the three files.
 # Codex Desktop currently reads only ~/.codex/config.toml for MCP servers
 # (openai/codex#13025): copy these tables there if the CLI's do not appear.
@@ -24,3 +24,8 @@ command = "bash"
 args = ["tools/mcp/chrome-devtools-mcp.sh", "run"]
 startup_timeout_sec = 60
 tool_timeout_sec = 300
+
+[mcp_servers.js-debugger]
+command = "bash"
+args = ["tools/mcp/js-debugger-mcp.sh", "serve"]
+startup_timeout_sec = 60

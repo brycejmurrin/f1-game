@@ -45,7 +45,7 @@ const DailyChallenge = (function () {
     function data() {
       const raw = store.get(KEY, null);
       const d = raw && typeof raw === "object" ? raw : {};
-      const days = d.days && typeof d.days === "object" ? d.days : {};
+      const days = isObj(d.days) ? d.days : {};
       const st = d.streak && typeof d.streak === "object" ? d.streak : {};
       return { days, streak: { count: Number.isInteger(st.count) ? st.count : 0, last: typeof st.last === "string" ? st.last : null } };
     }

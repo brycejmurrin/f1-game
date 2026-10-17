@@ -21,6 +21,7 @@ var AudioPanel = (() => {
       G.soundOn = b; store.set("sound", b);
       GameAudio.setEnabled(b);
       if (!b) {
+        stopBattlePreview();
         if (G.announcer && G.announcer.stop) G.announcer.stop();
         if (G.radio && G.radio.stop) G.radio.stop();
         if (G.radio && G.radio.pack) G.radio.pack.stop();
@@ -60,6 +61,14 @@ var AudioPanel = (() => {
     // reader user hears every card twice if we default this on.
     let radioOn = store.get("radioVoice", false);
     let radioVol = store.get("volRadio", 0.8);
+    const FOCUS_VALUES = [[0, "STANDARD"], [4, "4 dB"], [8, "8 dB"], [12, "12 dB"]];
+    const focusNow = () => {
+      const value = !GameAudio._stub && GameAudio.getRadioFocusDb ? GameAudio.getRadioFocusDb() : store.get("radioFocusDb", 0);
+      return [0, 4, 8, 12].indexOf(value) >= 0 ? value : 0;
+    };
+    function restoreFocus() {
+      if (GameAudio.setRadioFocusDb) GameAudio.setRadioFocusDb(store.get("radioFocusDb", 0));
+    }
     /* The announcer's switch is READ FROM THE MODULE, never mirrored here. It
      * is the one spoken setting a second surface also flips — the flyby editor
      * previews it — and a `let annOn` in this closure would have gone stale the
@@ -82,6 +91,34 @@ var AudioPanel = (() => {
     const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
     const recordedFor = (ch) => ch === "announcer" && G.radio && G.radio.announcerPackOn ? G.radio.announcerPackOn() : packNow() === "rec";
     const spotNow = () => (store.get("spotter", false) !== false ? "on" : "off");
+
+    const battlePreview = typeof BattleEarcon !== "undefined" ? BattleEarcon.create(GameAudio) : null;
+    const battleButtons = [
+      [$("as-battle-ahead-closing"), "ahead:closing"], [$("as-battle-ahead-opening"), "ahead:opening"],
+      [$("as-battle-behind-closing"), "behind:closing"], [$("as-battle-behind-opening"), "behind:opening"],
+    ];
+    const battleNow = () => (rr() && rr().battleEarcon ? rr().battleEarcon() : !!store.get("battleEarcon", false));
+    function stopBattlePreview() {
+      if (battlePreview) battlePreview.stop();
+      if (rr() && rr().stopBattleEarcon) rr().stopBattleEarcon();
+    }
+    function battleNote(text) { const n = $("as-battle-status"); if (n) n.textContent = text; }
+    // BACK changes a page; closing the dialog hides its ancestor. Cover both
+    // independently, including browsers without a speech-synthesis instance.
+    if (typeof SettingsNav !== "undefined" && SettingsNav.onLeave) SettingsNav.onLeave((id) => {
+      if (id === "audio") stopBattlePreview();
+    });
+    const battlePanel = $("audioset"), battleSettings = $("pmsettings");
+    if (typeof MutationObserver === "function") {
+      for (const el of [battlePanel, battleSettings]) if (el) {
+        new MutationObserver(() => { if (el.hidden) stopBattlePreview(); })
+          .observe(el, { attributes: true, attributeFilter: ["hidden"] });
+      }
+    }
+    if (battleSettings && battleSettings.addEventListener) {
+      battleSettings.addEventListener("close", stopBattlePreview);
+      battleSettings.addEventListener("cancel", stopBattlePreview);
+    }
     function setRadio(b) {
       if (b && !G.soundOn) setSound(true, true);
       radioOn = b; store.set("radioVoice", b);
@@ -340,6 +377,13 @@ var AudioPanel = (() => {
       SettingRow.paint($("as-rpack"), packNow(), PACK_VALUES);
       if (GameAudio.radioPresets) SettingRow.paint($("as-rpreset"), GameAudio.radioPreset(), GameAudio.radioPresets());
       SettingRow.paint($("as-spot"), spotNow(), ONOFF);
+      SettingRow.paint($("as-focus"), focusNow(), FOCUS_VALUES);
+      SettingRow.paint($("as-battle"), battleNow() ? "on" : "off", ONOFF);
+      const battleStatus = $("as-battle-status");
+      if (battleStatus && battleNow() && battleStatus.textContent === "Battle tones are off. RADIO CHECK gives the usual status.") {
+        battleStatus.textContent = "Battle tones are on. Learn the four samples below; RADIO CHECK requests one on a quiet straight.";
+      }
+      for (const [button] of battleButtons) if (button) button.disabled = !battleNow() || !G.soundOn;
       const cnote = $("as-chat-note");
       if (cnote) {
         const c = chatNow();
@@ -451,6 +495,50 @@ var AudioPanel = (() => {
       write: (v) => { store.set("radioPreset", GameAudio.setRadioPreset(v)); syncAudioPanel(); preview("radio"); } });
     SettingRow.wire("as-spot", { values: ONOFF, read: spotNow,
       write: (v) => { if (rr()) rr().setSpotter(v === "on"); else store.set("spotter", v === "on"); GameAudio.uiTick(); syncAudioPanel(); } });
+    SettingRow.wire("as-battle", { values: ONOFF, read: () => (battleNow() ? "on" : "off"),
+      write: (v) => {
+        const on = v === "on";
+        stopBattlePreview();
+        if (on && !G.soundOn) setSound(true, true);
+        else if (on) GameAudio.init();
+        if (rr() && rr().setBattleEarcon) rr().setBattleEarcon(on);
+        else store.set("battleEarcon", on);
+        if (on && battlePreview) battlePreview.prepare();
+        battleNote(on ? "Use the four samples to learn the tones. RADIO CHECK requests one during a quiet straight." : "Battle tones are off. RADIO CHECK gives the usual status.");
+        syncAudioPanel();
+      } });
+    for (const [button, key] of battleButtons) {
+      if (button) button.onclick = () => {
+        // Audition never lifts a mute or turns the setting on, and never queues
+        // a sound after decoding. A cold first click prepares; the next plays.
+        const watching = typeof RealRace !== "undefined" && RealRace.status && RealRace.status().watch;
+        const p = G.player;
+        const raceUnsafe = G.state === "race" && ((G.cautionLevel && G.cautionLevel() !== 0)
+          || (p && ((p.brakeDemand || 0) > 0.15 || Math.abs(p.lateralAccel || 0) > (G.LAT_MAX || 30) * 0.5)));
+        if (!battleNow() || !G.soundOn || !battlePreview || watching || raceUnsafe
+            || (G.state !== "menu" && !G.paused)
+            || (rr() && rr().trafficBusy && rr().trafficBusy())
+            || (G.radio && G.radio.busy && G.radio.busy())
+            || (G.announcer && G.announcer.speaking && G.announcer.speaking())
+            || (GameAudio.radioVoicesLive && GameAudio.radioVoicesLive() > 0)) {
+          battleNote("Samples wait until sound is on and the radio is quiet, in a menu or pause."); return;
+        }
+        GameAudio.init();
+        if (!battlePreview.ready()) {
+          battlePreview.prepare(); battleNote("Preparing the tones. Press the sample again in a moment."); return;
+        }
+        const volume = 0.3 * Math.max(0, Math.min(1, +store.get("volRadio", 0.8) || 0));
+        if (battlePreview.play(key, volume)) battleNote(key.replace(":", " ") + ".");
+        else battleNote("The sample could not play. Check sound and voice volume.");
+      };
+    }
+    SettingRow.wire("as-focus", { values: FOCUS_VALUES, read: focusNow,
+      write: (v) => {
+        const db = +v, value = [0, 4, 8, 12].indexOf(db) >= 0 ? db : 0;
+        store.set("radioFocusDb", value);   // store first: a lazy stub must not lose this choice
+        if (GameAudio.setRadioFocusDb) GameAudio.setRadioFocusDb(value);
+        syncAudioPanel();
+      } });
     SettingRow.wire("as-comm", { values: COMM_VALUES, read: commNow,
       write: (v) => { if (rr()) rr().setComm(v); else store.set("commentary", v); GameAudio.uiTick(); syncAudioPanel(); } });
     // THE PRE-RACE ANNOUNCER (js/audio/announcer.js). Same shape, same master
@@ -869,6 +957,7 @@ var AudioPanel = (() => {
       // on its first frame. Restoring after would run one race's worth of
       // frames on the default voice and only correct on the next setEngine.
       applyStoredTone();
+      restoreFocus();
       // setMusic BEFORE setSound: setSound starts the menu track, and the
       // soundtrack's own switch defaults ON — a MUSIC OFF player would fetch and
       // decode menu.mp3 at boot before the switch was ever set.

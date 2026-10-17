@@ -308,6 +308,12 @@ function buildTeamPicker() {
       // The team-accent skin (--accent) was only ever written by the HUD's
       // first race tick, so the garage kept the LAST race's colours.
       try { document.documentElement.dataset.team = t.id; } catch (_) { /* no DOM */ }
+      // TEAM menu accents are concrete on :root (rather than a CSS var) so
+      // they also work before the HUD exists. Repaint that cached value when
+      // the player changes team in the garage picker; otherwise MENU ACCENT =
+      // TEAM stays on the previously selected team's colour until another
+      // appearance setting is touched.
+      try { if (typeof AppearanceOpts !== "undefined" && AppearanceOpts.applyAll) AppearanceOpts.applyAll(); } catch (_) { /* appearance is optional */ }
       store.set("driver", seat);
       setTeamPicker(false);
       // The garage (the one host) repaints its own 3D car for free —
@@ -463,8 +469,7 @@ function trackInFilter(t, filter, favs) {
 // hero still read Tracks.LIST[G.trackIdx], so Bahrain stayed in the detail
 // panel with nothing highlighted (apex10). Snap to the first tile that the
 // chip actually shows.
-function snapTrackToFilter() {
-  const filter = visibleTrackFilter();
+function snapTrackToFilter(filter = visibleTrackFilter()) {
   const favs = favList();
   const cur = Tracks.LIST[G.trackIdx];
   if (keepActiveId && !pinnedActive(cur)) keepActiveId = null;
@@ -482,7 +487,9 @@ function setTrackFilter(id, focus, keepDaily) {
   if (id !== "daily-open") store.set("trackFilter", id);
   if (!keepDaily && G.daily && G.daily.isActive()) G.daily.stop();
   if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
-  snapTrackToFilter();
+  // Explicit choices leave a custom circuit too. The passive-entry fallback
+  // keeps a designer's custom pick visible, but must not override this click.
+  snapTrackToFilter(id);
   // The chip rebuild is deferred through view transitions; the hero must not
   // keep describing the circuit the filter just hid (FINDINGS tracks-ui #1).
   updateTrackPreview();
@@ -1128,6 +1135,13 @@ function openTrackDetail() {
   if (!modal) return;
   const crns = TrackMaps.corners(t);
   document.getElementById("track-detail-name").textContent = t.name + (t.gp ? "  ·  " + t.gp : "");
+  // The canvas labels are part of the modal's accessible reading order. Keep
+  // them tied to the selected circuit rather than making every map sound like
+  // the same generic diagram when a player moves between tracks.
+  const mapCanvas = document.getElementById("track-detail-canvas");
+  if (mapCanvas) mapCanvas.setAttribute("aria-label", t.name + " circuit layout diagram");
+  const elevCanvas = document.getElementById("track-detail-elev");
+  if (elevCanvas) elevCanvas.setAttribute("aria-label", t.name + " elevation profile");
   const dz = TrackMaps.drsZones(t);
   const dir = TrackMaps.direction(t);
   const elev = TrackMaps.elevRange(t);

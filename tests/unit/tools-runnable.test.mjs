@@ -21,6 +21,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { makeClosedDbFaults, makeStorageFaults } from "../helpers/storage-faults.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TOOLS = path.join(ROOT, "tools");
@@ -42,6 +43,23 @@ function toolFiles() {
 }
 
 const FILES = toolFiles();
+
+test("storage fault fixtures deterministically model denial, quota, corruption and closed IDB", () => {
+  const f = makeStorageFaults({ initial: { "apex26.save": '{"v":1}' }, quotaBytes: 20 });
+  assert.equal(f.storage.getItem("apex26.save"), '{"v":1}');
+  f.set({ read: true });
+  assert.throws(() => f.storage.getItem("apex26.save"), { name: "SecurityError" });
+  f.set({ read: false, write: true });
+  assert.throws(() => f.storage.setItem("apex26.save", "x"), { name: "SecurityError" });
+  f.set({ write: false, quotaBytes: 1 });
+  assert.throws(() => f.storage.setItem("apex26.save", "too large"), { name: "QuotaExceededError" });
+  f.set({ quotaBytes: Infinity }).corrupt("apex26.save", "not-json");
+  assert.equal(f.storage.getItem("apex26.save"), "not-json");
+  const closed = makeClosedDbFaults();
+  closed.close();
+  assert.throws(() => closed.db.transaction("kv"), { name: "InvalidStateError" });
+  assert.deepEqual(closed.events.map((e) => e.fault || e.op), ["close", "InvalidStateError"]);
+});
 
 /** Absolute path of a tool by BASENAME. tools/ is grouped into subdirectories
  *  (lib, ci, check, gen, shot, gfx, track, car, ui, lighting, mcp, net, env)
@@ -295,6 +313,63 @@ test("the MCP-facing entry points answer without touching a browser or a network
     else if (!c.want.test(text)) failed.push(`${path.basename(c.args[0])}: output missing ${c.want}`);
   }
   assert.deepEqual(failed, [], "an MCP-facing entry point does not answer");
+});
+
+test("CLI clarity (#1702 #1699 #1696 #1694): help paths answer fast without side effects, typos are errors", () => {
+  const at = (rel) => path.join(ROOT, rel);
+  const run = (rel, ...args) => spawnSync(rel.endsWith(".py") ? "python3" : process.execPath, [at(rel), ...args],
+    { encoding: "utf8", cwd: ROOT, timeout: 15000 });
+  const text = (r) => `${r.stdout}\n${r.stderr}`;
+  // --help / bare: usage, exit 0. The 15 s timeout is the "no browser, no replay, no scan" assertion.
+  for (const [rel, args, want] of [
+    ["tools/ci/pick-unit-slices.mjs", ["--help"], /usage:.*pick-unit-slices/],
+    ["tools/ci/geometry-paths.mjs", [], /usage:.*geometry-paths/],
+    ["tools/ci/playwright-occupancy.mjs", [], /usage:.*playwright-occupancy/],
+    ["tools/ci/spec-staleness.mjs", ["--help"], /usage:.*spec-staleness/],
+    ["tools/ci/run-playwright.mjs", ["--help"], /usage:.*run-playwright/],
+    ["tools/shot/baked-scenery.mjs", ["--help"], /--limit/],
+    ["tools/check/scan-globals.mjs", ["--help"], /usage:.*scan-globals/],
+    ["tools/check/font-digits.py", ["--help"], /usage:.*font-digits/],
+    ["tools/check/extract-module.mjs", ["--help"], /usage:.*extract-module/],
+    ["tools/shot/cam-motion.mjs", ["--help"], /usage:/],
+    ["tools/shot/cam-corners.mjs", ["--help"], /usage:/],
+  ]) {
+    const r = run(rel, ...args);
+    assert.equal(r.status, 0, `${rel} ${args.join(" ")}: exit ${r.status} ${r.stderr}`);
+    assert.match(r.stdout, want, rel);
+  }
+  // pick-unit-slices --help must print usage, not a computed plan.
+  assert.doesNotMatch(run("tools/ci/pick-unit-slices.mjs", "--help").stdout, /reason|fail-safe plan/);
+  // scan-globals --help writes no artifact.
+  const graph = at("artifacts/dep-graph.json");
+  const before = fs.existsSync(graph) ? fs.statSync(graph).mtimeMs : null;
+  run("tools/check/scan-globals.mjs", "--help");
+  assert.equal(fs.existsSync(graph) ? fs.statSync(graph).mtimeMs : null, before, "scan-globals --help wrote dep-graph.json");
+  // An unknown flag exits non-zero and says so, before any browser or VM boots.
+  for (const [rel, args] of [
+    ["tools/shot/baked-scenery.mjs", ["--bogus"]],
+    ["tools/shot/repro-shot.mjs", ["x.json", "--bogus"]],
+    ["tools/shot/shot-survey.mjs", ["--tema"]],
+    ["tools/shot/track-session.mjs", ["--serve", "--bogus"]],
+    ["tools/shot/cam-motion.mjs", ["--bogus"]],
+    ["tools/shot/agent.mjs", ["monza", "world", "--tema=x"]],
+    ["tools/shot/shot.mjs", ["monza", "0.1", "--bogus"]],
+    ["tools/shot/garage-tap.mjs", ["--bogus"]],
+    ["tools/check/physics-tune-sweep.mjs", ["--tema"]],
+    ["tools/check/defend-duel.mjs", ["--tema"]],
+    ["tools/check/player-dyn.mjs", ["--tema"]],
+  ]) {
+    const r = run(rel, ...args);
+    assert.ok(r.status === 1 || r.status === 2, `${rel} ${args.join(" ")}: exit ${r.status}`);
+    assert.match(text(r), /unknown flag/, rel);
+  }
+  // A bad extract-module range is a message, not a SyntaxError stack. js/game.js lines 1-3 open a comment.
+  const bad = run("tools/check/extract-module.mjs", "js/game.js", "1", "3");
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /does not parse as a program/);
+  assert.doesNotMatch(bad.stderr, /\n\s+at /);
+  // baked-scenery documents --limit (the cheap smoke).
+  assert.match(fs.readFileSync(at("tools/shot/baked-scenery.mjs"), "utf8"), /--limit=1/);
 });
 
 test("offline-precache-check --help prints usage and does not launch Chromium", () => {
@@ -692,4 +767,11 @@ test("occlusion-estimate resolves game-vm and --help exits without booting it", 
     { encoding: "utf8", cwd: ROOT, timeout: 10000 });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /usage:.*occlusion-estimate/);
+});
+
+test("profile-gameloop.mjs: page-ready waits come from APEX_PROFILE_WAIT_MS, never below 20 s", () => {
+  const src = fs.readFileSync(tool("profile-gameloop.mjs"), "utf8");
+  assert.match(src, /APEX_PROFILE_WAIT_MS/);
+  assert.doesNotMatch(src, /timeout:\s*20000/, "a literal 20 s wait would ignore the env override");
+  assert.equal((src.match(/timeout:\s*WAIT_MS/g) || []).length, 2, "both waitForFunction calls use WAIT_MS");
 });

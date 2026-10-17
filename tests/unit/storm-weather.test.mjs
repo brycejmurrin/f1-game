@@ -1,12 +1,12 @@
 // storm-weather — the STORM weather (⛈, js/race/storm.js): above rain on the
 // arc ladder, rain's grip and tread, heavier rain, a deterministic lightning
 // schedule that never flashes under reduced motion, a safety-car start and a
-// safety car while a storm rolls through, and a RACE SETTINGS chip that a
-// friend room never offers (js/net/lobby.js refuses the word).
+// safety car while a storm rolls through, and a RACE SETTINGS chip that friend
+// rooms offer too (js/net/lobby.js lists the word).
 //
 // The real storm.js, weather-arc.js, tyre-model.js, particles.js,
 // race-control.js and race-settings.js in Node VMs — no browser, < 1 s. The
-// in-game half (the real game.js frame: reduced-motion strike, room coercion,
+// in-game half (the real game.js frame: reduced-motion strike, room staging,
 // grip) is tests/unit/storm-vm.test.mjs.
 //
 // Run: node --test tests/unit/storm-weather.test.mjs  (npm run test:tooling-fast)
@@ -104,7 +104,7 @@ test("storm rain is heavier than rain: more streaks drawn", () => {
   assert.ok(peak.storm >= peak.rain * 1.6, `storm ${peak.storm} vs rain ${peak.rain}`);
 });
 
-test("MIXED: a drawn rain escalates to storm solo, never in a friend room", () => {
+test("MIXED: a drawn rain escalates to storm, in a friend room too", () => {
   // from dry the drawn list is [overcast, wet, rain, fog]: 0.6 → rain; storm odds 0.1 < 0.25
   const hash = (_s, _r, _k, n) => (n === "to" ? 0.6 : n === "storm" ? 0.1 : 0.5);
   const solo = bootArc(hash);
@@ -113,7 +113,7 @@ test("MIXED: a drawn rain escalates to storm solo, never in a friend room", () =
   const room = bootArc(hash);
   room.G.raceWeather = "dry";
   room.G.netRoom = true;
-  assert.equal(room.wa.planFor().to, "rain", "a room's plan never names storm (lobby.js would refuse the packet)");
+  assert.equal(room.wa.planFor().to, "storm", "a room's plan may name storm (lobby.js lists it)");
   const odds = bootArc((_s, _r, _k, n) => (n === "to" ? 0.6 : n === "storm" ? 0.4 : 0.5));
   odds.G.raceWeather = "dry";
   assert.equal(odds.wa.planFor().to, "rain", "1 in 4 only");
@@ -220,21 +220,31 @@ test("storm SC flies with CAUTIONS off, is bounded, and coexists with a scripted
   assert.equal(both.rc.level, 1, "the storm leaves; the script's hold remains");
 });
 
-test("RACE SETTINGS: the ⛈ STORM chip is offered solo, hidden in a room; a room races it as rain", () => {
+test("RACE SETTINGS: the ⛈ STORM chip is offered solo and in a room, matching the lobby's WEATHER list", () => {
   const ctx = context();
   run(ctx, "js/race/race-settings.js");
   const RS = ctx.RaceSettings;
-  const ids = (room) => Array.from(RS.weatherOpts(room), ([id]) => id);
-  assert.ok(ids(false).includes("storm"));
-  assert.equal(RS.weatherOpts(false).find(([id]) => id === "storm")[1], "⛈ STORM");
-  assert.ok(!ids(true).includes("storm"), "no STORM in a friend room");
-  assert.deepEqual(ids(true), ["dry", "wet", "rain", "overcast", "fog"], "exactly the five names lobby.js accepts");
-  assert.equal(RS.roomWeather("storm"), "rain");
-  assert.equal(RS.roomWeather("fog"), "fog");
+  const ids = Array.from(RS.weatherOpts(), ([id]) => id);
+  assert.equal(RS.weatherOpts().find(([id]) => id === "storm")[1], "⛈ STORM");
   const lobby = read("js/net/lobby.js").match(/const WEATHER = new Set\((\[[^\]]*\])\)/);
-  if (lobby && !JSON.parse(lobby[1]).includes("storm")) {
-    assert.deepEqual(JSON.parse(lobby[1]).slice().sort(), ids(true).slice().sort(), "the room list is the lobby's list");
-  }
-  const src = read("js/race/race-settings.js");
-  assert.match(src, /SettingRow\.paint\("rs-weather", G\.raceWeather, weatherOpts\(netRoom\)\)/, "the sheet paints the room-aware list");
+  assert.deepEqual(JSON.parse(lobby[1]).slice().sort(), ids.slice().sort(), "the sheet's list is the lobby's list");
+  assert.equal(RS.roomWeather, undefined, "no room coercion left");
+});
+
+test("__apex.race() keeps weather \"storm\" instead of racing it dry", () => {
+  const src = read("js/agent/apex.js");
+  const m = src.match(/G\.raceWeather = \(([^?]*)\? weather : "dry"/);
+  assert.ok(m, "race() weather mapping found");
+  assert.match(m[1], /weather === "storm"/);
+});
+
+test("R2: a practice rewind does not extend the storm SC (raceT jumps back, the window follows)", () => {
+  const { rc, G, adv, S } = bootRC({ raceWeather: "rain" });
+  adv(120);
+  G.raceWeather = "storm";
+  adv(100);
+  assert.equal(rc.level, 3, "storm SC out");
+  G.raceT -= 100;                      // driving-coach restoreWorld: the clock comes back to before the storm
+  adv(S.SC_ROLL_S - 100 + 5);          // 150 s of SC have now been flown in all
+  assert.equal(rc.level, 0, "the SC window counts the time flown, not the clock value");
 });

@@ -1,0 +1,5 @@
+interface:
+  display_name: Compound Verify
+  short_description: Verify changed behavior with recorded evidence
+policy:
+  allow_implicit_invocation: false

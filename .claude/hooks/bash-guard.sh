@@ -131,6 +131,22 @@ PRE='((sudo|env|exec|nice|nohup|command|setsid|doas|stdbuf([[:space:]]+-[^[:spac
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [ -n "$ROOT" ] || ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
+# --- git checkout --theirs/--ours <path> on a multi-hunk conflict (#2429) -----
+# Advisory only: taking one whole side keeps it for EVERY hunk, and --theirs
+# once dropped a unique fix. tools/ci/sync-pr.mjs is the sanctioned path.
+if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}git([[:space:]]+-[^[:space:]]+)*[[:space:]]+(checkout|restore)[[:space:]].*--(theirs|ours|conflict=)"; then
+  set -f
+  for w in $(printf '%s\n' "$SCAN" | grep -E "git([[:space:]]+-[^[:space:]]+)*[[:space:]]+(checkout|restore)[[:space:]]" | head -1 | sed -E 's/.*(checkout|restore)//'); do
+    case "$w" in -*|\;|\&*|\|*) continue ;; esac
+    [ -f "$w" ] || continue
+    N=$(grep -c '^<<<<<<< ' "$w" 2>/dev/null || true)
+    if [ "${N:-0}" -ge 2 ]; then
+      echo "WARNING: $w has $N conflict hunks; this keeps one side for all of them (tools/ci/sync-pr.mjs resolves per hunk)." >&2
+    fi
+  done
+  set +f
+fi
+
 # --- pkill -f / killall on the browser or test tree ---------------------------
 # Command position only (start of line or after ; & | ( ), so a commit message
 # or echo that merely MENTIONS the words is not blocked.
@@ -312,35 +328,11 @@ if [ "${APEX_RUN_CANCEL_OK:-}" != 1 ] && ! printf '%s' "$SCAN" | grep -Eq 'APEX_
   fi
 fi
 
-# --- the queue hold on git push (AGENTS.md rule 4) -------------------------------
-# Prose until 2026-10-15: "if queue-depth.mjs says hold, commit locally only".
-# Enforced here on every `git … push` in the command (the same shape the
-# fallback regex above reads; heredoc bodies and quoted text are not commands).
-# The gauge is skipped when it cannot answer (no token, API down: rc 3 — the
-# push proceeds with a note), in a checkout whose origin is not this repository
-# (the hook's own tests), under APEX_GUARD_PROBE, and with APEX_PUSH_HOLD=0 in
-# the environment or the command, which is the override for "the user asked
-# for this push now". A hold reads as exit 1 and the push is refused with the
-# gauge's own line; retry when `node tools/ci/queue-depth.mjs` says ok.
-# A push that starts NO CI is not held (#2182, 2026-10-15): the gauge gets the
-# command (`--push`), resolves every destination branch, and answers
-# `= queue skip …` (exit 0) when each has no open PR or a draft PR without
-# `run-ci` — a handoff push before a long wait (rule 12) must not be lost to a
-# jammed queue. An unresolvable target or a failed PR lookup measures as before.
-PUSH_RE="(^|[;&|({\`][[:space:]]*)${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|\$)"
-if [ -z "${APEX_GUARD_PROBE:-}" ] && [ "${APEX_PUSH_HOLD:-}" != 0 ] && ! printf '%s' "$SCAN" | grep -Eq 'APEX_PUSH_HOLD=0' \
-   && printf '%s' "$SCAN" | grep -Eq "$PUSH_RE" \
-   && [ -f "$ROOT/tools/ci/queue-depth.mjs" ] \
-   && git -C "$ROOT" remote get-url origin 2>/dev/null | grep -q 'f1-game'; then
-  QLINE=$(cd "$ROOT" && timeout -k 5 "${APEX_QUEUE_TIMEOUT:-90}" node tools/ci/queue-depth.mjs --push "$SCAN" 2>/dev/null); QRC=$?
-  case "$QRC" in
-    0) case "$QLINE" in "= queue skip"*) echo "bash-guard: $QLINE" >&2 ;; esac ;;
-    1) echo "BLOCKED: ${QLINE:-= queue hold}" >&2
-       echo "AGENTS.md rule 4: a push now only adds queue wait for every session. Commit locally; push when 'node tools/ci/queue-depth.mjs' says ok (poll it, do not loop on pushes). APEX_PUSH_HOLD=0 git push … overrides when the user asked for this push now." >&2
-       exit 2 ;;
-    *) echo "bash-guard: queue-depth could not answer (rc $QRC: no token, API unreachable or timed out) — the push is not held." >&2 ;;
-  esac
-fi
+# No queue hold on git push (retired 2026-10-16, the CI/CD review #2333 finding 7).
+# The hold held pushes for hours on 2026-10-15 and then released ~30 sessions
+# in one minute; a held push runs later and costs the same slot-minutes, and
+# the pool ran at 39 of 40 slots all day regardless. queue-depth.mjs stays an
+# informational gauge.
 
 # --- guards before git commit ---------------------------------------------------
 # WHICH COMMANDS ARE COMMITS (2026-10-04). The regex this replaced matched
@@ -475,6 +467,16 @@ EOF
   fi
   if [ -n "${APEX_GUARD_PROBE:-}" ] && [ "$DOCS_ONLY" = 1 ]; then
     echo "bash-guard probe: commit docs-only" >&2; exit 0
+  fi
+  # A TREE WITH NO tools/ (the track-survey-assets image branches) CANNOT RUN
+  # THE GUARDS: skip with a note instead of leaving the model to find
+  # APEX_SKIP_GUARDS=1 (#2428). Only when every committed path sits outside
+  # js/ css/ tools/ tests/ and the generated shell files; `commit -a` stages at
+  # commit time, so it never skips.
+  if [ ! -d "$ROOT/tools/ci" ] && [ ! -d "$ROOT/tools/check" ] && [ "$C_ALL" != "1" ] && [ -n "$(printf '%s' "$COMMITTED" | tr -d '[:space:]')" ] \
+     && ! printf '%s\n' "$COMMITTED" | grep -Eq '^(js/|css/|tools/|tests/)|^(index\.html|sw\.js|version\.json|package\.json|CHANGELOG\.md)$'; then
+    echo "guards skipped: no tools/ in this tree" >&2
+    exit 0
   fi
   if [ "$DOCS_ONLY" = 1 ]; then
     T0=$(date +%s)

@@ -605,7 +605,7 @@ const LOBBY_SRC = fs.readFileSync(path.join(ROOT, "js/net/lobby.js"), "utf8");
 test("host remove: each guest row exposes a host-only remove control", () => {
   assert.match(LOBBY_SRC, /function hostRemoveRow/);
   assert.match(LOBBY_SRC, /dataset\.rosterRemove = id/);
-  assert.match(LOBBY_SRC, /hostRemoveRow\(row, peerId\)/);
+  assert.match(LOBBY_SRC, /hostRemoveRow\(verifyRow\(li, id\), id\)/);
 });
 
 test("host remove: evict stays in the room, broadcasts lobby LEFT, and rotates the code", () => {

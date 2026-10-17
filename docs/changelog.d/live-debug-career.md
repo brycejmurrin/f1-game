@@ -1,0 +1,2 @@
+Fixed: importing a career backup with a non-text team, a non-numeric year or a bad custom team name is refused instead of crashing the import card; a settings-file career with unreadable money is skipped rather than restored as a zero-credit career; a backup with an out-of-range round no longer overwrites a newer local season; binding PageDown/Home/arrows no longer scrolls the menu.
+Fixed: a career save or backup with an unreadable number in a field such as rep, year or budget level no longer crashes the import.

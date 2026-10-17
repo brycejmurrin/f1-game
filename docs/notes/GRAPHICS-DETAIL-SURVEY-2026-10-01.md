@@ -281,7 +281,7 @@ frame time).
   `SSSNode`, `SunLight`/`CSMShadowNode`): every one is an ES module importing
   `three/webgpu` and `three/tsl`, loadable only through the import-map island
   (`index.html:3303-3309` maps `three/addons/` to the generated
-  `vendor/three-0.186.0/addons/`, which only `tools/gen/vendor-three.mjs` may
+  `vendor/three-0.186.1/addons/`, which only `tools/gen/vendor-three.mjs` may
   extend). Using them would make the look TLX-only — a parity gap by construction.
   Read them as reference ports instead (the r186 `SSAONode` Vogel disk and the
   `SMAANode` fixes are the two worth porting by hand).

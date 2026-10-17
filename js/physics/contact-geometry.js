@@ -1,4 +1,4 @@
-/* Oriented boxes in the local (along-road, right) plane. No car mutation. */
+/* Physical road boundaries and oriented boxes in the local road plane. No car mutation. */
 "use strict";
 const ContactGeometry = (function () {
   const HALF_LONG = 2.4, HALF_WIDE = 1;
@@ -118,7 +118,46 @@ const ContactGeometry = (function () {
     out.closing = closing; out.magnitude = j;
     return out;
   }
+  // Shared driving/contact/takeover boundary. Caller-owned output and post scratch;
+  // preserve side classification from the candidate x before any clamping.
+  function wallLimits(track, s, x, out, postLim, previous) {
+    let wallR = Tracks.wallAt(track, s, 1), wallL = Tracks.wallAt(track, s, -1);
+    let laneMin = 0, pitSd = 0;
+    const p = track.pit;
+    // Takeover raw bodies have no scenery colliders. Preserve the validated
+    // side across a solid feature, including a changing wall face along s.
+    let pitX = previous ? previous.x : x, previousFace = null;
+    if (previous && p && !p.painted) {
+      const pk = ((Math.round(previous.s / track.total * track.n) % track.n) + track.n) % track.n;
+      if (p.v[pk] >= 0.98) previousFace = track.hw[pk] + p.bands.verge;
+      else if (p.w[pk] >= TrackPit.EXIT_WALL_W && ((previous.s - p.sOut) % track.total + track.total) % track.total < p.exitRoadM)
+        previousFace = track.hw[pk] + p.bands.verge * p.v[pk];
+    }
+    if (p && !p.painted) {
+      const k = ((Math.round(s / track.total * track.n) % track.n) + track.n) % track.n;
+      if (p.v[k] >= 0.98) {
+        pitSd = p.side;
+        const face = track.hw[k] + p.bands.verge;
+        if ((previousFace === null ? pitX * pitSd < face + 0.125 : pitX * pitSd < previousFace + 0.125)) { if (pitSd > 0) wallR = Math.min(wallR, face - 1.1); else wallL = Math.min(wallL, face - 1.1); }
+        else laneMin = track.hw[k] + p.off.fastIn + 1.0;
+      } else if (p.w[k] >= TrackPit.EXIT_WALL_W && ((s - p.sOut) % track.total + track.total) % track.total < p.exitRoadM) {
+        pitSd = p.side;
+        const wallLat = track.hw[k] + p.bands.verge * p.v[k];
+        if ((previousFace === null ? pitX * pitSd < wallLat + 0.125 : pitX * pitSd < previousFace + 0.125)) { if (pitSd > 0) wallR = Math.min(wallR, wallLat - 1.15); else wallL = Math.min(wallL, wallLat - 1.15); }
+        else laneMin = wallLat + 0.30 + 1.0;
+      }
+    }
+    if (track.posts && track.posts.length) {
+      Tracks.postLimits(track, s, previous ? previous.x : x, postLim);
+      if (postLim.r < wallR) wallR = postLim.r;
+      if (postLim.l < wallL) wallL = postLim.l;
+      if (postLim.minOut > laneMin) { laneMin = postLim.minOut; pitSd = postLim.side; }
+    }
+    out.r = wallR; out.l = wallL; out.laneMin = laneMin; out.side = pitSd;
+    return out;
+  }
+
   // `radius` is internal to overlap()/sweep(); nothing outside ever read it.
-  return Object.freeze({ overlap, sweep, impulse, INERTIA, FRICTION });
+  return Object.freeze({ overlap, sweep, impulse, wallLimits, INERTIA, FRICTION });
 })();
 Object.freeze(ContactGeometry);

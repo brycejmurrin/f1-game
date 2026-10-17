@@ -3,7 +3,9 @@
  * Quest Touch (xr-standard mapping): buttons[0] trigger, [1] squeeze,
  * [3] thumbstick press, [4] A/X, [5] B/Y; axes[2]/[3] thumbstick.
  * Right trigger = throttle, left trigger = brake, thumbstick X = steer,
- * A/X = recenter (caller), B/Y = pause. Pure mapping + edge latch so unit
+ * A/X = recenter (caller), B/Y = pause. With a granted DOM overlay and
+ * an open menu, stick = navigation, A/X = select, B/Y = back. Squeeze
+ * never snaps the seated gaze. Pure mapping + edge latch so unit
  * tests need no WebXR runtime; js/xr/xr-session.js feeds live gamepads.
  */
 "use strict";
@@ -41,12 +43,14 @@ const XrInput = (function () {
    * `roll` is a steer command in −1..1 (the name is historical); inject()
    * hands it to Input as a STICK (`steer`), never through the tilt pipeline.
    */
-  function mapFrame(sources, prev) {
-    let thr = 0, brk = 0, stickX = 0, held = 0;
+  function mapFrame(sources, prev, options) {
+    const menuOpen = !!(options && options.menuOpen);
+    const menuNav = menuOpen && !!options.overlay;
+    let thr = 0, brk = 0, stickX = 0, stickY = 0, held = 0;
     let primaryDown = false, secondaryDown = false;
     const list = sources || [];
     // XRInputSourceArray is indexed/iterable, but has no Array.prototype.some.
-    let hasLeft = false;
+    let hasLeft = false, hasStick = false, hasGamepad = false;
     for (let i = 0; i < list.length; i++)
       if (usableStick(list[i]) && list[i].handedness === "left") hasLeft = true;
     for (let i = 0; i < list.length; i++) {
@@ -54,6 +58,7 @@ const XrInput = (function () {
       if (!src || src.targetRayMode === "gaze") continue;
       const gp = src.gamepad;
       if (!gp) continue;
+      hasGamepad = true;
       const hand = src.handedness;   // "left" | "right" | "none"
       const t = btn(gp, BTN_TRIGGER);
       if (hand === "right") thr = Math.max(thr, t);
@@ -65,26 +70,36 @@ const XrInput = (function () {
       const sx = axis(gp, AXIS_STICK_X);
       // Prefer left stick for steer when both present; else any.
       if (usableStick(src)) {
-        if (hand === "left" || (!hasLeft && hand !== "right" && !stickX)) stickX = sx;
-        else if (hand === "right" && !hasLeft) stickX = sx;
+        hasStick = true;
+        if (hand === "left" || (!hasLeft && hand !== "right" && !stickX) || (hand === "right" && !hasLeft)) {
+          stickX = sx; stickY = axis(gp, AXIS_STICK_Y);
+        }
       }
       if (btn(gp, BTN_PRIMARY) > 0.5) primaryDown = true;
       if (btn(gp, BTN_SECONDARY) > 0.5) secondaryDown = true;
-      // Squeeze on either hand = look-back hold bit (Input.remoteSample.held).
-      if (btn(gp, BTN_SQUEEZE) > 0.5) held = 1;
+      // Squeeze never turns the seated XR anchor; look behind physically.
       void BTN_STICK; void AXIS_STICK_Y;
     }
     const latch = prev || { primary: false, secondary: false };
     const events = [];
     let recenter = false;
-    if (primaryDown && !latch.primary) recenter = true;
-    if (secondaryDown && !latch.secondary) events.push("pause");
+    if (primaryDown && !latch.primary) {
+      if (menuNav) events.push("navSelect"); else recenter = true;
+    }
+    if (secondaryDown && !latch.secondary) events.push(menuNav ? "navBack" : "pause");
+    const direction = menuNav && Math.max(Math.abs(stickX), Math.abs(stickY)) > 0.55
+      ? (Math.abs(stickY) >= Math.abs(stickX) ? (stickY < 0 ? "navUp" : "navDown") : (stickX < 0 ? "navLeft" : "navRight")) : null;
+    if (direction && direction !== latch.direction) events.push(direction);
+    latch.direction = direction;
+    if (menuOpen) { thr = 0; brk = 0; stickX = 0; }
+
     latch.primary = primaryDown;
     latch.secondary = secondaryDown;
 
     const steer = XrRig.stickToSteer(stickX);
     return {
-      sample: { roll: steer, thr: thr, brk: brk, held: held },
+      sample: { roll: hasStick ? steer : null, thr: thr, brk: brk, held: held },
+      driving: hasGamepad && !(options && options.driving === false),
       events,
       recenter,
       latch,
@@ -97,7 +112,15 @@ const XrInput = (function () {
   function inject(input, mapped) {
     if (!input || !mapped) return false;
     const s = mapped.sample;
-    input.remoteSample({ steer: typeof s.roll === "number" ? s.roll : 0, thr: s.thr, brk: s.brk, held: s.held | 0 });
+    if (mapped.driving === false) {
+      // A disconnect or EXISTING CONTROLS releases only our lane. A phone may
+      // have supplied a newer sample since our last frame; never clear it.
+      if (input.remoteLost) input.remoteLost("xr");
+    } else {
+      const sample = { source: "xr", thr: s.thr, brk: s.brk, held: s.held | 0 };
+      if (typeof s.roll === "number") sample.steer = s.roll;
+      input.remoteSample(sample);
+    }
     const ev = mapped.events || [];
     for (let i = 0; i < ev.length; i++) input.remoteEvent(ev[i]);
     return true;

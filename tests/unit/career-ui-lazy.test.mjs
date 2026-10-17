@@ -81,7 +81,7 @@ test("manifest keeps career-ui.js in LAZY_CAREER_UI and the boot stub on FULL", 
   const m = createRequire(import.meta.url)("../../tools/manifest.cjs");
   assert.ok(m.FULL.includes("js/career/career-ui-boot.js"));
   assert.ok(!m.FULL.includes("js/career/career-ui.js"));
-  assert.deepEqual(m.LAZY_CAREER_UI, ["js/career/career-ui.js"]);
+  assert.deepEqual(m.LAZY_CAREER_UI, ["js/career/career-planning-ui.js", "js/career/career-ui.js"]);
 });
 
 function delayedCareer() {

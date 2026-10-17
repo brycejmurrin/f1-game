@@ -232,7 +232,12 @@ function createPool(opts) {
       if (closed) return;
       closed = true;
       while (queue.length) queue.shift().reject(new Error("game-vm-pool: pool closed before the job ran"));
-      const gone = slots.map((slot) => { slot.current = null; return kill(slot); });
+      const gone = slots.map((slot) => {
+        const entry = slot.current;
+        slot.current = null;
+        if (entry) entry.reject(new Error(`game-vm-pool: ${entry.job.circuit} — pool closed while the job was running`));
+        return kill(slot);
+      });
       await Promise.all(gone);
     },
   };

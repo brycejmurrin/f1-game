@@ -24,11 +24,7 @@ const InputHoldButtons = (function () {
     // re-trips the off-track auto-rescue ("throttle held but not moving").
     const holdBtns = [];
     function holdReleasePointer(pointerId) {
-      for (const h of holdBtns) {
-        h.anchors && h.anchors.delete(pointerId);
-        h.live && h.live.delete(pointerId);
-        if (h.ids.delete(pointerId) && h.ids.size === 0) { h.apply(false); h.level && h.level(0); }
-      }
+      for (const h of holdBtns) h.release(pointerId);
     }
     function holdReleaseAll(keepLatch) {
       // A LATCH DROPS HERE on the everything-off paths (window blur, page hidden,
@@ -40,6 +36,7 @@ const InputHoldButtons = (function () {
       for (const h of holdBtns) {
         h.ids.clear();
         h.anchors && h.anchors.clear();
+        h.levels && h.levels.clear();
         h.live && h.live.clear();
         h.apply(false);
         h.level && h.level(0);
@@ -108,8 +105,26 @@ const InputHoldButtons = (function () {
       const dir = (opts && opts.dir) || 1;
       const ids = new Set();
       const anchors = level ? new Map() : null;   // pointerId -> axis pos at touch-down
+      const levels = level ? new Map() : null;    // pointerId -> current travel
       const live = new Map();                     // pointerId -> visible at pointerdown
-      holdBtns.push({ ids, apply, level, anchors, el, live });
+      // Every contact holds independently: easing or releasing one finger must
+      // not override another finger's stronger press. Both release routes use
+      // the same aggregation, including window capture before the local event.
+      function paintLevel() {
+        if (!level) return;
+        let strongest = 0;
+        for (const value of levels.values()) strongest = Math.max(strongest, value);
+        level(strongest);
+      }
+      function release(pointerId) {
+        anchors && anchors.delete(pointerId);
+        levels && levels.delete(pointerId);
+        live.delete(pointerId);
+        if (!ids.delete(pointerId)) return;
+        if (ids.size === 0) apply(false);
+        paintLevel();
+      }
+      holdBtns.push({ ids, apply, level, anchors, levels, el, live, release });
       el.addEventListener("pointerdown", e => {
         if (e.pointerType === "mouse" && e.button !== 0) return;   // a right-click opens a context menu and may never send pointerup
         try { el.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone (cancelled between down and here); the button still works uncaptured */ }
@@ -121,27 +136,27 @@ const InputHoldButtons = (function () {
         ids.add(e.pointerId);
         live.set(e.pointerId, !holdTargetGone(el));
         if (firstContact) apply(true);
-        if (level) { anchors.set(e.pointerId, axis === "x" ? e.clientX : e.clientY); level(1); }
+        if (level) {
+          anchors.set(e.pointerId, axis === "x" ? e.clientX : e.clientY);
+          levels.set(e.pointerId, 1);
+          paintLevel();
+        }
       });
       if (level) el.addEventListener("pointermove", e => {
         const a = anchors.get(e.pointerId);
         if (a == null) return;
         if (axis === "x") {
           const ease = Math.max(0, (e.clientX - a) * (-dir) - PEDAL_DEAD_PX);
-          level(clamp(1 - ease / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));
+          levels.set(e.pointerId, clamp(1 - ease / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));
+          paintLevel();
           return;
         }
         const up = Math.max(0, a - e.clientY - PEDAL_DEAD_PX);
-        level(clamp(1 - up / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));
+        levels.set(e.pointerId, clamp(1 - up / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));
+        paintLevel();
       });
-      function release(e) {
-        anchors && anchors.delete(e.pointerId);
-        live.delete(e.pointerId);
-        if (!ids.delete(e.pointerId)) return;
-        if (ids.size === 0) { apply(false); if (level) level(0); }
-      }
-      el.addEventListener("pointerup", release);
-      el.addEventListener("pointercancel", release);
+      el.addEventListener("pointerup", (e) => release(e.pointerId));
+      el.addEventListener("pointercancel", (e) => release(e.pointerId));
       // NOT pointerleave. setPointerCapture fires a boundary pointerleave as it
       // retargets (holdSetupCtl in js/game.js documents the same trap). A second
       // finger on a turn arrow does the same to a held GAS. Window-level
@@ -152,7 +167,7 @@ const InputHoldButtons = (function () {
       // drop a thumb that is still down.
       el.addEventListener("lostpointercapture", function (e) {
         if (!lostCaptureShouldRelease(el, e.pointerId)) return;
-        release(e);
+        release(e.pointerId);
       });
     }
 

@@ -79,7 +79,7 @@ function load(hooks = {}) {
     },
     postLimits() {},
   };
-  for (const f of ["js/core/mat4.js", "js/physics/wall-clamp.js"]) {
+  for (const f of ["js/core/mat4.js", "js/physics/contact-geometry.js", "js/physics/wall-end-face.js", "js/physics/wall-clamp.js"]) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
   }
   return {
@@ -389,3 +389,23 @@ test("game.js hands WallClamp.apply a pooled ctx, not a per-call literal", () =>
   assert.doesNotMatch(game, /WallClamp\.apply\(c, \{/);
   assert.match(game, /const _wallCtx = \{[^\n]*addShake\(d\)/);
 });
+
+for (const side of [-1, 1]) {
+  test(`driving keeps pit road/lane and exit boundaries (side ${side})`, () => {
+    const { ctx, WallClamp } = load();
+    ctx.Tracks.wallAt = () => 30;
+    for (const exit of [false, true]) {
+      for (const lane of [false, true]) {
+        const lat = exit ? 11 : 12;
+        const track = { total: 1000, n: 1, hw: [10], pit: {
+          side, painted: false, v: [exit ? 0.5 : 1], w: [1], bands: { verge: 2 },
+          off: { fastIn: 3 }, sOut: 0, exitRoadM: 30,
+        } };
+        const c = noseInCar({ human: false, x: side * (lat + (lane ? 0.2 : -0.2)) });
+        WallClamp.apply(c, baseCtx({ track }));
+        const expected = lane ? (exit ? 12.3 : 14) : lat - (exit ? 1.15 : 1.1);
+        assert.equal(c.x, side * expected);
+      }
+    }
+  });
+}
