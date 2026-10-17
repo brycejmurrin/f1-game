@@ -74,15 +74,18 @@ test("arms: parse, reject unknown, interleave A B C A B C", () => {
   assert.deepEqual(s, ["tlx1", "tlxgpu1", "glx1", "tlx2", "tlxgpu2", "glx2"]);
   // the pins: GLX = gfxBackend webgl2; WebGPU = tlxForceGL "0"; default clears both
   assert.deepEqual(L.ARMS.glx.set, { "apex26.gfxBackend": "webgl2" });
-  assert.deepEqual(L.ARMS.tlxgpu.set, { "apex26.tlxForceGL": "0" });
-  assert.deepEqual(L.ARMS.tlx.set, {});
-  assert.ok(L.ARMS.tlx.del.includes("apex26.gfxBackend") && L.ARMS.tlx.del.includes("apex26.tlxForceGL"));
+  // an unset pick needs a WebGPU adapter to default to TLX (renderer-boot.js); the simulator has none
+  assert.deepEqual(L.ARMS.tlx.set, { "apex26.gfxBackend": "three" });
+  assert.deepEqual(L.ARMS.tlxgpu.set, { "apex26.gfxBackend": "three", "apex26.tlxForceGL": "0" });
+  assert.ok(L.ARMS.tlx.del.includes("apex26.tlxForceGL") && L.ARMS.glx.del.includes("apex26.tlxForceGL"));
 });
 
 test("the arm keys are the ones the game reads", () => {
   const gfx = fs.readFileSync(path.join(ROOT, "js/render/gfx.js"), "utf8");
   const picker = fs.readFileSync(path.join(ROOT, "js/perf/renderer-picker.js"), "utf8");
   assert.ok(gfx.includes('"apex26.gfxBackend"'));
+  const boot = fs.readFileSync(path.join(ROOT, "js/render/renderer-boot.js"), "utf8");
+  assert.match(boot, /stored\.unset && pref === "three"\)\s*\{\s*if \(!\(await gpuAdapterAvailable\(\)\)\) pref = "webgl2"/, "the unset default needs an adapter: why the TLX arms pin an explicit three pick");
   assert.ok(picker.includes('"apex26.tlxForceGL"'));
   assert.match(picker, /next === "webgpu"\) GameStore\.store\.rawSet\("apex26\.tlxForceGL", "0"\)/);
 });

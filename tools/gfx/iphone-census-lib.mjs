@@ -32,8 +32,12 @@ export const DEFAULT_URL = "https://brycejmurrin.github.io/f1-game/";
  *  js/perf/renderer-picker.js THREE PATH: "1" pins three WebGL2, "0" pins
  *  three WebGPU, unset = AUTO, which stays on WebGL2 on Safari/iOS). */
 export const ARMS = {
-  tlx: { label: "TLX default (three WebGL2)", set: {}, del: ["apex26.gfxBackend", "apex26.tlxForceGL"], expectBound: "tlx:webgl2" },
-  tlxgpu: { label: "TLX WebGPU (THREE PATH: WEBGPU)", set: { "apex26.tlxForceGL": "0" }, del: ["apex26.gfxBackend"], expectBound: "tlx:webgpu" },
+  // An UNSET pick defaults to TLX only when navigator.gpu.requestAdapter() resolves
+  // (js/render/renderer-boot.js); run 4 showed the simulator's adapter is null, so the
+  // unset default boots GLX there. The explicit "three" pick skips that check and is
+  // what a phone WITH an adapter runs, so both TLX arms pin it.
+  tlx: { label: "TLX (three WebGL2; explicit pick)", set: { "apex26.gfxBackend": "three" }, del: ["apex26.tlxForceGL"], expectBound: "tlx:webgl2" },
+  tlxgpu: { label: "TLX WebGPU (THREE PATH: WEBGPU)", set: { "apex26.gfxBackend": "three", "apex26.tlxForceGL": "0" }, del: [], expectBound: "tlx:webgpu" },
   glx: { label: "GLX (plain WebGL2)", set: { "apex26.gfxBackend": "webgl2" }, del: ["apex26.tlxForceGL"], expectBound: "glx:webgl2" },
 };
 
@@ -179,7 +183,10 @@ export const DIAG_SRC = `
   for (const k of ["apex26.gfxBackend", "apex26.tlxForceGL", "apex26.gfxTlxFail", "apex26.gfxWgxFail", "apex26.gfxBackendProbe"]) { try { o.storage[k] = localStorage.getItem(k); } catch (_) {} }
   for (const k of ["apex26.gfxBound", "apex26.gfxClaimFail", "apex26.tlxAutoGL"]) { try { o.session[k] = sessionStorage.getItem(k); } catch (_) {} }
   try { o.hidden = document.hidden; o.vis = document.visibilityState; o.focus = document.hasFocus(); o.hasTLX = typeof TLX !== "undefined"; o.hasGfx = typeof Gfx !== "undefined"; } catch (_) {}
-  try { const l = window.__apex.logs ? window.__apex.logs({ ns: "gfx" }) : null; o.gfxLog = Array.isArray(l) ? l.slice(-12) : l; } catch (e) { o.logsError = String(e && e.message); }
+  try { const l = window.__apex.logs ? window.__apex.logs({ ns: "gfx" }) : null; o.gfxLog = Array.isArray(l) ? l.filter((x) => /bind|fallback|TLX|three|backend|adapter|GLX context/i.test(x.msg)).slice(-8) : l; } catch (e) { o.logsError = String(e && e.message); }
+  try { const l = window.__apex.logs ? window.__apex.logs() : null; o.logTail = Array.isArray(l) ? l.slice(-14).map((x) => x.ns + ":" + String(x.msg).slice(0, 90)) : null; } catch (_) {}
+  try { const p = window.__apex.physState(); o.phys = p ? { t: p.t, speed: p.speed, s: p.s, frozen: p.frozen, paused: p.paused } : null; } catch (e) { o.physError = String(e && e.message); }
+  try { o.loopFrames = typeof LoopHealth !== "undefined" ? LoopHealth.state() : null; } catch (_) {}
   try { const d = window.__apex.diag({ download: false }); o.diag = JSON.parse(JSON.stringify(d, (k, v) => (typeof v === "string" && v.length > 200 ? v.slice(0, 200) : v))); } catch (e) { o.diagError = String(e && e.message); }
   return JSON.stringify(o).length > 12000 ? { storage: o.storage, session: o.session, diagError: o.diagError || "diag too large", diagKeys: o.diag ? Object.keys(o.diag) : null } : o;`;
 
@@ -341,7 +348,8 @@ export function verdict(res) {
     if (leg.diag && (leg.diag.storage || leg.diag.session)) rows.push([`arm ${leg.arm} r${leg.round} latches`, JSON.stringify({ ls: leg.diag.storage, ss: leg.diag.session }).slice(0, 300)]);
     if (leg.diag) {
       const d = leg.diag, e = d.diag && d.diag.env;
-      rows.push([`arm ${leg.arm} r${leg.round} page`, JSON.stringify({ hidden: d.hidden, vis: d.vis, focus: d.focus, hasTLX: d.hasTLX, hasGfx: d.hasGfx, gfxLog: d.gfxLog, env: e && e.backendState, diagError: d.diagError }).slice(0, 700)]);
+      rows.push([`arm ${leg.arm} r${leg.round} page`, JSON.stringify({ hidden: d.hidden, vis: d.vis, focus: d.focus, hasTLX: d.hasTLX, hasGfx: d.hasGfx, gfxLog: d.gfxLog, env: e && e.backendState, diagError: d.diagError }).slice(0, 900)]);
+      rows.push([`arm ${leg.arm} r${leg.round} loop`, JSON.stringify({ phys: d.phys, physError: d.physError, loop: d.loopFrames, tail: d.logTail }).slice(0, 1400)]);
     }
   }
   for (const [arm, legs] of Object.entries(byArm)) {
