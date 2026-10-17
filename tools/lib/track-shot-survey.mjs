@@ -2,6 +2,7 @@
 // @doc Shot-survey plans: presets, resume filters, findings/progress JSON, HTML galleries (apex-extras / shot-survey).
 // @skill survey-track
 import fs from "node:fs";
+import { escapeHtml as galleryEscape, screenshotCard, renderGallery } from "./screenshot-gallery.cjs";
 import path from "node:path";
 import { cameraControls, scenarioShots } from "./survey-scenarios.mjs";
 import zlib from "node:zlib";
@@ -93,13 +94,33 @@ export function normalizeSurveyTracks(args = {}, known = null) {
   const seen = new Set();
   const out = [];
   for (const id of raw) {
-    if (!/^[a-z0-9_]{2,40}$/.test(id)) throw new Error(`bad track id ${id}`);
+    if (!/^(?:[a-z0-9_]{2,40}|custom-[a-f0-9]{8})$/.test(id)) throw new Error(`bad track id ${id}`);
     if (known && !known.includes(id)) throw new Error(`unknown track ${id}`);
     if (seen.has(id)) continue;
     seen.add(id);
     out.push(id);
   }
   return out;
+}
+
+/** Partition circuit-qualified targets before any browser is started. */
+export function buildSurveyPlans(args, tracks) {
+  if (args.locations && (!Array.isArray(args.locations) || !args.locations.length || args.locations.length > 32 || new Set(args.locations).size !== args.locations.length)) throw new Error('locations must contain 1..32 unique ids');
+  if (args.locations && tracks.length > 1) for (const id of args.locations) {
+    if (typeof id !== 'string' || !tracks.some(track => id.startsWith(track + '/'))) throw new Error('Location does not match a selected track: ' + id);
+  }
+  const plans = new Map(tracks.map(track => {
+    const locations = args.locations?.filter(id => tracks.length === 1 || id.startsWith(track + '/'));
+    if (locations && !locations.length) throw new Error('No locations selected for ' + track);
+    return [track, buildTrackShotSurveyPlan({ ...args, track, ...(locations ? { locations, tracks: [track] } : {}) })];
+  }));
+  if (args.select) {
+    if (!Array.isArray(args.select) || !args.select.length || args.select.length > 32) throw new Error('select must contain 1..32 shot names');
+    const names = new Set(args.select);
+    for (const name of names) if (![...plans.values()].some(p => p.shots.some(s => s.name === name))) throw new Error('Unknown selected shot: ' + name);
+    for (const p of plans.values()) p.shots = p.shots.filter(s => names.has(s.name));
+  }
+  return plans;
 }
 
 /** Two cells with one name write and replace ONE image, so a gallery would count a single final view twice
@@ -117,6 +138,14 @@ export function assertUniqueShotNames(shots) {
 
 /** Machine-readable plan for a survey run (no I/O). */
 export function buildTrackShotSurveyPlan(args = {}) {
+  if (args.location && args.locations) throw new Error('Use location or locations, not both');
+  if (args.locations) {
+    if (!Array.isArray(args.locations) || !args.locations.length || args.locations.length > 32 || new Set(args.locations).size !== args.locations.length) throw new Error('locations must contain 1..32 unique ids');
+    const shots = args.locations.flatMap(location => scenarioShots({ ...args, locations: undefined, location }));
+    const plan = buildTrackShotSurveyPlan({ ...args, location: undefined, locations: undefined, angles: undefined, weathers: undefined, camera: undefined, preset: 'custom', shots });
+    plan.shots.sort((a, b) => a.tod.localeCompare(b.tod) || String(a.weather).localeCompare(String(b.weather)));
+    return plan;
+  }
   if (!args.location && (args.angles || args.weathers || args.camera)) throw new Error("angles/weathers/camera require a named location");
   if (args.location) args = { ...args, preset: "custom", shots: scenarioShots(args) };
   const label = normLabel(args.label ?? args.prefix ?? "survey");
@@ -328,34 +357,6 @@ export function writeSurveyFindings(outDir, meta) {
   return { file, findings: body };
 }
 
-/** Static HTML gallery beside the PNGs (relative img paths). */
-export function writeSurveyIndex(outDir, meta) {
-  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-  const rows = (meta.shots || []).map((s) => {
-    const file = `${esc(s.name)}.png`;
-    const cap = `${s.name} · ${s.track || meta.track} · frac ${s.frac} · ${s.cam} · ${s.tod}${s.weather ? ` · ${s.weather}` : ""}`;
-    return `<figure><a href="${file}"><img src="${file}" loading="lazy" alt="${esc(cap)}"></a><figcaption>${esc(cap)}</figcaption></figure>`;
-  }).join("\n");
-  const panel = meta.panelPng ? `<p>Panel: <a href="${esc(path.basename(meta.panelPng))}">${esc(path.basename(meta.panelPng))}</a></p>` : "";
-  const html = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>${esc(meta.track || "track")} shot survey</title>
-<style>
-body{font:14px/1.4 system-ui,sans-serif;margin:1rem;background:#14161c;color:#e6e9ef}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
-figure{margin:0} img{width:100%;height:auto;border-radius:4px;background:#000}
-figcaption{font:11px/1.3 monospace;margin-top:4px;color:#9aa3b2}
-</style></head><body>
-<h1>${esc(meta.track || "")} — ${esc(meta.label || "survey")}</h1>
-<p>${meta.ok ?? meta.shots?.length ?? 0} shot(s), preset ${esc(meta.preset || "custom")}. ${panel}</p>
-<div class="grid">${rows}</div>
-</body></html>`;
-  const file = path.join(outDir, "index.html");
-  fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(file, html);
-  return file;
-}
-
-const htmlEscape = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const galleryTrack = (row) => row.actualTrack || row.state?.info?.track || row.track || "Unknown track";
 const failedCount = (row) => Math.max(Number(row.failed) || 0, Array.isArray(row.failures) ? row.failures.length : 0, row.error ? 1 : 0);
 const galleryPath = (outDir, file) => {
@@ -363,38 +364,45 @@ const galleryPath = (outDir, file) => {
   return relative.split(path.sep).map(encodeURIComponent).join("/");
 };
 
-/** Multi-track gallery. Rows may include shots as well as the legacy index/panel links. */
+function surveyCards(outDir, shots, track) {
+  return shots.map((shot) => screenshotCard({
+    title: shot.name || "View",
+    caption: [shot.track || track, shot.frac != null ? `lap ${Math.round(shot.frac * 100)}%` : "", shot.cam, shot.tod, shot.weather].filter(Boolean).join(" · "),
+    image: galleryPath(outDir, shot.png || shot.file || `${shot.name}.png`),
+    metadata: shot,
+  }));
+}
+
+/** Static HTML gallery beside the captures; actual JPEG/PNG paths are preserved. */
+export function writeSurveyIndex(outDir, meta) {
+  const links = meta.panelPng ? `<a href="${galleryEscape(galleryPath(outDir, meta.panelPng))}">Contact sheet</a>` : "";
+  const html = renderGallery({ title: `${meta.track || "Track"} — ${meta.label || "survey"}`,
+    summary: `${meta.ok ?? meta.shots?.length ?? 0} captures · ${meta.preset || "custom"}`,
+    groups: [{ title: meta.track || "Track", cards: surveyCards(outDir, meta.shots || [], meta.track), links }],
+  });
+  fs.mkdirSync(outDir, { recursive: true });
+  const file = path.join(outDir, "index.html");
+  fs.writeFileSync(file, html);
+  return file;
+}
+
+/** Combined gallery; supports both captured frames and legacy panel/index rows. */
 export function writeCompareIndex(outDir, meta) {
   const tracks = meta.tracks || [];
-  const count = (row) => row.captured ?? row.shots?.length ?? 0;
-  const sections = tracks.map((t, i) => {
-    const track = galleryTrack(t);
-    const rel = t.relIndex === null ? null : galleryPath(outDir, t.relIndex || `${t.track || track}/index.html`);
-    const indexLink = rel ? ` · <a href="${htmlEscape(rel)}">Track index</a>` : "";
-    const panel = t.panel ? `<p><a href="${htmlEscape(galleryPath(outDir, t.panel))}">Contact sheet</a></p>` : "";
-    const shots = (t.shots || []).map((shot) => {
-      const image = shot.png || shot.file || `${shot.name}.png`;
-      const file = htmlEscape(galleryPath(outDir, image));
-      const details = [shot.cam, shot.frac == null ? null : `lap ${Number.isFinite(Number(shot.frac)) ? (Number(shot.frac) * 100).toFixed(1) + "%" : shot.frac}`, shot.tod, shot.weather].filter(Boolean).join(" · ");
-      const caption = [shot.name || "View", details].filter(Boolean).join(" — ");
-      return `<figure><a href="${file}"><img src="${file}" loading="lazy" alt="${htmlEscape(track + " — " + caption)}"></a><figcaption>${htmlEscape(caption)}</figcaption></figure>`;
-    }).join("\n");
-    const failures = (Array.isArray(t.failures) ? t.failures : []).map((failure) => `<li>${htmlEscape(typeof failure === "string" ? failure : [failure.name, failure.error || failure.message || JSON.stringify(failure)].filter(Boolean).join(": "))}</li>`).join("");
-    const error = t.error ? `<p class="failure">${htmlEscape(t.error)}</p>` : "";
-    return `<section id="track-${i + 1}"><h2>${htmlEscape(t.label || track)}</h2><p class="meta">${htmlEscape(track)} · ${count(t)} captured · ${failedCount(t)} failed${t.preset ? " · " + htmlEscape(t.preset) : ""}${indexLink}</p>${panel}${error}${failures ? `<ul class="failure">${failures}</ul>` : ""}<div class="grid">${shots}</div></section>`;
-  }).join("\n");
-  const html = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${htmlEscape(meta.label || "Track survey gallery")}</title>
-<style>
-*{box-sizing:border-box}body{font:15px/1.5 system-ui,sans-serif;margin:0;padding:clamp(12px,3vw,36px);background:#14161c;color:#e6e9ef;overflow-wrap:anywhere}
-a{color:#8ec7ff}section{margin:2rem 0;padding:1rem 0;border-top:1px solid #39404d}h1,h2{line-height:1.2}.meta,figcaption{color:#b6bfce}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:20px}figure{margin:0;min-width:0}img{display:block;width:100%;height:auto;border-radius:6px;background:#000}figcaption{font-size:13px;margin-top:7px}.failure{color:#ffb4a8}nav{display:flex;flex-wrap:wrap;gap:8px 18px}
-</style></head><body>
-<h1>${htmlEscape(meta.label || "Track survey gallery")}</h1>
-<p>${tracks.length} track(s) · ${tracks.reduce((n, t) => n + count(t), 0)} captured · ${tracks.reduce((n, t) => n + failedCount(t), 0)} failed · preset ${htmlEscape(meta.preset || "custom")}</p>
-<nav aria-label="Tracks">${tracks.map((t, i) => `<a href="#track-${i + 1}">${htmlEscape(t.label || galleryTrack(t))}</a>`).join("")}</nav>
-${sections}
-</body></html>`;
+  const groups = tracks.map((track) => {
+    const title = galleryTrack(track);
+    const links = [];
+    if (track.relIndex !== null) links.push(`<a href="${galleryEscape(galleryPath(outDir, track.relIndex || `${title}/index.html`))}">Track index</a>`);
+    if (track.panel) links.push(`<a href="${galleryEscape(galleryPath(outDir, track.panel))}">Contact sheet</a>`);
+    const cards = surveyCards(outDir, track.shots || [], title);
+    if (!cards.length && track.panel) cards.push(screenshotCard({ title: "Contact sheet", image: galleryPath(outDir, track.panel) }));
+    const failures = [...(track.failures || []), ...(track.error ? [track.error] : [])];
+    return { title: track.label || title, cards, links: links.join(" "),
+      description: `${track.captured ?? track.shots?.length ?? 0} captured · ${Math.max(Number(track.failed) || 0, failures.length)} failed`,
+      extra: failures.length ? `<details><summary>Capture failures</summary><pre>${galleryEscape(JSON.stringify(failures, null, 2))}</pre></details>` : "",
+    };
+  });
+  const html = renderGallery({ title: `Track surveys — ${meta.label || "compare"}`, summary: `${tracks.length} track(s) · ${tracks.reduce((n, t) => n + (t.captured ?? t.shots?.length ?? 0), 0)} captured · ${tracks.reduce((n, t) => n + failedCount(t), 0)} failed · preset ${meta.preset || "custom"}`, groups });
   fs.mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, "index.html");
   fs.writeFileSync(file, html);

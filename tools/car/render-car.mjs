@@ -83,6 +83,7 @@
 //   node tools/car/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,night  # 3x3 grid
 //   node tools/car/render-car.mjs --team=all --spineLogo=wrap --views=top,rearquarter  # one design, every car
 
+import { renderPage, screenshotCard } from '../lib/screenshot-gallery.cjs';
 import { launchChromium, shutdown } from '../lib/harness.mjs';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -494,18 +495,6 @@ try {
   console.log(`Rendered ${shots.length} shot(s) in ${((Date.now() - t0) / 1000).toFixed(1)}s -> ${OUT}`);
 
   const metaLine = `${PRESET ? 'preset=' + PRESET + ' · ' : ''}${lightTods ? lightTods.join('/') : TOD}${STUDIO ? ' · studio' : ''}${Object.keys(parts).length ? ' · ' + Object.entries(parts).map(([k, v]) => k + '=' + v).join(' ') : ''}`;
-  const style = `body{margin:0;background:#111;color:#ccc;font:14px system-ui,sans-serif;padding:16px}
-  h1{font-size:16px;letter-spacing:.08em;text-transform:uppercase;color:#fff}
-  .meta{color:#888;margin:-8px 0 16px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
-  figure{margin:0;background:#000;border:1px solid #222;border-radius:8px;overflow:hidden}
-  img{display:block;width:100%;height:auto}
-  figcaption{padding:6px 8px;color:#9ab;font-size:12px;text-transform:capitalize}
-  table{border-collapse:collapse}
-  th{color:#fff;text-align:left;padding:6px 10px;font:600 12px system-ui;text-transform:uppercase;letter-spacing:.04em}
-  td{padding:4px}
-  td img{width:260px;border:1px solid #222;border-radius:6px;display:block}`;
-
   let body;
   if (MULTI_TEAM) {
     // Rows = team, columns = shot. The question a team walk asks is "does this
@@ -533,17 +522,14 @@ try {
     }).join('\n');
     body = `<table><thead><tr><th></th>${lightTods.map(t => `<th>${t}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
   } else {
-    body = `<div class="grid">\n${shots.map(s => `<figure><img src="${s.file}" alt="${s.label}"><figcaption>${s.label}</figcaption></figure>`).join('\n')}\n</div>`;
+    body = `<div class="gallery-grid">${shots.map(s => screenshotCard({title:s.label,image:s.file})).join('\n')}</div>`;
   }
 
-  writeFileSync(resolveContainedChild(OUT, 'index.html', 'render contact sheet path'), `<!doctype html><meta charset="utf8">
-<title>${MULTI_TEAM ? TEAM_IDS.length + ' teams' : TEAM} — render sheet</title>
-<style>
-  ${style}
-</style>
-<h1>${MULTI_TEAM ? TEAM_IDS.join(' · ') : TEAM}${LIVERY ? ' · ' + LIVERY : ''}</h1>
-<div class="meta">${metaLine}</div>
-${body}`);
+  writeFileSync(resolveContainedChild(OUT, 'index.html', 'render contact sheet path'), renderPage({
+    title: `${MULTI_TEAM ? TEAM_IDS.join(' · ') : TEAM}${LIVERY ? ' · ' + LIVERY : ''} — render sheet`,
+    summary: metaLine, body: MULTI_TEAM || lightTods ? `<div class="table-scroll">${body}</div>` : body,
+    css: 'td img{width:260px;max-width:260px;height:auto;display:block}',
+  }));
 
   writeFileSync(resolveContainedChild(OUT, 'manifest.json', 'render manifest path'), JSON.stringify({
     viewport: { width: W, height: H }, browser: browser.version(), encoding: JPEG ? 'jpeg' : 'png',
