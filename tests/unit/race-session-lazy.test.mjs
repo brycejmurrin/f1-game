@@ -133,3 +133,32 @@ test("ensureRaceSession slow load shows SLOW CONNECTION on the loading card", as
   await new Promise((r) => setTimeout(r, 120));
   assert.equal(gp.textContent, "SLOW CONNECTION — still loading…");
 });
+
+// #2625: on failure the card offers Retry and Back to menu.
+test("LoadingScreen.failed shows Retry + Back to menu and resolves the choice", async () => {
+  const screen = src("js/ui/loading-screen.js");
+  const mk = () => {
+    const els = {}, mkEl = () => { const e = { children: [], listeners: {}, textContent: "", appendChild(c) { e.children.push(c); }, remove() { e.removed = true; }, addEventListener(t, f) { e.listeners[t] = f; } }; return e; };
+    els.loading = { hidden: false }; els["ld-gp"] = mkEl(); els["ld-text"] = mkEl();
+    const ctx = vm.createContext({ document: { getElementById: (i) => els[i] || null, createElement: mkEl }, Log: { warn() {} } });
+    vm.runInContext(screen + "\nthis.LoadingScreen = LoadingScreen;", ctx);
+    return { ctx, els };
+  };
+  for (const [idx, want] of [[0, "retry"], [1, "back"]]) {
+    const { ctx, els } = mk();
+    const p = ctx.LoadingScreen.failed();
+    const row = els["ld-text"].children[0];
+    assert.deepEqual(row.children.map((b) => b.textContent), ["Retry", "Back to menu"]);
+    assert.equal(els["ld-gp"].textContent, ctx.LoadingScreen.FAIL_TEXT);
+    row.children[idx].listeners.click();
+    assert.equal(await p, want);
+  }
+  const { ctx, els } = mk(); els.loading.hidden = true;
+  assert.equal(await ctx.LoadingScreen.failed(), "back");
+});
+
+test("startRace retries the race-session load on Retry and quits to menu on Back", () => {
+  const g = src("js/game.js");
+  assert.match(g, /while \(!sessionOk && await LoadingScreen\.failed\(\) === "retry"\) \{ sessionOk = await ensureRaceSession\(\)/);
+  assert.match(g, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\)/);
+});
