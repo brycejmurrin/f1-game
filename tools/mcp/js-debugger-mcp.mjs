@@ -17,6 +17,7 @@ export const TOOLS = [
   def("debugger_attach", "Attach a page target by id. One session at a time; local HTTP repros/about:blank only. May pause JavaScript. endpoint may be omitted after debugger_targets.", { endpoint, targetId: str("Page id from debugger_targets") }, ["targetId"]),
   def("debugger_detach", "Remove owned breakpoints, reset exception pauses, resume, disable and detach. Reports cleanup failures; never closes the browser."),
   def("debugger_state", "Read current pause/stack/scopes and operation results. Reports `detached: target gone` after a lost target and `pageUnresponsive` when a long run blocks the page. An acknowledgment is not a pause verdict.", {}, [], true),
+  def("debugger_incident", "Save the latest exception-log entry, current Apex state and a JPEG of the attached local page under scratch/debug-incidents. Call after an exception while the page is running; the screenshot is later than the failing frame. Never launches a browser.", {}, [], false),
   def("debugger_scripts", "List parsed scripts (named URLs first, max 200; reports total/truncated). Anonymous/eval scripts hidden unless includeAnonymous. Filter = URL substring, or regex with regex:true.",
     { filter: { type: "string", maxLength: 1000 }, regex: { type: "boolean" }, includeAnonymous: { type: "boolean" } }, [], true),
   def("debugger_source", "Read a bounded script source excerpt. Lines and columns in this MCP are ONE-based.",
@@ -77,7 +78,7 @@ export async function callTool(session, name, args = {}) {
     const a = args;
     const routes = {
       debugger_targets: () => session.listTargets(a.endpoint, a.targetType), debugger_attach: () => session.attach(a.endpoint, a.targetId),
-      debugger_detach: () => session.detach(), debugger_state: () => session.stateWithHealth(), debugger_scripts: () => session.scriptsList(a.filter, { regex: a.regex, includeAnonymous: a.includeAnonymous }),
+      debugger_detach: () => session.detach(), debugger_state: () => session.stateWithHealth(), debugger_incident: () => session.incident(), debugger_scripts: () => session.scriptsList(a.filter, { regex: a.regex, includeAnonymous: a.includeAnonymous }),
       debugger_logpoint: () => session.setLogpoint(a), debugger_logpoint_read: () => session.readLogpoints(a),
       debugger_exception_log: () => session.exceptionLogControl(a), debugger_listeners: () => session.listeners(a), debugger_instances: () => session.instances(a),
       debugger_source: () => session.source(a.scriptId, a.startLine ?? 1, a.count ?? 40, { url: a.url, endLine: a.endLine }),
@@ -94,7 +95,12 @@ export async function callTool(session, name, args = {}) {
     try { body = await routes[name](); }
     finally { if (changesSession || name === "debugger_detach") session.toolBusy = false; }
     if (JSON.stringify(body).length > 128000) throw Error("Result exceeds 128KB; narrow the request. The debugger action may already have completed.");
-    return { content: [{ type: "text", text: JSON.stringify(body) }], structuredContent: body,
+    const content = [{ type: "text", text: JSON.stringify(body) }];
+    if (name === "debugger_incident" && body.ok) {
+      for (const [file, mimeType] of [[body.screenshot, "image/jpeg"], [body.report, "application/json"]])
+        content.push({ type: "resource_link", uri: pathToFileURL(file).href, name: file.split("/").at(-1), mimeType });
+    }
+    return { content, structuredContent: body,
       isError: body.ok === false || !!body.cleanupErrors?.length || !!body.exceptionDetails };
   } catch (error) {
     const body = { ok: false, error: String(error.message || error).slice(0, 2000) };

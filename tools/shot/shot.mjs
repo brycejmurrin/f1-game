@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { dirname } from "node:path";
 import {
   launchChromium,
@@ -47,6 +48,13 @@ import { captureContextOptions, captureLaunchOptions, applyCaptureProfile } from
 import { captureBrowserDiagnostics, assertCaptureGpuCapability, startCaptureTrace } from "./capture-diagnostics.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
+function sourceRevision() {
+  try {
+    const git = (...args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8", timeout: 3000 }).trim();
+    return { head: git("rev-parse", "HEAD"), dirty: !!git("status", "--porcelain", "--untracked-files=no") };
+  } catch { return { head: null, dirty: null }; }
+}
+const SOURCE = sourceRevision();
 
 const argv = process.argv.slice(2);
 exitIfHelp(argv, SHOT_USAGE);
@@ -171,7 +179,9 @@ async function captureJob(page, job, waitMs, modelInfo, diagnostics) {
       seed: a.seed(), renderClock: a.renderClock(), render: a.renderScale(), camera: a.cameraState(), info: a.info() };
   });
   const renderer = rendererEvidence(state.diag, pixels, job.backend);
-  writeFileSync(`${job.out}.capture.json`, JSON.stringify({ job, browser: diagnostics, state, renderer, readiness, pixels,
+  writeFileSync(`${job.out}.capture.json`, JSON.stringify({ version: 1, source: SOURCE,
+    viewport: page.viewportSize(), frame: { camera: frame.camera, clear: frame.clear, dbgCamActive: frame.dbgCamActive },
+    job, browser: diagnostics, state, renderer, readiness, pixels,
     image: { path: job.out, bytes: shot.bytes, via: shot.via, scope: pageScope ? "page" : "scene" } }, null, 2) + "\n");
   if (!renderer.positive) throw new Error(`capture requested ${job.backend} but renderer evidence is not healthy: ${JSON.stringify(renderer)}`);
   const st = await sharp(buf).stats();

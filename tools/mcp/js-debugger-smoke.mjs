@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { createInterface } from "node:readline";
-import { mkdir, writeFile, mkdtemp } from "node:fs/promises";
+import { mkdir, writeFile, mkdtemp, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
@@ -92,7 +92,7 @@ try {
   }
   const init = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "native-smoke", version: "1" } });
   check("stdio initialize and tool discovery", () => assert.equal(init.serverInfo.name, "js-debugger-mcp"));
-  assert.equal((await rpc("tools/list")).tools.length, 18);
+  assert.equal((await rpc("tools/list")).tools.length, 19);
   const target = (await call("debugger_targets", { endpoint })).targets.find(t => t.url === url + "/"); assert.ok(target);
   await call("debugger_attach", { endpoint, targetId: target.id });
   const script = (await call("debugger_scripts", { filter: "fixture.js" })).scripts[0]; assert.ok(script);
@@ -180,6 +180,13 @@ try {
   state = await until(s => s.operations.at(-1).status === "completed");
   const elog = await call("debugger_exception_log", { action: "read" });
   check("exception log records a caught exception without pausing", () => { assert.equal(state.paused, false); assert.ok(elog.entries.some(e => /logged-by-smoke/.test(e.message))); });
+  const incident = await call("debugger_incident");
+  const jpeg = await readFile(incident.screenshot);
+  check("incident saves the latest exception and a real page JPEG", () => {
+    assert.match(incident.exception.message, /logged-by-smoke/);
+    assert.equal(jpeg[0], 0xff); assert.equal(jpeg[1], 0xd8);
+    assert.equal(incident.scene.available, false); // This fixture is not the game.
+  });
   await call("debugger_exception_log", { action: "stop" });
   await call("debugger_run", { expression: 'window.addEventListener("apexprobe", () => {}); window.Probe = class Probe {}; window.keep = [new Probe(), new Probe(), new Probe()]; 1' });
   await until(s => s.operations.at(-1).status === "completed");
