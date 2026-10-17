@@ -279,11 +279,11 @@
   box-sizing: border-box;
 }
 #rs-presets > .preset-btn small {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
+  /* Wraps, never clamps: a 2-line clamp ellipsised "full distance, qualifying,
+     real…" at UI SIZE 150/200 (Bryce 2026-10-17); the card grows instead. */
+  display: block;
   max-width: 100%;
+  overflow-wrap: anywhere;
   text-align: center;
 }
 /* Narrow sheets (phone portrait ~390, not landscape 844): even 2×2 tracks and
