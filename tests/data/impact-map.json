@@ -6484,6 +6484,9 @@
       ],
       "restore": [
         "tests/unit/livery-design.test.mjs"
+      ],
+      "*": [
+        "tests/unit/livery-zone-finish.test.mjs"
       ]
     },
     "js/garage/pit-signs.js": {
@@ -6835,6 +6838,7 @@
         "tests/unit/garage-interior-gate.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-zone-finish.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs"
       ]
     },

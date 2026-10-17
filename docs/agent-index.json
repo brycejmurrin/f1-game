@@ -964,6 +964,7 @@
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-decal-surfaces.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-zone-finish.test.mjs",
         "tests/unit/parts-distinct-mesh.test.mjs",
         "tests/unit/parts-locked-equivalent.test.mjs",
         "tests/unit/setup-trial-session.test.mjs",
@@ -972,7 +973,7 @@
         "tests/unit/team-style-relief.test.mjs",
         "tests/unit/tyre-recipes-open-rim.test.mjs"
       ],
-      "declaredTests": 253,
+      "declaredTests": 258,
       "twinned": false
     },
     {
