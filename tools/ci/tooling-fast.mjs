@@ -928,6 +928,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ship-filter-paths.test.mjs",
   // shot.mjs --batch / --jpeg / --raster parse (no Chromium).
   "tests/unit/shot-jobs.test.mjs",
+  // Shared survey runner: CLI and MCP manifests match, and colliding gallery names stay distinct.
+  "tests/unit/shot-survey-runner.test.mjs",
   // The physics step's functions (update, updateCar…) compile under 48 KB of bytecode — TurboFan's
   // cap is 61,440 B and past it the whole race runs deoptimized (PERF-HUNT-2 S11); one node child, ~2 s.
   "tests/unit/sim-bytecode-budget.test.mjs",
