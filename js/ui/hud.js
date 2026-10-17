@@ -2579,8 +2579,31 @@ function mmRun(ctx, map, n, i0, steps, cssW, cssH) {
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   }
 }
-/** The "P" disc at the peel-off, radius `r` in local px. */
+/** The "P" disc at the peel-off, radius `r` in local px. Rendered once per
+ *  (radius, fill, ratio) into a small canvas and blitted: a per-frame `font`
+ *  set + `fillText` was 980 ms of a 30 s window (TLX-PERF-HUNT-5 F1). */
+const _mmPitGlyph = new Map();
 function mmPitMark(ctx, x, y, r, fill) {
+  const key = r + "|" + fill + "|" + _mmRatio;
+  let g = _mmPitGlyph.get(key);
+  if (g === undefined) {
+    if (_mmPitGlyph.size > 8) _mmPitGlyph.clear();   // fill is --you: a theme change is a new key
+    g = null;
+    const cw = Math.ceil((2 * r + 2) * _mmRatio), cv = document.createElement("canvas");
+    cv.width = cw; cv.height = cw;
+    const gc = cv.getContext && cv.getContext("2d");
+    if (gc) {
+      const L = cw / _mmRatio, c = L / 2;
+      gc.setTransform(_mmRatio, 0, 0, _mmRatio, 0, 0);
+      gc.fillStyle = fill; gc.beginPath(); gc.arc(c, c, r, 0, Math.PI * 2); gc.fill();
+      gc.fillStyle = "#14161c"; gc.font = "700 " + (r + 2) + "px system-ui, sans-serif";
+      gc.textAlign = "center"; gc.textBaseline = "middle";
+      gc.fillText("P", c, c + 0.5);
+      g = { cv, L };
+    }
+    _mmPitGlyph.set(key, g);
+  }
+  if (g) { ctx.drawImage(g.cv, x - g.L / 2, y - g.L / 2, g.L, g.L); return; }
   ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#14161c"; ctx.font = "700 " + (r + 2) + "px system-ui, sans-serif";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
