@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "91625fc7d96adaea3405f1125cc4385530e2c6330ed122607526f4f224fa4ecf",
+  "sourceDigest": "0de139d2c09da6c2c75e87410f72e55013472b19afdcdafe519a96ab97f92bf3",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -2235,9 +2235,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.004846,
       "target": [
-        610.38,
+        610.37,
         7.39,
-        -194.63
+        -194.64
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 30,
@@ -2253,7 +2253,7 @@
       "frac": 0,
       "target": [
         539.29,
-        26.32,
+        26.33,
         -229.33
       ],
       "stationMethod": "nearest-road-projection",
@@ -2269,9 +2269,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.975059,
       "target": [
-        563.69,
+        563.68,
         4.67,
-        -372.17
+        -372.15
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 34,
@@ -3254,11 +3254,11 @@
       "track": "spa",
       "name": "Raidillon Gold Dual Jumbotron",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.116668,
+      "frac": 0.116664,
       "target": [
-        -53.42,
-        -14.02,
-        670.55
+        -53.37,
+        -14.03,
+        670.61
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/spa.js anchor K(0.159)",
@@ -3273,11 +3273,11 @@
       "track": "spa",
       "name": "Eau Rouge Brook Crossing",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.141668,
+      "frac": 0.141664,
       "target": [
-        -213.73,
+        -213.65,
         -25.08,
-        581.56
+        581.64
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/spa.js anchor K(0.184)",
@@ -3292,11 +3292,11 @@
       "track": "spa",
       "name": "Timing Tower",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.942668,
+      "frac": 0.942664,
       "target": [
-        187.17,
+        186.84,
         4.73,
-        513.29
+        509.5
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/spa.js timingTower K(0.985)",
