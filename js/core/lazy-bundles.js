@@ -54,6 +54,7 @@ function ensureRaceSession() {
   }
   raceSessionLoad = loadBackendScripts(RACE_SESSION_FILES, RACE_SESSION_EDGES, {
     strict: true, loaded: raceSessionLoaded,
+    onSlow: () => { if (typeof LoadingScreen !== "undefined" && LoadingScreen.slowNotice) LoadingScreen.slowNotice(); },   // #2625
     ready: (src) => !RACE_SESSION_READY[src] || RACE_SESSION_READY[src](),
   }).then((ok) => {
     if (!ok || !raceSessionReady()) {

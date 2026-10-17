@@ -1133,3 +1133,48 @@ test("acceptAnswer refuses an answer built for an older offer, and still takes a
     if (priorHash === undefined) delete globalThis.Hash32;
   }
 });
+
+
+test("remote close drains accepted messages before terminal close on the next pump", () => {
+  const h = pcHarness();
+  try {
+    const got = [];
+    h.ep.onMessage((_, data) => got.push(data));
+    h.ep.onClose(() => got.push("close"));
+    h.event.onmessage({ data: "result" });
+    h.event.onmessage({ data: "bye" });
+    h.event.onclose();
+    assert.equal(h.pcClosed(), 1, "wire resources release immediately");
+    assert.deepEqual(got, []);
+    h.state.onopen(); h.event.onopen();
+    assert.equal(h.ep.status, "closing", "late opens cannot resurrect the wire");
+    assert.equal(h.ep.send(NetTransport.EVENT, "late"), false);
+    h.ep.pump();
+    assert.deepEqual(got, ["result", "bye", "close"]);
+    h.ep.pump();
+    assert.equal(got.length, 3);
+  } finally { h.done(); }
+});
+
+test("intentional local close discards accepted undelivered messages", () => {
+  const h = pcHarness();
+  try {
+    let messages = 0;
+    h.ep.onMessage(() => messages++);
+    h.event.onmessage({ data: "result" });
+    h.ep.close(); h.ep.pump();
+    assert.equal(messages, 0);
+  } finally { h.done(); }
+});
+
+test("BYE handling during remote-close drain can locally discard trailing mail", () => {
+  const h = pcHarness();
+  try {
+    const got = [];
+    h.ep.onMessage((_, data) => { got.push(data); if (data === "bye") h.ep.close(); });
+    h.ep.onClose(() => got.push("close"));
+    for (const data of ["result", "bye", "model"]) h.event.onmessage({ data });
+    h.event.onclose(); h.ep.pump();
+    assert.deepEqual(got, ["result", "bye", "close"]);
+  } finally { h.done(); }
+});

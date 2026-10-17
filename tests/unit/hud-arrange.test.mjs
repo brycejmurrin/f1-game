@@ -160,7 +160,7 @@ function editor(pieceId = "piece", options = {}) {
   const policy = visibilityPolicy(elements, preferences, rows, { window: viewport, root: {},
     getComputedStyle: () => ({ getPropertyValue: key => options.insets?.[key] || '0px' }) });
   Object.assign(layout, { LIM: policy.LIM, visibilityIds: policy.visibilityIds, visibility: policy.visibility, setVisibility: policy.setVisibility,
-    screenBounds: policy.screenBounds, fit() {} });
+    screenBounds: policy.screenBounds, holdArrangePreview(on) { options.onPreviewHold?.(on, ids); }, fit() {} });
   if (options.hidden) ids.get(pieceId).hidden = true;
   if (options.rect) ids.get(pieceId).getBoundingClientRect = () => options.rect;
   const ctx = { document: doc, window: viewport,
@@ -442,4 +442,16 @@ test('editor: hidden map, gaps and mirror stay selectable and their owner modes 
     assert.equal(e.preferences[id === 'map' ? 'hudMapVis' : id === 'gaps' ? 'hudGapsVis' : 'hudMirror'], 'auto');
     assert.equal(e.writes.length, 0, 'changing visibility does not move the piece');
   }
+});
+
+
+test('editor holds the MOVE & SIZE preview before hiding settings and releases after restoring them', () => {
+  const states = [];
+  const e = editor('map', { onPreviewHold: (on, ids) => states.push([on, ids.get('pmsettings').hidden]) });
+  e.ids.get('pmsettings').hidden = false;
+  e.api.setEditing(true);
+  assert.deepEqual(states, [[true, false]]);
+  assert.equal(e.ids.get('pmsettings').hidden, true);
+  e.api.setEditing(false);
+  assert.deepEqual(states, [[true, false], [false, false]]);
 });

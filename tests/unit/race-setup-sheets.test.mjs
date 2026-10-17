@@ -172,7 +172,8 @@ test("race presets restore balanced wrap and a --tap floor (phone portrait 2×2)
   assert.equal(decl(rules, tile, "min-height"), "var(--tap)",
     "preset tiles stay at the shared tap floor, not the secondary chip height");
   assert.equal(decl(rules, tile, "overflow"), "hidden");
-  assert.equal(decl(rules, "#rs-presets > .preset-btn small", "-webkit-line-clamp"), "2");
+  assert.equal(decl(rules, "#rs-presets > .preset-btn small", "-webkit-line-clamp"), null,
+    "preset blurbs wrap in full; a line clamp ellipsised them at UI SIZE 150/200");
   assert.equal(
     decl(rules, "#rs-presets", "--balance-basis", { context: /max-width:\s*480px/ }),
     "calc(50% - var(--gap) * 0.5)",

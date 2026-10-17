@@ -6,6 +6,7 @@ import zlib from "node:zlib";
 import path from "node:path";
 import {
   buildTrackShotSurveyPlan,
+  buildSurveyPlans,
   estimateSurveyMs,
   filterResumeShots,
   pngProblem,
@@ -94,6 +95,54 @@ function tinyPng() {
     chunk("IDAT", zlib.deflateSync(Buffer.from([0, 255, 0, 0]))), chunk("IEND", Buffer.alloc(0))]);
 }
 
+test('named batches partition tracks and reject missing, duplicate and oversized selections', () => {
+  const args = { locations: ['spa/eau-rouge', 'monaco/turn-1', 'spa/raidillon'], angles: ['overview', 'entry'] };
+  const plans = buildSurveyPlans(args, ['spa', 'monaco']);
+  assert.equal(plans.get('spa').shots.length, 4);
+  assert.equal(plans.get('monaco').shots.length, 2);
+  assert.ok(plans.get('spa').shots.every(s => s.location.startsWith('spa/')));
+  const name = plans.get('monaco').shots[0].name;
+  const selected = buildSurveyPlans({ ...args, select: [name] }, ['spa', 'monaco']);
+  assert.equal(selected.get('spa').shots.length, 0);
+  assert.deepEqual(selected.get('monaco').shots.map(s => s.name), [name]);
+  assert.throws(() => buildSurveyPlans({ ...args, select: ['missing'] }, ['spa', 'monaco']), /Unknown selected shot/);
+  assert.throws(() => buildSurveyPlans({ ...args, locations: [...args.locations, 'fuji/turn-1'] }, ['spa', 'monaco']), /does not match/);
+  assert.throws(() => buildSurveyPlans({ ...args, locations: ['spa/eau-rouge'] }, ['spa', 'monaco']), /No locations/);
+  assert.throws(() => buildSurveyPlans({ locations: ['spa/eau-rouge', 'spa/eau-rouge'] }, ['spa']), /unique/);
+  assert.throws(() => buildSurveyPlans({ locations: ['spa/eau-rouge'], location: 'spa/raidillon' }, ['spa']), /not both/);
+  assert.throws(() => buildSurveyPlans({ locations: ['spa/eau-rouge', 'spa/raidillon'], angles: ['overview','reverse','overhead','entry','apex','exit'], weathers: ['dry','wet','rain'] }, ['spa']), /max 32/);
+});
+
+test('native custom scenery targets preserve content ids and reject unsupported scenery', async () => {
+  const { loadSurveyDesigns } = await import('../../tools/lib/custom-survey-locations.mjs');
+  const { design } = await import('../helpers/editor-vm.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'survey-custom-')), file = path.join(dir, 'designs.json');
+  const row = design({ props: [{ kind: 'pond', s: .25, side: 1, gap: 30 }, { kind: 'pond', s: .75, side: -1, gap: 40 }] });
+  const write = items => fs.writeFileSync(file, JSON.stringify({ format: 'apex26.tracks', v: 1, items }));
+  try {
+    write([row]);
+    const custom = loadSurveyDesigns(file), id = custom.designs[0].id;
+    assert.deepEqual(normalizeSurveyTracks({ track: id }), [id]);
+    const targets = custom.locations.get(id);
+    assert.deepEqual(targets.map(l => l.id), [`${id}/pond-1`, `${id}/pond-2`]);
+    assert.ok(targets.every(l => l.target.length === 3 && l.target.every(Number.isFinite)));
+    assert.match(targets[0].verification, /placement anchor/);
+    assert.ok(targets[0].target[2] > 400 && targets[0].target[2] < 450, 'infield pond centre includes its 30m half-width beyond the road-edge gap');
+    const plan = buildTrackShotSurveyPlan({ track: id, customDesigns: custom, location: `${id}/pond-2`, angles: ['overhead'] });
+    assert.deepEqual(plan.shots[0].target, targets[1].target);
+    assert.ok(plan.shots[0].dist > 110, 'water framing accounts for the full footprint');
+    write(custom.designs);
+    assert.equal(loadSurveyDesigns(file).designs[0].id, id);
+    assert.notEqual(loadSurveyDesigns(file).digest, custom.digest, 'input changes invalidate resume');
+    write([{ ...row, props: [{ kind: 'future-prop', s: .2 }] }]);
+    assert.throws(() => loadSurveyDesigns(file), /Unsupported scenery/);
+    write([{ ...row, theme: 'future-theme' }]);
+    assert.throws(() => loadSurveyDesigns(file), /Unsupported theme/);
+    write([{ ...row, id: 'custom-00000000' }]);
+    assert.throws(() => loadSurveyDesigns(file), /id mismatch/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("filterResumeShots and findings helpers", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-survey-"));
   const plan = buildTrackShotSurveyPlan({ preset: "lap", label: "r" });
@@ -151,11 +200,11 @@ test("compare gallery shows every track view, captions, failures and legacy pane
     { track: "legacy", captured: 4, panel: "legacy/panel.png", relIndex: "legacy/index.html" },
   ] });
   const html = fs.readFileSync(file, "utf8");
-  assert.equal((html.match(/<figure>/g) || []).length, 2);
+  assert.equal((html.match(/class="capture /g) || []).length, 3);
   assert.match(html, /first\/ridge%20one.jpg/);
   assert.match(html, /second\/ridge.png/);
-  assert.match(html, /orbit · lap 25.0% · day/);
-  assert.match(html, /trackside · lap 75.0% · night/);
+  assert.match(html, /lap 25% · orbit · day/);
+  assert.match(html, /lap 75% · trackside · night/);
   assert.match(html, /3 track\(s\) · 6 captured · 1 failed/);
   assert.match(html, /legacy\/panel.png/);
   assert.match(html, /legacy\/index.html/);
@@ -163,7 +212,6 @@ test("compare gallery shows every track view, captions, failures and legacy pane
   assert.doesNotMatch(html, /<script>/);
   assert.match(html, /Fjord &lt;ridge&gt;/);
   assert.match(html, /name="viewport"/);
-  assert.match(html, /minmax\(min\(100%,340px\)/);
 });
 
 test("report galleries copy repeated shot names portably and preserve actual custom identities", (t) => {
@@ -255,6 +303,69 @@ test('named scenarios resolve racing-space locations and preserve camera control
  assert.throws(()=>buildTrackShotSurveyPlan({location:'spa/eau-rouge',camera:{fov:Infinity}}),/fov/);
  assert.throws(()=>buildTrackShotSurveyPlan({preset:'custom',shots:[{cam:'orbit',lat:3}]}),/require eye/);
 });
+test('every circuit exposes authored turn locations usable by named shot plans', async () => {
+ const { listSurveyLocations } = await import('../../tools/lib/survey-scenarios.mjs');
+ const { createRequire } = await import('node:module');
+ const require = createRequire(import.meta.url);
+ const defs = require('../../tools/track/verify-track.cjs').buildContext(null, {quiet:true}).LIST;
+ assert.equal(defs.length,52);
+ for (const def of defs) {
+   const locations = listSurveyLocations(def.id);
+   assert.equal(locations.filter(l=>l.kind==='turn').length,def.turns.length,def.id);
+   assert.equal(locations.find(l=>l.id===`${def.id}/turn-1`).frac,def.turns[0],def.id);
+   const plan = buildTrackShotSurveyPlan({track:def.id,location:`${def.id}/turn-1`,angles:['apex']});
+   assert.equal(plan.shots[0].frac,def.turns[0],def.id);
+ }
+ assert.throws(()=>listSurveyLocations('unknown'),/Unknown track/);
+ assert.throws(()=>buildTrackShotSurveyPlan({track:'monaco',location:'spa/turn-1'}),/Unknown or ambiguous/);
+});
+test('named scenery catalog accounts for every registered hero and targets emitted geometry', async () => {
+ const { listSurveyLocations } = await import('../../tools/lib/survey-scenarios.mjs');
+ const { default: { scenerySourceDigest } } = await import('../../tools/shot/scenery-source-hash.cjs');
+ const catalog = JSON.parse(fs.readFileSync('tools/shot/scenery-locations.json', 'utf8'));
+ assert.equal(catalog.sourceDigest,scenerySourceDigest(path.resolve('.')),'catalog must be regenerated after scenery or projection source changes');
+ const registryDir = 'tests/data/landmarks';
+ const registryFiles = fs.readdirSync(registryDir).filter(f=>f.endsWith('.json'));
+ const { createRequire } = await import('node:module');
+ const require = createRequire(import.meta.url);
+ const trackIds = Array.from(require('../../tools/track/verify-track.cjs').buildContext(null,{quiet:true}).LIST,d=>d.id).sort();
+ assert.deepEqual(registryFiles.map(f=>f.slice(0,-5)).sort(),trackIds,'every circuit must have a scenery registry');
+ const registered = registryFiles.flatMap(f=>JSON.parse(fs.readFileSync(path.join(registryDir,f),'utf8')).ids);
+ assert.equal(new Set([...catalog.locations.map(l=>l.modelId),...catalog.omitted.map(l=>l.modelId)]).size,registered.length);
+ assert.deepEqual([...catalog.locations.map(l=>l.modelId),...catalog.omitted.map(l=>l.modelId)].sort(),registered.sort());
+ for (const file of registryFiles) {
+   const track=file.slice(0,-5), names=listSurveyLocations(track).filter(l=>l.kind==='scenery');
+   assert.ok(names.length>0,`${track}: no emitted scenery names`);
+   for (const l of names) {
+     assert.ok(l.frac>=0&&l.frac<1,`${l.id}: racing fraction`);
+     assert.equal(l.target.length,3);
+     assert.ok(l.target.every(Number.isFinite));
+     assert.ok(l.nearestRoadDistanceM>=0 && l.viewDistanceM>=0);
+     assert.ok(['source-viewpoint','nearest-road-projection'].includes(l.stationMethod));
+     assert.match(l.verification,/framing unverified/);
+   }
+ }
+ assert.equal(listSurveyLocations('spa').filter(l=>l.kind==='named').length,4);
+ const merlion=listSurveyLocations('singapore').find(l=>l.modelId==='singapore-merlion');
+ assert.ok(merlion);
+ const shot=buildTrackShotSurveyPlan({track:'singapore',location:merlion.id,angles:['overview']}).shots[0];
+ assert.equal(shot.frac,merlion.frac);
+ assert.deepEqual(shot.target,merlion.target);
+ const fuji=listSurveyLocations('fuji').find(l=>l.modelId==='fuji-mount-fuji');
+ assert.equal(fuji.frac,.12);
+ assert.equal(fuji.stationMethod,'source-viewpoint');
+ assert.notEqual(fuji.projectedFrac,fuji.frac);
+ const estoril=listSurveyLocations('estoril').find(l=>l.modelId==='estoril-moinho');
+ assert.equal(estoril.frac,.44);
+ assert.equal(estoril.stationMethod,'source-viewpoint');
+ const jerez=listSurveyLocations('jerez').find(l=>l.modelId==='jerez-ovni');
+ assert.equal(jerez.frac,.002,'the sl() scenery anchor is the racing start line');
+ assert.equal(jerez.name,'El Ovni');
+ assert.equal(listSurveyLocations('magny_cours').find(l=>l.modelId==='magny-cours-bourg').name,'Bourg');
+ const sochi=listSurveyLocations('sochi').find(l=>l.modelId==='sochi-flame-tower');
+ assert.equal(sochi.frac,.115,'the Olympic Park loop has a nearer wrong-leg road');
+ assert.notEqual(sochi.projectedFrac,sochi.frac);
+});
 test('resume requires matching receipt identity when a capture context is supplied',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'survey-identity-'));
  try {
@@ -282,6 +393,17 @@ test('survey GPU auto-selection does not mistake installed Mesa for a usable loc
  assert.equal(surveyGlEnvironment({GITHUB_ACTIONS:'true'},'',librariesOnly).APEX_GPU,'llvmpipe');
  assert.equal(surveyGlEnvironment({APEX_GPU:'hardware'},'swiftshader',librariesOnly).APEX_GPU,'swiftshader');
  assert.equal(surveyGlEnvironment({APEX_GPU:'hardware'},'',librariesOnly).APEX_GPU,'hardware');
+});
+
+test('survey galleries preserve the actual JPEG capture path and native navigation', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apex-gallery-jpeg-'));
+  try {
+    const file = writeSurveyIndex(dir, { track: 'spa', shots: [{ name: 'pond', png: path.join(dir, 'pond.jpg'), cam: 'orbit' }] });
+    const html = fs.readFileSync(file, 'utf8');
+    assert.match(html, /src="pond.jpg"/);
+    assert.doesNotMatch(html, /pond.png|<script\b|<select\b/);
+    assert.match(html, /name="viewport"/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 // #1982: identity and resume evidence.

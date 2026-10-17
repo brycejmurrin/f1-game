@@ -648,7 +648,7 @@ test("starting TT compares the built car once per rival and session configuratio
     recordControls: () => ({ steer: "keyboard" }), raceWeather: "dry", raceTyreWear: true,
     difficulty: "normal", raceTimeOfDay: "day", announce: message => notices.push(message) };
   const ctx = vm.createContext({ G, GhostShare, PhysicsConsts: { REVISION: 7 },
-    Ghost: { contextKey: JSON.stringify, setTrack() {} }, GameStore: { ttBoard: () => [] } });
+    Ghost: { contextKey: JSON.stringify, setTrack() {}, bestTime: () => Infinity }, GameStore: { ttBoard: () => [] } });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-records.js"), "utf8"), ctx);
   const records = ctx.SessionRecords.create(G);
   const recorded = records.config(); recorded.car[0] = "mclaren";
@@ -780,4 +780,50 @@ test("shared ghost meta keeps only the whitelisted keys, strings <= 32 chars", a
   assert.equal(({}).p, undefined, "no prototype pollution");
   const out = GhostShare.fileExport({ ...trace(40, 90), meta: { medal: "gold", evil: "x" } }, { track: "monza" });
   assert.deepEqual(Object.keys(out.envelope.meta), ["medal"], "an export carries the same whitelist");
+});
+
+
+test("TT records find historical wear classes without crossing other settings", () => {
+  const G = { session: "tt", player: { team: { id: "haas" }, mods: {} },
+    track: { def: { id: "monza" } }, store: { rev: 0 }, recordControls: () => ({}),
+    raceTyreWear: "real", raceWeather: "dry", announce() {},
+    daily: { current: () => null, isActive: () => false }, fmtTime: String };
+  const saved = new Map(), board = new Map(), compared = [];
+  let guestContext = null;
+  const ghost = () => ({ contextKey: JSON.stringify, track: () => "monza", setTrack(id, key) { this.selected = key; },
+    bestTime() { return saved.get(this.selected) || Infinity; },
+    medal: () => null, startLap() {}, finishLap(time) { saved.set(this.selected, time); return true; } });
+  const Ghost = ghost(), InputGhost = { ...ghost(), startLap() {} };
+  const ctx = vm.createContext({ G, Ghost, InputGhost, PhysicsConsts: { REVISION: 7 },
+    GhostShare: { hasGuest: () => !!guestContext, guest: () => ({ context: guestContext }),
+      contextNotice(a, b) { compared.push([a, b]); return "comparison"; } },
+    Quali: { medalFor: () => null },
+    GameStore: { ttBoard: (id, key) => board.get(key) || [],
+      ttBoardAdd(id, entry) { board.set(entry.context, [entry]); } } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-records.js"), "utf8"), ctx);
+  const records = ctx.SessionRecords.create(G), normalized = records.current();
+  for (const wear of ["real", "light", "off"]) {
+    saved.clear(); board.clear();
+    const old = JSON.stringify({ ...records.config(), tyreWear: wear });
+    saved.set(old, 90); board.set(old, [{ t: 90, context: old }]);
+    guestContext = old;
+    for (const preference of ["off", "light", "real"]) {
+      G.raceTyreWear = preference;
+      assert.equal(records.begin(), normalized);
+      assert.equal(compared.at(-1)[0], normalized, "compatible historical guest compares as current class");
+      assert.equal(G.ttRecord, 90);
+      assert.equal(Ghost.bestTime(), 90); assert.equal(InputGhost.bestTime(), 90);
+      assert.equal(records.board("monza")[0].t, 90);
+    }
+    records.finish(89, [], 90);
+    records.begin();
+    assert.equal(G.ttRecord, 89, "new canonical board record survives reload");
+    assert.equal(Ghost.bestTime(), 89, "faster ghost remains discoverable through legacy key");
+    assert.equal(InputGhost.bestTime(), 89);
+    G.raceWeather = "wet"; records.begin();
+    assert.equal(G.ttRecord, Infinity); assert.equal(Ghost.bestTime(), Infinity);
+    G.raceWeather = "dry";
+  }
+  G.session = "race"; G.raceTyreWear = "real"; const real = records.current();
+  G.raceTyreWear = "off"; assert.notEqual(records.current(), real);
 });

@@ -1,0 +1,3744 @@
+{
+  "schema": 2,
+  "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
+  "sourceDigest": "87823243d8791ac4ffaca210b4cd9a7a70bd851b6909684123fb3e490dca8626",
+  "locations": [
+    {
+      "id": "abudhabi/ferrari-world",
+      "modelId": "abudhabi-ferrari-world",
+      "track": "abudhabi",
+      "name": "Ferrari World",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.281246,
+      "target": [
+        191.83,
+        14.2,
+        931.04
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 108,
+      "viewDistanceM": 108,
+      "source": "tests/data/landmarks/abudhabi.json; js/circuits/scenery/abudhabi.js"
+    },
+    {
+      "id": "abudhabi/marina",
+      "modelId": "abudhabi-marina",
+      "track": "abudhabi",
+      "name": "Marina",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.721576,
+      "target": [
+        -287.04,
+        8.31,
+        -459.09
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 71.1,
+      "viewDistanceM": 71.1,
+      "source": "tests/data/landmarks/abudhabi.json; js/circuits/scenery/abudhabi.js"
+    },
+    {
+      "id": "abudhabi/pit-exit-tunnel-portal",
+      "modelId": "abudhabi:pit-exit-tunnel-portal",
+      "track": "abudhabi",
+      "name": "Pit Exit Tunnel Portal",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.044731,
+      "target": [
+        -226.35,
+        1.86,
+        54.69
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 48,
+      "viewDistanceM": 48,
+      "source": "tests/data/landmarks/abudhabi.json; js/circuits/scenery/abudhabi.js"
+    },
+    {
+      "id": "abudhabi/yas-hotel-left-tower",
+      "modelId": "yas-hotel-left-tower",
+      "track": "abudhabi",
+      "name": "Yas Hotel Left Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.9818,
+      "target": [
+        117.5,
+        51.49,
+        94.99
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 41,
+      "viewDistanceM": 41,
+      "source": "tests/data/landmarks/abudhabi.json; js/circuits/scenery/abudhabi.js"
+    },
+    {
+      "id": "abudhabi/yas-hotel-right-tower",
+      "modelId": "yas-hotel-right-tower",
+      "track": "abudhabi",
+      "name": "Yas Hotel Right Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.981799,
+      "target": [
+        105.94,
+        51.49,
+        13.81
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 41,
+      "viewDistanceM": 41,
+      "source": "tests/data/landmarks/abudhabi.json; js/circuits/scenery/abudhabi.js"
+    },
+    {
+      "id": "abudhabi/yas-hotel-gridshell",
+      "modelId": "yas-hotel-gridshell",
+      "track": "abudhabi",
+      "name": "Yas Hotel Gridshell",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.981804,
+      "target": [
+        116.77,
+        16.4,
+        90.04
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 36,
+      "viewDistanceM": 36,
+      "source": "tests/data/landmarks/abudhabi.json; js/circuits/scenery/abudhabi.js"
+    },
+    {
+      "id": "albert_park/albert-piastri-stand",
+      "modelId": "albert-piastri-stand",
+      "track": "albert_park",
+      "name": "Albert Piastri Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.005328,
+      "target": [
+        146.99,
+        5.09,
+        -475.22
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 29,
+      "viewDistanceM": 29,
+      "source": "tests/data/landmarks/albert_park.json; js/circuits/scenery/albert_park.js"
+    },
+    {
+      "id": "albert_park/albert-msac",
+      "modelId": "albert-msac",
+      "track": "albert_park",
+      "name": "MSAC",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.148437,
+      "target": [
+        591.09,
+        10.38,
+        75.8
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 68.7,
+      "viewDistanceM": 68.8,
+      "source": "tests/data/landmarks/albert_park.json; js/circuits/scenery/albert_park.js"
+    },
+    {
+      "id": "albert_park/albert-lakeside-stadium",
+      "modelId": "albert-lakeside-stadium",
+      "track": "albert_park",
+      "name": "Albert Lakeside Stadium",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.644867,
+      "target": [
+        -314.75,
+        2.03,
+        -286.11
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 43,
+      "viewDistanceM": 43,
+      "source": "tests/data/landmarks/albert_park.json; js/circuits/scenery/albert_park.js"
+    },
+    {
+      "id": "anderstorp/speaker-tower",
+      "modelId": "anderstorp-speaker-tower",
+      "track": "anderstorp",
+      "name": "Speaker Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.022079,
+      "target": [
+        -148.2,
+        8.72,
+        27.15
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 55,
+      "viewDistanceM": 55,
+      "source": "tests/data/landmarks/anderstorp.json; js/circuits/scenery/anderstorp.js"
+    },
+    {
+      "id": "anderstorp/stations-1968",
+      "modelId": "anderstorp-stations-1968",
+      "track": "anderstorp",
+      "name": "Stations 1968",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.034394,
+      "target": [
+        -118.18,
+        3.55,
+        -7.22
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 60.4,
+      "viewDistanceM": 60.5,
+      "source": "tests/data/landmarks/anderstorp.json; js/circuits/scenery/anderstorp.js"
+    },
+    {
+      "id": "anderstorp/flight-hangars",
+      "modelId": "anderstorp-flight-hangars",
+      "track": "anderstorp",
+      "name": "Flight Hangars",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.639878,
+      "target": [
+        262.58,
+        9.16,
+        -250.54
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 62.5,
+      "viewDistanceM": 62.5,
+      "source": "tests/data/landmarks/anderstorp.json; js/circuits/scenery/anderstorp.js"
+    },
+    {
+      "id": "bahrain/sakhir-tower",
+      "modelId": "bahrain-sakhir-tower",
+      "track": "bahrain",
+      "name": "Sakhir Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.019304,
+      "target": [
+        308.12,
+        21.21,
+        146.4
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 69,
+      "viewDistanceM": 69,
+      "source": "tests/data/landmarks/bahrain.json; js/circuits/scenery/bahrain.js"
+    },
+    {
+      "id": "bahrain/main-tribuna",
+      "modelId": "bahrain-main-tribuna",
+      "track": "bahrain",
+      "name": "Main Tribuna",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.999983,
+      "target": [
+        412.13,
+        6.67,
+        46.3
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 31,
+      "viewDistanceM": 31,
+      "source": "tests/data/landmarks/bahrain.json; js/circuits/scenery/bahrain.js"
+    },
+    {
+      "id": "bahrain/control-tower",
+      "modelId": "bahrain-control-tower",
+      "track": "bahrain",
+      "name": "Control Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.007411,
+      "target": [
+        334.52,
+        12.4,
+        83.09
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 45,
+      "viewDistanceM": 45,
+      "source": "tests/data/landmarks/bahrain.json; js/circuits/scenery/bahrain.js"
+    },
+    {
+      "id": "bahrain/university-grandstand",
+      "modelId": "bahrain-university-grandstand",
+      "track": "bahrain",
+      "name": "University Grandstand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.184788,
+      "target": [
+        -52.88,
+        6.53,
+        496.99
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 33.2,
+      "viewDistanceM": 33.2,
+      "source": "tests/data/landmarks/bahrain.json; js/circuits/scenery/bahrain.js"
+    },
+    {
+      "id": "bahrain/schumacher-corner",
+      "modelId": "bahrain-schumacher-corner",
+      "track": "bahrain",
+      "name": "Schumacher Corner",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.101707,
+      "target": [
+        377.57,
+        2.35,
+        600.54
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 21,
+      "viewDistanceM": 21,
+      "source": "tests/data/landmarks/bahrain.json; js/circuits/scenery/bahrain.js"
+    },
+    {
+      "id": "bahrain/beyon-grandstand",
+      "modelId": "bahrain-beyon-grandstand",
+      "track": "bahrain",
+      "name": "Beyon Grandstand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.780259,
+      "target": [
+        -76.2,
+        3.96,
+        -309.32
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 45,
+      "viewDistanceM": 45,
+      "source": "tests/data/landmarks/bahrain.json; js/circuits/scenery/bahrain.js"
+    },
+    {
+      "id": "baku/shirvanshah-palace",
+      "modelId": "baku-shirvanshah-palace",
+      "track": "baku",
+      "name": "Shirvanshah Palace",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.501017,
+      "target": [
+        651.66,
+        12.97,
+        0.03
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 41.5,
+      "viewDistanceM": 41.5,
+      "source": "tests/data/landmarks/baku.json; js/circuits/scenery/baku.js"
+    },
+    {
+      "id": "baku/icheri-sheher-wall",
+      "modelId": "baku-icheri-sheher-wall",
+      "track": "baku",
+      "name": "Icheri Sheher Wall",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.460339,
+      "target": [
+        400.88,
+        22.17,
+        55.23
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 15.4,
+      "viewDistanceM": 15.4,
+      "source": "tests/data/landmarks/baku.json; js/circuits/scenery/baku.js"
+    },
+    {
+      "id": "brands_hatch/pit-straight-stand",
+      "modelId": "brands-pit-straight-stand",
+      "track": "brands_hatch",
+      "name": "Pit Straight Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.977375,
+      "target": [
+        226.12,
+        -5.34,
+        -23.68
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 32.4,
+      "viewDistanceM": 32.4,
+      "source": "tests/data/landmarks/brands_hatch.json; js/circuits/scenery/brands_hatch.js"
+    },
+    {
+      "id": "brands_hatch/desire-wilson-stand",
+      "modelId": "brands-desire-wilson-stand",
+      "track": "brands_hatch",
+      "name": "Desire Wilson Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.997978,
+      "target": [
+        300.58,
+        -8.1,
+        6.13
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 29.7,
+      "viewDistanceM": 29.7,
+      "source": "tests/data/landmarks/brands_hatch.json; js/circuits/scenery/brands_hatch.js"
+    },
+    {
+      "id": "brands_hatch/paddock-hill-stand",
+      "modelId": "brands-paddock-hill-stand",
+      "track": "brands_hatch",
+      "name": "Paddock Hill Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.015448,
+      "target": [
+        363.91,
+        -8,
+        32.78
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 27,
+      "viewDistanceM": 27,
+      "source": "tests/data/landmarks/brands_hatch.json; js/circuits/scenery/brands_hatch.js"
+    },
+    {
+      "id": "brands_hatch/hailwoods-stand",
+      "modelId": "brands-hailwoods-stand",
+      "track": "brands_hatch",
+      "name": "Hailwoods Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.038105,
+      "target": [
+        439.35,
+        -11.49,
+        109.89
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 27.1,
+      "viewDistanceM": 27.1,
+      "source": "tests/data/landmarks/brands_hatch.json; js/circuits/scenery/brands_hatch.js"
+    },
+    {
+      "id": "brands_hatch/kentagon",
+      "modelId": "brands-kentagon",
+      "track": "brands_hatch",
+      "name": "Kentagon",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.017605,
+      "target": [
+        344.02,
+        -10.06,
+        102.4
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 45,
+      "viewDistanceM": 45,
+      "source": "tests/data/landmarks/brands_hatch.json; js/circuits/scenery/brands_hatch.js"
+    },
+    {
+      "id": "buddh/main-grandstand",
+      "modelId": "buddh-main-grandstand",
+      "track": "buddh",
+      "name": "Main Grandstand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.021995,
+      "target": [
+        74.57,
+        10,
+        261.3
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 45,
+      "viewDistanceM": 45,
+      "source": "tests/data/landmarks/buddh.json; js/circuits/scenery/buddh.js"
+    },
+    {
+      "id": "buddh/pit-complex",
+      "modelId": "buddh-pit-complex",
+      "track": "buddh",
+      "name": "Pit Complex",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.005466,
+      "target": [
+        -52.95,
+        6.14,
+        217.94
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 60,
+      "viewDistanceM": 60,
+      "source": "tests/data/landmarks/buddh.json; js/circuits/scenery/buddh.js"
+    },
+    {
+      "id": "buddh/temple-hill",
+      "modelId": "buddh-temple-hill",
+      "track": "buddh",
+      "name": "Temple Hill",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.268785,
+      "target": [
+        -169,
+        12.66,
+        230.86
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 93.2,
+      "viewDistanceM": 93.2,
+      "source": "tests/data/landmarks/buddh.json; js/circuits/scenery/buddh.js"
+    },
+    {
+      "id": "buenos_aires/pit-block",
+      "modelId": "baires-pit-block",
+      "track": "buenos_aires",
+      "name": "Pit Block",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.975447,
+      "target": [
+        72.32,
+        1.67,
+        -52.11
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 59.5,
+      "viewDistanceM": 59.5,
+      "source": "tests/data/landmarks/buenos_aires.json; js/circuits/scenery/buenos_aires.js"
+    },
+    {
+      "id": "buenos_aires/control-tower",
+      "modelId": "baires-control-tower",
+      "track": "buenos_aires",
+      "name": "Control Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.995,
+      "target": [
+        14.14,
+        6.82,
+        9.99
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/buenos_aires.js anchor K(0.995)",
+      "projectedFrac": 0.193579,
+      "nearestRoadDistanceM": 67.6,
+      "viewDistanceM": 73.5,
+      "source": "tests/data/landmarks/buenos_aires.json; js/circuits/scenery/buenos_aires.js"
+    },
+    {
+      "id": "buenos_aires/portico",
+      "modelId": "baires-portico",
+      "track": "buenos_aires",
+      "name": "Portico",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.928344,
+      "target": [
+        278.96,
+        8.59,
+        -153.6
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 55.8,
+      "viewDistanceM": 55.8,
+      "source": "tests/data/landmarks/buenos_aires.json; js/circuits/scenery/buenos_aires.js"
+    },
+    {
+      "id": "buenos_aires/terrace-curvon",
+      "modelId": "baires-terrace-curvon",
+      "track": "buenos_aires",
+      "name": "Curvón Terrace",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.379472,
+      "target": [
+        -377.46,
+        6.83,
+        188.21
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 35,
+      "viewDistanceM": 35,
+      "source": "tests/data/landmarks/buenos_aires.json; js/circuits/scenery/buenos_aires.js"
+    },
+    {
+      "id": "buenos_aires/confiteria",
+      "modelId": "baires-confiteria",
+      "track": "buenos_aires",
+      "name": "Confiteria",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.745641,
+      "target": [
+        108.23,
+        2.1,
+        -215.4
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 40.6,
+      "viewDistanceM": 40.6,
+      "source": "tests/data/landmarks/buenos_aires.json; js/circuits/scenery/buenos_aires.js"
+    },
+    {
+      "id": "buenos_aires/talud-gate",
+      "modelId": "baires-talud-gate",
+      "track": "buenos_aires",
+      "name": "Talud Gate",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.83475,
+      "target": [
+        305.88,
+        3.86,
+        -415.55
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 54.4,
+      "viewDistanceM": 54.4,
+      "source": "tests/data/landmarks/buenos_aires.json; js/circuits/scenery/buenos_aires.js"
+    },
+    {
+      "id": "catalunya/main-grandstand",
+      "modelId": "catalunya-main-grandstand",
+      "track": "catalunya",
+      "name": "Main Grandstand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.004991,
+      "target": [
+        -289.43,
+        8.82,
+        53.16
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 16,
+      "viewDistanceM": 16,
+      "source": "tests/data/landmarks/catalunya.json; js/circuits/scenery/catalunya.js"
+    },
+    {
+      "id": "catalunya/pit-end-scoreboard",
+      "modelId": "catalunya-pit-end-scoreboard",
+      "track": "catalunya",
+      "name": "Pit End Scoreboard",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.042218,
+      "target": [
+        -159.28,
+        11.6,
+        -69.57
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 28.8,
+      "viewDistanceM": 28.8,
+      "source": "tests/data/landmarks/catalunya.json; js/circuits/scenery/catalunya.js"
+    },
+    {
+      "id": "cota/amphitheater",
+      "modelId": "cota-amphitheater",
+      "track": "cota",
+      "name": "Amphitheater",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.760073,
+      "target": [
+        359.57,
+        -0.07,
+        -2.48
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 86.5,
+      "viewDistanceM": 86.5,
+      "source": "tests/data/landmarks/cota.json; js/circuits/scenery/cota.js"
+    },
+    {
+      "id": "cota/turn1-big-red",
+      "modelId": "cota-turn1-big-red",
+      "track": "cota",
+      "name": "Turn1 Big Red",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.100291,
+      "target": [
+        377.31,
+        6.83,
+        -348.35
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 56,
+      "viewDistanceM": 56,
+      "source": "tests/data/landmarks/cota.json; js/circuits/scenery/cota.js"
+    },
+    {
+      "id": "dijon/combe-cut",
+      "modelId": "dijon-combe-cut",
+      "track": "dijon",
+      "name": "Combe Cut",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.308155,
+      "target": [
+        -353.36,
+        -8.5,
+        314.26
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 65.6,
+      "viewDistanceM": 65.6,
+      "source": "tests/data/landmarks/dijon.json; js/circuits/scenery/dijon.js"
+    },
+    {
+      "id": "dijon/parabolique-bank",
+      "modelId": "dijon-parabolique-bank",
+      "track": "dijon",
+      "name": "Parabolique Bank",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.829925,
+      "target": [
+        477.83,
+        -13.49,
+        -528.65
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 35.1,
+      "viewDistanceM": 35.1,
+      "source": "tests/data/landmarks/dijon.json; js/circuits/scenery/dijon.js"
+    },
+    {
+      "id": "dijon/prenois-ferme",
+      "modelId": "dijon-prenois-ferme",
+      "track": "dijon",
+      "name": "Prenois Ferme",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.45898,
+      "target": [
+        -191.18,
+        -8.38,
+        -31.89
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 66.3,
+      "viewDistanceM": 66.4,
+      "source": "tests/data/landmarks/dijon.json; js/circuits/scenery/dijon.js"
+    },
+    {
+      "id": "donington/hollywood-stand",
+      "modelId": "donington-hollywood-stand",
+      "track": "donington",
+      "name": "Hollywood Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.285258,
+      "target": [
+        141.7,
+        4.52,
+        -151.36
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/donington.js sHollywood",
+      "projectedFrac": 0.257273,
+      "nearestRoadDistanceM": 28,
+      "viewDistanceM": 34,
+      "source": "tests/data/landmarks/donington.json; js/circuits/scenery/donington.js"
+    },
+    {
+      "id": "donington/ema-airliner",
+      "modelId": "donington-ema-airliner",
+      "track": "donington",
+      "name": "EMA Airliner",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.737258,
+      "target": [
+        -162.63,
+        103.07,
+        525.11
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/donington.js sAir",
+      "projectedFrac": 0.61747,
+      "nearestRoadDistanceM": 340.5,
+      "viewDistanceM": 486.6,
+      "source": "tests/data/landmarks/donington.json; js/circuits/scenery/donington.js"
+    },
+    {
+      "id": "donington/ratcliffe-power",
+      "modelId": "donington-ratcliffe-power",
+      "track": "donington",
+      "name": "Ratcliffe Power",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.840053,
+      "target": [
+        -3063.96,
+        73.08,
+        1306.73
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 2784,
+      "viewDistanceM": 2784,
+      "source": "tests/data/landmarks/donington.json; js/circuits/scenery/donington.js"
+    },
+    {
+      "id": "estoril/timing-tower",
+      "modelId": "estoril-timing-tower",
+      "track": "estoril",
+      "name": "Timing Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.977788,
+      "target": [
+        -87.27,
+        11.86,
+        -30.42
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 29,
+      "viewDistanceM": 29,
+      "source": "tests/data/landmarks/estoril.json; js/circuits/scenery/estoril.js"
+    },
+    {
+      "id": "estoril/aldeia",
+      "modelId": "estoril-aldeia",
+      "track": "estoril",
+      "name": "Aldeia",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.26,
+      "target": [
+        94.8,
+        2.09,
+        -254.47
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/estoril.js anchor K(0.26)",
+      "projectedFrac": 0.333204,
+      "nearestRoadDistanceM": 24.7,
+      "viewDistanceM": 103.5,
+      "source": "tests/data/landmarks/estoril.json; js/circuits/scenery/estoril.js"
+    },
+    {
+      "id": "estoril/deposito",
+      "modelId": "estoril-deposito",
+      "track": "estoril",
+      "name": "Deposito",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.62,
+      "target": [
+        260.88,
+        6.82,
+        -59.21
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/estoril.js anchor K(0.62)",
+      "projectedFrac": 0.231695,
+      "nearestRoadDistanceM": 90.7,
+      "viewDistanceM": 157,
+      "source": "tests/data/landmarks/estoril.json; js/circuits/scenery/estoril.js"
+    },
+    {
+      "id": "estoril/moinho",
+      "modelId": "estoril-moinho",
+      "track": "estoril",
+      "name": "Moinho",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.44,
+      "target": [
+        -185.91,
+        6.41,
+        50.41
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/estoril.js anchor K(0.44); geographic identity uncertain",
+      "projectedFrac": 0.950164,
+      "nearestRoadDistanceM": 27.6,
+      "viewDistanceM": 124.6,
+      "source": "tests/data/landmarks/estoril.json; js/circuits/scenery/estoril.js"
+    },
+    {
+      "id": "fuji/speedway-hotel",
+      "modelId": "fuji-speedway-hotel",
+      "track": "fuji",
+      "name": "Speedway Hotel",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.168,
+      "target": [
+        -402.22,
+        -7.95,
+        308.67
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/fuji.js anchor K(0.168)",
+      "projectedFrac": 0.345419,
+      "nearestRoadDistanceM": 48.3,
+      "viewDistanceM": 144.9,
+      "source": "tests/data/landmarks/fuji.json; js/circuits/scenery/fuji.js"
+    },
+    {
+      "id": "fuji/mount-fuji",
+      "modelId": "fuji-mount-fuji",
+      "track": "fuji",
+      "name": "Mount Fuji",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.12,
+      "target": [
+        3038.57,
+        378.05,
+        90.34
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "docs/tracks/fuji.md §4 skyline viewing station",
+      "projectedFrac": 0.89832,
+      "nearestRoadDistanceM": 2449.6,
+      "viewDistanceM": 3193.5,
+      "source": "tests/data/landmarks/fuji.json; js/circuits/scenery/fuji.js"
+    },
+    {
+      "id": "hockenheim/motodrom-screen",
+      "modelId": "hockenheim-motodrom-screen",
+      "track": "hockenheim",
+      "name": "Motodrom Screen",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.881596,
+      "target": [
+        437.41,
+        9.98,
+        -321.85
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 46.6,
+      "viewDistanceM": 46.6,
+      "source": "tests/data/landmarks/hockenheim.json; js/circuits/scenery/hockenheim.js"
+    },
+    {
+      "id": "hockenheim/mercedes-tribune",
+      "modelId": "hockenheim-mercedes-tribune",
+      "track": "hockenheim",
+      "name": "Mercedes Tribune",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.828194,
+      "target": [
+        458.46,
+        12.03,
+        -76.67
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 31.5,
+      "viewDistanceM": 31.5,
+      "source": "tests/data/landmarks/hockenheim.json; js/circuits/scenery/hockenheim.js"
+    },
+    {
+      "id": "hockenheim/sued-tribune",
+      "modelId": "hockenheim-sued-tribune",
+      "track": "hockenheim",
+      "name": "Süd Tribune",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.934802,
+      "target": [
+        431.99,
+        9.19,
+        -491.58
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 37.4,
+      "viewDistanceM": 37.4,
+      "source": "tests/data/landmarks/hockenheim.json; js/circuits/scenery/hockenheim.js"
+    },
+    {
+      "id": "hockenheim/nord-tribune",
+      "modelId": "hockenheim-nord-tribune",
+      "track": "hockenheim",
+      "name": "Nord Tribune",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.054623,
+      "target": [
+        744.38,
+        6.8,
+        -20.9
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 32.2,
+      "viewDistanceM": 32.2,
+      "source": "tests/data/landmarks/hockenheim.json; js/circuits/scenery/hockenheim.js"
+    },
+    {
+      "id": "hockenheim/infield-compound",
+      "modelId": "hockenheim-infield-compound",
+      "track": "hockenheim",
+      "name": "Infield Compound",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.89,
+      "target": [
+        345.2,
+        2.27,
+        -277.35
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/hockenheim.js anchor K(0.890)",
+      "projectedFrac": 0.782608,
+      "nearestRoadDistanceM": 32.2,
+      "viewDistanceM": 52.6,
+      "source": "tests/data/landmarks/hockenheim.json; js/circuits/scenery/hockenheim.js"
+    },
+    {
+      "id": "hungaroring/pit-complex",
+      "modelId": "hungaroring-pit-complex",
+      "track": "hungaroring",
+      "name": "Pit Complex",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.000001,
+      "target": [
+        373.81,
+        3.15,
+        -341.04
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 51,
+      "viewDistanceM": 51,
+      "source": "tests/data/landmarks/hungaroring.json; js/circuits/scenery/hungaroring.js"
+    },
+    {
+      "id": "hungaroring/main-tribune",
+      "modelId": "hungaroring-main-tribune",
+      "track": "hungaroring",
+      "name": "Main Tribune",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.999954,
+      "target": [
+        313.7,
+        3.02,
+        -265.77
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 45.3,
+      "viewDistanceM": 45.3,
+      "source": "tests/data/landmarks/hungaroring.json; js/circuits/scenery/hungaroring.js"
+    },
+    {
+      "id": "imola/partenza-stands",
+      "modelId": "imola-partenza-stands",
+      "track": "imola",
+      "name": "Partenza Stands",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.02473,
+      "target": [
+        -261.56,
+        1.98,
+        414.56
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 48.2,
+      "viewDistanceM": 48.2,
+      "source": "tests/data/landmarks/imola.json; js/circuits/scenery/imola.js"
+    },
+    {
+      "id": "imola/racetrack-tower",
+      "modelId": "imola-racetrack-tower",
+      "track": "imola",
+      "name": "Racetrack Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.989327,
+      "target": [
+        -425.44,
+        17.04,
+        301.18
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 55,
+      "viewDistanceM": 55,
+      "source": "tests/data/landmarks/imola.json; js/circuits/scenery/imola.js"
+    },
+    {
+      "id": "imola/senna-memorial",
+      "modelId": "senna-memorial",
+      "track": "imola",
+      "name": "Senna Memorial",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.074693,
+      "target": [
+        -12.51,
+        3.59,
+        379.33
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 27,
+      "viewDistanceM": 27,
+      "source": "tests/data/landmarks/imola.json; js/circuits/scenery/imola.js"
+    },
+    {
+      "id": "imola/hill-villas",
+      "modelId": "imola-hill-villas",
+      "track": "imola",
+      "name": "Hill Villas",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.355,
+      "target": [
+        749.48,
+        3.66,
+        -445.04
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/imola.js anchor R(0.355)",
+      "projectedFrac": 0.378715,
+      "nearestRoadDistanceM": 31.6,
+      "viewDistanceM": 91,
+      "source": "tests/data/landmarks/imola.json; js/circuits/scenery/imola.js"
+    },
+    {
+      "id": "imola/tamburello-tribute-wall",
+      "modelId": "imola-tamburello-tribute-wall",
+      "track": "imola",
+      "name": "Tamburello Tribute Wall",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.08124,
+      "target": [
+        17.01,
+        1.76,
+        369.04
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 37.6,
+      "viewDistanceM": 37.6,
+      "source": "tests/data/landmarks/imola.json; js/circuits/scenery/imola.js"
+    },
+    {
+      "id": "indianapolis/pagoda",
+      "modelId": "indy-pagoda",
+      "track": "indianapolis",
+      "name": "Pagoda",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.00491,
+      "target": [
+        264.4,
+        24.52,
+        -77.52
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 70,
+      "viewDistanceM": 70,
+      "source": "tests/data/landmarks/indianapolis.json; js/circuits/scenery/indianapolis.js"
+    },
+    {
+      "id": "indianapolis/scoring-pylon",
+      "modelId": "indy-scoring-pylon",
+      "track": "indianapolis",
+      "name": "Scoring Pylon",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.030446,
+      "target": [
+        303.27,
+        17.79,
+        26.13
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 32,
+      "viewDistanceM": 32,
+      "source": "tests/data/landmarks/indianapolis.json; js/circuits/scenery/indianapolis.js"
+    },
+    {
+      "id": "indianapolis/main-stands",
+      "modelId": "indy-main-stands",
+      "track": "indianapolis",
+      "name": "Main Stands",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.999994,
+      "target": [
+        366.52,
+        6.93,
+        -98.45
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 32.3,
+      "viewDistanceM": 32.3,
+      "source": "tests/data/landmarks/indianapolis.json; js/circuits/scenery/indianapolis.js"
+    },
+    {
+      "id": "indianapolis/museum",
+      "modelId": "indy-museum",
+      "track": "indianapolis",
+      "name": "Museum",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.801925,
+      "target": [
+        46.97,
+        2.83,
+        -624.76
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 103.7,
+      "viewDistanceM": 103.7,
+      "source": "tests/data/landmarks/indianapolis.json; js/circuits/scenery/indianapolis.js"
+    },
+    {
+      "id": "interlagos/senna-s",
+      "modelId": "interlagos-senna-s",
+      "track": "interlagos",
+      "name": "Senna S",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.055567,
+      "target": [
+        171.01,
+        1.48,
+        -475.96
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 29.1,
+      "viewDistanceM": 29.1,
+      "source": "tests/data/landmarks/interlagos.json; js/circuits/scenery/interlagos.js"
+    },
+    {
+      "id": "interlagos/main-tribuna",
+      "modelId": "interlagos-main-tribuna",
+      "track": "interlagos",
+      "name": "Main Tribuna",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.010247,
+      "target": [
+        181.31,
+        1.27,
+        -285.8
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 68.5,
+      "viewDistanceM": 68.5,
+      "source": "tests/data/landmarks/interlagos.json; js/circuits/scenery/interlagos.js"
+    },
+    {
+      "id": "interlagos/guarapiranga",
+      "modelId": "interlagos-guarapiranga",
+      "track": "interlagos",
+      "name": "Guarapiranga",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.42,
+      "target": [
+        -460.63,
+        -35.34,
+        -234.28
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/interlagos.js anchor K(0.42)",
+      "projectedFrac": 0.217119,
+      "nearestRoadDistanceM": 234.3,
+      "viewDistanceM": 559.1,
+      "source": "tests/data/landmarks/interlagos.json; js/circuits/scenery/interlagos.js"
+    },
+    {
+      "id": "interlagos/guarapiranga-shore",
+      "modelId": "interlagos-guarapiranga-shore",
+      "track": "interlagos",
+      "name": "Guarapiranga Shore",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.4,
+      "target": [
+        -205.34,
+        -34.74,
+        -6.91
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/interlagos.js anchor K(0.40)",
+      "projectedFrac": 0.253968,
+      "nearestRoadDistanceM": 69.4,
+      "viewDistanceM": 217,
+      "source": "tests/data/landmarks/interlagos.json; js/circuits/scenery/interlagos.js"
+    },
+    {
+      "id": "istanbul/turn8-hospitality",
+      "modelId": "istanbul-turn8-hospitality",
+      "track": "istanbul",
+      "name": "Turn8 Hospitality",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.477169,
+      "target": [
+        -784.64,
+        7.23,
+        516.36
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 57.5,
+      "viewDistanceM": 57.5,
+      "source": "tests/data/landmarks/istanbul.json; js/circuits/scenery/istanbul.js"
+    },
+    {
+      "id": "istanbul/stone-portal",
+      "modelId": "istanbul-stone-portal",
+      "track": "istanbul",
+      "name": "Stone Portal",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.911937,
+      "target": [
+        622.44,
+        7.14,
+        -587.3
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 31.6,
+      "viewDistanceM": 31.7,
+      "source": "tests/data/landmarks/istanbul.json; js/circuits/scenery/istanbul.js"
+    },
+    {
+      "id": "jacarepagua/tijuca-ridge",
+      "modelId": "jacarepagua-tijuca-ridge",
+      "track": "jacarepagua",
+      "name": "Tijuca Ridge",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.59202,
+      "target": [
+        1047.29,
+        38.64,
+        391.69
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 530.3,
+      "viewDistanceM": 530.3,
+      "source": "tests/data/landmarks/jacarepagua.json; js/circuits/scenery/jacarepagua.js"
+    },
+    {
+      "id": "jacarepagua/pit-bleacher",
+      "modelId": "jacarepagua-pit-bleacher",
+      "track": "jacarepagua",
+      "name": "Pit Bleacher",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0,
+      "target": [
+        86.99,
+        2.67,
+        277.2
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 20,
+      "viewDistanceM": 20,
+      "source": "tests/data/landmarks/jacarepagua.json; js/circuits/scenery/jacarepagua.js"
+    },
+    {
+      "id": "jacarepagua/fishing-skiff",
+      "modelId": "jacarepagua-fishing-skiff",
+      "track": "jacarepagua",
+      "name": "Fishing Skiff",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.448,
+      "target": [
+        -131.98,
+        3.38,
+        209.55
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/jacarepagua.js anchor K(0.448)",
+      "projectedFrac": 0.044849,
+      "nearestRoadDistanceM": 45.5,
+      "viewDistanceM": 119.5,
+      "source": "tests/data/landmarks/jacarepagua.json; js/circuits/scenery/jacarepagua.js"
+    },
+    {
+      "id": "jacarepagua/sail-skiff-a",
+      "modelId": "jacarepagua-sail-skiff-a",
+      "track": "jacarepagua",
+      "name": "Sail Skiff A",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.478,
+      "target": [
+        14.47,
+        2.66,
+        201.27
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/jacarepagua.js anchor K(0.478)",
+      "projectedFrac": 0.014837,
+      "nearestRoadDistanceM": 55.6,
+      "viewDistanceM": 131.5,
+      "source": "tests/data/landmarks/jacarepagua.json; js/circuits/scenery/jacarepagua.js"
+    },
+    {
+      "id": "jacarepagua/sail-skiff-b",
+      "modelId": "jacarepagua-sail-skiff-b",
+      "track": "jacarepagua",
+      "name": "Sail Skiff B",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.508,
+      "target": [
+        160.06,
+        3.71,
+        218.88
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/jacarepagua.js anchor K(0.508)",
+      "projectedFrac": 0.985154,
+      "nearestRoadDistanceM": 38.5,
+      "viewDistanceM": 115.5,
+      "source": "tests/data/landmarks/jacarepagua.json; js/circuits/scenery/jacarepagua.js"
+    },
+    {
+      "id": "jacarepagua/paddock-1",
+      "modelId": "jacarepagua-paddock-1",
+      "track": "jacarepagua",
+      "name": "Paddock 1",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.90532,
+      "target": [
+        408.4,
+        4.96,
+        198.23
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 47.3,
+      "viewDistanceM": 47.3,
+      "source": "tests/data/landmarks/jacarepagua.json; js/circuits/scenery/jacarepagua.js"
+    },
+    {
+      "id": "jacarepagua/paddock-2",
+      "modelId": "jacarepagua-paddock-2",
+      "track": "jacarepagua",
+      "name": "Paddock 2",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.935771,
+      "target": [
+        396.64,
+        4.85,
+        201.56
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 52,
+      "viewDistanceM": 52,
+      "source": "tests/data/landmarks/jacarepagua.json; js/circuits/scenery/jacarepagua.js"
+    },
+    {
+      "id": "jacarepagua/paddock-3",
+      "modelId": "jacarepagua-paddock-3",
+      "track": "jacarepagua",
+      "name": "Paddock 3",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.956002,
+      "target": [
+        302.67,
+        4.82,
+        205.11
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 52,
+      "viewDistanceM": 52,
+      "source": "tests/data/landmarks/jacarepagua.json; js/circuits/scenery/jacarepagua.js"
+    },
+    {
+      "id": "jeddah/fountain",
+      "modelId": "jeddah-fountain",
+      "track": "jeddah",
+      "name": "Fountain",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.2,
+      "target": [
+        -307.46,
+        177.07,
+        -432.35
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/jeddah.js anchor K(0.20)",
+      "projectedFrac": 0.165062,
+      "nearestRoadDistanceM": 206.9,
+      "viewDistanceM": 266,
+      "source": "tests/data/landmarks/jeddah.json; js/circuits/scenery/jeddah.js"
+    },
+    {
+      "id": "jeddah/floating-mosque",
+      "modelId": "jeddah-floating-mosque",
+      "track": "jeddah",
+      "name": "Floating Mosque",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.164935,
+      "target": [
+        -335.14,
+        19.6,
+        -423.18
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 236,
+      "viewDistanceM": 236,
+      "source": "tests/data/landmarks/jeddah.json; js/circuits/scenery/jeddah.js"
+    },
+    {
+      "id": "jeddah/blue-sail",
+      "modelId": "jeddah-blue-sail",
+      "track": "jeddah",
+      "name": "Blue Sail",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.275,
+      "target": [
+        157.91,
+        63.01,
+        37.5
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/jeddah.js anchor K(0.275)",
+      "projectedFrac": 0.701744,
+      "nearestRoadDistanceM": 53.5,
+      "viewDistanceM": 92.3,
+      "source": "tests/data/landmarks/jeddah.json; js/circuits/scenery/jeddah.js"
+    },
+    {
+      "id": "jeddah/golden-tower-hotel",
+      "modelId": "jeddah-golden-tower-hotel",
+      "track": "jeddah",
+      "name": "Golden Tower Hotel",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.055126,
+      "target": [
+        -247.4,
+        26.05,
+        -1167.11
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 80,
+      "viewDistanceM": 80,
+      "source": "tests/data/landmarks/jeddah.json; js/circuits/scenery/jeddah.js"
+    },
+    {
+      "id": "jeddah/flagpole",
+      "modelId": "jeddah-flagpole",
+      "track": "jeddah",
+      "name": "Flagpole",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.3,
+      "target": [
+        163.1,
+        80.9,
+        252.68
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/jeddah.js anchor K(0.30)",
+      "projectedFrac": 0.665971,
+      "nearestRoadDistanceM": 40.4,
+      "viewDistanceM": 138.9,
+      "source": "tests/data/landmarks/jeddah.json; js/circuits/scenery/jeddah.js"
+    },
+    {
+      "id": "jerez/ovni",
+      "modelId": "jerez-ovni",
+      "track": "jerez",
+      "name": "El Ovni",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.002,
+      "target": [
+        -9.37,
+        13.34,
+        -144.42
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/jerez.js anchor K(sl(0.002))",
+      "projectedFrac": 0.662128,
+      "nearestRoadDistanceM": 30.9,
+      "viewDistanceM": 33.5,
+      "source": "tests/data/landmarks/jerez.json; js/circuits/scenery/jerez.js"
+    },
+    {
+      "id": "jerez/control-tower",
+      "modelId": "jerez-control-tower",
+      "track": "jerez",
+      "name": "Control Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.01184,
+      "target": [
+        -41.64,
+        21.73,
+        -177.57
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 31.5,
+      "viewDistanceM": 31.5,
+      "source": "tests/data/landmarks/jerez.json; js/circuits/scenery/jerez.js"
+    },
+    {
+      "id": "jerez/lorenzo-corner",
+      "modelId": "jerez-lorenzo-corner",
+      "track": "jerez",
+      "name": "Lorenzo Corner",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.825221,
+      "target": [
+        499.77,
+        4.99,
+        -199.29
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 23.5,
+      "viewDistanceM": 23.5,
+      "source": "tests/data/landmarks/jerez.json; js/circuits/scenery/jerez.js"
+    },
+    {
+      "id": "jerez/dani-pedrosa",
+      "modelId": "jerez-dani-pedrosa",
+      "track": "jerez",
+      "name": "Dani Pedrosa",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.258058,
+      "target": [
+        -74.68,
+        13.16,
+        363.5
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 25.5,
+      "viewDistanceM": 25.5,
+      "source": "tests/data/landmarks/jerez.json; js/circuits/scenery/jerez.js"
+    },
+    {
+      "id": "korea/main-grandstand",
+      "modelId": "korea-main-grandstand",
+      "track": "korea",
+      "name": "Main Grandstand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.020226,
+      "target": [
+        -393.1,
+        4.01,
+        -524.47
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 31.9,
+      "viewDistanceM": 31.9,
+      "source": "tests/data/landmarks/korea.json; js/circuits/scenery/korea.js"
+    },
+    {
+      "id": "korea/marina-shells",
+      "modelId": "korea-marina-shells",
+      "track": "korea",
+      "name": "Marina Shells",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.663787,
+      "target": [
+        300.13,
+        21.35,
+        258.76
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 59.2,
+      "viewDistanceM": 59.2,
+      "source": "tests/data/landmarks/korea.json; js/circuits/scenery/korea.js"
+    },
+    {
+      "id": "korea/final-footbridge",
+      "modelId": "korea-final-footbridge",
+      "track": "korea",
+      "name": "Final Footbridge",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.884862,
+      "target": [
+        231.57,
+        6.02,
+        -447.3
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 24,
+      "viewDistanceM": 24,
+      "source": "tests/data/landmarks/korea.json; js/circuits/scenery/korea.js"
+    },
+    {
+      "id": "kyalami/pit-block",
+      "modelId": "kyalami-pit-block",
+      "track": "kyalami",
+      "name": "Pit Block",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.982236,
+      "target": [
+        -458.62,
+        -0.03,
+        -45.36
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 50.8,
+      "viewDistanceM": 50.8,
+      "source": "tests/data/landmarks/kyalami.json; js/circuits/scenery/kyalami.js"
+    },
+    {
+      "id": "kyalami/race-control",
+      "modelId": "kyalami-race-control",
+      "track": "kyalami",
+      "name": "Race Control",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.999117,
+      "target": [
+        -408.11,
+        9.44,
+        -93.4
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 53.7,
+      "viewDistanceM": 53.7,
+      "source": "tests/data/landmarks/kyalami.json; js/circuits/scenery/kyalami.js"
+    },
+    {
+      "id": "kyalami/main-grandstand",
+      "modelId": "kyalami-main-grandstand",
+      "track": "kyalami",
+      "name": "Main Grandstand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.95,
+      "target": [
+        -533.21,
+        6.09,
+        97.17
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 23.5,
+      "viewDistanceM": 23.5,
+      "source": "tests/data/landmarks/kyalami.json; js/circuits/scenery/kyalami.js"
+    },
+    {
+      "id": "kyalami/headgear",
+      "modelId": "kyalami-headgear",
+      "track": "kyalami",
+      "name": "Headgear",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.34,
+      "target": [
+        556.26,
+        5.03,
+        -128.05
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/kyalami.js anchor K(0.34)",
+      "projectedFrac": 0.463592,
+      "nearestRoadDistanceM": 159.6,
+      "viewDistanceM": 219.9,
+      "source": "tests/data/landmarks/kyalami.json; js/circuits/scenery/kyalami.js"
+    },
+    {
+      "id": "kyalami/windpump",
+      "modelId": "kyalami-windpump",
+      "track": "kyalami",
+      "name": "Windpump",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.708237,
+      "target": [
+        -87.78,
+        1.6,
+        86.19
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 96.3,
+      "viewDistanceM": 96.3,
+      "source": "tests/data/landmarks/kyalami.json; js/circuits/scenery/kyalami.js"
+    },
+    {
+      "id": "kyalami/clubhouse",
+      "modelId": "kyalami-clubhouse",
+      "track": "kyalami",
+      "name": "Clubhouse",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.964999,
+      "target": [
+        -532.88,
+        -1.73,
+        -22.13
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 75.5,
+      "viewDistanceM": 75.5,
+      "source": "tests/data/landmarks/kyalami.json; js/circuits/scenery/kyalami.js"
+    },
+    {
+      "id": "madrid/monumental-stands",
+      "modelId": "madrid-monumental-stands",
+      "track": "madrid",
+      "name": "Monumental Stands",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.759723,
+      "target": [
+        -154.36,
+        12.25,
+        -80
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 28.1,
+      "viewDistanceM": 28.1,
+      "source": "tests/data/landmarks/madrid.json; js/circuits/scenery/madrid.js"
+    },
+    {
+      "id": "madrid/sf-tribuna",
+      "modelId": "madrid-sf-tribuna",
+      "track": "madrid",
+      "name": "Start/Finish Tribuna",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0,
+      "target": [
+        -193.52,
+        3.37,
+        -828.11
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 26,
+      "viewDistanceM": 26,
+      "source": "tests/data/landmarks/madrid.json; js/circuits/scenery/madrid.js"
+    },
+    {
+      "id": "magny_cours/main-tribuna",
+      "modelId": "magny-cours-main-tribuna",
+      "track": "magny_cours",
+      "name": "Main Tribuna",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.005478,
+      "target": [
+        205.35,
+        4.19,
+        -35.32
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 28,
+      "viewDistanceM": 28,
+      "source": "tests/data/landmarks/magny_cours.json; js/circuits/scenery/magny_cours.js"
+    },
+    {
+      "id": "magny_cours/control-block",
+      "modelId": "magny-cours-control-block",
+      "track": "magny_cours",
+      "name": "Control Block",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.996502,
+      "target": [
+        183.58,
+        9.23,
+        -126.93
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 57.3,
+      "viewDistanceM": 57.3,
+      "source": "tests/data/landmarks/magny_cours.json; js/circuits/scenery/magny_cours.js"
+    },
+    {
+      "id": "magny_cours/conservatoire",
+      "modelId": "magny-cours-conservatoire",
+      "track": "magny_cours",
+      "name": "Conservatoire",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.055208,
+      "target": [
+        -20.58,
+        0.95,
+        35.03
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 59.4,
+      "viewDistanceM": 59.4,
+      "source": "tests/data/landmarks/magny_cours.json; js/circuits/scenery/magny_cours.js"
+    },
+    {
+      "id": "magny_cours/chateau-deau",
+      "modelId": "magny-cours-chateau-deau",
+      "track": "magny_cours",
+      "name": "Chateau Deau",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.817195,
+      "target": [
+        -171.53,
+        14.94,
+        -527.57
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 35.5,
+      "viewDistanceM": 35.5,
+      "source": "tests/data/landmarks/magny_cours.json; js/circuits/scenery/magny_cours.js"
+    },
+    {
+      "id": "magny_cours/ferme",
+      "modelId": "magny-cours-ferme",
+      "track": "magny_cours",
+      "name": "Ferme",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.34,
+      "target": [
+        -262.05,
+        4.04,
+        -113.78
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/magny_cours.js anchor K(0.34)",
+      "projectedFrac": 0.486,
+      "nearestRoadDistanceM": 35.2,
+      "viewDistanceM": 65.8,
+      "source": "tests/data/landmarks/magny_cours.json; js/circuits/scenery/magny_cours.js"
+    },
+    {
+      "id": "magny_cours/bourg",
+      "modelId": "magny-cours-bourg",
+      "track": "magny_cours",
+      "name": "Bourg",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.62,
+      "target": [
+        78.06,
+        7.76,
+        288.29
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/magny_cours.js anchor K(0.62)",
+      "projectedFrac": 0.1142,
+      "nearestRoadDistanceM": 178.9,
+      "viewDistanceM": 242.8,
+      "source": "tests/data/landmarks/magny_cours.json; js/circuits/scenery/magny_cours.js"
+    },
+    {
+      "id": "mexico/foro-sol-entry",
+      "modelId": "mexico-foro-sol-entry",
+      "track": "mexico",
+      "name": "Foro Sol Entry",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.720133,
+      "target": [
+        127.28,
+        8.23,
+        1.42
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 30,
+      "viewDistanceM": 30,
+      "source": "tests/data/landmarks/mexico.json; js/circuits/scenery/mexico.js"
+    },
+    {
+      "id": "mexico/peraltada-stand",
+      "modelId": "mexico-peraltada-stand",
+      "track": "mexico",
+      "name": "Peraltada Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.935,
+      "target": [
+        656,
+        6.35,
+        327.79
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/mexico.js anchor K(0.935)",
+      "projectedFrac": 0.891791,
+      "nearestRoadDistanceM": 57,
+      "viewDistanceM": 73.2,
+      "source": "tests/data/landmarks/mexico.json; js/circuits/scenery/mexico.js"
+    },
+    {
+      "id": "mexico/foro-scoreboard",
+      "modelId": "foro-scoreboard",
+      "track": "mexico",
+      "name": "Foro Scoreboard",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.800373,
+      "target": [
+        456.13,
+        16.07,
+        46.36
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 54,
+      "viewDistanceM": 54,
+      "source": "tests/data/landmarks/mexico.json; js/circuits/scenery/mexico.js"
+    },
+    {
+      "id": "mexico/paddock-suite-0",
+      "modelId": "mexico-paddock-suite-0",
+      "track": "mexico",
+      "name": "Paddock Suite 0",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.010268,
+      "target": [
+        397.31,
+        4.59,
+        328.1
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 50,
+      "viewDistanceM": 50,
+      "source": "tests/data/landmarks/mexico.json; js/circuits/scenery/mexico.js"
+    },
+    {
+      "id": "mexico/palacio-deportes",
+      "modelId": "mexico-palacio-deportes",
+      "track": "mexico",
+      "name": "Palacio Deportes",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.5994,
+      "target": [
+        -227.69,
+        11.94,
+        -321.4
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 83,
+      "viewDistanceM": 83.1,
+      "source": "tests/data/landmarks/mexico.json; js/circuits/scenery/mexico.js"
+    },
+    {
+      "id": "miami/hard-rock-neon",
+      "modelId": "miami-hard-rock-neon",
+      "track": "miami",
+      "name": "Hard Rock Neon",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.008434,
+      "target": [
+        -17.63,
+        27.22,
+        29.76
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 124.3,
+      "viewDistanceM": 124.3,
+      "source": "tests/data/landmarks/miami.json; js/circuits/scenery/miami.js"
+    },
+    {
+      "id": "miami/msc-yacht-club",
+      "modelId": "msc-yacht-club",
+      "track": "miami",
+      "name": "Msc Yacht Club",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.319672,
+      "target": [
+        478.7,
+        15.35,
+        -231.82
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 45,
+      "viewDistanceM": 45,
+      "source": "tests/data/landmarks/miami.json; js/circuits/scenery/miami.js"
+    },
+    {
+      "id": "miami/beach-club-cabana",
+      "modelId": "beach-club-cabana",
+      "track": "miami",
+      "name": "Beach Club Cabana",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.517627,
+      "target": [
+        -580.73,
+        1.22,
+        -181.05
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 55.1,
+      "viewDistanceM": 55.1,
+      "source": "tests/data/landmarks/miami.json; js/circuits/scenery/miami.js"
+    },
+    {
+      "id": "miami/mia-sign",
+      "modelId": "miami-mia-sign",
+      "track": "miami",
+      "name": "MIA Sign",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.300281,
+      "target": [
+        580.37,
+        4.14,
+        -197.86
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 29,
+      "viewDistanceM": 29,
+      "source": "tests/data/landmarks/miami.json; js/circuits/scenery/miami.js"
+    },
+    {
+      "id": "monaco/tabac-shop",
+      "modelId": "monaco-tabac-shop",
+      "track": "monaco",
+      "name": "Tabac Shop",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.712294,
+      "target": [
+        269.11,
+        2.61,
+        -5.69
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 12.6,
+      "viewDistanceM": 12.6,
+      "source": "tests/data/landmarks/monaco.json; js/circuits/scenery/monaco.js"
+    },
+    {
+      "id": "monaco/mirabeau-apartments",
+      "modelId": "monaco-mirabeau-apartments",
+      "track": "monaco",
+      "name": "Mirabeau Apartments",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.342233,
+      "target": [
+        -230.35,
+        12.01,
+        523.5
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 39.8,
+      "viewDistanceM": 39.8,
+      "source": "tests/data/landmarks/monaco.json; js/circuits/scenery/monaco.js"
+    },
+    {
+      "id": "monaco/rascasse-bar",
+      "modelId": "monaco-rascasse-bar",
+      "track": "monaco",
+      "name": "Rascasse Bar",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.870159,
+      "target": [
+        211.18,
+        3.68,
+        -453.13
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 12.9,
+      "viewDistanceM": 12.9,
+      "source": "tests/data/landmarks/monaco.json; js/circuits/scenery/monaco.js"
+    },
+    {
+      "id": "monaco/fairmont-main",
+      "modelId": "monaco-fairmont-main",
+      "track": "monaco",
+      "name": "Fairmont Main",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.381068,
+      "target": [
+        -303,
+        43.05,
+        361.28
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 24.8,
+      "viewDistanceM": 24.8,
+      "source": "tests/data/landmarks/monaco.json; js/circuits/scenery/monaco.js"
+    },
+    {
+      "id": "mont_tremblant/control-tower",
+      "modelId": "tremblant-control-tower",
+      "track": "mont_tremblant",
+      "name": "Control Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.011304,
+      "target": [
+        -89.43,
+        19.98,
+        613.1
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 71,
+      "viewDistanceM": 71,
+      "source": "tests/data/landmarks/mont_tremblant.json; js/circuits/scenery/mont_tremblant.js"
+    },
+    {
+      "id": "mont_tremblant/hump-crest",
+      "modelId": "tremblant-hump-crest",
+      "track": "mont_tremblant",
+      "name": "Hump Crest",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.606486,
+      "target": [
+        73.47,
+        7.27,
+        -174.35
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 36.1,
+      "viewDistanceM": 36.1,
+      "source": "tests/data/landmarks/mont_tremblant.json; js/circuits/scenery/mont_tremblant.js"
+    },
+    {
+      "id": "mont_tremblant/bridge",
+      "modelId": "tremblant-bridge",
+      "track": "mont_tremblant",
+      "name": "Bridge",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.872624,
+      "target": [
+        290.46,
+        24.5,
+        456.62
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 23,
+      "viewDistanceM": 23,
+      "source": "tests/data/landmarks/mont_tremblant.json; js/circuits/scenery/mont_tremblant.js"
+    },
+    {
+      "id": "mont_tremblant/namerow-bank",
+      "modelId": "tremblant-namerow-bank",
+      "track": "mont_tremblant",
+      "name": "Namerow Bank",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.898289,
+      "target": [
+        393.99,
+        24.26,
+        537.55
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 26.6,
+      "viewDistanceM": 26.6,
+      "source": "tests/data/landmarks/mont_tremblant.json; js/circuits/scenery/mont_tremblant.js"
+    },
+    {
+      "id": "mont_tremblant/paddock-bend-stand",
+      "modelId": "tremblant-paddock-bend-stand",
+      "track": "mont_tremblant",
+      "name": "Paddock Bend Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.941065,
+      "target": [
+        202.74,
+        24.53,
+        512.58
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 26.3,
+      "viewDistanceM": 26.3,
+      "source": "tests/data/landmarks/mont_tremblant.json; js/circuits/scenery/mont_tremblant.js"
+    },
+    {
+      "id": "montreal/hairpin-grandstands",
+      "modelId": "montreal-hairpin-grandstands",
+      "track": "montreal",
+      "name": "Hairpin Grandstands",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.550098,
+      "target": [
+        37.77,
+        2.12,
+        800.09
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 33.2,
+      "viewDistanceM": 33.2,
+      "source": "tests/data/landmarks/montreal.json; js/circuits/scenery/montreal.js"
+    },
+    {
+      "id": "montreal/wall-of-champions-stand",
+      "modelId": "montreal-wall-of-champions-stand",
+      "track": "montreal",
+      "name": "Wall Of Champions Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.972335,
+      "target": [
+        -243.19,
+        3.04,
+        -360.98
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 22.1,
+      "viewDistanceM": 22.1,
+      "source": "tests/data/landmarks/montreal.json; js/circuits/scenery/montreal.js"
+    },
+    {
+      "id": "montreal/biosphere",
+      "modelId": "montreal-biosphere",
+      "track": "montreal",
+      "name": "Biosphere",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.3,
+      "target": [
+        145.24,
+        26.77,
+        -508.93
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/montreal.js anchor K(0.30)",
+      "projectedFrac": 0.226311,
+      "nearestRoadDistanceM": 84.3,
+      "viewDistanceM": 326.9,
+      "source": "tests/data/landmarks/montreal.json; js/circuits/scenery/montreal.js"
+    },
+    {
+      "id": "montreal/casino",
+      "modelId": "montreal-casino",
+      "track": "montreal",
+      "name": "Casino",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.276083,
+      "target": [
+        25.06,
+        20.81,
+        -241.12
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 102,
+      "viewDistanceM": 102,
+      "source": "tests/data/landmarks/montreal.json; js/circuits/scenery/montreal.js"
+    },
+    {
+      "id": "monza/tribuna-centrale",
+      "modelId": "monza-tribuna-centrale",
+      "track": "monza",
+      "name": "Tribuna Centrale",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.004846,
+      "target": [
+        610.37,
+        7.39,
+        -194.64
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 30,
+      "viewDistanceM": 30,
+      "source": "tests/data/landmarks/monza.json; js/circuits/scenery/monza.js"
+    },
+    {
+      "id": "monza/podium-tower",
+      "modelId": "monza-podium-tower",
+      "track": "monza",
+      "name": "Podium Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0,
+      "target": [
+        539.29,
+        26.33,
+        -229.33
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 44,
+      "viewDistanceM": 44,
+      "source": "tests/data/landmarks/monza.json; js/circuits/scenery/monza.js"
+    },
+    {
+      "id": "monza/pit-canopy",
+      "modelId": "monza-pit-canopy",
+      "track": "monza",
+      "name": "Pit Canopy",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.975059,
+      "target": [
+        563.68,
+        4.67,
+        -372.15
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 34,
+      "viewDistanceM": 34,
+      "source": "tests/data/landmarks/monza.json; js/circuits/scenery/monza.js"
+    },
+    {
+      "id": "mosport/moss-corner-bank",
+      "modelId": "mosport-moss-corner-bank",
+      "track": "mosport",
+      "name": "Moss Corner Bank",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.472216,
+      "target": [
+        -107.78,
+        -6.03,
+        -676.56
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 31.1,
+      "viewDistanceM": 31.1,
+      "source": "tests/data/landmarks/mosport.json; js/circuits/scenery/mosport.js"
+    },
+    {
+      "id": "mosport/whites-tunnel",
+      "modelId": "mosport-whites-tunnel",
+      "track": "mosport",
+      "name": "Whites Tunnel",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.915244,
+      "target": [
+        154.72,
+        27.82,
+        675.97
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 30.3,
+      "viewDistanceM": 30.3,
+      "source": "tests/data/landmarks/mosport.json; js/circuits/scenery/mosport.js"
+    },
+    {
+      "id": "mosport/event-centre",
+      "modelId": "mosport-event-centre",
+      "track": "mosport",
+      "name": "Event Centre",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.960358,
+      "target": [
+        24.65,
+        31.95,
+        629.98
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 44.5,
+      "viewDistanceM": 44.5,
+      "source": "tests/data/landmarks/mosport.json; js/circuits/scenery/mosport.js"
+    },
+    {
+      "id": "mugello/centrale-stand",
+      "modelId": "mugello-centrale-stand",
+      "track": "mugello",
+      "name": "Centrale Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.005483,
+      "target": [
+        48.08,
+        7,
+        3.78
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 33.1,
+      "viewDistanceM": 33.1,
+      "source": "tests/data/landmarks/mugello.json; js/circuits/scenery/mugello.js"
+    },
+    {
+      "id": "mugello/poggio-secco-stand",
+      "modelId": "mugello-poggio-secco-stand",
+      "track": "mugello",
+      "name": "Poggio Secco Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.221393,
+      "target": [
+        -412.57,
+        1.77,
+        344.03
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 46.2,
+      "viewDistanceM": 46.2,
+      "source": "tests/data/landmarks/mugello.json; js/circuits/scenery/mugello.js"
+    },
+    {
+      "id": "mugello/materassi-stand",
+      "modelId": "mugello-materassi-stand",
+      "track": "mugello",
+      "name": "Materassi Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.237941,
+      "target": [
+        -399.2,
+        1.87,
+        297.76
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 40.1,
+      "viewDistanceM": 40.1,
+      "source": "tests/data/landmarks/mugello.json; js/circuits/scenery/mugello.js"
+    },
+    {
+      "id": "nurburgring/burg-nurburg",
+      "modelId": "nurburgring-burg-nurburg",
+      "track": "nurburgring",
+      "name": "Burg Nurburg",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.681681,
+      "target": [
+        785.62,
+        87.28,
+        1026.16
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 802.7,
+      "viewDistanceM": 802.7,
+      "source": "tests/data/landmarks/nurburgring.json; js/circuits/scenery/nurburgring.js"
+    },
+    {
+      "id": "nurburgring/coca-cola-kurve",
+      "modelId": "nurburgring-coca-cola-kurve",
+      "track": "nurburgring",
+      "name": "Coca Cola Kurve",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.859937,
+      "target": [
+        -552.43,
+        2.06,
+        656.72
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 21.5,
+      "viewDistanceM": 21.5,
+      "source": "tests/data/landmarks/nurburgring.json; js/circuits/scenery/nurburgring.js"
+    },
+    {
+      "id": "nurburgring/race-control",
+      "modelId": "nurburgring-race-control",
+      "track": "nurburgring",
+      "name": "Race Control",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.988435,
+      "target": [
+        -45.48,
+        10.47,
+        234.12
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 45.5,
+      "viewDistanceM": 45.5,
+      "source": "tests/data/landmarks/nurburgring.json; js/circuits/scenery/nurburgring.js"
+    },
+    {
+      "id": "okayama/control-tower",
+      "modelId": "okayama-control-tower",
+      "track": "okayama",
+      "name": "Control Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.047597,
+      "target": [
+        -91.33,
+        13.9,
+        16.25
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 25,
+      "viewDistanceM": 25,
+      "source": "tests/data/landmarks/okayama.json; js/circuits/scenery/okayama.js"
+    },
+    {
+      "id": "okayama/paddock-block",
+      "modelId": "okayama-paddock-block",
+      "track": "okayama",
+      "name": "Paddock Block",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.21432,
+      "target": [
+        165.18,
+        2.66,
+        -97.34
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 25.7,
+      "viewDistanceM": 25.8,
+      "source": "tests/data/landmarks/okayama.json; js/circuits/scenery/okayama.js"
+    },
+    {
+      "id": "paul_ricard/main-grandstand",
+      "modelId": "paul-ricard-main-grandstand",
+      "track": "paul_ricard",
+      "name": "Main Grandstand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.004835,
+      "target": [
+        -43.29,
+        5.53,
+        -121.46
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 28.5,
+      "viewDistanceM": 28.5,
+      "source": "tests/data/landmarks/paul_ricard.json; js/circuits/scenery/paul_ricard.js"
+    },
+    {
+      "id": "paul_ricard/beausset-hill",
+      "modelId": "paul-ricard-beausset-hill",
+      "track": "paul_ricard",
+      "name": "Beausset Hill",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.745328,
+      "target": [
+        -844.21,
+        0.05,
+        -694.5
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 76.8,
+      "viewDistanceM": 76.8,
+      "source": "tests/data/landmarks/paul_ricard.json; js/circuits/scenery/paul_ricard.js"
+    },
+    {
+      "id": "paul_ricard/pit-entry-2019",
+      "modelId": "paul-ricard-pit-entry-2019",
+      "track": "paul_ricard",
+      "name": "Pit Entry 2019",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.940096,
+      "target": [
+        -377.35,
+        2.12,
+        -303.67
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 29.6,
+      "viewDistanceM": 29.6,
+      "source": "tests/data/landmarks/paul_ricard.json; js/circuits/scenery/paul_ricard.js"
+    },
+    {
+      "id": "paul_ricard/aerodrome",
+      "modelId": "paul-ricard-aerodrome",
+      "track": "paul_ricard",
+      "name": "Aerodrome",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.429737,
+      "target": [
+        100.15,
+        3.07,
+        375.34
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 158,
+      "viewDistanceM": 158,
+      "source": "tests/data/landmarks/paul_ricard.json; js/circuits/scenery/paul_ricard.js"
+    },
+    {
+      "id": "paul_ricard/airfield-tower",
+      "modelId": "paul-ricard-airfield-tower",
+      "track": "paul_ricard",
+      "name": "Airfield Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.458961,
+      "target": [
+        -51.72,
+        8.66,
+        297.27
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 138.1,
+      "viewDistanceM": 138.1,
+      "source": "tests/data/landmarks/paul_ricard.json; js/circuits/scenery/paul_ricard.js"
+    },
+    {
+      "id": "paul_ricard/cabanon",
+      "modelId": "paul-ricard-cabanon",
+      "track": "paul_ricard",
+      "name": "Cabanon",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.235,
+      "target": [
+        1010.39,
+        2.53,
+        657.03
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/paul_ricard.js anchor K(0.235)",
+      "projectedFrac": 0.262027,
+      "nearestRoadDistanceM": 24.4,
+      "viewDistanceM": 128,
+      "source": "tests/data/landmarks/paul_ricard.json; js/circuits/scenery/paul_ricard.js"
+    },
+    {
+      "id": "paul_ricard/drywall",
+      "modelId": "paul-ricard-drywall",
+      "track": "paul_ricard",
+      "name": "Drywall",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.235,
+      "target": [
+        1027.52,
+        0.26,
+        654.52
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/paul_ricard.js anchor K(0.235)",
+      "projectedFrac": 0.260331,
+      "nearestRoadDistanceM": 33.7,
+      "viewDistanceM": 129.2,
+      "source": "tests/data/landmarks/paul_ricard.json; js/circuits/scenery/paul_ricard.js"
+    },
+    {
+      "id": "portimao/main-stand",
+      "modelId": "portimao-main-stand",
+      "track": "portimao",
+      "name": "Main Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.000006,
+      "target": [
+        269.05,
+        6.28,
+        138.39
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 24.6,
+      "viewDistanceM": 24.6,
+      "source": "tests/data/landmarks/portimao.json; js/circuits/scenery/portimao.js"
+    },
+    {
+      "id": "portimao/t1-stands",
+      "modelId": "portimao-t1-stands",
+      "track": "portimao",
+      "name": "T1 Stands",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.055051,
+      "target": [
+        263.11,
+        7.88,
+        404.95
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 55.2,
+      "viewDistanceM": 55.3,
+      "source": "tests/data/landmarks/portimao.json; js/circuits/scenery/portimao.js"
+    },
+    {
+      "id": "portimao/moinho",
+      "modelId": "portimao-moinho",
+      "track": "portimao",
+      "name": "Moinho",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.415,
+      "target": [
+        -53.4,
+        24.53,
+        306.38
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/portimao.js anchor K(0.415)",
+      "projectedFrac": 0.464531,
+      "nearestRoadDistanceM": 22.5,
+      "viewDistanceM": 109.5,
+      "source": "tests/data/landmarks/portimao.json; js/circuits/scenery/portimao.js"
+    },
+    {
+      "id": "qatar/pit-slab",
+      "modelId": "qatar-pit-slab",
+      "track": "qatar",
+      "name": "Pit Slab",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.000013,
+      "target": [
+        475.35,
+        20.24,
+        -377.68
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 48,
+      "viewDistanceM": 48,
+      "source": "tests/data/landmarks/qatar.json; js/circuits/scenery/qatar.js"
+    },
+    {
+      "id": "qatar/paddock-media-centre",
+      "modelId": "qatar-paddock-media-centre",
+      "track": "qatar",
+      "name": "Paddock Media Centre",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.925074,
+      "target": [
+        307.33,
+        7.42,
+        -747.02
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 80,
+      "viewDistanceM": 80,
+      "source": "tests/data/landmarks/qatar.json; js/circuits/scenery/qatar.js"
+    },
+    {
+      "id": "qatar/t1-vvip-canopy",
+      "modelId": "qatar-t1-vvip-canopy",
+      "track": "qatar",
+      "name": "Turn 1 VVIP Canopy",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.051924,
+      "target": [
+        617.11,
+        7.75,
+        -136.05
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 56,
+      "viewDistanceM": 56,
+      "source": "tests/data/landmarks/qatar.json; js/circuits/scenery/qatar.js"
+    },
+    {
+      "id": "qatar/lusail-hill",
+      "modelId": "qatar-lusail-hill",
+      "track": "qatar",
+      "name": "Lusail Hill",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.067507,
+      "target": [
+        552.02,
+        3.92,
+        -4.81
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 64,
+      "viewDistanceM": 64,
+      "source": "tests/data/landmarks/qatar.json; js/circuits/scenery/qatar.js"
+    },
+    {
+      "id": "qatar/katara-towers",
+      "modelId": "qatar-katara-towers",
+      "track": "qatar",
+      "name": "Katara Towers",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.758932,
+      "target": [
+        -296.8,
+        53.9,
+        -752.95
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 229,
+      "viewDistanceM": 229,
+      "source": "tests/data/landmarks/qatar.json; js/circuits/scenery/qatar.js"
+    },
+    {
+      "id": "qatar/lusail-stadium",
+      "modelId": "qatar-lusail-stadium",
+      "track": "qatar",
+      "name": "Lusail Stadium",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.84436,
+      "target": [
+        -148.55,
+        21.4,
+        -794.28
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 152.3,
+      "viewDistanceM": 152.3,
+      "source": "tests/data/landmarks/qatar.json; js/circuits/scenery/qatar.js"
+    },
+    {
+      "id": "qatar/hospitality-villas-1",
+      "modelId": "qatar-hospitality-villas-1",
+      "track": "qatar",
+      "name": "Hospitality Villas 1",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.954749,
+      "target": [
+        371.36,
+        6.82,
+        -599.08
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 64,
+      "viewDistanceM": 64,
+      "source": "tests/data/landmarks/qatar.json; js/circuits/scenery/qatar.js"
+    },
+    {
+      "id": "redbull/lauda-kurve-stand",
+      "modelId": "redbull-lauda-kurve-stand",
+      "track": "redbull",
+      "name": "Lauda Kurve Stand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.096023,
+      "target": [
+        78.04,
+        12.27,
+        -401.05
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 34.8,
+      "viewDistanceM": 34.8,
+      "source": "tests/data/landmarks/redbull.json; js/circuits/scenery/redbull.js"
+    },
+    {
+      "id": "sepang/main-grandstand-canopy",
+      "modelId": "sepang-main-grandstand-canopy",
+      "track": "sepang",
+      "name": "Main Grandstand Canopy",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.987284,
+      "target": [
+        104.44,
+        14.57,
+        -55.9
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 27,
+      "viewDistanceM": 27.1,
+      "source": "tests/data/landmarks/sepang.json; js/circuits/scenery/sepang.js"
+    },
+    {
+      "id": "sepang/t1-grandstand",
+      "modelId": "sepang-t1-grandstand",
+      "track": "sepang",
+      "name": "T1 Grandstand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.05814,
+      "target": [
+        492.11,
+        3.41,
+        -105.95
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 47,
+      "viewDistanceM": 47,
+      "source": "tests/data/landmarks/sepang.json; js/circuits/scenery/sepang.js"
+    },
+    {
+      "id": "sepang/t7-grandstand",
+      "modelId": "sepang-t7-grandstand",
+      "track": "sepang",
+      "name": "T7 Grandstand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.447674,
+      "target": [
+        -519.88,
+        7.53,
+        -178.17
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 47.5,
+      "viewDistanceM": 47.5,
+      "source": "tests/data/landmarks/sepang.json; js/circuits/scenery/sepang.js"
+    },
+    {
+      "id": "sepang/race-control",
+      "modelId": "sepang-race-control",
+      "track": "sepang",
+      "name": "Race Control",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.005788,
+      "target": [
+        213.03,
+        12.18,
+        27.94
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 64.9,
+      "viewDistanceM": 64.9,
+      "source": "tests/data/landmarks/sepang.json; js/circuits/scenery/sepang.js"
+    },
+    {
+      "id": "sepang/klia-skyline",
+      "modelId": "sepang-klia-skyline",
+      "track": "sepang",
+      "name": "KLIA Skyline",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.42,
+      "target": [
+        -717.46,
+        19.97,
+        100.3
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/sepang.js anchor K(0.42)",
+      "projectedFrac": 0.420058,
+      "nearestRoadDistanceM": 188,
+      "viewDistanceM": 188,
+      "source": "tests/data/landmarks/sepang.json; js/circuits/scenery/sepang.js"
+    },
+    {
+      "id": "shanghai/wing-east",
+      "modelId": "shanghai-wing-east",
+      "track": "shanghai",
+      "name": "Wing East",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.93575,
+      "target": [
+        -330.2,
+        21.28,
+        -304.4
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 28,
+      "viewDistanceM": 28,
+      "source": "tests/data/landmarks/shanghai.json; js/circuits/scenery/shanghai.js"
+    },
+    {
+      "id": "shanghai/wing-west",
+      "modelId": "shanghai-wing-west",
+      "track": "shanghai",
+      "name": "Wing West",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.022172,
+      "target": [
+        124.99,
+        18.04,
+        -412.88
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 28,
+      "viewDistanceM": 28,
+      "source": "tests/data/landmarks/shanghai.json; js/circuits/scenery/shanghai.js"
+    },
+    {
+      "id": "shanghai/yu-pavilions",
+      "modelId": "shanghai-yu-pavilions",
+      "track": "shanghai",
+      "name": "Yu Pavilions",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.00996,
+      "target": [
+        43.69,
+        2.93,
+        -467.55
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 100.2,
+      "viewDistanceM": 100.2,
+      "source": "tests/data/landmarks/shanghai.json; js/circuits/scenery/shanghai.js"
+    },
+    {
+      "id": "shanghai/lake-boardwalk",
+      "modelId": "shanghai-lake-boardwalk",
+      "track": "shanghai",
+      "name": "Lake Boardwalk",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.005181,
+      "target": [
+        14.01,
+        0.67,
+        -480.8
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 120,
+      "viewDistanceM": 120,
+      "source": "tests/data/landmarks/shanghai.json; js/circuits/scenery/shanghai.js"
+    },
+    {
+      "id": "silverstone/wing-wave-roof",
+      "modelId": "silverstone-wing-wave-roof",
+      "track": "silverstone",
+      "name": "Wing Wave Roof",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.002747,
+      "target": [
+        386.38,
+        8.3,
+        -344.41
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 65.4,
+      "viewDistanceM": 65.4,
+      "source": "tests/data/landmarks/silverstone.json; js/circuits/scenery/silverstone.js"
+    },
+    {
+      "id": "silverstone/control-tower",
+      "modelId": "silverstone-control-tower",
+      "track": "silverstone",
+      "name": "Control Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.963861,
+      "target": [
+        450.09,
+        18.98,
+        -482.03
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 40,
+      "viewDistanceM": 40,
+      "source": "tests/data/landmarks/silverstone.json; js/circuits/scenery/silverstone.js"
+    },
+    {
+      "id": "silverstone/t2-hangar-west",
+      "modelId": "silverstone-t2-hangar-west",
+      "track": "silverstone",
+      "name": "T2 Hangar West",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.706746,
+      "target": [
+        -474.66,
+        -2.66,
+        -217.75
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 106,
+      "viewDistanceM": 106,
+      "source": "tests/data/landmarks/silverstone.json; js/circuits/scenery/silverstone.js"
+    },
+    {
+      "id": "silverstone/t2-hangar-centre",
+      "modelId": "silverstone-t2-hangar-centre",
+      "track": "silverstone",
+      "name": "T2 Hangar Centre",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.751503,
+      "target": [
+        -377.72,
+        -2.07,
+        -402.84
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 112,
+      "viewDistanceM": 112,
+      "source": "tests/data/landmarks/silverstone.json; js/circuits/scenery/silverstone.js"
+    },
+    {
+      "id": "silverstone/t2-hangar-east",
+      "modelId": "silverstone-t2-hangar-east",
+      "track": "silverstone",
+      "name": "T2 Hangar East",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.795346,
+      "target": [
+        -246.9,
+        0.4,
+        -624.14
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 104,
+      "viewDistanceM": 104,
+      "source": "tests/data/landmarks/silverstone.json; js/circuits/scenery/silverstone.js"
+    },
+    {
+      "id": "singapore/merlion",
+      "modelId": "singapore-merlion",
+      "track": "singapore",
+      "name": "Merlion",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.952884,
+      "target": [
+        -675.67,
+        11.42,
+        -132.4
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 38.5,
+      "viewDistanceM": 38.5,
+      "source": "tests/data/landmarks/singapore.json; js/circuits/scenery/singapore.js"
+    },
+    {
+      "id": "singapore/parliament-house",
+      "modelId": "singapore-parliament-house",
+      "track": "singapore",
+      "name": "Parliament House",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.894855,
+      "target": [
+        -477.74,
+        9.35,
+        -302.85
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 87.8,
+      "viewDistanceM": 87.8,
+      "source": "tests/data/landmarks/singapore.json; js/circuits/scenery/singapore.js"
+    },
+    {
+      "id": "singapore/fullerton-hotel",
+      "modelId": "singapore-fullerton-hotel",
+      "track": "singapore",
+      "name": "Fullerton Hotel",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.979617,
+      "target": [
+        -746.88,
+        17.6,
+        5.9
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 48.5,
+      "viewDistanceM": 48.5,
+      "source": "tests/data/landmarks/singapore.json; js/circuits/scenery/singapore.js"
+    },
+    {
+      "id": "singapore/anderson-bridge",
+      "modelId": "singapore-anderson-bridge",
+      "track": "singapore",
+      "name": "Anderson Bridge",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.909535,
+      "target": [
+        -557.61,
+        5.31,
+        -231.88
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 10,
+      "viewDistanceM": 10,
+      "source": "tests/data/landmarks/singapore.json; js/circuits/scenery/singapore.js"
+    },
+    {
+      "id": "sochi/fisht-stadium",
+      "modelId": "sochi-fisht-stadium",
+      "track": "sochi",
+      "name": "Fisht Stadium",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.14609,
+      "target": [
+        -27.14,
+        13.51,
+        12.98
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 139.4,
+      "viewDistanceM": 139.4,
+      "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
+    },
+    {
+      "id": "sochi/bolshoy-dome",
+      "modelId": "sochi-bolshoy-dome",
+      "track": "sochi",
+      "name": "Bolshoy Dome",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.149763,
+      "target": [
+        -7.26,
+        8.13,
+        5.76
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 137.5,
+      "viewDistanceM": 137.5,
+      "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
+    },
+    {
+      "id": "sochi/adler-arena",
+      "modelId": "sochi-adler-arena",
+      "track": "sochi",
+      "name": "Adler Arena",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.225,
+      "target": [
+        298.42,
+        4.29,
+        165.02
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.225)",
+      "projectedFrac": 0.653059,
+      "nearestRoadDistanceM": 117.2,
+      "viewDistanceM": 127.5,
+      "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
+    },
+    {
+      "id": "sochi/flame-tower",
+      "modelId": "sochi-flame-tower",
+      "track": "sochi",
+      "name": "Flame Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.115,
+      "target": [
+        -208.68,
+        19.53,
+        24.07
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.115)",
+      "projectedFrac": 0.74347,
+      "nearestRoadDistanceM": 92.9,
+      "viewDistanceM": 103.5,
+      "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
+    },
+    {
+      "id": "sochi/iceberg-palace",
+      "modelId": "sochi-iceberg-palace",
+      "track": "sochi",
+      "name": "Iceberg Palace",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.29,
+      "target": [
+        620.66,
+        6.19,
+        -254.8
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.290)",
+      "projectedFrac": 0.512767,
+      "nearestRoadDistanceM": 112.3,
+      "viewDistanceM": 128.3,
+      "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
+    },
+    {
+      "id": "sochi/olympic-rings",
+      "modelId": "sochi-olympic-rings",
+      "track": "sochi",
+      "name": "Olympic Rings",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.062,
+      "target": [
+        -510.75,
+        7.48,
+        68.13
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.062)",
+      "projectedFrac": 0.80627,
+      "nearestRoadDistanceM": 16.9,
+      "viewDistanceM": 65.5,
+      "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
+    },
+    {
+      "id": "sochi/race-control",
+      "modelId": "sochi-race-control",
+      "track": "sochi",
+      "name": "Race Control",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.986179,
+      "target": [
+        -843.12,
+        20.93,
+        314.09
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 37.5,
+      "viewDistanceM": 37.5,
+      "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
+    },
+    {
+      "id": "sochi/shayba-arena",
+      "modelId": "sochi-shayba-arena",
+      "track": "sochi",
+      "name": "Shayba Arena",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.245,
+      "target": [
+        502.87,
+        4.8,
+        151.75
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/sochi.js anchor K(0.245)",
+      "projectedFrac": 0.564559,
+      "nearestRoadDistanceM": 125,
+      "viewDistanceM": 159.5,
+      "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
+    },
+    {
+      "id": "sochi/olympic-park-station",
+      "modelId": "sochi-olympic-park-station",
+      "track": "sochi",
+      "name": "Olympic Park Station",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.008268,
+      "target": [
+        -683.43,
+        6.99,
+        264.98
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 69.5,
+      "viewDistanceM": 69.5,
+      "source": "tests/data/landmarks/sochi.json; js/circuits/scenery/sochi.js"
+    },
+    {
+      "id": "spa/raidillon-gold-dual-jumbotron",
+      "modelId": "spa-raidillon-gold-dual-jumbotron",
+      "track": "spa",
+      "name": "Raidillon Gold Dual Jumbotron",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.116664,
+      "target": [
+        -53.37,
+        -14.03,
+        670.61
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/spa.js anchor K(0.159)",
+      "projectedFrac": 0.116374,
+      "nearestRoadDistanceM": 27,
+      "viewDistanceM": 27.2,
+      "source": "tests/data/landmarks/spa.json; js/circuits/scenery/spa.js"
+    },
+    {
+      "id": "spa/eau-rouge-brook-crossing",
+      "modelId": "spa-eau-rouge-brook-crossing",
+      "track": "spa",
+      "name": "Eau Rouge Brook Crossing",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.141664,
+      "target": [
+        -213.65,
+        -25.08,
+        581.64
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/spa.js anchor K(0.184)",
+      "projectedFrac": 0.141623,
+      "nearestRoadDistanceM": 16,
+      "viewDistanceM": 16,
+      "source": "tests/data/landmarks/spa.json; js/circuits/scenery/spa.js"
+    },
+    {
+      "id": "spa/timing-tower",
+      "modelId": "spa-timing-tower",
+      "track": "spa",
+      "name": "Timing Tower",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.942664,
+      "target": [
+        186.84,
+        4.73,
+        509.5
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/spa.js timingTower K(0.985)",
+      "projectedFrac": 0.942429,
+      "nearestRoadDistanceM": 38,
+      "viewDistanceM": 38,
+      "source": "tests/data/landmarks/spa.json; js/circuits/scenery/spa.js"
+    },
+    {
+      "id": "suzuka/circuit-wheel",
+      "modelId": "suzuka-circuit-wheel",
+      "track": "suzuka",
+      "name": "Circuit Wheel",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.020249,
+      "target": [
+        -682.86,
+        31.14,
+        88.14
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 69,
+      "viewDistanceM": 69,
+      "source": "tests/data/landmarks/suzuka.json; js/circuits/scenery/suzuka.js"
+    },
+    {
+      "id": "suzuka/crossover-portal",
+      "modelId": "suzuka-crossover-portal",
+      "track": "suzuka",
+      "name": "Crossover Portal",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.436762,
+      "target": [
+        201.67,
+        12.55,
+        30.28
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 14.2,
+      "viewDistanceM": 14.2,
+      "source": "tests/data/landmarks/suzuka.json; js/circuits/scenery/suzuka.js"
+    },
+    {
+      "id": "suzuka/main-stand-crown",
+      "modelId": "suzuka-main-stand-crown",
+      "track": "suzuka",
+      "name": "Main Stand Crown",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0,
+      "target": [
+        -532.8,
+        15.68,
+        115.29
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 29.4,
+      "viewDistanceM": 29.4,
+      "source": "tests/data/landmarks/suzuka.json; js/circuits/scenery/suzuka.js"
+    },
+    {
+      "id": "suzuka/spoon-terrace",
+      "modelId": "suzuka-spoon-terrace",
+      "track": "suzuka",
+      "name": "Spoon Terrace",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.619903,
+      "target": [
+        765.75,
+        20.53,
+        320.35
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 27.5,
+      "viewDistanceM": 27.5,
+      "source": "tests/data/landmarks/suzuka.json; js/circuits/scenery/suzuka.js"
+    },
+    {
+      "id": "suzuka/130r-bank",
+      "modelId": "suzuka-130r-bank",
+      "track": "suzuka",
+      "name": "130r Bank",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.839529,
+      "target": [
+        230.01,
+        18.01,
+        30.14
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 19.5,
+      "viewDistanceM": 19.5,
+      "source": "tests/data/landmarks/suzuka.json; js/circuits/scenery/suzuka.js"
+    },
+    {
+      "id": "vegas/sphere",
+      "modelId": "vegas-sphere",
+      "track": "vegas",
+      "name": "Sphere",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.279974,
+      "target": [
+        -374.03,
+        53.92,
+        141.56
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 131.4,
+      "viewDistanceM": 131.4,
+      "source": "tests/data/landmarks/vegas.json; js/circuits/scenery/vegas.js"
+    },
+    {
+      "id": "vegas/wynn-encore",
+      "modelId": "vegas-wynn-encore",
+      "track": "vegas",
+      "name": "Wynn Encore",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.444588,
+      "target": [
+        -32.4,
+        52.82,
+        624.59
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 69,
+      "viewDistanceM": 69,
+      "source": "tests/data/landmarks/vegas.json; js/circuits/scenery/vegas.js"
+    },
+    {
+      "id": "vegas/caesars",
+      "modelId": "vegas-caesars",
+      "track": "vegas",
+      "name": "Caesars",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.619572,
+      "target": [
+        586.04,
+        37.42,
+        457.89
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 79,
+      "viewDistanceM": 79,
+      "source": "tests/data/landmarks/vegas.json; js/circuits/scenery/vegas.js"
+    },
+    {
+      "id": "vegas/bellagio",
+      "modelId": "vegas-bellagio",
+      "track": "vegas",
+      "name": "Bellagio",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.679844,
+      "target": [
+        646.65,
+        35.41,
+        70.95
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 77,
+      "viewDistanceM": 77,
+      "source": "tests/data/landmarks/vegas.json; js/circuits/scenery/vegas.js"
+    },
+    {
+      "id": "vegas/paris-balloon",
+      "modelId": "vegas-paris-balloon",
+      "track": "vegas",
+      "name": "Paris Balloon",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.74791,
+      "target": [
+        540.62,
+        15.46,
+        -351.74
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 33,
+      "viewDistanceM": 33,
+      "source": "tests/data/landmarks/vegas.json; js/circuits/scenery/vegas.js"
+    },
+    {
+      "id": "vegas/grand-prix-plaza",
+      "modelId": "vegas-grand-prix-plaza",
+      "track": "vegas",
+      "name": "Grand Prix Plaza",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.01167,
+      "target": [
+        -372.24,
+        16.31,
+        -797.59
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 62,
+      "viewDistanceM": 62,
+      "source": "tests/data/landmarks/vegas.json; js/circuits/scenery/vegas.js"
+    },
+    {
+      "id": "watkins_glen/pit-terrace",
+      "modelId": "glen-pit-terrace",
+      "track": "watkins_glen",
+      "name": "Pit Terrace",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.97491,
+      "target": [
+        309.71,
+        0.54,
+        379.59
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 37.5,
+      "viewDistanceM": 37.5,
+      "source": "tests/data/landmarks/watkins_glen.json; js/circuits/scenery/watkins_glen.js"
+    },
+    {
+      "id": "watkins_glen/esses-hill",
+      "modelId": "glen-esses-hill",
+      "track": "watkins_glen",
+      "name": "Esses Hill",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.189668,
+      "target": [
+        -137.75,
+        -10.74,
+        489.51
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 35.5,
+      "viewDistanceM": 35.5,
+      "source": "tests/data/landmarks/watkins_glen.json; js/circuits/scenery/watkins_glen.js"
+    },
+    {
+      "id": "zandvoort/ferris-wheel",
+      "modelId": "zandvoort-ferris-wheel",
+      "track": "zandvoort",
+      "name": "Ferris Wheel",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.048394,
+      "target": [
+        387.37,
+        18.25,
+        322.37
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 128.4,
+      "viewDistanceM": 128.4,
+      "source": "tests/data/landmarks/zandvoort.json; js/circuits/scenery/zandvoort.js"
+    },
+    {
+      "id": "zolder/main-grandstand",
+      "modelId": "zolder-main-grandstand",
+      "track": "zolder",
+      "name": "Main Grandstand",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.011999,
+      "target": [
+        -171.41,
+        5.65,
+        78.99
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 34.8,
+      "viewDistanceM": 34.8,
+      "source": "tests/data/landmarks/zolder.json; js/circuits/scenery/zolder.js"
+    },
+    {
+      "id": "zolder/sf-museum",
+      "modelId": "zolder-sf-museum",
+      "track": "zolder",
+      "name": "Start/Finish Museum",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.035566,
+      "target": [
+        -172.05,
+        1.89,
+        41.15
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 41.4,
+      "viewDistanceM": 41.4,
+      "source": "tests/data/landmarks/zolder.json; js/circuits/scenery/zolder.js"
+    },
+    {
+      "id": "zolder/villeneuve-poles",
+      "modelId": "zolder-villeneuve-poles",
+      "track": "zolder",
+      "name": "Villeneuve Poles",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.050967,
+      "target": [
+        -61.52,
+        2.59,
+        35.73
+      ],
+      "stationMethod": "nearest-road-projection",
+      "nearestRoadDistanceM": 53.1,
+      "viewDistanceM": 53.1,
+      "source": "tests/data/landmarks/zolder.json; js/circuits/scenery/zolder.js"
+    },
+    {
+      "id": "zolder/sterrenwacht",
+      "modelId": "zolder-sterrenwacht",
+      "track": "zolder",
+      "name": "Sterrenwacht",
+      "nameSource": "authored model ID; real-world identity unverified",
+      "frac": 0.023997,
+      "target": [
+        -36.94,
+        2.17,
+        90.11
+      ],
+      "stationMethod": "source-viewpoint",
+      "viewpointSource": "js/circuits/scenery/zolder.js anchor K(0.1802)",
+      "projectedFrac": 0.595913,
+      "nearestRoadDistanceM": 54.1,
+      "viewDistanceM": 79.5,
+      "source": "tests/data/landmarks/zolder.json; js/circuits/scenery/zolder.js"
+    }
+  ],
+  "omitted": [
+    {
+      "track": "anderstorp",
+      "modelId": "anderstorp-press-stand",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "catalunya",
+      "modelId": "catalunya-race-control",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "cota",
+      "modelId": "cota-main-grandstand",
+      "reason": "model did not emit"
+    },
+    {
+      "track": "dijon",
+      "modelId": "dijon-pit-garages",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "dijon",
+      "modelId": "dijon-race-control",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "estoril",
+      "modelId": "estoril-pit-terrace",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "hockenheim",
+      "modelId": "hockenheim-race-control",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "indianapolis",
+      "modelId": "indy-pit-stalls",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "interlagos",
+      "modelId": "interlagos-sp-skyline",
+      "reason": "model did not emit"
+    },
+    {
+      "track": "istanbul",
+      "modelId": "istanbul-race-control",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "jacarepagua",
+      "modelId": "jacarepagua-pit-grandstand",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "jacarepagua",
+      "modelId": "jacarepagua-timing-box",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "jacarepagua",
+      "modelId": "jacarepagua-lagoon-shore",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "jacarepagua",
+      "modelId": "jacarepagua-shore-reeds",
+      "reason": "model did not emit"
+    },
+    {
+      "track": "jeddah",
+      "modelId": "jeddah-golden-twins",
+      "reason": "model did not emit"
+    },
+    {
+      "track": "korea",
+      "modelId": "korea-pit-complex",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "mexico",
+      "modelId": "mexico-foro-sol-exit",
+      "reason": "model did not emit"
+    },
+    {
+      "track": "mosport",
+      "modelId": "mosport-pit-garages",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "okayama",
+      "modelId": "okayama-pit-garages",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "paul_ricard",
+      "modelId": "paul-ricard-race-control",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "portimao",
+      "modelId": "portimao-pit-blocks",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "portimao",
+      "modelId": "portimao-race-control",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "shanghai",
+      "modelId": "shanghai-circles-stand",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "sochi",
+      "modelId": "sochi-ice-cube",
+      "reason": "superseded by the pit complex"
+    },
+    {
+      "track": "watkins_glen",
+      "modelId": "glen-timing-tower",
+      "reason": "superseded by the pit complex"
+    }
+  ]
+}
