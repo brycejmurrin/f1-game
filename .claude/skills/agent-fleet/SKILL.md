@@ -61,8 +61,8 @@ A cloud worker also keeps one report line in the PR body, under the block
 rather than inside it, and posts the same line as a PR comment on every change
 (role-pr-owner.md §Monitoring and reporting):
 `fleet-status: <working|blocked|needs-decision|ready|red|done> | <one-line reason> | <UTC time>`.
-The orchestrator reads it from the body and the matching comment; no script
-parses it yet.
+The orchestrator reads it from the body and the matching comment;
+`tools/ci/pr-board.mjs` shows it as the FLEET column (state, age, reason).
 
 Quota park: `state: blocked`, `blocker: quota until <reset>`, `needs-orchestrator: no`
 (`references/worker.md` §Quota park).
