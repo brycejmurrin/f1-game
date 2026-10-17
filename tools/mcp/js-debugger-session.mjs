@@ -1,6 +1,7 @@
 // @doc Agent debugger session: pause generations, breakpoints, scopes and nonblocking execution.
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
 import { recordException, traceMethods } from "./js-debugger-trace.mjs";
@@ -108,7 +109,7 @@ export class DebugSession {
     const image = Buffer.from(data.data || "", "base64");
     if (image.length < 4 || image.length > 6 * 1024 * 1024 || image[0] !== 0xff || image[1] !== 0xd8)
       throw Error("Incident screenshot was not a valid bounded JPEG (6 MiB limit)");
-    const dir = fileURLToPath(new URL("../../scratch/debug-incidents/", import.meta.url));
+    const dir = path.join(fileURLToPath(new URL("../../", import.meta.url)), "scratch", "debug-incidents");
     mkdirSync(dir, { recursive: true });
     const id = randomUUID(), imagePath = `${dir}/${id}.jpg`, reportPath = `${dir}/${id}.json`;
     const report = { version: 1, observedAt, target: { ...this.target, url: pageUrl }, exception,
