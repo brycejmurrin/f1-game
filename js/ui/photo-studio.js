@@ -83,6 +83,25 @@ function create(G, deps) {
   deps = deps || {};
   const root = G.$("photo-studio");
   if (!root) return null;
+  // Photo looks belong to the free-camera visit, not to the lighting profile.
+  // setLightTune is live-only; the observer restores the exact pre-visit
+  // values whenever FreeCam hides its panel, including Escape and teardown.
+  if (typeof PhotoKit !== "undefined" && typeof LightTune !== "undefined" &&
+      LightTune.LT && typeof G.setLightTune === "function") {
+    const freeRows = G.$("fc-rows"), freeRoot = G.$("freecam");
+    if (freeRows && freeRoot && !G.$("fc-looks")) {
+      const lookSession = PhotoKit.createLookSession((id) => LightTune.LT[id], (id, value) => G.setLightTune(id, value));
+      const lookControls = PhotoKit.mountLookControls(freeRows, lookSession, document);
+      if (lookControls && typeof MutationObserver !== "undefined") {
+        new MutationObserver(() => {
+          if (!freeRoot.hidden) return;
+          if (lookSession.end()) {
+            for (const button of lookControls.children) button.setAttribute("aria-pressed", "false");
+          }
+        }).observe(freeRoot, { attributes: true, attributeFilter: ["hidden"] });
+      }
+    }
+  }
   const st = { open: false, source: "race", aspect: "wide", grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
   const E = {}, session = [];
   let last = null, raw = null, capturedOptions = null, focus = null, libraryPaint = 0, releaseCar = null, downloading = false;
