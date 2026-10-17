@@ -18,6 +18,9 @@ test("trusted pointer can reach pause and resume repeatedly", async ({ page }) =
     const button = page.locator("#" + id);
     await expect(button).toBeVisible();
     await expect(button).toBeEnabled();
+    // The title groups (Play, Garage, Watch & Explore, Create, Utilities) share one scroller on a short phone, so a
+    // lower group is reached by scrolling; the check below still demands it fits and owns its pointer target.
+    await button.scrollIntoViewIfNeeded();
     const hit = await button.evaluate((el) => {
       const r = el.getBoundingClientRect();
       const x = r.left + r.width / 2, y = r.top + r.height / 2;
@@ -36,7 +39,11 @@ test("trusted pointer can reach pause and resume repeatedly", async ({ page }) =
     const hit = await hitTarget(id);
     await page.mouse.click(hit.x, hit.y);
   };
-  for (const id of ["mb-race", "mb-garage", "mb-settings"]) await hitTarget(id);
+  for (const id of ["mb-race", "mb-garage", "mb-settings"]) {
+    // Destination groups share a scrolling column on short screens.
+    await page.locator("#" + id).scrollIntoViewIfNeeded();
+    await hitTarget(id);
+  }
   await page.evaluate(() => window.__apex.headless(true));
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null, null,

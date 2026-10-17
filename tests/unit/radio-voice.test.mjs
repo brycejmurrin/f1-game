@@ -1126,6 +1126,134 @@ test("squelch reuses a two-voice band-pass pool; a second line does not allocate
   assert.equal(v.debug().squelch.pool, 2);
 });
 
+function squelchClock() {
+  const { RV: R, G, ctx, synth } = load({ stored: { radioVoice: true, volRadio: 0.8 } });
+  const timers = new Map(), sources = [], peaks = [];
+  let serial = 0, time = 0;
+  ctx.setTimeout = (fn, delay = 0) => {
+    const id = ++serial; timers.set(id, { fn, at: time + Math.max(0, delay) }); return id;
+  };
+  ctx.clearTimeout = (id) => timers.delete(id);
+  const actx = fakeAudio(), gain = actx.createGain, source = actx.createBufferSource;
+  actx.createGain = function () {
+    const g = gain.call(this);
+    g.gain.linearRampToValueAtTime = (value) => peaks.push(value);
+    return g;
+  };
+  actx.createBufferSource = function () {
+    const s = source.call(this); s.stops = [];
+    s.stop = (at) => s.stops.push(at); sources.push(s); return s;
+  };
+  ctx.window.RadioSquelchCtx = actx;
+  function advance(until) {
+    let count = 0;
+    for (;;) {
+      const next = [...timers].filter(([, v]) => v.at <= until)
+        .sort((a, b) => a[1].at - b[1].at || a[0] - b[0])[0];
+      if (!next) break;
+      assert.ok(++count < 100, "deterministic timer queue must settle");
+      time = next[1].at; actx.currentTime = time / 1000;
+      timers.delete(next[0]); next[1].fn();
+    }
+    time = until; actx.currentTime = time / 1000;
+  }
+  return { v: R.create(G), actx, timers, sources, peaks, synth, advance, ctx, G };
+}
+
+test("setting radio volume to zero stops its live squelch and cannot revive a stale close", (t) => {
+  const { v, actx, timers, sources, peaks, synth, advance } = squelchClock();
+  t.after(() => v.stop());
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), true); advance(0);
+  assert.equal(sources.length, 1); assert.ok(peaks[0] > 0);
+  const closeAt = v.debug().squelch.atClose * 1000;
+  const lateClose = [...timers.values()].find((job) => job.at === closeAt).fn;
+  const speechCalls = synth.calls.length;
+  assert.equal(v.setVolume(0), 0);
+  assert.equal(sources[0].stops.at(-1), actx.currentTime, "mute stops the live BufferSource immediately");
+  assert.equal(v.debug().squelch.cut, true);
+  assert.equal(synth.calls.length, speechCalls, "squelch mute does not cancel or redesign legacy speech");
+  lateClose(); advance(closeAt + 1);
+  assert.equal(sources.length, 1, "no source or audible volume floor after mute");
+  assert.equal(peaks.length, 1); assert.ok(!v.debug().squelch.fired.includes("close"));
+  v.setVolume(0.8); lateClose();
+  assert.equal(sources.length, 1, "unmute does not resurrect the old close");
+  assert.equal(v.say("TYRES AT 50%", 3, "info"), true); advance(closeAt + 1);
+  assert.equal(sources.length, 2, "a new positive-volume line still opens normally");
+  lateClose();
+  assert.equal(sources.length, 2, "an old callback cannot close the replacement line");
+  assert.ok(!v.debug().squelch.fired.includes("close"));
+  const secondCloseAt = closeAt + 1 + v.debug().squelch.atClose * 1000;
+  advance(secondCloseAt);
+  assert.equal(sources.length, 3, "the replacement's own close still plays");
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
+  const now = secondCloseAt; advance(now);
+  const replacementCloseAt = now + v.debug().squelch.atClose * 1000;
+  const replacementClose = [...timers].find(([, job]) => job.at === replacementCloseAt)[0];
+  const speechDeadline = [...timers].find(([, job]) => job.at > replacementCloseAt)[0];
+  lateClose();
+  const beforeMute = synth.calls.length;
+  v.setVolume(0);
+  assert.equal(timers.has(replacementClose), false,
+    "stale close must not erase the replacement handle before mute cancels its timer");
+  assert.equal(timers.has(speechDeadline), true, "mute preserves the legacy speech deadline task");
+  assert.equal(synth.calls.length, beforeMute, "only owned squelch is canceled");
+});
+
+test("mute invalidates squelch for accepted speech still waiting on its lead", (t) => {
+  const { v, sources, synth, advance } = squelchClock();
+  t.after(() => v.stop());
+  assert.equal(v.say("BOX BOX BOX", 3, "info", 0.43), true);
+  v.setVolume(0); v.setVolume(0.8); advance(430);
+  assert.equal(sources.length, 0, "a pre-mute delayed line cannot re-arm bursts after unmute");
+  assert.equal(synth.calls.filter((call) => call.m === "speak").length, 1,
+    "the change leaves the accepted legacy speech task intact");
+  advance(1400); assert.equal(sources.length, 0);
+  assert.equal(v.say("TYRES AT 50%", 3, "info"), true); advance(1400);
+  assert.equal(sources.length, 1, "fresh positive-volume speech can arm its frame");
+});
+
+
+test("selective focus follows actual audible synth start and rejects stale mute/context callbacks", (t) => {
+  const { v, ctx, G, synth, advance } = squelchClock(); t.after(() => v.stop());
+  const held = new Set(), utterances = []; let gen = 1;
+  ctx.GameAudio.ctxGen = () => gen;
+  ctx.GameAudio.setVoiceFocusHold = (on, owner) => on ? held.add(owner) : held.delete(owner);
+  synth.speak = (u) => utterances.push(u);
+  assert.equal(v.say("BOX BOX BOX", 3, "info"), true); advance(0);
+  assert.equal(held.size, 0, "accepted speech has not started");
+  const first = utterances[0]; first.onstart(); assert.equal(held.size, 1);
+  v.setVolume(0); assert.equal(held.size, 0); v.setVolume(0.8);
+  first.onstart(); assert.equal(held.size, 0, "mute invalidates late start even after unmute");
+  v.say("TYRES AT 50%", 3, "info"); advance(0);
+  const next = utterances.at(-1); next.onstart(); assert.equal(held.size, 1);
+  first.onend(); assert.ok(held.has(next), "stale end cannot release replacement");
+  gen++; held.clear(); next.onstart(); assert.equal(held.size, 0, "rebuilt context rejects old onstart");
+  v.setVolume(0); v.say("BOX BOX BOX", 3, "info"); advance(0);
+  utterances.at(-1).onstart(); assert.equal(held.size, 0, "zero-volume synth never focuses");
+  v.setVolume(0.8); G.soundOn = false; utterances.at(-1).onstart(); assert.equal(held.size, 0);
+});
+
+test("race mix audition stops only the preview generation it started", () => {
+  const { RV, G, synth, ctx } = load({ voices: [{ name: "Local", lang: "en-US", localService: true }] });
+  const timers = new Map(); let next = 0;
+  ctx.setTimeout = (fn, ms) => { timers.set(++next, { fn, ms }); return next; }; ctx.clearTimeout = (id) => timers.delete(id);
+  vm.runInContext(read("js/audio/race-mix-audition.js"), ctx);
+  const audition = vm.runInContext("RaceMixAudition", ctx), voice = RV.create(G);
+  const audio = { enabled: () => true, init() {}, debug: () => ({ engineOn: false }), currentTrackId: () => "existing", musicBackend: () => null };
+  const store = { get: (key, d) => key === "sfx" ? false : key === "radioVoice" ? true : d };
+  assert.equal(audition.start({ audio, radio: voice, store }), true);
+  [...timers.values()].find((t) => t.ms === 2400).fn();
+  const auditionGeneration = voice.previewGeneration();
+  assert.equal(voice.preview("control", "Independent later test"), true);
+  assert.notEqual(voice.previewGeneration(), auditionGeneration);
+  const cancels = synth.calls.filter((c) => c.m === "cancel").length;
+  audition.stop();
+  assert.equal(synth.calls.filter((c) => c.m === "cancel").length, cancels, "Stop leaves a later independent preview alone");
+  assert.equal(timers.size, 0);
+  const current = voice.previewGeneration(); assert.equal(voice.stopPreviewIfGeneration(current), true, "owner can cancel its own pending/current voice");
+  assert.equal(voice.stopPreviewIfGeneration(current), false, "spent ownership cannot cancel a newer voice generation");
+});
+
 // ── #2189: the squelch plays through GameAudio's own context and SFX bus ────
 // audioCtx() asked GameAudio.context(), which GameAudio never exported, so the
 // real path fell through: null on a phone (squelch never fired) and a second,

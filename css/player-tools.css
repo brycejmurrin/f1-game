@@ -1,11 +1,18 @@
 /* Player tools share the menu's spacing, type and target-size ladder. */
 @layer components {
+.settings-find { flex:1 1 100%; grid-column:1 / -1; min-width:0; display:grid; gap:var(--gap); padding:calc(var(--gap) * .5) 0 var(--gap); border-bottom:1px solid var(--dim); }
 .pm-doors > .settings-find { flex:1 1 100%; width:100%; }
-.settings-find { display:grid; gap:var(--gap); padding:calc(var(--gap) * .5) 0 var(--gap); border-bottom:1px solid var(--dim); }
 .settings-find label { display:grid; gap:calc(var(--gap) * .5); font-weight:700; }
-.settings-find input { box-sizing:border-box; width:100%; min-width:0; min-height:var(--tap); padding:calc(var(--gap) * .5); font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--dim); border-radius:var(--r-sm); }
+.settings-find input, .player-tool-panel > input, .player-tool-panel > select { box-sizing:border-box; width:100%; min-width:0; min-height:var(--tap); padding:calc(var(--gap) * .5); font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--dim); border-radius:var(--r-sm); }
 .settings-find-results { display:grid; gap:calc(var(--gap) * .5); margin:0; padding:0; list-style:none; }
 .settings-find-results button { width:100%; min-height:var(--tap); text-align:left; }
+.player-tool-panel { display:grid; gap:calc(var(--gap) * .5); min-width:0; }
+/* The pause setup-trial panel spans the sheet like the input review. */
+#pausemenu .sheet-body > .player-tool-panel { grid-column: 1 / -1; flex-basis: 100%; min-width: 0; width: 100%; }
+.player-tool-row { display:flex; gap:calc(var(--gap) * .5); flex-wrap:wrap; align-items:center; }
+.player-tool-row input, .player-tool-row select, .player-tool-row button { min-height:var(--tap); max-width:100%; font:inherit; }
+.player-tool-note { overflow-wrap:anywhere; }
 .race-message-list { display:grid; gap:var(--gap); padding-left:var(--pad); }
 .race-message-list small { display:block; color:var(--dim); font:inherit; }
+.cs-liv-ed-inspect { min-height:var(--tap); font:inherit; background:transparent; color:inherit; border:1px solid var(--dim); border-radius:var(--r-sm); padding:calc(var(--gap) * .25) calc(var(--gap) * .5); }
 }

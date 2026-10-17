@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Thirty-one `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Thirty-three `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -10,6 +10,7 @@ need → skill (when / don'ts)
          ↓
        MCP?  local CLI pin → apex-tools (apex_*)
              live canvas   → chrome-devtools (chrome_*)      (mcp-probe)
+             source debug  → js-debugger (debugger_*)         (parent-owned existing Chrome)
              host browser  → playwright-official (browser_*) (survey-ui-matrix / css-play)
              Pages / web   → deploy-research subagent (host fetch / WebFetch)
              no wrap       → run the tools/ CLI
@@ -26,12 +27,26 @@ surface without hand-wiring:
 | Claude stub | `CLAUDE.md` | Must stay a one-line import; never duplicate rules. |
 | Skills (canonical) | `.claude/skills/*/SKILL.md` | Yes for Claude Code + Cursor (compat). Do **not** copy into `.cursor/skills/`. |
 | Skills (Codex mirror) | `.agents/skills/<name>` → `../../.claude/skills/<name>` | Yes. Codex scans `.agents/skills` (symlinks OK — OpenAI docs). Keep lockstep; never fork bodies. |
-| Subagents | `.claude/agents/*.md` | Yes for Claude / Cursor. Codex has no parallel path — use AGENTS.md routes. |
+| Personas / subagents | `.claude/agents/*.md` | Claude and Cursor load these directly. Codex hosts may expose collaboration agents; when they do not, use the same persona contracts through launch prompts and `AGENTS.md`. Never create a second Codex persona tree. |
 | MCP catalog | `.mcp.json` + `.cursor/mcp.json` | Lockstep (unit-tested). Desktop Cursor loads them; Cloud often does not. |
 | Codex MCP | `.codex/config.toml` | Project `[mcp_servers.*]` lockstepped to `.mcp.json`. Loads only when the project is **trusted**; user overrides may live in `~/.codex/config.toml`. |
-| Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the three catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
-| Cloud VM | `.cursor/environment.json` | `install` + shared runtime Chromium discovery + allowlist of the three catalog commands. |
+| Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the four catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
+| Cloud VM | `.cursor/environment.json` | `install` + shared runtime Chromium discovery + allowlist of the four catalog commands. |
 | Cursor entry | `.cursor/rules/apex-shared.mdc` | Always-on pointer at AGENTS / skills / MCP. |
+
+**Codex collaboration adapter.** When the Codex host exposes collaboration
+agents, read the named `.claude/agents/<persona>.md` and its skill, then launch
+the task with an explicit persona label, OWNED paths, forbidden actions,
+allowed tools, and the required hand-back format. Claude frontmatter such as
+`readonly`, `tools`, `background` and `model` is reference metadata in Codex;
+repeat the safety limits in the launch prompt. Keep Merge Desk authority with
+the explicitly designated parent session. Delegate bounded read-only evidence
+work (for example `release-auditor`), never ready/arm/merge authority.
+
+The doctor catalog warning is host metadata, not a repository failure. If the
+host provides a redacted JSON snapshot, inspect it with
+`node tools/check/doctor.mjs --catalog <snapshot.json> --json`; the doctor
+does not discover, install or validate hosted tools.
 
 **Layout principles (Claude + Codex + Cursor, 2026):**
 
@@ -52,10 +67,10 @@ surface without hand-wiring:
 
 1. Link this repo to environment **Apex 26** ([819b740b-ac05-11f1-b532-320a589b8025](https://cursor.com/dashboard/cloud-agents/environments/e/819b740b-ac05-11f1-b532-320a589b8025)). **Save** from `.cursor/environment.json` on the ship branch, then **Build** until the newest row is green. Committed `environment.json` wins over personal dashboard JSON; recurring / config-change builds are what new agents boot from (not one-off draft builds from agents).
 2. When starting a Cloud Agent, pick that environment — not a generic default. After boot, `cursor-cloud environment-info` should show `source: "Repository"`, `build.resolution: "resolved"`, and a `buildId`; run `npm run test:guards` without `npm install` first.
-3. **MCP (required for `apex_*` / `browser_*` / `chrome_*` in Cloud):** the host
+3. **MCP (required for `apex_*` / `browser_*` / `chrome_*` / `debugger_*` in Cloud):** the host
    does **not** attach project `.mcp.json` by itself ([capabilities](https://cursor.com/docs/cloud-agent/capabilities)).
    In [Cloud Agents → Integrations & MCP](https://cursor.com/agents) (team-shared:
-   Dashboard → Plugins & MCPs) register these three **stdio** servers — same names /
+   Dashboard → Plugins & MCPs) register these four **stdio** servers — same names /
    `bash` wrappers as root `.mcp.json`. Pasteable catalog (keep `command: bash`;
    do **not** use bare `npx @playwright/mcp`):
 
@@ -76,6 +91,11 @@ surface without hand-wiring:
     "type": "stdio",
     "command": "bash",
     "args": ["tools/mcp/playwright-mcp.sh", "run"]
+  },
+  "js-debugger": {
+    "type": "stdio",
+    "command": "bash",
+    "args": ["tools/mcp/js-debugger-mcp.sh", "serve"]
   }
 }
 ```
@@ -87,7 +107,7 @@ surface without hand-wiring:
    ([enterprise MCP allowlist](https://cursor.com/docs/enterprise/model-and-integration-management);
    `tests/unit/environment-json.test.mjs`). A stale save shows three nameless
    `{ "command": "bash" }` rows in `environment-info` (or bare `npx` for
-   playwright) and host attach fails. **Enable all three** in the launch MCP
+   playwright) and host attach fails. **Enable all four** in the launch MCP
    dropdown (catalog often ships only two until toggled — measured 2026-09-03;
    re-checked 2026-10-06).
 4. Put secrets in Cursor Secrets — never commit them into `mcp.json` `env`.
@@ -98,8 +118,8 @@ surface without hand-wiring:
 | Signal | Good | Broken (this session 2026-10-06) |
 |---|---|---|
 | `environment-info` → `source` / `build.resolution` | `Repository` / `resolved` | (VM OK even when MCP empty) |
-| `environment-info` → `mcpServerAllowlist` | three named rows with distinct `*bash tools/mcp/…` patterns | nameless `{command:"bash"}` ×3 |
-| Dynamic MCP namespaces | `apex-tools`, `chrome-devtools`, `playwright-official` plus `cursor*` | only `cursor`, `cursor-cloud`, `cursor-subscriptions` |
+| `environment-info` → `mcpServerAllowlist` | four named rows with distinct `*bash tools/mcp/…` patterns | nameless `{command:"bash"}` ×3 |
+| Dynamic MCP namespaces | `apex-tools`, `chrome-devtools`, `playwright-official`, `js-debugger` plus `cursor*` | only `cursor`, `cursor-cloud`, `cursor-subscriptions` |
 | VM wrappers | `bash tools/env/ensure-mcp-ready.sh` / `mcp-smoke` OK | n/a (VM ≠ host attach) |
 
 **MCP empty in this session?** CLI fallbacks work without attachment:
@@ -109,17 +129,17 @@ surface without hand-wiring:
 end (Playwright chrome-channel symlink + `mcp-smoke.mjs`) — that validates the
 VM, not host MCP attachment. If `environment-info` shows an allowlist without
 **`name`** on each row, re-**Save** the environment from git’s
-`.cursor/environment.json`, then start a **new** agent with all three MCPs enabled.
+`.cursor/environment.json`, then start a **new** agent with all four MCPs enabled.
 
 When the host catalog is empty, use the Fallback column below (and
-`./tools/mcp/apex-tools-mcp.sh call …`). Do not invent a fourth allowlist
-name for a server that left `.mcp.json`.
+`./tools/mcp/apex-tools-mcp.sh call …`). Only add allowlist names that exist
+in `.mcp.json`; removed aliases stay absent.
 
 ## MCP servers
 
 **Repo catalog** (root `.mcp.json` for Claude Code, `.cursor/mcp.json` for
-Cursor, `.codex/config.toml` for Codex — the same THREE servers, lockstepped by
-`tests/unit/agent-config.test.mjs`; trimmed from seven on 2026-09). Stdio wrappers use `command: bash` +
+Cursor, `.codex/config.toml` for Codex — the same four servers, lockstepped by
+`tests/unit/agent-config.test.mjs`; the debugger joins the three retained after the 2026-09 trim). Stdio wrappers use `command: bash` +
 `args: ["tools/…", …]` because Cursor looks up `command` on `PATH`. The
 `playwright-official` row launches the shell wrapper's `run`, which pins
 `@playwright/mcp@0.0.79` (never `@latest`) and passes the Chromium
@@ -134,6 +154,7 @@ auto-load them — then use the Fallback column.
 | **apex-tools** | `apex_*` | Pin safe flags on committed `tools/` CLIs against the **working tree** (the wrap map below is the count). Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
 | **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **survey-ui-matrix**, **css-play**. Batch shots → **playwright-probe** (CLI, not this MCP). | `bash tools/mcp/playwright-mcp.sh run` (stdio) |
 | **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
+| **js-debugger** | `debugger_*` | Parent-owned source debugging of an existing local Chrome page: breakpoints, pause/step, stack/locals and resume; non-pausing logpoints, exception log, incident screenshot, listener and instance counts. Does not launch a browser (`node tools/mcp/debug-chrome.mjs start` does, as a CLI). Setup: [Agent JS debugger](research/AGENT-JS-DEBUGGER-MCP.md). | `tools/mcp/js-debugger-mcp.sh serve-http`, then `call <debugger_tool> '{…}'` against that persistent session |
 
 **Removed 2026-09 (CLI only now, not MCP-attached):**
 
@@ -231,7 +252,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Thirty-one tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Thirty-three tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -262,7 +283,9 @@ the tool when the 3D frame behind the HUD matters.
 29 → 30 on 2026-10-10 for `apex_catalog` (built-in): every valid id the other tools
 accept (tracks, cams, tods, shot presets, HUD devices/cams, job kinds, UI screens
 and viewports) in one read, sourced from the tools' own schemas so it cannot drift.
-30 → 31 on 2026-10-16 for `apex_locations`: authored turn and sector targets
+30 → 31 on 2026-10-16 for `apex_profile_query` (`perf/query.mjs`: summarise or compare saved profile artifacts, tree kind). The profiler run itself is `apex_job_start` kind `profile` (`perf/profile.mjs`, a browser job behind the already-guarded job door).
+31 → 32 on 2026-10-16 for `apex_profile`, the same job as a direct browser-kind tool (`profile` joined the settings matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`); it returns a jobId and holds the browser lock until the job exits.
+32 → 33 on 2026-10-16 for `apex_locations`: authored turn and sector targets
 on all 52 circuits, plus curated named scenery with source-located fractions.
 
 <!-- WRAP-MAP -->
@@ -299,6 +322,8 @@ on all 52 circuits, plus curated named scenery with source-located fractions.
 | `apex_hud_shot` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
 | `apex_hud_survey` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
 | `apex_hud_mock` | `shot/hud-mock.mjs` | browser | survey-ui-matrix |
+| `apex_profile` | `perf/profile.mjs` | browser | playwright-probe |
+| `apex_profile_query` | `perf/query.mjs` | tree | playwright-probe |
 
 Pins the wrap always applies (you cannot override them):
 
@@ -403,3 +428,148 @@ Host catalog empty (this Cloud dashboard often is):
 `dryRun: true` prints argv and spawns nothing. Browser wraps take the lock —
 `apex_status` first. `./tools/mcp/apex-tools-mcp.sh smoke` checks the repo shell
 wrappers without taking the lock.
+
+For source debugging, use the separately registered `js-debugger` server's
+`debugger_*` tools. When its host catalog is unavailable, keep
+`./tools/mcp/js-debugger-mcp.sh serve-http` running in one terminal, then call
+`./tools/mcp/js-debugger-mcp.sh call debugger_state '{}'` from another shell.
+The daemon preserves the attachment and pause state between calls. It attaches
+to the parent's existing local Chrome, never launches a browser, and must not
+drive a target during a Playwright group. Detach before ending the session.
+The complete [tool reference and debugging workflow](research/AGENT-JS-DEBUGGER-MCP.md)
+covers discovery, breakpoints, locals, stepping, exception pauses and cleanup.
+
+
+### Combined track survey galleries
+
+`apex_shot_survey {"tracks":["monza","spa"],"preset":"quick","out":"artifacts/track-survey/weekend"}` captures each track serially and writes one root `index.html` containing every view, grouped by circuit. Per-track galleries and findings remain available. Long capture batches return an asynchronous job ID as before.
+
+Combine saved reports without launching a browser:
+
+```json
+{"reports":["artifacts/track-survey/monza/findings.json","artifacts/track-survey/spa/findings.json"],"out":"artifacts/track-survey/combined"}
+```
+
+Pass this object to `apex_shot_survey`. The CLI equivalent is `node tools/shot/shot-survey.mjs --reports artifacts/track-survey/monza/findings.json,artifacts/track-survey/spa/findings.json --out artifacts/track-survey/combined`.
+The output folder includes copied PNG/JPEG assets and can be shared as a ZIP. Reports may identify custom circuits; an explicit `actualTrack` or runtime `state.info.track` takes precedence over a bootstrap track ID. Captures now record their actual runtime track ID. Missing images fail the gallery build; recorded capture failures stay visible in the gallery.
+
+### Read-only UI inspector
+
+`node tools/ui/explorer.mjs inspect --screen settingsappearance --styles '#as-uiScale'`
+opens the existing catalog route in one isolated Chromium and writes
+`artifacts/ui-explorer/inspection.json` plus JSON stdout. Use `--selector` to scope
+controls and `--styles` for one element's browser-computed CSS and matched source
+rules. `--help` and `--list` remain browser-free. Catalog setup is not evidence
+that every door or control is actionable; use the explorer's validated `replay`
+scenarios for real interaction paths and Playwright traces.
+
+For an existing local Playwright page, import `installInspector`, `inspectPage`
+and `diffInspections` from `tools/ui/explorer/inspector.mjs`. After
+`await installInspector(page)`, `__apex.ui.inspect({root:'#pmsettings'})` is a
+read-only dev-page namespace. Reinstall after navigation. It is not shipped in
+the game or added to its production module roster. It does not call the general
+`__apex` getters, which may lazily load a circuit.
+
+Reports include role/name/value/pressed/selected/open, native disabled state,
+unique selectors, focus/focused dialog, range bounds, axis-specific scrolling, clipping
+and hit interception. Explicit adapters cover UI/HUD/button scale, opacity,
+appearance selects, camera offsets/comfort and live lighting inputs. `saved:null`
+means no override when storage is readable; `unavailable` and `unmapped` are not
+passes. Camera offsets do not prove rendered framing; lighting profile persistence
+and pixels remain unverified by this probe. Other controls explicitly stay unmapped.
+Move the actual control, compare DOM/live/saved values, then reload to verify durability.
+
+`diffInspections(before,after)` separates semantic/binding changes from geometry
+movement; replay action timings include these diffs. The DOM name/role screening
+is supplemented by Playwright's accessibility snapshot. CSS reports pair computed
+values with candidate declarations/source lines; they do not guess cascade winners.
+Known limits and truncation are recorded in JSON. No new browser controller,
+framework, hosted service, WebMCP dependency or settings mutation is required.
+
+Adaptive CSS diagnostics include each control's computed sizing, wrapping, zoom,
+font and container properties, with deduplicated ancestor boxes and scroll metrics
+(`layoutContexts`, at most 12 ancestors per control / 256 unique contexts).
+Contexts also retain `data-shape/density/pair/rail/fit` classifications and
+sheet-scale/fit/compact/pair/rail threshold tokens used by the game's adaptive CSS.
+`display:contents` ancestors are marked boxless and do not cause false clipping;
+outer real clips still apply. Clipping checks continue beyond the context limit.
+`adaptive` records the visual viewport, pointer/orientation/motion media matches,
+root scale/safe-area/tap tokens and selected appearance attributes. CSS custom
+properties retain browser serialization; a `calc()` token is not a measured inset.
+
+Use a bounded sweep to compare the SAME open state across sizes:
+
+```sh
+node tools/ui/explorer.mjs inspect --screen garage --styles '#cs-tab-team' --viewports 390x844,844x390,1280x800
+```
+
+Or import `inspectResponsive` and call
+`await inspectResponsive(page,{root:'#carsetup',viewports:[{width:390,height:844},{width:844,height:390}]})`.
+The result contains a snapshot per size and consecutive diffs; geometry, computed
+layout and ancestor changes are separate from semantic/binding changes. The
+original viewport is restored even if inspection fails. Up to eight integer
+sizes are allowed (width 240–3840, height 240–2160). The helper changes viewport
+size only; set pointer and safe-area for the whole session with `--touch`/`--boot`/`--safe` (below).
+Each record reports layout settlement: at least 150 ms and three matching frame
+samples, bounded to 500 elements, 120 frames and two seconds. Unstable/truncated
+samples are explicit, and quiet samples cannot rule out later async work. Resizing can
+trigger native orientation/pause dialogs; they are recorded, not dismissed, and
+restoring size cannot undo application state transitions. Use the existing
+`layout-audit.mjs` matrix for scales/pointers/insets and validated replay actions
+for settings changes, scrolling, reload durability and modal navigation.
+
+**Phone emulation (inspect only).** The default session is a 1280x800 mouse
+desktop, so a phone-sized sweep without these flags reports `pointer: coarse`
+false and the desktop 24 px tap floor. For the shape a player holds:
+
+```sh
+node tools/ui/explorer.mjs inspect --screen settings --touch --boot 932x430 --safe 0,59,21,59 --viewports 932x430,844x390 --summary
+```
+
+`--touch` makes a `hasTouch`/`isMobile` context (`pointer: coarse`, 44 px tap
+floor; a resize cannot switch this). `--boot WxH` boots at that size, so
+boot-time classifiers see the phone. `--safe T,R,B,L` sets real
+`env(safe-area-inset-*)` values through CDP `Emulation.setSafeAreaInsetsOverride`
+(0–200 px each; the iPhone Pro Max landscape notch is about 0,59,21,59).
+`--summary` prints one tab-separated line per issue (screen, size, kind,
+selector, message) instead of the JSON, which is still written to `--out`.
+`provenance.emulation` records the settings. A sweep record that has not settled
+gets one more settlement budget (`settlement.retried`). Settlement also waits for finite running CSS animations on, inside or above the root (`settlement.animating`): a fade or pointer-events transition leaves geometry final while hit tests still answer `<html>`; infinite animations are ignored. If it is still moving,
+its issues carry `provisional: true`. A hit test whose visible centre lands on
+`<html>`/`<body>` is `not-hit-testable` (nothing painted takes the point), not
+`blocked` by another control. A native `<label>` counts as part of its control's
+tap target and hit area. Load ≥ 3 or a held browser lock exits **75** (retry
+later), not 1.
+
+Add `--roundtrip` to revisit sizes in reverse order (at most 15 observations,
+without duplicating the turnaround size). Every record retains bounded classifier
+history, final state and return-cycle evidence. `paths` compares the same size
+across directions, including classified sheets without controls. Differences can
+be intentional hysteresis; absent, replaced or bounded contexts remain unknown.
+History records at most 128 contexts, 16 states each and 1,024 states total.
+
+`--styles` also reports inherited candidate declarations and source lines, plus
+browser-reported container-query metadata and actual container identity/geometry
+when supported. Query conditions have no CDP active result and remain explicitly
+unevaluated. Shadow/slot ancestry and optional API failures remain unavailable.
+These records do not establish inheritance, condition truth or cascade winners.
+
+Use `--audit artifacts/fit-audit/audit.json` to attach existing native fit-audit,
+layout-audit or menu-fit evidence (input at most 5 MiB). Producers now capture
+source identity and root, viewport, pointer, scales, insets and appearance.
+Only matching complete provenance is comparable; old reports remain incomparable,
+and setup failures remain skipped. Dirty worktrees require equal content
+fingerprints. Findings retain producer measurements and map only to uniquely
+identified controls or contexts. Audit measurement rules are not duplicated.
+Layout-audit's content-visibility override is recorded as an adjustment, so its
+geometry reports remain incomparable with an untouched inspector page. The tool
+does not change page styles to manufacture a match. A comparable empty cell is
+an absence of native findings, not a functional pass.
+
+API references: [Chrome CSS domain](https://chromedevtools.github.io/devtools-protocol/tot/CSS/),
+[current CDP schema](https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol/master/json/browser_protocol.json),
+[Chromium inherited style traversal](https://raw.githubusercontent.com/chromium/chromium/main/third_party/blink/renderer/core/inspector/inspector_style_resolver.cc),
+[Playwright accessibility snapshots](https://playwright.dev/docs/aria-snapshots),
+[Playwright traces](https://playwright.dev/docs/trace-viewer),
+[MDN visual viewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport),
+[MDN box generation](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Display/Visual_formatting_model#the_principal_box).

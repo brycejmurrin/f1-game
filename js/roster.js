@@ -24,6 +24,7 @@
       "js/render/webgpu/wgx-shadow.js",
       "js/render/webgpu/wgx-chunked.js",
       "js/render/webgpu/wgx-post.js",
+      "js/render/webgpu/wgx-roadlut.js",
       "js/render/webgpu/wgx.js"
     ],
     "three": [
@@ -112,6 +113,10 @@
       "js/render/webgpu/wgx.js"
     ],
     [
+      "js/render/webgpu/wgx-roadlut.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
       "js/render/three/tsl-chunks.js",
       "js/render/three/tsl-lit.js"
     ],
@@ -146,12 +151,22 @@
   ],
     LAZY_AGENT: [
     "js/agent/agentview-raster.js",
+    "js/agent/agentview-corners.js",
     "js/agent/agentview.js",
+    "js/agent/apex-net.js",
     "js/agent/apex.js"
   ],
     LAZY_EDGES: [
     [
       "js/agent/agentview-raster.js",
+      "js/agent/agentview.js"
+    ],
+    [
+      "js/agent/apex-net.js",
+      "js/agent/apex.js"
+    ],
+    [
+      "js/agent/agentview-corners.js",
       "js/agent/agentview.js"
     ]
   ],
@@ -247,6 +262,7 @@
     LAZY_AUDIO: [
     "js/audio/signal.js",
     "js/audio/soundtrack.js",
+    "js/audio/race-mix-audition.js",
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
     "js/audio/ers-layer.js",
@@ -257,6 +273,7 @@
     "js/audio/crowd.js",
     "js/audio/car-sfx.js",
     "js/audio/voice-pack.js",
+    "js/audio/battle-earcon.js",
     "js/audio/radio-voice.js",
     "js/audio/announcer-recorded.js",
     "js/audio/announcer.js",
@@ -295,6 +312,14 @@
     [
       "js/audio/voice-pack.js",
       "js/audio/radio-voice.js"
+    ],
+    [
+      "js/audio/battle-earcon.js",
+      "js/audio/radio-voice.js"
+    ],
+    [
+      "js/audio/battle-earcon.js",
+      "js/audio/panel.js"
     ],
     [
       "js/audio/radio-voice.js",
@@ -458,6 +483,7 @@
     "js/net/transport.js",
     "js/net/handshake.js",
     "js/net/lobby-codes.js",
+    "js/net/lobby-roster.js",
     "js/net/snapshot.js",
     "js/net/session.js",
     "js/net/netplay.js",
@@ -504,6 +530,10 @@
     [
       "js/net/lobby-codes.js",
       "js/net/lobby.js"
+    ],
+    [
+      "js/net/lobby-roster.js",
+      "js/net/lobby.js"
     ]
   ],
     LAZY_WORKER: [
@@ -523,8 +553,10 @@
     "js/editor/elev-presets.js",
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
+    "js/editor/followup-tools.js",
     "js/editor/scenery-panel.js",
     "js/editor/bridge-panel.js",
+    "js/editor/workspace.js",
     "js/editor/designer.js"
   ],
     LAZY_EDITOR_EDGES: [
@@ -555,6 +587,10 @@
     [
       "js/editor/shape.js",
       "js/editor/profile.js"
+    ],
+    [
+      "js/editor/followup-tools.js",
+      "js/editor/scenery-panel.js"
     ],
     [
       "js/editor/shape.js",
@@ -605,11 +641,19 @@
       "js/editor/designer.js"
     ],
     [
+      "js/editor/followup-tools.js",
+      "js/editor/designer.js"
+    ],
+    [
       "js/editor/scenery-panel.js",
       "js/editor/designer.js"
     ],
     [
       "js/editor/bridge-panel.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/workspace.js",
       "js/editor/designer.js"
     ]
   ],
@@ -653,9 +697,15 @@
   ],
     LAZY_CAM_EDITOR_EDGES: [],
     LAZY_CAREER_UI: [
+    "js/career/career-planning-ui.js",
     "js/career/career-ui.js"
   ],
-    LAZY_CAREER_UI_EDGES: [],
+    LAZY_CAREER_UI_EDGES: [
+    [
+      "js/career/career-planning-ui.js",
+      "js/career/career-ui.js"
+    ]
+  ],
     LAZY_TRACK_BUILD: [
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
@@ -668,6 +718,7 @@
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
+    "js/track/scenery/guards.js",
     "js/track/scenery/build-props.js"
   ],
     LAZY_TRACK_BUILD_EDGES: [
@@ -697,6 +748,10 @@
     ],
     [
       "js/track/scenery/venue.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
+      "js/track/scenery/guards.js",
       "js/track/scenery/build-props.js"
     ],
     [
@@ -745,12 +800,14 @@
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
+    "js/track/scenery/guards.js",
     "js/track/scenery/build-props.js",
     "js/data/teams.js",
     "js/garage/experience.js",
     "js/garage/scene-prims.js",
     "js/garage/scene-equipment.js",
     "js/garage/scene-live.js",
+    "js/garage/scene-dress.js",
     "js/garage/scene-crew.js",
     "js/garage/scene.js",
     "js/circuits/bahrain.js",

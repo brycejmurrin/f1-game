@@ -12,7 +12,7 @@ import path from "node:path";
 import {
   GUARDS_A, GUARDS_B, GUARDS_JOB,
   guardsVerdict, localVerdict, evaluate, shaPrefixMatch, stampReadySha, newestByName,
-  planVerdict, withPlan, resolveSha,
+  planVerdict, withPlan, resolveSha, verdictLine,
 } from "../../tools/ci/ready-gate.mjs";
 
 const run = (name, status, conclusion, id = 1) => ({
@@ -347,4 +347,17 @@ test("a newer queued attempt without started_at cannot reuse an old pass", () =>
   const old = run(GUARDS_JOB, "completed", "success", 1);
   const queued = { ...run(GUARDS_JOB, "queued", null, 2), started_at: null };
   for (const checks of [[old, queued], [queued, old]]) assert.equal(guardsVerdict(checks).state, "pending");
+});
+
+test("planVerdict: [~] and Deferred: items count as closed (#2397)", () => {
+  const body = "## Plan\n- [x] a — sha\n- [~] later thing\n- [ ] Deferred: follow-up #12\n- [ ] ~~dropped~~ — why\n";
+  assert.deepEqual(planVerdict(body), { state: "done", items: 4, open: [] });
+  const open = planVerdict("## Plan\n- [~] later\n- [ ] still todo\n- [ ] Deferred-ish not closed\n");
+  assert.equal(open.state, "open");
+  assert.deepEqual(open.open, ["still todo", "Deferred-ish not closed"]);
+});
+
+test("#2430: the verdict line carries the FULL 40-char sha a merge call needs", () => {
+  const sha = "4dc3d6226176b48601a9e9cb0612989cc7ec916b";
+  assert.match(verdictLine({ state: "passed", evidence: "ok", sha, source: "ci" }), /^= ready-gate passed — ok sha=[0-9a-f]{40} source=ci$/);
 });

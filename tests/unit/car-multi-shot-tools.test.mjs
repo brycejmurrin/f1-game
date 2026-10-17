@@ -29,8 +29,10 @@ test("render-car has a spine preset and repeatable --shot customs", () => {
   // tools/lib/chromium-path.mjs covers every layout incl. the headless shell.
   assert.match(src, /chromiumPath\(\)/, "browser discovery goes through tools/lib/chromium-path.mjs");
   assert.doesNotMatch(src, /function findChromium/, "no private copy of browser discovery");
-  assert.match(src, /before:\s*frame,\s*n:\s*need/,
-    "frame settle must pass `need` into waitForFunction (free `need` is PAGEERR)");
+  assert.match(src, /await mutateCaptureScene\(page,/, "camera changes mark the requested scene");
+  assert.match(src, /await awaitCaptureReady\(page,[\s\S]*?await captureCanvas\(dest\)/,
+    "capture must await the marked scene before reading its pixels");
+  assert.doesNotMatch(src, /waitForTimeout\(/, "a stalled renderer cannot pass through a timed fallback");
 });
 
 test("render-car walks a team LIST in one browser, and grids the sheet by team", () => {
@@ -46,7 +48,7 @@ test("render-car walks a team LIST in one browser, and grids the sheet by team",
   // rebuilds the car, so re-sending it every shot pays that per camera move.
   assert.match(src, /s\.team !== renderedTeam \? \{ team: s\.team \}/,
     "team must be sent only on change, not on every shot");
-  assert.match(src, /s\.team !== renderedTeam/, "a team swap needs the long frame settle, like a tod change");
+  assert.match(src, /s\.team !== renderedTeam/, "team swaps must be included in the scene mutation");
   assert.match(src, /assertSafePathToken\(t, 'team'\)/, "every id in the list is still a path token");
 });
 
@@ -60,8 +62,8 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
   assert.match(src, /return "spine"/,
     "single-team default views=spine unless a preset overrides");
   assert.match(src, /startsWith\(name \+ "="\)/, "must accept --team=value as well as --team value");
-  assert.match(src, /screenshotGameCanvas\(page, png, \{[\s\S]*skipAwait: false/,
-    "capture awaits present — skipAwait duplicated frames under --fast");
+  assert.match(src, /await awaitCaptureReady\(page, \{ timeoutMs: 60000, pauseRender: true \}\);\s*const shot = await screenshotGameCanvas\(page, png, \{\s*skipAwait: true/,
+    "one strict present barrier precedes capture, then the duplicate wait is skipped");
   assert.match(src, /openGarage/, "must reuse openGarage retries, not a one-shot mb-garage click");
   assert.match(src, /settleGarage/, "settle soft-present between presets");
   // The WALK never reloads (openGarage pins the team live); only the --serve /
@@ -148,10 +150,13 @@ test("screenshotGameCanvas prefers #game-soft before freezing for CDP", () => {
   assert.match(fn, /forceCdp:\s*true/, "CDP leg skips soft retry after freeze");
 });
 
-test("carshot uses soft→CDP clip, not page.screenshot", () => {
+test("carshot uses native pixels or soft→CDP with a proportional centre crop", () => {
   const src = code("tools/car/carshot.mjs");
   assert.match(src, /screenshotPresentedCanvas/, "shared capture helper");
-  assert.match(src, /clip:\s*\{\s*x:\s*96/, "keeps the tiny centre crop");
+  assert.match(src, /screenshotNativeCanvas/, "native Three.js reads the presented renderer buffer");
+  assert.match(src, /x:\s*width \* 96 \/ 480, y:\s*height \* 40 \/ 270, width:\s*width \* 288 \/ 480, height:\s*height \* 190 \/ 270/,
+    "keeps the tiny centre crop proportions when the viewport changes");
+  assert.match(src, /if \(!pixels\.meaningful\)/, "black or HUD-only output fails the capture");
   assert.doesNotMatch(src, /page\.screenshot\(/, "no raw page.screenshot");
 });
 

@@ -35,6 +35,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx } from "../helpers/glx-mock.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readFile = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -45,6 +46,7 @@ const read = (p) => p === "js/game.js"
 // Comment-stripped source: a pin can only match code, and a comment can
 // neither fail nor satisfy it.
 const code = (p) => (p.startsWith("css/") ? readCssSource(p) : read(p)).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+const gameUnionCode = () => gameSource().replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 /** The span between two source needles, ASSERTING BOTH EXIST FIRST.
  *
  * `src.slice(src.indexOf(a), src.indexOf(b))` is the shape that disarmed this
@@ -263,7 +265,7 @@ test("RENDERER picker lives in renderer-picker.js, not game.js or gfx-quality.js
   // The picker's own behaviour — a <select> with ‹ › steps, "WEBGPU
   // (UNAVAILABLE)" without navigator.gpu — is driven through bootPicker()
   // below; this is the ownership rule only.
-  assert.doesNotMatch(code("js/game.js"), /getElementById\(\s*"pm-renderer"\s*\)|\$\(\s*"pm-renderer"\s*\)/);
+  assert.doesNotMatch(gameUnionCode(), /getElementById\(\s*"pm-renderer"\s*\)|\$\(\s*"pm-renderer"\s*\)/);
   assert.match(code("js/perf/renderer-picker.js"), /getElementById\(\s*"pm-renderer"\s*\)/);
   // The preset file keeps the GRAPHICS button only — the split is the ownership rule.
   assert.doesNotMatch(code("js/perf/quality-preset.js"), /pm-renderer|apex26\.gfxBackend/);
@@ -486,8 +488,8 @@ test("race-start render fail-fasts on backendState.ctxLost (drops handoff)", () 
   assert.match(src, /gfxContextLost\(\)[\s\S]{0,250}?loadingScreen\.phase\(\) === "handoff"/);
   assert.match(code("js/perf/race-entry-profile.js"), /handoff:lower-lost/);
   const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("const sessionEntry = SessionEntry.create();"));
-  assert.match(body, /loadTrackStepped\(trackIdx, \(\) => !gfxContextLost\(\)\)/,
-    "#976 paced load aborts mid-step when the context is already lost");
+  assert.match(body, /loadTrackStepped\(trackIdx, \(\) => !stale\(\) && !gfxContextLost\(\)\)/,
+    "paced load aborts mid-step when its entry is stale or its context is lost");
   assert.match(body, /await yieldMain\(\);[\s\S]{0,80}?if \(gfxContextLost\(\)\)/,
     "fail-closed covers the scheduler.yield gaps between paced startRaceBody legs");
   assert.match(body, /if \(player !== entryPlayer \|\| \(state !== "count" && state !== "race"\)\) return false/,
@@ -648,9 +650,18 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
     "optIn must require the group to exist and be non-empty — a pick for files that are gone is not an opt-in");
 
   const wgx = code("js/render/webgpu/wgx.js");
-  assert.match(wgx, /device\.lost[\s\S]{0,600}_wgxEscalate\(/, "device.lost climbs the ladder through _wgxEscalate");
+  const lossCallback = wgx.match(/device\.lost\.then\(function\s*\(info\)\s*\{\s*if\s*\(info && info\.reason === "destroyed"\) return;/);
+  assert.ok(lossCallback, "device.lost registers its recovery callback");
+  // Extract the callback itself: capture cleanup may grow the body without
+  // changing the visible-loss ladder, so a character budget is not its contract.
+  const lossBody = fnBody(wgx.slice(lossCallback.index).replace(
+    /^device\.lost\.then\(function\s*\(info\)/, "function deviceLoss(info)"), "deviceLoss");
+  assert.match(lossBody, /if\s*\(!hidden\)\s*\{[^]*?_wgxEscalate\("device lost \("[^;]*,\s*true\);\s*return;/,
+    "visible device.lost climbs the ladder through forced _wgxEscalate");
+  assert.match(fnBody(wgx, "_wgxEscalate"), /_lost\s*=\s*true;\s*_rejectCapture\([^;]*;\s*_healReset\(\)/,
+    "loss escalation rejects queued capture before recovery bookkeeping");
   assert.match(fnBody(wgx, "_wgxEscalate"), /apex26\.gfxClaimFail/, "the last rung surrenders the tab to GLX via the claim-fail latch");
-  assert.doesNotMatch(wgx, /device\.lost[\s\S]{0,2200}setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
+  assert.doesNotMatch(lossBody, /setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
   assert.match(wgx, /\bWGX_LITE\b/);
   assert.match(wgx, /\bIS_WEBKIT\b/);
   assert.match(wgx, /WGX_LITE\s*&&\s*format\s*===\s*"rgba16float"\s*\)\s*format\s*=\s*"bgra8unorm"/);
@@ -756,6 +767,16 @@ test("TLX material-map ownership keeps placeholders and reports pack state", () 
   assert.match(wgx, /_matOwnedAlbedo/);
   assert.match(wgx, /matPlaceAlbedoView/);
   assert.match(wgx, /_releaseOwnedMatMaps/);
+});
+
+test("TLX rejects partial material readbacks so Assets can retry", () => {
+  const tlx = read("js/render/three/tlx.js");
+  const at = tlx.indexOf("function readbackTextureLayers(size, images, n, data)");
+  assert.ok(at > 0, "TLX material readback helper moved");
+  const body = tlx.slice(at, tlx.indexOf("\n      }", at));
+  assert.match(body, /const expected = \[\]/);
+  assert.match(body, /filled === expected\.length \? filled : 0/,
+    "a missing layer must reject the whole array instead of binding a zero-filled page");
 });
 
 test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgpu", () => {
@@ -1786,7 +1807,7 @@ test("the debris pools instance behind a capability read, with the loop as fallb
   // of every lap from cones alone, which have no liveness test (PERF-FINDINGS
   // 2h). GLX ships updateInstances; WGX and TLX have not been ported and MUST
   // keep the per-body path rather than silently drawing nothing.
-  const dw = code("js/physics/debris-world.js");
+  const dw = code("js/physics/debris-draw.js");   // #1661: the drawing half of DebrisWorld
   assert.match(dw, /gfx\.updateInstances\(/);
   assert.match(dw, /gfx\.drawInstanced\(/);
   assert.match(dw, /!gfx\.createInstancedBatch\s*\|\|\s*!gfx\.updateInstances\s*\|\|\s*!gfx\.drawInstanced/,
@@ -4020,6 +4041,17 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // A-H4: an InstancedMesh caster (tlxCasterAttr=0) disposes; the attribute Mesh has no dispose(), so its event.
   assert.match(sh, /function disposeCaster\(m\) \{\s*try \{ if \(m\.isInstancedMesh\) m\.dispose\(\); else m\.dispatchEvent\(\{ type: "dispose" \}\); \}/);
   const tlxSrc = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const disposeInstancedObject = new Function(`return (${fnSource(tlxSrc, "function disposeInstancedObject(mesh) {")})`)();
+  const plain = { dispatches: 0, dispatchEvent(e) { this.dispatches++; this.event = e; } };
+  disposeInstancedObject(plain);
+  assert.equal(plain.dispatches, 1, "attribute-backed plain Meshes release three's render object through its dispose event");
+  assert.deepEqual(plain.event, { type: "dispose" });
+  const instanced = { isInstancedMesh: true, disposals: 0, dispose() { this.disposals++; } };
+  disposeInstancedObject(instanced);
+  assert.equal(instanced.disposals, 1, "real InstancedMesh resources use its native dispose method");
+  assert.doesNotMatch(tlxSrc, /(?:mv|batch)\.imesh\.dispose\(\)/, "freeing a batch must not call nonexistent Mesh.dispose directly");
+  assert.match(tlxSrc, /disposeInstancedObject\(mv\.imesh\);[\s\S]*?disposeInstancedObject\(batch\.imesh\);/,
+    "both the mirror and main batch use the lifecycle-aware disposer");
   assert.match(tlxSrc, /function freeInstancedBatch\(batch\) \{\s*if \(!batch\) return;\s*if \(shadowSys && shadowSys\.freeInstanced\) shadowSys\.freeInstanced\(batch\);/,
     "and TLX frees it with the batch");
   // A released geometry (freeMesh / chunked free) is parked out of every slot
@@ -4036,11 +4068,16 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // geometry.dispose() alone only nulls an attribute mirror. A pooled wrapper
   // dropped without the event pinned every chunk of every freed track (~17 MB
   // of JS heap per picker pick, measured). Both drop paths go through one helper.
-  assert.match(tlxSrc, /function dropWrapper\(m\) \{[\s\S]*?if \(_warmPending\) \{ _dropQueue\.push\(m\); return; \}\s*try \{ m\.dispatchEvent\(\{ type: "dispose" \}\); \}[\s\S]*?m\.geometry = null; m\.material = null;\s*\}/,
-    "dropWrapper dispatches three's dispose event before nulling the wrapper — and defers while a warm's compileAsync may still hold the mesh");
+  const drop = fnBody(tlxSrc, "dropWrapper");
+  assert.match(drop, /if \(_warmPending\)[^]*?_dropQueue\.push\(\{ mesh: m, ownedGeometry \}\)[^]*?return;/,
+    "warm retains both object and owned geometry in one retirement record");
+  assert.match(drop, /m\.dispatchEvent\(\{ type: "dispose" \}\);[^]*?m\.geometry = null; m\.material = null;[^]*?ownedGeometry\.dispose\(\)/,
+    "object disposal precedes reference clearing and owned geometry disposal");
   assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
   assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
-  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 3, "releaseGeometry, prunePool and the flush all drop through it");
+  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 2, "releaseGeometry and prunePool drop shared wrappers through the helper");
+  assert.match(fnBody(tlxSrc, "flushDropped"), /dropWrapper\(entry\.mesh, entry\.ownedGeometry\)/, "flush retains ownership metadata");
+  assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh\)/, "coalesced owned views use the same warm-aware lifecycle");
   const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
   assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
     "warm probes dispose before clearing references, after pending compilation settles");
@@ -5149,7 +5186,7 @@ test("TLX placeholder material arrays carry the pack's sampling state (WGSL acce
     "t.minFilter = THREE.LinearMipmapLinearFilter",
     "t.magFilter = THREE.LinearFilter",
     "t.generateMipmaps = true",
-    "t.anisotropy = 4",
+    "t.anisotropy = materialArrayAnisotropy()",
   ]) {
     assert.ok(pack.includes(line), "createTextureArray lost `" + line + "` — the pack sampling state changed; mirror it in the placeholder");
     assert.ok(placeholder.includes(line), "placeholder array lacks `" + line + "` — three compiles the lit program against the placeholder, and a Nearest/Nearest ClampToEdge placeholder bakes textureLoad+clamp into the WGSL for the life of the program");
@@ -5244,7 +5281,7 @@ test("spatial upscale persists once through GameStore at the UI boundary", () =>
 test("TLX timing enables the bundled backend, not a shadow renderer property", async () => {
   const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
-  let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0;
+  let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0, _inspectorHold = false;
   const _gpuSupported = () => true;
   const body = fnBody(code("js/render/three/tlx.js"), "gpuTimer");
   const timer = eval("(function(on){" + body + "})");
@@ -5469,7 +5506,7 @@ test("TLX defers resize during compilation and applies the latest requested size
 });
 
 test("TLX ignores a timing result after disabling or restarting its measurement session", async () => {
-  let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0;
+  let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _inspectorHold = false;
   const pending = [], _gpuSupported = () => true;
   const renderer = { backend: {}, resolveTimestampsAsync: () => new Promise(r => pending.push(r)) };
   const src = code("js/render/three/tlx.js");
@@ -5982,7 +6019,7 @@ function bootScenario({ install = true, init = true, pref = "webgl2", skip = fal
     Event: class { constructor(type) { this.type = type; } },
     location: { reload: () => events.push("reload") },
     BACKEND_FILES: { webgl2: ["glsl-chunks.js", "glx.js"] },
-    canvas: {}, _claimSkipped: skip, _createHung: false, pick: pref, why: "",   // start()'s closure state the sliced fallback reads
+    canvas: {}, _claimSkipped: skip, _createHung: false, _initOwner: null, pick: pref, why: "",   // start()'s closure state the sliced fallback reads
     backendPreference: () => pref,
     showGraphicsUnavailable: () => events.push("unavailable"),
     async loadBackendScripts(group) {

@@ -81,6 +81,7 @@ function buildTools(host) {
     const b = document.createElement("button");
     b.type = "button"; b.className = "opt-btn lt-preview-btn";
     b.dataset.scope = id;
+    b.setAttribute("aria-pressed", id === _scope ? "true" : "false");
     b.textContent = label;
     b.onclick = () => { _scope = id; refreshCamTunePanel(); };
     scope.appendChild(b);
@@ -268,7 +269,8 @@ function buildCamTunePanel() {
     imp.type = "button";
     imp.textContent = "IMPORT";
     imp.title = "Paste JSON, a window.CameraEdits snippet, or an APXC1 share code into the box, then click IMPORT.";
-    actions.insertBefore(imp, $("ct-close"));
+    const close = $("ct-close");
+    actions.insertBefore(imp, close && close.parentNode === actions ? close : null);
     imp.onclick = () => {
       const ta = $("ct-json");
       ta.hidden = false;
@@ -317,8 +319,16 @@ function updateCtProfileLabel() {
   }
   const sm = $("ct-rows") && $("ct-rows")._ctScopeBtns;
   if (sm) {
-    if (sm.mode) sm.mode.classList.toggle("on", _scope === "mode");
-    if (sm.global) sm.global.classList.toggle("on", _scope === "global");
+    if (sm.mode) {
+      const on = _scope === "mode";
+      sm.mode.classList.toggle("on", on);
+      sm.mode.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    if (sm.global) {
+      const on = _scope === "global";
+      sm.global.classList.toggle("on", on);
+      sm.global.setAttribute("aria-pressed", on ? "true" : "false");
+    }
   }
 }
 function refreshCamTunePanel() {

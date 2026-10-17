@@ -200,9 +200,9 @@ const UiExperience = (function () {
     });
     wire("mb-photo", () => deps.openPhoto("home"));
     wire("pm-photo", () => deps.openPhoto("race"));
-    wire("pm-strategy", () => deps.openSettingsPage("driving", "pm-pit-panel"));
-    wire("pm-practice", () => deps.openSettingsPage("driving", "pm-practice-panel"));
-    wire("pm-review", () => deps.openSettingsPage("driving", "pm-session-review"));
+    wire("pm-strategy", () => deps.openSettingsPage("strategy", "pm-pit-panel"));
+    wire("pm-practice", () => deps.openSettingsPage("practice", "pm-practice-panel"));
+    wire("pm-review", () => deps.openSettingsPage("review", "pm-session-review"));
     const intro = $("practice-brief");
     let goal = $("practice-goal");
     function paintGoal() {

@@ -232,6 +232,11 @@ const DataResults = (function () {
       return tr;
     }
 
+    function driverTag(r, byNum) {
+      const d = byNum[r.num] || {};
+      return d.code || (r.num !== null ? "#" + r.num : "—");
+    }
+
     function driverCells(tr, r, byNum) {
       const d = byNum[r.num] || {};
       const who = d.name || (r.num !== null ? "Car " + r.num : "—");
@@ -284,8 +289,10 @@ const DataResults = (function () {
         const status = statusOf(r);
         const time = kind === "practice" ? fmtLap(r.duration) : fmtClock(r.duration);
         // A retirement has no duration: the status takes the TIME cell so
-        // the row still says WHY, and the gap column stays empty.
-        tr.appendChild(el("td", "dh-td-time", time || status || "—"));
+        // the row still says WHY, and the gap column stays empty. The status
+        // wins even when the provider kept a duration (a DSQ keeps the time
+        // the car completed), or the row reads as an ordinary finish.
+        tr.appendChild(el("td", "dh-td-time", status || time || "—"));
         // A lapped finisher has no duration but a "+1 LAP" label: the label
         // is the whole gap, so it must not wait on the time.
         const gap = typeof r.gap === "string" && r.gap && !status ? r.gap : (time && fmtGap(r.gap)) || "—";
@@ -313,8 +320,13 @@ const DataResults = (function () {
           // dp is the last round the group below BELONGS to, and a driver whose
           // deepest round is Q2 was eliminated IN Q2 — not in the Q3 they never
           // reached. Off by one here reads plausibly and is wrong on every row.
+          // The provider records no "advanced" flag: a car that went through
+          // but set no time in the next round reads exactly like the first car
+          // knocked out there. So the lead of the group below is named rather
+          // than asserted eliminated, and the band never claims more than the
+          // times prove.
           tbody.appendChild(cutRow(6, dp < 0 ? "NO TIME SET"
-                                             : "ELIMINATED IN " + qLabel(meta, dp)));
+            : "ELIMINATED IN " + qLabel(meta, dp) + " · P" + r.pos + " MAY HAVE ADVANCED WITHOUT A TIME"));
         }
         prev = dp;
         const tr = el("tr");
@@ -358,7 +370,11 @@ const DataResults = (function () {
         tr.appendChild(el("td", "dh-td-time", fmtLap(qSlot(r, i))));
         tr.appendChild(el("td", "dh-td-time", fmtGap(qGap(r, i)) || "—"));
         tbody.appendChild(tr);
-        if (n === lastThrough) tbody.appendChild(cutRow(5, "ELIMINATED IN " + qLabel(meta, i)));
+        if (n === lastThrough) {
+          const nx = ran[n + 1];
+          tbody.appendChild(cutRow(5, "ELIMINATED IN " + qLabel(meta, i) +
+            (nx ? " · " + (driverTag(nx, byNum)) + " MAY HAVE ADVANCED WITHOUT A TIME" : "")));
+        }
       });
       t.appendChild(tbody);
       return tableWrap(t);

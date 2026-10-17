@@ -33,7 +33,7 @@ function boot(opts = {}) {
       get length() { return disk.size; },
       key(i) { return Array.from(disk.keys())[i]; },
       getItem(k) { const v = disk.get(k); return v === undefined ? null : v; },
-      setItem(k, v) { disk.set(k, v); },
+      setItem(k, v) { if (opts.denyWrites) throw Object.assign(new Error("quota refused"), { name: "QuotaExceededError" }); disk.set(k, v); },
       removeItem(k) { disk.delete(k); },
     },
   };
@@ -74,6 +74,22 @@ test("settings export round-trips ttlb boards (export, clear, import, laps match
   assert.equal(got.length, 2);
   assert.equal(got[0], 89.5);
   assert.equal(got[1], 90.1);
+});
+
+test("ttlb import reports quota-refused laps as failed rather than reloading them away", () => {
+  const file = { format: "apex26-settings-v1", settings: {}, ttlb: { monza: [lap(90)] } };
+  const opts = { denyWrites: true }, denied = boot(opts);
+  const result = denied.loadSettings(file);
+  assert.equal(result.applied, 0);
+  assert.equal(result.failed, 1, "the existing import UI must keep the page instead of auto-reloading");
+  assert.equal(denied.disk.has("apex26.ttlb.monza"), false);
+  assert.equal(denied.GameStore.ttBoard("monza").length, 1, "session-only lap remains usable");
+  opts.denyWrites = false;
+  assert.equal(denied.loadSettings(file).applied, 1, "retry persists an already cached refused lap after storage recovers");
+  assert.equal(denied.loadSettings(file).skipped, 1, "a durable duplicate remains a no-op");
+  assert.equal(denied.GameStore.ttBoard("monza").length, 1, "retry never duplicates the cached lap");
+  assert.equal(JSON.parse(denied.disk.get("apex26.ttlb.monza")).laps.length, 1);
+  assert.equal(boot().loadSettings(file).applied, 1, "the same valid lap applies once storage accepts it");
 });
 
 test("ttlb import merges and keeps the best laps per class", () => {

@@ -5,49 +5,8 @@ import { performance } from "node:perf_hooks";
 import { installProbeInit, gotoGame, mutateCaptureScene, awaitCaptureReady, screenshotPresentedCanvas } from "../../shot/probe-page.mjs";
 import { pixelEvidence } from "../../shot/capture-contract.mjs";
 
-/** Serializable DOM screening, not an accessibility conformance or pixel oracle. */
-export function inspectUI() {
-  const visible = (e) => {
-    if (!e || e.closest('[hidden],[inert],[aria-hidden="true"]')) return false;
-    if (e.checkVisibility && !e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return false;
-    for (let p = e.parentElement; p; p = p.parentElement) {
-      if (p.tagName === "DETAILS" && !p.open && !p.querySelector(":scope > summary")?.contains(e)) return false;
-    }
-    const s = getComputedStyle(e), r = e.getBoundingClientRect();
-    return s.display !== "none" && s.visibility !== "hidden" && Number(s.opacity) > 0 && r.width > 0 && r.height > 0;
-  };
-  const selector = (e) => e.id ? `#${CSS.escape(e.id)}` : null;
-  const name = (e) => {
-    const refs = (e.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean);
-    return (e.getAttribute("aria-label") || refs.map((id) => document.getElementById(id)?.textContent || "").join(" ") ||
-      (e.labels ? [...e.labels].map((l) => l.textContent).join(" ") : "") || e.textContent || e.getAttribute("title") || "").replace(/\s+/g, " ").trim().slice(0, 160);
-  };
-  const roots = [...document.querySelectorAll('.screen,dialog,[role="dialog"],#overlay,#hud,#pausemenu,#photo-studio')].filter(visible).map((e) => e.id || e.getAttribute("aria-label") || e.tagName);
-  const issues = [], controls = [];
-  for (const e of [...document.querySelectorAll('button,a[href],input:not([type="hidden"]),select,textarea,summary,[role="button"]')].filter(visible).slice(0, 500)) {
-    const r = e.getBoundingClientRect(), sel = selector(e), label = name(e);
-    const control = { selector: sel, role: e.getAttribute("role") || e.tagName.toLowerCase(), name: label, disabled: !!e.disabled,
-      checked: e.checked, expanded: e.getAttribute("aria-expanded"), value: e.type === "password" ? "[redacted]" : e.value,
-      box: { x: r.x, y: r.y, width: r.width, height: r.height } };
-    controls.push(control);
-    if (!label) issues.push({ kind: "unnamed", selector: sel, message: "Visible control has no name in this DOM screening." });
-    const scroller = (() => { for (let p = e.parentElement; p; p = p.parentElement) {
-      const s = getComputedStyle(p);
-      if ((/(auto|scroll)/.test(s.overflowY) && p.scrollHeight > p.clientHeight + 1) || (/(auto|scroll)/.test(s.overflowX) && p.scrollWidth > p.clientWidth + 1)) return true;
-    } return false; })();
-    if ((r.x < -1 || r.y < -1 || r.right > innerWidth + 1 || r.bottom > innerHeight + 1) && !scroller)
-      issues.push({ kind: "offscreen", selector: sel, message: `${label || sel || e.tagName} extends outside the viewport without a scrolling ancestor.` });
-    if (!e.disabled && Math.min(r.width, r.height) < (matchMedia("(pointer:coarse)").matches ? 44 : 24))
-      issues.push({ kind: "tiny-target", selector: sel, message: `${label || sel} target is ${r.width.toFixed(1)} × ${r.height.toFixed(1)} CSS px.` });
-  }
-  if (document.documentElement.scrollWidth > innerWidth + 2) issues.push({ kind: "overflow", selector: "html", message: "Document has horizontal overflow." });
-  const active = document.activeElement;
-  return { title: document.title, url: location.href, roots: [...new Set(roots)], dialogs: [...document.querySelectorAll('dialog[open],[role="dialog"]')].filter(visible).map((e) => e.id || name(e)),
-    viewport: { width: innerWidth, height: innerHeight, textScale: Number(document.documentElement.dataset.explorerTextScale || 100) },
-    controls, issues, focus: active ? { selector: selector(active), name: name(active), tag: active.tagName } : null,
-    errorOverlay: [...document.querySelectorAll('#__err_overlay,#vite-error-overlay')].filter(visible).map((e) => e.textContent.slice(0, 1000)),
-    game: window.__apex?.info?.() || null };
-}
+export { inspectUI } from "./inspector.mjs";
+import { inspectUI } from "./inspector.mjs";
 
 export function observeErrors(page) {
   const errors = [], requests = [];

@@ -1,39 +1,30 @@
 # garage-angles.mjs — when, how, and how fast
 
-**Contents**
+**Use when:** placement is already answered by `spine-station.mjs` and a
+lit, foreshortened garage view is needed.
 
-- [Pick the cheapest path first](#pick-the-cheapest-path-first)
-- [Everything is an axis](#everything-is-an-axis)
-  - [Cameras](#cameras)
-  - [Stations — cameras keyed to a PART](#stations-cameras-keyed-to-a-part)
-  - [Designs](#designs)
-  - [Free camera](#free-camera)
-  - [Comparisons](#comparisons)
-  - [Session — hot-swapping designs](#session-hot-swapping-designs)
-  - [Output](#output)
-- [Presets are starting points](#presets-are-starting-points)
-- [Fast iteration](#fast-iteration)
-- [Multi-team](#multi-team)
-- [BEFORE pack — fetch, do not recapture](#before-pack--fetch-do-not-recapture)
-- [Before you run](#before-you-run)
-- [When NOT to use](#when-not-to-use)
-- [Offline preflight](#offline-preflight)
+**Inputs:** team/part/design selection, shot preset, and whether the result is
+an offline or live capture.
 
+**Verification:** record preset, camera, renderer, and output path; use the
+same preset before/after comparisons.
 
-The garage is the only place occlusion, wall crests, and real lighting get a
-vote. Use this tool when `spine-station.mjs` (0.2 s, flat atlas) has already
-answered placement and you need **lit, foreshortened** proof.
+**Writes/ownership:** captures and reports only; garage geometry and livery
+edits stay with the owning source files.
 
 ## Contents
+
 - Pick the cheapest path first
 - Everything is an axis
 - Presets are starting points
 - Fast iteration
 - Multi-team
 - BEFORE pack — fetch, do not recapture
-- Before you run
 - When NOT to use
 - Offline preflight
+The garage is the only place occlusion, wall crests, and real lighting get a
+vote. Use this tool when `spine-station.mjs` (0.2 s, flat atlas) has already
+answered placement and you need **lit, foreshortened** proof.
 
 ## Pick the cheapest path first
 
@@ -266,6 +257,19 @@ test` suite or the host Playwright MCP's *launched* Chromium is up; the idle
 `@playwright/mcp` server that Cloud attaches for the whole session is
 reported (`apex_status` → `playwright.hostMcp`) and no longer blocks.
 
+### Backend and shipped liveries
+
+Use `--backend=three` for TLX or `--backend=webgl2` for GLX (the existing default).
+The requested backend is checked against the live binding. `--livery=shipped`
+selects each team's shipped livery, including saved custom liveries; `default`
+still selects the catalog paint. MCP `apex_garage {op:"open", backend:"three",
+livery:"shipped"}` forwards the same choices.
+
+The page stays paused between captures. Scene edits mark a new source generation,
+then one strict readiness barrier runs before the screenshot. Native garage
+captures wait on actual renderer presents rather than the stationary race camera
+clock. Failed captures restore the caller's rendering state.
+
 ### Output
 
 | flag | meaning |
@@ -337,18 +341,6 @@ on macos-latest, once a day when the watched paths moved (or on
 dispatch), so the newest pack may trail ship by up to a day; the fetch
 prints how stale it is. Recapture only the AFTER angles you changed.
 
-## Before you run
-
-1. Check `/proc/loadavg` < 3 — a busy box measures the machine, not the code.
-2. Reap orphan Chromium from prior probes (`ps … | head`, kill by PID).
-3. Never run while Playwright browser groups are in flight.
-4. **WebGL / DISPLAY:** headless SwiftShader needs a usable GL context.
-   `launchChromium` (via this tool) clears a *dead local* `DISPLAY=:N` when
-   `/tmp/.X11-unix/XN` is missing — that was the 2026-09-10 Cloud failure mode
-   where `__apex` never appeared. You do **not** need a separate `serve` on
-   `:3456`; the tool starts its own static server. If GL is still missing:
-   `unset DISPLAY` or `xvfb-run -a node tools/shot/garage-angles.mjs …`.
-   Opt out of the clear with `APEX_KEEP_DISPLAY=1`.
 
 ## When NOT to use
 

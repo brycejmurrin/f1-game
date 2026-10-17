@@ -333,7 +333,7 @@ for (const device of [
   const {viewport,touch,scale}=device;
   test.describe(`Practice controls at ${viewport.width}x${viewport.height} ${scale}%`, () => {
     test.use({viewport,hasTouch:touch,isMobile:touch});
-    test("coach, drills and pit strategy work through Settings → Driving", async ({page}, info) => {
+    test("coach, drills and pit strategy work through their pause doors", async ({page}, info) => {
       const errors=[]; page.on("pageerror", e=>errors.push(e.message));
       const press = async selector => touch ? page.locator(selector).tap() : page.locator(selector).click();
       await enterTT(page);
@@ -348,13 +348,13 @@ for (const device of [
       // navigated to this same sheet.
       await press("#pm-settings");
       await press("#pm-open-driving");
-      await expect(page.locator("#dlg-settings")).toHaveText("DRIVING");
+      await expect(page.locator("#dlg-settings")).toHaveText("SETTINGS › DRIVING AIDS");
       await expect(page.locator("#pausemenu")).toBeHidden();
       for (const selector of ['#announce', '#lights', '.hud-top', '#minimap'])
         await expect(page.locator(selector)).toHaveCSS('visibility', 'hidden');
       await expect(page.locator("#pm-coach-help")).toContainText(/text tips/i);
-      for (const id of ["pm-practice-panel", "pm-pit-panel", "pm-session-review"])
-        await expect(page.locator("#" + id)).not.toHaveAttribute("open", "");
+      for (const id of ["pm-panel-practice", "pm-panel-strategy", "pm-panel-review"])
+        await expect(page.locator("#" + id)).toBeHidden();
       await expect(page.locator("#pm-drill-sel")).toBeHidden();
       await expect(page.locator("#pm-pit-choice-sel")).toBeHidden();
       await page.locator("#pm-coach-sel").selectOption("on");
@@ -366,7 +366,16 @@ for (const device of [
       expect(initialCoach.latest).toBeNull();
       expect(initialCoach.total).toBe(0);
       await expect(page.locator("#pm-coach-tip")).toContainText(/next tip.*after you drive/i);
-      await press("#pm-practice-panel > summary");
+      await press("#pm-settings-close");
+      await press("#pm-settings-close");
+      const sessionPage = async door => {
+        await expect(page.locator("#pausemenu")).toBeVisible();
+        await press("#" + door);
+        await expect(page.locator("#pmsettings")).toBeVisible();
+        const panel = { "pm-practice": "pm-practice-panel", "pm-strategy": "pm-pit-panel", "pm-review": "pm-session-review" }[door];
+        await expect(page.locator("#" + panel)).toBeVisible();
+      };
+      await sessionPage("pm-practice");
       await expect(page.locator("#pm-drill-sel")).toBeVisible();
       await page.locator("#pm-drill-sel").selectOption("sector");
       await expect(page.locator("#pm-drill-status")).toContainText("Finish the next sector");
@@ -380,9 +389,9 @@ for (const device of [
       const driving=await page.evaluate(()=>window.__apex.physState().driving);
       expect(driving.practice).toBe(true);
       expect(driving.insights.drill.mode).toBe("sector");
-      await press("#pm-practice-panel > summary");
+      await press("#pm-settings-close");
       await expect(page.locator("#pm-practice-set")).toBeHidden();
-      await press("#pm-pit-panel > summary");
+      await sessionPage("pm-strategy");
       const select=page.locator("#pm-pit-choice-sel");
       await expect(select).toBeEnabled();
       const value=await select.locator("option").nth(1).getAttribute("value");
@@ -392,21 +401,19 @@ for (const device of [
       await expect(page.locator("#pm-pit-help")).toContainText(compound.split(" · ")[1]);
       await expect(page.locator("#pm-pit-help")).toContainText("Choosing tyres does not call you into the pits");
       await expect(page.locator("#pm-pit-estimate")).toContainText("Estimated pit loss:");
-      await press("#pm-pit-panel > summary");
-      await press("#pm-practice-panel > summary");
+      await press("#pm-settings-close");
+      await sessionPage("pm-practice");
       await page.locator("#pm-practice-retry").scrollIntoViewIfNeeded();
       await page.screenshot({path:info.outputPath("practice-controls.png")});
-      await press("#pm-practice-panel > summary");
-      await press("#pm-pit-panel > summary");
+      await press("#pm-settings-close");
+      await sessionPage("pm-strategy");
       await select.scrollIntoViewIfNeeded();
       await page.screenshot({path:info.outputPath("pit-controls.png")});
-      await press("#pm-pit-panel > summary");
-      await press("#pm-session-review > summary");
+      await press("#pm-settings-close");
+      await sessionPage("pm-review");
       await expect(page.locator("#pm-coach-summary")).toContainText(/no tips|0 tips/i);
-      await press("#pm-session-review > summary");
       await press("#pm-settings-close");
-      await expect(page.locator("#pm-settings-index")).toBeVisible();
-      await press("#pm-settings-close");
+      await expect(page.locator("#pausemenu")).toBeVisible();
       await press("#pm-howto");
       await page.locator('#htp-contents a[href="#htp-driving"]').click();
       await expect(page.locator("#htp-driving")).toBeInViewport();
@@ -460,8 +467,8 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await press('#pm-coach-prev'); await expect(page.locator('#pm-coach-sel')).toHaveValue('off');
         await expect(page.locator('#pm-coach-status')).toContainText(/coach off/i);
         await expect(page.locator('#pm-coach-tip')).toContainText(/next tip.*after you drive/i);
-        for (const id of ['pm-practice-panel','pm-pit-panel','pm-session-review'])
-          await expect(page.locator('#'+id)).not.toHaveAttribute('open','');
+        for (const id of ['pm-panel-practice','pm-panel-strategy','pm-panel-review'])
+          await expect(page.locator('#'+id)).toBeHidden();
         await expect(page.locator('#pm-practice-set')).toBeHidden();
         await expect(page.locator('#pm-pit-choice-sel')).toBeHidden();
         const measure = async root => page.evaluate(selector => {
@@ -486,10 +493,15 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         expect(m.docOverflow).toBeLessThanOrEqual(1); expect(m.paneOverflow).toBeLessThanOrEqual(1);
         expect(m.paneHeight).toBeGreaterThan(70);
         if ([100,150,200].includes(pct)) await page.screenshot({path:info.outputPath(`driving-${pct}.png`)});
-        // Open the simplified sections by touch, so hidden content cannot make
-        // an overflow measurement or disabled-control assertion pass vacuously.
-        for (const id of ['pm-practice-panel','pm-pit-panel']) {
-          await press('#'+id+' > summary');
+        // Search retains access to unavailable session controls from title,
+        // where their disabled state and explanation still need to fit.
+        await press('#pm-settings-close');
+        const searchPage = async id => {
+          await page.getByRole('searchbox', {name:'Find a setting'}).fill(id);
+          await press('[data-setting-result="'+id+'"]');
+        };
+        for (const [id, route] of [['pm-practice-panel','practice'],['pm-pit-panel','strategy']]) {
+          await searchPage(route);
           await expect(page.locator('#'+id)).toHaveAttribute('open','');
           if (id === 'pm-practice-panel') {
             await expect(page.locator('#pm-practice-set')).toBeVisible();
@@ -512,10 +524,10 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
           expect(expanded.overflow,`${id} at ${pct}%`).toEqual([]);
           expect(expanded.smallTargets,`${id} at ${pct}%`).toEqual([]);
           expect(expanded.paneOverflow).toBeLessThanOrEqual(1);
-          await press('#'+id+' > summary');
-          await expect(page.locator('#'+id)).not.toHaveAttribute('open','');
+          await press('#pm-settings-close');
+          await expect(page.locator('#pm-settings-index')).toBeVisible();
         }
-        await press('#pm-session-review > summary');
+        await searchPage('review');
         await expect(page.locator('#pm-coach-summary')).toContainText(/no tips|0 tips/i);
         await expect(page.locator('#pm-session-review')).toHaveAttribute('open','');
         await expect(page.locator('#pm-driving-trace')).toBeHidden();
@@ -527,9 +539,9 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         expect(action.sw).toBeLessThanOrEqual(action.w+1); expect(action.sh).toBeLessThanOrEqual(action.h+1);
         await press('#pm-technical-data > summary');
         await expect(page.locator('#pm-driving-trace')).toBeHidden();
-        await press('#pm-session-review > summary');
+        await press('#pm-settings-close');
         await expect(page.locator('#pm-driving-trace')).toBeHidden();
-        await press('#pm-settings-close'); await expect(page.locator('#pm-settings-index')).toBeVisible();
+        await page.getByRole('searchbox', {name:'Find a setting'}).fill(''); await expect(page.locator('#pm-settings-index')).toBeVisible();
         await press('#pm-settings-close'); await expect(page.locator('#pmsettings')).toBeHidden();
         // phone-browser-landscape + UI SIZE 200%: #mb-help can resolve while its
         // hit centre is still clipped by the safe-area/chrome strip, so a bare
@@ -539,6 +551,19 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await expect(page.locator('#overlay')).toBeVisible();
         await page.locator('#mb-help').scrollIntoViewIfNeeded();
         await press('#mb-help');
+        // The sheet reopens with the shape/density it had at the PREVIOUS UI
+        // SIZE; SheetShape reclassifies it a frame or two later (fit cap, then
+        // density). An anchor jump taken before that lands in the old layout,
+        // and the reflow then carries #htp-driving out of the pane (desktop
+        // 200%, run 38985530584: wide rail -> compact strip, ratio 0). Jump
+        // only once a classify pass changes nothing.
+        await page.waitForFunction(() => {
+          const el = document.getElementById('howtoplay-inner');
+          if (!el || !el.dataset.shape || !el.dataset.density) return false;
+          const before = el.dataset.shape + '|' + el.dataset.density;
+          window.SheetShape.reclassify();
+          return before === el.dataset.shape + '|' + el.dataset.density;
+        }, null, {polling:100, timeout:10000});
         await press('#htp-contents a[href="#htp-driving"]');
         await expect(page.locator('#htp-driving')).toBeInViewport();
         await expect(page.locator('#htp-contents a[href="#htp-driving"]')).toHaveAttribute('aria-current','true');

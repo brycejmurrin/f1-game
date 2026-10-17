@@ -49,7 +49,7 @@ const GLXBackend = (function () {
   // private / quota). Without it, both the loss timer and the restore reload
   // bailed, leaving a restored context with _ctxLost still set — a silent
   // dead canvas. In-memory only, so a real new visit still gets two attempts.
-  let _sessLostN = 0;
+  let _sessLostN = 0; const _fallbackLossCount = () => { try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { return 0; } };
   // GPU error counter — WebGL has no onuncapturederror, so drain getError() once
   // per present. Exists because the real-GPU gate read null here and passed
   // vacuously: docs/PERF-FINDINGS.md 2e.
@@ -118,8 +118,8 @@ const GLXBackend = (function () {
   let glowProg = null, glowU = null, glowVAO = null, glowVBO = null, glowCap = 0;
   let lineProg = null, lineU = null, lineVAO = null, lineVBO = null, lineCap = 0;   // DRIVING LINE ribbon
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
-  let particleProg = null, particleU = null, particleVAO = null, particleVBO = null, particleCap = 0;
-  let _partLastAdd = -1, _partLastN = 0;   // shared VBO: skip SubData only when same blend group
+  let particleProg = null, particleU = null, particleVAO = [], particleVBO = [], particleCap = [0, 0];
+  let _partEpochs = new WeakMap(), _partEpoch = 0, _partResident = [];
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
   let shadowVAO = null;
   let width = 0, height = 0, aspect = 1;
@@ -702,7 +702,7 @@ const GLXBackend = (function () {
       // xrCompatible only when navigator.xr (task 20); omit otherwise (Safari/SwiftShader).
       ...(typeof navigator !== "undefined" && navigator.xr ? { xrCompatible: true } : {}),
     });
-    if (!gl) return false;
+    if (!gl) return false; try { setTimeout(function () { if (/^apex26\\.ctxLostReloads=\\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
     if (_softPresent) ensureSoftDisplay();
 
     // Parallel shader compile (Chrome 76+, Safari 14.1+; not Firefox): see link().
@@ -825,7 +825,7 @@ const GLXBackend = (function () {
         var _rk = "apex26.ctxLostReloads";
         _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
         sessionStorage.setItem(_rk, String(_n));
-      } catch (_) { _n = ++_sessLostN; }
+      } catch (_) { _n = Math.max(++_sessLostN, _fallbackLossCount() + 1); try { window.name = "apex26.ctxLostReloads=" + _n; } catch (_) { /* best effort */ } }
       if (_n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ } }, 1200);
       else {
         if (typeof window.__apexReportError === "function") window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + _n + " times) — reload to try again, or pick another RENDERER in settings."));
@@ -845,7 +845,7 @@ const GLXBackend = (function () {
     // webglcontextrestored (the loss handler also failed to arm its timer).
     canvas.addEventListener("webglcontextrestored", function () {
       var n = 0;
-      try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = _sessLostN; }
+      try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
       if (n > 2) return;
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);
@@ -1041,10 +1041,12 @@ const GLXBackend = (function () {
       particleU = locs(particleProg, ["uViewProj", "uEye", "uAdditive", "uSunColor", "uAmbSky", "uAmbGround", "uFogColor", "uFogDensity"]);
       // Dynamic interleaved buffer: [cornerX, cornerY, cx, cy, cz, r, g, b,
       // size, alpha] ×6 verts/particle (filled by js/fx/particles.js).
-      particleVAO = gl.createVertexArray();
-      gl.bindVertexArray(particleVAO);
-      particleVBO = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, particleVBO);
+      _partEpochs = new WeakMap(); _partResident = []; particleCap = [0, 0];
+      for (let i = 0; i < 2; i++) {
+      particleVAO[i] = gl.createVertexArray();
+      gl.bindVertexArray(particleVAO[i]);
+      particleVBO[i] = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, particleVBO[i]);
       const pst = 10 * 4;   // 10 floats per vertex
       gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, pst, 0);
       gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, pst, 8);
@@ -1052,6 +1054,7 @@ const GLXBackend = (function () {
       gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, pst, 32);
       gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 1, gl.FLOAT, false, pst, 36);
       gl.bindVertexArray(null);
+      }
     }
 
     skyVAO = gl.createVertexArray();
@@ -2755,9 +2758,8 @@ const GLXBackend = (function () {
   // the scene alpha channel (the SSR car-paint tag — see draw()) is masked.
   // Must be called while the HDR scene target is bound (before present) so
   // particles tone-map and bloom with the scene.
-  // `dirty` mirrors drawSkidBatch: false skips bufferSubData when the VBO still
-  // holds this blend group's last upload (shared VBO — re-upload if the other
-  // group drew last). particles.js passes false on a clean rain-cell hold.
+  // Each blend stream owns a VBO. Identity, content epoch and count establish
+  // residency; dirty=false alone never proves the selected buffer is current.
   function drawParticles(data, floatCount, additive, dirty) {
     if (ctxGone() || !particleProg || !(floatCount > 0) || !frameEye) return;
     if (dirty !== false && !data) return;
@@ -2771,19 +2773,22 @@ const GLXBackend = (function () {
     gl.uniform3fv(particleU.uAmbGround, frameAmbGround);
     gl.uniform3fv(particleU.uFogColor, _particleFog.color);
     gl.uniform1f(particleU.uFogDensity, _particleFog.density);
-    bindVAO(particleVAO);
-    gl.bindBuffer(gl.ARRAY_BUFFER, particleVBO);
     const addBit = additive ? 1 : 0;
-    const needUpload = dirty !== false || _partLastAdd !== addBit || _partLastN !== floatCount;
+    if (!data) return;
+    let epoch = _partEpochs.get(data);
+    if (!epoch || dirty !== false) { epoch = ++_partEpoch; _partEpochs.set(data, epoch); }
+    const resident = _partResident[addBit];
+    bindVAO(particleVAO[addBit]);
+    gl.bindBuffer(gl.ARRAY_BUFFER, particleVBO[addBit]);
+    const needUpload = !resident || resident.data !== data || resident.epoch !== epoch || resident.count !== floatCount;
     if (needUpload) {
       if (!data) return;
-      if (floatCount > particleCap) {
-        particleCap = floatCount;
-        gl.bufferData(gl.ARRAY_BUFFER, particleCap * 4, gl.DYNAMIC_DRAW);
+      if (floatCount > particleCap[addBit]) {
+        particleCap[addBit] = floatCount;
+        gl.bufferData(gl.ARRAY_BUFFER, particleCap[addBit] * 4, gl.DYNAMIC_DRAW);
       }
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, data, 0, floatCount);
-      _partLastAdd = addBit;
-      _partLastN = floatCount;
+      _partResident[addBit] = { data, epoch, count: floatCount };
     }
     setBlend(true);
     if (additive) gl.blendFunc(gl.ONE, gl.ONE);
@@ -2855,6 +2860,7 @@ const GLXBackend = (function () {
     drawDrivingLine,
     drawGlow,
     drawParticles,
+    postHealth: () => null, retryPost: () => false,
     setOutputTarget: setOutput,
     clearOutputTarget: clearOutput,
     outputTargetState,

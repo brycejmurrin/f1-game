@@ -1,7 +1,7 @@
 /* storm-vm.test.mjs — the STORM weather in the real game (tools/lib/game-vm.cjs
  * runs js/game.js on an inert DOM): a storm race starts behind the safety car
  * on rain's grip; the render frame's lightning strikes off the seeded schedule
- * and never flashes under REDUCED MOTION; a friend room never keeps a storm
+ * and never flashes under REDUCED MOTION; a friend room may keep a storm
  * staged (js/net/lobby.js refuses the word and drops the whole SETTINGS).
  * The pure halves are tests/unit/storm-weather.test.mjs.
  *
@@ -68,12 +68,31 @@ test("lightning strikes in a storm, and never flashes under REDUCED MOTION", asy
   } finally { delete root.dataset.motion; }
 });
 
-test("a friend room never keeps a storm staged: it races as rain", () => {
+test("a friend room keeps a storm staged: the lobby accepts it", () => {
   g.G.raceWeather = "storm";
   g.G.setNetRoom(true);
   try {
-    assert.equal(g.G.raceWeather, "rain", "setNetRoom coerces a solo STORM pick");
+    assert.equal(g.G.raceWeather, "storm", "setNetRoom no longer coerces a solo STORM pick");
     g.G.openRaceSettings("select");
-    assert.notEqual(g.G.raceWeather, "storm", "the room's sheet never stages storm");
+    assert.equal(g.G.raceWeather, "storm", "the room's sheet keeps storm");
   } finally { g.G.setNetRoom(false); }
+});
+
+test("MIXED: the sheet's FORECAST line shows the plan the green arms, and STABLE hides it", async () => {
+  await g.apex.race("monza", "day", "dry", { laps: 3 });
+  g.G.endWeatherSession();
+  const doc = g.sandbox ? g.sandbox.document : g.ctx.document;
+  g.G.raceLaps = 4; g.G.raceChangeable = true;
+  g.G.openRaceSettings("select");
+  const line = doc.getElementById("rs-forecast");
+  assert.ok(line && !line.hidden && /^FORECAST: /.test(line.textContent), "MIXED shows a FORECAST line: " + (line && line.textContent));
+  await g.G.startRace();
+  const arc = g.G.weatherArc;
+  const Forecast = (g.sandbox || g.ctx).Forecast;
+  const expect = Forecast.compute({ plan: { to: arc.to, dur: arc.dur }, from: "dry", lapS: g.G.track.total / 45, seed: g.G.simSeed() });
+  assert.equal(line.textContent, "FORECAST: " + expect.text, "the sheet's line is the forecast of the plan armed at the green");
+  g.G.endWeatherSession();
+  g.G.raceChangeable = false;
+  g.G.openRaceSettings("select");
+  assert.ok(doc.getElementById("rs-forecast").hidden, "STABLE has no forecast");
 });

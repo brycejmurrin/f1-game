@@ -474,6 +474,7 @@ function restoreOnEngine() {
     GameAudio.setEnabled(!!G.soundOn);
     GameAudio.setMusicVolume(store.get("volMusic"));
     GameAudio.setSfxVolume(store.get("volSfx"));
+    if (GameAudio.setRadioFocusDb) GameAudio.setRadioFocusDb(store.get("radioFocusDb", 0));
     const radio = G.radio;
     if (radio && radio.setVolume) radio.setVolume(store.get("volRadio", 0.8));
   } catch (e) { Log.warn("audio", "early level restore failed: " + (e && e.message)); }

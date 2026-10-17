@@ -629,7 +629,11 @@
           if (onTrack(a.c[0], a.c[2], 5)) return;
           const b = [a.r, a.u, a.t];
           const topH = 1.4 + rows * rise;
-          const topBack = side * (1.0 + rows * depth + 1.2);
+          // Front face flush with the terrace back wall's rear face (wall 0.7 thick at
+          // 1 + rows*depth, so +0.35 + 1.3 half-thickness): buried 0.45 m into the wall,
+          // the seal's end caps met the wall's once terrace() cut its rows to the chord
+          // (#2204) — two same-facing coplanar spots (coplanar-audit mexico --why).
+          const topBack = side * (1.0 + rows * depth + 1.65);
           // Thick closed back — kills the see-through open-shelf read
           addBox(out, vadd(vadd(a.c, a.r, topBack), a.u, topH * 0.52),
                  [2.6, topH * 1.1, spacing * 0.96], BOWL_SHELL[0], b);

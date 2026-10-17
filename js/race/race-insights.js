@@ -2,7 +2,7 @@
 "use strict";
 const RaceInsights = (function () {
   const DRILLS = Object.freeze({ free: "Free practice", sector: "Finish this sector cleanly", corner: "Drive through the next corner",
-    lap: "One full lap from the line", braking: "Brake to a controlled stop", trail: "Release the brake into a turn",
+    lap: "One full lap from the line", cooling: "Measure a cooling lap on this tyre set", braking: "Brake to a controlled stop", trail: "Release the brake into a turn",
     slalom: "Six clean direction changes", launch: "Standing start to racing speed",
     start: "Gain a place off the line",
     // THE RIVAL DRILLS. Every drill above judges the car against the road; these
@@ -75,11 +75,15 @@ const RaceInsights = (function () {
     function event(kind, text) {
       boundedPush(events, { seq: ++sequence, time: G.raceT || 0, lap: G.player ? G.player.lap : 0, kind, text }, 128);
     }
-    function reset() { previous = sector = tyreStart = drill = lastDrill = null; events = []; sequence = distance = 0; lapClean = false; weather = null; laps = []; energy = [[], [], []]; attempts = {}; }
+    let runId = null, runs = 0;   // one id per session: settle() replaces its row rather than appending
+    function reset() { runId = null; previous = sector = tyreStart = drill = lastDrill = null; events = []; sequence = distance = 0; lapClean = false; weather = null; laps = []; energy = [[], [], []]; attempts = {}; }
     function startDrill(mode) {
       if (!Object.hasOwn(DRILLS, mode)) mode = "free";
       const c = G.player;
       if (!c) return false;
+      if (mode === "cooling" && (!G.practice || !G.tyres || !G.tyres.on() || !coolingSample(c))) {
+        G.announce("COOLING LAP NEEDS UNSCORED PRACTICE AND TYRE WEAR", 3, "practice"); return false;
+      }
       if (["braking", "trail"].includes(mode) && Math.abs(c.speed) < G.vTop() * .3) {
         G.announce("BUILD SPEED BEFORE SETTING THIS DRILL", 2, "practice"); return false;
       }
@@ -139,6 +143,8 @@ const RaceInsights = (function () {
         towS: 0, wakeS: 0, closed: 0, pressT: 0, escapeT: 0, clearT: 0, phase2: 0, lastT: null,
         attacked: false, conceded: false, gifted: false, gaveUp: false, cleared: 0, passing: new Set(),
         clean: true, reason: "", done: false };
+      if (mode === "cooling") drill.cooling = { car: c, track: G.track, tyre: c.tyre,
+        stint: c.tyreStints || 0, compound: c.tyre && c.tyre.id, wet: G.trackWetness ? G.trackWetness() : 0, start: null };
       event("practice", DRILLS[mode] + " — unscored");
       return true;
     }
@@ -279,8 +285,54 @@ const RaceInsights = (function () {
       G.announce(drill.clean ? "PRACTICE DONE — " + text.toUpperCase() + (improved ? " · NEW BEST" : "")
         : "PRACTICE — TRY AGAIN: " + drill.reason.toUpperCase(), 3, "practice");
     }
+    // Cooling is a measured comparison, never a time/mastery competition.
+    function coolingSample(c) {
+      const grip = G.tyres && G.tyres.gripMul && G.tyres.gripMul(c);
+      return Number.isFinite(c.tyreGrain) && Number.isFinite(c.tyreBlister) && Number.isFinite(grip) && grip > 0
+        ? { grain: c.tyreGrain, blister: c.tyreBlister, grip } : null;
+    }
+    function finishCooling(current, c) {
+      const a = drill.cooling.start, b = coolingSample(c);
+      if (!a || !b) failDrill("tyre measurement unavailable");
+      const recovery = drill.clean ? { grainStart: a.grain, grainEnd: b.grain, gripStart: a.grip, gripEnd: b.grip,
+        grainChangePP: 100 * (b.grain - a.grain), gripChangePct: 100 * (b.grip / a.grip - 1),
+        blisterStart: a.blister, blisterEnd: b.blister } : null;
+      const signed = n => (n >= 0 ? "+" : "") + n.toFixed(1);
+      const text = recovery ? (recovery.grainChangePP < -.05 && recovery.gripChangePct > .05 && b.blister <= b.grain ? "Measured recovery · " : "No recovery measured · ")
+        + "Grain " + signed(recovery.grainChangePP) + "pp; grip " + signed(recovery.gripChangePct) + "%"
+        + (b.blister > b.grain && b.blister > 0 ? " · Blistering remains" : "") : "No valid recovery measurement";
+      drill.done = true;
+      lastDrill = { mode: "cooling", seconds: Math.max(0, G.raceT - (drill.lapStart ?? drill.time)), clean: drill.clean,
+        changes: 0, reason: drill.reason, score: null, text, recovery };
+      boundedPush(attempts.cooling || (attempts.cooling = []), { time: G.raceT, clean: drill.clean, score: null, text, reason: drill.reason }, 10);
+      event("practice", "Cooling lap · " + (drill.clean ? text : drill.reason));
+      G.announce(drill.clean ? text.toUpperCase() : "COOLING LAP INVALID — " + drill.reason.toUpperCase(), 4, "practice");
+    }
+    function observeCooling(c, current) {
+      const m = drill.cooling, wet = G.trackWetness ? G.trackWetness() : 0;
+      if (!G.practice || !G.tyres || !G.tyres.on()) failDrill("practice or tyre wear ended");
+      if (c !== m.car || G.track !== m.track) failDrill("session changed");
+      if (c.tyre !== m.tyre || (c.tyre && c.tyre.id) !== m.compound || (c.tyreStints || 0) !== m.stint || (previous && current.wear < previous.wear)) failDrill("tyre set changed");
+      if (!Number.isFinite(wet) || Math.abs(wet - m.wet) > .05) failDrill("weather changed");
+      if (!coolingSample(c)) failDrill("tyre measurement unavailable");
+      // A reset's invalid partial lap may clear at the first line; only the
+      // measured full lap must be uninterrupted, on track and under green.
+      if (m.start && (current.contact || current.off || current.invalid || current.pit !== "track"
+          || current.retired || c.finished || (G.cautionLevel && G.cautionLevel() > 0))) failDrill("lap interrupted");
+      if (!drill.clean) { finishCooling(current, c); return; }
+      if (current.lap > drill.lap) {
+        if (current.lap !== drill.lap + 1) { failDrill("timing line skipped"); finishCooling(current, c); return; }
+        drill.lap = current.lap;
+        if (m.start) { finishCooling(current, c); return; }
+        if (current.contact || current.off || current.invalid || current.pit !== "track" || current.retired || c.finished
+            || (G.cautionLevel && G.cautionLevel() > 0)) return;
+        m.start = coolingSample(c); drill.lapStart = G.raceT;
+        G.announce("COOLING LAP MEASUREMENT STARTED", 2, "practice");
+      } else if (current.lap < drill.lap) { failDrill("crossed the line backwards"); finishCooling(current, c); }
+    }
     function observeDrill(c, current) {
       if (!drill || drill.done) return;
+      if (drill.mode === "cooling") { observeCooling(c, current); return; }
       if (current.contact) failDrill("car contact");
       if (current.off) failDrill("left the track");
       if (current.retired) failDrill("car retired");
@@ -456,7 +508,7 @@ const RaceInsights = (function () {
         observeDrill(c, current); return;
       }
       const wet = G.trackWetness ? G.trackWetness() : 0;
-      if (weather != null && Math.abs(wet - weather) > .05) { laps = []; energy = [[], [], []]; sector.valid = false; weather = wet; }
+      if (weather != null && Math.abs(wet - weather) > .05) { laps = []; energy = [[], [], []]; sector.valid = false; tyreStart = current; weather = wet; }
       if (weather == null) weather = wet;
       const dt = now - previous.time, ds = current.prog - previous.prog;
       if (dt <= 0) return;
@@ -464,13 +516,20 @@ const RaceInsights = (function () {
       else { sector.valid = false; lapClean = false; tyreStart = current; failDrill("position jumped"); }
       if (current.penalty > previous.penalty) event("penalty", "+" + (current.penalty - previous.penalty) + "s time penalty");
       if (current.warnings > previous.warnings) event("limits", "Track-limits warning " + current.warnings);
-      if (current.invalid && !previous.invalid) event("invalid", "Lap invalidated by an incident or practice reset");
+      if (current.invalid && !previous.invalid) {
+        const why = current.contact ? "car contact" : current.off ? "left the track" : current.warnings > previous.warnings ? "track limits"
+          : current.penalty > previous.penalty ? "penalty" : "incident or practice reset";
+        event("invalid", "Lap invalidated: " + why);
+      }
       if (current.contact && !previous.contact) event("contact", "Car contact");
       if (current.off && !previous.off) event("surface", "Left the track");
       if (current.retired && !previous.retired) event("retirement", "Car retired");
-      if (current.pit !== previous.pit) event("pit", "Pit phase: " + current.pit);
+      if (current.pit !== previous.pit) {
+        event("pit", "Pit phase: " + current.pit);
+        if (current.pit !== "track") { energy = [[], [], []]; sector.valid = false; }
+      }
       if (current.tyre !== previous.tyre || current.stint !== previous.stint || current.wear < previous.wear) {
-        tyreStart = current; laps = []; event("tyres", "New stint: " + (current.tyre || "unknown compound"));
+        tyreStart = current; laps = []; energy = [[], [], []]; sector = { ...current, valid: false }; event("tyres", "New stint: " + (current.tyre || "unknown compound"));
       }
       if (current.contact || current.off || current.invalid || current.pit !== "track" || (G.cautionLevel ? G.cautionLevel() : 0) > 0) { sector.valid = false; lapClean = false; }
       if (current.sector !== previous.sector) {
@@ -549,8 +608,21 @@ const RaceInsights = (function () {
       }
       return out;
     }
-    function summary() { return { distance, drill: drill ? { mode: drill.mode, done: drill.done, clean: drill.clean, changes: drill.changes, reason: drill.reason, phase: drill.phase } : null, lastDrill: lastDrill ? { ...lastDrill } : null }; }
-    return { update, reset, event, startDrill, forecast, network, summary, mastery, debrief, journal: () => events.map(e=>({...e})),
+    // THE INCIDENT/PENALTY TIMELINE. The journal's penalty, limits, invalid-lap, contact and retirement rows,
+    // ordered by seq, persisted under apex26.incidentLog (last 5 sessions). Re-settling the same session
+    // replaces its row, so showing the results twice never duplicates an entry.
+    const LOG_KINDS = ["penalty", "limits", "invalid", "contact", "retirement"];
+    function settle() {
+      const rows = events.filter((e) => LOG_KINDS.includes(e.kind)).map((e) => ({ seq: e.seq, time: e.time, lap: e.lap, kind: e.kind, text: e.text }));
+      if (!rows.length) return rows;
+      if (!runId) runId = G.records.key() + "@" + Date.now() + "#" + (++runs);
+      const raw = G.store.get("incidentLog", null);
+      const kept = raw && Array.isArray(raw.sessions) ? raw.sessions.filter((x) => x && x.id !== runId) : [];
+      G.store.set("incidentLog", { version: 1, sessions: kept.concat({ id: runId, entries: rows.slice(-40) }).slice(-5) });
+      return rows;
+    }
+    function summary() { return { distance, drill: drill ? { mode: drill.mode, done: drill.done, clean: drill.clean, changes: drill.changes, reason: drill.reason, phase: drill.phase } : null, lastDrill: lastDrill ? { ...lastDrill, ...(lastDrill.recovery ? { recovery: { ...lastDrill.recovery } } : {}) } : null }; }
+    return { update, reset, event, settle, startDrill, forecast, network, summary, mastery, debrief, journal: () => events.map(e=>({...e})),
       attempts: mode => (attempts[mode] || []).map(a => ({ ...a })) };
   }
   return Object.freeze({ create, DRILLS, needsRivals });

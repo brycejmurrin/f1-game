@@ -4,6 +4,9 @@ const SetupUI = (function () {
 
 function create(G) {
 Log.info("ui", "SetupUI.create");
+const tuneExperiments = SetupExperiments.create(G, (team) => renderStatBars($("cs-stats-inner"), team));
+let surfaceControls = null;
+function clearSurfaceControls() { if (surfaceControls) surfaceControls.dispose(); surfaceControls = null; }
 // Stable helpers from the game.js closure.
 const { $, els, cssCol, store, arrToHex, hexToArr,
         getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
@@ -64,6 +67,7 @@ function renderStatBars(container, team) {
 // tab-strips), and defaulting to TEAM: opening on the first PARTS category
 // shows a player coming to change their team FRONT WING options, with the
 // rail's selected tab not the first one and LIVERY 14th behind a horizontal scroll.
+let csVisitGeneration = 0;
 let csActiveCat = null;   // id of the tab currently open in the GARAGE
 let csLivCreating = false; // livery creator panel open?
 let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
@@ -89,12 +93,16 @@ const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "lowe
                           "rearWing", "cover", "spineTint", "saddleTint",
                           "sideTint", "sunTint",
                           "bandTint2", "plateTint",
-                          "fin", "finArt", "logo", "logo2", "logo3"];
+                          "fin", "finArt", "logo", "logo2", "logo3", "patternTint", "patternSecond"];
 const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "default",
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
                           coverVents: "none", spineHeight: "standard", spineSide: "none",
-                          coverBind: "independent", finHandoff: "match", bodySplit: "off" };
+                          coverBind: "independent", finHandoff: "match", bodySplit: "off",
+                          patternPlacement: "crown", patternSide: "both", patternWidth: "70", patternRepeat: "6",
+                          patternOffset: "0", patternTaper: "20", patternOpacity: "100",
+                          patternRotation: "0", patternStretch: "100", patternWeight: "100",
+                          coverFinish: "inherit", wingFinish: "inherit", haloFinish: "inherit" };
 // WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
 // named a SURFACE, so the sheet could not answer its own first question: what
 // does this change? Worse, two rows read as a pair and are not one — ACCENT is
@@ -131,6 +139,21 @@ const LIV_ROW_HINT = {
   logo: "TEAM LOGO — the dominant shape of the team mark everywhere it is drawn: crown, fin badge, SPINE SIDE logo/emblem/lockup, the WRAP design's flank bull, the livery tile, garage wall. The colour you pick is used as-is (no contrast override). Lettering (numbers, wordmarks) auto-contrasts; it is not this row.",
   logo2: "LOGO DETAIL — the mark's second shape (shield, disc, traced layer, or island), named per team. One-loop marks have no such row. The colour you pick is used as-is. Authored plates reach the flank logo/emblem too.",
   logo3: "OUTLINE — a rim around the mark only, in the colour you pick. Off by default.",
+  patternPlacement: "DESIGN AREA — new spine patterns cover the crown/tail or continue over the shoulders.",
+  patternSide: "WRAP SIDES — both cover flanks, or just the chosen side; crown remains painted.",
+  patternWidth: "DESIGN WIDTH — coverage across the crown and flank, as a percentage.",
+  patternRepeat: "REPEATS — density of repeated shapes or lines on the cover.",
+  patternOffset: "SIDE OFFSET — shift the new spine pattern across the cover.",
+  patternTaper: "TAIL TAPER — narrow the pattern toward the rear of the cover.",
+  patternOpacity: "OPACITY — transparency of the new spine artwork over its base paint.",
+  patternRotation: "ROTATION — turn the artwork within its painted area. Wrap sides remain aligned with the crown.",
+  patternStretch: "LENGTH STRETCH — compress or extend the artwork along the engine cover.",
+  patternWeight: "LINE WEIGHT — thickness of contour, honeycomb, wave, herringbone, circuit and speed-line strokes.",
+  patternTint: "DESIGN COLOUR — adjustable artwork on the crown and selected cover flanks. Unset = ACCENT.",
+  patternSecond: "SECOND DESIGN COLOUR — two-colour patterns, including gradients, waves, sunbursts, scallops, herringbone, circuits, shards and pixel fade. Unset = PRIMARY.",
+  coverFinish: "COVER FINISH — painted engine cover and airbox; INHERIT uses FINISH. Carbon and intake surfaces stay unchanged.",
+  wingFinish: "WING FINISH — painted front and rear wing assemblies, including moving flaps. Carbon stays carbon.",
+  haloFinish: "HALO FINISH — the painted halo; INHERIT uses FINISH.",
   finish: "FINISH — the paint surface: gloss, satin or chrome.",
   wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
   numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
@@ -340,6 +363,7 @@ function buildTeamOptions(optsEl, team) {
       G.driverIdx = i; store.set("driver", i);
       if (G.soundOn) GameAudio.uiTick();
       buildSetup();
+      $("cs-options")?.querySelector(`[data-cs-driver="${i}"]`)?.focus({ preventScroll: true });
     };
     row.appendChild(b);
   });
@@ -410,10 +434,13 @@ function syncGarageExitChrome() {
 }
 
 function buildSetup() {
+  clearSurfaceControls();
+  if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end();
   syncGarageExitChrome();
   const team = Teams.LIST[G.teamIdx];
   // A draft is ONE team's paint: after a team pick it would SAVE & FIT onto the new team.
   if (csLivCreating && csLivTeamId !== team.id) discardLivDraft();
+  tuneExperiments.capture(team);
   const parts = getTeamParts(team.id);
 
   // Remap any saved exclusive option this team can't use onto its universal
@@ -451,6 +478,7 @@ function buildSetup() {
   const remaining = cap - spent;
 
   $("cs-team").textContent = team.name.toUpperCase();
+
 
   const budgetEl = $("cs-budget");
   const budgetFill = $("cs-budget-fill");
@@ -612,6 +640,27 @@ function buildSetup() {
     cost.textContent = locked ? "RESEARCH · " + Career.researchCost(opt).toLocaleString() + " cr"
                      : opt.cost > 0 ? opt.cost + " cr" : "FREE";
     row.appendChild(cost);
+    const fitted = getTeamParts(team.id), replacing = resolveOpt(activeCat);
+    const shortfall = unlimited ? 0 : Math.max(0, Parts.getCost(fitted, team) - (replacing ? replacing.cost || 0 : 0) + (opt.cost || 0) - cap);
+    if (locked && shortfall > 0) {
+      const why = document.createElement("div"); why.className = "cs-opt-desc";
+      why.textContent = "Research only — cannot fit within current cap (" + shortfall.toLocaleString() + " cr short).";
+      main.appendChild(why);
+    }
+    // A saved career can exist outside career play; only its active round
+    // belongs in this purchase decision. Legacy planning APIs remain optional.
+    if (locked && typeof Career.inCareer === "function" && Career.inCareer() && typeof Career.planning === "function") {
+      const planning = Career.planning();
+      const cash = planning && typeof planning.cash === "function" ? planning.cash(Career.researchCost(opt)) : null;
+      if (cash && !cash.unlimited && [cash.afterPurchase, cash.wages, cash.low].every(Number.isFinite)) {
+        const advisory = document.createElement("div"); advisory.className = "cs-opt-desc";
+        advisory.textContent = cash.afterPurchase.toLocaleString() + " cr after research · " + cash.wages.toLocaleString()
+          + " cr upcoming wages · conservative next-round balance " + cash.low.toLocaleString() + " cr before income (floors at zero). "
+          + (cash.afterPurchase < cash.wages ? "Upcoming wages exceed the remaining cash. " : "")
+          + "Sponsor income is not guaranteed; this estimate does not block research.";
+        main.appendChild(advisory);
+      }
+    }
 
     const reject = () => {
       row.classList.add("budget-reject");
@@ -640,7 +689,14 @@ function buildSetup() {
       const co = resolveOpt(activeCat);
       const cc = co ? (co.cost || 0) : 0;
       if (!unlimited && (Parts.getCost(p, team) - cc + (opt.cost || 0)) > cap) {
-        if (locked) { buildSetup(); return; }
+        if (locked) {
+          buildSetup();
+          const notice = document.createElement("p"); notice.className = "adv-help";
+          notice.setAttribute("role", "status");
+          notice.textContent = "Unlocked, not fitted — " + (Parts.getCost(p, team) - cc + (opt.cost || 0) - cap).toLocaleString() + " cr over the fitted cap.";
+          $("cs-options").appendChild(notice);
+          return;
+        }
         reject();
         return;
       }
@@ -730,61 +786,7 @@ function livSwatch(team, liv, tags) {
 
 // SETUP — the mechanical sheet (js/garage/setup-tune.js): five sliders on the
 // tuner's .tune-row markup (DOM only, no new classes), a RAKE readout, and a
-// RESET TO WORKS. Every slider writes the store on input; the stat bars and
-// the player's mods follow through recomputePlayerMods on the next race.
-function buildTuneOptions(container, team) {
-  const wrap = document.createElement("div");
-  // Not cs-liv-editor: that class widens the car reserve and translucents the
-  // sheet for the PAINT editor. SETUP only needs the compact-density help hide.
-  wrap.className = "cs-tune-editor";
-  wrap.appendChild(csLabel("SETUP SHEET — " + team.short));
-  const cur = SetupTune.get(team.id);
-  const rows = {};
-  const rakeOut = document.createElement("p"); rakeOut.id = "cs-rake-readout"; rakeOut.className = "adv-help"; rakeOut.setAttribute("data-help", "keep");   // a live readout: HELP TEXT: HIDE keeps it
-  const refresh = () => {
-    const t = SetupTune.get(team.id);
-    for (const k of SetupTune.FIELDS) { rows[k].b.textContent = t[k] + SetupTune.RANGE[k].unit; rows[k].inp.value = t[k]; }
-    // "X-mode trade", not "aero load": RH_GAIN·rake is a step on the 0..1
-    // NORMALISED load axis, and that axis reaches the player only through
-    // xVmaxGain/xDfLoss/xCoastCut, each multiplied by the flap position. With
-    // the flaps shut it is exactly zero, so labelling it a live aero-load gain
-    // told the player the opposite of what the model does.
-    rakeOut.textContent = "RAKE " + (t.rideR - t.rideF) + " mm (rear − front) · Straight Mode trade "
-      + (SetupTune.rake(team.id) >= 0 ? "+" : "") + Math.round(SetupTune.rake(team.id) * Parts.RH_GAIN * 100) + " pts"
-      + " · brake bias " + t.brakeBias.toFixed(1) + " % front";
-    renderStatBars($("cs-stats-inner"), team);
-    const tab = $(csTabId("tune"));
-    if (tab) { tab.classList.toggle("upgraded", !SetupTune.isDefault(team.id)); const c = tab.querySelector(".cs-tab-cur"); if (c) c.textContent = SetupTune.isDefault(team.id) ? "WORKS" : "TUNED"; }
-  };
-  for (const k of SetupTune.FIELDS) {
-    const r = SetupTune.RANGE[k];
-    const lab = document.createElement("label"); lab.className = "tune-row";
-    const span = document.createElement("span"); span.className = "tune-label";
-    span.textContent = r.label + " ";
-    const b = document.createElement("b"); span.appendChild(b);
-    const inp = document.createElement("input");
-    inp.type = "range"; inp.min = r.min; inp.max = r.max; inp.step = r.step; inp.value = cur[k];
-    inp.dataset.csTune = k;
-    inp.setAttribute("aria-label", r.label);
-    inp.oninput = () => { SetupTune.set(team.id, { [k]: parseFloat(inp.value) }); refresh(); };
-    lab.appendChild(span); lab.appendChild(inp);
-    wrap.appendChild(lab);
-    rows[k] = { b, inp };
-  }
-  wrap.appendChild(rakeOut);
-  const note = document.createElement("p"); note.className = "adv-help";
-  note.textContent = "Bars: stiffer overall sharpens turn-in and costs traction; a stiffer front shifts load transfer forward and reduces front grip in sustained turns; a stiffer rear helps rotation. "
-    + "Rake sizes the ACTIVE AERO trade, not the car's standing downforce: more rake means more top speed to gain and more grip to lose when the flaps open, and with them shut the car drives exactly the same (measured: identical grip across the whole rake range in Corner Mode). A max-wing car is already at full load. "
-    + "Brake bias splits the friction budget between the axles under braking — forward understeers on entry, rearward rotates. "
-    + "The works sheet is exactly the car it always was.";
-  wrap.appendChild(note);
-  const reset = document.createElement("button"); reset.type = "button"; reset.className = "cs-liv-ed-cancel";
-  reset.textContent = "RESET TO WORKS";
-  reset.onclick = () => { SetupTune.reset(team.id); if (G.soundOn) GameAudio.uiTick(); refresh(); };
-  wrap.appendChild(reset);
-  container.appendChild(wrap);
-  refresh();
-}
+function buildTuneOptions(container, team) { tuneExperiments.build(container, team); }
 
 function buildLiveryOptions(container, team) {
   if (csLivCreating) {
@@ -832,6 +834,7 @@ function buildLiveryOptions(container, team) {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "cs-opt cs-liv" + (active ? " active" : "") + (isCustom ? " cs-liv-custom" : "");
+    row.dataset.csLivery = liv.id;
     row.setAttribute("aria-label", "Select " + liv.name + " livery");
     row.title = liv.name;
     row.setAttribute("aria-pressed", active ? "true" : "false");
@@ -906,6 +909,10 @@ function buildLiveryOptions(container, team) {
       saveLiveryId(team.id, liv.id);
       if (G.soundOn) GameAudio.uiSelect();
       buildSetup();
+      // IDs can come from imported paint jobs: compare data, never interpolate
+      // an untrusted id into a CSS selector.
+      const choices = $("cs-options")?.querySelectorAll("[data-cs-livery]") || [];
+      for (const choice of choices) if (choice.dataset.csLivery === liv.id) { choice.focus({ preventScroll: true }); break; }
     };
     container.appendChild(rowWrap);
   }
@@ -939,6 +946,7 @@ function buildLiveryCreator(container, team) {
   // not a number; NUMBER FONT and the mark colours are always live (the nose
   // number and its crest head paint on every car), so they carry no dep.
   const deps = [];
+  let designTools = null;
   const needFin = () => (d.finShape || "standard") !== "none";
   const NO_FIN = "Needs a tail fin — pick a FIN SHAPE other than NONE";
   const finArtLive = () => needFin() && ((d.finStyle || "team") !== "none" || d.finBadge === "number" || d.finBadge === "code");
@@ -957,11 +965,13 @@ function buildLiveryCreator(container, team) {
     }
   };
   const applyPreview = (defer3d) => {
+    if (designTools) designTools.changed(defer3d);
     prev.style.background = "linear-gradient(120deg, " + d.c1 + " 0 56%, " + d.c2 + " 56% 100%)";
     prev.textContent = "";
     if (d.stripe) { const st = document.createElement("span"); st.className = "cs-liv-stripe"; st.style.background = d.stripe; prev.appendChild(st); }
-    refreshPalettes();   // a slot's new colour becomes matchable from every other slot
+    const restorePaletteFocus = refreshPalettes();   // a slot's new colour becomes matchable from every other slot
     syncDeps();
+    if (restorePaletteFocus && !restorePaletteFocus.disabled) restorePaletteFocus.focus({ preventScroll: true });
     defer3d ? scheduleLivPreview(team, d) : livePreviewDraft(team, d);
   };
 
@@ -978,7 +988,7 @@ function buildLiveryCreator(container, team) {
                     "wing", "rearWing", "cover",
                     ...(((typeof LiveryTex !== "undefined" && LiveryTex.FILL_SURFACES) || [])
                       .map((f) => f.key)),   // design fills, from the painters' own list
-                    "fin", "finArt", "logo", "logo2", "logo3", "halo"];
+                    "fin", "finArt", "logo", "logo2", "logo3", "halo", "patternTint", "patternSecond"];
   const paletteColours = () => {
     const seen = [];
     const add = (v) => {
@@ -993,32 +1003,41 @@ function buildLiveryCreator(container, team) {
   const palRows = [];   // rebuilt on every edit: the palette IS the other slots
   const refreshPalettes = () => {
     const cols = paletteColours();
+    const focused = document.activeElement;
+    let replacement = null;
     for (let i = 0; i < palRows.length; i++) {
       const pr = palRows[i];
+      const ownedFocus = focused && pr.el.contains(focused);
+      const focusColour = ownedFocus && focused.dataset.csColour;
       pr.el.textContent = "";
       for (let c = 0; c < cols.length; c++) {
         const chip = document.createElement("button");
         chip.type = "button";
         chip.className = "cs-liv-ed-none";
         chip.style.background = cols[c];
+        chip.dataset.csColour = cols[c];
         chip.title = "Use " + cols[c];
         chip.setAttribute("aria-label", "Use colour " + cols[c] + " for " + pr.label);
         if ((d[pr.key] || "").toLowerCase() === cols[c]) chip.classList.add("active");
         chip.onclick = () => { pr.set(cols[c]); };
         pr.el.appendChild(chip);
+        if (ownedFocus && (cols[c] === focusColour || (!cols.includes(focusColour) && cols[c] === (d[pr.key] || "").toLowerCase()))) replacement = chip;
       }
     }
+    return replacement;
   };
 
+  surfaceControls = typeof GarageSurfaceInspection !== "undefined" ? GarageSurfaceInspection.controls(wrap) : null;
   const colorRow = (label, key, allowNone) => {
     const r = document.createElement("label"); r.className = "cs-liv-ed-row";
     if (LIV_ROW_HINT[key]) { r.title = LIV_ROW_HINT[key]; r.setAttribute("aria-description", LIV_ROW_HINT[key]); }
     const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = label; r.appendChild(lb);
     const inp = document.createElement("input"); inp.type = "color";
+    inp.dataset.livField = key; inp.setAttribute("aria-label", label);
     inp.value = /^#[0-9a-fA-F]{6}$/.test(d[key]) ? d[key] : "#000000";
     if (allowNone && !d[key]) inp.classList.add("cs-liv-off");
     inp.oninput = () => { d[key] = inp.value; inp.classList.remove("cs-liv-off"); applyPreview(true); };
-    inp.onchange = flushLivPreview;
+    inp.onchange = () => { applyPreview(); flushLivPreview(); };
     r.appendChild(inp);
     if (allowNone) {
       const off = document.createElement("button"); off.type = "button"; off.className = "cs-liv-ed-none"; off.textContent = "NONE";
@@ -1029,6 +1048,7 @@ function buildLiveryCreator(container, team) {
     palRows.push({ el: pal, key, label,
       set: (hex) => { d[key] = hex; inp.value = hex; inp.classList.remove("cs-liv-off"); applyPreview(); } });
     r.appendChild(pal);
+    if (surfaceControls) surfaceControls.row(r, label, key);
     return r;
   };
   // GROUPED BY THE ZONE EACH ROW PAINTS. The sheet is twenty-three colour rows
@@ -1042,7 +1062,7 @@ function buildLiveryCreator(container, team) {
     return r;
   };
   wrap.appendChild(section("BODY"));
-  wrap.appendChild(colorRow("PRIMARY", "c1", false));
+  const bodyRow = colorRow("PRIMARY", "c1", false); wrap.appendChild(bodyRow);
   wrap.appendChild(colorRow("ACCENT", "c2", false));
   wrap.appendChild(colorRow("BODY STRIPE", "stripe", true));      // full spine: nose → engine cover
   wrap.appendChild(colorRow("NOSE STRIPE", "noseStripe", true));  // nose crown only: tip → bulkhead
@@ -1126,13 +1146,14 @@ function buildLiveryCreator(container, team) {
     if (LIV_ROW_HINT[key]) { r.title = LIV_ROW_HINT[key]; r.setAttribute("aria-description", LIV_ROW_HINT[key]); }
     const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = label; r.appendChild(lb);
     const group = document.createElement("span"); group.className = "cs-liv-ed-finish";
+    group.setAttribute("role", "group"); group.setAttribute("aria-label", label);
     const btns = [];
     for (const f of values) {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "cs-liv-ed-none" + ((d[key] || dflt) === f ? " active" : "");
       if (key === "finish") b.dataset.csFinish = f; else b.dataset.csPill = key + ":" + f;
-      b.textContent = f.toUpperCase();
+      b.textContent = (typeof GarageLiveryDesignEditor !== "undefined" ? GarageLiveryDesignEditor.label(f) : f).toUpperCase();
       b.setAttribute("aria-pressed", String((d[key] || dflt) === f));
       b.onclick = () => {
         d[key] = f;
@@ -1151,6 +1172,8 @@ function buildLiveryCreator(container, team) {
     return r;
   };
   pillRow("FINISH", "finish", ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "gloss");
+  for (const [label, key] of [["COVER FINISH", "coverFinish"], ["WING FINISH", "wingFinish"], ["HALO FINISH", "haloFinish"]])
+    pillRow(label, key, ["inherit", "gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "inherit");
   pillRow("WING FLAPS", "wingCarbon", ["paint", "carbon"], "paint");
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
   pillRow("NUMBER FONT", "numFont", LT && LT.NUM_FONT_IDS || ["default"], "default");
@@ -1161,7 +1184,7 @@ function buildLiveryCreator(container, team) {
   pillRow("FIN SHAPE", "finShape", Car3D.FIN_SHAPE_IDS || ["standard"], "standard");
   deps.push({ row: pillRow("TAIL STYLE", "finStyle", LT && LT.TAIL_STYLE_IDS || ["team"], "team"), when: needFin, why: NO_FIN });
   deps.push({ row: pillRow("FIN BADGE", "finBadge", LT && LT.FIN_BADGE_IDS || ["logo"], "logo"), when: needFin, why: NO_FIN });
-  pillRow("SPINE TOP", "spineLogo", LT && LT.SPINE_LOGO_IDS || ["logo"], "logo");
+  const spineRow = pillRow("SPINE TOP", "spineLogo", LT && LT.SPINE_LOGO_IDS || ["logo"], "logo");
   pillRow("COVER BIND", "coverBind", ["independent", "saddleWrap", "spineOnly"], "independent");
   pillRow("FIN HANDOFF", "finHandoff", ["match", "contrast", "hardCut"], "match");
   // Body details: the T-cam housing colour (the real car-1 / car-2 code) and
@@ -1183,7 +1206,9 @@ function buildLiveryCreator(container, team) {
   const nlb = document.createElement("span"); nlb.className = "cs-liv-ed-lbl"; nlb.textContent = "NAME"; nameRow.appendChild(nlb);
   const name = document.createElement("input"); name.type = "text"; name.className = "cs-liv-ed-name";
   name.maxLength = 18; name.placeholder = "My Livery"; name.value = d.name;
-  name.oninput = () => { d.name = name.value; };
+  name.dataset.livField = "name";
+  name.oninput = () => { d.name = name.value; if (designTools) designTools.changed(true); };
+  name.onchange = () => { if (designTools) designTools.changed(false); };
   nameRow.appendChild(name);
   wrap.appendChild(nameRow);
 
@@ -1213,6 +1238,10 @@ function buildLiveryCreator(container, team) {
   btns.append(cancel, save);
   wrap.appendChild(btns);
 
+  if (typeof GarageLiveryDesignEditor !== "undefined") designTools = GarageLiveryDesignEditor.attach(wrap, d, {
+    changed: applyPreview, flush: flushLivPreview, preview: (value) => livePreviewDraft(team, value),
+    pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns,
+  });
   container.appendChild(wrap);
   applyPreview();
   // Spine / logo edits need the crown in the car gap the sheet leaves — the
@@ -1228,7 +1257,8 @@ let _livPreviewKey = "";
 let _livPrevDraft = null;
 // These never land in Car3D.build. A drag still invalidates the decal atlas;
 // it must not also throw away the preview mesh (a full car rebuild on a phone).
-const MESH_FREE_DRAFT = { logo: 1, logo2: 1, logo3: 1, sponsors: 1, numFont: 1, finStyle: 1, finBadge: 1, name: 1 };
+const MESH_FREE_DRAFT = { logo: 1, logo2: 1, logo3: 1, sponsors: 1, numFont: 1, finStyle: 1, finBadge: 1, name: 1, patternTint: 1, patternSecond: 1, patternPlacement: 1, patternSide: 1,
+  patternWidth: 1, patternRepeat: 1, patternOffset: 1, patternTaper: 1, patternOpacity: 1, patternRotation: 1, patternStretch: 1, patternWeight: 1 };
 function draftSkipsMesh(prev, next) {
   if (!prev) return false;
   const seen = Object.create(null);
@@ -1266,6 +1296,8 @@ function flushLivPreview() {
   if (p) livePreviewDraft(p.team, p.d);
 }
 function livePreviewDraft(team, d) {
+  // A paint/design edit invalidates the transient contour's source atlas.
+  if (typeof GarageSurfaceInspection !== "undefined" && GarageSurfaceInspection.field()) GarageSurfaceInspection.end();
   const key = team.id + "|" + JSON.stringify(d);
   if (key === _livPreviewKey) return;
   const skipMesh = draftSkipsMesh(_livPrevDraft, d);
@@ -1280,6 +1312,7 @@ function livePreviewDraft(team, d) {
 }
 
 function endLivPreview(team) {
+  if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end();
   cancelLivPreview();
   _livPreviewKey = "";
   _livPrevDraft = null;
@@ -1297,12 +1330,15 @@ function openSetup() {
   els.overlay.hidden = true;
   $("vsfriend").hidden = true;
   const cs = $("carsetup");
+  const generation = ++csVisitGeneration;
+  tuneExperiments.visit(Teams.LIST[G.teamIdx]);
   cs.hidden = false;
   G.setupPreviewOn = true;
   cs.setAttribute("aria-busy", "true");
   const finish = () => {
+    if (generation !== csVisitGeneration || cs.hidden) return;
     try { buildSetup(); }
-    finally { cs.removeAttribute("aria-busy"); }
+    finally { if (generation === csVisitGeneration) cs.removeAttribute("aria-busy"); }
   };
   if (typeof requestAnimationFrame === "function") {
     requestAnimationFrame(() => requestAnimationFrame(finish));
@@ -1330,7 +1366,7 @@ function discardLivDraft() {
 }
 if (typeof MutationObserver === "function") {
   const cs = $("carsetup");
-  if (cs) new MutationObserver(() => { if (cs.hidden) discardLivDraft(); })
+  if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); tuneExperiments.close(); } })
     .observe(cs, { attributes: true, attributeFilter: ["hidden"] });
 }
 return { buildSetup, openSetup };

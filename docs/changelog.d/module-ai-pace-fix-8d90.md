@@ -1,0 +1,1 @@
+Fixed: Career AI catalog development now improves race and qualifying pace relative to the legal works build. Aero and ERS retain their existing dedicated effects, and MY TEAM saved-build pacing stays unchanged.

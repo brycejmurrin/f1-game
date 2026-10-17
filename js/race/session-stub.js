@@ -53,7 +53,10 @@ var Spotter = {
 
 var PitLane = {
   _stub: true,
-  create: () => ({
+  create: (G = {}) => {
+    // Menu strategy writes must survive the later real-model recreation.
+    const pinId = (id) => { const t = G.track, d = t && t.def; return ((typeof id === "string" && id.trim() ? id : null) || (d && d.id) || (t && t.id) || "track"); };
+    return ({
     _stub: true,
     zoneOf: () => null, limit: () => 999, toBox: () => Infinity,
     approachV: () => 999, entryV: () => 999, exitV: () => 999,
@@ -62,7 +65,12 @@ var PitLane = {
     update: function () {}, think: function () {}, stepBegin: function () {}, stepEnd: function () {}, clearArm: function () {}, reset: function () {},
     planFor: () => null, planInfo: () => null, twoCompoundApplies: () => false,
     // RaceSettings paintPlan/wire reads these before ensureRaceSession (CI #1180).
-    pinnedStops: () => null, setPinnedStops: function () {}, lossS: () => 0,
+    pinnedStops(id) {
+      const v = G.store && G.store.get ? G.store.get("pitPlan." + pinId(id), "auto") : "auto";
+      return v == null || v === "auto" ? null : Math.max(0, Math.min(2, v | 0));
+    },
+    setPinnedStops(v, id) { if (G.store && G.store.set) G.store.set("pitPlan." + pinId(id), v == null ? "auto" : (v | 0)); },
+    lossS: () => 0,
     compoundDue: () => false, nextCode: () => "", nextFor: () => null, replan: function () {},
     laneX: (_c, _hw, x) => x, laneUniform: () => null, boxUniform: () => null,
     lastCue: () => null, canWork: () => false, addWork: () => 0,
@@ -76,7 +84,8 @@ var PitLane = {
     // picker; tests/unit/session-stub-surface.test.mjs derives these from call sites.
     commitFrac: () => 0, toEntry: () => -1,
     choices: () => [], ownedTyres: () => [], pickFor: () => null, selectNext: () => false,
-  }),
+    });
+  },
   zoneOf: () => null, inWindow: () => false, throughM: () => 0,
   ENTRY_M: 0, EXIT_M: 0, BOX_M: 0, LIMIT_FRAC: 0, BOX_S: 0, PIT_SIDE: 1,
 };
@@ -115,7 +124,7 @@ var SessionRecords = {
   PHYS: "",
   create: () => ({
     _stub: true,
-    begin: function () {}, current: () => null, config: () => ({}), sample: function () {},
+    begin: function () {}, current: () => null, config: () => ({}), sample: function () {}, sampleInput: function () {},
     accept: () => false, board: () => [], invalidate: function () {}, finish: function () {},
     prepareDaily: function () {}, restoreDaily: function () {}, key: () => "",
   }),

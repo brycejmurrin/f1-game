@@ -283,16 +283,15 @@ export function stampIntegrity(outDir) {
   return count;
 }
 
-async function build() {
-  const kdir = path.resolve(ROOT, arg("kokoro", "scratch/voicepack"));
-  const req = createRequire(path.join(kdir, "package.json"));
-  const { KokoroTTS } = await import(req.resolve("kokoro-js"));
-  const ffmpeg = arg("ffmpeg", null) || req("ffmpeg-static");
-  const id = arg("id", "george"), dtype = arg("dtype", "q4");
-  const spec = specFor(id, arg("speaker", null));
-  const pack = spec.pack;   // the file written: <id>, or <id>-<speaker> for a channel that is not the voice's own
-  const voice = arg("voice", VOICES[id].voice);
-  const speed = +arg("speed", String(VOICES[id].speed));
+const MODEL = "onnx-community/Kokoro-82M-v1.0-ONNX";
+const MODEL_OPTIONS = { device: "cpu", session_options: { intraOpNumThreads: 2, interOpNumThreads: 1 } };
+const ENCODING = ["-af",
+  "silenceremove=start_periods=1:start_threshold=-38dB:start_silence=0.01,areverse,silenceremove=start_periods=1:start_threshold=-38dB:start_silence=0.03,areverse",
+  "-ac", "1", "-ar", "24000", "-c:a", "libmp3lame", "-b:a", "32k"];
+
+// Shared by full builds and append: only a missing encode may load Kokoro.
+// Hash the actual recipe; bump `recipe` when a dependency upgrade changes audio.
+export async function recordClips({ list, cache, voice, dtype, speed, loadTTS, getFFmpeg, clips = {}, chunks = [] }) {
   // A word said on its own gets a whole sentence's prosody, which is slow:
   // Kokoro gave "to" half a second. Short fragments are rendered faster so a
   // spliced line runs at an engineer's pace; numbers stay a touch clearer.
@@ -301,42 +300,26 @@ async function build() {
     if (/^[0-9]/.test(key) || /^p [0-9]/.test(key)) return +(speed * 1.08).toFixed(2);
     return +(words <= 1 ? speed * 1.22 : words === 2 ? speed * 1.12 : speed).toFixed(2);
   };
-  const KBPS = 32;
-  const outDir = path.resolve(ROOT, arg("out", "assets/voice"));
-  const cache = path.join(ROOT, "artifacts", "voicepack", id, voice + "-" + dtype);
-  fs.mkdirSync(cache, { recursive: true });
-  fs.mkdirSync(outDir, { recursive: true });
-  const list = flag("append") ? [...fallbackVocabulary(id, spec.speaker), ...fullPhrases(id, spec.speaker)] : phrases(id, spec.speaker);
-  const tts = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", {
-    dtype, device: "cpu", session_options: { intraOpNumThreads: 2, interOpNumThreads: 1 },
-  });
-  const safe = (k) => k.replace(/[^a-z0-9]+/gi, "_").slice(0, 60) + "_" + createHash("sha256").update(k).digest("hex").slice(0, 16);
-  const clips = {};
-  const chunks = [];
-  let off = 0, i = 0;
-  if (flag("append")) {
-    const old = JSON.parse(fs.readFileSync(path.join(outDir, pack + ".json"), "utf8"));
-    if (old.voice !== voice) throw new Error("--append cannot mix different voices");
-    const bin = fs.readFileSync(path.join(outDir, pack + ".bin"));
-    Object.assign(clips, old.clips); chunks.push(bin); off = bin.length;
-  }
+  const safe = (k) => k.replace(/[^a-z0-9]+/gi, "_").slice(0, 60);
+  let off = chunks.reduce((n, buf) => n + buf.length, 0), i = 0, tts;
   for (const { key, text } of list) {
     i++;
     if (clips[key]) continue;
     const sp = key.startsWith("@line:") ? speed : speedFor(key);
-    const mp3 = path.join(cache, safe(key) + "_" + sp + "_" + KBPS + ".mp3");
+    const mp3 = path.join(cache, safe(key) + "_" + createHash("sha256").update(JSON.stringify({
+      recipe: 1, key, text, model: MODEL, options: { ...MODEL_OPTIONS, dtype }, voice, speed: sp, encoding: ENCODING,
+    })).digest("hex") + ".mp3");
     if (!fs.existsSync(mp3)) {
       const wav = mp3.replace(/\.mp3$/, ".wav");
+      tts ||= await loadTTS();
       const audio = await tts.generate(text, { voice, speed: sp });
       await audio.save(wav);
       // Trim Kokoro's lead-in and tail, both ends, then encode.
-      execFileSync(ffmpeg, ["-y", "-loglevel", "error", "-i", wav, "-af",
-        "silenceremove=start_periods=1:start_threshold=-38dB:start_silence=0.01,areverse,silenceremove=start_periods=1:start_threshold=-38dB:start_silence=0.03,areverse",
-        "-ac", "1", "-ar", "24000", "-c:a", "libmp3lame", "-b:a", KBPS + "k", mp3]);
+      execFileSync(getFFmpeg(), ["-y", "-loglevel", "error", "-i", wav, ...ENCODING, mp3]);
       fs.unlinkSync(wav);
     }
     const buf = fs.readFileSync(mp3);
-    const probe = spawnSync(ffmpeg, ["-i", mp3], { encoding: "utf8" }).stderr || "";
+    const probe = spawnSync(getFFmpeg(), ["-i", mp3], { encoding: "utf8" }).stderr || "";
     const dm = probe.match(/Duration: (\d+):(\d+):([\d.]+)/);
     const dur = dm ? (+dm[1]) * 3600 + (+dm[2]) * 60 + (+dm[3]) : 0;
     clips[key] = [off, buf.length, +dur.toFixed(3)];
@@ -344,11 +327,41 @@ async function build() {
     off += buf.length;
     if (i % 25 === 0) console.log(`[voicepack] ${i}/${list.length}`);
   }
-  const binary = Buffer.concat(chunks);
+  return { clips, binary: Buffer.concat(chunks) };
+}
+
+async function build() {
+  const kdir = path.resolve(ROOT, arg("kokoro", "scratch/voicepack"));
+  const req = createRequire(path.join(kdir, "package.json"));
+  let ffmpeg;
+  const getFFmpeg = () => ffmpeg ||= arg("ffmpeg", null) || req("ffmpeg-static");
+  const loadTTS = async () => {
+    const { KokoroTTS } = await import(req.resolve("kokoro-js"));
+    return KokoroTTS.from_pretrained(MODEL, { ...MODEL_OPTIONS, dtype });
+  };
+  const id = arg("id", "george"), dtype = arg("dtype", "q4");
+  const spec = specFor(id, arg("speaker", null));
+  const pack = spec.pack;   // the file written: <id>, or <id>-<speaker> for a channel that is not the voice's own
+  const voice = arg("voice", VOICES[id].voice);
+  const speed = +arg("speed", String(VOICES[id].speed));
+  const outDir = path.resolve(ROOT, arg("out", "assets/voice"));
+  const cache = path.join(ROOT, "artifacts", "voicepack", id, voice + "-" + dtype);
+  fs.mkdirSync(cache, { recursive: true });
+  fs.mkdirSync(outDir, { recursive: true });
+  const list = flag("append") ? [...fallbackVocabulary(id, spec.speaker), ...fullPhrases(id, spec.speaker)] : phrases(id, spec.speaker);
+  const clips = {};
+  const chunks = [];
+  if (flag("append")) {
+    const old = JSON.parse(fs.readFileSync(path.join(outDir, pack + ".json"), "utf8"));
+    if (old.voice !== voice) throw new Error("--append cannot mix different voices");
+    const bin = fs.readFileSync(path.join(outDir, pack + ".bin"));
+    Object.assign(clips, old.clips); chunks.push(bin);
+  }
+  const { binary } = await recordClips({ list, cache, voice, dtype, speed, loadTTS, getFFmpeg, clips, chunks });
   fs.writeFileSync(path.join(outDir, pack + ".bin"), binary);
   const man = { v: 1, id: pack, voice, speaker: spec.speaker, model: "Kokoro-82M v1.0 (ONNX " + dtype + ")", licence: "Apache-2.0", speed, clips, binary: binaryIntegrity(binary) };
   fs.writeFileSync(path.join(outDir, pack + ".json"), JSON.stringify(man) + "\n");
-  console.log(`[voicepack] ${pack}: ${list.length} clips, ${(off / 1024).toFixed(0)} KB`);
+  console.log(`[voicepack] ${pack}: ${list.length} clips, ${(binary.length / 1024).toFixed(0)} KB`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

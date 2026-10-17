@@ -16,6 +16,9 @@ function create(G) {
 // RACE ORDER and the SLIP BUDGET live in agentview.js (loaded first, LAZY_AGENT)
 // so obs()/physState() and world() cannot drift apart (#2172).
 const raceOrder = (cars) => AgentView.raceOrder(cars);
+const finiteOrNil = (v) => v === undefined || v === null || (typeof v === "number" && isFinite(v));
+// update(NaN) wrote NaN into every car, and an infinite n never returned.
+const stepArgs = (dt, n) => [Number.isFinite(dt) && dt >= 0 ? dt : 1 / 60, Number.isFinite(n) && n >= 0 ? Math.floor(n) : 1];
 // The three UI scales take a PERCENT. A fraction (1.6) or junk used to be
 // snapped and SAVED: uiScale(1.6) stored 40 %, uiScale("abc") the default.
 // null still resets; undefined reads.
@@ -48,8 +51,8 @@ function settled(promise, out) {
 const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
   "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf",
-  "towing", "wake", "axFrac", "axFracF", "axFracR", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
-  "kerbSndT", "kerbHapT",
+  "towing", "wake", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
+  "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking",
   // The AI brake look-ahead cache (perf hunt 2 S6): one object per car, keyed on
   // the node window; refilled lazily by updateCarBrakePlan, so a cold car is
   // simply without it (CarFields predeclares it undefined).
@@ -144,10 +147,6 @@ function clearShot(n, place) {
 const CLEAR_AZ = [0, 20, -20, 40, -40, 60, -60, 90, -90];             // orbit: swing round the subject
 const CLEAR_SIDE = [[1, 1], [1, 0.7], [1, 0.45], [-1, 1], [-1, 0.7], [-1, 0.45]];   // roadside/view: step in, then the other side
 
-let _netPeer = null;
-let _lobbyPeerTimer = null;   // keeps the fake lobby peer pumping (see lobbyFake)
-// The far end of a faked lobby connection — see lobbyFake().
-let _lobbyPeer = null;
 
 function simCareerRound() {
   const rows = G.qualiSim(0);
@@ -261,6 +260,9 @@ const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
   jump(frac, speed, lateral) {
     if (!G.player || !G.track) return false;
+    // A non-finite argument would write NaN into prog/s/speed, and the whole field
+    // sort and every later physState read goes with it: refuse before touching state.
+    if (!finiteOrNil(frac) || !finiteOrNil(speed) || !finiteOrNil(lateral)) return false;
     IncidentSim.release(G.player);
     const f01 = (((frac || 0) % 1) + 1) % 1;
     const sNew = wrapS(f01 * G.track.total);
@@ -396,7 +398,7 @@ const api = {
   camera(m) {
     if (m == null) return { mode: CAM_MODES[G.camMode].id, index: G.camMode, modes: CAM_MODES.map((c) => c.id) };
     const i = typeof m === "number" ? m : CAM_MODES.findIndex((c) => c.id === String(m).toLowerCase());
-    if (i < 0 || i >= CAM_MODES.length) return false;
+    if (!(Number.isInteger(i) && i >= 0 && i < CAM_MODES.length)) return false;   // NaN / 1.5 reached setCamMode and left G.camMode junk
     G.dbgCam = null;   // switching to a game camera mode leaves any view() free-cam
     setCamMode(i);
     // Same as jump(): SwiftShader can starve rAF / the 10 Hz HUD tick for many
@@ -583,8 +585,8 @@ const api = {
   },
   garageStep(dt, n) {
     if (!G.setupPreviewOn) return null;
-    const step = dt == null ? 1 / 60 : dt;
-    for (let i = 0; i < (n == null ? 1 : n); i++) G.stepSetupAero(step);
+    const [step, count] = stepArgs(dt, n);
+    for (let i = 0; i < count; i++) G.stepSetupAero(step);
     return this.garageAero();
   },
   // Switch garage car without opening #teampicker — same store writes as the tile
@@ -655,7 +657,7 @@ const api = {
     if (!team || !parts || typeof parts !== "object") return { ok: false, error: "bad_parts" };
     const cur = Object.assign({}, G.getTeamParts(team.id));
     for (const [cat, id] of Object.entries(parts)) {
-      if (id != null && id !== "") cur[cat] = id;
+      if (typeof id === "string" && id !== "") cur[cat] = id;   // an Infinity/object id persisted as JSON null (the parts store never re-validates)
     }
     G.saveTeamParts(team.id, cur);
     // Garage open: drop the preview, rebuild the sheet. Closed (menu / a race): DONE's recompute, so the next frame re-keys the player body, cockpit and wheel meshes.
@@ -962,7 +964,7 @@ const api = {
   },
 
   setSpeed(v) {
-    if (!G.player || G.player.px == null) return false;
+    if (!G.player || G.player.px == null || !Number.isFinite(v)) return false;
     G.player.speed = Math.max(0, Math.min(200, v));
     return { speed: G.player.speed };
   },
@@ -972,7 +974,7 @@ const api = {
   // velocity and yaw rate after rotating so the car doesn't immediately un-spin.
   // Use spin(180) to face the wrong way, spin(-45) for a 45° drift setup.
   spin(deg) {
-    if (!G.player || G.player.px == null) return false;
+    if (!G.player || G.player.px == null || !Number.isFinite(deg)) return false;
     G.player.head = G.player.head + deg * Math.PI / 180;
     G.player.vLat = 0;
     G.player.yawRateCur = 0;
@@ -980,7 +982,7 @@ const api = {
   },
 
   nudge(dLat = 0, dSpeed = 0) {
-    if (!G.player || G.player.px == null) return false;
+    if (!G.player || G.player.px == null || !Number.isFinite(dLat) || !Number.isFinite(dSpeed)) return false;
     if (dLat)   G.player.vLat  = (G.player.vLat || 0) + dLat;
     if (dSpeed) G.player.speed = Math.max(0, (G.player.speed || 0) + dSpeed);
     return { speed: +(G.player.speed || 0).toFixed(2), vLat: +(G.player.vLat || 0).toFixed(2) };
@@ -1319,7 +1321,7 @@ const api = {
     if (!G.player || !G.track) return false;
     const ai = G.cars.filter((c) => !c.isPlayer);
     const used = [];
-    (list || []).forEach((spec, i) => {
+    (Array.isArray(list) ? list : []).forEach((spec, i) => {
       const c = ai[i];
       if (!c) return;
       c.prog = G.player.prog + (spec.dProg || 0);
@@ -1333,7 +1335,7 @@ const api = {
     return used.map((c) => G.cars.indexOf(c));
   },
   aim(relDeg) {
-    if (!G.player || !G.track || G.player.px == null) return false;
+    if (!G.player || !G.track || G.player.px == null || !finiteOrNil(relDeg)) return false;
     Tracks.sample(G.track, G.player.s, smp);
     G.player.head = Math.atan2(smp.t[0], smp.t[2]) + (relDeg || 0) * Math.PI / 180;
     G.player.vLat = 0;
@@ -1341,6 +1343,7 @@ const api = {
   },
   go() {
     if (G.flyingStart) G.flyingStart.stop();   // a rolling start's run-up (js/race/flying-start.js): the wheel is the caller's now
+    if (!G.player || !G.cars.length) return false;   // no race() built a grid: "race" with zero cars is a dead tick loop (#2532)
     G.state = "race"; G.raceT = Math.max(G.raceT, 0.5);
     if (G.loadingScreen && G.loadingScreen.lowerWaitPlate) G.loadingScreen.lowerWaitPlate();
     resetStartLights(true);
@@ -1431,7 +1434,7 @@ const api = {
   },
   // Load any circuit (by index or id, e.g. "monza") and start a normal race,
   // optionally forcing time of day ("day" | "night" | "default") and weather
-  // ("dry" | "wet" | "rain" | "overcast" | "fog"). "wet" = damp road, no rain;
+  // ("dry" | "wet" | "rain" | "overcast" | "fog" | "storm"). "wet" = damp road, no rain;
   // "rain" = wet road + falling rain. Skips menus so a harness can render any track.
   // opts.laps: the race distance (default GAME_LAPS) — the tyre-class draw at
   // grid-up reads it, so a long-race bench must set it HERE, not after.
@@ -1457,7 +1460,7 @@ const api = {
     // End the previous session's weather arc FIRST: startRace's restoreBase() puts a live MIXED
     // race's chip weather back over whatever is set below (every in-game exit does this).
     if (G.endWeatherSession) G.endWeatherSession();
-    G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
+    G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog" || weather === "storm") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
     if (opts && opts.grid != null) G.raceGrid = opts.grid;   // the game's setter validates the name
     if (opts && opts.duel != null) {
@@ -1502,7 +1505,7 @@ const api = {
   careerReset() { const result = Career.clear(); if (result.ok) G.refreshCareerButton(); return result; },
   careerFreeMoney(on) { return Career.freeMoney(on); },
   // Hand the live career credits. No argument grants Career.GRANT.
-  careerGrant(n) { return Career.grant(n); },
+  careerGrant(n) { return Career.grant(Number.isFinite(n) ? n : undefined); },
   careerFacility(up) {
     if (up) Career.upgradeFacility();
     return { level: Career.facility(), max: Career.FACILITY_MAX,
@@ -1685,7 +1688,7 @@ const api = {
   },
   clearInput() { G._testInput = null; },
   step(dt, n) {
-    const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
+    const [d, count] = stepArgs(dt, n);
     for (let i = 0; i < count; i++) {
       // Keep the render-interpolation anchors in sync: the render-driven loop
       // snapshots them before each step, so a manual pump must too or a frozen
@@ -1931,6 +1934,12 @@ const api = {
     const ms = gfx.gpuMs ? gfx.gpuMs() : -1, b = gfx.backendState ? gfx.backendState() : null;
     return { supported: st.supported, on: st.on, ms, software: b ? !!(b.softAdapter || b.softwareGL) : null };
   },
+  // inspector(on?) — the opt-in three.js Inspector dev panel (js/perf/three-inspector.js), TLX only; default ON on localhost/file: (not under webdriver), OFF on the deployed site; ?inspector=0|1 overrides.
+  // inspector(true|false) toggles, inspector() reads { on, supported, reason, loading }. GPU timings need WebGPU
+  // timestamp-query; the WebGL2 path still gets CPU/Memory/Timeline/Viewer. While on, gpuTimer() reports off.
+  inspector: (on) => typeof ThreeInspector === "undefined"
+    ? { on: false, supported: false, reason: "three-inspector.js not loaded", loading: false }
+    : ThreeInspector.set(gfx, on),
   // lightTune(o?) — get or set the live lighting-tuner values (same registry as
   // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every
   // tunable. With an object: merges valid entries (clamped to each slider's
@@ -2094,7 +2103,21 @@ const api = {
   },
 
   // perf() — thin governor snapshot (alias of renderScale report + tier parts).
-  perf() { return this.renderScale(); },
+  // perf({on, reset, measure}) — renderScale() (the governor view, unchanged) plus the per-subsystem
+  // frame budget from js/perf/spans.js: on:true starts the span recorder (off = one bool per call),
+  // reset:true clears the rings, measure:true also emits performance.measure() for traces. While
+  // recording, `spans` holds p50/p95/p99/max ms per phase (frame input physics ai collide camera
+  // render hud), `loaf` the long-animation-frame ring, `gpu` gpuTimer().
+  perf(o) {
+    if (typeof PerfSpans !== "undefined") {
+      if (o && o.reset) PerfSpans.reset();
+      if (o && o.measure !== undefined) PerfSpans.measure(o.measure);
+      if (o && o.on !== undefined) PerfSpans.on(o.on);
+    }
+    const base = this.renderScale();
+    if (typeof PerfSpans === "undefined" || !(PerfSpans.isOn() || o)) return base;
+    return Object.assign(base, PerfSpans.report(), { gpu: this.gpuTimer() });
+  },
 
   uiScale(v) { return badPct("uiScale", v) || G.setScale("uiScale", "--ui-scale", v); },
   hudScale(v) { return badPct("hudScale", v) || G.setScale("hudScale", "--hud-scale", v); },
@@ -2228,7 +2251,7 @@ const api = {
       G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     }
     if (input !== undefined) G._testInput = input || null;
-    const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
+    const [d, count] = stepArgs(dt, n);
     for (let i = 0; i < count; i++) {
       AgentView.syncRenderAnchors(G.cars);   // all six, exactly as step() does
       update(d);
@@ -2352,210 +2375,7 @@ const api = {
     return Object.assign({ ok: true }, c.netInput);
   },
 
-  net() {
-    return G.netPlay ? G.netPlay.status() : { active: false };
-  },
-
-  netLoopback(o) {
-    o = o || {};
-    if (!G.netPlay) return { ok: false, error: "no_netplay", message: "NetPlay is not available." };
-    const pair = NetTransport.loopback({
-      latencyMs: o.latencyMs != null ? o.latencyMs : 0,
-      jitterMs: o.jitterMs || 0,
-      loss: o.loss || 0,
-      // `seed` makes loss and jitter REPRODUCIBLE. Without it a lossy spec is
-      // a coin flip that re-runs differently, which is indistinguishable from
-      // the defect it is meant to catch.
-      rnd: o.seed != null ? NetTransport.seededRnd(o.seed) : undefined,
-    });
-    _netPeer = pair[1];
-    // THE FAR END MUST ANSWER PINGS. A bare transport endpoint is not a peer:
-    // in a real connection the other browser runs NetSession too, so the near
-    // end reaches synced() inside one round trip and starts handing snapshots
-    // to the game. Without a responder synced() is false for ever, every
-    // packet lands in heldState, and net().buffered stays 0 while the session
-    // reports itself alive — which is precisely what the multiplayer-session
-    // specs were failing on (14 reds, six of them this).
-    NetSession.autoPong(_netPeer);
-    // Both endpoints must be pumped from the same moment for the loopback's
-    // wire clock to line up (see js/net/transport.js). A test passes its own
-    // t0 so the whole session runs on a virtual clock it controls.
-    const t0 = o.nowMs != null ? o.nowMs : performance.now();
-    pair[0].pump(t0); _netPeer.pump(t0);
-    const res = G.netPlay.start({
-      transport: pair[0],
-      role: o.role === "guest" ? "guest" : "host",
-      peerProfile: o.peer || null,
-      interpDelayMs: o.interpDelayMs,
-    });
-    if (!res.ok) { _netPeer = null; return res; }
-    // ...and the near end must PING at t0, not on the caller's first netTick.
-    // start() does not pump, so without this the first PING and the first
-    // snapshot ride the same pump: the snapshot arrives while synced() is
-    // still false and is held, so the very first assertion after one packet
-    // sees 0. A live session pumps every frame from the moment it connects
-    // (transport.js says so in as many words); this is that first frame.
-    G.netPlay.tick(t0);
-    return res;
-  },
-
-  netPeerSend(st, atMs, wireId) {
-    if (!_netPeer || !G.netPlay) return false;
-    const status = G.netPlay.status();
-    const cur = G.cars[status.remoteId] || {};
-    const car = Object.assign({
-      s: cur.s || 0, x: cur.x || 0, head: cur.head || 0, speed: cur.speed || 0,
-      gear: cur.gear || 1, lap: cur.lap || 0,
-      deploying: false, offroad: false, onKerb: false, braking: false,
-    }, st || {});
-    const now = atMs != null ? atMs : performance.now();
-    _netPeer.pump(now);
-    // The WIRE id, not the cars[] index. A real peer stamps its packets with
-    // G.wireId — the same number on every screen, which an index is not — so
-    // the fake peer must too, or onState has no slot to route it to.
-    const wire = wireId != null ? wireId
-      : (status.remotes && status.remotes.length && status.remotes[0].wire != null
-        ? status.remotes[0].wire : null);
-    if (wire == null) return { ok: false, error: "no_wire" };
-    const ok = _netPeer.send("state", NetSnapshot.encodeSnapshot(Math.round(now), [
-      { id: wire, car },
-    ]));
-    return ok ? { sent: car, at: Math.round(now) } : false;
-  },
-
-  // netPeerClose() — the rival's connection drops. The game must hand their
-  // car back to the AI rather than leave a driverless obstacle on track.
-  netPeerClose() {
-    if (!_netPeer) return false;
-    try { _netPeer.close(); } catch (e) {}
-    _netPeer = null;
-    return true;
-  },
-
-  lobby(o) {
-    if (!G.netLobby) return { available: false };
-    if (o && o.open) G.netLobby.open();
-    if (o && o.cancel) G.netLobby.cancel();
-    return Object.assign({ available: true }, G.netLobby.status(), {
-      profile: G.netLobby.localProfile(),
-      shown: !!(document.getElementById("vsfriend") && !document.getElementById("vsfriend").hidden),
-    });
-  },
-
-  // lobbyFake(on) — make the lobby build LOOPBACK endpoints instead of real
-  // RTCPeerConnections. Necessary, not merely convenient: an RTCPeerConnection
-  // whose ICE never completes (a sandboxed CI browser, a locked-down network)
-  // spins indefinitely, so a test that builds one does not fail — it HANGS,
-  // which is far worse. The far endpoint is kept here so the connection can be
-  // completed on demand by lobbyWatch(), which drives it to onConnected().
-  lobbyFake(on) {
-    if (!G.netLobby) return false;
-    if (!on) {
-      if (_lobbyPeerTimer != null) { clearInterval(_lobbyPeerTimer); _lobbyPeerTimer = null; }
-      _lobbyPeer = null; G.netLobby.setTransportFactory(null); return false;
-    }
-    G.netLobby.setTransportFactory((o) => {
-      const pair = NetTransport.loopback({ latencyMs: 0 });
-      _lobbyPeer = pair[1];
-      // THE FAKE PEER HAS TO STAY ALIVE. A bare endpoint answers no PINGs and
-      // sends none, so the lobby's session hears nothing after the last thing
-      // the test pushed and closes on its own 6 s timeout — the room then loses
-      // the peer with no user action at all. Measured with a probe that only
-      // watched: peerReady held true through t+5.5 s and went false at t+6.0 s.
-      // Every room/seat spec that takes more than six seconds to reach its
-      // assertion failed on that, which is why they fail on a slow box and pass
-      // on a fast one. autoPong answers the lobby's own 500 ms pings, and the
-      // 25 ms pump is what lets the far end SEE them — lobbyPeerEvent only
-      // pumps when the test happens to send something, and a real peer is
-      // running its own loop the whole time.
-      NetSession.autoPong(_lobbyPeer);
-      if (_lobbyPeerTimer != null) clearInterval(_lobbyPeerTimer);
-      _lobbyPeerTimer = setInterval(() => {
-        if (!_lobbyPeer) return;
-        try { _lobbyPeer.pump(performance.now()); } catch (e) {}
-      }, 25);
-      return Object.assign(pair[0], { role: o && o.role });
-    });
-    return true;
-  },
-
-  lobbyWatch() {
-    if (!G.netLobby) return false;
-    G.netLobby.watchForOpen();
-    return true;
-  },
-
-  lobbyPeerEvent(type, data) {
-    if (!_lobbyPeer) return false;
-    const now = performance.now();
-    _lobbyPeer.pump(now);
-    const ok = _lobbyPeer.send("event", JSON.stringify({ t: type, d: data }));
-    _lobbyPeer.pump(now);
-    return ok;
-  },
-
-  lobbyRoom() {
-    return G.netLobby ? G.netLobby.roomState() : null;
-  },
-
-  lobbyHost() {
-    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
-    G.netLobby.open();
-    return G.netLobby.host();
-  },
-  lobbyJoin(inviteCode) {
-    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
-    G.netLobby.open();
-    G.netLobby.join();
-    return G.netLobby.makeAnswer(inviteCode);
-  },
-  lobbyAccept(answerCode) {
-    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
-    return G.netLobby.acceptAnswer(answerCode);
-  },
-
-  lobbySdp() {
-    if (!G.netLobby || !G.netLobby.sdp) return { ok: false, error: "no_lobby" };
-    const s = G.netLobby.sdp();
-    return s || { ok: false, error: "no_connection" };
-  },
-
-  async lobbyPairs() {
-    if (!G.netLobby || !G.netLobby.sdp) return { ok: false, error: "no_lobby" };
-    const s = G.netLobby.sdp();
-    const pc = s && s._pc;
-    if (!pc || !pc.getStats) return { ok: false, error: "no_connection" };
-    const stats = await pc.getStats();
-    const local = new Map(), remote = new Map(), pairs = [];
-    stats.forEach((r) => {
-      if (r.type === "local-candidate") local.set(r.id, r);
-      else if (r.type === "remote-candidate") remote.set(r.id, r);
-      else if (r.type === "candidate-pair") pairs.push(r);
-    });
-    const name = (c) => (c ? (c.candidateType || "?") + " " + (c.address || c.ip || "?")
-                             + ":" + (c.port || "?") + "/" + (c.protocol || "?") : "?");
-    return {
-      ice: s.ice, conn: s.conn,
-      pairs: pairs.map((p) => ({
-        state: p.state, nominated: !!p.nominated,
-        sent: p.requestsSent, recv: p.responsesReceived,
-        bytes: p.bytesSent,
-        local: name(local.get(p.localCandidateId)),
-        remote: name(remote.get(p.remoteCandidateId)),
-      })),
-    };
-  },
-
-  lobbyCodeHost() {
-    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
-    G.netLobby.open();
-    return G.netLobby.codeHost();
-  },
-  lobbyCodeJoin(code) {
-    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
-    G.netLobby.open();
-    return G.netLobby.codeJoin(code);
-  },
+  ...ApexNet.hooks(G, { resetStartLights }),
 
   // turnProbe() — is a relay actually there?
   //
@@ -2636,101 +2456,13 @@ const api = {
     });
   },
 
-  lobbyInviteAnother() {
-    if (!G.netLobby) return Promise.resolve({ ok: false, error: "no_lobby" });
-    return G.netLobby.inviteAnother();
-  },
-  lobbyReady(v) {
-    if (!G.netLobby) return false;
-    G.netLobby.setReady(v !== false);
-    return true;
-  },
-  lobbyStart() {
-    if (!G.netLobby) return false;
-    return G.netLobby.startFromRoom();
-  },
-
-  // lobbyMods(profile) — resolve a peer profile to multipliers, locally.
-  lobbyMods(profile) {
-    return G.netLobby ? G.netLobby.modsFromProfile(profile) : null;
-  },
-
-  // lobbyFailure(wireStats, secs) — the message a failed connection produces,
-  // from a given wire state. Exposed because the real thing needs two devices
-  // on two hostile networks, which no CI can arrange — but WHICH diagnosis we
-  // draw from a given set of candidates is pure logic and must not regress.
-  lobbyFailure(st, secs) {
-    return G.netLobby ? G.netLobby.failureMsg(st, secs || 30) : null;
-  },
-
-  lobbyShare(which) {
-    if (!G.netLobby) return false;
-    return which === "answer" ? G.netLobby.shareAnswer() : G.netLobby.shareInvite();
-  },
-
-  netStartArm(nowMs, atMs, hold) {
-    if (!G.netPlay || !G.netPlay.active()) return { ok: false, error: "no_session" };
-    G.netNow = nowMs;
-    G.netStart = atMs == null
-      ? null
-      : { at: atMs, hold: hold != null ? hold : 0.5, now: () => G.netNow };
-    G.state = "count";
-    G.countT = 0;
-    G.lightsLit = 0;
-    resetStartLights(false);
-    return {
-      ok: true,
-      at: atMs != null ? atMs : null,
-      hold: G.netStart ? G.netStart.hold : null,
-      awaiting: G.netPlay.awaitingStart(),
-    };
-  },
-
-  netHostStart() {
-    if (!G.netPlay || !G.netPlay.active()) return { ok: false, error: "no_session" };
-    return { ok: !!G.netPlay.hostStart(), startPending: !!G.netStart };
-  },
-
-  netPeerEvent(type, data, atMs) {
-    if (!_netPeer) return false;
-    const now = atMs != null ? atMs : performance.now();
-    _netPeer.pump(now);
-    return _netPeer.send("event", JSON.stringify({ t: type, d: data }));
-  },
-
-  netPeerLaps() { return G.netPlay ? G.netPlay.peerLaps() : []; },
-
-  // netTick(nowMs?) — pump the session by hand. The game loop already calls
-  // this every frame, but a test must not depend on rAF actually running at a
-  // useful rate: driving it explicitly is what makes latency, loss and
-  // interpolation reproducible here, the same way step() does for physics.
-  netTick(nowMs) {
-    if (!G.netPlay) return false;
-    const now = nowMs != null ? nowMs : performance.now();
-    // PUMP THE FAKE PEER TOO. transport.js is explicit that both endpoints must
-    // pump every frame or the wire clock does not line up, and a live peer does
-    // (it is running its own loop). Only netPeerSend/netPeerEvent pumped it, so
-    // a test that merely ticks — a clock warm-up, an idle stretch — delivered
-    // nothing to the far end, its autoPong never saw a PING, and the session
-    // could not sync. The peer goes first so anything it answers is on the wire
-    // before the session's own pump collects.
-    if (_netPeer && _netPeer.pump) { try { _netPeer.pump(now); } catch (e) {} }
-    G.netPlay.tick(now);
-    return G.netPlay.status();
-  },
-
-  netStop() {
-    _netPeer = null;
-    return G.netPlay ? G.netPlay.stop("local") : false;
-  },
-
   aiPlace(idx, frac, speed, x) {
     if (!G.track || !G.cars[idx]) return false;
     const c = G.cars[idx];
     if (c.isPlayer) return false;
     const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
     c.s = c._prevS = wrapS(f01 * G.track.total);
-    c.prog = (c.lap || 0) * G.track.total + f01 * G.track.total;
+    c.prog = ((c.lap || 0) - 1) * G.track.total + c.s;   // the engine's (lap-1)*L + s (see NetPlay's prog rebuild)
     if (x     !== undefined) { c.x = x; c.xVis = x; }
     if (speed !== undefined) c.speed = speed;
     c.vLat = 0; c.yawRateCur = 0;
@@ -2803,7 +2535,7 @@ const api = {
   },
 
   setLap(n) {
-    if (!G.player) return false;
+    if (!G.player || !Number.isFinite(+n || 0)) return false;
     G.player.lap = Math.max(0, Math.floor(+n || 0));
     return { lap: G.player.lap };
   },
@@ -2882,10 +2614,12 @@ const api = {
     };
   },
 
-  seed(n) { if (n !== undefined) G.seed = n; return G.seed; },
+  seed(n) { if (n !== undefined && Number.isFinite(n)) G.seed = n; return G.seed; },
 
   reset(frac, speed, x, seed) {
     if (!G.track || !G.player) return false;
+    // NaN into prog/s/speed/x survives every later tick (the field sort reads prog): refuse first.
+    if (![frac, speed, x, seed].every(finiteOrNil)) return false;
     G.resetEpisodeOwners();   // clear takeovers, held flags and debris before reusing car indexes
     if (seed !== undefined) G.seed = seed;
     gridUp();   // also clears finPos / retired / dnf / dnfAt / dnfWhy
@@ -2929,7 +2663,7 @@ const api = {
       c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.deploying = false; c.boostOn = false; OvertakeMode.reset(c);
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false;
-      delete c.vertLoad;
+      if ("vertLoad" in c) c.vertLoad = undefined;   // a CarFields key: a delete would make the car a dictionary
       // EVERY per-episode transient is DELETED, not zeroed, from ONE list —
       // EPISODE_TRANSIENTS at the top of this file. Deleting is the point:
       // these fields are absent on a cold car, so removing them is what makes
@@ -2957,9 +2691,12 @@ const api = {
       // dead code. Add to EPISODE_TRANSIENTS; never a second list.
       c.lane = c.lanePref != null ? c.lanePref : 0;
       c._prevS = c.s;
-      for (const k of EPISODE_TRANSIENTS) delete c[k];
+      // Reset to `undefined`, never `delete`: a delete (of a non-last key) drops all 22 cars to V8 dictionary
+      // mode (undoes PERF-HUNT-2 #1), and an absent key reads the same as an undefined one (car-fields.js header).
+      for (const k of EPISODE_TRANSIENTS) if (k in c) c[k] = undefined;
     }
     BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
+    agentView.beginEpisode();
     G._testInput = null;
     return this.obs();
   },
@@ -3314,6 +3051,7 @@ const api = {
     return d;
   },
 };
+try { if (typeof ThreeInspector !== "undefined") ThreeInspector.boot(gfx); } catch (_) { /* dev tool: never blocks boot */ }
 lazyTrackEnsure(api);
 return api;
 }

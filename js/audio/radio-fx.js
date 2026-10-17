@@ -355,7 +355,8 @@ var GameAudioRadioFx = (function () {
         t += p.duration;
         joined = true;
       }
-      const nodes = [g];
+      const nodes = [g], focusOwner = {};
+      const focusContext = host.context();
       let dead = false;
       /* SPOTTER OWNS ITS OWN MUSIC DUCK. The engineer ducks from radio-voice.js;
        * the spotter never goes through that module, so the hold is latched here
@@ -371,12 +372,16 @@ var GameAudioRadioFx = (function () {
       const teardown = () => {
         if (dead) return;
         dead = true; voicesLive--;
+        if (host.setVoiceFocusHold) host.setVoiceFocusHold(false, focusOwner);
         releaseSpotterDuck();
         for (const s of srcs) { try { s.disconnect(); } catch (e) { /* gone */ } }
         for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
       };
       if (!srcs.length) { dead = true; for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } } return null; }
       voicesLive++;
+      // Audio-clock automation shares the BufferSource schedule, including
+      // suspended contexts. No wall timer can promote a future voice early.
+      if ((!o || o.channel !== "coach") && host.setVoiceFocusSpan) host.setVoiceFocusSpan(focusOwner, t0, t, focusContext);
       if (fx === "spotter" && host.setSpotterDuck) {
         spotterDuck = true;
         host.setSpotterDuck(true);
@@ -396,6 +401,7 @@ var GameAudioRadioFx = (function () {
           for (const s of srcs) { try { s.stop(tt + 0.06); } catch (e) { /* not started, or ended */ } }
           if (tail) { try { tail.stop(tt); } catch (e) { /* already played */ } }
           releaseSpotterDuck();
+          if (host.setVoiceFocusHold) host.setVoiceFocusHold(false, focusOwner);
           setTimeout(teardown, 120);
         },
       };
@@ -439,11 +445,31 @@ var GameAudioRadioFx = (function () {
       let chained = false;
       let ended = false;
       const entry = {};
+      let unbindFocus = null;
+      function bindMediaFocus(a) {
+        let playing = false;
+        const sync = () => {
+          if (dead || el !== a) return;
+          if (host.setVoiceFocusHold) host.setVoiceFocusHold(playing
+            && !a.paused && !a.ended && !a.muted && a.volume > 0 && host.enabled(), entry);
+        };
+        a.onplaying = () => { playing = true; sync(); };
+        a.onwaiting = a.onpause = () => { playing = false; sync(); };
+        // stalled concerns network fetch; buffered playback can continue.
+        a.onstalled = a.onvolumechange = sync;
+        unbindFocus = () => {
+          playing = false;
+          a.onplaying = a.onwaiting = a.onpause = a.onstalled = a.onvolumechange = null;
+          if (host.setVoiceFocusHold) host.setVoiceFocusHold(false, entry);
+          unbindFocus = null;
+        };
+      }
       const teardown = () => {
         if (dead) return;
         dead = true;
         ended = true;
         _watchClips.delete(entry);
+        if (unbindFocus) unbindFocus();
         releaseDuck();
         if (voiceHandle && voiceHandle.stop) { try { voiceHandle.stop(); } catch (e) { /* gone */ } voiceHandle = null; }
         for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
@@ -472,12 +498,14 @@ var GameAudioRadioFx = (function () {
         if (typeof Audio === "undefined") { teardown(); return null; }
         el = new Audio(url);
         el.volume = Math.min(1, vol);
+        bindMediaFocus(el);
         el.onended = el.onerror = () => teardown();
         const p = el.play();
         if (p && p.catch) p.catch(() => teardown());
         return handle;
       }
       const disconnectMedia = () => {
+        if (unbindFocus) unbindFocus();
         for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
         nodes = [];
         if (el) { el.onended = el.onerror = null; el = null; }
@@ -525,6 +553,7 @@ var GameAudioRadioFx = (function () {
         g.connect(voiceChain("radio:" + radioPreset, ch));
         nodes = [mediaSrc, g];
         chained = true;
+        bindMediaFocus(el);
         el.onended = () => teardown();
         el.onerror = fallBack;
         el.src = url;

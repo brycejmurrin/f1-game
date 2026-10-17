@@ -17,7 +17,7 @@ verified before it merges onto the session branch, and deployed on the user's wo
 | L1b | keep lamp instanced casters when the lamp is unchanged (fallback for L1) | not needed unless the census shows the depth copy failing |
 | G1 | godray chain: night lamp beams use one blur pair, not two | done 40a627f (TLX + GLX, `apex26.grLite`) |
 | R1 | pooled fixed-shape draw records | done (R1 commit) |
-| P2 | fixed per-pair post materials (no texture swaps) | low priority |
+| P2 | fixed per-pair post materials (no texture swaps) | done — `_fixedMats` defaults on (see TLX-PERF-HUNT-2026-10-11) |
 | — | SSR MRT loop skip / attachment skip | dropped (below) |
 
 ## Findings that shape the plan

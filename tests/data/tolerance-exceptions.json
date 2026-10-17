@@ -1,0 +1,4 @@
+{
+  "_doc": "Rows excused from tools/check/tolerance-diff.mjs: {file, line, reason}. `line` is a substring of the ADDED assertion line. A row that matches nothing in the diff is reported stale; delete it. Every row needs a reason a reviewer can read (AGENTS.md rule 9: never widen a tolerance to get green).",
+  "exceptions": []
+}

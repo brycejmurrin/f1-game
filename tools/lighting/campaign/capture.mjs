@@ -6,6 +6,7 @@ import { extname, join, resolve, sep } from "node:path";
 import { CAMERA_FRACTIONS, REGIONS } from "./config.mjs";
 import { evaluateGates, measurePixels } from "./metrics.mjs";
 import { launchChromium } from "../../lib/harness.mjs";
+import sharp from "sharp";
 import { screenshotPresentedCanvas } from "../../shot/probe-page.mjs";
 
 const MIME = Object.freeze({
@@ -75,8 +76,30 @@ export async function captureConfiguredViews(track, captureView) {
   return views;
 }
 
-async function readPngPixels(page, imagePath) {
-  const b64 = readFileSync(imagePath).toString("base64");
+// Decode opaque, unprofiled 8-bit RGB(A) screenshot PNGs locally:
+// sending every RGBA byte back through page.evaluate makes a multi-megabyte
+// JSON array per view. Other PNG encodings retain canvas decoding so colour
+// profiles, palette transparency and alpha premultiplication keep their semantics.
+export async function readPngPixels(page, imagePath) {
+  const png = readFileSync(imagePath);
+  let screenshotEncoding = png.length >= 33 && png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) &&
+    png[24] === 8 && [2, 6].includes(png[25]);
+  for (let at = 8; screenshotEncoding && at < png.length;) {
+    const length = at + 8 <= png.length ? png.readUInt32BE(at) : png.length;
+    const end = at + length + 12;
+    if (end > png.length || !["IHDR", "IDAT", "IEND", "pHYs"].includes(png.toString("ascii", at + 4, at + 8))) {
+      screenshotEncoding = false;
+      break;
+    }
+    at = end;
+  }
+  if (screenshotEncoding) {
+    const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    let opaque = true;
+    for (let i = 3; i < data.length; i += 4) if (data[i] !== 255) { opaque = false; break; }
+    if (opaque) return { width: info.width, height: info.height, data };
+  }
+  const b64 = png.toString("base64");
   return page.evaluate(async (encoded) => {
     const img = new Image();
     img.src = "data:image/png;base64," + encoded;
@@ -143,7 +166,7 @@ async function captureAttempt(page, condition, profile, outDir) {
     const image = join(viewDir, `${index + 1}-f${frac.toFixed(2)}.png`);
     await screenshotPresentedCanvas(page, { path: image, type: "png" });
     const pixels = await readPngPixels(page, image);
-    const metrics = measurePixels(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height, REGIONS);
+    const metrics = measurePixels(pixels.data, pixels.width, pixels.height, REGIONS);
     const frameState = await sampleFrameState(page);
     lightState = { ...frameState.lightState, hdrMode: frameState.hdrMode };
     const pageErrors = Array.from(new Set(page[PAGE_ERRORS]));

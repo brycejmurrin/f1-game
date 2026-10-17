@@ -1,19 +1,7 @@
 @layer components {
 /* Apex 26 — menus styles. Load order: tools/manifest.cjs CSS. */
-/* FOUR TIERS, by how much of your evening the thing costs.
-   HERO is the career — the 24-round game everything else feeds into. PLAY NOW is
-   the four one-sitting modes, 2x2, as dark plates with a red leading edge.
-   EXPLORE is Watch / Practice / Photo Studio / Garage (H3 Home rooms plus the
-   car workshop), also a forced 2x2. SECONDARY is the chrome rooms: half-height,
-   two across, no glow.
-
-   It was two tiers, but the play row had grown to FIVE full-size red buttons, so
-   the flat list the two-tier split existed to break up had quietly come back —
-   and a 24-round career carried exactly the weight of a time trial. Folding the
-   four quick modes into 2x2 pays for the hero's extra height, so the column is
-   no taller than before and still clears a 390px landscape phone. Garage used
-   to sit in the leftover utility strip; promoting it into explore keeps that
-   row even and the rooms row a chrome strip. */
+/* Career retains the hero treatment. Destination groups and compact wrapping
+   live in menu-destinations.css; the shared title scroller contains every group. */
 #menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
 /* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
@@ -85,18 +73,7 @@
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
 #menu-hero .bigbtn { padding-block: 13px; }
-/* THE `mb-` FAMILY IS GONE, AND THIS IS WHAT REPLACED IT. Both of its classes
-   dressed exactly ONE element inside exactly one button, so each was a class
-   that could never be reused and a name nobody could look up — the shape
-   the restructure-screens-css skill rule 12 names ("one property
-   plus N one-line context overrides beats N variant classes") and rule 8's
-   `--sheet-w` table demonstrates: the variation lives on the CONTEXT, not in a
-   class of its own. #mb-career's only element child that is not the icon is the
-   two-line stack, and the save line already carried an id for JS to fill.
-   Selectors are IDs now, so they outrank the class rules they replace by more
-   than the class rules outranked each other — checked against every other rule
-   that touches these two elements (there is one, the touch floor at the end of
-   this file, and one in css/responsive.css, which wins on LAYER either way). */
+/* Career keeps its label and saved-state line in a vertical stack. */
 #mb-career > span { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 /* The sub line under a door's label: what the button will DO, dim and small so
    it never competes with the label. Five uses — the hero's live save line and
@@ -133,7 +110,7 @@
 /* Primary has `border: none`; rooms have a 1px .alt hairline. Matching width
    keeps the two 2-up columns on the same vertical tracks (measured 205 vs 203
    on 1280 before this). Color stays transparent on the red doors. */
-#menu-buttons :is(#menu-hero, #menu-retention, #menu-primary, #menu-explore) .bigbtn { border-color: transparent; }
+#menu-buttons :is(#menu-hero, #menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn { border-color: transparent; }
 /* width: 100% is REDUNDANT in the cascade (#menu-buttons .bigbtn at (1,1,0)
    already wins it on every branch) and KEPT on purpose: tests/unit/title-menu-even
    pins this exact declaration as the contract that 2-up cells fill, and
@@ -223,7 +200,7 @@
    keeps the shared :active press (skew + scale 0.97). The hover/press "glow"
    is ::before — a red-tinted wash faded by OPACITY, which the compositor can
    run without repainting the shadow every frame (::after is the sheen). */
-#menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn {
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn {
   background:
     linear-gradient(90deg, var(--red) 0 4px, transparent 4px) border-box,
     color-mix(in oklab, var(--carbon) 88%, var(--text) 9%);
@@ -232,7 +209,7 @@
   box-shadow: none;
   transition: transform var(--dur-1, 120ms) var(--ease-out, ease-out);
 }
-#menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn::before {
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn::before {
   content: "";
   position: absolute; inset: 0; z-index: -1;
   pointer-events: none;
@@ -243,10 +220,10 @@
   transition: opacity var(--dur-1, 120ms) var(--ease-out, ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
-  #menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn:hover::before { opacity: 1; }
+  #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:hover::before { opacity: 1; }
 }
-#menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn:active::before { opacity: 1; }
-#menu-buttons :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:active::before { opacity: 1; }
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
 /* The hero keeps its red and its resting glow, but its hover heat is now the
    same opacity fade: the hot gradient lives on ::before, the face stays on
    --grad-primary, and box-shadow no longer TRANSITIONS (a gradient never
@@ -319,35 +296,19 @@
 /* Landscape: branding left, buttons right — a phone held sideways has width to
    spend and no height at all. Two columns, everything vertically centred, and
    the whole screen still inside the safe area. */
-/* THE SIDE-BY-SIDE COMPOSITION, shared by a landscape phone and a desktop (the
-   large-screen block in css/responsive.css only changes the sizes).
-   Columns are sized to their CONTENT and the pair is centred as a unit. They
-   used to be `1fr 1fr` with `justify-items: start`, which on anything wide
-   pinned the title to the far-left edge and left the buttons stranded at the
-   half-way line — ~630px of dead space between them on a 1920 screen.
-   Nothing spans rows either: brand and buttons share row 1, small print takes
-   row 2. The old layout ran the button column through all four branding rows,
-   and a grid distributes a spanning item's excess height across the rows it
-   covers — which is what pushed the small print 230px below the title. */
-/* THE DOCUMENT-LEVEL SHORT THRESHOLD, declared beside the screen that reads it —
-   the same arrangement `--pair-at` has with #cs-inner. js/ui/sheet-shape.js resolves
-   `innerHeight / --ui-scale` against this and writes data-density onto body, which is
-   how the screens OUTSIDE `.sheet` get an answer (#overlay's zoom sits on its children,
-   so it has none of its own to divide by). 600 is what the two #overlay blocks already
-   used — 599 here, 600 in css/responsive.css, one pixel apart, the same question.
-   It is registered `inherits: false` in css/tokens.css: declared plainly it cascaded
-   into every .sheet and moved their thresholds from 380 to 600. */
+/* Wide Home places brand and navigation side by side within the safe area. */
+/* SheetShape resolves these document thresholds before child zoom. */
 body { --compact-at: 600px; --wide-at: 620px; }
 
 /* LIVE HOME GEOMETRY (blocking). html[data-home-live] + data-home-scene are
    stamped in the inline pre-paint script; experience.js keeps them in sync. */
 html[data-home-live] #overlay #menu-buttons { background: transparent; border: 0; padding: var(--gap); }
 html[data-home-live] #overlay[data-intro] #menu-buttons .bigbtn { animation: none; }
-html[data-home-live] #overlay :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn {
+html[data-home-live] #overlay :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn {
   background: var(--plate); border-color: var(--plate-line); transform: none; text-align: start;
   justify-content: flex-start; align-items: center; padding: var(--gap); font-style: normal; min-height: var(--tap);
 }
-html[data-home-live] #overlay :is(#menu-retention, #menu-primary, #menu-explore) .bigbtn > span { align-items: flex-start; }
+html[data-home-live] #overlay :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn > span { align-items: flex-start; }
 html[data-home-live] #overlay #menu-secondary .bigbtn { transform: none; font-style: normal; }
 html[data-home-live] #overlay #menu-brand {
   align-self: end; position: relative; z-index: 1; isolation: isolate; overflow: hidden;
@@ -391,11 +352,10 @@ html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
 /* Compact-wide live Home: subgrid-place #menu-secondary under brand (no DOM move).
    Keep #menu-buttons as the scroll box — ui-scale @200% scrolls RACE into it.
    display:contents broke that box and let brand (z-index) steal hits on DATA HUB. */
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
-  grid-template-columns: minmax(0, 1fr) min(46%, 400px);
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
   grid-template-rows: minmax(0, 1fr);
   align-content: stretch; align-items: stretch;
-  /* 0.15: cheap 852×344 fold clearance for GARAGE. */
   row-gap: calc(var(--gap) * 0.15); column-gap: var(--gap);
   overflow-x: hidden;
 }
@@ -408,62 +368,44 @@ html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #ov
   font-size: clamp(var(--fs-5), calc(4.2 * var(--vwz)), calc(var(--fs-6) * 2.8));
 }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-meta { margin-top: calc(var(--gap) * 0.5); }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
   display: grid; grid-column: 1 / -1; grid-row: 1;
   grid-template-columns: subgrid;
   grid-template-rows: max-content max-content max-content max-content;
   align-content: start; align-items: start; justify-items: stretch;
   width: auto; height: 100%; max-height: 100%; min-height: 0; align-self: stretch;
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
-  /* Above brand so zoomed secondary keeps DATA HUB hittable; empty cells pass clicks through. */
   touch-action: pan-y; z-index: 2; background: transparent;
-  /* Inline pad: CAREER skewX tip past overflow-x:hidden (B1). */
   padding-block: calc(var(--gap) * 0.5);
   padding-inline: var(--gap);
   pointer-events: none;
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
   pointer-events: auto;
 }
-/* No group zoom: #menu-buttons zooms (ui-scale.spec 200% desktop). */
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) {
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) {
   width: 100%; align-self: start; justify-self: stretch;
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero { grid-column: 2; grid-row: 1; gap: calc(var(--gap) * 0.3); }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-primary { grid-column: 2; grid-row: 2; gap: calc(var(--gap) * 0.3); }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { grid-column: 2; grid-row: 3; gap: calc(var(--gap) * 0.3); }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
-  /* Row 2 col 1 under brand. #1537: height auto for 2-line labels; --tap floor stays. */
-  grid-column: 1; grid-row: 2; display: flex; flex-wrap: nowrap; align-items: stretch;
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
+  grid-column: 1; grid-row: 1 / -1; align-self: end; display: flex; flex-wrap: nowrap; align-items: stretch;
   gap: calc(var(--gap) * 0.15); min-height: var(--tap); height: auto; max-height: none;
   --balance-basis: 0%; --balance-min: 0%;
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary.balanced-row > :not([hidden]) {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn { justify-content: flex-start; white-space: normal; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary.balanced-row > :not([hidden]) {
   flex: 1 1 0; min-width: 0; width: auto;
 }
-/* #1537: clamp+wrap — nowrap ellipsis clipped TRACK DES / HOW TO P in ~74px cells. */
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
-  display: inline-flex; flex-direction: row; justify-content: flex-start; align-items: center;
-  gap: calc(var(--gap) / 8); min-height: var(--tap-paint); height: auto; max-height: none;
-  padding: calc(var(--gap) / 10) calc(var(--gap) / 8) calc(var(--gap) / 10) calc(var(--gap) / 4);
-  font-size: clamp(0.55rem, calc(1.7 * var(--vwz)), calc(var(--fs-micro) * 0.78));
-  letter-spacing: 0; line-height: 1.1; white-space: normal; text-wrap: balance;
-  overflow-wrap: anywhere; overflow: hidden; text-overflow: clip; text-align: start; min-width: 0;
-}
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn .btn-ico {
-  width: 0.85em; height: 0.85em; flex: none; margin: 0;
-}
-html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-buttons .bigbtn {
+:where(body[data-density="compact"]) #overlay #menu-buttons .bigbtn {
   min-height: var(--tap); padding-block: calc(var(--gap) / 2);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-primary, #menu-explore, #menu-hero) .bigbtn {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-primary, #menu-explore, #menu-hero) .bigbtn {
   min-height: max(var(--tap-min), var(--tap-paint));
   padding-block: calc(var(--gap) * 0.3);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn {
   padding-block: calc(var(--gap) * 0.4);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {
   min-height: var(--tap-paint); height: auto; max-height: none;
 }
 html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: none; }
@@ -625,23 +567,7 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
      Dynamic Island when --gut was smaller than the token gutter. */
   padding-block-start: max(var(--safe-t), calc(var(--sat) + var(--gap) * 0.5));
 }
-/* THE PORTRAIT PHONE IS THREE BANDS: brand, doors, cars. Redesigned
-   2026-09-23 from an iPhone report against the previous pass: the wordmark sat
-   under the status bar (the safe-area fix is on the tall #overlay rule above),
-   the doors had grown to fill the screen, and the 900/1600 portrait drawing was
-   a full-height layer the whole button column sat on top of, so the cars were
-   never actually seen. The landscape phone is the composition players like —
-   compact doors beside a side-on pair of cars in the clear — so portrait now
-   says the same thing stacked:
-   - row 1, the brand, clear of the notch;
-   - row 2, the doors at their landscape sizes: one-line play doors, a 2x2 of
-     rooms, the column only as tall as its content (minmax(0, auto) — grid
-     grows it before the fr row, and it scrolls if the phone is too short);
-   - row 3, whatever height is left, holds the SIDE-ON drawing (#title-car) as
-     an in-flow grid item instead of an absolute layer, so nothing covers it.
-   Scoped to tall AND narrow so an upright iPad keeps the large-portrait sizes
-   in css/responsive.css and its own drawing. No px in any padding or gap:
-   rawSpacing is ratcheted at zero slack. */
+/* Portrait Home reserves separate bands for brand, scrollable doors, and the car preview. */
 @media (max-width: 699px) {
   :where(body[data-shape="tall"]) #overlay {
     grid-template-rows: auto minmax(0, auto) minmax(0, 1fr);
@@ -775,7 +701,7 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
    ratio of zoom-corrected dimensions equals the ratio of raw dimensions — but
    data-shape is combinable with data-density in one selector and is consistent
    with the sheet-level data-shape convention everywhere else. */
-:where(body[data-shape="wide"][data-density="compact"]) #overlay {
+html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
   /* The doors do not need half the screen. At 1fr 1fr the column measured
      417px of a 932px phone (2026-09-22, iPhone 15 Pro Max) with every label
      sitting in ~90px of slack, while the title art behind the brand column had
@@ -882,9 +808,6 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
   white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.1;
   font-size: clamp(0.6rem, calc(2.0 * var(--vwz)), var(--fs-micro));
 }
-/* Four rooms in the narrower column wrap 3 + 1 from the 5.5rem basis, which
-   stretches the leftover into a banner; a forced 2x2 costs one ~30px row
-   (274 -> ~305 on a 343px safe height) and matches portrait. */
 :where(body[data-shape="wide"][data-density="compact"]) :is(#menu-explore, #menu-secondary) {
   --balance-basis: calc(50% - 0.5em);
   --balance-min: calc(50% - 0.5em);
@@ -897,15 +820,7 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
 /* The static mode subs are the first thing to go when height is short — the
    hero's save line stays, it is state the player came back for. */
 :where(body[data-density="compact"]) :is(#menu-primary, #menu-explore) .mb-sub { display: none; }
-/* THE RETENTION PAIR STACKS ITS SUB LINE UNDER THE LABEL on a short wide
-   title. MEASURED (layout-audit, ios-iphone-landscape 734x343, 2026-10-05):
-   #mb-daily put DAILY TIME TRIAL and its sub side by side in one nowrap line,
-   and the sub painted "MONTREAL · DRY" cut to an ellipsis. Stacked, each line
-   gets the button's whole width. The height is ALWAYS two lines, whatever the
-   text — the shell's TODAY'S CHALLENGE and the booted MONTREAL · DRY · STREAK n
-   occupy the same box — so, like #mb-career-sub, the button never changes
-   height after boot (docs/PERF-FINDINGS.md 4a). Tight leading and a quarter-gap of
-   block padding keep the cost to ~8 own px over the one-line chip. */
+/* Retention pair: sub line under the label on a short wide title. */
 :where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn {
   /* Row: .btn-ico beside the label/sub stack (span is column). Column here
      used to be a no-op with one child; with icons it would grow tile height. */
@@ -913,16 +828,13 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
   padding-block: calc(var(--gap) * 0.25);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-retention .bigbtn > span { max-width: 100%; min-width: 0; line-height: 1.15; }
-/* Live-home `padding: var(--gap)` outranks the :where rule above — pin icon
-   budget here so DAILY TIME TRIAL (~153px) still fits one line on a half-width
-   chip beside CONTINUE (183 − 8 pad − 14 ico ≈ 161). */
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn {
   flex-direction: row; align-items: center; gap: 0;
   /* letter-spacing makes DAILY TIME TRIAL ~165px; 183−4 pad−12 ico ≈ 167.
      Token pad (not raw px) so the rawSpacing ratchet stays flat. */
   padding-inline: calc(var(--gap) / 8);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn .btn-ico {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn .btn-ico {
   margin: 0; flex: none; width: 0.6em; height: 0.6em;
 }
 /* Desktop live-home: drop .btn-ico's 0.5em margin so the label keeps width. */

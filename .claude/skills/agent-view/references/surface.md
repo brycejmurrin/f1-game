@@ -2,7 +2,13 @@
 
 Load this when driving a lap, writing a policy, or debugging a typed error. SKILL.md holds the entry points only.
 
+**Use when:** a deterministic, screenshot-free read of race state, geometry, or scenery is needed.
 
+**Inputs:** track, staged tool call, seed, and the exact world/field/scene payload being inspected.
+
+**Verification:** pin the seed, record the sequence, and distinguish dynamic reads from cached setup state.
+
+**Writes/ownership:** read-only; geometry fixes belong to `new-track` or `survey-track`.
 ## Contents
 - Three ways in (same surface, different cost)
 - The tools, by the question they answer

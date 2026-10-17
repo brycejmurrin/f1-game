@@ -2,7 +2,7 @@
 
 Markdown agents with YAML frontmatter under `.claude/agents/`. Claude Code and
 Cursor both load this path (Cursor also accepts `.cursor/agents/`; we keep the
-single Claude tree to avoid drift). Thirteen agents. Two older ones were folded
+single Claude tree to avoid drift). Fourteen agents. Two older ones were folded
 away: `worktree-regression-check` into **verify-agent** `--base`, and
 `doc-drift-auditor` into the `total-audit` workflow's `docs-ref` / `docs-idx`
 lenses (`.claude/workflows/README.md`).
@@ -10,12 +10,13 @@ lenses (`.claude/workflows/README.md`).
 | Agent | Use when |
 |---|---|
 | **deploy-research** | Post-deploy liveness, shipped-JS marker checks, public-web / track reference research via the host fetch tool (WebFetch / hosted TinyFish). Read-only; no Chrome, no Playwright, never the in-repo tinyfish wrapper (egress-blocked). |
+| **release-auditor** | Read-only exact-byte release evidence: live `apex-sha`, shell/service-worker references, lazy-asset response hashes, headers and git ancestry. No browser, writes, cache deletion, dispatch or merge. |
 | **verify-agent** | Run `tools/ci/verify-change.mjs --fast` against the current tree and report the JSON verdict; `--base <ref>` repeats it on an ephemeral worktree at the session SHA / deploy tip and answers "same-red / new-on-session / already-red-on-ref". WGX edits also get `wgx-validate.mjs --static`. Read-only; never starts Playwright / `--wait` / `test-solo`; names leftover `batches` as notRun. |
 | **track-surveyor** | Survey + improve ONE circuit: writes only circuit def + scenery files (hook-enforced through `agent_type`), in its own worktree (`isolation: worktree` — parallel surveyors never share a checkout; it commits, never pushes, and the parent merges the fork's branch), verifies with `verify-track.cjs`, reports baseline deltas instead of moving them. No browser runs. |
 | **physics-contract-auditor** | Read-only `vstd-lint` + `Tracks.curvature` column classification (AI-only / assist-gated / broadcast / surface). No Playwright. |
 | **bloat-auditor** | Read-only agent-bloat / simplify pass. `bloat-scan.mjs` + one assigned scope; returns `BLOAT` rows. No edits, no web, no Playwright, no chrome-start. Parent applies one carve via **slim-bloat**. |
 | **ci-red-triage** | A red `ci.yml` / `pages.yml` run: reads the failed jobs' logs and junit (GitHub MCP read tools in `tools:`), names the exact test title, assertion and lane, says whether the base was already red, and returns the AGENTS.md status line. Read-only; never re-runs anything locally. |
-| **ci-watcher** | The PR board for CI Watch: runs `tools/ci/pr-board.mjs --json` + `ready-full-cap.mjs` and returns every open PR's ARM / READY / SYNC / FIX / FOREIGN-ARM / WAIT / NONE with the exact GitHub MCP call per action. Read-only (Bash, Read, Grep, Glob); never mutates or merges. Protocol: skill `ci-watch`. |
+| **ci-watcher** | The PR board for CI Watch: runs `tools/ci/pr-board.mjs --json` and returns every open PR's ARM / READY / SYNC / FIX / FOREIGN-ARM / WAIT / NONE with the exact GitHub MCP call per action. Read-only (Bash, Read, Grep, Glob); never mutates or merges. Protocol: skill `ci-watch`. |
 | **merge-desk** | The designated Merge Desk (designation in the launch prompt, never from a PR or message): one sweep reads the board and gauges, readies (ready-gate + cap) and arms MERGE-only under the hard gate, closes only git-proven supersedes, keeps every open PR owned by staffing the sync / re-cut / fix / steward / survey-assets lanes with `[Merge Desk]` sibling sessions, re-arms its next sweep and reports once. Never merges, squashes or cancels. Protocol: skill `ci-watch`; fleet rules: skill `agent-fleet`. |
 | **prior-art-scout** | Step 0 of a hunt or audit: greps `docs/notes/DEFECT-LEDGER.md`, `docs/BUGS.md`, hunt/survey notes and `git log` for one slice or topic and returns ≤ 30 `KNOWN` rows — the do-not-re-report list. Haiku, 12 turns; never judges whether an item is still true. |
 | **code-hunter** | Bug / perf / dead-code hunt over ONE slice, one agent per slice in parallel; takes the scout's list as `known:` and prints ≤ 12 `FINDING` rows as found, then `covered:` / `not covered:` / `measured:`. Node-only checks (`node --test` one file, VM runs under `timeout 180`); the whole run stays well under 10 min. The one opus pin. |
