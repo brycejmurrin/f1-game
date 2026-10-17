@@ -26,7 +26,9 @@ function boot(options = {}) {
   };
   let closed = 0, restored = null, overlays = true, current = options.priorCamera || { open: false };
   const G = { $: dom.byId, canvas: dom.byId("game"), track: { name: "Monza", total: 1000 }, photoMode: !!options.priorPhoto,
-    player: options.player || null,
+    player: options.player || null, raceTimeOfDay: "day", raceWeather: "dry", weatherArc: options.arc || null,
+    setTimeOfDay(v) { if (v !== undefined) G.raceTimeOfDay = v; return G.raceTimeOfDay; },
+    weather(v) { if (v !== undefined) { G.weatherArc = null; G.raceWeather = v; } return G.raceWeather; },
     photoCam: { pos: [1, 2, 3], yaw: 1, pitch: 0.3, fov: 60 },
     gfx: { capturePixels: () => { order.push("read"); return options.readback || Promise.resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4).fill(123) }); } } };
   const freeCam = {
@@ -545,4 +547,30 @@ test("#1895: the Home title art does not paint over a live Photo Studio subject"
   const css = fs.readFileSync(new URL("../../css/experience.css", import.meta.url), "utf8");
   assert.match(css, /body\.photo-studio-open #overlay\[data-home-ready="1"\] #title-car \{ display: none; \}/,
     "once the garage/track subject has painted, #title-car must be hidden while the studio is open");
+});
+
+test("Time & weather preview changes the session live and every reset or close restores it, arc included", () => {
+  const arc = { from: "dry", to: "rain" };
+  const { api, G, dom } = boot({ arc });
+  api.open({ source: "race" });
+  const group = dom.byId("ps-tod").closest("section");
+  assert.equal(group.hidden, false);
+  const reset = dom.byId("ps-cond-reset");
+  assert.equal(reset.disabled, true, "nothing to reset until a condition changes");
+  const pick = (id, v) => { const sel = dom.byId(id); sel.value = v; sel.dispatchEvent({ type: "change" }); };
+  pick("ps-tod", "night"); pick("ps-weather", "storm");
+  assert.deepEqual([G.raceTimeOfDay, G.raceWeather, G.weatherArc], ["night", "storm", null]);
+  assert.equal(reset.disabled, false);
+  reset.click();
+  assert.deepEqual([G.raceTimeOfDay, G.raceWeather, G.weatherArc], ["day", "dry", arc]);
+  pick("ps-tod", "dusk");
+  api.close(false);
+  assert.deepEqual([G.raceTimeOfDay, G.raceWeather, G.weatherArc], ["day", "dry", arc]);
+});
+
+test("Time & weather group stays out of the garage subject", () => {
+  const { api, G, dom } = boot({});
+  api.open({ source: "garage" });
+  assert.equal(dom.byId("ps-tod").closest("section").hidden, true);
+  assert.deepEqual([G.raceTimeOfDay, G.raceWeather], ["day", "dry"]);
 });

@@ -1,10 +1,10 @@
 # Barrier run-off lateral teleports — plan (2026-09-30)
 
-Status: **PLAN** — docs-only first; implementation slices follow as separate
-draft PRs. Owns the OPEN ledger item from 2026-09-26
+Status: **IMPLEMENTED** — Slices 1–3 shipped; Slice 4's fleet-wide, lower-only
+class caps landed in #1625. Owns the ledger item from 2026-09-26
 (`docs/notes/DEFECT-LEDGER.md`). A path written `js/<new>/…`, `tests/<new>/…`,
-or `tools/<new>/…` is a PROPOSED file (drop the `<new>/` segment), not one that
-exists yet.
+or `tools/<new>/…` was a proposed file when this plan was written (drop the
+`<new>/` segment).
 
 ## Goal
 
@@ -182,6 +182,13 @@ exact head. Do **not** merge (Bryce's merge worker).
 - Fleet probe becomes a permanent ratchet: `maxAdjOver ≤ cap` per class
   (open / street), lowered only, never raised.
 
+Completed without the optional `wallAt` lerp: the end-face response removes the
+player teleport without changing authored pit-opening discontinuities. The
+permanent probe now builds every circuit, includes both sides and pit edges,
+and reads the lower-only class caps from `tests/data/ratchets.json`: open
+`7.9 m`, street `9.75 m`. A synthetic over-cap track proves the cap fails
+closed.
+
 ## Tests that must stay green (no loosening)
 
 | Path | Pins |
@@ -220,10 +227,12 @@ exact head. Do **not** merge (Bryce's merge worker).
 
 ## Success criteria
 
-- Open permanent circuits: max adj `|Δ(bar−hw)|` at tyre termini **< 3 m**
-  (feathered), and a car scraping across a terminus moves laterally **< 1.5 m**
-  in one physics step.
+- Open permanent circuits: max adj `|Δ(bar−hw)|` at off-pit tyre termini
+  **< 3 m** (feathered), and a car scraping across a terminus moves laterally
+  **< 1.5 m** in one physics step.
 - Monaco pit taper: either feathered or end-faced so clamp Δx **< 2 m**.
+- Every permanent circuit, including authored pit edges, stays within the
+  lower-only `maxAdjOver` cap for its open/street class.
 - All listed must-keep tests green with **unchanged** assertions.
 - Ledger OPEN item closed with before/after table in the final slice PR body.
 

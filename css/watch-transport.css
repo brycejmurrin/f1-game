@@ -58,7 +58,7 @@ body.watch-controls-on #bc-tower {
   overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y;
 }
 #bc-tower button.bc-head { width: 100%; text-align: left; border-radius: 0; background: transparent; }
-body:has(.screen:not([hidden])) .watch-transport, body.photo-mode .watch-transport { display: none; }
+body:has(> .screen:not([hidden])) .watch-transport, body.photo-mode .watch-transport { display: none; }
 @media (max-width: 900px) {
   .watch-transport [data-wt="controls"] { flex-wrap: wrap; }
   .watch-transport [data-wt="driver-field"] { flex: 1 1 120px; }

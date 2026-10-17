@@ -126,7 +126,8 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   // FACTORY setup via teamDecalState(team, false).
   assert.match(cd, /const st = setup \? teamDecalState\(team, false, setup, car\.visStamp\) : teamDecalState\(team, false\);\s*\n\s*const vt = st\.parts;/);
   assert.match(cd, /const parts = Parts\.getVisualTiers\(setup, team\);/);
-  assert.match(cd, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(\) : getFieldWheelMeshes\(c\.team, c\);/);
+  // The player's pair takes the team so livery wheel tints (rimTint / caliperTint) join its cache key.
+  assert.match(cd, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(c\.team\) : getFieldWheelMeshes\(c\.team, c\);/);
   assert.match(cd, /putBoundedMesh\(fieldWheelCache, fieldWheelOrder/,
     "field wheels must promote hits like every other mesh LRU");
   assert.match(cd, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,
