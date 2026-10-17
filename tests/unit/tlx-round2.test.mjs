@@ -288,6 +288,32 @@ test("setRange0 rewrites the same range without length=0 between same-frame call
   assert.equal(attr.updateRanges[0].start, 0);
 });
 
+test("createTexMesh uses Uint16 indices at or under 65535 verts and Uint32 above", () => {
+  const m = TLX.match(/createTexMesh\(data\) \{/);
+  assert.ok(m, "createTexMesh moved");
+  let depth = 1, i = m.index + m[0].length;
+  for (; i < TLX.length && depth; i++) {
+    if (TLX[i] === "{") depth++;
+    else if (TLX[i] === "}") depth--;
+  }
+  const body = TLX.slice(m.index + m[0].length, i - 1);
+  const THREE = CORE;
+  const _meshMade = { tex: 0 };
+  const noopMesh = () => ({ noop: true });
+  const _regGeo = (g) => g;
+  const createTexMesh = eval("(function(data){" + body + "})");
+  const mesh = (vCount) => createTexMesh({
+    pos: new Float32Array(vCount * 3),
+    nrm: new Float32Array(vCount * 3),
+    uv: new Float32Array(vCount * 2),
+    idx: [0, 1, 2],
+  });
+  assert.ok(mesh(3).geo.index.array instanceof Uint16Array, "a decal fits in 16-bit indices");
+  assert.ok(mesh(65535).geo.index.array instanceof Uint16Array, "65535 verts is still Uint16");
+  assert.ok(mesh(65536).geo.index.array instanceof Uint32Array, "65536 verts needs Uint32");
+  assert.equal(mesh(3).geo.index.array[2], 2);
+});
+
 test("pruneGeoRegistry's cold walk does not allocate an iterator result per geometry", () => {
   const m = TLX.match(/function pruneGeoRegistry\(now\) \{/);
   assert.ok(m, "pruneGeoRegistry moved");

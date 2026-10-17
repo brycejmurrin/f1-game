@@ -19,6 +19,7 @@ Headless Chromium, TLX WebGL2 (`apex26.tlxForceGL=1`), Monaco, helmet cam so the
 | F6 | `js/render/shared/driving-line.js` `draw` | none | REFUTED | `_drawOpts` is one scratch refilled per frame. `build` allocates once per circuit. |
 | F7 | `js/render/shared/mirror-pass.js` `drawCars` / `mirrorLights` | low | CODE-TRACED, not patched | One `next` sample under `drawCarsLod` and samples on `mirrorLights` (interval 2048, 4 frames). Hot `for…of` on a dense array does not allocate in this V8; the hold path already reuses `_vlBuf` / `_vlOut`. Left as-is. |
 | F8 | scheduler (#2653) | — | not this patch | Owned mirror cadence (`instEvery`) already freezes prop re-cull. Lamp/sky/HUD jobs sit outside OWNED. |
+| GPUMEM-9 | `js/render/three/tlx.js` `createTexMesh` | build-time index buffer | CONFIRMED, patched | Was always `Uint32Array`. Now `Uint16Array` when `pos.length / 3 <= 65535`, `Uint32Array` otherwise. Same cut as GLX/WGX (`vCount > 65535`). Not a per-frame alloc. |
 
 ## Fixes
 
@@ -26,5 +27,6 @@ Behaviour-neutral: the range object, its `count`, and which WeakRefs survive are
 
 - `setRange0`: if `updateRanges` is already `[r]`, only `r.count` changes.
 - `pruneGeoRegistry` and the `memState` geometry census: indexed loops.
+- `createTexMesh`: Uint16 indices at or under 65535 vertices, Uint32 above.
 
 no player-facing change

@@ -4264,7 +4264,11 @@ const TLX = (function () {
           g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(data.pos), 3));
           g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(data.nrm), 3));
           g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(data.uv), 2));
-          g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
+          // three picks the GL index type from the array. A decal is well under
+          // 65535 verts, so Uint16 halves the index buffer; past that, Uint32.
+          const vCount = data.pos.length / 3;
+          const IndexArray = vCount > 65535 ? Uint32Array : Uint16Array;
+          g.setIndex(new THREE.BufferAttribute(new IndexArray(data.idx), 1));
           return { __tlx: true, geo: _regGeo(g, "tex"), tex: true, count: data.idx.length };
         },
         createChunkedMesh(data, cellSize) {
