@@ -5027,15 +5027,15 @@ const WGX = (function () {
           for (let i = 0; i < kN; i++) { const c = cs[ks[i]]; if (Frustum.aabbDist2(c.mn, c.mx, reach[0], reach[1], reach[2]) <= r2) ks[w++] = ks[i]; }
           kN = w;
         }
-        const sk = tb._shKey;
-        if (sk && InstCells.enabled() && tb._shKeyN === kN && tb._shadowPacked && tb.shadowInstBuf) {
+        const sk = batch._shKey;
+        if (sk && InstCells.enabled() && batch._shKeyN === kN && batch._shadowPacked && batch.shadowInstBuf) {
           let same = true;
           for (let i = 0; i < kN && same; i++) same = sk[i] === ks[i];
-          if (same) return tb._shadowN;
+          if (same) return batch._shadowN;
         }
       }
       const src = tb.srcMatrices;
-      const dst = shadow ? (_shadowPackFor(tb) || tb._instPacked) : tb._instPacked;
+      const dst = shadow ? (_shadowPackFor(batch) || batch._instPacked) : tb._instPacked;
       const sc = shadow ? null : tb.srcColors;   // depth pipelines ignore tint lanes
       let n = 0;
       for (let ci = 0; ci < kN; ci++) {
@@ -5054,17 +5054,17 @@ const WGX = (function () {
       if (shadow) {
         // Shadow pack: its own buffer, its own count; the camera-side cache,
         // count and buffer are untouched.
-        tb._shadowN = n;
-        if (n && tb.shadowInstBuf && dst === tb._shadowPacked) {
-          device.queue.writeBuffer(tb.shadowInstBuf, 0, dst, 0, n * 20);
+        batch._shadowN = n;
+        if (n && batch.shadowInstBuf && dst === batch._shadowPacked) {
+          device.queue.writeBuffer(batch.shadowInstBuf, 0, dst, 0, n * 20);
         }
         // Record the set shadowInstBuf now holds (GLX parity); any other writer of that buffer
         // (wgx-shadow castShadowInstanced's full-set pack) resets _shKeyN to -1.
-        if (dst === tb._shadowPacked && InstCells.enabled()) {
-          const sk = tb._shKey && tb._shKey.length >= cn ? tb._shKey : (tb._shKey = new Int32Array(cn));
+        if (dst === batch._shadowPacked && InstCells.enabled()) {
+          const sk = batch._shKey && batch._shKey.length >= cn ? batch._shKey : (batch._shKey = new Int32Array(cn));
           for (let i = 0; i < kN; i++) sk[i] = ks[i];
-          tb._shKeyN = kN;
-        } else tb._shKeyN = -1;
+          batch._shKeyN = kN;
+        } else batch._shKeyN = -1;
         return n;
       }
       tb.visible = n;
