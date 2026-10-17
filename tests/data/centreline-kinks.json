@@ -2,8 +2,6 @@
   "_doc": "Per-circuit count of centreline nodes whose chord-to-chord radius is below the road half-width (tools/lib/centreline-kinks.cjs, #2209). Lower-only: fix a circuit's control points, then `node tools/track/centreline-kinks.cjs --update`.",
   "counts": {
     "bahrain": 3,
-    "shanghai": 1,
-    "mexico": 3,
     "qatar": 1,
     "nurburgring": 1,
     "istanbul": 1,
