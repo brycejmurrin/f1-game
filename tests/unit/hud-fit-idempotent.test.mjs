@@ -50,7 +50,7 @@ function bootFlipHarness(o = {}) {
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet, RegExp, Date,
     parseFloat, parseInt, isFinite, Infinity,
-    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    Log: o.log || { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false, DEBUG: 4 },
     document: dom.document, innerWidth: W, innerHeight: H, devicePixelRatio: 1,
     M4: { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) },
     PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 },
@@ -438,7 +438,7 @@ function bootOrderHarness({ events = true } = {}) {
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet, RegExp, Date,
     parseFloat, parseInt, isFinite, Infinity,
-    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false, DEBUG: 4 },
     document: dom.document, devicePixelRatio: 1,
     M4: { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) },
     PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 },
@@ -604,4 +604,18 @@ test("publishing a changed top-control zoom requests one subsequent full fit", (
       assert.equal(styles.get("--hud-fit-stamp"), "1", "completed full fit permits the stamp");
     }
   }
+});
+
+test("fitHud tracer: off by default it logs nothing; on, it logs one line per CHANGE of the published fit", () => {
+  const lines = (on) => {
+    const out = [];
+    const h = bootFlipHarness({ log: { info() {}, warn() {}, error() {}, DEBUG: 4, enabled: () => on, debug: (ns, m) => out.push(m) } });
+    for (let i = 0; i < 5; i++) { h.paintAt(h.pub()); h.invalidate(); h.tick(); }
+    return out;
+  };
+  assert.deepEqual(lines(false), [], "flag off: not one record");
+  const on = lines(true);
+  assert.ok(on.length >= 1 && on.every((m) => m.startsWith("hudfit top=")), JSON.stringify(on));
+  assert.equal(new Set(on).size, on.length, "a repeated state is not logged twice");
+  assert.ok(on.length < 5, "a settled fit logs fewer lines than ticks: " + JSON.stringify(on));
 });

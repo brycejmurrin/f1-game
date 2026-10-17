@@ -445,7 +445,7 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.te
 // the zoom by the same factor, so the next measurement returns the same number.
 const FIT_AIR = 10;              // px of daylight required between two clusters
 const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
-let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
+let _fitTrace = "", _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
 let _fitPending = false;   // invalidateFit mid-tick: do not publish --hud-fit-stamp until the next fitHud
 // _fitStamped: a stamp is published and no clash has voided it since.
 // _fitClashRun: consecutive same-key ticks that re-opened the fit for a clash.
@@ -1836,6 +1836,14 @@ function fitHud() {
   mirrorClear(root);
   if (typeof HudLayout !== "undefined" && HudLayout.clearReadouts) HudLayout.clearReadouts();
   if (els.minimap) void els.minimap.offsetHeight;
+  // FIT TRACER, off unless `?log=ui:debug`: one line per CHANGE of the published fit, so a phone's
+  // flicker reads off the metrics overlay as a timeline instead of a guess.
+  if (Log.enabled("ui", Log.DEBUG)) {
+    const rc = (el) => { const r = el && !el.hidden ? el.getBoundingClientRect() : null; return r && r.width ? [r.left, r.top, r.width, r.height].map(Math.round).join(",") : "-"; };
+    const pv = (n) => root.style.getPropertyValue(n) || "-";
+    const line = `hudfit top=${pv("--hud-z-top")} dock=${pv("--hud-z-dock")} drw=${pv("--dock-r-w")} sec=${rc(els.hudSectors)} pause=${rc(els.pausebtn)} cam=${rc(els.btnCam)}`;
+    if (line !== _fitTrace) { _fitTrace = line; Log.debug("ui", line); }
+  }
 }
 
 // Gear, tachometer and speed — every frame (updateHud, above its 10 Hz gate).
