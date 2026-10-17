@@ -73,6 +73,9 @@ node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wr
 ./tools/mcp/apex-tools-mcp.sh smoke
 ```
 
+- When AGENTS.md retires a rule, grep `tools/` and `.claude/hooks/` for its constant in the same PR
+  (the ready-PR cap retired 2026-10-16 still ran as 3 in `ready-full-cap.mjs` and sessions obeyed it).
+
 ## Load on demand
 
 - Gate contracts, ratchets, reading a failure → [`references/guards.md`](references/guards.md)

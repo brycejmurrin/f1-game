@@ -56,6 +56,9 @@ ARM a PR only when ALL hold; any miss is WAIT (say which):
 - Tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR
   resolve swarms; batch small tooling/doc fixes into one PR.
 - Never cancel another session's CI runs; they re-run them.
+- Pages starvation: each merge replaces the PENDING Pages train (the live site
+  stayed ~45 min stale on 2026-10-17). After a merge, if one is pending and none
+  running, batch further merges until it starts; a RUNNING train is never cancelled.
 
 ## One sweep
 

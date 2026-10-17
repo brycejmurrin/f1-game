@@ -55,6 +55,18 @@ HANDOFF <PR> <to session>, <state>, branch <name> @ <sha7>
 STAND-DOWN <PR> <who is pushing>
 ```
 
+Rotation is routine: an owner hands off at ~350 k context, the orchestrator at
+300 k (owners reached 400-550 k, $15-25, before anyone rotated). The HANDOFF
+message body, so the successor starts cold with no questions:
+
+```
+HANDOFF <session> → <successor or orchestrator>, context <k>
+PRs: <#> head <sha7> CI <READ verdict: run id, jobs that ran, tests>  (one per line)
+Branches without a PR: <branch @ sha7 | none>
+Claims: <who-is-on-it text | none>   Grants in force: <quoted, UTC>
+Next step: <one exact command or action>
+```
+
 Liveness first: `get_session` on the target; `send_message` to a session that
 has gone inactive fails with `session_inactive` (a HANDOFF to the idle #2124
 owner bounced on 2026-10-15), and an orchestrator that is idle may never read

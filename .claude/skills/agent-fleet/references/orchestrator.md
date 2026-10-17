@@ -69,6 +69,17 @@ before every `create_session`:
    frames, docs, the commit recipe) so no round-two message is needed.
 6. The PUSH line (green-cycle push; the slot is retired).
 7. The `USER GRANTS:` quote and `Do not enable auto-merge or merge.`
+8. Every anticipated action AND path in `USER GRANTS:` (`js/game.js`, workflow
+   dispatch, `.claude/**`, a ratchets row), and the worker's NEXT item named
+   (issue #, PR): a grant the brief omits is refused as relayed and an unnamed
+   next item idles the lane (#2625 declined the game.js hook; #2709 refused
+   #1683 and a dispatch, 2026-10-17).
+9. The cost cap and "low reasoning effort" in the brief. Effort cannot be set
+   by `create_session`: read `effort_level` in `get_session` metadata and say
+   so if it is higher than asked.
+10. `get_session` on any session before assigning it a PR or message: a dead
+   one fails `not found` (#2717's owner), and a foreign Cursor one is reached
+   through its PR.
 
 ### Pre-launch quota check (#2380)
 
@@ -215,6 +226,15 @@ the acting session.
   relaunch with NEW evidence or a narrower OWNED, never the same prompt.
 - Keep one safety-net timer (`send_later` / `subscribe_timer`, ~50 min, later
   ~4 h) while workers run; drop it when every PR is merged or closed.
+- Each wake also lists every open PR with no live owner session (Bryce requires
+  one per PR); start an owner (role-pr-owner.md) or say why not. `pr-board`
+  does not print this yet: check `get_session` per owner.
+- One owner per red tip: before several sessions fix the same red, search open
+  PR titles/branches for the failing test name and name ONE owner in a message
+  (three sessions opened the same catalog-digest fix, #2716/#2717/#2695).
+- After a merge, if a Pages run is pending and none running, hold further
+  merges until one starts: each merge replaces the PENDING train (45 min stale
+  site, 2026-10-17). A RUNNING train is never cancelled.
 
 ## Answering an escalation
 

@@ -62,6 +62,8 @@ names before that), NOT an up-to-date branch, and every re-sync is a fresh PR ru
 reports a conflict, or when a required check is red on the tip and the fix
 is already there. A green PR merges as it stands. **Red AND conflicting:** fix the red on the branch first, then sync once, then ONE push (two pushes cancel the live run — AGENTS.md rule 4).
 Bare `sync-pr <branch>` (no flag) does the real merge and pushes nothing.
+Verify cost: clean merge and `npm run gen` rewrote nothing → `sync-pr <branch> --verify=none --push`; else
+`tooling-fast --changed` (the default full ladder cost 723 s vs 110 s); CI re-gates the head.
 
 A base merge can conflict on generated files (`ratchets.json` conflicts ended
 with #2295's per-branch deltas); `sync-pr` cures those and hands back the rest. It leaves you ON
@@ -98,6 +100,9 @@ by all at once. **This overrides "port the fix now and push":** a fix already pu
 live claim, or a live host session on it means STAND DOWN and say so. Three
 sessions fixed one bug on 2026-09-18 and the result was a revert
 (`docs/notes/SHARED-BRANCH-COORDINATION.md`).
+Also search open PR titles and branches for the failing test name before
+fixing: the first claimant fixes, everyone else comments and waits (three
+sessions opened one catalog-digest fix, #2716/#2717/#2695, 2026-10-17).
 
 ## 4. Never push to the deploy branch
 

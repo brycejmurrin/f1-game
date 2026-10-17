@@ -41,6 +41,9 @@ open review threads), then act in this order without asking:
 1. CONFLICTING → `node tools/ci/sync-pr.mjs <branch>` (delete a stale local
    `sync-pr-<branch>` first), resolve keeping both sides, run
    `node tools/ci/tooling-fast.mjs --changed --jobs=3`, push once.
+   Verify by diff size: a clean merge where gen rewrote nothing →
+   `sync-pr <branch> --verify=none --push` (CI re-gates the head); otherwise
+   `tooling-fast --changed`. The default full ladder took 723 s vs 110 s.
 2. Red job → agent `ci-red-triage`; fix within OWNED, `tooling-fast --changed`
    plus the failing test alone, push once.
    A red the base also has: port the fix if one exists, else one PR comment
@@ -49,6 +52,10 @@ open review threads), then act in this order without asking:
 4. Draft and green → `node tools/ci/ready-gate.mjs --pr <n>`; mark ready only
    when it exits 0 AND `ci-watch` shows `= ci passed` (ready-gate reads the
    structural guards; it has exited 0 while `CI` was red).
+   A draft or unlabelled run can say `passed` with 16 of 17 jobs skipped: put
+   the `run-ci` label on first, and cite in every READY the run id, the job ids
+   that RAN (not skipped) and the tests>0 line. A `workflow_dispatch` pass is
+   not a verdict on the PR head.
 
 Send `REPORT owner-<PR> <sha> <verdict>` at each push or red, `READY <PR> <sha>`
 when it goes ready, and `DONE <PR> <merge sha>` when it merges; then delete the
