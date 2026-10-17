@@ -1697,6 +1697,26 @@ test("calibration cannot move to a second already-connected pad when its activit
 });
 
 
+test('CHECK CONTROLS cancels keyboard and pad binding capture without changing mappings', () => {
+  for (const device of ['keys', 'pad']) {
+    const r = bootUi(true, {}, {}, null, { deferTimers: true });
+    const { Input, $, sb, fire, press } = r;
+    const pad = fakePad(sb, fire);
+    const beforeKeys = plain(Input.getKeyMap()), beforePad = plain(Input.getPadMap());
+    slotOf($('pm-' + device), 'boost', 1).onclick();
+    const preview = $('pm-pad-section').kids.find(n => n.id === 'pm-pad-preview');
+    preview.onclick();
+    assert.equal(preview.attrs['aria-expanded'], 'true');
+    press('KeyQ'); pad.press(0); Input.poll(); pad.release(0); Input.poll();
+    assert.deepEqual(plain(Input.getKeyMap()), beforeKeys);
+    assert.deepEqual(plain(Input.getPadMap()), beforePad);
+    preview.onclick();
+    slotOf($('pm-' + device), 'boost', 1).onclick();
+    if (device === 'keys') { press('KeyQ'); assert.equal(Input.getKeyMap().boost[1], 'KeyQ'); }
+    else { pad.press(1); Input.poll(); assert.equal(Input.getPadMap().boost[1], 1); }
+  }
+});
+
 function withProfileStore(sb) {
   const data = new Map();
   sb.GameStore = { store: { get: (k, d) => data.has(k) ? data.get(k) : d,

@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Thirty-two `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Thirty-three `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -252,7 +252,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Thirty-two tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Thirty-three tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -285,12 +285,15 @@ accept (tracks, cams, tods, shot presets, HUD devices/cams, job kinds, UI screen
 and viewports) in one read, sourced from the tools' own schemas so it cannot drift.
 30 → 31 on 2026-10-16 for `apex_profile_query` (`perf/query.mjs`: summarise or compare saved profile artifacts, tree kind). The profiler run itself is `apex_job_start` kind `profile` (`perf/profile.mjs`, a browser job behind the already-guarded job door).
 31 → 32 on 2026-10-16 for `apex_profile`, the same job as a direct browser-kind tool (`profile` joined the settings matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`); it returns a jobId and holds the browser lock until the job exits.
+32 → 33 on 2026-10-16 for `apex_locations`: authored turn and sector targets
+on all 52 circuits, plus curated named scenery with source-located fractions.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
 |---|---|---|---|
 | `apex_status` | built-in | tree | check-changes |
 | `apex_catalog` | built-in | tree | check-changes |
+| `apex_locations` | built-in | tree | survey-track |
 | `apex_doctor` | `check/doctor.mjs` | tree | check-changes |
 | `apex_pick_tests` | `ci/pick-tests.mjs` | tree | check-changes |
 | `apex_select_specs` | `ci/select-specs.mjs` | tree | check-changes |
@@ -349,6 +352,9 @@ Pins the wrap always applies (you cannot override them):
   multi-track runs default to async (`apex_job_start` kind `shot_survey`, returns
   `jobId`); `resume` skips existing PNGs; `gl` prefers `llvmpipe` when Mesa dri
   is present; never spawns N separate `shot.mjs` boots
+- `apex_locations` → read-only per-circuit targets from authored racing-lap
+  turn/sector fractions; a location ID feeds `apex_shot_survey.location`.
+  A target fraction is not proof that a landmark is framed in the raster.
 - `apex_track` → one session per server: `open` takes the browser lock until
   `close` (or the server exits); `op survey` is the same batch as
   `apex_shot_survey`; `cam`/`tod`/`frac` are enum- and range-checked,
@@ -446,6 +452,13 @@ Combine saved reports without launching a browser:
 
 Pass this object to `apex_shot_survey`. The CLI equivalent is `node tools/shot/shot-survey.mjs --reports artifacts/track-survey/monza/findings.json,artifacts/track-survey/spa/findings.json --out artifacts/track-survey/combined`.
 The output folder includes copied PNG/JPEG assets and can be shared as a ZIP. Reports may identify custom circuits; an explicit `actualTrack` or runtime `state.info.track` takes precedence over a bootstrap track ID. Captures now record their actual runtime track ID. Missing images fail the gallery build; recorded capture failures stay visible in the gallery.
+
+### three.js Inspector (TLX, opt-in)
+
+`?inspector=1` (or `__apex.inspector(true)`) loads the vendored three.js Inspector panel on the TLX renderer; it is off under the Playwright
+harness and on the deployed site, and nothing under `vendor/three-0.186.1/addons/inspector/` is fetched while it is off. `__apex.inspector()` reads
+`{on, supported, reason}`. Pin `apex26.gfxBackend=three` first, or a software-GL boot may answer `supported:false` (#2674). Reference:
+[DEBUG-HOOKS §inspector](DEBUG-HOOKS.md), notes in `docs/notes/THREE-INSPECTOR-2026-10-16.md`.
 
 ### Read-only UI inspector
 
