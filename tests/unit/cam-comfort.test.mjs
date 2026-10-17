@@ -21,9 +21,33 @@ function rawStore(initial) {
   return {
     raw(k) { return disk.has(k) ? disk.get(k) : null; },
     rawSet(k, v) { disk.set(k, v); return true; },
+    get(k, d) { return disk.has(k) ? disk.get(k) : d; },
+    set(k, v) { disk.set(k, v); return true; },
     _disk: disk,
   };
 }
+
+function loadCamTune() {
+  const disk = new Map();
+  const ctx = {
+    GameStore: {
+      store: {
+        rev: 0,
+        get(k, d) { return disk.has(k) ? disk.get(k) : d; },
+        set(k, v) { disk.set(k, v); this.rev++; return true; },
+      },
+    },
+    Teams: { LIST: [{ id: "mclaren" }, { id: "ferrari" }] },
+    M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) },
+    Log: { info() {}, debug() {}, enabled() { return false; } },
+  };
+  vm.runInNewContext(
+    fs.readFileSync(path.join(ROOT, "js/camera/offsets.js"), "utf8") + "\nthis.exported = CamTune;",
+    ctx);
+  return ctx.exported;
+}
+
+const plain = (value) => JSON.parse(JSON.stringify(value));
 
 test("detectTouch / detectXr read navigator capabilities", () => {
   const CC = load();
@@ -51,6 +75,23 @@ test("boot is a no-op on desktop without XR", () => {
   const s = rawStore();
   assert.equal(CC.boot(s, { maxTouchPoints: 0 }, {}), null);
   assert.equal(s.raw(CC.KEY), null);
+});
+
+test("reduced-motion boot preselects both renderer comfort hooks off", () => {
+  const CC = load();
+  const s = rawStore();
+  const reduced = { matchMedia: (query) => ({ matches: query === "(prefers-reduced-motion: reduce)" }) };
+  CC.boot(s, { maxTouchPoints: 0 }, reduced);
+  assert.equal(s.get("motionBlur"), 1, "notch 1 disables motion blur");
+  assert.equal(s.get("speedLines"), 1, "notch 1 disables speed lines");
+
+  s.set("motionBlur", 7);
+  s.set("speedLines", 4);
+  let applied = null;
+  const G = { gfx: { setComfortFx(opts) { applied = opts; } } };
+  assert.deepEqual({ ...CC.applyFx(G, s) }, { motionBlur: 7, speedLines: 4 });
+  assert.deepEqual({ ...applied }, { motionBlur: 7, speedLines: 4 },
+    "the persisted flags reach the optional renderer hook");
 });
 
 test("active follows the stored preference", () => {
@@ -123,4 +164,49 @@ test("active() is memoised on the store's rev / rawRev: no raw read per frame, e
   assert.equal(CC.active(plain), true);
   plain._disk.set("camComfortPref", "off");
   assert.equal(CC.active(plain), false);
+});
+
+test("camera overrides resolve track over car over the existing global baseline", () => {
+  const CamTune = loadCamTune();
+  assert.equal(CamTune.importPack({
+    v: 2,
+    global: { dist: 1 },
+    comfort: { bob: 0.8 },
+    cars: {
+      mclaren: { modes: { chase: { dist: 2 } }, comfort: { bob: 0.5 } },
+    },
+    tracks: {
+      monza: { modes: { chase: { dist: 3 } }, comfort: { bob: 0.2 } },
+    },
+  }).ok, true);
+
+  CamTune.setContext("monza", "mclaren");
+  assert.equal(CamTune.get("chase", "dist"), 3);
+  assert.equal(CamTune.comfortGet("bob"), 0.2);
+
+  CamTune.setContext("spa", "mclaren");
+  assert.equal(CamTune.get("chase", "dist"), 2);
+  assert.equal(CamTune.comfortGet("bob"), 0.5);
+
+  CamTune.setContext("spa", "ferrari");
+  assert.equal(CamTune.get("chase", "dist"), 1);
+  assert.equal(CamTune.comfortGet("bob"), 0.8);
+});
+
+test("JSON and APXC1 camera packs round-trip track and car overrides", () => {
+  const source = loadCamTune();
+  source.importPack({
+    v: 2,
+    cars: { mclaren: { modes: { cockpit: { height: 0.25 } }, comfort: { rollLean: 0.4 } } },
+    tracks: { spa: { modes: { chase: { fov: 5 } }, comfort: { speedFov: 0.3 } } },
+  });
+  const pack = plain(source.exportPack());
+  assert.deepEqual(pack.cars.mclaren.modes.cockpit, { height: 0.25 });
+  assert.deepEqual(pack.tracks.spa.comfort, { speedFov: 0.3 });
+
+  const restored = loadCamTune();
+  const decoded = restored.decodeShare(source.encodeShare(pack));
+  assert.equal(decoded.ok, true);
+  assert.equal(restored.importPack(decoded.pack).ok, true);
+  assert.deepEqual(plain(restored.exportPack()), pack);
 });
