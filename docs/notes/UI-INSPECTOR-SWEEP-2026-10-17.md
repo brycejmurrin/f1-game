@@ -52,9 +52,37 @@ they need a rerun on a quiet box.
 |----|--------|----------|------|---------|
 | F4 | datastandings | all, including 1280x800 | constructor `.dh-name` 0–26px wide ("Me…", "F.", "N") | **CONFIRMED-LIVE**, fixed: `css/data.css` `.dh-row-cons` name floor 6.5em + `.dh-cons-main` `min-width: auto`, so the H2H bars wrap; spec `ui-redesign.spec.js` "data hub constructor names stay readable in phone landscape" |
 | F5 | datastandings / dataresults | ios-iphone-landscape (852x393) | driver `.dh-name` ellipsis ("Max Verstappen") | to judge: 844x390 touch shot shows the driver names whole |
-| F6 | vsfriend | all three | `#vs-close` 3px past `div.sheet-foot` left/right | low: CLOSE sits in head chrome and reads whole in the 844x390 shot |
+| F6 | vsfriend | all three | `#vs-close` 3px past `div.sheet-foot` left/right | **CONFIRMED-LIVE** (round 3): the skewX(-6deg) corners are shaved by the foot's `overflow:hidden` once the entrance animation ends; fixed in #2639 |
 | F7 | trackdetail | all three | legend 2px past `#track-detail-canvas-wrap` | low: 2px |
 | F8 | lightingtuner / cameratuner / flybyeditor | all three | `tapSoft` 14–27 | dev tools; not player-facing |
+
+## Round 3: the improved inspector (#2628) — `inspect --touch --boot 932x430 --safe 0,59,21,59 --viewports 932x430,844x390 --summary`
+
+All 57 non-Home screens. Every flag was re-checked live before any fix.
+
+| id | screen | flag | verdict |
+|----|--------|------|---------|
+| F9 | career, garageteam, resultsseason, trackdetail @932x430 | every control `not-hit-testable` (`<html>`) | not-a-bug, **tool bug**: settle watched geometry only, so a fade was read as settled. Fixed in #2640 (settle waits for finite CSS animations); all four now `clean` |
+| F10 | teampicker, customize | screen never opened (exit 1) | not-a-bug, **tool bug**: the catalog route clicked the garage card after a fixed 400 ms, before it rendered. Fixed in #2640 |
+| F11 | teampicker @844x390 | team tiles `blocked` by the neighbour's `.tm-sub` | **CONFIRMED-LIVE**: wrapped tile text spilled over the next row (7 of 12); `#sel-teams` auto rows held 52px. Fixed in #2641 (`grid-auto-rows: max-content`) |
+| F12 | customize @844x390 | NAME/CODE `blocked` by the foot | not-a-bug: fields scrolled under the foot's edge, reachable by scrolling. Inspector refinement filed below (T11) |
+| F13 | Data Hub (every tab) | "Developer tools" `<summary>` 27px tall (44px touch floor) | CONFIRMED; rule in `css/menu-destinations.css:64` (Home session's file), handed to Bryce |
+| F14 | settingsappearance | ADVANCED `<summary>` 28px tall | fixed upstream by #2632; clean on the tip `086e55bfc` |
+| F15 | 9 screens | exit 75 at load 0.1 | **tool bug**: the occupancy check read a waiting shell that mentioned `playwright test` as a live suite. Fixed in #2638 (merged) |
+| — | settingsdriving | condition-cues checkbox 13–14px | not-a-bug: label row is the target. Inspector now counts the label (#2628) |
+
+**T11 (open):** a control partly under a sibling overlay at a scroller's edge reads `blocked`; when scrolling brings it clear, it should be "reachable by scroll", not a defect.
+
+## Outcome
+
+| PR | change | state |
+|----|--------|-------|
+| #2627 | Data Hub constructor names (F4) | merged |
+| #2628 | inspector `--touch/--boot/--safe/--summary`, settle-retry, label targets, exit 75 (closes #2624) | merged |
+| #2638 | occupancy: a shell mentioning `playwright test` is not a suite (F15) | merged |
+| #2639 | VS Friend CLOSE skew corners (F6) | open |
+| #2640 | inspector settle waits for CSS animations; catalog garage-card race (F9, F10) | open |
+| #2641 | team picker rows (F11) | open |
 
 ## Sources
 - Playwright emulation (hasTouch, isMobile): https://playwright.dev/docs/emulation
