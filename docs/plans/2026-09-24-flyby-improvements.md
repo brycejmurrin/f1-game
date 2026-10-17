@@ -40,6 +40,12 @@ rendered. Fleet sweep, 52 circuits x 400 samples, before -> after:
 - **Phase 1.3** `FlybySeq.vary(list, seed)`: a different sequence per load (role draw, bearing jitter, landmark swap, reversed moves); the grid close is untouched. Only when the player has no saved shot list.
 - Tests in `tests/unit/flyby-shots.test.mjs` (slot == `gridSlot`, roles, `vary` validity + fleet audit on six seeds, Mont-Tremblant canopy); verified with `frame-report --fleet --diff` (corner shots neutral: turn-mid −0.5, turn-late +0.7) and `flyby.mjs` renders of nine circuits.
 
+## Done on N4 flyby runtime (2026-10-17)
+- **Hero corner car (#1571).** The player's menu model follows `TrackLine.at` at `DrivingLine.speedAt`, reaches the filmed apex at the shot midpoint, and returns to its grid box before the finale. This bypasses the player-relative rival cull and is a broadcast-only menu pose; it never reaches race physics.
+- **Lights grid cameras (#1572).** Lights 1–3 select the three grid-film beats from `lightsLit`; light 4 releases the owned debug camera to the player's normal camera.
+- **Runtime polish (#1575).** Shot boundaries expose a 150 ms dip (300 ms under reduced motion), wide shots expose sector-reveal progress, establishing shots can opt into metre-scale sway, and radius-authored editor controls show their live metre equivalent.
+- Unit contracts live in `tests/unit/flyby-shots.test.mjs` and `tests/unit/flyby-panel.test.mjs`.
+
 ## Next steps (as of 2026-09-24 04:20 UTC)
 
 ### Shipped / in flight

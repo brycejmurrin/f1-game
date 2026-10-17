@@ -562,7 +562,8 @@ export function measuredCheap(file, db = timings()) {
  *  cuts where the fallback says (7.5 s/test since 2026-09-29, the llvmpipe
  *  p75). `db` pins the timing history (tests pass an empty one). */
 export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflowShards = MAX_OVERFLOW_SHARDS,
-  overBudgetShards = MAX_OVER_BUDGET_SHARDS, spillShards = MAX_SPILL_SHARDS, staleFirst = false } = {}) {
+  overBudgetShards = MAX_OVER_BUDGET_SHARDS, spillShards = MAX_SPILL_SHARDS, staleFirst = false,
+  includeTwinned = false } = {}) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
   const allowanceSec = cap.budgetSec - cap.perFailureSec + m.secPerTest;
@@ -592,7 +593,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
     // holds the pairs and the drift check that keeps the substitution honest —
     // it is on the fast gate, so a twin that stops covering fails there rather
     // than leaving the spec quietly unchecked in both places.
-    if (isTwinned(file)) {
+    if (!includeTwinned && isTwinned(file)) {
       coveredByVmTwin.push({ file, tests, twin: twinOf(file) });
       continue;
     }

@@ -256,12 +256,15 @@
                       "spineHeight", "tcam", "coverVents", "wingCarbon", "numFont",
                       "cover", "rearWing", "stripe", "accent", "nose", "pod", "wing",
                       "halo", "fin", "finArt", "noseStripe", "logo", "logo2", "logo3",
-                      "spineTint", "sideTint"];
+                      "spineTint", "sideTint",
+                      "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent",
+                      "podFinish", "finFinish", "mirrorFinish", "helmetStyle", "coverFinish", "wingFinish", "haloFinish"];
   // logo*/spineTint/sideTint are RGB triples — without HEX_FIELDS they stay
   // strings and markPalette crashes on .slice (same class as wrap+partial).
   const HEX_FIELDS = new Set(["cover", "rearWing", "stripe", "accent", "nose", "pod",
                               "wing", "halo", "fin", "finArt", "noseStripe",
-                              "logo", "logo2", "logo3", "spineTint", "sideTint"]);
+                              "logo", "logo2", "logo3", "spineTint", "sideTint",
+                              "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent"]);
   const hexRgb = (h) => { const v = parseInt(String(h).replace(/^#/, ""), 16);
     return Number.isFinite(v) ? [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255] : null; };
   const LIV_OVER = (() => {

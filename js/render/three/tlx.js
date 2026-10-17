@@ -117,7 +117,13 @@ const TLX = (function () {
   function setRange0(attr, count) {
     const r = attr.__tlxRange || (attr.__tlxRange = { start: 0, count: 0 });
     r.count = count;
-    const ur = attr.updateRanges; ur.length = 0; ur.push(r);
+    const ur = attr.updateRanges;
+    // Same frame, same attribute (blob / decal / coalesce: one call per instance):
+    // length = 0 drops V8's element store and the push allocates a new one.
+    // three's clearUpdateRanges still zeros the list after the upload, so the
+    // next frame's first write pushes once; the rest only move r.count.
+    if (ur.length === 1 && ur[0] === r) return;
+    ur.length = 0; ur.push(r);
   }
 
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
@@ -3455,7 +3461,13 @@ const TLX = (function () {
         if (now - _geoPruneAt < 2000) return;
         _geoPruneAt = now;
         let w = 0;
-        for (const ref of _geoReg) if (ref && ref.deref()) _geoReg[w++] = ref;
+        // Indexed: `for…of` builds a result object per live geometry, and this
+        // walk runs on the 2 s clock so the loop stays cold and V8 does not
+        // elide those objects (~170 KB at 4000 refs).
+        for (let i = 0; i < _geoReg.length; i++) {
+          const ref = _geoReg[i];
+          if (ref && ref.deref()) _geoReg[w++] = ref;
+        }
         _geoReg.length = w;
       }
       // STATIC-GEOMETRY MIRROR RELEASE
@@ -4252,7 +4264,11 @@ const TLX = (function () {
           g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(data.pos), 3));
           g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(data.nrm), 3));
           g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(data.uv), 2));
-          g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
+          // three picks the GL index type from the array. A decal is well under
+          // 65535 verts, so Uint16 halves the index buffer; past that, Uint32.
+          const vCount = data.pos.length / 3;
+          const IndexArray = vCount > 65535 ? Uint32Array : Uint16Array;
+          g.setIndex(new THREE.BufferAttribute(new IndexArray(data.idx), 1));
           return { __tlx: true, geo: _regGeo(g, "tex"), tex: true, count: data.idx.length };
         },
         createChunkedMesh(data, cellSize) {
@@ -5985,7 +6001,8 @@ const TLX = (function () {
             try {
               const kinds = {};
               let live = 0;
-              for (const ref of _geoReg) {
+              for (let gi = 0; gi < _geoReg.length; gi++) {
+                const ref = _geoReg[gi];
                 const g = ref && ref.deref();
                 if (!g) continue;
                 live++;
