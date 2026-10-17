@@ -9,7 +9,8 @@
 // Wraps WebGL2RenderingContext.prototype create*/delete* before any page script runs,
 // then drives the picker (RACE -> tap circuit, as mem-census does) and prints, per visit,
 // live = creates - deletes for each object kind. Growth of `live` between the last two
-// cycles is the leak; flat is clean. Counts, never a frame rate.
+// cycles is the leak; flat is clean. Counts, never a frame rate. The census pins
+// apex26.tlxForceGL=1 (three's WebGL2 fallback, the iPhone path) and reports threeWebGL2Backend.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,7 +61,7 @@ async function main() {
     const ctx = await browser.newContext({ viewport: { width: 960, height: 540 } });
     await ctx.addInitScript((be) => {
       window.__TEST_MODE = true;
-      try { localStorage.setItem("apex26.gfxBackend", be); localStorage.setItem("apex26.tyreWear", JSON.stringify("off")); } catch (_) {}
+      try { localStorage.setItem("apex26.gfxBackend", be); localStorage.setItem("apex26.tlxForceGL", "1"); localStorage.setItem("apex26.tyreWear", JSON.stringify("off")); } catch (_) {}
     }, o.backend);
     await ctx.addInitScript(censusInitScript);
     await ctx.addInitScript(glCountInit, KINDS);
@@ -76,7 +77,7 @@ async function main() {
       return page.evaluate(() => {
         const o = {};
         for (const k in window.__glCount) o[k] = { created: window.__glCount[k].c, deleted: window.__glCount[k].d, live: window.__glCount[k].c - window.__glCount[k].d };
-        return { gl: o, backend: (window.renderer && window.renderer.backend && window.renderer.backend.constructor.name) || null };
+        return { gl: o, webgl2Backend: !!(window.renderer && window.renderer.backend && window.renderer.backend.isWebGLBackend === true) };
       });
     };
     const emit = (row) => { rows.push(row); if (!o.quiet) console.log(JSON.stringify(row)); };
@@ -100,7 +101,7 @@ async function main() {
       }
     }
     const grew = Object.values(growth).some((g) => Object.values(g).some((v) => v > 0));
-    const summary = { backend: o.backend, renderBackend: rows[0] && rows[0].backend, cycles: o.cycles, growthLastCycle: growth, pageErrors: errors.length, verdict: grew ? "grows" : "flat" };
+    const summary = { backend: o.backend, threeWebGL2Backend: rows.slice(1).every((r) => r.webgl2Backend), cycles: o.cycles, growthLastCycle: growth, pageErrors: errors.length, verdict: grew ? "grows" : "flat" };
     console.log("= gl-object-census " + JSON.stringify(summary));
     if (o.json) { mkdirSync(dirname(o.json), { recursive: true }); writeFileSync(o.json, JSON.stringify({ summary, rows, errors }, null, 2)); }
   } finally {

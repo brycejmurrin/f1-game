@@ -284,6 +284,66 @@ export const PATCHES = [
       },
     ],
   },
+  {
+    id: 15,
+    title: "WebGL fallback frees GL programs, shaders and VAOs (three #34597)",
+    file: "build/three.webgpu.js",
+    why: "Pipelines._releaseProgram only called the stats-only info.destroyProgram and WebGLBackend " +
+      "never deleted a program, shader or VAO, so every track switch left ~50 VAOs, ~4 programs and " +
+      "~8 shaders alive (tools/gfx/gl-object-census.mjs: deleted = 0 across 9 visits). Backport of " +
+      "#34601 (backend.destroyProgram / destroyPipeline delete the shader and program) and a reduced " +
+      "#34610: the VAO cache stays keyed by attribute ids, each render object holds one counted " +
+      "reference, and the VAO is deleted when the last holder is released (render object dispose or " +
+      "geometry dispose). Compute VAOs are pinned, never released.",
+    upstream: "fixed on dev for r187 (#34601 program/pipeline, #34610 VAO, issue #34597); npm latest is still 0.186.1",
+    edits: [
+      {
+        find: "\tdestroyProgram( /*program*/ ) { }\n",
+        replace: "\tdestroyProgram( /*program*/ ) { }\n\n\t/**\n\t * Destroys the given pipeline.\n\t *\n\t * @abstract\n\t * @param {Pipeline} pipeline - The pipeline.\n\t */\n\tdestroyPipeline( /*pipeline*/ ) { }\n\n\t/**\n\t * Releases the vertex state of the given render object.\n\t *\n\t * @abstract\n\t * @param {RenderObject} renderObject - The render object.\n\t */\n\tdeleteVertexState( /*renderObject*/ ) { }\n",
+        count: 1,
+      },
+      {
+        find: "\t_releasePipeline( pipeline ) {\n\n\t\tthis.caches.delete( pipeline.cacheKey );\n",
+        replace: "\t_releasePipeline( pipeline ) {\n\n\t\tthis.backend.destroyPipeline( pipeline );\n\n\t\tthis.caches.delete( pipeline.cacheKey );\n",
+        count: 1,
+      },
+      {
+        find: "\t\tthis.programs[ stage ].delete( code );\n\n\t\tthis.info.destroyProgram( program );\n",
+        replace: "\t\tthis.programs[ stage ].delete( code );\n\n\t\tthis.backend.destroyProgram( program );\n\t\tthis.info.destroyProgram( program );\n",
+        count: 1,
+      },
+      {
+        find: "\t\trenderObject.onDispose = () => {\n\n\t\t\tthis.pipelines.delete( renderObject );\n",
+        replace: "\t\trenderObject.onDispose = () => {\n\n\t\t\tthis.pipelines.backend.deleteVertexState( renderObject );\n\t\t\tthis.pipelines.delete( renderObject );\n",
+        count: 1,
+      },
+      {
+        find: "\t\t\t// clear geometry cache attributes\n\n\t\t\tthis.attributes = null;\n",
+        replace: "\t\t\tthis.renderer.backend.deleteVertexState( this );\n\n\t\t\t// clear geometry cache attributes\n\n\t\t\tthis.attributes = null;\n",
+        count: 1,
+      },
+      {
+        find: "\t\tthis.vaoCache = {};\n",
+        replace: "\t\tthis.vaoCache = {};\n\t\tthis.vaoUsed = {};\n",
+        count: 1,
+      },
+      {
+        find: "\t\tif ( vaoGPU === undefined ) {\n\n\t\t\tthis.vaoCache[ vaoKey ] = this._createVao( attributes );\n",
+        replace: "\t\tif ( vaoGPU === undefined ) {\n\n\t\t\tthis.vaoCache[ vaoKey ] = this._createVao( attributes );\n\t\t\tthis.vaoUsed[ vaoKey ] = ( this.vaoUsed[ vaoKey ] || 0 ) + 1; // compute VAOs are pinned\n",
+        count: 1,
+      },
+      {
+        find: "\t\t\tvaoGPU = this.vaoCache[ vaoKey ];\n\n\t\t\tif ( vaoGPU === undefined ) {\n\n\t\t\t\tvaoGPU = this._createVao( attributes );\n\n\t\t\t\tthis.vaoCache[ vaoKey ] = vaoGPU;\n\t\t\t\tattributesData.vaoGPU = vaoGPU;\n\n\t\t\t}\n",
+        replace: "\t\t\tvaoGPU = this.vaoCache[ vaoKey ];\n\n\t\t\tif ( vaoGPU === undefined ) {\n\n\t\t\t\tvaoGPU = this._createVao( attributes );\n\n\t\t\t\tthis.vaoCache[ vaoKey ] = vaoGPU;\n\n\t\t\t}\n\n\t\t\tattributesData.vaoGPU = vaoGPU;\n\t\t\tattributesData.vaoKey = vaoKey;\n\t\t\tthis.vaoUsed[ vaoKey ] = ( this.vaoUsed[ vaoKey ] || 0 ) + 1;\n",
+        count: 1,
+      },
+      {
+        find: "\tdestroyProgram( program ) {\n\n\t\tthis.delete( program );\n\n\t}\n\n\t/**\n\t * Creates a render pipeline for the given render object.\n",
+        replace: "\tdestroyProgram( program ) {\n\n\t\tconst data = this.get( program );\n\n\t\tif ( data.shaderGPU !== undefined ) this.gl.deleteShader( data.shaderGPU );\n\n\t\tthis.delete( program );\n\n\t}\n\n\t/**\n\t * Destroys the given pipeline.\n\t *\n\t * @param {Pipeline} pipeline - The pipeline.\n\t */\n\tdestroyPipeline( pipeline ) {\n\n\t\tconst data = this.get( pipeline );\n\n\t\tif ( data.programGPU !== undefined ) this.gl.deleteProgram( data.programGPU );\n\n\t\tthis.delete( pipeline );\n\n\t}\n\n\t/**\n\t * Releases the VAO reference held by the given render object; the VAO is\n\t * deleted once its last holder let go.\n\t *\n\t * @param {RenderObject} renderObject - The render object.\n\t */\n\tdeleteVertexState( renderObject ) {\n\n\t\tconst attributes = renderObject.attributes;\n\n\t\tif ( attributes === null || this.has( attributes ) === false ) return;\n\n\t\tconst attributesData = this.get( attributes );\n\t\tconst vaoKey = attributesData.vaoKey;\n\n\t\tif ( vaoKey === undefined ) return;\n\n\t\tattributesData.vaoKey = undefined;\n\t\tattributesData.vaoGPU = undefined;\n\n\t\tif ( -- this.vaoUsed[ vaoKey ] > 0 ) return;\n\n\t\tconst vaoGPU = this.vaoCache[ vaoKey ];\n\n\t\tdelete this.vaoUsed[ vaoKey ];\n\t\tdelete this.vaoCache[ vaoKey ];\n\n\t\tif ( this.state.currentVAO === vaoGPU ) this.state.resetVertexState();\n\n\t\tthis.gl.deleteVertexArray( vaoGPU );\n\n\t}\n\n\t/**\n\t * Creates a render pipeline for the given render object.\n",
+        count: 1,
+      },
+    ],
+  },
 ];
 
 /** Retired patches, kept so the canary can assert the UPSTREAM form is present. */
