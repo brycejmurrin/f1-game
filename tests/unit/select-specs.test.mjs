@@ -1715,9 +1715,17 @@ test("CSS-only changes retain bounded relevant player layout coverage", () => {
   const hud = cssSpecs(["css/hud.css"]);
   assert.deepEqual(hud, ["tests/specs/css-player-smoke.spec.js"]);
   assert.ok(!hud.includes("tests/specs/menu-baseline.spec.js"));
-  assert.equal(menu.length, 2);
+  // Home/menu layout CSS also runs the two specs that reach mid-season doors
+  // (#mb-standings): ship CI 39017766676 went red on them after #2633.
+  for (const name of ["menus", "menu-destinations", "overlays", "experience"]) {
+    const home = cssSpecs([`css/${name}.css`]);
+    assert.ok(home.includes("tests/specs/season.spec.js"), `${name} moves Home doors season.spec clicks`);
+    assert.ok(home.includes("tests/specs/ui-audit.spec.js"), `${name} moves Home doors ui-audit clicks`);
+  }
+  assert.ok(!hud.includes("tests/specs/season.spec.js"));
+  assert.equal(menu.length, 4);
   assert.equal(hud.length, 1);
-  for (const specs of [menu, hud, cssSpecs(["css/tokens.css"])]) {
+  for (const specs of [menu, hud, cssSpecs(["css/tokens.css"]), cssSpecs(["css/menu-destinations.css"])]) {
     const plan = fit(specs, DEFAULT_BUDGET_MIN);
     assert.deepEqual(plan.skipped, [], "bounded CSS coverage fits existing shard pools");
     assert.deepEqual(plan.overBudgetSpecs, []);
