@@ -152,6 +152,11 @@ export function readFragments(dir = FRAG_DIR) {
     .map((name) => ({ name, data: JSON.parse(fs.readFileSync(path.join(dir, name), "utf8")) }));
 }
 
+/** Baked data, not code: a size ceiling on it measures the data, not anyone's
+ *  discipline, and every re-bake would trip it (#1659). applyFragments drops
+ *  these rows, so neither the check nor --update ever sees them. */
+export const EXCLUDED_FILES = new Set(["js/lighting/presets.js"]);
+
 /** base + the deltas of every fragment. PURE. A delta for an entry that
  *  ratchets.json no longer carries (its file was deleted and --update dropped
  *  it) has nothing to move and is ignored. */
@@ -166,6 +171,7 @@ export function applyFragments(base, frags) {
     for (const [file, metrics] of Object.entries(data.files || {})) for (const [m, d] of Object.entries(metrics)) bump(out.files?.[file], m, d);
     for (const [m, d] of Object.entries(data.tree || {})) bump(out.tree, m, d);
   }
+  for (const f of EXCLUDED_FILES) delete out.files?.[f];
   return out;
 }
 
