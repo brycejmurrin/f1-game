@@ -4,6 +4,7 @@ const GarageSurfaceInspection = (function () {
   const VIEWS = Object.freeze({
     c1: "side", c2: "side", stripe: "top", noseStripe: "front", accent: "side", nose: "front", pod: "side", lower: "side", upper: "side",
     cover: "hero", spineTint: "top", saddleTint: "hero", sideTint: "side", sunTint: "hero", bandTint2: "top", plateTint: "side",
+    patternTint: "hero", patternSecond: "hero",
     wing: "wingFront", rearWing: "wingRear", fin: "rear", finArt: "rear", halo: "front", logo: "hero", logo2: "hero", logo3: "hero",
   });
   const DURATION_MS = 5000;

@@ -504,7 +504,9 @@ const Liveries = (function () {
     "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover",
     "spineTint", "sideTint", "sunTint", "bandTint2", "plateTint",
     "saddleTint", "coverBind", "finHandoff",
-    "rearWing", "wingCarbon", "bodySplit", "lower", "upper"];
+    "rearWing", "wingCarbon", "bodySplit", "lower", "upper",
+    "patternTint", "patternSecond", "patternPlacement", "patternSide", "patternWidth", "patternRepeat",
+    "patternOffset", "patternTaper", "patternOpacity", "coverFinish", "wingFinish", "haloFinish"];
 
   // One-shot paint migrate: fold ridge→BAND, airbox→COVER; drop lettering overrides.
   // Idempotent. Mutates and returns `liv` (or a shallow copy when null-safe).

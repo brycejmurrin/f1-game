@@ -106,7 +106,7 @@ export function loadParts({ shade = false } = {}) {
   // carDecalData) — but that is the boundary: anything that RASTERISES a livery
   // texture still needs a browser and stays in tests/specs/.
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js",
-                   "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js", "js/car/helmets.js",
+                   "js/car/livery-design.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js", "js/car/helmets.js",
                    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js",
                    ...(shade ? ["js/car/car-shade.js"] : []),
                    "js/car/car-body-geom.js", "js/car/car3d.js", "js/car/car-mesh.js"])
@@ -116,7 +116,7 @@ export function loadParts({ shade = false } = {}) {
   // so ctx.Parts is undefined however the file looks. Evaluate the bare name in
   // the same context instead (the pattern in tools/car/cockpit-pale-sweep.mjs).
   const grab = (n) => vm.runInContext(n, ctx);
-  return { Car3D: grab("Car3D"), Parts: grab("Parts"), Teams: grab("Teams"),
+  return { CarMaterials: grab("CarMaterials"), Car3D: grab("Car3D"), Parts: grab("Parts"), Teams: grab("Teams"),
            CarMesh: grab("CarMesh"), LiveryTex: grab("LiveryTex"), CarShade: shade ? grab("CarShade") : null };
 }
 
