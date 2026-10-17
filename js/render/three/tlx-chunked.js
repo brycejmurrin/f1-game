@@ -392,6 +392,53 @@
           buckets.set(mk, { idx, mn: m.mn, mx: m.mx, gx: m.gx, gz: m.gz });
         });
       }
+      // DUST MERGE (needs mergeK > 1, so tlxChunkMerge=1 is its off-switch too). Centroid binning leaves cells
+      // holding a handful of triangles (a big ground triangle whose centroid lands in a street cell): monaco drew
+      // 61 of 96 visible chunk draws at <= 33 triangles, each its own RenderObject (and again in the mirror and
+      // sun passes). Dust draws of one 2x2-draw-cell block that fit together (triangle cap, extent cap) share one
+      // chunk with the union AABB: same triangles, same lamp cells (those live on `lampCells`), fewer draws.
+      if (mergeK > 1) {
+        const DUST = 48 * 3, GROUP = 384 * 3, MAXEXT = cell * mergeK * 7;
+        const groupOf = new Map(), blocks = new Map();
+        const wide = [];   // dust whose own box already spans > MAXEXT (ground skirts): visible nearly everywhere, so locality buys nothing
+        buckets.forEach((bk, key) => {
+          if (bk.idx.length > DUST) return;
+          let list, g;
+          if (bk.mx[0] - bk.mn[0] > MAXEXT || bk.mx[2] - bk.mn[2] > MAXEXT) list = wide;
+          else {
+            const bkey = ChunkBins.key(Math.floor(bk.gx / 8), Math.floor(bk.gz / 8));
+            list = blocks.get(bkey);
+            if (!list) blocks.set(bkey, list = []);
+          }
+          g = list.length ? list[list.length - 1] : null;
+          if (g && list !== wide) {
+            const w0 = Math.max(g.mx[0], bk.mx[0]) - Math.min(g.mn[0], bk.mn[0]), w2 = Math.max(g.mx[2], bk.mx[2]) - Math.min(g.mn[2], bk.mn[2]);
+            if (w0 > MAXEXT || w2 > MAXEXT) g = null;
+          }
+          if (!g || g.n + bk.idx.length > GROUP) {
+            list.push(g = { parts: [], n: 0, mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity], gx: bk.gx, gz: bk.gz, done: false });
+          }
+          g.parts.push(bk.idx); g.n += bk.idx.length;
+          for (let a = 0; a < 3; a++) { if (bk.mn[a] < g.mn[a]) g.mn[a] = bk.mn[a]; if (bk.mx[a] > g.mx[a]) g.mx[a] = bk.mx[a]; }
+          groupOf.set(key, g);
+        });
+        if (groupOf.size) {
+          const ordered = new Map();
+          buckets.forEach((bk, key) => {
+            const g = groupOf.get(key);
+            if (!g) { ordered.set(key, bk); return; }
+            if (g.done) return;   // emitted where its first member sat: draw order stays near emission order
+            g.done = true;
+            if (g.parts.length === 1) { ordered.set(key, bk); return; }
+            const idx = new IndexArray(g.n);
+            let o = 0;
+            for (const part of g.parts) for (let i = 0; i < part.length; i++) idx[o++] = part[i];
+            ordered.set(key, { idx, mn: g.mn, mx: g.mx, gx: g.gx, gz: g.gz });
+          });
+          buckets.clear();
+          ordered.forEach((bk, key) => buckets.set(key, bk));
+        }
+      }
       const chunks = [];
       let count = 0;
       buckets.forEach((bk, key) => {
