@@ -1,5 +1,8 @@
 // @doc Agent debugger session: pause generations, breakpoints, scopes and nonblocking execution.
 import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
 import { recordException, traceMethods } from "./js-debugger-trace.mjs";
 
@@ -92,6 +95,42 @@ export class DebugSession {
       catch { st.pageUnresponsive = true; st.pageNote = `Page did not answer Runtime.evaluate within ${probeMs} ms: a long loop is running. Wait, or debugger_control {action:"cancel"} (terminateExecution); chunk long loops.`; }
     }
     return st;
+  }
+  async incident() {
+    const cdp = this.connected();
+    if (this.pause) throw Error("Resume before capturing an incident; a paused page may not render a screenshot");
+    if (this.target?.type !== "page") throw Error("Incident screenshots require an attached page target");
+    const currentLocalUrl = async () => {
+      const response = await cdp.send("Runtime.evaluate", { expression: "location.href", returnByValue: true, silent: true }, 5000);
+      const href = response.result?.value;
+      if (response.exceptionDetails || typeof href !== "string") throw Error("Could not verify the current page URL");
+      if (href !== "about:blank") localUrl(href.replace(/^blob:/, "").split(/[?#]/)[0]);
+      return href.split(/[?#]/)[0];
+    };
+    const pageUrl = await currentLocalUrl();
+    const observedAt = new Date().toISOString();
+    const exception = this.exceptionLog?.entries.at(-1) || null;
+    const scene = await cdp.send("Runtime.evaluate", { expression:
+      "(()=>{const a=globalThis.__apex;if(!a)return {available:false};return {available:true,info:a.info?.(),camera:a.cameraState?.(),renderScale:a.renderScale?.()}})()",
+      returnByValue: true, silent: true }, 5000);
+    if (scene.exceptionDetails) throw Error(`Apex state capture failed: ${clip(scene.exceptionDetails.text)}`);
+    if (JSON.stringify(scene.result?.value ?? {}).length > 32768) throw Error("Apex state capture exceeded 32 KiB");
+    const data = await cdp.send("Page.captureScreenshot", { format: "jpeg", quality: 75,
+      fromSurface: true, captureBeyondViewport: false }, 15000);
+    if (await currentLocalUrl() !== pageUrl) throw Error("Page navigated during incident capture; retry on the local page");
+    const image = Buffer.from(data.data || "", "base64");
+    if (image.length < 4 || image.length > 6 * 1024 * 1024 || image[0] !== 0xff || image[1] !== 0xd8)
+      throw Error("Incident screenshot was not a valid bounded JPEG (6 MiB limit)");
+    const dir = path.join(fileURLToPath(new URL("../../", import.meta.url)), "scratch", "debug-incidents");
+    mkdirSync(dir, { recursive: true });
+    const id = randomUUID(), imagePath = `${dir}/${id}.jpg`, reportPath = `${dir}/${id}.json`;
+    const report = { version: 1, observedAt, target: { ...this.target, url: pageUrl }, exception,
+      scene: scene.result?.value ?? { available: false }, screenshot: imagePath };
+    writeFileSync(imagePath, image);
+    writeFileSync(reportPath, JSON.stringify(report, null, 2) + "\n");
+    return { ok: true, observedAt, exception, scene: report.scene,
+      screenshot: imagePath, report: reportPath, bytes: image.length,
+      note: "Screenshot and state were collected after the exception; this is not the exact failing frame." };
   }
   async listTargets(endpoint, kind = "page") {
     this.lastEndpoint = endpoint;

@@ -136,6 +136,45 @@ test("buildTrackShotSurveyPlan: weather is validated and reaches every shot (nul
   assert.throws(() => buildTrackShotSurveyPlan({ preset: "quick", weather: "snow" }), /weather invalid/);
 });
 
+test('named scenarios resolve racing-space locations and preserve camera controls', () => {
+ const plan=buildTrackShotSurveyPlan({track:'spa',location:'eau rouge',angles:['overview','entry'],weathers:['dry','rain'],camera:{fov:45}});
+ assert.equal(plan.shots.length,4);assert.equal(plan.shots[0].frac,.14);assert.equal(plan.shots[0].fov,45);
+ assert.equal(plan.shots[1].lookFrac,.14);assert.equal(plan.shots[1].lat,-6);
+ assert.match(plan.shots[0].verification,/unverified/);
+ assert.throws(()=>buildTrackShotSurveyPlan({track:'monza',location:'spa/eau-rouge'}),/Unknown/);
+ assert.throws(()=>buildTrackShotSurveyPlan({track:'spa',location:'eau rouge',angles:['__proto__']}),/Unknown angle/);
+ assert.throws(()=>buildTrackShotSurveyPlan({location:'spa/eau-rouge',camera:{fov:Infinity}}),/fov/);
+ assert.throws(()=>buildTrackShotSurveyPlan({preset:'custom',shots:[{cam:'orbit',lat:3}]}),/require eye/);
+});
+test('resume requires matching receipt identity when a capture context is supplied',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'survey-identity-'));
+ try {
+  const shot={name:'one'};const file=path.join(dir,'one.jpg');fs.writeFileSync(file,'fixture');
+  const context={extension:'jpg',identities:{one:'current'}};
+  assert.equal(filterResumeShots(dir,[shot],true,context).pending.length,1);
+  fs.writeFileSync(file+'.capture.json',JSON.stringify({identity:'old'}));
+  assert.equal(filterResumeShots(dir,[shot],true,context).pending.length,1);
+  fs.writeFileSync(file+'.capture.json',JSON.stringify({identity:'current'}));
+  assert.equal(filterResumeShots(dir,[shot],true,context).resumed.length,1);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('capture identities are key-order independent but change with source or settings', async()=>{
+ const {captureIdentity}=await import('../../tools/lib/survey-scenarios.mjs');
+ assert.equal(captureIdentity({seed:1,shot:{az:40,el:30}}),captureIdentity({shot:{el:30,az:40},seed:1}));
+ assert.notEqual(captureIdentity({revision:'a',profile:'preview'}),captureIdentity({revision:'a',profile:'comparison'}));
+ assert.notEqual(captureIdentity({revision:'a'}),captureIdentity({revision:'b'}));
+});
+
+test('survey GPU auto-selection does not mistake installed Mesa for a usable local device',async()=>{
+ const {surveyGlEnvironment}=await import('../../tools/lib/survey-scenarios.mjs');
+ const librariesOnly=p=>p.endsWith('swrast_dri.so');
+ assert.equal(surveyGlEnvironment({},'',librariesOnly).APEX_GPU,'swiftshader');
+ assert.equal(surveyGlEnvironment({GITHUB_ACTIONS:'true'},'',librariesOnly).APEX_GPU,'llvmpipe');
+ assert.equal(surveyGlEnvironment({APEX_GPU:'hardware'},'swiftshader',librariesOnly).APEX_GPU,'swiftshader');
+ assert.equal(surveyGlEnvironment({APEX_GPU:'hardware'},'',librariesOnly).APEX_GPU,'hardware');
+});
+
 // #1982: identity and resume evidence.
 test("two fracs that round to one name are rejected at plan time, not overwritten into one image", () => {
   assert.throws(() => buildTrackShotSurveyPlan({ preset: "custom", fracs: [0.101, 0.104], cam: "orbit", label: "repro" }),

@@ -167,6 +167,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // GL-aware capture / remote-group worker defaults (llvmpipe vs SwiftShader).
   "tests/unit/browser-workers.test.mjs",
   "tests/unit/build-client-drop.test.mjs",
+  "tests/unit/build-gallery.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
   "tests/unit/cam-motion.test.mjs",
@@ -212,6 +213,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // gpu-census.yml's real-GPU Verdict as functions (tools/gfx/census-verdict.mjs)
   // plus its plan gate (nightly skip, push request) executed on a scratch repo; < 1 s.
   "tests/unit/census-verdict.test.mjs",
+  "tests/unit/centreline-kinks.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/change-kind.test.mjs",
   "tests/unit/changed-files.test.mjs",
@@ -549,6 +551,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-inputs.test.mjs",
   "tests/unit/hud-layout.test.mjs",
   "tests/unit/hud-metrics-layout.test.mjs",
+  "tests/unit/hud-minimap-pitmark.test.mjs",
   // Behaviour pins that must survive the band allocator (PR #1375 audit; todo = known red on ship).
   "tests/unit/hud-pins.test.mjs",
   // Portrait phone bottom cluster: TYRES stays in the column (landscape-only
@@ -590,6 +593,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lamp-shadow-pick.test.mjs",
   // Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.
   "tests/unit/lap-format-rollover.test.mjs",
+  "tests/unit/layers-nav-memo.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
   "tests/unit/lazy-bundles-prefetch.test.mjs",
   "tests/unit/lazy-track-build.test.mjs",
@@ -623,6 +627,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
   // livery-contrast (9.7 s) and cover-legibility (7.4 s) stay CI-only.
   "tests/unit/livery-decal-surfaces.test.mjs",
+  // Pure artwork and paint-editor VM regression; selected for all source edits.
+  "tests/unit/livery-design.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   "tests/unit/load-order.test.mjs",
   // The LOADING CARD's geometry: the three numbers the flyby editor authors,

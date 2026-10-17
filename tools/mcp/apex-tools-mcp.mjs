@@ -448,6 +448,12 @@ const CATALOG = [
       type: "object",
       additionalProperties: false,
       properties: {
+        location: { type: "string", description: "Named racing-space location, e.g. spa/eau-rouge; source-located framing starts unverified." },
+        angles: { type: "array", minItems: 1, maxItems: 6, items: { type: "string", enum: ["overview","reverse","overhead","entry","apex","exit"] } },
+        weathers: { type: "array", minItems: 1, maxItems: 5, items: { type: "string", enum: ["dry","wet","rain","overcast","fog"] } },
+        profile: { type: "string", enum: ["preview","comparison"] },
+        seed: { type: "integer", minimum: 0 },
+        camera: { type: "object", additionalProperties: false, properties: { fov: {type:"number",minimum:10,maximum:120}, h:{type:"number"}, dist:{type:"number"}, az:{type:"number"}, el:{type:"number"} } },
         track: { type: "string", description: "Circuit id (or use tracks[])." },
         tracks: {
           type: "array",
@@ -482,6 +488,10 @@ const CATALOG = [
               dist: { type: "number" },
               h: { type: "number" },
               side: { type: "number" },
+              fov: { type: "number", minimum: 10, maximum: 120 },
+              lat: { type: "number", minimum: -500, maximum: 500 },
+              lookFrac: { type: "number", minimum: 0, maximum: 1 },
+              target: { type: "array", minItems: 3, maxItems: 3, items:{type:"number"} },
               hud: { type: "boolean" },
             },
           },
@@ -499,8 +509,8 @@ const CATALOG = [
         sheetName: { type: "string", pattern: "^[A-Za-z0-9._-]{1,80}$" },
         panel: { type: "boolean", description: "Build contact sheet PNG (default true)." },
         index: { type: "boolean", description: "Write index.html gallery (default true)." },
-        resume: { type: "boolean", description: "Skip cells whose PNG already exists under out/." },
-        async: { type: "boolean", description: "true=jobId via shot_survey; false=sync; default=job when estimate≥60s or multi-track." },
+        resume: { type: "boolean", description: "Resume only matching source/settings receipts; uses the async runner." },
+        async: { type: "boolean", description: "true=jobId via shot_survey; legacy false=sync; named/profile/seed/resume surveys always use jobs for reproducible capture." },
         gl: { type: "string", enum: ["llvmpipe", "swiftshader"], description: "Software GL stack. llvmpipe needs /dev/dri (CI only); use swiftshader in a cloud container." },
         closeSession: { type: "boolean", description: "Free browser lock when done (default true; sync path)." },
         keepSession: { type: "boolean", description: "When true, leave session open (implies closeSession false)." },
@@ -548,8 +558,9 @@ const CATALOG = [
       properties: {
         op: { type: "string", enum: ["open", "status", "team", "livery", "design", "frame", "shot", "diff", "sheet", "reload", "close"] },
         team: { type: "string", description: "Team id (open: the team to boot with; team: switch to it)." },
+        backend: { type: "string", enum: ["webgl2", "three"], description: "Renderer for op open (default webgl2)." },
         seat: { type: "number", description: "Driver seat 0/1 with op team." },
-        livery: { type: "string", description: "Catalog livery id." },
+        livery: { type: "string", description: "Catalog/custom livery id, or shipped for the team’s shipped selection." },
         design: { type: "object", description: "Liveries.FIELDS values (+ part.<cat>, driver, light.<knob>)." },
         base: { type: "string", description: "Catalog livery the design paints over." },
         frame: { description: "Station / alias / view name, or {view|station|cam, az, el, dist, target, lamp, zoom, pan, eye, look, clamp, crop}. az / el are RADIANS (el is clamped to the orbit's pitch range), dist is metres." },
@@ -802,6 +813,10 @@ const CATALOG = [
         az: { type: "number" },
         el: { type: "number", description: "Degrees. orbit/cinematic: elevation; eye: pitch (+ up; omit to look ahead)." },
         dist: { type: "number" },
+        fov: { type: "number", minimum: 10, maximum: 120 },
+        lat: { type: "number", minimum: -500, maximum: 500 },
+        lookFrac: { type: "number", minimum: 0, maximum: 1 },
+        lookTarget: { type: "array", minItems: 3, maxItems: 3, items:{type:"number"}, description:"World-space camera target; separate from local/deploy target." },
         h: { type: "number", description: "Metres above the road at frac. eye: eye height (default 2.5); orbit: aim-point height (default 1.5)." },
         side: { type: "number", enum: [-1, 1] },
         tod: { type: "string", enum: ["day", "dusk", "dawn", "night"] },
@@ -2164,6 +2179,10 @@ function garageArgv(args) {
     "--team", String(args.team || "mclaren"),
     "--out", assertSafeOut(args.out || "artifacts/garage-session")];
   if (args.fast) argv.push("--fast");
+  if (args.backend != null) {
+    if (!["webgl2", "three"].includes(args.backend)) throw new Error("backend must be webgl2 or three");
+    argv.push("--backend", args.backend);
+  }
   if (args.livery) argv.push("--livery", String(args.livery));
   return argv;
 }

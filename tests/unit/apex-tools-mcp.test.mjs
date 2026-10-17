@@ -494,6 +494,11 @@ test("apex_garage: open spawns garage-angles --serve; ops refuse until open; cal
   assert.ok(body.argv.some((a) => a.endsWith("garage-angles.mjs")), body.argv);
   assert.ok(body.argv.includes("--serve") && body.argv.includes("ferrari"), body.argv);
   assert.ok(!body.argv.includes("--url"));
+  const three = callCli("apex_garage", { op: "open", team: "ferrari", backend: "three", livery: "shipped", dryRun: true });
+  assert.equal(three.status, 0, three.stderr);
+  const threeArgv = JSON.parse(three.stdout).argv;
+  assert.equal(threeArgv[threeArgv.indexOf("--backend") + 1], "three");
+  assert.equal(threeArgv[threeArgv.indexOf("--livery") + 1], "shipped");
   const shot = callCli("apex_garage", { op: "shot", frame: "spineTop", design: { spineLogo: "wrap" }, name: "a", dryRun: true });
   assert.equal(shot.status, 0, shot.stderr);
   const cmd = JSON.parse(shot.stdout).command;
@@ -1584,7 +1589,7 @@ test("apex_track shot carries el and h: eye pitch / eye height, orbit aim height
   assert.equal(body(callCli("apex_track", { op: "shot", h: 10 })).error, "track_not_open", "a real shot still needs a session");
   // The page half: h reaches eyeAt / orbit, an explicit el re-aims eye through view({eye,yaw,pitch}).
   const ts = fs.readFileSync(path.join(ROOT, "tools/shot/track-session.mjs"), "utf8");
-  assert.match(ts, /a\.eyeAt\(o\.frac, 0, o\.h == null \? 2\.5 : o\.h\)/);
+  assert.match(ts, /a\.eyeAt\(o\.frac, o\.lat \|\| 0, o\.h == null \? 2\.5 : o\.h, o\.lookFrac\)/);
   assert.match(ts, /a\.view\(\{ eye: r\.eye, yaw, pitch: o\.pitch \}\)/);
   assert.match(ts, /a\.orbit\(o\.frac, o\.az, o\.el, o\.dist, o\.h == null \? 1\.5 : o\.h, \{ clear: o\.clear \}\)/);
   assert.match(ts, /clear: !op\.through/, "survey shots step round blockers like shot.mjs unless op.through");

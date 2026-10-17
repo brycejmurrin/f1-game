@@ -394,7 +394,7 @@ test("bump bounciness is taken from a pre-step speed, the impulse from the live 
   // relative velocity because that is momentum — it has to see the state it is
   // actually correcting.
   const src = readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8");
-  assert.match(src, /for \(const c of ranked\) if \(!ownsPose\(c\)\) c\._preColSpd = c\._nOk \? c\._nSpd : c\.speed;/,
+  assert.match(src, /for \(let i = 0; i < ranked\.length; i\+\+\) \{ const c = ranked\[i\]; if \(!ownsPose\(c\)\) c\._preColSpd = c\._nOk \? c\._nSpd : c\.speed; \}/,
     "local contact bodies need the snapshot, and a net car's reference is its predicted speed");
   assert.match(src, /const e = AiDrive\.bumpRestitution\(relV0 > 0 \? relV0 : relV\);/,
     "the coefficient must read the pre-step closing speed");
