@@ -79,6 +79,14 @@ test("loading circuits one after another keeps one world in memory and does not 
       await waitFrames(page, 15);
       await settle(page, SETTLE_MS);
       const c = await censusAfterGc(page, cdp);
+      // Diagnosis (docs/notes/TRACK-SWITCH-METAL-2026-10-17.md): is growth a leak or timing?
+      // Re-read after more GC rounds and settle; a leak persists, a late-GC artefact shrinks.
+      const reads = [c.heapMB];
+      for (let k = 0; k < 3; k++) { await settle(page, 1500); reads.push((await censusAfterGc(page, cdp)).heapMB); }
+      c.heapMin = Math.min(...reads);
+      c.reads = reads;
+      c.path = await page.evaluate(() => { try { const e = window.__apex.diag({ download: false }).env; return JSON.stringify({ backend: e.backend, state: e.backendState }).slice(0, 400); } catch (_) { return null; } });
+      console.log(`[mem] visit ${visit} ${id} heap reads ${reads.join(" ")} geom ${c.three && c.three.geometries} tex ${c.three && c.three.textures} ro ${c.three && c.three.renderObjects} path ${c.path}`);
       expect(c.aliveTracks, `visit ${visit} to ${id}: built tracks still reachable after GC`).toEqual([id]);
       expect(c.three && c.three.renderObjects, `visit ${visit} to ${id}: the world must have drawn for this reading to mean anything`)
         .toBeGreaterThanOrEqual(MIN_RENDER_OBJECTS);
