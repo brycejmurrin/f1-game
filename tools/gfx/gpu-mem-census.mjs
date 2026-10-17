@@ -22,7 +22,9 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
-exitIfHelp(argv, `usage: node tools/gfx/gpu-mem-census.mjs [track=monaco] [--warm 60] [--real-link] [--mobile] [--json PATH]
+exitIfHelp(argv, `usage: node tools/gfx/gpu-mem-census.mjs [track=monaco] [--warm 60] [--real-link] [--mobile] [--visits a,b,...] [--json PATH]
+  --visits then switches to each listed circuit in turn (the race path) and prints the net bytes and GL create/delete counts after each,
+  which is the oracle for a GL-object leak across track switches (three #34597, issue #2651).
   --mobile forces the phone tier (apex26.forceMobileTier=1: mirror "lite" rung etc.).
   GPU-resident bytes by format on TLX's WebGL2 path, from the allocation calls (exact counts, not a driver number).
   Link calls are stubbed unless --real-link, so the scene reaches steady state quickly under SwiftShader.`);
@@ -34,9 +36,10 @@ function flag(name, dflt) {
   }
   return dflt;
 }
-const VALUED = new Set(["--warm", "--json"]);
+const VALUED = new Set(["--warm", "--json", "--visits"]);
 const track = argv.filter((a, i) => !a.startsWith("--") && !VALUED.has(argv[i - 1]))[0] || "monaco";
 const WARM = Math.max(0, +flag("--warm", 60) || 60);
+const VISITS = String(flag("--visits", "") || "").split(",").map((x) => x.trim()).filter(Boolean);
 const REAL_LINK = argv.includes("--real-link");
 const MOBILE = argv.includes("--mobile");
 const JSON_OUT = flag("--json", null);
@@ -101,6 +104,11 @@ function installWrap() {
   wrap("bindBuffer", function (t, o) { bufBound.set(t, o); });
   wrap("bufferData", function (t, d) { const o = bufBound.get(t); if (!o) return; st.buf.set(o, typeof d === "number" ? d : (d && d.byteLength) | 0); });
   wrap("deleteBuffer", function (o) { st.buf.delete(o); });
+  st.life = {};
+  for (const [c, d] of [["createTexture", "deleteTexture"], ["createBuffer", "deleteBuffer"], ["createVertexArray", "deleteVertexArray"], ["createProgram", "deleteProgram"], ["createShader", "deleteShader"], ["createFramebuffer", "deleteFramebuffer"], ["createRenderbuffer", "deleteRenderbuffer"]]) {
+    const k = c.slice(6); st.life[k] = { created: 0, deleted: 0 };
+    wrap(c, function () { st.life[k].created++; }); wrap(d, function () { st.life[k].deleted++; });
+  }
   P.__gm = st;
   return true;
 }
@@ -127,7 +135,7 @@ async function main() {
       const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
       for (let i = 0; i < warm; i++) { A.setInput({ throttle: true, steer: 0.35 * Math.sin(i / 25) }); await raf(); }
     }, WARM);
-    const out = await page.evaluate(async () => {
+    const snap = async () => page.evaluate(async () => {
       const raf = () => new Promise((r) => requestAnimationFrame(r));
       for (let i = 0; i < 5; i++) await raf();
       const st = WebGL2RenderingContext.prototype.__gm;
@@ -139,13 +147,27 @@ async function main() {
       cat["buffers"] = { n: bn, b: bb, big: 0 };
       const big = [...st.tex.values()].sort((a, b) => b.b - a.b).slice(0, 8).map((e) => `${e.fmt} ${e.w}x${e.h}${e.d > 1 ? "x" + e.d : ""} ${mb(e.b)}MB`);
       return { cat: Object.entries(cat).map(([k, v]) => ({ k, n: v.n, mb: mb(v.b), bigMB: mb(v.big) })).sort((a, b) => b.mb - a.mb), big,
-        texMB: mb([...st.tex.values()].reduce((s, e) => s + e.b, 0)), rbMB: mb([...st.rb.values()].reduce((s, e) => s + e.b, 0)), bufMB: mb(bb), tex: st.tex.size };
+        life: JSON.parse(JSON.stringify(st.life)), texMB: mb([...st.tex.values()].reduce((s, e) => s + e.b, 0)), rbMB: mb([...st.rb.values()].reduce((s, e) => s + e.b, 0)), bufMB: mb(bb), tex: st.tex.size };
     });
+    const out = await snap();
+    const visits = [{ track, texMB: out.texMB, rbMB: out.rbMB, bufMB: out.bufMB, life: out.life }];
+    for (const t of VISITS) {
+      await page.evaluate((id) => { window.__apex.race(id); }, t);
+      await page.waitForFunction((id) => window.__apex.info().track === id, t, { timeout: WAIT_MS, polling: 100 });
+      await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 55, 0); });
+      await page.evaluate(async (warm) => { const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r)); for (let i = 0; i < warm; i++) { A.setInput({ throttle: true }); await raf(); } }, WARM);
+      const o = await snap();
+      visits.push({ track: t, texMB: o.texMB, rbMB: o.rbMB, bufMB: o.bufMB, life: o.life });
+    }
     console.log(`gpu-mem ${track} ${MOBILE ? "mobile" : "desktop"}: textures ${out.texMB} MB (${out.tex}), renderbuffers ${out.rbMB} MB, buffers ${out.bufMB} MB`);
     for (const r of out.cat.slice(0, 14)) console.log(r.k.padEnd(34) + String(r.n).padStart(5) + String(r.mb).padStart(10) + " MB  biggest " + r.bigMB);
     console.log("largest textures:", out.big.join(" | "));
+    if (VISITS.length) {
+      console.log("\nvisit            net MB (tex+rb+buf)   created/deleted: Texture  Buffer  VertexArray  Program  Shader");
+      for (const v of visits) { const l = v.life, f = (k) => `${l[k].created}/${l[k].deleted}`; console.log(v.track.padEnd(16) + String(+(v.texMB + v.rbMB + v.bufMB).toFixed(1)).padStart(12) + "          " + [f("Texture"), f("Buffer"), f("VertexArray"), f("Program"), f("Shader")].map((x) => x.padStart(10)).join("")); }
+    }
     console.log("= gpu-mem " + JSON.stringify({ track, mobile: MOBILE, texMB: out.texMB, rbMB: out.rbMB, bufMB: out.bufMB, errors: errors.length }));
-    if (JSON_OUT) { mkdirSync(dirname(JSON_OUT), { recursive: true }); writeFileSync(JSON_OUT, JSON.stringify(out, null, 2)); }
+    if (JSON_OUT) { mkdirSync(dirname(JSON_OUT), { recursive: true }); writeFileSync(JSON_OUT, JSON.stringify({ ...out, visits }, null, 2)); }
   } finally {
     await browser.close().catch(() => {});
     await srv.close?.();

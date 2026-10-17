@@ -1,6 +1,6 @@
 # GPU memory census and memory research, 2026-10-17
 
-Tool: `node tools/gfx/gpu-mem-census.mjs [track] [--mobile]` (this note's evidence). Companion to the pass census (draws and triangles per pass, PR #2699) and
+Tool: `node tools/gfx/gpu-mem-census.mjs [track] [--mobile] [--visits a,b,...]` (this note's evidence). Companion to the pass census (draws and triangles per pass, PR #2699) and
 `docs/notes/PERF-RESEARCH-2026-10-17.md` §9c (what an iPhone allows). Counts only: no GPU or phone number.
 
 ## What the tool counts
@@ -48,6 +48,28 @@ Desktop adds a 1024x1280 and a 1024x1024 `RGBA8` (6.7 and 5.3 MB), 256x256x17 ar
 | WebKit refuses canvas allocations over 16,777,216 pixels per canvas, and over a total canvas-memory ceiling (384–576 MB in 2019 reports) | https://pqina.nl/blog/canvas-area-exceeds-the-maximum-limit/ and https://bugs.webkit.org/show_bug.cgi?id=195325 | 2D-canvas facing, years old. Our largest canvas at phone size is orders below it. Noted so nobody chases it |
 | MDN WebGL best practices (page dated 2026-10-07): prefer `texStorage` (some drivers allocate a full mip chain with `texImage`), `invalidateFramebuffer` on tile GPUs, depth+stencil round up to 4 bytes, mipmaps cost ~30 %, `alpha:false` can be costly, size a per-pixel VRAM budget | https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices | Covered or not ours: `invalidateFramebuffer` is in `PERF-RESEARCH` §2 item 2; TLX requests `alpha:false` and `stencil:false`, but three's WebGL backend hardcodes `alpha: !0` (comments in `js/render/three/tlx.js`). Whether three allocates through `texStorage` was not checked here. The per-pixel VRAM budget is a method we could adopt for a render-scale ceiling, not a change |
 | Apple A15 and later offer lossy texture compression through Metal (50 % off uncompressed textures); not exposed to WebGL or WebGPU | https://www.ludicon.com/castano/blog/2026/01/choosing-texture-formats-for-webgpu-applications/ | Not reachable from the web; nothing to do |
+
+## Across track switches (`--visits monza,monaco,monza`, phone tier, deploy tip, links stubbed, one run)
+
+| visit | textures MB | buffers MB | GL created / deleted: texture, buffer, VAO, program, shader |
+|---|---|---|---|
+| monaco (boot) | 24.2 | 31.7 | 59/12, 1237/35, 141/0, 24/0, 47/0 |
+| monza | 28.9 | 35.5 | 69/23, 1883/591, 225/0, 30/0, 57/0 |
+| monaco again | 24.2 | 41.5 | 84/33, 2488/1310, 292/0, 32/0, 61/0 |
+| monza again | 27.0 | 45.1 | 89/46, 3096/1870, 374/0, 35/0, 66/0 |
+
+- **The #2651 defect is visible as exact counts on the deploy tip: 374 vertex arrays, 35 programs and 66 shaders created over four visits, none deleted.** (Buffers and
+  textures are deleted; the fix branch for #2651 is not in this tree, so this is the baseline to re-run against it: the three zero columns should start to fill.)
+- **Textures return to baseline on a revisit (24.2 MB, then 24.2 MB); GL buffers do not: monaco 31.7 → 41.5 MB (+9.7), monza 35.5 → 45.1 (+9.6).** That is the same
+  size as the 12.75 MB CPU-side step #2693 measured for monza's first revisit, seen on the GPU side. Two visits per circuit cannot say whether it plateaus; run
+  `--visits` with five or more before calling it bounded.
+- Read as counts of what the game asked for, not driver memory (see above).
+
+## Check only a Mac can make
+
+Compositor backing-store growth (the EmulatorJS report above) shows in Safari Web Inspector → Timelines → Memory as the "Page" category, not in anything the
+page can read. The phone recorder (#2700) cannot see it. For one soak, connect the iPhone to a Mac, record the Memory timeline for ten minutes of racing,
+and note whether "Page" climbs while JavaScript stays flat.
 
 ## Not run
 
