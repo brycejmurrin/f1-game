@@ -28,14 +28,22 @@ findings in §Tool gaps are proposals, not edits.
 | T8 | **Output size.** One screen at four sizes prints MBs of JSON. | `artifacts/sweep/*.json`. | `--summary`: one line per issue (screen, viewport, kind, selector, provisional). |
 | T9 | **Chromium is not iOS Safari.** WebKit isn't installed here, and Safari's toolbars change landscape `innerHeight`. | `/opt/pw-browsers` has Chromium only. | Keep a real-device (or BrowserStack) pass for final phone sign-off. |
 
-## Findings table (in progress)
+| T10 | **A label's tap area is not counted.** A checkbox inside a `<label>` is measured alone, but tapping anywhere on the label toggles it. | F2 below. | Measure the activation area: the control's box joined with its wrapping or `for=` label. |
 
-| id | screen | viewport | kind | verdict |
-|----|--------|----------|------|---------|
-| F1 | hud | 390x844 | Brake intercepted by `#btn-throttle` | to verify (touch + screenshot) |
-| F2 | settingsdriving | all | CONDITION-AWARE BRAKING CUES target 13 × 44 | to verify |
-| F3 | settingsfiles | 932x430 | SAVE GARAGE FILE intercepted by `#pmsettings-inner > div:nth-of-type(3)` | to verify (first-record, see T3) |
-| — | select / garage / career | 932x430 | `blocked by html` | not-a-bug candidate (T3); confirm at 932x430 as a second viewport |
+## Findings table (round 1)
+
+Re-checked with a touch context booted at the target size (`hasTouch`/`isMobile`, `pointer: coarse` true), waiting for
+finite animations to finish; one screenshot per cell in `artifacts/sweep/shots/`.
+
+| id | screen | viewport | flag (desktop inspect) | touch re-check | verdict |
+|----|--------|----------|------------------------|----------------|---------|
+| F1 | hud | 390x844 | Brake intercepted by `#btn-throttle` | every pedal/button intercepted by `#rotate-device` | not-a-bug: portrait shows the rotate-device prompt by design |
+| F2 | settingsdriving | 932x430, 844x390 | CONDITION-AWARE BRAKING CUES checkbox 13 × 44 | 14.2 × 56.7 | not-a-bug: `#pm-condition-cues` sits inside `label.player-tool-row` (`js/ui/condition-cue-controls.js:7`), so the whole row is the target (T10) |
+| F3 | settingsfiles | 932x430 | SAVE GARAGE FILE intercepted | clean at 932x430 and 844x390 | not-a-bug: unsettled first record (T3) |
+| — | select / garage / career | 932x430 | `blocked by html` ×38 | not re-flagged | not-a-bug (T3) |
+
+Round 2: `layout-audit.mjs` (touch, injected insets) over every non-Home screen at ios-iphone-landscape-844,
+ios-iphone-landscape and ios-iphone-landscape-safari.
 
 ## Sources
 - Playwright emulation (hasTouch, isMobile): https://playwright.dev/docs/emulation
