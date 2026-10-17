@@ -474,7 +474,7 @@
       for (const pl of pools.values()) {
         for (let i = 0; i < pl.pool.length; i++) {
           const m = pl.pool[i];
-          if (m.geometry !== geo && m.__lastGeo !== geo) continue;   // an already-parked slot's RenderObject still holds __lastGeo (#2693)
+          if (m.geometry !== geo && !(m.geometry === parkedGeo && m.__lastGeo === geo)) continue;   // a PARKED slot's RenderObject still holds __lastGeo (#2693); a re-used slot is left alone
           m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null;
           try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
         }
