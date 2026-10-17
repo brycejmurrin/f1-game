@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { readFileSync } from "node:fs";
+import { readFileSync, unlinkSync } from "node:fs";
 import { Cdp, localUrl } from "../../tools/mcp/js-debugger-cdp.mjs";
 import { DebugSession } from "../../tools/mcp/js-debugger-session.mjs";
 import { callTool, handleRpc, TOOLS } from "../../tools/mcp/js-debugger-mcp.mjs";
@@ -36,12 +36,43 @@ test("loopback validation refuses remote/rebinding/credentials and wrong protoco
   for (const u of ["http://127.0.0.1:9222", "http://localhost:9222", "http://[::1]:9222"]) assert.equal(localUrl(u).protocol, "http:");
 });
 test("tools expose actual debugger operations; malformed arguments fail before attachment", async () => {
-  assert.equal(TOOLS.length, 18);
+  assert.equal(TOOLS.length, 19);
   const s = new DebugSession();
   for (const [name, args] of [["debugger_breakpoint", { url: "x", line: 0 }], ["debugger_control", { action: "unknown" }],
     ["debugger_source", { scriptId: "s1", count: 201 }], ["debugger_state", { surprise: true }], ["debugger_evaluate", { pauseToken: "x", expression: "x", allowSideEffects: "true" }]]) {
     const r = await callTool(s, name, args); assert.equal(r.isError, true); assert.doesNotMatch(r.content[0].text, /Attach a target/);
   }
+});
+test("incident bundles the latest exception, local page state and bounded screenshot", async () => {
+  const { s, c } = await attached();
+  await s.exceptionLogControl({ action: "start" });
+  c.emit("Debugger.paused", { reason: "exception", data: { description: "boom", uncaught: true }, callFrames: [frame] });
+  c.reply = async (method, params) => method === "Runtime.evaluate"
+    ? { result: { value: params.expression === "location.href" ? "about:blank" : { available: true, info: { track: "monza" } } } }
+    : method === "Page.captureScreenshot" ? { data: Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64") } : {};
+  const result = await callTool(s, "debugger_incident", {});
+  assert.equal(result.isError, false);
+  assert.equal(result.structuredContent.exception.message, "boom");
+  assert.equal(result.structuredContent.scene.info.track, "monza");
+  assert.deepEqual(readFileSync(result.structuredContent.screenshot), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+  assert.equal(result.content.filter(x => x.type === "resource_link").length, 2);
+  assert.equal(c.calls.find(x => x.method === "Page.captureScreenshot").params.captureBeyondViewport, false);
+  unlinkSync(result.structuredContent.screenshot); unlinkSync(result.structuredContent.report);
+  paused(c);
+  const refused = await callTool(s, "debugger_incident", {});
+  assert.equal(refused.isError, true);
+  assert.match(refused.structuredContent.error, /Resume before/);
+  await s.detach();
+});
+test("incident refuses a page that navigated away from loopback after attachment", async () => {
+  const { s, c } = await attached();
+  c.reply = async method => method === "Runtime.evaluate"
+    ? { result: { value: "https://example.com/private" } } : {};
+  const result = await callTool(s, "debugger_incident", {});
+  assert.equal(result.isError, true);
+  assert.match(result.structuredContent.error, /loopback|127\.0\.0\.1|localhost/i);
+  assert.equal(c.calls.some(x => x.method === "Page.captureScreenshot"), false);
+  await s.detach();
 });
 test("pause generation invalidates frames and objects after resume and re-pause", async () => {
   const { s, c } = await attached(); paused(c);
@@ -342,7 +373,7 @@ test("JSON-RPC protocol responds to initialize/list/ping, not notifications", as
   const s = new DebugSession();
   const request = method => ({ jsonrpc: "2.0", id: 1, method });
   assert.equal((await handleRpc(s, request("initialize"))).result.serverInfo.name, "js-debugger-mcp");
-  assert.equal((await handleRpc(s, request("tools/list"))).result.tools.length, 18);
+  assert.equal((await handleRpc(s, request("tools/list"))).result.tools.length, 19);
   assert.equal(await handleRpc(s, { jsonrpc: "2.0", method: "notifications/initialized" }), null);
   assert.equal((await handleRpc(s, request("missing"))).error.code, -32601);
   assert.equal((await handleRpc(s, [])).error.code, -32600);
@@ -363,7 +394,7 @@ test("real stdio subprocess discovery and malformed JSON recovery, no browser la
   child.stdin.end('bad json\n{"jsonrpc":"2.0","id":1,"method":"initialize"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"debugger_state","arguments":null}}\n');
   const [code] = await once(child, "exit"); assert.equal(code, 0, err);
   const rows = out.trim().split("\n").map(JSON.parse); assert.equal(rows.length, 4); assert.equal(rows[0].error.code, -32700);
-  assert.equal(rows.find(r => r.id === 2).result.tools.length, 18);
+  assert.equal(rows.find(r => r.id === 2).result.tools.length, 19);
   assert.equal(rows.find(r => r.id === 3).error.code, -32602);
 });
 test("project catalogs launch the separate debugger wrapper and discover its tools", async () => {
@@ -377,7 +408,7 @@ test("project catalogs launch the separate debugger wrapper and discover its too
   assert.equal((await once(child, "exit"))[0], 0, err);
   const rows = out.trim().split("\n").map(JSON.parse);
   assert.equal(rows.find(r => r.id === 1).result.serverInfo.name, "js-debugger-mcp");
-  assert.equal(rows.find(r => r.id === 2).result.tools.length, 18);
+  assert.equal(rows.find(r => r.id === 2).result.tools.length, 19);
   assert.equal(rows.find(r => r.id === 3).result.structuredContent.connected, false);
 });
 
@@ -446,7 +477,7 @@ test("wrapper validates port and missing-daemon calls fail without creating a se
   const daemon = await startDebuggerHttp({ port: 0 }); const port = daemon.server.address().port; await daemon.close();
   const result = await shell(["call", "debugger_state", "{}"], port);
   assert.equal(result.code, 1); assert.match(result.body.error, /start js-debugger-mcp.sh serve-http/);
-  assert.equal((await shell(["list-tools"], port)).body.length, 18);
+  assert.equal((await shell(["list-tools"], port)).body.length, 19);
 });
 test("daemon shutdown drops incomplete uploads before cleaning up a paused target", { timeout: 3000 }, async () => {
   const { s, c } = await attached(); paused(c);
