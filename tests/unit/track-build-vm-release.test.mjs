@@ -225,7 +225,8 @@ const STRIP = {
   // → terrainY #1940 (2026-10-16): the 1 cm world-distance margin replaces a 1 %
   //   barycentric slack, so 3 faces that only the slack buried now survive
   //   (emission unchanged): 294892 → 294895
-  monza: { before: 325542, after: 294895 },
+  // → monza centreline-kink chamfer (#2209, 2026-10-17): one path point -> two, emission 325542/294895 → 325408/294744
+  monza: { before: 325408, after: 294744 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

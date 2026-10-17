@@ -73,7 +73,7 @@
     // numbers physical bends: T1 precedes Tamburello, T8 is the uphill right,
     // T11–13 are Acque Minerali. Never number by sorting curvature peaks.
     // Source: fia.com/system/files/decision-document/2025_imola_event_-_circuit_map_-_imola_2025.pdf
-    sectors: [0.33451582, 0.65393488],
+    sectors: [0.33452376, 0.65394799],
     turns: [0.0788, 0.1529, 0.1639, 0.1844, 0.2804, 0.2969, 0.35812372, 0.4392, 0.4834, 0.5204, 0.5674, 0.5904, 0.5999, 0.69293924, 0.6984, 0.8169, 0.8529, 0.8799, 0.9459],
     furniture: { tree: "cypress", fol: [0.24, 0.41, 0.21], lamp: "none" },  // columnar spires
     kit: { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
