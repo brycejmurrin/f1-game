@@ -21,7 +21,7 @@ Profiler, self time per frame), `trace.mjs` (DevTools trace, main-thread event t
 
 | # | finding | measured | status |
 |---|---|---|---|
-| 1 | `body:has(#x…)` rules search the whole document whenever body restyles | style recalc 5.6-7.3 → 3.6-4.2 ms/frame | **fixed here**: 49 rules scoped to `> #x` |
+| 1 | `body:has(#x…)` rules search the whole document whenever body restyles | style recalc 5.6-7.3 → 3.6-4.2 ms/frame | **fixed here**: 54 `:has(` arguments scoped to `> #x` |
 | 2 | HUD full fit (`fitHud`, every ~3.3 s on the same key) is a 54-125 ms task; each fit ping-pongs root custom properties | profile bursts; 13-16 ms per root-var write + read | reported to the HUD-fit owner (PR #2743 lane) |
 | 3 | `HudLayout.clearReadouts` costs 9-24 ms per call at ~2 calls/s (ResizeObserver, plus 4 per full fit) | 397 ms of 20 s | open, hud-layout.js |
 | 4 | 7 `body:has(#hud-*)` rules whose element sits inside `#hud` are still unscoped | selector stats | open: try `> #hud #hud-x` |
@@ -50,8 +50,8 @@ A/B, interleaved, the same harness, CSSOM rewrite of the 48 matching rules in th
 | base | 6.45, 5.56, 7.30 | 10.9, 9.4, — |
 | scoped | 3.59, 3.97, 4.19 | 7.6, 8.3, 8.6 |
 
-The source change is the same rewrite, done in `css/*.css` (49 rules in carsetup, dialogs, hud, overlays, tuner and
-watch-transport; `touch-controls.css` was left alone because it belongs to the HUD-fit lane). It skips `dialog[open]`
+The source change is the same rewrite, done in `css/*.css` (54 `:has(` arguments in carsetup, dialogs, hud, menus,
+overlays, tuner and watch-transport, the second link of a chained `body:has(…):has(…)` included; `touch-controls.css` was left alone because it belongs to the HUD-fit lane). It skips `dialog[open]`
 and `dialog:modal`, because the Data Hub telemetry dialog is nested inside `#datahub`. `tests/unit/css-has-scope.test.mjs`
 pins every scoped id and every `.screen` to a body child in `index.html`, and refuses an unscoped search for a body child.
 
