@@ -78,6 +78,13 @@ on:
         required: false
         default: "45"
 
+  # A workflow that exists only on a topic branch cannot be dispatched, and an
+  # agent token cannot dispatch at all (gpu-census.yml): a push that edits the
+  # request file runs THAT branch's tree with the file's fields.
+  push:
+    branches: ["cursor/**"]
+    paths: [".github/iphone-census-request.json"]
+
 permissions:
   contents: read
 
@@ -92,18 +99,23 @@ jobs:
     timeout-minutes: 45
     env:
       # Inputs reach the shell through env, never interpolated into a script.
-      IC_URL: ${{ inputs.url }}
-      IC_DEVICE: ${{ inputs.device }}
+      IC_URL: ${{ inputs.url || 'https://brycejmurrin.github.io/f1-game/' }}
+      IC_DEVICE: ${{ inputs.device || 'iPhone 17 Pro' }}
       IC_OS: ${{ inputs.os_version }}
-      IC_TRACK: ${{ inputs.track }}
-      IC_SOAK: ${{ inputs.soak_minutes }}
-      IC_ARMS: ${{ inputs.arms }}
-      IC_ROUNDS: ${{ inputs.rounds }}
-      IC_WINDOW: ${{ inputs.window_seconds }}
+      IC_TRACK: ${{ inputs.track || 'montreal' }}
+      IC_SOAK: ${{ inputs.soak_minutes || '3' }}
+      IC_ARMS: ${{ inputs.arms || 'tlx,tlxgpu,glx' }}
+      IC_ROUNDS: ${{ inputs.rounds || '1' }}
+      IC_WINDOW: ${{ inputs.window_seconds || '45' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # A PUSH carries no inputs: its request file's fields win over the defaults above.
+      - name: Read push request
+        if: ${{ github.event_name == 'push' }}
+        run: node tools/gfx/iphone-census-request.mjs
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

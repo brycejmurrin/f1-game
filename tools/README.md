@@ -249,6 +249,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/gpu-census.mjs** | Does this machine have a real GPU? Launches full Chromium per flag set and reports the adapter (`census_only` in CI). | — |
 | **gfx/gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | — |
 | **gfx/iphone-census-lib.mjs** | Pure half of iphone-census.yml: capabilities, simulator pick, probe sources, arm schedule, maths, Verdict. | renderer-debug |
+| **gfx/iphone-census-request.mjs** | Pushed iphone-census request file -> IC_* env lines through the lib allowlist; rejected fields are warned. | renderer-debug |
 | **gfx/iphone-census-summary.mjs** | Verdict step of iphone-census.yml: prints and appends the summary, exits 1 on a failed verdict. | renderer-debug |
 | **gfx/iphone-census.mjs** | Drives Mobile Safari in an iOS simulator (safaridriver): facts, rAF, soak, 3-arm renderer A/B -> iphone-census.json. | renderer-debug |
 | **gfx/iphone-sim-setup.mjs** | Creates, automation-enables and boots an iPhone simulator on a macOS runner; prints IC_SIM_* env lines. | renderer-debug |

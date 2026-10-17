@@ -300,3 +300,36 @@ export function renderSummary(res, v) {
   L.push(v.bad.length ? "**Verdict: FAIL**\n" + v.bad.map((b) => "- " + b).join("\n") : "**Verdict: PASS** (every leg produced its number; read the rows, a slow phone is a measurement, not a failure)");
   return L.join("\n");
 }
+
+// ───────────────────────── push request ─────────────────────────
+// A workflow that exists only on a topic branch cannot be workflow_dispatch'ed
+// (GitHub dispatches from the default branch's registry: the API 404s), and an
+// agent token cannot dispatch anyway (gpu-census.yml, same story). So a push that
+// edits .github/iphone-census-request.json runs THAT branch's tree with the
+// file's fields, which override the dispatch defaults.
+
+const REQ_ENV = {
+  url: ["IC_URL", (v) => /^https:\/\/[^\s"'`$]+$/.test(v)],
+  device: ["IC_DEVICE", (v) => /^[A-Za-z0-9 ().-]{1,40}$/.test(v)],
+  os_version: ["IC_OS", (v) => /^[0-9.]{0,12}$/.test(v)],
+  track: ["IC_TRACK", (v) => /^[a-z0-9_-]{1,32}$/.test(v)],
+  soak_minutes: ["IC_SOAK", (v) => /^\d{1,2}$/.test(v)],
+  arms: ["IC_ARMS", (v) => /^[a-z,]{1,40}$/.test(v)],
+  rounds: ["IC_ROUNDS", (v) => /^[1-4]$/.test(v)],
+  window_seconds: ["IC_WINDOW", (v) => /^\d{2,3}$/.test(v)],
+};
+
+/** Env lines (`IC_X=v`) for the fields of a request file that pass their
+ *  allowlist; anything else is dropped and named in `rejected`. One line per
+ *  key by construction: a value with a newline fails every pattern. */
+export function requestEnv(req) {
+  const lines = [], rejected = [];
+  for (const [k, v] of Object.entries(req && typeof req === "object" ? req : {})) {
+    const spec = REQ_ENV[k];
+    if (!spec) { if (!k.startsWith("//")) rejected.push(k); continue; }
+    const s = String(v);
+    if (s !== "" && !spec[1](s)) { rejected.push(k); continue; }
+    if (s !== "") lines.push(`${spec[0]}=${s}`);
+  }
+  return { lines, rejected };
+}

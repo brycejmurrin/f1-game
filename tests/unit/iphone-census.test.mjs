@@ -224,8 +224,10 @@ test("driver: without selenium-webdriver it exits 2 with the install hint, befor
   assert.match(r.stderr, /selenium-webdriver.*not installed/);
 });
 
-test("workflow: dispatch only, macOS simulator, no secrets, inputs via env, verdict + artifact", () => {
-  assert.deepEqual(Object.keys(wf.on), ["workflow_dispatch"]);
+test("workflow: dispatch + request push only, macOS simulator, no secrets, inputs via env, verdict + artifact", () => {
+  assert.deepEqual(Object.keys(wf.on), ["workflow_dispatch", "push"], "no schedule");
+  assert.deepEqual(wf.on.push.paths, [".github/iphone-census-request.json"]);
+  assert.deepEqual(wf.on.push.branches, ["cursor/**"]);
   const job = wf.jobs.census;
   assert.match(job["runs-on"], /inputs\.image \|\| 'macos-latest'/);
   assert.ok(wf.on.workflow_dispatch.inputs.image.options.every((o) => /^macos-/.test(o)), "image choices are macOS only");
@@ -248,4 +250,16 @@ test("workflow: dispatch only, macOS simulator, no secrets, inputs via env, verd
   assert.equal(d.device.default, "iPhone 17 Pro");
   assert.equal(d.url.default, "https://brycejmurrin.github.io/f1-game/");
   assert.match(wfText, /NOT for phone performance/);
+});
+
+test("requestEnv: allowlisted fields become IC_* lines, the rest is rejected", () => {
+  const r = L.requestEnv({ "//": "note", soak_minutes: "2", arms: "tlx,glx", url: "https://example.com/x", rounds: "", device: "iPhone 17 Pro" });
+  assert.deepEqual(r.lines, ["IC_SOAK=2", "IC_ARMS=tlx,glx", "IC_URL=https://example.com/x", "IC_DEVICE=iPhone 17 Pro"]);
+  assert.deepEqual(r.rejected, []);
+  const bad = L.requestEnv({ url: "http://x", arms: "tlx\nIC_X=1", soak_minutes: "99999", evil: "1", track: "a b" });
+  assert.deepEqual(bad.lines, []);
+  assert.deepEqual(bad.rejected.sort(), ["arms", "evil", "soak_minutes", "track", "url"]);
+  assert.deepEqual(L.requestEnv(null).lines, []);
+  const req = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/iphone-census-request.json"), "utf8"));
+  assert.deepEqual(L.requestEnv(req).rejected, [], "the committed request file passes its own allowlist");
 });
