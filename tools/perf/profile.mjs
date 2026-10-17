@@ -17,13 +17,14 @@
 //               spread is "noise", never a win; with fewer than 3 repeats every verdict is "unproven"; the raf row is cadence, informational only.
 // SwiftShader caveat: CPU JS cost is meaningful, GPU/fill numbers are not (the "render" span includes the synchronous
 // software-raster wait; physics/ai/collide/hud are the reliable rows) (docs/notes/PROFILER-DESIGN-2026-10-16.md).
-import { writeFileSync, mkdirSync, existsSync, rmSync } from "node:fs";
+import { writeFileSync, mkdirSync, existsSync, rmSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync, execFileSync } from "node:child_process";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
-import { aggregate, diff, formatDiff, formatTable, intervalStats } from "./lib.mjs";
+import { aggregate, diff, formatDiff, formatTable, intervalStats, supportsCaptureKey } from "./lib.mjs";
+const CAPTURE_SRC = ["js/render/three/tlx.js", "js/render/glx/glx.js", "js/render/webgpu/wgx.js"];   // where a ref reads the apex26.wgxCapture switch
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const OUT = join(ROOT, "artifacts/profiles");
@@ -150,8 +151,9 @@ try {
     const out = { track, frames, repeat, head };
     console.log(`\nspans — ${track}, ${frames} frames, ${repeat} repeat(s) (ms)\n${formatTable(head)}`);
     if (baseRef) {
-      const { agg, sha } = await withWorktree(baseRef, async (dir, sha) => ({ agg: aggregate(await runSpans(dir, "base")), sha }));
-      out.base = agg; out.baseRef = baseRef; out.baseSha = sha; out.delta = diff(agg, head);
+      const { agg, sha, keyed } = await withWorktree(baseRef, async (dir, sha) => ({ agg: aggregate(await runSpans(dir, "base")), sha, keyed: argv.includes("--capture") || supportsCaptureKey(CAPTURE_SRC.map((f) => { try { return readFileSync(join(dir, f), "utf8"); } catch (_) { return ""; } })) }));
+      out.base = agg; out.baseRef = baseRef; out.baseSha = sha; out.delta = diff(agg, head, { incomparable: !keyed });
+      if (!keyed) console.log(`(base predates the apex26.wgxCapture key: it paid the per-frame readback HEAD skipped; verdicts are "incomparable" — re-run with --capture to put the readback on both arms)`);
       console.log("\n" + formatDiff(out.delta, `${baseRef}@${sha.slice(0, 8)}`, "HEAD"));
       if (!Object.keys(agg).some((k) => k !== "raf")) console.log("(base predates PerfSpans: only the rAF cadence row is comparable)");
     }
