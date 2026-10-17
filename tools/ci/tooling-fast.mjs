@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc Runner behind `npm run test:tooling-fast`: per-file timing, buffered output, `--jobs=N`; exports the list.
+// @doc Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.
 // @section runner
 /**
  * tooling-fast.mjs — run the structural unit suites with per-file progress.
@@ -239,6 +239,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // but-unapplied. This is the mirror — a class the markup wears that no rule
   // matches, which reads as styled and is not. Pure source scan, ~0.3 s.
   "tests/unit/class-usage.test.mjs",
+  // tools/lib/cli-args.mjs: unknown flag is an error with the near miss, =/space forms agree, --help (#1697).
+  "tests/unit/cli-args.test.mjs",
   // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,
   // well under a second; must run where the helper or a call-site is edited.
   "tests/unit/clipboard.test.mjs",
@@ -310,6 +312,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/data-standings.test.mjs",
   "tests/unit/day-sky-palette-storm-deck.test.mjs",
   "tests/unit/debris-step-skip.test.mjs",
+  "tests/unit/debug-chrome.test.mjs",
   "tests/unit/deep-link.test.mjs",
   // ...and a third of the same family: two widgets keyed on ONE sign convention
   // were painted opposite colours. Neither half is wrong alone, so only a test
@@ -349,6 +352,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-stage.test.mjs",
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/desktop-version.test.mjs",
+  "tests/unit/destructure-usage.test.mjs",
   // DevFlags: query/hash/storage resolution for boot toggles (js/core/dev-flags.js).
   "tests/unit/dev-flags.test.mjs",
   "tests/unit/digital-steer.test.mjs",
@@ -518,6 +522,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/glx-output-target.test.mjs",
   // #2153: GLX resize() snaps a ±1 px present/render jitter (WGX hysteresis) so the post chain is not rebuilt (mock).
   "tests/unit/glx-resize-hysteresis.test.mjs",
+  "tests/unit/glx-resource-balance.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/grip-steer.test.mjs",
   "tests/unit/handback.test.mjs",
@@ -564,10 +569,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
   "tests/unit/incident-rpm.test.mjs",
+  "tests/unit/init-owner-resize-observer.test.mjs",
   // InputBindings factory alone (conflict claim, reset/isDefault, persistence,
   // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
   "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-ghost.test.mjs",
+  "tests/unit/js-debugger-mcp.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
   // knob-ab.mjs fails a visual knob whose ON vs OFF frame does not beat the noise floor (#1885 puddles). Pure.
@@ -692,6 +699,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/onboard.test.mjs",
   // updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.
   "tests/unit/ot-ahead-scan-gate.test.mjs",
+  "tests/unit/over-road-scan.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
   // PaceMath (js/race/pace-math.js): vTop/vStd/aStd + X-mode/ERS/gearHi pins from pre-extract goldens. ~0.1 s.
   "tests/unit/pace-math.test.mjs",
@@ -718,6 +726,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/perf-governor.test.mjs",
   "tests/unit/perf-race-entry.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
+  // PerfSpans ring/percentiles/off-switch + __apex.perf() in the game VM; profile lib noise rule; apex_profile argv pins.
+  "tests/unit/perf-spans.test.mjs",
   "tests/unit/perf-try.test.mjs",
   "tests/unit/phone-input-improvements.test.mjs",
   // ...and PHONE AS CONTROLLER: the wire codec, the shared roll math, and a
@@ -758,6 +768,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
+  "tests/unit/profile-lib.test.mjs",
+  "tests/unit/profile-mcp.test.mjs",
   // The branch-prune rule behind prune-branches.yml: merged-only, never an
   // open PR's head, claims on age; pure fixtures, under a second.
   "tests/unit/prune-branches.test.mjs",
@@ -824,6 +836,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/ci/remote-group.mjs + browser-group.yml: the group/shard validation
   // that stands between a dispatch input and a shell, and the run pick. Pure, instant.
   "tests/unit/remote-group.test.mjs",
+  // Renderer ownership, post health, material detail and particle residency; isolated VM.
+  "tests/unit/render-final-contracts.test.mjs",
   // render() lighting-prep pure-move: renderLightingPrep owns sky/lightning/lamps; call-order pin. ~0.05 s.
   "tests/unit/render-lighting-prep.test.mjs",
   "tests/unit/renderer-boot-timeout.test.mjs",
@@ -843,6 +857,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",
+  "tests/unit/road-position-checks.test.mjs",
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
   "tests/unit/save-durability.test.mjs",
@@ -954,6 +969,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // STORM (js/race/storm.js): above rain on the arc ladder, rain's grip and tread, heavier rain,
   // a seeded frame-rate-independent lightning schedule, the storm safety car, no STORM chip in rooms. VM, < 1 s.
   "tests/unit/storm-weather.test.mjs",
+  "tests/unit/stuck-census.test.mjs",
   // SubagentStop report-contract hook (.claude/hooks/subagent-contract.py): spawns it on fake payloads, < 1 s.
   "tests/unit/subagent-contract-hook.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
@@ -969,12 +985,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/telemetry-view-resize.test.mjs",
   "tests/unit/terrain-falloff.test.mjs",
   "tests/unit/terrain-normals.test.mjs",
+  "tests/unit/terrain-y.test.mjs",
   "tests/unit/test-bg-outcome.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",
   "tests/unit/test-groups-generated.test.mjs",
   "tests/unit/test-groups.test.mjs",
   "tests/unit/test-observed.test.mjs",
   "tests/unit/tex-census.test.mjs",
+  "tests/unit/three-inspector.test.mjs",
   // ...and THROTTLE = LATCH, which shares digital-steer's VM harness and runs
   // in 0.1 s: the pedal is the one control that can be left ON, so the drop on
   // blur/reset belongs in the edit loop rather than in a browser group.
@@ -1013,6 +1031,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 TLX: post chain retries after death, shadowStr 0 when the sun pass failed, DPR cap on mobileTier, caster geometry clone, warm-guarded releaseGeometry, true-LRU materials, pack CPU copy dropped, devtools-gated globals.
   "tests/unit/tlx-round2.test.mjs",
   "tests/unit/tlx-texture-release.test.mjs",
+  // tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).
+  "tests/unit/tolerance-diff.test.mjs",
   "tests/unit/tooling-fast-runner.test.mjs",
   // Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.
   "tests/unit/tools-a12-guards.test.mjs",
@@ -1147,6 +1167,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/wait-for.test.mjs",
   "tests/unit/wait-polling.test.mjs",
   "tests/unit/wall-clamp.test.mjs",
+  "tests/unit/wall-end-face-vm.test.mjs",
   // The falling rain follows WETNESS through a weather arc: shown at 0.25, the
   // storm tier and rain loop at 0.72, hidden again when a drying arc drops below
   // 0.25 — six arcs sampled at 10 points each. VM-executed weather-arc.js, ~1 s.

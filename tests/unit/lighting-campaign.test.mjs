@@ -1,4 +1,5 @@
 import test from "node:test";
+import sharp from "sharp";
 import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -630,4 +631,52 @@ test("hard gates report white clipping, narrow tonal range, and page errors", ()
   });
   assert.equal(bad.ok, false);
   assert.deepEqual(new Set(bad.failures), new Set(["white-clip", "tonal-range", "page-error"]));
+});
+
+
+test("campaign screenshot decode preserves opaque RGB/RGBA pixels without a browser round trip", async () => {
+  const { readPngPixels } = await importCaptureModule();
+  await mkdir(new URL("../../scratch/", import.meta.url), { recursive: true });
+  const dir = await mkdtemp(join(new URL("../../scratch/", import.meta.url).pathname, "lighting-pixels-"));
+  const rgba = Buffer.from([0, 0, 0, 255, 37, 101, 219, 255, 128, 128, 128, 255, 255, 255, 255, 255]);
+  try {
+    for (const channels of [3, 4]) {
+      const file = join(dir, `opaque-${channels}.png`);
+      let image = sharp(rgba, { raw: { width: 2, height: 2, channels: 4 } });
+      if (channels === 3) image = image.removeAlpha();
+      await image.png().toFile(file);
+      const pixels = await readPngPixels({ evaluate() { throw new Error("opaque screenshot should decode locally"); } }, file);
+      assert.equal(pixels.width, 2); assert.equal(pixels.height, 2);
+      assert.deepEqual(pixels.data, rgba);
+      assert.deepEqual(measurePixels(pixels.data, 2, 2, REGIONS), measurePixels(new Uint8ClampedArray(rgba), 2, 2, REGIONS));
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("campaign decode retains browser colour/alpha semantics for other PNG encodings", async () => {
+  const { readPngPixels } = await importCaptureModule();
+  await mkdir(new URL("../../scratch/", import.meta.url), { recursive: true });
+  const dir = await mkdtemp(join(new URL("../../scratch/", import.meta.url).pathname, "lighting-pixels-"));
+  const rgba = Buffer.from([37, 101, 219, 128, 255, 128, 0, 0]);
+  try {
+    const fixtures = {
+      alpha: sharp(rgba, { raw: { width: 2, height: 1, channels: 4 } }),
+      profiled: sharp({ create: { width: 2, height: 1, channels: 3, background: "red" } }).withIccProfile("srgb"),
+      palette: sharp({ create: { width: 2, height: 1, channels: 3, background: "red" } }).png({ palette: true }),
+      grayscale: sharp(Buffer.from([0, 255]), { raw: { width: 2, height: 1, channels: 1 } }).toColourspace("b-w"),
+    };
+    for (const [name, image] of Object.entries(fixtures)) {
+      const file = join(dir, `${name}.png`);
+      await image.png().toFile(file);
+      const expected = { width: 2, height: 1, data: [1, 2, 3, 4] };
+      let calls = 0;
+      const actual = await readPngPixels({ async evaluate(fn, encoded) {
+        calls++;
+        assert.deepEqual(Buffer.from(encoded, "base64"), await readFile(file));
+        return expected;
+      } }, file);
+      assert.equal(actual, expected, name);
+      assert.equal(calls, 1, name);
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });

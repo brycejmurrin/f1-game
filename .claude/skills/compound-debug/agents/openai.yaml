@@ -1,0 +1,5 @@
+interface:
+  display_name: Compound Debug
+  short_description: Find a failure cause and verify the correction
+policy:
+  allow_implicit_invocation: false

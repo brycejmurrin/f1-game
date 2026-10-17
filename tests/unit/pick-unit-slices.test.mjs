@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+const ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
 import {
   SLICES, NODE_SLICES, SLICE_COST_P50_SEC, SLICE_SCRIPTS, pick, costs, testFileOwners, ciOutputs,
 } from "../../tools/ci/pick-unit-slices.mjs";
@@ -108,6 +109,14 @@ test("a brand-new unit file selects guards only, not every slice", () => {
 
 test("SLICE_COST_P50_SEC covers every slice", () => {
   for (const s of SLICES) assert.ok(SLICE_COST_P50_SEC[s] > 0, s);
+});
+
+test("--costs exposes the per-slice planning estimates", () => {
+  const out = execFileSync(process.execPath, ["tools/ci/pick-unit-slices.mjs", "--all", "--costs"], {
+    cwd: ROOT, encoding: "utf8",
+  });
+  assert.match(out, /vm-b1\tselected\tp50=455s/);
+  assert.match(out, /selected=\d+s all=\d+s saved=0s/);
 });
 
 test("--all selects every slice for schedule/dispatch", () => {

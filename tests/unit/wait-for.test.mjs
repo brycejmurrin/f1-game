@@ -23,6 +23,9 @@ test("parseArgs: unknown flag, no condition, bad numbers are usage errors", () =
   assert.throws(() => parseArgs([]), /at least one condition/);
   assert.throws(() => parseArgs(["--load-below", "abc"]), UsageError);
   assert.throws(() => parseArgs(["--pid-gone", "--timeout", "3"]), UsageError);
+  for (const pid of ["0", "-1", "1.5", "2147483648", "9007199254740993"]) {
+    assert.throws(() => parseArgs(["--pid-gone", pid]), UsageError, `invalid PID ${pid}`);
+  }
   assert.throws(() => parseArgs(["stray"]), UsageError);
 });
 
@@ -48,8 +51,27 @@ test("waitFor: held once the load drops; 124 on timeout with the blocker named",
 test("CLI: exit 1 on usage, 0 on a pid that is gone, 124 on a live pid", () => {
   const cli = path.resolve("tools/ci/wait-for.mjs");
   assert.equal(spawnSync("node", [cli, "--bogus"]).status, 1);
+  assert.equal(spawnSync("node", [cli, "--pid-gone", "1.5"]).status, 1);
   assert.equal(spawnSync("node", [cli, "--pid-gone", "2147483646", "--timeout", "1"]).status, 0);
   assert.equal(spawnSync("node", [cli, "--pid-gone", String(process.pid), "--timeout", "0.01", "--poll", "0.01"]).status, 124);
+});
+
+test("waitFor caps polling at the deadline and Node's maximum timer delay", async () => {
+  const c = fakeClock();
+  const r = await waitFor([{ kind: "pid", pid: 1 }], {
+    timeoutMin: 0.01, pollSec: 60, ...c, deps: { alive: () => true },
+  });
+  assert.equal(r.code, 124);
+  assert.equal(c.now(), 600, "a 600 ms timeout must not wait for the 60 s poll");
+  const long = fakeClock();
+  const sleeps = [];
+  const held = await waitFor([{ kind: "pid", pid: 1 }], {
+    timeoutMin: 100000, pollSec: 3e6, ...long,
+    sleep: async (ms) => { sleeps.push(ms); await long.sleep(ms); },
+    deps: { alive: () => sleeps.length === 0 },
+  });
+  assert.equal(held.code, 0);
+  assert.deepEqual(sleeps, [2147483647], "larger Node delays would collapse to 1 ms");
 });
 
 test("readStatus: none / running / done / died map to exit codes", () => {

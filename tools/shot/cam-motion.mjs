@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { parseFlags } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const S = 200;
@@ -155,6 +156,8 @@ function table(rows) {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
+  parseFlags(process.argv.slice(2), ["--help"]);
+  if (process.argv.includes("--help")) { console.log("usage: node tools/shot/cam-motion.mjs   # in-VM camera motion table, no browser"); process.exit(0); }
   const r = checkCamMotion();
   console.log(table(r.rows));
   if (!r.ok) {

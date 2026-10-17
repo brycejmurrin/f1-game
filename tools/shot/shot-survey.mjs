@@ -5,11 +5,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { parseFlags } from "../lib/cli-args.mjs";
 import { fileURLToPath } from "node:url";
 import {
   buildTrackShotSurveyPlan,
   estimateSurveyMs,
   filterResumeShots,
+  surveyTerminalState,
   normalizeSurveyTracks,
   scoreShotFindings,
   writeCompareIndex,
@@ -20,6 +22,10 @@ import {
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const argv = process.argv.slice(2);
+if (!argv.includes("--help") && !argv.includes("-h")) {
+  parseFlags(argv, ["--count", "--dry-run", "--fracs", "--gl", "--label", "--no-index", "--no-panel", "--out",
+    "--plan-json", "--preset", "--resume", "--tod", "--track", "--tracks", "--weather"]);
+}
 const flag = (n, d) => {
   const i = argv.indexOf(n);
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d;
@@ -145,9 +151,10 @@ for (let ti = 0; ti < tracks.length; ti++) {
   const track = tracks[ti];
   const outDir = tracks.length === 1 ? outRoot : path.join(outRoot, track);
   fs.mkdirSync(outDir, { recursive: true });
-  const { pending, resumed } = filterResumeShots(outDir, plan.shots, resume);
+  const { pending, resumed, invalid } = filterResumeShots(outDir, plan.shots, resume);
+  for (const bad of invalid) console.error(`shot-survey: ${track}/${bad.name}.png is not a valid image (${bad.reason}); recapturing`);
   writeSurveyProgress(outRoot, {
-    state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length,
+    state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length, invalid,
     shotsPerTrack: plan.shots.length, estimateMs,
   });
 
@@ -237,7 +244,7 @@ if (tracks.length > 1 && wantIndex) {
 }
 
 writeSurveyProgress(outRoot, {
-  state: hardFail ? "failed" : "done", tracks, trackResults: trackResults.map((t) => ({
+  state: surveyTerminalState(trackResults, hardFail), tracks, trackResults: trackResults.map((t) => ({
     track: t.track, captured: t.captured, failed: t.failed, error: t.error,
   })),
   compareIndex, estimateMs,

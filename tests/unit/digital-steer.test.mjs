@@ -379,6 +379,19 @@ test("re-entering TILT zeroes on a fresh reading, not the lean the player left t
   });
 });
 
+test("one non-finite orientation reading does not poison the TILT filter for the session", () => {
+  const { Input, fire, clock } = boot();
+  const lean = (beta, gamma) => { clock.t += 16; fire("deviceorientation", { beta, gamma }); };
+  Input.setSteerMode("tilt");
+  return Input.requestGyro().then(() => {
+    lean(0, 0); Input.calibrate();
+    lean(0, Infinity);                          // a broken sensor / WebView: cos(Infinity) is NaN
+    let s = 0;
+    for (let i = 0; i < 120; i++) { lean(0, 20); s = Input.steer(0.016); }
+    assert.ok(Number.isFinite(s), "steer stayed NaN after the bad reading: " + s);
+    assert.ok(Math.abs(s) > 0.05, "a real 20° lean must steer again: " + s);
+  });
+});
 
 test("alternate held bindings release independently, including after focus changes", () => {
   for (const [action, codes, state] of [

@@ -12,6 +12,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { STAGE_DIRS, STAGE_ROOT_FILES } from "../../tools/desktop/stage-files.mjs";
 import {
+  assertStageDest,
   desktopVersionFromBuild,
   stageSite,
   stampStaged,
@@ -96,4 +97,42 @@ test("default desktop stages must match HEAD while explicit overrides stay inten
     else process.env.APEX_SITE_DIR = prior;
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+
+test("stage destination guards resolve symlink parents before replacing source trees", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const fixture = fs.mkdtempSync(path.join(ROOT, "scratch/stage-guard-"));
+  const root = path.join(fixture, "repo");
+  const source = path.join(root, "js");
+  const alias = path.join(fixture, "source-alias");
+  fs.mkdirSync(source, { recursive: true });
+  fs.symlinkSync(source, alias, "dir");
+  const previous = path.join(source, "prior-stage");
+  fs.mkdirSync(previous);
+  fs.writeFileSync(path.join(previous, "index.html"), "keep source");
+  fs.writeFileSync(path.join(previous, "version.json"), "{}");
+  try {
+    assert.throws(() => stageSite(path.join(alias, "prior-stage"), { root }), /refusing --out.*inside js/);
+    assert.equal(fs.readFileSync(path.join(previous, "index.html"), "utf8"), "keep source");
+    assert.throws(() => assertStageDest(path.join(alias, "not-created", "site"), root), /refusing --out.*inside js/);
+    fs.symlinkSync(root, path.join(fixture, "repo-alias"), "dir");
+    assert.throws(() => assertStageDest(path.join(fixture, "repo-alias"), root), /checkout/);
+  } finally { fs.rmSync(fixture, { recursive: true, force: true }); }
+});
+
+test("missing stage inputs leave a previous stage intact", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const fixture = fs.mkdtempSync(path.join(ROOT, "scratch/stage-input-"));
+  const root = path.join(fixture, "repo"), dest = path.join(fixture, "site");
+  fs.mkdirSync(root); fs.mkdirSync(dest);
+  for (const name of STAGE_ROOT_FILES) fs.writeFileSync(path.join(root, name), "{}");
+  for (const name of STAGE_DIRS.slice(0, -1)) fs.mkdirSync(path.join(root, name));
+  fs.writeFileSync(path.join(dest, "index.html"), "previous complete site");
+  fs.writeFileSync(path.join(dest, "version.json"), "{}");
+  try {
+    assert.throws(() => stageSite(dest, { root }), /missing directory vendor/);
+    assert.equal(fs.readFileSync(path.join(dest, "index.html"), "utf8"), "previous complete site");
+    assert.equal(fs.readdirSync(dest).length, 2);
+  } finally { fs.rmSync(fixture, { recursive: true, force: true }); }
 });

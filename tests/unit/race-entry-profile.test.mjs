@@ -242,7 +242,7 @@ test("race-entry ticks pump input and network while holding physics and governor
     lastFrame: 100, paused: false, state: "count", _poseAt: null,
     mirrorPass: { preparing: () => preparing }, gfx: { warming: () => warming },
     PerfGov: { tick: dt => calls.push(["governor", dt]) },
-    performance: { now: () => 260 },
+    performance: { now: () => 260 }, PerfSpans: { begin() {}, end() {} },
     Input: { poll: () => calls.push("input"), clearEdges: () => calls.push("clear") },
     BrakeCue: { tick() {} }, onboard: { tick() {} },
     director: { tick() {} },

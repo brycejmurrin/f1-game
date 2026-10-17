@@ -106,7 +106,7 @@ export function loadParts({ shade = false } = {}) {
   // carDecalData) — but that is the boundary: anything that RASTERISES a livery
   // texture still needs a browser and stays in tests/specs/.
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js",
-                   "js/car/livery-design.js", "js/car/livery-graphics.js", "js/car/liverytex.js", "js/car/helmets.js",
+                   "js/car/livery-design.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js", "js/car/helmets.js",
                    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js",
                    ...(shade ? ["js/car/car-shade.js"] : []),
                    "js/car/car-body-geom.js", "js/car/car3d.js", "js/car/car-mesh.js"])

@@ -12,6 +12,7 @@
  *   node tools/check/ai-race.mjs human [--track monza] [--runs 3]
  *   node tools/check/ai-race.mjs ratings [--json]
  *   node tools/check/ai-race.mjs band  [--track monza] [--diff normal] [--seconds 90]
+ *   node tools/check/ai-race.mjs stuck [--track monza] [--seconds 240] [--runs 3]
  *
  * Race subcommands take --wear off|light|real (DEFAULT off, the VM harness pin).
  * With wear off the strategy layer — stintPlan, pitNow, compoundFor, degCost,
@@ -38,6 +39,7 @@ const map = {
   human: "ai-human.mjs",
   ratings: "ai-ratings.mjs",
   band: "ai-band.mjs",
+  stuck: "ai-stuck.mjs",
   help: null,
   "--help": null,
   "-h": null,
@@ -53,6 +55,7 @@ if (!cmd || map[cmd] === null || !(cmd in map)) {
   node tools/check/ai-race.mjs human   [args]   # how the AI races a PLAYER, not itself
   node tools/check/ai-race.mjs ratings [args]   # DriverRatings Pearson / style zero-mean
   node tools/check/ai-race.mjs band    [args]   # rubber-band profile (needs a human)
+  node tools/check/ai-race.mjs stuck   [args]   # per-car stuck / rescue census over N seeds
 
   race subcommands: --wear off|light|real  (default off — strategy/pit behaviour is OFF)
   ratings: data-only, no --wear

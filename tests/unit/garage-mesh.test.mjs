@@ -36,7 +36,7 @@ function harness() {
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
-                   "js/garage/scene-live.js", "js/garage/experience.js", "js/garage/scene.js"])
+                   "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
@@ -307,7 +307,7 @@ test("a failed trace upload preserves its decal and retries after recovery", () 
     Log: { info() {}, warn: (_t, m) => warns.push(m), error() {}, debug() {}, enabled: () => false },
   });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
-                   "js/garage/scene-live.js", "js/garage/experience.js", "js/garage/scene.js"])
+                   "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
@@ -357,7 +357,7 @@ test("garage dress upload retries after a transient failure, and a new team clea
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
-                   "js/garage/scene-live.js", "js/garage/experience.js", "js/garage/scene.js"])
+                   "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const garage = vm.runInContext("GarageScene", ctx);
   garage.init(gfx);
@@ -496,7 +496,7 @@ test("garage orbit path reuses lampAim, chase buffer, and boardInfo cache", () =
   assert.match(src, /const _chase = \[\]/, "pulse chase buffer is reused");
   assert.match(src, /const chase = _chase/, "pulse copies into _chase");
   assert.doesNotMatch(src, /chase = rig\.slice/, "no per-pulse chase = rig.slice");
-  assert.match(src, /_boardInfo && stamp === _boardInfoKey/, "boardInfo is stamped-cached");
+  assert.match(read("js/garage/scene-dress.js"), /_boardInfo && stamp === _boardInfoKey/, "boardInfo is stamped-cached");
   assert.match(src, /const inside = _inside/, "wall culling flags reuse _inside");
   const cam = read("js/garage/setup-camera.js");
   assert.match(cam, /const lightsRig = GarageScene\.live/, "live() once per garage frame");

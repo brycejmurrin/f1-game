@@ -11,8 +11,11 @@
       "lines": 1
     },
     "js/game.js": {
-      "codeLines": -3,
-      "lines": -4
+      "codeLines": -2,
+      "lines": -3
     }
+  },
+  "tree": {
+    "waitForTimeout": -2
   }
 }

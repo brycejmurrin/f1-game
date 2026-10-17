@@ -54,10 +54,13 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/hud-survey-matrix.mjs** | HUD survey core: cells, quick/full/exhaustive matrices, shards, expected-visible rules, findings, merge, report HTML. | — |
 | **lib/mem-census.mjs** | Page-side memory census (track WeakRefs, decoded audio, render objects, forced GC) for the CLI and its spec. | — |
 | **lib/output-paths.mjs** | Path-containment helpers for the `artifacts/` vs `scratch/` output contract; gated by `output-paths.spec.js`. | — |
+| **lib/over-road-scan.cjs** | Pure over-road triangle scan shared by tests/specs/terrain-over-road.spec.js (runs in the page) and its unit test. | — |
 | **lib/pack-assets.cjs** | Node loader for assets/pack: `parseModel` (mirrors assets.js) and `packAssets()` (the `Assets.modelSync` surface). | asset-pack |
 | **lib/proxy-fetch.mjs** | A `fetch` honouring HTTPS_PROXY (curl-backed when Node would bypass the agent proxy) for GitHub API callers in tools/. | — |
+| **lib/road-position-checks.cjs** | Position-based road-ribbon checks (running width/advance, skirt depth+attachment, vertical continuity) for verify-track. | — |
 | **lib/session-contracts.mjs** | Normalize hosted tool envelopes and diagnose session capability prerequisites without calling remote services. | check-changes |
 | **lib/solid-in-road.cjs** | Solid-in-road audit: `solidsInRoad(track, prims)` lists shipped prop/glass prims whose XZ hull stands on tarmac. | scenery-dress |
+| **lib/stuck-census.mjs** | Per-car AI stuck / rescue event tracker (pure; the VM loop lives in tools/check/ai-stuck.mjs). | ai-racecraft |
 | **lib/track-build-vm.cjs** | The shared "run the REAL track build headless in a Node VM" harness the audits and VM tests load the engine through. | agent-view |
 | **lib/track-shot-survey.mjs** | Shot-survey plans: presets, resume filters, findings/progress JSON, HTML galleries (apex-extras / shot-survey). | survey-track |
 | **lib/tumftm.mjs** | Pure TUMFTM racetrack-database CSV parse/decimate → track-designer design + LGPL attribution envelope. | new-track |
@@ -112,12 +115,14 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/ai-race.mjs** | One entry for the AI instruments: pace / field / tactics / line / human / ratings / band. | ai-racecraft |
 | **check/ai-ratings.mjs** | Pearson matrix and column stats over DriverRatings.BASE — the personality dial check. | ai-racecraft |
 | **check/ai-strategy-census.mjs** | The AI field's tyre strategy over a whole race with TYRE WEAR real: stop counts, stints, compounds, stop reasons. | ai-racecraft |
+| **check/ai-stuck.mjs** | AI stuck / rescue census: per-car stuckT episodes and rescue teleports over N seeds (VM, AI-only). | ai-racecraft |
 | **check/ai-tactics.mjs** | AI racecraft over N laps: intervals in s, stuck-behind-slower, attack conversion, swap-backs (+ --mode human). | ai-racecraft |
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
 | **check/check-physics.mjs** | Physics stability probes: `check-physics.mjs <bank\|grip\|roadfollow\|steer>` — no-NaN, forward motion, steering authority. | tune-physics |
 | **check/defend-duel.mjs** | Staged two-car duels on a straight: defendPull ON vs OFF, same cell both arms (`--track --fracs --gaps --dxs --pair`). | ai-racecraft |
+| **check/destructure-usage.mjs** | Fails when a file destructures a name its script-global provider does not export (a dropped name after a rebase). | slim-bloat |
 | **check/doctor.mjs** | Read-only YAML/refs/mirrors/browser/deps doctor; --json and optional --catalog FILE. No browser or network. | check-changes |
 | **check/dup-keys.mjs** | Scans js/ for a DUPLICATE key in one object literal — the merge hazard where two sessions add a field and later wins. | check-changes |
 | **check/episode-diff.mjs** | Names the per-car field that broke seeded replay: replays a seed N times in the VM, diffs cold vs warm. | — |
@@ -214,6 +219,16 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/shot-survey.mjs** | Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON. | survey-track |
 | **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
+
+### `tools/perf/`
+
+The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and the A/B delta against a git ref.
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
+| **perf/profile.mjs** | One profiler CLI (spans \| cpu \| hitch \| trace) with --repeat noise floor and --base <ref> A/B delta table. | playwright-probe |
+| **perf/query.mjs** | Summarise a saved profile (spans JSON or .cpuprofile: top-N self/total, fn/file filter) or compare two spans JSONs. | playwright-probe |
 
 ### `tools/gfx/`
 
@@ -357,6 +372,15 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/cdmcp-lamps.py** | Night lamp screenshot suite via chrome-devtools MCP (Qatar, Singapore, Bahrain, Monza); `--port`, `--only`, `--limit`. | mcp-probe |
 | **mcp/cdmcp-measure.py** | Background-friendly Chromium MCP measure suite: boot (network/console/LCP), ui floors, full(+heap); `= run` verdict. | mcp-probe |
 | **mcp/chrome-devtools-mcp.sh** | Wrapper for the local `scratch/chrome-devtools-mcp` clone: `clone`/`build`/`run`/`verify`/`status`/`help`. | mcp-probe |
+| **mcp/debug-chrome.mjs** | CLI, not an MCP tool: start/status/stop a headless Chromium (CDP 9222) plus static server for the js-debugger. | — |
+| **mcp/js-debugger-cdp.mjs** | Bounded CDP transport and loopback target discovery for js-debugger-mcp. | — |
+| **mcp/js-debugger-cli.mjs** | Separate debugger server CLI: stdio, persistent loopback daemon and state-preserving shell calls. | — |
+| **mcp/js-debugger-http.mjs** | Persistent loopback JSON-RPC bridge for the debugger's separate shell-call processes. | — |
+| **mcp/js-debugger-mcp.mjs** | Opt-in stdio JavaScript debugger MCP: attach, breakpoints, step, scopes; no browser launch. | — |
+| **mcp/js-debugger-mcp.sh** | Separate JavaScript debugger MCP wrapper: serve, serve-http, call, status, list-tools and parent-only smoke. | — |
+| **mcp/js-debugger-session.mjs** | Agent debugger session: pause generations, breakpoints, scopes and nonblocking execution. | — |
+| **mcp/js-debugger-smoke.mjs** | Parent-only native Chromium smoke for js-debugger-mcp's real stdio/CDP debugging workflow. | — |
+| **mcp/js-debugger-trace.mjs** | Non-pausing debugger tools: logpoints, exception log, listener counts, live-object counts (CDP). | — |
 | **mcp/mcp-cli.mjs** | chrome-devtools MCP over stdio against a running build: `probe --backend webgpu`, `--eval`, `--console RE`, `--dry-run`. | mcp-probe |
 | **mcp/mcp-smoke.mjs** | Pokes the repo MCP wrappers (`apex_status`, probe help, chrome-devtools `status`, tinyfish `help`). No Chromium. | check-changes |
 | **mcp/playwright-mcp.sh** | Official `@playwright/mcp@0.0.79` wrapper (help/status/run): the `playwright-official` stdio server. | survey-ui-matrix / css-play / mcp-probe |
@@ -409,6 +433,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **check/html-sink-lint.mjs** | Flags non-constant `.innerHTML =` / `.outerHTML =` / `insertAdjacentHTML()` sinks in js/ outside the audited allowlist. |
 | **check/offline-precache-check.cjs** | Does an installed PWA still work with the origin gone? The only check that sees a bare circuit after a missed precache. |
 | **check/reject-lint.mjs** | An unhandled rejection paints a full-screen overlay — finds promise-returning API calls that discard theirs. |
+| **check/tolerance-diff.mjs** | Fails a PR that loosens a test tolerance (toBeCloseTo digits, a bound, tol/eps) beside production edits. |
 | **check/wait-polling-lint.mjs** | A declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`. |
 | **ci/assert-audit.mjs** | Does each declared test ASSERT anything? Grades `asserting` / `implicit` / `vacuous`; flags empty `.catch(() => {})`. |
 | **ci/base-green.sh** | Was this commit gated green? Prints `green`, `red` or `unknown` for a sha from its ci.yml / pages.yml runs. |
@@ -449,8 +474,8 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/test-honesty.mjs** | Finds tests that pass by not testing: bare `test.skip`/`fixme`/`todo` without a `SKIP-OK:` reason, and empty bodies. |
 | **ci/test-observed.mjs** | Which tests have I never seen run? Declared spec titles (espree) vs every title any `artifacts/logs/` run reported. |
 | **ci/test-solo.mjs** | Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`; refuses (exit 3) while busy (`--max-load`). Foreground. |
-| **ci/tooling-fast.mjs** | Runner behind `npm run test:tooling-fast`: per-file timing, buffered output, `--jobs=N`; exports the list. |
-| **ci/verify-change.mjs** | ONE command: fast gate (verify-track, graph-parity, tooling-fast, shell check) + `test-bg` batches → one verdict. |
+| **ci/tooling-fast.mjs** | Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list. |
+| **ci/verify-change.mjs** | ONE diff-aware `--fast` gate plus test batches; full tooling-fast is the pre-push floor; plan JSON reports budget. |
 | **lib/circuit-scope.cjs** | `scope(ids)` keeps the circuits APEX_CIRCUITS names (all when unset); audit `--all` and sweep loops read it. |
 | **lib/stale-rows.mjs** | Which stale baseline rows a fleet sweep fails: all locally, a PR's own circuits on a PR, none on the train (#2183). |
 
@@ -463,6 +488,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **check/skill-smoke-recipes.json** | `check/skill-smoke.mjs`, `tests/unit/skill-progressive.test.mjs` |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
+| **mcp/js-debugger-mcp.json** | `tests/unit/js-debugger-mcp.test.mjs` |
 | **track/clip-baseline.json** | `ci/select-specs.mjs`, `lib/stale-rows.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/audit-circuit.test.mjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |

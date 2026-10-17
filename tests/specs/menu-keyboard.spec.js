@@ -740,6 +740,8 @@ test.describe("Escape is BACK", () => {
   // garage card that opened it — hands focus to the NEW card, not <body>.
   test("the team picker focuses the current team and a pick returns focus to the garage card", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
+    // This contract measures native focus and modal state, not rendered cars.
+    await page.evaluate(() => window.__apex.headless(true));
     await page.locator("#mb-garage").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();

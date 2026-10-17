@@ -111,7 +111,7 @@ test("wrap lettering gets a contrasting keyline on solid and gradient artwork", 
     strokeText(text, x, y) { strokes.push({ text, x, y, color: this.strokeStyle }); }
   }
   const { ctx } = load({ document: { querySelector: () => null, createElement: () => ({ getContext: () => new Canvas() }) } });
-  for (const file of ["js/core/log.js", "js/data/teams.js", "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/liverytex.js"]) vm.runInContext(source(file), ctx);
+  for (const file of ["js/core/log.js", "js/data/teams.js", "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"]) vm.runInContext(source(file), ctx);
   const LT = vm.runInContext("LiveryTex", ctx);
   for (const spineLogo of ["ribbon", "gradient"]) for (const spineSide of ["number", "code", "wordmark", "duo"]) {
     const liv = { c1: [0, 0, 0], c2: [1, 1, 1], cover: [0, 0, 0], spineLogo, spineSide,

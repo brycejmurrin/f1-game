@@ -69,7 +69,7 @@ test('online Photo camera input integrates while shared physics continues; solo 
   const tick = source.slice(source.indexOf('function tickBody(now) {'), source.indexOf('// ---------- car setup panel ----------'));
   for (const [online, photo] of [[false, true], [true, true], [true, false]]) {
     const calls = { photo: 0, render: 0, physics: 0 };
-    const sandbox = { Math, lastFrame: 0, paused: true, state: 'race', gfx: { warming: () => false },
+    const sandbox = { Math, PerfSpans: { begin() {}, end() {} }, lastFrame: 0, paused: true, state: 'race', gfx: { warming: () => false },
       Input: { poll() {}, clearEdges() {}, setTimeScale() {} }, BrakeCue: { tick() {} }, onboard: { tick() {} },
       netPlay: { tick() {}, active: () => online }, PerfGov: { tick() {}, recordSimulation() {} },
       // Deploy tip's tickBody also ticks the TV director and gates on mirror

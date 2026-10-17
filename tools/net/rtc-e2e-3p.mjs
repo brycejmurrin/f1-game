@@ -33,7 +33,7 @@ import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
-const PORT = 4468;                       // not 4467 — so it can run beside the 2-peer one
+const PORT = 4468;                       // separate port; browser runs stay serialized
 const alive = async () => {
   try { return (await fetch(`http://127.0.0.1:${PORT}/version.json`)).ok; } catch (e) { return false; }
 };
@@ -47,6 +47,7 @@ for (let i = 0; i < 40 && !up; i++) {
 console.log("server up:", up, adopted ? "(adopted an existing one)" : "");
 if (!up) { await shutdown(); process.exit(1); }
 const log = (...a) => console.log(...a);
+const pageErrors = [];
 
 // Three pages means two of them are always background tabs, and Chromium
 // throttles a background tab's rAF to a crawl. Fatal and not obviously so: the
@@ -63,7 +64,7 @@ const b = await launchChromium({
 const mk = async (name) => {
   const c = await b.newContext({ viewport: { width: 844, height: 390 } });
   const p = await c.newPage();
-  p.on("pageerror", (e) => log(`  [${name} pageerror]`, String(e).slice(0, 160)));
+  p.on("pageerror", (e) => { pageErrors.push({ peer: name, error: String(e) }); log(`  [${name} pageerror]`, String(e).slice(0, 160)); });
   await p.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "domcontentloaded", timeout: 90000 });
   await p.waitForFunction(() => window.__apex != null, null, { timeout: 90000 });
   // THREE software-rendered racing games on one box starve each other's game
@@ -212,51 +213,73 @@ const read = (p) => p.evaluate(() => {
   const rivals = {};
   for (const r of (n.remotes || [])) {
     const c = A2.carAt(r.id) || {};
-    rivals[r.driverId] = { s: +(c.s || 0).toFixed(1), speed: +(c.speed || 0).toFixed(1) };
+    rivals[r.driverId] = { s: c.s, prog: c.prog, speed: c.speed };
+  }
+  const roles = {};
+  for (const role of A2.carRoles()) {
+    const car = A2.carAt(role.id);
+    roles[car.driverId] = { human: role.human, local: role.local };
   }
   return {
     role: n.role, driverId: mine.driverId,
     active: n.active, reason: n.reason, nRemotes: (n.remotes || []).length,
+    startPending: n.startPending,
+    stale: n.stale,
     alive: n.net ? n.net.alive : null, synced: n.net ? n.net.synced : null,
     rtt: n.net ? Math.round(n.net.rtt) : null,
-    mine: { s: +(mine.s || 0).toFixed(1), speed: +(mine.speed || 0).toFixed(1) },
-    rivals,
+    mine: { s: mine.s, prog: mine.prog, speed: mine.speed },
+    rivals, roles,
+    remoteIdentities: (n.remotes || []).map((r) => ({ driverId: r.driverId, wire: r.wire })),
   };
 });
+// Same tolerance and reasoning as the two-peer harness: a rival drawn ~100 ms
+// in the past is legitimately ~10 m behind where it says it is, and the clocks
+// agree only to within the RTT. Loose enough not to flake, tight enough that a
+// car stuck on the grid or never replicated fails outright.
+const TOL_M = 40;
+const sees = (viewer, targetId, targetProg) => {
+  const r = viewer.rivals[targetId];
+  return !!r && Math.abs(r.prog - targetProg) < TOL_M && r.speed > 5;
+};
+const healthy = (peer) => peer.active === true && peer.synced === true && !peer.startPending &&
+  Array.isArray(peer.stale) && peer.stale.length === 0;
+const humanRival = (viewer, id) => viewer.roles[id]?.human === true && viewer.roles[id]?.local === false;
+const validDrivers = (peers) => new Set(peers.map((p) => p.driverId)).size === 3 &&
+  peers.every((peer) => typeof peer.driverId === "string" && peer.nRemotes === 2 &&
+    Object.keys(peer.rivals).length === 2 && !Object.hasOwn(peer.rivals, peer.driverId) &&
+    Object.keys(peer.rivals).every((id) => humanRival(peer, id)));
+const allPlaying = (a, b2, c) => [a, b2, c].every(healthy) && validDrivers([a, b2, c]) &&
+  [a, b2, c].every((p) => p.mine.speed > 5) &&
+  sees(a, b2.driverId, b2.mine.prog) && sees(a, c.driverId, c.mine.prog) &&
+  sees(b2, c.driverId, c.mine.prog) && sees(c, b2.driverId, b2.mine.prog);
 let ra, rb, rc;
+// Stop at the first complete positive observation within the existing bound.
+// Continuing straight after that drives into T1 and tests an unattended car's
+// crash rather than the multiplayer link this harness is intended to prove.
 for (let i = 0; i < 8; i++) {
   await new Promise((r) => setTimeout(r, 3000));
   [ra, rb, rc] = await Promise.all([read(A), read(B), read(C)]);
   log(`${el()} A ${JSON.stringify(ra)}`);
   log(`${el()} B ${JSON.stringify(rb)}`);
   log(`${el()} C ${JSON.stringify(rc)}`);
+  if (allPlaying(ra, rb, rc)) break;
 }
-
-// Same tolerance and reasoning as the two-peer harness: a rival drawn ~100 ms
-// in the past is legitimately ~10 m behind where it says it is, and the clocks
-// agree only to within the RTT. Loose enough not to flake, tight enough that a
-// car stuck on the grid or never replicated fails outright.
-const TOL_M = 40;
-const sees = (viewer, targetId, targetS) => {
-  const r = viewer.rivals[targetId];
-  return !!r && Math.abs(r.s - targetS) < TOL_M && r.speed > 5;
-};
 const moving = ra.mine.speed > 5 && rb.mine.speed > 5 && rc.mine.speed > 5;
 
 // THE RELAY. B and C have no connection to each other — every peer holds one
 // RTCPeerConnection to the HOST and nothing else. So B seeing C at all is only
 // possible because the host forwarded C's state, and this pair of lines is the
 // entire star topology under test. A two-peer harness cannot express it.
-const bSeesC = sees(rb, rc.driverId, rc.mine.s);
-const cSeesB = sees(rc, rb.driverId, rb.mine.s);
-const aSeesBoth = sees(ra, rb.driverId, rb.mine.s) && sees(ra, rc.driverId, rc.mine.s);
+const bSeesC = sees(rb, rc.driverId, rc.mine.prog);
+const cSeesB = sees(rc, rb.driverId, rb.mine.prog);
+const aSeesBoth = sees(ra, rb.driverId, rb.mine.prog) && sees(ra, rc.driverId, rc.mine.prog);
 
 log(`\nall three driving:            ${moving}`);
 log(`host sees both guests:        ${aSeesBoth}`);
 log(`guest B sees guest C:         ${bSeesC}   <- only possible via the host relay`);
 log(`guest C sees guest B:         ${cSeesB}   <- likewise`);
 
-const playing = moving && aSeesBoth && bSeesC && cSeesB;
+const playing = allPlaying(ra, rb, rc);
 log(playing
   ? `\n*** THREE PEERS RACING, GUESTS SEEING EACH OTHER THROUGH THE HOST at ${el()} ***`
   : `\n*** connected, but not racing correctly ***`);
@@ -277,30 +300,71 @@ log(playing
 // is the case that matters, and it is the one that reaches the close handler
 // with a transport-supplied reason rather than a deliberate local stop.
 log(`\n${el()} closing guest B…`);
-await B.close().catch(() => {});
+await B.close();
 await new Promise((r) => setTimeout(r, 8000));
 
 const [ra2, rc2] = await Promise.all([read(A), read(C)]);
 log(`${el()} A ${JSON.stringify(ra2)}`);
 log(`${el()} C ${JSON.stringify(rc2)}`);
 
-// The host keeps its remaining guest, and the surviving guest keeps the host.
-// nRemotes on A drops 2 -> 1 (B handed back to the AI); C keeps at least the
-// host. Neither may go inactive: `active: false` on either is the bug.
+// Exact identities matter: keeping two remotes, or dropping C instead of B,
+// satisfied the former nRemotes >= 1 check while leaving a phantom driver.
 const aSurvived = ra2.active === true;
 const cSurvived = rc2.active === true;
-const aDroppedOnlyB = ra2.nRemotes >= 1;
+const onlyRival = (viewer, before, id) => {
+  const original = before.remoteIdentities.find((r) => r.driverId === id);
+  const remaining = viewer.remoteIdentities[0];
+  return viewer.nRemotes === 1 && viewer.remoteIdentities.length === 1 &&
+    Object.keys(viewer.rivals).length === 1 && Object.hasOwn(viewer.rivals, id) &&
+    original && Number.isInteger(original.wire) && remaining.driverId === id && remaining.wire === original.wire && humanRival(viewer, id);
+};
+const aDroppedOnlyB = onlyRival(ra2, ra, rc.driverId);
+const cDroppedOnlyB = onlyRival(rc2, rc, ra.driverId);
+const departedWire = ra.remoteIdentities.find((r) => r.driverId === rb.driverId)?.wire;
+const departedWireGone = Number.isInteger(departedWire) &&
+  rc.remoteIdentities.some((r) => r.driverId === rb.driverId && r.wire === departedWire) &&
+  [ra2, rc2].every((peer) => peer.remoteIdentities.every((r) => r.wire !== departedWire));
+const departedIsAi = [ra2, rc2].every((viewer) => {
+  const role = viewer.roles[rb.driverId];
+  return role && role.human === false && role.local === false;
+});
 const stillDriving = ra2.mine.speed > 5 && rc2.mine.speed > 5;
 
 log(`\nhost still active after B left:      ${aSurvived}`);
 log(`guest C still active after B left:   ${cSurvived}   <- the regression`);
 log(`host kept a rival (B -> AI, not all): ${aDroppedOnlyB}`);
+log(`guest C kept only host A:            ${cDroppedOnlyB}`);
+log(`departed B is AI on both survivors: ${departedIsAi}`);
+log(`departed B wire absent on both:     ${departedWireGone}`);
 log(`both survivors still driving:        ${stillDriving}`);
 
-const survived = aSurvived && cSurvived && aDroppedOnlyB && stillDriving;
+// Prove fresh replication AFTER departure in each direction. Swap throttle
+// and brake so matching stale, symmetric movement cannot satisfy both legs.
+let freshMotion = true;
+let [beforeA, beforeC] = [ra2, rc2];
+for (const drivingHost of [true, false]) {
+  await Promise.all([
+    A.evaluate((drive) => window.__apex.setInput({ throttle: drive, brake: !drive, steer: 0 }), drivingHost),
+    C.evaluate((drive) => window.__apex.setInput({ throttle: drive, brake: !drive, steer: 0 }), !drivingHost),
+  ]);
+  await new Promise((r) => setTimeout(r, 3000));
+  const [afterA, afterC] = await Promise.all([read(A), read(C)]);
+  const [owner0, viewer0, owner, viewer] = drivingHost
+    ? [beforeA, beforeC, afterA, afterC] : [beforeC, beforeA, afterC, afterA];
+  const oldPose = viewer0.rivals[owner.driverId], pose = viewer.rivals[owner.driverId];
+  const fresh = !!oldPose && !!pose && healthy(owner) && healthy(viewer) && humanRival(viewer, owner.driverId) && humanRival(owner, viewer.driverId) &&
+    owner.mine.prog - owner0.mine.prog > 5 && pose.prog - oldPose.prog > 5 &&
+    Math.abs(pose.prog - owner.mine.prog) < TOL_M;
+  freshMotion = freshMotion && fresh;
+  log(`${el()} fresh ${owner.driverId} motion after departure: ${fresh}`, JSON.stringify({ owner: owner.mine, replica: pose }));
+  [beforeA, beforeC] = [afterA, afterC];
+}
+
+const survived = aSurvived && cSurvived && healthy(ra2) && healthy(rc2) && aDroppedOnlyB && cDroppedOnlyB && departedWireGone && departedIsAi && stillDriving && freshMotion;
 log(survived
   ? `\n*** ONE GUEST LEFT, THE RACE CARRIED ON at ${el()} ***`
   : `\n*** a guest leaving took the race down with it ***`);
 
 await shutdown();
-process.exit(playing && survived ? 0 : 1);
+log("page errors:", pageErrors.length);
+process.exit(playing && survived && pageErrors.length === 0 ? 0 : 1);

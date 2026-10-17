@@ -22,6 +22,7 @@
 import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { parseFlags } from "../lib/cli-args.mjs";
 const require = createRequire(import.meta.url);
 // From this file, never a literal checkout path: a literal made an A/B run in a second
 // worktree (the base arm) load the FIRST checkout's code, so both arms measured one tree.
@@ -40,6 +41,7 @@ if (argv.includes("--help") || argv.includes("-h")) {
 `);
   process.exit(0);
 }
+parseFlags(argv, ["--track", "--diff", "--fracs", "--gaps", "--dxs", "--dvs", "--secs", "--pair", "--json", "--v0", "--help"]);
 const flag = (n, d) => { const i = argv.indexOf("--" + n); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : d; };
 const TRACK = flag("track", "monza"), DIFF = flag("diff", "normal"), OUT = flag("json", "");
 const SECS = +flag("secs", 8), NFRAC = +flag("fracs", 4);

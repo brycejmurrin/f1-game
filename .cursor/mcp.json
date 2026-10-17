@@ -15,6 +15,11 @@
       "type": "stdio",
       "command": "bash",
       "args": ["tools/mcp/chrome-devtools-mcp.sh", "run"]
+    },
+    "js-debugger": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["tools/mcp/js-debugger-mcp.sh", "serve"]
     }
   }
 }

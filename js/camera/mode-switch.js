@@ -87,7 +87,7 @@ window.CamModes = (function () {
       const replay = typeof RealRace !== "undefined" && RealRace.replay ? RealRace.replay() : null;
       if (!(opts && opts.persist === false) && !(replay && replay.isRunning())) G.store.set("camMode", G.camMode);
       if (G.camMode !== prev) {
-        G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut || 0.35;
+        G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut ?? 0.35;   // cut: 0 is an instant cut, not missing
         Log.info("game", `CamModes.setCamMode ${CAM_MODES[prev].id} -> ${CAM_MODES[G.camMode].id}`);
         if (typeof ExtraRigs !== "undefined") ExtraRigs.reset(CAM_MODES[G.camMode].id);
         // A cut: the new rig's eased bend sides start from its own target,

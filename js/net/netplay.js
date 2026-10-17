@@ -564,6 +564,9 @@ const NetPlay = (function () {
       s.clearHandlers();
       s.onState((bytes, at) => onState(bytes, s, id, at));
       s.onClose((why) => {
+        // We close a BYE/incompatible peer ourselves, so close() reports "local"; the
+        // LEFT other guests are told and the hand-back must keep the real reason.
+        if (closeWhy.has(id)) { why = closeWhy.get(id); closeWhy.delete(id); }
         sessions.delete(id);
         const carFor = remoteFor(id);
         armedPeers.delete(id);
@@ -622,7 +625,9 @@ const NetPlay = (function () {
               // let onClose hand its car back to the AI, exactly as a drop does.
               if (role === "host" && sessions.size > 1) {
                 if (G.announce) G.announce("A RIVAL IS ON A DIFFERENT GAME VERSION — DROPPED", 4, "info");
+                closeWhy.set(id, "incompatible_physics");
                 try { s.close(); } catch (e) { /* already gone; onClose still runs */ }
+                closeWhy.delete(id);
               } else {
                 if (G.announce) G.announce("GAME VERSIONS DIFFER — RELOAD BOTH GAMES", 4, "info");
                 stop("incompatible_physics");
@@ -649,7 +654,9 @@ const NetPlay = (function () {
             // car a frozen human slot for seconds. onClose owns the
             // hand-back + cleanup, so this stays a single path.
             if (role === "host" && sessions.size > 1) {
+              closeWhy.set(id, "bye");
               try { s.close(); } catch (e) { /* already gone */ }
+              closeWhy.delete(id);
               // close() fires onClose("local"); keep the clean-leave reason.
               lastReason = "bye";
             } else stop("bye");
@@ -973,6 +980,7 @@ const NetPlay = (function () {
     let startSeen = false;
     let named = null;                     // host: the START already sent ({at, hold}), for late ARMEDs
     const armedPeers = new Set();
+    const closeWhy = new Map();   // peer id -> why, for a close WE start on its behalf (close() itself reports "local")
     const leftWires = new Map();          // host: wire id -> reason, for every rival that left this race
     const allArmed = () => armedPeers.size >= Math.max(1, remotes.size);
 

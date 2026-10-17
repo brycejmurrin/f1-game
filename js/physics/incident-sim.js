@@ -205,7 +205,6 @@ const IncidentSim = (function () {
       if (idxs.length >= C1_MIN_CARS) { if (!_c1) { _rejected.disabledKind++; continue; } kind = "c1"; }
       else if (relV >= R2_CAR_V * Math.max(G.PACE, 0.05)) { if (!_r2) { _rejected.disabledKind++; continue; } kind = "r2"; }
       else { if (!_r3) { _rejected.disabledKind++; continue; } kind = "r3"; }
-      if (idxs.length > MAX_TAKEOVER) { _rejected.takeoverCap += idxs.length - MAX_TAKEOVER; idxs = idxs.slice(0, MAX_TAKEOVER); }
       startIncident(kind, idxs, relV, dt);
     }
     for (const [i, sev] of wallCand) {
@@ -232,7 +231,10 @@ const IncidentSim = (function () {
     const promoted = [];
     for (const i of idxs) {
       const c = cars[i];
-      if (!c) continue;
+      if (!c || _owned.has(i) || c.finished || c.retired) continue;
+      // One budget across clusters, walls and earlier windows. Count every denied
+      // eligible attempt; failed promotions leave room for the next candidate.
+      if (_owned.size >= MAX_TAKEOVER) { _rejected.takeoverCap++; continue; }
       // AI cars never write `head` (only the grid, coast and rescue do), so
       // it is the grid's 0 for the whole race and the launch velocity pointed
       // along world +Z whatever the road did — the mirror pose in debrisworld

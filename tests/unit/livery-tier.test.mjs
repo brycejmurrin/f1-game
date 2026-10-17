@@ -73,6 +73,20 @@ test("mobile keeps the same absolute upload sizes as the 1024-era policy", () =>
   assert.equal(LiveryTex.playerHiResDeferred(true), false, "mobile has no larger player upload to defer");
 });
 
+test("a phone on GRAPHICS: HIGH keeps AI cars at the phone size (M-10); the player follows the tier", () => {
+  // atlasMobile(isPlayer, tier, phone): the player follows the memory tier, an AI car the device.
+  assert.equal(LiveryTex.atlasMobile(false, false, true), true, "phone + HIGH: AI stays on the phone divisor");
+  assert.equal(LiveryTex.atlasMobile(true, false, true), false, "phone + HIGH: the player may take the desktop preview");
+  assert.equal(LiveryTex.atlasMobile(false, true, true), true);
+  assert.equal(LiveryTex.atlasMobile(true, true, true), true);
+  assert.equal(LiveryTex.atlasMobile(false, false, false), false, "desktop is unchanged");
+  assert.equal(LiveryTex.atlasMobile(true, false, false), false, "desktop is unchanged");
+  const ai = (m) => LiveryTex.atlasDiv(false, LiveryTex.atlasMobile(false, m.tier, m.phone));
+  const saved = atlasBytes(ai({ tier: false, phone: false })) - atlasBytes(ai({ tier: false, phone: true }));
+  assert.equal(saved, 1747620 - 436900, "each AI car sheds 1.25 MB");
+  assert.ok(21 * saved / 1048576 > 26, "21 AI cars shed ~26.2 MB of mip-inclusive atlas");
+});
+
 test("the desktop grid stays well under the old every-car-full figure", () => {
   // Steady-state after deferral: player hi-res + 21 AI at 512.
   const everyFull = 22 * atlasBytes(1);
@@ -401,7 +415,7 @@ function paintAtlasWidths(isPlayer, hiRes) {
   sb.globalThis = sb;
   vm.createContext(sb);
   for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js",
-                   "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/liverytex.js"])
+                   "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
   const LT = vm.runInContext("LiveryTex", sb);
   const returned = LT.buildAtlas("ferrari", {}, 16, isPlayer, hiRes);
@@ -437,7 +451,7 @@ test("M28: an emblem that finishes decoding after CLEAR or a newer upload never 
   ctx.globalThis = ctx;
   vm.createContext(ctx);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js",
-                   "js/car/livery-graphics.js", "js/car/liverytex.js"])
+                   "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
   const LT = vm.runInContext("LiveryTex", ctx);
   let marks = 0;
@@ -480,7 +494,7 @@ test("C-P3: ImageBitmap upload == canvas upload, byte for byte (Chromium, APEX_L
   try {
     const page = await browser.newPage();
     await page.goto("about:blank");
-    for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/livery-graphics.js", "js/car/liverytex.js"])
+    for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
       await page.addScriptTag({ path: path.join(ROOT, f) });
     const out = await page.evaluate(async () => {
       const gl = document.createElement("canvas").getContext("webgl2");

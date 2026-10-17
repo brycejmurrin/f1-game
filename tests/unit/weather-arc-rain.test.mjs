@@ -164,8 +164,8 @@ test("endSession(true) restores the chip's weather but keeps the plan; endSessio
 
 test("source guard: MIXED plans go through capPlanDur; host wxArc.dur does not", () => {
   const src = read("js/race/weather-arc.js");
-  assert.match(src, /function capPlanDur\(dur\)/);
-  assert.match(src, /const dur = capPlanDur\(120 \+ Math\.floor\(r\("dur"\) \* 300\)\);/);
+  assert.match(src, /function capPlanDur\(dur, laps = capLaps\(\), len = G\.track && G\.track\.total\)/);
+  assert.match(src, /dur: capPlanDur\(120 \+ Math\.floor\(r\("dur"\) \* 300\), laps, len\)/);
   assert.match(src, /never recapped/);
 });
 

@@ -118,6 +118,7 @@ test("pinned IWER vendor is present and ENTER VR appears; session starts/exits/r
 
   const again = await startVr(page);
   expect(again.ok && again.presenting).toBe(true);
+  await waitXrFrames(page, 2, { timeout: 45_000 });
   await endVr(page);
 
   expect(page.__xrPageErrors || []).toEqual([]);
@@ -191,22 +192,31 @@ test("controller thumbstick/trigger/squeeze/A-B map through Input.remoteSample/r
   expect((await startVr(page)).ok).toBe(true);
   await waitXrFrames(page, 2, { timeout: 45_000 });
 
-  const mapped = await page.evaluate(async () => {
+  // Both phases share one immersive session. `menuOpen` is UiLayers.navOpen():
+  // the title screen counts, so the stick/trigger/A/B drive MENU navigation there
+  // and pedals stay zero. The driving mapping is asserted with the menu layer
+  // reported closed (what a race in progress reports).
+  const capture = (args) => page.evaluate(async ({ menuOpen, press }) => {
     const d = globalThis.__iwerDevice;
     const samples = [];
     const events = [];
     const prev = Input.remoteSample;
     const prevEv = Input.remoteEvent;
+    const prevNav = UiLayers.navOpen;
     Input.remoteSample = (s) => { samples.push(s); return prev ? prev.call(Input, s) : true; };
     Input.remoteEvent = (k) => { events.push(k); return prevEv ? prevEv.call(Input, k) : true; };
+    if (menuOpen === false) UiLayers.navOpen = () => false;
 
     d.controllers.right.updateButtonValue("trigger", 1);
     d.controllers.left.updateButtonValue("trigger", 0.8);
     d.controllers.left.updateAxes("thumbstick", 0.9, 0);
+    // Squeeze is NOT a look-back any more: it must never raise `held`.
     d.controllers.right.updateButtonValue("squeeze", 1);
-    // Rising edge A = recenter, B = pause
-    d.controllers.right.updateButtonValue("a-button", 1);
-    d.controllers.right.updateButtonValue("b-button", 1);
+    if (press) {
+      // Rising edge A = recenter, B = pause
+      d.controllers.right.updateButtonValue("a-button", 1);
+      d.controllers.right.updateButtonValue("b-button", 1);
+    }
 
     // Window rAF is suspended while immersive; drive the wait off the session.
     const s = XrSession.getSession();
@@ -223,13 +233,28 @@ test("controller thumbstick/trigger/squeeze/A-B map through Input.remoteSample/r
 
     Input.remoteSample = prev;
     Input.remoteEvent = prevEv;
+    UiLayers.navOpen = prevNav;
     return {
       samples: samples.slice(-5),
       events: events.slice(),
       presenting: XrSession.isPresenting(),
+      navOpen: !!prevNav(),
     };
-  });
+  }, args);
 
+  // Phase 1: the real title screen. A menu is open, so no pedal or steer command.
+  const inMenu = await capture({ menuOpen: undefined, press: false });
+  test.info().annotations.push({ type: "xr-input-menu", description: JSON.stringify(inMenu) });
+  expect(inMenu.presenting).toBe(true);
+  expect(inMenu.navOpen, "title screen counts as an open menu layer").toBe(true);
+  const menuLast = inMenu.samples[inMenu.samples.length - 1];
+  expect(menuLast, "expected remoteSample traffic").toBeTruthy();
+  expect(menuLast.thr).toBe(0);
+  expect(menuLast.brk).toBe(0);
+  expect(menuLast.held | 0).toBe(0);
+
+  // Phase 2: driving. Triggers, stick and the A/B edges map through.
+  const mapped = await capture({ menuOpen: false, press: true });
   test.info().annotations.push({ type: "xr-input", description: JSON.stringify(mapped) });
   expect(mapped.presenting).toBe(true);
   const last = mapped.samples[mapped.samples.length - 1];
@@ -241,7 +266,8 @@ test("controller thumbstick/trigger/squeeze/A-B map through Input.remoteSample/r
   // Left stick at +0.9, past XrRig's 0.12 dead zone: a finite rightward command.
   expect(last.roll).toBeUndefined();
   expect(last.steer).toBeGreaterThan(0.5);
-  expect(last.held | 0).toBe(1);
+  // Squeeze no longer injects a look-back (the seated anchor never turns).
+  expect(last.held | 0).toBe(0);
   expect(mapped.events).toContain("pause");
 
   await endVr(page);
@@ -314,24 +340,17 @@ test("WebGPU path negotiates via enabledFeatures and falls back to WebGL2", asyn
   expect(page.__xrPageErrors || []).toEqual([]);
 });
 
-test("EXIT VR restores window tick once (no double loop); camMode store unchanged", async ({ page }) => {
+test("EXIT VR resumes the game tick and restores the live camera without changing its preference", async ({ page }) => {
   test.setTimeout(180_000);
   await bootAndProbe(page);
-  // Seed a non-cockpit cam and confirm store writes.
-  await page.evaluate(() => {
-    localStorage.setItem("apex26.camMode", "1");
-  });
-  // Re-goto so camMode loads from store... actually game already booted; set live.
-  await page.evaluate(() => {
-    if (typeof setCamMode === "function") setCamMode(1); // persists chase/far
-  });
+  await page.evaluate(() => window.__apex.camera(1));
   const beforeStore = await page.evaluate(() => localStorage.getItem("apex26.camMode"));
 
   expect((await startVr(page)).ok).toBe(true);
   await waitXrFrames(page, 2, { timeout: 45_000 });
 
   const during = await page.evaluate(() => ({
-    cam: typeof camMode !== "undefined" ? camMode : null,
+    cam: window.__apex.camera().index,
     store: localStorage.getItem("apex26.camMode"),
     loopByXr: XrBoot.loopByXr(),
     diag: XrBoot.diag(),
@@ -342,32 +361,23 @@ test("EXIT VR restores window tick once (no double loop); camMode store unchange
   expect(during.diag.savedCam).toBeGreaterThanOrEqual(0);
 
   await endVr(page);
-
-  const after = await page.evaluate(() => new Promise((resolve) => {
-    let n = 0;
-    const start = performance.now();
-    function count(t) {
-      n++;
-      if (n >= 3 || performance.now() - start > 500) {
-        resolve({
-          n,
-          loopByXr: XrBoot.loopByXr(),
-          windowPending: XrBoot.diag().windowPending,
-          cam: typeof camMode !== "undefined" ? camMode : null,
-          store: localStorage.getItem("apex26.camMode"),
-          savedCam: XrBoot.diag().savedCam,
-        });
-        return;
-      }
-      requestAnimationFrame(count);
-    }
-    requestAnimationFrame(count);
-  }));
+  // Observe the game's own tick, rather than an unrelated rAF chain created
+  // by the test (which would keep running even if the game failed to resume).
+  await page.evaluate(() => {
+    globalThis.__xrFlatTicks = 0;
+    globalThis.__xrOriginalPoll = Input.poll;
+    Input.poll = (...args) => { __xrFlatTicks++; return __xrOriginalPoll.apply(Input, args); };
+  });
+  await page.waitForFunction(() => __xrFlatTicks >= 3, null, { polling: 100, timeout: 15_000 });
+  const after = await page.evaluate(() => {
+    Input.poll = __xrOriginalPoll;
+    return { loopByXr: XrBoot.loopByXr(), cam: window.__apex.camera().index,
+      store: localStorage.getItem("apex26.camMode"), savedCam: XrBoot.diag().savedCam };
+  });
   expect(after.loopByXr).toBe(false);
   expect(after.savedCam).toBe(-1);
   expect(after.store).toBe(beforeStore);
-  // Exactly one window chain should be alive — we observe a few rAFs, not a stall.
-  expect(after.n).toBeGreaterThanOrEqual(2);
+  expect(after.cam).toBe(1);
   expect(page.__xrPageErrors || []).toEqual([]);
 });
 

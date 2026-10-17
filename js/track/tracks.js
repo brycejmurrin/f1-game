@@ -421,6 +421,12 @@ const Tracks = (function () {
       // livery painter exist (feature-detected inside; the VM builds skip it).
       if (typeof PitSigns !== "undefined") PitSigns.upload(G, track);
       lap("pitSigns", "up"); yield track; _t = _now();
+      // The CPU copies of the prop / glass / water geometry are read only by the dev surface
+      // (__apex.trackGeometry); the meshes are already uploaded. A player build frees them, as it
+      // does the graph. A page that wants them (agent surface, trackGeometry(true)) says so.
+      if (opts && opts.retainGraph === false && !opts.retainGeometry && !keepGeometry) {
+        track.propsGeo = track.glassGeo = track.waterGeo = null;
+      }
     }
     Log.info("track", "build done " + def.id + " total=" + (track && track.total && +track.total.toFixed(1)) + " n=" + (track && track.n) + " night=" + !!(track && track._night));
     return track;
@@ -630,6 +636,10 @@ const Tracks = (function () {
     return t ? LIST.indexOf(t) : -1;
   }
 
+  // Inclusion margin of terrainY, in metres of world distance from a triangle
+  // edge (a barycentric slack scales with the triangle and bridged a 1 m gap
+  // between two 100 m rects). Covers float cracks at shared edges and no more.
+  const TRI_EPS = 0.01;
   function terrainGrid(track) {
     const g = track.terrainGeo;
     if (!g || !g.pos || !g.idx) return null;
@@ -646,9 +656,9 @@ const Tracks = (function () {
     const cells = new Array(nx * nz);
     for (let t = 0; t < idx.length; t += 3) {
       const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
-      const x0 = __M.min(pos[a], pos[b], pos[c]), x1 = __M.max(pos[a], pos[b], pos[c]);
-      const z0 = __M.min(pos[a + 2], pos[b + 2], pos[c + 2]);
-      const z1 = __M.max(pos[a + 2], pos[b + 2], pos[c + 2]);
+      const x0 = __M.min(pos[a], pos[b], pos[c]) - TRI_EPS, x1 = __M.max(pos[a], pos[b], pos[c]) + TRI_EPS;
+      const z0 = __M.min(pos[a + 2], pos[b + 2], pos[c + 2]) - TRI_EPS;
+      const z1 = __M.max(pos[a + 2], pos[b + 2], pos[c + 2]) + TRI_EPS;
       const i0 = __M.max(0, __M.floor((x0 - mnx) / CELL));
       const i1 = __M.min(nx - 1, __M.floor((x1 - mnx) / CELL));
       const j0 = __M.max(0, __M.floor((z0 - mnz) / CELL));
@@ -660,7 +670,7 @@ const Tracks = (function () {
         }
       }
     }
-    track._terrGrid = { geo: g, mnx, mnz, nx, nz, cell: CELL, cells };
+    track._terrGrid = { geo: g, mnx, mnz, mxx, mxz, nx, nz, cell: CELL, cells };
     return track._terrGrid;
   }
 
@@ -715,8 +725,10 @@ const Tracks = (function () {
     const pos = g.pos, idx = g.idx; let best = null;
     const G = terrainGrid(track);
     if (G) {
-      const i = __M.floor((x - G.mnx) / G.cell), j = __M.floor((z - G.mnz) / G.cell);
-      if (i < 0 || j < 0 || i >= G.nx || j >= G.nz) return null;
+      if (x < G.mnx - TRI_EPS || z < G.mnz - TRI_EPS || x > G.mxx + TRI_EPS || z > G.mxz + TRI_EPS) return null;
+      // The exact maximum edge floors one cell past the grid when the extent is a whole number of cells.
+      const i = __M.min(G.nx - 1, __M.max(0, __M.floor((x - G.mnx) / G.cell)));
+      const j = __M.min(G.nz - 1, __M.max(0, __M.floor((z - G.mnz) / G.cell)));
       const list = G.cells[j * G.nx + i];
       if (!list) return null;
       for (let n = 0; n < list.length; n++) {
@@ -737,7 +749,10 @@ const Tracks = (function () {
     const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z;
     const den = d00 * d11 - d01 * d01; if (__M.abs(den) < 1e-9) return best;
     const u = (d11 * d20 - d01 * d21) / den, vv = (d00 * d21 - d01 * d20) / den;
-    if (u < -0.01 || vv < -0.01 || u + vv > 1.01) return best;
+    // Barycentric slack = TRI_EPS / (that vertex's altitude); altitude = 2A / opposite edge, 2A = sqrt(den).
+    const tA = __M.sqrt(den), w = 1 - u - vv;
+    if (u * tA < -TRI_EPS * __M.sqrt(d11) || vv * tA < -TRI_EPS * __M.sqrt(d00)
+        || w * tA < -TRI_EPS * __M.sqrt((v0x - v1x) * (v0x - v1x) + (v0z - v1z) * (v0z - v1z))) return best;
     const y = pos[a + 1] + u * (pos[c + 1] - pos[a + 1]) + vv * (pos[b + 1] - pos[a + 1]);
     return best === null || y > best ? y : best;
   }

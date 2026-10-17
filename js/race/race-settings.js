@@ -6,13 +6,9 @@ const RaceSettings = (function () {
   "use strict";
 
   const RS_WEATHER = [["dry", "☀ DRY"], ["wet", "💧 WET"], ["rain", "🌧 RAIN"], ["storm", "⛈ STORM"], ["overcast", "☁ CLOUDY"], ["fog", "🌫 FOG"]];
-  // STORM IS SOLO-ONLY for now: js/net/lobby.js validates SETTINGS weather
-  // (and a MIXED plan's wxArc.to) against the five pre-storm names and drops
-  // the WHOLE packet on anything else, so a room never offers it, and a storm
-  // picked solo comes into a room as RAIN (setNetRoom). The chip returns in
-  // rooms once the lobby's WEATHER set lists "storm".
-  const weatherOpts = (room) => (room ? RS_WEATHER.filter(([id]) => id !== "storm") : RS_WEATHER);
-  const roomWeather = (w) => (w === "storm" ? "rain" : w);
+  // STORM is offered everywhere: js/net/lobby.js lists it in WEATHER, so a room accepts it for SETTINGS
+  // and for a MIXED plan's wxArc.to.
+  const weatherOpts = () => RS_WEATHER;
   const RS_CONDITIONS = [["stable", "STABLE"], ["mixed", "MIXED"]];
   const RS_TIME = [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]];
   const RS_DIFF = [["easy", "EASY"], ["normal", "NORMAL"], ["hard", "HARD"]];
@@ -161,7 +157,7 @@ const RaceSettings = (function () {
     } = G;
     const {
       GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
-      qualiResults, openQuali, enableTilt, getSteerMode, buildStandings, raceIntro,
+      qualiResults, openQuali, enableTilt, getSteerMode, buildStandings, raceIntro, previewWxPlan,
     } = deps;
     const isTimeTrial = () => G.session === "tt";
     const isChampionship = () => G.flow === "season" || G.flow === "career";
@@ -209,12 +205,12 @@ const RaceSettings = (function () {
         else { raceLaps = full; G.raceLaps = full; }
       }
       SettingRow.paint("rs-laps", raceLaps, lapOpts.map((n) => [n, !tt && n === full ? full + " (FULL)" : String(n)]));
-      if (netRoom && G.raceWeather !== roomWeather(G.raceWeather)) G.raceWeather = roomWeather(G.raceWeather);
-      SettingRow.paint("rs-weather", G.raceWeather, weatherOpts(netRoom));
+      SettingRow.paint("rs-weather", G.raceWeather, weatherOpts());
       SettingRow.disable("rs-laps", !!daily);
       SettingRow.disable("rs-weather", !!daily);
       $("rs-mixed").hidden = tt;
       SettingRow.paint("rs-mixed", G.raceChangeable ? "mixed" : "stable", RS_CONDITIONS);
+      paintForecast(tt);
       SettingRow.paint("rs-time", G.raceTimeOfDay, RS_TIME);
       SettingRow.disable("rs-time", !!daily);
       $("rs-diff").hidden = tt;
@@ -362,6 +358,30 @@ const RaceSettings = (function () {
       $("rs-plan-loss").textContent = (stops ? stops + (stops === 1 ? " STOP · BOX L" : " STOPS · BOX L") + plan.lapsAt.join(", L") : "NO STOP")
         + (pin === 0 && stops ? " · 2 DRY COMPOUNDS" : "")   // NO STOP pinned, the rule raised it (AiDrive.stintPlan)
         + " · PIT LOSS ≈ " + Math.round(pits.lossS()) + " s";
+    }
+
+    // FORECAST line under CONDITIONS (MIXED only): the plan the green will arm, read through
+    // previewWxPlan (deps) so staging laps/weather never caches it. Built at runtime (no shell node).
+    // Only once the selected circuit is the BUILT one: the plan's duration is capped by the built
+    // track's length, so a preview from another circuit's length could differ from the armed arc.
+    function paintForecast(tt) {
+      let el = $("rs-forecast");
+      if (!el) {
+        const host = $("rs-mixed");
+        if (!host || !host.parentNode) return;
+        el = document.createElement("p");
+        el.id = "rs-forecast"; el.className = "adv-help"; el.hidden = true; el.setAttribute("aria-live", "polite");
+        host.parentNode.insertBefore(el, host.nextSibling);
+      }
+      let text = "";
+      const def = Tracks.LIST[G.trackIdx];
+      if (!tt && G.raceChangeable && typeof Forecast !== "undefined" && previewWxPlan && G.track && def && G.track.def && G.track.def.id === def.id) {
+        const plan = previewWxPlan({ laps: G.raceLaps, from: G.raceWeather });
+        const f = plan && Forecast.compute({ plan, from: G.raceWeather, lapS: G.track.total / 45, seed: netRoom || !G.simSeed ? 0 : G.simSeed() });
+        if (f) text = "FORECAST: " + f.text;
+      }
+      el.textContent = text;
+      el.hidden = !text;
     }
 
     function wireRaceSettings() {
@@ -545,13 +565,6 @@ const RaceSettings = (function () {
     function setNetRoom(on) {
       if (netRoom !== !!on) resetDraft();
       netRoom = !!on;
-      if (!netRoom) return;
-      // Into a room: nothing the lobby would refuse may be left staged for its
-      // SETTINGS — a solo STORM pick races as RAIN, and a MIXED plan already
-      // drawn toward a storm is re-drawn (planFor never draws one in a room).
-      if (G.raceWeather === "storm") G.raceWeather = "rain";
-      const p = G.wxArcPlan;
-      if (p && p.to === "storm") G.wxArcPlan = null;
     }
 
     function openRaceSetup() {
@@ -679,6 +692,6 @@ const RaceSettings = (function () {
   /* duelOpts/duelValue are EXPORTED, not private, so the DUEL row's rules can be
    * tested without a DOM: the inert VM DOM does not build SettingRow children,
    * so painting the row asserts nothing (tests/unit/duel-row.test.mjs). */
-  return { create, duelOpts, duelValue, presetValues, matchPreset, sheetTitle, draftOf, draftFor, weatherOpts, roomWeather };
+  return { create, duelOpts, duelValue, presetValues, matchPreset, sheetTitle, draftOf, draftFor, weatherOpts };
 })();
 Object.freeze(RaceSettings);
