@@ -238,6 +238,7 @@ const FULL = [
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
   "js/car/crest-paths.js",
   "js/car/livery-graphics.js",
+  "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/car/ghost-share.js",
@@ -258,6 +259,7 @@ const FULL = [
   "js/garage/scene-prims.js",
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
+  "js/garage/scene-dress.js",
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "js/garage/arrival.js",
@@ -414,6 +416,7 @@ const FULL = [
   "js/physics/incident-sim.js",
   "js/physics/contact-geometry.js", // oriented overlap, linear sweep, contact impulse (restitution + Coulomb friction)
   "js/physics/collide.js",   // car-car contact resolver (Collide.create(G, collideFx)), extracted from game.js
+  "js/physics/wall-end-face.js", // pit-edge / run-off end face: hold s, scrub, keep x (WallEndFace.apply), #1623
   "js/physics/wall-clamp.js", // barrier / pit / gantry hard clamp + human writeback (WallClamp.apply), carve-headroom B
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
@@ -528,6 +531,7 @@ const CARVIEW = [
   "js/car/liveries.js",
   "js/car/crest-paths.js",
   "js/car/livery-graphics.js",
+  "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/physics/consts.js",
   "js/car/car-mesh.js",
@@ -575,6 +579,7 @@ const TRACK_VM = [
   "js/garage/scene-prims.js",
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
+  "js/garage/scene-dress.js",
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "@circuits",
@@ -698,6 +703,8 @@ const HARD_EDGES = [
   ["js/garage/scene-prims.js", "js/garage/scene-equipment.js"],   // the pit equipment destructures GaragePrims at eval
   ["js/garage/scene-prims.js", "js/garage/scene-live.js"],        // the live atlas destructures GaragePrims at eval
   ["js/garage/scene-equipment.js", "js/garage/scene-live.js"],    // ...and GarageEquipment (the timing-screen housing's anchor)
+  ["js/garage/scene-prims.js", "js/garage/scene-dress.js"],       // the team dress destructures GaragePrims at eval
+  ["js/garage/scene-dress.js", "js/garage/scene.js"],             // the bay destructures GarageDress at eval
   ["js/garage/scene-prims.js", "js/garage/scene.js"],             // the bay destructures GaragePrims at eval
   ["js/garage/scene-equipment.js", "js/garage/scene.js"],         // ...GarageEquipment (the fan and screen anchors)
   ["js/garage/scene-live.js", "js/garage/scene.js"],              // ...and GarageLive (the atlas size and painters)
@@ -754,6 +761,7 @@ const HARD_EDGES = [
   // monogram because a tag moved is exactly the kind of quiet regression the
   // load-order guard exists to prevent.
   ["js/car/crest-paths.js", "js/car/liverytex.js"],
+  ["js/car/crest-draw.js", "js/car/liverytex.js"],   // liverytex destructures LiveryCrests.create(...) at eval
   ["js/core/store.js", "js/camera/offsets.js"],  // cam-tune destructures GameStore at eval
   ["js/core/store.js", "js/career/career.js"],    // career destructures GameStore at eval
   ["js/core/store.js", "js/career/season-cal.js"], // season-cal destructures GameStore at eval
@@ -834,6 +842,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
   ["js/core/mat4.js", "js/physics/wall-clamp.js"],       // WallClamp binds M4.clamp at eval
+  ["js/physics/wall-end-face.js", "js/physics/wall-clamp.js"],   // WallClamp calls WallEndFace.apply(…)
   ["js/physics/wall-clamp.js", "js/game.js"],            // updateCar calls WallClamp.apply(…)
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/physics/ai-band.js", "js/game.js"],          // updateCar calls AiBand for pace catch-up
@@ -879,6 +888,7 @@ const DEFERRED = {
     "js/render/webgpu/wgx-shadow.js",
     "js/render/webgpu/wgx-chunked.js",
     "js/render/webgpu/wgx-post.js",
+    "js/render/webgpu/wgx-roadlut.js",
     "js/render/webgpu/wgx.js",
   ],
   three: [
@@ -905,11 +915,15 @@ const DEFERRED = {
 // ~350 KB of parse + PWA memory. Fetch-miss still caches on first use.
 const LAZY_AGENT = [
   "js/agent/agentview-raster.js",
+  "js/agent/agentview-corners.js",
   "js/agent/agentview.js",
+  "js/agent/apex-net.js",
   "js/agent/apex.js",
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
+  ["js/agent/apex-net.js", "js/agent/apex.js"],   // ApexApi spreads ApexNet.hooks(...) when game.js calls ApexApi.create
+  ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
 ];
 
 // RACE PAYLOAD. Data a session needs only once a race resolves, never to paint
@@ -1177,6 +1191,7 @@ const LAZY_NET = [
   "js/net/transport.js",
   "js/net/handshake.js",
   "js/net/lobby-codes.js",  // LobbyCodes: paste/copy/share/scan/QR for invite+answer (before lobby)
+  "js/net/lobby-roster.js", // LobbyRoster: the room roster's stateless DOM leaves (before lobby)
   "js/net/snapshot.js",
   "js/net/session.js",
   "js/net/netplay.js",
@@ -1240,6 +1255,7 @@ const LAZY_NET_EDGES = [
   ["js/net/scan.js", "js/net/lobby.js"],
   ["js/net/handshake.js", "js/net/lobby-codes.js"],
   ["js/net/lobby-codes.js", "js/net/lobby.js"],
+  ["js/net/lobby-roster.js", "js/net/lobby.js"],   // lobby destructures LobbyRoster inside create(), which game.js evals
 ];
 
 const DEFERRED_EDGES = [
@@ -1258,6 +1274,7 @@ const DEFERRED_EDGES = [
   ["js/render/webgpu/wgx-shadow.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx-chunked.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx-post.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgx-roadlut.js", "js/render/webgpu/wgx.js"],   // wgx.js destructures WGXRoadLut at eval
   ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
   ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
   ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],      // TLX.create invokes TLXShaders.sky
@@ -1288,6 +1305,7 @@ const PATHS = {
   WGX_SHADOW: "js/render/webgpu/wgx-shadow.js",
   WGX_CHUNKED: "js/render/webgpu/wgx-chunked.js",
   WGX_POST: "js/render/webgpu/wgx-post.js",
+  WGX_ROADLUT: "js/render/webgpu/wgx-roadlut.js",
   WGX: "js/render/webgpu/wgx.js",
   INST_CELLS: "js/render/shared/inst-cells.js",
   GLTF: "js/render/shared/gltf.js",

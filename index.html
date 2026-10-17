@@ -855,11 +855,15 @@
             <span class="tune-label" id="pm-throttlemode-label">THROTTLE</span>
             <div>
               <button id="pm-throttlemode-prev" type="button" data-step="-1" aria-label="Previous throttle mode">&lsaquo;</button>
-              <select id="pm-throttlemode-sel" aria-labelledby="pm-throttlemode-label"></select>
+              <select id="pm-throttlemode-sel" aria-labelledby="pm-throttlemode-label" aria-describedby="pm-throttle-note"></select>
               <button id="pm-throttlemode-next" type="button" data-step="1" aria-label="Next throttle mode">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help">HOLD keeps your thumb on GAS. LATCH makes GAS a switch &mdash; tap once for full throttle, tap again to lift. AUTO drives the throttle for you so you only steer and brake &mdash; less tiring over a long race, and the way TOUCH steering has always worked.</p>
+          <p id="pm-throttle-note" class="adv-help" data-help="keep">HOLD: keep your thumb on GAS.</p>
+          <details id="pm-throttle-compare">
+            <summary>Compare throttle modes</summary>
+            <p class="adv-help" data-help="keep">HOLD keeps your thumb on GAS. LATCH makes GAS a switch &mdash; tap once for full throttle, tap again to lift. AUTO drives the throttle for you so you only steer and brake &mdash; less tiring over a long race, and the way TOUCH steering has always worked.</p>
+          </details>
           <div id="pm-mirror" class="set-row" role="group" aria-labelledby="pm-mirror-label">
             <span class="tune-label" id="pm-mirror-label">LEFT-HANDED</span>
             <div>
@@ -3594,6 +3598,7 @@
 <script defer crossorigin="anonymous" src="js/car/custom-liveries.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/crest-paths.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/livery-graphics.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/crest-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liverytex.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost-share.js?v=dev"></script>
@@ -3612,6 +3617,7 @@
 <script defer crossorigin="anonymous" src="js/garage/scene-prims.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-equipment.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-live.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/scene-dress.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-crew.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/arrival.js?v=dev"></script>
@@ -3761,6 +3767,7 @@
 <script defer crossorigin="anonymous" src="js/physics/incident-sim.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/contact-geometry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/collide.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/wall-end-face.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/wall-clamp.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/car-fields.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/field-lod.js?v=dev"></script>

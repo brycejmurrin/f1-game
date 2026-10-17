@@ -1118,3 +1118,28 @@ test("AQUAPLANING: the AI's lift speed sits just past onset, ordered by tread, a
   assert.equal(a, T.aquaplane(70, 1, T.treadFor("rain", 1)), "an unfitted car reads the tread the conditions call for");
   assert.equal(T.aquaInto({ tread: 0 }, 70, "rain", 1).mul, T.aquaplane(70, 1, 0), "a fitted set reads its own");
 });
+
+// ── R1: a local shower's end must not step the temperatures ─────────────────
+// weather-arc.js ends a cell arc (arc = null, raceWeather = from) once the road is within SETTLE (0.005) of the
+// start wetness, ~7 TAU_DRY after cell.life. The temperatures held tAmb(to) all that time, then stepped
+// 13 -> 30 C air and 14 -> 48 C asphalt in one tick (tempInto / grain / blister all read it).
+test("R1: ambient and track temperature are continuous across a local shower's end", () => {
+  const cell = { c0: 0.3, h: 0.15, v: 8, life: 400, total: 5386 };
+  const arcAt = (t) => ({ from: "dry", to: "rain", t, dur: 100, cell });
+  const mk = (arc, raceWeather) => T.create({ lapsTarget: 25, track: { total: 5386, def: {} }, LAT_MAX: 22, aTop: () => 7, vTop: () => 60, raceWeather, weatherArc: arc });
+  const temps = (t, ended) => { const m = ended ? mk(null, "dry") : mk(arcAt(t), "dry"); return [m.ambient(), m.trackTemp()]; };
+  // The tick the arc lets go: SETTLE 0.005 of a 0..1 wetness swing = 36 * ln(200) s past cell.life.
+  const tEnd = cell.life + 36 * Math.log(200);
+  const [aBefore, tBefore] = temps(tEnd, false), [aAfter, tAfter] = temps(tEnd + 1 / 60, true);
+  assert.ok(Math.abs(aAfter - aBefore) < 1, `ambient steps ${aBefore} -> ${aAfter} at the arc end`);
+  assert.ok(Math.abs(tAfter - tBefore) < 1, `track temp steps ${tBefore} -> ${tAfter} at the arc end`);
+  // And it never moves faster than the road dries along the whole arc (1 s steps, < 2 C).
+  let prev = temps(0, false)[1];
+  for (let t = 1; t <= tEnd; t++) {
+    const now = temps(t, false)[1];
+    assert.ok(Math.abs(now - prev) < 2, `track temp jumps ${prev} -> ${now} at t=${t}`);
+    prev = now;
+  }
+  // The ramp itself is unchanged: at cell.life the temperature is still the rain end's.
+  assert.equal(temps(cell.life - 1, false)[1], temps(cell.life, false)[1] + 0, "held at `to` until the shower passes");
+});

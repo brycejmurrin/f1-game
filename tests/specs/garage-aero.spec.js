@@ -205,3 +205,82 @@ test.describe("garage active aero", () => {
     }
   });
 });
+
+// Real pointer activation protects the narrow UI contract; evaluate-clicks
+// would bypass the footer that previously covered Camera on a short phone.
+test("garage camera stays clickable and its drawer stays bounded on phones", async ({ page }) => {
+  await page.evaluate(() => window.__apex.headless(true));
+  for (const side of ["right", "left"]) {
+  await page.evaluate((side) => document.documentElement.setAttribute("data-look-garage-side", side), side);
+  for (const viewport of [{ width: 393, height: 659 }, { width: 734, height: 343 }, { width: 568, height: 320 }]) {
+    await page.setViewportSize(viewport);
+    await page.evaluate(({ width, height }) => {
+      const style = document.documentElement.style;
+      style.setProperty("--sat", height > width ? "59px" : "0px");
+      style.setProperty("--sab", height > width ? "34px" : "21px");
+      style.setProperty("--sal", height > width ? "0px" : "59px");
+      style.setProperty("--sar", height > width ? "0px" : "59px");
+    }, viewport);
+    await openGarage(page);
+    // Opening/resize can repaint safe-area tokens; measure the settled sheet,
+    // including the <400 local-pixel width that previously made basis=height.
+    await page.evaluate(({ width, height }) => {
+      const style = document.documentElement.style;
+      style.setProperty("--sat", height > width ? "59px" : "0px");
+      style.setProperty("--sab", height > width ? "34px" : "21px");
+      style.setProperty("--sal", height > width ? "0px" : "59px");
+      style.setProperty("--sar", height > width ? "0px" : "59px");
+      window.SheetShape.reclassify();
+    }, viewport);
+    await expect.poll(() => page.locator("#cs-options").evaluate((e) => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+    await expect.poll(() => page.locator("#cs-tabs").evaluate((e) => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+    const layout = await page.evaluate(() => {
+      const r = (id) => document.getElementById(id).getBoundingClientRect();
+      const sheet = r("cs-inner"), bar = r("cs-stack");
+      return { overlap: Math.max(0, Math.min(sheet.right, bar.right) - Math.max(sheet.left, bar.left)) * Math.max(0, Math.min(sheet.bottom, bar.bottom) - Math.max(sheet.top, bar.top)) };
+    });
+    expect(layout.overlap).toBeLessThanOrEqual(1);
+    await page.locator("#cs-tab-engine").click();
+    await expect(page.locator("#cs-tab-engine")).toHaveAttribute("aria-selected", "true");
+    await page.locator("#cs-cam").click();
+    await expect(page.locator("#cs-cam-panel")).toBeVisible();
+    const metrics = await page.evaluate(() => {
+      const panel = document.getElementById("cs-cam-panel");
+      const r = panel.getBoundingClientRect();
+      const options = document.getElementById("cs-options").getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, left: r.left, right: r.right,
+        xOverflow: panel.scrollWidth - panel.clientWidth, optionsHeight: options.height,
+        width: innerWidth, height: innerHeight };
+    });
+    expect(metrics.top).toBeGreaterThanOrEqual(0);
+    expect(metrics.bottom).toBeLessThanOrEqual(metrics.height);
+    expect(metrics.left).toBeGreaterThanOrEqual(0);
+    expect(metrics.right).toBeLessThanOrEqual(metrics.width);
+    expect(metrics.xOverflow).toBeLessThanOrEqual(1);
+    expect(metrics.optionsHeight).toBeGreaterThanOrEqual(44);
+    await page.locator("#cs-view-reset").click();
+    await page.locator("#cs-cam").click();
+    await expect(page.locator("#cs-cam-panel")).toBeHidden();
+    if (viewport.width === 568) {
+      await page.locator("#cs-tab-livery").click();
+      await page.locator(".cs-liv-create").click();
+      await expect(page.locator(".cs-liv-editor")).toBeVisible();
+      await expect(page.locator("#cs-tabs")).toBeHidden();
+      const editor = await page.evaluate(() => {
+        const host = document.getElementById("cs-body");
+        const body = host.getBoundingClientRect(), style = getComputedStyle(host);
+        const options = document.getElementById("cs-options").getBoundingClientRect();
+        const scale = body.width / host.offsetWidth;
+        const padding = (parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)) * scale;
+        return { widthDelta: Math.abs(body.width - padding - options.width), height: options.height };
+      });
+      expect(editor.widthDelta).toBeLessThanOrEqual(1);
+      expect(editor.height).toBeGreaterThanOrEqual(44);
+      await page.locator(".cs-liv-ed-cancel").click();
+    }
+    await page.locator("#cs-done").click();
+    await expect(page.locator("#carsetup")).toBeHidden();
+  }
+  }
+  await page.evaluate(() => document.documentElement.removeAttribute("data-look-garage-side"));
+});

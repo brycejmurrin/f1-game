@@ -1,0 +1,102 @@
+# TLX perf hunt 5, 2026-10-16 — Inspector + CPU profiles, JS-side only
+
+Branch `cursor/tlx-perf-inspector-9d2e`, cut from deploy tip `6f7ee195` (#2576, the three.js Inspector, merged).
+Scope: TLX (`js/render/three/**`, `js/render/shared/**`) CPU-side cost: frame JS time, draw/render-object
+counts, allocations, leaks across circuit switches. This container is SwiftShader, so GPU/fill numbers are not
+measured (gpu-census NOT dispatched: no candidate fix reached it).
+
+**Result: no TLX-owned regression above the run-to-run spread was found, so this PR ships no code change.** It
+ships the baseline, the method that makes TLX measurable on this box, the negative results, and one finding that
+belongs to the HUD owner.
+
+## Method (why the first three attempts measured nothing)
+
+| attempt | result |
+|---|---|
+| `tools/gfx/frame-hitch.mjs` headless | `frames: 0` — headless Chromium freezes rAF (`tools/shot/motion-capture.mjs` header) |
+| headed under `xvfb-run` | three's WebGL2 shaders fail to link (`VALIDATE_STATUS false`), page unusable |
+| headless + `recordVideo` (ticks rAF) | frames tick, but ~5 per 30 s: 94 s of a 99 s CPU profile is `getProgramParameter`, i.e. SwiftShader blocking on shader links; the scene never reaches steady state (render objects still growing after 150 s) |
+| **headless + `recordVideo` + program-link stub** | 700–1800 frames per 30 s; the JS path is measured, GPU work is empty |
+
+The stub (init script, before any page script): `linkProgram`, `compileShader`, `validateProgram` become no-ops,
+`getProgramParameter`/`getShaderParameter` return true, info logs return `""`. Draw calls on an unlinked program
+cost nothing, so a frame is three's + TLX's JS plus the game. It measures **CPU-side JS only**; shader compile
+cost and any GPU time are invisible by construction.
+
+Probe: `rAF` wrapper timing each callback (so a frame = the game's whole tick: physics, HUD, render),
+`performance.memory.usedJSHeapSize` sawtooth deltas for allocation, `GLX.__tlx.memState()` for retained
+geometries/textures/render objects, CDP `Profiler` (inclusive + self time, and samples aligned to frames >20 ms)
+and `HeapProfiler.startSampling` with `includeObjectsCollectedByMajorGC/MinorGC` (counts garbage too; the older
+note in `frame-hitch.mjs` says sampled objects vanish when collected — these flags are what changes that).
+Chrome (the Inspector, on by default on localhost since #2576) was open for the leak run and its Performance
+tab agreed with the harness: Scene CPU 3.51 ms, frame CPU 4.42 ms at 844×600.
+
+## Baseline (chase camera, 22 cars, TLX WebGL2 path, stubbed links, 60 s settle then 30 s window, 3 runs each)
+
+Frame = whole `requestAnimationFrame` callback ms (game tick + render JS). `alloc` = JS heap bytes allocated per
+frame (sawtooth sum). `rObj/rGeo/rTex` = three `renderer.info` retained counts (what the Inspector Memory tab
+shows) at the end of the window.
+
+| circuit | p50 ms (runs) | p95 ms (runs) | mean ms | alloc KB/frame | render objects | geometries | textures |
+|---|---|---|---|---|---|---|---|
+| monaco, day | 3.1 (2.2, 3.6, 3.1) | 17.5 (17.0–18.8) | 5.1 | 170 (151–198) | 438–511 | 449–457 | 51–55 |
+| spa, day | 4.3 (2.5–4.7) | 20.1 (14.2–25.7) | 6.8 | 257 (196–302) | 568–635 | 654–727 | 52–55 |
+| vegas, night | 3.4 (3.2–3.7) | 11.2 (11.2–11.3) | 4.1 | 132 (123–135) | 373–397 | 583–632 | 57–59 |
+| singapore, night | 4.1 (3.9–4.8) | 20.0 (17.0–21.3) | 6.0 | 170 (151–193) | 372–377 | 375–379 | 50–57 |
+
+Not captured and why: **programs** (`renderer.info.programs` is empty on three's WebGL backend with stubbed
+links), **triangles**, and **draw calls per frame** (`memState().calls` is the last `render()`'s count, sampled
+4–18 across runs; render objects is the stable proxy). Run-to-run spread is large (frame count 704–1792 per
+window) because the box is shared and the rAF is compositor-driven; a claimed win must clear the ranges above.
+
+## Findings
+
+| id | file:line | metric (before → after) | spread | fix commit | test |
+|---|---|---|---|---|---|
+| F1 | `js/ui/hud.js:2423` `drawMinimap` → `mmPitMark` `:2649` (**FORBIDDEN here; HUD owner**) | in frames >20 ms (104 of 1346 = 7.7 %, 2.8 s of the window) `updateHud` is 51 % (1417 ms), `drawMinimap` 993 ms, of which `mmPitMark` 980 ms (a `fillText` + `ctx.font` set per call) | one run; heavy-frame share 5–8 % across 4 runs | none (not mine) | none |
+| F2 | circuit-switch leak (monaco→spa→monaco→spa→monaco, Inspector on) | rGeo 412→418→472→422→450, rObj 458→417→502→413→483, rTex 54→55→55→53→53, rUbo 527→474→559→470→540, JS heap 146.5→165.7→154.6→171.2→154.9 MB | none monotone; monaco visits 146.5/154.6/154.9 MB | n/a — clean | n/a |
+| F3 | `js/render/three/tlx.js:4122` `setRenderScale` → `resizeNow` → `setSize` | 321 ms of a 30 s window (2 governor steps) | governor-driven (the box is slow) | n/a — already coalesced and guarded by the `<0.02` contract | n/a |
+| F4 | `tsl-lit.js:341` `updateFrame` | 3.4 MB / 1348 frames ≈ 2.5 KB/frame of ~190 | below spread (monaco 151–198) | not worth a patch: hoisting the two closures and the default arrays cannot be told from noise | n/a |
+| F5 | `three.webgpu.min.js` `_bindUniforms` (vendor) | 16 KB/frame of iterator objects (`for…of` over bindings) | one profile | none (`vendor/**` forbidden) | n/a |
+
+**F1 is the only thing that stood out.** The mid-race tail the notes call "periodic hitches"
+(`PERF-GAMEPLAY-HITCHES-2026-10-14.md`: `announceLane` layout thrash) is, on this run, mostly the minimap's
+pit-mark text draw. Caveat: canvas text under SwiftShader may force a GPU-raster flush that a real GPU does not,
+so this is **suspected, not confirmed on hardware**. Check it on a device with the Inspector Performance tab (or a
+`gpu-census` window) before fixing; the cheap fix is to draw the "P" glyph once into an offscreen canvas and
+`drawImage` it, setting `ctx.font` only on a size change.
+
+### Checked and clean (with the number)
+
+- Retained counts after circuit switches: flat (F2); no per-switch leak of geometries, textures or render objects.
+- Material/program thrash: `memState().matMiss` 19 and `mats` 19 in every run (no growth), pool 162–334 varies
+  with warm-up only.
+- `matKeyFor` (`tlx.js:1768`) is memoised; `drawList` uses a count cursor (`drawList.n`) — the A5 regrow-from-empty
+  finding in `TLX-PERF-HUNT-2026-10-11.md` no longer applies.
+- The mirror pass renders the scene a second time (`mirrorEnd`, `tlx.js:4741`, 436 ms of a 30 s HELMET window):
+  this is the known A1 design, unchanged; it does not run under the chase camera used for the baseline.
+- Where the time goes in a 30 s window (inclusive, monaco): `tickBody` 5.6 s of 30 s wall (the rest idle),
+  `render` 3.8 s of it, three's `_renderObjects` 2.2 s, `updateForRender` 1.1 s (three internal, per render
+  object), `updateHud` 0.64 s, `updateCar` 0.54 s.
+
+## Not run
+
+- `gpu-census.yml` (no code change to measure); the TLX gate (`gfx-probe --backend three …`) and browser groups:
+  no `js/` change.
+- Any hardware GPU number. Programs/triangles per frame (see baseline).
+- WGX/GLX; the `?inspector=1` Memory tab was read through its DOM only (counts equal `renderer.info`).
+
+## Next step
+
+1. HUD owner: verify F1 on a real device, then cache the pit-mark glyph (`js/ui/hud.js`, FORBIDDEN for this lane).
+2. If a TLX change is wanted, the biggest TLX-owned JS lever left in the profile is `updateForRender`
+   (1.1 s/30 s) — per render object uniform refresh in three; the lever is fewer render objects (A2 in the
+   2026-10-11 hunt: collapse the ~28 instanced prop variants), a design change, not a patch.
+3. Make the stub probe a tool (`tools/gfx/`, outside this lane's OWNED globs); it is reproduced below.
+
+## Appendix: the probe
+
+`scratch/tlxperf.mjs` (not committed; `scratch/` is untracked). Run as
+`FAKELINK=1 SETTLE=60 NOPROF=1 node scratch/tlxperf.mjs <track> <day|night> 30 out.json`
+(`ALLOC=1` adds the heap sampler, `HEAVY=20` the heavy-frame attribution, no `NOPROF`: the CPU profile).
+Everything it does is described under Method; the stub is the six `P.* = …` lines there.

@@ -75,6 +75,7 @@ test("agentview-raster.js exposes create() and the three rasters", () => {
 test("AgentView.create() still returns the whole documented surface", () => {
   const get = evalGlobals([
     "js/agent/agentview-raster.js",
+    "js/agent/agentview-corners.js",
     "js/agent/agentview.js",
   ]);
   const AgentView = get("AgentView");
@@ -132,7 +133,7 @@ test("span lengthM: wrap, plain and full-lap spans match along()'s walk", () => 
     banking: () => null, terrainY: () => 0,
   };
   const get = evalGlobals(
-    ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
+    ["js/agent/agentview-raster.js", "js/agent/agentview-corners.js", "js/agent/agentview.js"],
     { Tracks: TracksStub });
   const view = get("AgentView").create({
     wrapS: (s) => ((s % TOTAL) + TOTAL) % TOTAL,
@@ -192,7 +193,7 @@ test("episode metadata makes prior-episode delta requests return full worlds", (
   const Tracks = { sample(t, s, out) { out.p[0] = 0; out.p[1] = 0; out.p[2] = s;
     out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.hw = 6; },
     curvature: () => 0, wallAt: () => 6 };
-  const get = evalGlobals(["js/agent/agentview-raster.js", "js/agent/agentview.js"], { Tracks });
+  const get = evalGlobals(["js/agent/agentview-raster.js", "js/agent/agentview-corners.js", "js/agent/agentview.js"], { Tracks });
   const player = { px: 0, pz: 0, s: 0, x: 0, head: 0, speed: 0, prog: 0, lap: 0, isPlayer: true };
   const view = get("AgentView").create({ wrapS: s => s, gripMult: () => 1,
     LONG_GRIP: 34, update() {}, els: {}, camVantage() {},

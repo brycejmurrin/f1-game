@@ -552,6 +552,8 @@ window.MenuNav = (function () {
     const layer = activeLayer();
     if (!layer) return;
     const active = document.activeElement;
+    // key-binds is waiting for this key: let it bind PageDown/Home/arrows without paging the pane.
+    if (active && active.dataset && active.dataset.armed === "1") return;
     if (ownsArrows(active, key, e)) return;
 
     const list = items(layer);

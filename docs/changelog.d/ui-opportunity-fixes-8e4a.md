@@ -1,0 +1,4 @@
+Fixed: Keep Garage Camera controls clickable on portrait phones and give landscape camera controls a wider, bounded drawer. Keep circuit search visible in portrait and the selected circuit name visible on short landscape screens.
+Improved: Controls show concise help for the selected throttle mode with an expandable comparison. Backup & Restore separates Save, Restore and Import actions and explains shared codes in plain language.
+Fixed: Short-landscape Garage reserves space for Camera controls, keeps budget sizing on the correct axis, and provides a scrolling category rail with a usable parts list. Backup actions stay aligned above their selected content at every width.
+Improved: Shared sheets contain narrow columns and wrap long headings and exit labels; Settings and How to Play reuse the shared layout and scroll rules. Reflow coverage includes 320 CSS pixels, enlarged UI, and keyboard focus restoration.
