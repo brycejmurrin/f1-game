@@ -247,6 +247,14 @@ export async function fold() {
   return n;
 }
 
+/** Scheduled fold (.github/workflows/ratchets-fold.yml): fold only once at least
+ *  `min` fragments have piled up, so a quiet week opens no PR. Returns the count
+ *  folded, or 0 when it was not yet due (nothing is touched). */
+export async function foldIfDue(min = 1) {
+  if (readFragments().length < Math.max(1, min)) return 0;
+  return fold();
+}
+
 export async function measure(data = load()) {
   const rows = [];
   for (const [file, metrics] of Object.entries(data.files)) {
@@ -596,7 +604,9 @@ async function main() {
     return;
   }
   if (argv.includes("--fold")) {
-    const n = await fold();
+    const minArg = argv.find((a) => a.startsWith("--min-fragments="));
+    const n = minArg ? await foldIfDue(Number(minArg.split("=")[1]) || 1) : await fold();
+    if (minArg && !n) { console.log(`ratchets --fold: fewer than ${minArg.split("=")[1]} fragment(s), nothing folded`); return; }
     console.log(`ratchets --fold: ${n} fragment(s) summed into tests/data/ratchets.json and deleted; every effective ceiling unchanged`);
     return;
   }
