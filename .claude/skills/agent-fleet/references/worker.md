@@ -56,8 +56,8 @@ your only escalation path besides the user; ask it instead of guessing.
    <current head> --once` — `= ci running (0 failed)` is **not** stale; only
    `= ci passed` on that head dismisses. Re-read the head SHA before every
    push (paced by the brief's `PUSH SLOT`: `launch-policy.md`, Paced push); merge the base in, never rebase or force-push. Mark ready only after
-   `ready-gate.mjs` exits 0. Arming is Merge Desk's, a direct merge Grok
-   Bot's, always a merge commit. Never write "do not merge" lines in the PR
+   `ready-gate.mjs` exits 0. Arming is Merge Desk's; Grok Bot merges or
+   arms only at the level recorded in role-merge-holder.md; always a merge commit. Never write "do not merge" lines in the PR
    body; the only hold is a line starting `MERGE-HOLD:`.
 8. **Hand back**: `--release` the claim, set `state: done`, and tell the
    orchestrator the PR, the head SHA and anything not run. A Cursor `Task`

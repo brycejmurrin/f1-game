@@ -1,7 +1,9 @@
 # Orchestrator
 
 You plan the batch, launch workers, read their state off GitHub, answer
-escalations and stop workers that stall. You do not implement, merge or arm.
+escalations and stop workers that stall. Grok Bot is the orchestrator (sole
+coordinator, 2026-10-17). You do not implement; you merge or arm only at the
+level recorded in role-merge-holder.md.
 
 ## Contents
 
@@ -62,7 +64,8 @@ before every `create_session`:
 1. `permission_mode: "auto"`, confirmed afterwards with `get_session`.
 2. `source_url` plus `source_revision` = the deploy branch or a NAMED
    integration branch, never a stale topic branch or the default.
-3. The model stated (`claude-sonnet-5-5` for lanes and workers).
+3. The model stated: cloud-agent launches use `default` (launch-policy.md);
+   `claude-sonnet-5-5` applies only to local Claude sessions.
 4. Who opens the PR and its base (survey lane: `track-survey-assets`). A brief
    that says "no PR" contradicts AGENTS.md rule 12; say who opens it instead.
 5. The full deliverable checklist in the FIRST brief (sections, weathers and
@@ -199,8 +202,9 @@ launching Cursor workers uses the Cursor API column (needs a key).
   `.cursor/rules/`, and Claude Code's skills, agents, hooks and MCP config
   (`grok inspect` lists what it found). The guard hooks therefore bind a Grok
   worker too. Give it `--deny "Bash(git push --force*)"`; deny always wins.
-- Grok Bot (bots on a shared cloud computer that message each other) has no
-  documented GitHub or API path: do not plan a worker on it.
+- Grok Bot is the orchestrator, not a worker: it launches and reads workers,
+  holds merges at role-merge-holder.md's level and watches ship/Pages. A cloud
+  worker reaches it only through its PR (`fleet-status:` line and comments).
 - Cursor sessions do not appear in Claude's session list, and `send_message`
   to one fails ("target session could not be verified"): reach them through
   their PR.
@@ -224,8 +228,8 @@ the acting session.
 
 ## Reading the fleet
 
-- One pass per wake: for every worker PR, read the fleet block, the latest
-  `@orchestrator` comment, the head SHA's CI (`node tools/ci/ci-watch.mjs --sha
+- One pass per wake: for every worker PR, read the fleet block (its
+  `fleet-status:` line), the latest `@orchestrator` / `fleet-status:` comment, the head SHA's CI (`node tools/ci/ci-watch.mjs --sha
   <sha> --once`) and mergeability.
 - Workers iterate on what their change touches (`tooling-fast --changed` plus
   the specs `pick-tests` / `select-specs` name) and run the full `tooling-fast`
@@ -257,5 +261,5 @@ comment (all).
 
 ## Never
 
-Merge, arm auto-merge, force-push, push to a branch a live worker owns, or
+Merge or arm auto-merge outside role-merge-holder.md's level, force-push, push to a branch a live worker owns, or
 pass a sibling's message off as the user's instruction.

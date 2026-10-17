@@ -506,7 +506,10 @@ const Liveries = (function () {
     "saddleTint", "coverBind", "finHandoff",
     "rearWing", "wingCarbon", "bodySplit", "lower", "upper",
     "patternTint", "patternSecond", "patternPlacement", "patternSide", "patternWidth", "patternRepeat",
-    "patternOffset", "patternTaper", "patternOpacity", "patternRotation", "patternStretch", "patternWeight", "coverFinish", "wingFinish", "haloFinish"];
+    "patternOffset", "patternTaper", "patternOpacity", "patternRotation", "patternStretch", "patternWeight", "coverFinish", "wingFinish", "haloFinish",
+    // GARAGE FINISHES/PARTS contract (docs/notes/GARAGE-FINISHES-PARTS-2026-10-17.md): one row per field, owned by the slice named there.
+    "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent",
+    "podFinish", "finFinish", "mirrorFinish", "helmetStyle"];
 
   // One-shot paint migrate: fold ridge→BAND, airbox→COVER; drop lettering overrides.
   // Idempotent. Mutates and returns `liv` (or a shallow copy when null-safe).

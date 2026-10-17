@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "4db7776251fc483459cba1effdda22b83197b11cf47040b7e6a7e42a332cfafc",
+  "sourceDigest": "00542470d7560540d9719a4e5c5c86cc392f654de1669048c4d202f9f7f3cecd",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -623,11 +623,11 @@
       "track": "cota",
       "name": "Amphitheater",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.760073,
+      "frac": 0.760076,
       "target": [
-        359.57,
+        359.61,
         -0.07,
-        -2.48
+        -2.39
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 86.5,
@@ -642,9 +642,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.100291,
       "target": [
-        377.31,
+        377.32,
         6.83,
-        -348.35
+        -348.29
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 56,
@@ -875,11 +875,11 @@
       "track": "hockenheim",
       "name": "Motodrom Screen",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.881596,
+      "frac": 0.882272,
       "target": [
-        437.41,
+        437.37,
         9.98,
-        -321.85
+        -321.88
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 46.6,
@@ -894,8 +894,8 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.828194,
       "target": [
-        458.46,
-        12.03,
+        458.42,
+        12.01,
         -76.67
       ],
       "stationMethod": "nearest-road-projection",
@@ -911,9 +911,9 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.934802,
       "target": [
-        431.99,
-        9.19,
-        -491.58
+        431.96,
+        9.21,
+        -491.57
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 37.4,
@@ -926,11 +926,11 @@
       "track": "hockenheim",
       "name": "Nord Tribune",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.054623,
+      "frac": 0.054625,
       "target": [
-        744.38,
-        6.8,
-        -20.9
+        744.39,
+        6.81,
+        -20.87
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 32.2,
@@ -945,13 +945,13 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.89,
       "target": [
-        345.2,
-        2.27,
-        -277.35
+        345.23,
+        2.26,
+        -277.32
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/hockenheim.js anchor K(0.890)",
-      "projectedFrac": 0.782608,
+      "projectedFrac": 0.782634,
       "nearestRoadDistanceM": 32.2,
       "viewDistanceM": 52.6,
       "source": "tests/data/landmarks/hockenheim.json; js/circuits/scenery/hockenheim.js"
@@ -1223,15 +1223,15 @@
       "track": "istanbul",
       "name": "Turn8 Hospitality",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.477169,
+      "frac": 0.476771,
       "target": [
-        -784.64,
-        7.23,
-        516.36
+        -786.04,
+        7.22,
+        507.74
       ],
       "stationMethod": "nearest-road-projection",
-      "nearestRoadDistanceM": 57.5,
-      "viewDistanceM": 57.5,
+      "nearestRoadDistanceM": 57.6,
+      "viewDistanceM": 57.6,
       "source": "tests/data/landmarks/istanbul.json; js/circuits/scenery/istanbul.js"
     },
     {
@@ -1240,7 +1240,7 @@
       "track": "istanbul",
       "name": "Stone Portal",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.911937,
+      "frac": 0.91187,
       "target": [
         622.44,
         7.14,
@@ -2630,14 +2630,14 @@
       "nameSource": "authored model ID; real-world identity unverified",
       "frac": 0.415,
       "target": [
-        -53.4,
+        -53.41,
         24.53,
-        306.38
+        306.39
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/portimao.js anchor K(0.415)",
-      "projectedFrac": 0.464531,
-      "nearestRoadDistanceM": 22.5,
+      "projectedFrac": 0.464525,
+      "nearestRoadDistanceM": 22.4,
       "viewDistanceM": 109.5,
       "source": "tests/data/landmarks/portimao.json; js/circuits/scenery/portimao.js"
     },
@@ -2904,7 +2904,7 @@
       "track": "shanghai",
       "name": "Yu Pavilions",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.00996,
+      "frac": 0.009959,
       "target": [
         43.69,
         2.93,
