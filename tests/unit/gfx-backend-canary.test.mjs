@@ -5512,9 +5512,11 @@ test("TLX defers resize during compilation and applies the latest requested size
   } };
   const post = { resize(w, h) { calls.push(["post", w, h]); } };
   let _postRebuild = false;              // a retired post chain owes a rebuild at the next realloc
+  const fixedActive = () => false;       // apex26.tlxFixedTargets off
+  const sceneView = null;                // no viewport helper when fixed targets are off
   const buildPost = () => post;
   const src = code("js/render/three/tlx.js");
-  const applyResize = eval("(function(){" + fnBody(src, "applyResize") + "})");
+  const applyResize =eval("(function(){" + fnBody(src, "applyResize") + "})");
   const resize = eval("(function(){" + fnBody(src, "resize") + "})");
   resize();
   renderScale = 0.75; _layoutCanvas.clientWidth = window.innerWidth = 1000;
