@@ -1347,6 +1347,15 @@ export function cssSpecs(changed) {
   if (!files.length) return [];
   const specs = new Set(["tests/specs/css-player-smoke.spec.js"]);
   if (files.some((f) => /^css\/(menus|title|carsetup|tokens|select|fonts-hud|components|responsive|dialogs|dialog-platform|overlays|garage-experience)\.css$/.test(f))) specs.add("tests/specs/menu-baseline.spec.js");
+  // Home layout CSS also moves doors that only exist mid-season. Ship CI
+  // 39017766676 (086e55bf, #2633): #menu-garage was laid over PLAY's 6th cell,
+  // so #mb-standings (hidden until round 1 ends) could not be clicked. A fresh
+  // title never shows it, so menu-baseline stayed green. season + ui-audit both
+  // finish a round and click it.
+  if (files.some((f) => /^css\/(menus|menu-destinations|overlays|experience)\.css$/.test(f))) {
+    specs.add("tests/specs/season.spec.js");
+    specs.add("tests/specs/ui-audit.spec.js");
+  }
   return [...specs];
 }
 

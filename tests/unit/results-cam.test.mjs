@@ -2,6 +2,7 @@
  * plus the HIGHLIGHTS montage audio feed from game.js tickBody.
  * Run: node --test tests/unit/results-cam.test.mjs
  */
+import { renderRateStubs } from "../helpers/render-rate-stub.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -322,6 +323,7 @@ function highlightsRig({ sound = true } = {}) {
   const rivalAudio = { collect(p) { field.collects++; return cars.filter((c) => c !== p).map((c, k) => ({ lat: 3, arc: 4 + k, rev: 0.7, approach: 0, slot: k })); } };
   const noop = () => {};
   const tickCtx = vm.createContext({
+    ...renderRateStubs(),
     Math, performance: { now: () => 0 }, PerfSpans: { begin() {}, end() {} }, lastFrame: 0, paused: false, state: "results",
     gfx: { warming: () => false }, Input: { poll: noop, clearEdges: noop, setTimeScale: noop }, BrakeCue: { tick: noop }, onboard: { tick: noop },
     netPlay: { tick: noop, active: () => false }, netStart: null, countT: 0, startLights: { countCredit: () => 0 }, PerfGov: { tick: noop, recordSimulation: noop }, UiExperience: { resumeHolding: () => false },

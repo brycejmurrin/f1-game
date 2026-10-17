@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { Script } from 'node:vm';
 import { renderReport, writeReport } from '../../tools/ui/explorer/report.mjs';
 
 function fixture() {
@@ -55,12 +54,12 @@ test('untrusted strings cannot close script, title or attributes', () => {
   bundle.findings[0].message = payload;
   bundle.graph.nodes[0].label = payload;
   const html = renderReport(bundle);
-  assert.equal((html.match(/<script\b/g) ?? []).length, 2);
+  assert.doesNotMatch(html, /<script\b/);
   assert.doesNotMatch(html, /<img src=x|<title><\/script>/);
   assert.match(html, /&lt;img src=x onerror=&quot;bad&quot;&gt;/);
-  const embedded = html.match(/<script type="application\/json" id="report-data">([\s\S]*?)<\/script>/)[1];
+  const embedded = html.match(/href="data:application\/json;charset=utf-8,([^"]+)"/)[1];
   assert.doesNotMatch(embedded, /[<>&\u2028\u2029]/);
-  assert.deepEqual(JSON.parse(embedded), bundle);
+  assert.deepEqual(JSON.parse(decodeURIComponent(embedded)), bundle);
 });
 
 test('unsafe or escaping artifact paths never produce href, src or replay commands', () => {
@@ -130,36 +129,14 @@ test('archived run links accept relative evidence only and escape labels', () =>
   assert.doesNotMatch(html, />Bad external<|>Bad traversal</);
 });
 
-test('inline browser script parses independently and supports filtering without a server', () => {
+test('offline report uses native capability links and JSON downloads without dead script controls', () => {
   const html = renderReport(fixture());
-  const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)];
-  assert.equal(scripts.length, 2);
-  const listeners = {};
-  const sections = [
-    { dataset: { status: 'partial', search: 'garage missing texture' } },
-    { dataset: { status: 'not-run', search: 'phone stress' } }
-  ];
-  const findings = [{ dataset: { search: 'button clipped' } }];
-  const elements = {
-    search: { value: '', addEventListener: (event, callback) => { listeners.search = callback; } },
-    status: { value: 'all', addEventListener: (event, callback) => { listeners.status = callback; } },
-    'result-count': {},
-    download: { addEventListener() {} }
-  };
-  const document = {
-    getElementById: id => elements[id],
-    querySelectorAll: selector => selector === '.capability' ? sections : findings
-  };
-  new Script(scripts[1][1]).runInNewContext({ document });
-  assert.equal(elements['result-count'].textContent, '2 capabilities shown');
-  elements.search.value = 'garage';
-  listeners.search();
-  assert.equal(sections[0].hidden, false);
-  assert.equal(sections[1].hidden, true);
-  assert.equal(findings[0].hidden, true);
-  elements.status.value = 'passed';
-  listeners.status();
-  assert.equal(elements['result-count'].textContent, '0 capabilities shown');
+  assert.doesNotMatch(html, /<script\b|<select\b|type="search"|<button\b|\sonclick=/i);
+  assert.match(html, /aria-label="Capabilities"/);
+  assert.match(html, /href="#capability-0">First race/);
+  assert.match(html, /id="capability-0"/);
+  assert.match(html, /href="report.json" download/);
+  assert.match(html, /<details><summary>Action history/);
 });
 
 test('writeReport creates portable HTML and faithful JSON together', async () => {

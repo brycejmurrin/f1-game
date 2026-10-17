@@ -105,3 +105,31 @@ test("ensureRaceSession reinjects real PitLane and calls onRaceSessionReady", as
   assert.equal(ctx.PitLane._stub, false);
   assert.ok(loaded.some((u) => String(u).includes("pit-lane.js")));
 });
+
+// #2625: a never-resolving file makes ScriptLoader call onSlow; the loading card's line changes.
+test("ensureRaceSession slow load shows SLOW CONNECTION on the loading card", async () => {
+  const loader = src("js/core/script-loader.js"), bundles = src("js/core/lazy-bundles.js"), screen = src("js/ui/loading-screen.js");
+  const gp = { textContent: "Please wait" }, root = { hidden: false };
+  const ctx = vm.createContext({
+    ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
+      LAZY_RACE_SESSION: ["js/race/pit-lane.js"], LAZY_RACE_SESSION_EDGES: [], LAZY_AUDIO: [], LAZY_AUDIO_EDGES: [],
+      SCENERY_DIR: "", LAZY_SCENERY: [], LAZY_DATA: [], LAZY_DATA_EDGES: [], LAZY_NET: [], LAZY_NET_EDGES: [] },
+    window: { __APEX_BUILD: "test", setTimeout, clearTimeout },
+    PitLane: { _stub: true }, Tracks: { LIST: [], circuitPayloadResident: () => true, hydrate: () => true },
+    Log: { warn() {}, info() {} }, els: {}, queueMicrotask, requestIdleCallback() { return 1; },
+    UpdateCheck: { prepareLazyLoad: async () => true, blocksLazyLoad: () => false },
+    setTimeout, clearTimeout,
+    document: {
+      getElementById: (id) => (id === "loading" ? root : id === "ld-gp" ? gp : null),
+      createElement: () => ({ dataset: {}, remove() {} }),
+      head: { appendChild() { /* never loads */ } },
+    },
+  });
+  vm.runInContext(loader + "\nthis.ScriptLoader = ScriptLoader;\n" + screen + "\nthis.LoadingScreen = LoadingScreen;", ctx);
+  vm.runInContext(bundles + `
+    const lb = LazyBundles.create({ els, loadBackendScripts: (f, e, o) => ScriptLoader.create().load(f, e, Object.assign({ slowMs: 30, deadlineMs: 5000 }, o)), getContext() {}, onRaceSessionReady() {} });
+    globalThis.__ensure = lb.ensureRaceSession;`, ctx);
+  void ctx.__ensure();
+  await new Promise((r) => setTimeout(r, 120));
+  assert.equal(gp.textContent, "SLOW CONNECTION — still loading…");
+});
