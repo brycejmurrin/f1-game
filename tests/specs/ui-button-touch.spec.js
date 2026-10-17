@@ -1484,3 +1484,20 @@ test.describe("Arrange map clearance handoff", () => {
     await page.locator("#hud-arrange-done").click();
   });
 });
+
+test.describe("Settings Appearance — touch targets", () => {
+  test.use({ viewport: LANDSCAPE, hasTouch: true, isMobile: true });
+
+  test("ADVANCED disclosure summary is at least --tap tall", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#mb-settings").tap();
+    await page.locator("#pm-open-appearance").tap();
+    const sum = page.locator("#pmsettings details[data-as=\"advanced\"] > summary");
+    await sum.waitFor({ state: "attached", timeout: BOOT_MS });
+    await sum.scrollIntoViewIfNeeded();
+    const h = await sum.evaluate((e) => e.getBoundingClientRect().height);
+    expect(h).toBeGreaterThanOrEqual(43.5);
+  });
+});
