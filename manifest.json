@@ -65,9 +65,16 @@
       "url": "./?go=race",
       "icons": [
         {
-          "src": "icons/shortcut-96.png",
+          "src": "icons/shortcut-race-96.png",
           "sizes": "96x96",
-          "type": "image/png"
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-race-maskable-96.png",
+          "sizes": "96x96",
+          "type": "image/png",
+          "purpose": "maskable"
         }
       ]
     },
@@ -78,9 +85,16 @@
       "url": "./?go=daily",
       "icons": [
         {
-          "src": "icons/shortcut-96.png",
+          "src": "icons/shortcut-daily-96.png",
           "sizes": "96x96",
-          "type": "image/png"
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-daily-maskable-96.png",
+          "sizes": "96x96",
+          "type": "image/png",
+          "purpose": "maskable"
         }
       ]
     },
@@ -91,9 +105,16 @@
       "url": "./?go=nextgp",
       "icons": [
         {
-          "src": "icons/shortcut-96.png",
+          "src": "icons/shortcut-nextgp-96.png",
           "sizes": "96x96",
-          "type": "image/png"
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-nextgp-maskable-96.png",
+          "sizes": "96x96",
+          "type": "image/png",
+          "purpose": "maskable"
         }
       ]
     },
@@ -104,9 +125,16 @@
       "url": "controller.html",
       "icons": [
         {
-          "src": "icons/shortcut-96.png",
+          "src": "icons/shortcut-controller-96.png",
           "sizes": "96x96",
-          "type": "image/png"
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-controller-maskable-96.png",
+          "sizes": "96x96",
+          "type": "image/png",
+          "purpose": "maskable"
         }
       ]
     },
@@ -117,9 +145,16 @@
       "url": "./?go=garage",
       "icons": [
         {
-          "src": "icons/shortcut-96.png",
+          "src": "icons/shortcut-garage-96.png",
           "sizes": "96x96",
-          "type": "image/png"
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "icons/shortcut-garage-maskable-96.png",
+          "sizes": "96x96",
+          "type": "image/png",
+          "purpose": "maskable"
         }
       ]
     }

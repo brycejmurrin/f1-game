@@ -244,12 +244,17 @@ test("manifest.json: id keeps the installed identity, screenshots and shortcuts 
   }
 });
 
-// #1612: shortcuts get their own 96px icon (not the 192 install icon) and the manifest declares a language.
+// #1612: each shortcut gets its own 96px icon plus a maskable-safe one and the manifest declares a language.
 test("manifest.json: lang is set and every shortcut icon is a shipped 96x96 PNG", () => {
   const m = JSON.parse(read("manifest.json"));
   assert.equal(m.lang, "en");
+  const seen = new Set();
   for (const sc of m.shortcuts) {
     assert.ok(sc.icons && sc.icons.length, sc.name + " has an icon");
+    assert.ok(sc.icons.some((ic) => ic.purpose === "maskable"), sc.name + " has a maskable-safe icon");
+    const any = sc.icons.find((ic) => ic.purpose === "any");
+    assert.ok(any && !seen.has(any.src), sc.name + " has its own icon, not shared");
+    seen.add(any.src);
     for (const ic of sc.icons) {
       assert.equal(ic.sizes, "96x96");
       const buf = fs.readFileSync(path.join(ROOT, ic.src));
