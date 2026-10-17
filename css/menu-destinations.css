@@ -1,9 +1,6 @@
 @layer responsive {
 /* Destination groups share the title's existing scroller and layout editor. */
-#menu-buttons .menu-destination-label {
-  margin: 0; padding-top: .3em; color: var(--dim); font-size: .75rem;
-  font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-}
+#menu-buttons .menu-destination-label { display: none; }
 #menu-buttons > .menu-destination {
   width: 100%; max-width: none; gap: calc(var(--gap) * .7);
   --balance-basis: calc(50% - var(--gap)); --balance-min: calc(50% - var(--gap));
@@ -36,7 +33,6 @@
 #menu-create .mb-sub { white-space: normal; overflow-wrap: anywhere; }
 /* Compact Home (Oct-15 shape): hero column, 2-up doors, chips under the brand. */
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { grid-template-rows: repeat(4, max-content); row-gap: calc(var(--gap)*.2); --home-g: calc(var(--gap)*.2); padding-block: calc(var(--gap)/4); }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > .menu-destination-label { display: none; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-retention, #menu-explore, #menu-create) { display: flex; width: 100%; gap: var(--home-g); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero { flex-direction: column; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) { grid-column: 2; align-self: start; }
