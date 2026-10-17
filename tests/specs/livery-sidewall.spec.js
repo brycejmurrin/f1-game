@@ -18,14 +18,14 @@ test.describe("Livery sidewall ink", () => {
       const tinted = build({ sidewallInk: [1, 1, 0] });
       const same = (a, b, k) => a[k].length === b[k].length && a[k].every((v, i) => v === b[k][i]);
       const A = Car3D.AXLES, centres = [[0.79, A.frontZ], [0.76, A.rearZ]].flatMap(([x, z]) => [[x, z], [-x, z]]);
-      // the factory compound band colour, as the mesh stores it (Float32)
-      const band = (parts._visual && parts._visual.tyres && parts._visual.tyres.band || []).map(Math.fround);
-      const isBand = (m, i) => band.length === 3 && m.col[i * 3] === band[0] && m.col[i * 3 + 1] === band[1] && m.col[i * 3 + 2] === band[2];
+      // Only the stock dark lettering may take the ink: any other changed vertex (the compound
+      // band above all) would mean the tyre stops reading as its compound.
+      const SW = [0.16, 0.16, 0.17], near = (a, b) => Math.abs(a - b) < 1e-4;   // col may be doubles or Float32
       const off = [], corners = new Set();
-      let bandVerts = 0, bandInked = 0;
+      let notLettering = 0;
       for (let i = 0; i < none.col.length / 3; i++) {
-        if (isBand(none, i)) { bandVerts++; if (!isBand(tinted, i)) bandInked++; }
         if (none.col[i * 3] === tinted.col[i * 3] && none.col[i * 3 + 1] === tinted.col[i * 3 + 1] && none.col[i * 3 + 2] === tinted.col[i * 3 + 2]) continue;
+        if (!near(none.col[i * 3], SW[0]) || !near(none.col[i * 3 + 1], SW[1]) || !near(none.col[i * 3 + 2], SW[2])) notLettering++;
         const x = none.pos[i * 3], y = none.pos[i * 3 + 1], z = none.pos[i * 3 + 2];
         if (!centres.some(([cx, cz]) => Math.hypot(x - cx, y - A.wheelY, z - cz) < 0.45)) off.push(i);
         corners.add((x > 0 ? "R" : "L") + (z > 0 ? "F" : "B"));
@@ -35,7 +35,7 @@ test.describe("Livery sidewall ink", () => {
         geometryIdentical: ["pos", "nrm", "mat", "idx"].every((k) => same(none, tinted, k)),
         colourChanged: !same(none, tinted, "col"),
         offWheel: off.length,
-        bandVerts, bandInked,
+        notLettering,
         corners: [...corners].sort(),
         key: CarWheels.tints({ sidewallInk: [1, 1, 0] }).key,
         emptyKey: CarWheels.tints({}).key,
@@ -46,8 +46,7 @@ test.describe("Livery sidewall ink", () => {
     expect(r.colourChanged).toBe(true);
     expect(r.offWheel).toBe(0);
     // the compound band stays readable on an inked car (player and AI teammate alike)
-    expect(r.bandVerts).toBeGreaterThan(0);
-    expect(r.bandInked).toBe(0);
+    expect(r.notLettering).toBe(0);
     expect(r.corners).toEqual(["LB", "LF", "RB", "RF"]);
     expect(r.emptyKey).toBe("");
     expect(r.key).not.toBe("");
