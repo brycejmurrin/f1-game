@@ -567,9 +567,10 @@ test.describe("TLX — boot", () => {
       GLX.gpuTimer(false);
       return { before, on, ms };
     });
-    // tlxForceGL pins three on WebGL2 (SwiftShader in CI): no timestamp-query
-    // feature, so the timer reports unsupported and never turns on — the exact
-    // {supported:false} shape GLX returns on SwiftShader. gpuMs stays -1.
+    // tlxForceGL pins three on WebGL2 (SwiftShader in CI). SwiftShader DOES
+    // expose EXT_disjoint_timer_query_webgl2 (three's WebGL timestamp-query),
+    // but TLX refuses the timer on software GL: a software GPU time is no
+    // evidence. So it reports unsupported and never turns on; gpuMs stays -1.
     expect(typeof st.before.supported).toBe("boolean");
     expect(st.before.supported).toBe(false);
     expect(st.on.supported).toBe(false);
