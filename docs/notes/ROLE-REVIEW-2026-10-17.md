@@ -26,7 +26,30 @@ Sample: owners `session_014JRFBdoQbkyLMRVJwWKhEU` (#2685/#2716), `session_013cfQ
 | owner, 1 PR | 014m73tf… | 221k | $3.07 | 26 local commits unpushed |
 | implementers | kinks A / icon picker | 170k / 147k | $1.64 / $0.91 | cheap; stopped at PR + CI watch |
 | tools lane | 01555beW… | record shows 0 | not reported | cost invisible to the orchestrator's roster (its roster line also showed "0 k $ 0") |
-An owner or orchestrator costs ~linearly with context per wake; the implementers are not the cost problem, the two long-lived roles are.
+A wake costs ~linearly with context. See the 24-hour view below: owners are cheap on average, so the cost sits in orchestrators and long-running hunters/fixers.
+
+## 24-hour view (`list_sessions`, two pages, sessions created 2026-10-16 12:10Z onward; CONFIRMED from the session records, roles by title prefix)
+129 sessions, **$908** of `usage.cost_usd` (the list stops at 100 per page, so older or unlisted sessions are missing; the 10-17 00:15Z seam between pages was deduped by id).
+| role (title prefix) | n | cost | share | avg | max context |
+|---|---|---|---|---|---|
+| orchestrator (unbracketed titles) | 3 | $275.0 | 30% | $91.68 | 647k |
+| fixer (`[Fix]`, `[fixer]`) | 30 | $219.4 | 24% | $7.31 | 555k |
+| hunter / debugger | 17 | $176.7 | 19% | $10.40 | 598k |
+| owner | 46 | $103.0 | 11% | $2.24 | 554k |
+| perf lane | 10 | $82.4 | 9% | $8.24 | 517k |
+| implementer, retro, builder, UI, other | 22 | $52.3 | 6% | — | 462k |
+- **Context predicts cost.** 20 sessions ended at ≥ 400k tokens and account for $526 (58%) of the total. Rotating at ~300k (rule already in launch-policy; #2727 strengthens it) is the single biggest lever; it needs a check the session cannot skip, not more prose.
+- **Orchestrators:** `Cy9zMdPn…` "Bug hunting and profiler tool" $252.11 at 632k (not read; cost and context from its record), `DAD` $18.84 at 647k (read above).
+- **Owner average is fine ($2.24); two owner outliers:** `…XtmDuHhW` "PR #2642 UI sweep note (docs)" $20.72 at 554k, a docs-only PR; `…7Q3hZ3e1` $11.03 at 472k (three tools PRs, read above). A docs-only owner should never reach 100k; the owner card has no "stop growing" rule.
+- **Fixers:** `…rSNNNP56` "[fixer] Home menu CSS fit — code only, no screenshots" $116.98 at 163k context (the context is small, so the cost is wall time and turns, not size; the 9 h 8 min age is `created_at` 02:14Z to `updated_at` 11:22Z). `…ETs7G9Md` "[Fix] track-switch-memory spec red on Metal" $14.82 at 555k.
+- **Hunters/debuggers:** the 2026-10-16 evening `[Debugger]` wave: nine sessions at $8.9–16.7 each, 435–598k, ≈ $120 (e.g. `…6MCd9v7U` $16.68, `…GbRojbmY` $14.54). Per launch-policy a hunter stops after the first zero-finding round; I did not read these transcripts, so whether they obeyed it is NOT CONFIRMED.
+- **Recommendation 11 (new, rank 2 by dollars):** a hard rotation/stop line in the launch template that the session can check itself. In `references/orchestrator.md` Hard lines add:
+```
+12. Size stop, every role: the launch prompt ends with `STOP AT: 300k context or $<cap>`. The session reads its own
+    `context_usage.used_tokens` / `usage.cost_usd` via `get_session` (omit session_id) at every wake after a
+    green push; at the stop it sends HANDOFF/FINAL and ends. Docs-only owners: stop at 100k.
+```
+Sources: `session_0194ATfoAWFex31kfebbgFH8` roster (`get_session` shows `context_usage` and `usage` for any id, including this session's own).
 
 ## Findings (ranked by saved minutes / dollars)
 
