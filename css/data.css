@@ -1226,7 +1226,7 @@ body[data-width="wide"][data-density="compact"] {
   /* Short landscape phone: the body is the one scroller (a column that scrolled
      on its own hid the map legend behind the card edge), the chart takes the
      free width, and the readout is two fixed columns whose labels wrap. */
-  .dh-tpopup-body { overflow-y: auto; align-items: flex-start; }
+  .dh-tpopup-body { overflow-y: auto; align-items: flex-start; overscroll-behavior-y: contain; touch-action: pan-y; }
   .dh-telem-main { overflow: visible; }
   .dh-telem-side { overflow: visible; }
   .dh-telem-main .dh-canvas, .dh-telem-main .dh-delta { max-width: none; }

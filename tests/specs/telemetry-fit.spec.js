@@ -58,11 +58,7 @@ async function openCompare(page, v) {
   await expect(page.locator(".dh-tpopup[open] canvas.dh-map")).toBeVisible();
 }
 
-for (const v of VIEWS) {
-  test.describe(v.name, () => {
-    test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
-
-    test("telemetry compare view is not clipped, overlapped or narrower than its column", async ({ page }) => {
+async function checkFit(page, v) {
       await openCompare(page, v);
       const r = await page.evaluate((ins) => {
         const q = (s) => /** @type {HTMLElement[]} */ ([...document.querySelectorAll(s)]);
@@ -107,6 +103,13 @@ for (const v of VIEWS) {
       expect(r.keyRight).toBeLessThanOrEqual(r.bodyRight + 1);
       expect(r.mainScrollW, "no sideways overflow").toBeLessThanOrEqual(r.mainClientW + 1);
       expect(r.chartW, "trace uses the column width").toBeGreaterThanOrEqual(r.inner - 4);
-    });
-  });
 }
+
+test.describe("landscape 852x393 notch", () => {
+  test.use({ viewport: { width: VIEWS[0].w, height: VIEWS[0].h }, hasTouch: true });
+  test("telemetry compare view is not clipped, overlapped or narrower than its column", async ({ page }) => { await checkFit(page, VIEWS[0]); });
+});
+test.describe("portrait 390x844", () => {
+  test.use({ viewport: { width: VIEWS[1].w, height: VIEWS[1].h }, hasTouch: true });
+  test("telemetry compare view is not clipped, overlapped or narrower than its column", async ({ page }) => { await checkFit(page, VIEWS[1]); });
+});
