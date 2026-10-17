@@ -924,3 +924,52 @@ test("a commit in a tree with no tools/ skips the guards unless it stages code",
     assert.match(r.stderr, /probe: commit code/);
   } finally { repo.rm(); }
 });
+
+// H4/H5 and the H2 unmark (retro 2026-10-17, hooks H2-H5)
+test("H4: a push over a red tooling-fast run is refused; && chains, green logs and the override pass", () => {
+  const repo = scratchRepo("hook-pushred-");
+  try {
+    const push = (command, env = {}) => hook("bash-guard.sh", { tool_name: "Bash", tool_input: { command }, cwd: repo.dir }, { cwd: repo.dir, env });
+    const log = path.join(repo.dir, "artifacts/logs/tooling-fast-suite.log");
+    fs.mkdirSync(path.dirname(log), { recursive: true });
+    // chained with ';' the push runs on a red result: refused before the run starts
+    let r = push("node tools/ci/tooling-fast.mjs; git push -u origin x");
+    assert.equal(r.status, 2, r.stderr); assert.match(r.stderr, /tooling-fast \.\.\.; git push/);
+    r = push("npm run test:tooling-fast\ngit push -u origin x");
+    assert.equal(r.status, 2, r.stderr);
+    assert.notEqual(push("node tools/ci/tooling-fast.mjs && git push -u origin x").status, 2, "&& is the safe join");
+    // newest log red, written after HEAD
+    fs.writeFileSync(log, "x\n= run failed (39 passed, 1 failed)\n");
+    r = push("git push -u origin x");
+    assert.equal(r.status, 2, r.stderr); assert.match(r.stderr, /= run failed \(39 passed, 1 failed\)/);
+    assert.notEqual(push("git push -u origin x", { APEX_PUSH_FAILED_OK: "1" }).status, 2, "override");
+    assert.notEqual(push("APEX_PUSH_FAILED_OK=1 git push -u origin x").status, 2, "inline override");
+    assert.notEqual(push("git status").status, 2, "only a push is held");
+    fs.writeFileSync(log, "x\n= run passed (40 passed, 0 failed)\n");
+    assert.notEqual(push("git push -u origin x").status, 2, "green log");
+    // a red log from before HEAD is stale
+    fs.writeFileSync(log, "= run failed (1 passed, 1 failed)\n");
+    const old = new Date(Date.now() - 86400e3); fs.utimesSync(log, old, old);
+    assert.notEqual(push("git push -u origin x").status, 2, "stale log");
+  } finally { repo.rm(); }
+});
+
+test("H5: a loaded box gets the longer guard cap, above it sits the hook timeout; H2 unmark runs before git verbs", () => {
+  const src = fs.readFileSync(HOOK, "utf8");
+  assert.match(src, /\/proc\/loadavg[^\n]*GUARD_T=300/);
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
+  for (const h of settings.hooks.PreToolUse.flatMap((g) => g.hooks).filter((h) => h.command.includes("bash-guard.sh")))
+    assert.ok(h.timeout >= 300 + 15, `bash-guard hook timeout ${h.timeout} must clear the loaded cap`);
+  const repo = scratchRepo("hook-unmark-");
+  try {
+    fs.mkdirSync(path.join(repo.dir, ".claude/memory"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, ".claude/memory/a.md"), "a\n");
+    repo.g("add", "-A"); repo.g("commit", "-qm", "mem");
+    repo.g("update-index", "--assume-unchanged", ".claude/memory/a.md");
+    assert.match(repo.g("ls-files", "-v").stdout, /^h \.claude\/memory\/a\.md/m);
+    const r = hook("bash-guard.sh", { tool_name: "Bash", tool_input: { command: "git add -A && git commit -m x" }, cwd: repo.dir },
+      { cwd: repo.dir, env: { APEX_MEMORY_SYNC: "1", APEX_GUARD_PROBE: "1" } });
+    assert.notEqual(r.status, null);
+    assert.match(repo.g("ls-files", "-v").stdout, /^H \.claude\/memory\/a\.md/m, "unmarked before the git verb");
+  } finally { repo.rm(); }
+});

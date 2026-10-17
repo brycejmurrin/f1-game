@@ -334,6 +334,37 @@ fi
 # the pool ran at 39 of 40 slots all day regardless. queue-depth.mjs stays an
 # informational gauge.
 
+# H2 (retro 2026-10-17): memory-sync.sh hides the tracked .claude/memory files with
+# assume-unchanged so the Stop hook stops nagging; any git verb that reads or rewrites the
+# index sees the real files first, so a memory edit rides the next commit.
+GIT_VERB='git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+(add|commit|checkout|switch|merge|pull|stash|reset|restore|rebase|cherry-pick|status|diff)([[:space:]]|$)'
+if printf '%s' "$SCAN" | grep -Eq "(^|[;&|({\`][[:space:]]*)${PRE}${GIT_VERB}"; then
+  "$HOOKDIR/memory-sync.sh" unmark </dev/null >/dev/null 2>&1 || true
+fi
+
+# H4 (retro 2026-10-17): a push over a red local run. `tooling-fast ...; git push` pushed
+# despite "= run failed (39 passed, 1 failed)". Two refusals: a `;`/newline chain from a
+# tooling-fast / test:tooling-fast run into a push (`&&` is the safe join), and any push while
+# the newest tooling-fast log, written after HEAD was committed, ends `= run failed`.
+# APEX_PUSH_FAILED_OK=1 overrides (the push is a fix for that very failure, or a docs push).
+PUSH_RX="(^|[;&|({\`][[:space:]]*)${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|\$)"
+if [ "${APEX_PUSH_FAILED_OK:-}" != 1 ] && ! printf '%s' "$SCAN" | grep -Eq 'APEX_PUSH_FAILED_OK=1' \
+   && printf '%s' "$SCAN" | grep -Eq "$PUSH_RX"; then
+  if printf '%s' "$SCAN" | tr '\n' ';' | grep -Eq "tooling-fast[^;&|]*;[[:space:]]*([^&|]*[;&|][[:space:]]*)?git[[:space:]]+push"; then
+    echo "BLOCKED: 'tooling-fast ...; git push' pushes even when the run is red (retro 2026-10-17). Join with '&&', or run tooling-fast first and push after you read its '= run' line." >&2
+    exit 2
+  fi
+  TF_LOG=$(ls -t "$ROOT"/artifacts/logs/tooling-fast*.log 2>/dev/null | head -1)
+  if [ -n "$TF_LOG" ]; then
+    HEAD_CT=$(git -C "$ROOT" log -1 --format=%ct 2>/dev/null || echo 0)
+    LOG_MT=$(stat -c %Y "$TF_LOG" 2>/dev/null || echo 0)
+    if [ "$LOG_MT" -ge "${HEAD_CT:-0}" ] && [ "$(grep -E '^= run ' "$TF_LOG" | tail -1 | cut -c1-12)" = "= run failed" ]; then
+      echo "BLOCKED: the newest tooling-fast log ($TF_LOG) ends '$(grep -E '^= run ' "$TF_LOG" | tail -1)', written after HEAD was committed. Fix it and re-run before pushing; APEX_PUSH_FAILED_OK=1 only when this push is the fix or is not code." >&2
+      exit 2
+    fi
+  fi
+fi
+
 # --- guards before git commit ---------------------------------------------------
 # WHICH COMMANDS ARE COMMITS (2026-10-04). The regex this replaced matched
 # `git( -C dir)? commit` on the raw text, so `git -c k=v commit`, `git
@@ -420,6 +451,10 @@ if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUA
   # below it and rc 124 blocks with a reason; settings.json also sets
   # onFailure "block". APEX_GUARD_TIMEOUT (seconds) exists for the tests.
   GUARD_T="${APEX_GUARD_TIMEOUT:-160}"
+  # H5 (retro 2026-10-17): at loadavg >= 3 the 160 s cap blocked a commit that was fine alone
+  # (gfx-backend-canary, #2647). A loaded box gets the longer cap; settings.json's hook
+  # timeout (360 s) sits above it. An explicit APEX_GUARD_TIMEOUT always wins.
+  if [ -z "${APEX_GUARD_TIMEOUT:-}" ] && awk '{exit !($1 >= 3)}' /proc/loadavg 2>/dev/null; then GUARD_T=300; fi
   guard_timed_out() {
     if [ "$1" = 124 ] || [ "$1" = 137 ]; then
       echo "BLOCKED: $2 did not finish within ${GUARD_T} s (the box is loaded: check /proc/loadavg and any live playwright run), so this commit was NOT guarded. Retry when the box is idle; APEX_SKIP_GUARDS=1 only when the guards themselves are the change." >&2

@@ -53,8 +53,19 @@ REPO="$MAIN/.claude/memory"
 BASE="$MAIN/artifacts/.memory-base"
 
 MODE_OK=0
-case "$MODE" in restore|save) MODE_OK=1 ;; esac
+case "$MODE" in restore|save|unmark) MODE_OK=1 ;; esac
 [ "$MODE_OK" = 1 ] || exit 0
+
+# H2 (retro 2026-10-17, #2662): the synced files are tracked, so every save dirtied the tree
+# and the global Stop hook nagged about files the agent must not touch. `assume-unchanged`
+# hides them from `git diff`/`status`; bash-guard.sh runs `unmark` before any git verb that
+# reads or rewrites the index (add, commit, checkout, merge ...), so a memory edit still rides
+# the session's next commit and a checkout is never refused. restore/save re-mark.
+mark_memory() {
+  git -C "$MAIN" ls-files -z -- .claude/memory 2>/dev/null \
+    | xargs -0 -r git -C "$MAIN" update-index "$1" 2>/dev/null || true
+}
+if [ "$MODE" = unmark ]; then mark_memory --no-assume-unchanged; exit 0; fi
 
 if [ "$MODE" = save ] && [ -n "$INPUT" ]; then
   # PostToolUse: act only when the edited file is inside the live dir.
@@ -65,6 +76,7 @@ except Exception: print("")' 2>/dev/null)
 fi
 
 mkdir -p "$LIVE" "$REPO" "$BASE" 2>/dev/null || exit 0
+mark_memory --no-assume-unchanged   # the sync compares real files
 HEAD_NOW=$(git -C "$MAIN" rev-parse HEAD 2>/dev/null || true)
 LIVE="$LIVE" REPO="$REPO" BASE="$BASE" MODE="$MODE" MAIN="$MAIN" HEAD_NOW="$HEAD_NOW" python3 - <<'PY' || true
 import os, shutil, subprocess, sys
@@ -144,4 +156,5 @@ if mode == "restore" or n_in or n_out or conflicts:
     if conflicts: msg += "; CONFLICT kept the repo copy of " + ", ".join(conflicts) + " (re-apply your edit)"
     print(msg)
 PY
+mark_memory --assume-unchanged
 exit 0
