@@ -150,7 +150,7 @@
 #appearance-studio [data-screen="hud"] [data-as="preview-door"] { border-inline-start-color: var(--preview-hud-accent); background: color-mix(in oklab, var(--look-hud-bg) calc(var(--preview-panel-opacity, 1) * 100%), transparent); }
 #appearance-studio [data-as="preview-speed"] { font-size: var(--fs-6); font-weight: 800; }
 #pm-panel-appearance > [data-as="advanced"] { margin-top: var(--gap); padding: var(--pad); border: 1px solid var(--plate-line); border-radius: var(--r-md); }
-#pm-panel-appearance > [data-as="advanced"] > summary { min-height: var(--tap-min); font-size: var(--fs-2); font-weight: 700; cursor: pointer; }
+#pm-panel-appearance > [data-as="advanced"] > summary { min-height: var(--tap-paint); font-size: var(--fs-2); font-weight: 700; cursor: pointer; }
 #pmsettings-inner:has(#pm-panel-appearance:not([hidden])[data-appearance-studio]) { --sheet-w: calc(var(--tap) * 25); max-width: min(calc(var(--tap) * 31), calc(100 * var(--vwz) - var(--pad) * 2)); }
 @media (max-width: 900px) {
   #appearance-studio { grid-template-columns: minmax(0, 1fr); }

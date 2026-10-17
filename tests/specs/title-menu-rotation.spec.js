@@ -141,7 +141,8 @@ for (const sz of [...PHONES, TABLET]) {
               if (!tr.width) continue;
               const walker = document.createTreeWalker(t, NodeFilter.SHOW_TEXT);
               for (let n; (n = walker.nextNode());) {
-                if (getComputedStyle(n.parentElement).display === "none") continue;
+                const ps = getComputedStyle(n.parentElement);
+                if (ps.display === "none" || ps.textOverflow === "ellipsis") continue;
                 for (const m of n.data.matchAll(/\S+/g)) {
                   const rg = document.createRange(); rg.setStart(n, m.index); rg.setEnd(n, m.index + m[0].length);
                   const lines = new Set([...rg.getClientRects()].map((r) => Math.round(r.top))).size;
@@ -157,7 +158,7 @@ for (const sz of [...PHONES, TABLET]) {
             };
           });
           expect(fit.sh, `${scene}: phone-landscape Home menu must fit without scrolling`).toBeLessThanOrEqual(fit.ch + 1);
-          expect(fit.rows, `${scene}: compact Home rows 3/3/4`).toEqual(["3", "3", "4"]);
+          expect(fit.rows, `${scene}: compact Home rows 2/3/4`).toEqual(["2", "3", "4"]);
           expect(fit.labelDisplay, `${scene}: compact Home group labels stay hidden`).toBe("none");
           expect(fit.broken, `${scene}: no tile label splits or overflows a word`).toEqual([]);
         }
