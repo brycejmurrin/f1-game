@@ -1,0 +1,15 @@
+{
+  "files": {
+    "css/hud.css": {
+      "codeLines": 1,
+      "lines": 2
+    },
+    "js/car/car3d.js": {
+      "lines": -9
+    },
+    "js/ui/hud.js": {
+      "codeLines": -10,
+      "lines": -8
+    }
+  }
+}

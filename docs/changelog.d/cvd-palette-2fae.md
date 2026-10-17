@@ -1,1 +1,1 @@
-Improved: COLOUR VISION (deuteranopia, protanopia, tritanopia) separates the player marker, a slower lap and the session-best ink so they stay distinct.
+Improved: COLOUR VISION (deuteranopia, protanopia, tritanopia) separates the player marker, a slower lap and the session-best ink so they stay distinct. The map plate keeps a ring, an armed aero zone is hatched, and a ghost delta carries a hollow ring.
