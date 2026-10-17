@@ -4980,7 +4980,7 @@ const WGX = (function () {
       let v = batch._mir;
       if (!v) {
         if (batch._mirFail || !batch._instPacked || !batch.instBuf || batch.instBuf === identInstanceBuf) return null;
-        const packed = new Float32Array(batch._instPacked.length);
+        const packed = new Float32Array(batch._instPacked);   // a COPY, not zeros: lanes 16..18 are the 1,1,1 tint a batch without srcColors never rewrites
         let ib;
         try { ib = _mkBuffer(packed, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST); } catch (e) { batch._mirFail = true; _allocFail("mirrorInstances", e); return null; }
         v = batch._mir = { cells: batch.cells, srcMatrices: batch.srcMatrices, srcColors: batch.srcColors, instances: batch.instances,

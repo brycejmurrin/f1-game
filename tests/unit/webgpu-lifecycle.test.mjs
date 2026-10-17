@@ -2748,6 +2748,8 @@ test("WGX mirror-pass cull gets its own pack, buffer and cell-set key: main and 
   assert.equal(mirWrites(), 1, "one upload into the mirror buffer");
   assert.equal(mainWrites(), 1, "the mirror cull did not touch the main instBuf");
   assert.equal(batch._cellKeyN, 2, "…nor the main cell-set key");
+  // Pixel A/B (Monaco, mirror on) caught a black band: a colourless batch never rewrites the tint lanes, so a zeroed mirror pack drew black.
+  assert.deepEqual(Array.from(batch._mir._instPacked.slice(16, 19)), [1, 1, 1], "the first mirrored instance keeps the 1,1,1 tint lanes");
   gfx.mirrorEnd();
   const mirBuf = batch._mir.instBuf;
   for (let f = 0; f < 3; f++) {
