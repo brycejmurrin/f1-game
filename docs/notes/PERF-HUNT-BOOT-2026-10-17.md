@@ -12,3 +12,20 @@ Scripts (not committed): a PerformanceObserver `longtask` boot probe, a CDP `Pro
 
 Not covered (next round): `renderer.info.memory` geometries/textures across rebuilds, menu screen-transition long tasks via a DevTools trace, lazy-bundle waterfall on a cold SW.
 `profile.mjs --mode spans` profiles per-frame gameplay, not the build; use the VM harness (`track-build-vm.cjs`) for CPU-only build time.
+
+## Round 2 — menu transitions, also dry
+
+Long tasks per menu click (3 fresh pages, 844x390 touch, `longtask` observer, 2.5 s window):
+
+| Screen | Long tasks (ms) |
+|---|---|
+| settings | 95/164/316/61/72, none, 95/90/73/85 |
+| help, data, season | all under 175 |
+| race | 56-253, 4-8 tasks per open |
+| garage | 2155, 1889, none (3D car build; GARAGE-CAR-CAPTURE-PERFORMANCE.md) |
+| career | 96, 1761, 52 (once; not repeated) |
+
+CPU profile of the settings open (3 runs, per run): `scroll-fade.js measure` 92 ms, `querySelectorAll` 50, `showModal` 39, audio `detectPeriod`+`createCtx` 73 (lazy audio engine), `settings-tabs.show` 16; `(program)` 996 ms is native.
+`measure` already reads every region in one batch and writes afterwards (the comments say so), so its cost is the one layout after the screen opens, not a read/write interleave. No owned fix is outside the spread. The garage and career 1.8-2.2 s tasks are the 3D build, SwiftShader-bound.
+
+Stop: two consecutive rounds with no CONFIRMED finding (role-hunter.md). Not measured: cold-SW lazy-bundle waterfall, Lighthouse.
