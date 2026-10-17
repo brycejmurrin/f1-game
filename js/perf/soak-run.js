@@ -163,3 +163,5 @@ const SoakRun = (function () {
       elapsedMin: _run.started ? +((performance.now() - _run.tRace) / 60000).toFixed(2) : 0, minutes: _run.minutes } : null),
   };
 })();
+
+Object.freeze(SoakRun);
