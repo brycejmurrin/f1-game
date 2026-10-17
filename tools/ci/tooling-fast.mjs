@@ -1399,10 +1399,11 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // a stamp of HEAD blessed a committed tip the suite never saw (ledger M36).
   // Only a full suite stamps, so only a full suite pays for the tree hash.
   const rel = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f) : f).replace(/\\/g, "/");
-  // car-shade's unchanged process-CPU benchmark measured 1875 ms alongside
-  // other files versus 293–562 ms alone. Give its existing quiet-run contract
-  // one exclusive phase; all assertions, deadlines and pool limits stay intact.
-  const isolated = new Set((opts.isolatedFiles || ["tests/unit/car-shade.test.mjs"]).map(rel));
+  // car-shade's unchanged CPU benchmark measured 1875 ms alongside other
+  // files versus 293–562 ms alone. game-vm's unchanged 12 s boot/race wall
+  // measured 40.5 s alongside other VM files versus 8.03 s alone. Run these
+  // performance contracts exclusively; assertions, deadlines and pool limits stay intact.
+  const isolated = new Set((opts.isolatedFiles || ["tests/unit/car-shade.test.mjs", "tests/unit/game-vm.test.mjs"]).map(rel));
   const isolatedFiles = files.filter((file) => isolated.has(rel(file)));
   files = [...isolatedFiles, ...files.filter((file) => !isolated.has(rel(file)))];
   const ran = new Set(files.map(rel));

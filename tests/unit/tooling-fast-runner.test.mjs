@@ -339,7 +339,7 @@ test("a file that runs zero tests, skips every test, or calls process.exit(0) FA
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("isolated CPU benchmarks finish alone before ordinary files run in parallel with contiguous progress indices", async () => {
+test("isolated performance benchmarks run serially before ordinary files run in parallel with contiguous progress indices", async () => {
   const dir = tmp();
   try {
     const events = path.join(dir, "events.jsonl");
@@ -350,7 +350,9 @@ const event = action => fs.appendFileSync(${JSON.stringify(events)}, JSON.string
 test(${JSON.stringify(name)}, async () => { event("start"); ${body} event("end"); });\n`);
       return file;
     };
-    const isolated = mk("isolated", "await new Promise(resolve => setTimeout(resolve, 250));");
+    const isolatedA = mk("isolated-a", "await new Promise(resolve => setTimeout(resolve, 250));");
+    const isolatedB = mk("isolated-b", "await new Promise(resolve => setTimeout(resolve, 250));");
+    const isolatedNames = new Set(["isolated-a", "isolated-b"]);
     const markerA = path.join(dir, "a-started"), markerB = path.join(dir, "b-started");
     const rendezvous = (own, other) => `fs.writeFileSync(${JSON.stringify(own)}, "started");
 const deadline = Date.now() + 10000;
@@ -359,26 +361,30 @@ assert.ok(fs.existsSync(${JSON.stringify(other)}), "ordinary files must run conc
     const a = mk("ordinary-a", rendezvous(markerA, markerB));
     const b = mk("ordinary-b", rendezvous(markerB, markerA));
     const logPath = path.join(dir, "suite.log");
-    const result = await runToolingFast([a, isolated, b], { jobs: 2, order: "list", isolatedFiles: [isolated], logPath });
+    const result = await runToolingFast([a, isolatedA, b, isolatedB], { jobs: 2, order: "list", isolatedFiles: [isolatedA, isolatedB], logPath });
     assert.equal(result.ok, true);
-    assert.equal(result.passed, 3); assert.equal(result.failed, 0); assert.equal(result.notStarted, 0);
+    assert.equal(result.passed, 4); assert.equal(result.failed, 0); assert.equal(result.notStarted, 0);
     const history = fs.readFileSync(events, "utf8").trim().split("\n").map(JSON.parse);
-    assert.deepEqual(history.slice(0, 2), [{ name: "isolated", action: "start" }, { name: "isolated", action: "end" }]);
+    assert.deepEqual(history.slice(0, 4), [
+      { name: "isolated-a", action: "start" }, { name: "isolated-a", action: "end" },
+      { name: "isolated-b", action: "start" }, { name: "isolated-b", action: "end" },
+    ]);
     const active = new Set(); let maxOrdinary = 0;
     for (const event of history) {
       if (event.action === "start") {
-        if (event.name === "isolated") assert.equal(active.size, 0);
-        else assert.equal(active.has("isolated"), false, "an ordinary child overlaps the isolated benchmark");
-        active.add(event.name); maxOrdinary = Math.max(maxOrdinary, [...active].filter(name => name !== "isolated").length);
+        if (isolatedNames.has(event.name)) assert.equal(active.size, 0, "isolated benchmarks must not overlap any child");
+        else assert.equal([...active].some(name => isolatedNames.has(name)), false, "an ordinary child overlaps an isolated benchmark");
+        active.add(event.name); maxOrdinary = Math.max(maxOrdinary, [...active].filter(name => !isolatedNames.has(name)).length);
       } else active.delete(event.name);
     }
     assert.equal(maxOrdinary, 2, "ordinary children still use both permitted slots");
     assert.equal(active.size, 0);
     const log = fs.readFileSync(logPath, "utf8");
-    assert.match(log, /isolated prefix=.*isolated\.test\.mjs before parallel pool/);
-    assert.match(log, /START 1\/3 \S*isolated\.test\.mjs/);
-    assert.match(log, /START 2\/3 \S*ordinary-a\.test\.mjs/);
-    assert.match(log, /START 3\/3 \S*ordinary-b\.test\.mjs/);
+    assert.match(log, /isolated prefix=.*isolated-a\.test\.mjs,.*isolated-b\.test\.mjs before parallel pool/);
+    assert.match(log, /START 1\/4 \S*isolated-a\.test\.mjs/);
+    assert.match(log, /START 2\/4 \S*isolated-b\.test\.mjs/);
+    assert.match(log, /START 3\/4 \S*ordinary-a\.test\.mjs/);
+    assert.match(log, /START 4\/4 \S*ordinary-b\.test\.mjs/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

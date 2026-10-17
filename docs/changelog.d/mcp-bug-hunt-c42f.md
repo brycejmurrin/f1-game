@@ -7,4 +7,4 @@ Fixed: Handle material readback allocation failures and WebGL error flags withou
 Fixed: Expose debugger exception properties, release completed-run objects, and transport large Unicode source responses within bounded limits.
 Fixed: Report interrupted browser runs accurately and parse multiline skill descriptions for routing.
 Improved: Fit replay footage with an exact spatial index and reduce deployment-test process overhead.
-Improved: Run the car-smoothing CPU benchmark without neighboring test workloads while retaining its performance budget and geometry assertions.
+Improved: Run the car-smoothing and game boot/race performance benchmarks without neighboring test workloads while retaining both performance budgets and behavior assertions.
