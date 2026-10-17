@@ -1381,9 +1381,9 @@
         // AFTER the ground relief, BEFORE paint/material bumps (js/render/glx/shaders/glsl-lit.js).
         const Ngeo = vec3(N).toVar();
 
-        // car surface ids 20-33 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js)
+        // car surface ids 20-37 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js)
         const surfaceId = floor(matA.add(0.5)).toVar();
-        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(33.0)).toVar();
+        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(37.0)).toVar();
         const paintSurface = surfaceId.equal(20.0).toVar();
         const carbonSurface = surfaceId.equal(21.0).toVar();
         const rubberSurface = surfaceId.equal(22.0).toVar();
@@ -1396,13 +1396,17 @@
         const panelSurface = surfaceId.equal(26.0).toVar();
         // MIRROR: chrome livery finish (FINISH_SURFACE.chrome). Paint-like
         // (keeps clearcoat + env lobe) but metallic and nearly smooth.
-        const mirrorSurface = surfaceId.equal(27.0).toVar();
+        // 36 = TINTED CHROME: mirror response, lacquer reflection tinted by the livery hue (CarMaterialShade.TINTED).
+        const tintedSurface = surfaceId.equal(36.0).toVar();
+        const mirrorSurface = surfaceId.equal(27.0).or(tintedSurface).toVar();
         // Three more livery finishes, mirroring js/render/glx/shaders/glsl-lit.js. A
         // finish costs a SURFACE ID, not a uniform: car3d.js FINISH_SURFACE
         // remaps a painted vertex. Carbon needs no id — 21 already exists.
         const matteSurface = surfaceId.equal(28.0).toVar();
         const satinMetalSurface = surfaceId.equal(29.0).toVar();
-        const iriSurface = surfaceId.equal(30.0).toVar();
+        // 37 = CHAMELEON: pearl's response with a wider sweep and a fixed second hue (CarMaterialShade.CHAMELEON).
+        const chamSurface = surfaceId.equal(37.0).toVar();
+        const iriSurface = surfaceId.equal(30.0).or(chamSurface).toVar();
         const carbonFinish = surfaceId.equal(31.0).toVar();   // bare weave OVER the livery colour
         // CARBON WEAVE (GLX): finish 31 and the carbon parts 21, faded to its
         // mean over 8-16 m so the 3.3 cm cross-hatch cannot moire at range.
@@ -1559,7 +1563,16 @@
         }).ElseIf(carbonSurface, () => {
           albedo.assign(albedo.mul(weave.mul(0.24).add(0.88)));
         });
-        If(iriSurface, () => {
+        If(chamSurface, () => {
+          const fres = clamp(dot(N, V), 0.0, 1.0).oneMinus().toVar();
+          const shift = vec3(0.0, 0.33, 0.67).add(fres.mul(2.2)).mul(6.2831853)
+            .cos().mul(0.5).add(0.5).toVar();
+          albedo.assign(albedo.mul(mix(vec3(1.0), shift.mul(1.10).add(0.45),
+            smoothstep(0.06, 0.60, fres).mul(0.80))));
+          const chamL = dot(albedo, vec3(0.299, 0.587, 0.114));
+          albedo.assign(mix(albedo, vec3(0.10, 0.42, 0.95).mul(max(chamL.mul(1.8), 0.10)),
+            smoothstep(0.10, 0.55, fres).mul(0.70)));
+        }).ElseIf(iriSurface, () => {
           const fres = clamp(dot(N, V), 0.0, 1.0).oneMinus().toVar();
           const shift = vec3(0.0, 0.33, 0.67).add(fres.mul(1.4)).mul(6.2831853)
             .cos().mul(0.5).add(0.5).toVar();
@@ -2002,7 +2015,11 @@
             .mul(U.carSunGlint).mul(shadow).mul(U.keyMul));
           ccTrans.assign(envW.mul(0.94).oneMinus());
           color.mulAssign(ccTrans);                             // absorb under the mirror
-          const addCC = envCC.mul(envW);
+          const addCC = envCC.mul(envW).toVar();
+          // TINTED CHROME: the reflection takes the livery hue (albedo / its brightest channel, 88 % mixed in).
+          If(tintedSurface, () => {
+            addCC.mulAssign(mix(vec3(1.0), albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)), 0.88));
+          });
           color.addAssign(addCC.div(addCC.mul(0.35).add(1.0)));  // gentle soft-clip
         });
 

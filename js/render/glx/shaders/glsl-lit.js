@@ -972,10 +972,10 @@ void main() {
   // the analytic env mirror below — orange-peel/flake live UNDER the clearcoat,
   // they must not roughen the mirror shell (that's what read as "ghostly" before).
   vec3 Ngeo = N;
-  // Car3D surface ids occupy 20..33, above TrackGeom's 0..15 material range.
+  // Car3D surface ids occupy 20..37, above TrackGeom's 0..15 material range.
   // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
   int surfaceId = int(vMat + 0.5);
-  bool classifiedCar = surfaceId >= 20 && surfaceId <= 33;
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 37;
   bool paintSurface = surfaceId == 20;
   bool carbonSurface = surfaceId == 21;
   bool rubberSurface = surfaceId == 22;
@@ -990,14 +990,20 @@ void main() {
   // MIRROR: a chrome livery finish. Paint-like (it keeps the clearcoat and the
   // env lobe, which is what actually makes a mirror) but metallic and nearly
   // smooth, so the body reflects its surroundings instead of going matte-dark.
-  bool mirrorSurface = surfaceId == 27;
+  // 36 = TINTED CHROME (FINISH_SURFACE.tinted): the same mirror response as 27, but the lacquer
+  // env reflection below is multiplied by the livery hue so a red car stays red (CarMaterialShade.TINTED).
+  bool tintedSurface = surfaceId == 36;
+  bool mirrorSurface = surfaceId == 27 || tintedSurface;
   // Three more livery finishes, on the SAME mechanism the existing ones use:
   // car3d.js FINISH_SURFACE remaps a painted vertex's id, so a finish costs a
   // surface id here rather than a new uniform. CARBON needs no id at all — 21
   // already exists and the carbon finish simply points at it.
   bool matteSurface = surfaceId == 28;       // flat, chalky, no clearcoat
   bool satinMetalSurface = surfaceId == 29;  // brushed-alloy sheen, half-metal
-  bool iriSurface = surfaceId == 30;         // pearlescent: hue swings with view angle
+  // 37 = CHAMELEON (FINISH_SURFACE.chameleon): pearl's response (iriSurface classification) with a
+  // wider, stronger sweep and a fixed second hue in the albedo block (CarMaterialShade.CHAMELEON).
+  bool chamSurface = surfaceId == 37;
+  bool iriSurface = surfaceId == 30 || chamSurface;   // pearlescent: hue swings with view angle
   bool carbonFinish = surfaceId == 31;       // bare weave OVER the livery colour
   // THE HELMET VISOR is glass-like in roughness and clearcoat but NOT a chrome
   // mirror: see the baseRefl split in the env block below.
@@ -1170,7 +1176,13 @@ void main() {
   } else if (carbonSurface) {
     albedo *= 0.88 + 0.24 * weave;
   }
-  if (iriSurface) {
+  if (chamSurface) {
+    float fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
+    vec3 shift = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + fres * 2.2));
+    albedo *= mix(vec3(1.0), 0.45 + 1.10 * shift, smoothstep(0.06, 0.60, fres) * 0.80);
+    float chamL = dot(albedo, vec3(0.299, 0.587, 0.114));
+    albedo = mix(albedo, vec3(0.10, 0.42, 0.95) * max(chamL * 1.8, 0.10), smoothstep(0.10, 0.55, fres) * 0.70);
+  } else if (iriSurface) {
     float fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
     vec3 shift = 0.5 + 0.5 * cos(6.2831853 * (vec3(0.0, 0.33, 0.67) + fres * 1.4));
     // MULTIPLY the base colour rather than mixing toward the interference
@@ -1724,6 +1736,8 @@ void main() {
     ccTrans = 1.0 - envW * 0.94;
     color *= ccTrans;                                       // absorb: darken the base hard under the mirror so it reads as a mirror, not a milky wash
     vec3 addCC = envCC * envW;
+    // TINTED CHROME: the reflection takes the livery hue (albedo / its brightest channel, 88 % mixed in).
+    if (tintedSurface) addCC *= mix(vec3(1.0), albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04), 0.88);
     color += addCC / (1.0 + addCC * 0.35);                 // gentle soft-clip — keeps bright reflections bright
   }
 

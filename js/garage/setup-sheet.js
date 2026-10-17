@@ -166,7 +166,7 @@ const LIV_ROW_HINT = {
   helmetBase: "HELMET BASE — the helmet shell colour. Unset = the driver's own design.",
   helmetAccent: "HELMET ACCENT — the helmet's stripe and cap colour. Unset = the driver's own design.",
   helmetStyle: "HELMET — TEAM keeps the driver's own design; other styles repaint it from HELMET BASE and ACCENT.",
-  finish: "FINISH — the paint surface: gloss, satin or chrome.",
+  finish: "FINISH — the paint surface: gloss, satin, matte, chrome, brushed, pearl, carbon, tinted chrome (a mirror in the livery hue) or chameleon (a strong colour-shift pearl).",
   wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
   numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
   sponsors: "SPONSORS — which set of names the car carries. CLEAN paints none, which also greys every spine design that writes a sponsor name (TOP wordmark, SIDE wordmark/duo/title).",
