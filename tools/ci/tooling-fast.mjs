@@ -211,6 +211,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // gpu-census.yml's real-GPU Verdict as functions (tools/gfx/census-verdict.mjs)
   // plus its plan gate (nightly skip, push request) executed on a scratch repo; < 1 s.
   "tests/unit/census-verdict.test.mjs",
+  "tests/unit/centreline-kinks.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/change-kind.test.mjs",
   "tests/unit/changed-files.test.mjs",
@@ -589,6 +590,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lamp-shadow-pick.test.mjs",
   // Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.
   "tests/unit/lap-format-rollover.test.mjs",
+  "tests/unit/layers-nav-memo.test.mjs",
   "tests/unit/lazy-audio-firstbind-vm.test.mjs",
   "tests/unit/lazy-bundles-prefetch.test.mjs",
   "tests/unit/lazy-track-build.test.mjs",
