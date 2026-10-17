@@ -49,3 +49,12 @@ to go through `--update`, which rewrites `ratchets.json` and re-conflicts every 
 `tests/data/ratchets.d/<branch>.json` (the `tree` section) and leaves `ratchets.json` alone; repeat the reason in the
 commit. `--reason` is required, and the flag refuses the deploy branch and a detached HEAD. Two PRs doing this merge clean in
 either order (`tests/unit/ratchet-merge-hotspot.test.mjs`, last test); `npm run fold` folds the tree deltas like file deltas.
+
+## Delta scope (#2583, 2026-10-17)
+
+A topic-branch `--update` / `--auto-raise` delta may raise any row but lowers only
+files in `git diff --name-only <merge-base>` (plus untracked) against the deploy
+branch (`APEX_RATCHETS_BASE` overrides the ref). Before, every sibling PR
+subtracted the same untouched headroom from `game.js`/`apex.js`/`agentview.js`,
+and the merged tree went over its ceiling. Tree metrics are not attributable to a
+file and are still written. Shrink on the tip is captured by `--fold` or a tip-side `--update`.
