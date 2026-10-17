@@ -645,7 +645,8 @@ test.describe("UI scale", () => {
         const mz = menu.currentCSSZoom;
         const doubled = ["menu-hero", "menu-retention", "menu-primary", "menu-explore", "menu-secondary"]
           .map((id) => document.getElementById(id))
-          .filter((el) => el && typeof el.currentCSSZoom === "number" && Math.abs(el.currentCSSZoom - mz) > 0.001)
+          // display:contents groups (the dense Home) have no box and so no zoom of their own: nothing to double.
+          .filter((el) => el && getComputedStyle(el).display !== "contents" && typeof el.currentCSSZoom === "number" && Math.abs(el.currentCSSZoom - mz) > 0.001)
           .map((el) => `${el.id}:${el.currentCSSZoom}`);
         const over = [];
         let subs = 0;

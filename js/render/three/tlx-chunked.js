@@ -440,6 +440,44 @@
           buckets.clear();
           ordered.forEach((bk, key) => buckets.set(key, bk));
         }
+        // ORPHAN DUST. The block pack only joins dust that shares an 8-cell block
+        // and a union box under MAXEXT. A ground triangle whose own box is already
+        // most of that block (monaco props, headless build: 54 draws at <= 48
+        // triangles whose box exceeds 576 m, 762 triangles between them) has no
+        // neighbour there and cannot pair without crossing MAXEXT, so each stays
+        // a RenderObject in the scene pass and again in the sun pass. The box is
+        // already larger than the block, so culling it on its own rarely drops
+        // it. Pack those leftovers into the same 384-triangle groups as the wide
+        // list, with no spatial key. Tight dust (box <= one block) stays put, so
+        // a small cluster still culls on its own. Lamp cells stay on `lampCells`.
+        const SPAN = cell * 8;
+        const orphans = [];
+        buckets.forEach((bk, key) => {
+          if (bk.idx.length > DUST) return;
+          if (bk.mx[0] - bk.mn[0] <= SPAN && bk.mx[2] - bk.mn[2] <= SPAN) return;
+          orphans.push({ key, bk });
+        });
+        if (orphans.length > 1) {
+          const groups = [];
+          let g = null;
+          for (let i = 0; i < orphans.length; i++) {
+            const o = orphans[i];
+            if (!g || g.n + o.bk.idx.length > GROUP) {
+              groups.push(g = { keys: [], parts: [], n: 0, mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity], gx: o.bk.gx, gz: o.bk.gz, key: o.key });
+            }
+            g.keys.push(o.key); g.parts.push(o.bk.idx); g.n += o.bk.idx.length;
+            for (let a = 0; a < 3; a++) { if (o.bk.mn[a] < g.mn[a]) g.mn[a] = o.bk.mn[a]; if (o.bk.mx[a] > g.mx[a]) g.mx[a] = o.bk.mx[a]; }
+          }
+          for (let gi = 0; gi < groups.length; gi++) {
+            const pg = groups[gi];
+            if (pg.parts.length < 2) continue;
+            const idx = new IndexArray(pg.n);
+            let w = 0;
+            for (let p = 0; p < pg.parts.length; p++) { const part = pg.parts[p]; for (let i = 0; i < part.length; i++) idx[w++] = part[i]; }
+            buckets.set(pg.key, { idx, mn: pg.mn, mx: pg.mx, gx: pg.gx, gz: pg.gz });
+            for (let i = 1; i < pg.keys.length; i++) buckets.delete(pg.keys[i]);
+          }
+        }
       }
       const chunks = [];
       let count = 0;
