@@ -20,7 +20,7 @@ const ctx = (count = 0) => ({ cap: { cap: 3, count } });
 
 test("defaults come from ready-full-cap", () => {
   assert.equal(DEPLOY, "claude/f1-game-project-26h3ng");
-  assert.equal(MAX_LIVE, 3);
+  assert.equal(MAX_LIVE, 8);
   assert.deepEqual([...SUGGESTIONS].sort(), ["ARM", "FIX", "FOREIGN-ARM", "NONE", "READY", "SYNC", "WAIT"]);
 });
 

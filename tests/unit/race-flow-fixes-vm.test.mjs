@@ -313,7 +313,7 @@ test("startRaceBody aborts to the menu when the race-session bundle failed to lo
   // stops the loading screen, quits to the menu, tells the player and returns before the stubs can start a race.
   const src = gameSource();
   const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("async function startRaceBody()") + 6000);
-  assert.match(body, /const sessionOk = await ensureRaceSession\(\);/);
+  assert.match(body, /let sessionOk = await ensureRaceSession\(\);/);   // #2625: a `let`, so RETRY on the loading card can re-run the load
   assert.match(body, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\); announce\("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"\); return false; \}/);
   assert.ok(body.indexOf("if (!sessionOk)") < body.indexOf("await ensureAudio()"), "the abort comes before anything starts the race");
 });

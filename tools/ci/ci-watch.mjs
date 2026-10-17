@@ -309,6 +309,41 @@ export function waitingJobs(sha, { since = null, request = api, now = Date.now, 
 
 export const wantsAnnotations = (job) => job.conclusion === "failure" || job.conclusion === "timed_out";
 
+/** Read-only triage lines for a red job (#2665): is it already red on the deploy tip, is it a known flake?
+ *  `baseRun`/`baseJobs` are the deploy branch's latest completed run of the same workflow and its jobs (null = unknown);
+ *  `annos` the failing annotation lines; `quarantine` tests/data/flaky-quarantine.json's rows. Pure. */
+export function inheritedNotes({ job, annos = [], baseRun = null, baseJobs = null, quarantine = [] }) {
+  const out = [];
+  const same = Array.isArray(baseJobs) ? baseJobs.find((b) => b.name === job.name) : null;
+  if (baseRun && same && (same.conclusion === "failure" || same.conclusion === "timed_out")) {
+    out.push(`    base red since ${String(baseRun.head_sha).slice(0, 7)} — the deploy tip's run #${baseRun.id} has "${job.name}" ${same.conclusion} too: likely inherited, not this PR's`);
+  }
+  const text = `${job.name}\n${annos.join("\n")}`;
+  const hit = (Array.isArray(quarantine) ? quarantine : []).find((q) => q && ((q.spec && text.includes(q.spec)) || (q.title && text.includes(q.title))));
+  if (hit) out.push(`    in flaky-quarantine.json: ${hit.spec}${hit.title ? ` › ${String(hit.title).slice(0, 80)}` : ""} (owner ${hit.owner || "?"}, expires ${hit.expires || "?"}) — a retry pass is allowed once, but a pass that needed one is a red (rule 9)`);
+  return out;
+}
+
+const baseRunCache = new Map();
+/** The deploy branch's newest completed run of `workflowId` and its jobs; cached per workflow for the process. */
+export function baseRunFor(workflowId, request = api) {
+  if (baseRunCache.has(workflowId)) return baseRunCache.get(workflowId);
+  let res = { baseRun: null, baseJobs: null };
+  try {
+    const r = request(`actions/workflows/${workflowId}/runs?branch=${encodeURIComponent(DEPLOY)}&status=completed&per_page=1`);
+    const run = r?.json?.workflow_runs?.[0];
+    if (run) {
+      const j = request(`actions/runs/${run.id}/jobs?per_page=100`);
+      if (Array.isArray(j?.json?.jobs)) res = { baseRun: run, baseJobs: j.json.jobs };
+    }
+  } catch { /* triage is advisory: no answer, no line */ }
+  baseRunCache.set(workflowId, res);
+  return res;
+}
+function readQuarantine() {
+  try { return JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../../tests/data/flaky-quarantine.json"), "utf8")).quarantine || []; } catch { return []; }
+}
+
 function annotations(jobId) {
   const r = api(`check-runs/${jobId}/annotations?per_page=5`);
   return (r.json || []).filter((a) => a.annotation_level === "failure").slice(0, 3)
@@ -451,7 +486,12 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
         // Annotations only for a job that FAILED: a cancelled job's annotation is
         // the draft/ready dedupe's "higher priority waiting request" (rule 8) — as a
         // Monitor event it read as a red, eight times over, on PR #279.
-        if (wantsAnnotations(e.job)) for (const a of annotations(e.job.id)) console.log(a);
+        if (wantsAnnotations(e.job)) {
+          const annos = annotations(e.job.id);
+          for (const a of annos) console.log(a);
+          const base = baseRunFor(run.workflow_id, request);
+          for (const n of inheritedNotes({ job: e.job, annos, ...base, quarantine: readQuarantine() })) console.log(n);
+        }
       }
     }
     const v = verdict(runs, jobsByRun);

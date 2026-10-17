@@ -1462,7 +1462,7 @@ test("a job's reported log is the file holding its output, and status tails it",
     const logText = fs.readFileSync(path.join(fake, done.log), "utf8");
     assert.match(logText, /52\/52 circuits ok/, "the reported log holds the CLI's output, not 0 bytes");
     assert.match(fs.readFileSync(path.join(fake, done.stderr), "utf8"), /a warning/);
-    assert.match(done.tail, /52\/52 circuits ok[\s\S]*--- stderr ---\na warning/);
+    assert.equal(done.tail, undefined, "a finished job whose log parsed carries out, not the same text again (#2672)");
     assert.deepEqual(done.out, { ok: true, n: 52 });
     assert.ok(!fs.readdirSync(path.join(fake, "artifacts/logs/apex-jobs")).some((f) => f.endsWith(".out")), "no unreported side file");
 
@@ -1981,6 +1981,8 @@ const ARG_EXEMPT = {
   "apex_hud_shot.async": "routing only: job vs inline; never part of the pinned argv",
   "apex_hud_shot.inlineImage": "output only: attach the PNG inline; not part of the pinned argv",
   "apex_hud_survey.async": "routing only: job vs inline; never part of the pinned argv",
+  "apex_select_specs.full": "reply shaping only (slimBody): keeps shard spec lists; never part of the argv",
+  "apex_unit_test.full": "reply shaping only (slimBody): keeps the whole TAP stream; never part of the argv",
 };
 const ARG_ALWAYS = new Set(["dryRun", "target", "url", "image"]);   // transport / output flags of every tool
 const argCandidates = (spec) => {
@@ -2203,4 +2205,37 @@ test("saved gallery cannot write through an assets directory symlink", () => {
     assert.equal(fs.readdirSync(outside).length, 0);
     assert.equal(fs.existsSync(path.join(out, "index.html")), false);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(outside, { recursive: true, force: true }); }
+});
+
+test("slimBody (#2672): doctor keeps failures + pass count, unit_test keeps counts + failing names, select_specs drops shard spec lists; full restores", async () => {
+  const { slimBody } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const doc = { ok: true, out: { checks: [{ id: "a", status: "pass" }, { id: "b", status: "warn" }, { id: "c", status: "pass" }], summary: { pass: 2 } } };
+  const d = slimBody("apex_doctor", doc);
+  assert.deepEqual(d.out.checks.map((c) => c.id), ["b"]); assert.equal(d.out.passed, 2);
+  assert.equal(slimBody("apex_doctor", doc, { full: true }).out.checks.length, 3);
+  const tap = (fail) => ({ ok: !fail, out: null, stdout: `ok 1 - a\n${fail ? "not ok 2 - broken thing\n" : "ok 2 - b\n"}# tests 2\n# pass ${2 - fail}\n# fail ${fail}\n` });
+  const ok = slimBody("apex_unit_test", tap(0));
+  assert.deepEqual(ok.out, { tests: 2, pass: 2, fail: 0, failing: [] }); assert.equal(ok.stdout, "");
+  const bad = slimBody("apex_unit_test", tap(1));
+  assert.deepEqual(bad.out.failing, ["broken thing"]); assert.match(bad.stdout, /not ok 2/);
+  const sel = slimBody("apex_select_specs", { out: { selected: [{ file: "x" }], shards: [{ name: "s1", specs: "a.js b.js" }] } });
+  assert.deepEqual(sel.out.shards, [{ name: "s1", specCount: 2 }]);
+});
+
+test("hudEstimateMs (#2673): tracks measured cost and scales with cells; the kill budget is not the estimate", async () => {
+  const { hudEstimateMs } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const { expandMatrix } = await import("../../tools/lib/hud-survey-matrix.mjs");
+  assert.ok(hudEstimateMs("apex_hud_shot", {}) <= 90000 && hudEstimateMs("apex_hud_mock", {}) <= 90000);
+  const id = expandMatrix("quick", {}).cells[0].id;
+  const one = hudEstimateMs("apex_hud_survey", { matrix: "quick", only: [id] });
+  const all = hudEstimateMs("apex_hud_survey", { matrix: "quick" });
+  assert.ok(one <= 90000, `one cell ~47 s measured, got ${one}`);
+  assert.ok(all > one * 3, "the full quick matrix costs several times one cell");
+  assert.ok(all < 20 * 60000, "and far less than the old 18-minute claim for one cell");
+});
+
+test("tool descriptions state the host ceiling and the per-call boot (#2673)", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "utf8");
+  assert.match(src, /name: "apex_job_status"[\s\S]{0,400}~120 s/);
+  assert.match(src, /name: "apex_agent"[\s\S]{0,300}COLD-BOOTS/);
 });

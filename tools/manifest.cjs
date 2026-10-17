@@ -387,6 +387,7 @@ const FULL = [
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
+  "js/perf/phone-recorder.js", // PhoneRecorder: SETTINGS > METRICS > PHONE TEST (RECORD / SHARE soak JSON, #1633); reads PerfGov/GLX, writes neither
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
   "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
   "js/camera/vantage.js",
@@ -1422,11 +1423,6 @@ const MOVED = {
   "tools/slider-effect-live.mjs": "tools/lighting/slider-effect-live.mjs",
   "tools/slider-effect-view.py": "tools/lighting/slider-effect-view.py",
   "tools/look-survey-sheet.py": "tools/lighting/look-survey-sheet.py",
-  "tools/lighting-campaign/capture.mjs": "tools/lighting/campaign/capture.mjs",
-  "tools/lighting-campaign/config.mjs": "tools/lighting/campaign/config.mjs",
-  "tools/lighting-campaign/io.mjs": "tools/lighting/campaign/io.mjs",
-  "tools/lighting-campaign/metrics.mjs": "tools/lighting/campaign/metrics.mjs",
-  "tools/lighting-campaign/tune.mjs": "tools/lighting/campaign/tune.mjs",
   "tools/harness.mjs": "tools/lib/harness.mjs",
   "tools/output-paths.mjs": "tools/lib/output-paths.mjs",
   "tools/game-vm.cjs": "tools/lib/game-vm.cjs",

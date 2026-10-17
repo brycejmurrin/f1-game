@@ -170,9 +170,11 @@ const WGXShadow = (function () {
       } catch (_) { blockerPipeline = null; blockerBG = null; /* PCSS downsample optional; LIT still binds the placeholder */ }
     }
 
+    function _shadowModelSrc(model) {
+      return model && model.length === 16 ? model : (model && model.length > 16 && model.subarray ? model.subarray(0, 16) : IDENT);
+    }
     function _writeShadowModel(slot, model) {
-      const src = model && model.length === 16 ? model : (model && model.length > 16 && model.subarray ? model.subarray(0, 16) : IDENT);
-      shadowModelRing.set(src, slot * SHADOW_MODEL_F32_STRIDE);
+      shadowModelRing.set(_shadowModelSrc(model), slot * SHADOW_MODEL_F32_STRIDE);
     }
     // One writeBuffer for every slot filled this pass — call before
     // shadowPass.end(). writeBuffer is queue-ordered before submit, so
@@ -212,6 +214,7 @@ const WGXShadow = (function () {
     // The model ring is unaffected: slots keep counting across Begins and are
     // reset only by the frame submit (or the overflow path below), so a
     // submitted pass's slots are never rewritten by a later one.
+    let _smPass = null, _smSlot = -1;   // _shadowSetModel's same-model memo
     function _shadowEncoderBegin() {
       if (_pendingShadowEnc) {
         try { core.device.queue.submit([_pendingShadowEnc.finish()]); } catch (_) { /* core.device error surfaces later */ }
@@ -219,6 +222,7 @@ const WGXShadow = (function () {
         if (_shadowSlot > SHADOW_SLOTS - 512) { _shadowSlot = 0; _shadowFlushed = 0; _shadowOverflow = 0; }
       }
       shadowEncoder = core.device.createCommandEncoder();
+      _smPass = null;   // a new pass binds nothing yet (also covers a pass wrapper that is reused, e.g. by a mock)
     }
     // The frame submit: shadow encoder (when any pass recorded) rides in front
     // of the main encoder, then the ring resets for the next frame.
@@ -228,12 +232,24 @@ const WGXShadow = (function () {
       _shadowSlot = 0; _shadowFlushed = 0; _shadowOverflow = 0;
       return sh ? [sh.finish(), mainEnc.finish()] : [mainEnc.finish()];
     }
+    // Same-model dedupe. A prop batch cast passes _shadowIdent and most track/prop casts pass MAT_IDENT, so a run of
+    // casts re-took a ring slot, re-copied the same 16 floats and re-bound group 1 at a new offset every time. Group 1
+    // is only ever bound here, and a pass object is new per Begin, so "(this pass, its last slot, equal floats)" is an
+    // exact hit: the binding already points at that slot and the ring bytes are unchanged.
     function _shadowSetModel(model) {
+      const src = _shadowModelSrc(model);
+      if (_smPass === shadowPass && _smSlot >= 0) {
+        const o = _smSlot * SHADOW_MODEL_F32_STRIDE;
+        let same = true;
+        for (let i = 0; i < 16; i++) if (shadowModelRing[o + i] !== src[i]) { same = false; break; }
+        if (same) return _smSlot;
+      }
       if (_shadowSlot >= SHADOW_SLOTS) { _shadowOverflow++; return -1; }
       const slot = _shadowSlot++;
-      _writeShadowModel(slot, model);
+      shadowModelRing.set(src, slot * SHADOW_MODEL_F32_STRIDE);
       _shadowDynOff[0] = slot * SHADOW_MODEL_STRIDE;
       shadowPass.setBindGroup(1, shadowModelBindGroup, _shadowDynOff);
+      _smPass = shadowPass; _smSlot = slot;
       return slot;
     }
     function shadowBegin(lightVP) {
