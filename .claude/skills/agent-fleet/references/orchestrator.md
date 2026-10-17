@@ -89,7 +89,7 @@ before every `create_session`:
 12. Size stop, every role: the launch prompt ends `STOP AT: 300k context or $<cap>`.
    The session reads its own `context_usage` / `usage` via `get_session` (no id)
    at every wake after a green push and, at the stop, sends HANDOFF/FINAL and
-   ends. Docs-only owners stop at 100k (`docs/notes/ROLE-REVIEW-2026-10-17.md`).
+   ends. Docs-only owners stop at 100k (role review, #2737).
 
 ### Pre-launch quota check (#2380)
 
