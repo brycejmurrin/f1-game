@@ -18,7 +18,7 @@ function load(files, opts, prepare) {
   const warns = [];
   const ctx = vm.createContext({
     ApexRoster: { DEFERRED_EDGES: [] },
-    window: { __APEX_BUILD: "t" },
+    window: { __APEX_BUILD: "t", setTimeout, clearTimeout },
     Log: { warn: (_ns, m) => warns.push(m) },
     UpdateCheck: { prepareLazyLoad: prepare, blocksLazyLoad: () => false },
     document: {
@@ -56,7 +56,7 @@ function integrityLoad(body, published, block, tagName = "SCRIPT") {
   const appended = [];
   let executed = false;
   const ctx = vm.createContext({
-    ApexRoster: { DEFERRED_EDGES: [] }, window: { __APEX_BUILD: 15717 },
+    ApexRoster: { DEFERRED_EDGES: [] }, window: { __APEX_BUILD: 15717 }, setTimeout, clearTimeout,
     UpdateCheck: { prepareLazyLoad: async () => true, blocksLazyLoad: () => false },
     document: {
       getElementById(id) {
@@ -105,4 +105,35 @@ test("an unrelated DOM element is not deployment integrity metadata", async () =
   const result = await integrityLoad("old", "new", "", "DIV");
   assert.equal(result.ok, true);
   assert.equal(result.appended[0].integrity, undefined);
+});
+
+// #2582: a file that never fires load/error must fail at the deadline (and
+// signal "slow" first) instead of hanging the load forever.
+test("a hung lazy file fails at the deadline after signalling slow", async () => {
+  const removed = [], slow = [], warns = [];
+  const ctx = vm.createContext({
+    ApexRoster: { DEFERRED_EDGES: [] }, window: { __APEX_BUILD: "t", setTimeout, clearTimeout },
+    Log: { warn: (_n, m) => warns.push(m) },
+    UpdateCheck: { prepareLazyLoad: async () => true, blocksLazyLoad: () => false },
+    document: {
+      createElement: () => ({ dataset: {}, remove() { removed.push(1); } }),
+      head: { appendChild() { /* never loads, never errors */ } },
+    },
+  });
+  vm.runInContext(loader + "\nthis.ScriptLoader = ScriptLoader;", ctx);
+  const t0 = Date.now();
+  const ok = await ctx.ScriptLoader.create().load(["pit-lane.js"], [], { strict: true, slowMs: 30, deadlineMs: 120, onSlow: (s) => slow.push(s) });
+  assert.equal(ok, false);
+  assert.deepEqual(slow, ["pit-lane.js"]);
+  assert.equal(removed.length, 1, "the stalled tag is removed so a retry re-injects");
+  assert.ok(Date.now() - t0 < 2000);
+  assert.ok(warns.some((m) => /timed out/.test(m)));
+});
+
+test("a file that loads in time never fires slow or the deadline", async () => {
+  const slow = [];
+  const { v } = await load(["a.js"], { slowMs: 30, deadlineMs: 60, onSlow: (s) => slow.push(s) }, async () => true);
+  assert.equal(v, true);
+  await new Promise((r) => setTimeout(r, 120));
+  assert.deepEqual(slow, []);
 });
