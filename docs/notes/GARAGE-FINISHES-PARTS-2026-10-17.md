@@ -116,6 +116,37 @@ mirrors, (4) tyre sidewall ink, (5) player helmet picker.
 **Slice 2** — metallic flake + candy (two shader ids across GLX/TLX/WGX, shade numbers pinned in
 `car-material-shade.js`, WGX/TLX parity test, phone-safe fade). **Slice 3** — sidewall ink + player helmet picker.
 
+## 7. More candidates (second pass — same cost model, still unrendered)
+
+**More finishes.** All are ids in the existing per-id branch (≤ ~12 ALU, near-field fade, no texture) unless noted.
+
+| Candidate | Idea | Cost / risk |
+|---|---|---|
+| Gunmetal / anodised | metal-lobe finish with a dark tinted albedo (between brushed 29 and chrome 27) | trivial; reuses the `METAL` constants; reads on phone because the dark env boost already exists |
+| Gold / rose-gold plate | chrome with a fixed warm tint, ignoring livery hue | trivial; overrides team colour on purpose, so opt-in per zone (mirrors, halo, wing) rather than whole car |
+| Frosted / ice satin | satin + cool fresnel rim | trivial; near-duplicate of satin at phone distance — only worth it as a zone finish |
+| Oil-slick / holographic | pearl with a wider cos-palette and a higher blend (needs `patternSecond`-style second hue) | low; the strongest "wow" per ALU after flake, but moiré-prone on motion |
+| Suede / velvet | matte + fresnel brightening at grazing angles | low; cheap, but looks like matte face-on |
+| Race-worn (grime, scuffs, tyre-marbles) | **not** a finish: a per-race wear tint driven by race progress | medium; couples livery to race state and the field LOD — defer, and keep it out of the garage save |
+| Flat vintage / non-reflective | matte with the env lobe forced off | trivial; arguably matte already covers it |
+
+**More parts / zones.** Sections already named in the mesh: `sponsorBoard`, `sidepods`, `sharkFin`, `mirrors`,
+`suspension`, `brakeDucts`, `wheels`, `bodyDetail`, `bolsters`, `cockpit`, `driver`, `helmet`, `exhaust`.
+
+| Part | Today | Needs | Class |
+|---|---|---|---|
+| Suspension arm colour (carbon vs painted vs polished) | section `suspension` exists | a `suspensionFinish` field | paint-only |
+| Brake-duct / bargeboard trim colour | `brakeDucts` section; floor board built in `car3d.js` | tint field | paint-only |
+| Cockpit steering wheel grips / marker | `getCockpitWheel(liv, style)` is already livery-keyed | expose grip colour as a livery field | paint-only, player-visible in cockpit camera |
+| Seat bolsters / cabin trim | `bolsters`, `cockpit` sections | tint field; cockpit view dims light accents already (`_ckAcc`) | paint-only |
+| Sponsor board colour | `sponsorBoard` is an opaque panel at the pod line | tint, keep sponsor ink legible via the existing contrast guards | paint-only |
+| Exhaust tip heat colour | tip glow comes from the fuel option | player pick of heat tint | paint-only, exhaust section |
+| Rear-light / rain-light colour | surface 25 is reserved and contractual | do **not** expose | skip |
+
+**Revised ranking after this pass.** Finishes: unchanged top 5; add *gold/gunmetal as zone-only finishes* to slice 1
+because they are free once zone fields exist. Parts: add *steering-wheel grip colour* and *suspension finish* to slice 1
+for the same reason (a field plus a section map entry); keep helmet picker in slice 3.
+
 ## 6. Not verified here / caveats
 
 - The candidate shader finishes (flake, candy, tinted chrome) have **no render yet**: a believable proof needs the
