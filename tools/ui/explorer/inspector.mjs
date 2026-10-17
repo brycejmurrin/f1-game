@@ -149,8 +149,18 @@ export function inspectUI(options = {}) {
     }
     const disabled = e.matches ? e.matches(":disabled") || e.getAttribute("aria-disabled") === "true" : !!e.disabled;
     const hit = right > left && bottom > topY ? safe(() => document.elementFromPoint((left + right) / 2, (topY + bottom) / 2)) : null;
-    const hits = hit && (hit === e || e.contains(hit));
-    const reachability = { scrollX, scrollY, clippedBy, hit: disabled ? "disabled" : !hit ? "not-tested" : hits ? "hits" : "blocked", interceptor: hit && !hits ? selector(hit) : null };
+    // A native label activates its control, so a tap landing on it is a hit and
+    // its box is part of the target (a checkbox inside a full-width label row).
+    const labels = safe(() => [...(e.labels || [])], []);
+    const hits = hit && (hit === e || e.contains(hit) || labels.some(l => l === hit || l.contains(hit)));
+    // The root itself answering means nothing painted takes the point (a
+    // transition, pointer-events:none): not another control covering this one.
+    const bare = hit && !hits && (hit === document.documentElement || hit === document.body);
+    const reachability = { scrollX, scrollY, clippedBy, hit: disabled ? "disabled" : !hit ? "not-tested" : hits ? "hits" : bare ? "not-hit-testable" : "blocked", interceptor: hit && !hits ? selector(hit) : null };
+    const area = labels.reduce((a, l) => { const b = l.getBoundingClientRect();
+      return b.width && b.height ? { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom) } : a; },
+      { x: r.x, y: r.y, right: r.right, bottom: r.bottom });
+    const target = { width: area.right - area.x, height: area.bottom - area.y };
     const c = { selector: sel, role: role(e), name: label, disabled, checked: e.checked, expanded: e.getAttribute("aria-expanded"),
       pressed: e.getAttribute("aria-pressed"), selected: e.getAttribute("aria-selected"), open: e.tagName === "SUMMARY" ? e.parentElement?.open : undefined,
       value: e.type === "password" || /password|secret|token/i.test(e.name || "") ? "[redacted]" : typeof e.value === "string" ? e.value.slice(0, 512) : e.value,
@@ -162,7 +172,8 @@ export function inspectUI(options = {}) {
     if (((r.x < -1 || r.right > innerWidth + 1) && !scrollX) || ((r.y < -1 || r.bottom > innerHeight + 1) && !scrollY)) issue("offscreen", `${label || sel} escapes the viewport without scrolling on that axis.`);
     if (clippedBy.length) issue("clipped", `${label || sel} extends past a non-scrolling clip.`);
     if (reachability.hit === "blocked" && !disabled) issue("blocked", `${label || sel} is intercepted by ${reachability.interceptor}.`);
-    if (!disabled && Math.min(r.width, r.height) < (matchMedia("(pointer:coarse)").matches ? 44 : 24)) issue("tiny-target", `${label || sel} target is ${r.width.toFixed(1)} × ${r.height.toFixed(1)} CSS px.`);
+    if (reachability.hit === "not-hit-testable" && !disabled) issue("not-hit-testable", `${label || sel}: its visible centre hit-tests to ${reachability.interceptor} (nothing painted takes the point).`);
+    if (!disabled && Math.min(target.width, target.height) < (matchMedia("(pointer:coarse)").matches ? 44 : 24)) issue("tiny-target", `${label || sel} target is ${target.width.toFixed(1)} × ${target.height.toFixed(1)} CSS px${labels.length ? " including its label" : ""}.`);
     if (c.binding.status === "mismatch") issue("binding-mismatch", `${label || sel}: DOM value differs from its live binding.`);
   }
   if (document.documentElement.scrollWidth > innerWidth + 2) issues.push({ kind: "overflow", selector: "html", message: "Document has horizontal overflow." });
@@ -225,13 +236,21 @@ export async function inspectResponsive(page, { viewports, root, styles, roundTr
   try {
     for (const { viewport, sourceIndex, phase } of sequence) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      const settlement = await page.evaluate(settleLayout, { root });
+      let settlement = await page.evaluate(settleLayout, { root });
+      // One more budget before judging: the first resize after boot often
+      // outlasts a single sample window. Still moving after that, the record's
+      // issues are provisional — a hit test mid-transition is not a defect.
+      if (settlement && settlement.stable === false) settlement = { ...await page.evaluate(settleLayout, { root }), retried: true };
       const inspection = await inspectPage(page, { root, styles, source, audits });
+      if (settlement && settlement.stable === false) {
+        inspection.provisional = true;
+        for (const i of inspection.issues || []) i.provisional = true;
+      }
       records.push({ requestedViewport: { width: viewport.width, height: viewport.height }, sourceIndex, phase, settlement, inspection,
         diff: records.length ? diffInspections(records.at(-1).inspection, inspection) : null });
     }
   } finally { await page.setViewportSize(originalViewport); }
   return { version: 1, mode: "viewport-sweep", roundTrip, originalViewport, restoredViewport: true, records,
     ...(roundTrip ? { paths: compareSweepPaths(records) } : {}),
-    limitations: ["Only viewport size is changed; pointer, safe-area, scale and appearance settings remain those of the current page", "Stability samples up to 500 elements for at most 120 frames / two seconds; quiet samples cannot rule out later asynchronous changes", "Resize handlers can change application state; restoring viewport does not undo those transitions", "Advisories are not functional passes or confirmed CSS defects"] };
+    limitations: ["Only viewport size is changed; pointer, safe-area, scale and appearance settings remain those of the current page (inspect --touch/--boot/--safe set them for the whole session)", "Issues from a record that did not settle after one retry are marked provisional", "Stability samples up to 500 elements for at most 120 frames / two seconds; quiet samples cannot rule out later asynchronous changes", "Resize handlers can change application state; restoring viewport does not undo those transitions", "Advisories are not functional passes or confirmed CSS defects"] };
 }
