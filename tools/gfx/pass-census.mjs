@@ -18,7 +18,7 @@
 // Each pass is keyed by its render target (name + size) or "canvas"; `render.drawCalls` and `.triangles`
 // are summed per key per frame and averaged over the measured frames.
 //
-//   node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--json PATH]
+//   node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object] [--json PATH]
 //        [--camera chase|helmet|...]   (a __apex camera mode name; default: leave the race default)
 //
 // Output: one table row per pass key: frames it ran in (of N), mean draw calls and triangles per frame it
@@ -31,7 +31,8 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
-exitIfHelp(argv, `usage: node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--camera MODE] [--json PATH]
+exitIfHelp(argv, `usage: node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object] [--camera MODE] [--json PATH]
+  --by-object attributes each pass's triangles to object groups (the mesh's userData flags: tlxLgRoad, tlxBatch, ...), for the mirror and main passes.
   --mobile forces the phone tier (apex26.forceMobileTier=1: mirror "lite" rung etc.).
   Draw calls and triangles per render pass per frame on TLX's WebGL2 path (exact counts, not timings).
   Link calls are stubbed unless --real-link, so the scene reaches steady state quickly under SwiftShader.`);
@@ -49,6 +50,7 @@ const FRAMES = Math.max(10, +flag("--frames", 120) || 120);
 const WARM = Math.max(0, +flag("--warm", 60) || 60);
 const REAL_LINK = argv.includes("--real-link");
 const MOBILE = argv.includes("--mobile");
+const BY_OBJECT = argv.includes("--by-object");
 const CAMERA = flag("--camera", null);
 const JSON_OUT = flag("--json", null);
 const WAIT_MS = Math.max(60000, +process.env.APEX_PROFILE_WAIT_MS || 60000);
@@ -88,8 +90,26 @@ function installWrap() {
   // three's `info.render.drawCalls` / `.triangles` accumulate across the passes of ONE frame and reset when the
   // next frame starts (info.autoReset), so a pass's own count is the delta around its render() call; a value
   // that went DOWN means a reset happened inside the call, and the after-value is then the pass's count.
+  const objRows = [];
+  r.__passCensus.objRows = objRows;
+  let curKey = "canvas";
+  if (typeof r.renderObject === "function") {
+    const origRO = r.renderObject.bind(r);
+    // Group label: the mesh's userData flags (tlxLgRoad, tlxEmissive, tlxBatch, ...), which are what TLX marks its mesh kinds with
+    // (meshes carry no names, and every material is the same node-material class, so neither separates them).
+    const label = (o) => { const k = o.userData ? Object.keys(o.userData).join(",") : ""; return k || (o.geometry && o.geometry.name) || "unflagged"; };
+    r.renderObject = function (object) {
+      if (!r.__passCensus.on || !r.__passCensus.byObject) return origRO.apply(this, arguments);
+      const i = r.info.render, c0 = i.drawCalls | 0, t0 = i.triangles | 0;
+      const out = origRO.apply(this, arguments);
+      const c1 = i.drawCalls | 0, t1 = i.triangles | 0;
+      objRows.push([curKey, label(object) + (object.isInstancedMesh ? " [inst]" : ""), c1 >= c0 ? c1 - c0 : c1, t1 >= t0 ? t1 - t0 : t1]);
+      return out;
+    };
+  }
   r.render = function (scene, camera) {
     const i = r.info.render, c0 = i.drawCalls | 0, t0 = i.triangles | 0;
+    { const t = r.getRenderTarget && r.getRenderTarget(); curKey = t ? ((t.texture && t.texture.name) || t.name || "rt") + " " + t.width + "x" + t.height : "canvas"; }
     const out = orig(scene, camera);
     if (r.__passCensus.on) {
       const t = r.getRenderTarget && r.getRenderTarget();
@@ -125,15 +145,15 @@ async function main() {
       for (let i = 0; i < warm; i++) { A.setInput({ throttle: true, steer: 0.35 * Math.sin(i / 25) }); await raf(); }
     }, WARM);
     await page.evaluate(installWrap);
-    const rows = await page.evaluate(async ({ n }) => {
+    const rows = await page.evaluate(async ({ n, by }) => {
       const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
       const r = window.renderer, pc = r.__passCensus;
-      pc.rows.length = 0; pc.on = true;
+      pc.rows.length = 0; pc.objRows.length = 0; pc.byObject = by; pc.on = true;
       let frames = 0;
       for (let i = 0; i < n; i++) { A.setInput({ throttle: true, steer: 0.35 * Math.sin((i + 200) / 25) }); await raf(); frames++; }
       pc.on = false; A.clearInput();
-      return { frames, rows: pc.rows.slice() };
-    }, { n: FRAMES });
+      return { frames, rows: pc.rows.slice(), objRows: pc.objRows.slice() };
+    }, { n: FRAMES, by: BY_OBJECT });
     const by = new Map();
     for (const [key, calls, tris] of rows.rows) {
       const e = by.get(key) || { key, renders: 0, calls: 0, tris: 0 };
@@ -150,10 +170,19 @@ async function main() {
     for (const e of table) {
       console.log(e.pass.padEnd(34) + String(e.perFrameRan).padStart(9) + String(e.callsPerRender).padStart(14) + String(e.trisPerRender).padStart(13) + String(e.callsPerFrame).padStart(13) + String(e.trisPerFrame).padStart(12));
     }
+    let byObj = [];
+    if (BY_OBJECT) {
+      const m = new Map();
+      for (const [pass, lab, calls, tris] of rows.objRows) { const k = pass + " | " + lab; const e = m.get(k) || { pass, group: lab, draws: 0, calls: 0, tris: 0 }; e.draws++; e.calls += calls; e.tris += tris; m.set(k, e); }
+      byObj = [...m.values()].map((e) => ({ pass: e.pass, group: e.group, callsPerFrame: +(e.calls / rows.frames).toFixed(1), trisPerFrame: Math.round(e.tris / rows.frames) })).sort((a, b) => b.trisPerFrame - a.trisPerFrame);
+      console.log("\nby object group (pass | group)".padEnd(58) + "calls/frame  tris/frame");
+      for (const e of byObj.slice(0, 24)) console.log((e.pass + " | " + e.group).slice(0, 56).padEnd(58) + String(e.callsPerFrame).padStart(11) + String(e.trisPerFrame).padStart(12));
+      if (!byObj.length) console.log("(no renderObject calls seen: this three build does not expose renderer.renderObject)");
+    }
     const summary = { track, frames: rows.frames, backend: backend.api, forceWebGL: backend.forceWebGL,
       stubbedLinks: !REAL_LINK, mobileTier: MOBILE, callsPerFrame: +total.calls.toFixed(1), trisPerFrame: total.tris, pageErrors: errors.length };
     console.log("= pass-census " + JSON.stringify(summary));
-    if (JSON_OUT) { mkdirSync(dirname(JSON_OUT), { recursive: true }); writeFileSync(JSON_OUT, JSON.stringify({ summary, table, errors }, null, 2)); }
+    if (JSON_OUT) { mkdirSync(dirname(JSON_OUT), { recursive: true }); writeFileSync(JSON_OUT, JSON.stringify({ summary, table, byObject: byObj, errors }, null, 2)); }
     if (!table.length) { console.error("no render() calls recorded"); process.exitCode = 1; }
   } finally {
     await browser.close().catch(() => {});

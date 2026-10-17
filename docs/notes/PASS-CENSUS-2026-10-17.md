@@ -34,6 +34,26 @@ program links stubbed so the scene reaches steady state under SwiftShader (metho
 - Cross-check: the dust-merge census (`docs/notes/PERF-HUNT-TLX-2026-10-17.md`, monaco chase, after #2634) gave main 87–90 calls and mirror
   37 / ~148k triangles at its own viewport; this run is a different viewport and a later tree, same shape.
 
+## Which meshes the mirror draws (`--by-object`, phone tier, Monaco, 40 frames)
+
+TLX meshes carry no names and share one node-material class, so the tool labels each draw by the mesh's `userData` flags (`tlxLgRoad`, `tlxBatch`, …),
+read inside `renderer.renderObject` (counts per object, exact).
+
+| pass | group | calls/frame | triangles/frame |
+|---|---|---|---|
+| main (576x324) | `tlxLgRoad` (road chunks) | 53.8 | 141,678 |
+| main | `tlxBatch` (batched props) | 19.5 | 42,276 |
+| **mirror (138x39)** | **`tlxLgRoad`** | **11.6** | **133,042** |
+| mirror | everything else | 0 | 0 |
+| sun shadow (1024x1024, 0.1 of frames) | unflagged | 2.3 | 11,402 |
+
+- **The mirror pass draws only road chunks, at the same index density as the main pass.** About 11.5k triangles per chunk, into a target of ~5,400 pixels.
+  That names the #2657 target: a decimated road index (or fewer rings) for the mirror, nothing else. Terrain, props and glass are already out of the lite rung.
+- Scene-wide, the 57 visible road chunks hold about 150k of the scene's ~185k triangles, so no other mesh kind can move the total.
+- This run's output target was 576x324, not 640x360: the render-scale governor stepped during the measurement, so main-pass totals differ by a few percent from
+  the table above. Per-group shares are what to read.
+- Where it would be built: road chunks come from `js/render/three/tlx-chunked.js` (road chunking is claimed by #2631), so this note names the target and does not touch it.
+
 ## Not run
 
 Other circuits, other cameras (`--camera`), `--real-link`, the mobile tier at a phone viewport (844x390; this run kept 640x360); one run only, so no spread is claimed for the counts (they are deterministic per
