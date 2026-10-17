@@ -87,6 +87,7 @@
 <link rel="preload" href="css/title.css?v=dev" as="style">
 <link rel="preload" href="css/menus.css?v=dev" as="style">
 <link rel="preload" href="css/responsive.css?v=dev" as="style">
+<link rel="preload" href="css/menu-destinations.css?v=dev" as="style">
 <!-- /@gen-shell:preload -->
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css title faces; css/fonts-hud.css the rest)
@@ -128,6 +129,7 @@
 <link rel="stylesheet" href="css/loading.css?v=dev" media="print">
 <link rel="stylesheet" href="css/a11y-loading.css?v=dev" media="print">
 <link rel="stylesheet" href="css/responsive.css?v=dev">
+<link rel="stylesheet" href="css/menu-destinations.css?v=dev">
 <link rel="stylesheet" href="css/track-detail.css?v=dev" media="print">
 <link rel="stylesheet" href="css/career.css?v=dev" media="print">
 <link rel="stylesheet" href="css/data.css?v=dev" media="print">
@@ -821,19 +823,195 @@
     <div id="pm-settings-body" class="sheet-body pane">
       <nav id="pm-settings-index" class="pm-doors" aria-label="Settings">
         <button id="pm-open-controls" type="button">CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
-        <button id="pm-open-driving" type="button">DRIVING&hellip;<small>Coach, practice, strategy &amp; badges</small></button>
-        <button id="pm-advanced">DRIVING AIDS&hellip;<small>Presets, steering feel &amp; assists</small></button>
-        <button id="pm-open-display" type="button">DISPLAY&hellip;<small>HUD &amp; graphics</small></button>
+        <button id="pm-open-driving" type="button">DRIVING AIDS&hellip;<small>Presets, assistance, gears &amp; coaching</small></button>
+        <button id="pm-open-display" type="button">HUD &amp; CAMERA&hellip;<small>HUD layout, map &amp; view</small></button>
         <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Colours, UI size &amp; every screen&rsquo;s look</small></button>
         <button id="pm-open-a11y" type="button">ACCESSIBILITY&hellip;<small>Motion, keyboard focus &amp; colourblind cues</small></button>
+
         <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Music, radio, spotter &amp; voices</small></button>
-        <button id="pm-open-files" type="button">BACKUP &amp; RESTORE&hellip;<small>Save or load your preferences</small></button>
+        <button id="pm-open-files" type="button">SAVES &amp; DATA&hellip;<small>Preferences, storage &amp; restore points</small></button>
+        <button id="pm-open-graphics" type="button">GRAPHICS&hellip;<small>Renderer, resolution & effects</small></button>
+        <button id="pm-open-visual" type="button">VISUAL STUDIO&hellip;<small>Camera, lighting, flyby & garage arrival</small></button>
+        <button id="pm-open-progress" type="button">PROGRESS&hellip;<small>Licence badges</small></button>
       </nav>
       <div class="pm-groups">
+        <section id="pm-panel-progress" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
+          <details open id="pm-badges-panel">
+            <summary class="adv-more-btn">LICENCE BADGES</summary>
+            <p id="pm-badges-summary" class="adv-help" data-help="keep">No badges yet.</p>
+            <ol id="pm-badges-list"></ol>
+          </details>
+        </section>
+
+        <section id="pm-panel-review" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
+          <details open id="pm-session-review">
+            <summary class="adv-more-btn">SESSION REVIEW</summary>
+            <p id="pm-coach-summary" class="adv-help" data-help="keep">No coaching tips recorded this session.</p>
+            <p id="pm-connection" class="adv-help" data-help="keep" hidden></p>
+            <ol id="pm-incident-log"></ol>
+            <details id="pm-technical-data">
+              <summary class="adv-more-btn">TECHNICAL DATA</summary>
+              <p class="adv-help">Optional JSON download: recent driving samples, race events and estimates. Driving samples are recorded while coach or practice is active.</p>
+              <button id="pm-driving-trace" type="button" disabled>DOWNLOAD SESSION DATA</button>
+              <p class="adv-help">AI passing decisions: each rival’s latest choice. An earlier commitment may still be active.</p>
+              <ol id="pm-ai-decisions"></ol>
+            </details>
+          </details>
+        </section>
+
+        <section id="pm-panel-strategy" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
+          <details open id="pm-pit-panel">
+            <summary class="adv-more-btn">PIT STRATEGY</summary>
+            <div id="pm-pit-choice" class="set-row" role="group" aria-labelledby="pm-pit-choice-label">
+              <span class="tune-label" id="pm-pit-choice-label">NEXT TYRES</span>
+              <div>
+                <button id="pm-pit-choice-prev" type="button" data-step="-1" aria-label="Previous tyre choice">&lsaquo;</button>
+                <select id="pm-pit-choice-sel" aria-labelledby="pm-pit-choice-label" aria-describedby="pm-pit-help"></select>
+                <button id="pm-pit-choice-next" type="button" data-step="1" aria-label="Next tyre choice">&rsaquo;</button>
+              </div>
+            </div>
+            <p id="pm-pit-help" class="adv-help" data-help="keep">Choose the tyres to fit at your next stop. AUTO lets the game choose. Drive into the pit entry to stop; this choice does not call you into the pits. Requires tyre wear to be enabled.</p>
+            <p id="pm-pit-estimate" class="adv-help" data-help="keep"></p>
+            <p id="pm-stint-forecast" class="adv-help" data-help="keep"></p>
+            <p id="pm-energy-forecast" class="adv-help" data-help="keep"></p>
+          </details>
+        </section>
+
+        <section id="pm-panel-practice" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
+          <details open id="pm-practice-panel">
+            <summary class="adv-more-btn">PRACTICE A SECTION</summary>
+            <p id="pm-practice-help" class="adv-help">Choose a goal, save your starting point, then resume. TRY AGAIN restores that point and goal. REWIND 10s steps the car back without one. A Time Trial is always practice; in a race or qualifying, ARM PRACTICE first — that makes the session unscored and cannot be undone.</p>
+            <button id="pm-practice-arm" type="button" aria-describedby="pm-practice-state" hidden>ARM PRACTICE (UNSCORED)</button>
+            <div id="pm-drill" class="set-row" role="group" aria-labelledby="pm-drill-label">
+              <span class="tune-label" id="pm-drill-label">PRACTICE GOAL</span>
+              <div>
+                <button id="pm-drill-prev" type="button" data-step="-1" aria-label="Previous practice goal">&lsaquo;</button>
+                <select id="pm-drill-sel" aria-labelledby="pm-drill-label" aria-describedby="pm-drill-status"></select>
+                <button id="pm-drill-next" type="button" data-step="1" aria-label="Next practice goal">&rsaquo;</button>
+              </div>
+            </div>
+            <p id="pm-drill-status" class="adv-help" data-help="keep"></p>
+            <button id="pm-practice-set" type="button" aria-describedby="pm-practice-state">SAVE STARTING POINT</button>
+            <button id="pm-practice-retry" type="button" aria-describedby="pm-practice-state" disabled>TRY AGAIN</button>
+            <button id="pm-practice-rewind" type="button" aria-describedby="pm-practice-state" disabled>REWIND 10s</button>
+            <p id="pm-practice-state" class="adv-help" data-help="keep">Practising makes this session unscored: laps and ghosts will not be saved. Restart the session to set records again. Rewind restores the full grid and race clock.</p>
+          </details>
+        </section>
+
+        <section id="pm-panel-visual" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
+          <details open id="pm-visual-tuners" class="pm-renderer-sub">
+            <summary class="adv-more-btn" id="pm-visual-tuners-sum">ADVANCED VISUALS · 4 TOOLS</summary>
+            <div id="pm-visual-tuners-body" role="group" aria-label="Advanced visual tools">
+              <p id="pm-visual-tuners-help" class="adv-help">Creative tools for the look of the game: lighting, camera angles, the pre-race flyby (its FREE CAMERA flies anywhere and sets shots) and the pit-garage arrival. Start a race, then pause to preview changes on track. The Lighting Tuner also applies in the garage (exposure, bloom, screen sun-shaft, lens glare).</p>
+              <button id="pm-lighting" aria-describedby="pm-visual-tuners-help">LIGHTING TUNER&hellip;</button>
+              <button id="pm-camtune" aria-describedby="pm-visual-tuners-help">CAMERA TUNER&hellip;</button>
+              <button id="pm-flyby" aria-describedby="pm-visual-tuners-help">FLYBY SHOT EDITOR&hellip;</button>
+              <button id="pm-garrival" aria-describedby="pm-visual-tuners-help">GARAGE ARRIVAL TUNER&hellip;</button>
+            </div>
+          </details>
+        </section>
+
+        <section id="pm-panel-graphics" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
+          <details open id="pm-display-adv" class="pm-renderer-sub">
+            <summary class="adv-more-btn" id="pm-renderer-details-sum">RENDERER · WEBGL2</summary>
+            <div id="pm-display-adv-body" role="group" aria-label="Renderer">
+              <div id="pm-res" class="set-row" role="group" aria-labelledby="pm-res-label">
+                <span class="tune-label" id="pm-res-label">RESOLUTION</span>
+                <div>
+                  <button id="pm-res-prev" type="button" data-step="-1" aria-label="Previous resolution">&lsaquo;</button>
+                  <select id="pm-res-sel" aria-labelledby="pm-res-label"></select>
+                  <button id="pm-res-next" type="button" data-step="1" aria-label="Next resolution">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">How sharp the 3D scene is drawn. LOW and MED draw fewer pixels for a smoother, cooler-running phone; HIGH is full sharpness; AUTO lowers it only when the frame rate drops. Menus and the HUD always stay sharp.</p>
+              <div id="pm-fullscreen" class="set-row" role="group" aria-labelledby="pm-fullscreen-label">
+                <span class="tune-label" id="pm-fullscreen-label">FULLSCREEN</span>
+                <div>
+                  <button id="pm-fullscreen-prev" type="button" data-step="-1" aria-label="Previous fullscreen">&lsaquo;</button>
+                  <select id="pm-fullscreen-sel" aria-labelledby="pm-fullscreen-label"></select>
+                  <button id="pm-fullscreen-next" type="button" data-step="1" aria-label="Next fullscreen">&rsaquo;</button>
+                </div>
+              </div>
+              <p id="pm-fullscreen-note" class="adv-help">Fills the screen and, where the browser allows it, keeps Esc as your pause key instead of spending it on leaving fullscreen.</p>
+              <button id="pm-install" type="button" hidden>INSTALL APP</button>
+              <div id="pm-upscale" class="set-row" role="group" aria-labelledby="pm-upscale-label">
+                <span class="tune-label" id="pm-upscale-label">UPSCALE</span>
+                <div>
+                  <button id="pm-upscale-prev" type="button" data-step="-1" aria-label="Previous upscale">&lsaquo;</button>
+                  <select id="pm-upscale-sel" aria-labelledby="pm-upscale-label"></select>
+                  <button id="pm-upscale-next" type="button" data-step="1" aria-label="Next upscale">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">Sharpens the picture when RESOLUTION is below HIGH. No effect at full resolution.</p>
+              <!-- OCCLUSION sits here because it is a pure renderer lever: it
+                   changes what is SUBMITTED, never what is drawn. Hidden on a
+                   backend that cannot do it (js/ui/scale.js), because a row
+                   that sits there doing nothing is worse than no row. -->
+              <div id="pm-occlusion" class="set-row" role="group" aria-labelledby="pm-occlusion-label">
+                <span class="tune-label" id="pm-occlusion-label">OCCLUSION</span>
+                <div>
+                  <button id="pm-occlusion-prev" type="button" data-step="-1" aria-label="Previous occlusion setting">&lsaquo;</button>
+                  <select id="pm-occlusion-sel" aria-labelledby="pm-occlusion-label"></select>
+                  <button id="pm-occlusion-next" type="button" data-step="1" aria-label="Next occlusion setting">&rsaquo;</button>
+                </div>
+              </div>
+              <p id="pm-occlusion-note" class="adv-help" data-help="keep">Skips scenery the track itself is hiding, using depth queries on the graphics card. Costs nothing visually when it works; turn it off if anything flickers or disappears.</p>
+              <!-- DEBRIS sits with the renderer levers because that is what it is
+                   on a handset: a Rapier side-world stepping every frame for
+                   spall, marbles and trackside furniture. OFF costs no lap
+                   time, no penalty and nothing on the car. -->
+              <div id="pm-debris" class="set-row" role="group" aria-labelledby="pm-debris-label">
+                <span class="tune-label" id="pm-debris-label">DEBRIS</span>
+                <div>
+                  <button id="pm-debris-prev" type="button" data-step="-1" aria-label="Previous debris setting">&lsaquo;</button>
+                  <select id="pm-debris-sel" aria-labelledby="pm-debris-label"></select>
+                  <button id="pm-debris-next" type="button" data-step="1" aria-label="Next debris setting">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">Carbon fragments, tyre marbles and knocked-over trackside furniture. OFF saves work on a phone and never changes lap time, penalties or damage.</p>
+              <div id="pm-buildworker" class="set-row" role="group" aria-labelledby="pm-buildworker-label">
+                <span class="tune-label" id="pm-buildworker-label">BUILD IN BACKGROUND</span>
+                <div>
+                  <button id="pm-buildworker-prev" type="button" data-step="-1" aria-label="Previous background build setting">&lsaquo;</button>
+                  <select id="pm-buildworker-sel" aria-labelledby="pm-buildworker-label"></select>
+                  <button id="pm-buildworker-next" type="button" data-step="1" aria-label="Next background build setting">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">Experimental. Builds the circuit on a second thread while the loading screen plays, so fewer frames stall. Takes effect on the next circuit you load.</p>
+              <button id="pm-renderer">RENDERER: WEBGL2</button>
+              <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
+              <p class="adv-help">RENDERER is the drawing engine: THREE.JS is the default, WEBGL2 the most compatible, WEBGPU experimental. GRAPHICS trades detail for frame rate, LOW to ULTRA. Either may reload the game. The buttons below are for troubleshooting: RESET RENDERER returns to the defaults if the picture breaks, and COPY DIAG copies a report for a bug report.</p>
+            </div>
+          </details>
+        </section>
+
         <section id="pm-panel-a11y" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden></section>
         <section id="pm-panel-files" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden></section>
         <section id="pm-panel-controls" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
+<details id="adv-feel-details">
+    <summary id="adv-feel-sum" class="adv-more-btn">FEEL · NORMAL</summary>
+    <div role="group" aria-label="Steering feel">
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">TILT SENSITIVITY <b id="pm-tiltsimple-v">8</b></span>
+        <input id="pm-tiltsimple" type="range" min="1" max="10" step="1" value="8" aria-label="Tilt sensitivity"></label>
+      <p class="adv-help">How sharply the car answers your phone tilt. Higher = less tilt needed for full lock (more sensitive); lower = relaxed, bigger tilts.</p>
+    </div>
+    <div class="adv-item">
+      <div id="pm-feel" class="set-row" role="group" aria-labelledby="pm-feel-label">
+        <span class="tune-label" id="pm-feel-label">STEERING</span>
+        <div>
+          <button id="pm-feel-prev" type="button" data-step="-1" aria-label="Previous steering">&lsaquo;</button>
+          <select id="pm-feel-sel" aria-labelledby="pm-feel-label"></select>
+          <button id="pm-feel-next" type="button" data-step="1" aria-label="Next steering">&rsaquo;</button>
+        </div>
+      </div>
+      <p class="adv-help">Overall steering feel, from forgiving and stable to sharp and direct. CUSTOM means the ADVANCED sliders moved off a named step.</p>
+    </div>
+    </div>
+    </details>
+<button id="pm-advanced">ADVANCED INPUT &amp; HANDLING&hellip;<small>Response curves, dead zones &amp; steering bias</small></button>
+
           <!-- Every preference on this sheet is a SETTING ROW (js/ui/setting-row.js):
                LABEL on the left, ‹ VALUE › on the right, one line at every UI
                SIZE. The value is a native select (tap = the platform picker with
@@ -855,11 +1033,15 @@
             <span class="tune-label" id="pm-throttlemode-label">THROTTLE</span>
             <div>
               <button id="pm-throttlemode-prev" type="button" data-step="-1" aria-label="Previous throttle mode">&lsaquo;</button>
-              <select id="pm-throttlemode-sel" aria-labelledby="pm-throttlemode-label"></select>
+              <select id="pm-throttlemode-sel" aria-labelledby="pm-throttlemode-label" aria-describedby="pm-throttle-note"></select>
               <button id="pm-throttlemode-next" type="button" data-step="1" aria-label="Next throttle mode">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help">HOLD keeps your thumb on GAS. LATCH makes GAS a switch &mdash; tap once for full throttle, tap again to lift. AUTO drives the throttle for you so you only steer and brake &mdash; less tiring over a long race, and the way TOUCH steering has always worked.</p>
+          <p id="pm-throttle-note" class="adv-help" data-help="keep">HOLD: keep your thumb on GAS.</p>
+          <details id="pm-throttle-compare">
+            <summary>Compare throttle modes</summary>
+            <p class="adv-help" data-help="keep">HOLD keeps your thumb on GAS. LATCH makes GAS a switch &mdash; tap once for full throttle, tap again to lift. AUTO drives the throttle for you so you only steer and brake &mdash; less tiring over a long race, and the way TOUCH steering has always worked.</p>
+          </details>
           <div id="pm-mirror" class="set-row" role="group" aria-labelledby="pm-mirror-label">
             <span class="tune-label" id="pm-mirror-label">LEFT-HANDED</span>
             <div>
@@ -901,34 +1083,6 @@
             </div>
             <p class="adv-help">Press this on the screen you play on; the phone becomes the wheel. Web pages cannot pair over Bluetooth.</p>
           </div>
-          <div id="pm-gears" class="set-row" role="group" aria-labelledby="pm-gears-label">
-            <span class="tune-label" id="pm-gears-label">GEARS</span>
-            <div>
-              <button id="pm-gears-prev" type="button" data-step="-1" aria-label="Previous gears">&lsaquo;</button>
-              <select id="pm-gears-sel" aria-labelledby="pm-gears-label"></select>
-              <button id="pm-gears-next" type="button" data-step="1" aria-label="Next gears">&rsaquo;</button>
-            </div>
-          </div>
-          <p class="adv-help">MANUAL needs free thumbs: tilt steering, a keyboard or a pad.</p>
-          <!-- ACTIVE AERO — whether the 2026 moveable wing switches itself inside
-               an activation zone. It sits with GEARS because it is the same kind
-               of choice: how much of the car you operate yourself. It was in RACE
-               SETTINGS, next to LAPS and WEATHER, which was wrong — those describe
-               the event, this describes the driver, and a control preference you
-               can only change by quitting to the menu is one you cannot change
-               when you discover you want it.
-               MANUAL by default: the button IS the mechanic. AUTO exists because
-               inside a zone X-mode is never the wrong choice, so a player who
-               forgets it is simply slower than the AI, which takes every zone. -->
-          <div id="pm-aero" class="set-row" role="group" aria-labelledby="pm-aero-label">
-            <span class="tune-label" id="pm-aero-label">ACTIVE AERO</span>
-            <div>
-              <button id="pm-aero-prev" type="button" data-step="-1" aria-label="Previous active aero">&lsaquo;</button>
-              <select id="pm-aero-sel" aria-labelledby="pm-aero-label"></select>
-              <button id="pm-aero-next" type="button" data-step="1" aria-label="Next active aero">&rsaquo;</button>
-            </div>
-          </div>
-          <p class="adv-help">MANUAL: the AERO button is yours in every zone. AUTO: the wing opens itself, like the AI.</p>
           <!-- KEYBOARD — one row per driving action, two key slots each, built
                by js/ui/key-binds.js from the binding table in js/input/input.js.
                Tap a slot, press a key. On a touch device the module hides it
@@ -965,6 +1119,92 @@
           </div>
         </section>
         <section id="pm-panel-driving" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
+<h3 class="pm-group-h">DRIVING PRESETS</h3>
+<p class="adv-help">Presets change driving assistance and steering feel together. Individual controls remain available below and in Controls.</p>
+    <div class="preset-row balanced-row">
+      <button id="pm-preset-rookie" class="preset-btn">ROOKIE<small>the car drives with you</small></button>
+      <button id="pm-preset-relax" class="preset-btn">RELAX<small>easiest &mdash; the car helps you</small></button>
+      <button id="pm-preset-standard" class="preset-btn">STANDARD<small>balanced default</small></button>
+      <button id="pm-preset-pro" class="preset-btn">PRO<small>sharp &mdash; full control</small></button>
+    </div>
+<details id="adv-aids-details">
+    <summary id="adv-aids-sum" class="adv-more-btn">AIDS · OFF</summary>
+    <div role="group" aria-label="Driving aids">
+    <div class="adv-item">
+      <div id="pm-helplevel" class="set-row" role="group" aria-labelledby="pm-helplevel-label">
+        <span class="tune-label" id="pm-helplevel-label">DRIVING HELP</span>
+        <div>
+          <button id="pm-helplevel-prev" type="button" data-step="-1" aria-label="Previous driving help">&lsaquo;</button>
+          <select id="pm-helplevel-sel" aria-labelledby="pm-helplevel-label"></select>
+          <button id="pm-helplevel-next" type="button" data-step="1" aria-label="Next driving help">&rsaquo;</button>
+        </div>
+      </div>
+      <p class="adv-help">How much of each corner the car steers for you. Higher = easier to stay on track.</p>
+    </div>
+    <div class="adv-item">
+      <div id="pm-linemode" class="set-row" role="group" aria-labelledby="pm-linemode-label">
+        <span class="tune-label" id="pm-linemode-label">STEER ASSIST</span>
+        <div>
+          <button id="pm-linemode-prev" type="button" data-step="-1" aria-label="Previous steer assist">&lsaquo;</button>
+          <select id="pm-linemode-sel" aria-labelledby="pm-linemode-label"></select>
+          <button id="pm-linemode-next" type="button" data-step="1" aria-label="Next steer assist">&rsaquo;</button>
+        </div>
+      </div>
+      <p class="adv-help">Gently steers toward the ideal line. This changes the car’s steering; the visual DRIVING LINE is separate, in RACE SETTINGS.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">6</b></span>
+        <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="6" aria-label="Adaptive buttons"></label>
+      <p class="adv-help">Slows the keys and on-screen arrows at speed so a tap is a smaller correction. OFF (1) is the old snap. Does not change the stick, tilt, or a drag on the track. SPEED STEER still picks the speed that feels heavy.</p>
+    </div>
+    <div class="adv-item" id="pm-haptics-item">
+      <label class="tune-row"><span class="tune-label">HAPTICS <b id="pm-haptics-v">6</b></span>
+        <input id="pm-haptics" type="range" min="1" max="10" step="1" value="6" aria-label="Haptics"></label>
+      <p class="adv-help">Strength of every buzz and rumble: kerbs, contact, losing the front end, and the brake cue. 1 is OFF. Needs a phone that vibrates or a controller that rumbles &mdash; iPhone and iPad do neither from a web page.</p>
+    </div>
+    <div class="adv-item" id="pm-triggerhap-item" hidden>
+      <div id="pm-triggerhap" class="set-row" role="group" aria-labelledby="pm-triggerhap-label">
+        <span class="tune-label" id="pm-triggerhap-label">TRIGGER HAPTICS</span>
+        <div>
+          <button id="pm-triggerhap-prev" type="button" data-step="-1" aria-label="Previous trigger haptics">&lsaquo;</button>
+          <select id="pm-triggerhap-sel" aria-labelledby="pm-triggerhap-label"></select>
+          <button id="pm-triggerhap-next" type="button" data-step="1" aria-label="Next trigger haptics">&rsaquo;</button>
+        </div>
+      </div>
+      <p class="adv-help">L2/R2 motors on pads that support them (Chrome/Edge 126+, Opera, Samsung Internet on Windows and macOS, and over Bluetooth on Linux/ChromeOS). Lock-up buzzes the brake trigger; wheelspin the throttle. OFF falls back to the grip rumble. Adaptive trigger resistance is not available through the browser Gamepad API. Safari and Firefox have no pad rumble.</p>
+    </div>
+    </div>
+    </details>
+          <div id="pm-gears" class="set-row" role="group" aria-labelledby="pm-gears-label">
+            <span class="tune-label" id="pm-gears-label">GEARS</span>
+            <div>
+              <button id="pm-gears-prev" type="button" data-step="-1" aria-label="Previous gears">&lsaquo;</button>
+              <select id="pm-gears-sel" aria-labelledby="pm-gears-label"></select>
+              <button id="pm-gears-next" type="button" data-step="1" aria-label="Next gears">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help">MANUAL needs free thumbs: tilt steering, a keyboard or a pad.</p>
+          <!-- ACTIVE AERO — whether the 2026 moveable wing switches itself inside
+               an activation zone. It sits with GEARS because it is the same kind
+               of choice: how much of the car you operate yourself. It was in RACE
+               SETTINGS, next to LAPS and WEATHER, which was wrong — those describe
+               the event, this describes the driver, and a control preference you
+               can only change by quitting to the menu is one you cannot change
+               when you discover you want it.
+               MANUAL by default: the button IS the mechanic. AUTO exists because
+               inside a zone X-mode is never the wrong choice, so a player who
+               forgets it is simply slower than the AI, which takes every zone. -->
+          <div id="pm-aero" class="set-row" role="group" aria-labelledby="pm-aero-label">
+            <span class="tune-label" id="pm-aero-label">ACTIVE AERO</span>
+            <div>
+              <button id="pm-aero-prev" type="button" data-step="-1" aria-label="Previous active aero">&lsaquo;</button>
+              <select id="pm-aero-sel" aria-labelledby="pm-aero-label"></select>
+              <button id="pm-aero-next" type="button" data-step="1" aria-label="Next active aero">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help">MANUAL: the AERO button is yours in every zone. AUTO: the wing opens itself, like the AI.</p>
+
+
           <div id="pm-coach" class="set-row" role="group" aria-labelledby="pm-coach-label">
             <span class="tune-label" id="pm-coach-label">DRIVING COACH</span>
             <div>
@@ -994,58 +1234,11 @@
               <p class="adv-help">Beeps when you exceed the visual line’s target speed, even when the line is hidden. Used only while PREDICTIVE CUE is OFF. Turn both cues OFF for no braking beeps.</p>
             </div>
           </details>
-          <details id="pm-practice-panel">
-            <summary class="adv-more-btn">PRACTICE A SECTION</summary>
-            <p id="pm-practice-help" class="adv-help">Choose a goal, save your starting point, then resume. TRY AGAIN restores that point and goal. REWIND 10s steps the car back without one. A Time Trial is always practice; in a race or qualifying, ARM PRACTICE first — that makes the session unscored and cannot be undone.</p>
-            <button id="pm-practice-arm" type="button" aria-describedby="pm-practice-state" hidden>ARM PRACTICE (UNSCORED)</button>
-            <div id="pm-drill" class="set-row" role="group" aria-labelledby="pm-drill-label">
-              <span class="tune-label" id="pm-drill-label">PRACTICE GOAL</span>
-              <div>
-                <button id="pm-drill-prev" type="button" data-step="-1" aria-label="Previous practice goal">&lsaquo;</button>
-                <select id="pm-drill-sel" aria-labelledby="pm-drill-label" aria-describedby="pm-drill-status"></select>
-                <button id="pm-drill-next" type="button" data-step="1" aria-label="Next practice goal">&rsaquo;</button>
-              </div>
-            </div>
-            <p id="pm-drill-status" class="adv-help" data-help="keep"></p>
-            <button id="pm-practice-set" type="button" aria-describedby="pm-practice-state">SAVE STARTING POINT</button>
-            <button id="pm-practice-retry" type="button" aria-describedby="pm-practice-state" disabled>TRY AGAIN</button>
-            <button id="pm-practice-rewind" type="button" aria-describedby="pm-practice-state" disabled>REWIND 10s</button>
-            <p id="pm-practice-state" class="adv-help" data-help="keep">Practising makes this session unscored: laps and ghosts will not be saved. Restart the session to set records again. Rewind restores the full grid and race clock.</p>
-          </details>
-          <details id="pm-pit-panel">
-            <summary class="adv-more-btn">PIT STRATEGY</summary>
-            <div id="pm-pit-choice" class="set-row" role="group" aria-labelledby="pm-pit-choice-label">
-              <span class="tune-label" id="pm-pit-choice-label">NEXT TYRES</span>
-              <div>
-                <button id="pm-pit-choice-prev" type="button" data-step="-1" aria-label="Previous tyre choice">&lsaquo;</button>
-                <select id="pm-pit-choice-sel" aria-labelledby="pm-pit-choice-label" aria-describedby="pm-pit-help"></select>
-                <button id="pm-pit-choice-next" type="button" data-step="1" aria-label="Next tyre choice">&rsaquo;</button>
-              </div>
-            </div>
-            <p id="pm-pit-help" class="adv-help" data-help="keep">Choose the tyres to fit at your next stop. AUTO lets the game choose. Drive into the pit entry to stop; this choice does not call you into the pits. Requires tyre wear to be enabled.</p>
-            <p id="pm-pit-estimate" class="adv-help" data-help="keep"></p>
-            <p id="pm-stint-forecast" class="adv-help" data-help="keep"></p>
-            <p id="pm-energy-forecast" class="adv-help" data-help="keep"></p>
-          </details>
-          <details id="pm-session-review">
-            <summary class="adv-more-btn">SESSION REVIEW</summary>
-            <p id="pm-coach-summary" class="adv-help" data-help="keep">No coaching tips recorded this session.</p>
-            <p id="pm-connection" class="adv-help" data-help="keep" hidden></p>
-            <ol id="pm-incident-log"></ol>
-            <details id="pm-technical-data">
-              <summary class="adv-more-btn">TECHNICAL DATA</summary>
-              <p class="adv-help">Optional JSON download: recent driving samples, race events and estimates. Driving samples are recorded while coach or practice is active.</p>
-              <button id="pm-driving-trace" type="button" disabled>DOWNLOAD SESSION DATA</button>
-              <p class="adv-help">AI passing decisions: each rival’s latest choice. An earlier commitment may still be active.</p>
-              <ol id="pm-ai-decisions"></ol>
-            </details>
-          </details>
+
+
+
           <!-- LICENCE BADGES: local achievements (js/career/badges.js fills both on open). -->
-          <details id="pm-badges-panel">
-            <summary class="adv-more-btn">LICENCE BADGES</summary>
-            <p id="pm-badges-summary" class="adv-help" data-help="keep">No badges yet.</p>
-            <ol id="pm-badges-list"></ol>
-          </details>
+
         </section>
         <section id="pm-panel-display" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
@@ -1158,87 +1351,8 @@
               <div id="pm-hud-sample" aria-hidden="true"><div class="hud-box"><div class="hud-label">SPEED</div><div class="hud-value">312</div></div></div>
             </div>
           </details>
-          <details id="pm-display-adv" class="pm-renderer-sub">
-            <summary class="adv-more-btn" id="pm-renderer-details-sum">RENDERER · WEBGL2</summary>
-            <div id="pm-display-adv-body" role="group" aria-label="Renderer">
-              <div id="pm-res" class="set-row" role="group" aria-labelledby="pm-res-label">
-                <span class="tune-label" id="pm-res-label">RESOLUTION</span>
-                <div>
-                  <button id="pm-res-prev" type="button" data-step="-1" aria-label="Previous resolution">&lsaquo;</button>
-                  <select id="pm-res-sel" aria-labelledby="pm-res-label"></select>
-                  <button id="pm-res-next" type="button" data-step="1" aria-label="Next resolution">&rsaquo;</button>
-                </div>
-              </div>
-              <p class="adv-help">How sharp the 3D scene is drawn. LOW and MED draw fewer pixels for a smoother, cooler-running phone; HIGH is full sharpness; AUTO lowers it only when the frame rate drops. Menus and the HUD always stay sharp.</p>
-              <div id="pm-fullscreen" class="set-row" role="group" aria-labelledby="pm-fullscreen-label">
-                <span class="tune-label" id="pm-fullscreen-label">FULLSCREEN</span>
-                <div>
-                  <button id="pm-fullscreen-prev" type="button" data-step="-1" aria-label="Previous fullscreen">&lsaquo;</button>
-                  <select id="pm-fullscreen-sel" aria-labelledby="pm-fullscreen-label"></select>
-                  <button id="pm-fullscreen-next" type="button" data-step="1" aria-label="Next fullscreen">&rsaquo;</button>
-                </div>
-              </div>
-              <p id="pm-fullscreen-note" class="adv-help">Fills the screen and, where the browser allows it, keeps Esc as your pause key instead of spending it on leaving fullscreen.</p>
-              <button id="pm-install" type="button" hidden>INSTALL APP</button>
-              <div id="pm-upscale" class="set-row" role="group" aria-labelledby="pm-upscale-label">
-                <span class="tune-label" id="pm-upscale-label">UPSCALE</span>
-                <div>
-                  <button id="pm-upscale-prev" type="button" data-step="-1" aria-label="Previous upscale">&lsaquo;</button>
-                  <select id="pm-upscale-sel" aria-labelledby="pm-upscale-label"></select>
-                  <button id="pm-upscale-next" type="button" data-step="1" aria-label="Next upscale">&rsaquo;</button>
-                </div>
-              </div>
-              <p class="adv-help">Sharpens the picture when RESOLUTION is below HIGH. No effect at full resolution.</p>
-              <!-- OCCLUSION sits here because it is a pure renderer lever: it
-                   changes what is SUBMITTED, never what is drawn. Hidden on a
-                   backend that cannot do it (js/ui/scale.js), because a row
-                   that sits there doing nothing is worse than no row. -->
-              <div id="pm-occlusion" class="set-row" role="group" aria-labelledby="pm-occlusion-label">
-                <span class="tune-label" id="pm-occlusion-label">OCCLUSION</span>
-                <div>
-                  <button id="pm-occlusion-prev" type="button" data-step="-1" aria-label="Previous occlusion setting">&lsaquo;</button>
-                  <select id="pm-occlusion-sel" aria-labelledby="pm-occlusion-label"></select>
-                  <button id="pm-occlusion-next" type="button" data-step="1" aria-label="Next occlusion setting">&rsaquo;</button>
-                </div>
-              </div>
-              <p id="pm-occlusion-note" class="adv-help" data-help="keep">Skips scenery the track itself is hiding, using depth queries on the graphics card. Costs nothing visually when it works; turn it off if anything flickers or disappears.</p>
-              <!-- DEBRIS sits with the renderer levers because that is what it is
-                   on a handset: a Rapier side-world stepping every frame for
-                   spall, marbles and trackside furniture. OFF costs no lap
-                   time, no penalty and nothing on the car. -->
-              <div id="pm-debris" class="set-row" role="group" aria-labelledby="pm-debris-label">
-                <span class="tune-label" id="pm-debris-label">DEBRIS</span>
-                <div>
-                  <button id="pm-debris-prev" type="button" data-step="-1" aria-label="Previous debris setting">&lsaquo;</button>
-                  <select id="pm-debris-sel" aria-labelledby="pm-debris-label"></select>
-                  <button id="pm-debris-next" type="button" data-step="1" aria-label="Next debris setting">&rsaquo;</button>
-                </div>
-              </div>
-              <p class="adv-help">Carbon fragments, tyre marbles and knocked-over trackside furniture. OFF saves work on a phone and never changes lap time, penalties or damage.</p>
-              <div id="pm-buildworker" class="set-row" role="group" aria-labelledby="pm-buildworker-label">
-                <span class="tune-label" id="pm-buildworker-label">BUILD IN BACKGROUND</span>
-                <div>
-                  <button id="pm-buildworker-prev" type="button" data-step="-1" aria-label="Previous background build setting">&lsaquo;</button>
-                  <select id="pm-buildworker-sel" aria-labelledby="pm-buildworker-label"></select>
-                  <button id="pm-buildworker-next" type="button" data-step="1" aria-label="Next background build setting">&rsaquo;</button>
-                </div>
-              </div>
-              <p class="adv-help">Experimental. Builds the circuit on a second thread while the loading screen plays, so fewer frames stall. Takes effect on the next circuit you load.</p>
-              <button id="pm-renderer">RENDERER: WEBGL2</button>
-              <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
-              <p class="adv-help">RENDERER is the drawing engine: THREE.JS is the default, WEBGL2 the most compatible, WEBGPU experimental. GRAPHICS trades detail for frame rate, LOW to ULTRA. Either may reload the game. The buttons below are for troubleshooting: RESET RENDERER returns to the defaults if the picture breaks, and COPY DIAG copies a report for a bug report.</p>
-            </div>
-          </details>
-          <details id="pm-visual-tuners" class="pm-renderer-sub">
-            <summary class="adv-more-btn" id="pm-visual-tuners-sum">ADVANCED VISUALS · 4 TOOLS</summary>
-            <div id="pm-visual-tuners-body" role="group" aria-label="Advanced visual tools">
-              <p id="pm-visual-tuners-help" class="adv-help">Creative tools for the look of the game: lighting, camera angles, the pre-race flyby (its FREE CAMERA flies anywhere and sets shots) and the pit-garage arrival. Start a race, then pause to preview changes on track. The Lighting Tuner also applies in the garage (exposure, bloom, screen sun-shaft, lens glare).</p>
-              <button id="pm-lighting" aria-describedby="pm-visual-tuners-help">LIGHTING TUNER&hellip;</button>
-              <button id="pm-camtune" aria-describedby="pm-visual-tuners-help">CAMERA TUNER&hellip;</button>
-              <button id="pm-flyby" aria-describedby="pm-visual-tuners-help">FLYBY SHOT EDITOR&hellip;</button>
-              <button id="pm-garrival" aria-describedby="pm-visual-tuners-help">GARAGE ARRIVAL TUNER&hellip;</button>
-            </div>
-          </details>
+
+
         </section>
         <section id="pm-panel-appearance" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
@@ -1415,88 +1529,16 @@
           <div id="advanced-inner">
     <!-- Same shape as DISPLAY: one always-visible primary (presets + pace),
          then closed folds whose summaries carry the live choice. -->
-    <div class="preset-row balanced-row">
-      <button id="pm-preset-rookie" class="preset-btn">ROOKIE<small>the car drives with you</small></button>
-      <button id="pm-preset-relax" class="preset-btn">RELAX<small>easiest &mdash; the car helps you</small></button>
-      <button id="pm-preset-standard" class="preset-btn">STANDARD<small>balanced default</small></button>
-      <button id="pm-preset-pro" class="preset-btn">PRO<small>sharp &mdash; full control</small></button>
-    </div>
+
 
     <h3 class="pm-group-h" id="pm-pace-h">OVERALL SPEED <b id="pm-pace-v">84%</b></h3>
     <label class="tune-row">
       <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed" aria-describedby="pm-pace-help"></label>
     <p id="pm-pace-help" class="adv-help">How fast the whole field runs, you and the AI alike, as a share of real F1 speed. Lower gives more time to react; it does not change who is quicker.</p>
 
-    <details id="adv-feel-details">
-    <summary id="adv-feel-sum" class="adv-more-btn">FEEL · NORMAL</summary>
-    <div role="group" aria-label="Steering feel">
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">TILT SENSITIVITY <b id="pm-tiltsimple-v">8</b></span>
-        <input id="pm-tiltsimple" type="range" min="1" max="10" step="1" value="8" aria-label="Tilt sensitivity"></label>
-      <p class="adv-help">How sharply the car answers your phone tilt. Higher = less tilt needed for full lock (more sensitive); lower = relaxed, bigger tilts.</p>
-    </div>
-    <div class="adv-item">
-      <div id="pm-feel" class="set-row" role="group" aria-labelledby="pm-feel-label">
-        <span class="tune-label" id="pm-feel-label">STEERING</span>
-        <div>
-          <button id="pm-feel-prev" type="button" data-step="-1" aria-label="Previous steering">&lsaquo;</button>
-          <select id="pm-feel-sel" aria-labelledby="pm-feel-label"></select>
-          <button id="pm-feel-next" type="button" data-step="1" aria-label="Next steering">&rsaquo;</button>
-        </div>
-      </div>
-      <p class="adv-help">Overall steering feel, from forgiving and stable to sharp and direct. CUSTOM means the ADVANCED sliders moved off a named step.</p>
-    </div>
-    </div>
-    </details>
 
-    <details id="adv-aids-details">
-    <summary id="adv-aids-sum" class="adv-more-btn">AIDS · OFF</summary>
-    <div role="group" aria-label="Driving aids">
-    <div class="adv-item">
-      <div id="pm-helplevel" class="set-row" role="group" aria-labelledby="pm-helplevel-label">
-        <span class="tune-label" id="pm-helplevel-label">DRIVING HELP</span>
-        <div>
-          <button id="pm-helplevel-prev" type="button" data-step="-1" aria-label="Previous driving help">&lsaquo;</button>
-          <select id="pm-helplevel-sel" aria-labelledby="pm-helplevel-label"></select>
-          <button id="pm-helplevel-next" type="button" data-step="1" aria-label="Next driving help">&rsaquo;</button>
-        </div>
-      </div>
-      <p class="adv-help">How much of each corner the car steers for you. Higher = easier to stay on track.</p>
-    </div>
-    <div class="adv-item">
-      <div id="pm-linemode" class="set-row" role="group" aria-labelledby="pm-linemode-label">
-        <span class="tune-label" id="pm-linemode-label">STEER ASSIST</span>
-        <div>
-          <button id="pm-linemode-prev" type="button" data-step="-1" aria-label="Previous steer assist">&lsaquo;</button>
-          <select id="pm-linemode-sel" aria-labelledby="pm-linemode-label"></select>
-          <button id="pm-linemode-next" type="button" data-step="1" aria-label="Next steer assist">&rsaquo;</button>
-        </div>
-      </div>
-      <p class="adv-help">Gently steers toward the ideal line. This changes the car’s steering; the visual DRIVING LINE is separate, in RACE SETTINGS.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">6</b></span>
-        <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="6" aria-label="Adaptive buttons"></label>
-      <p class="adv-help">Slows the keys and on-screen arrows at speed so a tap is a smaller correction. OFF (1) is the old snap. Does not change the stick, tilt, or a drag on the track. SPEED STEER still picks the speed that feels heavy.</p>
-    </div>
-    <div class="adv-item" id="pm-haptics-item">
-      <label class="tune-row"><span class="tune-label">HAPTICS <b id="pm-haptics-v">6</b></span>
-        <input id="pm-haptics" type="range" min="1" max="10" step="1" value="6" aria-label="Haptics"></label>
-      <p class="adv-help">Strength of every buzz and rumble: kerbs, contact, losing the front end, and the brake cue. 1 is OFF. Needs a phone that vibrates or a controller that rumbles &mdash; iPhone and iPad do neither from a web page.</p>
-    </div>
-    <div class="adv-item" id="pm-triggerhap-item" hidden>
-      <div id="pm-triggerhap" class="set-row" role="group" aria-labelledby="pm-triggerhap-label">
-        <span class="tune-label" id="pm-triggerhap-label">TRIGGER HAPTICS</span>
-        <div>
-          <button id="pm-triggerhap-prev" type="button" data-step="-1" aria-label="Previous trigger haptics">&lsaquo;</button>
-          <select id="pm-triggerhap-sel" aria-labelledby="pm-triggerhap-label"></select>
-          <button id="pm-triggerhap-next" type="button" data-step="1" aria-label="Next trigger haptics">&rsaquo;</button>
-        </div>
-      </div>
-      <p class="adv-help">L2/R2 motors on pads that support them (Chrome/Edge 126+, Opera, Samsung Internet on Windows and macOS, and over Bluetooth on Linux/ChromeOS). Lock-up buzzes the brake trigger; wheelspin the throttle. OFF falls back to the grip rumble. Adaptive trigger resistance is not available through the browser Gamepad API. Safari and Firefox have no pad rumble.</p>
-    </div>
-    </div>
-    </details>
+
+
 
     <!-- Native disclosure: expanded/collapsed state, keyboard toggling (Enter/
          Space on the summary) and screen-reader "expanded" announcement all
@@ -2731,7 +2773,7 @@
             <select id="rs-line-sel" aria-labelledby="rs-line-label" aria-describedby="rs-line-help"></select>
             <button id="rs-line-next" type="button" data-step="1" aria-label="Next driving line">&rsaquo;</button>
           </div>
-          <p id="rs-line-help" class="adv-help">The glowing suggested line on the road, coloured by the speed to carry. CORNERS shows it only into and through the bends. It never steers; colour and opacity are in SETTINGS › DISPLAY.</p>
+          <p id="rs-line-help" class="adv-help">The glowing suggested line on the road, coloured by the speed to carry. CORNERS shows it only into and through the bends. It never steers; colour and opacity are in SETTINGS › HUD &amp; CAMERA.</p>
         </div>
         <div id="rs-tyres" class="set-row" role="group" aria-labelledby="rs-tyres-label">
           <span class="tune-label" id="rs-tyres-label">TYRE WEAR</span>
@@ -3082,7 +3124,7 @@
         <dt>OVERTAKE</dt>
         <dd>Follow within one second to arm it, then activate for about 3–5 seconds of electric power, depending on the car&rsquo;s electric system. The HUD explains when it is unavailable: the opening lap, a caution or the cooldown. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
         <dt>GEARS</dt>
-        <dd>Choose SETTINGS › CONTROLS › GEARS: MANUAL to shift yourself. Shift up near the redline and down before slow corners. Manual gears work on desktop and with TILT on a phone; BUTTONS and TOUCH keep gears automatic.</dd>
+        <dd>Choose SETTINGS › DRIVING AIDS › GEARS: MANUAL to shift yourself. Shift up near the redline and down before slow corners. Manual gears work on desktop and with TILT on a phone; BUTTONS and TOUCH keep gears automatic.</dd>
         <dt>RACE CONTROL</dt>
         <dd>Yellow flags, the virtual safety car, the safety car and the red flag are OFF by default. Turn them on in RACE SETTINGS › CAUTIONS. Cars a lap down move aside for the car lapping them.</dd>
         <!-- PIT STOPS came from the deploy branch while this branch restructured
@@ -3103,7 +3145,7 @@
         <dt>WHAT IT COSTS</dt>
         <dd>The whole lap through the pits, against racing the same stretch, plus the time stood still &mdash; which is why it is worth different amounts at different circuits rather than a fixed penalty. A long pit straight costs more than a short one. That difference is what decides one stop against two</dd>
       <dt id="htp-driving">DRIVING COACH</dt>
-      <dd>Open <b>SETTINGS &rarr; DRIVING</b> and turn the coach ON. Short text tips appear in the race-message area while you drive. The coach watches sustained braking, steering and tyre-slip conditions; it never changes your controls. Your ON/OFF choice is saved.
+      <dd>Open <b>SETTINGS &rarr; DRIVING AIDS</b> and turn the coach ON. Short text tips appear in the race-message area while you drive. The coach watches sustained braking, steering and tyre-slip conditions; it never changes your controls. Your ON/OFF choice is saved.
         <br><b>Where the lap went.</b> Once you have a saved best lap on a circuit, each completed lap is compared with it corner by corner, and the corner that cost the most time is named when you cross the line. The DRIVING page shows the lap total and the two worst corners. Each figure covers a corner and the straight after it, because a slow straight is usually paid for at the apex before it, and the comparison only exists against your own best lap in the same car.
         <br>It waits during flags, other race messages and pit stops, and spaces tips out so brief corrections do not cause a stream of messages. Reopen DRIVING to read the latest tip and its explanation. BRAKING CUES groups the predictive warning and line-speed beep; the predictive cue takes priority, and both must be OFF to silence braking cues. SESSION REVIEW counts the tips recorded this session; those counts are not a driving score.</dd>
       <dt>WHAT THE TIPS MEAN</dt>
@@ -3117,16 +3159,16 @@
         <br><b>X-mode in corners:</b> the active aero was open while cornering hard. Close it before you turn in.
         <br><b>Track limits:</b> a warning was recorded for leaving the track. Four in a row cost five seconds.</dd>
       <dt>PRACTICE A SECTION</dt>
-      <dd>Start a solo <b>TIME TRIAL</b>. Drive to a useful starting point, open <b>SETTINGS &rarr; DRIVING</b>, expand <b>PRACTICE A SECTION</b>, choose a <b>PRACTICE GOAL</b>, then <b>SAVE STARTING POINT</b>. Resume and drive the section. <b>TRY AGAIN</b>, or your <b>RECOVER</b> key (<b>R</b> by default) while driving, restores the saved grid, race clock and practice goal. <b>REWIND 10s</b> needs no starting point: it steps every car and the race clock back about ten seconds.
+      <dd>Start a solo <b>TIME TRIAL</b>. Drive to a useful starting point, open <b>PAUSE &rarr; PRACTICE</b>, expand <b>PRACTICE A SECTION</b>, choose a <b>PRACTICE GOAL</b>, then <b>SAVE STARTING POINT</b>. Resume and drive the section. <b>TRY AGAIN</b>, or your <b>RECOVER</b> key (<b>R</b> by default) while driving, restores the saved grid, race clock and practice goal. <b>REWIND 10s</b> needs no starting point: it steps every car and the race clock back about ten seconds.
         <br><b>This makes the session unscored.</b> Laps and ghosts will not be saved after a starting point is set or you rewind. Restart the session to set records again. A solo race or qualifying session can use checkpoints and rewind after you choose ARM PRACTICE (UNSCORED), which cannot be undone for that session; daily challenges, multiplayer, season and career races cannot be armed.</dd>
       <dt>PRACTICE GOALS</dt>
       <dd><b>Free practice:</b> repeat any section. <b>Sector:</b> cross the next sector line cleanly. <b>Corner:</b> drive through the next corner; the result shows your time, minimum speed and exit speed. <b>Full lap:</b> cross the line to start timing, then complete a clean lap; practice laps are never saved, so this is how to time one. <b>Braking:</b> build speed before saving, then brake firmly and keep braking until the car stops; a tap followed by coasting does not count, and the result is your stopping distance, plus how many metres of it were spent below the hardest braking the car managed on that attempt. <b>Trail braking:</b> brake firmly, keep some brake on as the car turns in, then release it while the car is still turning. <b>Slalom:</b> make six direction changes while moving; the car must change direction, not just the stick. <b>Launch:</b> stop the car before saving, then launch to racing speed, timed from your first throttle. <b>Race start:</b> set it on the grid before the lights; it ends at the first corner and scores the places you gained. <b>Racecraft goals</b> need other cars close by and no caution: SLIPSTREAM closes on the car ahead in its wake, OVERTAKE passes the car ahead (only when it runs your pace), DEFEND holds your place against a quicker car attacking you, and TRAFFIC clears three slower cars without contact. If the moment is wrong, a message says what to do first. Each goal judges what the car did and shows the result on screen when it ends. Contact or leaving the track marks an attempt for retry; clean completions are saved separately from lap records, and the DRIVING page shows this session's attempts and your saved best.</dd>
       <dt>PIT STRATEGY</dt>
-      <dd>With tyre wear enabled, <b>SETTINGS &rarr; DRIVING &rarr; PIT STRATEGY &rarr; NEXT TYRES</b> selects the compound fitted at your next stop; AUTO lets the game choose. Enter the pit lane yourself. Pit loss, tyre life and energy use are estimates based on the circuit and recent driving. More clean sectors and laps improve the available data.</dd>
+      <dd>With tyre wear enabled, <b>PAUSE &rarr; PIT STRATEGY &rarr; NEXT TYRES</b> selects the compound fitted at your next stop; AUTO lets the game choose. Enter the pit lane yourself. Pit loss, tyre life and energy use are estimates based on the circuit and recent driving. More clean sectors and laps improve the available data.</dd>
       <dt>SESSION REVIEW</dt>
       <dd>Review coaching tip counts, recent incidents and penalties after a run. Tips are listed most-repeated first and grouped by the turn they happened at, so one corner earning most of them is easy to see; when the same mistake comes up three times the review names the practice goal that drills it. Circuits without curated turn numbers simply show no location. <b>TECHNICAL DATA</b> contains the optional <b>DOWNLOAD SESSION DATA</b> JSON file and AI passing decisions. You do not need these tools to use the coach.</dd>
       <dt>LICENCE BADGES</dt>
-      <dd>Achievements kept on this device, listed in SETTINGS &rarr; DRIVING &rarr; LICENCE BADGES: FIRST WIN, PODIUM, POLE POSITION (with a driven qualifying lap), FASTEST LAP, CLEAN SHEET (a race with no track-limits strike or penalty), DAILY DEVOTION (a 7-day daily challenge streak) and 2026 WORLD TOUR (a win at every venue of the real 2026 calendar; the page counts the venues won so far). New badges appear on the results screen. Race badges are not given in a time trial, a practice session, a DUEL or a race with fewer than three cars.</dd>
+      <dd>Achievements kept on this device, listed in SETTINGS &rarr; PROGRESS &rarr; LICENCE BADGES: FIRST WIN, PODIUM, POLE POSITION (with a driven qualifying lap), FASTEST LAP, CLEAN SHEET (a race with no track-limits strike or penalty), DAILY DEVOTION (a 7-day daily challenge streak) and 2026 WORLD TOUR (a win at every venue of the real 2026 calendar; the page counts the venues won so far). New badges appear on the results screen. Race badges are not given in a time trial, a practice session, a DUEL or a race with fewer than three cars.</dd>
         <dt>TRACK LIMITS</dt>
         <dd>Every counted cut deletes that lap's time. In a race the first two are warnings, the third brings the black-and-white flag, and the fourth and every one after it add +5 s. The HUD shows the count in every driving camera.</dd>
         <dt id="htp-setup">CAMERA</dt>
@@ -3134,19 +3176,19 @@
         <dt>RACE SETTINGS</dt>
         <dd>Shown before each race: LAPS, WEATHER, CONDITIONS (MIXED lets the weather change), TIME OF DAY, DIFFICULTY, GRID, DUEL, CAUTIONS, RELIABILITY, DRIVING LINE and TYRE WEAR. QUICK RACE, FULL WEEKEND and ENDURANCE set several at once.</dd>
         <dt>SETTINGS</dt>
-        <dd>Pause with your binding (keyboard <span data-help-keys="pause">P</span>, controller <span data-help-pad="pause">Menu / Start</span>) or the pause button, then open SETTINGS. You can also open it from the title menu. BACK returns to the previous page. BACKUP &amp; RESTORE saves your preferences; garage files stay in GARAGE › TEAM, and career progress is separate.</dd>
+        <dd>Pause with your binding (keyboard <span data-help-keys="pause">P</span>, controller <span data-help-pad="pause">Menu / Start</span>) or the pause button, then open SETTINGS. You can also open it from the title menu. BACK returns to the previous page. SAVES &amp; DATA saves your preferences; garage files stay in GARAGE › TEAM, and career progress is separate.</dd>
         <dt>CONTROLS</dt>
-        <dd>Choose input, pedals, gears and active aero here. Rebind keyboard and controller actions, calibrate a controller, or set up a wheel. A keyboard or connected controller can be used alongside touch controls.
+        <dd>Choose input, pedals and steering feel here. Gears and active aero are in DRIVING AIDS. Rebind keyboard and controller actions, calibrate a controller, or set up a wheel. A keyboard or connected controller can be used alongside touch controls.
           <br>THROTTLE: HOLD keeps your thumb on GAS, LATCH makes GAS a tap-on, tap-off switch, AUTO drives the throttle so you only steer and brake. LEFT-HANDED swaps the two on-screen thumb groups. RECALIBRATE TILT makes the way you hold the phone straight ahead. MANUAL GEARS need tilt, a keyboard or a pad.
           <br>STEER THIS GAME WITH A PHONE shows a room code and QR code: scan or type it on a phone and the phone becomes the wheel (both need internet). In CONTROLLER, BUTTON NAMES fixes prompts that name the wrong buttons, CALIBRATE STICK cures a drifting stick, SET UP A WHEEL maps a wheel and pedals the browser cannot, and RESET CONTROLLER restores the default buttons.</dd>
-        <dt>STEERING &amp; ASSISTS</dt>
-        <dd>Choose response presets and steering aids here. STEER ASSIST helps steer the car; the visual DRIVING LINE is in RACE SETTINGS. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed, not the analog stick. Find BRAKING CUES in SETTINGS › DRIVING. Expand ADVANCED for detailed steering adjustments.
+        <dt>DRIVING AIDS</dt>
+        <dd>Choose driving presets, gears, active aero and steering aids here. Fine response curves and dead zones are under CONTROLS › ADVANCED INPUT &amp; HANDLING. STEER ASSIST helps steer the car; the visual DRIVING LINE is in RACE SETTINGS. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed, not the analog stick. Find BRAKING CUES in SETTINGS › DRIVING AIDS. Open CONTROLS › ADVANCED INPUT &amp; HANDLING for detailed steering adjustments.
           <br><b>PRESETS</b> set every handling slider at once. ROOKIE is the easiest: the most corner help and line pull, the earliest braking cue, and AUTO throttle. RELAX is nearly as forgiving but leaves the throttle to you. STANDARD is the default car with no corner help. PRO is STANDARD with sharper RESPONSE. Moving any slider afterwards shows CUSTOM. OVERALL SPEED is separate: it slows or speeds the whole field, you and the AI alike.
           <br><b>FEEL:</b> TILT SENSITIVITY, and STEERING from SUPER EASY through ASSISTED and NORMAL to SIM (SIM also quickens turn-in).
           <br><b>AIDS:</b> DRIVING HELP (OFF, MEDIUM, HIGH) steers part of each corner for you. STEER ASSIST (OFF, CORNERS, FULL) pulls the steering toward the ideal line. HAPTICS sets vibration strength; iPhone and iPad cannot vibrate from a web page. TRIGGER HAPTICS (when the pad supports it) routes lock-up to the brake trigger and wheelspin to the throttle; adaptive trigger resistance is not available from a web page.
           <details><summary class="adv-more-btn">ADVANCED SLIDERS</summary><p>TILT and TOUCH: how far you tilt or drag for full lock, smoothing, and the curve near centre. CONTROLLER: STICK CURVE, DEAD ZONE (raise it only for a drifting stick, after CALIBRATE STICK) and SATURATION (for a worn stick that cannot reach full lock). STEER RATE: how fast a held key or arrow winds on lock. CAR HANDLING, for every input: DRIVING HELP, RESPONSE (turn-in), LINEARITY (gentle or direct near centre), STEER LOCK, SPEED STEER (steering kept at high speed), STEADY AT SPEED (softens tilt, drag and stick as speed rises) and WEIGHT. RACING LINE biases you toward the apex (PULL) or wider (PUSH) and never overrides your steering.</p></details></dd>
-        <dt>DISPLAY</dt>
-        <dd>Adjust HUD and button sizes separately (UI SIZE, for the menus, is in APPEARANCE); PANEL OPACITY lightens the plates behind the readouts. HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. During a race, ADVANCED VISUALS opens the lighting and camera tuners with a live preview.
+        <dt>HUD &amp; CAMERA / GRAPHICS</dt>
+        <dd>Adjust HUD and button sizes separately (UI SIZE, for the menus, is in APPEARANCE); PANEL OPACITY lightens the plates behind the readouts. HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. GRAPHICS holds renderer and performance controls. VISUAL STUDIO opens lighting, camera, flyby and garage-arrival tools; track-dependent previews require a race.
           <br>In the HUD fold: STYLE (MINIMAL, STANDARD, or BROADCAST with a TV timing tower); LAYOUT (AUTO shows every readout scaled to fit, TIMING keeps sectors and gaps, DRIVER the car-state chips, COMPACT neither); MAP; GAPS to the cars ahead and behind; MIRROR (AUTO in the onboard cameras, ON in every camera; tap it mid-race to tuck it away); LINE COLOUR (COLOUR-BLIND uses blue, orange and magenta); LINE OPACITY; BUTTON OPACITY.
           <br>In the RENDERER fold: RESOLUTION (LOW or MED runs smoother and cooler on a phone; AUTO lowers it only when the frame rate drops), FULLSCREEN, UPSCALE, OCCLUSION (turn it off if scenery flickers or vanishes) and DEBRIS (looks only; OFF never changes lap time, penalties or damage). RENDERER and GRAPHICS may reload the game; RESET RENDERER fixes a broken picture. COCKPIT picks the wheel, seat, halo and interior of the cockpit view.</dd>
         <dt>APPEARANCE</dt>
@@ -3594,6 +3636,7 @@
 <script defer crossorigin="anonymous" src="js/car/custom-liveries.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/crest-paths.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/livery-graphics.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/crest-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liverytex.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost-share.js?v=dev"></script>
@@ -3612,6 +3655,7 @@
 <script defer crossorigin="anonymous" src="js/garage/scene-prims.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-equipment.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-live.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/scene-dress.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-crew.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/arrival.js?v=dev"></script>
@@ -3665,6 +3709,7 @@
 <script defer crossorigin="anonymous" src="js/ui/menu-nav.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/aria-state.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/setting-row.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/editor-workspace.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-search.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-tabs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/key-binds.js?v=dev"></script>
@@ -3697,11 +3742,13 @@
 <script defer crossorigin="anonymous" src="js/input/steer-tuning.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/governor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/loop-health.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/perf/spans.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/race-entry-profile.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/quality-preset.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/renderer-picker.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/compatibility-recovery.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/gfx-debug-overlay.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/perf/three-inspector.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scale.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dock-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-opts.js?v=dev"></script>
@@ -3717,6 +3764,7 @@
 <script defer crossorigin="anonymous" src="js/ui/hud-tyres.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-damage.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/live-region.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-skin.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-readouts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-relative.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-strategy.js?v=dev"></script>
@@ -3753,10 +3801,12 @@
 <script defer crossorigin="anonymous" src="js/career/custom-team.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/quali-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/onboard.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/debris-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/debris-world.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/incident-sim.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/contact-geometry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/collide.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/wall-end-face.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/wall-clamp.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/car-fields.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/field-lod.js?v=dev"></script>

@@ -650,7 +650,7 @@ function create(G) {
   }
   // Re-arm only the three device-aware marks, preserving coach statistics,
   // mappings and saves. Onboard owns its live instance; no game façade needed.
-  const helpSheet = $("howtoplay");
+  const helpSheet = $("htp-controls");
   if (helpSheet && typeof Onboard !== "undefined" && Onboard.resetControlsRefresher) {
     const refresher = document.createElement("button");
     refresher.id = "htp-controls-refresher"; refresher.type = "button";

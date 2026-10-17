@@ -9,17 +9,24 @@ export function localUrl(raw, websocket = false) {
   return u;
 }
 
-export async function targets(endpoint) {
+// T7: /json/list also lists service_worker and worker targets; each has its own page-style
+// WebSocket, so the same Debugger/Runtime session attaches to them directly.
+export const TARGET_TYPES = { page: ["page"], service_worker: ["service_worker"], worker: ["worker"], all: ["page", "service_worker", "worker"] };
+export async function targets(endpoint, kind = "page") {
+  const wanted = TARGET_TYPES[kind];
+  if (!wanted) throw Error("targetType must be page, service_worker, worker or all");
   const u = localUrl(endpoint);
   if (u.pathname !== "/") throw Error("Browser endpoint must be an origin, e.g. http://127.0.0.1:9222");
-  const response = await fetch(new URL("/json/list", u), { redirect: "error", signal: AbortSignal.timeout(5000) });
+  let response;
+  try { response = await fetch(new URL("/json/list", u), { redirect: "error", signal: AbortSignal.timeout(5000) }); }
+  catch (e) { throw Error(`Cannot reach Chrome at ${u.origin} (${e.cause?.code || e.name}); start Chrome with --remote-debugging-port and check the endpoint`); }
   if (!response.ok) throw Error(`Target discovery HTTP ${response.status}`);
   const raw = await response.text();
   if (raw.length > 1024 * 1024) throw Error("Target discovery response too large");
   const rows = JSON.parse(raw);
   if (!Array.isArray(rows)) throw Error("Malformed target discovery response");
-  return rows.filter(t => t && t.type === "page" && typeof t.id === "string" && typeof t.url === "string")
-    .slice(0, 100).map(t => ({ id: t.id, title: String(t.title || "").slice(0, 200), url: t.url,
+  return rows.filter(t => t && wanted.includes(t.type) && typeof t.id === "string" && typeof t.url === "string")
+    .slice(0, 100).map(t => ({ id: t.id, type: t.type, title: String(t.title || "").slice(0, 200), url: t.url,
       webSocketDebuggerUrl: t.webSocketDebuggerUrl }));
 }
 
@@ -39,7 +46,9 @@ export class Cdp extends EventEmitter {
           const p = this.pending.get(msg.id);
           if (!p) return;
           clearTimeout(p.timer); this.pending.delete(msg.id);
-          if (msg.error) p.reject(Error(msg.error.message)); else p.resolve(msg.result || {});
+          // T9: a response that arrives after its deadline still reaches the late handler.
+          if (p.late) p.late(msg.error ? Error(msg.error.message) : null, msg.result || {});
+          else if (msg.error) p.reject(Error(msg.error.message)); else p.resolve(msg.result || {});
         } else if (msg.method) this.emit(msg.method, msg.params || {});
       } catch (e) { this.fail(e); socket.close(); }
     });
@@ -65,12 +74,13 @@ export class Cdp extends EventEmitter {
     });
     return client;
   }
-  send(method, params = {}, timeout = this.timeout) {
+  send(method, params = {}, timeout = this.timeout, late = null) {
     if (this.closed || this.socket.readyState !== 1) return Promise.reject(Error("CDP is disconnected"));
     const id = ++this.id;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.pending.delete(id);
+        if (late) { const p = this.pending.get(id); p.late = late; p.timer = null; }
+        else this.pending.delete(id);
         reject(Error(`${method} response timed out; execution may still be active`));
       }, timeout);
       this.pending.set(id, { resolve, reject, timer });
@@ -81,7 +91,7 @@ export class Cdp extends EventEmitter {
   fail(error) {
     if (this.closed) return;
     this.closed = true;
-    for (const p of this.pending.values()) { clearTimeout(p.timer); p.reject(error); }
+    for (const p of this.pending.values()) { clearTimeout(p.timer); if (!p.late) p.reject(error); }
     this.pending.clear(); this.emit("disconnect", error);
   }
   close() { this.fail(Error("CDP detached")); this.socket.close(); }

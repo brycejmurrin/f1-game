@@ -1,4 +1,4 @@
-/* Apex 26 — SettingsExport: SETTINGS › BACKUP & RESTORE,
+/* Apex 26 — SettingsExport: SETTINGS › SAVES & DATA,
    which carries a player's state OUT of the browser and back IN. THREE files,
    deliberately separate:
 
@@ -756,6 +756,14 @@ function futureCareerSlot(raw, flavour) {
   return CareerBackup.validate({ format: CareerBackup.FORMAT,
     slots: [{ flavour, i: 0, data: { v: raw && raw.v } }] }).reason === "newer-version";
 }
+// migrateSlot coerces money:"abc" to 0, which would restore a poisoned file as
+// a zero-credit career; ask the backup gate about the RAW money first.
+function poisonedCareerMoney(raw, flavour) {
+  if (typeof CareerBackup === "undefined" || !raw || typeof raw !== "object"
+      || !Object.prototype.hasOwnProperty.call(raw, "money")) return false;
+  return CareerBackup.validate({ format: CareerBackup.FORMAT,
+    slots: [{ flavour, i: 0, data: { money: raw.money } }] }).reason === "nan-money";
+}
 function collectCareer() {
   const out = {};
   let n = 0;
@@ -821,6 +829,7 @@ function applyCareer(file, revisions) {
     }
     const match = CAREER_SLOT_RE.exec(k);
     if (futureCareerSlot(bag[k], match[1])) return refused("newer-version");
+    if (poisonedCareerMoney(bag[k], match[1])) { skipped++; continue; }
     const c = migrateSlot(bag[k]);
     if (!c) { skipped++; continue; }
     slots.push({ flavour: match[1], i: Number(match[2]), data: c });
@@ -872,6 +881,7 @@ function create(G) {
   let picker = null;
   let armed = null;
   let armT = 0;
+  let leaveSubscribed = false;
   let pickVersion = 0;
   let reloading = false;
 
@@ -879,7 +889,7 @@ function create(G) {
   // and a second input would open a second one. `value = ""` before every click so
   // choosing the SAME file twice still fires change.
   function pick(onJson, maxBytes) {
-    ++pickVersion;   // a new chooser supersedes pending reads
+    const chooserVersion = ++pickVersion;   // a new chooser supersedes pending reads
     if (!picker) {
       picker = document.createElement("input");
       picker.type = "file";
@@ -888,7 +898,7 @@ function create(G) {
       document.body.appendChild(picker);
     }
     picker.onchange = () => {
-      if (reloading) return;
+      if (reloading || chooserVersion !== pickVersion) return;
       const version = ++pickVersion;
       const f = picker.files && picker.files[0];
       if (!f) return;
@@ -979,20 +989,31 @@ function create(G) {
   function mount() {
     const host = document.getElementById("pm-panel-files");
     if (!host || document.getElementById("pm-settings-file")) return;
+    if (!leaveSubscribed && typeof SettingsNav !== "undefined" && SettingsNav.onLeave) {
+      SettingsNav.onLeave((page) => { if (page === "files") { disarm(); ++pickVersion; } });
+      leaveSubscribed = true;
+    }
     const h = document.createElement("h3");
     h.className = "pm-group-h";
     h.id = "pm-settings-file";
-    h.textContent = "SETTINGS FILE";
+    h.textContent = "SAVES & DATA";
     const note = document.createElement("p");
     note.className = "adv-help";
     note.setAttribute("data-help", "keep");   // HELP TEXT: HIDE keeps it — it is the only word on what LOAD does
-    note.textContent = "Back up preferences, appearance profiles, tuners, control bindings and time-trial leaderboards with SAVE ALL. SAVE CHANGED exports only differences from the defaults. LOAD asks twice, then reloads; leaderboards in the file are merged with yours (best laps kept). Photos, personal background images, career progress, ghosts, replays and accounts are not included. For cars, setups and liveries, use the file buttons in GARAGE › TEAM.";
+    note.id = "pm-settings-file-scope";
+    note.textContent = "SAVE ALL SETTINGS includes preferences, appearance profiles, tuners and control bindings. SAVE CHANGED SETTINGS includes only preference differences from defaults. Both files also include saved time-trial leaderboards when present; loading merges those boards with yours and keeps the best laps. LOAD SETTINGS FILE asks twice, then reloads. Neither file is a complete game backup: garage builds, career and season progress, photos, personal background images, ghosts, replays, daily progress, accounts and network credentials are not included.";
+    const otherFiles = document.createElement("p");
+    otherFiles.id = "pm-other-save-files";
+    otherFiles.className = "adv-help";
+    otherFiles.setAttribute("data-help", "keep");
+    otherFiles.textContent = "Separate backups: GARAGE → TEAM → SAVE GARAGE FILE saves parts, setups, liveries and your team. CAREER → CAREER MODES → SAVE CAREER FILE saves all six career slots. The same separate file controls are on the Save and Restore pages here. LOAD asks twice and replaces only the corresponding data, then reloads. Settings, garage and career remain separate files. Photos, personal backgrounds, ghosts, replays and accounts are not included in these backups. STORAGE HEALTH & RESTORE POINTS below reports browser storage and local career history; local history is not an exported backup.";
+
 
     const shareNote = document.createElement("p");
     shareNote.id = "pm-share-code-help";
     shareNote.className = "adv-help";
     shareNote.setAttribute("data-help", "keep");
-    shareNote.textContent = "Paste an APXS1 / APXL1 / APXD1 share code (or a #share= link) to stage a setup, livery, or daily challenge. Your previous setup or livery is kept after an import: paste UNDO here to restore it. Ghosts still use APXG1 / #ghost=.";
+    shareNote.textContent = "Paste a shared setup, livery or daily challenge code or link. Your previous setup or livery is kept after an import: paste UNDO here to restore it. Ghost recording codes and links are imported separately.";
     // textarea — not <input>: settings-export tests pick the LOAD file input via
     // querySelector("input"), and a text field here would steal that match.
     const shareIn = document.createElement("textarea");
@@ -1001,7 +1022,7 @@ function create(G) {
     shareIn.rows = 2;
     shareIn.spellcheck = false;
     shareIn.autocomplete = "off";
-    shareIn.placeholder = "paste APXS1 / APXL1 / APXD1 code";
+    shareIn.placeholder = "Paste a shared setup, livery or challenge";
     shareIn.setAttribute("aria-label", "Share code");
     shareIn.setAttribute("aria-describedby", "pm-share-code-help pm-share-code-status");
     const shareStatus = document.createElement("p");
@@ -1037,21 +1058,84 @@ function create(G) {
       shareStatus.textContent = ShareCode.messageFor(started.n ? { ok: false } : applied);
     };
 
-    host.append(h,
+    const nav = document.createElement("div");
+    nav.id = "pm-files-nav";
+    nav.setAttribute("role", "group");
+    nav.setAttribute("aria-label", "Backup actions");
+    const sections = [], choices = [];
+    const selectSection = (index) => {
+      disarm();
+      sections.forEach((section, i) => { section.hidden = i !== index; });
+      choices.forEach((button, i) => button.setAttribute("aria-pressed", String(i === index)));
+    };
+    for (const [id, label] of [["save", "Save"], ["restore", "Restore"], ["share", "Import share code"]]) {
+      const section = document.createElement("section");
+      section.id = "pm-files-" + id;
+      const button = document.createElement("button");
+      button.id = "pm-files-show-" + id;
+      button.type = "button";
+      button.textContent = label;
+      button.setAttribute("aria-controls", section.id);
+      section.setAttribute("aria-labelledby", button.id);
+      const index = sections.length;
+      button.onclick = () => selectSection(index);
+      sections.push(section); choices.push(button); nav.append(button);
+    }
+    // Settings, garage and career stay separate files: each action page keeps
+    // the three in that order under their own sub-heading.
+    const groupHead = (text) => {
+      const head = document.createElement("h4");
+      head.className = "pm-group-h"; head.textContent = text;
+      return head;
+    };
+    const saveHelp = document.createElement("p");
+    saveHelp.className = "adv-help";
+    saveHelp.textContent = "Save all settings for a backup, or just your changes to share a smaller file.";
+    sections[0].append(saveHelp,
       saveBtn("pm-settings-changed", "SAVE CHANGED SETTINGS",
-        "Only the settings that differ from the defaults, each with the default it replaced and where that default lives.",
+        "Changed preferences plus saved time-trial leaderboards, when present. This is not a full game backup.",
         () => collect("changes", G), () => `apex26-settings-changes-${stamp()}.json`),
       saveBtn("pm-settings-all", "SAVE ALL SETTINGS",
-        "Every setting with its current value.",
+        "All exportable preferences plus saved time-trial leaderboards, when present. This is not a full game backup.",
         () => collect("all", G), () => `apex26-settings-all-${stamp()}.json`),
+      groupHead("GARAGE FILE"),
+      saveBtn("pm-garage-save", "SAVE GARAGE FILE", "Parts, setups, liveries and your team. Career progress and settings are excluded.",
+        collectGarage, () => `apex26-garage-${stamp()}.json`),
+      groupHead("CAREER FILE"),
+      saveBtn("pm-career-save", "SAVE CAREER FILE", "All six career slots and the active slot. Settings and garage builds are excluded.",
+        collectCareer, () => `apex26-career-${stamp()}.json`));
+    const restoreHelp = document.createElement("p");
+    restoreHelp.className = "adv-help";
+    restoreHelp.setAttribute("data-help", "keep");
+    restoreHelp.textContent = "Replace settings, garage or career data from a saved file. Press Load twice to confirm, then choose the file. Each file replaces only its own data and the game reloads after applying it; best laps are merged.";
+    sections[1].append(restoreHelp,
       loadBtn("pm-settings-load", "LOAD SETTINGS FILE",
         "Read an apex26-settings file back in. Only allowlisted keys are written; the garage, career and accounts are never touched.",
         (obj) => applySettings(obj, G), "SETTINGS", null, SETTINGS_MAX_BYTES),
-      note,
-      shareNote, shareIn, shareBtn, shareStatus);
+      groupHead("GARAGE FILE"),
+      loadBtn("pm-garage-load", "LOAD GARAGE FILE", "Replace garage data only. Settings and career saves are kept.",
+        applyGarage, "THE GARAGE", null, GARAGE_MAX_BYTES),
+      groupHead("CAREER FILE"),
+      loadBtn("pm-career-load", "LOAD CAREER FILE", "Replace career slots only, with protection against changes made after confirmation.",
+        applyCareer, "CAREER SAVES", careerRevisions,
+        typeof CareerBackup !== "undefined" ? CareerBackup.MAX_BYTES : 5 * 1024 * 1024));
+    sections[2].append(shareNote, shareIn, shareBtn, shareStatus);
+    const scope = document.createElement("details");
+    scope.id = "pm-files-included";
+    const summary = document.createElement("summary");
+    summary.textContent = "What is included in each backup?";
+    scope.append(summary, note, otherFiles);
+    // Exclusions remain visible on every action page, even with help hidden.
+    const exclusions = document.createElement("p");
+    exclusions.className = "adv-help";
+    exclusions.setAttribute("data-help", "keep");
+    exclusions.textContent = "Settings, garage and career are separate files. Photos, background images, ghosts, replays and accounts are excluded.";
+    selectSection(0);
+    host.append(h, nav, ...sections, exclusions, scope);
+    if (typeof SaveHealth !== "undefined" && SaveHealth.mount) SaveHealth.mount(host);
   }
 
-  // THE GARAGE PAIR LIVES IN THE GARAGE, not here: a player looking to back up
+  // The contextual garage pair remains in the Garage: a player looking to back up
   // a livery looks where liveries are. js/garage/setup-sheet.js calls this at
   // the end of its TEAM tab and appends what comes back. It rebuilds that tab
   // on every change, so this returns FRESH nodes each call and holds no
@@ -1163,7 +1247,7 @@ function create(G) {
   return _ui;
 }
 
-/** Remount the BACKUP & RESTORE controls if create already ran (idempotent).
+/** Remount the SAVES & DATA controls if create already ran (idempotent).
  *  SettingsNav calls this when the files page opens so a missed boot mount
  *  cannot leave an empty panel (title + Back only). */
 function ensureMounted() { if (_ui && typeof _ui.mount === "function") _ui.mount(); }

@@ -24,7 +24,7 @@ const sandbox = {
 };
 const vctx = vm.createContext(sandbox);
 for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
-                 "js/garage/scene-live.js", "js/garage/experience.js", "js/garage/scene.js"])
+                 "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js", "js/garage/scene.js"])
   vm.runInContext(read(f), vctx, { filename: f });
 const GarageLive = vm.runInContext("GarageLive", vctx);
 const GarageScene = vm.runInContext("GarageScene", vctx);

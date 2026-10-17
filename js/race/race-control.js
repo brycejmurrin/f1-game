@@ -257,7 +257,7 @@ const RaceControl = (function () {
     // there at the start (a storm START runs behind the SC for SC_START_S; one
     // rolling in mid-race is neutralised until it eases back to rain, capped
     // at SC_ROLL_S). null = no storm now.
-    let stormSince = null, stormAtStart = false;
+    let stormSince = null, stormAtStart = false, stormLastT = 0;
     // Last state broadcast to a guest, so only CHANGES are sent.
     let sent = "";
     const savedCaution = store.get("caution", false);
@@ -266,7 +266,7 @@ const RaceControl = (function () {
     function reset() {
       caution = blank(); replayOwned = false;
       held = 0; heldCause = "";
-      scriptHeld = 0; scriptCause = ""; wxHeld = 0; stormSince = null; stormAtStart = false;
+      scriptHeld = 0; scriptCause = ""; wxHeld = 0; stormSince = null; stormAtStart = false; stormLastT = 0;
       queryT = 0;
       capHoldT = 0; capHoldLevel = 0;
       restartWanted = false;
@@ -543,6 +543,10 @@ const RaceControl = (function () {
     function stormTick() {
       const S = typeof Storm !== "undefined" ? Storm : null;
       const t = typeof G.raceT === "number" && Number.isFinite(G.raceT) ? G.raceT : 0;
+      // A practice rewind (driving-coach restoreWorld) sets raceT back: carry the storm's start with it, or the
+      // window measures t - stormSince across the jump and the SC stays out for the rewound span again (R2).
+      if (stormSince != null && t < stormLastT - 0.5) stormSince -= stormLastT - t;
+      stormLastT = t;
       if (!S || !S.is(G.raceWeather)) {
         if (stormSince != null) Log.info("race", "storm eased raceT=" + t.toFixed(1));
         stormSince = null;

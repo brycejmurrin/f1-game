@@ -23,7 +23,7 @@ const SceneryIdentity = (function () {
 
     const underpassPortal = (s, opts) => {
       opts = opts || {};
-      const k = Math.round(s * n) % n;
+      const k = ((Math.round(s * n) % n) + n) % n;
       const clearH = opts.h != null ? opts.h : 5.5;
       const thick = opts.thick != null ? opts.thick : 1.4;
       const col = opts.col || [0.10, 0.10, 0.12];

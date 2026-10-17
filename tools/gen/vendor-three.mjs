@@ -43,6 +43,26 @@ const ADDONS = [
   ["examples/jsm/webxr/XRButton.js", "addons/webxr/XRButton.js"],
   ["examples/jsm/webxr/VRButton.js", "addons/webxr/VRButton.js"],
   ["examples/jsm/webxr/WebGLXRFallback.js", "addons/webxr/WebGLXRFallback.js"],
+  // Opt-in dev Inspector (?inspector=1, js/perf/three-inspector.js). Core only: Settings.js lazily
+  // imports extensions/ on a click, which we do not vendor. Never precached (sw.js), never preloaded.
+  ["examples/jsm/inspector/Inspector.js", "addons/inspector/Inspector.js"],
+  ["examples/jsm/inspector/RendererInspector.js", "addons/inspector/RendererInspector.js"],
+  ["examples/jsm/inspector/Extension.js", "addons/inspector/Extension.js"],
+  ["examples/jsm/inspector/tabs/Console.js", "addons/inspector/tabs/Console.js"],
+  ["examples/jsm/inspector/tabs/Memory.js", "addons/inspector/tabs/Memory.js"],
+  ["examples/jsm/inspector/tabs/Parameters.js", "addons/inspector/tabs/Parameters.js"],
+  ["examples/jsm/inspector/tabs/Performance.js", "addons/inspector/tabs/Performance.js"],
+  ["examples/jsm/inspector/tabs/Settings.js", "addons/inspector/tabs/Settings.js"],
+  ["examples/jsm/inspector/tabs/Timeline.js", "addons/inspector/tabs/Timeline.js"],
+  ["examples/jsm/inspector/tabs/Viewer.js", "addons/inspector/tabs/Viewer.js"],
+  ["examples/jsm/inspector/ui/Graph.js", "addons/inspector/ui/Graph.js"],
+  ["examples/jsm/inspector/ui/Item.js", "addons/inspector/ui/Item.js"],
+  ["examples/jsm/inspector/ui/List.js", "addons/inspector/ui/List.js"],
+  ["examples/jsm/inspector/ui/Profiler.js", "addons/inspector/ui/Profiler.js"],
+  ["examples/jsm/inspector/ui/Style.js", "addons/inspector/ui/Style.js"],
+  ["examples/jsm/inspector/ui/Tab.js", "addons/inspector/ui/Tab.js"],
+  ["examples/jsm/inspector/ui/Values.js", "addons/inspector/ui/Values.js"],
+  ["examples/jsm/inspector/ui/utils.js", "addons/inspector/ui/utils.js"],
 ];
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
@@ -120,9 +140,14 @@ async function generate(version, tarballArg) {
   // 3. Minify: @rollup/plugin-terser's defaults for an ES output (module: true),
   //    keeping the @license banner three's header plugin prepends.
   const outDir = path.join(VENDOR, `three-${version}`);
+  // PATCHES.md is hand-written prose beside the generated files: keep it across the wipe.
+  const patchesMd = path.join(outDir, "PATCHES.md");
+  const keepPatches = fs.existsSync(patchesMd) ? fs.readFileSync(patchesMd) : null;
   fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(path.join(outDir, "addons/tsl/display"), { recursive: true });
   fs.mkdirSync(path.join(outDir, "addons/webxr"), { recursive: true });
+  fs.mkdirSync(path.join(outDir, "addons/inspector/tabs"), { recursive: true });
+  fs.mkdirSync(path.join(outDir, "addons/inspector/ui"), { recursive: true });
   const files = {};
   const put = (name, buf) => {
     fs.writeFileSync(path.join(outDir, name), buf);
@@ -137,6 +162,8 @@ async function generate(version, tarballArg) {
   }
   put("LICENSE.txt", fs.readFileSync(path.join(pkg, "LICENSE")));
   for (const [from, to] of ADDONS) put(to, fs.readFileSync(path.join(pkg, from)));
+
+  if (keepPatches) fs.writeFileSync(patchesMd, keepPatches);
 
   // 4. The manifest — what --check and the canary read.
   const manifest = {

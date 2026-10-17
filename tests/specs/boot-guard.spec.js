@@ -26,9 +26,15 @@ function trackNavs(page) {
   return state;
 }
 
+// The boot guard's repair is a reload, so a poll can land mid-navigation and
+// page.evaluate rejects with "Execution context was destroyed". That is the
+// repair working, not a failure: read it as "no overlay yet" and poll again.
 const overlayText = (page) => page.evaluate(() => {
   const d = document.getElementById("__err_overlay");
   return d && d.style.display !== "none" ? d.textContent.replace(/\s+/g, " ") : null;
+}).catch((e) => {
+  if (/Execution context was destroyed|navigation/i.test(String(e && e.message))) return null;
+  throw e;
 });
 
 test("production CSP allows prepaint preferences before deferred modules load", async ({ browser, baseURL }) => {

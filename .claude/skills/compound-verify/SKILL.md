@@ -1,6 +1,6 @@
 ---
 name: compound-verify
-description: Use when explicitly invoking compound-verify.
+description: Use when compound-verify.
 disable-model-invocation: true
 ---
 ## F1 project integration

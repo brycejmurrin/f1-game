@@ -92,7 +92,7 @@ try {
   }
   const init = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "native-smoke", version: "1" } });
   check("stdio initialize and tool discovery", () => assert.equal(init.serverInfo.name, "js-debugger-mcp"));
-  assert.equal((await rpc("tools/list")).tools.length, 13);
+  assert.equal((await rpc("tools/list")).tools.length, 18);
   const target = (await call("debugger_targets", { endpoint })).targets.find(t => t.url === url + "/"); assert.ok(target);
   await call("debugger_attach", { endpoint, targetId: target.id });
   const script = (await call("debugger_scripts", { filter: "fixture.js" })).scripts[0]; assert.ok(script);
@@ -103,7 +103,7 @@ try {
   assert.ok(bp.locations[0].column >= 1);
   await call("debugger_run", { expression: "window.finalResult = fixture()" });
   let state = await until(s => s.paused); const first = state.pause.token;
-  check("breakpoint pauses pending evaluation", () => { assert.equal(state.pause.frames[0].line, 5); assert.equal(state.operations[0].status, "pending"); });
+  check("breakpoint pauses pending evaluation", () => { assert.equal(state.pause.frames[0].line, 5); assert.equal(state.operations[0].status, "paused"); });
   const evalArgs = { pauseToken: first, expression: "answer" };
   check("paused frame local evaluation", () => {});
   assert.equal((await call("debugger_evaluate", evalArgs)).result.value, 41);
@@ -162,6 +162,57 @@ try {
   await call("debugger_run", { expression: "Promise.resolve(42)", awaitPromise: true });
   state = await until(s => s.operations.at(-1).status === "completed");
   check("async execution result", () => assert.equal(state.operations.at(-1).result.result.value, 42));
+  // T1/A1-A4/T5: scripts filter, non-pausing logpoint, exception log, listener and instance counts.
+  const named = await call("debugger_scripts", {});
+  check("scripts: anonymous hidden, totals reported", () => { assert.ok(named.scripts.every(x => x.url)); assert.equal(typeof named.total, "number"); assert.equal(named.truncated, false); });
+  const lp = await call("debugger_logpoint", { url: url + "/fixture.js", line: 9, expression: "n" });
+  assert.equal(lp.locations[0].line, 9);
+  await call("debugger_run", { expression: "window.finalResult = fixture()" });
+  state = await until(s => s.operations.at(-1).status === "completed");
+  const hits = await call("debugger_logpoint_read", { id: lp.id });
+  check("logpoint records without pausing", () => { assert.equal(state.paused, false); assert.deepEqual(hits.logpoints[0].items.map(i => i.v), [41]); assert.equal(hits.logpoints[0].hits, 1); });
+  await call("debugger_logpoint_read", { clear: true });
+  assert.equal((await call("debugger_logpoint_read", {})).logpoints[0].hits, 0);
+  check("logpoint ring clear", () => {});
+  await call("debugger_remove_breakpoint", { id: lp.breakpointId });
+  await call("debugger_exception_log", { action: "start" });
+  await call("debugger_run", { expression: 'try { throw Error("logged-by-smoke") } catch (e) {}' });
+  state = await until(s => s.operations.at(-1).status === "completed");
+  const elog = await call("debugger_exception_log", { action: "read" });
+  check("exception log records a caught exception without pausing", () => { assert.equal(state.paused, false); assert.ok(elog.entries.some(e => /logged-by-smoke/.test(e.message))); });
+  await call("debugger_exception_log", { action: "stop" });
+  await call("debugger_run", { expression: 'window.addEventListener("apexprobe", () => {}); window.Probe = class Probe {}; window.keep = [new Probe(), new Probe(), new Probe()]; 1' });
+  await until(s => s.operations.at(-1).status === "completed");
+  const ls = await call("debugger_listeners", { target: "window" });
+  check("listeners counted by type", () => assert.equal(ls.byType.apexprobe, 1));
+  const inst = await call("debugger_instances", { expression: "Probe" });
+  check("instances counted via queryObjects", () => assert.equal(inst.count, 3));
+  await call("debugger_run", { expression: "new Promise(() => {})", awaitPromise: true });
+  const abandoning = await call("debugger_run", { expression: "1" });
+  check("a new run abandons a hung one", () => assert.equal(abandoning.abandoned.length, 1));
+  await until(s => s.operations.at(-1).status === "completed");
+  // T9: deadline passes, op stays tracked, the late result is recorded.
+  await call("debugger_run", { expression: "new Promise(r => setTimeout(() => r(7), 2500))", awaitPromise: true, timeoutMs: 1000 });
+  state = await until(s => s.operations.at(-1).timedOut);
+  state = await until(s => s.operations.at(-1).status === "completed");
+  check("timed-out run stays tracked and records its late result", () => { assert.equal(state.operations.at(-1).late, true); assert.equal(state.operations.at(-1).result.result.value, 7); });
+  // T10: a busy page is reported, and cancel (terminateExecution) frees it.
+  await call("debugger_run", { expression: "(() => { const t = Date.now(); while (Date.now() - t < 60000) {} })()" });
+  state = await until(s => s.pageUnresponsive === true);
+  await call("debugger_control", { action: "cancel" });
+  state = await call("debugger_state");
+  check("pageUnresponsive reported; cancel terminates the script", () => assert.equal(state.operations.at(-1).status, "cancelled"));
+  assert.equal(await page.evaluate(() => 1 + 1), 2);
+  // T7: worker targets are listed on request.
+  await page.evaluate(() => { window.w = new Worker(URL.createObjectURL(new Blob(["setInterval(() => {}, 1000)"]))); });
+  await new Promise(resolve => setTimeout(resolve, 500));
+  const workers = await call("debugger_targets", { endpoint, targetType: "worker" });
+  check("worker targets listed with targetType", () => { assert.ok(workers.targets.length >= 1); assert.ok(workers.targets.every(t => t.type === "worker")); });
+  // T8: a run pending across a reload fails as aborted.
+  await call("debugger_run", { expression: "new Promise(() => {})", awaitPromise: true });
+  await page.reload();
+  state = await until(s => s.operations.at(-1).status === "aborted");
+  check("run across a reload is aborted, not pending", () => assert.match(state.operations.at(-1).error, /context destroyed/));
   await page.evaluate(() => new Promise(resolve => {
     const iframe = document.createElement("iframe"); iframe.onload = resolve;
     iframe.srcdoc = "<script>window.frameValue = 1; //# sourceURL=iframe-debugger-fixture.js<\/script>";
@@ -182,9 +233,18 @@ try {
   const detached = await call("debugger_detach"); assert.deepEqual(detached.cleanupErrors, []);
   assert.equal(await page.evaluate(() => window.finalResult), 42);
   check("detach while paused resumes and preserves browser", () => assert.equal((browser.contexts()[0].pages()).length, 1));
-  await call("debugger_attach", { endpoint, targetId: target.id });
+  await call("debugger_attach", { targetId: target.id });
+  check("attach reuses the last endpoint (T12)", () => {});
   await call("debugger_breakpoint", { url: url + "/fixture.js", line: 5 });
-  await call("debugger_run", { expression: "window.finalResult = fixture()" }); await until(s => s.paused);
+  await call("debugger_run", { expression: "window.finalResult = fixture()" }); state = await until(s => s.paused);
+  assert.equal((await call("debugger_evaluate", { pauseToken: state.pause.token, frameIndex: 0, expression: "answer" })).result.value, 41);
+  const bysrc = await call("debugger_source", { url: url + "/fixture.js", startLine: 3, endLine: 5 });
+  check("frameIndex alias, source by url+endLine (T12)", () => assert.match(bysrc.source, /5:   answer = inner/));
+  const badArg = await rpc("tools/call", { name: "debugger_evaluate", arguments: { pauseToken: state.pause.token, expression: "1", bogus: 1 } });
+  check("rejection names the valid parameters (T12)", () => assert.match(badArg.structuredContent.error, /valid arguments: pauseToken, frame/));
+  await call("debugger_exceptions", { mode: "none" });
+  const lsRefused = await call("debugger_evaluate", { pauseToken: state.pause.token, expression: "localStorage.getItem('apex26.smoke')" }, true);
+  check("storage read refusal points at allowSideEffects (T14b)", () => assert.match(lsRefused.hint, /allowSideEffects:true/));
   const eofExit = once(mcp, "exit"); mcp.stdin.end(); assert.equal((await eofExit)[0], 0); mcp = null;
   check("MCP stdin closure cleans up a paused session", () => {});
   assert.equal(await page.evaluate(() => window.finalResult), 42);
@@ -240,6 +300,8 @@ try {
   await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "native-smoke", version: "1" } });
   await call("debugger_attach", { endpoint, targetId: target.id });
   await page.close(); await until(s => !s.connected);
+  check("lost target reads detached: target gone", () => {});
+  assert.match((await call("debugger_state")).detached, /^target gone/);
   check("target closure clears session", () => {});
   const receipt = { passed: checks.length, checks, browserVersion: browser.version(), protocol: "MCP stdio + persistent HTTP shell wrapper + native CDP", gpuClaim: false };
   await writeFile(path.join(out, "smoke.json"), JSON.stringify(receipt, null, 2) + "\n");
