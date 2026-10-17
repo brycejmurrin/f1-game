@@ -2096,7 +2096,21 @@ const api = {
   },
 
   // perf() — thin governor snapshot (alias of renderScale report + tier parts).
-  perf() { return this.renderScale(); },
+  // perf({on, reset, measure}) — renderScale() (the governor view, unchanged) plus the per-subsystem
+  // frame budget from js/perf/spans.js: on:true starts the span recorder (off = one bool per call),
+  // reset:true clears the rings, measure:true also emits performance.measure() for traces. While
+  // recording, `spans` holds p50/p95/p99/max ms per phase (frame input physics ai collide camera
+  // render hud), `loaf` the long-animation-frame ring, `gpu` gpuTimer().
+  perf(o) {
+    if (typeof PerfSpans !== "undefined") {
+      if (o && o.reset) PerfSpans.reset();
+      if (o && o.measure !== undefined) PerfSpans.measure(o.measure);
+      if (o && o.on !== undefined) PerfSpans.on(o.on);
+    }
+    const base = this.renderScale();
+    if (typeof PerfSpans === "undefined" || !(PerfSpans.isOn() || o)) return base;
+    return Object.assign(base, PerfSpans.report(), { gpu: this.gpuTimer() });
+  },
 
   uiScale(v) { return badPct("uiScale", v) || G.setScale("uiScale", "--ui-scale", v); },
   hudScale(v) { return badPct("hudScale", v) || G.setScale("hudScale", "--hud-scale", v); },
