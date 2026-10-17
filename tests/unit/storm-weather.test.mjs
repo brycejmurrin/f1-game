@@ -237,3 +237,14 @@ test("__apex.race() keeps weather \"storm\" instead of racing it dry", () => {
   assert.ok(m, "race() weather mapping found");
   assert.match(m[1], /weather === "storm"/);
 });
+
+test("R2: a practice rewind does not extend the storm SC (raceT jumps back, the window follows)", () => {
+  const { rc, G, adv, S } = bootRC({ raceWeather: "rain" });
+  adv(120);
+  G.raceWeather = "storm";
+  adv(100);
+  assert.equal(rc.level, 3, "storm SC out");
+  G.raceT -= 100;                      // driving-coach restoreWorld: the clock comes back to before the storm
+  adv(S.SC_ROLL_S - 100 + 5);          // 150 s of SC have now been flown in all
+  assert.equal(rc.level, 0, "the SC window counts the time flown, not the clock value");
+});
