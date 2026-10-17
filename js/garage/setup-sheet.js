@@ -321,15 +321,19 @@ function csLabel(text) {
 // click, as the select screen does — picking here IS picking your entry for
 // the next race.
 function buildTeamOptions(optsEl, team) {
+  // WORK ON CAR pauses the running race without changing its state.
+  const pitLocked = () => G.state === "race";
   const careerLocked = typeof Career !== "undefined" && Career.inCareer && Career.inCareer();
+  const identityLocked = () => pitLocked() || careerLocked;
+  const lockReason = pitLocked() ? "Race identity is fixed while working on the active car" : "Your team is fixed by your active career contract";
   optsEl.appendChild(csLabel("TEAM"));
 
   const card = document.createElement("button");
   card.className = "team-card";
   card.id = "cs-team-card";
   card.setAttribute("aria-haspopup", "dialog");
-  card.disabled = !!careerLocked;
-  if (careerLocked) card.title = "Your team is fixed by your active career contract";
+  card.disabled = !!identityLocked();
+  if (identityLocked()) card.title = lockReason;
   const body = document.createElement("span"); body.className = "tm-body";
   const name = document.createElement("span"); name.className = "tm-name"; name.textContent = team.name;
   const sub = document.createElement("span"); sub.className = "tm-sub";
@@ -338,7 +342,7 @@ function buildTeamOptions(optsEl, team) {
   const chev = document.createElement("span");
   chev.className = "tm-chev"; chev.textContent = "▾"; chev.setAttribute("aria-hidden", "true");
   card.append(G.teamSwatch(team), body, chev);
-  card.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); G.setTeamPicker(true); };
+  card.onclick = () => { if (identityLocked()) return; if (G.soundOn) GameAudio.uiSelect(); G.setTeamPicker(true); };
   optsEl.appendChild(card);
 
   optsEl.appendChild(csLabel("DRIVER"));
@@ -350,16 +354,16 @@ function buildTeamOptions(optsEl, team) {
     const taken = (G.peerSeats ? G.peerSeats() : [])
       .some((s) => s.team === team.id && s.driver === i);
     b.className = "sel-chip" + (i === G.driverIdx ? " active" : "");
-    b.disabled = taken || careerLocked;
+    b.disabled = taken || !!identityLocked();
     if (taken) b.title = "Taken by the other player";
-    else if (careerLocked) b.title = "Your seat is fixed by your active career contract";
+    else if (identityLocked()) b.title = lockReason;
     b.setAttribute("aria-pressed", i === G.driverIdx ? "true" : "false");
     b.dataset.csDriver = String(i);
     // Legends park an unsourced number at 1 (select-screen driverLabel's rule): no "#1" there.
     const num = team.legends && !(d.num > 1) ? "" : `#${d.num} `;
     b.textContent = `${num}${d.name}${taken ? "  · TAKEN" : ""}`;
     b.onclick = () => {
-      if (i === G.driverIdx) return;
+      if (taken || identityLocked() || i === G.driverIdx) return;
       G.driverIdx = i; store.set("driver", i);
       if (G.soundOn) GameAudio.uiTick();
       buildSetup();
@@ -373,7 +377,9 @@ function buildTeamOptions(optsEl, team) {
   const edit = document.createElement("button");
   edit.className = "sel-edit"; edit.id = "cs-customize";
   edit.textContent = "✎ EDIT MY TEAM";
-  edit.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); G.openCustomize(); };
+  edit.disabled = pitLocked();
+  if (pitLocked()) edit.title = lockReason;
+  edit.onclick = () => { if (pitLocked()) return; if (G.soundOn) GameAudio.uiSelect(); G.openCustomize(); };
   editRow.appendChild(edit);
   optsEl.appendChild(editRow);
 
@@ -1323,6 +1329,8 @@ function endLivPreview(team) {
 
 function openSetup() {
   Log.info("ui", "SetupUI.openSetup");
+  // A picker left from an earlier garage visit must not sit over pit work.
+  if (G.state === "race") G.setTeamPicker(false);
   // Show the garage sheet first, then build its DOM off the click stack.
   // Change Car used to call buildSetup() before unhiding #carsetup, so the
   // select/season screen froze with no sheet (and Back stopped responding).
