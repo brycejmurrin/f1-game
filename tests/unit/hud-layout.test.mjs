@@ -803,7 +803,7 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "touch STRATEGY sits under fitHud's measured left column (--hud-left-h), not a bare 152px");
   assert.match(css, /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\) \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
     "touch RELATIVE uses the same measured left column");
-  assert.match(css, /:has\(#hud-rel:not\(\[hidden\]\)\) #hud-strat:not\(\[data-hl-user\]\)/,
+  assert.match(css, /:has\(> :where\(#hud\) > #hud-rel:not\(\[hidden\]\)\) #hud-strat:not\(\[data-hl-user\]\)/,
     "STRATEGY steps beside RELATIVE instead of stacking onto PLAN");
   assert.match(css, /:root\[data-limits-left\] #hud-strat/,
     "STRATEGY clears the left-mode TRACK LIMITS chip");
