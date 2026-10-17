@@ -6,6 +6,7 @@
 //   node tools/car/audit-parts.mjs [--cats=engine,aero] [--team=mclaren]
 //
 // Output: scratch/renders/parts/<category>/ and parts/factory/
+import { screenshotCard, renderGallery } from "../lib/screenshot-gallery.cjs";
 import { chromium } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -48,12 +49,10 @@ const CAT_VIEW = {
 };
 const cats = arg("cats", Object.keys(CAT_VIEW).join(",")).split(",")
   .map((value) => assertSafePathToken(value.trim(), "category")).filter(Boolean);
-const esc = (value) => String(value).replace(/[&<>"]/g, (char) => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;",
-}[char]));
-const sheet = (title, cards) => `<!doctype html><meta charset=utf8><title>${esc(title)}</title>
-<style>body{margin:0;background:#111;color:#ccc;font:13px system-ui;padding:14px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}figure{margin:0;background:#000;border:1px solid #222;border-radius:6px;overflow:hidden}img{display:block;width:100%}figcaption{padding:5px 7px;color:#9ab;font-size:12px}</style>
-<h2 style="text-transform:uppercase;letter-spacing:.06em">${esc(title)}</h2><div class=grid>${cards.map(({ file, label }) => `<figure><img src="${esc(file)}" alt="${esc(label)}"><figcaption>${esc(label)}</figcaption></figure>`).join("\n")}</div>`;
+const sheet = (title, cards) => renderGallery({ title,
+  summary: `${cards.length} part views`,
+  groups: [{ title: "Captured parts", cards: cards.map(({ file, label }) => screenshotCard({ title: label, image: file })) }],
+});
 async function setAndSettle(page, state) {
   const before = await page.evaluate(() => window.CARVIEW.frame);
   await page.evaluate((next) => window.CARVIEW.set(next), state);

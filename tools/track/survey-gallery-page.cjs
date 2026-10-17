@@ -1,41 +1,43 @@
 "use strict";
-// @doc Offline survey gallery page: filters, accessible lightbox and keyboard navigation.
-function buildHtml(manifest) {
-  const data = JSON.stringify(manifest).replace(/</g, "\\u003c");
-  return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Apex circuit gallery</title><style>
-:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#10151d;color:#eaf1fa;font:16px system-ui}header,main{padding:24px;max-width:1600px;margin:auto}h1{margin:0 0 8px}p{color:#b7c4d5}.filters{display:flex;flex-wrap:wrap;gap:16px}label{display:grid;gap:6px}select,input,button,a.download{font:inherit;padding:10px;background:#233247;color:inherit;border:1px solid #52647c;border-radius:7px}input{max-width:100%}button{cursor:pointer}:focus-visible{outline:3px solid #8ef0c4;outline-offset:3px}#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:16px}.card{padding:0;overflow:hidden;text-align:left}.card img{width:100%;aspect-ratio:16/9;object-fit:contain;background:#080b10;display:block}.caption{display:block;padding:12px}dialog{width:min(1300px,96vw);max-height:95vh;padding:16px;border:1px solid #52647c;background:#10151d;color:inherit;border-radius:12px}dialog::backdrop{background:#000c}dialog img{width:100%;max-height:70vh;object-fit:contain;display:block}.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}.toolbar span{flex:1}.download{text-decoration:none}#detail{white-space:pre-wrap;font-size:13px}#empty{padding:32px;border:1px dashed #52647c}
-.frame{position:relative}#guide-lines{position:absolute;inset:0;pointer-events:none;background:linear-gradient(to right,transparent 33.1%,#fff8 33.2%,#fff8 33.4%,transparent 33.5%,transparent 66.4%,#fff8 66.5%,#fff8 66.7%,transparent 66.8%),linear-gradient(to bottom,transparent 33.1%,#fff8 33.2%,#fff8 33.4%,transparent 33.5%,transparent 66.4%,#fff8 66.5%,#fff8 66.7%,transparent 66.8%)}
-</style><header><h1>Apex circuit gallery</h1><p>Browse captured track views by circuit, camera, time and weather. Images stay uncropped.</p><div class="filters" id="filters"></div><div class="toolbar"><button id="select-view">Select visible</button><button id="export-plan">Export selected plan</button><button id="compare">Compare selected pair</button><span id="selection-count"></span></div><p id="count" role="status" aria-live="polite"></p></header><main><div id="grid"></div><p id="empty" hidden>No captures match these filters.</p></main>
-<dialog id="viewer" aria-labelledby="caption"><div class="toolbar"><button id="previous" aria-label="Previous image">←</button><button id="next" aria-label="Next image">→</button><span id="caption"></span><a class="download" id="download" download>Save image</a><button id="close">Close</button></div><label><input id="guides" type="checkbox">Framing thirds</label><div class="frame"><img id="full" alt=""><div id="guide-lines" hidden></div></div><p id="detail"></p></dialog>
-<dialog id="comparison" aria-label="Image comparison"><button id="compare-close">Close comparison</button><p id="compare-note"></p><div style="position:relative"><img id="compare-base" alt="First selected capture"><img id="compare-over" alt="Second selected capture" style="position:absolute;inset:0;height:100%;clip-path:inset(0 50% 0 0)"></div><label>Comparison split<input id="split" type="range" min="0" max="100" value="50"></label></dialog>
-<script type="application/json" id="manifest">${data}</script><script>
-(()=>{'use strict';
-const manifest=JSON.parse(document.getElementById('manifest').textContent), shots=manifest.shots;
-const byId=id=>document.getElementById(id), grid=byId('grid'), dialog=byId('viewer'), fields={};
-let visible=[], index=0, opener=null; const selected=new Set();
-function text(tag,value){const e=document.createElement(tag);e.textContent=value;return e;}
-function safeImage(value){if(typeof value==='string'&&/^data:image\\/(?:webp|png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(value))return value;try{const u=new URL(value,location.href);return ['http:','https:','file:'].includes(u.protocol)?u.href:'';}catch{return '';}}
-function caption(s){return [s.circuit,s.location,s.angle||s.sector,s.fraction!=null?'lap '+Math.round(s.fraction*100)+'%':'',s.tod,s.condition||s.weather].filter(Boolean).join(' · ');}
-for(const [key,label] of [['circuit','Circuit'],['location','Location'],['angle','Angle'],['sector','View'],['tod','Time'],['condition','Weather']]){
- const wrap=text('label',label), select=document.createElement('select');select.id=key+'-filter';
- select.append(new Option('All '+label.toLowerCase(),''));
- [...new Set(shots.map(s=>s[key]||'unknown'))].sort().forEach(v=>select.append(new Option(v,v)));
- wrap.append(select);byId('filters').append(wrap);fields[key]=select;select.addEventListener('change',render);
+// @doc Offline circuit gallery: pre-rendered captures, native circuit navigation and recipe downloads.
+const { escapeHtml: esc, screenshotCard, renderGallery } = require("../lib/screenshot-gallery.cjs");
+
+function planLink(shots, label) {
+  const names = new Set();
+  const jobs = shots.filter((s) => s.job).map((s, i) => {
+    const base = String(s.job.name || `capture-${i + 1}`).replace(/[^A-Za-z0-9._-]/g, "-").slice(0, 72) || "capture";
+    let name = base, suffix = 1;
+    while (names.has(name)) name = `${base}-${++suffix}`;
+    names.add(name);
+    return { ...s.job, name };
+  });
+  const links = [];
+  for (let offset = 0; offset < jobs.length; offset += 32) {
+    const part = offset / 32 + 1;
+    const href = "data:application/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ preset: "custom", label: "gallery", shots: jobs.slice(offset, offset + 32) }, null, 2));
+    const number = jobs.length > 32 ? ` ${part} of ${Math.ceil(jobs.length / 32)}` : "";
+    links.push(`<a href="${esc(href)}" download="capture-plan-${part}.json">${esc(label + number)}</a>`);
+  }
+  return links.join(" ");
 }
-const searchLabel=text('label','Search'),search=document.createElement('input');search.type='search';search.id='search';search.placeholder='Circuit, view, branch…';searchLabel.append(search);byId('filters').append(searchLabel);search.addEventListener('input',render);
-const reset=text('button','Reset');reset.type='button';byId('filters').append(reset);reset.onclick=()=>{Object.values(fields).forEach(e=>e.value='');search.value='';render();};
-function show(){const s=visible[index];byId('full').src=safeImage(s.web);byId('full').alt=caption(s);byId('caption').textContent=(index+1)+' / '+visible.length+' · '+caption(s);byId('download').href=safeImage(s.web);byId('detail').textContent=[s.input,s.branch?'Branch: '+s.branch:'Local capture',s.fraction!=null?'Lap fraction: '+s.fraction:'',s.renderer?'Renderer: '+JSON.stringify(s.renderer):'',s.job?'Camera recipe: '+JSON.stringify(s.job):'',s.timings?'Timing (ms): '+JSON.stringify(s.timings):'',s.sourceIdentity?'Source: '+JSON.stringify(s.sourceIdentity):''].filter(Boolean).join('\\n');byId('previous').disabled=byId('next').disabled=visible.length<2;}
-function move(delta){if(visible.length){index=(index+delta+visible.length)%visible.length;show();}}
-function render(){const query=search.value.trim().toLowerCase();visible=shots.filter(s=>Object.entries(fields).every(([key,e])=>!e.value||(s[key]||'unknown')===e.value)&&(!query||[caption(s),s.branch,s.input].join(' ').toLowerCase().includes(query)));grid.replaceChildren();
-visible.forEach((s,i)=>{const button=document.createElement('button');button.type='button';button.className='card';button.setAttribute('aria-label','Enlarge '+caption(s));const img=document.createElement('img');img.src=safeImage(s.thumb||s.web);img.alt='';img.loading='lazy';const cap=text('span',caption(s));cap.className='caption';button.append(img,cap);button.onclick=()=>{index=i;opener=button;show();dialog.showModal();byId('close').focus();};const tile=document.createElement('div');const choice=text('label','Select capture');const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=selected.has(s);checkbox.onchange=()=>{if(checkbox.checked)selected.add(s);else selected.delete(s);selectionCount();};choice.prepend(checkbox);tile.append(button,choice);grid.append(tile);});byId('count').textContent=visible.length+' of '+shots.length+' captures';byId('empty').hidden=visible.length!==0;}
-byId('guides').onchange=e=>byId('guide-lines').hidden=!e.target.checked;
-function selectionCount(){byId('selection-count').textContent=selected.size+' selected';}
-byId('select-view').onclick=()=>{visible.forEach(s=>selected.add(s));render();selectionCount();};
-byId('export-plan').onclick=()=>{const chosen=[...selected];if(!chosen.length||chosen.some(s=>!s.job)){byId('selection-count').textContent='Select captures with reproducible job metadata.';return;}if(new Set(chosen.map(s=>s.circuit)).size!==1){byId('selection-count').textContent='Export one circuit at a time.';return;}const shots=chosen.map((s,i)=>({...s.job,name:s.job.name||'selected-'+i}));const blob=new Blob([JSON.stringify({preset:'custom',label:'selected',shots},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='selected-plan.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-byId('compare').onclick=()=>{const pair=[...selected];if(pair.length!==2){byId('selection-count').textContent='Select exactly two captures.';return;}const framing=s=>JSON.stringify([s.circuit,s.fraction,s.camera,s.job?.az,s.job?.el,s.job?.dist,s.job?.h,s.job?.fov,s.job?.lat,s.job?.lookFrac,s.job?.target]);byId('compare-note').textContent=pair.map(caption).join(' ↔ ')+(pair.every(s=>s.job)&&framing(pair[0])===framing(pair[1])?' · Matching requested framing':' · Warning: different or incomplete framing; not a controlled comparison');byId('compare-base').src=safeImage(pair[0].web);byId('compare-over').src=safeImage(pair[1].web);byId('comparison').showModal();Promise.all([byId('compare-base').decode(),byId('compare-over').decode()]).then(()=>{const a=byId('compare-base'),b=byId('compare-over');if(a.naturalWidth!==b.naturalWidth||a.naturalHeight!==b.naturalHeight)byId('compare-note').textContent+=' · Warning: different image resolutions';}).catch(()=>{byId('compare-note').textContent+=' · Image failed to decode';});};
-byId('split').oninput=e=>byId('compare-over').style.clipPath='inset(0 '+(100-e.target.value)+'% 0 0)';byId('compare-close').onclick=()=>byId('comparison').close();
-byId('previous').onclick=()=>move(-1);byId('next').onclick=()=>move(1);byId('close').onclick=()=>dialog.close();dialog.addEventListener('close',()=>{byId('full').removeAttribute('src');if(opener?.isConnected)opener.focus();});dialog.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();move(e.key==='ArrowRight'?1:-1);}});dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});render();
-})();</script></html>`;
+
+function buildHtml(manifest) {
+  const circuits = new Map();
+  for (const shot of manifest.shots || []) {
+    const name = shot.circuit || "Unlabelled circuit";
+    if (!circuits.has(name)) circuits.set(name, []);
+    circuits.get(name).push(shot);
+  }
+  const groups = [...circuits].map(([title, shots]) => ({
+    title, description: `${shots.length} captures`, links: planLink(shots, "Download circuit capture plan"),
+    cards: shots.map((s) => screenshotCard({
+      title: [s.location, s.angle || s.sector, s.fraction != null ? `lap ${Math.round(s.fraction * 100)}%` : ""].filter(Boolean).join(" · ") || title,
+      caption: [s.tod, s.condition || s.weather, s.branch].filter(Boolean).join(" · "),
+      image: s.web || s.thumb,
+      metadata: { input: s.input, branch: s.branch, fraction: s.fraction, renderer: s.renderer, job: s.job, timings: s.timings, sourceIdentity: s.sourceIdentity },
+      links: planLink([s], "Download capture recipe"),
+    })),
+  }));
+  return renderGallery({ title: "Apex circuit gallery", summary: `${manifest.shots?.length || 0} captures across ${groups.length} circuits. Choose a circuit to browse its views.`, groups });
 }
 module.exports = { buildHtml };
