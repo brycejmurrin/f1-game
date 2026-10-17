@@ -18,7 +18,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { spawnSync } from "node:child_process";
 import {
-  ARMS, BOUND_SRC, DIAG_SRC, DRIVER_SRC, FACTS_SRC, FIXED_VIEW_SRC, GPU_ADAPTER_SRC, RAF_SRC, READY_SRC,
+  ARMS, BOUND_SRC, DIAG_SRC, DRIVER_SRC, NO_ROTATE_SRC, FACTS_SRC, FIXED_VIEW_SRC, GPU_ADAPTER_SRC, RAF_SRC, READY_SRC,
   RESET_FRAMES_SRC, SAMPLE_SRC, DEFAULT_URL, armSchedule, buildCapabilities, cadence, parseArms, pngStats, windowSummary,
 } from "./iphone-census-lib.mjs";
 
@@ -81,7 +81,7 @@ const phase = async (name, fn) => {
 async function waitReady(timeoutMs = 180000) {
   const end = Date.now() + timeoutMs;
   while (Date.now() < end) {
-    try { if (await run(READY_SRC)) return true; } catch (_) { /* page still loading */ }
+    try { if (await run(READY_SRC)) { await run(NO_ROTATE_SRC); return true; } } catch (_) { /* page still loading */ }
     await sleep(3000);
   }
   throw new Error("game did not answer __apex.info() in " + timeoutMs / 1000 + " s");
@@ -150,6 +150,11 @@ try {
   for (const { arm, round } of armSchedule(arms, rounds)) {
     const leg = { arm, round, label: ARMS[arm].label, expectBound: ARMS[arm].expectBound };
     res.ab.push(leg);
+    if (arm === "tlxgpu" && !(res.gpuAdapter && res.gpuAdapter.adapter)) {
+      leg.skipped = "this simulator has no WebGPU adapter (navigator.gpu exists, requestAdapter() = null): three's WebGPU pin falls back to its WebGL2 backend, so there is nothing distinct to measure. A real-device question.";
+      log("ab", arm, "r" + round, "SKIPPED:", leg.skipped);
+      continue;
+    }
     const ph = await phase(`ab-${arm}-r${round}`, async () => {
       await run(`const [set, del] = arguments; try { for (const k of del) localStorage.removeItem(k); for (const k of Object.keys(set)) localStorage.setItem(k, set[k]); sessionStorage.removeItem("apex26.gfxBound"); } catch (e) {} return true;`, ARMS[arm].set, ARMS[arm].del);
       await driver.get(URL_);

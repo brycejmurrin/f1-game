@@ -237,6 +237,18 @@ export const FIXED_VIEW_SRC = `
   const A = window.__apex;
   try { window.__icDrive && window.__icDrive.stop(); A.park(0.1); A.camera("chase"); A.snapCam(); return true; } catch (e) { return String(e && e.message); }`;
 
+/** The game pauses every race on a portrait coarse-pointer phone ("Race paused why=rotate-block",
+ *  js/game.js syncRotateBlocker) behind a dark ROTATE DEVICE overlay, and a simulator session starts
+ *  in portrait with no way to rotate it. Hiding the gate lets the race tick; the viewport stays
+ *  PORTRAIT and the summary says so. Run 5 (39030104339): LoopHealth ran, physState speed 0, p50 0. */
+export const NO_ROTATE_SRC = `
+  if (document.getElementById("ic-no-rotate")) return "present";
+  const st = document.createElement("style"); st.id = "ic-no-rotate";
+  st.textContent = "#rotate-device{display:none!important}";
+  document.head.appendChild(st);
+  try { window.dispatchEvent(new Event("resize")); } catch (_) {}
+  return "installed";`;
+
 /** Boot gate: the game answers and a race is loaded. */
 export const READY_SRC = `return !!(window.__apex && window.__apex.info && window.__apex.info().state);`;
 
@@ -314,6 +326,7 @@ export function verdict(res) {
     rows.push(["host", [res.device, "iOS " + (res.os || "?") + " SIMULATOR", "GL " + (facts.glRenderer || "?")].join(" / ") + (res.runner ? " on " + res.runner : "")]);
     rows.push(["userAgent", facts.ua]);
     rows.push(["DPR", String(facts.dpr)]);
+    if (facts.inner) rows.push(["viewport", `${facts.inner[0]}x${facts.inner[1]} CSS px, ${facts.inner[0] <= facts.inner[1] ? "PORTRAIT (the game's rotate-device gate is hidden by the harness so the race can tick; HUD layout is not the landscape one a player sees)" : "landscape"}`]);
     rows.push(["navigator.gpu", String(facts.hasNavigatorGpu) + (res.gpuAdapter ? " (adapter " + res.gpuAdapter.adapter + ", shader-f16 " + res.gpuAdapter.shaderF16 + ")" : "")]);
     const bs = facts.backendState;
     rows.push(["backendState", bs ? JSON.stringify(bs).slice(0, 240) : "null (TLX not bound)"]);
@@ -333,6 +346,7 @@ export function verdict(res) {
   const ab = (res && res.ab) || [];
   const byArm = {};
   for (const leg of ab) {
+    if (leg.skipped) { rows.push([`arm ${leg.arm} r${leg.round}`, "SKIPPED: " + leg.skipped]); continue; }
     (byArm[leg.arm] = byArm[leg.arm] || []).push(leg);
     if (leg.error) { bad.push(`arm ${leg.arm} round ${leg.round}: ${leg.error}`); continue; }
     if (leg.window == null || leg.window.p50 == null) bad.push(`arm ${leg.arm} round ${leg.round}: no frame p50`);

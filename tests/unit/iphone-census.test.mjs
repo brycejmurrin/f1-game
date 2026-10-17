@@ -147,7 +147,7 @@ test("SAMPLE_SRC reads perf, memState and tolerates Safari's missing performance
 });
 
 test("every in-page source is syntactically a function body", () => {
-  for (const k of ["FACTS_SRC", "GPU_ADAPTER_SRC", "RAF_SRC", "SAMPLE_SRC", "RESET_FRAMES_SRC", "DIAG_SRC", "DRIVER_SRC", "FIXED_VIEW_SRC", "READY_SRC", "BOUND_SRC"]) {
+  for (const k of ["FACTS_SRC", "GPU_ADAPTER_SRC", "RAF_SRC", "SAMPLE_SRC", "RESET_FRAMES_SRC", "DIAG_SRC", "NO_ROTATE_SRC", "DRIVER_SRC", "FIXED_VIEW_SRC", "READY_SRC", "BOUND_SRC"]) {
     assert.doesNotThrow(() => new Function(L[k]), k);
   }
 });
@@ -305,4 +305,25 @@ test("verdict: the per-arm page row carries the fallback log and visibility, so 
   assert.match(row[1], /"hidden":true/);
   assert.match(row[1], /Gfx\.bind fallback webgl2/);
   assert.match(row[1], /"hasTLX":false/);
+});
+
+test("NO_ROTATE_SRC hides the rotate-device gate once, and the gate is the id the game reads", () => {
+  const added = [];
+  const doc = { getElementById: (id) => added.find((e) => e.id === id) || null, createElement: () => ({}), head: { appendChild: (e) => added.push(e) } };
+  assert.equal(runProbe(L.NO_ROTATE_SRC, { document: doc, window: { dispatchEvent() {} }, Event: class {} }), "installed");
+  assert.match(added[0].textContent, /#rotate-device\{display:none!important\}/);
+  assert.equal(runProbe(L.NO_ROTATE_SRC, { document: doc, window: { dispatchEvent() {} }, Event: class {} }), "present");
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /\$\("rotate-device"\)/);
+  assert.match(game, /why=rotate-block|"rotate-block"/);
+});
+
+test("verdict: a skipped arm is a row, not a failure; the viewport row says PORTRAIT", () => {
+  const r = good();
+  r.facts.inner = [393, 700];
+  r.ab[1] = { arm: "tlxgpu", round: 1, skipped: "no WebGPU adapter" };
+  const v = L.verdict(r);
+  assert.deepEqual(v.bad, []);
+  assert.match(v.rows.find((x) => x[0] === "arm tlxgpu r1")[1], /SKIPPED: no WebGPU adapter/);
+  assert.match(v.rows.find((x) => x[0] === "viewport")[1], /393x700.*PORTRAIT/);
 });
