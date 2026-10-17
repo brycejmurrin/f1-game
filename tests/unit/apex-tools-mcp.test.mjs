@@ -492,6 +492,11 @@ test("apex_garage: open spawns garage-angles --serve; ops refuse until open; cal
   assert.ok(body.argv.some((a) => a.endsWith("garage-angles.mjs")), body.argv);
   assert.ok(body.argv.includes("--serve") && body.argv.includes("ferrari"), body.argv);
   assert.ok(!body.argv.includes("--url"));
+  const three = callCli("apex_garage", { op: "open", team: "ferrari", backend: "three", livery: "shipped", dryRun: true });
+  assert.equal(three.status, 0, three.stderr);
+  const threeArgv = JSON.parse(three.stdout).argv;
+  assert.equal(threeArgv[threeArgv.indexOf("--backend") + 1], "three");
+  assert.equal(threeArgv[threeArgv.indexOf("--livery") + 1], "shipped");
   const shot = callCli("apex_garage", { op: "shot", frame: "spineTop", design: { spineLogo: "wrap" }, name: "a", dryRun: true });
   assert.equal(shot.status, 0, shot.stderr);
   const cmd = JSON.parse(shot.stdout).command;

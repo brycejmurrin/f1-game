@@ -548,8 +548,9 @@ const CATALOG = [
       properties: {
         op: { type: "string", enum: ["open", "status", "team", "livery", "design", "frame", "shot", "diff", "sheet", "reload", "close"] },
         team: { type: "string", description: "Team id (open: the team to boot with; team: switch to it)." },
+        backend: { type: "string", enum: ["webgl2", "three"], description: "Renderer for op open (default webgl2)." },
         seat: { type: "number", description: "Driver seat 0/1 with op team." },
-        livery: { type: "string", description: "Catalog livery id." },
+        livery: { type: "string", description: "Catalog/custom livery id, or shipped for the team’s shipped selection." },
         design: { type: "object", description: "Liveries.FIELDS values (+ part.<cat>, driver, light.<knob>)." },
         base: { type: "string", description: "Catalog livery the design paints over." },
         frame: { description: "Station / alias / view name, or {view|station|cam, az, el, dist, target, lamp, zoom, pan, eye, look, clamp, crop}. az / el are RADIANS (el is clamped to the orbit's pitch range), dist is metres." },
@@ -2116,6 +2117,10 @@ function garageArgv(args) {
     "--team", String(args.team || "mclaren"),
     "--out", assertSafeOut(args.out || "artifacts/garage-session")];
   if (args.fast) argv.push("--fast");
+  if (args.backend != null) {
+    if (!["webgl2", "three"].includes(args.backend)) throw new Error("backend must be webgl2 or three");
+    argv.push("--backend", args.backend);
+  }
   if (args.livery) argv.push("--livery", String(args.livery));
   return argv;
 }
