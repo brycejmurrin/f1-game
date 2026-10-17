@@ -115,8 +115,9 @@ test("a FULL overflow spills into bounded spill jobs instead of skipping (PR #12
   // filled all MAX_OVERFLOW_SHARDS jobs, so dev-tools.spec.js (56 tests) was
   // skipped, ran nowhere, and red the verdict (remote-group 37665046433:
   // 74/74 pass). Reproduce: ~300 s routed fillers (fewer tests, so they sort
-  // first) fill the overflow to within less than dev-tools' 129 s, then
-  // dev-tools is the leftover.
+  // first) fill the overflow to within less than that spec's 129 s, then
+  // it is the leftover. dev-tools is a VM twin, so this packing fixture opts
+  // back in with includeTwinned — the twin skip is not what the spill leg tests.
   const dev = "tests/specs/dev-tools.spec.js";
   const all = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js"))
     .map((f) => "tests/specs/" + f);
@@ -131,7 +132,7 @@ test("a FULL overflow spills into bounded spill jobs instead of skipping (PR #12
     const db = { specs: { ...Object.fromEntries(fill.map((f) => [f, row(300, declaredTests(f))])),
       [dev]: row(129, declaredTests(dev)) } };
     const rank = () => 3;
-    return { db, r: fit([...fill, dev], DEFAULT_BUDGET_MIN, { db, rank, overflowShards: MAX_OVERFLOW_SHARDS, ...opts }) };
+    return { db, r: fit([...fill, dev], DEFAULT_BUDGET_MIN, { db, rank, overflowShards: MAX_OVERFLOW_SHARDS, includeTwinned: true, ...opts }) };
   };
   const secOf = (xs) => xs.reduce((n, x) => n + x.sec, 0);
   const devSec = 129;
@@ -216,7 +217,7 @@ test("terrain and ordinary parts leftovers use only spare over-budget capacity (
   const affected = new Set(oversized.map(([file]) => file));
   const rank = (file) => file === budgeted ? 0 : affected.has(file) ? 2 : 3;
   const plan = (overBudgetShards) => fit(rows.map(([file]) => file), DEFAULT_BUDGET_MIN,
-    { db, rank, overBudgetShards });
+    { db, rank, overBudgetShards, includeTwinned: true });
   assert.equal(maxDeclaredTimeout(terrain), SELECTED_GATE.perTestTimeoutSec * 1000);
   assert.equal(measuredCheap(terrain, db), true, "terrain remains eligible for the ordinary measured cut first");
   const full = plan(MAX_OVER_BUDGET_SHARDS);
@@ -263,7 +264,7 @@ test("terrain and ordinary parts leftovers use only spare over-budget capacity (
       : file === "tests/specs/dev-tools.spec.js" ? 495 : sec]), [parts, 70]];
   const ordinaryDb = dbFor(ordinaryRows);
   const ordinaryPlan = (overBudgetShards) => fit(ordinaryRows.map(([file]) => file), DEFAULT_BUDGET_MIN,
-    { db: ordinaryDb, rank: (file) => file === props ? 1 : rank(file), overBudgetShards });
+    { db: ordinaryDb, rank: (file) => file === props ? 1 : rank(file), overBudgetShards, includeTwinned: true });
   assert.equal(maxDeclaredTimeout(parts), 0, "this regression covers ordinary, not declared-slow, work");
   const ordinary = ordinaryPlan(MAX_OVER_BUDGET_SHARDS);
   assert.deepEqual(ordinary.skipped, []);
@@ -312,7 +313,7 @@ test("a saturated wide plan runs props-over-road and parts-physics without displ
   const affected = new Set(oversized.map(([file]) => file));
   const rank = (file) => file === budgeted ? 0 : affected.has(file) ? 2 : 3;
   const plan = (spillShards, overBudgetShards = MAX_OVER_BUDGET_SHARDS) => fit(rows.map(([file]) => file), DEFAULT_BUDGET_MIN,
-    { db, rank, spillShards, overBudgetShards });
+    { db, rank, spillShards, overBudgetShards, includeTwinned: true });
   const old = plan(2, 0); // Disable the later spare-pool fallback to isolate the original spill defect.
   assert.equal(old.oversize.length, MAX_OVERSIZE_SHARDS, "all oversize slots are occupied");
   assert.deepEqual(old.spill.map((s) => s.file).sort(), leftovers.slice(0, 4).map(([file]) => file).sort(),
