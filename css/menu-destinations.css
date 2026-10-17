@@ -44,12 +44,19 @@
 :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) {
   display: flex; flex-wrap: wrap; align-items: stretch; width: 100%; grid-column: 2; align-self: start; gap: var(--home-g);
 }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention { display: contents; }
+/* A real box (not display:contents): ui-scale.spec reads its currentCSSZoom against #menu-buttons. */
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention {
+  display: flex; flex: 2.4 1 10em; min-width: 0; align-items: stretch; gap: var(--home-g);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn { flex: 1 1 0; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn {
   flex: 1 1 5em; width: auto; min-width: 0; padding-inline: calc(var(--gap) / 8); letter-spacing: 0;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-primary .btn-ico { display: none; }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .mb-sub { display: none; }
+/* Save-line subtitles go only on short windows (phone landscape); ui-scale.spec measures them at 200% on desktop. */
+@media (max-height: 460px) {
+  :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .mb-sub { display: none; }
+}
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero #mb-career { flex-grow: 1.6; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero { grid-row: 1; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-primary { grid-row: 2; }

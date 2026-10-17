@@ -394,7 +394,7 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
   /* Row 2 col 1 under brand. #1537: height auto for 2-line labels; --tap floor stays. */
-  grid-column: 1; grid-row: 2; display: flex; flex-wrap: nowrap; align-items: stretch;
+  grid-column: 1; grid-row: 4; align-self: end; display: flex; flex-wrap: nowrap; align-items: stretch;
   gap: calc(var(--gap) * 0.15); min-height: var(--tap); height: auto; max-height: none;
   --balance-basis: 0%; --balance-min: 0%;
 }
