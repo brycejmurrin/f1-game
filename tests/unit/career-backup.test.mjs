@@ -225,6 +225,14 @@ test("hostile payloads are rejected with a reason and change nothing", () => {
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
       data: Object.assign(save({}), { driver: { name: "A", code: "YOU", num: {} } }) }] }, "driver-num"],
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0, data: [1, 2, 3] }] }, "slot-not-object"],
+    // Interpolated into the import card: a hostile toString threw inside the picker callback.
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { team: { toString: 1 } }) }] }, "team-not-string"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { year: "2026" }) }] }, "year-not-number"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { year: Infinity }) }] }, "year-not-number"],
+    [{ format: "apex26-career-backup-v1", slots: [], myTeam: { customTeam: { name: { toString: 1 } } } }, "custom-team-name"],
     // A driver career filed under a MY TEAM row (and the reverse) would load as
     // the wrong flavour in that slot set.
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "myteam", i: 2, data: save({ flavour: "driver" }) }] }, "flavour-mismatch"],
@@ -429,6 +437,16 @@ test("older backup keeps the Grand Prix stage after a zero-point sprint", () => 
     assert.equal(h.store.keyRevision("season"), revision);
     assert.equal(h.SeasonCal.stage(h.SeasonCal.load()), "race");
   }
+});
+
+test("seasonAhead compares the cleaned round: round 250 is 0, so a local round-5 season stays", () => {
+  const h = loadHarness();
+  const local = { round: 5, pts: {}, teamPts: {}, driverCodes: {} };
+  h.store.write("season", local);
+  const envelope = { format: "apex26-career-backup-v1", slots: [], season: { round: 250, pts: {}, teamPts: {}, driverCodes: {} } };
+  assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"));
+  assert.equal(h.CareerBackup.apply(envelope).applied.includes("season"), false);
+  assert.equal(h.store.get("season", null).round, 5);
 });
 
 test("sprint-stage preservation keeps paid-sprint and zero-point Grand Prix protection", () => {
@@ -1615,19 +1633,22 @@ test("import keeps the Daily per-class bests keyed by a JSON records context (#2
   assert.match(line, / · 80\.000/, "the share line shows the restored lap");
   assert.doesNotMatch(line, /NO LAP/);
 
-  // Hostile or oversized class keys still drop; excess valid classes reject.
+  // Hostile or oversized class keys still drop; valid native classes survive.
   const classes = { constructor: { best: 1, laps: 1 }, prototype: { best: 1, laps: 1 }, ["x".repeat(4097)]: { best: 1, laps: 1 } };
   for (let i = 0; i < 12; i++) classes[JSON.stringify({ car: ["c" + i] })] = { best: 70 + i, laps: 1 };
   const c = loadHarness();
   c.Career.load();
   const env2 = JSON.parse(JSON.stringify(envelope));
   env2.daily = { days: { "2026-10-15": { best: 70, laps: 12, classes } } };
-  const before = [...c.disk.entries()];
-  assert.equal(c.CareerBackup.apply(env2, { focusFlavour: "driver" }).reason, "daily-invalid");
-  assert.deepEqual([...c.disk.entries()], before, "over-limit history is refused without partial writes");
+  assert.equal(c.CareerBackup.apply(env2, { focusFlavour: "driver" }).ok, true);
+  const restoredClasses = JSON.parse(c.disk.get("apex26.daily.v1")).days["2026-10-15"].classes;
+  assert.equal(Object.keys(restoredClasses).length, 12);
+  assert.equal(Object.hasOwn(restoredClasses, "constructor"), false);
+  assert.equal(Object.hasOwn(restoredClasses, "prototype"), false);
+  assert.equal(Object.hasOwn(restoredClasses, "x".repeat(4097)), false);
 });
 
-test("native Daily backup round-trips 61 days of eight full records contexts", async () => {
+test("native Daily backup round-trips 61 days of nine full records contexts", async () => {
   const a = loadHarness();
   a.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 111 })));
   a.Career.load();
@@ -1638,7 +1659,7 @@ test("native Daily backup round-trips 61 days of eight full records contexts", a
   for (let day = 0; day < 61; day++) {
     const date = new Date(Date.UTC(2026, 7, 17 + day)).toISOString().slice(0, 10);
     daily.select(date, "open");
-    for (let bias = 0; bias < 8; bias++) {
+    for (let bias = 0; bias < 9; bias++) {
       daily.record(90 + bias, JSON.stringify({ car: ["mclaren"], config, brakeBias: (52 + bias * 0.5) / 100 }));
     }
   }
@@ -1654,7 +1675,7 @@ test("native Daily backup round-trips 61 days of eight full records contexts", a
   assert.equal(JSON.parse(b.disk.get("apex26.career.driver.0")).money, 111);
 });
 
-test("native export refuses over-limit Daily histories before downloading", async () => {
+test("native histories beyond the former class/day counts export without truncation", async () => {
   for (const manyDays of [false, true]) {
     const h = loadHarness();
     const days = {};
@@ -1663,14 +1684,93 @@ test("native export refuses over-limit Daily histories before downloading", asyn
       days[date] = { classes: Object.fromEntries(Array.from({ length: manyDays ? 1 : 9 }, (_, i) => [JSON.stringify({ bias: i }), { best: 90, laps: 1 }])) };
     }
     h.store.set("daily.v1", { days });
-    let downloads = 0;
-    h.ctx.document.createElement = () => { downloads++; return {}; };
-    assert.equal((await h.CareerBackup.exportAll()).reason, "daily-invalid");
-    assert.equal(downloads, 0);
+    const exported = await h.CareerBackup.exportAll();
+    assert.equal(exported.ok, true);
     const target = loadHarness();
-    const before = [...target.disk.entries()];
-    assert.equal(target.CareerBackup.apply(h.CareerBackup.build()).reason, "daily-invalid");
-    assert.deepEqual([...target.disk.entries()], before);
+    assert.equal(target.CareerBackup.apply(exported.envelope).ok, true);
+    assert.deepEqual(JSON.parse(target.disk.get("apex26.daily.v1")), { days });
+  }
+});
+
+test("Daily merge preserves nine classes and remains exportable", async () => {
+  const h = loadHarness();
+  fillSix(h);
+  const day = "2026-10-16", key = i => JSON.stringify({ bias: i });
+  const classes = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [key(i), { best: 90 + i, laps: 2 }]));
+  h.store.set("daily.v1", { days: { [day]: { best: 90, laps: 16, classes } } });
+  const envelope = h.CareerBackup.build();
+  envelope.daily = { days: { [day]: { best: 80, laps: 1, classes: {
+    [key(0)]: { best: 80, laps: 1 }, [key(8)]: { best: 100, laps: 1 },
+  } } } };
+  assert.equal(h.CareerBackup.validate(envelope).ok, true);
+  assert.equal(h.CareerBackup.apply(envelope).ok, true);
+  const merged = JSON.parse(h.disk.get("apex26.daily.v1"));
+  assert.equal(Object.keys(merged.days[day].classes).length, 9);
+  assert.deepEqual(merged.days[day].classes[key(0)], { best: 80, laps: 2 });
+  assert.equal(merged.days[day].laps, 16);
+  const exported = await h.CareerBackup.exportAll();
+  assert.equal(exported.ok, true);
+  const target = loadHarness();
+  assert.equal(target.CareerBackup.apply(JSON.parse(h.CareerBackup.serialize(exported.envelope))).ok, true);
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.daily.v1")), merged);
+});
+
+test("merging valid Daily histories preserves their entire day union", async () => {
+  const h = loadHarness();
+  const days = offset => Object.fromEntries(Array.from({ length: 120 }, (_, i) => [
+    new Date(Date.UTC(2026, 0, 1 + offset + i)).toISOString().slice(0, 10), { best: 80 + i, laps: 1 },
+  ]));
+  const mine = days(0), theirs = days(120);
+  h.store.set("daily.v1", { days: mine });
+  const envelope = h.CareerBackup.build();
+  envelope.daily = { days: theirs };
+  assert.equal(h.CareerBackup.apply(envelope).ok, true);
+  assert.deepEqual(JSON.parse(h.disk.get("apex26.daily.v1")).days, { ...mine, ...theirs });
+  assert.equal((await h.CareerBackup.exportAll()).ok, true);
+});
+
+test("over-budget Daily union rejects before career, selection or extra writes", () => {
+  const h = loadHarness();
+  fillSix(h);
+  const daily = offset => ({ days: { "2026-10-16": { classes: Object.fromEntries(
+    Array.from({ length: 900 }, (_, i) => [JSON.stringify({ id: i + offset, tune: "x".repeat(3000) }), { best: 90, laps: 1 }]),
+  ) } } });
+  h.store.set("daily.v1", daily(0));
+  const envelope = h.CareerBackup.build();
+  envelope.slots[0].data.money = 777;
+  envelope.daily = daily(900);
+  envelope.badges = { got: { pole: 100 } };
+  assert.equal(h.CareerBackup.validate(envelope).ok, true, "each input fits the file budget");
+  const before = [...h.disk.entries()];
+  const result = h.CareerBackup.apply(envelope, { liveSlot: "myteam:2" });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "daily-too-large");
+  assert.deepEqual([...h.disk.entries()], before, "failed preflight makes no partial restore");
+  assert.equal(h.CareerBackup.apply(envelope, { includeProgressExtras: false }).ok, true);
+  assert.deepEqual(JSON.parse(h.disk.get("apex26.daily.v1")), daily(0), "skipped Daily is not merged");
+});
+
+test("hostile local Daily is refused before a merge can disguise its keys", () => {
+  const h = loadHarness();
+  fillSix(h);
+  const envelope = h.CareerBackup.build();
+  envelope.daily = { days: { "2026-10-16": { best: 80, laps: 1 } } };
+  h.store.set("daily.v1", JSON.parse('{"days":{"__proto__":{"best":1}}}'));
+  const before = [...h.disk.entries()];
+  assert.equal(h.CareerBackup.apply(envelope).reason, "daily-hostile");
+  assert.deepEqual([...h.disk.entries()], before);
+  assert.equal(h.CareerBackup.apply(envelope, { includeExtras: false }).ok, true);
+});
+
+test("valid Daily import repairs non-object local history", () => {
+  for (const local of [1, "bad", []]) {
+    const h = loadHarness();
+    fillSix(h);
+    h.store.set("daily.v1", local);
+    const envelope = h.CareerBackup.build();
+    envelope.daily = { days: { "2026-10-16": { best: 80, laps: 1 } } };
+    assert.equal(h.CareerBackup.apply(envelope).ok, true);
+    assert.deepEqual(JSON.parse(h.disk.get("apex26.daily.v1")), envelope.daily);
   }
 });
 
@@ -1716,4 +1816,12 @@ for (const action of ["delete-arm", "delete-confirm", "close", "normal"]) test(`
   await Promise.resolve(); await Promise.resolve();
   const review = h.G.$("cr-left").querySelectorAll('[data-cr-act="import"]').some((button) => button.textContent === "IMPORT?");
   assert.equal(review, action === "normal", "abandoned file must not recreate an import review");
+});
+
+test("a {toString:1} version marker does not throw out of validate/apply", () => {
+  const h = loadHarness();
+  const payload = { format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 1,
+    data: Object.assign(save({}), { v: JSON.parse('{"toString":1}'), tally: { pts: JSON.parse('{"toString":1}') } }) }] };
+  assert.doesNotThrow(() => h.CareerBackup.validate(payload));
+  assert.doesNotThrow(() => h.CareerBackup.apply(payload, { otherFlavourConfirmed: true }));
 });

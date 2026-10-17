@@ -12,7 +12,7 @@ import path from "node:path";
 import {
   GUARDS_A, GUARDS_B, GUARDS_JOB,
   guardsVerdict, localVerdict, evaluate, shaPrefixMatch, stampReadySha, newestByName,
-  planVerdict, withPlan, resolveSha,
+  planVerdict, withPlan, resolveSha, verdictLine,
 } from "../../tools/ci/ready-gate.mjs";
 
 const run = (name, status, conclusion, id = 1) => ({
@@ -355,4 +355,9 @@ test("planVerdict: [~] and Deferred: items count as closed (#2397)", () => {
   const open = planVerdict("## Plan\n- [~] later\n- [ ] still todo\n- [ ] Deferred-ish not closed\n");
   assert.equal(open.state, "open");
   assert.deepEqual(open.open, ["still todo", "Deferred-ish not closed"]);
+});
+
+test("#2430: the verdict line carries the FULL 40-char sha a merge call needs", () => {
+  const sha = "4dc3d6226176b48601a9e9cb0612989cc7ec916b";
+  assert.match(verdictLine({ state: "passed", evidence: "ok", sha, source: "ci" }), /^= ready-gate passed — ok sha=[0-9a-f]{40} source=ci$/);
 });

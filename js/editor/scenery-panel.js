@@ -5,10 +5,11 @@ const DesignerScenery = (function () {
   "use strict";
   const CATEGORIES = Object.freeze({
     all: null,
-    nature: ["parkland", "alpine", "autumn", "tuscany", "savanna", "ardennes", "winter", "jungle", "lakeside", "moorland", "vineyard", "blossom", "volcanic"],
-    coast: ["harbour", "marina", "coast", "twilight", "lakeside", "shipyard", "island", "volcanic"],
+    nature: ["parkland", "alpine", "autumn", "tuscany", "savanna", "ardennes", "winter", "jungle", "lakeside", "moorland", "vineyard", "blossom", "volcanic", "fjord", "redwood"],
+    coast: ["harbour", "marina", "coast", "twilight", "lakeside", "shipyard", "island", "volcanic", "fjord"],
+    mountain: ["alpine", "winter", "canyon", "volcanic", "fjord", "redwood"],
     city: ["harbour", "marina", "tilke", "airfield", "metropolis", "shipyard", "stadium"],
-    desert: ["oasis", "desertnight", "canyon", "saltflat"],
+    desert: ["oasis", "desertnight", "canyon", "saltflat", "badlands"],
     night: ["desertnight", "marina", "twilight", "stadium"],
   });
   const PRESETS = Object.freeze({
@@ -35,9 +36,12 @@ const DesignerScenery = (function () {
     const gaps = Object.assign({}, TrackDesignerProps.DEFAULT_GAP);
     const summary = el("div", "td-group"); summary.dataset.role = "theme-summary";
     const activeName = el("div", "td-label");
+    const lookSummary = el("div", "td-hint"); lookSummary.dataset.role = "look-summary";
+    const resetLook = btn("RESET ATMOSPHERE", "sel-chip", () => onPreset("default"));
+    resetLook.setAttribute("aria-label", "Reset time of day, trees and crowd to theme defaults");
     const blurb = el("div", "td-hint"); blurb.dataset.role = "theme-blurb";
     blurb.setAttribute("aria-live", "polite");
-    summary.append(activeName, blurb);
+    summary.append(activeName, lookSummary, resetLook, blurb);
     const searchRow = el("div", "td-chips"); searchRow.dataset.role = "theme-search";
     const search = el("input", "td-input"); search.type = "search";
     search.placeholder = "Find a theme…"; search.setAttribute("aria-label", "Find a scenery theme");
@@ -103,19 +107,24 @@ const DesignerScenery = (function () {
     const library = group("1 · CHOOSE AN OBJECT"); library.dataset.role = "object-library";
     const objectFilters = el("div", "td-chips"); objectFilters.dataset.role = "object-filters";
     objectFilters.setAttribute("role", "group"); objectFilters.setAttribute("aria-label", "Object categories");
-    const waterKinds = ["water", "pond", "lake", "river"];
-    const nature = ["trees", "palms", "hedge", "pines", "bushes", ...waterKinds];
+    const objectSearch = el("input", "td-input"); objectSearch.type = "search";
+    objectSearch.placeholder = "Find an object…"; objectSearch.setAttribute("aria-label", "Find a scenery object");
+    const objectCount = el("div", "td-hint"); objectCount.setAttribute("role", "status"); objectCount.dataset.role = "object-results";
     function filterObjects() {
       for (const b of objectFilters.children) pressed(b, b.dataset.objectCategory === objectCategory);
+      const query = objectSearch.value.trim().toLowerCase(); let n = 0;
       for (const b of props.children) {
-        const kind = b.dataset.prop;
-        b.hidden = objectCategory === "water" ? !waterKinds.includes(kind) : objectCategory !== "all" && (nature.includes(kind) ? "nature" : "venue") !== objectCategory;
+        const kind = b.dataset.prop, text = TrackDesignerProps.LABELS[kind] + " " + TrackDesignerProps.DESCRIPTIONS[kind];
+        b.hidden = (objectCategory !== "all" && !TrackDesignerProps.CATEGORIES[objectCategory].includes(kind)) || !text.toLowerCase().includes(query);
+        if (!b.hidden) n++;
       }
+      objectCount.textContent = n ? n + " objects" : "No objects found. Try another search or category.";
     }
-    for (const [id, label] of [["all", "ALL"], ["nature", "NATURE"], ["water", "WATER"], ["venue", "RACE VENUE"]]) {
+    for (const [id, label] of [["all", "ALL"], ["nature", "NATURE"], ["terrain", "TERRAIN"], ["water", "WATER"], ["venue", "RACE VENUE"]]) {
       const b = btn(label, "sel-chip", () => { objectCategory = id; filterObjects(); });
       b.dataset.objectCategory = id; objectFilters.appendChild(b);
     }
+    objectSearch.addEventListener("input", filterObjects);
     const props = el("div", "td-chips"); props.dataset.role = "props";
     props.setAttribute("role", "group"); props.setAttribute("aria-label", "Scenery props");
     for (const id of TrackDesignerProps.KINDS) {
@@ -123,7 +132,7 @@ const DesignerScenery = (function () {
     }
     const selectedObject = el("div", "td-hint"); selectedObject.dataset.role = "selected-object";
     selectedObject.setAttribute("role", "status");
-    library.append(objectFilters, props);
+    library.append(objectSearch, objectFilters, props, objectCount);
     const placementGroup = group("2 · PLACE OBJECTS"); placementGroup.dataset.role = "object-placement";
     const sides = el("div", "td-chips"); sides.dataset.role = "prop-side";
     sides.setAttribute("role", "group"); sides.setAttribute("aria-label", "Track side in driving direction");
@@ -198,11 +207,16 @@ const DesignerScenery = (function () {
     placementGroup.append(selectedObject, placement, target, sides, gap, hint, actions);
     propsGroup.append(library, placementGroup, placedGroup);
     const panels = { themes: themePanel, atmosphere, objects: propsGroup };
+    const scrollPositions = new Map();
     function showSection(id) {
+      const rail = root.closest(".td-rail");
+      if (rail) scrollPositions.set(section, rail.scrollTop);
       section = panels[id] ? id : "themes";
       blurb.hidden = section !== "themes";
       for (const [key, panel] of Object.entries(panels)) panel.hidden = key !== section;
       for (const b of nav.children) { const on = b.dataset.scenerySection === section; pressed(b, on); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; }
+      const target = section;
+      if (rail) rail.scrollTop = scrollPositions.get(target) || 0;
     }
     for (const [id, panel] of Object.entries(panels)) {
       const b = btn(id.toUpperCase(), "sel-chip", () => showSection(id)); b.dataset.scenerySection = id;
@@ -239,6 +253,7 @@ const DesignerScenery = (function () {
       for (const key of Object.keys(lookRows)) for (const b of lookRows[key].children) if (b.dataset.look) pressed(b, b.dataset.look === key + ":" + look[key]);
       for (const b of presets.children) pressed(b, LOOK_ROWS.every(([key]) => PRESETS[b.dataset.preset][key] === look[key]));
       const c = TrackDesignerProps.counts(d.props);
+      lookSummary.textContent = look.time.toUpperCase() + " · TREES " + look.trees.toUpperCase() + " · CROWD " + look.crowd.toUpperCase() + " · " + c.total + "/" + TrackDesignerProps.TOTAL + " OBJECTS";
       selectedObject.textContent = TrackDesignerProps.LABELS[kind] + " · " + TrackDesignerProps.DESCRIPTIONS[kind];
       empty.hidden = c.total > 0;
       rangeActions.hidden = placementMode !== "range"; swap.disabled = state.sel < 0 || state.span < 0 || state.sel === state.span;
@@ -268,6 +283,7 @@ const DesignerScenery = (function () {
       if (range) hint.textContent = "Even spacing from start to end in driving order. Earlier end points cross the start line. " + amount + " objects · " + room + " slots left.";
       if (amount > room) hint.textContent += " Reduce positions or choose one side to fit the limit.";
       if (range && state.span < 0) hint.textContent += " Choose an end point first.";
+      if (TrackDesignerProps.CATEGORIES.terrain.includes(kind) || TrackDesignerProps.CATEGORIES.water.includes(kind)) hint.textContent += " Landscape objects that overlap the road are hidden. Use an open area or increase the gap. Terrain objects decorate the ground without changing road elevation.";
       remove.disabled = !c[kind];
       const key = JSON.stringify(d.props || []);
       if (key !== lastProps) {

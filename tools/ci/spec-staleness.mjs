@@ -59,6 +59,12 @@ import { select } from "./select-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log("usage: node tools/ci/spec-staleness.mjs [--days N] [--top N] [--json]\n"
+    + "  Replays select-specs over recent history (minutes) and ranks tests/specs by time since CI last selected one.\n"
+    + "  --help: this text; the replay does not start.");
+  process.exit(0);
+}
 const flag = (name, dflt) => {
   const i = argv.indexOf(name);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;

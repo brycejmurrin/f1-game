@@ -293,6 +293,7 @@ async function precacheAssetLists() {
     "js/render/webgpu/wgx-shadow.js",
     "js/render/webgpu/wgx-chunked.js",
     "js/render/webgpu/wgx-post.js",
+    "js/render/webgpu/wgx-roadlut.js",
     "js/render/webgpu/wgx.js",
     "js/render/three/tsl-chunks.js",
     "js/render/three/tsl-lit.js",
@@ -436,10 +437,12 @@ async function precacheAssetLists() {
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
+    "js/track/scenery/guards.js",
     "js/track/scenery/build-props.js",
     // LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start
     "js/audio/signal.js",
     "js/audio/soundtrack.js",
+    "js/audio/race-mix-audition.js",
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
     "js/audio/ers-layer.js",
@@ -450,6 +453,7 @@ async function precacheAssetLists() {
     "js/audio/crowd.js",
     "js/audio/car-sfx.js",
     "js/audio/voice-pack.js",
+    "js/audio/battle-earcon.js",
     "js/audio/radio-voice.js",
     "js/audio/announcer-recorded.js",
     "js/audio/announcer.js",
@@ -481,6 +485,7 @@ async function precacheAssetLists() {
     "js/net/transport.js",
     "js/net/handshake.js",
     "js/net/lobby-codes.js",
+    "js/net/lobby-roster.js",
     "js/net/snapshot.js",
     "js/net/session.js",
     "js/net/netplay.js",
@@ -505,6 +510,7 @@ async function precacheAssetLists() {
     "js/editor/followup-tools.js",
     "js/editor/scenery-panel.js",
     "js/editor/bridge-panel.js",
+    "js/editor/workspace.js",
     "js/editor/designer.js",
     // LAZY_XR — WebXR session behind navigator.xr / ENTER VR
     "js/xr/xr-plan.js",
@@ -562,7 +568,7 @@ async function precacheAssetLists() {
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
-  const LAZY_AGENT = ["js/agent/agentview-raster.js","js/agent/agentview.js","js/agent/apex.js"];
+  const LAZY_AGENT = ["js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex.js"];
   // /@gen-shell:sw-lazy-agent
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);

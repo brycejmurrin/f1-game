@@ -748,6 +748,14 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   min-height: var(--tap-paint); padding: calc(var(--gap) / 3) calc(var(--gap) / 6);
   font-size: var(--fs-micro);
 }
+/* The six-column editor row is comfortable on the desktop dock, but a compact
+   rail can leave the operations strip only a few hundred local pixels wide.
+   At that width DOWN › and NORM overflow their equal grid cells while the
+   parent clips horizontal overflow. Two rows preserve the readable labels and
+   the full tap target; the desktop six-column layout above is unchanged. */
+#flyby-inner[data-density="compact"] #fb-ops {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 /* Static foot: sticky was covering the shot strip on short docks (the same
    rail-off compact move lighting/camera already make). */
 #flyby-inner[data-density="compact"] > .sheet-foot {
@@ -1029,7 +1037,7 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
      fits two actions, then grows the final DONE action across the last line. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] > .sheet-foot {
     grid-column: 1; grid-row: 2;
-    display: flex; flex-wrap: wrap;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     --balance-basis: 5.5rem; --balance-min: 5rem;
     margin-top: 0; gap: 5px; padding: 6px 0 0;
   }
@@ -1042,6 +1050,7 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
        intent of the 0 was to let the buttons shrink in the rail, and they still
        do: --tap-min only floors the axis a thumb needs. */
     padding: 5px 6px; font-size: var(--fs-micro); min-height: var(--tap-min);
+    white-space: normal; line-height: 1.1;
   }
   /* chips wrap as a block in the rail rather than the short-panel scroll strip */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-tabs {
@@ -1383,6 +1392,15 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
   }
 }
 
+@layer components {
+@media (max-width: 900px) and (max-height: 500px) {
+  :is(#lighting-inner, #camtune-inner) > .sheet-foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :is(#lighting-inner, #camtune-inner) > .sheet-foot button { min-width: 0; white-space: normal; line-height: 1.1; }
+}
+}
+
+
+
 /* ---------- UI Fit r6: lighting over flyby stacked dock (#lighting / #lt-*) ----------
    Survey rank 5: both inners are position:fixed to the same insets, so on a
    short landscape dock they paint on top of each other and #lt-rows is
@@ -1431,4 +1449,41 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
 /* GARAGE ANGLE's plan of the bay (js/garage/arrival.js angleMap): under the
    selector, the chosen eye lit. currentColor so it follows the panel's ink. */
 #ga-angle-map { display: block; width: 100%; max-width: 168px; margin-top: var(--gap); color: var(--text); }
+}
+
+@layer components {
+/* Shared workspace furniture: domain previews and Escape remain unchanged. */
+:is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view] {
+  display: flex; flex-direction: column; gap: calc(var(--gap) * .5);
+  --ew-tap: max(44px, calc(44px / var(--sheet-eff-scale, var(--ui-scale, 1))));
+}
+.editor-workspace .ew-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * .7); flex: 0 0 auto; }
+.editor-workspace :is(#ct-head, #ga-head, #lt-head h2, #fb-head h2) { display: none; }
+.editor-workspace .ew-title { font: inherit; font-weight: 800; margin: 0; flex: 1; min-width: 0; }
+.editor-workspace .ew-toolbar button, .editor-workspace .ew-tools > summary {
+  min-height: var(--ew-tap); min-width: var(--ew-tap); touch-action: manipulation;
+}
+.editor-workspace .ew-note { margin: 0; color: var(--dim); font-size: var(--fs-micro); flex: 0 0 auto; }
+.editor-workspace .ew-tools { display: contents; }
+.editor-workspace .ew-tools > summary { display: none; cursor: pointer; align-content: center; }
+:is(#lighting-inner, #camtune-inner, #flyby-inner).editor-workspace[data-editor-view] :is(#lt-rail, #ct-rail, #fb-rail) {
+  display: flex; flex-direction: column; max-height: none; overflow: visible;
+}
+:is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view="preview"] {
+  bottom: auto; max-height: calc(100% - var(--sat) - var(--sab) - 16px);
+}
+:is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view="preview"] > :not(.ew-toolbar):not(.sheet-foot) { display: none; }
+.editor-workspace[data-editor-view="preview"] > .sheet-foot > :not(#lt-close):not(#ct-close):not(#fb-close):not(#ga-close) { display: none; }
+@media (max-height: 620px), (max-width: 600px) {
+  :is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view] { overflow: hidden; }
+  .editor-workspace .ew-tools { display: block; flex: 0 0 auto; }
+  .editor-workspace .ew-tools > summary { display: list-item; list-style: disclosure-closed inside; }
+  .editor-workspace .ew-tools[open] > summary { list-style-type: disclosure-open; }
+  .editor-workspace .ew-tools[open] { max-height: 35%; overflow-y: auto; overscroll-behavior-y: contain; }
+  :is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view] :is(#lt-rows, #ct-rows, #fb-rows, #ga-rows) {
+    flex: 1 1 auto; min-height: var(--ew-tap); max-height: none; overflow-y: auto; overscroll-behavior-y: contain;
+  }
+  :is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view] :is(button, select, summary, input:not([type="hidden"])) { min-height: var(--ew-tap); }
+  .editor-workspace > .sheet-foot { background: var(--plate); }
+}
 }

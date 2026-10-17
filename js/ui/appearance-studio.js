@@ -31,9 +31,13 @@ const AppearanceStudio = (function () {
   // motion is NULLABLE: unset = follow the OS / touch auto comfort (CamComfort,
   // TitleFx); an explicit "on" would override both, so the Studio never pins it.
   const VISUAL_KEYS = Object.freeze(Object.keys(DEFAULTS));
+  // Cosmetic presets must not replace readability, comfort or unit preferences.
+  const PRESET_PRESERVE = ["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits"];
   const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups" };
   const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
-    career: ["lookCareer"], race: ["lookRace"], hud: ["hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
+    pause: ["lookPause"], datahub: ["lookDatahub"], select: ["lookSelect"],
+    career: ["lookCareer"], race: ["lookRace"], garage: ["lookGarage"],
+    hud: ["hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
     popups: ["lookPopups"] });
   const PRESETS = Object.freeze([
     { id: "classic", name: "CLASSIC", note: "Original motorsport style", values: { homeScene: "static" } },
@@ -114,7 +118,9 @@ const AppearanceStudio = (function () {
   }
   function applyPreset(id, chosenScope = scope) {
     const p = PRESETS.find((v) => v.id === id); if (!p) return false;
-    const result = applySnapshot(Object.assign({}, DEFAULTS, p.values), { scope: chosenScope });
+    const current = snapshot(), next = Object.assign({}, DEFAULTS, p.values);
+    for (const key of PRESET_PRESERVE) next[key] = current[key];
+    const result = applySnapshot(next, { scope: chosenScope });
     activePreset = id; render(); say(p.name + " applied to " + (chosenScope === "screen" ? pageLabel() : "all visual settings") + (result.durable ? "." : " for this session; browser storage is unavailable.")); return true;
   }
   function setScene(mode, motion) {
@@ -143,19 +149,23 @@ const AppearanceStudio = (function () {
     const row = { id: newId, name: label, values: snapshot() }; if (at < 0) rows.push(row); else rows[at] = row;
     selectedProfile = newId; return writeProfiles(rows);
   }
-  function loadProfile(id) { const p = profiles().find((r) => r.id === id); if (!p) return false; selectedProfile = id; const result = applySnapshot(p.values); say(p.name + " applied to all visual settings" + durabilityNote(result)); return true; }
+  function loadProfile(id, chosenScope = scope) { const p = profiles().find((r) => r.id === id); if (!p) return false; selectedProfile = id; const result = applySnapshot(p.values, { scope: chosenScope }); say(p.name + " applied to " + (chosenScope === "screen" ? pageLabel() : "all visual settings") + durabilityNote(result)); return true; }
   function deleteProfile(id) { const rows = profiles(); if (!rows.some((p) => p.id === id)) return false; selectedProfile = ""; const result = writeProfiles(rows.filter((p) => p.id !== id)); say(result.durable ? "Profile deleted. Your current appearance stays in place." : "Profile deleted for this session. Browser storage could not save that change for your next visit."); return true; }
   function attach(value) { hooks = value || {}; invoke("applyVisuals", snapshot()); sceneChanged(); }
   function setPreviewFrame(url) {
     if (!ui || typeof url !== "string" || !/^(data:image\/(png|jpeg|webp);base64,|blob:)/.test(url)) return false;
     ui.preview.style.setProperty("--studio-scene-image", 'url("' + url.replace(/["\\\n\r]/g, "") + '")'); return true;
   }
-  const pageLabel = () => ({ home: "Home", career: "Career", race: "Race Setup", hud: "HUD", popups: "Popup" })[previewPage];
+  const pageLabel = () => ({ home: "Home", pause: "Pause Menu", datahub: "Data Hub", select: "Track Selector", career: "Career", race: "Race Setup", garage: "Garage", hud: "HUD", popups: "Popup" })[previewPage];
   function node(tag, cls, text) { const e = document.createElement(tag); if (cls) e.dataset.as = cls.replace(/^as-/, ""); if (text != null) e.textContent = text; return e; }
   function button(text, fn, cls) { const e = node("button", cls, text); e.type = "button"; e.addEventListener("click", fn); return e; }
   function group(host, title) { const box = node("section", "as-box"); box.appendChild(node("h3", "as-heading", title)); host.appendChild(box); return box; }
   function choice(host, label, key, values) {
     const row = node("div", "as-row"), text = node("span", "as-label", label), controls = node("div", "as-segment");
+    // Stable search target for Settings › FIND A SETTING.  The studio is
+    // built lazily, so the search descriptor is registered after this DOM
+    // exists rather than pointing at an absent static shell node.
+    controls.id = "as-" + key;
     const list = []; controls.setAttribute("role", "group"); controls.setAttribute("aria-label", label);
     for (const [id, name] of values) { const b = button(name, () => { const v = snapshot(); v[key] = id; applySnapshot(v); }); controls.appendChild(b); list.push({ id, b }); }
     row.append(text, controls); host.appendChild(row); ui.choices.push({ key, list }); return row;
@@ -167,6 +177,7 @@ const AppearanceStudio = (function () {
   }
   function range(host, label, key, lo, hi) {
     const row = node("label", "as-row"), name = node("span", "as-label", label), input = node("input"), out = node("output"); input.type = "range"; input.min = lo; input.max = hi; input.step = .25; input.setAttribute("aria-label", label);
+    input.id = "as-" + key;
     let before = null; input.addEventListener("pointerdown", () => { before = snapshot(); });
     input.addEventListener("keydown", (e) => {
       // Keyboard and assistive-tech changes do not produce pointerdown. Keep
@@ -184,13 +195,17 @@ const AppearanceStudio = (function () {
     if (previewPage === "home") { for (const name of ["RACE", "WATCH", "GARAGE", "SETTINGS"]) plate.appendChild(node("div", "as-preview-door", name)); }
     else if (previewPage === "career") { plate.append(node("h3", "", "DRIVER CAREER"), node("p", "", "NEXT RACE · MONZA"), node("div", "as-preview-door", "CONTINUE WEEKEND"), node("p", "", "DEVELOPMENT     TEAM     SEASON")); }
     else if (previewPage === "race") { plate.append(node("h3", "", "RACE SETTINGS"), node("p", "", "MONZA · GRAND PRIX")); for (const name of ["WEEKEND     RACE", "WEATHER     DRY", "LAPS     12", "START RACE"]) plate.appendChild(node("div", "as-preview-door", name)); }
+    else if (previewPage === "pause") { plate.append(node("h3", "", "PAUSED")); for (const name of ["RESUME", "RESTART", "SETTINGS", "QUIT"]) plate.appendChild(node("div", "as-preview-door", name)); }
+    else if (previewPage === "datahub") { plate.append(node("h3", "", "F1 DATA HUB"), node("p", "", "LAP ANALYSIS     TYRES     TELEMETRY")); for (const name of ["SECTOR TIMES", "SPEED TRACE", "RACE PACE"]) plate.appendChild(node("div", "as-preview-door", name)); }
+    else if (previewPage === "select") { plate.append(node("h3", "", "TRACK SELECTOR"), node("p", "", "CLASSICS     SEASON")); for (const name of ["MONZA", "SUZUKA", "MONACO"]) plate.appendChild(node("div", "as-preview-door", name)); }
+    else if (previewPage === "garage") { plate.append(node("h3", "", "GARAGE"), node("p", "", "CAR SETUP")); for (const name of ["ENGINE", "AERO", "CHASSIS", "LIVERY"]) plate.appendChild(node("div", "as-preview-door", name)); }
     else if (previewPage === "hud") {
       plate.append(node("h3", "", s.hudProfile.toUpperCase() + " HUD"), node("div", "as-preview-door", "P3     LAP 4 / 12"), node("div", "as-preview-speed", "287 " + (s.speedUnits === "mph" ? "KM/H → 178 MPH" : "KM/H")));
       if (s.hudGapsVis !== "off" && s.hudProfile !== "minimal") plate.appendChild(node("p", "", "P2 NOR +1.2     P4 LEC −0.8"));
       if (s.hudMetricsLayout !== "compact") plate.appendChild(node("p", "", s.hudMetricsLayout === "timing" ? "S1 28.412     S2 31.090" : "TYRES 82%     ENERGY 64%"));
     } else { plate.append(node("h3", "", "RACE RESULTS")); for (const name of ["1   NORRIS", "2   VERSTAPPEN", "3   YOU · +8 POSITIONS"]) plate.appendChild(node("div", "as-preview-door", name)); plate.appendChild(node("p", "", "CONTINUE")); }
     body.appendChild(plate); body.dataset.screen = previewPage;
-    const lookKey = ({ career: "lookCareer", race: "lookRace", popups: "lookPopups" })[previewPage], look = lookKey && s[lookKey];
+    const lookKey = ({ pause: "lookPause", datahub: "lookDatahub", select: "lookSelect", career: "lookCareer", race: "lookRace", garage: "lookGarage", popups: "lookPopups" })[previewPage], look = lookKey && s[lookKey];
     plate.style.borderRadius = look && look.corners === "sharp" ? "0" : look && look.corners === "pill" ? "var(--r-lg)" : "var(--r-md)";
     plate.style.textAlign = look && look.head === "centre" ? "center" : "left";
     plate.style.setProperty("--preview-density", look && look.density === "tight" ? ".7" : look && look.density === "roomy" ? "1.3" : "1");
@@ -210,7 +225,7 @@ const AppearanceStudio = (function () {
     ui.previewWrap.dataset.shape = previewShape;
     ui.undo.disabled = !undoStack.length; ui.delete.disabled = !selectedProfile; ui.load.disabled = !selectedProfile;
     ui.scopeGlobal.setAttribute("aria-pressed", String(scope === "global")); ui.scopeScreen.setAttribute("aria-pressed", String(scope === "screen"));
-    ui.scopeNote.textContent = scope === "global" ? "Presets and reset apply across menus, HUD and scene. Driving settings stay as they are." : "Presets and reset affect " + pageLabel() + " only. Global colours and other screens stay as they are.";
+    ui.scopeNote.textContent = scope === "global" ? "Presets, profile application and reset apply across menus, HUD and scene. Presets preserve accessibility and units; profiles and reset include them." : "Presets, profile application and reset affect " + pageLabel() + " only. Global colours and other screens stay as they are.";
     const rows = profiles(); ui.profileSelect.replaceChildren(); const empty = node("option", "", "New profile"); empty.value = ""; ui.profileSelect.appendChild(empty);
     for (const row of rows) { const opt = node("option", "", row.name); opt.value = row.id; ui.profileSelect.appendChild(opt); }
     ui.profileSelect.value = selectedProfile;
@@ -273,14 +288,14 @@ const AppearanceStudio = (function () {
     ui = { choices: [], colours: [], ranges: [], presets: [], pages: [], shapes: [] };
     const studio = node("div", "as-studio"), controls = node("div", "as-controls"), previewSide = node("section", "as-preview-side");
     studio.id = "appearance-studio"; studio.append(controls, previewSide); panel.prepend(studio); panel.dataset.appearanceStudio = "on";
-    const gallery = group(controls, "PREVIEW PRESET"), presets = node("div", "as-preset-list"); gallery.appendChild(presets);
+    const gallery = group(controls, "APPLY APPEARANCE PRESET"), presets = node("div", "as-preset-list"); gallery.appendChild(presets);
     for (const p of PRESETS) { const b = button("", () => applyPreset(p.id)); b.dataset.preset = p.id; b.append(node("span", "as-preset-art"), node("strong", "", p.name)); b.title = p.note; presets.appendChild(b); ui.presets.push({ id: p.id, b }); }
     const profile = group(controls, "APPEARANCE PROFILE"), names = node("div", "as-profile-row"); ui.profileSelect = node("select"); ui.profileSelect.setAttribute("aria-label", "Saved appearance profiles"); ui.name = node("input"); ui.name.type = "text"; ui.name.maxLength = 40; ui.name.placeholder = "Name your appearance"; ui.name.setAttribute("aria-label", "Appearance profile name");
     ui.profileSelect.addEventListener("change", () => { selectedProfile = ui.profileSelect.value; const p = profiles().find((r) => r.id === selectedProfile); ui.name.value = p ? p.name : ""; render(); });
-    ui.load = button("APPLY", () => loadProfile(selectedProfile)); const save = button("SAVE PROFILE", () => saveProfile(ui.name.value, selectedProfile)); const newProfile = button("SAVE AS NEW", () => saveProfile(ui.name.value)); ui.delete = button("DELETE", () => deleteProfile(selectedProfile)); names.append(ui.profileSelect, ui.name, ui.load, save, newProfile, ui.delete); profile.appendChild(names);
+    ui.load = button("APPLY PROFILE", () => loadProfile(selectedProfile)); const save = button("SAVE PROFILE", () => saveProfile(ui.name.value, selectedProfile)); const newProfile = button("SAVE AS NEW", () => saveProfile(ui.name.value)); ui.delete = button("DELETE", () => deleteProfile(selectedProfile)); names.append(ui.profileSelect, ui.name, ui.load, save, newProfile, ui.delete); profile.appendChild(names);
     const scopeRow = node("div", "as-profile-row"); ui.scopeGlobal = button("GLOBAL", () => { scope = "global"; render(); }); ui.scopeScreen = button("THIS SCREEN", () => { scope = "screen"; render(); }); ui.undo = button("UNDO", undo); scopeRow.append(ui.scopeGlobal, ui.scopeScreen, ui.undo, button("RESET SCOPE", () => reset())); profile.appendChild(scopeRow); ui.scopeNote = node("p", "as-note"); profile.appendChild(ui.scopeNote);
     const menu = group(controls, "MENU · GLOBAL"); choice(menu, "Theme", "uiTheme", [["dark", "Dark"], ["light", "Light"], ["system", "System"]]); colour(menu, "Accent colour", "menuAccent", "menuAccentHex"); choice(menu, "Text size", "textSize", [["normal", "Normal"], ["large", "Large"], ["larger", "Larger"]]); range(menu, "UI size", "uiScale", 40, 200); choice(menu, "Reduce motion", "motion", [["auto", "Auto"], ["reduce", "On"], ["off", "Off"]]); ui.motionNote = node("p", "as-note", "Menu motion is reduced by your system preference. Auto follows it; Off keeps motion on."); menu.appendChild(ui.motionNote); choice(menu, "High contrast", "uiContrast", [["off", "Off"], ["high", "On"]]);
-    const hud = group(controls, "RACE HUD"); choice(hud, "Style", "hudProfile", [["minimal", "Minimal"], ["standard", "Standard"], ["broadcast", "Broadcast"]]); colour(hud, "Accent colour", "hudAccent", "hudAccentHex"); range(hud, "HUD size", "hudScale", 70, 200); choice(hud, "Layout", "hudMetricsLayout", [["auto", "Auto"], ["full", "Full"], ["timing", "Timing"], ["driver", "Driver"], ["compact", "Compact"]]); hud.appendChild(button("ALL HUD & DISPLAY OPTIONS", () => { if (hooks.openDisplay) hooks.openDisplay(); else say("Open Settings → Display for all HUD options."); }));
+    const hud = group(controls, "RACE HUD"); choice(hud, "Style", "hudProfile", [["minimal", "Minimal"], ["standard", "Standard"], ["broadcast", "Broadcast"]]); colour(hud, "Accent colour", "hudAccent", "hudAccentHex"); range(hud, "HUD size", "hudScale", 70, 200); choice(hud, "Layout", "hudMetricsLayout", [["auto", "Auto"], ["full", "Full"], ["timing", "Timing"], ["driver", "Driver"], ["compact", "Compact"]]); hud.appendChild(button("ALL HUD & CAMERA OPTIONS", () => { if (hooks.openDisplay) hooks.openDisplay(); else say("Open Settings → HUD & Camera for all HUD options."); }));
     const sceneBox = group(controls, "SCENE · HOME"); choice(sceneBox, "Scene", "homeScene", [["auto", "Mix environments"], ["garage", "Garage"], ["night", "Night garage"], ["studio", "Studio"], ["track", "Circuit"], ["pitlane", "Pit lane"], ["static", "Static"], ["photo", "My photo"]]); choice(sceneBox, "Home camera", "homeCamera", [["auto", "Auto"], ["hero", "Hero"], ["front", "Front"], ["side", "Side"], ["rear", "Rear"]]); choice(sceneBox, "Background motion", "backgroundMotion", [["still", "Off"], ["ambient", "On"]]); ui.sceneNote = node("p", "as-note"); sceneBox.append(ui.sceneNote, button("PHOTO STUDIO & MY BACKGROUND", () => { if (hooks.openPhoto) hooks.openPhoto(); else say("Photo Studio becomes available after the game finishes loading."); }));
     ui.photoBox = node("section", "as-photo-picker"); ui.photoBox.setAttribute("aria-label", "Saved menu background photos");
     ui.photoSelect = node("select"); ui.photoSelect.setAttribute("aria-label", "Saved photo"); ui.photoSelect.addEventListener("change", photoSelection);
@@ -290,7 +305,7 @@ const AppearanceStudio = (function () {
     ui.photoNote = node("p", "as-note"); ui.photoNote.setAttribute("role", "status"); ui.photoNote.setAttribute("aria-live", "polite");
     ui.photoBox.append(node("h3", "as-heading", "SAVED PHOTOS"), photoActions, ui.photoPreview, ui.photoNote); sceneBox.appendChild(ui.photoBox);
     const tools = node("div", "as-preview-toolbar"), pages = node("div", "as-segment"); pages.setAttribute("role", "group"); pages.setAttribute("aria-label", "Preview screen");
-    for (const [id, name] of [["home", "HOME"], ["career", "CAREER"], ["race", "RACE SETUP"], ["hud", "HUD"], ["popups", "POPUP"]]) { const b = button(name, () => { previewPage = id; render(); }); pages.appendChild(b); ui.pages.push({ id, b }); }
+    for (const [id, name] of [["home", "HOME"], ["pause", "PAUSE"], ["datahub", "DATA HUB"], ["select", "TRACK SELECTOR"], ["career", "CAREER"], ["race", "RACE SETUP"], ["garage", "GARAGE"], ["hud", "HUD"], ["popups", "POPUP"]]) { const b = button(name, () => { previewPage = id; render(); }); pages.appendChild(b); ui.pages.push({ id, b }); }
     const shapes = node("div", "as-segment"); shapes.setAttribute("role", "group"); shapes.setAttribute("aria-label", "Preview device"); for (const [id, name] of [["desktop", "Desktop"], ["phone", "Phone"]]) { const b = button(name, () => { previewShape = id; render(); }); shapes.appendChild(b); ui.shapes.push({ id, b }); }
     tools.append(pages, shapes); ui.previewWrap = node("div", "as-preview-wrap"); ui.preview = node("div", "as-preview"); ui.preview.setAttribute("aria-label", "Illustrative appearance preview"); ui.previewWrap.appendChild(ui.preview); previewSide.append(tools, ui.previewWrap, node("p", "as-note", "Representative preview. Use the advanced screen controls below for exact layout and the real-screen preview."));
     ui.status = node("p", "as-status"); ui.status.setAttribute("role", "status"); ui.status.setAttribute("aria-live", "polite"); controls.appendChild(ui.status);
@@ -328,6 +343,20 @@ const AppearanceStudio = (function () {
       if (settings) observer.observe(settings, { attributes: true, attributeFilter: ["hidden"] });
     }
     render();
+    if (typeof SettingsSearch !== "undefined") SettingsSearch.register("appearance-studio", [
+      { id: "appearance-theme", label: "Theme", page: "appearance", target: "as-uiTheme", aliases: "dark light system colour color" },
+      { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "as-menuAccent", aliases: "colour color highlight brand team custom" },
+      { id: "appearance-text-size", label: "Text size", page: "appearance", target: "as-textSize", aliases: "larger bigger words readability" },
+      { id: "appearance-reduce-motion", label: "Menu motion", page: "appearance", target: "as-motion", aliases: "reduce animation transitions comfort" },
+      { id: "appearance-contrast", label: "High contrast", page: "appearance", target: "as-uiContrast", aliases: "readability sunlight outlines" },
+      { id: "appearance-hud-style", label: "HUD style", page: "appearance", target: "as-hudProfile", aliases: "broadcast minimal standard race" },
+      { id: "appearance-hud-accent-choice", label: "HUD accent", page: "appearance", target: "as-hudAccent", aliases: "race colour color" },
+      { id: "appearance-hud-size", label: "HUD size", page: "appearance", target: "as-hudScale", aliases: "race bigger smaller readouts" },
+      { id: "appearance-hud-layout", label: "HUD layout", page: "appearance", target: "as-hudMetricsLayout", aliases: "timing compact driver metrics" },
+      { id: "appearance-home-scene", label: "Home scene", page: "appearance", target: "as-homeScene", aliases: "garage night studio circuit pitlane background" },
+      { id: "appearance-home-camera", label: "Home camera", page: "appearance", target: "as-homeCamera", aliases: "hero front side rear view" },
+      { id: "appearance-background-motion", label: "Background motion", page: "appearance", target: "as-backgroundMotion", aliases: "ambient still moving scene" },
+    ]);
   }
   // Same readyState rule as SettingsExport.mount: deferred scripts run at
   // "interactive", after DOMContentLoaded would already have missed a late listen.

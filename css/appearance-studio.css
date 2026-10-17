@@ -59,12 +59,19 @@
   box-sizing: border-box;
 }
 #appearance-studio [data-as="preset-list"] strong {
-  font-size: 0.72em;
+  /* Compact wide sheets keep five tiles in one row. Cap the label size so
+     long single-word names remain fully visible at 200% UI scale. */
+  font-size: clamp(0.65rem, 0.72em, 0.72em);
   line-height: 1.15;
   letter-spacing: var(--ls-2);
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  hyphens: auto;
+  /* Keep single-word preset names intact at large UI sizes. The tile grid
+     already reflows when it needs more width; breaking BROADCAST or SUNLIGHT
+     in the middle makes the preset gallery look damaged while the rest of the
+     Appearance page remains readable. Multi-word names still wrap at spaces. */
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  text-wrap: balance;
   text-align: center;
   max-width: 100%;
   min-width: 0;
@@ -224,6 +231,22 @@
 #pmsettings-inner[data-shape="wide"][data-density="compact"] #appearance-studio [data-as="preset-list"] button {
   min-height: var(--tap-paint);
   min-width: var(--tap-paint);
+}
+/* High UI scales on short phone landscapes leave each five-column tile too
+   narrow for the preset names (CLASSIC becomes CLASS / SIC). Keep the dense
+   five-up desktop treatment, but keep long preset names intact on the phone
+   landscape sheet without changing tap floors. */
+@media (max-width: 900px) and (max-height: 500px) {
+  #pmsettings-inner[data-shape="wide"][data-density="compact"] #appearance-studio [data-as="preset-list"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  #pmsettings-inner[data-shape="wide"][data-density="compact"] #appearance-studio [data-as="preset-list"] strong {
+    font-size: .64em;
+    letter-spacing: 0;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
 }
 #appearance-studio input,
 #appearance-studio select {

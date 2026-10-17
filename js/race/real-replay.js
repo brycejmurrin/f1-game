@@ -417,6 +417,9 @@ const RealReplay = (function () {
 
     function onKey(e) {
       if (!run || G.state !== "race" || G.paused || G.photoMode || !e || e.repeat) return;
+      // Ctrl/Cmd/Alt chords belong to the browser (Ctrl+Plus/Minus zoom, Ctrl+N, Alt+arrows):
+      // the replay keys are the bare keys, and Shift stays theirs (Shift+= is "+").
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = e.target, tag = t && t.tagName;
       // THE TRANSPORT'S OWN BUTTONS AND TIMELINE keep the replay keys: a click
       // leaves focus there, and the keys went dead until something else took
@@ -538,16 +541,48 @@ const RealReplay = (function () {
           clip = GameAudio.radioMediaClip(h.url, { volume: vol });
         }
         if (!clip) {
-          if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
+          const engine = typeof GameAudio !== "undefined" ? GameAudio : null;
+          const generation = engine && engine.ctxGen ? engine.ctxGen() : null, owner = {};
           const a = new Audio(h.url);
           a.volume = Math.min(1, vol);
-          const off = () => { if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false); };
-          a.onended = a.onerror = off;
+          let held = false, playing = false, disposed = false, ducked = true;
+          const current = () => !disposed && run && run.audio === clip && (!engine || !engine.ctxGen || engine.ctxGen() === generation);
+          const audible = () => G.soundOn && !a.muted && a.volume > 0 && !a.paused && !a.ended && (!G.radio || !G.radio.volume || G.radio.volume() > 0);
+          const release = () => {
+            if (held && current() && engine && engine.setVoiceFocusHold) engine.setVoiceFocusHold(false, owner);
+            held = false;
+          };
+          const syncFocus = () => {
+            if (!playing || !audible()) { release(); return; }
+            if (current() && !held && engine && engine.setVoiceFocusHold) { engine.setVoiceFocusHold(true, owner); held = true; }
+          };
+          const interrupted = () => { playing = false; release(); };
+          const unduck = () => { if (current() && ducked && engine && engine.setRadioDuck) engine.setRadioDuck(false); ducked = false; };
+          const off = () => {
+            interrupted();
+            unduck();
+            disposed = true;
+            for (const [event, fn] of Object.entries(listeners)) {
+              if (a.removeEventListener) a.removeEventListener(event, fn);
+              else if (a["on" + event] === fn) a["on" + event] = null;
+            }
+          };
+          // A play request or a stalled fetch is not proof of audible playback.
+          const listeners = {
+            playing: () => { playing = true; syncFocus(); },
+            waiting: interrupted, pause: interrupted, ended: off, error: off,
+            volumechange: syncFocus,
+          };
+          for (const [event, fn] of Object.entries(listeners)) {
+            if (a.addEventListener) a.addEventListener(event, fn);
+            else a["on" + event] = fn;
+          }
+          if (engine && engine.setRadioDuck) engine.setRadioDuck(true);
           clip = {
             get paused() { return a.paused; },
             get ended() { return a.ended; },
-            pause() { a.pause(); off(); },
-            play() { return a.play(); },
+            pause() { a.pause(); interrupted(); unduck(); },
+            play() { if (current() && !ducked && engine && engine.setRadioDuck) { engine.setRadioDuck(true); ducked = true; } const p = a.play(); if (p && p.catch) p.catch(off); return p; },
             stop() { a.pause(); off(); },
           };
         }

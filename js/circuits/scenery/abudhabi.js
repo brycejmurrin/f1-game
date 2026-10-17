@@ -544,10 +544,10 @@
         const bridges = [
           { id: "yas-hotel-bridge-main", frac: 0.88, clearance: 9.5,
             thickness: 2.4, depth: 32, span: 27, gap: 2.2, pierW: 2.0,
-            col: [0.08, 0.09, 0.12] },
+            col: [0.50, 0.52, 0.55] },
           { id: "yas-hotel-bridge-forward", frac: 0.875, clearance: 9.2,
             thickness: 1.8, depth: 22, span: 26, gap: 2.2, pierW: 1.8,
-            col: [0.10, 0.11, 0.14] },
+            col: [0.46, 0.48, 0.52] },
         ];
         for (const bridge of bridges) {
           overheadSpan({

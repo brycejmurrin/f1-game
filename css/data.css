@@ -430,6 +430,14 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
    .dh-cons-main. Growing the name parks that team on the far right when the
    row has no gap column (P1), while P2+ keep it beside the name. */
 .dh-cons-main .dh-name { flex: 0 1 auto; }
+/* PHONE-LANDSCAPE CONSTRUCTOR NAMES. The constructors column is ~385px at
+   844x390, and the H2H bars (min 140px) shared the row with .dh-cons-main
+   (min 200px), so the name, the only shrinkable piece, collapsed to "Me…",
+   "F.", "N" (touch inspect 2026-10-17). Give the name the same floor as the
+   narrow tier and let the main info size to its content: when both no longer
+   fit, the row's existing wrap drops the H2H bars to their own line. */
+.dh-row-cons .dh-cons-main { min-width: auto; }
+.dh-row-cons .dh-cons-main .dh-name { min-width: 6.5em; }
 .dh-wins { font-size: var(--fs-2); color: #f6d200; font-weight: 700; flex: 0 0 auto; }
 .dh-pts { font-family: var(--font-hud); min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: var(--text); font-variant-numeric: tabular-nums; }
 .dh-gap { font-size: var(--fs-2); color: var(--dim); flex: 0 0 auto; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -902,6 +910,15 @@ body[data-width="narrow"] .dh-pick-field { width: 100%; }
 body[data-width="narrow"] .dh-pick-select { max-width: none; width: 100%; }
 
 body[data-width="narrow"] .dh-tab { font-size: var(--fs-1); padding: calc(var(--gap) * 0.5) 10px; }
+
+/* Dashboard metric cells can shrink below a label's min-content width on
+   split-view phones. Let MAX SPEED / DISTANCE wrap inside their auto-fit cell
+   instead of spilling into the neighbouring metric. */
+body[data-width="narrow"] .dh-glabel {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
 
 /* Last Race: hide secondary columns before they can overflow. Driver, position,
    time/status, and points remain. Compact landscape is often still "wide" in

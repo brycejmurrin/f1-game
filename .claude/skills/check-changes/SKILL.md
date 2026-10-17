@@ -1,9 +1,15 @@
 ---
 name: check-changes
-description: "Use when asked did I break anything, run or pick the right tests for touched files, validate or pre-push check a change, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging or pushing to the deploy branch, or triaging a Playwright timeout/hang or `--wait` exit 124 (machine load vs real failure). A red Actions run is ci-red-triage; driving a PR to green is steward."
+description: "Use when asked did I break anything, pick tests, validate/pre-push, verify track edits, js/css shell/cache policy, deploy-branch merge/push, or Playwright timeout triage. Red Actions → ci-red-triage; green PR → steward."
 ---
 
 # Validate changes before committing/pushing
+
+The canonical command meanings and ladder are in
+[`docs/VERIFICATION.md`](../../../docs/VERIFICATION.md). This skill adds the
+failure triage and tool-routing details; it does not redefine the ladder.
+
+Check scoped `DEFECT-LEDGER.md` entries and see [`references/vm-twin.md`](references/vm-twin.md) for VM-twin routing and DEFECT-LEDGER checks.
 
 ## This tree, right now
 

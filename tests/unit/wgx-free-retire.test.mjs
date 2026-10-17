@@ -19,6 +19,7 @@ const WGX_POST_SOURCE = await readFile(new URL(P.WGX_POST, ROOT), "utf8");
 const WGX_SHADOW_SOURCE = await readFile(new URL(P.WGX_SHADOW, ROOT), "utf8");
 const WGX_CHUNKED_SOURCE = await readFile(new URL(P.WGX_CHUNKED, ROOT), "utf8");
 const WGX_MAIN_SOURCE = await readFile(new URL(P.WGX, ROOT), "utf8");
+const WGX_ROADLUT_SOURCE = await readFile(new URL(P.WGX_ROADLUT, ROOT), "utf8");   // wgx.js destructures WGXRoadLut at eval
 const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, FRUSTUM_SOURCE, WGX_SOURCE,
        LIGHT_BUDGET_SOURCE, POST_COMMON_SOURCE, KNOBS_SOURCE,
        VERTEX_PACK_SOURCE, INST_CELLS_SOURCE] = await Promise.all([
@@ -333,7 +334,7 @@ function makeGpuHarness(opts = {}) {
   vm.runInContext(`${WGX_SHADOW_SOURCE}\nwindow.WGXShadow = WGXShadow;`, context);
   vm.runInContext(`${WGX_CHUNKED_SOURCE}\nwindow.WGXChunked = WGXChunked;`, context);
   vm.runInContext(`${WGX_POST_SOURCE}\nwindow.WGXPost = WGXPost;`, context);
-  vm.runInContext(`${WGX_MAIN_SOURCE}\nwindow.WGX = WGX;`, context);
+  vm.runInContext(`${WGX_ROADLUT_SOURCE}\n${WGX_MAIN_SOURCE}\nwindow.WGX = WGX;`, context);
 
   return {
     canvas,

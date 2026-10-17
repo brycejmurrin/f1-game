@@ -27,6 +27,16 @@ import { parseBlob, readBlob, blobName, validateShots as bakeValidate, shotError
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
+test("flyby shot tabs label the shared rows panel after rebuilds", () => {
+  const src = read("js/camera/flyby-editor.js");
+  assert.match(src, /const activeTab = \$\("fb-tab-" \+ sel\);/,
+    "refreshChips resolves the selected tab after rebuilding the rail");
+  assert.match(src, /if \(activeTab\) host\.setAttribute\("aria-labelledby", activeTab\.id\);/,
+    "the selected shot names the shared tabpanel");
+  assert.match(src, /else host\.removeAttribute\("aria-labelledby"\);/,
+    "an empty or invalid list does not leave a stale tab reference");
+});
+
 /** FlybyPanel's module surface, evaluated on its own. `const` at top level is
  *  rewritten to `var` so the IIFE's assignment lands on the sandbox, the same
  *  trick tests/unit/ui-improve-pass.test.mjs uses for the other UI modules. */
@@ -573,6 +583,7 @@ function deferredTool(kind) {
   function element(id, hidden = false) {
     let value = hidden;
     return { id, style: {}, dataset: {}, disabled: false, isConnected: true,
+      closest: () => ids.get("pm-panel-visual"),
       get hidden() { return value; },
       set hidden(next) {
         if (value === !!next) return;
@@ -585,7 +596,8 @@ function deferredTool(kind) {
       },
     };
   }
-  const ids = new Map(["pmsettings", "pm-panel-display", "pm-camtune", "pm-flyby"].map((id) => [id, element(id)]));
+  const ids = new Map(["pmsettings", "pm-panel-visual", "pm-camtune", "pm-flyby"].map((id) => [id, element(id)]));
+  ids.set("pm-panel-display", element("pm-panel-display", true));
   const G = { state: "race", paused: true, $: (id) => ids.get(id) || null,
     els: { pmsettings: ids.get("pmsettings") }, store: { get: (_key, fallback) => fallback } };
   const sb = { Log: { info() {}, warn() {}, debug() {} }, MutationObserver: Observer,
@@ -636,7 +648,7 @@ for (const kind of ["camera", "flyby"]) {
     await h.deliver(); assert.equal(h.opened.length, 0);
   });
 
-  for (const route of ["pmsettings", "pm-panel-display"]) test(`${kind} pending UI open is cancelled by ${route} hide and reopen`, async () => {
+  for (const route of ["pmsettings", "pm-panel-visual"]) test(`${kind} pending UI open is cancelled by ${route} hide and reopen`, async () => {
     const h = deferredTool(kind); h.button.onclick();
     // Same-task hide/reopen: checking only the final hidden value is insufficient.
     h.ids.get(route).hidden = true; h.ids.get(route).hidden = false;
@@ -647,9 +659,9 @@ for (const kind of ["camera", "flyby"]) {
     const h = deferredTool(kind); h.button.onclick();
     // The real editor is created inside ensure's resolution. A route changes
     // there after loading, but observer delivery has not run when open fulfills.
-    h.queueRouteChangeAtCreate("pm-panel-display");
+    h.queueRouteChangeAtCreate("pm-panel-visual");
     await h.deliver();
-    assert.equal(h.ids.get("pm-panel-display").hidden, false, "final visibility alone cannot detect leaving and returning");
+    assert.equal(h.ids.get("pm-panel-visual").hidden, false, "final visibility alone cannot detect leaving and returning");
     assert.ok(h.delayedObservers.length > 0, "observer callbacks are still withheld at fulfillment");
     assert.equal(h.opened.length, 0, "pending route records must invalidate the UI request immediately");
     h.flushObservers(); await h.settle();
@@ -672,7 +684,7 @@ for (const kind of ["camera", "flyby"]) {
   });
 
   test(`${kind} explicit API opens outside Settings remain supported and cancellable`, async () => {
-    const h = deferredTool(kind); h.ids.get("pmsettings").hidden = true; h.ids.get("pm-panel-display").hidden = true;
+    const h = deferredTool(kind); h.ids.get("pmsettings").hidden = true; h.ids.get("pm-panel-visual").hidden = true;
     h.G.state = "menu"; h.G.paused = false;
     h.open(); h.close(); await h.deliver(); assert.equal(h.opened.length, 0);
     await h.open(); assert.equal(h.opened.length, 1, "API intent does not require the Settings UI");

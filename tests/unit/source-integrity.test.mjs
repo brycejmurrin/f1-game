@@ -445,3 +445,23 @@ test("the GL-call census refuses to report a frame it did not measure", () => {
   assert.match(src, /await page\.evaluate\(\(\) => __apex\.go\(\)\)/,
     "go() must come after the track wait, on its own");
 });
+
+test("menu survey catalogs relocated settings panels and traverses Controls before Advanced", async () => {
+  const { SCREENS } = await import("../../tools/ui/menu-screens.mjs");
+  for (const id of ["graphics", "visual", "progress", "files", "practice", "strategy", "review"]) {
+    const screen = SCREENS.find((s) => s.id === "settings" + id);
+    assert.ok(screen, id + " has a survey route");
+    const clicks = [], waits = [], evaluations = [];
+    await screen.open({ click: async (selector) => clicks.push(selector),
+      waitForSelector: async (selector) => waits.push(selector),
+      evaluate: async (fn) => evaluations.push(String(fn)) });
+    assert.equal(clicks[0], "#mb-settings");
+    assert.ok(waits.includes("#pm-panel-" + id + ":not([hidden])"));
+    if (["practice", "strategy", "review"].includes(id)) {
+      assert.ok(evaluations.some((s) => s.includes('SettingsNav.showDirect("' + id + '"')));
+    } else assert.ok(clicks.includes("#pm-open-" + id));
+  }
+  const clicks = [];
+  await SCREENS.find((s) => s.id === "advanced").open({ click: async (s) => clicks.push(s), waitForSelector: async () => {} });
+  assert.deepEqual(clicks, ["#mb-settings", "#pm-open-controls", "#pm-advanced"]);
+});

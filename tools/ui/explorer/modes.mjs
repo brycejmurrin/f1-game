@@ -7,6 +7,7 @@ import { validateScenario, addGraphStep, minimizeActions, stateKey } from "./cor
 import { MODE_TITLES, MISSIONS, missionBrief } from "./catalog.mjs";
 import { gotoGame, mutateCaptureScene } from "../../shot/probe-page.mjs";
 import { inspectUI, openSession, performAction, matchesOracle, captureRecord, startPerformanceTrace, installFault, positionScene } from "./browser.mjs";
+import { diffInspections } from "./inspector.mjs";
 
 export async function explore(browser, url, options) {
   const { outDir, modes = Object.keys(MODE_TITLES), maxShots = 25 } = options;
@@ -41,7 +42,7 @@ export async function explore(browser, url, options) {
     await performAction(s, action);
     const after = await s.page.evaluate(inspectUI);
     addGraphStep(bundle.graph, before, after, action);
-    return { before, after, durationMs: Math.round(performance.now() - started) };
+    return { before, after, diff: diffInspections(before, after), durationMs: Math.round(performance.now() - started) };
   };
   const withSession = async (fn, opts) => {
     const s = await openSession(browser, url, opts); let timer;
@@ -66,7 +67,7 @@ export async function explore(browser, url, options) {
         await s.context.tracing.start({ screenshots: false, snapshots: true, sources: false });
         try {
           for (const a of scenario.actions) {
-            actions.push(a); const timing = await step(s, a); timings.push({ action: a, durationMs: timing.durationMs });
+            actions.push(a); const timing = await step(s, a); timings.push({ action: a, durationMs: timing.durationMs, diff: timing.diff });
             if (a.type === "checkpoint") await record(s, "missions", `${scenario.id}-${actions.length}`, a.label, [...actions], { execution: "guided player-route", timings: [...timings] });
           }
           if (scenario.oracle && !await matchesOracle(s, scenario.oracle)) throw new Error("Mission goal was not reached");

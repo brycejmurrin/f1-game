@@ -233,6 +233,7 @@ def run(log: Logger, url: str, *, shots: bool) -> int:
         log.log(f"navigate: {nav.splitlines()[0] if nav else '(empty)'}")
         if "ERR_" in nav or "Unable to navigate" in nav:
             log.log("FATAL: localhost not serving — start: python3 -m http.server <port>")
+            failures.append(f"navigation failed: {nav[:500]}")
             status = "failed"
             return 1
         time.sleep(1.5)

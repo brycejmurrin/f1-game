@@ -117,11 +117,12 @@ const SceneryStructures = (function () {
       }
     };
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
-    const wall = (s0, s1, side, gap, h, col, thick) => {
+    const wall = (s0, s1, side, gap, h, col, thick, alt) => {
       const a = thick || 0.5;
       if (alreadyLaid("wall", s0, s1, side, gap, `${a}|${h}|${(col || []).join(",")}`)) return;
       ctx.noteSpan("wall", s0, s1, side, gap, { h });
       recordBarrier(s0, s1, side, gap);
+      let n = 0;
       along(s0, s1, 6, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], a / 2)) {
@@ -130,11 +131,14 @@ const SceneryStructures = (function () {
         }
         const wallCol = col || [0.78, 0.78, 0.80];
         const capCol = [wallCol[0] * 0.72, wallCol[1] * 0.72, wallCol[2] * 0.74];
-        ctx.instance(`wall|${a}|${h}|${wallCol.join(",")}`,
+        // `alt` (opt-in, metres): every other slab stands `alt` thicker, so slope-overlapped
+        // neighbours never share a side plane (z-fight, coplanar-audit; TrackGeom.MIN_SEP).
+        const t = alt && (n++ & 1) ? a + alt : a;
+        ctx.instance(`wall|${t}|${h}|${wallCol.join(",")}`,
           { o: p.c, r: p.r, u: p.u, t: p.t, s: [1, 1, spacing] },
           (rec) => {
-            rec.box([0, (h - 0.4) / 2, 0], [a, h + 0.4, 1], wallCol);   // slab
-            rec.box([0, h, 0], [a * 1.1, 0.16, 1], capCol);            // coping rail on top
+            rec.box([0, (h - 0.4) / 2, 0], [t, h + 0.4, 1], wallCol);   // slab
+            rec.box([0, h, 0], [t * 1.1, 0.16, 1], capCol);            // coping rail on top
           },
           { kind: "wall", k, side });
       }, `wall|${side}|${gap}|${a}|${h}|${(col || []).join(",")}`);
@@ -324,7 +328,7 @@ const SceneryStructures = (function () {
     };
     const gantry = (s, h, col, opts) => {
       const st = (opts && opts.style) || kitOf("gantry", "box");
-      const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
+      const k = ((Math.round(s * n) % n) + n) % n, c = col || [0.16, 0.16, 0.19];
       const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       const housing = vadd(beam, u, -0.62);   // the lamp housing's centre (below)
@@ -800,30 +804,80 @@ const SceneryStructures = (function () {
       ctx.indexSolid(s0, s1, side, gap, depth);
       along(s0, s1, step, (k, spacing) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
-        const seg = spacing * 0.98;
+        // STRAIGHT BOXES ON A BEND (#2204). A row at lateral offset d stands on a different arc than
+        // the centreline: on the inside of a bend the chord to the next station is shorter than
+        // `spacing`, so neighbouring rows interpenetrate. Cap each row at the chord between this
+        // station and its neighbours, taken at the row's nearer-to-the-bend corner. Never longer.
+        const nb = Math.max(1, Math.round(step / ds));
+        const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap));
+        const chord = (lat) => {
+          const p = vadd(a.c, a.r, lat);
+          let c = spacing;
+          for (const q of kn) {
+            const pq = vadd(q.c, q.r, lat);
+            c = Math.min(c, Math.hypot(pq[0] - p[0], pq[1] - p[1], pq[2] - p[2]));
+          }
+          return c;
+        };
+        // The box is not rotated to the chord, so its depth also swings into the neighbour by
+        // dep/2 * tan(angle between the tangent and the chord): take that off as well.
+        const swing = (() => {
+          let t = 0;
+          for (const q of kn) {
+            const dx = q.c[0] - a.c[0], dy = q.c[1] - a.c[1], dz = q.c[2] - a.c[2], dl = Math.hypot(dx, dy, dz) || 1;
+            const cos = Math.abs((dx * a.t[0] + dy * a.t[1] + dz * a.t[2]) / dl);
+            t = Math.max(t, Math.sqrt(Math.max(0, 1 - cos * cos)) / Math.max(0.2, cos));
+          }
+          return t;
+        })();
+        const rowSeg = (back) => {
+          const half = dep / 2;
+          const c = Math.min(spacing, chord(back - half), chord(back + half), chord(back));
+          // Past the bend's centre of curvature the row folds onto its neighbour: no row there.
+          const l = (c - dep * 0.5 * swing) * 0.98;
+          return l < 1.2 ? 0 : l;
+        };
+        const seg = rowSeg(side * depth / 2);
+        if (seg <= 0) return;
         if (rejBox(vadd(vadd(a.c, a.u, topH / 2), a.r, side * depth / 2),
                    [depth, topH, seg], b)) return;
         out._mat = MAT.CONCRETE;
         if (opts.retainer !== false)
-          addBox(out, vadd(a.c, a.u, 1.0), [0.9, 2.2, seg], concAlt, b);
+          addBox(out, vadd(a.c, a.u, 1.0), [0.9, 2.2, rowSeg(0) || seg], concAlt, b);
         for (let r = 0; r < rows; r++) {
           const back = side * (1.0 + r * dep), up = 1.4 + r * rise;
           const tc = vadd(vadd(a.c, a.r, back), a.u, up);
+          const rs = rowSeg(back);
+          if (rs <= 0) continue;
           out._mat = MAT.CONCRETE;
-          addBox(out, tc, [dep, rise + 0.3, seg], r & 1 ? conc : concAlt, b);
-          crowdBand(vadd(tc, a.u, rise * 0.5 + 0.6), b, side, dep * 0.6, 1.1, seg - 1.6,
+          addBox(out, tc, [dep, rise + 0.3, rs], r & 1 ? conc : concAlt, b);
+          crowdBand(vadd(tc, a.u, rise * 0.5 + 0.6), b, side, dep * 0.6, 1.1, rs - 1.6,
                     opts.crowd, dens, k * 31.7 + r * 11.3 + side * 7.1);
         }
         const topBack = side * (1.0 + rows * dep);
+        const tbSeg = rowSeg(topBack) || seg;                                            // the back wall stands on the outermost arc
         if (opts.backWall !== false) {
           out._mat = MAT.CONCRETE;
-          addBox(out, vadd(vadd(a.c, a.r, topBack), a.u, topH * 0.5),
-                 [0.7, topH, seg], concAlt, b);                                          // plain back wall
+          // The wall stands rows*dep beyond the anchor, where the verge can fall away. At full
+          // length neighbouring walls overlapped and carried each other; cut to the chord they
+          // stand alone, so take the foot down to the lowest terrain under the wall (jerez's
+          // Angel Nieto bowl wrap floated 1.2-1.3 m, ground-audit --why).
+          const wc = vadd(a.c, a.r, topBack);
+          let drop = 0;
+          if (typeof terrainYAt === "function") {
+            for (const o of [-0.5, 0, 0.5]) {
+              const p = vadd(wc, a.t, o * tbSeg), ty = terrainYAt(p[0], p[2]);
+              if (ty != null) drop = Math.max(drop, (p[1] - ty) / Math.max(0.5, a.u[1]));
+            }
+          }
+          const wallH = topH + drop;
+          addBox(out, vadd(wc, a.u, topH - wallH * 0.5),
+                 [0.7, wallH, tbSeg], concAlt, b);                                       // plain back wall
         }
         if (opts.cut) {
           out._mat = 0;
           addPrism(out, vadd(vadd(a.c, a.r, topBack), a.u, topH),
-                   [6, 3.4, seg], opts.cutCol || [0.52, 0.32, 0.22], b);
+                   [6, 3.4, tbSeg], opts.cutCol || [0.52, 0.32, 0.22], b);
         }
         out._mat = 0;
       }, `terrace|${side}|${gap}|${rows}|${rise}|${dep}|${step}`);

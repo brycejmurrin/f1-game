@@ -21,8 +21,10 @@
 // pitch (view() free-look); without it eye looks ahead as before. The first
 // line it prints is {"ready":true,…}; stdin EOF closes the browser. Usage:
 //   node tools/shot/track-session.mjs --serve --track spa --out artifacts/track-session
+import { performance } from "node:perf_hooks";
+import { cameraControls } from "../lib/survey-scenarios.mjs";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, existsSync } from "node:fs";
+import { mkdirSync, existsSync, writeFileSync } from "node:fs";
 import { join, resolve, basename, relative, isAbsolute, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -34,10 +36,12 @@ import { awaitCaptureReady, mutateCaptureScene, installProbeInit, screenshotPres
 import { parseCaptureOptions, captureContextOptions, captureLaunchOptions, captureScreenshotOptions,
   captureExtension, applyCaptureProfile } from "./capture-options.mjs";
 import { captureBrowserDiagnostics, assertCaptureGpuCapability, startCaptureTrace } from "./capture-diagnostics.mjs";
+import { parseFlags } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const options = parseCaptureOptions(process.argv.slice(2));
 const argv = options.positionals;
+parseFlags(argv, ["--serve", "--track", "--out", "--backend"]);
 const flag = (n, d) => { const i = argv.indexOf(n); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
 const BOOT_MS = 45000, TRACK_MS = 60000, PRESENT_MS = 90000;
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
@@ -80,7 +84,9 @@ async function buildTrack(id) {
 }
 
 async function shot(op) {
+  const shotStarted = performance.now();
   const cam = String(op.cam || "orbit");
+  const controls = cameraControls({ ...op, cam });
   if (!CAMS.has(cam)) throw new Error(`cam must be one of ${[...CAMS].join("|")}`);
   const tod = String(op.tod || "day");
   if (!TODS.has(tod)) throw new Error(`tod must be one of ${[...TODS].join("|")}`);
@@ -101,7 +107,7 @@ async function shot(op) {
     // clear (shot.mjs parity, __apex orbit/cinematic/view): step round a building, hill
     // or tree between eye and car instead of landing inside a pit building at frac 0.
     // op.through keeps the asked-for placement.
-    clear: !op.through };
+    clear: !op.through, ...controls };
   for (const k of ["az", "el", "dist", "h"]) {
     if (args[k] != null && !Number.isFinite(args[k])) throw new Error(`${k} must be a finite number`);
   }
@@ -112,26 +118,34 @@ async function shot(op) {
     if (o.weather && a.weather && a.weather() !== o.weather) a.weather(o.weather);
     if (a.hud) a.hud(o.hud);
     if (o.cam === "eye") {
-      const r = a.eyeAt(o.frac, 0, o.h == null ? 2.5 : o.h);
+      const r = a.eyeAt(o.frac, o.lat || 0, o.h == null ? 2.5 : o.h, o.lookFrac);
       // Re-aim by pitch along the same heading: view() free-look, yaw 0 = -Z.
-      if (o.pitch != null && r) {
+      if (o.pitch != null && o.lookFrac == null && r) {
         const yaw = Math.atan2(r.target[0] - r.eye[0], -(r.target[2] - r.eye[2])) * 180 / Math.PI;
         a.view({ eye: r.eye, yaw, pitch: o.pitch });
       }
     } else if (o.cam === "orbit") a.orbit(o.frac, o.az, o.el, o.dist, o.h == null ? 1.5 : o.h, { clear: o.clear });
     else if (o.cam === "cinematic") a.cinematic(o.frac, { dist: o.dist, el: o.el, clear: o.clear });
-    else if (o.cam === "trackside") a.view({ s: o.frac, side: o.side, dist: o.dist, height: Math.max(3, o.el * 0.35), look: "in", clear: o.clear });
+    else if (o.cam === "trackside") a.view({ s: o.frac, side: o.side, dist: o.dist, height: o.h == null ? Math.max(3, o.el * 0.35) : o.h, look: "in", clear: o.clear });
     else a.snapCam();
+    if (o.fov != null || o.target != null) {
+      const pose = a.viewState();
+      if (!pose?.eye || !pose?.tgt) throw new Error("Camera pose unavailable for framing controls");
+      a.view({ eye: pose.eye, target: o.target || pose.tgt, fov: o.fov || pose.fov });
+    }
     if (a.step) a.step(1 / 60, 4);
     const vs = a.viewState ? a.viewState() : null, cs = a.camState ? a.camState() : null;
-    return { dbgCamActive: !!(vs && vs.dbgCamActive) || !!(cs && cs.debug), camState: cs };
+    return { track: a.info().track, dbgCamActive: !!(vs && vs.dbgCamActive) || !!(cs && cs.debug), camState: cs };
   }, args);
+  const sceneDone = performance.now();
   const readiness = await awaitCaptureReady(page, { timeoutMs: PRESENT_MS });
+  const readyDone = performance.now();
   const png = join(outDir, `${name}.${captureExtension(options)}`);
   const { scope, ...imageOptions } = captureScreenshotOptions(options);
   const cap = scope === "page" || args.hud
-    ? await screenshotPresentedCanvas(page, { path: png, ...imageOptions, skipAwait: true, forceCdp: true, pauseRender: true, clip: { x: 0, y: 0, ...page.viewportSize() }, timeout: 60000 })
-    : await screenshotPresentedCanvas(page, { path: png, ...imageOptions, skipAwait: true, timeout: 60000 });
+    ? await screenshotPresentedCanvas(page, { ...imageOptions, skipAwait: true, forceCdp: true, pauseRender: true, clip: { x: 0, y: 0, ...page.viewportSize() }, timeout: 60000 })
+    : await screenshotPresentedCanvas(page, { ...imageOptions, skipAwait: true, timeout: 60000 });
+  const imageDone = performance.now();
   const pixels = await pixelEvidence(cap.buf);
   if (!pixels.meaningful) throw new Error(`frame scene evidence is ${pixels.classification}`);
   const st = await sharp(cap.buf).stats();
@@ -139,10 +153,13 @@ async function shot(op) {
   if ((st.channels.length >= 4 && st.channels[3].max === 0) || spread < 2) {
     throw new Error(`frame is blank (pixel spread ${spread.toFixed(2)})`);
   }
+  const writeStarted = performance.now();
+  writeFileSync(png, cap.buf);
+  const writeDone = performance.now();
   const prev = shots.findIndex((s) => s.name === name);
-  const rec = { name, png, frac, cam, tod, weather, track };
+  const rec = { name, png, frac, cam, tod, weather, track: frame.track || track };
   if (prev >= 0) shots[prev] = rec; else shots.push(rec);
-  return { png, spread: +spread.toFixed(1), kb: +(cap.buf.length / 1024).toFixed(1), frame, readiness, pixels, scope: scope === "page" || args.hud ? "page" : "scene", profile: options.profile };
+  return { track: rec.track, timings: { sceneMs: sceneDone-shotStarted, readyMs: readyDone-sceneDone, captureMs: imageDone-readyDone, evidenceMs: writeStarted-imageDone, writeMs: writeDone-writeStarted, totalMs: performance.now()-shotStarted }, png, spread: +spread.toFixed(1), kb: +(cap.buf.length / 1024).toFixed(1), frame, readiness, pixels, scope: scope === "page" || args.hud ? "page" : "scene", profile: options.profile };
 }
 
 const pngOf = (ref) => {
@@ -229,6 +246,7 @@ async function handle(op) {
     if (options.seed != null) url.searchParams.set("seed", options.seed);
     await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: BOOT_MS });
     await page.waitForFunction(() => window.__apex != null, null, { timeout: BOOT_MS, polling: 100 });
+    await page.evaluate(() => window.__apex.agentHelp());
     await applyCaptureProfile(page, options);
     // Models resident BEFORE the build, so scenery's bakedModel() emits (shot.mjs).
     await page.evaluate(async () => { try { if (typeof Assets !== "undefined" && Assets.loadModels) await Assets.loadModels(); } catch (_) { /* procedural look */ } });

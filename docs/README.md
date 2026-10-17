@@ -8,22 +8,25 @@ Player-facing change notes live in [changelog.d/](changelog.d/).
 
 ## Read in this order
 
-**If you are an agent**, the path is `AGENTS.md` → `ARCHITECTURE.md` →
-`TESTING.md` §1-2 → the one area doc your change touches → the skill that
+**If you are an agent**, the path is `AGENTS.md` → `ARCHITECTURE-MAP.md` →
+`VERIFICATION.md` → `ARCHITECTURE.md` → `TESTING.md` §1-2 → the one area doc your change touches → the skill that
 drives it.
 
 | # | Read | Why, and how much |
 |---|---|---|
 | 1 | [`../AGENTS.md`](../AGENTS.md) | The rules. Every flat prohibition lives there and nowhere else. Read the whole thing — it is deliberately short. |
 | 2 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | **New contributors start here** — boot path, layer map, data flow, where to edit what. Ten-minute read. |
-| 3 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module **contract**, the `G` façade, the game loop, and the three renderers behind one seam. Skim the generated module index; read the section for the directory you are about to edit. |
-| 4 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. §5 is a lookup table, not reading. |
-| 5 | the area doc | One of the area docs below. Load it only when the task touches its area. |
-| 6 | the skill | `.claude/skills/README.md` picks it; the skill drives the tools. |
+| 3 | [VERIFICATION.md](VERIFICATION.md) | The current edit-loop, pre-push, docs-only, CI and Pages command meanings. |
+| 4 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module **contract**, the `G` façade, the game loop, and the three renderers behind one seam. Skim the generated module index; read the section for the directory you are about to edit. |
+| 5 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. §5 is a lookup table, not reading. |
+| 6 | the area doc | One of the area docs below. Load it only when the task touches its area. |
+| 7 | the skill | `.claude/skills/README.md` picks it; the skill drives the tools. |
 
 **If you are a person** reading to understand the game: [`../README.md`](../README.md)
 → [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) → [ARCHITECTURE.md](ARCHITECTURE.md) → [PHYSICS.md](PHYSICS.md) or
 [CAREER.md](CAREER.md) → [TESTING.md](TESTING.md) §1.
+
+Local screenshot galleries: [builder and viewer workflow](notes/LOCAL-SURVEY-GALLERY.md).
 
 ## The area docs (load one on demand)
 
@@ -55,7 +58,7 @@ drives it.
 |---|---|
 | [AGENT-SURFACE.md](AGENT-SURFACE.md) | Skills vs MCP vs `tools/` CLIs vs wrap — which `apex_*` exists, which stay CLI-only, and why the ones that left, left. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (generated), the agent-facing JSON world view (`world`/`field`/`scene`/`rollout`), and the DevTools console recipes. `AGENTS.md` has the short list. |
-| [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 185 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
+| [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 191 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
 | [tracks/](tracks/) | Per-circuit reference material. |
 | [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit, committed on `track-survey-assets`, not here); written by `tools/lighting/look-survey-sheet.py`. |
 
@@ -98,9 +101,10 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 | [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) | The open-defect register and the backlog behind it (was `ARCHITECTURE-REVIEW.md` §7-8). |
 | [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md) | The standing assessment: what the no-build-step bet costs, why asserted invariants hold where prose ones drift, and the lessons. |
 | [notes/CI-CAPACITY-2026-09-29.md](notes/CI-CAPACITY-2026-09-29.md) | The 20-concurrent-job jam of 2026-09-29 (200-290 jobs queued for 7 h): where PR runs spent their slots, why the selector over-sharded and excluded the circuit's own spec, what changed, what did not, and how to re-measure. |
-| [notes/CI-CLOG-SURVEY-2026-10-15.md](notes/CI-CLOG-SURVEY-2026-10-15.md) | The 2026-10-15 jam measured: 401 PR runs by 05:30 UTC, 73 % cancelled by sweeps under the owner's account and re-pushed, half the pushes base-merge syncs, 10-14 min queue waits on five serial plumbing hops. What changed: the plumbing jobs folded into `select`, needed-only node rows on drafts, the push hold and the run-cancel refusal enforced in the hooks; what is left to the owner (one required check, Docs guards off the required list, a Support ticket for the 40-job limit). |
+| [notes/CI-CLOG-SURVEY-2026-10-15.md](notes/CI-CLOG-SURVEY-2026-10-15.md) | The 2026-10-15 jam measured: 401 PR runs by 05:30 UTC, 73 % cancelled by sweeps under the owner's account and re-pushed, half the pushes base-merge syncs, 10-14 min queue waits on five serial plumbing hops. What changed: the plumbing jobs folded into `select`, needed-only node rows on drafts, the push hold and the run-cancel refusal enforced in the hooks; what is left to the owner (one required check, Docs guards off the required list, a Support ticket for the 40-job limit was an open support item at survey time). |
 | [notes/CICD-REVIEW-2026-10-16.md](notes/CICD-REVIEW-2026-10-16.md) | Whole-system CI/CD review, 2026-10-16: 1,200 ci.yml runs and 30,400 jobs measured — the pool runs at 39 of 40 slots, 26 % of runner-minutes die in cancelled runs (mostly manual sweeps), the ship-push fast tier reaches 38 % of merges, selected legs wait 63 min on a ready PR's critical path. The pipeline-now table, the ranked findings, the seven fix PRs, the 16 AGENTS.md contradictions and the three owner decisions (organisation + merge queue, cancel sweeps, train on push). |
 | [notes/CICD-JOBS-REVIEW-2026-10-16.md](notes/CICD-JOBS-REVIEW-2026-10-16.md) | Follow-up job-structure review, 2026-10-16: 323 runs / 4,263 jobs (8.8 h) joined to 96 PRs' changed files. Ranked proposals (changelog-fragments into the commit hook, tooling-fast `--bail`, a base-red detector), setup cost 7.9 %, train reuse hit rate 4 %, the new configuration measured where n allows. |
+| [notes/CI-SELECTION-PLAN-2026-10-16.md](notes/CI-SELECTION-PLAN-2026-10-16.md) | Test selection and tiering plan, 2026-10-16: what each job × tier caught in 40 h (2,097 runs; 58 % of failed jobs inherited from a red tip), 160 merges replayed through the selectors (node fail-safes, HUD/editor/CSS routing), the train since train-on-push, what Meta/Google/Ekstazi say about diff-based selection, ten ranked proposals and three owner decisions. |
 | [notes/PREPUSH-GATE-LADDER.md](notes/PREPUSH-GATE-LADDER.md) | The pre-push ladder: `test:guards` ⊂ `test:tooling-fast` ⊂ `deploy.mjs --gate-only`, with the measured sizes (`gen-ladder-figures.mjs` regenerates it). Read before judging a green rung as proof of the one above. |
 | [notes/SHARED-BRANCH-COORDINATION.md](notes/SHARED-BRANCH-COORDINATION.md) | `who-is-on-it.mjs` claims and the stand-down rule when another session already pushed a fix or holds a claim on your paths. |
 | [notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md](notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md) | Evidence behind AGENTS.md §Concurrent PRs: merge commits only, draft=fast / ready=full, when a sync is worth a full PR run. |
@@ -139,7 +143,7 @@ rather than rewriting the record.
 
 | Doc | Topic | Cited from |
 |---|---|---|
-| [research/AGENT-CONTRACTS.md](research/AGENT-CONTRACTS.md) | Current API references and reproducible agent tool contracts: diagnostics, smoke recipes, lifecycle/capture/replay evidence and hosted provider boundaries. | `tools/check/doctor.mjs`, `tools/lib/session-contracts.mjs` |
+| [research/AGENT-JS-DEBUGGER-MCP.md](research/AGENT-JS-DEBUGGER-MCP.md) | JS debugger MCP setup, routing, lifecycle and cleanup contracts. | `.claude/skills/js-debugger` |\n| [research/AGENT-CONTRACTS.md](research/AGENT-CONTRACTS.md) | Current API references and reproducible agent tool contracts: diagnostics, smoke recipes, lifecycle/capture/replay evidence and hosted provider boundaries. | `tools/check/doctor.mjs`, `tools/lib/session-contracts.mjs` |
 | [research/PLATFORM-INPUT-NOTES.md](research/PLATFORM-INPUT-NOTES.md) | The platform behaviours that only bite on one device: pointer capture and the four-way release net, the top layer vs `z-index`, `zoom` and `--ui-scale`, `(pointer: coarse)`, Escape vs `<dialog>` close watchers, iOS WebGL context loss. | `js/input/input.js`, `js/ui/modal.js`, 4 specs |
 | [WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md) | How to close WGX vs GLX: gap inventory, WebGPU API recipes (MSAA resolve, timestamp-query, texture arrays, mip-gen, god-ray), recommended slice order. §5 holds the WGSL rules a mock device cannot enforce. Left with the backends in the 2026-09-03 spike-out and back with the 2026-09-04 re-attach — see `spike/backends/README.md`. | `js/render/webgpu/wgx.js`, `js/render/webgpu/wgsl-chunks.js` |
 | [research/PHASE-C-SLIDER-DESIGN.md](research/PHASE-C-SLIDER-DESIGN.md) | The slider recalibration with the numbers: the arithmetic defects behind "I always end up at the bottom", computed from the shipped mappings. | `js/game.js`, `js/input/steer-tuning.js` |

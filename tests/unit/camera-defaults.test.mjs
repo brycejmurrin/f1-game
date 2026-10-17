@@ -226,6 +226,10 @@ test("broadcast cameras carry per-mode cut ease durations", () => {
   assert.equal(cutTo("cinematic"), 0.6);
   assert.equal(cutTo("heli"), 0.55);
   assert.equal(cutTo("side"), 0.45, "each mode's own cut, not the cinematic one");
+  for (const id of ["cockpit", "hood", "tcam", "visor", "helmet"]) {
+    G.camCutT = 9;   // a stale glide must be cleared, and `cut: 0` is an instant cut, not a 0.35 s ease
+    assert.equal(cutTo(id), 0, `${id} declares cut: 0`);
+  }
 });
 
 test("a camera cut publishes HUD classes without waiting for rAF", () => {

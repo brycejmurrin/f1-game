@@ -1548,7 +1548,9 @@ test("phone ownership, parked diagnostics and controls refresher preserve drivin
   const g = { store: { get: (k, d) => disk[k] ?? d, set: (k, v) => { disk[k] = v; } }, state: "race", paused: false,
     player: { otArmed: true, xArmed: true, aeroX: 0 }, raceAeroMode: "auto", announce: (line) => { lines.push(line); return true; } };
   const coach = Onboard.create(g);
-  const refresher = $("howtoplay").kids.find((n) => n.id === "htp-controls-refresher");
+  const refresher = $("htp-controls").kids.find((n) => n.id === "htp-controls-refresher");
+  assert.ok(refresher, "reminders belong inside the scrolling Controls section");
+  assert.ok(!$("howtoplay").kids.some((n) => n.id === "htp-controls-refresher"), "no controls outside the help sheet");
   refresher.onclick(); assert.equal(coach.state().shown, 0); assert.equal(coach.state().races, 0);
   assert.deepEqual(disk.coachStats, { corners: 12 });
   r.sb.UiLayers.navOpen = () => false; now++;

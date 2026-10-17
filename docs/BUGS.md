@@ -300,6 +300,8 @@ pass: B1–B8 and S1–S2 / S4–S10 FIXED here; S3 remains OPEN as measured fra
 debt. Prefer linking here from PRs; promote lasting open items into the ledger
 when a campaign owns them.
 
+> **Historical sections below.** The dated bug-hunt backlogs preserve branch, PR and CI evidence from the measurement date; they are not a statement that those rows remain open on the deploy branch. Use the current entries above and [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) for present status.
+
 ## 2026-10-09 bug-hunt backlog (verified, not yet fixed)
 
 From the 2026-10-09 read-only hunt (15 hunters on tip `88f2b21a6`; every row below re-read or reproduced by the parent

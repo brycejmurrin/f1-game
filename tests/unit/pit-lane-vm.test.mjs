@@ -194,7 +194,7 @@ test("the pit wall stands on both sides: a car on the road cannot run through it
   assert.ok(xLane >= hw + p.off.fastIn + 1.0 - 0.05, `held at the lane's barrier (x·side ${xLane.toFixed(2)}, barrier ${(hw + p.off.fastIn).toFixed(2)})`);
 });
 
-test("an armed AI is guided: the pit side of the road on the approach, one line that peels off the road and blends back, and a cap that meets the limit at the line", async () => {
+test("an armed AI is guided: the pit side of the road on the approach, one line that peels off the road and blends back, and a cap that meets the limit where the entry road starts", async () => {
   await fresh();
   const t = g.G.track, p = t.pit, L = t.total, s = p.side, pits = g.G.pits;
   const hwAt = (arc) => t.hw[((Math.round(arc / L * t.n) % t.n) + t.n) % t.n];
@@ -245,7 +245,13 @@ test("an armed AI is guided: the pit side of the road on the approach, one line 
   // The cap: the limit at the line, a braking curve before it, nothing a lap out.
   const lim = pits.limit();
   assert.ok(Math.abs(pits.entryV(ai(p.sIn - 2)) - lim) < 0.5, "at the limit at the line");
-  assert.ok(pits.entryV(ai(p.sIn - 100)) > lim + 10 && pits.entryV(ai(p.sIn - 100)) < pits.entryV(ai(p.sIn - 300)), "a rising curve away from it");
+  assert.ok(pits.entryV(ai(p.sA - 100)) > lim + 10 && pits.entryV(ai(p.sA - 100)) < pits.entryV(ai(p.sA - 300)), "a rising curve away from the road's start");
+  // The peel is made ON the entry road, so the limit holds from its START: a cap
+  // that only reached the limit at the line let a car onto the road at 25-30 m/s,
+  // too fast to move across before the wall (#2601, Suzuka weather stop).
+  assert.ok(p.entryRoadM > 12, "the entry road is long enough to test");
+  assert.ok(Math.abs(pits.entryV(ai(wrap(p.sIn - p.entryRoadM / 2))) - lim) < 0.5, "at the limit half way along the entry road");
+  assert.ok(Math.abs(pits.entryV(ai(wrap(p.sA + 1))) - lim) < 0.5, "…and at its start");
   assert.equal(pits.entryV(ai(p.sIn + 50)), Infinity, "and no cap inside the window");
 });
 
@@ -652,4 +658,21 @@ test("no AI car deploys BOOST under a VSC cap — only a free OVERTAKE push may"
   assert.equal(lvl, 2, "the VSC was flying");
   assert.ok(ticks > 0);
   assert.equal(boost, 0, `${boost} of ${ticks} AI ticks deployed BOOST under the VSC`);
+});
+
+test("an AI that still owes its second dry compound keeps its armed stop on the final lap (it is not disqualified for a cleared arm)", async () => {
+  await g.race(ID, "day", "dry", { laps: 10 });
+  const a = g.apex; a.tyres({ level: "real" }); a.go(); a.rivals([]);
+  const c = g.G.cars.find((x) => !x.human && !x.retired);
+  assert.ok(c, "an AI car");
+  assert.ok(g.G.pits.twoCompoundApplies(), "precondition: a 10-lap dry race with wear on is under the two-compound rule");
+  assert.ok((c.tyreLog || []).length <= 1, "precondition: the grid set is the only set it has run");
+  c.lap = g.G.lapsTarget; c.pitArmed = true; c.pitState = "none";
+  g.G.pits.update(c, 1 / 60);
+  assert.equal(c.pitArmed, true, "the owed stop stays armed on the final lap");
+  // Control: a car that has met the rule (two dry compounds run) is disarmed there, as before.
+  c.tyreLog = [{ code: "M", wet: false }, { code: "H", wet: false }];
+  c.pitArmed = true; c.pitState = "none";
+  g.G.pits.update(c, 1 / 60);
+  assert.equal(c.pitArmed, false, "a compliant car's final-lap stop pays nothing and is cleared");
 });

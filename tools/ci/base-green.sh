@@ -23,7 +23,7 @@
 # unknown: no run for <sha>, no `gh`, an API error, an empty sha.
 #
 # FAIL SAFE: only `green` may narrow anything. Callers treat `red` and
-# `unknown` alike — run everything. Needs GH_TOKEN with actions:read and
+# `unknown` alike — run everything. Needs `gh` authenticated (GH_TOKEN with actions:read, or a `gh auth login` session; the script never reads the token itself) and
 # GITHUB_REPOSITORY (both set in the jobs that call this).
 set -u
 SHA="${1:-}"

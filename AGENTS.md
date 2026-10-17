@@ -3,7 +3,7 @@
 Unofficial WebGL2 F1 fan game. No build step, no frameworks: pure IIFE modules loaded via `<script>` tags, static
 files on GitHub Pages.
 
-This file holds the rules every session needs and nothing else. Evidence lives in `docs/` (start at `docs/README.md`),
+This file holds the rules every session needs and nothing else. Evidence lives in `docs/` (start at `docs/README.md`, then `docs/VERIFICATION.md`),
 workflows in `.claude/skills/`, enforced rules in `.claude/hooks/`, renderer rules in `.claude/rules/` (they load with
 their files). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
 
@@ -12,7 +12,7 @@ their files). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
 npx serve -l 3456 .                   # serve locally (or: python3 -m http.server 3456)
 node tools/ci/pick-tests.mjs          # 1. which GROUPS does this change need? (the table below; select-specs.mjs: per-SPEC)
 #                                       2. make ALL edits, then verify ONCE (rule 2); a new test file = a tests/groups.json group + a TESTING.md §5 row + `npm run gen`
-node tools/ci/tooling-fast.mjs --jobs=3   # 3. edit-loop check, a SUBSET (rule 3): ~2 min idle; `npm run test:tooling-fast` is --jobs=1, ~9 min
+node tools/ci/tooling-fast.mjs --changed --jobs=3   # 3. diff-aware edit-loop check; `npm run test:tooling-fast` is the full floor before a code push
 node tools/ci/test-bg.mjs <group>     # 4. ONE browser group, in the background → artifacts/logs/<group>.log (rule 5)
 node tools/ci/test-bg.mjs --wait --timeout 45   # 5. the waiter, as ONE background task (rule 4); the verdict is the log's `= run …` line
 node tools/ci/deploy.mjs --gate-only  # 6. before a push: the only check that runs what the deploy runs
@@ -50,7 +50,7 @@ Session shape — twelve rules that control wall time, waiting and handoff:
 3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above: `test:guards` (the commit hook,
    every commit) ⊂ `test:tooling-fast` (`gen-ladder-figures.mjs --table` sizes it) ⊂ `deploy.mjs --gate-only`, the only
    pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine; `docs/notes/PREPUSH-GATE-LADDER.md`).
-   Before every code `git push`: `npm run test:tooling-fast` plus the change-aware pick (`pick-tests`) must pass.
+   Before every code `git push`: `npm run test:tooling-fast` plus the change-aware pick (`pick-tests`) must pass; edit loops may use `verify-change --fast --json` / `tooling-fast --changed` for a diff-sized budget.
 4. BLOCK OR BACKGROUND, by duration and whether the NEXT step needs the answer. Foreground: under 2 min and needed now (`test:guards` about a minute, one `node --test`, `verify-track`, `pick-tests`).
    Background, ONE Bash `run_in_background` task logging to `artifacts/logs/`: 2–15 min (`tooling-fast`, `deploy.mjs --gate-only`) and a browser group (`test-bg.mjs <group>`, then `test-bg.mjs --wait --timeout 45` as the task; exit 1 = red, 124 = still running).
    While it runs, do work that does not touch it: research, docs/tools/tests edits, a read-only subagent, or the NEXT change in a linked worktree (`EnterWorktree`; shared-contract files stay out of worktrees). Never `js/`/`css/` in this checkout, a second browser group, or a CPU-heavy node suite on top of a browser run — that load IS the timeout.

@@ -18,7 +18,7 @@
  * ceiling soft-limits HFOV a few degrees under the floor there.
  *
  * cine: return the authored VFOV untouched (crane/editor framing stays as framed).
- * Landscape output must stay bit-identical to the old cap-only path.
+ * Square and landscape (aspect >= 1) keep the old cap-only path.
  */
 const CamFovFit = (function () {
   "use strict";
@@ -50,10 +50,13 @@ const CamFovFit = (function () {
     // Cap: landscape — same formula as the former game.js inline block.
     const fovYCap = vfovForHfov(HFOV_MAX, aspect);
     fovY = Math.min(fovY, fovYCap);
-    // Floor: portrait — widen VFOV so HFOV does not collapse.
-    const fovYFloor = vfovForHfov(HFOV_MIN, aspect);
-    fovY = Math.max(fovY, fovYFloor);
-    if (fovY > FOVY_MAX) fovY = FOVY_MAX;
+    // Floor and ceiling belong to portrait only; preserve authored long lenses
+    // on square/landscape screens, including normal TRACKSIDE cameras.
+    if (aspect < 1) {
+      const fovYFloor = vfovForHfov(HFOV_MIN, aspect);
+      fovY = Math.max(fovY, fovYFloor);
+      if (fovY > FOVY_MAX) fovY = FOVY_MAX;
+    }
     return fovY;
   }
 

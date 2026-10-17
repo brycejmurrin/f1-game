@@ -202,3 +202,83 @@ test('research cash advisory uses actual research price and active career, witho
   Career.planning = () => ({ cash: () => ({ afterPurchase: 100, wages: 60, low: 40, unlimited: true }) }); run();
   assert.equal(main.children.length, 0, 'unlimited funds have no spending cash warning');
 });
+
+function measuredFixture() {
+  const dom = makeDom(), saved = new Map(), revisions = new Map();
+  const store = { get: (k,d) => saved.has(k) ? structuredClone(saved.get(k)) : d,
+    set(k,v) { return this.write(k,v).durable; }, keyRevision: k => revisions.get(k) || 0,
+    write(k,v) { saved.set(k, structuredClone(v)); revisions.set(k,(revisions.get(k)||0)+1); return {ok:true,durable:true}; } };
+  const ctx = vm.createContext({ document: dom.document, GameStore:{store}, PhysicsConsts:{BB_REF:.56} });
+  for (const file of ['setup-tune','setup-presets','setup-trials']) vm.runInContext(read('js/garage/'+file+'.js'),ctx);
+  const S=vm.runInContext('SetupTune',ctx), P=vm.runInContext('SetupPresets',ctx), T=vm.runInContext('SetupTrials',ctx);
+  const context=()=>({unscored:true,stableWeather:true,physics:'rev1',car:'haas',parts:{engine:'a'},track:'monza',point:0,weather:{type:'dry',wet:0},tyres:{id:'medium',wear:0,temp:85},fuel:1,energy:1,assists:{traction:false}});
+  const baseline=S.get('haas'),candidate={...baseline,arbF:baseline.arbF+1};
+  const begin=(launch=async()=>({ok:true,context:context()}))=>T.create({teamId:'haas',store,baseline,candidate,launch});
+  return {dom,store,ctx,S,P,T,context,baseline,candidate,begin};
+}
+test('preset contexts normalize bounded provenance, preserve old libraries and preview precise part differences',()=>{
+  const h=measuredFixture();const row=h.P.save(h.store,'haas','Dry',h.baseline,'monza',{v:1,physics:'rev1',track:'monza',parts:{engine:'a'},note:'x'.repeat(300)}).row;
+  assert.equal(row.context.note.length,160);
+  const normalized=h.P.normalize(JSON.parse(JSON.stringify({v:1,items:[row]})));assert.equal(normalized.items[0].context.parts.engine,'a');
+  const same=h.P.preview(h.store,'haas',row.id,{v:1,physics:'rev1',track:'monza',parts:{engine:'a'}});assert.equal(same.contextChanges.length,0);
+  const changed=h.P.preview(h.store,'haas',row.id,{v:1,physics:'rev1',track:'monza',parts:{engine:'b'}});assert.match(changed.contextChanges.join(' '),/Part engine: a → b/);
+  delete row.context;h.store.write('setupPresets.haas',{v:1,items:[row]});const legacy=h.P.preview(h.store,'haas',row.id);assert.match(legacy.contextChanges.join(' '),/unknown/);assert.equal(h.P.apply(h.store,'haas',legacy).ok,true);
+});
+test('measured launches require three clean baseline, A/A and candidate repeats; show median and spread only for equivalent starts',async()=>{
+ const h=measuredFixture();h.begin();for(const arm of ['baseline','control','candidate'])for(const score of [3,3.2,3.1]){assert.equal(await h.T.attempt(arm),true);assert.equal(h.T.record({mode:'launch',clean:true,score},h.context()),true);}
+ const s=h.T.summary();assert.equal(s.comparable,true);assert.equal(s.delta,0);assert.equal(s.groups.control.n,3);assert.ok(Math.abs(s.groups.baseline.spread-.2)<1e-10);
+ assert.equal(h.T.record({mode:'launch',clean:true,score:1},h.context()),false,'duplicate settlement ignored');h.T.cancel();
+});
+test('each changed starting condition and missing conditions exclude receipts and suppress comparison',async()=>{
+ for(const key of ['physics','car','parts','track','point','weather','tyres','fuel','energy','assists']){
+  const h=measuredFixture();let next=h.context();h.begin(async()=>({ok:true,context:next}));await h.T.attempt('baseline');h.T.record({mode:'launch',clean:true,score:3},h.context());
+  next={...h.context(),[key]:'changed'};await h.T.attempt('candidate');h.T.record({mode:'launch',clean:true,score:2},h.context());const s=h.T.summary();assert.equal(s.receipts[1].valid,false,key);assert.match(s.receipts[1].issues.join(' '),new RegExp(key));assert.equal(s.delta,null);h.T.cancel();
+ }
+ const h=measuredFixture();h.begin(async()=>({ok:true,context:{}}));await h.T.attempt('baseline');h.T.record({mode:'launch',clean:true,score:1},{});assert.equal(h.T.summary().receipts[0].valid,false);
+});
+test('unclean attempts, mid-run weather/tune changes and retries are excluded',async()=>{
+ const h=measuredFixture();h.begin();await h.T.attempt('baseline');h.T.record({mode:'launch',clean:false,score:3,reason:'contact'},h.context());
+ await h.T.attempt('candidate');h.T.record({mode:'launch',clean:true,score:2},{...h.context(),weather:'wet'});
+ await h.T.attempt('baseline');h.T.invalidate('rewind');assert.equal(h.T.summary().receipts.filter(r=>r.valid).length,0);assert.match(h.T.summary().receipts[2].issues.join(' '),/rewind/);h.T.cancel();
+});
+test('cancel restores only its owned mechanical sheet and pending launch receives a revocable lease',async()=>{
+ const h=measuredFixture();h.begin();await h.T.attempt('candidate');h.T.cancel();assert.deepEqual(plain(h.S.get('haas')),plain(h.baseline));
+ h.begin();await h.T.attempt('candidate');h.S.set('haas',{arbF:11});h.T.cancel();assert.equal(h.S.get('haas').arbF,11,'later user edit preserved');
+ let finish,lease;h.begin(o=>{lease=o.isCurrent;return new Promise(r=>finish=r);});const pending=h.T.attempt('candidate');assert.equal(lease(),true);h.T.cancel();assert.equal(lease(),false);finish({ok:true,context:h.context()});assert.equal(await pending,false);assert.equal(h.T.active(),false);
+});
+test('comparison controls are reachable in actual DOM and capture the candidate on explicit Begin',async()=>{
+ const h=measuredFixture(),host=h.dom.makeElement('div');h.dom.body.appendChild(host);let starts=0;
+ h.T.mount(host,{teamId:'haas',store:h.store,baseline:h.baseline,candidateNow:()=>h.S.get('haas'),launch:async()=>{starts++;return {ok:true,context:h.context()};}});
+ const buttons=host.querySelectorAll('button');h.S.set('haas',{arbF:10});buttons.find(b=>b.textContent==='BEGIN COMPARISON').onclick();
+ await buttons.find(b=>b.textContent==='RUN CANDIDATE').onclick();await Promise.resolve();assert.equal(starts,1);assert.equal(h.S.get('haas').arbF,10);assert.equal(h.T.summary().pending,true);h.T.cancel();
+});
+
+test('transient condition drift stays excluded even when restored before completion; same-value user writes release ownership',async()=>{
+ const h=measuredFixture();h.begin();await h.T.attempt('baseline');h.T.observe({...h.context(),weather:'wet'});h.T.observe(h.context());h.T.record({mode:'launch',clean:true,score:3},h.context());assert.match(h.T.summary().receipts[0].issues.join(' '),/weather changed/);
+ h.T.cancel();h.begin();await h.T.attempt('candidate');h.S.set('haas',h.candidate);h.T.cancel();assert.deepEqual(plain(h.S.get('haas')),plain(h.candidate),'same-value explicit write is a later owner, not permission to restore baseline');
+});
+test('A/A control drift suppresses observed delta and attempt receipts are bounded',async()=>{
+ const h=measuredFixture();h.begin();for(const arm of ['baseline','control','candidate'])for(let i=0;i<3;i++){await h.T.attempt(arm);h.T.record({mode:'launch',clean:true,score:arm==='control'?5:3},h.context());}
+ assert.equal(h.T.summary().comparable,false);assert.equal(h.T.summary().delta,null);
+ for(let i=0;i<3;i++){await h.T.attempt('baseline');h.T.record({mode:'launch',clean:true,score:3},h.context());}
+ assert.equal(await h.T.attempt('baseline'),false);assert.equal(h.T.summary().receipts.filter(x=>x.arm==='baseline').length,6);h.T.cancel();
+});
+
+test('pause comparison return preserves completed receipts, excludes incomplete run and safely stops before cancellation restore',async()=>{
+ const h=measuredFixture(),pause=h.dom.makeElement('div'),body=h.dom.makeElement('div');body.className='sheet-body';pause.appendChild(body);h.dom.body.appendChild(pause);const calls=[];
+ const G={$:()=>pause,quitToMenu:()=>calls.push(['quit',h.S.get('haas').arbF]),openGarageFrom:from=>calls.push(['garage',from])};
+ const ui=h.T.mountPause(G);assert.equal(h.T.mountPause(G),ui,'mount is idempotent');assert.equal(ui.section.hidden,true);
+ h.begin();await h.T.attempt('baseline');h.T.record({mode:'launch',clean:true,score:3},h.context());await h.T.attempt('candidate');
+ const buttons=ui.section.querySelectorAll('button');buttons.find(b=>b.textContent==='RETURN TO SETUP COMPARISON').onclick();assert.equal(h.T.active(),true);assert.equal(h.T.summary().receipts.length,2);assert.equal(h.T.summary().receipts[0].valid,true);assert.equal(h.T.summary().receipts[1].valid,false);assert.deepEqual(calls.map(x=>x[0]),['quit','garage']);
+ buttons.find(b=>b.textContent==='CANCEL SETUP COMPARISON').onclick();assert.equal(calls[2][0],'quit');assert.equal(calls[2][1],h.candidate.arbF,'session stops before store restoration');assert.deepEqual(plain(h.S.get('haas')),plain(h.baseline));assert.equal(h.T.active(),false);assert.equal(ui.section.hidden,true);ui.dispose();
+});
+test('explicit cancellation calls runtime cancellation while its async launch lease is still valid',async()=>{
+ const h=measuredFixture();let lease,finish,cancelled=false;h.T.create({teamId:'haas',store:h.store,baseline:h.baseline,candidate:h.candidate,launch:o=>{lease=o.isCurrent;return new Promise(r=>finish=r);},cancelRuntime:()=>{cancelled=lease();}});
+ const pending=h.T.attempt('candidate');h.T.cancel();assert.equal(cancelled,true);assert.equal(lease(),false);finish({ok:true,context:h.context()});assert.equal(await pending,false);
+});
+
+test('pause comparison controls cannot quit a later ordinary session with no runtime ownership',async()=>{
+ const h=measuredFixture(),pause=h.dom.makeElement('div'),body=h.dom.makeElement('div');body.className='sheet-body';pause.appendChild(body);h.dom.body.appendChild(pause);let owns=true,quits=0;
+ const ui=h.T.mountPause({$:()=>pause,setupTrialContext:()=>owns?h.context():null,quitToMenu:()=>quits++,openGarageFrom(){}});h.begin();await h.T.attempt('baseline');assert.equal(ui.section.hidden,false);owns=false;ui.refresh();assert.equal(ui.section.hidden,true);
+ for(const b of ui.section.querySelectorAll('button'))b.onclick();assert.equal(quits,0);h.T.cancel();ui.dispose();
+});

@@ -2,6 +2,11 @@
 
 **TWO INPUTS, TWO TOOLS. Read the first line of the paste.**
 
+## Contents
+
+- CRITICAL — `bake.mjs` is a FULL REPLACE
+- Capture, review, ship
+- Read-only preflight receipts
 | paste starts with | what it is | tool |
 |---|---|---|
 | `window.LightEdits = {…}` | a DELTA — only the player's own overrides, what COPY VALUES emits | `merge-proposals.mjs` (merge) |
@@ -21,11 +26,6 @@ Live knob work without a paste → the lighting-tuner index (`SKILL.md`).
 Per-track agent proposals → `artifacts/lighting/proposals/<id>.json`, then
 `node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs` (validates + merges;
 does not bump cache). Never let a subagent write `js/lighting/presets.js`.
-
-## Contents
-- CRITICAL — `bake.mjs` is a FULL REPLACE
-- Capture, review, ship
-- Read-only preflight receipts
 
 ## CRITICAL — `bake.mjs` is a FULL REPLACE
 

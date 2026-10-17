@@ -172,7 +172,7 @@ function sceneBoard({ unlimited = false, owned = false, tdev = 0 } = {}) {
     document, LiveryTex: {}, Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
   for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/track/core/geom.js", "js/track/core/pit.js",
-                   "js/garage/scene-prims.js", "js/garage/scene-equipment.js", "js/garage/scene-live.js",
+                   "js/garage/scene-prims.js", "js/garage/scene-equipment.js", "js/garage/scene-live.js", "js/garage/scene-dress.js",
                    "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const team = vm.runInContext('Teams.LIST.find(t => t.id === "mercedes")', ctx);

@@ -178,6 +178,22 @@ test("HUD screen scope does not rewrite the global HUD profile", () => {
   assert.equal(studioForScope().includes("hudProfile"), false);
 });
 
+test("every ScreenLooks page has a screen scope and a preview entry", () => {
+  const { studio } = load();
+  const keys = id => Array.from(studio.SCREEN_KEYS[id]);
+  assert.deepEqual(keys("pause"), ["lookPause"]);
+  assert.deepEqual(keys("datahub"), ["lookDatahub"]);
+  assert.deepEqual(keys("select"), ["lookSelect"]);
+  assert.deepEqual(keys("race"), ["lookRace"]);
+  assert.deepEqual(keys("career"), ["lookCareer"]);
+  assert.deepEqual(keys("garage"), ["lookGarage"]);
+  assert.deepEqual(keys("popups"), ["lookPopups"]);
+  const sourceText = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8");
+  for (const id of ["pause", "datahub", "select", "career", "race", "garage", "hud", "popups"]) {
+    assert.match(sourceText, new RegExp('\\[\\"' + id + '\\",'), id + " preview button");
+  }
+});
+
 function studioForScope() {
   return load({ hudProfile: "minimal" }).studio.SCREEN_KEYS.hud;
 }
@@ -345,7 +361,7 @@ test("M2: Studio edits never pin motion:'on' and write only the keys that change
   writes.length = 0; studio.applyPreset("classic"); studio.reset();
   assert.ok(!writes.includes("motion"));
   // An explicit reduce is still honoured, and RESET/null removes the key rather than writing "on".
-  studio.applyPreset("focus"); assert.equal(values.motion, "reduce");
+  studio.applySnapshot({ ...studio.snapshot(), motion: "reduce" }); assert.equal(values.motion, "reduce");
   studio.reset(); assert.equal(values.motion, undefined);
   studio.undo(); assert.equal(values.motion, "reduce");
 });
@@ -364,6 +380,39 @@ test("mounted Studio exposes percentage units and explains system reduced motion
   studio.applySnapshot({ ...studio.snapshot(), uiScale: 125, hudScale: 90, motion: "reduce" });
   assert.equal(note.hidden, true); assert.equal(values.motion, "reduce");
   for (const input of ranges) assert.equal(input.getAttribute("aria-valuetext"), input.value + "%");
+});
+
+
+test("cosmetic presets retain accessibility and units without writing those preferences", () => {
+  const preferences = { motion: "reduce", textSize: "larger", uiScale: 137.5, uiContrast: "high", cvdMode: "tritan", speedUnits: "mph", cbCues: "on" };
+  for (const preset of ["classic", "paddock", "broadcast", "focus", "sunlight"]) {
+    const { studio, values, writes } = load(preferences);
+    const before = plain(studio.snapshot());
+    studio.applyPreset(preset);
+    for (const [key, value] of Object.entries(preferences)) {
+      assert.equal(values[key], value, preset + " preserves " + key);
+      assert.ok(!writes.includes(key), preset + " leaves storage untouched for " + key);
+    }
+    studio.undo(); assert.deepEqual(plain(studio.snapshot()), before);
+  }
+});
+
+test("profile application obeys selected screen scope and undo restores the affected screen", () => {
+  const dom = makeDom(), panel = dom.byId("pm-panel-appearance");
+  panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  const { studio, values } = load({ homeScene: "garage", uiTheme: "light", motion: "reduce" }, true, false, dom.document);
+  studio.saveProfile("Garage light");
+  studio.applySnapshot({ ...studio.snapshot(), homeScene: "night", uiTheme: "dark", motion: "off" });
+  const before = plain(studio.snapshot());
+  const descendants = el => [el, ...el.children.flatMap(descendants)];
+  const buttons = descendants(panel).filter(el => el.tagName === "BUTTON");
+  buttons.find(el => el.textContent === "THIS SCREEN").click();
+  buttons.find(el => el.textContent === "APPLY PROFILE").click();
+  assert.equal(values.homeScene, "garage");
+  assert.equal(values.uiTheme, "dark"); assert.equal(values.motion, "off");
+  studio.undo(); assert.deepEqual(plain(studio.snapshot()), before);
+  studio.loadProfile("profile-1", "global");
+  assert.equal(values.uiTheme, "light"); assert.equal(values.motion, "reduce");
 });
 
 function photoPickerHarness(album, setBackground = () => true) {

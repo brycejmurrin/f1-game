@@ -104,6 +104,7 @@ window.SpotifyMusic = (function () {
   // requests that already passed through fetch before sign-out.
   let sessionGen = 0;
   let searchT = null;
+  let searchRevision = 0;
   const commandTimers = new Set();
 
   /* ---------------- storage (GameStore's raw lane) ----------------
@@ -554,7 +555,7 @@ window.SpotifyMusic = (function () {
     stopPolling();
     pollBusy = false;
     if (volTimer !== null) { clearTimeout(volTimer); volTimer = null; }
-    volPend = null;
+    volPend.clear();
     if (searchT !== null) { clearTimeout(searchT); searchT = null; }
     for (const timer of commandTimers) clearTimeout(timer);
     commandTimers.clear();
@@ -871,22 +872,22 @@ window.SpotifyMusic = (function () {
   // Coalesce on the trailing edge: the last value inside the window is the one
   // the user let go on, and it is the only one worth a request.
   const VOL_PUT_MS = 250;
-  let volTimer = null, volPend = null;
+  let volTimer = null;
+  const volPend = new Map();   // captured device -> its latest gesture's value
   function putDeviceVolume(pct) {
-    volPend = Math.max(0, Math.min(100, Math.round(pct)));
+    volPend.set(deviceId2(), Math.max(0, Math.min(100, Math.round(pct))));
     if (volTimer !== null) return;
     const gen = sessionGen;
-    // Bind the device when the trailing-edge request is scheduled. The user can
-    // switch devices while the debounce window is open; sending this volume to
-    // the newly selected device would apply an old slider gesture to the wrong
-    // speaker.
-    const targetDevice = deviceId2();
+    // Gestures on different speakers retain their own values, even if the
+    // player switches away and back before this batch is sent.
     volTimer = setTimeout(() => {
       volTimer = null;
-      const v = volPend; volPend = null;
-      if (gen !== sessionGen || v === null) return;
-      api("/me/player/volume?volume_percent=" + v +
-          (targetDevice ? "&device_id=" + encodeURIComponent(targetDevice) : ""), { method: "PUT" });
+      const pending = Array.from(volPend); volPend.clear();
+      if (gen !== sessionGen) return;
+      for (const [targetDevice, v] of pending) {
+        api("/me/player/volume?volume_percent=" + v +
+            (targetDevice ? "&device_id=" + encodeURIComponent(targetDevice) : ""), { method: "PUT" });
+      }
     }, VOL_PUT_MS);
   }
   function setDeviceVolume(pct) {
@@ -895,8 +896,9 @@ window.SpotifyMusic = (function () {
     devVol = v;
     putDeviceVolume(v);
   }
-  function searchPlaylists(q) {
+  function searchPlaylists(q, revision) {
     const gen = sessionGen;
+    const queryRevision = revision == null ? ++searchRevision : revision;
     const term = (q || "").trim();
     if (!term) { results = []; render(); return Promise.resolve([]); }
     return api("/search?type=playlist&limit=10&q=" + encodeURIComponent(term)).then((r) => {
@@ -909,7 +911,7 @@ window.SpotifyMusic = (function () {
           by: (p.owner && p.owner.display_name) || "" }));
       }, () => []);
     }).then((rs) => {
-      if (gen !== sessionGen) return [];
+      if (gen !== sessionGen || queryRevision !== searchRevision) return [];
       results = rs || []; render(); return results;
     });
   }
@@ -1235,8 +1237,35 @@ window.SpotifyMusic = (function () {
     const live = BACKEND.active();
     const img = el("sp-art");
     if (img) {
-      if (art && img.getAttribute("src") !== art) img.setAttribute("src", art);
-      img.hidden = !art;
+      const current = img.dataset.apexArt || "";
+      if (current !== (art || "")) {
+        const next = art || "";
+        img.dataset.apexArt = next;
+        img.dataset.apexArtFailed = "";
+        img.onerror = next ? () => {
+          // Album art URLs are short-lived CDN links. Remove the failed source
+          // so the element's neutral background remains visible instead of
+          // showing a broken-image glyph. The token prevents a late failure
+          // from changing newer artwork.
+          if (img.dataset.apexArt === next) {
+            img.dataset.apexArtFailed = next;
+            img.removeAttribute("src");
+            img.hidden = false;
+          }
+        } : null;
+        if (next) {
+          img.setAttribute("src", next);
+          img.hidden = false;
+        } else {
+          img.removeAttribute("src");
+          img.hidden = true;
+        }
+      } else {
+        // A failed current image is intentionally represented by the visible
+        // neutral swatch, while no artwork at all keeps the decorative element
+        // out of the layout.
+        img.hidden = !art;
+      }
     }
     txt("sp-title", title || (live ? "Nothing playing" : "Not connected"));
     txt("sp-artist", artist || "");
@@ -1385,12 +1414,14 @@ window.SpotifyMusic = (function () {
     });
     on("sp-search", "input", (e) => {
       const q = e.target.value;
-      if (searchT !== null) clearTimeout(searchT);
+      const revision = ++searchRevision;
+      if (searchT !== null) { clearTimeout(searchT); searchT = null; }
+      if (!q.trim()) { results = []; render(); return; }
       // Debounced: one request per pause in typing, not per keystroke.
       const gen = sessionGen;
       searchT = setTimeout(() => {
         searchT = null;
-        if (gen === sessionGen) searchPlaylists(q);
+        if (gen === sessionGen && revision === searchRevision) searchPlaylists(q, revision);
       }, 350);
     });
     on("as-sp-playlist", "change", (e) => {

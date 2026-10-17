@@ -242,7 +242,10 @@ import {
   quarantineSchemaKeys,
   formatIssueBody,
   listAllRuns,
+  listRunJobs,
+  JOBS_PAGE,
   upsertIssue,
+  baseRedRows, formatBaseRedBody, syncBaseRedIssue, BASE_RED_MARKER, BASE_RED_TITLE,
   setFlakeTallyTestHooks,
   ISSUE_MARKER,
   ISSUE_TITLE,
@@ -362,6 +365,70 @@ test("upsertIssue rewrites the open marker issue, else creates one with the flak
   } finally { setFlakeTallyTestHooks(); }
 });
 
+const row = (spec, branches, fails = 1) => ({ test: "t", spec, fails, flakyPasses: 0, runsSeen: fails, lastSeenRunId: 9, branches });
+
+test("baseRedRows: 3 unrelated branches, or 2 with a train, is a red on the base; one branch's red and a retry-pass are not", () => {
+  const rows = [
+    row("tests/specs/menu-keyboard.spec.js", ["cursor/a", "cursor/b", "cursor/c"], 3),
+    row("tests/specs/hud-layout.spec.js", ["cursor/a", DEPLOY_BRANCH], 2),
+    row("tests/specs/career.spec.js", ["cursor/a", "cursor/b"], 2),
+    row("tests/specs/smoke.spec.js", ["cursor/a"], 4),
+    { ...row("tests/specs/agent-view.spec.js", ["cursor/a", "cursor/b", "cursor/c"], 0), flakyPasses: 3 },
+  ];
+  const got = baseRedRows(rows).map((r) => r.spec);
+  assert.deepEqual(got, ["tests/specs/menu-keyboard.spec.js", "tests/specs/hud-layout.spec.js"]);
+  assert.match(baseRedRows(rows)[1].reason, /including a train/);
+});
+
+test("formatBaseRedBody starts with its own marker (not the daily one) and lists the suspects", () => {
+  const body = formatBaseRedBody(baseRedRows([row("tests/specs/menu-keyboard.spec.js", ["a", "b", "c"], 3)]), { runsExamined: 12, hours: 3, now: new Date("2026-10-16T09:00:00Z") });
+  assert.ok(body.startsWith(BASE_RED_MARKER));
+  assert.notEqual(BASE_RED_MARKER, ISSUE_MARKER);
+  assert.match(body, /menu-keyboard\.spec\.js \| 3 \| 3 \|/);
+  assert.match(body, /last 3 h, read 2026-10-16T09:00Z \(12 failed/);
+});
+
+test("syncBaseRedIssue opens on the first suspect, refreshes while it lasts, closes when the window is clean, and is a no-op with nothing open", async () => {
+  const calls = [];
+  const hook = (issues) => ({
+    fetch: async (url, init) => {
+      calls.push([init.method, url, init.body ? JSON.parse(init.body) : null]);
+      if (init.method === "GET") return { status: 200, arrayBuffer: async () => Buffer.from(JSON.stringify(issues)) };
+      return { status: 200, arrayBuffer: async () => Buffer.from(JSON.stringify({ number: 88 })) };
+    },
+    delay: async () => {},
+  });
+  const suspects = [{ spec: "s", test: "t" }];
+  try {
+    setFlakeTallyTestHooks(hook([]));
+    assert.deepEqual(await syncBaseRedIssue(suspects, "B", { token: "t" }), { number: 88, created: true });
+    assert.match(calls[0][1], /labels=base-red/);
+    assert.deepEqual(calls[1][2], { title: BASE_RED_TITLE, body: "B", labels: ["base-red"] });
+    calls.length = 0;
+    setFlakeTallyTestHooks(hook([{ number: 12, body: BASE_RED_MARKER + "\nold" }, { number: 13, body: "unrelated" }]));
+    assert.deepEqual(await syncBaseRedIssue(suspects, "B2", { token: "t" }), { number: 12, updated: true });
+    assert.equal(calls[1][0], "PATCH");
+    calls.length = 0;
+    assert.deepEqual(await syncBaseRedIssue([], "clean", { token: "t" }), { number: 12, closed: true });
+    assert.deepEqual(calls[1][2], { state: "closed", state_reason: "completed", body: "clean" });
+    calls.length = 0;
+    setFlakeTallyTestHooks(hook([]));
+    assert.deepEqual(await syncBaseRedIssue([], "clean", { token: "t" }), { none: true });
+    assert.equal(calls.length, 1, "nothing open and nothing to report: only the listing call");
+  } finally { setFlakeTallyTestHooks(); }
+});
+
+test("flake-tally.yml: a 2-hourly base-red mode beside the daily tally, same least privilege; the base-red label exists", () => {
+  const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/flake-tally.yml"), "utf8");
+  assert.match(wf, /^\s+- cron: "17 \*\/2 \* \* \*"$/m, "every 2 h");
+  assert.match(wf, /MODE: \$\{\{ github\.event\.schedule == '17 \*\/2 \* \* \*' && 'base-red' \|\| inputs\.mode \|\| 'daily' \}\}/);
+  assert.match(wf, /node tools\/ci\/flake-tally\.mjs --base-red --hours 3 --issue/);
+  assert.match(wf, /^permissions:\n  contents: read\n  actions: read\n  issues: write$/m, "no new permission");
+  const labels = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/labels.json"), "utf8"));
+  const l = labels.find((x) => x.name === "base-red");
+  assert.ok(l && l.description.length <= 100, "fleet.yml syncs labels.json; GitHub caps a description at 100 chars");
+});
+
 test("flake-tally.yml runs the daily tally with least privilege, and the flaky label exists", () => {
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/flake-tally.yml"), "utf8");
   assert.match(wf, /^\s+- cron: "19 6 \* \* \*"$/m, "daily");
@@ -372,4 +439,34 @@ test("flake-tally.yml runs the daily tally with least privilege, and the flaky l
   assert.match(wf, /node tools\/ci\/flake-tally\.mjs --events all --days "\$DAYS" --propose --issue/);
   const labels = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/labels.json"), "utf8"));
   assert.ok(labels.some((l) => l.name === "flaky"), "fleet.yml syncs labels.json; the issue needs the label");
+});
+
+test("#2233: listRunJobs pages 30 at a time (per_page=100 is a 502 on large runs) and keeps what it read when a later page fails", async () => {
+  const calls = [];
+  const job = (id) => ({ id, name: `j${id}` });
+  const serve = (failPage) => async (url) => {
+    calls.push(url);
+    const page = Number(/[?&]page=(\d+)/.exec(url)?.[1]);
+    if (page === failPage) return { status: 502, arrayBuffer: async () => Buffer.from("bad gateway") };
+    const all = Array.from({ length: 70 }, (_, i) => job(i + 1));
+    const slice = all.slice((page - 1) * 30, page * 30);
+    return { status: 200, arrayBuffer: async () => Buffer.from(JSON.stringify({ total_count: 70, jobs: slice })) };
+  };
+  try {
+    setFlakeTallyTestHooks({ fetch: serve(0), delay: async () => {} });
+    const r = await listRunJobs(123, { token: "t" });
+    assert.equal(r.jobs.length, 70);
+    assert.equal(calls.length, 3, "30 + 30 + 10: the short page ends the listing");
+    assert.ok(calls.every((u) => /jobs\?per_page=30&page=\d+$/.test(u)), calls.join("\n"));
+    assert.ok(!calls.some((u) => /per_page=100/.test(u)));
+    assert.equal(JOBS_PAGE, 30);
+    // a page that keeps failing after the first: the jobs already read are returned, not thrown away
+    calls.length = 0;
+    setFlakeTallyTestHooks({ fetch: serve(2), delay: async () => {} });
+    const partial = await listRunJobs(123, { token: "t" });
+    assert.equal(partial.jobs.length, 30);
+    // the first page failing is an error
+    setFlakeTallyTestHooks({ fetch: serve(1), delay: async () => {} });
+    assert.match((await listRunJobs(123, { token: "t" })).error, /HTTP 502/);
+  } finally { setFlakeTallyTestHooks(); }
 });

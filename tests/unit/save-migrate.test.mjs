@@ -176,6 +176,15 @@ test("invalid driver points and overflowing legacy aliases stay finite and idemp
   assert.equal(JSON.stringify(overflow), snap);
 });
 
+test("remapPoints: a pts key naming an Object.prototype member stays a finite number", () => {
+  const SM = load();
+  const s = SM.remapPoints(JSON.parse(`{"pts":{"toString":3,"constructor":4,"valueOf":"x","haas:0":25}}`));
+  for (const k of ["toString", "constructor", "valueOf"]) assert.ok(Number.isFinite(s.pts[k]), k + " -> " + s.pts[k]);
+  assert.equal(s.pts.toString, 3);
+  assert.equal(s.pts.constructor, 4);
+  assert.equal(s.pts.valueOf, 0);
+});
+
 test("a stored display code is never overwritten from the shipped roster on load", () => {
   // award() files the player's seat as "YOU" (and market moves / MY TEAM hires
   // re-label seats); remapPoints reset it to the shipped seat code on every
@@ -317,4 +326,27 @@ test("remapPoints leaves season.config alone: the standalone season keeps its fr
   const viaStandalone = { round: 1, pts: {}, config: { drop: 2 } };
   SM.migrateSeasonPoints({ get: () => null, set() {} }, viaStandalone);
   assert.deepEqual(JSON.parse(JSON.stringify(viaStandalone.config)), { drop: 2 }, "migrateSeasonPoints keeps it too");
+});
+
+test("roundMap and finishMap skip a __proto__ key like the sibling maps", () => {
+  const SM = load();
+  const raw = JSON.parse('{"__proto__":[5,6],"AAA":[1,2]}');
+  for (const fn of [SM.roundMap, SM.finishMap]) {
+    const out = fn(raw);
+    assert.equal(Array.isArray(Object.getPrototypeOf(out)), false, "prototype untouched");
+    assert.deepEqual(Object.keys(out), ["AAA"]);
+  }
+});
+
+test("migrateCareer coerces a {toString:1} field instead of throwing (live fuzz 2026-10-16)", () => {
+  const SM = load();
+  const hostile = () => JSON.parse('{"toString":1}');
+  const out = SM.migrateCareer({ v: hostile(), flavour: "driver", team: "haas", money: hostile(), rep: hostile(),
+    tally: { pts: hostile(), wins: hostile() }, seat: hostile(), year: hostile(), seed: hostile(), budgetLvl: hostile(), facility: hostile(), deal: { salary: hostile(), years: hostile() } });
+  assert.equal(out.money, 0);
+  assert.equal(out.rep, 0);
+  assert.equal(out.tally.pts, 0);
+  assert.equal(out.year, 2026);
+  assert.equal(out.budgetLvl, 0);
+  assert.equal(out.facility, 0);
 });

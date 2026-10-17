@@ -773,6 +773,9 @@ const TyreModel = (function () {
       c.tyreLap0 = c.lap || 0;
       const physical = physicalLaps(c);
       c.tyrePhysicalOffset = physical == null ? null : physical - lapsDone(c.tyreLap0);
+      // A box BEFORE the line fits mid-lap N: the next crossing reads N+1 but is only a partial lap on this
+      // set, so lapsOn would run a lap ahead (replan's loadK, wetLapsToStop, the HUD's laps left).
+      c.tyreLapAdj = (c.lap || 0) >= 1 && G.track && G.track.total > 0 && (c.s || 0) > G.track.total * 0.5 ? 1 : 0;
       c.tyreStints = (c.tyreStints || 0) + 1;
       // THE STINT LOG, which is what the results sheet draws. Recorded HERE
       // because fit() is the only place a set is ever changed, so the log and
@@ -826,9 +829,17 @@ const TyreModel = (function () {
     // dictionary-mode object (a hash probe + getter call per read), so it reads each value once and hands
     // them down — ambient was read twice per car through trackTemp() (PERF-HUNT-2 S4/S7). Same arithmetic.
     function ambient() { return ambientAt(G.weatherArc, G.raceWeather); }
+    // Progress of the temperature blend. A local shower (arc.cell) outlives its ramp and then dries back to the
+    // start weather with weather-arc.js's TAU_DRY lag; holding f = 1 until the arc let go stepped the air 13 -> 30 C
+    // and the asphalt 14 -> 48 C in one tick (R1, LIVE-DEBUGGER-RACE-2026-10-16).
+    const TAU_DRY = 36;
+    function arcFrac(arc) {
+      if (arc.cell && arc.t >= arc.cell.life) return Math.exp(-(arc.t - arc.cell.life) / TAU_DRY);
+      return clamp(arc.t / arc.dur, 0, 1);
+    }
     function ambientAt(arc, weather) {
       if (arc && arc.dur > 0 && arc.from && arc.to) {
-        const f = clamp(arc.t / arc.dur, 0, 1);
+        const f = arcFrac(arc);
         return tAmb(arc.from) + (tAmb(arc.to) - tAmb(arc.from)) * f;
       }
       return tAmb(weather);
@@ -837,7 +848,7 @@ const TyreModel = (function () {
     function trackTemp() { const arc = G.weatherArc, weather = G.raceWeather; return trackTempAt(arc, weather, ambientAt(arc, weather)); }
     function trackTempAt(arc, weather, a) {
       if (arc && arc.dur > 0 && arc.from && arc.to) {
-        const f = clamp(arc.t / arc.dur, 0, 1);
+        const f = arcFrac(arc);
         const d = tTrackDelta(arc.from) + (tTrackDelta(arc.to) - tTrackDelta(arc.from)) * f;
         return a + d;
       }
@@ -962,7 +973,8 @@ const TyreModel = (function () {
       // Teleports are not distance driven; tyreLap0 remains the public age baseline
       // used by historical race drop-ins and network strategy snapshots.
       return Math.max(0, physical != null && c.tyrePhysicalOffset != null
-        ? physical - c.tyrePhysicalOffset - lapsDone(c.tyreLap0) : lapsDone(c.lap) - lapsDone(c.tyreLap0));
+        ? physical - c.tyrePhysicalOffset - lapsDone(c.tyreLap0) - (c.tyreLapAdj || 0)
+        : lapsDone(c.lap) - lapsDone(c.tyreLap0) - (c.tyreLapAdj || 0));
     }
     function spent(c) { return c ? clamp(c.tyreWear || 0, 0, 2) : 0; }
     /** Laps this set has left before the cliff, at the rate THIS car has been

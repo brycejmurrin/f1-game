@@ -44,8 +44,8 @@ Everything else is built on these. They live in `css/components.css`.
 | primitive | what it is |
 |---|---|
 | `.screen` | a full-viewport overlay, inset by the OS safe area, that centres its child |
-| `.sheet` | a card with a fixed head, ONE scrolling body and a pinned foot; also the `sheet` **query container** every layout decision inside it keys on. Dense sheets may declare `--fit-at` (minimum functional local height); `SheetShape` then caps only that panel's effective zoom when the safe viewport cannot supply it. Phone-landscape floors: select / season / garage / career / settings / howtoplay / results / standings / customize / vs-friend / quali use `--compact-at: 480px`; audio / Spotify use `520px`; the generic floor is `380px` |
-| `.pane` | a scroll region that says so — an edge fade on whichever side has more |
+| `.sheet` | a card with a fixed head, ONE scrolling body and a pinned foot. Its default column can shrink; long headings and footer labels wrap within it. Screen-specific columns retain their own templates; also the `sheet` **query container** every layout decision inside it keys on. Dense sheets may declare `--fit-at` (minimum functional local height); `SheetShape` then caps only that panel's effective zoom when the safe viewport cannot supply it. Phone-landscape floors: select / season / garage / career / settings / howtoplay / results / standings / customize / vs-friend / quali use `--compact-at: 480px`; audio / Spotify use `520px`; the generic floor is `380px` |
+| `.pane` | a shrinkable scroll region with contained vertical overscroll and focus scroll padding — an edge fade on whichever side has more |
 | `.pane-pair` | the shared **list-detail** layout (`.pair-side` + `.pair-main`), used by `#season-setup`, `#carsetup` and `#career` (`#select` left it in the 2026-09 picker redesign: a flag strip over a hero is one column). Default foot sits under the side column; `.pair-foot-full` spans BACK / YOUR CAR / NEXT (and season APPLY) across both. Slots are named by POSITION, not role — see the note in `css/overlays.css` |
 | `.balanced-row` | a content-driven control cluster: items wrap from their preferred local width, every line shares its space evenly, and a lone final item fills the line without child-count-specific CSS |
 
@@ -112,6 +112,9 @@ not.
 
 | family | rules | owner | also in |
 |---|---|---|---|
+| `editor-` | shared workspace | `tuner.css` | Preview/Edit container |
+| `ew-` | shared workspace | `tuner.css` | toolbar, scope note and disclosure |
+| `menu-` | destinations | `menu-destinations.css` | title destination headings and groups |
 | `dh-` | 264 | `data.css` | `components.css`, `dialog-platform.css`, `tokens.css` |
 | `td-` | 27 | `editor.css` | — |
 | *(unprefixed)* | 344 | `career.css` | `touch-controls.css`, `carsetup.css`, `components.css`, `menus.css`, `dialogs.css`, `hud.css`, `race-setup.css`, `dialog-platform.css`, `responsive.css`, `select.css`, `tuner.css`, `overlays.css`, `tokens.css`, `data.css`, `settings-controls.css`, `title.css`, `settings.css` |
@@ -491,7 +494,7 @@ found a real WCAG failure in the lighting tuner within a minute.
 | `quali` | `#quali` | race settings → QUALIFYING LAP **on** → `#rs-go` |
 | `standings` | `#standings` | in-race → pause → `#pm-standings` |
 | `customize` | `#customize` | garage → **TEAM** tab → `#cs-customize` |
-| `advanced` | `#advanced` | settings → `#pm-advanced` |
+| `advanced` | `#advanced` | settings → Controls → `#pm-advanced` |
 | `audioset` | `#audioset` | settings → `#pm-audio` |
 | `spotify` | `#spotifypanel` | shown directly (no account to connect) |
 | `careerguide` | `#career-guide` | career → HOW CAREER WORKS |

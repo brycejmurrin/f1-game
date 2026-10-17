@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { gameSource } from "../helpers/game-source.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -919,6 +920,7 @@ test("a WATCH speaks the replay's highlights through the commentator, on any cam
     [{ kind: "fastest", pos: 1, dur: 92.44 }, /1:32\.4/], [{ kind: "sc", level: 3 }, /SAFETY CAR/]]) {
     const w = watch();
     w.step(0.05, 20);   // before the battle talk (SETTLE_S): the highlight is the first line
+    if (h.kind === "sc") w.G._caution = h.level;
     assert.equal(w.radio.replayEvent(h, w.cars[0], null), true, h.kind);
     w.step(0.05, 20);
     const all = comm(w).map((s) => s.msg).join(" | ");
@@ -975,6 +977,7 @@ test("a WATCH timeline cut halts the active voice and invalidates already accept
   r.G.radio = { halt() { halted++; } };
   r.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, still }); return true; };
   r.step(0.05, 20);
+  r.G._caution = 3;
   r.radio.replayEvent({ kind: "sc", level: 3 });
   r.step(0.05);
   assert.equal(accepted.length, 1);
@@ -983,6 +986,7 @@ test("a WATCH timeline cut halts the active voice and invalidates already accept
   r.radio.resetTimeline();
   assert.equal(halted, 1, "playing and pending voice are stopped at the timeline boundary");
   assert.equal(accepted[0].still(), false, "the game card queue cannot start a stale transmission later");
+  r.G._caution = 0;
   r.radio.replayEvent({ kind: "green" });
   r.step(0.05);
   assert.equal(accepted.length, 2);
@@ -1171,6 +1175,72 @@ test("observe ranks the field at 10 Hz, not every physics step", () => {
   assert.ok(comm(r).slice(before).some(s => /1:31/.test(s.msg)), JSON.stringify(r.said));
 });
 
+test("current caution invalidates delayed TV and replay flags through the real announce queue", () => {
+  const r = watch(); r.step(0.1);
+  r.hooks.busy = true;
+  r.G._caution = 3; r.step(0.1);
+  r.G._caution = 0; r.step(0.1);
+  r.G._caution = 1; r.step(0.1);
+  r.hooks.busy = false; r.step(0.1);
+  assert.equal(comm(r).length, 0, "green copy expires when local yellow replaces green");
+
+  // The real game queue accepts a line now but checks still() at display time.
+  const game = gameSource(), shown = [];
+  const ac = vm.createContext({ hudProfile: "standard", CAM_MODES: [{ id: "chase" }], camMode: 0,
+    els: { announce: { dataset: {} } }, shown, announceT: 0, _annPri: 0, _annFloor: 0,
+    _annQueue: [], performance: { now: () => 0 } });
+  for (const re of [/const ANN_PRI = [^;]+;/, /const ANN_STALE_MS = [^;]+;/,
+    /const ANN_QUEUE_MAX = [^;]+;/, /function announce\([^]*?\n\}/]) vm.runInContext(game.match(re)[0], ac);
+  vm.runInContext('function showAnnounce(msg, dur, kind) { shown.push(msg); _annPri = ANN_PRI[kind] || 2; announceT = Math.max(3, (dur || 1.6) + .5); _annFloor = 3; }'
+    + '\nfunction tick(dt) {\n' + game.match(/ {2}if \(announceT > 0\) \{\n {4}announceT -= dt;\n[\s\S]*?\n {4}\}\n {2}\}\n/)[0] + '}', ac);
+  const w = watch(); w.step(0.1);
+  w.G.announce = (...args) => ac.announce(...args);
+  vm.runInContext('announce("BLOCK", 5, "race")', ac);
+  w.G._caution = 3;
+  w.radio.replayEvent({ kind: "sc", level: 3 }); w.step(0.1);
+  assert.equal(ac._annQueue.length, 1, "SC card accepted downstream");
+  w.G._caution = 0;
+  w.radio.replayEvent({ kind: "green" }); w.step(0.1);
+  for (let i = 0; i < 120; i++) vm.runInContext('tick(.1)', ac);
+  assert.equal(shown.length, 2);
+  assert.match(shown[1], /GREEN/);
+  assert.ok(!shown.some((msg) => /SAFETY CAR/.test(msg)), "accepted SC is stale by display time");
+  for (const level of [2, 3, 4, 0]) {
+    w.G._caution = level;
+    w.radio.replayEvent(level ? { kind: "sc", level } : { kind: "green" }); w.step(0.1);
+    for (let i = 0; i < 60; i++) vm.runInContext('tick(.1)', ac);
+  }
+  assert.equal(shown.length, 6, "valid VSC, SC, red and green each play once");
+});
+
+test("last-lap urgent retries refresh the battle and retain one final-lap reminder", () => {
+  for (const scenario of ["lead", "ahead", "defend", "calm"]) {
+    const r = race({ laps: 3, store: { radioChat: "key", commentary: "off" } });
+    r.step(0.1, 100);
+    let blocked = true; const attempts = [];
+    r.G.announce = (msg, dur, kind) => { attempts.push({ msg, kind, accepted: !blocked }); return !blocked; };
+    r.G.player.lap = 3; r.step(0.1);
+    assert.match(attempts.at(-1).msg, /BBB/, "first offer attacks original rival");
+    const [a, b, p] = r.cars;
+    if (scenario === "lead") p.prog = a.prog + 30;
+    else if (scenario === "ahead") b.prog = a.prog + 30;
+    else if (scenario === "defend") { p.prog = b.prog + 12; a.prog = p.prog + 240; }
+    else { a.prog = p.prog + 240; b.prog = p.prog + 180; }
+    // Let both cars cross fresh timing lines after the changed order: gaps
+    // are measured checkpoint times, so the previous gap can persist briefly.
+    if (scenario === "defend" || scenario === "calm") r.step(0.1, 50);
+    blocked = false; r.step(0.1);
+    const accepted = attempts.filter((x) => x.accepted && x.kind === "race");
+    assert.equal(accepted.length, 1);
+    const msg = accepted[0].msg;
+    if (scenario === "lead") assert.match(msg, /LEADING|WIN/);
+    else if (scenario === "ahead") { assert.match(msg, /AAA/); assert.doesNotMatch(msg, /BBB/); }
+    else if (scenario === "defend") assert.match(msg, /BBB.*(OFF|BACK|BEHIND)|HOLD BBB/);
+    else assert.match(msg, /LAST LAP|ONE TO GO/);
+    r.step(0.1, 20);
+    assert.equal(attempts.filter((x) => x.accepted && x.kind === "race").length, 1, "last-lap reminder remains once-only");
+  }
+});
 
 test("accepted live race cards cannot survive a new field or a radio reset", () => {
   for (const boundary of ["field", "reset"]) {
@@ -1203,6 +1273,7 @@ test("commentary OFF permanently discards accepted WATCH copy without suppressin
   const r = watch(), accepted = [];
   r.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, still }); return true; };
   r.step(.05);
+  r.G._caution = 3;
   r.radio.replayEvent({ kind: "sc", level: 3 });
   r.step(.05);
   assert.equal(accepted.length, 1);
@@ -1211,6 +1282,7 @@ test("commentary OFF permanently discards accepted WATCH copy without suppressin
   assert.equal(accepted[0].still(), false, "OFF applies to accepted cards waiting behind other news");
   r.radio.setComm("on");
   assert.equal(accepted[0].still(), false, "re-enabling must not resurrect discarded copy");
+  r.G._caution = 0;
   r.radio.replayEvent({ kind: "green" });
   r.step(.05);
   assert.equal(accepted.length, 2);
@@ -1365,7 +1437,7 @@ test("engineer OFF clears refused pending urgent copy before chatter is re-enabl
 test("engineer chatter changes preserve accepted WATCH commentary and valid non-OFF modes", () => {
   const w = watch(), accepted = [];
   w.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, still }); return true; };
-  w.step(.1); w.radio.replayEvent({ kind: "sc", level: 3 }); w.step(.1);
+  w.G._caution = 3; w.step(.1); w.radio.replayEvent({ kind: "sc", level: 3 }); w.step(.1);
   const tv = accepted[0]; assert.ok(tv); assert.equal(tv.still(), true);
   w.radio.setChat("off"); w.radio.setChat("chatty");
   assert.equal(tv.still(), true, "TV and race-control commentary retain their own setting/generation");

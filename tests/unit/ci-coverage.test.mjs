@@ -426,20 +426,28 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   const nodeIf = (node.match(/^    if: (.*)$/m) || [])[1] || "";
   assert.match(nodeIf, /needs\.select\.outputs\.any_node == 'true' \|\| github\.event_name != 'pull_request'/,
     "node-suites may skip at the job level only on a pull request with no needed slice");
+  // Decisions D1/D2 (the CI selection plan, PR #2560 §6): no draft
+  // (run-ci or not) and no Pages call runs the node slices; ready PRs, the
+  // nightly and dispatch do.
+  assert.ok(nodeIf.includes("&& !(github.event_name == 'pull_request' && github.event.pull_request.draft) &&"),
+    "node-suites skips every draft, run-ci included");
+  assert.match(nodeIf, /inputs\.concurrency_key == ''/, "node-suites skips on the Pages call");
   const steps = node.split(/\n      - /).slice(1);
-  const setup = steps.filter((st) => /^uses: actions\/checkout@|^uses: \.\/\.github\/actions\/setup-apex|^name: Plan the slices for this diff|^name: Was this head already green as a draft\?/.test(st));
-  assert.equal(setup.length, 4, "checkout, the reuse question, setup-apex and the plan step");
+  const setup = steps.filter((st) => /^uses: actions\/checkout@|^uses: \.\/\.github\/actions\/setup-apex|^name: Plan the slices for this diff/.test(st));
+  assert.equal(setup.length, 3, "checkout, setup-apex and the plan step");
+  assert.doesNotMatch(node, /reuse-draft-fast\.sh|steps\.reuse\./, "no draft run exists to reuse, so node-suites asks no reuse question");
   for (const st of setup) assert.match(st, /\n        if: matrix\.needed != 'false'/, "an unneeded row skips: " + st.split("\n")[0]);
   assert.match(node, /if \[ "\$\{\{ matrix\.needed \}\}" = "false" \]; then[\s\S]*?exit 0/, "the suites step exits 0 for an unneeded row");
   assert.match(node, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.slices\) \}\}/);
   const driving = (ciWorkflow.split("\n  driving-model:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.match(driving, /^    needs: \[select\]$/m);
   assert.match(driving, /needs\.select\.outputs\.driving == 'true'/);
+  assert.match(driving, /^    if: .*inputs\.concurrency_key == ''/m, "driving-model skips on the Pages call (decision D2)");
   // No plumbing job is left in front of the fast tier: every job that used to
   // wait on `reuse-draft` asks the question itself, as a step.
   const jobs = parseYAML(ciWorkflow).jobs;
   for (const id of ["reuse-draft", "unit-plan", "ship-filter", "renderer-filter", "xr-filter"]) assert.ok(!jobs[id], `${id} is a step now, not a job`);
-  for (const id of ["guards-a", "guards-b", "node-suites", "sweeps-parts", "driving-model"]) {
+  for (const id of ["guards-a", "guards-b", "sweeps-parts", "driving-model"]) {
     const st = jobs[id].steps.find((x) => x.id === "reuse");
     assert.ok(st && /reuse-draft-fast\.sh/.test(st.run), `${id} asks the reuse question itself`);
     assert.deepEqual(jobs[id].permissions, { contents: "read", actions: "read" }, `${id} needs actions:read for the runs lookup`);
@@ -467,6 +475,64 @@ test("test:xr is path-gated (a filter step of select → xr) and feeds ci-verdic
   assert.match(xr, /npm run test:xr/);
   const body = (ciWorkflow.split("\n  ci-verdict:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.match(body, /- xr\b/);
+});
+
+test("XR filter executes renderer, lazy-roster and emulated-spec changes while skipping unrelated paths", () => {
+  const step = parseYAML(ciWorkflow).jobs.select.steps.find((st) => st.id === "xrfilter");
+  const root = new URL("../../artifacts/", import.meta.url);
+  fs.mkdirSync(root, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(root.pathname, "xr-filter-"));
+  try {
+    const git = (...args) => cp.execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    const write = (file, body) => {
+      const dest = path.join(dir, file);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, body);
+    };
+    git("init", "-q", "-b", "fixture");
+    git("config", "user.name", "XR fixture");
+    git("config", "user.email", "xr@example.test");
+    write("tools/ci/ci-pr-base.sh", fs.readFileSync(new URL("../../tools/ci/ci-pr-base.sh", import.meta.url), "utf8"));
+    git("add", "."); git("commit", "-qm", "base");
+    const base = git("rev-parse", "HEAD");
+    const xrSpecs = JSON.parse(fs.readFileSync(new URL("../groups.json", import.meta.url), "utf8")).groups["test:xr"].files;
+    const cases = [
+      ["js/render/renderer-boot.js", true],
+      ["js/render/glx/glx.js", true],
+      ["js/render/three/tlx.js", true],
+      ["tools/manifest.cjs", true],
+      ...xrSpecs.map((file) => [file, true]),
+      ["js/xr/xr-session.js", true],
+      ["tests/helpers/iwer-install.mjs", true],
+      ["tests/vendor/iwer-2.5.0.min.js", true],
+      ["playwright.config.js", true],
+      [".github/workflows/ci.yml", true],
+      ["docs/TESTING.md", false],
+      ["js/render/three/tlx-post.js", false],
+      ["js/race/race-control.js", false],
+    ];
+    write("step.sh", step.run);
+    for (const [file, expected] of cases) {
+      git("checkout", "-q", "--detach", base);
+      write(file, "// changed XR boundary fixture\n");
+      git("add", file); git("commit", "-qm", file);
+      const sha = git("rev-parse", "HEAD");
+      // A real two-parent test merge exercises ci-pr-base.sh, rather than
+      // replacing git diff or testing a second copy of the filter's regex.
+      const merge = git("commit-tree", `${sha}^{tree}`, "-p", base, "-p", sha, "-m", "test merge");
+      git("checkout", "-q", "--detach", merge);
+      const output = path.join(dir, "output");
+      fs.rmSync(output, { force: true });
+      const result = cp.spawnSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", "step.sh"], {
+        cwd: dir, encoding: "utf8",
+        env: { ...process.env, EVENT: "pull_request", BEFORE: "stale-unreachable-base", GITHUB_SHA: merge, GITHUB_OUTPUT: output },
+      });
+      assert.equal(result.status, 0, `${file}: ${result.stderr}\n${result.stdout}`);
+      assert.equal(fs.readFileSync(output, "utf8").trim(), `xr=${expected}`, `${file}: ${result.stdout}`);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("no workflow demotes the change-aware gate to advisory", () => {
@@ -656,6 +722,18 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   git("checkout", "-q", "-b", "m2", "deploy"); git("merge", "-q", "--no-ff", "-m", "M2", "feature"); const M2 = git("rev-parse", "HEAD");
   assert.equal(git("rev-parse", `${M2}^{tree}`), git("rev-parse", `${D}^{tree}`), "fixture: M2 must share D's tree");
   assert.notEqual(git("rev-parse", `${M1}^{tree}`), git("rev-parse", `${B}^{tree}`), "fixture: M1 must not share B's tree");
+
+  // A side branch can change a gate input and then revert it before a
+  // tree-identical merge. The final tree still matches D, but D's earlier
+  // green run did not exercise that changed history and must not be reused.
+  git("checkout", "-q", "-b", "sensitive", D);
+  const gateInput = ["tools", "ci", "selection.mjs"].join("/");
+  fs.mkdirSync(path.dirname(path.join(dir, gateInput)), { recursive: true });
+  write(gateInput, "changed"); git("add", "."); git("commit", "-q", "-m", "change gate input");
+  fs.rmSync(path.join(dir, gateInput)); git("add", "-u"); git("commit", "-q", "-m", "revert gate input");
+  const S = git("rev-parse", "HEAD");
+  git("checkout", "-q", "-b", "m3", D); git("merge", "-q", "--no-ff", "-m", "M3", "sensitive"); const M3 = git("rev-parse", "HEAD");
+  assert.equal(git("rev-parse", `${M3}^{tree}`), git("rev-parse", `${D}^{tree}`), "fixture: M3 must share D's tree after a reverted gate-input change");
   void A;
 
   const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
@@ -703,6 +781,8 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
 
   assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7" },
     "merge with a parent's exact tree + that parent's green PR run: reuse");
+  assert.equal(verdict(M3, { [D]: [run()] }).reuse, "false",
+    "a tree-identical merge after a workflow/selection change and revert must rerun the gate");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }).reuse, "true", "a branch push run counts too");
   // ci.yml has no merge_group trigger (2026-10-14), so such a run is not one of its gates.
   assert.equal(verdict(M2, { [D]: [run({ event: "merge_group" })] }).reuse, "false", "a merge_group run is not a ci.yml gate any more");
@@ -1537,7 +1617,9 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   assert.ok(shipFilter.includes(fastTier), "the ship filter step sits out the fast tier with the same expression");
   assert.ok(sweepsJob.includes(fastTier), "sweeps sit out the fast tier");
   assert.doesNotMatch(ciWorkflow, /smoke_only/, "the always-false smoke_only input and its guards are gone (2026-10-14)");
-  for (const name of ["guards-a", "guards-b", "guards", "node-suites", "driving-model", "select"]) {
+  // node-suites left the draft fast tier on 2026-10-16 (decision D1): it keeps
+  // the shared draft/label predicate and adds its own draft skip (pinned above).
+  for (const name of ["guards-a", "guards-b", "guards", "driving-model", "select"]) {
     const job = ciWorkflow.slice(ciWorkflow.indexOf(`\n  ${name}:\n`));
     const head = job.slice(0, job.indexOf("\n    steps:"));
     assert.ok(head.includes(PR_ACTIVE), `${name} must skip draft synchronize unless run-ci`);
@@ -1772,6 +1854,18 @@ test("every inline `node -e '…'` script in the workflows is syntactically comp
  * gate on the merged tree and the tip sat red. `selected-verdict` has one
  * fixed name, runs whatever `selected` did, and reads the pair the way
  * poke-train did. Pinned so it cannot quietly stop covering a case. */
+test("the two CI guard shards stop starting files after their first failure (--bail)", () => {
+  const parsed = parseYAML(ciWorkflow).jobs;
+  for (const [id, shard] of [["guards-a", "1/2"], ["guards-b", "2/2"]]) {
+    const step = parsed[id].steps.find((st) => /tooling-fast\.mjs/.test(st.run || ""));
+    assert.ok(step, `${id} runs tooling-fast`);
+    assert.match(step.run, new RegExp(`--shard=${shard.replace("/", "\\/")} --bail$`),
+      `${id} must pass --bail (2026-10-16 CI jobs review: red shards ran a mean 5.9 min past the first failure)`);
+  }
+  // The local edit loop keeps every failure visible.
+  assert.doesNotMatch(JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")).scripts["test:tooling-fast"], /--bail/);
+});
+
 test("selected-verdict: one fixed-name check that always judges the change-aware gate", () => {
   const job = ciWorkflow.slice(ciWorkflow.indexOf("\n  selected-verdict:\n"), ciWorkflow.indexOf("\n  baseline-trial:\n"));
   assert.ok(job.length > 0, "the selected-verdict job is gone");

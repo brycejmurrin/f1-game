@@ -63,6 +63,7 @@
 //   --az=210 --el=20 --dist=4  render ONE custom angle (overrides --views/--preset)
 //   --shot=label,az,el,dist    REPEATABLE customs in ONE Chromium (preferred for spine)
 //   --preset=spine            crown / crown-rear / flank-high / tail-high
+//   --jpeg [--quality=80] human-review JPEGs; PNG remains the default
 //   --out=DIR             output dir. Default: scratch/renders/cars/<team>
 //   --w=900 --h=680       viewport size
 //   --gpu=1               draw on the HOST's GPU instead of pinning swiftshader
@@ -82,7 +83,7 @@
 //   node tools/car/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,night  # 3x3 grid
 //   node tools/car/render-car.mjs --team=all --spineLogo=wrap --views=top,rearquarter  # one design, every car
 
-import { chromium } from 'playwright';
+import { launchChromium, shutdown } from '../lib/harness.mjs';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { resolve, dirname } from 'node:path';
@@ -96,7 +97,7 @@ const RC_USAGE = `usage: node tools/car/render-car.mjs [--views=a,b,c] [--preset
 exitIfHelp(process.argv.slice(2), RC_USAGE);
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import { screenshotPresentedCanvas } from '../shot/probe-page.mjs';
+import { screenshotPresentedCanvas, mutateCaptureScene, awaitCaptureReady } from '../shot/probe-page.mjs';
 
 /* How many distinct colours are in the middle of a written shot. Cheap, and it
    is the only thing that separates "rendered" from "wrote a file". */
@@ -271,6 +272,13 @@ const PLIGHTS = process.argv.filter(a => a.startsWith('--plight=')).map(a => a.s
 // A custom --az/--el/--dist renders a single ad-hoc view instead of the presets.
 const CUSTOM = (arg('az', null) != null || arg('el', null) != null || arg('dist', null) != null);
 const HOST_GPU = arg('gpu', '0') !== '0';
+const JPEG = arg('jpeg', null) != null && arg('jpeg', '1') !== '0';
+const qualityArg = arg('quality', '80');
+if (qualityArg === true) throw new Error('--quality requires a value');
+const QUALITY = Number(qualityArg);
+if (!Number.isInteger(QUALITY) || QUALITY < 1 || QUALITY > 100) throw new Error('--quality must be 1..100');
+if (!JPEG && arg('quality', null) != null) throw new Error('--quality requires --jpeg');
+const EXT = JPEG ? 'jpg' : 'png';
 const W      = parseInt(arg('w', '900'), 10);
 const H      = parseInt(arg('h', '680'), 10);
 const URL    = arg('url', 'http://127.0.0.1:3456');
@@ -384,7 +392,7 @@ for (const f of LIV_FIELDS) { const v = arg(f, null); if (v != null) qs.set(f, v
 // that each arg('…') literal is in it).
 const RC_FLAGS = new Set(['az', 'bg', 'carsmooth', 'dist', 'el', 'exp', 'flap', 'gpu', 'h',
   'intensity', 'lightset', 'livery', 'look', 'lookx', 'looky', 'num', 'out', 'preset', 'refl',
-  'rig', 'studio', 'sweep', 'team', 'tod', 'url', 'views', 'w', 'wait', 'plight', 'shot',
+  'rig', 'studio', 'sweep', 'team', 'tod', 'url', 'views', 'w', 'wait', 'plight', 'shot', 'jpeg', 'quality',
   ...PART_CATS, ...LIV_FIELDS]);
 {
   const bad = process.argv.slice(2).filter((a) => a.startsWith('--')
@@ -420,7 +428,8 @@ const shots = [];
 const GPU_ARGS = ['--enable-webgl', '--ignore-gpu-blocklist'];
 const SOFT_GL = glStack() === 'llvmpipe' ? 'llvmpipe' : 'swiftshader';
 const SOFT_ARGS = SOFT_GL === 'llvmpipe' ? ['--use-angle=gl', '--use-gl=angle'] : ['--use-angle=swiftshader'];
-const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}),
+const started = Date.now();
+const browser = await launchChromium({ ...(EXE ? { executablePath: EXE } : {}),
   args: HOST_GPU ? GPU_ARGS : [...SOFT_ARGS, ...GPU_ARGS] });
 console.log(`renderer: ${HOST_GPU ? "the host's GPU (--gpu)" : SOFT_GL}`);
 try {
@@ -439,35 +448,25 @@ try {
     resp = await page.goto(alt, { waitUntil: 'load' });
   }
   const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: WAIT_MS }).then(() => true).catch(() => false);
-  if (!ok) { console.error(`carview did not become ready in ${WAIT_MS / 1000}s — is the server running and the car building? (--wait=SECONDS to allow longer)`); process.exit(2); }
+  if (!ok) throw new Error(`carview did not become ready in ${WAIT_MS / 1000}s — is the server running and the car building? (--wait=SECONDS to allow longer)`);
 
   const boot = { team: TEAM, parts };
   if (LIVERY) boot.livery = LIVERY;
   if (NUM != null) boot.num = NUM;
   if (REFL != null) boot.refl = parseFloat(REFL);
-  const bootFrame = await page.evaluate((p) => {
-    const before = window.CARVIEW.frame;
-    window.CARVIEW.set(p);
-    return before;
-  }, boot);
-  await page.waitForFunction((before) => window.CARVIEW.frame >= before + 8, bootFrame, { polling: 100, timeout: WAIT_MS })
-    .catch(async () => { await page.waitForTimeout(2_000); });
+  await mutateCaptureScene(page, (p) => window.CARVIEW.set(p), boot);
 
-  let renderedTod = TOD, renderedTeam = TEAM, firstShot = true;
+  let renderedTeam = TEAM;
   const t0 = Date.now();
   /** Soft #view / #game-soft → CDP. Never page.screenshot (fonts hang under SwiftShader). */
   async function captureCanvas(dest) {
     const shot = await screenshotPresentedCanvas(page, {
-      path: dest, preferView: true, timeout: 60_000,
+      path: dest, preferView: true, skipAwait: true, timeout: WAIT_MS, type: JPEG ? 'jpeg' : 'png', ...(JPEG ? { quality: QUALITY } : {}),
     });
-    return shot.via || shot.id || 'cdp';
+    return shot;
   }
   for (const s of shotDefs) {
-    const frame = await page.evaluate((p) => {
-      const before = window.CARVIEW.frame;
-      window.CARVIEW.set(p);
-      return before;
-    }, { az: s.az, el: s.el, dist: s.dist,
+    await mutateCaptureScene(page, (p) => window.CARVIEW.set(p), { az: s.az, el: s.el, dist: s.dist,
          look:  s.look  != null ? s.look  : LOOK,
          lookX: s.lookX != null ? s.lookX : LOOKX,
          lookY: s.lookY != null ? s.lookY : (LOOKY != null ? parseFloat(LOOKY) : 0),
@@ -475,37 +474,22 @@ try {
          // Only when it CHANGES: CARVIEW.set({team}) rebuilds the car, and
          // re-sending the same id every shot pays that on every camera move.
          ...(s.team !== renderedTeam ? { team: s.team } : {}) });
-    // Soft-present waiters force a blit; 3 frames + awaitSoftPresent is enough
-    // for same-tod orbit moves. Keep the longer settle only on first/tod change.
-    // `need` MUST be in the arg bag — a free `need` in the page fn is ReferenceError
-    // ("need is not defined"), the waiter fails, and every shot falls back to sleep.
-    // A team swap rebuilds the mesh and repaints the atlas — strictly more work
-    // than an orbit move, so it gets the same long settle a tod change does.
-    const heavy = firstShot || s.tod !== renderedTod || s.team !== renderedTeam;
-    const need = heavy ? 8 : 3;
-    await page.waitForFunction(
-      ({ before, n }) => window.CARVIEW.frame >= before + n,
-      { before: frame, n: need },
-      { polling: 50, timeout: WAIT_MS },
-    ).catch(async () => {
-      console.log(`  (slow frame settle — falling back to a timed wait)`);
-      await page.waitForTimeout(1_500);
-    });
-    if (heavy) await page.waitForTimeout(400);
-    firstShot = false;
-    renderedTod = s.tod;
     renderedTeam = s.team;
-    const file = MULTI_TEAM ? `${s.team}-${s.label}${lightTods ? '-' + s.tod : ''}.png`
-               : lightTods ? `${s.group}-${s.tod}.png` : `${s.label}.png`;
+    // The shared generation marker rejects old readbacks and waits only until
+    // this camera/team has actually painted. No timed fallback can pass a stall.
+    const file = MULTI_TEAM ? `${s.team}-${s.label}${lightTods ? '-' + s.tod : ''}.${EXT}`
+               : lightTods ? `${s.group}-${s.tod}.${EXT}` : `${s.label}.${EXT}`;
     const dest = resolveContainedChild(OUT, file, 'render output path');
-    const via = await captureCanvas(dest);
+    const readiness = await awaitCaptureReady(page, { timeoutMs: WAIT_MS });
+    const capture = await captureCanvas(dest);
+    const via = capture.via || capture.id || 'cdp';
     const shades = await blankCheck(dest);
     if (shades < 6) {
       console.error(`  ✗ ${file} — only ${shades} distinct colour${shades === 1 ? "" : "s"} in the centre: the canvas did not paint.`);
       console.error(`    Chromium renders this through ${SOFT_GL}; check the launch flag is ${SOFT_ARGS[0]}.`);
       process.exitCode = 3;
     } else console.log(`  ✓ ${file} (via=${via})`);
-    shots.push({ file, label: s.label, group: s.group, tod: s.tod, team: s.team, via });
+    shots.push({ file, label: s.label, group: s.group, tod: s.tod, team: s.team, via, readiness, bytes: capture.bytes, timings: capture.timings });
   }
   console.log(`Rendered ${shots.length} shot(s) in ${((Date.now() - t0) / 1000).toFixed(1)}s -> ${OUT}`);
 
@@ -561,7 +545,12 @@ try {
 <div class="meta">${metaLine}</div>
 ${body}`);
 
+  writeFileSync(resolveContainedChild(OUT, 'manifest.json', 'render manifest path'), JSON.stringify({
+    viewport: { width: W, height: H }, browser: browser.version(), encoding: JPEG ? 'jpeg' : 'png',
+    renderer: await page.evaluate(() => ({ backend: 'webgl2', softPresent: GLX.softPresent?.() || false })),
+    elapsedMs: Date.now() - started, shots,
+  }, null, 2));
   console.log(`Contact sheet: ${resolveContainedChild(OUT, 'index.html', 'render contact sheet path')}`);
 } finally {
-  await browser.close();
+  await shutdown();
 }

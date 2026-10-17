@@ -65,6 +65,7 @@ export const RULES = [
   [/^(js|css|index\.html|version\.json)/, ["tooling-fast"],
    "load order, docs integrity, api contracts — ~2 min at three files at a time, catches the structural slips"],
 
+  [/^tests\/unit\/render-final-contracts\.test\.mjs$/, ["tooling-fast"], "renderer ownership, post health, material detail and particle residency contracts"],
   // ── renderer ────────────────────────────────────────────────────────────
   // NOT "visual" — tests/manual/tracks-visual.spec.js is PARKED. It has no
   // committed golden baselines and self-skips all 40 circuits, so the group
@@ -193,6 +194,7 @@ export const RULES = [
   [/^js\/camera\/cockpit-opts\.js/, ["ui"], "DOM screens"],
   [/^js\/camera\//, ["input"], "camera vantage, offsets and mode switching"],
   [/^js\/audio\/spotify\.js/, ["ui", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
+  [/^js\/audio\/battle-earcon\.js$/, ["audio-unit"], "finite battle motifs: selection, readiness and cancellation in its own unit suite"],
   [/^js\/audio\/radio-voice\.js/, ["audio-unit", "ui"], "the spoken radio: its own policy suite, and the mixer panel that toggles it"],
   [/^js\/audio\/voice-pack\.js/, ["audio-unit"], "the recorded radio voice: its composer, pack coverage and the RadioVoice hand-off"],
   [/^js\/audio\/announcer\.js/, ["audio-unit", "ui"], "the pre-race announcer: its own script+voice suite, and the loading screen and settings sheet that drive it"],
@@ -233,6 +235,7 @@ export const RULES = [
   // tests/unit/pick-tests.test.mjs holds the invariant, so a thirteenth cannot
   // appear in silence — these twelve are what it measured.
   [/^js\/race\/race-settings\.js/, ["game-vm"], "race-settings-vm.test.mjs"],
+  [/^js\/ui\/editor-workspace\.js$/, ["steering-unit", "ui"], "editor-workspace.test.mjs — tuner furniture and return lifecycle"],
   [/^js\/ui\/settings-tabs\.js/, ["steering-unit", "ui"], "settings-tabs.test.mjs (the page stack + LAZY_AUDIO gate); ui for the menu specs"],
   [/^js\/career\/custom-team\.js/, ["car"], "custom-team.spec.js"],
   [/^js\/car\/helmets\.js/, ["garage-unit"], "helmets.test.mjs"],
@@ -297,6 +300,7 @@ export const RULES = [
   // panel, the global type and colour tokens, the picker), so they ride along.
   [/^css\/(menus|carsetup|tokens|select)\.css/, ["ui", "baseline"], "the menu chrome: only the blessed PNGs in menu-baseline.spec.js see it"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
+  [/^js\/race\/setup-trial-session\.js$/, ["garage-unit"], "fresh solo setup-trial ownership and starting conditions"],
   [/^js\/ui\/settings-search\.js$/, ["steering-unit"], "settings search ownership and focus regressions"],
   // Two rules, because "script tags + DOM shell" is LOAD-BEARING: it is one of
   // select-specs' BOOT_FALLBACK_REASONS, the strings that let node-plan.mjs
@@ -305,6 +309,9 @@ export const RULES = [
   // Rewording it to mention the art would put vm-page — logging.spec.js's VM
   // twin — back into every source edit's node plan.
   [/^index\.html/, ["baseline"], "the #title-car art the baseline PNGs pixel-compare"],
+  // index.html IS the precached shell: sw.js installs from the tags it names and its inline boot guard
+  // (version check, broken-install repair) has unit coverage only in the service-worker group (#1704).
+  [/^index\.html/, ["service-worker"], "the precached shell: the SW's install list and the boot guard's repair"],
   [/^(index|cockpit-view)\.html/, ["tiny", "ui"], "script tags + DOM shell"],
   [/^tools\/manifest\.cjs/, ["tooling-fast"], "load order is asserted against index.html"],
   [/^tools\//, ["tooling-fast"], "the tools index and every tool contract live in the tooling suite"],

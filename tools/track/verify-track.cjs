@@ -29,6 +29,8 @@ const vm   = require("vm");
 
 const ROOT = path.resolve(__dirname, "../..");
 const MANIFEST = require("../manifest.cjs");
+const { kinkNodes } = require("../lib/centreline-kinks.cjs");
+const { checkRoadPositions } = require("../lib/road-position-checks.cjs");
 
 // --all mode: run verification for every track id found in Tracks.LIST
 if (require.main === module) main();
@@ -318,6 +320,15 @@ function verifyDef(Tracks, def, opts) {
 
   const folds = roadGeoChecks(id, track);
 
+  // Single-node centreline kinks (node radius < half-width): pinned per shipped circuit, lower-only
+  // (tests/data/centreline-kinks.json, tools/track/centreline-kinks.cjs). Custom designs are not pinned.
+  if (Tracks.LIST.some((t) => t.id === id)) {
+    const kinks = kinkNodes(track).length;
+    const pinned = (JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/centreline-kinks.json"), "utf8")).counts || {})[id] || 0;
+    if (kinks > pinned) throw new Error(`centreline has ${kinks} node(s) tighter than the half-width (pinned ${pinned}): ` +
+      "`node tools/track/centreline-kinks.cjs " + id + "` lists them; add a control point at the corner entry (#2209)");
+  }
+
   console.log(`OK ${id}: props ${props} verts (road ${road}, terrain ${terrain})` +
     (inst ? ` — ${inst} instanced` : "") + ` — ${total} total`);
   if (folds) console.log(folds);
@@ -384,6 +395,10 @@ function roadGeoChecks(id, track) {
   }
   if (dups) throw new Error(`roadGeo has ${dups} duplicate kerb/skirt/hatch triangles (first at tri ${firstDup}) — ` +
     "a kerb quad laid twice (see buildKerbs in js/track/core/mesh.js)");
+
+  // Position-based ribbon checks the index checks cannot make (width, skirt depth, continuity; #1943).
+  const posFail = checkRoadPositions(track);
+  if (posFail.length) throw new Error(`roadGeo position check: ${posFail.join("; ")}`);
 
   const { px, pz, tx, tz } = track;
   const runs = [];

@@ -1282,7 +1282,7 @@ test("phone samples bunched into one millisecond still reach the filter", () => 
 // path under IWER): one mapFrame -> inject on a fresh Input carries a finite
 // `steer` and NO `roll`, and the first frame's steer/pedals are finite.
 test("XR from a cold start: the first injected stick sample is finite all the way through Input", () => {
-  const { Input, sb, clock } = bootInput();
+  const { Input, sb, clock, key } = bootInput();
   for (const f of ["js/xr/xr-rig.js", "js/xr/xr-input.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: f });
   const XrInput = vm.runInContext("XrInput", sb);
   const pad = (axes, buttons) => ({ axes, buttons: buttons.map((v) => ({ value: v, pressed: v > 0.5 })) });
@@ -1303,7 +1303,24 @@ test("XR from a cold start: the first injected stick sample is finite all the wa
   assert.ok(Number.isFinite(steer) && steer > 0.5, "the very first frame steers, finite: " + steer);
   assert.ok(Number.isFinite(Input.throttleLevel()) && Input.throttleLevel() > 0.5);
   assert.ok(Number.isFinite(Input.brakeLevel()) && Input.brakeLevel() > 0.5);
-  assert.ok(Input.lookingBack(), "squeeze is the look-back hold bit");
+  assert.equal(s.held, 0, "XR squeeze preserves the default stable seated gaze");
+  assert.equal(Input.lookingBack(), false, "XR cannot inject a synthetic look-back hold");
+  // Input still reports ordinary look-back intent; the immersive camera gate
+  // enforces comfort for keyboard/pad intent only while XR is presenting.
+  Input.remoteLost();
+  key("KeyB", true);
+  assert.equal(Input.lookingBack(), true, "ordinary keyboard look-back remains available");
+  key("KeyB", false);
+  assert.equal(Input.lookingBack(), false);
+  const physical = { index: 0, connected: true, id: "standard pad", mapping: "standard", axes: [0, 0, 0, 0],
+    buttons: Array.from({ length: 18 }, (_, i) => ({ value: i === 11 ? 1 : 0, pressed: i === 11 })) };
+  sb.navigator.getGamepads = () => [physical];
+  sb.dispatchEvent({ type: "gamepadconnected", gamepad: physical });
+  Input.poll();
+  assert.equal(Input.lookingBack(), true, "ordinary physical pad look-back remains available");
+  physical.buttons[11] = { value: 0, pressed: false };
+  Input.poll();
+  assert.equal(Input.lookingBack(), false, "physical pad release clears the hold");
 });
 
 test("wheel pedal axes never feed onboard free-look; an ordinary right stick still does", () => {
@@ -1400,6 +1417,32 @@ test("host(): cancelling a private exchange ignores a late answer and closes the
   assert.ok(request.token.cancelled); assert.equal(h.hostEnd.status, "closed");
   resolve({ ok: true, payload: "LATE ANSWER" }); await settle();
   assert.equal(accepted, 0); assert.equal(h.ui.linkedN, 0); assert.equal(h.ctl.state().phase, "cancelled");
+});
+
+test("host(): expired private pairing clears the QR and frees a fresh attempt", async () => {
+  let finish, request;
+  const deps = { usingPrivateRelay: () => true,
+    swap: (o) => { request = o; return new Promise((r) => { finish = r; }); } };
+  const h = hostHarness(deps);
+  h.ui.failedN = 0; h.ui.failed = () => h.ui.failedN++;
+  await settle();
+  assert.equal(h.ctl.state().phase, "waiting");
+  assert.ok(h.ui.qrs.at(-1).url);
+  finish({ ok: false, error: "expired", message: "Room expired" });
+  await settle();
+  assert.equal(h.ctl.state().phase, "failed");
+  assert.equal(h.hostEnd.status, "closed");
+  assert.equal(request.token.cancelled, true);
+  assert.equal(h.ui.qrs.at(-1).url, null, "the expired QR is removed");
+  assert.equal(h.ui.failedN, 1, "the platform restores its pairing button exactly once");
+  assert.match(h.ui.said.at(-1), /code expired.*STEER THIS GAME WITH A PHONE/);
+  h.ctl.cancel();
+  const fresh = hostHarness(deps);
+  await settle();
+  assert.equal(fresh.ctl.state().phase, "waiting");
+  assert.ok(fresh.ui.qrs.at(-1).url, "a fresh attempt publishes a new live QR");
+  assert.equal(request.token.cancelled, false);
+  fresh.ctl.cancel(); finish({ ok: false, error: "cancelled" }); await settle();
 });
 
 test("host(): private exchange and unreadable-answer failures release their transport", async () => {

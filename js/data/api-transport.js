@@ -418,7 +418,14 @@ const F1Transport = (function () {
       return t;
     }
 
-    return { request, cancelAll, cacheEntryT, staleMark, staleSince };
+    /** Drop one URL from BOTH caches. A body over CACHE_MAX_CHARS lives only in memCache, so clearing
+     *  localStorage alone leaves it served until the page reloads (an unfinished race's /position grid). */
+    function forget(url) {
+      memCache.delete(url);
+      try { localStorage.removeItem(CACHE_PREFIX + url); } catch (e) { /* no storage */ }
+    }
+
+    return { request, cancelAll, cacheEntryT, staleMark, staleSince, forget };
   }
 
   return { create };

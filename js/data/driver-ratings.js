@@ -110,9 +110,11 @@ const DriverRatings = (function () {
         }
       : fromTier(tier, code);
     if (deltas) {
-      for (const k of AXES) if (deltas[k]) r[k] = clamp(r[k] + deltas[k], 1, 100);
+      // A delta is a finite number or nothing: a persisted "5" concatenated ("825") and Infinity pinned the axis.
+      const dv = (k) => (typeof deltas[k] === "number" && isFinite(deltas[k]) ? deltas[k] : 0);
+      for (const k of AXES) if (dv(k)) r[k] = clamp(r[k] + dv(k), 1, 100);
       // Career may not author style deltas; ignore unknown keys.
-      for (const k of STYLE_AXES) if (deltas[k]) r[k] = clamp(r[k] + deltas[k], -STYLE_SCALE, STYLE_SCALE);
+      for (const k of STYLE_AXES) if (dv(k)) r[k] = clamp(r[k] + dv(k), -STYLE_SCALE, STYLE_SCALE);
     }
     return r;
   }

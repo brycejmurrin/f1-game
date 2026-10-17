@@ -36,7 +36,8 @@ const CareerBackup = (function () {
   // `rowFlavour` is the slot the file files it under; a driver career that
   // claims a MY TEAM row (a hand edit) would load as a driver save in that set.
   function futureSave(data) {
-    return !!(data && typeof SaveMigrate !== "undefined" && Number(data.v) > SaveMigrate.CAREER_V);
+    if (!data || typeof SaveMigrate === "undefined") return false;
+    try { return Number(data.v) > SaveMigrate.CAREER_V; } catch (_) { return false; }
   }
   function slotPayloadOk(data, rowFlavour) {
     if (data == null) return { ok: true };
@@ -78,6 +79,16 @@ const CareerBackup = (function () {
     }
     if (data.fitted != null && (typeof data.fitted !== "object" || Array.isArray(data.fitted))) {
       return { ok: false, reason: "fitted-not-object" };
+    }
+    // team and year are interpolated into the import card; an object with a
+    // hostile toString throws "Cannot convert object to primitive value" there.
+    if (data.team != null && typeof data.team !== "string") return { ok: false, reason: "team-not-string" };
+    if (data.year != null && (typeof data.year !== "number" || !Number.isFinite(data.year))) {
+      return { ok: false, reason: "year-not-number" };
+    }
+    const ct = data.myTeamIdentity && data.myTeamIdentity.customTeam;
+    if (ct != null && (!isObj(ct) || (ct.name != null && typeof ct.name !== "string"))) {
+      return { ok: false, reason: "custom-team-name" };
     }
     return { ok: true };
   }
@@ -260,6 +271,10 @@ const CareerBackup = (function () {
     }
     // Malformed VALUES inside myTeam are dropped per key at apply, not fatal.
     if (raw.myTeam != null && !isObj(raw.myTeam)) return { ok: false, reason: "myteam-not-object" };
+    if (raw.myTeam && raw.myTeam.customTeam != null && (!isObj(raw.myTeam.customTeam)
+        || (raw.myTeam.customTeam.name != null && typeof raw.myTeam.customTeam.name !== "string"))) {
+      return { ok: false, reason: "custom-team-name" };
+    }
     // Ghosts must never ride along — refuse a file that smuggles them in.
     if (raw.ghost != null || raw.ghosts != null || raw["ghost.v1"] != null) {
       return { ok: false, reason: "ghosts-forbidden" };
@@ -347,7 +362,8 @@ const CareerBackup = (function () {
   }
   function num(v, lo, hi) { return typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi ? v : null; }
   // A Daily class key is Ghost.contextKey(): JSON of the car/tune config, never an
-  // ID (#2165). Bounded and never a prototype name; the 8-per-day cap still holds.
+  // ID (#2165). Keys are bounded and never prototype names; the whole history
+  // uses the file-byte budget, since native play and merges can add classes.
   const CLASS_KEY_MAX = 4096;
   function classKey(k) {
     return k.length > 0 && k.length <= CLASS_KEY_MAX && k !== "__proto__" && k !== "constructor" && k !== "prototype";
@@ -454,8 +470,7 @@ const CareerBackup = (function () {
     if (own(e, "best")) out.best = cleanBest(e.best);
     if (own(e, "laps")) out.laps = num(e.laps, 0, 1e6) | 0;
     if (!nested && isObj(e.classes)) {
-      if (Object.keys(e.classes).filter(classKey).length > 8) throw new Error("too many daily classes");
-      out.classes = idMap(e.classes, 8, (v) => cleanDayEntry(v, true), classKey);
+      out.classes = idMap(e.classes, Infinity, (v) => cleanDayEntry(v, true), classKey);
     }
     return out;
   }
@@ -466,7 +481,6 @@ const CareerBackup = (function () {
       const src = plain(r.days);
       const days = {};
       const dates = Object.keys(src).filter((k) => DAY_RE.test(k)).sort();
-      if (dates.length > 120) throw new Error("too many daily days");
       for (const day of dates) {
         const e = cleanDayEntry(src[day], false);
         if (e) days[day] = e;
@@ -509,8 +523,8 @@ const CareerBackup = (function () {
   function cleanExtra(name, raw) {
     try {
       const incoming = new Blob([JSON.stringify(raw)]).size;
-      // Daily context keys contain whole car/tune configs: 61 days × eight
-      // classes legitimately exceeds 256 KiB. Only schema-checked Daily data
+      // Daily context keys contain whole car/tune configs; native histories
+      // legitimately exceed 256 KiB. Only schema-checked Daily data
       // gets the file budget; discarded junk retains the original extra cap.
       const limit = name === "daily" ? MAX_BYTES : EXTRA_MAX;
       if (incoming > limit) return { ok: false, reason: name + "-too-large" };
@@ -648,6 +662,8 @@ const CareerBackup = (function () {
   }
   function seasonAhead(local, incoming) {
     if (!isObj(local)) return false;
+    // apply() writes the CLEANED season (round > 200 -> 0); compare that, not the raw file.
+    if (isObj(incoming)) { const c = cleanExtra("season", incoming); if (c && c.value) incoming = Object.assign({}, incoming, { round: c.value.round }); }
     const a = local.round | 0, b = incoming.round | 0;
     return a !== b ? a > b : seasonPts(local) > seasonPts(incoming)
       || qualifyingAhead(local, incoming) || sprintAhead(local, incoming);
@@ -830,6 +846,22 @@ const CareerBackup = (function () {
       plan.push({ f: f, i: idx, data, id: id });
     }
 
+    // Two valid histories can exceed the byte budget when combined. Check the
+    // cleaned local input AND the union before any slot/selection/extra writes;
+    // raw local prototype keys must not disappear inside Object.assign first.
+    let mergedDaily = null;
+    if (s && typeof s.write === "function" && envelope.daily != null
+        && o.includeExtras !== false && o.includeProgressExtras !== false) {
+      const rawLocal = s.get("daily.v1", null);
+      const local = cleanExtra("daily", isObj(rawLocal) ? rawLocal : {});
+      if (!local.ok) return local;
+      const incoming = cleanExtra("daily", envelope.daily);
+      if (!incoming.ok) return incoming;
+      const merged = cleanExtra("daily", mergeDaily(local.value, incoming.value));
+      if (!merged.ok) return merged;
+      mergedDaily = merged.value;
+    }
+
     for (let p = 0; p < plan.length; p++) {
       const step = plan[p];
       const id = step.id;
@@ -873,8 +905,7 @@ const CareerBackup = (function () {
       }
       const badges = extra("badges");
       if (badges) recordWrite("badges", s.write("badges", mergeBadges(s.get("badges", null), badges)));
-      const daily = extra("daily");
-      if (daily) recordWrite("daily.v1", s.write("daily.v1", mergeDaily(s.get("daily.v1", null), daily)));
+      if (mergedDaily && progressExtras) recordWrite("daily.v1", s.write("daily.v1", mergedDaily));
       const records = extra("records");
       if (records) recordWrite("records", s.write("records", mergeRecords(s.get("records", null), records)));
       // Identity is embedded in each slot above. Global GP garage keys are never replaced by career import.

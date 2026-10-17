@@ -18,6 +18,7 @@ const CASES = [
   ["tools/check/ai-pace.mjs", /ai-pace/],
   ["tools/check/ai-field.mjs", /ai-field/],
   ["tools/check/ai-line.mjs", /ai-line/],
+  ["tools/check/ai-stuck.mjs", /ai-stuck/],
   ["tools/check/ai-human.mjs", /ai-human/],
   ["tools/check/player-dyn.mjs", /player-dyn/],
   ["tools/check/physics-tune-sweep.mjs", /physics-tune-sweep/],

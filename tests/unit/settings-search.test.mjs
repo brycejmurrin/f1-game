@@ -48,7 +48,7 @@ test("a fresh settings session cancels search-return ownership while preserving 
 });
 test("successful lazy search still owns BACK and opens ancestor disclosures", async () => {
   const h = boot({ lazy: true }), fold = h.el("details", "audio-fold", h.dom.document.querySelector("#audioset")), target = h.el("input", "as-mvol", fold); target.value = "42";
-  const result = h.result("music"); result.onclick(); h.ctx.GameAudio._stub = false; h.complete(); await tick(); await tick();
+  const result = h.result("music volume"); result.onclick(); h.ctx.GameAudio._stub = false; h.complete(); await tick(); await tick();
   assert.equal(fold.open, true); assert.equal(h.dom.document.activeElement, target); h.nav.back(); assert.equal(h.dom.document.activeElement, result); assert.equal(target.value, "42");
 });
 test("search spans the existing two-column door grid and a full flex row on narrow sheets", () => {

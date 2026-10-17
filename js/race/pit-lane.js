@@ -702,8 +702,8 @@ var PitLane = (function () {
         // the limit into traffic at racing speed. GO for a moment
         // after the release; MERGE, naming the car, while one is closing on
         // the track side; otherwise the metres to the end of the road.
-        if ((c.pitOutT || 0) > 0) return { phase: "served", text: "GO GO GO", dist: 0, frac: 1 };
         const o = closingCar(c);
+        if ((c.pitOutT || 0) > 0) return { phase: "served", text: o ? "GO — " + (o.code || "CAR") + " CLOSING" : "GO GO GO", dist: 0, frac: 1 };
         if (o) return { phase: "merge", text: "MERGE — " + (o.code || "CAR") + " CLOSING", dist: 0, frac: 1 };
         const m = toExit(c);
         return m > 0 ? { phase: "out", text: "EXIT " + Math.round(m) + "m", dist: m, frac: clamp(1 - m / exitLen(c), 0, 1) } : null;
@@ -766,7 +766,15 @@ var PitLane = (function () {
       const d = toEntry(c);
       if (!(d > 0)) return Infinity;
       const lim = limit();
-      return Math.sqrt(lim * lim + 2 * ENTRY_BRAKE * Math.max(0, d - 4));
+      // The curve ends at the START of the entry road, not at the line: the
+      // peel to the lane happens ON the road, and a car let through it at 25-30
+      // m/s (the curve's value 30 m out) cannot move 9 m sideways in 30 m — it
+      // met the wall at the road's end clamped to its track face (x -7.8, 8 of
+      // 21 on a Suzuka weather stop), was not in the lane at the line, and went
+      // round again, every lap. On the road itself: the limit.
+      const p = G.track && G.track.pit;
+      const road = p && !p.painted ? p.entryRoadM || 0 : 0;
+      return Math.sqrt(lim * lim + 2 * ENTRY_BRAKE * Math.max(0, d - road - 4));
     }
 
     /** The EXIT ROAD's hold: the limit until the blend has brought a serviced
@@ -1192,8 +1200,10 @@ var PitLane = (function () {
       // think() guards ARMING on the last lap / a flagged leader, but an AI that
       // armed on lap L-1 and missed its entry (it comes in next time round) was
       // still armed past it: the stop paid nothing and was taken anyway.
+      // …EXCEPT a car that still owes its second dry compound: a stop re-cut late (or a missed pass at a
+      // pre-line box) lands in the final lap, and clearing it there ends in applyCompoundRule's DSQ.
       if (!c.human && c.pitArmed && st === "none" &&
-          ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars)))) clearArm(c);
+          ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget && !owesCompound(c)) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars)))) clearArm(c);
       const zz = z(), L = zoneFor.total;   // zoneFor IS G.track here: enabled() above saw z() non-null (one façade read, PERF-HUNT-2 S7)
       if (st === "out" && c.pitOutT > 0) c.pitOutT = Math.max(0, c.pitOutT - dt);   // the GO chip's clock
       // Every plan is re-cut once per lap (replan): the player's reference, and
@@ -1532,17 +1542,20 @@ var PitLane = (function () {
       return Math.max(0, (G.lapsTarget || 0) - ((c && c.lap) || 0) + 1);
     }
     /** The player still owes the second compound with the race nearly run. */
+    function owesCompound(c) {
+      return !!c && twoCompoundApplies() && typeof SportingRegs !== "undefined" && SportingRegs.compoundShort(c.tyreLog);
+    }
     function compoundDue(c) {
       if (!c || !twoCompoundApplies() || typeof SportingRegs === "undefined") return false;
       return lapsToFlag(c) <= COMPOUND_WARN_LAPS && SportingRegs.compoundShort(c.tyreLog);
     }
     /** The STRATEGY row's pin for this circuit: a stop count, or null for AUTO. */
-    function pinKey() { const t = G.track, d = t && t.def; return "pitPlan." + ((d && d.id) || (t && t.id) || "track"); }
-    function pinnedStops() {
-      const v = G.store && G.store.get ? G.store.get(pinKey(), "auto") : "auto";
+    function pinKey(id) { const t = G.track, d = t && t.def; return "pitPlan." + ((typeof id === "string" && id.trim() ? id : null) || (d && d.id) || (t && t.id) || "track"); }
+    function pinnedStops(id) {
+      const v = G.store && G.store.get ? G.store.get(pinKey(id), "auto") : "auto";
       return v == null || v === "auto" ? null : Math.max(0, Math.min(2, v | 0));
     }
-    function setPinnedStops(v) { if (G.store && G.store.set) G.store.set(pinKey(), v == null ? "auto" : (v | 0)); }
+    function setPinnedStops(v, id) { if (G.store && G.store.set) G.store.set(pinKey(id), v == null ? "auto" : (v | 0)); }
     /** The lane's net cost in seconds at racing speed — the number that makes
      *  a 2-stop at Monaco read as the mistake it is. `estimate` refines it
      *  under a caution; this is the plain figure the STRATEGY row shows. */

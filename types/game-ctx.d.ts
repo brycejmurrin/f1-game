@@ -105,6 +105,9 @@ interface CarState {
   isPlayer: boolean;
   mods: CarMods | null;
   aeroLoad: number | null;
+  /** Evidence from the latest human PlayerForces application. */
+  _dirtyAirMul?: number;
+  _coachAssisted?: boolean;
   seat: number;
   /** Arc position (m) and lateral offset (m, +right). */
   s: number;
@@ -412,6 +415,11 @@ interface GameCtx {
   /** Continuous track wetness 0..1 (look=drive). Local roadWetness() in game.js aliases this. */
   readonly trackWetness: () => number;
   readonly recordControls: () => Record<string, unknown>;
+  /** Explicit solo standing-start setup comparisons; ordinary TT keeps its rolling start. */
+  readonly setupTrialRestart: (options: { teamId: string; tune: Record<string, number>; mode: "launch"; isCurrent: () => boolean }) => Promise<{ ok: boolean; context?: Record<string, unknown>; reason?: string }>;
+  readonly setupTrialContext: () => Record<string, unknown> | null;
+  readonly setupTrialCancel: () => void;
+  readonly realRace: { status(): { active: boolean } };
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
   readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown>; practiceGoal(): string; setPracticeGoal(id: string): boolean };
   readonly openCoachDetails: () => void;
@@ -431,7 +439,7 @@ interface GameCtx {
    * The RACE RADIO — js/race/race-radio.js: the engineer's race calls and the
    * in-race commentary. AudioPanel drives its two settings (chatter, commentary).
    */
-  readonly raceRadio: { update(dt: number): void; request(): string; reset(): void; setChat(v: string): string; setComm(v: string): string; chat(): string; comm(): string; trafficBusy(): boolean; debug(): Record<string, unknown> };
+  readonly raceRadio: { update(dt: number): void; request(): string; reset(): void; setChat(v: string): string; setComm(v: string): string; battleEarcon(): boolean; setBattleEarcon(on: boolean): boolean; stopBattleEarcon(): void; chat(): string; comm(): string; trafficBusy(): boolean; debug(): Record<string, unknown> };
   /** What the loading card describes — the flyby editor previews the same object. */
   readonly loadingInfo: () => Record<string, unknown>;
   /** The menu's race prep (world built, menuFinish done, program warm, car prep record), read-only — __apex.menuPrep. */
@@ -894,7 +902,9 @@ declare const Director: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const RaceMessageHistory: GameModuleFactory;
+declare const RaceMixControls: GameModuleFactory;
 declare const SetupExperiments: GameModuleFactory;
+declare const SetupTrialSession: GameModuleFactory;
 declare const RaceSettings: GameModuleFactory;
 declare const RivalAudio: GameModuleFactory;
 declare const CarSfx: GameModuleFactory;

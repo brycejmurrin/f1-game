@@ -1,6 +1,8 @@
 # Continuing an existing PR (red PR, takeover, finish)
 
 Use this when the task is a PR that already exists, so no worker opens a twin.
+A dedicated session that owns one PR until it merges is the PR-owner role:
+`role-pr-owner.md` (watch kit, wake order, traps).
 
 Orchestrator, before launching:
 1. Read the PR (`pull_request_read`, methods `get` and `get_files`). Derive

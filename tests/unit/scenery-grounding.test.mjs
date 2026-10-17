@@ -154,3 +154,74 @@ test("baseline has no stale entries — a cap below the measured count is a lie"
   }
   assert.deepEqual(slack, [], "stale baseline entries:\n  " + slack.join("\n  "));
 });
+
+// Exercise the authored filter with the real anchor (including its 0.3 m
+// embed), while leaving motorhome's own footprint/support guards in place.
+for (const guard of ["clear", "road", "unsupported"]) {
+  test(`Jerez paddock seats account for anchor embed and retain ${guard} guard`, () => {
+    const { buildContext, shipped } = createRequire(import.meta.url)("../../tools/lib/track-build-vm.cjs");
+    const h = buildContext();
+    const original = h.sandbox.TrackScenery.jerez;
+    const calls = [], emitted = [];
+    h.sandbox.TrackScenery.jerez = (api) => {
+      const sl = (f) => (f + Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4) % 1;
+      const seats = Array.from({ length: 8 }, (_, i) => {
+        const k = api.K(sl(0.973 + i * 0.0068));
+        const gap = i === 7 ? 33 : 27;
+        const a = api.anchor(k, 1, gap);
+        assert.equal(api.onTrack(a.c[0], a.c[2], 10), false);
+        assert.ok(Math.abs(api.terrainYAt(a.c[0], a.c[2]) - a.c[1] - 0.3) < 1e-8);
+        return { k, c: a.c };
+      });
+      const isSeat = (x, z) => seats.some(({ c }) => c[0] === x && c[2] === z);
+      original({ ...api,
+        onTrack(x, z, margin) {
+          return guard === "road" && isSeat(x, z) || api.onTrack(x, z, margin);
+        },
+        terrainYAt(x, z) {
+          const y = api.terrainYAt(x, z);
+          return guard === "unsupported" && isSeat(x, z) ? y + 1 : y;
+        },
+        motorhome(...args) {
+          if (args[1] === 1) calls.push(args[0]);
+          const start = h.prims.length;
+          const result = api.motorhome(...args);
+          emitted.push(h.prims.slice(start));
+          return result;
+        },
+      });
+      assert.deepEqual(calls, guard === "clear" ? seats.map(({ k }) => k) : []);
+    };
+    h.Tracks.build(h.Tracks.LIST.find(({ id }) => id === "jerez"));
+    if (guard === "clear") {
+      assert.equal(emitted.length, 11, "eight main and three road-clear support motorhomes remain");
+      for (const prims of emitted)
+        assert.ok(shipped(prims, h.liveBufs).length > 0, "each restored motorhome emits geometry");
+    }
+  });
+}
+
+// Exercise the same grouping function audit() uses after support propagation.
+test("a low unsupported neighbor cannot hide a genuinely floating primitive", () => {
+  const { clusterFloatingPrimitives } = createRequire(import.meta.url)("../../tools/track/float-audit.cjs");
+  const member = (gap, name) => ({ gap, p: {
+    name, minX: 0, maxX: 1, minY: gap, maxY: gap + 1, minZ: 0, maxZ: 1,
+  } });
+  const track = { n: 1, px: [0], pz: [0] };
+  for (const members of [[member(6, "high"), member(1.1, "low")],
+                         [member(1.1, "low"), member(6, "high")]]) {
+    const { report, floating } = clusterFloatingPrimitives(members, track);
+    assert.equal(report.length, 1, "preserve neighboring-object grouping");
+    assert.equal(floating.length, 1, "6 m defect remains flagged");
+    assert.equal(floating[0], report[0]);
+    assert.equal(report[0].cells, 2, "retain both unsupported members");
+    assert.equal(report[0].minGap, 1.1);
+    assert.equal(report[0].maxGap, 6);
+    assert.match(report[0].src, /highx1/);
+    assert.match(report[0].src, /lowx1/);
+  }
+  assert.equal(clusterFloatingPrimitives([member(1.2, "boundary")], track).floating.length, 0);
+  assert.equal(clusterFloatingPrimitives([member(1.204, "above")], track).floating.length, 1,
+    "display rounding cannot erase a gap above the unchanged 1.2 m threshold");
+  assert.equal(clusterFloatingPrimitives([], track).floating.length, 0);
+});

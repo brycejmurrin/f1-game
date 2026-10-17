@@ -47,6 +47,7 @@ window.MusicLib = (function () {
   let wired = false;
   let usable = (() => { try { return typeof indexedDB !== "undefined" && !!indexedDB; } catch (e) { return false; } })();
   let cache = [];            // [{id, name, size, added}] — mirrors the store, for sync count()
+  const health = new Map();
   const urls = new Map();    // db id -> object URL. WE own these; remove() revokes.
 
   const $ = (id) => document.getElementById(id);
@@ -147,6 +148,7 @@ window.MusicLib = (function () {
   }
 
   function dropUrl(id) {
+    health.delete(pid(id));
     const url = urls.get(id);
     if (!url) return;
     // A session of add/remove cycles leaks the whole blob per orphaned handle.
@@ -159,6 +161,16 @@ window.MusicLib = (function () {
       : (bytes / 1048576).toFixed(1) + " MB";
   }
 
+  function playbackStatus(id, status) {
+    if (typeof id !== "string" || !id.startsWith("user:") || !cache.some((m) => pid(m.id) === id)) return false;
+    if (status && status.state === "failed") health.set(id, { state: "failed", reason: String(status.reason || "Could not play this file.").slice(0, 180) });
+    else health.delete(id);
+    render(); return true;
+  }
+  function retry(id) {
+    if (!cache.some((m) => pid(m.id) === id)) return false;
+    health.delete(id); const result = call("playTrackId", id); render(); return result;
+  }
   function row(meta, playingId) {
     const el = document.createElement("div");
     el.className = "music-row";
@@ -183,8 +195,10 @@ window.MusicLib = (function () {
       b.onclick = () => { call("uiTick"); fn(); };
       return b;
     };
+    const failure = health.get(pid(meta.id));
+    if (failure) { size.textContent += " · Skipped: " + failure.reason; }
     el.append(name, size,
-      btn("music-play", "▶", "Play", () => { call("playTrackId", pid(meta.id)); refresh(); }),
+      btn("music-play", failure ? "RETRY" : "▶", failure ? "Retry" : "Play", () => { if (failure) retry(pid(meta.id)); else { call("playTrackId", pid(meta.id)); refresh(); } }),
       btn("music-del", "✕", "Remove", () => remove(meta.id)));
     return el;
   }
@@ -192,7 +206,7 @@ window.MusicLib = (function () {
   function libraryMsg() {
     if (!usable) return DEAD_MSG;
     if (!cache.length) return NO_TRACKS_MSG;
-    return cache.length + (cache.length === 1 ? " track" : " tracks") + " in your library.";
+    return cache.length + (cache.length === 1 ? " track" : " tracks") + " in your library." + (health.size ? " " + health.size + " skipped; retry the marked tracks." : "");
   }
 
   function render(msg) {
@@ -368,7 +382,8 @@ window.MusicLib = (function () {
   } else init();
 
   return {
-    init, list, add, remove, clear, refresh, render,
+    init, list, add, remove, clear, refresh, render, playbackStatus, retry,
+    health: (id) => health.has(id) ? Object.assign({}, health.get(id)) : null,
     count() { return cache.length; },
     available() { return usable; },
   };

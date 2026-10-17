@@ -2,9 +2,48 @@
 const TitleMenu = (function () {
   "use strict";
 
+  // Move the existing nodes: their handlers, saved-state labels and visibility
+  // remain owned by their original modules. The outer title-layout pieces stay put.
+  function organize(doc) {
+    const menu = doc && doc.getElementById("menu-buttons");
+    if (!menu || menu.dataset.destinations) return;
+    menu.dataset.destinations = "true";
+    const group = (id, label, buttons) => {
+      let row = doc.getElementById(id);
+      if (!row) { row = doc.createElement("div"); row.id = id; row.className = "balanced-row"; }
+      row.classList.add("menu-destination");
+      row.setAttribute("role", "group"); row.setAttribute("aria-label", label);
+      const heading = doc.createElement("h2"); heading.className = "menu-destination-label";
+      heading.textContent = label; menu.appendChild(heading); menu.appendChild(row);
+      for (const name of buttons) { const button = doc.getElementById(name); if (button) row.appendChild(button); }
+      return row;
+    };
+    const hero = doc.getElementById("menu-hero");
+    if (hero) { hero.setAttribute("role", "group"); hero.setAttribute("aria-label", "Continue and career"); }
+    group("menu-primary", "Play", ["mb-race", "mb-tt", "mb-vs", "mb-season", "mb-practice", "mb-standings"]);
+    group("menu-garage", "Garage", ["mb-garage"]);
+    group("menu-explore", "Watch & Explore", ["mb-watch", "mb-data"]);
+    const create = group("menu-create", "Create", ["mb-photo", "mb-designer"]);
+    const utilities = group("menu-secondary", "Utilities", ["mb-settings", "mb-phonepad", "mb-help"]);
+    const shortcut = (row, id, label, page) => {
+      if (doc.getElementById(id)) return;
+      const button = doc.createElement("button"); button.id = id; button.type = "button";
+      button.className = "bigbtn alt minibtn"; button.textContent = label;
+      button.onclick = () => {
+        const settings = doc.getElementById("mb-settings");
+        if (settings) settings.click();
+        if (typeof SettingsNav !== "undefined") (SettingsNav.showDirect || SettingsNav.show)(page, true);
+      };
+      row.appendChild(button);
+    };
+    shortcut(create, "mb-visual", "VISUAL STUDIO", "visual");
+    shortcut(utilities, "mb-saves", "SAVES & DATA", "files");
+  }
+
   function create(G) {
     Log.info("game", "TitleMenu.create");
     const { $ } = G;
+    organize(typeof document !== "undefined" ? document : null);
 
     function refresh() {
       const btn = $("mb-career");
@@ -112,6 +151,6 @@ const TitleMenu = (function () {
     return { refresh };
   }
 
-  return { create };
+  return { create, organize };
 })();
 Object.freeze(TitleMenu);

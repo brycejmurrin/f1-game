@@ -1,4 +1,5 @@
 // @ts-check
+import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
 
@@ -22,6 +23,46 @@ test.describe.parallel("Career — the modes screen", () => {
     await expect(page.locator("#cr-right")).toContainText("MY TEAM");
     // Nothing to press in the foot: every action here is a card.
     await expect(page.locator("#cr-go")).toBeHidden();
+  });
+
+  test("Daily class merges still allow a native career backup download", async ({ page }, info) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.gfxBackend", "three");
+      localStorage.setItem("apex26.tlxForceGL", "1");
+    });
+    await boot(page);
+    await expect(page).toHaveTitle(/Apex 26/);
+    const errors = [];
+    page.on("pageerror", e => errors.push(e.message));
+    const expected = await page.evaluate(() => {
+      window.__apex.career({ teamId: "haas", seat: 1, seed: 7 });
+      const day = "2026-10-16", key = i => JSON.stringify({ bias: i });
+      const daily = DailyChallenge.create({ store: GameStore.store });
+      daily.select(day, "open");
+      for (let i = 0; i < 8; i++) daily.record(90 + i, key(i));
+      const envelope = CareerBackup.build();
+      envelope.daily = { days: { [day]: { best: 80, laps: 1,
+        classes: { [key(8)]: { best: 80, laps: 1 } } } } };
+      const result = CareerBackup.apply(envelope);
+      if (!result.ok) throw new Error("Daily merge refused: " + result.reason);
+      return GameStore.store.get("daily.v1");
+    });
+    await page.locator("#cr-back").click();
+    await page.locator("#mb-career").click();
+    await expect(page.locator("#cr-title")).toHaveText("CAREER MODES");
+    const waiting = page.waitForEvent("download");
+    await page.locator('[data-cr-act="export"]').first().click();
+    const download = await waiting;
+    const path = info.outputPath("daily-career-backup.json");
+    await download.saveAs(path);
+    const saved = JSON.parse(await readFile(path, "utf8"));
+    expect(saved.slots).toHaveLength(6);
+    expect(saved.daily).toEqual(expected);
+    expect(Object.keys(saved.daily.days["2026-10-16"].classes)).toHaveLength(9);
+    const restored = await page.evaluate(saved => CareerBackup.apply(saved), saved);
+    expect(restored.ok).toBe(true);
+    expect(errors).toEqual([]);
+    await info.attach("Daily backup after class merge", { path, contentType: "application/json" });
   });
 
   test("an empty slot starts that mode, in that slot", async ({ page }) => {

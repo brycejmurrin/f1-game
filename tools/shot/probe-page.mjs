@@ -319,8 +319,12 @@ function captureTokenInPage() {
     return { ...token, mode: "synchronous-generation", submitted: first.gen, required: first.gen + 1 };
   }
   if (soft) return { ...token, mode: "legacy-two-presents", required: 2, before: Number.isFinite(first.gen) ? first.gen : 0 };
-  const before = window.__apex?.cameraState?.()?.renderFrame;
-  return { ...token, mode: "native-frame", required: 2, before: Number.isFinite(before) ? before : null };
+  // The race camera clock does not advance in the garage. CARVIEW has its
+  // own draw counter; the garage must use the renderer's real present signal.
+  const clock = window.CARVIEW ? "viewer" : window.__apex?.garageCam?.()?.on ? "present" : "game";
+  const before = clock === "viewer" ? window.CARVIEW.frame
+    : clock === "game" ? window.__apex?.cameraState?.()?.renderFrame : null;
+  return { ...token, mode: "native-frame", clock, required: 2, before: Number.isFinite(before) ? before : null };
 }
 
 /** Run a trusted Page.evaluate callback and mark its requested scene atomically.
@@ -347,11 +351,11 @@ export async function mutateCaptureScene(page, fn, arg) {
  * requested generation. Older async backends retain the two-present fallback.
  * Native renderers must advance the game render clock or signal real presents.
  */
-export async function awaitCaptureReady(page, { timeoutMs = 30000 } = {}) {
+export async function awaitCaptureReady(page, { timeoutMs = 30000, pauseRender = false } = {}) {
   if (!(Number.isFinite(timeoutMs) && timeoutMs > 0)) throw new Error("probe: capture readiness needs a positive timeout");
   const token = pendingCaptureTokens.get(page) || null;
   pendingCaptureTokens.delete(page);
-  return page.evaluate(async ({ ms, token: marked, readToken }) => {
+  return page.evaluate(async ({ ms, token: marked, readToken, pause }) => {
     const gfx = typeof GLX === "undefined" ? null : GLX;
     const soft = !!gfx?.softPresent?.();
     const state = () => gfx?.softPresentState?.() || {};
@@ -381,10 +385,11 @@ export async function awaitCaptureReady(page, { timeoutMs = 30000 } = {}) {
     };
     let watchdog;
     try {
-      return await Promise.race([
+      const ready = await Promise.race([
         (async () => {
           if (mode === "native-frame") {
-            const clock = () => window.__apex?.cameraState?.()?.renderFrame;
+            const clock = () => request.clock === "viewer" ? window.CARVIEW?.frame
+              : request.clock === "present" ? null : window.__apex?.cameraState?.()?.renderFrame;
             const now = clock();
             const before = Number.isFinite(request.before) && now >= request.before ? request.before : now;
             if (Number.isFinite(before)) {
@@ -420,8 +425,83 @@ export async function awaitCaptureReady(page, { timeoutMs = 30000 } = {}) {
         new Promise((_, reject) => { watchdog = setTimeout(() => reject(new Error(
           "probe: capture readiness timed out after " + ms + "ms (" + mode + ")")), ms); }),
       ]);
+      // Pause in the same browser task as the completed present, before IPC or
+      // image encoding can queue more software GPU work. The owner restores it.
+      if (pause && window.__apex?.headless) window.__apex.headless(true);
+      return ready;
     } finally { clearTimeout(watchdog); }
-  }, { ms: timeoutMs, token, readToken: captureTokenInPage.toString() });
+  }, { ms: timeoutMs, token, readToken: captureTokenInPage.toString(), pause: pauseRender });
+}
+
+/** Render a capture operation, restoring even an already-paused caller on failure. */
+export async function withCaptureRendering(page, run) {
+  const previous = await page.evaluate(() => {
+    const a = window.__apex;
+    if (!a?.headless) return null; // isolated CARVIEW owns its own loop
+    const before = a.headless(); a.headless(false); return before;
+  });
+  let failed = false;
+  try { return await run(); }
+  catch (error) { failed = true; throw error; }
+  finally {
+    if (previous != null) try {
+      await page.evaluate((before) => window.__apex.headless(before), previous);
+    } catch (error) { if (!failed) throw error; }
+  }
+}
+
+/** Native scene pixels, copied in the task that presents the unpreserved buffer.
+ * A composited page is deliberately outside this path. Soft backends return
+ * null so callers can use their already-presented 2D canvas instead.
+ */
+export async function screenshotNativeCanvas(page, { path, type = "png", quality = 85, clip = null, timeout = 60000 } = {}) {
+  if (!["png", "jpeg"].includes(type)) throw new Error("native capture type must be png or jpeg");
+  if (!(Number.isFinite(timeout) && timeout > 0)) throw new Error("native capture needs a positive timeout");
+  const started = Date.now();
+  const pack = await page.evaluate(async ({ format, q, crop, ms }) => {
+    if (typeof GLX === "undefined") throw new Error("native capture has no renderer");
+    if (GLX.softPresent?.()) return null;
+    if (!GLX.capturePixels || !GLX.awaitSoftPresent) throw new Error("native capture has no renderer readback");
+    const a = window.__apex, before = a?.headless?.();
+    let timer, expired = false;
+    try {
+      a?.headless?.(false);
+      const work = (async () => {
+        if (await GLX.awaitSoftPresent(ms, "frame") !== "frame") throw new Error("native capture did not present");
+        if (expired) throw new Error("native capture cancelled");
+        // Enqueue the renderer's PBO/fence read before another frame can clear
+        // this backbuffer. Pause only after the read has been submitted.
+        const read = GLX.capturePixels();
+        a?.headless?.(true);
+        const pixels = await read;
+        if (expired) throw new Error("native capture cancelled");
+        const source = document.createElement("canvas");
+        source.width = pixels.width; source.height = pixels.height;
+        source.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height), 0, 0);
+        const canvas = document.getElementById("game") || document.getElementById("view");
+        const box = canvas?.getBoundingClientRect();
+        if (!(box?.width > 0 && box.height > 0)) throw new Error("native capture has no visible canvas");
+        const c = crop || { x: box.x, y: box.y, width: box.width, height: box.height };
+        if (!(c.width > 0 && c.height > 0 && c.x >= box.x && c.y >= box.y
+          && c.x + c.width <= box.right + 0.01 && c.y + c.height <= box.bottom + 0.01)) throw new Error("native capture crop is outside the canvas");
+        const output = document.createElement("canvas");
+        output.width = Math.max(1, Math.round(c.width * devicePixelRatio));
+        output.height = Math.max(1, Math.round(c.height * devicePixelRatio));
+        output.getContext("2d").drawImage(source, (c.x - box.x) * source.width / box.width,
+          (c.y - box.y) * source.height / box.height, c.width * source.width / box.width,
+          c.height * source.height / box.height, 0, 0, output.width, output.height);
+        return { b64: output.toDataURL("image/" + format, q / 100).split(",")[1], width: output.width, height: output.height };
+      })();
+      return await Promise.race([work, new Promise((_, reject) => {
+        timer = setTimeout(() => { expired = true; reject(new Error("native capture timed out after " + ms + "ms")); }, ms);
+      })]);
+    } finally { clearTimeout(timer); if (before != null) a.headless(before); }
+  }, { format: type, q: quality, crop: clip, ms: timeout });
+  if (!pack) return null;
+  const buf = Buffer.from(pack.b64, "base64");
+  if (path) writeFileSync(path, buf);
+  return { buf, bytes: buf.length, via: "native-pixels", width: pack.width, height: pack.height,
+    readiness: { mode: "native-readback", presents: 1 }, timings: { captureMs: Date.now() - started } };
 }
 
 /**

@@ -62,12 +62,17 @@ test("the car is not held at the pit limiter after the standing restart", () => 
   a.setInput({ throttle: true, steer: 0 });
   // 450 ticks is 7.5 s — comfortably inside the ~12 s the latch used to hold,
   // and comfortably enough for a real standing start to clear the limiter.
-  for (let i = 0; i < 450; i++) g.step(1);
+  // PEAK over the window, not the last tick: the latch capped the car for the
+  // whole window, but the grid melee can put it in a turn-1 contact near the
+  // end, and a car that has just been touched reads slower than it was (the
+  // end-of-window speed moved 0.7 m/s with an unrelated AI-cover change).
+  let peak = 0;
+  for (let i = 0; i < 450; i++) { g.step(1); if (player.speed > peak) peak = player.speed; }
   a.clearInput();
   const limit = G.pits && G.pits.limit ? G.pits.limit() : 22;
-  assert.ok(player.speed > limit + 5,
+  assert.ok(peak > limit + 5,
     `full throttle for 7.5 s should beat the pit limiter (${limit.toFixed(1)} m/s), ` +
-    `got ${player.speed.toFixed(1)} m/s — the lane latch is back`);
+    `peak ${peak.toFixed(1)} m/s — the lane latch is back`);
 });
 
 test("a stop the red flag interrupts before the set is fitted is not counted", () => {

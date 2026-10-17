@@ -5,6 +5,7 @@
       "mcp__apex-tools",
       "mcp__playwright-official",
       "mcp__chrome-devtools",
+      "mcp__js-debugger",
       "mcp__claude-code-remote",
       "mcp__Context7",
       "mcp__Claude_Docs",
@@ -23,6 +24,7 @@
       "mcp__apex-tools__*",
       "mcp__playwright-official__*",
       "mcp__chrome-devtools__*",
+      "mcp__js-debugger__*",
       "mcp__claude-code-remote__*",
       "mcp__Context7__*",
       "mcp__Claude_Docs__*",
@@ -166,7 +168,8 @@
   "enabledMcpjsonServers": [
     "apex-tools",
     "playwright-official",
-    "chrome-devtools"
+    "chrome-devtools",
+    "js-debugger"
   ],
   "hooks": {
     "SessionStart": [
@@ -301,7 +304,7 @@
         ]
       },
       {
-        "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|job_start))$",
+        "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|js-debugger__.*|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|profile|job_start))$",
         "hooks": [
           {
             "type": "command",
