@@ -2408,8 +2408,6 @@ body.desktop #hud-inputs:not([data-hl-user]) {
 /* Pause review is a still, labelled chart independent of the live HUD scale. */
 #pausemenu .input-review { grid-column: 1 / -1; flex-basis: 100%; min-width: 0; width: 100%; }
 .input-review-canvas { display: block; width: 100%; max-width: 100%; height: auto; }
-} /* @layer hud */
-
 /* PHONE TEST recorder (js/perf/phone-recorder.js): a tiny non-interactive REC
    badge low-left inside the safe area, and the how-to + buttons in the METRICS fold. */
 #phone-rec-badge {
@@ -2425,3 +2423,5 @@ body.desktop #hud-inputs:not([data-hl-user]) {
 #pm-phonerec button:disabled { opacity: .45; }
 #pm-phonerec ol { padding-left: 1.4em; }
 #pm-phonerec a { display: inline-block; min-height: 44px; line-height: 44px; }
+
+} /* @layer hud */

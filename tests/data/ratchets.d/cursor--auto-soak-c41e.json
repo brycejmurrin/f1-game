@@ -1,0 +1,22 @@
+{
+  "files": {
+    "css/hud.css": {
+      "codeLines": -14,
+      "lines": -16
+    },
+    "js/agent/agentview.js": {
+      "lines": -4
+    },
+    "js/agent/apex.js": {
+      "codeLines": -2,
+      "lines": -2
+    },
+    "js/game.js": {
+      "codeLines": 1,
+      "lines": 1
+    },
+    "js/render/glx/glx.js": {
+      "lines": -12
+    }
+  }
+}
