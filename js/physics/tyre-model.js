@@ -772,7 +772,7 @@ const TyreModel = (function () {
       c.tyreGrain = 0; c.tyreBlister = 0; c.flatSpot = 0;
       c.tyreLap0 = c.lap || 0;
       const physical = physicalLaps(c);
-      if (physical == null) physicalOffset.delete(c); else physicalOffset.set(c, physical - lapsDone(c.tyreLap0));
+      c.tyrePhysicalOffset = physical == null ? null : physical - lapsDone(c.tyreLap0);
       // A box BEFORE the line fits mid-lap N: the next crossing reads N+1 but is only a partial lap on this
       // set, so lapsOn would run a lap ahead (replan's loadK, wetLapsToStop, the HUD's laps left).
       const len = G.track && G.track.total, at = physical == null ? c.s : c.prog - (c._progGift || 0);   // prog when the physical clock has it: a stale s on the grid says nothing
@@ -963,8 +963,6 @@ const TyreModel = (function () {
     // the raw state; `spent` is what the HUD bar and the engineer read, because
     // "80% through the stint" is the thing a driver can act on.
     // Completed laps on this set: a grid set (tyreLap0 0) is not a lap old at the start crossing.
-    // Off the car on purpose: one more car field tips the 22 shared shapes into V8 dictionary mode (car-fields.js header).
-    const physicalOffset = new WeakMap();
     function physicalLaps(c) {
       const length = G.track && G.track.total;
       return c && Number.isFinite(c.prog) && length > 0
@@ -975,8 +973,8 @@ const TyreModel = (function () {
       const physical = physicalLaps(c);
       // Teleports are not distance driven; tyreLap0 remains the public age baseline
       // used by historical race drop-ins and network strategy snapshots.
-      return Math.max(0, physical != null && physicalOffset.has(c)
-        ? physical - physicalOffset.get(c) - lapsDone(c.tyreLap0) - (c.tyreLapAdj || 0)
+      return Math.max(0, physical != null && c.tyrePhysicalOffset != null
+        ? physical - c.tyrePhysicalOffset - lapsDone(c.tyreLap0) - (c.tyreLapAdj || 0)
         : lapsDone(c.lap) - lapsDone(c.tyreLap0) - (c.tyreLapAdj || 0));
     }
     function spent(c) { return c ? clamp(c.tyreWear || 0, 0, 2) : 0; }
