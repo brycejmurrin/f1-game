@@ -2610,7 +2610,10 @@ jobs:
     # A label-noise run (#2184, the `on:` note) skips every job, and a SKIPPED
     # job reports success: under the required name it would sit on the head
     # beside the real verdict. It gets another name, so it never counts as CI.
-    name: ${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && 'CI label event (ignored)' || (github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-ci')) && 'CI draft (opted out)' || 'CI' }}
+    # The DRAFT fast tier is named apart too (#2664): its success would otherwise sit on the head under the required
+    # name `CI`, and when the PR goes ready that stale success satisfies the requirement while the full tier is still
+    # running (retro finding 10: a merge landed with the full-tier run in progress). Only a non-draft run supplies `CI`.
+    name: ${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && 'CI label event (ignored)' || (github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-ci')) && 'CI draft (opted out)' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && 'CI (draft fast tier)' || 'CI' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs:
@@ -2637,4 +2640,8 @@ jobs:
       - name: Aggregate job results
         env:
           NEEDS: ${{ toJSON(needs) }}
+          # Full-tier PR runs: these must have run AND passed (a job skipped by `if:` reports success, so a hollow
+          # run would otherwise read green). Measured on recent full-tier runs: they never skip there, unlike
+          # driving-model / sweeps / the macOS leg, which the change-aware selection skips legitimately.
+          REQUIRE_SUCCESS: ${{ (github.event_name == 'pull_request' && !github.event.pull_request.draft) && 'guards-a,guards-b,guards,select,smoke' || '' }}
         run: node tools/ci/ci-verdict.mjs
