@@ -1046,6 +1046,7 @@ body:has(dialog:modal) #update-chip { display: none; }
    (this layer) is beaten only by an important rule of higher specificity. */
 :root[data-appearance-peek="pause"] #pausemenu:not([open]),
 :root[data-appearance-peek="race"] #race-settings:not([open]),
+:root[data-appearance-peek="designer"] #trackdesigner:not([open]),
 :root[data-appearance-peek="popups"] #standings:not([open]) { display: grid !important; z-index: 30; }
 :root[data-appearance-peek="datahub"] #datahub:not([open]) { display: flex !important; z-index: 30; }
 :root[data-appearance-peek="select"] #select[hidden],
