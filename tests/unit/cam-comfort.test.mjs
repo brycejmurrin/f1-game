@@ -79,6 +79,8 @@ test("boot is a no-op on desktop without XR", () => {
 
 test("reduced-motion boot preselects both renderer comfort hooks off", () => {
   const CC = load();
+  assert.equal(CC.FX_DEFS.every((d) => d.unit === ""), true,
+    "tuner formatting receives an empty unit instead of rendering undefined");
   const s = rawStore();
   const reduced = { matchMedia: (query) => ({ matches: query === "(prefers-reduced-motion: reduce)" }) };
   CC.boot(s, { maxTouchPoints: 0 }, reduced);

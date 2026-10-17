@@ -8,9 +8,9 @@ const CamComfort = (function () {
   // Bare string on the raw lane (same pattern as CockpitOpts flags).
   const KEY = "camComfortPref";   // "on" | "off" | unset
   const FX_DEFS = Object.freeze([
-    Object.freeze({ id: "motionBlur", label: "MOTION BLUR", min: 1, max: 10, step: 1, def: 5,
+    Object.freeze({ id: "motionBlur", label: "MOTION BLUR", min: 1, max: 10, step: 1, def: 5, unit: "",
       help: "Motion-blur amount. Notch 1 is OFF. Stored now; renderers may bind the optional comfort-FX hook later." }),
-    Object.freeze({ id: "speedLines", label: "SPEED LINES", min: 1, max: 10, step: 1, def: 5,
+    Object.freeze({ id: "speedLines", label: "SPEED LINES", min: 1, max: 10, step: 1, def: 5, unit: "",
       help: "Speed-line amount. Notch 1 is OFF. Stored now; renderers may bind the optional comfort-FX hook later." }),
   ]);
   const FX_BY_ID = {};
