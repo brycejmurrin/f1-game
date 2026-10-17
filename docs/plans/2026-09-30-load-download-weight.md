@@ -295,8 +295,11 @@ tier green → **do not merge** (Bryce's merge worker).
 | 3 — SW install-critical pool | #584 | `7729463ca` | shipped |
 | 4 — upscaler decision | — | — | deferred; still requires its own real-GPU A/B |
 
-The matched real-Metal race-entry table for vegas and spa is recorded in
-`docs/notes/LIVE-DEBUGGER-RENDER-GPU-EVIDENCE-2026-10-17.md`. The before arm
-is slice 1 and the after arm is slice 2, keeping the attribution instrument
-identical. Slice 3's install-critical byte/file-count result remains deferred
-because #1651 asks only for race-entry evidence.
+The available real-Metal race-entry table for vegas and spa is recorded in
+`docs/notes/LIVE-DEBUGGER-RENDER-GPU-EVIDENCE-2026-10-17.md`. Grok Bot chose
+route B: historical Apple/Metal before evidence plus existing instrumented
+ship runs `38513041950` (vegas) and `38507400652` (spa), with no workflow,
+tool or runtime-switch change. This is not a matched A/B: the historical
+before arm has no named spans and no spa value. Slice 3's install-critical
+byte/file-count result remains deferred because #1651 asks only for
+race-entry evidence.
