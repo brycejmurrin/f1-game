@@ -23,9 +23,10 @@
 //   node tools/shot/track-session.mjs --serve --track spa --out artifacts/track-session
 import { performance } from "node:perf_hooks";
 import { cameraControls } from "../lib/survey-scenarios.mjs";
+import { loadSurveyDesigns } from "../lib/custom-survey-locations.mjs";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, existsSync, writeFileSync } from "node:fs";
-import { join, resolve, basename, relative, isAbsolute, sep } from "node:path";
+import { mkdirSync, existsSync, writeFileSync, realpathSync } from "node:fs";
+import { join, resolve, basename, dirname, relative, isAbsolute, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -51,7 +52,9 @@ if (!argv.includes("--serve")) {
   console.error("usage: track-session.mjs --serve --track <id> [--out <dir under artifacts/ or scratch/>] [--profile preview|comparison] [--scope scene|page] [--gpu swiftshader|llvmpipe|hardware|lavapipe] [--browser auto|chromium|shell] [--trace] [--cache-assets]");
   process.exit(2);
 }
-const outDir = resolve(ROOT, flag("--out", "artifacts/track-session"));
+let outDir = resolve(ROOT, flag("--out", "artifacts/track-session"));
+const outputRoot = resolve(ROOT, flag("--output-root", outDir));
+const designs = flag("--designs", "") ? loadSurveyDesigns(resolve(ROOT, flag("--designs", ""))) : null;
 mkdirSync(outDir, { recursive: true });
 const send = (o) => process.stdout.write(JSON.stringify(o) + "\n");
 
@@ -209,8 +212,19 @@ async function diff(a, b) {
 async function handle(op) {
   if (op.status) return { track, shots: shots.length, uptimeMs: Date.now() - started, profile: options.profile, diagnostics };
   if (op.track) {
-    if (!/^[a-z0-9_]{2,40}$/.test(String(op.track))) throw new Error("bad track id");
-    return { track: op.track, buildMs: await withRendering(() => buildTrack(String(op.track))) };
+    if (!/^(?:[a-z0-9_]{2,40}|custom-[a-f0-9]{8})$/.test(String(op.track))) throw new Error("bad track id");
+    const nextOut = op.out == null ? outDir : resolve(ROOT, String(op.out));
+    const rel = relative(outputRoot, nextOut);
+    if (rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel)) throw new Error('output must stay under session output root');
+    let ancestor = nextOut;
+    while (!existsSync(ancestor) && dirname(ancestor) !== ancestor) ancestor = dirname(ancestor);
+    const physical = relative(realpathSync(outputRoot), realpathSync(ancestor));
+    if (physical === '..' || physical.startsWith('..' + sep) || isAbsolute(physical)) throw new Error('output symlink escapes session output root');
+    const buildMs = await withRendering(() => buildTrack(String(op.track)));
+    mkdirSync(nextOut, { recursive: true });
+    outDir = nextOut;
+    shots.length = 0;
+    return { track, out: outDir, buildMs };
   }
   if (op.eval != null) {
     const r = await page.evaluate(async (expr) => {
@@ -239,6 +253,9 @@ async function handle(op) {
     assertCaptureGpuCapability(diagnostics, options);
     if (options.trace) trace = await startCaptureTrace(browser, { path: options.tracePath || join(outDir, `capture-${Date.now()}.trace.json`) });
     page = await browser.newPage(captureContextOptions(options, { width: 1280, height: 720 }));
+    if (designs) await page.addInitScript(items => {
+      localStorage.setItem('apex26.customTracks', JSON.stringify({ v: 1, items }));
+    }, designs.designs);
     await installProbeInit(page, { backend: String(flag("--backend", "three")), tlxForceGL: options.gpu === "llvmpipe" });
     const url = new URL(srv.snapshotUrl || srv.url);
     if (options.seed != null) url.searchParams.set("seed", options.seed);

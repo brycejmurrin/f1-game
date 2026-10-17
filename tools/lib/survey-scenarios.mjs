@@ -47,7 +47,8 @@ function indexedLocations() {
   return circuitLocations;
 }
 
-export function listSurveyLocations(track) {
+export function listSurveyLocations(track, custom = null) {
+  if (custom?.locations.has(track)) return custom.locations.get(track).map(l => ({ ...l }));
   const all = indexedLocations();
   if (!all.has(track)) throw new Error(`Unknown track ${track}; choose ${[...all.keys()].join(', ')}`);
   return [...SURVEY_LOCATIONS.filter(l => l.track === track).map(l => ({ ...l, kind: 'named' })),
@@ -61,10 +62,10 @@ export const CAMERA_RECIPES = {
   apex: { cam: 'trackside', dist: 18, h: 5, side: 1, fov: 55 },
   exit: { cam: 'eye', offset: .012, h: 3, lat: 6, fov: 60 },
 };
-export function resolveLocation(query, track) {
+export function resolveLocation(query, track, custom = null) {
   const q = String(query).trim().toLowerCase();
   const tracks = track ? [track] : [...indexedLocations().keys()];
-  const candidates = tracks.flatMap(id => listSurveyLocations(id));
+  const candidates = tracks.flatMap(id => listSurveyLocations(id, custom));
   const found = candidates.filter(l => l.id === q || (track && l.aliases.includes(q)));
   if (found.length !== 1) throw new Error(`Unknown or ambiguous location ${query}; use a circuit-qualified id such as ${track || 'spa'}/turn-1`);
   return { ...found[0] };
@@ -87,7 +88,7 @@ export function cameraControls(s) {
   return out;
 }
 export function scenarioShots(args) {
-  const location=resolveLocation(args.location,args.track || args.tracks?.[0]);
+  const location=resolveLocation(args.location,args.track || args.tracks?.[0], args.customDesigns);
   if (args.tracks?.some(t=>t!==location.track)) throw new Error('Named locations require one matching track');
   const angles=args.angles || ['overview','reverse','overhead'];
   const weathers=args.weathers || [args.weather || 'dry'];
@@ -96,10 +97,11 @@ export function scenarioShots(args) {
   return weathers.flatMap(weather=>angles.map(angle=>{
     if (!Object.hasOwn(CAMERA_RECIPES,angle)) throw new Error(`Unknown angle ${angle}`);
     const {offset=0,...camera}=CAMERA_RECIPES[angle];
+    if (location.distance && camera.cam === 'orbit') camera.dist = Math.max(camera.dist, location.distance);
     return { ...camera, name:`${location.id.replace('/','-')}-${angle}-${weather}`, frac:+((location.frac+offset+1)%1).toFixed(6),
       ...(camera.cam==='eye'?{lookFrac:location.frac}:{}), weather, tod:args.tod||'day', location:location.id, angle,
       verification:location.verification,
-      ...(location.kind==='scenery' ? { target: location.target } : {}),
+      ...(location.target ? { target: location.target } : {}),
       ...cameraControls({...camera,...args.camera}) };
   }));
 }

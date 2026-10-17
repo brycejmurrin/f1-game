@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { loadSurveyDesigns } from '../lib/custom-survey-locations.mjs';
 /**
  * @doc Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock).
  * @skill check-changes
@@ -396,6 +397,7 @@ const CATALOG = [
     description: "Tree — list shot targets for one circuit: authored turns, start/finish, sector boundaries, and named scenery models that actually emitted. Scenery shots use source viewing stations where known or a nearest-road candidate, then aim at the model; framing needs visual review. Pass an id to apex_shot_survey.location. No browser.",
     inputSchema: { type: "object", additionalProperties: false, required: ["track"], properties: {
       track: { type: "string" }, search: { type: "string", description: "Optional case-insensitive name/id filter." },
+      designs: { type: "string", description: "Native custom-track collection JSON file; lists authored placement anchors." },
     } },
   },
   {
@@ -452,12 +454,15 @@ const CATALOG = [
     name: "apex_shot_survey",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — multi-shot scenery survey via one track-session boot per circuit. Presets: quick (4), dual_lite (8), night_pass, lap, dual, inspect, scenery/full (12). Long or multi-track runs default to async (returns jobId; watch apex_job_status). Options: tracks[], resume, async, gl llvmpipe|swiftshader (llvmpipe is CI-only: needs /dev/dri, which cloud containers lack — use swiftshader locally), weather dry|wet|rain|overcast|fog, progress/findings JSON. Skill: survey-track.",
+    description: "Browser (lock first) — multi-shot scenery survey sharing one warm browser across circuits. Named locations default to preview JPEG; use comparison for selected final PNGs. Presets: quick, dual_lite, night_pass, lap, dual, inspect, scenery/full. Long or multi-track runs return an async jobId; watch apex_job_status. Resume checks source, settings and custom collection identity. Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
         location: { type: "string", description: "Named racing-space location, e.g. spa/eau-rouge; source-located framing starts unverified." },
+        locations: { type: "array", minItems: 1, maxItems: 32, uniqueItems: true, items: { type: "string" }, description: "Circuit-qualified targets across selected tracks, grouped into one warm batch." },
+        select: { type: 'array', minItems: 1, maxItems: 32, uniqueItems: true, items: { type: 'string' }, description: 'Capture only these shot names from the plan; use comparison for selected finals.' },
+        designs: { type: "string", description: "Native custom-track collection JSON file. Required for custom ids." },
         angles: { type: "array", minItems: 1, maxItems: 6, items: { type: "string", enum: ["overview","reverse","overhead","entry","apex","exit"] } },
         weathers: { type: "array", minItems: 1, maxItems: 5, items: { type: "string", enum: ["dry","wet","rain","overcast","fog"] } },
         profile: { type: "string", enum: ["preview","comparison"] },
@@ -850,6 +855,10 @@ const CATALOG = [
       additionalProperties: false,
       properties: {
         kind: { type: "string", enum: JOB_KINDS },
+        designs: { type: "string", description: "shot_survey: native custom-track collection JSON file." },
+        select: { type: 'array', minItems: 1, maxItems: 32, uniqueItems: true, items: { type: 'string' }, description: 'shot_survey: capture only these names from the preset plan.' },
+        profile: { type: "string", enum: ["preview", "comparison"] },
+        seed: { type: "integer", minimum: 0, maximum: 4294967295 },
         track: { type: "string", description: "survey_track / shot_survey: circuit id." },
         tracks: { type: "string", description: "shot_survey: comma-separated circuit ids (sequential)." },
         preset: { type: "string", description: "shot_survey: quick|dual_lite|night_pass|scenery|full|lap|dual|inspect|custom." },
@@ -1096,7 +1105,7 @@ for (const tool of CATALOG) {
     if (spec.type === "string") spec.maxLength = key === "expr" ? 65536 : 4096;
     if (spec.type === "array") spec.maxItems = 256;
   }
-  if (schema.properties.track) schema.properties.track.enum = knownCircuits();
+  if (schema.properties.track && !['apex_locations', 'apex_shot_survey', 'apex_job_start'].includes(tool.name)) schema.properties.track.enum = knownCircuits();
 }
 const schemaFor = (name) => CATALOG.find((t) => t.name === name).inputSchema;
 const bound = (name, key, extra) => Object.assign(schemaFor(name).properties[key], extra);
@@ -1118,7 +1127,13 @@ bound("apex_track", "dist", { exclusiveMinimum: 0, maximum: 10000 });
 bound("apex_track", "az", { minimum: -36000, maximum: 36000 });
 bound("apex_track", "el", { minimum: -90, maximum: 90 });
 bound("apex_track", "h", { minimum: -100, maximum: 3000 });
-bound("apex_shot_survey", "track", { enum: knownCircuits() });
+// Surveys additionally accept content-addressed custom ids from an explicit collection.
+bound("apex_shot_survey", "track", { pattern: "^(?:[a-z0-9_]{2,40}|custom-[a-f0-9]{8})$" });
+bound('apex_locations', 'track', { pattern: '^(?:[a-z0-9_]{2,40}|custom-[a-f0-9]{8})$' });
+bound('apex_job_start', 'track', { pattern: '^(?:[a-z0-9_]{2,40}|custom-[a-f0-9]{8})$' });
+bound('apex_shot_survey', 'locations', { maxItems: 32 });
+bound('apex_shot_survey', 'select', { maxItems: 32 });
+bound('apex_job_start', 'select', { maxItems: 32 });
 bound("apex_shot_survey", "tracks", { maxItems: 12 });
 bound("apex_shot_survey", "count", { type: "integer", minimum: 1, maximum: 32 });
 bound("apex_shot_survey", "fracs", { maxItems: 32 });
@@ -2331,7 +2346,8 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_catalog") return handleCatalog(args);
   if (name === "apex_locations") {
-    const all = listSurveyLocations(args.track);
+    const custom = args.designs ? loadSurveyDesigns(path.resolve(ROOT, args.designs)) : null;
+    const all = listSurveyLocations(args.track, custom);
     const search = args.search?.trim().toLowerCase();
     const exact = search && all.filter(l => l.id === search || l.aliases.includes(search));
     const locations = !search ? all : exact.length ? exact : all.filter(l =>

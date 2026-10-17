@@ -1615,6 +1615,7 @@ const MIN_ARGS = {
   apex_graph_parity: { base: "HEAD~1", id: "monza" },
   apex_frame_report: { track: "monza" },
   apex_shot_survey: { track: "monza" },
+  apex_locations: { track: 'monza' },
   apex_car_audit: { check: "ladder" },
   apex_ui_fit: { screen: "title" },
   apex_ui_shot: { screen: "title" },
@@ -1829,6 +1830,39 @@ test("apex_locations discovers authored turns and scenery names for shot surveys
   const plan = JSON.parse(callCli("apex_shot_survey", { track: "monaco", location: "monaco/turn-1",
     angles: ["apex"], dryRun: true }).stdout);
   assert.equal(plan.shots[0].location, "monaco/turn-1");
+  assert.equal(plan.options.profile, 'preview');
+  const batch = JSON.parse(callCli('apex_shot_survey', { tracks: ['monaco', 'spa'],
+    locations: ['monaco/turn-1', 'spa/eau-rouge'], angles: ['overview'], dryRun: true }).stdout);
+  assert.equal(batch.ok, true);
+  assert.equal(batch.plans.spa.shots[0].location, 'spa/eau-rouge');
+  assert.equal(batch.plans.monaco.shots[0].location, 'monaco/turn-1');
+  assert.equal(batch.options.profile, 'preview');
+  const comparison = JSON.parse(callCli('apex_shot_survey', { track: 'monaco', location: 'monaco/turn-1', profile: 'comparison', dryRun: true }).stdout);
+  assert.equal(comparison.options.profile, 'comparison');
+});
+
+test('custom survey collection flows through location catalog and async job argv', async () => {
+  const { design } = await import('../helpers/editor-vm.mjs');
+  const { loadSurveyDesigns } = await import('../../tools/lib/custom-survey-locations.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-custom-survey-')), file = path.join(dir, 'designs.json');
+  try {
+    fs.writeFileSync(file, JSON.stringify({ format: 'apex26.tracks', v: 1, items: [design({ props: [{ kind: 'pond', s: .25, side: 1, gap: 40 }] })] }));
+    const id = loadSurveyDesigns(file).designs[0].id;
+    const catalog = JSON.parse(callCli('apex_locations', { track: id, designs: file }).stdout);
+    assert.equal(catalog.ok, true);
+    assert.equal(catalog.locations[0].id, `${id}/pond-1`);
+    const plan = JSON.parse(callCli('apex_shot_survey', { track: id, designs: file, location: `${id}/pond-1`, angles: ['overhead'], dryRun: true }).stdout);
+    assert.equal(plan.ok, true);
+    assert.equal(plan.options.profile, 'preview');
+    assert.deepEqual(plan.shots[0].target, catalog.locations[0].target);
+    const { buildTrackShotSurveyPlan } = await import('../../tools/lib/track-shot-survey.mjs');
+    const selected = buildTrackShotSurveyPlan({ preset: 'quick' }).shots[0].name;
+    const job = JSON.parse(callCli('apex_job_start', { kind: 'shot_survey', track: id, designs: file, preset: 'quick', select: [selected], profile: 'preview', dryRun: true }).stdout);
+    assert.equal(job.ok, true);
+    assert.equal(job.argv[job.argv.indexOf('--designs') + 1], file);
+    assert.equal(job.argv[job.argv.indexOf('--profile') + 1], 'preview');
+    assert.equal(job.argv[job.argv.indexOf('--select') + 1], selected);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 // A misspelled key used to hide behind "tool needs <required>" / the anyOf message; the typo is the likelier mistake.
