@@ -325,6 +325,8 @@ on all 52 circuits, plus curated named scenery with source-located fractions.
 | `apex_profile` | `perf/profile.mjs` | browser | playwright-probe |
 | `apex_profile_query` | `perf/query.mjs` | tree | playwright-probe |
 
+Not wrapped as their own `apex_*` tool: `profile.mjs --mode hitch|trace` (hitch wraps `gfx/frame-hitch.mjs`, trace writes a Perfetto JSON; `--base <ref>` prints `incomparable` when the base lacks the `apex26.wgxCapture` key, #2674) and the three.js Inspector (`?inspector=1`, `__apex.inspector()`, see §three.js Inspector below).
+
 Pins the wrap always applies (you cannot override them):
 
 - `apex_doctor` → `--tree --json` (diagnostics only; never installs or launches)

@@ -152,3 +152,38 @@ candidate, not proof that the object is visible or geographically accurate;
 far skyline models, wide assemblies and crossings especially need rendered
 review. The MCP tool format follows
 the [MCP tools specification](https://modelcontextprotocol.io/specification/2025-06-18/server/tools).
+
+Named reviews default to the `preview` profile (640 × 360 JPEG). Select final
+shots with `--select` and use `--profile comparison` in a fresh output directory.
+Resume remains specific to the source revision, camera, conditions, profile,
+seed, GPU and, for custom tracks, the collection file's content hash.
+
+Queue several named targets with `locations`; qualify each with its circuit id.
+The batch shares one browser, loads assets once, switches tracks sequentially,
+and groups named shots by weather and time of day. Each track keeps its own
+output directory and contact sheet. `session.json` records `reusedSession`,
+`buildMs` and startup time separately. `--cold-sessions` retains separate browser
+boots for comparisons. The implementation follows Playwright's
+[page/context reuse and initialization APIs](https://playwright.dev/docs/api/class-browsercontext).
+
+```sh
+bash tools/mcp/apex-tools-mcp.sh call apex_shot_survey '{"tracks":["singapore","spa"],"locations":["singapore/merlion","spa/eau-rouge"],"angles":["overview","entry"],"resume":true}'
+node tools/shot/shot-survey.mjs --tracks singapore,spa --locations singapore/merlion,spa/eau-rouge --angles overview,entry --out artifacts/named-review --resume
+```
+
+For custom scenery, export a native `apex26.tracks` collection from the designer
+and pass its path as `designs` in MCP or `--designs` in the CLI. `apex_locations`
+then accepts the collection's content ids and lists names such as
+`custom-1234abcd/pond-1` or `custom-1234abcd/mountain-1`. Targets are computed
+from the native centreline, authored side, and placement gap. These are placement
+anchors, not emitted bounds. Water and terrain query the native prop dresser
+for their centre and dimensions, so wide objects get a larger orbit distance.
+Water may be suppressed by road clearance checks,
+and large scenery can extend beyond the anchor. Inspect the gallery before
+claiming a match. New landscape kinds and themes require the game revision that
+implements them; unsupported entries fail explicitly rather than being dropped.
+
+```sh
+node tools/shot/shot-survey.mjs --designs artifacts/designs.json --track custom-1234abcd --list-locations
+node tools/shot/shot-survey.mjs --designs artifacts/designs.json --track custom-1234abcd --location custom-1234abcd/pond-1 --angles overview,overhead --out artifacts/custom-review
+```

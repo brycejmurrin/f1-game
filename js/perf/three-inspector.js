@@ -55,7 +55,7 @@ const ThreeInspector = (function () {
   async function enable(gfx) {
     const h = gfx && typeof gfx.inspectorHost === "function" ? gfx.inspectorHost() : null;
     if (!h || !h.renderer) {
-      last = { on: false, supported: false, reason: "TLX only (this backend has no three.js renderer)" };
+      last = { on: false, supported: false, reason: "TLX only: the backend that booted has no three.js renderer (a software-GL boot may pick GLX; pin apex26.gfxBackend=three)" };
       say("not available: " + last.reason);
       return;
     }
