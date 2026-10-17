@@ -28,6 +28,7 @@ const PhoneRecorder = (function () {
   const MAX_EVENTS = 50;
   const MAX_SAVE_CHARS = 600000;
 
+  const HOWTO_AUTO = "AUTO SOAK: one tap runs a hands-free 15 min wet Monza race. Set the phone down, screen on, this page in front (a locked or backgrounded page pauses), Low Power Mode off; it stops itself, then tap SHARE.";
   const HOWTO = [
     "1. Low Power Mode OFF, brightness fixed, note charging and case.",
     "2. Start a race: ONE fixed circuit, WET weather, FULL grid, CHASE camera.",
@@ -360,10 +361,13 @@ const PhoneRecorder = (function () {
     const have = r.isOn() || !!r.record();
     _ui.rec.textContent = r.isOn() ? "STOP" : "RECORD";
     _ui.quick.disabled = r.isOn();
+    const auto = typeof SoakRun !== "undefined" && SoakRun.active();
+    _ui.auto.textContent = auto ? "STOP AUTO" : "AUTO SOAK";
+    _ui.rec.disabled = auto;
     _ui.rec.setAttribute("aria-pressed", r.isOn() ? "true" : "false");
     _ui.share.disabled = !have; _ui.copy.disabled = !have;
     if (!_ui.status.dataset.msg) {
-      _ui.status.textContent = r.isOn() ? "recording · " + fmt(r.elapsedMs()) + " · " + r.count() + " samples"
+      _ui.status.textContent = auto ? "auto soak " + (SoakRun.status().state || "") + " · " + fmt(r.elapsedMs()) + " · " + r.count() + " samples" : r.isOn() ? "recording · " + fmt(r.elapsedMs()) + " · " + r.count() + " samples"
         : (have ? "saved run: " + r.count() + " samples" : "idle — nothing runs until you tap RECORD");
     }
   }
@@ -381,6 +385,12 @@ const PhoneRecorder = (function () {
       flash(quick === true ? "quick facts: stay on this screen 30 s" : "recording — resume and race 15 min");
     }
     paintBadge(); paintUI();
+  }
+  function onAuto() {
+    if (typeof SoakRun === "undefined" || !SoakRun.create) { flash("auto soak unavailable on this build"); return; }
+    if (SoakRun.active()) { SoakRun.stop("stopped"); flash("auto soak stopped"); paintUI(); return; }
+    flash("auto soak: building a wet Monza race, keep this screen on");
+    SoakRun.start().then((ok) => { if (!ok) flash("auto soak could not start"); paintUI(); });
   }
   function current() { const r = recorder(); return { text: r.serialize(), name: fileName(r.record()) }; }
   function onShare() {
@@ -414,6 +424,7 @@ const PhoneRecorder = (function () {
     const h = document.createElement("p"); h.className = "adv-help"; h.style.fontWeight = "700"; h.textContent = "PHONE TEST";
     const how = document.createElement("ol"); how.className = "adv-help";
     HOWTO.forEach((l) => { const li = document.createElement("li"); li.textContent = l.replace(/^\d\. /, ""); how.appendChild(li); });
+    const au = document.createElement("p"); au.className = "adv-help"; au.textContent = HOWTO_AUTO;
     const ab = document.createElement("ol"); ab.className = "adv-help";
     HOWTO_AB.forEach((l) => { const li = document.createElement("li"); li.textContent = l; ab.appendChild(li); });
     const row = document.createElement("div"); row.style.margin = "0";
@@ -423,10 +434,10 @@ const PhoneRecorder = (function () {
       b.addEventListener("click", (e) => { e.stopPropagation(); fn(); });
       row.appendChild(b); return b;
     };
-    _ui = { rec: mk("pm-phonerec-rec", "RECORD", onRecord), quick: mk("pm-phonerec-quick", "QUICK 30s", () => onRecord(true)), share: mk("pm-phonerec-share", "SHARE", onShare), copy: mk("pm-phonerec-copy", "COPY", onCopy) };
+    _ui = { auto: mk("pm-phonerec-auto", "AUTO SOAK", onAuto), rec: mk("pm-phonerec-rec", "RECORD", onRecord), quick: mk("pm-phonerec-quick", "QUICK 30s", () => onRecord(true)), share: mk("pm-phonerec-share", "SHARE", onShare), copy: mk("pm-phonerec-copy", "COPY", onCopy) };
     _ui.status = document.createElement("p"); _ui.status.className = "adv-help"; _ui.status.setAttribute("role", "status");
     _ui.link = document.createElement("p"); _ui.link.className = "adv-help";
-    [h, how, ab, row, _ui.status, _ui.link].forEach((n) => box.appendChild(n));
+    [h, au, how, ab, row, _ui.status, _ui.link].forEach((n) => box.appendChild(n));
     host.appendChild(box);
     // A run that survived a tab kill is shareable without recording again.
     const r = recorder();
