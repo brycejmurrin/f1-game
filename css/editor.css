@@ -754,7 +754,7 @@
 #trackdesigner[open][data-foot="in"] { grid-template-rows: 0 minmax(auto, 1fr); }
 #trackdesigner[data-foot="in"] .sheet-head { height: 0; padding: 0; margin: 0; overflow: visible; position: relative; z-index: 5; }
 #trackdesigner[data-foot="in"] .sheet-head h2 { display: none; }
-#trackdesigner[data-foot="in"] .sheet-head .dh-close { width: var(--tap-paint); height: var(--tap-paint); min-width: var(--tap-paint); min-height: var(--tap-paint); position: absolute; top: calc(var(--gap) / 2); right: calc(var(--gap) / 2); }
+#trackdesigner[data-foot="in"] #td-close { width: var(--tap-paint); height: var(--tap-paint); min-width: var(--tap-paint); min-height: var(--tap-paint); position: absolute; top: calc(var(--gap) / 2); right: calc(var(--gap) / 2); }
 #trackdesigner[data-foot="in"] .td-body {
   grid-template-columns: minmax(0, 1fr) minmax(250px, 45%);
   grid-template-rows: auto minmax(0, 1fr) auto;
