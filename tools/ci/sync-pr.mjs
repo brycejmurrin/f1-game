@@ -6,7 +6,7 @@
 //   node tools/ci/sync-pr.mjs <branch> --plan   # print the plan, run nothing
 //   node tools/ci/sync-pr.mjs <branch>          # fetch, merge, verify, leave the result on a local branch
 //   node tools/ci/sync-pr.mjs <branch> --push   # same, then push to origin/<branch>
-//   node tools/ci/sync-pr.mjs <branch> --verify=none|fast|full   # default fast
+//   node tools/ci/sync-pr.mjs <branch> --verify=none|fast|full   # default fast = tooling-fast --changed; full = the whole floor
 //   node tools/ci/sync-pr.mjs <branch> --force-clean-behind     # sync although needs-sync.mjs says `no`
 //   node tools/ci/sync-pr.mjs <branch> --resume --from=<stage>   # re-verify the kept sync-pr-<branch>
 //   node tools/ci/sync-pr.mjs <branch> --stop                    # stop that branch's running sync (whole process tree; no pkill -f)
@@ -97,7 +97,10 @@ export function verifyStages({ verify, changed, circuits, suites, planFor = node
   const skip = new Set();
   if (verify === "fast" && changed) { const p = planFor(changed); if (!p.all) for (const s of p.skip) skip.add(s); }
   return [
-    { name: "tooling-fast", cmd: "node", args: ["tools/ci/tooling-fast.mjs", "--jobs=3"], timeoutMs: STAGE_TIMEOUT_MS["tooling-fast"] },
+    // fast: only the unit files the merged branch's OWN diff reaches (`--changed` diffs HEAD against its merge-base with the
+    // deploy tip, which after the merge is the tip: the PR's paths plus whatever `npm run gen` rewrote); a diff that
+    // touches a run-all path falls back to the whole floor by itself. full: the whole ladder.
+    { name: "tooling-fast", cmd: "node", args: ["tools/ci/tooling-fast.mjs", ...(verify === "full" ? [] : ["--changed"]), "--jobs=3"], timeoutMs: STAGE_TIMEOUT_MS["tooling-fast"] },
     ...suites.filter((s) => !skip.has(s)).map((s) => ({ name: s, cmd: "npm", args: ["run", s], timeoutMs: STAGE_TIMEOUT_MS.node })),
     ...circuits.map((id) => ({ name: `verify-track:${id}`, cmd: "node", args: ["tools/track/verify-track.cjs", id], timeoutMs: STAGE_TIMEOUT_MS["verify-track"] })),
   ].map((st) => ({ ...st, skipped: [...skip] }));
@@ -121,7 +124,7 @@ function usage() {
     "  --plan    print head/tip/conflicts for that branch against the deploy tip, run nothing",
     "  --push    on a clean verify, push the result to origin/<branch> (default: leaves it on a local sync-pr-<branch> branch for review);",
     "            a push that starts CI waits while queue-depth.mjs holds (APEX_PUSH_HOLD=0 when the user asked for it now)",
-    "  --verify  fast (default): tooling-fast --jobs=3 + the node suites node-plan.mjs needs for the branch's own diff;",
+    "  --verify  fast (default): tooling-fast --changed --jobs=3 (the branch's own diff; ~2 min vs ~12 min whole) + the node suites node-plan.mjs needs for it;",
     "            full: every ci.yml node suite; none: only after a clean merge that regenerated nothing",
     "  --force-clean-behind  sync although needs-sync.mjs says `no` (clean-behind is not a reason; exit 4 without it)",
     "  --resume  re-verify the kept sync-pr-<branch> (no fetch, no merge); --from=<stage> starts at that stage",
@@ -239,6 +242,7 @@ export function main() {
       }
     } else if (verify === "none") throw new Error("--resume --verify=none verifies nothing; drop --resume and push by hand");
     const stages = verifyStages({ verify, changed: changedPaths(tip), circuits: touchedCircuits(tip), suites: verify === "none" ? [] : gateNodeSuites() });
+    log(`verify=${verify}: ${stages.map((st) => st.name).join(" → ") || "nothing"}; if it stops, resume with: ${resumeCmd(stages[0]?.name || null)}`);
     if (stages[0]?.skipped.length) log(`verify=${verify}: node-plan skips ${stages[0].skipped.join(", ")} for this diff (CI re-gates the pushed head)`);
     if (!stages.length) log("verify=none: clean merge, nothing regenerated — CI gates the pushed head");
     const r = runStages(stages, { from });
