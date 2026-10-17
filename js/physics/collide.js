@@ -724,7 +724,7 @@ const Collide = (() => {
       motionTime = G.raceT;
       // AI cars mirrored their world pose BEFORE this pass (updateCar's tail), so a
       // shove rendered one step late; snapshot so the clamp loop can re-mirror.
-      for (const c of ranked) if (!ownsPose(c) && !c.human) { c._preColS = c.s; c._preColX = c.x; }
+      for (let i = 0; i < ranked.length; i++) { const c = ranked[i]; if (!ownsPose(c) && !c.human) { c._preColS = c.s; c._preColX = c.x; } }
       sweepContacts(ranked, dt || FIXED_DT);
       // PRE-STEP CLOSING SPEED, for the restitution reference only. aSp/bSp are
       // read LIVE, and _colResolvePair mutates .speed as it goes, so in a
@@ -737,7 +737,7 @@ const Collide = (() => {
       // it is actually correcting. Only `e` moves to the snapshot.
       // Mirrors aSp/bSp for a net-owned car, whose predicted speed is the
       // reference and is not ours to mutate.
-      for (const c of ranked) if (!ownsPose(c)) c._preColSpd = c._nOk ? c._nSpd : c.speed;
+      for (let i = 0; i < ranked.length; i++) { const c = ranked[i]; if (!ownsPose(c)) c._preColSpd = c._nOk ? c._nSpd : c.speed; }
       // Side-rub speed loss for this step, in m/s: a deceleration (AiDrive.rubDecel)
       // times the step, so the headless harness's arbitrary dt scrubs per second.
       const rubScrub = AiDrive.rubDecel(!!track.street) * (dt || FIXED_DT);
@@ -789,7 +789,8 @@ const Collide = (() => {
         }
       }
       // keep everyone inside the per-side barriers after being shoved around
-      for (const c of ranked) {
+      for (let i = 0; i < ranked.length; i++) {
+        const c = ranked[i];
         if (ownsPose(c) || incidentSim.owns(c)) continue;   // the pose owner supplies its own boundary
         // The SAME boundary WallClamp.apply enforces every tick (barriers, pit wall,
         // exit wall, gantry legs), so a shove cannot leave a car past the pit wall
@@ -817,7 +818,8 @@ const Collide = (() => {
         player.px = w.x;
         player.pz = w.z;
       }
-      for (const c of ranked) {
+      for (let i = 0; i < ranked.length; i++) {
+        const c = ranked[i];
         if (ownsPose(c)) { motion.delete(c); continue; }   // no sweep from a prior driving pose after handback
         let p = motion.get(c); if (!p) { p = {}; motion.set(c, p); }
         p.prog = c.prog; p.x = c.x; p.angle = bodyAngle(c);
