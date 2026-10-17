@@ -14,7 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
-  selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS }
+  selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, changedHeader, EMPTY_DIFF_MESSAGE }
   from "../../tools/ci/tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -408,4 +408,31 @@ test(${JSON.stringify(name)}, () => { fs.appendFileSync(${JSON.stringify(events)
     assert.match(fs.readFileSync(path.join(dir, "suite.log"), "utf8"),
       new RegExp(`bail: stopped starting files after the first failure; ${result.notStarted} of 3 file\\(s\\) not started`));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// --changed follow-up: an empty diff must never read as a green run, and the header must say why it fell back.
+test("--changed: every selector result carries the real diff size; a fallback names the path that forced it", () => {
+  const all = ["tests/unit/docs-integrity.test.mjs", "tests/unit/agent-config.test.mjs"];
+  const opts = { allFiles: all, pinIndex: new Map(), scripts: {} };
+  const empty = selectToolingFastChanged([], opts);
+  assert.deepEqual([empty.reason, empty.files, empty.changed], ["empty", [], 0]);
+  const runAll = selectToolingFastChanged(["tools/lib/hud-survey-matrix.mjs", "docs/README.md"], opts);   // tools/lib/ is a run-all path (the real #2663 case)
+  assert.equal(runAll.reason, "run-all-path");
+  assert.equal(runAll.changed, 2, "a whole-floor fallback used to print changed=0");
+  assert.equal(runAll.because, "tools/lib/hud-survey-matrix.mjs", "the first matching run-all path is named");
+  assert.equal(runAll.files.length, all.length);
+});
+
+test("--changed header: reason, real diff size, files, because=<path>; the empty message tells the caller what to do", () => {
+  assert.equal(changedHeader({ reason: "run-all-path", changed: 3, because: "tools/lib/hud-survey-matrix.mjs", shards: ["1/2", "2/2"] }, 662),
+    "[tooling-fast] --changed reason=run-all-path changed=3 files=662 because=tools/lib/hud-survey-matrix.mjs shards=1/2,2/2");
+  assert.equal(changedHeader({ reason: "matched", changed: 5, shards: [] }, 52), "[tooling-fast] --changed reason=matched changed=5 files=52 shards=none");
+  assert.match(EMPTY_DIFF_MESSAGE, /EMPTY diff against origin\/claude\/f1-game-project-26h3ng — nothing was selected, nothing verified \(exit 3\)/);
+  assert.match(EMPTY_DIFF_MESSAGE, /without --changed/);
+});
+
+test("--changed CLI: the empty branch prints the message and exits 3 before any file runs (source pin; the diff cannot be faked in a unit test)", () => {
+  const src = fs.readFileSync(fileURLToPath(new URL("../../tools/ci/tooling-fast.mjs", import.meta.url)), "utf8");
+  assert.match(src, /if \(changedMeta\.reason === "empty"\) \{[\s\S]{0,600}console\.error\(EMPTY_DIFF_MESSAGE\);\s*process\.exit\(3\);/);
+  assert.ok(src.indexOf('changedMeta.reason === "empty"') < src.indexOf("await runToolingFast(files"), "the guard runs before the runner");
 });
