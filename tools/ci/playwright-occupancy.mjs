@@ -18,6 +18,12 @@ export function classifyPlaywrightLine(line) {
   const m = text.trim().match(/^(\d+)\s/);
   const pid = m ? Number(m[1]) : NaN;
   if (!Number.isFinite(pid)) return null;
+  // A shell whose COMMAND STRING mentions the suite (`bash -c '… npx playwright
+  // test …'`, a waiter queued behind another run) is not the suite: a running
+  // one always has its own node/npx line. Read as a suite, a queued waiter
+  // refused every apex_* browser tool and explorer run (2026-10-17).
+  const argv0 = (text.trim().split(/\s+/)[1] || "").split("/").pop();
+  if (/^(?:ba|z|da|k)?sh$/.test(argv0)) return null;
   if (/(?:^|[\s/])playwright\s+test(?:\s|$)/.test(text)) {
     return { kind: "suite", pid };
   }
