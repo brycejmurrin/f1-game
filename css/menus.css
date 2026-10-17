@@ -1,19 +1,7 @@
 @layer components {
 /* Apex 26 — menus styles. Load order: tools/manifest.cjs CSS. */
-/* FOUR TIERS, by how much of your evening the thing costs.
-   HERO is the career — the 24-round game everything else feeds into. PLAY NOW is
-   the four one-sitting modes, 2x2, as dark plates with a red leading edge.
-   EXPLORE is Watch / Practice / Photo Studio / Garage (H3 Home rooms plus the
-   car workshop), also a forced 2x2. SECONDARY is the chrome rooms: half-height,
-   two across, no glow.
-
-   It was two tiers, but the play row had grown to FIVE full-size red buttons, so
-   the flat list the two-tier split existed to break up had quietly come back —
-   and a 24-round career carried exactly the weight of a time trial. Folding the
-   four quick modes into 2x2 pays for the hero's extra height, so the column is
-   no taller than before and still clears a 390px landscape phone. Garage used
-   to sit in the leftover utility strip; promoting it into explore keeps that
-   row even and the rooms row a chrome strip. */
+/* Career retains the hero treatment. Destination groups and compact wrapping
+   live in menu-destinations.css; the shared title scroller contains every group. */
 #menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
 /* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
@@ -85,18 +73,7 @@
 /* The hero is the one button on the screen with two lines of text, so it centres
    its own stack rather than inheriting the single-line baseline the others use. */
 #menu-hero .bigbtn { padding-block: 13px; }
-/* THE `mb-` FAMILY IS GONE, AND THIS IS WHAT REPLACED IT. Both of its classes
-   dressed exactly ONE element inside exactly one button, so each was a class
-   that could never be reused and a name nobody could look up — the shape
-   the restructure-screens-css skill rule 12 names ("one property
-   plus N one-line context overrides beats N variant classes") and rule 8's
-   `--sheet-w` table demonstrates: the variation lives on the CONTEXT, not in a
-   class of its own. #mb-career's only element child that is not the icon is the
-   two-line stack, and the save line already carried an id for JS to fill.
-   Selectors are IDs now, so they outrank the class rules they replace by more
-   than the class rules outranked each other — checked against every other rule
-   that touches these two elements (there is one, the touch floor at the end of
-   this file, and one in css/responsive.css, which wins on LAYER either way). */
+/* Career keeps its label and saved-state line in a vertical stack. */
 #mb-career > span { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 /* The sub line under a door's label: what the button will DO, dim and small so
    it never competes with the label. Five uses — the hero's live save line and
@@ -319,24 +296,8 @@
 /* Landscape: branding left, buttons right — a phone held sideways has width to
    spend and no height at all. Two columns, everything vertically centred, and
    the whole screen still inside the safe area. */
-/* THE SIDE-BY-SIDE COMPOSITION, shared by a landscape phone and a desktop (the
-   large-screen block in css/responsive.css only changes the sizes).
-   Columns are sized to their CONTENT and the pair is centred as a unit. They
-   used to be `1fr 1fr` with `justify-items: start`, which on anything wide
-   pinned the title to the far-left edge and left the buttons stranded at the
-   half-way line — ~630px of dead space between them on a 1920 screen.
-   Nothing spans rows either: brand and buttons share row 1, small print takes
-   row 2. The old layout ran the button column through all four branding rows,
-   and a grid distributes a spanning item's excess height across the rows it
-   covers — which is what pushed the small print 230px below the title. */
-/* THE DOCUMENT-LEVEL SHORT THRESHOLD, declared beside the screen that reads it —
-   the same arrangement `--pair-at` has with #cs-inner. js/ui/sheet-shape.js resolves
-   `innerHeight / --ui-scale` against this and writes data-density onto body, which is
-   how the screens OUTSIDE `.sheet` get an answer (#overlay's zoom sits on its children,
-   so it has none of its own to divide by). 600 is what the two #overlay blocks already
-   used — 599 here, 600 in css/responsive.css, one pixel apart, the same question.
-   It is registered `inherits: false` in css/tokens.css: declared plainly it cascaded
-   into every .sheet and moved their thresholds from 380 to 600. */
+/* Wide Home places brand and navigation side by side within the safe area. */
+/* SheetShape resolves these document thresholds before child zoom. */
 body { --compact-at: 600px; --wide-at: 620px; }
 
 /* LIVE HOME GEOMETRY (blocking). html[data-home-live] + data-home-scene are
@@ -392,7 +353,9 @@ html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
    Keep #menu-buttons as the scroll box — ui-scale @200% scrolls RACE into it.
    display:contents broke that box and let brand (z-index) steal hits on DATA HUB. */
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
-  grid-template-columns: minmax(0, 1fr) min(46%, 400px);
+  /* Reserve room for scaled labels: a 400px cap becomes only 200 CSS px
+     at 200% UI size and wraps the hero until RACE falls below the fold. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
   grid-template-rows: minmax(0, 1fr);
   align-content: stretch; align-items: stretch;
   /* 0.15: cheap 852×344 fold clearance for GARAGE. */
@@ -625,23 +588,7 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
      Dynamic Island when --gut was smaller than the token gutter. */
   padding-block-start: max(var(--safe-t), calc(var(--sat) + var(--gap) * 0.5));
 }
-/* THE PORTRAIT PHONE IS THREE BANDS: brand, doors, cars. Redesigned
-   2026-09-23 from an iPhone report against the previous pass: the wordmark sat
-   under the status bar (the safe-area fix is on the tall #overlay rule above),
-   the doors had grown to fill the screen, and the 900/1600 portrait drawing was
-   a full-height layer the whole button column sat on top of, so the cars were
-   never actually seen. The landscape phone is the composition players like —
-   compact doors beside a side-on pair of cars in the clear — so portrait now
-   says the same thing stacked:
-   - row 1, the brand, clear of the notch;
-   - row 2, the doors at their landscape sizes: one-line play doors, a 2x2 of
-     rooms, the column only as tall as its content (minmax(0, auto) — grid
-     grows it before the fr row, and it scrolls if the phone is too short);
-   - row 3, whatever height is left, holds the SIDE-ON drawing (#title-car) as
-     an in-flow grid item instead of an absolute layer, so nothing covers it.
-   Scoped to tall AND narrow so an upright iPad keeps the large-portrait sizes
-   in css/responsive.css and its own drawing. No px in any padding or gap:
-   rawSpacing is ratcheted at zero slack. */
+/* Portrait Home reserves separate bands for brand, scrollable doors, and the car preview. */
 @media (max-width: 699px) {
   :where(body[data-shape="tall"]) #overlay {
     grid-template-rows: auto minmax(0, auto) minmax(0, 1fr);
