@@ -221,6 +221,48 @@ test.describe("UI scale", () => {
     });
   }
 
+  // Bryce 2026-10-17 ("The cut-off text at UI size 200% is fine as it is?" - "No"):
+  // the preset blurbs and the career intro carried a 2-line -webkit-line-clamp
+  // and read "full distance, qualifying, real…". They wrap in full instead.
+  for (const [label, viewport] of [["844x390", { width: 844, height: 390 }], ["932x430", { width: 932, height: 430 }], ["852x393", LANDSCAPE]]) {
+    for (const pct of [100, 150, 200]) {
+      test(`race-settings blurbs and the career intro are not truncated at ${pct}% (${label})`, async ({ page }) => {
+        await page.setViewportSize(viewport);
+        await boot(page);
+        await page.evaluate((p) => window.__apex.uiScale(p), pct);
+        const TRUNC = (sel) => {
+          const els = [...document.querySelectorAll(sel)].filter((e) => e.getClientRects().length);
+          return {
+            n: els.length,
+            // What hides text: a line clamp, an ellipsis that fires, or the text
+            // box leaving the card that clips it. (scrollHeight vs clientHeight
+            // is not used: a zoomed font box rounds 3px over with nothing cut.)
+            cut: els.filter((e) => {
+              const cs = getComputedStyle(e), r = e.getBoundingClientRect(), p = e.parentElement.getBoundingClientRect();
+              return cs.webkitLineClamp !== "none" ||
+                (cs.textOverflow === "ellipsis" && e.scrollWidth > e.clientWidth + 1) ||
+                (e.parentElement.matches(".preset-btn") && (r.bottom > p.bottom + 1 || r.right > p.right + 1));
+            }).map((e) => e.textContent.trim().slice(0, 40)),
+            doc: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          };
+        };
+        await toTitle(page);
+        await open(page, ["mb-race", "sel-go"]);
+        const rs = await page.evaluate(TRUNC, "#rs-presets > .preset-btn small");
+        if (rs.n) {   // the captions are hidden on narrow sheets by design
+          expect(rs.cut, `preset blurbs truncated @${pct}% ${label}`).toEqual([]);
+        }
+        expect(rs.doc, `race-settings scrolls sideways @${pct}% ${label}`).toBeLessThanOrEqual(1);
+        await toTitle(page);
+        await open(page, ["mb-career"]);
+        const cr = await page.evaluate(TRUNC, "#cr-left .cr-note, #cr-right .cr-note");
+        expect(cr.n, "career intro notes are on screen").toBeGreaterThan(0);
+        expect(cr.cut, `career intro truncated @${pct}% ${label}`).toEqual([]);
+        expect(cr.doc, `career scrolls sideways @${pct}% ${label}`).toBeLessThanOrEqual(1);
+      });
+    }
+  }
+
   test("race events and HUD changes keep touch buttons the same size", async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     await boot(page);

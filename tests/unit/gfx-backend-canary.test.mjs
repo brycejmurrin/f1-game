@@ -1603,6 +1603,29 @@ test("begin() does not re-bind the per-pass sampler units when nothing changed",
   assert.equal(h.count("activeTexture", (a) => a[0] === h.gl.TEXTURE6), 0, "…and never select unit 6 for it");
 });
 
+test("material uniforms survive begin(): a second pass with the same material uploads none", () => {
+  // The nine material caches were reset in every begin(), so each pass (main, mirror, env face) re-sent up to nine
+  // uniform1f on its first lit draw. A WebGL uniform is program state and litMaterial is its only writer, so only a
+  // relink invalidates it.
+  const h = bootGlx();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mesh = h.GLX.createMesh(tri);
+  const model = new Float32Array(16); model[0] = model[5] = model[10] = model[15] = 1;
+  const MAT = ["uEmissive", "uAlpha", "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle"];
+  const matUploads = () => h.count("uniform1f", (a) => MAT.includes(a[0].name));
+  const opts = { roughness: 0.4, metalness: 0.6, emissive: 0.25 };
+  h.GLX.begin(h.frame());
+  h.reset();
+  h.GLX.draw(mesh, model, opts);
+  assert.ok(matUploads() >= 3, "the first draw of a fresh link uploads the non-default values");
+  h.reset();
+  h.GLX.begin(h.frame());
+  h.GLX.draw(mesh, model, opts);
+  assert.equal(matUploads(), 0, "begin() no longer clears the material caches");
+  h.GLX.draw(mesh, model, { roughness: 0.9 });
+  assert.equal(matUploads(), 3, "a changed material still uploads exactly the lanes that moved (rough, metal, emissive)");
+});
+
 test("uModel goes through the redundancy cache, not a raw upload", () => {
   // PERF-FINDINGS 2h: uModel was 103.2 uploads/frame for 50.3 distinct values,
   // because drawChunked calls litMaterial once per chunk RUN and every run of

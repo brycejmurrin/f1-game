@@ -218,7 +218,11 @@ const GLXBackend = (function () {
 
 
   // Material uniform cache — skip redundant per-draw scalar uploads.
-  let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1, _matCC = -1, _matCP = -1, _matSpark = -1;
+  // A Float64Array, not nine closure lets: a `let` that takes a new double is re-boxed as a HeapNumber (16 B) on every
+  // change; a typed-array slot stores the double unboxed. Index order: emissive, alpha, rough, metal, spec, detail,
+  // clearcoat, carPaint, sparkle. Like _luNL below it is PROGRAM state — a WebGL uniform survives every unbind, and
+  // litMaterial is the only writer — so only a relink invalidates it (reset beside _luNL), not begin().
+  const _matC = new Float64Array(9).fill(-1);
   // uNumLights, last value written to the LIT program. Unlike the _mat* caches
   // above this is NOT cleared per frame: a WebGL uniform is per-PROGRAM state
   // and survives every unbind, so the only thing that can invalidate it is a
@@ -990,7 +994,8 @@ const GLXBackend = (function () {
     // state, not VAO state, so setting it once here covers every mesh.
     gl.vertexAttrib3f(9, 1, 1, 1);
     _luNL = -1;   // a relink resets every uniform on the program — see the cache's note
-    _unitTex.length = 0; _unitTgt.length = 0;   // …and a context restore drops every binding
+    _matC.fill(-1);
+    _unitTex.length = _unitTgt.length = 0;
     _envUnitSet = false;   // uEnvCube's sampler unit is program state: re-point it once after this link
     litU = locs(litProg, ["uModel", "uInstanced", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
@@ -2084,7 +2089,6 @@ const GLXBackend = (function () {
       // (lens-glare halo weight) by drawGlow only.
       uploadLightSet(L, null, L ? (L.length / 15) | 0 : 0);
     }
-    _matEmissive = _matAlpha = _matRough = _matMetal = _matSpec = _matDetail = _matCC = _matCP = _matSpark = -1;
   }
 
   // Upload a set of point lights into the lit program's MAX_LIGHTS uniform
@@ -2169,15 +2173,15 @@ const GLXBackend = (function () {
     const clearcoat = opts && opts.clearcoat !== undefined ? opts.clearcoat : 0.0;
     const carPaint = opts && opts.carPaint !== undefined ? opts.carPaint : 0.0;
     const sparkle = opts && opts.sparkle !== undefined ? opts.sparkle : 1.0;
-    if (emissive  !== _matEmissive) { gl.uniform1f(litU.uEmissive,  emissive);  _matEmissive = emissive; }
-    if (alpha     !== _matAlpha)    { gl.uniform1f(litU.uAlpha,     alpha);     _matAlpha    = alpha; }
-    if (roughness !== _matRough)    { gl.uniform1f(litU.uRoughness, roughness); _matRough    = roughness; }
-    if (metalness !== _matMetal)    { gl.uniform1f(litU.uMetalness, metalness); _matMetal    = metalness; }
-    if (specular  !== _matSpec)     { gl.uniform1f(litU.uSpecular,  specular);  _matSpec     = specular; }
-    if (detail    !== _matDetail)   { gl.uniform1f(litU.uDetail,    detail);    _matDetail   = detail; }
-    if (clearcoat !== _matCC)       { gl.uniform1f(litU.uClearcoat, clearcoat); _matCC       = clearcoat; }
-    if (carPaint  !== _matCP)       { gl.uniform1f(litU.uCarPaint,  carPaint);  _matCP       = carPaint; }
-    if (sparkle   !== _matSpark)    { gl.uniform1f(litU.uSparkle,   sparkle);   _matSpark    = sparkle; }
+    if (emissive !== _matC[0]) { gl.uniform1f(litU.uEmissive, emissive); _matC[0] = emissive; }
+    if (alpha !== _matC[1]) { gl.uniform1f(litU.uAlpha, alpha); _matC[1] = alpha; }
+    if (roughness !== _matC[2]) { gl.uniform1f(litU.uRoughness, roughness); _matC[2] = roughness; }
+    if (metalness !== _matC[3]) { gl.uniform1f(litU.uMetalness, metalness); _matC[3] = metalness; }
+    if (specular !== _matC[4]) { gl.uniform1f(litU.uSpecular, specular); _matC[4] = specular; }
+    if (detail !== _matC[5]) { gl.uniform1f(litU.uDetail, detail); _matC[5] = detail; }
+    if (clearcoat !== _matC[6]) { gl.uniform1f(litU.uClearcoat, clearcoat); _matC[6] = clearcoat; }
+    if (carPaint !== _matC[7]) { gl.uniform1f(litU.uCarPaint, carPaint); _matC[7] = carPaint; }
+    if (sparkle !== _matC[8]) { gl.uniform1f(litU.uSparkle, sparkle); _matC[8] = sparkle; }
     return alpha;
   }
 
