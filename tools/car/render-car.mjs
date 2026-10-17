@@ -381,6 +381,8 @@ for (const [k, v] of Object.entries(parts)) qs.set(k, v);
 // for it at all before this.
 const LIV_FIELDS = ['finish', 'finShape', 'finStyle', 'finBadge', 'spineLogo', 'spineSide',
                     'spineHeight', 'tcam', 'coverVents', 'wingCarbon', 'numFont',
+                    'mirrorTint', 'rimTint', 'caliperTint', 'sidewallInk', 'helmetBase', 'helmetAccent',
+                    'podFinish', 'finFinish', 'mirrorFinish', 'helmetStyle', 'coverFinish', 'wingFinish', 'haloFinish',
                     'cover', 'rearWing', 'stripe', 'accent', 'nose', 'pod', 'wing',
                     'halo', 'fin', 'finArt', 'logo', 'logo2', 'logo3'];
 for (const f of LIV_FIELDS) { const v = arg(f, null); if (v != null) qs.set(f, v); }
