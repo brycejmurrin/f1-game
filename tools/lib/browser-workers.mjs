@@ -64,7 +64,7 @@ export function captureGpuOptions({ env = process.env, gpu = glStack(env),
 
 /** Spec basenames in playwright.config.js RENDER_SPECS (no .spec.js). */
 export const RENDER_HEAVY_SPEC_IDS = [
-  "dev-tools", "f1-track-accuracy", "hud-audit", "image-grade-visual",
+  "dev-tools", "dev-tools-dom", "f1-track-accuracy", "hud-audit", "image-grade-visual",
   "lighting-ab", "lighting-tuner-grade",
   "garage-first-frame",
   "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",

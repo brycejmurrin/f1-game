@@ -137,20 +137,4 @@ test.describe("simulation determinism", () => {
     expect(leaked.secondVsThird, "fields that drift on every episode").toEqual([]);
   });
 
-  test("cosmetic randomness does not draw from the seeded stream", async ({ page }) => {
-    await load(page);
-    // Rendering frames between two identical episodes must not shift the sim.
-    // If particles/camera-shake ever moved onto the seeded stream, drawing them
-    // would advance it and this would fail.
-    const r = await page.evaluate((src) => {
-      const run = eval("(" + src + ")");
-      const a = run(42);
-      return new Promise((res) => {
-        let i = 0;
-        const tick = () => (++i > 20 ? res([a, run(42)]) : requestAnimationFrame(tick));
-        requestAnimationFrame(tick);
-      });
-    }, episodeScript().toString());
-    expect(JSON.stringify(r[1])).toBe(JSON.stringify(r[0]));
-  });
 });

@@ -562,6 +562,18 @@ EOF
   # branch touches it, so two PRs growing one module never conflict, #2291),
   # else tests/data/ratchets.json — so the raise is in this commit's diff
   # instead of a hand edit plus a second guard run. Bigger growth still blocks.
+  # ONE GUARD RUN PER COMMIT, NOT ONE PER MATCHING FILTER (2026-10-17).
+  # settings.json registers this hook under 14 `if:` filters, so a commit
+  # command that also says node/sh/npm/... starts two or more copies at once:
+  # each ran the full suite, doubling the load and sharing $LOG, so one timed
+  # out (160/300 s) while its twin went green in 202 s — seven blocked
+  # commits in a row. Copies now queue on a lock, and a later copy reuses a
+  # GREEN verdict for the same staged tree (git write-tree) from the last
+  # 10 minutes. Red and timed-out runs are never reused.
+  if command -v flock >/dev/null 2>&1; then
+    exec 9>"$ROOT/artifacts/pre-commit-guards.lock"
+    flock -w $(( GUARD_T + 60 )) 9 || true
+  fi
   RLOG="$ROOT/artifacts/pre-commit-ratchets.log"
   if (cd "$ROOT" && node tools/check/ratchets.mjs --auto-raise >"$RLOG" 2>&1); then
     if grep -q '^RAISED\|^LOWERED' "$RLOG"; then
@@ -580,6 +592,14 @@ EOF
     exit 2
   fi
   T0=$(date +%s)
+  TREE=$(cd "$ROOT" && git write-tree 2>/dev/null)
+  OKF="$ROOT/artifacts/pre-commit-guards.ok"
+  RAISED=$(grep -c '^RAISED\|^LOWERED' "$RLOG" 2>/dev/null)
+  if [ -n "$TREE" ] && [ -f "$OKF" ] && [ "$(cat "$OKF" 2>/dev/null)" = "$TREE" ] \
+     && [ -n "$(find "$OKF" -mmin -10 2>/dev/null)" ]; then
+    COMMIT_CTX="bash-guard: code commit — ratchets --auto-raise (${RAISED:-0} raised/lowered); test:guards already green for staged tree $TREE (a concurrent copy of this hook ran it; log $LOG)."
+    exit 0
+  fi
   (cd "$ROOT" && timeout -k 5 "$GUARD_T" npm run --silent test:guards >"$LOG" 2>&1); RC=$?
   guard_timed_out "$RC" "npm run test:guards"
   if [ "$RC" != 0 ]; then
@@ -588,7 +608,7 @@ EOF
     echo "Fix the guard (or prefix with APEX_SKIP_GUARDS=1 when the guards themselves are the change under test)." >&2
     exit 2
   fi
-  RAISED=$(grep -c '^RAISED\|^LOWERED' "$RLOG" 2>/dev/null)
+  [ -n "$TREE" ] && printf '%s' "$TREE" > "$OKF"
   COMMIT_CTX="bash-guard: code commit — ratchets --auto-raise (${RAISED:-0} raised/lowered) then npm run test:guards (green, $(( $(date +%s) - T0 )) s; log $LOG)."
 fi
 exit 0
