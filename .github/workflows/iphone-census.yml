@@ -1,0 +1,159 @@
+name: iPhone census
+
+# Run the game in Mobile Safari on an iOS SIMULATOR (GitHub's own macOS runner,
+# Apple's safaridriver) and record the automatable parts of the phone
+# measurement plan (docs/notes/PERF-RESEARCH-2026-10-17.md §4 A, A2, B-lite, D
+# and §2 item 7):
+#
+#   A   facts      userAgent, DPR, navigator.gpu (+ adapter / shader-f16),
+#                  GLX.__tlx.backendState(), __apex.perf(), the four WebGL2
+#                  extensions that decide #2.4 / #9
+#   A2  rAF        cadence on the menu
+#   B   soak       a scripted race (closed-loop driver over the __apex hooks)
+#                  sampled every 30 s: frame p50/p95/p99, renderScale, tier, memState
+#   D   renderer   three arms — TLX default (three WebGL2), TLX WebGPU
+#       A/B        (THREE PATH: WEBGPU), GLX (apex26.gfxBackend="webgl2") —
+#                  interleaved, each with a fixed-view screenshot and a
+#                  window-1 p50
+#
+# WHAT THIS PROVES, AND WHAT IT CANNOT. The simulator runs iOS's WebKit on the
+# runner's GPU through the host's Metal. It is evidence for iOS-Safari
+# CORRECTNESS — which extensions and paths Safari exposes, whether TLX-on-WebGPU
+# and GLX draw the right picture — and NOT for phone performance: its frame
+# times are the Mac's. The Verdict summary says so on every run and labels every
+# timing. No thermal, memory-pressure or jetsam claim, and per-frame JavaScript
+# cost needs Safari Timelines on a device.
+#
+# No secrets. Dispatch only (macOS minutes are the dear ones; there is no
+# schedule and no push trigger):
+#   gh workflow run iphone-census.yml --ref <branch>   (or MCP actions_run_trigger)
+# The target is the LIVE Pages site. To measure a branch, deploy it first or
+# point `url` at a reachable build.
+#
+# Sources, checked 2026-10-17:
+#   https://manp.gs/mac/1/safaridriver            (safari:useSimulator & friends)
+#   https://webkit.org/blog/9395/webdriver-is-coming-to-safari-in-ios-13/
+#   https://github.com/actions/runner-images/issues/13220   (one iOS runtime per image)
+# Logic and tests: tools/gfx/iphone-census-lib.mjs, tests/unit/iphone-census.test.mjs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Page to load (must be publicly reachable; default is the live Pages site)"
+        required: false
+        default: "https://brycejmurrin.github.io/f1-game/"
+      device:
+        description: "iPhone model name for the simulator (falls back to the newest Pro iPhone this Xcode has)"
+        required: false
+        default: "iPhone 17 Pro"
+      os_version:
+        description: "iOS runtime to use (prefix, e.g. 26 or 26.0; empty = the newest on the image)"
+        required: false
+        default: ""
+      image:
+        description: "macOS runner image"
+        type: choice
+        options: ["macos-latest", "macos-26", "macos-15"]
+        required: false
+        default: "macos-latest"
+      track:
+        description: "Circuit for the scripted race"
+        required: false
+        default: "montreal"
+      soak_minutes:
+        description: "B-lite soak length in minutes (0 skips it)"
+        required: false
+        default: "3"
+      arms:
+        description: "Renderer arms, comma-separated, any of tlx,tlxgpu,glx"
+        required: false
+        default: "tlx,tlxgpu,glx"
+      rounds:
+        description: "Interleaved passes over the arms (1 = A B C; 2 = A B C A B C)"
+        required: false
+        default: "1"
+      window_seconds:
+        description: "Seconds measured per arm window (>= 15)"
+        required: false
+        default: "45"
+
+permissions:
+  contents: read
+
+# One census at a time per ref; a second dispatch queues.
+concurrency:
+  group: iphone-census-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  census:
+    runs-on: ${{ inputs.image || 'macos-latest' }}
+    timeout-minutes: 45
+    env:
+      # Inputs reach the shell through env, never interpolated into a script.
+      IC_URL: ${{ inputs.url }}
+      IC_DEVICE: ${{ inputs.device }}
+      IC_OS: ${{ inputs.os_version }}
+      IC_TRACK: ${{ inputs.track }}
+      IC_SOAK: ${{ inputs.soak_minutes }}
+      IC_ARMS: ${{ inputs.arms }}
+      IC_ROUNDS: ${{ inputs.rounds }}
+      IC_WINDOW: ${{ inputs.window_seconds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: What the runner has
+        continue-on-error: true
+        run: |
+          sw_vers; xcodebuild -version
+          xcrun simctl list runtimes
+          safaridriver --version || true
+
+      # Remote Automation for desktop Safari (the runner images enable it; this
+      # is idempotent). The iOS simulator's own switch is set by the setup script.
+      - name: Enable safaridriver
+        run: sudo safaridriver --enable
+
+      - name: Boot an iPhone simulator
+        run: node tools/gfx/iphone-sim-setup.mjs --device "$IC_DEVICE" --os "$IC_OS"
+
+      # selenium-webdriver is the driver's only dependency: installed here, not a
+      # package.json dependency (no lockfile churn for a dispatch-only tool).
+      - name: Install selenium-webdriver
+        run: npm install --no-save --no-package-lock --ignore-scripts selenium-webdriver@4.51.0
+
+      - name: Run census in Mobile Safari
+        id: census
+        run: |
+          mkdir -p artifacts/iphone-census
+          node tools/gfx/iphone-census.mjs \
+            --url "$IC_URL" --device "$IC_SIM_DEVICE" --os "$IC_SIM_OS" --track "$IC_TRACK" \
+            --soak-min "$IC_SOAK" --arms "$IC_ARMS" --rounds "$IC_ROUNDS" --window-s "$IC_WINDOW" \
+            --out artifacts/iphone-census
+
+      - name: Diagnostics on failure
+        if: ${{ failure() }}
+        continue-on-error: true
+        run: |
+          xcrun simctl list devices booted
+          ls ~/Library/Logs/DiagnosticReports 2>/dev/null | head
+          log show --last 3m --predicate 'process == "safaridriver" OR process == "webinspectord"' --style compact 2>/dev/null | tail -60
+
+      - name: Verdict — fail the job on what the simulator reported
+        if: ${{ !cancelled() }}
+        run: node tools/gfx/iphone-census-summary.mjs artifacts/iphone-census
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: iphone-census
+          path: artifacts/iphone-census/
+          if-no-files-found: warn
+          retention-days: 14

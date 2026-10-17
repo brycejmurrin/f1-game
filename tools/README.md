@@ -248,6 +248,10 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/glx-call-census.mjs** | What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages. | renderer-debug |
 | **gfx/gpu-census.mjs** | Does this machine have a real GPU? Launches full Chromium per flag set and reports the adapter (`census_only` in CI). | — |
 | **gfx/gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | — |
+| **gfx/iphone-census-lib.mjs** | Pure half of iphone-census.yml: capabilities, simulator pick, probe sources, arm schedule, maths, Verdict. | renderer-debug |
+| **gfx/iphone-census-summary.mjs** | Verdict step of iphone-census.yml: prints and appends the summary, exits 1 on a failed verdict. | renderer-debug |
+| **gfx/iphone-census.mjs** | Drives Mobile Safari in an iOS simulator (safaridriver): facts, rAF, soak, 3-arm renderer A/B -> iphone-census.json. | renderer-debug |
+| **gfx/iphone-sim-setup.mjs** | Creates, automation-enables and boots an iPhone simulator on a macOS runner; prints IC_SIM_* env lines. | renderer-debug |
 | **gfx/knob-ab.mjs** | Visual knob A/B: same frame with a lightTune knob ON twice (noise floor) and OFF; fails unless ON vs OFF beats noise. | renderer-debug |
 | **gfx/mem-census.mjs** | Memory census: heap after GC, live tracks, three render objects and decoded audio per track load (picker or race path). | mcp-probe / check-changes |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |

@@ -528,6 +528,8 @@
     "// brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.",
     "tests/unit/input-bindings.test.mjs",
     "tests/unit/input-ghost.test.mjs",
+    "// iphone-census.yml (Mobile Safari in an iOS simulator on a macOS runner): safaridriver capability object, simulator runtime / device-type pick, arm schedule + the localStorage keys the game reads, in-page probes run against stubbed globals, Verdict rows/failures + the simulator-is-not-a-phone labels, summary CLI, workflow shape; no browser, < 1 s.",
+    "tests/unit/iphone-census.test.mjs",
     "tests/unit/js-debugger-mcp.test.mjs",
     "tests/unit/key-binds.test.mjs",
     "tests/unit/keyboard-first-audio-vm.test.mjs",
