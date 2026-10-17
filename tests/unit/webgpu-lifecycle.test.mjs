@@ -2723,6 +2723,33 @@ test("a capture NEVER reconfigures the swapchain inside an encoded frame", async
   assert.ok(cfgAt >= 0 && encAt > cfgAt, "the reconfigure must precede this frame's encoder");
 });
 
+test("WGX shadow casts with an unchanged model reuse the bound ring slot", async () => {
+  // castShadowInstanced passes one identity model and most track/prop casts pass MAT_IDENT: every cast used to take
+  // a new ring slot, copy the same 16 floats and re-bind group 1 at a new offset. Group 1 is bound only there and a
+  // pass is new per Begin, so an equal model in the same pass is an exact hit.
+  const h = makeGpuHarness({ recordPass: true });
+  const gfx = await h.create();
+  gfx.resize();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mesh = gfx.createMesh(tri);
+  const id = new Float32Array(16); id[0] = id[5] = id[10] = id[15] = 1;
+  const moved = new Float32Array(id); moved[12] = 5;
+  const g1 = () => h.passCalls.filter(([n, a]) => n === "setBindGroup" && a[0] === 1).length;
+  gfx.shadowBegin(id);
+  const n0 = g1();
+  for (let i = 0; i < 5; i++) gfx.castShadow(mesh, id);
+  assert.equal(g1() - n0, 1, "five identical-model casts bind group 1 once");
+  gfx.castShadow(mesh, moved);
+  assert.equal(g1() - n0, 2, "a different model takes a new slot and binds again");
+  gfx.castShadow(mesh, id);
+  assert.equal(g1() - n0, 3, "going back to the first model is not a hit: the binding now points at the moved slot");
+  gfx.shadowEnd();
+  gfx.shadowBegin(id);
+  const n1 = g1();
+  gfx.castShadow(mesh, id); gfx.castShadow(mesh, id);
+  assert.equal(g1() - n1, 1, "a new pass binds afresh, then dedupes");
+});
+
 test("WGX shadow cull packs into the batch's OWN buffer and leaves the camera pack alone", async () => {
   // Bug hunt 2026-09-02: the shadow encoder rides the FRAME submit while the
   // camera cull's writeBuffer is queue-ordered before it, so a shared instBuf
