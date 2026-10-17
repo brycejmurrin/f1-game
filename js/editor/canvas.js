@@ -11,6 +11,7 @@ const DesignerCanvas = (function () {
   "use strict";
   const S = TrackShape;
   const clamp = M4.clamp;          // the shared scalar (js/core/mat4.js, FULL), never a private copy
+  const HEAT_MIN_PX = 6;             // thinnest the HEIGHT / SPEED colour ribbon is drawn (css px)
   const HIT_PX = 28;                 // pick radius around a handle (css px); larger than the drawn dot
   const HIT_TOUCH = 44;              // …and under a finger (≥44 css px WCAG / Bryce mobile)
   const DRAG_MOUSE = 6;              // intentional move threshold (mouse) — below this, select only
@@ -502,7 +503,12 @@ const DesignerCanvas = (function () {
       g.closePath();
       g.fillStyle = stale ? COL.roadStale : sceneryOn ? "#50545a" : COL.road;
       g.fill("evenodd");
-      if (heatReady()) heatFill(L, R, n);
+      if (heatReady()) {
+        heatFill(L, R, n);
+        // Whole-lap zoom draws a 14 m road ~3 px wide: re-stroke the colours on the
+        // centreline at a readable minimum so the map still reads as a heat map.
+        if (hw[0] * 2 * scale < HEAT_MIN_PX) heatRibbon(n);
+      }
       g.strokeStyle = COL.edge; g.lineWidth = 1; g.stroke();
       // Subtle red/white kerbs make the live overhead road legible at lap scale.
       if (sceneryOn && !stale) for (const edge of [L, R]) {
@@ -555,6 +561,17 @@ const DesignerCanvas = (function () {
         done += len;
       }
     }
+    function heatRibbon(n) {
+      const elevation = heatKind === "elevation", palette = elevation ? HEIGHT : SPD, span = heatHigh - heatLow;
+      const bucket = (k) => elevation ? (span < 0.01 ? 2 : Math.min(4, Math.floor((heat[k] - heatLow) / span * 5))) : spdBucket(heat[k]);
+      g.lineWidth = HEAT_MIN_PX; g.lineCap = "round"; g.lineJoin = "round";
+      for (let k = 0; k < n; k++) {
+        const j = (k + 1) % n;
+        g.strokeStyle = palette[bucket(k)];
+        g.beginPath(); g.moveTo(toSX(built.px[k]), toSY(built.pz[k])); g.lineTo(toSX(built.px[j]), toSY(built.pz[j])); g.stroke();
+      }
+      g.lineCap = "butt";
+    }
     function heatLegend() {
       if (!heatReady()) return;
       const elevation = heatKind === "elevation", palette = elevation ? HEIGHT : SPD;
@@ -595,12 +612,19 @@ const DesignerCanvas = (function () {
       const touch = ptype === "touch";
       const groupOn = span >= 0 && sel >= 0 && span !== sel;
       const group = groupOn ? new Set(S.spanIndices(sel, span, N)) : null;   // one walk, not one per handle
+      // Dense polygons (built-in circuits: hundreds of points) must not bury the
+      // road or its HEIGHT/SPEED colours under full-size dots: idle handle radius
+      // follows the on-screen point spacing (picking is by hit radius, unchanged).
+      let perim = 0;
+      for (let i = 0; i < N; i++) { const a = pts[i], b = pts[(i + 1) % N]; perim += Math.hypot(toSX(b[0]) - toSX(a[0]), toSY(b[1]) - toSY(a[1])); }
+      const gapPx = perim / N;
       for (let i = 0; i < N; i++) {
         const sx = toSX(pts[i][0]), sy = toSY(pts[i][1]);
         if (sx < -20 || sy < -20 || sx > W + 20 || sy > H + 20) continue;
         const inGroup = groupOn && group.has(i);
         const isSel = i === sel || inGroup || (i === dragI && mode === "drag") || (press && press.i === i);
-        const r = (isSel ? 7 : i === hover ? 6 : sceneryOn ? Math.min(2, Math.max(1, scale * 6)) : 4.5) * (touch ? 1.5 : 1);
+        let r = (isSel ? 7 : i === hover ? 6 : sceneryOn ? Math.min(2, Math.max(1, scale * 6)) : 4.5) * (touch ? 1.5 : 1);
+        if (!isSel && i !== hover) r = Math.max(1.5, Math.min(r, gapPx * 0.4));
         // Soft hit halo under a finger so the ≥44 px target reads on the map.
         if (touch && (isSel || i === hover)) {
           g.beginPath(); g.arc(sx, sy, HIT_TOUCH / 2, 0, Math.PI * 2);
@@ -613,7 +637,10 @@ const DesignerCanvas = (function () {
         g.beginPath();
         if (i === 0) g.rect(sx - r - 1, sy - r - 1, 2 * r + 2, 2 * r + 2); else g.arc(sx, sy, r, 0, Math.PI * 2);
         g.fillStyle = isSel ? COL.sel : i === 0 ? COL.start : COL.handle;
+        const faint = heatReady() && !isSel && i !== hover && i !== 0;
+        if (faint) g.globalAlpha = 0.45;
         g.fill(); g.strokeStyle = "#000"; g.lineWidth = 1; g.stroke();
+        if (faint) g.globalAlpha = 1;
       }
     }
     function drawing() {
