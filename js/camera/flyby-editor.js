@@ -86,7 +86,14 @@ function midOf(i) { const s = span(i); return (s.from + s.to) / 2; }
 function cur() { const list = ensure(); return list[Math.max(0, Math.min(list.length - 1, sel))]; }
 function poseOf(slot) { const s = cur(); return s && s[slot.arr] && s[slot.arr][slot.i]; }
 
-function fmt(d, v) {
+function fmt(d, v, field) {
+  if (field === "distR" || field === "yR") {
+    try {
+      const b = G.track && typeof FlybySeq !== "undefined" && FlybySeq.bounds(G.track);
+      const metric = FlybyPanel.metricValue(field, v, b && b.rad);
+      if (metric) return metric;
+    } catch (_) { /* no built circuit yet: keep the portable authored unit */ }
+  }
   const dec = (String(d.step).split(".")[1] || "").length;
   return (+v).toFixed(Math.min(dec, 3)) + (d.unit || "");
 }
@@ -452,10 +459,10 @@ function show(id, on) {
   const row = $("fb-row-" + id);
   if (row) row.style.display = on ? "" : "none";
 }
-function setNum(id, d, v) {
+function setNum(id, d, v, field) {
   const inp = $("fb-in-" + id), b = $("fb-v-" + id);
   if (inp) inp.value = v;
-  if (b) b.textContent = fmt(d, v);
+  if (b) b.textContent = fmt(d, v, field);
 }
 
 function refreshRows() {
@@ -482,7 +489,7 @@ function refreshRows() {
       const on = fields.indexOf(f) !== -1;
       show(slot.key + "-" + f, on);
       if (on && f === "y") relabel(slot.key + "-y", slot.label + " " + fieldLabel(p.at, "y"));
-      if (on) setNum(slot.key + "-" + f, FIELD[f], typeof p[f] === "number" ? p[f] : FIELD[f].def);
+      if (on) setNum(slot.key + "-" + f, FIELD[f], typeof p[f] === "number" ? p[f] : FIELD[f].def, f);
     }
   }
 }

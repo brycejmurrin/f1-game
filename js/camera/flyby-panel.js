@@ -67,6 +67,12 @@ function poseFields(pose) { return POSE_FIELDS[pose && pose.at] || POSE_FIELDS.s
 function fieldLabel(at, f) {
   return (f === "y" && (at === "centre" || at === "landmark")) ? "HEIGHT OFFSET" : FIELD[f].label;
 }
+/** Centre anchors stay portable as lap-radius fractions, while the editor
+ *  shows the concrete distance on the circuit currently being framed. */
+function metricValue(f, v, radius) {
+  return (f === "distR" || f === "yR") && radius > 0 && typeof v === "number"
+    ? Math.round(v * radius) + " m" : null;
+}
 
 /** Re-anchor a pose, KEEPING whatever the new anchor can still use. Switching
  *  `corner` -> `centre` has no sensible arc offset to carry, but a height does,
@@ -262,7 +268,7 @@ function fromSaved(saved) {
 
 const ops = {
   EASES, AT_KINDS, POSE_FIELDS, FIELD, FIELD_IDS, FOV, SLOTS, CORNER_NS, RANKS, SHOTS_VERSION, DUR,
-  clone, poseFields, fieldLabel, switchPoseAt, uniqueId, blankShot, savedForm, fromSaved,
+  clone, poseFields, fieldLabel, metricValue, switchPoseAt, uniqueId, blankShot, savedForm, fromSaved,
   addShot, duplicateShot, deleteShot, moveShot, normaliseDurs, shotErrors, validateShots, toBlob,
 };
 
