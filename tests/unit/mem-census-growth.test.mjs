@@ -25,7 +25,7 @@ test("the leaks this spec was written for still fail it, every interval over the
 });
 
 test("a Metal one-time warm-up step does not fail it, wherever the step lands", () => {
-  // macos-latest, WebGPU, run 39019765029 attempt 1 / run 39017426292 attempt 2: monza, visits 1..5.
+  // macos-latest, WebGPU, monza visits 1..5: run 39018575798 attempt 1 (step at 2) and attempt 2 (steps at 2 and 3).
   assert.ok(!leaks([133.1, 148.6, 149.9, 150.5, 151.2]), "step at visit 2");
   assert.ok(!leaks([134.2, 151.5, 165.8, 166.4, 167.1]), "steps at visits 2 and 3");
   assert.ok(!leaks([134.7, 148.7, 149.4, 150.0, 150.9]), "monaco");

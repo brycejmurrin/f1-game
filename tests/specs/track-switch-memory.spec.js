@@ -54,63 +54,6 @@ const MIN_RENDER_OBJECTS = 40;
 const SETTLE_MS = 6000;
 const CIRCUITS = ["monza", "monaco"];
 
-
-// TEMPORARY DIAGNOSTIC: aggregate a CDP heap snapshot by node type+name (self size), list large
-// ArrayBuffer backing stores and (given the visit-1 id set) the shortest retaining path of each new one.
-async function snapAgg(cdp, v1Ids) {
-  let buf = [];
-  const on = (e) => buf.push(e.chunk);
-  cdp.on("HeapProfiler.addHeapSnapshotChunk", on);
-  await cdp.send("HeapProfiler.takeHeapSnapshot", { reportProgress: false });
-  cdp.off("HeapProfiler.addHeapSnapshotChunk", on);
-  const snap = JSON.parse(buf.join("")); buf = null;
-  const f = snap.snapshot.meta.node_fields, nf = f.length, types = snap.snapshot.meta.node_types[0];
-  const ti = f.indexOf("type"), ni = f.indexOf("name"), si = f.indexOf("self_size"), ii = f.indexOf("id"), ci = f.indexOf("edge_count");
-  const ef = snap.snapshot.meta.edge_fields, ne = ef.length, etypes = snap.snapshot.meta.edge_types[0];
-  const eti = ef.indexOf("type"), eni = ef.indexOf("name_or_index"), eto = ef.indexOf("to_node");
-  const agg = new Map(), ids = new Set(), big = [];
-  const N = snap.nodes.length / nf;
-  for (let n = 0; n < N; n++) {
-    const i = n * nf, t = types[snap.nodes[i + ti]];
-    let nm = snap.strings[snap.nodes[i + ni]];
-    if (nm === "system / JSArrayBufferData" && snap.nodes[i + si] >= 500000) { ids.add(snap.nodes[i + ii]); if (v1Ids && !v1Ids.has(snap.nodes[i + ii])) big.push(n); }
-    if (t === "string" || t === "concatenated string" || t === "sliced string") nm = "STR:" + nm.slice(0, 60).replace(/\s+/g, " ");
-    else if (t === "number" || t === "hidden" || t === "synthetic") nm = t + ":" + nm.slice(0, 40);
-    const k = t + "|" + nm, a = agg.get(k) || [0, 0]; a[0] += snap.nodes[i + si]; a[1]++; agg.set(k, a);
-  }
-  let paths = [];
-  if (v1Ids && big.length) {
-    const parent = new Int32Array(N).fill(-1), pedge = new Int32Array(N).fill(-1), seen = new Uint8Array(N);
-    const first = new Int32Array(N + 1); for (let n = 0, e = 0; n < N; n++) { first[n] = e; e += snap.nodes[n * nf + ci]; } first[N] = snap.edges.length / ne;
-    const q = [0]; seen[0] = 1;
-    for (let h = 0; h < q.length; h++) {
-      const n = q[h];
-      for (let e = first[n]; e < first[n + 1]; e++) {
-        const et = etypes[snap.edges[e * ne + eti]]; if (et === "weak") continue;
-        const to = snap.edges[e * ne + eto] / nf; if (seen[to]) continue;
-        seen[to] = 1; parent[to] = n; pedge[to] = e; q.push(to);
-      }
-    }
-    big.sort((x, y) => snap.nodes[y * nf + si] - snap.nodes[x * nf + si]);
-    for (const n of big.slice(0, 8)) {
-      const hops = []; let cur = n;
-      for (let d = 0; d < 9 && cur > 0 && parent[cur] >= 0; d++) {
-        const e = pedge[cur], et = etypes[snap.edges[e * ne + eti]], nmi = snap.edges[e * ne + eni];
-        const en = et === "element" || et === "hidden" ? "[" + nmi + "]" : snap.strings[nmi];
-        const pn = parent[cur]; hops.push(`${snap.strings[snap.nodes[pn * nf + ni]].slice(0, 30)}.${en}`); cur = pn;
-      }
-      paths.push(`${(snap.nodes[n * nf + si] / 1048576).toFixed(2)}MB <- ` + hops.join(" <- "));
-    }
-  }
-  return { agg, ids, paths };
-}
-function snapDiff(a, b) {
-  const rows = [];
-  for (const [k, v] of b) { const o = a.get(k) || [0, 0]; if (v[0] - o[0] > 150000) rows.push([v[0] - o[0], v[1] - o[1], k]); }
-  rows.sort((x, y) => y[0] - x[0]);
-  return rows.slice(0, 25).map((r) => `${(r[0] / 1048576).toFixed(2)}MB +${r[1]} ${r[2].slice(0, 90)}`).join(" ;; ");
-}
-
 test("loading circuits one after another keeps one world in memory and does not grow", async ({ page }) => {
   // Six picker builds on software GL: 92-123 s measured, past the 120 s
   // default. The build wait itself is bounded by pickTrack's timeout.
@@ -129,26 +72,13 @@ test("loading circuits one after another keeps one world in memory and does not 
   expect(backend, "this spec measures the shipped TLX backend").toBe("three");
 
   const heap = {}, readings = [];
-  for (let visit = 1; visit <= 5; visit++) {
+  for (let visit = 1; visit <= 3; visit++) {
     for (const id of CIRCUITS) {
       await pickTrack(page, id);
       await waitUntilDrawn(page, id);
       await waitFrames(page, 15);
       await settle(page, SETTLE_MS);
       const c = await censusAfterGc(page, cdp);
-      // Diagnosis (docs/notes/TRACK-SWITCH-METAL-2026-10-17.md): is growth a leak or timing?
-      // Re-read after more GC rounds and settle; a leak persists, a late-GC artefact shrinks.
-      const reads = [c.heapMB];
-      for (let k = 0; k < 3; k++) { await settle(page, 1500); reads.push((await censusAfterGc(page, cdp)).heapMB); }
-      c.heapMin = Math.min(...reads);
-      c.reads = reads;
-      (heap.diag = heap.diag || []).push(`v${visit} ${id}: first ${reads[0]} reads ${reads.join("/")} geom ${c.three && c.three.geometries} tex ${c.three && c.three.textures} ro ${c.three && c.three.renderObjects}`);
-      if (id === "monza" && (visit === 1 || visit === 3)) { const g = await snapAgg(cdp, visit === 1 ? null : heap.ids1); if (visit === 1) { heap.snap1 = g.agg; heap.ids1 = g.ids; } else { heap.snapDiff = snapDiff(heap.snap1, g.agg) + " PATHS " + g.paths.join(" ;; "); } }
-      const caches = await page.evaluate(() => { const r = window.renderer, o = {}; if (!r) return o; for (const k of Object.keys(r)) { const m = r[k]; if (!m || typeof m !== "object" || k === "info") continue; for (const k2 of Object.keys(m)) { const v = m[k2]; if (v && (v instanceof Map || v instanceof Set) && v.size > 20) o[k + "." + k2] = v.size; else if (v && (v instanceof WeakMap)) o[k + "." + k2] = "wm"; } } return o; });
-      const mirror = await page.evaluate(() => { try { return GLX.__tlx.memState().mirror; } catch (_) { return null; } });
-      heap.diag[heap.diag.length - 1] += " MIRROR " + JSON.stringify(mirror) + " CACHES " + JSON.stringify(caches).slice(0, 120);
-      c.path = await page.evaluate(() => { try { const e = window.__apex.diag({ download: false }).env; return JSON.stringify({ backend: e.backend, state: e.backendState }).slice(0, 400); } catch (_) { return null; } });
-      console.log(`[mem] visit ${visit} ${id} heap reads ${reads.join(" ")} geom ${c.three && c.three.geometries} tex ${c.three && c.three.textures} ro ${c.three && c.three.renderObjects} path ${c.path}`);
       expect(c.aliveTracks, `visit ${visit} to ${id}: built tracks still reachable after GC`).toEqual([id]);
       expect(c.three && c.three.renderObjects, `visit ${visit} to ${id}: the world must have drawn for this reading to mean anything`)
         .toBeGreaterThanOrEqual(MIN_RENDER_OBJECTS);
@@ -161,11 +91,8 @@ test("loading circuits one after another keeps one world in memory and does not 
       expect(nbc.zero, `visit ${visit} to ${id}: node-builder states orphaned at usedTimes 0 (of ${nbc.size})`).toBe(0);
     }
   }
-  // TEMPORARY DIAGNOSTIC (remove before ready): surface every reading in the failure text.
-  heap.path = readings.length ? readings[0].path : null;
-  expect(0, "SNAPDIFF " + heap.snapDiff + " DIAG " + heap.diag.join(" | ") + " PATH " + (await page.evaluate(() => { try { const e = window.__apex.diag({ download: false }).env; return JSON.stringify({ b: e.backend, s: e.backendState }).slice(0, 500); } catch (x) { return String(x); } }))).toBe(1);
   for (const id of CIRCUITS) {
-    const grew = heap[id][5] - heap[id][2];
+    const grew = heap[id][3] - heap[id][2];
     expect(grew, `${id}: heap ${heap[id].slice(1).join(" → ")} MB across three visits`).toBeLessThanOrEqual(GROWTH_MB);
   }
 });
