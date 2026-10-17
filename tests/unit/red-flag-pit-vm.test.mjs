@@ -99,7 +99,7 @@ test("red-flag grids and their first crossing preserve physical tyre age", async
     const G = game.G, L = G.track.total;
     G.tyres.setLevel("real");
     for (const c of G.cars) {
-      c.lap = 2; c.prog = L + 200; c._progGift = 0;
+      c.lap = 2; c.prog = L + 200; c.s = 200; c._progGift = 0;
       G.tyres.fit(c, c.tyre);
       c.lap = 6; c.fuelLap = 6; c.prog = 5 * L + 200; c.s = 200;
       c.tyreWear = c.tyreWearF = c.tyreWearR = 0.5;

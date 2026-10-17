@@ -12,3 +12,4 @@ Improved: Run the car-smoothing and game boot/race performance benchmarks withou
 Improved: Apply the shared performance-test isolation policy to generated Node groups as well as structural checks, preserving npm forwarding of --flag/--flag=value options and fail-fast exits.
 Fixed: Observe settled VM page promises before advancing unrelated timers or rendered frames, while retaining the evaluate deadline and animation-frame pumping.
 Improved: Release completed circuit geometry in the barrier regression fixture instead of retaining the entire fleet's mesh buffers.
+Fixed: Declare fitted tyre age state when cars spawn so resets preserve fast object properties on Node 22, and align red-flag tyre fixture coordinates before fitting.
