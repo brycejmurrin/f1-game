@@ -18,6 +18,14 @@ Read your role's reference before acting:
   the launch template, the per-vendor spawn / message / wake table, how to read
   the fleet, answering an escalation, what never to do.
 - **Existing PR** (red PR, takeover) → [`references/existing-pr.md`](references/existing-pr.md).
+- **Session roles** (finding, owning and merging are separate sessions; each
+  card is the launch contract, its watch kit and its message lines):
+  hunter → [`references/role-hunter.md`](references/role-hunter.md) (finds and
+  fixes, hands every PR off with `NEW-PR`); PR owner →
+  [`references/role-pr-owner.md`](references/role-pr-owner.md) (one PR to
+  merged: subscribe, CI watch, check-in, fix reds and conflicts unasked); merge
+  holder → [`references/role-merge-holder.md`](references/role-merge-holder.md)
+  (no live Merge Desk: the orchestrator holds the queue at the user's level).
 - **Worker** → [`references/worker.md`](references/worker.md): the loop with
   the command for each step, the escalation rule, the hand-back, the traps that
   cost real sessions.
@@ -59,7 +67,9 @@ reference §Escalate).
 ## Rules that bind both roles
 
 - Nobody in the fleet merges or arms auto-merge: Merge Desk arms (merge commit
-  only, ≤ 2 armed) and Grok Bot may merge (AGENTS.md §Concurrent PRs). A hold
+  only, ≤ 2 armed) and Grok Bot may merge (AGENTS.md §Concurrent PRs). With
+  no live desk, the orchestrator arms only at the merge level the user set in
+  its own session (references/role-merge-holder.md). A hold
   is a PR-body line starting `MERGE-HOLD:`, never "do not merge" wording.
   Draft → ready only after `node tools/ci/ready-gate.mjs` exits 0.
 - One owner per path: OWNED / FORBIDDEN globs in the launch prompt, a

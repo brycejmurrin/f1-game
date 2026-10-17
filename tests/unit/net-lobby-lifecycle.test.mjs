@@ -578,7 +578,7 @@ test("the reopen, watch and clash timers are all owned and cancellable", () => {
   // built — the old early return skipped the timeout check and the poll spun
   // at 4 Hz forever with no message.
   assert.match(SOURCE,
-    /if \(!watched\) \{\s*\n[\s\S]{0,700}?CONNECT_TIMEOUT_MS\) \{\s*\n\s*clearInterval\(pollTimer\);\s*\n\s*sayConnectFail\(null,/,
+    /if \(!watched\) \{\s*\n[\s\S]{0,700}?CONNECT_TIMEOUT_MS\) \{\s*\n\s*stopPoll\(\);\s*\n\s*sayConnectFail\(null,/,
     "the never-materialised branch must hit the deadline");
   // grace(): the re-render timer rides the clashSince record and every
   // teardown path goes through clashDrop/clashClear.
@@ -2535,5 +2535,23 @@ test("guest coalescing retains the last valid profile when the final HELLO is in
     await new Promise((r) => setTimeout(r, 1050));
     assert.equal(h.lobby.roomState().peers[0].label, 7);
     assert.equal(h.lobby.roomState().peerReady, true, "invalid READY cannot replace the pending legitimate state");
+  } finally { h.lobby.cancel(); }
+});
+
+// hunt F3: the connect poll cleared its interval without nulling the handle, so onFail's
+// `watcherArmed = !!pollTimer` read a FINISHED watcher as armed — an empty expired room got the
+// "INVITE ANOTHER" copy and kept the dead code live with SHARE/COPY on.
+test("an expired room after a failed connect is taken down with host copy, not read as watched", async () => {
+  const { h, rooms, ts } = codeRoomHarness();
+  try {
+    assert.equal((await h.lobby.codeHost()).ok, true);
+    await rooms[0].onJoiner("g", "answer-1");
+    ts[0].status = "closed";                        // the joiner's connect fails; the poll stops itself
+    await new Promise((r) => setTimeout(r, 900));
+    rooms[0].onFail({ ok: false, error: "expired", message: "x" });
+    assert.doesNotMatch(h.status.textContent, /INVITE ANOTHER/, "no watcher is armed any more");
+    assert.match(h.status.textContent, /expired.*NEW CODE/i);
+    assert.equal(h.elements.get("vs-code-value").textContent, "", "the dead code is no longer shown");
+    assert.equal(h.elements.get("vs-code-share").disabled, true, "SHARE is off for a dead code");
   } finally { h.lobby.cancel(); }
 });

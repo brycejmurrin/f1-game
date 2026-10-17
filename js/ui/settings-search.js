@@ -3,13 +3,13 @@ const SettingsSearch = (function () {
   "use strict";
   const CATALOG = Object.freeze([
     ["steering", "Steering input", "controls", "pm-steer-sel", "tilt touch buttons keyboard wheel"],
-    ["gears", "Manual gears", "controls", "pm-gears-sel", "shift automatic transmission"],
-    ["aero", "Active aero", "controls", "pm-aero-sel", "wing manual automatic drs"],
+    ["gears", "Manual gears", "driving", "pm-gears-sel", "shift automatic transmission"],
+    ["aero", "Active aero", "driving", "pm-aero-sel", "wing manual automatic drs"],
     ["keys", "Keyboard bindings", "controls", "pm-keys", "rebind keys controls"],
     ["pad", "Controller bindings", "controls", "pm-pad", "gamepad buttons wheel"],
     ["coach", "Driving coach", "driving", "pm-coach-sel", "tips advice braking"],
     ["brake-cue", "Braking cue", "driving", "pm-linebrakecue-sel", "braking beep warning"],
-    ["pit", "Next pit-stop tyres", "driving", "pm-pit-choice-sel", "compound tires strategy"],
+    ["pit", "Next pit-stop tyres", "strategy", "pm-pit-choice-sel", "compound tires strategy"],
     ["hud", "HUD style", "display", "pm-hudprofile-sel", "broadcast minimal"],
     ["hud-size", "HUD size", "display", "pm-hudscale", "bigger smaller scale readouts"],
     ["map", "Track map", "display", "pm-hudmap-sel", "minimap"],
@@ -18,8 +18,48 @@ const SettingsSearch = (function () {
     ["motion", "Reduce motion", "a11y", "pm-motion-sel", "shake flyby animation comfort"],
     ["focus", "Keyboard focus", "a11y", "pm-focus-sel", "outline ring accessibility"],
     ["colour", "Colourblind cues", "a11y", "pm-cbcues-sel", "colorblind tyre flags accessibility"],
-    ["assist", "Steer assist", "advanced", "pm-linemode-sel", "steering help racing line"],
-    ["line", "Racing line", "advanced", "pm-line", "driving guide"],
+    ["assist", "Steer assist", "driving", "pm-linemode-sel", "steering help racing line"],
+    ["line", "Steering line bias", "advanced", "pm-line", "steer assist inside outside racing line offset"],
+    ["throttle", "Throttle mode", "controls", "pm-throttlemode-sel", "automatic manual pedals"],
+    ["handedness", "Left-handed controls", "controls", "pm-mirror-sel", "mirror touch pedals hand"],
+    ["tilt-calibration", "Recalibrate tilt", "controls", "pm-calib", "phone sensor center centre"],
+    ["phone-controller", "Phone controller pairing", "controls", "pm-phonepad", "qr code remote second screen"],
+    ["stick-calibration", "Calibrate controller stick", "controls", "pm-pad-calib", "gamepad drift center centre"],
+    ["wheel", "Wheel setup", "controls", "pm-pad-wheel", "steering wheel pedals calibration"],
+    ["predictive-cue", "Predictive braking cue", "driving", "pm-brakecue", "brake warning distance"],
+    ["practice", "Practice goals and checkpoints", "practice", "pm-practice-panel", "rewind retry save starting point unscored"],
+    ["strategy", "Pit strategy", "strategy", "pm-pit-panel", "tyres tires stint energy forecast"],
+    ["review", "Session review", "review", "pm-session-review", "incidents coaching transcript race data download"],
+    ["badges", "Driving badges", "progress", "pm-badges-panel", "licence license achievements progress"],
+    ["hud-visible", "Show HUD", "display", "pm-hidehud-sel", "hide interface readouts"],
+    ["hud-layout", "HUD readout layout", "display", "pm-hudmetrics-sel", "timing driver compact"],
+    ["mirror", "Rear-view mirror", "display", "pm-hudmirror-sel", "rear view camera"],
+    ["line-colour", "Driving line colour", "display", "pm-linecolor-sel", "visual guide color"],
+    ["line-opacity", "Driving line opacity", "display", "pm-lineopacity-sel", "visual guide transparent"],
+    ["touch-size", "Touch button size", "display", "pm-btnscale", "bigger smaller pedals arrows"],
+    ["touch-opacity", "Touch button opacity", "display", "pm-btnopacity", "transparent pedals arrows"],
+    ["panel-opacity", "HUD panel opacity", "display", "pm-panelopacity", "transparent readouts"],
+    ["resolution", "Resolution", "graphics", "pm-res-sel", "render scale performance quality pixels graphics picture sharpness"],
+    ["fullscreen", "Fullscreen", "graphics", "pm-fullscreen-sel", "full screen window"],
+    ["upscale", "Upscaling", "graphics", "pm-upscale-sel", "resolution sharpness performance"],
+    ["occlusion", "Occlusion culling", "graphics", "pm-occlusion-sel", "hidden objects performance"],
+    ["debris", "Debris", "graphics", "pm-debris-sel", "damage pieces performance"],
+    ["background-build", "Background build", "graphics", "pm-buildworker-sel", "worker loading performance"],
+    ["renderer", "Renderer backend", "graphics", "pm-renderer", "webgl webgpu graphics troubleshooting"],
+    ["lighting-tuner", "Lighting tuner", "visual", "pm-lighting", "sun shadows exposure visual studio"],
+    ["camera-tuner", "Camera tuner", "visual", "pm-camtune", "framing field view fov visual studio"],
+    ["flyby-editor", "Flyby shot editor", "visual", "pm-flyby", "cinematic cameras visual studio"],
+    ["arrival-tuner", "Garage arrival tuner", "visual", "pm-garrival", "pit animation visual studio"],
+    ["units", "Speed units", "appearance", "pm-units-sel", "mph kmh kilometres miles"],
+    ["help-text", "Help text", "appearance", "pm-helptext-sel", "explanations descriptions hints"],
+    ["tilt-sensitivity", "Tilt sensitivity", "controls", "pm-tiltsimple", "phone steering"],
+    ["stick-deadzone", "Stick dead zone", "advanced", "pm-paddz", "controller gamepad drift deadzone stick pad wheel centre center"],
+    ["haptics", "Haptics strength", "driving", "pm-haptics", "vibration rumble feedback"],
+    ["trigger-haptics", "Trigger haptics", "driving", "pm-triggerhap-sel", "controller vibration feedback"],
+    ["pace", "Overall field speed", "advanced", "pm-pace", "pace slower faster whole field"],
+    ["spotter", "Spotter", "audio", "as-spot-sel", "nearby cars voice"],
+    ["radio-volume", "Radio voice volume", "audio", "as-rvol", "speech engineer loud quiet"],
+    ["music-source", "Music source", "audio", "as-src-sel", "soundtrack connection songs"],
     ["music", "Music volume", "audio", "as-mvol", "sound songs soundtrack"],
     ["effects", "Sound effects volume", "audio", "as-svol", "engine tyres tires sounds"],
     ["rivals-mute", "Rivals sound on/off", "audio", "as-l-rivals", "mute other cars opponents engines"],
@@ -89,11 +129,12 @@ const SettingsSearch = (function () {
     let last = null, fromSearch = false, destinationNote = null;
     const clearFeedback = () => { if (destinationNote) destinationNote.remove(); destinationNote = null; };
     if (o.onLeave) o.onLeave(clearFeedback);
-    const panelIds = { controls: "pm-panel-controls", driving: "pm-panel-driving", display: "pm-panel-display", appearance: "pm-panel-appearance", a11y: "pm-panel-a11y", advanced: "advanced", audio: "audioset", files: "pm-panel-files" };
     function unavailable(row) {
       clearFeedback();
       const message = row.label + " is unavailable in the current session or on this device. BACK returns to your search.";
-      const panel = panelIds[row.page] ? document.querySelector("#" + panelIds[row.page]) : null;
+      const panel = typeof SettingsNav !== "undefined" && SettingsNav.panel
+        ? SettingsNav.panel(row.page)
+        : document.querySelector("#" + (row.page === "advanced" ? "advanced" : row.page === "audio" ? "audioset" : "pm-panel-" + row.page));
       if (panel) {
         destinationNote = document.createElement("p"); destinationNote.className = "adv-help";
         destinationNote.setAttribute("role", "status"); destinationNote.textContent = message;

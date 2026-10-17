@@ -464,8 +464,8 @@ export function createExtras(ctx) {
         }
         return { browser: true, argv };
       }
-      // Profiler (tools/perf/profile.mjs): a browser job, started only here so the guarded apex_job_start is its one
-      // door (a standalone apex_profile browser tool needs a .claude hook entry). The argv is built from typed fields.
+      // Profiler (tools/perf/profile.mjs): a browser job, started by apex_job_start or the direct apex_profile tool (both
+      // guarded as browser tools). The argv is built from typed fields.
       case "profile": {
         const mode = String(a.mode || "spans");
         if (!["spans", "cpu", "hitch", "trace"].includes(mode)) throw Object.assign(new Error("mode"), { refuse: refuse("bad_args", "mode must be spans|cpu|hitch|trace", 'e.g. {"kind":"profile","mode":"spans"}.') });
@@ -915,6 +915,14 @@ export function createExtras(ctx) {
       apex_shot_survey: (a) => handleShotSurvey(a),
       apex_track: (a) => handleTrack(a),
       apex_job_start: (a) => jobStart(a),
+      // The profiler's direct door: a browser-kind tool (guard lists name it) whose run is the profile job, so the lock is
+      // taken for the job's life and apex_job_status watches it.
+      apex_profile: (a) => {
+        const r = jobStart({ ...a, kind: "profile" });
+        let b; try { b = JSON.parse(r.content[0].text); } catch { return r; }
+        if (b.ok === false || b.dryRun || b.mock) return r;
+        return toolResult({ ...b, routed: "apex_job_start profile", hint: "Runs in the background: apex_job_status {jobId, wait:100} until state is done; then apex_profile_query on the artifact named in the log." });
+      },
       apex_job_status: (a) => jobStatusWait(a),
       apex_job_cancel: (a) => jobCancel(a),
       apex_ui_fit: (a, o) => uiFit(a, o),

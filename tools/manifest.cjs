@@ -314,6 +314,7 @@ const FULL = [
   "js/ui/menu-nav.js",
   "js/ui/aria-state.js",
   "js/ui/setting-row.js",
+  "js/ui/editor-workspace.js",
   "js/ui/settings-search.js",
   "js/ui/settings-tabs.js",
   "js/ui/key-binds.js",
@@ -442,7 +443,7 @@ const CSS = [
   "css/settings-controls.css", "css/dialog-platform.css", "css/save-health.css", "css/tuner.css",
   "css/title.css", "css/menus.css", "css/select.css", "css/race-setup.css",
   "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css", "css/overlays.css",
-  "css/loading.css", "css/a11y-loading.css", "css/responsive.css",
+  "css/loading.css", "css/a11y-loading.css", "css/responsive.css", "css/menu-destinations.css",
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
   "css/data.css",
@@ -457,7 +458,7 @@ const CSS = [
 // already-in-flight print sheet, not a second 79 KB of preload contention).
 const CSS_PRELOAD = [
   "css/tokens.css", "css/components.css", "css/title.css", "css/menus.css",
-  "css/responsive.css",
+  "css/responsive.css", "css/menu-destinations.css",
 ];
 // Sheets that are NOT title-critical load print→all (media="print"
 // onload="this.media='all'") so they do not hold LCP; the rest render-block.

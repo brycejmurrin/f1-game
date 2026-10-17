@@ -157,13 +157,12 @@ for (const [shapeName, viewport] of SHAPES) {
         }, null, { polling: 100, timeout: BOOT_MS });
         await page.waitForTimeout(600);   // let the sheet settle and measure
         if (screenName === "title") {
-          // FOUT reflow is done when GARAGE sits fully on-screen. The
-          // wrapped phone actual (227059, CI 37466745467) clipped it
-          // under DATA HUB / TRACK DESIGNER — do not bless that frame.
+          // Capture the natural top of the destination scroller. RACE must
+          // be visible; later groups can be reached by scrolling.
           await page.waitForFunction(() => {
-            const garage = document.getElementById("mb-garage");
-            if (!garage || garage.hidden) return false;
-            const g = garage.getBoundingClientRect();
+            const primary = document.getElementById("mb-race");
+            if (!primary || primary.hidden) return false;
+            const g = primary.getBoundingClientRect();
             return g.height > 8 && g.width > 40
               && g.top >= -1 && g.bottom <= window.innerHeight + 1;
           }, null, { polling: 100, timeout: 15_000 });

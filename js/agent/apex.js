@@ -16,6 +16,9 @@ function create(G) {
 // RACE ORDER and the SLIP BUDGET live in agentview.js (loaded first, LAZY_AGENT)
 // so obs()/physState() and world() cannot drift apart (#2172).
 const raceOrder = (cars) => AgentView.raceOrder(cars);
+const finiteOrNil = (v) => v === undefined || v === null || (typeof v === "number" && isFinite(v));
+// update(NaN) wrote NaN into every car, and an infinite n never returned.
+const stepArgs = (dt, n) => [Number.isFinite(dt) && dt >= 0 ? dt : 1 / 60, Number.isFinite(n) && n >= 0 ? Math.floor(n) : 1];
 // The three UI scales take a PERCENT. A fraction (1.6) or junk used to be
 // snapped and SAVED: uiScale(1.6) stored 40 %, uiScale("abc") the default.
 // null still resets; undefined reads.
@@ -257,6 +260,9 @@ const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
   jump(frac, speed, lateral) {
     if (!G.player || !G.track) return false;
+    // A non-finite argument would write NaN into prog/s/speed, and the whole field
+    // sort and every later physState read goes with it: refuse before touching state.
+    if (!finiteOrNil(frac) || !finiteOrNil(speed) || !finiteOrNil(lateral)) return false;
     IncidentSim.release(G.player);
     const f01 = (((frac || 0) % 1) + 1) % 1;
     const sNew = wrapS(f01 * G.track.total);
@@ -392,7 +398,7 @@ const api = {
   camera(m) {
     if (m == null) return { mode: CAM_MODES[G.camMode].id, index: G.camMode, modes: CAM_MODES.map((c) => c.id) };
     const i = typeof m === "number" ? m : CAM_MODES.findIndex((c) => c.id === String(m).toLowerCase());
-    if (i < 0 || i >= CAM_MODES.length) return false;
+    if (!(Number.isInteger(i) && i >= 0 && i < CAM_MODES.length)) return false;   // NaN / 1.5 reached setCamMode and left G.camMode junk
     G.dbgCam = null;   // switching to a game camera mode leaves any view() free-cam
     setCamMode(i);
     // Same as jump(): SwiftShader can starve rAF / the 10 Hz HUD tick for many
@@ -579,8 +585,8 @@ const api = {
   },
   garageStep(dt, n) {
     if (!G.setupPreviewOn) return null;
-    const step = dt == null ? 1 / 60 : dt;
-    for (let i = 0; i < (n == null ? 1 : n); i++) G.stepSetupAero(step);
+    const [step, count] = stepArgs(dt, n);
+    for (let i = 0; i < count; i++) G.stepSetupAero(step);
     return this.garageAero();
   },
   // Switch garage car without opening #teampicker — same store writes as the tile
@@ -651,7 +657,7 @@ const api = {
     if (!team || !parts || typeof parts !== "object") return { ok: false, error: "bad_parts" };
     const cur = Object.assign({}, G.getTeamParts(team.id));
     for (const [cat, id] of Object.entries(parts)) {
-      if (id != null && id !== "") cur[cat] = id;
+      if (typeof id === "string" && id !== "") cur[cat] = id;   // an Infinity/object id persisted as JSON null (the parts store never re-validates)
     }
     G.saveTeamParts(team.id, cur);
     // Garage open: drop the preview, rebuild the sheet. Closed (menu / a race): DONE's recompute, so the next frame re-keys the player body, cockpit and wheel meshes.
@@ -958,7 +964,7 @@ const api = {
   },
 
   setSpeed(v) {
-    if (!G.player || G.player.px == null) return false;
+    if (!G.player || G.player.px == null || !Number.isFinite(v)) return false;
     G.player.speed = Math.max(0, Math.min(200, v));
     return { speed: G.player.speed };
   },
@@ -968,7 +974,7 @@ const api = {
   // velocity and yaw rate after rotating so the car doesn't immediately un-spin.
   // Use spin(180) to face the wrong way, spin(-45) for a 45° drift setup.
   spin(deg) {
-    if (!G.player || G.player.px == null) return false;
+    if (!G.player || G.player.px == null || !Number.isFinite(deg)) return false;
     G.player.head = G.player.head + deg * Math.PI / 180;
     G.player.vLat = 0;
     G.player.yawRateCur = 0;
@@ -976,7 +982,7 @@ const api = {
   },
 
   nudge(dLat = 0, dSpeed = 0) {
-    if (!G.player || G.player.px == null) return false;
+    if (!G.player || G.player.px == null || !Number.isFinite(dLat) || !Number.isFinite(dSpeed)) return false;
     if (dLat)   G.player.vLat  = (G.player.vLat || 0) + dLat;
     if (dSpeed) G.player.speed = Math.max(0, (G.player.speed || 0) + dSpeed);
     return { speed: +(G.player.speed || 0).toFixed(2), vLat: +(G.player.vLat || 0).toFixed(2) };
@@ -1315,7 +1321,7 @@ const api = {
     if (!G.player || !G.track) return false;
     const ai = G.cars.filter((c) => !c.isPlayer);
     const used = [];
-    (list || []).forEach((spec, i) => {
+    (Array.isArray(list) ? list : []).forEach((spec, i) => {
       const c = ai[i];
       if (!c) return;
       c.prog = G.player.prog + (spec.dProg || 0);
@@ -1329,7 +1335,7 @@ const api = {
     return used.map((c) => G.cars.indexOf(c));
   },
   aim(relDeg) {
-    if (!G.player || !G.track || G.player.px == null) return false;
+    if (!G.player || !G.track || G.player.px == null || !finiteOrNil(relDeg)) return false;
     Tracks.sample(G.track, G.player.s, smp);
     G.player.head = Math.atan2(smp.t[0], smp.t[2]) + (relDeg || 0) * Math.PI / 180;
     G.player.vLat = 0;
@@ -1498,7 +1504,7 @@ const api = {
   careerReset() { const result = Career.clear(); if (result.ok) G.refreshCareerButton(); return result; },
   careerFreeMoney(on) { return Career.freeMoney(on); },
   // Hand the live career credits. No argument grants Career.GRANT.
-  careerGrant(n) { return Career.grant(n); },
+  careerGrant(n) { return Career.grant(Number.isFinite(n) ? n : undefined); },
   careerFacility(up) {
     if (up) Career.upgradeFacility();
     return { level: Career.facility(), max: Career.FACILITY_MAX,
@@ -1681,7 +1687,7 @@ const api = {
   },
   clearInput() { G._testInput = null; },
   step(dt, n) {
-    const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
+    const [d, count] = stepArgs(dt, n);
     for (let i = 0; i < count; i++) {
       // Keep the render-interpolation anchors in sync: the render-driven loop
       // snapshots them before each step, so a manual pump must too or a frozen
@@ -2244,7 +2250,7 @@ const api = {
       G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     }
     if (input !== undefined) G._testInput = input || null;
-    const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
+    const [d, count] = stepArgs(dt, n);
     for (let i = 0; i < count; i++) {
       AgentView.syncRenderAnchors(G.cars);   // all six, exactly as step() does
       update(d);
@@ -2455,7 +2461,7 @@ const api = {
     if (c.isPlayer) return false;
     const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
     c.s = c._prevS = wrapS(f01 * G.track.total);
-    c.prog = (c.lap || 0) * G.track.total + f01 * G.track.total;
+    c.prog = ((c.lap || 0) - 1) * G.track.total + c.s;   // the engine's (lap-1)*L + s (see NetPlay's prog rebuild)
     if (x     !== undefined) { c.x = x; c.xVis = x; }
     if (speed !== undefined) c.speed = speed;
     c.vLat = 0; c.yawRateCur = 0;
@@ -2528,7 +2534,7 @@ const api = {
   },
 
   setLap(n) {
-    if (!G.player) return false;
+    if (!G.player || !Number.isFinite(+n || 0)) return false;
     G.player.lap = Math.max(0, Math.floor(+n || 0));
     return { lap: G.player.lap };
   },
@@ -2607,10 +2613,12 @@ const api = {
     };
   },
 
-  seed(n) { if (n !== undefined) G.seed = n; return G.seed; },
+  seed(n) { if (n !== undefined && Number.isFinite(n)) G.seed = n; return G.seed; },
 
   reset(frac, speed, x, seed) {
     if (!G.track || !G.player) return false;
+    // NaN into prog/s/speed/x survives every later tick (the field sort reads prog): refuse first.
+    if (![frac, speed, x, seed].every(finiteOrNil)) return false;
     G.resetEpisodeOwners();   // clear takeovers, held flags and debris before reusing car indexes
     if (seed !== undefined) G.seed = seed;
     gridUp();   // also clears finPos / retired / dnf / dnfAt / dnfWhy
@@ -2654,7 +2662,7 @@ const api = {
       c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.deploying = false; c.boostOn = false; OvertakeMode.reset(c);
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false;
-      delete c.vertLoad;
+      if ("vertLoad" in c) c.vertLoad = undefined;   // a CarFields key: a delete would make the car a dictionary
       // EVERY per-episode transient is DELETED, not zeroed, from ONE list —
       // EPISODE_TRANSIENTS at the top of this file. Deleting is the point:
       // these fields are absent on a cold car, so removing them is what makes
@@ -2682,7 +2690,9 @@ const api = {
       // dead code. Add to EPISODE_TRANSIENTS; never a second list.
       c.lane = c.lanePref != null ? c.lanePref : 0;
       c._prevS = c.s;
-      for (const k of EPISODE_TRANSIENTS) delete c[k];
+      // Reset to `undefined`, never `delete`: a delete (of a non-last key) drops all 22 cars to V8 dictionary
+      // mode (undoes PERF-HUNT-2 #1), and an absent key reads the same as an undefined one (car-fields.js header).
+      for (const k of EPISODE_TRANSIENTS) if (k in c) c[k] = undefined;
     }
     BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
     agentView.beginEpisode();

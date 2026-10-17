@@ -771,6 +771,9 @@ const TyreModel = (function () {
       if (quali()) { c.tyreTs = optTemp(c.tyre.life); c.tyreTb = c.tyreTs; }   // …except a qualifying set: warmed on the out-lap
       c.tyreGrain = 0; c.tyreBlister = 0; c.flatSpot = 0;
       c.tyreLap0 = c.lap || 0;
+      // A box BEFORE the line fits mid-lap N: the next crossing reads N+1 but is only a partial lap on this
+      // set, so lapsOn would run a lap ahead (replan's loadK, wetLapsToStop, the HUD's laps left).
+      c.tyreLapAdj = (c.lap || 0) >= 1 && G.track && G.track.total > 0 && (c.s || 0) > G.track.total * 0.5 ? 1 : 0;
       c.tyreStints = (c.tyreStints || 0) + 1;
       // THE STINT LOG, which is what the results sheet draws. Recorded HERE
       // because fit() is the only place a set is ever changed, so the log and
@@ -957,7 +960,7 @@ const TyreModel = (function () {
     // the raw state; `spent` is what the HUD bar and the engineer read, because
     // "80% through the stint" is the thing a driver can act on.
     // Completed laps on this set: a grid set (tyreLap0 0) is not a lap old at the start crossing.
-    function lapsOn(c) { return c && c.tyre ? Math.max(0, lapsDone(c.lap) - lapsDone(c.tyreLap0)) : 0; }
+    function lapsOn(c) { return c && c.tyre ? Math.max(0, lapsDone(c.lap) - lapsDone(c.tyreLap0) - (c.tyreLapAdj || 0)) : 0; }
     function spent(c) { return c ? clamp(c.tyreWear || 0, 0, 2) : 0; }
     /** Laps this set has left before the cliff, at the rate THIS car has been
      *  wearing it: wear per completed lap on the set, or — before a lap has

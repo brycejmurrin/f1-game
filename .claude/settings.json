@@ -304,7 +304,7 @@
         ]
       },
       {
-        "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|js-debugger__.*|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|job_start))$",
+        "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|js-debugger__.*|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|profile|job_start))$",
         "hooks": [
           {
             "type": "command",
