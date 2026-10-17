@@ -93,13 +93,33 @@ export function normalizeSurveyTracks(args = {}, known = null) {
   const seen = new Set();
   const out = [];
   for (const id of raw) {
-    if (!/^[a-z0-9_]{2,40}$/.test(id)) throw new Error(`bad track id ${id}`);
+    if (!/^(?:[a-z0-9_]{2,40}|custom-[a-f0-9]{8})$/.test(id)) throw new Error(`bad track id ${id}`);
     if (known && !known.includes(id)) throw new Error(`unknown track ${id}`);
     if (seen.has(id)) continue;
     seen.add(id);
     out.push(id);
   }
   return out;
+}
+
+/** Partition circuit-qualified targets before any browser is started. */
+export function buildSurveyPlans(args, tracks) {
+  if (args.locations && (!Array.isArray(args.locations) || !args.locations.length || args.locations.length > 32 || new Set(args.locations).size !== args.locations.length)) throw new Error('locations must contain 1..32 unique ids');
+  if (args.locations && tracks.length > 1) for (const id of args.locations) {
+    if (typeof id !== 'string' || !tracks.some(track => id.startsWith(track + '/'))) throw new Error('Location does not match a selected track: ' + id);
+  }
+  const plans = new Map(tracks.map(track => {
+    const locations = args.locations?.filter(id => tracks.length === 1 || id.startsWith(track + '/'));
+    if (locations && !locations.length) throw new Error('No locations selected for ' + track);
+    return [track, buildTrackShotSurveyPlan({ ...args, track, ...(locations ? { locations, tracks: [track] } : {}) })];
+  }));
+  if (args.select) {
+    if (!Array.isArray(args.select) || !args.select.length || args.select.length > 32) throw new Error('select must contain 1..32 shot names');
+    const names = new Set(args.select);
+    for (const name of names) if (![...plans.values()].some(p => p.shots.some(s => s.name === name))) throw new Error('Unknown selected shot: ' + name);
+    for (const p of plans.values()) p.shots = p.shots.filter(s => names.has(s.name));
+  }
+  return plans;
 }
 
 /** Two cells with one name write and replace ONE image, so a gallery would count a single final view twice
@@ -117,6 +137,14 @@ export function assertUniqueShotNames(shots) {
 
 /** Machine-readable plan for a survey run (no I/O). */
 export function buildTrackShotSurveyPlan(args = {}) {
+  if (args.location && args.locations) throw new Error('Use location or locations, not both');
+  if (args.locations) {
+    if (!Array.isArray(args.locations) || !args.locations.length || args.locations.length > 32 || new Set(args.locations).size !== args.locations.length) throw new Error('locations must contain 1..32 unique ids');
+    const shots = args.locations.flatMap(location => scenarioShots({ ...args, locations: undefined, location }));
+    const plan = buildTrackShotSurveyPlan({ ...args, location: undefined, locations: undefined, angles: undefined, weathers: undefined, camera: undefined, preset: 'custom', shots });
+    plan.shots.sort((a, b) => a.tod.localeCompare(b.tod) || String(a.weather).localeCompare(String(b.weather)));
+    return plan;
+  }
   if (!args.location && (args.angles || args.weathers || args.camera)) throw new Error("angles/weathers/camera require a named location");
   if (args.location) args = { ...args, preset: "custom", shots: scenarioShots(args) };
   const label = normLabel(args.label ?? args.prefix ?? "survey");

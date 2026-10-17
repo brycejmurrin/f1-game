@@ -8,6 +8,7 @@
 //   node tools/ci/wait-for.mjs --load-below 2.8 --timeout 40
 //   node tools/ci/wait-for.mjs --file-nonempty artifacts/logs/x.log --timeout 10
 //   node tools/ci/wait-for.mjs --pid-gone 12345 --timeout 30
+//   node tools/ci/wait-for.mjs --log-matches artifacts/logs/x.log '^= (run|bg exit)' --timeout 45
 //
 // Exit 0 every condition held · 124 timeout (nothing is killed) · 1 usage error.
 import fs from "node:fs";
@@ -15,10 +16,11 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { pidAlive } from "../lib/deploy-status.mjs";
 
-export const FLAGS = ["--load-below", "--file-nonempty", "--pid-gone", "--timeout", "--poll", "--help"];
+export const FLAGS = ["--load-below", "--file-nonempty", "--log-matches", "--pid-gone", "--timeout", "--poll", "--help"];
 export const USAGE = `usage: node tools/ci/wait-for.mjs <condition>... [--timeout <min>] [--poll <sec>]
   --load-below <n>        1-min loadavg < n
   --file-nonempty <path>  file exists with size > 0
+  --log-matches <path> <re>  a line of <path> matches the regex (the verdict line; never pgrep -f, which matches its own shell)
   --pid-gone <pid>        process <pid> no longer exists
   conditions combine with AND; exit 0 held / 124 timeout / 1 usage. Run it as one background task.`;
 
@@ -47,6 +49,13 @@ export function parseArgs(argv) {
       if (!Number.isInteger(pid) || pid > 2147483647) throw new UsageError(`${name} needs a positive 32-bit integer PID, got ${JSON.stringify(val)}`);
       conds.push({ kind: "pid", pid });
     }
+    else if (name === "--log-matches") {
+      const re = argv[++i];
+      if (!val || val.startsWith("-") || re === undefined) throw new UsageError(`${name} needs a path and a regex`);
+      let rx;
+      try { rx = new RegExp(re, "m"); } catch (e) { throw new UsageError(`${name} regex ${JSON.stringify(re)}: ${e.message}`); }
+      conds.push({ kind: "log", path: val, re: rx });
+    }
     else {
       if (!val || val.startsWith("-")) throw new UsageError(`${name} needs a path`);
       conds.push({ kind: "file", path: val });
@@ -62,11 +71,12 @@ export const load1 = () => {
 
 /** One evaluation: `{ ok, pending[] }` — pending names what still blocks. */
 export function check(conds, deps = {}) {
-  const { load = load1, alive = pidAlive, size = (p) => { try { return fs.statSync(p).size; } catch { return 0; } } } = deps;
+  const { load = load1, alive = pidAlive, read = (p) => { try { return fs.readFileSync(p, "utf8"); } catch { return ""; } }, size = (p) => { try { return fs.statSync(p).size; } catch { return 0; } } } = deps;
   const pending = [];
   for (const c of conds) {
     if (c.kind === "load") { const l = load(); if (!(l < c.max)) pending.push(`load ${l.toFixed(2)} >= ${c.max}`); }
     else if (c.kind === "pid") { if (alive(c.pid)) pending.push(`pid ${c.pid} alive`); }
+    else if (c.kind === "log") { if (!c.re.test(read(c.path))) pending.push(`${c.path} has no line matching ${c.re.source}`); }
     else if (!(size(c.path) > 0)) pending.push(`${c.path} empty or missing`);
   }
   return { ok: !pending.length, pending };

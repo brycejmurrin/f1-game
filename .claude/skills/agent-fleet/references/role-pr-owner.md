@@ -25,8 +25,9 @@ Use the orchestrator.md launch template with:
 ## The watch kit (arm at start and after every push)
 
 1. `subscribe_pr_activity` on the PR.
-2. A `Monitor` on `node tools/ci/ci-watch.mjs --sha <head> --timeout 30`,
-   re-armed on expiry until the `= ci …` line (it expires at 30 min).
+2. A `Monitor` on `node tools/ci/ci-watch.mjs --sha <head> --timeout 30 --failures-only`,
+   re-armed on expiry until the `= ci …` line (it expires at 30 min). Plain mode
+   emits one event per job leg and woke ~15 owners per PR (retro 2026-10-17); do not SAY on a green leg.
 3. One `send_later` check-in ~50 min out, re-armed (~4 h later) while the PR is
    open. The subscription drops `check_run` completions; the timer is not optional.
 4. Reply once: `ARMED <PR> sub=yes monitor=yes checkin=<UTC>`. No ARMED line

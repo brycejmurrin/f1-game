@@ -377,6 +377,7 @@ const HudArrange = (() => {
         ensureBar();
         opener = document.activeElement;
         context = { set: HudLayout.shown(), profile: HudLayout.profile() };
+        HudLayout.holdArrangePreview(true);
         hideDialogs();
         reveal();
         for (const [, , sel] of ELEMENTS) { const el = document.querySelector(sel); if (el) el.setAttribute("data-hl-arr", ""); }
@@ -412,6 +413,8 @@ const HudArrange = (() => {
           preview = null;
         }
         if (restore === false) shown = null; else restoreDialogs();
+        HudLayout.holdArrangePreview(false);
+        HudLayout.fit();
         drag = null; pinch = null; pointers.clear();
         if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
       }

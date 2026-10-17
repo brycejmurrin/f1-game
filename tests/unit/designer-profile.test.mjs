@@ -290,3 +290,21 @@ test("destroy removes every input subscription and is idempotent", () => {
   h.dom.dispatch(h.canvas, { type: "keydown", key: "ArrowUp" });
   assert.equal(JSON.stringify(h.ev), before);
 });
+
+for (const dy of [-8, 8]) {
+  test("held elevation grip applies live delta once: " + dy, () => {
+    const h = boot();
+    const before = h.grips()[0];
+    const span = Math.max(8, Math.max(...h.tr.py) - Math.min(...h.tr.py));
+    h.fire("pointerdown", before, 1, { pointerType: "mouse" });
+    h.fire("pointermove", { x: before.x, y: before.y + dy });
+    const change = h.ev.changes.find((c) => c.live);
+    assert.ok(change);
+    const selected = h.rec.arcs.find((a) => a.r === 9);
+    const expected = before.y - change.h * (H - 6) / span;
+    assert.ok(Math.abs(selected.y - expected) < 0.05, `${selected.y} should follow live profile ${expected}`);
+    assert.equal(commits(h.ev).length, 0);
+    h.fire("pointerup", { x: before.x, y: before.y + dy });
+    assert.equal(commits(h.ev)[0].h, change.h);
+  });
+}

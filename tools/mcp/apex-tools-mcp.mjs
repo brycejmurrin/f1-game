@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { loadSurveyDesigns } from '../lib/custom-survey-locations.mjs';
 /**
  * @doc Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock).
  * @skill check-changes
@@ -24,6 +25,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { listSurveyLocations } from "../lib/survey-scenarios.mjs";
 import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
 import { aliveRun } from "../ci/test-bg.mjs";
@@ -38,7 +40,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.14.0";
+const SERVER_VERSION = "1.15.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -386,8 +388,17 @@ const CATALOG = [
     name: "apex_catalog",
     week: 8,
     kind: "tree",
-    description: "Tree — every valid id the other apex_* tools accept, in one read: tracks, cams, times of day, shot_survey presets, HUD devices and cams, job kinds, UI screens and UI viewports (the two viewport families differ: apex_ui_* take ios-*/desktop-*, apex_hud_* take phone-*/desktop-*). Read-only, no browser; call it instead of guessing an id and reading the bad_args reply.",
+    description: "Tree — every valid track/camera/UI id the other apex_* tools accept, in one read. For per-track turn and scenery targets call apex_locations. Read-only, no browser.",
     inputSchema: { type: "object", properties: { dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
+  },
+  {
+    name: "apex_locations",
+    kind: "tree",
+    description: "Tree — list shot targets for one circuit: authored turns, start/finish, sector boundaries, and named scenery models that actually emitted. Scenery shots use source viewing stations where known or a nearest-road candidate, then aim at the model; framing needs visual review. Pass an id to apex_shot_survey.location. No browser.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["track"], properties: {
+      track: { type: "string" }, search: { type: "string", description: "Optional case-insensitive name/id filter." },
+      designs: { type: "string", description: "Native custom-track collection JSON file; lists authored placement anchors." },
+    } },
   },
   {
     name: "apex_doctor",
@@ -443,12 +454,15 @@ const CATALOG = [
     name: "apex_shot_survey",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — multi-shot scenery survey via one track-session boot per circuit. Presets: quick (4), dual_lite (8), night_pass, lap, dual, inspect, scenery/full (12). Long or multi-track runs default to async (returns jobId; watch apex_job_status). Options: tracks[], resume, async, gl llvmpipe|swiftshader (llvmpipe is CI-only: needs /dev/dri, which cloud containers lack — use swiftshader locally), weather dry|wet|rain|overcast|fog, progress/findings JSON and combined HTML with every view. Pass reports[] to combine saved surveys into a portable gallery without Chromium. Skill: survey-track.",
+    description: "Browser (lock first) — multi-shot scenery survey sharing one warm browser across circuits. Named locations default to preview JPEG; use comparison for selected final PNGs. Presets: quick, dual_lite, night_pass, lap, dual, inspect, scenery/full. Long or multi-track runs return an async jobId; watch apex_job_status. Resume checks source, settings and custom collection identity. Pass reports[] to combine saved surveys into a portable gallery without Chromium. Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: {
         location: { type: "string", description: "Named racing-space location, e.g. spa/eau-rouge; source-located framing starts unverified." },
+        locations: { type: "array", minItems: 1, maxItems: 32, uniqueItems: true, items: { type: "string" }, description: "Circuit-qualified targets across selected tracks, grouped into one warm batch." },
+        select: { type: 'array', minItems: 1, maxItems: 32, uniqueItems: true, items: { type: 'string' }, description: 'Capture only these shot names from the plan; use comparison for selected finals.' },
+        designs: { type: "string", description: "Native custom-track collection JSON file. Required for custom ids." },
         angles: { type: "array", minItems: 1, maxItems: 6, items: { type: "string", enum: ["overview","reverse","overhead","entry","apex","exit"] } },
         weathers: { type: "array", minItems: 1, maxItems: 5, items: { type: "string", enum: ["dry","wet","rain","overcast","fog"] } },
         profile: { type: "string", enum: ["preview","comparison"] },
@@ -880,6 +894,10 @@ const CATALOG = [
       additionalProperties: false,
       properties: {
         kind: { type: "string", enum: JOB_KINDS },
+        designs: { type: "string", description: "shot_survey: native custom-track collection JSON file." },
+        select: { type: 'array', minItems: 1, maxItems: 32, uniqueItems: true, items: { type: 'string' }, description: 'shot_survey: capture only these names from the preset plan.' },
+        profile: { type: "string", enum: ["preview", "comparison"] },
+        seed: { type: "integer", minimum: 0, maximum: 4294967295 },
         track: { type: "string", description: "survey_track / shot_survey: circuit id." },
         tracks: { type: "string", description: "shot_survey: comma-separated circuit ids (sequential)." },
         preset: { type: "string", description: "shot_survey: quick|dual_lite|night_pass|scenery|full|lap|dual|inspect|custom." },
@@ -1129,7 +1147,7 @@ for (const tool of CATALOG) {
     if (spec.type === "string") spec.maxLength = key === "expr" ? 65536 : 4096;
     if (spec.type === "array") spec.maxItems = 256;
   }
-  if (schema.properties.track) schema.properties.track.enum = knownCircuits();
+  if (schema.properties.track && !['apex_locations', 'apex_shot_survey', 'apex_job_start'].includes(tool.name)) schema.properties.track.enum = knownCircuits();
 }
 const schemaFor = (name) => CATALOG.find((t) => t.name === name).inputSchema;
 const bound = (name, key, extra) => Object.assign(schemaFor(name).properties[key], extra);
@@ -1151,7 +1169,13 @@ bound("apex_track", "dist", { exclusiveMinimum: 0, maximum: 10000 });
 bound("apex_track", "az", { minimum: -36000, maximum: 36000 });
 bound("apex_track", "el", { minimum: -90, maximum: 90 });
 bound("apex_track", "h", { minimum: -100, maximum: 3000 });
-bound("apex_shot_survey", "track", { enum: knownCircuits() });
+// Surveys additionally accept content-addressed custom ids from an explicit collection.
+bound("apex_shot_survey", "track", { pattern: "^(?:[a-z0-9_]{2,40}|custom-[a-f0-9]{8})$" });
+bound('apex_locations', 'track', { pattern: '^(?:[a-z0-9_]{2,40}|custom-[a-f0-9]{8})$' });
+bound('apex_job_start', 'track', { pattern: '^(?:[a-z0-9_]{2,40}|custom-[a-f0-9]{8})$' });
+bound('apex_shot_survey', 'locations', { maxItems: 32 });
+bound('apex_shot_survey', 'select', { maxItems: 32 });
+bound('apex_job_start', 'select', { maxItems: 32 });
 bound("apex_shot_survey", "tracks", { maxItems: 12 });
 bound("apex_shot_survey", "count", { type: "integer", minimum: 1, maximum: 32 });
 bound("apex_shot_survey", "fracs", { maxItems: 32 });
@@ -1951,7 +1975,7 @@ async function handleCatalog(args = {}) {
     hudDevices: enumOf("apex_hud_shot", "device"), hudCams: enumOf("apex_hud_shot", "cam"),
     jobKinds: JOB_KINDS,
     uiScreens: ui.screens, uiViewports: ui.viewports, ...(ui.error ? { uiError: ui.error } : {}),
-    hint: "apex_ui_fit / apex_ui_shot take uiScreens × uiViewports; apex_hud_shot takes hudDevices (ios-iphone-landscape-844 aliases phone-landscape-844x390).",
+    hint: "apex_locations {track} lists named shot targets; apex_ui_fit / apex_ui_shot take uiScreens × uiViewports; apex_hud_shot takes hudDevices.",
   });
 }
 /** When this server process started, and the source files it loaded (tools/mcp/*.mjs plus the tools/lib modules they import).
@@ -2375,6 +2399,16 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_catalog") return handleCatalog(args);
+  if (name === "apex_locations") {
+    const custom = args.designs ? loadSurveyDesigns(path.resolve(ROOT, args.designs)) : null;
+    const all = listSurveyLocations(args.track, custom);
+    const search = args.search?.trim().toLowerCase();
+    const exact = search && all.filter(l => l.id === search || l.aliases.includes(search));
+    const locations = !search ? all : exact.length ? exact : all.filter(l =>
+      `${l.id} ${l.name}`.toLowerCase().includes(search));
+    return toolResult({ ok: true, track: args.track, locations, count: locations.length,
+      hint: "Use apex_shot_survey {track, location:<id>, angles:[\"entry\",\"apex\",\"exit\"]}; inspect framing before claiming a landmark match." });
+  }
   if (name === "apex_garage") return handleGarage(args);   // async: a persistent child, not a spawnSync
   if (name === "apex_verify_change_fast" && args.sync !== true && !args.dryRun) {
     // ~10 min against a ~180 s host cap: a background job, not a call that times out (and is killed at 600 s).
@@ -2573,6 +2607,8 @@ const OUTPUT_SCHEMAS = {
   apex_catalog: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), tracks: S("array"), cams: S("array"), tods: S("array"),
     shotPresets: S("array"), hudDevices: S("array"), hudCams: S("array"), jobKinds: S("array"), uiScreens: S("array"), uiViewports: S("array"),
     hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
+  apex_locations: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), track: S("string"),
+    locations: S("array"), count: S("number"), hint: S("string") } },
   apex_doctor: cliOut({ ok: S("boolean"), mode: S("string"), checks: S("array"), summary: S("object") }),
   apex_pick_tests: cliOut({ reason: S("string"), receipts: S("array"), unclaimed: S("array"), files: S("array"), groups: S("array") }),
   apex_select_specs: cliOut({ reason: S("string"), changed: S("number"), groups: S("array"), selected: S("array"), skipped: S("array"),
