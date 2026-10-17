@@ -988,7 +988,12 @@ body[data-width="narrow"] .dh-td-driver .dh-name,
 body[data-density="compact"] .dh-td-driver .dh-name {
   white-space: normal;
   word-break: normal;
-  overflow-wrap: normal;
+  /* break-word, not anywhere: a surname that fits the cell stays whole; one
+     wider than the cell (HULKENBERG at UI SIZE 200%) wraps instead of the
+     shared .dh-name ellipsis cutting it to "HULKENBE…". */
+  overflow-wrap: break-word;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 /* ── Schedule 2-column grid on a short+wide local viewport ──────────────── */
