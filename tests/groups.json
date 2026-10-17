@@ -2019,6 +2019,7 @@
         "tests/specs/menu-traversal.spec.js",
         "tests/specs/music-library.spec.js",
         "tests/specs/photo-studio.spec.js",
+        "tests/specs/picker-edit-button.spec.js",
         "tests/specs/picker-tab-inplace.spec.js",
         "tests/specs/rotation-recovery.spec.js",
         "tests/specs/title-menu-rotation.spec.js",
