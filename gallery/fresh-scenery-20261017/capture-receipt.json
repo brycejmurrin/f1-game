@@ -1,0 +1,125 @@
+{
+  "capturedAt": "2026-10-17T06:40:04.044Z",
+  "source": "42d9c5ea0cde97ba5b88459ff4200bd1e31cf2dc",
+  "renderer": "TLX / Chromium SwiftShader",
+  "profile": "preview",
+  "seed": 2391,
+  "viewport": {
+    "width": 640,
+    "height": 360
+  },
+  "reducedMotion": "not overridden (browser default)",
+  "groups": [
+    {
+      "track": "fuji",
+      "file": "mount-fuji.html",
+      "count": 4,
+      "bytes": 106944,
+      "shots": [
+        {
+          "name": "fuji-mount-fuji-overview-dry",
+          "az": 40,
+          "el": 40,
+          "weather": "dry"
+        },
+        {
+          "name": "fuji-mount-fuji-reverse-dry",
+          "az": 220,
+          "el": 30,
+          "weather": "dry"
+        },
+        {
+          "name": "fuji-mount-fuji-overview-rain",
+          "az": 40,
+          "el": 40,
+          "weather": "rain"
+        },
+        {
+          "name": "fuji-mount-fuji-reverse-rain",
+          "az": 220,
+          "el": 30,
+          "weather": "rain"
+        }
+      ]
+    },
+    {
+      "track": "singapore",
+      "file": "singapore-waterfront.html",
+      "count": 4,
+      "bytes": 165846,
+      "shots": [
+        {
+          "name": "singapore-merlion-overview-dry",
+          "az": 40,
+          "el": 40,
+          "weather": "dry"
+        },
+        {
+          "name": "singapore-merlion-overview-rain",
+          "az": 40,
+          "el": 40,
+          "weather": "rain"
+        },
+        {
+          "name": "singapore-merlion-overview-dry",
+          "az": 20,
+          "el": 32,
+          "weather": "dry"
+        },
+        {
+          "name": "singapore-merlion-overview-rain",
+          "az": 20,
+          "el": 32,
+          "weather": "rain"
+        }
+      ]
+    },
+    {
+      "track": "spa",
+      "file": "spa-eau-rouge.html",
+      "count": 4,
+      "bytes": 102301,
+      "shots": [
+        {
+          "name": "spa-eau-rouge-overview-dry",
+          "az": 40,
+          "el": 40,
+          "weather": "dry"
+        },
+        {
+          "name": "spa-eau-rouge-reverse-dry",
+          "az": 220,
+          "el": 30,
+          "weather": "dry"
+        },
+        {
+          "name": "spa-eau-rouge-overview-rain",
+          "az": 40,
+          "el": 40,
+          "weather": "rain"
+        },
+        {
+          "name": "spa-eau-rouge-reverse-rain",
+          "az": 220,
+          "el": 30,
+          "weather": "rain"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "browserCases": 8,
+    "viewports": [
+      390,
+      1440
+    ],
+    "javaScriptEnabled": false,
+    "networkEnabled": false,
+    "imagesDecoded": true,
+    "nativeNavigation": true,
+    "keyboardImageExpansion": true,
+    "documentOverflow": false,
+    "directFileNavigation": "Blocked by Chromium administrator policy; verified unchanged HTML bytes offline instead."
+  },
+  "selection": "14 screenshots captured; 12 included. Two Singapore reverse frames obscured the statue and were replaced by two new waterfront angles."
+}
