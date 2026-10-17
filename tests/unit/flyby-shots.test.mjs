@@ -170,6 +170,101 @@ test("every signature list is playable and keeps its camera out of solid scenery
   }
 });
 
+function loadFlybyRuntime(extra = {}) {
+  const sb = Object.assign({
+    Math, JSON, Object, Array, Number, String, Map, Set, WeakMap,
+    Float32Array, Uint32Array, isFinite, setTimeout: () => 0,
+  }, extra);
+  vm.createContext(sb);
+  return vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/flyby-seq.js"), "utf8") + ";FlybySeq", sb);
+}
+
+test("#1571: the flyby hero reaches the apex at mid-shot on the racing line", () => {
+  const speedReads = [];
+  const Tracks = {
+    sample(_track, s, out) {
+      out.p[0] = 0; out.p[1] = 3; out.p[2] = s;
+      out.t[0] = 0; out.t[1] = 0; out.t[2] = 1;
+      out.r[0] = 1; out.r[1] = 0; out.r[2] = 0;
+      out.hw = 10;
+      return out;
+    },
+  };
+  const TrackLine = { at: (_track, s) => ({ x: 2 + s / 1000 }) };
+  const DrivingLine = { speedAt: (s) => { speedReads.push(s); return 40 + s / 100; } };
+  const F = loadFlybyRuntime({ Tracks, TrackLine, DrivingLine });
+  const cars = [
+    { isPlayer: true, s: 10, x: 0, px: 0, pz: 10 },
+    { isPlayer: false, s: 20, x: 0, px: 0, pz: 20 },
+  ];
+  const hero = F.driveHero({ total: 1000 }, 300, 0.5, 3, cars);
+  assert.strictEqual(hero, cars[0], "the player's menu model stays inside the renderer's player-relative car cull");
+  assert.equal(hero.s, 300, "the car apexes at the exact middle of the shot");
+  assert.equal(hero.x, 2.3, "the car sits on TrackLine.at");
+  assert.equal(hero.speed, 43, "its displayed speed comes from DrivingLine.speedAt");
+  assert.deepEqual(speedReads, [300, 300], "speedAt drives both travel and the rendered speed");
+  assert.equal(hero.px, 2.3);
+  assert.equal(hero.pz, 300);
+});
+
+test("#1572: lights 1-3 select grid shots and light 4 restores the player camera", () => {
+  const calls = [];
+  const FlybySeqStub = {
+    GRID_SHOTS: [{ id: "grid-a", dur: 1 }, { id: "grid-b", dur: 1 }, { id: "grid-c", dur: 1 }],
+    gridProgress: (lit) => (lit - 0.5) / 3,
+    solve: (track, u, shots) => {
+      calls.push({ track, u, shots });
+      return { eye: [u, 2, 3], tgt: [4, 5, 6], fov: 40 + u };
+    },
+    FAR: 6000, FOG: 0.15,
+    setHeroCars() {},
+  };
+  const sb = { Math, WeakMap, FlybySeq: FlybySeqStub };
+  vm.createContext(sb);
+  const SL = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/start-lights.js"), "utf8") + ";StartLights", sb);
+  const track = { id: "grid" };
+  const G = { state: "count", lightsLit: 1, track, dbgCam: null };
+  const runtime = SL.create(G, { Particles: null });
+  runtime.update();
+  assert.equal(calls.length, 1);
+  assert.strictEqual(calls[0].shots, FlybySeqStub.GRID_SHOTS);
+  assert.equal(calls[0].u, 1 / 6, "light 1 keys the first grid shot");
+  assert.equal(G.dbgCam.cine, true);
+  G.lightsLit = 3;
+  runtime.update();
+  assert.equal(calls[1].u, 5 / 6, "light 3 keys the final grid shot");
+  G.lightsLit = 4;
+  runtime.update();
+  assert.equal(G.dbgCam, null, "light 4 hands back to the player's selected camera");
+});
+
+test("#1575: boundaries drive a 150 ms dip, slower under reduced motion, and expose wide-sector progress", () => {
+  const F = loadFlybyRuntime();
+  const shots = [
+    { id: "wide", dur: 0.25 },
+    { id: "turn", dur: 0.25 },
+    { id: "wide2", dur: 0.5 },
+  ];
+  assert.deepEqual([...F.boundaries(shots)], [0.25, 0.5]);
+  F.setDuration(20000);
+  const normal = F.presentation(0.25, shots, false);
+  const reduced = F.presentation(0.25, shots, true);
+  assert.equal(normal.dipMs, 150);
+  assert.equal(reduced.dipMs, 300);
+  assert.equal(normal.dip, 1, "the dip peaks exactly at the cut");
+  assert.equal(F.presentation(0.1, shots, false).dip, 0, "ordinary frames are not dimmed");
+  assert.equal(F.presentation(0.125, shots, false).sectors, 0.5, "the first wide reveals sectors progressively");
+  assert.equal(F.presentation(0.375, shots, false).sectors, 0, "corner shots leave sectors hidden");
+  assert.equal(F.presentation(0.75, shots, false).sectors, 1, "the second wide completes the reveal");
+});
+
+test("#1575: a per-shot sway is optional and disabled under reduced motion", () => {
+  const F = loadFlybyRuntime();
+  assert.equal(F.swayAt({ sway: 0.4 }, 0.25, false), 0.4);
+  assert.equal(F.swayAt({}, 0.25, false), 0);
+  assert.equal(F.swayAt({ sway: 0.4 }, 0.25, true), 0, "reduced motion holds the authored pose");
+});
+
 test("the shipped flyby never puts the eye inside a building", async () => {
   for (const id of CIRCUITS) {
     const bad = await withTrack(id, (track, g) => {
