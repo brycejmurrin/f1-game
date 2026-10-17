@@ -94,6 +94,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
 
   const context = vm.createContext({
     URL,
+    crypto: webcrypto,
     AbortController,
     Request,
     Response,
@@ -1506,7 +1507,7 @@ function lazyShellFetch(map, seen) {
     if (seen) seen.push(url.pathname.slice(1) + url.search);
     if (url.pathname.endsWith("/version.json")) return new Response('{"build":322}', { status: 200 });
     if (url.pathname.endsWith("/index.html")) {
-      return new Response('<meta name="apex-build" content="322"><script src="js/game.js?v=aaaaaaaaaaaa"></script>' +
+      return new Response(`<meta name="apex-build" content="322"><script src="js/game.js?v=${hash12("body of js/game.js")}"></script>` +
         (map ? `<script type="application/json" id="apex-lazy-v">${JSON.stringify(map)}</script>` : ""), { status: 200 });
     }
     return new Response("body of " + url.pathname.slice(1), { status: 200 });
@@ -1531,7 +1532,7 @@ test("an unchanged hashed file is copied from the older generation, only when it
   const monza = hash12("body of js/circuits/monza.js"), spa = hash12("body of js/circuits/spa.js");
   const seen = [];
   const h = createHarness({ fetchImpl: lazyShellFetch({ "js/circuits/monza.js": monza, "js/circuits/spa.js": spa }, seen),
-    globals: { crypto: globalThis.crypto } });
+    globals: { crypto: webcrypto } });
   h.stores.set("apex26-321", new Map([
     [`${ORIGIN}/js/circuits/monza.js?v=${monza}`, new Response("body of js/circuits/monza.js")],
     // a cache-first miss filed a newer deploy's body under this key (Pages ignores ?v=)
@@ -1652,4 +1653,68 @@ test("career UI is required under its content-hash key before a successful updat
   assert.ok(h.stores.get("apex26-322").has(`${ORIGIN}/js/career/career-ui.js?v=${map["js/career/career-ui.js"]}`));
   await h.lifecycleEvent("activate").done();
   assert.deepEqual(h.deleted, ["apex26-321"]);
+});
+
+
+test("fresh wrong-generation essential bytes reject installation and retain the old cache", async () => {
+  const ordinary = lazyShellFetch({ "js/career/career-ui.js": hash12("expected career") });
+  const h = createHarness({ fetchImpl: ordinary });
+  h.stores.set("apex26-321", new Map([[`${ORIGIN}/index.html`, new Response("old shell")]]));
+  await assert.rejects(h.lifecycleEvent("install").done(), /Content hash mismatch/);
+  assert.ok(h.stores.has("apex26-321"));
+  assert.equal(h.deleted.includes("apex26-321"), false);
+});
+
+test("runtime stamped asset rejects a mismatched network body without caching it", async () => {
+  const url = `${ORIGIN}/js/fresh.js?v=${hash12("expected")}`;
+  const h = createHarness({ fetchImpl: async () => new Response("other generation") });
+  const event = h.fetchEvent({ method: "GET", url });
+  const res = await event.responsePromise;
+  await Promise.all(event.lifetimes);
+  assert.equal(res.type, "error");
+  for (const store of h.stores.values()) assert.equal(store.has(url), false);
+});
+
+test("optional stamped mismatch is omitted without poisoning the successful generation", async () => {
+  const map = { "js/circuits/monza.js": hash12("expected monza") };
+  const h = createHarness({ fetchImpl: lazyShellFetch(map) });
+  await h.lifecycleEvent("install").done();
+  const store = h.stores.get("apex26-322");
+  assert.equal(store.has(`${ORIGIN}/js/circuits/monza.js?v=${map["js/circuits/monza.js"]}`), false);
+  assert.equal(h.skipped, 1);
+});
+
+test("optional digest verification expires without caching a late verified response", { timeout: 5000 }, async () => {
+  const body = "body of js/circuits/monza.js", hash = hash12(body), pending = new Map(), digest = deferred();
+  let checked = false;
+  const h = createHarness({ fetchImpl: lazyShellFetch({ "js/circuits/monza.js": hash }), globals: {
+    setTimeout(callback, ms, ...args) {
+      if (ms !== 4000) return setTimeout(callback, ms, ...args);
+      const id = {}; pending.set(id, callback); return id;
+    },
+    clearTimeout(id) { if (!pending.delete(id)) clearTimeout(id); },
+    crypto: { subtle: { digest(algorithm, bytes) {
+      if (Buffer.from(bytes).toString() !== body) return webcrypto.subtle.digest(algorithm, bytes);
+      checked = true;
+      queueMicrotask(() => { for (const expire of pending.values()) expire(); });
+      return digest.promise;
+    } } },
+  } });
+  await h.lifecycleEvent("install").done();
+  assert.equal(checked, true, "the deadline fires during digest work, not during fetch");
+  const store = h.stores.get("apex26-322"), url = `${ORIGIN}/js/circuits/monza.js?v=${hash}`;
+  assert.equal(h.skipped, 1, "optional verification cannot block a healthy installation");
+  assert.equal(store.has(url), false);
+  digest.resolve(await webcrypto.subtle.digest("SHA-256", Buffer.from(body)));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(store.has(url), false, "late verification cannot write after its deadline");
+});
+
+test("required stamped admission fails closed without digest support", async () => {
+  for (const crypto of [undefined, { subtle: { digest: async () => { throw new Error("digest unavailable"); } } }]) {
+    const h = createHarness({ fetchImpl: lazyShellFetch(null), globals: { crypto } });
+    await assert.rejects(h.lifecycleEvent("install").done(), /verify content hash|digest unavailable/);
+    assert.equal(h.skipped, 0);
+    assert.equal(h.stores.get("apex26-322").has(`${ORIGIN}/__apex_install_complete__`), false);
+  }
 });

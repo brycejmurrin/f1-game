@@ -1247,7 +1247,7 @@ function visibilityEditor() {
   vm.runInContext(SRC + '; this.HudLayout = HudLayout;', ctx);
   ctx.HudLayout.build();
   const choose = (id, value) => { const el = document.getElementById(id); assert.ok(el, id); el.value = value; dom.dispatch(el, { type: 'change', bubbles: true }); };
-  return { H: ctx.HudLayout, E: ctx.HudElements, document, choose, owners, stored, changes,
+  return { H: ctx.HudLayout, E: ctx.HudElements, document, choose, owners, stored, changes, ctx, dom,
     flush() { while (timers.length) timers.shift()(); } };
 }
 
@@ -1285,4 +1285,30 @@ test('grouped tower visibility stays mixed until explicitly changed and writes o
   assert.equal(e.document.getElementById('pm-hl-visibility').hidden, true, 'race-event messages cannot be disabled accidentally');
   assert.equal(e.H.setVisibility('speed', 'auto'), false, 'binary preferences cannot acquire AUTO');
   assert.equal(e.H.setVisibility('tower', 'mixed'), false, 'mixed is a readout, not a command');
+});
+
+
+test('ARRANGE keeps the selected camera preview while settings are hidden, then releases it', () => {
+  const e = visibilityEditor(), H = e.H;
+  e.ctx.innerWidth = 1000; e.ctx.innerHeight = 500;
+  H.setCam('chase');
+  const fold = e.document.getElementById('pm-hudlayout');
+  fold.open = true;
+  let visible = true;
+  fold.getClientRects = () => visible ? [{}] : [];
+  e.dom.dispatch(fold, { type: 'toggle' });
+  e.choose('pm-hl-set-sel', 'cockpit');
+  assert.equal(H.shown(), 'cockpit');
+  H.holdArrangePreview(true); visible = false;
+  H.fit();
+  H.set('map', { x: 12 }, 'cockpit', 'standard'); H.fit();
+  assert.equal(H.shown(), 'cockpit');
+  assert.equal(fold.open, true);
+  assert.equal(H.get('map', 'cockpit', 'standard').x, 12);
+  assert.equal(H.get('map', 'other', 'standard').x, 0);
+  visible = true; H.holdArrangePreview(false); H.fit();
+  assert.equal(H.shown(), 'cockpit', 'Done restores the settings preview');
+  visible = false; H.fit();
+  assert.equal(H.shown(), 'other', 'leaving settings still cleans up the preview');
+  assert.equal(fold.open, false);
 });

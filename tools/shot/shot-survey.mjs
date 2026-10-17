@@ -3,13 +3,14 @@
 // @doc Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON.
 // @skill survey-track
 import fs from "node:fs";
-import { SURVEY_LOCATIONS, CAMERA_RECIPES, captureIdentity, sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
+import { loadSurveyDesigns } from "../lib/custom-survey-locations.mjs";
+import { SURVEY_LOCATIONS, CAMERA_RECIPES, listSurveyLocations, captureIdentity, sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { parseFlags } from "../lib/cli-args.mjs";
 import { fileURLToPath } from "node:url";
 import {
-  buildTrackShotSurveyPlan,
+  buildSurveyPlans,
   estimateSurveyMs,
   filterResumeShots,
   surveyTerminalState,
@@ -25,25 +26,36 @@ import {
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const argv = process.argv.slice(2);
 if (!argv.includes("--help") && !argv.includes("-h")) {
-  parseFlags(argv, ["--count", "--dry-run", "--fracs", "--gl", "--label", "--no-index", "--no-panel", "--out",
-    "--plan-json", "--preset", "--reports", "--resume", "--tod", "--track", "--tracks", "--weather"]);
+  parseFlags(argv, ["--angles", "--cold-sessions", "--count", "--designs", "--dry-run", "--fracs", "--gl", "--label",
+    "--list-locations", "--location", "--locations", "--no-index", "--no-panel", "--out", "--plan-file", "--plan-json",
+    "--preset", "--profile", "--reports", "--resume", "--save-plan", "--seed", "--select", "--tod", "--track", "--tracks",
+    "--weather", "--weathers"]);
 }
 const flag = (n, d) => {
   const i = argv.indexOf(n);
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d;
 };
 const has = (n) => argv.includes(n);
+const designsFile = flag('--designs', '');
+const customDesigns = designsFile ? loadSurveyDesigns(path.resolve(ROOT, designsFile)) : null;
 
 function usage(code = 2) {
   console.error(`usage: node tools/shot/shot-survey.mjs --tracks id[,id…] [--preset scenery|quick|dual_lite|night_pass|lap|dual|inspect|full|custom]
        [--label name] [--out dir] [--resume] [--no-panel] [--no-index] [--gl llvmpipe|swiftshader]
-       [--location spa/eau-rouge --angles overview,reverse,overhead --weathers dry,rain]
+       [--location spa/eau-rouge|monaco/turn-1 --angles overview,reverse,overhead --weathers dry,rain]
        [--profile preview|comparison --seed N --select name,name --plan-file FILE --save-plan FILE --list-locations]
+       [--locations ID,ID --designs native-collection.json --cold-sessions]
        [--reports findings.json[,findings.json…]] [--fracs 0,0.5] [--count N] [--tod day|dusk|dawn|night] [--weather dry|wet|rain|overcast|fog] [--dry-run]`);
   process.exit(code);
 }
 
-if (has("--list-locations")) { console.log(JSON.stringify({ locations: SURVEY_LOCATIONS, cameras: CAMERA_RECIPES }, null, 2)); process.exit(0); }
+if (has("--list-locations")) {
+  const track = flag("--track", flag("--tracks", ""));
+  console.log(JSON.stringify({ locations: track ? listSurveyLocations(track, customDesigns) : SURVEY_LOCATIONS,
+    ...(track ? { track } : { hint: "Pass --track ID to list authored turns and anchors for any circuit." }),
+    cameras: CAMERA_RECIPES }, null, 2));
+  process.exit(0);
+}
 if (has("--help") || has("-h")) usage(0);
 
 // Rebuild a portable gallery from saved surveys without booting Chromium.
@@ -71,11 +83,9 @@ const count = flag("--count", "");
 const fracsRaw = flag("--fracs", "");
 const dryRun = has("--dry-run");
 
-const profile = flag("--profile", "comparison");
-if (!["preview", "comparison"].includes(profile)) throw new Error("profile must be preview or comparison");
 const seed = Number(flag("--seed", "2391"));
 if (!Number.isSafeInteger(seed) || seed < 0 || seed > 4294967295) throw new Error("seed must be a integer in 0..4294967295");
-const planArgs = { preset, label, track: tracks[0], tracks };
+const planArgs = { preset, label, track: tracks[0], tracks, customDesigns };
 // --plan-json: the plan-shaping options the flags below do not name (cam/cams/az/el/dist/h/side/hud/shots/cols/sheetName)
 const planJson = flag("--plan-json", "");
 if (planJson) Object.assign(planArgs, JSON.parse(planJson), { preset, label });
@@ -84,24 +94,27 @@ if (weather) planArgs.weather = weather;
 if (count) planArgs.count = Number(count);
 if (fracsRaw) planArgs.fracs = fracsRaw.split(",").map(Number);
 if (has("--location")) planArgs.location = flag("--location", "");
+if (has("--locations")) planArgs.locations = flag("--locations", "").split(',');
 if (has("--angles")) planArgs.angles = flag("--angles", "").split(",");
 if (has("--weathers")) planArgs.weathers = flag("--weathers", "").split(",");
 if (has("--plan-file")) Object.assign(planArgs, JSON.parse(fs.readFileSync(flag("--plan-file", ""), "utf8")));
-const plan = buildTrackShotSurveyPlan(planArgs);
-if (has("--select")) {
-  const names = new Set(flag("--select", "").split(","));
-  for (const name of names) if (!plan.shots.some(s=>s.name===name)) throw new Error("Unknown selected shot: " + name);
-  plan.shots = plan.shots.filter(s=>names.has(s.name));
-}
-if (new Set(plan.shots.map(s=>s.name)).size !== plan.shots.length) throw new Error("Shot names must be unique");
+if (has('--select')) planArgs.select = flag('--select', '').split(',');
+const profile = flag('--profile', planArgs.location || planArgs.locations ? 'preview' : 'comparison');
+if (!['preview', 'comparison'].includes(profile)) throw new Error('profile must be preview or comparison');
+const plans = buildSurveyPlans(planArgs, tracks);
+const plan = plans.get(tracks[0]);
+for (const p of plans.values()) if (new Set(p.shots.map(s=>s.name)).size !== p.shots.length) throw new Error("Shot names must be unique");
+if (has('--save-plan') && planArgs.locations && tracks.length > 1) throw new Error('Save named-location plans one track at a time');
 if (has("--save-plan")) fs.writeFileSync(flag("--save-plan", ""), JSON.stringify({preset:"custom",label,shots:plan.shots},null,2));
 const source = sourceIdentity(ROOT);
-const estimateMs = estimateSurveyMs(plan.shots.length, tracks.length);
+if (customDesigns) source.designsHash = customDesigns.digest;
+const estimateMs = [...plans.values()].reduce((sum, p) => sum + estimateSurveyMs(p.shots.length, 1), 0);
 
 if (dryRun) {
   console.log(JSON.stringify({
     ok: true, dryRun: true, profile, seed, source, tracks, out: outRoot, preset: plan.preset, label: plan.label,
     shotsPerTrack: plan.shots.length, estimateMs, resume, gl: gl || undefined, shots: plan.shots,
+    plans: Object.fromEntries(plans),
   }, null, 2));
   process.exit(0);
 }
@@ -114,14 +127,30 @@ writeSurveyProgress(outRoot, {
 
 function sessionEnv() { return surveyGlEnvironment(process.env, gl); }
 
+function stopSessionChild(child, state) {
+  if (state.stopping) return state.stopping;
+  if (state.dead || !child.pid) return Promise.resolve();
+  state.stopping = new Promise((resolve, reject) => {
+    const term = setTimeout(() => child.kill('SIGTERM'), 8000);
+    const limit = setTimeout(() => {
+      clearTimeout(term);
+      reject(new Error('Track session did not finish shutting down; refusing another browser'));
+    }, 23000);
+    child.once('exit', () => { clearTimeout(term); clearTimeout(limit); resolve(); });
+    child.stdin.end();
+  });
+  return state.stopping;
+}
+
 function runSession(track, outDir) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [
       path.join(ROOT, "tools/shot/track-session.mjs"),
       "--serve", "--track", track, "--out", outDir, "--profile", profile, "--seed", String(seed),
+      '--output-root', outRoot, ...(designsFile ? ['--designs', path.resolve(ROOT, designsFile)] : []),
     ], { cwd: ROOT, env: sessionEnv(), stdio: ["pipe", "pipe", "pipe"] });
     const state = { buf: "", pending: new Map(), seq: 0, ready: false, track, out: outDir };
-    const fail = (e) => { try { child.kill("SIGTERM"); } catch { /* */ } reject(e); };
+    const fail = (e) => { stopSessionChild(child, state).then(() => reject(e), reject); };
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (d) => {
       state.buf += d;
@@ -135,6 +164,7 @@ function runSession(track, outDir) {
           else resolve({
             child, state, boot: msg,
             send(cmd, timeoutMs = 240000) {
+              if (state.dead) return Promise.reject(new Error('track session has exited'));
               return new Promise((res, rej) => {
                 const id = ++state.seq;
                 const timer = setTimeout(() => { state.pending.delete(id); rej(new Error(`no reply within ${timeoutMs} ms`)); }, timeoutMs);
@@ -142,10 +172,7 @@ function runSession(track, outDir) {
                 child.stdin.write(JSON.stringify({ id, ...cmd }) + "\n");
               });
             },
-            async close() {
-              try { child.stdin.end(); } catch { /* */ }
-              await new Promise((r) => { child.once("exit", r); setTimeout(r, 8000); });
-            },
+            close() { return stopSessionChild(child, state); },
           });
           continue;
         }
@@ -156,6 +183,9 @@ function runSession(track, outDir) {
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (d) => process.stderr.write(`[shot-survey ${track}] ${String(d).trim().slice(0, 300)}\n`));
     child.on("exit", (code, sig) => {
+      state.dead = true;
+      for (const p of state.pending.values()) { clearTimeout(p.timer); p.reject(new Error(`track-session exited (${code ?? sig})`)); }
+      state.pending.clear();
       if (!state.ready) fail(new Error(`track-session exited before ready (${code ?? sig})`));
     });
     child.on("error", fail);
@@ -165,9 +195,13 @@ function runSession(track, outDir) {
 
 const trackResults = [];
 let hardFail = false;
+let sess = null;
 
+try {
 for (let ti = 0; ti < tracks.length; ti++) {
   const track = tracks[ti];
+  const plan = plans.get(track);
+  if (!plan.shots.length) continue;
   const outDir = tracks.length === 1 ? outRoot : path.join(outRoot, track);
   fs.mkdirSync(outDir, { recursive: true });
   const identityContext = { extension: profile === "preview" ? "jpg" : "png", identities: Object.fromEntries(plan.shots.map(s=>[s.name,captureIdentity({ source, track, shot:s, profile, seed, gpu:sessionEnv().APEX_GPU })])) };
@@ -188,11 +222,16 @@ for (let ti = 0; ti < tracks.length; ti++) {
   const existingPanel = path.join(outDir, `${plan.sheetName}.png`);
   if (fs.existsSync(existingPanel)) panelPng = existingPanel;
 
-  let sess = null;
   try {
     if (pending.length) {
-      sess = await runSession(track, outDir);
-      fs.writeFileSync(path.join(outDir, "session.json"), JSON.stringify({source,profile,seed,...sess.boot},null,2));
+      let sessionRecord;
+      if (!sess) { sess = await runSession(track, outDir); sessionRecord = { ...sess.boot, reusedSession: false }; }
+      else {
+        const switched = await sess.send({ track, out: outDir });
+        if (!switched.ok) throw new Error(switched.error || 'track switch failed');
+        sessionRecord = { ...switched, reusedSession: true, bootMs: 0, profile, diagnostics: sess.boot.diagnostics };
+      }
+      fs.writeFileSync(path.join(outDir, "session.json"), JSON.stringify({source,profile,seed,...sessionRecord},null,2));
       for (let si = 0; si < pending.length; si++) {
         const s = pending[si];
         writeSurveyProgress(outRoot, {
@@ -239,8 +278,7 @@ for (let ti = 0; ti < tracks.length; ti++) {
       });
       trackResults.push({
         track: captured[0]?.track || track, out: outDir, captured: captured.length, failed: failed.length,
-        shots: captured,
-        panel: panelPng, indexHtml, findings: findings.file, failures: failed.length ? failed : undefined,
+        panel: panelPng, indexHtml, shots: captured, findings: findings.file, failures: failed.length ? failed : undefined,
         relIndex: indexHtml ? path.relative(outRoot, indexHtml) : `${track}/index.html`,
       });
     }
@@ -250,10 +288,12 @@ for (let ti = 0; ti < tracks.length; ti++) {
     hardFail = true;
     trackResults.push({ track, out: outDir, error: String(e.message || e) });
     process.stderr.write(`[shot-survey] ${track}: ${e.message || e}\n`);
+    if (sess) { await sess.close(); sess = null; }
   } finally {
-    if (sess) await sess.close();
+    if (has('--cold-sessions') && sess) { await sess.close(); sess = null; }
   }
 }
+} finally { if (sess) await sess.close(); }
 
 let compareIndex = null;
 if (tracks.length > 1 && wantIndex) {
@@ -261,9 +301,10 @@ if (tracks.length > 1 && wantIndex) {
     label: plan.label, preset: plan.preset,
     tracks: trackResults.map((t) => ({
       track: t.track,
-      captured: t.captured, failed: t.failed, failures: t.failures, shots: t.shots, error: t.error,
+      captured: t.captured,
+      shots: t.shots, failed: t.failed, failures: t.failures, error: t.error,
       panel: t.panel ? path.relative(outRoot, t.panel) : null,
-      relIndex: t.indexHtml ? (t.relIndex || `${t.track}/index.html`) : null,
+      relIndex: t.indexHtml ? t.relIndex || `${t.track}/index.html` : null,
     })),
   });
 }

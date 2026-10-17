@@ -115,7 +115,7 @@ function launch(cmd, args, marker, log) {
   return { pid: child.pid, marker, cmd: path.basename(cmd), log: path.relative(ROOT, path.join(DIR, log)) };
 }
 export async function main(args = process.argv.slice(2)) {
-  const cmd = args[0] || "help";
+  const cmd = args.includes("--help") || args.includes("-h") ? "help" : args[0] || "help";
   if (cmd === "status") {
     const p = readPids();
     if (!p) { console.log(JSON.stringify({ running: false })); return 0; }
@@ -166,7 +166,7 @@ export async function main(args = process.argv.slice(2)) {
   start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu] [--device phone-landscape|desktop] [--headless-game]   static server (3456) + Chromium; refuses beside a test run or at loadavg >= 3
   status                                                           chromeAlive, viewport (innerWidth x innerHeight), PIDs, page targets
   stop                                                             kills exactly the PIDs in artifacts/debug-chrome/pids.json`);
-  return cmd === "help" || cmd === "--help" ? 0 : 1;
+  return cmd === "help" ? 0 : 1;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().then(c => { process.exitCode = c; }).catch(e => { console.error(JSON.stringify({ ok: false, error: e.message })); process.exitCode = 1; });

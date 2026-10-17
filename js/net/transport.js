@@ -471,16 +471,19 @@ const NetTransport = (function () {
     }
 
     let discTimer = null;   // the disconnect grace window below; shutdown reclaims it
+    let terminalReason = null;
     function shutdown(reason) {
-      if (ep.status === "closed") return;
-      ep.status = "closed";
+      if (ep.status === "closed" || (ep.status === "closing" && reason !== "local")) return;
+      const drain = reason !== "local" && reason !== "overflow" && inbox.length > 0;
+      terminalReason = drain ? reason : null;
+      ep.status = drain ? "closing" : "closed";
       if (discTimer) { clearTimeout(discTimer); discTimer = null; }
-      inbox.length = 0;
+      if (!drain) inbox.length = 0;
       eventOut.length = 0;
-      queuedState = queuedEvents = queuedBytes = 0;
+      if (!drain) queuedState = queuedEvents = queuedBytes = 0;
       for (const k of CHANNELS) { try { chans[k] && chans[k].close(); } catch (e) { /* already closing */ } }
       try { pc.close(); } catch (e) { /* already closing */ }
-      ep._emit("close", reason);
+      if (!drain) ep._emit("close", reason);
     }
 
     function peekEventType(data) {
@@ -527,6 +530,7 @@ const NetTransport = (function () {
         ch.onbufferedamountlow = () => { flushEventOut(); };
       }
       ch.onopen = () => {
+        if (ep.status === "closed" || ep.status === "closing") return;
         if (opened[kind]) return;   // counted by DISTINCT kind, never by number of opens
         opened[kind] = true;
         if (++openCount === CHANNELS.length) {
@@ -543,7 +547,7 @@ const NetTransport = (function () {
         shutdown("peer");
       };
       ch.onmessage = (e) => {
-        if (ep.status === "closed") return;
+        if (ep.status === "closed" || ep.status === "closing") return;
         const bytes = messageBytes(e.data);
         if (queuedBytes + bytes > INBOX_BYTE_CAP ||
             (kind === EVENT && queuedEvents + 1 > EVENT_INBOX_CAP)) {
@@ -604,7 +608,7 @@ const NetTransport = (function () {
       const s = pc.connectionState;
       if (Log.enabled("net", Log.DEBUG)) Log.debug("net", "pc state -> " + s);
       if (s !== "disconnected" && discTimer) { clearTimeout(discTimer); discTimer = null; }
-      if (ep.status === "closed") return;
+      if (ep.status === "closed" || ep.status === "closing") return;
       if (s === "failed" || s === "closed") {
         Log.info("net", "connection closed (" + s + ")");
         shutdown(s);   // releases the pc — see ch.onclose
@@ -621,6 +625,7 @@ const NetTransport = (function () {
 
     ep.pc = pc;
     ep.send = function (channel, data) {
+      if (ep.status === "closed" || ep.status === "closing") return false;
       const ch = chans[channel];
       if (!ch || ch.readyState !== "open") return false;
       // maxRetransmits:0 drops on the NETWORK — the local SCTP queue still
@@ -665,6 +670,12 @@ const NetTransport = (function () {
         // m.at is the arrival stamp taken at inbox push — session.js does the
         // PONG clock math on it rather than on handler-run time.
         ep._emit("message", m.channel, m.data, m.at);
+      }
+      if (terminalReason && ep.status === "closing") {
+        const reason = terminalReason;
+        terminalReason = null;
+        ep.status = "closed";
+        ep._emit("close", reason);
       }
       return count;
     };

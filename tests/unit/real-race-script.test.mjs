@@ -331,13 +331,14 @@ function pendingWatchHarness() {
   return { tab, requests, launches, script, flush, reopen: () => { opened = true; } };
 }
 
-async function launchRecoveryHarness() {
+async function launchRecoveryHarness(failPositions = false) {
   const store = new Map(), launches = [], order = [];
   let opened = true, result = false, requests = 0;
   const { D, findTeam } = load({ Tracks: { LIST: TRACKS },
     localStorage: { getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
     F1API: { locationData: () => {
       requests++;
+      if (failPositions) return Promise.reject(new Error("offline"));
       return Promise.resolve(positionRows(script));
     }, cancelAll() {} },
     RealRace: { replay: () => null, launch: (script, opts) => {
@@ -613,7 +614,7 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   const noSeat = find(entry, (n) => n.tag === "button" && n.disabled === true);
   assert.equal(noSeat.length, 20);
   assert.equal(noSeat[0].text, "no seat in this roster");
-  assert.equal(buttons[1]["aria-label"], "Race as Charles LECLERC");
+  assert.equal(buttons[1]["aria-label"], "JUMP IN — race as Charles LECLERC");
   // DRIVE AS: the seated drivers, grid order.
   const picker = find(tree, (n) => n.tag === "select" && n["aria-label"] === "DRIVER")[0];
   assert.deepEqual(picker.children.map((o) => o.text), ["P1 · RUS · George RUSSELL", "P2 · LEC · Charles LECLERC"]);
@@ -631,6 +632,10 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   assert.ok(/PIA passed LEC for P2/.test(lapRows[0].children[2].text), lapRows[0].children[2].text);
   assert.ok(/^[A-Z]{3} 1:\d\d\.\d{3}$/.test(lapRows[0].children[3].text), lapRows[0].children[3].text);
   assert.equal(find(lapRows[0], (n) => n.tag === "button")[0].text, "START");
+  for (const [index, action] of [[0, "START"], [1, "JUMP IN"]]) {
+    const button = find(lapRows[index], (n) => n.tag === "button")[0];
+    assert.equal(button["aria-label"], action + " at lap " + (index + 1));
+  }
   assert.ok(/STR OUT/.test(lapRows[7].children[2].text), "lap 8: " + lapRows[7].children[2].text);
   assert.ok(/^SAFETY CAR/.test(lapRows[30].children[2].text), "lap 31: " + lapRows[30].children[2].text);
   assert.ok(/pit: /.test(lapRows[30].children[2].text), "the stops under the safety car");
@@ -918,6 +923,17 @@ test("a dense winner cannot permanently cache a full-distance peer's sparse posi
   assert.equal(partial.complete, false); assert.deepEqual(host(partial.failed), [2]);
   sparse = false; const full = await D.fetchTraces(script, null, partial);
   assert.equal(full.complete, true); assert.deepEqual(requests, [1, 2, 2]);
+});
+
+test("positions accessible action follows LOAD and failed RETRY", async () => {
+  const h = await launchRecoveryHarness(true);
+  const button = h.nodes.find((n) => n.tag === "button" && n.text === "LOAD POSITIONS");
+  assert.ok(button);
+  assert.match(button["aria-label"], /^LOAD POSITIONS/);
+  button.fire("click");
+  await h.flush();
+  assert.equal(button.textContent, "RETRY POSITIONS");
+  assert.match(button["aria-label"], /^RETRY POSITIONS/);
 });
 
 test("dense truncated WATCH windows remain retryable, including matching memory records", async () => {
