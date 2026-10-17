@@ -968,7 +968,30 @@ const LoadingScreen = (function () {
     return true;
   }
 
-  return { create, slowNotice, SLOW_TEXT, isAutomation, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
+  /** The race-session bundle failed (#2625): offer RETRY or BACK TO MENU on the card, resolving
+   *  "retry" | "back" (the card stays up for the caller to stop() or reuse). Uses the menu's
+   *  .opt-btn and resolves "back" at once when there is no card to put them on. */
+  const FAIL_TEXT = "COULD NOT LOAD — check your connection";
+  function failed() {
+    const r = typeof document !== "undefined" && document.getElementById ? document.getElementById("loading") : null;
+    const gp = r && document.getElementById("ld-gp"), host = r && document.getElementById("ld-text");
+    if (!r || r.hidden || !gp || !host) return Promise.resolve("back");
+    gp.textContent = FAIL_TEXT;
+    return new Promise((resolve) => {
+      const row = document.createElement("div");
+      row.id = "ld-fail";
+      const add = (label, choice) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "opt-btn"; b.textContent = label;
+        b.addEventListener("click", () => { row.remove(); if (choice === "retry") gp.textContent = "Please wait"; resolve(choice); });
+        row.appendChild(b);
+      };
+      add("Retry", "retry"); add("Back to menu", "back");
+      host.appendChild(row);
+    });
+  }
+
+  return { create, slowNotice, failed, SLOW_TEXT, FAIL_TEXT, isAutomation, FLY_MS, SHORT_FLY_MS, FLY_MAX_MS, SKIP_GRACE_MS, SKIP_STREAK, flyMsFor, metaRows, nextSkips, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars,
     packSettled, warmPresentReady,
     gridLayout, gridField, gridColour, gridInk, isGridShot, GRID_ROW_MIN };
 })();
