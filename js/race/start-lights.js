@@ -101,7 +101,31 @@ var StartLights = (function () {
       return lamps;
     }
 
+    // Lights 1–3 keep the broadcast on the standing field; light 4 is the
+    // handoff to the player's selected camera. `lightsLit`, not countT, is the
+    // source so network starts and slow-frame catch-up choose the same shot as
+    // the gantry. The owned object is cleared only if nobody replaced it.
+    let _countCam = null;
+    function countdownCamera() {
+      const lit = G.lightsLit | 0;
+      if (G.state === "count" && lit >= 1 && lit <= 3 && G.track &&
+          typeof FlybySeq !== "undefined" && FlybySeq.solve) {
+        const fb = FlybySeq.solve(G.track, FlybySeq.gridProgress(lit), FlybySeq.GRID_SHOTS);
+        if (!_countCam) _countCam = { eye: [0, 0, 0], target: [0, 0, 0], fov: 50, far: FlybySeq.FAR, fog: FlybySeq.FOG, cine: true, startLights: true };
+        for (let i = 0; i < 3; i++) { _countCam.eye[i] = fb.eye[i]; _countCam.target[i] = fb.tgt[i]; }
+        _countCam.fov = fb.fov;
+        G.dbgCam = _countCam;
+      } else if (_countCam && G.dbgCam === _countCam) {
+        G.dbgCam = null;
+      }
+    }
+
     function update() {
+      if (typeof FlybySeq !== "undefined" && FlybySeq.setHeroCars) {
+        const flying = G.state === "menu" && G.loadingScreen && G.loadingScreen.active && G.loadingScreen.active();
+        FlybySeq.setHeroCars(flying ? G.cars : null);
+      }
+      countdownCamera();
       if (!P || !P.flare || G.state !== "count") return;
       const lit = G.lightsLit | 0;
       if (lit <= 0) return;
@@ -113,7 +137,7 @@ var StartLights = (function () {
       }
     }
 
-    return { update, lampsFor, countCredit };
+    return { update, lampsFor, countCredit, countdownCamera };
   }
 
   return { create, countCredit };
