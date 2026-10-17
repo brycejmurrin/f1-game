@@ -73,8 +73,8 @@ test("compact-wide live Home grid-places #menu-secondary under the brand", () =>
   );
   assert.match(
     menus,
-    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[\s\S]*grid-column:\s*1;[\s\S]*grid-row:\s*2;[\s\S]*min-height:\s*var\(--tap\)/,
-    "parks #menu-secondary under the brand with a --tap floor (#1537: height auto for 2-line labels)",
+    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[\s\S]*grid-column:\s*1;[\s\S]*grid-row:\s*4;[\s\S]*min-height:\s*var\(--tap\)/,
+    "parks #menu-secondary under the brand (bottom row, clear of the sound chip) with a --tap floor (#1537: height auto for 2-line labels)",
   );
   assert.match(
     menus,

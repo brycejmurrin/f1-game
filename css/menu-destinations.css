@@ -20,7 +20,6 @@
 :where(body[data-density="compact"]) #menu-buttons > .menu-destination .mb-sub { display: none; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons > .menu-destination > .bigbtn {
   display: flex; align-items: center; justify-content: center; gap: .4em;
-  /* Width-driven; full size as UI SIZE grows (ui-scale 200% floor). */
   font-size: max(.6rem, min(calc(var(--fs-4) * var(--ui-compact-text, 1)), calc(1.6 * var(--vwz) * var(--ui-compact-text, 1))),
     calc(var(--fs-4) * var(--ui-compact-text, 1) * clamp(0, calc((var(--ui-compact-text, 1) - 1) * 2), 1)));
   white-space: normal; text-wrap: balance; overflow-wrap: normal; hyphens: none; line-height: 1.15;
@@ -36,24 +35,21 @@
    instead of a nowrap subtitle running past a half-width door (200% zoom, 1280 wide). */
 #menu-create .bigbtn { white-space: normal; text-wrap: balance; overflow-wrap: anywhere; }
 #menu-create .mb-sub { white-space: normal; overflow-wrap: anywhere; }
-/* Compact Home: four rows in the right track, utilities under the brand; rows wrap on whole words. */
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
   grid-template-rows: repeat(4, max-content); row-gap: calc(var(--gap) * .3); --home-g: calc(var(--gap) * .3);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > .menu-destination-label { display: none; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) {
-  display: flex; flex-wrap: wrap; align-items: stretch; width: 100%; grid-column: 2; align-self: start; gap: var(--home-g);
+  display: flex; flex-wrap: wrap; width: 100%; grid-column: 2; align-self: start; gap: var(--home-g);
 }
-/* A real box (not display:contents): ui-scale.spec reads its currentCSSZoom against #menu-buttons. */
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention {
-  display: flex; flex: 2.4 1 10em; min-width: 0; align-items: stretch; gap: var(--home-g);
+  display: flex; flex: 2.4 1 10em; min-width: 0; gap: var(--home-g);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn { flex: 1 1 0; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn {
   flex: 1 1 5em; width: auto; min-width: 0; padding-inline: calc(var(--gap) / 8); letter-spacing: 0;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-primary .btn-ico { display: none; }
-/* Save-line subtitles go only on short windows (phone landscape); ui-scale.spec measures them at 200% on desktop. */
 @media (max-height: 460px) {
   :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .mb-sub { display: none; }
 }
