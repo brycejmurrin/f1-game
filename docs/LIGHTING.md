@@ -638,9 +638,19 @@ All 52 circuits have a full `tod × weather` grid (1,040 condition keys, plus `"
 The `<track>|dusk|wet` profiles are short deltas (2026-10-04): `<track>|dusk|rain` minus its falling-rain knobs plus the wet-surface knobs of `<track>|day|wet`, replacing a COPY-ALL stamp with `ambientMul` 0 / `keyMul` 0.115. Dawn|dry fill is the shared stamp `LightPresets["*|dawn|dry"]` (`ambientMul` 0.5, twilight `keyMul` 0.29): per-track dawn|dry no longer pins those two knobs, so the fleet lift is one key (profiles.js resolves `*|<tod>|<wx>` between `"*"` and the track key). Dusk|dry uses `LightPresets["*|dusk|dry"]` (twilight ambient/key fill, lamp/bloom/floodEmit, buried-sun `sunElev` fixes on 15 tracks): per-track dusk|dry keeps sun/gr/tint and Spa #1136 twilight exceptions. Night|dry authenticity is the shared stamp `LightPresets["*|night|dry"]` (ambient fill up, nightAmbLift/bloom/key down, floodEmit up): per-track night|dry keeps only exceptions (Spa flood/cityGlow, Bahrain/Qatar mast pools, …). Dusk|wet uses `LightPresets["*|dusk|wet"]` (twilight sky fill, key/bloom/floodEmit for lamp read in rain sheen, exposure trimmed): per-track dusk|wet keeps fog/ssr/tint exceptions (Spa twilight fill #1136, …). Night|wet uses `LightPresets["*|night|wet"]` (band fill and key/bloom up for lamp read in rain sheen, city glow and exposure down): per-track night|wet keeps grade and fog exceptions (Monaco tunnel grade, Spa pools/fog, …).
 
 Full-grid **mcp-probe `look-survey`** (chase + `park` + `snapCam`). Contact
-sheets land in [`docs/look-survey/`](look-survey/README.md) as each circuit
-hits all 20 looks (`python3 tools/lighting/look-survey-sheet.py --ready`). First visual
-pass was 4 looks × 40 circuits; the remaining 16 per track are still shooting.
+sheets land in ignored `artifacts/lighting/sheets/` as each circuit hits all 20
+looks (`python3 tools/lighting/look-survey-sheet.py --ready`); the existing
+curated gallery is linked from [`docs/look-survey/`](look-survey/README.md).
+First visual pass was 4 looks × 40 circuits; the remaining 16 per track are
+still shooting.
+
+The twelve N10 sheets are generated on demand, never committed to the deploy
+branch: `node tools/lighting/look-survey-n10.mjs`. Its checked-in manifest fixes
+the circuit list and camera fraction; captures land in
+`artifacts/lighting/shots/` and sheets in `artifacts/lighting/sheets/` (both
+gitignored). Use `--sheets-only` to restitch existing frames or `--force` to
+recapture all 240 looks.
+
 Cross-cutting from the frames:
 - Desert/street **nights** often flood/neon-hot with dusk-orange horizons —
   lamps, bloom, exposure, city glow pulled so lights own a darker sky.
