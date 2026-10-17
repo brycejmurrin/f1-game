@@ -743,6 +743,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // phone sample reaching Input's tilt pipeline over the in-process loopback
   // transport — same VM harness, no browser, ~0.3 s.
   "tests/unit/phone-pad.test.mjs",
+  // PhoneRecorder (#1633): sampler cadence, JSON serializer, SHARE/COPY fallbacks. VM, < 0.5 s.
+  "tests/unit/phone-recorder.test.mjs",
   "tests/unit/phone-touch-surface.test.mjs",
   "tests/unit/photo-kit.test.mjs",
   "tests/unit/photo-studio.test.mjs",

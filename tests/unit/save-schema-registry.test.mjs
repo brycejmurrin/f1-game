@@ -42,6 +42,7 @@ const PASSTHROUGH_FILES = new Set([
   "js/ui/share-code.js",
   "js/input/steer-tuning.js",
   "js/perf/metrics-overlay.js",
+  "js/perf/phone-recorder.js",   // apex26.phoneRec: a transient soak-run scratch blob, not a setting or save field (kept out of export/backup on purpose)
   "js/audio/spotify.js",
   "js/camera/cockpit-opts.js",
   "js/career/career.js",

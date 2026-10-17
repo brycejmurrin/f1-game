@@ -73,7 +73,8 @@
     "physics:sweep": "node tools/check/physics-tune-sweep.mjs",
     "wgx:capture": "node tools/gfx/gfx-probe.mjs --backend webgpu",
     "prepare": "git config core.hooksPath .githooks || true",
-    "test:perf-race-entry": "node tools/ci/run-playwright.mjs tests/specs/perf-race-entry.spec.js"
+    "test:perf-race-entry": "node tools/ci/run-playwright.mjs tests/specs/perf-race-entry.spec.js",
+    "test:phone-recorder": "node tools/ci/run-playwright.mjs tests/specs/phone-recorder.spec.js"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

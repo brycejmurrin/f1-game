@@ -12,6 +12,9 @@
  * Failed or cancelled selected jobs remain red even if sibling JUnit is clean.
  * No successful verdict may substitute for execution of the planned tests.
  *
+ * FULL-TIER STRICTNESS (#2664): `REQUIRE_SUCCESS=a,b,c` names jobs that must be `success`, not skipped. The workflow sets
+ * it only for a non-draft PR run, where a job skipped by `if:` would read as success and a hollow run would look green.
+ *
  * It also fails when it was handed nothing: NEEDS unset / empty / `{}` exits 2,
  * and a payload with no `success` at all (everything skipped) fails with exit 1.
  *
@@ -30,6 +33,7 @@ export const ADVISORY = new Set();
  */
 export function verdict(needs, opts = {}) {
   const advisory = new Set(opts.advisory || ADVISORY);
+  const require = [...(opts.require || [])];
   const bad = [];
   const skipped = [];
   const passed = [];
@@ -60,6 +64,10 @@ export function verdict(needs, opts = {}) {
     else if (result === "failure" || result === "cancelled") bad.push(`${name}: ${result}`);
     else bad.push(`${name}: unknown result ${JSON.stringify(result)}`);
   }
+  for (const name of require) {
+    const result = needs[name] && typeof needs[name] === "object" ? String(needs[name].result || "") : "";
+    if (result !== "success") bad.push(`${name}: required to succeed on a full-tier run, got ${result || "missing"}`);
+  }
   // Skipped-only is not green either: when every needed job was skipped (a
   // workflow whose gates all hung off one input) nothing was actually checked.
   // (A named core set is deliberately NOT required: a called run may skip
@@ -86,7 +94,8 @@ function main(argv = process.argv.slice(2)) {
     console.error("::error::ci-verdict: NEEDS holds no job results");
     process.exit(2);
   }
-  const v = verdict(needs);
+  const require = String(process.env.REQUIRE_SUCCESS || "").split(",").map((x) => x.trim()).filter(Boolean);
+  const v = verdict(needs, { require });
   if (argv.includes("--json")) {
     console.log(JSON.stringify(v, null, 2));
     process.exit(v.ok ? 0 : 1);
