@@ -1156,6 +1156,10 @@ function buildLiveryCreator(container, team) {
   };
   wrap.appendChild(section("COCKPIT"));
   wrap.appendChild(colorRow("HALO", "halo", true));
+  const lidStyled = () => (d.helmetStyle || "team") !== "team";
+  const NO_LID = "Needs a HELMET style other than TEAM";
+  deps.push({ row: colorRow("HELMET BASE", "helmetBase", true), when: lidStyled, why: NO_LID });
+  deps.push({ row: colorRow("HELMET ACCENT", "helmetAccent", true), when: () => lidStyled() && d.helmetStyle !== "solid", why: "Needs a HELMET style with a stripe, cap, band or chevron" });
   // One pill row per single-choice field: FINISH (Car3D's surface set — this
   // array and FINISH_SURFACE were two copies and the specs held a third),
   // NUMBER FONT and SPONSORS (LiveryTex's id lists). Same nodes and classes.
@@ -1214,6 +1218,7 @@ function buildLiveryCreator(container, team) {
   // What the cover's FLANK carries — the number, the mark or the driver code.
   pillRow("SPINE SIDE", "spineSide", LT && LT.SPINE_SIDE_IDS || ["none"], "none");
   pillRow("BODY SPLIT", "bodySplit", ["off", "lr"], "off");
+  pillRow("HELMET", "helmetStyle", (typeof Helmets !== "undefined" && Helmets.STYLES) || ["team"], "team");
   // The pills that write a sponsor name: dead under the CLEAN pack.
   for (const k of ["spineLogo:wordmark", "spineSide:wordmark", "spineSide:duo", "spineSide:title"]) {
     const b = wrap.querySelector('[data-cs-pill="' + k + '"]');

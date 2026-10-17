@@ -152,6 +152,7 @@ const GarageLiveryDesignEditor = (function () {
     section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
       ["logo", "logo2", "logo3", "numFont", "sponsors"], [api.markNote]);
     section("COCKPIT & CAMERA", "Halo paint and finish, plus the small T-cam housing above the driver.", ["halo", "haloFinish", "tcam"]);
+    section("HELMET", "Your driver's helmet. TEAM keeps the driver's own design; the other styles repaint it from HELMET BASE and HELMET ACCENT.", ["helmetStyle", "helmetBase", "helmetAccent"]);
     section("REVIEW & SAVE", "Undo or compare your edits, then name and save this paint job.", [], [historyRow, status, api.nameRow, api.saveRow]);
     // One SPINE TOP selection, divided by purpose rather than a wall of pills.
     const group = api.spineRow.querySelector(".cs-liv-ed-finish"), choices = Array.from(group.querySelectorAll("button"));
