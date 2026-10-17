@@ -85,6 +85,7 @@ test("loading circuits one after another keeps one world in memory and does not 
       for (let k = 0; k < 3; k++) { await settle(page, 1500); reads.push((await censusAfterGc(page, cdp)).heapMB); }
       c.heapMin = Math.min(...reads);
       c.reads = reads;
+      (heap.diag = heap.diag || []).push(`v${visit} ${id}: first ${reads[0]} reads ${reads.join("/")} geom ${c.three && c.three.geometries} tex ${c.three && c.three.textures} ro ${c.three && c.three.renderObjects}`);
       c.path = await page.evaluate(() => { try { const e = window.__apex.diag({ download: false }).env; return JSON.stringify({ backend: e.backend, state: e.backendState }).slice(0, 400); } catch (_) { return null; } });
       console.log(`[mem] visit ${visit} ${id} heap reads ${reads.join(" ")} geom ${c.three && c.three.geometries} tex ${c.three && c.three.textures} ro ${c.three && c.three.renderObjects} path ${c.path}`);
       expect(c.aliveTracks, `visit ${visit} to ${id}: built tracks still reachable after GC`).toEqual([id]);
@@ -99,6 +100,9 @@ test("loading circuits one after another keeps one world in memory and does not 
       expect(nbc.zero, `visit ${visit} to ${id}: node-builder states orphaned at usedTimes 0 (of ${nbc.size})`).toBe(0);
     }
   }
+  // TEMPORARY DIAGNOSTIC (remove before ready): surface every reading in the failure text.
+  heap.path = readings.length ? readings[0].path : null;
+  expect(0, "DIAG " + heap.diag.join(" | ") + " PATH " + (await page.evaluate(() => { try { const e = window.__apex.diag({ download: false }).env; return JSON.stringify({ b: e.backend, s: e.backendState }).slice(0, 500); } catch (x) { return String(x); } }))).toBe(1);
   for (const id of CIRCUITS) {
     const grew = heap[id][3] - heap[id][2];
     expect(grew, `${id}: heap ${heap[id].slice(1).join(" → ")} MB across three visits`).toBeLessThanOrEqual(GROWTH_MB);
