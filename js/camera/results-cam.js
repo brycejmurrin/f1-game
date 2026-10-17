@@ -43,17 +43,35 @@ const ResultsCam = (function () {
   /** Pure: pick highlight windows from ReplayBuf-shaped tags inside [t0,t1]. */
   function highlightsReel(tags, t0, t1, maxS) {
     if (!(t1 > t0) || !(maxS > 0)) return [];
-    const list = (tags || []).filter((g) => g && g.t >= t0 && g.t <= t1);
+    const list = (tags || []).filter((g) => g && Number.isFinite(g.t) && g.t >= t0 && g.t <= t1)
+      .slice().sort((a, b) => a.t - b.t);
+    const merged = [];
+    for (const g of list) {
+      const dur = Math.min(HIGHLIGHT_CLIP_S, t1 - t0);
+      const start = Math.min(Math.max(t0, g.t - dur * 0.55), t1 - dur);
+      const clip = { kind: g.kind || "tag", t0: start, t1: start + dur, car: g.car | 0 };
+      // Repeated tags on one subject should not rewind the same incident.
+      // Other subjects keep their own shots, even when the time windows overlap.
+      let prev = null;
+      for (let i = merged.length - 1; i >= 0; i--) {
+        const p = merged[i];
+        if (p.car === clip.car && Math.min(p.t1, clip.t1) - Math.max(p.t0, clip.t0) >= Math.min(p.t1 - p.t0, dur) * 0.5) { prev = p; break; }
+      }
+      if (prev) {
+        if (!prev.events) prev.events = [{ kind: prev.kind, t: prev._tagT, car: prev.car }];
+        prev.events.push({ kind: clip.kind, t: g.t, car: clip.car });
+        prev.t0 = Math.min(prev.t0, clip.t0); prev.t1 = Math.max(prev.t1, clip.t1);
+      } else { clip._tagT = g.t; merged.push(clip); }
+    }
     const out = [];
     let budget = maxS;
-    for (let i = list.length - 1; i >= 0 && budget > 0; i--) {
-      const g = list[i];
-      const dur = Math.min(HIGHLIGHT_CLIP_S, budget, t1 - t0);
-      const start = Math.min(Math.max(t0, g.t - dur * 0.55), t1 - dur);
-      out.push({ kind: g.kind || "tag", t0: start, t1: start + dur, car: g.car | 0 });
-      budget -= dur;
+    for (let i = merged.length - 1; i >= 0 && budget > 0; i--) {
+      const clip = merged[i], dur = Math.min(clip.t1 - clip.t0, budget);
+      const kept = { kind: clip.kind, t0: clip.t1 - dur, t1: clip.t1, car: clip.car };
+      if (clip.events) kept.events = clip.events;
+      out.push(kept); budget -= dur;
     }
-    return out.reverse();
+    return out.reverse().sort((a, b) => a.t0 - b.t0);
   }
 
   function create(G, eligible) {

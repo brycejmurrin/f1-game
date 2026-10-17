@@ -683,7 +683,8 @@ test("a flipped human car handed back from a takeover is demoted once and is not
   const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number, Map, Set, Uint8Array, isNaN, isFinite, console, DebrisWorld,
     Tracks: { sample: () => {}, wallAt: () => 8 } });
   seedLog(ctx);
-  for (const f of ["js/core/mat4.js", "js/race/race-control.js", "js/physics/incident-sim.js"]) vm.runInContext(rd(f), ctx, { filename: f });
+  for (const f of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js",
+    "js/race/race-control.js", "js/physics/incident-sim.js"]) vm.runInContext(rd(f), ctx, { filename: f });
   const IncidentSim = vm.runInContext("IncidentSim", ctx);
   const mk = (s, human) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0, yawRateCur: 0, prog: s, finished: false, retired: false, human });
   const cars = [mk(100, true), mk(103, false)];

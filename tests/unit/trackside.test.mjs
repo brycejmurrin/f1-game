@@ -31,7 +31,9 @@ function load() {
   vm.runInNewContext(
     fs.readFileSync(path.join(ROOT, "js/camera/trackside.js"), "utf8") + "\nthis.exported = TracksideCams;",
     ctx);
-  return ctx.exported;
+  vm.runInNewContext(
+    fs.readFileSync(path.join(ROOT, "js/camera/fov-fit.js"), "utf8") + "\nthis.fovFit = CamFovFit;", ctx);
+  return { ...ctx.exported, fitFovY: ctx.fovFit.fitFovY };
 }
 
 test("build places one cam per measured corner outside the half-width", () => {
@@ -67,6 +69,16 @@ test("pose tightens the lens when the car is far and opens it when the car is cl
   assert.ok(near.fov > far.fov, `close shot should be wider (${near.fov} vs ${far.fov})`);
   assert.ok(far.fov <= 22, `a distant car should be on the long lens, got ${far.fov}`);
   assert.ok(near.fov <= 50 && far.fov >= 18, "fov stays inside the clamp");
+});
+
+test("far-subject trackside long lens survives final landscape FOV fitting", () => {
+  const TS = load();
+  const track = { total: 1000, id: "test" };
+  const shot = TS.pose(track, 280, 0, { carPos: [0, 280] });
+  assert.equal(shot.fov, 18, "far subject reaches the authored telephoto clamp");
+  const authored = shot.fov * Math.PI / 180;
+  assert.equal(TS.fitFovY(authored, 16 / 9, { cine: false }), authored,
+    "normal TRACKSIDE must retain the long lens after the gameplay aspect fit");
 });
 
 test("pose aims at the subject car when carPos is supplied", () => {

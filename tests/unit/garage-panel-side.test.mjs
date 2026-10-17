@@ -15,6 +15,26 @@ const { panelCover, presentOpts, glareScale } = vm.runInContext("SetupCamera", c
 const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
 const noCam = () => { throw new Error("camTop must only be read on the portrait axis"); };
 const CANVAS = rect(0, 0, 1440, 900);
+test('garage held camera controls release only their owning pointer, or window blur', () => {
+  const source = read('js/garage/setup-camera.js');
+  const fn = source.slice(source.indexOf('function holdSetupCtl('), source.indexOf('holdSetupCtl("cs-view-in"'));
+  for (const end of ['pointerup', 'pointercancel', 'lostpointercapture', 'blur']) {
+    const handlers = {}, win = {}, rates = { az: 1 }; let steps = 0;
+    const el = { addEventListener(t, f) { (handlers[t] ||= []).push(f); }, setPointerCapture() {} };
+    const sb = { $: () => el, G: { setupPreviewOn: true }, preview: false, arrival: {}, spHeld: null,
+      window: { addEventListener(t, f) { (win[t] ||= []).push(f); } } };
+    vm.runInNewContext(fn + ';holdSetupCtl("left", rates, step);', Object.assign(sb, { rates, step: () => steps++ }));
+    const fire = (list, type, id) => { for (const f of list[type] || []) f({ type, pointerId: id, preventDefault() {} }); };
+    fire(handlers, 'pointerdown', 11); assert.equal(sb.spHeld, rates); assert.equal(steps, 1);
+    fire(win, 'pointerup', 22); assert.equal(sb.spHeld, rates, 'another finger cannot stop the held camera');
+    fire(handlers, 'pointerdown', 22); assert.equal(steps, 1, 'another pointer cannot steal this control');
+    if (end === 'blur') fire(win, end);
+    else { fire(handlers, end, 22); assert.equal(sb.spHeld, rates); fire(handlers, end, 11); }
+    assert.equal(sb.spHeld, null, end + ' releases the owner');
+    fire(handlers, 'pointerdown', 33); assert.equal(sb.spHeld, rates, 'control can be entered again');
+    fire(win, 'pointerup', 33); assert.equal(sb.spHeld, null);
+  }
+});
 
 test("a RIGHT dock returns the same unsigned fraction it always did", () => {
   for (const w of [0, 120, 410, 540, 1100, 1440]) {
@@ -114,6 +134,27 @@ test("the GARAGE look rules keep the car's floor and stay out of portrait", () =
   assert.match(css, /:root\[data-look-garage-glass="solid"\] #carsetup #cs-inner \{ background: var\(--carbon\); \}/);
   assert.match(css, /:root\[data-look-garage-glass="glass"\]:not\(\[data-ui-contrast="high"\]\) #carsetup #cs-inner \{/);
   assert.match(css, /:root\[data-look-garage-stats="hide"\] #carsetup #cs-stats-inner \{ display: none; \}/);
+});
+
+test("narrow landscape garage keeps camera and aero controls reachable", () => {
+  const css = read("css/carsetup.css");
+  const start = css.indexOf("@media (max-width: 700px) and (orientation: landscape)");
+  const end = css.indexOf("/* CAMERA / ACTIVE AERO / Z-MODE", start);
+  const media = start >= 0 && end > start ? css.slice(start, end) : "";
+  assert.ok(media, "narrow landscape needs a dedicated compact controls layout");
+  assert.doesNotMatch(media, /#cs-stack\s*\{\s*display:\s*none/,
+    "the only camera/aero controls must not disappear on narrow landscape");
+  assert.match(media, /#cs-stack[\s\S]*display:\s*flex/);
+  assert.match(media, /grid-template-rows:\s*minmax\(0, 1fr\) auto/,
+    "narrow landscape reserves an actual toolbar row outside the sheet");
+  assert.match(media, /#cs-stack[\s\S]*grid-row:\s*2;\s*position:\s*relative/,
+    "controls participate in layout rather than covering the header");
+  assert.match(media, /z-index:\s*4/,
+    "the compact dock must remain above the full-width garage sheet");
+  assert.match(media, /#cs-bar[\s\S]*flex-direction:\s*row/,
+    "the bottom toolbar uses the safe viewport width");
+  assert.match(media, /#cs-tabs[\s\S]*overflow-x:\s*hidden;\s*overflow-y:\s*auto/,
+    "the short sheet gives categories their own vertical scroll rail");
 });
 
 test("REAR-WING sits back and slightly above the wing", () => {

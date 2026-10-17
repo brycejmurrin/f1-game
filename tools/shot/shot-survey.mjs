@@ -7,21 +7,30 @@ import { loadSurveyDesigns } from "../lib/custom-survey-locations.mjs";
 import { SURVEY_LOCATIONS, CAMERA_RECIPES, listSurveyLocations, captureIdentity, sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { parseFlags } from "../lib/cli-args.mjs";
 import { fileURLToPath } from "node:url";
 import {
   buildSurveyPlans,
   estimateSurveyMs,
   filterResumeShots,
+  surveyTerminalState,
   normalizeSurveyTracks,
   scoreShotFindings,
   writeCompareIndex,
   writeSurveyFindings,
   writeSurveyIndex,
+  writeSurveyGalleryFromReports,
   writeSurveyProgress,
 } from "../lib/track-shot-survey.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const argv = process.argv.slice(2);
+if (!argv.includes("--help") && !argv.includes("-h")) {
+  parseFlags(argv, ["--angles", "--cold-sessions", "--count", "--designs", "--dry-run", "--fracs", "--gl", "--label",
+    "--list-locations", "--location", "--locations", "--no-index", "--no-panel", "--out", "--plan-file", "--plan-json",
+    "--preset", "--profile", "--reports", "--resume", "--save-plan", "--seed", "--select", "--tod", "--track", "--tracks",
+    "--weather", "--weathers"]);
+}
 const flag = (n, d) => {
   const i = argv.indexOf(n);
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d;
@@ -36,7 +45,7 @@ function usage(code = 2) {
        [--location spa/eau-rouge|monaco/turn-1 --angles overview,reverse,overhead --weathers dry,rain]
        [--profile preview|comparison --seed N --select name,name --plan-file FILE --save-plan FILE --list-locations]
        [--locations ID,ID --designs native-collection.json --cold-sessions]
-       [--fracs 0,0.5] [--count N] [--tod day|dusk|dawn|night] [--weather dry|wet|rain|overcast|fog] [--dry-run]`);
+       [--reports findings.json[,findings.json…]] [--fracs 0,0.5] [--count N] [--tod day|dusk|dawn|night] [--weather dry|wet|rain|overcast|fog] [--dry-run]`);
   process.exit(code);
 }
 
@@ -48,6 +57,16 @@ if (has("--list-locations")) {
   process.exit(0);
 }
 if (has("--help") || has("-h")) usage(0);
+
+// Rebuild a portable gallery from saved surveys without booting Chromium.
+if (has("--reports")) {
+  const reports = flag("--reports", "").split(",").map((s) => s.trim()).filter(Boolean).map((s) => path.resolve(ROOT, s));
+  if (!reports.length) throw new Error("--reports needs at least one findings.json path");
+  const out = path.resolve(ROOT, flag("--out", "artifacts/track-survey/gallery"));
+  if (has("--dry-run")) console.log(JSON.stringify({ ok: true, dryRun: true, reports, out, browser: false }));
+  else console.log(JSON.stringify({ ok: true, browser: false, indexHtml: writeSurveyGalleryFromReports(out, reports), out }));
+  process.exit(0);
+}
 
 const tracksCsv = flag("--tracks", flag("--track", ""));
 const tracks = normalizeSurveyTracks({ tracks: tracksCsv.split(",").map((s) => s.trim()).filter(Boolean) });
@@ -186,12 +205,14 @@ for (let ti = 0; ti < tracks.length; ti++) {
   const outDir = tracks.length === 1 ? outRoot : path.join(outRoot, track);
   fs.mkdirSync(outDir, { recursive: true });
   const identityContext = { extension: profile === "preview" ? "jpg" : "png", identities: Object.fromEntries(plan.shots.map(s=>[s.name,captureIdentity({ source, track, shot:s, profile, seed, gpu:sessionEnv().APEX_GPU })])) };
-  const { pending, resumed } = filterResumeShots(outDir, plan.shots, resume, identityContext);
+  const { pending, resumed, invalid } = filterResumeShots(outDir, plan.shots, resume, identityContext);
+  for (const bad of invalid) console.error(`shot-survey: ${track}/${bad.name}.${identityContext.extension} is not a valid image (${bad.reason}); recapturing`);
+  const invalidNames = new Set(invalid.map((b) => b.name));
   for (const s of pending) {
-    if (fs.existsSync(path.join(outDir, `${s.name}.${identityContext.extension}`))) throw new Error("Existing capture does not match this plan/revision; choose a new output directory: " + s.name);
+    if (!invalidNames.has(s.name) && fs.existsSync(path.join(outDir, `${s.name}.${identityContext.extension}`))) throw new Error("Existing capture does not match this plan/revision; choose a new output directory: " + s.name);
   }
   writeSurveyProgress(outRoot, {
-    state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length,
+    state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length, invalid,
     shotsPerTrack: plan.shots.length, estimateMs,
   });
 
@@ -228,7 +249,7 @@ for (let ti = 0; ti < tracks.length; ti++) {
           continue;
         }
         if (reply.ok) {
-          const row = { ...s, track, png: reply.png, spread: reply.spread, kb: reply.kb, timings: reply.timings };
+          const row = { ...s, track: reply.track || track, png: reply.png, spread: reply.spread, kb: reply.kb, timings: reply.timings };
           fs.writeFileSync(reply.png + ".capture.json", JSON.stringify({ identity:identityContext.identities[s.name], source, profile, seed, job:{...s,track}, timings:reply.timings, frame:reply.frame, state:{plugin:{renderer:sess.boot.diagnostics}} },null,2));
           row.flags = scoreShotFindings(row);
           captured.push(row);
@@ -247,23 +268,21 @@ for (let ti = 0; ti < tracks.length; ti++) {
     let indexHtml = null;
     if (wantIndex && captured.length) {
       indexHtml = writeSurveyIndex(outDir, {
-        track, label: plan.label, preset: plan.preset, shots: captured, panelPng, ok: captured.length,
+        track: captured[0]?.track || track, label: plan.label, preset: plan.preset, shots: captured, panelPng, ok: captured.length,
       });
     }
-    if (captured.length) {
+    {
       const findings = writeSurveyFindings(outDir, {
-        ok: failed.length === 0,
-        track, label: plan.label, preset: plan.preset, shots: captured, panelPng, indexHtml,
+        ok: failed.length === 0, failed: failed.length, failures: failed,
+        track: captured[0]?.track || track, label: plan.label, preset: plan.preset, shots: captured, panelPng, indexHtml,
       });
       trackResults.push({
-        track, out: outDir, captured: captured.length, failed: failed.length,
+        track: captured[0]?.track || track, out: outDir, captured: captured.length, failed: failed.length,
         panel: panelPng, indexHtml, shots: captured, findings: findings.file, failures: failed.length ? failed : undefined,
         relIndex: indexHtml ? path.relative(outRoot, indexHtml) : `${track}/index.html`,
       });
-    } else {
-      trackResults.push({ track, out: outDir, captured: 0, failed: failed.length || 1, skipped: !failed.length });
-      hardFail = true;
     }
+    if (!captured.length) hardFail = true;
     if (failed.length) hardFail = true;
   } catch (e) {
     hardFail = true;
@@ -291,7 +310,7 @@ if (tracks.length > 1 && wantIndex) {
 }
 
 writeSurveyProgress(outRoot, {
-  state: hardFail ? "failed" : "done", tracks, trackResults: trackResults.map((t) => ({
+  state: surveyTerminalState(trackResults, hardFail), tracks, trackResults: trackResults.map((t) => ({
     track: t.track, captured: t.captured, failed: t.failed, error: t.error,
   })),
   compareIndex, estimateMs,

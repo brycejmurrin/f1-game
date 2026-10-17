@@ -1,7 +1,13 @@
 # UI-matrix probes, routes, diagnosis, mistakes
 
 Load this when a measurement looks wrong, when reaching a screen, or when a CSS change 'did nothing'. Setup ritual + screen enumeration: [setup.md](setup.md). Axes live in code, not prose: viewports (with injected iPhone safe-area insets) in `tools/ui/menu-screens.mjs` `VIEWPORTS`, screens in its `SCREENS`, and the scale axis (40–200 %) in `tools/ui/ui-scale-axis.mjs`.
+**Use when:** a screen/viewport measurement is wrong or a CSS change appears ineffective.
 
+**Inputs:** the route, viewport/scale cell, pointer mode, and the observed geometry or style symptom.
+
+**Verification:** capture the measured cell, DOM/CSS evidence, and whether the result came from the UI matrix or a focused screen probe.
+
+**Writes/ownership:** read-only diagnosis; CSS edits stay with `css-play` and menu ownership stays with `ui-menu-a11y`.
 ## Contents
 - 3. The probe — four questions, each with its trap
 - 4. Reaching each screen, and resetting between them

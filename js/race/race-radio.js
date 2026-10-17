@@ -80,6 +80,35 @@ var RaceRadio = (function () {
     let chat = readSetting("radioChat", CHAT, "normal");
     let comm = readSetting("commentary", COMM, "tv");
 
+    let battleOn = !!(store && store.get && store.get("battleEarcon", false));
+    let battle = null;
+    function battleService() {
+      // AUDIO is lazy: constructing the race need not load or unlock sound.
+      if (!battle && typeof BattleEarcon !== "undefined" && typeof GameAudio !== "undefined") battle = BattleEarcon.create(GameAudio);
+      return battle;
+    }
+    function stopBattleEarcon() { if (battle) battle.stop(); }
+    function battleEarcon() { return battleOn; }
+    function setBattleEarcon(on) {
+      battleOn = !!on;
+      if (store && store.set) store.set("battleEarcon", battleOn);
+      stopBattleEarcon();
+      const b = battleOn && battleService();
+      if (b && G.soundOn) b.prepare();   // readiness only: decoding never plays
+      return battleOn;
+    }
+    function battleSafe() {
+      const p = G.player;
+      if (!p || !live || watch || G.state !== "race" || G.paused || !last
+          || last.caution !== 0 || last.finished || last.retired || last.pitting
+          || Math.abs((G.raceT || 0) - last.t) > 0.5 || underLoad(p)
+          || (spotter && spotter.occupied()) || G.announceBusy
+          || (G.radio && G.radio.busy && G.radio.busy())
+          || (G.announcer && G.announcer.speaking && G.announcer.speaking())) return false;
+      for (const c of queue.eng.values()) if (c.tier >= 5) return false;
+      return !(typeof GameAudio !== "undefined" && GameAudio.radioVoicesLive && GameAudio.radioVoicesLive() > 0);
+    }
+
     let live = false, evalT = 0, t = 0, lastCars = null, last = null;
     // A REAL RACE WATCH (js/race/real-replay.js setWatching): every car is a
     // puppet, so the replay's own highlights are the news (replayEvent) and the
@@ -114,6 +143,7 @@ var RaceRadio = (function () {
     }
 
     function reset() {
+      stopBattleEarcon();
       timeline++;
       facts.reset();
       lines = RadioLines.create((o.seed || 1) + ((G.raceRound | 0) * 7919));
@@ -125,6 +155,7 @@ var RaceRadio = (function () {
     // A replay cut changes the facts and clock, not the race. Drop pending
     // copy and cooldowns from the old timeline without repeating once-only news.
     function resetTimeline() {
+      stopBattleEarcon();
       if (!watch) return;
       timeline++;
       if (G.radio && G.radio.halt) G.radio.halt();
@@ -172,6 +203,7 @@ var RaceRadio = (function () {
     }
 
     function speak(c, kind) {
+      if (c.id === "last" && c.ch === "eng") refreshLastLap(c, f2());
       const text = lines.pick(c.key, c.vars);
       if (!text) { queue[c.ch].delete(c.id); return false; }
       // Accepted cards may wait across a seek or the start of another race.
@@ -217,6 +249,20 @@ var RaceRadio = (function () {
       return (p.brakeDemand || 0) > LOAD_BRAKE || lat > max * LOAD_LAT;
     }
 
+    // Urgent last-lap calls may wait behind a full card queue. Keep the
+    // reminder, but name the battle that exists when the retry is accepted.
+    function refreshLastLap(c, f) {
+      const pos = f.rawPos || f.pos;
+      c.vars = { pos, ahead: S(f.ahead), behind: S(f.behind) };
+      c.key = "eng.lastCalm";
+      if (pos === 1) c.key = "eng.lastLead";
+      else if (f.ahead && f.gapA != null && f.gapA < 1.5) {
+        c.key = "eng.lastAttack"; c.vars.gap = gapT(f.gapA);
+      } else if (f.behind && f.gapB != null && f.gapB < 1.5) {
+        c.key = "eng.lastDefend"; c.vars.gap = gapT(f.gapB);
+      }
+    }
+
     // ── ENGINEER: events ────────────────────────────────────────────────────
     function engineerEvent(e, f, p) {
       // A driver who has taken the flag or retired is off the radio: only their
@@ -234,13 +280,7 @@ var RaceRadio = (function () {
               onSaid: () => { m.toldPos = pos; } });
           }
           if (f.toGo === 1 && f.laps > 1) {
-            const vars = { pos, ahead: S(f.ahead), behind: S(f.behind) };
-            let key = "eng.lastCalm";
-            if (pos === 1) key = "eng.lastLead";
-            else if (f.gapA != null && f.gapA < 1.5) { key = "eng.lastAttack"; vars.gap = gapT(f.gapA); }
-            else if (f.gapB != null && f.gapB < 1.5) { key = "eng.lastDefend"; vars.gap = gapT(f.gapB); }
-            if (key === "eng.lastCalm" && f.gapB != null && f.gapB < 1.5) { key = "eng.lastDefend"; vars.gap = gapT(f.gapB); }
-            offer({ id: "last", ch: "eng", tier: 5, chat: 1, once: "last", key, vars, ttl: 10 });
+            offer({ id: "last", ch: "eng", tier: 5, chat: 1, once: "last", ttl: 10 });
           } else if (f.toGo != null && [10, 5, 3, 2].indexOf(f.toGo) >= 0 && f.toGo < f.laps) {
             offer({ id: "toGo", ch: "eng", tier: 3, chat: f.toGo === 10 ? 3 : 2, once: "toGo" + f.toGo,
               key: "eng.toGo", vars: { left: f.toGo, pos }, ttl: 15, still: samePos(pos) });
@@ -472,10 +512,10 @@ var RaceRadio = (function () {
           if (e.pos > 0 && e.pos <= 5) offer({ id: "pit", ch: "tv", tier: 2, key: "tv.pit", vars: { a: S(e.car), pos: e.pos }, ttl: 8 });
           break;
         case "caution":
-          if (e.level === 4) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.red", vars: {}, ttl: 8 });
-          else if (e.level === 3) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.sc", vars: {}, ttl: 8 });
-          else if (e.level === 2) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.vsc", vars: {}, ttl: 8 });
-          else if (e.level === 0 && e.prev >= 2 && e.prev < 4) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.green", vars: {}, ttl: 6 });
+          if (e.level === 4) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.red", vars: {}, ttl: 8, still: () => f2().caution === 4 });
+          else if (e.level === 3) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.sc", vars: {}, ttl: 8, still: () => f2().caution === 3 });
+          else if (e.level === 2) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.vsc", vars: {}, ttl: 8, still: () => f2().caution === 2 });
+          else if (e.level === 0 && e.prev >= 2 && e.prev < 4) offer({ id: "flag", ch: "tv", tier: 4, key: "tv.green", vars: {}, ttl: 6, still: () => f2().caution === 0 });
           break;
         case "finish":
           if (e.pos === 1) {
@@ -620,6 +660,17 @@ var RaceRadio = (function () {
     function request() {
       const f = last;
       if (!live || !f || watch) return "";
+      if (battleOn) {
+        const b = battleService();
+        if (!G.soundOn) stopBattleEarcon();
+        else {
+          if (!battleSafe()) { stopBattleEarcon(); return ""; }
+          const key = typeof BattleEarcon !== "undefined" ? BattleEarcon.select(f) : "";
+          if (b && !b.ready()) b.prepare();   // this request still uses spoken status
+          const volume = 0.3 * Math.max(0, Math.min(1, +(store && store.get ? store.get("volRadio", 0.8) : 0.8) || 0));
+          if (key && b && b.play(key, volume)) return "";   // a finite motif, no extra sentence
+        }
+      }
       const text = f.ahead && f.gapA != null && f.behind && f.gapB != null
         ? lines.pick("eng.status", { pos: f.pos, gapA: gapT(f.gapA), gapB: gapT(f.gapB) })
         : f.ahead && f.gapA != null ? "P" + f.pos + ". " + gapT(f.gapA) + " TO " + S(f.ahead)
@@ -636,11 +687,12 @@ var RaceRadio = (function () {
       // The flags: the same "flag" slot the caution edge uses, so a WATCH whose
       // own caution follows the script says it once.
       if (h.kind === "sc") {
-        const key = h.level >= 4 ? "tv.red" : h.level === 2 ? "tv.vsc" : "tv.sc";
-        offer({ id: "flag", ch: "tv", tier: 4, key, vars: {}, ttl: 8 });
+        const level = h.level >= 4 ? 4 : h.level === 2 ? 2 : 3;
+        const key = level === 4 ? "tv.red" : level === 2 ? "tv.vsc" : "tv.sc";
+        offer({ id: "flag", ch: "tv", tier: 4, key, vars: {}, ttl: 8, still: () => f2().caution === level });
         return true;
       }
-      if (h.kind === "green") { offer({ id: "flag", ch: "tv", tier: 4, key: "tv.green", vars: {}, ttl: 6 }); return true; }
+      if (h.kind === "green") { offer({ id: "flag", ch: "tv", tier: 4, key: "tv.green", vars: {}, ttl: 6, still: () => f2().caution === 0 }); return true; }
       if (!a) return false;
       switch (h.kind) {
         case "pass": {
@@ -667,6 +719,7 @@ var RaceRadio = (function () {
     }
     /** A WATCH starts (hooks {nameOf, radioBusy}) or ends (null). */
     function setWatching(hooks) {
+      stopBattleEarcon();
       timeline++;
       watch = hooks || null;
       queue.tv.clear(); queue.eng.clear();
@@ -688,6 +741,7 @@ var RaceRadio = (function () {
 
     return {
       update, request, reset, resetTimeline, setChat, setComm, replayEvent, setWatching,
+      battleEarcon, setBattleEarcon, stopBattleEarcon,
       /** Commentary will speak in a WATCH (not OFF): the replay's captions stand down for it. */
       commentates: () => comm !== "off",
       chat: () => chat, comm: () => comm,

@@ -3,6 +3,7 @@ import { readCssSource } from "../helpers/css-source.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -128,14 +129,14 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   );
   assert.match(experience, /#menu-brand :is\(#soundbtn, #disclaimer\) \{[\s\S]*background:\s*var\(--carbon\)/,
     "Sound and the disclaimer stay on solid --carbon over a bright livery");
-  // Retention / primary / explore are dark plates; only CAREER is solid --red.
+  // Retention / primary / garage / explore / create are dark plates; only CAREER is solid --red.
   // Without this override, .bigbtn:not(.alt) { color: var(--menu-accent-ink) }
   // paints DAILY TIME TRIAL black-on-carbon when menuAccent is ember
   // (2026-10-06 phone landscape).
   assert.match(
     experience,
-    /#menu-retention \.bigbtn,\s*#menu-primary \.bigbtn,\s*#menu-explore \.bigbtn \{ color: var\(--text\)/,
-    "DAILY / RACE / explore plates keep --text, not --menu-accent-ink",
+    /#menu-retention \.bigbtn,\s*#menu-primary \.bigbtn,\s*#menu-garage \.bigbtn,\s*#menu-explore \.bigbtn,\s*#menu-create \.bigbtn \{ color: var\(--text\)/,
+    "DAILY / RACE / GARAGE / explore / studio plates keep --text, not --menu-accent-ink",
   );
 });
 
@@ -384,4 +385,37 @@ test("title menu: the doors the script re-names start with their visible label",
   assert.doesNotMatch(js, /Daily challenge — |Continue career — /);
   // the shell's own label is what the script writes, so there is no first-paint flip
   assert.match(read("index.html"), /<span class="mb-label">CAREER MODES<\/span>/);
+});
+
+
+test("destination grouping preserves original controls and routes shortcuts through settings", () => {
+  class Node {
+    constructor(tag = "div") { this.tagName = tag; this.children = []; this.dataset = {}; this.attrs = {}; this.classList = { add() {} }; }
+    appendChild(node) {
+      if (node.parentNode) node.parentNode.children = node.parentNode.children.filter((n) => n !== node);
+      node.parentNode = this; this.children.push(node); return node;
+    }
+    setAttribute(k, v) { this.attrs[k] = v; }
+    click() { this.onclick?.(); }
+  }
+  const menu = new Node(); menu.id = "menu-buttons";
+  const walk = (node, id) => node.id === id ? node : node.children.map((n) => walk(n, id)).find(Boolean);
+  const doc = { getElementById: (id) => walk(menu, id), createElement: (tag) => new Node(tag) };
+  for (const id of ["menu-hero", "menu-primary", "menu-explore", "menu-secondary", "mb-practice", "mb-watch", "mb-garage", "mb-settings", "mb-designer", "mb-data", "mb-help"]) {
+    const n = new Node(); n.id = id; menu.appendChild(n);
+  }
+  const practice = doc.getElementById("mb-practice"); let practiced = 0;
+  practice.onclick = () => practiced++;
+  const opened = []; doc.getElementById("mb-settings").onclick = () => opened.push("settings");
+  const ctx = vm.createContext({ SettingsNav: { show: (id) => opened.push(id) } });
+  vm.runInContext(read("js/ui/title-menu.js"), ctx);
+  const organize = vm.runInContext("TitleMenu.organize", ctx);
+  organize(doc); organize(doc);
+  assert.equal(practice.parentNode.id, "menu-primary"); practice.click(); assert.equal(practiced, 1);
+  assert.equal(doc.getElementById("mb-garage").parentNode.id, "menu-garage");
+  assert.equal(doc.getElementById("mb-watch").parentNode.id, "menu-explore");
+  assert.equal(doc.getElementById("mb-designer").parentNode.id, "menu-create");
+  assert.equal(menu.children.filter((n) => n.id === "menu-create").length, 1);
+  doc.getElementById("mb-visual").click(); doc.getElementById("mb-saves").click();
+  assert.deepEqual(opened, ["settings", "visual", "settings", "files"]);
 });

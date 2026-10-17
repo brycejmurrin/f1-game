@@ -5,6 +5,7 @@ import fs from "node:fs";
 import { escapeHtml as galleryEscape, screenshotCard, renderGallery } from "./screenshot-gallery.cjs";
 import path from "node:path";
 import { cameraControls, scenarioShots } from "./survey-scenarios.mjs";
+import zlib from "node:zlib";
 
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
 const TODS = new Set(["day", "dusk", "dawn", "night"]);
@@ -122,6 +123,19 @@ export function buildSurveyPlans(args, tracks) {
   return plans;
 }
 
+/** Two cells with one name write and replace ONE image, so a gallery would count a single final view twice
+ *  (`fracs:[.101,.104]` both round to `-10-`; #1982). Reject at plan time, naming the colliding fracs. */
+export function assertUniqueShotNames(shots) {
+  const by = new Map();
+  for (const s of shots) by.set(s.name, [...(by.get(s.name) || []), s.frac]);
+  const dup = [...by].filter(([, fr]) => fr.length > 1);
+  if (dup.length) {
+    throw new Error(`survey cells share a name and would overwrite one image: ${dup.map(([n, fr]) => `${n} (fracs ${fr.join(", ")})`).join("; ")}`
+      + " — space the fracs further apart (names round to 1 %) or give shots[] explicit unique names");
+  }
+  return shots;
+}
+
 /** Machine-readable plan for a survey run (no I/O). */
 export function buildTrackShotSurveyPlan(args = {}) {
   if (args.location && args.locations) throw new Error('Use location or locations, not both');
@@ -167,6 +181,7 @@ export function buildTrackShotSurveyPlan(args = {}) {
       };
     });
     if (shots.length > MAX_SURVEY_SHOTS) throw new Error(`shots max ${MAX_SURVEY_SHOTS}`);
+    assertUniqueShotNames(shots);
     return {
       preset: presetKey,
       label,
@@ -211,6 +226,7 @@ export function buildTrackShotSurveyPlan(args = {}) {
   if (shots.length > MAX_SURVEY_SHOTS) {
     throw new Error(`survey would take ${shots.length} shots (max ${MAX_SURVEY_SHOTS}); lower count or use one cam`);
   }
+  assertUniqueShotNames(shots);
 
   return {
     preset: presetKey,
@@ -241,18 +257,49 @@ export function shotPngPath(outDir, name) {
 }
 
 /** Split planned shots into already-on-disk (resume) vs still needed. */
+const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** Structural PNG check (signature, IHDR with a real size, every chunk's CRC, a closing IEND). Existence is not
+ *  evidence: a truncated or text-filled file used to count as a finished cell on resume (#1982). Pixels are not
+ *  decoded; that stays the capture's own spread/kb score. -> null when sound, else the reason. */
+export function pngProblem(file) {
+  let buf;
+  try { buf = fs.readFileSync(file); } catch (e) { return `unreadable (${e.code || e.message})`; }
+  if (buf.length < 8 || !buf.subarray(0, 8).equals(PNG_SIG)) return "not a PNG (bad signature)";
+  let off = 8, first = true, sawEnd = false;
+  while (off + 12 <= buf.length) {
+    const len = buf.readUInt32BE(off);
+    const type = buf.toString("latin1", off + 4, off + 8);
+    if (off + 12 + len > buf.length) return `truncated in a ${type} chunk`;
+    if (first && (type !== "IHDR" || len !== 13)) return "first chunk is not IHDR";
+    if (first && (buf.readUInt32BE(off + 8) < 1 || buf.readUInt32BE(off + 12) < 1)) return "zero-size image";
+    first = false;
+    if (zlib.crc32(buf.subarray(off + 4, off + 8 + len)) !== buf.readUInt32BE(off + 8 + len)) return `bad CRC in a ${type} chunk`;
+    off += 12 + len;
+    if (type === "IEND") { sawEnd = true; break; }
+  }
+  return sawEnd ? null : "no IEND chunk (truncated)";
+}
+
+/** Split a plan into cells to capture and cells already on disk. A cell only counts as resumed when its PNG is
+ *  structurally sound; an unsound one is listed in `invalid` (with why) and recaptured. */
 export function filterResumeShots(outDir, shots, resume = false, context = null) {
-  if (!resume) return { pending: shots.slice(), resumed: [] };
+  if (!resume) return { pending: shots.slice(), resumed: [], invalid: [] };
   const pending = [];
   const resumed = [];
+  const invalid = [];
   for (const s of shots) {
     const png = context?.extension ? path.join(outDir, `${s.name}.${context.extension}`) : shotPngPath(outDir, s.name);
     let matches = !context;
     if (context) { try { matches = JSON.parse(fs.readFileSync(png + ".capture.json", "utf8")).identity === context.identities[s.name]; } catch {} }
-    if (fs.existsSync(png) && matches) resumed.push({ ...s, png, resumed: true });
+    if (!fs.existsSync(png)) { pending.push(s); continue; }
+    // An unsound PNG is recaptured whatever its receipt says (#1982); other formats (preview JPEG) are judged by identity alone.
+    const why = png.endsWith(".png") ? pngProblem(png) : null;
+    if (why) { invalid.push({ name: s.name, reason: why }); pending.push(s); }
+    else if (matches) resumed.push({ ...s, png, resumed: true });
     else pending.push(s);
   }
-  return { pending, resumed };
+  return { pending, resumed, invalid };
 }
 
 /** Heuristic flags for a captured cell (spread/kb from track-session). */
@@ -274,6 +321,13 @@ export function writeSurveyProgress(outDir, progress) {
   return file;
 }
 
+/** The one terminal state the CLI and the MCP adapter both write to progress.json. The adapter used to write
+ *  "done" unconditionally and then answer ok:false, so a poller saw success for a run whose shots failed (#1983). */
+export function surveyTerminalState(trackResults = [], hardFail = false) {
+  const bad = hardFail || trackResults.some((t) => t.error || t.failed > 0 || !(t.captured > 0 || t.skipped));
+  return bad ? "failed" : "done";
+}
+
 export function writeSurveyFindings(outDir, meta) {
   fs.mkdirSync(outDir, { recursive: true });
   const shots = (meta.shots || []).map((s) => {
@@ -284,10 +338,14 @@ export function writeSurveyFindings(outDir, meta) {
   const body = {
     ok: meta.ok !== false,
     track: meta.track,
+    actualTrack: meta.actualTrack || meta.state?.info?.track,
+    state: meta.state?.info ? { info: meta.state.info } : undefined,
     tracks: meta.tracks,
     label: meta.label,
     preset: meta.preset,
     captured: shots.length,
+    failed: meta.failed ?? (Array.isArray(meta.failures) ? meta.failures.length : 0),
+    failures: meta.failures,
     flagged: flagged.length,
     shots,
     panel: meta.panelPng || null,
@@ -299,6 +357,8 @@ export function writeSurveyFindings(outDir, meta) {
   return { file, findings: body };
 }
 
+const galleryTrack = (row) => row.actualTrack || row.state?.info?.track || row.track || "Unknown track";
+const failedCount = (row) => Math.max(Number(row.failed) || 0, Array.isArray(row.failures) ? row.failures.length : 0, row.error ? 1 : 0);
 const galleryPath = (outDir, file) => {
   const relative = path.isAbsolute(file) ? path.relative(outDir, file) : file;
   return relative.split(path.sep).map(encodeURIComponent).join("/");
@@ -330,7 +390,7 @@ export function writeSurveyIndex(outDir, meta) {
 export function writeCompareIndex(outDir, meta) {
   const tracks = meta.tracks || [];
   const groups = tracks.map((track) => {
-    const title = track.actualTrack || track.track || "Unknown track";
+    const title = galleryTrack(track);
     const links = [];
     if (track.relIndex !== null) links.push(`<a href="${galleryEscape(galleryPath(outDir, track.relIndex || `${title}/index.html`))}">Track index</a>`);
     if (track.panel) links.push(`<a href="${galleryEscape(galleryPath(outDir, track.panel))}">Contact sheet</a>`);
@@ -342,9 +402,42 @@ export function writeCompareIndex(outDir, meta) {
       extra: failures.length ? `<details><summary>Capture failures</summary><pre>${galleryEscape(JSON.stringify(failures, null, 2))}</pre></details>` : "",
     };
   });
-  const html = renderGallery({ title: `Track surveys — ${meta.label || "compare"}`, summary: `${tracks.length} tracks · ${meta.preset || "custom"}`, groups });
+  const html = renderGallery({ title: `Track surveys — ${meta.label || "compare"}`, summary: `${tracks.length} track(s) · ${tracks.reduce((n, t) => n + (t.captured ?? t.shots?.length ?? 0), 0)} captured · ${tracks.reduce((n, t) => n + failedCount(t), 0)} failed · preset ${meta.preset || "custom"}`, groups });
   fs.mkdirSync(outDir, { recursive: true });
   const file = path.join(outDir, "index.html");
   fs.writeFileSync(file, html);
   return file;
+}
+
+/** Assemble existing findings reports without a browser; copy images for a portable folder. */
+export function writeSurveyGalleryFromReports(outDir, reportPaths, { validateAssetPath } = {}) {
+  if (!Array.isArray(reportPaths) || !reportPaths.length) throw new Error("Survey gallery requires at least one findings report");
+  const copies = [];
+  const rows = reportPaths.map((reportPath, reportIndex) => {
+    const reportFile = path.resolve(reportPath);
+    let report;
+    try { report = JSON.parse(fs.readFileSync(reportFile, "utf8")); }
+    catch (error) { throw new Error(`Cannot read survey report ${reportFile}: ${error.message}`); }
+    if (!report || !Array.isArray(report.shots)) throw new Error(`Invalid survey report ${reportFile}: shots must be an array`);
+    const copyAsset = (image, assetIndex) => {
+      const source = path.resolve(path.dirname(reportFile), image);
+      if (validateAssetPath) validateAssetPath(source);
+      if (!/\.(png|jpe?g)$/i.test(source)) throw new Error(`Unsupported survey image ${source}: expected PNG or JPEG`);
+      if (!fs.existsSync(source) || !fs.statSync(source).isFile()) throw new Error(`Missing survey image ${source} (report ${reportFile})`);
+      const basename = path.basename(source).replace(/[^A-Za-z0-9._-]/g, "_");
+      const file = `assets/${reportIndex + 1}-${assetIndex}-${basename}`;
+      copies.push({ source, file });
+      return file;
+    };
+    const shots = report.shots.map((shot, i) => ({ ...shot, png: copyAsset(shot.png || shot.file || `${shot.name}.png`, i + 1) }));
+    const panel = report.panel || report.panelPng;
+    return { ...report, track: galleryTrack(report), shots, captured: shots.length, panel: panel ? copyAsset(panel, "panel") : null, relIndex: null };
+  });
+  // Validate the entire input before writing so missing images cannot leave a partial gallery.
+  validateAssetPath?.(path.join(outDir, "index.html"));
+  validateAssetPath?.(path.join(outDir, "assets"));
+  for (const { file } of copies) validateAssetPath?.(path.join(outDir, file));
+  fs.mkdirSync(path.join(outDir, "assets"), { recursive: true });
+  for (const { source, file } of copies) fs.copyFileSync(source, path.join(outDir, file));
+  return writeCompareIndex(outDir, { label: "Track survey gallery", preset: "reports", tracks: rows });
 }

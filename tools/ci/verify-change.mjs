@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // verify-change.mjs — ONE command that runs what a change needs, serialized
-// @doc ONE command: fast gate (verify-track, graph-parity, tooling-fast, shell check) + `test-bg` batches → one verdict.
+// @doc ONE diff-aware `--fast` gate plus test batches; full tooling-fast is the pre-push floor; plan JSON reports budget.
 // @section runner
 // correctly, and hands back one verdict.
 //
@@ -40,6 +40,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pick, DEPLOY_BRANCH, validateSelectionArgs, selectionReceipt } from "./pick-tests.mjs";
+import { estimateToolingFast, loadTimings, selectToolingFastChanged, TOOLING_FAST_FILES } from "./tooling-fast.mjs";
 import { proxyFetch } from "../lib/proxy-fetch.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -122,6 +123,20 @@ const circuits = files
   .filter(Boolean);
 const wantsToolingFast = groups.includes("tooling-fast") ||
   files.some((f) => /^(js|css|tools|tests|docs)\//.test(f) || /^index\.html|^AGENTS\.md/.test(f));
+// The commit/deploy gates keep the full tooling-fast floor. The local edit
+// loop can safely use the runner's path-pin index, however: it is fail-safe
+// for tracked, harness, and unmatched paths, while a source edit runs only
+// the unit files that pin that source. This is the cheap pre-PR path; CI
+// still re-gates the complete floor before merge.
+const toolingFastSelection = wantsToolingFast
+  ? selectToolingFastChanged(files)
+  : { files: [], reason: "not-needed", shards: [] };
+const toolingFastTimings = loadTimings();
+const toolingFastEstimatedMs = toolingFastSelection.files.reduce(
+  (sum, file) => sum + (typeof toolingFastTimings[file] === "number" ? toolingFastTimings[file] : 0), 0,
+);
+const localJobs = os.loadavg()[0] < 1.5 ? 3 : 2;
+const toolingFastEstimate = estimateToolingFast(toolingFastSelection.files, toolingFastTimings, localJobs);
 const wantsGraphParity = files.some((f) => f === "js/track/scenery/graph.js");
 // --since names the baseline outright; otherwise the merge-base (committed +
 // uncommitted work). Null = no git ref found: graph-parity then defaults to HEAD.
@@ -139,6 +154,13 @@ const plan = {
   unclaimed: receipt.unclaimed,
   fast: {
     toolingFast: wantsToolingFast,
+    toolingFastReason: toolingFastSelection.reason,
+    toolingFastFiles: toolingFastSelection.files.length,
+    toolingFastShards: toolingFastSelection.shards,
+    toolingFastEstimatedMs,
+    toolingFastCriticalPathMs: toolingFastEstimate.criticalPathMs,
+    toolingFastWorkerMs: toolingFastEstimate.workerMs,
+    toolingFastUnmeasured: toolingFastEstimate.unmeasured,
     verifyTrack: circuits,
     graphParity: wantsGraphParity,
     graphParityBase,
@@ -192,8 +214,10 @@ if (plan.fast.toolingFast) {
   // (deploy.mjs's GATE_JOBS) and 117 s at three (peak loadavg 3.4). Three when
   // the box is quiet; two when something else is already running — a live
   // browser group has its own claim on the cores (AGENTS.md §Verification 5).
-  const jobs = os.loadavg()[0] < 1.5 ? 3 : 2;
-  fastOk = run("tooling-fast", "node", ["tools/ci/tooling-fast.mjs", `--jobs=${jobs}`]) && fastOk;
+    const jobs = localJobs;
+  const args = ["tools/ci/tooling-fast.mjs", `--jobs=${jobs}`, ...toolingFastSelection.files];
+  say(`tooling-fast selection: ${toolingFastSelection.reason} files=${toolingFastSelection.files.length}/${TOOLING_FAST_FILES.filter((f) => !f.startsWith("//")).length} total=${(toolingFastEstimatedMs / 1000).toFixed(1)}s critical=${(toolingFastEstimate.criticalPathMs / 1000).toFixed(1)}s jobs=${jobs} shards=${toolingFastSelection.shards.join(",") || "none"}`);
+  fastOk = run("tooling-fast", "node", args) && fastOk;
 }
 {
   // Advisory: confirms every shell tag reads ?v=dev and meta == version.json

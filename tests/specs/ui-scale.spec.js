@@ -639,6 +639,7 @@ test.describe("UI scale", () => {
         return {
           doubled, over, subs, reach,
           race: [race.top, race.bottom, race.left, race.right].map((v) => +v.toFixed(1)),
+          menu: [m.top, m.bottom, top0, menu.scrollHeight, menu.clientHeight].map((v) => +v.toFixed(1)),
           raceInView: race.top >= Math.max(0, m.top) - 1 && race.bottom <= Math.min(vh, m.bottom) + 1
             && race.left >= -1 && race.right <= vw + 1,
         };
@@ -868,4 +869,263 @@ test.describe("Broadcast map control clearance", () => {
     });
     expect(custom.after).toEqual(custom.before);expect(custom.cx).toBe("");expect(custom.cy).toBe("");
   });
+});
+
+test("UI inspector verifies real scale bindings, persistence and CSS provenance", async ({ page }, testInfo) => {
+  const { installInspector, inspectPage, diffInspections } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { writeFileSync } = await import("node:fs");
+  const errors = []; page.on("pageerror", e => errors.push(e.message));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => { __apex.agentHelp(); __apex.headless(true); });
+  const open = async () => {
+    await page.locator("#mb-settings").click(); await page.locator("#pm-open-appearance").click();
+    await installInspector(page);
+  };
+  await open();
+  const snapshot = () => page.evaluate(() => __apex.ui.inspect({ root: "#pmsettings" }));
+  const before = await snapshot();
+  const input = page.locator("#as-uiScale"); const old = Number(await input.inputValue());
+  await input.focus(); await page.keyboard.press(old < 200 ? "ArrowRight" : "ArrowLeft");
+  const value = Number(await input.inputValue()); expect(value).not.toBe(old);
+  await expect.poll(async () => (await snapshot()).controls.find(c => c.selector === "#as-uiScale")?.binding.runtime).toBeCloseTo(value, 5);
+  const after = await inspectPage(page, { root: "#pmsettings", styles: "#as-uiScale" });
+  const control = after.controls.find(c => c.selector === "#as-uiScale");
+  expect(control.role).toBe("slider"); expect(control.binding.status).toBe("matches");
+  expect(control.binding.saved.value).toBe(value);
+  expect(after.styles.rules.some(r => r.source?.includes("/css/") && r.line > 0)).toBe(true);
+  expect(after.accessibility).toContain("UI size");
+  expect(diffInspections(before, after).changed.some(c => c.selector === "#as-uiScale")).toBe(true);
+  // A DOM-only mutation is deliberately NOT a working setting: the inspector must reject it.
+  await input.evaluate(e => { e.value = Number(e.value) + (Number(e.value) < 200 ? 1 : -1); });
+  expect((await snapshot()).issues.some(i => i.kind === "binding-mismatch" && i.selector === "#as-uiScale")).toBe(true);
+  await page.reload(); await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => __apex.headless(true)); await open();
+  expect((await snapshot()).controls.find(c => c.selector === "#as-uiScale").binding.saved.value).toBe(value);
+  for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport); const report = await snapshot();
+    expect(report.viewport.width).toBe(viewport.width); expect(report.controls.length).toBeGreaterThan(0);
+    expect(report.controls.find(c => c.selector === "#as-uiScale").binding.status).toBe("matches");
+  }
+  writeFileSync(testInfo.outputPath("ui-inspection.json"), JSON.stringify(after, null, 2));
+  expect(errors).toEqual([]);
+});
+
+test("UI inspector catches hit interception, inherited disability and axis-specific clipping", async ({ page }) => {
+  const { inspectUI, installInspector } = await import("../../tools/ui/explorer/inspector.mjs");
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.setContent(`<style>body{margin:0}#scroll{width:900px;height:80px;overflow-y:auto;overflow-x:hidden}#wide{margin-left:1100px}#cover{position:absolute;left:0;top:100px;width:180px;height:50px;background:red}</style>
+    <span id="one">Camera</span><span id="two"> height</span><input id="range" type="range" aria-labelledby="one two">
+    <fieldset disabled><button id="disabled">Disabled by fieldset</button></fieldset>
+    <button id="blocked" style="position:absolute;left:0;top:100px;width:180px;height:50px">Blocked</button><div id="cover"></div>
+    <div id="scroll"><button id="wide">Offscreen</button><div style="height:300px"></div></div>
+    <div style="width:100px;overflow:hidden"><div style="width:300px;margin-left:200px;overflow-x:auto"><button id="unreachable">Unreachable</button><div style="width:600px;height:1px"></div></div></div>
+    <button id="duplicate">First</button><button id="duplicate">Second</button>
+    <div id="contents" style="display:contents;overflow:hidden"><button id="contents-action" style="width:160px;height:50px">Visible action</button></div>
+    <div id="outer-clip" style="width:80px;overflow:hidden"><div style="display:contents;overflow:hidden"><button id="contents-clipped" style="width:200px">Really clipped</button></div></div>
+    <button aria-pressed="false">Whine</button>`);
+  await page.evaluate(() => { window.__apex = { info() { throw new Error("Inspector invoked a lazy game hook"); } }; });
+  await installInspector(page);
+  const before = await page.evaluate(inspectUI);
+  expect(before.controls.find(c => c.selector === "#range").name).toBe("Camera height");
+  expect(before.controls.find(c => c.selector === "#range").role).toBe("slider");
+  expect(before.controls.find(c => c.selector === "#disabled").disabled).toBe(true);
+  expect(before.issues.some(i => i.kind === "blocked" && i.selector === "#blocked")).toBe(true);
+  expect(before.issues.some(i => i.kind === "offscreen" && i.selector === "#wide")).toBe(true);
+  expect(before.issues.some(i => i.kind === "clipped" && i.selector === "#unreachable")).toBe(true);
+  expect(before.controls.find(c => c.selector === "#contents-action").reachability.clippedBy).toEqual([]);
+  expect(before.controls.find(c => c.selector === "#contents-action").reachability.hit).toBe("hits");
+  expect(before.controls.find(c => c.selector === "#contents-clipped").reachability.clippedBy).toContainEqual({ selector: "#outer-clip", axis: "x" });
+  await page.locator("#contents-action").evaluate(e => { e.addEventListener("click", () => { e.dataset.clicked = "yes"; }); });
+  await page.locator("#contents-action").click();
+  await expect(page.locator("#contents-action")).toHaveAttribute("data-clicked", "yes");
+  for (const c of before.controls.filter(c => ["First", "Second"].includes(c.name))) expect(await page.locator(c.selector).count()).toBe(1);
+  const toggle = before.controls.find(c => c.name === "Whine");
+  expect(toggle.selector).toBeTruthy(); await page.locator(toggle.selector).click();
+  await page.locator(toggle.selector).evaluate(e => e.setAttribute("aria-pressed", "true"));
+  expect((await page.evaluate(inspectUI)).controls.find(c => c.selector === toggle.selector).pressed).toBe("true");
+});
+
+test("UI inspector explains adaptive CSS changes without confusing layout with setting changes", async ({ page }, testInfo) => {
+  const { inspectResponsive } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { writeFileSync } = await import("node:fs");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setContent(`<style>
+    :root{--ui-scale:1.25;--safe-l:47px;--safe-r:47px}body{margin:0;padding:10px}#sheet{box-sizing:border-box;width:100%;max-width:800px;overflow:auto}
+    #row{display:flex;flex-wrap:nowrap;gap:12px}button{min-width:200px;height:50px}
+    @media(max-width:500px){#row{flex-direction:column;flex-wrap:wrap}#sheet{max-height:140px}}
+    </style><main id="sheet"><div id="row"><button id="first">First action</button><button>Second action</button><button>Third action</button></div></main>`);
+  const report = await inspectResponsive(page, { root: "#sheet", styles: "#row", viewports: [{ width: 1280, height: 800 }, { width: 390, height: 844 }, { width: 844, height: 390 }] });
+  expect(page.viewportSize()).toEqual({ width: 1280, height: 800 });
+  expect(report.records.every(r => r.settlement.stable && !r.settlement.truncated)).toBe(true);
+  const phone = report.records[1].inspection;
+  expect(phone.viewport.width).toBe(390);
+  expect(phone.adaptive.visualViewport.width).toBeCloseTo(390);
+  expect(phone.adaptive.rootTokens["--safe-l"]).toBe("47px");
+  expect(phone.adaptive.rootTokens["--ui-scale"]).toBe("1.25");
+  const row = phone.layoutContexts.find(c => c.selector === "#row");
+  expect(row.computed["flex-direction"]).toBe("column");
+  expect(phone.layoutContexts.find(c => c.selector === "#sheet").scroll.height).toBeGreaterThan(140);
+  expect(phone.controls.find(c => c.selector === "#first").reachability.scrollY).toBe(true);
+  expect(phone.styles.rules.some(r => r.media?.some(m => m.active && m.text.includes("500px")))).toBe(true);
+  expect(report.records[1].diff.changed).toEqual([]);
+  expect(report.records[1].diff.layoutContexts).toContain("#row");
+  expect(report.records[1].diff.environmentChanged).toBe(true);
+  expect(report.records[2].inspection.layoutContexts.find(c => c.selector === "#row").computed["flex-direction"]).toBe("row");
+  writeFileSync(testInfo.outputPath("adaptive-inspection.json"), JSON.stringify(report, null, 2));
+});
+
+test("UI inspector keeps flattened Garage tabs actionable through a viewport sweep", async ({ page }, testInfo) => {
+  const { inspectResponsive } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { writeFileSync } = await import("node:fs");
+  const errors = []; page.on("pageerror", e => errors.push(e.message));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/"); await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => { __apex.agentHelp(); __apex.headless(true); });
+  await page.locator("#mb-garage").click();
+  await expect(page.locator('#carsetup:not([aria-busy="true"])')).toBeVisible();
+  const report = await inspectResponsive(page, { root: "#carsetup", styles: "#cs-tab-team", viewports: [{ width: 1280, height: 800 }, { width: 390, height: 844 }, { width: 844, height: 390 }] });
+  for (const r of report.records) {
+    const tab = r.inspection.controls.find(c => c.selector === "#cs-tab-team");
+    expect(tab).toBeTruthy();
+    expect(r.settlement.stable).toBe(true);
+    expect(tab.reachability.hit).toBe("hits");
+    const boxless = r.inspection.layoutContexts.filter(c => !c.boxGenerated && c.computed.display === "contents");
+    expect(boxless.length).toBeGreaterThan(0);
+    expect(tab.reachability.clippedBy.filter(c => boxless.some(b => b.selector === c.selector))).toEqual([]);
+    expect(r.inspection.errorOverlay).toEqual([]);
+  }
+  await page.locator("#cs-tab-team").click();
+  await expect(page.locator("#cs-tab-team")).toHaveAttribute("aria-selected", "true");
+  writeFileSync(testInfo.outputPath("garage-adaptive-inspection.json"), JSON.stringify(report, null, 2));
+  expect(errors).toEqual([]);
+});
+
+test("UI inspector bounds settlement when animation frames do not arrive", async ({ page }) => {
+  const { inspectResponsive } = await import("../../tools/ui/explorer/inspector.mjs");
+  await page.setContent('<button id="action">Still inspectable</button>');
+  const original = page.viewportSize();
+  await page.evaluate(() => {
+    window.__cancelledFrames = [];
+    window.requestAnimationFrame = () => 1234;
+    window.cancelAnimationFrame = id => window.__cancelledFrames.push(id);
+  });
+  const report = await inspectResponsive(page, { viewports: [{ width: 390, height: 844 }] });
+  expect(report.records[0].settlement.stable).toBe(false);
+  expect(report.records[0].settlement.frames).toBe(0);
+  // No frames arrive, so a second settlement budget cannot help: no retry, issues provisional.
+  expect(report.records[0].settlement.retried).toBeUndefined();
+  expect(report.records[0].inspection.provisional).toBe(true);
+  expect(report.records[0].inspection.controls.some(c => c.selector === "#action")).toBe(true);
+  expect(await page.evaluate(() => window.__cancelledFrames)).toEqual([1234]);
+  expect(page.viewportSize()).toEqual(original);
+});
+
+test("UI inspector maps camera and lighting tuner inputs without invoking game hooks", async ({ page }, testInfo) => {
+  test.setTimeout(180000);
+  const { SCREENS } = await import("../../tools/ui/menu-screens.mjs");
+  const { installInspector, inspectUI } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { writeFileSync } = await import("node:fs");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/"); await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => { __apex.agentHelp(); __apex.headless(true); });
+  await SCREENS.find(s => s.id === "cameratuner").open(page);
+  await installInspector(page);
+  const camera = await page.evaluate(inspectUI, { root: "#camtune" });
+  const knob = camera.controls.find(c => c.binding.kind === "camera-offset" && !c.disabled);
+  expect(knob).toBeTruthy(); expect(knob.binding.status).toBe("matches");
+  const input = page.locator(knob.selector); await input.focus();
+  await page.keyboard.press(Number(knob.value) < Number(knob.max) ? "ArrowRight" : "ArrowLeft");
+  const cameraAfter = await page.evaluate(inspectUI, { root: "#camtune" });
+  const moved = cameraAfter.controls.find(c => c.selector === knob.selector);
+  expect(moved.value).not.toBe(knob.value); expect(moved.binding.status).toBe("matches");
+  expect(moved.binding.saved.value).toBe(Number(moved.value));
+  await page.locator("#ct-close").click();
+  await SCREENS.find(s => s.id === "lightingtuner").open(page);
+  await expect(page.locator("#lt-in-keyMul")).toBeVisible();
+  await page.locator("#lt-in-keyMul").focus(); await page.keyboard.press("ArrowLeft");
+  const lighting = await page.evaluate(inspectUI, { root: "#lighting" });
+  const light = lighting.controls.find(c => c.selector === "#lt-in-keyMul");
+  expect(light.binding.status).toBe("matches"); expect(light.binding.runtime).toBe(Number(light.value));
+  expect(light.binding.saved.status).toBe("unmapped");
+  writeFileSync(testInfo.outputPath("tuner-inspection.json"), JSON.stringify({ camera: cameraAfter, lighting }, null, 2));
+});
+
+test("UI inspector observes intentional hysteresis on forward and reverse paths", async ({ page }, testInfo) => {
+  const { inspectResponsive } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { writeFileSync } = await import("node:fs");
+  await page.setViewportSize({ width: 380, height: 600 });
+  await page.setContent('<main id="sheet" data-pair="off">Text-only classified sheet</main>');
+  await page.evaluate(() => {
+    const sheet = document.getElementById("sheet");
+    const update = () => { if (innerWidth >= 400) sheet.dataset.pair = "on"; else if (innerWidth <= 390) sheet.dataset.pair = "off"; };
+    window.addEventListener("resize", update); update();
+  });
+  const report = await inspectResponsive(page, { root: "#sheet", roundTrip: true, viewports: [380, 395, 405].map(width => ({ width, height: 600 })) });
+  expect(report.records.map(r => r.phase)).toEqual(["forward", "forward", "forward", "reverse", "reverse"]);
+  expect(report.records.every(r => r.settlement.stable)).toBe(true);
+  expect(report.paths.differencesTotal).toBe(1);
+  const difference = report.paths.comparisons.find(c => c.requestedViewport.width === 395).differences[0];
+  expect(difference).toEqual({ selector: "#sheet", forward: { pair: "off" }, reverse: { pair: "on" } });
+  expect(page.viewportSize()).toEqual({ width: 380, height: 600 });
+  writeFileSync(testInfo.outputPath("hysteresis-inspection.json"), JSON.stringify(report, null, 2));
+});
+
+test("UI inspector records bounded alternating classification evidence", async ({ page }) => {
+  const { settleLayout } = await import("../../tools/ui/explorer/transitions.mjs");
+  await page.setContent('<main id="sheet" data-density="roomy"><button>Action</button></main>');
+  await page.evaluate(() => {
+    window.__stopAlternating = false;
+    const toggle = () => { if (window.__stopAlternating) return; const e = document.getElementById("sheet"); e.dataset.density = e.dataset.density === "roomy" ? "compact" : "roomy"; requestAnimationFrame(toggle); };
+    requestAnimationFrame(toggle);
+  });
+  let result;
+  try { result = await page.evaluate(settleLayout, { root: "#sheet" }); }
+  finally { await page.evaluate(() => { window.__stopAlternating = true; }); }
+  expect(result.stable).toBe(false);
+  expect(result.frames).toBeLessThanOrEqual(120);
+  const context = result.history.contexts.find(c => c.selector === "#sheet");
+  expect(context.alternating).toBeGreaterThan(0);
+  expect(context.states.length).toBeLessThanOrEqual(result.history.limits.statesPerContext);
+  expect(context.evidence.length).toBeLessThanOrEqual(result.history.limits.evidencePerContext);
+});
+
+test("UI inspector exposes named container and inherited candidate sources", async ({ page }, testInfo) => {
+  const { inspectPage } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { writeFileSync } = await import("node:fs");
+  await page.setContent(`<style>
+    #panel{container:panel / inline-size;width:400px;--adaptive-gap:17px}
+    #row{display:flex;gap:var(--adaptive-gap)}
+    @container panel (min-width:300px){#row{flex-direction:column}}
+    </style><main id="panel"><div id="row"><button>First</button><button>Second</button></div></main>`);
+  const report = await inspectPage(page, { root: "#panel", styles: "#row" });
+  expect(report.styles.computed.find(p => p.name === "flex-direction").value).toBe("column");
+  const inherited = report.styles.inherited.find(a => a.ancestor.id === "panel");
+  expect(inherited).toBeTruthy();
+  expect(inherited.rules.some(r => r.declarations.some(d => d.name === "--adaptive-gap" && d.value === "17px"))).toBe(true);
+  const query = report.styles.rules.flatMap(r => r.containerQueries || []).find(q => q.name === "panel");
+  expect(query).toBeTruthy();
+  expect(query.condition.status).toBe("unavailable");
+  expect(query.container.status).toBe("available");
+  expect(query.container.node.id).toBe("panel");
+  expect(query.container.geometry.width).toBeCloseTo(400);
+  writeFileSync(testInfo.outputPath("container-inherited-inspection.json"), JSON.stringify(report, null, 2));
+});
+
+test("UI inspector joins native findings only for matching rendered provenance", async ({ page }) => {
+  const { inspectPage } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { captureAuditEnvironment, captureAuditSelectors } = await import("../../tools/ui/explorer/audit-evidence.mjs");
+  await page.setContent(`<style>:root{--ui-scale:1;--hud-scale:1;--hud-btn-scale:1;--sat:0px;--sar:0px;--sab:0px;--sal:0px;--safe-t:0px;--safe-r:0px;--safe-b:0px;--safe-l:0px;--gut:0px}</style><main id="sheet"><button id="tiny" style="width:12px;height:12px">X</button></main>`);
+  const source = { sha: "a".repeat(40), dirty: false, fingerprint: null };
+  const environment = await page.evaluate(captureAuditEnvironment, { root: "#sheet", source });
+  const selectorIndex = await page.evaluate(captureAuditSelectors, { root: "#sheet", selectors: ["#tiny"] });
+  const box = await page.locator("#tiny").boundingBox();
+  const row = { screen: "fixture", environment, selectorIndex, tap: [{ el: "#tiny", w: box.width, h: box.height, sev: "tiny" }], spacing: [], type: [], overflow: [], marker: [] };
+  const audits = { producer: "fit-audit", rows: [row, { ...row, error: "setup failed" }, { ...row, environment: { ...environment, pointer: { ...environment.pointer, coarse: !environment.pointer.coarse } } }] };
+  const report = await inspectPage(page, { root: "#sheet", source, audits });
+  expect(report.auditEvidence.cells.map(c => c.status)).toEqual(["comparable", "skipped", "incomparable"]);
+  expect(report.auditEvidence.findings).toHaveLength(1);
+  expect(report.auditEvidence.findings[0].mapping.status).toBe("mapped");
+  expect(report.auditEvidence.findings[0].mapping.selector).toBe("#tiny");
 });

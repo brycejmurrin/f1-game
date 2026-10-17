@@ -30,6 +30,8 @@ const PREFIX_WRITES = [
 
 /** Files that only write keys already named in SPEC / PREFIX helpers. */
 const PASSTHROUGH_FILES = new Set([
+  "js/career/custom-team.js",   // identitySet/Get relays: keys are customTeam / livery.* below
+  "js/car/custom-liveries.js",   // setIdentityValue relay for livery.* keys
   "js/career/restore-points.js",   // writes the captured slot key back, never a new one
   "js/ui/settings-export.js",
   "js/ui/scale.js",
@@ -177,4 +179,19 @@ test("SaveMigrate.validateCareerSave matches registry career slots", () => {
   const SM = vm.runInContext("SaveMigrate", ctx);
   assert.equal(SM.validateCareerSave({ flavour: "driver", team: "haas", money: 10 }), true);
   assert.equal(SM.validateCareerSave("nope"), false);
+});
+
+test("the automatic UI flags (designerCoached, camComfortPref) are registered, typed, and device-local (#2320)", () => {
+  const R = loadRegistry();
+  R.strict = true;   // an unregistered write would throw
+  for (const k of ["designerCoached", "camComfortPref"]) assert.doesNotThrow(() => R.noteWrite("apex26." + k), k);
+  assert.equal(R.resolve("designerCoached").lane, "json");
+  assert.equal(R.resolve("camComfortPref").lane, "raw");
+  assert.ok(R.validateKey("designerCoached", true) && !R.validateKey("designerCoached", "yes"));
+  assert.ok(R.validateKey("camComfortPref", "on") && R.validateKey("camComfortPref", "off") && !R.validateKey("camComfortPref", "maybe"));
+  // Device-derived / tutorial state stays out of settings backups.
+  const exported = new Set(R.settingsSpec.map((row) => row.k));
+  assert.ok(!exported.has("designerCoached") && !exported.has("camComfortPref"));
+  // Unknown-key detection is not weakened.
+  assert.throws(() => R.noteWrite("apex26.designerCoachedTypo"), /unregistered save key/);
 });

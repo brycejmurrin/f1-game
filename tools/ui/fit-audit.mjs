@@ -27,6 +27,9 @@
 //
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
+import fs from "node:fs";
+import path from "node:path";
+import { captureAuditEnvironment, captureAuditSource, captureAuditSelectors, auditFindingSelectors } from "./explorer/audit-evidence.mjs";
 import { fileURLToPath } from "node:url";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 let setupApiMocks = null;
@@ -36,7 +39,8 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, 
 const argv = process.argv.slice(2);
 exitIfHelp(argv, `fit-audit — numbers matrix: tap / type / spacing / overflow floors
 
-  node tools/ui/fit-audit.mjs [--only=select,menu] [--sizes=852x393,…] [--scale=100,130]
+  node tools/ui/fit-audit.mjs [--only=select,menu] [--sizes=852x393,…] [--scale=100,130] [--json]
+  Native JSON is saved to artifacts/fit-audit/audit.json.
 
 Browser-only. Prefer layout-audit.mjs --list / --help to see the catalog without launching.`);
 const arg = (k) => { const a = argv.find((x) => x.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : null; };
@@ -230,11 +234,15 @@ const MEASURE = function (rootSel) {
       }
     }
   }
+  out.thresholds = { tap: { comfy: COMFY, floor: FLOOR }, spacing: { gap: SPACE, targetFloor: FLOOR }, type: { min: TYPE_MIN } };
+  out.units = "CSS px";
   return out;
 };
 
 const srv = await startStaticServer(ROOT);
 const totals = new Map();
+const rows = [];
+const source = await captureAuditSource(ROOT);
 try {
   const browser = await launchChromium({ args: ["--use-angle=swiftshader"] });
   for (const [name, setup, sel, opts] of SCREENS) {
@@ -258,6 +266,9 @@ try {
         }).catch(() => {});
         await sleep(120);
         const r = await page.evaluate(MEASURE, sel).catch((e) => ({ error: e.message }));
+        const environment = await page.evaluate(captureAuditEnvironment, { root: sel, source }).catch(() => null);
+        const selectorIndex = await page.evaluate(captureAuditSelectors, { root: sel, selectors: auditFindingSelectors(r) }).catch(() => ({}));
+        rows.push({ producer: "fit-audit", screen: name, viewport, environment, selectorIndex, ...r });
         const tag = `${viewport.width}x${viewport.height}${scaleTag(scale)}`;
         if (r.error) { console.log(`  ${tag.padEnd(13)} ${r.error}`); continue; }
         const bits = [];
@@ -284,4 +295,9 @@ try {
   console.log("\n=== totals across the matrix ===");
   for (const [k, v] of [...totals].sort((a, b) => b[1] - a[1])) console.log(`  ${k}: ${v}`);
   if (!totals.size) console.log("  clean");
+  const report = { producer: "fit-audit", rows };
+  const out = path.join(ROOT, "artifacts", "fit-audit");
+  fs.mkdirSync(out, { recursive: true });
+  fs.writeFileSync(path.join(out, "audit.json"), JSON.stringify(report, null, 2));
+  if (argv.includes("--json")) console.log(JSON.stringify(report));
 } finally { await shutdown(); }

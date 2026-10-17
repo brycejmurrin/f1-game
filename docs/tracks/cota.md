@@ -20,7 +20,12 @@ pale dusty green-gray.
 
 ## 3. Elevation
 Real Hill Country relief from the SRTM bake in `js/track/circuit-elevations.js`
-(~22 m peak-to-trough). Continuous rolling — not three sparse cosine bumps
+(~31 m peak-to-trough; T1 crest >= 25 m, pinned by the elevation-smoothness test). The
+bake uses a per-circuit override (1 smoothing pass, kink 0.06, grade cap 0.08)
+in `tools/gen/bake-elevation.mjs`: the global 6-pass / 5.5 % limits flattened
+the hill to ~10 m. Raw SRTM spans ~37 m; published figures put the lap's
+total variation higher (formula1.com "highs and lows" of COTA; FIA WEC lap of
+COTA), which is not reachable without inventing data. Continuous rolling — not three sparse cosine bumps
 with ~70% of the lap dead-flat between them.
 - Steep Turn 1 climb from the start line to the blind hairpin.
 - Descent into the flowing Esses, then rolling mid-lap and back-straight crest.

@@ -18,6 +18,12 @@ export function classifyPlaywrightLine(line) {
   const m = text.trim().match(/^(\d+)\s/);
   const pid = m ? Number(m[1]) : NaN;
   if (!Number.isFinite(pid)) return null;
+  // A shell whose COMMAND STRING mentions the suite (`bash -c '… npx playwright
+  // test …'`, a waiter queued behind another run) is not the suite: a running
+  // one always has its own node/npx line. Read as a suite, a queued waiter
+  // refused every apex_* browser tool and explorer run (2026-10-17).
+  const argv0 = (text.trim().split(/\s+/)[1] || "").split("/").pop();
+  if (/^(?:ba|z|da|k)?sh$/.test(argv0)) return null;
   if (/(?:^|[\s/])playwright\s+test(?:\s|$)/.test(text)) {
     return { kind: "suite", pid };
   }
@@ -60,4 +66,17 @@ export function scanPlaywrightLines(stdout) {
   // server idle). It stays reported (`hostMcp`) and is not a refusal.
   out.busy = out.suite || out.hostBrowser;
   return out;
+}
+
+// CLI, only when run directly: `--scan` classifies the live process table, anything else prints usage.
+import { execFileSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (process.argv.includes("--scan")) {
+    const ps = execFileSync("ps", ["-eo", "pid,args"], { encoding: "utf8" });
+    console.log(JSON.stringify(scanPlaywrightLines(ps)));
+  } else {
+    console.log("usage: node tools/ci/playwright-occupancy.mjs --scan\n"
+      + "  Prints {live,busy,suite,hostMcp,hostBrowser,pids} for the process table as JSON (busy = a suite or a host browser).");
+  }
 }

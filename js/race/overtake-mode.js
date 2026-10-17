@@ -119,7 +119,8 @@ const OvertakeMode = (function () {
   // After the fire decision. A HUMAN's press toggles (the button is an edge,
   // like BOOST); the AI's existing fire roll switches it on and it runs until
   // the allowance is gone. Returns true on the tick it starts deploying.
-  function spend(c, dt, fire, gate, speedOK, pushS) {
+  // Decide this tick's toggle/gates before braking and aero are evaluated.
+  function prepare(c, fire, gate, speedOK, pushS) {
     let started = false;
     const wasOn = c.otOn;
     if (!gate || !(c.otE > 0)) c.otOn = false;
@@ -127,22 +128,28 @@ const OvertakeMode = (function () {
     else if (fire && c.otArmed) { c.otOn = true; started = true; }
     if (started) note(c, "on mj=" + mj(c).toFixed(2));
     else if (wasOn && !c.otOn) note(c, gate ? "off" : "cut gate-closed");
-    const rate = energy() / Math.max(0.5, pushS || 4);
-    // Paused below OT_MIN_SPEED, and while the pedal is down, not cancelled: the
-    // push only enters the acceleration in the throttle branch, and braking wins
-    // there, so burning the allowance through a braking zone spent MJ for no
-    // thrust. spend() runs before this tick's brake decision, so it reads the
-    // LAST tick's pedal (c.brakeDemand, written at the end of updateCar) — one
-    // tick of lag at 60 Hz, absent (undefined) on a fresh car = not braking.
-    const live = c.otOn && !!speedOK && !(c.brakeDemand > 0);
-    if (live) {
-      c.otE = Math.max(0, c.otE - rate * dt);
-      if (c.otE <= 0) { c.otOn = false; note(c, "spent"); }
-    }
-    c.otT = live && c.otOn ? c.otE / rate : 0;
+    c.otT = c.otOn && speedOK ? c.otE / (energy() / Math.max(0.5, pushS || 4)) : 0;
+    return started;
+  }
+  // Only actual current-tick thrust pays the allowance. The returned fraction
+  // caps a final partial tick's thrust to the energy it can fund.
+  function consume(c, dt, thrust, pushS) {
+    if (!(thrust && c.otOn && c.otT > 0 && dt > 0)) { c.otT = 0; return 0; }
+    const cost = energy() / Math.max(0.5, pushS || 4) * dt;
+    const fraction = Math.min(1, c.otE / cost);
+    c.otE = Math.max(0, c.otE - cost);
+    if (c.otE <= 0) { c.otOn = false; note(c, "spent"); }
+    c.otT = c.otOn ? c.otE / (cost / dt) : 0;
+    return fraction;
+  }
+  // Legacy callers retain their pedal-based adapter; production physics uses
+  // prepare + consume after resolving this tick's actual throttle/brake branch.
+  function spend(c, dt, fire, gate, speedOK, pushS) {
+    const started = prepare(c, fire, gate, speedOK, pushS);
+    consume(c, dt, !(c.brakeDemand > 0), pushS);
     return started;
   }
 
-  return { DETECT_FRAC, energy, mj, detectFrac, detectS, crossed, reset, lines, arm, spend };
+  return { DETECT_FRAC, energy, mj, detectFrac, detectS, crossed, reset, lines, arm, prepare, consume, spend };
 })();
 Object.freeze(OvertakeMode);

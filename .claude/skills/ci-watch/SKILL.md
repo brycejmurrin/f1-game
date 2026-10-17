@@ -1,6 +1,6 @@
 ---
 name: ci-watch
-description: "Use when you are the designated Merge Desk / CI Watch: sweep open PRs with pr-board.mjs, ready green drafts when ready-full-cap has room, disable foreign SQUASH/REBASE arms, arm MERGE-method auto-merge."
+description: "Use when you are the designated Merge Desk / CI Watch: sweep open PRs with pr-board.mjs, ready green drafts, disable foreign SQUASH/REBASE arms, arm MERGE-method auto-merge."
 ---
 
 # Merge Desk (Claude-run; this skill kept its old `ci-watch` name)
@@ -45,15 +45,11 @@ ARM a PR only when ALL hold; any miss is WAIT (say which):
 
 ## Merge pacing (moved from AGENTS.md §Concurrent PRs)
 
-- Keep ~6 or fewer PRs ready. A draft whose tip is green and whose
-  `ready-gate.mjs --pr <n>` exits 0 should be marked ready by its owner within
-  15 min; Merge Desk flips it otherwise.
-- `node tools/ci/ready-full-cap.mjs` (default cap 3; `--cap` / `--exclude
-  <branch>` / `--json`) refuses when ≥ 3 ready PRs already have in-progress or
-  queued full-tier `ci.yml`. Wait for a free slot rather than force-launching
-  the full tier: a mark-ready burst stacks ~40-job runs
-  (`docs/notes/CI-MERGE-BURST-2026-10-03.md`; no merge queue on this
-  personal-account repo).
+- A draft whose tip is green and whose `ready-gate.mjs --pr <n>` exits 0 is
+  marked ready by its owner; Merge Desk flips it otherwise. No ready cap since
+  2026-10-16 (CI/CD review #2333 finding 7): ci.yml's `queue: max` lanes bound
+  the browser legs inside GitHub, and the cap of 3 read 13/3 while 12 ready
+  PRs were open. `ready-full-cap.mjs` still prints the count for information.
 - `MERGE-HOLD:` is cleared only by whoever set it, by deleting the line when
   the hold is over (`.github/pull_request_template.md` shows where it goes).
 - A SQUASH/REBASE arm by anyone: disable it and tell Merge Desk and Grok Bot.
@@ -70,14 +66,19 @@ ARM a PR only when ALL hold; any miss is WAIT (say which):
 
 | suggest | action |
 |---|---|
-| READY | Confirm `node tools/ci/ready-gate.mjs --pr <n>` exits 0 AND `node tools/ci/ready-full-cap.mjs` exits 0, then `mcp__github__update_pull_request` `draft: false`. At most 3 flips per sweep, never more than the board's `cap.room`; no waiver, `--cap`/`--exclude` only on the user's explicit say. |
+| READY | Confirm `node tools/ci/ready-gate.mjs --pr <n>` exits 0, then `mcp__github__update_pull_request` `draft: false`. |
 | ARM | Only if the hard gate above holds: `mcp__github__enable_pr_auto_merge` `mergeMethod: "MERGE"`. MERGE only. |
 | FOREIGN-ARM | A SQUASH or REBASE arm: `mcp__github__disable_pr_auto_merge`, then re-arm with MERGE only if the hard gate holds. Tell the user which actor armed it if known. |
-| SYNC | Not yours to push. If a live session owns the PR (`node tools/ci/who-is-on-it.mjs`, recent pushes), `send_message` it `HANDOFF`/`BLOCKED` per `agent-fleet` `references/comms.md`. Otherwise `node tools/ci/sync-pr.mjs <branch>` (merge ship, never rebase or force-push; `--push` only after it verified). Run it in a worktree, not a checkout another session uses. Never arm it while DIRTY. |
+| SYNC | Not yours to push. If a live session owns the PR (`node tools/ci/who-is-on-it.mjs`, recent pushes), `send_message` it `HANDOFF`/`BLOCKED` per `agent-fleet` `references/comms.md`. Otherwise run `node tools/ci/needs-sync.mjs <branch>` (the board prints its verdict under the table; `no` = leave it, a green PR merges as it stands) and only for `conflict`/`stale-red` `node tools/ci/sync-pr.mjs <branch>` (merge ship, never rebase or force-push; `--push` only after it verified). Run it in a worktree, not a checkout another session uses. Never arm it while DIRTY. |
 | FIX | Same ownership check. A live owner gets the failing job names by message. Otherwise hand to the `ci-red-triage` agent for the test and assertion, then fix per `steward` (and its `references/ownership.md`). A `cancelled` with a live sibling is the draft/ready dedupe, not a red (`steward` §1). |
 | WAIT | Nothing. Cap full, CI running, gate pending, 2 already armed, `MERGE-HOLD:` set. |
 | NONE | Nothing: armed with MERGE and healthy. |
 
+2a. Re-cut / supersede / close of a PR another session owns: in the same sweep
+   `send_message` its owner `STAND DOWN <old PR> superseded by <new PR>` and put
+   `Superseded by #<new>` in the old PR body, so no worker spends a CI cycle on
+   it (#2388). The worker-side bullet (`agent-fleet`
+   `references/worker.md` §Waiting) makes the worker re-read claims and PR state first.
 3. Run this check BEFORE acting on a row: stand down on any PR a live session is actively pushing (a push inside the
    last ~10 min, or a live `who-is-on-it` claim): no flip, no sync, no arm race
    with its fix push. Say so in the summary.
@@ -88,6 +89,13 @@ ARM a PR only when ALL hold; any miss is WAIT (say which):
    `node tools/ci/ci-watch.mjs --sha <tip> --once` per turn — never
    `--timeout 600` or any long foreground poll loop. If the line is still
    `= ci running` or jobs are queued, write a handoff note and end the turn.
+
+## Archiving (#2426)
+
+Archive only session ids named in the sweep's own report, one `archive_session`
+call per id, never from a `list_sessions` filter result. Only finished workers
+whose PR is merged or closed qualify; a live orchestrator or `[Merge Desk]`
+session is never archived.
 
 ## Cadence
 
@@ -100,8 +108,8 @@ re-arm. A sweep that does nothing stays one line.
 ```
 You are Merge Desk for brycejmurrin/f1-game, designated by Bryce. Follow
 .claude/skills/ci-watch/SKILL.md exactly. Run `node tools/ci/pr-board.mjs --json`,
-act per SUGGESTION with the GitHub MCP tools (READY only after ready-gate and
-ready-full-cap exit 0, at most 3 per sweep and never more than the board's cap.room; ARM = enable_pr_auto_merge MERGE only,
+act per SUGGESTION with the GitHub MCP tools (READY only after ready-gate
+exits 0; ARM = enable_pr_auto_merge MERGE only,
 only under the skill's hard gate: ci green, never DIRTY/CONFLICTING, at most 2
 armed repo-wide, no MERGE-HOLD: line in the body; FOREIGN-ARM = disable a
 SQUASH/REBASE arm, leave a MERGE arm). Never merge, never squash. The only body

@@ -85,4 +85,11 @@ body:has(.screen:not([hidden])) .watch-transport, body.photo-mode .watch-transpo
   .watch-transport [data-wt="controls"] { flex-wrap: wrap; }
   body.watch-controls-on #bc-tower { max-height: calc(100svh - 150px - var(--sat) - var(--sab)); }
 }
+
+.watch-transport [data-wt="chapters"] { margin-top: calc(var(--gap) / 2); min-width: 0; }
+.watch-transport [data-wt="chapters"] > summary { cursor: pointer; min-height: var(--tap); display: list-item; align-content: center; font-size: var(--fs-micro); }
+.watch-transport [data-wt="chapters"] > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.watch-transport [data-wt="chapter-field"] { max-width: 100%; }
+.watch-transport [data-wt="chapter"] { min-height: var(--tap); }
+
 }

@@ -262,12 +262,13 @@ test("cross-device links use public HTTPS in wrappers and preserve web deploymen
     });
     const nodes = new Map(), qrs = [];
     const $ = (id) => {
-      if (!nodes.has(id)) nodes.set(id, { textContent: "", hidden: true, setAttribute() {}, scrollIntoView() {} });
+      if (!nodes.has(id)) nodes.set(id, { textContent: "", hidden: true, setAttribute() {}, scrollIntoView() {}, append() {} });
       return nodes.get(id);
     };
     let pairingUi;
     Object.assign(sandbox, {
       PhysicsConsts: {}, CamModes: { CAM_MODES: [] },
+      document: { createElement: () => ({ setAttribute() {} }) },
       PhonePad: { padUrl: pad.padUrl, host: (ui) => { pairingUi = ui; return { cancel() {} }; } },
       LobbyCodes: { paintQr: (_wrap, _canvas, url) => qrs.push(url) },
     });

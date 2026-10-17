@@ -584,6 +584,17 @@ const ScreenLooks = (function () {
     Log.info("ui", "ScreenLooks.build");
     let after = byId("pm-titlescreen");
     for (const s of SCREENS) after = buildScreen(s, after);
+    if (typeof SettingsSearch !== "undefined") {
+      const descriptors = [];
+      for (const s of SCREENS) for (const n of s.knobs) descriptors.push({
+        id: "look-" + s.id + "-" + n.k,
+        label: s.title + " " + n.label.toLowerCase(),
+        page: "appearance",
+        target: "pm-look-" + s.id + "-" + n.k,
+        aliases: "layout screen appearance " + s.id,
+      });
+      SettingsSearch.register("screen-looks", descriptors);
+    }
     // TITLE SCREEN keeps its own fold; it gains the PEEK button, last (after REPLAY INTRO).
     const tsBody = byId("pm-titlescreen-body");
     if (tsBody) {

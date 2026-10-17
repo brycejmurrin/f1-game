@@ -56,12 +56,13 @@ test("apex-tools-mcp.mjs and shell entry exist", () => {
   assert.doesNotMatch(src, /name:\s*"tinyfish_/);
 });
 
-test(".mcp.json registers apex-tools in the three-server catalog", () => {
+test(".mcp.json registers apex-tools alongside the separate debugger server", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "js-debugger",
     "playwright-official",
   ]);
   assert.equal(cfg.mcpServers["apex-tools"].type, "stdio");
@@ -179,6 +180,8 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_job_status",
     "apex_locations",
     "apex_pick_tests",
+    "apex_profile",
+    "apex_profile_query",
     "apex_rotate_markings_check",
     "apex_select_specs",
     "apex_session_status",
@@ -408,6 +411,16 @@ test("playwright occupancy matches `playwright test` tokens, not MCP JSON", asyn
     "suite",
   );
   assert.equal(
+    classifyPlaywrightLine(`2430 /bin/bash -c timeout 1500 bash -c 'until grep -q done log; do sleep 15; done'; npx playwright test tests/specs/ui-scale.spec.js -g x`),
+    null,
+    "a shell whose command string merely mentions the suite is not a live suite",
+  );
+  assert.equal(classifyPlaywrightLine("77 sh -c npx playwright test --reporter=line"), null);
+  assert.equal(
+    classifyPlaywrightLine("5492 node /home/runner/work/f1-game/node_modules/.bin/playwright test tests/specs/hud-layout.spec.js")?.kind,
+    "suite",
+  );
+  assert.equal(
     classifyPlaywrightLine('12 /exec-daemon/cursor-exec-daemon --mcp-config {"playwright":{"command":"npx","args":["@playwright/mcp@latest"]}}'),
     null,
     "Cursor --mcp-config JSON is not a live Playwright process",
@@ -492,6 +505,11 @@ test("apex_garage: open spawns garage-angles --serve; ops refuse until open; cal
   assert.ok(body.argv.some((a) => a.endsWith("garage-angles.mjs")), body.argv);
   assert.ok(body.argv.includes("--serve") && body.argv.includes("ferrari"), body.argv);
   assert.ok(!body.argv.includes("--url"));
+  const three = callCli("apex_garage", { op: "open", team: "ferrari", backend: "three", livery: "shipped", dryRun: true });
+  assert.equal(three.status, 0, three.stderr);
+  const threeArgv = JSON.parse(three.stdout).argv;
+  assert.equal(threeArgv[threeArgv.indexOf("--backend") + 1], "three");
+  assert.equal(threeArgv[threeArgv.indexOf("--livery") + 1], "shipped");
   const shot = callCli("apex_garage", { op: "shot", frame: "spineTop", design: { spineLogo: "wrap" }, name: "a", dryRun: true });
   assert.equal(shot.status, 0, shot.stderr);
   const cmd = JSON.parse(shot.stdout).command;
@@ -1618,6 +1636,7 @@ const MIN_ARGS = {
   apex_locations: { track: 'monza' },
   apex_car_audit: { check: "ladder" },
   apex_ui_fit: { screen: "title" },
+  apex_profile: { track: "monza" },
   apex_ui_shot: { screen: "title" },
   apex_job_start: { kind: "verify_all" },
 };
@@ -2129,4 +2148,59 @@ test("browserTimeoutMs: 180 s, 420 s for an apex_agent call that changes weather
   assert.equal(browserTimeoutMs("apex_agent", { command: "atmosphere", tod: "dusk" }), 420000);
   assert.equal(browserTimeoutMs("apex_shot", { tod: "night" }), 180000, "only apex_agent rebuilds the scene on a tod");
   assert.ok(browserTimeoutMs("apex_agent", { weather: "wet" }) > 269000, "above the measured duration");
+});
+
+
+test("apex_shot_survey reports rebuilds portable multi-custom-track HTML without a browser", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "survey-gallery-test-"));
+  try {
+    const reports = ["custom-first", "custom-second"].map((track, i) => {
+      const image = path.join(dir, `image-${i}.jpg`);
+      fs.writeFileSync(image, "JPEG fixture");
+      const report = path.join(dir, `report-${i}.json`);
+      fs.writeFileSync(report, JSON.stringify({ track: "monza", actualTrack: track, shots: [{ name: "aerial", file: image, cam: "orbit", frac: 0.5, tod: "day" }] }));
+      return report;
+    });
+    const out = path.join(dir, "gallery");
+    const r = callCli("apex_shot_survey", { reports, out });
+    assert.equal(r.status, 0, r.stderr);
+    const body = JSON.parse(r.stdout);
+    assert.equal(body.ok, true);
+    assert.equal(body.browser, false);
+    const html = fs.readFileSync(body.indexHtml, "utf8");
+    assert.match(html, /custom-first/);
+    assert.match(html, /custom-second/);
+    assert.equal(fs.readdirSync(path.join(out, "assets")).length, 2);
+    const cli = spawnSync(process.execPath, [path.join(ROOT, "tools/shot/shot-survey.mjs"), "--reports", reports.join(","), "--out", path.join(dir, "cli-gallery")], { cwd: ROOT, encoding: "utf8", timeout: 15000 });
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.equal(JSON.parse(cli.stdout).browser, false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("apex_shot_survey report images cannot escape artifact roots", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "survey-gallery-test-"));
+  try {
+    const report = path.join(dir, "report.json");
+    fs.writeFileSync(report, JSON.stringify({ track: "custom-a", shots: [{ name: "bad", file: path.join(ROOT, "outside.jpg") }] }));
+    const r = callCli("apex_shot_survey", { reports: [report], out: path.join(dir, "gallery") });
+    assert.equal(JSON.parse(r.stdout).ok, false);
+    assert.match(JSON.stringify(JSON.parse(r.stdout)), /artifacts|scratch/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+
+test("saved gallery cannot write through an assets directory symlink", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "survey-gallery-symlink-"));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "apex-gallery-outside-"));
+  try {
+    const image = path.join(dir, "source.jpg"), report = path.join(dir, "report.json"), out = path.join(dir, "out");
+    fs.writeFileSync(image, "JPEG fixture");
+    fs.writeFileSync(report, JSON.stringify({ track: "custom-a", shots: [{ name: "view", file: image }] }));
+    fs.mkdirSync(out);
+    fs.symlinkSync(outside, path.join(out, "assets"), "dir");
+    const r = callCli("apex_shot_survey", { reports: [report], out });
+    assert.equal(JSON.parse(r.stdout).ok, false);
+    assert.equal(fs.readdirSync(outside).length, 0);
+    assert.equal(fs.existsSync(path.join(out, "index.html")), false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(outside, { recursive: true, force: true }); }
 });

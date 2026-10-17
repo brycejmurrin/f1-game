@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: "Use when asked for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after or GLX-vs-TLX frames (backend-compare), flicker/shimmer/z-fighting clips (motion-capture), game-loop CPU profiles / flame charts / GC spikes, the CAR STUDIO (livery, sponsors, carview.html), or camera modes (cockpit/chase/orbit/cinematic/roadside, camState/viewState, framing a corner, camera lag). Not the parts catalog (garage-parts-livery), UI-fit shots (survey-ui-matrix) or a live canvas (mcp-probe)."
+description: "Use when asked for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after or GLX-vs-TLX frames (backend-compare), flicker/shimmer/z-fighting clips (motion-capture), CPU profiles / flame charts / GC spikes, the CAR STUDIO (livery, sponsors, carview.html), or camera modes (cockpit/chase/orbit/roadside, camState/viewState, framing a corner, camera lag). Not the parts catalog (garage-parts-livery), UI-fit shots (survey-ui-matrix) or a live canvas (mcp-probe)."
 ---
 
 # Headless Playwright probing
@@ -102,6 +102,10 @@ node tools/shot/profile-gameloop.mjs singapore render        # .cpuprofile → C
 `tools/track/coplanar-audit.cjs <id>` (no browser) are the z-fight pair
 motion-capture's reference points at. A still frame cannot show shimmer and a CPU chart cannot see fill-bound work —
 both references say what the numbers mean before you A/B on them.
+
+**Combined galleries:** `apex_shot_survey {tracks:["monza","spa"],preset:"quick"}` writes every view into a root HTML gallery. To combine existing surveys without recapturing, use `apex_shot_survey {reports:["artifacts/a/findings.json","artifacts/b/findings.json"],out:"artifacts/combined"}`; copied image assets make that folder portable. Preserve the actual custom track ID in report metadata.
+
+**Image budget** (plan WS4; #2399): `Read` at most 8 images, then compact; never re-`Read` an old shot; JPEG ≤ 800 px wide for anything a model will look at; for more than 3 shots use `apex_shot_survey` / `apex_track op survey`, never a loop of `apex_shot`. A request over 32 MB kills the session and `/compact` with it.
 
 ## Load on demand
 

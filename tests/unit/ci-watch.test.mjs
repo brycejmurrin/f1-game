@@ -10,7 +10,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy, resolveSha } from "../../tools/ci/ci-watch.mjs";
+import { latestPerWorkflow, verdict, newJobEvents, wantsAnnotations, pagesVerdictRun, noneVerdict, openPrFor, watchSha, api, supersededBy, resolveSha, hollowDraft, cancelledExternal, supersededByPr, fileState, waitingJobs } from "../../tools/ci/ci-watch.mjs";
 import { githubToken, NO_TOKEN_HINT } from "../../tools/ci/github-token.mjs";
 
 const run = (id, name, status, conclusion, created) => ({ id, name, status, conclusion, created_at: created });
@@ -231,7 +231,7 @@ test("API polling asks HTTP caches to revalidate and preserves failed HTTP/JSON 
   } });
   assert.deepEqual(result, { json: [] });
   for (const [stdout, error] of [["{}\n403", "HTTP 403"], ["{}\n502", "HTTP 502"], ["not JSON\n200", "bad JSON"]]) {
-    assert.equal(api(associated, { env: { GH_TOKEN: "fixture" }, run: () => ({ status: 0, stdout }) }).error, error);
+    assert.equal(api(associated, { env: { GH_TOKEN: "fixture" }, sleepSync() {}, run: () => ({ status: 0, stdout }) }).error, error);
   }
 });
 
@@ -382,6 +382,7 @@ test("#2184: a label-noise run (all jobs skipped, success) never hides the real 
   }, { once: true });
   assert.equal(result.code, 1, result.lines.join("\n"));
   assert.ok(result.lines.some((line) => line.startsWith("= ci failed")));
+  assert.ok(result.lines.some((line) => /^= ci failed.* sha=[0-9a-f]{40}\b/.test(line)), "#2430: the verdict line carries the full 40-char sha");
   assert.ok(!result.lines.some((line) => line.includes("#2 ")), "the noise run is not even announced");
 });
 
@@ -447,4 +448,122 @@ test("#2259: an older completed run plus a label at T and no run after T is neve
     "run-ci on a READY PR starts no real run");
   assert.equal(triggerFloor(draft, pages([])).floor, null);
   assert.match(triggerFloor(draft, () => ({ error: "HTTP 502" })).error, /HTTP 502/);
+});
+
+// ── #2384: the CI-verdict friction fixes ────────────────────────────────────
+const PR_RUN = { ...run(60, "CI", "completed", "success", "2026-10-16T08:00:00Z"), event: "pull_request", workflow_id: 7, head_branch: "cursor/x", run_started_at: "2026-10-16T08:00:00Z", updated_at: "2026-10-16T08:00:20Z" };
+const watch = (request, options = {}) => {
+  const lines = [];
+  return watchSha(SHA, { interval: 1, deadline: Infinity, once: true, now: () => 0, wait: async () => {}, report: (l) => lines.push(l), request, ...options })
+    .then((code) => ({ code, lines }));
+};
+const fixture = (runs, jobs) => (endpoint) => {
+  if (endpoint.startsWith("actions/runs?")) return { json: { workflow_runs: runs } };
+  const m = /^actions\/runs\/(\d+)\/jobs/.exec(endpoint);
+  if (m) return { json: { jobs: jobs[m[1]] || [] } };
+  if (endpoint.startsWith("check-runs/")) return { json: [] };
+  if (endpoint.startsWith("actions/workflows/")) return { json: { workflow_runs: runs } };
+  throw new Error(endpoint);
+};
+
+test("api retries a 5xx with backoff, then returns the success; a 4xx is never retried", () => {
+  const delays = [], replies = ["{}\n502", "{}\n503", '{"ok":1}\n200'];
+  const r = api("x", { env: { GH_TOKEN: "t" }, etags: null, sleepSync: (ms) => delays.push(ms), run: () => ({ status: 0, stdout: replies.shift() }) });
+  assert.deepEqual(r, { json: { ok: 1 } });
+  assert.deepEqual(delays, [1000, 2000]);
+  let calls = 0;
+  const e = api("x", { env: { GH_TOKEN: "t" }, etags: null, sleepSync: () => { throw new Error("no sleep"); }, run: () => (calls++, { status: 0, stdout: "{}\n404" }) });
+  assert.equal(e.error, "HTTP 404"); assert.equal(calls, 1);
+  calls = 0;
+  const dead = api("x", { env: { GH_TOKEN: "t" }, etags: null, sleepSync() {}, run: () => (calls++, { status: 0, stdout: "{}\n500" }) });
+  assert.equal(dead.error, "HTTP 500"); assert.equal(calls, 4, "one try + three retries");
+});
+
+test("--failures-only: a green job and the run announcement stay silent; a red job and the final line speak", async () => {
+  const jobs = { 60: [job(1, "guards", "completed", "success"), job(2, "smoke", "completed", "failure", [{ name: "Run smoke", conclusion: "failure" }]), job(3, "x", "completed", "cancelled")] };
+  const all = await watch(fixture([PR_RUN], jobs));
+  const quiet = await watch(fixture([PR_RUN], jobs), { failuresOnly: true });
+  assert.ok(all.lines.some((l) => l.includes("guards → success")) && all.lines.some((l) => l.startsWith("CI #60")));
+  assert.deepEqual(quiet.lines.filter((l) => !l.startsWith("= ci")).map((l) => l.replace(/ u\/\d+$/, "")), ["CI › smoke → failure — step \"Run smoke\"", "CI › x → cancelled"]);
+  assert.ok(quiet.lines.at(-1).startsWith("= ci failed"));
+  assert.match(quiet.lines.at(-1), /run=#60 pull_request/, "the final line names the run and event");
+});
+
+test("a persisted state never replays a job event after a re-arm, and the final line still prints", async () => {
+  const jobs = { 60: [job(2, "smoke", "completed", "failure")] };
+  const mem = new Set(), state = { has: (k) => mem.has(k), add: (k) => mem.add(k) };
+  const first = await watch(fixture([PR_RUN], jobs), { state });
+  const again = await watch(fixture([PR_RUN], jobs), { state });
+  assert.equal(first.lines.filter((l) => l.includes("smoke → failure")).length, 1);
+  assert.equal(again.lines.filter((l) => l.includes("smoke → failure")).length, 0, "no replay");
+  assert.ok(again.lines.at(-1).startsWith("= ci failed"));
+  assert.ok(mem.has("60.1:2"), "keyed by run id, attempt and job id");
+  const files = new Map();
+  const fsm = { readFileSync: (f) => { if (!files.has(f)) throw new Error("ENOENT"); return files.get(f); }, mkdirSync() {}, writeFileSync: (f, c) => files.set(f, c) };
+  const a = fileState("/s.json", fsm); a.add("1:2");
+  assert.ok(fileState("/s.json", fsm).has("1:2"), "file-backed state survives a new process");
+});
+
+test("hollow: a draft whose only real job is the skeleton is `= ci hollow`, never passed", async () => {
+  const skel = job(1, "Draft push (CI skipped — add run-ci label)", "completed", "success");
+  const skipped = (id) => job(id, `leg ${id}`, "completed", "skipped");
+  assert.deepEqual(hollowDraft([skel, skipped(2), skipped(3)]), { skipped: 2, total: 3 });
+  assert.equal(hollowDraft([skel, job(2, "guards", "completed", "success")]), null, "a real job ran: not hollow");
+  assert.equal(hollowDraft([job(2, "guards", "completed", "success")]), null);
+  const r = await watch(fixture([PR_RUN], { 60: [skel, skipped(2), skipped(3)] }));
+  assert.equal(r.code, 5);
+  assert.match(r.lines.at(-1), /^= ci hollow \(draft, 2\/3 jobs skipped — add run-ci\)/);
+  const real = await watch(fixture([PR_RUN], { 60: [job(2, "guards", "completed", "success")] }));
+  assert.equal(real.code, 0); assert.ok(real.lines.at(-1).startsWith("= ci passed"));
+});
+
+test("cancelled-external: the only run, every job cancelled within 60 s, no newer run", async () => {
+  const dead = { ...PR_RUN, conclusion: "cancelled" };
+  const jobs = { 60: [job(1, "a", "completed", "cancelled"), job(2, "b", "completed", "cancelled")] };
+  assert.equal(cancelledExternal([dead], jobs), 20);
+  assert.equal(cancelledExternal([{ ...dead, updated_at: "2026-10-16T08:05:00Z" }], jobs), null, "five minutes in is a timeout, not an external cancel");
+  assert.equal(cancelledExternal([dead, { ...dead, id: 61 }], jobs), null);
+  assert.equal(cancelledExternal([dead], { 60: [job(1, "a", "completed", "failure")] }), null);
+  const r = await watch(fixture([dead], jobs), { checkSuperseded: false });
+  assert.equal(r.code, 2);
+  assert.match(r.lines.at(-1), /^= ci cancelled-external — run #60/);
+});
+
+test("superseded: a merged PR or a moved PR head ends the watch; the merge commit itself is not superseded", async () => {
+  const head = (n) => n.toString(16).padStart(40, "0");
+  const open = { number: 5, state: "open", head: { sha: SHA }, merge_commit_sha: null };
+  assert.equal(supersededByPr(SHA, () => ({ json: [open] })), null);
+  assert.deepEqual(supersededByPr(SHA, () => ({ json: [{ ...open, state: "closed", merged_at: "t" }] })), { why: "merged", pr: 5 });
+  assert.deepEqual(supersededByPr(SHA, () => ({ json: [{ ...open, head: { sha: head(9) } }] })), { why: "new head", pr: 5, head: head(9) });
+  assert.equal(supersededByPr(SHA, () => ({ json: [{ ...open, state: "closed", merged_at: "t", merge_commit_sha: SHA }] })), null, "watching the merge commit");
+  assert.equal(supersededByPr(SHA, () => ({ error: "HTTP 500" })), null, "an API error is not evidence");
+  const running = { ...PR_RUN, status: "in_progress", conclusion: null };
+  const base = fixture([running], { 60: [job(1, "a", "in_progress", null)] });
+  const via = (prs) => (e) => e.startsWith("commits/") ? { json: prs } : base(e);
+  const moved = await watch(via([{ ...open, head: { sha: head(9) } }]), { checkSuperseded: true });
+  assert.equal(moved.code, 4);
+  assert.match(moved.lines.at(-1), new RegExp(`^= ci superseded \\(new head ${head(9).slice(0, 7)}\\)`));
+  const merged = await watch(via([{ ...open, state: "closed", merged_at: "t" }]), { checkSuperseded: true });
+  assert.match(merged.lines.at(-1), /^= ci superseded \(merged\)/);
+});
+
+test("--jobs: one line per queued/pending leg with its wait age; running and finished legs are only counted", () => {
+  const now = Date.parse("2026-10-16T08:30:00Z");
+  const live = { ...PR_RUN, status: "in_progress", conclusion: null };
+  const jobs = { 60: [
+    { ...job(1, "smoke 1", "queued", null), created_at: "2026-10-16T08:18:00Z" },
+    { ...job(2, "smoke 2", "pending", null), created_at: "2026-10-16T08:29:00Z" },
+    job(3, "guards", "in_progress", null), job(4, "done", "completed", "success") ] };
+  const lines = [];
+  assert.equal(waitingJobs(SHA, { request: fixture([live], jobs), now: () => now, report: (l) => lines.push(l) }), 0);
+  assert.deepEqual(lines, ["CI › smoke 1 — queued 12m (run #60)", "CI › smoke 2 — pending 1m (run #60)", `= ci jobs 2 waiting (1 queued, 1 pending), 1 running sha=${SHA}`]);
+  const bad = [];
+  assert.equal(waitingJobs(SHA, { request: () => ({ error: "HTTP 500" }), report: (l) => bad.push(l) }), 3);
+});
+
+test("a run cancelled once is reported once per process pair: floor line names the dispatch escape hatch", async () => {
+  const old = { ...PR_RUN, created_at: "2026-10-16T07:00:00Z" };
+  const r = await watch(fixture([old], {}), { since: Date.parse("2026-10-16T08:00:00Z") });
+  assert.equal(r.code, 124);
+  assert.match(r.lines.at(-1), /dispatch ci\.yml/);
 });

@@ -17,7 +17,7 @@ export function parseCaptureArgs(argv, name, extras = []) {
     const value = rhs.length ? rhs.join('=') : argv[++i];
     if (value == null || value.startsWith('--')) throw new Error(`missing value: ${key}`);
     const prop = key === '--timeout-ms' ? 'timeoutMs' : key.slice(2);
-    if (prop === 'seed' || prop === 'frames' || prop === 'timeoutMs') out[prop] = Number(value);
+    if (prop === 'seed' || prop === 'frames' || prop === 'timeoutMs' || prop === 'cycles') out[prop] = Number(value);
     else if (prop === 'viewport') {
       if (!/^\d+x\d+$/.test(value)) throw new Error('viewport must be WxH');
       const [width, height] = value.split('x').map(Number); out.viewport = { width, height };
@@ -29,6 +29,7 @@ export function parseCaptureArgs(argv, name, extras = []) {
   if (!['three', 'webgl2', 'webgpu'].includes(out.backend)) throw new Error('backend must be three|webgl2|webgpu');
   if (!Object.values(out.viewport).every((n) => Number.isInteger(n) && n >= 64 && n <= 4096)) throw new Error('viewport bounds: 64..4096');
   if (!Number.isInteger(out.frames) || out.frames < 1 || out.frames > 120) throw new Error('frames bounds: 1..120');
+  if (name === 'lifecycle-census' && (!Number.isInteger(out.cycles ?? 1) || (out.cycles ?? 1) < 1 || (out.cycles ?? 1) > 12)) throw new Error('cycles bounds: 1..12');
   if (!Number.isInteger(out.timeoutMs) || out.timeoutMs < 1000 || out.timeoutMs > 900000) throw new Error('timeout-ms bounds: 1000..900000');
   out.out = resolve(ROOT, out.out);
   const bases = ['artifacts', 'scratch'].map((p) => resolve(ROOT, p));
@@ -41,7 +42,8 @@ export function parseCaptureArgs(argv, name, extras = []) {
   return out;
 }
 export function usage(name, extra = '') {
-  return `usage: node tools/${name === 'lifecycle-census' ? 'check' : 'shot'}/${name}.mjs --track ID --seed uint32 --out DIR ${extra} [--help|--plan]\nOutput must be under artifacts/ or scratch/. Plan validates inputs without booting or writing.\n`;
+  const lifecycle = name === 'lifecycle-census' ? ' [--cycles N]' : '';
+  return `usage: node tools/${name === 'lifecycle-census' ? 'check' : 'shot'}/${name}.mjs --track ID --seed uint32 --out DIR ${extra}${lifecycle} [--help|--plan]\nOutput must be under artifacts/ or scratch/. Plan validates inputs without booting or writing.\n`;
 }
 export function invoked(url) { return process.argv[1] && fileURLToPath(url) === resolve(process.argv[1]); }
 export async function pixelEvidence(buf) {

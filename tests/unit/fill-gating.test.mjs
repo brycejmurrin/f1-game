@@ -26,7 +26,8 @@ const FILL_KEYS = LT.FILL_SURFACES.map((f) => f.key);
  *  between the samples of even a 48x48 probe and read as "never painted". */
 function probeLands(teamId, liv) {
   return A.paint(teamId, liv)
-    .some((op) => HIT.test(op.style || "") || HIT.test(op.stroke || ""));
+    .some((op) => HIT.test(op.style || "") || HIT.test(op.stroke || "") ||
+      op.style?.stops?.some(([, color]) => HIT.test(color)));
 }
 /** The design with every OTHER fill row cleared: a live row can still be
  *  outranked on a particular livery (FLANK FILL beats SADDLE on the shoulder,
@@ -52,7 +53,7 @@ test("LiveryTex publishes the fill map the sheet and the shot tool both read", (
   // The atlas is loaded in a vm sandbox, so its arrays are cross-realm and
   // deepStrictEqual would fail on the prototype rather than the contents.
   const keys = LT.FILL_SURFACES.map((f) => f.key).sort().join(",");
-  assert.equal(keys, ["bandTint2", "plateTint", "saddleTint", "sideTint", "spineTint", "sunTint"].sort().join(","));
+  assert.equal(keys, ["bandTint2", "patternTint", "patternSecond", "plateTint", "saddleTint", "sideTint", "spineTint", "sunTint"].sort().join(","));
   assert.equal(LT.fillInert("logo", {}), false, "a row that is not a fill is never inert");
 });
 

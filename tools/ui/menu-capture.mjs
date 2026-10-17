@@ -239,7 +239,10 @@ export function writeCaptureIndex(outDir, rows) {
       caption: row.screen, links: row.dom ? `<a href="${galleryEscape(row.dom)}">DOM snapshot</a>` : "",
     }));
   }
-  fs.writeFileSync(path.join(outDir, "index.html"), renderGallery({ title: "Apex menu screenshots",
+  const skipped = rows.filter((row) => row.skipped || !row.shot);
+  const skippedList = skipped.length ? `<details open><summary>SKIPPED (${skipped.length})</summary><ul>${skipped.map((row) =>
+    `<li>${galleryEscape(row.screen)} · ${galleryEscape(row.viewport)}${row.skipped ? ` — ${galleryEscape(row.skipped)}` : ""}</li>`).join("")}</ul></details>` : "";
+  fs.writeFileSync(path.join(outDir, "index.html"), renderGallery({ title: "Apex menu screenshots", links: skippedList,
     summary: `${rows.filter((row) => row.shot && !row.skipped).length} captures · ${screens.size} screens`,
     groups: [...screens].map(([title, cards]) => ({ title, cards })),
   }));

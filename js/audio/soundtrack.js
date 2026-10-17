@@ -12,9 +12,11 @@ var GameAudioSoundtrack = (function () {
     let musicGain = null;
     let musicSrc = null;
     let musicToken = 0;
+    let actionGeneration = 0;   // public playback actions; automatic next/failover retain their owner
     const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
     let _decodeTail = Promise.resolve();
     const _musicLoads = {};                  // url -> in-flight fetch+decode (see playIndex)
+    const _musicLoadControllers = {};        // url -> AbortController for in-flight loads
     const _bufKeys = [];                     // insertion order of cached urls (bound: MUSIC_CACHE)
     // Decoded PCM is ~90 MB per four-minute track at a 48 kHz context. Desktop
     // keeps the 2 most recent so a two-track playlist alternates without a
@@ -114,8 +116,13 @@ var GameAudioSoundtrack = (function () {
     // decodeAudioData refuses, a 404, offline) never made one: silence, with
     // the UI naming the dead track. Skip it; a whole list that fails stops.
     let _musicFails = 0;
-    function musicLoadFailed(token) {
+    function trackHealth(state, reason) {
+      const track = PLAYLIST[musicIndex];
+      if (track && !track.builtin && typeof MusicLib !== "undefined" && MusicLib.playbackStatus) MusicLib.playbackStatus(track.id, { state, reason: reason || "" });
+    }
+    function musicLoadFailed(token, reason) {
       if (!musicOn || token !== musicToken) return;   // superseded: not ours to skip
+      trackHealth("failed", reason || "Could not load or decode this audio file.");
       // Capped at the ELIGIBLE count: nextTrack only cycles the selected source,
       // so a PLAYLIST.length cap re-fetched one dead upload up to that many times.
       if (++_musicFails >= Math.max(1, eligibleCount())) { _musicFails = 0; stopInternal(); return; }
@@ -167,13 +174,13 @@ var GameAudioSoundtrack = (function () {
       const off = (musicResumeBuf === url && Number.isFinite(musicResumeOff)) ? musicResumeOff : 0;
       musicResumeBuf = url; musicResumeAt = NaN; musicResumeOff = off;
       el.onloadedmetadata = () => { if (token === musicToken && off > 0 && off < (el.duration || 0)) try { el.currentTime = off; } catch (e) { /* unseekable: from the top */ } };
-      el.onplaying = () => { if (token === musicToken) _musicFails = 0; };
+      el.onplaying = () => { if (token === musicToken) { _musicFails = 0; trackHealth("playing"); } };
       el.onended = () => { if (token === musicToken && musicOn) nextTrack(1); };
       el.onerror = () => {
         if (token !== musicToken) return;
         Log.warn("audio", "music stream failed for " + url + ": media error " + ((el.error && el.error.code) || "?"));
         musicStreaming = false;
-        musicLoadFailed(token);
+        musicLoadFailed(token, "This audio format could not be played, or the file is unavailable.");
       };
       musicElUrl = url; musicStreaming = true;
       el.src = url;
@@ -189,6 +196,7 @@ var GameAudioSoundtrack = (function () {
     function playMusicBuffer(buf, token) {
       if (!host.context() || !musicOn || token !== musicToken) return;  // superseded
       _musicFails = 0;
+      trackHealth("playing");
       ensureMusicGain();
       replaceMusicSource();
       const src = host.context().createBufferSource();
@@ -255,6 +263,7 @@ var GameAudioSoundtrack = (function () {
       const prev = source;
       source = want;
       if (!anyEligible()) { source = prev; return prev; }
+      ++actionGeneration;
       if (backend) return source;
       if (!eligible(musicIndex)) {
         const i = seekEligible(musicIndex, 1);
@@ -332,7 +341,7 @@ var GameAudioSoundtrack = (function () {
           // Music is optional and the game plays on without it. Retained rather
           // than printed: a soundtrack that never starts is otherwise invisible.
           Log.warn("audio", "music load/decode failed for " + url + ": " + ((err && err.message) || err));
-          musicLoadFailed(token);
+          musicLoadFailed(token, "Could not fetch or decode this audio file. Try another format or retry.");
           return null;
         });
       _musicLoads[url] = _load;
@@ -363,6 +372,7 @@ var GameAudioSoundtrack = (function () {
     }
     function skipTrack() {
       if (!musicEnabled) return null;
+      ++actionGeneration;
       if (backend) { try { return backend.skip(); } catch (e) { return null; } }
       if (!host.context()) return null;
       nextTrack(1);
@@ -370,6 +380,7 @@ var GameAudioSoundtrack = (function () {
     }
     function prevTrack() {
       if (!musicEnabled) return null;
+      ++actionGeneration;
       if (backend) {
         try { return backend.prev ? backend.prev() : backend.name(); } catch (e) { return null; }
       }
@@ -407,6 +418,7 @@ var GameAudioSoundtrack = (function () {
     function removeTrack(id) {
       const i = indexOfId(id);
       if (i < 0) return false;
+      ++actionGeneration;
       const wasPlaying = musicOn && i === musicIndex;
       delete musicBuffers[PLAYLIST[i].url];
       const k = _bufKeys.indexOf(PLAYLIST[i].url);   // …and its LRU slot, or it starves a live buffer
@@ -422,6 +434,7 @@ var GameAudioSoundtrack = (function () {
     function playTrackId(id) {
       const i = indexOfId(id);
       if (i < 0 || backend || !musicEnabled) return false;
+      ++actionGeneration;
       playIndex(i);
       return musicOn;
     }
@@ -437,6 +450,7 @@ var GameAudioSoundtrack = (function () {
        built-in playlist left off rather than restarting from track one. */
     function setMusicBackend(b) {
       if (b === backend) return;
+      ++actionGeneration;
       if (backend) {
         try { const p = backend.stop(); if (p && p.catch) p.catch(() => {}); }
         catch (e) { /* replacing a failed backend must still restore the soundtrack */ }
@@ -455,12 +469,19 @@ var GameAudioSoundtrack = (function () {
     function musicBackend() { return backend; }
 
     function setMusicEnabled(b) {
+      ++actionGeneration;
       musicEnabled = !!b;
       if (!musicEnabled) stopMusic();
       else if (host.context() || backend) startMusic(lastTrackIdx);
     }
 
     function startMusic(trackIdx) {
+      if (musicEnabled) ++actionGeneration;
+      resumeMusic(trackIdx);
+    }
+    // Context/visibility recovery reuses the owner rather than pretending to
+    // be a new manual selection. An explicit stop invalidates pending resumes.
+    function resumeMusic(trackIdx) {
       const idx = (typeof trackIdx === "number") ? trackIdx : 0;
       lastTrackIdx = idx;
       if (!musicEnabled) return;
@@ -482,6 +503,11 @@ var GameAudioSoundtrack = (function () {
     function stopInternal() {
       musicOn = false;
       musicToken++;                                // cancel any in-flight load
+      for (const url in _musicLoadControllers) {
+        try { _musicLoadControllers[url].abort(); } catch (e) { /* already settled */ }
+        delete _musicLoadControllers[url];
+        delete _musicLoads[url];
+      }
       // stop() and disconnect() get their OWN try each. Sharing one meant a throw
       // from stop() (stop-before-start is the documented case) skipped the
       // disconnect, stranding a BufferSource that keeps rendering AND pins its
@@ -500,6 +526,10 @@ var GameAudioSoundtrack = (function () {
     }
 
     function stopMusic() {
+      ++actionGeneration;
+      stopPlayback();
+    }
+    function stopPlayback() {
       stopInternal();
       if (backend) { try { backend.stop(); } catch (e) { /* a broken backend must not take the audio down */ } }
     }
@@ -519,7 +549,7 @@ var GameAudioSoundtrack = (function () {
     function suspendMusic() {
       captureStreamPos();
       const hidBuf = musicResumeBuf, hidAt = musicResumeAt, hidOff = musicResumeOff;
-      if (musicOn) stopMusic();
+      if (musicOn) stopPlayback();
       musicResumeBuf = hidBuf; musicResumeAt = hidAt; musicResumeOff = hidOff;
     }
     function resetContext() {
@@ -546,8 +576,10 @@ var GameAudioSoundtrack = (function () {
       }
     }
     return {
+      musicPlaybackGeneration: () => actionGeneration,
+      stopMusicIfGeneration(generation) { if (generation !== actionGeneration) return false; stopMusic(); return true; },
       startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck,
-      suspendMusic, resetContext, releaseEngineDuck, duckForEngine,
+      suspendMusic, resumeMusic, resetContext, releaseEngineDuck, duckForEngine,
       isPlaying: () => musicOn, streaming: () => musicStreaming, lastTrack: () => lastTrackIdx, volume: () => musicVol,
     };
   }

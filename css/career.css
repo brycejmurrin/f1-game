@@ -884,7 +884,7 @@
 }
 
 #career-offers .sheet[data-density="compact"] .co-offer {
-  margin-bottom: calc(var(--gap) * 0.35); padding: calc(var(--pad) * 0.45); min-height: var(--tap-min);
+  margin-bottom: calc(var(--gap) * 0.35); padding: calc(var(--pad) * 0.45); min-height: var(--tap-paint);
 }
 #career-offers .sheet[data-density="compact"] .co-offer-team {
   white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;

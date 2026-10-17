@@ -157,6 +157,7 @@ const FULL = [
   // Legends sits with the other driver data and AHEAD of js/car/liveries.js,
   // whose forTeam() appends Legends.liveries() to the picker.
   "js/data/legends.js",
+  "js/career/team-identity.js",
   "js/career/save-migrate.js",
   // Persistence sits ahead of every js/game module: the settings panels, the
   // perf sentinel and the Spotify client go through GameStore.store's raw lane,
@@ -236,7 +237,9 @@ const FULL = [
   "js/car/liveries.js",
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
   "js/car/crest-paths.js",
+  "js/car/livery-design.js",
   "js/car/livery-graphics.js",
+  "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/car/ghost-share.js",
@@ -257,9 +260,12 @@ const FULL = [
   "js/garage/scene-prims.js",
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
+  "js/garage/scene-dress.js",
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "js/garage/arrival.js",
+  "js/garage/surface-inspection.js",
+  "js/car/surface-outline.js",
   "js/garage/setup-camera.js",
   "js/garage/prebuild.js",              // GaragePrebuild: the garage built while the title/race settings idle
   "js/garage/pit-signs.js",
@@ -269,6 +275,7 @@ const FULL = [
   "js/lighting/atmosphere.js",
   "js/career/regulations.js",
   "js/career/ai-dev.js",
+  "js/career/career-planning.js", // bounded projections and save protection
   "js/career/career.js",
   "js/career/season-cal.js",
   "js/career/badges.js",       // after season-cal: reads SeasonCal.REAL_2026 (call time)
@@ -287,6 +294,11 @@ const FULL = [
   "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
   "js/camera/flyby-panel.js",
   "js/garage/setup-tune.js",
+  "js/garage/setup-trials.js", // bounded unscored setup comparison receipts (call-time consumers)
+  "js/race/setup-trial-session.js", // fresh solo trial sessions through normal race entry
+  "js/garage/setup-presets.js",
+  "js/garage/setup-experiments.js", // reversible tune experiments and aero bench
+  "js/garage/livery-design-editor.js",
   "js/garage/setup-sheet.js",
   "js/career/experience.js",
   "js/career/career-ui-boot.js", // CareerUI stub; #career body is LAZY_CAREER_UI
@@ -304,6 +316,7 @@ const FULL = [
   "js/ui/menu-nav.js",
   "js/ui/aria-state.js",
   "js/ui/setting-row.js",
+  "js/ui/editor-workspace.js",
   "js/ui/settings-search.js",
   "js/ui/settings-tabs.js",
   "js/ui/key-binds.js",
@@ -338,10 +351,13 @@ const FULL = [
   "js/input/steer-tuning.js",
   "js/perf/governor.js",
   "js/perf/loop-health.js",
+  "js/perf/spans.js",
   "js/perf/race-entry-profile.js",
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
+  "js/render/shared/compatibility-recovery.js",
   "js/perf/gfx-debug-overlay.js",
+  "js/perf/three-inspector.js",   // ThreeInspector: opt-in (?inspector=1) dev panel; lazy import() of vendor addons/inspector, never precached
   "js/ui/scale.js",
   "js/ui/dock-layout.js",
   "js/camera/cockpit-opts.js",
@@ -357,6 +373,7 @@ const FULL = [
   "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
   "js/ui/hud-damage.js",     // the DAMAGE chip on #hud-damage (paints Damage; display only)
   "js/ui/live-region.js",    // LiveRegion: the one writer of #announce-live (flag > penalty > save > radio > HUD queue)
+  "js/ui/hud-skin.js",   // HudSkin: runtime team accent (skinAccent) — for GameHud
   "js/ui/hud-readouts.js",   // gap laps, ERS MJ/state, BB, blue flag, race DELTA trace, spoken HUD — for GameHud
   "js/ui/hud-relative.js",   // opt-in RELATIVE box: road neighbours ±2, gaps, laps up/down — for GameHud
   "js/ui/hud-strategy.js",   // opt-in STRATEGY panel: tyre laps, pit loss, next stop, undercut cue — for GameHud
@@ -397,10 +414,12 @@ const FULL = [
   "js/career/custom-team.js",
   "js/ui/quali-sheet.js",
   "js/ui/onboard.js",
+  "js/physics/debris-draw.js",
   "js/physics/debris-world.js",
   "js/physics/incident-sim.js",
   "js/physics/contact-geometry.js", // oriented overlap, linear sweep, contact impulse (restitution + Coulomb friction)
   "js/physics/collide.js",   // car-car contact resolver (Collide.create(G, collideFx)), extracted from game.js
+  "js/physics/wall-end-face.js", // pit-edge / run-off end face: hold s, scrub, keep x (WallEndFace.apply), #1623
   "js/physics/wall-clamp.js", // barrier / pit / gantry hard clamp + human writeback (WallClamp.apply), carve-headroom B
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
@@ -415,6 +434,8 @@ const FULL = [
   "js/ui/update-check.js",  // UpdateCheck: in-session version.json re-check + UPDATE READY chip (call-time; script-loader asks it)
   "js/ui/race-message-history.js",
   "js/ui/controller-profile-controls.js",
+  "js/ui/condition-cue-controls.js",
+  "js/ui/race-mix-controls.js",
   "js/game.js",
 ];
 
@@ -424,7 +445,7 @@ const CSS = [
   "css/settings-controls.css", "css/dialog-platform.css", "css/save-health.css", "css/tuner.css",
   "css/title.css", "css/menus.css", "css/select.css", "css/race-setup.css",
   "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css", "css/overlays.css",
-  "css/loading.css", "css/a11y-loading.css", "css/responsive.css",
+  "css/loading.css", "css/a11y-loading.css", "css/responsive.css", "css/menu-destinations.css",
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
   "css/data.css",
@@ -439,7 +460,7 @@ const CSS = [
 // already-in-flight print sheet, not a second 79 KB of preload contention).
 const CSS_PRELOAD = [
   "css/tokens.css", "css/components.css", "css/title.css", "css/menus.css",
-  "css/responsive.css",
+  "css/responsive.css", "css/menu-destinations.css",
 ];
 // Sheets that are NOT title-critical load print→all (media="print"
 // onload="this.media='all'") so they do not hold LCP; the rest render-block.
@@ -512,7 +533,9 @@ const CARVIEW = [
   "js/car/car3d.js",
   "js/car/liveries.js",
   "js/car/crest-paths.js",
+  "js/car/livery-design.js",
   "js/car/livery-graphics.js",
+  "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/physics/consts.js",
   "js/car/car-mesh.js",
@@ -550,6 +573,7 @@ const TRACK_VM = [
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
   "js/track/scenery/venue.js",
+  "js/track/scenery/guards.js",
   "js/track/scenery/build-props.js",
   // The garages ARE the setup screen's bay (GarageScene.buildStatic), placed by
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
@@ -559,6 +583,7 @@ const TRACK_VM = [
   "js/garage/scene-prims.js",
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
+  "js/garage/scene-dress.js",
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "@circuits",
@@ -568,6 +593,10 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  ["js/data/teams.js", "js/career/team-identity.js"],
+  ["js/career/team-identity.js", "js/career/save-migrate.js"],
+  ["js/garage/setup-tune.js", "js/garage/setup-presets.js"],
+  ["js/garage/surface-inspection.js", "js/garage/setup-camera.js"],
   ["js/ui/settings-search.js", "js/ui/settings-tabs.js"],
   ["js/input/controller-profiles.js", "js/input/input.js"],
   ["js/core/store.js", "js/career/restore-points.js"],
@@ -588,6 +617,9 @@ const HARD_EDGES = [
   ["js/car/car-materials.js", "js/car/car3d.js"],
   ["js/car/car-geometry.js", "js/car/car-body-geom.js"],
   ["js/car/car-body-geom.js", "js/car/car3d.js"],
+  ["js/car/livery-design.js", "js/garage/livery-design-editor.js"],
+  ["js/garage/livery-design-editor.js", "js/garage/setup-sheet.js"],
+  ["js/car/livery-design.js", "js/car/liverytex.js"],
   ["js/car/livery-graphics.js", "js/car/liverytex.js"],
   ["js/input/bindings.js", "js/input/input.js"],
   ["js/input/pad-menu.js", "js/input/input.js"],
@@ -624,6 +656,7 @@ const HARD_EDGES = [
   ["js/camera/cam-groups.js", "js/ui/hud-layout.js"], // camSet reads CamGroups.COCKPIT_LAYOUT at eval
   ["js/camera/cam-groups.js", "js/ui/hud.js"],      // ONBOARD_IDS = CamGroups.ONBOARD at eval
   ["js/ui/hud-tyres.js", "js/ui/hud.js"],
+  ["js/ui/hud-skin.js", "js/ui/hud.js"],            // updateHud calls HudSkin.skinAccent (call time; ordered with its peers)
   ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
@@ -677,6 +710,8 @@ const HARD_EDGES = [
   ["js/garage/scene-prims.js", "js/garage/scene-equipment.js"],   // the pit equipment destructures GaragePrims at eval
   ["js/garage/scene-prims.js", "js/garage/scene-live.js"],        // the live atlas destructures GaragePrims at eval
   ["js/garage/scene-equipment.js", "js/garage/scene-live.js"],    // ...and GarageEquipment (the timing-screen housing's anchor)
+  ["js/garage/scene-prims.js", "js/garage/scene-dress.js"],       // the team dress destructures GaragePrims at eval
+  ["js/garage/scene-dress.js", "js/garage/scene.js"],             // the bay destructures GarageDress at eval
   ["js/garage/scene-prims.js", "js/garage/scene.js"],             // the bay destructures GaragePrims at eval
   ["js/garage/scene-equipment.js", "js/garage/scene.js"],         // ...GarageEquipment (the fan and screen anchors)
   ["js/garage/scene-live.js", "js/garage/scene.js"],              // ...and GarageLive (the atlas size and painters)
@@ -733,6 +768,7 @@ const HARD_EDGES = [
   // monogram because a tag moved is exactly the kind of quiet regression the
   // load-order guard exists to prevent.
   ["js/car/crest-paths.js", "js/car/liverytex.js"],
+  ["js/car/crest-draw.js", "js/car/liverytex.js"],   // liverytex destructures LiveryCrests.create(...) at eval
   ["js/core/store.js", "js/camera/offsets.js"],  // cam-tune destructures GameStore at eval
   ["js/core/store.js", "js/career/career.js"],    // career destructures GameStore at eval
   ["js/core/store.js", "js/career/season-cal.js"], // season-cal destructures GameStore at eval
@@ -740,6 +776,8 @@ const HARD_EDGES = [
   ["js/physics/consts.js", "js/garage/setup-tune.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/career/season-cal.js", "js/career/season-ui.js"], // the screen reads the season rules
   ["js/career/season-ui.js", "js/game.js"],      // game.js calls SeasonUI.create(G) at eval
+  ["js/career/career-planning.js", "js/career/career.js"], // save protection runs during Career evaluation
+  ["js/garage/setup-experiments.js", "js/garage/setup-sheet.js"], // creates the tune experiment controller at evaluation
   ["js/car/parts.js", "js/career/career.js"],     // Career.start seeds owned/fitted from Parts (call time, keep ordered)
   ["js/data/driver-ratings.js", "js/game.js"],   // makeCars reads DriverRatings for every car's skill
   ["js/career/career.js", "js/race/quali-model.js"],    // quali reads Career.rnd/devFor for its spread
@@ -811,6 +849,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
   ["js/core/mat4.js", "js/physics/wall-clamp.js"],       // WallClamp binds M4.clamp at eval
+  ["js/physics/wall-end-face.js", "js/physics/wall-clamp.js"],   // WallClamp calls WallEndFace.apply(…)
   ["js/physics/wall-clamp.js", "js/game.js"],            // updateCar calls WallClamp.apply(…)
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/physics/ai-band.js", "js/game.js"],          // updateCar calls AiBand for pace catch-up
@@ -856,6 +895,7 @@ const DEFERRED = {
     "js/render/webgpu/wgx-shadow.js",
     "js/render/webgpu/wgx-chunked.js",
     "js/render/webgpu/wgx-post.js",
+    "js/render/webgpu/wgx-roadlut.js",
     "js/render/webgpu/wgx.js",
   ],
   three: [
@@ -882,11 +922,15 @@ const DEFERRED = {
 // ~350 KB of parse + PWA memory. Fetch-miss still caches on first use.
 const LAZY_AGENT = [
   "js/agent/agentview-raster.js",
+  "js/agent/agentview-corners.js",
   "js/agent/agentview.js",
+  "js/agent/apex-net.js",
   "js/agent/apex.js",
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
+  ["js/agent/apex-net.js", "js/agent/apex.js"],   // ApexApi spreads ApexNet.hooks(...) when game.js calls ApexApi.create
+  ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
 ];
 
 // RACE PAYLOAD. Data a session needs only once a race resolves, never to paint
@@ -935,6 +979,7 @@ const LAZY_RACE_SESSION_EDGES = [
 const LAZY_AUDIO = [
   "js/audio/signal.js",
   "js/audio/soundtrack.js",
+  "js/audio/race-mix-audition.js",
   "js/audio/radio-fx.js",
   "js/audio/tone-model.js",
   "js/audio/ers-layer.js",
@@ -945,6 +990,7 @@ const LAZY_AUDIO = [
   "js/audio/crowd.js",
   "js/audio/car-sfx.js",
   "js/audio/voice-pack.js",
+  "js/audio/battle-earcon.js", // finite opt-in motifs; panel and voice cancellation share the helper
   "js/audio/radio-voice.js",
   "js/audio/announcer-recorded.js",
   "js/audio/announcer.js",
@@ -960,6 +1006,8 @@ const LAZY_AUDIO_EDGES = [
   ["js/audio/engine.js", "js/audio/music-lib.js"],
   ["js/audio/engine.js", "js/audio/crowd.js"],
   ["js/audio/voice-pack.js", "js/audio/radio-voice.js"],
+  ["js/audio/battle-earcon.js", "js/audio/radio-voice.js"], // stop/halt cancels all owned motifs
+  ["js/audio/battle-earcon.js", "js/audio/panel.js"], // creates the preview service at panel construction
   ["js/audio/radio-voice.js", "js/audio/announcer.js"],
   ["js/audio/announcer-recorded.js", "js/audio/announcer.js"],
   ["js/audio/engine.js", "js/audio/panel.js"],
@@ -1036,16 +1084,19 @@ const LAZY_EDITOR = [
   "js/editor/elev-presets.js", // ElevPresets: Flat / Rolling / Hilly → per-node heights[] (no DOM)
   "js/editor/profile.js",     // DesignerProfile: the elevation strip under the canvas (per-node height grips → callbacks)
   "js/editor/selection-panel.js", // DesignerSelection: shared point/range controls
+  "js/editor/followup-tools.js", // review proposals, scenery recipes and learning cards
   "js/editor/scenery-panel.js", // DesignerScenery: theme discovery, atmosphere and prop inspector
   "js/editor/bridge-panel.js", // DesignerBridges: authored road-overpass controls
+  "js/editor/workspace.js",  // DesignerWorkspace: inspector disclosures and navigation state
   "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
 ];
 // stamps / randomise / validate / insight / fixes / canvas / profile destructure TrackShape at eval — the
 // same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
 // roster; designer.js (the screen) must follow every other editor module.
 // elev-presets is pure (optional CustomTracks.LIMITS at call time) — no shape edge.
-const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/scenery-preview.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/bridge-panel.js" && f !== "js/editor/designer.js")
+const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/followup-tools.js" && f !== "js/editor/shape.js" && f !== "js/editor/scenery-preview.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/bridge-panel.js" && f !== "js/editor/workspace.js" && f !== "js/editor/designer.js")
   .map((f) => ["js/editor/shape.js", f])
+  .concat([["js/editor/followup-tools.js", "js/editor/scenery-panel.js"]])
   .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
 
 // WEBXR SESSION (js/xr/* minus the boot façade). ~42 KB behind navigator.xr /
@@ -1081,12 +1132,13 @@ const LAZY_CAM_EDITOR_EDGES = [];
 
 // CAREER screen body (~63 KB). Title buttons call CareerUI.openHub/openSlots
 // (FULL stub in career-ui-boot.js); the sheet itself is unreachable until
-// CAREER opens. Dom / Career / CareerBackup stay FULL, so the inject needs
-// no intra-bundle edges.
+// CAREER opens. Dom / Career / CareerBackup stay FULL; planning cards load
+// before the screen that calls them.
 const LAZY_CAREER_UI = [
+  "js/career/career-planning-ui.js", // read-only planning cards and explicit recovery
   "js/career/career-ui.js",   // CareerScreen
 ];
-const LAZY_CAREER_UI_EDGES = [];
+const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/career-ui.js"]];
 
 // TRACK BUILD toolkit (~535 KB raw / ~170 KB gzip). Title never runs a byte of
 // these — only Tracks.build / buildPaced (after ensureScenery) does. Order IS
@@ -1106,6 +1158,7 @@ const LAZY_TRACK_BUILD = [
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
   "js/track/scenery/venue.js",
+  "js/track/scenery/guards.js",
   "js/track/scenery/build-props.js",
 ];
 const LAZY_TRACK_BUILD_EDGES = [
@@ -1116,6 +1169,7 @@ const LAZY_TRACK_BUILD_EDGES = [
   ["js/track/scenery/identity.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/pits.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/venue.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/guards.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/themes.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/landmark-kit.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/circuit-kit.js", "js/track/scenery/build-props.js"],
@@ -1144,6 +1198,7 @@ const LAZY_NET = [
   "js/net/transport.js",
   "js/net/handshake.js",
   "js/net/lobby-codes.js",  // LobbyCodes: paste/copy/share/scan/QR for invite+answer (before lobby)
+  "js/net/lobby-roster.js", // LobbyRoster: the room roster's stateless DOM leaves (before lobby)
   "js/net/snapshot.js",
   "js/net/session.js",
   "js/net/netplay.js",
@@ -1207,6 +1262,7 @@ const LAZY_NET_EDGES = [
   ["js/net/scan.js", "js/net/lobby.js"],
   ["js/net/handshake.js", "js/net/lobby-codes.js"],
   ["js/net/lobby-codes.js", "js/net/lobby.js"],
+  ["js/net/lobby-roster.js", "js/net/lobby.js"],   // lobby destructures LobbyRoster inside create(), which game.js evals
 ];
 
 const DEFERRED_EDGES = [
@@ -1225,6 +1281,7 @@ const DEFERRED_EDGES = [
   ["js/render/webgpu/wgx-shadow.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx-chunked.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx-post.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgx-roadlut.js", "js/render/webgpu/wgx.js"],   // wgx.js destructures WGXRoadLut at eval
   ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
   ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
   ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],      // TLX.create invokes TLXShaders.sky
@@ -1255,6 +1312,7 @@ const PATHS = {
   WGX_SHADOW: "js/render/webgpu/wgx-shadow.js",
   WGX_CHUNKED: "js/render/webgpu/wgx-chunked.js",
   WGX_POST: "js/render/webgpu/wgx-post.js",
+  WGX_ROADLUT: "js/render/webgpu/wgx-roadlut.js",
   WGX: "js/render/webgpu/wgx.js",
   INST_CELLS: "js/render/shared/inst-cells.js",
   GLTF: "js/render/shared/gltf.js",

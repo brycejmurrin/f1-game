@@ -771,6 +771,9 @@ const TyreModel = (function () {
       if (quali()) { c.tyreTs = optTemp(c.tyre.life); c.tyreTb = c.tyreTs; }   // …except a qualifying set: warmed on the out-lap
       c.tyreGrain = 0; c.tyreBlister = 0; c.flatSpot = 0;
       c.tyreLap0 = c.lap || 0;
+      // A box BEFORE the line fits mid-lap N: the next crossing reads N+1 but is only a partial lap on this
+      // set, so lapsOn would run a lap ahead (replan's loadK, wetLapsToStop, the HUD's laps left).
+      c.tyreLapAdj = (c.lap || 0) >= 1 && G.track && G.track.total > 0 && (c.s || 0) > G.track.total * 0.5 ? 1 : 0;
       c.tyreStints = (c.tyreStints || 0) + 1;
       // THE STINT LOG, which is what the results sheet draws. Recorded HERE
       // because fit() is the only place a set is ever changed, so the log and
@@ -824,9 +827,17 @@ const TyreModel = (function () {
     // dictionary-mode object (a hash probe + getter call per read), so it reads each value once and hands
     // them down — ambient was read twice per car through trackTemp() (PERF-HUNT-2 S4/S7). Same arithmetic.
     function ambient() { return ambientAt(G.weatherArc, G.raceWeather); }
+    // Progress of the temperature blend. A local shower (arc.cell) outlives its ramp and then dries back to the
+    // start weather with weather-arc.js's TAU_DRY lag; holding f = 1 until the arc let go stepped the air 13 -> 30 C
+    // and the asphalt 14 -> 48 C in one tick (R1, LIVE-DEBUGGER-RACE-2026-10-16).
+    const TAU_DRY = 36;
+    function arcFrac(arc) {
+      if (arc.cell && arc.t >= arc.cell.life) return Math.exp(-(arc.t - arc.cell.life) / TAU_DRY);
+      return clamp(arc.t / arc.dur, 0, 1);
+    }
     function ambientAt(arc, weather) {
       if (arc && arc.dur > 0 && arc.from && arc.to) {
-        const f = clamp(arc.t / arc.dur, 0, 1);
+        const f = arcFrac(arc);
         return tAmb(arc.from) + (tAmb(arc.to) - tAmb(arc.from)) * f;
       }
       return tAmb(weather);
@@ -835,7 +846,7 @@ const TyreModel = (function () {
     function trackTemp() { const arc = G.weatherArc, weather = G.raceWeather; return trackTempAt(arc, weather, ambientAt(arc, weather)); }
     function trackTempAt(arc, weather, a) {
       if (arc && arc.dur > 0 && arc.from && arc.to) {
-        const f = clamp(arc.t / arc.dur, 0, 1);
+        const f = arcFrac(arc);
         const d = tTrackDelta(arc.from) + (tTrackDelta(arc.to) - tTrackDelta(arc.from)) * f;
         return a + d;
       }
@@ -949,7 +960,7 @@ const TyreModel = (function () {
     // the raw state; `spent` is what the HUD bar and the engineer read, because
     // "80% through the stint" is the thing a driver can act on.
     // Completed laps on this set: a grid set (tyreLap0 0) is not a lap old at the start crossing.
-    function lapsOn(c) { return c && c.tyre ? Math.max(0, lapsDone(c.lap) - lapsDone(c.tyreLap0)) : 0; }
+    function lapsOn(c) { return c && c.tyre ? Math.max(0, lapsDone(c.lap) - lapsDone(c.tyreLap0) - (c.tyreLapAdj || 0)) : 0; }
     function spent(c) { return c ? clamp(c.tyreWear || 0, 0, 2) : 0; }
     /** Laps this set has left before the cliff, at the rate THIS car has been
      *  wearing it: wear per completed lap on the set, or — before a lap has

@@ -99,7 +99,7 @@
 // SETUP: launchChromium clears a dead local DISPLAY (no /tmp/.X11-unix/XN) so
 // headless SwiftShader WebGL can start. If you still see "__apex never appeared"
 // with gl2:false, unset DISPLAY or wrap: xvfb-run -a node tools/shot/garage-angles.mjs …
-// Chromium args come from chromiumArgsForBackend("webgl2") and include
+// Chromium args come from chromiumArgsForBackend(backend) and include
 // --enable-unsafe-swiftshader. No separate serve on :3456 — this tool starts
 // its own static server. Check loadavg < 3 first (AGENTS.md §Verification).
 //
@@ -120,8 +120,8 @@ import sharp from "sharp";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { assertOutputDir } from "../lib/output-paths.mjs";
 import {
-  chromiumArgsForBackend, installProbeInit, gotoGame, openGarage, settleGarage,
-  screenshotGameCanvas,
+  chromiumArgsForBackend, installProbeInit, gotoGame, openGarage,
+  screenshotGameCanvas, mutateCaptureScene, awaitCaptureReady, withCaptureRendering,
 } from "./probe-page.mjs";
 import { loadParts } from "../car/parts-sweep.mjs";
 import { loadAtlas } from "../car/livery-contrast.mjs";
@@ -144,7 +144,7 @@ const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom"
   "--cols", "--json", "--base", "--design", "--zip", "--logos", "--site", "--cdn",
   "--lamp", "--aero", "--target", "--dpr", "--budget", "--baseline",
   "--station", "--pair", "--flat", "--eye", "--look", "--path", "--path-steps", "--clamp",
-  "--serve", "--watch", "--overlay"]);
+  "--serve", "--watch", "--overlay", "--backend"]);
 
 // Bare `--help` used to be silently ignored (OWN_FLAGS only catches `--k=v`
 // unknowns as livery axes) and launch a multi-minute Chromium shoot. Exit
@@ -153,7 +153,7 @@ const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom"
 const GA_USAGE = `garage-angles — garage shots, ONE Chromium (soft #game-soft CDP)
 
   node tools/shot/garage-angles.mjs [--team=redbull|all] [--views=spine] [--plan]
-    [--livery=default] [--preset=wall|fin|flank|mark|quick|sweep|none]
+    [--backend=webgl2|three] [--livery=default|shipped] [--preset=wall|fin|flank|mark|quick|sweep|none]
     [--out=artifacts/garage-angles] [--fast] [--viewport=1280x720]
 
   --plan     print the cartesian product and exit (no browser)
@@ -243,6 +243,8 @@ function expandRange(tok, map) {
 }
 const nums = (raw, map = Number) => listOf(raw).flatMap((t) => expandRange(t, map)).filter((n) => Number.isFinite(n));
 
+const backend = flag("--backend", "webgl2");
+if (!["webgl2", "three"].includes(backend)) { console.error("--backend must be webgl2 or three"); process.exit(2); }
 const teamArg = flag("--team", "mclaren").trim();
 const liveries = listOf(flag("--livery", "default"));
 // `--base` is a LIST: a design walk runs over each named catalog livery.
@@ -1251,7 +1253,29 @@ function watchPaths(paths, onChange) {
   }
 }
 
-async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
+// Preparation never waits on a paused renderer. The final scene mutation owns
+// one freshness barrier immediately before capture.
+async function settleGaragePreview(page, { frames = 0 } = {}) {
+  await mutateCaptureScene(page, (count) => {
+    for (let i = 0; i < count; i++) window.__apex.step(1 / 60);
+  }, Math.max(0, frames | 0));
+}
+
+async function prepareGarageCapture(page) {
+  const bound = await page.evaluate(() => {
+    const a = window.__apex;
+    a.agentHelp();
+    const actual = a.diag({ download: false }).env.backend;
+    a.headless(true);
+    return actual;
+  });
+  if (bound !== backend) throw new Error(`garage requested ${backend}, bound ${bound}`);
+}
+
+async function frame(page, ...args) {
+  return withCaptureRendering(page, () => captureFrame(page, ...args));
+}
+async function captureFrame(page, teamId, tag, cam, dir, capOpts = {}) {
   const tSettle = Date.now();
   const view = cam.view;
   const vpCur = capOpts.vp || vp;
@@ -1288,7 +1312,9 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
       window.__apex.garageStep(1 / 60, 60);
     }, cam.aero.on);
   }
-  await settleGarage(page, { frames: viewSettle, awaitMs: viewAwait });
+  await mutateCaptureScene(page, (count) => {
+    for (let i = 0; i < count; i++) window.__apex.step(1 / 60);
+  }, viewSettle);
   const settleMs = ms(tSettle);
   const vpTag = `${vpCur[0]}x${vpCur[1]}`;
   const png = join(dir, capOpts.name ? `${safe(capOpts.name)}.png`
@@ -1301,10 +1327,14 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
   const maxTries = Math.max(gateRetries, capOpts.prevHash ? 4 : gateRetries);
   for (let attempt = 0; attempt < maxTries; attempt++) {
     tries++;
-    if (attempt) await settleGarage(page, { frames: Math.max(2, viewSettle), awaitMs: viewAwait });
+    if (attempt) await mutateCaptureScene(page, (count) => {
+      window.__apex.headless(false);
+      for (let i = 0; i < count; i++) window.__apex.step(1 / 60);
+    }, Math.max(2, viewSettle));
     const tCap = Date.now();
+    const readiness = await awaitCaptureReady(page, { timeoutMs: 60000, pauseRender: true });
     const shot = await screenshotGameCanvas(page, png, {
-      skipAwait: false,
+      skipAwait: true,
       skipVisible: !!capOpts.gameVisible,
     });
     capMs += ms(tCap);
@@ -1336,7 +1366,7 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
         : null;
       const baselineDiff = baselineDir ? await pixelDiff(join(baselineDir, basename(png)), png) : null;
       return {
-        view, cam: cam.key, tag, png, vp: vpTag, spread: gate.spread, via: shot.via || "page-clip",
+        view, cam: cam.key, tag, png, vp: vpTag, backend, readiness, spread: gate.spread, via: shot.via || "page-clip",
         occl: occl == null ? undefined : +(occl * 100).toFixed(1),
         baselineDiff: baselineDiff == null ? undefined : baselineDiff,
         dpr: capOpts.dpr || 1, hash,
@@ -1350,10 +1380,11 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
 }
 
 async function applyLivery(page, teamId, livId) {
-  const got = await page.evaluate(({ team, id }) => {
+  const got = await page.evaluate(({ team, id: requested }) => {
+    const id = requested === "shipped" ? GarageDefaults.get("livery." + team) || "default" : requested;
     const t = Teams.LIST.find((x) => x.id === team);
     if (!t) return { ok: false, error: `no team "${team}"` };
-    const list = Liveries.forTeam(t);
+    const list = Liveries.forTeam(t).concat(GameStore.store.get("livery.custom." + team, []) || []);
     if (!list.some((l) => l.id === id)) {
       return { ok: false, error: `no livery "${id}"`, have: list.map((l) => l.id) };
     }
@@ -1364,7 +1395,7 @@ async function applyLivery(page, teamId, livId) {
     const extra = got.have ? ` (have ${got.have.join(",")})` : "";
     throw new Error(`${got.error}${extra}`);
   }
-  await settleGarage(page, { frames: liverySettle, awaitMs: liveryAwait });
+  await settleGaragePreview(page, { frames: liverySettle, awaitMs: liveryAwait });
   return got.name;
 }
 
@@ -1483,7 +1514,7 @@ async function applyDesign(page, teamId, fields, base) {
     const extra = got.have ? ` (have ${got.have.join(",")})` : "";
     throw new Error(`${got.error}${extra}`);
   }
-  await settleGarage(page, { frames: liverySettle, awaitMs: liveryAwait });
+  await settleGaragePreview(page, { frames: liverySettle, awaitMs: liveryAwait });
   return got;
 }
 
@@ -1493,7 +1524,7 @@ async function switchTeam(page, teamId) {
   if (useStoreTeam) {
     const got = await page.evaluate((id) => window.__apex.garageTeam(id), teamId);
     if (!got.ok) throw new Error(`garageTeam(${teamId}): ${got.error || "failed"}`);
-    if (got.switched) await settleGarage(page, { frames: liverySettle, awaitMs: liveryAwait });
+    if (got.switched) await settleGaragePreview(page, { frames: liverySettle, awaitMs: liveryAwait });
     if (!got.label) throw new Error(`garage opened but label empty after switch to ${teamId}`);
     return { switched: got.switched, label: got.label };
   }
@@ -1516,7 +1547,7 @@ async function switchTeam(page, teamId) {
       return !tp || tp.hidden || getComputedStyle(tp).display === "none";
     }, null, { polling: 100, timeout: 15000 }).catch(() => {});
   }
-  if (switched) await settleGarage(page, { frames: liverySettle, awaitMs: liveryAwait });
+  if (switched) await settleGaragePreview(page, { frames: liverySettle, awaitMs: liveryAwait });
   const label = await page.evaluate(() => document.getElementById("cs-team")?.textContent || "");
   return { switched, label };
 }
@@ -1533,16 +1564,17 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
   try {
     await page.setViewportSize({ width: vp[0], height: vp[1] });
     if (ownPage) {
-      await installProbeInit(page, { backend: "webgl2", team: teamIndex(workTeams[0]) });
+      await installProbeInit(page, { backend, team: teamIndex(workTeams[0]) });
     }
     const tBoot = Date.now();
     await gotoGame(page, srvUrl, 120000);
     phase.boot = ms(tBoot);
     await page.evaluate(({ t, liv }) => {
-      GameStore.store.set("livery." + t, liv);
+      GameStore.store.set("livery." + t, liv === "shipped" ? GarageDefaults.get("livery." + t) || "default" : liv);
     }, { t: workTeams[0], liv: liveries[0] });
     const tOpen = Date.now();
     await openGarage(page, { team: workTeams[0] });
+    await prepareGarageCapture(page);
     phase.open = ms(tOpen);
 
     const shots = [];
@@ -1585,7 +1617,7 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
         for (const v of vps) {
           if (vps.length > 1 || v !== vp) {
             await page.setViewportSize({ width: v[0], height: v[1] });
-            await settleGarage(page, { frames: viewSettle, awaitMs: viewAwait });
+            await settleGaragePreview(page, { frames: viewSettle, awaitMs: viewAwait });
           }
           for (const cam of cams) {
             const s = await frame(page, teamId, tag, cam, dir, {
@@ -1627,11 +1659,12 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
 async function serveSession(browser, gameUrl) {
   const page = await browser.newPage();
   await page.setViewportSize({ width: vp[0], height: vp[1] });
-  await installProbeInit(page, { backend: "webgl2", team: teamIndex(teams[0]) });
+  await installProbeInit(page, { backend, team: teamIndex(teams[0]) });
   const tBoot = Date.now();
   await gotoGame(page, gameUrl, 120000);
-  await page.evaluate(({ t, liv }) => { GameStore.store.set("livery." + t, liv); }, { t: teams[0], liv: liveries[0] });
   await openGarage(page, { team: teams[0] });
+  await applyLivery(page, teams[0], liveries[0]);
+  await prepareGarageCapture(page);
   const st = { team: teams[0], tag: liveries[0], name: liveries[0], livery: liveries[0], design: null, base: null,
                cam: cams[0] || null, shots: [], n: 0 };
   const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
@@ -1648,6 +1681,7 @@ async function serveSession(browser, gameUrl) {
     await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 200, timeout: 120000 });
     await openGarage(page, { team: st.team });
     await reapply();
+    await prepareGarageCapture(page);
   };
   // A diff side is a shot name or a PNG path. A path must be a file under
   // artifacts/ or scratch/ (real path, so a symlink out is refused): the rule
@@ -1675,7 +1709,7 @@ async function serveSession(browser, gameUrl) {
       if (cmd.seat != null) {
         const got = await page.evaluate(({ t, seat }) => window.__apex.garageTeam(t, seat), { t: cmd.team, seat: Number(cmd.seat) });
         if (!got.ok) throw new Error(`seat ${cmd.seat}: ${got.error || "refused"}`);
-        if (got.switched) await settleGarage(page, { frames: liverySettle, awaitMs: liveryAwait });
+        if (got.switched) await settleGaragePreview(page, { frames: liverySettle, awaitMs: liveryAwait });
         r.seat = got.seat;
       }
     }
@@ -1691,10 +1725,17 @@ async function serveSession(browser, gameUrl) {
     }
     if (cmd.frame) {
       st.cam = camFromSpec(cmd.frame);
-      const framed = await page.evaluate(({ v, o }) => window.__apex.garageFrame(v, o), { v: st.cam.view, o: hookOptsFor(st.cam) });
-      if (!framed.ok) throw new Error(`frame: ${framed.error || "failed"}`);
-      await settleGarage(page, { frames: viewSettle, awaitMs: viewAwait });
-      r.cam = st.cam.key; r.camera = await cameraNow();
+      if (!cmd.shot) r.camera = await withCaptureRendering(page, async () => {
+        const framed = await mutateCaptureScene(page, ({ v, o, frames }) => {
+          const a = window.__apex, result = a.garageFrame(v, o);
+          for (let i = 0; i < frames; i++) a.step(1 / 60);
+          return result;
+        }, { v: st.cam.view, o: hookOptsFor(st.cam), frames: viewSettle });
+        if (!framed.ok) throw new Error(`frame: ${framed.error || "failed"}`);
+        await awaitCaptureReady(page, { timeoutMs: 60000, pauseRender: true });
+        return cameraNow();
+      });
+      r.cam = st.cam.key;
     }
     if (cmd.shot) {
       if (!st.cam) throw new Error("no camera — send a frame first");
@@ -1707,6 +1748,7 @@ async function serveSession(browser, gameUrl) {
       if (doLabel) await labelPng(s.png, titleOf(s), subOf(s));
       st.shots.push(s);
       r.shot = s;
+      r.camera = await cameraNow();
     }
     if (Array.isArray(cmd.diff) && cmd.diff.length === 2) {
       const [a, b] = cmd.diff.map(pngOf);
@@ -1724,7 +1766,7 @@ async function serveSession(browser, gameUrl) {
     if (cmd.reload) { await reload(); r.reloaded = true; }
     if (cmd.status || Object.keys(cmd).every((k) => k === "id")) {
       r.status = { team: st.team, tag: st.tag, livery: st.livery, design: st.design, base: st.base,
-                   cam: st.cam ? st.cam.key : null, shots: st.shots.length, out: outDir, camera: await cameraNow() };
+                   cam: st.cam ? st.cam.key : null, shots: st.shots.length, out: outDir, camera: await cameraNow(), renderPaused: await page.evaluate(() => window.__apex.headless()) };
     }
     return r;
   };
@@ -1880,7 +1922,7 @@ async function finishRun(A, B, ctx) {
   const record = {
     teams, liveries, base: baseLivery, axes, designs, against: againstRef, preset: presetRaw || null,
     fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle, live: doLive, liveBuild,
-    liverySettle, viewSettle, gateRetries,
+    backend, liverySettle, viewSettle, gateRetries,
     zoom: zoomList, pan: panList, cams, crop, name: nameTpl || null,
     logos: logosMode || null, site: doSite, inert, dprs, bases: baseList,
     lamps: lampList, targets: targetList.map((t) => t.name), baseline: baselineDir, budget: budgetSec || null,
@@ -1940,7 +1982,7 @@ async function main() {
   }
   if (doPlan) {
     console.log(JSON.stringify({
-      teams, liveries, base: baseLivery, axes, designs, views, cams, viewports: vps,
+      backend, teams, liveries, base: baseLivery, axes, designs, views, cams, viewports: vps,
       preset: presetRaw || null, crop, name: nameTpl || null, logos: logosMode || null,
       stations: [...new Set(cams.map((c) => c.station).filter(Boolean))],
       stationsFrom: autoStations.length ? fieldStations : null,
@@ -2026,7 +2068,7 @@ async function main() {
   const t0 = Date.now();
   const browser = await launchChromium({
     headless: process.env.APEX_HEADED !== "1",
-    args: chromiumArgsForBackend("webgl2"),
+    args: chromiumArgsForBackend(backend),
   });
   const rollupEntries = multiTeam && rollupOnly ? [] : null;
   try {

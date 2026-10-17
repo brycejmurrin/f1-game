@@ -43,6 +43,58 @@ async function loadMonza(page) {
 // the cheapest honest read of "how would this mode frame the car".
 const frame = (page, mode) => page.evaluate((m) => __apex.previewCam(m, 0.2, 55), mode);
 
+test.describe("deferred tuner doors", () => {
+test.use({ serviceWorkers: "block" }); // route() must own the deliberately held script.
+for (const [door, panel, close] of [["pm-camtune", "camtune", "ct-close"], ["pm-flyby", "flyby", "fb-close"]]) {
+  test(`a delayed ${door} door cannot reopen after resume and can be opened later`, async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.gfxBackend", "three");
+      localStorage.setItem("apex26.tlxForceGL", "1");
+    });
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    let release, arrived = false;
+    const gate = new Promise(resolve => { release = resolve; });
+    await page.route("**/js/camera/tuner-panel.js*", async route => { arrived = true; await gate; await route.continue(); });
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(async () => { __apex.headless(true); await __apex.race("monza"); __apex.go(); });
+    async function settings() {
+      await page.locator("#pausebtn").click();
+      await page.locator("#pm-settings").click();
+      await page.locator("#pm-open-visual").click();
+      const disclosure = page.locator("#pm-visual-tuners");
+      if (!(await disclosure.evaluate(el => el.open))) await disclosure.locator("summary").click();
+    }
+    try {
+      await settings();
+      await page.locator("#" + door).click();
+      await expect.poll(() => arrived, { timeout: BOOT_MS }).toBe(true);
+      await page.locator("#pm-settings-close").click();
+      await page.locator("#pm-settings-close").click();
+      await page.locator("#pm-resume").click();
+      release();
+      await page.waitForFunction(() => typeof CamTunerEditor !== "undefined" && typeof FlybyEditor !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+      const settled = await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => resolve({
+        camera: document.getElementById("camtune").hidden,
+        flyby: document.getElementById("flyby").hidden,
+        dock: document.body.classList.contains("lt-open"),
+        pause: document.getElementById("pausemenu").hidden,
+      }))));
+      expect(settled).toEqual({ camera: true, flyby: true, dock: false, pause: true });
+      await settings();
+      await page.locator("#" + door).click();
+      await expect(page.locator("#" + panel)).toHaveJSProperty("hidden", false);
+      await page.locator("#" + close).click();
+      await expect(page.locator("#pm-panel-visual")).toBeVisible();
+      await expect(page.locator("#pm-panel-display")).toBeHidden();
+      expect(errors).toEqual([]);
+    } finally { release(); }
+  });
+}
+});
+
 test("camTune() reports the knob registry; the six offsets default to zero", async ({ page }) => {
   await loadMonza(page);
   const all = await page.evaluate(() => __apex.camTune());
@@ -206,8 +258,8 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
     __apex.camera("hood");
     document.getElementById("pausebtn").click();
     document.getElementById("pm-settings").click();
-    document.getElementById("pm-open-display").click();
-    document.querySelector("#pm-visual-tuners > summary").click();
+    document.getElementById("pm-open-visual").click();
+    document.getElementById("pm-visual-tuners").open = true;
     document.getElementById("pm-camtune").click();
   });
   // The #camtune wrapper is a zero-width fixed shell (the docked .sheet inside
@@ -246,6 +298,8 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.camComfort") || "{}").fovBias)).toBe(-5);
 
   // ALL CAMS scope writes the global baseline, not the live mode.
+  await page.locator('#camtune-inner .ew-tools > summary').click();
+  await expect(page.locator('#camtune-inner .ew-tools')).toHaveAttribute('open', '');
   await page.evaluate(() => document.querySelector('#ct-scope button[data-scope="global"]').click());
   await expect(page.locator("#ct-profile")).toContainText("ALL CAMERAS");
   await page.evaluate(() => {

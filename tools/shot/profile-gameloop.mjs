@@ -17,6 +17,8 @@ exitIfHelp(argv, `profile-gameloop — headless V8 CPU profile of the game loop
 
 Writes scratch/profiles/*.cpuprofile. Default track=vegas, mode=physics.`);
 const [track = "vegas", mode = "physics"] = argv;
+// Page-ready / track-load wait: 20 s is too short on a loaded SwiftShader box (APEX_PROFILE_WAIT_MS raises it).
+const WAIT_MS = Math.max(20000, +process.env.APEX_PROFILE_WAIT_MS || 20000);
 
 const srv = await startStaticServer(ROOT);
 let browser;
@@ -29,9 +31,9 @@ try {
   const context = await browser.newContext(ctxOpts);
   const page = await context.newPage();
   await page.goto(srv.url);
-  await page.waitForFunction(() => window.__apex != null, null, { timeout: 20000 });
+  await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS });
   await page.evaluate((t) => { window.__apex.race(t); }, track);
-  await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: 20000 });
+  await page.waitForFunction((t) => window.__apex.info().track === t, track, { timeout: WAIT_MS });
   await sleep(2000);
 
   const cdp = await page.context().newCDPSession(page);

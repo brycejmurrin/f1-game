@@ -583,7 +583,7 @@ varies by build; the September 15 probe below verified one working build. Missin
 /usr/share/vulkan/icd.d/lvp_icd.json` fails) means reinstall
 `mesa-vulkan-drivers` or re-Save the env snapshot.
 
-MCP on this host: the three-server map is `docs/AGENT-SURFACE.md` (trimmed from seven on 2026-09; the CLI-only leftovers are tabled there). Keep
+MCP on this host: the current server map is `docs/AGENT-SURFACE.md` (the CLI-only leftovers are tabled there). Keep
 `apex-tools` in repo-root `.mcp.json` (and `.cursor/mcp.json`); the cloud host
 catalog is often empty, in which case the shell wrappers
 (`./tools/mcp/apex-tools-mcp.sh call`, `./tools/mcp/playwright-mcp.sh`,

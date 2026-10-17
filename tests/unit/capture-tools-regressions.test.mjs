@@ -6,14 +6,14 @@ import { spawnSync } from 'node:child_process';
 import vm from 'node:vm';
 import { EventEmitter } from 'node:events';
 import sharp from 'sharp';
-import { screenshotPresentedCanvas, awaitCaptureReady, mutateCaptureScene } from '../../tools/shot/probe-page.mjs';
+import { screenshotPresentedCanvas, awaitCaptureReady, mutateCaptureScene, withCaptureRendering, screenshotNativeCanvas } from '../../tools/shot/probe-page.mjs';
 import { poolMap, startWorkerPool, waitCaptureFrame, openPage } from '../../tools/shot/apex-capture.mjs';
 import { parseCssPlayArgs, screenClicks, SCREENS, swapStylesheet } from '../../tools/ui/css-play.mjs';
 import { menuReady, previewMapSettled } from '../../tools/ui/menu-readiness.mjs';
 import { parseSurveyTrackArgs } from '../../tools/track/survey-track.mjs';
 import { parseCaptureArgs, pixelEvidence, rendererEvidence, ROOT } from '../../tools/shot/capture-contract.mjs';
-import { pendingWatchCancellation } from '../../tools/check/lifecycle-census.mjs';
-import { recordCapture, stageRace, runBoundedCapture, visibleScreen, waitNextGameRender, captureContextOptions, captureFailureSnapshot, captureOperationBudget, captureOperation } from '../../tools/shot/capture-runtime.mjs';
+import { lifecycleSoak, pendingWatchCancellation } from '../../tools/check/lifecycle-census.mjs';
+import { recordCapture, stageRace, runBoundedCapture, visibleScreen, waitNextGameRender, captureContextOptions, captureFailureSnapshot, captureOperationBudget, captureOperation, parseCaptureProvenance, capturePageProvenance } from '../../tools/shot/capture-runtime.mjs';
 import { parseBenchmarkArgs, summarizeBenchmarkSamples, captureSample } from '../../tools/shot/capture-benchmark.mjs';
 import { registerTeardownResource, shutdown } from '../../tools/lib/harness.mjs';
 import { cameraDelta, loadFixture, exitReplayThroughUi, preflightReplayFixture, cameraOnlyFixture, controlClickGuard, verifiedControlClick } from '../../tools/shot/replay-camera-probe.mjs';
@@ -37,7 +37,7 @@ test('agent help boots once with the selected seed and measured startup budget',
     startStaticServer: async () => ({ url: 'http://fixture/' }),
     launchChromium: async () => ({ newPage: async () => page }),
     installProbeInit: async () => calls.push(['init']),
-    chromiumArgsForBackend: () => [], sleep: async () => {},
+    chromiumArgsForBackend: () => [], sleep: async () => {}, parseFlags: () => ({}),
     shutdown: async () => { cleaned++; },
   });
   assert.deepEqual(calls, [['init'], ['goto', 'http://fixture/?seed=0'], ['wait', 45000, 100]]);
@@ -286,6 +286,20 @@ test('lifecycle pending WATCH cancellation prevents stale trace completion launc
   assert.equal(cancellation.after.pendingRequests, 0);
   assert.equal(cancellation.after.launches, 0);
   assert.equal(cancellation.after.cachedTraces, false);
+});
+
+test('lifecycle soak closes every repeated headless mode cycle', async () => {
+  const soak = await lifecycleSoak({ track: 'monza', seed: 7, cycles: 1 });
+  assert.equal(soak.ok, true);
+  assert.equal(soak.rows.length, 1);
+  assert.equal(soak.rows[0].closed.resources.timers, 0);
+  assert.equal(soak.rows[0].closed.resources.rafFrames, 0);
+  assert.equal(soak.rows[0].closed.resources.rejectionListeners, 0);
+});
+
+test('lifecycle census accepts a bounded repeat count', () => {
+  assert.equal(parseCaptureArgs(['--cycles=3', '--plan'], 'lifecycle-census', ['--cycles']).cycles, 3);
+  assert.throws(() => parseCaptureArgs(['--cycles=13', '--plan'], 'lifecycle-census', ['--cycles']), /cycles bounds/);
 });
 
 test('replay fixture plan is offline and bounded', () => {
@@ -691,6 +705,18 @@ test('GPU diagnostics omit raw command lines and reject explicit fallback capabi
   assert.doesNotThrow(() => assertCaptureGpuCapability({ actual: null }, { gpuExplicit: false }));
 });
 
+test('capture provenance keeps source and deployed shell SHAs distinct', async () => {
+  const source = 'ABCDEFabcdefABCDEFabcdefABCDEFabcdefABCD';
+  const deployed = '0123456789abcdef0123456789abcdef01234567';
+  const page = { evaluate: async () => ({ deployedSha: deployed, build: 2042, version: '2026.10.16' }) };
+  const evidence = await capturePageProvenance(page, { sourceSha: source, dirty: true });
+  assert.deepEqual(evidence, { sourceSha: source.toLowerCase(), deployedSha: deployed, deployedShaTrusted: true,
+    matches: false, build: '2042', version: '2026.10.16', dirty: true });
+  assert.equal(parseCaptureProvenance({ sourceSha: source, deployedSha: source }).matches, true);
+  assert.equal(parseCaptureProvenance({ sourceSha: source, deployedSha: 'latest' }).deployedShaTrusted, false);
+  assert.equal(parseCaptureProvenance({ sourceSha: source, deployedSha: null }).deployedSha, null);
+});
+
 test('GPU diagnostics clean up sessions created after a timeout without changing returned provenance', async () => {
   let resolveSession, detached = 0, sent = 0;
   const creation = new Promise((resolve) => { resolveSession = resolve; });
@@ -859,4 +885,79 @@ test('WebGPU capture launch uses the verified software adapter pins and refuses 
   assert.ok(launch.args.includes('--use-webgpu-adapter=swiftshader'));
   assert.ok(launch.args.includes('--use-vulkan=swiftshader'));
   assert.throws(() => captureLaunchOptions(parseCaptureOptions(['--gpu', 'llvmpipe']), { backend: 'webgpu' }), /WebGL-only/);
+});
+
+
+test('garage capture uses actual native presents when the race camera clock is stationary', async () => {
+  let presents = 0, paused = false;
+  const window = { __apex: { garageCam: () => ({ on: true }), cameraState: () => ({ renderFrame: 0 }),
+    headless: (value) => value == null ? paused : (paused = value) } };
+  const GLX = { softPresent: () => false, awaitSoftPresent: async (_timeout, signal) => {
+    assert.equal(signal, 'frame'); assert.equal(paused, false); presents++; return 'frame';
+  } };
+  const page = { evaluate: (fn, payload) => vm.runInNewContext('(' + fn.toString() + ')(payload)',
+    { window, GLX, payload, setTimeout, clearTimeout, Date }) };
+  const result = await awaitCaptureReady(page, { timeoutMs: 100, pauseRender: true });
+  assert.equal(result.presents, 2); assert.equal(presents, 2); assert.equal(paused, true);
+  paused = false; GLX.awaitSoftPresent = async () => 'stale';
+  await assert.rejects(awaitCaptureReady(page, { timeoutMs: 100 }), /no usable presentation clock/);
+});
+
+test('isolated car capture uses the viewer draw clock instead of a race camera clock', async () => {
+  let frame = 2;
+  const window = { CARVIEW: { get frame() { return frame++; } }, __apex: { cameraState: () => ({ renderFrame: 0 }) } };
+  const page = { evaluate: (fn, payload) => vm.runInNewContext('(' + fn.toString() + ')(payload)',
+    { window, GLX: { softPresent: () => false }, payload, setTimeout, clearTimeout, Date }) };
+  const result = await awaitCaptureReady(page, { timeoutMs: 100 });
+  assert.equal(result.mode, 'native-frame'); assert.ok(result.shown >= result.before + 2);
+});
+
+test('capture rendering restores a live or paused owner after success or capture failure', async () => {
+  for (const previous of [true, false]) for (const fail of [true, false]) {
+    let paused = previous;
+    const window = { __apex: { headless: (value) => value == null ? paused : (paused = value) } };
+    const page = { evaluate: (fn, payload) => vm.runInNewContext('(' + fn.toString() + ')(payload)', { window, payload }) };
+    const run = withCaptureRendering(page, async () => {
+      assert.equal(paused, false);
+      window.__apex.headless(true);
+      if (fail) throw new Error('capture rejected');
+      return 'captured';
+    });
+    if (fail) await assert.rejects(run, /capture rejected/); else assert.equal(await run, 'captured');
+    assert.equal(paused, previous);
+  }
+});
+
+
+test('native readback is submitted before pausing and restores its owner on failure', async () => {
+  for (const before of [false, true]) {
+    let paused = before, reads = 0;
+    const window = { __apex: { headless: (value) => value == null ? paused : (paused = value) } };
+    const GLX = { softPresent: () => false, awaitSoftPresent: async (_ms, signal) => {
+      assert.equal(signal, 'frame'); assert.equal(paused, false); return 'frame';
+    }, capturePixels: () => { reads++; assert.equal(paused, false); return Promise.reject(new Error('readback failed')); } };
+    const page = { evaluate: (fn, payload) => vm.runInNewContext('(' + fn.toString() + ')(payload)',
+      { window, GLX, payload, setTimeout, clearTimeout }) };
+    await assert.rejects(screenshotNativeCanvas(page), /readback failed/);
+    assert.equal(reads, 1); assert.equal(paused, before);
+    GLX.awaitSoftPresent = async () => 'stale';
+    await assert.rejects(screenshotNativeCanvas(page), /did not present/);
+    assert.equal(reads, 1); assert.equal(paused, before);
+    GLX.softPresent = () => true;
+    assert.equal(await screenshotNativeCanvas(page), null);
+    assert.equal(paused, before);
+  }
+});
+
+test('timed-out native presentation cannot later start a readback or pause its owner', async () => {
+  let paused = false, complete, reads = 0;
+  const window = { __apex: { headless: (value) => value == null ? paused : (paused = value) } };
+  const GLX = { softPresent: () => false, awaitSoftPresent: () => new Promise((resolve) => { complete = resolve; }),
+    capturePixels: () => { reads++; throw new Error('late readback'); } };
+  const page = { evaluate: (fn, payload) => vm.runInNewContext('(' + fn.toString() + ')(payload)',
+    { window, GLX, payload, setTimeout, clearTimeout }) };
+  await assert.rejects(screenshotNativeCanvas(page, { timeout: 5 }), /timed out/);
+  assert.equal(paused, false); complete('frame');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reads, 0); assert.equal(paused, false);
 });

@@ -34,7 +34,7 @@ function repo() {
   const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
   const tool = (...a) => cp.execFileSync(process.execPath, ["tools/check/ratchets.mjs", ...a],
-    { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GITHUB_EVENT_NAME: "", GITHUB_ACTIONS: "" } });
+    { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GITHUB_EVENT_NAME: "", GITHUB_ACTIONS: "", APEX_RATCHETS_BASE: "ship" } });
   git("init", "-q", "-b", "ship");
   git("config", "user.email", "t@example.invalid"); git("config", "user.name", "t"); git("config", "commit.gpgsign", "false");
   for (const t of TOOLS) write(t, fs.readFileSync(path.join(ROOT, t), "utf8"));
@@ -47,7 +47,7 @@ function repo() {
   // Start every ceiling AT its value: the tool writes the normalised form.
   write("tests/data/ratchets.json", JSON.stringify({ files: {
     "js/agent/apex.js": { codeLines: 1, lines: 1 }, "js/car/car3d.js": { lines: 1 }, "js/ui/hud.js": { codeLines: 1, lines: 1 } } }));
-  tool("--update");
+  tool("--update", "--absolute");
   git("add", "-A"); git("commit", "-qm", "base");
   /** Branch `name` off ship, insert `add` lines into `file` after line `at`
    *  (distinct per PR, so the SOURCE merges clean and only the ratchet can
@@ -118,4 +118,116 @@ test("--fold sums the fragments into ratchets.json and deletes them, ceilings un
     ? fs.readdirSync(path.join(r.dir, "tests/data/ratchets.d")).filter((f) => f.endsWith(".json")) : [];
   assert.deepEqual(left, [], "fold deletes every fragment");
   assert.deepEqual(JSON.parse(r.tool("--json")).rows.map((x) => `${x.file} ${x.metric} ${x.ceiling}`), before);
+});
+
+// #2449 P2 (2026-10-16): the commit hook's raise was already a delta, but the
+// DELIBERATE form (`--update`, after an extraction or a reasoned raise) still
+// rewrote absolutes into ratchets.json, so 28 of 71 conflicted syncs that day
+// fought on that file ("ratchets re-snapped once"). On a topic branch it now
+// writes the branch's own fragment, whichever way the number moves.
+const slim = (r, name, file, drop, from = "ship", at = 20) => {
+  r.git("checkout", "-q", "-b", name, from);
+  const f = path.join(r.dir, file);
+  const lines = fs.readFileSync(f, "utf8").split("\n");
+  lines.splice(at, drop);
+  fs.writeFileSync(f, lines.join("\n"));
+};
+const commitAll = (r, msg) => { r.git("add", "-A"); r.git("commit", "-qm", msg); r.git("checkout", "-q", "ship"); };
+
+test("--update on a topic branch writes a ratchets.d delta and leaves ratchets.json alone", (t) => {
+  const r = repo();
+  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  const base = fs.readFileSync(path.join(r.dir, "tests/data/ratchets.json"), "utf8");
+  slim(r, "cursor/lower-7777", "js/ui/hud.js", 30);
+  const out = r.tool("--update");
+  assert.equal(fs.readFileSync(path.join(r.dir, "tests/data/ratchets.json"), "utf8"), base, "ratchets.json untouched");
+  const frag = JSON.parse(fs.readFileSync(path.join(r.dir, "tests/data", "ratchets.d", "cursor--lower-7777.json"), "utf8"));
+  assert.equal(frag.files["js/ui/hud.js"].lines, -30, "the lowering is a negative delta");
+  assert.match(out, /cursor--lower-7777\.json/, "the receipt names the fragment");
+  const v = JSON.parse(r.tool("--json"));
+  assert.equal(v.ok, true);
+  for (const x of v.rows.filter((x) => x.file === "js/ui/hud.js")) assert.equal(x.ceiling, x.value);
+});
+
+test("two branches that each --update the SAME ceiling merge clean and sum", (t) => {
+  const r = repo();
+  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  slim(r, "cursor/x-8888", "js/ui/hud.js", 30); r.tool("--update"); commitAll(r, "x");
+  slim(r, "cursor/y-9999", "js/ui/hud.js", 40, "ship", 120); r.tool("--update"); commitAll(r, "y");
+  assert.deepEqual(r.conflicts("cursor/x-8888", "cursor/y-9999"), [], "old behaviour: both rewrote the same absolute line");
+  assert.deepEqual(r.conflicts("ship", "cursor/y-9999"), []);
+});
+
+test("--update --absolute snaps ratchets.json in place; a detached HEAD does too", (t) => {
+  const r = repo();
+  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  const lines = () => JSON.parse(r.tool("--json")).rows.find((x) => x.file === "js/ui/hud.js" && x.metric === "lines");
+  slim(r, "cursor/abs-aaaa", "js/ui/hud.js", 30);
+  r.tool("--update", "--absolute");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(r.dir, "tests/data/ratchets.json"), "utf8")).files["js/ui/hud.js"].lines, 171);
+  assert.equal(fs.existsSync(path.join(r.dir, "tests/data/ratchets.d")), false, "no fragment");
+  r.git("add", "-A"); r.git("commit", "-qm", "abs");
+  r.git("checkout", "-q", "--detach");
+  fs.writeFileSync(path.join(r.dir, "js/ui/hud.js"), fs.readFileSync(path.join(r.dir, "js/ui/hud.js"), "utf8").split("\n").slice(0, 140).join("\n"));
+  r.tool("--update");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(r.dir, "tests/data/ratchets.json"), "utf8")).files["js/ui/hud.js"].lines, 140);
+  assert.equal(lines().ceiling, 140);
+});
+
+// #2337: a deliberate tree-metric raise (`--update --fragment --reason`) lands as the branch's own
+// delta, so two PRs that both add bare catches (the cssClasses shape) never share a ratchets.json hunk.
+test("two PRs raising the same TREE metric as fragments merge clean in either order, leaving ratchets.json alone", (t) => {
+  const r = repo();
+  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(r.dir, rel)), { recursive: true }); fs.writeFileSync(path.join(r.dir, rel), text); };
+  for (const rel of ["tools/check/tree-counts.mjs", "tools/lib/css-source.mjs"]) write(rel, fs.readFileSync(path.join(ROOT, rel), "utf8"));
+  const cur = JSON.parse(fs.readFileSync(path.join(r.dir, "tests/data/ratchets.json"), "utf8"));
+  write("tests/data/ratchets.json", JSON.stringify({ ...cur, tree: { bareCatches: 0 } }));
+  r.tool("--update", "--absolute");
+  r.git("add", "-A"); r.git("commit", "-qm", "tree metric");
+  const prTree = (name, file, at, n) => {
+    r.git("checkout", "-q", "-b", name, "ship");
+    const lines = fs.readFileSync(path.join(r.dir, file), "utf8").split("\n");
+    lines.splice(at, 0, ...Array.from({ length: n }, (_, i) => `try { x(); } catch (e) {} // ${name}${i}`.replace("catch (e) {} //", "catch (e) {}\n//")));
+    fs.writeFileSync(path.join(r.dir, file), lines.join("\n"));
+    assert.throws(() => r.tool("--auto-raise"), /./, "the auto path never raises a tree metric");
+    assert.throws(() => r.tool("--update", "--fragment"), /reason/, "a deliberate raise names its reason");
+    r.tool("--update", "--fragment", "--reason=fixture: adds bare catches");
+    r.git("add", "-A"); r.git("commit", "-qm", name);
+    const touched = r.git("diff", "--name-only", "ship", name).split("\n");
+    assert.ok(!touched.includes("tests/data/ratchets.json"), `ratchets.json untouched: ${touched}`);
+    assert.ok(touched.some((f) => f.startsWith("tests/data/ratchets.d/")), "the delta lands as a fragment");
+    r.git("checkout", "-q", "ship");
+  };
+  prTree("cursor/t-1111", "js/ui/hud.js", 50, 2);
+  prTree("cursor/t-2222", "js/car/car3d.js", 60, 3);
+  assert.deepEqual(r.conflicts("cursor/t-1111", "cursor/t-2222"), []);
+  r.git("merge", "-q", "--no-ff", "-m", "land 1", "cursor/t-1111");
+  assert.deepEqual(r.conflicts("ship", "cursor/t-2222"), []);
+  r.git("merge", "-q", "--no-ff", "-m", "land 2", "cursor/t-2222");
+  const v = JSON.parse(r.tool("--json"));
+  assert.equal(v.ok, true, JSON.stringify(v.over));
+  const row = v.rows.find((x) => x.tree && x.metric === "bareCatches");
+  assert.equal(row.value, 5);
+  assert.equal(row.ceiling, 5, "the merged tip's effective tree ceiling is the sum of both deltas");
+  r.tool("--fold");
+  assert.equal(JSON.parse(r.tool("--json")).rows.find((x) => x.tree && x.metric === "bareCatches").ceiling, 5, "fold keeps the tree ceiling");
+});
+
+// #2583: a delta lowered every ratcheted file, touched or not, so sibling PRs
+// double-lowered shared ceilings. Only files the branch changed may be lowered.
+test("--update on a topic branch lowers only files the branch changed", (t) => {
+  const r = repo();
+  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  // Headroom the branch did not create: the tip shrank apex.js past its ceiling.
+  const apex = path.join(r.dir, "js/agent/apex.js");
+  fs.writeFileSync(apex, fs.readFileSync(apex, "utf8").split("\n").slice(0, 150).join("\n") + "\n");
+  r.git("add", "-A"); r.git("commit", "-qm", "tip shrinks apex");
+  r.git("checkout", "-q", "-b", "cursor/sib-1111");
+  const f = path.join(r.dir, "js/ui/hud.js");
+  fs.writeFileSync(f, fs.readFileSync(f, "utf8").split("\n").slice(0, 170).join("\n") + "\n");
+  r.tool("--update");
+  const frag = JSON.parse(fs.readFileSync(path.join(r.dir, "tests/data", "ratchets.d", "cursor--sib-1111.json"), "utf8"));
+  assert.ok(frag.files["js/ui/hud.js"], "the touched file is lowered");
+  assert.equal(frag.files["js/agent/apex.js"], undefined, "an untouched file is not");
 });

@@ -74,6 +74,7 @@ test('menu screenshot report renders responsive native screen navigation and DOM
     writeCaptureIndex(dir, [
       { screen: 'garage', viewport: 'phone', shot: 'garage.png', dom: 'garage.dom.json' },
       { screen: 'settings', viewport: 'desktop', shot: 'settings.png' },
+      { screen: 'career', viewport: 'phone', skipped: 'boot failed' },
     ]);
     const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
     assert.doesNotMatch(html, /<script\b|<table\b|<select\b/);
@@ -81,5 +82,6 @@ test('menu screenshot report renders responsive native screen navigation and DOM
     assert.match(html, /href="garage.dom.json"/);
     assert.match(html, /name="viewport"/);
     assert.equal((html.match(/class="capture /g) || []).length, 2);
+    assert.match(html, /SKIPPED \(1\)[\s\S]*career · phone — boot failed/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

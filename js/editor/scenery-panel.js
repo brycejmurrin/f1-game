@@ -5,10 +5,11 @@ const DesignerScenery = (function () {
   "use strict";
   const CATEGORIES = Object.freeze({
     all: null,
-    nature: ["parkland", "alpine", "autumn", "tuscany", "savanna", "ardennes", "winter", "jungle", "lakeside", "moorland", "vineyard", "blossom", "volcanic"],
-    coast: ["harbour", "marina", "coast", "twilight", "lakeside", "shipyard", "island", "volcanic"],
+    nature: ["parkland", "alpine", "autumn", "tuscany", "savanna", "ardennes", "winter", "jungle", "lakeside", "moorland", "vineyard", "blossom", "volcanic", "fjord", "redwood"],
+    coast: ["harbour", "marina", "coast", "twilight", "lakeside", "shipyard", "island", "volcanic", "fjord"],
+    mountain: ["alpine", "winter", "canyon", "volcanic", "fjord", "redwood"],
     city: ["harbour", "marina", "tilke", "airfield", "metropolis", "shipyard", "stadium"],
-    desert: ["oasis", "desertnight", "canyon", "saltflat"],
+    desert: ["oasis", "desertnight", "canyon", "saltflat", "badlands"],
     night: ["desertnight", "marina", "twilight", "stadium"],
   });
   const PRESETS = Object.freeze({
@@ -27,7 +28,7 @@ const DesignerScenery = (function () {
     const text = (p.label + " " + p.blurb).toLowerCase();
     return (!ids || ids.includes(id)) && words.every((w) => text.includes(w));
   }
-  function create({ el, btn, group, onTheme, onLook, onPreset, onKind, onPlace, onRemove, onRemoveAt, onSelect, onEditAt, onCopyAt }) {
+  function create({ el, btn, group, onTheme, onLook, onPreset, onKind, onPlace, onRemove, onRemoveAt, onSelect, onEditAt, onCopyAt, onRecipe }) {
     const root = group("SCENERY");
     root.dataset.role = "scenery";
     let category = "all", current = null, side = 1, lastProps = null, section = "themes", placementMode = "point", copies = 3, editing = -1, objectCategory = "all";
@@ -35,9 +36,12 @@ const DesignerScenery = (function () {
     const gaps = Object.assign({}, TrackDesignerProps.DEFAULT_GAP);
     const summary = el("div", "td-group"); summary.dataset.role = "theme-summary";
     const activeName = el("div", "td-label");
+    const lookSummary = el("div", "td-hint"); lookSummary.dataset.role = "look-summary";
+    const resetLook = btn("RESET ATMOSPHERE", "sel-chip", () => onPreset("default"));
+    resetLook.setAttribute("aria-label", "Reset time of day, trees and crowd to theme defaults");
     const blurb = el("div", "td-hint"); blurb.dataset.role = "theme-blurb";
     blurb.setAttribute("aria-live", "polite");
-    summary.append(activeName, blurb);
+    summary.append(activeName, lookSummary, resetLook, blurb);
     const searchRow = el("div", "td-chips"); searchRow.dataset.role = "theme-search";
     const search = el("input", "td-input"); search.type = "search";
     search.placeholder = "Find a theme…"; search.setAttribute("aria-label", "Find a scenery theme");
@@ -103,19 +107,24 @@ const DesignerScenery = (function () {
     const library = group("1 · CHOOSE AN OBJECT"); library.dataset.role = "object-library";
     const objectFilters = el("div", "td-chips"); objectFilters.dataset.role = "object-filters";
     objectFilters.setAttribute("role", "group"); objectFilters.setAttribute("aria-label", "Object categories");
-    const waterKinds = ["water", "pond", "lake", "river"];
-    const nature = ["trees", "palms", "hedge", "pines", "bushes", ...waterKinds];
+    const objectSearch = el("input", "td-input"); objectSearch.type = "search";
+    objectSearch.placeholder = "Find an object…"; objectSearch.setAttribute("aria-label", "Find a scenery object");
+    const objectCount = el("div", "td-hint"); objectCount.setAttribute("role", "status"); objectCount.dataset.role = "object-results";
     function filterObjects() {
       for (const b of objectFilters.children) pressed(b, b.dataset.objectCategory === objectCategory);
+      const query = objectSearch.value.trim().toLowerCase(); let n = 0;
       for (const b of props.children) {
-        const kind = b.dataset.prop;
-        b.hidden = objectCategory === "water" ? !waterKinds.includes(kind) : objectCategory !== "all" && (nature.includes(kind) ? "nature" : "venue") !== objectCategory;
+        const kind = b.dataset.prop, text = TrackDesignerProps.LABELS[kind] + " " + TrackDesignerProps.DESCRIPTIONS[kind];
+        b.hidden = (objectCategory !== "all" && !TrackDesignerProps.CATEGORIES[objectCategory].includes(kind)) || !text.toLowerCase().includes(query);
+        if (!b.hidden) n++;
       }
+      objectCount.textContent = n ? n + " objects" : "No objects found. Try another search or category.";
     }
-    for (const [id, label] of [["all", "ALL"], ["nature", "NATURE"], ["water", "WATER"], ["venue", "RACE VENUE"]]) {
+    for (const [id, label] of [["all", "ALL"], ["nature", "NATURE"], ["terrain", "TERRAIN"], ["water", "WATER"], ["venue", "RACE VENUE"]]) {
       const b = btn(label, "sel-chip", () => { objectCategory = id; filterObjects(); });
       b.dataset.objectCategory = id; objectFilters.appendChild(b);
     }
+    objectSearch.addEventListener("input", filterObjects);
     const props = el("div", "td-chips"); props.dataset.role = "props";
     props.setAttribute("role", "group"); props.setAttribute("aria-label", "Scenery props");
     for (const id of TrackDesignerProps.KINDS) {
@@ -123,7 +132,7 @@ const DesignerScenery = (function () {
     }
     const selectedObject = el("div", "td-hint"); selectedObject.dataset.role = "selected-object";
     selectedObject.setAttribute("role", "status");
-    library.append(objectFilters, props);
+    library.append(objectSearch, objectFilters, props, objectCount);
     const placementGroup = group("2 · PLACE OBJECTS"); placementGroup.dataset.role = "object-placement";
     const sides = el("div", "td-chips"); sides.dataset.role = "prop-side";
     sides.setAttribute("role", "group"); sides.setAttribute("aria-label", "Track side in driving direction");
@@ -187,8 +196,8 @@ const DesignerScenery = (function () {
       if (editing < 0 || !lap.value.trim() || !editGap.value.trim() || !Number.isFinite(+lap.value) || !Number.isFinite(+editGap.value)) return;
       onEditAt(editing, { s: Math.max(0, Math.min(100, +lap.value)) / 100, side: +editSide.value, gap: +editGap.value }); place.focus();
     });
-    const move = btn("MOVE TO POINT", "sel-chip", () => { if (current && editing >= 0) onEditAt(editing, { s: TrackDesignerProps.pointFrac(current.design.pts, Math.max(0, current.sel)) }); place.focus(); });
-    const copy = btn("COPY TO POINT", "sel-chip", () => { if (editing >= 0) onCopyAt(editing); place.focus(); });
+    const move = btn("MOVE TO POINT", "sel-chip", () => { if (current && current.sel >= 0 && editing >= 0) onEditAt(editing, { s: TrackDesignerProps.pointFrac(current.design.pts, current.sel) }); place.focus(); });
+    const copy = btn("COPY TO POINT", "sel-chip", () => { if (current && current.sel >= 0 && editing >= 0) onCopyAt(editing); place.focus(); });
     const cancel = btn("CANCEL", "sel-chip", () => { editing = -1; editor.hidden = true; place.focus(); });
     editActions.append(applyEdit, move, copy, cancel); editor.append(editFields, editActions);
     const placedGroup = group("3 · PLACED OBJECTS"); placedGroup.dataset.role = "object-list";
@@ -198,11 +207,16 @@ const DesignerScenery = (function () {
     placementGroup.append(selectedObject, placement, target, sides, gap, hint, actions);
     propsGroup.append(library, placementGroup, placedGroup);
     const panels = { themes: themePanel, atmosphere, objects: propsGroup };
+    const scrollPositions = new Map();
     function showSection(id) {
+      const rail = root.closest(".td-rail");
+      if (rail) scrollPositions.set(section, rail.scrollTop);
       section = panels[id] ? id : "themes";
       blurb.hidden = section !== "themes";
       for (const [key, panel] of Object.entries(panels)) panel.hidden = key !== section;
       for (const b of nav.children) { const on = b.dataset.scenerySection === section; pressed(b, on); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; }
+      const target = section;
+      if (rail) rail.scrollTop = scrollPositions.get(target) || 0;
     }
     for (const [id, panel] of Object.entries(panels)) {
       const b = btn(id.toUpperCase(), "sel-chip", () => showSection(id)); b.dataset.scenerySection = id;
@@ -221,17 +235,25 @@ const DesignerScenery = (function () {
       editing = i; editor.hidden = false;
       lap.value = String(Math.round(p.s * 1000000) / 10000); editGap.value = String(p.gap); editGap.min = String(MIN_GAP[p.kind]); editSide.value = String(p.side);
       editGapField.hidden = editSideField.hidden = p.kind === "gantry";
-      copy.disabled = !TrackDesignerProps.canPlace(current.design.props, p.kind); lap.focus();
+      refreshDestination(); lap.focus();
     }
 
+    function refreshDestination() {
+      const p = current && (current.design.props || [])[editing], valid = current && current.sel >= 0 && current.sel < current.design.pts.length;
+      move.disabled = !valid; copy.disabled = !valid || !p || !TrackDesignerProps.canPlace(current.design.props, p.kind);
+      for (const [b, verb] of [[move, "MOVE"], [copy, "COPY"]]) { b.textContent = valid ? verb + " TO POINT " + (current.sel + 1) : verb + " · SELECT DESTINATION"; b.setAttribute("aria-label", b.textContent); }
+    }
+    const recipes = DesignerFollowup.recipePanel({ el, btn, getState: () => current, onApply: onRecipe });
+    placedGroup.appendChild(recipes.root);
     function refresh(state) {
-      current = state;
+      current = state; refreshDestination(); recipes.refresh();
       const d = state.design, kind = state.propKind, p = TrackThemes.get(d.theme), look = TrackThemes.lookOf(d);
       activeName.textContent = p.label; blurb.textContent = p.blurb;
       for (const b of themes.children) pressed(b, b.dataset.theme === d.theme);
       for (const key of Object.keys(lookRows)) for (const b of lookRows[key].children) if (b.dataset.look) pressed(b, b.dataset.look === key + ":" + look[key]);
       for (const b of presets.children) pressed(b, LOOK_ROWS.every(([key]) => PRESETS[b.dataset.preset][key] === look[key]));
       const c = TrackDesignerProps.counts(d.props);
+      lookSummary.textContent = look.time.toUpperCase() + " · TREES " + look.trees.toUpperCase() + " · CROWD " + look.crowd.toUpperCase() + " · " + c.total + "/" + TrackDesignerProps.TOTAL + " OBJECTS";
       selectedObject.textContent = TrackDesignerProps.LABELS[kind] + " · " + TrackDesignerProps.DESCRIPTIONS[kind];
       empty.hidden = c.total > 0;
       rangeActions.hidden = placementMode !== "range"; swap.disabled = state.sel < 0 || state.span < 0 || state.sel === state.span;
@@ -261,6 +283,7 @@ const DesignerScenery = (function () {
       if (range) hint.textContent = "Even spacing from start to end in driving order. Earlier end points cross the start line. " + amount + " objects · " + room + " slots left.";
       if (amount > room) hint.textContent += " Reduce positions or choose one side to fit the limit.";
       if (range && state.span < 0) hint.textContent += " Choose an end point first.";
+      if (TrackDesignerProps.CATEGORIES.terrain.includes(kind) || TrackDesignerProps.CATEGORIES.water.includes(kind)) hint.textContent += " Landscape objects that overlap the road are hidden. Use an open area or increase the gap. Terrain objects decorate the ground without changing road elevation.";
       remove.disabled = !c[kind];
       const key = JSON.stringify(d.props || []);
       if (key !== lastProps) {
@@ -269,7 +292,7 @@ const DesignerScenery = (function () {
         while (list.firstChild) list.removeChild(list.firstChild);
         for (const [i, prop] of (d.props || []).entries()) {
           const li = el("li", "td-issue");
-          const where = prop.kind === "gantry" ? "OVER ROAD" : (prop.side < 0 ? "LEFT" : "RIGHT") + " · " + prop.gap + " m";
+          const where = prop.kind === "gantry" ? "OVER ROAD" : (prop.side < 0 ? "LEFT" : "RIGHT") + " · " + TrackDesignerProps.effectiveGap(prop.kind, prop.gap) + " m" + (prop.gap < MIN_GAP[prop.kind] ? " (stored " + prop.gap + " m)" : "");
           li.appendChild(el("span", "", TrackDesignerProps.LABELS[prop.kind] + " · " + Math.round(prop.s * 100) + "% LAP · " + where));
           const del = btn("REMOVE", "sel-chip", () => {
             onRemoveAt(i);

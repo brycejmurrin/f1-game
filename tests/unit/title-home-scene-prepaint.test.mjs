@@ -58,46 +58,46 @@ test("compact-wide live Home grid-places #menu-secondary under the brand", () =>
   // can sit under #menu-brand while remaining the title scroll box (no DOM move).
   assert.match(
     menus,
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*grid-template-columns:\s*subgrid/,
+    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*grid-template-columns:\s*subgrid/,
     "subgrids door groups onto the overlay columns",
   );
   assert.match(
     menus,
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*overflow-y:\s*auto/,
+    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*overflow-y:\s*auto/,
     "keeps #menu-buttons as the title scroll box",
   );
   assert.doesNotMatch(
     menus,
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[^}]*display:\s*contents/,
+    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[^}]*display:\s*contents/,
     "display:contents drops the scroll box (ui-scale @200% / SE hit tests)",
   );
   assert.match(
     menus,
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[\s\S]*grid-column:\s*1;[\s\S]*grid-row:\s*2;[\s\S]*min-height:\s*var\(--tap\)/,
-    "parks #menu-secondary under the brand with a --tap floor (#1537: height auto for 2-line labels)",
+    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[\s\S]*grid-column:\s*1;[\s\S]*grid-row:\s*1 \/ -1;[\s\S]*min-height:\s*var\(--tap\)/,
+    "parks #menu-secondary under the brand (bottom of the column, clear of the sound chip) with a --tap floor (#1537: height auto for 2-line labels)",
   );
   assert.match(
     menus,
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*min-height:\s*var\(--tap-paint\)/,
+    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*min-height:\s*var\(--tap-paint\)/,
     "under-brand rooms keep the --tap-paint floor",
   );
   assert.match(
     menus,
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*white-space:\s*normal/,
+    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*white-space:\s*normal/,
     "#1537: under-brand rooms wrap (TRACK DESIGNER / HOW TO PLAY) instead of nowrap-clip",
   );
   assert.match(
     menus,
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*justify-content:\s*flex-start/,
+    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \.bigbtn \{[\s\S]*justify-content:\s*flex-start/,
     "under-brand room icons stay on the leading edge (not clipped by center+overflow)",
   );
   assert.match(
     menus,
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*padding-inline:\s*var\(--gap\)/,
+    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-buttons \{[\s\S]*padding-inline:\s*var\(--gap\)/,
     "CAREER skew tip clears #menu-buttons overflow-x via inline pad",
   );
   const secondaryBlock = menus.match(
-    /html\[data-home-live\] :where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[^}]+\}/,
+    /:where\(body\[data-shape="wide"\]\[data-density="compact"\]\) #overlay #menu-secondary \{[^}]+\}/,
   );
   assert.ok(secondaryBlock, "compact-wide #menu-secondary rule block exists");
   assert.match(secondaryBlock[0], /display:\s*flex/, "rooms stay a visible flex row");

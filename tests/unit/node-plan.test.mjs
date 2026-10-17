@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, THINNED_VM, topicalTfOverlap, adaptedGroups, circuitsOf, scriptBuilds } from "../../tools/ci/node-plan.mjs";
+import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, THINNED_VM, topicalTfOverlap, adaptedGroups, circuitsOf, scriptBuilds, unitFileOwnership } from "../../tools/ci/node-plan.mjs";
 import { filesFor } from "../../tools/ci/run-group.mjs";
 import { TOOLING_FAST_FILES } from "../../tools/ci/tooling-fast.mjs";
 import { gateNodeSuites } from "../../tools/ci/deploy.mjs";
@@ -43,6 +43,26 @@ test("a UI-only diff skips the VM slices; the fast scripts are never in the plan
   assert.match(sh, /planned\(\) \{/);
   assert.equal(p.skipTf, true, "matched PR plans thin tooling-fast overlap on topical riders");
   assert.match(sh, /export NODE_PLAN_SKIP_TF=1/);
+});
+
+test("known unit ownership narrows the node plan, while tooling-fast and unknown files stay safe", () => {
+  const vm = plan(["tests/unit/real-replay-vm.test.mjs"]);
+  assert.equal(vm.all, false);
+  assert.ok(vm.run.includes("test:game-vm-b1") && vm.run.includes("test:game-vm-b2"), JSON.stringify(vm));
+  assert.ok(vm.run.includes("test:game-vm-a") && vm.skip.includes("test:node-slow"), JSON.stringify(vm));
+
+  const fast = plan(["tests/unit/select-screen-fixes.test.mjs"]);
+  assert.equal(fast.all, false);
+  assert.deepEqual(fast.run, [], JSON.stringify(fast));
+  assert.ok(fast.skip.includes("test:game-vm-b1"), JSON.stringify(fast));
+
+  const unregistered = "tests/unit/" + "new-" + "unregistered.test.mjs";
+  const unknown = plan([unregistered]);
+  assert.equal(unknown.all, true, JSON.stringify(unknown));
+  assert.match(unknown.reason, /unowned unit file/);
+  const ownership = unitFileOwnership(["tests/unit/real-replay-vm.test.mjs", unregistered]);
+  assert.ok(ownership.owned.get("tests/unit/real-replay-vm.test.mjs")?.includes("game-vm-b1"));
+  assert.deepEqual(ownership.unknown, [unregistered]);
 });
 
 test("PR matched plans skip only tooling-fast ∩ always-on topical; --all and fail-safe do not", () => {
@@ -116,8 +136,11 @@ test("a game.js diff runs every VM slice, unscoped", () => {
 });
 
 test("fail safe: no diff, an infra path, a unit file, a harness, or an unrouted path runs everything", () => {
-  for (const changed of [[], ["package.json"], ["tests/unit/game-vm.test.mjs"], ["tools/lib/game-vm.cjs"],
-                         ["tests/data/physics-baseline.json"], ["some/unknown/file.txt"], [".github/workflows/ci.yml"]]) {
+  for (const changed of [[], ["package.json"], ["tests/unit/" + "new-unregistered.test.mjs"], ["tools/lib/game-vm.cjs"],
+                         ["tests/data/physics-baseline.json"], ["some/unknown/file.txt"], [".github/workflows/ci.yml"],
+                         ["tools/ci/pick-unit-slices.mjs"], ["tools/ci/node-plan.mjs"],
+                         ["tools/ci/geometry-paths.mjs"], ["tools/ci/twinned-specs.mjs"],
+                         ["tools/ci/ci-select-specs-step.sh"], ["tools/ci/ci-resolve-before.sh"]]) {
     const p = plan(changed);
     assert.equal(p.all, true, `${JSON.stringify(changed)} must run everything (${p.reason})`);
     assert.deepEqual(p.skip, []);
@@ -146,7 +169,7 @@ test("ci.yml: the node-suites job plans on a pull request and guards exactly the
   // Matrix rows come from select's plan step / pick-unit-slices (path-gated runners),
   // not a static `slice:` list — same contract as ci-coverage + pick-unit-slices tests.
   assert.match(nodeJob, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.slices\) \}\}/);
-  for (const id of ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page", "slow"])
+  for (const id of ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page-a", "page-b", "slow"])
     assert.match(step, new RegExp(`${id}\\)`), `case arm for ${id}`);
   assert.match(step, /vm-a1\)\n(?:\s+#.*\n)*\s+export APEX_CIRCUIT_SHARD=1\/2\n\s+if planned test:game-vm-a; then/, "vm-a1 is the first half of the roster");
   assert.match(step, /vm-a2\)\n(?:\s+#.*\n)*\s+export APEX_CIRCUIT_SHARD=2\/2\n\s+if planned test:game-vm-a; then/, "vm-a2 is the second half");
@@ -191,7 +214,7 @@ test("a spec edit: an ADAPTED spec runs vm-page; a twinned spec's group runs no 
   // stripped here, so a plain browser-spec edit stays the rules' answer.
   const adapted = plan(["tests/specs/logging.spec.js"]);
   assert.equal(adapted.all, false);
-  assert.deepEqual(adapted.run, ["test:vm-page"]);
+  assert.deepEqual(adapted.run, ["test:vm-page-a"], "logging is in page-a");
   const twinned = plan(["tests/specs/collisions-deep.spec.js"]);
   assert.deepEqual(twinned.groups, ["audit"], "the owner route must not reach the VM planner");
   assert.deepEqual(twinned.run, []);
@@ -205,9 +228,11 @@ test("L9: a circuit an ADAPTED spec builds keeps test:vm-page in the plan (2026-
   const runner = circuitsOf(ADAPTED_RUNNER);
   for (const id of ["cota", "imola", "albert_park", "bahrain", "monza"]) assert.ok(runner.has(id), `${id} missing from the runner's circuits`);
   for (const spec of Object.keys(ADAPTED)) for (const id of circuitsOf(spec) || []) assert.ok(runner.has(id), `${spec} -> ${id}`);
-  assert.equal(scriptBuilds("test:vm-page", ["cota"]), true);
-  assert.equal(scriptBuilds("test:vm-page", ["dijon"]), false, "a circuit no ADAPTED spec builds still skips");
+  assert.equal(scriptBuilds("test:vm-page-b", ["cota"]), true);
+  assert.equal(scriptBuilds("test:vm-page-a", ["cota"]), false);
+  assert.equal(scriptBuilds("test:vm-page-b", ["dijon"]), false, "a circuit no ADAPTED spec builds still skips");
   const cota = plan(["js/circuits/cota.js"]);
-  assert.ok(cota.run.includes("test:vm-page"), JSON.stringify(cota.skip));
-  assert.ok(!plan(["js/circuits/dijon.js"]).run.includes("test:vm-page"));
+  assert.ok(cota.run.includes("test:vm-page-b"), JSON.stringify(cota.skip));
+  assert.ok(!cota.run.includes("test:vm-page-a"));
+  assert.ok(!plan(["js/circuits/dijon.js"]).run.some((s) => s.startsWith("test:vm-page")));
 });

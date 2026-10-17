@@ -1,0 +1,74 @@
+name: Flake tally
+
+# DAILY FLAKE TALLY (2026-10-16, the CI/CD review #2333, flaky-test question).
+# Every browser job already uploads junit and the live reporter prints
+# `= FLAKY`; until today only the by-hand `flake-tally.mjs` over 14 nightly runs
+# read them. This reads every FAILED ci.yml / pages.yml run of the last 2
+# days (PR fast tiers, ready full tiers, the train, the nightly), tallies by
+# spec + title, names the repeat offenders (passed only on retry in ≥ 2 runs,
+# or failed first-try on ≥ 3 branches) and rewrites ONE open issue labelled
+# `flaky`. Only failed runs are read (APEX_FAIL_ON_FLAKY=1 reds a run on an
+# unquarantined retry, so a green run holds no news) and only the logs of
+# their failed browser jobs: ~3 requests per red run against the token's
+# ~1,000 an hour. It never edits tests/data/flaky-quarantine.json: a quarantine row
+# is a PR with an owner and the evidence run (AGENTS.md rule 9).
+#
+# BASE-RED DETECTOR (2026-10-16, CI jobs review): the same job runs every 2 h in
+# `base-red` mode over the last 3 h of failed runs and opens, refreshes or
+# closes ONE issue labelled `base-red` when a spec failed first-try on 3+
+# unrelated branches (or on 2 including a train). menu-keyboard was red on
+# unrelated diffs for over an hour (7 PR runs, 3 trains, ~1,000 job-min) and the
+# daily tally read it hours later. Advisory: a label and an issue block nothing.
+#
+# Least privilege: issues: write for the issues, actions: read for runs,
+# artifacts and job logs, contents: read for the checkout. The token is
+# GITHUB_TOKEN; an issue edit made with it starts no workflow run.
+on:
+  schedule:
+    - cron: "19 6 * * *"
+    - cron: "17 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "window in days (daily mode)"
+        default: "2"
+        type: string
+      mode:
+        description: "daily tally, or the 3 h base-red detector"
+        default: "daily"
+        type: choice
+        options: [daily, base-red]
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: flake-tally
+  cancel-in-progress: false
+
+jobs:
+  tally:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # The tool imports only node builtins and tools/lib (no npm install).
+      - name: Tally the failed runs (daily) or look for a red on the base (every 2 h)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DAYS: ${{ inputs.days || '2' }}
+          MODE: ${{ github.event.schedule == '17 */2 * * *' && 'base-red' || inputs.mode || 'daily' }}
+        run: |
+          if [ "$MODE" = base-red ]; then
+            node tools/ci/flake-tally.mjs --base-red --hours 3 --issue --work-dir "$RUNNER_TEMP/flake-tally"
+          else
+            node tools/ci/flake-tally.mjs --events all --days "$DAYS" --propose --issue --work-dir "$RUNNER_TEMP/flake-tally"
+          fi

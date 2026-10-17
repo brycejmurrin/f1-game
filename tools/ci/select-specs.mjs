@@ -338,6 +338,11 @@ export const FAT_UI_SELECTED_JOB_MIN = 50;
 // 2-vCPU llvmpipe runner starve each other's boots (Pages 38695272346,
 // oversize-career: 45 s boot timeout while the sibling worker built three tracks).
 export const FAT_UI_MIN_PIECES = 2;
+// hud-layout has stayed above 11 minutes per native half in recent Actions
+// runs (p50 ~700 s per half). Keep each runner below the 50-minute fat-UI
+// ceiling with three pieces while the smaller career specs retain the two
+// piece floor. This is a bounded fan-out increase for the measured outlier.
+export const HUD_LAYOUT_MIN_PIECES = 3;
 // Over-budget / high-timeout specs with NO CI measurement: Playwright --shard
 // so each leg has this many tests, not one 30-minute packed file. A spec with
 // a measured median is split by its measured TIME instead (shards(),
@@ -864,7 +869,9 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
       // cost one more job start per fat spec — bounded fleet-wide by the lanes.
       const workers = 1;
       const secFat = Math.max(1, sec, s.tests * FAT_UI_SEC_PER_TEST);
-      const nFat = Math.max(FAT_UI_MIN_PIECES, piecesToFitCap(secFat, s.tests, FAT_UI_SELECTED_JOB_MIN));
+      const minPieces = /(?:^|\/)hud-layout\.spec\.js$/.test(s.file)
+        ? HUD_LAYOUT_MIN_PIECES : FAT_UI_MIN_PIECES;
+      const nFat = Math.max(minPieces, piecesToFitCap(secFat, s.tests, FAT_UI_SELECTED_JOB_MIN));
       for (let i = 1; i <= nFat; i++) {
         items.push({ solo: true, name: `oversize-${base}-${i}of${nFat}`, files: [s.file],
           shard: `${i}/${nFat}`, tests: Math.ceil(s.tests / nFat),
@@ -949,16 +956,14 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
 export const TRACKED = [
   /^package(-lock)?\.json$/,          // scripts + dependency versions
   /^playwright\.config\.js$/,         // projects, timeouts, the reporter
-  // `tools/ci/` ON THE FOUR THAT MOVED. Only manifest.cjs still sits at the
-  // tools/ root; pick-tests, select-specs, select-budget and run-playwright are
-  // all under tools/ci/, so four of these five alternatives matched NOTHING —
-  // editing the selector, the budget model or the Playwright runner never set
-  // reason "infra", never printed SELECTION NARROWER THAN THE CHANGE, and the
-  // gate went on trusting a routing produced by the code in that very diff.
+  // `tools/ci/` selection machinery. Only manifest.cjs still sits at the
+  // tools/ root. Changes to a selector, planner, base resolver or runner must
+  // fail safe to the full gate instead of trusting routing produced by the
+  // same diff.
   // A path inside a regex literal is invisible to a rename; the lint in
   // tests/unit/select-specs.test.mjs now fails on any member that matches no
   // tracked file, which is what pick-tests.mjs's RULES have had all along.
-  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs)$/,
+  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs|pick-unit-slices\.mjs|node-plan\.mjs|geometry-paths\.mjs|twinned-specs\.mjs|ci-select-specs-step\.sh|ci-resolve-before\.sh)$/,
   /^tests\/helpers\/(fixtures|global-setup|live-reporter)\.js$/,  // EVERY spec's plumbing
   /^\.github\//,                      // the job that runs the selection
   /^(index\.html|sw\.js|version\.json)$/,   // the shell, its precache, its cache key

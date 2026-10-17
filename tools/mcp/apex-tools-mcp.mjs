@@ -454,7 +454,7 @@ const CATALOG = [
     name: "apex_shot_survey",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — multi-shot scenery survey sharing one warm browser across circuits. Named locations default to preview JPEG; use comparison for selected final PNGs. Presets: quick, dual_lite, night_pass, lap, dual, inspect, scenery/full. Long or multi-track runs return an async jobId; watch apex_job_status. Resume checks source, settings and custom collection identity. Skill: survey-track.",
+    description: "Browser (lock first) — multi-shot scenery survey sharing one warm browser across circuits. Named locations default to preview JPEG; use comparison for selected final PNGs. Presets: quick, dual_lite, night_pass, lap, dual, inspect, scenery/full. Long or multi-track runs return an async jobId; watch apex_job_status. Resume checks source, settings and custom collection identity. Pass reports[] to combine saved surveys into a portable gallery without Chromium. Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -469,6 +469,7 @@ const CATALOG = [
         seed: { type: "integer", minimum: 0 },
         camera: { type: "object", additionalProperties: false, properties: { fov: {type:"number",minimum:10,maximum:120}, h:{type:"number"}, dist:{type:"number"}, az:{type:"number"}, el:{type:"number"} } },
         track: { type: "string", description: "Circuit id (or use tracks[])." },
+        reports: { type: "array", minItems: 1, maxItems: 12, items: { type: "string" }, description: "Existing findings.json paths under artifacts/ or scratch/. Builds one portable HTML gallery without starting a browser; preserves custom track identities." },
         tracks: {
           type: "array",
           items: { type: "string" },
@@ -572,8 +573,9 @@ const CATALOG = [
       properties: {
         op: { type: "string", enum: ["open", "status", "team", "livery", "design", "frame", "shot", "diff", "sheet", "reload", "close"] },
         team: { type: "string", description: "Team id (open: the team to boot with; team: switch to it)." },
+        backend: { type: "string", enum: ["webgl2", "three"], description: "Renderer for op open (default webgl2)." },
         seat: { type: "number", description: "Driver seat 0/1 with op team." },
-        livery: { type: "string", description: "Catalog livery id." },
+        livery: { type: "string", description: "Catalog/custom livery id, or shipped for the team’s shipped selection." },
         design: { type: "object", description: "Liveries.FIELDS values (+ part.<cat>, driver, light.<knob>)." },
         base: { type: "string", description: "Catalog livery the design paints over." },
         frame: { description: "Station / alias / view name, or {view|station|cam, az, el, dist, target, lamp, zoom, pan, eye, look, clamp, crop}. az / el are RADIANS (el is clamped to the orbit's pitch range), dist is metres." },
@@ -846,10 +848,47 @@ const CATALOG = [
     },
   },
   {
+    name: "apex_profile",
+    week: 7,
+    kind: "browser",
+    description: "Browser (lock first) — profile a circuit's frame budget (tools/perf/profile.mjs) as a BACKGROUND job (returns a jobId; the lock is held until it exits): per-subsystem p50/p95/p99 spans, `repeat` fresh pages for the spread, `base` = a git ref to A/B against. Watch with apex_job_status, read the artifact with apex_profile_query. Same run as apex_job_start kind profile. Skill: playwright-probe.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        track: { type: "string", description: "Circuit id (default vegas)." },
+        mode: { type: "string", enum: ["spans", "cpu", "hitch", "trace"], description: "Default spans." },
+        frames: { type: "integer", minimum: 10, maximum: 600, description: "Measured rAF frames (default 40)." },
+        repeat: { type: "integer", minimum: 1, maximum: 7, description: "Fresh pages; median + spread (1 = every verdict unproven)." },
+        base: { type: "string", description: "Git ref to A/B against (a worktree run)." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "apex_profile_query",
+    kind: "tree",
+    description: "Tree — after apex_job_start kind profile (tools/perf/profile.mjs: per-subsystem p50/p95/p99, --repeat spread, --base A/B), summarise or compare the saved profiler artifacts under artifacts/ or scratch/ (tools/perf/query.mjs): a spans JSON → table; a .cpuprofile → top-N self/total with fn / file regex filters; two spans JSONs (file + compare) → A/B delta. Never returns a raw profile. Skill: playwright-probe.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file: { type: "string", description: "artifacts/profiles/<name>.json or .cpuprofile (also scratch/profiles/)." },
+        compare: { type: "string", description: "A second spans JSON: file is the base, compare the head." },
+        top: { type: "integer", minimum: 1, maximum: 100 },
+        fn: { type: "string", description: "Function-name regex filter (cpuprofile)." },
+        fileFilter: { type: "string", description: "Source-file regex filter (cpuprofile)." },
+        dryRun: { type: "boolean" },
+      },
+      required: ["file"],
+    },
+  },
+  {
     name: "apex_job_start",
     week: 7,
     kind: "tree",
-    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once (survey_track, shot_survey, hud_shot, hud_survey, hud_mock, ui_gallery, ui_matrix, flicker_gate take the browser lock until they exit; hud_* start only from apex_hud_shot / apex_hud_survey / apex_hud_mock). Watch with apex_job_status. Skill: check-changes.",
+    description: "Tree — start a minutes-long CLI in the BACKGROUND and return a jobId at once (survey_track, shot_survey, hud_shot, hud_survey, hud_mock, profile, ui_gallery, ui_matrix, flicker_gate take the browser lock until they exit; hud_* start only from apex_hud_shot / apex_hud_survey / apex_hud_mock). Watch with apex_job_status. Skill: check-changes.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -879,7 +918,10 @@ const CATALOG = [
         scale: { type: "string", description: "ui_matrix: comma list of interface sizes, e.g. 100,130." },
         site: { type: "string", description: "flicker_gate: comma list of site ids (default all)." },
         team: { type: "string", description: "livery_contrast: one team id (default every team — slow)." },
-        base: { type: "string", description: "graph_parity_all: the git ref for BASE= (required)." },
+        base: { type: "string", description: "graph_parity_all: the git ref for BASE= (required); profile: git ref to A/B against." },
+        mode: { type: "string", enum: ["spans", "cpu", "hitch", "trace"], description: "profile: default spans." },
+        frames: { type: "integer", minimum: 10, maximum: 600, description: "profile: measured rAF frames (default 40)." },
+        repeat: { type: "integer", minimum: 1, maximum: 7, description: "profile: fresh pages; median + spread (1 = every verdict unproven)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -1113,7 +1155,7 @@ schemaFor("apex_select_specs").required = ["since"];
 schemaFor("apex_graph_parity").required = ["base"];
 schemaFor("apex_graph_parity").anyOf = [{ required: ["id"] }, { required: ["all"], properties: { all: { const: true } } }];
 schemaFor("apex_frame_report").required = ["track"];
-schemaFor("apex_shot_survey").anyOf = [{ required: ["track"] }, { required: ["tracks"] }];   // the handler refuses without one; say so in the schema
+schemaFor("apex_shot_survey").anyOf = [{ required: ["track"] }, { required: ["tracks"] }, { required: ["reports"] }];   // the handler refuses without one; say so in the schema
 bound("apex_graph_parity", "id", { enum: knownCircuits() });
 bound("apex_pick_tests", "files", { items: { type: "string", minLength: 1, maxLength: 4096 } });
 bound("apex_select_specs", "budgetMin", { exclusiveMinimum: 0, maximum: 120 });
@@ -1549,6 +1591,14 @@ function buildArgv(name, args) {
       return hudSurveyArgv(args);
     case "apex_hud_mock":
       return hudMockArgv(args);
+    case "apex_profile_query": {
+      const argv = [...nodeTool("perf/query.mjs"), assertSafeOut(String(args.file))];
+      if (args.compare) argv.push(assertSafeOut(String(args.compare)));
+      if (args.top != null) argv.push("--top", String(args.top));
+      if (args.fn) argv.push("--fn", String(args.fn));
+      if (args.fileFilter) argv.push("--file", String(args.fileFilter));
+      return argv;
+    }
     case "apex_doctor":
       return [...nodeTool("check/doctor.mjs"), "--tree", "--json"];
     case "apex_frame_report":
@@ -2154,6 +2204,10 @@ function garageArgv(args) {
     "--team", String(args.team || "mclaren"),
     "--out", assertSafeOut(args.out || "artifacts/garage-session")];
   if (args.fast) argv.push("--fast");
+  if (args.backend != null) {
+    if (!["webgl2", "three"].includes(args.backend)) throw new Error("backend must be webgl2 or three");
+    argv.push("--backend", args.backend);
+  }
   if (args.livery) argv.push("--livery", String(args.livery));
   return argv;
 }

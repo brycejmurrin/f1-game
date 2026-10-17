@@ -121,10 +121,17 @@ const TLX = (function () {
   }
 
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
-  async function create(canvas /*, opts */) {
+  async function create(canvas, opts) {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
     // three renderer before same-page GLX fallback claims #game.
     let _abortDisplay = null, _abortRenderer = null;
+    // Undo for the observers/listeners create() attaches, run by the catch: a create that throws after init
+    // (an initOwner superseded mid-boot) would otherwise leave them on a dead backend.
+    const _createUndo = [];
+    let materialArrayDetail = null;
+    const initOwner = opts && opts.initOwner;
+    const checkInit = () => { if (initOwner) initOwner.check(); };
+    checkInit();
     try {
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
@@ -143,8 +150,8 @@ const TLX = (function () {
       }
       if (isMobile) Log.warn("gfx", "TLX on a phone: three keeps ~54 MB of CPU geometry copies — a jetsam mid-race reverts to WebGL2 at the next boot; apex26.tlxMobile=0 declines");
 
-      const THREE = await import("three/webgpu");
-      const TSL = await import("three/tsl");
+      const THREE = await import("three/webgpu"); checkInit();
+      const TSL = await import("three/tsl"); checkInit();
 
       THREE.ColorManagement.enabled = false;
 
@@ -235,7 +242,7 @@ const TLX = (function () {
       let _gpuAdapterOk = false;
       try {
         if (navigator.gpu && navigator.gpu.requestAdapter) {
-          const ad = await navigator.gpu.requestAdapter();
+          const ad = await navigator.gpu.requestAdapter(); checkInit();
           _gpuAdapterOk = !!ad;
           if (ad) {
             const info = ad.info || null;
@@ -425,6 +432,7 @@ const TLX = (function () {
             });
           } catch (_) { glCtx = null; }    // null -> three makes its own, as before
         }
+        checkInit();
         const renderer = new THREE.WebGPURenderer({
           canvas,
           alpha: false,
@@ -463,6 +471,7 @@ const TLX = (function () {
         renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
         try {
           await renderer.init();
+          checkInit();
         } catch (e) {
           // AUTO WebGPU→WebGL2 retry (and the outer create catch) must not keep
           // a half-booted three renderer / GPUDevice alive across the fallback.
@@ -604,6 +613,7 @@ const TLX = (function () {
         renderer = boot.renderer;
         ownGL = boot.ownGL;
       } catch (e) {
+        checkInit();
         // init() does not getContext("webgpu") — configure is lazy on first
         // present() — so #game is still unbound and AUTO can retry WebGL2.
         if (_glPin !== "0" && _glPin !== "1" && !forceWebGL) {
@@ -617,6 +627,7 @@ const TLX = (function () {
         }
       }
       _abortRenderer = renderer;
+      try { setTimeout(function () { if (/^apex26\\.ctxLostReloads=\\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
@@ -924,11 +935,19 @@ const TLX = (function () {
       const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
       let _shownAt = -1e9;
       let _sessLostN = 0;   // two-reload budget when sessionStorage throws (GLX _sessLostN)
+      const _fallbackLossCount = () => {
+        try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; }
+        catch (_) { return 0; }
+      };
+      const _rememberFallbackLoss = (n) => { try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ } };
       try {
-        document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
-        window.addEventListener("pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
+        let onShown = null, onPageShow = null;
+        document.addEventListener("visibilitychange", onShown = function () { if (!document.hidden) _shownAt = _nowMs(); });
+        window.addEventListener("pageshow", onPageShow = function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
+        _createUndo.push(function () { document.removeEventListener("visibilitychange", onShown); window.removeEventListener("pageshow", onPageShow); });
       } catch (_) { /* no document events (harness) */ }
       renderer.onDeviceLost = function (info) {
+        if (initOwner && !initOwner.active) return;
         try { if (_threeOnLost) _threeOnLost(info); } catch (_) { /* three's own bookkeeping; ours must run regardless */ }
         // Abort program warm first: compileAsync after a loss often never
         // settles, and warming()===true makes game.js skip present/afterPresent
@@ -965,7 +984,7 @@ const TLX = (function () {
           try {
             n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
             sessionStorage.setItem(rk, String(n));
-          } catch (_) { n = ++_sessLostN; }
+          } catch (_) { n = Math.max(++_sessLostN, _fallbackLossCount() + 1); _rememberFallbackLoss(n); }
           if (n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
           else {
             // Third loss in one tab. GLX's identical 2-cap ends in a frozen
@@ -1013,16 +1032,17 @@ const TLX = (function () {
         } catch (_) { /* visibility / picker / harness; budget uses _sessLostN when storage throws */ }
       };
       try {
-        canvas.addEventListener("webglcontextrestored",
-          function () {
-            // Same two-reload budget as the loss handler: an unguarded restore
-            // reload looped on a device that loses the context every boot.
-            // Storage failure must not skip the reload (GLX: dead canvas).
-            var n = 0;
-            try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = _sessLostN; }
-            if (n > 2) return;
-            try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
-          }, false);
+        let onRestored = null;
+        canvas.addEventListener("webglcontextrestored", onRestored = function () {
+          // Same two-reload budget as the loss handler: an unguarded restore
+          // reload looped on a device that loses the context every boot.
+          // Storage failure must not skip the reload (GLX: dead canvas).
+          var n = 0;
+          try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
+          if (n > 2) return;
+          try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
+        }, false);
+        _createUndo.push(function () { canvas.removeEventListener("webglcontextrestored", onRestored, false); });
       } catch (_) { /* detached/synthetic canvas in a harness: the timer above still covers it */ }
 
       // lifecycle state
@@ -1046,13 +1066,14 @@ const TLX = (function () {
         return spatialUpscale && renderScale < 0.98 && !!(post && post.spatialOk && post.spatialOk());
       }
       function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
-      const DPR_CAP = mobileTier ? 1.5 : 2;   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
+      let DPR_CAP = mobileTier ? 1.5 : 2;   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
 
       // M9 GPU frame timer state
       // supported only where three's timestamp-query feature is present — the
       // WebGPU backend with the adapter feature; never on the WebGL2 fallback
       // (SwiftShader/CI), keeping the GLX {supported:false} shape there.
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
+      let _inspectorHold = false;   // dev Inspector owns timestamp resolution (inspectorHost below)
       function resolveGpuTimer() {
         if (!_gpuTimerOn) return;
         const epoch = _gpuTimerEpoch;
@@ -1236,8 +1257,12 @@ const TLX = (function () {
       return post;
       }
       post = buildPost();
-      let _postStrikes = 0, _postRebuild = false, _postRetryAt = 0;   // post-only deaths so far; a rebuild is owed, and when to try it
-
+      let _postStrikes = 0, _postRebuild = false, _postRetryAt = 0;
+      let _postHealth = { state: post ? "recovering" : "degraded", attempts: 0, maxAttempts: 3, reason: post ? "Waiting for first completed post frame" : "Post-processing unavailable" };
+      function postFailure(reason) {
+        _postHealth = { state: _postRebuild ? "recovering" : "degraded", attempts: _postStrikes, maxAttempts: 3,
+          reason: String(reason || "Post-processing failed").replace(/\s+/g, " ").slice(0, 160) };
+      }
       const ENV_SIZE = 64;
       const ENV_CULL_M = 150;
       let envRT = null, envDummy = null;
@@ -1437,7 +1462,7 @@ const TLX = (function () {
             t.minFilter = THREE.LinearMipmapLinearFilter;
             t.magFilter = THREE.LinearFilter;
             t.generateMipmaps = true;
-            t.anisotropy = 4;
+            t.anisotropy = materialArrayAnisotropy();
           }
           t.needsUpdate = true;
           return t;
@@ -2115,6 +2140,20 @@ const TLX = (function () {
         if (mat) pushRec(null, null, mat, drawEm(opts), drawAl(opts), 0, null, batch);
       }
 
+      // THREE.InstancedMesh owns a dispose() method, but the attribute-backed
+      // mirror path deliberately uses a plain Mesh. Mesh has no dispose()
+      // method; its render-object cache is released by the documented
+      // Object3D dispose event. Keep this distinction in one helper so a
+      // track switch cannot leave a plain mirror's render object pinned (or
+      // hide the TypeError from calling a nonexistent Mesh.dispose()).
+      function disposeInstancedObject(mesh) {
+        if (!mesh) return;
+        try {
+          if (mesh.isInstancedMesh && typeof mesh.dispose === "function") mesh.dispose();
+          else if (typeof mesh.dispatchEvent === "function") mesh.dispatchEvent({ type: "dispose" });
+        } catch (_) { /* best-effort: the renderer may already be tearing down */ }
+      }
+
       function freeInstancedBatch(batch) {
         if (!batch) return;
         if (shadowSys && shadowSys.freeInstanced) shadowSys.freeInstanced(batch);   // its keyed shadow caster
@@ -2124,7 +2163,7 @@ const TLX = (function () {
           const ix = _instRegistry.indexOf(mv.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);
           try { scene.remove(mv.imesh); } catch (_) { /* */ }
-          try { mv.imesh.dispose(); } catch (_) { /* */ }
+          disposeInstancedObject(mv.imesh);
           try { mv.imesh.geometry.dispose(); } catch (_) { /* */ }
           mv.imesh = null; mv.cells = null; mv.srcMatrices = mv.srcColors = mv.packMatrices = mv.packColors = null;
         }
@@ -2132,7 +2171,7 @@ const TLX = (function () {
           const ix = _instRegistry.indexOf(batch.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);
           try { scene.remove(batch.imesh); } catch (_) { /* */ }
-          try { batch.imesh.dispose(); } catch (_) { /* */ }
+          disposeInstancedObject(batch.imesh);
           batch.imesh = null;
         }
         if (batch.geo) {
@@ -2613,6 +2652,7 @@ const TLX = (function () {
       let _wrapPart = true;   // R9 A/B handle: apex26.tlxPartWrap=0 restores the copy into TLX's own array
       try { _wrapPart = localStorage.getItem("apex26.tlxPartWrap") !== "0"; } catch (_) { /* no storage: wrap */ }
       const PART_ATTRS = [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxSize", 1, 8], ["fxAlpha", 1, 9]];
+      const _partEpochs = new WeakMap(); let _partEpoch = 0;
       const partStreams = [
         { geo: null, ib: null, cap: 0, min: 256 * 6, stride: 10, attrs: PART_ATTRS },   // alpha group
         { geo: null, ib: null, cap: 0, min: 256 * 6, stride: 10, attrs: PART_ATTRS },   // additive group
@@ -3266,17 +3306,23 @@ const TLX = (function () {
       // race→race switch). Queue the drop; flushDropped() finishes it on the
       // first present after the warm settles, when no compile holds the mesh.
       const _dropQueue = [];
-      function dropWrapper(m) {
+      function dropWrapper(m, ownedGeometry) {
         try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
         m.visible = false;
-        if (_warmPending) { _dropQueue.push(m); return; }
+        if (_warmPending) {
+          if (!_dropQueue.some((entry) => entry.mesh === m)) _dropQueue.push({ mesh: m, ownedGeometry });
+          return;
+        }
+        if (m.__tlxDropped) return;
+        m.__tlxDropped = true;
         try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
         if (m._ownGeo && m.geometry) m.geometry.dispose();   // a mesh that owns its geometry (an R1 run's view)
         m.geometry = null; m.material = null;
+        if (ownedGeometry) try { ownedGeometry.dispose(); } catch (_) { /* already lost */ }
       }
       function flushDropped() {
         if (_warmPending || !_dropQueue.length) return;
-        for (const m of _dropQueue) dropWrapper(m);
+        for (const entry of _dropQueue) dropWrapper(entry.mesh, entry.ownedGeometry);
         _dropQueue.length = 0;
       }
 
@@ -3572,6 +3618,8 @@ const TLX = (function () {
        * WebGL2 readback could not write (better a colour-shifted pack than
        * none). Returns the number of layers written. */
       function readbackTextureLayers(size, images, n, data) {
+        const expected = [];
+        for (let i = 0; i < n; i++) if (images[i]) expected.push(i);
         let done = [];
         try {
           if (typeof Assets !== "undefined" && Assets.readLayerBytes) done = Assets.readLayerBytes(size, images, n, data);
@@ -3584,7 +3632,11 @@ const TLX = (function () {
           if (r < 0) return filled;
           filled += r;
         }
-        return filled;
+        // A partially readable pack is not a usable pack.  Returning a
+        // texture with zero-filled pages makes missing materials look valid
+        // and prevents Assets.load() from clearing its in-flight promise so a
+        // later retry can recover after a transient readback failure.
+        return filled === expected.length ? filled : 0;
       }
       // The 2d round-trip for one layer the WebGL2 readback refused: 1 written, 0 a bad layer, -1 no 2d context.
       function fill2dLayer(c2d, size, img, i, data) {
@@ -3608,6 +3660,7 @@ const TLX = (function () {
       let _packAsync = true;
       try { _packAsync = localStorage.getItem("apex26.tlxPackAsync") !== "0"; } catch (_) { /* no storage: async */ }
       let _matBindGen = 0;
+      let _matRequested = new Set();
 
       // CSS-box observation is shared; TLX still owns renderer.setSize(),
       // backend limits and post-target allocation.
@@ -3618,6 +3671,7 @@ const TLX = (function () {
       // The WebGL2 driver's texture ceiling is a device constant: ask once.
       let _glMaxDim = -1, _glMaxTries = 0;
       const cssSizeCache = CanvasCssSize.create(_layoutCanvas, { settleFrames: 30 });
+      _createUndo.push(function () { cssSizeCache.dispose(); });
       // Window resize (game.js) and settings can fire many times per drag frame.
       // Coalesce those to one target realloc per animation frame; begin() and
       // setRenderScale force an immediate apply so the draw sees the new size.
@@ -3692,7 +3746,10 @@ const TLX = (function () {
             _displayCanvas.width = cwBuf;
             _displayCanvas.height = chBuf;
           }
-          if (_postRebuild && !post) { _postRebuild = false; post = buildPost(); }
+          if (_postRebuild && !post) {
+            _postRebuild = false; post = buildPost();
+            if (!post) postFailure("Post-processing reconstruction failed");
+          }
           if (post) post.resize(rw, rh);
         }
       }
@@ -3934,7 +3991,12 @@ const TLX = (function () {
         try {
           n = (parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) + 1;
           sessionStorage.setItem("apex26.ctxLostReloads", String(n));
-        } catch (_) { n = ++_sessLostN; }
+        } catch (_) {
+          let prior = 0;
+          try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); prior = m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { /* best effort */ }
+          n = Math.max(++_sessLostN, prior + 1);
+          try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ }
+        }
         if (n <= 2) { try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
         try {
           if (typeof window.__apexReportError === "function")
@@ -3998,6 +4060,7 @@ const TLX = (function () {
         const deadPost = post;
         post = null;
         _postRebuild = false;   // lit/fx go too: no chain to rebuild for
+        postFailure("Renderer fallback requires reload for post-processing");
         _cancelSoftBlits();
         try { if (deadPost && deadPost.dispose) deadPost.dispose(); } catch (_) { /* best-effort degradation */ }
         try { if (sky && sky.dispose) sky.dispose(); } catch (_) { /* its two bake targets: best-effort */ }
@@ -4029,7 +4092,25 @@ const TLX = (function () {
         }
       };
       // the backend object (the ~40-member seam contract)
+      function materialArrayAnisotropy() {
+        if (materialArrayDetail !== null) return materialArrayDetail;
+        let requested = 4;
+        try { if (localStorage.getItem("apex26.tlxMaterialDetail") === "8") requested = 8; } catch (_) { /* baseline */ }
+        let cap = 1;
+        try {
+          const b = renderer.backend;
+          cap = renderer.getMaxAnisotropy ? renderer.getMaxAnisotropy() : (b && b.capabilities && b.capabilities.getMaxAnisotropy ? b.capabilities.getMaxAnisotropy() : 1);
+        } catch (_) { /* unsupported */ }
+        materialArrayDetail = Math.max(1, Math.min(requested, Number.isFinite(cap) ? cap : 1));
+        return materialArrayDetail;
+      }
       const backend = {
+        postHealth: () => ({ ..._postHealth, retryable: !post && !!lit && !!fx }),
+        retryPost() {
+          if (post || !lit || !fx) return false;
+          _postStrikes = 0; _postRebuild = true; _postRetryAt = 0;
+          postFailure("Manual recovery requested"); return true;
+        },
         backend: "three",                    // WGX precedent: backend id marker
         // Occlusion culling is a GLX feature (js/render/glx/chunked.js); these
         // are DECLARED, not implemented. game.js installs a backend by
@@ -4052,6 +4133,11 @@ const TLX = (function () {
           renderScale = v; resizeNow(); return true;
         },
         getRenderScale() { return renderScale; },
+        // PerfGov.init (after create) caps the backing store at DPR 1 once the crash sentinel holds two strikes: the scene/ldr/canvas targets shrink with dpr^2 (#1641). Only ever lowers.
+        capDpr(n) {
+          if (!(n >= 1) || n >= DPR_CAP) return false;
+          DPR_CAP = n; resizeNow(); return true;
+        },
         setSpatialUpscale, getSpatialUpscale,
         getPresentSize,
         get width() { return W; },
@@ -4073,15 +4159,20 @@ const TLX = (function () {
         gpuTimer(on) {
           const sup = _gpuSupported();
           if (on !== undefined) {
-            const next = !!on && sup;
+            const next = !!on && sup && !_inspectorHold;
             if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuMs = -1; }
             _gpuTimerOn = next;
-            try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
+            if (!_inspectorHold) try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
             if (!_gpuTimerOn) _gpuMs = -1;
           }
           return { supported: sup, on: _gpuTimerOn };
         },
         gpuMs() { return _gpuMs; },
+        // Dev Inspector hand-off (js/perf/three-inspector.js): the renderer plus the gpuTimer interlock — while held,
+        // gpuTimer stays off so only the Inspector's own pass resolves timestamp queries.
+        inspectorHost() {
+          return { renderer, hold(on) { _inspectorHold = !!on; if (on) { _gpuTimerOn = false; _gpuMs = -1; _gpuTimerEpoch++; } } };
+        },
         // "Skipped for cadence, map still valid" — see tlx-shadow.js §KEEP.
         carShadowKeep() { return !!(shadowSys && shadowSys.carShadowKeep()); },
         lampShadowKeep(idx) { return !!(shadowSys && shadowSys.lampShadowKeep(idx)); },
@@ -4257,7 +4348,7 @@ const TLX = (function () {
             t.minFilter = THREE.LinearMipmapLinearFilter;
             t.magFilter = THREE.LinearFilter;
             t.generateMipmaps = true;
-            t.anisotropy = 4;                            // the road is the grazing surface
+            t.anisotropy = materialArrayAnisotropy();
             // three keeps texture.image.data for the texture's life (~4.4 MB a map at the shipped 256 px, ~36 MB at
             // 512). Drop it once the first upload has run; the dims stay so a later size query still answers. A context
             // loss reloads the page, so nothing re-reads the bytes. (createTexture's releaseTexSource, for arrays.)
@@ -4285,12 +4376,16 @@ const TLX = (function () {
           // P4: a token still filling is held back (the procedural look stays bound) and bound once ready; a newer
           // call supersedes the wait, and the never-bound tokens it held are freed instead (WGX parity).
           const gen = ++_matBindGen;
+          _matRequested = new Set(maps ? [maps.albedo, maps.normal] : []);
           const waits = maps ? [maps.albedo, maps.normal].filter((t) => t && t.pending && t.ready).map((t) => t.ready) : [];
           if (waits.length) {
             Promise.all(waits).then(() => {
               const live = (t) => !!(t && !t.pending && !t._freed);
               const a = live(maps.albedo) ? maps.albedo : null, nn = live(maps.normal) ? maps.normal : null;
-              if (gen !== _matBindGen || !a) { for (const t of [a, nn]) if (t) t.dispose(); return; }
+              if (gen !== _matBindGen || !a) {
+                for (const t of new Set([a, nn])) if (t && (gen === _matBindGen || !_matRequested.has(t))) t.dispose();
+                return;
+              }
               bindNow(Object.assign({}, maps, { albedo: a, normal: nn }));
             });
             return;
@@ -4862,6 +4957,7 @@ const TLX = (function () {
           return !!(ownGL || (renderer && renderer.backend && renderer.backend.gl));
         },
         async attachXrSession(session) {
+          const generation = this._xrAttachGeneration = (this._xrAttachGeneration || 0) + 1;
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (!gl) throw new Error("TLX XR needs the WebGL2 backend (apex26.tlxForceGL=1)");
           // Flat boot omits xrCompatible; make the context XR-ready only here
@@ -4869,9 +4965,11 @@ const TLX = (function () {
           if (typeof gl.makeXRCompatible === "function") {
             try { await gl.makeXRCompatible(); } catch (_) { /* already compatible */ }
           }
+          if (generation !== this._xrAttachGeneration) return null;
           if (typeof XRWebGLLayer === "undefined") throw new Error("XRWebGLLayer missing");
           const layer = new XRWebGLLayer(session, gl, { antialias: false, alpha: false });
           await session.updateRenderState({ baseLayer: layer });
+          if (generation !== this._xrAttachGeneration) return null;
           this._xrLayer = layer;
           this._xrSession = session;
           _xrActive = true;
@@ -4899,6 +4997,7 @@ const TLX = (function () {
           return layer;
         },
         detachXrSession() {
+          this._xrAttachGeneration = (this._xrAttachGeneration || 0) + 1;
           this._xrLayer = null;
           this._xrSession = null;
           this._pendingXrEyes = null;
@@ -4949,11 +5048,12 @@ const TLX = (function () {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resizeNow();
           _sizeOwned = true;   // the next resize() defers to the next begin() (no rAF + cancel per frame)
-          // A dead post chain used to come back only on a resize/DPR change. Retry on a 2 s timer (3-strike cap kept):
-          // one transient throw must not cost ACES/bloom/FXAA/mirror for the rest of the race. Not warmed: one compile hitch.
+          // Existing bounded retry remains synchronous. Fully warmed recovery
+          // needs exclusive compiler state; see the recorded recovery design gap.
           if (_postRebuild && !post && !_warmPending
               && (typeof performance !== "undefined" ? performance.now() : Date.now()) >= _postRetryAt) {
             _postRebuild = false; post = buildPost(); if (post) post.resize(W, H);
+            else postFailure("Post-processing reconstruction failed");
           }
           _tagSwap();
           _instStamp++;
@@ -5186,8 +5286,11 @@ const TLX = (function () {
           const wrap = !!(data && data instanceof Float32Array && data.length >= floatCount
             && data.length % slot.stride === 0 && _wrapPart);
           const fresh = wrap ? wrapStream(slot, data) : ensureStream(slot, verts);
-          if (dirty !== false || fresh) {
-            if (!data) return;
+          if (!data) return;
+          let epoch = _partEpochs.get(data);
+          if (!epoch || dirty !== false) { epoch = ++_partEpoch; _partEpochs.set(data, epoch); }
+          if (fresh || slot.payload !== data || slot.epoch !== epoch || slot.payloadCount !== floatCount) {
+            slot.payload = data; slot.epoch = epoch; slot.payloadCount = floatCount;
             // set() the source whole when it is exactly the payload; a subarray view only when it is longer.
             if (slot.ib.array !== data) slot.ib.array.set(data.length <= floatCount ? data : data.subarray(0, floatCount));
             uploadStream(slot, floatCount);
@@ -5422,6 +5525,7 @@ const TLX = (function () {
                 if (post.depthEnd) post.depthEnd();
                 _gpuLastOperation = "render-post";
                 post.present(opts, _postF);
+                _postHealth = { state: "healthy", attempts: _postStrikes, maxAttempts: 3, reason: "" };
               } finally {
                 if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
                 if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
@@ -5440,6 +5544,7 @@ const TLX = (function () {
             post = null;
             _cancelSoftBlits();
             _postRebuild = ++_postStrikes <= 3;
+            postFailure("Post-processing presentation failed");
             _postRetryAt = (typeof performance !== "undefined" ? performance.now() : Date.now()) + 2000;   // begin() retries; a resize is not required
             try { paintCanvas(this); painted = true; } catch (e) { persistFail(e); }
             finally {
@@ -5877,6 +5982,7 @@ const TLX = (function () {
         },
       };
 
+      checkInit();
       try { localStorage.removeItem("apex26.gfxTlxFail"); } catch (_) { /* blocked storage */ }
       try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* blocked storage */ }
       try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window */ }
@@ -5884,10 +5990,12 @@ const TLX = (function () {
       try { Log.info("gfx", "TLX bind ok"); } catch (_) { /* harness */ }
       return backend;
     } catch (e) {
+      for (let i = _createUndo.length - 1; i >= 0; i--) { try { _createUndo[i](); } catch (_) { /* best effort */ } }
       try {
         if (_abortDisplay && _abortDisplay.parentNode) _abortDisplay.parentNode.removeChild(_abortDisplay);
       } catch (_) { /* already detached */ }
       try { disposeKeepingContext(_abortRenderer); } catch (_) { /* three dispose best-effort */ }
+      if (initOwner && !initOwner.active) return null;
       return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract)
     }
   }

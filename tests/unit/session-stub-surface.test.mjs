@@ -21,8 +21,8 @@
  * picker).
  *
  * Not covered (declared): writes made to a stub instance before its bundle
- * lands (pits.setPinnedStops, raceRadio.setChat) still vanish when the ready
- * hook recreates the instance — a write-recording stub is a follow-up.
+ * lands (e.g. raceRadio.setChat) may vanish when the ready hook recreates the
+ * instance. Pit pins use the persistent store; race-settings-pitplan-key covers them.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -172,4 +172,20 @@ test("the stub globals answer every member read outside their lazy bundles", () 
 test("RadioVoice.inert() carries sayPreRace like the real inert (loading-screen radioCheck asks for it by name)", () => {
   assert.equal(typeof stubGlobal("RadioVoice").inert().sayPreRace, "function");
   assert.equal(stubGlobal("RadioVoice").inert().sayPreRace("x", 1, 0), false);
+});
+
+test("the stub AudioPanel paints a saved SOUND OFF on the title button before the real panel lands", () => {
+  // Until the first gesture loads LAZY_AUDIO, index.html's static "SOUND ON" is all the player sees: a
+  // muted player reloaded to a button that claimed the opposite, and tapping it turned the sound ON.
+  const mk = (soundOn) => {
+    const btn = { textContent: "♪ SOUND ON", attrs: { "aria-pressed": "true" }, setAttribute(k, v) { this.attrs[k] = v; } };
+    stubGlobal("AudioPanel").create({ els: { soundbtn: btn }, store: G0.store, soundOn });
+    return btn;
+  };
+  const off = mk(false);
+  assert.equal(off.textContent, "♪ SOUND OFF");
+  assert.equal(off.attrs["aria-pressed"], "false");
+  const on = mk(true);
+  assert.equal(on.textContent, "♪ SOUND ON");
+  assert.equal(on.attrs["aria-pressed"], "true");
 });

@@ -128,6 +128,22 @@ test("tools data-file readers cover specs and CommonJS unit tests", async () => 
   assert.ok(files.includes("tests/unit/shared-track-foundation-characterization.test.cjs"), "CommonJS unit tests fell outside the scan");
 });
 
+test("tools data readers reuse one source snapshot per collection and refresh the next collection", async () => {
+  const { collect } = await import("../../tools/gen/gen-tools-readme.mjs");
+  const files = ["gen/reader.mjs", "gen/first-fixture.json", "gen/second-fixture.json"];
+  let reads = 0, mentioned = "first-fixture.json";
+  const read = () => { reads++; return `// @doc Fixture reader\nconst file = '${mentioned}';`; };
+  const first = collect({ files, read });
+  assert.equal(reads, 1, "header and all data rows share the tool source read");
+  assert.ok(first.data[0].readers.includes("gen/reader.mjs"));
+  assert.ok(!first.data[1].readers.includes("gen/reader.mjs"));
+  mentioned = "second-fixture.json";
+  const second = collect({ files, read });
+  assert.equal(reads, 2, "a new collection rereads source rather than serving a stale module cache");
+  assert.ok(!second.data[0].readers.includes("gen/reader.mjs"));
+  assert.ok(second.data[1].readers.includes("gen/reader.mjs"));
+});
+
 test("docs/LIGHTING-TUNER-SLIDERS.md: the generated block lists every TUNE_DEFS knob", () => {
   const doc = read("docs/LIGHTING-TUNER-SLIDERS.md");
   const b = block(doc, "tune-defs");

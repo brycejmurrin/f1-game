@@ -35,6 +35,7 @@
 // --scale joins the viewport axis (`ios-iphone-landscape@130`). Raise --jobs=N
 // only when /proc/loadavg first field is under ~3.
 import { styles as galleryStyles, escapeHtml as galleryEscape } from "../lib/screenshot-gallery.cjs";
+import { captureAuditEnvironment, captureAuditSource, captureAuditSelectors, auditFindingSelectors } from "./explorer/audit-evidence.mjs";
 import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -261,6 +262,8 @@ const PROBE = (rootSel) => {
   // and merely below our preference. Counting both as one number had the grid
   // reporting 40 "violations" on a screen that has none.
   const WCAG_MIN = 24;
+  out.thresholds = { smallTaps: { floor: tapFloor, slack: 0.5 }, tinyTaps: { floor: WCAG_MIN, slack: 0.5 } };
+  out.units = "CSS px (map metrics retain their native percent/buffer units)";
   out.tinyTaps = [];
   out.belowFold = 0;
   // ANY ancestor that can actually scroll to it, in either axis — not the
@@ -663,6 +666,7 @@ const browser = await launchChromium({
 // and by waits, not by CPU — three at once measured ~3x the throughput, which is
 // the difference between a coffee and an afternoon. Raise with --jobs=N.
 const rows = [];
+const source = await captureAuditSource(ROOT);
 // Every (viewport, scale) pair is its own sweep — its own context, its own boot.
 // Rescaling a live context would be cheaper, but the reset-and-reload recovery
 // below can fire at any cell, and a job whose identity is one column is far
@@ -729,7 +733,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
     } else expanded.push(s);
   }
   for (const screen of expanded) {
-    const cell = { viewport: vpName, why, screen: screen.id, screenName: screen.name };
+    const cell = { producer: "layout-audit", root: screen.root, viewport: vpName, why, screen: screen.id, screenName: screen.name };
     errors = [];
     if (!booted) cell.skipped = "boot failed";
     else try {
@@ -828,6 +832,8 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
         await page.waitForFunction(previewMapSettled, null, { polling: 100, timeout: 5000 }).catch(() => {});
       }
       Object.assign(cell, await page.evaluate(PROBE, screen.root));
+      cell.environment = await page.evaluate(captureAuditEnvironment, { root: screen.root, source, adjustments: ["content-visibility:visible!important"] }).catch(() => null);
+      cell.selectorIndex = await page.evaluate(captureAuditSelectors, { root: screen.root, selectors: auditFindingSelectors(cell) }).catch(() => ({}));
       if (wantShots) {
         const file = `${screen.id}__${vpName}.png`;
         await page.screenshot({ path: path.join(SHOT_DIR, file), timeout: 300000 });

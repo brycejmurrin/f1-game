@@ -8,19 +8,22 @@
 const TrackDesignerProps = (function () {
   "use strict";
   // Order is the codec kind index — never reorder; append only.
-  const KINDS = Object.freeze(["stand", "gantry", "trees", "water", "flood", "billboard", "palms", "hedge", "pines", "bushes", "marshal", "camera", "pond", "lake", "river"]);
+  const KINDS = Object.freeze(["stand", "gantry", "trees", "water", "flood", "billboard", "palms", "hedge", "pines", "bushes", "marshal", "camera", "pond", "lake", "river", "mountain", "snowpeak", "hill", "dune", "rocks", "lagoon", "canal", "blossom", "wheel", "cottage"]);
   const LABELS = Object.freeze({
     stand: "STAND", gantry: "GANTRY", trees: "TREES",
     water: "WATER", flood: "FLOOD", billboard: "BOARD", palms: "PALMS", hedge: "HEDGE",
     pines: "PINES", bushes: "BUSHES", marshal: "MARSHAL", camera: "CAMERA", pond: "POND", lake: "LAKE", river: "RIVER",
+    mountain: "MOUNTAIN", snowpeak: "SNOW PEAK", hill: "GRASS HILL", dune: "SAND DUNE", rocks: "ROCK OUTCROP",
+    lagoon: "LAGOON", canal: "CANAL", blossom: "BLOSSOM GROVE", wheel: "FERRIS WHEEL", cottage: "COTTAGE",
   });
   // Per-kind and total caps: custom tracks stay under the fleet prop budget.
-  const CAPS = Object.freeze({ stand: 4, gantry: 4, trees: 6, water: 4, flood: 2, billboard: 8, palms: 6, hedge: 6, pines: 6, bushes: 6, marshal: 4, camera: 4, pond: 4, lake: 4, river: 4 });
+  const CAPS = Object.freeze({ stand: 4, gantry: 4, trees: 6, water: 4, flood: 2, billboard: 8, palms: 6, hedge: 6, pines: 6, bushes: 6, marshal: 4, camera: 4, pond: 4, lake: 4, river: 4, mountain: 3, snowpeak: 3, hill: 6, dune: 6, rocks: 6, lagoon: 4, canal: 4, blossom: 6, wheel: 2, cottage: 6 });
   const TOTAL = 16;
   const DEFAULT_GAP = Object.freeze({
     stand: 18, gantry: 0, trees: 34, water: 40, flood: 28, billboard: 9, palms: 24, hedge: 12, pines: 28, bushes: 16, marshal: 14, camera: 20, pond: 28, lake: 50, river: 24,
+    mountain: 60, snowpeak: 70, hill: 30, dune: 28, rocks: 16, lagoon: 40, canal: 22, blossom: 30, wheel: 36, cottage: 22,
   });
-  const MIN_GAP = Object.freeze({ stand: 14, gantry: 0, trees: 20, water: 24, flood: 18, billboard: 6, palms: 16, hedge: 8, pines: 20, bushes: 10, marshal: 10, camera: 14, pond: 16, lake: 30, river: 14 });
+  const MIN_GAP = Object.freeze({ stand: 14, gantry: 0, trees: 20, water: 24, flood: 18, billboard: 6, palms: 16, hedge: 8, pines: 20, bushes: 10, marshal: 10, camera: 14, pond: 16, lake: 30, river: 14, mountain: 40, snowpeak: 50, hill: 20, dune: 18, rocks: 10, lagoon: 24, canal: 14, blossom: 20, wheel: 28, cottage: 16 });
   const DESCRIPTIONS = Object.freeze({
     stand: "A 70 m grandstand for spectators.", gantry: "An overhead gantry spanning the road.",
     trees: "A short belt of mixed woodland.", water: "A large trackside pond; allow plenty of space.",
@@ -31,12 +34,36 @@ const TrackDesignerProps = (function () {
     pond: "A compact 60 × 80 m pond for infields and gardens.",
     lake: "A broad 320 × 380 m lake; allow a large open area.",
     river: "A narrow 28 × 360 m straight river section; its direction stays fixed on the map.",
+    mountain: "A rugged 160 m wide, 110 m high mountain with a rocky summit.",
+    snowpeak: "A 200 m wide, 160 m high peak with a snowy crown.",
+    hill: "A rounded 100 m wide grass hill, 24 m above its surroundings.",
+    dune: "A low 90 m wide golden sand dune, 18 m high.",
+    rocks: "A craggy 28 m wide rock outcrop, 14 m high.",
+    lagoon: "A turquoise 180 × 140 m lagoon for tropical scenery.",
+    canal: "A slim 16 × 240 m canal; its direction stays fixed on the map.",
+    blossom: "A short grove of pink flowering trees.",
+    wheel: "A 44 m tall Ferris wheel for a trackside festival.",
+    cottage: "A small cottage with a terracotta gabled roof.",
+  });
+  const LANDSCAPES = Object.freeze({
+    mountain: { w: 160, h: 110, col: [0.36, 0.38, 0.40], rough: 0.3 },
+    snowpeak: { w: 200, h: 160, col: [0.40, 0.44, 0.48], rough: 0.3, snowline: 0.55 },
+    hill: { w: 100, h: 24, col: [0.28, 0.42, 0.20], rough: 0.12, rounded: true },
+    dune: { w: 90, h: 18, col: [0.74, 0.60, 0.36], rough: 0.16, rounded: true },
+    rocks: { w: 28, h: 14, col: [0.42, 0.42, 0.40], rough: 0.4 },
   });
   const WATER = Object.freeze({
     water: { size: [220, 0.25, 280], color: [0.14, 0.36, 0.48] },
     pond: { size: [60, 0.25, 80], color: [0.18, 0.42, 0.38] },
     lake: { size: [320, 0.25, 380], color: [0.10, 0.30, 0.46] },
     river: { size: [28, 0.25, 360], color: [0.16, 0.40, 0.50] },
+    lagoon: { size: [180, 0.25, 140], color: [0.12, 0.54, 0.58] },
+    canal: { size: [16, 0.25, 240], color: [0.18, 0.36, 0.42] },
+  });
+  const CATEGORIES = Object.freeze({
+    nature: ["trees", "palms", "hedge", "pines", "bushes", "blossom"],
+    terrain: Object.keys(LANDSCAPES), water: Object.keys(WATER),
+    venue: ["stand", "gantry", "flood", "billboard", "marshal", "camera", "wheel", "cottage"],
   });
   const GAP_MAX = 120;
   const BOARD_COLS = Object.freeze([
@@ -59,6 +86,7 @@ const TrackDesignerProps = (function () {
   };
 
   /** Count placed props by kind (and total). */
+  const effectiveGap = (kind, gap) => has(kind) ? (kind === "gantry" ? 0 : Math.max(MIN_GAP[kind], gapOf(kind, gap))) : null;
   function counts(list) {
     const out = { total: 0 };
     for (const k of KINDS) out[k] = 0;
@@ -216,11 +244,11 @@ const TrackDesignerProps = (function () {
 
   function placeOne(api, sv, K, p, i) {
     const side = p.side || 1;
-    const gap = p.gap;
+    const gap = effectiveGap(p.kind, p.gap);
     const k = K(p.s);
     if (p.kind === "stand") {
       if (!api.grandstandEx) return false;
-      api.grandstandEx(p.s, side, Math.max(14, gap), 70, null, null, { tiers: 1, h: 11 });
+      api.grandstandEx(p.s, side, gap, 70, null, null, { tiers: 1, h: 11 });
       return true;
     }
     if (p.kind === "gantry") {
@@ -228,45 +256,65 @@ const TrackDesignerProps = (function () {
       api.gantry(p.s, 5.5, [0.72, 0.74, 0.78], {});
       return true;
     }
-    if (p.kind === "trees") {
+    if (p.kind === "trees" || p.kind === "blossom") {
       if (!api.forestEdge) return false;
-      const half = 0.01;
-      api.forestEdge(p.s - half, p.s + half, side, Math.max(20, gap), {
-        hMin: 9, hMax: 15, density: 0.35, pineFrac: 0.35,
-        col: [0.18, 0.36, 0.16], col2: [0.24, 0.40, 0.18],
+      const half = 0.01, blossom = p.kind === "blossom";
+      api.forestEdge(p.s - half, p.s + half, side, gap, {
+        hMin: 9, hMax: 15, density: 0.35, pineFrac: blossom ? 0 : 0.35,
+        col: blossom ? [0.76, 0.42, 0.54] : [0.18, 0.36, 0.16], col2: blossom ? [0.88, 0.62, 0.70] : [0.24, 0.40, 0.18],
       });
       return true;
     }
     if (WATER[p.kind]) {
       if (!api.waterSurface) return false;
       const water = WATER[p.kind], clearance = Math.max(MIN_GAP[p.kind], gap), id = "custom-prop-" + p.kind + "-" + i;
-      if (p.kind !== "water" && waterOverlapsRoad(api.track, k, side, clearance, water.size)) {
+      if (waterOverlapsRoad(api.track, k, side, clearance, water.size)) {
         if (api.modelDiagnostics && api.modelDiagnostics.suppressed) api.modelDiagnostics.suppressed.push({ id, reason: "water footprint overlaps road" });
         return false;
       }
       return api.waterSurface(k, side, clearance, water.size, water.color, { id }) !== false;
     }
+    if (LANDSCAPES[p.kind]) {
+      const o = LANDSCAPES[p.kind], reach = o.w * 0.75 + 12;
+      if (!api.anchor || !(o.rounded ? api.ridge : api.mountain)) return false;
+      // Guard the full skirt against every segment, including another part of
+      // the lap. The same guard runs in the map preview and the race build.
+      if (waterOverlapsRoad(api.track, k, side, gap, [reach * 2, 0, reach * 2])) return false;
+      const a = api.anchor(k, side, gap + reach), base = Number.isFinite(api.pyMin) ? api.pyMin - 1 : a.c[1] - 1;
+      const h = o.h + Math.max(0, a.c[1] - base);
+      if (o.rounded) api.ridge(a.c[0], a.c[2], base, 0, o.w, o.w, h, o.col, { profile: "massif", rough: o.rough, crest: 0.25 });
+      else api.mountain(a.c[0], a.c[2], base, o.w, h, { seg: 12, seed: 31 + i * 17, rough: o.rough, rock: o.col, forest: o.col, snowline: o.snowline || 2, snow: [0.95, 0.97, 1] });
+      return true;
+    }
+    if (p.kind === "wheel") {
+      if (!api.ferrisWheel) return false;
+      api.ferrisWheel(k, side, gap, 22); return true;
+    }
+    if (p.kind === "cottage") {
+      if (!api.house) return false;
+      api.house(k, side, gap, 14, 9, 20, { wall: [0.82, 0.76, 0.62], roof: [0.54, 0.26, 0.18], roofType: "gable" }); return true;
+    }
     if (p.kind === "flood") {
       if (!api.floodMast) return false;
-      api.floodMast(k, side, Math.max(18, gap), { h: 24, cool: true, pool: true });
+      api.floodMast(k, side, gap, { h: 24, cool: true, pool: true });
       return true;
     }
     if (p.kind === "billboard") {
       if (!api.billboard) return false;
       const col = BOARD_COLS[i % BOARD_COLS.length];
-      api.billboard(k, side, Math.max(6, gap), 10, 4.2, col);
+      api.billboard(k, side, gap, 10, 4.2, col);
       return true;
     }
     if (p.kind === "palms") {
       if (!api.palm) return false;
       const step = 12 / Math.max(1, sv.total || 5000);
-      for (const offset of [-1, 0, 1]) api.palm(K(p.s + offset * step), side, Math.max(MIN_GAP.palms, gap), 11, [0.18, 0.42, 0.20]);
+      for (const offset of [-1, 0, 1]) api.palm(K(p.s + offset * step), side, gap, 11, [0.18, 0.42, 0.20]);
       return true;
     }
     if (p.kind === "hedge") {
       if (!api.hedge) return false;
       const half = 24 / Math.max(1, sv.total || 5000);
-      api.hedge(p.s - half, p.s + half, side, Math.max(MIN_GAP.hedge, gap), 1.8, [0.22, 0.38, 0.18]);
+      api.hedge(p.s - half, p.s + half, side, gap, 1.8, [0.22, 0.38, 0.18]);
       return true;
     }
     if (p.kind === "pines" || p.kind === "bushes") {
@@ -274,7 +322,7 @@ const TrackDesignerProps = (function () {
       if (!emit) return false;
       const step = (pines ? 14 : 6) / Math.max(1, sv.total || 5000), radius = pines ? 1 : 2;
       for (let j = -radius; j <= radius; j++) {
-        const at = K(p.s + j * step), dist = Math.max(MIN_GAP[p.kind], gap);
+        const at = K(p.s + j * step), dist = gap;
         if (pines) emit(at, side, dist, 14, [0.16, 0.30, 0.20]);
         else emit(at, side, dist, [0.28, 0.42, 0.20]);
       }
@@ -283,15 +331,15 @@ const TrackDesignerProps = (function () {
     if (p.kind === "marshal" || p.kind === "camera") {
       const emit = p.kind === "marshal" ? api.marshalPost : api.cameraTower;
       if (!emit) return false;
-      emit(k, side, Math.max(MIN_GAP[p.kind], gap), p.kind === "marshal" ? { style: "hut" } : { h: 12, style: "scaffold" });
+      emit(k, side, gap, p.kind === "marshal" ? { style: "hut" } : { h: 12, style: "scaffold" });
       return true;
     }
     return false;
   }
 
   return {
-    KINDS, LABELS, CAPS, TOTAL, DEFAULT_GAP, MIN_GAP, DESCRIPTIONS,
-    has, sanitize, counts, canPlace, place, placeBatch, updateAt, removeAt, removeLast, pointFrac, dress,
+    KINDS, LABELS, CAPS, TOTAL, DEFAULT_GAP, MIN_GAP, DESCRIPTIONS, CATEGORIES,
+    has, effectiveGap, sanitize, counts, canPlace, place, placeBatch, updateAt, removeAt, removeLast, pointFrac, dress,
   };
 })();
 Object.freeze(TrackDesignerProps);

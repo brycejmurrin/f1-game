@@ -413,6 +413,21 @@ test("an unconfirmed in-race RENDERER tap keeps the picker's options, and the qu
   assert.equal(h.sel.value, "three", "the picker snaps back to the unset default renderer");
 });
 
+test("an in-race RENDERER confirm belongs to the value that asked (H29): a different pick re-asks instead of reloading", () => {
+  const h = bootGfx();
+  h.body.dataset.race = "1";
+  h.sel.value = "webgpu";
+  h.dom.dispatch(h.sel, { type: "change" });
+  assert.equal(h.sel.dataset.armed, "1", "first pick arms");
+  h.sel.value = "three";   // a different renderer within the 5 s window
+  h.dom.dispatch(h.sel, { type: "change" });
+  assert.equal(h.pendingReload(), false, "the other value is a NEW question, not the confirm of the first");
+  assert.equal(h.sb.localStorage.getItem("apex26.gfxBackend"), null, "nothing is written");
+  assert.equal(h.sel.dataset.armed, "1", "and it is armed for the new value");
+  h.dom.dispatch(h.sel, { type: "change" });   // the deliberate second tap on the same value
+  assert.equal(h.sb.localStorage.getItem("apex26.gfxBackend"), "three", "confirming the SAME value proceeds");
+});
+
 test("a stale arm never carries into the next race; out of a race it is cleared, not consumed", () => {
   const h = bootGfx();
   h.body.dataset.race = "1";
@@ -575,19 +590,20 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-strategy", "pm-review", "pm-practice", "pm-photo", "pm-howto", "pm-checkpoint-save", "pm-checkpoint-retry", "pm-checkpoint-rewind", "pm-standings", "pm-skip-results", "pm-quit"]);
   const settingsIndex = html.slice(html.indexOf('id="pm-settings-index"'), html.indexOf("</nav>", html.indexOf('id="pm-settings-index"')));
   const doors = [...settingsIndex.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files"],
-    "SETTINGS has the seven top-level doors in task order");
-  assert.match(settingsIndex, /id="pm-advanced"[^>]*>STEERING &amp; ASSISTS/);
+  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress"],
+    "SETTINGS has the ten top-level doors in task order");
+  assert.doesNotMatch(settingsIndex, /id="pm-advanced"/);
+  assert.match(html, /id="pm-panel-controls"[\s\S]*id="pm-advanced"[^>]*>ADVANCED INPUT &amp; HANDLING/);
   const driving = html.slice(html.indexOf('id="pm-panel-driving"'), html.indexOf("</section>", html.indexOf('id="pm-panel-driving"')));
-  const practiceIds = ["pm-coach", "pm-practice-panel", "pm-practice-set", "pm-practice-retry", "pm-session-review"];
+  const practiceIds = ["pm-coach", "pm-gears", "pm-aero", "adv-aids-details", "pm-preset-pro"];
   for (const id of practiceIds) {
     assert.match(driving, new RegExp(`id="${id}"`), `${id} lives on the dedicated DRIVING sheet`);
     assert.doesNotMatch(pause, new RegExp(`id="${id}"`), `${id} is not a pause-menu action`);
   }
   assert.doesNotMatch(pause, /id="pm-driving"/, "pause opens SETTINGS; it has no DRIVING shortcut");
-  const display = html.slice(html.indexOf('id="pm-panel-display"'), html.indexOf("</section>", html.indexOf('id="pm-panel-display"')));
+  const display = html.slice(html.indexOf('id="pm-panel-visual"'), html.indexOf("</section>", html.indexOf('id="pm-panel-visual"')));
   for (const id of ["pm-visual-tuners", "pm-lighting", "pm-camtune"])
-    assert.match(display, new RegExp(`id="${id}"`), `${id} is nested under DISPLAY`);
+    assert.match(display, new RegExp(`id="${id}"`), `${id} is nested under VISUAL STUDIO`);
   assert.match(pause, /<div id="pm-now-card" class="as-now-card" hidden>/, "the pause NOW PLAYING card starts hidden; panel.js shows it while music plays");
   assert.match(pause, /id="pm-resume" autofocus/);
 });
