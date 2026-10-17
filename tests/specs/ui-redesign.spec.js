@@ -1106,3 +1106,39 @@ test("data hub constructor names stay readable in phone landscape", async ({ pag
     expect(n.sw, `${n.text} is cut off (${n.w}px of ${n.sw}px)`).toBeLessThanOrEqual(n.w + 1);
   }
 });
+
+test.describe("phone emulation (isMobile)", () => {
+  // The phone the sweep emulated (inspect --touch): a mobile, touch context.
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
+
+test("compact VS Friend CLOSE keeps its skewed corners inside the head-parked foot", async ({ page }) => {
+  // .bigbtn is skewX(-6deg): its painted corners overhang the box by
+  // tan(6deg) * h / 2. The compact foot is overflow:hidden, so without room
+  // for that overhang CLOSE was shaved 3px left and right (UI inspector sweep
+  // 2026-10-17, 932x430 and 844x390 touch).
+  await waitReady(page);
+  // overlays.css / dialogs.css arrive in the deferred batch (media="print"
+  // until loaded); the compact head-parked foot is defined there.
+  await page.waitForFunction(() => [...document.querySelectorAll('link[rel="stylesheet"]')]
+    .filter(l => /\/(overlays|dialogs)\.css/.test(l.href)).every(l => l.media !== "print" && l.sheet),
+    null, { polling: 100, timeout: 15_000 });
+  await page.evaluate(() => document.getElementById("mb-vs").click());
+  await page.waitForFunction(() => !document.getElementById("vsfriend").hidden, null, { polling: 100, timeout: 10_000 });
+  await page.evaluate(() => window.SheetShape?.reclassify());
+  await page.waitForFunction(() => document.getElementById("vsfriend-inner").dataset.density === "compact",
+    null, { polling: 100, timeout: 10_000 });
+  // Measure the steady state: the sheet's entrance animation holds the base
+  // foot padding until it finishes, and a player sees the frame after it.
+  await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== "running"
+    || !Number.isFinite(a.effect?.getComputedTiming?.().endTime)), null, { polling: 100, timeout: 10_000 });
+  const fit = await page.evaluate(() => {
+    const close = document.getElementById("vs-close").getBoundingClientRect();
+    const foot = document.querySelector("#vsfriend-inner > .sheet-foot").getBoundingClientRect();
+    return { left: close.left - foot.left, right: foot.right - close.right,
+      overflow: getComputedStyle(document.querySelector("#vsfriend-inner > .sheet-foot")).overflow };
+  });
+  expect(fit.overflow, "the foot still clips (the clip is what makes the overhang visible)").toContain("hidden");
+  expect(fit.left, "CLOSE's skewed left corner is inside the foot").toBeGreaterThanOrEqual(-0.5);
+  expect(fit.right, "CLOSE's skewed right corner is inside the foot").toBeGreaterThanOrEqual(-0.5);
+});
+});
