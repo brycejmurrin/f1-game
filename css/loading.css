@@ -263,4 +263,6 @@
   opacity: 1;
 }
 #xr-enter[hidden] { display: none !important; }
+/* #2625: RETRY / BACK TO MENU when the race-session bundle fails (see failed() in loading-screen); the buttons reuse the menu opt-btn style. */
+#ld-fail { display: flex; flex-wrap: wrap; gap: var(--gap); margin-top: var(--gap); pointer-events: auto; }
 } /* @layer overlays */

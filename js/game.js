@@ -2680,7 +2680,7 @@ async function startRaceBody() {
   }
   if (stale()) return false; if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
   rlap("scenery");
-  const sessionOk = await ensureRaceSession(); if (stale()) return false;   // LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
+  let sessionOk = await ensureRaceSession(); while (!sessionOk && !stale() && await LoadingScreen.failed() === "retry") sessionOk = await ensureRaceSession(); if (stale()) return false;   // #2625 RETRY re-runs the load, BACK falls through; LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
   if (!sessionOk) { loadingScreen.stop(); quitToMenu(); announce("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"); return false; }   // the stubs have no retirements or pit stops, and TT data would be lost silently
   await ensureAudio(); if (stale()) return false;   // LAZY_AUDIO — stub until first race/gesture; real engine before startEngine (false = silent race; the loader logged it)
   radioVoice.prepare();   // the recorded voices download over the loading screen, not under the first line

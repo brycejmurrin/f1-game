@@ -387,12 +387,13 @@ test("#2186: sync-pr's fast verify of a docs-only diff skips the VM suites, runs
   const suites = ["test:game-vm-a", "test:net-unit", "test:vm-page", "test:node-slow", "test:game-vm-b1", "test:game-vm-b2"];
   const fast = verifyStages({ verify: "fast", changed: ["docs/README.md"], circuits: [], suites });
   const names = fast.map((s) => s.name);
-  assert.deepEqual(fast[0].args, ["tools/ci/tooling-fast.mjs", "--jobs=3"]);
+  assert.deepEqual(fast[0].args, ["tools/ci/tooling-fast.mjs", "--changed", "--jobs=3"], "fast = the branch's own diff only (#2186 follow-up)");
   assert.ok(!names.some((n) => /^test:game-vm-/.test(n)), names.join(" "));
   assert.ok(names.includes("test:net-unit"), "a cheap unscoped suite still runs");
   for (const st of fast) assert.ok(st.timeoutMs > 0 && st.timeoutMs <= 20 * 60e3, `${st.name} has a timeout inside the 30-min ceiling`);
   const full = verifyStages({ verify: "full", changed: ["docs/README.md"], circuits: ["spa"], suites });
   assert.deepEqual(full.map((s) => s.name), ["tooling-fast", ...suites, "verify-track:spa"], "full runs every suite");
+  assert.deepEqual(full[0].args, ["tools/ci/tooling-fast.mjs", "--jobs=3"], "full runs the whole tooling-fast floor, no --changed");
   assert.deepEqual(verifyStages({ verify: "fast", changed: null, circuits: [], suites }).map((s) => s.name), ["tooling-fast", ...suites], "unknown diff runs every suite");
   assert.deepEqual(verifyStages({ verify: "none", changed: [], circuits: [], suites }), []);
   assert.deepEqual(VERIFY_MODES, ["none", "fast", "full"]);

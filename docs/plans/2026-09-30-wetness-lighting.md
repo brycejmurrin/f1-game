@@ -76,7 +76,7 @@ contract change must keep that gate coherent with real wet/rain, not dry sheen.
 in the goal have **zero** `track|…` keys and resolve to `"*"` alone
 (verified by parsing `js/lighting/presets.js`).
 
-Campaign lattice already knows them (`tools/lighting/campaign/config.mjs`
+Campaign lattice already knows them (the deleted lighting campaign config (#2176)
 `TRACKS` / `SHARDS` / `CAMERA_FRACTIONS`). Look-survey sheets exist only for the
 first wave (`docs/look-survey/README.md`); none of the twelve have a sheet yet.
 

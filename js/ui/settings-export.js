@@ -212,6 +212,7 @@ const SPEC = [
   { k: "hudAccentHex", lane: "json", group: "appearance", def: "#e10600", src: "js/ui/appearance-opts.js" },
   { k: "textSize", lane: "json", group: "appearance", def: "large", src: "js/ui/appearance-opts.js TEXT SIZE", oneOf: ["normal", "large", "larger"] },
   { k: "uiContrast", lane: "json", group: "appearance", def: "high", src: "js/ui/appearance-opts.js HIGH CONTRAST", oneOf: ["off", "high"] },
+  { k: "appIcon", lane: "json", group: "appearance", def: "default", src: "js/ui/appearance-opts.js APP ICON", oneOf: ["default", "A", "B", "C", "D", "E", "F"] },
   { k: "cvdMode", lane: "json", group: "appearance", def: "off", src: "js/ui/appearance-opts.js COLOUR VISION", oneOf: ["off", "deutan", "protan", "tritan"] },
   { k: "speedUnits", lane: "json", group: "appearance", def: "kmh", src: "js/ui/appearance-opts.js SPEED UNITS", oneOf: ["kmh", "mph"] },
   { k: "menuHelp", lane: "json", group: "appearance", def: "on", src: "js/ui/appearance-opts.js HELP TEXT (on = SHOW | off = HIDE)", oneOf: ["on", "off"] },

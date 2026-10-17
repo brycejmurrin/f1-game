@@ -32,7 +32,7 @@ import { aliveRun } from "../ci/test-bg.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
-  expandMatrix, parseShard, shardCells, estimateMinutes, validateOffsets,
+  expandMatrix, parseShard, shardCells, estimateMinutes, validateOffsets, filterOnly, bootGroups,
 } from "../lib/hud-survey-matrix.mjs";
 import { pathToFileURL } from "node:url";
 
@@ -404,7 +404,7 @@ const CATALOG = [
     name: "apex_doctor",
     kind: "tree",
     description: "Tree — read-only local tool readiness and prerequisite report; no browser, network, installation or writes.",
-    inputSchema: { type: "object", properties: { dryRun: { type: "boolean" } } },
+    inputSchema: { type: "object", properties: { dryRun: { type: "boolean" }, full: { type: "boolean", description: "Return every check row (default: failures and warnings plus the pass count; ~54 KB on a healthy tree)." } } },
   },
   {
     name: "apex_eval",
@@ -540,7 +540,7 @@ const CATALOG = [
   {
     name: "apex_agent",
     week: 2,
-    description: "Browser (lock first) — agent.mjs world/track/scene/rollout via harness. Skill: agent-view.",
+    description: "Browser (lock first) — agent.mjs world/track/scene/rollout via harness. COLD-BOOTS a browser on EVERY call (help 4 s, world detail:brief ~100 s on SwiftShader); for repeated reads use apex_track op:eval on a persistent session. Skill: agent-view.",
     inputSchema: {
       type: "object",
       properties: {
@@ -599,6 +599,7 @@ const CATALOG = [
       properties: {
         since: { type: "string" },
         budgetMin: { type: "number" },
+        full: { type: "boolean", description: "Keep each shard's spec list (default: specCount; `selected` already lists every spec)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -755,7 +756,7 @@ const CATALOG = [
       type: "object",
       properties: {
         matrix: { type: "string", description: "quick (default) | full | leads | exhaustive (needs shard) | path to a matrix JSON under scratch/ or artifacts/." },
-        only: { type: "array", items: { type: "string" }, description: "Keep cells whose id contains any of these substrings." },
+        only: { type: "array", items: { type: "string" }, description: "Keep cells whose CELL id contains any of these substrings (e.g. phoneL-chase, not a device id like phone-landscape-844x390; a miss lists the valid ids)." },
         shard: { type: "string", description: "i/n — one balanced shard of the matrix (whole boot groups)." },
         backend: { type: "string", enum: ["three", "webgl2"], description: "Renderer every cell boots (default three = TLX; webgl2 = GLX)." },
         noShots: { type: "boolean", description: "Measure only, no PNGs." },
@@ -933,11 +934,11 @@ const CATALOG = [
     name: "apex_job_status",
     week: 7,
     kind: "tree",
-    description: "Tree — a background job's state (running | done | failed | cancelled), elapsed time, log tail and, once finished, its parsed JSON result in out. `wait` (1–300 s) blocks until it finishes (waitedS / stillRunning); capped results carry topFindings. No jobId lists every job this server started. Skill: check-changes.",
+    description: "Tree — a background job's state (running | done | failed | cancelled), elapsed time, log tail and, once finished, its parsed JSON result in out. `wait` (1–300 s) blocks until it finishes (waitedS / stillRunning) but the host moves any call past ~120 s to a background task, so use wait ≤ 100; capped results carry topFindings. No jobId lists every job this server started. Skill: check-changes.",
     inputSchema: { type: "object", additionalProperties: false, properties: { jobId: { type: "string" },
       state: { type: "string", enum: ["running", "done", "failed", "cancelled"], description: "No jobId: list only jobs in this state." },
       limit: { type: "integer", minimum: 1, maximum: 200, description: "No jobId: newest N jobs (default 20)." },
-      wait: { type: "integer", minimum: 1, maximum: 300, description: "With jobId: hold the call up to N seconds until the job is no longer running (no polling loop); the reply says waitedS / stillRunning." },
+      wait: { type: "integer", minimum: 1, maximum: 300, description: "With jobId: hold the call up to N seconds until the job is no longer running (no polling loop); the reply says waitedS / stillRunning. The host backgrounds a call after ~120 s: pass ≤ 100." },
       dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
   },
   {
@@ -1032,6 +1033,7 @@ const CATALOG = [
       properties: {
         file: { type: "string", description: "tests/unit/<name>.test.mjs (the path as the repo spells it)." },
         pattern: { type: "string", description: "Only tests whose name matches this regex (--test-name-pattern)." },
+        full: { type: "boolean", description: "Return the whole TAP stream (default: pass/fail counts and failing test names; a failing run keeps its stdout)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -1511,6 +1513,24 @@ function hudMockMock(argv) {
   return hudMockResult(toolResult({ ok: true, mock: true, exit: 0, argv, stdout: "", stderr: "", out: summary, durationMs: 0 }));
 }
 
+/** What a HUD job really costs, for `estimateMs` (the kill budget below is deliberately generous and is NOT an
+ *  estimate). Measured on this box with one cell (2026-10-17): hud_shot 57 s, hud_mock 39 s, hud_survey --only 47 s.
+ *  hud_survey scales by boot groups and cells: ~40 s per boot + ~7 s per cell (one-sample calibration, #2673). */
+export function hudEstimateMs(name, args = {}, expand = expandMatrix) {
+  if (name === "apex_hud_shot") return 60000;
+  if (name === "apex_hud_mock") return 40000;
+  try {
+    const m = args.matrix || "quick";
+    if (["quick", "full", "leads", "exhaustive"].includes(m)) {
+      let cells = expand(m, args.track ? { track: args.track } : {}).cells;
+      if (Array.isArray(args.only) && args.only.length) cells = filterOnly(cells, args.only);
+      if (args.shard) { const sh = parseShard(args.shard); cells = shardCells(cells, sh.i, sh.n); }
+      return bootGroups(cells).length * 40000 + cells.length * (args.noShots ? 3000 : 7000);
+    }
+  } catch { /* unknown matrix: fall through */ }
+  return 60000;
+}
+
 /** Budget: twice the CLI's own estimate for the named matrix (+ 5 min), capped at 90 min. */
 const HUD_TIMEOUT_MS = (name, args) => {
   if (name === "apex_hud_shot") return 420000;
@@ -1788,6 +1808,31 @@ export function splitOut(stdout) {
   return { out: null, rest: text };
 }
 export function parseOut(stdout) { return splitOut(stdout).out; }
+
+/** Reply diet (#2672): the verdict without the bulk. `args.full` restores the whole reply. Pure — body is the
+ *  parsed result of runSpawn. doctor: non-pass check rows + the pass count; unit_test: pass/fail counts and failing
+ *  test names (a failing run keeps its stdout, which holds the diagnosis); select_specs: shards without the spec list
+ *  `selected` already carries. */
+export function slimBody(name, body, args = {}) {
+  if (args.full || !body || body.error) return body;
+  if (name === "apex_doctor" && body.out && Array.isArray(body.out.checks)) {
+    const checks = body.out.checks;
+    return { ...body, out: { ...body.out, checks: checks.filter((c) => c.status !== "pass"), passed: checks.filter((c) => c.status === "pass").length, slim: "pass rows omitted; {full:true} lists them" } };
+  }
+  if (name === "apex_unit_test" && body.out == null && typeof body.stdout === "string") {
+    const n = (k) => { const m = new RegExp(`^# ${k} (\\d+)`, "m").exec(body.stdout); return m ? +m[1] : null; };
+    const pass = n("pass"), fail = n("fail");
+    if (pass == null || fail == null) return body;
+    const failing = [...body.stdout.matchAll(/^\s*not ok \d+ - (.+)$/gm)].map((m) => m[1]);
+    const out = { tests: n("tests"), pass, fail, failing };
+    return { ...body, out, stdout: fail ? body.stdout : "" };
+  }
+  if (name === "apex_select_specs" && body.out && Array.isArray(body.out.shards)) {
+    return { ...body, out: { ...body.out, shards: body.out.shards.map(({ specs, ...r }) => ({ ...r, specCount: String(specs || "").split(/\s+/).filter(Boolean).length })) } };
+  }
+  return body;
+}
+const SLIMMED = new Set(["apex_doctor", "apex_unit_test", "apex_select_specs"]);
 
 /** Run a CLI without blocking the server. spawnSync froze the whole process
  *  for a browser tool's 30–100 s: apex_status could not answer, and when a
@@ -2478,7 +2523,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
     const r = extras().handlers.apex_job_start({ kind, [HUD_JOB_ARGV]: argv });   // sync: returns the jobId at once
     const body = JSON.parse(r.content[0].text);
     if (body.ok === false) return r;
-    return toolResult({ ...body, routed: `apex_job_start ${kind}`, estimateMs: HUD_TIMEOUT_MS(name, args),
+    return toolResult({ ...body, routed: `apex_job_start ${kind}`, estimateMs: hudEstimateMs(name, args), killAfterMs: HUD_TIMEOUT_MS(name, args),
       hint: "Runs in the background: apex_job_status {jobId} until state is done; findings land in out / the log. async:false blocks instead." });
   }
   if (hud) {
@@ -2527,7 +2572,11 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   // Classified non-zero: verify-change --fast exit 2 = verdict partial (fast
   // phase passed, remaining browser groups are not-run — never a tool crash).
   const allowExit = name === "apex_verify_change_fast" ? new Set([0, 2]) : null;
-  return runSpawn(argv, { timeoutMs, allowExit, env, signal });
+  const run = runSpawn(argv, { timeoutMs, allowExit, env, signal });
+  if (!SLIMMED.has(name)) return run;
+  return run.then((result) => {
+    try { return toolResult(slimBody(name, JSON.parse(result.content[0].text), args), { isError: result.isError }); } catch { return result; }
+  });
 }
 
 // Tool annotations (MCP 2025-06-18 ToolAnnotations). The spec's defaults are
