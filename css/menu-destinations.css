@@ -20,8 +20,8 @@
 :where(body[data-density="compact"]) #menu-buttons > .menu-destination .mb-sub { display: none; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons > .menu-destination > .bigbtn {
   display: flex; align-items: center; justify-content: center; gap: .4em;
-  font-size: calc(var(--fs-4) * var(--ui-compact-text, 1));
-  white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
+  font-size: clamp(.7rem, calc(2.6 * var(--vwz) * var(--ui-compact-text, 1)), calc(var(--fs-4) * var(--ui-compact-text, 1)));
+  white-space: normal; text-wrap: balance; overflow-wrap: normal; hyphens: none; line-height: 1.15;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons > .menu-destination .btn-ico { margin: 0; flex: none; }
 :root[data-title-btns="stack"] #menu-buttons > .menu-destination {
@@ -35,16 +35,16 @@
 #menu-create .bigbtn { white-space: normal; text-wrap: balance; overflow-wrap: anywhere; }
 #menu-create .mb-sub { white-space: normal; overflow-wrap: anywhere; }
 /* Compact Home: groups share the right track; Utilities stay under the brand. */
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
   grid-template-rows: repeat(5, max-content);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > .menu-destination-label { display: none; }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-garage, #menu-create) {
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > .menu-destination-label { display: none; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-garage, #menu-create) {
   width: 100%; align-self: start; justify-self: stretch; grid-column: 2; gap: calc(var(--gap) * 0.3);
 }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-garage { grid-row: 3; }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { grid-row: 4; }
-html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create { grid-row: 5; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-garage { grid-row: 3; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { grid-row: 4; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create { grid-row: 5; }
 .dh-developer-tools { padding: 0 var(--gap) calc(var(--gap) * .5); flex-shrink: 0; }
 .dh-developer-tools > summary { cursor: pointer; color: var(--dim); min-height: var(--tap-min); }
 .dh-developer-tools > button { margin-top: calc(var(--gap) * .3); }
