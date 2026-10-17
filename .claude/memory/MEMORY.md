@@ -28,3 +28,4 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Standing Merge Desk](standing-merge-desk.md) — since 2026-10-15 a Sonnet `[Merge Desk]` sibling (agent merge-desk.md) runs sweeps and spawns Sonnet lane workers, woken hourly; send SWEEP there
 - [Sessions run Sonnet](sessions-run-sonnet.md) — 2026-10-16: lanes/workers/fresh-session scheduled tasks use claude-sonnet-5-5, never Fable
 - [Merge Desk session](merge-desk-session.md) — persistent Claude Merge Desk session_01WQY3pk…; workers send `SWEEP <PR#>`; it never merges
+- [Fixers may screenshot](fixers-may-screenshot.md) — stuck UI fixer: allow screenshots (no loops), 15-min cap then push with a named known-red, or the orchestrator finishes it
