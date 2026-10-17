@@ -63,7 +63,8 @@
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn .btn-ico { width: .85em; height: .85em; flex: none; margin: 0; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .btn-ico { display: none; }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > #mb-phonepad { flex-grow: 1.35; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn:not([hidden]) { flex: 1 1 auto; min-width: min-content; }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary:has(#mb-standings:not([hidden])) > .bigbtn { font-size: clamp(.6rem, calc(1.25*var(--vwz)), var(--fs-micro)); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .bigbtn { font-size: clamp(.7rem, calc(1.7*var(--vwz)), calc(var(--fs-4)*var(--ui-compact-text, 1))); }
 @media (max-width: 700px) { :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .btn-ico { display: none; } }
 .dh-developer-tools { padding: 0 var(--gap) calc(var(--gap) * .5); flex-shrink: 0; }
