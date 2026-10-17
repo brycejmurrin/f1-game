@@ -118,11 +118,28 @@ drawn and `mmPitMark` self-time is 0 ms in both arms (smoke runs), i.e. F1's 980
 | after | 1, 2, 3 | 2.9, 0.7, 1.1 | 5.1 %, 9.2 %, 7.3 % | 12.1/20.1, 10.4/22.6, 11.4/22.4 | 1488, 1499, 1456 |
 
 Reading: the `mmPitMark` self-time drop (≈3.8 s → ≈1 ms per window, three runs each, ranges disjoint by three
-orders of magnitude) is a real win in the profiler. **No whole-frame win is claimed**: heavy-frame share (7.4–15 %
-vs 5.1–9.2 %) overlaps, and p50 is *higher* after (10.4–12.1 vs 3.7–9.8 ms) with fewer frames per window; that is
-unexplained, run-order or box noise is the likely reading (the box is shared, rAF is compositor-driven), and a
-re-run is needed before saying the change is free. Caveat from F1 stands: the cost may be SwiftShader's canvas
-text path, so a hardware effect is unmeasured (gpu-census was not dispatched).
+orders of magnitude) is a real win in the profiler. The builder's p50 rise (10.4–12.1 vs 3.7–9.8 ms) did **not**
+reproduce; see the re-measure below.
+
+### F1 re-measure (PR owner, 2026-10-17): the p50 question
+
+Same stubbed-link method (844×390, DPR 2, monaco, chase camera, tyre wear + rain forcing the marker, 20 s settle,
+30 s window), but **no CPU profiler** (the builder's 200 µs profiler was on in both arms), frame = one rAF callback,
+4 runs per arm strictly alternating before/after, one browser at a time, loadavg 0.3–3.2 (the probe's own Chromium).
+The before arm serves `git show HEAD~2:js/ui/hud.js` through a route. The probe also counts, inside the window,
+`fillText("P")` calls, `drawImage` calls of a <40 px canvas and `document.createElement("canvas")` calls.
+
+| arm | run | p50 / p95 ms | frames >20 ms | mean ms | frames | `fillText("P")` / glyph `drawImage` / canvases created |
+|---|---|---|---|---|---|---|
+| before | 1–4 | 4.9/29.4, 4.4/28.9, 3.8/31.2, 4.4/31.1 | 33.1, 32.3, 31.1, 29.9 % | 11.9, 11.4, 12.0, 11.4 | 484, 486, 482, 482 | 194, 193, 196, 190 / 0 / 0 |
+| after | 1–4 | 4.6/20.5, 4.9/21.5, 4.4/20.1, 4.7/19.3 | 5.6, 7.4, 5.2, 4.7 % | 8.1, 8.5, 8.2, 7.7 | 478, 476, 484, 488 | 0 / 188, 191, 187, 194 / 0 |
+
+p50 is not worse (before 3.8–4.9, after 4.4–4.9 ms). The tail moves: p95 28.9–31.2 → 19.3–21.5 ms, heavy-frame share
+29.9–33.1 → 4.7–7.4 %, mean 11.4–12.0 → 7.7–8.5 ms, ranges disjoint over 4 runs each. The cache never misses (0
+canvases created in the window; one glyph `drawImage` per marker frame), so the builder's higher after-p50 was not the
+cache key nor `drawImage` cost; its profiler-on, 3-run numbers (1456–1713 frames per window against 476–488 here)
+were a different frame-rate regime. Still SwiftShader CPU-side numbers: canvas text may be cheaper on a real GPU, so
+the size of the win on hardware is unmeasured (gpu-census was not dispatched).
 
 Visual evidence (not an assertion): minimap canvas at 844×390, DPR 2, before vs after, monaco with the marker
 active — the "P" disc, the sector colours and the pit run are indistinguishable by eye (`artifacts/minimap-before-after.png`,
