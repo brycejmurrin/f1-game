@@ -348,6 +348,10 @@ body:has(dialog[open]) #save-warning { display: none; }
   pointer-events: none;
 }
 #htp-controls { scroll-margin-block-start: var(--gap); }
+#htp-controls-refresher {
+  display: block; min-width: var(--tap); min-height: var(--tap); margin-block: calc(var(--gap) * 0.5);
+  padding: 0 var(--gap); font: inherit; letter-spacing: inherit; text-align: start; cursor: pointer;
+}
 #htp-inputs { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
 #htp-inputs details { min-width: 0; }
 #htp-inputs p { margin-block: calc(var(--gap) * 0.5); }
