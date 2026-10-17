@@ -453,3 +453,5 @@ const PhoneRecorder = (function () {
     isOn: () => recorder().isOn(), json: () => recorder().serialize(),
   };
 })();
+
+Object.freeze(PhoneRecorder);
