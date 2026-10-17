@@ -50,6 +50,14 @@ A/B, interleaved, the same harness, CSSOM rewrite of the 48 matching rules in th
 | base | 6.45, 5.56, 7.30 | 10.9, 9.4, — |
 | scoped | 3.59, 3.97, 4.19 | 7.6, 8.3, 8.6 |
 
+Re-measured on the COMMITTED CSS (no CSSOM rewrite), deploy tip 500ceb00 vs this branch at ff607831, interleaved,
+same harness (`scratch/perfB/trace.mjs`, 12 s window, rAF-counted frames):
+
+| arm | UpdateLayoutTree ms/frame | fps (headless race) |
+|---|---|---|
+| deploy tip | 7.21, 7.14, 6.04 | 37.7, 38.9, 44.2 |
+| scoped | 4.17, 4.07, 4.23 | 44.8, 45.7, 43.4 |
+
 The source change is the same rewrite, done in `css/*.css` (54 `:has(` arguments in carsetup, dialogs, hud, menus,
 overlays, tuner and watch-transport, the second link of a chained `body:has(…):has(…)` included; `touch-controls.css` was left alone because it belongs to the HUD-fit lane). It skips `dialog[open]`
 and `dialog:modal`, because the Data Hub telemetry dialog is nested inside `#datahub`. `tests/unit/css-has-scope.test.mjs`
