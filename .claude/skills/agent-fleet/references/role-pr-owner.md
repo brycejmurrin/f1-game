@@ -28,6 +28,7 @@ Use the orchestrator.md launch template with:
   plus the grant that created the owner role. If the user already ordered the
   merge and the orchestrator armed it, say "auto-merge is armed (MERGE); leave
   it" — the owner still never arms or merges.
+- `STOP AT: 300k context or $<cap>` as the last line (docs-only PR: 100k); the owner checks it at every wake and hands off.
 - The relayed notes from the previous owner (head sha, last CI verdict, local
   sync state, files that conflicted).
 

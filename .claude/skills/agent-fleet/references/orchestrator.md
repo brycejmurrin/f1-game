@@ -86,6 +86,10 @@ before every `create_session`:
    message per ask; a correction is `RETRACT <ask>`, never a second broadcast.
    No peer fan-out ("send to every session below"): replies go to the
    orchestrator only (three asks in four minutes cost ~21 wakes each, 2026-10-17).
+12. Size stop, every role: the launch prompt ends `STOP AT: 300k context or $<cap>`.
+   The session reads its own `context_usage` / `usage` via `get_session` (no id)
+   at every wake after a green push and, at the stop, sends HANDOFF/FINAL and
+   ends. Docs-only owners stop at 100k (`docs/notes/ROLE-REVIEW-2026-10-17.md`).
 
 ### Pre-launch quota check (#2380)
 
