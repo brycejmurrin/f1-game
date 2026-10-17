@@ -404,7 +404,7 @@ const CATALOG = [
     name: "apex_doctor",
     kind: "tree",
     description: "Tree — read-only local tool readiness and prerequisite report; no browser, network, installation or writes.",
-    inputSchema: { type: "object", properties: { dryRun: { type: "boolean" } } },
+    inputSchema: { type: "object", properties: { dryRun: { type: "boolean" }, full: { type: "boolean", description: "Return every check row (default: failures and warnings plus the pass count; ~54 KB on a healthy tree)." } } },
   },
   {
     name: "apex_eval",
@@ -599,6 +599,7 @@ const CATALOG = [
       properties: {
         since: { type: "string" },
         budgetMin: { type: "number" },
+        full: { type: "boolean", description: "Keep each shard's spec list (default: specCount; `selected` already lists every spec)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -1032,6 +1033,7 @@ const CATALOG = [
       properties: {
         file: { type: "string", description: "tests/unit/<name>.test.mjs (the path as the repo spells it)." },
         pattern: { type: "string", description: "Only tests whose name matches this regex (--test-name-pattern)." },
+        full: { type: "boolean", description: "Return the whole TAP stream (default: pass/fail counts and failing test names; a failing run keeps its stdout)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -1789,6 +1791,31 @@ export function splitOut(stdout) {
 }
 export function parseOut(stdout) { return splitOut(stdout).out; }
 
+/** Reply diet (#2672): the verdict without the bulk. `args.full` restores the whole reply. Pure — body is the
+ *  parsed result of runSpawn. doctor: non-pass check rows + the pass count; unit_test: pass/fail counts and failing
+ *  test names (a failing run keeps its stdout, which holds the diagnosis); select_specs: shards without the spec list
+ *  `selected` already carries. */
+export function slimBody(name, body, args = {}) {
+  if (args.full || !body || body.error) return body;
+  if (name === "apex_doctor" && body.out && Array.isArray(body.out.checks)) {
+    const checks = body.out.checks;
+    return { ...body, out: { ...body.out, checks: checks.filter((c) => c.status !== "pass"), passed: checks.filter((c) => c.status === "pass").length, slim: "pass rows omitted; {full:true} lists them" } };
+  }
+  if (name === "apex_unit_test" && body.out == null && typeof body.stdout === "string") {
+    const n = (k) => { const m = new RegExp(`^# ${k} (\\d+)`, "m").exec(body.stdout); return m ? +m[1] : null; };
+    const pass = n("pass"), fail = n("fail");
+    if (pass == null || fail == null) return body;
+    const failing = [...body.stdout.matchAll(/^\s*not ok \d+ - (.+)$/gm)].map((m) => m[1]);
+    const out = { tests: n("tests"), pass, fail, failing };
+    return { ...body, out, stdout: fail ? body.stdout : "" };
+  }
+  if (name === "apex_select_specs" && body.out && Array.isArray(body.out.shards)) {
+    return { ...body, out: { ...body.out, shards: body.out.shards.map(({ specs, ...r }) => ({ ...r, specCount: String(specs || "").split(/\s+/).filter(Boolean).length })) } };
+  }
+  return body;
+}
+const SLIMMED = new Set(["apex_doctor", "apex_unit_test", "apex_select_specs"]);
+
 /** Run a CLI without blocking the server. spawnSync froze the whole process
  *  for a browser tool's 30–100 s: apex_status could not answer, and when a
  *  client gave up at its own 60 s limit the child ran on holding the lock, so
@@ -2527,7 +2554,11 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   // Classified non-zero: verify-change --fast exit 2 = verdict partial (fast
   // phase passed, remaining browser groups are not-run — never a tool crash).
   const allowExit = name === "apex_verify_change_fast" ? new Set([0, 2]) : null;
-  return runSpawn(argv, { timeoutMs, allowExit, env, signal });
+  const run = runSpawn(argv, { timeoutMs, allowExit, env, signal });
+  if (!SLIMMED.has(name)) return run;
+  return run.then((result) => {
+    try { return toolResult(slimBody(name, JSON.parse(result.content[0].text), args), { isError: result.isError }); } catch { return result; }
+  });
 }
 
 // Tool annotations (MCP 2025-06-18 ToolAnnotations). The spec's defaults are

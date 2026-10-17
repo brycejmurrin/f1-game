@@ -19,10 +19,10 @@ const run = (branch, status = "in_progress", extra = {}) => ({
   html_url: extra.url || `https://example.test/${branch}`,
 });
 
-test("defaults: deploy base, ci.yml path, cap of 3", () => {
+test("defaults: deploy base, ci.yml path, cap of 8", () => {
   assert.equal(DEPLOY, "claude/f1-game-project-26h3ng");
   assert.equal(CI_PATH, ".github/workflows/ci.yml");
-  assert.equal(MAX_LIVE, 3);
+  assert.equal(MAX_LIVE, 8);
 });
 
 test("draft PR runs never count toward the ready full-tier cap", () => {
@@ -55,17 +55,17 @@ test("queued and in_progress both consume a slot; one PR one slot", () => {
   );
   assert.equal(v.count, 2);
   assert.equal(v.slots.find((s) => s.headRefName === "cursor/a").status, "in_progress");
-  assert.equal(v.ok, true, "2 < default cap 3");
+  assert.equal(v.ok, true, "2 < default cap 8");
 });
 
 test("at cap refuses; under cap allows; --exclude frees a slot", () => {
   const prs = [pr(1, "a"), pr(2, "b"), pr(3, "c"), pr(4, "d")];
   const runs = [run("a", "in_progress", { id: 1 }), run("b", "queued", { id: 2 }), run("c", "in_progress", { id: 3 })];
-  const full = evaluate(prs, runs);
+  const full = evaluate(prs, runs, { cap: 3 });
   assert.equal(full.count, 3);
   assert.equal(full.ok, false, "3 is not < 3");
   assert.match(reportLine(full), /REFUSE mark-ready/);
-  const room = evaluate(prs, runs, { exclude: ["c"] });
+  const room = evaluate(prs, runs, { cap: 3, exclude: ["c"] });
   assert.equal(room.count, 2);
   assert.equal(room.ok, true);
   assert.match(reportLine(room), /room to mark ready/);
