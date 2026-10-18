@@ -166,7 +166,7 @@ const LIV_ROW_HINT = {
   helmetBase: "HELMET BASE — the helmet shell colour. Unset = the driver's own design.",
   helmetAccent: "HELMET ACCENT — the helmet's stripe and cap colour. Unset = the driver's own design.",
   helmetStyle: "HELMET — TEAM keeps the driver's own design; other styles repaint it from HELMET BASE and ACCENT.",
-  finish: "FINISH — the paint surface: gloss, satin, matte, chrome, brushed, pearl, carbon, tinted chrome (a mirror in the livery hue) or chameleon (a strong colour-shift pearl).",
+  finish: "FINISH — the paint surface: gloss, satin, matte, chrome, brushed, pearl, carbon, flake (metallic sparkle), candy (deep saturated), tinted (chrome that keeps the livery hue) or chameleon (a strong colour-shift pearl).",
   wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
   numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
   sponsors: "SPONSORS — which set of names the car carries. CLEAN paints none, which also greys every spine design that writes a sponsor name (TOP wordmark, SIDE wordmark/duo/title).",
@@ -1158,6 +1158,13 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("HALO", "halo", true));
   wrap.appendChild(colorRow("RIM", "rimTint", true)); wrap.appendChild(colorRow("CALIPER", "caliperTint", true)); wrap.appendChild(colorRow("SIDEWALL INK", "sidewallInk", true));   // WHEELS & BRAKES section (livery-design-editor.js)
   wrap.appendChild(colorRow("MIRROR HOUSING", "mirrorTint", true));
+  // HELMET section rows: appended like every other row (the editor only collects rows that are on the page)
+  const lidStyled = () => (d.helmetStyle || "team") !== "team";
+  const NO_LID = "Needs a HELMET style other than TEAM";
+  const lidBaseRow = colorRow("HELMET BASE", "helmetBase", true), lidAccentRow = colorRow("HELMET ACCENT", "helmetAccent", true);
+  wrap.appendChild(lidBaseRow); wrap.appendChild(lidAccentRow);
+  deps.push({ row: lidBaseRow, when: lidStyled, why: NO_LID });
+  deps.push({ row: lidAccentRow, when: () => lidStyled() && d.helmetStyle !== "solid", why: "Needs a HELMET style with a stripe, cap, band or chevron" });
   // One pill row per single-choice field: FINISH (Car3D's surface set — this
   // array and FINISH_SURFACE were two copies and the specs held a third),
   // NUMBER FONT and SPONSORS (LiveryTex's id lists). Same nodes and classes.
@@ -1217,6 +1224,7 @@ function buildLiveryCreator(container, team) {
   // What the cover's FLANK carries — the number, the mark or the driver code.
   pillRow("SPINE SIDE", "spineSide", LT && LT.SPINE_SIDE_IDS || ["none"], "none");
   pillRow("BODY SPLIT", "bodySplit", ["off", "lr"], "off");
+  pillRow("HELMET", "helmetStyle", (typeof Helmets !== "undefined" && Helmets.STYLES) || ["team"], "team");
   // The pills that write a sponsor name: dead under the CLEAN pack.
   for (const k of ["spineLogo:wordmark", "spineSide:wordmark", "spineSide:duo", "spineSide:title"]) {
     const b = wrap.querySelector('[data-cs-pill="' + k + '"]');
@@ -1261,7 +1269,7 @@ function buildLiveryCreator(container, team) {
 
   if (typeof GarageLiveryDesignEditor !== "undefined") designTools = GarageLiveryDesignEditor.attach(wrap, d, {
     changed: applyPreview, flush: flushLivPreview, preview: (value) => livePreviewDraft(team, value),
-    pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns,
+    pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns, teamId: team.id,
   });
   container.appendChild(wrap);
   applyPreview();
@@ -1339,6 +1347,10 @@ function endLivPreview(team) {
   _livPrevDraft = null;
   G.livDraftOverride = null;
   if (invalidateDecalTextures) invalidateDecalTextures(team.id);
+  // The race body caches key on the SAVED livery id: one built while the draft
+  // was live (a garage opened mid-race) holds the draft's paint (#2796 item 4).
+  const cd = typeof CarDraw !== "undefined" && CarDraw.instance && CarDraw.instance();
+  if (cd && cd.invalidateCustomMeshCaches) cd.invalidateCustomMeshCaches(team.id);
   G._spMeshKey = "";
 }
 

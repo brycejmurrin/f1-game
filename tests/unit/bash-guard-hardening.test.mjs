@@ -122,6 +122,36 @@ test("settings.json turns the merge prompts off for every session, and squash/re
     assert.match(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: m }), /"deny"/, `${m} stays denied`);
 });
 
+test("settings.json registers bash-guard once, without unsupported per-step filters", () => {
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
+  const hooks = settings.hooks.PreToolUse
+    .filter((group) => group.matcher === "Bash")
+    .flatMap((group) => group.hooks)
+    .filter((entry) => entry.command.includes("bash-guard.sh"));
+  assert.equal(hooks.length, 1, "one Bash call must start one imported Claude bash-guard");
+  assert.equal(Object.hasOwn(hooks[0], "if"), false, "Cursor does not document Claude hook-step `if` filters");
+  assert.equal(hooks[0].timeout, 360);
+  assert.equal(hooks[0].onFailure, "block");
+});
+
+test("bash-guard fast-exits non-trigger commands within 500 ms", () => {
+  const src = fs.readFileSync(HOOK, "utf8");
+  const trigger = src.match(/^GUARD_TRIGGER='([^']+)'$/m);
+  assert.ok(trigger, "bash-guard declares its fast-path trigger union");
+  assert.deepEqual(trigger[1].split("|").sort(),
+    ["git", "gh ", "kill", "pgrep", "curl", "node", "npm", "npx", "playwright", "chrom", "python", "sh ", "eval", "xargs"].sort(),
+    "the fast path stays in lockstep with the 14 former settings filters");
+  const started = Date.now();
+  const r = spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command: "echo ordinary-command" } }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  const elapsed = Date.now() - started;
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout, "");
+  assert.ok(elapsed < 500, `ordinary Bash guard path took ${elapsed} ms`);
+});
+
 test("pkill -f blocks whatever its pattern names: it always matches its own shell (#2125)", () => {
   // `pkill -f "serve -l 3456"` passed the old browser-word filter and killed its
   // own shell (exit 144) in two census siblings on 2026-10-15.

@@ -1,0 +1,38 @@
+[
+  {
+    "query": "Where is the Liveries.forTeam symbol defined? Show me its body.",
+    "expect": "code-nav"
+  },
+  {
+    "query": "Before I change Tracks.curvature: who calls it, and where is it defined?",
+    "expect": "code-nav"
+  },
+  {
+    "query": "Find every place that uses PhysicsConsts.MAX_RPM, destructured reads included, without grep.",
+    "expect": "code-nav"
+  },
+  {
+    "query": "What does the Ghost module export? List its exports and their type without reading the whole file.",
+    "expect": "code-nav"
+  },
+  {
+    "query": "I just edited js/ui/hud.js. Any new errors from that edit, like a misspelled symbol in a member call?",
+    "expect": "code-nav"
+  },
+  {
+    "query": "What type does G.wrapS have per the GameCtx contract, and who calls it?",
+    "expect": "code-nav"
+  },
+  {
+    "query": "Find dead code and unused exports across js/ui so we can shrink the tree.",
+    "expect": "slim-bloat"
+  },
+  {
+    "query": "Set a breakpoint in fitFovY and step through it in the live page to see the locals.",
+    "expect": "js-debugger"
+  },
+  {
+    "query": "Show me the track's corners and curvature profile at Monza from the running game.",
+    "expect": "agent-view"
+  }
+]

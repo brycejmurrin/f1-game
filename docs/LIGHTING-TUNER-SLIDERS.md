@@ -647,11 +647,11 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 |---|---|---|---|---|---|---|
 | `carReflect` | CAR REFLECTION | 0 … 1 | 0.05 | `uCarReflect` | ✓ | game.js×2, setup-camera.js, post.js×6 |
 | `carEnvCube` | ENV REFLECTION | 0 … 1 | 0.3 | — | ✓ | game.js, glx.js×2 |
-| `carGloss` | PAINT GLOSS | 0.2 … 1.4 | 1 | `uCarGloss` | ✓ | game.js |
-| `carSpecular` | PAINT SPECULAR | 0 … 2.5 | 1 | — | ✓ | game.js |
-| `carClearcoat` | CLEARCOAT | 0 … 1 | 0.05 | — | ✓ | game.js |
-| `carMetal` | PAINT METALNESS | 0 … 2.5 | 1 | — | ✓ | game.js |
-| `carGlow` | BODY GLOW | 0 … 2.5 | 1 | — | ✓ | game.js |
+| `carGloss` | PAINT GLOSS | 0.2 … 1.4 | 1 | `uCarGloss` | ✓ | grade-tint.js |
+| `carSpecular` | PAINT SPECULAR | 0 … 2.5 | 1 | — | ✓ | grade-tint.js |
+| `carClearcoat` | CLEARCOAT | 0 … 1 | 0.05 | — | ✓ | grade-tint.js |
+| `carMetal` | PAINT METALNESS | 0 … 2.5 | 1 | — | ✓ | grade-tint.js |
+| `carGlow` | BODY GLOW | 0 … 2.5 | 1 | — | ✓ | grade-tint.js |
 | `tailLightMul` | TAIL-LIGHT GLOW | 0 … 2.5 | 1 | — |   | game.js, frame-lights.js |
 | `brakeGlowMul` | BRAKE FLARE | 0 … 2.5 | 1 | — |   | game.js, frame-lights.js |
 | `tailRange` | TAIL-LIGHT RANGE | 60 … 310 | 160 | — |   | game.js×2, frame-lights.js×2 |
@@ -697,9 +697,9 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `rainShearLen` | RAIN SPEED STRETCH | 0 … 5 | 2 | — |   | particles.js×4 |
 | `windSpeed` | WIND | 0 … 3 | 1 | `uWind` |   | live.js×2, glx.js×2 |
 | `windDir` | WIND DIRECTION | -180 … 180 | 35 | — |   | particles.js×4, glx.js×2 |
-| `lightning` | LIGHTNING FREQ | 0 … 2.75 | 1 | — | ✓ | game.js×4, glx.js×2 |
-| `lightningFlash` | LIGHTNING FLASH | 0 … 2 | 1 | — |   | game.js×2 |
-| `lightningDecay` | LIGHTNING DECAY | 0.4 … 19.35 | 8 | — |   | game.js×4 |
+| `lightning` | LIGHTNING FREQ | 0 … 2.75 | 1 | — | ✓ | game.js, storm-flash.js×3, glx.js×2 |
+| `lightningFlash` | LIGHTNING FLASH | 0 … 2 | 1 | — |   | storm-flash.js×2 |
+| `lightningDecay` | LIGHTNING DECAY | 0.4 … 19.35 | 8 | — |   | storm-flash.js×4 |
 | `weatherSunMute` | WEATHER SUN MUTE | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
 
 ## IMAGE & COLOUR  (41)

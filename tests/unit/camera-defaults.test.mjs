@@ -234,7 +234,7 @@ test("broadcast cameras carry per-mode cut ease durations", () => {
 
 test("a camera cut publishes HUD classes without waiting for rAF", () => {
   const cam = fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8");
-  const apex = fs.readFileSync(path.join(root, "js/agent/apex.js"), "utf8");
+  const apex = fs.readFileSync(path.join(root, "js/agent/apex-cam.js"), "utf8");
   const refreshCam = cam.slice(cam.indexOf("function refreshCamBtn"), cam.indexOf("function setCamMode"));
   assert.match(refreshCam, /G\.refreshHud\(true\)/,
     "refreshCamBtn must paint hud-bcam / --hud-top-h on the cut, not the next HUD tick");

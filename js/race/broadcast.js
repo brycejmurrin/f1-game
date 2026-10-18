@@ -245,6 +245,30 @@ const Broadcast = (function () {
     let shown = new Set(), towerT = 0, mode = "gap", prevPos = new Map(), deltaAt = new Map();
     let clickBound = null;
     let pip = null;   // {key, label, at (wall), seen (wall)} — the car in the inset
+    let graphics = null, graphicsLoad = null;
+
+    // TV graphics are a display-only lazy island. WATCH/HIGHLIGHTS is the
+    // existing Broadcast owner, so loading it here needs no game.js hook.
+    function makeGraphics() {
+      const factory = TvGraphics;
+      return Reflect.apply(factory.create, factory, [G]);
+    }
+    function ensureGraphics() {
+      if (graphics || graphicsLoad || typeof document === "undefined") return;
+      if (typeof TvGraphics !== "undefined" && typeof OverlayFeed !== "undefined") {
+        graphics = makeGraphics();
+        return;
+      }
+      if (typeof ScriptLoader === "undefined" || !ScriptLoader.create) return;
+      graphicsLoad = ScriptLoader.create().load(
+        ["js/overlay/feed.js", "js/race/tv-graphics.js"],
+        [["js/overlay/feed.js", "js/race/tv-graphics.js"]],
+        { ready: (src) => src !== "js/overlay/feed.js" || typeof OverlayFeed !== "undefined" }
+      ).then((ok) => {
+        graphicsLoad = null;
+        if (ok && on && typeof TvGraphics !== "undefined") graphics = makeGraphics();
+      });
+    }
 
     function modeIdx(id) {
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
@@ -270,6 +294,7 @@ const Broadcast = (function () {
       syncCamera();
       if (auto) { camTo(SHOTS[0]); lastCut = 0; }
       buildTower(o && o.tower !== false);
+      ensureGraphics();
       Log.info("game", "Broadcast.start auto=" + auto + " tower=" + !!tower);
     }
     function stop() {
@@ -280,6 +305,7 @@ const Broadcast = (function () {
         if (clickBound) tower.removeEventListener("click", clickBound);
         tower.hidden = true; tower.textContent = "";
       }
+      if (graphics) { graphics.stop(); graphics = null; }
       clickBound = null; tower = null; rowsEl = []; head = null; listEl = null;
       try { document.body.classList.remove("bc-on"); } catch (e) { /* no document: a VM */ }
     }
@@ -443,6 +469,7 @@ const Broadcast = (function () {
       direct(st);
       towerT -= dt;
       if (towerT <= 0) { towerT = TOWER_TICK_S; paintTower(st); pipTick(st); }
+      if (graphics) graphics.tick(dt);
     }
     function refresh(st) { if (on && st) { paintTower(st); pipTick(st); } }
     function status() { return on ? { auto, locked, manual: wall < manualUntil, manualRemaining: Math.max(0, manualUntil - wall), shot: onAirShot, cuts, tower: !!tower, rows: rowsEl.length, mode,

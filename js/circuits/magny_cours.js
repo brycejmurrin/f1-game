@@ -16,6 +16,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.4,
+    tyreSeverity: 0.88,  // Smooth French permanent; low-deg historic band
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     terrainOuter: 115,

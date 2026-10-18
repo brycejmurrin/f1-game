@@ -21,6 +21,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.182,  // official length of the traced (post-2000) layout; builds 4.140 km
+    tyreSeverity: 0.98,  // Historic Portuguese permanent; near-neutral
     baseHW: 7,
     sceneryCoordinates: "racing",
     terrainOuter: 110,
