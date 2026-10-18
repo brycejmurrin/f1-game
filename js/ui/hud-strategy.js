@@ -3,13 +3,14 @@
    MOVE & SIZE (js/ui/hud-layout.js "strat"). Only in a RACE with TYRE WEAR on
    — no wear, no strategy.
 
-   Four lines, all READ from the models that already own them:
+   Five lines, all READ from the models that already own them:
      TYRES     the compound and the laps left at this driver's rate
                (G.tyres.lapsLeft / spent — js/physics/tyre-model.js)
      PIT LOSS  the stop's cost in seconds, caution-aware
                (G.pits.estimate(c).lossS, else lossS() — js/race/pit-lane.js)
      NEXT      the plan's next box lap and compound (G.pits.planInfo)
      UNDERCUT  a cue, shown only when the rule below says so
+     COVER     the car directly BEHIND is boxing or due in on fresher rubber
 
    THE UNDERCUT CUE (undercut(), pure): the car directly AHEAD in race order is
    within one pit loss (gap <= lossS, so a stop now and a faster out-lap is the
@@ -19,6 +20,12 @@
    is the gap chips' own measure (js/ui/hud.js): race distance over
    max(the player's speed, 0.26 x vTop).
 
+   THE COVER CUE (behindThreat(), pure): mirrors js/race/engineer.js — the car
+   directly BEHIND within one pit loss is IN the lane now, or its plan window is
+   P<lap> due this lap or next while the player's own stop is within THREAT_REACH
+   laps and the set has done real work (wear >= COVER_MIN_WEAR), and the rival
+   is on fresher rubber (less worn by UNDERCUT_WEAR). Same gap measure as above.
+
    Pure core unit-tested in tests/unit/hud-strategy.test.mjs. tick(G, player)
    is the one js/ui/hud.js call, at the 10 Hz HUD tick; the rows are built at
    runtime inside the static #hud-strat (index.html). Reads only. */
@@ -26,6 +33,8 @@ const HudStrategy = (function () {
   "use strict";
 
   const UNDERCUT_WEAR = 0.05;   // the rival's set must be this much more worn (share of life)
+  const THREAT_REACH = 3;     // engineer.js THREAT_REACH — own stop must be this near
+  const COVER_MIN_WEAR = 0.4; // same floor as the engineer threat gate
 
   /** "~12 L" laps left, "GONE" past the set's life, "--" unknown. */
   function fmtLaps(left, spent) {
@@ -65,13 +74,28 @@ const HudStrategy = (function () {
     if (!(o.gapS > 0) || !(o.lossS > 0) || o.gapS > o.lossS) return false;
     return (o.rivalWear || 0) - (o.myWear || 0) >= UNDERCUT_WEAR;
   }
+  /** The cover / behind-undercut rule (see the header). */
+  function behindThreat(o) {
+    if (!o || !o.hasBehind || !o.stopLeft) return false;
+    if (!(o.lossS > 0) || !(o.gapS > 0) || o.gapS > o.lossS + 2) return false;
+    if (o.behindInPit) return true;
+    const lts = o.lapsToStop;
+    if (lts == null || lts < 1 || lts > THREAT_REACH) return false;
+    if ((o.myWear || 0) < COVER_MIN_WEAR) return false;
+    const w = o.behindWindow;
+    if (!w || w[0] !== "P") return false;
+    const due = +w.slice(1) - (o.behindLap || 0);
+    if (!(due >= 0) || due > 1) return false;
+    return (o.myWear || 0) - (o.behindWear || 0) >= UNDERCUT_WEAR;
+  }
 
   // ---- the DOM ------------------------------------------------------------
   const doc = typeof document !== "undefined" ? document : null;
   let root = null, nodes = null;
-  const last = { tyre: "", loss: "", next: "", uc: null, ucWho: null, label: "" };
+  const last = { tyre: "", loss: "", next: "", uc: null, ucWho: null, cov: null, covWho: null, label: "" };
   let short = false, shortPlayer = null, shortNext = null;
   const ctx = { hasRival: false, rivalInPit: false, rivalLapped: false, stopLeft: false, gapS: 0, lossS: 0, rivalWear: 0, myWear: 0 };
+  const bctx = { hasBehind: false, behindInPit: false, stopLeft: false, gapS: 0, lossS: 0, behindWear: 0, myWear: 0, lapsToStop: null, behindWindow: "", behindLap: 0 };
 
   function build() {
     root = doc && doc.getElementById("hud-strat");
@@ -87,8 +111,10 @@ const HudStrategy = (function () {
       root.appendChild(el);
       nodes[k] = v; nodes[k + "Row"] = el;
     };
-    row("tyre", "TYRES"); row("loss", "PIT LOSS"); row("next", "NEXT"); row("uc", "▲ UNDERCUT");
+    row("tyre", "TYRES"); row("loss", "PIT LOSS"); row("next", "NEXT");
+    row("uc", "▲ UNDERCUT"); row("cov", "▼ COVER");
     nodes.ucRow.hidden = true;
+    nodes.covRow.hidden = true;
     return true;
   }
   const isOn = () => typeof HudElements === "undefined" || HudElements.isOn("strat");
@@ -122,10 +148,11 @@ const HudStrategy = (function () {
     let i = (player.rank || 0) - 1;
     if (ranked[i] !== player) i = ranked.indexOf(player);
     const a = i > 0 ? ranked[i - 1] : null;
+    const behind = i >= 0 && i < ranked.length - 1 ? ranked[i + 1] : null;
+    const vFloor = Math.max(player.speed || 0, (G.vTop ? G.vTop() : 80) * 0.26);
+    const total = G.track ? G.track.total : 0;
     ctx.hasRival = !!a && !a.retired;
     if (ctx.hasRival) {
-      const vFloor = Math.max(player.speed || 0, (G.vTop ? G.vTop() : 80) * 0.26);
-      const total = G.track ? G.track.total : 0;
       const dist = (a.prog || 0) - (player.prog || 0);
       ctx.gapS = dist / vFloor;
       ctx.rivalLapped = total > 0 && dist >= total;   // a lap or more up the road: not a fight for this place
@@ -141,11 +168,31 @@ const HudStrategy = (function () {
       nodes.ucRow.hidden = !uc;
       nodes.uc.textContent = uc ? (a.code || "") : "";
     }
+    bctx.hasBehind = !!behind && !behind.retired;
+    bctx.stopLeft = ctx.stopLeft;
+    bctx.myWear = spent;
+    bctx.lossS = lossS;
+    bctx.lapsToStop = pl && Number.isFinite(pl.lapsToStop) ? pl.lapsToStop : null;
+    if (bctx.hasBehind) {
+      const backDist = (player.prog || 0) - (behind.prog || 0);
+      bctx.gapS = backDist / vFloor;
+      bctx.behindInPit = !!(behind.pitState && behind.pitState !== "none");
+      bctx.behindWear = tyres.spent(behind);
+      bctx.behindLap = behind.lap || 0;
+      bctx.behindWindow = pit && pit.windowOf ? pit.windowOf(behind) : "";
+    }
+    const cov = behindThreat(bctx);
+    if (cov !== last.cov || (cov && behind !== last.covWho)) {
+      last.cov = cov; last.covWho = cov ? behind : null; dirty = true;
+      nodes.covRow.hidden = !cov;
+      nodes.cov.textContent = cov ? (behind.code || "") : "";
+    }
     if (dirty) {
       root.setAttribute("aria-label", "Strategy: tyres " + last.tyre + ", pit loss " + last.loss + ", next stop " + last.next
-        + (uc ? ", undercut on " + (a.code || "the car ahead") : ""));
+        + (uc ? ", undercut on " + (a.code || "the car ahead") : "")
+        + (cov ? ", cover from " + (behind.code || "the car behind") : ""));
     }
   }
 
-  return Object.freeze({ UNDERCUT_WEAR, fmtLaps, fmtLoss, fmtNext, fmtWindow, tyresShort, undercut, tick });
+  return Object.freeze({ UNDERCUT_WEAR, THREAT_REACH, COVER_MIN_WEAR, fmtLaps, fmtLoss, fmtNext, fmtWindow, tyresShort, undercut, behindThreat, tick });
 })();

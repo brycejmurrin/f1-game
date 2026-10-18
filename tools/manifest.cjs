@@ -323,12 +323,19 @@ const FULL = [
   "js/ui/key-binds.js",
   "js/ui/settings-export.js",
   "js/physics/aero-zones.js",
+  "js/fx/grade-tint.js",       // GradeTint: car-paint bases + hue/sat (game.js destructures it at eval)
   "js/fx/skidmarks.js",
   "js/fx/car-fx.js",           // CarFx.create(G, { skids }): plank sparks + AI lock-up marks (after skidmarks + particles)
   "js/race/storm.js",          // Storm: the weather above rain — lightning schedule, SC timings, rain/spray scale (pure; before race-control)
   "js/race/wind.js",           // Wind: per-race seeded wind + gusts on the race clock; head/tail drag, crosswind (game.js calls Wind.setLevel at eval)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
+  "js/physics/drive-tune.js",  // DriveTune.create(): live PACE / steer / grip lets (game.js wires at eval)
+  "js/race/lap-record.js",     // LapRecord.create(): time-trial record + sector bests (game.js wires at eval)
+  "js/race/storm-flash.js",    // StormFlash.create(): in-frame lightning flash (after Storm; game.js wires at eval)
+  "js/ui/captions.js",         // Captions: spotter/announcer strip + speaker table (announce-banner calls radioWho)
+  "js/race/announce-banner.js", // AnnounceBanner.create(): radio card queue (game.js wires at eval)
+  "js/race/light-tune-edit.js", // LightTuneEdit.set(): one lighting-slider write
   "js/race/pace-math.js",      // PaceMath.create(deps): vTop/vStd/aStd + X-mode/ERS/gearHi/rpmFor (game.js wires)
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
   "js/overlay/feed.js",        // OverlayFeed: shared v1 frame schema + 2 s full-frame diff
@@ -373,6 +380,7 @@ const FULL = [
   "js/camera/drive-onboard.js",
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
+  "js/ui/cvd-palette.js",   // CvdPalette: semantic colours; AppearanceOpts.setCvdMode calls set()
   "js/ui/appearance-opts.js",
   "js/ui/a11y-opts.js",      // SETTINGS › ACCESSIBILITY (reduce motion row + focus + colourblind cues)
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
@@ -653,6 +661,8 @@ const HARD_EDGES = [
   // frame cannot draw a default the player did not choose.
   ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
   ["js/core/store.js", "js/ui/driving-line-opts.js"],
+  ["js/core/store.js", "js/ui/cvd-palette.js"],       // reads apex26.cvdMode at eval
+  ["js/ui/cvd-palette.js", "js/ui/appearance-opts.js"], // setCvdMode / applyReadability call CvdPalette.set
   ["js/core/store.js", "js/ui/appearance-opts.js"],
   ["js/ui/setting-row.js", "js/ui/appearance-opts.js"],
   ["js/core/store.js", "js/ui/a11y-opts.js"],
@@ -752,6 +762,12 @@ const HARD_EDGES = [
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/physics/consts.js", "js/race/pace-math.js"], // PaceMath reads X_*/DRAIN_*/REGEN_*/OT_TIME_*/GEAR_* at create
   ["js/core/mat4.js", "js/race/pace-math.js"],      // PaceMath aliases M4.clamp / M4.lerp at eval
+  ["js/fx/grade-tint.js", "js/game.js"],         // game.js destructures GradeTint at eval
+  ["js/physics/drive-tune.js", "js/game.js"],    // game.js calls DriveTune.create() at eval
+  ["js/race/lap-record.js", "js/game.js"],       // game.js calls LapRecord.create() at eval
+  ["js/race/storm.js", "js/race/storm-flash.js"], // StormFlash.step calls Storm.strikeIn
+  ["js/race/storm-flash.js", "js/game.js"],      // game.js calls StormFlash.create() at eval
+  ["js/race/announce-banner.js", "js/game.js"],  // game.js calls AnnounceBanner.create() at eval
   ["js/race/pace-math.js", "js/game.js"],           // game.js calls PaceMath.create(deps) at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
   ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
@@ -934,11 +950,17 @@ const LAZY_AGENT = [
   "js/agent/agentview-corners.js",
   "js/agent/agentview.js",
   "js/agent/apex-net.js",
+  "js/agent/apex-cam.js",
+  "js/agent/apex-track.js",
+  "js/agent/apex-lobby.js",
   "js/agent/apex.js",
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
   ["js/agent/apex-net.js", "js/agent/apex.js"],   // ApexApi spreads ApexNet.hooks(...) when game.js calls ApexApi.create
+  ["js/agent/apex-cam.js", "js/agent/apex.js"],
+  ["js/agent/apex-track.js", "js/agent/apex.js"],
+  ["js/agent/apex-lobby.js", "js/agent/apex.js"],
   ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
 ];
 
@@ -968,6 +990,7 @@ const LAZY_RACE_SESSION = [
   "js/race/engineer.js",
   "js/race/radio-lines.js",
   "js/race/race-facts.js",
+  "js/race/event-journal.js",
   "js/race/spotter.js",
   "js/race/race-radio.js",
   "js/race/start-lights.js",

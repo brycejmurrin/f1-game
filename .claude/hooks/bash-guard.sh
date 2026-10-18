@@ -28,9 +28,8 @@
 #    the parsed argv (round 2, see "one parse" below).
 #  git push / gh — force, mirror, delete, deploy-branch pushes are blocked;
 #    `gh pr merge --squash|--rebase` is denied and other merges / ready flips
-#    ask (merge_policy.py, shared with github-mcp-guard.sh). A push while
-#    `tools/ci/queue-depth.mjs` says hold is refused (AGENTS.md rule 4;
-#    APEX_PUSH_HOLD=0 overrides) unless the push starts no CI (#2182), and an Actions run cancel (`gh run cancel`,
+#    ask, silent under APEX_MERGE_DESK=1 (merge_policy.py, shared with github-mcp-guard.sh); the queue-depth
+#    push hold is retired (2026-10-16, see below), and an Actions run cancel (`gh run cancel`,
 #    …/actions/runs/<id>/cancel) is refused (APEX_RUN_CANCEL_OK=1 overrides).
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
 #    .claude/agents, survey images/reports under artifacts/shots/{tracks,gallery}
@@ -67,6 +66,15 @@ if [ -z "$CMD" ]; then
       exit 2
     fi
   fi
+  exit 0
+fi
+# settings.json deliberately invokes this one guard for every Bash call. Skip
+# SCAN and shellparse work for ordinary commands without relying on Claude
+# Code's non-portable per-hook `if` field (Cursor imports the file but does not
+# document that field); JSON command extraction still runs first.
+# Keep this union in lockstep with the 14 former `if: Bash(*word*)` filters.
+GUARD_TRIGGER='git|gh |kill|pgrep|curl|node|npm|npx|playwright|chrom|python|sh |eval|xargs'
+if ! printf '%s' "$CMD" | grep -Eq "$GUARD_TRIGGER"; then
   exit 0
 fi
 # SCAN is the command as the kill rules below see it (2026-09-22). Two holes

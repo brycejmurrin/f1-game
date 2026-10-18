@@ -163,6 +163,44 @@ const TrackSpline = (function () {
   // player's physics path does not come through here at all (see js/game.js
   // — progress is integrated, not re-projected, precisely so it cannot snap
   // onto the wrong leg), so this serves the agent view and the debris fallback.
+  // SEGMENT GRID for the hint-less search. Without a hint project() scanned all
+  // n segments, and the flyby planner (flyby-sight offRoad: 25 probes per prop
+  // box) calls it that way thousands of times per track switch: ~295 ms of
+  // main-thread JS on monza under SwiftShader (docs/notes/PERF-P1-2026-10-18.md).
+  // Each segment is listed in every SEG_CELL cell its XZ AABB touches, built
+  // once per centreline. The search walks rings of cells outward from the query
+  // and stops once a ring cannot hold a segment as close as the best cost so
+  // far (cost >= XZ distance², with or without the height term), and the best
+  // is the lowest index among equal costs — exactly what the ascending linear
+  // scan picks, so every answer is bit-identical to it.
+  const SEG_CELL = 32, SEG_MIN_N = 64;
+  function segGrid(track) {
+    const g = track._segGrid, n = track.n, px = track.px, pz = track.pz;
+    if (g && g.px === px && g.pz === pz && g.n === n) return g;
+    if (!Object.isExtensible(track)) return null;
+    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+    for (let i = 0; i < n; i++) {
+      if (px[i] < x0) x0 = px[i]; if (px[i] > x1) x1 = px[i];
+      if (pz[i] < z0) z0 = pz[i]; if (pz[i] > z1) z1 = pz[i];
+    }
+    if (!(x1 - x0 < 1e6 && z1 - z0 < 1e6)) return null;   // non-finite or absurd extent: scan linearly
+    const C = SEG_CELL, gnx = Math.floor((x1 - x0) / C) + 1, gnz = Math.floor((z1 - z0) / C) + 1;
+    const span = new Int32Array(n * 4), start = new Int32Array(gnx * gnz + 1);
+    for (let i = 0; i < n; i++) {
+      const j = i + 1 === n ? 0 : i + 1, o = i * 4;
+      const i0 = span[o] = Math.floor((Math.min(px[i], px[j]) - x0) / C), i1 = span[o + 1] = Math.floor((Math.max(px[i], px[j]) - x0) / C);
+      const j0 = span[o + 2] = Math.floor((Math.min(pz[i], pz[j]) - z0) / C), j1 = span[o + 3] = Math.floor((Math.max(pz[i], pz[j]) - z0) / C);
+      for (let b = j0; b <= j1; b++) for (let a = i0; a <= i1; a++) start[b * gnx + a + 1]++;
+    }
+    for (let c = 0; c < gnx * gnz; c++) start[c + 1] += start[c];
+    const list = new Int32Array(start[gnx * gnz]), fill = start.slice(0, gnx * gnz);
+    for (let i = 0; i < n; i++) {   // ascending i, so each cell's list is ascending
+      const o = i * 4;
+      for (let b = span[o + 2]; b <= span[o + 3]; b++) for (let a = span[o]; a <= span[o + 1]; a++) list[fill[b * gnx + a]++] = i;
+    }
+    return (track._segGrid = { px, pz, n, x0, z0, gnx, gnz, start, list });
+  }
+
   function project(track, wx, wz, hint, wy) {
     const n = track.n, L = track.total, ds = L / n;
     const px = track.px, pz = track.pz, rx = track.rx, rz = track.rz, tx = track.tx, tz = track.tz;
@@ -193,12 +231,39 @@ const TrackSpline = (function () {
         const ey = wy - cy;
         cost += ey * ey;
       }
-      if (cost < bestCost) { bestCost = cost; bestD2 = d2; bestK = i; bestT = t; bestCx = cx; bestCz = cz; }
+      if (cost < bestCost || (lowest && cost === bestCost && i < bestK)) { bestCost = cost; bestD2 = d2; bestK = i; bestT = t; bestCx = cx; bestCz = cz; }
     }
+    let lowest = false;   // grid search: ties go to the lowest index, as the ascending scan's strict < does
+    const G = (hint == null || !isFinite(hint)) && n >= SEG_MIN_N && isFinite(wx) && isFinite(wz) ? segGrid(track) : null;
     if (hint != null && isFinite(hint)) {
       const h = ((Math.round(hint / ds) % n) + n) % n;
       const W = 16;                       // ±16 nodes around last position
       for (let d = -W; d <= W; d++) evalSeg(((h + d) % n + n) % n);
+    } else if (G) {
+      lowest = true;
+      const C = SEG_CELL, gnx = G.gnx, gnz = G.gnz, start = G.start, list = G.list;
+      const ci = Math.floor((wx - G.x0) / C), cj = Math.floor((wz - G.z0) / C);
+      // Rings below rMin miss the grid (a query off its edge), rings past rMax
+      // hold nothing more; each ring is walked clipped to the grid, so a query
+      // kilometres out costs the grid's rings, not the empty ones before it.
+      const rMin = Math.max(ci < 0 ? -ci : ci >= gnx ? ci - gnx + 1 : 0, cj < 0 ? -cj : cj >= gnz ? cj - gnz + 1 : 0);
+      const rMax = Math.max(Math.abs(ci), Math.abs(gnx - 1 - ci), Math.abs(cj), Math.abs(gnz - 1 - cj));
+      const cellSegs = (a, b) => {
+        const c = b * gnx + a;
+        for (let q = start[c], e = start[c + 1]; q < e; q++) evalSeg(list[q]);
+      };
+      for (let r = rMin; r <= rMax; r++) {
+        // every cell of ring r lies >= (r - 1) whole cells from the query (1 cm
+        // of slack for the clamped closest point rounding across a cell edge)
+        const lb = (r - 1) * C - 0.01;
+        if (lb > 0 && lb * lb > bestCost) break;
+        const a0 = Math.max(ci - r, 0), a1 = Math.min(ci + r, gnx - 1);
+        const b0 = Math.max(cj - r + 1, 0), b1 = Math.min(cj + r - 1, gnz - 1);
+        if (cj - r >= 0 && cj - r < gnz) for (let a = a0; a <= a1; a++) cellSegs(a, cj - r);
+        if (r > 0 && cj + r >= 0 && cj + r < gnz) for (let a = a0; a <= a1; a++) cellSegs(a, cj + r);
+        if (r > 0 && ci - r >= 0 && ci - r < gnx) for (let b = b0; b <= b1; b++) cellSegs(ci - r, b);
+        if (r > 0 && ci + r >= 0 && ci + r < gnx) for (let b = b0; b <= b1; b++) cellSegs(ci + r, b);
+      }
     } else {
       for (let i = 0; i < n; i++) evalSeg(i);
     }

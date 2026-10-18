@@ -514,6 +514,8 @@ const Liveries = (function () {
     // GARAGE FINISHES/PARTS contract (docs/notes/GARAGE-FINISHES-PARTS-2026-10-17.md): one row per field, owned by the slice named there.
     "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent",
     "podFinish", "finFinish", "mirrorFinish", "helmetStyle",
+    // LD zones slice (docs/notes/LIVERY-REF-2026-10-18.md): front and rear wing endplates.
+    "endplate",
     // BODY (2026-10-18): the chassis shape, Car3D.bodyStyleKey — geometry, like finShape.
     "bodyStyle"];
 
