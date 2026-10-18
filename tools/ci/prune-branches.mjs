@@ -61,11 +61,11 @@ export { parseRefs };
 // The branch-audit verdicts --also may opt into. "absorbed" is always on: merging
 // such a branch changes nothing, so deleting it loses nothing. The rest are
 // judgement calls and need a person to tick them.
-export const OPT_IN = ["superseded", "post-merge", "pr-closed", "no-history", "unmerged"];
+const OPT_IN = ["superseded", "post-merge", "pr-closed", "no-history", "unmerged"];
 // Reasons that lose nothing on delete; every other reason is archived first.
-export const LOSSLESS = new Set(["merged", "absorbed", "expired claim"]);
-export const ARCHIVE_PREFIX = "refs/archive/";
-export const OLD_ARCHIVE_TAGS = "refs/tags/archive/";
+const LOSSLESS = new Set(["merged", "absorbed", "expired claim"]);
+const ARCHIVE_PREFIX = "refs/archive/";
+const OLD_ARCHIVE_TAGS = "refs/tags/archive/";
 
 /** refs/tags/archive/<b> lines (for-each-ref `%(objectname) %(refname)`) ->
  *  { push: ["<sha>:refs/archive/<b>"], tags: ["refs/tags/archive/<b>"] }. */
@@ -108,9 +108,9 @@ export function archiveRefs(prune, reasons, shaOf) {
 export const DEPLOY = "claude/f1-game-project-26h3ng";
 // gh-pages, and the claims board (who-is-on-it.mjs): coordination state that
 // is never merged and must never be audited away.
-export const ALWAYS_KEEP = [/^gh-pages$/, /^claude\/claims-board$/];
+const ALWAYS_KEEP = [/^gh-pages$/, /^claude\/claims-board$/];
 export const CLAIMS = /^claude\/claims\//;
-export const CLAIM_MIN_DAYS = 1;
+const CLAIM_MIN_DAYS = 1;
 
 /** Decide, per branch, prune or keep. Pure: git and the clock come in.
  *  branches: [{ name, sha, time }] (time = committer unix seconds).
