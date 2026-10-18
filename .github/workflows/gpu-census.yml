@@ -397,6 +397,12 @@ jobs:
             --json "game-webgpu-${{ matrix.image }}.json" \
             --shot "game-webgpu-${{ matrix.image }}.png"
 
+      - name: Matched Three WebGPU memory and submission experiment
+        timeout-minutes: 10
+        if: ${{ needs.plan.outputs.census_only != 'true' }}
+        shell: bash
+        run: node scratch/renderer-ab-experiment.mjs --hardware --pairs 3 --race-frames 240 --out .
+
       # The control: the same pin (a no-op here — forceWebGL short-circuits
       # the blit), so the two TLX legs differ in exactly ONE variable.
       - name: Game check — three.js / WebGL2 (control)
