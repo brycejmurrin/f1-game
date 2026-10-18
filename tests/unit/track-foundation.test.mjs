@@ -491,10 +491,10 @@ test("the display-reset latch clears from EITHER chunk slider, as the tuner prom
   // so a player who read that note on PER-CHUNK ROAD and did exactly what it
   // said cleared nothing: the instruction silently only worked on the other
   // control. Whatever the note offers, the edit path has to honour.
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = fs.readFileSync(path.join(ROOT, "js/race/light-tune-edit.js"), "utf8");
   // Not [^)]* — the condition contains !(+LT[id] > 0), so a no-paren class
   // stops at the first inner ")". Bounded any-char instead.
-  const clear = game.match(/if \([\s\S]{0,220}?perChunkLights[\s\S]{0,220}?_perChunkOff\) \{/);
+  const clear = game.match(/if \([\s\S]{0,220}?perChunkLights[\s\S]{0,220}?perChunkOff\) \{/);
   assert.ok(clear, "the _perChunkOff rising-edge clear still exists");
   assert.match(clear[0], /roadChunkLamps/,
     "the latch clear must accept a rising edge on roadChunkLamps too — the " +

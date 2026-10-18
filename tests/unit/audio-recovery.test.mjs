@@ -273,7 +273,7 @@ test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume 
   assert.match(g, /const comfort = camComfort\(\);/, "render() reads the comfort latch once per frame");
   assert.match(g, /CamTune\.buzzAmp\(spV, player\.deploying, comfort, _buzzWet\)/, "REDUCE MOTION / XR comfort drops the onboard speed buzz via CamTune.buzzAmp");
   assert.match(g, /_vantExtra\.reduceMotion = comfort;/, "…and the kerb shiver (js/camera/vantage.js)");
-  assert.match(g, /CamTune\.shakeOffset\(shake, comfort\)/, "collision shake also goes through CamTune (comfort bob)");
+  assert.match(g, /CamTune\.shakeOffset\(feel\.shake, comfort\)/, "collision shake also goes through CamTune (comfort bob)");
   assert.match(g, /CamTune\.rollTarget\(roadCamRoll, camSlipSm/, "horizon lean goes through CamTune (comfort rollLean)");
 });
 
