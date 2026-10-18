@@ -400,6 +400,12 @@ jobs:
 
       # The control: the same pin (a no-op here — forceWebGL short-circuits
       # the blit), so the two TLX legs differ in exactly ONE variable.
+      - name: Matched Three WebGPU instance upload experiment
+        timeout-minutes: 10
+        if: ${{ needs.plan.outputs.census_only != 'true' }}
+        shell: bash
+        run: node scratch/instance-upload-ab.mjs
+
       - name: Game check — three.js / WebGL2 (control)
         if: ${{ needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true

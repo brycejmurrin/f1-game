@@ -1,1 +1,1 @@
-{"images": "macos-latest", "track": "montreal", "tod": "day", "clock": 12, "census_only": false, "force": "batches", "ls": "", "leg": "decal-run-release-c4e8", "entry": "menu-full"}
+{"images":"macos-latest","track":"vegas","tod":"night","clock":0,"census_only":false,"force":"batches","ls":"","cam":"chase>cockpit","entry":"api","leg":"instance-prefix-native-ab-f2a6"}
