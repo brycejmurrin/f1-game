@@ -445,7 +445,7 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.te
 // the zoom by the same factor, so the next measurement returns the same number.
 const FIT_AIR = 10;              // px of daylight required between two clusters
 const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
-let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
+let _fitTrace = "", _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
 let _fitPending = false;   // invalidateFit mid-tick: do not publish --hud-fit-stamp until the next fitHud
 // _fitStamped: a stamp is published and no clash has voided it since.
 // _fitClashRun: consecutive same-key ticks that re-opened the fit for a clash.
@@ -1068,7 +1068,11 @@ function fitHud() {
   // 2026-10-04). So each data-hl element's `hidden` is in the key — a list
   // re-read only on a full fit (HudLayout.apply invalidates it), a flag read
   // per tick, no layout.
-  const head = vpW() + "x" + vpH() + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
+  // Which dock buttons are showing is part of the key: showTouchControls hides/unhides BOOST, OT, AERO
+  // and the shifts after the first fit, and a taller column under a stale cap overflowed the top.
+  let dockSig = "";
+  for (const d of [_dockL, _dockR]) if (d) for (const b of d.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn")) dockSig += b.hidden ? "0" : "1";
+  const head = vpW() + "x" + vpH() + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "." + dockSig + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
   const tail = "|" + document.body.className;
   if (head + hlKey() + tail === _fitKey && --_fitWait > 0) {
     // Same-key backoff must not lock a short --dock-r-w while wrap-reverse
@@ -1163,7 +1167,7 @@ function fitHud() {
   // through, still retrying (bounded) in case it is merely not populated yet.
   let retry = !top;
   if (!top && !wide(els.minimap, zTopPub) && !wide(els.hudSectors, zTopPub) && !span(_hudBottom, zBotPub) && !wide(_dockL, zDockPub) && !wide(_dockR, zDockPub)) {
-    if (++_fitRetry <= 30) _fitKey = "";
+    if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; }   // nothing fitted: no --hud-fit-stamp yet
     return;
   }
   // The dock's painted floor (declared above): read past the nothing-laid-out retry, which a
@@ -1623,7 +1627,7 @@ function fitHud() {
       if (avail > 0 && denom > 0) capBot = Math.min(capBot, avail / denom);
     }
   }
-  if (retry) { if (++_fitRetry <= 30) _fitKey = ""; } else _fitRetry = 0;
+  if (retry) { if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; } } else _fitRetry = 0;   // pending: the dock cap is not in yet
   // EACH CAP IS COMPARED AGAINST THE SLIDER THAT DRIVES IT. The readout bands
   // ride --hud-scale; the touch dock rides --hud-btn-scale (BUTTON SIZE, its
   // own slider — css/overlays.css), which defaults to --hud-scale and is only
@@ -1758,6 +1762,14 @@ function fitHud() {
     const mapR = els.minimap && !els.minimap.hidden ? els.minimap.getBoundingClientRect() : null;
     const mapClear = mapR && mapR.width ? mapR.right + margin : 0;
     const secEl = els.hudSectors;
+    // A PLATE ONLY INTRUDES FROM THE LEFT, AND ONLY ON SHARED ROWS. Shrinking a right-anchored plate
+    // clears a group its right edge reaches into; it does nothing for a plate the player DRAGGED beside
+    // BOOST, above the pedals. Testing `right > group.left` alone squeezed that plate to 48 px, the
+    // wrapped split times grew it 139 px tall into BRAKE's rows, the next fit released it, and the HUD
+    // flipped larger <-> smaller every tick (iPhone 15, BUTTON SIZE 237 %, 2026-10-17). A plate
+    // inside or right of a group is hud-layout.js clearControls' to move, not this pass's to squeeze.
+    const rowHit = (a, b) => a.top < b.bottom && b.top < a.bottom;
+    const intrudes = (a, b) => rowHit(a, b) && a.left < b.left && a.right > b.left - margin;
     if (secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
     for (let pass = 0; pass < 4; pass++) {
       const secR = secEl.getBoundingClientRect();
@@ -1766,7 +1778,7 @@ function fitHud() {
       for (const g of _dockR.children) {
         const r = g.getBoundingClientRect();
         if (!(r.width && r.height)) continue;
-        if (secR.right > r.left - margin) worst = Math.max(worst, secR.right - (r.left - margin));
+        if (intrudes(secR, r)) worst = Math.max(worst, secR.right - (r.left - margin));
       }
       if (!(worst > 0.5)) break;
       const zSec = zPaint() || 1;
@@ -1779,7 +1791,7 @@ function fitHud() {
     for (const g of _dockR.children) {
       const r = g.getBoundingClientRect();
       if (!(r.width && r.height)) continue;
-      if (secR.right > r.left - margin) worst = Math.max(worst, secR.right - (r.left - margin));
+      if (intrudes(secR, r)) worst = Math.max(worst, secR.right - (r.left - margin));
     }
     if (worst > 0.5) {
       const brLeft = boostRightLeft();
@@ -1797,7 +1809,7 @@ function fitHud() {
     let onDock = false;
     for (const g of _dockR.children) {
       const r = g.getBoundingClientRect();
-      if (r.width && r.height && secR.right > r.left - margin && secR.left < r.right - margin) { onDock = true; break; }
+      if (r.width && r.height && rowHit(secR, r) && secR.right > r.left - margin && secR.left < r.right - margin) { onDock = true; break; }
     }
     if (!onDock && secEl.style && secEl.style.removeProperty) secEl.style.removeProperty("max-width");
   }
@@ -1836,6 +1848,14 @@ function fitHud() {
   mirrorClear(root);
   if (typeof HudLayout !== "undefined" && HudLayout.clearReadouts) HudLayout.clearReadouts();
   if (els.minimap) void els.minimap.offsetHeight;
+  // FIT TRACER, off unless `?log=ui:debug`: one line per CHANGE of the published fit, so a phone's
+  // flicker reads off the metrics overlay as a timeline instead of a guess.
+  if (Log.enabled("ui", Log.DEBUG)) {
+    const rc = (el) => { const r = el && !el.hidden ? el.getBoundingClientRect() : null; return r && r.width ? [r.left, r.top, r.width, r.height].map(Math.round).join(",") : "-"; };
+    const pv = (n) => root.style.getPropertyValue(n) || "-";
+    const line = `hudfit top=${pv("--hud-z-top")} dock=${pv("--hud-z-dock")} drw=${pv("--dock-r-w")} sec=${rc(els.hudSectors)} pause=${rc(els.pausebtn)} cam=${rc(els.btnCam)}`;
+    if (line !== _fitTrace) { _fitTrace = line; Log.debug("ui", line); }
+  }
 }
 
 // Gear, tachometer and speed — every frame (updateHud, above its 10 Hz gate).

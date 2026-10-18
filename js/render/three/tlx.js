@@ -2,6 +2,22 @@
 "use strict";
 
 const TLX = (function () {
+  // three r186 Renderer.init() starts its own window rAF loop (Animation: info.reset, nodeFrame.update ->
+  // frameId, inspector) that ticks every vsync beside the game loop: 2.04 rAF callbacks per drawn frame on
+  // TLX vs 1.04 on GLX (gpu-census 39071040057), 0.12 ms each on the phone-shaped VM probe. TLX never sets
+  // an animation loop, so its context becomes a pump that begin() drains: frameId still advances once per
+  // DRAWN frame (FRAME-type nodes such as post passes key on it), an idle canvas runs no three callback,
+  // and XRManager's session swap still restores it (it saves getContext() and puts it back on end).
+  function pumpAnimation(r) {
+    const anim = r && r._animation;
+    if (!anim || typeof anim.setContext !== "function" || typeof anim.stop !== "function" || typeof anim.start !== "function") return null;
+    const pump = { cb: null };
+    pump.requestAnimationFrame = (cb) => { pump.cb = cb; return 1; };
+    pump.cancelAnimationFrame = () => { pump.cb = null; };
+    pump.drain = () => { const cb = pump.cb; if (cb) { pump.cb = null; cb(typeof performance !== "undefined" ? performance.now() : 0); } };
+    anim.stop(); anim.setContext(pump); anim.start();   // start() ticks once now and parks the next tick in the pump
+    return pump;
+  }
   let _lastFailure = null, _presentWarned = false;
   function _fail(reason) {
     _lastFailure = { reason: String(reason), at: Date.now() };
@@ -117,7 +133,13 @@ const TLX = (function () {
   function setRange0(attr, count) {
     const r = attr.__tlxRange || (attr.__tlxRange = { start: 0, count: 0 });
     r.count = count;
-    const ur = attr.updateRanges; ur.length = 0; ur.push(r);
+    const ur = attr.updateRanges;
+    // Same frame, same attribute (blob / decal / coalesce: one call per instance):
+    // length = 0 drops V8's element store and the push allocates a new one.
+    // three's clearUpdateRanges still zeros the list after the upload, so the
+    // next frame's first write pushes once; the rest only move r.count.
+    if (ur.length === 1 && ur[0] === r) return;
+    ur.length = 0; ur.push(r);
   }
 
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
@@ -472,6 +494,8 @@ const TLX = (function () {
         try {
           await renderer.init();
           checkInit();
+          // WebGL2 only: that is the phone's path, measured (paired census); WebGPU keeps three's own loop untouched.
+          if (renderer.backend && renderer.backend.isWebGLBackend) renderer.__apexPump = pumpAnimation(renderer);
         } catch (e) {
           // AUTO WebGPU→WebGL2 retry (and the outer create catch) must not keep
           // a half-booted three renderer / GPUDevice alive across the fallback.
@@ -1079,9 +1103,12 @@ const TLX = (function () {
       let DPR_CAP = mobileTier ? 1.5 : 2;   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
 
       // M9 GPU frame timer state
-      // supported only where three's timestamp-query feature is present — the
-      // WebGPU backend with the adapter feature; never on the WebGL2 fallback
-      // (SwiftShader/CI), keeping the GLX {supported:false} shape there.
+      // supported only where three's timestamp-query feature is present: the
+      // WebGPU adapter feature, or on three's WebGL2 backend (the iPhone's
+      // path) EXT_disjoint_timer_query_webgl2, which three maps to the same
+      // feature name and times per outermost render() (a nested render is
+      // skipped, not double-counted). Software GL (SwiftShader/CI) stays
+      // {supported:false}: it exposes the extension, but its time means nothing.
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
       let _inspectorHold = false;   // dev Inspector owns timestamp resolution (inspectorHost below)
       function resolveGpuTimer() {
@@ -1098,7 +1125,10 @@ const TLX = (function () {
       }
       function _gpuSupported() {
         try {
-          return !!(renderer.backend && renderer.backend.isWebGPUBackend)
+          const be = renderer.backend;
+          // SwiftShader exposes the GL extension too (measured 2026-10-17): a
+          // software GPU time is no evidence, so the WebGL path needs real GL.
+          return !!(be && (be.isWebGPUBackend || (be.isWebGLBackend && !softwareGL)))
             && typeof renderer.hasFeature === "function"
             && !!renderer.hasFeature("timestamp-query");
         } catch (_) { return false; }
@@ -3455,7 +3485,13 @@ const TLX = (function () {
         if (now - _geoPruneAt < 2000) return;
         _geoPruneAt = now;
         let w = 0;
-        for (const ref of _geoReg) if (ref && ref.deref()) _geoReg[w++] = ref;
+        // Indexed: `for…of` builds a result object per live geometry, and this
+        // walk runs on the 2 s clock so the loop stays cold and V8 does not
+        // elide those objects (~170 KB at 4000 refs).
+        for (let i = 0; i < _geoReg.length; i++) {
+          const ref = _geoReg[i];
+          if (ref && ref.deref()) _geoReg[w++] = ref;
+        }
         _geoReg.length = w;
       }
       // STATIC-GEOMETRY MIRROR RELEASE
@@ -4173,10 +4209,10 @@ const TLX = (function () {
         isMobile,
         mobileTier,
         // GPU frame timer — the GLX gpuTimer/gpuMs contract (_gpuTimerBegin/_gpuMs in glx.js).
-        // WebGPU exposes it through three's timestamp-query pass; the WebGL2
-        // fallback (SwiftShader/CI via tlxForceGL) has no timestamp-query
-        // feature -> {supported:false} / gpuMs()=-1, byte-identical to GLX on
-        // SwiftShader. Never fabricates: gpuMs mirrors three's own resolved
+        // Both three backends expose it through three's timestamp-query pool
+        // (WebGL2: EXT_disjoint_timer_query_webgl2, e.g. Chrome on Apple
+        // Metal in gpu-census); software GL (SwiftShader/CI) -> {supported:false}
+        // / gpuMs()=-1 even though it exposes the extension. Never fabricates: gpuMs mirrors three's own resolved
         // renderer.info.render.timestamp (already in ms), populated async in
         // present() only while the timer is on.
         gpuTimer(on) {
@@ -4252,7 +4288,11 @@ const TLX = (function () {
           g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(data.pos), 3));
           g.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(data.nrm), 3));
           g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(data.uv), 2));
-          g.setIndex(new THREE.BufferAttribute(new Uint32Array(data.idx), 1));
+          // three picks the GL index type from the array. A decal is well under
+          // 65535 verts, so Uint16 halves the index buffer; past that, Uint32.
+          const vCount = data.pos.length / 3;
+          const IndexArray = vCount > 65535 ? Uint32Array : Uint16Array;
+          g.setIndex(new THREE.BufferAttribute(new IndexArray(data.idx), 1));
           return { __tlx: true, geo: _regGeo(g, "tex"), tex: true, count: data.idx.length };
         },
         createChunkedMesh(data, cellSize) {
@@ -5070,6 +5110,8 @@ const TLX = (function () {
         },
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
+          // three's per-frame tick (info.reset, nodeFrame.update), once per drawn frame — see pumpAnimation.
+          if (renderer.__apexPump) renderer.__apexPump.drain();
           resizeNow();
           _sizeOwned = true;   // the next resize() defers to the next begin() (no rAF + cancel per frame)
           // Existing bounded retry remains synchronous. Fully warmed recovery
@@ -5985,7 +6027,8 @@ const TLX = (function () {
             try {
               const kinds = {};
               let live = 0;
-              for (const ref of _geoReg) {
+              for (let gi = 0; gi < _geoReg.length; gi++) {
+                const ref = _geoReg[gi];
                 const g = ref && ref.deref();
                 if (!g) continue;
                 live++;

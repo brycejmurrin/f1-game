@@ -20,7 +20,8 @@ Playwright tooling.
   the wrong instrument here does not give a worse number, it gives a confident
   number about the wrong thing. Task 1 blocks Task 2 for that reason.
 - No new runtime dependencies and no generated-file edits without an explicit
-  decision (Task 4 is exactly that decision, and is NOT pre-approved).
+  decision. Task 4 was that decision: **no** (Merge Desk, on Bryce's
+  delegation, 2026-10-16). See Task 4.
 - The player's own car, the garage, photo mode and the car studio keep their
   current fidelity. Any resolution policy is about AI cars at racing distance.
 - A software probe is not evidence about a player's GPU. Anything touching
@@ -202,7 +203,7 @@ whether anyone notices.
 - [x] (landed in docs/notes/PERF-FINDINGS.md §4, #1636) Add the TLX colour rows from the 2026-09-14 bisect (control 45.6 / normal
       45.6 / colour 42.9 / both 42.8 / Float16BufferAttribute 39.1).
 
-### Task 4: KTX2 / UASTC material arrays — DECISION FIRST, NOT PRE-APPROVED
+### Task 4: KTX2 / UASTC material arrays — DECIDED NO (2026-10-16)
 
 Supersedes the earlier "strips → lossless WebP" idea, which was the wrong
 frame: WebP saves 525 KB of DOWNLOAD and nothing else, because image formats
@@ -225,11 +226,19 @@ dependency, against the standing rule in `AGENTS.md`. It also has a real cost:
 Basis transcoding is SLOWER than decoding WebP/AVIF and its files are often
 larger than AVIF — so this is a VRAM-and-bandwidth play, not a download one.
 
-- [ ] Decide whether ~9 MB of VRAM and better sampling locality justify a wasm
+- [x] Decide whether ~9 MB of VRAM and better sampling locality justify a wasm
       dependency and a bake-time encoder. If NO, record the refusal here and
       close it; a standing "maybe" costs more than a decided "no".
-- [ ] If yes: UASTC, **not** ETC1S. ETC1S is fine for colour and poor for
-      normal maps, and half of this pack IS normal maps.
+      **Decision (Merge Desk, on Bryce's delegation, 2026-10-16): not adopting KTX2/UASTC.**
+      The shipped baked PBR material arrays already work. A Basis
+      transcoder is a new runtime dependency (wasm, ~300 KB) plus a bake-time
+      encoder and compressed-array upload in all three backends, and it adds a
+      failure path on phones. The VRAM prize on these arrays is ~8.5 MB, an
+      order of magnitude below the liveries (Task 1). Reopen only if texture
+      size or load time becomes a measured problem.
+- [x] If yes: UASTC, **not** ETC1S. ETC1S is fine for colour and poor for
+      normal maps, and half of this pack IS normal maps. **N/A — the decision is no**,
+      so neither UASTC nor ETC1S is adopted.
 
 ### Task 5: Two open TLX colour questions — need real hardware
 
@@ -248,8 +257,9 @@ larger than AVIF — so this is a VRAM-and-bandwidth play, not a download one.
 
 ## Order
 
-Task 1, then Task 2. Task 3 any time. Task 4 is a decision to be taken, not
-work to be started. Task 5 is blocked on an instrument that does not exist yet.
+Task 1, then Task 2. Task 3 any time. Task 4 was decided **no** on 2026-10-16
+(Merge Desk, on Bryce's delegation): not adopting KTX2/UASTC. Task 5 is blocked
+on an instrument that does not exist yet.
 
 The through-line: this session's geometry work was real but it was one order of
 magnitude below the biggest number in the game, and nobody knew that because

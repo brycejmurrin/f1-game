@@ -80,7 +80,7 @@ test("persisted SOUND OFF and out-of-range volumes apply on first load", async (
   // This is a genuine first pointer gesture and also exercises the Settings
   // button's formerly unconditional GameAudio.init().
   await page.locator("#mb-settings").click();
-  await page.waitForTimeout(50);
+  await expect(page.locator("#pm-audio")).toBeVisible();
   expect(await page.evaluate(() => ({
     enabled: GameAudio.enabled(),
     contextState: GameAudio.debug().contextState,

@@ -115,3 +115,214 @@ test("shade contract numbers appear in all three lit backends", () => {
   assert.match(src.TLX, /select\(matteSurface, float\(0\.0\)/, "TLX: matte clearcoat stays 0");
   assert.match(src.WGX, /if \(matteSurface\) \{ clearcoat = 0\.0; \}/, "WGX: matte clearcoat stays 0");
 });
+
+// ---- Garage finishes S3: tinted chrome (36) and chameleon (37) ----------------------------------------------
+
+function shaderSources() {
+  return {
+    GLX: read("js/render/glx/shaders/glsl-lit.js"),
+    TLX: read("js/render/three/tsl-lit.js"),
+    WGX: read("js/render/webgpu/wgsl-chunks.js"),
+  };
+}
+
+test("FINISH_SURFACE rows tinted 36 and chameleon 37 exist, in the reserved ids", () => {
+  const { CarMaterials } = loadMaterials();
+  assert.equal(CarMaterials.FINISH_SURFACE.tinted, 36);
+  assert.equal(CarMaterials.FINISH_SURFACE.chameleon, 37);
+  assert.equal(CarMaterials.FINISH_RESERVED.tinted, 36);
+  assert.equal(CarMaterials.FINISH_RESERVED.chameleon, 37);
+  // shipped rows unchanged and still first (the chip order is the key order)
+  assert.deepEqual(Object.keys(CarMaterials.FINISH_SURFACE).slice(0, 6), ["satin", "chrome", "matte", "carbon", "brushed", "pearl"]);
+  assert.equal(CarMaterials.FINISH_SURFACE.pearl, 30);
+});
+
+test("tinted/chameleon remap only paint vertices; gloss and unset stay byte-identical", () => {
+  const { CarMaterials } = loadMaterials();
+  const { SURFACES, applyFinish } = CarMaterials;
+  for (const [name, id] of [["tinted", 36], ["chameleon", 37]]) {
+    const out = { mat: [SURFACES.paint, SURFACES.carbon, SURFACES.glass, SURFACES.rubber, SURFACES.paint] };
+    applyFinish(out, name);
+    assert.deepEqual(out.mat, [id, SURFACES.carbon, SURFACES.glass, SURFACES.rubber, id]);
+    const zone = { mat: [SURFACES.paint, SURFACES.paint] };
+    applyFinish(zone, "gloss", [{ name: "mirrors", from: 0, to: 1 }], { mirrorFinish: name });
+    assert.deepEqual(zone.mat, [id, SURFACES.paint]);
+  }
+  const base = { mat: [SURFACES.paint, SURFACES.carbon, SURFACES.paint] };
+  applyFinish(base, "gloss");
+  applyFinish(base, undefined);
+  assert.deepEqual(base.mat, [SURFACES.paint, SURFACES.carbon, SURFACES.paint]);
+});
+
+test("the garage chip rows are derived from FINISH_SURFACE, so the new finishes appear (and only rendered ones)", () => {
+  const { CarMaterials } = loadMaterials();
+  const sheet = read("js/garage/setup-sheet.js");
+  assert.match(sheet, /pillRow\("FINISH", "finish", \["gloss", \.\.\.Object\.keys\(Car3D\.FINISH_SURFACE\)\], "gloss"\)/);
+  assert.match(sheet, /\["inherit", "gloss", \.\.\.Object\.keys\(Car3D\.FINISH_SURFACE\)\]/);
+  const chips = ["gloss", ...Object.keys(CarMaterials.FINISH_SURFACE)];
+  assert.ok(chips.includes("tinted") && chips.includes("chameleon"));
+  // Rule: a row is only added once its branch exists in all three shaders.
+  const src = shaderSources();
+  for (const id of Object.values(CarMaterials.FINISH_SURFACE)) {
+    assert.match(src.GLX, new RegExp(`surfaceId == ${id}\\b`), `GLX has no branch for finish id ${id}`);
+    assert.match(src.WGX, new RegExp(`surfaceId == ${id}\\b`), `WGX has no branch for finish id ${id}`);
+    assert.match(src.TLX, new RegExp(`surfaceId\\.equal\\(${id}\\.0\\)`), `TLX has no branch for finish id ${id}`);
+  }
+});
+
+test("Teams.liveryEnumOk accepts the new finish names (derived from FINISH_SURFACE) and still refuses junk", () => {
+  const { CarMaterials } = loadMaterials();
+  const cx = vm.createContext({ console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set });
+  cx.Car3D = { FINISH_SURFACE: CarMaterials.FINISH_SURFACE };
+  vm.runInContext(read("js/data/teams.js"), cx, { filename: "js/data/teams.js" });
+  const Teams = vm.runInContext("Teams", cx);
+  for (const f of ["gloss", "pearl", "tinted", "chameleon"]) assert.equal(Teams.liveryEnumOk("finish", f), true, f);
+  for (const f of ["constructor", "tintedd"]) assert.equal(Teams.liveryEnumOk("finish", f), false, f);
+});
+
+test("tinted chrome: mirror response + livery-hue reflection, same numbers in GLX / TLX / WGX", () => {
+  const { CarMaterialShade } = loadMaterials();
+  const T = CarMaterialShade.TINTED;
+  const src = shaderSources();
+  const pins = {
+    GLX: [/bool tintedSurface = surfaceId == 36;/, /bool mirrorSurface = surfaceId == 27 \|\| tintedSurface;/,
+      new RegExp(`if \\(tintedSurface\\) addCC \\*= mix\\(vec3\\(1\\.0\\), albedo / max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\), ${T.envTint}\\);`)],
+    WGX: [/let tintedSurface = surfaceId == 36;/, /let mirrorSurface = surfaceId == 27 \|\| tintedSurface;/,
+      new RegExp(`if \\(tintedSurface\\) \\{ addCC = addCC \\* mix\\(vec3<f32>\\(1\\.0\\), albedo / max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\), vec3<f32>\\(${T.envTint}\\)\\); \\}`)],
+    TLX: [/const tintedSurface = surfaceId\.equal\(36\.0\)\.toVar\(\);/, /const mirrorSurface = surfaceId\.equal\(27\.0\)\.or\(tintedSurface\)\.toVar\(\);/,
+      new RegExp(`addCC\\.mulAssign\\(mix\\(vec3\\(1\\.0\\), albedo\\.div\\(max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\)\\), ${T.envTint}\\)\\);`)],
+  };
+  for (const [name, res] of Object.entries(pins)) for (const re of res) assert.match(src[name], re, `${name}: tinted chrome drifted: ${re}`);
+  // the whole lit colour takes the hue after the metal block (T.finalTint): a red car stays red instead of washing pink
+  assert.equal(T.finalTint, true);
+  const hue = `albedo / max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\)`;
+  assert.match(src.GLX, new RegExp(`if \\(tintedSurface\\) color \\*= ${hue};`));
+  assert.match(src.WGX, new RegExp(`if \\(tintedSurface\\) \\{ color = color \\* \\(${hue}\\); \\}`));
+  assert.match(src.TLX, new RegExp(`If\\(tintedSurface, \\(\\) => \\{\\s*color\\.mulAssign\\(albedo\\.div\\(max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\)\\)\\);`));
+  // the mirror response it inherits (chrome 27) is unchanged
+  assert.match(src.GLX, /mirrorSurface \? max\(uClearcoat, 0\.85\)/);
+  assert.match(src.GLX, /if \(mirrorSurface\) rough = min\(rough, 0\.09\);/);
+});
+
+test("chameleon: team hue face-on, fixed flip hue at grazing angles on the LIT colour, same numbers in GLX / TLX / WGX; pearl 30 untouched", () => {
+  const { CarMaterialShade } = loadMaterials();
+  const H = CarMaterialShade.CHAMELEON;
+  const src = shaderSources();
+  const f2 = (v) => v.toFixed(2);
+  const lit = (v) => (Number.isInteger(v) ? v.toFixed(1) : String(v));   // 1 -> "1.0", 0.25 -> "0.25": the spelling the shaders use
+  const [r, g, b] = H.flipHue.map(lit);
+  const lo = f2(H.flipFresLo), hi = f2(H.flipFresHi), w = f2(H.flipWeight);
+  const pins = {
+    GLX: [/bool chamSurface = surfaceId == 37;/, /bool iriSurface = surfaceId == 30 \|\| chamSurface;/,
+      new RegExp(`chamFlip = smoothstep\\(${lo}, ${hi}, fres\\);`),
+      new RegExp(`if \\(chamSurface\\) color \\*= mix\\(chamHue, vec3\\(${r}, ${g}, ${b}\\), chamFlip \\* ${w}\\);`)],
+    WGX: [/let chamSurface = surfaceId == 37;/, /let iriSurface = surfaceId == 30 \|\| chamSurface;/,
+      new RegExp(`chamFlip = smoothstep\\(${lo}, ${hi}, fres\\);`),
+      new RegExp(`if \\(chamSurface\\) \\{ color = color \\* mix\\(chamHue, vec3<f32>\\(${r}, ${g}, ${b}\\), vec3<f32>\\(chamFlip \\* ${w}\\)\\); \\}`)],
+    TLX: [/const chamSurface = surfaceId\.equal\(37\.0\)\.toVar\(\);/, /const iriSurface = surfaceId\.equal\(30\.0\)\.or\(chamSurface\)\.toVar\(\);/,
+      new RegExp(`chamFlip\\.assign\\(smoothstep\\(${lo}, ${hi}, fres\\)\\);`),
+      new RegExp(`color\\.mulAssign\\(mix\\(chamHue, vec3\\(${r}, ${g}, ${b}\\), chamFlip\\.mul\\(${w}\\)\\)\\);`)],
+  };
+  for (const [name, res] of Object.entries(pins)) for (const re of res) assert.match(src[name], re, `${name}: chameleon drifted: ${re}`);
+  // pearl 30 keeps its own constants (1.4 sweep, 0.30..0.92 window, 0.40 weight) in every backend
+  assert.match(src.GLX, /fres \* 1\.4\)\);[\s\S]{0,400}smoothstep\(0\.30, 0\.92, fres\) \* 0\.40/);
+  assert.match(src.WGX, /fres \* 1\.4\)\)\);[\s\S]{0,500}smoothstep\(0\.30, 0\.92, fres\) \* 0\.40/);
+  assert.match(src.TLX, /fres\.mul\(1\.4\)[\s\S]{0,400}smoothstep\(0\.30, 0\.92, fres\)\.mul\(0\.40\)/);
+  // the flip window sits in the grazing half and keeps the face-on colour
+  assert.ok(H.flipFresLo > 0.5 && H.flipWeight < 1.0);
+});
+
+// ---- Garage finishes S4: metallic flake (34) and candy (35) -------------------------------------------------
+
+test("FINISH_SURFACE rows flake 34 and candy 35 exist, are accepted by Teams.liveryEnumOk, and remap paint only", () => {
+  const { CarMaterials } = loadMaterials();
+  assert.equal(CarMaterials.FINISH_SURFACE.flake, 34);
+  assert.equal(CarMaterials.FINISH_SURFACE.candy, 35);
+  const chips = ["gloss", ...Object.keys(CarMaterials.FINISH_SURFACE)];
+  assert.deepEqual(chips, ["gloss", "satin", "chrome", "matte", "carbon", "brushed", "pearl", "flake", "candy", "tinted", "chameleon"]);
+  const cx = vm.createContext({ console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set });
+  cx.Car3D = { FINISH_SURFACE: CarMaterials.FINISH_SURFACE };
+  vm.runInContext(read("js/data/teams.js"), cx, { filename: "js/data/teams.js" });
+  const Teams = vm.runInContext("Teams", cx);
+  for (const f of ["flake", "candy"]) assert.equal(Teams.liveryEnumOk("finish", f), true, f);
+  const { SURFACES, applyFinish } = CarMaterials;
+  for (const [name, id] of [["flake", 34], ["candy", 35]]) {
+    const out = { mat: [SURFACES.paint, SURFACES.carbon, SURFACES.glass, SURFACES.paint] };
+    applyFinish(out, name);
+    assert.deepEqual(out.mat, [id, SURFACES.carbon, SURFACES.glass, id]);
+  }
+});
+
+test("flake: same grain, spark, fade and specular numbers in GLX / TLX / WGX; paint-class response", () => {
+  const { CarMaterialShade } = loadMaterials();
+  const F = CarMaterialShade.FLAKE;
+  const f2 = (v) => v.toFixed(2);
+  const src = shaderSources();
+  const fade = F.fadeStartM + F.fadeSpanM;
+  assert.equal(fade, 26, "flake fades to the base colour at ~26 m");
+  const pins = {
+    GLX: [/bool flakeSurface = surfaceId == 34;/, /bool paintSurface = surfaceId == 20 \|\| flakeSurface \|\| candySurface;/,
+      new RegExp(`clamp\\(1\\.0 - \\(vDist - ${F.fadeStartM.toFixed(1)}\\) / ${F.fadeSpanM.toFixed(1)}, 0\\.0, 1\\.0\\)`),
+      new RegExp(`floor\\(vObjPos \\* ${F.cellsPerM.toFixed(1)}\\)`),
+      new RegExp(`smoothstep\\(${f2(F.sparkLo)}, 1\\.0, fkH\\)`),
+      new RegExp(`\\(fkH - 0\\.5\\) \\* ${f2(F.grainAmp)} \\+ \\(fkS - ${f2(F.sparkMean)}\\) \\* ${f2(F.sparkGain)}\\) \\* fkF`),
+      new RegExp(`specular = min\\(1\\.0, specular \\+ fkS \\* ${f2(F.specGain)} \\* fkF\\)`),
+      new RegExp(`flakeSurface \\? max\\(uMetalness, ${f2(F.metalness)}\\) : uMetalness`)],
+    WGX: [/let flakeSurface = surfaceId == 34;/, /let paintSurface = surfaceId == 20 \|\| flakeSurface \|\| candySurface;/,
+      new RegExp(`clamp\\(1\\.0 - \\(vDist - ${F.fadeStartM.toFixed(1)}\\) / ${F.fadeSpanM.toFixed(1)}, 0\\.0, 1\\.0\\)`),
+      new RegExp(`floor\\(in\\.objPos \\* ${F.cellsPerM.toFixed(1)}\\)`),
+      new RegExp(`smoothstep\\(${f2(F.sparkLo)}, 1\\.0, fkH\\)`),
+      new RegExp(`\\(fkH - 0\\.5\\) \\* ${f2(F.grainAmp)} \\+ \\(fkS - ${f2(F.sparkMean)}\\) \\* ${f2(F.sparkGain)}\\) \\* fkF`),
+      new RegExp(`specular = min\\(1\\.0, specular \\+ fkS \\* ${f2(F.specGain)} \\* fkF\\)`),
+      new RegExp(`flakeSurface\\) \\{ metalness = max\\(D\\.mat0\\.w, ${f2(F.metalness)}\\)`)],
+    TLX: [/const flakeSurface = surfaceId\.equal\(34\.0\)\.toVar\(\);/, /surfaceId\.equal\(20\.0\)\.or\(flakeSurface\)\.or\(candySurface\)/,
+      new RegExp(`vd\\.sub\\(${F.fadeStartM.toFixed(1)}\\)\\.div\\(${F.fadeSpanM.toFixed(1)}\\)\\.oneMinus\\(\\)`),
+      new RegExp(`floor\\(objP\\.mul\\(${F.cellsPerM.toFixed(1)}\\)\\)`),
+      new RegExp(`smoothstep\\(${f2(F.sparkLo)}, 1\\.0, fkH\\)`),
+      new RegExp(`fkH\\.sub\\(0\\.5\\)\\.mul\\(${f2(F.grainAmp)}\\)\\.add\\(fkS\\.sub\\(${f2(F.sparkMean)}\\)\\.mul\\(${f2(F.sparkGain)}\\)\\)\\.mul\\(fkF\\)`),
+      new RegExp(`fkS\\.mul\\(${f2(F.specGain)}\\)\\.mul\\(fkF\\)`),
+      new RegExp(`select\\(flakeSurface, max\\(matU\\.metalness, ${f2(F.metalness)}\\), matU\\.metalness\\)`)],
+  };
+  for (const [name, res] of Object.entries(pins)) for (const re of res) assert.match(src[name], re, `${name}: flake drifted: ${re}`);
+  // mean-preserving: the share of sparking cells ~ sparkMean, so the fade does not pop the average brightness
+  assert.ok(Math.abs((1 - F.sparkLo) / 2 - F.sparkMean) < 1e-9, "sparkMean is the mean of the smoothstep spark term");
+});
+
+test("candy: darker saturated base, tinted lacquer, saturated rim, high gloss — same numbers in GLX / TLX / WGX", () => {
+  const { CarMaterialShade } = loadMaterials();
+  const C = CarMaterialShade.CANDY;
+  const f2 = (v) => v.toFixed(2);
+  const src = shaderSources();
+  const pins = {
+    GLX: [/bool candySurface = surfaceId == 35;/,
+      new RegExp(`candySurface \\? max\\(uClearcoat, ${f2(C.clearcoat)}\\)`),
+      new RegExp(`max\\(mix\\(vec3\\(cdL\\), albedo, ${C.satBoost}\\), vec3\\(0\\.0\\)\\) \\* ${C.darken}`),
+      new RegExp(`addCC \\*= mix\\(vec3\\(1\\.0\\), cdHue, ${C.envTint}\\)`),
+      new RegExp(`color \\+= cdHue \\* ccF \\* ${C.rimGain}`),
+      new RegExp(`max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${C.chromaFloor}\\)`)],
+    WGX: [/let candySurface = surfaceId == 35;/,
+      new RegExp(`candySurface\\) \\{ clearcoat = max\\(D\\.mat1\\.z, ${f2(C.clearcoat)}\\)`),
+      new RegExp(`max\\(mix\\(vec3<f32>\\(cdL\\), albedo, vec3<f32>\\(${C.satBoost}\\)\\), vec3<f32>\\(0\\.0\\)\\) \\* ${C.darken}`),
+      new RegExp(`addCC \\* mix\\(vec3<f32>\\(1\\.0\\), cdHue, vec3<f32>\\(${C.envTint}\\)\\)`),
+      new RegExp(`color = color \\+ cdHue \\* ccF \\* ${C.rimGain}`),
+      new RegExp(`max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${C.chromaFloor}\\)`)],
+    TLX: [/const candySurface = surfaceId\.equal\(35\.0\)\.toVar\(\);/,
+      new RegExp(`select\\(candySurface, max\\(matU\\.clearcoat, ${f2(C.clearcoat)}\\), matU\\.clearcoat\\)`),
+      new RegExp(`max\\(mix\\(vec3\\(cdL\\), albedo, ${C.satBoost}\\), vec3\\(0\\.0\\)\\)\\.mul\\(${C.darken}\\)`),
+      new RegExp(`addCC\\.mulAssign\\(mix\\(vec3\\(1\\.0\\), cdHue, ${C.envTint}\\)\\)`),
+      new RegExp(`color\\.addAssign\\(cdHue\\.mul\\(ccF\\)\\.mul\\(${C.rimGain}\\)\\)`),
+      new RegExp(`max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${C.chromaFloor}\\)`)],
+  };
+  for (const [name, res] of Object.entries(pins)) for (const re of res) assert.match(src[name], re, `${name}: candy drifted: ${re}`);
+  // candy is darker than the paint it replaces and the rim cannot reach bloom territory on its own
+  assert.ok(C.darken < 1 && C.satBoost > 1 && C.rimGain < 0.6);
+});
+
+test("flake and candy add no uniform, define, texture fetch or shader variant (surfaceId branches only)", () => {
+  const src = shaderSources();
+  for (const [name, s] of Object.entries(src)) {
+    const m = (s.match(/(?:flakeSurface|candySurface|fkF|cdL)[^\n]*/g) || []).join("\n");
+    assert.ok(m.length > 0, `${name}: no flake/candy code found`);
+    assert.doesNotMatch(m, /\buniform\b|#define|texture\w*\(|textureSample|cubeTexture|\buCand|\buFlak/i, `${name}: flake/candy must stay ALU-only`);
+  }
+});

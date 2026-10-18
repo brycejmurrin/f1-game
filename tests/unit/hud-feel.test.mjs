@@ -522,10 +522,10 @@ test("the number plate is the card's identity anchor, and it collapses to a stri
   assert.match(hud, /body\[data-density="compact"\] #announce \{[\s\S]*?--radio-num: 22px;/);
   // The number left the channel line when it gained the plate — one number on
   // the card, not two.
-  const g = read("js/game.js");
-  assert.doesNotMatch(g.match(/function radioWho\(kind\) \{[\s\S]*?\n\}/)[0], /num/,
+  const g = read("js/race/announce-banner.js");
+  assert.doesNotMatch(g.match(/function radioWho\(kind\) \{[\s\S]*?\n\s*\}/)[0], /num/,
     "radioWho still appends the car number — the plate already shows it");
-  assert.match(g, /els\.announceNum\.textContent = radioNum\(\);/, "showAnnounce fills the plate");
+  assert.match(g, /announceNum\.textContent = radioNum\(\);/, "showAnnounce fills the plate");
 });
 
 test("coach and practice keep their own channel and priority, and practice is its own kind", () => {
@@ -533,8 +533,8 @@ test("coach and practice keep their own channel and priority, and practice is it
   // The advisory kinds are a CHANNEL on the card (the coach's colour on the
   // WHO line), never a bigger or smaller card.
   assert.match(hud, /#announce\[data-kind="coach"\] #announce-who,\n#announce\[data-kind="practice"\] #announce-who \{ color: var\(--faster\); \}/);
-  const g0 = read("js/game.js");
-  const who = vm.runInNewContext(read("js/audio/radio-voice.js") + "\n(" + g0.match(/function radioWho\(kind\) \{[\s\S]*?\n\}/)[0] + ")", { player: null });
+  const g0 = read("js/race/announce-banner.js");
+  const who = vm.runInNewContext(read("js/audio/radio-voice.js") + "\n(" + g0.match(/function radioWho\(kind\) \{[\s\S]*?\n\s*\}/)[0] + ")", { deps: { player: () => null } });
   for (const kind of ["coach", "practice"]) assert.equal(who(kind), "COACH", kind);
   for (const kind of ["penalty-hit", "penalty-warn", "warning", "warn"]) assert.equal(who(kind), "RACE CONTROL", kind);
   // …and the channel is ALL a kind may recolour. The number plate is the
@@ -544,7 +544,7 @@ test("coach and practice keep their own channel and priority, and practice is it
   assert.doesNotMatch(hud, /#announce\[data-kind="[a-z-]+"\][^{]*#announce-num/,
     "a kind repaints the number plate — the plate is the team, the WHO line is the channel");
   // A practice verdict must not be prioritised as a record message.
-  const g = read("js/game.js");
+  const g = read("js/race/announce-banner.js");
   const pri = g.match(/const ANN_PRI = \{([^}]*)\}/)[1];
   assert.match(pri, /practice: 2/);
   assert.match(pri, /coach: 1/, "a coach tip still yields to everything else");
@@ -1044,9 +1044,9 @@ test("a dropped gap strip carries the radio card's caution step down with the fl
   assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\)/);
   assert.match(css, /:root\[data-gap-drop\] #announce \{ --flag-slot-top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\), calc\(var\(--hud-gaps-b, 0px\) \+ 8px\)\); \}/,
     "the dropped strip raises the card's flag slot to the chip's edge");
-  assert.match(css, /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 38px\); \}/,
+  assert.match(css, /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(> :where\(#hud\) > #hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 38px\); \}/,
     "the card sits 38px under the flag slot, wherever the chip is");
-  assert.match(css, /body\[data-density="compact"\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 34px\); \}/,
+  assert.match(css, /body\[data-density="compact"\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(> :where\(#hud\) > #hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 34px\); \}/,
     "compact keeps its tighter step under the chip");
   assert.doesNotMatch(css, /body\[data-gap-drop\]/, "no body[data-gap-drop] twin: the slot token is the one writer");
   assert.doesNotMatch(hud, /body\.(setAttribute|removeAttribute|hasAttribute)\("data-gap-drop"/, "gapForm no longer mirrors the drop onto body");
@@ -1375,7 +1375,7 @@ test("a moved (data-hl) piece whose words change width re-fits on the next tick,
 
 test("the caution step-aside needs the card's other slot to really apply; TEXT LARGER grows the ERS bar", () => {
   const rules = cssRules(read("css/hud.css"));
-  const caution = rules.filter((r) => /:has\(#hud-flag:not\(\[hidden\]\)\) #announce$/.test(r.selector));
+  const caution = rules.filter((r) => /:has\(> :where\(#hud\) > #hud-flag:not\(\[hidden\]\)\) #announce$/.test(r.selector));
   assert.equal(caution.length, 2, "base and compact caution rules — the dropped-gap-strip case rides --flag-slot-top, not a twin rule");
   for (const r of caution) assert.match(r.selector, /:not\(\.hud-mirror-on\.hud-mirror-side\)/, r.selector);
   for (const r of caution) assert.match(r.selector, /:not\(\[data-radio-placed\]\)/, "automatic caution placement cannot move a manually positioned radio");

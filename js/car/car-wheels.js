@@ -2,6 +2,30 @@
 "use strict";
 
 const CarWheels = (function () {
+  // LIVERY WHEEL TINTS (livery rimTint / caliperTint / sidewallInk): paint-only overrides of the brakes catalog
+  // colours for ALL four wheels. A field is a [r,g,b] 0..1 array (resolved livery) or "#rrggbb".
+  // Unset = NO_TINTS = today's catalog colour. `key` joins every wheel mesh cache key so a livery
+  // change rebuilds the wheels; "" when nothing is set (keys stay byte-identical).
+  const _tintMemo = new WeakMap();
+  const NO_TINTS = Object.freeze({ rim: null, cal: null, ink: null, key: "" });
+  function tintColour(v) {
+    if (!v) return null;
+    if (Array.isArray(v)) return v.length >= 3 && v.slice(0, 3).every(Number.isFinite) ? [v[0], v[1], v[2]] : null;
+    const m = typeof v === "string" && /^#?([0-9a-f]{6})$/i.exec(v);
+    if (!m) return null;
+    const n = parseInt(m[1], 16);
+    return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+  }
+  const q255 = (c) => c ? c.map((x) => Math.round(x * 255)).join(",") : "";
+  function tints(liv) {
+    if (!liv || typeof liv !== "object") return NO_TINTS;
+    let t = _tintMemo.get(liv);
+    if (t) return t;
+    const rim = tintColour(liv.rimTint), cal = tintColour(liv.caliperTint), ink = tintColour(liv.sidewallInk);
+    t = !rim && !cal && !ink ? NO_TINTS : Object.freeze({ rim, cal, ink, key: "|w" + q255(rim) + ";" + q255(cal) + (ink ? ";" + q255(ink) : "") });
+    _tintMemo.set(liv, t);
+    return t;
+  }
   function create(context) {
     const { SURFACES, TYRE, INTAKE } = context;
     const { addTri, addQuad, addBox, addSpan } = context.geometry;
@@ -25,7 +49,7 @@ const CarWheels = (function () {
     const OPEN_SPOKES = 3;
 
     function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
-                      grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle) {
+                      grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle, inkColor) {
       // `rimColor` is the brakes recipe's `rim` key. It reached this line and then
       // DIED here: RC was computed and never read once, so the nine catalog
       // options that set a rim colour painted nothing. The clamp scan
@@ -231,6 +255,8 @@ const CarWheels = (function () {
           }
         }
       }
+      // The band is always the compound colour (it is how a tyre reads at a glance, the
+      // player's and the AI teammate's alike); livery sidewallInk paints the lettering rings below.
       const BAND = bandColor || [0.85, 0.10, 0.08];
       const bandWidth = tyreStyle && tyreStyle.bandWidth != null ? tyreStyle.bandWidth : 0.09;
       for (const bs of [[x0, -1], [x1, 1]]) {
@@ -245,9 +271,10 @@ const CarWheels = (function () {
       }
       // Raised sidewall lettering ring(s): proud dark annulus inboard of the band
       // (0.006 out vs the band's 0.004, so the two faces never share a plane).
-      const sidewall = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.sidewall) || 0)));
+      // A tyre option with no lettering still gets one ring when sidewallInk is set, so the ink always shows.
+      const sidewall = Math.max(0, Math.min(2, Math.round((tyreStyle && tyreStyle.sidewall) || 0))) || (inkColor ? 1 : 0);
       if (sidewall > 0) {
-        const SW = [0.16, 0.16, 0.17];
+        const SW = inkColor || [0.16, 0.16, 0.17];
         const rings = sidewall === 2 ? [[0.700, 0.740], [0.775, 0.805]] : [[0.700, 0.740]];
         for (const bs of [[x0, -1], [x1, 1]]) {
           const xb = bs[0] + bs[1] * 0.006;
@@ -467,18 +494,18 @@ const CarWheels = (function () {
       }
     }
 
-    function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle) {
+    function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor) {
       const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor,
-        grooved, tyreStyle, null, brakeStyle, wheelStyle);
+        grooved, tyreStyle, null, brakeStyle, wheelStyle, inkColor);
       return out;
     }
-    function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle) {
+    function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor) {
       const rotating = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const fixed = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const width = w || 0.34;
       addWheel(rotating, 0, 0, 0, 0.34, width, bandColor, caliperColor, rimColor,
-        grooved, tyreStyle, fixed, brakeStyle, wheelStyle);
+        grooved, tyreStyle, fixed, brakeStyle, wheelStyle, inkColor);
       // Upright and hub carrier give the wishbones/caliper a visible termination.
       // The hub carrier the wishbones and caliper terminate in. It was a cube
       // sitting inside the rim, visible through the spokes from every angle.
@@ -491,6 +518,6 @@ const CarWheels = (function () {
     return { addWheel, buildWheel, buildWheelLayers };
   }
 
-  return { create };
+  return { create, tints };
 })();
 Object.freeze(CarWheels);

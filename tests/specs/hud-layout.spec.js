@@ -656,6 +656,113 @@ test.describe("buttons steer high HUD scale", () => {
   });
 });
 
+// BUTTONS mode: the touch controls follow BUTTON SIZE only. HUD SIZE resizes the
+// readouts and must not move or resize a single control (Bryce, 2026-10-17).
+const CONTROL_IDS = ["btn-steer-left", "btn-steer-right", "btn-throttle", "btn-brake",
+  "btn-boost", "btn-ot", "btn-aero", "pausebtn", "btn-cam"];
+const HUD_INDEPENDENCE_VIEWPORTS = [
+  { name: "phone-844x390", w: 844, h: 390, sal: 0, sar: 0, sat: 0, sab: 0 },
+  { name: "phone-932x430", w: 932, h: 430, sal: 59, sar: 59, sat: 0, sab: 21 },
+  { name: "phone-667x375", w: 667, h: 375, sal: 0, sar: 0, sat: 0, sab: 0 },
+];
+// One BUTTON SIZE per shape (100 / 175 / 100): the measured matrix of all nine was identical (2026-10-17).
+for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[100, 175, 100][i]]) {
+  test.describe(`buttons steer: controls ignore HUD SIZE (${v.name}, BUTTON SIZE ${btn})`, () => {
+    test.setTimeout(300_000);
+    test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
+    test("control rects are identical at HUD SIZE min / default / max", async ({ page }) => {
+      await race(page, "buttons", false, v, { hudScale: 100, btnScale: btn });
+      const rects = {}, gearW = {}, fitDiag = {};
+      for (const hud of [70, 100, 200]) {
+        await page.evaluate((pct) => localStorage.setItem("apex26.hudScale", JSON.stringify(pct)), hud);
+        await page.reload();
+        await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+        await page.addStyleTag({ content: `:root{--sal:${v.sal}px;--sar:${v.sar}px;--sat:${v.sat}px;--sab:${v.sab}px;}` });
+        await page.evaluate(() => window.__apex.race("monza"));
+        await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+        await page.evaluate(() => window.__apex.go());
+        await page.waitForFunction(() => { const b = document.getElementById("pausebtn"); return !!b && !b.hidden; },
+          null, { polling: 100, timeout: BOOT_MS });
+        await page.evaluate(() => window.GameHud && GameHud.invalidateFit && GameHud.invalidateFit());
+        // invalidateFit voids --hud-fit-stamp; the app republishes it once a full fit has landed. A fixed sleep
+        // read the unfitted 126 px paint when a slow CI frame had not ticked the HUD yet (#2801). The predicate
+        // is synchronous on purpose: waitForFunction does `if (success)`, so an async one (a Promise) is always
+        // truthy and passes at once, which is why waitPhoneHudFitClearance does not wait for the stamp.
+        await page.waitForFunction(() => {
+          if (document.body.classList.contains("desktop")) return false;
+          GameHud.syncPhoneFit();
+          return /^\d+$/.test(document.documentElement.style.getPropertyValue("--hud-fit-stamp"));
+        }, null, { polling: 100, timeout: 60_000 });
+        fitDiag[hud] = await page.evaluate(() => { const st = document.documentElement.style; return { zDock: st.getPropertyValue("--hud-z-dock"), stamp: st.getPropertyValue("--hud-fit-stamp"), vp: innerWidth + "x" + innerHeight, sab: getComputedStyle(document.documentElement).getPropertyValue("--sab") }; });
+        rects[hud] = await page.evaluate((ids) => Object.fromEntries(ids.map((id) => {
+          const el = document.getElementById(id);
+          if (!el || el.hidden) return [id, null];
+          const r = el.getBoundingClientRect();
+          return [id, [r.x, r.y, r.width, r.height].map((n) => Math.round(n * 2) / 2)];
+        })), CONTROL_IDS);
+        gearW[hud] = await page.evaluate(() => document.getElementById("hud-box-time").getBoundingClientRect().width);
+      }
+      const base = rects[100];
+      expect(Object.values(base).filter(Boolean).length, JSON.stringify(base)).toBeGreaterThanOrEqual(7);
+      // Controls that do not fit shrink to fit: none may sit off-screen (BOOST at y -14, #2801).
+      for (const hud of [70, 100, 200]) for (const [id, r] of Object.entries(rects[hud])) if (r) expect(r[1], `${id} at HUD SIZE ${hud} ${JSON.stringify(fitDiag)}`).toBeGreaterThanOrEqual(0);
+      // Non-vacuous: HUD SIZE really did resize the readouts it is meant to resize.
+      expect(gearW[200], JSON.stringify(gearW)).toBeGreaterThan(gearW[70] * 1.3);
+      for (const hud of [70, 200]) expect(rects[hud], `HUD SIZE ${hud} vs 100 ${JSON.stringify(fitDiag)}`).toEqual(base);
+    });
+  });
+}
+
+// A plate the player DRAGS beside BOOST, above the pedals (iPhone 15, BUTTON SIZE 237 %): the dock pass
+// tested columns only, squeezed it to 48 px every fit, clearControls restored it, and the HUD flickered
+// larger <-> smaller (Bryce, 2026-10-17). It shares the pedals' columns, not their rows, so it must keep its
+// own width, stay off every tap target, and hold one size across ticks.
+test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test("keeps its width and does not resize across ticks", async ({ page }) => {
+    // The SHIPPED look (no PIN_PREVIOUS_LOOK): its text size is what makes the filled plate wider than 48 px.
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      for (const [k, val] of Object.entries({ steerMode: "buttons", hudScale: 122, hudBtnScale: 237.3, radioChat: "off", commentary: "off" })) localStorage.setItem("apex26." + k, JSON.stringify(val));
+    });
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    // Filled split times (a fresh race shows "-"), as on lap 2.
+    await page.addStyleTag({ content: ":root{--sal:59px;--sar:59px;--sat:0px;--sab:21px;} #hud-sectors .sec-val::after { content: ' 31.234'; }" });
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.go());
+    await page.waitForFunction(() => document.getElementById("hud-sectors").getBoundingClientRect().height > 65,
+      null, { polling: 100, timeout: 30_000 });
+    // DRAGGED THERE, not dropped: the old pass was bistable; a finger drag crosses both positions.
+    for (const [x, y] of [[23, 5], [25, 10]]) {
+      await page.evaluate(([x, y]) => { HudLayout.set("sectors", { x, y }); GameHud.invalidateFit(); }, [x, y]);
+      await page.evaluate(() => new Promise((r) => setTimeout(r, 600)));
+    }
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 1500))); // let fitHud + the pack follow-up settle
+    const seen = await page.evaluate(() => new Promise((resolve) => {
+      const out = new Set(), sec = document.getElementById("hud-sectors"), t0 = performance.now();
+      const iv = setInterval(() => {
+        const r = sec.getBoundingClientRect();
+        out.add([r.left, r.top, r.width, r.height].map(Math.round).join(",") + " mw=" + sec.style.maxWidth);
+        if (performance.now() - t0 > 3000) { clearInterval(iv); resolve([...out]); }
+      }, 50);
+    }));
+    expect(seen, "one plate state across 3 s of HUD ticks: " + JSON.stringify(seen)).toHaveLength(1);
+    const st = await page.evaluate(() => {
+      const sec = document.getElementById("hud-sectors"), r = sec.getBoundingClientRect();
+      const hits = [...document.querySelectorAll(".touchbtn")].filter((b) => !b.hidden).map((b) => [b.id, b.getBoundingClientRect()])
+        .filter(([, b]) => b.width && r.left < b.right && b.left < r.right && r.top < b.bottom && b.top < r.bottom).map(([id]) => id);
+      return { w: r.width, mw: sec.style.maxWidth, hits };
+    });
+    expect(st.mw, JSON.stringify(st)).toBe("");
+    expect(st.w, JSON.stringify(st)).toBeGreaterThan(52);
+    expect(st.hits, JSON.stringify(st)).toEqual([]);
+  });
+});
+
 // TILT was left out of #1191's steer-buttons dock standoff: at HUD 150% the
 // sector strip still sat on BOOST (844×390 survey). Same --dock-r-w + anchor
 // tether, without regressing the buttons/touch cases above.

@@ -68,6 +68,59 @@ const CarMaterialShade = (function () {
     darkEnvBoost: 0.32,
   });
 
-  return { CARBON, GLOSS, MATTE, METAL };
+  // TINTED CHROME (FINISH_SURFACE.tinted -> 36). Mirror response of chrome (27: clearcoat >= 0.85, metalness
+  // >= 0.55, specular 1, rough <= 0.09). The lacquer env reflection is multiplied by the livery hue
+  // (addCC *= mix(1, albedo / max(maxChannel(albedo), chromaFloor), envTint)) AND, after the metal block, the whole lit
+  // colour is multiplied by that hue (finalTint) — the env terms alone left a red car pink, because the white sun glint,
+  // sky and metal reflections dominate. White/grey paint (hue 1) stays chrome.
+  const TINTED = Object.freeze({
+    envTint: 0.88,          // how much of the livery hue the lacquer reflection takes
+    chromaFloor: 0.04,      // max-channel floor, so near-black paint cannot divide by ~0
+    finalTint: true,        // lit colour *= hue after the metal block
+  });
+
+  // CHAMELEON (FINISH_SURFACE.chameleon -> 37). Pearl's classification (clearcoat >= 0.70, metalness
+  // >= 0.25, rough <= 0.22). The albedo is NOT blended (the white clearcoat/metal terms washed any albedo-only flip to
+  // icy silver at every angle): after the metal block the lit colour is multiplied by mix(teamHue, flipHue, flip) with
+  // flip = smoothstep(flipFresLo, flipFresHi, fresnel) * flipWeight. Pearl 30 itself is untouched.
+  const CHAMELEON = Object.freeze({
+    flipFresLo: 0.58,
+    flipFresHi: 1.00,
+    flipWeight: 0.90,
+    flipHue: Object.freeze([0.25, 0.55, 1.0]),
+    chromaFloor: 0.04,
+  });
+
+  // METALLIC FLAKE (FINISH_SURFACE.flake -> 34). A PAINT response (gloss clearcoat + env mirror) with
+  // metalness >= metalness, plus object-space hash flakes: albedo *= 1 + ((h - 0.5) * grainAmp +
+  // (smoothstep(sparkLo, 1, h) - sparkMean) * sparkGain) * fade, specular += spark * specGain * fade.
+  // fade = 1 inside fadeStartM, 0 from fadeEndM (the livery colour beyond ~26 m, so nothing can moire).
+  // The albedo term is mean-preserving (sparkMean = mean of the smoothstep spark term = (1 - sparkLo) / 2), so the fade has no pop.
+  const FLAKE = Object.freeze({
+    cellsPerM: 140.0,       // object-space cells per metre (~7 mm)
+    fadeStartM: 10.0,
+    fadeSpanM: 16.0,        // fadeEndM = fadeStartM + fadeSpanM = 26 m
+    grainAmp: 0.30,
+    sparkLo: 0.82,
+    sparkMean: 0.09,
+    sparkGain: 0.90,
+    specGain: 0.40,
+    metalness: 0.35,
+  });
+
+  // CANDY (FINISH_SURFACE.candy -> 35). Paint response with a high-gloss lacquer (clearcoat >= clearcoat),
+  // albedo = max(mix(lum, albedo, satBoost), 0) * darken, the lacquer's env reflection tinted by the
+  // livery hue (envTint) and a saturated Fresnel rim: color += hue * ccF * rimGain, where hue = albedo /
+  // max(maxChannel, chromaFloor).
+  const CANDY = Object.freeze({
+    satBoost: 1.35,
+    darken: 0.62,
+    clearcoat: 0.90,
+    envTint: 0.55,
+    rimGain: 0.45,
+    chromaFloor: 0.04,
+  });
+
+  return { CARBON, GLOSS, MATTE, METAL, TINTED, CHAMELEON, FLAKE, CANDY };
 })();
 Object.freeze(CarMaterialShade);

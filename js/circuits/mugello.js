@@ -27,6 +27,7 @@
     night: false,
     theme: "green",
     lengthKm: 5.2,
+    tyreSeverity: 1.18,  // Fast flowing Tuscan energy; high-speed permanent band
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     terrainOuter: 120,

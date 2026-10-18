@@ -233,6 +233,7 @@ const FULL = [
   // The announcer's authored half. Data only, read at CALL time and guarded on
   // the global, so the order is for tidiness rather than correctness.
   "js/data/circuit-lore.js",
+  "js/data/flyby-overrides.js",
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
@@ -322,15 +323,24 @@ const FULL = [
   "js/ui/key-binds.js",
   "js/ui/settings-export.js",
   "js/physics/aero-zones.js",
+  "js/fx/grade-tint.js",       // GradeTint: car-paint bases + hue/sat (game.js destructures it at eval)
   "js/fx/skidmarks.js",
   "js/fx/car-fx.js",           // CarFx.create(G, { skids }): plank sparks + AI lock-up marks (after skidmarks + particles)
   "js/race/storm.js",          // Storm: the weather above rain — lightning schedule, SC timings, rain/spray scale (pure; before race-control)
   "js/race/wind.js",           // Wind: per-race seeded wind + gusts on the race clock; head/tail drag, crosswind (game.js calls Wind.setLevel at eval)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
+  "js/physics/drive-tune.js",  // DriveTune.create(): live PACE / steer / grip lets (game.js wires at eval)
+  "js/race/lap-record.js",     // LapRecord.create(): time-trial record + sector bests (game.js wires at eval)
+  "js/race/storm-flash.js",    // StormFlash.create(): in-frame lightning flash (after Storm; game.js wires at eval)
+  "js/race/announce-banner.js", // AnnounceBanner.create(): radio card queue (game.js wires at eval)
+  "js/race/light-tune-edit.js", // LightTuneEdit.set(): one lighting-slider write
   "js/race/pace-math.js",      // PaceMath.create(deps): vTop/vStd/aStd + X-mode/ERS/gearHi/rpmFor (game.js wires)
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
+  "js/overlay/feed.js",        // OverlayFeed: shared v1 frame schema + 2 s full-frame diff
+  "js/race/tv-graphics.js",    // TvGraphics: broadcast-profile pass/battle/fastest-lap cards
   "js/race/broadcast.js",      // Broadcast.create(G, replay): the WATCH timing tower + AUTO director (RealReplay.create makes one)
+  "js/overlay/render.js",      // OverlayRender: transform-only overlay.html painter; inert in the game shell
   "js/camera/director.js",     // Director.create(G): live TV director (CAM_MODES "tv"); reuses Broadcast pure cut policy
   "js/ui/watch-transport.js",
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
@@ -748,6 +758,12 @@ const HARD_EDGES = [
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/physics/consts.js", "js/race/pace-math.js"], // PaceMath reads X_*/DRAIN_*/REGEN_*/OT_TIME_*/GEAR_* at create
   ["js/core/mat4.js", "js/race/pace-math.js"],      // PaceMath aliases M4.clamp / M4.lerp at eval
+  ["js/fx/grade-tint.js", "js/game.js"],         // game.js destructures GradeTint at eval
+  ["js/physics/drive-tune.js", "js/game.js"],    // game.js calls DriveTune.create() at eval
+  ["js/race/lap-record.js", "js/game.js"],       // game.js calls LapRecord.create() at eval
+  ["js/race/storm.js", "js/race/storm-flash.js"], // StormFlash.step calls Storm.strikeIn
+  ["js/race/storm-flash.js", "js/game.js"],      // game.js calls StormFlash.create() at eval
+  ["js/race/announce-banner.js", "js/game.js"],  // game.js calls AnnounceBanner.create() at eval
   ["js/race/pace-math.js", "js/game.js"],           // game.js calls PaceMath.create(deps) at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
   ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
@@ -930,11 +946,17 @@ const LAZY_AGENT = [
   "js/agent/agentview-corners.js",
   "js/agent/agentview.js",
   "js/agent/apex-net.js",
+  "js/agent/apex-cam.js",
+  "js/agent/apex-track.js",
+  "js/agent/apex-lobby.js",
   "js/agent/apex.js",
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
   ["js/agent/apex-net.js", "js/agent/apex.js"],   // ApexApi spreads ApexNet.hooks(...) when game.js calls ApexApi.create
+  ["js/agent/apex-cam.js", "js/agent/apex.js"],
+  ["js/agent/apex-track.js", "js/agent/apex.js"],
+  ["js/agent/apex-lobby.js", "js/agent/apex.js"],
   ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
 ];
 
@@ -1206,6 +1228,7 @@ const LAZY_NET = [
   "js/net/lobby-roster.js", // LobbyRoster: the room roster's stateless DOM leaves (before lobby)
   "js/net/snapshot.js",
   "js/net/session.js",
+  "js/net/spectate.js",
   "js/net/netplay.js",
   "js/net/lobby.js",
   // PHONE AS CONTROLLER rides the same wire (rtc + handshake + rendezvous), so
@@ -1258,6 +1281,7 @@ const CONTROLLER = [
 // not one module gathering the rest.
 const LAZY_NET_EDGES = [
   ["js/net/snapshot.js", "js/net/session.js"],
+  ["js/net/spectate.js", "js/net/netplay.js"],
   ["js/net/sdp.js", "js/net/handshake.js"],
   ["js/net/qr.js", "js/net/lobby-codes.js"],
   ["js/net/qr.js", "js/net/lobby.js"],

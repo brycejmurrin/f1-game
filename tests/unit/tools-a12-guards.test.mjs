@@ -130,6 +130,12 @@ test("G1 every generator refuses an unknown flag with exit 2 and writes nothing"
     assert.match(r.stderr, /unknown argument/, `${g} ${flag}`);
   }
   assert.equal(sig(), before, "no generated file was touched");
+  for (const rel of ["tools/docs/gen-coverage-table.mjs", "tools/docs/gen-agent-index.mjs"]) {
+    const r = spawnSync(process.execPath, [path.join(ROOT, rel), "--chek"], { cwd: ROOT, encoding: "utf8" });
+    assert.equal(r.status, 2, `${rel} --chek: status ${r.status}\n${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /unknown argument/);
+  }
+  assert.equal(sig(), before, "docs generators wrote nothing on an unknown flag");
 });
 
 test("G1 --help prints usage and exits 0 without writing (gen-lib generators)", () => {

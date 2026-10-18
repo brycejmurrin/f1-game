@@ -126,7 +126,8 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   // FACTORY setup via teamDecalState(team, false).
   assert.match(cd, /const st = setup \? teamDecalState\(team, false, setup, car\.visStamp\) : teamDecalState\(team, false\);\s*\n\s*const vt = st\.parts;/);
   assert.match(cd, /const parts = Parts\.getVisualTiers\(setup, team\);/);
-  assert.match(cd, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(\) : getFieldWheelMeshes\(c\.team, c\);/);
+  // The player's pair takes the team so livery wheel tints (rimTint / caliperTint) join its cache key.
+  assert.match(cd, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(c\.team\) : getFieldWheelMeshes\(c\.team, c\);/);
   assert.match(cd, /putBoundedMesh\(fieldWheelCache, fieldWheelOrder/,
     "field wheels must promote hits like every other mesh LRU");
   assert.match(cd, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,
@@ -161,19 +162,20 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
     "the player casts the silhouette at livePlayerMat unless a first-person view resolved the cockpit body");
   assert.match(sp, /G\.gfx\.castShadow\(deps\.teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\), _shadowMats\[i\]\)/);
   assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
-  assert.match(game, /1\.5 \* Math\.max\(PACE, 0\.05\)/,
+  assert.match(game, /1\.5 \* Math\.max\(driveTune\.PACE, 0\.05\)/,
     "beached gate additive floor must scale with PACE like the grass speed floor");
 });
 
 test("orbit / agent-view read the mirrored world pose for the field", () => {
   const apex = read("js/agent/apex.js");
+  const cam = read("js/agent/apex-cam.js");
   const view = read("js/agent/agentview.js");
-  assert.match(apex, /const cx = \(c\.px != null\) \? c\.px/);
-  assert.match(apex, /const cz = \(c\.pz != null\) \? c\.pz/);
-  assert.doesNotMatch(apex, /c\.human && c\.px != null/);
+  assert.match(cam, /const cx = \(c\.px != null\) \? c\.px/);
+  assert.match(cam, /const cz = \(c\.pz != null\) \? c\.pz/);
+  assert.doesNotMatch(cam, /c\.human && c\.px != null/);
   assert.match(read("js/agent/apex-net.js"), /error: "no_wire"/);
   assert.match(apex, /error: "invalid_repro"/);
-  assert.match(apex, /ok: true, cleared: true/);
+  assert.match(read("js/agent/apex-lobby.js"), /ok: true, cleared: true/);
   assert.match(apex, /return \{ ok: true, bytes: blob\.size \}/);
   assert.match(view, /if \(c\.px != null\) return \[c\.px, c\.pz\];/);
   assert.doesNotMatch(view, /c\.human && c\.px != null/);

@@ -345,6 +345,29 @@ body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
    migration as --steel (steel-role.test.mjs). */
 .dh-footnote { margin-top: calc(var(--gap) * 4 / 3); padding-top: calc(var(--gap) * 2 / 3); border-top: 1px solid rgba(255,255,255,0.05); font-size: var(--fs-2); color: var(--dim); text-align: right; }
 
+/* schedule */
+[data-nextgp="tile"] {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: calc(var(--gap) / 3) var(--gap);
+  padding: var(--gap); border: 1px solid var(--plate-line);
+  border-radius: var(--r-lg); background: color-mix(in oklab, var(--red) 12%, var(--plate));
+}
+[data-nextgp="kicker"] { color: var(--red); font-size: var(--fs-1); font-weight: 900; font-style: italic; letter-spacing: var(--ls-5); }
+[data-nextgp="name"] { margin: 0; color: var(--text); font-size: var(--fs-6); line-height: 1.05; }
+[data-nextgp="place"] { min-width: 0; color: var(--dim); font-size: var(--fs-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-nextgp="countdown"] {
+  grid-column: 2; grid-row: 1 / span 3; align-self: center; color: var(--text);
+  font-size: var(--fs-5); font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+[data-nextgp="sessions"] {
+  grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: calc(var(--gap) / 3); margin-top: calc(var(--gap) * 0.5);
+}
+[data-nextgp="session"] { display: flex; flex-direction: column; gap: calc(var(--gap) / 6); padding-top: calc(var(--gap) / 3); border-top: 1px solid var(--plate-line); }
+[data-nextgp="session-label"] { color: var(--steel); font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-3); }
+[data-nextgp="session-time"] { color: var(--text); font-size: var(--fs-1); white-space: nowrap; }
+body[data-width="narrow"] [data-nextgp="tile"] { grid-template-columns: 1fr; }
+body[data-width="narrow"] [data-nextgp="countdown"] { grid-column: 1; grid-row: auto; }
+
 /* schedule rows */
 .dh-race {
   display: flex; align-items: flex-start; gap: 10px;
@@ -701,6 +724,8 @@ body[data-density="compact"] .dh-canvas.dh-map { max-width: 220px; }
 button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-legend-item.dh-off { opacity: 0.35; }
 .dh-legend-item.dh-legend-static { cursor: default; font-style: italic; }
+/* a colour key is not a target: no chip tap floor, so the map key stays a few short lines */
+.dh-legend-item.dh-legend-static { min-height: 0; min-width: 0; }
 /* compare-mode legend group: [LABEL][solid chip][dashed chip] — the label
    toggles both lines, each chip toggles that driver's line */
 .dh-leg-group {
@@ -1221,7 +1246,17 @@ body[data-width="wide"][data-density="compact"] {
   .dh-telem-side .dh-dash { gap: 5px; padding: 8px 10px; }
   .dh-telem-side .dh-gval { font-size: 15px; }
   .dh-telem-side .dh-glabel { font-size: var(--fs-micro); }
+  /* Short landscape phone: the body is the one scroller (a column that scrolled
+     on its own hid the map legend behind the card edge), the chart takes the
+     free width, and the readout is two fixed columns whose labels wrap. */
+  .dh-tpopup-body { overflow-y: auto; align-items: flex-start; overscroll-behavior-y: contain; touch-action: pan-y; }
+  .dh-telem-main { overflow: visible; }
+  .dh-telem-side { overflow: visible; }
+  .dh-telem-main .dh-canvas, .dh-telem-main .dh-delta { max-width: none; }
+  .dh-telem-side .dh-dash { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* The readout labels wrap instead of colliding with their neighbour column. */
+.dh-telem-side .dh-glabel { white-space: normal; overflow-wrap: anywhere; line-height: 1.15; letter-spacing: var(--ls-1); }
 body[data-width="wide"][data-density="normal"] {
   .dh-telem-main { padding: var(--gap) calc(var(--gap) * 7 / 6); }
   .dh-telem-side { width: 340px; padding: var(--gap) calc(var(--gap) * 7 / 6); }
@@ -1234,7 +1269,9 @@ body[data-width="wide"][data-density="normal"] {
 }
 body[data-density="compact"] {
   .dh-tpopup-card {
-    max-height: calc(100svh - var(--sat) - var(--sab));
+    /* the card is zoomed: heights use --svhz (÷ zoom), or it outgrows the screen
+       by the zoom factor and the centred card loses its header off the top */
+    max-height: calc(100 * var(--svhz) - (var(--sat) + var(--sab)) / var(--ui-scale));
     border-radius: var(--r-md);
     width: 100%;
   }

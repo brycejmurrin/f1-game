@@ -1024,8 +1024,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
   let surfaceId = i32(vMatId + 0.5);
-  let classifiedCar = surfaceId >= 20 && surfaceId <= 33;
-  let paintSurface = surfaceId == 20;
+  let classifiedCar = surfaceId >= 20 && surfaceId <= 37;
+  // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (see js/render/glx/shaders/glsl-lit.js); the grain / saturation / rim
+  // are layered in the albedo and env blocks (CarMaterialShade.FLAKE / .CANDY).
+  let flakeSurface = surfaceId == 34;
+  let candySurface = surfaceId == 35;
+  let paintSurface = surfaceId == 20 || flakeSurface || candySurface;
   let carbonSurface = surfaceId == 21;
   let rubberSurface = surfaceId == 22;
   // TYRE SIDEWALL (car3d.js SURFACES.sidewall = 33): satin rubber wall, band and
@@ -1037,13 +1041,17 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let panelSurface = surfaceId == 26;
   // MIRROR: chrome livery finish (car3d.js SURFACES.mirror = 27). Paint-like
   // (keeps clearcoat + env lobe) but metallic and nearly smooth.
-  let mirrorSurface = surfaceId == 27;
+  // 36 = TINTED CHROME: mirror response with the lacquer reflection tinted by the livery hue (CarMaterialShade.TINTED).
+  let tintedSurface = surfaceId == 36;
+  let mirrorSurface = surfaceId == 27 || tintedSurface;
   // Three more livery finishes, mirroring js/render/glx/shaders/glsl-lit.js. A finish
   // costs a SURFACE ID, not a uniform: car3d.js FINISH_SURFACE remaps a painted
   // vertex. Carbon needs no id — 21 already exists and the finish points at it.
   let matteSurface = surfaceId == 28;
   let satinMetalSurface = surfaceId == 29;
-  let iriSurface = surfaceId == 30;
+  // 37 = CHAMELEON: pearl's response with a wider sweep and a fixed second hue (CarMaterialShade.CHAMELEON).
+  let chamSurface = surfaceId == 37;
+  let iriSurface = surfaceId == 30 || chamSurface;
   let carbonFinish = surfaceId == 31;   // bare weave OVER the livery colour
   // CARBON WEAVE (GLX): finish 31 and the carbon parts 21, faded to its mean
   // over 8-16 m so the 3.3 cm cross-hatch cannot moire at range. Computed
@@ -1065,6 +1073,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (paintLike) {
       carPaint = D.mat1.w;
       clearcoat = D.mat1.z;
+      if (candySurface) { clearcoat = max(D.mat1.z, 0.90); }
       if (mirrorSurface) { clearcoat = max(D.mat1.z, 0.85); }
       if (iriSurface) { clearcoat = max(D.mat1.z, 0.70); }
       if (satinMetalSurface) { clearcoat = min(D.mat1.z, 0.25); }
@@ -1148,6 +1157,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // js/render/glx/shaders/glsl-lit.js. game.js sets 0.12 on every PAINT_* for the
     // metallic-flake tint; the 0.0 discarded it and left CAR METALLIC dead.
     if (paintSurface) { metalness = D.mat0.w; }
+    if (flakeSurface) { metalness = max(D.mat0.w, 0.35); }
     if (satinMetalSurface) { metalness = max(D.mat0.w, 0.60); }
     if (iriSurface) { metalness = max(D.mat0.w, 0.25); }
     if (matteSurface) { metalness = 0.0; }
@@ -1209,7 +1219,30 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   } else if (carbonSurface) {
     albedo = albedo * (0.88 + 0.24 * weave);
   }
-  if (iriSurface) {
+  // METALLIC FLAKE (34) and CANDY (35): see js/render/glx/shaders/glsl-lit.js.
+  if (flakeSurface) {
+    let fkF = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
+    if (fkF > 0.0) {
+      let fkC = floor(in.objPos * 140.0);
+      let fkH = hash21(fkC.xy + fkC.z * 19.7);
+      let fkS = smoothstep(0.82, 1.0, fkH);
+      albedo = albedo * (1.0 + ((fkH - 0.5) * 0.30 + (fkS - 0.09) * 0.90) * fkF);
+      specular = min(1.0, specular + fkS * 0.40 * fkF);
+    }
+  }
+  if (candySurface) {
+    let cdL = dot(albedo, vec3<f32>(0.299, 0.587, 0.114));
+    albedo = max(mix(vec3<f32>(cdL), albedo, vec3<f32>(1.35)), vec3<f32>(0.0)) * 0.62;
+  }
+  var chamFlip = 0.0;
+  var chamHue = vec3<f32>(1.0);
+  if (chamSurface) {
+    // CHAMELEON: team hue face-on, flip toward a fixed blue at grazing angles, applied to the lit colour after the metal block
+    // (mirrors js/render/glx/shaders/glsl-lit.js; CarMaterialShade.CHAMELEON).
+    let fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
+    chamFlip = smoothstep(0.58, 1.00, fres);
+    chamHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
+  } else if (iriSurface) {
     let fres = 1.0 - clamp(dot(N, V), 0.0, 1.0);
     let shift = 0.5 + 0.5 * cos(6.2831853 * (vec3<f32>(0.0, 0.33, 0.67) + vec3<f32>(fres * 1.4)));
     // MULTIPLY the base colour, do not mix toward the interference colour — a
@@ -1627,7 +1660,15 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
           * F.params7.y * shadow * keyMul;
     ccTrans = 1.0 - envW * 0.94;
     color = color * ccTrans;
-    let addCC = envCC * envW;
+    var addCC = envCC * envW;
+    // TINTED CHROME: the reflection takes the livery hue (albedo / its brightest channel, 88 % mixed in).
+    if (tintedSurface) { addCC = addCC * mix(vec3<f32>(1.0), albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04), vec3<f32>(0.88)); }
+    // CANDY: the lacquer is tinted (55 %) and the Fresnel rim glows in the saturated livery hue.
+    if (candySurface) {
+      let cdHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
+      addCC = addCC * mix(vec3<f32>(1.0), cdHue, vec3<f32>(0.55));
+      color = color + cdHue * ccF * 0.45;
+    }
     color = color + addCC / (1.0 + addCC * 0.35);
   }
 
@@ -1718,6 +1759,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     }
     color = color + metAdd / (1.0 + max(max(metAdd.r, metAdd.g), metAdd.b));
   }
+  // TINTED CHROME / CHAMELEON: the white lit terms take the livery hue (mirrors glsl-lit.js).
+  if (tintedSurface) { color = color * (albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)); }
+  if (chamSurface) { color = color * mix(chamHue, vec3<f32>(0.25, 0.55, 1.0), vec3<f32>(chamFlip * 0.90)); }
 
   // Sky rim / fresnel (GLX js/render/glx/shaders/glsl-lit.js): grazing-angle atmospheric
   // brightening tinted by the horizon. SKY RIM GLOW = params9.w (def 1.0).
