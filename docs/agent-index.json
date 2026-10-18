@@ -479,7 +479,6 @@
       "script": "test",
       "kind": "browser",
       "files": [],
-      "declaredTests": null,
       "twinned": false
     },
     {
@@ -492,7 +491,6 @@
         "tests/specs/drift.spec.js",
         "tests/specs/understeer-cue.spec.js"
       ],
-      "declaredTests": 40,
       "twinned": true
     },
     {
@@ -502,7 +500,6 @@
       "files": [
         "tests/unit/agentview-api-contract.test.mjs"
       ],
-      "declaredTests": 6,
       "twinned": false
     },
     {
@@ -547,7 +544,6 @@
         "tests/unit/voice-pack.test.mjs",
         "tests/unit/wind-speed.test.mjs"
       ],
-      "declaredTests": 571,
       "twinned": false
     },
     {
@@ -555,7 +551,6 @@
       "script": "test:audit",
       "kind": "command",
       "files": [],
-      "declaredTests": null,
       "twinned": false
     },
     {
@@ -565,7 +560,6 @@
       "files": [
         "tests/specs/menu-baseline.spec.js"
       ],
-      "declaredTests": 6,
       "twinned": false
     },
     {
@@ -584,7 +578,6 @@
         "tests/specs/livery-wheels.spec.js",
         "tests/specs/parts-*.spec.js"
       ],
-      "declaredTests": 39,
       "twinned": false
     },
     {
@@ -605,7 +598,6 @@
         "tests/specs/tracks-walls-b.spec.js",
         "tests/specs/tracks-walls.spec.js"
       ],
-      "declaredTests": 235,
       "twinned": true
     },
     {
@@ -613,7 +605,6 @@
       "script": "test:clip",
       "kind": "command",
       "files": [],
-      "declaredTests": null,
       "twinned": false
     },
     {
@@ -623,7 +614,6 @@
       "files": [
         "tests/specs/collision*.spec.js"
       ],
-      "declaredTests": null,
       "twinned": false
     },
     {
@@ -641,7 +631,6 @@
         "tests/unit/desktop-version.test.mjs",
         "tests/unit/followup-platform.test.mjs"
       ],
-      "declaredTests": 57,
       "twinned": false
     },
     {
@@ -676,7 +665,6 @@
         "tests/unit/test-groups.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
-      "declaredTests": 589,
       "twinned": false
     },
     {
@@ -684,7 +672,6 @@
       "script": "test:float",
       "kind": "command",
       "files": [],
-      "declaredTests": null,
       "twinned": false
     },
     {
@@ -694,7 +681,6 @@
       "files": [
         "tests/specs/ui-audit.spec.js"
       ],
-      "declaredTests": 78,
       "twinned": false
     },
     {
@@ -774,7 +760,6 @@
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
-      "declaredTests": 924,
       "twinned": false
     },
     {
@@ -784,7 +769,6 @@
       "files": [
         "tests/unit/elevation-tracks-vm.test.mjs"
       ],
-      "declaredTests": 47,
       "twinned": false
     },
     {
@@ -863,7 +847,6 @@
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
-      "declaredTests": 877,
       "twinned": false
     },
     {
@@ -904,7 +887,6 @@
         "tests/unit/track-wetness-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
-      "declaredTests": 373,
       "twinned": false
     },
     {
@@ -951,7 +933,6 @@
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs"
       ],
-      "declaredTests": 504,
       "twinned": false
     },
     {
@@ -986,7 +967,6 @@
         "tests/unit/team-style-relief.test.mjs",
         "tests/unit/tyre-recipes-open-rim.test.mjs"
       ],
-      "declaredTests": 282,
       "twinned": false
     },
     {
@@ -1004,7 +984,6 @@
         "tests/specs/track-switch-memory.spec.js",
         "tests/specs/webgl-probes.spec.js"
       ],
-      "declaredTests": 57,
       "twinned": false
     },
     {
@@ -1012,7 +991,6 @@
       "script": "test:graph-parity",
       "kind": "command",
       "files": [],
-      "declaredTests": null,
       "twinned": false
     },
     {
@@ -1056,7 +1034,6 @@
         "tests/unit/twin-fidelity.test.mjs",
         "tests/unit/twinned-specs.test.mjs"
       ],
-      "declaredTests": 430,
       "twinned": false
     },
     {
@@ -1081,7 +1058,6 @@
         "tests/specs/telemetry-fit.spec.js",
         "tests/specs/wake-lock.spec.js"
       ],
-      "declaredTests": 278,
       "twinned": true
     },
     {
@@ -1103,7 +1079,6 @@
         "tests/specs/touch-pedals.spec.js",
         "tests/specs/touch-steer.spec.js"
       ],
-      "declaredTests": 161,
       "twinned": false
     },
     {
@@ -1116,7 +1091,6 @@
         "tests/unit/followup-update-check.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
-      "declaredTests": 52,
       "twinned": false
     },
     {
@@ -1135,7 +1109,6 @@
         "tests/unit/ui-inspector-css.test.mjs",
         "tests/unit/ui-inspector-transitions.test.mjs"
       ],
-      "declaredTests": 212,
       "twinned": false
     },
     {
@@ -1148,7 +1121,6 @@
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/mobile-sync-web.test.mjs"
       ],
-      "declaredTests": 52,
       "twinned": false
     },
     {
@@ -1167,7 +1139,6 @@
         "tests/specs/time-trial.spec.js",
         "tests/specs/track-designer.spec.js"
       ],
-      "declaredTests": 191,
       "twinned": true
     },
     {
@@ -1184,7 +1155,6 @@
         "tests/specs/multiplayer-seats.spec.js",
         "tests/specs/multiplayer-session.spec.js"
       ],
-      "declaredTests": 75,
       "twinned": false
     },
     {
@@ -1214,7 +1184,6 @@
         "tests/unit/rendezvous-worker.test.mjs",
         "tests/unit/track-codec.test.mjs"
       ],
-      "declaredTests": 490,
       "twinned": false
     },
     {
@@ -1228,7 +1197,6 @@
         "tests/unit/foundation-core-vm.test.mjs",
         "tests/unit/slider-effect.test.mjs"
       ],
-      "declaredTests": 62,
       "twinned": false
     },
     {
@@ -1239,7 +1207,6 @@
         "tests/specs/perf-frametime.spec.js",
         "tests/specs/track-switch-release.spec.js"
       ],
-      "declaredTests": 2,
       "twinned": false
     },
     {
@@ -1249,7 +1216,6 @@
       "files": [
         "tests/specs/perf-race-entry.spec.js"
       ],
-      "declaredTests": 1,
       "twinned": false
     },
     {
@@ -1260,7 +1226,6 @@
         "tests/specs/phone-recorder.spec.js",
         "tests/specs/soak-run.spec.js"
       ],
-      "declaredTests": 2,
       "twinned": false
     },
     {
@@ -1277,7 +1242,6 @@
         "tests/specs/race-control.spec.js",
         "tests/specs/world-physics.spec.js"
       ],
-      "declaredTests": 38,
       "twinned": true
     },
     {
@@ -1285,7 +1249,6 @@
       "script": "test:render",
       "kind": "browser",
       "files": [],
-      "declaredTests": null,
       "twinned": false
     },
     {
@@ -1295,7 +1258,6 @@
       "files": [
         "tests/unit/service-worker.test.mjs"
       ],
-      "declaredTests": 98,
       "twinned": false
     },
     {
@@ -1303,7 +1265,6 @@
       "script": "test:shimmer",
       "kind": "command",
       "files": [],
-      "declaredTests": null,
       "twinned": false
     },
     {
@@ -1313,7 +1274,6 @@
       "files": [
         "tests/specs/smoke.spec.js"
       ],
-      "declaredTests": 10,
       "twinned": false
     },
     {
@@ -1375,7 +1335,6 @@
         "tests/unit/title-fx.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
-      "declaredTests": 944,
       "twinned": false
     },
     {
@@ -1415,7 +1374,6 @@
         "tests/unit/xr-phase0.test.mjs",
         "tests/unit/xr-plan.test.mjs"
       ],
-      "declaredTests": 618,
       "twinned": false
     },
     {
@@ -1449,7 +1407,6 @@
         "tests/unit/track-themes-build.test.mjs",
         "tests/unit/track-validate-fleet.test.mjs"
       ],
-      "declaredTests": 201,
       "twinned": false
     },
     {
@@ -1459,7 +1416,6 @@
       "files": [
         "tests/unit/parts-visual-distinctness.test.mjs"
       ],
-      "declaredTests": 13,
       "twinned": false
     },
     {
@@ -1471,7 +1427,6 @@
         "tests/specs/logging.spec.js",
         "tests/specs/smoke.spec.js"
       ],
-      "declaredTests": 19,
       "twinned": true
     },
     {
@@ -1479,7 +1434,6 @@
       "script": "test:tooling",
       "kind": "command",
       "files": [],
-      "declaredTests": null,
       "twinned": false
     },
     {
@@ -1487,7 +1441,6 @@
       "script": "test:tooling-fast",
       "kind": "command",
       "files": [],
-      "declaredTests": null,
       "twinned": false
     },
     {
@@ -1519,7 +1472,6 @@
         "tests/specs/ui-scale.spec.js",
         "tests/specs/watch-transport-layout.spec.js"
       ],
-      "declaredTests": 327,
       "twinned": true
     },
     {
@@ -1529,7 +1481,6 @@
       "files": [
         "tests/unit/adapted-specs.test.mjs"
       ],
-      "declaredTests": 2,
       "twinned": false
     },
     {
@@ -1543,7 +1494,6 @@
         "tests/specs/projection.spec.js",
         "tests/unit/adapted-specs.test.mjs"
       ],
-      "declaredTests": 16,
       "twinned": true
     },
     {
@@ -1560,7 +1510,6 @@
         "tests/specs/race-control.spec.js",
         "tests/unit/adapted-specs.test.mjs"
       ],
-      "declaredTests": 31,
       "twinned": true
     },
     {
@@ -1571,7 +1520,6 @@
         "tests/specs/vr-emulated.spec.js",
         "tests/specs/xr-plan.spec.js"
       ],
-      "declaredTests": 10,
       "twinned": false
     }
   ],
