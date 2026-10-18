@@ -198,8 +198,8 @@ test("every new field is published, copied, offered in the garage, hinted and fi
   }
   for (const k of NEW.filter((f) => f.endsWith("Finish")))
     assert.match(sheet.match(/const LIV_DRAFT_PILLS = \{([\s\S]*?)\};/)[1], new RegExp(`${k}: "inherit"`));
-  assert.equal(M.Teams.liveryEnumOk("floorFinish", "chrome"), true);
-  assert.equal(M.Teams.liveryEnumOk("floorFinish", "inherit"), true);
-  assert.equal(M.Teams.liveryEnumOk("rimFinish", "constructor"), false);
-  assert.equal(M.Teams.liveryEnumOk("noseFinish", "lava"), false);
+  // An unknown finish id from an imported garage file is inert: the build ignores it.
+  const junk = build({ floorFinish: "lava", suspFinish: "constructor", noseFinish: "lava" });
+  assert.deepEqual(Array.from(junk.mat), Array.from(base.mat));
+  assert.equal(W.CarWheels.tints({ rimFinish: "constructor" }).surf, null);
 });
