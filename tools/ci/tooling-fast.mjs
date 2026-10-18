@@ -680,7 +680,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Low-speed lock plateau pin (1.06× → ≈0.371 rad at notch 7) + high-speed
   // Object.is vs pre-boost raw; companion to steer-lock-taper. Source + VM, ~3 s.
   "tests/unit/low-speed-lock.test.mjs",
-  // apex-lsp as an MCP client drives it: definition / references / symbols on the real js/ tree via tsc --lsp. ~2 s.
+  // apex-lsp as an MCP client: definition / references / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). ~2 s.
   "tests/unit/lsp-mcp.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
