@@ -45,7 +45,7 @@ test("5: S3 (player and field) is closed at the line, not a whole step past it",
   // The same overshoot RaceControl.lineTransition subtracts from the lap.
   assert.match(GAME, /const s3Past = dLine > 0 && oldS > L \* 0\.5 && c\.s < L \* 0\.5 && dt > 0 \? dt \* \(1 - Math\.min\(1, Math\.max\(0, \(L - oldS\) \/ dLine\)\)\) : 0;/);
   assert.match(GAME, /const e = c\.lapTime - \(ns === 0 \? s3Past : 0\) - c\._secT0;/, "field sector bests");
-  assert.match(GAME, /const elapsed = c\.lapTime - \(newSector === 0 \? s3Past : 0\) - sectorStartT;/, "the player's split");
+  assert.match(GAME, /const elapsed = c\.lapTime - \(newSector === 0 \? s3Past : 0\) - lapRec\.sectorStartT;/, "the player's split");
   const rc = read("js/race/race-control.js");
   assert.match(rc, /const frac = \(total - oldS\) \/ ds;\n\s+if \(Number\.isFinite\(frac\)\) over = dt \* \(1 - Math\.min\(1, Math\.max\(0, frac\)\)\);/,
     "the lap's own overshoot, which s3Past mirrors — change both together");

@@ -15,6 +15,7 @@
     night: true,
     theme: "street_night",
     lengthKm: 6.2,
+    tyreSeverity: 1.05,  // Street thermal stress; below Singapore 1.15 (Pirelli Las Vegas heat notes)
     baseHW: 7,
     street: true,
     // The pit complex (TrackPit): the STREET one on the inside (left), where

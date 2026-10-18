@@ -50,6 +50,7 @@
     night: false,
     theme: "green",
     lengthKm: 3.948,
+    tyreSeverity: 1.02,  // Canadian permanent classic; near-neutral
     baseHW: 6.5,
     sceneryCoordinates: "racing",
     terrainOuter: 120,

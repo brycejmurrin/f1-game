@@ -198,6 +198,7 @@ export const GROUPS = [
   ["env", "Container bootstrap: browsers and the Cursor Cloud install."],
   ["desktop", "Electron desktop packaging: stage the Pages allow-list into a site folder the shell serves over app://."],
   ["moves", "Move plans read by gen/move-tree.mjs — data, not code."],
+  ["hooks", "Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason trailer."],
 ];
 
 const INTRO = `# Apex 26 dev tools

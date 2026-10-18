@@ -15,7 +15,7 @@ function scratch() {
   fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "ratchet-fold-"));
   const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
-  for (const t of ["tools/check/ratchets.mjs", "tools/check/merge-hygiene.mjs"]) write(t, fs.readFileSync(path.join(ROOT, t), "utf8"));
+  for (const t of ["tools/check/ratchets.mjs", "tools/check/merge-hygiene.mjs", "tools/hooks/ratchet-reason.mjs"]) write(t, fs.readFileSync(path.join(ROOT, t), "utf8"));
   write(F, "var a = 1;\n");
   write("tests/data/ratchets.json", JSON.stringify({ files: { [F]: { lines: 10 } } }));
   for (const n of ["x", "y", "z"]) write(`tests/data/ratchets.d/${n}.json`, JSON.stringify({ files: { [F]: { lines: 1 } } }));
