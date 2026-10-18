@@ -50,6 +50,8 @@ const TAG_RANK = { def: 0, export: 1, alias: 2, use: 3 };
 export function classify(line, col, next = "") {
   const before = line.slice(0, col), after = line.slice(col).replace(/^[\w$]+/, "");
   if (/\b(function\*?|class)\s+$/.test(before) || /\breadonly\s+$/.test(before)) return "def";
+  // `const { a } = Head` / `const K = Head;`: the head itself is being aliased.
+  if (/^\s*([;,)]|$)/.test(after) && (/\}\s*=\s*(window\.)?$/.test(before) || /\b(const|let|var)\s+[\w$]+\s*=\s*(window\.)?$/.test(before))) return "alias";
   if (/\b(const|let|var)\s*[{[][^}\]]*$/.test(before)) return "alias";
   // `const x = …` and later declarators (`const a = 1, x = …`): a bare member expression is an alias.
   if (/\b(const|let|var)\s+$/.test(before) || (/^\s*(const|let|var)\s/.test(line) && /,\s*$/.test(before) && /^\s*=(?!=)/.test(after)))
@@ -368,7 +370,7 @@ export class Lsp {
     const per = {};
     for (const l of list) { const f = this.rel(l.uri); per[f] = (per[f] || 0) + 1; }
     const byFile = Object.entries(per).sort((a, b) => b[1] - a[1]);
-    return { total: rows.length, byFile, files: new Set(list.map(l => l.uri)).size, rows: rows.slice(0, limit), truncated: rows.length > limit };
+    return { total: rows.length, byFile, tags: list.map(l => this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character)), files: new Set(list.map(l => l.uri)).size, rows: rows.slice(0, limit), truncated: rows.length > limit };
   }
   stop() { clearTimeout(this.idle); if (this.proc && !this.proc.killed) { try { this.notify("exit", null); } catch { /* closed */ } this.proc.kill(); } }
 }
@@ -386,7 +388,8 @@ const def = (name, description, properties, required = []) => ({ name, descripti
 export const TOOLS = [
   def("lsp_definition", "Go to definition through TypeScript's checker. Use instead of grep to find where a global, module member (Head.member), G.<member> or local is defined. Rows: `file:line:col  [def|export|alias] source`, the real declaration first; several same-named top-level functions are all listed.", where),
   def("lsp_references", "Every reference across js/, sorted by file, with a per-file summary when long. Semantic (skips comments, strings, same-named members of other objects); window.X globals and G.<member> fall back to labelled text matches that follow `const { x } = Head` destructures. Rows: `file:line:col  [def|export|alias|use] source`.",
-    { ...where, includeDeclaration: { type: "boolean", description: "Include the declaration itself (default true)" }, limit: int(`Rows to print (default ${MAX_ROWS})`, 1, 2000) }),
+    { ...where, includeDeclaration: { type: "boolean", description: "Include the declaration itself (default true)" }, limit: int(`Rows to print (default ${MAX_ROWS})`, 1, 2000),
+      files: { type: "boolean", description: "Only the per-file counts (every file), no rows: who uses it, at a glance" } }),
   def("lsp_symbols", "Workspace symbol search by name or prefix: declarations listed (exact first, top-level before nested), aliases (`const x = Y.x`, destructuring) collapsed to a count.", { query: str("Symbol name or prefix, e.g. GameHud"), limit: int("Rows (default 30)", 1, MAX_ROWS) }, ["query"]),
   def("lsp_hover", "Inferred type and JSDoc (type first, then where it was asked). JS parameters without JSDoc read as any.", where),
   def("lsp_diagnostics", "TypeScript diagnostics for one file. jsconfig.json has checkJs off, so this reports syntax errors only.", { file: where.file }, ["file"]),
@@ -409,9 +412,11 @@ export async function callTool(lsp, name, a = {}) {
         return { s, tag: lsp.tag(f, line, character), loc: `${f}:${line + 1}:${character + 1}` };
       });
       const shown = rows.filter(r => r.tag !== "alias"), aliases = rows.filter(r => r.tag === "alias");
-      text = shown.slice(0, limit).map(({ s, loc, tag }) => `${s.name}  ${KIND[s.kind] || s.kind}${tag === "export" ? " (export)" : ""}  ${loc}${s.containerName ? `  (in ${s.containerName})` : ""}`).join("\n")
-        + (shown.length > limit ? `\n… ${shown.length - limit} more (raise limit, max ${MAX_ROWS})` : "")
-        + (aliases.length ? `\n+ ${aliases.length} alias${aliases.length === 1 ? "" : "es"} (const x = Y.x / destructuring), e.g. ${aliases.slice(0, 3).map(r => r.loc).join(", ")}` : "")
+      const exact = shown.filter(r => r.s.name === a.query), other = shown.filter(r => r.s.name !== a.query);
+      const line = ({ s, loc, tag }) => `${s.name}  ${KIND[s.kind] || s.kind}${tag === "export" ? " (export)" : ""}  ${loc}${s.containerName ? `  (in ${s.containerName})` : ""}`;
+      text = [...exact.map(line), ...(exact.length && other.length ? [`— ${other.length} other name${other.length === 1 ? "" : "s"} matching "${a.query}":`] : []), ...other.map(line)].slice(0, limit + 1).join("\n")
+        + (shown.length > limit ? `\n… ${shown.length - limit} more (raise limit, max ${MAX_ROWS}; an exact name lists first)` : "")
+        + (aliases.length ? `\n+ ${aliases.length} alias${aliases.length === 1 ? "" : "es"} (const x = Y.x / destructuring)${aliases.some(r => r.s.name === a.query) ? ` — ${aliases.filter(r => r.s.name === a.query).length} of ${a.query}` : ""}, e.g. ${aliases.slice(0, 3).map(r => r.loc).join(", ")}` : "")
         || `no symbol matches ${a.query}`;
     } else if (name === "lsp_diagnostics") {
       await lsp.prepare();
@@ -437,9 +442,11 @@ export async function callTool(lsp, name, a = {}) {
       const notes = [at.note,
         many && name === "lsp_definition" && `${at.top.length} separate top-level declarations named ${a.symbol}`,
         many && name === "lsp_references" && `${at.top.length} declarations named ${a.symbol}; these are the one at ${pos(p)} (others: ${at.top.filter(l => pos(l) !== pos(p)).slice(0, 5).map(pos).join(", ")}; pass file+line)`].filter(Boolean);
-      const summary = name === "lsp_references" && r.total > 40 ? `\nby file: ${r.byFile.slice(0, 8).map(([f, n]) => `${f} ${n}`).join(", ")}${r.byFile.length > 8 ? `, … ${r.byFile.length - 8} more files` : ""}` : "";
+      const summary = a.files ? `\n${r.byFile.map(([f, n]) => `${f} ${n}`).join("\n")}` : name === "lsp_references" && r.total > 40 ? `\nby file: ${r.byFile.slice(0, 8).map(([f, n]) => `${f} ${n}`).join(", ")}${r.byFile.length > 8 ? `, … ${r.byFile.length - 8} more files` : ""}` : "";
       const self = name === "lsp_definition" && r.total === 1 && p && r.rows[0].startsWith(`${pos(p)} `);
-      text = `${r.total} ${name === "lsp_definition" ? "definition" : "reference"}${r.total === 1 ? "" : "s"}${name === "lsp_references" ? ` in ${r.files} file${r.files === 1 ? "" : "s"}` : ""} (${self ? "at the declaration" : `query at ${p ? pos(p) : "—"}`}${notes.length ? "; " + notes.join("; ") : ""})${summary}\n${r.rows.join("\n")}${r.truncated ? `\n… ${r.total - r.rows.length} more (limit)` : ""}`;
+      const extraRows = name === "lsp_definition" ? r.tags.filter(t => t !== "def").length : 0, defs = r.total - extraRows;
+      const count = name === "lsp_definition" && extraRows && defs ? `${defs} definition${defs === 1 ? "" : "s"} (+${extraRows} export/alias row${extraRows === 1 ? "" : "s"})` : `${r.total} ${name === "lsp_definition" ? "definition" : "reference"}${r.total === 1 ? "" : "s"}`;
+      text = `${count}${name === "lsp_references" ? ` in ${r.files} file${r.files === 1 ? "" : "s"}` : ""} (${self ? "at the declaration" : `query at ${p ? pos(p) : "—"}`}${notes.length ? "; " + notes.join("; ") : ""})${summary}${a.files ? "" : `\n${r.rows.join("\n")}${r.truncated ? `\n… ${r.total - r.rows.length} more (raise limit, or files: true for per-file counts)` : ""}`}`;
     }
     return { content: [{ type: "text", text }], isError: false };
   } catch (e) {
@@ -480,13 +487,16 @@ const CLI = { def: "lsp_definition", refs: "lsp_references", sym: "lsp_symbols",
 async function cli([cmd, target, ...rest]) {
   const name = CLI[cmd];
   if (!name || !target) {
-    process.stdout.write("node tools/mcp/lsp-mcp.mjs [serve | --list-tools | def|refs|hover <Name|Head.member|file:line[:col]> | sym <query> | diag <file>]\n");
+    process.stdout.write("node tools/mcp/lsp-mcp.mjs [serve | --list-tools | def|refs|hover <Name|Head.member|file:line[:col]> [--no-decl --files --limit=N] | sym <query> [--limit=N] | diag <file>]\n");
     return cmd === "--help" ? 0 : 2;
   }
   const pos = /^(.+\.(?:js|ts)):(\d+)(?::(\d+))?$/.exec(target);
   const args = name === "lsp_symbols" ? { query: target } : name === "lsp_diagnostics" ? { file: target }
     : pos ? { file: pos[1], line: +pos[2], ...(pos[3] ? { column: +pos[3] } : {}) } : { symbol: target };
   if (rest.includes("--no-decl")) args.includeDeclaration = false;
+  if (rest.includes("--files")) args.files = true;
+  const lim = rest.find(x => x.startsWith("--limit="));
+  if (lim) args.limit = +lim.slice(8);
   const lsp = new Lsp();
   try { const r = await callTool(lsp, name, args); process.stdout.write(r.content[0].text + "\n"); return r.isError ? 1 : 0; }
   finally { lsp.stop(); }

@@ -134,7 +134,7 @@ test("fixture workspace: freshness, ambiguity, window globals, honest misses", {
     r = await text("lsp_definition", { symbol: "Alpha.wrap" });
     assert.match(r.t, /src\/a\.js:4:\d+ {2}\[def\] function wrap/, "the wrap in Alpha's file, never b.js's");
     assert.doesNotMatch(r.t, /src\/b\.js/);
-    assert.match(r.t, /no Alpha\.wrap use in js\/.*may not export/, "labelled, not presented as an export");
+    assert.match(r.t, /no Alpha\.wrap use in src\/.*may not export/, "labelled, not presented as an export");
     r = await text("lsp_definition", { symbol: "Alpha.nope" });
     assert.equal(r.err, true); assert.match(r.t, /has no member nope/);
     r = await text("lsp_definition", { symbol: "Gamma.ping" });
@@ -146,6 +146,10 @@ test("fixture workspace: freshness, ambiguity, window globals, honest misses", {
     assert.match(r.t, /src\/d\.js:5:15 {2}\[use\] const twice = key \* 2;/, "the local it binds");
     assert.match(r.t, /src\/d\.js:7:17 {2}\[use\] const again = B\.KEY;/, "uses through const B = Beta");
     assert.match(r.t, /src\/c\.js:3:3 {2}\[def\] KEY: 5/);
+    r = await text("lsp_references", { symbol: "Beta.KEY", files: true });
+    assert.match(r.t, /^6 references in 2 files .*\nsrc\/c\.js 3\nsrc\/d\.js 3$/, "files: true prints only per-file counts");
+    r = await text("lsp_symbols", { query: "wrap" });
+    assert.match(r.t, /^wrap {2}function {2}src\/a\.js:4:\d+\nwrap {2}function {2}src\/b\.js:4:\d+$/, r.t);
     r = await text("lsp_definition", { symbol: "Beta.go" });
     assert.match(r.t, /src\/c\.js:4:3 {2}\[def\] go\(\)/);
 
@@ -172,6 +176,8 @@ test("classify tags a row by the identifier at the column", () => {
   assert.equal(classify("    sample, wrapS,", 4, "  } = ctx;"), "alias", "a destructure closing lines later");
   assert.equal(t("  return { a, sample };", "sample"), "export");
   assert.equal(classify("    sample, wrapS,", 4, "  };"), "export", "the middle of a multi-line export list");
+  assert.equal(t("const { IDLE_RPM, MAX_RPM } = PhysicsConsts;", "PhysicsConsts"), "alias", "the head of a destructure");
+  assert.equal(t("const K = PhysicsConsts, rev = 1;", "PhysicsConsts"), "alias");
   assert.equal(t("x.sample(1)", "sample"), "use");
   assert.equal(t("const k = x ? sample : 1;", "sample"), "use");
   assert.equal(inCommentOrString('a = "T.x" + T.y', 6), true);
