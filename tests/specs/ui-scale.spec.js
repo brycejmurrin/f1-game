@@ -929,27 +929,27 @@ test("UI inspector verifies real scale bindings, persistence and CSS provenance"
   await open();
   const snapshot = () => page.evaluate(() => __apex.ui.inspect({ root: "#pmsettings" }));
   const before = await snapshot();
-  const input = page.locator("#as-uiScale"); const old = Number(await input.inputValue());
+  const input = page.locator("#pm-uiscale"); const old = Number(await input.inputValue());
   await input.focus(); await page.keyboard.press(old < 200 ? "ArrowRight" : "ArrowLeft");
   const value = Number(await input.inputValue()); expect(value).not.toBe(old);
-  await expect.poll(async () => (await snapshot()).controls.find(c => c.selector === "#as-uiScale")?.binding.runtime).toBeCloseTo(value, 5);
-  const after = await inspectPage(page, { root: "#pmsettings", styles: "#as-uiScale" });
-  const control = after.controls.find(c => c.selector === "#as-uiScale");
+  await expect.poll(async () => (await snapshot()).controls.find(c => c.selector === "#pm-uiscale")?.binding.runtime).toBeCloseTo(value, 5);
+  const after = await inspectPage(page, { root: "#pmsettings", styles: "#pm-uiscale" });
+  const control = after.controls.find(c => c.selector === "#pm-uiscale");
   expect(control.role).toBe("slider"); expect(control.binding.status).toBe("matches");
   expect(control.binding.saved.value).toBe(value);
   expect(after.styles.rules.some(r => r.source?.includes("/css/") && r.line > 0)).toBe(true);
-  expect(after.accessibility).toContain("UI size");
-  expect(diffInspections(before, after).changed.some(c => c.selector === "#as-uiScale")).toBe(true);
+  expect(after.accessibility).toContain("Interface size");
+  expect(diffInspections(before, after).changed.some(c => c.selector === "#pm-uiscale")).toBe(true);
   // A DOM-only mutation is deliberately NOT a working setting: the inspector must reject it.
   await input.evaluate(e => { e.value = Number(e.value) + (Number(e.value) < 200 ? 1 : -1); });
-  expect((await snapshot()).issues.some(i => i.kind === "binding-mismatch" && i.selector === "#as-uiScale")).toBe(true);
+  expect((await snapshot()).issues.some(i => i.kind === "binding-mismatch" && i.selector === "#pm-uiscale")).toBe(true);
   await page.reload(); await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => __apex.headless(true)); await open();
-  expect((await snapshot()).controls.find(c => c.selector === "#as-uiScale").binding.saved.value).toBe(value);
+  expect((await snapshot()).controls.find(c => c.selector === "#pm-uiscale").binding.saved.value).toBe(value);
   for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(viewport); const report = await snapshot();
     expect(report.viewport.width).toBe(viewport.width); expect(report.controls.length).toBeGreaterThan(0);
-    expect(report.controls.find(c => c.selector === "#as-uiScale").binding.status).toBe("matches");
+    expect(report.controls.find(c => c.selector === "#pm-uiscale").binding.status).toBe("matches");
   }
   writeFileSync(testInfo.outputPath("ui-inspection.json"), JSON.stringify(after, null, 2));
   expect(errors).toEqual([]);

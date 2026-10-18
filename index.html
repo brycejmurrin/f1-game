@@ -1359,27 +1359,15 @@
         </section>
         <section id="pm-panel-appearance" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
-          <p class="adv-help">Everything here applies straight away. GENERAL has its own preview; every other fold shows the real screen behind this page while you change it (PEEK holds it; tap or Esc to come back).</p>
-          <!-- GENERAL: colours, readability and motion — the knobs that reach
-               every screen — in one fold with the menu / HUD preview. The
-               per-screen folds after TITLE SCREEN are built by
-               js/ui/screen-looks.js. -->
-          <details id="pm-general" class="pm-renderer-sub">
-          <summary class="adv-more-btn" id="pm-general-sum">GENERAL · COLOURS, SIZE &amp; READABILITY</summary>
-          <div id="pm-general-body" role="group" aria-label="General appearance">
-          <div id="pm-appearance-preview" class="pm-accent-preview" aria-hidden="true">
-            <div class="pm-look-menu">
-              <span class="pm-look-kicker">GRAND PRIX</span>
-              <span class="pm-look-title">MONZA</span>
-              <span class="pm-look-chips"><span class="pm-look-chip" data-on="1">RACE</span><span class="pm-look-chip">QUALI</span></span>
-              <span class="bigbtn pm-accent-preview-btn">START</span>
-            </div>
-            <div class="pm-look-hud">
-              <span class="pm-accent-preview-hud"><b>P3</b></span>
-              <span class="pm-look-lap">LAP <b>4</b>/12</span>
-              <span class="pm-look-spd"><b id="pm-look-speed">287</b><span class="pm-look-unit">KM/H</span></span>
-            </div>
-          </div>
+          <p class="adv-help">Everything here applies straight away. The studio has its own preview; every other fold shows the real screen behind this page while you change it (PEEK holds it; tap or Esc to come back).</p>
+          <!-- GENERAL: speed units and help text. The per-screen folds after
+               TITLE SCREEN are built by js/ui/screen-looks.js. -->
+          <!-- ONE HOME (#2846): THEME, MENU / HUD ACCENT, UI SIZE, TEXT SIZE and
+               HIGH CONTRAST were here AND in the Appearance Studio's own rows.
+               These two blocks are now the only copy: js/ui/appearance-studio.js
+               adopts them into its MENU · GLOBAL and RACE HUD groups (ids and
+               wiring unchanged: appearance-opts.js, scale.js). -->
+          <div id="pm-appearance-menu" data-studio-home="menu">
           <h4 class="pm-look-h">COLOURS</h4>
           <div id="pm-uitheme" class="set-row" role="group" aria-labelledby="pm-uitheme-label">
             <span class="tune-label" id="pm-uitheme-label">THEME</span>
@@ -1405,23 +1393,6 @@
             <div>
               <input id="pm-menuaccent-hex" type="color" value="#e10600" aria-labelledby="pm-menuaccent-hex-label">
               <input id="pm-menuaccent-hextext" class="pm-accent-hextext" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Menu accent hex" value="#e10600">
-            </div>
-          </div>
-          <div id="pm-hudaccent" class="set-row" role="group" aria-labelledby="pm-hudaccent-label">
-            <span class="tune-label" id="pm-hudaccent-label">HUD ACCENT</span>
-            <div>
-              <button id="pm-hudaccent-prev" type="button" data-step="-1" aria-label="Previous HUD accent">&lsaquo;</button>
-              <select id="pm-hudaccent-sel" aria-labelledby="pm-hudaccent-label"></select>
-              <button id="pm-hudaccent-next" type="button" data-step="1" aria-label="Next HUD accent">&rsaquo;</button>
-            </div>
-          </div>
-          <div id="pm-hudaccent-swatches" class="pm-accent-swatches" role="listbox" aria-label="HUD accent presets"></div>
-          <p class="adv-help">The stripes on the race HUD and the radio number plate. TEAM uses your team&rsquo;s colour.</p>
-          <div id="pm-hudaccent-custom" class="set-row pm-accent-custom" role="group" aria-labelledby="pm-hudaccent-hex-label" hidden>
-            <span class="tune-label" id="pm-hudaccent-hex-label">CUSTOM HUD</span>
-            <div>
-              <input id="pm-hudaccent-hex" type="color" value="#e10600" aria-labelledby="pm-hudaccent-hex-label">
-              <input id="pm-hudaccent-hextext" class="pm-accent-hextext" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" aria-label="HUD accent hex" value="#e10600">
             </div>
           </div>
           <h4 class="pm-look-h">READABILITY</h4>
@@ -1455,6 +1426,30 @@
             </div>
           </div>
           <p class="adv-help" id="pm-contrast-help">Solid panels behind menus and the HUD, brighter labels and stronger outlines. Helps in sunlight.</p>
+          </div>
+          <div id="pm-appearance-hud" data-studio-home="hud">
+          <div id="pm-hudaccent" class="set-row" role="group" aria-labelledby="pm-hudaccent-label">
+            <span class="tune-label" id="pm-hudaccent-label">HUD ACCENT</span>
+            <div>
+              <button id="pm-hudaccent-prev" type="button" data-step="-1" aria-label="Previous HUD accent">&lsaquo;</button>
+              <select id="pm-hudaccent-sel" aria-labelledby="pm-hudaccent-label"></select>
+              <button id="pm-hudaccent-next" type="button" data-step="1" aria-label="Next HUD accent">&rsaquo;</button>
+            </div>
+          </div>
+          <div id="pm-hudaccent-swatches" class="pm-accent-swatches" role="listbox" aria-label="HUD accent presets"></div>
+          <p class="adv-help">The stripes on the race HUD and the radio number plate. TEAM uses your team&rsquo;s colour.</p>
+          <div id="pm-hudaccent-custom" class="set-row pm-accent-custom" role="group" aria-labelledby="pm-hudaccent-hex-label" hidden>
+            <span class="tune-label" id="pm-hudaccent-hex-label">CUSTOM HUD</span>
+            <div>
+              <input id="pm-hudaccent-hex" type="color" value="#e10600" aria-labelledby="pm-hudaccent-hex-label">
+              <input id="pm-hudaccent-hextext" class="pm-accent-hextext" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" aria-label="HUD accent hex" value="#e10600">
+            </div>
+          </div>
+          </div>
+          <details id="pm-general" class="pm-renderer-sub">
+          <summary class="adv-more-btn" id="pm-general-sum">GENERAL · SPEED UNITS &amp; HELP TEXT</summary>
+          <div id="pm-general-body" role="group" aria-label="General appearance">
+          <button id="pm-general-jump" type="button" class="adv-more-btn" data-settings-jump="appearance" data-jump-target="pm-uitheme-sel">THEME, ACCENTS, SIZES &amp; CONTRAST are in MENU · GLOBAL &rsaquo;</button>
           <div id="pm-units" class="set-row" role="group" aria-labelledby="pm-units-label">
             <span class="tune-label" id="pm-units-label">SPEED UNITS</span>
             <div>
