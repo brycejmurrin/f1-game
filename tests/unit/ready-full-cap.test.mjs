@@ -58,17 +58,18 @@ test("queued and in_progress both consume a slot; one PR one slot", () => {
   assert.equal(v.ok, true, "2 < default cap 8");
 });
 
-test("at cap refuses; under cap allows; --exclude frees a slot", () => {
+test("at/over the reference count is reported as info, never REFUSE; --exclude frees a slot", () => {
   const prs = [pr(1, "a"), pr(2, "b"), pr(3, "c"), pr(4, "d")];
   const runs = [run("a", "in_progress", { id: 1 }), run("b", "queued", { id: 2 }), run("c", "in_progress", { id: 3 })];
   const full = evaluate(prs, runs, { cap: 3 });
   assert.equal(full.count, 3);
   assert.equal(full.ok, false, "3 is not < 3");
-  assert.match(reportLine(full), /REFUSE mark-ready/);
+  assert.match(reportLine(full), /^ready-full-cap: info: 3\/3 ready full-tier live, over the old cap \(no cap since 2026-10-16\)/);
+  assert.doesNotMatch(reportLine(full), /REFUSE|wait for a slot/i, "the cap was retired 2026-10-16");
   const room = evaluate(prs, runs, { cap: 3, exclude: ["c"] });
   assert.equal(room.count, 2);
   assert.equal(room.ok, true);
-  assert.match(reportLine(room), /room to mark ready/);
+  assert.match(reportLine(room), /^ready-full-cap: info: 2\/3 ready full-tier live \(no cap since 2026-10-16\)/);
   const tight = evaluate(prs, runs, { cap: 2 });
   assert.equal(tight.ok, false);
 });
