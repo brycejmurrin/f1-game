@@ -1,3 +1,4 @@
+// @ts-check
 /* AI-only reachable passing lanes. Read-only traffic inputs, no randomness. */
 "use strict";
 const AiCorridor = (function () {

@@ -13,6 +13,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.6,
+    tyreSeverity: 0.72,  // Long straights, low tyre energy — permanent low-deg band (below Monza 0.55 floor approach)
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     terrainOuter: 110,

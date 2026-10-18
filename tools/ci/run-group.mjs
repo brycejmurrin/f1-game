@@ -9,10 +9,14 @@
 // (pull_request matched plans only). Deploy / Pages / nightly keep
 // `npm run test:<x>` unchanged. Empty after filter → exit 0 with SKIPPED.
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TOOLING_FAST_FILES } from "./tooling-fast.mjs";
+
+const require = createRequire(import.meta.url);
+const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -43,6 +47,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       .groups[script].files.length - files.length;
     console.log(`run-group ${script}: ${files.length} onlyHere (skipped ${dropped} tooling-fast)`);
   }
-  const r = spawnSync(process.execPath, ["--test", ...files], { cwd: ROOT, stdio: "inherit" });
+  const r = spawnSync(process.execPath, ["--test", ...files], {
+    cwd: ROOT,
+    stdio: "inherit",
+    env: { ...process.env, ...augmentNodeCompileCache(process.env, ROOT) },
+  });
   process.exit(r.status === null ? 1 : r.status);
 }

@@ -1701,7 +1701,8 @@
         "tests/unit/flyby-shots.test.mjs"
       ],
       "project": [
-        "tests/unit/flyby-shots.test.mjs"
+        "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/spline-project-height.test.mjs"
       ],
       "propBoxes": [
         "tests/unit/flyby-shots.test.mjs"
@@ -2837,11 +2838,13 @@
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-helmet-style.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
       "designFor": [
-        "tests/unit/helmets.test.mjs"
+        "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-helmet-style.test.mjs"
       ],
       "generated": [
         "tests/unit/helmets.test.mjs"
@@ -2850,13 +2853,17 @@
         "tests/unit/helmets.test.mjs"
       ],
       "painter": [
-        "tests/unit/helmets.test.mjs"
+        "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-helmet-style.test.mjs"
       ],
       "pointAt": [
         "tests/unit/helmets.test.mjs"
       ],
       "shell": [
         "tests/unit/helmets.test.mjs"
+      ],
+      "styled": [
+        "tests/unit/livery-helmet-style.test.mjs"
       ]
     },
     "js/car/input-ghost.js": {
@@ -2881,7 +2888,8 @@
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
-        "tests/unit/livery-wheels.test.mjs"
+        "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ]
     },
     "js/car/livery-design.js": {
@@ -6493,6 +6501,7 @@
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/race-session-fixes.test.mjs",
@@ -6598,6 +6607,9 @@
       ],
       "restore": [
         "tests/unit/livery-design.test.mjs"
+      ],
+      "section": [
+        "tests/unit/livery-helmet-style.test.mjs"
       ],
       "*": [
         "tests/unit/livery-sidewall.test.mjs",
@@ -6955,6 +6967,7 @@
         "tests/unit/garage-interior-gate.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-helmet-style.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",
@@ -9630,6 +9643,7 @@
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/pace-math.test.mjs",
         "tests/unit/parts-ladder.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
@@ -13860,6 +13874,9 @@
       "setContrast": [
         "tests/unit/appearance-opts.test.mjs"
       ],
+      "setCvdMode": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
       "setHelp": [
         "tests/unit/appearance-opts.test.mjs"
       ],
@@ -13986,6 +14003,23 @@
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ]
+    },
+    "js/ui/cvd-palette.js": {
+      "dE2000": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
+      "labFromLinear": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
+      "rgb01": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
+      "simulate": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
+      "simulateLinear": [
+        "tests/unit/cvd-palette.test.mjs"
       ]
     },
     "js/ui/debris-opts.js": {

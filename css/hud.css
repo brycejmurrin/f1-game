@@ -521,6 +521,8 @@ body.hud-met-compact #hud-box-best { display: none !important; }
 #hud-delta[data-sign="fast"] .hud-value { color: var(--faster); }
 #hud-delta[data-sign="slow"] .hud-value { color: var(--slower); }
 #hud-delta[hidden] { display: none !important; }
+/* Ghost reference is a hollow ring, not only the faster/slower ink. */
+#hud-delta[data-ref="ghost"] .hud-label::after { content: "\25CB"; margin-left: 0.15em; color: var(--ghost); font-style: normal; }
 /* Per-element HUD toggles (js/ui/hud-elements.js). body[data-hud-hide~=id]. */
 body[data-hud-hide~="pos"] #hud-box-pos,
 body[data-hud-hide~="lap"] #hud-box-lap { display: none !important; }
@@ -743,7 +745,7 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
   padding: 5px 10px; border-radius: var(--r-sm);
 }
-#hud-aero { --aero-hue: #26a5f5; }   /* the AERO button's blue, declared once */
+#hud-aero { --aero-hue: var(--zone); }   /* CVD palette zone ink */
 #hud-aero.ax-off { color: var(--dim); border-left: 3px solid color-mix(in srgb, var(--aero-hue) 50%, transparent); }
 /* BRAKE BIAS: a set-up fact, not a state — quiet ink, no fill, half a chip. */
 #hud-bb {
@@ -751,8 +753,8 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   padding: calc(var(--gap) / 6) calc(var(--gap) * 2 / 3); margin-top: calc(var(--gap) * 0.5); border-radius: var(--r-sm);
   color: var(--dim); border: 1px solid var(--plate-line); text-shadow: var(--hud-halo);
 }
-#hud-aero.ax-armed { color: #04202e; background: var(--aero-hue); }
-#hud-aero.ax-open { color: #d6efff; background: #083e78; box-shadow: 0 0 14px rgba(50,175,255,0.55); }
+#hud-aero.ax-armed { color: #04202e; background: repeating-linear-gradient(135deg, transparent 0 3px, #04202e 3px 5px), var(--aero-hue); }
+#hud-aero.ax-open { color: #d6efff; background: #083e78; box-shadow: inset 0 0 0 2px var(--zone), 0 0 14px rgba(50,175,255,0.55); }
 /* A circuit with no qualifying straight has no activation zone and therefore no
    active aero at all — Monaco. Struck through, because the difference between
    "not here, yet" and "not on this track" is the difference between waiting and
@@ -771,7 +773,7 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   top: calc(8px + var(--sat) / var(--hud-z));
   width: 128px; height: 128px;
   opacity: 0.90;
-  background: rgb(8 8 14 / calc(0.55 * var(--hud-panel-a-eff))); box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+  background: rgb(8 8 14 / calc(0.55 * var(--hud-panel-a-eff))); box-shadow: inset 0 0 0 2px var(--you), 0 2px 8px rgba(0,0,0,0.6);
 }
 /* PHONE PORTRAIT: the centred POS/LAP/TIME/BEST row is wider than the slot
    beside #minimap (survey 390×844: tower x=31–359 vs map x=10–138, ranked
