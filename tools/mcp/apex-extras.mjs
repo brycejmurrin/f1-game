@@ -15,6 +15,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import { loadSurveyDesigns } from "../lib/custom-survey-locations.mjs";
 import {
@@ -78,7 +79,7 @@ export async function thumbBlock(png, width = 640) {
 
 export function createExtras(ctx) {
   const { ROOT, toolResult, refuse, acquireLock, releaseLock, occupancyRefuse, assertSafeOut,
-    knownCircuits, runSpawn, log, mockMode } = ctx;
+    knownCircuits, runSpawn, log, mockMode, spawnJob = spawn } = ctx;
   const spawnChild = ctx.spawnChild || spawn;   // tests inject a fake track-session child
   /** verify-change --fast exits 2 for a "partial" verdict (the browser groups are not run by design): a result, not a failure — the sync tool allowed 0 and 2 too. */
   const jobExitOk = (kind, code) => code === 0 || (kind === "verify_change_fast" && code === 2);
@@ -120,26 +121,42 @@ export function createExtras(ctx) {
     })();
     return summary;
   }
-  function sessSend(cmd, timeoutMs = 240000) {
+  function sessSend(cmd, timeoutMs = 240000, signal = null) {
     return new Promise((resolve, reject) => {
-      const id = ++sess.seq;
-      const timer = setTimeout(() => { if (sess) sess.pending.delete(id); reject(new Error(`no reply within ${timeoutMs} ms`)); }, timeoutMs);
-      sess.pending.set(id, { resolve, reject, timer });
-      sess.child.stdin.write(JSON.stringify({ id, ...cmd }) + "\n");
+      const s = sess;
+      if (!s) return reject(new Error("session closed"));
+      const id = ++s.seq;
+      let done = false;
+      const settle = (fn, value) => {
+        if (done) return;
+        done = true; clearTimeout(timer); signal?.removeEventListener("abort", onAbort); s.pending.delete(id); fn(value);
+      };
+      const timer = setTimeout(() => settle(reject, new Error(`no reply within ${timeoutMs} ms`)), timeoutMs);
+      const onAbort = () => {
+        settle(reject, Object.assign(new Error("request cancelled; track session closed"), { code: "cancelled" }));
+        sessClose("cancelled request");
+      };
+      if (signal?.aborted) return onAbort();
+      signal?.addEventListener("abort", onAbort, { once: true });
+      s.pending.set(id, { resolve: (v) => settle(resolve, v), reject: (e) => settle(reject, e), timer });
+      s.child.stdin.write(JSON.stringify({ id, ...cmd }) + "\n");
     });
   }
   function surveyGlEnv(args = {}) { return surveyGlEnvironment(process.env, args.gl); }
-  async function trackOpen(args) {
+  async function trackOpen(args, signal = null) {
     const track = needTrack(args.track || "monza");
     const out = assertSafeOut(args.out || `artifacts/track-session/${track}`);
     const argv = nodeArgv("shot/track-session.mjs", "--serve", "--track", track, "--out", out);
     if (sess) return toolResult({ ok: true, op: "open", alreadyOpen: true, track: sess.track, hint: 'op "track" switches circuits; "close" ends the session.' });
     if (args.dryRun) return toolResult({ ok: true, dryRun: true, op: "open", argv });
     if (mockMode()) return toolResult({ ok: true, mock: true, op: "open", argv });
+    if (signal?.aborted) return refuse("cancelled", "the client cancelled the track open", "Retry when ready.");
     const took = acquireLock("apex_track");
     if (took) return took;
     const child = spawnChild(argv[0], argv.slice(1), { cwd: ROOT, env: surveyGlEnv(args), stdio: ["pipe", "pipe", "pipe"], detached: true });
     const s = sess = { child, track, pending: new Map(), seq: 0, buf: "", started: Date.now(), shots: 0, exited: false, out };
+    const onAbort = () => { if (sess === s) sessClose("cancelled open"); };
+    signal?.addEventListener("abort", onAbort, { once: true });
     const ready = new Promise((resolve) => {
       s.onReady = resolve;
       setTimeout(() => resolve(null), 180000).unref();
@@ -166,6 +183,12 @@ export function createExtras(ctx) {
       if (sess === s) sessClose(`exit ${code ?? sig}`);   // releases once the tree is gone
     });
     const r = await ready;
+    signal?.removeEventListener("abort", onAbort);
+    if (signal?.aborted) {
+      if (sess === s) sessClose("cancelled open");
+      if (s.closing) await s.closing;
+      return refuse("cancelled", "the client cancelled the track open; the session was closed", "Retry when ready.");
+    }
     if (r && r.ready) s.boot = r;
     if (!r || !r.ready) {
       const why = sess === s ? sessClose("not ready") : null;
@@ -182,7 +205,8 @@ export function createExtras(ctx) {
     for (const k of ["cam", "cams", "az", "el", "dist", "h", "side", "hud", "shots", "cols", "sheetName", "weather", "location", "locations", "angles", "weathers", "camera"]) if (a[k] != null) o[k] = a[k];
     return o;
   };
-  async function handleShotSurvey(args = {}) {
+  async function handleShotSurvey(args = {}, { signal = null } = {}) {
+    if (signal?.aborted) return refuse("cancelled", "the client cancelled the survey", "Retry when ready.");
     if (args.reports != null) {
       if (!Array.isArray(args.reports) || !args.reports.length || args.reports.length > 12)
         return refuse("bad_args", "reports needs 1–12 findings.json paths", "Pass reports[] and an output directory; no browser is started.");
@@ -260,12 +284,12 @@ export function createExtras(ctx) {
         if (!sess || sess.track !== track || sess.out !== outDir) {
           if (sess) await handleTrack({ op: "close" });
           if (sess?.closing) await sess.closing;
-          const opened = await trackOpen({ track, out: outDir, gl: args.gl });
+          const opened = await trackOpen({ track, out: outDir, gl: args.gl }, signal);
           const body = bodyOf(opened);
           if (body.ok === false) throw new Error(body.error || "track session not ready");
           if (sess) sess.boot = body;
         }
-        return { send: (cmd, timeoutMs) => sessSend(cmd, timeoutMs), boot: sess && sess.boot, record: sess && sess.boot };
+        return { send: (cmd, timeoutMs) => sessSend(cmd, timeoutMs, signal), boot: sess && sess.boot, record: sess && sess.boot };
       },
       async close() {
         if (args.keepSession || args.closeSession === false) return;
@@ -317,11 +341,11 @@ export function createExtras(ctx) {
     }
   }
 
-  async function handleTrack(args = {}) {
+  async function handleTrack(args = {}, { signal = null } = {}) {
     const op = String(args.op || "status");
     try {
-      if (op === "open") return await trackOpen(args);
-      if (op === "survey") return handleShotSurvey(args);
+      if (op === "open") return await trackOpen(args, signal);
+      if (op === "survey") return handleShotSurvey(args, { signal });
     } catch (e) { if (e.refuse) return e.refuse; return refuse("bad_args", String(e.message || e), "See the apex_track inputSchema."); }
     if (op === "close") {
       const s = sess;
@@ -348,21 +372,20 @@ export function createExtras(ctx) {
     if (args.dryRun) return toolResult({ ok: true, dryRun: true, op, command: cmd });
     if (!sess) return refuse("track_not_open", "no track session", 'Call apex_track {"op":"open","track":"spa"} first.');
     try {
-      const reply = await sessSend(cmd);
+      const reply = await sessSend(cmd, 240000, signal);
       delete reply.id;
       if (op === "shot" && reply.ok) sess.shots++;
       if (op === "track" && reply.ok) sess.track = reply.track;
       const result = toolResult({ op, ...reply }, { isError: reply.ok === false });
       return (op === "shot" || op === "sheet" || op === "diff") && reply.ok ? withImage(result, reply.png, args.image) : result;
     } catch (e) {
-      return refuse("track_failed", String(e.message || e), "Retry; if the session died, op open again.");
+      return refuse(e.code === "cancelled" ? "cancelled" : "track_failed", String(e.message || e), "Retry; if the session died, op open again.");
     }
   }
 
   // ── apex_job_*: long CLIs in the background ───────────────────────────────
   const JOB_DIR = path.join(ROOT, "artifacts", "logs", "apex-jobs");
   const jobs = new Map();
-  let jobSeq = 0;
   const list = (v, what) => {
     if (v == null || v === "") return null;
     const s = Array.isArray(v) ? v.join(",") : String(v);
@@ -489,7 +512,9 @@ export function createExtras(ctx) {
   /** One-shot `call` must not SIGKILL durable jobs on exit — they outlive the CLI. */
   const callCli = process.argv[2] === "call";
   const jobManifestPath = (id) => path.join(JOB_DIR, `${id}.json`);
+  const jobCancelPath = (id) => path.join(JOB_DIR, `${id}.cancelled`);
   const writeJobManifest = (j) => {
+    reconcileCancellation(j);
     try {
       fs.writeFileSync(jobManifestPath(j.id), JSON.stringify({
         id: j.id, kind: j.kind, state: j.state, exit: j.exit, pid: j.child?.pid || j.pid || null,
@@ -498,8 +523,21 @@ export function createExtras(ctx) {
       }, null, 2) + "\n");
     } catch (e) { log(`job manifest write failed: ${e.message}`); }
   };
+  const readJobManifest = (id) => {
+    try { return JSON.parse(fs.readFileSync(jobManifestPath(id), "utf8")); } catch { return null; }
+  };
+  const readCancellation = (id) => {
+    try { return JSON.parse(fs.readFileSync(jobCancelPath(id), "utf8")); } catch { return null; }
+  };
+  const reconcileCancellation = (j) => {
+    if (!j) return j;
+    const cancelled = readCancellation(j.id);
+    if (cancelled) Object.assign(j, { state: "cancelled", exit: cancelled.exit ?? j.exit, ended: cancelled.ended ?? j.ended });
+    return j;
+  };
   const exitFileFor = (log) => log.replace(/\.log$/, ".exit");
   const refreshDiskJob = (meta) => {
+    reconcileCancellation(meta);
     if (!meta || meta.state !== "running") return meta;
     // The one-shot caller may die before its exit handler runs. The wrapper's
     // .exit is authoritative even when its orphaned shell remains a zombie:
@@ -543,7 +581,7 @@ export function createExtras(ctx) {
         const logAbs = m.log ? path.join(ROOT, m.log) : "";
         const exitAbs = logAbs ? exitFileFor(logAbs) : "";
         if (m.ended && Date.now() - m.ended > JOB_TTL_MS) {
-          for (const x of [mf, logAbs, m.stderr ? path.join(ROOT, m.stderr) : "", exitAbs]) if (x) fs.rmSync(x, { force: true });
+          for (const x of [mf, logAbs, m.stderr ? path.join(ROOT, m.stderr) : "", exitAbs, jobCancelPath(m.id)]) if (x) fs.rmSync(x, { force: true });
           continue;
         }
         if (m.state === "failed" && logAbs && !fs.existsSync(exitAbs)) {
@@ -588,6 +626,7 @@ export function createExtras(ctx) {
       hint: `full result: ${logRel} (jq on the log); per-cell data is in the report named above` };
   };
   const jobView = (j, full = false) => {
+    j = reconcileCancellation(j);
     // log = the CLI's stdout, where every job CLI reports; stderr beside it.
     // (Until 2026-10-05 log named the stderr file, which stayed 0 bytes for
     // verify_all / float_all while the output sat in an unreported .out.)
@@ -643,7 +682,7 @@ export function createExtras(ctx) {
       return toolResult({ ok: true, dryRun: true, kind, argv: plan.argv, env: plan.env, browser: plan.browser, ...(est || {}) });
     }
     if (mockMode()) return toolResult({ ok: true, mock: true, kind, argv: plan.argv, env: plan.env, ...(est || {}) });
-    const memRunning = [...jobs.values()].filter((j) => j.state === "running");
+    const memRunning = [...jobs.values()].map(reconcileCancellation).filter((j) => j.state === "running");
     const diskRunning = listDiskJobs().filter((j) => j.state === "running" && !jobs.has(j.id));
     if (memRunning.length + diskRunning.length >= 2) {
       // Name them: "2 jobs already running" sent the caller to a second tool call just to learn which, and for how long.
@@ -651,16 +690,40 @@ export function createExtras(ctx) {
       return refuse("jobs_busy", `${memRunning.length + diskRunning.length} jobs already running: ${who}`, "At most 2 run at once. apex_job_status {jobId} to watch one; apex_job_cancel {jobId} to free a slot.");
     }
     if (plan.browser) { const took = acquireLock(`apex_job:${kind}`); if (took) return took; }
-    fs.mkdirSync(JOB_DIR, { recursive: true });
-    const id = `${kind}-${Date.now().toString(36)}-${++jobSeq}`;
-    const log = path.join(JOB_DIR, `${id}.log`), err = path.join(JOB_DIR, `${id}.err`);
-    const logFd = fs.openSync(log, "w"), errFd = fs.openSync(err, "w");
-    const env = plan.env ? { ...process.env, ...plan.env } : process.env;
+    let id, log, err, manifestFd, logFd, errFd, child;
+    const ownedFiles = [];
+    try {
+      fs.mkdirSync(JOB_DIR, { recursive: true });
+      for (let attempt = 0; attempt < 8; attempt++) {
+        id = `${kind}-${Date.now().toString(36)}-${process.pid}-${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+        log = path.join(JOB_DIR, `${id}.log`); err = path.join(JOB_DIR, `${id}.err`);
+        const created = [];
+        try {
+          manifestFd = fs.openSync(jobManifestPath(id), "wx"); created.push(jobManifestPath(id));
+          logFd = fs.openSync(log, "wx"); created.push(log);
+          errFd = fs.openSync(err, "wx"); created.push(err);
+          ownedFiles.push(...created);
+          break;
+        } catch (e) {
+          for (const fd of [manifestFd, logFd, errFd]) if (fd != null) try { fs.closeSync(fd); } catch { /* */ }
+          for (const file of created) try { fs.rmSync(file); } catch { /* */ }
+          manifestFd = logFd = errFd = undefined;
+          if (e.code !== "EEXIST" || attempt === 7) throw e;
+        }
+      }
+      fs.closeSync(manifestFd); manifestFd = undefined;
+      const env = plan.env ? { ...process.env, ...plan.env } : process.env;
+      const exitFile = exitFileFor(log);
+      child = spawnJob("/bin/sh", ["-c", '"$@"; c=$?; printf %s "$c" > "$APEX_JOB_EXIT_FILE"; exit $c', "sh", ...plan.argv],
+        { cwd: ROOT, detached: true, env: { ...env, APEX_JOB_EXIT_FILE: exitFile }, stdio: ["ignore", logFd, errFd] });
+    } catch (e) {
+      for (const fd of [manifestFd, logFd, errFd]) if (fd != null) try { fs.closeSync(fd); } catch { /* */ }
+      for (const file of ownedFiles) try { fs.rmSync(file); } catch { /* */ }
+      if (plan.browser) releaseLock();
+      return refuse("job_spawn_failed", String(e.message || e), "Check the job executable and artifact directory, then retry.");
+    }
     // sh records the child's real exit code beside the log: a one-shot `call` parent dies before the exit handler below
     // runs, and refreshDiskJob would otherwise have to guess the verdict from the log's last line.
-    const exitFile = exitFileFor(log);
-    const child = spawn("/bin/sh", ["-c", '"$@"; c=$?; printf %s "$c" > "$APEX_JOB_EXIT_FILE"; exit $c', "sh", ...plan.argv],
-      { cwd: ROOT, detached: true, env: { ...env, APEX_JOB_EXIT_FILE: exitFile }, stdio: ["ignore", logFd, errFd] });
     fs.closeSync(logFd); fs.closeSync(errFd);
     try { child.unref(); } catch { /* */ }
     const j = { id, kind, argv: plan.argv, browser: plan.browser, child, pid: child.pid, state: "running", exit: null, started: Date.now(), ended: null, log, err };
@@ -669,6 +732,7 @@ export function createExtras(ctx) {
     child.on("exit", (code, sig) => {
       j.ended = Date.now();
       j.exit = code ?? sig;
+      reconcileCancellation(j);
       if (j.state === "running") j.state = jobExitOk(j.kind, code) ? "done" : "failed";
       writeJobManifest(j);
       // A cancelled browser job frees the lock from jobCancel, after its tree is gone.
@@ -676,6 +740,7 @@ export function createExtras(ctx) {
     });
     child.on("error", (e) => {
       j.state = "failed"; j.exit = String(e.message); j.ended = Date.now();
+      reconcileCancellation(j);
       writeJobManifest(j);
       if (j.browser) releaseLock();
     });
@@ -691,12 +756,12 @@ export function createExtras(ctx) {
       const merged = new Map(fromDisk.map((j) => [j.id, j]));
       for (const j of jobs.values()) merged.set(j.id, j);
       // Newest first and bounded: a long-lived checkout accumulates every job ever started (dozens of manifests).
-      const all = [...merged.values()].filter((j) => !args.state || j.state === args.state).sort((a, b) => (b.started || 0) - (a.started || 0));
+      const all = [...merged.values()].map(reconcileCancellation).filter((j) => !args.state || j.state === args.state).sort((a, b) => (b.started || 0) - (a.started || 0));
       const limit = Math.min(Number(args.limit) || 20, 200);
       return toolResult({ ok: true, jobs: all.slice(0, limit).map((j) => jobView(j)), total: all.length, ...(all.length > limit ? { hint: `${all.length - limit} older job(s) not shown; pass limit (max 200) or state.` } : {}) });
     }
     const id = String(args.jobId);
-    const j = jobs.get(id) || loadDiskJob(id);
+    const j = reconcileCancellation(jobs.get(id)) || loadDiskJob(id);
     if (!j) return refuse("unknown_job", `no job ${id}`, "apex_job_status {} lists in-memory and disk manifests under artifacts/logs/apex-jobs/.");
     return toolResult({ ok: j.state !== "failed", ...jobView(j, true) }, { isError: j.state === "failed" });
   }
@@ -710,7 +775,7 @@ export function createExtras(ctx) {
   }
   async function waitForJob(args, wait) {
     const t0 = Date.now();
-    const state = () => { const j = jobs.get(String(args.jobId)) || loadDiskJob(String(args.jobId)); return j ? j.state : null; };
+    const state = () => { const j = reconcileCancellation(jobs.get(String(args.jobId))) || loadDiskJob(String(args.jobId)); return j ? j.state : null; };
     while (state() === "running" && Date.now() - t0 < wait * 1000) await new Promise((r) => setTimeout(r, 1000));
     const { wait: _w, ...rest } = args;
     const r = jobStatus(rest);
@@ -733,6 +798,9 @@ export function createExtras(ctx) {
     let survivors;
     if (j.state === "running") {
       j.state = "cancelled";
+      const marker = { state: "cancelled", ended: Date.now(), exit: j.exit ?? null };
+      try { fs.writeFileSync(jobCancelPath(j.id), JSON.stringify(marker) + "\n", { flag: "wx" }); }
+      catch (e) { if (e.code !== "EEXIST") throw e; }
       j.cancelTree = processTree(j.child?.pid || j.pid);
       survivors = (await killTreeAndWait(j.cancelTree)).survivors.length;
       j.ended = Date.now();
@@ -887,8 +955,8 @@ export function createExtras(ctx) {
       return d ? { id: d.id, kind: d.kind, pid: d.pid } : null;
     },
     handlers: {
-      apex_shot_survey: (a) => handleShotSurvey(a),
-      apex_track: (a) => handleTrack(a),
+      apex_shot_survey: (a, o) => handleShotSurvey(a, o),
+      apex_track: (a, o) => handleTrack(a, o),
       apex_job_start: (a) => jobStart(a),
       // The profiler's direct door: a browser-kind tool (guard lists name it) whose run is the profile job, so the lock is
       // taken for the job's life and apex_job_status watches it.

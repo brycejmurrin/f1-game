@@ -1,0 +1,15 @@
+# zizmor configuration — read by tools/check/workflow-lint.mjs (zizmor 1.31.1).
+# Reference: https://docs.zizmor.sh/configuration/
+#
+# Everything else is audited at the default (regular) persona. Findings that are
+# real are fixed in the workflows; findings that are not are silenced where they
+# occur with a reasoned `# zizmor: ignore[<audit>] <why>` comment, so the reason
+# sits next to the line and a moved line keeps its ignore.
+rules:
+  # `uses: ./.github/actions/…` -> `uses: $/.github/actions/…` (GitHub added `$/` in
+  # July 2026). The `./` form is valid and is not an attack surface here: the local
+  # actions are checked out from the same commit as the workflow. The pinned
+  # actionlint (v1.7.12, March 2026) predates `$/` and rejects it, so adopting it
+  # would trade a style note for a hard lint error. Revisit when actionlint parses `$/`.
+  self-repository:
+    disable: true

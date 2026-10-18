@@ -62,6 +62,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/harness.mjs** | Shared harness for the headless `__apex` tools: in-process static server + Chromium launch with teardown-safe shutdown. | playwright-probe |
 | **lib/hud-geometry.mjs** | In-page HUD box probe (rect, visibility, font px) + the pure overlap/safe-area rules of hud-layout.spec. | — |
 | **lib/hud-survey-matrix.mjs** | HUD survey core: cells, quick/full/exhaustive matrices, shards, expected-visible rules, findings, merge, report HTML. | — |
+| **lib/lint-bins.mjs** | Locates the pinned lint binaries (actionlint, zizmor, glslang, naga, shellcheck) and defines what an absent one means. | — |
 | **lib/mem-census.mjs** | Page-side memory census (track WeakRefs, decoded audio, render objects, forced GC) for the CLI and its spec. | — |
 | **lib/node-compile-cache.cjs** | NODE_COMPILE_CACHE env for tooling-fast / run-group child processes (off under coverage). | — |
 | **lib/output-paths.mjs** | Path-containment helpers for the `artifacts/` vs `scratch/` output contract; gated by `output-paths.spec.js`. | — |
@@ -157,6 +158,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
 | **check/ratchets.mjs** | Size ratchets: ratchets.json + per-branch ratchets.d/ deltas. `--check`, `--update`, `--fold`, `--json`, `--base <ref>`. | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
+| **check/shader-validate.mjs** | glslang over the GLX GLSL ES 3.00 shaders, naga (advisory) over the WGX WGSL; offline, skips LOUDLY without the binary. | renderer-debug |
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
 | **check/skill-routing-eval.py** | Routes realistic requests through the REAL skill set via `claude -p` and scores which skill fired (correct/wrong/none). | agent-config |
 | **check/skill-smoke.mjs** | Plan or execute one bounded offline contract per canonical skill; retain explicit unverified browser/device scope. | — |
@@ -166,6 +168,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/twin-fidelity.mjs** | Prove a VM twin catches what the browser copy catches — by breaking the | — |
 | **check/vm-portable.mjs** | Which specs `tests/helpers/vm-page.js` could run under `node --test`: per-spec blocking calls + a portable count. | — |
 | **check/vstd-lint.mjs** | REPORT, not a gate: lists every `.speed`-vs-literal comparison, always exits 0. The gate is tests/unit/vstd-invariant. | tune-physics |
+| **check/workflow-lint.mjs** | actionlint + zizmor over .github/workflows, offline; skips LOUDLY (fails under --require) without the binary. | check-changes |
 
 ### `tools/gen/`
 
@@ -185,6 +188,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/gen-hooks-table.mjs** | Regenerates the `__apex` hook index block in `docs/DEBUG-HOOKS.md` from `apex.js` + `agentHelp()`; `--check`. | agent-view |
 | **gen/gen-ladder-figures.mjs** | Prints the gate-ladder sizes (unit files per rung) from tests/groups.json; --json / --table. Writes nothing. | check-changes |
 | **gen/gen-lib.mjs** | Shared writer for the `gen-*.mjs` generators: `--check` vs write, marker-block replacement. | check-changes |
+| **gen/gen-locales.mjs** | Regenerate locales/en.json and manifest hashes from I18n.t / data-i18n call sites. | — |
 | **gen/gen-output-surface.mjs** | Generates the agent output catalog from tools, npm scripts and configured MCP routes; --check detects drift. | agent-config |
 | **gen/gen-shell.mjs** | Generates the shell tag blocks, sw.js precache seed and js/roster.js from the manifest; `--check` fails on drift. | check-changes |
 | **gen/gen-slider-doc.mjs** | Regenerates the slider tables in `docs/LIGHTING-TUNER-SLIDERS.md` from `TUNE_DEFS`; `--check` fails on drift. | lighting-tuner |
@@ -417,6 +421,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/cdmcp-lamps.py** | Night lamp screenshot suite via chrome-devtools MCP (Qatar, Singapore, Bahrain, Monza); `--port`, `--only`, `--limit`. | mcp-probe |
 | **mcp/cdmcp-measure.py** | Background-friendly Chromium MCP measure suite: boot (network/console/LCP), ui floors, full(+heap); `= run` verdict. | mcp-probe |
 | **mcp/chrome-devtools-mcp.sh** | Wrapper for the local `scratch/chrome-devtools-mcp` clone: `clone`/`build`/`run`/`verify`/`status`/`help`. | mcp-probe |
+| **mcp/chrome-devtools-runtime.mjs** | Materialize the two Apex-reviewed chrome-devtools-mcp 1.7.0 fixes without mutating npm or clone sources. | — |
 | **mcp/debug-chrome.mjs** | CLI, not an MCP tool: start/status/stop a headless Chromium (CDP 9222) plus static server for the js-debugger. | — |
 | **mcp/js-debugger-cdp.mjs** | Bounded CDP transport and loopback target discovery for js-debugger-mcp. | — |
 | **mcp/js-debugger-cli.mjs** | Separate debugger server CLI: stdio, persistent loopback daemon and state-preserving shell calls. | — |
@@ -474,6 +479,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | **env/cloud-agent-install.sh** | Cursor Cloud dashboard `install`: best-effort mesa/vulkan/xvfb, then `install-browsers.sh`, then the MCP clones. | check-changes |
 | **env/ensure-mcp-ready.sh** | Post-install MCP bootstrap: Playwright chrome channel symlink + apex-tools smoke (no Chromium). | check-changes |
 | **env/install-browsers.sh** | Idempotent Chromium bootstrap: reuse an installed browser or choose a writable Playwright cache; --plan never installs. | — |
+| **env/install-lint-bins.sh** | Pinned, checksummed install of actionlint, shellcheck, zizmor, glslang and naga into artifacts/bin. | — |
 | **env/mirror-skills.sh** | Repair the tracked .agents/skills/ Codex mirror: one symlink per skill dir (--check drift, --copy fallback). | agent-config |
 
 ### `tools/desktop/`

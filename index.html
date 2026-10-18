@@ -820,7 +820,7 @@
      camera tuners open from DISPLAY's advanced visuals. -->
 <dialog id="pmsettings" class="screen dim" data-esc-close="pm-settings-close" aria-labelledby="dlg-settings" hidden>
   <div id="pmsettings-inner" class="sheet">
-    <div class="sheet-head"><h2 id="dlg-settings">SETTINGS</h2></div>
+    <div class="sheet-head"><h2 id="dlg-settings" data-i18n="settings.title">SETTINGS</h2></div>
     <div id="pm-settings-body" class="sheet-body pane">
       <nav id="pm-settings-index" class="pm-doors" aria-label="Settings">
         <button id="pm-open-controls" type="button">CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
@@ -2025,16 +2025,11 @@
           <button id="as-sp-mode-remote" class="opt-btn" type="button">REMOTE</button>
           <button id="as-sp-mode-browser" class="opt-btn" type="button">IN BROWSER</button>
         </div>
-        <p class="as-note">REMOTE plays through the Spotify app on your phone or computer &mdash; open it once so it shows up below. IN BROWSER plays here, but needs desktop Chrome/Edge/Firefox.</p>
-        <label class="tune-row"><span class="tune-label">DEVICE</span>
-          <select id="as-sp-device" aria-label="Spotify device"></select></label>
-        <button id="as-sp-refresh" class="adv-more-btn" type="button">&#8635; REFRESH DEVICES</button>
-
-        <!-- WHAT TO PLAY. Connecting only makes this browser a Spotify device;
-             it does not queue anything, and a browser that has never played has
-             no context to resume — which is why "connected" could be silent. -->
-        <label class="tune-row"><span class="tune-label">PLAY FROM</span>
-          <select id="as-sp-playlist" aria-label="Spotify playlist"></select></label>
+        <p class="as-note">REMOTE plays through the Spotify app on your phone or computer &mdash; open it once so OPEN PLAYER can pick it. IN BROWSER plays here, but needs desktop Chrome/Edge/Firefox.</p>
+        <!-- WHAT TO PLAY and WHERE. The playlist and device pickers live only in
+             the player sheet (#sp-playlist2 / #sp-device2): one home, not two
+             copies with the same handlers (#2847). PLAY here resumes whatever
+             was chosen there. -->
         <div class="opt-row">
           <button id="as-sp-play" class="opt-btn" type="button">&#9654; PLAY</button>
           <button id="as-sp-pause" class="opt-btn" type="button">&#10074;&#10074; PAUSE</button>
@@ -3585,6 +3580,9 @@
 <script defer crossorigin="anonymous" src="js/data/garage-defaults.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/save-schema-registry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/i18n-pseudo.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/i18n.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/dom-apply.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/restore-points.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-backup.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>
@@ -3799,6 +3797,7 @@
 <script defer crossorigin="anonymous" src="js/camera/mode-switch.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-boot.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-minimap.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/results-story.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/results-sheet.js?v=dev"></script>
