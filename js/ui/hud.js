@@ -1068,7 +1068,11 @@ function fitHud() {
   // 2026-10-04). So each data-hl element's `hidden` is in the key — a list
   // re-read only on a full fit (HudLayout.apply invalidates it), a flag read
   // per tick, no layout.
-  const head = vpW() + "x" + vpH() + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
+  // Which dock buttons are showing is part of the key: showTouchControls hides/unhides BOOST, OT, AERO
+  // and the shifts after the first fit, and a taller column under a stale cap overflowed the top.
+  let dockSig = "";
+  for (const d of [_dockL, _dockR]) if (d) for (const b of d.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn")) dockSig += b.hidden ? "0" : "1";
+  const head = vpW() + "x" + vpH() + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "." + dockSig + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
   const tail = "|" + document.body.className;
   if (head + hlKey() + tail === _fitKey && --_fitWait > 0) {
     // Same-key backoff must not lock a short --dock-r-w while wrap-reverse
