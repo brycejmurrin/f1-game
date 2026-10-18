@@ -986,7 +986,7 @@
         "tests/unit/team-style-relief.test.mjs",
         "tests/unit/tyre-recipes-open-rim.test.mjs"
       ],
-      "declaredTests": 282,
+      "declaredTests": 283,
       "twinned": false
     },
     {
