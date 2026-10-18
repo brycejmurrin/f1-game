@@ -14025,6 +14025,29 @@
         "tests/unit/player-tools-ui.test.mjs"
       ]
     },
+    "js/ui/captions.js": {
+      "push": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "radioWho": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setBg": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setMode": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setPos": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setSize": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setSpeakerInk": [
+        "tests/unit/captions.test.mjs"
+      ]
+    },
     "js/ui/condition-cue-controls.js": {
       "apply": [
         "tests/unit/player-tools-ui.test.mjs"
