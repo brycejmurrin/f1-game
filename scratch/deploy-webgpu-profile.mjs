@@ -9,6 +9,7 @@ import { installGarageGpuAllocationProbe } from './garage-webgpu-allocation-init
 import { installRenderSubmitMetrics } from './render-submit-metrics.mjs';
 const deploy='e48b3e9038e38126c105c64ac1e59f4bc36f28f7';
 const git=(...a)=>execFileSync('git',a,{encoding:'utf8'}).trim();
+try{git('cat-file','-e',deploy+'^{commit}');}catch{execFileSync('git',['fetch','--depth=1','origin',deploy],{stdio:'inherit'});}
 if(git('diff',deploy,'HEAD','--','js','css','vendor','assets','index.html','tools/lib/harness.mjs','tools/shot/probe-page.mjs')) throw Error('product differs from deploy');
 const report={schema:'deploy-three-webgpu-profile/v1',deploy,requestCommit:git('rev-parse','HEAD'),viewport:{width:844,height:390},deviceScaleFactor:1,reducedMotion:true,runs:[],started:new Date().toISOString()};
 const save=()=>writeFileSync('game-deploy-webgpu-profile.json',JSON.stringify(report,null,2));
