@@ -1384,7 +1384,10 @@
         // car surface ids 20-37 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js)
         const surfaceId = floor(matA.add(0.5)).toVar();
         const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(37.0)).toVar();
-        const paintSurface = surfaceId.equal(20.0).toVar();
+        // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (js/render/glx/shaders/glsl-lit.js); grain / saturation / rim below.
+        const flakeSurface = surfaceId.equal(34.0).toVar();
+        const candySurface = surfaceId.equal(35.0).toVar();
+        const paintSurface = surfaceId.equal(20.0).or(flakeSurface).or(candySurface).toVar();
         const carbonSurface = surfaceId.equal(21.0).toVar();
         const rubberSurface = surfaceId.equal(22.0).toVar();
         // TYRE SIDEWALL (car3d.js SURFACES.sidewall = 33): satin rubber wall,
@@ -1427,7 +1430,7 @@
         const carPaint = select(classifiedCar,
           select(paintLike, matU.carPaint, float(0.0)), matU.carPaint).toVar();
         const clearcoat = select(classifiedCar,
-          select(paintSurface, matU.clearcoat,
+          select(paintSurface, select(candySurface, max(matU.clearcoat, 0.90), matU.clearcoat),
             select(mirrorSurface, max(matU.clearcoat, 0.85),
               select(iriSurface, max(matU.clearcoat, 0.70),
                 select(satinMetalSurface, min(matU.clearcoat, 0.25),
@@ -1454,7 +1457,7 @@
               // faint metallic flake on the other two. Specular (below) and
               // roughness already paired them; metalness was the one missed.
               select(carbonSurface.or(carbonFinish), float(0.08),
-                select(paintSurface, matU.metalness, float(0.0)))))))),
+                select(paintSurface, select(flakeSurface, max(matU.metalness, 0.35), matU.metalness), float(0.0)))))))),
           matU.metalness).toVar();
         const specular = select(classifiedCar,
           select(rubberSurface, float(0.18),
@@ -1562,6 +1565,21 @@
           albedo.assign(albedo.mul(weave.mul(0.32).add(0.84)));
         }).ElseIf(carbonSurface, () => {
           albedo.assign(albedo.mul(weave.mul(0.24).add(0.88)));
+        });
+        // METALLIC FLAKE (34) and CANDY (35): see js/render/glx/shaders/glsl-lit.js.
+        If(flakeSurface, () => {
+          const fkF = clamp(vd.sub(10.0).div(16.0).oneMinus(), 0.0, 1.0).toVar();
+          If(fkF.greaterThan(0.0), () => {
+            const fkC = floor(objP.mul(140.0));
+            const fkH = hash21(fkC.xy.add(fkC.z.mul(19.7)));
+            const fkS = smoothstep(0.82, 1.0, fkH);
+            albedo.assign(albedo.mul(fkH.sub(0.5).mul(0.30).add(fkS.sub(0.09).mul(0.90)).mul(fkF).add(1.0)));
+            specular.assign(min(specular.add(fkS.mul(0.40).mul(fkF)), 1.0));
+          });
+        });
+        If(candySurface, () => {
+          const cdL = dot(albedo, vec3(0.299, 0.587, 0.114));
+          albedo.assign(max(mix(vec3(cdL), albedo, 1.35), vec3(0.0)).mul(0.62));
         });
         const chamFlip = float(0.0).toVar();
         const chamHue = vec3(1.0).toVar();
@@ -2018,6 +2036,12 @@
           // TINTED CHROME: the reflection takes the livery hue (albedo / its brightest channel, 88 % mixed in).
           If(tintedSurface, () => {
             addCC.mulAssign(mix(vec3(1.0), albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)), 0.88));
+          });
+          // CANDY: the lacquer is tinted (55 %) and the Fresnel rim glows in the saturated livery hue.
+          If(candySurface, () => {
+            const cdHue = albedo.div(max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)).toVar();
+            addCC.mulAssign(mix(vec3(1.0), cdHue, 0.55));
+            color.addAssign(cdHue.mul(ccF).mul(0.45));
           });
           color.addAssign(addCC.div(addCC.mul(0.35).add(1.0)));  // gentle soft-clip
         });

@@ -76,6 +76,7 @@ function bootTuner(weather = "wet", saved = null) {
   h.ctx.ApexClipboard = { write: () => Promise.resolve(true) };
   h.ctx.ltStore = h.store; h.ctx.LT = h.LT; h.ctx.gfx = { hasPerChunkLights: true }; h.ctx._perChunkOff = false;
   // Exercise the real game setter's rising-edge latch clearing with the real store.
+  vm.runInContext(read("js/race/light-tune-edit.js"), h.ctx, { filename: "js/race/light-tune-edit.js" });
   vm.runInContext(symbolSource("function setLightTune(id, v)"), h.ctx);
   Object.assign(h.G, { $, els: {}, ltKey: h.store.key, setLightTune: h.ctx.setLightTune,
     persistLightTune: h.store.persist, applyLightTune: h.store.apply,
