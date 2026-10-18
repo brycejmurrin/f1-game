@@ -174,7 +174,8 @@ export function catalogRows(Parts, Teams, fallback = "mclaren") {
     for (const opt of cat.options) {
       const teamId = eligibleTeam(Parts, Teams, opt, fallback);
       if (!teamId) throw new Error(`no eligible team for ${cat.id}/${opt.id}`);
-      const sig = opt.tag === "SIGNATURE" && opt.equivalent;
+      // A SIGNATURE or a STYLE reskin is measured against the twin it copies.
+      const sig = (opt.tag === "SIGNATURE" || opt.tag === "STYLE") && opt.equivalent;
       rows.push({
         cat: cat.id, optionId: opt.id, label: opt.label, teamId,
         signature: !!sig, equivalent: sig || null,

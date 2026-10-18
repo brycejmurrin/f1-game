@@ -569,6 +569,71 @@ const Parts = (function () {
     },
   ];
 
+  // STYLE options (2026-10-18): universal reskins. Each one is its `equivalent`
+  // in everything but the mesh: cost, the four stat multipliers and every other
+  // field are COPIED from it here, so a STYLE row can never drift into a
+  // physics change (tests/unit/parts-visual-distinctness.test.mjs pins it the
+  // way it pins SIGNATURE), and `visual` is the equivalent's recipe with the
+  // listed keys overridden. Open to every team, unlike a SIGNATURE.
+  // Preview: node tools/viewer/build-viewer.mjs --sheet=parts:<category>:<team> --match=^style_
+  const STYLES = [
+    ["engine", "evo_kit", "style_engine_zeropod", "Zero-Pod Concept", "near-vanishing sidepods with a deep undercut",
+      { podWidth: 0.80, shoulderHeight: 0.92, undercut: 1.30, coke: 1.30, tailWidth: 0.76, coverHeight: 0.92, inlet: 0, chimney: 0, twin: 0 }],
+    ["engine", "turbo", "style_engine_bigbox", "Big Airbox", "towering airbox over broad, high-shouldered pods",
+      { in: 1.60, snork: 1, coverHeight: 1.20, podWidth: 1.16, shoulderHeight: 1.20, undercut: 0.82, servicePanel: 4, chimney: 3 }],
+    ["aero", "low", "style_aero_spoon", "Spoon Wing", "deep-swept spoon rear wing and a raised, raked front",
+      { rearSweep: 0.09, rearTaper: 0.86, frontSweep: 0.08, frontRise: 0.09, fin: 1.28, plate: 3, casc: 3 }],
+    ["aero", "underfloor", "style_aero_twinplane", "Twin-Plane", "swan-neck mount, turning vanes and a high diffuser",
+      { swan: 1, tvane: 1, gill: 4, duct: 2, slot: 1, floorEdge: 1.10, diffuserRise: 1.28 }],
+    ["suspension", "sport", "style_susp_stance", "Stance Kit", "slammed ride with long, wide-set wishbones",
+      { ride: -0.035, arm: 1.20, wishbone: 1.24, toe: 1.16, rocker: 2 }],
+    ["suspension", "kerb_spec", "style_susp_rally", "Rally Raise", "tall ride with short arms and an exposed rocker",
+      { ride: 0.055, arm: 0.80, wishbone: 0.82, toe: 0.92, rocker: 0, push: 1 }],
+    ["brakes", "carbon", "style_brakes_bigdisc", "Big Disc", "oversized rotors behind wide ducts",
+      { rotorScale: 1.25, duct: 1.35, discFace: 2, scoop: 2, caliperPos: 5.7, cal: [0.10, 0.62, 0.95] }],
+    ["brakes", "sport", "style_brakes_open", "Open Drum", "small rotors left open to the air",
+      { rotorScale: 0.92, duct: 0.55, coverOpen: 2, discFace: 0, scoop: 0, cal: [0.95, 0.80, 0.10] }],
+    ["tyres", "soft", "style_tyres_whitewall", "White Wall", "wide white sidewall band and a deep tread",
+      { band: [0.96, 0.96, 0.98], bandWidth: 0.132, grooves: 4, grooveDepth: 0.075, sidewall: 2, shoulder: 2 }],
+    ["tyres", "compound_c4", "style_tyres_classic", "Classic Grooved", "four-groove tread on a plain dark wall",
+      { band: [0.20, 0.20, 0.22], bandWidth: 0.045, grooves: 4, grooveDepth: 0.075, shoulder: 0, spokes: 8 }],
+    ["ers", "deploy", "style_ers_neon", "Neon Cells", "eight-cell pack under a glowing blister",
+      { cells: 8, pack: 1.24, blister: 2, conduit: 2, coolerIntake: 2, led: [1.9, 0.4, 1.6] }],
+    ["ers", "harvest", "style_ers_slim", "Slim Pack", "thin, flush pack with no blister",
+      { cells: 2, pack: 0.95, blister: 0, conduit: 0, coolerIntake: 0, led: [0.12, 1.5, 1.9] }],
+    ["gearbox", "sequential_pro", "style_gearbox_finned", "Finned Case", "tall strakes and a full heat-fin stack",
+      { strakes: 5, strakeH: 0.22, fin: 1, finSY: 0.24, finSZ: 0.40, heatFins: 4, ribs: 2, louvres: 6 }],
+    ["gearbox", "long_ratio", "style_gearbox_smooth", "Smooth Case", "narrow, bare casing with no strakes",
+      { strakes: 0, fin: 0, heatFins: 0, ribs: 0, louvres: 0, caseWidth: 0.86, casing: 3 }],
+    ["fuel", "race_blend", "style_fuel_blue", "Blue Flame", "blue-violet exhaust flame and cap",
+      { cap: [0.25, 0.40, 1.95], flame: [0.25, 0.45, 1.95], fxFlame: [0.55, 0.90, 2.90], filler: 2 }],
+    ["fuel", "high_octane", "style_fuel_green", "Green Flame", "green exhaust flame and cap",
+      { cap: [0.18, 1.70, 0.40], flame: [0.30, 1.90, 0.40], fxFlame: [0.70, 2.80, 0.60], filler: 0, line: 2, breather: 2, hatch: 1 }],
+    ["exhaust", "megaphone", "style_exhaust_trumpet", "Trumpet", "wide flared bore with a wrapped wastegate",
+      { bore: 1.22, flare: 1, wastegate: 2, wrap: 1, lip: 2 }],
+    ["exhaust", "free_flow", "style_exhaust_tripipe", "Tri-Pipe", "three narrow outlets, no flare",
+      { pipes: 3, bore: 1.04, flare: 0, wastegate: 0, lip: 1 }],
+    ["floor", "fence_array", "style_floor_tallfence", "Tall Fences", "six tall fences and a raised edge lip",
+      { fences: 6, fenceH: 1.45, edgeLip: 1, skid: 2 }],
+    ["floor", "step_plank", "style_floor_flat", "Flat Board", "fenceless flat floor with a plain edge",
+      { fences: 0, fenceH: 1, edgeLip: 0, skid: 0 }],
+    ["cockpit", "deflector", "style_cockpit_aeroscreen", "Aeroscreen", "screened halo with a winged blade and twin camera pods",
+      { screen: 1, haloBlade: 2, haloWing: 1, camPods: 2, headrest: 2, mirror: 1.32 }],
+    ["cockpit", "open_cell", "style_cockpit_bare", "Bare Halo", "plain halo, low headrest and small mirrors",
+      { screen: 0, haloBlade: 0, haloWing: 0, camPods: 0, headrest: 0, mirror: 0.87 }],
+    ["wheels", "spoked", "style_wheels_starburst", "Starburst", "eight-spoke rim with a gold nut",
+      { spokes: 8, dish: 0, tape: 0, deflector: 0, nut: [0.98, 0.78, 0.10] }],
+    ["wheels", "dished", "style_wheels_fulldisc", "Full Disc", "closed disc cover with a deep dish and big deflector",
+      { spokes: 0, dish: 2, tape: 1, deflector: 2, nut: [0.85, 0.12, 0.10] }],
+  ];
+  for (const [catId, eqId, id, label, look, visual] of STYLES) {
+    const cat = CATALOG.find((c) => c.id === catId);
+    const eq = cat.options.find((o) => o.id === eqId);
+    const opt = Object.assign({}, eq, { id, label, tag: "STYLE", equivalent: eqId,
+      desc: `${eq.label} performance — ${look}`, visual: Object.assign({}, eq.visual, visual) });
+    cat.options.push(opt);
+  }
+
   const DEFAULTS = {
     engine: "stock", aero: "medium", suspension: "standard",
     brakes: "standard", tyres: "medium", ers: "standard",
