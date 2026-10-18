@@ -382,6 +382,7 @@ const FULL = [
   "js/camera/drive-onboard.js",
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
+  "js/ui/cvd-palette.js",   // CvdPalette: semantic colours; AppearanceOpts.setCvdMode calls set()
   "js/ui/appearance-opts.js",
   "js/ui/a11y-opts.js",      // SETTINGS › ACCESSIBILITY (reduce motion row + focus + colourblind cues)
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
@@ -662,6 +663,8 @@ const HARD_EDGES = [
   // frame cannot draw a default the player did not choose.
   ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
   ["js/core/store.js", "js/ui/driving-line-opts.js"],
+  ["js/core/store.js", "js/ui/cvd-palette.js"],       // reads apex26.cvdMode at eval
+  ["js/ui/cvd-palette.js", "js/ui/appearance-opts.js"], // setCvdMode / applyReadability call CvdPalette.set
   ["js/core/store.js", "js/ui/appearance-opts.js"],
   ["js/ui/setting-row.js", "js/ui/appearance-opts.js"],
   ["js/core/store.js", "js/ui/a11y-opts.js"],
