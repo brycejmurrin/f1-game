@@ -136,8 +136,8 @@ async function shootTrack(page, track) {
   // Otherwise layer this circuit's signature over DEFAULT, then apply the
   // requested deterministic vary() seed.
   const trackShots = SHOTS || await page.evaluate(([id, seed]) => {
-    const base = window.FlybyOverrides.resolve(id, window.FlybySeq.DEFAULT, null);
-    return seed == null ? base : window.FlybySeq.vary(base, seed);
+    const base = window.FlybyOverrides.resolve(id, FlybySeq.DEFAULT, null);
+    return seed == null ? base : FlybySeq.vary(base, seed);
   }, [track, SEED]);
   const rows = [];
   for (const u of points) {
@@ -213,7 +213,6 @@ try {
   // rejection in headless compositing raises the error overlay over the frame.
   await installProbeInit(page, { backend: BACKEND });
   await gotoGame(page, srv.url, 180000);
-  await page.addScriptTag({ path: path.join(ROOT, "js/data/flyby-overrides.js") });
   for (const track of TRACKS) {
     const rows = await shootTrack(page, track);
     report(track, rows);
