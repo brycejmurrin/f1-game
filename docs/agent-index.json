@@ -676,7 +676,7 @@
         "tests/unit/test-groups.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
-      "declaredTests": 587,
+      "declaredTests": 589,
       "twinned": false
     },
     {
@@ -1056,7 +1056,7 @@
         "tests/unit/twin-fidelity.test.mjs",
         "tests/unit/twinned-specs.test.mjs"
       ],
-      "declaredTests": 428,
+      "declaredTests": 430,
       "twinned": false
     },
     {
