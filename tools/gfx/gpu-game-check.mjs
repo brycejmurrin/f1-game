@@ -15,7 +15,14 @@
  *
  * Run: node tools/gfx/gpu-game-check.mjs [track] [--json out.json] [--shot out.png]
  *      [--backend three|webgl2|webgpu] [--path webgpu|webgl2] [--boot-timeout MS]
- *      [--ls apex26.key=value ...] [--gl-err-drain] [--help]
+ *      [--ls apex26.key=value ...] [--gl-err-drain] [--mem-switch] [--help]
+ *
+ * Memory (#1648, I-3): every leg's gfx object carries mem.usedJSHeapSize
+ * (Chrome performance.memory), mem.geometries / textures / uniformBuffers /
+ * rObj from __tlx.memState(), and tier / crashStrikes. --mem-switch adds an
+ * A-B-A race() leg (this track, the other of montreal|monza, this track again)
+ * and reports heap and those counts after each build. It is off by default:
+ * two extra track builds per census leg.
  *
  * GLX getError: drained ONCE PER BEAT (~1 Hz) through GLX.drainGpuErrors(),
  * not on every present — GL error flags are sticky until read, so the
@@ -1481,6 +1488,25 @@ try {
     // three's two backends an open lead after run 25 (docs/PERF-FINDINGS.md 2t).
     try { const a = window.__apex; if (a && a.renderScale) r.gov = a.renderScale(); } catch (e) { r.govError = String(e && e.message); }
     try { r.engine = document.getElementById("game").getAttribute("data-engine"); } catch (_) { /* no canvas */ }
+    // I-3 (#1648). Counts the renderer already tracks; no extra allocation.
+    r.mem = {};
+    try {
+      const pm = performance.memory;
+      if (pm && typeof pm.usedJSHeapSize === "number") r.mem.usedJSHeapSize = pm.usedJSHeapSize;
+    } catch (_) { /* not Chromium */ }
+    try {
+      const ms = g.__tlx && g.__tlx.memState && g.__tlx.memState();
+      if (ms) {
+        r.mem.geometries = ms.rGeo;
+        r.mem.textures = ms.rTex;
+        r.mem.uniformBuffers = ms.rUbo;
+        r.mem.rObj = ms.rObj;
+      }
+    } catch (e) { r.mem.memStateError = String(e && e.message).slice(0, 120); }
+    try {
+      const rs = window.__apex && window.__apex.renderScale && window.__apex.renderScale();
+      if (rs) { r.mem.tier = rs.tier; r.mem.crashStrikes = rs.crashStrikes; }
+    } catch (_) { /* governor not up */ }
     return r;
   }), 20000, "gfx");
   // bounded() turns ANY failure into a value, so a gfx read that threw or timed
@@ -1489,6 +1515,40 @@ try {
   // say. That is what made the Windows webgpu leg unreadable. Name it.
   if (out.gfx && out.gfx.error) out.gfxReadFailed = "read failed: " + out.gfx.error;
   else if (out.gfx && out.gfx.glx === false) out.gfxReadFailed = "GLX was undefined in the page";
+  if (out.gfx && out.gfx.mem) {
+    const m = out.gfx.mem;
+    const mb = typeof m.usedJSHeapSize === "number" ? (m.usedJSHeapSize / 1048576).toFixed(1) + "MB" : "n/a";
+    console.log(`[game-check] mem heap=${mb} rObj=${m.rObj ?? "?"} geo=${m.geometries ?? "?"} tex=${m.textures ?? "?"} tier=${m.tier ?? "?"} crashStrikes=${m.crashStrikes ?? "?"}`);
+  }
+  if (argv.includes("--mem-switch")) {
+    const other = track === "monza" ? "montreal" : "monza";
+    out.memSwitch = await bounded(() => page.evaluate(async (ids) => {
+      const A = window.__apex;
+      if (!A || !A.race || !A.info) return { error: "no __apex.race" };
+      const sample = () => {
+        const row = { track: null };
+        try { row.track = A.info().track; } catch (_) { /* mid-build */ }
+        try {
+          const pm = performance.memory;
+          if (pm) row.usedJSHeapSize = pm.usedJSHeapSize;
+        } catch (_) { /* not Chromium */ }
+        try {
+          const g = typeof GLX !== "undefined" ? GLX : null;
+          const ms = g && g.__tlx && g.__tlx.memState && g.__tlx.memState();
+          if (ms) { row.geometries = ms.rGeo; row.textures = ms.rTex; row.rObj = ms.rObj; }
+        } catch (_) { /* no TLX */ }
+        return row;
+      };
+      const steps = [];
+      for (const id of ids) {
+        try { await A.race(id); } catch (e) { steps.push({ id, error: String(e && e.message).slice(0, 140) }); break; }
+        const info = A.info();
+        steps.push(Object.assign({ id, state: info && info.state }, sample()));
+      }
+      return { steps };
+    }, [track, other, track]), 240000, "mem-switch");
+    checkpoint("mem-switch");
+  }
   if (out.overlay && out.overlay.error) out.overlayReadFailed = "read failed: " + out.overlay.error;
   // WHAT THE GPU TIMER SPANS (hunt 4 I5). The three backends' gpuMs time
   // different work, so gpuFrame.medianMs is comparable within a backend only.

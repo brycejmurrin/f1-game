@@ -180,7 +180,7 @@ test.describe("multiplayer session", () => {
     expect(out.at100 - out.at0).toBeLessThan(6);
   });
 
-  test("when the rival drops, their car is handed back to the AI", async ({ page }) => {
+  test("when a guest drops, the host keeps the race reconnectable and hands the car to AI", async ({ page }) => {
     // A driverless car parked on the circuit is worse than an AI one. The AI
     // path already exists, so handing back is just clearing the role flags.
     await race(page);
@@ -205,8 +205,28 @@ test.describe("multiplayer session", () => {
     expect(out.during.human).toBe(true);
     expect(out.during.local).toBe(false);
     expect(out.after.human).toBe(false);
-    expect(out.netAfter.active).toBe(false);
+    expect(out.netAfter.active).toBe(true);
+    expect(out.netAfter.role).toBe("host");
+    expect(out.netAfter.remotes).toHaveLength(0);
     expect(out.moved).toBeGreaterThan(5);
+  });
+
+  test("when the host actually leaves, the guest session still ends and its cars return to AI", async ({ page }) => {
+    await race(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      const s = A.netLoopback({ nowMs: 1000, latencyMs: 0, interpDelayMs: 0, role: "guest" });
+      const during = A.carRoles()[s.remoteId];
+      A.netPeerClose();
+      A.netTick(1010);
+      return { during, after: A.carRoles()[s.remoteId], netAfter: A.net() };
+    });
+
+    expect(out.during.human).toBe(true);
+    expect(out.during.local).toBe(false);
+    expect(out.after.human).toBe(false);
+    expect(out.netAfter.active).toBe(false);
+    expect(out.netAfter.reason).toBe("transport");
   });
 
   test("a session survives a lossy link", async ({ page }) => {
