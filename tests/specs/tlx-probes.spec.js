@@ -693,3 +693,32 @@ test.describe("TLX — boot", () => {
     expect(dims.h).toBeGreaterThan(0);
   });
 });
+
+// Exercise the real installed backend and scene registry, not a mock map.
+// No pixels are claimed here: this checks ownership immediately after free.
+test('freeing batched decal meshes removes their hidden scene objects', async ({ page }) => {
+  await page.goto('/?three-devtools=1');
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  expect(await page.evaluate(() => GLX.backend)).toBe('three');
+  await page.evaluate(() => window.__apex.headless(true));
+  await page.waitForFunction(() => !GLX.warming(), null, { polling: 100, timeout: 60000 });
+  const result = await page.evaluate(() => {
+    window.__apex.agentHelp();
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 4;
+    const tex = GLX.createTexture(canvas), model = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    let created = 0, retained = 0, disposals = 0;
+    try {
+      for (let i = 0; i < 40; i++) {
+        const mesh = GLX.createTexMesh({ pos: [0, 0, 0, 1, 0, 0, 0, 0, 1], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], uv: [0, 0, 1, 0, 0, 1], idx: [0, 1, 2] });
+        const geo = mesh.geo;
+        GLX.drawDecal(mesh, model, tex, { batch: true });
+        const run = window.scene.children.find(o => o.isInstancedMesh && o.geometry === geo);
+        if (run) { created++; run.addEventListener('dispose', () => disposals++); }
+        GLX.freeMesh(mesh); GLX.freeMesh(mesh);
+        if (window.scene.children.some(o => o.geometry === geo)) retained++;
+      }
+    } finally { GLX.freeTexture(tex); }
+    return { created, retained, disposals };
+  });
+  expect(result).toEqual({ created: 40, retained: 0, disposals: 40 });
+});
