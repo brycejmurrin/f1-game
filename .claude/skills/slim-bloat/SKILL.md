@@ -1,6 +1,6 @@
 ---
 name: slim-bloat
-description: "Use when files, docs or the tree have grown too large for agents — saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates, or \"simplify this / too much context\". Not physics tune, circuit accuracy, CSS restructure (css-play), skill hygiene (agent-config) or pre-push verify (check-changes)."
+description: "Use when files, docs or the tree grow too large for agents — saturated size ratchet, dead or duplicate code, repeated docs rules, stale comments, extract/split candidates, or \"simplify this / too much context\". Not CSS restructure (css-play) or skill hygiene (agent-config)."
 ---
 
 # Cut agent bloat (Claude-simplify for Apex 26)
@@ -48,12 +48,12 @@ locksteps; if `tools/manifest.cjs` changed, run `node tools/gen/gen-shell.mjs`
 3. **Never convert IIFE → ESM.** New-file lockstep: file + `<script>` +
    `tools/manifest.cjs` (+ `HARD_EDGES` if eval-time) + `node tools/gen/gen-shell.mjs`.
 4. **Never hand the auditor a browser run.** Dead `__apex` hooks: parent
-   confirms with **mcp-probe** / `mcp-cli.mjs probe` after `apex_status`.
+   confirms with **mcp-probe** / `node tools/mcp/mcp-cli.mjs probe` after `apex_status`.
    Context7 / WebFetch are fine (Agent Skills caps, library docs).
 5. **Never "simplify" physics, the timestep, or `updateCar`/`render()`.**
    See do-not.md.
 
-Editing a skill's description, routing queries, an agent, a hook or AGENTS.md (budgets, the routing A/B) → **agent-config**.
+Consolidating a rule repeated across AGENTS.md and `docs/` into one canonical copy is this skill; editing a skill's description, routing queries, an agent, a hook or AGENTS.md's budgets (the routing A/B) → **agent-config**.
 CSS/DOM count work → **css-play** (`references/restructure.md`). Pre-push →
 **check-changes** / `verify-agent`.
 

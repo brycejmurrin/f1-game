@@ -1,11 +1,13 @@
 ---
 name: compound-verify
-description: Use when compound-verify.
+description: "Use when /compound-verify is typed: Pass/Fail/Skip evidence per changed behavior."
 disable-model-invocation: true
 ---
 ## F1 project integration
 
 This project copy is an explicit opt-in. The repository subsystem skills, `check-changes`, browser occupancy rules, generated-file policy, and verification gates govern F1 work. Use those workflows for their mechanisms; this skill supplies supporting diagnosis, review, or verification reasoning. It does not authorize bypassing repository gates or publishing changes.
+
+The F1 checks, cheapest first: `node tools/ci/pick-tests.mjs` names the groups a change needs; `node tools/ci/tooling-fast.mjs --changed --jobs=3` in the edit loop and `npm run test:tooling-fast` before a code push; one browser group at a time via `node tools/ci/test-bg.mjs <group>` in the background, its verdict the log's `= run …` line (AGENTS.md rules 4–5). Never run a browser inside a subagent (rule 10): mark that coverage Skip with the reason.
 
 
 # Verify changed behavior
@@ -16,7 +18,7 @@ Derive the verification scope from the user's acceptance criteria and the actual
 
 Choose checks that distinguish correct behavior from the reported failure. Run the original reproduction where one exists, followed by the relevant unit, integration, build, or browser checks. Record command or action, environment, expected result, actual result, and evidence location. Do not broaden or repeat checks without a changed risk, failure, or unresolved uncertainty.
 
-For browser behavior, map changed files to affected routes and critical interactions. Use an available browser capable of reaching the target, following its own instructions; localhost belongs to the machine running the browser. Confirm page and build identity before testing. Use fresh inspected state for interactions. Exercise the relevant flow and inspect rendered state and console errors. Record viewport and other conditions that affect comparisons. Static code reads and DOM-free simulations do not establish rendered browser correctness.
+For browser behavior, map changed files to affected routes and critical interactions. Use an available browser capable of reaching the target, following its own instructions; localhost belongs to the machine running the browser. Here, live poking is skill `mcp-probe`, never while a Playwright run is live. Confirm page and build identity before testing. Use fresh inspected state for interactions. Exercise the relevant flow and inspect rendered state and console errors. Record viewport and other conditions that affect comparisons. Static code reads and DOM-free simulations do not establish rendered browser correctness.
 
 Use sandbox data for consequential external flows. If authentication or human action is unavailable, mark that flow Skip with the exact reason and continue independent checks. Do not send messages, make purchases, or write to external systems unless the user's request authorizes the action. Start local development services only within the authorized project scope and record any process left running.
 

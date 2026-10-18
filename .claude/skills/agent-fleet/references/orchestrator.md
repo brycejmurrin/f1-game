@@ -44,7 +44,7 @@ USER GRANTS: "<the user's exact words>" (<UTC time>) — what this worker may do
 MODE/SEED: permission_mode "auto"; source_revision <deploy branch | NAMED integration branch>; model <id>.
 PR: <worker | orchestrator> opens the DRAFT PR, base <deploy branch | track-survey-assets>.
 DELIVERABLES: <the full checklist: every section, weather/frame, doc, merge step the PR must contain>
-PUSH: when your own cycle is green (no slot; launch-policy.md, Paced push).
+PUSH: when your own cycle is green, and before any browser run or wait over ~10 min.
 Load skill agent-fleet and follow references/worker.md.
 Open a DRAFT PR; keep its fleet block current; subscribe with your host's tool.
 When blocked or unsure: set state: blocked, needs-orchestrator: yes, comment
@@ -70,7 +70,7 @@ before every `create_session`:
    that says "no PR" contradicts AGENTS.md rule 12; say who opens it instead.
 5. The full deliverable checklist in the FIRST brief (sections, weathers and
    frames, docs, the commit recipe) so no round-two message is needed.
-6. The PUSH line (green-cycle push; the slot is retired): push BEFORE any browser run or wait over ~10 min.
+6. The PUSH line: push BEFORE any browser run or wait over ~10 min (AGENTS.md rule 12).
 7. The `USER GRANTS:` quote and `Do not enable auto-merge or merge.`
 8. Every anticipated action AND path in `USER GRANTS:` (`js/game.js`, workflow
    dispatch, `.claude/**`, a ratchets row), and the worker's NEXT item named
@@ -162,6 +162,8 @@ and `docs/notes/AGENT-CONFIG-RESEARCH-2026-10-15.md`.
   subscribe to this PR"; server-side, no rule fixes it): fall back to
   `ci-watch.mjs --sha <head> --once` on each timer wake and say so in the
   hand-back.
+- **The template's last line is not a veto**: holds are `MERGE-HOLD:` lines only
+  (`comms.md` §Authority).
 - **Reach.** Workers `send_message` the orchestrator id in the brief (~20 s
   delivery) and may message sibling owners directly; a fleet-wide instruction
   is one `send_message` per live session.
@@ -177,10 +179,6 @@ enforcement there. Use Codex children for bounded evidence work such as
 explicitly designated parent session. Do not claim sibling-session
 subscriptions, PR ownership or merge authority unless the host actually
 provides those APIs and the user granted them.
-
-The last line limits the worker's own actions. It is not a merge veto: the
-worker must not copy it, or any "do not merge" wording, into the PR body or a
-hand-back. To hold a PR, the body carries a line starting `MERGE-HOLD:`.
 
 ## Per-vendor adapters (sources in the design note)
 
@@ -244,9 +242,7 @@ the acting session.
 - Each wake also lists every open PR with no live owner session (Bryce requires
   one per PR); start an owner (role-pr-owner.md) or say why not. `pr-board`
   does not print this yet: check `get_session` per owner.
-- One owner per red tip: before several sessions fix the same red, search open
-  PR titles/branches for the failing test name and name ONE owner in a message
-  (three sessions opened the same catalog-digest fix, #2716/#2717/#2695).
+- One owner per red tip: steward §3.
 - After a merge, if a Pages run is pending and none running, hold further
   merges until one starts: each merge replaces the PENDING train (45 min stale
   site, 2026-10-17). A RUNNING train is never cancelled.

@@ -1,6 +1,6 @@
 ---
 name: agent-config
-description: "Use when editing AGENTS.md or CLAUDE.md, a SKILL.md or its description, subagents (.claude/agents), hooks (.claude/hooks), skill-routing queries or the routing eval, or a description word/char budget fails. Code or docs bloat → slim-bloat."
+description: "Use when editing AGENTS.md/CLAUDE.md, adding a skill or a SKILL.md description, subagents, hooks, skill-routing queries or eval, or a description budget fails. Code or docs bloat → slim-bloat."
 ---
 
 # Edit the agent surface — instructions, skills, subagents, hooks
@@ -18,7 +18,8 @@ description: "Use when editing AGENTS.md or CLAUDE.md, a SKILL.md or its descrip
 
 - `AGENTS.md` ≤ 28,500 B; every root-to-nested AGENTS.md chain ≤ 31,000 B
   (Codex's 32 KiB project-doc cap); ≤ 75 rule-bearing lines.
-- All skill descriptions together ≤ 1,600 words and ≤ 12,000 chars; one
+- All skill descriptions together stay under the word and char budgets in
+  `agent-config.test.mjs` (read the live figures there, not here); one
   description ≤ 1,024 chars; every `→ name` must be a skill or agent. The
   failure message prints the live totals — trim one to add one.
 - Every skill needs `tests/data/skill-routing/queries/<skill>.json` (5+
@@ -26,6 +27,21 @@ description: "Use when editing AGENTS.md or CLAUDE.md, a SKILL.md or its descrip
   `tools/check/skill-smoke-recipes.json` (`tests/unit/skill-progressive.test.mjs`).
 - SKILL.md body under 500 lines; frontmatter keys only from the allowlist in
   `tests/unit/agent-surface.test.mjs`.
+
+## New skill — in order
+
+1. Check `.claude/skills/README.md` and `ls .claude/skills` for a sibling that
+   already covers it; extend that one instead when the trigger words overlap.
+2. `.claude/skills/<name>/SKILL.md`: `name`, `description` ("Use when …", one
+   "Not X → skill" clause), keys only from `SKILL_KEYS` in `agent-surface.test.mjs`;
+   trim another description by what this one adds.
+3. `tests/data/skill-routing/queries/<name>.json`: an array of
+   `{"query": "…", "expect": "<skill or agent>"}` rows, 5+ expecting `<name>`
+   and 3 near-misses expecting the neighbour.
+4. A recipe in `tools/check/skill-smoke-recipes.json` `recipes[]` (copy a
+   sibling's `skill` / `task` / `fixture` / `pattern` / `expected` row).
+5. `bash tools/env/mirror-skills.sh`, a row in `.claude/skills/README.md`, then
+   `npm run gen`; retest as below.
 
 ## Workflow: survey → fix → retest → A/B
 

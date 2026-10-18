@@ -1,11 +1,13 @@
 ---
 name: compound-debug
-description: Use when compound-debug.
+description: "Use when /compound-debug is typed: root-cause and fix a confirmed failure."
 disable-model-invocation: true
 ---
 ## F1 project integration
 
 This project copy is an explicit opt-in. The repository subsystem skills, `check-changes`, browser occupancy rules, generated-file policy, and verification gates govern F1 work. Use those workflows for their mechanisms; this skill supplies supporting diagnosis, review, or verification reasoning. It does not authorize bypassing repository gates or publishing changes.
+
+In this repo, reproduce through the `__apex` hooks first (AGENTS.md §Seeing the game); a renderer fault goes to `renderer-debug`, a red CI run to agent `ci-red-triage`.
 
 
 # Debug a confirmed failure

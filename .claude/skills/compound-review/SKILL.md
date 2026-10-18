@@ -1,6 +1,6 @@
 ---
 name: compound-review
-description: Use when compound-review.
+description: "Use when /compound-review is typed: report-only review of a scoped diff."
 disable-model-invocation: true
 ---
 ## F1 project integration

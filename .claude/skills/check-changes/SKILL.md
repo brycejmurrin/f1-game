@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: "Use when asked did I break anything, pick tests, validate/pre-push, verify track edits, js/css shell/cache policy, deploy-branch merge/push, or Playwright timeout triage. Red Actions → ci-red-triage; green PR → steward."
+description: "Use when asked did I break anything, pick tests, validate/pre-push, verify track edits, js/css shell/cache policy, deploy-branch merge/push, or Playwright timeout triage. Red Actions → ci-red-triage."
 ---
 
 # Validate changes before committing/pushing
@@ -9,7 +9,7 @@ The canonical command meanings and ladder are in
 [`docs/VERIFICATION.md`](../../../docs/VERIFICATION.md). This skill adds the
 failure triage and tool-routing details; it does not redefine the ladder.
 
-Check scoped `DEFECT-LEDGER.md` entries and see [`references/vm-twin.md`](references/vm-twin.md) for VM-twin routing and DEFECT-LEDGER checks.
+Before fixing a known-class defect, grep [`docs/notes/DEFECT-LEDGER.md`](../../../docs/notes/DEFECT-LEDGER.md) for its scope; moving a browser spec onto the node gate (a VM twin) → [`references/vm-twin.md`](references/vm-twin.md).
 
 ## This tree, right now
 
@@ -36,23 +36,14 @@ node tools/ci/verify-change.mjs              # fast gate + start batch 1 (backgr
 node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked
 ```
 
-**BEFORE A PUSH, `--fast` IS NOT THE TOP RUNG.** AGENTS.md rule 3 is a ladder
-and `verify-change` sits on rung 2: `test:tooling-fast` is a SUBSET of the unit
-files (the live figures are rule 3's, generated), and the rest have taken deploys
-red three times. The only pre-push
-check that runs what the deploy runs is
+`--fast` is the edit-loop rung, not the top one (AGENTS.md rules 3–5). Before a
+push, run the only check that runs what the deploy runs, once:
 
 ```sh
 node tools/ci/deploy.mjs --gate-only         # pushes NOTHING; a dirty tree is fine
 ```
 
-Use `verify-change --fast` in the edit loop and for a subagent verdict; run
-`--gate-only` once before you push. Green on rung 2 never means green on
-rung 3 (`docs/notes/PREPUSH-GATE-LADDER.md`).
-
-`--wait` blocks for the full queue. Subagents and the default loop use `--fast` or a single
-started batch, then read the log's `= run …` verdict line (anchor and waiter: `references/triage.md` §Rules
-that prevent the class; AGENTS.md rules 4-5). Push once per verified batch: a push over a live run cancels it.
+A started batch's verdict is its log's `= run …` line (`references/triage.md`).
 
 Is the tree already red? Not a `--plan` question: `node tools/ci/deploy.mjs --train`
 prints the deploy branch's last ci / pages / nightly conclusions; before blaming your
