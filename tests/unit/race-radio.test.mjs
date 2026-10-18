@@ -1184,31 +1184,39 @@ test("current caution invalidates delayed TV and replay flags through the real a
   r.hooks.busy = false; r.step(0.1);
   assert.equal(comm(r).length, 0, "green copy expires when local yellow replaces green");
 
-  // The real game queue accepts a line now but checks still() at display time.
-  const game = gameSource(), shown = [];
-  const ac = vm.createContext({ hudProfile: "standard", CAM_MODES: [{ id: "chase" }], camMode: 0,
-    els: { announce: { dataset: {} } }, shown, announceT: 0, _annPri: 0, _annFloor: 0,
-    _annQueue: [], performance: { now: () => 0 } });
-  for (const re of [/const ANN_PRI = [^;]+;/, /const ANN_STALE_MS = [^;]+;/,
-    /const ANN_QUEUE_MAX = [^;]+;/, /function announce\([^]*?\n\}/]) vm.runInContext(game.match(re)[0], ac);
-  vm.runInContext('function showAnnounce(msg, dur, kind) { shown.push(msg); _annPri = ANN_PRI[kind] || 2; announceT = Math.max(3, (dur || 1.6) + .5); _annFloor = 3; }'
-    + '\nfunction tick(dt) {\n' + game.match(/ {2}if \(announceT > 0\) \{\n {4}announceT -= dt;\n[\s\S]*?\n {4}\}\n {2}\}\n/)[0] + '}', ac);
+  // The real banner accepts a line now but checks still() at display time.
+  const shown = [];
+  const announceText = {};
+  Object.defineProperty(announceText, "textContent", { set(v) { shown.push(v); }, get() { return shown.at(-1) || ""; } });
+  const ac = vm.createContext({
+    performance: { now: () => 0 },
+    RadioVoice: { SPEAKERS: { race: "radio", warning: "control" } },
+    GameAudio: { radioLeadS: () => 0, radioSting() {} },
+  });
+  vm.runInContext(readFileSync(new URL("../../js/race/announce-banner.js", import.meta.url), "utf8"), ac);
+  const banner = vm.runInContext("AnnounceBanner", ac).create({
+    els: () => ({ announceText, announceWho: { textContent: "" }, announceNum: { textContent: "" }, announce: { className: "", hidden: true, dataset: {} }, announceLive: { textContent: "" } }),
+    player: () => ({ name: "A Driver", num: 1 }), state: () => "race", hudProfile: () => "standard",
+    camMode: () => 0, camModes: () => [{ id: "chase" }], radioVoice: () => ({ say() {} }), history: () => null,
+  });
   const w = watch(); w.step(0.1);
-  w.G.announce = (...args) => ac.announce(...args);
-  vm.runInContext('announce("BLOCK", 5, "race")', ac);
+  let queued = 0;
+  w.G.announce = (...args) => { const ok = banner.announce(...args); if (ok) queued++; return ok; };
+  banner.announce("BLOCK", 5, "race");
+  queued = 0;
   w.G._caution = 3;
   w.radio.replayEvent({ kind: "sc", level: 3 }); w.step(0.1);
-  assert.equal(ac._annQueue.length, 1, "SC card accepted downstream");
+  assert.equal(queued, 1, "SC card accepted downstream");
   w.G._caution = 0;
   w.radio.replayEvent({ kind: "green" }); w.step(0.1);
-  for (let i = 0; i < 120; i++) vm.runInContext('tick(.1)', ac);
+  for (let i = 0; i < 120; i++) banner.tick(0.1);
   assert.equal(shown.length, 2);
   assert.match(shown[1], /GREEN/);
   assert.ok(!shown.some((msg) => /SAFETY CAR/.test(msg)), "accepted SC is stale by display time");
   for (const level of [2, 3, 4, 0]) {
     w.G._caution = level;
     w.radio.replayEvent(level ? { kind: "sc", level } : { kind: "green" }); w.step(0.1);
-    for (let i = 0; i < 60; i++) vm.runInContext('tick(.1)', ac);
+    for (let i = 0; i < 60; i++) banner.tick(0.1);
   }
   assert.equal(shown.length, 6, "valid VSC, SC, red and green each play once");
 });
