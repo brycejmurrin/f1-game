@@ -171,7 +171,9 @@ const GarageLiveryDesignEditor = (function () {
       for (const b of choices) if (accepts(b.dataset.csPill.split(":")[1])) group.appendChild(b);
     }
     // CHOICES THAT ONLY ACT ON SOME CARS, measured by the 2026-10-18 livery editor
-    // audit (D3, D5, D6): each one changed neither mesh nor atlas outside its `when`, so it greys
+    // audit (D5, D6): each one changed neither mesh nor atlas outside its `when`, so it greys
+    // like every other dependent row instead of looking broken. (HALO FINISH is not one: since #2829 it
+    // lands on an unset or grey halo too, car3d.js haloOn.)
     const rules = [
       { pill: "coverBind:spineOnly", when: () => draft.spineLogo === "cap", why: "SPINE ONLY changes only the CAP design in SPINE TOP" },
       { pill: "finHandoff:contrast", when: () => (draft.finShape || "standard") !== "none", why: "Needs a tail fin — pick a FIN SHAPE other than NONE" },
