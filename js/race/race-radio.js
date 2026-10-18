@@ -612,6 +612,7 @@ var RaceRadio = (function () {
       if (f.pitting) m.pitLap = f.lap;
       if (f.caution > 0) m.cautionLap = f.lap;
       const tv = tvLive(f);
+      if (o.onEvents && ev.length) o.onEvents(ev, f);
       for (const e of ev) {
         if (!watch) engineerEvent(e, f, p);   // a replay has no engineer
         if (tv) tvEvent(e, f);
