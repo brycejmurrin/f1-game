@@ -1191,16 +1191,18 @@ const CarDraw = (function () {
         if (m.RFixed) G.gfx.freeMesh(m.RFixed);
       }
     }
-    function getPlayerWheelMeshes() {
-      const key = playerTyreId + ":" + playerBrakeId + ":" + playerWheelId;
+    function getPlayerWheelMeshes(team) {
+      // livery wheel tints (rimTint / caliperTint) join the key: "" when unset, so today's key is unchanged
+      const wt = CarWheels.tints(team && deps.resolveLivery(team));
+      const key = playerTyreId + ":" + playerBrakeId + ":" + playerWheelId + wt.key;
       return putBoundedMesh(wheelMeshCache, wheelMeshOrder, key, () => {
         const band = playerTyreVisual && playerTyreVisual.band || Car3D.TYRE_BAND[playerTyreTier];
-        const caliper = playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier];
-        const rim = playerBrakeVisual && playerBrakeVisual.rim;
+        const caliper = wt.cal || (playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier]);
+        const rim = wt.rim || (playerBrakeVisual && playerBrakeVisual.rim);
         const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false,
-          playerTyreVisual, playerBrakeVisual, playerWheelVisual);
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink);
         const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false,
-          playerTyreVisual, playerBrakeVisual, playerWheelVisual);
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink);
         return {
           F: G.gfx.createMesh(front.rotating),
           R: G.gfx.createMesh(rear.rotating),
@@ -1231,14 +1233,17 @@ const CarDraw = (function () {
     // factory parts, so distinct fitted combos in one race are far fewer.
     const fieldWheelOrder = [];
     const FIELD_WHEEL_CACHE_MAX = 12;
+    let _fwTints = null;
     let _fwVt = null;   // the pending build for the hoisted factory below (no closure per car per frame)
     function getFieldWheelMeshes(team, car) {
       const setup = car && car.visualSetup;
       const st = setup ? teamDecalState(team, false, setup, car.visStamp) : teamDecalState(team, false);
       const vt = st.parts;   // permanently cached factory resolve — was ~1260 resolveSetup/s across the drawn field
       // A pure function of the cached state's parts, so it is built once per state.
-      const key = st.fwKey || (st.fwKey = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1"));
-      _fwVt = vt;
+      const wt = CarWheels.tints(deps.resolveLivery(team));   // rimTint / caliperTint: part of the key ("" unset)
+      const base = st.fwKey || (st.fwKey = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1"));
+      const key = wt.key ? base + wt.key : base;
+      _fwVt = vt; _fwTints = wt;
       return putBoundedMesh(fieldWheelCache, fieldWheelOrder, key, buildPendingFieldWheels, FIELD_WHEEL_CACHE_MAX, freeWheelPair);
     }
     function buildPendingFieldWheels() {
@@ -1247,10 +1252,11 @@ const CarDraw = (function () {
         const brake = vt._visual && vt._visual.brakes;
         const wheel = vt._visual && vt._visual.wheels;
         const band = (tyre && tyre.band) || Car3D.TYRE_BAND[vt.tyres] || Car3D.TYRE_BAND[1];
-        const caliper = brake ? brake.cal : Car3D.BRAKE_CALIPER[vt.brakes];
-        const rim = brake && brake.rim;
-        const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel);
-        const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel);
+        const wt = _fwTints;
+        const caliper = wt.cal || (brake ? brake.cal : Car3D.BRAKE_CALIPER[vt.brakes]);
+        const rim = wt.rim || (brake && brake.rim);
+        const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel, wt.ink);
+        const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel, wt.ink);
         // A MARKER, not behaviour (Car3D.build's `field` opt is the same idea): this
         // cache and getPlayerWheelMeshes() call buildWheelLayers identically, so a
         // mesh probe cannot otherwise tell a FIELD pair from a PLAYER one, and
@@ -1291,7 +1297,7 @@ const CarDraw = (function () {
     // spin discs, brake rings or far flares (those are Particles, which a second
     // camera would emit twice). Pass dt 0 with it: the main pass advances the spin.
     function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare) {
-      const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes(c.team, c);
+      const wm = c.isPlayer ? getPlayerWheelMeshes(c.team) : getFieldWheelMeshes(c.team, c);
       c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / PhysicsConsts.WHEEL_R) * dt) % (Math.PI * 2);
       // Fronts have their own spin so a lock-up (c.wheelLock) freezes them while
       // the car still moves; the flat spot it leaves bumps them once per rev.

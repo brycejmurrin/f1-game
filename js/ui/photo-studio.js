@@ -6,6 +6,9 @@
 const PhotoStudio = (function () {
 const KEY = "apex26.photoBackground", DB = "apex26.photoLibrary", LIMIT = 6;
 const ASPECTS = { scene: 0, wide: 16 / 9, square: 1, portrait: 4 / 5 };
+// TIME and WEATHER are the engine's own discrete sets (js/race/weather-arc.js VALID, setTimeOfDay): no continuous clock exists.
+const TODS = [["dawn", "Dawn"], ["day", "Day"], ["dusk", "Dusk"], ["night", "Night"], ["default", "Track default"]];
+const WXS = [["dry", "Dry"], ["overcast", "Overcast"], ["fog", "Fog"], ["wet", "Wet"], ["rain", "Rain"], ["storm", "Storm"]];
 let live = null;
 const text = (v, max) => String(v || "").replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, max || 80);
 function filename(label) { return "apex26-" + (text(label).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "photo") + ".png"; }
@@ -121,6 +124,33 @@ function create(G, deps) {
     (v) => { if (st.subject && !st.busy && v !== subjectValue()) st.subject(v); }, "ps-subject");
   const subjectGroup = group("SUBJECT", [subjectRow,
     mk("p", { className: "adv-help", textContent: "Your car in the garage or on the circuit. Your Home scene stays as it is." })]);
+  // CONDITIONS: the SESSION's time of day and weather through the lighting tuner's own seam (G.setTimeOfDay /
+  // G.weather → Atmosphere.applyRaceSettings). A preview only: open() records what the session had, RESET and
+  // every close put it back, so a photo never leaks into a race, a career or a result (the race is paused and the
+  // Home car is a fresh borrowed one while the studio is open).
+  const cond = { tod: null, wx: null, arc: null, touched: false };
+  const pick = (label, list, read, run, id) => select(label, list, read, (v) => { run(v); paintCond(); }, id);
+  const setTod = (v) => { if (st.busy || st.closing || isGarage()) return; cond.touched = true; G.setTimeOfDay(v); };
+  const setWx = (v) => { if (st.busy || st.closing || isGarage()) return; cond.touched = true; G.weather(v); };
+  const todRow = pick("Time of day", TODS, () => G.setTimeOfDay(), setTod, "ps-tod");
+  const wxRow = pick("Weather", WXS, () => G.weather(), setWx, "ps-weather");
+  const condReset = button("RESET CONDITIONS", () => resetCond(), "ps-cond-reset");
+  const condGroup = group("TIME & WEATHER", [todRow, wxRow, condReset,
+    mk("p", { className: "adv-help", textContent: "Changes the light and weather for this photo only. Your race and results stay as they were." })]);
+  function paintCond() {
+    for (const [id, row, v] of [["ps-tod", todRow, G.setTimeOfDay()], ["ps-weather", wxRow, G.weather()]]) {
+      SettingRow.paint(row, v);
+    }
+    E["ps-cond-reset"].disabled = st.busy || !(G.setTimeOfDay() !== cond.tod || G.weather() !== cond.wx);
+  }
+  function resetCond() {
+    if (cond.tod == null) return;
+    if (G.setTimeOfDay() !== cond.tod) G.setTimeOfDay(cond.tod);
+    if (G.weather() !== cond.wx || cond.touched) { G.weather(cond.wx); }
+    if (cond.touched) G.weatherArc = cond.arc;   // a MIXED race's arc, dropped by weather()
+    cond.touched = false;
+    if (st.open) paintCond();
+  }
   const placement = (label, id, min, max, step, unit) => {
     const out = mk("output", { id: id + "-value", textContent: "0" + unit });
     const input = mk("input", { id, type: "range", min: String(min), max: String(max), step: String(step), value: "0" });
@@ -139,6 +169,7 @@ function create(G, deps) {
       mk("p", { id: "ps-context", className: "adv-help" }),
       subjectGroup,
       carGroup,
+      condGroup,
       group("COMPOSITION", [
         select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); if (!st.busy) recompose(); }, "ps-aspect"),
         select("Guide", [["off", "Off"], ["thirds", "Thirds"], ["centre", "Centre"]], () => st.grid, (v) => { st.grid = v; guides(); }, "ps-grid-select"),
@@ -240,6 +271,8 @@ function create(G, deps) {
       E[id].value = "0"; E[id + "-value"].textContent = "0" + unit;
     }
     placeCar();
+    condGroup.hidden = isGarage();
+    if (!isGarage()) { cond.tod = G.setTimeOfDay(); cond.wx = G.weather(); cond.arc = G.weatherArc; cond.touched = false; paintCond(); }
     subjectGroup.hidden = !st.subject;
     if (st.subject) SettingRow.paint(subjectRow, subjectValue());
     document.body.classList.add("photo-studio-open");
@@ -270,6 +303,7 @@ function create(G, deps) {
   }
   function finishClose(back) {
     if (!st.open && !st.closing) return;
+    if (!isGarage() && cond.tod != null) { resetCond(); cond.tod = null; }
     const returnTo = st.back; st.generation++; st.open = false; st.back = null; st.closing = false;
     if (releaseCar) { releaseCar(); releaseCar = null; }
     if (isGarage()) { if (deps.garage && deps.garage.restore && st.snapshot) deps.garage.restore(st.snapshot); st.snapshot = null; }

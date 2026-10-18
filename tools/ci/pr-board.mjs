@@ -28,6 +28,10 @@
  * Each ARM counts toward MAX_ARMED (2 repo-wide, any method). The
  * PLAN column is ready-gate.mjs's planVerdict of the PR body: done/items, or "-"
  * for a body with no ## Plan checklist (AGENTS.md rule 12).
+ * FLEET is the worker's report (agent-fleet role-pr-owner.md §Monitoring and
+ * reporting): the body's `fleet-status: <state> | <reason> | <utc>` line,
+ * or the newest PR comment starting `fleet-status:` or `@orchestrator
+ * NEEDS-DECISION:` when it is newer than the body line; state, age, reason.
  *
  *   node tools/ci/pr-board.mjs              # the table
  *   node tools/ci/pr-board.mjs --json       # rows + cap, for the skill
@@ -53,6 +57,50 @@ export const MERGE_METHOD = "merge";
 export function hasMergeHold(body) {
   return /^MERGE-HOLD:/m.test(String(body || "").replace(/<!--[\s\S]*?-->/g, ""));
 }
+/** One `fleet-status: <state> | <reason> | <utc>` line (body or comment), outside
+ *  HTML comments; the last one in the text wins. null when absent. */
+export function parseFleetStatus(text) {
+  const lines = String(text || "").replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/);
+  let out = null;
+  for (const l of lines) {
+    const m = /^\s*fleet-status:\s*([^|]+?)\s*(?:\|\s*([^|]*?)\s*)?(?:\|\s*(\S[^|]*?)\s*)?$/.exec(l);
+    if (!m || m[1].startsWith("<")) continue; // the template placeholder is not a report
+    const at = Date.parse(m[3] || "");
+    out = { state: m[1], reason: m[2] || "", at: Number.isFinite(at) ? new Date(at).toISOString() : null };
+  }
+  return out;
+}
+
+/** The fleet report for one PR: the body line, replaced by the newest comment
+ *  that starts `fleet-status:` or `@orchestrator NEEDS-DECISION:` when that
+ *  comment is newer (a body line with no time loses to any such comment). */
+export function fleetStatus(body, comments = []) {
+  const fromBody = parseFleetStatus(body);
+  let best = fromBody ? { ...fromBody, source: "body" } : null;
+  for (const c of comments || []) {
+    const text = String(c?.body || "").trimStart();
+    const at = c?.created_at ? new Date(c.created_at).toISOString() : null;
+    let s = null;
+    const ask = /^@orchestrator NEEDS-DECISION:\s*(.*)/.exec(text);
+    if (ask) s = { state: "needs-decision", reason: ask[1].split(/\r?\n/)[0].trim(), at };
+    else if (/^fleet-status:/.test(text)) {
+      const p = parseFleetStatus(text.split(/\r?\n/)[0]);
+      if (p) s = { ...p, at };
+    }
+    if (!s || !at) continue;
+    if (!best || !best.at || Date.parse(at) > Date.parse(best.at)) best = { ...s, source: "comment" };
+  }
+  return best;
+}
+
+/** "45m", "3h", "2d" since `at` (ISO), or "?" without a time. */
+export function ageLabel(at, now = Date.now()) {
+  const ms = now - Date.parse(at || "");
+  if (!Number.isFinite(ms)) return "?";
+  const m = Math.max(0, Math.round(ms / 60000));
+  return m < 60 ? `${m}m` : m < 48 * 60 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`;
+}
+
 export const SUGGESTIONS = ["ARM", "READY", "SYNC", "FIX", "FOREIGN-ARM", "WAIT", "NONE"];
 const LIVE = new Set(["queued", "in_progress", "waiting", "requested", "pending"]);
 const BAD_JOB = new Set(["failure", "timed_out", "startup_failure"]);
@@ -166,6 +214,7 @@ export function evaluate(items, opts = {}) {
       gateEvidence: gate.evidence,
       plan: planVerdict(pr.body),
       hold: hasMergeHold(pr.body),
+      fleet: fleetStatus(pr.body, it.comments),
       url: pr.html_url || "",
     };
     const d = decide(row, ctx);
@@ -180,14 +229,15 @@ export function evaluate(items, opts = {}) {
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /** The table plus a one-line footer. */
-export function render(result, { capLine: line } = {}) {
+export function render(result, { capLine: line, now = Date.now() } = {}) {
   const { rows, cap } = result;
-  const head = ["PR", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "SUGGEST"];
+  const head = ["PR", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "FLEET", "SUGGEST"];
   const plan = (p) => (!p || p.state === "none" ? "-" : `${p.items - p.open.length}/${p.items}`);
+  const fleet = (f) => (!f ? "-" : clip(`${f.state} ${ageLabel(f.at, now)}${f.reason ? `: ${f.reason}` : ""}`, 40));
   const body = rows.map((r) => [
     `#${r.number}`, clip(r.title, 40), r.draft ? "draft" : "ready", r.sha || "-",
     r.mergeableState || "-", r.armed ? (r.mergeMethod || "armed") : "-", r.ci,
-    clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan), r.hold ? `${r.suggest} (HOLD)` : r.suggest,
+    clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan), fleet(r.fleet), r.hold ? `${r.suggest} (HOLD)` : r.suggest,
   ]);
   const all = [head, ...body];
   const w = head.map((_, i) => Math.max(...all.map((row) => row[i].length)));
@@ -249,7 +299,15 @@ export function measure(opts = {}) {
         if (batch.length < 100) break;
       }
     }
-    items.push({ pr, runs, jobs, jobsRunId: ci.runId, checkRuns: checks.json?.check_runs || [] });
+    // The newest issue comments (ascending order: the last page holds them) for
+    // the FLEET column; advisory, so a failed read leaves the body line alone.
+    // https://docs.github.com/en/rest/issues/comments#list-issue-comments
+    let comments = [];
+    if (pr.comments > 0) {
+      const c = request(`issues/${n}/comments?per_page=100&page=${Math.ceil(pr.comments / 100)}`);
+      if (!c.error && Array.isArray(c.json)) comments = c.json;
+    }
+    items.push({ pr, runs, jobs, jobsRunId: ci.runId, checkRuns: checks.json?.check_runs || [], comments });
   }
   const result = evaluate(items, { cap: capV, armed: [...armedByPr.values()].filter(Boolean).length });
   return { ok: true, ...result, capLine: capLine(capV) };
@@ -275,7 +333,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
 Read-only board of every open PR into ${DEPLOY}: draft/ready, mergeable_state,
 auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
-and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
+the worker's fleet-status report (state, age, reason), and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
 Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|stale-red|no; git fetch, no writes).
 Exit 0 printed, 2 bad args, 3 API/token.`);
   const args = parseArgs(argv);
