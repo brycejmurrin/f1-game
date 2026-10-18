@@ -8,7 +8,9 @@
 //   node tools/viewer/build-viewer.mjs --cars=all --circuits=imola --out=scratch/v.html
 //   node tools/viewer/build-viewer.mjs --cars=all --shots      also PNG stills + a contact sheet (artifacts/viewer/shots/)
 //   node tools/viewer/build-viewer.mjs --cars=ferrari --sheet=liveries:ferrari   every livery of one team on one sheet
-//       (also finishes:<team>, parts:<category>:<team> or parts:all:<team>; implies --shots of that axis only)
+//       (also finishes:<team>, bodies:<team>, parts:<category>:<team> or parts:all:<team>; implies --shots of
+//       that axis only). Parts and bodies are framed close on what changes and shot BEFORE|AFTER, with the
+//       pair's pixel difference on the label; --frame=<name> overrides the close-up (viewer.html FRAMES)
 //   ... --sheet=liveries:haas --match='^(neo_|retro_)'   only the variants whose id matches
 //   node tools/viewer/build-viewer.mjs --list                  the valid team and circuit ids
 //   node tools/viewer/build-viewer.mjs --json                  one JSON line: {ok,out,bytes,cars,circuits[,shots,sheet]}
@@ -26,9 +28,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 export const DEFAULT_CIRCUITS = ["monza", "spa", "monaco", "suzuka"];
 
 export function parseArgs(argv) {
-  const a = { cars: null, circuits: null, out: null, json: false, list: false, shots: false, sheet: null, match: null };
+  const a = { cars: null, circuits: null, out: null, json: false, list: false, shots: false, sheet: null, match: null, frame: null };
   for (const s of argv) {
-    const m = /^--(cars|circuits|out|sheet|match)=(.*)$/.exec(s);
+    const m = /^--(cars|circuits|out|sheet|match|frame)=(.*)$/.exec(s);
     if (m) a[m[1]] = m[2];
     else if (s === "--json") a.json = true;
     else if (s === "--list") a.list = true;
@@ -65,9 +67,10 @@ export async function buildViewer(args) {
   if (args.shots || args.sheet) {
     const { shootViewer } = await import("./viewer-shots.mjs");
     const dir = path.join(path.dirname(out), "shots");
-    const r = await shootViewer(out, { ...sel, sheet: args.sheet, match: args.match, outDir: dir, cacheDir: path.join(ROOT, "artifacts/viewer/cdn") });
+    const r = await shootViewer(out, { ...sel, sheet: args.sheet, match: args.match, frame: args.frame, outDir: dir, cacheDir: path.join(ROOT, "artifacts/viewer/cdn") });
     result.shots = r.shots.map((s) => path.relative(ROOT, s.png));
     result.sheet = r.sheet && path.relative(ROOT, r.sheet);
+    if (r.pairs.length) result.pairs = r.pairs.map((p) => ({ label: p.label, diffPct: +p.diffPct.toFixed(2) }));
   }
   return result;
 }
@@ -84,6 +87,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       else {
         console.log(`viewer: ${r.out} (${(r.bytes / 1e6).toFixed(2)} MB) — ${r.cars.length} car(s), ${r.circuits.length} circuit(s)`);
         if (r.shots) console.log(`shots: ${r.shots.length} PNG(s)` + (r.sheet ? `, sheet ${r.sheet}` : ""));
+        for (const p of r.pairs || []) console.log(`  Δ ${p.diffPct.toFixed(1).padStart(5)}%  ${p.label}`);
       }
     }
   } catch (e) {

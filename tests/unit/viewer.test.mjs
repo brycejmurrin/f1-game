@@ -8,9 +8,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { carBundle, circuitData, viewerHtml, teamIds } from "../../tools/viewer/viewer-data.mjs";
 import { parseArgs, resolveSelection, DEFAULT_CIRCUITS } from "../../tools/viewer/build-viewer.mjs";
-import { parseSheet } from "../../tools/viewer/viewer-shots.mjs";
+import { parseSheet, pixelDiffPct, CAT_FRAME } from "../../tools/viewer/viewer-shots.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 test("the page's embedded car roster builds the same mesh the game's loader does", () => {
@@ -73,9 +76,23 @@ test("build-viewer: selection defaults, 'all', and refusals", () => {
   assert.equal(parseArgs([]).shots, false);
   assert.equal(parseArgs(["--sheet=liveries:ferrari"]).sheet, "liveries:ferrari");
   assert.equal(parseArgs(["--match=^neo_"]).match, "^neo_");
+  assert.equal(parseArgs(["--frame=nose"]).frame, "nose");
+  assert.deepEqual(parseSheet("bodies:haas"), { kind: "bodies", team: "haas" });
   assert.deepEqual(parseSheet("parts:aero:haas"), { kind: "parts", cat: "aero", team: "haas" });
   assert.deepEqual(parseSheet("finishes:haas"), { kind: "finishes", team: "haas" });
   assert.throws(() => parseSheet("wheels:haas"), /unknown --sheet kind/);
   assert.throws(() => parseSheet("parts:aero"), /parts:<category>:<team>/);
   assert.ok(teamIds().includes("ferrari"));
+});
+
+test("close-ups: every part category has a frame the page defines, and the pair diff measures pixels", async () => {
+  const html = viewerHtml({ cars: ["haas"] });
+  for (const [cat, f] of Object.entries(CAT_FRAME)) assert.match(html, new RegExp(`\\b${f}:\\s*\\[\\[`), `${cat} -> ${f} is not a FRAMES entry`);
+  const sharp = (await import("sharp")).default;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "viewer-diff-"));
+  const png = (name, g) => sharp({ create: { width: 10, height: 10, channels: 3, background: { r: g, g, b: g } } }).png().toFile(path.join(dir, name)).then(() => path.join(dir, name));
+  const [a, b, c] = await Promise.all([png("a.png", 0), png("b.png", 0), png("c.png", 200)]);
+  assert.equal(await pixelDiffPct(a, b), 0);
+  assert.equal(await pixelDiffPct(a, c), 100);
+  fs.rmSync(dir, { recursive: true, force: true });
 });
