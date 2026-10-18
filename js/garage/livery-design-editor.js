@@ -148,7 +148,7 @@ const GarageLiveryDesignEditor = (function () {
     section("COVER SIDES & TAIL LINK", "Side artwork and its fills. COVER BIND links top and side graphics; FIN HANDOFF controls the transition to the tail.",
       ["spineSide", "sideTint", "plateTint", "coverBind", "finHandoff"]);
     section("WINGS", "Front and rear wing paint. Carbon flaps keep their carbon material; WING FINISH applies to painted wing surfaces.",
-      ["wingCarbon", "wing", "rearWing", "wingFinish"]);
+      ["wingCarbon", "wing", "rearWing", "endplate", "wingFinish"]);
     section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
       ["finShape", "fin", "finFinish", "finStyle", "finArt", "finBadge"]);
     section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
