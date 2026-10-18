@@ -513,8 +513,9 @@ test("UpdateCheck is wired: #update-chip in the shell, the visibility hook, the 
 // and unpressable. It stands down under a modal, as #save-warning does.
 test("UPDATE READY and the save warning stand down under a modal dialog", () => {
   const css = read("css/overlays.css");
-  assert.match(css, /body:has\(dialog:modal\) #update-chip \{ display: none; \}/);
-  assert.match(css, /body:has\(dialog\[open\]\) #save-warning \{ display: none; \}/);
+  // Scoped to body's dialogs plus the telemetry popup inside #datahub (css-has-scope.test.mjs).
+  assert.match(css, /body:has\(> dialog:modal\) #update-chip,\s*body:has\(> :where\(#datahub\) > dialog:modal\) #update-chip \{ display: none; \}/);
+  assert.match(css, /body:has\(> dialog\[open\]\) #save-warning,\s*body:has\(> :where\(#datahub\) > dialog\[open\]\) #save-warning \{ display: none; \}/);
   assert.doesNotMatch(css, /Above every\s+menu sheet/, "the comment no longer promises what the top layer forbids");
 });
 

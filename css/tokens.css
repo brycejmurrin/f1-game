@@ -592,6 +592,8 @@
      matching stop stays literal — a ramp's stops are chosen against each
      other, not from the palette (see css/hud.css). */
   --you: #aeea00;
+  --zone: #26a5f5; /* minimap DRS / active-aero stroke */
+  --ghost: #78dcff; /* minimap ghost dot */
   /* TIMING COLOURS — the F1 timing-screen convention, as the 2026 tower
      draws it: purple = session best (one holder, transfers), green =
      personal best, yellow = slower than your own best; no reference yet
@@ -1065,22 +1067,27 @@ body:not(.desktop) {
    turned damage level 2 — a 50/50 mix of the two — into the same colour as
    both. Tol's sand #ddcc77 keeps the yellow "caution" meaning and sits well
    above either red in LIGHTNESS, the one channel every dichromacy keeps
-   (tritan's #ff6a4d / #ee7733 were ~0.01 apart in OKLab L). */
+   (tritan's #ff6a4d / #ee7733 were ~0.01 apart in OKLab L).
+   --you and --sec-best were retuned so they stay apart from --slower under the Machado simulation. */
 :root[data-cvd="deutan"],
 :root[data-cvd="protan"] {
   --faster: #4aa3ff;
   --slower: #ee7733;
   --sec-slow: #ddcc77;
-  --sec-best: #80e0ff;
-  --you: #ff6a4d;
+  --sec-best: #c8f4ff;
+  --you: #ff9ec8;
+  --zone: #7ec8ff;
+  --ghost: #ffffff;
   --red: #cc3311;
 }
 :root[data-cvd="tritan"] {
-  --faster: #00b8a3;
-  --slower: #ff6a4d;
-  --sec-slow: #ddcc77;
-  --sec-best: #4aa3ff;
-  --you: #ff6699;
+  --faster: #00e0c0;
+  --slower: #ff9eb0;
+  --sec-slow: #ffe56a;
+  --sec-best: #e8fff4;
+  --you: #ff5c96;
+  --zone: #00e0c0;
+  --ghost: #ffffff;
 }
 /* HIGH CONTRAST: solid plates instead of see-through ones, secondary text near
    full strength, lines that read as lines. Theme-relative, so LIGHT + HIGH

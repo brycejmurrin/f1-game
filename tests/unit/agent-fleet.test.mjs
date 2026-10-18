@@ -15,6 +15,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const SKILL = read(".claude/skills/agent-fleet/SKILL.md");
 const ORCH = read(".claude/skills/agent-fleet/references/orchestrator.md");
 const WORKER = read(".claude/skills/agent-fleet/references/worker.md");
+const ADAPT = read(".claude/skills/agent-fleet/references/adapters.md");
 
 test("every host's PR-subscription tool is named for its host, and none is called fake", () => {
   for (const [file, text] of [["AGENTS.md", read("AGENTS.md")],
@@ -42,13 +43,14 @@ test("a subscription never stands alone: each host's timer is named beside it", 
 });
 
 test("the adapter table covers each host's verified spawn path", () => {
-  const table = ORCH.match(/## Per-vendor adapters[\s\S]*?\n\| spawn \|([^\n]*)/);
-  assert.ok(table, "orchestrator.md has the adapter table with a spawn row");
+  // The table moved from orchestrator.md to adapters.md (2026-10-18 split); the pins moved with it.
+  const table = ADAPT.match(/## Per-vendor adapters[\s\S]*?\n\| spawn \|([^\n]*)/);
+  assert.ok(table, "adapters.md has the adapter table with a spawn row");
   assert.match(table[1], /create_session/, "Claude Code spawn");
   assert.match(table[1], /environment: "cloud"/, "Cursor in-agent Task spawn");
   assert.match(table[1], /POST \/v1\/agents/, "Cursor API spawn");
   assert.match(table[1], /grok [^|]*-p /, "Grok Build headless spawn");
-  assert.match(ORCH, /--deny "Bash\(git push --force\*\)"/, "a Grok worker is denied force-push");
+  assert.match(ADAPT, /--deny "Bash\(git push --force\*\)"/, "a Grok worker is denied force-push");
 });
 
 test("the steward card's hashes match the files it lets sessions skip", async () => {
@@ -97,7 +99,8 @@ test("the launch template carries every field the agent-fleet launch policy requ
 });
 
 test("the skill routes to both references and to its evidence note", () => {
-  for (const ref of ["references/orchestrator.md", "references/worker.md"]) {
+  for (const ref of ["references/orchestrator.md", "references/authority.md", "references/adapters.md",
+    "references/running.md", "references/worker.md"]) {
     assert.ok(SKILL.includes(ref), `SKILL.md links ${ref}`);
   }
   const note = "docs/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md";
