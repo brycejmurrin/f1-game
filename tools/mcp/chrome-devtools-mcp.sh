@@ -82,6 +82,9 @@ local_ok() {
 }
 
 run_mcp() {
+  # Bounded wait for the SessionStart npm install (stderr only; stdout is JSON-RPC).
+  . "$ROOT/tools/mcp/mcp-preflight.sh"
+  if local_ok; then mcp_preflight; else mcp_preflight "${MCP_NPM_PACKAGE%@*}"; fi
   local chrome
   chrome="$(detect_chrome)"
   build_mcp_args "$chrome"

@@ -172,6 +172,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_frame_report",
     "apex_garage",
     "apex_graph_parity",
+    "apex_help",
     "apex_hud_mock",
     "apex_hud_shot",
     "apex_hud_survey",
@@ -2234,8 +2235,49 @@ test("hudEstimateMs (#2673): tracks measured cost and scales with cells; the kil
   assert.ok(all < 20 * 60000, "and far less than the old 18-minute claim for one cell");
 });
 
+test("tools/list stays compact and apex_help returns the full text it shortens", () => {
+  const out = rpc([
+    { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
+    { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_help", arguments: { tool: "apex_shot_survey" } } },
+    { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "apex_help", arguments: { tool: "apex_nope" } } },
+  ]);
+  const listed = out.find((m) => m.id === 1).result;
+  assert.ok(JSON.stringify(listed).length < 55000, `tools/list is ${JSON.stringify(listed).length} bytes`);
+  const help = listed.tools.find((t) => t.name === "apex_help");
+  assert.equal(help.annotations.readOnlyHint, true);
+  assert.ok(help.outputSchema && help.outputSchema.type === "object");
+  const short = listed.tools.find((t) => t.name === "apex_shot_survey");
+  const full = out.find((m) => m.id === 2).result.structuredContent;
+  assert.equal(full.ok, true);
+  assert.ok(full.description.length > short.description.length, "help carries the uncompacted description");
+  assert.match(short.description, /apex_help/);
+  assert.ok(Object.keys(full.inputSchema.properties.camera.properties).includes("fov"), "nested object bodies live in apex_help");
+  for (const t of listed.tools) for (const k of t.inputSchema.required || []) assert.ok(t.inputSchema.properties[k], `${t.name} keeps required ${k}`);
+  const miss = out.find((m) => m.id === 3).result;
+  assert.equal(miss.isError, true);
+});
+
 test("tool descriptions state the host ceiling and the per-call boot (#2673)", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "utf8");
   assert.match(src, /name: "apex_job_status"[\s\S]{0,400}~120 s/);
   assert.match(src, /name: "apex_agent"[\s\S]{0,300}COLD-BOOTS/);
+});
+
+test("servers boot with no node_modules: static import graphs (apex-tools, js-debugger) name only node: and relative modules", () => {
+  // .mcp.json starts the server alongside SessionStart's npm install; a bare static import (sharp, 2026-10-18) crashed it to CONNECTION_CLOSED.
+  const seen = new Set(), bare = [];
+  const walk = (f) => {
+    if (seen.has(f) || !fs.existsSync(f)) return;
+    seen.add(f);
+    const src = fs.readFileSync(f, "utf8");
+    for (const m of src.matchAll(/^\s*(?:import|export)\s[^;]*?\bfrom\s*["']([^"']+)["']|^\s*import\s*["']([^"']+)["']/gm)) {
+      const spec = m[1] || m[2];
+      if (spec.startsWith(".")) walk(path.resolve(path.dirname(f), spec));
+      else if (!spec.startsWith("node:")) bare.push(`${spec} <- ${path.relative(ROOT, f)}`);
+    }
+  };
+  walk(MCP);
+  walk(path.join(ROOT, "tools/mcp/js-debugger-mcp.mjs"));
+  assert.ok(seen.size > 3, `walked ${seen.size} files`);
+  assert.deepEqual(bare, [], "load npm packages with a lazy `await import()` at the call site");
 });
