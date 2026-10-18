@@ -24,13 +24,13 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. sourceBytes are source-file snapshots, not output sizes or tokens. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 416,
+    "files": 418,
     "classifications": {
-      "entrypoint-candidate": 281,
+      "entrypoint-candidate": 282,
       "protocol-entrypoint": 28,
       "asset": 2,
       "data": 11,
-      "ambiguous": 52,
+      "ambiguous": 53,
       "library": 42
     },
     "npmScripts": 72,
@@ -2242,7 +2242,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 39459,
+      "sourceBytes": 39555,
       "outputPolicy": "keep-native",
       "outputContract": "Empty versus unmatched versus infrastructure; unclaimed paths and sequential cap",
       "doc": "What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`).",
@@ -2424,10 +2424,10 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 13301,
+      "sourceBytes": 13457,
       "outputPolicy": "targeted-summary",
       "outputContract": "Dry-run does not commit/push; full published URL mapping retrievable",
-      "doc": "Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch.",
+      "doc": "Legacy screenshot branch publisher; use tools/shot/publish-evidence.mjs for new evidence outside Git history.",
       "skill": "steward",
       "nativeOutputFlagMentions": [
         "--quiet"
@@ -2911,7 +2911,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 34893,
+      "sourceBytes": 36254,
       "outputPolicy": "keep-native",
       "outputContract": "Background != pass; exit124 leaves alive; = bg exit takes precedence; refused/not-run",
       "doc": "Starts test groups in the BACKGROUND and hands back a log to tail; sequential by default (`--parallel`, `--wait`).",
@@ -3024,7 +3024,7 @@
         "npm-script-reference",
         "argv-or-parser"
       ],
-      "sourceBytes": 110755,
+      "sourceBytes": 111075,
       "outputPolicy": "job-status",
       "outputContract": "NotStarted/bail, timeouts/empty-run, unchanged-tree stamp, suite terminal line",
       "doc": "Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.",
@@ -6134,7 +6134,7 @@
         "argv-or-parser",
         "shell-or-python-shebang"
       ],
-      "sourceBytes": 36073,
+      "sourceBytes": 37041,
       "outputPolicy": "artifact-first",
       "outputContract": "isError exit, ids, image content blocks",
       "doc": "Passthrough for every Chrome DevTools + TinyFish MCP tool (`chrome_*` / `tinyfish_*`): list-tools / call / serve.",
@@ -7224,6 +7224,27 @@
       ]
     },
     {
+      "path": "tools/shot/publish-evidence.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "argv-or-parser"
+      ],
+      "sourceBytes": 12561,
+      "outputPolicy": "artifact-first",
+      "outputContract": "Keep prepared versus published state, receipt path, source/dirty provenance, file and asset counts, checksums and URLs. Retrieval must never repeat a publication action.",
+      "doc": "Packages generated evidence with provenance and publishes checksum-verified GitHub Release assets outside Git history.",
+      "skill": null,
+      "nativeOutputFlagMentions": [],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/shot/publish-evidence.mjs"
+      ]
+    },
+    {
       "path": "tools/shot/replay-camera-probe.mjs",
       "classification": "entrypoint-candidate",
       "evidence": [
@@ -8031,6 +8052,18 @@
       ]
     },
     {
+      "path": "tools/ui/audit-diff.mjs",
+      "classification": "ambiguous",
+      "evidence": [],
+      "sourceBytes": 3258,
+      "outputPolicy": "no-direct-output",
+      "outputContract": "Library invoked by layout-audit: preserve per-cell added/fixed findings, skipped/missing counts and final diff verdict. No standalone verbosity flags.",
+      "doc": "Library behind `layout-audit --diff <before.json>`: added / fixed findings per screen|viewport cell (no browser).",
+      "skill": "survey-ui-matrix",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": []
+    },
+    {
       "path": "tools/ui/circuit-axis.mjs",
       "classification": "ambiguous",
       "evidence": [],
@@ -8280,7 +8313,7 @@
         "npm-script-reference",
         "argv-or-parser"
       ],
-      "sourceBytes": 55827,
+      "sourceBytes": 56366,
       "outputPolicy": "artifact-first",
       "outputContract": [
         "exit status and explicit failure cause",
@@ -9154,7 +9187,7 @@
     },
     {
       "name": "test:state-unit",
-      "command": "node --test tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/pause-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs",
+      "command": "node --test tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-determinism.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/pause-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs",
       "agentCommand": [
         "node",
         "tools/agent-run.mjs",

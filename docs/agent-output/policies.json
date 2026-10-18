@@ -1934,6 +1934,11 @@
       ],
       "presentation": "native"
     },
+    "tools/shot/publish-evidence.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Keep prepared versus published state, receipt path, source/dirty provenance, file and asset counts, checksums and URLs. Retrieval must never repeat a publication action."
+    },
     "tools/shot/replay-camera-probe.mjs": {
       "action": "artifact-first",
       "preserve": [
@@ -2170,6 +2175,11 @@
       "action": "targeted-summary",
       "preserve": "Any THROW remains fatal; every warning retrievable, circuit coverage and quiet cannot imply omitted checks passed.",
       "presentation": "shared-levels"
+    },
+    "tools/ui/audit-diff.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "Library invoked by layout-audit: preserve per-cell added/fixed findings, skipped/missing counts and final diff verdict. No standalone verbosity flags."
     },
     "tools/ui/circuit-axis.mjs": {
       "action": "no-direct-output",

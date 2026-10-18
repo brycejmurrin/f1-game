@@ -85,3 +85,41 @@ test('menu screenshot report renders responsive native screen navigation and DOM
     assert.match(html, /SKIPPED \(1\)[\s\S]*career · phone — boot failed/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("layout-audit --diff flags a new finding, credits a fix, and never counts a skip as a pass", async () => {
+  const { diffAudits, formatDiff } = await import("../../tools/ui/audit-diff.mjs");
+  const before = { rows: [
+    { screen: "title", viewport: "v1", clipped: [], offscreen: [{ el: "#a" }] },
+    { screen: "garage", viewport: "v1", clipped: [] },
+    { screen: "select", viewport: "v1", skipped: "timeout" },
+    { screen: "career", viewport: "v1" },
+  ] };
+  const after = { rows: [
+    { screen: "title", viewport: "v1", clipped: [], offscreen: [] },
+    { screen: "garage", viewport: "v1", clipped: [{ el: "#tab", by: ".sheet" }], docOverflowX: true },
+    { screen: "select", viewport: "v1", clipped: [{ el: "#x", by: "#y" }] },
+  ] };
+  const d = diffAudits(before, after);
+  assert.deepEqual(d.added.map((x) => x.cell + " " + x.finding),
+    ["garage|v1 clipped: #tab past .sheet", "garage|v1 docOverflowX"]);
+  assert.deepEqual(d.removed.map((x) => x.finding), ["offscreen: #a"]);
+  assert.deepEqual(d.skipped, ["select|v1"]);
+  assert.deepEqual(d.missing, ["career|v1"]);
+  assert.match(formatDiff(d).at(-1), /^= diff NEW: 2 cells compared, 2 new, 1 fixed, 1 skipped/);
+  assert.match(formatDiff(diffAudits(after, after)).at(-1), /^= diff ok/);
+
+  // The CLI path: exits before any browser launch, 1 on a new finding, 0 when clean.
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "audit-diff-test-"));
+  try {
+    const b = path.join(dir, "before.json"), a = path.join(dir, "after.json");
+    fs.writeFileSync(b, JSON.stringify(before));
+    fs.writeFileSync(a, JSON.stringify(after));
+    const cli = (...args) => spawnSync(process.execPath, [path.join(ROOT, "tools/ui/layout-audit.mjs"), ...args], { encoding: "utf8" });
+    const red = cli("--diff=" + b, "--after=" + a);
+    assert.equal(red.status, 1, red.stderr || red.stdout);
+    assert.match(red.stdout, /^\+ garage\|v1 {2}clipped: #tab past \.sheet$/m);
+    const green = cli("--diff", a, "--after=" + a);
+    assert.equal(green.status, 0, green.stderr || green.stdout);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

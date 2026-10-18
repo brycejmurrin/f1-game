@@ -276,7 +276,7 @@ test("a spec edit selects the browser group(s) that run it; the CI selectors str
 });
 
 test("the stylesheets the blessed menu PNGs see route to baseline (incident 2026-09-16)", () => {
-  for (const f of ["css/menus.css", "css/carsetup.css", "css/tokens.css", "css/select.css"]) {
+  for (const f of ["css/menus.css", "css/carsetup.css", "css/tokens.css", "css/select.css", "css/components.css"]) {
     const groups = json(f).groups.map((g) => g.group);
     assert.ok(groups.includes("baseline") && groups.includes("ui"), `${f} must pick ui + baseline, got ${groups}`);
   }

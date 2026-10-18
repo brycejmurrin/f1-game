@@ -108,16 +108,12 @@ count`, `postStep hands a finished car back…`, `a world-generation handback…
 
 ### Incident reset is a no-op after handback
 
-**`incident({reset:true})` is a NO-OP once the takeover already ended.**
-`IncidentSim.reset()` (`js/physics/incident-sim.js`) only iterates and hands back
-entries in `_incidents` — if the takeover already settled or hit its hard
-time cap, `_incidents` is already empty and `reset()` does nothing (the
-`for` loop runs zero times) even though it still returns `status()` looking
-like success. **It cannot fix a car that looks stuck *after* handback** —
-that is bespoke-model state (off-track, low speed, bad heading), not an
-active takeover. For a stuck-after-handback car, use `__apex.resetPlayer()`
-or `__apex.jump(frac, speed, x)` instead; only reach for `incident({reset:true})`
-while `incident().count > 0` / `incidents` is non-empty.
+`IncidentSim.reset()` (`js/physics/incident-sim.js`) only hands back entries in
+`_incidents`. Once the takeover settled or hit its time cap that list is empty, so
+`incident({reset:true})` does nothing yet still returns a success-looking `status()`.
+A car stuck *after* handback is bespoke-model state (off-track, low speed, bad
+heading): use `__apex.resetPlayer()` or `__apex.jump(frac, speed, x)`. Reach for
+`incident({reset:true})` only while `incident().count > 0`.
 
 ### Reliability: lap-1 / every-race DNF
 
@@ -162,9 +158,7 @@ Browser first: `__apex.caution()` then read `level`, `sinceT`, `cause`. `held` i
 - Using wall-clock time or global random sources, breaking seeded determinism.
 - Reporting a timeout-shaped browser failure as logic before checking load and
   re-running the specific spec alone if needed.
-- Calling `incident({reset:true})` to un-stick a car and concluding nothing is
-  wrong when it returns cleanly — check `incident().count` first; a car stuck
-  *after* handback needs `resetPlayer()`/`jump()`, not another reset call.
+- Trusting a clean `incident({reset:true})` return: see "Incident reset is a no-op after handback" above.
 
 ## Fresh reset evidence
 

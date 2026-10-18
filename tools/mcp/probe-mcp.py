@@ -521,8 +521,9 @@ def cmd_help(_: argparse.Namespace) -> int:
   route <prefixed>     show backend + upstream tool name
   list-tools           every chrome_* and tinyfish_* tool
   call <name> '<json>' invoke one prefixed tool (auto-routes to the daemon)
-  chrome-start         persistent Chromium daemon in tmux (state survives calls)
-  chrome-stop          stop it — ALWAYS before test-bg.mjs / Playwright
+  chrome-start         persistent Chromium daemon in tmux (state survives calls);
+                       refused while a Playwright run is live here (--force overrides)
+  chrome-stop          stop it — test-bg.mjs refuses a browser group while it is up
   chrome-daemon        the daemon itself, foreground (chrome-start runs this)
   serve                stdio MCP server (not in .mcp.json since 2026-09; opt-in only)
 """
@@ -710,7 +711,24 @@ def cmd_chrome_daemon(args: argparse.Namespace) -> int:
     return 0
 
 
+def live_test_run() -> str:
+    """`<pid>:<start> <log>` of a live Playwright run in THIS checkout, else ""
+    (.claude/hooks/live-run.py, the same answer stop-guard and protect-files use)."""
+    try:
+        r = subprocess.run([sys.executable, str(ROOT / ".claude" / "hooks" / "live-run.py"), str(ROOT)],
+                           capture_output=True, text=True, timeout=10)
+        return r.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
 def cmd_chrome_start(args: argparse.Namespace) -> int:
+    live = "" if getattr(args, "force", False) else live_test_run()
+    if live:
+        print(f"REFUSED: a Playwright run is live in this checkout ({live}); a Chrome beside it "
+              "starves it. Wait for its `= run` line (node tools/ci/test-bg.mjs --status), "
+              "or pass --force.", file=sys.stderr)
+        return 1
     port = daemon_port()
     if port is not None:
         print(f"already running on 127.0.0.1:{port}")
@@ -734,8 +752,8 @@ def cmd_chrome_start(args: argparse.Namespace) -> int:
         port = daemon_port()
         if port is not None:
             print(f"probe-chrome daemon up on 127.0.0.1:{port}")
-            print("REMEMBER: `chrome-stop` before any test-bg.mjs run — a live "
-                  "MCP browser starves Playwright (see .claude/skills/mcp-probe).")
+            print("REMEMBER: `chrome-stop` before any test-bg.mjs run — test-bg refuses "
+                  "a browser group while this daemon is live.")
             return 0
     print("daemon did not come up — tmux pane:", file=sys.stderr)
     print(_tmux("capture-pane", "-t", f"{CHROME_DAEMON_SESSION}:0.0", "-p").stdout,
@@ -884,6 +902,7 @@ def main() -> int:
 
     p_cstart = sub.add_parser("chrome-start", add_help=False)
     p_cstart.add_argument("--port", type=valid_port, default=CHROME_DAEMON_PORT)
+    p_cstart.add_argument("--force", action="store_true")
     p_cstart.set_defaults(func=cmd_chrome_start)
 
     p_cstop = sub.add_parser("chrome-stop", add_help=False)
