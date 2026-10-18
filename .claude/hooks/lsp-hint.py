@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse (Grep, Bash) hook: when a search pattern is a bare JS symbol, name the apex-lsp call.
+"""PostToolUse (Grep, Bash) hook: when a search pattern was a bare JS symbol, name the apex-lsp call.
 
 Agents reach for grep even with a code-intelligence server attached; the
 adoption write-ups (docs/notes/LSP-MCP-2026-10-18.md §Agent use) found that a
@@ -9,10 +9,12 @@ and when that pattern is a symbol (`Tracks\\.curvature`, `\\bGameHud\\b`,
 `function forTeam`) aimed at js/ or the whole tree, adds ONE factual line naming
 the semantic equivalent. Text, regexes, comments and CSS searches get nothing.
 
-Output: hookSpecificOutput.additionalContext with no permissionDecision, so the
-search runs as asked (https://code.claude.com/docs/en/hooks: PreToolUse
-additionalContext; written as a statement, not an order). Any error → no output
-(advisory, fail open; never blocks). APEX_LSP_HINT=off silences it.
+PostToolUse, not PreToolUse: every PreToolUse hook here is a guard that must block
+when it fails (tests/unit/bash-guard-hardening.test.mjs), and an advisory hint must
+never stop a search. After the search the line lands next to its results, where the
+follow-up lookup is chosen. Output: hookSpecificOutput.additionalContext
+(https://code.claude.com/docs/en/hooks; written as a statement, not an order).
+Any error → no output (advisory, fail open). APEX_LSP_HINT=off silences it.
 """
 import json
 import os
@@ -76,11 +78,12 @@ def main():
         return
     call = "lsp_definition" if is_decl else "lsp_references"
     cli = "def" if is_decl else "refs"
-    msg = (f"lsp-hint: `{sym}` is a JS symbol; apex-lsp answers this semantically "
+    msg = (f"lsp-hint: `{sym}` is a JS symbol; for the next lookup apex-lsp answers this semantically "
            f"(MCP {call} {{symbol: \"{sym}\"}}, lsp_callers for who calls it; shell: tools/mcp/lsp-mcp.sh {cli} {sym}) — "
            "rows tagged [def|export|alias|use] with the enclosing function, comments and strings excluded. "
            "grep stays right for text, comments, CSS and regexes.")
-    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": msg}}))
+    event = data.get("hook_event_name") or "PostToolUse"
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": msg}}))
 
 
 if __name__ == "__main__":

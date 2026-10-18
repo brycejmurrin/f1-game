@@ -237,15 +237,18 @@ test("fixture workspace: callers, outline, body, paging, concise, diagnostics ne
   } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("lsp-hint.py names the apex-lsp call for a symbol search, and stays quiet otherwise", () => {
+test("lsp-hint.py (PostToolUse) names the apex-lsp call after a symbol search, and stays quiet otherwise", () => {
   const hook = path.join(ROOT, ".claude/hooks/lsp-hint.py");
   assert.ok(fs.statSync(hook).mode & 0o111, "hook must be executable");
   const run = input => {
-    const r = spawnSync("python3", [hook], { input: JSON.stringify(input), encoding: "utf8", env: { ...process.env, APEX_LSP_HINT: "" } });
+    const r = spawnSync("python3", [hook], { input: JSON.stringify({ hook_event_name: "PostToolUse", ...input }), encoding: "utf8", env: { ...process.env, APEX_LSP_HINT: "" } });
     return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput : null;
   };
   let h = run({ tool_name: "Grep", tool_input: { pattern: "Tracks\\.curvature", path: "js" } });
-  assert.equal(h.hookEventName, "PreToolUse");
+  assert.equal(h.hookEventName, "PostToolUse");
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8")).hooks;
+  assert.ok(settings.PostToolUse.some(g => g.matcher === "Grep|Bash" && g.hooks.some(x => x.command.includes("lsp-hint.py"))), "registered PostToolUse Grep|Bash");
+  assert.ok(!settings.PreToolUse.some(g => g.hooks.some(x => x.command.includes("lsp-hint.py"))), "never a PreToolUse guard: those block on failure");
   assert.equal(h.permissionDecision, undefined, "advisory: never decides the permission");
   assert.match(h.additionalContext, /lsp_references \{symbol: "Tracks\.curvature"\}/);
   assert.match(run({ tool_name: "Grep", tool_input: { pattern: "function\\s+forTeam" } }).additionalContext, /lsp_definition \{symbol: "forTeam"\}/);
