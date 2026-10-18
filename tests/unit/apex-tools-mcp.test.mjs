@@ -2292,3 +2292,9 @@ test("servers boot with no node_modules: static import graphs (apex-tools, js-de
   assert.ok(seen.size > 3, `walked ${seen.size} files`);
   assert.deepEqual(bare, [], "load npm packages with a lazy `await import()` at the call site");
 });
+
+test("track-session accepts the flags shot-survey passes (--output-root, --designs): apex_shot_survey died with 'unknown flag'", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(process.execPath, ["tools/shot/track-session.mjs", "--serve", "--track", "monza", "--output-root", "scratch/none", "--designs", "scratch/none.json"], { encoding: "utf8", timeout: 20000 });
+  assert.doesNotMatch(r.stderr, /unknown flag/);
+});
