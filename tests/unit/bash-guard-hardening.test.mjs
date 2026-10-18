@@ -1003,3 +1003,48 @@ test("H5: a loaded box gets the longer guard cap, above it sits the hook timeout
     assert.match(repo.g("ls-files", "-v").stdout, /^H \.claude\/memory\/a\.md/m, "unmarked before the git verb");
   } finally { repo.rm(); }
 });
+
+test('diagnostics and UI browser entry points remain parent-owned across MCP and shell', () => {
+  const sub = command => hook('bash-guard.sh', bashCall(command, { agent_id: 'a1' }));
+  const blocked = [
+    "node tools/mcp/apex-tools-mcp.mjs call apex_ui_inspect '{}'",
+    "bash tools/mcp/apex-tools-mcp.sh call apex_diagnostics '{\"op\":\"capabilities\"}'",
+    "node tools/perf/diagnostics.mjs memory_census '{}'",
+    "node tools/perf/diagnostics.mjs gpu_memory_census '{}'",
+    "node tools/perf/diagnostics.mjs renderer_probe '{}'",
+    "node tools/perf/diagnostics.mjs memory_census '{\"dryRun\":true}'",
+    "node tools/perf/diagnostics.mjs unknown '{}'",
+    "cd tools/perf && node ./diagnostics.mjs memory_census '{}'",
+    "node tools/gfx/mem-census.mjs --plan",
+    "node tools/gfx/gpu-mem-census.mjs --dry-run",
+    "node tools/gfx/gfx-probe.mjs --plan",
+    "node tools/ui/explorer.mjs inspect --screen title",
+    "node tools/ui/explorer.mjs replay artifacts/mission.json",
+  ];
+  for (const command of blocked) {
+    assert.equal(sub(command).status, 2, command);
+    assert.equal(hook('bash-guard.sh', bashCall(command)).status, 0, 'parent may run: ' + command);
+  }
+  for (const command of [
+    "node tools/perf/diagnostics.mjs vm_lifecycle '{}'",
+    "node tools/check/lifecycle-census.mjs --cycles 1",
+    "node tools/mcp/apex-tools-mcp.mjs call apex_ui_mission_plan '{\"mission\":\"first-race\"}'",
+    "node tools/mcp/apex-tools-mcp.mjs call apex_garage_plan '{}'",
+    "node tools/ui/explorer.mjs brief --mission first-race --url http://localhost:3456",
+    "node tools/ui/explorer.mjs --list",
+    "node tools/shot/garage-angles.mjs --plan",
+  ]) assert.equal(sub(command).status, 0, 'browser-free plan/VM remains open: ' + command);
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude/settings.json'), 'utf8'));
+  const matcher = new RegExp(settings.hooks.PreToolUse.find(g => g.hooks.some(h => h.command.includes('mcp-browser-guard.sh'))).matcher);
+  for (const tool of ['apex_ui_inspect', 'apex_diagnostics']) {
+    const name = 'mcp__apex-tools__' + tool;
+    assert.ok(matcher.test(name));
+    assert.equal(hook('mcp-browser-guard.sh', { tool_name: name, agent_type: 'worker' }).status, 2);
+    assert.equal(hook('mcp-browser-guard.sh', { tool_name: name }).status, 0);
+  }
+  for (const tool of ['apex_ui_mission_plan', 'apex_garage_plan', 'apex_ui_diff']) {
+    const name = 'mcp__apex-tools__' + tool;
+    assert.equal(matcher.test(name), false);
+    assert.equal(hook('mcp-browser-guard.sh', { tool_name: name, agent_type: 'worker' }).status, 0);
+  }
+});

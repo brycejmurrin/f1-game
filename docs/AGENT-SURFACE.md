@@ -211,6 +211,11 @@ apex-tools HTTP `3713` (`127.0.0.1` only). Design / refuses:
 | Live `version.json` / Pages | **deploy-research** (host fetch / WebFetch / hosted TinyFish) | `mcp-probe`, curl github.io, `tinyfish-mcp.sh` in-container |
 | Batch screenshots | skill **playwright-probe** (`shot.mjs` / `apex-capture`) | Chrome MCP while Playwright runs |
 | Multi-angle car / garage (ONE Chromium) | `garage-angles-fetch.mjs` (BEFORE pack) · `render-car.mjs --preset=spine` / `--shot=` · `garage-angles.mjs` AFTER only | N× recapturing the 11-team garage grid; Car shot / `carview.html` |
+| Garage capture matrix preflight | `apex_garage_plan` with explicit shot/time limits; capture only through the parent-owned garage workflow | planning as rendered evidence |
+| Semantic controls, CSS, hit targets and live/saved UI bindings | `apex_ui_inspect` on one local catalog screen; optional bounded viewport sequence | probe completion as a UI pass |
+| Compare saved UI inspections | `apex_ui_diff` with matching viewport sequences | unrelated screenshots as semantic evidence |
+| Named player navigation scenario | `apex_ui_mission_plan`, then parent-owned replay with its outer deadline and shared browser lock | scenario preparation as interaction verification |
+| Heap growth, memory lifecycle, GPU allocations or renderer diagnostics | `apex_diagnostics` capabilities → bounded run → saved report query; `apex_profile` for CPU/copy spans and `debugger_*` for source state | heap growth alone as a leak; software GPU timing as player hardware evidence |
 | Tiny car inspect JPEG | `tools/car/carshot.mjs` (soft→CDP clip) | full `apex-capture` sweep |
 | Interactive host browser | **playwright-official** (`browser_*`) | `test-bg.mjs`; chrome-devtools at the same time |
 | One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` matrix / `--gallery` |
@@ -253,7 +258,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Thirty-three tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Thirty-eight tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -288,12 +293,23 @@ and viewports) in one read, sourced from the tools' own schemas so it cannot dri
 31 → 32 on 2026-10-16 for `apex_profile`, the same job as a direct browser-kind tool (`profile` joined the settings matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`); it returns a jobId and holds the browser lock until the job exits.
 32 → 33 on 2026-10-16 for `apex_locations`: authored turn and sector targets
 on all 52 circuits, plus curated named scenery with source-located fractions.
+33 → 38 on 2026-10-18 for `apex_ui_inspect` (bounded semantic/CSS inspection),
+`apex_ui_diff` (saved inspection comparison), `apex_ui_mission_plan` (named replay
+scenario preparation), `apex_garage_plan` (browser-free camera/design matrix) and
+`apex_diagnostics` (capabilities, background memory/GPU/renderer/VM probes, and
+saved report queries). Browser diagnostics use the existing job lock; planning
+and report comparison do not launch Chromium.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
 |---|---|---|---|
 | `apex_status` | built-in | tree | check-changes |
 | `apex_catalog` | built-in | tree | check-changes |
+| `apex_diagnostics` | `perf/diagnostics.mjs` | tree | renderer-debug |
+| `apex_garage_plan` | `shot/garage-angles.mjs` | tree | garage-parts-livery |
+| `apex_ui_mission_plan` | `ui/explorer.mjs` | tree | survey-ui-matrix |
+| `apex_ui_inspect` | `ui/explorer.mjs` | browser | ui-menu-a11y |
+| `apex_ui_diff` | `ui/explorer/inspector.mjs` | tree | ui-menu-a11y |
 | `apex_locations` | built-in | tree | survey-track |
 | `apex_doctor` | `check/doctor.mjs` | tree | check-changes |
 | `apex_pick_tests` | `ci/pick-tests.mjs` | tree | check-changes |
@@ -325,6 +341,15 @@ on all 52 circuits, plus curated named scenery with source-located fractions.
 | `apex_hud_mock` | `shot/hud-mock.mjs` | browser | survey-ui-matrix |
 | `apex_profile` | `perf/profile.mjs` | browser | playwright-probe |
 | `apex_profile_query` | `perf/query.mjs` | tree | playwright-probe |
+
+`apex_catalog` retains its general response when `section` is omitted. For focused
+discovery use `section: "parts"`, `"liveries"` or `"garage"`, with optional literal
+`filter`, `offset` and `limit` (default 25, maximum 100). Parts support canonical
+`category` and `team` filters and expose cost, stat multipliers and supplier/team
+restrictions. This does not evaluate career ownership. Livery discovery excludes
+optional Legends additions and saved custom paint. `apex_car_audit` ladder and
+`apex_job_start` parts_sweep accept `categories` and `team`; the latter applies
+team availability before serial or parallel mesh measurement.
 
 Not wrapped as their own `apex_*` tool: `profile.mjs --mode hitch|trace` (hitch wraps `gfx/frame-hitch.mjs`, trace writes a Perfetto JSON; `--base <ref>` prints `incomparable` when the base lacks the `apex26.wgxCapture` key, #2674) and the three.js Inspector (`?inspector=1`, `__apex.inspector()`, see §three.js Inspector below).
 

@@ -30,6 +30,10 @@ import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
 import { aliveRun } from "../ci/test-bg.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
+import { createUITools, UI_INSPECT_SCHEMA, UI_DIFF_SCHEMA, UI_MISSION_SCHEMA } from "./ui-tools.mjs";
+import { DISCOVERY_SCHEMA, CAR_FILTER_SCHEMA, discoverCatalog } from "./catalog-discovery.mjs";
+import { GARAGE_PLAN_SCHEMA, createGaragePlanHandler } from "./garage-plan.mjs";
+import { DIAGNOSTICS_TOOL, createDiagnosticsHandler } from "./diagnostics-tools.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
   expandMatrix, parseShard, shardCells, estimateMinutes, validateOffsets, filterOnly, bootGroups,
@@ -332,6 +336,31 @@ function nodeTool(rel) {
 }
 
 const CATALOG = [
+  { ...DIAGNOSTICS_TOOL, kind: 'tree' },
+  {
+    name: "apex_garage_plan",
+    kind: "tree",
+    description: "Tree (no browser) — garage-angles --plan for one canonical team × up to 4 named frames × up to 4 livery enum options. Explicit maxShots (1..16) and time budget (30..180 s); returns estimated matrix and withinBudget, never captures. Skill: garage-parts-livery.",
+    inputSchema: GARAGE_PLAN_SCHEMA,
+  },
+  {
+    name: "apex_ui_mission_plan",
+    kind: "tree",
+    description: "Tree (no browser) — prepare one canonical first-race, customize-car or return-settings scenario, its pinned local replay command and explicit shot/time limits. Writes only the bundled scenario under artifacts/ or scratch/. Parent executes with the outer deadline and shared browser lock; planning is not a playtest pass. Skill: survey-ui-matrix.",
+    inputSchema: UI_MISSION_SCHEMA,
+  },
+  {
+    name: "apex_ui_inspect",
+    kind: "browser",
+    description: "Browser (shared lock owned by explorer) — semantic controls, computed CSS, hit interception, clipping and explicit live/saved bindings for one catalog screen, up to 8 viewports and optional roundtrip. Disposable context; local working tree only; 180 s cap. Returns bounded advisories and inspection.json. Probe completion is not a UI pass. Skill: ui-menu-a11y.",
+    inputSchema: UI_INSPECT_SCHEMA,
+  },
+  {
+    name: "apex_ui_diff",
+    kind: "tree",
+    description: "Tree (no browser) — compare two saved inspection.json files under artifacts/ or scratch/ (5 MiB each), with matching viewport sequence. Returns semantic/layout differences and unavailable/unmapped counts; observations are not correctness verdicts. Skill: ui-menu-a11y.",
+    inputSchema: UI_DIFF_SCHEMA,
+  },
   {
     name: "apex_verify_change_fast",
     week: 1,
@@ -1146,12 +1175,24 @@ for (const tool of CATALOG) {
   const schema = tool.inputSchema;
   schema.additionalProperties = false;
   for (const [key, spec] of Object.entries(schema.properties)) {
-    if (spec.type === "string") spec.maxLength = key === "expr" ? 65536 : 4096;
-    if (spec.type === "array") spec.maxItems = 256;
+    if (spec.type === "string") spec.maxLength ??= key === "expr" ? 65536 : 4096;
+    if (spec.type === "array") spec.maxItems ??= 256;
   }
   if (schema.properties.track && !['apex_locations', 'apex_shot_survey', 'apex_job_start'].includes(tool.name)) schema.properties.track.enum = knownCircuits();
 }
 const schemaFor = (name) => CATALOG.find((t) => t.name === name).inputSchema;
+Object.assign(schemaFor('apex_catalog').properties, DISCOVERY_SCHEMA);
+Object.assign(schemaFor('apex_car_audit').properties, CAR_FILTER_SCHEMA);
+Object.assign(schemaFor('apex_job_start').properties, CAR_FILTER_SCHEMA);
+// Diagnostic-specific constraints remain enforced by diagnosticPlan; retain
+// broader existing shot/profile job properties and admit their new typed keys.
+for (const key of ['tracks', 'visits', 'backend', 'mode', 'cycles', 'settle', 'warm', 'maxGrowthMb', 'seed', 'cam', 'mobile', 'realLink', 'lite', 'iphone']) {
+  const props = schemaFor('apex_job_start').properties;
+  const spec = DIAGNOSTICS_TOOL.inputSchema.properties[key];
+  if (!props[key]) props[key] = spec;
+  else if (props[key].type !== spec.type) props[key] = { anyOf: [props[key], spec] };
+  else if (props[key].enum && spec.enum) props[key].enum = [...new Set([...props[key].enum, ...spec.enum])];
+}
 const bound = (name, key, extra) => Object.assign(schemaFor(name).properties[key], extra);
 schemaFor("apex_select_specs").required = ["since"];
 schemaFor("apex_graph_parity").required = ["base"];
@@ -2006,6 +2047,10 @@ function statusNext(lock, playwright, loadavg) {
 }
 /** apex_catalog: ids come from the tool schemas and the UI audit's own catalogs, so they cannot drift from what the tools accept. */
 async function handleCatalog(args = {}) {
+  if (args.section) {
+    try { return toolResult(discoverCatalog(args)); }
+    catch (e) { return refuse('bad_args', e.message, 'Use canonical catalog ids and bounded pagination.'); }
+  }
   if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv: ["apex_catalog"], note: "read-only; no browser" });
   const enumOf = (tool, prop) => CATALOG.find((t) => t.name === tool)?.inputSchema?.properties?.[prop]?.enum || [];
   let ui = { screens: [], viewports: [] };
@@ -2455,6 +2500,20 @@ function dispatch(name, args = {}, { signal = null } = {}) {
       hint: "Use apex_shot_survey {track, location:<id>, angles:[\"entry\",\"apex\",\"exit\"]}; inspect framing before claiming a landmark match." });
   }
   if (name === "apex_garage") return handleGarage(args);   // async: a persistent child, not a spawnSync
+  if (name === 'apex_garage_plan') {
+    const gate = gateTreeArgs(args); if (gate) return gate;
+    return createGaragePlanHandler({ ROOT, toolResult, refuse, runSpawn })(args, { signal });
+  }
+  if (name === 'apex_diagnostics') {
+    const gate = gateTreeArgs(args); if (gate) return gate;
+    return createDiagnosticsHandler({ ROOT, toolResult, refuse, assertSafeOut, occupancyRefuse, mockMode, runSpawn,
+      knownCircuits, startJob: a => extras().handlers.apex_job_start(a) })(args, { signal });
+  }
+  if (Object.hasOwn(uiTools().handlers, name)) {
+    const gate = toolKind(known) === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
+    if (gate) return gate;
+    return uiTools().handlers[name](args, { signal });
+  }
   if (name === "apex_verify_change_fast" && args.sync !== true && !args.dryRun) {
     // ~10 min against a ~180 s host cap: a background job, not a call that times out (and is killed at 600 s).
     const gate = gateTreeArgs(args);
@@ -2765,6 +2824,10 @@ function rpcError(id, code, message) {
 }
 
 let extrasInst = null;
+let uiToolsInst = null;
+function uiTools() {
+  return uiToolsInst ||= createUITools({ ROOT, toolResult, refuse, assertSafeOut, runSpawn, occupancyRefuse, mockMode });
+}
 /** apex_track / apex_job_* / apex_ui_* / apex_*_audit handlers (tools/mcp/apex-extras.mjs). */
 function extras() {
   if (!extrasInst) {

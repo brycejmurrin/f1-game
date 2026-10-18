@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "f1-dev-tools",
-  "version": "0.3.1",
-  "description": "Reproduce, inspect, compare and validate Apex 26 camera and replay changes using the game's existing developer interface.",
+  "version": "0.4.0",
+  "description": "Inspect, profile, debug and validate Apex 26 UI, memory, rendering, garage parts, cameras and replay using the game checkout\u2019s developer tools.",
   "author": {
     "name": "F1 Game"
   },
@@ -10,8 +10,8 @@
     "com.openai": {
       "interface": {
         "displayName": "F1 Dev Tools",
-        "shortDescription": "Camera and replay workflows",
-        "longDescription": "Five development workflows for brycejmurrin/f1-game: scene reproduction, camera inspection, before/after comparisons, WATCH replay transition checks, and camera preset preview/export. Uses the repository's apex-tools, playwright-official, chrome-devtools, js-debugger and apex-lsp MCP servers for deterministic game probes, live browser checks, performance inspection, source debugging and code navigation.",
+        "shortDescription": "Apex game inspection and profiling",
+        "longDescription": "Project-specific workflows for brycejmurrin/f1-game: semantic UI inspection, CPU and memory diagnostics, graphics profiling, garage angles and parts, JavaScript debugging, scene reproduction, camera comparison, WATCH replay checks, and preset preview/export. Uses the repository MCP servers and preserves page diagnosis, release-asset checks and storage reporting.",
         "developerName": "F1 Game",
         "category": "Developer Tools",
         "capabilities": [
