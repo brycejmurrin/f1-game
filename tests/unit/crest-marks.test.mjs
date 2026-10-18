@@ -761,3 +761,26 @@ test("a legend's car wears its marque crest; a wordmark marque is lettered with 
     assert.ok(run.includes(word) && !/LEG|LGD/.test(run), `${lid}: "${run}"`);
   }
 });
+
+/* ── CREST STYLE (LD logos slice): original emblems replace the team mark at every station ── */
+test("crestStyle: each original emblem draws distinct, bounded, legible art; team/unset/unknown keep the team mark", () => {
+  assert.deepEqual(Array.from(LT.CREST_STYLE_IDS), ["team", "shield", "roundel", "wings", "arrow", "star"]);
+  const R = { x: 0, y: 0, w: 200, h: 200 };
+  const ops = (liv) => { const ctx = new RecCtx(); LT.drawCrest(ctx, "ferrari", R, { liv, bare: false }); return JSON.stringify(ctx.ops); };
+  const team = ops({});
+  for (const v of ["team", "bogus", "constructor", "", null]) assert.equal(ops({ crestStyle: v }), team, String(v));
+  const seen = new Set([team]);
+  for (const id of LT.CREST_STYLE_IDS.slice(1)) {
+    const a = ops({ crestStyle: id });
+    assert.equal(a, ops({ crestStyle: id }), id + " is deterministic");
+    assert.ok(!seen.has(a), id + " differs from the team mark and every other emblem");
+    seen.add(a);
+    const ctx = new RecCtx(); LT.drawCrest(ctx, "ferrari", R, { liv: { crestStyle: id }, bare: false });
+    for (const op of ctx.ops) if (op.kind === "stroke") assert.ok(op.lw >= LT.STROKE_MIN, id + " stroke floor");
+    assert.ok(ctx.ops.length > 0 && ctx.ops.length < 400, id + " bounded");
+  }
+});
+
+test("crestStyle is a livery field (garage file round-trip, forTeam copy)", () => {
+  assert.ok(Liveries.FIELDS.includes("crestStyle"));
+});

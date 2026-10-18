@@ -1000,7 +1000,7 @@ export const CIRCUIT_FOUNDATION = /^tests\/specs\/([a-z0-9-]+)-foundation\.spec\
 // scoped to the ids whose rows differ. Reading them needs the base, so a
 // base git cannot show leaves the file TRACKED, exactly as before.
 // Also `{ <circuit id>: <number> }` (flat), e.g. the props triangle budget.
-export const PER_CIRCUIT_DATA = new Set([
+const PER_CIRCUIT_DATA = new Set([
   "tests/data/scenery-audit-baseline.json",
   "tools/track/props-tris-baseline.json",
   "tools/track/clip-baseline.json",

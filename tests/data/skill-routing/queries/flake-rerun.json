@@ -1,0 +1,8 @@
+[
+{"query": "Only hud-layout shard red, my PR is docs-only. What evidence before asking Bryce to rerun CI?", "expect": "flake-rerun"},
+{"query": "Sibling shards green but one Playwright spec timed out at 120s on loaded box. Policy for rerun request #2394?", "expect": "flake-rerun"},
+{"query": "Same test red on ship tip already — is this a flake I should rerun or base red?", "expect": "flake-rerun"},
+{"query": "ci-rerun once after Bryce said yes — where do I log the flake wake?", "expect": "flake-rerun"},
+{"query": "PR unrelated to physics but physics shard failed once. Steps before re-dispatching Actions?", "expect": "flake-rerun"},
+{"query": "Retry passed locally on second try — steward says treat as red. Flake rerun policy?", "expect": "flake-rerun"}
+]

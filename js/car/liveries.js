@@ -532,7 +532,7 @@ const Liveries = (function () {
     "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent",
     "podFinish", "finFinish", "mirrorFinish", "helmetStyle",
     // LD zones slice (docs/notes/LIVERY-REF-2026-10-18.md): front and rear wing endplates.
-    "endplate",
+    "endplate", "crestStyle",
     // PAINT ZONES (CarMaterials.PAINT_ZONES; header above): new surfaces, each optional.
     "floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "rimFinish", "deflectorTint",
     "cockpitTint", "gripTint", "noseFinish", "boardTint", "exhaustTint"];

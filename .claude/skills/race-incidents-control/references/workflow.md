@@ -4,6 +4,7 @@ Load from the SKILL.md index when the task needs this detail.
 
 ## Contents
 - Workflow / Implementation
+- Traces
 - Common Mistakes
 - Fresh reset evidence
 
@@ -35,8 +36,19 @@ Load from the SKILL.md index when the task needs this detail.
    - It raises caution immediately but lowers with hysteresis/minimum hold and
      hard caps to avoid flicker or permanent neutralization.
    - In multiplayer, only the host computes; guests adopt host `apply()` state.
-   - The Safety Car / red flag disables OVERTAKE (until the leader's next crossing after it ends; Art. B7.2.2), not active aero; a yellow or VSC disables neither. LOW GRIP (wet: `TyreModel.treadFor` > 0) also disables it (B7.2.2(d)) and halves the active-aero trade (`aeroWetK` in game.js).
-   - Under the Safety Car the field QUEUES (B5.13): `RaceControl.scQueueFrac` gives the leader the SC pace (0.45 × vTop) and a car > 1 s adrift of the car ahead on the road up to 0.6 × vTop until it closes — so a stop under the SC is genuinely cheaper. Overtake itself is `js/race/overtake-mode.js` (detection line, 0.5 MJ allowance).
+   - The ONE place for the SC/overtake facts this file relies on:
+     - OVERTAKE: the Safety Car / red flag disables it until the leader's next
+       line crossing after it ends (`otHoldLap`, Art. B7.2.2), so `otEnabled`
+       stays false up to a lap after GREEN; a yellow or VSC disables neither
+       overtake nor active aero. LOW GRIP (wet: `TyreModel.treadFor` > 0) also
+       disables it (B7.2.2(d)) and halves the active-aero trade (`aeroWetK` in
+       game.js). Overtake itself is `js/race/overtake-mode.js` (detection line,
+       0.5 MJ allowance).
+     - SPEED CAP: race control never slows a car. game.js applies it live from
+       `raceCtl.level` (`cautionV`; AI `holdCap`): VSC 0.6 × vTop; under the SC
+       the field QUEUES (B5.13), `RaceControl.scQueueFrac` giving the leader
+       0.45 × vTop and a car > 1 s adrift of the car ahead up to 0.6 × vTop until
+       it closes. Cars at SC pace with `level` 0 point at game.js.
 
 5. **Preserve determinism.**
    - No `Date.now()` or `Math.random()` in debris, incident, caution, or
@@ -52,6 +64,47 @@ Load from the SKILL.md index when the task needs this detail.
    - `__apex.caution({hazards:true})` for flag state plus hazard list.
    - `__apex.retirements()` after `seed()`/`reliability()`/`race()` for DNF plan.
    - `carAt(i).otEnabled` to confirm overtake gating under cautions.
+
+7. **Verify narrowly, then with browser coverage.**
+   - Rules: `node --test tests/unit/race-control.test.mjs` after race-control
+     logic changes.
+   - Takeovers (R2/R3/C1): `node --test tests/unit/incident-gate.test.mjs`
+     (promote, handback, window, budget, `release`). `race-control.spec.js` and
+     `debris.spec.js` do NOT exercise IncidentSim; `collisions-deep.spec.js` /
+     `collisions-deep-vm.test.mjs` switch every takeover OFF via
+     `incident({flags})` to test the bespoke clamp, so a takeover change can
+     break them through that hook.
+   - Browser coverage: a single spec (`npm test -- tests/specs/<file>.spec.js`, background) or, for the whole
+     `physics-core` group, `node tools/ci/remote-group.mjs physics-core` on the pushed branch (AGENTS.md verification table).
+   - Use `test:tooling-fast` (background, AGENTS.md rule 4) for docs/hooks/unit inventory checks.
+
+## Traces
+
+Takeover never released, reset after handback, lap-1 DNF, SC never deploys, SC stuck out.
+
+### Takeover never released (cars frozen / floating after a pile-up)
+
+All in `js/physics/incident-sim.js`; `__apex.incident()` is `status()`.
+1. `incident().count` / `incidents[].ticks` / `owned`: count 0 means no live
+   takeover — the car is bespoke-stuck (next section), not owned.
+2. `postStep(dt)` is the only progress path and game.js calls it EVERY tick,
+   even with debris off (`js/game.js` ~4523-4534; `preStep` only while
+   `DebrisWorld.active()`). A paused or non-race state that skips the physics
+   step also freezes the takeover.
+3. Normal exit per car: settle (`pose.sleeping` or speed < `SETTLE_V` and spin
+   < `SETTLE_W`) for `SETTLE_HOLD_S` (0.30 s), or `inc.elapsed >= WINDOW_MAX_S`
+   (3.0 s hard cap) → `handbackCar(inc, i, false, pose)` (~381-382).
+   `elapsed` advances by `dt`; a NaN/0 `dt` from the caller is the first suspect.
+4. Anomaly exits → `handbackCar(…, true)` restores last-good `inc.good`/`snap`
+   (`_fallbacks++`): world inactive or `worldGen()` changed, no/NaN body pose,
+   teleport past `stepBound`, car retired/finished.
+5. External release: `release(c)` (rescuePlayer, retireCar, `__apex.jump`)
+   returns false when the car is not in `_owned`. `reset()` hands back ALL.
+6. `c1Pileup` (`apex26.c1Pileup`, default ON) gates promotion; switching a
+   kind off via `incident({flags})` (`setFlags`) also hands back that kind's
+   live takeovers as anomalies — the quickest A/B for "is it the takeover?".
+Tests: `incident-gate.test.mjs` (`incident window scales with time, not car
+count`, `postStep hands a finished car back…`, `a world-generation handback…`).
 
 ### Incident reset is a no-op after handback
 
@@ -90,16 +143,9 @@ Browser first: `__apex.caution()` then read `level`, `sinceT`, `cause`. `held` i
 - Normal exits: hazards fall below SC_MIN and `sinceT >= MIN_HOLD` (6 s) lowers it a level at a time, or the hard cap SC_MAX (90 s, VSC/SC; YELLOW_MAX 30 s) forces GREEN even with the hazard picture intact, then CAP_REARM_HOLD (45 s) suppresses a same-level re-raise from that stale picture (an escalation still flies). A flag that outlives ~90 s of `caution().sinceT` is therefore not the hazard loop: look for a `held` flag.
 - `held` (scripted, `G.holdCaution` from `js/race/real-race.js`): exempt from the cap and MIN_HOLD until `hold(0)`; a real-race replay that never releases keeps the SC out. Hazard-loop inputs cannot lower it.
 - Debris going inactive or CAUTIONS switched off mid-flag freezes the LEVEL but it still ages to the cap (`capDropIfExpired`); `caution(false)` drops it at once.
-- "Back in" for the player is two separate things: the flag (`caution().level`) and the OVERTAKE hold (`otHoldLap`, off until the leader's next line crossing, so `otEnabled` stays false for up to a lap after GREEN) — and the field's speed cap is game.js's, read live from `raceCtl.level` (`cautionV` in game.js), so cars at SC pace with `level` 0 point at game.js, not race control.
+- "Back in" for the player is two separate things: the flag (`caution().level`) and the OVERTAKE hold / game.js speed cap (step 4).
 - Guest: green on the host but SC on the guest = missed `EV.CAUTION` (`apply()`); `update()` returns early for guests, so only a host message clears it (`reset()` clears it when `G.state !== "race"`).
 - Repro in the VM: `caution(true)`, raise the flag, step past 90 s of sim time (or `hold()`) and read `caution().sinceT`/`level` each step.
-
-7. **Verify narrowly, then with browser coverage.**
-   - Run the pure unit guard `node --test tests/unit/race-control.test.mjs` after
-     race-control logic changes.
-   - Browser coverage: a single spec (`npm test -- tests/specs/race-control.spec.js`, background) or, for the whole
-     `physics-core` group, `node tools/ci/remote-group.mjs physics-core` on the pushed branch (AGENTS.md verification table).
-   - Use `test:tooling-fast` (background, AGENTS.md rule 4) for docs/hooks/unit inventory checks.
 
 ## Common Mistakes
 
@@ -112,8 +158,7 @@ Browser first: `__apex.caution()` then read `level`, `sinceT`, `cause`. `held` i
 - Lowering flags directly on hazard count with no hysteresis, causing flicker as
   debris despawns.
 - Assuming `RaceControl.update()` slows cars: it only sets the flag and gates
-  overtake. The VSC/SC speed cap (VSC 0.6 × vTop; SC: leader 0.45 via `scQueueFrac`, queued cars up to 0.6; AI
-  `holdCap`) is applied in game.js from `raceCtl.level`; do not drive cars from here.
+  overtake; the speed cap is game.js's (step 4). Do not drive cars from here.
 - Using wall-clock time or global random sources, breaking seeded determinism.
 - Reporting a timeout-shaped browser failure as logic before checking load and
   re-running the specific spec alone if needed.

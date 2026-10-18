@@ -26,6 +26,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.3,
+    tyreSeverity: 1.05,  // Banking adds vertical energy (Pirelli Dutch GP notes); no 2026 Chronicle rate — calendar band ~1.0
     gpLaps: 72,   // real race distance (4.259 km); lengthKm's 1 dp derives 71
     baseHW: 7,
     sceneryCoordinates: "racing",
@@ -42,11 +43,14 @@
     // corner) ran dead flat. Turn indices re-resolve through any future remap.
     // Real angles per circuitzandvoort.nl: Hugenholtz is T3 ("after two turns
     // that go right, the third corner goes left"), max 18°; Arie Luyendyk is
-    // T14, the last corner, 15-18° / 32% max gradient.
+    // T14, the last corner, 15-18° / 32% max gradient. T14 ships 18°: the
+    // circuit page and NOS 2021-09-03
+    // (https://nos.nl/collectie/13874/artikel/2396275) both give 18°; the 19°
+    // figures were rounded 2020 previews.
     banked: true,
     bankZones: [
       { turn: 3,  angleDeg: 18, widthM: 140 },  // Hugenholtz banked LEFT hairpin
-      { turn: 14, angleDeg: 19, widthM: 140 },  // Arie Luyendyk banked final RIGHT
+      { turn: 14, angleDeg: 18, widthM: 140 },  // Arie Luyendyk banked final RIGHT
       { turn: 1,  angleDeg: 4.0, widthM: 200 },  // Tarzan
       { turn: 7,  angleDeg: 3.0, widthM: 110 },  // Hunserug-side sweep
       { turn: 11, angleDeg: 3.5, widthM: 140 },  // Hans Ernst chicane
@@ -57,7 +61,21 @@
       { s0: 0.1745, s1: 0.2287, hw: 6.1, ease: 0.012 },  // racing arc 0.195-0.212 Hugenholtz (T3 apex 0.2084)
     ],
     pal: { zenith: [0.28, 0.41, 0.60], horizon: [0.82, 0.78, 0.70], grass: [0.42, 0.50, 0.25], runoff: [0.60, 0.52, 0.34], fog: [0.74, 0.73, 0.70], fogDensity: 0.0024, sunDir: [0.5597170785495562, 0.6492718111174852, 0.5149397122655918], sun: [1, 0.94, 0.80], sunColor: [1, 0.9, 0.74] },
-    elevations: [{ s: 0.56, halfM: 300, rise: 8 }],
+    // Elevation, re-seated on this def's own turn fracs (startFrac 0, no
+    // _sceneryShift: s is the racing frac). Shape per Verstappen.com
+    // 2021-09-02 (https://news.verstappen.com/en/article/4487): T3 exit climbs
+    // to T4 Hunserug, T4->T5 dips, T5->T6 climbs, T7 Scheivlak runs downhill,
+    // T8-T11 nearly flat; Hunserug is one of the highest points
+    // (https://circuitzandvoort.nl/en/corners). Real relief is ~8 m, but T4
+    // (world ≈ −59,20) sits only ~40 m from the 0.667 stretch (≈ −71,−18), so
+    // an 8 m cosine bump makes survey() groundCliffs along that corridor
+    // (CLIFF_SLOPE 0.55). Rises are capped so relief ≈ 4.3 m and cliffs = 0;
+    // the old single hump at 0.56 put the crest between T8 and T9 (flat).
+    elevations: [
+      { s: 0.2957, halfM: 360, rise: 4.2 },  // T4 Hunserug crest (climb from T3 exit, fall to T5)
+      { s: 0.4260, halfM: 150, rise: 3.94 }, // T5 -> T6 climb, crest just past T6
+      { s: 0.4520, halfM: 140, rise: 1.05 }, // eases the fall through T7 Scheivlak
+    ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP

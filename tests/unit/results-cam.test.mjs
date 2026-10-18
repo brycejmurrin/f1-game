@@ -331,6 +331,7 @@ function highlightsRig({ sound = true } = {}) {
     GameAudio: audio.GameAudio, soundOn: sound, player, cars, rivalAudio,
     naturalGear: (v) => (v < 30 ? 2 : 6), rpmFor: (g, v) => Math.min(15000, 5000 + v * 1000 / g), isWetRoad: () => false, vTop: () => 90,
     _poseAt: null, photoMode: false, setupPreviewOn: false, announceT: 0, hitStop: 0, frozen: false, track: {}, physAcc: 0, PHYS_DT: 1 / 60,
+    banner: { tick() {}, clear() {}, announce() {}, get t() { return 0; } }, feel: { shake: 0, camRoll: 0, hitStop: 0 },
     renderAlpha: 0, clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), updateHud: noop, render: noop, update: noop, updatePhotoCam: noop,
   });
   vm.runInContext(TICK, tickCtx, { filename: "js/game.js#tickBody" });

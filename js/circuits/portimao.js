@@ -27,6 +27,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.7,
+    tyreSeverity: 1.25,  // Abrasive Portimão surface (2020–21 Portuguese GP Pirelli)
     gpLaps: 66,   // real race distance (4.653 km); lengthKm's 1 dp derives 65
     baseHW: 7.5,
     sceneryCoordinates: "racing",

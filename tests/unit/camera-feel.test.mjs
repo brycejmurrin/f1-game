@@ -265,7 +265,7 @@ test("LOOK BACK flips are a cut for the aim: one snap per edge, and the state ga
   CamFeel.tick({ mode: "reverse", dt: 0.016, racing: true, lookHeld: true });
   assert.equal(CamFeel.consumeAimSnap(), false, "reverse never flips, so never cuts");
   const game = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
-  assert.match(game, /CamFeel\.consumeAimSnap\(\)\) \{ for \(let i = 0; i < 3; i\+\+\) camTgt\[i\] = tgtT\[i\]; camRoll = -camRoll; \}/,
+  assert.match(game, /CamFeel\.consumeAimSnap\(\)\) \{ for \(let i = 0; i < 3; i\+\+\) camTgt\[i\] = tgtT\[i\]; feel\.camRoll = -feel\.camRoll; \}/,
     "game.js snaps the target (not the eye) and mirrors the roll on the edge");
   assert.match(game, /lookingBackNow\(\) \? -1 : 1/, "and keeps the roll target mirrored while looking back");
 });

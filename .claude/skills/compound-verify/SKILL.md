@@ -1,6 +1,6 @@
 ---
 name: compound-verify
-description: Use when compound-verify.
+description: "Use when the user names compound-verify: invoke scoped workflow — inspect tool change, re-run checks, report evidence; check-changes and deploy --gate-only govern pushes."
 disable-model-invocation: true
 ---
 ## F1 project integration

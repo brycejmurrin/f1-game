@@ -1,22 +1,22 @@
 [
   {
-    "query": "/compound-verify inspect the current tool change.",
+    "query": "/compound-verify I changed the pit-lane speed limiter; give me Pass/Fail/Skip evidence for each behavior it touches.",
     "expect": "compound-verify"
   },
   {
-    "query": "Use compound-verify on this scoped change.",
+    "query": "/compound-verify the new lap-record banner: which acceptance criteria pass, which fail, and what could not be checked here?",
     "expect": "compound-verify"
   },
   {
-    "query": "I explicitly want the compound-verify workflow for this task.",
+    "query": "Run compound-verify on my tools/ci/pr-board.mjs edit and report a table of behaviors with the exact commands and outcomes.",
     "expect": "compound-verify"
   },
   {
-    "query": "Please invoke compound-verify and report the evidence.",
+    "query": "I explicitly want the compound-verify workflow: prove the WATCH replay fix works across opening, middle and ending frames, or mark it Skip with the reason.",
     "expect": "compound-verify"
   },
   {
-    "query": "Apply the compound-verify supporting workflow while respecting project gates.",
+    "query": "/compound-verify the HUD layout change at phone width; no browser in this subagent, so say which flows stay Skip.",
     "expect": "compound-verify"
   },
   {

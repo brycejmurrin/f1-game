@@ -37,9 +37,9 @@ const CarDraw = (function () {
             getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 
     // ── cache-helpers ───────────────────────────────────────────────
-    function invalidateCustomMeshCache(cache, order) {
+    function invalidateCustomMeshCache(cache, order, prefix = "custom:") {
       Object.keys(cache).forEach((key) => {
-        if (key.indexOf("custom:") !== 0) return;
+        if (key.indexOf(prefix) !== 0) return;
         if (cache[key] && G.gfx.freeMesh) G.gfx.freeMesh(cache[key]);
         delete cache[key];
         if (order) {
@@ -1589,11 +1589,15 @@ const CarDraw = (function () {
       playerVisualKey = visualKey;
     }
     // MY TEAM re-customise: drop every "custom:" entry of the four body caches.
-    function invalidateCustomMeshCaches() {
-      invalidateCustomMeshCache(teamMeshes, teamMeshOrder);
-      invalidateCustomMeshCache(teamBodies, teamBodyOrder);
-      invalidateCustomMeshCache(playerBodies, playerBodyOrder);
-      invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder);
+    // With a team id, that team's entries (the livery editor's CANCEL / SAVE:
+    // their keys carry the SAVED livery id, so a miss while a draft was live
+    // stored the draft's paint under it — issue #2796 item 4).
+    function invalidateCustomMeshCaches(teamId) {
+      const prefix = (teamId || "custom") + ":";
+      invalidateCustomMeshCache(teamMeshes, teamMeshOrder, prefix);
+      invalidateCustomMeshCache(teamBodies, teamBodyOrder, prefix);
+      invalidateCustomMeshCache(playerBodies, playerBodyOrder, prefix);
+      invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder, prefix);
     }
     // Drop EVERY procedural body/wheel GPU cache (same wipe loadCarModel does
     // before adopting a GLB). A sharedTest worker that already raced leaves

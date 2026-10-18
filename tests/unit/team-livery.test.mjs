@@ -170,8 +170,12 @@ test("the paint editor builds every draft through one constructor", () => {
   assert.equal(literals.length, 0,
     "a csLivDraft object literal is back; build it with livDraftFrom() so the " +
     "three doors cannot drift apart again");
-  assert.equal((SHEET.match(/csLivDraft = livDraftFrom\(/g) || []).length, 3,
-    "expected exactly three livDraftFrom() calls (new, edit, copy)");
+  // livDraftFromOwn (a door that starts from the team's own scheme) is livDraftFrom plus the
+  // brand mark seed, so it is the same constructor.
+  const doors = (SHEET.match(/csLivDraft = [^;]*;/g) || []).filter((a) => /livDraftFrom(Own)?\(/.test(a));
+  assert.equal(doors.length, 3, "expected exactly three draft doors (new, edit, copy): " + doors.join(" | "));
+  const own = SHEET.slice(SHEET.indexOf("function livDraftFromOwn("), SHEET.indexOf("function livDraftTo("));
+  assert.match(own, /const d = livDraftFrom\(src, name\);/, "livDraftFromOwn builds through livDraftFrom");
 });
 
 test("the editor's draft table and forTeam name the same fields", () => {
@@ -345,6 +349,20 @@ test("sanitizeCustom keeps only real finShape / numFont / finish ids", () => {
   for (const k of ["finShape", "numFont", "finish"]) assert.equal(Object.hasOwn(unknown, k), false, k + " not a real id");
   const good = run({ finShape: M.Car3D.FIN_SHAPE_IDS[0], numFont: M.LiveryTex.NUM_FONT_IDS[0], finish: "gloss" });
   assert.deepEqual(Object.keys(good).sort(), ["finShape", "finish", "numFont"], "real ids pass");
+});
+
+// #2796 (5): the zone finish rows (pod/fin/mirror/cover/wing/halo) store a finish id or "inherit"; an unknown id was
+// saved and the editor then showed no selected chip.
+test("sanitizeCustom keeps only real zone-finish ids (inherit, gloss or a FINISH_SURFACE key)", () => {
+  const T = M.Teams;
+  const run = (livery) => JSON.parse(JSON.stringify(T.sanitizeCustom({ livery }).livery));
+  const zones = ["podFinish", "finFinish", "mirrorFinish", "coverFinish", "wingFinish", "haloFinish"];
+  const ok = ["inherit", "gloss"].concat(Object.keys(M.Car3D.FINISH_SURFACE));
+  for (const k of zones) {
+    assert.equal(Object.hasOwn(run({ [k]: "no-such-finish" }), k), false, k + " unknown id dropped");
+    assert.equal(Object.hasOwn(run({ [k]: "constructor" }), k), false, k + " prototype name dropped");
+    for (const id of ok) assert.equal(run({ [k]: id })[k], id, k + " keeps " + id);
+  }
 });
 
 test("My Team livery adapters stay within the active slot and invalidate cache without a store write", () => {

@@ -67,7 +67,7 @@ export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 export const CLAIMS_BOARD = "claude/claims-board";
 export const BOARD_MAX_MIN = 24 * 60;
 /** Commits-only mirror of every remote branch (regenerable, under artifacts/). */
-export const REF_CACHE = path.join(ROOT, "artifacts", "who-is-on-it-refs.git");
+const REF_CACHE = path.join(ROOT, "artifacts", "who-is-on-it-refs.git");
 const REF_FORMAT = "%(committerdate:unix)%09%(refname:short)%09%(authorname)%09%(objectname:short)%09%(subject)";
 
 const git = (...args) => {

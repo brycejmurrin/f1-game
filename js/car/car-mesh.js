@@ -626,8 +626,46 @@ function _flapKey(g, aLvl, style, c, finish, surface) {
   if (key === undefined) { key = g.cacheKey + "|" + ck + "|" + fin; byFin.set(fin, key); }
   return key;
 }
+// THE GARAGE FREES THE PAINT JOBS IT LEFT BEHIND. The caps are sized for a race
+// grid, where every set is drawn every frame. The garage livery editor mints a
+// new wing colour or finish per edit, so up to 64 sets + 128 elements of dead
+// paint stayed resident until FIFO pushed them out, and on TLX each kept a
+// hidden coalesced run (render object + instance buffer, walked by the
+// instanced-run pass every frame): edit 60 paid for 59 paint jobs nobody could
+// see (M1, docs/notes/MEM-M1-2026-10-18.md). A draw stamps its mesh's last use;
+// releaseIdleFlaps(ms), called by the garage on each livery/parts edit
+// (setup-camera.js spMeshBust), frees every flap mesh not drawn for `ms`. The
+// race path never calls it, so a rival off screen keeps its set. No clock (a
+// node VM): nothing is idle.
+const _flapNow = () => (typeof performance !== "undefined" && performance.now ? performance.now() : 0);
+function _flapUse(m) { if (m) m.__flapT = _flapNow(); return m; }
+function _flapEvictIdle(cache, order, idleMs, now) {
+  let w = 0, n = 0;
+  for (let i = 0; i < order.length; i++) {
+    const k = order[i], m = cache[k];
+    if (m && now - (m.__flapT || 0) > idleMs) {
+      if (_gfx.freeMesh) _gfx.freeMesh(m);
+      delete cache[k];
+      n++;
+      continue;
+    }
+    order[w++] = k;
+  }
+  order.length = w;
+  return n;
+}
+// How many flap meshes the caches hold (__apex/specs: garage-livery-churn.spec.js bounds them).
+function flapState() { return { sets: _flapSetOrder.length, elements: _flapOrder.length }; }
+function releaseIdleFlaps(idleMs) {
+  const now = _flapNow();
+  if (!now || !_gfx) return 0;
+  const n = _flapEvictIdle(_flapMeshes, _flapOrder, idleMs, now);
+  const sets = _flapEvictIdle(_flapSets, _flapSetOrder, idleMs, now);
+  if (sets) _flapSetMemo.clear();   // it may still point at a freed set
+  return n + sets;
+}
 function _flapPut(cache, order, max, key, data) {
-  const mesh = cache[key] = _gfx.createMesh(data);
+  const mesh = cache[key] = _flapUse(_gfx.createMesh(data));
   order.push(key);
   if (order.length > max) {
     const old = order.shift();
@@ -649,7 +687,7 @@ function getAeroFlap(aLvl, col, idx, style, el, finish, surface) {
   const g = el || Car3D.aeroFlaps(aLvl, style)[idx | 0];
   if (!g) return null;
   const key = _flapKey(g, aLvl, style, c, finish, surface);
-  return _flapMeshes[key] || _flapPut(_flapMeshes, _flapOrder, FLAP_CACHE_MAX, key, Car3D.buildFlapGeom(g, c, finish, surface));
+  return _flapUse(_flapMeshes[key]) || _flapPut(_flapMeshes, _flapOrder, FLAP_CACHE_MAX, key, Car3D.buildFlapGeom(g, c, finish, surface));
 }
 // THE WHOLE FLAP SET AS ONE STATIC MESH at a REST pose — closed (zAngle, Z-mode)
 // or `open` (xAngle, X-mode); `only` "front"/"rear" as drawAeroFlaps. Each element
@@ -667,10 +705,10 @@ function getAeroFlapSet(aLvl, col, style, finish, open, only, surface) {
   // already-memoised base key turns a hit into two Map/array reads. Cleared whole on an eviction.
   const bk = _flapKey(flaps[0], aLvl, style, c, finish, surface), slot = !only ? (open ? 1 : 0) : only === "front" ? (open ? 3 : 2) : only === "rear" ? (open ? 5 : 4) : -1;
   let memo = slot >= 0 ? _flapSetMemo.get(bk) : undefined;
-  if (memo && memo[slot]) return memo[slot];
+  if (memo && memo[slot]) return _flapUse(memo[slot]);
   const key = bk + (open ? "|X|" : "|Z|") + (only || "");
   const remember = (m) => { if (slot >= 0) { if (!memo) _flapSetMemo.set(bk, memo = []); memo[slot] = m; } return m; };
-  if (_flapSets[key]) return remember(_flapSets[key]);
+  if (_flapSets[key]) return remember(_flapUse(_flapSets[key]));
   const nOrder = _flapSetOrder.length;
   const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
   for (const fg of flaps) {
@@ -1914,7 +1952,7 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, REAR_LIGHTS, drawAeroEdge, drawTailGlow, flushTailGlows, drawMirrorLights, ersLightCode, gridStrobe,
+  return { init, releaseIdleFlaps, flapState, getMirrorFallback, getMirrorGlass, MIRROR_GLASS_V, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, CREW_PEOPLE, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getAeroFlapSet, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, COCKPIT_WHEELS, getLedStrip, LED_ROWS, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRetroTelemetry, drawClassicTelemetry, drawRearLights, REAR_LIGHTS, drawAeroEdge, drawTailGlow, flushTailGlows, drawMirrorLights, ersLightCode, gridStrobe,
     cockpitWheelRoll, WHEEL_ROLL_LAMBDA, getForearm, suitColour, forearmEnds, forearmMatrix, drawForearms, ARM_R, ARM_TAPER };
 })();
 Object.freeze(CarMesh);

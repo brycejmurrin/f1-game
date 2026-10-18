@@ -42,10 +42,14 @@
  * imports TOOLING_FAST_FILES). Keep package.json as `node tools/ci/tooling-fast.mjs`.
  */
 import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
+const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
 import { changedPaths } from "../lib/changed-files.mjs";
 import { loadGroups } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
@@ -78,8 +82,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/aero-flap-travel.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
-  // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
-  // asserted instead of described; under a second.
+  // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via
+  // gen-cursor-rules, the hooks — asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
   // The orchestrator/worker contract (skill agent-fleet): host-correct PR
   // subscribe tools, one fleet block, the mandated launch fields. < 0.1 s.
@@ -112,6 +116,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apca-timing.test.mjs",
   "tests/unit/apex-arg-guards.test.mjs",
   "tests/unit/apex-career-delete.test.mjs",
+  // Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.
+  "tests/unit/apex-memory.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
   "tests/unit/appearance-studio.test.mjs",
@@ -180,6 +186,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/camera-feel.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   "tests/unit/camera-tuner-a11y.test.mjs",
+  "tests/unit/captions.test.mjs",
   "tests/unit/capture-tools-regressions.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
   // test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit
@@ -212,6 +219,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-seat-rollover.test.mjs",
   "tests/unit/career-settle.test.mjs",
   "tests/unit/career-ui-lazy.test.mjs",
+  "tests/unit/carve-a-modules.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   // gpu-census.yml's real-GPU Verdict as functions (tools/gfx/census-verdict.mjs)
   // plus its plan gate (nightly skip, push request) executed on a scratch repo; < 1 s.
@@ -221,6 +229,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/change-kind.test.mjs",
   "tests/unit/changed-files.test.mjs",
   "tests/unit/changelog-fragments.test.mjs",
+  // Opt-in checkJs: files marked // @ts-check type-check clean under tsc (~0.5 s).
+  "tests/unit/check-js-types.test.mjs",
   // resolveChromium finds Playwright's headless shell when the full archive
   // was never unpacked — the cloud-agent / MCP bootstrap path.
   "tests/unit/chromium-shell.test.mjs",
@@ -295,6 +305,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the 52 and never in SEASON; hostile stored input is repaired or dropped.
   // Runs the TRACK_VM engine over a stub store, ~3 s.
   "tests/unit/custom-tracks.test.mjs",
+  // COLOUR VISION palette: off matches today's tokens, Machado + CIEDE2000.
+  "tests/unit/cvd-palette.test.mjs",
   // The three suites the feature batches added. Each is pure rules over a
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.
@@ -403,6 +415,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Job 6: MGU-K electric deploy/harvest + overtake boost cue (fake-audio VM).
   "tests/unit/ers-audio-layer.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
+  // ...and the race radio: every phrasebook line fits its card when spoken,
+  // pools deal like a deck, gaps come from the timing loop, a pass must hold,
+  // lines wait for the straight and die when stale, commentary only while
+  // the player is watching. ~0.1 s.
+  "tests/unit/event-journal.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
   "tests/unit/f1-dev-tools.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
@@ -633,6 +650,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
   "tests/unit/livery-design.test.mjs",
+  "tests/unit/livery-draft-mesh-cache.test.mjs",
   "tests/unit/livery-finish-contract.test.mjs",
   "tests/unit/livery-helmet-style.test.mjs",
   // PAINT ZONES (floor/susp/duct/deflector/cockpit/board/exhaust tints, floor/susp/nose/rim finishes): unset = byte-identical. VM, ~3 s.
@@ -666,6 +684,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Low-speed lock plateau pin (1.06× → ≈0.371 rad at notch 7) + high-speed
   // Object.is vs pre-boost raw; companion to steer-lock-taper. Source + VM, ~3 s.
   "tests/unit/low-speed-lock.test.mjs",
+  // apex-lsp as an MCP client: definition / references / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). ~2 s.
+  "tests/unit/lsp-mcp.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
   "tests/unit/marshal-panels.test.mjs",
@@ -675,6 +695,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/mcp-cli.test.mjs",
   "tests/unit/mcp-http-origin.test.mjs",
   "tests/unit/mcp-smoke.test.mjs",
+  "tests/unit/measure-pr-ci-after-close.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",
   "tests/unit/meeting-picker-labels.test.mjs",
   // The track-switch growth verdict (mem-census sustainedGrowthMB) replayed on the #773 / 2026-10-04 leak numbers and the Metal warm-up step. ~0.1 s.
@@ -714,6 +735,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/night-washout-presets.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
+  "tests/unit/node-compile-cache.test.mjs",
   "tests/unit/node-plan.test.mjs",
   "tests/unit/nontext-contrast.test.mjs",
   // Round-2: a slow/offline navigation to controller.html never gets the game shell; controller.html is precached as optional.
@@ -794,6 +816,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
+  // Nightly process dashboard reducer (tools/ci/process-dashboard.mjs): fixture
+  // percentiles, tier walls, push-to-live, time-ratchet skip. No network, < 0.2 s.
+  "tests/unit/process-dashboard.test.mjs",
   "tests/unit/profile-lib.test.mjs",
   "tests/unit/profile-mcp.test.mjs",
   // The branch-prune rule behind prune-branches.yml: merged-only, never an
@@ -810,10 +835,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",
   "tests/unit/race-insights.test.mjs",
-  // ...and the race radio: every phrasebook line fits its card when spoken,
-  // pools deal like a deck, gaps come from the timing loop, a pass must hold,
-  // lines wait for the straight and die when stale, commentary only while
-  // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
   "tests/unit/race-session-fixes.test.mjs",
   "tests/unit/race-session-lazy.test.mjs",
@@ -834,6 +855,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/rain-cells.test.mjs",
   // Two PRs auto-raising one module's ceiling merge clean (ratchets.d fragments, #2291).
   "tests/unit/ratchet-merge-hotspot.test.mjs",
+  "tests/unit/ratchet-reason.test.mjs",
   "tests/unit/ratchets-fold-schedule.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
@@ -882,6 +904,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/res-scale-census.test.mjs",
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
+  "tests/unit/ribbon-cpu-release.test.mjs",
   "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
   "tests/unit/rival-contact-sfx.test.mjs",
@@ -917,6 +940,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/session-status.test.mjs",
   "tests/unit/session-stub-surface.test.mjs",
   "tests/unit/session-transcript.test.mjs",
+  "tests/unit/setting-deps.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
   "tests/unit/settings-search.test.mjs",
@@ -931,9 +955,15 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/setup-screens-state.test.mjs",
   "tests/unit/setup-trial-session.test.mjs",
   "tests/unit/setup-tune.test.mjs",
+  // tools/check/shader-validate.mjs: glslang over the GLX GLSL, naga (advisory) over the WGX WGSL. Extraction runs
+  // unconditionally; the compilers SKIP loudly when absent (tools/env/install-lint-bins.sh) and the CI `lints` job fails a SKIP. ~3 s.
+  "tests/unit/shader-validate.test.mjs",
   // The sun shadow map's depth span holds a 250 m caster: drives the real
   // ShadowPass.sunPass on a stub renderer and projects through its light VP.
   "tests/unit/shadow-pass-depth.test.mjs",
+  "tests/unit/share-card-data.test.mjs",
+  "tests/unit/share-card-layout.test.mjs",
+  "tests/unit/share-card.test.mjs",
   "tests/unit/share-code.test.mjs",
   "tests/unit/shared-math.test.mjs",
   "tests/unit/sheet-per-screen.test.mjs",
@@ -952,8 +982,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // skidmarks.js lays marks per SECOND of laying (was per frame): a VM run of
   // the ring buffer at three refresh rates, ~0.1 s.
   "tests/unit/skidmarks-cadence.test.mjs",
+  // 2026-10-18 skill-surface retest pins (gameplay + render/UI prose), < 1 s.
+  "tests/unit/skill-gameplay-surface.test.mjs",
   "tests/unit/skill-hint-hook.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
+  "tests/unit/skill-render-ui-surface.test.mjs",
   // skill-routing-eval.py against a fake `claude` on PATH (no model calls), ~1.5 s.
   "tests/unit/skill-routing-eval.test.mjs",
   "tests/unit/skill-smoke.test.mjs",
@@ -1043,6 +1076,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/title-menu-even.test.mjs",
   // three's per-frame tick once per drawn frame on WebGL2 (the pump), WebGPU untouched: the real pumpAnimation over a fake three Animation, and the install gate.
   "tests/unit/tlx-anim-pump.test.mjs",
+  "tests/unit/tlx-car-shadow-cpu.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
   "tests/unit/tlx-cull-shadow-pack.test.mjs",
   // A throw in one TLX subsystem costs that subsystem only: the car/lamp shadow
@@ -1243,6 +1277,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // WIND (js/race/wind.js): a pure function of (seed, circuit, weather, clock), fog calm and a storm gusty,
   // gusts and the side force capped, head/tail wind a few km/h of top speed, OFF a true no-op. VM, ~1 s.
   "tests/unit/wind.test.mjs",
+  // tools/check/workflow-lint.mjs: actionlint + zizmor (offline) over .github/workflows; fails a planted bad workflow, passes the tree.
+  // Skips loudly when a binary is absent; the CI `lints` job fails a SKIP. ~3 s.
+  "tests/unit/workflow-lint.test.mjs",
   "tests/unit/xr-backend-pin.test.mjs",
   "tests/unit/xr-cull-union.test.mjs",
   "tests/unit/xr-opts.test.mjs",
@@ -1289,7 +1326,7 @@ const fmtDur = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
  * fast files started early cost nothing. `--order=list` restores list order;
  * `--record` rewrites the committed table from this run. */
 export const TIMINGS_FILE = path.join(ROOT, "tests/data/tooling-fast-timings.json");
-export const LOCAL_TIMINGS_FILE = path.join(LOGDIR, "tooling-fast-timings.json");
+const LOCAL_TIMINGS_FILE = path.join(LOGDIR, "tooling-fast-timings.json");
 
 /** { <repo-relative file>: ms } — local measurements override committed ones. */
 export function loadTimings(files = [TIMINGS_FILE, LOCAL_TIMINGS_FILE]) {
@@ -1421,8 +1458,8 @@ export function tapFailureDetail(text) {
  * 540 s; the 600 s wall still lands inside ci.yml's 15-minute guards job for a
  * file that starts first, which longest-first makes the slow ones do.
  * APEX_TOOLING_TEST_TIMEOUT_S / APEX_TOOLING_FILE_TIMEOUT_S override both. */
-export const PER_TEST_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_TEST_TIMEOUT_S) || 540) * 1000;
-export const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT_S) || 600) * 1000;
+const PER_TEST_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_TEST_TIMEOUT_S) || 540) * 1000;
+const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT_S) || 600) * 1000;
 
 /**
  * Run the structural suites one file at a time.
@@ -1484,7 +1521,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // test, e.g. tooling-fast-runner.test.mjs), it switches that child into
   // report-to-parent mode, where a failing or hung file exits 0 — measured:
   // both hang tests "passed" until this line. Each child is a fresh runner.
-  const childEnv = { ...process.env };
+  const childEnv = { ...process.env, ...augmentNodeCompileCache(process.env, ROOT) };
   delete childEnv.NODE_TEST_CONTEXT;
   const reap = (sig) => {
     for (const c of live) { try { process.kill(-c.pid, "SIGKILL"); } catch (_) { /* already gone */ } }
@@ -1649,7 +1686,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
 export const DEFAULT_JOBS = 1;
 
 /** Paths that force a full tooling-fast run in --changed mode (fail-safe). */
-export const TOOLING_FAST_CHANGED_RUN_ALL = [
+const TOOLING_FAST_CHANGED_RUN_ALL = [
   /^tests\/groups\.json$/,
   /^package(-lock)?\.json$/,
   /^playwright\.config\.js$/,
@@ -1682,7 +1719,7 @@ function indexPathKey(map, key, testFile) {
 }
 
 /** Map repo-relative paths → tooling-fast unit files that pin them in source. */
-export function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
+function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
   const map = new Map();
   for (const f of files) {
     if (f.startsWith("//")) continue;
@@ -1713,7 +1750,7 @@ export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardC
 }
 
 /** Changed paths vs the deploy branch (merge-base with origin/DEPLOY_BRANCH). */
-export function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
+function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
   try {
     const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
     return changedPaths([base], { cwd: root });
@@ -1804,7 +1841,7 @@ export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against 
 
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
-export const TOOLING_FAST_FLAGS = Object.freeze([
+const TOOLING_FAST_FLAGS = Object.freeze([
   "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--stop", "--help", "-h",
 ]);
 

@@ -28,7 +28,9 @@
 #               stays and is written back to ride this branch's next commit,
 #               and MEMORY.md keeps the live index lines the branch lacks
 #               (2026-10-15, #2128: a memory committed on one topic branch
-#               vanished from the live dir on the next checkout). The
+#               vanished from the live dir on the next checkout) — unless a
+#               commit since the merge-base with the old HEAD removed them
+#               (2026-10-18, #2873: a committed dedupe came back). The
 #               baseline records HEAD in .head to tell a move from an edit.
 #           Until 2026-10-02 save copied every differing live file over the
 #           repo and deleted repo files the session lacked: a resumed session,
@@ -92,6 +94,16 @@ def deleted_in_history(f):
     r = subprocess.run(["git", "-C", main, "log", "-1", "--diff-filter=D", "--format=%H", head, "--",
                         os.path.relpath(os.path.join(repo, f), main)], capture_output=True, text=True)
     return bool(r.stdout.strip())
+def removed_by_commits(f):
+    """Lines that commits reachable from HEAD, but not from the previous HEAD,
+    removed from f: a deliberate edit (this branch's commit, or a merged one),
+    unlike lines a checked-out branch simply never had (2026-10-18, #2873)."""
+    if not (head and prev_head): return set()
+    mb = subprocess.run(["git", "-C", main, "merge-base", prev_head, head], capture_output=True, text=True).stdout.strip()
+    if not mb: return set()
+    d = subprocess.run(["git", "-C", main, "diff", "-U0", mb, head, "--",
+                        os.path.relpath(os.path.join(repo, f), main)], capture_output=True, text=True).stdout
+    return {x[1:] for x in d.splitlines() if x.startswith("-") and not x.startswith("---")}
 def read(d, f):
     p = os.path.join(d, f)
     try:
@@ -131,8 +143,8 @@ for f in sorted(names):
         # and an index line the branch lacks is not a removal (#2128).
         if r is None: final = l
         else:
-            rl = r.splitlines()
-            final = "\n".join(rl + [x for x in l.splitlines() if x not in rl]) + "\n"
+            rl, gone = r.splitlines(), removed_by_commits(f)
+            final = "\n".join(rl + [x for x in l.splitlines() if x not in rl and x not in gone]) + "\n"
         write(repo, f, final)
         if final != l: write(live, f, final); n_in += 1
         n_out += 1
@@ -144,6 +156,15 @@ for f in sorted(names):
         final = merge_index(b, l, r)
         write(live, f, final); write(repo, f, final)
         n_in += 1; n_out += 1
+    elif live_changed and repo_changed and (l is None or r is None):
+        # Edit vs delete (#2901): honour the deletion on both sides and report
+        # CONFLICT — never write the surviving side onto the deleted side
+        # (that silently resurrected the file).
+        conflicts.append(f + " (delete vs edit)")
+        drop(live, f); drop(repo, f)
+        if l is None: n_out += 1
+        if r is None: n_in += 1
+        final = None
     else:                                       # both changed a topic file
         conflicts.append(f)
         if r is not None: write(live, f, r)     # never overwrite the shared copy
@@ -153,7 +174,13 @@ for f in sorted(names):
 write(base, ".head", head + "\n")
 if mode == "restore" or n_in or n_out or conflicts:
     msg = f"memory: {n_in} in from .claude/memory/, {n_out} out"
-    if conflicts: msg += "; CONFLICT kept the repo copy of " + ", ".join(conflicts) + " (re-apply your edit)"
+    if conflicts:
+        dels = [c for c in conflicts if "delete vs edit" in c]
+        both = [c for c in conflicts if "delete vs edit" not in c]
+        if both:
+            msg += "; CONFLICT kept the repo copy of " + ", ".join(both) + " (re-apply your edit)"
+        if dels:
+            msg += "; CONFLICT delete vs edit — honoured delete for " + ", ".join(dels)
     print(msg)
 PY
 mark_memory --assume-unchanged

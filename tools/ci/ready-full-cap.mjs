@@ -14,12 +14,13 @@
  * of 40 slots regardless, and the cap read 13/3 with 12 ready PRs open. The
  * count is still printed by pr-board for information. Default MAX_LIVE = 8 (Bryce 2026-10-17: "Raise the ready pr cap"; 40 Linux slots).
  *
- *   node tools/ci/ready-full-cap.mjs              # exit 0 under cap, 1 at/over
+ *   node tools/ci/ready-full-cap.mjs              # one `ready-full-cap: info: N/M ...` line
  *   node tools/ci/ready-full-cap.mjs --json
  *   node tools/ci/ready-full-cap.mjs --cap 2
  *   node tools/ci/ready-full-cap.mjs --exclude cursor/my-branch
  *
- * Exit: 0 room to mark ready, 1 refuse (at/over cap), 2 bad args, 3 no token/API.
+ * Exit: 0 measured (under or over the reference count: never a refusal), 2 bad
+ * args, 3 no token/API.
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -34,7 +35,7 @@ export const CI_PATH = ".github/workflows/ci.yml";
 /** Max ready PRs allowed to hold an in-progress or queued full-tier ci.yml run. */
 export const MAX_LIVE = 8;
 /** Run statuses that hold or wait for runners (the REST `status` filter's live values). */
-export const LIVE_RUN_STATUSES = ["in_progress", "queued", "pending", "waiting", "requested"];
+const LIVE_RUN_STATUSES = ["in_progress", "queued", "pending", "waiting", "requested"];
 
 /**
  * @param {string} pathQs
@@ -106,10 +107,10 @@ export function evaluate(prs, runs, opts = {}) {
 export function reportLine(v) {
   if (!v) return "ready-full-cap: no verdict";
   const heads = v.slots.map((s) => `#${s.number}(${s.status})`).join(" ");
-  if (v.ok) {
-    return `ready-full-cap: ${v.count}/${v.cap} ready full-tier live — room to mark ready${heads ? ` [${heads}]` : ""}`;
-  }
-  return `ready-full-cap: REFUSE mark-ready — ${v.count}/${v.cap} ready PRs already have in-progress/queued full-tier CI${heads ? `: ${heads}` : ""}. Wait for a slot; draft fast-tier stays uncapped.`;
+  // Informational since 2026-10-16 (#2333 finding 7): over the reference count is
+  // reported, never a refusal; ci.yml's `queue: max` lanes bound the legs.
+  const over = v.ok ? "" : ", over the old cap";
+  return `ready-full-cap: info: ${v.count}/${v.cap} ready full-tier live${over} (no cap since 2026-10-16)${heads ? ` [${heads}]` : ""}`;
 }
 
 function parseArgs(argv) {
@@ -168,9 +169,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const argv = process.argv.slice(2);
   exitIfHelp(argv, `usage: node tools/ci/ready-full-cap.mjs [--cap N] [--exclude <branch>] [--json]
 
-Merge Desk: refuse marking a draft ready when ≥N (default ${MAX_LIVE}) ready PRs
-already have live (in_progress / queued / pending / waiting / requested) full-tier ci.yml. Draft fast-tier is uncapped.
-Exit 0 = room, 1 = refuse, 2 = bad args, 3 = API/token.`);
+Informational (no cap since 2026-10-16): counts ready PRs with live (in_progress / queued /
+pending / waiting / requested) full-tier ci.yml against a reference of N (default ${MAX_LIVE}).
+Draft fast-tier is never counted. Exit 0 = measured (never a refusal), 2 = bad args, 3 = API/token.`);
   const args = parseArgs(argv);
   if (args.error) {
     console.error(`ready-full-cap: ${args.error}`);
@@ -191,5 +192,5 @@ Exit 0 = room, 1 = refuse, 2 = bad args, 3 = API/token.`);
       }
     }
   }
-  process.exit(v.ok ? 0 : 1);
+  process.exit(0); // informational: over the reference count is not a refusal
 }

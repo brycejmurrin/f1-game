@@ -1,6 +1,6 @@
 ---
 name: garage-parts-livery
-description: "Use when editing the GARAGE parts catalog, livery/finish/shark fin, a number/crest/sponsor mark unreadable against the car's paint (livery contrast/legibility; HUD digits are ui-menu-a11y, billboards scenery-dress), SIGNATURE or FACTORY_PRESETS meshes, ersProfile/aeroLoad, career owned-part UI, Car3D visual recipes. Isolated studio renders → playwright-probe; handling → tune-physics."
+description: "Use when editing the GARAGE parts catalog, livery/finish/fin, paint legibility for numbers/crests/sponsors, SIGNATURE/FACTORY_PRESETS, ersProfile/aeroLoad, career owned-part UI, Car3D recipes. Deep tables in references/livery-fields.md; studio shots: playwright-probe."
 ---
 
 # Garage — parts, livery, and car mesh
@@ -72,33 +72,22 @@ node tools/shot/shot.mjs bahrain 0.06 orbit out.png --team audi --dist 5.5 --el 
 
 ### Cover design / number-mark legibility
 
-Cover designs and unreadable numbers/marks have separate guards (`cover-legibility`, `crest-marks`, `fill-gating`,
-`fin-design`; none implies another). Offline placement first: `node tools/car/spine-station.mjs --team=redbull`.
-Detail and the NUMBER/MARK picker fix path → [references/placement.md](references/placement.md) § Cover-design guards.
+A NUMBER / MARK unreadable on its paint: start with `node --test tests/unit/crest-marks.test.mjs`;
+the fix is in the ink pickers of `js/car/liverytex.js` (`inkOn` → `haloFor`, `drawNumber`,
+`buildAtlas`'s `ink`/`finNum`/flank picks) or a team's `logo3` in `js/data/teams.js`.
+`livery-contrast` scores panels, never glyphs. **Paint guard set** (none implies another):
+`crest-marks`, `cover-legibility`, `livery-contrast`, `fill-gating`, `team-livery`, plus
+`fin-design` for placement. Offline placement first: `node tools/car/spine-station.mjs --team=redbull`.
+Detail → [references/placement.md](references/placement.md) § Cover-design guards.
 
 Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **career-mode**,
 **tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `node tools/gen/gen-shell.mjs --check`.
 
 ## BEFORE pack — fetch, do not recapture
 
-Car/garage agents MUST NOT capture their own 11-team garage BEFORE grid
-(`garage-angles.mjs --budget=12m` / wheels-tyres runs). That costs 12–28 min
-on llvmpipe and is why **Garage before** exists.
-
-```sh
-node tools/garage-angles-fetch.mjs                  # merge-base with ship
-node tools/garage-angles-fetch.mjs --sha HEAD --out artifacts/garage-before
-gh workflow run garage-before.yml -f ref=claude/f1-game-project-26h3ng
-```
-
-The pack is `garage-before-<sha>` (MANIFEST.json: team, preset, file, sha,
-timestamp). If the exact SHA has no pack, the script takes the nearest
-ancestor and prints compare-API staleness (commits + js/car|garage|render
-files). Capture only AFTER shots for the angles you changed, then
-`--baseline=` / `--against=` against the fetched pack. Workflow:
-`.github/workflows/garage-before.yml` — macos, 4 team shards, daily
-(10:23 UTC, only when watched paths moved) or on dispatch, not a
-required check; a car change merged today has no pack until then. Not Car shot (`carview.html` has no garage room).
+Never capture your own 11-team garage BEFORE grid (12–28 min): fetch the
+**Garage before** pack with `node tools/garage-angles-fetch.mjs`, then shoot
+only AFTER angles → [references/before-pack.md](references/before-pack.md).
 
 ## Design loop — spine top / side, fin, any paint row
 
@@ -113,8 +102,7 @@ required check; a car change merged today has no pack until then. Not Car shot (
    `{"frame":"spineSide"}` or an explicit `eye`/`look`, `{"diff":[a,b]}` for Δ + overlay.
 4. **Choose**: `--pair='spineLogo:wrap|saddle'` scores the two in one run
    (`design-pairs.png`, magenta overlay of what changed).
-5. **Gate**: `cover-legibility`, `crest-marks`, `fill-gating` (`node --test tests/unit/<x>.test.mjs`),
-   then `fin-design` for placement. None of the three implies another.
+5. **Gate**: the paint guard set above (`node --test tests/unit/<x>.test.mjs`).
 
 ## Load on demand
 

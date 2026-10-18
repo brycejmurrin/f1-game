@@ -1293,9 +1293,13 @@ window.SpotifyMusic = (function () {
       : devSupportsVol ? "Sets the volume on " + (devName || "the device") + " itself."
       : "This device does not accept remote volume — use its own volume buttons. " +
         "(Spotify reports supports_volume: false, usually a phone.)");
-    ["sp-prev", "sp-toggle", "sp-fwd", "sp-refresh2"].forEach((i) => dis(i, !live));
+    ["sp-prev", "sp-toggle", "sp-fwd"].forEach((i) => dis(i, !live));
     fillSelect("sp-playlist2", playlistOpts(), contextUri(), !live);
-    fillSelect("sp-device2", deviceOpts(), deviceId2(), !live);
+    // The device row only means anything in REMOTE mode (IN BROWSER plays in
+    // this tab), so it is disabled, never hidden, elsewhere.
+    const remote = mode() === "remote";
+    fillSelect("sp-device2", deviceOpts(), deviceId2(), !live || !remote);
+    dis("sp-refresh2", !live || !remote);
     txt("sp-status2", message || (live ? "" : "Not connected — open MUSIC & SOUND to set Spotify up."));
 
     const box = el("sp-results");
@@ -1360,15 +1364,11 @@ window.SpotifyMusic = (function () {
     txt("as-sp-status", msg);
     txt("as-sp-now", pauseMenuNowText());
 
-    fillSelect("as-sp-playlist", playlistOpts(), contextUri(), state !== "connected");
-    // MODE + DEVICE. The device row only means anything in remote mode, so it
-    // is disabled (never hidden) elsewhere — hiding reflows the sheet.
+    // MODE. The playlist and device pickers live in the player sheet only.
     const remote = mode() === "remote";
     const b1 = el("as-sp-mode-remote"), b2 = el("as-sp-mode-browser");
     if (b1) b1.classList.toggle("active", remote);
     if (b2) b2.classList.toggle("active", !remote);
-    fillSelect("as-sp-device", deviceOpts(), deviceId2(), !remote || state !== "connected");
-    dis("as-sp-refresh", !remote || state !== "connected");
     const live = state === "connected" && (remote ? !!readToken() : ready);
     dis("as-sp-play", !live);
     dis("as-sp-pause", !live);
@@ -1390,8 +1390,6 @@ window.SpotifyMusic = (function () {
     on("as-sp-check", "click", () => { check(); });
     on("as-sp-mode-remote", "click", () => setMode("remote"));
     on("as-sp-mode-browser", "click", () => setMode("browser"));
-    on("as-sp-device", "change", (e) => setDevice(e.target.value));
-    on("as-sp-refresh", "click", () => loadDevices());
 
     on("sp-prev", "click", prev);
     on("sp-toggle", "click", () => { activate(); toggle(); });
@@ -1423,11 +1421,6 @@ window.SpotifyMusic = (function () {
         searchT = null;
         if (gen === sessionGen && revision === searchRevision) searchPlaylists(q, revision);
       }, 350);
-    });
-    on("as-sp-playlist", "change", (e) => {
-      activate();
-      setContext(e.target.value);
-      if (e.target.value && BACKEND.active()) playChosen();
     });
     on("as-sp-play", "click", () => {
       activate();                       // must happen inside the click itself

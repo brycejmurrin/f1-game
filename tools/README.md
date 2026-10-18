@@ -54,7 +54,9 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/harness.mjs** | Shared harness for the headless `__apex` tools: in-process static server + Chromium launch with teardown-safe shutdown. | playwright-probe |
 | **lib/hud-geometry.mjs** | In-page HUD box probe (rect, visibility, font px) + the pure overlap/safe-area rules of hud-layout.spec. | — |
 | **lib/hud-survey-matrix.mjs** | HUD survey core: cells, quick/full/exhaustive matrices, shards, expected-visible rules, findings, merge, report HTML. | — |
+| **lib/lint-bins.mjs** | Locates the pinned lint binaries (actionlint, zizmor, glslang, naga, shellcheck) and defines what an absent one means. | — |
 | **lib/mem-census.mjs** | Page-side memory census (track WeakRefs, decoded audio, render objects, forced GC) for the CLI and its spec. | — |
+| **lib/node-compile-cache.cjs** | NODE_COMPILE_CACHE env for tooling-fast / run-group child processes (off under coverage). | — |
 | **lib/output-paths.mjs** | Path-containment helpers for the `artifacts/` vs `scratch/` output contract; gated by `output-paths.spec.js`. | — |
 | **lib/over-road-scan.cjs** | Pure over-road triangle scan shared by tests/specs/terrain-over-road.spec.js (runs in the page) and its unit test. | — |
 | **lib/pack-assets.cjs** | Node loader for assets/pack: `parseModel` (mirrors assets.js) and `packAssets()` (the `Assets.modelSync` surface). | asset-pack |
@@ -70,6 +72,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/track-shot-survey.mjs** | Shot-survey plans: presets, resume filters, findings/progress JSON, HTML galleries (apex-extras / shot-survey). | survey-track |
 | **lib/tumftm.mjs** | Pure TUMFTM racetrack-database CSV parse/decimate → track-designer design + LGPL attribution envelope. | new-track |
 | **lib/ui-mock-core.mjs** | Core of hud-mock/menu-mock: held rAF loop, labelled boxes, CDP capture (png\|jpeg, clip), contact sheet, cell cache. | — |
+| **lib/vm-script-cache.cjs** | Persist vm.Script cachedData for game-vm manifest eval (content-hash keyed). | — |
 | **lib/webgpu-chrome-args.cjs** | Single source for WebGPU Chromium flags, shared by `harness.mjs`, `chrome-devtools-mcp.sh` and tests. | mcp-probe |
 | **lib/work-tree-id.mjs** | Content id of the WORKING TREE (tracked + untracked, ignore rules honoured) as a git tree hash, and of a commit's tree. | — |
 
@@ -88,6 +91,8 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/fleet-flags.mjs** | Flags model drift, cost over cap, context over 300k and stalled "working" sessions from get_session JSON. | agent-fleet |
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
 | **ci/handback.mjs** | Verifies a PR head's CI + ready-gate, prints one SWEEP and one DONE line, lists check-ins to delete. | agent-fleet |
+| **ci/measure-guard-commit.mjs** | Measure commit-guard wall time vs a direct test:guards run (#2647). | check-changes |
+| **ci/measure-pr-ci-after-close.mjs** | 24 h scan: PR ci.yml job-minutes starting after close + peak-hour PR wall median (#2213, epic #1949). | steward |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
 | **ci/post-merge.mjs** | Checks a merged PR's merge commit has 2 parents, releases the claim, lists check-ins to delete. | agent-fleet |
@@ -126,6 +131,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
+| **check/check-js-types.mjs** | Type-checks the JS files that opt in with `// @ts-check` (JSDoc + the repo's local tsc, noEmit). | check-changes |
 | **check/check-physics.mjs** | Physics stability probes: `check-physics.mjs <bank\|grip\|roadfollow\|steer>` — no-NaN, forward motion, steering authority. | tune-physics |
 | **check/defend-duel.mjs** | Staged two-car duels on a straight: defendPull ON vs OFF, same cell both arms (`--track --fracs --gaps --dxs --pair`). | ai-racecraft |
 | **check/destructure-usage.mjs** | Fails when a file destructures a name its script-global provider does not export (a dropped name after a rebase). | slim-bloat |
@@ -138,19 +144,23 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/lockup-bench.mjs** | Straight-line brake sweep: peak axFracF / afF, wheelLock, flat-spot growth. | tune-physics |
 | **check/merge-hygiene.mjs** | Keep ratchets.json + groups.json one-entry-per-line and stably sorted; `--check` (default) / `--fix`. | check-changes |
 | **check/occlusion-estimate.mjs** | How much would occlusion culling save? Exact software visibility per 72 m cell, no GPU. | renderer-debug |
+| **check/physics-oracle.mjs** | Golden physics traces (VM): raw-double per-step player state + track queries for the apex-26 TypeScript port gate. | tune-physics |
 | **check/physics-tune-sweep.mjs** | How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap. | tune-physics |
 | **check/player-dyn.mjs** | Player vehicle-dynamics bench (VM): braking, accel, skidpad, step steer, trail-brake, lift-off, power-on, flick. | tune-physics |
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
 | **check/ratchets.mjs** | Size ratchets: ratchets.json + per-branch ratchets.d/ deltas. `--check`, `--update`, `--fold`, `--json`, `--base <ref>`. | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
+| **check/shader-validate.mjs** | glslang over the GLX GLSL ES 3.00 shaders, naga (advisory) over the WGX WGSL; offline, skips LOUDLY without the binary. | renderer-debug |
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
 | **check/skill-routing-eval.py** | Routes realistic requests through the REAL skill set via `claude -p` and scores which skill fired (correct/wrong/none). | agent-config |
 | **check/skill-smoke.mjs** | Plan or execute one bounded offline contract per canonical skill; retain explicit unverified browser/device scope. | — |
+| **check/track-oracle.mjs** | Golden track-query grid (VM): Tracks.sample/banking/onKerb/wallAt/inPitLane as raw doubles for the apex-26 port gate. | agent-view |
 | **check/tree-counts.mjs** | Counts behind the `tree` ratchets: CSS classes/spacing/colour, shell nodes, bare catches, waits, sleeps. `--offenders`. | — |
 | **check/trim-comments.mjs** | Strips dividers, closed banners and loc pointers; `--headers` shortens headers; `--narrative` needs explicit paths. | slim-bloat |
 | **check/twin-fidelity.mjs** | Prove a VM twin catches what the browser copy catches — by breaking the | — |
 | **check/vm-portable.mjs** | Which specs `tests/helpers/vm-page.js` could run under `node --test`: per-spec blocking calls + a portable count. | — |
 | **check/vstd-lint.mjs** | REPORT, not a gate: lists every `.speed`-vs-literal comparison, always exits 0. The gate is tests/unit/vstd-invariant. | tune-physics |
+| **check/workflow-lint.mjs** | actionlint + zizmor over .github/workflows, offline; skips LOUDLY (fails under --require) without the binary. | check-changes |
 
 ### `tools/gen/`
 
@@ -165,6 +175,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/gen-arch-table.mjs** | Generates the module index block of `docs/ARCHITECTURE.md` from the manifest + each file's header; `--check` drift. | check-changes |
 | **gen/gen-changelog.mjs** | Validates `docs/changelog.d` fragments (`--check`); `--fold` writes them into `CHANGELOG.md` under the build. | check-changes |
 | **gen/gen-circuit-meta.mjs** | Extracts circuit picker metadata into js/track/circuit-meta.js (LAZY_CIRCUIT hydrates). | check-changes |
+| **gen/gen-cursor-rules.mjs** | Emit `.cursor/rules/*.mdc` from `.claude/rules` (`paths`→`globs`, else `alwaysApply`); `--check`. | agent-config |
 | **gen/gen-flags-table.mjs** | Regenerates the DevFlags table in `docs/DEBUG-HOOKS.md` from `js/core/dev-flags.js`; `--check`. | check-changes |
 | **gen/gen-hooks-table.mjs** | Regenerates the `__apex` hook index block in `docs/DEBUG-HOOKS.md` from `apex.js` + `agentHelp()`; `--check`. | agent-view |
 | **gen/gen-ladder-figures.mjs** | Prints the gate-ladder sizes (unit files per rung) from tests/groups.json; --json / --table. Writes nothing. | check-changes |
@@ -409,7 +420,11 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/js-debugger-session.mjs** | Agent debugger session: pause generations, breakpoints, scopes and nonblocking execution. | — |
 | **mcp/js-debugger-smoke.mjs** | Parent-only native Chromium smoke for js-debugger-mcp's real stdio/CDP debugging workflow. | — |
 | **mcp/js-debugger-trace.mjs** | Non-pausing debugger tools: logpoints, exception log, listener counts, live-object counts (CDP). | — |
+| **mcp/lsp-eval.mjs** | apex-lsp vs grep on fixed code questions with known answers: correctness, output chars, time; `--json`. | — |
+| **mcp/lsp-mcp.mjs** | Stdio MCP code intelligence over TypeScript 7's native `tsc --lsp`: definition, references, symbols, hover, diagnostics. | — |
+| **mcp/lsp-mcp.sh** | apex-lsp MCP wrapper: serve (stdio), or def\|refs\|sym\|hover\|diag from a shell over TypeScript 7 `tsc --lsp`. | — |
 | **mcp/mcp-cli.mjs** | chrome-devtools MCP over stdio against a running build: `probe --backend webgpu`, `--eval`, `--console RE`, `--dry-run`. | mcp-probe |
+| **mcp/mcp-preflight.sh** | Sourced by the MCP launchers: bounded wait (<= 60 s) for the SessionStart `npm install`; stderr only. | mcp-probe |
 | **mcp/mcp-smoke.mjs** | Pokes the repo MCP wrappers (`apex_status`, probe help, chrome-devtools `status`, tinyfish `help`). No Chromium. | check-changes |
 | **mcp/playwright-mcp.sh** | Official `@playwright/mcp@0.0.79` wrapper (help/status/run): the `playwright-official` stdio server. | survey-ui-matrix / css-play / mcp-probe |
 | **mcp/probe-mcp.py** | Passthrough for every Chrome DevTools + TinyFish MCP tool (`chrome_*` / `tinyfish_*`): list-tools / call / serve. | mcp-probe |
@@ -447,9 +462,11 @@ Container bootstrap: browsers and the Cursor Cloud install.
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **env/apex-memory.mjs** | List, show, and retire `.claude/memory` topic files from any host; no assume-unchanged. | agent-config |
 | **env/cloud-agent-install.sh** | Cursor Cloud dashboard `install`: best-effort mesa/vulkan/xvfb, then `install-browsers.sh`, then the MCP clones. | check-changes |
 | **env/ensure-mcp-ready.sh** | Post-install MCP bootstrap: Playwright chrome channel symlink + apex-tools smoke (no Chromium). | check-changes |
 | **env/install-browsers.sh** | Idempotent Chromium bootstrap: reuse an installed browser or choose a writable Playwright cache; --plan never installs. | — |
+| **env/install-lint-bins.sh** | Pinned, checksummed install of actionlint, shellcheck, zizmor, glslang and naga into artifacts/bin. | — |
 | **env/mirror-skills.sh** | Repair the tracked .agents/skills/ Codex mirror: one symlink per skill dir (--check drift, --copy fallback). | agent-config |
 
 ### `tools/desktop/`
@@ -461,6 +478,14 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **desktop/pack-dry-run.mjs** | Desktop pack dry-run: stage + stamp to a temp dir, check every electron-builder input, build no installer. | check-changes |
 | **desktop/stage-files.mjs** | Shared allow-list of runtime files/dirs staged for Pages and Electron packaging. | check-changes |
 | **desktop/stage.mjs** | Stage the deployable site folder (Pages / Electron) from the shared allow-list; optional content-hash stamp. | check-changes |
+
+### `tools/hooks/`
+
+Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason trailer.
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **hooks/ratchet-reason.mjs** | Commit-hook ratchet absorb: 20 lines silent, 40 with a Ratchet-Reason trailer. | slim-bloat |
 
 ## Test runner & coverage
 
@@ -497,6 +522,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
 | **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
+| **ci/process-dashboard.mjs** | Nightly CI process dashboard: per-job p50/p90, cancel and re-gate rates, push-to-live. |
 | **ci/publish-shots.mjs** | Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch. |
 | **ci/queue-depth.mjs** | Actions queue gauge: queued + running JOBS by OS vs the 40 Linux / 5 macOS slots; `= queue ok\|hold`. |
 | **ci/ready-full-cap.mjs** | Count ready PRs with live full-tier CI (informational since 2026-10-16; no gate reads it). |

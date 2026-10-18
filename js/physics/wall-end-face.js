@@ -1,3 +1,4 @@
+// @ts-check
 /* Apex 26 — WALL END FACE: the one case the lateral wall clamp gets wrong.
  *
  * WallClamp pins c.x to the barrier at the car's NEW s. Where the barrier steps

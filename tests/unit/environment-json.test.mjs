@@ -31,6 +31,7 @@ test(".cursor/environment.json exists and bootstraps chrome MCP", () => {
   const names = (env.mcpServerAllowlist || []).map((row) => row.name).sort();
   // Allowlist = committed catalog servers only; removed aliases stay absent.
   assert.deepEqual(names, [
+    "apex-lsp",
     "apex-tools",
     "chrome-devtools",
     "js-debugger",
@@ -112,6 +113,6 @@ test(".cursor/environment.json allowlist covers every stdio MCP command in .mcp.
   }
   assert.deepEqual(
     [...allowByName.keys()].sort(),
-    ["apex-tools", "chrome-devtools", "js-debugger", "playwright-official"],
+    ["apex-lsp", "apex-tools", "chrome-devtools", "js-debugger", "playwright-official"],
   );
 });

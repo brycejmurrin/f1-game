@@ -75,7 +75,7 @@ const CustomLiveries = (function () {
     "patternTint", "patternSecond", "patternPlacement", "patternSide", "patternWidth", "patternRepeat",
     "patternOffset", "patternTaper", "patternOpacity", "patternRotation", "patternStretch", "patternWeight", "coverFinish", "wingFinish", "haloFinish",
     "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent",
-    "podFinish", "finFinish", "mirrorFinish", "helmetStyle", "endplate",
+    "podFinish", "finFinish", "mirrorFinish", "helmetStyle", "endplate", "crestStyle",
     "floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "rimFinish", "deflectorTint",
     "cockpitTint", "gripTint", "noseFinish", "boardTint", "exhaustTint"];
     // A stored garage file may still carry the four RETIRED keys, so every read

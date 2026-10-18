@@ -155,6 +155,9 @@
     "js/agent/agentview-corners.js",
     "js/agent/agentview.js",
     "js/agent/apex-net.js",
+    "js/agent/apex-cam.js",
+    "js/agent/apex-track.js",
+    "js/agent/apex-lobby.js",
     "js/agent/apex.js"
   ],
     LAZY_EDGES: [
@@ -164,6 +167,18 @@
     ],
     [
       "js/agent/apex-net.js",
+      "js/agent/apex.js"
+    ],
+    [
+      "js/agent/apex-cam.js",
+      "js/agent/apex.js"
+    ],
+    [
+      "js/agent/apex-track.js",
+      "js/agent/apex.js"
+    ],
+    [
+      "js/agent/apex-lobby.js",
       "js/agent/apex.js"
     ],
     [
@@ -183,6 +198,7 @@
     "js/race/engineer.js",
     "js/race/radio-lines.js",
     "js/race/race-facts.js",
+    "js/race/event-journal.js",
     "js/race/spotter.js",
     "js/race/race-radio.js",
     "js/race/start-lights.js",

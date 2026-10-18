@@ -92,14 +92,21 @@ const CarMaterials = (function () {
     floor: "floorFinish", suspension: "suspFinish" });
   const NOSE_Z = 1.55, NOSE_SECTIONS = ["chassis", "hood", "livery"];
   const pickedFinish = (v) => v === "gloss" || Object.hasOwn(FINISH_SURFACE, v) ? v : null;
-  function applyFinish(out, finish, sections, livery) {
+  // `zones` (optional) are { name, from, to } spans drawn inside another section that belong to `name`'s
+  // finish (Car3D's zone(): pod panel, cover stripes, floor, headrest, deflector; #2796). They are
+  // remapped first and never revisited.
+  function applyFinish(out, finish, sections, livery, zones) {
     const noseFin = livery && pickedFinish(livery.noseFinish), nose = [];
     if (noseFin && sections) for (const section of sections) if (NOSE_SECTIONS.includes(section.name))
       for (let i = section.from; i < section.to; i++) if (out.mat[i] === SURFACES.paint && out.pos[i * 3 + 2] >= NOSE_Z) nose.push(i);
     if (sections && livery && Object.values(ZONE_FINISH).some((f) => livery[f] && livery[f] !== "inherit")) {
-      for (const section of sections) {
+      const done = zones && zones.length ? new Uint8Array(out.mat.length) : null;
+      for (const section of done ? zones.concat(sections) : sections) {
         const choice = finishOf(livery, ZONE_FINISH[section.name]), local = FINISH_SURFACE[choice] || SURFACES.paint;
-        for (let i = section.from; i < section.to; i++) if (out.mat[i] === SURFACES.paint) out.mat[i] = local;
+        for (let i = section.from; i < section.to; i++) {
+          if (out.mat[i] !== SURFACES.paint || (done && done[i])) continue;
+          out.mat[i] = local; if (done) done[i] = 1;
+        }
       }
     } else {
       const finishSurface = FINISH_SURFACE[finish];
