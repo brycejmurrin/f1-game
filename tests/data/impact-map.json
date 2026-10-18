@@ -1939,13 +1939,22 @@
       ]
     },
     "js/camera/photo-kit.js": {
+      "apply": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
       "applyDof": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
+      "createLookSession": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "deleteMark": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "marksFor": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
+      "mountLookControls": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "nextGrid": [
@@ -14757,6 +14766,9 @@
         "tests/specs/photo-studio-conditions.spec.js",
         "tests/specs/photo-studio.spec.js",
         "tests/unit/photo-studio.test.mjs"
+      ],
+      "*": [
+        "tests/unit/photo-kit.test.mjs"
       ]
     },
     "js/ui/platform-session.js": {
