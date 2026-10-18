@@ -4,6 +4,7 @@
 {"query":"From my phone: load Monza in landscape in your Chromium and send me a screenshot of the start grid.","expect":"phone-browser"},
 {"query":"open the live game on the phone browser connector in portrait and show me the main menu","expect":"phone-browser"},
 {"query":"I only have my iPhone. Start whatever public browser server the repo has so my Grok connector can drive the game.","expect":"phone-browser"},
+{"query":"On my iPhone the link you gave me is a localhost address and it won't open. Get me a tunnel URL I can paste into the Grok custom connector.","expect":"phone-browser"},
 {"query":"The HUD tyre widget is clipped at phone landscape 844x390; fix the one cramped screen.","expect":"ui-menu-a11y"},
 {"query":"Pairing my phone as a controller for VS FRIEND fails at the QR code step and the WebRTC connection never opens.","expect":"multiplayer-debug"},
 {"query":"Drive the live working-tree canvas with Chrome DevTools MCP and poke __apex while I watch the console.","expect":"mcp-probe"}

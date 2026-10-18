@@ -184,6 +184,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/camera-feel.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   "tests/unit/camera-tuner-a11y.test.mjs",
+  "tests/unit/captions.test.mjs",
   "tests/unit/capture-tools-regressions.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
   // test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit
@@ -226,6 +227,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/change-kind.test.mjs",
   "tests/unit/changed-files.test.mjs",
   "tests/unit/changelog-fragments.test.mjs",
+  // Opt-in checkJs: files marked // @ts-check type-check clean under tsc (~0.5 s).
+  "tests/unit/check-js-types.test.mjs",
   // resolveChromium finds Playwright's headless shell when the full archive
   // was never unpacked — the cloud-agent / MCP bootstrap path.
   "tests/unit/chromium-shell.test.mjs",
@@ -300,6 +303,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the 52 and never in SEASON; hostile stored input is repaired or dropped.
   // Runs the TRACK_VM engine over a stub store, ~3 s.
   "tests/unit/custom-tracks.test.mjs",
+  // COLOUR VISION palette: off matches today's tokens, Machado + CIEDE2000.
+  "tests/unit/cvd-palette.test.mjs",
   // The three suites the feature batches added. Each is pure rules over a
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.
@@ -408,6 +413,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Job 6: MGU-K electric deploy/harvest + overtake boost cue (fake-audio VM).
   "tests/unit/ers-audio-layer.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
+  // ...and the race radio: every phrasebook line fits its card when spoken,
+  // pools deal like a deck, gaps come from the timing loop, a pass must hold,
+  // lines wait for the straight and die when stale, commentary only while
+  // the player is watching. ~0.1 s.
+  "tests/unit/event-journal.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
   "tests/unit/f1-dev-tools.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
@@ -638,7 +648,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
   "tests/unit/livery-design.test.mjs",
+  "tests/unit/livery-draft-mesh-cache.test.mjs",
   "tests/unit/livery-finish-contract.test.mjs",
+  "tests/unit/livery-helmet-style.test.mjs",
   // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
   "tests/unit/livery-sidewall.test.mjs",
   "tests/unit/livery-tier.test.mjs",
@@ -668,6 +680,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Low-speed lock plateau pin (1.06× → ≈0.371 rad at notch 7) + high-speed
   // Object.is vs pre-boost raw; companion to steer-lock-taper. Source + VM, ~3 s.
   "tests/unit/low-speed-lock.test.mjs",
+  // apex-lsp as an MCP client drives it: definition / references / symbols on the real js/ tree via tsc --lsp. ~2 s.
+  "tests/unit/lsp-mcp.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
   "tests/unit/marshal-panels.test.mjs",
@@ -797,6 +811,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
+  // Nightly process dashboard reducer (tools/ci/process-dashboard.mjs): fixture
+  // percentiles, tier walls, push-to-live, time-ratchet skip. No network, < 0.2 s.
+  "tests/unit/process-dashboard.test.mjs",
   "tests/unit/profile-lib.test.mjs",
   "tests/unit/profile-mcp.test.mjs",
   // The branch-prune rule behind prune-branches.yml: merged-only, never an
@@ -813,10 +830,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",
   "tests/unit/race-insights.test.mjs",
-  // ...and the race radio: every phrasebook line fits its card when spoken,
-  // pools deal like a deck, gaps come from the timing loop, a pass must hold,
-  // lines wait for the straight and die when stale, commentary only while
-  // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
   "tests/unit/race-session-fixes.test.mjs",
   "tests/unit/race-session-lazy.test.mjs",
@@ -956,8 +969,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // skidmarks.js lays marks per SECOND of laying (was per frame): a VM run of
   // the ring buffer at three refresh rates, ~0.1 s.
   "tests/unit/skidmarks-cadence.test.mjs",
+  // 2026-10-18 skill-surface retest pins (gameplay + render/UI prose), < 1 s.
+  "tests/unit/skill-gameplay-surface.test.mjs",
   "tests/unit/skill-hint-hook.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
+  "tests/unit/skill-render-ui-surface.test.mjs",
   // skill-routing-eval.py against a fake `claude` on PATH (no model calls), ~1.5 s.
   "tests/unit/skill-routing-eval.test.mjs",
   "tests/unit/skill-smoke.test.mjs",

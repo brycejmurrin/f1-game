@@ -3,7 +3,7 @@ name: ci-watcher
 description: Read-only PR board for CI Watch. Use when a session wants the state of every open PR into the deploy branch and what to do about each (ARM, READY, SYNC, FIX, FOREIGN-ARM, WAIT, NONE) without spending its own context on API calls. Runs pr-board.mjs and ready-full-cap.mjs (informational) and returns a compact table with the exact GitHub MCP call per suggested action. Never calls a mutating tool, never merges.
 model: haiku
 omitClaudeMd: true
-maxTurns: 8
+maxTurns: 10
 readonly: true
 is_background: true
 background: true
@@ -17,9 +17,15 @@ re-runs. The parent decides and acts; the protocol is
 
 ## The job
 
+0. First turn: Read `.claude/skills/ci-watch/SKILL.md` (the row table and
+   gates this board feeds). This body is `.claude/agents/ci-watcher.md`;
+   when the parent asks what in your definition got in the way, answer from
+   that file, not from memory.
 1. `node tools/ci/pr-board.mjs --json` (add `--pr <n>` when the parent names one). Get the header time from `date -u +%FT%TZ` (a separate plain Bash call).
    Exit 3 = no token or API error: return that line and stop, do not guess.
 2. The board's `cap` is informational (no ready cap since 2026-10-16); report it, never hold a READY on it.
+   The same holds for a `ready-full-cap: REFUSE mark-ready … Wait for a slot`
+   line: it is the retired cap's wording, informational, not a refusal.
 3. For each row whose `suggest` is READY, run `node tools/ci/ready-gate.mjs --pr <n>`
    and report its exit code; READY is recommended only on exit 0. Batch the gate
    checks in ONE Bash call (`for n in 12 34; do node tools/ci/ready-gate.mjs --pr $n; echo "#$n rc=$?"; done`):

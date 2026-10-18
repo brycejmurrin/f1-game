@@ -128,6 +128,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
+| **check/check-js-types.mjs** | Type-checks the JS files that opt in with `// @ts-check` (JSDoc + the repo's local tsc, noEmit). | check-changes |
 | **check/check-physics.mjs** | Physics stability probes: `check-physics.mjs <bank\|grip\|roadfollow\|steer>` — no-NaN, forward motion, steering authority. | tune-physics |
 | **check/defend-duel.mjs** | Staged two-car duels on a straight: defendPull ON vs OFF, same cell both arms (`--track --fracs --gaps --dxs --pair`). | ai-racecraft |
 | **check/destructure-usage.mjs** | Fails when a file destructures a name its script-global provider does not export (a dropped name after a rebase). | slim-bloat |
@@ -413,6 +414,9 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/js-debugger-session.mjs** | Agent debugger session: pause generations, breakpoints, scopes and nonblocking execution. | — |
 | **mcp/js-debugger-smoke.mjs** | Parent-only native Chromium smoke for js-debugger-mcp's real stdio/CDP debugging workflow. | — |
 | **mcp/js-debugger-trace.mjs** | Non-pausing debugger tools: logpoints, exception log, listener counts, live-object counts (CDP). | — |
+| **mcp/lsp-eval.mjs** | apex-lsp vs grep on fixed code questions with known answers: correctness, output chars, time; `--json`. | — |
+| **mcp/lsp-mcp.mjs** | Stdio MCP code intelligence over TypeScript 7's native `tsc --lsp`: definition, references, symbols, hover, diagnostics. | — |
+| **mcp/lsp-mcp.sh** | apex-lsp MCP wrapper: serve (stdio), or def\|refs\|sym\|hover\|diag from a shell over TypeScript 7 `tsc --lsp`. | — |
 | **mcp/mcp-cli.mjs** | chrome-devtools MCP over stdio against a running build: `probe --backend webgpu`, `--eval`, `--console RE`, `--dry-run`. | mcp-probe |
 | **mcp/mcp-smoke.mjs** | Pokes the repo MCP wrappers (`apex_status`, probe help, chrome-devtools `status`, tinyfish `help`). No Chromium. | check-changes |
 | **mcp/playwright-mcp.sh** | Official `@playwright/mcp@0.0.79` wrapper (help/status/run): the `playwright-official` stdio server. | survey-ui-matrix / css-play / mcp-probe |
@@ -498,6 +502,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
 | **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
+| **ci/process-dashboard.mjs** | Nightly CI process dashboard: per-job p50/p90, cancel and re-gate rates, push-to-live. |
 | **ci/publish-shots.mjs** | Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch. |
 | **ci/queue-depth.mjs** | Actions queue gauge: queued + running JOBS by OS vs the 40 Linux / 5 macOS slots; `= queue ok\|hold`. |
 | **ci/ready-full-cap.mjs** | Count ready PRs with live full-tier CI (informational since 2026-10-16; no gate reads it). |

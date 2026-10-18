@@ -56,6 +56,21 @@ contract: `tools/manifest.cjs`, `tests/groups.json`, `index.html`, anything
 generated (AGENTS.md rule 11), `tests/data/ratchets.json`, `AGENTS.md`,
 `.github/workflows/`, `.claude/`.
 
+Worktree facts the brief may not know:
+
+- A brief that names the main checkout (`/home/user/f1-game`, `cd` there,
+  `git -C` it) cannot run here: the isolation guard refuses it. Do the same
+  work in your worktree at the commit the brief names (or the session SHA),
+  and say so in your first `SendMessage` and the final report.
+- A fresh worktree has no `node_modules`. Plain `node` resolves packages from
+  the main checkout's `node_modules` (Node walks up the parent directories),
+  so `node --test` usually works as is; for `npm run`/`npx` or a
+  "Cannot find module", symlink it once:
+  `ln -s /home/user/f1-game/node_modules node_modules` (gitignored; never
+  commit it). `npm install` only when the brief changes `package-lock.json`.
+- The hooks refuse compound commands they cannot parse (a `&&`/`|` chain that
+  mixes tools, `awk -v`, loops): run one plain command per Bash call.
+
 ## How messaging works
 
 - Your plain text reaches nobody until your final report. To talk mid-task,
