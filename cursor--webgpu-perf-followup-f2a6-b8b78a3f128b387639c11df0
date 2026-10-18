@@ -1,0 +1,1 @@
+1792350789	Bryce Murrin	Three/WebGPU follow-up: instance pack dirty-suffix upload only (js/render/three/tlx.js _writeInstanceMatrices/cullInstances), focused unit regression and native upload measurement; independent of PR2898 culling budgets  [cursor/webgpu-perf-followup-f2a6; session b8b78a3f128b387639c11df0]
