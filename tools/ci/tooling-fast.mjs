@@ -211,6 +211,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
   "tests/unit/career-data-audio-improvements.test.mjs",
+  // js/career/*.js never consumes simRnd and uses Math.random only at two allowlisted non-draw sites; source scan, < 50 ms.
+  "tests/unit/career-determinism.test.mjs",
   "tests/unit/career-experience.test.mjs",
   "tests/unit/career-hire-rating.test.mjs",
   "tests/unit/career-legends.test.mjs",
@@ -221,6 +223,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-settle.test.mjs",
   "tests/unit/career-ui-lazy.test.mjs",
   "tests/unit/carve-a-modules.test.mjs",
+  "tests/unit/catalog-discovery.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   // gpu-census.yml's real-GPU Verdict as functions (tools/gfx/census-verdict.mjs)
   // plus its plan gate (nightly skip, push request) executed on a scratch repo; < 1 s.
@@ -377,6 +380,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/destructure-usage.test.mjs",
   // DevFlags: query/hash/storage resolution for boot toggles (js/core/dev-flags.js).
   "tests/unit/dev-flags.test.mjs",
+  "tests/unit/diagnostics-tools.test.mjs",
   "tests/unit/digital-steer.test.mjs",
   // Live TV director (js/camera/director.js): pure cut dwell/battles + dbgCam publish without car forces. ~0.05 s.
   "tests/unit/director.test.mjs",
@@ -831,6 +835,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // open PR's head, claims on age; pure fixtures, under a second.
   "tests/unit/prune-branches.test.mjs",
   "tests/unit/pu-harvest-audio.test.mjs",
+  // Evidence archive round-trip, provenance and non-overwriting release publication; no live GitHub writes.
+  "tests/unit/publish-evidence.test.mjs",
   // shots/<topic> evidence-branch publisher: validations, dry run, full publish into a throwaway bare repo.
   "tests/unit/publish-shots.test.mjs",
   // STANDING-WATER PUDDLES: js/render/shared/puddles.js reference mask (sample pins, growth/drying, edge bias) + every constant mirrored in GLX/TLX/WGX + the PUDDLES knob plumbing. Pure, < 1 s.
@@ -949,6 +955,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/setting-deps.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
+  "tests/unit/settings-one-home.test.mjs",
   "tests/unit/settings-search.test.mjs",
   // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
   "tests/unit/settings-tabs.test.mjs",

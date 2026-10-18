@@ -60,6 +60,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/output-paths.mjs** | Path-containment helpers for the `artifacts/` vs `scratch/` output contract; gated by `output-paths.spec.js`. | — |
 | **lib/over-road-scan.cjs** | Pure over-road triangle scan shared by tests/specs/terrain-over-road.spec.js (runs in the page) and its unit test. | — |
 | **lib/pack-assets.cjs** | Node loader for assets/pack: `parseModel` (mirrors assets.js) and `packAssets()` (the `Assets.modelSync` surface). | asset-pack |
+| **lib/process-tree.mjs** | Process-tree shutdown shared by Apex jobs and bounded diagnostic supervisors. | — |
 | **lib/proxy-fetch.mjs** | A `fetch` honouring HTTPS_PROXY (curl-backed when Node would bypass the agent proxy) for GitHub API callers in tools/. | — |
 | **lib/road-position-checks.cjs** | Position-based road-ribbon checks (running width/advance, skirt depth+attachment, vertical continuity) for verify-track. | — |
 | **lib/run-pid.mjs** | Pidfile + tree kill behind `tooling-fast.mjs --stop` and `sync-pr.mjs --stop`; no pgrep -f, no hand-typed PID. | — |
@@ -237,12 +238,14 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/hud-live-sample.mjs** | Sample moved HUD pieces every few ms in an unfrozen race after position jumps; report time spent off screen. | survey-ui-matrix |
 | **shot/hud-mock.mjs** | Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; one boot per pointer type, ~1 s a shot. | survey-ui-matrix |
 | **shot/hud-survey.mjs** | Race-HUD survey: devices x cameras x presets/themes/scale → overlaps, missing, offscreen, tiny text + shots, gallery. | survey-ui-matrix |
+| **shot/lib/garage-camera-catalog.mjs** | Named garage targets, camera aliases, stations and livery field mappings. | garage-parts-livery |
 | **shot/lib/survey-runner.mjs** | Shared shot-survey runner: identical plans, failure state and gallery rows for CLI and MCP. | survey-track |
 | **shot/loading-probe.mjs** | Tap RACE! headless; record preparation, garage, flyby and first presented race frame. `--settle ms --invalidate`. | — |
 | **shot/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | playwright-probe |
 | **shot/pit-shots.mjs** | Pit-lane shot set, one boot per circuit: entry, exit, lane overview and each team's box, from the resolved geometry. | playwright-probe |
 | **shot/probe-page.mjs** | Probe helpers: reduced-motion init, backend pick, garage open/settle, soft/#game CDP shot. | — |
 | **shot/profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | playwright-probe |
+| **shot/publish-evidence.mjs** | Packages generated evidence with provenance and publishes checksum-verified GitHub Release assets outside Git history. | — |
 | **shot/replay-camera-probe.mjs** | Offline-fixture live-render camera discontinuity probe across replay entry, seek, follow, exit and reentry. | f1-animation-cameras |
 | **shot/repro-shot.mjs** | Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header. | playwright-probe |
 | **shot/scenery-source-hash.cjs** | Fingerprint all scenery geometry/build inputs used by the named screenshot catalog. | — |
@@ -257,9 +260,11 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **perf/diagnostics.mjs** | Bounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses. | renderer-debug / mcp-probe |
 | **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
 | **perf/profile.mjs** | One profiler CLI (spans \| cpu \| hitch \| trace) with --repeat noise floor and --base <ref> A/B delta table. | playwright-probe |
 | **perf/query.mjs** | Summarise a saved profile (spans JSON or .cpuprofile: top-N self/total, fn/file filter) or compare two spans JSONs. | playwright-probe |
+| **perf/runtime-memory.mjs** | Nonintrusive, feature-detected CDP heap/DOM/performance counters on a parent-owned browser session. | mcp-probe / js-debugger |
 
 ### `tools/gfx/`
 
@@ -358,6 +363,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **ui/audit-diff.mjs** | Library behind `layout-audit --diff <before.json>`: added / fixed findings per screen\|viewport cell (no browser). | survey-ui-matrix |
 | **ui/circuit-axis.mjs** | The `--circuits` axis for the two menu screens that draw a circuit (#select preview, #track-detail) in the fit tools. | survey-ui-matrix |
 | **ui/css-play.mjs** | One-screen CSS edit loop: host the tree, open a menu, dump structured DOM, hot-swap a stylesheet, screenshot. | css-play |
 | **ui/explorer.mjs** | UI exploration: missions, navigation atlas, filmstrips, phone/fault/a11y probes, replay reduction, scene reports. | survey-ui-matrix |
@@ -407,6 +413,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/apex-tools-mcp.sh** | Cursor / Cloud stdio entry for the `apex_*` MCP (`.mcp.json` → `serve`); `help`/`call`/`smoke` from a shell. | check-changes |
 | **mcp/browser-http-up.mjs** | Keep the phone browser MCP and its public tunnel up. Reuse a live address; start one only when it is dead. | phone-browser |
 | **mcp/browser-http.mjs** | Phone-sized Chromium over streamable HTTP on 127.0.0.1. Not a .mcp.json server. | phone-browser |
+| **mcp/catalog-discovery.mjs** | Bounded browser-free canonical parts, livery and garage camera discovery; validated audit filters. | garage-parts-livery |
 | **mcp/cdmcp-bg.mjs** | Detach/status/wait/stop twin of `test-bg.mjs` for `cdmcp-measure.py`: `cdmcp-bg.mjs boot --port 3462`. | mcp-probe |
 | **mcp/cdmcp-cli.py** | Stdio JSON-RPC client for chrome-devtools MCP: `list-tools`, `call`, `survey-title`, `apex-shot`, `slider-ab`. | mcp-probe |
 | **mcp/cdmcp-lamps-tune.py** | Asserts the LAMPS tuner sliders via Chromium MCP using `lightState().meanLampRGB` / `bakedLights` / `lampPosts`. | mcp-probe |
@@ -415,6 +422,8 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/chrome-devtools-mcp.sh** | Wrapper for the local `scratch/chrome-devtools-mcp` clone: `clone`/`build`/`run`/`verify`/`status`/`help`. | mcp-probe |
 | **mcp/chrome-devtools-runtime.mjs** | Materialize the two Apex-reviewed chrome-devtools-mcp 1.7.0 fixes without mutating npm or clone sources. | — |
 | **mcp/debug-chrome.mjs** | CLI, not an MCP tool: start/status/stop a headless Chromium (CDP 9222) plus static server for the js-debugger. | — |
+| **mcp/diagnostics-tools.mjs** | Typed background diagnostics and bounded report queries for Apex MCP. | renderer-debug / mcp-probe |
+| **mcp/garage-plan.mjs** | Browser-free bounded garage matrix planning over canonical cameras and livery fields. | garage-parts-livery |
 | **mcp/js-debugger-cdp.mjs** | Bounded CDP transport and loopback target discovery for js-debugger-mcp. | — |
 | **mcp/js-debugger-cli.mjs** | Separate debugger server CLI: stdio, persistent loopback daemon and state-preserving shell calls. | — |
 | **mcp/js-debugger-http.mjs** | Persistent loopback JSON-RPC bridge for the debugger's separate shell-call processes. | — |
@@ -434,6 +443,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/report-server.mjs** | Localhost half of `apex-report.js`: serves the tree to a PHONE and collects the bundle it posts back. | mcp-probe |
 | **mcp/tinyfish-mcp.sh** | Local TinyFish MCP proxy helper: `setup`/`start`/`stop`/`status`/`fetch`/`search`/`deploy-check`/`deploy-js` on :3711. | mcp-probe |
 | **mcp/tinyfish-rpc.py** | Unwraps TinyFish `fetch_content`/`search` JSON-RPC results: `unwrap` / `deploy-summary` / `live-build` / `tool-names`. | mcp-probe |
+| **mcp/ui-tools.mjs** | Bounded semantic UI inspection and saved inspection comparison for Apex MCP. | ui-menu-a11y |
 
 ### `tools/viewer/`
 
@@ -526,7 +536,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
 | **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
 | **ci/process-dashboard.mjs** | Nightly CI process dashboard: per-job p50/p90, cancel and re-gate rates, push-to-live. |
-| **ci/publish-shots.mjs** | Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch. |
+| **ci/publish-shots.mjs** | Legacy screenshot branch publisher; use tools/shot/publish-evidence.mjs for new evidence outside Git history. |
 | **ci/queue-depth.mjs** | Actions queue gauge: queued + running JOBS by OS vs the 40 Linux / 5 macOS slots; `= queue ok\|hold`. |
 | **ci/ready-full-cap.mjs** | Count ready PRs with live full-tier CI (informational since 2026-10-16; no gate reads it). |
 | **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA. |

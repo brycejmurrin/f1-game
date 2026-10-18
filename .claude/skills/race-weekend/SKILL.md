@@ -1,6 +1,6 @@
 ---
 name: race-weekend
-description: "Use when tyre wear/compounds (tyre-model.js), pit stops/lane (pit-lane.js), the STRATEGY/tyre HUD, quali or results sheets, start lights, flying start, the weather arc or sporting regs (two-compound rule, SC passes) change. Handling → tune-physics; flags/SC → race-incidents-control; calendar → season-mode."
+description: "Use when tyre wear/compounds (tyre-model.js), pit stop time/lane (pit-lane.js), the STRATEGY/tyre HUD, quali or results sheets, start lights, flying start, rain/weather arc or sporting regs (two-compound rule, SC passes) change. Handling → tune-physics; flags/SC → race-incidents-control; calendar → season-mode."
 ---
 
 # Race weekend — tyres, pits, quali, start, weather, regs
@@ -39,6 +39,8 @@ Flags, SC/blue-flag calls, `raceCtl`, finish order/delay, scripted holds → **r
 
 ## Hooks (live page)
 
+Full argument list: `__apex.agentHelp()` (runtime manifest) or `docs/DEBUG-HOOKS.md`.
+
 ```js
 __apex.tyres()                       // compound, life, wear, grip cost; {field:true} every car
 __apex.tyres({level:"real", fit:"hard"})   // wear on + a set fitted the way a stop does
@@ -69,5 +71,4 @@ Prefer one spec over its group (`npm test -- tests/specs/pit-lane.spec.js`).
   planner; a spec that ends with `finishRace()` meets it via `tyres({fit})`.
 - Quali/results sheets never compute order; a wrong classification is the
   model (`Quali.rows`, `RaceControl.finishOrder`), not the DOM.
-- Sprint points / quali-on-off for a Season → season-mode; inside a career
-  save → career-mode. Safety car, flags, retirements → race-incidents-control.
+- Sprint points / quali-on-off inside a career save → career-mode (a standalone Season → season-mode).

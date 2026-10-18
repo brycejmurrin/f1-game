@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -93,12 +94,13 @@ test("server table names the attached servers and the four that left", () => {
 
 test("wrap map count grows only with a documented MCP tool", () => {
   const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
-  assert.equal(catalog.tools.length, 35,
+  assert.equal(catalog.tools.length, 40,
     "30 → 12 on 2026-09, then 12 → 10 on 2026-09-03 when apex_gfx_probe and " +
     "apex_wgx_validate_static left with the WGX/TLX spike-out (their CLIs are in " +
     "tools/gfx/ now), then 10 → 11 on 2026-09-10 for apex_garage, the one wrap that " +
     "is a SESSION (garage-angles --serve), then 11 → 12 on 2026-09-24 for " +
-    "apex_frame_report (node-VM framing report, no browser), then 12 → 13 for read-only apex_doctor and 13 → 16 for read-only session checks; then 16 → 24 on 2026-10-03 for the track session, background jobs, one-cell UI tools and offline car/track audits; then 24 → 26 on 2026-10-04 for apex_hud_shot / apex_hud_survey (one CLI, hud-survey.mjs); then 26 → 27 on 2026-10-05 for apex_unit_test; then 27 → 28 on 2026-10-06 for apex_shot_survey (multi-shot track-session panel); then 28 → 29 on 2026-10-10 for apex_hud_mock (HUD layout on black, ~1 s a shot); then 29 → 30 on 2026-10-10 for apex_catalog (every valid id in one read); then 30 → 31 on 2026-10-16 for apex_profile_query (profiler; the run itself is apex_job_start kind profile); then 31 → 32 on 2026-10-16 for the direct browser tool apex_profile (the same job, one call); then 32 → 33 on 2026-10-16 for apex_locations (all-circuit shot targets); then 33 → 34 on 2026-10-18 for apex_help (full text and schema that tools/list shortens); then 34 → 35 on 2026-10-18 for apex_viewer (a self-contained three.js page of engine-built cars and circuits); " +
+    "apex_frame_report (node-VM framing report, no browser), then 12 → 13 for read-only apex_doctor and 13 → 16 for read-only session checks; then 16 → 24 on 2026-10-03 for the track session, background jobs, one-cell UI tools and offline car/track audits; then 24 → 26 on 2026-10-04 for apex_hud_shot / apex_hud_survey (one CLI, hud-survey.mjs); then 26 → 27 on 2026-10-05 for apex_unit_test; then 27 → 28 on 2026-10-06 for apex_shot_survey (multi-shot track-session panel); then 28 → 29 on 2026-10-10 for apex_hud_mock (HUD layout on black, ~1 s a shot); then 29 → 30 on 2026-10-10 for apex_catalog (every valid id in one read); then 30 → 31 on 2026-10-16 for apex_profile_query (profiler; the run itself is apex_job_start kind profile); then 31 → 32 on 2026-10-16 for the direct browser tool apex_profile (the same job, one call); then 32 → 33 on 2026-10-16 for apex_locations (all-circuit shot targets); then 33 → 34 on 2026-10-18 for apex_help (full text and schema that tools/list shortens); then 34 → 35 on 2026-10-18 for apex_viewer (a self-contained three.js page of engine-built cars and circuits); then 35 → 40 on 2026-10-18 for apex_ui_inspect, apex_ui_diff, apex_ui_mission_plan, apex_garage_plan and apex_diagnostics (bounded inspection, planning and diagnostics); " +
+
     "grow it on purpose, in the doc too");
 });
 
@@ -227,13 +229,20 @@ test("Codex .codex/config.toml MCP servers lockstep .mcp.json", () => {
 test("MCP descriptions state tree vs browser", () => {
   const src = read("tools/mcp/apex-tools-mcp.mjs");
   assert.match(src, /docs\/AGENT-SURFACE\.md/);
-  const doc = fs.readFileSync(DOC, "utf8");
-  const wrap = parseTable(doc, "<!-- WRAP-MAP -->");
+  // Read the public registry: tool descriptors can be imported from focused modules.
+  const registry = JSON.parse(execFileSync(process.execPath,
+    [path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "list-tools"],
+    { cwd: ROOT, encoding: "utf8", timeout: 10000 }));
+  const tools = new Map(registry.map((tool) => [tool.name, tool]));
+  const wrap = parseTable(fs.readFileSync(DOC, "utf8"), "<!-- WRAP-MAP -->");
+  assert.deepEqual([...tools.keys()].sort(), wrap.map(([name]) => stripTick(name)).sort());
   for (const [mcp, , kind] of wrap) {
     const name = stripTick(mcp);
-    const prefix = kind === "browser" ? "Browser \\(lock first\\)" : "Tree";
-    assert.match(src, new RegExp(`name: "${name}"[\\s\\S]{0,240}description: "${prefix}`),
-      `${name} description must start with ${kind === "browser" ? "Browser (lock first)" : "Tree"}`);
+    const description = tools.get(name).description;
+    assert.match(description, kind === "browser" ? /^Browser\b/ : /^Tree\b/,
+      `${name} description must state ${kind}`);
+    if (kind === "browser") assert.match(description, /\block\b/i,
+      `${name} browser description must document the lock`);
   }
 });
 

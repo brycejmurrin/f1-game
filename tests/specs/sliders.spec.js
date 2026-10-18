@@ -54,7 +54,7 @@ const SLIDERS = [
   { id: "pm-rate",    key: "wheelbase",       store: "steerRate",  vid: "pm-rate-v",    min: 1,  max: 10, sign: -1 },
   { id: "pm-expo",    key: "expo",            store: "steerExpo",  vid: "pm-expo-v",    min: 1,  max: 10, sign: -1 },
   { id: "pm-smooth",  key: "tiltCutoff",      store: "steerSmooth",vid: "pm-smooth-v",  min: 1,  max: 10, sign: -1 },
-  { id: "pm-tiltdeg", key: "maxTilt",         store: "tiltDeg",    vid: "pm-tiltdeg-v", min: 1,  max: 10, sign: -1 },
+  { id: "pm-tiltsimple", key: "maxTilt",      store: "tiltDeg",    vid: "pm-tiltsimple-v", min: 1, max: 10, sign: -1 },
   { id: "pm-lock",    key: "maxSlip",         store: "steerLock",  vid: "pm-lock-v",    min: 1,  max: 10, sign: +1 },
   { id: "pm-speedsteer", key: "speedRef",     store: "steerSpeed", vid: "pm-speedsteer-v", min: 1, max: 10, sign: +1 },
   { id: "pm-help",    key: "roadFollow",      store: "drivingHelp",vid: "pm-help-v",    min: 1,  max: 10, sign: +1 },

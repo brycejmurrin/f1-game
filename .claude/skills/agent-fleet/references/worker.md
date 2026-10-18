@@ -35,9 +35,11 @@ your only escalation path besides the user; ask it instead of guessing.
 4. **Screenshot** UI and visual claims with `playwright-probe` /
    `survey-ui-matrix` / `tools/shot/hud-survey.mjs`, at phone landscape 844x390
    with touch first. Numbers first (overlap px², findings), 2–4 images per PR.
-   Until a publishing tool exists: commit the PNGs (each < 400 KB) to a
-   separate `shots/<pr>` branch cut from the deploy branch, never the PR
-   branch, and list each file with what it proves in the PR body.
+   Keep captures under ignored `artifacts/` or `scratch/`. Publish selected
+   evidence with `tools/shot/publish-evidence.mjs` (or promote a CI artifact
+   with `archive-evidence.yml`), then link the release assets and explain what
+   each capture proves in the PR body. Do not create new image branches;
+   `docs/EVIDENCE-STORAGE.md` describes publication, provenance and retention.
 5. **Keep the PR body live** (AGENTS.md rule 12): tick each Plan item with its
    evidence the moment it lands (`update_pull_request`, no push needed), add
    discovered work, strike dropped items with why; refresh Status and the

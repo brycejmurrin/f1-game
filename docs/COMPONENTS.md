@@ -241,9 +241,9 @@ file changes a screen owned by another.
 - `.build-tag` — `components` + `menus`. The footer version tag: styled in
   `menus`, overridden by a compact-density selector in `components`.
 - `.cs-liv-swatch` / `.tm-colour` / `.swatch` / `.res-swatch` / `.dh-swatch` /
-  `.pm-accent-chip` / `.pm-accent-preview-hud` —
+  `.pm-accent-chip` —
   their owning files (`carsetup` / `menus` / `menus` / `overlays` / `data` /
-  `components` / `components`)
+  `components`)
   + `tokens`. The whole swatch family appears once more in `tokens`' single
   `forced-colors` block: colour IS the content on a swatch, so they all opt
   out of forced-color-adjust together — one rule, deliberately, rather than
@@ -324,7 +324,6 @@ that relationship visible across its physical files.
 - `.sur-rnd` — `race-setup.css`, `select.css`.
 - `.sur-country` — `race-setup.css`, `select.css`.
 - `.pm-groups` — `settings-controls.css`, `settings.css`.
-- `.pm-accent-preview` — `settings-controls.css`, `settings.css`.
 - `.pm-look-h` — `settings-controls.css`, `settings.css`.
 - `.pm-accent-swatches` — `settings-controls.css`, `settings.css`.
 - `.pm-replay-intro` — `settings-controls.css`, `settings.css`.

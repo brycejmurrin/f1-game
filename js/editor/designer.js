@@ -1894,6 +1894,8 @@ const TrackDesigner = (function () {
     // Right after HALF-WIDTH (children indexes in the browser and in the test DOM alike).
     const box = ui.width.parentNode, at = Array.prototype.indexOf.call(box.children, ui.width);
     ui.spanW = stepper("SPAN WIDTH m", spanHW, (v) => setSpanWidth(v), 0.1, (v) => (hasSpan() ? v.toFixed(1) : "—"));
+    // Stable ids: SettingDeps.EXPLAIN says why −/+ are aria-disabled (#2851).
+    ui.spanW.children[1].id = "td-spanw-dn"; ui.spanW.children[3].id = "td-spanw-up";
     box.insertBefore(ui.spanW, box.children[at + 1] || null);
     ui.turnPick = el("div"); ui.turnPick.hidden = true; ui.turnPick.setAttribute("role", "group"); ui.turnPick.setAttribute("aria-label", "Selected turn");
     ui.turnPickLabel = el("div", "td-label", "SELECTED TURN");

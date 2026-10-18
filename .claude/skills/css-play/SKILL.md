@@ -6,7 +6,8 @@ description: "Use when iterating one menu/HUD stylesheet with screenshots, or re
 # Playing with menu / HUD CSS
 
 Host the working tree, open **one** screen, dump structured DOM, edit `css/`,
-hot-swap the stylesheet, screenshot. No cache bump in the loop.
+hot-swap the stylesheet, screenshot. No cache bump in the loop (`bump-cache`
+only stamps the deploy's staged copy).
 
 ## When to Use
 
@@ -42,32 +43,22 @@ REPLACES the catalog path, so give the whole route: settings DISPLAY panel =
 `pm-audio`). Catalog ids are a subset of `SCREENS` in `tools/ui/menu-screens.mjs`.
 Every step here needs a browser (Chromium via harness.mjs); `--help`/`--list` do not.
 
-Who owns a row: find the class in `index.html`, then `grep -n 'tune-row' css/*.css`.
-Settings sliders (`label.tune-row` > `.tune-label` + `input[type=range]`): base
-`css/tuner.css`, sheet override `.pm-group .tune-row` in `css/settings.css`,
-DISPLAY panel `#pm-panel-display .tune-row` in `css/settings-controls.css`; sizes
-are tokens `--slider`/`--tap` (`css/tokens.css`). Enumerated rows are `.set-row`
-(`css/settings-controls.css`). The pause menu (`--screen pause`, which boots a
-Monza race first) is `#pausemenu` in `css/dialogs.css`, compact-density rules
-included; `css/menus.css` is the title chrome, not the pause sheet.
+Who owns a row (tune-row, set-row, the pause sheet): [references/loop.md §Who owns a row](references/loop.md#who-owns-a-row).
 
 ## Hard don'ts
 
-1. **There is no cache bump.** `bump-cache` only stamps the deploy's staged copy; hot-swap is the reload. Regenerate
-   once, last edit before commit, when the look ships.
-2. **Hide `#game`.** A live canvas starves the compositor (survey-ui-matrix).
-3. **Open through the app's buttons**, never `hidden = false` on a dialog.
-4. **One browser at a time** — [mcp-probe traps](../mcp-probe/references/traps-chrome.md).
-5. **Do not run `layout-audit` for one screen.** That is the matrix.
-6. **A change to TYPE METRICS invalidates a pixel golden — re-bless in the SAME
+1. **Hide `#game`.** A live canvas starves the compositor (survey-ui-matrix).
+2. **Open through the app's buttons**, never `hidden = false` on a dialog.
+3. **One browser at a time** — [mcp-probe traps](../mcp-probe/references/traps-chrome.md).
+4. **Do not run `layout-audit` for one screen.** That is the matrix.
+5. **A change to TYPE METRICS invalidates a pixel golden — re-bless in the SAME
    commit.** `tests/specs/menu-baseline.spec.js` holds six blessed PNGs; the
    title, select and garage screens are pixel-compared at a 1% tolerance. A
    font-size, tracking, weight or gap change relays text and blows that budget.
-   `pick-tests` selects it (`baseline`) only for `css/menus.css` and `index.html`;
-   any other sheet (`css/carsetup.css`, `tokens.css`, `select.css`) gets just
-   `ui`, so run the spec yourself after a type-metric change. Regenerate on this
-   box (goldens are portable; the runner and a dev container agree to within
-   1-17 px) and REVIEW the diff, never accept it blind:
+   Which sheets select it is code, not prose: `node tools/ci/pick-tests.mjs`
+   (group `baseline`) and `select-specs.mjs` (the spec) — when neither names it
+   for your sheet, run the spec yourself. Regenerate on this box and REVIEW the
+   diff, never accept it blind:
 
    ```sh
    npm test -- tests/specs/menu-baseline.spec.js            # does it still match?

@@ -3560,6 +3560,7 @@
       ],
       "replace": [
         "tests/unit/career-backup.test.mjs",
+        "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/damage.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -13020,6 +13021,9 @@
       "retireTexture": [
         "tests/unit/tlx-texture-release.test.mjs"
       ],
+      "setInstanceRange": [
+        "tests/unit/tlx-hunt4.test.mjs"
+      ],
       "setRange0": [
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
@@ -14104,7 +14108,8 @@
       "*": [
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/settings-one-home.test.mjs"
       ]
     },
     "js/ui/aria-state.js": {
@@ -15517,7 +15522,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
-        "tests/unit/perf-try.test.mjs"
+        "tests/unit/perf-try.test.mjs",
+        "tests/unit/settings-one-home.test.mjs"
       ]
     },
     "js/ui/share-code.js": {
