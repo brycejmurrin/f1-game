@@ -34,8 +34,9 @@ at WAIT while the draft's Plan has open items, and shows the Plan as PLAN
 
 ARM a PR only when ALL hold; any miss is WAIT (say which):
 
-- non-draft, ci.yml `success` on the head (the board's ARM also fires while CI
-  runs: that is not enough), `node tools/ci/ready-gate.mjs --pr <n>` exits 0;
+- non-draft, ci.yml `success` on the head (the board WAITs while CI runs, on
+  an open Plan item and on `MERGE-HOLD:` since 2026-10-18; still confirm),
+  `node tools/ci/ready-gate.mjs --pr <n>` exits 0;
 - `mergeableState` is not `dirty` — never arm a DIRTY/CONFLICTING PR;
 - fewer than 2 PRs armed repo-wide right now (count every armed row, any
   method), so at most 2 are ever armed;
