@@ -984,6 +984,37 @@ test("H4: a push over a red tooling-fast run is refused; && chains, green logs a
   } finally { repo.rm(); }
 });
 
+// H1 (#2662): harness Stop hook — memory dir excluded from porcelain; push-hold silences unpushed nag.
+test("H1: stop-hook-git-check.sample treats synced memory and a held push as clean (Bryce applies the same to ~/.claude)", () => {
+  const sample = path.join(ROOT, "tests/fixtures/stop-hook-git-check.sample.sh");
+  const repo = scratchRepo("hook-stophook-");
+  const run = (env = {}) => spawnSync("bash", [sample], {
+    cwd: repo.dir, encoding: "utf8",
+    env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, STOP_HOOK_UPSTREAM: "origin/main", ...env },
+  });
+  try {
+    fs.mkdirSync(path.join(repo.dir, ".claude/memory"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, ".claude/memory/a.md"), "mem\n");
+    repo.g("add", "-A"); repo.g("commit", "-qm", "init");
+    repo.g("branch", "-M", "main");
+    fs.writeFileSync(path.join(repo.dir, ".claude/memory/a.md"), "mem dirty\n");
+    assert.equal(run().status, 0, "only .claude/memory dirty must not nag");
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "other\n");
+    assert.equal(run().status, 2, "dirty prose outside memory still nags");
+    repo.g("checkout", "-q", "main");
+    repo.g("reset", "-q", "--hard");
+    const base = repo.g("rev-parse", "HEAD").stdout.trim();
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "ahead note\n");
+    repo.g("add", "docs/PHYSICS.md"); repo.g("commit", "-qm", "ahead");
+    repo.g("config", "remote.origin.url", repo.dir);
+    repo.g("config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*");
+    repo.g("update-ref", "refs/remotes/origin/main", base);
+    assert.equal(run().status, 2, `unpushed commits nag without push-hold (${run().stderr})`);
+    fs.writeFileSync(path.join(repo.dir, ".claude/push-hold"), "live CI on pushed tip\n");
+    assert.equal(run().status, 0, "push-hold clears the unpushed nag while CI is live");
+  } finally { repo.rm(); }
+});
+
 test("H5: a loaded box gets the longer guard cap, above it sits the hook timeout; H2 unmark runs before git verbs", () => {
   const src = fs.readFileSync(HOOK, "utf8");
   assert.match(src, /\/proc\/loadavg[^\n]*GUARD_T=300/);
@@ -1002,4 +1033,49 @@ test("H5: a loaded box gets the longer guard cap, above it sits the hook timeout
     assert.notEqual(r.status, null);
     assert.match(repo.g("ls-files", "-v").stdout, /^H \.claude\/memory\/a\.md/m, "unmarked before the git verb");
   } finally { repo.rm(); }
+});
+
+test('diagnostics and UI browser entry points remain parent-owned across MCP and shell', () => {
+  const sub = command => hook('bash-guard.sh', bashCall(command, { agent_id: 'a1' }));
+  const blocked = [
+    "node tools/mcp/apex-tools-mcp.mjs call apex_ui_inspect '{}'",
+    "bash tools/mcp/apex-tools-mcp.sh call apex_diagnostics '{\"op\":\"capabilities\"}'",
+    "node tools/perf/diagnostics.mjs memory_census '{}'",
+    "node tools/perf/diagnostics.mjs gpu_memory_census '{}'",
+    "node tools/perf/diagnostics.mjs renderer_probe '{}'",
+    "node tools/perf/diagnostics.mjs memory_census '{\"dryRun\":true}'",
+    "node tools/perf/diagnostics.mjs unknown '{}'",
+    "cd tools/perf && node ./diagnostics.mjs memory_census '{}'",
+    "node tools/gfx/mem-census.mjs --plan",
+    "node tools/gfx/gpu-mem-census.mjs --dry-run",
+    "node tools/gfx/gfx-probe.mjs --plan",
+    "node tools/ui/explorer.mjs inspect --screen title",
+    "node tools/ui/explorer.mjs replay artifacts/mission.json",
+  ];
+  for (const command of blocked) {
+    assert.equal(sub(command).status, 2, command);
+    assert.equal(hook('bash-guard.sh', bashCall(command)).status, 0, 'parent may run: ' + command);
+  }
+  for (const command of [
+    "node tools/perf/diagnostics.mjs vm_lifecycle '{}'",
+    "node tools/check/lifecycle-census.mjs --cycles 1",
+    "node tools/mcp/apex-tools-mcp.mjs call apex_ui_mission_plan '{\"mission\":\"first-race\"}'",
+    "node tools/mcp/apex-tools-mcp.mjs call apex_garage_plan '{}'",
+    "node tools/ui/explorer.mjs brief --mission first-race --url http://localhost:3456",
+    "node tools/ui/explorer.mjs --list",
+    "node tools/shot/garage-angles.mjs --plan",
+  ]) assert.equal(sub(command).status, 0, 'browser-free plan/VM remains open: ' + command);
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, '.claude/settings.json'), 'utf8'));
+  const matcher = new RegExp(settings.hooks.PreToolUse.find(g => g.hooks.some(h => h.command.includes('mcp-browser-guard.sh'))).matcher);
+  for (const tool of ['apex_ui_inspect', 'apex_diagnostics']) {
+    const name = 'mcp__apex-tools__' + tool;
+    assert.ok(matcher.test(name));
+    assert.equal(hook('mcp-browser-guard.sh', { tool_name: name, agent_type: 'worker' }).status, 2);
+    assert.equal(hook('mcp-browser-guard.sh', { tool_name: name }).status, 0);
+  }
+  for (const tool of ['apex_ui_mission_plan', 'apex_garage_plan', 'apex_ui_diff']) {
+    const name = 'mcp__apex-tools__' + tool;
+    assert.equal(matcher.test(name), false);
+    assert.equal(hook('mcp-browser-guard.sh', { tool_name: name, agent_type: 'worker' }).status, 0);
+  }
 });

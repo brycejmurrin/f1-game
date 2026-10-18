@@ -21,8 +21,11 @@ function rpc(lines, env = {}) {
     env: { ...process.env, APEX_MCP_MOCK: "1", ...env },
     cwd: ROOT,
     timeout: 15000,
+    // Batched schema-contract probes now publish 38 tool schemas and hundreds
+    // of typed refusals; keep the transport fixture bounded above 1 MiB.
+    maxBuffer: 8 * 1024 * 1024,
   });
-  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.status, 0, r.error?.message || r.stderr);
   return r.stdout
     .split("\n")
     .map((l) => l.trim())
@@ -168,11 +171,14 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_car_audit",
     "apex_catalog",
     "apex_ci_status",
+    "apex_diagnostics",
     "apex_doctor",
     "apex_eval",
     "apex_frame_report",
     "apex_garage",
+    "apex_garage_plan",
     "apex_graph_parity",
+    "apex_help",
     "apex_hud_mock",
     "apex_hud_shot",
     "apex_hud_survey",
@@ -191,10 +197,14 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_status",
     "apex_track",
     "apex_track_audit",
+    "apex_ui_diff",
     "apex_ui_fit",
+    "apex_ui_inspect",
+    "apex_ui_mission_plan",
     "apex_ui_shot",
     "apex_unit_test",
     "apex_verify_change_fast",
+    "apex_viewer",
     "apex_who_is_on_it",
   ]);
   for (const n of names) {
@@ -926,7 +936,7 @@ test("every tool carries title, honest MCP annotations and an outputSchema; resu
   assert.deepEqual(destructive, ["apex_job_cancel"]);
   assert.deepEqual(openWorld.sort(), ["apex_ci_status", "apex_who_is_on_it"]);
   for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
-  for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
+  for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
 });
@@ -1236,8 +1246,9 @@ test("graph-parity cleans partial archives and every load/build failure using sm
   }
 });
 
-test("parseOut takes the trailing JSON block, never a number from inside it", async () => {
-  const { parseOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+test("splitOut takes the trailing JSON block, never a number from inside it", async () => {
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const parseOut = (stdout) => splitOut(stdout).out;
   // apex_shot: a text line, then pretty-printed JSON whose last value line is a bare number.
   const shot = 'wrote x.png (20.3 KB)\n{\n  "frame": {\n    "tgt": [\n      -285.6,\n      563.528\n    ]\n  }\n}';
   assert.deepEqual(parseOut(shot), { frame: { tgt: [-285.6, 563.528] } });
@@ -1959,6 +1970,12 @@ test("syncStructured makes structuredContent match the refined text body, and le
 // call must be refused as invalid), unless the argument is exempt below WITH a reason. A new argument that does nothing fails here
 // until it is wired or exempted; an exemption that has become unnecessary fails too, so the table cannot rot.
 const ARG_BASES = {
+  apex_ui_inspect: [{ screen: "title" }],
+  apex_ui_diff: [{ before: "scratch/before.json", after: "scratch/after.json" }],
+  apex_ui_mission_plan: [{ mission: "first-race" }],
+  apex_garage_plan: [{}],
+  apex_diagnostics: [{ op: "run", kind: "memory_census" }],
+  apex_catalog: [{ section: "parts" }],
   apex_shot: [{ track: "monza" }],
   apex_agent: [{ track: "monza" }],
   apex_eval: [{ track: "monza", expr: "1" }],
@@ -1973,6 +1990,7 @@ const ARG_BASES = {
   apex_graph_parity: [{ base: "HEAD", id: "monza" }],
   apex_pick_tests: [{}],
   apex_track_audit: [{ track: "monza" }],
+  apex_viewer: [{}],
   apex_car_audit: [{ check: "ladder" }, { check: "crest" }],               // teams: the crest sweep only
   apex_garage: [{ op: "open", team: "ferrari" }, { op: "team", team: "mercedes" }, { op: "design" }, { op: "design", design: { stripe: "#ffffff" } }, { op: "shot" }, { op: "sheet" }],   // each op reads its own keys; base only with a design
   apex_track: [{ op: "survey", track: "monza" }, { op: "shot" }, { op: "eval" }],
@@ -1993,7 +2011,7 @@ const argCandidates = (spec) => {
     const lo = spec.exclusiveMinimum != null ? spec.exclusiveMinimum + 1 : (spec.minimum ?? 0) + 1;
     return [lo, lo + 1];
   }
-  if (spec.type === "array") return [spec.items?.enum ? [spec.items.enum[0]] : spec.items?.type === "number" ? [0.3] : spec.items?.type === "object" ? [{}] : ["a"]];
+  if (spec.type === "array") return spec.items?.enum ? [[spec.items.enum[0]], [spec.items.enum.at(-1)]] : [spec.items?.type === "number" ? [0.3] : spec.items?.type === "object" ? [{}] : ["a"]];
   if (spec.type === "object") return [{ a: 1 }];
   return [spec.pattern ? "probe-1" : "probe"];
 };
@@ -2223,6 +2241,17 @@ test("slimBody (#2672): doctor keeps failures + pass count, unit_test keeps coun
   assert.deepEqual(sel.out.shards, [{ name: "s1", specCount: 2 }]);
 });
 
+test("slimBody: eval scope hint, profile_query ENOENT hint, who_is_on_it drops stale and released claims", async () => {
+  const { slimBody } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  assert.match(slimBody("apex_eval", { ok: false, out: { err: "info is not defined" } }).fix, /a\.info\(\)/);
+  const browserThrow = slimBody("apex_eval", { ok: true, exit: 0, out: { err: "boom" } });
+  assert.equal(browserThrow.ok, false); assert.equal(browserThrow.fix, undefined);
+  assert.equal(slimBody("apex_eval", { ok: true, out: { v: 1 } }).ok, true);
+  assert.match(slimBody("apex_profile_query", { ok: false, stderr: "ENOENT: no such file" }).fix, /apex_job_start/);
+  const w = slimBody("apex_who_is_on_it", { out: { claims: [{ slug: "a" }, { slug: "b", stale: true }, { slug: "c", released: true }] } });
+  assert.deepEqual(w.out.claims, [{ slug: "a" }]); assert.equal(w.out.hiddenClaims, 2);
+});
+
 test("hudEstimateMs (#2673): tracks measured cost and scales with cells; the kill budget is not the estimate", async () => {
   const { hudEstimateMs } = await import("../../tools/mcp/apex-tools-mcp.mjs");
   const { expandMatrix } = await import("../../tools/lib/hud-survey-matrix.mjs");
@@ -2235,13 +2264,35 @@ test("hudEstimateMs (#2673): tracks measured cost and scales with cells; the kil
   assert.ok(all < 20 * 60000, "and far less than the old 18-minute claim for one cell");
 });
 
+test("tools/list stays compact and apex_help returns the full text it shortens", () => {
+  const out = rpc([
+    { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
+    { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_help", arguments: { tool: "apex_shot_survey" } } },
+    { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "apex_help", arguments: { tool: "apex_nope" } } },
+  ]);
+  const listed = out.find((m) => m.id === 1).result;
+  assert.ok(JSON.stringify(listed).length < 55000, `tools/list is ${JSON.stringify(listed).length} bytes`);
+  const help = listed.tools.find((t) => t.name === "apex_help");
+  assert.equal(help.annotations.readOnlyHint, true);
+  assert.ok(help.outputSchema && help.outputSchema.type === "object");
+  const short = listed.tools.find((t) => t.name === "apex_shot_survey");
+  const full = out.find((m) => m.id === 2).result.structuredContent;
+  assert.equal(full.ok, true);
+  assert.ok(full.description.length > short.description.length, "help carries the uncompacted description");
+  assert.match(short.description, /apex_help/);
+  assert.ok(Object.keys(full.inputSchema.properties.camera.properties).includes("fov"), "nested object bodies live in apex_help");
+  for (const t of listed.tools) for (const k of t.inputSchema.required || []) assert.ok(t.inputSchema.properties[k], `${t.name} keeps required ${k}`);
+  const miss = out.find((m) => m.id === 3).result;
+  assert.equal(miss.isError, true);
+});
+
 test("tool descriptions state the host ceiling and the per-call boot (#2673)", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "utf8");
   assert.match(src, /name: "apex_job_status"[\s\S]{0,400}~120 s/);
   assert.match(src, /name: "apex_agent"[\s\S]{0,300}COLD-BOOTS/);
 });
 
-test("server boots with no node_modules: its static import graph names only node: and relative modules", () => {
+test("servers boot with no node_modules: static import graphs (apex-tools, js-debugger) name only node: and relative modules", () => {
   // .mcp.json starts the server alongside SessionStart's npm install; a bare static import (sharp, 2026-10-18) crashed it to CONNECTION_CLOSED.
   const seen = new Set(), bare = [];
   const walk = (f) => {
@@ -2255,6 +2306,262 @@ test("server boots with no node_modules: its static import graph names only node
     }
   };
   walk(MCP);
+  walk(path.join(ROOT, "tools/mcp/js-debugger-mcp.mjs"));
   assert.ok(seen.size > 3, `walked ${seen.size} files`);
   assert.deepEqual(bare, [], "load npm packages with a lazy `await import()` at the call site");
+});
+
+// Semantic inspection wrappers: browser-free contract tests, with injected CLI
+// execution. A browser pass is owned by the parent and is not implied here.
+test('UI inspector schema bounds sizes, selectors, flags and local target', () => {
+  for (const args of [
+    { viewports: Array(9).fill({ width: 844, height: 390 }) },
+    { safe: [0, 1, 2] }, { safe: [0, 0, 201, 0] },
+    { selector: 'x'.repeat(513) }, { screen: 'not-a-screen' },
+    { boot: { width: 239, height: 390 } }, { flags: '--help' },
+    { roundtrip: true },
+  ]) {
+    const r = callCli('apex_ui_inspect', { ...args, dryRun: true });
+    assert.equal(r.status, 1, JSON.stringify(args));
+    assert.equal(JSON.parse(r.stdout).error, 'bad_args');
+  }
+  const r = callCli('apex_ui_inspect', { screen: 'title', selector: '--help', styles: '#title', viewports: [{ width: 844, height: 390 }], touch: true, safe: [0, 59, 21, 59], roundtrip: true, dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  const b = JSON.parse(r.stdout);
+  assert.ok(b.argv.includes('--selector=--help'), 'selector cannot turn into CLI option');
+  assert.ok(b.argv.includes('844x390'));
+  assert.equal(b.lockOwner, 'tools/ui/explorer.mjs');
+  for (const args of [{ target: 'deploy' }, { url: 'https://example.com' }, { out: '../escape' }]) {
+    assert.equal(callCli('apex_ui_inspect', { ...args, dryRun: true }).status, 1);
+  }
+});
+
+test('UI inspector delegates locking to the canonical CLI and summarizes unknown bindings', async () => {
+  const { createUITools } = await import('../../tools/mcp/ui-tools.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apex-ui-contract-'));
+  const report = { viewport: { width: 844, height: 390 }, controls: [
+    { selector: '#a', binding: { status: 'matches' } },
+    { selector: '#b', binding: { status: 'unavailable' } },
+    { selector: '#c', binding: { status: 'unmapped' } },
+  ], issues: [{ kind: 'small-target', selector: '#a' }], settlement: { stable: false } };
+  const result = body => ({ content: [{ type: 'text', text: JSON.stringify(body) }] });
+  let spawned = 0;
+  const ctx = { ROOT: dir, assertSafeOut: p => path.resolve(dir, p), mockMode: () => false,
+    occupancyRefuse: () => null, toolResult: result,
+    refuse: (error, message) => result({ ok: false, error, message }),
+    runSpawn: async (argv, options) => {
+      spawned++; assert.equal(options.timeoutMs, 180000);
+      const out = argv[argv.indexOf('--out') + 1];
+      fs.mkdirSync(out, { recursive: true }); fs.writeFileSync(path.join(out, 'inspection.json'), JSON.stringify(report));
+      return result({ ok: true });
+    } };
+  try {
+    const handlers = createUITools(ctx).handlers;
+    const b = JSON.parse((await handlers.apex_ui_inspect({})).content[0].text);
+    assert.equal(spawned, 1); assert.equal(b.ok, true);
+    assert.equal(b.records[0].bindings.unavailable, 1);
+    assert.equal(b.records[0].bindings.unmapped, 1);
+    assert.equal(b.records[0].advisoryTotal, 1);
+    assert.equal(b.records[0].settlement.stable, false);
+    assert.match(b.limitation, /not a UI pass/);
+    const busy = createUITools({ ...ctx, occupancyRefuse: () => result({ ok: false, error: 'lock_held' }) }).handlers;
+    assert.equal(JSON.parse((await busy.apex_ui_inspect({})).content[0].text).error, 'lock_held');
+    assert.equal(spawned, 1, 'busy check must prevent CLI spawn');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('saved UI diffs are browser free, reject incompatible or oversized evidence, and bound findings', async () => {
+  const { createUITools } = await import('../../tools/mcp/ui-tools.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apex-ui-diff-'));
+  const result = body => ({ content: [{ type: 'text', text: JSON.stringify(body) }] });
+  const ctx = { ROOT: dir, assertSafeOut: p => path.resolve(dir, p), mockMode: () => false,
+    toolResult: result, refuse: (error, message) => result({ ok: false, error, message }),
+    runSpawn: () => { throw new Error('must not spawn'); }, occupancyRefuse: () => { throw new Error('must not inspect browser'); } };
+  const handler = createUITools(ctx).handlers.apex_ui_diff;
+  const save = (name, value) => fs.writeFileSync(path.join(dir, name), JSON.stringify(value));
+  const report = { provenance: { screen: 'title' }, viewport: { width: 844, height: 390 }, controls: [{ selector: '#a', value: 'one', binding: { status: 'unmapped' } }], issues: [] };
+  try {
+    save('before', report); save('after', { ...report, controls: [{ ...report.controls[0], value: 'two' }], issues: Array(101).fill({ kind: 'test' }) });
+    let b = JSON.parse(handler({ before: 'before', after: 'after' }).content[0].text);
+    assert.equal(b.ok, true); assert.equal(b.browser, false);
+    assert.equal(b.comparisons[0].changedTotal, 1); assert.equal(b.comparisons[0].issues.length, 100); assert.equal(b.comparisons[0].totals.issues, 101);
+    save('after', { ...report, viewport: { width: 1280, height: 800 } });
+    assert.equal(JSON.parse(handler({ before: 'before', after: 'after' }).content[0].text).error, 'incompatible_inspections');
+    save('after', { invalid: true });
+    assert.equal(JSON.parse(handler({ before: 'before', after: 'after' }).content[0].text).error, 'bad_args');
+    fs.writeFileSync(path.join(dir, 'after'), 'x'.repeat(5 * 1024 * 1024 + 1));
+    assert.equal(JSON.parse(handler({ before: 'before', after: 'after' }).content[0].text).error, 'bad_args');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('named UI mission plans cannot supply actions or unbounded capture budgets', () => {
+  for (const args of [{ mission: 'anything' }, { mission: 'first-race', maxShots: 6 }, { mission: 'first-race', timeoutSeconds: 181 }, { mission: 'first-race', actions: [] }]) {
+    assert.equal(callCli('apex_ui_mission_plan', { ...args, dryRun: true }).status, 1);
+  }
+  const r = callCli('apex_ui_mission_plan', { mission: 'first-race', maxShots: 2, timeoutSeconds: 60, dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  const b = JSON.parse(r.stdout);
+  assert.equal(b.planOnly, true); assert.equal(b.written, false);
+  assert.equal(b.limits.missions, 1); assert.equal(b.limits.maxShots, 2); assert.equal(b.limits.timeoutMs, 60000);
+  assert.ok(b.argv.includes('replay'));
+});
+
+test('garage plan uses canonical frame/paint/team selectors and explicit budgets without a browser', () => {
+  for (const args of [
+    { team: 'invented' }, { frames: ['unknown'] },
+    { frames: ['spineTop', 'spineSide'], maxShots: 1 },
+    { field: 'spineLogo', options: ['unknown'] },
+    { field: 'spineLogo' }, { maxShots: 17 }, { budgetSeconds: 181 },
+  ]) assert.equal(callCli('apex_garage_plan', { ...args, dryRun: true }).status, 1, JSON.stringify(args));
+  const r = callCli('apex_garage_plan', { team: 'mclaren', frames: ['spineTop'], maxShots: 1, budgetSeconds: 180 });
+  assert.equal(r.status, 0, r.stderr);
+  const b = JSON.parse(r.stdout);
+  assert.equal(b.browser, false); assert.equal(b.planOnly, true);
+  assert.equal(b.plan.shotCount, 1); assert.equal(b.plan.budget, 180);
+});
+
+test('canonical catalog and car filters integrate with the published MCP schemas', () => {
+  let r = callCli('apex_catalog', { section: 'parts', category: 'fuel', team: 'haas', limit: 2 });
+  assert.equal(r.status, 0, r.stderr);
+  let b = JSON.parse(r.stdout);
+  assert.equal(b.section, 'parts'); assert.ok(b.rows.length <= 2);
+  assert.ok(b.rows.every(row => row.category === 'fuel'));
+  for (const [name, args] of [
+    ['apex_car_audit', { check: 'ladder', categories: ['fuel'], team: 'haas' }],
+    ['apex_job_start', { kind: 'parts_sweep', categories: ['fuel'], team: 'haas' }],
+  ]) {
+    r = callCli(name, { ...args, dryRun: true });
+    assert.equal(r.status, 0, r.stderr);
+    b = JSON.parse(r.stdout);
+    assert.ok(b.argv.includes('--cats=fuel')); assert.ok(b.argv.includes('--team=haas'));
+    assert.equal(callCli(name, { ...args, team: 'invented', dryRun: true }).status, 1);
+  }
+});
+
+test('diagnostics registry exposes bounded capabilities and all four named job kinds', () => {
+  const r = callCli('apex_diagnostics', { op: 'capabilities' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout).jobs, ['memory_census', 'gpu_memory_census', 'renderer_probe', 'vm_lifecycle']);
+  for (const kind of ['memory_census', 'gpu_memory_census', 'renderer_probe', 'vm_lifecycle']) {
+    const run = callCli('apex_job_start', { kind, dryRun: true });
+    assert.equal(run.status, 0, run.stderr + run.stdout);
+    const plan = JSON.parse(run.stdout);
+    assert.equal(plan.kind, kind);
+    assert.ok(plan.argv.some(s => s.endsWith('/tools/perf/diagnostics.mjs')), 'persistent bounded supervisor owns execution');
+  }
+  assert.equal(callCli('apex_diagnostics', { op: 'run', kind: 'shell', dryRun: true }).status, 1);
+});
+
+test("track-session accepts the flags shot-survey passes (--output-root, --designs): apex_shot_survey died with 'unknown flag'", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(process.execPath, ["tools/shot/track-session.mjs", "--serve", "--track", "monza", "--output-root", "scratch/none", "--designs", "scratch/none.json"], { encoding: "utf8", timeout: 20000 });
+  assert.doesNotMatch(r.stderr, /unknown flag/);
+});
+
+// ── robustness (code-hunter 2026-10-18) ──────────────────────────────────
+test("serve exits through process.on('exit') on SIGTERM, so its child cleanup hooks run", { timeout: 15000 }, async () => {
+  // Node's default SIGTERM skips exit hooks: every detached runSpawn group, garage, job and track session outlived the server.
+  const dir = path.join(ROOT, "scratch", `apex-mcp-sig-${process.pid}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const marker = path.join(dir, "exit-hook"), preload = path.join(dir, "hook.cjs");
+  fs.writeFileSync(preload, `process.on("exit", (c) => require("fs").writeFileSync(${JSON.stringify(marker)}, String(c)));\n`);
+  try {
+    const child = spawn(process.execPath, ["-r", preload, MCP, "serve"], { cwd: ROOT, env: { ...process.env, APEX_MCP_MOCK: "1" }, stdio: ["pipe", "pipe", "ignore"] });
+    const exited = new Promise((r) => child.on("exit", (code, sig) => r({ code, sig })));
+    const replied = new Promise((r) => child.stdout.once("data", r));
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n");
+    await replied;   // the handlers are in place once serve answers
+    child.kill("SIGTERM");
+    const { code, sig } = await exited;
+    assert.equal(sig, null, "the server exits itself instead of dying on the signal");
+    assert.equal(code, 143);
+    assert.equal(fs.readFileSync(marker, "utf8"), "143", "process.on('exit') hooks ran");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+function extrasCtx(over = {}) {
+  const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
+  const released = { n: 0 };
+  return { released, ctx: { ROOT, toolResult, refuse: (error, message, fix) => toolResult({ ok: false, error, message, fix }),
+    acquireLock: () => null, releaseLock: () => { released.n++; }, occupancyRefuse: () => null, assertSafeOut: (p) => p,
+    knownCircuits: () => ["monza"], runSpawn: null, splitOut: (s) => ({ out: null, rest: s }), log: () => {}, mockMode: () => false, ...over } };
+}
+
+test("closeAll ends an open apex_track session and frees its lock; a stdin EPIPE does not crash the server", { timeout: 15000 }, async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  // A stand-in track-session child: ready line, one reply per request, exits on stdin EOF. No browser.
+  const FIX = `process.stdout.write('{"ready":true}\\n');let b="";process.stdin.on("data",(d)=>{b+=d;let i;while((i=b.indexOf("\\n"))>=0){const m=JSON.parse(b.slice(0,i));b=b.slice(i+1);process.stdout.write(JSON.stringify({id:m.id,ok:true})+"\\n");}});`;
+  let child;
+  const { ctx, released } = extrasCtx({ spawnChild: (_c, _a, opts) => (child = spawn(process.execPath, ["-e", FIX], opts)) });
+  const ex = createExtras(ctx);
+  const open = JSON.parse((await ex.handlers.apex_track({ op: "open", track: "monza" })).content[0].text);
+  assert.equal(open.ok, true, JSON.stringify(open));
+  assert.doesNotThrow(() => child.stdin.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" })));
+  const closing = ex.closeAll("stdio closed");
+  assert.equal(ex.sessionInfo(), null, "the session is gone at once");
+  const done = await closing;
+  assert.equal(done.closed, true);
+  assert.equal(released.n, 1, "the browser lock is released once the tree is gone");
+  assert.equal(await ex.closeAll("again"), null, "closeAll with nothing open is a no-op");
+});
+
+test("garage stdin EPIPE on a dying child is logged, not an unhandled 'error'", { timeout: 5000 }, async () => {
+  const { EventEmitter } = await import("node:events");
+  const { PassThrough } = await import("node:stream");
+  const { garageOpen, garageClose, releaseLock } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const psBefore = process.env.APEX_MCP_PS;
+  process.env.APEX_MCP_PS = "";
+  const child = new EventEmitter();
+  child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
+  child.pid = process.pid; child.kill = () => true;
+  try {
+    const r = await garageOpen({}, { spawnChild: () => { setImmediate(() => child.stdout.write('{"ready":true}\n')); return child; } });
+    assert.equal(JSON.parse(r.content[0].text).ok, true);
+    assert.doesNotThrow(() => child.stdin.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" })));
+  } finally {
+    garageClose("fixture teardown"); child.emit("exit", 0); releaseLock();
+    if (psBefore === undefined) delete process.env.APEX_MCP_PS; else process.env.APEX_MCP_PS = psBefore;
+  }
+});
+
+test("a running browser job on disk is occupancy even after its one-shot `call` owner died", async () => {
+  // jobStart via `call` records the CALL pid in the lock; it dies at once, the lock reads stale, and the job's browser runs on.
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const root = path.join(ROOT, "scratch", `apex-mcp-jobs-${process.pid}`);
+  const dir = path.join(root, "artifacts", "logs", "apex-jobs");
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    const ex = createExtras(extrasCtx({ ROOT: root }).ctx);
+    assert.equal(ex.runningBrowserJob(), null);
+    const manifest = (id, browser) => fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind: browser ? "hud_shot" : "verify_all",
+      state: "running", pid: process.pid, browser, started: Date.now(), log: `artifacts/logs/apex-jobs/${id}.log` }));
+    manifest("verify_all-x-1", false);
+    assert.equal(ex.runningBrowserJob(), null, "a node-only job is not browser occupancy");
+    manifest("hud_shot-x-2", true);
+    assert.deepEqual(ex.runningBrowserJob(), { id: "hud_shot-x-2", kind: "hud_shot", pid: process.pid });
+    fs.writeFileSync(path.join(dir, "hud_shot-x-2.exit"), "0");
+    assert.equal(ex.runningBrowserJob(), null, "the job's recorded exit frees it");
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  const src = fs.readFileSync(MCP, "utf8");
+  assert.match(src, /function occupancyRefuse\(\) \{[^}]*?lockInfo\(\)[\s\S]{0,800}?runningBrowserJob\(\)/, "occupancyRefuse consults the job list");
+});
+
+test("apex_locations with an unreadable designs file is bad_args, not internal_error", () => {
+  const r = callCli("apex_locations", { track: "monza", designs: "nope.json" });
+  const b = JSON.parse(r.stdout);
+  assert.equal(b.ok, false);
+  assert.equal(b.error, "bad_args");
+});
+
+test("chrome-devtools-mcp.sh run tolerates a missing Chromium instead of exiting under set -e", () => {
+  // SessionStart may still be installing Chromium when the MCP server starts; detect_chrome's exit 1 killed it for the session.
+  const sh = fs.readFileSync(path.join(ROOT, "tools/mcp/chrome-devtools-mcp.sh"), "utf8");
+  const fn = sh.match(/^wait_chrome\(\) \{[\s\S]*?^\}$/m);
+  assert.ok(fn, "wait_chrome()");
+  assert.match(sh, /run_mcp\(\) \{[\s\S]*?\n  local chrome\n  chrome="\$\(wait_chrome\)"/);   // the preflight lines sit between the brace and `local chrome`
+  const r = spawnSync("bash", ["-c", `set -euo pipefail\nfind_chrome() { return 1; }\n${fn[0]}\nc="$(wait_chrome)"\nargs=(--x \${c:+--executablePath "$c"})\necho "rc=$? c=[$c] n=\${#args[@]}"`],
+    { encoding: "utf8", env: { ...process.env, APEX_CHROME_WAIT_S: "0" }, timeout: 10000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /rc=0 c=\[\] n=1/);
+  assert.match(r.stderr, /starting without --executablePath/);
 });

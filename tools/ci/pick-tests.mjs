@@ -66,6 +66,7 @@ export const RULES = [
    "load order, docs integrity, api contracts — ~2 min at three files at a time, catches the structural slips"],
 
   [/^tests\/unit\/render-final-contracts\.test\.mjs$/, ["tooling-fast"], "renderer ownership, post health, material detail and particle residency contracts"],
+  [/^plugins\/f1-dev-tools\//, ["tooling-fast"], "F1 Dev Tools helpers and package routing — f1-dev-tools.test.mjs"],
   // ── renderer ────────────────────────────────────────────────────────────
   // NOT "visual" — tests/manual/tracks-visual.spec.js is PARKED. It has no
   // committed golden baselines and self-skips all 40 circuits, so the group
@@ -221,6 +222,7 @@ export const RULES = [
   // lifecycle. Pure Node suite (xr-phase0.test.mjs) in steering-unit / tooling-fast;
   // the optional iwer Playwright smoke is test:xr (not selected by path alone).
   [/^js\/xr\//, ["steering-unit", "tooling-fast"], "xr-phase0.test.mjs — rig compose, input map, sessionInit, vendored XR addons"],
+  [/^js\/share\//, ["state-unit"], "share-card data/layout/painter and Daily Challenge delivery hook"],
   [/^js\/ui\/scale\.js/, ["ui"], "ui-scale.spec.js"],
   [/^js\/ui\/dock-layout\.js/, ["steering-unit", "ui"], "dock-layout.test.mjs + ui-button-touch reposition"],
   [/^js\/ui\/hud-arrange\.js/, ["steering-unit", "ui"], "hud-arrange.test.mjs (pure drag / pinch / clash maths) + the pause-card editor"],
@@ -304,6 +306,7 @@ export const RULES = [
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
   [/^js\/race\/setup-trial-session\.js$/, ["garage-unit"], "fresh solo setup-trial ownership and starting conditions"],
   [/^js\/ui\/settings-search\.js$/, ["steering-unit"], "settings search ownership and focus regressions"],
+  [/^js\/ui\/setting-deps\.js$/, ["steering-unit"], "settings grey-out dependency map: every rule greys with a reason"],
   // Two rules, because "script tags + DOM shell" is LOAD-BEARING: it is one of
   // select-specs' BOOT_FALLBACK_REASONS, the strings that let node-plan.mjs
   // drop the boot group from the VM plan when only a blanket rule named it
@@ -322,6 +325,7 @@ export const RULES = [
   [/^types\//, ["tooling-fast"], "the authored .d.ts contracts are checked by game-ctx-surface"],
   [/^desktop\//, ["desktop-unit", "tooling-fast"], "electron-builder config, identity, notices, version"],
   [/^(AGENTS|CLAUDE|README)\.md$|^docs\/|^\.claude\/(skills|agents|rules)\/|^\.agents\/skills\//, ["tooling-fast"], "docs integrity is a real test"],
+  [/^package\.json$/, ["tooling-fast"], "gen scripts and test:* entries — tooling-fast + gen:check"],
 ];
 
 /** Manifest files that ONLY the two blanket rules (tiny / tooling-fast) reach:

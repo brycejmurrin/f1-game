@@ -37,6 +37,19 @@ test("--json reports a reason CI can branch on, not prose", () => {
   }
 });
 
+test("F1 Dev Tools package paths select structural checks without browser suites", () => {
+  for (const file of [
+    "plugins/f1-dev-tools/plugin.json",
+    "plugins/f1-dev-tools/skills/f1-dev-tools/SKILL.md",
+    "plugins/f1-dev-tools/skills/f1-dev-tools/scripts/browser.js",
+  ]) {
+    const result = json(file);
+    assert.equal(result.reason, "matched", file);
+    assert.deepEqual(result.groups.map(row => row.group), ["tooling-fast"], file);
+    assert.deepEqual(result.unclaimed, [], file);
+  }
+});
+
 test("a file no rule claims reports 'unmatched', not an empty success", () => {
   // The distinction CI depends on: "nothing changed, run nothing" and "things
   // changed but I cannot route them, run EVERYTHING" are opposite instructions

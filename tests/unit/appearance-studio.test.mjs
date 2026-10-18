@@ -297,15 +297,14 @@ test("profile apply, reset and Undo disclose session-only restoration when stora
   studio.undo(); assert.match(status.textContent, /restored for this session; browser storage is unavailable/);
 });
 
-test("Studio retains quarter-percent scales and previews independent HUD accent and contrast precedence", () => {
+test("Studio previews independent HUD accent and contrast precedence", () => {
   const dom = makeDom(), panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
   // Pin uiContrast off so panel opacity is visible; shipped default is high (solid).
   const { studio } = load({ uiScale: 109.25, hudPanelOpacity: 20, uiContrast: "off" }, true, false, dom.document,
     { getComputedStyle: () => ({ getPropertyValue: key => key === "--accent" ? "#00a3e0" : "" }) });
   const descendants = node => [node, ...node.children.flatMap(descendants)];
-  const nodes = descendants(dom.byId("appearance-studio")), input = nodes.find(node => node.getAttribute("aria-label") === "UI size");
+  const nodes = descendants(dom.byId("appearance-studio"));
   const preview = nodes.find(node => node.dataset.as === "preview");
-  assert.equal(input.step, .25); assert.equal(input.value, 109.25);
   assert.equal(preview.style.getPropertyValue("--preview-hud-accent"), "#00a3e0");
   assert.equal(preview.style.getPropertyValue("--preview-panel-opacity"), "0.2");
   studio.applySnapshot({ ...studio.snapshot(), uiContrast: "high" });
@@ -367,21 +366,17 @@ test("M2: Studio edits never pin motion:'on' and write only the keys that change
 });
 
 
-test("mounted Studio exposes percentage units and explains system reduced motion", () => {
+test("one home (#2846): the Studio builds no second copy and jumps to HUD and motion homes", () => {
   const dom = makeDom(), panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
-  const { studio, values } = load({}, true, true, dom.document);
+  load({}, true, true, dom.document);
   const descendants = el => [el, ...el.children.flatMap(descendants)];
-  const all = descendants(dom.byId("pm-panel-appearance"));
-  const ranges = all.filter(el => el.type === "range");
-  assert.equal(ranges.length, 2);
-  for (const input of ranges) assert.equal(input.getAttribute("aria-valuetext"), input.value + "%");
-  const note = all.find(el => /Menu motion is reduced by your system/.test(el.textContent));
-  assert.ok(note); assert.equal(note.hidden, false); assert.equal(studio.snapshot().motion, null);
-  studio.applySnapshot({ ...studio.snapshot(), uiScale: 125, hudScale: 90, motion: "reduce" });
-  assert.equal(note.hidden, true); assert.equal(values.motion, "reduce");
-  for (const input of ranges) assert.equal(input.getAttribute("aria-valuetext"), input.value + "%");
+  const all = descendants(dom.byId("appearance-studio"));
+  assert.equal(all.filter(el => el.type === "range" || el.type === "color").length, 0, "no studio-owned size sliders or colour pickers");
+  for (const key of ["uiTheme", "menuAccent", "textSize", "uiScale", "uiContrast", "motion", "hudProfile", "hudAccent", "hudScale", "hudMetricsLayout"])
+    assert.ok(!all.some(el => el.id === "as-" + key), "no studio row for " + key);
+  const jumps = all.filter(el => el.dataset.settingsJump).map(el => el.dataset.settingsJump + ">" + el.dataset.jumpTarget);
+  assert.deepEqual(jumps, ["a11y>pm-motion-sel", "display>pm-hudprofile-sel", "display>pm-hudscale", "display>pm-hudmetrics-sel"]);
 });
-
 
 test("cosmetic presets retain accessibility and units without writing those preferences", () => {
   const preferences = { motion: "reduce", textSize: "larger", uiScale: 137.5, uiContrast: "high", cvdMode: "tritan", speedUnits: "mph", cbCues: "on" };
@@ -469,19 +464,4 @@ test("saved photo refresh ignores superseded responses and responses after Appea
   h.refresh.click(); h.panel.hidden = true; h.observers[0]();
   pending[2]([{ id: "closed", title: "Closed", thumb: "data:image/jpeg;base64,CCCC" }]); await photoTick();
   assert.equal(h.select.children[1].value, "new"); assert.equal(h.box.hasAttribute("aria-busy"), false);
-});
-
-test("Studio range controls keep Undo working for keyboard adjustments", () => {
-  const dom = makeDom(), panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
-  const { studio, values } = load({}, true, false, dom.document);
-  const descendants = el => [el, ...el.children.flatMap(descendants)];
-  const input = descendants(panel).find(el => el.getAttribute("aria-label") === "UI size");
-  assert.ok(input);
-  dom.dispatch(input, { type: "keydown", key: "ArrowRight" });
-  input.value = "125";
-  dom.dispatch(input, { type: "input" });
-  dom.dispatch(input, { type: "change" });
-  assert.equal(values.uiScale, 125);
-  assert.equal(studio.undo(), true);
-  assert.equal(values.uiScale, null, "Undo restores the unset shipped default after a keyboard edit");
 });

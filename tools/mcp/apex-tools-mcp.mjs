@@ -5,9 +5,9 @@ import { loadSurveyDesigns } from '../lib/custom-survey-locations.mjs';
  * @skill check-changes
  * apex-tools-mcp — wrap committed tools/ CLIs as MCP tools (apex_* only).
  *
- * One of the THREE .mcp.json servers (beside chrome-devtools and
- * playwright-official; catalog trimmed 7 → 3 and wraps 30 → 11 on 2026-09; 16 with framing, doctor and session checks).
- * Never chrome_* / tinyfish_*. Local working tree only; no github.io.
+ * One of the FOUR .mcp.json servers (beside playwright-official, chrome-devtools and js-debugger).
+ * The catalog serves 40 tools (apex_help, apex_viewer, five bounded UI/diagnostics tools, and the prior wraps);
+ * `node tools/mcp/apex-tools-mcp.mjs list-tools` is the live count. Never chrome_* / tinyfish_*. Local working tree only; no github.io.
  * Design: docs/research/APEX-TOOLS-MCP.md — map: docs/AGENT-SURFACE.md
  *
  *   node tools/mcp/apex-tools-mcp.mjs help | status | list-tools | serve | smoke
@@ -30,6 +30,10 @@ import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
 import { aliveRun } from "../ci/test-bg.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
+import { createUITools, UI_INSPECT_SCHEMA, UI_DIFF_SCHEMA, UI_MISSION_SCHEMA } from "./ui-tools.mjs";
+import { DISCOVERY_SCHEMA, CAR_FILTER_SCHEMA, discoverCatalog } from "./catalog-discovery.mjs";
+import { GARAGE_PLAN_SCHEMA, createGaragePlanHandler } from "./garage-plan.mjs";
+import { DIAGNOSTICS_TOOL, createDiagnosticsHandler } from "./diagnostics-tools.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
   expandMatrix, parseShard, shardCells, estimateMinutes, validateOffsets, filterOnly, bootGroups,
@@ -40,7 +44,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.15.0";
+const SERVER_VERSION = "1.16.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -271,6 +275,15 @@ function occupancyRefuse() {
       "Wait for the other apex_* browser tool to finish, or remove the lock if that PID is gone.",
     );
   }
+  // A one-shot `call` that started a browser job dies at once, so its lock reads stale while the job's Chromium runs.
+  const job = extras().runningBrowserJob();
+  if (job) {
+    return refuse(
+      "job_running",
+      `browser job ${job.id} (${job.kind}) is still running (pid ${job.pid})`,
+      "apex_job_status {jobId, wait:100} until it is done, or apex_job_cancel {jobId}.",
+    );
+  }
   const port = daemonPort();
   if (port != null) {
     return refuse(
@@ -332,6 +345,31 @@ function nodeTool(rel) {
 }
 
 const CATALOG = [
+  { ...DIAGNOSTICS_TOOL, kind: 'tree' },
+  {
+    name: "apex_garage_plan",
+    kind: "tree",
+    description: "Tree (no browser) — garage-angles --plan for one canonical team × up to 4 named frames × up to 4 livery enum options. Explicit maxShots (1..16) and time budget (30..180 s); returns estimated matrix and withinBudget, never captures. Skill: garage-parts-livery.",
+    inputSchema: GARAGE_PLAN_SCHEMA,
+  },
+  {
+    name: "apex_ui_mission_plan",
+    kind: "tree",
+    description: "Tree (no browser) — prepare one canonical first-race, customize-car or return-settings scenario, its pinned local replay command and explicit shot/time limits. Writes only the bundled scenario under artifacts/ or scratch/. Parent executes with the outer deadline and shared browser lock; planning is not a playtest pass. Skill: survey-ui-matrix.",
+    inputSchema: UI_MISSION_SCHEMA,
+  },
+  {
+    name: "apex_ui_inspect",
+    kind: "browser",
+    description: "Browser (shared lock owned by explorer) — semantic controls, computed CSS, hit interception, clipping and explicit live/saved bindings for one catalog screen, up to 8 viewports and optional roundtrip. Disposable context; local working tree only; 180 s cap. Returns bounded advisories and inspection.json. Probe completion is not a UI pass. Skill: ui-menu-a11y.",
+    inputSchema: UI_INSPECT_SCHEMA,
+  },
+  {
+    name: "apex_ui_diff",
+    kind: "tree",
+    description: "Tree (no browser) — compare two saved inspection.json files under artifacts/ or scratch/ (5 MiB each), with matching viewport sequence. Returns semantic/layout differences and unavailable/unmapped counts; observations are not correctness verdicts. Skill: ui-menu-a11y.",
+    inputSchema: UI_DIFF_SCHEMA,
+  },
   {
     name: "apex_verify_change_fast",
     week: 1,
@@ -390,6 +428,12 @@ const CATALOG = [
     kind: "tree",
     description: "Tree — every valid track/camera/UI id the other apex_* tools accept, in one read. For per-track turn and scenery targets call apex_locations. Read-only, no browser.",
     inputSchema: { type: "object", properties: { dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
+  },
+  {
+    name: "apex_help",
+    kind: "tree",
+    description: "Tree — full description and full input schema (every nested property and its prose) of one apex_* tool; tools/list carries only a short form. Read-only, no browser.",
+    inputSchema: { type: "object", required: ["tool"], properties: { tool: { type: "string", description: "Tool name, e.g. apex_shot_survey." } } },
   },
   {
     name: "apex_locations",
@@ -1041,6 +1085,23 @@ const CATALOG = [
       required: ["file"],
     },
   },
+  {
+    name: "apex_viewer",
+    week: 8,
+    kind: "tree",
+    description: "Tree — writes ONE self-contained three.js viewer page (no browser, seconds): a car customiser that runs the game's own Car3D in the page (every team, livery, finish and garage part) and circuits (Tracks.build centreline, racing line, curvature): artifacts/viewer/apex-viewer.html. Publish it as an Artifact to show the user. Neither list given: all cars + monza, spa, monaco, suzuka. PNG stills and variant sheets are the CLI's --shots / --sheet (they launch Chromium). Skill: playwright-probe.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        cars: { type: "array", maxItems: 12, items: { type: "string" }, description: "Team ids (Teams.LIST), or [\"all\"]; [] for none." },
+        circuits: { type: "array", maxItems: 80, items: { type: "string" }, description: "Circuit ids (Tracks.LIST), or [\"all\"]; [] for none." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
 ];
 
 function badArgs(message, fix) {
@@ -1146,12 +1207,24 @@ for (const tool of CATALOG) {
   const schema = tool.inputSchema;
   schema.additionalProperties = false;
   for (const [key, spec] of Object.entries(schema.properties)) {
-    if (spec.type === "string") spec.maxLength = key === "expr" ? 65536 : 4096;
-    if (spec.type === "array") spec.maxItems = 256;
+    if (spec.type === "string") spec.maxLength ??= key === "expr" ? 65536 : 4096;
+    if (spec.type === "array") spec.maxItems ??= 256;
   }
   if (schema.properties.track && !['apex_locations', 'apex_shot_survey', 'apex_job_start'].includes(tool.name)) schema.properties.track.enum = knownCircuits();
 }
 const schemaFor = (name) => CATALOG.find((t) => t.name === name).inputSchema;
+Object.assign(schemaFor('apex_catalog').properties, DISCOVERY_SCHEMA);
+Object.assign(schemaFor('apex_car_audit').properties, CAR_FILTER_SCHEMA);
+Object.assign(schemaFor('apex_job_start').properties, CAR_FILTER_SCHEMA);
+// Diagnostic-specific constraints remain enforced by diagnosticPlan; retain
+// broader existing shot/profile job properties and admit their new typed keys.
+for (const key of ['tracks', 'visits', 'backend', 'mode', 'cycles', 'settle', 'warm', 'maxGrowthMb', 'seed', 'cam', 'mobile', 'realLink', 'lite', 'iphone']) {
+  const props = schemaFor('apex_job_start').properties;
+  const spec = DIAGNOSTICS_TOOL.inputSchema.properties[key];
+  if (!props[key]) props[key] = spec;
+  else if (props[key].type !== spec.type) props[key] = { anyOf: [props[key], spec] };
+  else if (props[key].enum && spec.enum) props[key].enum = [...new Set([...props[key].enum, ...spec.enum])];
+}
 const bound = (name, key, extra) => Object.assign(schemaFor(name).properties[key], extra);
 schemaFor("apex_select_specs").required = ["since"];
 schemaFor("apex_graph_parity").required = ["base"];
@@ -1656,6 +1729,16 @@ function buildArgv(name, args) {
       argv.push(file);
       return argv;
     }
+    case "apex_viewer": {
+      const argv = [...nodeTool("viewer/build-viewer.mjs"), "--json"];
+      for (const k of ["cars", "circuits"]) {
+        if (args[k] === undefined) continue;
+        const ids = (Array.isArray(args[k]) ? args[k] : []).map(String);
+        if (ids.some((id) => !/^[a-z0-9_]{1,32}$/.test(id))) badArgs(`apex_viewer: ${k} must be lowercase ids`, `e.g. {"${k}":["${k === "cars" ? "ferrari" : "monza"}"]}, or ["all"].`);
+        argv.push(`--${k}=${ids.join(",")}`);
+      }
+      return argv;
+    }
     case "apex_eval": {
       const argv = [...nodeTool("shot/apex-eval.mjs"), String(args.track || "monza"), String(args.expr || "a.info()")];
       if (args.raw) argv.push("--raw");
@@ -1807,7 +1890,6 @@ export function splitOut(stdout) {
   }
   return { out: null, rest: text };
 }
-export function parseOut(stdout) { return splitOut(stdout).out; }
 
 /** Reply diet (#2672): the verdict without the bulk. `args.full` restores the whole reply. Pure — body is the
  *  parsed result of runSpawn. doctor: non-pass check rows + the pass count; unit_test: pass/fail counts and failing
@@ -1815,6 +1897,18 @@ export function parseOut(stdout) { return splitOut(stdout).out; }
  *  `selected` already carries. */
 export function slimBody(name, body, args = {}) {
   if (args.full || !body || body.error) return body;
+  if (name === "apex_eval" && typeof body.out?.err === "string") {
+    // The browser route exits 0 with {err} for a throwing expr; the VM route exits 1.
+    const fix = /\bis not defined\b/.test(body.out.err) ? "The expression scope is `a` (= __apex): write `a.info()`, not `info()`." : body.fix;
+    return { ...body, ok: false, ...(fix && { fix }) };
+  }
+  if (name === "apex_profile_query" && body.ok === false && !body.fix && /ENOENT/.test(String(body.stderr))) {
+    return { ...body, fix: "No such profile: apex_job_start {kind:\"profile\"} writes artifacts/profiles/<name>.json; pass that path as `file`." };
+  }
+  if (name === "apex_who_is_on_it" && Array.isArray(body.out?.claims)) {
+    const live = body.out.claims.filter((c) => !c.stale && !c.released);
+    return { ...body, out: { ...body.out, claims: live, hiddenClaims: body.out.claims.length - live.length } };
+  }
   if (name === "apex_doctor" && body.out && Array.isArray(body.out.checks)) {
     const checks = body.out.checks;
     return { ...body, out: { ...body.out, checks: checks.filter((c) => c.status !== "pass"), passed: checks.filter((c) => c.status === "pass").length, slim: "pass rows omitted; {full:true} lists them" } };
@@ -1832,7 +1926,7 @@ export function slimBody(name, body, args = {}) {
   }
   return body;
 }
-const SLIMMED = new Set(["apex_doctor", "apex_unit_test", "apex_select_specs"]);
+const SLIMMED = new Set(["apex_doctor", "apex_unit_test", "apex_select_specs", "apex_eval", "apex_profile_query", "apex_who_is_on_it"]);
 
 /** Run a CLI without blocking the server. spawnSync froze the whole process
  *  for a browser tool's 30–100 s: apex_status could not answer, and when a
@@ -1847,6 +1941,7 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
   const [cmd, ...args] = argv;
   return new Promise((resolve) => {
     let stdout = "", stderr = "", spawnErr = null, stopped = null, settled = false;
+    let stdoutBytes = 0, stderrBytes = 0, stdoutTruncated = false, stderrTruncated = false;
     let child;
     try {
       child = spawn(cmd, args, { cwd: ROOT, env: { ...process.env, ...env }, detached: true });
@@ -1873,7 +1968,7 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
       // its parse doubled every result (apex_who_is_on_it reached 60 KB).
       const { out, rest } = splitOut(stdout);
       const body = {
-        ok: exit === 0,
+        ok: exit === 0 && !stdoutTruncated && !stderrTruncated,
         exit,
         argv,
         env: Object.keys(env).length ? env : undefined,
@@ -1894,6 +1989,12 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
           ? `stopped after ${Math.round(timeoutMs / 1000)} s (process group killed)`
           : "the client cancelled the call; the process group was killed";
         body.fix = stopped === "timeout" ? "Check apex_status for load, then retry." : "Retry when ready.";
+      } else if (stdoutTruncated || stderrTruncated) {
+        body.ok = false;
+        body.error = "output_truncated";
+        body.message = `child output exceeded the ${cap} byte per-stream limit`;
+        body.fix = "Read the CLI's artifact output, reduce its result, or add bounded pagination; a truncated verdict is never success.";
+        body.truncated = { stdout: stdoutTruncated, stderr: stderrTruncated, stdoutBytes, stderrBytes, capBytes: cap };
       } else if (allowExit && allowExit.has(exit)) {
         body.ok = true;
       }
@@ -1913,8 +2014,26 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     const cap = 8 * 1024 * 1024;
-    child.stdout.on("data", (d) => { if (stdout.length < cap) stdout += d; });
-    child.stderr.on("data", (d) => { if (stderr.length < cap) stderr += d; });
+    const append = (which, d) => {
+      const bytes = Buffer.byteLength(d);
+      if (which === "stdout") stdoutBytes += bytes; else stderrBytes += bytes;
+      const text = which === "stdout" ? stdout : stderr;
+      const used = Buffer.byteLength(text), left = Math.max(0, cap - used);
+      let piece = d;
+      if (bytes > left) {
+        let lo = 0, hi = d.length;
+        while (lo < hi) {
+          const mid = Math.ceil((lo + hi) / 2);
+          if (Buffer.byteLength(d.slice(0, mid)) <= left) lo = mid; else hi = mid - 1;
+        }
+        if (lo && /[\uD800-\uDBFF]/.test(d[lo - 1])) lo--;
+        piece = d.slice(0, lo);
+        if (which === "stdout") stdoutTruncated = true; else stderrTruncated = true;
+      }
+      if (which === "stdout") stdout += piece; else stderr += piece;
+    };
+    child.stdout.on("data", (d) => append("stdout", d));
+    child.stderr.on("data", (d) => append("stderr", d));
     child.on("error", (e) => { spawnErr = e; finish(null, null); });
     child.on("close", finish);
   });
@@ -2004,8 +2123,18 @@ function statusNext(lock, playwright, loadavg) {
     hint: "e.g. apex_shot_survey {track, preset:\"quick\"} or multi-track async job via tracks[].",
   };
 }
+/** apex_help: the uncompacted description + inputSchema that tools/list shortens (see compactTool). */
+function handleHelp(args = {}) {
+  const t = CATALOG.find((c) => c.name === args.tool);
+  if (!t) return refuse("unknown_tool", `unknown tool ${args.tool}`, `Pick one of: ${CATALOG.map((c) => c.name).join(", ")}.`);
+  return toolResult({ ok: true, tool: t.name, description: t.description, inputSchema: t.inputSchema });
+}
 /** apex_catalog: ids come from the tool schemas and the UI audit's own catalogs, so they cannot drift from what the tools accept. */
 async function handleCatalog(args = {}) {
+  if (args.section) {
+    try { return toolResult(discoverCatalog(args)); }
+    catch (e) { return refuse('bad_args', e.message, 'Use canonical catalog ids and bounded pagination.'); }
+  }
   if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv: ["apex_catalog"], note: "read-only; no browser" });
   const enumOf = (tool, prop) => CATALOG.find((t) => t.name === tool)?.inputSchema?.properties?.[prop]?.enum || [];
   let ui = { screens: [], viewports: [] };
@@ -2335,6 +2464,8 @@ export async function garageOpen(args, { spawnChild = spawn, readyTimeoutMs = 18
   });
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (d) => log(`[garage] ${String(d).trim().slice(0, 400)}`));
+  // EPIPE from a dying child is an 'error' event: unhandled, it took the whole server down.
+  child.stdin?.on("error", (e) => log(`[garage] stdin: ${e.message}`));
   child.on("exit", (code, sig) => {
     g.exited = true;
     if (g.killTimer) clearTimeout(g.killTimer);
@@ -2444,9 +2575,17 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_catalog") return handleCatalog(args);
+  if (name === "apex_help") return handleHelp(args);
   if (name === "apex_locations") {
-    const custom = args.designs ? loadSurveyDesigns(path.resolve(ROOT, args.designs)) : null;
-    const all = listSurveyLocations(args.track, custom);
+    let all;
+    try {
+      // A missing or malformed designs file is the caller's argument, not a server fault (was internal_error).
+      const custom = args.designs ? loadSurveyDesigns(path.resolve(ROOT, args.designs)) : null;
+      all = listSurveyLocations(args.track, custom);
+    } catch (e) {
+      if (e.refuse) return e.refuse;
+      return refuse("bad_args", String(e.message || e), "Pass designs as a readable custom-survey designs JSON path, or omit it.");
+    }
     const search = args.search?.trim().toLowerCase();
     const exact = search && all.filter(l => l.id === search || l.aliases.includes(search));
     const locations = !search ? all : exact.length ? exact : all.filter(l =>
@@ -2455,6 +2594,20 @@ function dispatch(name, args = {}, { signal = null } = {}) {
       hint: "Use apex_shot_survey {track, location:<id>, angles:[\"entry\",\"apex\",\"exit\"]}; inspect framing before claiming a landmark match." });
   }
   if (name === "apex_garage") return handleGarage(args);   // async: a persistent child, not a spawnSync
+  if (name === 'apex_garage_plan') {
+    const gate = gateTreeArgs(args); if (gate) return gate;
+    return createGaragePlanHandler({ ROOT, toolResult, refuse, runSpawn })(args, { signal });
+  }
+  if (name === 'apex_diagnostics') {
+    const gate = gateTreeArgs(args); if (gate) return gate;
+    return createDiagnosticsHandler({ ROOT, toolResult, refuse, assertSafeOut, occupancyRefuse, mockMode, runSpawn,
+      knownCircuits, startJob: a => extras().handlers.apex_job_start(a) })(args, { signal });
+  }
+  if (Object.hasOwn(uiTools().handlers, name)) {
+    const gate = toolKind(known) === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
+    if (gate) return gate;
+    return uiTools().handlers[name](args, { signal });
+  }
   if (name === "apex_verify_change_fast" && args.sync !== true && !args.dryRun) {
     // ~10 min against a ~180 s host cap: a background job, not a call that times out (and is killed at 600 s).
     const gate = gateTreeArgs(args);
@@ -2584,7 +2737,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 // wrap here; derive honest hints from the catalog instead of restating them per
 // tool. Clients treat these as untrusted hints, so they are self-description,
 // not a permission boundary — the pins and the lock remain the real guards.
-const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity"]);
+const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity", "apex_viewer"]);
 const DESTRUCTIVE = new Set(["apex_job_cancel"]);
 const OPEN_WORLD = new Set(["apex_ci_status", "apex_who_is_on_it"]);
 function toolAnnotations(entry) {
@@ -2656,6 +2809,8 @@ const OUTPUT_SCHEMAS = {
   apex_catalog: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), tracks: S("array"), cams: S("array"), tods: S("array"),
     shotPresets: S("array"), hudDevices: S("array"), hudCams: S("array"), jobKinds: S("array"), uiScreens: S("array"), uiViewports: S("array"),
     hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
+  apex_help: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), tool: S("string"), description: S("string"),
+    inputSchema: S("object"), error: S("string"), message: S("string"), fix: S("string") } },
   apex_locations: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), track: S("string"),
     locations: S("array"), count: S("number"), hint: S("string") } },
   apex_doctor: cliOut({ ok: S("boolean"), mode: S("string"), checks: S("array"), summary: S("object") }),
@@ -2670,6 +2825,7 @@ const OUTPUT_SCHEMAS = {
   apex_who_is_on_it: cliOut({ hours: S("number"), fetched: S("boolean"), branch: S("string"), live: S("array"), claims: S("array"),
     touched: S("array") }),
   apex_car_audit: cliOut({}, ["array", "null"]),
+  apex_viewer: cliOut({ ok: S("boolean"), out: S("string"), bytes: S("number"), cars: S("array"), circuits: S("array"), error: S("string") }),
   apex_track_audit: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), track: S("string"), verify: S("object"),
     float: S("object"), hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
   apex_job_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), jobs: S("array"), error: S("string"),
@@ -2682,8 +2838,79 @@ function toolOutputSchema(entry) {
   return OUTPUT_SCHEMAS[entry.name] || CLI_RESULT_SCHEMA;
 }
 
-function listTools() {
-  return CATALOG.map((t) => ({
+// tools/list is paid on every session start, so it carries a short form: a long description keeps its
+// first sentences + the "Skill:" pointer, long property prose is cut, and object schemas nested below the
+// top level collapse to their type. apex_help {tool} returns the full text and schema. Validation always
+// uses the full CATALOG schema; only the published copy is compact.
+const DESC_LONG = 240, DESC_KEEP = 60, PROP_KEEP = 60;
+function cutAt(text, max) {
+  if (text.length <= max) return text;
+  const head = text.slice(0, max);
+  const stop = Math.max(head.lastIndexOf(". "), head.lastIndexOf("; "));
+  return (stop > max / 3 ? head.slice(0, stop + 1) : head.replace(/\s+\S*$/, "") + "…");
+}
+function compactDescription(name, d) {
+  if (name === "apex_help" || d.length <= DESC_LONG) return d;
+  const skill = d.match(/\s(Skill: [^.]*\.?)\s*$/);
+  const body = skill ? d.slice(0, skill.index) : d;
+  return `${cutAt(body, DESC_KEEP)} apex_help {tool: "${name}"}.${skill ? " " + skill[1] : ""}`;
+}
+const BOUND_KEYS = new Set(["minItems", "maxItems", "uniqueItems", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "pattern"]);
+function compactSchema(spec, depth = 0, dense = false, required = false) {
+  if (Array.isArray(spec)) return spec.map((x) => compactSchema(x, depth, dense));
+  if (!spec || typeof spec !== "object") return spec;
+  const out = {};
+  for (const [k, v] of Object.entries(spec)) {
+    if (k === "description" && typeof v === "string") out[k] = cutAt(v, PROP_KEEP);
+    else if (k === "properties" && depth >= 1 && v && typeof v === "object") continue;   // nested object body: apex_help
+    else if (k === "properties" && v && typeof v === "object") out[k] = Object.fromEntries(Object.entries(v).map(([n, p]) => [n, compactSchema(p, depth + 1, dense, (spec.required || []).includes(n))]));
+    else if (k === "items") out[k] = compactSchema(v, depth, dense);
+    else if (dense && BOUND_KEYS.has(k)) continue;   // bounds stay enforced by validateArgs; apex_help shows them
+    else if (k === "enum" && Array.isArray(v) && v.length > 6 && !required) {   // 53 circuit ids / 16 devices / 20 cams repeat across tools: apex_catalog lists them
+      out.description = cutAt(`${out.description || spec.description || "Id"} Allowed values: apex_catalog / apex_help.`, PROP_KEEP + 20);
+    }
+    else if ((k === "maxLength" && v === 4096) || (k === "maxItems" && v === 256)) continue;   // wrapper-wide defaults, enforced server-side
+    else if (k === "required" && depth >= 1) continue;
+    else if (k === "additionalProperties" && depth >= 1) continue;
+    else out[k] = v;
+  }
+  return out;
+}
+// The runSpawn envelope keys every wrapped CLI shares are dropped from the published outputSchema (still
+// valid: additionalProperties is true, and structuredContent is validated against the full schema in tests).
+const ENVELOPE_KEYS = ["tool", "dryRun", "argv", "durationMs", "exit", "stdout", "stderr"];
+function compactOutput(schema) {
+  const properties = Object.fromEntries(Object.entries(schema.properties || {}).filter(([k]) => !ENVELOPE_KEYS.includes(k)));
+  return { ...schema, properties };
+}
+/** A tool whose compact schema still tops 1.5 KB also drops numeric/array/string bounds from the published copy. */
+function denseSchema(t) {
+  const plain = compactSchema(t.inputSchema);
+  return JSON.stringify(plain).length > 1500 ? compactSchema(t.inputSchema, 0, true) : plain;
+}
+// Tools that landed after the 55 KB tools/list ceiling. Full parameters stay in apex_help
+// and in validateArgs; the published copy keeps only required fields so a session start stays under the cap.
+const HELP_ONLY_PUBLISHED = new Set([
+  "apex_diagnostics", "apex_ui_inspect", "apex_ui_diff", "apex_ui_mission_plan", "apex_garage_plan",
+  "apex_viewer",
+]);
+function publishedInputSchema(t) {
+  const schema = denseSchema(t);
+  if (!HELP_ONLY_PUBLISHED.has(t.name)) return schema;
+  const req = schema.required || [];
+  const properties = {};
+  for (const k of req) if (schema.properties?.[k]) properties[k] = schema.properties[k];
+  return { type: "object", additionalProperties: false, ...(req.length ? { required: req } : {}), properties };
+}
+function listTools(compact = true) {
+  return CATALOG.map((t) => compact ? ({
+    name: t.name,
+    title: toolAnnotations(t).title,
+    description: compactDescription(t.name, t.description),
+    inputSchema: publishedInputSchema(t),
+    outputSchema: compactOutput(toolOutputSchema(t)),
+    annotations: toolAnnotations(t),
+  }) : ({
     name: t.name,
     title: toolAnnotations(t).title,
     description: t.description,
@@ -2735,7 +2962,7 @@ function cmdStatus() {
 }
 
 function cmdListTools() {
-  process.stdout.write(JSON.stringify(listTools(), null, 2) + "\n");
+  process.stdout.write(JSON.stringify(listTools(false), null, 2) + "\n");
   return 0;
 }
 
@@ -2765,6 +2992,10 @@ function rpcError(id, code, message) {
 }
 
 let extrasInst = null;
+let uiToolsInst = null;
+function uiTools() {
+  return uiToolsInst ||= createUITools({ ROOT, toolResult, refuse, assertSafeOut, runSpawn, occupancyRefuse, mockMode });
+}
 /** apex_track / apex_job_* / apex_ui_* / apex_*_audit handlers (tools/mcp/apex-extras.mjs). */
 function extras() {
   if (!extrasInst) {
@@ -2862,7 +3093,14 @@ async function handleRpc(msg) {
   return { jsonrpc: "2.0", id: mid, error: { code: -32601, message: `Method not found: ${method}` } };
 }
 
+/** A host stops a server with a signal; Node's default action skips process.on("exit"), so every detached child
+ *  (runSpawn groups, garage, jobs, track session) outlived it. Exit instead, which runs those hooks. */
+function exitOnSignals() {
+  for (const [s, n] of [["SIGTERM", 15], ["SIGINT", 2], ["SIGHUP", 1]]) process.once(s, () => process.exit(128 + n));
+}
+
 function cmdServe() {
+  exitOnSignals();
   const rl = require("readline").createInterface({
     input: process.stdin,
     crlfDelay: Infinity,
@@ -2870,7 +3108,11 @@ function cmdServe() {
   const pending = new Set();
   let closing = false;
   const finish = () => {
-    if (closing && !pending.size) { garageClose("stdio closed"); process.exitCode = 0; }
+    if (!closing || pending.size) return;
+    garageClose("stdio closed");
+    // An open apex_track session would otherwise keep the server alive, holding the browser lock.
+    if (extrasInst) extrasInst.closeAll("stdio closed");
+    process.exitCode = 0;
   };
   rl.on("line", (line) => {
     line = line.trim();
@@ -2920,6 +3162,7 @@ export function httpRefusal(req) {
 }
 
 export function cmdServeHttp() {
+  exitOnSignals();
   const port = /^\d+$/.test(String(process.env.APEX_MCP_HTTP_PORT || ""))
     ? Number(process.env.APEX_MCP_HTTP_PORT)
     : HTTP_PORT_DEFAULT;

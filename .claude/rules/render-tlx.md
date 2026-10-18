@@ -16,8 +16,10 @@ paths:
   `chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. Then dispatch
   `gpu-census.yml` on `macos-latest` and read its Verdict step: a software
   probe is not evidence about a player's machine (two shipped defects were
-  invisible to every software test). Dispatch `ci.yml` with
-  `renderer_macos: true` when a gfx spec or its launch config changed.
+  invisible to every software test). One census run per branch — a second
+  queues, a third replaces it; dispatch A/B arms sequentially. Dispatch
+  `ci.yml` with `renderer_macos: true` when a gfx spec or its launch config
+  changed.
 - Never compare the census's two TLX legs on frames, FPS or luma without
   reading the `path:` row. The WebGPU leg pins `tlxForceGL=0` and `tlx.js`
   soft-blits (GPU readback + `putImageData` every frame) whenever
