@@ -1,0 +1,221 @@
+
+## photostudio (Photo Studio)
+- [LOW] label-case @ios-iphone-landscape-852x393: row "COMPOSITION" is UPPER; 6 other rows are Mixed
+- [LOW] label-case @ios-iphone-landscape-852x393: row "YOUR PHOTO" is UPPER; 6 other rows are Mixed
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "DOWNLOAD PNG" (YOUR PHOTO) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "SAVE PHOTO" (YOUR PHOTO) greyed with no reason at all
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: Caption → OFF greys none of the 15 other controls in "COMPOSITION" (Frame, Guide, Shot presets, COMPOSITION)
+
+## season-setup (Season setup)
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "PRESETS" appears in sections: PRESETS | QUALIFYING | SPRINT RACE | RACE DISTANCE | POINTS | FASTEST LAP POINT | DROPPED SCORES | ADD A CIRCUIT
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "Move up — BAHRAIN" (CALENDAR — 24 ROUNDS) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "Move down — PORTIMAO" (CALENDAR — 24 ROUNDS) greyed with no reason at all
+
+## career (Career hub)
+- [MED] duplicate-label @ios-iphone-landscape-852x393: "IMPORT CAREER BACKUP RESTORES ITS DRIVER CAREER SAVES" ×3 in one row (DRIVER CAREER)
+- [MED] duplicate-label @ios-iphone-landscape-852x393: "IMPORT CAREER BACKUP RESTORES ITS MY TEAM SAVES" ×3 in one row (MY TEAM)
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "DRIVER CAREER" appears in sections: DRIVER CAREER | BACKUP
+
+## trackdesigner (Track designer)
+- [LOW] duplicate-label @ios-iphone-landscape-852x393: "HOW TO" ×2 on screen (rows: Track Designer workspace)
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "Clear point selection" (THROUGH POINT) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "Focus selected points on the map and pro" (THROUGH POINT) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "SPAN WIDTH m down" (TRACK DESIGNER ✕) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "SPAN WIDTH m up" (TRACK DESIGNER ✕) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "START HERE" (TRACK DESIGNER ✕) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "DELETE POINT" (TRACK DESIGNER ✕) greyed with no reason at all
+
+## settingscontrols (Settings — controls)
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Steering feel" is Mixed; 4 other rows are UPPER
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "RESET THIS CONTROLLER PROFILE" (SETTINGS › CONTROLS) greyed with no reason at all
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: LEFT-HANDED → OFF greys none of the 16 other controls in "SETTINGS › CONTROLS" (Steering feel, STEERING, STEERING INPUT, THROTTLE)
+
+## settingsdriving (Settings — driving aids)
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Driving aids" is Mixed; 7 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Braking cues" is Mixed; 7 other rows are UPPER
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "auto" (GEARS) greyed with no reason at all
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: STEER ASSIST → OFF greys none of the 21 other controls in "DRIVING PRESETS" (DRIVING PRESETS, DRIVING HELP, Driving aids, ACTIVE AERO, DRIVING COACH)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: DRIVING COACH → OFF greys none of the 21 other controls in "DRIVING PRESETS" (DRIVING PRESETS, DRIVING HELP, STEER ASSIST, Driving aids, ACTIVE AERO)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: LINE-SPEED CUE → OFF greys none of the 21 other controls in "DRIVING PRESETS" (DRIVING PRESETS, DRIVING HELP, STEER ASSIST, Driving aids, ACTIVE AERO)
+
+## settingsdisplay (Settings — HUD & camera)
+- [LOW] label-case @ios-iphone-landscape-852x393: row "HUD elements" is mixed; 23 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "HUD layout" is mixed; 23 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "HUD element position and size" is mixed; 23 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Phone test recorder" is Mixed; 23 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Cockpit" is Mixed; 23 other rows are UPPER
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "on" (HUD) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "SHARE" (Phone test recorder) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "COPY" (Phone test recorder) greyed with no reason at all
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: OVERLAY → OFF greys none of the 100 other controls in "SETTINGS › HUD & CAMERA" (STYLE, LAYOUT, MAP, GAPS, MIRROR)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: LOOK BACK LATCH → OFF greys none of the 100 other controls in "SETTINGS › HUD & CAMERA" (STYLE, LAYOUT, MAP, GAPS, MIRROR)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: SPEED VIGNETTE → OFF greys none of the 100 other controls in "SETTINGS › HUD & CAMERA" (STYLE, LAYOUT, MAP, GAPS, MIRROR)
+
+## settingsgraphics (Graphics)
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Renderer" is Mixed; 9 other rows are UPPER
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: FULLSCREEN → OFF greys none of the 32 other controls in "SETTINGS › GRAPHICS" (RESOLUTION, RACE IN PORTRAIT, Renderer, UPSCALE, OCCLUSION)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: RACE IN PORTRAIT → OFF greys none of the 32 other controls in "SETTINGS › GRAPHICS" (RESOLUTION, FULLSCREEN, Renderer, UPSCALE, OCCLUSION)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: UPSCALE → OFF greys none of the 32 other controls in "SETTINGS › GRAPHICS" (RESOLUTION, FULLSCREEN, RACE IN PORTRAIT, Renderer, OCCLUSION)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: OCCLUSION → OFF greys none of the 32 other controls in "SETTINGS › GRAPHICS" (RESOLUTION, FULLSCREEN, RACE IN PORTRAIT, Renderer, UPSCALE)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: DEBRIS → OFF greys none of the 32 other controls in "SETTINGS › GRAPHICS" (RESOLUTION, FULLSCREEN, RACE IN PORTRAIT, Renderer, UPSCALE)
+
+## settingsfiles (Saves & Data)
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "GARAGE FILE" appears in sections: SAVES & DATA | GARAGE FILE | CAREER FILE
+
+## settingsreview (Session review)
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "DOWNLOAD SESSION DATA" (SETTINGS › SESSION REVIEW) greyed with no reason at all
+
+## settingsappearance (Settings — appearance)
+- [LOW] duplicate-label @ios-iphone-landscape-852x393: "BROADCAST" ×2 on screen (rows: APPLY APPEARANCE PRESET | Style)
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "THEME" appears in sections: MENU · GLOBAL | COLOURS
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "ACCENT COLOUR" appears in sections: MENU · GLOBAL | RACE HUD
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "TEXT SIZE" appears in sections: MENU · GLOBAL | READABILITY | SETTINGS › APPEARANCE
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "HIGH CONTRAST" appears in sections: MENU · GLOBAL | READABILITY
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "LAYOUT" appears in sections: RACE HUD | SETTINGS › APPEARANCE | BUTTONS
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "GENERAL APPEARANCE" appears in sections: COLOURS | READABILITY
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "SIDE" appears in sections: SETTINGS › APPEARANCE | BUTTONS
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "CORNERS" appears in sections: BUTTONS & CARD | SETTINGS › APPEARANCE
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "TITLE SCREEN LAYOUT" appears in sections: BUTTONS | TITLE | CAR DRAWING
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Theme" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Accent colour" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Text size" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Reduce motion" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "High contrast" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Style" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Layout" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Scene" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Home camera" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Background motion" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Preview screen" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Preview device" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "General appearance" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Pause menu" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Title screen layout" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Title screen" is Mixed; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "data hub appearance" is lower; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "track selector appearance" is lower; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "race settings appearance" is lower; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "career appearance" is lower; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "garage appearance" is lower; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "track designer appearance" is lower; 45 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "popups appearance" is lower; 45 other rows are UPPER
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "APPLY PROFILE" (APPEARANCE PROFILE) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "DELETE" (APPEARANCE PROFILE) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "Saved photo" (SAVED PHOTOS) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "CHOOSE PHOTO" (SAVED PHOTOS) greyed with no reason at all
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: Reduce motion → OFF greys none of the 17 other controls in "MENU · GLOBAL" (Theme, Accent colour, Text size, MENU · GLOBAL, High contrast)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: High contrast → OFF greys none of the 18 other controls in "MENU · GLOBAL" (Theme, Accent colour, Text size, MENU · GLOBAL, Reduce motion)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: Background motion → OFF greys none of the 14 other controls in "SCENE · HOME" (Scene, Home camera, SCENE · HOME)
+
+## settingsa11y (Settings — accessibility)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: COLOURBLIND CUES → OFF greys none of the 12 other controls in "ACCESSIBILITY" (REDUCE MOTION, KEYBOARD FOCUS, GAS (KEYBOARD / PAD), LOOK BACK (KEYBOARD / PAD))
+
+## racesettings (Race settings)
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Race setting presets" is Mixed; 15 other rows are UPPER
+- [MED] silent-grey @ios-iphone-landscape-852x393: "CUSTOMchange any setting" (Race setting presets) greyed — reason only in a hover title: Lights on its own when your settings match no preset
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: CAUTIONS → OFF greys none of the 44 other controls in "RACE SETTINGSZANDVOORT · Red Bull Racing · 3 LAPS " (Race setting presets, LAPS, WEATHER, CONDITIONS, TIME OF DAY)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: RELIABILITY → OFF greys none of the 44 other controls in "RACE SETTINGSZANDVOORT · Red Bull Racing · 3 LAPS " (Race setting presets, LAPS, WEATHER, CONDITIONS, TIME OF DAY)
+
+## pause (Pause menu)
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "SAVE START" (PAUSED) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "TRY AGAIN" (PAUSED) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "REWIND 10s" (PAUSED) greyed with no reason at all
+
+## audioset (Music & sound)
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Music transport" is Mixed; 54 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Learn battle tones" is Mixed; 54 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Engine layers" is Mixed; 54 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Spotify playback mode" is Mixed; 54 other rows are UPPER
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "AHEAD · CLOSING" (Learn battle tones) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "AHEAD · OPENING" (Learn battle tones) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "BEHIND · CLOSING" (Learn battle tones) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "BEHIND · OPENING" (Learn battle tones) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "PITCH for control" (PITCH 0.90) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "RATE for control" (RATE 1.05) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "PITCH for coach" (PITCH 1.00) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "RATE for coach" (RATE 0.95) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "PITCH for radio" (PITCH 1.05) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "RATE for radio" (RATE 1.15) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "PITCH for announcer" (PITCH 0.95) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "RATE for announcer" (RATE 0.92) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "CONNECT" (CLIENT ID) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "DISCONNECT" (CLIENT ID) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "Spotify device" (DEVICE) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "↻ REFRESH DEVICES" (CLIENT ID) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "Spotify playlist" (PLAY FROM) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "▶ PLAY" (CLIENT ID) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "❚❚ PAUSE" (CLIENT ID) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "CHECK ACCOUNT" (CLIENT ID) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "♫ OPEN PLAYER…" (CLIENT ID) greyed with no reason at all
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "STOP TEST" (SETTINGS › MUSIC & SOUND) greyed with no reason at all
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: TEAM RADIO → OFF greys none of the 25 other controls in "SOUND · ON SOUND EFFECTS ‹ ONOFF › VOLUME 2 MENU S" (SPOTTER, ENGINEER, BATTLE TONES, RADIO FOCUS, RADIO VOICE)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: SPOTTER → OFF greys none of the 26 other controls in "SOUND · ON SOUND EFFECTS ‹ ONOFF › VOLUME 2 MENU S" (TEAM RADIO, ENGINEER, BATTLE TONES, RADIO FOCUS, RADIO VOICE)
+- [CAND] off-greys-nothing @ios-iphone-landscape-852x393: RADIO FOCUS → 0 greys none of the 26 other controls in "SOUND · ON SOUND EFFECTS ‹ ONOFF › VOLUME 2 MENU S" (TEAM RADIO, SPOTTER, ENGINEER, BATTLE TONES, RADIO VOICE)
+
+## spotify (Spotify player)
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "DEVICE VOLUME" appears in sections: SPOTIFY | PLAY FROM | DEVICE
+
+## careerhub (Career hub (season))
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "NEXT RACE" appears in sections: THIS ROUND | CAREER RECORD
+- [MED] silent-grey @ios-iphone-landscape-852x393: "Raise the fitted cap · 2,500 crLEVEL 0 →" (NEXT RACE) greyed — reason only in a hover title: Needs 1,300 cr more than you have
+
+## datatelemetry (Data hub — telemetry)
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "SELECT DRIVERS" appears in sections: F1 DATA HUB✕ | SELECT DRIVERS
+
+## lightingtuner (Lighting tuner)
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Lighting categories" is Mixed; 13 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Editor actions" is Mixed; 13 other rows are UPPER
+
+## cameratuner (Camera tuner)
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Camera modes" is Mixed; 12 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Editor actions" is Mixed; 12 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "HEIGHT 0.00m" is mixed; 12 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "DISTANCE 0.00m" is mixed; 12 other rows are UPPER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "SIDE 0.00m" is mixed; 12 other rows are UPPER
+
+## flybyeditor (Flyby shot editor)
+- [MED] setting-twice @ios-iphone-landscape-852x393: row "TRACK CARD" appears in sections: TRACK CARD | ANNOUNCER
+- [LOW] label-case @ios-iphone-landscape-852x393: row "SCRUB 0.045" is UPPER; 20 other rows are mixed
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Flyby shots" is Mixed; 20 other rows are mixed
+- [LOW] label-case @ios-iphone-landscape-852x393: row "Editor actions" is Mixed; 20 other rows are mixed
+- [LOW] label-case @ios-iphone-landscape-852x393: row "TRACK CARD" is UPPER; 20 other rows are mixed
+- [LOW] label-case @ios-iphone-landscape-852x393: row "EASING" is UPPER; 20 other rows are mixed
+- [LOW] label-case @ios-iphone-landscape-852x393: row "FOV FROM 36.0°" is UPPER; 20 other rows are mixed
+- [LOW] label-case @ios-iphone-landscape-852x393: row "FOV TO 38.0°" is UPPER; 20 other rows are mixed
+- [LOW] label-case @ios-iphone-landscape-852x393: row "EYE FROM ANCHOR" is UPPER; 20 other rows are mixed
+- [LOW] label-case @ios-iphone-landscape-852x393: row "EYE TO ANCHOR" is UPPER; 20 other rows are mixed
+- [LOW] label-case @ios-iphone-landscape-852x393: row "LOOK FROM ANCHOR" is UPPER; 20 other rows are mixed
+- [LOW] label-case @ios-iphone-landscape-852x393: row "LOOK TO ANCHOR" is UPPER; 20 other rows are mixed
+
+## dataexport (Data hub — export)
+- [HIGH] silent-grey @ios-iphone-landscape-852x393: "Download" (F1 DATA HUB✕) greyed with no reason at all
+
+## __cross ()
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "GARAGE" on title, careerhub
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "CAMERA" on garage, garagelivery, garageteam, garagewheels
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "ACTIVE AERO CORNER MODE" on garage, garagelivery, garageteam, garagewheels
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "FREE BUILD" on garage, garagelivery, garageteam, garagewheels
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "CLOSE GARAGE" on garage, garagelivery, garageteam, garagewheels
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "PRESETS" on season-setup, settingsappearance
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "MAIN MENU" on career, careerhub
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "CLOSE DATA HUB" on datahub, datatelemetry, dataschedule, datastandings, dataresults, datalive, dataexport
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "DATA HUB SECTIONS" on datahub, datatelemetry, dataschedule, datastandings, dataresults, datalive, dataexport
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "GPS TRACE EXPORT" on datahub, datatelemetry, dataschedule, datastandings, dataresults, datalive, dataexport
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "SAVE" on trackdesigner, customize
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "STYLE" on settingsdisplay, settingsappearance
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "LAYOUT" on settingsdisplay, settingsappearance
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "PRESET" on settingsdisplay, cameratuner
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "SIDE" on settingsdisplay, settingsappearance
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "HALO" on settingsdisplay, customize
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "REDUCE MOTION" on settingsappearance, settingsa11y
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "RELIABILITY" on racesettings, careerguide
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "STRATEGY" on racesettings, pause
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "GRAND PRIXPRE-SEASON TESTING  SAKHIR  2026-02-11PRE-SEASON" on datatelemetry, dataresults, datalive
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "SHOW UNOBSTRUCTED PREVIEW" on lightingtuner, cameratuner, flybyeditor
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "FREE CAMERA" on lightingtuner, flybyeditor
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "EDITOR ACTIONS" on lightingtuner, cameratuner, flybyeditor
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "2026" on dataresults, datalive, dataexport
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "2025" on dataresults, datalive, dataexport
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "2024" on dataresults, datalive, dataexport
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "2023" on dataresults, datalive, dataexport
+- [INFO] on-several-screens @ios-iphone-landscape-852x393: "GRAND PRIXPRE-SEASON TESTING  SAKHIR  2026-02-11PRE-SEASON TESTING  SAKHIR  2026-02-18AUSTRALIAN GRAND PRIX  MELBOURNECHINESE GRAND PRIX  SHANGHAIJAPANESE GRAND PRIX  SUZUKAMIAMI GRAND PRIXCANADIAN GRAND PRIX  MONTREALMONACO GRAND PRIX  MONTE CARLOBARCELONA GRAND PRIX  CATALUNYAAUSTRIAN GRAND PRIX  SPIELBERGBRITISH GRAND PRIX  SILVERSTONEBELGIAN GRAND PRIX  SPA-FRANCORCHAMPSHUNGARIAN GRAND PRIX  HUNGARORINGDUTCH GRAND PRIX  ZANDVOORTITALIAN GRAND PRIX  MONZASPANISH GRAND PRIX  MADRINGAZERBAIJAN GRAND PRIX  BAKUBAHRAIN GRAND PRIX  KUALA LUMPURSINGAPORE GRAND PRIXUNITED STATES GRAND PRIX  AUSTINMEXICO CITY GRAND PRIXSO PAULO GRAND PRIX  INTERLAGOSLAS VEGAS GRAND PRIXQATAR GRAND PRIX  LUSAILABU DHABI GRAND PRIX  YAS MARINA CIRCUIT" on dataresults, datalive
