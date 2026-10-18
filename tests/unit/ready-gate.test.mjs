@@ -357,6 +357,28 @@ test("planVerdict: [~] and Deferred: items count as closed (#2397)", () => {
   assert.deepEqual(open.open, ["still todo", "Deferred-ish not closed"]);
 });
 
+test("planVerdict: when several ## Plan sections remain, the last with items wins (Cursor agent append)", () => {
+  const dual = [
+    "## Plan",
+    "- [ ] **now:** stale human item",
+    "- [ ] another open",
+    "",
+    "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->",
+    "## Plan",
+    "- [x] sync — sha",
+    "- [~] Deferred: hosted upload",
+    "- [x] CI green",
+    "<!-- CURSOR_AGENT_PR_BODY_END -->",
+    "",
+  ].join("\n");
+  const v = planVerdict(dual);
+  assert.equal(v.state, "done");
+  assert.equal(v.items, 3);
+  assert.deepEqual(v.open, []);
+  const onlyStaleLast = "## Plan\n- [x] a\n\n## Plan\n- [ ] still open\n";
+  assert.equal(planVerdict(onlyStaleLast).state, "open");
+});
+
 test("#2430: the verdict line carries the FULL 40-char sha a merge call needs", () => {
   const sha = "4dc3d6226176b48601a9e9cb0612989cc7ec916b";
   assert.match(verdictLine({ state: "passed", evidence: "ok", sha, source: "ci" }), /^= ready-gate passed — ok sha=[0-9a-f]{40} source=ci$/);

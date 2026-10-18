@@ -238,18 +238,30 @@ export function verdictLine(v) {
 }
 
 export function planVerdict(body) {
+  // Strip HTML comments (PR-template examples). Cursor cloud agents wrap their
+  // live Plan in one-line CURSOR_AGENT_PR_BODY_* markers; content BETWEEN those
+  // markers stays. A Bryce-opened PR can keep an older ## Plan above the agent
+  // block — when several ## Plan sections remain, use the LAST with items so
+  // the agent checklist (appended) is the gate, not a stale human draft.
   const text = String(body || "").replace(/<!--[\s\S]*?-->/g, "");
-  const head = /^##[ \t]+Plan\b.*$/m.exec(text);
-  if (!head) return { state: "none", items: 0, open: [] };
-  const rest = text.slice(head.index + head[0].length);
-  const next = /^##[ \t]/m.exec(rest);
-  const section = next ? rest.slice(0, next.index) : rest;
-  const items = [...section.matchAll(/^[ \t]*[-*][ \t]+\[([ xX~])\][ \t]*(.*)$/gm)];
-  if (!items.length) return { state: "none", items: 0, open: [] };
-  const open = items
+  const heads = [...text.matchAll(/^##[ \t]+Plan\b.*$/gm)];
+  if (!heads.length) return { state: "none", items: 0, open: [] };
+  let chosen = null;
+  for (let i = heads.length - 1; i >= 0; i--) {
+    const head = heads[i];
+    const rest = text.slice(head.index + head[0].length);
+    const next = /^##[ \t]/m.exec(rest);
+    const section = next ? rest.slice(0, next.index) : rest;
+    const items = [...section.matchAll(/^[ \t]*[-*][ \t]+\[([ xX~])\][ \t]*(.*)$/gm)];
+    if (!items.length) continue;
+    chosen = items;
+    break;
+  }
+  if (!chosen) return { state: "none", items: 0, open: [] };
+  const open = chosen
     .filter(([, mark, t]) => mark === " " && !/^~~/.test(t.trim()) && !/^(\*\*)?Deferred:/i.test(t.trim()))
     .map(([, , t]) => t.trim() || "(empty item)");
-  return { state: open.length ? "open" : "done", items: items.length, open };
+  return { state: open.length ? "open" : "done", items: chosen.length, open };
 }
 
 /** Fold the Plan into a green verdict: open items refuse (exit 1); no Plan
