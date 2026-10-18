@@ -45,10 +45,10 @@ test.describe("the rival is keyed by a cross-peer identity", () => {
   test("the lazy net stack exposes seatless spectator policy", async ({ page }) => {
     await raceWithRival(page, { team: "ferrari", driver: 1 });
     const policy = await page.evaluate(() => ({
-      present: typeof window.NetSpectate !== "undefined",
-      spectator: window.NetSpectate && window.NetSpectate.kind({ kind: "spectator" }),
-      driver: window.NetSpectate && window.NetSpectate.kind({ kind: "driver" }),
-      publish: window.NetSpectate && window.NetSpectate.canPublish("spectator"),
+      present: typeof NetSpectate !== "undefined",
+      spectator: NetSpectate.kind({ kind: "spectator" }),
+      driver: NetSpectate.kind({ kind: "driver" }),
+      publish: NetSpectate.canPublish("spectator"),
     }));
     expect(policy).toEqual({
       present: true,
