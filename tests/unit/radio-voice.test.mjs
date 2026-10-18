@@ -121,15 +121,15 @@ test("every ANN_PRI kind resolves to a speaker, and the map agrees with radioWho
   // Scraped from js/game.js, so adding a `kind` there turns the fast gate red
   // until the radio knows about it — rather than that kind silently speaking in
   // the engineer's voice because it fell through a default.
-  const g = read("js/game.js");
+  const g = read("js/race/announce-banner.js");
   const kinds = [...g.match(/const ANN_PRI = \{([^}]*)\}/)[1].matchAll(/"?([a-z-]+)"?\s*:/g)].map((m) => m[1]);
   assert.ok(kinds.length >= 7, `expected the ANN_PRI keys, got ${kinds.join(",")}`);
-  const who = g.match(/function radioWho\(kind\) \{[\s\S]*?\n\}/)[0];
+  const who = g.match(/function radioWho\(kind\) \{[\s\S]*?\n\s*\}/)[0];
   for (const k of kinds) {
     const speaker = RV.SPEAKERS[k];
     assert.ok(speaker, `ANN_PRI has "${k}" but RadioVoice.SPEAKERS does not`);
     assert.ok(RV.TONE[speaker], `speaker ${speaker} has no prosody`);
-    const label = vm.runInNewContext('(' + who + ')', {RadioVoice: RV, player: {code:'TST'}})(k);
+    const label = vm.runInNewContext('(' + who + ')', {RadioVoice: RV, deps: { player: () => ({ code: 'TST' }) }})(k);
     assert.equal(label, {control:'RACE CONTROL',coach:'COACH',announcer:'COMMENTARY',radio:'TST · RADIO'}[speaker]);
   }
 });
@@ -712,13 +712,13 @@ test("the sting is gated on the session, exactly as plan() is", () => {
   // showAnnounce draws MENU cards too — the title screen's save-conflict card is
   // the one plan() names. A radio squelch under it claims a transmission that is
   // not happening, on a screen where no car is running.
-  const game = read("js/game.js");
-  assert.match(game, /if \(state === "race" \|\| state === "count"\) GameAudio\.radioSting\(/);
+  const game = read("js/race/announce-banner.js");
+  assert.match(game, /if \(\(deps\.state\(\)\) === "race" \|\| \(deps\.state\(\)\) === "count"\) GameAudio\.radioSting\(/);
   // ...and the VOICE gets the same channel's cue length as its lead, from the
   // engine rather than a second copy of the note table, so the words start when
   // the figure ends instead of underneath it.
   assert.match(game, /GameAudio\.radioLeadS\(_annCh\)/);
-  assert.match(game, /radioVoice\.say\(msg, announceT, kind, _annLead\)/);
+  assert.match(game, /\(deps\.radioVoice\(\)\)\.say\(msg, announceT, kind, _annLead\)/);
 });
 
 test("waiting for the courtesy figure costs no shipped line its voice", () => {
@@ -800,7 +800,8 @@ test("quitting to the title ends the radio, not just the card", () => {
   const quit = symbolSource("function quitToMenu()");
   assert.match(quit, /GameAudio\.radioStingStop\(\)/,
     "quitToMenu must end the sting itself rather than borrow the voice's observer");
-  assert.match(quit, /_annQueue\.length = 0/, "…on the same pass that empties the announce queue");
+  assert.match(quit, /banner\.clear\(\)/, "…on the same pass that empties the announce queue");
+  assert.match(read("js/race/announce-banner.js"), /_annQueue\.length = 0/, "banner.clear still drops the queued line");
   // Spotter speaks on VoicePack channel "spotter" without RadioVoice.current, so
   // hiding #announce only calls stop() (engineer) or radioStingStop — never
   // pack.stop(). raceRadio.update (which would pack.stop("spotter") on !race)
@@ -969,7 +970,7 @@ test("a rotate-block pause that re-hides the card in the same task still halts r
 
 test('every message channel uses the same speaker for its HUD label and its voice', () => {
   const f = vm.runInNewContext('(' + symbolSource('function radioWho(kind)') + ')',
-    { RadioVoice: RV, player: { name: 'Test Driver', code: 'TST' } });
+    { RadioVoice: RV, deps: { player: () => ({ name: 'Test Driver', code: 'TST' }) } });
   for (const [kind, speaker, label] of [
     ['warning','control','RACE CONTROL'], ['warn','control','RACE CONTROL'],
     ['penalty-hit','control','RACE CONTROL'], ['penalty-warn','control','RACE CONTROL'],
