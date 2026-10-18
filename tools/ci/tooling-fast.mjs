@@ -82,8 +82,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/aero-flap-travel.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
-  // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
-  // asserted instead of described; under a second.
+  // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via
+  // gen-cursor-rules, the hooks — asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
   // The orchestrator/worker contract (skill agent-fleet): host-correct PR
   // subscribe tools, one fleet block, the mandated launch fields. < 0.1 s.
@@ -116,6 +116,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apca-timing.test.mjs",
   "tests/unit/apex-arg-guards.test.mjs",
   "tests/unit/apex-career-delete.test.mjs",
+  // Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.
+  "tests/unit/apex-memory.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
   "tests/unit/appearance-studio.test.mjs",
@@ -692,6 +694,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/mcp-cli.test.mjs",
   "tests/unit/mcp-http-origin.test.mjs",
   "tests/unit/mcp-smoke.test.mjs",
+  "tests/unit/measure-pr-ci-after-close.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",
   "tests/unit/meeting-picker-labels.test.mjs",
   // The track-switch growth verdict (mem-census sustainedGrowthMB) replayed on the #773 / 2026-10-04 leak numbers and the Metal warm-up step. ~0.1 s.
@@ -935,6 +938,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/session-status.test.mjs",
   "tests/unit/session-stub-surface.test.mjs",
   "tests/unit/session-transcript.test.mjs",
+  "tests/unit/setting-deps.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
   "tests/unit/settings-search.test.mjs",
@@ -952,6 +956,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The sun shadow map's depth span holds a 250 m caster: drives the real
   // ShadowPass.sunPass on a stub renderer and projects through its light VP.
   "tests/unit/shadow-pass-depth.test.mjs",
+  "tests/unit/share-card-data.test.mjs",
+  "tests/unit/share-card-layout.test.mjs",
+  "tests/unit/share-card.test.mjs",
   "tests/unit/share-code.test.mjs",
   "tests/unit/shared-math.test.mjs",
   "tests/unit/sheet-per-screen.test.mjs",
@@ -1228,6 +1235,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/validation-cli.test.mjs",
   "tests/unit/verify-live.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
+  // tools/viewer: the 3D viewer page carries the engine-built car (within 0.5 mm) and circuit. ~6 s, no browser.
+  "tests/unit/viewer.test.mjs",
   "tests/unit/visual-oracle.test.mjs",
   "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
@@ -1308,7 +1317,7 @@ const fmtDur = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
  * fast files started early cost nothing. `--order=list` restores list order;
  * `--record` rewrites the committed table from this run. */
 export const TIMINGS_FILE = path.join(ROOT, "tests/data/tooling-fast-timings.json");
-export const LOCAL_TIMINGS_FILE = path.join(LOGDIR, "tooling-fast-timings.json");
+const LOCAL_TIMINGS_FILE = path.join(LOGDIR, "tooling-fast-timings.json");
 
 /** { <repo-relative file>: ms } — local measurements override committed ones. */
 export function loadTimings(files = [TIMINGS_FILE, LOCAL_TIMINGS_FILE]) {
@@ -1440,8 +1449,8 @@ export function tapFailureDetail(text) {
  * 540 s; the 600 s wall still lands inside ci.yml's 15-minute guards job for a
  * file that starts first, which longest-first makes the slow ones do.
  * APEX_TOOLING_TEST_TIMEOUT_S / APEX_TOOLING_FILE_TIMEOUT_S override both. */
-export const PER_TEST_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_TEST_TIMEOUT_S) || 540) * 1000;
-export const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT_S) || 600) * 1000;
+const PER_TEST_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_TEST_TIMEOUT_S) || 540) * 1000;
+const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT_S) || 600) * 1000;
 
 /**
  * Run the structural suites one file at a time.
@@ -1668,7 +1677,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
 export const DEFAULT_JOBS = 1;
 
 /** Paths that force a full tooling-fast run in --changed mode (fail-safe). */
-export const TOOLING_FAST_CHANGED_RUN_ALL = [
+const TOOLING_FAST_CHANGED_RUN_ALL = [
   /^tests\/groups\.json$/,
   /^package(-lock)?\.json$/,
   /^playwright\.config\.js$/,
@@ -1701,7 +1710,7 @@ function indexPathKey(map, key, testFile) {
 }
 
 /** Map repo-relative paths → tooling-fast unit files that pin them in source. */
-export function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
+function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
   const map = new Map();
   for (const f of files) {
     if (f.startsWith("//")) continue;
@@ -1732,7 +1741,7 @@ export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardC
 }
 
 /** Changed paths vs the deploy branch (merge-base with origin/DEPLOY_BRANCH). */
-export function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
+function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
   try {
     const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
     return changedPaths([base], { cwd: root });
@@ -1823,7 +1832,7 @@ export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against 
 
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
-export const TOOLING_FAST_FLAGS = Object.freeze([
+const TOOLING_FAST_FLAGS = Object.freeze([
   "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--stop", "--help", "-h",
 ]);
 

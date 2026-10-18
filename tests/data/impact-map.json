@@ -1952,13 +1952,22 @@
       ]
     },
     "js/camera/photo-kit.js": {
+      "apply": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
       "applyDof": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
+      "createLookSession": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "deleteMark": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "marksFor": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
+      "mountLookControls": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "nextGrid": [
@@ -2882,6 +2891,7 @@
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/fin-design.test.mjs",
+        "tests/unit/livery-design.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "migratePaint": [
@@ -2890,7 +2900,6 @@
       "*": [
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
-        "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
@@ -6100,6 +6109,9 @@
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ],
+      "hexToArr": [
+        "tests/unit/livery-design.test.mjs"
+      ],
       "idxOr": [
         "tests/unit/boot-input-shape.test.mjs"
       ],
@@ -6499,7 +6511,6 @@
         "tests/unit/js-debugger-mcp.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/light-grid.test.mjs",
-        "tests/unit/livery-design.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/metrics.test.mjs",
@@ -6519,6 +6530,7 @@
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchet-reason.test.mjs",
         "tests/unit/ratchets.test.mjs",
+        "tests/unit/ready-gate.test.mjs",
         "tests/unit/report-server.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
@@ -6955,6 +6967,9 @@
         "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "csTabId": [
+        "tests/unit/livery-design.test.mjs"
+      ],
       "endLivPreview": [
         "tests/unit/livery-draft-mesh-cache.test.mjs"
       ],
@@ -6963,6 +6978,9 @@
       ],
       "livDraftFrom": [
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/team-livery.test.mjs"
+      ],
+      "livDraftFromOwn": [
         "tests/unit/team-livery.test.mjs"
       ],
       "livDraftTo": [
@@ -8883,6 +8901,9 @@
       "create": [
         "tests/unit/phone-recorder.test.mjs"
       ],
+      "download": [
+        "tests/unit/phone-recorder.test.mjs"
+      ],
       "fileName": [
         "tests/unit/phone-recorder.test.mjs"
       ],
@@ -10202,7 +10223,8 @@
         "tests/unit/badges.test.mjs",
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
-        "tests/unit/loading-card.test.mjs"
+        "tests/unit/loading-card.test.mjs",
+        "tests/unit/share-card.test.mjs"
       ],
       "current": [
         "tests/unit/daily-challenge.test.mjs"
@@ -10223,7 +10245,8 @@
       "open": [
         "tests/specs/menu-baseline.spec.js",
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/share-card.test.mjs"
       ],
       "plan": [
         "tests/unit/daily-challenge.test.mjs",
@@ -10235,12 +10258,16 @@
       "record": [
         "tests/unit/badges.test.mjs",
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/share-card.test.mjs"
       ],
       "select": [
         "tests/unit/badges.test.mjs",
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs"
+      ],
+      "shareCard": [
+        "tests/unit/share-card.test.mjs"
       ],
       "shareText": [
         "tests/unit/career-backup.test.mjs",
@@ -13441,6 +13468,30 @@
         "tests/unit/three-inspector.test.mjs"
       ]
     },
+    "js/share/share-card-data.js": {
+      "fromDaily": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "text": [
+        "tests/unit/share-card-data.test.mjs"
+      ]
+    },
+    "js/share/share-card-layout.js": {
+      "layout": [
+        "tests/unit/share-card-layout.test.mjs"
+      ]
+    },
+    "js/share/share-card.js": {
+      "deliver": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "paint": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "render": [
+        "tests/unit/share-card.test.mjs"
+      ]
+    },
     "js/track/build-client.js": {
       "build": [
         "tests/unit/boot-idle-prefetch.test.mjs",
@@ -14996,6 +15047,9 @@
         "tests/specs/photo-studio-conditions.spec.js",
         "tests/specs/photo-studio.spec.js",
         "tests/unit/photo-studio.test.mjs"
+      ],
+      "*": [
+        "tests/unit/photo-kit.test.mjs"
       ]
     },
     "js/ui/platform-session.js": {
@@ -15085,6 +15139,7 @@
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
@@ -15228,6 +15283,11 @@
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/ui-journey-career.test.mjs"
+      ]
+    },
+    "js/ui/setting-deps.js": {
+      "refresh": [
+        "tests/unit/setting-deps.test.mjs"
       ]
     },
     "js/ui/setting-row.js": {

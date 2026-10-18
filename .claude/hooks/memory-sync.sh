@@ -156,6 +156,15 @@ for f in sorted(names):
         final = merge_index(b, l, r)
         write(live, f, final); write(repo, f, final)
         n_in += 1; n_out += 1
+    elif live_changed and repo_changed and (l is None or r is None):
+        # Edit vs delete (#2901): honour the deletion on both sides and report
+        # CONFLICT — never write the surviving side onto the deleted side
+        # (that silently resurrected the file).
+        conflicts.append(f + " (delete vs edit)")
+        drop(live, f); drop(repo, f)
+        if l is None: n_out += 1
+        if r is None: n_in += 1
+        final = None
     else:                                       # both changed a topic file
         conflicts.append(f)
         if r is not None: write(live, f, r)     # never overwrite the shared copy
@@ -165,7 +174,13 @@ for f in sorted(names):
 write(base, ".head", head + "\n")
 if mode == "restore" or n_in or n_out or conflicts:
     msg = f"memory: {n_in} in from .claude/memory/, {n_out} out"
-    if conflicts: msg += "; CONFLICT kept the repo copy of " + ", ".join(conflicts) + " (re-apply your edit)"
+    if conflicts:
+        dels = [c for c in conflicts if "delete vs edit" in c]
+        both = [c for c in conflicts if "delete vs edit" not in c]
+        if both:
+            msg += "; CONFLICT kept the repo copy of " + ", ".join(both) + " (re-apply your edit)"
+        if dels:
+            msg += "; CONFLICT delete vs edit — honoured delete for " + ", ".join(dels)
     print(msg)
 PY
 mark_memory --assume-unchanged

@@ -220,9 +220,13 @@ test("an AI car advances its arc at speed·dt ÷ the Frenet stretch: no free dis
   a.go(); a.jump(0.5, 0, 0);   // the player well away from T1
   const ai = G.cars.find((c) => !c.human);
   for (const c of G.cars) if (!c.human && c !== ai) c.retired = true;
+  // Probe at T1's apex, found from the geometry: a hard-coded s on the entry
+  // flank went flat when #2824 de-kinked the Rettifilo entry (h 1.03 -> 1.01).
+  let sT1 = 480;
+  for (let s = 480; s <= 640; s += 0.5) if (fH(s, -4) > fH(sT1, -4)) sT1 = s;
   const rows = [];
   for (const x of [-4, 4]) {   // monza T1 is a right-hander: -x is the OUTSIDE
-    ai.s = 539.8; ai.prog = 5000 + ai.s; ai.x = x; ai.speed = 25; ai._prevS = ai.s;
+    ai.s = sT1; ai.prog = 5000 + ai.s; ai.x = x; ai.speed = 25; ai._prevS = ai.s;
     const p0 = ai.prog, s0 = ai.s;
     a.step(1 / 60, 1);
     const h = fH(s0, ai.x);

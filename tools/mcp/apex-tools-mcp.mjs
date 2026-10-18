@@ -5,9 +5,9 @@ import { loadSurveyDesigns } from '../lib/custom-survey-locations.mjs';
  * @skill check-changes
  * apex-tools-mcp — wrap committed tools/ CLIs as MCP tools (apex_* only).
  *
- * One of the THREE .mcp.json servers (beside chrome-devtools and
- * playwright-official; catalog trimmed 7 → 3 and wraps 30 → 11 on 2026-09; 16 with framing, doctor and session checks).
- * Never chrome_* / tinyfish_*. Local working tree only; no github.io.
+ * One of the FOUR .mcp.json servers (beside playwright-official, chrome-devtools and js-debugger).
+ * The catalog serves 34 tools (33 wraps + apex_help, which returns the full text tools/list shortens);
+ * `node tools/mcp/apex-tools-mcp.mjs list-tools` is the live count. Never chrome_* / tinyfish_*. Local working tree only; no github.io.
  * Design: docs/research/APEX-TOOLS-MCP.md — map: docs/AGENT-SURFACE.md
  *
  *   node tools/mcp/apex-tools-mcp.mjs help | status | list-tools | serve | smoke
@@ -40,7 +40,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.15.0";
+const SERVER_VERSION = "1.16.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -399,6 +399,12 @@ const CATALOG = [
     kind: "tree",
     description: "Tree — every valid track/camera/UI id the other apex_* tools accept, in one read. For per-track turn and scenery targets call apex_locations. Read-only, no browser.",
     inputSchema: { type: "object", properties: { dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
+  },
+  {
+    name: "apex_help",
+    kind: "tree",
+    description: "Tree — full description and full input schema (every nested property and its prose) of one apex_* tool; tools/list carries only a short form. Read-only, no browser.",
+    inputSchema: { type: "object", required: ["tool"], properties: { tool: { type: "string", description: "Tool name, e.g. apex_shot_survey." } } },
   },
   {
     name: "apex_locations",
@@ -1050,6 +1056,23 @@ const CATALOG = [
       required: ["file"],
     },
   },
+  {
+    name: "apex_viewer",
+    week: 8,
+    kind: "tree",
+    description: "Tree — writes ONE self-contained three.js viewer page (no browser, seconds): a car customiser that runs the game's own Car3D in the page (every team, livery, finish and garage part) and circuits (Tracks.build centreline, racing line, curvature): artifacts/viewer/apex-viewer.html. Publish it as an Artifact to show the user. Neither list given: all cars + monza, spa, monaco, suzuka. PNG stills and variant sheets are the CLI's --shots / --sheet (they launch Chromium). Skill: playwright-probe.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        cars: { type: "array", maxItems: 12, items: { type: "string" }, description: "Team ids (Teams.LIST), or [\"all\"]; [] for none." },
+        circuits: { type: "array", maxItems: 80, items: { type: "string" }, description: "Circuit ids (Tracks.LIST), or [\"all\"]; [] for none." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
 ];
 
 function badArgs(message, fix) {
@@ -1665,6 +1688,16 @@ function buildArgv(name, args) {
       argv.push(file);
       return argv;
     }
+    case "apex_viewer": {
+      const argv = [...nodeTool("viewer/build-viewer.mjs"), "--json"];
+      for (const k of ["cars", "circuits"]) {
+        if (args[k] === undefined) continue;
+        const ids = (Array.isArray(args[k]) ? args[k] : []).map(String);
+        if (ids.some((id) => !/^[a-z0-9_]{1,32}$/.test(id))) badArgs(`apex_viewer: ${k} must be lowercase ids`, `e.g. {"${k}":["${k === "cars" ? "ferrari" : "monza"}"]}, or ["all"].`);
+        argv.push(`--${k}=${ids.join(",")}`);
+      }
+      return argv;
+    }
     case "apex_eval": {
       const argv = [...nodeTool("shot/apex-eval.mjs"), String(args.track || "monza"), String(args.expr || "a.info()")];
       if (args.raw) argv.push("--raw");
@@ -1823,6 +1856,18 @@ export function splitOut(stdout) {
  *  `selected` already carries. */
 export function slimBody(name, body, args = {}) {
   if (args.full || !body || body.error) return body;
+  if (name === "apex_eval" && typeof body.out?.err === "string") {
+    // The browser route exits 0 with {err} for a throwing expr; the VM route exits 1.
+    const fix = /\bis not defined\b/.test(body.out.err) ? "The expression scope is `a` (= __apex): write `a.info()`, not `info()`." : body.fix;
+    return { ...body, ok: false, ...(fix && { fix }) };
+  }
+  if (name === "apex_profile_query" && body.ok === false && !body.fix && /ENOENT/.test(String(body.stderr))) {
+    return { ...body, fix: "No such profile: apex_job_start {kind:\"profile\"} writes artifacts/profiles/<name>.json; pass that path as `file`." };
+  }
+  if (name === "apex_who_is_on_it" && Array.isArray(body.out?.claims)) {
+    const live = body.out.claims.filter((c) => !c.stale && !c.released);
+    return { ...body, out: { ...body.out, claims: live, hiddenClaims: body.out.claims.length - live.length } };
+  }
   if (name === "apex_doctor" && body.out && Array.isArray(body.out.checks)) {
     const checks = body.out.checks;
     return { ...body, out: { ...body.out, checks: checks.filter((c) => c.status !== "pass"), passed: checks.filter((c) => c.status === "pass").length, slim: "pass rows omitted; {full:true} lists them" } };
@@ -1840,7 +1885,7 @@ export function slimBody(name, body, args = {}) {
   }
   return body;
 }
-const SLIMMED = new Set(["apex_doctor", "apex_unit_test", "apex_select_specs"]);
+const SLIMMED = new Set(["apex_doctor", "apex_unit_test", "apex_select_specs", "apex_eval", "apex_profile_query", "apex_who_is_on_it"]);
 
 /** Run a CLI without blocking the server. spawnSync froze the whole process
  *  for a browser tool's 30–100 s: apex_status could not answer, and when a
@@ -2011,6 +2056,12 @@ function statusNext(lock, playwright, loadavg) {
     reason: "lock free; occupancy clear",
     hint: "e.g. apex_shot_survey {track, preset:\"quick\"} or multi-track async job via tracks[].",
   };
+}
+/** apex_help: the uncompacted description + inputSchema that tools/list shortens (see compactTool). */
+function handleHelp(args = {}) {
+  const t = CATALOG.find((c) => c.name === args.tool);
+  if (!t) return refuse("unknown_tool", `unknown tool ${args.tool}`, `Pick one of: ${CATALOG.map((c) => c.name).join(", ")}.`);
+  return toolResult({ ok: true, tool: t.name, description: t.description, inputSchema: t.inputSchema });
 }
 /** apex_catalog: ids come from the tool schemas and the UI audit's own catalogs, so they cannot drift from what the tools accept. */
 async function handleCatalog(args = {}) {
@@ -2454,6 +2505,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_catalog") return handleCatalog(args);
+  if (name === "apex_help") return handleHelp(args);
   if (name === "apex_locations") {
     let all;
     try {
@@ -2601,7 +2653,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 // wrap here; derive honest hints from the catalog instead of restating them per
 // tool. Clients treat these as untrusted hints, so they are self-description,
 // not a permission boundary — the pins and the lock remain the real guards.
-const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity"]);
+const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity", "apex_viewer"]);
 const DESTRUCTIVE = new Set(["apex_job_cancel"]);
 const OPEN_WORLD = new Set(["apex_ci_status", "apex_who_is_on_it"]);
 function toolAnnotations(entry) {
@@ -2673,6 +2725,8 @@ const OUTPUT_SCHEMAS = {
   apex_catalog: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), tracks: S("array"), cams: S("array"), tods: S("array"),
     shotPresets: S("array"), hudDevices: S("array"), hudCams: S("array"), jobKinds: S("array"), uiScreens: S("array"), uiViewports: S("array"),
     hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
+  apex_help: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), tool: S("string"), description: S("string"),
+    inputSchema: S("object"), error: S("string"), message: S("string"), fix: S("string") } },
   apex_locations: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), track: S("string"),
     locations: S("array"), count: S("number"), hint: S("string") } },
   apex_doctor: cliOut({ ok: S("boolean"), mode: S("string"), checks: S("array"), summary: S("object") }),
@@ -2687,6 +2741,7 @@ const OUTPUT_SCHEMAS = {
   apex_who_is_on_it: cliOut({ hours: S("number"), fetched: S("boolean"), branch: S("string"), live: S("array"), claims: S("array"),
     touched: S("array") }),
   apex_car_audit: cliOut({}, ["array", "null"]),
+  apex_viewer: cliOut({ ok: S("boolean"), out: S("string"), bytes: S("number"), cars: S("array"), circuits: S("array"), error: S("string") }),
   apex_track_audit: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), track: S("string"), verify: S("object"),
     float: S("object"), hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
   apex_job_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), jobs: S("array"), error: S("string"),
@@ -2699,8 +2754,65 @@ function toolOutputSchema(entry) {
   return OUTPUT_SCHEMAS[entry.name] || CLI_RESULT_SCHEMA;
 }
 
-function listTools() {
-  return CATALOG.map((t) => ({
+// tools/list is paid on every session start, so it carries a short form: a long description keeps its
+// first sentences + the "Skill:" pointer, long property prose is cut, and object schemas nested below the
+// top level collapse to their type. apex_help {tool} returns the full text and schema. Validation always
+// uses the full CATALOG schema; only the published copy is compact.
+const DESC_LONG = 240, DESC_KEEP = 170, PROP_KEEP = 70;
+function cutAt(text, max) {
+  if (text.length <= max) return text;
+  const head = text.slice(0, max);
+  const stop = Math.max(head.lastIndexOf(". "), head.lastIndexOf("; "));
+  return (stop > max / 3 ? head.slice(0, stop + 1) : head.replace(/\s+\S*$/, "") + "…");
+}
+function compactDescription(name, d) {
+  if (name === "apex_help" || d.length <= DESC_LONG) return d;
+  const skill = d.match(/\s(Skill: [^.]*\.?)\s*$/);
+  const body = skill ? d.slice(0, skill.index) : d;
+  return `${cutAt(body, DESC_KEEP)} Full text and parameters: apex_help {tool: "${name}"}.${skill ? " " + skill[1] : ""}`;
+}
+const BOUND_KEYS = new Set(["minItems", "maxItems", "uniqueItems", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength", "pattern"]);
+function compactSchema(spec, depth = 0, dense = false, required = false) {
+  if (Array.isArray(spec)) return spec.map((x) => compactSchema(x, depth, dense));
+  if (!spec || typeof spec !== "object") return spec;
+  const out = {};
+  for (const [k, v] of Object.entries(spec)) {
+    if (k === "description" && typeof v === "string") out[k] = cutAt(v, PROP_KEEP);
+    else if (k === "properties" && depth >= 1 && v && typeof v === "object") continue;   // nested object body: apex_help
+    else if (k === "properties" && v && typeof v === "object") out[k] = Object.fromEntries(Object.entries(v).map(([n, p]) => [n, compactSchema(p, depth + 1, dense, (spec.required || []).includes(n))]));
+    else if (k === "items") out[k] = compactSchema(v, depth, dense);
+    else if (dense && BOUND_KEYS.has(k)) continue;   // bounds stay enforced by validateArgs; apex_help shows them
+    else if (k === "enum" && Array.isArray(v) && v.length > 6 && !required) {   // 53 circuit ids / 16 devices / 20 cams repeat across tools: apex_catalog lists them
+      out.description = cutAt(`${out.description || spec.description || "Id"} Allowed values: apex_catalog / apex_help.`, PROP_KEEP + 20);
+    }
+    else if ((k === "maxLength" && v === 4096) || (k === "maxItems" && v === 256)) continue;   // wrapper-wide defaults, enforced server-side
+    else if (k === "required" && depth >= 1) continue;
+    else if (k === "additionalProperties" && depth >= 1) continue;
+    else out[k] = v;
+  }
+  return out;
+}
+// The runSpawn envelope keys every wrapped CLI shares are dropped from the published outputSchema (still
+// valid: additionalProperties is true, and structuredContent is validated against the full schema in tests).
+const ENVELOPE_KEYS = ["tool", "dryRun", "argv", "durationMs", "exit", "stdout", "stderr"];
+function compactOutput(schema) {
+  const properties = Object.fromEntries(Object.entries(schema.properties || {}).filter(([k]) => !ENVELOPE_KEYS.includes(k)));
+  return { ...schema, properties };
+}
+/** A tool whose compact schema still tops 1.5 KB also drops numeric/array/string bounds from the published copy. */
+function denseSchema(t) {
+  const plain = compactSchema(t.inputSchema);
+  return JSON.stringify(plain).length > 1500 ? compactSchema(t.inputSchema, 0, true) : plain;
+}
+function listTools(compact = true) {
+  return CATALOG.map((t) => compact ? ({
+    name: t.name,
+    title: toolAnnotations(t).title,
+    description: compactDescription(t.name, t.description),
+    inputSchema: denseSchema(t),
+    outputSchema: compactOutput(toolOutputSchema(t)),
+    annotations: toolAnnotations(t),
+  }) : ({
     name: t.name,
     title: toolAnnotations(t).title,
     description: t.description,
@@ -2752,7 +2864,7 @@ function cmdStatus() {
 }
 
 function cmdListTools() {
-  process.stdout.write(JSON.stringify(listTools(), null, 2) + "\n");
+  process.stdout.write(JSON.stringify(listTools(false), null, 2) + "\n");
   return 0;
 }
 

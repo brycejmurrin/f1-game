@@ -1,0 +1,1 @@
+Fixed: Stop-hook H1 documented for Bryce (`docs/notes/STOP-HOOK-H1-BRYCE-2026-10-18.md`) with a tested reference script; bash-guard timeout root cause recorded (#2647); 24 h PR CI lifecycle re-measure (#2213).

@@ -6,13 +6,14 @@ alwaysApply: true
 # Apex 26 — Cursor entry
 
 - **Rules:** read root `AGENTS.md` (canonical). Root `CLAUDE.md` is a stub that
-  imports it; do not edit rules into `CLAUDE.md`.
+  imports it; do not edit rules into `CLAUDE.md`. Fleet rules:
+  `.claude/rules/fleet-core.md` (always-on; generated twin
+  `.cursor/rules/fleet-core.mdc`). Path-scoped rules: edit `.claude/rules/*.md`,
+  then `npm run gen` (never hand-edit the generated `.mdc` twins).
 - **Skills / subagents:** `.claude/skills/*/SKILL.md` and `.claude/agents/*.md`
-  (shared with Claude Code). Codex reads the same skill bodies via
-  `.agents/skills/<name>` (`bash tools/env/mirror-skills.sh` fills it) — keep
-  lockstep, never fork. Do not add `.cursor/skills/` or `.cursor/agents/`
-  unless a file is explicitly Cursor-only. The glob rules here (`render-wgx`,
-  `render-tlx`) carry the same bodies as `.claude/rules/` — edit both.
+  (shared with Claude Code). Codex via `.agents/skills/<name>`
+  (`bash tools/env/mirror-skills.sh`) — keep lockstep, never fork. Do not add
+  `.cursor/skills/` or `.cursor/agents/` unless Cursor-only.
 - **Route:** deploy/`version.json` → `deploy-research` (host fetch / WebFetch);
   pre-push → `verify-agent` (`--base <ref>` for "was it already red?");
   live canvas → `mcp-probe`; host browser → `playwright-official`;
@@ -23,17 +24,15 @@ alwaysApply: true
   often does **not** auto-load them — then `tools/mcp/apex-tools-mcp.sh call`,
   `tools/mcp/chrome-devtools-mcp.sh`, `python3 tools/mcp/probe-mcp.py chrome-start`
   (CLI daemon, not attached). `tools/mcp/tinyfish-mcp.sh` is CLI-only and
-  egress-blocked in-container. Map: `docs/AGENT-SURFACE.md`. The browser rules
-  (one at a time, never inside a subagent) are AGENTS.md §Verification.
-- **Cursor Cloud (moved from AGENTS.md):** launch with model id `default` only. Cloud MCP is always
-  `cursor` / `cursor-cloud` / `cursor-subscriptions`, plus `apex-tools` / `chrome-devtools` /
-  `playwright-official` after Bootstrap §3; if only the three `cursor*` appear, use the CLI fallbacks
-  above, invent no namespace, and re-Save when `environment-info` shows nameless bare-`bash` allowlist
-  rows. After every PR push: `subscribe_github_ci` + `subscribe_github_pr`; one timer
-  check-in (~1 h) only if the host lists `subscribe_timer` / `send_later` (do not invent it). Serve
-  locally for browser checks (the VM rarely reaches github.io). using-superpowers / brainstorming
-  hard-gates are optional references; AGENTS.md and the skills win.
+  egress-blocked in-container. Map: `docs/AGENT-SURFACE.md`.
+- **Cursor Cloud:** launch with model id `default` only. Cloud MCP is always
+  `cursor` / `cursor-cloud` / `cursor-subscriptions`, plus `apex-tools` /
+  `chrome-devtools` / `playwright-official` after Bootstrap §3; if only the
+  three `cursor*` appear, use the CLI fallbacks above, invent no namespace, and
+  re-Save when `environment-info` shows nameless bare-`bash` allowlist rows.
+  After every PR push: `subscribe_github_ci` + `subscribe_github_pr`; one timer
+  check-in (~1 h) only if the host lists `subscribe_timer` / `send_later`.
+  Serve locally for browser checks. AGENTS.md and the skills win.
 - **Token hygiene:** one skill per task; prefer `__apex` / `verify-track` /
-  `test:tooling-fast` before screenshots or browser groups. Path-scoped rules
-  under `.cursor/rules/` (e.g. `render-wgx.mdc`, `render-tlx.mdc`) attach by
-  globs. Bootstrap / Cloud MCP: `docs/AGENT-SURFACE.md` §Bootstrap.
+  `test:tooling-fast` before screenshots or browser groups. Bootstrap / Cloud
+  MCP: `docs/AGENT-SURFACE.md` §Bootstrap.

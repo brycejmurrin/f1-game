@@ -48,26 +48,26 @@ import { proxyFetch } from "../lib/proxy-fetch.mjs";   // #2188: Node fetch igno
 export const REPO = "brycejmurrin/f1-game";
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
 export const WORKFLOW_FILE = "ci.yml";
-export const DEFAULT_RUNS = 14;
-export const DEFAULT_DAYS = 2;
+const DEFAULT_RUNS = 14;
+const DEFAULT_DAYS = 2;
 /** --events all reads at most this many runs (newest first): ~1,000 GITHUB_TOKEN requests/hour is the budget. */
-export const MAX_ALL_RUNS = 400;
+const MAX_ALL_RUNS = 400;
 /** Runs listed per page for --events all; at most MAX_ALL_PAGES pages (1,500 runs). */
-export const MAX_ALL_PAGES = 15;
+const MAX_ALL_PAGES = 15;
 /** proposeRows: a test that passed only on retry in this many runs is a flake. */
 export const PROPOSE_FLAKY_RUNS = 2;
 /** proposeRows: a test that failed on this many distinct branches follows the test, not the change. */
 export const PROPOSE_FAIL_BRANCHES = 3;
 export const ISSUE_TITLE = "Flaky tests (daily tally)";
-export const ISSUE_LABEL = "flaky";
+const ISSUE_LABEL = "flaky";
 export const ISSUE_MARKER = "<!-- flake-tally: rewritten daily by .github/workflows/flake-tally.yml -->";
 export const ARTIFACT_PREFIX = "playwright-artifacts-";
 /** --base-red (2026-10-16 CI jobs review): a spec red on UNRELATED diffs within a short window is the base's, not a branch's. */
-export const BASE_RED_HOURS = 3;
+const BASE_RED_HOURS = 3;
 /** A first-try failure on this many distinct branches in the window (the deploy branch counts as one). */
-export const BASE_RED_BRANCHES = 3;
+const BASE_RED_BRANCHES = 3;
 export const BASE_RED_TITLE = "Base red suspects (auto)";
-export const BASE_RED_LABEL = "base-red";
+const BASE_RED_LABEL = "base-red";
 export const BASE_RED_MARKER = "<!-- flake-tally base-red: rewritten every 2 h by .github/workflows/flake-tally.yml -->";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -498,7 +498,7 @@ export function setFlakeTallyTestHooks(hooks = {}) {
 /** Every job of a run, 30 per page. `jobs?per_page=100` answers HTTP 502 on large runs (38570932657, 38514313174;
  *  #2233) while per_page=30 with paging works. -> { jobs } or { error }. */
 export const JOBS_PAGE = 30;
-export const MAX_JOB_PAGES = 12;
+const MAX_JOB_PAGES = 12;
 export async function listRunJobs(runId, { token } = {}) {
   const jobs = [];
   for (let page = 1; page <= MAX_JOB_PAGES; page++) {
@@ -552,7 +552,7 @@ export async function githubApi(method, pathQs, { token, raw = false, absUrl = n
 }
 
 /** Last N completed scheduled workflow runs on the deploy branch. */
-export async function listScheduledRuns({ n = DEFAULT_RUNS, branch = DEPLOY_BRANCH, token } = {}) {
+async function listScheduledRuns({ n = DEFAULT_RUNS, branch = DEPLOY_BRANCH, token } = {}) {
   const qs = `actions/workflows/${WORKFLOW_FILE}/runs?branch=${encodeURIComponent(branch)}&event=schedule&per_page=${Math.min(100, Math.max(1, n))}`;
   const r = await githubApi("GET", qs, { token });
   if (r.error) return { error: r.error, code: r.code };
@@ -564,7 +564,7 @@ export async function listScheduledRuns({ n = DEFAULT_RUNS, branch = DEPLOY_BRAN
  * Playwright artifact names for one run — per-run list (not repo-wide),
  * filtered to `playwright-artifacts-*`.
  */
-export async function listRunPlaywrightArtifacts(runId, { token } = {}) {
+async function listRunPlaywrightArtifacts(runId, { token } = {}) {
   const r = await githubApi("GET", `actions/runs/${runId}/artifacts?per_page=100`, { token });
   if (r.error) return { error: r.error, code: r.code };
   const arts = (r.json?.artifacts || [])
@@ -573,14 +573,14 @@ export async function listRunPlaywrightArtifacts(runId, { token } = {}) {
 }
 
 /** Exact-name lookup, then keep only the artifact for this run id. */
-export async function lookupArtifactExactName(name, runId, { token } = {}) {
+async function lookupArtifactExactName(name, runId, { token } = {}) {
   const r = await githubApi("GET", artifactNamePath(name), { token });
   if (r.error) return { error: r.error, code: r.code };
   const hit = pickArtifactForRun(r.json?.artifacts || [], runId);
   return hit ? { artifact: hit } : { artifact: null };
 }
 
-export async function downloadArtifactZip(artifactId, destZip, { token } = {}) {
+async function downloadArtifactZip(artifactId, destZip, { token } = {}) {
   const auth = token || githubToken();
   if (!auth) return { error: NO_TOKEN_HINT };
   const url = `${API}/actions/artifacts/${artifactId}/zip`;
@@ -591,14 +591,14 @@ export async function downloadArtifactZip(artifactId, destZip, { token } = {}) {
   return { ok: true, bytes: r.buffer.length };
 }
 
-export async function fetchJobLogText(jobId, { token } = {}) {
+async function fetchJobLogText(jobId, { token } = {}) {
   const r = await githubApi("GET", `actions/jobs/${jobId}/logs`, { token, raw: true });
   if (r.error) return r;
   return { text: r.text || "" };
 }
 
 /** Extract report HTML + junit XML paths from an unzipped artifact dir. */
-export function collectArtifactSources(dir) {
+function collectArtifactSources(dir) {
   const htmls = [];
   const junits = [];
   const walk = (d) => {
@@ -633,7 +633,7 @@ function unzipSelect(zipPath, outDir) {
  * Collect flake/fail events for one run. Prefers report.json from artifacts;
  * falls back to job logs when no report yields events.
  */
-export async function collectRunEvents(run, {
+async function collectRunEvents(run, {
   token,
   workDir,
   maxArtifactBytes = 80 * 1024 * 1024,
@@ -760,7 +760,7 @@ function parseArgs(argv) {
   };
 }
 
-export async function runFlakeTally(argv = process.argv.slice(2), { token } = {}) {
+async function runFlakeTally(argv = process.argv.slice(2), { token } = {}) {
   const args = parseArgs(argv);
   if (args.help) return { code: 0, text: USAGE };
   const auth = token !== undefined ? token : githubToken();

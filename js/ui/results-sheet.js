@@ -617,6 +617,30 @@ function buildTTResults() {
       }, () => { btn.textContent = text; });
     };
     els.resultsTable.appendChild(btn);
+    if (typeof G.daily.shareCard === "function") {
+      const cardBtn = document.createElement("button");
+      cardBtn.type = "button";
+      cardBtn.className = "sel-chip";
+      cardBtn.id = "res-card-share";
+      cardBtn.textContent = "SHARE CARD";
+      cardBtn.onclick = async () => {
+        if (cardBtn.disabled) return;
+        cardBtn.disabled = true;
+        const label = cardBtn.textContent;
+        cardBtn.textContent = "DRAWING…";
+        try {
+          const outcome = await G.daily.shareCard();
+          cardBtn.textContent = outcome === "shared" ? "SHARED"
+            : outcome === "cancelled" ? label
+            : outcome === "downloaded" ? "DOWNLOADED" : label;
+        } catch (_) {
+          cardBtn.textContent = "UNAVAILABLE";
+        } finally {
+          cardBtn.disabled = false;
+        }
+      };
+      els.resultsTable.appendChild(cardBtn);
+    }
     if (typeof ShareCode !== "undefined" && ShareCode.encode) {
       const codeBtn = document.createElement("button");
       codeBtn.type = "button";

@@ -314,7 +314,7 @@ test("createTexMesh uses Uint16 indices at or under 65535 verts and Uint32 above
   assert.equal(mesh(3).geo.index.array[2], 2);
 });
 
-test("pruneGeoRegistry's cold walk does not allocate an iterator result per geometry", () => {
+test("pruneGeoRegistry's cold walk visits each geometry without requesting an iterator", () => {
   const m = TLX.match(/function pruneGeoRegistry\(now\) \{/);
   assert.ok(m, "pruneGeoRegistry moved");
   let depth = 1, i = m.index + m[0].length;
@@ -324,12 +324,65 @@ test("pruneGeoRegistry's cold walk does not allocate an iterator result per geom
   }
   const body = TLX.slice(m.index + m[0].length, i - 1);
   const _geoReg = [];
-  for (let n = 0; n < 4000; n++) _geoReg.push(new WeakRef({ n }));
+  let visited = 0;
+  for (let n = 0; n < 4000; n++) _geoReg.push({ deref() { visited++; return this; } });
+  // A whole-process heap delta also counts unrelated V8 compilation/GC work.
+  // Trap the actual regression (for-of's iterator protocol) deterministically,
+  // and count dereferences so a no-op prune cannot satisfy the guard.
+  _geoReg[Symbol.iterator] = () => { throw new Error("cold prune requested an iterator"); };
   let _geoPruneAt = -Infinity;
   const prune = eval("(function(now){" + body + "})");
-  const before = process.memoryUsage().heapUsed;
   prune(0);
-  const delta = process.memoryUsage().heapUsed - before;
   assert.equal(_geoReg.length, 4000, "live refs stay");
-  assert.ok(delta < 40000, `cold prune allocated ${delta} bytes (for-of result objects)`);
+  assert.equal(visited, 4000, "every registered geometry is visited");
 });
+
+// Batched decal runs own a render object and instance buffer separately from
+// their source geometry. Exercise the actual backend functions and vendored
+// Three classes: disposing geometry alone cannot release that second owner.
+function tlxFunction(name) {
+  const start = TLX.indexOf('      function ' + name + '(');
+  assert.ok(start >= 0, name + ' exists');
+  const next = TLX.indexOf('\n      function ', start + 1);
+  return TLX.slice(start, next);
+}
+function decalRunHarness() {
+  const start = TLX.indexOf('      const _decalRuns = new Map();');
+  const end = TLX.indexOf('      // R1 (perf hunt 3)', start);
+  const dropStart = TLX.indexOf('      const _dropQueue = [];');
+  const dropEnd = TLX.indexOf('      // (geometry, material, OCCURRENCE)', dropStart);
+  return new Function('THREE', `
+    const scene = new THREE.Scene(), _instRegistry = [], meshPool = [], meshByGeo = new Map();
+    const shadowSys = null, BLOB_CAP = 8, window = {}, renderer = {};
+    let _warmPending = false;
+    const skipBatches = () => false, _coDrop = () => {};
+    const drawList = []; drawList.n = 0;
+    const setRange0 = () => {}, pushRec = () => { drawList.n++; };
+    ${tlxFunction('disposeInstancedObject')}
+    ${TLX.slice(start, end)}
+    ${TLX.slice(dropStart, dropEnd)}
+    return { append: _decalAppend, free: disposeGeometry, scene, registry: _instRegistry,
+      size: () => _decalRuns.size, warm: on => { _warmPending = on; }, flush: flushDropped };
+  `)(CORE);
+}
+for (const warming of [false, true]) {
+  test(`freed batched decal geometries leave no runs or instance buffers, warming=${warming}`, () => {
+    const h = decalRunHarness(), mat = new CORE.MeshBasicMaterial(), matrix = new CORE.Matrix4().elements;
+    let disposed = 0;
+    const meshes = [];
+    for (let i = 0; i < 40; i++) {
+      const geo = new CORE.BufferGeometry();
+      assert.equal(h.append(geo, matrix, mat), true);
+      const mesh = h.registry.at(-1); meshes.push(mesh);
+      mesh.addEventListener('dispose', () => disposed++);
+      h.warm(warming); h.free(geo);
+      if (warming) assert.equal(mesh.geometry, geo, 'compile keeps its inputs until settled');
+      h.warm(false); h.flush();
+    }
+    assert.equal(h.size(), 0, '40 freed source geometries must leave no strong geometry -> run entries');
+    assert.equal(h.registry.length, 0, 'hidden runs must leave the per-frame registry');
+    assert.equal(h.scene.children.length, 0);
+    for (const mesh of meshes) { assert.equal(mesh.geometry, null); assert.equal(mesh.material, null); }
+    assert.equal(disposed, 40, 'each instance buffer/render object released once');
+  });
+}
