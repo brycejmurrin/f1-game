@@ -43,6 +43,23 @@ const F1API = (function () {
     return (Array.isArray(lists) && lists[0]) || null;
   }
 
+  function scheduleSessions(r) {
+    const out = {};
+    const fields = [
+      ["fp1", "FirstPractice"], ["fp2", "SecondPractice"], ["fp3", "ThirdPractice"],
+      ["sq", r && r.SprintQualifying ? "SprintQualifying" : "SprintShootout"],
+      ["s", "Sprint"], ["q", "Qualifying"]
+    ];
+    for (const pair of fields) {
+      const raw = r && r[pair[1]];
+      const date = str(raw && raw.date), time = str(raw && raw.time);
+      if (date && time) out[pair[0]] = { date, time };
+    }
+    const raceDate = str(r && r.date), raceTime = str(r && r.time);
+    if (raceDate && raceTime) out.r = { date: raceDate, time: raceTime };
+    return out;
+  }
+
   function schedule() {
     return request(JOLPICA + "/" + season() + ".json", TTL_SCHEDULE).then(function (json) {
       return jRaces(json).map(function (r) {
@@ -56,7 +73,8 @@ const F1API = (function () {
           country: str(loc.country),
           date: str(r && r.date),
           time: str(r && r.time),
-          hasSprint: !!(r && (r.Sprint || r.SprintQualifying || r.SprintShootout))
+          hasSprint: !!(r && (r.Sprint || r.SprintQualifying || r.SprintShootout)),
+          sessions: scheduleSessions(r)
         };
       });
     });
