@@ -27,10 +27,14 @@ const SCHEDULE = {
     { round: "16", raceName: "Italian Grand Prix",        Circuit: { circuitName: "Autodromo Nazionale Monza",      Location: { locality: "Monza",          country: "Italy" } },        date: "2026-09-13", time: "13:00:00Z" },
     { round: "17", raceName: "Azerbaijan Grand Prix",     Circuit: { circuitName: "Baku City Circuit",              Location: { locality: "Baku",           country: "Azerbaijan" } },   date: "2026-09-27", time: "11:00:00Z" },
     { round: "18", raceName: "Singapore Grand Prix",      Circuit: { circuitName: "Marina Bay Street Circuit",      Location: { locality: "Singapore",      country: "Singapore" } },    date: "2026-10-11", time: "12:00:00Z" },
-    { round: "19", raceName: "United States Grand Prix",  Circuit: { circuitName: "Circuit of the Americas",        Location: { locality: "Austin",         country: "USA" } },          date: "2026-10-25", time: "19:00:00Z", Sprint: {} },
+    { round: "19", raceName: "United States Grand Prix",  Circuit: { circuitName: "Circuit of the Americas",        Location: { locality: "Austin",         country: "USA" } },          date: "2026-10-25", time: "19:00:00Z",
+      FirstPractice: { date: "2026-10-23", time: "17:30:00Z" }, SprintQualifying: { date: "2026-10-23", time: "21:30:00Z" },
+      Sprint: { date: "2026-10-24", time: "18:00:00Z" }, Qualifying: { date: "2026-10-24", time: "22:00:00Z" } },
     { round: "20", raceName: "Mexico City Grand Prix",    Circuit: { circuitName: "Autodromo Hermanos Rodriguez",   Location: { locality: "Mexico City",    country: "Mexico" } },       date: "2026-11-01", time: "20:00:00Z" },
     { round: "21", raceName: "São Paulo Grand Prix",      Circuit: { circuitName: "Autodromo Jose Carlos Pace",     Location: { locality: "São Paulo",      country: "Brazil" } },       date: "2026-11-15", time: "16:00:00Z", Sprint: {} },
-    { round: "22", raceName: "Las Vegas Grand Prix",      Circuit: { circuitName: "Las Vegas Strip Circuit",        Location: { locality: "Las Vegas",      country: "USA" } },          date: "2026-11-22", time: "06:00:00Z" },
+    { round: "22", raceName: "Las Vegas Grand Prix",      Circuit: { circuitName: "Las Vegas Strip Circuit",        Location: { locality: "Las Vegas",      country: "USA" } },          date: "2026-11-22", time: "06:00:00Z",
+      FirstPractice: { date: "2026-11-20", time: "00:30:00Z" }, SecondPractice: { date: "2026-11-20", time: "04:00:00Z" },
+      ThirdPractice: { date: "2026-11-21", time: "00:30:00Z" }, Qualifying: { date: "2026-11-21", time: "04:00:00Z" } },
     { round: "23", raceName: "Qatar Grand Prix",          Circuit: { circuitName: "Lusail International Circuit",   Location: { locality: "Lusail",         country: "Qatar" } },        date: "2026-11-29", time: "14:00:00Z", SprintQualifying: {} },
     { round: "24", raceName: "Abu Dhabi Grand Prix",      Circuit: { circuitName: "Yas Marina Circuit",             Location: { locality: "Abu Dhabi",      country: "UAE" } },          date: "2026-12-06", time: "13:00:00Z" }
   ]}}
