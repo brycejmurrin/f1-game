@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Thirty-three `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Thirty-nine `apex_*` tools (33 wraps + `apex_help {tool}`, the full text `tools/list` shortens, plus five bounded UI/diagnostics tools) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -258,7 +258,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Thirty-eight tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Thirty-nine tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -293,7 +293,8 @@ and viewports) in one read, sourced from the tools' own schemas so it cannot dri
 31 → 32 on 2026-10-16 for `apex_profile`, the same job as a direct browser-kind tool (`profile` joined the settings matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`); it returns a jobId and holds the browser lock until the job exits.
 32 → 33 on 2026-10-16 for `apex_locations`: authored turn and sector targets
 on all 52 circuits, plus curated named scenery with source-located fractions.
-33 → 38 on 2026-10-18 for `apex_ui_inspect` (bounded semantic/CSS inspection),
+33 → 34 on 2026-10-18 for `apex_help`; `tools/list` now publishes a compact form (71.5 → ~51 KB).
+34 → 39 on 2026-10-18 for `apex_ui_inspect` (bounded semantic/CSS inspection),
 `apex_ui_diff` (saved inspection comparison), `apex_ui_mission_plan` (named replay
 scenario preparation), `apex_garage_plan` (browser-free camera/design matrix) and
 `apex_diagnostics` (capabilities, background memory/GPU/renderer/VM probes, and
@@ -305,6 +306,7 @@ and report comparison do not launch Chromium.
 |---|---|---|---|
 | `apex_status` | built-in | tree | check-changes |
 | `apex_catalog` | built-in | tree | check-changes |
+| `apex_help` | built-in | tree | check-changes |
 | `apex_diagnostics` | `perf/diagnostics.mjs` | tree | renderer-debug |
 | `apex_garage_plan` | `shot/garage-angles.mjs` | tree | garage-parts-livery |
 | `apex_ui_mission_plan` | `ui/explorer.mjs` | tree | survey-ui-matrix |

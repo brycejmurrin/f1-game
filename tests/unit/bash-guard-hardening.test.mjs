@@ -984,6 +984,37 @@ test("H4: a push over a red tooling-fast run is refused; && chains, green logs a
   } finally { repo.rm(); }
 });
 
+// H1 (#2662): harness Stop hook — memory dir excluded from porcelain; push-hold silences unpushed nag.
+test("H1: stop-hook-git-check.sample treats synced memory and a held push as clean (Bryce applies the same to ~/.claude)", () => {
+  const sample = path.join(ROOT, "tests/fixtures/stop-hook-git-check.sample.sh");
+  const repo = scratchRepo("hook-stophook-");
+  const run = (env = {}) => spawnSync("bash", [sample], {
+    cwd: repo.dir, encoding: "utf8",
+    env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, STOP_HOOK_UPSTREAM: "origin/main", ...env },
+  });
+  try {
+    fs.mkdirSync(path.join(repo.dir, ".claude/memory"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, ".claude/memory/a.md"), "mem\n");
+    repo.g("add", "-A"); repo.g("commit", "-qm", "init");
+    repo.g("branch", "-M", "main");
+    fs.writeFileSync(path.join(repo.dir, ".claude/memory/a.md"), "mem dirty\n");
+    assert.equal(run().status, 0, "only .claude/memory dirty must not nag");
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "other\n");
+    assert.equal(run().status, 2, "dirty prose outside memory still nags");
+    repo.g("checkout", "-q", "main");
+    repo.g("reset", "-q", "--hard");
+    const base = repo.g("rev-parse", "HEAD").stdout.trim();
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "ahead note\n");
+    repo.g("add", "docs/PHYSICS.md"); repo.g("commit", "-qm", "ahead");
+    repo.g("config", "remote.origin.url", repo.dir);
+    repo.g("config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*");
+    repo.g("update-ref", "refs/remotes/origin/main", base);
+    assert.equal(run().status, 2, `unpushed commits nag without push-hold (${run().stderr})`);
+    fs.writeFileSync(path.join(repo.dir, ".claude/push-hold"), "live CI on pushed tip\n");
+    assert.equal(run().status, 0, "push-hold clears the unpushed nag while CI is live");
+  } finally { repo.rm(); }
+});
+
 test("H5: a loaded box gets the longer guard cap, above it sits the hook timeout; H2 unmark runs before git verbs", () => {
   const src = fs.readFileSync(HOOK, "utf8");
   assert.match(src, /\/proc\/loadavg[^\n]*GUARD_T=300/);
