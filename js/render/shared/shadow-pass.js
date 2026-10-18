@@ -158,6 +158,7 @@ const ShadowPass = (function () {
         if (allow && tierOk && geo && G.gfx.createChunkedMesh) {
           geo._keepPositions = true;
           G.track.meshes[key] = G.gfx.createChunkedMesh(geo, 72);
+          if (typeof Tracks !== "undefined" && Tracks.dropRibbonCpuIfReady) Tracks.dropRibbonCpuIfReady(G.track);
         }
       }
       const ch = G.track.meshes[key];

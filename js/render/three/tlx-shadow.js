@@ -380,7 +380,8 @@
       try { m.geometry.dispose(); } catch (_) { /* the clone releases its own instanceMatrix */ }
     }
     const iCast = [];             // this pass's casts, hidden again at the next Begin
-    const sharedInstCap = (n) => uboInstCap(renderer, n);
+    // M-12: phones skip only the shadow caster UBO pad (lit batches keep it).
+    const sharedInstCap = (n) => (!casterAttr && isMobile) ? (n | 0) : uboInstCap(renderer, n);
     // Scratch for setMatrixAt — never allocate per cast (was per-instance GC).
     const _castMat = new THREE.Matrix4();
     function castInstanced(batch, count) {

@@ -2656,6 +2656,7 @@
         "tests/unit/legends.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
+        "tests/unit/tlx-car-shadow-cpu.test.mjs",
         "tests/unit/vertex-pack.test.mjs"
       ]
     },
@@ -12700,7 +12701,8 @@
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "*": [
-        "tests/unit/frame-hitch-analyse.test.mjs"
+        "tests/unit/frame-hitch-analyse.test.mjs",
+        "tests/unit/tlx-car-shadow-cpu.test.mjs"
       ]
     },
     "js/render/three/tlx.js": {
@@ -13041,7 +13043,8 @@
         "tests/unit/frame-hitch-analyse.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
-        "tests/unit/perf-governor.test.mjs"
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/tlx-car-shadow-cpu.test.mjs"
       ]
     },
     "js/render/three/tsl-chunks.js": {
