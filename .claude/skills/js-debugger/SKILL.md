@@ -12,8 +12,7 @@ are the reference; `docs/AGENT-SURFACE.md` maps the surrounding agent tools.
 
 ## Own one local page
 
-Read `AGENTS.md` and check active validation before browser work. The parent
-owns one browser group; no browser starts beside an active gate or suite.
+The parent owns one browser group (`debug-chrome start` refuses beside a test run).
 Reuse the parent's authorized local Chrome page and dedicated debug profile.
 The debugger attaches; it never launches a browser. Browser setup and canvas
 inspection belong to `mcp-probe`.
@@ -24,6 +23,7 @@ same tools through the shell wrapper. First run:
 ```sh
 bash tools/mcp/js-debugger-mcp.sh status
 bash tools/mcp/js-debugger-mcp.sh list-tools
+bash tools/mcp/js-debugger-mcp.sh call debugger_targets '{"endpoint":"http://127.0.0.1:9222"}'
 ```
 
 A missing daemon needs one explicitly owned `serve-http` process. Keep it
@@ -42,26 +42,18 @@ node tools/mcp/debug-chrome.mjs status    # endpoint + targets;  stop: kills onl
 
 Not an MCP tool: the debugger still never launches Chrome.
 
-## Without pausing (hot loops, leaks)
+## Without pausing, long runs, workers
 
-`debugger_logpoint` (value per hit into a bounded ring, read with `debugger_logpoint_read`),
-`debugger_exception_log` (start/read/clear/stop), `debugger_listeners` and
-`debugger_instances` (counts across restarts). `debugger_run` is always mutating (no
-`allowSideEffects`; only `debugger_evaluate` has it) and a new run abandons a hung one.
-`debugger_scripts` hides anonymous scripts and reports `total`/`truncated`.
-
-Long runs: chunk long loops (a `race()` loop or minutes of `headless(false)` blocks the page;
-`debugger_state` then shows `pageUnresponsive`; `debugger_control cancel` ends the script, then reload).
-A `timeoutMs` deadline leaves the op `timedOut` but tracked; page JS is not cancelled and its late
-result still lands. `debugger_targets targetType:"service_worker"|"worker"` reaches `sw.js` and workers.
-`debug-chrome start --device phone-landscape|desktop` guarantees the viewport (see `status`).
+Logpoints, exception logs, listener/instance counts, `debugger_run` side effects,
+`timeoutMs`, `pageUnresponsive`, `sw.js`/worker targets and `--device` →
+[references/tools.md](references/tools.md).
 
 ## Reproduce → pause → inspect → resume
 
 1. Call `debugger_targets` with the real CDP `endpoint`; attach its exact
    `targetId` using `debugger_attach`. On a game page establish identity with
    `__apex.info()` and call `__apex.agentHelp()` once per page session.
-2. Narrow `debugger_scripts` by file name, then use `debugger_source` (it needs
+2. Find the function first (`Grep` `js/` for its symbol), then narrow `debugger_scripts` by that file name, then use `debugger_source` (it needs
    that row's `scriptId`, not a URL) to find the statement. Preserve the returned URL including its query suffix.
    Source lines/columns are one-based; frame indices are zero-based.
 3. Set `debugger_breakpoint` at that URL/line, optionally with a condition

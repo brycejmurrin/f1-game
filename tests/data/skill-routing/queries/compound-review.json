@@ -1,22 +1,22 @@
 [
   {
-    "query": "/compound-review inspect the current tool change.",
+    "query": "/compound-review my staged change to tools/ci/sync-pr.mjs: report findings only, no fixes.",
     "expect": "compound-review"
   },
   {
-    "query": "Use compound-review on this scoped change.",
+    "query": "/compound-review the diff on this branch against the deploy branch; rank findings by impact with file and line.",
     "expect": "compound-review"
   },
   {
-    "query": "I explicitly want the compound-review workflow for this task.",
+    "query": "Run compound-review on the tyre-wear refactor and tell me whether it is ready, with the checks you actually ran.",
     "expect": "compound-review"
   },
   {
-    "query": "Please invoke compound-review and report the evidence.",
+    "query": "I explicitly want the compound-review workflow on PR #2864: correctness and regressions first, speculative concerns kept separate.",
     "expect": "compound-review"
   },
   {
-    "query": "Apply the compound-review supporting workflow while respecting project gates.",
+    "query": "/compound-review the career save migration and fix only the findings you can prove.",
     "expect": "compound-review"
   },
   {
