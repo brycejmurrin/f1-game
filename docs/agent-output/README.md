@@ -52,6 +52,11 @@ An old running receipt never establishes completion or success. Existing native
 phase logs remain in the retained streams. The quiet skill-smoke runner also
 supports native `--progress` JSONL on stderr with recipe counts and elapsed time.
 
+Native `deploy.mjs --json` also retains complete child stdout in private log
+artifacts and announces each path on stderr before execution. Child stderr stays
+live; a failed child produces a final JSON error with its stdout artifact, so a
+quiet gate still leaves evidence for diagnosis.
+
 Compact terminal logs include a bounded actionable failure block even when the
 cause occurs in the middle, plus reported test counts and artifact/verdict
 receipts where available. Diagnostic adds surrounding context. Test counts

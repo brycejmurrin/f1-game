@@ -66,6 +66,7 @@ import { fileURLToPath } from "node:url";
 import { GEOMETRY_PATHS, targetedSuites } from "./geometry-paths.mjs";
 import { githubToken } from "./github-token.mjs";
 import { resolveGenBlocks, mergePackageJson } from "../lib/conflict-cure.mjs";
+import { saveOutputArtifact } from "../lib/agent-output.mjs";
 import { DEFAULT_LOG, stamp, readStatus, waitStatus } from "../lib/deploy-status.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -84,10 +85,28 @@ function must(r, what) {
   if (r.code !== 0) throw new Error(`${what} failed: ${r.err || r.out}`);
   return r.out;
 }
-function run(cmd, args, what) {
+// Node supports parent file descriptors as child stdio: no maxBuffer or
+// in-memory capture. https://nodejs.org/api/child_process.html#optionsstdio
+export function spawnDeployChild(cmd, args, { cwd = ROOT, env = process.env, json = JSON_OUT, root = ROOT, announce = log } = {}) {
+  if (!json) return spawnSync(cmd, args, { cwd, env, stdio: "inherit" });
+  const artifact = saveOutputArtifact("", { root, tool: "deploy-child", kind: "log" });
+  const fd = fs.openSync(path.resolve(root, artifact.path), fs.constants.O_WRONLY | fs.constants.O_NOFOLLOW);
+  try {
+    announce(`child stdout: ${artifact.path} (complete log; stderr remains live)`);
+    const result = spawnSync(cmd, args, { cwd, env, stdio: ["ignore", fd, "inherit"] });
+    return { ...result, stdoutArtifact: { ...artifact, bytes: fs.fstatSync(fd).size } };
+  } finally { fs.closeSync(fd); }
+}
+function childFailure(result, message) {
+  const detail = result.error?.message || (result.signal ? `signal ${result.signal}` : `exit ${result.status}`);
+  const error = new Error(`${message} (${detail})${result.stdoutArtifact ? ` — complete stdout: ${result.stdoutArtifact.path}` : ""}`);
+  if (result.stdoutArtifact) error.stdoutArtifact = result.stdoutArtifact;
+  return error;
+}
+export function run(cmd, args, what, options) {
   log(`${what}: ${cmd} ${args.join(" ")}`);
-  const r = spawnSync(cmd, args, { cwd: ROOT, stdio: JSON_OUT ? ["ignore", "ignore", "inherit"] : "inherit" });
-  if (r.status !== 0) throw new Error(`${what} failed (exit ${r.status})`);
+  const r = spawnDeployChild(cmd, args, options);
+  if (r.status !== 0) throw childFailure(r, `${what} failed`);
 }
 
 export function preflight() {
@@ -422,11 +441,10 @@ export function installIfLockMoved(before) {
   const changed = git(["diff", "--name-only", `${before}..HEAD`, "--", "package-lock.json", "package.json"]).out.trim();
   if (!changed) return false;
   log("the union changed package-lock.json — npm install before the gate measures it");
-  const r = spawnSync("npm", ["install", "--no-audit", "--no-fund"], {
-    cwd: ROOT, stdio: JSON_OUT ? ["ignore", "ignore", "inherit"] : "inherit",
+  const r = spawnDeployChild("npm", ["install", "--no-audit", "--no-fund"], {
     env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1" },
   });
-  if (r.status !== 0) throw new Error(`npm install failed (exit ${r.status}) — the union needs a package this box could not install`);
+  if (r.status !== 0) throw childFailure(r, "npm install failed — the union needs a package this box could not install");
   return true;
 }
 
@@ -443,8 +461,8 @@ export function installIfLockMoved(before) {
    a real clean-but-stale merge. */
 export const REGEN_MESSAGE = "merge: regenerate derived files on the union (npm run gen)";
 export function regenerateDerived(cwd = ROOT) {
-  const r = spawnSync("npm", ["run", "gen"], { cwd, stdio: JSON_OUT ? ["ignore", "ignore", "inherit"] : "inherit" });
-  if (r.status !== 0) throw new Error(`npm run gen failed on the merged tree (exit ${r.status}) — a generator's source did not merge into something it can read`);
+  const r = spawnDeployChild("npm", ["run", "gen"], { cwd });
+  if (r.status !== 0) throw childFailure(r, "npm run gen failed on the merged tree — a generator's source did not merge into something it can read");
   const dirty = git(["status", "--porcelain"], { cwd }).out;
   if (!dirty) return null;
   must(git(["add", "-A"], { cwd }), "add regenerated files");
@@ -990,7 +1008,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (marks) stamp(logFile, `start pid=${process.pid} mode=${argv.filter((a) => a.startsWith("--")).join(",") || "default"}`);
   let code = 1;
   try { code = main(); }
-  catch (e) { log("ERROR " + (e && e.message ? e.message : e)); }
+  catch (e) {
+    log("ERROR " + (e && e.message ? e.message : e));
+    if (JSON_OUT) console.log(JSON.stringify({ status: "failed", error: e.message || String(e), stdoutArtifact: e.stdoutArtifact || null }));
+  }
   if (marks) stamp(logFile, `done exit=${code}`);
   process.exit(code);
 }

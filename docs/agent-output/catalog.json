@@ -1915,7 +1915,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 63666,
+      "sourceBytes": 64909,
       "outputPolicy": "job-status",
       "outputContract": "Running versus terminal; gate-only/plan/PR receipts; exact SHA; child exits",
       "doc": "The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`.",
