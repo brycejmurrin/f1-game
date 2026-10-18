@@ -47,5 +47,5 @@ replay identically, so feedback may *read* physics state but never write it.
 
 - Channel table, the kerb-vs-kickup trap, the existing `hitStop` caveat and
   common mistakes → [references/workflow.md](references/workflow.md).
-- Generic trauma-shake math and easing (inspiration only; Godot/Unity snippets) →
+- Trauma-shake math, easing curves and the rest of the feedback menu →
   [references/feedback-recipes.md](references/feedback-recipes.md).
