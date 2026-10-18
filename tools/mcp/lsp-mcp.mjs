@@ -571,6 +571,9 @@ export class Lsp {
   // Every code (non-comment, non-string) occurrence of `A.b` / `A`, after the declaration
   // row; for `A.b`, also each file's `const { b } = A` / `const X = A` binding and the
   // uses of the local name that binding introduces (the checker sees none of them).
+  // Whole-head aliases also accept the guarded forms agents write for window globals:
+  // `typeof H !== "undefined" ? H : {}`, `(typeof H !== "undefined" && H) || {}`,
+  // and `H || {}` / `window.H || {}` (e.g. `const PC = …` then `PC.VMAX`).
   textRefs(parts, def) {
     const name = parts.at(-1), head = parts.slice(0, -1).join("."), esc = x => x.replace(/[$.]/g, "\\$&");
     const refs = [def], seen = new Set([`${def.uri}:${def.range.start.line}:${def.range.start.character}`]);
@@ -584,7 +587,16 @@ export class Lsp {
       }
     };
     const destr = new RegExp(`\\b(?:const|let|var)\\s*\\{([^}]*)\\}\\s*=\\s*(?:window\\.)?${esc(head)}\\b(?![\\w$.])`, "g");
-    const whole = new RegExp(`\\b(?:const|let|var)\\s+([\\w$]+)\\s*=\\s*(?:window\\.)?${esc(head)}\\s*[;,\\n]`, "g");
+    // Bare `H` / `window.H`, plus guarded aliases (optional parens around typeof):
+    // ternary, `(typeof H !== "undefined" && H) || {}`, and `H || {}`.
+    const headAtom = `(?:window\\.)?${esc(head)}(?![\\w$.])`;
+    const typeofH = `(?:\\(\\s*)?typeof\\s+${esc(head)}\\s*!==\\s*["']undefined["']\\s*(?:\\)\\s*)?`;
+    const wholeRhs = `(?:` +
+      `\\(\\s*typeof\\s+${esc(head)}\\s*!==\\s*["']undefined["']\\s*&&\\s*${esc(head)}\\s*\\)\\s*\\|\\|\\s*\\{\\s*\\}` +
+      `|${typeofH}\\?\\s*${esc(head)}(?![\\w$.])\\s*:\\s*(?:\\{\\s*\\}|null)` +
+      `|${headAtom}(?:\\s*\\|\\|\\s*\\{\\s*\\})?` +
+      `)`;
+    const whole = new RegExp(`\\b(?:const|let|var)\\s+([\\w$]+)\\s*=\\s*${wholeRhs}\\s*[;,\\n]`, "g");
     // Literal-first pattern (a leading lookbehind made V8 test every offset); the
     // boundary before the match is checked by hand: start of a name, or `window.`.
     const direct = new RegExp(`${parts.map(esc).join("\\??\\.")}(?![\\w$])`, "g");

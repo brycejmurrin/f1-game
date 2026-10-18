@@ -1,6 +1,6 @@
 ---
 name: race-weekend
-description: "Use when tyre wear/compounds (tyre-model.js), pit stops or the pit lane (pit-lane.js), the STRATEGY/tyre HUD, quali or results sheets, start lights, flying start, the weather arc or sporting regs (two-compound rule, SC passes) change. Handling → tune-physics; flags/SC → race-incidents-control; calendar → season-mode."
+description: "Use when tyre wear/compounds (tyre-model.js), pit stops/lane (pit-lane.js), the STRATEGY/tyre HUD, quali or results sheets, start lights, flying start, the weather arc or sporting regs (two-compound rule, SC passes) change. Handling → tune-physics; flags/SC → race-incidents-control; calendar → season-mode."
 ---
 
 # Race weekend — tyres, pits, quali, start, weather, regs
@@ -24,23 +24,18 @@ The rules modules that turn a lap into a weekend. Each is one
 
 Design evidence: `docs/research/TYRE-STRATEGY-DESIGN.md`, `docs/research/PIT-*.md`.
 
-## Where things live (race rules ↔ `js/game.js`)
+## Where things live (weekend rules ↔ `js/game.js`)
 
-Weekend **rules modules** stay out of `game.js`; the entry file **wires and classifies**:
+Rules modules stay out of `game.js`; the entry file **wires** them. Open these symbols first:
 
 - `ensureRaceSession()` (`lazyBundles`) loads pit/radio/reliability before grid setup;
-  `onRaceSessionReady` recreates `pits = PitLane.create(G)` and hooks race session deps.
-- `raceCtl = RaceControl.create(G)` — per-tick `updateCaution` / `applyCaution`; `cautionInfo()`
-  merges `SportingRegs.createPassWatch` (SC pass-back) for the HUD flag chip.
-- `scWatch` / `scPassCall`, `blueWatch` / `blueFlagCall` — sporting-reg penalties surfaced via `announce()`.
-- `realRace.update(dt)` — scripted race / WATCH transport; `realRace.owns(c)` gates player `raceT` and recover.
-- Finish pipeline (~`classify` helpers): `SportingRegs.applyCompoundRule`, `RaceControl.finishOrder`,
-  `RaceControl.classify`, `RaceControl.finishDelay` + `postFinish` solo wait; `holdCaution` for scripted flags.
+  `onRaceSessionReady` recreates `pits = PitLane.create(G)`. `pits.think` and the human pit UI
+  read the same `PitLane` state the AI `planFor` uses.
 - `wxArc` / `trackWetness()` / `gripMult(c)` — weather arc vs `TyreModel` wetness for grip and pits.
-- `pits.think` / human pit UI read the same `PitLane` state the AI `planFor` uses.
+- `gridFromQuali()` / `openQuali()` — whether a race grids from quali; the finish applies
+  `SportingRegs.applyCompoundRule`.
 
-Domain edits: the `js/race/*` and `js/physics/tyre-model.js` files above; flags/debris/episode
-owners → **race-incidents-control**. Do not grep `game.js` blindly — open these symbols first.
+Flags, SC/blue-flag calls, `raceCtl`, finish order/delay, scripted holds → **race-incidents-control**.
 
 ## Hooks (live page)
 
@@ -67,7 +62,9 @@ Prefer one spec over its group (`npm test -- tests/specs/pit-lane.spec.js`).
 ## Pitfalls
 
 - Tyre life is a fraction of the SCHEDULED distance, not laps: a 3-lap race is
-  tyre-free by design. Compare speeds through `vTop()`/`vStd()` (PACE scales).
+  tyre-free by design. Per-compound life comes from `lifeOf()` / `deriveLife()`
+  (`LIFE_MID`/`LIFE_K`/`LIFE_MIN`/`LIFE_MAX` in `tyre-model.js`, a row's own
+  `life` in `js/car/parts.js` wins). Speed comparisons: AGENTS.md §Physics.
 - The two-compound test is `PitLane.twoCompoundRule`, shared with the AI
   planner; a spec that ends with `finishRace()` meets it via `tyres({fit})`.
 - Quali/results sheets never compute order; a wrong classification is the
