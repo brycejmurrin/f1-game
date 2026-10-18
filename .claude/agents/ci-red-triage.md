@@ -14,6 +14,12 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
 
 ## The job
 
+0. No run, id or SHA given? Pick one and say which: the newest
+   `failure` run of `pages.yml`, then `ci.yml`, on the deploy branch
+   (`curl -sS "https://api.github.com/repos/brycejmurrin/f1-game/actions/workflows/pages.yml/runs?branch=claude/f1-game-project-26h3ng&status=failure&per_page=1"`,
+   same for `ci.yml`); if neither tip run is red, the newest red `ci.yml` run
+   on an open PR head (`…/actions/runs?event=pull_request&status=failure&per_page=5`).
+   Triage that one run; list the others you saw as `not triaged:`.
 1. Identify the run. The parent gives a run URL, a run id, or a SHA. With a
    SHA, list the runs on that `head_sha` and take the newest run
    per workflow INCLUDING cancelled. Inspect failed/cancelled jobs and elapsed
@@ -35,7 +41,10 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
    otherwise (tools absent) the fallback is `curl` + `jq` on the public API, never python3: `curl -sS https://api.github.com/repos/brycejmurrin/f1-game/actions/runs/<id>/jobs`
    and the job log URLs it returns. Grep the log for `Expected`, `Received`,
    `x FAIL`, `Timeout`, `timed out`, `not ok`, `= run `. `node tools/ci/junit-failed.mjs`
-   reads a downloaded junit artifact.
+   reads a downloaded junit artifact. A Pages run's job list is large
+   (~136 KB from `list_workflow_jobs`: the nested `ci / …` legs): never dump it
+   whole; filter it, e.g. `curl -sS "…/actions/runs/<id>/jobs?per_page=100"`
+   piped to `jq -c '.jobs[] | select(.conclusion=="failure" or .conclusion=="cancelled") | {id,name,conclusion,started_at,completed_at}'`.
 4. Name the lane: `Selected specs` (which shard), sweeps, pure-node, smoke,
    the nested Pages `ci / …`, or the gpu-census Verdict step. The wrapper job
    name is not the answer; the test title and the assertion are.
@@ -59,7 +68,10 @@ base: already-red-on-base | new-on-this-push | unknown  (base run <url>)
 next: <one action: fix X / port fix from <sha> / one re-run because <reason> / epsilon>
 ```
 
-Then bullets with the log lines you relied on (job, log line numbers REQUIRED; if a WebFetch extract has none, write `(no line numbers: WebFetch extract)`). Anything
+Then bullets with the log lines you relied on (job plus a locator REQUIRED: the
+log's line number, or its ISO timestamp prefix — Actions job logs carry
+timestamps, not line numbers, and either is accepted; if a WebFetch extract has
+neither, write `(no locator: WebFetch extract)`). Anything
 you could not read (a purged log, a missing artifact) is named as unread, not
 guessed. A "flake" verdict needs the cause named (load, a race in the spec, a
 service the diff does not touch); "it passed before" is not a cause.
