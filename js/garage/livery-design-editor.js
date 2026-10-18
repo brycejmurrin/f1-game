@@ -197,11 +197,18 @@ const GarageLiveryDesignEditor = (function () {
       }
     });
     // WHY IT IS GREY, ON SCREEN. Every dependency wrote its reason to `title`, a hover tooltip:
-    // a phone never shows one and a screen reader reads the row's static hint instead (audit
-    // D2). One line under each greyed row, or under a live row for its dead choices, carries
-    // the same text, and the row's description says it too. The sheet's own pass runs after
+    // a phone never shows one and a screen reader never reads it (audit D2). One line under
+    // each greyed row, or under a live row for its dead choices, carries the same text, and
+    // every control in the row is described by it (aria-describedby; the line itself is
+    // aria-hidden so a label row does not read it twice). The sheet's own pass runs after
     // ours in applyPreview, so this reads the settled state a microtask later.
     const reasons = new Map();
+    let reasonSeq = 0;
+    function describe(el, id, on) {
+      const ids = (el.getAttribute("aria-describedby") || "").split(" ").filter((x) => x && x !== id);
+      if (on) ids.push(id);
+      if (ids.length) el.setAttribute("aria-describedby", ids.join(" ")); else el.removeAttribute("aria-describedby");
+    }
     function explain() {
       for (const r of root.querySelectorAll(".cs-liv-ed-row, .tune-row")) {
         let text = "";
@@ -212,22 +219,22 @@ const GarageLiveryDesignEditor = (function () {
           text = why.join(" · ");
         }
         let line = reasons.get(r);
-        if (!text) { if (line) { line.remove(); reasons.delete(r); } restoreHint(r); continue; }
+        if (!text && !line) continue;
         if (!line) {
           line = document.createElement("span"); line.dataset.livWhy = "";
-          line.setAttribute("aria-hidden", "true"); reasons.set(r, line);
+          line.id = "cs-liv-why-" + ++reasonSeq; line.setAttribute("aria-hidden", "true"); reasons.set(r, line);
         }
+        for (const c of [r, ...r.querySelectorAll("button, input")]) if (c !== line) describe(c, line.id, !!text);
+        if (!text) { line.remove(); reasons.delete(r); continue; }
         if (line.parentNode !== r) r.appendChild(line);
         line.textContent = text;
-        if (!r.dataset.livHint) r.dataset.livHint = r.getAttribute("aria-description") || "-";
-        r.setAttribute("aria-description", text);
       }
     }
-    function restoreHint(r) {
-      if (!r.dataset.livHint) return;
-      if (r.dataset.livHint === "-") r.removeAttribute("aria-description"); else r.setAttribute("aria-description", r.dataset.livHint);
-      delete r.dataset.livHint;
-    }
+    // TAIL STYLE "team" paints one of the named motifs (McLaren's is CHEVRON), so it says which:
+    // otherwise its named twin looks like a pill that changes nothing (audit D7).
+    const teamTail = pills.find((b) => b.dataset.csPill === "finStyle:team");
+    const kind = teamTail && api.teamId && typeof LiveryTex !== "undefined" && LiveryTex.tailStyleOf && LiveryTex.tailStyleOf(api.teamId);
+    if (kind) teamTail.textContent = "TEAM · " + (LABELS[kind] || kind).toUpperCase();
     bindings.push(() => { Promise.resolve().then(explain); });
     sync();
     return Object.freeze({

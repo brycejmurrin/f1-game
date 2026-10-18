@@ -184,10 +184,12 @@ function editorFixture() {
   pillRow("FIN HANDOFF", "finHandoff", ["match", "contrast", "hardCut"], "match");
   pillRow("FIN SHAPE", "finShape", ["standard", "none"], "standard");
   pillRow("HALO FINISH", "haloFinish", ["inherit", "gloss", "matte"], "inherit");
+  pillRow("TAIL STYLE", "finStyle", ["team", "chevron", "none"], "team");
   Object.defineProperty(spineRow, "nextSibling", { get: () => root.children[root.children.indexOf(spineRow) + 1] });
   const nameRow = dom.document.createElement("label"); root.appendChild(nameRow);
+  ctx.LiveryTex = { tailStyleOf: (id) => (id === "mclaren" ? "chevron" : "diag") };
   editor = E.attach(root, draft, { flush() {}, changed, preview(value) { previews.push(plain(value)); },
-    pillRow, spineRow, bodyRow, nameRow });
+    pillRow, spineRow, bodyRow, nameRow, teamId: "mclaren" });
   const click = (text) => { const b = root.querySelectorAll("button").find((b) => b.textContent === text); assert.ok(b, text); assert.ok(!b.disabled, text + " enabled"); b.onclick(); };
   return { root, draft, editor, previews, click, spineRow, nextRow, bodyRow, nameRow };
 }
@@ -303,12 +305,14 @@ test("a greyed control explains itself on screen, and the line goes when it come
   await settle();
   assert.equal(width.getAttribute("aria-disabled"), "true");
   assert.deepEqual(why(width), ["Choose an adjustable design in SPINE TOP"], "visible reason under the greyed slider");
-  assert.equal(width.getAttribute("aria-description"), "Choose an adjustable design in SPINE TOP", "and the same words for a screen reader");
+  const slider = width.querySelectorAll("input")[0], line = width.querySelectorAll("span").find((el) => "livWhy" in el.dataset);
+  assert.ok(line.id && slider.getAttribute("aria-describedby").split(" ").includes(line.id), "the slider is described by the reason line");
+  assert.equal(line.getAttribute("aria-hidden"), "true", "read once, as the description, not again as label text");
   const design = root.querySelectorAll("button").find((b) => b.textContent === "SWAP COLOURS").parentNode.parentNode;
   assert.equal(design.getAttribute("aria-disabled"), "true", "SWAP / RESET grey as one row with the other pattern controls");
   click("CONTOUR LINES"); await settle();
   assert.deepEqual(why(width), [], "a live row carries no reason");
-  assert.equal(width.hasAttribute("aria-description"), false, "and its description is restored");
+  assert.equal(slider.hasAttribute("aria-describedby"), false, "and its description goes with it");
   assert.equal(design.getAttribute("aria-disabled"), "false");
   assert.deepEqual(why(design), ["SWAP COLOURS — Needs a two-colour design in SPINE TOP"], "a live row names its one dead choice");
   click("CHECKERED FLAG"); await settle();
@@ -362,5 +366,17 @@ test("HALO FINISH greys unless HALO is coloured — and Car3D agrees on every co
         assert.equal(mats("matte") !== mats("inherit"), live, team.id + " " + opt.id + " halo " + (halo || "unset"));
       }
     }
+  }
+});
+
+// D7: TAIL STYLE TEAM paints one of the named motifs, so its twin looked like a dead pill.
+test("TAIL STYLE TEAM names the motif it paints — and the atlas agrees for every team", () => {
+  const { root } = editorFixture();
+  assert.equal(root.querySelectorAll("button").find((b) => b.dataset.csPill === "finStyle:team").textContent, "TEAM · CHEVRON");
+  const A = loadAtlas(), ops = (team, liv) => JSON.stringify(A.paint(team, liv));
+  for (const t of A.Teams.LIST.filter((x) => !x.legends)) {
+    const base = { id: "custom_1", c1: t.color, c2: t.color2, finShape: "standard" }, kind = A.LT.tailStyleOf(t.id);
+    assert.ok(A.LT.TAIL_STYLE_IDS.includes(kind), t.id + ": " + kind + " is a pill");
+    assert.equal(ops(t.id, { ...base, finStyle: kind }), ops(t.id, { ...base, finStyle: "team" }), t.id + ": TEAM paints " + kind);
   }
 });
