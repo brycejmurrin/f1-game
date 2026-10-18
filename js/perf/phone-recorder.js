@@ -268,11 +268,17 @@ const PhoneRecorder = (function () {
     const stamp = String((rec && rec.startedAt) || "").replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-");
     return "apex26-soak-" + (stamp || "run") + ".json";
   }
+  // The panel keeps one fallback link. Replacing it must release the old
+  // recording blob; keep the current URL usable, and allow the browser the
+  // same 10 s read window as the other export flows before revoking an old one.
+  let releaseDownload = null;
   function download(text, name, d) {
     const doc = (d && d.doc) || (typeof document !== "undefined" ? document : null);
     const URLc = (d && d.URL) || (typeof URL !== "undefined" ? URL : null);
     if (!doc || !URLc || typeof Blob === "undefined") return { how: "none" };
     const url = URLc.createObjectURL(new Blob([text], { type: "application/json" }));
+    if (releaseDownload) releaseDownload();
+    releaseDownload = () => setTimeout(() => safe(() => URLc.revokeObjectURL(url), null), 10000);
     const a = doc.createElement("a");
     a.href = url; a.download = name; a.textContent = "DOWNLOAD " + name;
     a.style.display = "none";

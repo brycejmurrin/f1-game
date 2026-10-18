@@ -346,11 +346,14 @@ const Teams = (function () {
   // a kept "constructor" resolves to an inherited function and throws in every build. The three the garage
   // offers as pills must be a real id when those tables are loaded (they load after this file; call time);
   // any other string is refused only when it names an Object.prototype member.
+  // The per-zone finish rows: a finish id, or "inherit" to follow the whole-car FINISH.
+  const ZONE_FINISH = ["podFinish", "finFinish", "mirrorFinish", "coverFinish", "wingFinish", "haloFinish"];
   function liveryEnumOk(k, v) {
     if (typeof v !== "string" || v in Object.prototype) return false;
     const ids = k === "finShape" ? (typeof Car3D !== "undefined" && Car3D.FIN_SHAPE_IDS)
       : k === "numFont" ? (typeof LiveryTex !== "undefined" && LiveryTex.NUM_FONT_IDS)
       : k === "finish" ? (typeof Car3D !== "undefined" && Car3D.FINISH_SURFACE && ["gloss"].concat(Object.keys(Car3D.FINISH_SURFACE)))
+      : ZONE_FINISH.indexOf(k) >= 0 ? (typeof Car3D !== "undefined" && Car3D.FINISH_SURFACE && ["inherit", "gloss"].concat(Object.keys(Car3D.FINISH_SURFACE)))
       : null;
     return !ids || ids.indexOf(v) >= 0;
   }

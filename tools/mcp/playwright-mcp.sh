@@ -69,6 +69,9 @@ cmd_status() {
 
 cmd_run() {
   mkdir -p "$OUTDIR"
+  # Bounded wait for the SessionStart npm install + npx cache note (stderr only).
+  . "$ROOT/tools/mcp/mcp-preflight.sh"
+  mcp_preflight "${MCP_NPM_PACKAGE%@*}"
   # Isolated (in-memory profile, so two agents never share a locked
   # user-data-dir; --user-data-dir must NOT be combined with it).
   # --no-sandbox: this Cloud image is already a container.
@@ -76,6 +79,7 @@ cmd_run() {
   # bundled Playwright pins a different build than the one installed here.
   local exe=""
   exe="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"
+  [[ -z "$exe" ]] && echo "playwright-mcp: no repo-discovered Chromium; the package's pinned build may be absent" >&2
   exec npx --yes "$MCP_NPM_PACKAGE" \
     --isolated \
     --headless \
