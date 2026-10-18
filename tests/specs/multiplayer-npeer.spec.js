@@ -42,6 +42,22 @@ async function raceWithRival(page, peer) {
 test.use({ viewport: LANDSCAPE });
 
 test.describe("the rival is keyed by a cross-peer identity", () => {
+  test("the lazy net stack exposes seatless spectator policy", async ({ page }) => {
+    await raceWithRival(page, { team: "ferrari", driver: 1 });
+    const policy = await page.evaluate(() => ({
+      present: typeof NetSpectate !== "undefined",
+      spectator: NetSpectate.kind({ kind: "spectator" }),
+      driver: NetSpectate.kind({ kind: "driver" }),
+      publish: NetSpectate.canPublish("spectator"),
+    }));
+    expect(policy).toEqual({
+      present: true,
+      spectator: "spectator",
+      driver: "driver",
+      publish: false,
+    });
+  });
+
   test("a rival is held under a wire id, not a grid index", async ({ page }) => {
     const res = await raceWithRival(page, { team: "ferrari", driver: 1 });
     expect(res.ok).toBe(true);

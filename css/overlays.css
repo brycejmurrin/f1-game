@@ -870,13 +870,13 @@ body:has(dialog[open]) #save-warning { display: none; }
    already includes --sab, matching the toggle's dock. Desktop Classic
    keeps ANIMATE top-left, so a bare :has(home-motion) lift would
    still walk INSTALL on the title-desktop golden. */
-body[data-shape="tall"]:has(#home-motion:not([hidden])) #install-chip {
+body[data-shape="tall"]:has(> :where(#overlay) > #home-motion:not([hidden])) #install-chip {
   bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
 }
-:where(body[data-shape="wide"][data-density="compact"]):has(#home-motion:not([hidden])) #install-chip {
+:where(body[data-shape="wide"][data-density="compact"]):has(> :where(#overlay) > #home-motion:not([hidden])) #install-chip {
   bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
 }
-body[data-shape="wide"]:has(> #overlay[data-home-scene]:not([data-home-scene="static"])):has(#home-motion:not([hidden])) #install-chip {
+body[data-shape="wide"]:has(> #overlay[data-home-scene]:not([data-home-scene="static"])):has(> :where(#overlay) > #home-motion:not([hidden])) #install-chip {
   bottom: calc(var(--safe-b) + var(--tap) + var(--gap));
 }
 /* Same layer as experience.css's live-scene `padding: var(--gap)` shorthand,
@@ -887,7 +887,7 @@ body[data-shape="tall"] #overlay[data-home-scene]:not([data-home-scene="static"]
   scroll-padding-bottom: calc(var(--tap) + var(--gap));
   scrollbar-width: none;
 }
-body[data-shape="tall"]:has(#home-motion:not([hidden])):has(> #install-chip:not([hidden])) #overlay #menu-buttons {
+body[data-shape="tall"]:has(> :where(#overlay) > #home-motion:not([hidden])):has(> #install-chip:not([hidden])) #overlay #menu-buttons {
   padding-bottom: calc((var(--tap) + var(--gap)) * 2);
   scroll-padding-bottom: calc((var(--tap) + var(--gap)) * 2);
 }
