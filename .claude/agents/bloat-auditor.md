@@ -39,7 +39,15 @@ So:
 ## The job
 
 1. Run `node tools/check/bloat-scan.mjs --json` (add the parent-named paths).
-   Report ratchet slack and skill/agent line counts verbatim.
+   Named paths ADD files to the report and fill `coverage`; they do not narrow
+   `files` (~7 KB, every ratcheted file, skill and agent). Report only the
+   rows in your scope: filter the JSON, e.g. `node tools/check/bloat-scan.mjs
+   --json js/track/` piped to `jq -c '.files[] | select(.path |
+   startswith("js/track/"))'`, plus `.coverage`. Report ratchet slack and
+   skill/agent line counts verbatim. Its `lines` is the newline split, one
+   more than `wc -l` on a file ending in a newline; quote the tool's number
+   and say which you used. Write every path repo-relative (`js/game.js`, not
+   `/home/user/…`), in rows and on `COVERED:` alike.
 2. Read the assigned file(s). Look for: extractable cohesive blocks
    (low `G` crossings), fat `SKILL.md` that restates a catalog, dead
    symbols, duplicate helpers, stale comments, tree-split candidates.

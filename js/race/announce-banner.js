@@ -40,6 +40,7 @@ const AnnounceBanner = (function () {
     let announceT = 0, _annPri = 0, _annFloor = 0;
     const _annQueue = [];
     function radioWho(kind) {
+      if (typeof Captions !== "undefined" && Captions.radioWho) return Captions.radioWho(kind, deps.player());
       const label = { control: "RACE CONTROL", coach: "COACH", announcer: "COMMENTARY" }[RadioVoice.SPEAKERS[kind]];
       if (label) return label;
       const p = (deps.player());
@@ -59,6 +60,9 @@ const AnnounceBanner = (function () {
       else delete (deps.els()).announce.dataset.kind;
       (deps.els()).announce.hidden = false;
       if ((deps.history())) (deps.history()).delivered(msg, { kind, who: (deps.els()).announceWho.textContent, quiet });
+      if (typeof Captions !== "undefined" && Captions.onRadio) {
+        Captions.onRadio({ who: (deps.els()).announceWho.textContent, text: msg, kind, quiet });
+      }
       // SCREEN READERS hear the card through #announce-live, an always-present polite
       // region (a region filled while hidden and unhidden in one step is missed by NVDA,
       // JAWS, VoiceOver: tetralogical.com/blog/2024/05/01). LiveRegion (js/ui/live-region.js)

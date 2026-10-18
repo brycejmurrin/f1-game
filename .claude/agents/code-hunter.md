@@ -35,7 +35,9 @@ its last turn, so a long hunt that reports at the end returns nothing.
 ## The job
 
 1. Read the slice's largest or most-called files first; `git log --oneline -15
-   -- <slice>` shows what moved recently.
+   -- <slice>` shows what moved recently. That IS one simple command — run it
+   exactly so, one path per call (`git log --oneline -15 -- js/net/`), never
+   with `git -C`, a pipe or a second command after it.
 2. For each suspect: find the callers (`Grep` across `js/`, `tools/`,
    `tests/`), the guard, the test that should catch it. A dead-code claim needs
    every reference checked, including `index.html`, `tools/manifest.cjs`,
@@ -44,6 +46,11 @@ its last turn, so a long hunt that reports at the end returns nothing.
    `tools/lib/game-vm.cjs` or `tools/lib/track-build-vm.cjs`, ALWAYS wrapped as
    `timeout 180 node …` (3 min cap per run, at most a few runs); a Node
    micro-benchmark. Never `npm test`, `test:tooling-fast` or a browser.
+   A `tools/mcp/` slice may also take a stdio handshake probe: spawn the
+   server, write one JSON-RPC `initialize` line, print the first reply, kill
+   it — all inside one `timeout 30 node -e "…"` call (no pipes into the
+   server). Never a wrapper that boots Chromium (`chrome-devtools-mcp.sh`,
+   the browser `apex_*` tools).
 4. A ms / byte / pixel figure needs harness output on the `measured:` line;
    without it, say `est.` and keep confidence below CONFIRMED.
 
@@ -57,6 +64,9 @@ measured: <exact command + numbers, or none>
 ```
 
 Zero findings is a legitimate answer: say `FINDING none`, then the three lines.
+A suspect (or a `known:` row) already fixed at HEAD is not a FINDING: put it
+on one line `fixed-at-head: <file:line or claim> — <fixing sha7 or the guard
+that now holds>`.
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
 report with its gaps named on `not covered:` beats silence; hitting `maxTurns`

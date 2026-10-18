@@ -30,5 +30,4 @@ responses never await generation lookup or CacheStorage writes; synchronous
 `waitUntil()` registration keeps those writes alive after the response is sent.
 Everything else = cache-first (network-first on a dev host, where every tag reads
 `?v=dev`). Deploy stamps **content hashes and shell generation** together; source tags
-stay `?v=dev`. Check with `node tools/gen/gen-shell.mjs --check`. Never bump `version.json`
-during a Playwright run.
+stay `?v=dev` (AGENTS.md "Critical conventions"). Check with `node tools/gen/gen-shell.mjs --check`.
