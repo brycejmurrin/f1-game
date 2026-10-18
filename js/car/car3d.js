@@ -138,8 +138,7 @@ const Car3D = (function () {
       if (sections.length) sections[sections.length - 1].to = at;
       sections.push({ name, from: at, to: at });
     };
-    // ZONE FINISH REACH (#2796 1-3): paint drawn in another section (pod panel, cover stripe, halo blade) is re-labelled for applyFinish only; sections keep their shape.
-    const zoneRanges = [], zone = (name, draw) => { const from = out.pos.length / 3; draw(); zoneRanges.push({ name, from, to: out.pos.length / 3 }); };
+    const zoneRanges = [], zone = (name, draw) => { const from = out.pos.length / 3; draw(); zoneRanges.push({ name, from, to: out.pos.length / 3 }); };   // #2796: livery-section paint that takes a zone's finish
     const c1 = color  || [0.8, 0.05, 0.05];
     // COCKPIT accent dimming — the wheel has always done this (getCockpitWheel
     // tints livery to 40-45%); the body trim needs it too. Accent elements sit
@@ -193,8 +192,7 @@ const Car3D = (function () {
     // over `lower` / `upper` (CarShade.lowerZone / upperZone).
     const bodySplitLR = liv.bodySplit === "lr";
     const haloTint = _ckAcc(liv.halo) || null;
-    const endplateC = _ckAcc(liv.endplate) || null;   // ENDPLATES: front plates (else c2) + rear plate bodies (else DARK); unset = byte-identical
-    const haloMetal = liv.haloFinish && liv.haloFinish !== "inherit" ? SURFACES.paint : SURFACES.metal;   // an explicit HALO FINISH paints the titanium so it lands
+    const endplateC = _ckAcc(liv.endplate) || null, haloOn = liv.haloFinish && liv.haloFinish !== "inherit", haloMetal = haloOn ? (Object.hasOwn(FINISH_SURFACE, liv.haloFinish) && FINISH_SURFACE[liv.haloFinish]) || SURFACES.paint : SURFACES.metal;   // ENDPLATES (front else c2, rear else DARK); an explicit HALO FINISH lands on the titanium (#2796 1)
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
     const ersC2 = tier("ers") === 2 ? [c2[0]*1.8, c2[1]*1.8, c2[2]*1.8] : c2;
@@ -917,8 +915,7 @@ const Car3D = (function () {
     // to lie on: the blade now occupies z -0.33..-0.63 and a flat band at
     // y 0.862 would be buried inside it. A span follows the crown's rearward
     // fall for the same twelve triangles the box cost.
-    zone("engineCover", () => addSpan(out, { z: -0.28, y: 0.972, w: 0.060, h: 0.030 },
-                 { z: -0.66, y: 0.944, w: 0.050, h: 0.026 }, c2));
+    zone("engineCover", () => addSpan(out, { z: -0.28, y: 0.972, w: 0.060, h: 0.030 }, { z: -0.66, y: 0.944, w: 0.050, h: 0.026 }, c2));
 
     for (const s of [-1, 1]) {
       const nf = anchors.noseAt(styledTipZ - 0.12), nr = anchors.noseAt(2.025);
@@ -973,12 +970,10 @@ const Car3D = (function () {
       if (!ckpt) addLoft(out, 1.05, 0, ns105.top + 0.012, 0.12, 0.016,
              1.55, 0, ns155.top + 0.012, 0.13, 0.016, stripeC);
       if (!ckpt) addLoft(out, 0.05, 0, 0.655, 0.12, 0.022, 1.05, 0, 0.545, 0.13, 0.022, stripeC);   // monocoque → hood crest
-      zone("engineCover", () => { if (!ckpt) addSpan(out, { z: -0.27, y: 0.984, w: 0.080, h: 0.020 },
+      if (!ckpt) zone("engineCover", () => { addSpan(out, { z: -0.27, y: 0.984, w: 0.080, h: 0.020 },
                               { z: -0.67, y: 0.954, w: 0.070, h: 0.018 }, stripeC);  // spine band over the roll structure
-      if (!ckpt) {
         addLoft(out, -0.94, 0, 0.775, 0.075, 0.02, -0.64, 0, 0.948, 0.07, 0.02, stripeC); // roll structure → cover ridge drop
-        addLoft(out, -1.95, 0, 0.600, 0.060, 0.02, -0.94, 0, 0.775, 0.075, 0.02, stripeC); // engine-cover ridge run to the tail
-      } });
+        addLoft(out, -1.95, 0, 0.600, 0.060, 0.02, -0.94, 0, 0.775, 0.075, 0.02, stripeC); }); // engine-cover ridge run to the tail
     }
     const noseStripeC = _ckAcc(liv.noseStripe) || null;
     if (noseStripeC) {
@@ -1094,7 +1089,6 @@ const Car3D = (function () {
     const crownY = 0.845 - (haloSty === 1 ? 0.008 : 0);
     const hoop = exHalo ? haloHoopPath(0.235, 0.505, -0.46, 0.30, 0.02, crownY, 0.49) : null, hoopT = hoop && shadeFlags.round ? CarShade.fine(hoop, 3) : hoop;   // rounded: a spline through it
     const haloBlade = Math.max(0, Math.min(2, Math.round(exHalo ? cockpitStyle.haloBlade || 0 : 0)));
-    const haloAt = out.pos.length / 3;
     if (haloBlade > 0) {
       const bladeC = haloTint || HALO;
       // Co-axial fairing follows the hoop's curve, 8–11 mm proud (no coplanar faces).
@@ -1121,7 +1115,6 @@ const Car3D = (function () {
         addBox(out, s * 0.155, 0.872, 0.08, 0.010, 0.028, 0.10, wingC, haloMetal);
       }
     }
-    zoneRanges.push({ name: "halo", from: haloAt, to: out.pos.length / 3 });
     const camPods = Math.max(0, Math.min(2, Math.round(exHalo ? cockpitStyle.camPods || 0 : 0)));
     for (let i = 0; i < camPods; i++) {
       const s = i === 0 ? -1 : 1;
@@ -1290,7 +1283,7 @@ const Car3D = (function () {
 
     part("halo");
     if (exHalo) {
-      const haloC = haloTint || HALO, haloS = haloMetal === SURFACES.paint || haloTint && Math.max(...haloTint) - Math.min(...haloTint) > 0.15 ? SURFACES.paint : SURFACES.metal;   // a COLOURED livery hoop is paint (Alpine pink: the metal env mirror washed it white); grey stays metal (titanium, Cadillac chrome)
+      const haloC = haloTint || HALO, haloS = haloOn || haloTint && Math.max(...haloTint) - Math.min(...haloTint) > 0.15 ? SURFACES.paint : SURFACES.metal;   // a COLOURED livery hoop is paint (Alpine pink: the metal env mirror washed it white); grey stays metal (titanium, Cadillac chrome)
       // Round titanium hoop with a LEVEL, gently arched top bar: one
       // continuous tube, collars (±0.235, 0.505, -0.46) rising to a crown
       // that holds y 0.845 (+HALO_RISE shallow arch) from mid to mid while
@@ -2164,10 +2157,7 @@ const Car3D = (function () {
     }
 
     if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
-    CarMaterials.applyFinish(out, liv.finish, zoneRanges.length ? sections.flatMap((s) => {   // split each section around the zone ranges inside it
-      const o = []; let at = s.from;
-      for (const r of zoneRanges) if (r.from >= s.from && r.to <= s.to && r.to > r.from) { if (r.from > at) o.push({ name: s.name, from: at, to: r.from }); o.push(r); at = r.to; }
-      if (at < s.to) o.push({ name: s.name, from: at, to: s.to }); return o; }) : sections, liv);
+    CarMaterials.applyFinish(out, liv.finish, sections, liv, zoneRanges);
 
     shadeFlags.round = false;
     shadeFlags.coverHi = true;

@@ -76,7 +76,7 @@ const RENDER_SPECS = [
   "lighting-ab", "lighting-tuner-grade",
   "garage-first-frame",
   "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",
-  "parts-liveries",
+  "parts-liveries", "parts-livery-designs",
   "ui-audit", "ui-button-touch", "menu-survey", "menu-keyboard", "photo-studio",
   "webgl-probes", "camera", "smoke", "season", "time-trial",
   "material-shimmer", "instanced-draw",
