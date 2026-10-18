@@ -98,6 +98,7 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["career-mode", "references/workflow.md"],
     ["race-incidents-control", "references/workflow.md"],
     ["new-track", "references/workflow.md"],
+    ["new-track", "references/schema.md"],
     ["renderer-debug", "references/glx-failures.md"],
     ["renderer-debug", "references/wgx-defects.md"],
     ["garage-parts-livery", "references/workflow.md"],

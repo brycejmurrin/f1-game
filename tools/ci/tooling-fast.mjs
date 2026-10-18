@@ -203,6 +203,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
   "tests/unit/career-data-audio-improvements.test.mjs",
+  // js/career/*.js never consumes simRnd and uses Math.random only at two allowlisted non-draw sites; source scan, < 50 ms.
+  "tests/unit/career-determinism.test.mjs",
   "tests/unit/career-experience.test.mjs",
   "tests/unit/career-hire-rating.test.mjs",
   "tests/unit/career-legends.test.mjs",

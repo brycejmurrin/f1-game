@@ -69,6 +69,6 @@ through `test-solo.mjs <path>` as one background task with a log in `artifacts/l
 `lifecycle-unit` is `async-lifecycle` + `tlx-chunked-lifecycle` (the first
 does read `api.js`/`live.js`), not the hub spec.
 
-Run `pick-tests js/data/hub.js` for the groups (AGENTS.md rules 4-5). An empty tab with no error is usually
+Run `node tools/ci/pick-tests.mjs js/data/hub.js` (explicit-path form) for the groups (AGENTS.md rules 4-5). An empty tab with no error is usually
 `NO_RESULT_MSG` / `NO_LIVE_MSG` / `NO_TELEM_MSG`, not a fetch failure. Layout of
 the hub chrome → **ui-menu-a11y** / **survey-ui-matrix**.
