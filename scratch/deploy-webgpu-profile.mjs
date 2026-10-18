@@ -52,11 +52,11 @@ try{
    const snap=async label=>{await page.evaluate(async()=>{await renderer.backend.device.queue.onSubmittedWorkDone();});await cdp.send('HeapProfiler.collectGarbage');await cdp.send('HeapProfiler.collectGarbage');const heap=await cdp.send('Runtime.getHeapUsage');const s=await state();if(!s.isWebGPUBackend||s.backend.api!=='webgpu'||s.backend.forceWebGL||s.backend.softAdapter||s.backend.softBlit||s.gpuErrors)throw Error('invalid native path/errors at '+label);return {label,heap,...s};};
    const shot=async label=>{await page.evaluate(()=>__apex.headless(false));await page.screenshot({path:`game-deploy-${rep}-${label}.png`,timeout:60000});await page.evaluate(()=>__apex.headless(true));};
    const profiled=async label=>{await cdp.send('Profiler.start');const metrics=await windowFrames(120);const p=await cdp.send('Profiler.stop');writeFileSync(`game-deploy-${rep}-${label}.cpuprofile`,JSON.stringify(p.profile));return metrics;};
-   let color=0;const edit=async()=>{const dispatchMs=await page.evaluate(i=>{const el=document.querySelector('input[data-liv-field="c2"]'),t=performance.now();el.value='#'+(0x204060+i*0x030507).toString(16).slice(-6);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return performance.now()-t;},color++);return {dispatchMs,...await windowFrames(1)};};
+   let color=0;const edit=async()=>{const dispatchMs=await page.evaluate(i=>{const el=document.querySelector('input[data-liv-field="c2"]'),t=performance.now();el.value='#'+(0x204060+i*0x030507).toString(16).slice(-6);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return performance.now()-t;},color++);return {dispatchMs,...await windowFrames(1),applied:await page.evaluate(()=>({value:document.querySelector('input[data-liv-field="c2"]').value,garage:GarageScene.debug()}))};};
    for(let i=0;i<5;i++)await edit();await windowFrames(60);row.garageWarm=await snap('garage-warm');
    row.garageIdleBefore=await windowFrames(180);row.garageIdleBeforeState=await snap('garage-idle-before');
    for(let i=0;i<30;i++){row.edits.push(await edit());if((i+1)%10===0){row['after'+(i+1)]=await snap('garage-after-'+(i+1));save();log('rep '+rep+' garage edits '+(i+1));}}
-   row.garageLiveCleanup=await windowFrames(100000,22000);row.garagePostCleanup=await snap('garage-post-22s-live');
+   row.garageLiveCleanup=await windowFrames(100000,26000);row.garagePostIdle=await snap('garage-post-26s-live');row.garageCleanupEdit=await edit();row.garagePostCleanup=await snap('garage-post-idle-and-edit');
    row.garageIdleAfter=await windowFrames(180);row.garageFinal=await snap('garage-final');await shot('garage');
    row.garageCpuProfile=await profiled('garage');save();
    const scenarios=[{id:'montreal-day',track:'montreal',tod:'day',weather:'dry',clock:12,modes:['chase','helmet']},{id:'vegas-night',track:'vegas',tod:'night',weather:'dry',clock:0,modes:['chase','helmet']},{id:'montreal-wet',track:'montreal',tod:'day',weather:'rain',clock:12,modes:['helmet']}];
@@ -65,7 +65,7 @@ try{
     const buildMs=await page.evaluate(async s=>{__apex.headless(true);await Assets.loadModels();__apex.seed(42);const t=performance.now();await __apex.race(s.track,s.tod,s.weather);const ms=performance.now()-t;__apex.go();__apex.freeze(true);__apex.govHold(true);__apex.renderScale(1);__apex.renderClock(s.clock,true);__apex.jump(.1,0,0);__apex.snapCam();__apex.gpuTimer(true);return ms;},scene);
     for(const mode of scene.modes){
      const s={id:scene.id,track:scene.track,tod:scene.tod,weather:scene.weather,mode,buildMs};row.scenarios.push(s);save();
-     await page.evaluate(mode=>{__apex.freeze(true);__apex.camera(mode);__apex.snapCam();},mode);
+     await page.evaluate(mode=>{__apex.freeze(true);__apex.jump(.1,0,0);__apex.camera(mode);__apex.snapCam();},mode);
      await windowFrames(60);s.before=await snap(scene.id+'-'+mode+'-before');s.fixed=await windowFrames(180);s.after=await snap(scene.id+'-'+mode+'-after');
      await shot(scene.id+'-'+mode);s.profiled=await profiled(scene.id+'-'+mode);
      await page.evaluate(()=>{__apex.freeze(false);__apex.setInput({throttle:false,brake:false,steer:0});});
