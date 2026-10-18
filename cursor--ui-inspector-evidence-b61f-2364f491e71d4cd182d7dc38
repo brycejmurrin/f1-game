@@ -1,1 +1,0 @@
-1792326378	Bryce Murrin	PR2900 original active owner; deterministic cold-prune test fixture only in tests/unit/tlx-round2.test.mjs; no renderer implementation edits; coordinate competing PR owner before push  [cursor/ui-inspector-evidence-b61f; session 2364f491e71d4cd182d7dc38]
