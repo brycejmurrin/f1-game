@@ -672,7 +672,7 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
     test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
     test("control rects are identical at HUD SIZE min / default / max", async ({ page }) => {
       await race(page, "buttons", false, v, { hudScale: 100, btnScale: btn });
-      const rects = {}, gearW = {};
+      const rects = {}, gearW = {}, fitDiag = {};
       for (const hud of [70, 100, 200]) {
         await page.evaluate((pct) => localStorage.setItem("apex26.hudScale", JSON.stringify(pct)), hud);
         await page.reload();
@@ -684,7 +684,16 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
         await page.waitForFunction(() => { const b = document.getElementById("pausebtn"); return !!b && !b.hidden; },
           null, { polling: 100, timeout: BOOT_MS });
         await page.evaluate(() => window.GameHud && GameHud.invalidateFit && GameHud.invalidateFit());
-        await page.evaluate(() => new Promise((r) => setTimeout(r, 1500))); // let fitHud settle
+        // invalidateFit voids --hud-fit-stamp; the app republishes it once a full fit has landed. A fixed sleep
+        // read the unfitted 126 px paint when a slow CI frame had not ticked the HUD yet (#2801). The predicate
+        // is synchronous on purpose: waitForFunction does `if (success)`, so an async one (a Promise) is always
+        // truthy and passes at once, which is why waitPhoneHudFitClearance does not wait for the stamp.
+        await page.waitForFunction(() => {
+          if (document.body.classList.contains("desktop")) return false;
+          GameHud.syncPhoneFit();
+          return /^\d+$/.test(document.documentElement.style.getPropertyValue("--hud-fit-stamp"));
+        }, null, { polling: 100, timeout: 60_000 });
+        fitDiag[hud] = await page.evaluate(() => { const st = document.documentElement.style; return { zDock: st.getPropertyValue("--hud-z-dock"), stamp: st.getPropertyValue("--hud-fit-stamp"), vp: innerWidth + "x" + innerHeight, sab: getComputedStyle(document.documentElement).getPropertyValue("--sab") }; });
         rects[hud] = await page.evaluate((ids) => Object.fromEntries(ids.map((id) => {
           const el = document.getElementById(id);
           if (!el || el.hidden) return [id, null];
@@ -696,10 +705,10 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
       const base = rects[100];
       expect(Object.values(base).filter(Boolean).length, JSON.stringify(base)).toBeGreaterThanOrEqual(7);
       // Controls that do not fit shrink to fit: none may sit off-screen (BOOST at y -14, #2801).
-      for (const hud of [70, 100, 200]) for (const [id, r] of Object.entries(rects[hud])) if (r) expect(r[1], `${id} at HUD SIZE ${hud}`).toBeGreaterThanOrEqual(0);
+      for (const hud of [70, 100, 200]) for (const [id, r] of Object.entries(rects[hud])) if (r) expect(r[1], `${id} at HUD SIZE ${hud} ${JSON.stringify(fitDiag)}`).toBeGreaterThanOrEqual(0);
       // Non-vacuous: HUD SIZE really did resize the readouts it is meant to resize.
       expect(gearW[200], JSON.stringify(gearW)).toBeGreaterThan(gearW[70] * 1.3);
-      for (const hud of [70, 200]) expect(rects[hud], `HUD SIZE ${hud} vs 100`).toEqual(base);
+      for (const hud of [70, 200]) expect(rects[hud], `HUD SIZE ${hud} vs 100 ${JSON.stringify(fitDiag)}`).toEqual(base);
     });
   });
 }

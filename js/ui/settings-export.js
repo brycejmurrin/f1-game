@@ -580,7 +580,10 @@ const GARAGE_STR_MAX = 64;              // ids, names, enum pills
 const GARAGE_LIVERIES_MAX = Math.floor(GARAGE_MAX_BYTES / 48);
 const SETTINGS_MAX_BYTES = 1024 * 1024; // LOAD SETTINGS: a real file is tens of KB; refused before f.text()
 const CAREER_BAG_KEYS_MAX = 16;         // 6 slots + the live pointer are all a real file holds
-const GARAGE_KEYS_MAX = 64;             // fields per livery / entries per parts sheet
+const GARAGE_KEYS_MAX = 64;             // entries per parts sheet
+// FIELDS PER LIVERY follow the schema: Liveries.FIELDS had 62 rows against a literal 64, so the next slices' fields
+// would have been dropped silently on import. The margin keeps a hostile file bounded without a cap to maintain.
+const liveryKeysMax = () => (typeof Liveries !== "undefined" && Liveries.FIELDS ? Liveries.FIELDS.length : GARAGE_KEYS_MAX) + 32;
 // ENUM-TYPED FIELDS INDEX PLAIN OBJECTS (Car3D finOf / FINISH_SURFACE, LiveryTex NUM_FONTS), so a
 // kept "constructor" resolves to an inherited function and throws in every build of that team.
 // The three the garage offers as pills are checked against the tables that drive those pills
@@ -609,9 +612,10 @@ function cleanLivery(l) {
   const out = { id: l.id, c1: clamp01(l.c1), c2: clamp01(l.c2) };
   if (typeof l.name === "string") out.name = l.name.slice(0, GARAGE_STR_MAX);
   let n = 0;
+  const max = liveryKeysMax();
   for (const k of Object.keys(l)) {
     if (k === "id" || k === "c1" || k === "c2" || k === "name" || k === "__proto__") continue;
-    if (n >= GARAGE_KEYS_MAX) break;
+    if (n >= max) break;
     if (rgb3(l[k])) out[k] = clamp01(l[k]);
     else if (typeof l[k] === "string" && l[k].length <= GARAGE_STR_MAX && liveryEnumOk(k, l[k])) out[k] = l[k];
     else continue;

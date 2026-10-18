@@ -735,6 +735,7 @@
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
@@ -822,6 +823,7 @@
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
@@ -918,6 +920,7 @@
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
@@ -3151,6 +3154,12 @@
     {
       "path": "js/ui/driving-line-opts.js",
       "global": "DrivingLineOpts",
+      "order": 218,
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/cvd-palette.js",
+      "global": "CvdPalette",
       "order": 218,
       "roster": "tag"
     },
