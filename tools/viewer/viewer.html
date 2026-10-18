@@ -1,0 +1,456 @@
+<title>Apex 26 Viewer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- @doc Template for viewer/build-viewer.mjs: the three.js car and circuit page; data is spliced in at the DATA marker. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: timing-screen header strip, one big 3D viewport, a legend rail under it. */
+:root {
+  --bg: #eef0f2; --panel: #ffffff; --fg: #1b2026; --muted: #5d6670; --line: #d3d8de;
+  --accent: #d1171f; --grass: #6f8f5e; --road: #6b7078; --race: #0a8fb3; --sky: #e4e8ec; --floor: #aab3bc;
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161b; --panel: #1a1f26; --fg: #e8ecf0; --muted: #98a2ad; --line: #2c333c;
+  --accent: #ff4b4f; --grass: #22402a; --road: #59606a; --race: #33d1ff; --sky: #0e1216; --floor: #242a31; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161b; --panel: #1a1f26; --fg: #e8ecf0; --muted: #98a2ad; --line: #2c333c;
+  --accent: #ff4b4f; --grass: #22402a; --road: #59606a; --race: #33d1ff; --sky: #0e1216; --floor: #242a31; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px; }
+.wrap { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(30px, 6vw, 46px); line-height: 1; margin: 2px 0 0; text-transform: uppercase; letter-spacing: .01em; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.modes, .picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.modes button, .picker button { font: 600 16px/1 var(--f-display); letter-spacing: .04em; text-transform: uppercase; color: var(--fg);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 9px 14px; cursor: pointer; }
+.modes button { font-size: 14px; padding: 7px 12px; }
+.modes button[aria-pressed="true"], .picker button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.modes button:focus-visible, .picker button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.picker i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.stat { background: var(--panel); padding: 10px 12px; min-width: 0; }
+.stat b { display: block; font-family: var(--f-mono); font-weight: 500; font-size: 20px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stat small { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+@media (max-width: 560px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.view { position: relative; width: 100%; aspect-ratio: 16 / 10; max-height: 72vh; max-width: 100%; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: var(--sky); touch-action: none; }
+@media (max-width: 560px) { .view { aspect-ratio: 4 / 5; } }
+.view canvas { display: block; width: 100%; height: 100%; }
+.hint { position: absolute; left: 10px; bottom: 8px; font-family: var(--f-mono); font-size: 11px; color: var(--muted); pointer-events: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--muted); align-items: center; }
+.legend i { display: inline-block; width: 22px; height: 8px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.ramp { background: linear-gradient(90deg, var(--road), #f2c230, #e5481c); }
+.race { background: var(--race); height: 3px !important; }
+.car { background: var(--accent); width: 10px !important; }
+p.note { margin: 0; max-width: 72ch; color: var(--muted); font-size: 13px; }
+code { font-family: var(--f-mono); font-size: 12px; }
+.empty { padding: 24px; color: var(--muted); }
+.custom { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px; align-items: end; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field label, .field span { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.field select, .field input { font: 500 15px/1.2 var(--f-body); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 9px 10px; min-width: 0; width: 100%; }
+.actions { display: flex; gap: 8px; }
+.actions button { flex: 1; font: 600 15px/1 var(--f-display); letter-spacing: .04em; text-transform: uppercase; color: var(--bg); background: var(--fg); border: 0; border-radius: 4px; padding: 11px 12px; cursor: pointer; }
+.actions button + button { color: var(--fg); background: var(--panel); border: 1px solid var(--line); }
+.actions button:focus-visible, .field select:focus-visible, .field input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.parts-box { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 8px; }
+.parts-box summary { font: 600 16px/1.6 var(--f-display); letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.parts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 10px; margin-top: 8px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow">Apex 26</div>
+      <h1 id="title">Viewer</h1>
+    </div>
+    <div class="modes" id="modes" role="group" aria-label="What to view"></div>
+  </header>
+  <div class="picker" id="picker" role="group" aria-label="Pick one"></div>
+
+  <div class="stats">
+    <div class="stat"><small id="l1">–</small><b id="s1">–</b></div>
+    <div class="stat"><small id="l2">–</small><b id="s2">–</b></div>
+    <div class="stat"><small id="l3">–</small><b id="s3">–</b></div>
+    <div class="stat"><small id="l4">–</small><b id="s4">–</b></div>
+  </div>
+
+  <div class="view" id="view"><span class="hint" id="hint">Drag to orbit · pinch or scroll to zoom</span></div>
+
+  <section class="custom" id="custom" hidden aria-label="Customise this car">
+    <div class="field"><label for="c-livery">Livery</label><select id="c-livery"></select></div>
+    <div class="field"><label for="c-finish">Finish</label><select id="c-finish"></select></div>
+    <div class="field"><label for="c-num">Number</label><input id="c-num" type="number" min="0" max="99" inputmode="numeric" placeholder="Driver's"></div>
+    <div class="actions"><button type="button" id="c-random">Randomise</button><button type="button" id="c-reset">Factory</button></div>
+    <details class="parts-box"><summary>Garage parts</summary><div class="parts" id="c-parts"></div></details>
+  </section>
+
+  <div class="legend" id="legend"></div>
+  <p class="note" id="note"></p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>/*@CARS*/</script>
+<script>
+"use strict";
+const DATA = /*@DATA*/null;
+const $ = (id) => document.getElementById(id);
+const view = $("view");
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const store = { get(k) { try { return localStorage.getItem("apex26.viewer." + k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem("apex26.viewer." + k, v); } catch (e) {} } };
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+view.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(36, 1, 0.05, 500);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(-4, 10, 6); scene.add(sun);
+
+let world = null, tick = null, frozen = false;
+function clearWorld() {
+  if (!world) return;
+  scene.remove(world);
+  world.traverse((o) => { if (o.geometry) o.geometry.dispose(); for (const m of [].concat(o.material || [])) m.dispose(); });
+  world = null; tick = null;
+}
+function stats(rows) { rows.forEach(([l, v], i) => { $("l" + (i + 1)).textContent = l; $("s" + (i + 1)).textContent = v; }); }
+const fmt = (n) => Number(n).toLocaleString("en-GB");
+
+// ── cars ─────────────────────────────────────────────────────────────
+// Built live from the embedded js/car roster (Car3D, Parts, Liveries, Teams),
+// the way js/car/car-draw.js buildCarData does, so any livery / finish / part
+// combination the garage can make is one rebuild away.
+// Surface ids (CarMaterials.SURFACES + FINISH_SURFACE) → [roughness, metalness, extras].
+// An approximation of the game's lit shader branches, close enough to tell finishes apart.
+const SURF = {
+  0: [0.5, 0.1], 20: [0.28, 0.05, { clearcoat: 0.8 }], 21: [0.45, 0.3], 22: [0.92, 0], 23: [0.3, 0.85],
+  24: [0.05, 0, { transparent: true, opacity: 0.45 }], 25: [0.5, 0, { unlit: true }], 26: [0.55, 0.1], 27: [0.04, 1],
+  28: [0.9, 0], 29: [0.3, 0.85], 30: [0.3, 0.15, { clearcoat: 1, sheen: 1 }], 31: [0.35, 0.35, { tint: 0x777777, clearcoat: 0.6 }],
+  32: [0.08, 0, { clearcoat: 1 }], 33: [0.7, 0], 34: [0.3, 0.6, { clearcoat: 1 }], 35: [0.12, 0.3, { clearcoat: 1 }],
+  36: [0.2, 0.55, { clearcoat: 0.6 }], 37: [0.25, 0.5, { iridescence: 1, clearcoat: 1 }],
+};
+function surfaceMaterial(id) {
+  const [roughness, metalness, x = {}] = SURF[id] || SURF[0];
+  if (x.unlit) return new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  return new THREE.MeshPhysicalMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness, metalness,
+    color: x.tint || 0xffffff, clearcoat: x.clearcoat || 0, clearcoatRoughness: 0.1, sheen: x.sheen || 0,
+    iridescence: x.iridescence || 0, transparent: !!x.transparent, opacity: x.opacity == null ? 1 : x.opacity });
+}
+// A studio sky for reflections: chrome and clearcoat are invisible without one.
+let studioEnv = null;
+function studio() {
+  if (studioEnv) return studioEnv;
+  const s = new THREE.Scene(), g = new THREE.SphereGeometry(10, 32, 16), cols = [], c = new THREE.Color();
+  for (let i = 0; i < g.attributes.position.count; i++) {
+    const y = g.attributes.position.getY(i) / 10;
+    c.setRGB(0.12, 0.13, 0.15).lerp(new THREE.Color(0.95, 0.96, 1), Math.min(1, Math.max(0, y + 0.35)));
+    cols.push(c.r, c.g, c.b);
+  }
+  g.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
+  s.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+  for (const [x, z] of [[-3, 2], [3, -2]]) {
+    const box = new THREE.Mesh(new THREE.PlaneGeometry(4, 1.2), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+    box.position.set(x, 7, z); box.rotation.x = Math.PI / 2; s.add(box);
+  }
+  studioEnv = new THREE.PMREMGenerator(renderer).fromScene(s, 0.02).texture;
+  return studioEnv;
+}
+
+const HAS_CARS = typeof Car3D !== "undefined" && typeof Parts !== "undefined";
+const FINISHES = HAS_CARS ? ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)] : [];
+const teamOf = (id) => Teams.LIST.find((t) => t.id === id) || Teams.LIST[0];
+const titleCase = (s) => String(s).replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+let spec = { team: null, livery: null, finish: "", num: null, parts: {} }, framedTeam = null;
+try { const s = JSON.parse(store.get("car") || "null"); if (s && s.team) spec = Object.assign(spec, s); } catch (e) {}
+
+/** Everything a picker can offer for one team: the garage's own lists. */
+function carOptions(teamId) {
+  const team = teamOf(teamId);
+  return {
+    liveries: Liveries.forTeam(team).map((l) => ({ id: l.id, name: l.name || titleCase(l.id) })),
+    finishes: FINISHES,
+    parts: Parts.CATALOG.map((c) => ({ id: c.id, label: titleCase(c.label || c.id),
+      options: c.options.map((o) => ({ id: o.id, label: o.label || titleCase(o.id), equivalent: o.equivalent || null })) })),
+    factory: Parts.getFactorySetup(team),
+  };
+}
+/** The livery object Car3D reads: every Liveries.FIELDS entry, as tools/carview.html resolves it. */
+function resolveLivery(team, s) {
+  const list = Liveries.forTeam(team);
+  const l = list.find((x) => x.id === s.livery) || list[0];
+  const o = { c1: l.c1, c2: l.c2 };
+  for (const f of Liveries.FIELDS) o[f] = l[f] != null ? l[f] : null;
+  o.finish = s.finish ? (s.finish === "gloss" ? null : s.finish) : (l.finish || null);
+  return { o, name: l.name || titleCase(l.id), finish: o.finish || "gloss" };
+}
+function carGeometry(s) {
+  const team = teamOf(s.team);
+  const { o, name, finish } = resolveLivery(team, s);
+  const setup = Object.assign({}, Parts.getFactorySetup(team), s.parts || {});
+  const num = s.num != null && s.num !== "" ? +s.num : (team.drivers && team.drivers[0] ? team.drivers[0].num : 0);
+  const d = Car3D.buildComplete(o.c1, o.c2, { livery: o, teamId: team.id, num, parts: Parts.getVisualTiers(setup, team) });
+  // One draw group per surface id, so each gets its own material.
+  const nTri = d.idx.length / 3, sid = (t) => d.mat[d.idx[t * 3]] | 0;
+  const order = Array.from({ length: nTri }, (_, t) => t).sort((a, b) => sid(a) - sid(b));
+  const idx = new Uint32Array(d.idx.length), g = new THREE.BufferGeometry(), mats = [];
+  let start = 0;
+  order.forEach((t, k) => {
+    idx.set([d.idx[t * 3], d.idx[t * 3 + 1], d.idx[t * 3 + 2]], k * 3);
+    const next = order[k + 1];
+    if (next === undefined || sid(next) !== sid(t)) { g.addGroup(start * 3, (k + 1 - start) * 3, mats.length); mats.push(surfaceMaterial(sid(t))); start = k + 1; }
+  });
+  g.setAttribute("position", new THREE.Float32BufferAttribute(d.pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(d.nrm, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(d.col, 3));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  return { g, mats, team, name, finish, num, verts: d.pos.length / 3 };
+}
+
+function buildCar(teamId) {
+  if (teamId !== spec.team) spec = { team: teamId, livery: null, finish: "", num: null, parts: {} };
+  store.set("car", JSON.stringify(spec));
+  clearWorld(); world = new THREE.Group(); scene.add(world);
+  scene.environment = studio();
+  const C = carGeometry(spec);
+  const body = new THREE.Mesh(C.g, C.mats);
+  C.g.computeBoundingBox();
+  const bb = C.g.boundingBox;
+  // Unlit, so the floor shows its token colour instead of washing out under both lights.
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(4.2, 64), new THREE.MeshBasicMaterial({ color: css("--floor") }));
+  floor.rotation.x = -Math.PI / 2; floor.position.y = bb.min.y - 0.002; world.add(floor);
+  const spin = new THREE.Group(); spin.add(body); world.add(spin);
+  // Fit the car's bounding sphere to the narrower of the two fields of view, once
+  // per team: a livery or part change keeps wherever the viewer has orbited to.
+  if (framedTeam !== spec.team) {
+    framedTeam = spec.team;
+    const r = bb.getBoundingSphere(new THREE.Sphere()).radius;
+    const vf = THREE.MathUtils.degToRad(camera.fov), hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
+    camera.position.set(4.6, 1.9, 4.2).setLength(r / Math.sin(Math.min(vf, hf) / 2) * 0.75);
+    controls.target.set(0, 0.45, 0.1);
+  }
+  controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 1.5; controls.maxDistance = 14; controls.update();
+  tick = (dt) => { if (!reduced) spin.rotation.y += dt * 0.25; };
+  $("eyebrow").textContent = "Apex 26 · Car3D.buildComplete · built in this page";
+  $("title").textContent = C.team.name;
+  stats([["Livery", C.name], ["Finish", titleCase(C.finish)], ["Number", C.num], ["Vertices", fmt(C.verts)]]);
+  $("legend").innerHTML = "";
+  $("note").innerHTML = "Built live by the game's own <code>Car3D.buildComplete()</code>: pick any livery, finish and garage part below. Sponsor and number decals are a separate texture and are not shown; materials approximate the game's shaders.";
+  fillCustom();
+  return C.team.name + " · " + C.name;
+}
+
+// The customise panel: the garage's livery, finish and part lists for this team.
+function fillCustom() {
+  const box = $("custom"); box.hidden = false;
+  const O = carOptions(spec.team);
+  const sel = (el, items, value) => {
+    el.innerHTML = "";
+    for (const it of items) { const o = document.createElement("option"); o.value = it.id; o.textContent = it.label; el.appendChild(o); }
+    el.value = value;
+  };
+  sel($("c-livery"), O.liveries.map((l) => ({ id: l.id, label: l.name })), spec.livery || O.liveries[0].id);
+  sel($("c-finish"), [{ id: "", label: "Livery's own" }, ...O.finishes.map((f) => ({ id: f, label: titleCase(f) }))], spec.finish || "");
+  $("c-num").value = spec.num != null ? spec.num : "";
+  const parts = $("c-parts"); parts.innerHTML = "";
+  for (const cat of O.parts) {
+    const wrap = document.createElement("label"); wrap.className = "field";
+    const span = document.createElement("span"); span.textContent = cat.label;
+    const s = document.createElement("select"); s.id = "c-part-" + cat.id; s.dataset.cat = cat.id;
+    sel(s, cat.options, (spec.parts && spec.parts[cat.id]) || O.factory[cat.id]);
+    wrap.append(span, s); parts.appendChild(wrap);
+  }
+}
+function setSpec(patch) { spec = Object.assign({}, spec, patch); buildCar(spec.team); }
+function wireCustom() {
+  $("c-livery").addEventListener("change", (e) => setSpec({ livery: e.target.value }));
+  $("c-finish").addEventListener("change", (e) => setSpec({ finish: e.target.value }));
+  $("c-num").addEventListener("change", (e) => setSpec({ num: e.target.value === "" ? null : Math.max(0, Math.min(99, +e.target.value | 0)) }));
+  $("c-parts").addEventListener("change", (e) => { if (e.target.dataset.cat) setSpec({ parts: Object.assign({}, spec.parts, { [e.target.dataset.cat]: e.target.value }) }); });
+  $("c-random").addEventListener("click", () => {
+    const O = carOptions(spec.team), pick = (a) => a[Math.floor(Math.random() * a.length)];
+    const parts = {}; for (const c of O.parts) parts[c.id] = pick(c.options).id;
+    setSpec({ livery: pick(O.liveries).id, finish: pick(["", ...O.finishes]), parts });
+  });
+  $("c-reset").addEventListener("click", () => setSpec({ livery: null, finish: "", num: null, parts: {} }));
+}
+
+// ── circuits ─────────────────────────────────────────────────────────
+function buildCircuit(id) {
+  const D = DATA.circuits[id];
+  clearWorld(); world = new THREE.Group(); scene.add(world);
+  scene.environment = null; $("custom").hidden = true; framedTeam = null;
+  const N = D.x.length;
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, minY = Infinity, maxY = -Infinity, maxK = 0;
+  for (let i = 0; i < N; i++) {
+    minX = Math.min(minX, D.x[i]); maxX = Math.max(maxX, D.x[i]);
+    minZ = Math.min(minZ, D.z[i]); maxZ = Math.max(maxZ, D.z[i]);
+    minY = Math.min(minY, D.y[i]); maxY = Math.max(maxY, D.y[i]);
+    maxK = Math.max(maxK, Math.abs(D.k[i]));
+  }
+  const S = 10 / Math.max(maxX - minX, maxZ - minZ), cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+  const range = Math.max(maxY - minY, 0.1);
+  const YEX = Math.round(Math.min(15, Math.max(1, 0.9 / (range * S))));
+  const W = 3;
+  const P = (i, lat, lift) => new THREE.Vector3((D.x[i] + D.rx[i] * lat - cx) * S, (D.y[i] - minY) * S * YEX + lift, (D.z[i] + D.rz[i] * lat - cz) * S);
+  const quad = (i, N) => { const j = (i + 1) % N; return [2 * i, 2 * j, 2 * i + 1, 2 * i + 1, 2 * j, 2 * j + 1]; };
+
+  const pos = [], col = [], idx = [], c = new THREE.Color();
+  const road = new THREE.Color(css("--road")), mid = new THREE.Color(0xf2c230), hot = new THREE.Color(0xe5481c);
+  for (let i = 0; i < N; i++) {
+    const a = P(i, -D.hw[i] * W, 0.01), b = P(i, D.hw[i] * W, 0.01);
+    pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+    const t = Math.min(Math.abs(D.k[i]) / 0.03, 1);
+    if (t < 0.5) c.copy(road).lerp(mid, t * 2); else c.copy(mid).lerp(hot, (t - 0.5) * 2);
+    col.push(c.r, c.g, c.b, c.r, c.g, c.b);
+    idx.push(...quad(i, N));
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  world.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+
+  // Skirt down to the ground so elevation reads as a solid embankment.
+  const sk = [], si = [];
+  for (let i = 0; i < N; i++) { const p = P(i, 0, 0); sk.push(p.x, p.y, p.z, p.x, -0.02, p.z); si.push(...quad(i, N)); }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.Float32BufferAttribute(sk, 3)); sg.setIndex(si);
+  world.add(new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.12, side: THREE.DoubleSide })));
+
+  const pts = []; for (let i = 0; i < N; i++) pts.push(P(i, D.l[i] * W, 0.03));
+  const curve = new THREE.CatmullRomCurve3(pts, true);
+  world.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(3000)), new THREE.LineBasicMaterial({ color: css("--race") })));
+
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry((maxX - minX) * S + 2, (maxZ - minZ) * S + 2), new THREE.MeshLambertMaterial({ color: css("--grass") }));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; world.add(ground);
+  world.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([P(0, -D.hw[0] * W, 0.02), P(0, D.hw[0] * W, 0.02)]), new THREE.LineBasicMaterial({ color: 0xffffff })));
+
+  const car = new THREE.Group();
+  const paint = new THREE.MeshLambertMaterial({ color: css("--accent") });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.035, 0.2), paint); body.position.y = 0.03; car.add(body);
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.012, 0.03), new THREE.MeshLambertMaterial({ color: 0x15181c })); wing.position.set(0, 0.065, -0.09); car.add(wing);
+  world.add(car);
+  let u = 0; const ahead = new THREE.Vector3();
+  const place = () => { curve.getPointAt(u, car.position); curve.getPointAt((u + 0.0015) % 1, ahead); car.lookAt(ahead); };
+  place();
+  tick = (dt) => { if (!reduced) { u = (u + 220 * dt / D.total) % 1; place(); } };
+
+  const xs = (maxX - minX) * S, zs = (maxZ - minZ) * S;
+  const fit = 1.25 / Math.min(1, camera.aspect);
+  camera.position.set(-xs * 0.35 * fit, Math.max(xs, zs) * 0.85 * fit, zs * 0.8 * fit);
+  controls.target.set(0, 0, 0); controls.maxPolarAngle = Math.PI * 0.48; controls.minDistance = 0.5; controls.maxDistance = 40; controls.update();
+
+  $("eyebrow").textContent = "Apex 26 · Tracks.build centreline";
+  $("title").innerHTML = "";
+  const parts = String(D.name).split("-");
+  $("title").append(parts[0]);
+  if (parts.length > 1) { const s = document.createElement("span"); s.textContent = "-" + parts.slice(1).join("-"); $("title").append(s); }
+  stats([["Lap length", fmt(D.total) + " m"], ["Built nodes", fmt(D.nodes)], ["Elevation range", range.toFixed(1) + " m"],
+    ["Tightest radius", maxK ? Math.round(1 / maxK) + " m" : "–"]]);
+  $("legend").innerHTML = '<span><i class="ramp"></i>Road, coloured by curvature (straight → hairpin)</span><span><i class="race"></i>Racing line</span><span><i class="car"></i>Car on the line</span><span>Height ×' + YEX + ", width ×" + W + "</span>";
+  $("note").innerHTML = "Every point comes from <code>Tracks.build()</code>, sampled to about 500 nodes. Road width and racing-line offsets are drawn 3× wide so they read at circuit scale; height is exaggerated by the factor shown above.";
+}
+
+// ── chrome ───────────────────────────────────────────────────────────
+const ids = (m) => m === "cars" ? (HAS_CARS ? DATA.cars : []) : Object.keys(DATA.circuits || {});
+const MODES = [["cars", "Cars", buildCar], ["circuits", "Circuits", buildCircuit]].filter(([k]) => ids(k).length);
+let mode = null, pick = {};
+function setMode(m) {
+  mode = m; store.set("mode", m);
+  for (const b of $("modes").children) b.setAttribute("aria-pressed", String(b.dataset.mode === m));
+  const picker = $("picker"); picker.innerHTML = "";
+  for (const id of ids(m)) {
+    const b = document.createElement("button");
+    b.type = "button"; b.id = "pick-" + m + "-" + id; b.dataset.id = id;
+    b.textContent = m === "cars" ? teamOf(id).short : String(DATA.circuits[id].name).split("-")[0];
+    b.title = m === "cars" ? teamOf(id).name : DATA.circuits[id].name;
+    b.addEventListener("click", () => select(id));
+    picker.appendChild(b);
+  }
+  const saved = m === "cars" ? spec.team : store.get(m);
+  select(saved && ids(m).includes(saved) ? saved : ids(m)[0]);
+}
+function select(id) {
+  pick[mode] = id; store.set(mode, id);
+  for (const b of $("picker").children) b.setAttribute("aria-pressed", String(b.dataset.id === id));
+  MODES.find(([k]) => k === mode)[2](id);
+  renderer.setClearColor(new THREE.Color(css("--sky")));
+}
+for (const [k, label] of MODES) {
+  const b = document.createElement("button");
+  b.type = "button"; b.id = "mode-" + k; b.dataset.mode = k; b.textContent = label;
+  b.addEventListener("click", () => setMode(k));
+  $("modes").appendChild(b);
+}
+if (MODES.length < 2) $("modes").hidden = true;
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(view);
+const repaint = () => { if (mode) select(pick[mode]); };
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", repaint);
+new MutationObserver(repaint).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.max(0, Math.min((now - last) / 1000, 0.1)); last = now;
+  if (tick && !frozen) tick(dt);
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+resize();
+if (HAS_CARS) wireCustom();
+if (MODES.length) {
+  const savedMode = store.get("mode");
+  setMode(MODES.some(([k]) => k === savedMode) ? savedMode : MODES[0][0]);
+} else {
+  view.innerHTML = '<p class="empty">This page was built with no cars and no circuits.</p>';
+}
+// Close-up cameras in the car's own frame (+Z forward, +Y up, metres; the front
+// axle is z 1.7, the rear -1.6, a wheel's outer face x ±0.95). A sheet frames
+// each variant on the part that changes, so a 3 cm difference fills the shot
+// instead of 1% of a whole-car still. [eye, target].
+const FRAMES = {
+  side:        [[6.2, 0.7, -0.1], [0, 0.45, -0.1]],
+  nose:        [[1.9, 0.9, 3.9], [0, 0.35, 2.0]],
+  front_wheel: [[2.1, 0.55, 2.3], [0.75, 0.34, 1.7]],
+  front_susp:  [[1.0, 1.25, 3.4], [0.45, 0.32, 1.65]],
+  rear_wheel:  [[2.1, 0.6, -2.3], [0.75, 0.36, -1.6]],
+  sidepod:     [[2.6, 1.5, 0.4], [0.35, 0.5, -0.4]],
+  airbox:      [[1.7, 1.9, 0.9], [0, 0.85, -0.3]],
+  rear:        [[1.7, 1.4, -4.2], [0, 0.6, -2.3]],
+  diffuser:    [[1.3, 0.5, -3.9], [0, 0.3, -2.4]],
+  floor:       [[3.0, 0.25, 0.3], [0.5, 0.1, -0.4]],
+  cockpit:     [[1.0, 1.6, 1.9], [0, 0.8, 0]],
+  top:         [[0.01, 7.5, 0], [0, 0, 0]],
+};
+// Headless hook (tools/viewer/viewer-shots.mjs): select one item, freeze motion
+// at its opening pose, and report once a frame has been drawn.
+window.APEX_VIEWER = {
+  ready: true,
+  select: (m, id) => { setMode(m); select(id); },
+  // Cars: every livery / finish / part id the page can build for a team, and one exact build.
+  options: (teamId) => carOptions(teamId),
+  frames: () => Object.keys(FRAMES),
+  // Aim at one close-up; framedTeam stays set, so a rebuild of the next variant keeps the shot.
+  frame: (name) => { const f = FRAMES[name]; if (!f) return false; controls.minDistance = 0.3;
+    camera.position.set(...f[0]); controls.target.set(...f[1]); controls.update(); return true; },
+  car: (s) => { if (mode !== "cars") setMode("cars"); spec = Object.assign({ livery: null, finish: "", num: null, parts: {} }, s);
+    for (const b of $("picker").children) b.setAttribute("aria-pressed", String(b.dataset.id === spec.team));
+    return buildCar(spec.team); },
+  still: () => new Promise((done) => { frozen = true; $("hint").hidden = true; requestAnimationFrame(() => requestAnimationFrame(() => done(true))); }),
+};
+requestAnimationFrame(frame);
+</script>
