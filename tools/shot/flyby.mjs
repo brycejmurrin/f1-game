@@ -25,6 +25,7 @@
  *   node tools/shot/flyby.mjs --u 0,0.38,0.72        # exact shot boundaries
  *   node tools/shot/flyby.mjs --frames 16 --out artifacts/flyby
  *   node tools/shot/flyby.mjs --shots scratch/shots.json   # an edited list, unbaked
+ *   node tools/shot/flyby.mjs --track bahrain --tod night --weather wet --seed 3
  *
  * Per track it writes one PNG per frame, `<track>-sheet.png` (every frame on one
  * image with its u and shot id, because a sequence is judged as a sequence) and
@@ -47,6 +48,7 @@ const argv = process.argv.slice(2);
 exitIfHelp(argv, `flyby — contact sheet + JSON of the pre-race FLYBY shots
 
   node tools/shot/flyby.mjs [--track monza] [--frames N] [--out DIR] [--u 0,0.5,1] [--shots file]
+    [--tod default|day|dawn|dusk|night] [--weather dry|wet|rain|overcast|fog|storm] [--seed uint32]
 
 Default: monza, 9 frames → artifacts/flyby/. Flags a camera inside scenery.`);
 const arg = (name, def) => {
@@ -63,11 +65,21 @@ const FRAMES = +arg("frames", 9);
 const W = +arg("width", 720), H = +arg("height", 405);
 const BACKENDS = ["webgl2", "three", "webgpu"];
 const BACKEND = arg("backend", "webgl2");
+const TIMES = ["default", "day", "dawn", "dusk", "night"];
+const WEATHERS = ["dry", "wet", "rain", "overcast", "fog", "storm"];
+const TOD = arg("tod", "default");
+const WEATHER = arg("weather", "dry");
+const SEED_ARG = arg("seed", null);
+const SEED = SEED_ARG == null ? null : Number(SEED_ARG);
 const ON_ROAD_LAT = 12;       // tests/unit/flyby-shots.test.mjs's on-road bound
 const MAX_LIFT = 25;          // …and its "rescued, not framed" bound
 
 // ---- everything checkable before a 60 s boot is checked before it ----------
 if (!BACKENDS.includes(BACKEND)) die(`--backend must be one of ${BACKENDS.join(", ")} (got "${BACKEND}")`);
+if (!TIMES.includes(TOD)) die(`--tod must be one of ${TIMES.join(", ")} (got "${TOD}")`);
+if (!WEATHERS.includes(WEATHER)) die(`--weather must be one of ${WEATHERS.join(", ")} (got "${WEATHER}")`);
+if (SEED != null && (!Number.isInteger(SEED) || SEED < 0 || SEED > 0xffffffff))
+  die(`--seed must be a uint32 (got "${SEED_ARG}")`);
 if (!(FRAMES >= 1) || !Number.isInteger(FRAMES)) die(`--frames must be a positive integer (got "${arg("frames")}")`);
 if (!(PORT >= 0 && PORT < 65536)) die(`--port must be 0..65535 (got "${arg("port")}")`);
 const { CIRCUITS } = require(path.join(ROOT, "tools/manifest.cjs"));
@@ -101,12 +113,14 @@ function defect(r) {
 
 async function shootTrack(page, track) {
   // A race builds the world; the flyby solver needs a built track, not a menu.
-  const ok = await page.evaluate(async (id) => {
-    const r = window.__apex.race(id);
+  const ok = await page.evaluate(async ([id, tod, weather]) => {
+    // The loading flyby seats free-play cars in tier order. Pin the same rule:
+    // a prior interactive choice must not leak a random/quali grid into a sheet.
+    const r = window.__apex.race(id, tod, weather, { grid: "tier" });
     if (!r) return false;
     await r;
     return true;
-  }, track);
+  }, [track, TOD, WEATHER]);
   if (!ok) throw new Error(`__apex.race("${track}") refused the track id`);
   // BY ID: after the first track info().track is already truthy, and a bare
   // truthiness wait would shoot the previous circuit.
@@ -118,9 +132,16 @@ async function shootTrack(page, track) {
   // track: startRace() clears it.
   await page.evaluate(() => window.__apex.freeze(true));
 
+  // Authored --shots are the saved-list tier and therefore win unchanged.
+  // Otherwise layer this circuit's signature over DEFAULT, then apply the
+  // requested deterministic vary() seed.
+  const trackShots = SHOTS || await page.evaluate(([id, seed]) => {
+    const base = window.FlybyOverrides.resolve(id, FlybySeq.DEFAULT, null);
+    return seed == null ? base : FlybySeq.vary(base, seed);
+  }, [track, SEED]);
   const rows = [];
   for (const u of points) {
-    const r = await page.evaluate(([uu, shots]) => window.__apex.flybyCam(uu, shots || undefined), [u, SHOTS]);
+    const r = await page.evaluate(([uu, shots]) => window.__apex.flybyCam(uu, shots), [u, trackShots]);
     if (!r) throw new Error("flybyCam unavailable — is the track built?");
     const bad = defect(r);
     const name = `${track}-u${String(Math.round(u * 100)).padStart(3, "0")}-${r.shot}${bad ? "-BAD" : ""}.png`;
@@ -160,7 +181,8 @@ async function shootTrack(page, track) {
   fs.writeFileSync(path.join(ROOT, OUT, `${track}-sheet.png`), Buffer.from(sheet, "base64"));
   for (const r of rows) delete r.b64;
   fs.writeFileSync(path.join(ROOT, OUT, `${track}-flyby.json`), JSON.stringify({
-    track, backend: BACKEND, shots: SHOTS_FILE || null, sheet: `${track}-sheet.png`, frames: rows,
+    track, backend: BACKEND, timeOfDay: TOD, weather: WEATHER, seed: SEED,
+    grid: "tier", shots: SHOTS_FILE || null, sheet: `${track}-sheet.png`, frames: rows,
   }, null, 2) + "\n");
   return rows;
 }

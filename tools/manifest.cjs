@@ -233,6 +233,7 @@ const FULL = [
   // The announcer's authored half. Data only, read at CALL time and guarded on
   // the global, so the order is for tidiness rather than correctness.
   "js/data/circuit-lore.js",
+  "js/data/flyby-overrides.js",
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js

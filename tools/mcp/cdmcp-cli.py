@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import socket
 import subprocess
 import sys
@@ -136,14 +137,38 @@ class McpClient:
             )
         except Exception:
             pass
+        tools = self._request("tools/list").get("tools", [])
+        self._page_scoped = {
+            tool["name"]
+            for tool in tools
+            if "pageId" in (tool.get("inputSchema", {}).get("required") or [])
+        }
+        self._page_id: int | None = None
+        if self._page_scoped:
+            pages = text_result(self._raw_call("list_pages", {}))
+            match = (
+                re.search(r"(?m)^(\d+):.*\[selected\]\s*$", pages)
+                or re.search(r"(?m)^(\d+):", pages)
+            )
+            if not match:
+                raise RuntimeError(f"cannot discover chrome-devtools pageId:\n{pages}")
+            self._page_id = int(match.group(1))
 
     def tools_list(self) -> list[str]:
         r = self._request("tools/list")
         return [t["name"] for t in r.get("tools", [])]
 
+    def _raw_call(self, name: str, arguments: dict) -> dict:
+        return self._request("tools/call", {"name": name, "arguments": arguments})
+
     def call(self, name: str, arguments: dict) -> dict:
-        r = self._request("tools/call", {"name": name, "arguments": arguments})
-        return r
+        args = dict(arguments)
+        if name in self._page_scoped and "pageId" not in args:
+            args["pageId"] = self._page_id
+        result = self._raw_call(name, args)
+        if result.get("isError"):
+            raise RuntimeError(f"{name}: {text_result(result)}")
+        return result
 
     def close(self) -> None:
         if self.proc.stdin:
@@ -634,12 +659,17 @@ def look_boot_js(track: str) -> str:
   if (typeof Assets !== "undefined" && Assets.loadModels) {{
     try {{ await Assets.loadModels(); }} catch (_) {{}}
   }}
-  a.race({json.dumps(track)});
-  for (let i = 0; i < 80 && !(a.info() && a.info().track); i++) await wait(200);
+  await a.race({json.dumps(track)});
+  const loadedInfo = a.info() || {{}};
+  if (loadedInfo.track !== {json.dumps(track)})
+    return {{ ok: false, error: "track mismatch", track: loadedInfo.track }};
   a.go();
   a.step(1/60, 120);
   a.camera("chase");
   if (a.hud) a.hud(false);
+  const overlay = document.getElementById("overlay");
+  if (overlay) overlay.hidden = true;
+  document.querySelectorAll(".screen").forEach(el => el.hidden = true);
   const ls = a.lightState ? a.lightState() : null;
   const info = a.info() || {{}};
   return {{
@@ -651,7 +681,14 @@ def look_boot_js(track: str) -> str:
 }}"""
 
 
-def look_settle_js(tod: str, wx: str, frac: float, prev_tod: str | None, parked: bool) -> str:
+def look_settle_js(
+    tod: str,
+    wx: str,
+    frac: float,
+    prev_tod: str | None,
+    parked: bool,
+    track: str | None = None,
+) -> str:
     """Settle one look. 1.6 s poll only when sessionDark flips (day ↔ dawn/dusk/night)."""
     return f"""async () => {{
   const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -661,6 +698,7 @@ def look_settle_js(tod: str, wx: str, frac: float, prev_tod: str | None, parked:
   const frac = {frac};
   const prevTod = {json.dumps(prev_tod)};
   const parked = {json.dumps(parked)};
+  const expectedTrack = {json.dumps(track)};
   if (a.weather) a.weather(wx);
   if (prevTod !== tod && a.setTimeOfDay) a.setTimeOfDay(tod);
   const nowDark = tod !== "day";
@@ -682,6 +720,13 @@ def look_settle_js(tod: str, wx: str, frac: float, prev_tod: str | None, parked:
     a.step(1/60, 2);
   }}
   await new Promise(r => requestAnimationFrame(r));
+  const info = a.info() || {{}};
+  if (expectedTrack && info.track !== expectedTrack)
+    throw new Error(`active track mismatch: expected ${{expectedTrack}}, got ${{info.track}}`);
+  const overlay = document.getElementById("overlay");
+  if (overlay) overlay.hidden = true;
+  document.querySelectorAll(".screen").forEach(el => el.hidden = true);
+  const presented = a.awaitPresent ? await a.awaitPresent(15000) : null;
   const ls = a.lightState ? a.lightState() : null;
   return {{
     ok: true,
@@ -693,6 +738,8 @@ def look_settle_js(tod: str, wx: str, frac: float, prev_tod: str | None, parked:
     numLights: ls && ls.numLights,
     sunY: ls && ls.sunY,
     builtNight: ls && ls.builtNight,
+    activeTrack: info.track,
+    presented,
   }};
 }}"""
 
@@ -731,7 +778,7 @@ def survey_track_looks(
     for tod, wx in ordered:
         print(f"  look {tod}|{wx}")
         rec = eval_json(c.call("evaluate_script", {
-            "function": look_settle_js(tod, wx, frac, prev_tod, parked),
+            "function": look_settle_js(tod, wx, frac, prev_tod, parked, track),
         }))
         png = out_dir / f"{tod}-{wx}.png"
         c.call("take_screenshot", {"filePath": str(png)})
@@ -769,7 +816,7 @@ def cmd_look_survey(argv: list[str]) -> None:
     Outputs:
       artifacts/lighting/shots/<track>/<tod>-<wx>.png  — one per combo
       artifacts/lighting/shots/<track>/state.json       — lightState snapshot
-      docs/look-survey/<track>_grid.png                 — stitched sheet (commit on track-survey-assets)
+      artifacts/lighting/sheets/<track>_grid.png       — stitched sheet (gitignored)
         (run: python3 tools/lighting/look-survey-sheet.py <track>)
 
     loadTrack rebuilds only on day ↔ dawn/dusk/night flip; weather-only combos

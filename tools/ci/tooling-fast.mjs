@@ -279,6 +279,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-comments.test.mjs",
   "tests/unit/css-critical-path.test.mjs",
   "tests/unit/css-faces.test.mjs",
+  "tests/unit/css-has-scope.test.mjs",
   "tests/unit/css-layers.test.mjs",
   "tests/unit/css-media-disjoint.test.mjs",
   "tests/unit/css-play.test.mjs",
@@ -632,6 +633,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-design.test.mjs",
   "tests/unit/livery-finish-contract.test.mjs",
   "tests/unit/livery-helmet-style.test.mjs",
+  // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
+  "tests/unit/livery-sidewall.test.mjs",
   "tests/unit/livery-tier.test.mjs",
   // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
   "tests/unit/livery-wheels.test.mjs",
@@ -835,6 +838,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // flag windows. Pure rules in a VM, ~0.3 s together.
   "tests/unit/ready-gate.test.mjs",
   "tests/unit/real-race-script.test.mjs",
+  // WATCH recording-gap cache (#2465): explicit refresh replaces a stale interior hole and keeps a pit stop and a red flag. VM, under a second.
+  "tests/unit/real-race-tab-gap-refresh.test.mjs",
   "tests/unit/real-race.test.mjs",
   // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
   "tests/unit/real-replay-captions.test.mjs",
@@ -1030,6 +1035,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/title-flow.test.mjs",
   "tests/unit/title-home-scene-prepaint.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
+  // three's per-frame tick once per drawn frame on WebGL2 (the pump), WebGPU untouched: the real pumpAnimation over a fake three Animation, and the install gate.
+  "tests/unit/tlx-anim-pump.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
   "tests/unit/tlx-cull-shadow-pack.test.mjs",
   // A throw in one TLX subsystem costs that subsystem only: the car/lamp shadow

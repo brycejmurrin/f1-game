@@ -21,6 +21,7 @@ const CarMaterials = (function () {
   // it is the default and remaps nothing.
   const FINISH_SURFACE = Object.freeze({
     satin: 26, chrome: 27, matte: 28, carbon: 31, brushed: 29, pearl: 30,
+    tinted: 36, chameleon: 37,   // shader branches exist in GLX/TLX/WGX (surface-id-parity.test.mjs)
   });
   // RESERVED FINISH IDS (garage finishes contract, 2026-10-17). A finish row joins FINISH_SURFACE only when its
   // shader branch exists in GLX, TLX and WGX, so the garage never offers a finish that renders as plain paint;
