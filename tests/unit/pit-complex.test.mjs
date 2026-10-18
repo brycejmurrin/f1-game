@@ -269,12 +269,13 @@ test("a street complex owns its side: no engine street barrier on the lane, the 
   // the row's pitch under a bay's width: the boxes are painted, no bay stands.
   const j = buildOnce("jeddah").pit;
   assert.equal(j.hasBays, false, "no garages on a row a bay cannot fit");
-  assert.ok(j.row.pitch < P.PITCH, `pitch ${j.row.pitch.toFixed(2)} < ${P.PITCH}`);
+  assert.ok(j.row.pitch <= P.PITCH, `pitch ${j.row.pitch.toFixed(2)} <= ${P.PITCH}`);
   assert.ok(j.row.painted && j.row.painted.length === 12, "…but its twelve boxes are still painted");
   assert.equal(j.row.placed.length, 0, "…and none placed");
-  // The GUARD decides, not the def's `bays: false`: the same def without the key gets none either.
   const def = T.LIST.find((d) => d.id === "jeddah");
-  assert.equal(built(Object.assign({}, def, { pit: { mode: "street", side: -1 } })).pit.hasBays, false, "the pitch guard alone withholds the bays");
+  assert.equal(built(def).pit.hasBays, false, "explicit bays:false even when the window fits a full row (#2201 start move)");
+  const syn = built(Object.assign({}, def, { pit: { mode: "street", side: -1 } }));
+  assert.equal(syn.pit.hasBays, true, "without bays:false a fitting window allows the row (#2201: ~342 m window)");
 });
 
 test("the bands are the regulation's: >= 12 m wall-to-garage, a <= 3.5 m fast lane, a >= 1 m corridor", () => {
