@@ -130,8 +130,11 @@ test("docs/TESTING.md documents every test group, and no group that is gone", ()
   assert.deepEqual(stale, [], "docs/TESTING.md lists a group that no longer exists in package.json");
 });
 
-test("docs/TESTING.md's coverage table names every root spec and unit suite", () => {
-  const doc = section(read("docs/TESTING.md"), "5. Coverage table");
+test("docs/TESTING-COVERAGE.md names every root spec and unit suite", () => {
+  const doc = read("docs/TESTING-COVERAGE.md");
+  const link = section(read("docs/TESTING.md"), "5. Coverage table");
+  assert.match(link, /TESTING-COVERAGE\.md/, "docs/TESTING.md §5 must link to the generated coverage page");
+  assert.ok(link.length < 2500, "docs/TESTING.md §5 inlined the coverage table again");
   // A row may name a FAMILY with a glob — the 16 per-circuit foundation specs
   // differ only by circuit and 16 identical rows would document nothing. A new
   // KIND of spec still has to earn its own row.
@@ -141,7 +144,7 @@ test("docs/TESTING.md's coverage table names every root spec and unit suite", ()
     .filter((f) => /\.(spec\.js|test\.(mjs|cjs))$/.test(f));
   const missing = files.filter((f) => !doc.includes(f) && !globs.some((re) => re.test(f)));
   assert.deepEqual(missing, [],
-    "a test file exists but is not described in the docs/TESTING.md coverage table — say what it covers");
+    "a test file exists but is not described in docs/TESTING-COVERAGE.md — say what it covers, then node tools/docs/gen-coverage-table.mjs");
 });
 
 test("docs/TESTING.md's file counts match the files on disk", () => {
