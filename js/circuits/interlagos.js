@@ -13,6 +13,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.3,
+    tyreSeverity: 0.92,  // Compact layout, moderate measured-era deg; below Japan 0.85 severity scale anchor
     baseHW: 7,
     terrainOuter: 120,
     dressingExclusions: [

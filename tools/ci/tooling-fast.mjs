@@ -212,6 +212,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-seat-rollover.test.mjs",
   "tests/unit/career-settle.test.mjs",
   "tests/unit/career-ui-lazy.test.mjs",
+  "tests/unit/carve-a-modules.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   // gpu-census.yml's real-GPU Verdict as functions (tools/gfx/census-verdict.mjs)
   // plus its plan gate (nightly skip, push request) executed on a scratch repo; < 1 s.
@@ -724,6 +725,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.
   "tests/unit/ot-ahead-scan-gate.test.mjs",
   "tests/unit/over-road-scan.test.mjs",
+  // Stream overlay v1 schema/diffs, transform painter, TV pass/battle/fastest cards, and staged root page.
+  "tests/unit/overlay-feed.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
   // PaceMath (js/race/pace-math.js): vTop/vStd/aStd + X-mode/ERS/gearHi pins from pre-extract goldens. ~0.1 s.
   "tests/unit/pace-math.test.mjs",
@@ -830,6 +833,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/rain-cells.test.mjs",
   // Two PRs auto-raising one module's ceiling merge clean (ratchets.d fragments, #2291).
   "tests/unit/ratchet-merge-hotspot.test.mjs",
+  "tests/unit/ratchet-reason.test.mjs",
   "tests/unit/ratchets-fold-schedule.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
