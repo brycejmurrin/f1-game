@@ -333,6 +333,7 @@ const FULL = [
   "js/physics/drive-tune.js",  // DriveTune.create(): live PACE / steer / grip lets (game.js wires at eval)
   "js/race/lap-record.js",     // LapRecord.create(): time-trial record + sector bests (game.js wires at eval)
   "js/race/storm-flash.js",    // StormFlash.create(): in-frame lightning flash (after Storm; game.js wires at eval)
+  "js/ui/captions.js",         // Captions: spotter/announcer strip + speaker table (announce-banner calls radioWho)
   "js/race/announce-banner.js", // AnnounceBanner.create(): radio card queue (game.js wires at eval)
   "js/race/light-tune-edit.js", // LightTuneEdit.set(): one lighting-slider write
   "js/race/pace-math.js",      // PaceMath.create(deps): vTop/vStd/aStd + X-mode/ERS/gearHi/rpmFor (game.js wires)

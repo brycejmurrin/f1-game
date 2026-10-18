@@ -205,6 +205,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › SAVES & DATA, which carries a player's state OUT of the browser and back IN. |
+| `captions.js` | `Captions` | tag | Captions: on-screen text for radio, spotter, and pre-race announcer. |
 | `watch-transport.js` | `WatchTransport` | tag | Visible controls for the real-race replay. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `dock-layout.js` | `DockLayout` | tag | DockLayout: per-scheme touch-dock REPOSITION offsets. |

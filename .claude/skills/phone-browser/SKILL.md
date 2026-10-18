@@ -1,6 +1,6 @@
 ---
 name: phone-browser
-description: "Use when the user is on a phone and wants the game in Chromium through the Grok connector, or the connector link stopped working. Not for chrome-devtools, Playwright tests, or desktop."
+description: "Use when the user is on a phone or iPhone and wants the game in Chromium through the Grok custom connector (tunnel, portrait/landscape), or its link or localhost will not open. Not for chrome-devtools, Playwright tests, or desktop."
 ---
 
 # Phone browser
@@ -9,7 +9,16 @@ The user has a phone and no computer. Do not tell them to install anything or ru
 
 ## Already connected
 
-Search connected tools for `browser_open`. If it is there, call it. Landscape is how the game is raced. Portrait is the tall screen. `browser_eval` and `browser_shot` need an open page. Do not start a second browser beside it.
+Search connected tools (ToolSearch) for `browser_open`. If it is there, call it. Do not start a second browser beside it.
+
+`browser_open` (`tools/mcp/browser-http.mjs`) takes ONE optional argument,
+`orientation`: `"landscape"` (default, 852×393 — how the game is raced) or
+`"portrait"` (393×852). There is no URL argument: it serves THIS checkout's
+working tree on a local static server and opens the game there (WebGL2, iPhone
+user agent, touch). It returns `{url, title, apex, width, height, coarse}`.
+Changing orientation rebuilds the page. `browser_eval({expression})` and
+`browser_shot` need an open page; `browser_status` reports `{browser,
+orientation, game, href}`.
 
 ## If the call fails, or no connector is connected
 
