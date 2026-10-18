@@ -969,8 +969,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/speed-coupling.test.mjs",
   // Round-2 track engine: surfaceFolds / centreline diagnostics, running-surface fold clamp, opt-in splineAlpha (unset = byte-identical path).
   "tests/unit/spline-fold-diagnostics.test.mjs",
-  // Hint-less Tracks.project segment grid == the full scan (3 circuits, ~5 s).
-  "tests/unit/spline-project-grid.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
   "tests/unit/spotter-lifecycle.test.mjs",
   // The start gantry's five lamps follow the countdown: one additive glow per
