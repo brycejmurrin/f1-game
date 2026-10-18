@@ -1,1 +1,1 @@
-{"images": "macos-latest", "track": "montreal", "tod": "day", "clock": 12, "census_only": false, "force": "env,chunked", "ls": "", "leg": "hunt-recovery-texture-ownership-6e21"}
+{"images":"macos-latest","track":"vegas","tod":"night","clock":0,"census_only":false,"force":"batches","ls":"","cam":"chase>cockpit","entry":"api","leg":"perf-render-cleanup-d7e2"}

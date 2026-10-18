@@ -3,7 +3,7 @@ const GarageScene = (function () {
   "use strict";
 
 let _gfx = null;            // renderer handle, set once by init()
-function init(gfx) { Log.info("game", "GarageScene.init"); _gfx = gfx; if (typeof GarageCrew !== "undefined") GarageCrew.init(gfx); }
+function init(gfx) { Log.info("game", "GarageScene.init"); if (_gfx && _gfx !== gfx) release(); _gfx = gfx; if (typeof GarageCrew !== "undefined") GarageCrew.init(gfx); }
 
 // The frame clear colour (gfx reads fogColor as the clear) — the "outside" the
 // bay is silhouetted against, and what the apron disc's rim fades into.
@@ -1016,7 +1016,6 @@ function rebuild(team, liv, info, ctx) {
     // not permanently remove this team's wall graphics or moving trace.
     dressFail = 0; dressRetryAt = 0; traceFail = 0;
     if (shellMesh) _gfx.freeMesh(shellMesh);
-    if (trussMesh) _gfx.freeMesh(trussMesh);
     for (let i = 0; i < SIDES.length; i++)
       if (ledMesh[SIDES[i]]) { _gfx.freeMesh(ledMesh[SIDES[i]]); ledMesh[SIDES[i]] = null; }
     if (floorMesh) _gfx.freeMesh(floorMesh);
@@ -1025,9 +1024,13 @@ function rebuild(team, liv, info, ctx) {
     const shell = acc();
     buildShell(shell, liv);
     shellMesh = _gfx.createMesh(shell);
-    const truss = acc();
-    buildTruss(truss);
-    trussMesh = _gfx.createMesh(truss);
+    // Roof geometry and wall-decal UVs never depend on paint, team or context.
+    // Keep their GPU handles until release(), including across colour drags.
+    if (!trussMesh) {
+      const truss = acc();
+      buildTruss(truss);
+      trussMesh = _gfx.createMesh(truss);
+    }
     const led = {};
     for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
     buildLed(led, liv);
@@ -1046,8 +1049,6 @@ function rebuild(team, liv, info, ctx) {
     GarageExperience.buildFacility(g, liv, ctx);
     for (let i = 0; i < SIDES.length; i++)
       if (g[SIDES[i]].idx.length) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
-    for (let i = 0; i < SIDES.length; i++)
-      if (dressMesh[SIDES[i]]) { _gfx.freeMesh(dressMesh[SIDES[i]]); dressMesh[SIDES[i]] = null; }
     // A new team or paint: the "what changed" marker on the spec board starts
     // over — every row differs from the last team's, and a board of twelve
     // highlights marks nothing. The crest canvas itself is keyed below.
@@ -1398,7 +1399,7 @@ function release() {
   const ft = (t) => { if (t && _gfx.freeTexture) { _gfx.freeTexture(t); n++; } return null; };
   shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); trussMesh = fm(trussMesh);
   for (const tbl of [ledMesh, propMesh, dressMesh, liveMesh]) for (const k of Object.keys(tbl)) { fm(tbl[k]); delete tbl[k]; }
-  fanMesh = fm(fanMesh); lampMesh = fm(lampMesh); lampFace = fm(lampFace); passMesh = fm(passMesh);
+  fanMesh = fm(fanMesh); lampMesh = fm(lampMesh); lampFace = fm(lampFace); passMesh = fm(passMesh); mirrorFadeMesh = fm(mirrorFadeMesh);
   dressTex = ft(dressTex); liveTex = ft(liveTex);
   for (const ent of previewMeshes.values()) fm(ent.mesh);
   previewMeshes.clear(); previewHulls.clear();

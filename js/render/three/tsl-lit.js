@@ -2605,16 +2605,20 @@
       const bUv = wp.xz.sub(U.bakeOrigin).div(U.bakeSize).toVar();
       const bIn = bUv.x.greaterThan(0.0).and(bUv.x.lessThan(1.0))
         .and(bUv.y.greaterThan(0.0)).and(bUv.y.lessThan(1.0));
-      const bG = bUv.mul(U.bakeGrid.xy).toVar();
-      const bTile = clamp(floor(bG), vec2(0.0), max(U.bakeGrid.xy.sub(1.0), vec2(0.0))).toVar();
-      const bSlot = BAKE_IDX_NODE.sample(bTile.add(0.5).div(U.bakeGrid.xy)).level(0).xy.toVar();
-      const bUvD = bSlot.add(bG.sub(bTile).mul(U.bakeGrid.z)).add(1.0).div(max(U.bakeAtlas, vec2(1.0))).toVar();
-      const bT = BAKE_NODE.sample(bUvD).level(0).toVar();
       const res = vec3(0.0).toVar();
-      If(U.bakeOn.greaterThan(0.5).and(bIn).and(bSlot.x.greaterThanEqual(0.0)), () => {
-        // alpha = the baked height: a car's marks (0-1.5 m up) share the road's pool
-        const hW = smoothstep(1.5, 3.0, abs(wp.y.sub(bT.a))).oneMinus();
-        res.assign(bT.rgb.mul(U.bakeScale).mul(hW).mul(n.y.mul(0.5).add(0.5)));
+      // Explicit LOD taps need no derivatives: keep them inside the gates so
+      // daytime/garage decals do not read an inactive bake, or an empty tile.
+      If(U.bakeOn.greaterThan(0.5).and(bIn), () => {
+        const bG = bUv.mul(U.bakeGrid.xy).toVar();
+        const bTile = clamp(floor(bG), vec2(0.0), max(U.bakeGrid.xy.sub(1.0), vec2(0.0))).toVar();
+        const bSlot = BAKE_IDX_NODE.sample(bTile.add(0.5).div(U.bakeGrid.xy)).level(0).xy.toVar();
+        If(bSlot.x.greaterThanEqual(0.0), () => {
+          const bUvD = bSlot.add(bG.sub(bTile).mul(U.bakeGrid.z)).add(1.0).div(max(U.bakeAtlas, vec2(1.0))).toVar();
+          const bT = BAKE_NODE.sample(bUvD).level(0).toVar();
+          // alpha = the baked height: a car's marks (0-1.5 m up) share the road's pool
+          const hW = smoothstep(1.5, 3.0, abs(wp.y.sub(bT.a))).oneMinus();
+          res.assign(bT.rgb.mul(U.bakeScale).mul(hW).mul(n.y.mul(0.5).add(0.5)));
+        });
       });
       return res;
     });

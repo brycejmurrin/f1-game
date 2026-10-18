@@ -158,3 +158,86 @@ test("reset() stops the cadence keep re-arming the previous session's car map", 
   sp.sunPass(frame, 5, true);
   assert.equal(calls.keep, 2, "a pass of the new session re-enables the keep");
 });
+
+// Mobile renderers retain the Begin hooks for API parity, but allocate no car/lamp
+// map. Drive the real producer: these paths must not resolve a silhouette or cull
+// prop batches just to feed a renderer no-op. Capability getters remain live so a
+// backend/target change is observed immediately, without debug-snapshot allocations.
+function dynamicShadowFixture() {
+  const ctx = vm.createContext({ Math, Float32Array, Array, Object, Number, Infinity });
+  seedLog(ctx);
+  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx);
+  vm.runInContext(`var LightTune = { LT: { shadowRange: 80, shadowStr: 1, carShadow: 1, moonShadow: 0, lampShadow: 1 } };
+    var PerfGov = { tier: () => 1 };`, ctx);
+  vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx);
+  const calls = { sun: 0, car: 0, lamp: 0, keep: 0, mesh: 0, cull: 0 };
+  const enabled = { car: false, lamp: false };
+  const noop = () => {};
+  const G = {
+    track: { propTop: 30, meshes: { terrainChunked: null, roadChunked: null, terrain: {}, road: {}, props: {}, propBatches: [{}, {}] } },
+    camEye: [0, 3, -8], camTgt: [0, 0, 0], player: { speed: 20, head: 0, team: 0 }, state: "race",
+    gfx: {
+      get carShadowEnabled() { return enabled.car; }, get lampShadowEnabled() { return enabled.lamp; },
+      shadowBegin: () => calls.sun++, shadowEnd: noop, castShadow: noop, castShadowChunked: noop,
+      carShadowBegin: () => calls.car++, carShadowEnd: noop, carShadowKeep: () => calls.keep++,
+      lampShadowBegin: () => calls.lamp++, lampShadowEnd: noop, lampShadowKeep: noop,
+      makeFrustumPlanes: () => [], shadowCullVP: [],
+      cullInstances: () => { calls.cull++; return 0; }, castShadowInstanced: noop,
+    },
+  };
+  const sp = ctx.ShadowPass.create(G, { vStd: v => v, teamMesh: () => { calls.mesh++; return {}; } });
+  const lights = [0, 10, 0, 10, 10, 10, 50, 0, -1, 0, 0.9, 0.7, 0, 0, 0];
+  const frame = (night = false) => ({ sunDir: [0, 0.8, 0.6], sunColor: night ? [0.1, 0.1, 0.1] : [1, 1, 1], lights, lampLum: [10], tailCount: 0 });
+  return { sp, calls, enabled, frame, G, LT: ctx.LightTune.LT };
+}
+
+test("disabled car maps do not resolve casters; live capability restoration and legacy hooks work", () => {
+  const { sp, calls, enabled, frame, G } = dynamicShadowFixture();
+  for (let n = 0; n < 60; n++) sp.sunPass(frame(), n, true);
+  assert.equal(calls.car, 0);
+  assert.equal(calls.mesh, 0, "no silhouettes built for an absent mobile map");
+  enabled.car = true;
+  sp.sunPass(frame(), 60, true);
+  assert.equal(calls.car, 1);
+  assert.equal(calls.mesh, 1);
+  enabled.car = false; G.player.speed = 0;
+  sp.sunPass(frame(), 61, true);
+  assert.equal(calls.keep, 0, "a disabled map must not be cadence-armed");
+  // Older consumers may omit capability metadata; a hook alone remains supported.
+  Object.defineProperty(G.gfx, "carShadowEnabled", { value: undefined });
+  sp.sunPass(frame(), 62, true);
+  assert.equal(calls.car, 2);
+});
+
+test("disabled lamp maps skip lamp caster resolution and prop packing, and resume when enabled", () => {
+  const { sp, calls, enabled, frame } = dynamicShadowFixture();
+  for (let n = 0; n < 60; n++) {
+    sp.livePlayerMat[12] = n * 0.5;
+    sp.lampPass(frame(true), n, true);
+  }
+  assert.equal(calls.lamp, 0);
+  assert.equal(calls.mesh, 0);
+  assert.equal(calls.cull, 0, "no prop batches packed for a renderer no-op");
+  enabled.lamp = true;
+  sp.lampPass(frame(true), 60, true);
+  assert.equal(calls.lamp, 1);
+  assert.equal(calls.mesh, 1);
+  assert.equal(calls.cull, 2);
+});
+
+test("zero shadow darkness stops only the car map, preserving sun-map readers and restoration", () => {
+  const { sp, calls, enabled, frame, LT } = dynamicShadowFixture();
+  enabled.car = true;
+  LT.shadowStr = 0;
+  for (let n = 0; n < 60; n++) sp.sunPass(frame(), n, true);
+  assert.equal(calls.car, 0);
+  assert.equal(calls.mesh, 0);
+  assert.equal(calls.sun, 1, "the static sun map still supplies god-rays");
+  LT.shadowStr = 1;
+  sp.sunPass(frame(), 60, true);
+  assert.equal(calls.car, 1);
+  assert.equal(calls.mesh, 1);
+  LT.shadowStr = 0;
+  sp.sunPass(frame(), 61, true);
+  assert.equal(calls.keep, 0, "zero strength must not keep a stale car map armed");
+});

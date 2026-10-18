@@ -264,6 +264,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/census-verdict.mjs** | Reads one image's census + four game-check JSONs, prints the Verdict rows and fails on what the game reported. | renderer-debug |
 | **gfx/chunk-reach.cjs** | How much chunked scenery a pass reaches, counted headlessly: re-bins triangles into 72 m cells like `createChunkedMesh`. | — |
 | **gfx/chunk-share-census.mjs** | Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run. | renderer-debug / lighting-tuner |
+| **gfx/decal-bake-probe.mjs** | Compare production decal bake pixels on WebGL2: five cases, baseline ref and JSON artifact. | — |
 | **gfx/frame-hitch.mjs** | Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation). | playwright-probe / renderer-debug |
 | **gfx/gfx-probe.mjs** | WEBGPU + THREE screenshot probe with the right Chromium flags: `--backend`, `--tlx-webgpu`, `--lavapipe`, `--lite`. | renderer-debug / mcp-probe |
 | **gfx/gl-object-census.mjs** | GL object census: WebGL2 create/delete counts (VAO, program, shader, buffer, texture, FBO, RBO) per circuit visit. | renderer-debug / mcp-probe |

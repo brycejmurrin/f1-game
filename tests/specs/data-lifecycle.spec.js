@@ -28,6 +28,43 @@ async function dataReady(page) {
   await page.waitForFunction(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined");
 }
 
+test("superseded schedule responses retire native countdown observers", async ({ page }) => {
+  await dataReady(page);
+  await page.evaluate(() => {
+    const NativeObserver = window.MutationObserver;
+    const active = new Set();
+    window.__scheduleObserverProbe = { active, made: 0, calls: 0 };
+    window.MutationObserver = class extends NativeObserver {
+      observe(target, options) {
+        if (target === document.documentElement && options.subtree && options.childList &&
+            options.attributeFilter && options.attributeFilter.includes("hidden")) {
+          if (!active.has(this)) window.__scheduleObserverProbe.made++;
+          active.add(this);
+        }
+        return super.observe(target, options);
+      }
+      disconnect() { active.delete(this); return super.disconnect(); }
+    };
+    let resolve;
+    const pending = new Promise(r => { resolve = r; });
+    F1API.schedule = () => { window.__scheduleObserverProbe.calls++; return pending; };
+    F1API.driverStandings = () => Promise.resolve([]);
+    F1API.constructorStandings = () => Promise.resolve([]);
+    DataHub.init(document.getElementById("datahub"));
+    for (let i = 0; i < 40; i++) DataHub.open("schedule");
+    DataHub.open("standings");
+    const date = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+    resolve([{ round: 1, name: "Future GP", circuit: "Test Circuit", locality: "Test", country: "Test", date, time: "12:00:00Z" }]);
+  });
+  await page.waitForFunction(() => window.__scheduleObserverProbe.made === 40, null, { polling: 100 });
+  expect(await page.evaluate(() => window.__scheduleObserverProbe.active.size)).toBe(1);
+  expect(await page.locator("#dh-panel [data-nextgp=tile]").count()).toBe(0);
+  await page.evaluate(() => DataHub.open("schedule"));
+  await expect(page.locator("#dh-panel [data-nextgp=tile]")).toBeVisible();
+  expect(await page.evaluate(() => ({ calls: window.__scheduleObserverProbe.calls,
+    active: window.__scheduleObserverProbe.active.size }))).toEqual({ calls: 40, active: 1 });
+});
+
 async function openLive(page) {
   await page.evaluate(() => {
     DataHub.init(document.getElementById("datahub"));
