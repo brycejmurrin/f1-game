@@ -52,7 +52,7 @@ Exact calls for the PARENT to make (you have no GitHub tools; owner `brycejmurri
 - FIX: hand to `ci-red-triage` with the head sha (or message the live owner)
 - WAIT / NONE: `none`
 
-Append one line: `act only if the parent is CI Watch by Bryce's designation`. List rows a
+Append one line: `act only if the parent is Merge Desk by Bryce's designation`. List rows a
 live session is pushing as STAND-DOWN candidates. Anything you could not read
 is named as unread, not guessed.
 
