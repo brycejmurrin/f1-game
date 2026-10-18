@@ -15,7 +15,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
-import sharp from "sharp";
 import { sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import { loadSurveyDesigns } from "../lib/custom-survey-locations.mjs";
 import {
@@ -71,6 +70,8 @@ export async function killTreeAndWait(pids, { graceMs = 3000, maxMs = 15000 } = 
 /** An MCP image block for a PNG: a 640-px JPEG thumbnail, so an agent sees the
  *  frame in the result instead of spending a Read on it. */
 export async function thumbBlock(png, width = 640) {
+  // Lazy: a static import kills the server at boot while SessionStart's npm install is still writing node_modules.
+  const { default: sharp } = await import("sharp");
   const buf = await sharp(png).resize({ width, withoutEnlargement: true }).jpeg({ quality: 70 }).toBuffer();
   return { type: "image", data: buf.toString("base64"), mimeType: "image/jpeg" };
 }

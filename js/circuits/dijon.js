@@ -27,6 +27,7 @@
     night: false,
     theme: "green",
     lengthKm: 3.727,
+    tyreSeverity: 0.95,  // Historic French permanent; slightly below neutral
     baseHW: 7,
     sceneryCoordinates: "racing",
     terrainOuter: 110,

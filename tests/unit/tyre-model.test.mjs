@@ -895,21 +895,20 @@ test("TyreModel.create seeds level from G.raceTyreWear (cold-boot sync)", () => 
   assert.equal(missing.level(), "off", "no G.raceTyreWear: stay inert");
 });
 
-test("authored tyreSeverity stays in [0.4, 2.0] and the seven P5 anchors hold", () => {
-  // Slice A must not invent out-of-clamp values, and must not retune the seven
-  // measured 2026 anchors from TYRE-STRATEGY-DESIGN §5.5.
+test("every circuit def declares tyreSeverity in [0.4, 2.0] and the seven P5 anchors hold", () => {
+  // Slice A (#1562): full fleet coverage; must not retune the seven measured
+  // 2026 anchors from TYRE-STRATEGY-DESIGN §5.5.
   const dir = join(ROOT, "js/circuits");
   const anchors = {
     monaco: 1.01, silverstone: 0.89, suzuka: 0.85, miami: 1.22,
     shanghai: 0.45, redbull: 1.97, albert_park: 0.61,
   };
-  let authored = 0;
-  for (const f of readdirSync(dir)) {
-    if (!f.endsWith(".js")) continue;
+  const files = readdirSync(dir).filter((f) => f.endsWith(".js"));
+  assert.equal(files.length, 52, "circuit def file count");
+  for (const f of files) {
     const src = readFileSync(join(dir, f), "utf8");
     const m = src.match(/tyreSeverity:\s*([0-9.]+)/);
-    if (!m) continue;
-    authored++;
+    assert.ok(m, `${f}: missing tyreSeverity`);
     const v = Number(m[1]);
     assert.ok(v >= 0.4 && v <= 2.0, `${f}: tyreSeverity ${v} outside clamp`);
     const id = f.replace(/\.js$/, "");
@@ -917,7 +916,6 @@ test("authored tyreSeverity stays in [0.4, 2.0] and the seven P5 anchors hold", 
       assert.equal(v, anchors[id], `${id} P5 anchor must stay ${anchors[id]}`);
     }
   }
-  assert.ok(authored >= 15, `expected ≥15 authored severities after A1, got ${authored}`);
 });
 
 test("severity default is 1.0 for circuits without authored data", () => {

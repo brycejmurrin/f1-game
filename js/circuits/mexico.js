@@ -20,6 +20,7 @@
     night: false,
     theme: "modern",
     lengthKm: 4.3,
+    tyreSeverity: 1.08,  // Altitude rear-limited wear; moderate-high calendar band (Pirelli Mexico previews)
     baseHW: 8,
     sceneryCoordinates: "racing",
     terrainOuter: 120,

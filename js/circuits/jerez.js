@@ -38,6 +38,7 @@
     night: false,
     theme: "desert",
     lengthKm: 4.426,
+    tyreSeverity: 0.82,  // Smooth test-track asphalt; low permanent band
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     // The main stand is authored in scenery/jerez.js (block 2, 0.005 -1 20 terracing). Without

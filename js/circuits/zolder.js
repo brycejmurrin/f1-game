@@ -43,6 +43,7 @@
     // the stand envelope. Monza / Sepang / Portimão precedent.
     ownPitStraight: true,
     lengthKm: 4.004,
+    tyreSeverity: 1.02,  // Belgian permanent classic; near-neutral
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     terrainOuter: 110,
