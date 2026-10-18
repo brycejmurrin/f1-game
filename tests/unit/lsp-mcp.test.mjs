@@ -10,7 +10,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Lsp, TOOLS, callTool, classify, inCommentOrString } from "../../tools/mcp/lsp-mcp.mjs";
+import { Lsp, TOOLS, callTool, classify, codeMask, inCommentOrString } from "../../tools/mcp/lsp-mcp.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -77,7 +77,9 @@ test("MCP client: definition, references and symbols on the real tree", { timeou
     const files = new Set(rows.map(r => r.split(":")[0]));
     assert.ok(rows.length >= 30 && files.size >= 10, `${rows.length} refs in ${files.size} files`);
     assert.ok(files.has("js/track/tracks.js") && files.has("js/game.js"));
-    assert.ok(rows.every(r => !/^\S+ {2}\[\w+\] (\/\/|\*)/.test(r)), "a comment line is not a reference");
+    // The enclosing label can hold parentheses (tsgo names callbacks `scanDists.map() callback`).
+    assert.ok(rows.every(r => /^\S+ {2}\[\w+\] \(.+?\) {2}\S/.test(r)), "every row: tag, enclosing function, source");
+    assert.ok(rows.every(r => !/^\S+ {2}\[\w+\] \(.+?\) {2}(\/\/|\*|\/\*)/.test(r)), "a comment line is not a reference");
 
     const sym = await c.call("lsp_symbols", { query: "GameHud" });
     assert.match(sym.content[0].text.split("\n")[0], /^GameHud {2}\w+ {2}js\/ui\/hud\.js:\d+:\d+$/);
@@ -274,4 +276,71 @@ test("lsp-eval: every pinned question answered correctly on the real tree", { ti
   const { run } = await import("../../tools/mcp/lsp-eval.mjs");
   const rows = await run();
   assert.deepEqual(rows.filter(r => !r.ok).map(r => r.q), []);
+});
+
+// Review fixes (2026-10-18): the code mask, exportsIn, process lifecycle, input confinement.
+test("codeMask carries comment, template and regex state across a file", () => {
+  const code = (text, word) => !codeMask(text)[text.indexOf(word)];
+  assert.equal(code('/"/.test(s); Tracks.curvature(1)', "Tracks"), true, "a quote inside a regex literal");
+  assert.equal(code("/it's/; Tracks.x(1)", "Tracks"), true, "an apostrophe inside a regex literal");
+  assert.equal(code("`a ${Tracks.curvature(1)} b`", "Tracks"), true, "a template interpolation is code");
+  assert.equal(code("`multi\nend`; Tracks.x", "Tracks"), true, "after a multi-line template closes");
+  assert.equal(code("a = b\n  * Tracks.curvature(s);", "Tracks"), true, "a wrapped multiplication is not a comment");
+  assert.equal(code("n = a / b / Tracks.k", "Tracks"), true, "division is not a regex");
+  assert.equal(code("x /* Tracks.curvature */ y", "Tracks"), false, "a mid-line block comment");
+  assert.equal(code("/* a\n * Tracks.q\n */", "Tracks"), false, "inside a multi-line block comment");
+  assert.equal(code('u = "https://a.b/c"; Tracks.y', "Tracks"), true, "// inside a string opens no comment");
+});
+
+test("fixture: exportsIn reads the module's own return, never a nested one or a // in a string", { timeout: 60000 }, async () => {
+  const os = await import("node:os");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-mcp3-"));
+  fs.writeFileSync(path.join(dir, "jsconfig.json"), JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));
+  fs.mkdirSync(path.join(dir, "src"));
+  fs.writeFileSync(path.join(dir, "src/log.js"), `"use strict";\nconst Lg = (function () {\n  const BASE = "https://a.b/c";\n  function fn() { return 1; }\n  function inner() { return 2; }\n  return {\n    BASE, fn,\n    warn(ns) { return { consoleNs: ns, bufferNs: ns }; },\n    // other: a comment, not a key\n    other: () => inner(),\n  };\n})();\n`);
+  const lsp = new Lsp({ root: dir, src: "src", anchor: "src/log.js", idleMs: 0 });
+  try {
+    const r = await callTool(lsp, "lsp_outline", { symbol: "Lg", all: true });
+    // BASE, fn, warn, other are the module's keys (the "https://" string and the comment do not cut the list); inner is internal.
+    assert.match(r.content[0].text, /Lg {2}:2 {2}IIFE module: 4 exported, 1 internal/, r.content[0].text);
+    assert.doesNotMatch(r.content[0].text, /\[export\] (consoleNs|bufferNs) /, "keys of an object returned by a method are not module exports");
+    assert.match(r.content[0].text, /\[export\] other {2}function/, "an arrow-valued key reads as a function");
+    for (const bad of [{ file: "../outside.js" }, { file: "jsconfig.json" }]) {
+      const d = await callTool(lsp, "lsp_diagnostics", bad);
+      assert.equal(d.isError, true); assert.match(d.content[0].text, /inside the workspace|checks JavaScript/);
+    }
+  } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("process lifecycle: a failed start is not cached; stop() and a tsc crash both recover", { timeout: 60000 }, async () => {
+  const bad = new Lsp({ cmd: "/nonexistent/tsc", timeout: 3000, idleMs: 0 });
+  for (let i = 0; i < 2; i++) {
+    const r = await callTool(bad, "lsp_symbols", { query: "X" });
+    assert.equal(r.isError, true); assert.match(r.content[0].text, /failed to start.*npm install/, `attempt ${i + 1}: ${r.content[0].text}`);
+  }
+  const lsp = new Lsp({ idleMs: 0 });
+  try {
+    const ok = q => callTool(lsp, "lsp_symbols", { query: q });
+    assert.match((await ok("GameHud")).content[0].text, /js\/ui\/hud\.js/);
+    lsp.stop();
+    assert.match((await ok("GameHud")).content[0].text, /js\/ui\/hud\.js/, "the call right after stop() starts a fresh tsc");
+    process.kill(lsp.proc.pid, "SIGKILL");
+    await new Promise(r => lsp.proc ? lsp.proc.once("exit", r) : r());
+    assert.match((await ok("GameHud")).content[0].text, /js\/ui\/hud\.js/, "and so does the call after tsc dies");
+    // Very ambiguous bare names refuse instead of following one at random; .d.ts types resolve.
+    const amb = await callTool(lsp, "lsp_references", { symbol: "create", files: true });
+    assert.equal(amb.isError, true); assert.match(amb.content[0].text, /separate top-level declarations.*Head\.member/);
+    assert.match((await callTool(lsp, "lsp_definition", { symbol: "TrackModel" })).content[0].text, /types\/game-ctx\.d\.ts:\d+:\d+ {2}\[def\] interface TrackModel/);
+  } finally { lsp.stop(); }
+});
+
+test("lsp-hint.py: builtins and lowercase heads stay quiet; option values are not patterns", () => {
+  const hook = path.join(ROOT, ".claude/hooks/lsp-hint.py");
+  const hint = input => !!spawnSync("python3", [hook], { input: JSON.stringify({ hook_event_name: "PostToolUse", ...input }), encoding: "utf8", env: { ...process.env, APEX_LSP_HINT: "" } }).stdout.trim();
+  for (const quiet of [{ tool_name: "Grep", tool_input: { pattern: "Math.max" } }, { tool_name: "Bash", tool_input: { command: "grep -n 'head.replace(' lib-x.mjs" } },
+    { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "docs", glob: "*.js" } }, { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "js", glob: "*.css" } }])
+    assert.equal(hint(quiet), false, JSON.stringify(quiet));
+  for (const loud of [{ tool_name: "Bash", tool_input: { command: "rg -t js GameHud js/" } }, { tool_name: "Bash", tool_input: { command: "grep -A 3 GameHud js/ui" } },
+    { tool_name: "Bash", tool_input: { command: "grep -rn -e Tracks.curvature js" } }, { tool_name: "Grep", tool_input: { pattern: "G\\.player" } }])
+    assert.equal(hint(loud), true, JSON.stringify(loud));
 });

@@ -25,6 +25,7 @@ Measurements, sources and limits: [`docs/notes/LSP-MCP-2026-10-18.md`](../../../
 
 Targets: `Name` (a global such as `GameHud`), `Head.member` (`Liveries.forTeam`),
 `G.member` (the façade: answered from `interface GameCtx` in `types/game-ctx.d.ts`),
+a contract type (`TrackModel`, found in `types/*.d.ts`),
 or `file` + `line` [+ `column`] (ONE-based; shell `js/ui/hud.js:237:15`).
 
 grep stays right for: text, comments, log strings, CSS/HTML, regex shapes, files
@@ -55,6 +56,14 @@ bare JS symbol. Take it for the next lookup.
   - `[use]`: a read or call.
 - "N definitions (+M export/alias rows)": N real declarations. Several
   same-named top-level functions (`wrapS`) are all listed, never one guessed.
+  For references, a name with more than 4 unrelated declarations (`create`:
+  170) is refused, because following one would be a guess. Pass `Head.member`
+  or `file`+`line` instead. A case slip gets "did you mean TLX (…)?".
+- `lsp_callers` follows `const lerp = M4.lerp` to the local calls, marked
+  `(via lerp)`. Counted the plain way, `M4.lerp` has 11 alias lines; its real
+  callers are 112 calls in 53 functions.
+- "N of them through a destructure or alias": text counts include those rows,
+  which grep would miss.
 - "text match: …" in the header: the checker cannot type the symbol, so the
   rows come from text, following destructures. That happens for `window.X`
   globals (`PhysicsConsts`, `CssZoom`) and for files ending in

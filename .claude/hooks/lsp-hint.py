@@ -30,6 +30,15 @@ SYMBOL = re.compile(
     r"(?:\\b)?(?:\\?\()?$"
 )
 SKIP_PATH = re.compile(r"\.(css|html|md|json|ya?ml|txt|log)$|(^|/)(css|docs|artifacts|scratch|node_modules)(/|$)")
+SKIP_GLOB = re.compile(r"\.(css|html|md|json|ya?ml|txt|log)\b")
+# Script globals are capitalised (GameHud, Tracks, PhysicsConsts) or the G façade; a lowercase
+# head is a local (`head.replace`) and these are the language's own objects, never project symbols.
+BUILTINS = set("""Math Object JSON Array Number String Boolean Promise Date RegExp Error Map Set WeakMap
+WeakSet Symbol Reflect Proxy Intl BigInt Atomics Function ArrayBuffer DataView Float32Array
+Float64Array Int32Array Uint8Array Uint16Array Uint32Array Int8Array Int16Array Node Element
+Document Window HTMLElement""".split())
+# grep/rg options that consume the next word, so it is not the pattern.
+ARG_OPTS = set("-A -B -C -m -t -T -g -f --type --type-not --glob --iglob --max-count --context --after-context --before-context --max-depth -d -D --include --exclude --exclude-dir".split())
 
 
 def symbol_of(pattern):
@@ -37,8 +46,9 @@ def symbol_of(pattern):
     if not m:
         return None, False
     sym = m.group("sym").replace("\\.", ".")
-    # A lone lowercase word is as likely text as a symbol; a Head.member or a capitalised global is a symbol.
-    if "." not in sym and not sym[0].isupper() and not m.group("decl"):
+    head = sym.split(".")[0]
+    # A lone lowercase word is as likely text as a symbol; a capitalised global (or G) is a symbol.
+    if not m.group("decl") and (not head[0].isupper() or head in BUILTINS):
         return None, False
     if len(sym) < 3:
         return None, False
@@ -51,10 +61,20 @@ def from_bash(command):
     except ValueError:
         return None, None
     for i, w in enumerate(words):
-        if w in ("grep", "rg", "egrep") or (w == "grep" and i and words[i - 1] == "git"):
-            rest = [x for x in words[i + 1:] if not x.startswith("-")]
-            if rest and rest[0] not in ("|", "&&", ";"):
-                return rest[0], " ".join(rest[1:2])
+        if w not in ("grep", "rg", "egrep"):
+            continue
+        rest, j, pattern = words[i + 1:], 0, None
+        while j < len(rest) and rest[j] not in ("|", "&&", ";", "||"):
+            x = rest[j]
+            if x in ("-e", "--regexp") and j + 1 < len(rest):
+                return rest[j + 1], " ".join(rest[j + 2:j + 3])
+            if x.startswith("-"):
+                j += 2 if x in ARG_OPTS else 1
+                continue
+            pattern = x
+            break
+        if pattern:
+            return pattern, " ".join(rest[j + 1:j + 2])
     return None, None
 
 
@@ -64,9 +84,10 @@ def main():
     data = json.load(sys.stdin)
     tool, inp = data.get("tool_name"), data.get("tool_input") or {}
     if tool == "Grep":
-        pattern, where = inp.get("pattern"), " ".join(str(inp.get(k) or "") for k in ("path", "glob", "type"))
-        if inp.get("type") not in (None, "", "js", "ts"):
+        pattern = inp.get("pattern")
+        if inp.get("type") not in (None, "", "js", "ts") or SKIP_PATH.search(str(inp.get("path") or "")) or SKIP_GLOB.search(str(inp.get("glob") or "")):
             return
+        where = ""
     elif tool == "Bash":
         pattern, where = from_bash(inp.get("command") or "")
     else:
