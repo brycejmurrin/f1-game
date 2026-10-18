@@ -2688,6 +2688,9 @@ if (typeof document !== "undefined" && document.fonts && document.fonts.ready &&
   document.fonts.ready.then(() => { _gapW[0] = _gapW[1] = 0; invalidateFit(); }, () => {});
 }
 function syncPhoneFit() {
+  // Run a fit that is due first, as the tick does: a stamp minted for a key the HUD has since left (BOOST
+  // unhid after a fit that saw a half-filled dock) told the waiter "fitted" over the uncapped dock (#2801).
+  syncHudLayoutClasses(); fitHud();
   syncComputedRootVars();
   phoneFitStampSync(+document.documentElement.style.getPropertyValue("--hud-scale") || _cssScale, true);
   const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");

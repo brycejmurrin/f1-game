@@ -44,6 +44,11 @@ test("the stamp is published on a clash-to-clear transition or a probe, not ever
   assert.match(fn, /if \(force \|\| !_fitStamped\)/, "an already-published stamp is not rewritten");
   assert.match(fn, /_fitStamped = false/, "a clash voids it, so its clearing publishes a new one");
   assert.match(HUD_JS, /phoneFitStampSync\([^\n]*_cssScale,\s*true\)/, "syncPhoneFit (the spec's probe) forces a fresh stamp");
+  // #2801: a stamp minted for a key the HUD has left (BOOST unhid after a fit that saw a half-filled dock)
+  // told the waiter "fitted" over the uncapped dock; the probe runs a due fit first, as the tick does.
+  const probe = HUD_JS.slice(HUD_JS.indexOf("function syncPhoneFit("), HUD_JS.indexOf("_syncPhoneFit = syncPhoneFit"));
+  const fit = probe.indexOf("fitHud()"), stamp = probe.indexOf("phoneFitStampSync(");
+  assert.ok(probe.indexOf("syncHudLayoutClasses()") >= 0 && fit > 0 && fit < stamp, "syncPhoneFit runs syncHudLayoutClasses + fitHud before it stamps");
 });
 
 test("CSS: #hud-sectors clears the right dock on every phone steer mode", () => {

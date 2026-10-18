@@ -14406,8 +14406,12 @@
       "resolveMetricsLayout": [
         "tests/unit/hud-metrics-layout.test.mjs"
       ],
+      "syncHudLayoutClasses": [
+        "tests/unit/hud-control-clearance.test.mjs"
+      ],
       "syncPhoneFit": [
-        "tests/specs/hud-layout.spec.js"
+        "tests/specs/hud-layout.spec.js",
+        "tests/unit/hud-control-clearance.test.mjs"
       ],
       "updateHud": [
         "tests/specs/hud-layout.spec.js",
