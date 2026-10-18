@@ -7,6 +7,8 @@ Load from the SKILL.md index when the task needs this detail.
 - `apex-capture cameras` — 12 modes, no drift
 - Why one server + Chromium workers
 - Environment gotchas (already handled in the tools — replicate in custom harnesses)
+- Backends and display
+- Galleries and image budget
 - Custom-harness skeleton (parent-owned browser)
 - Shared Playwright fixtures (`tests/helpers/fixtures.js`)
 
@@ -100,6 +102,31 @@ helped asset fetch; they are not the current harness.
    through its own `camVantage()` call with an empty `extra`. They are meant to
    frame identically — if you add anything to the camera's inputs, wire all of
    them, or a snapped/preview shot will silently disagree with the live view.
+
+## Backends and display
+
+- Pinning: `apex-eval` / `flicker-gate` default to TLX; pin with `--backend three|webgl2|webgpu`
+  (apex-eval) / `--backend three` (flicker-gate; its default webgl2 = GLX). A `GLX.*()` read under
+  the TLX default answers for TLX. `shot.mjs` takes `--backend three|webgl2|webgpu` (default three;
+  webgl2 costs ~4 min a boot on SwiftShader vs ~40 s for TLX); the `apex_eval` / `apex_shot` MCP
+  wraps pass none.
+- Soft present: WGX on SwiftShader needs `tools/gfx/gfx-probe.mjs` for the visible `#game`
+  (soft-present blit), never a raw canvas screenshot; HeadlessChrome GLX hides `#game` (opacity 0,
+  reads black) and blits onto `#game-soft` — await `awaitSoftPresent()` then capture that.
+- DISPLAY: a dead local `DISPLAY=:N` (no `/tmp/.X11-unix/XN`) used to make WebGL null and hang on
+  `__apex`; `launchChromium` clears it, fallback `unset DISPLAY` or `xvfb-run -a`. `garage-angles`
+  boots its own static server (no `:3456` serve):
+  [garage-angles.md](../../garage-parts-livery/references/garage-angles.md).
+
+## Galleries and image budget
+
+`apex_shot_survey {tracks:["monza","spa"],preset:"quick"}` writes every view into a root HTML
+gallery. To combine existing surveys without recapturing:
+`apex_shot_survey {reports:["artifacts/a/findings.json","artifacts/b/findings.json"],out:"artifacts/combined"}`;
+copied image assets make that folder portable. Preserve the actual custom track ID in report metadata.
+Image budget: `Read` at most 8 images, then compact; JPEG ≤ 800 px wide; more than 3 shots →
+`apex_shot_survey`. Never re-`Read` an old shot; never a loop of `apex_shot` (use `apex_shot_survey` /
+`apex_track op survey`). A request over 32 MB kills the session and `/compact` with it.
 
 ## Custom-harness skeleton (parent-owned browser)
 

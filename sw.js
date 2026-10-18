@@ -422,6 +422,7 @@ async function precacheAssetLists() {
     "js/race/engineer.js",
     "js/race/radio-lines.js",
     "js/race/race-facts.js",
+    "js/race/event-journal.js",
     "js/race/spotter.js",
     "js/race/race-radio.js",
     "js/race/start-lights.js",
@@ -529,6 +530,8 @@ async function precacheAssetLists() {
     // LAZY_CAREER_UI — CAREER screen behind the title CAREER door
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
+    // LOCALES — manifest only until a non-English language ships
+    "locales/manifest.json",
     // /@gen-shell:sw-optional
   ]);
   const shell = await fetch("index.html", { cache: "no-store" });

@@ -861,6 +861,7 @@ declare const TyreModel: GameModuleFactory;
 declare const SoakRun: GameModuleFactory;
 declare const PitLane: GameModuleFactory;
 declare const RaceEngineer: GameModuleFactory;
+declare const EventJournal: GameModuleFactory;
 declare const RaceRadio: GameModuleFactory;
 declare const CamModes: GameModuleFactory;
 declare const CamTunerPanel: GameModuleFactory;
@@ -872,6 +873,8 @@ declare const CareerScreen: GameModuleFactory;
 declare const SeasonUI: GameModuleFactory;
 declare const DebrisWorld: GameModuleFactory;
 declare const GameHud: GameModuleFactory;
+// js/ui/hud-minimap.js: GameHud.create builds it from the same ctx (#1656).
+declare const HudMinimap: GameModuleFactory;
 declare const GameResults: GameModuleFactory;
 declare const IncidentSim: GameModuleFactory;
 declare const LightStore: GameModuleFactory;

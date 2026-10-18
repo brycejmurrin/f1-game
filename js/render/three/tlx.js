@@ -142,6 +142,21 @@ const TLX = (function () {
     ur.length = 0; ur.push(r);
   }
 
+  // Instance packs can keep an unchanged prefix. Union writes until three
+  // consumes the ranges: a second cull before render must not lose the first.
+  function setInstanceRange(attr, start, count) {
+    if (count <= 0) return;
+    let end = start + count;
+    const ur = attr.updateRanges;
+    // A full visible-prefix rewrite supersedes earlier writes, including an
+    // initial full-capacity range left behind by three's buffer allocation.
+    if (start) for (let i = 0; i < ur.length; i++) { start = Math.min(start, ur[i].start); end = Math.max(end, ur[i].start + ur[i].count); }
+    const r = attr.__tlxInstRange || (attr.__tlxInstRange = { start: 0, count: 0 });
+    r.start = start; r.count = end - start;
+    if (ur.length !== 1 || ur[0] !== r) { ur.length = 0; ur.push(r); }
+    attr.needsUpdate = true;
+  }
+
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas, opts) {
     // Hoisted so the outer catch can tear down a half-booted soft overlay /
@@ -1975,7 +1990,7 @@ const TLX = (function () {
         geo.setAttribute("instanceTint", next);
         return next;
       }
-      function _writeInstanceMatrices(imesh, matrices, colors, n) {
+      function _writeInstanceMatrices(imesh, matrices, colors, n, firstDirty = 0) {
         const cap = imesh.userData.tlxInstCap || n;
         const drawN = Math.min(n, cap);
         const col = _instColorAttr(imesh, cap);
@@ -1990,20 +2005,24 @@ const TLX = (function () {
         // (perf hunt 2026-10-11 A4: 247 vs 27 us per 10k instances).
         const im = imesh.instanceMatrix, ia = im.array;
         const nf = drawN * 16;
-        if (matrices.buffer !== ia.buffer || matrices.byteOffset !== ia.byteOffset) ia.set(matrices.length === nf ? matrices : matrices.subarray(0, nf));
+        const ownMatrices = matrices.buffer === ia.buffer && matrices.byteOffset === ia.byteOffset;
+        if (!ownMatrices) ia.set(matrices.length === nf ? matrices : matrices.subarray(0, nf));
+        const first = Math.max(0, Math.min(drawN, firstDirty));
         if (colors && colors.length && col) {
           const ca = col.array, nc = drawN * 3;
-          if (colors.buffer !== ca.buffer || colors.byteOffset !== ca.byteOffset) ca.set(colors.length === nc ? colors : colors.subarray(0, nc));
+          const ownColors = colors.buffer === ca.buffer && colors.byteOffset === ca.byteOffset;
+          if (!ownColors) ca.set(colors.length === nc ? colors : colors.subarray(0, nc));
           // Dirty the TINT with the write, not beside it. `col` always exists
           // (_instColorAttr mints it), but `colors` is null on every
           // updateInstances call (DebrisWorld) and on every batch built
           // without node colours (graph.js passes null -> packColors null), so
           // marking it outside this branch re-uploaded an unchanged all-ones
           // buffer — drawN x 12 B a frame for bytes nothing had touched.
-          setRange0(col, nc); col.needsUpdate = true;
+          const from = ownColors ? first * 3 : 0;
+          setInstanceRange(col, from, nc - from);
         }
-        setRange0(im, nf);
-        im.needsUpdate = true;
+        const from = ownMatrices ? first * 16 : 0;
+        setInstanceRange(im, from, nf - from);
         imesh.count = drawN;
       }
       // Caller-packed set (DebrisWorld's Rapier pools, PERF-FINDINGS 2h): the
@@ -2099,6 +2118,12 @@ const TLX = (function () {
         // NOT writing _cullPlanes on a hit is load-bearing: it must keep
         // describing the frustum that physically wrote imesh.
         if (useKey && InstCells.sameKey(batch, ks, kN)) { batch.visible = batch._cullN; return batch._cullN; }
+        // The cell order fixes the packed order. A shared prefix already has
+        // the right matrix/tint bytes, even when cells at the tail changed.
+        let firstCell = 0, firstDirty = 0;
+        if (useKey && batch._cellKeyN >= 0) {
+          while (firstCell < kN && firstCell < batch._cellKeyN && batch._cellKey[firstCell] === ks[firstCell]) firstDirty += cs[ks[firstCell++]].idx.length;
+        }
         // A shadow cull packs into its OWN array, as GLX/WGX (_shadowPackFor):
         // packMatrices is the camera pack that a cell-key hit leaves standing and
         // drawWorldMeshes' mirror recorder copies (R3-RENDER-6). Casters read no colour.
@@ -2131,8 +2156,8 @@ const TLX = (function () {
         // or the god-ray march shades (both reject receivers past the radius).
         const reach = shadow && opts.reach && opts.reach[3] > 0 ? opts.reach : null, reach2 = reach ? reach[3] * reach[3] : 0;
         const sc = batch.srcColors, dc = shadow ? null : batch.packColors;
-        let n = 0;
-        for (let ci = 0, cn = useKey ? kN : cs.length; ci < cn; ci++) {
+        let n = firstDirty;
+        for (let ci = firstCell, cn = useKey ? kN : cs.length; ci < cn; ci++) {
           const c = useKey ? cs[ks[ci]] : cs[ci];
           if (!useKey && !TLXShaders.aabbInFrustum(planes, c.mn, c.mx)) continue;
           if (reach && TLXShaders.aabbDist2(c.mn, c.mx, reach[0], reach[1], reach[2]) > reach2) continue;
@@ -2162,7 +2187,7 @@ const TLX = (function () {
         // visible is the CAMERA count the lit draw reads; a shadow cull's n must
         // not overwrite it (GLX/WGX: the camera count survives the shadow cull).
         batch.visible = n;
-        if (n && batch.imesh) _writeInstanceMatrices(batch.imesh, dst, dc, n);
+        if (batch.imesh) _writeInstanceMatrices(batch.imesh, dst, dc, n, firstDirty);
         const snap = batch._cullPlanes || (batch._cullPlanes = new Float64Array(24));
         for (let pi = 0, po = 0; pi < 6; pi++) {
           const p = planes[pi];
@@ -2524,6 +2549,17 @@ const TLX = (function () {
         b.visible++; setRange0(im, b.visible * 16); im.needsUpdate = true;
         return true;
       }
+      // A freed decal source must release its hidden instance buffer/render object
+      // too. Geometry.dispose alone leaves the run in both strong registries.
+      function _decalDrop(geo) {
+        const b = _decalRuns.get(geo);
+        if (!b) return;
+        _decalRuns.delete(geo);
+        const ix = _instRegistry.indexOf(b.imesh);
+        if (ix >= 0) _instRegistry.splice(ix, 1);
+        dropWrapper(b.imesh);   // waits for an in-flight compile before disposal
+        b.rec = -1;
+      }
       // R1 (perf hunt 3) — REPEATED OPAQUE DRAWS AS ONE INSTANCED RUN PER PASS. The field's wheel layers
       // were ~150 records over ~42 meshes on a bunched grid, one three RenderObject each (6-9 us of JS per
       // object, census + bench). A draw whose opts carry `coalesce` (car-draw.js sets it on the opaque
@@ -2762,7 +2798,57 @@ const TLX = (function () {
       // counters prove the track build ran on THIS backend (never a real GLX
       // WebGL2 context, which is never init'd when TLX is active).
       const _meshMade = { mesh: 0, chunked: 0, tex: 0 };
-
+      // RETIRED TEXTURES ARE REUSED, NOT DESTROYED. A garage livery edit frees
+      // and re-creates the same-sized atlases (the car's decal atlas and its
+      // deferred hi-res swap, the bay's dress and live screens) on every change.
+      // Destroy + create is a fresh GPU allocation per edit (~27 MB for the
+      // desktop hi-res atlas), a fresh bind group per material, and on Safari's
+      // WebGPU a destroyed GPUTexture's memory stays held while any bind group
+      // that referenced it waits for GC (https://github.com/WebKit/WebKit/pull/76225),
+      // so a long editing session stacks freed atlases. three r186 re-uploads a
+      // texture whose .version moved INTO its existing GPU texture
+      // (Textures.updateTexture creates only while isDefaultTexture; there is no
+      // size check), so a retired texture of the SAME size and source kind takes
+      // the next source in place. Same size is what makes that safe; same kind
+      // keeps three's ImageBitmap flipY path what it was. Bounded by count and
+      // aged out after TEX_POOL_MS idle, so a race never carries the garage's.
+      const _texPool = [];   // { t, w, h, bmp, at } — oldest first
+      // 10 s, not a frame or two: car-draw's hi-res swap re-fills its 2048 texture from an idle callback,
+      // seconds after the edit on a slow device, and an aged-out entry is a fresh ~27 MB allocation again.
+      const TEX_POOL_MAX = 4, TEX_POOL_MS = 10000;
+      const _texStat = { made: 0, reused: 0, retired: 0, disposed: 0 };
+      const _isBitmap = (img) => typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap;
+      function takePooledTexture(src) {
+        if (!src || !(src.width > 0 && src.height > 0)) return null;
+        const bmp = _isBitmap(src);
+        for (let i = 0; i < _texPool.length; i++) {
+          const e = _texPool[i];
+          if (e.w === src.width && e.h === src.height && e.bmp === bmp) { _texPool.splice(i, 1); return e.t; }
+        }
+        return null;
+      }
+      // The decal material cache keys on the texture: a pooled one keeps its
+      // material (the next fill reuses both, no node build), a disposed one
+      // drops it — kept, it pinned the freed texture until LRU pressure.
+      function disposePooled(t) {
+        _texStat.disposed++;
+        if (fx && fx.releaseTexture) { try { fx.releaseTexture(t); } catch (_) { /* cache bookkeeping only */ } }
+        try { t.dispose(); } catch (_) { /* device already dying */ }
+      }
+      function retireTexture(t, now) {
+        if (!t.__tlxPoolW) { disposePooled(t); return; }
+        _texStat.retired++;
+        // An owned source closes now, as its dispose would have; a canvas is
+        // swapped for the stand-in so a never-uploaded one is not pinned here.
+        if (t.__tlxRelease) t.__tlxRelease();
+        else if (t.image && !_isBitmap(t.image)) { const stand = texStandIn(); if (stand) t.image = stand; }
+        t.onUpdate = null;
+        _texPool.push({ t, w: t.__tlxPoolW, h: t.__tlxPoolH, bmp: !!t.__tlxPoolBmp, at: now });
+        while (_texPool.length > TEX_POOL_MAX) disposePooled(_texPool.shift().t);
+      }
+      function ageTexPool(now) {
+        while (_texPool.length && now - _texPool[0].at > TEX_POOL_MS) disposePooled(_texPool.shift().t);
+      }
       let envCubeCam = null;
       let envFacesMask = 0, envReady = false, _envActive = false;
       // Software / soft-GPU faces clear black and skip the world. envReady
@@ -3389,6 +3475,7 @@ const TLX = (function () {
         meshByGeo.delete(geo);
         if (shadowSys && shadowSys.releaseGeometry) shadowSys.releaseGeometry(geo);   // its parked casters too
         _coDrop(geo);   // R1: its coalesced runs
+        _decalDrop(geo);   // F3: its batched decal run
       }
 
       function disposeGeometry(geo) {
@@ -3567,8 +3654,8 @@ const TLX = (function () {
       const _chunkRelOptIn = (function () {
         try { return localStorage.getItem("apex26.tlxChunkRelease") === "1"; } catch (_) { return false; }
       })();
-      let _mirrorSweepAt = 0;
-      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, gate: "?", gateBits: -1 };
+      let _mirrorSweepAt = 0, _carMirrorAt = 0;
+      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, carSh: 0, gate: "?", gateBits: -1 };
       // Throttled on performance.now(), never a frame counter: a frame counter
       // is not a clock, and the first attempt at this lever shipped
       // `(++n % 90) === 0` that never once fired (PERF-FINDINGS 2m).
@@ -3619,6 +3706,21 @@ const TLX = (function () {
           if (n) { freed += n; _mirrorStat.geos++; }
         }
         if (freed) _mirrorStat.freedMB = +(_mirrorStat.freedMB + freed / 1048576).toFixed(2);
+      }
+      // M-2: shadow-caster meshes (:sh / silhouette) — release CPU mirrors on every
+      // tier including phones. The static mirror sweep stays off mobile; car casters
+      // are frustumCulled=false depth-only geometry with cached bounds.
+      function sweepCarShadowMirrors(now) {
+        if (now - _carMirrorAt < 2000) return;
+        _carMirrorAt = now;
+        for (let i = 0; i < _geoReg.length; i++) {
+          const ref = _geoReg[i];
+          const g = ref && ref.deref ? ref.deref() : null;
+          if (!g || g.__tlxKind !== "carSh" || g.__tlxFreed) continue;
+          if (g.__tlxDrawnBatch === undefined) continue;
+          const n = releaseGeoMirrors(g);
+          if (n) { _mirrorStat.carSh++; _mirrorStat.freedMB = +(_mirrorStat.freedMB + n / 1048576).toFixed(2); }
+        }
       }
 
       function _regGeo(g, kind) { try { g.__tlxKind = kind; _geoReg.push(new WeakRef(g)); } catch (_) { /* no WeakRef: census degrades, nothing leaks */ } return g; }
@@ -4279,7 +4381,8 @@ const TLX = (function () {
         createMesh(data) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
           _meshMade.mesh++;
-          return { __tlx: true, geo: buildGeometry(data), count: (data.idx && data.idx.length) || 0 };
+          const kind = data._releaseCpuMirror ? "carSh" : "mesh";
+          return { __tlx: true, geo: _regGeo(buildGeometry(data), kind), count: (data.idx && data.idx.length) || 0 };
         },
         createTexMesh(data) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
@@ -4307,19 +4410,32 @@ const TLX = (function () {
           return { __tlx: true, geo: buildGeometry(data), chunked: true, count: (data.idx && data.idx.length) || 0 };
         },
         createTexture(src, opts) {
-          const t = new THREE.Texture(src);
+          // A retired same-size texture takes this source in place (see _texPool):
+          // its settings below are already these, and needsUpdate re-uploads.
+          let t = takePooledTexture(src);
+          if (t) { t.image = src; _texStat.reused++; }
+          else { t = new THREE.Texture(src); _texStat.made++; }
           // Borrow sources by default. A caller-created bitmap must stay open
-          // for three's flipY checks/reuploads, then close when its texture dies.
+          // for three's flipY checks/reuploads, then close when its texture dies
+          // (or is retired to the pool: retireTexture calls the same release).
+          t.__tlxRelease = null;
           if (opts && typeof opts.disposeSource === "function") {
             const disposeSource = opts.disposeSource;
             const release = () => {
               t.removeEventListener("dispose", release);
+              if (t.__tlxRelease === release) t.__tlxRelease = null;
               try { disposeSource(src); } catch (_) { /* keep GPU disposal running */ }
             };
             t.addEventListener("dispose", release);
+            t.__tlxRelease = release;
           }
+          // The size its GPU copy is allocated at (.image becomes a 1x1 stand-in
+          // after upload) and the source kind: what a later source must match.
+          if (src && src.width > 0 && src.height > 0) { t.__tlxPoolW = src.width; t.__tlxPoolH = src.height; t.__tlxPoolBmp = _isBitmap(src); }
           t.flipY = true;                       // GLX uploads UNPACK_FLIP_Y
-          t.anisotropy = 4;
+          // Never lowered on a reused texture: its sampler was made at the first
+          // upload, and car-draw's crispPlayerDecal raised the player's to 8.
+          if (!(t.anisotropy >= 4)) t.anisotropy = 4;
           t.colorSpace = THREE.NoColorSpace;    // no-sRGB calibration invariant
           t.premultiplyAlpha = true;            // decal atlas: premultiplied, ONE/ONE_MINUS_SRC_ALPHA (GLX parity)
           // Drop the CPU source once three has copied it to the GPU (see
@@ -4350,11 +4466,10 @@ const TLX = (function () {
         },
         freeTexture(t) {
           if (t && t.tex) {
-            // The decal material cache keys on the texture: without this its
-            // entries kept the freed texture (and, before releaseTexSource, its
-            // 5 MB canvas) alive until LRU pressure happened to evict them.
-            if (fx && fx.releaseTexture) { try { fx.releaseTexture(t.tex); } catch (_) { /* cache bookkeeping only */ } }
-            t.tex.dispose(); t.tex = null; return;
+            // Pooled or disposed (retireTexture); disposal also releases its
+            // decal materials (disposePooled).
+            retireTexture(t.tex, typeof performance !== "undefined" ? performance.now() : Date.now());
+            t.tex = null; return;
           }
           if (t && t.isTexture) t.dispose();          // a material array (createTextureArray)
         },
@@ -5703,11 +5818,13 @@ const TLX = (function () {
           // an override that cannot reach the failing path is not an override.
           // Default OFF, so nothing reaches a player through it.
           if (_sweepOptIn && !_mirUsed) sweepGeoMirrors(_now);
+          sweepCarShadowMirrors(_now);
           // Evicted materials dispose only now — after paint, when no drawList
           // record can still reference them (safe since the #33952 backport).
           for (let i = 0; i < _matDispose.length; i++) { try { _matDispose[i].dispose(); } catch (_) { /* already disposed */ } }
           _matDispose.length = 0;
           if (fx && fx.flushEvicted) fx.flushEvicted();
+          if (_texPool.length) ageTexPool(_now);
           _fxLast.shadows = _fxFrame.shadows; _fxLast.marks = _fxFrame.marks;
           _fxLast.skidVerts = _fxFrame.skidVerts; _fxLast.glow = _fxFrame.glow;
           _fxLast.particles = _fxFrame.particles; _fxLast.decals = _fxFrame.decals;
@@ -5815,7 +5932,10 @@ const TLX = (function () {
             return out;
           },
           meshState() {
-            return { mesh: _meshMade.mesh, chunked: _meshMade.chunked, tex: _meshMade.tex };
+            return { mesh: _meshMade.mesh, chunked: _meshMade.chunked, tex: _meshMade.tex,
+                     // createTexture: new GPU textures vs retired ones re-filled in place (_texPool)
+                     texMade: _texStat.made, texReused: _texStat.reused, texRetired: _texStat.retired,
+                     texDisposed: _texStat.disposed, texPooled: _texPool.length };
           },
           // R1: live?, runs held, and lifetime run records / instances / per-record fallbacks.
           coState() {

@@ -12,7 +12,10 @@ circuit with [the delegation prompt](references/delegation.md). The surveyor
 does the browser-free measurements and source diagnosis, edits only that
 circuit's pair of files in its OWN worktree (`isolation: worktree`, so disjoint
 circuits run in parallel), and stops at `verify-track` — engine work and the
-fleet gate below are the PARENT's, after it returns.
+fleet gate below are the PARENT's, after it returns. ONE circuit and a small fix:
+the parent may run the surveyor steps below inline instead (same pair-only edits,
+same stop at `verify-track`); spawn when circuits run in parallel or the
+diagnosis would flood this context.
 
 Several circuits (`$ARGUMENTS` = circuit ids, optional target year; every id in
 `Tracks.LIST`): the campaign procedure is [references/campaign.md](references/campaign.md)
@@ -24,6 +27,8 @@ The surveyor's edits are on its worktree branch, not in this checkout. Its repor
 names the branch and path; merge it before verifying here
 (`git merge --no-ff <surveyor-branch>`, then `verify-track` on the merged tree), and
 remove the worktree once merged (`git worktree remove <path>`).
+
+## Baseline audits (parent, before and after)
 
 ```sh
 node tools/track/audit-circuit.cjs <id> --json   # ONE offline call: verify/float/clip/coplanar/props/ground vs baselines
@@ -66,35 +71,45 @@ hands over to **new-track**, not dressing; routing is in the description.
 
 ## Short loop
 
-1. Read the brief, source pair and parent evidence — select 3–5 fixes supported
-   by a measured defect or dated source.
-2. Read the parent's baseline captures and record camera framings alongside
-   Node VM measurements. Request missing views in the hand-back; the surveyor
-   never captures them. Parent probes may include aerial/orbit/EYE and obliques.
-3. Edit dressing in `js/circuits/scenery/<id>.js` (the closure; the def
-   `js/circuits/<id>.js` is the other half of the pair). Complete all pair edits
-   before verification. New fields, terrain consumers, the `TrackDef.fromRaw`
-   copy, shared engine code, landmark registries, baselines and tests belong to
-   the parent. Coordinate edits around any live parent browser run.
-4. `verify-track.cjs <id>` — a THROW strands the game on the menu.
-5. Return changes, before/after numbers, source/year evidence, baseline deltas
-   and uncertainties. Parent captures the same framings after integration.
-6. The surveyor stops after `audit-circuit`. Parent integration, browser checks and
-   shipping follow **check-changes**.
+Parent (this session):
+1. Read the brief and source pair; run the `audit-circuit` baseline and take the
+   captures (aerial/orbit/EYE, obliques) the surveyor will measure against.
+2. Spawn one `track-surveyor` with [delegation.md](references/delegation.md).
+3. Merge its branch into yours (AGENTS.md rule 10), capture the same framings
+   after integration, then browser checks and shipping via **check-changes**.
 
-Montreal already ships `flatTerrain: true` + `terrainOuter: 70` — survey
-before re-applying that fix.
+Surveyor (`.claude/agents/track-surveyor.md` steps 1-5; it never captures):
+1. Pick 3-5 fixes, each backed by a measured defect or dated source; request
+   missing views in the hand-back.
+2. Edit the pair — dressing in `js/circuits/scenery/<id>.js`, the def in
+   `js/circuits/<id>.js` — all edits before verifying. New fields, terrain
+   consumers, the `TrackDef.fromRaw` copy, engine code, landmark registries,
+   baselines and tests belong to the parent.
+3. Verify once: `verify-track.cjs <id>` (a THROW strands the game on the menu),
+   `coplanar-audit.cjs <id>`, and `float-audit.cjs <id>` if floats were flagged.
+4. Return changes, before/after numbers, source/year evidence, baseline deltas
+   and uncertainties.
 
-## Parent brief and commit recipe (plan WS6; #2399)
+**apex-tools MCP down?** Every `apex_*` route has a CLI under `tools/`: audits
+`tools/track/{audit-circuit,ground-audit,clip-audit,coplanar-audit,float-audit}.cjs`,
+`centreline-kinks.cjs`, `graph-parity.cjs`, `verify-track.cjs`; `apex_frame_report` =
+`tools/shot/frame-report.mjs --track <id>`; multi-shot surveys
+`tools/shot/shot-survey.mjs` or `tools/shot/track-session.mjs` (parent only: browser).
+
+## Parent brief and evidence publication
 
 - Brief checklist: every frame incl. storm weather; a "Code & scenery deep-dive"
-  section (emitter counts with verified file:line); the branch name; PR base
-  `track-survey-assets` (never the deploy branch).
-- Commit recipe: survey paths are gitignored, so `git add -f <paths>` ALONE in
-  one Bash call, then `git commit` in the next.
+  section (emitter counts with verified file:line); the source branch/commit and
+  published evidence URL.
+- New capture output stays under ignored `artifacts/` or `scratch/`. Publish with
+  `node tools/shot/publish-evidence.mjs --dir artifacts/<capture> --label <slug> --publish`
+  and link the release assets; do not force-add images to a survey branch.
+  See `docs/EVIDENCE-STORAGE.md` for plan, local packaging, retries and retention.
+- Existing survey PRs keep their `track-survey-assets` base and pinned links.
+  Code/scenery fixes use a separate image-free deploy-branch PR.
 - Shots: more than 3 go through `apex_shot_survey` / `apex_track op survey`, not
   a loop of `apex_shot` (a 52-shot serial survey took 56 min).
-- **Image budget** (plan WS4; #2399): `Read` at most 8 images, then compact; never re-`Read` an old shot; JPEG ≤ 800 px wide for anything a model will look at. A request over 32 MB kills the session and `/compact` with it.
+- **Image budget** → [playwright-probe recipes §Galleries and image budget](../playwright-probe/references/recipes.md#galleries-and-image-budget).
 
 ## Load on demand
 

@@ -77,6 +77,23 @@ Check the **browser console** first — WebGL implementations log
 `GL_INVALID_OPERATION` with the call site when debug extensions are active.
 SwiftShader is especially verbose.
 
+**Bisect a `GL_INVALID_OPERATION` to its call** (parent browser, GLX bound):
+1. Count first: `GLX.gpuErrors()` / `GLX.gpuFirstError()` (also
+   `__apex.diag().env.gpuErrors`). GLX drains `getError()` only for the first 30
+   presents (`drainGlErrors` in `js/render/glx/glx.js`); set
+   `localStorage["apex26.glErrDrain"]="1"` and reload to drain every present.
+2. The tag is only `present` / `drain` / `pre-materialArray`, so localise by
+   wrapping the draw calls once in the console and logging the first stack:
+   ```js
+   const gl = document.querySelector('canvas#game').getContext('webgl2');
+   for (const f of ['drawElements','drawArrays','drawElementsInstanced','drawArraysInstanced','blitFramebuffer']) {
+     const o = gl[f].bind(gl); gl[f] = (...a) => { o(...a); const e = gl.getError(); if (e) { console.warn(f, e, new Error().stack); gl[f] = o; } };
+   }
+   ```
+   The stack names the pass module (`glx.js`, `glx/post.js`, `glx/shadow.js`, `glx/chunked.js`).
+3. Confirm by toggling that pass's knob (GRAPHICS tier, `lightTune`, `matTex(0)`) and
+   re-reading `gpuErrors()`; pin the fix in `tests/specs/webgl-probes.spec.js`.
+
 **Mobile STANDARD tier:** on mobile UA without GRAPHICS: HIGH, car/lamp shadow
 maps are not created but `game.js` still issues castShadow calls each frame.
 If those casts do not no-op, they spam `GL_INVALID_OPERATION` every frame
@@ -97,7 +114,8 @@ There is **no UBO**. `frame.lights` is a flat JS array of 15-float records:
 ```
 
 `setFrameLights()` (`js/lighting/frame-lights.js`) culls to the nearest CAP lamps each frame
-(`LT.lampCull` def 40 with traffic, else `LightBudget.MAX` = 48) and GLX
+(`LT.lampCull` with traffic — its `def` in `js/lighting/knobs.js` — else
+`LightBudget.MAX`, `js/render/shared/light-budget.js`) and GLX
 uploads ONE interleaved `uLight[]` — 16 floats per lamp in a single
 `uniform4fv`, not parallel arrays. (`uLightPos[i]`/`uLightCol[i]` survive only
 in the god-ray pass, `glx/post.js`; grepping for them in the lit shader finds

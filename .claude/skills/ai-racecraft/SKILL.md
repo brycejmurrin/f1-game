@@ -10,14 +10,6 @@ rate, ERS want, multi-sample brake target, slow lane nudge. Callers pass
 curvature samples and the already-drawn roll so the seeded stream in
 `makeCars()` / `updateCar` stays in `game.js`.
 
-## AI pace (scripted vs catch-up)
-
-`js/physics/ai-band.js` owns the gap-to-player catch-up band. **Default is
-`scripted`**: vmax = `tierV × skill × DIFF.ai` (± `pacePhase`), no boost from
-the player's gap. Opt-in `catchup` restores the legacy reverse-only rubber
-band (`DIFF.band`, start + lapping gates). Setting: Race Settings › FIELD ›
-AI PACE (`apex26.aiPace`). Do not edit `DIFF.*.band` literals here.
-
 ## Owns vs stays in `game.js`
 
 | `AiDrive` | `game.js` |
@@ -30,6 +22,24 @@ AI PACE (`apex26.aiPace`). Do not edit `DIFF.*.band` literals here.
 Ratings on the car (`craft` / `awareness` / `experience` / `skill`) come
 from `js/data/driver-ratings.js`. Career adds deltas on top (**career-mode**
 for the economy; this skill for how those axes drive the field).
+
+## Ratings → behaviour (where each knob lives)
+
+`AiDrive.traits(c)` reads `craft`/`awareness`/`experience`/`skill`/`consistency`/
+`aggression`/`optimism` (0.75 mid-grid fallbacks; a reused scratch). Every map
+below is in `ai-drive.js`; the game.js caller (grep the name) builds its ctx.
+
+| Behaviour | Function → game.js caller | Ratings read | Unit pin (`ai-drive.test.mjs`) |
+|---|---|---|---|
+| OT fire rate (λ, clamp 0.08-2.4) | `otFireRate` / `otShouldFire(roll, dt, ctx)` → `_aiOtFire` with `simRnd()` | craft ↑, awareness ↓, experience ↑, aggression ±22 %; house/team orders | `OT fire rate rises with craft…`, `otShouldFire respects the roll…`, `aggression raises otFireRate…` |
+| ERS deploy | `wantBoost` → `aiWantsBoost`; X-mode `wantX` → `c.xOn` | awareness (bank when rich), house style, `ersDeploy`/`ersRegen` | `wantBoost catches and defends…`, `…same at every PACE…`, `ERS map and wantX…` |
+| Lane nudge in traffic | `adaptLane(lane, ctx, dt)` → `c.lane` | craft (step size), awareness (commit) | `adaptLane nudges toward the freer side…`, `adaptLane on streets…` |
+| Pull out to pass | `otPull` (gated by `otWant`) | craft; street scale | `otPull: a queue-limited car pulls out…`, `otWant: a blocker that is slow but PULLING AWAY…` |
+| Let a faster car by | `letPassCase` / `letPassDelay` / `letPassPull` / `letPassEase` | awareness (earlier) | `letPass: awareness commits earlier…` |
+
+Making low-craft drivers passive is a constant in the map, never a second
+`simRnd()` draw (the seeded stream is drawn in game.js). Check the field with
+`ai-race.mjs ratings` and `tactics` after.
 
 ## Do not
 
@@ -48,6 +58,10 @@ low `vC` (k, grip, `diffCorner`, `skill`), too small `0.85`, or `errMul`/`hold`.
 `ai-drive.test.mjs` (brake* tests) and `ai-racecraft-vm.test.mjs`. No CLI prints the brake
 point itself: `ai-race.mjs pace` (lap time) and `line` (approach/apex) are the closest VM
 proxies; for the exact point probe `__apex` live (browser, `mcp-probe`).
+
+## Field pace (scripted vs catch-up band, `ai-band.js`)
+
+Not racecraft: `references/pace.md`.
 
 ## Traffic tactics (bunching, passing, defending, the player)
 

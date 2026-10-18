@@ -75,6 +75,9 @@ function action(input) {
     case 'checkpoint':
       shape(['label']);
       return { type, label: text(input.label, 'label', 160) };
+    case 'assert':
+      shape(['oracle']);
+      return { type, oracle: oracle(input.oracle) };
     case 'scene': {
       shape(['track', 'frac', 'cameras']);
       const result = { type, track: slug(input.track, 'track'), frac: number(input.frac, 'frac', 0, 1) };
@@ -91,6 +94,18 @@ function action(input) {
 function oracle(input) {
   object(input, 'oracle');
   switch (input.type) {
+    case 'binding': {
+      fields(input, ['type', 'selector', 'runtime', 'saved'], 'binding oracle');
+      const scalar = (v, nullable = false) => {
+        if (nullable && v === null) return null;
+        if (typeof v === 'string') return text(v, 'binding value', 512, true);
+        if (typeof v === 'boolean' || typeof v === 'number' && Number.isFinite(v)) return v;
+        fail('binding value must be a finite scalar (saved may be null for no override)');
+      };
+      const result = { type: input.type, selector: selector(input.selector), runtime: scalar(input.runtime) };
+      if (Object.hasOwn(input, 'saved')) result.saved = scalar(input.saved, true);
+      return result;
+    }
     case 'game': {
       fields(input, ['type', 'track', 'weather', 'state'], 'game oracle');
       if (!input.track && !input.weather && !input.state) fail('game oracle needs a specific state');

@@ -77,16 +77,16 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
 export const DEPLOY = "claude/f1-game-project-26h3ng";
-export const PAGES_WORKFLOW = 295002043;   // pages.yml (AGENTS.md §Watching CI and Pages)
-export const DEFAULT_TIMEOUT_MIN = 120;     // no --timeout: CI (~15 min) + the gated Pages publish (median 23, p90 73 min)
+const PAGES_WORKFLOW = 295002043;   // pages.yml (AGENTS.md §Watching CI and Pages)
+const DEFAULT_TIMEOUT_MIN = 120;     // no --timeout: CI (~15 min) + the gated Pages publish (median 23, p90 73 min)
 export const DEFAULT_INTERVAL_S = 60;       // seconds between polls; --interval overrides (min 10)
-export const WAIT_TIMEOUT_MIN = 720;        // --wait: one background task outlives the 30-min Monitor expiry
-export const FLOOR_GRACE_MIN = 5;           // minutes to wait for a run newer than the trigger floor
+const WAIT_TIMEOUT_MIN = 720;        // --wait: one background task outlives the 30-min Monitor expiry
+const FLOOR_GRACE_MIN = 5;           // minutes to wait for a run newer than the trigger floor
 const say = (...a) => console.log("[ci-watch]", ...a);
 
 /** url -> { etag, json }: the last 200 per URL, for If-None-Match. Bounded. */
 const ETAGS = new Map();
-export const ETAG_CACHE_MAX = 256;
+const ETAG_CACHE_MAX = 256;
 
 /** GET `repos/<REPO>/<pathQs>` → { json } | { error }; `cached: true` when a 304
  *  reused the stored body. `etags` (a Map, or null to disable) is the per-URL
@@ -101,7 +101,7 @@ export function api(pathQs, opts = {}) {
 }
 /** Backoff before each retry of a 5xx (1 s, 2 s, 4 s), then the error stands.
  *  https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api#handle-rate-limit-errors-appropriately */
-export const RETRY_DELAYS_MS = [1000, 2000, 4000];
+const RETRY_DELAYS_MS = [1000, 2000, 4000];
 const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
 function apiOnce(pathQs, { run = spawnSync, env = process.env, gh, etags = ETAGS } = {}) {

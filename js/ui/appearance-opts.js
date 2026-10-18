@@ -321,11 +321,9 @@ const AppearanceOpts = (function () {
     const boost = textSize === "larger" ? "1.18" : textSize === "large" ? "1.10" : "";
     if (boost) el.style.setProperty("--hud-text-boost", boost);
     else el.style.removeProperty("--hud-text-boost");
-    // The speedo's unit label and the preview's; the number follows on the next HUD tick.
+    // The speedo's unit label; the number follows on the next HUD tick.
     if (typeof document !== "undefined" && document.querySelectorAll) {
-      for (const u of document.querySelectorAll("#hud-speed .hud-unit, .pm-look-unit")) u.textContent = unitLabel();
-      const n = byId("pm-look-speed");
-      if (n) n.textContent = String(speed(287));
+      for (const u of document.querySelectorAll("#hud-speed .hud-unit")) u.textContent = unitLabel();
     }
   }
 
@@ -536,6 +534,7 @@ const AppearanceOpts = (function () {
     if (byId("pm-cvd")) {
       SettingRow.wire("pm-cvd", { values: CVD_MODES, read: () => cvdMode, write: (v) => setCvdMode(v) });
     }
+    if (typeof Captions !== "undefined" && Captions.initAppearanceRows) Captions.initAppearanceRows();
     SettingRow.wire("pm-units", { values: UNITS, read: () => units, write: (v) => setUnits(v) });
     SettingRow.wire("pm-helptext", { values: HELPS, read: () => help, write: (v) => setHelp(v) });
     buildSwatches("pm-menuaccent-swatches", "menu");

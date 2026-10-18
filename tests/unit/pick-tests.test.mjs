@@ -37,6 +37,19 @@ test("--json reports a reason CI can branch on, not prose", () => {
   }
 });
 
+test("F1 Dev Tools package paths select structural checks without browser suites", () => {
+  for (const file of [
+    "plugins/f1-dev-tools/plugin.json",
+    "plugins/f1-dev-tools/skills/f1-dev-tools/SKILL.md",
+    "plugins/f1-dev-tools/skills/f1-dev-tools/scripts/browser.js",
+  ]) {
+    const result = json(file);
+    assert.equal(result.reason, "matched", file);
+    assert.deepEqual(result.groups.map(row => row.group), ["tooling-fast"], file);
+    assert.deepEqual(result.unclaimed, [], file);
+  }
+});
+
 test("a file no rule claims reports 'unmatched', not an empty success", () => {
   // The distinction CI depends on: "nothing changed, run nothing" and "things
   // changed but I cannot route them, run EVERYTHING" are opposite instructions
@@ -263,7 +276,7 @@ test("a spec edit selects the browser group(s) that run it; the CI selectors str
 });
 
 test("the stylesheets the blessed menu PNGs see route to baseline (incident 2026-09-16)", () => {
-  for (const f of ["css/menus.css", "css/carsetup.css", "css/tokens.css", "css/select.css"]) {
+  for (const f of ["css/menus.css", "css/carsetup.css", "css/tokens.css", "css/select.css", "css/components.css"]) {
     const groups = json(f).groups.map((g) => g.group);
     assert.ok(groups.includes("baseline") && groups.includes("ui"), `${f} must pick ui + baseline, got ${groups}`);
   }

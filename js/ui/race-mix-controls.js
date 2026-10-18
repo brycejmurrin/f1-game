@@ -5,8 +5,8 @@ const RaceMixControls = (function () {
     if (!host || typeof RaceMixAudition === "undefined") return null;
     const box = document.createElement("section"); box.className = "player-tool-panel"; box.setAttribute("aria-label", "Test race sound mix");
     const row = document.createElement("div"); row.className = "player-tool-row";
-    const start = document.createElement("button"); start.type = "button"; start.className = "sel-chip"; start.textContent = "TEST RACE MIX";
-    const stop = document.createElement("button"); stop.type = "button"; stop.className = "sel-chip"; stop.textContent = "STOP TEST";
+    const start = document.createElement("button"); start.type = "button"; start.className = "sel-chip"; start.id = "as-mix-test"; start.textContent = "TEST RACE MIX";
+    const stop = document.createElement("button"); stop.type = "button"; stop.className = "sel-chip"; stop.id = "as-mix-stop"; stop.textContent = "STOP TEST";
     const note = document.createElement("p"); note.className = "adv-help"; note.setAttribute("role", "status");
     const hidden = () => !!host.closest("[hidden]") || !!document.hidden;
     const refresh = () => {

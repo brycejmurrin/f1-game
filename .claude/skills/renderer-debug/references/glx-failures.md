@@ -23,7 +23,8 @@ float z = sc.z - biasTerm * (uShadowRange / 80.0);   // static map only; the car
 `t` = `uShadowTexel` (1/SHADOW_SIZE; `SHADOW_SIZE` in `glx/shadow.js`, uploaded as `1/SHD.SIZE` in glx.js). Bias scales with SHADOW DISTANCE
 (`uShadowRange`, def 80): acne that appears only after raising that knob is the
 first thing to check. Chunk: `sampleShadow`, not `glsl-chunks.js`. Uniform
-locations: `glx.js` ~920 list, uploads ~1852-1893 (`T.shadowBias`, `T.shadowRange`).
+locations: the `"uShadowRange"` entry of the lit uniform-name list in `glx.js`; uploads
+are the `uf1(litU.uShadow…)` calls there (`T.shadowBias`, `T.shadowRange`).
 `tools/lighting/ab-lighting.mjs` catalog id `shadow.biasClamp` pins the clamp to ONE site
 (BROWSER-ONLY run; `list` is static). Static, no browser: `node --test tests/unit/shadow-pass-depth.test.mjs`
 (light-VP depth span; a too-tight near/far also reads as missing/odd shadows).
@@ -49,7 +50,7 @@ target: bloom still runs but only from pixels >= threshold, so it reads flat. Po
 
 ### Bloom blows out the whole frame (night, HDR on) — tuner or shader?
 
-Path: `game.js` ~7864-7995 picks `_bloom`/`_thresh` per time of day (night 0.55 / 0.97),
+Path: `game.js` (grep `let _grade, _bloom`) picks `_bloom`/`_thresh` per time of day,
 then `po.bloom = _bloom * LT.bloomMul`, `po.threshold = clamp(_thresh + LT.threshOff, 0.4, 1.2) * frame.exposure`,
 `po.exposure = frame.exposure * LT.exposureMul` -> `glx/post.js` `present()` (bright-pass
 `uThreshold`, mip chain, composite `uBloomAmt = bloom*1.25/(nLv-1)`, `uBloomKnee`, `uExposure`)

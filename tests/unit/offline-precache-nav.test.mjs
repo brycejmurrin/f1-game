@@ -106,6 +106,23 @@ test("install seeds controller.html as an optional (non-fatal) precache", async 
   assert.ok(h.stores.get("apex26-321").has(`${ORIGIN}/controller.html`), "controller.html is in the install cache");
 });
 
+test("install seeds locales/manifest.json as optional (English-only locale scaffold)", async () => {
+  const fetched = [];
+  const h = harness({
+    fetchImpl: async (r) => {
+      const u = new URL(typeof r === "string" ? r : r.url, `${ORIGIN}/`);
+      fetched.push(u.pathname);
+      if (u.pathname.endsWith("/version.json")) return new Response('{"build":321}');
+      if (u.pathname.endsWith("/index.html")) return new Response('<meta name="apex-build" content="321"><script src="js/game.js?v=321"></script>');
+      if (u.pathname.endsWith("/locales/manifest.json")) return new Response('{"en":{"name":"English","dir":"ltr","status":"reviewed","hash":"x","keys":1}}');
+      return new Response("asset");
+    },
+  });
+  await h.install();
+  assert.ok(fetched.some((p) => p.endsWith("/locales/manifest.json")), "install requests the locale manifest");
+  assert.ok(h.stores.get("apex26-321").has(`${ORIGIN}/locales/manifest.json`), "locale manifest is cached");
+});
+
 test("an install where controller.html 404s still completes (optional, not essential)", async () => {
   const h = harness({
     fetchImpl: async (r) => {

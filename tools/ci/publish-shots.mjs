@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch.
+ * @doc Legacy screenshot branch publisher; use tools/shot/publish-evidence.mjs for new evidence outside Git history.
  * @section runner
  * @skill steward
  *
@@ -42,6 +42,9 @@ const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.png$/i;
 
 export const HELP = `usage: node tools/ci/publish-shots.mjs <topic> <png...> [options]
 
+LEGACY: new capture output belongs in release assets, not Git image branches.
+Use tools/shot/publish-evidence.mjs instead; see docs/EVIDENCE-STORAGE.md.
+
 Publishes screenshots to branch shots/<topic>, cut from origin/${DEPLOY} in a
 temporary worktree under artifacts/publish-shots/. No PR branch is touched and
 nothing but shots/* is ever pushed.
@@ -57,7 +60,7 @@ Requirements: node_modules must exist in this checkout. The commit goes through 
 repo hooks (test:guards), which need the repo tools; the tool symlinks node_modules into
 the temp worktree as a separate step BEFORE invoking git commit. PNGs only, each <= 400 KB.`;
 
-export class Refusal extends Error {}
+class Refusal extends Error {}
 const refuse = (m) => { throw new Refusal(m); };
 
 /** The one push guard: anything but shots/<name> throws, so no code path can reach another branch. */
@@ -89,7 +92,7 @@ export function parseArgs(argv) {
 }
 
 /** "shots/foo" and "foo" both name the topic; any other prefix or odd character is refused. */
-export function normalizeTopic(raw) {
+function normalizeTopic(raw) {
   const t = raw && raw.startsWith("shots/") ? raw.slice("shots/".length) : raw;
   if (!t || !TOPIC_RE.test(t) || t.includes("..") || t.endsWith(".lock")) {
     refuse(`bad topic ${JSON.stringify(raw)}: use a plain name ([A-Za-z0-9._-]), the branch becomes shots/<topic>`);
@@ -98,7 +101,7 @@ export function normalizeTopic(raw) {
 }
 
 /** Every file must be a real PNG (extension AND signature) of at most MAX_BYTES; one report for all. */
-export function validateFiles(files) {
+function validateFiles(files) {
   const bad = [];
   const out = [];
   const seen = new Set();
@@ -130,7 +133,7 @@ export function validateFiles(files) {
 }
 
 /** README descriptions from --readme "file=text" (wins) and --map json; unknown names are an error. */
-export function collectNotes(readmeArgs, mapPath, files) {
+function collectNotes(readmeArgs, mapPath, files) {
   const notes = {};
   if (mapPath) {
     let j;
@@ -149,12 +152,12 @@ export function collectNotes(readmeArgs, mapPath, files) {
   return notes;
 }
 
-export function readmeLine(name, text) {
+function readmeLine(name, text) {
   return `- \`${name}\` — ${(text || "(no description given)").replace(/\s*\n\s*/g, " ")}`;
 }
 
 /** https://raw.githubusercontent.com URLs when the remote is a GitHub repo, else null. */
-export function rawBase(remoteUrl, branch) {
+function rawBase(remoteUrl, branch) {
   const m = /github\.com[:/]+([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(remoteUrl || "");
   return m ? `https://raw.githubusercontent.com/${m[1]}/${m[2]}/refs/heads/${branch}` : null;
 }

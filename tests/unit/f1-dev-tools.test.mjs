@@ -161,7 +161,7 @@ test('plugin advertises the checkout MCP catalog without owning server startup',
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'plugins/f1-dev-tools/plugin.json'), 'utf8'));
   const advertised = manifest.extensions?.['com.openai']?.interface?.capabilities;
   assert.deepEqual(advertised, ['apex-tools', 'playwright-official', 'chrome-devtools', 'js-debugger', 'apex-lsp']);
-  assert.equal(manifest.version, '0.3.1');
+  assert.equal(manifest.version, '0.4.0');
 
   const checkout = JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8'));
   assert.deepEqual(Object.keys(checkout.mcpServers).sort(), [...advertised].sort());

@@ -262,16 +262,15 @@ const ACCENT_DECOR = {
   "css/overlays.css": [
     "`.sel-label::before` — a skewed tick giving section labels a shared left edge (moved with classification off the title-critical sheet)",
   ],
-  "css/settings.css": [
-    "`.pm-accent-preview-hud` — Appearance's live HUD sample plate; the number is `--accent-ink`, the plate is ornament mirroring the radio card",
-    "`.pm-accent-chip-custom` conic-gradient — the CUSTOM swatch's rainbow hint; tap target identity is the chip ring + aria-label, not the wash",
-  ],
+  // css/settings.css has none since #2846 removed the GENERAL preview (its HUD
+  // sample plate and lap stripe were the two consumers).
   "css/hud.css": [
     "`.hud-box` border-left — the team stripe on a box whose value is the readout",
     "`body.hud-prof-broadcast .hud-gaps` border-left — the same stripe, broadcast skin",
     "`--accent-dim` on the sector rows — the same stripe again, dimmed",
     "`#bc-tower` border-left — the WATCH timing tower wears the same team stripe as `.hud-box`; every row's state (on camera, fastest, pit, out) is carried by its own text and fill, never by the stripe",
     "`#announce-num` background — the radio card's number PLATE. The team colour is the ground, not the message: the number on it is `--accent-ink`, picked per team to clear 4.5:1 (proved below), and the CHANNEL a message came in on is carried by the WHO line's colour, never by the plate",
+    "`#captions .cap-who` — optional SPEAKER COLOUR tint on the spotter label; the call text is `--text`, and SPEAKER COLOUR off uses `--text` only (same ornament/channel split as the radio WHO line)",
   ],
   "css/tokens.css": [
     "`--accent-dim` derivation",

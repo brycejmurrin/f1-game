@@ -20,8 +20,9 @@ geometry bug.
 2. **Use the declared close door.** For real dialogs, let `TopModal` mirror
    `hidden` to `showModal()`/`close()`. Add
    `data-esc-close="<button-id>"` to name the same action the visible back
-   button uses. Use `data-esc="none"` only for screens that must refuse
-   Escape.
+   button uses; that id must EXIST (in `index.html`, or built by a declared
+   dynamic owner) — `menu-a11y-audit` fails a door that names nothing. Use
+   `data-esc="none"` only for screens that must refuse Escape.
 
 3. **Respect the platform top layer.** A modal dialog has `z-index: auto`;
    do not sort it with `parseInt(zIndex)`. `UiLayers` treats `:modal` as
@@ -76,6 +77,15 @@ Back-stack (Escape/BACK goes to the wrong screen or closes too much). Suspects i
    (`js/ui/platform-session.js` `initInput`).
 4. Then `paused` / `state`, and whether `hidden` on `#pmsettings` was flipped by
    something other than the door.
+5. Key-bind capture (CONTROLS rebind): `onKey` in `js/ui/key-binds.js` listens on
+   `window` in the CAPTURE phase and, while `armed`, `preventDefault`s +
+   `stopPropagation`s Escape and `disarm()`s — Escape cancels the capture and must
+   never reach `TopModal`. If the dialog closes instead, check `armed` / `onScreen()`
+   (an off-screen capture disarms without consuming) and that no listener sits ahead of it.
+6. Native `<dialog>` `cancel`: a second Escape in a row fires a NON-cancelable
+   `cancel`, so the dialog closes behind `preventDefault`; `wire()`'s `close`
+   handler in `js/ui/modal.js` then presses the door. A double page-skip lives here.
+A fixed back-stack bug gets a pin in `tests/unit/menu-a11y-audit.test.mjs`.
 Node-level pins (no browser, run singly):
 `node --test tests/unit/menu-a11y-audit.test.mjs` (Escape/door lockstep, "repeated
 keyboard Escape advances one dialog page"), `tests/unit/ui-improve-pass.test.mjs`
@@ -120,20 +130,17 @@ pointer) and the unrun tool in the PR.
 
 ## Common mistakes
 
-- Closing a dialog by setting `open`/`close()` directly instead of `hidden`.
-- Adding a screen to markup/CSS but not to `UiLayers`, `ScrollFade`, or
-  `AriaState`.
-- A second Escape path instead of clicking the `data-esc-close` control.
-- Ranking a `<dialog>` by z-index.
-- Using viewport orientation as a proxy for sheet shape.
-- Forgetting that `zoom` changes layout boxes.
-- Using `requestAnimationFrame` for non-visual ARIA/scroll bookkeeping that
-  must also run when rendering is suspended.
+Pinned by `node --test tests/unit/menu-a11y-audit.test.mjs` (run it rather than
+re-reading a list): a screen missing from `ScrollFade`/`AriaState`, a second
+Escape path beside the `data-esc-close` control, a door id that does not exist.
+Not pinned: closing a dialog via `open`/`close()` instead of `hidden`; ranking a
+`<dialog>` by z-index; orientation as a proxy for sheet shape; forgetting that
+`zoom` changes layout boxes; `requestAnimationFrame` for non-visual ARIA/scroll
+bookkeeping that must also run while rendering is suspended.
 
 ## Reduced motion
 
 Check OS `prefers-reduced-motion` and the in-game MOTION setting separately.
 Inspect view transitions, looping HUD cues and programmatic focus scrolling.
 The tokens.css reduced-motion declarations are static evidence; native animation
-and scroll behavior still require the parent browser check. Modal rank must come
-from managed opening order, never querySelectorAll document order.
+and scroll behavior still require the parent browser check.

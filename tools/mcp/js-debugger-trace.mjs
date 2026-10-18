@@ -4,6 +4,12 @@
 const clip = (s, max = 2000) => String(s ?? "").slice(0, max);
 const RING = "__apexDbgLog";
 
+function exceptionMessage(data) {
+  const value = data?.description ?? data?.unserializableValue ??
+    (data && Object.hasOwn(data, "value") ? String(data.value) : data?.type === "undefined" ? "undefined" : "");
+  return clip(String(value).split("\n")[0], 300);
+}
+
 // Page-side ring: the breakpoint condition pushes the value and returns false, so the
 // page never pauses. Condition source runs in the paused-frame scope, so locals resolve.
 export function logpointCondition(id, expression, maxHits, maxChars) {
@@ -19,7 +25,7 @@ export function recordException(session, event) {
   const log = session.exceptionLog;
   if (!log || !["exception", "promiseRejection"].includes(event.reason)) return false;
   const top = (event.callFrames || []).slice(0, 5).map(f => `${f.functionName || "(anon)"} ${f.url || session.scripts.get(f.location.scriptId)?.url || f.location.scriptId}:${f.location.lineNumber + 1}:${f.location.columnNumber + 1}`);
-  const message = clip((event.data?.description || event.data?.value || "").toString().split("\n")[0], 300);
+  const message = exceptionMessage(event.data);
   const f0 = event.callFrames?.[0];
   log.total++;
   log.counts[message] = (log.counts[message] || 0) + 1;
@@ -56,14 +62,14 @@ export function traceMethods() {
       this.connected();
       if (action === "start") {
         if (!["all", "uncaught"].includes(state)) throw Error("state must be all (caught+uncaught) or uncaught");
-        this.exceptionLog = { state, max, total: 0, counts: {}, entries: [] };
+        this.exceptionLog = { state, max, total: 0, counts: Object.create(null), entries: [] };
         await this.cdp.send("Debugger.setPauseOnExceptions", { state });
         return { started: true, state, max, note: "Exception pauses are recorded and auto-resumed. Do not rely on debugger_exceptions pauses while this runs." };
       }
       const log = this.exceptionLog;
       if (!log) { if (action === "stop") return { stopped: true, active: false }; throw Error("Exception log is not running; call with action:start"); }
       const body = { active: true, state: log.state, total: log.total, retained: log.entries.length, counts: log.counts, entries: log.entries };
-      if (action === "clear") { Object.assign(log, { total: 0, counts: {}, entries: [] }); return { ...body, cleared: true }; }
+      if (action === "clear") { Object.assign(log, { total: 0, counts: Object.create(null), entries: [] }); return { ...body, cleared: true }; }
       if (action === "stop") { this.exceptionLog = null; await this.cdp.send("Debugger.setPauseOnExceptions", { state: "none" }); return { ...body, active: false, stopped: true }; }
       return body;
     },
@@ -76,9 +82,9 @@ export function traceMethods() {
         const o = await this.cdp.send("Runtime.evaluate", { expression, objectGroup: group, silent: true }, 5000);
         if (o.exceptionDetails || !o.result?.objectId) throw Error(`Target ${target} did not resolve to an object`);
         const { listeners } = await this.cdp.send("DOMDebugger.getEventListeners", { objectId: o.result.objectId }, 5000);
-        const byType = {};
+        const byType = Object.create(null);
         for (const l of listeners) byType[l.type] = (byType[l.type] || 0) + 1;
-        return { target, total: listeners.length, byType,
+        return { target, total: listeners.length, byType: { ...byType },
           ...(detail ? { listeners: listeners.slice(0, detail).map(l => ({ type: l.type, capture: l.useCapture, once: l.once, passive: l.passive,
             url: this.scripts.get(l.scriptId)?.url || null, line: l.lineNumber + 1, column: l.columnNumber + 1 })) } : {}) };
       } finally { this.cdp?.send("Runtime.releaseObjectGroup", { objectGroup: group }).catch(() => {}); }

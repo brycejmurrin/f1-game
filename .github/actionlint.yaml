@@ -1,0 +1,19 @@
+# actionlint configuration — read by tools/check/workflow-lint.mjs (actionlint v1.7.12).
+# Reference: https://github.com/rhysd/actionlint/blob/main/docs/config.md
+paths:
+  .github/workflows/ci.yml:
+    ignore:
+      # `concurrency.queue: max` is real (GitHub changelog 2026-05-07, "concurrency groups
+      # now allow larger queues"; used for the selected-leg LANES). actionlint v1.7.12 was
+      # released 2026-03 and only knows `group` and `cancel-in-progress`. Matches this one
+      # message only; remove when the pin moves past a release that knows `queue`.
+      - 'unexpected key "queue" for "concurrency" section'
+      - 'SC2086:info'   # see the SC2086 note below
+  # SC2086 at *info* level, in the three files that pass a flag list through an unquoted
+  # variable on purpose ($ARGS, $RATCHET_MODE, $MINE, $PATHS, $LS, ${FORCE:+…}): each is a
+  # reviewed word-split of a space-separated option string. Warning- and error-level
+  # shellcheck findings stay on everywhere, and every other SC2086 is still reported.
+  .github/workflows/car-shot.yml:
+    ignore: ['SC2086:info']
+  .github/workflows/gpu-census.yml:
+    ignore: ['SC2086:info']

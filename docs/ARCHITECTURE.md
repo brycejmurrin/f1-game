@@ -78,7 +78,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_Module index over 32 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_Module index over 33 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -96,6 +96,9 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `wake-lock.js` | `RaceWakeLock` | tag | RaceWakeLock: asynchronous screen wake-lock ownership. |
 | `save-schema-registry.js` | `SaveSchemaRegistry` | tag | SaveSchemaRegistry: manifest of every apex26.* persistence key. |
 | `store.js` | `GameStore` | tag | persistence for js/game.js: the cached localStorage wrapper (`store`, all keys prefixed "apex26.", plus the uncached raw-string lane the settings panels… |
+| `i18n-pseudo.js` | `I18nPseudo` | tag | pseudo-locale expansion for layout stress (en-XA). |
+| `i18n.js` | `I18n` | tag | gettext-style I18n: English defaults at the call site, optional locale JSON. |
+| `dom-apply.js` | `I18nDom` | tag | apply data-i18n / data-i18n-attr when the active language is not plain English. |
 
 **`js/`**
 
@@ -203,8 +206,10 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `editor-workspace.js` | `EditorWorkspace` | tag | Shared tuner furniture only. |
 | `settings-search.js` | `SettingsSearch` | tag | Find settings by player terms. |
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
+| `setting-deps.js` | `SettingDeps` | tag | SettingDeps — the ONE place a setting greys out because another setting makes it do nothing (tilt sliders under TOUCH steering, engine-layer levels with the… |
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › SAVES & DATA, which carries a player's state OUT of the browser and back IN. |
+| `captions.js` | `Captions` | tag | Captions: on-screen text for radio, spotter, and pre-race announcer. |
 | `watch-transport.js` | `WatchTransport` | tag | Visible controls for the real-race replay. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `dock-layout.js` | `DockLayout` | tag | DockLayout: per-scheme touch-dock REPOSITION offsets. |
@@ -227,6 +232,7 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
 | `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
 | `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
+| `hud-minimap.js` | `HudMinimap` | tag | HUD MINIMAP: the in-race track map on #minimap (js/ui/hud.js's GameHud owns the tick and calls draw()). |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-story.js` | `ResultsStory` | tag | ResultsStory: a short classification reveal from the SAME canonical verdict and points rules as GameResults. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
@@ -239,7 +245,7 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `deep-link.js` | `DeepLink` | tag | DeepLink: the installed-icon shortcuts (manifest.json `shortcuts`) land on `./?go=<door>`. |
 | `title-flow.js` | `TitleFlow` | tag | TitleFlow: title-menu session entry and shared ghost links. |
 | `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
-| `onboard.js` | `Onboard` | tag | first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation… |
+| `onboard.js` | `Onboard` | tag | first-run COACH MARKS: four one-shot prompts (brake, overtake, active aero, energy harvest clip) shown through the existing #announce channel the first time… |
 | `platform-session.js` | `PlatformSession` | tag | PlatformSession: platform UI, phone controller and session interruptions. create(G, deps) exposes staged wiring so entry boot order stays explicit. |
 | `update-check.js` | `UpdateCheck` | tag | UpdateCheck: an in-session "a newer build is live" check and its UPDATE READY chip. index.html's shell version guard runs ONCE, at boot; an installed PWA or a… |
 | `race-message-history.js` | `RaceMessageHistory` | tag | Delivered cards only: showAnnounce calls delivered after painting its card. |
@@ -328,6 +334,7 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `engineer.js` | `RaceEngineer` | LAZY_RACE_SESSION | RACE ENGINEER: the voice that makes the tyre model legible. |
 | `radio-lines.js` | `RadioLines` | LAZY_RACE_SESSION | RADIO LINES: the phrasebook the race engineer and the TV commentator speak from (js/race/race-radio.js decides WHEN; this decides the WORDS). |
 | `race-facts.js` | `RaceFacts` | LAZY_RACE_SESSION | RACE FACTS: what is happening in the race, as numbers and events a radio can talk about (js/race/race-radio.js is the only reader). |
+| `event-journal.js` | `EventJournal` | LAZY_RACE_SESSION | EVENT JOURNAL: read-only per-race log for highlight reels. |
 | `spotter.js` | `Spotter` | LAZY_RACE_SESSION | Spotter — "car left", "car right", "clear": the call a driver gets when a car is alongside, which a mirror at 300 km/h does not give you. |
 | `race-radio.js` | `RaceRadio` | LAZY_RACE_SESSION | RACE RADIO: the race engineer's situational awareness and the TV commentator, on the one radio card (js/game.js announce()). |
 | `start-lights.js` | `StartLights` | LAZY_RACE_SESSION | the start gantry's lights. |
@@ -572,6 +579,14 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `xr-session.js` | `XrSession` | LAZY_XR | WebXR immersive-vr session owner (Phase 0 spike). |
 | `apex-xr.js` | `ApexXR` | LAZY_XR | ApexXR: thin façade over XRPlan + XrSession for boot / settings. |
 | `xr-ui.js` | `XrUi` | LAZY_XR | ENTER VR button (Phase 0). |
+
+**`js/share/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `share-card-data.js` | `ShareCardData` | tag | pure, JSON-safe data models for exported result cards. |
+| `share-card-layout.js` | `ShareCardLayout` | tag | pure card layout: model + spec + text metric -> paint ops. |
+| `share-card.js` | `ShareCard` | tag | canvas painter, PNG encoder and Web Share/download delivery. |
 
 **`js/render/glx/shaders/`**
 

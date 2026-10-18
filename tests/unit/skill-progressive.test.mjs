@@ -98,6 +98,7 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["career-mode", "references/workflow.md"],
     ["race-incidents-control", "references/workflow.md"],
     ["new-track", "references/workflow.md"],
+    ["new-track", "references/schema.md"],
     ["renderer-debug", "references/glx-failures.md"],
     ["renderer-debug", "references/wgx-defects.md"],
     ["garage-parts-livery", "references/workflow.md"],
@@ -129,8 +130,10 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["playwright-probe", "references/car-viewer-presets.md"],
     ["playwright-probe", "references/cameras.md"],
     ["playwright-probe", "references/debug-cameras-framing.md"],
-    ["tune-physics", "references/game-feel.md"],
-    ["tune-physics", "references/game-feel-workflow.md"],
+    // 2026-10-18: game-feel split back out of tune-physics (Bryce: "fix all"; the
+    // split docs/notes/SKILL-TOOLING-PROPOSALS-2026-10-05.md queued behind the word budget).
+    ["game-feel", "references/workflow.md"],
+    ["game-feel", "references/feedback-recipes.md"],
     ["css-play", "references/restructure.md"],
     ["css-play", "references/restructure-screens-css-rules.md"],
     ["agent-view", "references/track-geometry.md"],
@@ -162,7 +165,7 @@ test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer st
     // input-controls, season-mode, data-hub, asset-pack, slim-bloat) are held
     // by the coverage tests below: a merge that leaves the vocabulary behind
     // makes the workflow unreachable, which is worse than one more directory.
-    "car-viewer", "debug-cameras", "debug-tracks", "game-feel",
+    "car-viewer", "debug-cameras", "debug-tracks",
     "restructure-screens-css",
     // 2026-10-05: one renderer-debug hub owns TLX, GLX and WGX (step 0 = diag().env.backend).
     "webgl-debug", "webgpu-debug",
@@ -225,7 +228,7 @@ test("a folded skill's trigger words live in the hub description", () => {
   // names the hub and one word only the folded skill used to carry.
   const need = {
     "playwright-probe": [/livery/i, /sponsors/i, /camera modes/i, /cockpit/i],
-    "tune-physics": [/game feel/i, /juice/i, /shake/i],
+    "game-feel": [/shake/i, /hit-stop/i, /kerb/i],   // split back out 2026-10-18; the vocabulary moved with it
     "css-play": [/restructur/i, /BEM|CUBE|ITCSS/],
     "agent-view": [/geometry/i, /curvature/i, /groundY/i],
     "f1-animation-cameras": [/replay/i, /anchor/i, /seek/i],

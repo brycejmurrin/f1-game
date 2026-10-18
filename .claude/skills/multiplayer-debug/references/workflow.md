@@ -46,27 +46,27 @@ Load from the SKILL.md index when the task needs this detail.
      mobile guest never finishes ICE (`checking`/`connecting` forever). Probe ICE
      on the **stuck peer** (usually the guest), not only the host.
 
-   - **Guest stuck ON the countdown (lights visibly lighting, never launches)
-     is NOT an ICE symptom — signalling already worked.** If the connection is
-     up (both peers show `net().active`/roles correctly), stop probing ICE and
-     look at countdown *consumption* instead: `js/game.js` reads `netStart`
-     (`{ at, hold, now() }`) each frame and derives `countT` from it
-     (grep `countT = (COUNTDOWN_S`), which drives `lightsLit` (grep
-     `lightsLit === COUNTDOWN_S`) and only clears `netStart` once
-     `lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold` — the
-     "consumed; never carry it into the next race" comment. (Grep, never a line
-     number: game.js moves every week and the three numbers that used to sit
-     here were ~800 lines stale.) A guest stuck with lights lit but the race never starting
-     means that consumption path never satisfied its exit condition — check the
-     guest's own `countT`/`lightsLit` progression via `G.countT`/`G.lightsLit`
-     (test-only accessors) or step through `netStartArm`/`netHostStart`, not the
-     ICE/candidate layer.
+   - **Guest stuck ON the countdown (lights lighting, never launches) is NOT an
+     ICE symptom — signalling already worked.** If both peers show
+     `net().active` and their roles, stop probing ICE; the bug is countdown
+     *consumption* in `js/game.js` (grep each, never a line number — game.js moves weekly):
+     - Each frame reads `netStart` (`{ at, hold, now() }`) and derives `countT`
+       (grep `countT = (COUNTDOWN_S`).
+     - `countT` drives `lightsLit` (grep `lightsLit === COUNTDOWN_S`).
+     - `netStart` clears only once `lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold`
+       (the "consumed; never carry it into the next race" comment).
+     - Lights lit but no start = that exit condition never held. Read the guest's own
+       `G.countT` / `G.lightsLit` (test-only accessors) or step `netStartArm` / `netHostStart`.
    - `__apex.net().startPending` is boolean-only (`!!G.netStart`, `netHostStart()` in `js/agent/apex.js`); it cannot say why a guest is stuck, so read `countT`/`lightsLit` as above.
 
-5. **Mobile QR flow is out-of-band.**
-   - VS FRIEND only: the desktop host shows a QR; the phone guest opens the encoded URL in
-     **Safari via the Camera app** (or paste), not the in-page scan UI. Do not debug
-     mobile join by expecting the guest to use `NetScan` inside the game page.
+5. **Mobile QR flow: two ways in, one code.**
+   - VS FRIEND: the usual phone guest points the **Camera app** at the host's QR and
+     the link opens in **Safari** (out of band, a separate tab from any installed app).
+   - In-page scanning also exists (`js/net/scan.js` `NetScan`, wired by
+     `js/net/lobby-codes.js` `scan(kind)`): the `vs-scan-invite` (guest) and
+     `vs-scan-answer` (host) buttons, hidden when `NetScan.supported()` is false.
+     Both routes, and paste, hand the same code to the lobby, so a "guest scans the
+     QR and nothing happens" is the code or the wire, not which route carried it.
    - The PHONE AS CONTROLLER QR is a different page (`controller.html#pad=CODE`); see
      [phone-nat.md](phone-nat.md).
 
@@ -76,15 +76,22 @@ Load from the SKILL.md index when the task needs this detail.
    - If relays exist but no connection forms, use `await __apex.lobbyPairs()`.
    - `recv: 0` across pairs means checks leave but no answer returns; a
      succeeded-but-not-nominated pair means something else ended first.
+   - **Pair succeeded, but the data channel never opens** (ICE fine, lobby
+     stuck "connecting"): the wire is `open` only when BOTH channels fire
+     `onopen` (`js/net/transport.js` `adopt()`: `openCount === CHANNELS.length`,
+     then `Log` "rtc open"). Check, in order: the host created `state` + `event`
+     (`createDataChannel`), the guest's `pc.ondatachannel` adopted each label once
+     (an unknown/duplicate label is logged "ignoring data channel" and closed);
+     `__apex.logs({ns:"net"})` for "rtc open" vs "connection closed (failed)"
+     (DTLS/SCTP never completed — usually a middlebox; try relay-only
+     `npm run rtc:e2e-3p-relay`); a channel `onclose` routes to `shutdown("peer")`.
+     Once open, a later silence is the session heartbeat (`js/net/session.js`),
+     not the channel. Offline pin: `node --test tests/unit/net-transport.test.mjs`.
 
-7. **Respect build handshakes.**
-   - Handshake refuses mismatched builds because physics/track constants can
-     differ. The build it compares is the shell's own
-     `<meta name="apex-build">` (`js/net/handshake.js`, error `build_mismatch`)
-     — meta wins without fetching. An unstamped shell falls back to
-     `version.json`; `build_unknown` means neither provides build identity.
-   - If JS/CSS changed, run `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump); stale builds can make peers unable to
-     connect by design.
+7. **Respect build handshakes.** Handshake refuses mismatched builds
+   (`build_mismatch`/`build_unknown`, `js/net/handshake.js`) because
+   physics/track constants can differ: trace in "Build mismatch" below. After a
+   JS/CSS change, shell/cache policy is **check-changes**.
 
 8. **Verify in order.**
    - Run `npm run test:net-unit` before any browser group; it covers transport,
@@ -95,8 +102,9 @@ Load from the SKILL.md index when the task needs this detail.
 
 ## "Build mismatch" though both are on the live build
 
-Not an encoding bug. `b` rides inside the invite/answer payload (`handshake.js` `createInvite`/`acceptInvite` -> `checkBuild(await localBuild(), payload.b)`).
-The `#vs=` link only carries the code (`inviteUrl`/`inviteFromUrl`; a corrupt link is `corrupt_code`/`bad_code`, never `build_mismatch`). 
+The build compared is the shell's own `<meta name="apex-build">`, not the deploy stamp (meta wins without fetching; an unstamped shell falls back to `version.json`).
+Not an encoding bug: `b` rides inside the invite/answer payload (`handshake.js` `createInvite`/`acceptInvite` -> `checkBuild(await localBuild(), payload.b)`).
+The `#vs=` link only carries the code (`inviteUrl`/`inviteFromUrl`; a corrupt link is `corrupt_code`/`bad_code`, never `build_mismatch`).
 So one tab's `<meta name="apex-build">` is stale: an installed PWA / service-worker-cached shell, or a tab left open across a deploy.
 - Compare `document.querySelector('meta[name=apex-build]').content` on BOTH devices with the live `index.html` (deploy-research). `res.mine`/`res.theirs` hold the numbers but the lobby shows only `res.message`, and `Log` prints just `handshake <action> fail build_mismatch`. `theirs > mine` = THIS device is stale.
 - `build_unknown` = no meta and the `version.json` fetch failed (offline phone). A link opened from Camera lands in Safari, not the installed app, so a mismatch there means Safari's cached shell.
@@ -148,8 +156,7 @@ scripts above rather than three background tabs.
 - Treating local candidate counts as proof that the peer received relay
   candidates; inspect `lobbySdp().remoteTypes`. Relay arrives last — truncation
   drops it first (host OK, guest stuck).
-- Expecting mobile VS FRIEND guests to join via in-page scan; they open the QR URL in
-  Safari/Camera, out of band (the pad QR opens `controller.html`, see phone-nat.md).
+- Blaming the scan route: Camera→Safari, in-page `NetScan` and paste deliver the same code (step 5).
 - Building `RTCPeerConnection` before awaiting ICE server prefetch; servers are
   fixed at construction.
 - Letting Nostr or room-code failures throw through the lobby; rendezvous errors
@@ -158,6 +165,4 @@ scripts above rather than three background tabs.
   invites sequential so pasted answers are matchable by humans.
 - Running browser net tests before `test:net-unit`, making deterministic unit
   failures look like WebRTC flake.
-- Reaching for `version.json` when a build handshake refuses: the handshake
-  reads `<meta name="apex-build">` from the shell, not the deploy stamp.
 - Debugging a guest stuck mid-countdown as an ICE problem: see step 4 (countdown consumption).

@@ -140,6 +140,8 @@ not.
 | `team-` | 7 | `select.css` | `components.css` |
 | `steer-` | 11 | `touch-controls.css` | `hud.css` |
 | `bc-` | 25 | `hud.css` | — |
+| `cap-` | 5 | `hud.css` | — |
+| `ld-` | 3 | `loading.css` | — |
 | `tdc-` | 7 | `track-detail.css` | — |
 | `co-` | 12 | `career.css` | — |
 | `pm-` | 66 | `settings.css` | `settings-controls.css`, `components.css`, `tokens.css` |
@@ -196,6 +198,12 @@ file changes a screen owned by another.
 
 **Deliberate sharing — one component, re-tuned elsewhere:**
 
+- `.cs-liv-editor` / `.cs-liv-ed-row` / `.cs-opt-desc` / `.cs-liv-ed-btns` / `.cs-liv-ed-prev` — `carsetup` + `garage-experience`. The paint editor's rows
+  are built in carsetup.css; garage-experience.css owns the greyed-row look and its visible reason line
+  (`[data-liv-why]`), and shows the editor's live feedback (`.cs-opt-desc[role=status]`, `[aria-live]`) on the compact
+  tier that otherwise hides `.cs-opt-desc`. The car-area tabs pin `.cs-liv-ed-btns` (CANCEL / SAVE) at the foot of
+  the pane and shrink the `.cs-liv-ed-prev` swatch to a strip.
+
 - `.q-time` — `career` + `components`. Shared timing text; race result gaps sit
   on a second line inside the driver name so they remain readable on phones.
 
@@ -233,9 +241,9 @@ file changes a screen owned by another.
 - `.build-tag` — `components` + `menus`. The footer version tag: styled in
   `menus`, overridden by a compact-density selector in `components`.
 - `.cs-liv-swatch` / `.tm-colour` / `.swatch` / `.res-swatch` / `.dh-swatch` /
-  `.pm-accent-chip` / `.pm-accent-preview-hud` —
+  `.pm-accent-chip` —
   their owning files (`carsetup` / `menus` / `menus` / `overlays` / `data` /
-  `components` / `components`)
+  `components`)
   + `tokens`. The whole swatch family appears once more in `tokens`' single
   `forced-colors` block: colour IS the content on a swatch, so they all opt
   out of forced-color-adjust together — one rule, deliberately, rather than
@@ -316,7 +324,6 @@ that relationship visible across its physical files.
 - `.sur-rnd` — `race-setup.css`, `select.css`.
 - `.sur-country` — `race-setup.css`, `select.css`.
 - `.pm-groups` — `settings-controls.css`, `settings.css`.
-- `.pm-accent-preview` — `settings-controls.css`, `settings.css`.
 - `.pm-look-h` — `settings-controls.css`, `settings.css`.
 - `.pm-accent-swatches` — `settings-controls.css`, `settings.css`.
 - `.pm-replay-intro` — `settings-controls.css`, `settings.css`.

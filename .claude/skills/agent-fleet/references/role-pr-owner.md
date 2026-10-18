@@ -43,13 +43,13 @@ red in OWNED → fix, `tooling-fast --changed` plus the failing test, push once;
 CONFLICTING/DIRTY → `node tools/ci/sync-pr.mjs <branch>` (merge origin, no
 force, no rebase); draft with a green tip and `ready-gate.mjs --pr <n>` exit 0
 → mark ready, then keep watching until merged.
-Do not enable auto-merge or merge: Grok Bot is the merge holder
+Do not enable auto-merge or merge: the merge desk / orchestrator holds merges
 (role-merge-holder.md, Level 3).
-REPORT: a cloud agent has no direct channel to Grok Bot. Keep this line in the
+REPORT: a cloud agent has no direct channel to the orchestrator. Keep this line in the
 PR body current, just under the fleet block (not inside it):
   fleet-status: <working|blocked|needs-decision|ready|red|done> | <one-line reason> | <UTC time>
 and post the same line as a PR comment on every state change (never on an
-unchanged state). Decisions go to Grok Bot, not Bryce: set needs-decision and
+unchanged state). Decisions go to the orchestrator, not Bryce: set needs-decision and
 comment `@orchestrator NEEDS-DECISION: <question>`, then wait for its reply on
 the PR. On merge: `fleet-status: done`, `state: done`, `--release` the claim.
 ```
@@ -72,30 +72,18 @@ your own comment) ends the turn with no tool call; call `ReadNotifications`
 only when a notice says one is pending.
 
 Read the live PR first (`pull_request_read get`, `ci-watch --sha <head> --once`,
-open review threads), then act in this order without asking:
+open review threads), then drive it with skill `steward`'s loop without asking:
+a conflict is steward §2 (`sync-pr`, including the prose-only `--verify=none`
+case), a red is §1 / `ci-red-triage` (fix within OWNED, `tooling-fast --changed`
+plus the failing test alone, one push), review comments are steward too. A red
+the base also has: port the fix if one exists, else one PR comment naming it.
 
-1. CONFLICTING → `node tools/ci/sync-pr.mjs <branch>` (delete a stale local
-   `sync-pr-<branch>` first), resolve keeping both sides, run
-   `node tools/ci/tooling-fast.mjs --changed --jobs=3`, push once.
-   Verify by diff size: a clean merge where gen rewrote nothing and the PR
-   diff is prose or generated files only → `sync-pr <branch> --verify=none --push`
-   (CI re-gates the head); otherwise leave the default `--verify=fast` and run
-   `tooling-fast --changed` (a full ladder measured 723 s vs 110 s).
-2. Red job → agent `ci-red-triage`; fix within OWNED, `tooling-fast --changed`
-   plus the failing test alone, push once.
-   A red the base also has: port the fix if one exists, else one PR comment
-   naming it, and at most one re-run for infra.
-3. Review comments → skill `steward`.
-4. Draft and green → `node tools/ci/ready-gate.mjs --pr <n>`; mark ready only
-   when it exits 0 AND `ci-watch` shows `= ci passed` (ready-gate reads the
-   structural guards; it has exited 0 while `CI` was red).
-   A draft or unlabelled run can say `passed` with 16 of 17 jobs skipped: put
-   the `run-ci` label on first, and cite in every READY the run id, the job ids
-   that RAN (not skipped) and the tests>0 line. A `workflow_dispatch` pass is
-   not a verdict on the PR head.
-   `ready-full-cap.mjs` is advisory (no desk cap, AGENTS.md): on REFUSE send ONE
-   line `CAP? <PR>` to the orchestrator and mark ready on its "go"; never arm a
-   timer for a cap refusal.
+What this role adds at draft → ready: mark ready only when `ready-gate.mjs --pr <n>`
+exits 0 AND `ci-watch` shows `= ci passed` (ready-gate reads the structural
+guards; it has exited 0 while `CI` was red). A draft or unlabelled run can say
+`passed` with 16 of 17 jobs skipped: put the `run-ci` label on first, and cite
+in every READY the run id, the job ids that RAN and the tests>0 line. A
+`workflow_dispatch` pass is not a verdict on the PR head.
 
 Send `REPORT owner-<PR> <sha> <verdict>` at each push or red, `READY <PR> <sha>`
 when it goes ready, and `DONE <PR> <merge sha>` when it merges; then delete the
@@ -107,12 +95,9 @@ Each session is its own 4-core VM; every stall measured that night was the
 session saturating itself (full tooling-fast past the 30-min cap, a local `ui`
 group at 41/201 after 24 min, a 12 s startup benchmark at 40 s under load).
 
-- Edit loop: `node tools/ci/tooling-fast.mjs --changed --jobs=3` plus the
-  failing test alone. The full 650-file `test:tooling-fast` is CI's job (the
-  ready tier runs it); run it locally only when CI is unavailable.
-- A whole browser group runs on CI: `node tools/ci/remote-group.mjs <group>`
-  on the pushed branch (four llvmpipe shards, ~10–15 min). Locally, one spec at
-  a time via `test-bg.mjs`, never a whole group.
+- Edit loop and browser groups: AGENTS.md rules 3–4 and §Verification
+  (`tooling-fast --changed --jobs=3` plus the failing test; a whole group runs
+  on CI via `remote-group.mjs`, locally one spec at a time).
 - Box-health line, last line of every REPORT / READY, printed by:
   `awk '/^cpu /{t=0;for(i=2;i<=9;i++)t+=$i;s=$9}END{getline l<"/proc/loadavg";split(l,a," ");printf "box load=%s steal=%.1f%% ",a[1],100*s/t}' /proc/stat; ps -eo pcpu,comm --sort=-pcpu | awk 'NR==2{print "top="$2" "$1"%"}'`.
   Load above 3 for two reports in a row: stop local runs and say what is running.
@@ -125,8 +110,6 @@ group at 41/201 after 24 min, a 12 s startup benchmark at 40 s under load).
   commits were held through one, 2026-10-17).
 - A ratchets delta that LOWERS ceilings for files the PR does not touch turns
   the merge ref red when the base moves. Carry rows only for files in the diff.
-- `sync-pr.mjs` refuses a clean-behind branch; that is correct. Sync only on
-  CONFLICTING or a required tip check red (AGENTS.md §Git branch & deploy).
 - A red you inherit from the deploy tip is cured by syncing after the tip fix
   merges, not by editing tests.
 

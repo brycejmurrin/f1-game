@@ -6,6 +6,7 @@ Load from the SKILL.md index when the task needs this detail.
 - Workflow / Implementation
 - Common Mistakes
 - Sponsor payout / double-pay trace (node-only)
+- Research / facility / budget spend vs settle trace (node-only)
 
 ## Workflow / Implementation
 
@@ -48,6 +49,8 @@ Load from the SKILL.md index when the task needs this detail.
    - Do not use `Date.now`, `Math.random`, or the physics `simRnd` stream for
      career markets, objectives, development, or reliability plans.
    - If you must add a draw, include stable varying parts in the key.
+   - `tests/unit/career-determinism.test.mjs` fails on any `simRnd` or a new
+     `Math.random()` in `js/career/*.js` (two allowlisted non-draw sites).
 
 7. **Verify through hooks before UI assertions.**
    - Start with `careerState()`, `careerSlots()`, `careerSim()`, and
@@ -111,3 +114,23 @@ returns null when `career.results` already has row `r === season.round - 1`; (2)
 at rollover), `docs/CAREER.md` ~839. Those units use `dnf: false` rows only: a window whose rows include a DNF is unpinned.
 "No pay after a DNF" is usually the contract, not a bug: a DNF row scores 0 pts / `double` false / `clean` unmet (`sponsorAt` counts `!r.dnf && r.clean`), so `met` can fail; pay lands only on the window's LAST round (`raced >= sp.end`). To repro: `__apex.retire()` in a driven race, or `careerSim(n)` (its draws include DNFs).
 Hand-off: record which guard the repro defeats (results row vs `paidSponsors`) and the `paidSponsors` value before/after.
+
+## Research / facility / budget spend vs settle trace (node-only)
+
+Spends and settlement never share a code path, so a "balance off after
+`settleRound`" is one of these, in `js/career/career.js`:
+1. Spends debit `career.money` at once and `save()`: `research(opt)` (cost
+   `researchCost(opt)` = `opt.cost × RESEARCH_MULT × (1 − facilityDiscount())`),
+   `upgradeFacility()` (`facilityCost()`), `upgradeBudget()`
+   (`budgetUpgradeCost()`). Each goes through `charge()` — 0 under
+   `freeMoney()` — and refuses when `blocked()` or the cost exceeds the balance.
+   The discount is applied ONCE, inside `researchCost`; a caller that discounts
+   again double-counts.
+2. `settleRound()` credits `prize + matePrize + salary + bonus + brief − wages`
+   (floor 0), then `settleSponsor()`; it never reads research/facility state and
+   returns null for an already-settled round (`career.results` row).
+3. `careerState().money` is a snapshot after `save()`; compare it with the
+   `money` field `settleRound` returns, not with a value read before the spend.
+Test home: `tests/unit/career-settle.test.mjs` (template: `the budget ladder
+raises the fitted cap, three rungs then stops`); blocked spends:
+`career-cross-tab.test.mjs`.

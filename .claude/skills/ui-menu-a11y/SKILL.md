@@ -8,19 +8,8 @@ description: "Use when menus, settings, dialogs, Escape/back behavior, keyboard 
 One shared layer question plus declared screen exits: ask `UiLayers` what is
 on top, and route Escape/back through the same button path a player would use.
 
-## When to Use
-
-- Adding, removing, or restacking a menu/dialog/screen.
-- Escape, BACK, focus, wheel/trackpad, arrow-key, or touch menu bugs.
-- `.sheet` / `.pane` / selected chips / UI scale / HUD layout CSS.
-- iPad/touch layout after `zoom`, `getBoundingClientRect()`, or
-  `(pointer: coarse)` changes.
-- A cramped / clipped / cut-off single screen, a short landscape phone, UI scale:
-  this skill owns the diagnosis and fix; **css-play** only supplies the edit loop.
-
-Not for in-race driving input, hub tab logic, whole-matrix review or restructure:
-see the description for the owning skills (restructure: css-play
-`references/restructure.md`).
+A cramped / clipped single screen (short landscape phone, UI scale) is diagnosed
+and fixed here; **css-play** only supplies the edit loop.
 
 ## Where things live (HUD / menus / a11y)
 
@@ -31,6 +20,7 @@ see the description for the owning skills (restructure: css-play
 | Strategy/tyre HUD panels | `js/ui/hud-strategy.js`, `js/ui/hud-tyres.js` | Opt-in race panels — not the main tower |
 | Layer / Escape gate | `js/ui/layers.js`, `js/ui/modal.js` | `UiLayers.top()`, `anyOpen()`; driving keys gated with **input-controls** |
 | Agent probes (HUD/menu) | `js/agent/apex.js` | `__apex.render({what:"view"|…})`, `physState()`, `inputState()` (gate + focus), `agentHelp()` manifest |
+| UI scale | `js/ui/scale.js` | the scale knob and `zoom` (workflow step 7) |
 | Static HUD shell | `index.html` + `css/hud.css`, `css/touch-controls.css` | `#game` overlay ids (`#hud-*`, `.touchbtn`); class toggles from `hud.js` |
 
 Menu-only work rarely needs `game.js`; race HUD numbers come from `G.player` / `G.cars` each `updateHud` tick.
@@ -45,15 +35,8 @@ through resizing and disclosure changes. Capture initial, mid-scroll, end, retur
 
 ## Quick Reference
 
-| Surface | Owner | Contract |
-|---|---|---|
-| Topmost / input gate | `js/ui/layers.js` | `top()` ranks `:modal` above z-index; `anyOpen()` gates driving keys |
-| Dialog seam | `js/ui/modal.js` | `hidden` is source of truth; `showModal()` mirrors it |
-| Escape/back | `data-esc-close`, `data-esc="none"` | Press the named control |
-| Desktop nav | `js/ui/menu-nav.js` | Redirect wheel only when no scroller owns it |
-| Sheet class | `js/ui/sheet-shape.js` | Writes `data-shape` / `data-pair`; JS must not read it |
-| Selected a11y | `js/ui/aria-state.js` | Mirrors visual selected → `aria-pressed` unless claimed (select-screen chips/tiles write their own) |
-| Scroll fade | `js/ui/scroll-fade.js` | Measures regions; writes fade/position classes |
+Layer gate, dialog seam, `data-esc-close` door, `MenuNav`, `SheetShape`, `AriaState`
+and `ScrollFade` (all `js/ui/<kebab>.js`): contracts in workflow steps 1-6 below.
 
 ```sh
 node tools/ci/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css
@@ -72,3 +55,5 @@ Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
 
 - Layer/Escape/zoom implementation, pause-settings overlay, mistakes →
   [references/workflow.md](references/workflow.md).
+- Lighthouse a11y / web-quality playbook →
+  [references/lighthouse-a11y-playbook.md](references/lighthouse-a11y-playbook.md).

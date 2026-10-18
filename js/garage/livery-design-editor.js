@@ -110,9 +110,11 @@ const GarageLiveryDesignEditor = (function () {
       draft.patternPlacement = "crown"; draft.patternSide = "both";
       api.changed(); status.textContent = "Design size, placement, rotation, stretch, line weight and opacity reset. Colours and selected design are kept. Undo restores your settings.";
     }, actions);
+    patternRows.push({ row: actionRow, when: () => true });
     bindings.push(() => {
       reset.disabled = !LiveryDesign.PATTERNS.includes(draft.spineLogo);
       swap.disabled = !LiveryDesign.SECOND_COLOR.includes(draft.spineLogo);
+      swap.title = swap.disabled ? "Needs a two-colour design in SPINE TOP" : "";
     });
     // Keep each setting and its paint beside the part it changes. Move the
     // original nodes, so their handlers, dependency rules and keyboard state survive.
@@ -127,8 +129,9 @@ const GarageLiveryDesignEditor = (function () {
     function section(title, description, keys, extras = []) {
       const heading = document.createElement("div"); heading.className = "cs-liv-ed-sec";
       heading.setAttribute("role", "heading"); heading.setAttribute("aria-level", "3"); heading.textContent = title;
-      heading.title = description; root.appendChild(heading);
-      const note = document.createElement("p"); note.className = "cs-opt-desc"; note.textContent = description; root.appendChild(note);
+      heading.title = description; heading.setAttribute("data-liv-section", title); root.appendChild(heading);
+      const note = document.createElement("p"); note.className = "cs-opt-desc"; note.textContent = description;
+      note.setAttribute("data-liv-section", title); root.appendChild(note);
       for (const item of [...keys.map((key) => fields.get(key)), ...extras]) {
         if (!item) continue;
         item.setAttribute("data-liv-section", title); root.appendChild(item);
@@ -146,11 +149,11 @@ const GarageLiveryDesignEditor = (function () {
     section("COVER SIDES & TAIL LINK", "Side artwork and its fills. COVER BIND links top and side graphics; FIN HANDOFF controls the transition to the tail.",
       ["spineSide", "sideTint", "plateTint", "coverBind", "finHandoff"]);
     section("WINGS", "Front and rear wing paint. Carbon flaps keep their carbon material; WING FINISH applies to painted wing surfaces.",
-      ["wingCarbon", "wing", "rearWing", "wingFinish"]);
+      ["wingCarbon", "wing", "rearWing", "endplate", "wingFinish"]);
     section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
       ["finShape", "fin", "finFinish", "finStyle", "finArt", "finBadge"]);
     section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
-      ["logo", "logo2", "logo3", "numFont", "sponsors"], [api.markNote]);
+      ["crestStyle", "logo", "logo2", "logo3", "numFont", "sponsors"], [api.markNote]);
     section("COCKPIT & CAMERA", "Halo, mirror and T-cam: paint, finish and mirror housing colour.", ["halo", "haloFinish", "mirrorTint", "mirrorFinish", "tcam"]);
     section("WHEELS & BRAKES", "Paint-only wheel colours, applied to all four wheels. NONE keeps the BRAKES and TYRES parts' own colours.", ["rimTint", "caliperTint", "sidewallInk"]);
     section("HELMET", "Helmets for both of this team's drivers, like the rest of the paint job. TEAM keeps each driver's own design; the other styles repaint it from HELMET BASE and HELMET ACCENT.", ["helmetStyle", "helmetBase", "helmetAccent"]);
@@ -168,6 +171,129 @@ const GarageLiveryDesignEditor = (function () {
       labelNode.textContent = label; labelNode.style.flexBasis = "100%"; group.appendChild(labelNode);
       for (const b of choices) if (accepts(b.dataset.csPill.split(":")[1])) group.appendChild(b);
     }
+    // ONE CAR AREA AT A TIME (livery editor audit 2026-10-18, reorganization option B). On a phone
+    // the editor pane leaves ~200 px for controls, and ~70 rows in one scroll put UNDO, NAME and
+    // SAVE a long way below the first colour. Each setting lives in exactly one area tab; CANCEL /
+    // SAVE stay pinned under the panes (CSS), and the rows a first paint job rarely needs sit
+    // under ADVANCED at the foot of their area. Rows only move between containers, so their
+    // handlers, dependency rules and the draft are untouched by a tab switch.
+    const AREAS = [
+      ["quick", "QUICK START", ["COLOUR PALETTE"]],
+      ["body", "BODY", ["BODY PAINT & BASE FINISH"]],
+      ["cover", "ENGINE COVER", ["ENGINE COVER — SHAPE & PAINT", "SPINE TOP — ARTWORK & COLOURS", "SPINE PATTERN — SIZE & PLACEMENT", "COVER SIDES & TAIL LINK"]],
+      ["wings", "WINGS", ["WINGS"]], ["fin", "TAIL FIN", ["TAIL FIN"]], ["marks", "MARKS & NUMBERS", ["TEAM MARKS & NUMBERS"]],
+      ["cockpit", "COCKPIT", ["COCKPIT & CAMERA"]], ["wheels", "WHEELS", ["WHEELS & BRAKES"]], ["helmet", "HELMET", ["HELMET"]],
+    ];
+    const ADVANCED = new Set(["podFinish", "coverFinish", "wingFinish", "finFinish", "haloFinish", "mirrorFinish", "coverBind", "finHandoff",
+      "logo3", "lower", "upper", "bodySplit", "noseStripe", "accent", "spineHeight", "coverVents", "tcam", "sidewallInk",
+      "patternPlacement", "patternSide", ...Object.keys(LiveryDesign.RANGES)]);
+    const QUICK = ["c1", "c2", "finish"];
+    const keyOfRow = (r) => { for (const [k, row] of fields) if (row === r) return k; return ""; };
+    const nodes = Array.from(root.children).filter((n) => n.hasAttribute("data-liv-section"));
+    const first = nodes[0];
+    const tablist = document.createElement("div"); tablist.setAttribute("role", "tablist"); tablist.setAttribute("aria-label", "Livery areas");
+    root.insertBefore(tablist, first);
+    const panes = [];
+    for (const [id, title, sections] of AREAS) {
+      let list = nodes.filter((n) => sections.includes(n.getAttribute("data-liv-section")));
+      if (id === "quick") list = [historyRow, status, api.nameRow, ...list, ...QUICK.map((k) => fields.get(k))].filter(Boolean);
+      else list = list.filter((n) => !QUICK.includes(keyOfRow(n)));
+      if (!list.some((n) => n && !n.classList.contains("cs-liv-ed-sec") && !n.classList.contains("cs-opt-desc"))) continue;
+      const pane = document.createElement("div"); pane.setAttribute("role", "tabpanel"); pane.id = "cs-liv-pane-" + id;
+      const advanced = list.filter((n) => ADVANCED.has(keyOfRow(n)) || n === actionRow);
+      for (const n of list) if (!advanced.includes(n)) pane.appendChild(n);
+      if (advanced.length) {
+        const head = document.createElement("div"); head.className = "cs-liv-ed-sec"; head.textContent = "ADVANCED";
+        head.setAttribute("role", "heading"); head.setAttribute("aria-level", "4"); pane.appendChild(head);
+        for (const n of advanced) pane.appendChild(n);
+      }
+      const tab = document.createElement("button"); tab.type = "button"; tab.className = "cs-liv-ed-none";
+      tab.setAttribute("role", "tab"); tab.id = "cs-liv-tab-" + id; tab.textContent = title;
+      tab.setAttribute("aria-controls", pane.id); pane.setAttribute("aria-labelledby", tab.id);
+      tablist.appendChild(tab); root.insertBefore(pane, api.saveRow);
+      panes.push({ id, tab, pane });
+    }
+    for (const n of nodes) if (n.getAttribute("data-liv-section") === "REVIEW & SAVE" && n !== api.saveRow && !panes.some((p) => p.pane.contains(n))) n.remove();
+    const TAB_KEY = "apex26.liveryTab";
+    function showTab(i, focus) {
+      panes.forEach((p, j) => {
+        const on = i === j;
+        p.pane.hidden = !on; p.tab.setAttribute("aria-selected", String(on)); p.tab.tabIndex = on ? 0 : -1;
+        p.tab.classList.toggle("active", on);
+      });
+      try { sessionStorage.setItem(TAB_KEY, panes[i].id); } catch (_) { /* private mode: the tab just resets */ }
+      if (focus) panes[i].tab.focus();
+    }
+    panes.forEach((p, i) => { p.tab.onclick = () => showTab(i, false); });
+    tablist.onkeydown = (e) => {
+      const at = panes.findIndex((p) => p.tab.getAttribute("aria-selected") === "true");
+      const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: panes.length - 1 }[e.key];
+      if (to == null) return;
+      e.preventDefault(); showTab((to + panes.length) % panes.length, true);
+    };
+    let remembered = "";
+    try { remembered = sessionStorage.getItem(TAB_KEY) || ""; } catch (_) { /* no storage */ }
+    showTab(Math.max(0, panes.findIndex((p) => p.id === remembered)), false);
+    // CHOICES THAT ONLY ACT ON SOME CARS, measured by the 2026-10-18 livery editor
+    // audit (D5, D6): each one changed neither mesh nor atlas outside its `when`, so it greys
+    // like every other dependent row instead of looking broken. (HALO FINISH is not one: since #2829 it
+    // lands on an unset or grey halo too, car3d.js haloOn.)
+    const rules = [
+      { pill: "coverBind:spineOnly", when: () => draft.spineLogo === "cap", why: "SPINE ONLY changes only the CAP design in SPINE TOP" },
+      { pill: "finHandoff:contrast", when: () => (draft.finShape || "standard") !== "none", why: "Needs a tail fin — pick a FIN SHAPE other than NONE" },
+    ];
+    const pills = Array.from(root.querySelectorAll("button"));
+    for (const rule of rules) if (rule.pill) rule.pill = pills.find((b) => b.dataset.csPill === rule.pill) || null;
+    bindings.push(() => {
+      for (const rule of rules) {
+        const off = !rule.when();
+        if (rule.pill === null) continue;
+        if (rule.pill) { rule.pill.disabled = off; rule.pill.title = off ? rule.why : ""; continue; }
+        if (!rule.row) continue;
+        rule.row.setAttribute("aria-disabled", String(off)); rule.row.title = off ? rule.why : "";
+        for (const input of rule.row.querySelectorAll("button, input")) input.disabled = off;
+      }
+    });
+    // WHY IT IS GREY, ON SCREEN. Every dependency wrote its reason to `title`, a hover tooltip:
+    // a phone never shows one and a screen reader never reads it (audit D2). One line under
+    // each greyed row, or under a live row for its dead choices, carries the same text, and
+    // every control in the row is described by it (aria-describedby; the line itself is
+    // aria-hidden so a label row does not read it twice). The sheet's own pass runs after
+    // ours in applyPreview, so this reads the settled state a microtask later.
+    const reasons = new Map();
+    let reasonSeq = 0;
+    function describe(el, id, on) {
+      const ids = (el.getAttribute("aria-describedby") || "").split(" ").filter((x) => x && x !== id);
+      if (on) ids.push(id);
+      if (ids.length) el.setAttribute("aria-describedby", ids.join(" ")); else el.removeAttribute("aria-describedby");
+    }
+    function explain() {
+      for (const r of root.querySelectorAll(".cs-liv-ed-row, .tune-row")) {
+        let text = "";
+        if (r.getAttribute("aria-disabled") === "true") text = r.title;
+        else {
+          const why = [];
+          for (const b of r.querySelectorAll("button")) if (b.disabled && b.title && !b.dataset.csColour) why.push(b.textContent + " — " + b.title);
+          text = why.join(" · ");
+        }
+        let line = reasons.get(r);
+        if (!text && !line) continue;
+        if (!line) {
+          line = document.createElement("span"); line.dataset.livWhy = "";
+          line.id = "cs-liv-why-" + ++reasonSeq; line.setAttribute("aria-hidden", "true"); reasons.set(r, line);
+        }
+        for (const c of [r, ...r.querySelectorAll("button, input")]) if (c !== line) describe(c, line.id, !!text);
+        if (!text) { line.remove(); reasons.delete(r); continue; }
+        if (line.parentNode !== r) r.appendChild(line);
+        line.textContent = text;
+      }
+    }
+    // TAIL STYLE "team" paints one of the named motifs (McLaren's is CHEVRON), so it says which:
+    // otherwise its named twin looks like a pill that changes nothing (audit D7).
+    const teamTail = pills.find((b) => b.dataset.csPill === "finStyle:team");
+    const kind = teamTail && api.teamId && typeof LiveryTex !== "undefined" && LiveryTex.tailStyleOf && LiveryTex.tailStyleOf(api.teamId);
+    if (kind) teamTail.textContent = "TEAM · " + (LABELS[kind] || kind).toUpperCase();
+    bindings.push(() => { Promise.resolve().then(explain); });
     sync();
     return Object.freeze({
       changed(drag) {

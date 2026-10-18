@@ -4,8 +4,8 @@ Unofficial WebGL2 F1 fan game. No build step, no frameworks: pure IIFE modules l
 files on GitHub Pages.
 
 This file holds the rules every session needs and nothing else. Evidence lives in `docs/` (start at `docs/README.md`, then `docs/VERIFICATION.md`),
-workflows in `.claude/skills/`, enforced rules in `.claude/hooks/`, renderer rules in `.claude/rules/` (they load with
-their files). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
+workflows in `.claude/skills/`, enforced rules in `.claude/hooks/`, rules in `.claude/rules/` (`fleet-core` every
+session; path-scoped attach with their files; Cursor twins from `gen-cursor-rules`). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
 
 ## The loop — every change, in order
 ```sh
@@ -21,9 +21,9 @@ git commit && git push -u origin cursor/<topic>-<hash>   # 7. commit runs test:g
 Docs-only fast path — every changed path is prose (`docs/`, `*.md`, `.claude/skills/`, `.claude/agents/`; no generated
 doc): skip steps 1 and 3–6, check with `node --test tests/unit/docs-integrity.test.mjs tests/unit/agent-config.test.mjs`
 (the commit hook then runs docs-integrity alone, no ratchet raise), and skip the 1 h timer. With no PR the push starts
-no CI (`= ci none`); an open PR still gets a fast tier of guards plus seconds, so one `ci-watch.mjs --sha` Monitor suffices.
+no CI (`= ci none`); a ready PR, or a draft labelled `run-ci`, gets a fast tier of guards plus seconds, so one `ci-watch.mjs --sha` Monitor suffices.
 
-Then watch CI (rule 12). Auto memory is ON (synced to `.claude/memory/`) for corrections and tastes; a measured lesson goes to `docs/notes/`, a rule to a hook or test, a work log to the PR body.
+Then watch CI (rule 12). Every host: `.claude/memory/MEMORY.md` + `.claude/rules/fleet-core.md`; edit via `node tools/env/apex-memory.mjs list|show|retire` (docs/notes/AGENT-MEMORY.md). A measured lesson goes to `docs/notes/`, a rule to a hook or test, a work log to the PR body.
 
 ## Verification — scale it to the change
 One browser GROUP costs 10–40 minutes of serialized SwiftShader here, so running more than the change needs is slower
@@ -85,8 +85,8 @@ Session shape — twelve rules that control wall time, waiting and handoff:
 4. Pixel screenshot — visual sign-off only, never an assertion source (live poking: skill `mcp-probe`). UI reviews always start from fresh shipped settings and the correct touch/mouse profile; record viewport, DPR, text/contrast, requested/applied zoom, and label stress/imported cases separately. Inspect original full-size images with DOM/styles, real scroll down/up and end/focus/state checks; capture initial/middle/end/back, help and rotation. Procedure: `.claude/skills/ui-menu-a11y/SKILL.md` and `.claude/skills/survey-ui-matrix/SKILL.md`.
 
 This container has no real GPU: renderers blit onto `#game-soft` and a probe waits on `awaitSoftPresent()`
-(`docs/notes/CI-RENDERING-PERFORMANCE.md`). Never run Chrome MCP while Playwright runs; a `version.json` check is
-agent `deploy-research`. A unit test of a renderer backend is not evidence that it runs: boot it live and confirm one
+(`docs/notes/CI-RENDERING-PERFORMANCE.md`). Never run Chrome MCP while Playwright runs.
+A unit test of a renderer backend is not evidence that it runs: boot it live and confirm one
 positive signal (`docs/ARCHITECTURE.md` §Boot evidence, `.claude/skills/mcp-probe/references/recipes.md`; each
 backend's gate is in `.claude/rules/render-wgx.md` / `render-tlx.md`).
 
@@ -166,13 +166,13 @@ Cloud agent stall abort, handoff fields, and merge-not-rebase: `docs/notes/AGENT
 ## Cursor Cloud specific instructions
 `.cursor/environment.json` bootstraps every Cloud VM (`mcpServerAllowlist` = `.mcp.json`'s servers); Cursor enters via
 `.cursor/rules/apex-shared.mdc` (the Cursor-only rules: model id, cloud MCP namespaces, cloud browser), Codex via `.codex/config.toml` and the tracked `.agents/skills/` symlinks (`tools/env/mirror-skills.sh` repairs them).
-Checklist: `docs/AGENT-SURFACE.md` §Bootstrap. Multi-agent runs (orchestrator, workers, launch prompts): skill `agent-fleet`; every sibling session, Merge Desk and orchestrators included, runs in auto mode (in default mode `send_message`/`send_later` prompt whatever the allow rules say), and a worker acts only on user grants quoted in its launch prompt or typed into its own session (relayed authority is refused): `references/orchestrator.md` §Authority.
+Checklist: `docs/AGENT-SURFACE.md` §Bootstrap. Multi-agent runs (orchestrator, workers, launch prompts): skill `agent-fleet`; every sibling session, Merge Desk and orchestrators included, runs in auto mode (in default mode `send_message`/`send_later` prompt whatever the allow rules say), and a worker acts only on user grants quoted in its launch prompt or typed into its own session (relayed authority is refused): `references/authority.md`.
 
 ## Git branch & deploy
 Work happens on a `cursor/<topic>-<hash>` branch (topic slug + 4–8 char disambiguator); legacy `claude/<topic>` PRs
 finish as they are, with no new ones. The deploy branch `claude/f1-game-project-26h3ng` is protected (a direct push is
 refused; a PR needs its one required check, `CI`, green), so work lands through a PR (`deploy.mjs --pr`) and only it ships
-(https://brycejmurrin.github.io/f1-game/). Track-survey images/galleries/reports ALWAYS go on `track-survey-assets` (PR base, never merged to the deploy branch; fixes a survey finds go in a separate image-free PR; `docs/notes/SURVEY-ASSETS-BRANCH.md`). A deploy merges other sessions' work: re-measure on the merged tree, and never force-push or rebase.
+(https://brycejmurrin.github.io/f1-game/). NEW generated images/galleries/reports stay under ignored `artifacts/` or `scratch/`; publish selected evidence with `node tools/shot/publish-evidence.mjs --dir artifacts/<capture> --label <slug> --publish` and link the release assets (`docs/EVIDENCE-STORAGE.md`). Do not commit new capture output on an image branch. Existing `track-survey-assets` PRs retain their base and old pinned links; never merge that branch into the deploy branch (`docs/notes/SURVEY-ASSETS-BRANCH.md`). Fixes a survey finds go in a separate image-free PR. A deploy merges other sessions' work: re-measure on the merged tree, and never force-push or rebase.
 Before fixing a red you did NOT cause, run `node tools/ci/who-is-on-it.mjs` (`--claim "<text>"` before you start, `--release` after) and list the host's live sessions: a fix already pushed, a live claim, or a session already on your paths → STOP (binding; `docs/notes/SHARED-BRANCH-COORDINATION.md`).
 SYNC ONLY WHEN YOU MUST: GitHub reports CONFLICTING/DIRTY or a required tip check is red; clean-behind is not a reason, and every re-sync buys a full PR run. Sync by merging origin/ship through `node tools/ci/sync-pr.mjs <branch>`, never a hand merge (it cures ratchets and generated-file conflicts, leaves you ON `sync-pr-<branch>`, and pushes nothing without `--push`; recovery in check-changes).
 `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge → `test:tooling-fast` → ci.yml's node suites → `verify-track` → push; it cures generated-file conflicts and stops on any other).

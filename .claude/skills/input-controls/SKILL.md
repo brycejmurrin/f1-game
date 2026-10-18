@@ -78,6 +78,12 @@ Player knobs, all in `js/input/steer-tuning.js` (`applySteerTuning` + `wireTune`
   `tests/unit/key-binds.test.mjs` (calibrate persists, full lock both sides); browser
   `tests/specs/gamepad.spec.js` "centre dead zone", `sliders.spec.js`.
 - Drifting stick triage (read `inputState()`, wheel vs pad, per-pad rest) → `references/pad-drift.md`.
+- No added lag: `padAxisShape` (`input.js`) is STATELESS (rest → dead zone →
+  saturation, no filter), so a drift fix belongs there or in `padRest`, never a
+  smoothing/slew stage; the response curve is `analogShape` (same file). Full lock:
+  each side is divided by its own travel (`1 ± rest`, `|rest| ≤ 0.5` so neither
+  divisor is below 0.5) and `span = max(0.05, 1 − dz − sat)` — a worn pad that
+  tops out short needs SATURATION, not a bigger rest.
 
 ## Keyboard leaks into a menu (or a menu eats the wheel)
 
@@ -101,6 +107,29 @@ Read held latches from `__apex.inputState().key`; read
 `focus:{id,tag,editable}`. These are separate from held-key latches.
 Cross-check `UiLayers.anyOpen()` and `document.activeElement` when debugging focus.
 
+## Touch and tilt (phone)
+
+- On-screen buttons (`steerMode "buttons"`, `js/input/hold-buttons.js`): a
+  button stuck held is the release path — window capture-phase
+  `pointerup`/`pointercancel`, and `lostpointercapture` only through
+  `lostCaptureShouldRelease`. Spec `touch-buttons.spec.js`
+  ("releasing returns to centre", "holding GAS survives tapping a turn arrow").
+- Canvas drag: relative from touch-down, the most recently MOVED finger
+  steers — `touch-steer.spec.js`. Pedal travel: `touch-pedals.spec.js`.
+- Tilt: One-Euro filter → dead zone → `MAX_TILT` map → slew
+  (`input.js`; `clampDeadzone()` keeps `DEADZONE < MAX_TILT` so the map cannot
+  invert). Rotating the phone (`onScreenRotate`) resets the filter only, not the
+  centre: an offset after rotation needs RECALIBRATE (`calibrate()` takes the
+  RAW angle). Spec `tilt-pipeline.spec.js` (dead zone, full lock at MAX_TILT,
+  slew, calibrate).
+- "Racing-line help stays highlighted" is not an input latch. The on-track ribbon is
+  `js/render/shared/driving-line.js` (mode OFF / CORNERS / FULL from RACE SETTINGS; green →
+  amber → red from the player's speed, so it stays red while you are over the target);
+  colour/opacity/brake-cue prefs are `js/ui/driving-line-opts.js`; pins
+  `tests/unit/driving-line*.test.mjs`. The steering PULL toward the line is the `raceLine`
+  assist (table above). Fix the held button first; re-check the line only if it outlives the release.
+- Reproduce at phone landscape (844×390) with touch first.
+
 ## Sharp edges
 
 - Gamepad has **no change events** — `Input.poll()` once per frame.
@@ -115,7 +144,8 @@ Cross-check `UiLayers.anyOpen()` and `document.activeElement` when debugging foc
   (`docs/research/PLATFORM-INPUT-NOTES.md`).
 
 ```sh
-node tools/ci/test-bg.mjs input   # browser group test:input; background it (AGENTS rule 4)
+npm test -- tests/specs/tilt-pipeline.spec.js   # prefer ONE spec (touch-buttons/touch-steer/touch-pedals/gamepad/steering), background
+node tools/ci/test-bg.mjs input   # whole browser group test:input (also camera specs); background it (AGENTS rule 4)
 ```
 
 ## Load on demand
