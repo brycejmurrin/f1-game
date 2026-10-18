@@ -93,8 +93,8 @@ backend's gate is in `.claude/rules/render-wgx.md` / `render-tlx.md`).
 ## Layout
 `js/track/` is the ENGINE, `js/circuits/` is the DATA (one file per circuit; script-tag order == `Tracks.LIST` ==
 picker order). The module roster and load order live in `tools/manifest.cjs` — the truth, not this file; per-directory
-tables: `docs/ARCHITECTURE.md`. Finding a named symbol (`Name`, `Head.member`): MCP `apex-lsp` `lsp_definition`/`lsp_references`
-(shell: `tools/mcp/lsp-mcp.sh def|refs|sym <name>`) beats grep — semantic, comment-free; grep stays for text and CSS.
+tables: `docs/ARCHITECTURE.md`. A named symbol (`Name`, `Head.member`, `G.x`) → MCP `apex-lsp`: `lsp_definition` (`body`), `lsp_references`, `lsp_callers`,
+`lsp_outline`, `lsp_diagnostics` after an edit (shell `tools/mcp/lsp-mcp.sh <cmd>`); grep stays for text, comments, CSS.
 
 - `js/core/log.js` loads FIRST. `js/game.js` is the entry; it hands the `G` façade to the extracted modules — one
   `Module.create(G)` per file, a module never reaches into game.js, and `types/game-ctx.d.ts` is the machine-checked
@@ -159,7 +159,7 @@ WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change,
 
 Hooks (`.claude/hooks/`, wired by `.claude/settings.json`): `session-start.sh` installs deps and prints the orientation line; `protect-files.sh` blocks generated-file edits and source edits during a live browser run (Write/Edit and Bash writes);
 `bash-guard.sh` runs the guards on the STAGED commit (`git add`, then `git commit`; a pass tells the model its guard path), blocks `pkill -f`, PID kills of a test-bg run, a browser run inside a subagent (`mcp-browser-guard.sh` for the MCP browser tools, and any unreadable payload) and any Actions run cancel; `github-mcp-guard.sh` and bash-guard's `gh pr merge`/`gh pr ready`/`gh api` check (one text, `merge_policy.py`) deny squash/rebase and run cancels (merge, arm and draft→ready run without a prompt under `APEX_MERGE_DESK=1`: §Concurrent PRs is behavioural); `post-edit.sh` (advisory) flags a `js/` edit that does not parse or staled a generated file;
-`stop-guard.sh` nudges once when a turn would end over a live run (`live-run.py`); `subagent-contract.py` (SubagentStop, advisory) bounces a reporter agent's malformed report; `skill-hint.py` (UserPromptSubmit, advisory) names the skills a prompt matches; `ui-fixer-uncommitted.sh` (UserPromptSubmit, advisory) reminds a `cursor/*` branch with an hour-old commit and a dirty tree to commit WIP; `memory-sync.sh` carries auto memory across cloud containers (`docs/notes/AGENT-MEMORY.md`). `touch .claude/allow-protected` lifts the generated-file rules only (never the live-run, surveyor or reviewer rules). Never duplicate skills or agents under `.cursor/`.
+`lsp-hint.py` (PreToolUse Grep/Bash, advisory) names the apex-lsp call when a search pattern is a bare JS symbol; `stop-guard.sh` nudges once when a turn would end over a live run (`live-run.py`); `subagent-contract.py` (SubagentStop, advisory) bounces a reporter agent's malformed report; `skill-hint.py` (UserPromptSubmit, advisory) names the skills a prompt matches; `ui-fixer-uncommitted.sh` (UserPromptSubmit, advisory) reminds a `cursor/*` branch with an hour-old commit and a dirty tree to commit WIP; `memory-sync.sh` carries auto memory across cloud containers (`docs/notes/AGENT-MEMORY.md`). `touch .claude/allow-protected` lifts the generated-file rules only (never the live-run, surveyor or reviewer rules). Never duplicate skills or agents under `.cursor/`.
 
 Cloud agent stall abort, handoff fields, and merge-not-rebase: `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md`.
 

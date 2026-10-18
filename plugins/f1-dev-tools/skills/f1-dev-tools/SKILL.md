@@ -24,8 +24,9 @@ pause token after each step, resume before dependent browser actions, and detach
 when finished. This route inspects JavaScript; it is not GPU profiling.
 
 To find where a symbol is defined or used, ask the `apex-lsp` MCP (`lsp_definition`,
-`lsp_references` with `Name` or `Head.member`) before grepping; the shell fallback is
-`tools/mcp/lsp-mcp.sh def|refs <name>`.
+`lsp_references`, `lsp_callers`, `lsp_outline` with `Name` or `Head.member`) before
+grepping, and `lsp_diagnostics` after an edit; the shell fallback is
+`tools/mcp/lsp-mcp.sh def|refs|callers|outline|diag <name>`.
 
 ## Choose a workflow
 

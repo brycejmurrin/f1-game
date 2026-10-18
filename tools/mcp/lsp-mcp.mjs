@@ -23,7 +23,7 @@
  *   node tools/mcp/lsp-mcp.mjs def Liveries.forTeam # the same tools from a shell
  *   node tools/mcp/lsp-mcp.mjs refs Tracks.curvature | sym GameHud | hover X.y | diag js/game.js
  */
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
@@ -35,6 +35,12 @@ const ANCHOR = "js/core/log.js";   // tsgo searches open projects only: one open
 const KIND = { 5: "class", 6: "method", 7: "property", 8: "field", 9: "constructor", 12: "function", 13: "variable", 14: "constant" };
 const MAX_ROWS = 200;
 const CANDIDATES = 6;
+const BODY_LINES = 40;   // definition body cap (maxLines raises it)
+const FN_KINDS = new Set([5, 6, 9, 12]);   // class, method, constructor, function
+// Diagnostics worth an agent's attention with checkJs off project-wide: unknown names,
+// "did you mean" typos, wrong arity, assigning a const, calling a non-function, redeclaring.
+// TS2339 (property missing) is left out: expando objects make it noise (2026-10-18 probe).
+const DIAG_CODES = new Set([2304, 2551, 2552, 2554, 2555, 2588, 2349, 2451]);
 // Modules receive the game façade as an untyped `G` parameter; its contract is
 // `interface GameCtx` in types/game-ctx.d.ts (AGENTS.md §Layout), so G.x answers from there.
 const FACADES = { G: { iface: "GameCtx", file: "types/game-ctx.d.ts" } };   // query positions tried per symbol before the text fallback
@@ -95,7 +101,7 @@ export class Lsp {
   constructor({ root = ROOT, src = SRC, anchor = ANCHOR, cmd = path.join(ROOT, "node_modules/.bin/tsc"), timeout = 30000,
     idleMs = +(process.env.APEX_LSP_IDLE_MS || 10 * 60000) } = {}) {
     this.root = root; this.src = src; this.anchor = anchor; this.cmd = cmd; this.timeout = timeout; this.idleMs = idleMs; this.idle = null; this.proc = null; this.ready = null;
-    this.open = new Map(); this.mtimes = new Map(); this.lines = new Map();
+    this.open = new Map(); this.mtimes = new Map(); this.lines = new Map(); this.syms = new Map();
   }
   start() {
     if (this.ready) return this.ready;
@@ -118,7 +124,7 @@ export class Lsp {
     proc.on("error", e => { died.message = `tsc --lsp failed to start: ${e.message} (npm install?)`; });
     const root = pathToFileURL(this.root).href;
     return this.ready = (async () => {
-      await this.request("initialize", { processId: process.pid, rootUri: root, capabilities: { textDocument: { hover: { contentFormat: ["markdown", "plaintext"] } } }, workspaceFolders: [{ uri: root, name: path.basename(this.root) }] });
+      await this.request("initialize", { processId: process.pid, rootUri: root, capabilities: { textDocument: { hover: { contentFormat: ["markdown", "plaintext"] }, documentSymbol: { hierarchicalDocumentSymbolSupport: true } } }, workspaceFolders: [{ uri: root, name: path.basename(this.root) }] });
       this.notify("initialized", {});
       this.scan(true);
       this.ensureOpen(this.anchor);
@@ -152,9 +158,10 @@ export class Lsp {
     if (changes.length) this.notify("workspace/didChangeWatchedFiles", { changes });
   }
   ensureOpen(file) {
-    if (this.open.has(file)) return;
+    if (this.open.has(file)) return this.open.get(file);
     this.notify("textDocument/didOpen", { textDocument: { uri: this.uriOf(file), languageId: "javascript", version: 1, text: fs.readFileSync(path.join(this.root, file), "utf8") } });
     this.open.set(file, 1);
+    return 1;
   }
   textLines(file) { return this.textOf(file).lines; }
   textOf(file) {
@@ -177,16 +184,165 @@ export class Lsp {
     return classify(lines[line0] || "", col0, lines.slice(line0 + 1, line0 + 9).join("\n"));
   }
   // `file:line:col  [tag] source`, the source clipped to ~120 chars around the match.
-  row(file, line0, col0, tag = true) {
+  row(file, line0, col0, tag = true, { where = null, source = true } = {}) {
     const raw = this.textLines(file)[line0] || "", lead = raw.length - raw.trimStart().length;
     let text = raw.trim(), c = Math.max(0, col0 - lead);
     if (text.length > 120) {
       const from = Math.max(0, Math.min(c - 50, text.length - 120));
       text = (from > 0 ? "…" : "") + text.slice(from, from + 120) + (from + 120 < text.length ? "…" : "");
     }
-    return `${file}:${line0 + 1}:${col0 + 1}  ${tag ? `[${this.tag(file, line0, col0)}] ` : ""}${text}`;
+    return `${file}:${line0 + 1}:${col0 + 1}  ${tag ? `[${this.tag(file, line0, col0)}] ` : ""}${where ? `(${where})${source ? "  " : ""}` : ""}${source ? text : ""}`.trimEnd();
   }
   async prepare() { clearTimeout(this.idle); await this.start(); this.scan(); }
+
+  // ── Structure: documentSymbol trees, cached until the file changes on disk ──
+  async outlineOf(file) {
+    const m = this.mtimes.get(file) ?? fs.statSync(path.join(this.root, file)).mtimeMs, hit = this.syms.get(file);
+    if (hit && hit.m === m) return hit.tree;
+    this.ensureOpen(file);
+    const tree = (await this.request("textDocument/documentSymbol", { textDocument: { uri: this.uriOf(file) } })) || [];
+    this.syms.set(file, { m, tree });
+    return tree;
+  }
+  // The symbols whose range holds a line, outermost first.
+  chain(tree, line0) {
+    const out = [];
+    for (let nodes = tree; nodes?.length;) {
+      const n = nodes.find(x => x.range.start.line <= line0 && line0 <= x.range.end.line);
+      if (!n) break;
+      out.push(n); nodes = n.children;
+    }
+    return out;
+  }
+  // "GameHud › updateDash": the named functions, and the globals holding them, around a line.
+  // A declaration row stops at its parent: `function ping` inside Alpha reads (Alpha).
+  async where(file, line0, col0 = -1) {
+    const labels = this.chain(await this.outlineOf(file), line0)
+      .filter(n => !(n.selectionRange.start.line === line0 && n.selectionRange.start.character === col0))
+      .filter(n => n.name !== "<function>" && (FN_KINDS.has(n.kind) || n.children?.some(c => c.name === "<function>")))
+      .map(n => n.name);
+    if (!labels.length) return "top level";
+    return labels.length > 3 ? `${labels[0]} › … › ${labels.slice(-2).join(" › ")}` : labels.join(" › ");
+  }
+  // The source of the symbol declared at a position (a function body, an object, a const), capped.
+  async bodyAt(file, line0, maxLines = BODY_LINES) {
+    const ch = this.chain(await this.outlineOf(file), line0);
+    const node = [...ch].reverse().find(n => n.selectionRange.start.line === line0) || ch.at(-1);
+    if (!node) return null;
+    const { start, end } = node.range, lines = this.textLines(file), n = end.line - start.line + 1, shown = Math.min(n, maxLines);
+    return lines.slice(start.line, start.line + shown).map((t, i) => `${String(start.line + i + 1).padStart(6)}  ${t}`).join("\n")
+      + (n > shown ? `\n        … ${n - shown} more lines (maxLines)` : "");
+  }
+  // Names a module exports: the members of the last `return { … }` (depth 1) inside a range.
+  exportsIn(file, range) {
+    const lines = this.textLines(file).slice(range.start.line, range.end.line + 1).join("\n");
+    const names = new Set(), all = [...lines.matchAll(/\breturn\s*\{/g)], at = all.length ? all.at(-1).index : -1;   // the module's own return is the last
+    if (at < 0) return names;
+    let depth = 0, tok = "";
+    for (let i = lines.indexOf("{", at); i < lines.length; i++) {
+      const ch = lines[i];
+      if (ch === "{" || ch === "(" || ch === "[") { depth++; if (depth === 1) tok = ""; continue; }
+      if (ch === "}" || ch === ")" || ch === "]") { if (depth === 1 && tok.trim()) names.add(tok.trim().split(/\s*:/)[0]); if (--depth === 0) break; continue; }
+      if (depth !== 1) continue;
+      if (ch === ",") { if (tok.trim()) names.add(tok.trim().split(/\s*:/)[0]); tok = ""; }
+      else if (ch === "/" && lines[i + 1] === "/") i = lines.indexOf("\n", i) - 1;
+      else tok += ch;
+    }
+    return new Set([...names].map(n => n.replace(/^\.\.\./, "")).filter(n => /^[\w$]+$/.test(n)));
+  }
+  // A module's members (an IIFE's inner declarations, or an object literal's keys), exported first.
+  async outline({ file, symbol, all = false, offset = 0, limit = MAX_ROWS }) {
+    await this.prepare();
+    let f = file && path.relative(this.root, path.resolve(this.root, file)), roots, only = null;
+    if (symbol) {
+      const g = this.windowDecl(symbol);
+      if (g?.kind === "window") { f = g.file; only = symbol; roots = await this.outlineOf(f); }
+      else {
+        const hit = (await this.symbols(symbol)).find(x => x.name === symbol && !x.containerName);
+        if (!hit) throw Error(`symbol not found: ${symbol} (lsp_symbols for a prefix)`);
+        f = this.rel(hit.location.uri);
+        roots = this.chain(await this.outlineOf(f), hit.location.range.start.line).slice(0, 1);
+      }
+    } else {
+      if (!f || !fs.existsSync(path.join(this.root, f))) throw Error(`no such file: ${file}`);
+      roots = await this.outlineOf(f);
+    }
+    const lines = this.textLines(f);
+    const sig = n => { const t = (lines[n.selectionRange.start.line] || "").trim(); return t.length > 90 ? t.slice(0, 89) + "…" : t; };
+    const row = (n, tag) => `  ${tag.padEnd(8)} ${n.name}  ${KIND[n.kind] || n.kind}  :${n.selectionRange.start.line + 1}  ${sig(n)}`;
+    const out = [], group = (title, members, exported, showRest) => {
+      const ex = members.filter(m => exported.has(m.name)), rest = members.filter(m => !exported.has(m.name));
+      out.push(`${title}: ${ex.length} exported, ${rest.length} internal`);
+      for (const m of ex) out.push(row(m, "[export]"));
+      const listed = showRest ? rest : all ? rest : [];
+      for (const m of listed) out.push(row(m, ""));
+      if (listed.length < rest.length) out.push(`  … ${rest.length - listed.length} internal (all: true lists them)`);
+    };
+    // `window.X = { … }` objects: tsgo lists their keys as top-level symbols; regroup them under X.
+    const wins = [...lines.entries()].map(([i, t]) => [i, /^\s*window\.([\w$]+)\s*=/.exec(t)?.[1]]).filter(([, n]) => n);
+    const owner = n => { let o = null; for (const [i, name] of wins) if (i <= n.range.start.line) o = { i, name }; return o; };
+    const byWin = new Map();
+    for (const r of roots) {
+      const w = wins.length && !r.children?.some(c => c.name === "<function>") && r.kind !== 13 ? owner(r) : null;
+      if (w) { if (!byWin.has(w.name)) byWin.set(w.name, { i: w.i, members: [] }); byWin.get(w.name).members.push(r); continue; }
+      if (only) continue;
+      const fn = r.name === "<function>" ? r : r.children?.find(c => c.name === "<function>");
+      const members = fn ? (fn.children || []) : FN_KINDS.has(r.kind) ? [] : (r.children || []);
+      if (!members.length) { out.push(row(r, "")); continue; }
+      if (r.name === "<function>") {
+        // An anonymous top-level IIFE (game.js): nothing is exported; list its functions.
+        const fns = members.filter(m => FN_KINDS.has(m.kind));
+        out.push(`(anonymous IIFE)  :${r.range.start.line + 1}  ${members.length} members, ${fns.length} functions${all ? "" : " (functions listed; all: true lists every member)"}`);
+        for (const m of all ? members : fns) out.push(row(m, ""));
+        continue;
+      }
+      group(`${r.name}  :${r.selectionRange.start.line + 1}  ${fn ? "IIFE module" : "object"}`, members, fn ? this.exportsIn(f, fn.range) : new Set(members.map(m => m.name)), false);
+    }
+    for (const [name, { i, members }] of byWin) {
+      if (only && only !== name) continue;
+      const fn = members.length === 1 && members[0].name === "<function>" ? members[0] : null;   // window.X = (function () { … })()
+      if (fn) group(`window.${name}  :${i + 1}  IIFE module`, fn.children || [], this.exportsIn(f, fn.range), false);
+      else group(`window.${name}  :${i + 1}  object`, members, new Set(members.map(m => m.name)), false);
+    }
+    const pageRows = out.slice(offset, offset + limit);
+    return `${f}\n${pageRows.join("\n")}${out.length > offset + limit ? `\n… ${out.length - offset - limit} more rows (offset: ${offset + limit})` : ""}`;
+  }
+
+  // ── Diagnostics an edit introduced: per-file // @ts-check, high-signal codes, minus HEAD's ──
+  async diagnose(file, all = false) {
+    await this.prepare();
+    const f = path.relative(this.root, path.resolve(this.root, file));
+    if (!fs.existsSync(path.join(this.root, f))) throw Error(`no such file: ${file}`);
+    const ambient = fs.existsSync(path.join(this.root, "types")) ? fs.readdirSync(path.join(this.root, "types")).filter(x => x.endsWith(".d.ts")).map(x => fs.readFileSync(path.join(this.root, "types", x), "utf8")).join("\n") : "";
+    const check = async text => {
+      const v = this.ensureOpen(f) + 1, lines = text.split("\n");
+      this.open.set(f, v);
+      this.notify("textDocument/didChange", { textDocument: { uri: this.uriOf(f), version: v }, contentChanges: [{ text: "// @ts-check\n" + text }] });
+      const r = await this.request("textDocument/diagnostic", { textDocument: { uri: this.uriOf(f) } });
+      return (r?.items || []).filter(d => {
+        if (d.code < 2000) return true;   // syntax
+        if (!DIAG_CODES.has(d.code)) return false;
+        const name = /'([\w$]+)'/.exec(d.message)?.[1];
+        if ((d.code === 2304 || d.code === 2552) && name && this.windowDecl(name)) return false;   // a window.X / CommonJS-flagged global: invisible to the checker
+        if (d.code === 2451 && name && new RegExp(`declare\\s+(const|let|var|function)\\s+${name}\\b`).test(ambient)) return false;   // the .d.ts contract re-declares it
+        return true;
+      }).map(d => ({ line0: d.range.start.line - 1, col0: d.range.start.character, code: d.code, msg: d.message.split("\n")[0], src: (lines[d.range.start.line - 1] || "").trim() }));
+    };
+    try {
+      const now = await check(fs.readFileSync(path.join(this.root, f), "utf8"));
+      let head = null;
+      try { head = execFileSync("git", ["show", `HEAD:${f}`], { cwd: this.root, stdio: ["ignore", "pipe", "ignore"] }).toString(); } catch { /* untracked or no git */ }
+      const fmt = d => `${f}:${d.line0 + 1}:${d.col0 + 1}  TS${d.code} ${d.msg}`;
+      if (head === null || all) return `${now.length} high-signal diagnostic${now.length === 1 ? "" : "s"} in ${f} (${head === null ? "not tracked at HEAD" : "all"}; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
+      const before = await check(head), key = d => `${d.code}|${d.msg}|${d.src}`, pool = new Map();
+      for (const d of before) pool.set(key(d), (pool.get(key(d)) || 0) + 1);
+      const fresh = now.filter(d => { const n = pool.get(key(d)) || 0; if (n) { pool.set(key(d), n - 1); return false; } return true; });
+      return `${fresh.length} new since HEAD in ${f} (${now.length - fresh.length} pre-existing hidden; all: true lists them; per-file @ts-check, codes ${[...DIAG_CODES].join("/")} + syntax)\n${fresh.map(fmt).join("\n")}`.trim();
+    } finally {
+      // Back to the disk text with no pragma: close it so the next query reopens it.
+      this.notify("textDocument/didClose", { textDocument: { uri: this.uriOf(f) } }); this.open.delete(f); this.syms.delete(f);
+    }
+  }
   // Counted from the END of a call, so a slow first query (project load) is never cut off.
   armIdle() {
     clearTimeout(this.idle);
@@ -240,6 +396,11 @@ export class Lsp {
     // Untyped heads never answer from the checker: skip the round-trips.
     if (c.parts.length === 2 && FACADES[c.parts[0]]) return { ...c, ...(await this.facade(c.parts, method, extra)) };
     if (c.parts.length > 1 && this.windowDecl(c.parts.slice(0, -1).join("."))) return { ...c, ...this.textFallback(c.parts, method, c.head) };
+    const g = c.parts.length === 1 && method === "textDocument/references" && this.windowDecl(c.parts[0]);
+    if (g) {
+      const p = c.top[0], def = { uri: this.uriOf(p.file), range: { start: { line: p.line0, character: p.col0 } } };
+      return { ...c, p, result: this.textRefs(c.parts, def), note: g.kind === "cjs" ? `text match: ${g.file} ends in module.exports, so the checker scopes ${c.parts[0]} to that file` : `text match: window.${c.parts[0]} is untyped for the checker` };
+    }
     let first = null;
     for (const p of c.cands) {
       this.ensureOpen(p.file);
@@ -249,10 +410,6 @@ export class Lsp {
     }
     if (c.parts.length === 2 && FACADES[c.parts[0]]) return { ...c, ...(await this.facade(c.parts, method, extra)) };
     if (c.parts.length > 1) return { ...c, ...this.textFallback(c.parts, method, c.head) };
-    if (c.parts.length === 1 && method === "textDocument/references" && c.top.some(l => /^\s*window\.[\w$]+\s*=/.test(this.textLines(l.file)[l.line0] || ""))) {
-      const p = c.top[0], def = { uri: this.uriOf(p.file), range: { start: { line: p.line0, character: p.col0 } } };
-      return { ...c, p, result: this.textRefs(c.parts, def), note: `text match: window.${c.parts[0]} is untyped for the checker` };
-    }
     if (c.parts.length === 1 && method === "textDocument/definition") {
       const p = c.top[0];
       return { ...c, p, result: c.top.map(l => ({ uri: this.uriOf(l.file), range: { start: { line: l.line0, character: l.col0 } } })) };
@@ -261,13 +418,17 @@ export class Lsp {
   }
   // `window.Head = {…}` globals (15 modules) are invisible to the checker, which
   // types `Head` as any; answer those from the text, labelled as such.
+  // A global the checker cannot see: `window.H = …`, or a top-level `const H` in a file the
+  // checker takes for a CommonJS module (it ends `module.exports = H`: ghost.js, ghost-share.js…).
   windowDecl(h) {
-    const decl = new RegExp(`^\\s*window\\.${h.replace(/[$.]/g, "\\$&")}\\s*=`, "m"), needle = `window.${h}`;
+    const esc = h.replace(/[$.]/g, "\\$&");
+    const win = new RegExp(`^\\s*window\\.${esc}\\s*=`, "m"), cjs = new RegExp(`^(?:const|let|var|function|class)\\s+${esc}\\b`, "m");
     for (const f of [...this.mtimes.keys()].sort()) {
       const { text } = this.textOf(f);
-      if (!text.includes(needle)) continue;
-      const m = decl.exec(text);
-      if (m) return { file: f, line0: this.posOf(f, m.index + m[0].indexOf("window")).line0 };
+      if (!text.includes(h)) continue;
+      let m = text.includes(`window.${h}`) && win.exec(text), kind = "window";
+      if (!m && text.includes("module.exports")) { m = cjs.exec(text); kind = "cjs"; }
+      if (m) return { file: f, line0: this.posOf(f, m.index + (kind === "window" ? m[0].indexOf("window") : 0)).line0, kind };
     }
     return null;
   }
@@ -276,7 +437,8 @@ export class Lsp {
     const d = this.windowDecl(h);
     if (!d && head) throw Error(`${h} (${head.file}:${head.line0 + 1}) has no member ${member} the checker can see; try lsp_hover ${h} or lsp_symbols ${member}`);
     if (!d) throw Error(`symbol not found: ${h} is not a global the checker or a window.${h} assignment declares`);
-    const key = new RegExp(`(^\\s*|[{,]\\s*)(${member.replace(/[$]/g, "\\$")})\\s*[:(,}]|^\\s*(?:async\\s+)?(?:get\\s+|set\\s+)?(${member.replace(/[$]/g, "\\$")})\\s*\\(`);
+    const em = member.replace(/[$]/g, "\\$");
+    const key = new RegExp(`(^\\s*|[{,]\\s*)(${em})\\s*[:(,}]|^\\s*(?:async\\s+)?(?:get\\s+|set\\s+)?(${em})\\s*\\(|\\b(?:function\\*?|const|let|var|class)\\s+(${em})\\b`);
     const lines = this.textLines(d.file);
     let def = null;
     for (let i = d.line0; i < lines.length && !def; i++) {
@@ -284,8 +446,8 @@ export class Lsp {
       const m = key.exec(lines[i]);
       if (m) def = { uri: this.uriOf(d.file), range: { start: { line: i, character: lines[i].indexOf(member, m.index) } } };
     }
-    if (!def) throw Error(`window.${h} (${d.file}:${d.line0 + 1}) has no member ${member}`);
-    const note = `text match: window.${h} is untyped for the checker`;
+    if (!def) throw Error(`${d.kind === "cjs" ? h : `window.${h}`} (${d.file}:${d.line0 + 1}) has no member ${member}`);
+    const note = d.kind === "cjs" ? `text match: ${d.file} ends in module.exports, so the checker scopes ${h} to that file` : `text match: window.${h} is untyped for the checker`;
     if (method !== "textDocument/references") return { p: { file: d.file, line0: def.range.start.line, col0: def.range.start.character }, result: method === "textDocument/hover" ? { contents: `(${note})` } : [def], note };
     return { p: { file: d.file, line0: def.range.start.line, col0: def.range.start.character }, result: this.textRefs(parts, def), note };
   }
@@ -361,16 +523,22 @@ export class Lsp {
     }
   }
   rank(l) { return TAG_RANK[this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character)]; }
-  locRows(locs, limit = MAX_ROWS, declFirst = false) {
+  // Location rows, paged (offset/limit). References carry the enclosing function
+  // (`(GameHud › updateDash)`); format "concise" drops the source text.
+  async locRows(locs, { limit = MAX_ROWS, offset = 0, declFirst = false, where = false, concise = false } = {}) {
     const list = (Array.isArray(locs) ? locs : locs ? [locs] : []).map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l);
     // A definition through an IIFE's `return { …, name, … }` is the export, not the body: list the declaration first.
     if (declFirst) list.sort((a, b) => this.rank(a) - this.rank(b));
     else list.sort((a, b) => a.uri.localeCompare(b.uri) || a.range.start.line - b.range.start.line || a.range.start.character - b.range.start.character);
-    const rows = list.map(l => this.row(this.rel(l.uri), l.range.start.line, l.range.start.character));
+    const page = list.slice(offset, offset + limit), rows = [];
+    for (const l of page) {
+      const f = this.rel(l.uri), { line, character } = l.range.start;
+      rows.push(this.row(f, line, character, true, { where: where ? await this.where(f, line, character).catch(() => null) : null, source: !concise }));
+    }
     const per = {};
     for (const l of list) { const f = this.rel(l.uri); per[f] = (per[f] || 0) + 1; }
     const byFile = Object.entries(per).sort((a, b) => b[1] - a[1]);
-    return { total: rows.length, byFile, tags: list.map(l => this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character)), files: new Set(list.map(l => l.uri)).size, rows: rows.slice(0, limit), truncated: rows.length > limit };
+    return { total: list.length, list, byFile, tags: list.map(l => this.tag(this.rel(l.uri), l.range.start.line, l.range.start.character)), files: new Set(list.map(l => l.uri)).size, rows, offset, truncated: list.length > offset + limit };
   }
   stop() { clearTimeout(this.idle); if (this.proc && !this.proc.killed) { try { this.notify("exit", null); } catch { /* closed */ } this.proc.kill(); } }
 }
@@ -385,14 +553,23 @@ const where = {
 const def = (name, description, properties, required = []) => ({ name, description,
   inputSchema: { type: "object", properties, required, additionalProperties: false },
   annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } });
+const page = { offset: int("Skip this many rows (paging; the footer names the next offset)", 0, 100000), limit: int(`Rows to print (default ${MAX_ROWS})`, 1, 2000) };
+const format = { format: { type: "string", enum: ["detailed", "concise"], description: "detailed (default): rows carry the source line; concise: location, tag and enclosing function only" } };
 export const TOOLS = [
-  def("lsp_definition", "Go to definition through TypeScript's checker. Use instead of grep to find where a global, module member (Head.member), G.<member> or local is defined. Rows: `file:line:col  [def|export|alias] source`, the real declaration first; several same-named top-level functions are all listed.", where),
-  def("lsp_references", "Every reference across js/, sorted by file, with a per-file summary when long. Semantic (skips comments, strings, same-named members of other objects); window.X globals and G.<member> fall back to labelled text matches that follow `const { x } = Head` destructures. Rows: `file:line:col  [def|export|alias|use] source`.",
-    { ...where, includeDeclaration: { type: "boolean", description: "Include the declaration itself (default true)" }, limit: int(`Rows to print (default ${MAX_ROWS})`, 1, 2000),
+  def("lsp_definition", "Where is it defined? Use instead of grep for a global, a module member (Head.member), G.<member> or a local. Rows `file:line:col  [def|export|alias] source`, the real declaration first; same-named top-level functions are all listed. body: true appends the declaration's source (capped at maxLines), saving a Read.",
+    { ...where, body: { type: "boolean", description: "Append the source of the first [def] (function body, object, const), up to maxLines" }, maxLines: int(`Body line cap (default ${BODY_LINES})`, 1, 400) }),
+  def("lsp_references", "Who uses it? Every reference across js/, sorted by file, each row tagged [def|export|alias|use] and naming its enclosing function `(Module › fn)`. Semantic (skips comments, strings, same-named members of other objects); window.X globals and G.<member> fall back to labelled text matches that follow `const { x } = Head` destructures. files: true prints only per-file counts.",
+    { ...where, includeDeclaration: { type: "boolean", description: "Include the declaration itself (default true)" }, ...page, ...format,
       files: { type: "boolean", description: "Only the per-file counts (every file), no rows: who uses it, at a glance" } }),
-  def("lsp_symbols", "Workspace symbol search by name or prefix: declarations listed (exact first, top-level before nested), aliases (`const x = Y.x`, destructuring) collapsed to a count.", { query: str("Symbol name or prefix, e.g. GameHud"), limit: int("Rows (default 30)", 1, MAX_ROWS) }, ["query"]),
+  def("lsp_callers", "Impact before an edit: the functions that use the symbol, one row per caller `file:line  Module › fn  ×N (lines …)`, grouped from its references (uses only, not the declaration or export/alias rows).",
+    { ...where, ...page }),
+  def("lsp_outline", "A module's shape without reading it: `symbol` (an IIFE global such as Liveries, or a window.X object) or `file` → its members, exported ones first, each with kind, line and its first source line. all: true also lists internal members.",
+    { symbol: str("A top-level global, e.g. Liveries, GameHud, PhysicsConsts"), file: where.file, all: { type: "boolean", description: "List internal (non-exported) members too" }, ...page }),
+  def("lsp_symbols", "Find a symbol by name or prefix: declarations listed (exact name first, top-level before nested), aliases (`const x = Y.x`, destructuring) collapsed to a count.",
+    { query: str("Symbol name or prefix, e.g. GameHud"), limit: int("Rows (default 30)", 1, MAX_ROWS), offset: page.offset }, ["query"]),
   def("lsp_hover", "Inferred type and JSDoc (type first, then where it was asked). JS parameters without JSDoc read as any.", where),
-  def("lsp_diagnostics", "TypeScript diagnostics for one file. jsconfig.json has checkJs off, so this reports syntax errors only.", { file: where.file }, ["file"]),
+  def("lsp_diagnostics", "After an edit: the errors it INTRODUCED in one file. Checks the file with // @ts-check (the project has checkJs off) for high-signal codes only (unknown name, 'did you mean' typo, wrong arity, assign to const, calling a non-function, redeclare, syntax) and hides the ones already present at git HEAD. all: true lists every high-signal one.",
+    { file: where.file, all: { type: "boolean", description: "Also list diagnostics already present at HEAD" } }, ["file"]),
 ];
 
 export async function callTool(lsp, name, a = {}) {
@@ -401,11 +578,14 @@ export async function callTool(lsp, name, a = {}) {
     if (!tool) throw Error(`Unknown tool: ${name}`);
     for (const k of Object.keys(a)) if (!tool.inputSchema.properties[k]) throw Error(`Unknown argument: ${k}; valid: ${Object.keys(tool.inputSchema.properties).join(", ")}`);
     for (const k of tool.inputSchema.required) if (a[k] == null) throw Error(`Missing argument: ${k}`);
-    if (a.file && a.line == null && name !== "lsp_diagnostics") throw Error("file needs line");
+    if (a.file && a.line == null && !["lsp_diagnostics", "lsp_outline"].includes(name)) throw Error("file needs line");
+    if (name === "lsp_outline" && !a.file === !a.symbol) throw Error("lsp_outline takes symbol or file (one of them)");
+    const offset = a.offset || 0, limit = a.limit || MAX_ROWS;
+    const more = (total, shown) => total > offset + shown ? `\n… ${total - offset - shown} more (offset: ${offset + shown}${a.files === undefined && name === "lsp_references" ? ", or files: true for per-file counts" : ""})` : "";
     let text;
     if (name === "lsp_symbols") {
       await lsp.prepare();
-      const res = await lsp.symbols(a.query), limit = a.limit || 30;
+      const res = await lsp.symbols(a.query), lim = a.limit || 30;
       // `const clamp = M4.clamp` is a symbol too: list declarations, then collapse aliases to a count.
       const rows = res.map(s => {
         const f = lsp.rel(s.location.uri), { line, character } = s.location.range.start;
@@ -414,39 +594,61 @@ export async function callTool(lsp, name, a = {}) {
       const shown = rows.filter(r => r.tag !== "alias"), aliases = rows.filter(r => r.tag === "alias");
       const exact = shown.filter(r => r.s.name === a.query), other = shown.filter(r => r.s.name !== a.query);
       const line = ({ s, loc, tag }) => `${s.name}  ${KIND[s.kind] || s.kind}${tag === "export" ? " (export)" : ""}  ${loc}${s.containerName ? `  (in ${s.containerName})` : ""}`;
-      text = [...exact.map(line), ...(exact.length && other.length ? [`— ${other.length} other name${other.length === 1 ? "" : "s"} matching "${a.query}":`] : []), ...other.map(line)].slice(0, limit + 1).join("\n")
-        + (shown.length > limit ? `\n… ${shown.length - limit} more (raise limit, max ${MAX_ROWS}; an exact name lists first)` : "")
+      const all = [...exact.map(line), ...(exact.length && other.length ? [`— ${other.length} other name${other.length === 1 ? "" : "s"} matching "${a.query}":`] : []), ...other.map(line)];
+      text = all.slice(offset, offset + lim).join("\n")
+        + (all.length > offset + lim ? `\n… ${all.length - offset - lim} more (offset: ${offset + lim}; an exact name lists first)` : "")
         + (aliases.length ? `\n+ ${aliases.length} alias${aliases.length === 1 ? "" : "es"} (const x = Y.x / destructuring)${aliases.some(r => r.s.name === a.query) ? ` — ${aliases.filter(r => r.s.name === a.query).length} of ${a.query}` : ""}, e.g. ${aliases.slice(0, 3).map(r => r.loc).join(", ")}` : "")
         || `no symbol matches ${a.query}`;
     } else if (name === "lsp_diagnostics") {
-      await lsp.prepare();
-      const f = path.relative(lsp.root, path.resolve(lsp.root, a.file)); lsp.ensureOpen(f);
-      const r = await lsp.request("textDocument/diagnostic", { textDocument: { uri: lsp.uriOf(f) } });
-      const items = r?.items || [];
-      text = items.map(d => `${f}:${d.range.start.line + 1}:${d.range.start.character + 1}  TS${d.code} ${d.message.split("\n")[0]}`).join("\n") || `${f}: 0 diagnostics`;
+      text = await lsp.diagnose(a.file, a.all);
+    } else if (name === "lsp_outline") {
+      text = await lsp.outline({ file: a.file, symbol: a.symbol, all: a.all, offset, limit });
     } else if (name === "lsp_hover") {
       const { p, result, note } = await lsp.at(a, "textDocument/hover");
       const c = result?.contents, body = typeof c === "string" ? c : Array.isArray(c) ? c.map(x => x.value || x).join("\n") : c?.value;
       text = `${body || "(no type information)"}\nat ${lsp.row(p.file, p.line0, p.col0)}${note && !body?.includes(note) ? `\n(${note})` : ""}`;
     } else {
-      const method = name === "lsp_definition" ? "textDocument/definition" : "textDocument/references";
-      const extra = name === "lsp_references" ? { context: { includeDeclaration: a.includeDeclaration !== false } } : {};
+      const isDef = name === "lsp_definition", callers = name === "lsp_callers";
+      const method = isDef ? "textDocument/definition" : "textDocument/references";
+      const extra = isDef ? {} : { context: { includeDeclaration: callers ? false : a.includeDeclaration !== false } };
       const at = await lsp.at(a, method, extra), { p } = at;
       const pos = l => `${l.file}:${l.line0 + 1}:${l.col0 + 1}`;
       // Several unrelated top-level symbols share the name (wrapS lives in many files):
       // list every declaration for a definition; references follow the first and say so.
       const many = at.top && at.top.length > 1;
-      const result = many && name === "lsp_definition" ? at.top.map(l => ({ uri: lsp.uriOf(l.file), range: { start: { line: l.line0, character: l.col0 } } })) : at.result;
-      if (Array.isArray(result) && (name === "lsp_definition" || a.includeDeclaration !== false) && !at.note) await lsp.followExports(result);
-      const r = lsp.locRows(result, a.limit, name === "lsp_definition");
+      let result = many && isDef ? at.top.map(l => ({ uri: lsp.uriOf(l.file), range: { start: { line: l.line0, character: l.col0 } } })) : at.result;
+      if (Array.isArray(result) && (isDef || (!callers && a.includeDeclaration !== false)) && !at.note) await lsp.followExports(result);
       const notes = [at.note,
-        many && name === "lsp_definition" && `${at.top.length} separate top-level declarations named ${a.symbol}`,
-        many && name === "lsp_references" && `${at.top.length} declarations named ${a.symbol}; these are the one at ${pos(p)} (others: ${at.top.filter(l => pos(l) !== pos(p)).slice(0, 5).map(pos).join(", ")}; pass file+line)`].filter(Boolean);
-      const summary = a.files ? `\n${r.byFile.map(([f, n]) => `${f} ${n}`).join("\n")}` : name === "lsp_references" && r.total > 40 ? `\nby file: ${r.byFile.slice(0, 8).map(([f, n]) => `${f} ${n}`).join(", ")}${r.byFile.length > 8 ? `, … ${r.byFile.length - 8} more files` : ""}` : "";
-      const self = name === "lsp_definition" && r.total === 1 && p && r.rows[0].startsWith(`${pos(p)} `);
-      const extraRows = name === "lsp_definition" ? r.tags.filter(t => t !== "def").length : 0, defs = r.total - extraRows;
-      const count = name === "lsp_definition" && extraRows && defs ? `${defs} definition${defs === 1 ? "" : "s"} (+${extraRows} export/alias row${extraRows === 1 ? "" : "s"})` : `${r.total} ${name === "lsp_definition" ? "definition" : "reference"}${r.total === 1 ? "" : "s"}`;
-      text = `${count}${name === "lsp_references" ? ` in ${r.files} file${r.files === 1 ? "" : "s"}` : ""} (${self ? "at the declaration" : `query at ${p ? pos(p) : "—"}`}${notes.length ? "; " + notes.join("; ") : ""})${summary}${a.files ? "" : `\n${r.rows.join("\n")}${r.truncated ? `\n… ${r.total - r.rows.length} more (raise limit, or files: true for per-file counts)` : ""}`}`;
+        many && isDef && `${at.top.length} separate top-level declarations named ${a.symbol}`,
+        many && !isDef && `${at.top.length} declarations named ${a.symbol}; these are the one at ${pos(p)} (others: ${at.top.filter(l => pos(l) !== pos(p)).slice(0, 5).map(pos).join(", ")}; pass file+line)`].filter(Boolean);
+      const head = `(${"%SELF%"}${notes.length ? "; " + notes.join("; ") : ""})`;
+      if (callers) {
+        // Group the uses by enclosing function: who would an edit to this symbol touch?
+        const locs = (Array.isArray(result) ? result : []).map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l)
+          .filter(l => lsp.tag(lsp.rel(l.uri), l.range.start.line, l.range.start.character) === "use");
+        const groups = new Map();
+        for (const l of locs) {
+          const f = lsp.rel(l.uri), w = await lsp.where(f, l.range.start.line).catch(() => "?"), k = `${f}\u0000${w}`;
+          if (!groups.has(k)) groups.set(k, { f, w, lines: [] });
+          groups.get(k).lines.push(l.range.start.line + 1);
+        }
+        const rows = [...groups.values()].sort((x, y) => x.f.localeCompare(y.f) || x.lines[0] - y.lines[0])
+          .map(g => { const u = [...new Set(g.lines)]; return `${g.f}:${g.lines[0]}  ${g.w}  ×${g.lines.length}${g.lines.length > 1 ? `  (line${u.length === 1 ? "" : "s"} ${u.slice(0, 12).join(", ")}${u.length > 12 ? ", …" : ""})` : ""}`; });
+        const files = new Set([...groups.values()].map(g => g.f)).size;
+        text = `${locs.length} use${locs.length === 1 ? "" : "s"} in ${groups.size} function${groups.size === 1 ? "" : "s"} across ${files} file${files === 1 ? "" : "s"} ${head.replace("%SELF%", `query at ${p ? pos(p) : "—"}`)}\n${rows.slice(offset, offset + limit).join("\n")}${more(rows.length, Math.min(limit, rows.length - offset))}`;
+      } else {
+        const r = await lsp.locRows(result, { limit, offset, declFirst: isDef, where: !isDef, concise: a.format === "concise" });
+        const summary = a.files ? `\n${r.byFile.map(([f, n]) => `${f} ${n}`).join("\n")}` : !isDef && r.total > 40 ? `\nby file: ${r.byFile.slice(0, 8).map(([f, n]) => `${f} ${n}`).join(", ")}${r.byFile.length > 8 ? `, … ${r.byFile.length - 8} more files` : ""}` : "";
+        const self = isDef && r.total === 1 && p && r.rows[0].startsWith(`${pos(p)} `);
+        const extraRows = isDef ? r.tags.filter(t => t !== "def").length : 0, defs = r.total - extraRows;
+        const count = isDef && extraRows && defs ? `${defs} definition${defs === 1 ? "" : "s"} (+${extraRows} export/alias row${extraRows === 1 ? "" : "s"})` : `${r.total} ${isDef ? "definition" : "reference"}${r.total === 1 ? "" : "s"}`;
+        text = `${count}${!isDef ? ` in ${r.files} file${r.files === 1 ? "" : "s"}` : ""} ${head.replace("%SELF%", self ? "at the declaration" : `query at ${p ? pos(p) : "—"}`)}${summary}${a.files ? "" : `\n${r.rows.join("\n")}${more(r.total, r.rows.length)}`}`;
+        if (isDef && a.body) {
+          const d = r.list.find(l => lsp.tag(lsp.rel(l.uri), l.range.start.line, l.range.start.character) === "def") || r.list[0];
+          const src = d && await lsp.bodyAt(lsp.rel(d.uri), d.range.start.line, a.maxLines || BODY_LINES);
+          text += src ? `\n\n${lsp.rel(d.uri)}:\n${src}` : "\n\n(no declaration body found)";
+        }
+      }
     }
     return { content: [{ type: "text", text }], isError: false };
   } catch (e) {
@@ -483,20 +685,28 @@ export async function serve() {
   await chain; lsp.stop();
 }
 
-const CLI = { def: "lsp_definition", refs: "lsp_references", sym: "lsp_symbols", hover: "lsp_hover", diag: "lsp_diagnostics" };
+const CLI = { def: "lsp_definition", refs: "lsp_references", callers: "lsp_callers", outline: "lsp_outline", sym: "lsp_symbols", hover: "lsp_hover", diag: "lsp_diagnostics" };
 async function cli([cmd, target, ...rest]) {
   const name = CLI[cmd];
   if (!name || !target) {
-    process.stdout.write("node tools/mcp/lsp-mcp.mjs [serve | --list-tools | def|refs|hover <Name|Head.member|file:line[:col]> [--no-decl --files --limit=N] | sym <query> [--limit=N] | diag <file>]\n");
+    process.stdout.write([
+      "node tools/mcp/lsp-mcp.mjs [serve | --list-tools]",
+      "  def|refs|callers|hover <Name | Head.member | file:line[:col]>   flags: --body --max-lines=N (def), --no-decl --files --concise (refs), --limit=N --offset=N",
+      "  outline <Global | file.js> [--all]     sym <query> [--limit=N]     diag <file.js> [--all]",
+    ].join("\n") + "\n");
     return cmd === "--help" ? 0 : 2;
   }
-  const pos = /^(.+\.(?:js|ts)):(\d+)(?::(\d+))?$/.exec(target);
+  const pos = /^(.+\.(?:js|ts)):(\d+)(?::(\d+))?$/.exec(target), file = /\.(js|ts)$/.test(target);
   const args = name === "lsp_symbols" ? { query: target } : name === "lsp_diagnostics" ? { file: target }
+    : name === "lsp_outline" ? (file ? { file: target } : { symbol: target })
     : pos ? { file: pos[1], line: +pos[2], ...(pos[3] ? { column: +pos[3] } : {}) } : { symbol: target };
-  if (rest.includes("--no-decl")) args.includeDeclaration = false;
-  if (rest.includes("--files")) args.files = true;
-  const lim = rest.find(x => x.startsWith("--limit="));
-  if (lim) args.limit = +lim.slice(8);
+  const flag = f => rest.includes(f), num = f => { const v = rest.find(x => x.startsWith(`${f}=`)); return v ? +v.slice(f.length + 1) : undefined; };
+  if (flag("--no-decl")) args.includeDeclaration = false;
+  if (flag("--files")) args.files = true;
+  if (flag("--concise")) args.format = "concise";
+  if (flag("--body")) args.body = true;
+  if (flag("--all")) args.all = true;
+  for (const [f, k] of [["--limit", "limit"], ["--offset", "offset"], ["--max-lines", "maxLines"]]) if (num(f) !== undefined) args[k] = num(f);
   const lsp = new Lsp();
   try { const r = await callTool(lsp, name, args); process.stdout.write(r.content[0].text + "\n"); return r.isError ? 1 : 0; }
   finally { lsp.stop(); }

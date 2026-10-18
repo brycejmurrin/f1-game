@@ -16,7 +16,7 @@ The plugin consumes the five MCP servers already configured by the game checkout
 | `playwright-official` | Serialized navigation, DOM assertions and screenshots | The repository Playwright probe after reading `.claude/skills/mcp-probe/SKILL.md` |
 | `chrome-devtools` | Serialized live-page console, network, heap and performance inspection | The repository Chrome/Playwright harness documented by the checkout |
 | `js-debugger` | Parent-owned source breakpoints, stepping and paused scopes on an existing local Chrome page | Persistent `bash tools/mcp/js-debugger-mcp.sh serve-http`, then separate `call debugger_*` clients; see [debugger setup](../../docs/research/AGENT-JS-DEBUGGER-MCP.md) |
-| `apex-lsp` | Go-to-definition, references, symbols and hover over `js/` via TypeScript 7 `tsc --lsp` | `bash tools/mcp/lsp-mcp.sh def <Name|Head.member>` (`refs`, `sym`, `hover`, `diag`); see [LSP-MCP](../../docs/notes/LSP-MCP-2026-10-18.md) |
+| `apex-lsp` | Definition (with body), references with enclosing functions, callers, module outlines, hover and new-since-HEAD diagnostics over `js/` via TypeScript 7 `tsc --lsp` | `bash tools/mcp/lsp-mcp.sh def <Name|Head.member> --body` (`refs`, `callers`, `outline`, `sym`, `hover`, `diag`); see [LSP-MCP](../../docs/notes/LSP-MCP-2026-10-18.md) |
 
 Use one browser server and one browser process at a time. The repository MCP configuration is the source of truth; the plugin advertises these names for routing and does not install or launch them.
 The debugger attaches to that same parent-owned local page. A pause stops its

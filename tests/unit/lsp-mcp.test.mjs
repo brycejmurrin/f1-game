@@ -5,7 +5,7 @@
 // No browser. ~2 s (one tsc --lsp project load).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,7 +46,7 @@ test(".mcp.json launches apex-lsp with the repo server", () => {
 });
 
 test("argument errors come back as tool errors before tsc starts", async () => {
-  assert.deepEqual(TOOLS.map(t => t.name), ["lsp_definition", "lsp_references", "lsp_symbols", "lsp_hover", "lsp_diagnostics"]);
+  assert.deepEqual(TOOLS.map(t => t.name), ["lsp_definition", "lsp_references", "lsp_callers", "lsp_outline", "lsp_symbols", "lsp_hover", "lsp_diagnostics"]);
   const never = { prepare() { throw Error("must not start tsc"); } };
   for (const [name, args, re] of [["lsp_symbols", {}, /Missing argument: query/], ["lsp_definition", { sym: "X" }, /Unknown argument: sym/],
     ["lsp_references", { file: "js/game.js" }, /file needs line/], ["nope", {}, /Unknown tool/]]) {
@@ -142,10 +142,10 @@ test("fixture workspace: freshness, ambiguity, window globals, honest misses", {
 
     r = await text("lsp_references", { symbol: "Beta.KEY" });
     assert.match(r.t, /^6 references in 2 files .*text match/, r.t);
-    assert.match(r.t, /src\/d\.js:3:7 {2}\[alias\] go, KEY: key \} = Beta;/, "a multi-line, renamed destructure");
-    assert.match(r.t, /src\/d\.js:5:15 {2}\[use\] const twice = key \* 2;/, "the local it binds");
-    assert.match(r.t, /src\/d\.js:7:17 {2}\[use\] const again = B\.KEY;/, "uses through const B = Beta");
-    assert.match(r.t, /src\/c\.js:3:3 {2}\[def\] KEY: 5/);
+    assert.match(r.t, /src\/d\.js:3:7 {2}\[alias\] \(top level\) {2}go, KEY: key \} = Beta;/, "a multi-line, renamed destructure");
+    assert.match(r.t, /src\/d\.js:5:15 {2}\[use\] \(top level\) {2}const twice = key \* 2;/, "the local it binds");
+    assert.match(r.t, /src\/d\.js:7:17 {2}\[use\] \(top level\) {2}const again = B\.KEY;/, "uses through const B = Beta");
+    assert.match(r.t, /src\/c\.js:3:3 {2}\[def\] \(top level\) {2}KEY: 5/);
     r = await text("lsp_references", { symbol: "Beta.KEY", files: true });
     assert.match(r.t, /^6 references in 2 files .*\nsrc\/c\.js 3\nsrc\/d\.js 3$/, "files: true prints only per-file counts");
     r = await text("lsp_symbols", { query: "wrap" });
@@ -157,8 +157,8 @@ test("fixture workspace: freshness, ambiguity, window globals, honest misses", {
     w("src/b.js", fs.readFileSync(path.join(dir, "src/b.js"), "utf8") + "const v2 = Alpha.ping(2);\n");
     w("src/a.js", `"use strict";\n\nconst Alpha = (function () {\n  function ping(x) { return x + 1; }\n  return { ping };\n})();\n`);
     r = await text("lsp_references", { symbol: "Alpha.ping" });
-    assert.match(r.t, /src\/b\.js:6:\d+ {2}\[use\] const v2 = Alpha\.ping\(2\);/, r.t);
-    assert.match(r.t, /src\/a\.js:4:\d+ {2}\[def\] function ping/, "the moved declaration is at its new line");
+    assert.match(r.t, /src\/b\.js:6:\d+ {2}\[use\] \(top level\) {2}const v2 = Alpha\.ping\(2\);/, r.t);
+    assert.match(r.t, /src\/a\.js:4:\d+ {2}\[def\] \(Alpha\) {2}function ping/, "the moved declaration is at its new line");
   } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -183,4 +183,81 @@ test("classify tags a row by the identifier at the column", () => {
   assert.equal(inCommentOrString('a = "T.x" + T.y', 6), true);
   assert.equal(inCommentOrString('a = "T.x" + T.y', 12), false);
   assert.equal(inCommentOrString("x = 1; // T.y", 10), true);
+});
+
+// The second wave (agent-use research, docs/notes/LSP-MCP-2026-10-18.md §Agent use):
+// enclosing functions on rows, callers, outline, definition bodies, paging,
+// concise rows, and diagnostics that report only what an edit introduced.
+test("fixture workspace: callers, outline, body, paging, concise, diagnostics new since HEAD", { timeout: 90000 }, async () => {
+  const os = await import("node:os");
+  const { execFileSync } = await import("node:child_process");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-mcp2-"));
+  const w = (f, t) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), t); };
+  const git = (...a) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd: dir, stdio: "ignore" });
+  w("jsconfig.json", JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));
+  w("src/a.js", `"use strict";\nconst Alpha = (function () {\n  const SECRET = 1;\n  function ping(x) {\n    return x + SECRET;\n  }\n  return { ping };\n})();\n`);
+  w("src/b.js", `"use strict";\nfunction useIt() {\n  return Alpha.ping(1) + Alpha.ping(2);\n}\nconst v = Alpha.ping(3);\nconst old = notDefinedAnywhere;\n`);
+  git("init", "-q"); git("add", "-A"); git("commit", "-qm", "base");
+  const lsp = new Lsp({ root: dir, src: "src", anchor: "src/a.js", idleMs: 0 });
+  const text = async (name, args) => { const r = await callTool(lsp, name, args); return { err: r.isError, t: r.content[0].text }; };
+  try {
+    let r = await text("lsp_callers", { symbol: "Alpha.ping" });
+    assert.match(r.t, /^3 uses in 2 functions across 1 file/, r.t);
+    assert.match(r.t, /\nsrc\/b\.js:3 {2}useIt {2}×2 {2}\(line 3\)/, "two uses on one line: one line listed");
+    assert.match(r.t, /\nsrc\/b\.js:5 {2}top level {2}×1/);
+
+    r = await text("lsp_references", { symbol: "Alpha.ping" });
+    assert.match(r.t, /src\/b\.js:3:\d+ {2}\[use\] \(useIt\) {2}return Alpha\.ping/, "rows name the enclosing function");
+    r = await text("lsp_references", { symbol: "Alpha.ping", format: "concise", limit: 1, offset: 1 });
+    assert.match(r.t, /\nsrc\/\w\.js:\d+:\d+ {2}\[\w+\] \([^)]+\)\n… \d+ more \(offset: 2/, r.t);
+
+    r = await text("lsp_outline", { symbol: "Alpha" });
+    assert.match(r.t, /Alpha {2}:2 {2}IIFE module: 1 exported, 1 internal\n {2}\[export\] ping {2}function {2}:4 {2}function ping\(x\) \{\n {2}… 1 internal/, r.t);
+    r = await text("lsp_outline", { file: "src/a.js", all: true });
+    assert.match(r.t, /SECRET {2}\w+ {2}:3/);
+
+    r = await text("lsp_definition", { symbol: "Alpha.ping", body: true });
+    assert.match(r.t, /\n\nsrc\/a\.js:\n {5}4 {4}function ping\(x\) \{\n {5}5 {6}return x \+ SECRET;\n {5}6 {4}\}$/, r.t);
+
+    // Unchanged from HEAD: the pre-existing unknown name is hidden unless all: true.
+    r = await text("lsp_diagnostics", { file: "src/b.js" });
+    assert.match(r.t, /^0 new since HEAD in src\/b\.js \(1 pre-existing hidden/, r.t);
+    // An edit that misspells a member and passes an extra argument (JS parameters are optional
+    // to the checker, so too FEW is never an error): only the new ones show.
+    w("src/b.js", fs.readFileSync(path.join(dir, "src/b.js"), "utf8") + "const typo = Alpha.pin(4);\nconst arity = Alpha.ping(1, 2);\n");
+    r = await text("lsp_diagnostics", { file: "src/b.js" });
+    assert.match(r.t, /^2 new since HEAD in src\/b\.js \(1 pre-existing hidden/, r.t);
+    assert.match(r.t, /\nsrc\/b\.js:7:\d+ {2}TS2551 Property 'pin' does not exist .*Did you mean 'ping'\?/, r.t);
+    assert.match(r.t, /\nsrc\/b\.js:8:\d+ {2}TS2554 Expected 0-1 arguments, but got 2\./, r.t);
+    r = await text("lsp_diagnostics", { file: "src/b.js", all: true });
+    assert.match(r.t, /^3 high-signal diagnostics/);
+    // The pragma never leaks: an ordinary query afterwards sees the disk text.
+    r = await text("lsp_definition", { symbol: "Alpha.ping" });
+    assert.match(r.t, /src\/a\.js:4:\d+ {2}\[def\] function ping/);
+  } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("lsp-hint.py names the apex-lsp call for a symbol search, and stays quiet otherwise", () => {
+  const hook = path.join(ROOT, ".claude/hooks/lsp-hint.py");
+  assert.ok(fs.statSync(hook).mode & 0o111, "hook must be executable");
+  const run = input => {
+    const r = spawnSync("python3", [hook], { input: JSON.stringify(input), encoding: "utf8", env: { ...process.env, APEX_LSP_HINT: "" } });
+    return r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput : null;
+  };
+  let h = run({ tool_name: "Grep", tool_input: { pattern: "Tracks\\.curvature", path: "js" } });
+  assert.equal(h.hookEventName, "PreToolUse");
+  assert.equal(h.permissionDecision, undefined, "advisory: never decides the permission");
+  assert.match(h.additionalContext, /lsp_references \{symbol: "Tracks\.curvature"\}/);
+  assert.match(run({ tool_name: "Grep", tool_input: { pattern: "function\\s+forTeam" } }).additionalContext, /lsp_definition \{symbol: "forTeam"\}/);
+  assert.match(run({ tool_name: "Bash", tool_input: { command: "grep -rn \"Liveries\\.forTeam\" js | head" } }).additionalContext, /Liveries\.forTeam/);
+  for (const quiet of [{ tool_name: "Grep", tool_input: { pattern: "TODO: fix" } }, { tool_name: "Grep", tool_input: { pattern: "wrapS" } },
+    { tool_name: "Grep", tool_input: { pattern: "GameHud", path: "css" } }, { tool_name: "Bash", tool_input: { command: "git status" } }])
+    assert.equal(run(quiet), null, JSON.stringify(quiet));
+  assert.equal(spawnSync("python3", [hook], { input: "not json", encoding: "utf8" }).stdout, "", "fails open");
+});
+
+test("lsp-eval: every pinned question answered correctly on the real tree", { timeout: 90000 }, async () => {
+  const { run } = await import("../../tools/mcp/lsp-eval.mjs");
+  const rows = await run();
+  assert.deepEqual(rows.filter(r => !r.ok).map(r => r.q), []);
 });
