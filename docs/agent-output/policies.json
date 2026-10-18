@@ -1,0 +1,2397 @@
+{
+  "version": 1,
+  "defaults": {
+    "level": "compact",
+    "levels": [
+      "compact",
+      "diagnostic",
+      "full"
+    ],
+    "entrypoint": "node tools/agent-run.mjs --",
+    "fullEvidence": "retained-before-summary"
+  },
+  "tools": {
+    "tools/agent-run.mjs": {
+      "action": "job-status",
+      "preserve": "Literal argv, no command-argument persistence, no implicit timeout, child cancellation ownership, separate stream retention, --read cursor/limits, full-mode compatibility.",
+      "presentation": "shared-levels"
+    },
+    "tools/car/audit-aero.mjs": {
+      "action": "keep-native",
+      "preserve": "Inherited child streams and parent render-car flags.",
+      "presentation": "native"
+    },
+    "tools/car/audit-parts.mjs": {
+      "action": "artifact-first",
+      "preserve": "All screenshots and contact sheets; distinguish successful captures from blank/error renders.",
+      "presentation": "shared-levels"
+    },
+    "tools/car/career-economy.mjs": {
+      "action": "keep-native",
+      "preserve": "Currency, season count, catalog/re-spec denominators; these rows answer the actual economic question.",
+      "presentation": "native"
+    },
+    "tools/car/carshot.mjs": {
+      "action": "keep-native",
+      "preserve": "Image retrieval and actual backend; a saved image alone is not a visual pass.",
+      "presentation": "native"
+    },
+    "tools/car/cockpit-pale-sweep.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Ray denominator, actual colors, geometry locations and no arbitrary pass threshold.",
+      "presentation": "shared-levels"
+    },
+    "tools/car/crest-sweep.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Native numeric JSON and units; measurements do not become a new gate.",
+      "presentation": "shared-levels"
+    },
+    "tools/car/flank-occlusion.mjs": {
+      "action": "keep-native",
+      "preserve": "Spatial row/column interpretation and JSON geometry; do not truncate an image-like grid blindly.",
+      "presentation": "native"
+    },
+    "tools/car/helmet-sheet.mjs": {
+      "action": "keep-native",
+      "preserve": "Actual contact sheet and labeling; no second compact envelope for an already small receipt.",
+      "presentation": "native"
+    },
+    "tools/car/helmet-trace.mjs": {
+      "action": "page-results",
+      "preserve": "Generated fitted-zone/source output when requested, original photo provenance and exact mappings.",
+      "presentation": "shared-levels"
+    },
+    "tools/car/livery-contrast.mjs": {
+      "action": "keep-native",
+      "preserve": "Threshold and area denominator plus every failure via full JSON; never drop failures as ordinary rows.",
+      "presentation": "native"
+    },
+    "tools/car/logo-authored-sweep.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Full measured combinations and numeric colors; refusal for unsupported arguments.",
+      "presentation": "shared-levels"
+    },
+    "tools/car/parts-ladder.mjs": {
+      "action": "keep-native",
+      "preserve": "Price/visibility baselines and trap evidence; JSON intentionally retains the complete table.",
+      "presentation": "native"
+    },
+    "tools/car/parts-sweep.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Mode-specific calibration/attribute/clamp results, exact numeric precision, failed exit and all worker rows.",
+      "presentation": "shared-levels"
+    },
+    "tools/car/render-car.mjs": {
+      "action": "artifact-first",
+      "preserve": "Actual GPU/software provenance, blank detection, image paths and child exit for aliases.",
+      "presentation": "shared-levels"
+    },
+    "tools/car/spine-station.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Coordinate orientation, per-team JSON records and distinction between band and mark geometry.",
+      "presentation": "shared-levels"
+    },
+    "tools/car/trace-car.mjs": {
+      "action": "keep-native",
+      "preserve": "Exact vector coordinates and native saved trace data; an empty contour must not look successful.",
+      "presentation": "native"
+    },
+    "tools/car/trace-logo.mjs": {
+      "action": "protocol-only",
+      "preserve": "Generated crest-path source, source bitmap provenance and explicit write mode.",
+      "presentation": "native"
+    },
+    "tools/carview.html": {
+      "action": "no-direct-output",
+      "preserve": "DOM controls, canvas display, generated markers and visible error messages.",
+      "presentation": "native"
+    },
+    "tools/check/ai-band.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/ai-field.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/ai-human.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/ai-line.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/ai-pace.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/ai-race.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence. Child inherited stdout/stderr and child exit status must remain accessible.",
+      "presentation": "native"
+    },
+    "tools/check/ai-ratings.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/ai-strategy-census.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/ai-stuck.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/ai-tactics.mjs": {
+      "action": "artifact-first",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/audio-test.cjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/bloat-scan.mjs": {
+      "action": "page-results",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/check-gctx.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/check-js-types.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/check-physics.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/class-usage.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/cross-file-paths.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/defend-duel.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/destructure-usage.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/doctor.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/dup-keys.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/episode-diff.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/evaluate-scope-lint.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/extract-module.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/font-digits.py": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/html-sink-lint.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/lifecycle-census.mjs": {
+      "action": "artifact-first",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/lockup-bench.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/merge-hygiene.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/occlusion-estimate.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/offline-precache-check.cjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/physics-oracle.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence. Artifact special-number encoding and determinism.",
+      "presentation": "native"
+    },
+    "tools/check/physics-tune-sweep.mjs": {
+      "action": "job-status",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/player-dyn.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/quick-validate.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/ratchets.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/reject-lint.mjs": {
+      "action": "page-results",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/scan-globals.mjs": {
+      "action": "artifact-first",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/shader-validate.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/shell-ids.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/skill-routing-eval.py": {
+      "action": "job-status",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/skill-smoke-recipes.json": {
+      "action": "no-direct-output",
+      "preserve": "Exports/data schema and caller-owned numeric/availability contracts; do not wrap or execute as CLI.",
+      "presentation": "native"
+    },
+    "tools/check/skill-smoke.mjs": {
+      "action": "artifact-first",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/tolerance-diff.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/track-oracle.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence. Artifact special-number encoding and determinism.",
+      "presentation": "native"
+    },
+    "tools/check/tree-counts.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/trim-comments.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/check/twin-fidelity.mjs": {
+      "action": "job-status",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/vm-portable.mjs": {
+      "action": "page-results",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/vstd-lint.mjs": {
+      "action": "page-results",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence. Report-only CLI always exits 0; do not reinterpret findings as a failed gate.",
+      "presentation": "shared-levels"
+    },
+    "tools/check/wait-polling-lint.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence. Report-only CLI always exits 0; do not reinterpret findings as a failed gate.",
+      "presentation": "native"
+    },
+    "tools/check/workflow-lint.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/ci/assert-audit.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Declared/live distinction; capture-harness exemptions; swallowed rejections and parse errors",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/base-green.sh": {
+      "action": "protocol-only",
+      "preserve": "Only green narrows a gate; unknown is not green",
+      "presentation": "native"
+    },
+    "tools/ci/base-verdict.sh": {
+      "action": "keep-native",
+      "preserve": "Base SHA/run URL; cancellation as red; advisory exit 0",
+      "presentation": "native"
+    },
+    "tools/ci/behind-ship.mjs": {
+      "action": "keep-native",
+      "preserve": "Unknown measurement; threshold and advisory semantics",
+      "presentation": "native"
+    },
+    "tools/ci/branch-audit.mjs": {
+      "action": "artifact-first",
+      "preserve": "Unknown PR set refusal; quiet period and survey exclusions",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/bump-cache.mjs": {
+      "action": "keep-native",
+      "preserve": "Check versus apply; build identity; inconsistency exit",
+      "presentation": "native"
+    },
+    "tools/ci/change-kind.mjs": {
+      "action": "protocol-only",
+      "preserve": "Caller-readable kind; do not prepend prose",
+      "presentation": "native"
+    },
+    "tools/ci/ci-coverage.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Advisory is not blocking; fixed coverage is not selected execution",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/ci-pr-base.sh": {
+      "action": "protocol-only",
+      "preserve": "Fallback unchanged; no decoration of shell substitution",
+      "presentation": "native"
+    },
+    "tools/ci/ci-rerun.mjs": {
+      "action": "keep-native",
+      "preserve": "Whole-run versus failed-job receipt; exits 0/1/2/3",
+      "presentation": "native"
+    },
+    "tools/ci/ci-resolve-before.sh": {
+      "action": "protocol-only",
+      "preserve": "Unsupported event and unreachable base fail; Pages unknown selects all",
+      "presentation": "native"
+    },
+    "tools/ci/ci-select-specs-step.sh": {
+      "action": "protocol-only",
+      "preserve": "Every dropped/unreadable/unreachable/not-run spec; workflow annotations",
+      "presentation": "native"
+    },
+    "tools/ci/ci-verdict.mjs": {
+      "action": "keep-native",
+      "preserve": "Missing/invalid NEEDS fails closed; skipped/advisory distinct",
+      "presentation": "native"
+    },
+    "tools/ci/ci-watch.mjs": {
+      "action": "keep-native",
+      "preserve": "Pending/none/unknown/cancelled/superseded; head SHA run attempt and final exit",
+      "presentation": "native"
+    },
+    "tools/ci/coverage-merge.mjs": {
+      "action": "keep-native",
+      "preserve": "Missing coverage failure and actual inputs; generated HTML is artifact",
+      "presentation": "native"
+    },
+    "tools/ci/deploy.mjs": {
+      "action": "job-status",
+      "preserve": "Running versus terminal; gate-only/plan/PR receipts; exact SHA; child exits",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/fixture-consumer-audit.mjs": {
+      "action": "keep-native",
+      "preserve": "Adoption falling or unraised floor remains failure",
+      "presentation": "native"
+    },
+    "tools/ci/flake-tally.mjs": {
+      "action": "artifact-first",
+      "preserve": "Download/parse notes; issue errors even in JSON; no failures inferred from absence",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/fleet-board.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Dry-run versus applied; pin failure; exact board issue number",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/fleet-flags.mjs": {
+      "action": "page-results",
+      "preserve": "Unknown served/configured metrics and stalled/disconnected evidence",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/geometry-paths.mjs": {
+      "action": "protocol-only",
+      "preserve": "Regex/suite strings are consumed by shell; unknown argument exit 2",
+      "presentation": "native"
+    },
+    "tools/ci/github-token.mjs": {
+      "action": "no-direct-output",
+      "preserve": "Never reveal token or child auth stdout",
+      "presentation": "native"
+    },
+    "tools/ci/handback.mjs": {
+      "action": "keep-native",
+      "preserve": "No SWEEP when pending/red/open Plan; trigger IDs; gate/CI exits",
+      "presentation": "native"
+    },
+    "tools/ci/junit-failed.mjs": {
+      "action": "protocol-only",
+      "preserve": "Empty list is real empty; consumers depend on paths only",
+      "presentation": "native"
+    },
+    "tools/ci/measure-guard-commit.mjs": {
+      "action": "keep-native",
+      "preserve": "Sample count/environment; measurement invokes guards and ratchet hook path",
+      "presentation": "native"
+    },
+    "tools/ci/measure-pr-ci-after-close.mjs": {
+      "action": "keep-native",
+      "preserve": "Observation window/max-runs and API errors; no cancellation mutation",
+      "presentation": "native"
+    },
+    "tools/ci/needs-sync.mjs": {
+      "action": "keep-native",
+      "preserve": "Offline CI unknown; clean-behind is distinct from conflict/red; exits 2/3",
+      "presentation": "native"
+    },
+    "tools/ci/nightly-group.mjs": {
+      "action": "protocol-only",
+      "preserve": "Daily index/rotation determinism; no added prose before env assignment",
+      "presentation": "native"
+    },
+    "tools/ci/node-plan.mjs": {
+      "action": "protocol-only",
+      "preserve": "Fail-safe all; skipped reasons; circuit-scoped plan versus execution",
+      "presentation": "native"
+    },
+    "tools/ci/pages-live-sha.sh": {
+      "action": "protocol-only",
+      "preserve": "Unreadable is empty/unknown and always exit 0",
+      "presentation": "native"
+    },
+    "tools/ci/pages-publishable.sh": {
+      "action": "protocol-only",
+      "preserve": "Strict unreadable false; same SHA false; always exit 0 is not publish permission",
+      "presentation": "native"
+    },
+    "tools/ci/pages-reuse-verdict.sh": {
+      "action": "protocol-only",
+      "preserve": "Tree equality and smoke success; no prose in GITHUB_OUTPUT",
+      "presentation": "native"
+    },
+    "tools/ci/pick-tests.mjs": {
+      "action": "keep-native",
+      "preserve": "Empty versus unmatched versus infrastructure; unclaimed paths and sequential cap",
+      "presentation": "native"
+    },
+    "tools/ci/pick-unit-slices.mjs": {
+      "action": "keep-native",
+      "preserve": "Fail-safe unmatched and any_node/driving values; plan is not execution",
+      "presentation": "native"
+    },
+    "tools/ci/playwright-occupancy.mjs": {
+      "action": "keep-native",
+      "preserve": "Browser server versus active test; PID command classifications",
+      "presentation": "native"
+    },
+    "tools/ci/post-merge.mjs": {
+      "action": "keep-native",
+      "preserve": "SQUASH versus two parents; release failure must remain visible",
+      "presentation": "native"
+    },
+    "tools/ci/pr-board.mjs": {
+      "action": "page-results",
+      "preserve": "ARM/READY/SYNC blockers; CI unknown; open Plan and repository-wide cap",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/pr-body.mjs": {
+      "action": "keep-native",
+      "preserve": "Partial label error after body success; exact PR; do not replace dry-run review text",
+      "presentation": "native"
+    },
+    "tools/ci/process-dashboard.mjs": {
+      "action": "artifact-first",
+      "preserve": "No-token/API/check failures; fixture source and observation coverage",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/prune-branches.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Dry-run versus apply; protected/open refs; partial failures and unarchived kept refs",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/publish-shots.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Dry-run does not commit/push; full published URL mapping retrievable",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/queue-depth.mjs": {
+      "action": "keep-native",
+      "preserve": "Informational gauge versus historical hold policy; timeout 124 and API 3",
+      "presentation": "native"
+    },
+    "tools/ci/ready-full-cap.mjs": {
+      "action": "keep-native",
+      "preserve": "Cap/exclude flags and no-token/API failure; do not hide row identities",
+      "presentation": "native"
+    },
+    "tools/ci/ready-gate.mjs": {
+      "action": "keep-native",
+      "preserve": "Missing/stale stamp; exact tip tree; --local scope; open Plan",
+      "presentation": "native"
+    },
+    "tools/ci/release-provenance.mjs": {
+      "action": "keep-native",
+      "preserve": "Local/deploy/live distinct; dirty/unknown; strict mismatch exit",
+      "presentation": "native"
+    },
+    "tools/ci/remote-group.mjs": {
+      "action": "job-status",
+      "preserve": "No-wait means dispatched not passed; timeout/cancelled/API exits; shard child streams",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/repo-size.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Full-clone refusal; packed versus raw and history-only distinctions",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/reuse-draft-fast.sh": {
+      "action": "protocol-only",
+      "preserve": "Unknown API/base forces no reuse; no stdout prose",
+      "presentation": "native"
+    },
+    "tools/ci/run-group.mjs": {
+      "action": "artifact-first",
+      "preserve": "--skip-tf coverage; inherited node --test exits; skipped all is distinct",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/run-node-group.mjs": {
+      "action": "artifact-first",
+      "preserve": "Inherited TAP; forwarded test flags; sequential phase failure and signals",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/run-playwright.mjs": {
+      "action": "artifact-first",
+      "preserve": "Never intermediate green; empty/unparseable twins fail; peeled specs and child signals",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/select-budget.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Timeout survival assumptions; measured versus fallback spec estimates",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/select-recall.mjs": {
+      "action": "keep-native",
+      "preserve": "Named miss versus silent miss; recall regression exit in native mode",
+      "presentation": "native"
+    },
+    "tools/ci/select-specs.mjs": {
+      "action": "protocol-only",
+      "preserve": "Dropped/unreadable/unreachable/racing paths; fixed/manual/twin coverage not execution",
+      "presentation": "native"
+    },
+    "tools/ci/selected-gate-verdict.mjs": {
+      "action": "keep-native",
+      "preserve": "Missing evidence, infra-retry and partial drops; failure exits 1",
+      "presentation": "native"
+    },
+    "tools/ci/session-status.mjs": {
+      "action": "keep-native",
+      "preserve": "Historical log evidence not current-tip green; detached/unpushed/unavailable/live unresolved",
+      "presentation": "native"
+    },
+    "tools/ci/session-transcript.mjs": {
+      "action": "page-results",
+      "preserve": "Quota folding counts; hook errors always show; transcript is data warning",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/spec-staleness.mjs": {
+      "action": "keep-native",
+      "preserve": "Shallow/replay failures; risk age is not test verdict",
+      "presentation": "native"
+    },
+    "tools/ci/spec-timings.mjs": {
+      "action": "keep-native",
+      "preserve": "Dry-run versus write; skipped unreadable files; growth is advisory",
+      "presentation": "native"
+    },
+    "tools/ci/sweep-shards.mjs": {
+      "action": "protocol-only",
+      "preserve": "Shard bounds; expected duration is estimate; all chosen files retained",
+      "presentation": "native"
+    },
+    "tools/ci/sync-pr.mjs": {
+      "action": "job-status",
+      "preserve": "Plan versus sync/push; resumable stage; inherited npm/gen/test exits",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/test-bg.mjs": {
+      "action": "keep-native",
+      "preserve": "Background != pass; exit124 leaves alive; = bg exit takes precedence; refused/not-run",
+      "presentation": "native"
+    },
+    "tools/ci/test-coverage-audit.mjs": {
+      "action": "keep-native",
+      "preserve": "Every orphan is actionable; failure exit preserved",
+      "presentation": "native"
+    },
+    "tools/ci/test-honesty.mjs": {
+      "action": "keep-native",
+      "preserve": "Skip explanations, unexplained count, nonzero result",
+      "presentation": "native"
+    },
+    "tools/ci/test-observed.mjs": {
+      "action": "page-results",
+      "preserve": "Local gitignored logs only; parse errors; absence locally not global absence",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/test-solo.mjs": {
+      "action": "artifact-first",
+      "preserve": "Inherited stdout; forced busy-run caveat; exits/signals and infrastructure failure",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/tooling-fast.mjs": {
+      "action": "job-status",
+      "preserve": "NotStarted/bail, timeouts/empty-run, unchanged-tree stamp, suite terminal line",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/twinned-specs.mjs": {
+      "action": "targeted-summary",
+      "preserve": "VM coverage is test-for-test; drift exit remains 1",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/verify-change.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Partial exit2 versus fail1/pass0; empty/unmatched; inherited child stderr not silently lost",
+      "presentation": "shared-levels"
+    },
+    "tools/ci/verify-live.mjs": {
+      "action": "keep-native",
+      "preserve": "checked entries and errors; base URL/runtime root; non-ok exits 1, missing URL exits 2",
+      "presentation": "native"
+    },
+    "tools/ci/wait-for.mjs": {
+      "action": "keep-native",
+      "preserve": "Timeout versus success and condition identity; no polling spam",
+      "presentation": "native"
+    },
+    "tools/ci/who-is-on-it.mjs": {
+      "action": "page-results",
+      "preserve": "Fetch failed means nothing read; stale claims hidden count; never suppress conflicting work",
+      "presentation": "shared-levels"
+    },
+    "tools/desktop/pack-dry-run.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/desktop/stage-files.mjs": {
+      "action": "no-direct-output",
+      "preserve": "Exports/data schema and caller-owned numeric/availability contracts; do not wrap or execute as CLI.",
+      "presentation": "native"
+    },
+    "tools/desktop/stage.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/docs/gen-agent-index.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/docs/gen-coverage-table.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/env/apex-memory.mjs": {
+      "action": "keep-native",
+      "preserve": "show document bytes, orphan names, retire count and failure exits.",
+      "presentation": "native"
+    },
+    "tools/env/cloud-agent-install.sh": {
+      "action": "artifact-first",
+      "preserve": "Usable-dependency fallback, warning/error distinction, browser/cache paths, retry behavior and actual exit status.",
+      "presentation": "shared-levels"
+    },
+    "tools/env/ensure-mcp-ready.sh": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/env/install-browsers.sh": {
+      "action": "artifact-first",
+      "preserve": "Usable-dependency fallback, warning/error distinction, browser/cache paths, retry behavior and actual exit status.",
+      "presentation": "shared-levels"
+    },
+    "tools/env/install-lint-bins.sh": {
+      "action": "artifact-first",
+      "preserve": "Usable-dependency fallback, warning/error distinction, browser/cache paths, retry behavior and actual exit status.",
+      "presentation": "shared-levels"
+    },
+    "tools/env/mirror-skills.sh": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/garage-angles-fetch.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "shared-levels"
+    },
+    "tools/gen/assets.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "shared-levels"
+    },
+    "tools/gen/bake-elevation.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/bake-flyby.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/garage-defaults.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-arch-table.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-changelog.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-circuit-meta.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-cursor-rules.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "shared-levels"
+    },
+    "tools/gen/gen-flags-table.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-hooks-table.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-ladder-figures.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-lib.mjs": {
+      "action": "no-direct-output",
+      "preserve": "Caller-visible stdout status, 160-character differing-line excerpts, --check failure=1, argument error=2, and written bytes.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-locales.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-output-surface.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-shell.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-slider-doc.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-test-groups.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/gen-tools-readme.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/import-models.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "shared-levels"
+    },
+    "tools/gen/move-tree.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "shared-levels"
+    },
+    "tools/gen/settings-defaults.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "shared-levels"
+    },
+    "tools/gen/synth-models.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/gen/targets.mjs": {
+      "action": "protocol-only",
+      "preserve": "Every generated path, delimiters, JSON array shape and successful exit.",
+      "presentation": "native"
+    },
+    "tools/gen/title-art.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/track-stills.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/vendor-three.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/voice-audition.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/voice-corpus.json": {
+      "action": "no-direct-output",
+      "preserve": "Phrase keys, speaker collections and ordering.",
+      "presentation": "native"
+    },
+    "tools/gen/voice-corpus.mjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/gen/voicepack.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/batch-visible-probe.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Read-only probe validity and explicit software-is-not-hardware warning; full JSON remains available.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/census-verdict.mjs": {
+      "action": "keep-native",
+      "preserve": "GitHub ::error annotations, unknown/missing evidence and existing nonzero gate exit.",
+      "presentation": "native"
+    },
+    "tools/gfx/chunk-reach.cjs": {
+      "action": "keep-native",
+      "preserve": "Indices per cube/face and distance baseline; it is a comparison table, not disposable logs.",
+      "presentation": "native"
+    },
+    "tools/gfx/chunk-share-census.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Counts and denominators plus complete native table JSON.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/frame-hitch.mjs": {
+      "action": "artifact-first",
+      "preserve": "Full work/stack/governor/trace arrays; --json names an artifact file and --quiet only controls stderr narration.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/gfx-probe.mjs": {
+      "action": "artifact-first",
+      "preserve": "Actual backend selection and environmental failure; do not equate screenshot existence with renderer correctness.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/gl-object-census.mjs": {
+      "action": "keep-native",
+      "preserve": "Existing = gl-object-census terminal line, raw JSONL rows and final growth denominators.",
+      "presentation": "native"
+    },
+    "tools/gfx/gltf-selftest.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Actual top-level executable despite ambiguous catalog classification; failure exit and all case names in full.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/glx-call-census.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Sample denominator and low-car warning; no comparisons across invalid workload configurations.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/gpu-census.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Hardware/software/unknown distinction, environment identity and complete report; --json is a destination.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/gpu-game-check.mjs": {
+      "action": "artifact-first",
+      "preserve": "Environment vs game failure, frameReadFailed/no-shot state, error exit and full checkpoint/report data.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/gpu-mem-census.mjs": {
+      "action": "keep-native",
+      "preserve": "MB units, actual mobile/desktop workload and optional --json destination; do not suppress the largest allocations.",
+      "presentation": "native"
+    },
+    "tools/gfx/knob-ab.mjs": {
+      "action": "keep-native",
+      "preserve": "Noise floor, actual knob values and verdict.json provenance; no visual pass from a screenshot path alone.",
+      "presentation": "native"
+    },
+    "tools/gfx/mem-census.mjs": {
+      "action": "keep-native",
+      "preserve": "= mem-census line, raw JSONL/heap snapshots and max-growth limit semantics.",
+      "presentation": "native"
+    },
+    "tools/gfx/pass-census.mjs": {
+      "action": "keep-native",
+      "preserve": "Real/stubbed link qualification, frame denominator and native JSON mode.",
+      "presentation": "native"
+    },
+    "tools/gfx/res-scale-ab.mjs": {
+      "action": "keep-native",
+      "preserve": "Control noise baseline, scale 1.0 identity, screenshot evidence and native failure exit.",
+      "presentation": "native"
+    },
+    "tools/gfx/res-scale-census.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Ordered scale rows, settling interval and native JSONL summary; --json is a file destination.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/road-lut-census.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Skip reasons, angular units, thresholds and full JSON rows.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/ssr-probe.mjs": {
+      "action": "artifact-first",
+      "preserve": "Wet-road sample configuration, images and debug interpretation; no unmeasured reflection success.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/tlx-pack-check.cjs": {
+      "action": "keep-native",
+      "preserve": "Missing-scenery refusal, all failure conditions and existing nonzero exit.",
+      "presentation": "native"
+    },
+    "tools/gfx/wgx-capture.mjs": {
+      "action": "keep-native",
+      "preserve": "Parent output flags, unsupported-option warnings and child exit.",
+      "presentation": "native"
+    },
+    "tools/gfx/wgx-lavapipe-probe.mjs": {
+      "action": "keep-native",
+      "preserve": "Exact software stack qualifier and inherited parent exit; no second summarizer.",
+      "presentation": "native"
+    },
+    "tools/gfx/wgx-shot.mjs": {
+      "action": "artifact-first",
+      "preserve": "Per-track validity, actual renderer and all original gallery entries; no image-to-text substitution.",
+      "presentation": "shared-levels"
+    },
+    "tools/gfx/wgx-validate.mjs": {
+      "action": "keep-native",
+      "preserve": "Real Dawn versus static validation, frame count and failure count/exit.",
+      "presentation": "native"
+    },
+    "tools/hooks/ratchet-reason.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/agent-output.mjs": {
+      "action": "no-direct-output",
+      "preserve": "Original content and isError, private artifact path/bytes, presentation failures, safe containment, bounded page cursor.",
+      "presentation": "native"
+    },
+    "tools/lib/agent-process.mjs": {
+      "action": "no-direct-output",
+      "preserve": "Child stdio choice and original exit/signal, timeout and cleanup outcomes.",
+      "presentation": "native"
+    },
+    "tools/lib/ai-ratings-math.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/browser-workers.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/census-entry.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/centreline-kinks.cjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/changed-files.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/chromium-path.mjs": {
+      "action": "protocol-only",
+      "preserve": "Single-line executable/cache protocol, flavor validation and exit status.",
+      "presentation": "native"
+    },
+    "tools/lib/circuit-scope.cjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/cli-args.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/conflict-cure.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/css-source.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/custom-survey-locations.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/deploy-status.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/flicker-metric.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/flyby-audit.cjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/lib/frame-fleet.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/frame-math.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/game-vm-pool.cjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/lib/game-vm.cjs": {
+      "action": "keep-native",
+      "preserve": "Exit status, stderr failures, target paths and counts; --check drift verdicts when supported.",
+      "presentation": "native"
+    },
+    "tools/lib/harness.mjs": {
+      "action": "no-direct-output",
+      "preserve": "Dead DISPLAY warning, injectable logger, teardown and launch handle contracts.",
+      "presentation": "native"
+    },
+    "tools/lib/hud-geometry.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/hud-survey-matrix.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/lint-bins.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/mem-census.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/node-compile-cache.cjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/output-paths.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/over-road-scan.cjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/pack-assets.cjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/process-tree.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/proxy-fetch.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/road-position-checks.cjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/run-pid.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/screenshot-gallery.cjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/session-contracts.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/solid-in-road.cjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/stale-rows.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/stuck-census.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/survey-scenarios.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/track-build-vm.cjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/track-shot-survey.mjs": {
+      "action": "no-direct-output",
+      "preserve": "Progress terminal state, timestamp, findings and index paths plus resume validity.",
+      "presentation": "native"
+    },
+    "tools/lib/tumftm.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/ui-mock-core.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/vm-script-cache.cjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lib/webgpu-chrome-args.cjs": {
+      "action": "protocol-only",
+      "preserve": "All launch flags and JSON keys; unknown-mode failure.",
+      "presentation": "native"
+    },
+    "tools/lib/work-tree-id.mjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/lighting/ab-lighting.mjs": {
+      "action": "targeted-summary",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/lighting/lighting-tuner-sweep.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/lighting/look-survey-n10.json": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/lighting/look-survey-n10.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/lighting/look-survey-sheet.py": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/lighting/pit-canopy-evidence.mjs": {
+      "action": "artifact-first",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/lighting/preset-validation.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/lighting/slider-effect-live.mjs": {
+      "action": "artifact-first",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/lighting/slider-effect-view.py": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/lighting/slider-effect.mjs": {
+      "action": "page-results",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/manifest.cjs": {
+      "action": "no-direct-output",
+      "preserve": "API signatures, return data and thrown errors.",
+      "presentation": "native"
+    },
+    "tools/mcp/apex-extras.mjs": {
+      "action": "job-status",
+      "preserve": "Failed/cancelled/unknown distinction; locks; argv; thumbnail blocks",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/apex-report.js": {
+      "action": "artifact-first",
+      "preserve": "Report JSON, download/POST error, tokenized transport",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/apex-tools-mcp.json": {
+      "action": "protocol-only",
+      "preserve": "40 native tool names, stdio/HTTP route",
+      "presentation": "native"
+    },
+    "tools/mcp/apex-tools-mcp.mjs": {
+      "action": "targeted-summary",
+      "preserve": "isError, structuredContent/text agreement, images/resources, classified exit 2/124",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/apex-tools-mcp.sh": {
+      "action": "protocol-only",
+      "preserve": "Exit codes and command arguments",
+      "presentation": "native"
+    },
+    "tools/mcp/browser-http-up.mjs": {
+      "action": "keep-native",
+      "preserve": "Auth URL, state path, failure exit",
+      "presentation": "native"
+    },
+    "tools/mcp/browser-http.mjs": {
+      "action": "targeted-summary",
+      "preserve": "JSON-RPC ids/errors, image MIME/data, token auth",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/catalog-discovery.mjs": {
+      "action": "page-results",
+      "preserve": "Canonical identifiers, availability limitations, total and nextOffset",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/cdmcp-bg.mjs": {
+      "action": "job-status",
+      "preserve": "Supervisor ownership and termination result",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/cdmcp-cli.py": {
+      "action": "artifact-first",
+      "preserve": "isError failures, camera-stable warnings, screenshot paths",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/cdmcp-lamps-tune.py": {
+      "action": "artifact-first",
+      "preserve": "Camera/knob values and errors; JSON report",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/cdmcp-lamps.py": {
+      "action": "artifact-first",
+      "preserve": "Selected shot limits, screenshots and final verdict",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/cdmcp-measure.py": {
+      "action": "artifact-first",
+      "preserve": "Measurement limitations and final outcome",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/chrome-devtools-mcp.sh": {
+      "action": "protocol-only",
+      "preserve": "Pinned native launch and JSON-RPC stdout; configured gateway controls tool-result presentation. Local fixture probes cover navigation, compact/diagnostic snapshots, full retrieval, original images and error status; individual action semantics are not exhaustively exercised.",
+      "presentation": "native"
+    },
+    "tools/mcp/chrome-devtools-runtime.mjs": {
+      "action": "keep-native",
+      "preserve": "Path-only stdout consumed by launcher",
+      "presentation": "native"
+    },
+    "tools/mcp/debug-chrome.mjs": {
+      "action": "keep-native",
+      "preserve": "Owned PIDs, endpoint, viewport mismatch and exit",
+      "presentation": "native"
+    },
+    "tools/mcp/diagnostics-tools.mjs": {
+      "action": "job-status",
+      "preserve": "Limits and unsupported GPU/leak interpretations",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/garage-plan.mjs": {
+      "action": "keep-native",
+      "preserve": "planOnly/withinBudget/limitation and argv",
+      "presentation": "native"
+    },
+    "tools/mcp/js-debugger-cdp.mjs": {
+      "action": "no-direct-output",
+      "preserve": "RPC id matching, timeouts, disconnects",
+      "presentation": "native"
+    },
+    "tools/mcp/js-debugger-cli.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Exit/isError, daemon identity, cleanup failure",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/js-debugger-http.mjs": {
+      "action": "protocol-only",
+      "preserve": "Status codes, limits, request ids, cleanup",
+      "presentation": "native"
+    },
+    "tools/mcp/js-debugger-mcp.json": {
+      "action": "protocol-only",
+      "preserve": "Exact command/args",
+      "presentation": "native"
+    },
+    "tools/mcp/js-debugger-mcp.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Pause token, object ids, isError, resource links, action-already-completed warning",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/js-debugger-mcp.sh": {
+      "action": "protocol-only",
+      "preserve": "Exit codes and command arguments",
+      "presentation": "native"
+    },
+    "tools/mcp/js-debugger-session.mjs": {
+      "action": "page-results",
+      "preserve": "Stale tokens, object ownership, 4000-char operation cap, 1000-char source lines",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/js-debugger-smoke.mjs": {
+      "action": "artifact-first",
+      "preserve": "Assertions, ownership, cleanup and failure exit",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/js-debugger-trace.mjs": {
+      "action": "page-results",
+      "preserve": "Ring retention, total counts, clear/stop semantics",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/lsp-eval.mjs": {
+      "action": "keep-native",
+      "preserve": "Correctness and timing separate",
+      "presentation": "native"
+    },
+    "tools/mcp/lsp-mcp.mjs": {
+      "action": "page-results",
+      "preserve": "ONE-based positions/tags, ambiguity/errors and baseline-subtraction caveat",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/lsp-mcp.sh": {
+      "action": "protocol-only",
+      "preserve": "Exit codes and command arguments",
+      "presentation": "native"
+    },
+    "tools/mcp/mcp-cli.mjs": {
+      "action": "artifact-first",
+      "preserve": "JSON-RPC errors/isError and nontext blocks",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/mcp-preflight.sh": {
+      "action": "keep-native",
+      "preserve": "Keep stdout clean for JSON-RPC",
+      "presentation": "native"
+    },
+    "tools/mcp/mcp-smoke.mjs": {
+      "action": "artifact-first",
+      "preserve": "Meaningful nonempty-result check and exit",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/output-level-mcp.mjs": {
+      "action": "targeted-summary",
+      "preserve": "isError, MIME/images/resources, structured schema refs and reserved key collisions",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/output-level-mcp.sh": {
+      "action": "protocol-only",
+      "preserve": "Exit codes and argv",
+      "presentation": "native"
+    },
+    "tools/mcp/playwright-mcp.sh": {
+      "action": "protocol-only",
+      "preserve": "Pinned native launch and JSON-RPC stdout; configured gateway controls tool-result presentation. Local fixture probes cover navigation, compact/diagnostic snapshots, full retrieval, original images and error status; individual action semantics are not exhaustively exercised.",
+      "presentation": "native"
+    },
+    "tools/mcp/probe-mcp.py": {
+      "action": "artifact-first",
+      "preserve": "isError exit, ids, image content blocks",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/report-server.mjs": {
+      "action": "keep-native",
+      "preserve": "Tokenized URLs, bytes, safe report paths",
+      "presentation": "native"
+    },
+    "tools/mcp/tinyfish-mcp.sh": {
+      "action": "page-results",
+      "preserve": "RPC failures remain nonzero, source URL/title and credentials redaction",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/tinyfish-rpc.py": {
+      "action": "page-results",
+      "preserve": "Live/local build mismatch exit and upstream RPC errors",
+      "presentation": "shared-levels"
+    },
+    "tools/mcp/ui-tools.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Unknown bindings, setup-versus-navigation limitation, truncation totals",
+      "presentation": "shared-levels"
+    },
+    "tools/net/nostr-local.cjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/net/nostr-probe.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/net/rtc-e2e-3p.mjs": {
+      "action": "job-status",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/net/rtc-e2e-room.mjs": {
+      "action": "job-status",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/net/rtc-e2e.mjs": {
+      "action": "job-status",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/net/rtc-sync-probe.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/perf/diagnostics.mjs": {
+      "action": "artifact-first",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "shared-levels"
+    },
+    "tools/perf/lib.mjs": {
+      "action": "no-direct-output",
+      "preserve": "Exports/data schema and caller-owned numeric/availability contracts; do not wrap or execute as CLI.",
+      "presentation": "native"
+    },
+    "tools/perf/profile.mjs": {
+      "action": "artifact-first",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence. Child inherited stdout/stderr and child exit status must remain accessible.",
+      "presentation": "shared-levels"
+    },
+    "tools/perf/query.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, stdout/stderr distinction, JSON schema and exact machine-mode bytes; units, thresholds, warnings and unavailable/skipped evidence.",
+      "presentation": "native"
+    },
+    "tools/perf/runtime-memory.mjs": {
+      "action": "no-direct-output",
+      "preserve": "Exports/data schema and caller-owned numeric/availability contracts; do not wrap or execute as CLI.",
+      "presentation": "native"
+    },
+    "tools/shot/agent.mjs": {
+      "action": "page-results",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/apex-capture.mjs": {
+      "action": "artifact-first",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/apex-eval.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/backend-compare.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/baked-scenery.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/build-gallery.cjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/cam-corners.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/cam-motion.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/capture-benchmark.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/capture-contract.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/capture-diagnostics.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/capture-options.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/capture-runtime.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/flicker-gate.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/flyby.mjs": {
+      "action": "targeted-summary",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/frame-report.mjs": {
+      "action": "targeted-summary",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/garage-angles.mjs": {
+      "action": "artifact-first",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/garage-before.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/garage-frame.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/garage-interior.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/garage-tap.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/gen-scenery-locations.cjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/hud-live-sample.mjs": {
+      "action": "targeted-summary",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/hud-mock.mjs": {
+      "action": "targeted-summary",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/hud-survey.mjs": {
+      "action": "artifact-first",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/lib/garage-camera-catalog.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/lib/survey-runner.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/loading-probe.mjs": {
+      "action": "targeted-summary",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/motion-capture.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/pit-shots.mjs": {
+      "action": "targeted-summary",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/probe-page.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/profile-gameloop.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/replay-camera-probe.mjs": {
+      "action": "artifact-first",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/repro-shot.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/scenery-locations.json": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/scenery-source-hash.cjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/shot-jobs.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/shot/shot-survey.mjs": {
+      "action": "artifact-first",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/shot.mjs": {
+      "action": "targeted-summary",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/shot/track-session.mjs": {
+      "action": "protocol-only",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/track/aero-zone-turns.cjs": {
+      "action": "keep-native",
+      "preserve": "Zone-length threshold and geometric-vs-authored distinction; small table is useful evidence.",
+      "presentation": "native"
+    },
+    "tools/track/audit-circuit.cjs": {
+      "action": "keep-native",
+      "preserve": "Baseline/warning distinctions, ms and check count, real failure exit.",
+      "presentation": "native"
+    },
+    "tools/track/barrier-jumps.cjs": {
+      "action": "no-direct-output",
+      "preserve": "Exported math/geometry/gallery interface; do not add verbosity flags to a helper.",
+      "presentation": "native"
+    },
+    "tools/track/build-gallery.cjs": {
+      "action": "keep-native",
+      "preserve": "Existing images and gallery source provenance; avoid listing every successful asset by default.",
+      "presentation": "native"
+    },
+    "tools/track/centreline-kinks.cjs": {
+      "action": "keep-native",
+      "preserve": "Gate versus update behavior, baseline identity and changed-file receipt.",
+      "presentation": "native"
+    },
+    "tools/track/clip-audit.cjs": {
+      "action": "targeted-summary",
+      "preserve": "All gate regressions, measured baseline and explicit omissions with complete JSON available.",
+      "presentation": "shared-levels"
+    },
+    "tools/track/clip-baseline.json": {
+      "action": "no-direct-output",
+      "preserve": "Baseline/reference schema and precision.",
+      "presentation": "native"
+    },
+    "tools/track/coplanar-audit.cjs": {
+      "action": "targeted-summary",
+      "preserve": "Facing-dot tolerance, every grown circuit and JSON precision.",
+      "presentation": "shared-levels"
+    },
+    "tools/track/coplanar-baseline.json": {
+      "action": "no-direct-output",
+      "preserve": "Baseline/reference schema and precision.",
+      "presentation": "native"
+    },
+    "tools/track/designer-code.mjs": {
+      "action": "keep-native",
+      "preserve": "APXT format, return status and clean stdout JSON rather than an extra wrapper envelope.",
+      "presentation": "native"
+    },
+    "tools/track/float-audit.cjs": {
+      "action": "targeted-summary",
+      "preserve": "Severity and all grown circuits, actual ground distances, precise full JSON and diagnostic source sites.",
+      "presentation": "shared-levels"
+    },
+    "tools/track/float-baseline.json": {
+      "action": "no-direct-output",
+      "preserve": "Baseline/reference schema and precision.",
+      "presentation": "native"
+    },
+    "tools/track/footprint-support.cjs": {
+      "action": "no-direct-output",
+      "preserve": "Exported math/geometry/gallery interface; do not add verbosity flags to a helper.",
+      "presentation": "native"
+    },
+    "tools/track/graph-parity.cjs": {
+      "action": "targeted-summary",
+      "preserve": "Two-ref identity, complete build failures and exact coordinate comparison; no generic text truncation.",
+      "presentation": "shared-levels"
+    },
+    "tools/track/ground-audit.cjs": {
+      "action": "targeted-summary",
+      "preserve": "Advisory versus failing status, all baseline regressions and generated shot-job payload.",
+      "presentation": "shared-levels"
+    },
+    "tools/track/import-circuit-path.mjs": {
+      "action": "protocol-only",
+      "preserve": "Coordinates, winding, upstream identity, exact JS/JSON export and mutation intent.",
+      "presentation": "native"
+    },
+    "tools/track/line-audit.mjs": {
+      "action": "keep-native",
+      "preserve": "Units, baked-line provenance and complete per-circuit comparisons.",
+      "presentation": "native"
+    },
+    "tools/track/measure-props-over-road.mjs": {
+      "action": "targeted-summary",
+      "preserve": "Full geometry JSON and exact shot evidence; no inferred track safety pass.",
+      "presentation": "shared-levels"
+    },
+    "tools/track/osm-circuits.json": {
+      "action": "no-direct-output",
+      "preserve": "Baseline/reference schema and precision.",
+      "presentation": "native"
+    },
+    "tools/track/props-tris-baseline.json": {
+      "action": "no-direct-output",
+      "preserve": "Baseline/reference schema and precision.",
+      "presentation": "native"
+    },
+    "tools/track/props-tris.cjs": {
+      "action": "targeted-summary",
+      "preserve": "Baseline gate/update semantics and exact triangle/vertex values.",
+      "presentation": "shared-levels"
+    },
+    "tools/track/refresh-f1-circuit-reference.mjs": {
+      "action": "keep-native",
+      "preserve": "Explicit network mutation, source provenance and confirmation of write; no extra progress by default.",
+      "presentation": "native"
+    },
+    "tools/track/rotate-markings.cjs": {
+      "action": "keep-native",
+      "preserve": "Dry-run/check/write semantics, source files and sorted markings.",
+      "presentation": "native"
+    },
+    "tools/track/startline-probe.cjs": {
+      "action": "targeted-summary",
+      "preserve": "Known excuses, 24-slot/grid limits and unexcused nonzero exit.",
+      "presentation": "shared-levels"
+    },
+    "tools/track/startline-snap.cjs": {
+      "action": "keep-native",
+      "preserve": "Unknown source locations stay unknown; preserve manually retained start values.",
+      "presentation": "native"
+    },
+    "tools/track/stitch-osm-ring.mjs": {
+      "action": "protocol-only",
+      "preserve": "Closed-ring topology, source OSM IDs, length tolerance and explicit output file.",
+      "presentation": "native"
+    },
+    "tools/track/survey-gallery-lib.cjs": {
+      "action": "no-direct-output",
+      "preserve": "Exported math/geometry/gallery interface; do not add verbosity flags to a helper.",
+      "presentation": "native"
+    },
+    "tools/track/survey-gallery-page.cjs": {
+      "action": "no-direct-output",
+      "preserve": "Exported math/geometry/gallery interface; do not add verbosity flags to a helper.",
+      "presentation": "native"
+    },
+    "tools/track/survey-track.mjs": {
+      "action": "artifact-first",
+      "preserve": "All imagery, original scene/camera coordinates, missing shots and no false visual sign-off.",
+      "presentation": "shared-levels"
+    },
+    "tools/track/track-accuracy-validator.mjs": {
+      "action": "no-direct-output",
+      "preserve": "Exported math/geometry/gallery interface; do not add verbosity flags to a helper.",
+      "presentation": "native"
+    },
+    "tools/track/track-verts.cjs": {
+      "action": "protocol-only",
+      "preserve": "Exact vertex arrays, circuit identifiers and native dump versus diff mode.",
+      "presentation": "native"
+    },
+    "tools/track/tumftm-import.mjs": {
+      "action": "targeted-summary",
+      "preserve": "LGPL attribution, imported status/IDs and actual write receipts; prose currently accompanies --json.",
+      "presentation": "shared-levels"
+    },
+    "tools/track/verify-track.cjs": {
+      "action": "targeted-summary",
+      "preserve": "Any THROW remains fatal; every warning retrievable, circuit coverage and quiet cannot imply omitted checks passed.",
+      "presentation": "shared-levels"
+    },
+    "tools/ui/circuit-axis.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/css-play.mjs": {
+      "action": "targeted-summary",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/ui/explorer.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/explorer/audit-evidence.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/explorer/browser.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/explorer/catalog.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/explorer/core.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/explorer/css-evidence.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/explorer/inspector.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/explorer/modes.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/explorer/report.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/explorer/transitions.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/fit-audit.mjs": {
+      "action": "targeted-summary",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/ui/layout-audit.mjs": {
+      "action": "artifact-first",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/ui/menu-capture.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/menu-fit.mjs": {
+      "action": "targeted-summary",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "shared-levels"
+    },
+    "tools/ui/menu-mock.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/menu-readiness.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/menu-screens.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/ui/ui-scale-axis.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/viewer/build-viewer.mjs": {
+      "action": "keep-native",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "native JSON/JSONL contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/viewer/viewer-data.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/viewer/viewer-shots.mjs": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    },
+    "tools/viewer/viewer.html": {
+      "action": "no-direct-output",
+      "preserve": [
+        "exit status and explicit failure cause",
+        "existing return or artifact contract",
+        "scope/coverage and omitted-count distinctions where applicable"
+      ],
+      "presentation": "native"
+    }
+  },
+  "profiles": {
+    "targeted-summary": "Semantic final JSON or test/verdict/cause summary; full native streams retained.",
+    "artifact-first": "Retain all stdout/stderr, preserve report/manifest/image receipts and expose saved evidence.",
+    "page-results": "Bounded preview with exact retained JSON collection paging independent of upstream cursor.",
+    "job-status": "Opt-in --progress receipt, --status change cursor, exact stream byte readers."
+  }
+}

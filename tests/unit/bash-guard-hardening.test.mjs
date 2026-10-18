@@ -518,7 +518,7 @@ test("agent-run: wrapped pushes and gh merges receive the direct command's polic
     repo.g("checkout", "-qb", "cursor/agent-run-1234");
     for (const command of ["git push --force origin topic", `git push origin HEAD:${DEPLOY}`,
       "env CI=1 git push -f origin topic", "bash -c 'git push --force origin topic'"]) {
-      const direct = run(command), compact = run(wrapped(command, "--output-level compact --timeout-ms=1000"));
+      const direct = run(command), compact = run(wrapped(command, "--progress --output-level compact --timeout-ms=1000"));
       assert.equal(direct.status, 2, command);
       assert.equal(compact.status, direct.status, `${command}: ${compact.stderr}`);
       assert.match(compact.stderr, /BLOCKED/);
@@ -541,6 +541,7 @@ test("agent-run: subagent browser checks unwrap argv, while help/read and litera
   for (const command of ["node tools/ci/test-bg.mjs smoke", "npx playwright test", "npm test", "node tools/ci/verify-change.mjs"]) {
     assert.equal(run(command).status, 2, command);
     assert.equal(run(wrapped(command)).status, 2, command);
+    assert.equal(run(wrapped(command, '--progress')).status, 2, command);
   }
   for (const command of ["node --test tests/unit/session-status.test.mjs", "node tools/ci/test-bg.mjs --status",
     "printf '%s' ';' 'git push --force origin x' '&&' 'npm test' '>' 'version.json'",
@@ -551,6 +552,8 @@ test("agent-run: subagent browser checks unwrap argv, while help/read and litera
   }
   for (const command of [`node '${AGENT_RUN}' --help -- git push --force origin x`,
     `node '${AGENT_RUN}' --read 'artifacts/agent-output/npm test' --output-level full`,
+    `node '${AGENT_RUN}' --read 'artifacts/agent-output/npm test' --pointer /rows --limit 3`,
+    `node '${AGENT_RUN}' --status 'artifacts/agent-output/npm test' --since cursor`,
     `node '${AGENT_RUN}' help -- npm test`]) assert.equal(run(command).status, 0, command);
   // A similarly named or arbitrary Node script is not a trusted wrapper.
   assert.equal(run("node /unrelated/tools/agent-run.mjs -- npm test").status, 0);
@@ -561,6 +564,8 @@ test("agent-run: invalid wrapper forms fail closed and literal argv operators st
   const run = (command) => hook("bash-guard.sh", bashCall(command));
   for (const command of [wrapped("git push -f origin x", "--bogus yes"), wrapped("git push -f origin x", "--output-level invalid"),
     wrapped("git push -f origin x", "--timeout-ms 0"), wrapped("git push -f origin x", "--read artifacts/agent-output/a"),
+    wrapped("git push -f origin x", "--status artifacts/agent-output/a"), wrapped("git push -f origin x", "--since cursor"),
+    wrapped("git push -f origin x", "--pointer /rows"),
     `node --require bad '${AGENT_RUN}' -- git push -f origin x`, `node '${AGENT_RUN}' -- git push '`,
     `node '${AGENT_RUN}' git push -f origin x`]) {
     const result = run(command);

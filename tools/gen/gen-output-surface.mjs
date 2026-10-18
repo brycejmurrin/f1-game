@@ -14,6 +14,7 @@ export const LEVELS = ["compact", "diagnostic", "full"];
 const RUNNER = ["node", "tools/agent-run.mjs", "--"];
 const OUTPUT_FLAGS = /(?<![\w-])--(?:quiet|verbose|concise|summary|json|full|detail|out|limit|offset|failures-only|stream|format|output-level)(?![\w-])/g;
 const interpreter = { ".mjs": "node", ".cjs": "node", ".js": "node", ".py": "python3", ".sh": "bash" };
+const POLICIES = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/agent-output/policies.json'), 'utf8'));
 
 /** Evidence for a possible entrypoint, not a guarantee of safe/default execution. */
 export function classify(file, source, npmNames = []) {
@@ -30,7 +31,7 @@ export function classify(file, source, npmNames = []) {
 }
 
 export function collect({ files = walkTools(), read = file => fs.readFileSync(path.join(ROOT, file), "utf8"),
-  scripts, servers } = {}) {
+  scripts, servers, policies = POLICIES } = {}) {
   scripts ??= JSON.parse(read("package.json")).scripts;
   servers ??= JSON.parse(read(".mcp.json")).mcpServers;
   const npmScripts = Object.keys(scripts).sort().map(name => ({ name, command: scripts[name],
@@ -39,7 +40,10 @@ export function collect({ files = walkTools(), read = file => fs.readFileSync(pa
     const fullPath = `tools/${file}`, source = read(fullPath), header = parseHeader(source);
     const npm = npmScripts.filter(row => row.command.includes(fullPath)).map(row => row.name);
     const kind = classify(file, source, npm);
+    const policy = policies.tools?.[fullPath];
+    if (policy?.action === 'protocol-only' && kind.classification === 'entrypoint-candidate') kind.classification = 'protocol-entrypoint';
     return { path: fullPath, ...kind, sourceBytes: Buffer.byteLength(source, "utf8"),
+      ...(policy ? { outputPolicy: policy.action, outputContract: policy.preserve } : {}),
       doc: header.doc ?? null, skill: header.skill ?? null,
       nativeOutputFlagMentions: [...new Set(source.match(OUTPUT_FLAGS) ?? [])].sort(), npmScripts: npm,
       ...(kind.classification === "entrypoint-candidate" ? {
@@ -62,7 +66,7 @@ export function collect({ files = walkTools(), read = file => fs.readFileSync(pa
       retrieval: "node tools/agent-run.mjs --read <artifact.path> [--offset N] [--limit N]" },
       mcp: { gateway: "tools/mcp/output-level-mcp.mjs", parameter: "outputLevel", retrievalTool: "output_read",
         scope: "all tools/list pages via gateway" },
-      coverage: "Wrapper presentation, not native verbosity flags. Append required native arguments to candidate commands. Libraries, ambiguous modules and assets are not asserted to be executable commands. npm commands run through npm, preserving shell syntax in their scripts.",
+      coverage: "Wrapper presentation, not native verbosity flags. Append required native arguments to candidate commands. Protocol entrypoints keep exact native stdout and are never recommended through the terminal wrapper. Libraries, ambiguous modules and assets are not asserted to be executable commands. npm commands run through npm, preserving shell syntax in their scripts.",
       limitations: "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. sourceBytes are source-file snapshots, not output sizes or tokens. Host-owned tools and unconfigured MCP servers are outside this catalog." },
     counts: { files: tools.length, classifications, npmScripts: npmScripts.length, configuredMcpServers: mcpRoutes.length },
     tools, npmScripts, mcpRoutes };

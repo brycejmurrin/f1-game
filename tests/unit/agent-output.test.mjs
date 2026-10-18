@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { spawnAgentProcess } from '../../tools/lib/agent-process.mjs';
 import { fileURLToPath } from 'node:url';
-import { OUTPUT_LEVELS, validateOutputLevel, saveOutputArtifact, summarizeOutput, presentMcpResult, readOutputArtifact, readOriginalMcpArtifact } from '../../tools/lib/agent-output.mjs';
+import { OUTPUT_LEVELS, validateOutputLevel, saveOutputArtifact, summarizeOutput, presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection } from '../../tools/lib/agent-output.mjs';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CLI = path.join(ROOT, 'tools/agent-run.mjs');
 function fixture(t) {
@@ -40,6 +40,9 @@ test('wide numeric trees and huge property names remain bounded', () => {
   const value = { status: 'unknown', tree: tree(4), ['x'.repeat(100000)]: 1 };
   assert.ok(JSON.stringify(summarizeOutput(value)).length < 25000);
   assert.ok(JSON.stringify(summarizeOutput(value, { level: 'diagnostic' })).length < 50000);
+  const longCollectionKey = summarizeOutput({ ['x'.repeat(100000)]: Array(50).fill(1) });
+  assert.ok(JSON.stringify(longCollectionKey).length < 10000);
+  assert.equal(Object.values(longCollectionKey)[0].at(-1).sourcePointerOmitted, true);
   const exhausted = Object.fromEntries(Array.from({ length: 35 }, (_, i) => ['error' + i, 'x'.repeat(100000)]));
   assert.ok(JSON.stringify(summarizeOutput(exhausted)).length < 10000);
   assert.ok(JSON.stringify(summarizeOutput(exhausted, { level: 'diagnostic' })).length < 25000);
@@ -142,6 +145,99 @@ test('diagnostic finds middle failure lines in long logs', (t) => {
   const run = cli(root, ['--output-level', 'diagnostic', '--', process.execPath, '-e', `process.stdout.write(${JSON.stringify(log)})`]);
   assert.equal(run.status, 0);
   assert.match(JSON.stringify(JSON.parse(run.stdout).stdout.diagnostics), /central failure/);
+});
+
+test('compact retains actionable middle failures and reported test counts', t => {
+  const root = fixture(t);
+  const log = 'routine\n'.repeat(2000) + 'Error: missing fixture alpha\n    at load.js:22\n' + 'routine\n'.repeat(2000) + '# tests 15\n# pass 14\n# fail 1\n';
+  const result = cli(root, ['--', process.execPath, '-e', `process.stdout.write(${JSON.stringify(log)});process.exitCode=7`]);
+  assert.equal(result.status, 7);
+  const data = JSON.parse(result.stdout);
+  assert.match(JSON.stringify(data.stdout.diagnostics), /missing fixture alpha/);
+  assert.equal(data.stdout.testCounts.fail, 1);
+  assert.equal(data.stdout.testCounts.pass, 14);
+  assert.equal(fs.readFileSync(path.join(root, data.stdout.artifact.path), 'utf8'), log);
+});
+
+test('capture and performance phase logs retain semantic final reports and validity evidence', t => {
+  const root = fixture(t);
+  const report = { status: 'unknown', valid: false, renderer: 'software fixture', units: 'ms', baseline: 16.7, sampleCount: 400, manifest: 'artifacts/captures/manifest.json', results: [...Array.from({ length: 20 }, (_, i) => ({ id: i, status: 'passed' })), { id: 20, status: 'failed', cause: 'camera stale' }] };
+  const log = '[capture] measuring phase\n' + JSON.stringify(report, null, 2) + '\n';
+  const run = cli(root, ['--', process.execPath, '-e', `process.stdout.write(${JSON.stringify(log)})`]);
+  const summary = JSON.parse(run.stdout).stdout;
+  assert.match(summary.reportScope, /final JSON/);
+  assert.equal(summary.data.valid, false);
+  assert.equal(summary.data.units, 'ms');
+  assert.equal(summary.data.baseline, 16.7);
+  assert.equal(summary.data.sampleCount, 400);
+  assert.equal(summary.data.results[0].cause, 'camera stale');
+  assert.equal(summary.data.results.at(-1).statusCounts.failed, 1);
+  assert.deepEqual(readOutputCollection({ root, artifact: summary.reportArtifact, pointer: summary.data.results.at(-1).sourcePointer, offset: 20, limit: 1 }).items, [report.results[20]]);
+  assert.equal(fs.readFileSync(path.join(root, summary.artifact.path), 'utf8'), log);
+});
+
+test('small MCP answers retain native schema and avoid duplicate summary payloads', t => {
+  const root = fixture(t);
+  const original = { content: [{ type: 'text', text: 'connected' }], structuredContent: { connected: true }, _meta: { upstream: 'preserved' } };
+  const result = presentMcpResult(original, { root });
+  assert.deepEqual(result.content, original.content);
+  assert.deepEqual(result.structuredContent, original.structuredContent);
+  assert.equal(result._meta.upstream, 'preserved');
+  const artifact = result._meta['apex/agent-output'].artifact;
+  assert.deepEqual(readOriginalMcpArtifact({ root, artifact }), original);
+  assert.ok(JSON.stringify(result).length < 600);
+});
+
+test('exact collection pages recover all omitted rows without advancing upstream cursors', t => {
+  const root = fixture(t);
+  const rows = Array.from({ length: 40 }, (_, id) => ({ id, value: `é${id}` }));
+  const native = { structuredContent: { rows, total: 200, nextCursor: 'upstream40' }, content: [{ type: 'text', text: JSON.stringify({ rows }) }] };
+  const artifact = saveOutputArtifact(native, { root, kind: 'mcp' });
+  const first = readOutputCollection({ root, artifact, pointer: '/structuredContent/rows', limit: 3 });
+  const recovered = [...first.items];
+  let offset = first.nextOffset;
+  while (offset !== null) { const page = readOutputCollection({ root, artifact, pointer: '/structuredContent/rows', offset, limit: 7 }); recovered.push(...page.items); offset = page.nextOffset; }
+  assert.deepEqual(recovered, rows);
+  assert.equal(first.totalItems, 40);
+  assert.equal(first.omittedItems, 37);
+  assert.equal(readOutputCollection({ root, artifact, pointer: '/content/0/text/rows', limit: 1 }).items[0].value, 'é0');
+  assert.throws(() => readOutputCollection({ root, artifact, pointer: '/structuredContent/missing' }), /does not exist/);
+  assert.throws(() => readOutputCollection({ root, artifact, pointer: '/structuredContent/~2' }), /pointer/);
+  assert.throws(() => readOutputCollection({ root, artifact, pointer: '/structuredContent/rows', limit: 101 }), /limit/);
+  const cliPage = cli(root, ['--read', artifact.path, '--pointer', '/structuredContent/rows', '--offset', '3', '--limit', '2']);
+  assert.deepEqual(JSON.parse(cliPage.stdout).items, rows.slice(3, 5));
+});
+
+test('opt-in progress exposes running status before completion without stdout preambles', async t => {
+  const root = fixture(t);
+  const child = spawn(process.execPath, [CLI, '--progress', '--', process.execPath, '-e', 'setTimeout(()=>{console.log("finished");process.exitCode=7},1000)'], { cwd: root });
+  t.after(() => { if (child.exitCode === null) child.kill('SIGTERM'); });
+  let stdout = '', stderr = '';
+  child.stdout.on('data', chunk => { stdout += chunk; });
+  const receipt = await new Promise(resolve => child.stderr.on('data', chunk => { stderr += chunk; if (stderr.includes('\n')) resolve(JSON.parse(stderr.split('\n')[0])); }));
+  const done = new Promise(resolve => child.once('close', code => resolve(code)));
+  assert.equal(stdout, '');
+  assert.equal(receipt.status, 'running');
+  const status = JSON.parse(cli(root, ['--status', receipt.artifact.path]).stdout);
+  assert.equal(status.status, 'running');
+  const unchanged = JSON.parse(cli(root, ['--status', receipt.artifact.path, '--since', status.cursor]).stdout);
+  assert.equal(unchanged.unchanged, true);
+  const observed = [], readErrors = [];
+  const watcher = setInterval(() => {
+    try { observed.push(JSON.parse(fs.readFileSync(path.join(root, receipt.artifact.path), 'utf8')).status); }
+    catch (error) { readErrors.push(error.message); }
+  }, 1);
+  t.after(() => clearInterval(watcher));
+  assert.equal(await done, 7);
+  clearInterval(watcher);
+  assert.ok(observed.length > 0);
+  assert.deepEqual(readErrors, [], 'concurrent readers always see a complete status record');
+  assert.equal(JSON.parse(stdout).exitCode, 7);
+  const final = JSON.parse(cli(root, ['--status', receipt.artifact.path]).stdout);
+  assert.equal(final.status, 'exited');
+  assert.equal(final.exitCode, 7);
+  assert.notEqual(final.cursor, status.cursor);
+  assert.equal(final.streamBytes.stdout, 9);
 });
 
 

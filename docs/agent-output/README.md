@@ -15,8 +15,12 @@ Bounded data is a preview, never proof that omitted findings are absent. Exit
 codes and MCP errors remain errors at every level. Unknown and pending states
 stay unknown and pending. A short successful result does not prove a test suite
 or readiness gate ran.
-Small native results may grow when wrapped in a summary and evidence envelope;
-these levels bound large output rather than promise savings on every call.
+Small MCP results (at most 1 KiB) keep their native content and structured data
+when that is smaller than the summary envelope. Their saved-evidence receipt is
+in `_meta["apex/agent-output"].artifact`. Larger previews use
+`structuredContent.artifact`. Terminal execution records still add overhead to
+tiny commands: prefer the existing concise native answer for commands marked
+`keep-native`, such as plain `doctor`, unless retention is needed.
 
 ## Terminal commands
 
@@ -30,6 +34,34 @@ node tools/agent-run.mjs --output-level diagnostic -- node tools/ci/sync-pr.mjs 
 node tools/agent-run.mjs --output-level full -- npm run test:audit
 node tools/agent-run.mjs --help
 ```
+
+For long commands, add `--progress` before `--`. One JSON receipt goes to stderr
+before launch with stdout/stderr and status artifact identities. Stdout remains
+one final JSON record (or the unchanged full streams). There is no polling timer
+or repeated progress tail. Read a receipt while the command runs:
+
+```sh
+node tools/agent-run.mjs --progress -- node tools/ci/tooling-fast.mjs --jobs=3
+node tools/agent-run.mjs --status artifacts/agent-output/<status-file>.json
+node tools/agent-run.mjs --status artifacts/agent-output/<status-file>.json --since <cursor>
+```
+
+Status includes observed stream sizes, elapsed time and a change cursor.
+`--since` returns only an unchanged marker when state and stream sizes match.
+An old running receipt never establishes completion or success. Existing native
+phase logs remain in the retained streams. The quiet skill-smoke runner also
+supports native `--progress` JSONL on stderr with recipe counts and elapsed time.
+
+Compact terminal logs include a bounded actionable failure block even when the
+cause occurs in the middle, plus reported test counts and artifact/verdict
+receipts where available. Diagnostic adds surrounding context. Test counts
+describe reported stream summaries; nested/repeated suites can overlap, so the
+exit/status remains authoritative. Capture and performance commands that print
+phase logs followed by final JSON receive a semantic preview of that report,
+including validity, baselines, units and prioritized failures. Complete phase
+logs and numeric data remain in the original artifact. A mixed-log stream also
+provides `reportArtifact`, a complete JSON copy for its collection source
+pointers; use that artifact for exact rows, and the stream artifact for logs.
 
 The wrapper retains stdout and stderr separately and preserves the command's
 exit status. If an explicit timeout fires and the child handles termination with
@@ -47,6 +79,13 @@ Use the returned artifact with `--read` to inspect saved evidence without
 re-running a command. Page large results; use `--help` for the supported read
 offset/limit options. `full` for a new invocation executes the command again,
 so use saved-result retrieval for actions already completed.
+
+For exact JSON collection rows, use `--read <artifact> --pointer /rows
+--offset 3 --limit 20`. A pointer is an RFC 6901 JSON pointer, with `~0` and `~1`
+escaping. Collection pages return unchanged rows and a `nextOffset`, within the
+retained result. They do not advance upstream pagination. Collection limits are
+1–100 rows, at most 262144 bytes per page and an 8 MiB source artifact; reduce
+the row limit or use byte pages for larger evidence. No individual row is clipped.
 
 ## MCP tools
 
@@ -78,6 +117,15 @@ This restores original blocks without repeating the action, up to 8 MiB; larger
 artifacts remain accessible in bounded text pages. The default `format` is
 `page`. Original retrieval rejects page offsets/limits.
 
+Use `format=collection`, `pointer`, `offset` and `limit` for exact rows without
+repeating the action. For example, `/structuredContent/rows` selects structured
+rows; `/content/0/text/rows` also works when native JSON lives inside a text
+block. Preview collection receipts distinguish fetched total, displayed and
+omitted rows and identify the source pointer. A native upstream `nextCursor`
+still means another upstream page; retrieve omitted rows in the saved page
+before moving that cursor. Summary normalization may display text JSON under
+`data`, but its source pointer uses the original `text` field.
+
 Schemas advertise both the original full result and the bounded presentation
 envelope. Full results preserve their original content and structured data.
 Protocol notifications, cancellation and approval decisions are unaffected.
@@ -88,6 +136,26 @@ Protocol notifications, cancellation and approval decisions are unaffected.
 configured MCP routes and entrypoint coverage. Libraries, assets and data files
 are distinguished from executable candidates; the inventory does not execute
 scripts to guess what they do.
+
+[Per-file policies](policies.json) record the reviewed output decision and
+preservation contract for every tool file. The generator attaches these to
+catalog entries. Libraries and control protocols receive no invented verbosity
+flags; protocol entrypoints have no terminal-wrapper recommendation. Shared
+profiles apply to report, artifact, collection and long-job producers, so npm
+aliases inherit the same behavior without separate implementations.
+
+Native retention exceptions are fixed at their producer: probe-mcp emits valid
+JSON and saves oversized originals under `artifacts/probe-mcp/`; cdmcp-measure
+saves complete JSON; debugger operation previews retain private original CDP
+responses under `artifacts/agent-output/`. Read those debugger artifacts as byte
+or collection pages, rather than evaluating again. Probe originals can be read
+directly from their returned local path.
+
+Notification-origin skill hints are skipped only when host event metadata
+identifies a nonprompt event. Plain user prompts remain routable. Memory-sync
+conflicts use PostToolUse context or a nonblocking Stop user warning. Guard
+allow/deny JSON, silent successful paths and exit codes keep their exact native
+contracts and are excluded from generic wrapping.
 
 Every terminal command can be presented through `agent-run`; every tool returned
 by a configured server's `tools/list` is adapted by the gateway, including

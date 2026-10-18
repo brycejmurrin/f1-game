@@ -80,8 +80,13 @@ fi
 mkdir -p "$LIVE" "$REPO" "$BASE" 2>/dev/null || exit 0
 mark_memory --no-assume-unchanged   # the sync compares real files
 HEAD_NOW=$(git -C "$MAIN" rev-parse HEAD 2>/dev/null || true)
-LIVE="$LIVE" REPO="$REPO" BASE="$BASE" MODE="$MODE" MAIN="$MAIN" HEAD_NOW="$HEAD_NOW" python3 - <<'PY' || true
-import os, shutil, subprocess, sys
+HOOK_EVENT=$(printf '%s' "$INPUT" | python3 -c 'import json,sys
+try:
+    event = json.load(sys.stdin).get("hook_event_name")
+    if event in ("PostToolUse", "Stop"): print(event)
+except (ValueError, AttributeError): pass' 2>/dev/null)
+LIVE="$LIVE" REPO="$REPO" BASE="$BASE" MODE="$MODE" MAIN="$MAIN" HEAD_NOW="$HEAD_NOW" HOOK_EVENT="$HOOK_EVENT" python3 - <<'PY' || true
+import json, os, shutil, subprocess, sys
 live, repo, base, mode = (os.environ[k] for k in ("LIVE", "REPO", "BASE", "MODE"))
 main, head = os.environ["MAIN"], os.environ["HEAD_NOW"]
 try:
@@ -181,7 +186,18 @@ if mode == "restore" or n_in or n_out or conflicts:
             msg += "; CONFLICT kept the repo copy of " + ", ".join(both) + " (re-apply your edit)"
         if dels:
             msg += "; CONFLICT delete vs edit — honoured delete for " + ", ".join(dels)
-    print(msg)
+    event = os.environ.get("HOOK_EVENT")
+    # https://code.claude.com/docs/en/hooks: exit-0 plain stdout is ignored
+    # on these events. Surface conflicts only; routine saves stay silent.
+    if event == "PostToolUse":
+        if conflicts:
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": msg}}))
+    elif event == "Stop":
+        # Stop additionalContext continues the conversation. A user-facing
+        # systemMessage preserves this advisory hook's nonblocking stop.
+        if conflicts: print(json.dumps({"systemMessage": msg}))
+    else:
+        print(msg)  # SessionStart and standalone CLI keep their plain output.
 PY
 mark_memory --assume-unchanged
 exit 0

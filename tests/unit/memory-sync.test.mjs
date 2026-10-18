@@ -226,3 +226,30 @@ test("H2: synced memory files are hidden from git status after save, and `unmark
     assert.match(git("show", "--stat", "HEAD"), /a\.md/);
   } finally { r.done(); }
 });
+
+
+test("memory conflicts use event-specific context without changing advisory control", () => {
+  for (const event of ["PostToolUse", "Stop"]) {
+    const r = rig();
+    try {
+      r.put(r.repo, "a.md", topic("a", "v1"));r.run("restore");
+      r.put(r.repo, "a.md", topic("a", 'theirs "quoted"'));
+      r.put(r.live, "a.md", topic("a", "mine"));
+      const input=JSON.stringify({hook_event_name:event,tool_input:event==="PostToolUse"?{file_path:path.join(r.live,"a.md")}:{}});
+      const out=JSON.parse(r.run("save",input));
+      if(event==="PostToolUse") {
+        assert.equal(out.hookSpecificOutput.hookEventName,event);
+        assert.match(out.hookSpecificOutput.additionalContext,/CONFLICT kept the repo copy of a\.md/);
+      } else {
+        assert.match(out.systemMessage,/CONFLICT kept the repo copy of a\.md/);
+        assert.equal(out.hookSpecificOutput,undefined,"Stop context would continue the conversation");
+      }
+      assert.equal(out.decision,undefined);assert.equal(out.continue,undefined);
+      assert.equal(r.get(r.live,"a.md"),r.get(r.repo,"a.md"));
+      assert.equal(r.run("save",input),"","successful hook saves stay silent");
+      r.put(r.live,"a.md",topic("a","ordinary edit"));
+      assert.equal(r.run("save",input),"","nonconflicting updates stay silent");
+      assert.equal(r.get(r.repo,"a.md"),topic("a","ordinary edit"));
+    } finally {r.done();}
+  }
+});

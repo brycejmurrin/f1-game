@@ -42,6 +42,13 @@ test("catalog covers every file, npm command and configured MCP route without fa
     assert.equal(!!row.agentCommand, row.classification === "entrypoint-candidate");
     if (row.agentCommand) assert.deepEqual(row.agentCommand.slice(0, 3), ["node", "tools/agent-run.mjs", "--"]);
   }
+  const policies = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/agent-output/policies.json'), 'utf8'));
+  assert.deepEqual(Object.keys(policies.tools).sort(), inventory.tools.map(row => row.path).sort());
+  for (const row of inventory.tools) {
+    assert.equal(row.outputPolicy, policies.tools[row.path].action);
+    assert.deepEqual(row.outputContract, policies.tools[row.path].preserve);
+    if (row.outputPolicy === 'protocol-only') assert.equal(row.agentCommand, undefined, row.path);
+  }
 });
 
 test("static flag mentions are labelled and generation is deterministic", () => {

@@ -101,6 +101,22 @@ test('compact and diagnostic retain artifacts; full is exact; reading never repe
   assert.equal((await h.call('escape', 'output_read', { artifact: '../private' })).error.code, -32602);
 });
 
+test('collection reader restores exact fetched rows and refuses incompatible options', async t => {
+  const h = harness(t);
+  const native = (await h.call('rows-source', 'plain', {})).result;
+  const artifact = native.structuredContent.artifact.path;
+  const saved = JSON.parse(fs.readFileSync(path.join(h.root, artifact), 'utf8'));
+  saved.structuredContent.rows = Array.from({ length: 40 }, (_, id) => ({ id }));
+  saved.structuredContent.nextCursor = 'native-next-page';
+  fs.writeFileSync(path.join(h.root, artifact), JSON.stringify(saved));
+  const page = (await h.call('rows', 'output_read', { artifact, format: 'collection', pointer: '/structuredContent/rows', offset: 3, limit: 4 })).result.structuredContent;
+  assert.deepEqual(page.items, [{ id: 3 }, { id: 4 }, { id: 5 }, { id: 6 }]);
+  assert.equal(page.totalItems, 40); assert.equal(page.nextOffset, 7);
+  assert.equal((await h.call('rows-invalid', 'output_read', { artifact, pointer: '/rows' })).error.code, -32602);
+  assert.equal((await h.call('rows-limit', 'output_read', { artifact, format: 'collection', pointer: '/structuredContent/rows', limit: 101 })).error.code, -32602);
+  assert.equal((await h.call('rows-count', 'plain', { outputLevel: 'full' })).result.structuredContent.calls, 2);
+});
+
 test('initialize, progress, cancellation, bidirectional ids including null, concurrent replies and upstream errors survive', async t => {
   const h = harness(t);
   const init = await h.request('init', 'initialize', {});

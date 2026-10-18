@@ -51,6 +51,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -605,13 +606,21 @@ def cmd_call(args: argparse.Namespace) -> int:
         if full or len(text) <= 12000:
             print(text)
         else:
-            # A silent cut reads as a complete answer — say what is missing.
-            print(text[:12000])
-            print(
-                f"# … truncated {len(text) - 12000} of {len(text)} bytes — "
-                "set PROBE_MCP_FULL=1 for everything",
-                file=sys.stderr,
-            )
+            # Retain the original before returning a valid, bounded JSON preview.
+            parent = ROOT / "artifacts" / "probe-mcp"
+            parent.mkdir(parents=True, exist_ok=True)
+            directory = Path(tempfile.mkdtemp(prefix="result-", dir=parent))
+            artifact = directory / "result.json"
+            with artifact.open("x", encoding="utf-8") as retained:
+                artifact.chmod(0o600)
+                retained.write(text + "\n")
+            print(json.dumps({
+                "truncated": True, "isError": failed,
+                "originalCharacters": len(text), "artifact": str(artifact),
+                "preview": text[:2000],
+                "note": "Read artifact for the original result; PROBE_MCP_FULL=1 prints full future calls.",
+            }, indent=2))
+
     finally:
         bridge.close()
     return 1 if failed else 0

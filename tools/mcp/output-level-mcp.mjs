@@ -6,7 +6,7 @@ import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, saveOutputArtifact, validateOutputLevel } from '../lib/agent-output.mjs';
+import { presentMcpResult, readOutputArtifact, readOriginalMcpArtifact, readOutputCollection, saveOutputArtifact, validateOutputLevel } from '../lib/agent-output.mjs';
 
 const LEVEL = { type: 'string', enum: ['compact', 'diagnostic', 'full'], default: 'compact', description: 'Presentation only: compact (default), diagnostic, or original full result. The action executes once; use the saved-result retrieval tool for saved evidence.' };
 const ENVELOPE = { type: 'object', required: ['outputLevel', 'summary', 'artifact'], properties: { outputLevel: { enum: ['compact', 'diagnostic'] }, summary: {}, artifact: { type: 'object' } } };
@@ -65,10 +65,10 @@ export function runGateway({ server, command, args = [], root = process.cwd() })
     remember(tool);
     const { parameter } = schemas.get(tool.name);
     const input = tool.inputSchema ?? { type: 'object' };
-    const description = `${tool.description ?? ''}\nOutput presentation: ${parameter}=compact (default), diagnostic, or full. Use the saved-result retrieval tool listed on the final tools/list page with artifact.path to inspect saved evidence without rerunning the action.${parameter !== 'outputLevel' ? ' The upstream outputLevel argument is preserved; the wrapper uses ' + parameter + ' to avoid a collision.' : ''}`;
+    const description = `${tool.description ?? ''}\nOutput presentation: ${parameter}=compact (default), diagnostic, or full. Use the saved-result retrieval tool listed on the final tools/list page with structuredContent.artifact.path (or _meta["apex/agent-output"].artifact.path for small native answers) to inspect saved evidence without rerunning the action.${parameter !== 'outputLevel' ? ' The upstream outputLevel argument is preserved; the wrapper uses ' + parameter + ' to avoid a collision.' : ''}`;
     return { ...tool, description, inputSchema: inputWithLevel(input, parameter), ...(tool.outputSchema ? { outputSchema: resultSchema(tool.outputSchema) } : {}) };
   }
-  const retrieval = () => ({ name: retrievalName, description: 'Read a saved original result without executing its action again. Default format=page returns bounded UTF-8 JSON text; it does not render saved images. Use format=original with outputLevel=full to return original MCP content blocks, including images, up to 8 MiB, without rerunning. nextOffset continues page retrieval.', inputSchema: { type: 'object', properties: { artifact: { type: 'string', description: 'artifact.path returned by a previous tool call' }, format: { type: 'string', enum: ['page', 'original'], default: 'page' }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 65536 }, outputLevel: LEVEL }, required: ['artifact'], additionalProperties: false }, annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false } });
+  const retrieval = () => ({ name: retrievalName, description: 'Read saved evidence without repeating its action. format=page returns byte pages. format=collection with pointer selects exact JSON rows (limit 1..100, max 262144 bytes/page); nextOffset advances within retained rows, never upstream pagination. format=original with outputLevel=full restores original MCP blocks including images up to 8 MiB. Artifact receipt is in structuredContent.artifact or _meta["apex/agent-output"].artifact for small native answers.', inputSchema: { type: 'object', properties: { artifact: { type: 'string', description: 'artifact.path returned by a previous tool call' }, format: { type: 'string', enum: ['page', 'collection', 'original'], default: 'page' }, pointer: { type: 'string', description: 'RFC 6901 pointer to retained array; embedded JSON text is decoded while traversing' }, offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 65536 }, outputLevel: LEVEL }, required: ['artifact'], additionalProperties: false }, annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false } });
   function discover(cursor) {
     return new Promise((resolve, reject) => {
       const id = `output-gateway:${randomUUID()}`;
@@ -99,15 +99,15 @@ export function runGateway({ server, command, args = [], root = process.cwd() })
         if (own(message, 'id') && cancelled.delete(key(message.id))) { error(message, -32800, 'Request cancelled before dispatch'); return; }
         if (name === retrievalName) {
           const a = message.params?.arguments ?? {};
-          const extra = Object.keys(a).filter(k => !['artifact', 'offset', 'limit', 'outputLevel', 'format'].includes(k));
-          if (extra.length || (a.format !== undefined && !['page', 'original'].includes(a.format)) || typeof a.artifact !== 'string' || (a.offset !== undefined && (!Number.isInteger(a.offset) || a.offset < 0)) || (a.limit !== undefined && (!Number.isInteger(a.limit) || a.limit < 1 || a.limit > 65536))) throw new Error('Invalid output_read arguments');
+          const extra = Object.keys(a).filter(k => !['artifact', 'offset', 'limit', 'outputLevel', 'format', 'pointer'].includes(k));
+          if (extra.length || (a.format !== undefined && !['page', 'collection', 'original'].includes(a.format)) || (a.pointer !== undefined && (typeof a.pointer !== 'string' || a.format !== 'collection')) || typeof a.artifact !== 'string' || (a.offset !== undefined && (!Number.isInteger(a.offset) || a.offset < 0)) || (a.limit !== undefined && (!Number.isInteger(a.limit) || a.limit < 1 || a.limit > 65536))) throw new Error('Invalid output_read arguments');
           const level = validateOutputLevel(a.outputLevel);
           let result;
           if (a.format === 'original') {
             if (level !== 'full' || a.offset !== undefined || a.limit !== undefined) throw new Error('format=original requires outputLevel=full and no offset/limit; use format=page for paged JSON evidence');
             result = readOriginalMcpArtifact({ root, artifact: a.artifact, maxBytes: 8 * 1024 * 1024 });
           } else {
-            const page = readOutputArtifact({ root, artifact: a.artifact, offset: a.offset, limit: a.limit, level });
+            const page = a.format === 'collection' ? readOutputCollection({ root, artifact: a.artifact, pointer: a.pointer, offset: a.offset, limit: a.limit }) : readOutputArtifact({ root, artifact: a.artifact, offset: a.offset, limit: a.limit, level });
             result = { content: [{ type: 'text', text: JSON.stringify(page) }], structuredContent: page };
           }
           if (own(message, 'id')) send({ jsonrpc: '2.0', id: message.id, result });

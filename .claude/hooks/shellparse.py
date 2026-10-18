@@ -328,16 +328,20 @@ def agent_run_leaf(argv, cwd):
     if "--help" in options or "-h" in options or options[:1] == ["help"]:
         return []
     values = {"--output-level": "compact", "--offset": "0", "--limit": "16384"}
-    allowed = {"--output-level", "--read", "--offset", "--limit", "--timeout-ms"}
+    allowed = {"--output-level", "--read", "--offset", "--limit", "--timeout-ms", "--status", "--since", "--pointer"}
     i = 0
     while i < len(options):
+        if options[i] == "--progress":
+            values["--progress"] = True
+            i += 1
+            continue
         name, eq, value = options[i].partition("=")
         if name not in allowed:
             raise AgentRunError("unknown agent-run option " + name)
         if not eq:
             i += 1
             value = options[i] if i < len(options) else ""
-        if not value:
+        if not value and name != "--pointer":
             raise AgentRunError(name + " needs a value")
         values[name] = value
         i += 1
@@ -353,14 +357,22 @@ def agent_run_leaf(argv, cwd):
                     raise ValueError()
             except ValueError:
                 raise AgentRunError("invalid agent-run numeric option " + name)
-    if "--read" in values:
+    if "--read" in values and "--status" in values:
+        raise AgentRunError("agent-run --read and --status are exclusive")
+    if "--read" in values or "--status" in values:
         if command:
-            raise AgentRunError("agent-run --read cannot execute a command")
+            raise AgentRunError("agent-run readers cannot execute a command")
+        if "--progress" in values or "--timeout-ms" in values:
+            raise AgentRunError("agent-run execution options require a command")
+        if "--since" in values and "--status" not in values:
+            raise AgentRunError("agent-run --since requires --status")
+        if "--status" in values and ("--pointer" in values or float(values["--offset"]) != 0 or float(values["--limit"]) != 16384):
+            raise AgentRunError("agent-run collection/page options require --read")
         return []
     if not command:
         raise AgentRunError("agent-run requires -- executable [args...]")
-    if float(values["--offset"]) != 0 or float(values["--limit"]) != 16384:
-        raise AgentRunError("agent-run --offset/--limit require --read")
+    if "--since" in values or "--pointer" in values or float(values["--offset"]) != 0 or float(values["--limit"]) != 16384:
+        raise AgentRunError("agent-run read options require a reader")
     return command
 
 

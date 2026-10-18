@@ -37,14 +37,14 @@ function excerpt(text, max) {
   const head = Math.floor(max * 0.65), tail = max - head;
   return text.slice(0, head) + `\n[omitted ${text.length - max} characters]\n` + (tail ? text.slice(-tail) : '');
 }
-const important = /status|verdict|count|total|error|fail|warn|message|fix|cause|stack|exit|signal|timed?out|unknown|pass|skip|dirty|unpushed|retriev|artifact|omitt|stdout|stderr/i;
+const important = /status|verdict|count|total|error|fail|warn|message|fix|cause|stack|exit|signal|timed?out|unknown|pass|skip|dirty|unpushed|retriev|artifact|omitt|stdout|stderr|valid|unit|threshold|baseline|control|sample|hardware|renderer|provenance|manifest|duration|elapsed|pending|not.?run|summary|environment|adapter|config|settings|seed|sha|image|camera|frame|metric/i;
 export function summarizeOutput(value, { level = 'compact' } = {}) {
   level = validateOutputLevel(level);
   if (level === 'full') return value;
   const diagnostic = level === 'diagnostic';
   const budget = { remaining: diagnostic ? 18000 : 6000, nodes: diagnostic ? 500 : 180 };
   const seen = new WeakSet();
-  function visit(v, depth = 0, key = '') {
+  function visit(v, depth = 0, key = '', pointer = '') {
     if (budget.nodes-- <= 0) return { omitted: true, reason: 'summary node budget' };
     if (v === null || typeof v === 'boolean' || typeof v === 'number') return v;
     if (typeof v === 'string') {
@@ -57,28 +57,29 @@ export function summarizeOutput(value, { level = 'compact' } = {}) {
     if (depth > (diagnostic ? 6 : 4) || budget.remaining <= 0) return { omitted: true, ...(Array.isArray(v) ? { count: v.length } : { keys: Object.keys(v).length }) };
     if (Array.isArray(v)) {
       const cap = diagnostic ? 8 : 3;
-      if (/^(checks|findings|errors|warnings)$/i.test(key)) {
+      const source = pointer.length <= 256 ? { sourcePointer: pointer } : { sourcePointerOmitted: true, retrieval: 'use byte pages for long collection paths' };
+      if (/^(checks|findings|errors|warnings|failures|tests|results|runs|legs|captures|scenarios)$/i.test(key) && v.some(item => item && typeof item === 'object' && ('status' in item || 'verdict' in item || 'severity' in item || 'ok' in item || 'pass' in item || 'success' in item || 'valid' in item || 'error' in item))) {
         const groups = [[], [], [], []], statusCounts = {};
-        for (const item of v) {
-          const status = String(item && typeof item === 'object' ? item.status ?? item.verdict ?? item.severity ?? item.level ?? (item.ok === false || item.pass === false ? 'failed' : item.error ? 'error' : 'unspecified') : 'unspecified').slice(0, 60);
+        for (const [index, item] of v.entries()) {
+          const status = String(item && typeof item === 'object' ? item.status ?? item.verdict ?? item.severity ?? item.level ?? (item.ok === false || item.pass === false || item.success === false ? 'failed' : item.valid === false ? 'invalid' : item.error ? 'error' : 'unspecified') : 'unspecified').slice(0, 60);
           const label = Object.hasOwn(statusCounts, status) || Object.keys(statusCounts).length < 16 ? status : 'other';
           statusCounts[label] = (statusCounts[label] || 0) + 1;
-          const severity = /fail|error|fatal|critical|^high$/i.test(status) ? 3 : /warn|medium/i.test(status) ? 2 : /unknown|unresolved/i.test(status) ? 1 : 0;
-          if (groups[severity].length < cap) groups[severity].push(item);
+          const severity = /fail|error|fatal|critical|^high$/i.test(status) ? 3 : /warn|medium/i.test(status) ? 2 : /unknown|unresolved|invalid|pending|not.?run/i.test(status) ? 1 : 0;
+          if (groups[severity].length < cap) groups[severity].push({ item, index });
         }
         const rows = [...groups[3], ...groups[2], ...groups[1], ...groups[0]].slice(0, cap);
-        const out = rows.map((item) => visit(item, depth + 1, key));
-        out.push({ totalItems: v.length, omittedItems: Math.max(0, v.length - rows.length), statusCounts, prioritizedIssues: true });
+        const out = rows.map(({ item, index }) => visit(item, depth + 1, key, `${pointer}/${index}`));
+        out.push({ totalItems: v.length, displayedItems: rows.length, omittedItems: Math.max(0, v.length - rows.length), displayedIndices: rows.map(row => row.index), ...source, statusCounts, prioritizedIssues: true });
         return out;
       }
-      const out = v.slice(0, cap).map((item) => visit(item, depth + 1, key));
-      if (v.length > cap) out.push({ omittedItems: v.length - cap, totalItems: v.length });
+      const out = v.slice(0, cap).map((item, index) => visit(item, depth + 1, key, `${pointer}/${index}`));
+      if (v.length > cap) out.push({ omittedItems: v.length - cap, totalItems: v.length, displayedItems: cap, ...source, nextOffset: cap, scope: 'retained collection; independent of upstream pagination' });
       return out;
     }
     if ((v.type === 'image' || v.type === 'audio') && v.data) return { type: v.type, mimeType: v.mimeType, omittedDataCharacters: v.data.length, data: '[retained in artifact]' };
     const out = {}, keys = Object.keys(v).sort((a, b) => Number(important.test(b)) - Number(important.test(a)));
     const cap = diagnostic ? 35 : 20;
-    for (const k of keys.slice(0, cap)) out[excerpt(k, 160)] = visit(v[k], depth + 1, k);
+    for (const k of keys.slice(0, cap)) out[excerpt(k, 160)] = visit(v[k], depth + 1, k, `${pointer}/${k === 'data' && /^\/content\/\d+$/.test(pointer) && v.type === 'text' ? 'text' : k.replace(/~/g, '~0').replace(/\//g, '~1')}`);
     if (keys.length > cap) out.omittedFields = keys.length - cap;
     return out;
   }
@@ -111,6 +112,10 @@ export function presentMcpResult(result, { root = process.cwd(), tool = 'mcp', l
   }
   if (level === 'full') return result;
   const envelope = { outputLevel: level, summary: summarizeOutput(result, { level }), artifact };
+  // Preserve useful small native answers and their outputSchema. The receipt
+  // is transport metadata, not an extra copy of the original payload.
+  const native = { ...result, _meta: { ...result._meta, 'apex/agent-output': { outputLevel: level, artifact } } };
+  if (!Object.hasOwn(result._meta ?? {}, 'apex/agent-output') && !result.content?.some(block => ['image', 'audio', 'resource'].includes(block.type)) && artifact.bytes <= 1024 && JSON.stringify(native).length < JSON.stringify(envelope).length * 2) return native;
   return { content: [{ type: 'text', text: JSON.stringify(envelope) }], structuredContent: envelope, ...(Object.hasOwn(result, 'isError') ? { isError: result.isError } : {}) };
 }
 function openOutputArtifact(root, artifact) {
@@ -158,5 +163,30 @@ export function readOriginalMcpArtifact({ root = process.cwd(), artifact, maxByt
     const original = JSON.parse(data.toString('utf8'));
     if (!original || !Array.isArray(original.content)) throw new Error('artifact is not an original MCP result');
     return original;
+  } finally { fs.closeSync(fd); }
+}
+
+/** Exact rows from a retained JSON collection; never advance the upstream cursor. */
+export function readOutputCollection({ root = process.cwd(), artifact, pointer = '', offset = 0, limit = 20 }) {
+  if (typeof pointer !== 'string' || (pointer !== '' && !pointer.startsWith('/')) || /~(?![01])/u.test(pointer)) throw new Error('pointer must be an RFC 6901 JSON pointer');
+  if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('collection offset must be nonnegative and limit must be 1..100');
+  const { fd, ref } = openOutputArtifact(root, artifact);
+  try {
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile() || stat.size > 8388608) throw new Error('collection retrieval requires a JSON artifact at most 8 MiB; use byte pages for larger results');
+    let value = JSON.parse(fs.readFileSync(fd, 'utf8'));
+    for (const raw of pointer === '' ? [] : pointer.slice(1).split('/')) {
+      // MCP text blocks often carry native JSON instead of structuredContent.
+      if (typeof value === 'string') value = JSON.parse(value);
+      const key = raw.replace(/~1/g, '/').replace(/~0/g, '~');
+      if (!value || typeof value !== 'object' || !Object.hasOwn(value, key)) throw new Error('collection pointer does not exist');
+      value = value[key];
+    }
+    if (typeof value === 'string') value = JSON.parse(value);
+    if (!Array.isArray(value)) throw new Error('collection pointer must select an array');
+    const items = value.slice(offset, offset + limit);
+    // Bound each retrieval without clipping individual rows or skipping them.
+    if (Buffer.byteLength(JSON.stringify(items)) > 262144) throw new Error('collection page exceeds 262144 bytes; reduce limit or use byte pages');
+    return { artifact: ref, pointer, scope: 'retained collection; independent of upstream pagination', offset, totalItems: value.length, displayedItems: items.length, omittedItems: Math.max(0, value.length - offset - items.length), nextOffset: offset + items.length < value.length ? offset + items.length : null, items };
   } finally { fs.closeSync(fd); }
 }
