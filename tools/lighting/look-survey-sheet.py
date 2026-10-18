@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# @doc 4×5 tod×weather contact sheet from `artifacts/lighting/shots/<id>/` → `docs/look-survey/<id>_grid.png`; `--ready`.
+# @doc 4×5 tod×weather sheet: artifacts/lighting/shots/<id>/ → ignored artifacts/lighting/sheets/<id>_grid.png.
 # @skill mcp-probe
 """Build a 4×5 tod×weather contact sheet from look-survey PNGs.
 
@@ -7,9 +7,9 @@
     python3 tools/lighting/look-survey-sheet.py --all
     python3 tools/lighting/look-survey-sheet.py --ready   # tracks with all 20 looks
 
-Writes docs/look-survey/<id>_grid.png; commit it on the track-survey-assets branch,
-never the deploy branch (tests/unit/committed-images.test.mjs). Source frames live in
-gitignored artifacts/lighting/shots/<id>/.
+Writes gitignored artifacts/lighting/sheets/<id>_grid.png. Source frames live in
+gitignored artifacts/lighting/shots/<id>/; generated sheets never go on the deploy
+branch (tests/unit/committed-images.test.mjs).
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 SHOTS = ROOT / "artifacts" / "lighting" / "shots"
-OUT = ROOT / "docs" / "look-survey"
+OUT = ROOT / "artifacts" / "lighting" / "sheets"
 TODS = ("dawn", "day", "dusk", "night")
 WXS = ("dry", "wet", "rain", "fog", "overcast")
 
