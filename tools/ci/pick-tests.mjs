@@ -119,6 +119,7 @@ export const RULES = [
   // file in js/ui/ is routed the day it lands instead of the day someone
   // remembers to extend a regex. The blanket-route count in
   // tests/data/ratchets.json is what catches a file no rule names.
+  [/^js\/overlay\//, ["state-unit"], "stream overlay frame schema and transform-only DOM painter"],
   [/^tools\/lib\/game-vm\.cjs/, ["game-vm"], "the Node VM game harness and its parity test"],
   [/^tools\/lighting\/slider-effect\.mjs/, ["node-slow"], "slider-effect.test.mjs spawns this tool per test"],
 
