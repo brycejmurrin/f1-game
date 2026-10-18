@@ -366,6 +366,61 @@ test('named scenery catalog accounts for every registered hero and targets emitt
  assert.equal(sochi.frac,.115,'the Olympic Park loop has a nearer wrong-leg road');
  assert.notEqual(sochi.projectedFrac,sochi.frac);
 });
+test("sourceDigest ignores an unrelated manifest module and follows TRACK_VM", async (t) => {
+ const { createRequire } = await import("node:module");
+ const require = createRequire(import.meta.url);
+ const { scenerySourceDigest } = require("../../tools/shot/scenery-source-hash.cjs");
+ const { TRACK_VM } = require("../../tools/manifest.cjs");
+ const root = path.resolve(".");
+ const baseline = scenerySourceDigest(root);
+ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-digest-"));
+ t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+ const files = [
+   "tools/shot/gen-scenery-locations.cjs",
+   "tools/shot/scenery-source-hash.cjs",
+   "tools/lib/track-build-vm.cjs",
+   "tools/lib/pack-assets.cjs",
+   ...TRACK_VM.filter(file => file !== "@circuits"),
+ ];
+ const walk = (dir, include) => {
+   for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+     const rel = `${dir}/${entry.name}`;
+     if (entry.isDirectory()) walk(rel, include);
+     else if (include(rel)) files.push(rel);
+   }
+ };
+ walk("assets/pack", file => file.endsWith(".bin") || file.endsWith("manifest.json"));
+ for (const dir of ["js/circuits", "js/circuits/scenery", "tests/data/landmarks"]) {
+   walk(dir, file => file.endsWith(dir.includes("landmarks") ? ".json" : ".js"));
+ }
+ for (const rel of files) {
+   const dest = path.join(tmp, rel);
+   fs.mkdirSync(path.dirname(dest), { recursive: true });
+   if (!fs.existsSync(dest)) fs.linkSync(path.join(root, rel), dest);
+ }
+ fs.mkdirSync(path.join(tmp, "tools"), { recursive: true });
+ const manifestPath = path.join(tmp, "tools/manifest.cjs");
+ const manifestSrc = fs.readFileSync(path.join(root, "tools/manifest.cjs"), "utf8");
+ const probe = ["js", "ui", "unrelated-digest-probe.js"].join("/");
+ const dropCache = () => {
+   const resolved = require.resolve(manifestPath);
+   for (const key of Object.keys(require.cache)) {
+     if (key === resolved || key.startsWith(tmp + path.sep)) delete require.cache[key];
+   }
+ };
+ fs.writeFileSync(manifestPath, manifestSrc.replace(
+   "const FULL = [\n",
+   `const FULL = [\n  "${probe}",\n`,
+ ));
+ dropCache();
+ assert.equal(scenerySourceDigest(tmp), baseline, "an unrelated FULL module must leave the digest unchanged");
+ fs.writeFileSync(manifestPath, manifestSrc.replace(
+   "\"@circuits\",\n  \"js/track/circuit-elevations.js\",\n  \"js/track/tracks.js\",",
+   "\"@circuits\",\n  \"js/track/circuit-elevations.js\",\n  \"js/core/log.js\",\n  \"js/track/tracks.js\",",
+ ));
+ dropCache();
+ assert.notEqual(scenerySourceDigest(tmp), baseline, "a TRACK_VM membership change must change the digest");
+});
 test('resume requires matching receipt identity when a capture context is supplied',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'survey-identity-'));
  try {

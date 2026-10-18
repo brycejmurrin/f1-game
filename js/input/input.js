@@ -1670,7 +1670,7 @@ const Input = (function () {
     clamp, activePad, padConnected: () => padConnected, remoteActive,
     remoteHaptics: () => remoteHaptics, now: nowMs,
   });
-  const { setHaptics, setTriggerHaptics, triggerHapticsEnabled, hapticsSupported,
+  const { setHaptics, setTriggerHaptics, hapticsSupported,
     triggerRumbleSupported, primeHaptics, vibrate, rumble } = haptics;
 
   /* ONE CURVE FOR EVERY DEVICE WAS THE DEFECT, and it is worth being exact
@@ -2453,7 +2453,6 @@ const Input = (function () {
     setKeyRampIn,
     setHaptics,
     setTriggerHaptics,
-    triggerHapticsEnabled,
     triggerRumbleSupported,
     vibrate,
     hapticsSupported,

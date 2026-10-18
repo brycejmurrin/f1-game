@@ -84,6 +84,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The orchestrator/worker contract (skill agent-fleet): host-correct PR
   // subscribe tools, one fleet block, the mandated launch fields. < 0.1 s.
   "tests/unit/agent-fleet.test.mjs",
+  // Generated agent index, hook page, coverage page and per-hook help. No browser.
+  "tests/unit/agent-indexes.test.mjs",
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
@@ -279,6 +281,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-comments.test.mjs",
   "tests/unit/css-critical-path.test.mjs",
   "tests/unit/css-faces.test.mjs",
+  "tests/unit/css-has-scope.test.mjs",
   "tests/unit/css-layers.test.mjs",
   "tests/unit/css-media-disjoint.test.mjs",
   "tests/unit/css-play.test.mjs",
@@ -630,7 +633,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/livery-decal-surfaces.test.mjs",
   // Pure artwork and paint-editor VM regression; selected for all source edits.
   "tests/unit/livery-design.test.mjs",
+  "tests/unit/livery-finish-contract.test.mjs",
+  // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
+  "tests/unit/livery-sidewall.test.mjs",
   "tests/unit/livery-tier.test.mjs",
+  // Livery rimTint / caliperTint (S2): unset = byte-identical wheels, set = colour-only, caches keyed. VM, ~1 s.
+  "tests/unit/livery-wheels.test.mjs",
+  "tests/unit/livery-zone-finish.test.mjs",
   "tests/unit/load-order.test.mjs",
   // The LOADING CARD's geometry: the three numbers the flyby editor authors,
   // clamped out of localStorage before they reach a CSS custom property, where
@@ -833,6 +842,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // flag windows. Pure rules in a VM, ~0.3 s together.
   "tests/unit/ready-gate.test.mjs",
   "tests/unit/real-race-script.test.mjs",
+  // WATCH recording-gap cache (#2465): explicit refresh replaces a stale interior hole and keeps a pit stop and a red flag. VM, under a second.
+  "tests/unit/real-race-tab-gap-refresh.test.mjs",
   "tests/unit/real-race.test.mjs",
   // Replay caption validity across seeks, reel cuts and session changes; isolated VM.
   "tests/unit/real-replay-captions.test.mjs",
@@ -931,6 +942,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ship-filter-paths.test.mjs",
   // shot.mjs --batch / --jpeg / --raster parse (no Chromium).
   "tests/unit/shot-jobs.test.mjs",
+  // Shared survey runner: CLI and MCP manifests match, and colliding gallery names stay distinct.
+  "tests/unit/shot-survey-runner.test.mjs",
   // The physics step's functions (update, updateCar…) compile under 48 KB of bytecode — TurboFan's
   // cap is 61,440 B and past it the whole race runs deoptimized (PERF-HUNT-2 S11); one node child, ~2 s.
   "tests/unit/sim-bytecode-budget.test.mjs",
@@ -1026,6 +1039,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/title-flow.test.mjs",
   "tests/unit/title-home-scene-prepaint.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
+  // three's per-frame tick once per drawn frame on WebGL2 (the pump), WebGPU untouched: the real pumpAnimation over a fake three Animation, and the install gate.
+  "tests/unit/tlx-anim-pump.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
   "tests/unit/tlx-cull-shadow-pack.test.mjs",
   // A throw in one TLX subsystem costs that subsystem only: the car/lamp shadow

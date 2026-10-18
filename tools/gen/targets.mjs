@@ -22,14 +22,17 @@ export const GENERATORS = [
   "./gen-slider-doc.mjs",
   "./gen-hooks-table.mjs",
   "./gen-arch-table.mjs",
+  "../docs/gen-coverage-table.mjs",
+  "../docs/gen-agent-index.mjs",
 ];
 
 export async function targets() {
   const out = [];
   for (const g of GENERATORS) {
     const m = await import(g);
-    if (typeof m.TARGET !== "string") throw new Error(`${g} exports no TARGET string`);
-    out.push(m.TARGET);
+    const listed = Array.isArray(m.TARGETS) ? m.TARGETS : [m.TARGET];
+    if (!listed.length || listed.some((t) => typeof t !== "string")) throw new Error(`${g} exports no TARGET string`);
+    out.push(...listed);
   }
   return out;
 }

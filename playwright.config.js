@@ -72,7 +72,7 @@ if (process.env.APEX_GL === "llvmpipe") {
 // pinned --project that excludes a spec it names, and any spec that captures an
 // image while sitting outside this list (how parts-liveries was found).
 const RENDER_SPECS = [
-  "dev-tools", "f1-track-accuracy", "hud-audit", "image-grade-visual",
+  "dev-tools", "dev-tools-dom", "f1-track-accuracy", "hud-audit", "image-grade-visual",
   "lighting-ab", "lighting-tuner-grade",
   "garage-first-frame",
   "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",

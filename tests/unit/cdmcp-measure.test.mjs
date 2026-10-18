@@ -14,6 +14,7 @@ const LAMPS = path.join(ROOT, "tools/mcp/cdmcp-lamps.py");
 const LAMPS_TUNE = path.join(ROOT, "tools/mcp/cdmcp-lamps-tune.py");
 const CLI = path.join(ROOT, "tools/mcp/cdmcp-cli.py");
 const BG = path.join(ROOT, "tools/mcp/cdmcp-bg.mjs");
+const N10 = path.join(ROOT, "tools/lighting/look-survey-n10.mjs");
 
 test("cdmcp-measure.py and cdmcp-bg.mjs exist and are executable-ish", () => {
   assert.ok(fs.existsSync(MEASURE));
@@ -162,6 +163,9 @@ test("look-survey settles 1.6s only on day/dark rebuild, not every weather flip"
   assert.match(py, /builtNight/);
   assert.match(py, /const rebuilt = prevDark == null \|\| nowDark !== prevDark/);
   assert.match(py, /if \(prevTod !== tod && a\.setTimeOfDay\)/);
+  assert.match(py, /await a\.race/);
+  assert.match(py, /await a\.awaitPresent/);
+  assert.match(py, /pageId/);
   assert.doesNotMatch(py, /await wait\(1600\)/);
   const help = spawnSync("python3", [CLI, "look-survey", "--help"], { encoding: "utf8" });
   assert.equal(help.status, 0, help.stderr);
@@ -169,11 +173,12 @@ test("look-survey settles 1.6s only on day/dark rebuild, not every weather flip"
   assert.match(help.stdout, /tod\|wx|time-of-day|weather/i);
 });
 
-test("look-survey-sheet.py writes tracked docs/look-survey grids", () => {
+test("look-survey-sheet.py writes ignored artifacts/lighting/sheets grids", () => {
   const sheet = path.join(ROOT, "tools/lighting/look-survey-sheet.py");
   assert.ok(fs.existsSync(sheet));
   const py = fs.readFileSync(sheet, "utf8");
-  assert.match(py, /docs\/look-survey/);
+  assert.match(py, /artifacts.*lighting.*sheets/s);
+  assert.doesNotMatch(py, /OUT = ROOT \/ "docs"/);
   assert.match(py, /--ready/);
   const help = spawnSync("python3", [sheet, "--help"], { encoding: "utf8" });
   assert.equal(help.status, 0, help.stderr);
@@ -201,6 +206,23 @@ print("ok")
 `], { encoding: "utf8", cwd: ROOT });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.match(r.stdout, /ok/);
+});
+
+test("N10 look-survey command is dry-runnable and targets ignored artifacts", () => {
+  assert.ok(fs.existsSync(N10));
+  const r = spawnSync("node", [N10, "--dry-run"], {
+    encoding: "utf8",
+    cwd: ROOT,
+    timeout: 5000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  for (const id of [
+    "anderstorp", "brands_hatch", "buddh", "dijon", "donington", "fuji",
+    "jerez", "korea", "mont_tremblant", "mosport", "okayama", "zolder",
+  ]) assert.match(r.stdout, new RegExp(`\\b${id}\\b`));
+  assert.match(r.stdout, /artifacts\/lighting\/sheets/);
+  assert.match(r.stdout, /cdmcp-cli\.py look-survey/);
+  assert.match(r.stdout, /look-survey-sheet\.py/);
 });
 
 test("lamps tuner fatal navigation keeps exit, terminal marker and report failed", () => {

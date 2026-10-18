@@ -85,6 +85,7 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
       TYRE_BAND: [null, [1, 1, 0]], BRAKE_CALIPER: [null, [1, 0, 0]],
       aeroLevelOf: () => 2, aeroStyleOf: () => null,
     },
+    CarWheels: { tints: () => ({ rim: null, cal: null, ink: null, key: "" }) },   // livery wheel tints: none set
     Parts: {
       CATALOG,
       legalityKey: () => "2026",
