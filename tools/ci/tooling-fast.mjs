@@ -835,6 +835,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // open PR's head, claims on age; pure fixtures, under a second.
   "tests/unit/prune-branches.test.mjs",
   "tests/unit/pu-harvest-audio.test.mjs",
+  // Evidence archive round-trip, provenance and non-overwriting release publication; no live GitHub writes.
+  "tests/unit/publish-evidence.test.mjs",
   // shots/<topic> evidence-branch publisher: validations, dry run, full publish into a throwaway bare repo.
   "tests/unit/publish-shots.test.mjs",
   // STANDING-WATER PUDDLES: js/render/shared/puddles.js reference mask (sample pins, growth/drying, edge bias) + every constant mirrored in GLX/TLX/WGX + the PUDDLES knob plumbing. Pure, < 1 s.

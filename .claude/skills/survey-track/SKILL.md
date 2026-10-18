@@ -96,13 +96,17 @@ Surveyor (`.claude/agents/track-surveyor.md` steps 1-5; it never captures):
 `tools/shot/frame-report.mjs --track <id>`; multi-shot surveys
 `tools/shot/shot-survey.mjs` or `tools/shot/track-session.mjs` (parent only: browser).
 
-## Parent brief and commit recipe
+## Parent brief and evidence publication
 
 - Brief checklist: every frame incl. storm weather; a "Code & scenery deep-dive"
-  section (emitter counts with verified file:line); the branch name; PR base
-  `track-survey-assets` (never the deploy branch).
-- Commit recipe: survey paths are gitignored, so `git add -f <paths>` ALONE in
-  one Bash call, then `git commit` in the next.
+  section (emitter counts with verified file:line); the source branch/commit and
+  published evidence URL.
+- New capture output stays under ignored `artifacts/` or `scratch/`. Publish with
+  `node tools/shot/publish-evidence.mjs --dir artifacts/<capture> --label <slug> --publish`
+  and link the release assets; do not force-add images to a survey branch.
+  See `docs/EVIDENCE-STORAGE.md` for plan, local packaging, retries and retention.
+- Existing survey PRs keep their `track-survey-assets` base and pinned links.
+  Code/scenery fixes use a separate image-free deploy-branch PR.
 - Shots: more than 3 go through `apex_shot_survey` / `apex_track op survey`, not
   a loop of `apex_shot` (a 52-shot serial survey took 56 min).
 - **Image budget** → [playwright-probe recipes §Galleries and image budget](../playwright-probe/references/recipes.md#galleries-and-image-budget).
