@@ -397,7 +397,7 @@ test("hud.js: the flag and the radio go through the one writer", () => {
     assert.match(code, /LiveRegion\.say\(/, `${name} speaks through LiveRegion`);
   }
   assert.match(hud, /LiveRegion\.say\(said, "flag"\)/);
-  assert.match(game, /LiveRegion\.say\(said, kind\)/);
+  assert.match(read("js/race/announce-banner.js"), /LiveRegion\.say\(said, kind\)/);
   assert.match(ro, /LiveRegion\.say\(said, "hud"\)/);
   assert.match(sel, /LiveRegion\.say\(text, "save"\)/);
 });

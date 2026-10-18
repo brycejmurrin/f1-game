@@ -534,7 +534,7 @@ test("WATCH cuts and held frames use subject framing and clear it when normal dr
     GameCams: { resetSmoothing() {} },
     camVantage: (_mode, _s, _x, _speed, _now, e) => { extra = { ...e }; return { eye: [0, 5, 0], tgt: [10, 2, 1000], fov: 50 }; },
     camEye: [0, 0, 0], camTgt: [0, 0, 0], gfx: null,
-    bankDy: 2, comfort: false, rpCam: { world: true, x: 10, z: 1000 },
+    bankDy: 2, comfort: false, feel: { shake: 0, camRoll: 0, hitStop: 0 }, rpCam: { world: true, x: 10, z: 1000 },
     _vantCarPos: [0, 0], headInterp: (c) => c.head, dt: 1 / 60,
   });
   vm.runInContext(pooled + "\n" + symbolSource("function snapGameCam("), ctx);
