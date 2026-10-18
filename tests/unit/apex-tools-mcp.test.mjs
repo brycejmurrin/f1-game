@@ -2401,7 +2401,7 @@ test("chrome-devtools-mcp.sh run tolerates a missing Chromium instead of exiting
   const sh = fs.readFileSync(path.join(ROOT, "tools/mcp/chrome-devtools-mcp.sh"), "utf8");
   const fn = sh.match(/^wait_chrome\(\) \{[\s\S]*?^\}$/m);
   assert.ok(fn, "wait_chrome()");
-  assert.match(sh, /run_mcp\(\) \{\n  local chrome\n  chrome="\$\(wait_chrome\)"/);
+  assert.match(sh, /run_mcp\(\) \{[\s\S]*?\n  local chrome\n  chrome="\$\(wait_chrome\)"/);   // the preflight lines sit between the brace and `local chrome`
   const r = spawnSync("bash", ["-c", `set -euo pipefail\nfind_chrome() { return 1; }\n${fn[0]}\nc="$(wait_chrome)"\nargs=(--x \${c:+--executablePath "$c"})\necho "rc=$? c=[$c] n=\${#args[@]}"`],
     { encoding: "utf8", env: { ...process.env, APEX_CHROME_WAIT_S: "0" }, timeout: 10000 });
   assert.equal(r.status, 0, r.stderr);
