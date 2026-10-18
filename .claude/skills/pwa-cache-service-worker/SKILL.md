@@ -28,12 +28,14 @@ Stale installed shell = this guard did not fire or `version.json` did not move (
 The deploy stamps the build (`2000 + commit count`, `pages.yml`) into `version.json` and the meta; the
 committed numbers are not what is live. Live check: `tools/ci/pages-live-sha.sh` / **deploy-research**.
 
-**Fetch.** Navigation is network-first with a bounded cache fallback; everything else
-cache-first (network-first on a dev host, where every tag reads `?v=dev`). The deploy
-stamps content hashes and shell generation together; source tags stay `?v=dev`
-(AGENTS.md "Critical conventions"). Check with `node tools/gen/gen-shell.mjs --check`.
-The in-session generation handshake, cache naming/retention and fetch races are in
-[references/sw-internals.md](references/sw-internals.md).
+**Fetch.** Per-class policy is the table below; dev-host `?v=dev`, the generation
+handshake, cache retention and fetch races → [references/sw-internals.md](references/sw-internals.md).
+
+**`sw.js` anchors** (grep the symbol; line numbers drift): `currentCacheName()`
+(~L64: `version.json` no-store → `apex26-<build>`), `cacheBuild()` (~L114: numeric
+parse of the name), `sweepStaleCaches()` (~L217: deletes only numerically OLDER caches,
+after `INSTALL_SETTLED`), the `install` (~L680) / `activate` (~L757) listeners, and the
+`fetch` listener's `isVersion` branch (~L926: `version.json` network-first, never cached).
 
 **CSP.** `<meta http-equiv="Content-Security-Policy">` is a gen-shell block
 (`CSP` in `tools/gen/gen-shell.mjs`, first in `<head>`): a new third-party
@@ -76,3 +78,4 @@ Related: `node tools/gen/gen-shell.mjs --check`, **check-changes**.
 - DEFERRED triple, offline check, mid-run bump, mistakes, stale-shell diagnosis →
   [references/workflow.md](references/workflow.md).
 - Handshake, cache name, fetch races → [references/sw-internals.md](references/sw-internals.md).
+- PWA perf / CWV playbook → [references/web-quality-perf.md](references/web-quality-perf.md).

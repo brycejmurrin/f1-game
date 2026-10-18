@@ -1,22 +1,22 @@
 [
   {
-    "query": "/compound-debug inspect the current tool change.",
+    "query": "/compound-debug the pit-stop timer unit test fails since my last commit; find why and fix it.",
     "expect": "compound-debug"
   },
   {
-    "query": "Use compound-debug on this scoped change.",
+    "query": "/compound-debug tools/ci/pr-board.mjs crashes on a PR with an empty body. Reproduce it, find the root cause, make the smallest fix.",
     "expect": "compound-debug"
   },
   {
-    "query": "I explicitly want the compound-debug workflow for this task.",
+    "query": "Run compound-debug on this: the replay seek throws a TypeError after my edit. Trace it back to where the state first goes wrong.",
     "expect": "compound-debug"
   },
   {
-    "query": "Please invoke compound-debug and report the evidence.",
+    "query": "I explicitly want the compound-debug workflow: the season points total is off by one after the sprint. Diagnose only, no fix yet.",
     "expect": "compound-debug"
   },
   {
-    "query": "Apply the compound-debug supporting workflow while respecting project gates.",
+    "query": "/compound-debug the ratchets check went red after my refactor; give me the leading hypothesis and a competing one before you change anything.",
     "expect": "compound-debug"
   },
   {

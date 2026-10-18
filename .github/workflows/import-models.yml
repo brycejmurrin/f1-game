@@ -64,7 +64,7 @@ jobs:
     # bounds a hang rather than the work.
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1   # zizmor: ignore[artipacked] this job commits and pushes the imported models
         with:
           ref: ${{ github.ref_name }}
 
@@ -90,19 +90,22 @@ jobs:
           # Sniff the magic bytes: PK -> zip, glTF -> glb, { -> gltf json.
           head -c 4 _dl/pack.bin | xxd
           if head -c 2 _dl/pack.bin | grep -q "PK"; then
-            python3 - <<'PY'
-            import stat
-            import zipfile
-            from pathlib import PurePosixPath
+            # python3 -c, not a heredoc: this block's YAML indent leaves the terminator
+            # off column 0, so `<<'PY'` never closed and python read the rest of the
+            # script as source (actionlint/shellcheck SC1039, 2026-10-18).
+            python3 -c '
+          import stat
+          import zipfile
+          from pathlib import PurePosixPath
 
-            with zipfile.ZipFile("_dl/pack.bin") as zf:
-                for info in zf.infolist():
-                    name = info.filename.replace("\\", "/")
-                    parts = PurePosixPath(name).parts
-                    mode = (info.external_attr >> 16) & 0o170000
-                    if name.startswith("/") or ".." in parts or stat.S_ISLNK(mode):
-                        raise SystemExit(f"unsafe archive entry: {info.filename!r}")
-            PY
+          with zipfile.ZipFile("_dl/pack.bin") as zf:
+              for info in zf.infolist():
+                  name = info.filename.replace("\\", "/")
+                  parts = PurePosixPath(name).parts
+                  mode = (info.external_attr >> 16) & 0o170000
+                  if name.startswith("/") or ".." in parts or stat.S_ISLNK(mode):
+                      raise SystemExit(f"unsafe archive entry: {info.filename!r}")
+          '
             unzip -q _dl/pack.bin -d _extract
           else
             # A single model file; keep its extension so the importer routes it.

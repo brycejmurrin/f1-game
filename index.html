@@ -711,6 +711,7 @@
 <aside id="save-warning" aria-labelledby="save-warning-title" hidden><strong id="save-warning-title">SESSION ONLY — SAVING UNAVAILABLE</strong><span id="save-warning-detail">Progress will be lost when this page closes or reloads.</span><button id="save-retry" type="button">RETRY SAVE</button><button id="save-export" type="button">EXPORT RECOVERY</button><button id="save-dismiss" type="button" aria-expanded="true">DISMISS</button></aside>
 <div id="announce-live" role="status" aria-live="polite" aria-atomic="true"></div>
 <div id="announce" aria-hidden="true" hidden><span id="announce-num"></span><span id="announce-body"><span id="announce-who"></span><span id="announce-text"></span></span></div>
+<div id="captions" class="cap-strip" role="status" aria-live="polite" aria-atomic="true" hidden><span class="cap-side" aria-hidden="true"></span><span class="cap-who"></span><span class="cap-text"></span></div>
 
 <!-- TOUCH-mode drag affordance: a ring at the point the finger went down, so
      the anchor of an otherwise invisible control is visible for a moment.
@@ -809,7 +810,7 @@
            nobody able to tell. Filled in by js/game/menus.js from the same ?v=
            the version guard parses, so it is the build that is EXECUTING, not a
            string baked into the markup. -->
-      <p id="pm-build" class="build-tag" aria-label="build number"></p>
+      <p id="pm-build" class="build-tag"></p>
     </div>
   </div>
 </dialog>
@@ -2024,16 +2025,11 @@
           <button id="as-sp-mode-remote" class="opt-btn" type="button">REMOTE</button>
           <button id="as-sp-mode-browser" class="opt-btn" type="button">IN BROWSER</button>
         </div>
-        <p class="as-note">REMOTE plays through the Spotify app on your phone or computer &mdash; open it once so it shows up below. IN BROWSER plays here, but needs desktop Chrome/Edge/Firefox.</p>
-        <label class="tune-row"><span class="tune-label">DEVICE</span>
-          <select id="as-sp-device" aria-label="Spotify device"></select></label>
-        <button id="as-sp-refresh" class="adv-more-btn" type="button">&#8635; REFRESH DEVICES</button>
-
-        <!-- WHAT TO PLAY. Connecting only makes this browser a Spotify device;
-             it does not queue anything, and a browser that has never played has
-             no context to resume — which is why "connected" could be silent. -->
-        <label class="tune-row"><span class="tune-label">PLAY FROM</span>
-          <select id="as-sp-playlist" aria-label="Spotify playlist"></select></label>
+        <p class="as-note">REMOTE plays through the Spotify app on your phone or computer &mdash; open it once so OPEN PLAYER can pick it. IN BROWSER plays here, but needs desktop Chrome/Edge/Firefox.</p>
+        <!-- WHAT TO PLAY and WHERE. The playlist and device pickers live only in
+             the player sheet (#sp-playlist2 / #sp-device2): one home, not two
+             copies with the same handlers (#2847). PLAY here resumes whatever
+             was chosen there. -->
         <div class="opt-row">
           <button id="as-sp-play" class="opt-btn" type="button">&#9654; PLAY</button>
           <button id="as-sp-pause" class="opt-btn" type="button">&#10074;&#10074; PAUSE</button>
@@ -2640,6 +2636,7 @@
           </div>
         </div>
         <dl id="ld-meta"></dl>
+        <div id="ld-caption" class="ld-caption" hidden><span class="ld-caption-who"></span><span class="ld-caption-text"></span></div>
       </div>
     </div>
   </div>
@@ -3075,6 +3072,7 @@
     <nav id="htp-contents" aria-label="How to play sections">
       <a href="#htp-controls">CONTROLS</a>
       <a href="#htp-racing">RACING</a>
+      <a href="#htp-2026rules">2026 RULES</a>
       <a href="#htp-pits">PIT STOPS</a>
       <a href="#htp-driving">DRIVING</a>
       <a href="#htp-setup">SETUP</a>
@@ -3114,6 +3112,9 @@
           <br>SETTINGS › CONTROLS › ACTIVE AERO: AUTO handles the wings for you. The HUD shows the automatic mode and zone status. Zones are available on every lap with no proximity rule; some circuits have none.</dd>
         <dt>OVERTAKE</dt>
         <dd>Follow within one second to arm it, then activate for about 3–5 seconds of electric power, depending on the car&rsquo;s electric system. The HUD explains when it is unavailable: the opening lap, a caution or the cooldown. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
+        <dt id="htp-2026rules">2026 RULES &mdash; ENERGY &amp; OVERTAKE</dt>
+        <dd><b>Energy harvest and super-clipping.</b> The hybrid recovers energy when you brake or lift. With a <b>full battery</b> (about 4 MJ on the energy bar), the car cannot keep harvesting on a long straight &mdash; the ICE is <b>super-clipped</b> so the MGU-K has headroom. You may feel a slowdown at part throttle or when you lift even though you are not braking hard. Spend charge with <span class="key">BOOST</span> or <span class="key">OVERTAKE</span>, or arrive at the straight with less than a full pack.
+          <br><b>Overtake Mode</b> is separate from BOOST and Active Aero: it is an extra 0.5 MJ allowance earned when you follow within one second at the detection line, then spent at will that lap (see <span class="key">OVERTAKE</span> above). It does not drain the main energy bar.</dd>
         <dt>GEARS</dt>
         <dd>Choose SETTINGS › DRIVING AIDS › GEARS: MANUAL to shift yourself. Shift up near the redline and down before slow corners. Manual gears work on desktop and with TILT on a phone; BUTTONS and TOUCH keep gears automatic.</dd>
         <dt>RACE CONTROL</dt>
@@ -3706,6 +3707,7 @@
 <script defer crossorigin="anonymous" src="js/ui/editor-workspace.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-search.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-tabs.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/setting-deps.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/key-binds.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-export.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/aero-zones.js?v=dev"></script>
@@ -3719,6 +3721,7 @@
 <script defer crossorigin="anonymous" src="js/physics/drive-tune.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/lap-record.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/storm-flash.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/captions.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/announce-banner.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/light-tune-edit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/pace-math.js?v=dev"></script>
@@ -3763,6 +3766,7 @@
 <script defer crossorigin="anonymous" src="js/camera/drive-onboard.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/feel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/cvd-palette.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/a11y-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-elements.js?v=dev"></script>
@@ -3794,6 +3798,9 @@
 <script defer crossorigin="anonymous" src="js/ui/results-story.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/results-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/quali-model.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/share/share-card-data.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/share/share-card-layout.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/share/share-card.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/daily-challenge.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-studio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/home-world.js?v=dev"></script>

@@ -40,7 +40,7 @@ When someone asks "how many corners does Spa have?", answer with `info().turns` 
 `trackInfo`, not `corners().length`.
 
 **The API does not know corner names.** `turns` (`js/circuits/<id>.js`) is a raw array of apex fractions; `trackInfo({what:"corners"})`
-computes `dir`, `radiusM`, `apexSpeedKph` in `buildCorners()` (`js/agent/agentview.js`) and labels corners only `T1`, `T2`, ... in driving order.
+computes `dir`, `radiusM`, `apexSpeedKph` in `buildCorners()` (`js/agent/agentview-corners.js`) and labels corners only `T1`, `T2`, ... in driving order.
 For a named corner (Eau Rouge, Raidillon), take the frac from the circuit file's comments, e.g.
 `grep -n "Eau Rouge\|Raidillon" js/circuits/spa.js` (floor ~0.14, Raidillon peak ~0.165, racing frac), say that is the source, then probe
 `groundY(f, lat)` / `trackProfile` around it (sweep recipe: debug-tracks-sweeps.md). Authoring-frame tables (`elevations`, `bankZones`) are
@@ -53,10 +53,33 @@ Every hook above except `render`/screens runs in `tools/lib/game-vm.cjs` (~5 s p
 then `a.info() / a.corners() / a.trackProfile(400) / a.trackInfo({what:"corners"})` as usual (end with `process.exit(0)`;
 write the script under `scratch/`, not `/tmp`). Compare circuits: loop `createGame` per id;
 elevation range = max−min of `trackProfile(n).y`, tightest radius = `1/max|k|`.
-Measured: monza 11 `turns` / 24 peaks / 6.0 m / minR 15 m; spa 20 / 42 / 102 m / 13 m.
+Illustrative only (2026-09-30; re-measure, never quote): monza 11 `turns` / 24 peaks / 6.0 m / minR 15 m; spa 20 / 42 / 102 m / 13 m.
 `1/max|k|` is the instantaneous peak (spa 13 m at frac 0.035); `trackInfo` corners' `radiusM` is averaged over the corner window (spa T1 30 m, tightest listed T20 29 m) — name which one "sharpest" means.
 Note `trackInfo().cornerCount` (monza 10, spa 15) can be lower than `info().turns` (11, 20): quote which hook you used.
 `tools/track/verify-track.cjs <id>` (VM) checks the build only; it prints no geometry stats.
+
+### Whole-lap recipe: steepest grade and worst terrain-over-road (any id)
+
+`slope` in `trackProfile` is the tangent's Y component (sin of the pitch), so
+grade % = `100·slope/√(1−slope²)`; `+` is uphill in the driving direction.
+```js
+// scratch/lap-grade.cjs — node scratch/lap-grade.cjs interlagos
+const {createGame}=require("../tools/lib/game-vm.cjs");
+(async()=>{ try { const g=await createGame({track:process.argv[2]||"spa"}); const a=g.apex;
+  const p=a.trackProfile(1000), L=a.info().total;
+  const top=p.map(q=>({frac:q.frac, m:Math.round(q.frac*L), pct:+(100*q.slope/Math.sqrt(1-q.slope*q.slope)).toFixed(1)}))
+    .sort((x,y)=>Math.abs(y.pct)-Math.abs(x.pct)).slice(0,5);
+  let worst={overRoad:-1/0};
+  for(let i=0;i<500;i++) for(const lat of [-1,0,1]){ const f=i/500, r=a.groundY(f, lat*p[Math.floor(f*1000)].hw);
+    if(r && r.overRoad!=null && r.overRoad>worst.overRoad) worst={frac:f, lat, overRoad:+r.overRoad.toFixed(3)}; }
+  process.stdout.write(JSON.stringify({steepest:top, worstOverRoad:worst})+"\n");
+  process.exit(0); } catch(e){ process.stderr.write(e.stack+"\n"); process.exit(1);} })();
+```
+The VM swallows a rejected promise silently (exit 0, no output), hence the
+try/catch; `overRoad` is null where no terrain is sampled. Verified on monza
+and interlagos (~10 s each). Report the frac AND metres, the sign (uphill/downhill), and that the grade is
+the built road (SRTM bake + bumps + `undulate`), not the real circuit's figure.
+Nearby corner: match the frac against `trackInfo({what:"corners"})`.
 
 ## Load on demand
 

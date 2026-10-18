@@ -84,13 +84,19 @@ const CarMaterials = (function () {
     const value = livery && livery[field];
     return value === "gloss" || Object.hasOwn(FINISH_SURFACE, value) ? value : livery && livery.finish || null;
   }
-  function applyFinish(out, finish, sections, livery) {
+  // `zones` (optional) are { name, from, to } spans drawn inside another section that belong to `name`'s
+  // finish (Car3D's pod panel and cover stripes, #2796). They are remapped first and never revisited.
+  function applyFinish(out, finish, sections, livery, zones) {
     if (sections && livery && [livery.coverFinish, livery.wingFinish, livery.haloFinish, livery.podFinish, livery.finFinish, livery.mirrorFinish].some((v) => v && v !== "inherit")) {
       const fields = { engineCover: "coverFinish", frontWing: "wingFinish", rearAssembly: "wingFinish", halo: "haloFinish",
         sidepods: "podFinish", sharkFin: "finFinish", mirrors: "mirrorFinish" };
-      for (const section of sections) {
+      const done = zones && zones.length ? new Uint8Array(out.mat.length) : null;
+      for (const section of done ? zones.concat(sections) : sections) {
         const choice = finishOf(livery, fields[section.name]), local = FINISH_SURFACE[choice] || SURFACES.paint;
-        for (let i = section.from; i < section.to; i++) if (out.mat[i] === SURFACES.paint) out.mat[i] = local;
+        for (let i = section.from; i < section.to; i++) {
+          if (out.mat[i] !== SURFACES.paint || (done && done[i])) continue;
+          out.mat[i] = local; if (done) done[i] = 1;
+        }
       }
       return;
     }

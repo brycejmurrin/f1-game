@@ -320,6 +320,7 @@ const FULL = [
   "js/ui/editor-workspace.js",
   "js/ui/settings-search.js",
   "js/ui/settings-tabs.js",
+  "js/ui/setting-deps.js",     // SettingDeps: declarative grey-out of settings another setting makes inert
   "js/ui/key-binds.js",
   "js/ui/settings-export.js",
   "js/physics/aero-zones.js",
@@ -333,6 +334,7 @@ const FULL = [
   "js/physics/drive-tune.js",  // DriveTune.create(): live PACE / steer / grip lets (game.js wires at eval)
   "js/race/lap-record.js",     // LapRecord.create(): time-trial record + sector bests (game.js wires at eval)
   "js/race/storm-flash.js",    // StormFlash.create(): in-frame lightning flash (after Storm; game.js wires at eval)
+  "js/ui/captions.js",         // Captions: spotter/announcer strip + speaker table (announce-banner calls radioWho)
   "js/race/announce-banner.js", // AnnounceBanner.create(): radio card queue (game.js wires at eval)
   "js/race/light-tune-edit.js", // LightTuneEdit.set(): one lighting-slider write
   "js/race/pace-math.js",      // PaceMath.create(deps): vTop/vStd/aStd + X-mode/ERS/gearHi/rpmFor (game.js wires)
@@ -379,6 +381,7 @@ const FULL = [
   "js/camera/drive-onboard.js",
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
+  "js/ui/cvd-palette.js",   // CvdPalette: semantic colours; AppearanceOpts.setCvdMode calls set()
   "js/ui/appearance-opts.js",
   "js/ui/a11y-opts.js",      // SETTINGS › ACCESSIBILITY (reduce motion row + focus + colourblind cues)
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
@@ -414,6 +417,9 @@ const FULL = [
   "js/ui/results-story.js",
   "js/ui/results-sheet.js",
   "js/race/quali-model.js",
+  "js/share/share-card-data.js",
+  "js/share/share-card-layout.js",
+  "js/share/share-card.js",
   "js/race/daily-challenge.js",
   "js/ui/appearance-studio.js",
   "js/ui/home-world.js",
@@ -659,6 +665,8 @@ const HARD_EDGES = [
   // frame cannot draw a default the player did not choose.
   ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
   ["js/core/store.js", "js/ui/driving-line-opts.js"],
+  ["js/core/store.js", "js/ui/cvd-palette.js"],       // reads apex26.cvdMode at eval
+  ["js/ui/cvd-palette.js", "js/ui/appearance-opts.js"], // setCvdMode / applyReadability call CvdPalette.set
   ["js/core/store.js", "js/ui/appearance-opts.js"],
   ["js/ui/setting-row.js", "js/ui/appearance-opts.js"],
   ["js/core/store.js", "js/ui/a11y-opts.js"],
@@ -816,6 +824,9 @@ const HARD_EDGES = [
   ["js/race/race-control.js", "js/physics/incident-sim.js"], // takeover line crossings share RaceControl semantics
   ["js/race/weather-arc.js", "js/game.js"],    // game.js calls WeatherArc.create(G, deps) at eval time
   // start-lights / marshal-panels → LAZY_RACE_SESSION (ensureRaceSession before startRace)
+  ["js/share/share-card-data.js", "js/race/daily-challenge.js"], // Daily shareCard builds the canonical model
+  ["js/share/share-card-layout.js", "js/share/share-card.js"],   // ShareCard.render lays out before painting
+  ["js/share/share-card.js", "js/race/daily-challenge.js"],      // Daily shareCard renders and delivers the PNG
   ["js/race/daily-challenge.js", "js/game.js"],   // game.js calls DailyChallenge.create(G) at eval time
   ["js/ui/title-menu.js", "js/game.js"],          // game.js calls TitleMenu.create(G) at eval time
   ["js/ui/title-flow.js", "js/game.js"],          // game.js calls TitleFlow.create(G) at eval time
@@ -986,6 +997,7 @@ const LAZY_RACE_SESSION = [
   "js/race/engineer.js",
   "js/race/radio-lines.js",
   "js/race/race-facts.js",
+  "js/race/event-journal.js",
   "js/race/spotter.js",
   "js/race/race-radio.js",
   "js/race/start-lights.js",

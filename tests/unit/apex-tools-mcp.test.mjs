@@ -60,6 +60,7 @@ test(".mcp.json registers apex-tools alongside the separate debugger server", ()
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
+    "apex-lsp",
     "apex-tools",
     "chrome-devtools",
     "js-debugger",
@@ -172,6 +173,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_frame_report",
     "apex_garage",
     "apex_graph_parity",
+    "apex_help",
     "apex_hud_mock",
     "apex_hud_shot",
     "apex_hud_survey",
@@ -1236,8 +1238,9 @@ test("graph-parity cleans partial archives and every load/build failure using sm
   }
 });
 
-test("parseOut takes the trailing JSON block, never a number from inside it", async () => {
-  const { parseOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+test("splitOut takes the trailing JSON block, never a number from inside it", async () => {
+  const { splitOut } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const parseOut = (stdout) => splitOut(stdout).out;
   // apex_shot: a text line, then pretty-printed JSON whose last value line is a bare number.
   const shot = 'wrote x.png (20.3 KB)\n{\n  "frame": {\n    "tgt": [\n      -285.6,\n      563.528\n    ]\n  }\n}';
   assert.deepEqual(parseOut(shot), { frame: { tgt: [-285.6, 563.528] } });
@@ -2224,6 +2227,17 @@ test("slimBody (#2672): doctor keeps failures + pass count, unit_test keeps coun
   assert.deepEqual(sel.out.shards, [{ name: "s1", specCount: 2 }]);
 });
 
+test("slimBody: eval scope hint, profile_query ENOENT hint, who_is_on_it drops stale and released claims", async () => {
+  const { slimBody } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  assert.match(slimBody("apex_eval", { ok: false, out: { err: "info is not defined" } }).fix, /a\.info\(\)/);
+  const browserThrow = slimBody("apex_eval", { ok: true, exit: 0, out: { err: "boom" } });
+  assert.equal(browserThrow.ok, false); assert.equal(browserThrow.fix, undefined);
+  assert.equal(slimBody("apex_eval", { ok: true, out: { v: 1 } }).ok, true);
+  assert.match(slimBody("apex_profile_query", { ok: false, stderr: "ENOENT: no such file" }).fix, /apex_job_start/);
+  const w = slimBody("apex_who_is_on_it", { out: { claims: [{ slug: "a" }, { slug: "b", stale: true }, { slug: "c", released: true }] } });
+  assert.deepEqual(w.out.claims, [{ slug: "a" }]); assert.equal(w.out.hiddenClaims, 2);
+});
+
 test("hudEstimateMs (#2673): tracks measured cost and scales with cells; the kill budget is not the estimate", async () => {
   const { hudEstimateMs } = await import("../../tools/mcp/apex-tools-mcp.mjs");
   const { expandMatrix } = await import("../../tools/lib/hud-survey-matrix.mjs");
@@ -2236,13 +2250,35 @@ test("hudEstimateMs (#2673): tracks measured cost and scales with cells; the kil
   assert.ok(all < 20 * 60000, "and far less than the old 18-minute claim for one cell");
 });
 
+test("tools/list stays compact and apex_help returns the full text it shortens", () => {
+  const out = rpc([
+    { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
+    { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_help", arguments: { tool: "apex_shot_survey" } } },
+    { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "apex_help", arguments: { tool: "apex_nope" } } },
+  ]);
+  const listed = out.find((m) => m.id === 1).result;
+  assert.ok(JSON.stringify(listed).length < 55000, `tools/list is ${JSON.stringify(listed).length} bytes`);
+  const help = listed.tools.find((t) => t.name === "apex_help");
+  assert.equal(help.annotations.readOnlyHint, true);
+  assert.ok(help.outputSchema && help.outputSchema.type === "object");
+  const short = listed.tools.find((t) => t.name === "apex_shot_survey");
+  const full = out.find((m) => m.id === 2).result.structuredContent;
+  assert.equal(full.ok, true);
+  assert.ok(full.description.length > short.description.length, "help carries the uncompacted description");
+  assert.match(short.description, /apex_help/);
+  assert.ok(Object.keys(full.inputSchema.properties.camera.properties).includes("fov"), "nested object bodies live in apex_help");
+  for (const t of listed.tools) for (const k of t.inputSchema.required || []) assert.ok(t.inputSchema.properties[k], `${t.name} keeps required ${k}`);
+  const miss = out.find((m) => m.id === 3).result;
+  assert.equal(miss.isError, true);
+});
+
 test("tool descriptions state the host ceiling and the per-call boot (#2673)", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "utf8");
   assert.match(src, /name: "apex_job_status"[\s\S]{0,400}~120 s/);
   assert.match(src, /name: "apex_agent"[\s\S]{0,300}COLD-BOOTS/);
 });
 
-test("server boots with no node_modules: its static import graph names only node: and relative modules", () => {
+test("servers boot with no node_modules: static import graphs (apex-tools, js-debugger) name only node: and relative modules", () => {
   // .mcp.json starts the server alongside SessionStart's npm install; a bare static import (sharp, 2026-10-18) crashed it to CONNECTION_CLOSED.
   const seen = new Set(), bare = [];
   const walk = (f) => {
@@ -2256,6 +2292,121 @@ test("server boots with no node_modules: its static import graph names only node
     }
   };
   walk(MCP);
+  walk(path.join(ROOT, "tools/mcp/js-debugger-mcp.mjs"));
   assert.ok(seen.size > 3, `walked ${seen.size} files`);
   assert.deepEqual(bare, [], "load npm packages with a lazy `await import()` at the call site");
+});
+
+test("track-session accepts the flags shot-survey passes (--output-root, --designs): apex_shot_survey died with 'unknown flag'", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(process.execPath, ["tools/shot/track-session.mjs", "--serve", "--track", "monza", "--output-root", "scratch/none", "--designs", "scratch/none.json"], { encoding: "utf8", timeout: 20000 });
+  assert.doesNotMatch(r.stderr, /unknown flag/);
+});
+
+// ── robustness (code-hunter 2026-10-18) ──────────────────────────────────
+test("serve exits through process.on('exit') on SIGTERM, so its child cleanup hooks run", { timeout: 15000 }, async () => {
+  // Node's default SIGTERM skips exit hooks: every detached runSpawn group, garage, job and track session outlived the server.
+  const dir = path.join(ROOT, "scratch", `apex-mcp-sig-${process.pid}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const marker = path.join(dir, "exit-hook"), preload = path.join(dir, "hook.cjs");
+  fs.writeFileSync(preload, `process.on("exit", (c) => require("fs").writeFileSync(${JSON.stringify(marker)}, String(c)));\n`);
+  try {
+    const child = spawn(process.execPath, ["-r", preload, MCP, "serve"], { cwd: ROOT, env: { ...process.env, APEX_MCP_MOCK: "1" }, stdio: ["pipe", "pipe", "ignore"] });
+    const exited = new Promise((r) => child.on("exit", (code, sig) => r({ code, sig })));
+    const replied = new Promise((r) => child.stdout.once("data", r));
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n");
+    await replied;   // the handlers are in place once serve answers
+    child.kill("SIGTERM");
+    const { code, sig } = await exited;
+    assert.equal(sig, null, "the server exits itself instead of dying on the signal");
+    assert.equal(code, 143);
+    assert.equal(fs.readFileSync(marker, "utf8"), "143", "process.on('exit') hooks ran");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+function extrasCtx(over = {}) {
+  const toolResult = (b) => ({ content: [{ type: "text", text: JSON.stringify(b) }] });
+  const released = { n: 0 };
+  return { released, ctx: { ROOT, toolResult, refuse: (error, message, fix) => toolResult({ ok: false, error, message, fix }),
+    acquireLock: () => null, releaseLock: () => { released.n++; }, occupancyRefuse: () => null, assertSafeOut: (p) => p,
+    knownCircuits: () => ["monza"], runSpawn: null, splitOut: (s) => ({ out: null, rest: s }), log: () => {}, mockMode: () => false, ...over } };
+}
+
+test("closeAll ends an open apex_track session and frees its lock; a stdin EPIPE does not crash the server", { timeout: 15000 }, async () => {
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  // A stand-in track-session child: ready line, one reply per request, exits on stdin EOF. No browser.
+  const FIX = `process.stdout.write('{"ready":true}\\n');let b="";process.stdin.on("data",(d)=>{b+=d;let i;while((i=b.indexOf("\\n"))>=0){const m=JSON.parse(b.slice(0,i));b=b.slice(i+1);process.stdout.write(JSON.stringify({id:m.id,ok:true})+"\\n");}});`;
+  let child;
+  const { ctx, released } = extrasCtx({ spawnChild: (_c, _a, opts) => (child = spawn(process.execPath, ["-e", FIX], opts)) });
+  const ex = createExtras(ctx);
+  const open = JSON.parse((await ex.handlers.apex_track({ op: "open", track: "monza" })).content[0].text);
+  assert.equal(open.ok, true, JSON.stringify(open));
+  assert.doesNotThrow(() => child.stdin.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" })));
+  const closing = ex.closeAll("stdio closed");
+  assert.equal(ex.sessionInfo(), null, "the session is gone at once");
+  const done = await closing;
+  assert.equal(done.closed, true);
+  assert.equal(released.n, 1, "the browser lock is released once the tree is gone");
+  assert.equal(await ex.closeAll("again"), null, "closeAll with nothing open is a no-op");
+});
+
+test("garage stdin EPIPE on a dying child is logged, not an unhandled 'error'", { timeout: 5000 }, async () => {
+  const { EventEmitter } = await import("node:events");
+  const { PassThrough } = await import("node:stream");
+  const { garageOpen, garageClose, releaseLock } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const psBefore = process.env.APEX_MCP_PS;
+  process.env.APEX_MCP_PS = "";
+  const child = new EventEmitter();
+  child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
+  child.pid = process.pid; child.kill = () => true;
+  try {
+    const r = await garageOpen({}, { spawnChild: () => { setImmediate(() => child.stdout.write('{"ready":true}\n')); return child; } });
+    assert.equal(JSON.parse(r.content[0].text).ok, true);
+    assert.doesNotThrow(() => child.stdin.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" })));
+  } finally {
+    garageClose("fixture teardown"); child.emit("exit", 0); releaseLock();
+    if (psBefore === undefined) delete process.env.APEX_MCP_PS; else process.env.APEX_MCP_PS = psBefore;
+  }
+});
+
+test("a running browser job on disk is occupancy even after its one-shot `call` owner died", async () => {
+  // jobStart via `call` records the CALL pid in the lock; it dies at once, the lock reads stale, and the job's browser runs on.
+  const { createExtras } = await import("../../tools/mcp/apex-extras.mjs");
+  const root = path.join(ROOT, "scratch", `apex-mcp-jobs-${process.pid}`);
+  const dir = path.join(root, "artifacts", "logs", "apex-jobs");
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    const ex = createExtras(extrasCtx({ ROOT: root }).ctx);
+    assert.equal(ex.runningBrowserJob(), null);
+    const manifest = (id, browser) => fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind: browser ? "hud_shot" : "verify_all",
+      state: "running", pid: process.pid, browser, started: Date.now(), log: `artifacts/logs/apex-jobs/${id}.log` }));
+    manifest("verify_all-x-1", false);
+    assert.equal(ex.runningBrowserJob(), null, "a node-only job is not browser occupancy");
+    manifest("hud_shot-x-2", true);
+    assert.deepEqual(ex.runningBrowserJob(), { id: "hud_shot-x-2", kind: "hud_shot", pid: process.pid });
+    fs.writeFileSync(path.join(dir, "hud_shot-x-2.exit"), "0");
+    assert.equal(ex.runningBrowserJob(), null, "the job's recorded exit frees it");
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  const src = fs.readFileSync(MCP, "utf8");
+  assert.match(src, /function occupancyRefuse\(\) \{[^}]*?lockInfo\(\)[\s\S]{0,800}?runningBrowserJob\(\)/, "occupancyRefuse consults the job list");
+});
+
+test("apex_locations with an unreadable designs file is bad_args, not internal_error", () => {
+  const r = callCli("apex_locations", { track: "monza", designs: "nope.json" });
+  const b = JSON.parse(r.stdout);
+  assert.equal(b.ok, false);
+  assert.equal(b.error, "bad_args");
+});
+
+test("chrome-devtools-mcp.sh run tolerates a missing Chromium instead of exiting under set -e", () => {
+  // SessionStart may still be installing Chromium when the MCP server starts; detect_chrome's exit 1 killed it for the session.
+  const sh = fs.readFileSync(path.join(ROOT, "tools/mcp/chrome-devtools-mcp.sh"), "utf8");
+  const fn = sh.match(/^wait_chrome\(\) \{[\s\S]*?^\}$/m);
+  assert.ok(fn, "wait_chrome()");
+  assert.match(sh, /run_mcp\(\) \{[\s\S]*?\n  local chrome\n  chrome="\$\(wait_chrome\)"/);   // the preflight lines sit between the brace and `local chrome`
+  const r = spawnSync("bash", ["-c", `set -euo pipefail\nfind_chrome() { return 1; }\n${fn[0]}\nc="$(wait_chrome)"\nargs=(--x \${c:+--executablePath "$c"})\necho "rc=$? c=[$c] n=\${#args[@]}"`],
+    { encoding: "utf8", env: { ...process.env, APEX_CHROME_WAIT_S: "0" }, timeout: 10000 });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /rc=0 c=\[\] n=1/);
+  assert.match(r.stderr, /starting without --executablePath/);
 });

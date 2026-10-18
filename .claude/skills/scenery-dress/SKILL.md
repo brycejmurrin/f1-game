@@ -65,5 +65,7 @@ accuracy / floating-tree survey → **survey-track** (Montreal already ships
 - `TrackGraph.instance` migration, `apex_graph_parity` / `BASE=` parity,
   `batches()` / `bakeOnly`, `__apex.trackGraph()` stats →
   [references/instancing.md](references/instancing.md).
+- Procedural scenery / wet-surface playbook →
+  [references/graphics-scenery-playbook.md](references/graphics-scenery-playbook.md).
 
 `grandstand` / `grandstandEx` take a lap fraction `(s,side,...)`; range helpers take fraction endpoints; raw primitives take world coordinates.

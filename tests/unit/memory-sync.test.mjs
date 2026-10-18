@@ -117,6 +117,32 @@ test("a deletion travels only from the side that made it", () => {
   } finally { r.done(); }
 });
 
+// #2901 review: when one side edits a topic and the other deletes it, the
+// three-way sync used to treat it as a both-changed conflict and write the
+// surviving side back onto the deleted side — resurrecting the file.
+test("edit vs delete on a topic file honours the delete (never resurrects)", () => {
+  const r = rig();
+  try {
+    r.put(r.repo, "a.md", topic("a", "v1"));
+    r.put(r.repo, "b.md", topic("b", "v1"));
+    r.run("restore");
+    // Live deletes a; repo edits a (other session).
+    fs.rmSync(path.join(r.live, "a.md"));
+    r.put(r.repo, "a.md", topic("a", "edited elsewhere"));
+    const outA = r.run("save");
+    assert.equal(r.get(r.live, "a.md"), null, "live delete must stay deleted");
+    assert.equal(r.get(r.repo, "a.md"), null, "repo must not keep the edited copy over a delete");
+    assert.match(outA, /CONFLICT|delete/i, "the clash is reported, not silent");
+    // Live edits b; repo deletes b.
+    r.put(r.live, "b.md", topic("b", "edited here"));
+    fs.rmSync(path.join(r.repo, "b.md"));
+    const outB = r.run("save");
+    assert.equal(r.get(r.repo, "b.md"), null, "repo delete must stay deleted");
+    assert.equal(r.get(r.live, "b.md"), null, "live must not resurrect the edited copy");
+    assert.match(outB, /CONFLICT|delete/i);
+  } finally { r.done(); }
+});
+
 test("a branch checkout that lacks a memory is not a deletion; a committed deletion still is (#2128)", () => {
   const r = rig();
   const main = path.dirname(path.dirname(r.repo));
@@ -149,6 +175,25 @@ test("a branch checkout that lacks a memory is not a deletion; a committed delet
     git("checkout", "-q", baseBranch);            // HEAD's history deleted c
     r.run("save");
     assert.equal(r.get(r.live, "c.md"), null, "a deletion in HEAD's history reaches the session");
+  } finally { r.done(); }
+});
+
+test("an index line removed by this branch's own commit stays removed (2026-10-18, #2873)", () => {
+  const r = rig();
+  const main = path.dirname(path.dirname(r.repo));
+  const git = (...a) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: main, encoding: "utf8" });
+  try {
+    r.put(r.repo, "MEMORY.md", "# idx\n- [A](a.md)\n- [A](a.md) stale dup\n");
+    r.put(r.repo, "a.md", topic("a", "alpha"));
+    git("add", ".claude"); git("commit", "-qm", "base");
+    r.run("restore");
+    // the session dedupes the TRACKED index and commits it: HEAD moves, the live copy is untouched
+    r.put(r.repo, "MEMORY.md", "# idx\n- [A](a.md)\n");
+    r.run("unmark");                             // as bash-guard does before `git add`
+    git("add", ".claude"); git("commit", "-qm", "dedupe index");
+    r.run("save");
+    assert.equal(r.get(r.repo, "MEMORY.md"), "# idx\n- [A](a.md)\n", "the committed removal is not re-added to the repo");
+    assert.equal(r.get(r.live, "MEMORY.md"), "# idx\n- [A](a.md)\n", "and reaches the live index");
   } finally { r.done(); }
 });
 

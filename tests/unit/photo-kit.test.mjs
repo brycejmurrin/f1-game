@@ -92,3 +92,77 @@ test("named bookmarks remain independently reachable after deleting a selected o
   PK.saveMark(store, "spa", { name: "Thirteenth", eye: [99, 2, 3], target: [4, 5, 6] });
   assert.equal(PK.marksFor(store, "spa")[0].name, "Angle 1");
 });
+
+test("photo looks expose the six named free-camera presets", () => {
+  const PK = load();
+  assert.deepEqual(
+    Array.from(PK.LOOK_PRESETS, (look) => look.name),
+    ["Clean TV", "Film", "Noir", "Golden", "Neon Night", "70s"],
+  );
+  assert.ok(PK.LOOK_PRESETS.every((look) => Object.isFrozen(look) && Object.isFrozen(look.values)));
+});
+
+test("applying looks then ending the session restores the exact lighting snapshot", () => {
+  const PK = load();
+  const live = {
+    exposureMul: 1.137, contrast: 1.246, saturation: 0.913,
+    gammaR: 1.021, gammaG: 0.987, gammaB: 1.044,
+    vignette: 0.777, bloomMul: 1.31, fogTint: -0.42,
+  };
+  const before = structuredClone(live);
+  const writes = [];
+  const session = PK.createLookSession(
+    (id) => live[id],
+    (id, value) => { writes.push([id, value]); live[id] = value; return true; },
+  );
+
+  assert.equal(session.apply("Noir"), true);
+  assert.equal(live.saturation, 0);
+  assert.notDeepEqual(live, before);
+  assert.equal(session.apply("Golden"), true, "a second look reuses the original snapshot");
+  assert.equal(session.end(), true);
+  assert.deepEqual(live, before);
+  assert.equal(session.end(), false, "exit is idempotent");
+  assert.ok(writes.length > Object.keys(before).length, "both presets and restore wrote through the live setter");
+});
+
+test("look sessions never persist and an unknown preset changes nothing", () => {
+  const PK = load();
+  const live = Object.fromEntries(PK.LOOK_KEYS.map((id, i) => [id, i + 0.5]));
+  const before = structuredClone(live);
+  const session = PK.createLookSession(
+    (id) => live[id],
+    (id, value) => { live[id] = value; return true; },
+  );
+  assert.equal(session.apply("Missing"), false);
+  assert.deepEqual(live, before);
+  assert.equal(session.active(), null);
+});
+
+test("mountLookControls lists every preset in the free-camera panel", () => {
+  const PK = load(), applied = [];
+  const node = (tag) => ({
+    tag, children: [], attrs: {}, listeners: {},
+    appendChild(child) { this.children.push(child); },
+    setAttribute(k, v) { this.attrs[k] = v; },
+    addEventListener(k, fn) { this.listeners[k] = fn; },
+  });
+  const parent = node("section");
+  const group = PK.mountLookControls(parent, { apply: (name) => { applied.push(name); return true; } }, {
+    createElement: node,
+  });
+  assert.equal(group.id, "fc-looks");
+  assert.equal(group.children.length, PK.LOOK_PRESETS.length);
+  assert.deepEqual(group.children.map((button) => button.textContent), Array.from(PK.LOOK_PRESETS, (look) => look.name.toUpperCase()));
+  group.children[2].listeners.click();
+  assert.deepEqual(applied, ["Noir"]);
+  assert.equal(group.children[2].attrs["aria-pressed"], "true");
+});
+
+test("Photo Studio binds looks to free-camera lifetime so exit restores the snapshot", () => {
+  const studio = fs.readFileSync(path.join(ROOT, "js/ui/photo-studio.js"), "utf8");
+  assert.match(studio, /PhotoKit\.createLookSession/);
+  assert.match(studio, /PhotoKit\.mountLookControls/);
+  assert.match(studio, /MutationObserver/);
+  assert.match(studio, /lookSession\.end\(\)/);
+});

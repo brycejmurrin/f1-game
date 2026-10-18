@@ -93,8 +93,12 @@ test("frontUtil is 1.0 where the front's lateral force peaks (the front curve pe
   // sin(frontUtil·pi/2) below util 1 and sit at ~1 (the maximum) at util 1.
   const b = bench(g, 0);
   const rows = [];
-  // steer is shaped (nonlinear), so the approach to the peak is dense in 0.40-0.60
-  for (const st of [0.3, 0.4, 0.42, 0.44, 0.46, 0.48, 0.5, 0.52, 0.54, 0.56, 0.58, 0.6, 0.8, 1.0]) {
+  // steer is shaped (nonlinear): dense in 0.40-0.60 for the approach, and in
+  // 0.76-0.86 where frontUtil crosses 1 (~0.81 at 40 m/s), so the argmax row
+  // sits within a grid step of the peak instead of one sample short of it.
+  const grid = [0.3, 0.4, 0.42, 0.44, 0.46, 0.48, 0.5, 0.52, 0.54, 0.56, 0.58, 0.6];
+  for (let i = 0; i <= 10; i++) grid.push(0.76 + i * 0.01);
+  for (const st of [...grid, 1.0]) {
     b.reset(40);
     for (let i = 0; i < 20; i++) b.step({ steer: st, throttle: b.P.speed < 39.8 });
     const s = b.state();
@@ -106,7 +110,11 @@ test("frontUtil is 1.0 where the front's lateral force peaks (the front curve pe
   const peak = rows.reduce((a, r) => (r.f > a.f ? r : a));
   assert.ok(peak.f > 0.99, `the sweep reaches the force peak (${peak.f.toFixed(3)})`);
   assert.ok(peak.u >= 0.98 - 1e-9, `the force peak (${peak.f.toFixed(4)} of muF) sits at frontUtil ~1 (u=${peak.u.toFixed(3)}; pre-fix it read 0.78 there)`);
-  assert.ok(rows.every((r) => r.f < 0.99 || r.u >= 0.98), `no row hits the force peak while frontUtil still reads below 0.98: ${JSON.stringify(rows)}`);
+  // The inverse of the curve check, same 0.02 tolerance: below util 1 a force
+  // ratio f is only reached at u = asin(f)·2/pi, so no row may reach it early
+  // (pre-fix: f ~1 at u 0.78). A flat "f >= 0.99 needs u >= 0.98" cutoff
+  // rejected on-curve rows, since sin(u·pi/2) >= 0.99 from u 0.91.
+  for (const r of rows) assert.ok(r.u >= Math.asin(Math.min(r.f, 1)) * 2 / Math.PI - 0.02, `|Fy|/muF ${r.f.toFixed(4)} reached early, at frontUtil ${r.u.toFixed(4)}: ${JSON.stringify(rows)}`);
 });
 
 test("lifting off near the limit rotates the car (lift-off oversteer)", () => {

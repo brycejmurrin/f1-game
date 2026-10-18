@@ -305,6 +305,7 @@ const TrackBuildClient = (function () {
       if (typeof PitSigns !== "undefined") PitSigns.upload(gfx, track);
       track.buildProfile.push({ n: "worker", k: "off", ms: +msg.ms.toFixed(2) });
       Log.info("track", "build worker: replayed " + def.id + " (" + recs.length + " uploads; " + Math.round(msg.ms) + " ms off-thread)");
+      if (typeof Tracks !== "undefined" && Tracks.dropRibbonCpuIfReady) Tracks.dropRibbonCpuIfReady(track);
       checkLive();
       return track;
     } catch (e) {
