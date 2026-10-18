@@ -35,12 +35,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const ARTIFACTS = path.join(ROOT, "artifacts");
-export const NODE_DIR = path.join(ARTIFACTS, "coverage-node");
-export const REPORT_DIR = path.join(ARTIFACTS, "coverage-report");
+const ARTIFACTS = path.join(ROOT, "artifacts");
+const NODE_DIR = path.join(ARTIFACTS, "coverage-node");
+const REPORT_DIR = path.join(ARTIFACTS, "coverage-report");
 
 /** Directories a default merge reads: coverage-<port>/ (browser) + coverage-node/. */
-export function defaultInputDirs() {
+function defaultInputDirs() {
   if (!fs.existsSync(ARTIFACTS)) return [];
   return fs.readdirSync(ARTIFACTS)
     .filter((n) => /^coverage-(\d+|node)$/.test(n))

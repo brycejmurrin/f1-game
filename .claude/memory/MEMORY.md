@@ -5,7 +5,7 @@ Claude Code auto memory for this repo, synced by `.claude/hooks/memory-sync.sh`
 topic file. User preferences and corrections only — a measured lesson belongs in
 `docs/notes/`, a rule in a hook or test. An entry that contradicts the current
 code or AGENTS.md is stale: fix or delete it, do not follow it.
-- [PR auto-merge](pr-auto-merge.md) — never arm or merge on my own; Merge Desk arms MERGE-commit only (squash retired 2026-10-13); `MERGE-HOLD:` is the only veto line, never paste "do not merge"
+- [PR auto-merge](pr-auto-merge.md) — never arm or merge on my own (orchestrator exception: [merge level 3](merge-level-3.md)); Merge Desk arms MERGE-commit only (squash retired 2026-10-13); `MERGE-HOLD:` is the only veto line, never paste "do not merge"
 - [Small steps for API analysis](small-steps-for-api-analysis.md) — prefer small incremental queries over bulk fetch scripts
 - [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — default never merge (mark ready at tip-green when asked to expedite); only on Bryce's explicit in-session "merge it asap" / "push and merge asap override": MERGE-commit via MCP, never squash, 1 h gate skipped and said so
 - [One subagent per skill](one-subagent-per-skill.md) — skill reviews: one Sonnet subagent per skill, never grouped
@@ -31,5 +31,5 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Merge level 3](merge-level-3.md) — since 2026-10-17 04:19Z the orchestrator arms/merges fleet PRs when ready + full-tier green + no conflict + no MERGE-HOLD; never Bryce's Cursor PRs
 - [Rejected design: hold immediately](rejected-design-hold-immediately.md) — on an in-session rejection or "wait", MERGE-HOLD the PR and tell the orchestrator first; "wait" pauses me, not the fleet (#2611 merged under a 2 h-late hold)
 - [Lanes keep working](lanes-keep-working.md) — 2026-10-17: lanes pull deploy and take the next item in their area after a dry round; no FINAL unless the area is empty
-- [Fixers may screenshot](fixers-may-screenshot.md) — stuck UI fixer: allow screenshots (no loops), 15-min cap then push with a named known-red, or the orchestrator finishes it
 - [Preview must look different](preview-must-look-different.md) — design sheets must differ in the picture (pixel-diff, close-up framing), not just in mm metrics; Bryce: "they all look the same"
+- [Synced plugins not in child sessions](synced-plugins-not-in-child-sessions.md) — plugin skills load in the parent session and its subagents, not in create_session siblings; run plugin invocations here

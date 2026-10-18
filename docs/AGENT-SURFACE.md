@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Thirty-four `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Thirty-five `apex_*` tools (34 wraps + `apex_help {tool}`, the full text `tools/list` shortens) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -253,7 +253,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Thirty-four tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Thirty-five tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -288,7 +288,8 @@ and viewports) in one read, sourced from the tools' own schemas so it cannot dri
 31 → 32 on 2026-10-16 for `apex_profile`, the same job as a direct browser-kind tool (`profile` joined the settings matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`); it returns a jobId and holds the browser lock until the job exits.
 32 → 33 on 2026-10-16 for `apex_locations`: authored turn and sector targets
 on all 52 circuits, plus curated named scenery with source-located fractions.
-33 → 34 on 2026-10-18 for `apex_viewer` (`viewer/build-viewer.mjs`): one
+33 → 34 on 2026-10-18 for `apex_help`; `tools/list` now publishes a compact form (71.5 → ~51 KB).
+34 → 35 on 2026-10-18 for `apex_viewer` (`viewer/build-viewer.mjs`): one
 self-contained three.js page (a live car customiser running the game's own
 `Car3D` — every team, livery, finish and garage part — and circuits), written to
 `artifacts/viewer/` with no browser, for publishing as an Artifact where a host
@@ -301,6 +302,7 @@ CLI flag rather than an argument of this tree-kind tool.
 |---|---|---|---|
 | `apex_status` | built-in | tree | check-changes |
 | `apex_catalog` | built-in | tree | check-changes |
+| `apex_help` | built-in | tree | check-changes |
 | `apex_locations` | built-in | tree | survey-track |
 | `apex_doctor` | `check/doctor.mjs` | tree | check-changes |
 | `apex_pick_tests` | `ci/pick-tests.mjs` | tree | check-changes |
