@@ -1847,6 +1847,7 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
   const [cmd, ...args] = argv;
   return new Promise((resolve) => {
     let stdout = "", stderr = "", spawnErr = null, stopped = null, settled = false;
+    let stdoutBytes = 0, stderrBytes = 0, stdoutTruncated = false, stderrTruncated = false;
     let child;
     try {
       child = spawn(cmd, args, { cwd: ROOT, env: { ...process.env, ...env }, detached: true });
@@ -1873,7 +1874,7 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
       // its parse doubled every result (apex_who_is_on_it reached 60 KB).
       const { out, rest } = splitOut(stdout);
       const body = {
-        ok: exit === 0,
+        ok: exit === 0 && !stdoutTruncated && !stderrTruncated,
         exit,
         argv,
         env: Object.keys(env).length ? env : undefined,
@@ -1894,6 +1895,12 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
           ? `stopped after ${Math.round(timeoutMs / 1000)} s (process group killed)`
           : "the client cancelled the call; the process group was killed";
         body.fix = stopped === "timeout" ? "Check apex_status for load, then retry." : "Retry when ready.";
+      } else if (stdoutTruncated || stderrTruncated) {
+        body.ok = false;
+        body.error = "output_truncated";
+        body.message = `child output exceeded the ${cap} byte per-stream limit`;
+        body.fix = "Read the CLI's artifact output, reduce its result, or add bounded pagination; a truncated verdict is never success.";
+        body.truncated = { stdout: stdoutTruncated, stderr: stderrTruncated, stdoutBytes, stderrBytes, capBytes: cap };
       } else if (allowExit && allowExit.has(exit)) {
         body.ok = true;
       }
@@ -1913,8 +1920,26 @@ export function runSpawn(argv, { timeoutMs = 90000, allowExit = null, env = {}, 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     const cap = 8 * 1024 * 1024;
-    child.stdout.on("data", (d) => { if (stdout.length < cap) stdout += d; });
-    child.stderr.on("data", (d) => { if (stderr.length < cap) stderr += d; });
+    const append = (which, d) => {
+      const bytes = Buffer.byteLength(d);
+      if (which === "stdout") stdoutBytes += bytes; else stderrBytes += bytes;
+      const text = which === "stdout" ? stdout : stderr;
+      const used = Buffer.byteLength(text), left = Math.max(0, cap - used);
+      let piece = d;
+      if (bytes > left) {
+        let lo = 0, hi = d.length;
+        while (lo < hi) {
+          const mid = Math.ceil((lo + hi) / 2);
+          if (Buffer.byteLength(d.slice(0, mid)) <= left) lo = mid; else hi = mid - 1;
+        }
+        if (lo && /[\uD800-\uDBFF]/.test(d[lo - 1])) lo--;
+        piece = d.slice(0, lo);
+        if (which === "stdout") stdoutTruncated = true; else stderrTruncated = true;
+      }
+      if (which === "stdout") stdout += piece; else stderr += piece;
+    };
+    child.stdout.on("data", (d) => append("stdout", d));
+    child.stderr.on("data", (d) => append("stderr", d));
     child.on("error", (e) => { spawnErr = e; finish(null, null); });
     child.on("close", finish);
   });
