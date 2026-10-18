@@ -18,6 +18,9 @@ const SRC = read("js/ui/setting-deps.js").replace(/^const SettingDeps\b/m, "var 
 const SHELL = read("index.html");
 
 // The parent a rule reads, as data: { id, want, off } — the values that make it live and inert.
+const parentsOf = (rule) => (rule.parent && !rule.values && !rule.except
+  ? [].concat(rule.parent).map((id) => ({ id, want: "on", off: "off" }))
+  : [parentOf(rule)].filter(Boolean));
 const parentOf = (rule) => {
   if (!rule.parent) return null;
   if (rule.values) return { id: rule.parent, want: rule.values[0], off: "__not-" + rule.values[0] };
@@ -28,6 +31,9 @@ const parentOf = (rule) => {
 const WHEN = {
   "line-off": (h, on) => { h.mode.line = on ? "full" : "off"; },
   "intro-motion": (h, on) => { h.mode.motion = on ? "on" : "reduce"; },
+  "vignette-motion": (h, on) => { h.mode.motion = on ? "on" : "reduce"; },
+  "touch-dock": (h, on) => { h.mode.touch = on; },
+  "panel-contrast": (h, on) => { h.d.documentElement.setAttribute("data-ui-contrast", on ? "normal" : "high"); },
 };
 
 function boot() {
@@ -35,10 +41,11 @@ function boot() {
   const d = dom.document;
   d.getElementById = (id) => d.querySelector("#" + id);
   const el = (tag, id, parent = dom.body) => { const n = dom.makeElement(tag, id); parent.appendChild(n); return n; };
-  const mode = { line: "full", motion: "on" };
+  const mode = { line: "full", motion: "on", touch: true };
   const ctx = vm.createContext({
     document: d, setTimeout, Log: { info() {}, warn() {} },
     DrivingLine: { mode: () => mode.line }, TitleFx: { mode: () => mode.motion },
+    Input: { touchControlsNeeded: () => mode.touch },
   });
   vm.runInContext(SRC, ctx);
   return { dom, d, el, ctx, mode, Deps: ctx.SettingDeps };
@@ -100,9 +107,9 @@ test("every rule target and parent id exists in the shell", () => {
   const h = boot();
   for (const rule of h.Deps.RULES) {
     for (const id of rule.runtime ? [] : rule.ids) assert.match(SHELL, new RegExp(`id="${id}"`), `${rule.key}: target #${id} missing from index.html`);
-    const p = parentOf(rule);
-    if (p) assert.match(SHELL, new RegExp(`id="${p.id}"`), `${rule.key}: parent #${p.id} missing`);
-    else assert.equal(typeof WHEN[rule.key], "function", `${rule.key}: a when() rule needs a WHEN entry in this test`);
+    const ps = parentsOf(rule);
+    for (const p of ps) if (!/^pm-(metrics|xr-mode)$/.test(p.id)) assert.match(SHELL, new RegExp(`id="${p.id}"`), `${rule.key}: parent #${p.id} missing`);
+    if (!ps.length) assert.equal(typeof WHEN[rule.key], "function", `${rule.key}: a when() rule needs a WHEN entry in this test`);
     assert.ok(rule.reason && rule.reason.length <= 28, `${rule.key}: reason must fit a one-line label (≤ 28 chars)`);
   }
 });
@@ -112,7 +119,7 @@ test("each parent OFF greys every dependent with a described reason; ON restores
     const h = boot();
     const live = rule.ids.flatMap((id) => buildTarget(h, id));
     const before = live.map((c) => c.value);
-    const parents = [parentOf(rule)].filter(Boolean);
+    const parents = parentsOf(rule);
     for (const p of parents) setParent(h, p, false);
     if (WHEN[rule.key]) WHEN[rule.key](h, false);
     h.Deps.refresh();
@@ -150,4 +157,33 @@ test("a parent missing from the DOM greys nothing (lazy panels)", () => {
   const [input] = buildTarget(h, "pm-tiltdeg");
   h.Deps.refresh();
   assert.equal(input.disabled, false);
+});
+
+test("two rules on one control: lifting one keeps the other's grey (PANEL OPACITY: HUD OFF + HIGH CONTRAST)", () => {
+  const h = boot();
+  const [input] = buildTarget(h, "pm-panelopacity");
+  setParent(h, { id: "pm-hidehud", want: "on", off: "off" }, false);
+  h.d.documentElement.setAttribute("data-ui-contrast", "high");
+  h.Deps.refresh();
+  assert.equal(input.disabled, true);
+  setParent(h, { id: "pm-hidehud", want: "on", off: "off" }, true); // HUD back on; contrast still high
+  h.Deps.refresh();
+  assert.equal(input.disabled, true, "HUD ON re-enabled a control HIGH CONTRAST still overrides");
+  const reason = h.d.getElementById(input.getAttribute("aria-describedby"));
+  assert.equal(reason && reason.textContent, "Solid under HIGH CONTRAST");
+  h.d.documentElement.setAttribute("data-ui-contrast", "normal");
+  h.Deps.refresh();
+  assert.equal(input.disabled, false);
+});
+
+test("a list of parents greys when ANY is off (ENGINE TONE: SOUND row and master button)", () => {
+  const h = boot();
+  const [a] = buildTarget(h, "as-engine-details");
+  setParent(h, { id: "as-sound", want: "on", off: "off" }, true);
+  setParent(h, { id: "soundbtn", want: "on", off: "off" }, false);
+  h.Deps.refresh();
+  assert.equal(a.disabled, true, "master sound off must grey the engine fold");
+  setParent(h, { id: "soundbtn", want: "on", off: "off" }, true);
+  h.Deps.refresh();
+  assert.equal(a.disabled, false);
 });

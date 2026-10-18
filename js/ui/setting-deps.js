@@ -52,7 +52,8 @@ const SettingDeps = (function () {
   /* A rule: { key, ids: [control or container id…], parent, values? | except?,
      reason, runtime? }. With `values` the rule is live while the parent's value
      is one of them, with `except` while it is none of them; with neither, while
-     the parent is ON (aria-pressed, a checkbox, or any value but "off"). A rule
+     the parent is ON (aria-pressed, a checkbox, or any value but "off"); a
+     list of parents must ALL be on. A rule
      whose parent is module state, not a control, gives `when(S)` instead.
      `runtime` marks targets a module builds (not in index.html). Every predicate answers true (live), false (grey) or
      null (parent unknown: leave the control alone). `reason` stays short: it
@@ -60,7 +61,10 @@ const SettingDeps = (function () {
   const layer = (slider, toggle, name) => ({ key: "layer-" + toggle, ids: [slider], parent: toggle, reason: name + " layer is off" });
   const RULES = Object.freeze([
     // A container rule first: its re-enable runs before a narrower rule re-greys a control inside it.
-    { key: "sound-engine", ids: ["as-engine-details"], parent: "as-sound", reason: "Applies when SOUND is on" },
+    // SOUND EFFECTS row AND the master speaker button (engine.js sfxOk).
+    { key: "sound-engine", ids: ["as-engine-details"], parent: ["as-sound", "soundbtn"], reason: "Applies when SOUND is on" },
+    // Radio voices play through the master bus (radio-voice.js).
+    { key: "sound-radio", ids: ["as-spot", "as-focus", "as-rpack", "as-rpreset"], parent: "soundbtn", reason: "SOUND is muted" },
     { key: "steer-tilt", ids: ["pm-tiltsimple", "pm-tiltdeg", "pm-smooth", "pm-tiltcurve"],
       parent: "pm-steer", values: ["tilt"], reason: "TILT steering only" },
     { key: "steer-touch", ids: ["pm-touchrange", "pm-dragsmooth", "pm-touchcurve"],
@@ -73,12 +77,23 @@ const SettingDeps = (function () {
     { key: "cue-line", ids: ["pm-linebrakecue"], parent: "pm-brakecue", values: ["1"], reason: "PREDICTIVE CUE is on" },
     { key: "cue-condition", ids: ["pm-condition-cues"], runtime: true,
       parent: "pm-brakecue", except: ["1"], reason: "PREDICTIVE CUE is OFF" },
+    // Button size, opacity and handedness style the on-screen touch dock only.
+    { key: "touch-dock", ids: ["pm-btnscale", "pm-btnopacity", "pm-mirror"], reason: "Touch controls only",
+      when: () => (typeof Input !== "undefined" && Input.touchControlsNeeded ? !!Input.touchControlsNeeded() : null) },
     { key: "hud-off", ids: ["pm-hudprofile", "pm-hudmetrics", "pm-hudmap", "pm-hudgaps", "pm-hudmirror", "pm-panelopacity"],
       parent: "pm-hidehud", values: ["on"], reason: "HUD is OFF" },
     // SGSR reconstructs a below-full buffer; at HIGH there is nothing to upscale.
     { key: "upscale-full", ids: ["pm-upscale"], parent: "pm-res", except: ["high"], reason: "Needs RESOLUTION below HIGH" },
     { key: "titleart-off", ids: ["pm-tl-art-size", "pm-tl-art-x", "pm-tl-art-y"], runtime: true,
       parent: "pm-titleart", except: ["off"], reason: "TITLE ART is OFF" },
+    // HIGH CONTRAST keeps every plate solid (tokens.css --hud-panel-a-eff).
+    { key: "panel-contrast", ids: ["pm-panelopacity"], reason: "Solid under HIGH CONTRAST",
+      when: () => (doc() ? doc().documentElement.getAttribute("data-ui-contrast") !== "high" : null) },
+    { key: "metrics-off", ids: ["pm-metrics-page", "pm-metrics-pos", "pm-metrics-size"], runtime: true,
+      parent: "pm-metrics", reason: "OVERLAY is OFF" },
+    { key: "xr-off", ids: ["pm-xr-backend", "pm-xr-input"], runtime: true, parent: "pm-xr-mode", reason: "VR MODE is OFF" },
+    { key: "vignette-motion", ids: ["pm-speedvig"], runtime: true, reason: "Off under REDUCE MOTION",
+      when: () => (typeof TitleFx !== "undefined" && TitleFx.mode ? TitleFx.mode() !== "reduce" : null) },
     // The intro never plays under REDUCE MOTION (title-fx.js); the effective mode folds in the OS setting.
     { key: "intro-motion", ids: ["pm-titleintro", "pm-replay-intro"], reason: "Off under REDUCE MOTION",
       when: () => (typeof TitleFx !== "undefined" && TitleFx.mode ? TitleFx.mode() !== "reduce" : null) },
@@ -157,8 +172,10 @@ const SettingDeps = (function () {
     if (!el) return;
     const row = rowOf(el);
     const mine = row.getAttribute("data-dep-off");
+    // One rule owns a greyed row at a time; only the owner lifts it, and a later
+    // rule in the same pass greys it again if it should still be inert.
+    if (mine && mine !== rule.key) return;
     if (!off && !mine) return;
-    if (off && mine && mine !== rule.key) return; // another rule already greys it
     const ctrls = controlsOf(el);
     const rid = id + "-dep";
     if (off) {
@@ -194,7 +211,7 @@ const SettingDeps = (function () {
       const v = rule.when ? rule.when(S)
         : rule.values ? S.is(rule.parent, ...rule.values)
         : rule.except ? S.is(rule.parent, ...rule.except) === null ? null : !S.is(rule.parent, ...rule.except)
-        : S.on(rule.parent);
+        : [].concat(rule.parent).map(S.on).reduce((a, v) => (a === false || v === false ? false : a === null ? v : a), null);
       return v === null || v === undefined ? null : !!v;
     }
     catch (e) { Log.warn("game", "SettingDeps rule " + rule.key + " failed: " + (e && e.message)); return null; }
