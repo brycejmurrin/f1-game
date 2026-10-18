@@ -82,7 +82,6 @@ const GRID_K_BAR = 0.004;
 // `gridK` caps the grid span, `lineK` (only where needed) the ±40 m max.
 const GRID_CURVE_ALLOW = {
   magny_cours: { gridK: 0.0627, why: "slots 5-14 sit in the Lycee chicane (T16/T17, 71-97 m behind the line, R≈19 m) and slots 17-23 run into T15 (203 m behind)" },
-  jeddah: { gridK: 0.0326, lineK: 0.0326, why: "startFrac 0.9625 is documented known-wrong (docs/tracks/START-LINES.md, no usable source): pole sits 15 m past the T27 apex, slots 0-9 on that bend, R≈31 m at pole" },
   silverstone: { gridK: 0.0248, why: "slots 10-17 sit in Club (T18, 116 m behind the line; R≈40 m at slot 12) and slots 20-23 reach back toward T17 (288 m behind)" },
   vegas: { gridK: 0.0137, why: "slots 4-11 sit on T17 (63 m behind the line), R≈73 m" },
   mexico: { gridK: 0.0083, why: "slots 22-23 only, past the default 22-car field: the tail reaches T17's exit (216 m behind the line)" },

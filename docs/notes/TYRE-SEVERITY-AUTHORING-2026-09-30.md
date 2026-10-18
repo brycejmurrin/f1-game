@@ -1,6 +1,6 @@
 # Tyre severity authoring — 2026-09-30
 
-Companion to the strategy/career-depth workstream (slice A) and
+Companion to the strategy/career-depth workstream (slice A, #1562) and
 `docs/research/TYRE-STRATEGY-DESIGN.md` §5.5.
 
 ## Method
@@ -16,6 +16,10 @@ Wear-OFF discipline is unchanged: `TyreModel` `LEVELS.off === 0` returns identit
 grip/traction; characterization fixtures pin OFF. Authoring severity does not
 alter that path.
 
+Fleet mean of all **52** authored values after slice A (2026-10-18): **≈ 1.04**
+(slightly above the 1.0 neutral default — expected while the seven-anchor sample
+skews high).
+
 ## Anchors (unchanged)
 
 | id | severity | source rate |
@@ -30,11 +34,11 @@ alter that path.
 
 Source: [F1 Chronicle 2026 tyre degradation](https://f1chronicle.com/2026-f1-tyre-degradation-data/).
 
-## A1 — calendar / sourced (this PR)
+## A1 — calendar / sourced (prior PR)
 
 | id | severity | evidence |
 |---|---|---|
-| catalunya | 2.00 | Softs **0.247 s/lap** vs era soft avg 0.113; heaviest 2026; “roughly double the next”; clamped ([half-season review](https://f1chronicle.com/f1-just-published-its-half-year-numbers-here-are-the-ones-it-didnt/)) |
+| catalunya | 2.00 | Softs **0.247 s/lap** vs era soft avg 0.113; heaviest 2026; clamped ([half-season review](https://f1chronicle.com/f1-just-published-its-half-year-numbers-here-are-the-ones-it-didnt/)) |
 | montreal | 0.40 | Evolution-dominated; measured slope ≈ flat / invisible deg (Chronicle) — model floor |
 | hungaroring | 0.77 | Softs **0.038 s/lap** clean stint (Chronicle) ÷ 0.0493 |
 | bahrain | 1.55 | Isola: Sakhir “most abrasive of the whole championship” ([GPblog / Pirelli](https://www.gpblog.com/en/news/tyre-degradation-analysis-from-bahrain-2023.html)); banded between Miami 1.22 and Austria 1.97 |
@@ -43,13 +47,51 @@ Source: [F1 Chronicle 2026 tyre degradation](https://f1chronicle.com/2026-f1-tyr
 | singapore | 1.15 | Thermal stress is the main deg cause despite smooth asphalt ([Pirelli Singapore](https://press.pirelli.com/managing-the-heat-under-the-lights-in-singapore/)) |
 | jeddah | 0.90 | Fresh street surface vs Bahrain abrasive (Isola contrast in same GPblog piece) |
 
-Authored count after A1: **15 / 52** (7 anchors + 8).
+## A2 — remaining calendar + legacy (#1562, 2026-10-18)
 
-## Deferred (A2)
+### 2026 REAL calendar (10 circuits that lacked severity)
 
-Remaining circuits stay at default **1.0** (`TyreModel` `SEVERITY_DEFAULT`) until
-a measured rate or a surface-class proxy with a cited source is written.
-**1.0 is the calendar-neutral placeholder** — do not invent per-track guesses
-in the model. Candidates: spa (resurfaced; thermal vs abrasion mix), zandvoort,
-cota, mexico, interlagos, baku, vegas, abudhabi, imola, paul_ricard, and all
-historic / classic-only layouts.
+| id | severity | evidence |
+|---|---|---|
+| spa | 0.85 | Hard **0.042 s/lap** at Spa 2026 ([Belgian GP telemetry](https://f1chronicle.com/belgian-grand-prix-2026-telemetry-deep-dive/)) ÷ 0.0493 |
+| zandvoort | 1.05 | Banking vertical load; no 2026 Chronicle rate — band ~1.0 (Pirelli Dutch GP energy notes) |
+| madrid | 1.18 | New Madring asphalt; street-circuit band 1.1–1.25 until a measured rate exists |
+| baku | 0.82 | Long straights / low lateral; one-stop Baku band below Monaco 1.01 |
+| sepang | 1.48 | Hot abrasive permanent; historic Sepang ≈ Sakhir (Pirelli) — near Bahrain 1.55 |
+| cota | 1.12 | Bumpy COTA surface + thermal; between Miami 1.22 and neutral |
+| mexico | 1.08 | Altitude rear-limited; moderate-high (Pirelli Mexico previews) |
+| interlagos | 0.92 | Compact São Paulo; moderate historic deg band |
+| vegas | 1.05 | Street thermal; below Singapore 1.15 (Pirelli Las Vegas heat notes) |
+| abudhabi | 0.88 | Smooth Yas Marina one-stop band; near Silverstone cluster |
+
+### Legacy / classic-only (27 circuits)
+
+Proxy bands only where no published 2026 rate exists — **permanent low** (0.68–0.90),
+**neutral** (0.95–1.05), **abrasive / hot** (1.10–1.42). See inline comments in
+each `js/circuits/<id>.js` file.
+
+| id | severity | band |
+|---|---|---|
+| buddh | 1.42 | hot abrasive |
+| korea | 1.38 | hot abrasive |
+| paul_ricard | 1.28 | hot abrasive |
+| portimao | 1.25 | abrasive permanent |
+| istanbul | 1.22 | high lateral |
+| mugello | 1.18 | high-speed permanent |
+| jacarepagua | 1.12 | abrasive permanent |
+| brands_hatch | 1.10 | short abrasive UK |
+| kyalami | 1.05 | moderate permanent |
+| watkins_glen, mosport, zolder, imola | 1.02 | near-neutral |
+| nurburgring, donington, mont_tremblant, fuji | 1.00 | calendar-neutral proxy |
+| buenos_aires, estoril | 0.98 | near-neutral |
+| dijon | 0.95 | low-moderate historic |
+| magny_cours | 0.88 | smooth permanent |
+| sochi | 0.86 | smooth asphalt |
+| okayama | 0.84 | smooth permanent |
+| jerez | 0.82 | smooth test track |
+| anderstorp | 0.90 | low-moderate |
+| hockenheim | 0.72 | long-straight low energy |
+| indianapolis | 0.68 | low-deg road course (above model floor 0.4) |
+
+Authored count: **52 / 52**. Unit gate: `tests/unit/tyre-model.test.mjs` (“every
+circuit def declares tyreSeverity…”).

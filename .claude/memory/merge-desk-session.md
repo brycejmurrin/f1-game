@@ -1,6 +1,6 @@
 ---
 name: merge-desk-session
-description: "Bryce designated a persistent Claude Merge Desk session (2026-10-15); workers send it SWEEP <PR#>"
+description: "2026-10-15 Merge Desk session_01WQY3pk… not found 2026-10-16; no desk named in the launch prompt → SWEEP-N/A"
 metadata:
   node_type: memory
   type: project

@@ -635,7 +635,10 @@ const SceneryStructures = (function () {
       const prevMat = out._mat;
       out._mat = MAT.FABRIC;
       const bt = hash(seed * 1.7);
-      addBox(out, c, [thick, h, len], pick(NIGHT ? Math.min(0.94, bt) : bt), b);
+      // Night mass is always the dark fabric slab; phone-screen speckle is separate below (#2204).
+      const bandCol = NIGHT ? (bt > 0.55 ? [0.10, 0.11, 0.14] : [0.15, 0.16, 0.20])
+        : pick(bt);
+      addBox(out, c, [thick, h, len], bandCol, b);
       // One speckle head per ~6 m, capped — the same budget monza's tieredBowl
       // arrived at by hand. Each stands proud of the band (taller, nudged
       // trackward) so it is never coplanar with it: buried inside it would cost
