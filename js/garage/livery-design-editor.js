@@ -171,17 +171,10 @@ const GarageLiveryDesignEditor = (function () {
       for (const b of choices) if (accepts(b.dataset.csPill.split(":")[1])) group.appendChild(b);
     }
     // CHOICES THAT ONLY ACT ON SOME CARS, measured by the 2026-10-18 livery editor
-    // audit (D3, D5, D6): each one changed neither mesh nor atlas outside its `when`, so it greys
-    // like every other dependent row instead of looking broken. A grey or unset HALO is built as
-    // bare metal (car3d.js haloS: a spread over 0.15 is paint), and finishes remap paint only.
-    const coloured = (hex) => {
-      if (!/^#[0-9a-f]{6}$/i.test(hex || "")) return false;
-      const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-      return Math.max(...c) - Math.min(...c) > 0.15;
-    };
+    // audit (D5, D6): each one changed neither mesh nor atlas outside its `when`, so it greys
+    // like every other dependent row instead of looking broken. (HALO FINISH is not one: since #2829 it
+    // lands on an unset or grey halo too, car3d.js haloOn.)
     const rules = [
-      { row: fields.get("haloFinish"), when: () => coloured(draft.halo),
-        why: "Needs a coloured HALO — an unset or grey halo is bare titanium, which takes no finish" },
       { pill: "coverBind:spineOnly", when: () => draft.spineLogo === "cap", why: "SPINE ONLY changes only the CAP design in SPINE TOP" },
       { pill: "finHandoff:contrast", when: () => (draft.finShape || "standard") !== "none", why: "Needs a tail fin — pick a FIN SHAPE other than NONE" },
     ];

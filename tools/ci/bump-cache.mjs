@@ -69,8 +69,8 @@ const SRI_TAG_RE = /<(script|link)\b[^>]*>/gi;
 const hasSriTarget = (tag) => /^<script\b/i.test(tag) ? /\bsrc="[^"?#]+\?v=/.test(tag) : /\brel="stylesheet"/i.test(tag) && /\bhref="[^"?#]+\?v=/.test(tag);
 const INTEGRITY_ATTR_RE = /\s+integrity="([^"]*)"/i;
 const META_RE = /(<meta\s+name="apex-build"\s+content=")([1-9][0-9]*)("\s*\/?>)/;
-export const LAZY_V_ID = "apex-lazy-v";
-export const LAZY_INTEGRITY_ID = "apex-lazy-integrity";
+const LAZY_V_ID = "apex-lazy-v";
+const LAZY_INTEGRITY_ID = "apex-lazy-integrity";
 
 // Every file the page injects WITHOUT a tag, from the roster's own source.
 // js/workers/bitmap-decode-worker.js stays build-keyed: its client
