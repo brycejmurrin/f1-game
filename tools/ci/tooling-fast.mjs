@@ -84,6 +84,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The orchestrator/worker contract (skill agent-fleet): host-correct PR
   // subscribe tools, one fleet block, the mandated launch fields. < 0.1 s.
   "tests/unit/agent-fleet.test.mjs",
+  // Generated agent index, hook page, coverage page and per-hook help. No browser.
+  "tests/unit/agent-indexes.test.mjs",
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
@@ -1034,6 +1036,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/title-flow.test.mjs",
   "tests/unit/title-home-scene-prepaint.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
+  // three's per-frame tick once per drawn frame on WebGL2 (the pump), WebGPU untouched: the real pumpAnimation over a fake three Animation, and the install gate.
+  "tests/unit/tlx-anim-pump.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
   "tests/unit/tlx-cull-shadow-pack.test.mjs",
   // A throw in one TLX subsystem costs that subsystem only: the car/lamp shadow
