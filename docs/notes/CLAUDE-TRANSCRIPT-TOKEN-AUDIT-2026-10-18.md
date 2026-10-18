@@ -1,6 +1,6 @@
 # Claude Code transcript token audit: f1-game sessions
 
-Research snapshot 2026-10-18, ship `758646374`, analysis 4:11–4:40 AM PT. Recommendation only: no runtime code, tool,
+Research snapshot 2026-10-18, ship `758646374`, analysis 4:11–4:27 AM PT. Recommendation only: no runtime code, tool,
 skill, hook, setting or existing doc changes. It is the Claude Code companion to
 [#2907](https://github.com/brycejmurrin/f1-game/pull/2907) (Cursor Cloud) and follows its structure and rules. Code links
 are pinned to `758646374`.
@@ -191,7 +191,7 @@ Start P5 and P4 (no open-PR overlap). P1 waits for #2884 and #2901; P2 is docs-o
 
 ## 11. Cost of this investigation
 
-4:11–4:45 AM PT, one agent, about 75 tool calls including the clone, commit, push and PR. Thirty-three local JSONL
+4:11–4:27 AM PT, one agent, about 70 tool calls including the clone, commit, push and PR. Thirty-three local JSONL
 files (110 MB) were processed by scripts; only aggregates and one-line excerpts entered context. The session picker was opened
 twice and cancelled each time, and no prompt was sent. Own token usage is not observable.
 
