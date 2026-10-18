@@ -7,8 +7,8 @@ verification gates or tool response contracts are changed by this note.
 ## Recommendation
 
 Keep required skills and checks, but load their detail by task and return
-bounded evidence by default. Start with host/plugin overhead and the root
-reading route; extending tool summaries comes next. Shorter final replies alone
+bounded evidence by default. Start with session lifecycle and host/plugin
+overhead, then the root reading route; extending tool summaries comes next. Shorter final replies alone
 will not fix large tool definitions, instructions and intermediate results.
 
 ## Evidence from this project
@@ -61,6 +61,35 @@ skills; [#2870](https://github.com/brycejmurrin/f1-game/pull/2870) and
 [#2878](https://github.com/brycejmurrin/f1-game/pull/2878) touch MCP tools/tests.
 Land or reconcile those before implementing overlapping recommendations.
 
+## Follow-up: evidence preserved from coding chats
+
+Direct Claude Code/Codex chat-history APIs and a connected local browser were
+not available in this session. The following is a search of committed transcript
+audits, session-linked PR records and current guidance, not a fresh read of raw
+chat histories. Session samples may overlap; do not add their counts or costs.
+
+| Record | Reported historical finding | Effect on this recommendation |
+|---|---|---|
+| [Transcript mining, Oct 16](TRANSCRIPT-MINING-2026-10-16.md) | 122 of 318 sessions read, covering 73% of recorded spend; 50 of 61 failed sessions ended on quota. Seven expensive sessions reported 2.3–5.6B cache-read tokens each, with end contexts of 408–706K. | Treat large context multiplied by repeated turns as a primary cost driver. These are historical reported counters, not measurements reproduced here. |
+| [Agent retro, Oct 17](AGENT-RETRO-2026-10-17.md) | 92 sessions sampled, about $660 known cost; three long-lived Opus sessions accounted for about $353. One roughly 750K-context orchestrator incurred about $0.35 per wake. | Put session lifetime, wake frequency and model/cost ceilings ahead of cosmetic output shortening. |
+| Same retro | About 15 of 29 overnight owners reacted to per-job events; a screenshot loop spent about $100 without committing. | Bound visual iterations, use numerical checks and preserve a reviewable checkpoint. One subscription plus a monitor plus a timer can create duplicate wake traffic. |
+| [Transcript reading recipe](../../.claude/skills/agent-fleet/references/transcripts.md) | A 100-event page measured 529–637K characters, while its digest was 4.7K. Most bulk was initialization metadata, signatures and duplicated inputs. | For future raw-history access, fetch summaries first, digest pages outside model context and page past quota noise. Do not dump transcripts into a chat. |
+| [Harness audit on its PR branch](https://github.com/brycejmurrin/f1-game/blob/cursor/harness-audit-8b1f/docs/notes/HARNESS-AUDIT-2026-10-18.md) | The 100.3K first-turn figure came from a 28-plugin session. One analyzer counted the small CLAUDE.md stub without following its AGENTS.md import. | Compare equivalent host/plugin configurations; check imported instructions separately rather than trusting stub-only analyzer totals. |
+
+Some historical recommendations have already landed. Source checks on this
+checkout found quota gates and staggered launches in `launch-policy.md`;
+context/cost stop conditions and a fresh-session check-in default that stops
+after two unchanged checks; and `worker.md` guidance for silent waits,
+quota parking and handing off after SWEEP. `ci-watch --failures-only`, compact
+tool replies and transcript quota-noise folding also exist. The Oct 16 queue
+hold proposal is historical: AGENTS.md says the hold was retired. Do not
+reintroduce it from an old transcript.
+
+The practical next step is to measure whether existing lifecycle controls are
+followed, then address the remaining output/routing gaps. User-chosen monitoring
+cadences still take precedence; no timers, models, sessions or subscriptions
+were changed by this review.
+
 ## Proposed compact default
 
 This is proposed policy text for a later coordinated edit to AGENTS.md, not an
@@ -95,7 +124,9 @@ that filtering. Collapsing visible UI output is not proof that model input shran
 
 ## Prioritized implementation
 
-1. **Measure and trim host overhead.** Compare fresh equivalent sessions with
+1. **Measure session lifecycle and trim host overhead.** Check repeated
+   no-change wakes, context growth and whether existing cost/context stops are
+   followed. Compare fresh equivalent sessions with
    required plugins only versus the current catalog; inspect Claude `/context`
    and `/usage` where available. Disable unused plugins/servers at the host,
    not by deleting required project tooling. Keep the catalog stable during a
