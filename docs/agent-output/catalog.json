@@ -24,9 +24,9 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. sourceBytes are source-file snapshots, not output sizes or tokens. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 418,
+    "files": 420,
     "classifications": {
-      "entrypoint-candidate": 282,
+      "entrypoint-candidate": 284,
       "protocol-entrypoint": 28,
       "asset": 2,
       "data": 11,
@@ -3024,7 +3024,7 @@
         "npm-script-reference",
         "argv-or-parser"
       ],
-      "sourceBytes": 111075,
+      "sourceBytes": 111170,
       "outputPolicy": "job-status",
       "outputContract": "NotStarted/bail, timeouts/empty-run, unchanged-tree stamp, suite terminal line",
       "doc": "Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.",
@@ -4180,6 +4180,27 @@
       ]
     },
     {
+      "path": "tools/gfx/decal-bake-probe.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "argv-or-parser"
+      ],
+      "sourceBytes": 4376,
+      "doc": "Compare production decal bake pixels on WebGL2: five cases, baseline ref and JSON artifact.",
+      "skill": null,
+      "nativeOutputFlagMentions": [
+        "--json"
+      ],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/gfx/decal-bake-probe.mjs"
+      ]
+    },
+    {
       "path": "tools/gfx/frame-hitch.mjs",
       "classification": "entrypoint-candidate",
       "evidence": [
@@ -4408,7 +4429,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 12934,
+      "sourceBytes": 14055,
       "outputPolicy": "keep-native",
       "outputContract": "Real/stubbed link qualification, frame denominator and native JSON mode.",
       "doc": "Draw calls and triangles per render pass (main, mirror, sun/lamp shadow, post) per frame: the exact count behind #2657.",
@@ -5977,7 +5998,7 @@
         "main-guard",
         "argv-or-parser"
       ],
-      "sourceBytes": 84725,
+      "sourceBytes": 91336,
       "outputPolicy": "page-results",
       "outputContract": "ONE-based positions/tags, ambiguity/errors and baseline-subtraction caveat",
       "doc": "Stdio MCP code intelligence over TypeScript 7's native `tsc --lsp`: definition, references, symbols, hover, diagnostics.",
@@ -6009,6 +6030,26 @@
       "skill": null,
       "nativeOutputFlagMentions": [],
       "npmScripts": []
+    },
+    {
+      "path": "tools/mcp/lsp-navigation-bench.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "main-guard",
+        "argv-or-parser"
+      ],
+      "sourceBytes": 2529,
+      "doc": "Measure real-tree LSP navigation latency and output size, with cold/first queries separated from warm queries.",
+      "skill": null,
+      "nativeOutputFlagMentions": [],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/mcp/lsp-navigation-bench.mjs"
+      ]
     },
     {
       "path": "tools/mcp/mcp-cli.mjs",
@@ -8523,7 +8564,7 @@
       "path": "tools/viewer/viewer.html",
       "classification": "asset",
       "evidence": [],
-      "sourceBytes": 29558,
+      "sourceBytes": 29681,
       "outputPolicy": "no-direct-output",
       "outputContract": [
         "exit status and explicit failure cause",
@@ -9019,7 +9060,7 @@
     },
     {
       "name": "test:mcp",
-      "command": "node --test tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs",
+      "command": "node --test tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs",
       "agentCommand": [
         "node",
         "tools/agent-run.mjs",
