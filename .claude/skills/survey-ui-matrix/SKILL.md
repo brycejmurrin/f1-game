@@ -5,8 +5,9 @@ description: "Use when reviewing the whole UI across orientations, viewport shap
 
 # Surveying the whole UI across the whole matrix
 
-The parent runs the browser matrix with one Chromium session. Delegate only
-browser-free catalog checks and artifact analysis. Subagents return defect tables
+The parent runs the browser matrix with one Chromium session — and `--list` /
+`--report` too: `bash-guard.sh` refuses `layout-audit.mjs` / `menu-mock.mjs` in a
+subagent unless `--help` is passed. Delegate only artifact analysis. Subagents return defect tables
 with screenshot paths and missing cells; the parent applies fixes via `css-play`
 or `ui-menu-a11y`. This follows AGENTS.md rule 10.
 
@@ -18,9 +19,9 @@ A layout bug is never "on a screen" — it is a **cell of a matrix**: screen ×
 viewport × scale × pointer. **One CLI:** `tools/ui/layout-audit.mjs`.
 
 ```sh
-# BROWSER-FREE (safe anywhere; exits before any launch): --help, --list, --report
+# NO BROWSER (exits before any launch; --list/--report still parent-only, see above): --help, --list, --report
 node tools/ui/layout-audit.mjs --help
-node tools/ui/layout-audit.mjs --list            # screens × viewports catalog (browser-free; counts are in its output)
+node tools/ui/layout-audit.mjs --list            # screens × viewports catalog (counts are in its output)
 # BROWSER-ONLY (launch Chromium: check /proc/loadavg < 3, no Playwright run live):
 node tools/ui/layout-audit.mjs --survey          # title-path + shots (npm run ui:survey)
 node tools/ui/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
@@ -28,13 +29,15 @@ node tools/ui/layout-audit.mjs --screen=settings # one cell
 node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run ui:audit)
 # Numbers companion (type/spacing floors): node tools/ui/fit-audit.mjs
 # Notch insets only: node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,21
-# Both of those LAUNCH CHROMIUM unless `--help` is passed;
-# a bare probe for usage used to start a browser. Prefer `layout-audit.mjs --list`
-# for the catalog without launching.
+# Both of those LAUNCH CHROMIUM unless `--help` is passed.
 ```
 
 Phone landscape 844x390 touch (NOT the default `ios-iphone-landscape`, 852x393):
 `node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens='*'`.
+Axes: pointer = viewport family (`ios-*` touch/coarse, `desktop-*` mouse/fine);
+orientation = `*-portrait` / `*-landscape` names; no ultrawide row exists — add one to
+`VIEWPORTS` (`tools/ui/menu-screens.mjs`). The whole "0.8-1.5x, touch + mouse" ask is one run:
+`node tools/ui/layout-audit.mjs --screens='*' --viewports='ios-*,desktop-*' --scale=80,100,150 --shots`.
 Which tool: menu-mock = look fast; layout-audit = numbers of record; fit-audit = type/spacing floors; menu-fit = free-form size.
 
 ## Fastest look at the MENUS and sheets: `tools/ui/menu-mock.mjs` (~1-2 s a cell)
@@ -51,9 +54,7 @@ node tools/ui/menu-mock.mjs --screens='*' --viewports=ios-iphone-landscape-844 -
 ```
 Shared pieces (held rAF, boxes, CDP capture, contact sheet, content-hash cache) live in `tools/lib/ui-mock-core.mjs`.
 
-
-This skill is the **interactive** complement: Playwright MCP for resize / DOM /
-CSS survey (`tools/mcp/playwright-mcp.sh`) or Chrome DevTools MCP; enumerate screens from source, measure each cell, capture.
+Interactive poking: Playwright MCP (`tools/mcp/playwright-mcp.sh`) or Chrome DevTools MCP.
 
 Flags (header of `layout-audit.mjs`): `--screens=a,b` / `--viewports=ios-*`
 (wildcard = prefix), `--scale=100,130` (40-200), `--circuits=`, `--shots`, `--dom`,
