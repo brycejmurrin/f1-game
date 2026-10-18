@@ -21,6 +21,13 @@ const Direct = Beta;
 const directUse = Direct.KEY; /*@direct-alias*/
 const Guarded = Beta || {};
 const guardedUse = Guarded.KEY; /*@guarded-alias*/
+const Loose = typeof Beta != "undefined" ? Beta : {};
+const looseUse = Loose.KEY; /*@loose-guard*/
+const Reverse = "undefined" !== typeof Beta ? Beta : null;
+const reverseUse = Reverse.KEY; /*@reverse-guard*/
+const Wrapped = (("undefined" != typeof Beta && Beta)) || {};
+const wrappedUse = Wrapped.KEY; /*@wrapped-guard*/
+function reverseParam(Beta) { const R = "undefined" != typeof Beta ? Beta : {}; return R.KEY; } /*@reverse-param-shadow*/
 function directParam(Beta) { const D = Beta; return D.KEY; } /*@direct-param-shadow*/
 function orParam(Beta) { const P = Beta || {}; return P.KEY; } /*@or-param-shadow*/
 function ternaryParam(Beta) { const T = typeof Beta !== "undefined" ? Beta : {}; return T.KEY; } /*@ternary-param-shadow*/
@@ -65,8 +72,8 @@ test("fallback references use lexical heads and include literal bracket members"
   const root = fixture(), lsp = new Lsp({ root, src: "src", anchor: "src/case.js", cmd: TSC, idleMs: 0 });
   try {
     const out = await ask(lsp, "lsp_references", { symbol: "Beta.KEY" });
-    for (const marker of ["beta-def", "dot", "bracket", "direct-alias", "guarded-alias"]) assert.match(out, new RegExp(`@${marker}\\b`));
-    for (const marker of ["direct-param-shadow", "or-param-shadow", "ternary-param-shadow", "and-param-shadow", "local-shadow", "shadow-window-direct", "shadow-window-alias"]) assert.doesNotMatch(out, new RegExp(`@${marker}\\b`));
+    for (const marker of ["beta-def", "dot", "bracket", "direct-alias", "guarded-alias", "loose-guard", "reverse-guard", "wrapped-guard"]) assert.match(out, new RegExp(`@${marker}\\b`));
+    for (const marker of ["direct-param-shadow", "reverse-param-shadow", "or-param-shadow", "ternary-param-shadow", "and-param-shadow", "local-shadow", "shadow-window-direct", "shadow-window-alias"]) assert.doesNotMatch(out, new RegExp(`@${marker}\\b`));
     const uses = await ask(lsp, "lsp_references", { symbol: "Beta.KEY", includeDeclaration: false });
     assert.doesNotMatch(uses, /@beta-def\b/); assert.match(uses, /@dot\b/); assert.match(uses, /@bracket\b/);
   } finally { lsp.stop(); fs.rmSync(root, { recursive: true, force: true }); }

@@ -900,15 +900,24 @@ export class Lsp {
       });
       if (parts.length < 2) continue;
       const bindings = [];
-      const emptyFallback = n => n?.type === "ObjectExpression" && n.properties.length === 0 || n?.type === "Literal" && n.value === null;
-      const globalHead = validHead;
-      const typeofGuard = n => n?.type === "BinaryExpression" && n.operator === "!==" &&
-        n.left?.type === "UnaryExpression" && n.left.operator === "typeof" && globalHead(n.left.argument) &&
-        n.right?.type === "Literal" && n.right.value === "undefined";
-      const headAlias = n => globalHead(n) ||
-        n?.type === "ConditionalExpression" && typeofGuard(n.test) && globalHead(n.consequent) && emptyFallback(n.alternate) ||
-        n?.type === "LogicalExpression" && n.operator === "||" && emptyFallback(n.right) &&
-          (globalHead(n.left) || n.left?.type === "LogicalExpression" && n.left.operator === "&&" && typeofGuard(n.left.left) && globalHead(n.left.right));
+      const unwrap = n => { while (n?.type === "ParenthesizedExpression") n = n.expression; return n; };
+      const emptyFallback = n => { n = unwrap(n); return n?.type === "ObjectExpression" && n.properties.length === 0 || n?.type === "Literal" && n.value === null; };
+      const globalHead = n => validHead(unwrap(n));
+      const typeofGuard = n => {
+        n = unwrap(n);
+        if (n?.type !== "BinaryExpression" || !["!==", "!="].includes(n.operator)) return false;
+        const typ = x => { x = unwrap(x); return x?.type === "UnaryExpression" && x.operator === "typeof" && globalHead(x.argument); };
+        const lit = x => { x = unwrap(x); return x?.type === "Literal" && x.value === "undefined"; };
+        return typ(n.left) && lit(n.right) || lit(n.left) && typ(n.right);
+      };
+      const headAlias = n => {
+        n = unwrap(n);
+        if (globalHead(n)) return true;
+        if (n?.type === "ConditionalExpression") return typeofGuard(n.test) && globalHead(n.consequent) && emptyFallback(n.alternate);
+        if (n?.type !== "LogicalExpression" || n.operator !== "||" || !emptyFallback(n.right)) return false;
+        const left = unwrap(n.left);
+        return globalHead(left) || left?.type === "LogicalExpression" && left.operator === "&&" && typeofGuard(left.left) && globalHead(left.right);
+      };
       visit(this.astOf(f), n => {
         if (n.type !== "VariableDeclarator" || !headAlias(n.init)) return;
         if (n.id.type === "ObjectPattern") for (const p of n.id.properties) {
