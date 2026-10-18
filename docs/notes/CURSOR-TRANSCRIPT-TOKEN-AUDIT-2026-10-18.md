@@ -195,7 +195,7 @@ one-agent environment check. Rebuild metrics from the appendix; never commit tra
 
 ## 11. Cost of this investigation
 
-3:49 to about 4:30 AM PT, roughly 75 tool calls by one agent; no transcript pages fetched via API. The 121 dumps (106 MB)
+3:49–4:10 AM PT, about 90 tool calls by one agent (including commit, push and PR); no transcript pages fetched via API. The 121 dumps (106 MB)
 and 33 Claude exports were processed by scripts; only aggregates and short excerpts entered context. Own token usage
 is not observable.
 
