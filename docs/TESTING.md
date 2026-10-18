@@ -768,6 +768,20 @@ If a guard needs history, the job needs `fetch-depth: 0` — today guards, the
 sweeps jobs, the ship filter and select have it; `node-suites` and smoke do
 not (smoke is depth 1), so a unit file that reads history skips there.
 
+### Workflow and shader lints (the `lints` job, 2026-10-18)
+
+`node tools/check/workflow-lint.mjs` runs actionlint (with shellcheck) and zizmor over `.github/workflows`;
+`node tools/check/shader-validate.mjs` runs glslangValidator over every GLX GLSL ES 3.00 program and naga (advisory) over the WGX
+WGSL modules. Both are offline. The binaries come from `bash tools/env/install-lint-bins.sh` (pinned and checksummed: zizmor by
+`pip --require-hashes`, actionlint by `go install`, naga by `cargo --locked`, glslang and shellcheck by apt); `--plan` prints
+what it would do. **An absent binary SKIPS LOUDLY** (a `SKIP … NOT CHECKED` line naming the install command, exit 0) and fails
+under `--require` / `APEX_REQUIRE_LINT_BINS=1`, which the `lints` job in `ci.yml` sets. The unit tests
+(`workflow-lint.test.mjs`, `shader-validate.test.mjs`) fail a planted bad workflow/shader (`tests/fixtures/`) and pass the tree;
+they are in `tooling-fast`, where they skip loudly because the shards install nothing, and run with the binaries in `lints`.
+Suppressions live in `.github/actionlint.yaml`, `.github/zizmor.yml` and inline `# zizmor: ignore[audit] reason` comments; the test
+rejects a blanket ignore or a reasonless one. TLX is not checked (TSL node graphs have no static shader stage), and WGSL
+authority stays `tools/gfx/wgx-validate.mjs`. Evidence: `docs/notes/SKILL-MCP-SCOUT-2026-10-18.md` §Adopted.
+
 ### Renderer specs on a real GPU (`macos-latest`) — first run 2026-09-03 (see §Field notes 2026-09-03, `image-grade-visual`)
 
 Every browser job in `ci.yml` ran on `ubuntu-latest`, whose only adapter is
