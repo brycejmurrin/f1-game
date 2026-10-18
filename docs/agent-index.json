@@ -1079,7 +1079,7 @@
         "tests/specs/telemetry-fit.spec.js",
         "tests/specs/wake-lock.spec.js"
       ],
-      "declaredTests": 277,
+      "declaredTests": 278,
       "twinned": true
     },
     {
