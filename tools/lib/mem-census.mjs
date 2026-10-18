@@ -1,3 +1,4 @@
+import { runtimeMemory } from "../perf/runtime-memory.mjs";
 // mem-census.mjs — the page half of the memory census, shared by
 // @doc Page-side memory census (track WeakRefs, decoded audio, render objects, forced GC) for the CLI and its spec.
 // tools/gfx/mem-census.mjs (the CLI) and tests/specs/track-switch-memory.spec.js
@@ -84,7 +85,8 @@ export async function censusAfterGc(page, cdp) {
     await cdp.send("HeapProfiler.collectGarbage");
     await page.waitForTimeout(50);
   }
-  return page.evaluate(readCensus);
+  const census = await page.evaluate(readCensus);
+  return { ...census, runtimeMemory: await runtimeMemory(cdp) };
 }
 
 /** Leak verdict over the forced-GC heap readings (MB) of repeated visits to ONE

@@ -49,6 +49,8 @@ Load from the SKILL.md index when the task needs this detail.
    - Do not use `Date.now`, `Math.random`, or the physics `simRnd` stream for
      career markets, objectives, development, or reliability plans.
    - If you must add a draw, include stable varying parts in the key.
+   - `tests/unit/career-determinism.test.mjs` fails on any `simRnd` or a new
+     `Math.random()` in `js/career/*.js` (two allowlisted non-draw sites).
 
 7. **Verify through hooks before UI assertions.**
    - Start with `careerState()`, `careerSlots()`, `careerSim()`, and

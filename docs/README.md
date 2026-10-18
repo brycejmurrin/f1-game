@@ -57,6 +57,7 @@ Local screenshot galleries: [builder and viewer workflow](notes/LOCAL-SURVEY-GAL
 | Doc | Covers |
 |---|---|
 | [AGENT-SURFACE.md](AGENT-SURFACE.md) | Skills vs MCP vs `tools/` CLIs vs wrap — which `apex_*` exists, which stay CLI-only, and why the ones that left, left. |
+| [EVIDENCE-STORAGE.md](EVIDENCE-STORAGE.md) | Publish generated screenshots and galleries as checksum-verified release assets, with source provenance, durable links and retention guidance. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (generated), the agent-facing JSON world view (`world`/`field`/`scene`/`rollout`), and the DevTools console recipes. `AGENTS.md` has the short list. |
 | [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 191 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
 | [tracks/](tracks/) | Per-circuit reference material. |
@@ -159,6 +160,7 @@ rather than rewriting the record.
 | [research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md) | External model/texture/normal-map ingestion: CC0 asset APIs, a `MAT`-indexed texture array, offline bake tool. | `tools/check/check-gctx.mjs`, `tools/gen/assets.mjs` |
 | [research/APEX-TOOLS-MCP.md](research/APEX-TOOLS-MCP.md) | Design / refuses for the `apex-tools` wrap. Agent map: [AGENT-SURFACE.md](AGENT-SURFACE.md). | `tools/mcp/apex-tools-mcp.mjs`, `tools/gfx/wgx-shot.mjs` |
 | [research/CHROME-DEVTOOLS-MCP.md](research/CHROME-DEVTOOLS-MCP.md) | Playbook for the chrome-devtools MCP tools against Apex: roots/`/tmp` file writes, snapshot uids, cold-boot LCP, clean heap cycles, lighthouse snapshot scores. Companion to `.claude/skills/mcp-probe`. | `tools/mcp/cdmcp-cli.py`, `tools/check/ratchets.mjs` |
+| [research/F1-PROFILING-PLAYBOOK.md](research/F1-PROFILING-PLAYBOOK.md) | CPU, heap retention, allocation churn, DOM/listener and graphics diagnostics; bounded recipes, current primary sources and hardware evidence limits. | `tools/perf/profile.mjs`, `tools/gfx/mem-census.mjs`, `tools/gfx/gpu-mem-census.mjs` |
 | [research/STRUCTURE-REDECISION-2026-08.md](research/STRUCTURE-REDECISION-2026-08.md) | Six structural questions re-opened on user request and re-decided from fresh measurement. | `tests/unit/perf-governor.test.mjs` |
 | [research/UI-REDESIGN-2026-08-18.md](research/UI-REDESIGN-2026-08-18.md) | UI redesign implementation plan + acceptance contract: catalogue screens restructured around one dominant scroller; the visual identity kept. | `tests/unit/css-token-adoption.test.mjs` |
 | [research/PAUSE-SETTINGS-IA.md](research/PAUSE-SETTINGS-IA.md) | Pause stays a 1-2-1-1 action sheet; settings is a home → CONTROLS / DISPLAY stack. Tabs and MORE are gone. | `js/ui/settings-tabs.js` |

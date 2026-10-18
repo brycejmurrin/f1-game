@@ -13,10 +13,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { TARGETS, CAM_ALIAS, STATIONS, FIELD_STATIONS } from "../../tools/shot/lib/garage-camera-catalog.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const code = (p) => read(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+const cameraCatalogCode = () => {
+  const cli = code("tools/shot/garage-angles.mjs");
+  assert.match(cli, /import \{ TARGETS, CAM_ALIAS, STATIONS, FIELD_STATIONS \} from "\.\/lib\/garage-camera-catalog\.mjs"/,
+    "the CLI imports the canonical browser-free camera tables");
+  assert.doesNotMatch(cli, /const (?:TARGETS|CAM_ALIAS|STATIONS|FIELD_STATIONS) = \{/,
+    "the CLI must not shadow the canonical camera tables");
+  return code("tools/shot/lib/garage-camera-catalog.mjs");
+};
 
 test("render-car has a spine preset and repeatable --shot customs", () => {
   const src = code("tools/car/render-car.mjs");
@@ -240,9 +249,18 @@ test("a preset is a bundle of plain flags, and a named camera is parameters", ()
   // so a preset is a starting point you can sweep away from.
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /const PRESETS = \{/, "purpose presets like render-car");
-  assert.match(src, /const CAM_ALIAS = \{/, "named cameras are a table of parameter bundles");
-  assert.match(src, /bay:\s*"hero:0\.68pi/, "bay = a base view plus an absolute orbit");
-  assert.match(src, /bayFront:\s*"front:0\.32pi/, "bayFront = the opposite diagonal");
+  const cameras = cameraCatalogCode();
+  assert.match(cameras, /export const CAM_ALIAS = \{/, "named cameras are a canonical table of parameter bundles");
+  assert.match(cameras, /bay:\s*"hero:0\.68pi/, "bay = a base view plus an absolute orbit");
+  assert.match(cameras, /bayFront:\s*"front:0\.32pi/, "bayFront = the opposite diagonal");
+  const aliases = JSON.parse(execFileSync(process.execPath,
+    ["tools/shot/garage-angles.mjs", "--plan", "--team=ferrari", "--views=bay,bayFront"],
+    { cwd: ROOT, encoding: "utf8" }));
+  assert.deepEqual(aliases.cams.map(({ key, view, el, dist }) => ({ key, view, el, dist })),
+    [{ key: "bay", view: "hero", el: 0.26, dist: 9.2 }, { key: "bayFront", view: "front", el: 0.28, dist: 9.4 }],
+    "the CLI consumes the canonical named-camera parameter bundles");
+  assert.ok(Math.abs(aliases.cams[0].az - 0.68 * Math.PI) < 1e-9);
+  assert.ok(Math.abs(aliases.cams[1].az - 0.32 * Math.PI) < 1e-9);
   assert.match(src, /saddleWall: \{ views: "bayFront"/, "saddleWall is a flag bundle over that camera");
   assert.match(src, /presetRaw === "list"/, "--preset=list prints and exits");
   assert.match(src, /presetRaw !== "none"/, "--preset=none is a first-class 'no preset'");
@@ -297,10 +315,9 @@ test("every garage camera preset is one a PLAYER can reach", () => {
   for (const p of presets) {
     assert.ok(buttons.has(p), `SP_VIEWS.${p} has no #cs-stack button — a tool camera belongs in CAM_ALIAS`);
   }
-  const tool = code("tools/shot/garage-angles.mjs");
-  const alias = /const CAM_ALIAS = \{([\s\S]*?)\n\};/.exec(tool);
-  assert.ok(alias, "the tool must own its survey framings");
-  for (const name of [...alias[1].matchAll(/^\s{2}([A-Za-z]+):/gm)].map((m) => m[1])) {
+  cameraCatalogCode();
+  assert.ok(Object.keys(CAM_ALIAS).length, "the canonical tool catalog must own its survey framings");
+  for (const name of Object.keys(CAM_ALIAS)) {
     assert.ok(!presets.includes(name), `${name} is a tool camera and must not be in SP_VIEWS`);
   }
 });
@@ -367,7 +384,9 @@ test("garage-angles: ranges, targets, lamps, seats, DPR, `all`, base lists and a
     assert.ok(src.includes(`"${f}"`) || src.includes(`argvHas("${f}")`), `${f} must be a flag the tool owns`);
   }
   assert.match(src, /function expandRange/, "a..b:n ranges on every numeric list");
-  assert.match(src, /const TARGETS = \{/, "named look-at points are a table in the TOOL");
+  assert.match(cameraCatalogCode(), /export const TARGETS = \{/, "named look-at points are a canonical TOOL table");
+  assert.deepEqual(TARGETS.crown, [0, 0.95, -0.55]);
+  assert.match(src, /if \(t in TARGETS\) return \{ name: t, at: TARGETS\[t\] \}/, "the CLI resolves imported target points");
   assert.match(src, /function pixelDiff/, "an A/B is a changed-pixel fraction, not only a pair sheet");
   assert.match(src, /function writeMatrixSheet/, "rows × cameras contact sheet");
   assert.match(src, /oracleHiddenPct\(teamId,/, "occlusion is recorded per SHOT, not only on rollups");
@@ -404,8 +423,13 @@ test("garage-angles: stations, field→station picking, pairs, flat art, a free 
   // one run with an overlay; the player's orbit floors can be lifted for a
   // dev shot; and the browser can stay open for a design loop.
   const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /const STATIONS = \{/, "stations are a table in the TOOL");
-  assert.match(src, /const FIELD_STATIONS = \{/, "fields know which station shows them");
+  const cameras = cameraCatalogCode();
+  assert.match(cameras, /export const STATIONS = \{/, "stations are a canonical TOOL table");
+  assert.match(cameras, /export const FIELD_STATIONS = \{/, "canonical fields know which station shows them");
+  assert.deepEqual(FIELD_STATIONS.spineLogo, ["spineTop"]);
+  assert.deepEqual(STATIONS.spineTop.target, [0, 0.9, -0.85]);
+  assert.match(src, /const st = STATIONS\[raw\]/, "the CLI consumes imported camera stations");
+  assert.match(src, /FIELD_STATIONS\[f\]/, "the CLI derives stations from the imported field mapping");
   for (const f of ["--station", "--pair", "--flat", "--eye", "--look", "--path", "--clamp", "--serve", "--watch"]) {
     assert.ok(src.includes(`"${f}"`) || src.includes(`argvHas("${f}")`), `${f} must be a flag the tool owns`);
   }

@@ -12,7 +12,10 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv } from "../../tools/ci/test-bg.mjs";
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv, probeChromeSessions, chromeRefusal } from "../../tools/ci/test-bg.mjs";
 
 test("parseTestBgArgv reads --timeout and --timeout=N as minutes", () => {
   assert.equal(parseTestBgArgv(["--wait", "--timeout", "45"]).waitTimeoutMin, 45);
@@ -114,4 +117,49 @@ test("a zombie supervisor is not a live run (#1921)", async () => {
   for (const s of ["Z", "X", "x"]) assert.equal(aliveRun({ pid: me, starttime: st }, { state: () => s }), false, `state ${s}`);
   for (const s of ["R", "S", "D", "T"]) assert.equal(aliveRun({ pid: me, starttime: st }, { state: () => s }), true, `state ${s}`);
   assert.equal(aliveRun({ pid: me, starttime: st }, { state: () => null }), true, "no /proc: the pid + start-time test stands");
+});
+
+// Skill mcp-probe hard rule 1 ("never render Chrome MCP while Playwright runs"),
+// enforced both ways: test-bg refuses a browser group beside a live
+// `probe-mcp.py chrome-start` daemon, and chrome-start refuses beside a live run.
+test("test-bg refuses a browser group while the MCP Chrome daemon is live (box-wide, --force overrides)", () => {
+  const sessions = probeChromeSessions(() => "work\nprobe-chrome-0123456789abcdef\nprobe-chrome-short\n");
+  assert.deepEqual(sessions, ["probe-chrome-0123456789abcdef"], "only the daemon's exact session-name shape counts");
+  assert.deepEqual(probeChromeSessions(() => { throw new Error("no tmux"); }), [], "no tmux = no daemon");
+  assert.match(chromeRefusal({ browser: true, force: false, sessions }), /REFUSED[\s\S]*probe-mcp\.py chrome-stop/);
+  assert.equal(chromeRefusal({ browser: true, force: true, sessions }), null, "--force overrides");
+  assert.equal(chromeRefusal({ browser: false, force: false, sessions }), null, "a node-only group is not a Chromium run");
+  assert.equal(chromeRefusal({ browser: true, force: false, sessions: [] }), null);
+  // Wired before anything spawns: the check sits in start() ahead of supersede/spawnGroup.
+  const src = fs.readFileSync(new URL("../../tools/ci/test-bg.mjs", import.meta.url), "utf8");
+  const body = src.slice(src.indexOf("function start("));
+  assert.ok(body.indexOf("chromeRefusal(") > 0 && body.indexOf("chromeRefusal(") < body.indexOf("supersede(groups)"),
+    "start() must refuse before it supersedes or spawns anything");
+});
+
+test("probe-mcp chrome-start refuses while a Playwright run is live in this checkout", () => {
+  const tool = fileURLToPath(new URL("../../tools/mcp/probe-mcp.py", import.meta.url));
+  // Import the CLI as a module and stub its edges: no tmux, no daemon, no live-run scan.
+  const py = `
+import importlib.util, argparse, sys
+spec = importlib.util.spec_from_file_location("probe_mcp", ${JSON.stringify(tool)})
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+def no_tmux(*a): raise SystemExit("tmux must not be called")
+m._tmux = no_tmux
+m.daemon_port = lambda: None
+m.live_test_run = lambda: "4242:99 artifacts/logs/smoke.log"
+print("refused", m.cmd_chrome_start(argparse.Namespace(port=0, force=False)))
+calls = []
+m.live_test_run = lambda: calls.append(1) or ""
+m.shutil.which = lambda _n: None
+print("clear", m.cmd_chrome_start(argparse.Namespace(port=0, force=False)), len(calls))
+m.live_test_run = lambda: "4242:99 x"
+print("forced", m.cmd_chrome_start(argparse.Namespace(port=0, force=True)))
+`;
+  const r = spawnSync("python3", ["-c", py], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^refused 1$/m);
+  assert.match(r.stderr, /REFUSED: a Playwright run is live in this checkout \(4242:99/);
+  assert.match(r.stdout, /^clear 1 1$/m, "no live run: it goes on to the tmux check (stubbed missing -> 1)");
+  assert.match(r.stdout, /^forced 1$/m, "--force skips the live-run check");
 });

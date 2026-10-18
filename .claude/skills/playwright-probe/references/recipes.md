@@ -124,7 +124,8 @@ helped asset fetch; they are not the current harness.
 gallery. To combine existing surveys without recapturing:
 `apex_shot_survey {reports:["artifacts/a/findings.json","artifacts/b/findings.json"],out:"artifacts/combined"}`;
 copied image assets make that folder portable. Preserve the actual custom track ID in report metadata.
-Image budget: never re-`Read` an old shot; never a loop of `apex_shot` (use `apex_shot_survey` /
+Image budget: `Read` at most 8 images, then compact; JPEG ≤ 800 px wide; more than 3 shots →
+`apex_shot_survey`. Never re-`Read` an old shot; never a loop of `apex_shot` (use `apex_shot_survey` /
 `apex_track op survey`). A request over 32 MB kills the session and `/compact` with it.
 
 ## Custom-harness skeleton (parent-owned browser)

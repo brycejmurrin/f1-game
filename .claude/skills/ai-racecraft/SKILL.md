@@ -10,14 +10,6 @@ rate, ERS want, multi-sample brake target, slow lane nudge. Callers pass
 curvature samples and the already-drawn roll so the seeded stream in
 `makeCars()` / `updateCar` stays in `game.js`.
 
-## AI pace (scripted vs catch-up)
-
-`js/physics/ai-band.js` owns the gap-to-player catch-up band. **Default is
-`scripted`**: vmax = `tierV × skill × DIFF.ai` (± `pacePhase`), no boost from
-the player's gap. Opt-in `catchup` restores the legacy reverse-only rubber
-band (`DIFF.band`, start + lapping gates). Setting: Race Settings › FIELD ›
-AI PACE (`apex26.aiPace`). Do not edit `DIFF.*.band` literals here.
-
 ## Owns vs stays in `game.js`
 
 | `AiDrive` | `game.js` |
@@ -66,6 +58,10 @@ low `vC` (k, grip, `diffCorner`, `skill`), too small `0.85`, or `errMul`/`hold`.
 `ai-drive.test.mjs` (brake* tests) and `ai-racecraft-vm.test.mjs`. No CLI prints the brake
 point itself: `ai-race.mjs pace` (lap time) and `line` (approach/apex) are the closest VM
 proxies; for the exact point probe `__apex` live (browser, `mcp-probe`).
+
+## Field pace (scripted vs catch-up band, `ai-band.js`)
+
+Not racecraft: `references/pace.md`.
 
 ## Traffic tactics (bunching, passing, defending, the player)
 
