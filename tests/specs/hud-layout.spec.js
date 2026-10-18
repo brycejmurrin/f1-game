@@ -662,7 +662,7 @@ const CONTROL_IDS = ["btn-steer-left", "btn-steer-right", "btn-throttle", "btn-b
   "btn-boost", "btn-ot", "btn-aero", "pausebtn", "btn-cam"];
 const HUD_INDEPENDENCE_VIEWPORTS = [
   { name: "phone-844x390", w: 844, h: 390, sal: 0, sar: 0, sat: 0, sab: 0 },
-  { name: "phone-932x430", w: 932, h: 430, sal: 59, sar: 59, sat: 0, sab: 21 },
+  { name: "phone-932x430", w: 932, h: 430, sal: 59, sar: 59, sat: 0, sab: 21, roomy: true },
   { name: "phone-667x375", w: 667, h: 375, sal: 0, sar: 0, sat: 0, sab: 0 },
 ];
 // One BUTTON SIZE per shape (100 / 175 / 100): the measured matrix of all nine was identical (2026-10-17).
@@ -672,7 +672,7 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
     test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
     test("control rects are identical at HUD SIZE min / default / max", async ({ page }) => {
       await race(page, "buttons", false, v, { hudScale: 100, btnScale: btn });
-      const rects = {}, gearW = {}, fitDiag = {};
+      const rects = {}, gearW = {}, fitDiag = {}, zTop = {};
       for (const hud of [70, 100, 200]) {
         await page.evaluate((pct) => localStorage.setItem("apex26.hudScale", JSON.stringify(pct)), hud);
         await page.reload();
@@ -701,13 +701,28 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
           return [id, [r.x, r.y, r.width, r.height].map((n) => Math.round(n * 2) / 2)];
         })), CONTROL_IDS);
         gearW[hud] = await page.evaluate(() => document.getElementById("hud-box-time").getBoundingClientRect().width);
+        // The fit publishes --hud-z-top only while the top cap binds (it is removed when the cap is >= HUD SIZE).
+        zTop[hud] = await page.evaluate(() => document.documentElement.style.getPropertyValue("--hud-z-top").trim());
       }
       const base = rects[100];
       expect(Object.values(base).filter(Boolean).length, JSON.stringify(base)).toBeGreaterThanOrEqual(7);
       // Controls that do not fit shrink to fit: none may sit off-screen (BOOST at y -14, #2801).
       for (const hud of [70, 100, 200]) for (const [id, r] of Object.entries(rects[hud])) if (r) expect(r[1], `${id} at HUD SIZE ${hud} ${JSON.stringify(fitDiag)}`).toBeGreaterThanOrEqual(0);
-      // Non-vacuous: HUD SIZE really did resize the readouts it is meant to resize.
-      expect(gearW[200], JSON.stringify(gearW)).toBeGreaterThan(gearW[70] * 1.3);
+      // Non-vacuous: HUD SIZE really did resize the readouts it is meant to resize, on every size step
+      // the screen has room for. Where the top cap binds at the larger size, both sizes paint at the
+      // cap (fit-to-screen), so a fixed ratio cannot hold there (667x375: 100 and 200 both 81.23 px,
+      // #2882). The roomy shape must keep at least one uncapped step, so the check never goes vacuous.
+      const sizes = [70, 100, 200], uncapped = [];
+      for (let a = 0; a < sizes.length; a++) for (let b = a + 1; b < sizes.length; b++) {
+        if (zTop[sizes[b]] !== "") {
+          // Excluded only on evidence: the cap really binds at the larger size (a zoom below that HUD SIZE).
+          expect(+zTop[sizes[b]], `cap at HUD SIZE ${sizes[b]} ${JSON.stringify({ gearW, zTop })}`).toBeLessThan(sizes[b] / 100);
+          continue;
+        }
+        uncapped.push(`${sizes[a]}->${sizes[b]}`);
+        expect(gearW[sizes[b]], `HUD SIZE ${sizes[a]} -> ${sizes[b]} ${JSON.stringify({ gearW, zTop })}`).toBeGreaterThan(gearW[sizes[a]] * 1.3);
+      }
+      if (v.roomy) expect(uncapped.length, `no uncapped HUD SIZE step on ${v.name} ${JSON.stringify({ gearW, zTop })}`).toBeGreaterThan(0);
       for (const hud of [70, 200]) expect(rects[hud], `HUD SIZE ${hud} vs 100 ${JSON.stringify(fitDiag)}`).toEqual(base);
     });
   });

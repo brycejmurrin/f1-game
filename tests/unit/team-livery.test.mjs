@@ -170,8 +170,12 @@ test("the paint editor builds every draft through one constructor", () => {
   assert.equal(literals.length, 0,
     "a csLivDraft object literal is back; build it with livDraftFrom() so the " +
     "three doors cannot drift apart again");
-  assert.equal((SHEET.match(/csLivDraft = livDraftFrom\(/g) || []).length, 3,
-    "expected exactly three livDraftFrom() calls (new, edit, copy)");
+  // livDraftFromOwn (a door that starts from the team's own scheme) is livDraftFrom plus the
+  // brand mark seed, so it is the same constructor.
+  const doors = (SHEET.match(/csLivDraft = [^;]*;/g) || []).filter((a) => /livDraftFrom(Own)?\(/.test(a));
+  assert.equal(doors.length, 3, "expected exactly three draft doors (new, edit, copy): " + doors.join(" | "));
+  const own = SHEET.slice(SHEET.indexOf("function livDraftFromOwn("), SHEET.indexOf("function livDraftTo("));
+  assert.match(own, /const d = livDraftFrom\(src, name\);/, "livDraftFromOwn builds through livDraftFrom");
 });
 
 test("the editor's draft table and forTeam name the same fields", () => {

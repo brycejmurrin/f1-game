@@ -187,11 +187,24 @@ try {
     assert.equal(jpeg[0], 0xff); assert.equal(jpeg[1], 0xd8);
     assert.equal(incident.scene.available, false); // This fixture is not the game.
   });
+  await call("debugger_exception_log", { action: "clear" });
+  await call("debugger_run", { expression: 'for (const value of [0, false, null, undefined, NaN, -0, Infinity, 12n, "constructor", "toString", "__proto__", "__proto__"]) { try { throw value; } catch (e) {} }' });
+  await until(s => s.operations.at(-1).status === "completed");
+  const primitiveLog = await call("debugger_exception_log", { action: "read" });
+  check("native CDP preserves primitive throws and reserved exception count keys", () => {
+    assert.deepEqual(primitiveLog.entries.map(e => e.message), ["0", "false", "null", "undefined", "NaN", "-0", "Infinity", "12n", "constructor", "toString", "__proto__", "__proto__"]);
+    assert.equal(primitiveLog.counts.constructor, 1);
+    assert.equal(primitiveLog.counts.toString, 1);
+    assert.equal(primitiveLog.counts.__proto__, 2);
+  });
   await call("debugger_exception_log", { action: "stop" });
-  await call("debugger_run", { expression: 'window.addEventListener("apexprobe", () => {}); window.Probe = class Probe {}; window.keep = [new Probe(), new Probe(), new Probe()]; 1' });
+  await call("debugger_run", { expression: 'for (const type of ["apexprobe", "constructor", "toString", "__proto__"]) window.addEventListener(type, () => {}); window.Probe = class Probe {}; window.keep = [new Probe(), new Probe(), new Probe()]; 1' });
   await until(s => s.operations.at(-1).status === "completed");
   const ls = await call("debugger_listeners", { target: "window" });
   check("listeners counted by type", () => assert.equal(ls.byType.apexprobe, 1));
+  check("native CDP counts custom listener names matching inherited properties", () => {
+    for (const type of ["constructor", "toString", "__proto__"]) assert.equal(ls.byType[type], 1);
+  });
   const inst = await call("debugger_instances", { expression: "Probe" });
   check("instances counted via queryObjects", () => assert.equal(inst.count, 3));
   await call("debugger_run", { expression: "new Promise(() => {})", awaitPromise: true });

@@ -320,6 +320,7 @@ const FULL = [
   "js/ui/editor-workspace.js",
   "js/ui/settings-search.js",
   "js/ui/settings-tabs.js",
+  "js/ui/setting-deps.js",     // SettingDeps: declarative grey-out of settings another setting makes inert
   "js/ui/key-binds.js",
   "js/ui/settings-export.js",
   "js/physics/aero-zones.js",
@@ -412,6 +413,7 @@ const FULL = [
   // names them, and a session without navigator.xr never fetches them.
   "js/xr/xr-opts.js",   // SETTINGS › VR rows; call-time GameStore / SettingRow
   "js/xr/xr-boot.js",
+  "js/ui/hud-minimap.js",    // HudMinimap: the #minimap track map GameHud draws each HUD tick (#1656)
   "js/ui/hud.js",
   "js/ui/results-story.js",
   "js/ui/results-sheet.js",
@@ -678,6 +680,7 @@ const HARD_EDGES = [
   ["js/camera/cam-groups.js", "js/ui/hud.js"],      // ONBOARD_IDS = CamGroups.ONBOARD at eval
   ["js/ui/hud-tyres.js", "js/ui/hud.js"],
   ["js/ui/hud-skin.js", "js/ui/hud.js"],            // updateHud calls HudSkin.skinAccent (call time; ordered with its peers)
+  ["js/ui/hud-minimap.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its HudMinimap
   ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
