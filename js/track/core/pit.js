@@ -333,11 +333,12 @@ const TrackPit = (function () {
     // The epsilon is load-bearing: a window sized to EXACTLY the row's length
     // compresses by a float's width, and `pitch 11.00 < 11` then drops every
     // bay on the circuit. A row that just fits is a row that fits.
-    if ((count - 1) * pitch > hi - lo + 1e-6) pitch = Math.max(BOX_LEN + 1, (hi - lo) / (count - 1));
+    const fullRowFits = (count - 1) * PITCH <= hi - lo + 1e-6;
+    if (!fullRowFits) pitch = Math.max(BOX_LEN + 1, (hi - lo) / (count - 1));
     // A compressed row paints its boxes closer than a bay is wide (Jeddah's
     // 190 m window: 10.0 m against 10.8), so it places no bays — two would
     // interpenetrate by the difference on every party wall.
-    const hasBays = r.hasBays && pitch >= PITCH - 1e-6;
+    const hasBays = r.hasBays && fullRowFits;
     const span = (count - 1) * pitch;
     const poleT = through(wrap(-GRID_POLE_M, L));
     const first = Math.min(Math.max(poleT + GRID_CLEAR, lo), Math.max(lo, hi - span));

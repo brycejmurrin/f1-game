@@ -1032,6 +1032,31 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   assert.equal(res.skipped, 0, "every row passes its oneOf / type check");
 });
 
+test("caption settings keys are in SPEC and round-trip", () => {
+  const keys = ["captions", "captionSize", "captionPos", "captionBg", "captionSpeakerInk"];
+  const { SettingsExport, collect } = boot({ disk: {
+    "apex26.captions": JSON.stringify("spoken"),
+    "apex26.captionSize": JSON.stringify("large"),
+    "apex26.captionPos": JSON.stringify("bottom"),
+    "apex26.captionBg": JSON.stringify(60),
+    "apex26.captionSpeakerInk": JSON.stringify("off"),
+  } });
+  const inSpec = new Set(SettingsExport.SPEC.map((r) => r.k));
+  for (const k of keys) assert.ok(inSpec.has(k), k + " needs a SPEC row");
+  const f = collect("changes");
+  assert.equal(f.settings.appearance.captions, "spoken");
+  assert.equal(f.settings.appearance.captionSize, "large");
+  assert.equal(f.settings.appearance.captionPos, "bottom");
+  assert.equal(f.settings.appearance.captionBg, 60);
+  assert.equal(f.settings.appearance.captionSpeakerInk, "off");
+  const b = boot();
+  const res = b.loadSettings(f);
+  assert.equal(res.ok, true);
+  assert.equal(res.skipped, 0);
+  assert.equal(JSON.parse(b.disk.get("apex26.captions")), "spoken");
+  assert.equal(JSON.parse(b.disk.get("apex26.captionBg")), 60);
+});
+
 test("Home settings and bounded visual profiles survive settings backup without carrying unrelated state", () => {
   const profiles = [{ id: "profile-1", name: "Night", values: { homeScene: "night", homeCamera: "rear", uiScale: 109.25,
     titleLayout: { v: 2, wide: { btns: { x: 18 } } }, lookCareer: { density: "roomy" }, steering: "pro", account: "secret" } }];
