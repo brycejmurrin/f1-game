@@ -39,8 +39,10 @@ Playwright hang after a mid-run `version.json` bump.
    node tools/gen/gen-shell.mjs
    ```
    Tags in the committed shell read `?v=dev`. `bump-cache --apply` refuses on
-   this repo. `version.json` is a generated file (the edit hook blocks a hand edit);
-   a deploy-side bump mid-run reloads every open page, so do not deploy during a run.
+   this repo. `version.json` is a generated file (the edit hook blocks a hand edit).
+   **Never deploy during a Playwright run:** the shell guard compares the page's
+   `<meta name="apex-build">` with a no-store `version.json`, and a newer build
+   reloads every open page mid-test (timeouts).
 
 5. **Test offline behaviour.**
    ```sh
@@ -57,8 +59,7 @@ Playwright hang after a mid-run `version.json` bump.
 
 - Hand-maintaining a precache manifest parallel to `index.html`.
 - Hand-bumping numeric `?v=N` or only `version.json`.
-- **A build bump landing mid Playwright run** — shell guard reloads every
-  open page → timeouts (see step 4).
+- A build bump landing mid Playwright run (step 4).
 - **Stale pause menu after deploy** — pause/settings DOM is inline in
   `index.html` (not `?v=` JS). If buttons/layout are old while in-race HUD
   updated, the installed shell did not reload.

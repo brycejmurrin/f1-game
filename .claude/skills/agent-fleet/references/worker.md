@@ -55,7 +55,7 @@ your only escalation path besides the user; ask it instead of guessing.
    with a failing test first → `steward`). On a CI wake, `ci-watch --sha
    <current head> --once` — `= ci running (0 failed)` is **not** stale; only
    `= ci passed` on that head dismisses. Re-read the head SHA before every
-   push (paced by the brief's `PUSH SLOT`: `launch-policy.md`, Paced push); merge the base in, never rebase or force-push. Mark ready only after
+   push (one push per green cycle); merge the base in, never rebase or force-push. Mark ready only after
    `ready-gate.mjs` exits 0. Arming is Merge Desk's; Grok Bot merges or
    arms only at the level recorded in role-merge-holder.md; always a merge commit. Never write "do not merge" lines in the PR
    body; the only hold is a line starting `MERGE-HOLD:`.
@@ -84,7 +84,7 @@ Keep working on anything the blocker does not touch while you wait.
   (`send_later`), and end the turn silently. A green per-job event needs no
   reply; only a red, a review or a merge conflict is work.
 - The harness Stop hook (`~/.claude/stop-hook-git-check.sh`, outside the repo,
-  not changeable here) is answered, not obeyed, when a push is held or the PR
+  not changeable here, and absent on some hosts) is answered, not obeyed, when a push is held or the PR
   merged: `git checkout --detach origin/<deploy>` clears its unpushed count.
   A user's "don't commit X" beats the hook.
 - One git verb per Bash call for `push`, `fetch` and `worktree add`; chained

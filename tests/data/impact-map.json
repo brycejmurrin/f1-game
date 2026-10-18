@@ -347,7 +347,8 @@
         "tests/unit/driving-cues.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs"
       ]
     },
     "js/audio/engine.js": {
@@ -796,6 +797,7 @@
       "create": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/pause-silence.test.mjs",
@@ -2460,6 +2462,7 @@
       ],
       "getAeroFlapSet": [
         "tests/unit/aero-flap-travel.test.mjs",
+        "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs"
       ],
       "getCarDecalMesh": [
@@ -2516,6 +2519,9 @@
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/mirror-glass-night.test.mjs"
+      ],
+      "releaseIdleFlaps": [
+        "tests/unit/car-mesh-crew-cache.test.mjs"
       ],
       "*": [
         "tests/unit/hud-speed-parity.test.mjs"
@@ -2897,6 +2903,9 @@
         "tests/unit/livery-design.test.mjs"
       ],
       "history": [
+        "tests/unit/livery-design.test.mjs"
+      ],
+      "paint": [
         "tests/unit/livery-design.test.mjs"
       ],
       "value": [
@@ -5202,6 +5211,7 @@
         "tests/unit/telemetry-view-resize.test.mjs"
       ],
       "*": [
+        "tests/unit/css-has-scope.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ]
     },
@@ -6845,6 +6855,9 @@
       "garageNow": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "garageSeat": [
+        "tests/unit/car-mesh-crew-cache.test.mjs"
+      ],
       "getSetupPreviewMesh": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
@@ -6859,6 +6872,9 @@
       ],
       "presentOpts": [
         "tests/unit/garage-panel-side.test.mjs"
+      ],
+      "spMeshBust": [
+        "tests/unit/car-mesh-crew-cache.test.mjs"
       ],
       "startDriveOut": [
         "tests/unit/garage-arrival.test.mjs",
@@ -6938,6 +6954,9 @@
         "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "endLivPreview": [
+        "tests/unit/livery-draft-mesh-cache.test.mjs"
+      ],
       "framePreset": [
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -6953,6 +6972,7 @@
         "tests/specs/parts-setup-ids.spec.js",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-followups.test.mjs",
+        "tests/unit/livery-draft-mesh-cache.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "renderStatBars": [
@@ -9555,7 +9575,8 @@
         "tests/unit/brake-cue.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs"
       ]
     },
     "js/physics/collide.js": {
@@ -9861,6 +9882,7 @@
         "tests/unit/player-forces.test.mjs"
       ],
       "*": [
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/trail-brake-turnin.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
@@ -10368,6 +10390,20 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/voice-pack.test.mjs"
+      ]
+    },
+    "js/race/event-journal.js": {
+      "create": [
+        "tests/unit/event-journal.test.mjs"
+      ],
+      "onFacts": [
+        "tests/unit/event-journal.test.mjs"
+      ],
+      "push": [
+        "tests/unit/event-journal.test.mjs"
+      ],
+      "update": [
+        "tests/unit/event-journal.test.mjs"
       ]
     },
     "js/race/flying-start.js": {
@@ -10965,10 +11001,12 @@
     },
     "js/race/race-facts.js": {
       "create": [
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
       ],
       "observe": [
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs"
       ],
       "reset": [
@@ -11034,6 +11072,7 @@
       "create": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
@@ -11079,6 +11118,7 @@
       ],
       "update": [
         "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
       ]
@@ -11147,6 +11187,7 @@
     "js/race/radio-lines.js": {
       "create": [
         "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-lines.test.mjs",
@@ -12781,6 +12822,9 @@
       "disposeKeepingContext": [
         "tests/unit/hunt-tlx-create-undo.test.mjs"
       ],
+      "disposePooled": [
+        "tests/unit/tlx-texture-release.test.mjs"
+      ],
       "drawInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
@@ -12911,6 +12955,9 @@
       ],
       "resizeNow": [
         "tests/unit/tlx-round2.test.mjs"
+      ],
+      "retireTexture": [
+        "tests/unit/tlx-texture-release.test.mjs"
       ],
       "setRange0": [
         "tests/unit/tlx-hunt3.test.mjs",
@@ -13982,6 +14029,29 @@
         "tests/unit/player-tools-ui.test.mjs"
       ]
     },
+    "js/ui/captions.js": {
+      "push": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "radioWho": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setBg": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setMode": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setPos": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setSize": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setSpeakerInk": [
+        "tests/unit/captions.test.mjs"
+      ]
+    },
     "js/ui/condition-cue-controls.js": {
       "apply": [
         "tests/unit/player-tools-ui.test.mjs"
@@ -14451,6 +14521,9 @@
       ]
     },
     "js/ui/hud-strategy.js": {
+      "behindThreat": [
+        "tests/unit/hud-strategy.test.mjs"
+      ],
       "fmtLaps": [
         "tests/unit/hud-strategy.test.mjs"
       ],
