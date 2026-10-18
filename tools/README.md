@@ -185,6 +185,15 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/voice-corpus.mjs** | Races the game VM and writes radio lines by channel to `tools/gen/voice-corpus.json` for voicepack.mjs. | audio-debug |
 | **gen/voicepack.mjs** | Author-time radio voice pack (Kokoro-82M) → `assets/voice/<id>.{bin,json}`; `--list` prints the phrases. | audio-debug |
 
+### `tools/docs/`
+
+Agent-facing generated pages: the coverage table, the hook index and the static impact map.
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **docs/gen-agent-index.mjs** | Regenerates `docs/agent-index.json`, `docs/AGENT-HOOKS.md` and `tests/data/impact-map.json`; `--check`. | agent-view |
+| **docs/gen-coverage-table.mjs** | Regenerates the per-file coverage page from each suite's header (or its groups.json note); `--check`. | check-changes |
+
 ### `tools/shot/`
 
 Headless observation of the running game: framed screenshots, one-expression evals, the agent surface, a CPU profile.
