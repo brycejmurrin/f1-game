@@ -27,4 +27,5 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Fixers may screenshot](fixers-may-screenshot.md) — UI sessions: screenshots and screenshot loops allowed (Bryce 06:37Z 10-17); keep the ~15-min per-defect cap
 - [Lanes keep working](lanes-keep-working.md) — 2026-10-17: lanes pull deploy and take the next item in their area after a dry round; no FINAL unless the area is empty
 - [Ask via AskUserQuestion](ask-via-askuserquestion.md) — decisions/asks for Bryce go through AskUserQuestion with what/why/options explained
+- [Preview must look different](preview-must-look-different.md) — design sheets must differ in the picture (pixel-diff, close-up framing), not just in mm metrics; Bryce: "they all look the same"
 - [Synced plugins not in child sessions](synced-plugins-not-in-child-sessions.md) — plugin skills load in the parent session and its subagents, not in create_session siblings; run plugin invocations here

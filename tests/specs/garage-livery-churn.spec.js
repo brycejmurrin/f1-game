@@ -7,7 +7,11 @@
 // hidden coalesced TLX run per set: edit N paid for N - 1 paint jobs nobody could see.
 // Contract, measured on the shipped TLX backend: after a warm-up, N more WING colour edits (the flap key; each a
 // colour never seen before, as a dragged picker gives) create NO new GPU textures, and once the edits pause the
-// next edit leaves the coalesced runs, geometries and render objects where the warm-up left them.
+// next edit leaves the flap meshes, coalesced runs and textures where the warm-up left them.
+// THE LEAKING CACHE, COUNTED DIRECTLY: renderer.info.memory.geometries and three's RenderObject count follow what
+// the last frames drew (deploy tip 75864637: 11 → 34 → 12 → 34 …), and even TLX's live-geometry census after a
+// forced GC swings ~22 between edits as the bay's rebuild lands (35/57 on the tip, 38/61 on the base, both flat).
+// None of them is the leak. The flap caches are: CarMesh.flapState() — the base held one more set per wing colour.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const WARM = 3, EDITS = 6;
@@ -20,7 +24,7 @@ const frames = (page, n) => page.evaluate((k) => new Promise((done) => {
   let i = 0; const f = () => (++i >= k ? done(null) : requestAnimationFrame(f)); requestAnimationFrame(f);
 }), n);
 
-test("N paint edits in the garage leave GPU textures, flap runs, geometries and render objects flat (TLX)", async ({ page }) => {
+test("N paint edits in the garage leave GPU textures, flap meshes, flap runs and textures flat (TLX)", async ({ page }) => {
   test.setTimeout(480000);   // ~10 s an edit on SwiftShader, plus boot
   await page.setViewportSize({ width: 844, height: 390 });
   await page.addInitScript(() => {
@@ -45,11 +49,14 @@ test("N paint edits in the garage leave GPU textures, flap runs, geometries and 
     b.createTexture = function (t, o) { if (!t.isRenderTargetTexture && !t.isDepthTexture) C.made++; return c(t, o); };
     b.destroyTexture = function (t, ...a) { if (!t.isRenderTargetTexture && !t.isDepthTexture) C.destroyed++; return d(t, ...a); };
   });
-  const read = () => page.evaluate(() => {
-    const r = window.renderer, co = GLX.__tlx.coState();
-    return { gpuTex: window.__churn.made, runs: co.runs, geo: r.info.memory.geometries, tex: r.info.memory.textures,
-      ro: r._objects._renderObjects.size };
-  });
+  const cdp = await page.context().newCDPSession(page);
+  const read = async () => {
+    for (let i = 0; i < 2; i++) await cdp.send("HeapProfiler.collectGarbage");   // the second pass collects what the first released
+    return page.evaluate(() => {
+      const r = window.renderer, co = GLX.__tlx.coState(), f = CarMesh.flapState ? CarMesh.flapState() : null;
+      return { gpuTex: window.__churn.made, runs: co.runs, flaps: f, tex: r.info.memory.textures };
+    });
+  };
   let n = 0;
   const edit = async () => {
     n++;
@@ -74,7 +81,8 @@ test("N paint edits in the garage leave GPU textures, flap runs, geometries and 
   test.info().annotations.push({ type: "churn", description: JSON.stringify(rows) });
   expect(end.gpuTex - warm.gpuTex, `GPU textures created by ${EDITS + 1} edits after the warm-up (each edit used to make new ones): ${JSON.stringify(rows)}`).toBe(0);
   expect(end.runs, `coalesced flap runs: ${rows.map((r) => r.runs).join(" → ")}`).toBeLessThanOrEqual(warm.runs);
-  expect(end.geo, `geometries: ${rows.map((r) => r.geo).join(" → ")}`).toBeLessThanOrEqual(warm.geo);
-  expect(end.ro, `render objects: ${rows.map((r) => r.ro).join(" → ")}`).toBeLessThanOrEqual(warm.ro);
+  expect(warm.flaps && warm.flaps.sets, "the turntable's wings come from the flap-set cache (CarMesh.flapState)").toBeGreaterThan(0);
+  expect(end.flaps.sets, `flap sets held: ${rows.map((r) => r.flaps.sets).join(" → ")}`).toBeLessThanOrEqual(warm.flaps.sets);
+  expect(end.flaps.elements, `flap elements held: ${rows.map((r) => r.flaps.elements).join(" → ")}`).toBeLessThanOrEqual(warm.flaps.elements);
   expect(end.tex, `textures: ${rows.map((r) => r.tex).join(" → ")}`).toBeLessThanOrEqual(warm.tex);
 });

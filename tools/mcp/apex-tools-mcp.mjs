@@ -1056,6 +1056,23 @@ const CATALOG = [
       required: ["file"],
     },
   },
+  {
+    name: "apex_viewer",
+    week: 8,
+    kind: "tree",
+    description: "Tree — writes ONE self-contained three.js viewer page (no browser, seconds): a car customiser that runs the game's own Car3D in the page (every team, livery, finish and garage part) and circuits (Tracks.build centreline, racing line, curvature): artifacts/viewer/apex-viewer.html. Publish it as an Artifact to show the user. Neither list given: all cars + monza, spa, monaco, suzuka. PNG stills and variant sheets are the CLI's --shots / --sheet (they launch Chromium). Skill: playwright-probe.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        cars: { type: "array", maxItems: 12, items: { type: "string" }, description: "Team ids (Teams.LIST), or [\"all\"]; [] for none." },
+        circuits: { type: "array", maxItems: 80, items: { type: "string" }, description: "Circuit ids (Tracks.LIST), or [\"all\"]; [] for none." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
 ];
 
 function badArgs(message, fix) {
@@ -1669,6 +1686,16 @@ function buildArgv(name, args) {
         argv.push("--test-name-pattern", pat);
       }
       argv.push(file);
+      return argv;
+    }
+    case "apex_viewer": {
+      const argv = [...nodeTool("viewer/build-viewer.mjs"), "--json"];
+      for (const k of ["cars", "circuits"]) {
+        if (args[k] === undefined) continue;
+        const ids = (Array.isArray(args[k]) ? args[k] : []).map(String);
+        if (ids.some((id) => !/^[a-z0-9_]{1,32}$/.test(id))) badArgs(`apex_viewer: ${k} must be lowercase ids`, `e.g. {"${k}":["${k === "cars" ? "ferrari" : "monza"}"]}, or ["all"].`);
+        argv.push(`--${k}=${ids.join(",")}`);
+      }
       return argv;
     }
     case "apex_eval": {
@@ -2626,7 +2653,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 // wrap here; derive honest hints from the catalog instead of restating them per
 // tool. Clients treat these as untrusted hints, so they are self-description,
 // not a permission boundary — the pins and the lock remain the real guards.
-const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity"]);
+const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity", "apex_viewer"]);
 const DESTRUCTIVE = new Set(["apex_job_cancel"]);
 const OPEN_WORLD = new Set(["apex_ci_status", "apex_who_is_on_it"]);
 function toolAnnotations(entry) {
@@ -2714,6 +2741,7 @@ const OUTPUT_SCHEMAS = {
   apex_who_is_on_it: cliOut({ hours: S("number"), fetched: S("boolean"), branch: S("string"), live: S("array"), claims: S("array"),
     touched: S("array") }),
   apex_car_audit: cliOut({}, ["array", "null"]),
+  apex_viewer: cliOut({ ok: S("boolean"), out: S("string"), bytes: S("number"), cars: S("array"), circuits: S("array"), error: S("string") }),
   apex_track_audit: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), track: S("string"), verify: S("object"),
     float: S("object"), hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
   apex_job_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), jobs: S("array"), error: S("string"),
