@@ -2460,6 +2460,7 @@
       ],
       "getAeroFlapSet": [
         "tests/unit/aero-flap-travel.test.mjs",
+        "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs"
       ],
       "getCarDecalMesh": [
@@ -2516,6 +2517,9 @@
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/mirror-glass-night.test.mjs"
+      ],
+      "releaseIdleFlaps": [
+        "tests/unit/car-mesh-crew-cache.test.mjs"
       ],
       "*": [
         "tests/unit/hud-speed-parity.test.mjs"
@@ -6846,6 +6850,9 @@
       "garageNow": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "garageSeat": [
+        "tests/unit/car-mesh-crew-cache.test.mjs"
+      ],
       "getSetupPreviewMesh": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
@@ -6860,6 +6867,9 @@
       ],
       "presentOpts": [
         "tests/unit/garage-panel-side.test.mjs"
+      ],
+      "spMeshBust": [
+        "tests/unit/car-mesh-crew-cache.test.mjs"
       ],
       "startDriveOut": [
         "tests/unit/garage-arrival.test.mjs",
@@ -6939,6 +6949,9 @@
         "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "endLivPreview": [
+        "tests/unit/livery-draft-mesh-cache.test.mjs"
+      ],
       "framePreset": [
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -6954,6 +6967,7 @@
         "tests/specs/parts-setup-ids.spec.js",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-followups.test.mjs",
+        "tests/unit/livery-draft-mesh-cache.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "renderStatBars": [
@@ -12782,6 +12796,9 @@
       "disposeKeepingContext": [
         "tests/unit/hunt-tlx-create-undo.test.mjs"
       ],
+      "disposePooled": [
+        "tests/unit/tlx-texture-release.test.mjs"
+      ],
       "drawInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
@@ -12912,6 +12929,9 @@
       ],
       "resizeNow": [
         "tests/unit/tlx-round2.test.mjs"
+      ],
+      "retireTexture": [
+        "tests/unit/tlx-texture-release.test.mjs"
       ],
       "setRange0": [
         "tests/unit/tlx-hunt3.test.mjs",
