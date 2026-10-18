@@ -533,6 +533,7 @@ const AppearanceOpts = (function () {
     if (byId("pm-cvd")) {
       SettingRow.wire("pm-cvd", { values: CVD_MODES, read: () => cvdMode, write: (v) => setCvdMode(v) });
     }
+    if (typeof Captions !== "undefined" && Captions.initAppearanceRows) Captions.initAppearanceRows();
     SettingRow.wire("pm-units", { values: UNITS, read: () => units, write: (v) => setUnits(v) });
     SettingRow.wire("pm-helptext", { values: HELPS, read: () => help, write: (v) => setHelp(v) });
     buildSwatches("pm-menuaccent-swatches", "menu");

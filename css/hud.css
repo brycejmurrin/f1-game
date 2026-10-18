@@ -1372,6 +1372,53 @@ body:not([data-hud-arrange]) :is(#lights, #announce) { pointer-events: none; }
 body:not(.desktop) #announce-text {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
 }
+/* Non-radio caption strip (spotter): js/ui/captions.js */
+#captions.cap-strip {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--sab, 0px) + 12px / var(--hud-z, 1));
+  display: flex;
+  align-items: center;
+  gap: calc(var(--gap) * 0.35);
+  max-width: min(440px, calc(var(--caption-ch, 38) * 1ch + 4rem));
+  padding: calc(var(--gap) * 0.35) calc(var(--gap) * 0.55);
+  background: rgb(8 8 14 / calc(var(--caption-bg-a, 0.82) * var(--hud-panel-a-eff, 1)));
+  border-radius: var(--r-sm);
+  font-family: var(--font-hud);
+  font-size: calc(var(--fs-3) * var(--caption-scale, 1));
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+  z-index: 16;
+  pointer-events: none;
+  text-wrap: pretty;
+}
+#captions.cap-strip[hidden] { display: none; }
+#captions .cap-side { font-size: 1.15em; opacity: 0.9; min-width: 1.1em; text-align: center; }
+#captions .cap-who {
+  flex: 0 0 auto;
+  font-size: 0.78em;
+  letter-spacing: var(--ls-2);
+  opacity: 0.85;
+  color: var(--caption-speaker, var(--accent));
+}
+:root[data-caption-speaker-ink="off"] #captions .cap-who { color: var(--text); opacity: 0.75; }
+#captions .cap-text { flex: 1 1 auto; min-width: 0; max-width: calc(var(--caption-ch, 38) * 1ch); }
+html[data-caption-pos="top"] #captions.cap-strip {
+  top: calc(var(--sat, 0px) + 8px / var(--hud-z, 1));
+  bottom: auto;
+}
+html[data-caption-pos="bottom"] #captions.cap-strip {
+  top: auto;
+  bottom: calc(var(--sab, 0px) + 12px / var(--hud-z, 1));
+}
+html[data-caption-pos="mirror"] #captions.cap-strip {
+  left: auto;
+  right: calc(var(--sar, 0px) + 8px / var(--hud-z, 1));
+  transform: none;
+}
+html[data-captions="off"] #captions.cap-strip { display: none !important; }
 /* ON TOUCH THE CARD STAYS IN THE DOCK LANE. --announce-lane-x / -shift / -w
    (js/ui/hud.js announceLane) are the gap the dock groups leave under the
    tower, already inset by --sal/--sar, in SCREEN px. --hud-z lives on this
