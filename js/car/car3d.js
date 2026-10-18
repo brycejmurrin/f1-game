@@ -791,8 +791,8 @@ const Car3D = (function () {
                       inlet.y + inlet.height * 0.08, inlet.z,
                       inlet.width * 0.48, inlet.height * 0.88, c1, 0.055, 0.012);
       }
-      const fenceN = Math.max(0, Math.min(6, Math.round(floorStyle.fences)));
-      const fenceH = Math.max(0.6, Math.min(1.6, floorStyle.fenceH));
+      const fenceN = Math.max(0, Math.min(10, Math.round(floorStyle.fences)));
+      const fenceH = Math.max(0.6, Math.min(2.25, floorStyle.fenceH));
       const fenceStep = fenceN > 1 ? 1.08 / (fenceN - 1) : 0;
       // Floor fences sit outboard of the pod. Keep their tops under the
       // sponsor board (yFrac 0.32..0.80) so a side ray hits the board first
@@ -1999,9 +1999,10 @@ const Car3D = (function () {
     // BIG SCOOP (STYLE): an oversized brake-duct mouth proud of each FRONT tyre's leading edge.
     if (!ckpt && brakeStyle && brakeStyle.bigScoop) {
       const sc = (brakeStyle.cal || [0.85, 0.12, 0.10]).map((v) => Math.min(v, 1));
+      const sm = Math.max(1, Math.min(1.45, (brakeStyle.rotorScale || 1) / 1.18));
       for (const s of [-1, 1]) {
-        addBox(out, s * 0.60, 0.34, AXLES.frontZ + 0.40, 0.16, 0.20, 0.16, DARK);
-        addBox(out, s * 0.60, 0.34, AXLES.frontZ + 0.49, 0.18, 0.22, 0.03, sc, SURFACES.metal);
+        addBox(out, s * 0.60, 0.34, AXLES.frontZ + 0.40, 0.20 * sm, 0.26 * sm, 0.20 * sm, DARK);
+        addBox(out, s * 0.60, 0.34, AXLES.frontZ + 0.52, 0.24 * sm, 0.28 * sm, 0.04, sc, SURFACES.metal);
       }
     }
 
