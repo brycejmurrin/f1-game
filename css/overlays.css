@@ -1016,6 +1016,7 @@ body:has(dialog:modal) #update-chip { display: none; }
    peek reveal below out-ranks these on purpose, for exactly as long as the
    peek lasts — js/ui/screen-looks.js flushes the box away when it ends. */
 #pausemenu:not([open]) { display: none; }
+#trackdesigner:not([open]) { display: none; }   /* restated for the PEEK reveal below (css-layers guard); css/editor.css owns the open look */
 /* Short phone (≤400px tall): RACE TOOLS as a 2-col grid with no empty cell.
    experience.css's #pm-quick-doors is 3-col in this same overlays layer; the
    #pausemenu id prefix wins on specificity. An odd leftover (REWIND & RETRY
@@ -1046,8 +1047,8 @@ body:has(dialog:modal) #update-chip { display: none; }
    (this layer) is beaten only by an important rule of higher specificity. */
 :root[data-appearance-peek="pause"] #pausemenu:not([open]),
 :root[data-appearance-peek="race"] #race-settings:not([open]),
-:root[data-appearance-peek="designer"] #trackdesigner:not([open]),
 :root[data-appearance-peek="popups"] #standings:not([open]) { display: grid !important; z-index: 30; }
+:root[data-appearance-peek="designer"] #trackdesigner:not([open]) { display: grid !important; z-index: 30; }
 :root[data-appearance-peek="datahub"] #datahub:not([open]) { display: flex !important; z-index: 30; }
 :root[data-appearance-peek="select"] #select[hidden],
 :root[data-appearance-peek="career"] #career[hidden],
