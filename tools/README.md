@@ -185,6 +185,15 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/voice-corpus.mjs** | Races the game VM and writes radio lines by channel to `tools/gen/voice-corpus.json` for voicepack.mjs. | audio-debug |
 | **gen/voicepack.mjs** | Author-time radio voice pack (Kokoro-82M) → `assets/voice/<id>.{bin,json}`; `--list` prints the phrases. | audio-debug |
 
+### `tools/docs/`
+
+Agent-facing generated pages: the coverage table, the hook index and the static impact map.
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **docs/gen-agent-index.mjs** | Regenerates `docs/agent-index.json`, `docs/AGENT-HOOKS.md` and `tests/data/impact-map.json`; `--check`. | agent-view |
+| **docs/gen-coverage-table.mjs** | Regenerates the per-file coverage page from each suite's header (or its groups.json note); `--check`. | check-changes |
+
 ### `tools/shot/`
 
 Headless observation of the running game: framed screenshots, one-expression evals, the agent surface, a CPU profile.
@@ -441,6 +450,14 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **desktop/pack-dry-run.mjs** | Desktop pack dry-run: stage + stamp to a temp dir, check every electron-builder input, build no installer. | check-changes |
 | **desktop/stage-files.mjs** | Shared allow-list of runtime files/dirs staged for Pages and Electron packaging. | check-changes |
 | **desktop/stage.mjs** | Stage the deployable site folder (Pages / Electron) from the shared allow-list; optional content-hash stamp. | check-changes |
+
+### `tools/hooks/`
+
+Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason trailer.
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **hooks/ratchet-reason.mjs** | Commit-hook ratchet absorb: 20 lines silent, 40 with a Ratchet-Reason trailer. | slim-bloat |
 
 ## Test runner & coverage
 

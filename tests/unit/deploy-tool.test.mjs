@@ -224,17 +224,17 @@ test("prose docs are never cured: no doc carries generated ladder digits any mor
 /* TWO PRs THAT EACH ADD A UNIT FILE (2026-09-30). This used to be the
  * clean-but-stale merge: both sides rewrote the committed ladder figures to the
  * same "N of M+1", git merged the identical hunks, and the union was a file
- * short until mergeDeployTip() re-ran the generators. The figures are not
- * committed any more, so the same history merges clean AND consistent: nothing
- * to regenerate, `npm run gen:check` green on the bare merge. Built in a
- * throwaway copy of the tree (text files only) and merged with the REAL
- * mergeDeployTip() from the copy's own deploy.mjs.
+ * short until mergeDeployTip() re-ran the generators. The ladder figures are
+ * not committed any more. The coverage page is: it lists every unit file, so
+ * the union's only follow-up is docs/TESTING-COVERAGE.md. Built in a throwaway
+ * copy of the tree (text files only) and merged with the REAL mergeDeployTip()
+ * from the copy's own deploy.mjs.
  *
  * Freshen generated files on the copy BEFORE the base commit: a ship tip that
  * already carried a stale ARCHITECTURE.md count (#697+#740, 2026-10-02) made
  * regenerateDerived write a follow-up commit for a reason that has nothing to
  * do with the unit-file merge under test, and this assertion went red. */
-test("two sides that each add a unit file merge clean and leave nothing stale", () => {
+test("two sides that each add a unit file merge clean and refresh only the coverage page", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-regen-"));
   const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
   const genCheck = () => spawnSync("npm", ["run", "-s", "gen:check"], { cwd: dir, encoding: "utf8" });
@@ -270,8 +270,10 @@ test("two sides that each add a unit file merge clean and leave nothing stale", 
       `const m = await import(${JSON.stringify(path.join(dir, "tools/ci/deploy.mjs"))}); console.log(m.mergeDeployTip());`],
       { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     assert.doesNotMatch(out, /AGENTS\.md|TESTING\.md|PREPUSH-GATE-LADDER/, "no ladder doc needed re-deriving: " + out);
-    assert.notEqual(g("log", "-1", "--format=%s"), REGEN_MESSAGE, "nothing to regenerate, so no follow-up commit");
-    assert.equal(g("log", "-1", "--format=%P").split(" ").length, 2, "HEAD is the merge itself");
+    assert.match(out, /TESTING-COVERAGE\.md/, "a new unit file is a coverage row: " + out);
+    assert.equal(g("log", "-1", "--format=%s"), REGEN_MESSAGE, "the coverage page is the derived follow-up");
+    assert.deepEqual(g("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").split("\n").filter(Boolean), ["docs/TESTING-COVERAGE.md"]);
+    assert.equal(g("log", "-1", "--skip=1", "--format=%P").split(" ").length, 2, "the commit under the follow-up is the merge");
     const check = genCheck();
     assert.equal(check.status, 0, "every generated file is fresh on the bare merge:\n" + check.stdout + check.stderr);
     assert.equal(g("status", "--porcelain"), "");

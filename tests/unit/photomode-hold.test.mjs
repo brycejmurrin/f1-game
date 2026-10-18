@@ -84,6 +84,7 @@ test('online Photo camera input integrates while shared physics continues; solo 
       _poseAt: null, photoMode: photo, setupPreviewOn: false,
       els: { lighting: { hidden: true }, camtune: { hidden: true }, flyby: { hidden: true } },
       announceT: 0, hitStop: 0, frozen: false, track: {}, physAcc: 0, PHYS_DT: 1 / 60, cars: [], renderAlpha: 0,   // track: the K1 null-track gate wants a built world
+      banner: { tick() {}, clear() {}, announce() {}, get t() { return 0; } }, feel: { shake: 0, camRoll: 0, hitStop: 0 },
       clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), updateHud() {},
       render: () => calls.render++, updatePhotoCam: () => calls.photo++, update: () => calls.physics++ };
     vm.runInNewContext(tick + '\ntickBody(20);', sandbox);

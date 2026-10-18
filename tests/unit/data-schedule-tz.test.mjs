@@ -11,6 +11,7 @@ import vm from "node:vm";
 import { readFileSync } from "node:fs";
 
 const SRC = readFileSync(new URL("../../js/data/schedule.js", import.meta.url), "utf8");
+const API_SRC = readFileSync(new URL("../../js/data/api.js", import.meta.url), "utf8");
 const ctx = vm.createContext({});
 vm.runInContext(SRC + ";globalThis.DataSchedule = DataSchedule;", ctx, { filename: "js/data/schedule.js" });
 const S = ctx.DataSchedule;
@@ -96,4 +97,82 @@ test("nextFlipAt: NEXT moves on at race start + 2 h (or the next UTC day for a d
   assert.equal(S.nextFlipAt(items, at + 2 * 3600e3), Date.parse("2026-12-06T15:00:00Z"));
   assert.equal(S.nextFlipAt([{ date: "2026-11-22" }], Date.parse("2026-11-22T10:00:00Z")), Date.parse("2026-11-23T00:00:00Z"));
   assert.equal(S.nextFlipAt(items, Date.parse("2027-01-01T00:00:00Z")), Infinity);
+});
+
+test("nextRace uses instants across DST and keeps a date-only fallback", () => {
+  const springForward = [
+    { name: "Finished", date: "2026-03-08", time: "07:30:00Z" },
+    { name: "DST edge", date: "2026-03-08", time: "10:30:00Z" },
+    { name: "Later", date: "2026-03-15" }
+  ];
+  assert.equal(S.nextRace(springForward, Date.parse("2026-03-08T10:00:00Z")).name, "DST edge");
+  assert.equal(S.nextRace(springForward, Date.parse("2026-03-08T13:00:01Z")).name, "Later");
+  assert.equal(S.nextRace([{ name: "Calendar only", date: "2026-11-01" }],
+    Date.parse("2026-11-01T23:59:59Z")).name, "Calendar only");
+  assert.equal(S.nextRace([{ date: "2026-11-01" }], Date.parse("2026-11-02T00:00:00Z")), null);
+});
+
+test("weekendSessions returns conventional and sprint weekends in UTC order", () => {
+  const normal = S.weekendSessions({
+    date: "2026-03-08", time: "05:00:00Z",
+    sessions: {
+      fp1: { date: "2026-03-06", time: "01:30:00Z" },
+      fp2: { date: "2026-03-06", time: "05:00:00Z" },
+      fp3: { date: "2026-03-07", time: "01:30:00Z" },
+      q: { date: "2026-03-07", time: "05:00:00Z" }
+    }
+  });
+  assert.deepEqual(Array.from(normal, (x) => x.key), ["fp1", "fp2", "fp3", "q", "r"]);
+  assert.deepEqual(Array.from(normal, (x) => x.label), ["FP1", "FP2", "FP3", "Q", "R"]);
+  assert.ok(normal.every((x) => Number.isFinite(x.startMs) && x.endMs > x.startMs && x.est === true));
+
+  const sprint = S.weekendSessions({
+    date: "2026-10-25", time: "19:00:00Z",
+    sessions: {
+      fp1: { date: "2026-10-23", time: "17:30:00Z" },
+      sq: { date: "2026-10-23", time: "21:30:00Z" },
+      s: { date: "2026-10-24", time: "18:00:00Z" },
+      q: { date: "2026-10-24", time: "22:00:00Z" }
+    }
+  });
+  assert.deepEqual(Array.from(sprint, (x) => x.key), ["fp1", "sq", "s", "q", "r"]);
+  assert.equal(sprint.find((x) => x.key === "sq").endMs - sprint.find((x) => x.key === "sq").startMs, 45 * 60e3);
+  assert.equal(sprint.find((x) => x.key === "s").endMs - sprint.find((x) => x.key === "s").startMs, 30 * 60e3);
+  assert.deepEqual(Array.from(S.weekendSessions({ date: "2026-11-22" }), (x) => x.key), [],
+    "a date-only race cannot invent a session instant");
+});
+
+test("F1API.schedule preserves Jolpica weekend session dates and times", async () => {
+  const body = { MRData: { RaceTable: { Races: [{
+    round: "19", raceName: "United States Grand Prix", date: "2026-10-25", time: "19:00:00Z",
+    FirstPractice: { date: "2026-10-23", time: "17:30:00Z" },
+    SprintQualifying: { date: "2026-10-23", time: "21:30:00Z" },
+    Sprint: { date: "2026-10-24", time: "18:00:00Z" },
+    Qualifying: { date: "2026-10-24", time: "22:00:00Z" }
+  }] } } };
+  const noop = () => {};
+  const apiCtx = vm.createContext({
+    F1Transport: { create: () => ({
+      request: () => Promise.resolve(body), cancelAll: noop, cacheEntryT: noop,
+      staleMark: noop, staleSince: noop, forget: noop
+    }) }
+  });
+  vm.runInContext(API_SRC + ";globalThis.F1API = F1API;", apiCtx, { filename: "js/data/api.js" });
+  const [race] = await apiCtx.F1API.schedule();
+  assert.deepEqual(JSON.parse(JSON.stringify(race.sessions)), {
+    fp1: { date: "2026-10-23", time: "17:30:00Z" },
+    sq: { date: "2026-10-23", time: "21:30:00Z" },
+    s: { date: "2026-10-24", time: "18:00:00Z" },
+    q: { date: "2026-10-24", time: "22:00:00Z" },
+    r: { date: "2026-10-25", time: "19:00:00Z" }
+  });
+});
+
+test("countdown is stable at boundaries and never goes negative", () => {
+  assert.equal(S.countdown(2 * 86400e3 + 3 * 3600e3 + 4 * 60e3 + 5e3), "2d 03h 04m");
+  assert.equal(S.countdown(3 * 3600e3 + 4 * 60e3 + 5e3), "3h 04m 05s");
+  assert.equal(S.countdown(4 * 60e3 + 5e3), "4m 05s");
+  assert.equal(S.countdown(999), "0m 00s");
+  assert.equal(S.countdown(0), "STARTED");
+  assert.equal(S.countdown(-1), "STARTED");
 });
