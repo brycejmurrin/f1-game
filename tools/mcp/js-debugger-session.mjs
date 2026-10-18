@@ -7,6 +7,13 @@ import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
 import { recordException, traceMethods } from "./js-debugger-trace.mjs";
 
 const clip = (s, max = 2000) => String(s || "").slice(0, max);
+/** One-line value of an object result from V8's preview, so an agent need not chain debugger_properties for `{a, b}`. */
+function previewSummary(r) {
+  const props = r?.preview?.properties;
+  if (!props) return undefined;
+  const body = props.slice(0, 12).map(p => `${clip(p.name, 40)}: ${clip(p.value, 60)}`).join(", ");
+  return clip(`${r.subtype === "array" ? "[" : "{"}${body}${r.preview.overflow || props.length > 12 ? ", …" : ""}${r.subtype === "array" ? "]" : "}"}`, 600);
+}
 const sourceLocation = p => ({ scriptId: p.scriptId, line: p.lineNumber + 1, column: (p.columnNumber ?? 0) + 1 });
 function exceptionPreview(value) {
   if (!value || typeof value.type !== "string") return undefined;
@@ -327,10 +334,10 @@ export class DebugSession {
     if (!callFrame) throw Error("Unknown frame index");
     const result = await this.connected().send("Debugger.evaluateOnCallFrame", { callFrameId: callFrame.callFrameId,
       expression, silent: true, throwOnSideEffect: !allowSideEffects, returnByValue: false,
-      generatePreview: false, objectGroup: token, timeout: 1000 }, 2000);
+      generatePreview: true, objectGroup: token, timeout: 1000 }, 2000);
     this.paused(token);
     const refused = !allowSideEffects && result.exceptionDetails && /side.?effect/i.test(JSON.stringify(result.exceptionDetails));
-    return { ...result, result: this.remember(result.result), ok: !result.exceptionDetails,
+    return { ...result, result: this.remember(result.result), summary: previewSummary(result.result), ok: !result.exceptionDetails,
       ...(refused ? { hint: "Refused as a possible side effect (V8 also treats localStorage/sessionStorage and similar reads as side-effecting). If the read is intended, retry with allowSideEffects:true." } : {}) };
   }
   async properties(token, objectId, offset, limit) {

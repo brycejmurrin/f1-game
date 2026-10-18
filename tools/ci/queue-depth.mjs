@@ -89,11 +89,11 @@ export const QUEUED_HOLD = 10;
 /** Live runs examined per call (one jobs request each). */
 export const MAX_RUNS = 30;
 /** Further QUEUED runs counted by jobs total_count (one per_page=1 request each). */
-export const MAX_COUNTED = 60;
+const MAX_COUNTED = 60;
 /** Pages of 100 runs read per status. */
-export const MAX_PAGES = 3;
+const MAX_PAGES = 3;
 /** Run statuses listed, waiting-for-a-runner first: that is where queued jobs live (#2181). */
-export const RUN_STATUSES = ["queued", "pending", "requested", "waiting", "in_progress"];
+const RUN_STATUSES = ["queued", "pending", "requested", "waiting", "in_progress"];
 const QUEUED_RUN = new Set(["queued", "pending", "requested", "waiting"]);
 export const DEFAULT_OUT = "apex-status/queue-depth.json";
 
@@ -308,7 +308,7 @@ export function pushVerdict(text, current, request = api) {
 
 /** Minutes of continuous ok that turn a hold into a go (--wait). */
 export const HYSTERESIS_MS = 2 * 60_000;
-export const WAIT_INTERVAL_S = 30;
+const WAIT_INTERVAL_S = 30;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const arrow = (xs) => xs.slice(-8).join("→");
 

@@ -94,3 +94,5 @@ Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
 
 The `"*|tod"` layer applies only when `gfx.hasPerChunkLights`. COPY VALUES exports
 `LightEdits` deltas; merged `lightState()` is observation, not a full export.
+
+Upstream graphics playbook (atmosphere, grading, shadows): [references/graphics-atmosphere-playbook.md](references/graphics-atmosphere-playbook.md).

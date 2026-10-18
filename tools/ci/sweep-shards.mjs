@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-export const SWEEP_TIMINGS_SEC = Object.freeze({
+const SWEEP_TIMINGS_SEC = Object.freeze({
   "tests/unit/baked-model-road-guard.test.mjs": 8.121,
   "tests/unit/build-steps.test.mjs": 25.081,
   "tests/unit/build-worker.test.mjs": 27.821,
@@ -43,7 +43,7 @@ export const SWEEP_TIMINGS_SEC = Object.freeze({
 
 // Median of the measured suite totals. New suites are intentionally charged
 // at this cost until the timing branch has a sample for them.
-export const UNKNOWN_SWEEP_SEC = 27.821;
+const UNKNOWN_SWEEP_SEC = 27.821;
 
 export function planSweepShards(files, { shards = 4, timings = SWEEP_TIMINGS_SEC } = {}) {
   if (!Number.isInteger(shards) || shards < 1) throw new Error(`invalid shard count: ${shards}`);
@@ -64,7 +64,7 @@ export function planSweepShards(files, { shards = 4, timings = SWEEP_TIMINGS_SEC
   }));
 }
 
-export function sweepFilesFromPackage(pkgPath = "package.json") {
+function sweepFilesFromPackage(pkgPath = "package.json") {
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
   const script = String(pkg.scripts?.["test:sweeps"] || "");
   return script.match(/tests\/unit\/[^\s]+/g) || [];
