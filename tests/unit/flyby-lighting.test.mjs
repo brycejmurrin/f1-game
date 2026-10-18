@@ -126,7 +126,7 @@ test("one flag decides the whole lens, and the preview carries it", () => {
   // XR Phase 0: camComfort() (motionReduced || immersive-vr; `comfort`, once per frame) shares the level
   // path so the HMD owns roll; dbgCam/cine still force-level for the flyby.
   assert.match(body, /const comfort = camComfort\(\);/, "render() resolves the comfort latch once per frame (perf hunt 2 F5)");
-  assert.match(body, /if \(dbgCam \|\| cine \|\| comfort\) \{\s*\n\s*camRoll = \(dbgCam && dbgCam\.roll\) \|\| 0;/,
+  assert.match(body, /if \(dbgCam \|\| cine \|\| comfort\) \{\s*\n\s*feel\.camRoll = \(dbgCam && dbgCam\.roll\) \|\| 0;/,
     "the live flyby would otherwise inherit the roll the last race left behind, and decay it over the " +
     "first half-second of a shot the editor showed level");
   assert.match(body, /const _near = cine \? FlybySeq\.NEAR/,
@@ -139,7 +139,7 @@ test("one flag decides the whole lens, and the preview carries it", () => {
     "thinning the fog while culling scenery at the unthinned fog wall trades haze for a hard edge of " +
     "missing world");
 
-  const apex = fs.readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8");
+  const apex = fs.readFileSync(new URL("../../js/agent/apex-cam.js", import.meta.url), "utf8");
   assert.match(apex, /fog: FlybySeq\.FOG, cine: true,/, "flybyCam must stamp the marker on its dbgCam");
 });
 
@@ -155,7 +155,7 @@ test("both the live screen and the editor's preview read them", () => {
   assert.match(body, /CamFovFit\.fitFovY\([\s\S]{0,80}\{ cine \}/,
     "the cinematic must fly the angle it was framed at, not the gameplay cap");
 
-  const apex = fs.readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8");
+  const apex = fs.readFileSync(new URL("../../js/agent/apex-cam.js", import.meta.url), "utf8");
   const at = apex.indexOf("flybyCam(u, shots)");
   assert.ok(at > 0, "__apex.flybyCam is gone — this guard is reading the wrong file");
   const cam = apex.slice(at, apex.indexOf("\n  },", at));

@@ -30,7 +30,7 @@ function lockTaper(vs, ref) {
 
 test("game.js ships the vs≤15 1.06 plateau / 15–30 blend / raw≥30 lockTaper", () => {
   const src = gameSource();
-  assert.match(src, /const vs = vStd\(Math\.abs\(c\.speed\)\),\s*raw = 1 \/ \(1 \+ vs \/ STEER_SPEED_REF\),\s*lockTaper = vs <= 15 \? 1\.06 : \(vs >= 30 \? raw : 1\.06 \+ \(raw - 1\.06\) \* \(vs - 15\) \/ 15\)/);
+  assert.match(src, /const vs = vStd\(Math\.abs\(c\.speed\)\),\s*raw = 1 \/ \(1 \+ vs \/ driveTune\.STEER_SPEED_REF\),\s*lockTaper = vs <= 15 \? 1\.06 : \(vs >= 30 \? raw : 1\.06 \+ \(raw - 1\.06\) \* \(vs - 15\) \/ 15\)/);
   assert.equal(/const lockTaper = 1 \/ \(1 \+ vStd\(Math\.abs\(c\.speed\)\) \/ STEER_SPEED_REF\);/.test(src), false,
     "old one-line hyperbolic lockTaper must be gone");
   assert.equal(/lockTaper = vs <= 15 \? 1 : \(vs >= 30 \? raw : 1 \+ \(raw - 1\) \* \(vs - 15\) \/ 15\)/.test(src), false,
