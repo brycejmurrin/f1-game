@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["paul_ricard"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
+      const { K, lapBounds, out, MAT, n, ds, pyMin, hash, every, along, anchor, vadd, onTrack,
         pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, modelGroup, prop, runoffApron,
@@ -234,9 +234,38 @@
       const bleacher = (s0, s1, side, gap, opts) => {
         opts = opts || {};
         const rows = opts.rows || 6, rise = opts.rise || 0.75, depth = opts.depth || 1.0;
-        along(s0, s1, opts.step || 9, (k, spacing) => {
+        const step = opts.step || 9;
+        along(s0, s1, step, (k, spacing) => {
           const a = anchor(k, side, gap);
-          const b = [a.r, a.u, a.t], seg = spacing * 0.94;
+          const b = [a.r, a.u, a.t];
+          const nb = Math.max(1, Math.round(step / ds));
+          const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap));
+          const chord = (lat) => {
+            const p = vadd(a.c, a.r, lat);
+            let c = spacing;
+            for (const q of kn) {
+              const pq = vadd(q.c, q.r, lat);
+              c = Math.min(c, Math.hypot(pq[0] - p[0], pq[1] - p[1], pq[2] - p[2]));
+            }
+            return c;
+          };
+          const swing = (() => {
+            let t = 0;
+            for (const q of kn) {
+              const dx = q.c[0] - a.c[0], dy = q.c[1] - a.c[1], dz = q.c[2] - a.c[2], dl = Math.hypot(dx, dy, dz) || 1;
+              const cos = Math.abs((dx * a.t[0] + dy * a.t[1] + dz * a.t[2]) / dl);
+              t = Math.max(t, Math.sqrt(Math.max(0, 1 - cos * cos)) / Math.max(0.2, cos));
+            }
+            return t;
+          })();
+          const rowSeg = (back) => {
+            const half = depth / 2;
+            const c = Math.min(spacing, chord(back - half), chord(back + half), chord(back));
+            const l = (c - depth * 0.5 * swing) * 0.94;
+            return l < 1.0 ? 0 : l;
+          };
+          const seg = rowSeg(side * (rows - 1) * depth / 2);
+          if (seg <= 0) return;
           // Scaffold rake: two tube legs per station carrying the whole tier.
           out._mat = MAT.METAL;
           for (const f of [0.25, 0.85]) {
@@ -250,15 +279,17 @@
             [0.62, 0.64, 0.68], b);
           for (let r = 0; r < rows; r++) {
             const back = r * depth, up = 0.5 + r * rise;
+            const rs = rowSeg(side * back) || seg;
+            if (rs <= 0) continue;
             const tier = addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
-              [depth, rise + 0.14, seg], r & 1 ? ALU : [0.71, 0.73, 0.76], b);
+              [depth, rise + 0.14, rs], r & 1 ? ALU : [0.71, 0.73, 0.76], b);
             // Thin, scattered crowd — a Paul Ricard grandstand is rarely full.
             // Never on a tier the road guard dropped: the figure floats (0.937).
             const h = hash(k * 13 + r * 7);
             if (h < 0.70 || tier === false) continue;
             out._mat = MAT.FABRIC;
             addBox(out, vadd(vadd(vadd(a.c, a.r, side * back),
-              a.t, (h - 0.5) * seg * 0.8), a.u, up + 0.55),
+              a.t, (h - 0.5) * rs * 0.8), a.u, up + 0.55),
               [0.5, 0.9, 0.55], h < 0.8 ? [0.80, 0.34, 0.28] : [0.30, 0.40, 0.66], b);
             out._mat = MAT.METAL;
           }
