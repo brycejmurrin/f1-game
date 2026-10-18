@@ -1,0 +1,1 @@
+New: 30 new paint schemes for every team in the garage LIVERY tab: matte, pearl, brushed, metal-flake, candy, tinted, chameleon and carbon finishes, plus a retro set that also reshapes the fin, engine-cover vents and spine.
