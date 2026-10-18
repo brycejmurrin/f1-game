@@ -47,6 +47,7 @@ var RaceFacts = {
 var EventJournal = {
   _stub: true,
   CAP: 256,
+  radioHooks: () => ({}),
   create: () => ({ reset: function () {}, update: function () {}, onFacts: function () {},
     events: () => [], count: () => 0, CAP: 256 }),
 };
