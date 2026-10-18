@@ -24,8 +24,11 @@ test("reserved finish ids are unique, past the shipped chain, and disjoint from 
   const reserved = Object.values(CM.FINISH_RESERVED);
   assert.equal(new Set(reserved).size, reserved.length);
   assert.ok(reserved.every((id) => id > 33), "34+ only: 20-33 are shipped surface ids");
-  const used = new Set(Object.values(CM.FINISH_SURFACE).concat(Object.values(CM.SURFACES)));
+  // A reserved id may be taken by its OWN finish row once the branch exists in all three shaders (the row's id must equal
+  // the reservation, checked below); it may never collide with a non-finish SURFACES id.
+  const used = new Set(Object.values(CM.SURFACES));
   for (const id of reserved) assert.ok(!used.has(id), `reserved id ${id} is already a surface`);
+  for (const [name, id] of Object.entries(CM.FINISH_SURFACE)) if (id > 33) assert.equal(CM.FINISH_RESERVED[name], id, `${name} -> ${id} is not its reserved id`);
   for (const name of Object.keys(CM.FINISH_RESERVED)) assert.ok(!(name in CM.FINISH_SURFACE) || CM.FINISH_SURFACE[name] === CM.FINISH_RESERVED[name]);
   for (const [name, id] of Object.entries(CM.FINISH_SURFACE)) assert.ok(id <= 33 || Object.values(CM.FINISH_RESERVED).includes(id), `${name} -> ${id} is neither shipped nor reserved`);
 });

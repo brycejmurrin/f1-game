@@ -16,23 +16,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 import sharp from "sharp";
-import { surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
+import { sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import { loadSurveyDesigns } from "../lib/custom-survey-locations.mjs";
 import {
-  buildTrackShotSurveyPlan,
-  buildSurveyPlans,
   estimateSurveyMs,
-  filterResumeShots,
   surveyTerminalState,
   normalizeSurveyTracks,
-  scoreShotFindings,
   shouldSurveyAsync,
-  writeCompareIndex,
-  writeSurveyFindings,
-  writeSurveyIndex,
   writeSurveyGalleryFromReports,
   writeSurveyProgress,
 } from "../lib/track-shot-survey.mjs";
+import { prepareSurveyPlans, runSurvey } from "../shot/lib/survey-runner.mjs";
 
 const TRACK_TOOL = "tools/shot/track-session.mjs";
 const ID_RE = /^[a-z0-9_]{2,40}$/;
@@ -168,6 +162,7 @@ export function createExtras(ctx) {
       if (sess === s) sessClose(`exit ${code ?? sig}`);   // releases once the tree is gone
     });
     const r = await ready;
+    if (r && r.ready) s.boot = r;
     if (!r || !r.ready) {
       const why = sess === s ? sessClose("not ready") : null;
       if (s.closing) await s.closing;
@@ -202,7 +197,7 @@ export function createExtras(ctx) {
       return refuse("bad_args", String(e.message || e), "Pass track or tracks[] with Tracks.LIST ids.");
     }
     let plan, plans;
-    try { plans = buildSurveyPlans({ ...args, customDesigns }, tracks); plan = plans.get(tracks[0]); }
+    try { plans = prepareSurveyPlans({ ...args, customDesigns }, tracks); plan = plans.get(tracks[0]); }
     catch (e) { return refuse("bad_args", String(e.message || e), "See apex_shot_survey inputSchema."); }
     const label = plan.label;
     const outRoot = assertSafeOut(args.out || (tracks.length === 1
@@ -254,97 +249,43 @@ export function createExtras(ctx) {
       });
     }
 
-    const trackResults = [];
-    try {
-      for (let ti = 0; ti < tracks.length; ti++) {
-        const track = tracks[ti];
-        const out = tracks.length === 1 ? outRoot : assertSafeOut(path.join(outRoot, track));
-        fs.mkdirSync(out, { recursive: true });
-        const { pending, resumed, invalid } = filterResumeShots(out, plan.shots, resume);
-        writeSurveyProgress(outRoot, {
-          state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length, invalid, estimateMs,
-        });
-
-        if (!sess || sess.track !== track || sess.out !== out) {
+    const host = {
+      log(line) { log(String(line).trim()); },
+      onShot() { if (sess) sess.shots++; },
+      async sessionFor(track, outDir) {
+        if (!sess || sess.track !== track || sess.out !== outDir) {
           if (sess) await handleTrack({ op: "close" });
           if (sess?.closing) await sess.closing;
-          const opened = await trackOpen({ track, out, gl: args.gl });
+          const opened = await trackOpen({ track, out: outDir, gl: args.gl });
           const body = bodyOf(opened);
-          if (body.ok === false) return opened;
+          if (body.ok === false) throw new Error(body.error || "track session not ready");
+          if (sess) sess.boot = body;
         }
-
-        const captured = resumed.map((s) => ({ ...s, track, flags: scoreShotFindings(s) }));
-        const failed = [];
-        for (let si = 0; si < pending.length; si++) {
-          const s = pending[si];
-          writeSurveyProgress(outRoot, {
-            state: "shooting", track, tracks, trackIndex: ti, shotIndex: si, shot: s.name,
-            pendingLeft: pending.length - si, captured: captured.length, estimateMs,
-          });
-          let reply;
-          try {
-            reply = await sessSend({
-              ...s, shot: s.name, frac: s.frac, cam: s.cam, az: s.az, el: s.el, dist: s.dist,
-              h: s.h, side: s.side, tod: s.tod, weather: s.weather, hud: s.hud,
-            }, 240000);
-          } catch (e) {
-            failed.push({ ...s, track, error: String(e.message || e) });
-            continue;
-          }
-          if (reply.ok) {
-            sess.shots++;
-            const row = { ...s, track: reply.track || track, png: reply.png, spread: reply.spread, kb: reply.kb };
-            row.flags = scoreShotFindings(row);
-            captured.push(row);
-          } else failed.push({ ...s, track, error: reply.error || "shot failed" });
-        }
-
-        let panelPng = null;
-        const existingPanel = path.join(out, `${plan.sheetName}.png`);
-        if (fs.existsSync(existingPanel)) panelPng = existingPanel;
-        if (wantPanel && pending.length && captured.length) {
-          try {
-            const sh = await sessSend({ sheet: plan.sheetName, cols: plan.cols || 0 }, 120000);
-            if (sh.ok) panelPng = sh.png;
-          } catch (e) { log(`survey panel failed: ${e.message}`); }
-        }
-
-        let indexHtml = null;
-        if (wantIndex && captured.length) {
-          indexHtml = writeSurveyIndex(out, {
-            track: captured[0]?.track || track, label: plan.label, preset: plan.preset, shots: captured, panelPng, ok: captured.length,
-          });
-        }
-        const findings = writeSurveyFindings(out, {
-          ok: failed.length === 0 && captured.length > 0, failed: failed.length, failures: failed,
-          track: captured[0]?.track || track, label: plan.label, preset: plan.preset, shots: captured, panelPng, indexHtml,
-        });
-        trackResults.push({
-          track: captured[0]?.track || track, out, captured: captured.length, failed: failed.length,
-          panel: panelPng, indexHtml, findings: findings.file, findingsSummary: findings.findings,
-          shots: captured, failures: failed.length ? failed : undefined,
-        });
-      }
-
-      let compareIndex = null;
-      if (tracks.length > 1 && wantIndex) {
-        compareIndex = writeCompareIndex(outRoot, {
-          label: plan.label, preset: plan.preset,
-          tracks: trackResults.map((t) => ({
-            track: t.track, captured: t.captured, failed: t.failed, failures: t.failures, shots: t.shots,
-            panel: t.panel ? path.relative(outRoot, t.panel) : null,
-            relIndex: t.indexHtml ? path.relative(outRoot, t.indexHtml) : null,
-          })),
-        });
-      }
+        return { send: (cmd, timeoutMs) => sessSend(cmd, timeoutMs), boot: sess && sess.boot, record: sess && sess.boot };
+      },
+      async close() {
+        if (args.keepSession || args.closeSession === false) return;
+        if (sess) await handleTrack({ op: "close" });
+        if (sess?.closing) await sess.closing;
+      },
+    };
+    let run;
+    try {
+      run = await runSurvey({
+        tracks, plans, outRoot, resume, wantPanel, wantIndex, profile,
+        seed: args.seed == null ? 2391 : Number(args.seed),
+        source: sourceIdentity(ROOT), gpu: surveyGlEnv(args).APEX_GPU, estimateMs,
+      }, host);
+      const trackResults = run.trackResults;
+      const compareIndex = run.compareIndex;
       writeSurveyProgress(outRoot, {
-        state: surveyTerminalState(trackResults), tracks, estimateMs, compareIndex,
+        state: surveyTerminalState(trackResults, run.hardFail), tracks, estimateMs, compareIndex,
         trackResults: trackResults.map((t) => ({ track: t.track, captured: t.captured, failed: t.failed, error: t.error })),
       });
 
-      const captured = trackResults.reduce((n, t) => n + t.captured, 0);
-      const failed = trackResults.reduce((n, t) => n + t.failed, 0);
-      const ok = captured > 0 && failed === 0;
+      const captured = trackResults.reduce((n, t) => n + (t.captured || 0), 0);
+      const failed = trackResults.reduce((n, t) => n + (t.failed || 0) + (t.error ? 1 : 0), 0);
+      const ok = !run.hardFail && captured > 0 && failed === 0;
       const panelPng = trackResults[0]?.panel || null;
       const result = toolResult({
         ok,

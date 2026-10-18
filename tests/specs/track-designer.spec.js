@@ -48,6 +48,11 @@ test.describe("Touch designer workspace", () => {
           return Math.max(profile.bottom - stage.bottom, map.bottom - profile.top);
         }), { message: `${width}x${height}@${scale} ${mode}: profile must fit its stage` }).toBeLessThanOrEqual(1);
       }
+      if (width > height && height <= 500 && scale === 100) {
+        // Short landscape phone: the foot rides under the rail, so the dialog never scrolls and SAVE / RACE stay on screen.
+        expect(await root.evaluate((e) => [e.dataset.foot, e.scrollHeight <= e.clientHeight + 1,
+          e.querySelector(".td-foot .sel-edit").getBoundingClientRect().bottom <= innerHeight + 1]), `${width}x${height}: foot tucked, no dialog scroll, SAVE on screen`).toEqual(["in", true, true]);
+      }
       await root.locator('[data-role="mode-bar"] [data-mode="scenery"]').tap();
       for (const section of ["themes", "atmosphere", "objects"]) {
         await root.locator(`[data-scenery-section="${section}"]`).tap({ timeout: 10_000 });
@@ -154,7 +159,7 @@ test("workspace organization preserves controls and scroll across modes and libr
       const box = await root.getByRole("tab", { name, exact: true }).boundingBox();
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     }
-    await expect.poll(() => rail.evaluate((e) => e.scrollTop)).toBe(helpScroll);
+    await expect.poll(() => rail.evaluate((e) => e.scrollTop), { message: `${viewport.width}x${viewport.height}@${viewport.scale || 1}: HOW TO scroll survives a tab round trip` }).toBe(helpScroll);
     await root.locator('[data-role="file-menu"] > summary').click();
     await expect(root.getByRole("button", { name: "EXPORT", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
