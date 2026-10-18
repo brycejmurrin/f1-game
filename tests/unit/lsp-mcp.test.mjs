@@ -3,6 +3,7 @@
 // TypeScript 7's native `tsc --lsp`. Proves cross-file definition, semantic
 // references and workspace symbols resolve for script-global IIFEs (jsconfig.json).
 // No browser. ~2 s (one tsc --lsp project load).
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
