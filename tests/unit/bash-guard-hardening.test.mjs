@@ -139,8 +139,8 @@ test("bash-guard fast-exits non-trigger commands within 500 ms", () => {
   const trigger = src.match(/^GUARD_TRIGGER='([^']+)'$/m);
   assert.ok(trigger, "bash-guard declares its fast-path trigger union");
   assert.deepEqual(trigger[1].split("|").sort(),
-    ["git", "gh ", "kill", "pgrep", "curl", "node", "npm", "npx", "playwright", "chrom", "python", "sh ", "eval", "xargs"].sort(),
-    "the fast path stays in lockstep with the 14 former settings filters");
+    ["git", "gh ", "kill", "pgrep", "curl", "node", "npm", "npx", "playwright", "chrom", "python", "sh ", "eval", "xargs", "agent-run"].sort(),
+    "the fast path covers the 14 former settings filters and the executable agent runner");
   const started = Date.now();
   const r = spawnSync("bash", [HOOK], {
     input: JSON.stringify({ tool_name: "Bash", tool_input: { command: "echo ordinary-command" } }),
@@ -506,6 +506,103 @@ test("github-mcp-guard: merge commits only, asks before merge/arm and the draftâ
 const DEPLOY = "claude/f1-game-project-26h3ng";
 const bashCall = (command, extra = {}) => ({ tool_name: "Bash", tool_input: { command }, ...extra });
 const decisionOf = (r) => { try { return JSON.parse(r.stdout.trim().split("\n").pop()).hookSpecificOutput.permissionDecision; } catch { return null; } };
+
+// Inspect hook decisions only: none of the wrapped commands execute here.
+const AGENT_RUN = path.join(ROOT, "tools/agent-run.mjs");
+const wrapped = (command, options = "") => `node '${AGENT_RUN}' ${options} -- ${command}`;
+
+test("agent-run: wrapped pushes and gh merges receive the direct command's policy", () => {
+  const repo = scratchRepo("hook-agent-run-");
+  const run = (command, env = {}) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env });
+  try {
+    repo.g("checkout", "-qb", "cursor/agent-run-1234");
+    for (const command of ["git push --force origin topic", `git push origin HEAD:${DEPLOY}`,
+      "env CI=1 git push -f origin topic", "bash -c 'git push --force origin topic'"]) {
+      const direct = run(command), compact = run(wrapped(command, "--output-level compact --timeout-ms=1000"));
+      assert.equal(direct.status, 2, command);
+      assert.equal(compact.status, direct.status, `${command}: ${compact.stderr}`);
+      assert.match(compact.stderr, /BLOCKED/);
+    }
+    for (const [command, expected] of [["gh pr merge 123 --squash", "deny"], ["gh pr merge 123 --merge", "ask"]]) {
+      const env = { APEX_MERGE_DESK: "" };
+      assert.equal(decisionOf(run(command, env)), expected);
+      assert.equal(decisionOf(run(wrapped(command, "--output-level=diagnostic"), env)), expected);
+      assert.equal(decisionOf(run(wrapped(command), { APEX_MERGE_DESK: "1" })), expected === "deny" ? "deny" : null);
+    }
+    // cd and git -C must resolve against the same repository as direct argv.
+    repo.g("checkout", "-qb", DEPLOY);
+    assert.equal(run(wrapped(`git -C '${repo.dir}' push origin HEAD`)).status, 2);
+    assert.equal(run(`cd '${repo.dir}' && ${wrapped("git push origin HEAD")}`).status, 2);
+  } finally { repo.rm(); }
+});
+
+test("agent-run: subagent browser checks unwrap argv, while help/read and literal data never execute", () => {
+  const run = (command) => hook("bash-guard.sh", bashCall(command, { agent_id: "agent-run-fixture" }));
+  for (const command of ["node tools/ci/test-bg.mjs smoke", "npx playwright test", "npm test", "node tools/ci/verify-change.mjs"]) {
+    assert.equal(run(command).status, 2, command);
+    assert.equal(run(wrapped(command)).status, 2, command);
+  }
+  for (const command of ["node --test tests/unit/session-status.test.mjs", "node tools/ci/test-bg.mjs --status",
+    "printf '%s' ';' 'git push --force origin x' '&&' 'npm test' '>' 'version.json'",
+    "printf '%s' \\; 'git push --force origin x'", "printf '%s' '--help'"]) {
+    const result = run(wrapped(command));
+    assert.equal(result.status, 0, `${command}: ${result.stderr}`);
+    assert.equal(decisionOf(result), null);
+  }
+  for (const command of [`node '${AGENT_RUN}' --help -- git push --force origin x`,
+    `node '${AGENT_RUN}' --read 'artifacts/agent-output/npm test' --output-level full`,
+    `node '${AGENT_RUN}' help -- npm test`]) assert.equal(run(command).status, 0, command);
+  // A similarly named or arbitrary Node script is not a trusted wrapper.
+  assert.equal(run("node /unrelated/tools/agent-run.mjs -- npm test").status, 0);
+  assert.equal(run(`node other.mjs '${AGENT_RUN}' -- npm test`).status, 0);
+});
+
+test("agent-run: invalid wrapper forms fail closed and literal argv operators stay arguments", () => {
+  const run = (command) => hook("bash-guard.sh", bashCall(command));
+  for (const command of [wrapped("git push -f origin x", "--bogus yes"), wrapped("git push -f origin x", "--output-level invalid"),
+    wrapped("git push -f origin x", "--timeout-ms 0"), wrapped("git push -f origin x", "--read artifacts/agent-output/a"),
+    `node --require bad '${AGENT_RUN}' -- git push -f origin x`, `node '${AGENT_RUN}' -- git push '`,
+    `node '${AGENT_RUN}' git push -f origin x`]) {
+    const result = run(command);
+    assert.equal(result.status, 2, `${command}: ${result.stderr}`);
+    assert.match(result.stderr, /cannot (inspect|parse) agent-run/);
+  }
+  const script = "import json,sys; sys.path.insert(0,sys.argv[1]); import shellparse; print(json.dumps([x[1] for x in shellparse.commands(sys.stdin.read(),sys.argv[2],strict=True)]))";
+  const command = wrapped("printf '%s' ';' '&&' '2' '>' '|' '\n' 'git push --force origin x'");
+  const result = spawnSync("python3", ["-c", script, path.dirname(PARSE), ROOT], { input: command, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), [["printf", "%s", ";", "&&", "2", ">", "|", "\n", "git push --force origin x"]]);
+});
+
+test("agent-run: raw cancellation/process rules retain direct policy, exceptions and quote defenses", () => {
+  const run = (command, env = {}) => hook("bash-guard.sh", bashCall(command), { env });
+  for (const command of ["gh run cancel 123", "gh api -X POST repos/o/r/actions/runs/123/cancel",
+    "pkill -f chrome", "pkill -9f node", "killall chrome"]) {
+    const direct = run(command), compact = run(wrapped(command));
+    assert.equal(direct.status, 2, command);
+    assert.equal(compact.status, direct.status, `${command}: ${compact.stderr}`);
+  }
+  const cancel = "gh run cancel 123";
+  for (const command of [wrapped(cancel), `APEX_RUN_CANCEL_OK=1 ${wrapped(cancel)}`,
+    wrapped(`env APEX_RUN_CANCEL_OK=1 ${cancel}`)]) {
+    const env = command === wrapped(cancel) ? { APEX_RUN_CANCEL_OK: "1" } : {};
+    assert.equal(run(command, env).status, 0, command);
+  }
+  for (const command of ["printf '%s' ';' 'pkill -f chrome' '&&' 'gh run cancel 123'",
+    "printf '%s' 'killall chrome'"]) {
+    const result = run(wrapped(command));
+    assert.equal(result.status, 0, `${command}: ${result.stderr}`);
+  }
+  // Existing cancellation policy conservatively matches URLs even in data;
+  // wrapping must preserve that policy rather than silently weaken it.
+  const urlData = "printf '%s' 'https://api.github.com/repos/o/r/actions/runs/123/cancel'";
+  assert.equal(run(wrapped(urlData)).status, run(urlData).status);
+  assert.equal(run(`node '${AGENT_RUN}' --help -- pkill -f chrome`).status, 0);
+  assert.equal(run(`node '${AGENT_RUN}' --read 'artifacts/agent-output/gh run cancel 123'`).status, 0);
+  assert.equal(run("node tools/agent-run.mjs -- pkill -f chrome").status, 2, "relative trusted path");
+  assert.equal(run("./tools/agent-run.mjs -- pkill -f chrome").status, 2, "direct executable trusted path");
+  assert.equal(run("./tools/agent-run.mjs -- git push --force origin topic").status, 2);
+});
 
 test("round 2 push: refspec DWIM, @, globs, --prune, config, abbreviations, aliases and wrappers all block", () => {
   const repo = scratchRepo("hook-push2-");

@@ -1,5 +1,6 @@
 // apex-tools-mcp.test.mjs — apex-tools MCP (local CLI wrap).
 // APEX_MCP_MOCK=1 / dryRun only — no Chromium, no network.
+import { nativeMcpConfig } from "../helpers/agent-output-launch.mjs";
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, spawn } from "node:child_process";
@@ -57,7 +58,7 @@ test("apex-tools-mcp.mjs and shell entry exist", () => {
 });
 
 test(".mcp.json registers apex-tools alongside the separate debugger server", () => {
-  const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
+  const cfg = nativeMcpConfig(JSON.parse(fs.readFileSync(MCP_JSON, "utf8")));
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-lsp",
@@ -77,8 +78,8 @@ test(".mcp.json registers apex-tools alongside the separate debugger server", ()
 });
 
 test("playwright-official pin matches the wrapper's audited package and never @latest", () => {
-  const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
-  const cursorCfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/mcp.json"), "utf8"));
+  const cfg = nativeMcpConfig(JSON.parse(fs.readFileSync(MCP_JSON, "utf8")));
+  const cursorCfg = nativeMcpConfig(JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/mcp.json"), "utf8")));
   const pw = fs.readFileSync(path.join(ROOT, "tools/mcp/playwright-mcp.sh"), "utf8")
     .match(/MCP_NPM_PACKAGE="([^"]+)"/)[1];
   // The catalog launches the wrapper's `run` (2026-10-05: the bare package

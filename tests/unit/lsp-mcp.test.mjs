@@ -5,6 +5,7 @@
 // including guarded head aliases (`typeof H !== "undefined" ? H : {}`, `(typeof H && H) || {}`,
 // `H || {}`) that feed PC.VMAX-style member reads. No browser. ~2 s (one tsc --lsp project load).
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
+import { nativeMcpConfig } from "../helpers/agent-output-launch.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -42,7 +43,7 @@ test("jsconfig.json makes js/ one script project with checkJs off", () => {
 });
 
 test(".mcp.json launches apex-lsp with the repo server", () => {
-  const s = JSON.parse(fs.readFileSync(path.join(ROOT, ".mcp.json"), "utf8")).mcpServers["apex-lsp"];
+  const s = nativeMcpConfig(JSON.parse(fs.readFileSync(path.join(ROOT, ".mcp.json"), "utf8"))).mcpServers["apex-lsp"];
   assert.ok(s, "apex-lsp missing from .mcp.json");
   assert.deepEqual([s.command, ...s.args], ["bash", "tools/mcp/lsp-mcp.sh", "serve"]);
 });

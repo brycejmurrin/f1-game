@@ -168,6 +168,8 @@ this research note needs only the existing docs/config checks.
 
 ## Primary research
 
+Implementation follow-up: [measured tool probes and optional compact status](TOKEN-TOOL-PROBES-2026-10-18.md).
+
 - [Claude Code costs](https://code.claude.com/docs/en/costs): inspect context and
   usage, load specialist procedures on demand, and account for subagent costs.
 - [OpenAI skills](https://developers.openai.com/codex/skills): descriptions route
@@ -179,3 +181,34 @@ this research note needs only the existing docs/config checks.
   filter intermediate tool data before returning it to model context.
 - [MCP TypeScript SDK compatibility](https://ts.sdk.modelcontextprotocol.io/v2/migration/upgrade-to-v2):
   structured/text result adaptation depends on protocol-era compatibility.
+
+## Fresh transcript audits: different host priorities
+
+The actual Cursor audit is [PR #2907](https://github.com/brycejmurrin/f1-game/pull/2907),
+report pinned at `0428717765efbbeb628e6ca21e942501bebcf1c9`. Its 121 dumps include
+26,241 tool calls. One `sync-pr` result reached 754,776 characters; repeated MCP
+discovery and broad file/search output were material. It has no provider usage
+counters. Shared selectable output levels address this output problem; query
+scoping and adoption remain necessary, including host-owned tools outside the
+project's MCP configuration.
+
+The Claude companion is [PR #2910](https://github.com/brycejmurrin/f1-game/pull/2910),
+report [pinned at 5bbb1bce](https://github.com/brycejmurrin/f1-game/blob/5bbb1bce/docs/notes/CLAUDE-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md).
+It reports 20 sessions,
+4,228 requests, 1.418B cache-read tokens and 2.04M output tokens. These are
+request counters, not billing, and exclude unavailable subagent usage.
+Of 802 follow-ups, 399 made at most one tool call, consuming 173M input tokens.
+The category is an investigation signal rather than proof every such turn was
+unnecessary. The report traces repeated subscriptions, Monitor and timer wakes,
+self-echoes and per-subagent hand-backs. Sixteen sessions reached the account
+limit. Its output-size problem does not match Cursor's: compact formatting alone
+will not resolve Claude's dominant repeated-context cost.
+
+The evidence supports prioritizing one authoritative CI watch with event/echo
+filtering after the overlapping #2884/#2901 work, then batched subagent digests,
+a pre-launch budget policy and a local JSONL usage reader. A budget cap requires
+the user's choice. Notification-only skill hints are a smaller independent
+follow-up. The user-level stop hook identified by the audit is outside this
+repository. Root guidance was about 5% of median Claude context in the sample;
+shrinking it is a lower priority than reducing idle wakes. This implementation
+does not change monitoring cadence, launch budgets or user-level hooks.

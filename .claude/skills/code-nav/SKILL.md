@@ -12,13 +12,20 @@ Measurements, sources and limits: [`docs/notes/LSP-MCP-2026-10-18.md`](../../../
 
 ## Which call
 
+Configured MCP calls default to compact presentation. Add `outputLevel: "full"`
+when the next decision requires the complete bounded definition/reference page;
+native `limit`, `offset`, `maxLines` and `format` still determine what is fetched.
+`output_read` retrieves a saved result without repeating a call. Shell examples
+below also support the common terminal entrypoint, for example
+`node tools/agent-run.mjs -- node tools/mcp/lsp-mcp.mjs refs Tracks.curvature --concise --limit=40`.
+
 | You want | MCP call | Shell (same tools, one process per call) |
 |---|---|---|
 | where it is defined (and its code) | `lsp_definition {symbol, body: true}` | `tools/mcp/lsp-mcp.sh def Liveries.forTeam --body` |
-| every use, each with its enclosing function | `lsp_references {symbol}` | `… refs Tracks.curvature` |
-| who would an edit touch (callers) | `lsp_callers {symbol}` | `… callers AiDrive.cornerK` |
+| uses, with enclosing functions (first page) | `lsp_references {symbol, format: "concise", limit: 40}` | `… refs Tracks.curvature --concise --limit=40` |
+| who would an edit touch (first caller page) | `lsp_callers {symbol, limit: 40}` | `… callers AiDrive.cornerK --limit=40` |
 | which files use it, counts only | `lsp_references {symbol, files: true}` | `… refs G.player --files` |
-| a module's exports without reading it | `lsp_outline {symbol}` or `{file}` | `… outline GameHud` / `… outline js/physics/consts.js` |
+| a module's exports without reading it | `lsp_outline {symbol, limit: 40}` or `{file, limit: 40}` | `… outline GameHud --limit=40` / `… outline js/physics/consts.js --limit=40` |
 | a name you only half know | `lsp_symbols {query}` | `… sym clamp` |
 | its type / JSDoc | `lsp_hover {symbol}` | `… hover G.wrapS` |
 | did my edit break anything in this file | `lsp_diagnostics {file}` | `… diag js/ui/hud.js` |
@@ -34,10 +41,11 @@ bare JS symbol. Take it for the next lookup.
 
 ## Workflows
 
-1. **Understand a module.** `lsp_outline {symbol: "Ghost"}` lists the exports,
-   then `lsp_definition {symbol: "Ghost.snapshot", body: true}` gives the body.
+1. **Understand a module.** `lsp_outline {symbol: "Ghost", limit: 40}` lists the exports,
+   then `lsp_definition {symbol: "Ghost.snapshot", body: true, maxLines: 60}` gives the body
+   (up to 60 lines).
    That's two calls and no full-file Read.
-2. **Before changing a shared function.** `lsp_callers` lists the functions that
+2. **Before changing a shared function.** `lsp_callers {symbol, limit: 40}` lists the functions that
    use it. Read those, not every grep hit. For a façade member, `files: true`
    first: `G.player` has 413 uses in 45 files.
 3. **After an edit, before the test run.** `lsp_diagnostics {file}` gives only the
@@ -72,7 +80,13 @@ bare JS symbol. Take it for the next lookup.
 - An error such as "has no member" or "not found" is the answer. Fall back to
   `lsp_symbols`; don't guess a neighbour.
 - Long output pages: the footer names the next `offset`, and `format: "concise"`
-  drops the source text.
+  on `lsp_references` drops the source text. Start with counts (`files: true`)
+  when file scope is enough; otherwise use a bounded page. Follow the footer's
+  `offset` when impact analysis needs every caller/use; a first page is not exhaustive.
+- Read progressively: outline → relevant definition with `body: true` → affected
+  callers. Request detailed references or a larger `maxLines` when source context
+  is needed; do not infer a complete body from a capped excerpt. Keep tool errors
+  and diagnostics visible rather than summarizing them into a success.
 
 ## Limits (measured)
 

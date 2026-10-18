@@ -213,6 +213,11 @@ output never goes to \`/tmp\`: use \`artifacts/tmp/\` for batch logs/probes and
 subset (safe flags only). Which rows are wrapped, and which must stay CLI-only:
 [\`docs/AGENT-SURFACE.md\`](../docs/AGENT-SURFACE.md).
 
+**Agent output:** terminal commands use \`node tools/agent-run.mjs -- <command>\`;
+configured MCP tools expose \`outputLevel\`. Both default to \`compact\`, with
+\`diagnostic\` and \`full\` selectable. Saved results can be read without rerunning
+actions. [Levels, examples and coverage](../docs/agent-output/README.md).
+
 **This file is generated** by \`node tools/gen/gen-tools-readme.mjs\` from the
 \`@doc\` / \`@skill\` / \`@section\` tags in each tool's header comment (first 15
 lines). Edit the tool's header, then regenerate; \`--check\` is the drift gate

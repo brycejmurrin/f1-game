@@ -59,6 +59,16 @@ and the apex SHA with `deploy-research` after Pages succeeds.
 For failure triage, use `ci-watch` and `ci-red-triage`; do not infer a verdict
 from a running job with zero failures or from a cancelled superseded run.
 
+## Routine status reporting
+
+`node tools/ci/session-status.mjs --summary` returns a bounded snapshot: branch,
+push/dirty/live-run state, inventory counts, and up to three failed or unresolved
+log examples. Omitted details remain available in the full default Markdown or
+with `--json`; `--json` takes precedence over `--summary` and returns full data.
+Add `--pr <n>` when live PR/CI evidence is needed. The local log counts describe
+historical files, not verification of the current commit; unknown states stay
+unknown and the ready gate is not evaluated by this command.
+
 ## Related readers
 
 - [AGENTS.md](../AGENTS.md) — binding rules and the full ladder.

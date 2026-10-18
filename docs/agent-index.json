@@ -503,6 +503,18 @@
       "twinned": false
     },
     {
+      "id": "agent-output",
+      "script": "test:agent-output",
+      "kind": "node",
+      "files": [
+        "tests/unit/agent-output-config.test.mjs",
+        "tests/unit/agent-output.test.mjs",
+        "tests/unit/output-level-mcp.test.mjs",
+        "tests/unit/output-surface.test.mjs"
+      ],
+      "twinned": false
+    },
+    {
       "id": "audio-unit",
       "script": "test:audio-unit",
       "kind": "node",

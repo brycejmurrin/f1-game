@@ -3,6 +3,7 @@
 // gfx-probe's backend flags, and the Playwright MCP pin. Nothing here launches
 // a browser or needs network. The tinyfish proxy and the probe bridge have
 // their own suites in tests/manual/ (tinyfish-mcp / probe-mcp), run by path.
+import { nativeMcpConfig } from "../helpers/agent-output-launch.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -59,7 +60,7 @@ test("Playwright MCP network fallback is pinned to the audited release", () => {
   assert.match(src, /MCP-ATTACHED AGAIN/, "the wrapper's run IS playwright-official");
   assert.match(src, /chromium-path\.mjs" --path/, "run resolves the installed Chromium for --executable-path");
   assert.doesNotMatch(src, /^\s*--user-data-dir/m, "--isolated and a --user-data-dir flag do not combine (the 2026-09 connect failure)");
-  const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
+  const cfg = nativeMcpConfig(JSON.parse(fs.readFileSync(MCP_JSON, "utf8")));
   assert.deepEqual(cfg.mcpServers["playwright-official"], { type: "stdio", command: "bash", args: ["tools/mcp/playwright-mcp.sh", "run"] });
   assert.doesNotMatch(src, /@playwright\/mcp@latest/);
   assert.match(src, /never --port \/ 0\.0\.0\.0/);

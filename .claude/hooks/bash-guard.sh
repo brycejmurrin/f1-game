@@ -73,11 +73,21 @@ fi
 # SCAN and shellparse work for ordinary commands without relying on Claude
 # Code's non-portable per-hook `if` field (Cursor imports the file but does not
 # document that field); JSON command extraction still runs first.
-# Keep this union in lockstep with the 14 former `if: Bash(*word*)` filters.
-GUARD_TRIGGER='git|gh |kill|pgrep|curl|node|npm|npx|playwright|chrom|python|sh |eval|xargs'
+# Keep the 14 former `if: Bash(*word*)` filters plus the executable agent runner.
+GUARD_TRIGGER='git|gh |kill|pgrep|curl|node|npm|npx|playwright|chrom|python|sh |eval|xargs|agent-run'
 if ! printf '%s' "$CMD" | grep -Eq "$GUARD_TRIGGER"; then
   exit 0
 fi
+# Keep legacy raw-text policies (kill/cancel/red-run checks) effective through
+# the trusted shell:false output runner too. The parser emits only executable
+# wrapper leaves, quoted with shlex.join: literal ';' arguments stay prose.
+# Retain the original command so explicit exception assignments remain visible.
+AGENT_LEAVES=$(printf '%s' "$CMD" | python3 "$(dirname "$0")/shellparse.py" agent-run "$PWD"); AGENT_LEAVES_RC=$?
+if [ "$AGENT_LEAVES_RC" != 0 ]; then
+  echo "bash-guard: BLOCKED — trusted wrapper normalization failed." >&2
+  exit 2
+fi
+[ -z "$AGENT_LEAVES" ] || CMD="$CMD"$'\n'"$AGENT_LEAVES"
 # SCAN is the command as the kill rules below see it (2026-09-22). Two holes
 # and one false positive were reproduced in the raw text: `sh -c "pkill -f
 # chrome"` and `/usr/bin/pkill -f chrome` walked past a regex that matched only
