@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: "Use when the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, A-B physics settings, a physics sweep, ROAD_FOLLOW, or whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change physics. Skidpad/step-steer/`player-dyn` VM A/B. Camera lag → playwright-probe; gamepad/touch/tilt/steer sliders → input-controls; AI → ai-racecraft."
+description: "Use when the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, A-B physics settings, a physics sweep, ROAD_FOLLOW, or whether driving feel improved; skidpad/step-steer/`player-dyn` VM A/B. Shake/hit-stop/juice → game-feel; camera lag → playwright-probe; gamepad/touch/tilt/steer sliders → input-controls; AI → ai-racecraft."
 ---
 
 # Tune the physics
@@ -38,11 +38,8 @@ defaults come from `js/input/steer-tuning.js` `applySteerTuning()` (slider defau
 the game.js literals are dead.
 `PACE` is a scale, not a cap; compare speeds via `vTop()`/`vStd()`/`aStd()`.
 
-**The arc must not reach the driver.** With assists off, nothing derived from
-track curvature / racing line may affect the player. New `Tracks.curvature()`
-(or equivalent) reads belong in a legitimate column — AI-only, assist-gated,
-broadcast-only, or surface — see `docs/PHYSICS.md`. Do not "help" the player
-by feeding path curvature into steer/throttle when assists are off.
+**The arc must not reach the driver** (AGENTS.md §Physics; columns in `docs/PHYSICS.md`): never "help"
+the player by feeding path curvature into steer/throttle with assists off.
 
 **`ROAD_FOLLOW` ships at `0` (OFF)** on purpose. The DRIVING HELP slider maps
 notch 1..10 to `0..0.70` (notch 1 = off). Recommending a raised default is a
@@ -52,27 +49,25 @@ Fixed in `js/physics/consts.js` (`PhysicsConsts`, not `setPhysics`): `LONG_GRIP`
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
 ```sh
-# Verify per AGENTS.md rule 4 and its table: prefer ONE spec (`npm test -- tests/specs/understeer-cue.spec.js`,
-# `physics-characterization.spec.js`) via test-bg.mjs, then `test-bg.mjs --wait --timeout 45`; cap two groups
-# (physics-core, collisions, aero, input; `pick-tests` names them); a whole group → remote-group.mjs on the pushed branch.
+# Browser verify (AGENTS.md table): ONE spec — understeer-cue.spec.js or physics-characterization.spec.js — via test-bg.mjs.
 node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>  # browser (launchChromium) — stability probe, not an A/B
 ```
 
 No browser (Node VM, `tools/lib/game-vm.cjs`, deterministic — the first stop for an A/B):
 
 ```sh
-TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json]   # skidpad, step-steer, trail-brake, midCorner_*; no flags to set physics
+TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json] [--seat pin|shipped]   # skidpad, step-steer, trail-brake, midCorner_*
+# --seat pin (default) = the bare driving model; --seat shipped = the car a fresh browser boots. Say which seat an A/B measured.
 node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SHAPES
 ```
 
-`player-dyn.mjs` exports `measure(g, frac)`: to A/B one setting, script it in
-`scratch/` — `createGame({track, storage: {difficulty: "normal", autoThrottle: false}})` (copy `main()`'s options), `await g.race(track)`, `g.apex.setPhysics({frontGrip: x})`,
-`measure(g, frac)` per value — and diff the JSON (read `aF`/`aR`, `uF`/`uR`, `yaw`; front
+`player-dyn.mjs` exports `measure(g, frac)`: to A/B one setting, copy the sweep script in
+[references/understeer-recipe.md](references/understeer-recipe.md) step 2 and diff the JSON (read `aF`/`aR`, `uF`/`uR`, `yaw`; front
 slip past its peak with rear settled = understeer). `physics-tune-sweep.mjs` is BROWSER + long (sharded
 DOM-slider laps, `APEX_WORKERS`): not for one setting. Verdict: a directional change in the
 same tables; worked "understeers in slow corners" example → [references/understeer-recipe.md](references/understeer-recipe.md).
 
-If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)) before commit. Theory:
+Theory:
 `docs/PHYSICS.md`, `docs/research/steering-research.md`.
 
 ## Load on demand
@@ -80,11 +75,5 @@ If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` ([shell/cache
 - Worked slow-corner understeer A/B → [references/understeer-recipe.md](references/understeer-recipe.md).
 - Closed-loop trial, parallel sweep (`polling: 100`), trail-brake, house-style
   assertions → [references/harness.md](references/harness.md).
-- **Game feel / juice** — which Apex system owns which channel, and the hard
-  line that juice is a render/audio layer that must never write `car.px/pz`,
-  `s`, `x`, `psi` or change `obs()`/`act()` determinism →
-  [references/game-feel.md](references/game-feel.md); channel table and the
-  kerb-vs-kickup mistakes in
-  [references/game-feel-workflow.md](references/game-feel-workflow.md);
-  trauma-shake math (inspiration only) in
-  [references/game-feel-feedback-recipes.md](references/game-feel-feedback-recipes.md).
+- Game feel / juice (shake, hit-stop, kerb and impact feedback that must not
+  change physics) is its own skill → **game-feel**.
