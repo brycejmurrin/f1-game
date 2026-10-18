@@ -53,7 +53,13 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
    `already-red-on-base` or `new-on-this-push`, or `unknown` when you did not read
    that previous run (never write `new-on-this-push` for an unread base). `tools/ci/base-verdict.sh`
    and `tools/ci/pages-live-sha.sh` exist for this.
-6. Diagnose before blaming the box: `caution().enabled=false` is the
+6. **Stale generated files (not a rerun):** when logs or node suites mention
+   `gen:check`, `agent-indexes.test.mjs`, `declaredTests` count mismatch,
+   missing keys in `tests/data/impact-map.json`, or the ARCHITECTURE.md module
+   table drift — prescribe **`npm run gen`**, then **`npm run gen:check`**, commit
+   only generated outputs, and push. Skill **gen-regen** lists symptoms; do not
+   recommend a blind Actions re-run for index drift alone.
+7. Diagnose before blaming the box: `caution().enabled=false` is the
    `SettingsDefaults` default, not a reason to pin WebGL2 or raise `BOOT_MS`;
    a one-ULP Suzuka arc mismatch needs an epsilon; a bare 120 s timeout on a
    shard that also shows loadavg pressure is the machine until a second

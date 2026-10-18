@@ -2524,6 +2524,17 @@ const TLX = (function () {
         b.visible++; setRange0(im, b.visible * 16); im.needsUpdate = true;
         return true;
       }
+      // A freed decal source must release its hidden instance buffer/render object
+      // too. Geometry.dispose alone leaves the run in both strong registries.
+      function _decalDrop(geo) {
+        const b = _decalRuns.get(geo);
+        if (!b) return;
+        _decalRuns.delete(geo);
+        const ix = _instRegistry.indexOf(b.imesh);
+        if (ix >= 0) _instRegistry.splice(ix, 1);
+        dropWrapper(b.imesh);   // waits for an in-flight compile before disposal
+        b.rec = -1;
+      }
       // R1 (perf hunt 3) — REPEATED OPAQUE DRAWS AS ONE INSTANCED RUN PER PASS. The field's wheel layers
       // were ~150 records over ~42 meshes on a bunched grid, one three RenderObject each (6-9 us of JS per
       // object, census + bench). A draw whose opts carry `coalesce` (car-draw.js sets it on the opaque
@@ -3439,6 +3450,7 @@ const TLX = (function () {
         meshByGeo.delete(geo);
         if (shadowSys && shadowSys.releaseGeometry) shadowSys.releaseGeometry(geo);   // its parked casters too
         _coDrop(geo);   // R1: its coalesced runs
+        _decalDrop(geo);   // F3: its batched decal run
       }
 
       function disposeGeometry(geo) {
