@@ -2689,7 +2689,7 @@ test("latches come down BEFORE early returns — the shape that bricked the GLX 
     "the visibilitychange handler re-arms with sentinelResume(), not sentinelArm(true)");
   assert.match(read("js/perf/governor.js"), /function sentinelResume\(\)/);
   // The env-probe latch has the same player-reachable reset as the chunk latch.
-  assert.match(game, /id === "carEnvCube" && \+v > 0 && !\(\+LT\[id\] > 0\) && _envProbeOff/,
+  assert.match(read("js/race/light-tune-edit.js"), /id === "carEnvCube" && \+v > 0 && !\(\+LT\[id\] > 0\) && ctx\.envProbeOff/,
     "ENV REFLECTION 0 -> >0 clears apex26.envProbeOff, like the chunk knobs clear perChunkOff");
 });
 
