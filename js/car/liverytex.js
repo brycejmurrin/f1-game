@@ -825,7 +825,7 @@ const LiveryTex = (function () {
     };
   }
 
-  const { CRESTS, crestGeneric, tracePath } = LiveryCrests.create({ css, fit, drawWordmark, teamShort, crestSpecFor, crestKey, legendOf,
+  const { CRESTS, crestGeneric, tracePath, EMBLEMS, EMBLEM_IDS } = LiveryCrests.create({ css, fit, drawWordmark, teamShort, crestSpecFor, crestKey, legendOf,
     CREST_DISC, CREST_MARGIN, STROKE_MIN, TEXT_MIN });
 
   // ── the custom team's uploaded emblem ──────────────────────────────────────
@@ -1008,7 +1008,9 @@ const LiveryTex = (function () {
   function drawCrest(ctx, teamId, R, opts) {
     const o = opts || {};
     const P = o.palette || markPalette(teamId, o.liv, o.field, !!o.bare);
-    const fn = CRESTS[crestKey(teamId)] || crestGeneric;
+    // CREST STYLE (liv.crestStyle): an original emblem in place of the team's mark, at every station.
+    const style = o.liv && o.liv.crestStyle;
+    const fn = (style && Object.hasOwn(EMBLEMS, style) && EMBLEMS[style]) || CRESTS[crestKey(teamId)] || crestGeneric;
     // The halo is generic on purpose: the same repeated-draw-under-shadow trick
     // drawLogoImage uses, so a mark that cannot reach INK_TARGET gets separated
     // without every crest having to grow its own outline pass.
@@ -2486,7 +2488,8 @@ const LiveryTex = (function () {
       // titleB stays unfilled: it drapes over curved nose paint, and a flat
       // patch would read as a sticker rectangle on the monocoque.
       fillRegion(ctx, REGIONS.titleA, board);
-      fillRegion(ctx, REGIONS.fwEnd, c2);
+      const epPaint = Array.isArray(colors.endplate) && colors.endplate.length >= 3 ? colors.endplate : c2;   // ENDPLATES row, else the c2 plate
+      fillRegion(ctx, REGIONS.fwEnd, epPaint);
       fillRegion(ctx, REGIONS.wing, colors.wing || c2);
       fillRegion(ctx, REGIONS.strip, c2);
       drawWordmark(ctx, names[0], REGIONS.titleA, inkPod,
@@ -2499,10 +2502,10 @@ const LiveryTex = (function () {
       drawWordmark(ctx, names[1], REGIONS.titleB, inkNose,
         { align: "center", halo: haloIf(inkNose) });
       // The FRONT-WING ENDPLATE carries a partner mark, as every 2026 car does.
-      // The plate is drawn in c2 (see car3d's front-plate span), so it inks for
-      // c2 — not for the flap colour, which is a different part.
-      drawWordmark(ctx, names[4] || names[0], REGIONS.fwEnd, inkOn([c2]),
-        { align: "center", spacing: 0.06, halo: haloIf(inkOn([c2])) });
+      // The plate is drawn in the ENDPLATES colour or c2 (see car3d's front-plate span), so it
+      // inks for that — not for the flap colour, which is a different part.
+      drawWordmark(ctx, names[4] || names[0], REGIONS.fwEnd, inkOn([epPaint]),
+        { align: "center", spacing: 0.06, halo: haloIf(inkOn([epPaint])) });
       const inkWing = inkOn([colors.wing || c2]);
       drawWordmark(ctx, names[2], REGIONS.wing, inkWing,
         { align: "center", spacing: 0.1, halo: haloIf(inkWing) });
@@ -2589,7 +2592,7 @@ const LiveryTex = (function () {
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,
-           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, tailStyleOf, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
+           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, tailStyleOf, CREST_STYLE_IDS: EMBLEM_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
            FILL_SURFACES, fillInert,
            airboxMeshColour, resolveFinPaint,
            hasFlankBull: (teamId) => !!bullPath(teamId) };

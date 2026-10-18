@@ -328,7 +328,7 @@ export function defaultSources(root = ROOT) {
 }
 
 /** Rows from one file, by shape. An unparseable file yields nothing. */
-export function rowsFromFile(file) {
+function rowsFromFile(file) {
   const text = fs.readFileSync(file, "utf8");
   if (/\.xml$/i.test(file) || /<testsuite/.test(text.slice(0, 400))) return parseJunit(text);
   let end = null;

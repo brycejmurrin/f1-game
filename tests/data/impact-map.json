@@ -8882,6 +8882,9 @@
       "create": [
         "tests/unit/phone-recorder.test.mjs"
       ],
+      "download": [
+        "tests/unit/phone-recorder.test.mjs"
+      ],
       "fileName": [
         "tests/unit/phone-recorder.test.mjs"
       ],

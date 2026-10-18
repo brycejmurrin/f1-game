@@ -347,20 +347,21 @@ test("SPINE ONLY greys except on CAP and CONTRAST greys without a fin — and th
   }
 });
 
-// D3: HALO FINISH was 0 of 9 on every car — an unset or grey halo is built as metal, and finishes remap paint.
-test("HALO FINISH greys unless HALO is coloured — and Car3D agrees on every cockpit", async () => {
+// D3: HALO FINISH was 0 of 9 on every car. #2829 (#2796 1) made an explicit HALO FINISH land on the titanium too,
+// so it is live for an unset or grey halo as well, and Car3D agrees on every cockpit.
+test("HALO FINISH is live whatever the HALO colour — and Car3D agrees on every cockpit", async () => {
   const { root, draft, editor } = editorFixture();
   const row = root.querySelectorAll("button").find((b) => b.dataset.csPill === "haloFinish:matte").parentNode.parentNode;
-  for (const [halo, live] of [["", false], ["#808085", false], ["#7a8a80", false], ["#e01080", true], ["#808f80", false], ["#80b080", true]]) {
+  for (const [halo, live] of [["", true], ["#808085", true], ["#7a8a80", true], ["#e01080", true], ["#808f80", true], ["#80b080", true]]) {
     draft.halo = halo; editor.changed();
-    assert.equal(row.getAttribute("aria-disabled"), String(!live), halo || "unset");
+    assert.notEqual(row.getAttribute("aria-disabled"), String(live), halo || "unset");
   }
   const M = loadParts(), hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
   const cockpit = M.Parts.CATALOG.find((c) => c.id === "cockpit");
   for (const team of M.Teams.LIST.filter((t) => ["mclaren", "ferrari", "redbull"].includes(t.id))) {
     for (const opt of cockpit.options) {
       const parts = M.Parts.getVisualTiers({ cockpit: opt.id }, team);
-      for (const [halo, live] of [["", false], ["#808085", false], ["#e01080", true], ["#80b080", true]]) {
+      for (const [halo, live] of [["", true], ["#808085", true], ["#e01080", true], ["#80b080", true]]) {
         const liv = halo ? { halo: hex(halo) } : {};
         const mats = (f) => Array.from(M.Car3D.build(team.color, team.color2, { livery: { ...liv, haloFinish: f }, teamId: team.id, num: 4, parts, noWheels: true }).mat).join();
         assert.equal(mats("matte") !== mats("inherit"), live, team.id + " " + opt.id + " halo " + (halo || "unset"));
