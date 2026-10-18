@@ -2089,10 +2089,6 @@
       <!-- Fades drop ALPHA and repeat the colour. SVG gradients are not
            premultiplied, so a stop of `transparent` is transparent BLACK and
            would smear a grey halo through the red. -->
-      <linearGradient id="tc-edge" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stop-color="currentColor" stop-opacity="0.85"/>
-        <stop offset="1" stop-color="currentColor" stop-opacity="0"/>
-      </linearGradient>
       <!-- Ground trails fade AWAY from the car, so the near end is solid and
            the far end dissolves. currentColor, not a literal, so the whole
            layer still themes off the one `color` declaration. -->
@@ -2101,11 +2097,6 @@
         <stop offset="0.30" stop-color="currentColor" stop-opacity="0.62"/>
         <stop offset="0.62" stop-color="currentColor" stop-opacity="0.18"/>
         <stop offset="1" stop-color="currentColor" stop-opacity="0"/>
-      </linearGradient>
-      <!-- Brush marks: a loaded stroke starts wet and runs dry. -->
-      <linearGradient id="tc-ink" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="currentColor" stop-opacity="0.72"/>
-        <stop offset="1" stop-color="currentColor" stop-opacity="0.16"/>
       </linearGradient>
     </defs>
     <!-- THE WHOLE CAR, ON THE GAME'S OWN CAMERA. Shot the real mesh with
