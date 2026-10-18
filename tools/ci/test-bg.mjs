@@ -105,7 +105,7 @@ export function procStart(pid) {
  * stays in /proc as Z with the same start time, and kill(pid, 0) still
  * succeeds — the run read as live although its log ended `= bg exit 0`. Field
  * 3 of /proc/<pid>/stat is the state; Z/X/x are dead. */
-export function procState(pid) {
+function procState(pid) {
   try { return fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(")").pop().trim()[0] || null; }
   catch (_) { return null; }
 }

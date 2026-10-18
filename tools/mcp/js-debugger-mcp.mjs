@@ -9,9 +9,14 @@ const integer = (description, minimum = 1, maximum = 1000000) => ({ type: "integ
 const endpoint = str("Loopback Chrome debugging origin, e.g. http://127.0.0.1:9222");
 const token = str("Current pause.token from debugger_state; invalid after resume, step, reload or detach");
 const expression = str("JavaScript expression", 16000);
+// destructiveHint only where the call can lose page state or run arbitrary code: detach (drops owned
+// breakpoints, resumes), control (cancel terminates a running script), evaluate/run (JS can mutate the page).
+// Breakpoints, logpoints and exception pauses only change debugger state.
+const DESTRUCTIVE = new Set(["debugger_detach", "debugger_control", "debugger_evaluate", "debugger_run"]);
+const IDEMPOTENT = new Set(["debugger_detach", "debugger_breakpoint", "debugger_remove_breakpoint", "debugger_exceptions"]);
 const def = (name, description, properties = {}, required = [], readOnlyHint = false) => ({ name, description,
   inputSchema: { type: "object", properties, required, additionalProperties: false },
-  annotations: { readOnlyHint, destructiveHint: !readOnlyHint, openWorldHint: true } });
+  annotations: { readOnlyHint, ...(readOnlyHint ? {} : { destructiveHint: DESTRUCTIVE.has(name), idempotentHint: IDEMPOTENT.has(name) }), openWorldHint: true } });
 export const TOOLS = [
   def("debugger_targets", "List targets in an already-running local Chrome (default pages; targetType service_worker|worker|all for sw.js and workers). No browser is launched.", { endpoint, targetType: { type: "string", enum: ["page", "service_worker", "worker", "all"] } }, ["endpoint"], true),
   def("debugger_attach", "Attach a page target by id. One session at a time; local HTTP repros/about:blank only. May pause JavaScript. endpoint may be omitted after debugger_targets.", { endpoint, targetId: str("Page id from debugger_targets") }, ["targetId"]),

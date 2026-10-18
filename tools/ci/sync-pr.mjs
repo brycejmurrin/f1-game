@@ -85,7 +85,7 @@ function runStage(st) {
 
 export const VERIFY_MODES = ["none", "fast", "full"];
 /** Per-stage ceilings: well inside a 30-min background task each. */
-export const STAGE_TIMEOUT_MS = { "tooling-fast": 20 * 60e3, node: 15 * 60e3, "verify-track": 5 * 60e3 };
+const STAGE_TIMEOUT_MS = { "tooling-fast": 20 * 60e3, node: 15 * 60e3, "verify-track": 5 * 60e3 };
 
 /**
  * The verify stages, in order. Pure.

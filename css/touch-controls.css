@@ -68,7 +68,7 @@
      the arrows, BRAKE and the shift buttons through `button { color }` and put
      them at ~1.1:1 on this fill (WCAG 1.4.11 wants 3:1). BOOST/OT/AERO set their
      own label colours by id and still win. */
-  --text: #f6f6f9; --dim: #9a9aa8;
+  --text: var(--hud-ink-light); --dim: #9a9aa8;
   color: var(--text);
   background: rgba(20, 20, 30, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.25);
