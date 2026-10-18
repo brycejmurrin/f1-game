@@ -25,6 +25,7 @@
     night: false,
     theme: "green",
     lengthKm: 5.5,
+    tyreSeverity: 1.48,  // Hot abrasive permanent; historic Sepang ≈ Sakhir band (Pirelli) — near Bahrain 1.55
     // The circuit's own stepped main stand (scenery, 0.958-0.020 left) is the
     // pit-straight stand, so the engine's generic 7-box one would stand inside
     // it. The Monza and Portimao precedent.
