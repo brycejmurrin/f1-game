@@ -4186,6 +4186,8 @@
         "argv-or-parser"
       ],
       "sourceBytes": 4376,
+      "outputPolicy": "artifact-first",
+      "outputContract": "Pixel correctness counts for five enabled/disabled/extent/tile cases; --json artifact path; no timing or WebGPU claim.",
       "doc": "Compare production decal bake pixels on WebGL2: five cases, baseline ref and JSON artifact.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -6039,6 +6041,8 @@
         "argv-or-parser"
       ],
       "sourceBytes": 2529,
+      "outputPolicy": "keep-native",
+      "outputContract": "Native exit status, JSON metric rows (first vs warm ms/chars/bytes), methodology note; no OS-cache or billed-model claim.",
       "doc": "Measure real-tree LSP navigation latency and output size, with cold/first queries separated from warm queries.",
       "skill": null,
       "nativeOutputFlagMentions": [],

@@ -956,6 +956,11 @@
       "preserve": "Counts and denominators plus complete native table JSON.",
       "presentation": "shared-levels"
     },
+    "tools/gfx/decal-bake-probe.mjs": {
+      "action": "artifact-first",
+      "preserve": "Pixel correctness counts for five enabled/disabled/extent/tile cases; --json artifact path; no timing or WebGPU claim.",
+      "presentation": "shared-levels"
+    },
     "tools/gfx/frame-hitch.mjs": {
       "action": "artifact-first",
       "preserve": "Full work/stack/governor/trace arrays; --json names an artifact file and --quiet only controls stderr narration.",
@@ -1534,6 +1539,11 @@
     "tools/mcp/lsp-mcp.sh": {
       "action": "protocol-only",
       "preserve": "Exit codes and command arguments",
+      "presentation": "native"
+    },
+    "tools/mcp/lsp-navigation-bench.mjs": {
+      "action": "keep-native",
+      "preserve": "Native exit status, JSON metric rows (first vs warm ms/chars/bytes), methodology note; no OS-cache or billed-model claim.",
       "presentation": "native"
     },
     "tools/mcp/mcp-cli.mjs": {
