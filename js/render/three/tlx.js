@@ -2777,7 +2777,9 @@ const TLX = (function () {
       // keeps three's ImageBitmap flipY path what it was. Bounded by count and
       // aged out after TEX_POOL_MS idle, so a race never carries the garage's.
       const _texPool = [];   // { t, w, h, bmp, at } — oldest first
-      const TEX_POOL_MAX = 4, TEX_POOL_MS = 3000;
+      // 10 s, not a frame or two: car-draw's hi-res swap re-fills its 2048 texture from an idle callback,
+      // seconds after the edit on a slow device, and an aged-out entry is a fresh ~27 MB allocation again.
+      const TEX_POOL_MAX = 4, TEX_POOL_MS = 10000;
       const _texStat = { made: 0, reused: 0, retired: 0, disposed: 0 };
       const _isBitmap = (img) => typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap;
       function takePooledTexture(src) {
