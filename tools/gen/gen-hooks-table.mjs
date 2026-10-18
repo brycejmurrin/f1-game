@@ -107,7 +107,12 @@ function summarise(block, name) {
 }
 
 /** Hook clusters peeled out of apex.js: `...ApexNet.hooks(G, …)` in `api` names a file whose `hooks()` returns the hook object. */
-export const PEELED = { ApexNet: "js/agent/apex-net.js" };
+export const PEELED = {
+  ApexNet: "js/agent/apex-net.js",
+  ApexCam: "js/agent/apex-cam.js",
+  ApexTrack: "js/agent/apex-track.js",
+  ApexLobby: "js/agent/apex-lobby.js",
+};
 
 function peeledHooks(spread) {
   const a = spread.argument;

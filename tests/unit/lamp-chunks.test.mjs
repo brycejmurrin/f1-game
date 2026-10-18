@@ -514,9 +514,10 @@ test("ChunkBins.bin: centroid cells, vertex AABBs, emission order, absolute indi
   const b = ChunkBins.bin(pos, idx, 72);
   assert.deepEqual([...b.keys()], [ChunkBins.key(1024, 1024), ChunkBins.key(1025, 1024)], "first-seen order");
   const o = b.get(ChunkBins.key(1024, 1024)), e = b.get(ChunkBins.key(1025, 1024));
-  assert.deepEqual(o.idx, [0, 1, 2, 6, 7, 8]);
+  assert.ok(o.idx instanceof Int32Array, "exact-size typed indices, not a growable JS array");
+  assert.deepEqual([...o.idx], [0, 1, 2, 6, 7, 8]);
   assert.deepEqual([o.mn, o.mx], [[0, 0, 0], [10, 1, 10]]);
-  assert.deepEqual(e.idx, [3, 4, 5]);
+  assert.deepEqual([...e.idx], [3, 4, 5]);
   assert.deepEqual([e.mn, e.mx], [[60, -1, 0], [110, 2, 5]], "the AABB is the vertices', so it may leave its own cell");
 });
 

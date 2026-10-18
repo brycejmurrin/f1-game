@@ -453,6 +453,14 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **desktop/stage-files.mjs** | Shared allow-list of runtime files/dirs staged for Pages and Electron packaging. | check-changes |
 | **desktop/stage.mjs** | Stage the deployable site folder (Pages / Electron) from the shared allow-list; optional content-hash stamp. | check-changes |
 
+### `tools/hooks/`
+
+Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason trailer.
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **hooks/ratchet-reason.mjs** | Commit-hook ratchet absorb: 20 lines silent, 40 with a Ratchet-Reason trailer. | slim-bloat |
+
 ## Test runner & coverage
 
 | Tool | Does |
