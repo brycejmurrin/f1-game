@@ -110,9 +110,11 @@ const GarageLiveryDesignEditor = (function () {
       draft.patternPlacement = "crown"; draft.patternSide = "both";
       api.changed(); status.textContent = "Design size, placement, rotation, stretch, line weight and opacity reset. Colours and selected design are kept. Undo restores your settings.";
     }, actions);
+    patternRows.push({ row: actionRow, when: () => true });
     bindings.push(() => {
       reset.disabled = !LiveryDesign.PATTERNS.includes(draft.spineLogo);
       swap.disabled = !LiveryDesign.SECOND_COLOR.includes(draft.spineLogo);
+      swap.title = swap.disabled ? "Needs a two-colour design in SPINE TOP" : "";
     });
     // Keep each setting and its paint beside the part it changes. Move the
     // original nodes, so their handlers, dependency rules and keyboard state survive.
@@ -167,6 +169,66 @@ const GarageLiveryDesignEditor = (function () {
       labelNode.textContent = label; labelNode.style.flexBasis = "100%"; group.appendChild(labelNode);
       for (const b of choices) if (accepts(b.dataset.csPill.split(":")[1])) group.appendChild(b);
     }
+    // CHOICES THAT ONLY ACT ON SOME CARS, measured by the 2026-10-18 livery editor
+    // audit (D3, D5, D6): each one changed neither mesh nor atlas outside its `when`, so it greys
+    // like every other dependent row instead of looking broken. A grey or unset HALO is built as
+    // bare metal (car3d.js haloS: a spread over 0.15 is paint), and finishes remap paint only.
+    const coloured = (hex) => {
+      if (!/^#[0-9a-f]{6}$/i.test(hex || "")) return false;
+      const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+      return Math.max(...c) - Math.min(...c) > 0.15;
+    };
+    const rules = [
+      { row: fields.get("haloFinish"), when: () => coloured(draft.halo),
+        why: "Needs a coloured HALO — an unset or grey halo is bare titanium, which takes no finish" },
+      { pill: "coverBind:spineOnly", when: () => draft.spineLogo === "cap", why: "SPINE ONLY changes only the CAP design in SPINE TOP" },
+      { pill: "finHandoff:contrast", when: () => (draft.finShape || "standard") !== "none", why: "Needs a tail fin — pick a FIN SHAPE other than NONE" },
+    ];
+    const pills = Array.from(root.querySelectorAll("button"));
+    for (const rule of rules) if (rule.pill) rule.pill = pills.find((b) => b.dataset.csPill === rule.pill) || null;
+    bindings.push(() => {
+      for (const rule of rules) {
+        const off = !rule.when();
+        if (rule.pill === null) continue;
+        if (rule.pill) { rule.pill.disabled = off; rule.pill.title = off ? rule.why : ""; continue; }
+        if (!rule.row) continue;
+        rule.row.setAttribute("aria-disabled", String(off)); rule.row.title = off ? rule.why : "";
+        for (const input of rule.row.querySelectorAll("button, input")) input.disabled = off;
+      }
+    });
+    // WHY IT IS GREY, ON SCREEN. Every dependency wrote its reason to `title`, a hover tooltip:
+    // a phone never shows one and a screen reader reads the row's static hint instead (audit
+    // D2). One line under each greyed row, or under a live row for its dead choices, carries
+    // the same text, and the row's description says it too. The sheet's own pass runs after
+    // ours in applyPreview, so this reads the settled state a microtask later.
+    const reasons = new Map();
+    function explain() {
+      for (const r of root.querySelectorAll(".cs-liv-ed-row, .tune-row")) {
+        let text = "";
+        if (r.getAttribute("aria-disabled") === "true") text = r.title;
+        else {
+          const why = [];
+          for (const b of r.querySelectorAll("button")) if (b.disabled && b.title && !b.dataset.csColour) why.push(b.textContent + " — " + b.title);
+          text = why.join(" · ");
+        }
+        let line = reasons.get(r);
+        if (!text) { if (line) { line.remove(); reasons.delete(r); } restoreHint(r); continue; }
+        if (!line) {
+          line = document.createElement("span"); line.dataset.livWhy = "";
+          line.setAttribute("aria-hidden", "true"); reasons.set(r, line);
+        }
+        if (line.parentNode !== r) r.appendChild(line);
+        line.textContent = text;
+        if (!r.dataset.livHint) r.dataset.livHint = r.getAttribute("aria-description") || "-";
+        r.setAttribute("aria-description", text);
+      }
+    }
+    function restoreHint(r) {
+      if (!r.dataset.livHint) return;
+      if (r.dataset.livHint === "-") r.removeAttribute("aria-description"); else r.setAttribute("aria-description", r.dataset.livHint);
+      delete r.dataset.livHint;
+    }
+    bindings.push(() => { Promise.resolve().then(explain); });
     sync();
     return Object.freeze({
       changed(drag) {
