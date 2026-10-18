@@ -6,7 +6,7 @@ const ControllerProfileControls = (function () {
     if (!host) return null;
     const section = document.createElement("section"); section.setAttribute("aria-label", "Controller profile");
     const label = document.createElement("p"); label.className = "adv-help"; label.setAttribute("role", "status");
-    const reset = document.createElement("button"); reset.type = "button"; reset.className = "sel-chip"; reset.textContent = "RESET THIS CONTROLLER PROFILE";
+    const reset = document.createElement("button"); reset.type = "button"; reset.className = "sel-chip"; reset.id = "pm-pad-profile-reset"; reset.textContent = "RESET THIS CONTROLLER PROFILE";
     const note = document.createElement("p"); note.className = "adv-help"; note.textContent = "Mappings follow the physical controller automatically. Reset affects this device only; other device profiles stay saved.";
     function render() {
       const profile = o.input.controllerProfile();

@@ -1,6 +1,6 @@
 # F1 Dev Tools
 
-A private skills plugin for Apex 26 / brycejmurrin/f1-game. Provides five workflows with executable helpers: scene reproduction, camera inspection, visual comparison, WATCH replay transition checks, and preset preview/export. The manifest advertises the repository MCPs that make those workflows reproducible.
+A private skills plugin for Apex 26 / brycejmurrin/f1-game. Version 0.4.0 expands the existing scene, camera, WATCH and preset workflows with semantic UI inspection, CPU/heap/memory/leak diagnostics, graphics profiling, garage angles and car parts. The manifest advertises the repository MCPs that make those workflows reproducible.
 
 Select this plugin in a coding session with the game checkout and browser execution available. Its skill reuses the game's existing Apex MCP server, browser integrations, camera tuner and production replay API. It needs no new hosted service or credentials. It does not add a new MCP server or run local game tools from a chat without an execution environment.
 
@@ -41,3 +41,9 @@ node --test tests/unit/f1-dev-tools.test.mjs
 ```
 
 The test also runs in `test:docs-guards` and `test:tooling-fast`. VM checks verify state contracts; rendered camera motion requires the browser workflow in the skill. Source changes to this package do not automatically update the private account release.
+
+## Focused inspection workflows
+
+Start with the skill’s [UI inspection](skills/f1-dev-tools/references/ui-inspection.md), [profiling and debugging](skills/f1-dev-tools/references/profiling.md), and [garage/parts](skills/f1-dev-tools/references/garage-parts.md) references. Discover current `tools/list` schemas and catalog IDs before execution; package updates do not upgrade checkout capabilities. Browser-owning operations share the repository lock and session lifecycle; long operations use bounded start/status/cancel jobs. Installation and CLI tests do not prove attached host tools or hardware GPU performance.
+
+The repository source is a skills-only package and intentionally retains its own author, prompt, capabilities and newer diagnosis/asset/storage helpers. The separately exported private account package has its own bridge and release version; do not overwrite either variant’s metadata or helpers with the other. Neither source change publishes the account release.

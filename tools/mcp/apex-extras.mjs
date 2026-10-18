@@ -33,40 +33,10 @@ const ID_RE = /^[a-z0-9_]{2,40}$/;
 const LIST_RE = /^[a-z0-9*_,.-]{1,200}$/i;
 const REF_RE = /^[A-Za-z0-9._\/~^@{}-]{1,200}$/;
 
-/** A process and every descendant, read BEFORE anything is killed: Playwright
- *  starts Chromium in its own process group, so killing the CLI's group left
- *  the browser running ~7 s after the lock read free (2026-10-03 re-test), and
- *  once its parent exits a browser is re-parented to init and unreachable. */
-export function processTree(rootPid) {
-  if (!rootPid) return [];
-  let rows;
-  try { rows = execFileSync("ps", ["-eo", "pid=,ppid="], { encoding: "utf8", timeout: 5000 }); } catch { return [rootPid]; }
-  const kids = new Map();
-  for (const line of rows.split("\n")) {
-    const [pid, ppid] = line.trim().split(/\s+/).map(Number);
-    if (pid && ppid) { if (!kids.has(ppid)) kids.set(ppid, []); kids.get(ppid).push(pid); }
-  }
-  const out = [rootPid];
-  for (let i = 0; i < out.length; i++) for (const k of kids.get(out[i]) || []) out.push(k);
-  return out;
-}
-const alive = (pid) => {
-  try { return !/^\d+ \(.*\) Z/.test(fs.readFileSync(`/proc/${pid}/stat`, "utf8")); }   // a zombie is gone
-  catch { try { process.kill(pid, 0); return true; } catch { return false; } }
-};
-/** SIGTERM every pid (and the root's group), SIGKILL survivors after graceMs,
- *  resolve once all are gone or maxMs passes. Release a lock only after this. */
-export async function killTreeAndWait(pids, { graceMs = 3000, maxMs = 15000 } = {}) {
-  const sig = (s) => { for (const p of pids) { try { process.kill(p, s); } catch { /* gone */ } } try { process.kill(-pids[0], s); } catch { /* not a leader */ } };
-  sig("SIGTERM");
-  const t0 = Date.now();
-  let killed = false;
-  while (pids.some(alive) && Date.now() - t0 < maxMs) {
-    if (!killed && Date.now() - t0 > graceMs) { sig("SIGKILL"); killed = true; }
-    await new Promise((r) => setTimeout(r, 150));
-  }
-  return { pids: pids.length, survivors: pids.filter(alive) };
-}
+import { processTree, killTreeAndWait, alive } from "../lib/process-tree.mjs";
+export { processTree, killTreeAndWait } from "../lib/process-tree.mjs";
+import { DIAGNOSTIC_JOB_KINDS, diagnosticsJobSpec } from "./diagnostics-tools.mjs";
+import { carFilterArgv } from "./catalog-discovery.mjs";
 
 /** An MCP image block for a PNG: a 640-px JPEG thumbnail, so an agent sees the
  *  frame in the result instead of spending a Read on it. */
@@ -394,6 +364,7 @@ export function createExtras(ctx) {
   };
   /** kind → {argv, browser}. Every flag is fixed here; callers pick values only. */
   function jobPlan(kind, a) {
+    if (DIAGNOSTIC_JOB_KINDS.includes(kind)) return diagnosticsJobSpec(kind, a, { ROOT, knownCircuits });
     switch (kind) {
       case "survey_track": return { browser: true, argv: nodeArgv("track/survey-track.mjs", needTrack(a.track), ...(a.oblique ? ["--oblique"] : [])) };
       case "shot_survey": {
@@ -477,7 +448,10 @@ export function createExtras(ctx) {
         return { browser: true, argv: nodeArgv("shot/flicker-gate.mjs", "--out", path.join(ROOT, "artifacts", "flicker-gate"), ...(site ? site.split(",").flatMap((x) => ["--site", x]) : [])) };
       }
       case "frame_fleet": return { browser: false, argv: nodeArgv("shot/frame-report.mjs", "--fleet") };
-      case "parts_sweep": return { browser: false, argv: nodeArgv("car/parts-sweep.mjs", "--json") };
+      case "parts_sweep": {
+        try { return { browser: false, argv: nodeArgv("car/parts-sweep.mjs", "--json", ...carFilterArgv(a)) }; }
+        catch (e) { throw Object.assign(e, { refuse: refuse("bad_args", e.message, "Use canonical category and team ids from apex_catalog.") }); }
+      }
       case "livery_contrast": {
         const t = list(a.team, "team");
         return { browser: false, argv: nodeArgv("car/livery-contrast.mjs", "--json", ...(t ? [`--team=${t}`] : [])) };
@@ -900,7 +874,10 @@ export function createExtras(ctx) {
   async function carAudit(args, { signal }) {
     const check = String(args.check || "");
     let argv;
-    if (check === "ladder") argv = nodeArgv("car/parts-ladder.mjs", "--json");
+    if (check === "ladder") {
+      try { argv = nodeArgv("car/parts-ladder.mjs", "--json", ...carFilterArgv(args)); }
+      catch (e) { return refuse("bad_args", e.message, "Use canonical category and team ids from apex_catalog."); }
+    }
     else if (check === "crest") {
       const teams = (args.teams || []).map(String);
       if (teams.some((t) => !/^[a-z]{2,20}$/.test(t))) return refuse("bad_args", "teams are team ids", "e.g. [\"haas\",\"audi\"]");
@@ -976,6 +953,6 @@ export function createExtras(ctx) {
   };
 }
 
-export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "profile", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
+export const JOB_KINDS = [...DIAGNOSTIC_JOB_KINDS, "survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "profile", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
 /** Key apex-tools-mcp uses to hand apex_job_start a pinned HUD argv; unreachable from JSON. */
 export const HUD_JOB_ARGV = Symbol("apex.hudJobArgv");

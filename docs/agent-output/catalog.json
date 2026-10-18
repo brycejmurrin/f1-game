@@ -24,13 +24,13 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. sourceBytes are source-file snapshots, not output sizes or tokens. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 408,
+    "files": 416,
     "classifications": {
-      "entrypoint-candidate": 308,
+      "entrypoint-candidate": 309,
       "asset": 2,
       "data": 11,
-      "ambiguous": 46,
-      "library": 41
+      "ambiguous": 52,
+      "library": 42
     },
     "npmScripts": 72,
     "configuredMcpServers": 5
@@ -305,7 +305,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 54751,
+      "sourceBytes": 55709,
       "doc": "How much does each catalog option change the car? Builds all options offline via `node:vm` against the right baseline.",
       "skill": "garage-parts-livery",
       "nativeOutputFlagMentions": [
@@ -2126,7 +2126,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 39339,
+      "sourceBytes": 39459,
       "doc": "What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`).",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -2861,7 +2861,7 @@
         "npm-script-reference",
         "argv-or-parser"
       ],
-      "sourceBytes": 110626,
+      "sourceBytes": 110755,
       "doc": "Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -4613,7 +4613,7 @@
       "path": "tools/lib/mem-census.mjs",
       "classification": "library",
       "evidence": [],
-      "sourceBytes": 9592,
+      "sourceBytes": 9731,
       "doc": "Page-side memory census (track WeakRefs, decoded audio, render objects, forced GC) for the CLI and its spec.",
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -4658,6 +4658,16 @@
       "sourceBytes": 3423,
       "doc": "Node loader for assets/pack: `parseModel` (mirrors assets.js) and `packAssets()` (the `Assets.modelSync` surface).",
       "skill": "asset-pack",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": []
+    },
+    {
+      "path": "tools/lib/process-tree.mjs",
+      "classification": "library",
+      "evidence": [],
+      "sourceBytes": 1996,
+      "doc": "Process-tree shutdown shared by Apex jobs and bounded diagnostic supervisors.",
+      "skill": null,
       "nativeOutputFlagMentions": [],
       "npmScripts": []
     },
@@ -5018,7 +5028,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 58144,
+      "sourceBytes": 57098,
       "doc": "Handlers for apex_track (track session), apex_job_* (background CLIs), apex_ui_*, apex_car_audit, apex_track_audit.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -5049,7 +5059,7 @@
       "path": "tools/mcp/apex-tools-mcp.json",
       "classification": "data",
       "evidence": [],
-      "sourceBytes": 1227,
+      "sourceBytes": 1346,
       "doc": null,
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -5061,7 +5071,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 165397,
+      "sourceBytes": 170221,
       "doc": "Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock).",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -5133,6 +5143,16 @@
         "node",
         "tools/mcp/browser-http.mjs"
       ]
+    },
+    {
+      "path": "tools/mcp/catalog-discovery.mjs",
+      "classification": "ambiguous",
+      "evidence": [],
+      "sourceBytes": 7506,
+      "doc": "Bounded browser-free canonical parts, livery and garage camera discovery; validated audit filters.",
+      "skill": "garage-parts-livery",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": []
     },
     {
       "path": "tools/mcp/cdmcp-bg.mjs",
@@ -5295,6 +5315,26 @@
         "node",
         "tools/mcp/debug-chrome.mjs"
       ]
+    },
+    {
+      "path": "tools/mcp/diagnostics-tools.mjs",
+      "classification": "ambiguous",
+      "evidence": [],
+      "sourceBytes": 5082,
+      "doc": "Typed background diagnostics and bounded report queries for Apex MCP.",
+      "skill": "renderer-debug / mcp-probe",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": []
+    },
+    {
+      "path": "tools/mcp/garage-plan.mjs",
+      "classification": "ambiguous",
+      "evidence": [],
+      "sourceBytes": 3946,
+      "doc": "Browser-free bounded garage matrix planning over canonical cameras and livery fields.",
+      "skill": "garage-parts-livery",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": []
     },
     {
       "path": "tools/mcp/js-debugger-cdp.mjs",
@@ -5693,6 +5733,19 @@
       ]
     },
     {
+      "path": "tools/mcp/ui-tools.mjs",
+      "classification": "ambiguous",
+      "evidence": [],
+      "sourceBytes": 10825,
+      "doc": "Bounded semantic UI inspection and saved inspection comparison for Apex MCP.",
+      "skill": "ui-menu-a11y",
+      "nativeOutputFlagMentions": [
+        "--out",
+        "--summary"
+      ],
+      "npmScripts": []
+    },
+    {
       "path": "tools/net/nostr-local.cjs",
       "classification": "entrypoint-candidate",
       "evidence": [
@@ -5805,6 +5858,29 @@
       "npmScripts": []
     },
     {
+      "path": "tools/perf/diagnostics.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "argv-or-parser"
+      ],
+      "sourceBytes": 15638,
+      "doc": "Bounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses.",
+      "skill": "renderer-debug / mcp-probe",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out",
+        "--quiet"
+      ],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/perf/diagnostics.mjs"
+      ]
+    },
+    {
       "path": "tools/perf/lib.mjs",
       "classification": "ambiguous",
       "evidence": [],
@@ -5855,6 +5931,16 @@
         "node",
         "tools/perf/query.mjs"
       ]
+    },
+    {
+      "path": "tools/perf/runtime-memory.mjs",
+      "classification": "ambiguous",
+      "evidence": [],
+      "sourceBytes": 3610,
+      "doc": "Nonintrusive, feature-detected CDP heap/DOM/performance counters on a parent-owned browser session.",
+      "skill": "mcp-probe / js-debugger",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": []
     },
     {
       "path": "tools/shot/agent.mjs",
@@ -6153,7 +6239,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 116212,
+      "sourceBytes": 111763,
       "doc": "Garage shots, ONE Chromium: walks teams x liveries x parts x cameras x viewports; clears dead DISPLAY.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -6323,6 +6409,16 @@
         "node",
         "tools/shot/hud-survey.mjs"
       ]
+    },
+    {
+      "path": "tools/shot/lib/garage-camera-catalog.mjs",
+      "classification": "ambiguous",
+      "evidence": [],
+      "sourceBytes": 4781,
+      "doc": "Named garage targets, camera aliases, stations and livery field mappings.",
+      "skill": "garage-parts-livery",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": []
     },
     {
       "path": "tools/shot/lib/survey-runner.mjs",
@@ -7777,7 +7873,7 @@
     },
     {
       "name": "test:docs-guards",
-      "command": "node --test tests/unit/agent-config.test.mjs tests/unit/agent-fleet.test.mjs tests/unit/agent-surface.test.mjs tests/unit/apex-tools-mcp.test.mjs tests/unit/assets-pack.test.mjs tests/unit/bash-guard-hardening.test.mjs tests/unit/bootstrap-doctor.test.mjs tests/unit/cdmcp-measure.test.mjs tests/unit/change-kind.test.mjs tests/unit/changelog-fragments.test.mjs tests/unit/ci-coverage.test.mjs tests/unit/component-inventory.test.mjs tests/unit/curvature-channels.test.mjs tests/unit/docs-integrity.test.mjs tests/unit/environment-json.test.mjs tests/unit/f1-dev-tools.test.mjs tests/unit/gen-arch-table.test.mjs tests/unit/generated-docs.test.mjs tests/unit/hooks-documented.test.mjs tests/unit/skill-hint-hook.test.mjs tests/unit/skill-progressive.test.mjs tests/unit/skill-routing-eval.test.mjs tests/unit/skill-smoke.test.mjs tests/unit/subagent-contract-hook.test.mjs tests/unit/test-groups.test.mjs tests/unit/ui-improve-pass.test.mjs",
+      "command": "node --test tests/unit/agent-config.test.mjs tests/unit/agent-fleet.test.mjs tests/unit/agent-surface.test.mjs tests/unit/apex-tools-mcp.test.mjs tests/unit/assets-pack.test.mjs tests/unit/bash-guard-hardening.test.mjs tests/unit/bootstrap-doctor.test.mjs tests/unit/catalog-discovery.test.mjs tests/unit/cdmcp-measure.test.mjs tests/unit/change-kind.test.mjs tests/unit/changelog-fragments.test.mjs tests/unit/ci-coverage.test.mjs tests/unit/component-inventory.test.mjs tests/unit/curvature-channels.test.mjs tests/unit/diagnostics-tools.test.mjs tests/unit/docs-integrity.test.mjs tests/unit/environment-json.test.mjs tests/unit/f1-dev-tools.test.mjs tests/unit/gen-arch-table.test.mjs tests/unit/generated-docs.test.mjs tests/unit/hooks-documented.test.mjs tests/unit/skill-hint-hook.test.mjs tests/unit/skill-progressive.test.mjs tests/unit/skill-routing-eval.test.mjs tests/unit/skill-smoke.test.mjs tests/unit/subagent-contract-hook.test.mjs tests/unit/test-groups.test.mjs tests/unit/ui-improve-pass.test.mjs",
       "agentCommand": [
         "node",
         "tools/agent-run.mjs",
@@ -8137,7 +8233,7 @@
     },
     {
       "name": "test:steering-unit",
-      "command": "node --test tests/unit/brake-cue.test.mjs tests/unit/controller-profiles.test.mjs tests/unit/digital-steer.test.mjs tests/unit/dock-layout.test.mjs tests/unit/driving-cues.test.mjs tests/unit/editor-workspace.test.mjs tests/unit/garage-defaults.test.mjs tests/unit/grip-steer.test.mjs tests/unit/hud-arrange.test.mjs tests/unit/input-bindings.test.mjs tests/unit/key-binds.test.mjs tests/unit/low-speed-lock.test.mjs tests/unit/onboard.test.mjs tests/unit/pad-haptics.test.mjs tests/unit/phone-input-improvements.test.mjs tests/unit/phone-pad.test.mjs tests/unit/player-tools-backup.test.mjs tests/unit/player-tools-ui.test.mjs tests/unit/setting-deps.test.mjs tests/unit/settings-defaults.test.mjs tests/unit/settings-export.test.mjs tests/unit/settings-search.test.mjs tests/unit/settings-tabs.test.mjs tests/unit/share-code.test.mjs tests/unit/steer-lock-taper.test.mjs tests/unit/steer-tuning-lock.test.mjs tests/unit/throttle-latch.test.mjs tests/unit/touch-drag-anchor.test.mjs tests/unit/touch-drag-speed.test.mjs tests/unit/xr-opts.test.mjs tests/unit/xr-phase0.test.mjs tests/unit/xr-plan.test.mjs",
+      "command": "node --test tests/unit/brake-cue.test.mjs tests/unit/controller-profiles.test.mjs tests/unit/digital-steer.test.mjs tests/unit/dock-layout.test.mjs tests/unit/driving-cues.test.mjs tests/unit/editor-workspace.test.mjs tests/unit/garage-defaults.test.mjs tests/unit/grip-steer.test.mjs tests/unit/hud-arrange.test.mjs tests/unit/input-bindings.test.mjs tests/unit/key-binds.test.mjs tests/unit/low-speed-lock.test.mjs tests/unit/onboard.test.mjs tests/unit/pad-haptics.test.mjs tests/unit/phone-input-improvements.test.mjs tests/unit/phone-pad.test.mjs tests/unit/player-tools-backup.test.mjs tests/unit/player-tools-ui.test.mjs tests/unit/setting-deps.test.mjs tests/unit/settings-defaults.test.mjs tests/unit/settings-export.test.mjs tests/unit/settings-one-home.test.mjs tests/unit/settings-search.test.mjs tests/unit/settings-tabs.test.mjs tests/unit/share-code.test.mjs tests/unit/steer-lock-taper.test.mjs tests/unit/steer-tuning-lock.test.mjs tests/unit/throttle-latch.test.mjs tests/unit/touch-drag-anchor.test.mjs tests/unit/touch-drag-speed.test.mjs tests/unit/xr-opts.test.mjs tests/unit/xr-phase0.test.mjs tests/unit/xr-plan.test.mjs",
       "agentCommand": [
         "node",
         "tools/agent-run.mjs",
