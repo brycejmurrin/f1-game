@@ -749,6 +749,7 @@
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
@@ -774,7 +775,7 @@
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
-      "declaredTests": 924,
+      "declaredTests": 928,
       "twinned": false
     },
     {
@@ -838,6 +839,7 @@
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
@@ -863,7 +865,7 @@
         "tests/unit/wind-vm.test.mjs",
         "tests/unit/world-physics-vm.test.mjs"
       ],
-      "declaredTests": 877,
+      "declaredTests": 881,
       "twinned": false
     },
     {
@@ -936,6 +938,7 @@
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
@@ -951,7 +954,7 @@
         "tests/unit/wake-lock-vm.test.mjs",
         "tests/unit/wind-vm.test.mjs"
       ],
-      "declaredTests": 504,
+      "declaredTests": 508,
       "twinned": false
     },
     {
@@ -1079,7 +1082,7 @@
         "tests/specs/telemetry-fit.spec.js",
         "tests/specs/wake-lock.spec.js"
       ],
-      "declaredTests": 277,
+      "declaredTests": 278,
       "twinned": true
     },
     {
