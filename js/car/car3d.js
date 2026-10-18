@@ -2163,8 +2163,7 @@ const Car3D = (function () {
       }
     });
 
-    if (sections.length) sections[sections.length - 1].to = out.pos.length / 3;
-    CarMaterials.applyZones(out, zoneRanges, sections, liv, _ckAcc);   // PAINT ZONES: floor/susp/duct/deflector/cockpit/board tints (unset = no-op)
+    if (sections.length) sections[sections.length - 1].to = out.pos.length / 3; CarMaterials.applyZones(out, zoneRanges, sections, liv, _ckAcc);   // PAINT ZONES (unset = no-op)
     CarMaterials.applyFinish(out, liv.finish, zoneRanges.length ? sections.flatMap((s) => {   // split each section around the zone ranges inside it
       const o = []; let at = s.from;
       for (const r of zoneRanges) if (r.from >= s.from && r.to <= s.to && r.to > r.from) { if (r.from > at) o.push({ name: s.name, from: at, to: r.from }); o.push(r); at = r.to; }
