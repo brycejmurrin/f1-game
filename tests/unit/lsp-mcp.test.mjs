@@ -90,6 +90,13 @@ test("MCP client: definition, references and symbols on the real tree", { timeou
     const pc = await c.call("lsp_definition", { symbol: "PhysicsConsts.IDLE_RPM" });
     assert.match(pc.content[0].text, /text match.*\njs\/physics\/consts\.js:\d+:\d+ {2}\[def\] IDLE_RPM:/s);
 
+    // Callers follow `const lerp = M4.lerp` aliases to the local calls behind them.
+    const lerp = await c.call("lsp_callers", { symbol: "M4.lerp", limit: 2000 });
+    assert.match(lerp.content[0].text, /\(via lerp\) {2}×\d+/, lerp.content[0].text.slice(0, 300));
+    assert.ok(+/^(\d+) uses/.exec(lerp.content[0].text)[1] >= 50, "aliased helpers have far more callers than alias lines");
+    // A case slip gets a suggestion, not a guess.
+    assert.match((await c.call("lsp_definition", { symbol: "Tlx" })).content[0].text, /did you mean TLX \(js\/render\/three\/tlx\.js:\d+\)\?$/);
+
     const pos = await c.call("lsp_definition", { file: "js/ui/select-screen.js", line: 1, column: 1 });
     assert.equal(pos.isError, false, pos.content[0].text);
   } finally { c.close(); }
@@ -145,7 +152,7 @@ test("fixture workspace: freshness, ambiguity, window globals, honest misses", {
     assert.match(r.t, /^6 references in 2 files .*text match/, r.t);
     assert.match(r.t, /src\/d\.js:3:7 {2}\[alias\] \(top level\) {2}go, KEY: key \} = Beta;/, "a multi-line, renamed destructure");
     assert.match(r.t, /src\/d\.js:5:15 {2}\[use\] \(top level\) {2}const twice = key \* 2;/, "the local it binds");
-    assert.match(r.t, /src\/d\.js:7:17 {2}\[use\] \(top level\) {2}const again = B\.KEY;/, "uses through const B = Beta");
+    assert.match(r.t, /src\/d\.js:7:17 {2}\[alias\] \(top level\) {2}const again = B\.KEY;/, "a read through const B = Beta, renamed: an alias");
     assert.match(r.t, /src\/c\.js:3:3 {2}\[def\] \(top level\) {2}KEY: 5/);
     r = await text("lsp_references", { symbol: "Beta.KEY", files: true });
     assert.match(r.t, /^6 references in 2 files .*\nsrc\/c\.js 3\nsrc\/d\.js 3$/, "files: true prints only per-file counts");
@@ -179,6 +186,9 @@ test("classify tags a row by the identifier at the column", () => {
   assert.equal(classify("    sample, wrapS,", 4, "  };"), "export", "the middle of a multi-line export list");
   assert.equal(t("const { IDLE_RPM, MAX_RPM } = PhysicsConsts;", "PhysicsConsts"), "alias", "the head of a destructure");
   assert.equal(t("const K = PhysicsConsts, rev = 1;", "PhysicsConsts"), "alias");
+  assert.equal(t("const lerp = M4.lerp;", "lerp", 1), "alias", "the member read only to rename it");
+  assert.equal(t("const clamp = M4.clamp, lerp = M4.lerp;", "lerp", 1), "alias", "a later declarator");
+  assert.equal(t("const k = Tracks.curvature(track, s);", "curvature"), "use", "a call is a use");
   assert.equal(t("x.sample(1)", "sample"), "use");
   assert.equal(t("const k = x ? sample : 1;", "sample"), "use");
   assert.equal(inCommentOrString('a = "T.x" + T.y', 6), true);

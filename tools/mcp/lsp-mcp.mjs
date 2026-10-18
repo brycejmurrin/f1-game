@@ -67,6 +67,8 @@ export function classify(line, col, next = "") {
     return closesDestructure && /^\s*:\s*[\w$]+\s*[,}]/.test(after) ? "alias" : "def";
   // A shorthand list that closes with `} = expr` (maybe lines later) is a destructure, else an export list.
   if (isShorthand(line, col)) return closesDestructure ? "alias" : "export";
+  // `const lerp = M4.lerp` / `const a = 1, lerp = M4.lerp;`: the member is read only to rename it.
+  if (/^\s*(const|let|var)\s/.test(line) && /(?:\b(?:const|let|var)\s+|,\s*)[\w$]+\s*=\s*(?:window\.)?(?:[\w$]+\??\.)+$/.test(before) && /^\s*([;,]|\/\/|$)/.test(after)) return "alias";
   return "use";
 }
 
@@ -368,7 +370,10 @@ export class Lsp {
     const at = s => ({ file: this.rel(s.location.uri), line0: s.location.range.start.line, col0: s.location.range.start.character });
     if (parts.length === 1) {
       const hits = (await this.symbols(name)).filter(s => s.name === name);
-      if (!hits.length) throw Error(`symbol not found: ${name} (try lsp_symbols for a prefix)`);
+      if (!hits.length) {
+        const near = (await this.symbols(name)).filter(s => s.name.toLowerCase() === name.toLowerCase() && !s.containerName && [5, 12, 13, 14].includes(s.kind)).slice(0, 3);
+        throw Error(`symbol not found: ${name}${near.length ? `; did you mean ${near.map(s => `${s.name} (${this.rel(s.location.uri)}:${s.location.range.start.line + 1})`).join(", ")}?` : " (try lsp_symbols for a prefix)"}`);
+      }
       const top = hits.filter(s => !s.containerName);
       return { cands: hits.map(at), parts, top: (top.length ? top : hits).map(at) };
     }
@@ -624,11 +629,21 @@ export async function callTool(lsp, name, a = {}) {
       const head = `(${"%SELF%"}${notes.length ? "; " + notes.join("; ") : ""})`;
       if (callers) {
         // Group the uses by enclosing function: who would an edit to this symbol touch?
-        const locs = (Array.isArray(result) ? result : []).map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l)
-          .filter(l => lsp.tag(lsp.rel(l.uri), l.range.start.line, l.range.start.character) === "use");
+        const all = (Array.isArray(result) ? result : []).map(l => l.targetUri ? { uri: l.targetUri, range: l.targetSelectionRange || l.targetRange } : l);
+        const tagOf = l => lsp.tag(lsp.rel(l.uri), l.range.start.line, l.range.start.character);
+        const locs = all.filter(l => tagOf(l) === "use");
+        // `const lerp = M4.lerp` hides the real callers behind a local name: follow it in its file.
+        for (const l of all.filter(l => tagOf(l) === "alias")) {
+          const f = lsp.rel(l.uri), text = lsp.textLines(f)[l.range.start.line] || "";
+          const m = /([\w$]+)\s*=\s*(?:window\.)?(?:[\w$]+\??\.)+$/.exec(text.slice(0, l.range.start.character));
+          if (!m) continue;
+          lsp.ensureOpen(f);
+          const refs = (await lsp.request("textDocument/references", { textDocument: { uri: l.uri }, position: { line: l.range.start.line, character: m.index }, context: { includeDeclaration: false } }).catch(() => [])) || [];
+          for (const r of refs) if (r.range.start.line !== l.range.start.line || r.range.start.character !== m.index) locs.push({ ...r, via: m[1] });
+        }
         const groups = new Map();
         for (const l of locs) {
-          const f = lsp.rel(l.uri), w = await lsp.where(f, l.range.start.line).catch(() => "?"), k = `${f}\u0000${w}`;
+          const f = lsp.rel(l.uri), w = `${await lsp.where(f, l.range.start.line).catch(() => "?")}${l.via ? ` (via ${l.via})` : ""}`, k = `${f}\u0000${w}`;
           if (!groups.has(k)) groups.set(k, { f, w, lines: [] });
           groups.get(k).lines.push(l.range.start.line + 1);
         }
