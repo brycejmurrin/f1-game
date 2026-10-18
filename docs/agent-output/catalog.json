@@ -24,13 +24,13 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. sourceBytes are source-file snapshots, not output sizes or tokens. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 402,
+    "files": 408,
     "classifications": {
-      "entrypoint-candidate": 303,
+      "entrypoint-candidate": 308,
       "asset": 2,
       "data": 11,
       "ambiguous": 46,
-      "library": 40
+      "library": 41
     },
     "npmScripts": 72,
     "configuredMcpServers": 5
@@ -1198,6 +1198,28 @@
       ]
     },
     {
+      "path": "tools/check/shader-validate.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "main-guard",
+        "argv-or-parser"
+      ],
+      "sourceBytes": 9135,
+      "doc": "glslang over the GLX GLSL ES 3.00 shaders, naga (advisory) over the WGX WGSL; offline, skips LOUDLY without the binary.",
+      "skill": "renderer-debug",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/check/shader-validate.mjs"
+      ]
+    },
+    {
       "path": "tools/check/shell-ids.mjs",
       "classification": "entrypoint-candidate",
       "evidence": [
@@ -1426,6 +1448,29 @@
         "--",
         "node",
         "tools/check/wait-polling-lint.mjs"
+      ]
+    },
+    {
+      "path": "tools/check/workflow-lint.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "main-guard",
+        "argv-or-parser"
+      ],
+      "sourceBytes": 4612,
+      "doc": "actionlint + zizmor over .github/workflows, offline; skips LOUDLY (fails under --require) without the binary.",
+      "skill": "check-changes",
+      "nativeOutputFlagMentions": [
+        "--format",
+        "--json"
+      ],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/check/workflow-lint.mjs"
       ]
     },
     {
@@ -2816,7 +2861,7 @@
         "npm-script-reference",
         "argv-or-parser"
       ],
-      "sourceBytes": 109640,
+      "sourceBytes": 110626,
       "doc": "Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -3122,6 +3167,25 @@
       ]
     },
     {
+      "path": "tools/env/install-lint-bins.sh",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "shell-or-python-shebang"
+      ],
+      "sourceBytes": 4450,
+      "doc": "Pinned, checksummed install of actionlint, shellcheck, zizmor, glslang and naga into artifacts/bin.",
+      "skill": null,
+      "nativeOutputFlagMentions": [],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "bash",
+        "tools/env/install-lint-bins.sh"
+      ]
+    },
+    {
       "path": "tools/env/mirror-skills.sh",
       "classification": "entrypoint-candidate",
       "evidence": [
@@ -3416,6 +3480,26 @@
       ]
     },
     {
+      "path": "tools/gen/gen-locales.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "main-guard",
+        "argv-or-parser"
+      ],
+      "sourceBytes": 3749,
+      "doc": "Regenerate locales/en.json and manifest hashes from I18n.t / data-i18n call sites.",
+      "skill": null,
+      "nativeOutputFlagMentions": [],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/gen/gen-locales.mjs"
+      ]
+    },
+    {
       "path": "tools/gen/gen-output-surface.mjs",
       "classification": "entrypoint-candidate",
       "evidence": [
@@ -3451,7 +3535,7 @@
         "npm-script-reference",
         "argv-or-parser"
       ],
-      "sourceBytes": 19937,
+      "sourceBytes": 20034,
       "doc": "Generates the shell tag blocks, sw.js precache seed and js/roster.js from the manifest; `--check` fails on drift.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [],
@@ -4514,6 +4598,18 @@
       "npmScripts": []
     },
     {
+      "path": "tools/lib/lint-bins.mjs",
+      "classification": "library",
+      "evidence": [],
+      "sourceBytes": 2813,
+      "doc": "Locates the pinned lint binaries (actionlint, zizmor, glslang, naga, shellcheck) and defines what an absent one means.",
+      "skill": null,
+      "nativeOutputFlagMentions": [
+        "--json"
+      ],
+      "npmScripts": []
+    },
+    {
       "path": "tools/lib/mem-census.mjs",
       "classification": "library",
       "evidence": [],
@@ -4910,7 +5006,7 @@
       "path": "tools/manifest.cjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 97336,
+      "sourceBytes": 97891,
       "doc": "Load-order truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `HARD_EDGES`, `TRACK_VM`; index.html must match.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [],
@@ -4922,7 +5018,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 54296,
+      "sourceBytes": 58144,
       "doc": "Handlers for apex_track (track session), apex_job_* (background CLIs), apex_ui_*, apex_car_audit, apex_track_audit.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -4965,7 +5061,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 164047,
+      "sourceBytes": 165397,
       "doc": "Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock).",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -5148,7 +5244,7 @@
         "argv-or-parser",
         "shell-or-python-shebang"
       ],
-      "sourceBytes": 9527,
+      "sourceBytes": 10712,
       "doc": "Wrapper for the local `scratch/chrome-devtools-mcp` clone: `clone`/`build`/`run`/`verify`/`status`/`help`.",
       "skill": "mcp-probe",
       "nativeOutputFlagMentions": [],
@@ -5159,6 +5255,25 @@
         "--",
         "bash",
         "tools/mcp/chrome-devtools-mcp.sh"
+      ]
+    },
+    {
+      "path": "tools/mcp/chrome-devtools-runtime.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "argv-or-parser"
+      ],
+      "sourceBytes": 11059,
+      "doc": "Materialize the two Apex-reviewed chrome-devtools-mcp 1.7.0 fixes without mutating npm or clone sources.",
+      "skill": null,
+      "nativeOutputFlagMentions": [],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/mcp/chrome-devtools-runtime.mjs"
       ]
     },
     {
@@ -5274,7 +5389,7 @@
       "path": "tools/mcp/js-debugger-session.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 28193,
+      "sourceBytes": 30461,
       "doc": "Agent debugger session: pause generations, breakpoints, scopes and nonblocking execution.",
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -5286,7 +5401,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 23276,
+      "sourceBytes": 24396,
       "doc": "Parent-only native Chromium smoke for js-debugger-mcp's real stdio/CDP debugging workflow.",
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -5303,7 +5418,7 @@
       "path": "tools/mcp/js-debugger-trace.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 8019,
+      "sourceBytes": 8290,
       "doc": "Non-pausing debugger tools: logpoints, exception log, listener counts, live-object counts (CDP).",
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -5338,7 +5453,7 @@
         "main-guard",
         "argv-or-parser"
       ],
-      "sourceBytes": 61979,
+      "sourceBytes": 84725,
       "doc": "Stdio MCP code intelligence over TypeScript 7's native `tsc --lsp`: definition, references, symbols, hover, diagnostics.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -5420,7 +5535,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 11572,
+      "sourceBytes": 13910,
       "doc": "Pokes the repo MCP wrappers (`apex_status`, probe help, chrome-devtools `status`, tinyfish `help`). No Chromium.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -6351,7 +6466,7 @@
       "path": "tools/shot/scenery-locations.json",
       "classification": "data",
       "evidence": [],
-      "sourceBytes": 115148,
+      "sourceBytes": 115147,
       "doc": null,
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -7842,7 +7957,7 @@
     },
     {
       "name": "test:mcp",
-      "command": "node --test tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs",
+      "command": "node --test tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs",
       "agentCommand": [
         "node",
         "tools/agent-run.mjs",
