@@ -10,6 +10,8 @@
  * impact map is the narrow static slice: a test that names a `js/…` path and
  * calls a function that file declares. Nightly V8 coverage and select-specs
  * consumption stay follow-ups (those files are outside this change).
+ * No per-group test counts: any PR that adds a test would stale every other
+ * one on merge (#2808); readers count with declaredTests() in select-budget.
  *
  *   node tools/docs/gen-agent-index.mjs
  *   node tools/docs/gen-agent-index.mjs --check
@@ -19,7 +21,6 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { argGate, emit, isMain, readRepo, ROOT } from "../gen/gen-lib.mjs";
 import { fileGlobal, rosterOf } from "../gen/gen-arch-table.mjs";
-import { declaredTests } from "../ci/select-budget.mjs";
 import { isTwinned } from "../ci/twinned-specs.mjs";
 
 const require = createRequire(import.meta.url);
@@ -166,18 +167,11 @@ function groupsTable() {
   return Object.keys(groups).sort().map((script) => {
     const def = groups[script] || {};
     const files = (def.files || []).filter((f) => typeof f === "string" && !f.startsWith("//")).sort();
-    let declared = 0;
-    let any = false;
-    for (const file of files) {
-      const n = declaredTests(file);
-      if (n != null) { declared += n; any = true; }
-    }
     return {
       id: script.replace(/^test:/, ""),
       script,
       kind: def.kind || null,
       files,
-      declaredTests: any ? declared : null,
       twinned: files.some((f) => isTwinned(f)),
     };
   });
