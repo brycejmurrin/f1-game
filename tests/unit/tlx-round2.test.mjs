@@ -314,7 +314,7 @@ test("createTexMesh uses Uint16 indices at or under 65535 verts and Uint32 above
   assert.equal(mesh(3).geo.index.array[2], 2);
 });
 
-test("pruneGeoRegistry's cold walk does not allocate an iterator result per geometry", () => {
+test("pruneGeoRegistry's cold walk visits each geometry without requesting an iterator", () => {
   const m = TLX.match(/function pruneGeoRegistry\(now\) \{/);
   assert.ok(m, "pruneGeoRegistry moved");
   let depth = 1, i = m.index + m[0].length;
@@ -324,12 +324,15 @@ test("pruneGeoRegistry's cold walk does not allocate an iterator result per geom
   }
   const body = TLX.slice(m.index + m[0].length, i - 1);
   const _geoReg = [];
-  for (let n = 0; n < 4000; n++) _geoReg.push(new WeakRef({ n }));
+  let visited = 0;
+  for (let n = 0; n < 4000; n++) _geoReg.push({ deref() { visited++; return this; } });
+  // A whole-process heap delta also counts unrelated V8 compilation/GC work.
+  // Trap the actual regression (for-of's iterator protocol) deterministically,
+  // and count dereferences so a no-op prune cannot satisfy the guard.
+  _geoReg[Symbol.iterator] = () => { throw new Error("cold prune requested an iterator"); };
   let _geoPruneAt = -Infinity;
   const prune = eval("(function(now){" + body + "})");
-  const before = process.memoryUsage().heapUsed;
   prune(0);
-  const delta = process.memoryUsage().heapUsed - before;
   assert.equal(_geoReg.length, 4000, "live refs stay");
-  assert.ok(delta < 40000, `cold prune allocated ${delta} bytes (for-of result objects)`);
+  assert.equal(visited, 4000, "every registered geometry is visited");
 });

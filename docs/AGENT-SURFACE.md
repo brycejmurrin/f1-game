@@ -506,6 +506,20 @@ contrast studio choices have explicit pressed-state adapters; other unmapped
 choices stay unverified. An inspection always reports behavior and persistence
 as `not-tested`. A matching current value is not an action or reload test.
 
+Saved inspection JSON can be summarized without starting Chromium:
+
+```sh
+node --input-type=module -e 'import fs from "node:fs"; import {summarizeInspection} from "./tools/ui/explorer.mjs"; console.log(summarizeInspection(JSON.parse(fs.readFileSync(process.argv[1],"utf8")),"saved"))' artifacts/inspection.json
+```
+
+For source navigation, use a binding's `source` file with
+`bash tools/mcp/lsp-mcp.sh outline <file> --all`, then request a definition at
+the returned file/line position with `--body`. This exposes internal UI handlers
+and avoids ambiguous global names; positions must come from the current checkout.
+Pair CSS candidate locations with the report's matched rules and adaptive metadata
+before choosing an edit. When moving an offline HTML report, retain its relative
+evidence directory too: rebuilding from report JSON alone does not copy those files.
+
 `--summary` prints coverage and limits per size, followed by findings. It says
 `no-findings`, never a blanket clean pass, and retains settlement, CSS, ARIA,
 control and layout-context truncation. With the JS debugger, query
