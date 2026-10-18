@@ -60,6 +60,7 @@ test(".mcp.json registers apex-tools alongside the separate debugger server", ()
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
+    "apex-lsp",
     "apex-tools",
     "chrome-devtools",
     "js-debugger",

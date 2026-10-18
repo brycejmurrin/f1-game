@@ -45,6 +45,7 @@ stayed separate in the 2026-09-03 pass.
 | **data-hub** | Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1, `js/data/*`, WATCH/HIGHLIGHTS wrong driver/race (a camera snap after a seek is f1-animation-cameras). |
 | **garage-parts-livery** | GARAGE parts catalog, livery/finish/shark fin, `ersProfile`/`aeroLoad`, career owned-part UI, Car3D visual recipes. |
 | **input-controls** | Steering, gamepad, touch steer, tilt/gyro, keyboard, on-screen steer buttons, driving-help/racing-line assists, GRIP STEER; owns the STEER sliders (tune-physics owns them as `setPhysics` A/B knobs). |
+| **code-nav** | Where a JS symbol is defined (with its body), every use with its enclosing function, callers before an edit, a module's exports, its type, and the errors an edit introduced — the `apex-lsp` MCP (`lsp_*`, `tools/mcp/lsp-mcp.sh`) over TypeScript 7 `tsc --lsp`, instead of grep. |
 | **js-debugger** | Source breakpoints, stepping, call stacks, paused locals and exception pauses through the separate debugger MCP or persistent shell wrapper; parent-owned existing local Chrome, fresh pause tokens and explicit cleanup. |
 | **mcp-probe** | Live working-tree canvas via the Chrome DevTools MCP (`chrome_*`) or `probe-mcp.py chrome-start` — poke `__apex`, heap/perf/console during an interactive repro. |
 | **multiplayer-debug** | VS FRIEND, WebRTC connection, phone-as-controller pairing, invite links/QR codes, room codes, build handshakes, Nostr signalling, TURN/ICE, replicated rivals, net determinism. |

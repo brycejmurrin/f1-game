@@ -1055,6 +1055,33 @@
       "evidenceScope": "Offline debugger pause/position/concurrency contracts only; excludes game behavior and target-device verification"
     },
     {
+      "skill": "code-nav",
+      "task": "Resolve definitions, references, callers, outlines and new-since-HEAD diagnostics through apex-lsp on hermetic fixtures",
+      "fixture": "tests/unit/lsp-mcp.test.mjs",
+      "pattern": "argument errors come back|classify tags a row|lsp-hint.py|fixture workspace: freshness|fixture workspace: callers",
+      "expected": {
+        "minPass": 5,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node22+ and npm install (typescript ^7 provides tsc --lsp); git for the diagnostics fixture; no browser"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "None needed: apex-lsp reads source through tsc --lsp and never opens a page; the real-tree MCP smoke is the rest of tests/unit/lsp-mcp.test.mjs"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "No GPU or device dependency; the only resource claim is tsc --lsp's ~400 MB RSS (docs/notes/LSP-MCP-2026-10-18.md)"
+        }
+      ],
+      "evidenceScope": "apex-lsp answers on pinned fixture workspaces; excludes the real-tree MCP smoke, agent routing and adoption"
+    },
+    {
       "skill": "gen-regen",
       "task": "Exercise agent-index render matches committed docs/agent-index.json",
       "fixture": "tests/unit/agent-indexes.test.mjs",

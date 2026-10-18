@@ -9,13 +9,13 @@ start/finish line, and 22 of 40 circuits put it inside a corner. This is the fix
 
 | | before | after |
 |---|---|---|
-| start lines inside a corner | **22 / 40** | **1 / 40** |
+| start lines inside a corner | **22 / 40** | **0 / 40** |
 | Turn-1 hand vs six undisputed corners | — | **6 / 6** |
 | `turns[0]` is the first apex after the line | — | **38 / 40** |
 | circuits building (`verify-track --all`) | 40 | **40** |
 
-The one line still in a corner is **jeddah**, deliberately untouched (see "Not
-located"). The two turn tables that still disagree with the measured first apex
+**jeddah** moved `0.9625 → 0.9160` on 2026-10-18 (`sceneryStartFrac: 0.9625`
+keeps dressing in place): line straight, first apex LEFT at 256 m, grid ok. The two turn tables that still disagree with the measured first apex
 are **sochi** and **jacarepagua** — neither circuit's `startFrac` nor turns were
 touched here, so that mismatch is pre-existing.
 
@@ -201,7 +201,8 @@ buenos_aires, jacarepagua — all 0.0, confirmed by both estimators.
 
 ### Not located — do not guess
 
-**jeddah** keeps its current value. **bahrain moved 0.2250 → 0.0000 on
+**jeddah** moved `0.9625 → 0.9160` on 2026-10-18 (`sceneryStartFrac: 0.9625`;
+see `docs/notes/JEDDAH-START-2201-2026-10-18.md`). **bahrain moved 0.2250 → 0.0000 on
 2026-10-04** (`sceneryStartFrac: 0.2250` keeps its dressing in place):
 
 - 0.225 sat on a 370 m diagonal after a hairpin, first apex a LEFT; the real
