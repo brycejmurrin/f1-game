@@ -94,7 +94,7 @@ const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "lowe
                           "sideTint", "sunTint",
                           "bandTint2", "plateTint",
                           "fin", "finArt", "logo", "logo2", "logo3", "patternTint", "patternSecond",
-                          "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent"];
+                          "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent", "endplate"];
 const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "default",
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
@@ -135,6 +135,7 @@ const LIV_ROW_HINT = {
   plateTint: "PLATE — the board SPINE SIDE's PLATE / TITLE designs paint on. The colour you pick is used as-is. Unset = SECONDARY, contrast-checked against the flank — never BODY STRIPE. Lettering auto-inks.",
   wing: "WINGS — the front and rear FLAPS. Unset = ACCENT.",
   rearWing: "REAR WING — the rear mainplane block. Unset = ACCENT.",
+  endplate: "ENDPLATES — the front-wing endplates and the rear-wing endplate bodies. Unset = the secondary body colour at the front, dark at the rear.",
   fin: "TAIL FIN — the shark-fin plate. The colour you pick is used as-is (even under FIN HANDOFF CONTRAST). Unset = ACCENT, or a contrast-derived colour when HANDOFF is CONTRAST. Needs a FIN SHAPE other than NONE.",
   finArt: "TAIL GRAPHIC — fin motif / badge ink. The colour you pick is used as-is. Unset = first base colour that clears the fin plate.",
   halo: "HALO — the cockpit halo loop.",
@@ -1112,6 +1113,7 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(section("WINGS & TAIL"));
   const wingRow = colorRow("WINGS", "wing", true), rearWingRow = colorRow("REAR WING", "rearWing", true);
   wrap.appendChild(wingRow); wrap.appendChild(rearWingRow);
+  wrap.appendChild(colorRow("ENDPLATES", "endplate", true));   // plates are paint whatever WING FLAPS is
   const flapsPainted = () => (d.wingCarbon || "paint") !== "carbon";
   const NO_PAINT = "Nothing to colour — WING FLAPS is CARBON";
   deps.push({ row: wingRow, when: flapsPainted, why: NO_PAINT }, { row: rearWingRow, when: flapsPainted, why: NO_PAINT });
@@ -1158,6 +1160,13 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("HALO", "halo", true));
   wrap.appendChild(colorRow("RIM", "rimTint", true)); wrap.appendChild(colorRow("CALIPER", "caliperTint", true)); wrap.appendChild(colorRow("SIDEWALL INK", "sidewallInk", true));   // WHEELS & BRAKES section (livery-design-editor.js)
   wrap.appendChild(colorRow("MIRROR HOUSING", "mirrorTint", true));
+  // HELMET section rows: appended like every other row (the editor only collects rows that are on the page)
+  const lidStyled = () => (d.helmetStyle || "team") !== "team";
+  const NO_LID = "Needs a HELMET style other than TEAM";
+  const lidBaseRow = colorRow("HELMET BASE", "helmetBase", true), lidAccentRow = colorRow("HELMET ACCENT", "helmetAccent", true);
+  wrap.appendChild(lidBaseRow); wrap.appendChild(lidAccentRow);
+  deps.push({ row: lidBaseRow, when: lidStyled, why: NO_LID });
+  deps.push({ row: lidAccentRow, when: () => lidStyled() && d.helmetStyle !== "solid", why: "Needs a HELMET style with a stripe, cap, band or chevron" });
   // One pill row per single-choice field: FINISH (Car3D's surface set — this
   // array and FINISH_SURFACE were two copies and the specs held a third),
   // NUMBER FONT and SPONSORS (LiveryTex's id lists). Same nodes and classes.
@@ -1217,6 +1226,7 @@ function buildLiveryCreator(container, team) {
   // What the cover's FLANK carries — the number, the mark or the driver code.
   pillRow("SPINE SIDE", "spineSide", LT && LT.SPINE_SIDE_IDS || ["none"], "none");
   pillRow("BODY SPLIT", "bodySplit", ["off", "lr"], "off");
+  pillRow("HELMET", "helmetStyle", (typeof Helmets !== "undefined" && Helmets.STYLES) || ["team"], "team");
   // The pills that write a sponsor name: dead under the CLEAN pack.
   for (const k of ["spineLogo:wordmark", "spineSide:wordmark", "spineSide:duo", "spineSide:title"]) {
     const b = wrap.querySelector('[data-cs-pill="' + k + '"]');

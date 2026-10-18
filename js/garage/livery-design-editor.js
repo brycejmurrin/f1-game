@@ -146,13 +146,14 @@ const GarageLiveryDesignEditor = (function () {
     section("COVER SIDES & TAIL LINK", "Side artwork and its fills. COVER BIND links top and side graphics; FIN HANDOFF controls the transition to the tail.",
       ["spineSide", "sideTint", "plateTint", "coverBind", "finHandoff"]);
     section("WINGS", "Front and rear wing paint. Carbon flaps keep their carbon material; WING FINISH applies to painted wing surfaces.",
-      ["wingCarbon", "wing", "rearWing", "wingFinish"]);
+      ["wingCarbon", "wing", "rearWing", "endplate", "wingFinish"]);
     section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
       ["finShape", "fin", "finFinish", "finStyle", "finArt", "finBadge"]);
     section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
       ["logo", "logo2", "logo3", "numFont", "sponsors"], [api.markNote]);
     section("COCKPIT & CAMERA", "Halo, mirror and T-cam: paint, finish and mirror housing colour.", ["halo", "haloFinish", "mirrorTint", "mirrorFinish", "tcam"]);
     section("WHEELS & BRAKES", "Paint-only wheel colours, applied to all four wheels. NONE keeps the BRAKES and TYRES parts' own colours.", ["rimTint", "caliperTint", "sidewallInk"]);
+    section("HELMET", "Helmets for both of this team's drivers, like the rest of the paint job. TEAM keeps each driver's own design; the other styles repaint it from HELMET BASE and HELMET ACCENT.", ["helmetStyle", "helmetBase", "helmetAccent"]);
     section("REVIEW & SAVE", "Undo or compare your edits, then name and save this paint job.", [], [historyRow, status, api.nameRow, api.saveRow]);
     // One SPINE TOP selection, divided by purpose rather than a wall of pills.
     const group = api.spineRow.querySelector(".cs-liv-ed-finish"), choices = Array.from(group.querySelectorAll("button"));

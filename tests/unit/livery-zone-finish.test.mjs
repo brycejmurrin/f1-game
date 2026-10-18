@@ -76,3 +76,29 @@ test("the garage offers the three pill rows and the housing colour row, and the 
   assert.ok(sheet.includes('colorRow("MIRROR HOUSING", "mirrorTint", true)'));
   assert.ok(ed.includes('"mirrorTint"'));
 });
+
+// #2796 items 1-3: a zone finish reaches the body-colour paint other sections emit for it.
+// Vertex colours carry CarShade's shading, so a colour is matched within a tolerance.
+const near = (m, i, c) => [0, 1, 2].every((k) => Math.abs(m.col[i * 3 + k] - c[k]) < 0.08);
+const ofColour = (m, c) => { const r = []; for (let i = 0; i < m.mat.length; i++) if (near(m, i, c)) r.push(i); return r; };
+test("HALO FINISH paints an untinted titanium halo, so the finish lands on it (#2796 1)", () => {
+  const m = build({ haloFinish: "matte", halo: null }), b = build({ halo: null });
+  const hoop = ofColour(b, M.CarMaterials ? M.CarMaterials.HALO : [0.55, 0.56, 0.58]).filter((i) => b.mat[i] === S.metal && b.pos[i * 3 + 1] > 0.78 && Math.abs(b.pos[i * 3]) < 0.32 && b.pos[i * 3 + 2] > -0.5 && b.pos[i * 3 + 2] < 0.6);
+  assert.ok(hoop.length > 0, "the untinted hoop is metal today");
+  for (const i of hoop) assert.equal(m.mat[i], FS.matte, `halo vertex ${i}`);
+  assert.deepEqual(Array.from(build({ haloFinish: "inherit", halo: null }).mat), Array.from(b.mat), "inherit is unset");
+});
+
+test("SIDEPOD FINISH reaches the pod colour panel painted in the livery section (#2796 2)", () => {
+  const POD = [0.1, 0.8, 0.2], m = build({ pod: POD, podFinish: "chrome" }), panel = ofColour(m, POD);
+  assert.ok(panel.length > 0, "the pod panel exists");
+  for (const i of panel) assert.equal(m.mat[i], FS.chrome, `pod panel vertex ${i}`);
+});
+
+test("COVER FINISH reaches the stripe runs over the engine cover, not the nose run (#2796 3)", () => {
+  const STRIPE = [0.9, 0.1, 0.6], m = build({ stripe: STRIPE, coverFinish: "satin" }), run = ofColour(m, STRIPE);
+  const cover = run.filter((i) => m.pos[i * 3 + 2] < -0.25), nose = run.filter((i) => m.pos[i * 3 + 2] > 1.2);
+  assert.ok(cover.length > 0 && nose.length > 0, "stripe runs exist on the cover and the nose");
+  for (const i of cover) assert.equal(m.mat[i], FS.satin, `cover stripe vertex ${i}`);
+  for (const i of nose) assert.equal(m.mat[i], S.paint, `nose stripe vertex ${i} keeps the body finish`);
+});
