@@ -271,6 +271,15 @@ function occupancyRefuse() {
       "Wait for the other apex_* browser tool to finish, or remove the lock if that PID is gone.",
     );
   }
+  // A one-shot `call` that started a browser job dies at once, so its lock reads stale while the job's Chromium runs.
+  const job = extras().runningBrowserJob();
+  if (job) {
+    return refuse(
+      "job_running",
+      `browser job ${job.id} (${job.kind}) is still running (pid ${job.pid})`,
+      "apex_job_status {jobId, wait:100} until it is done, or apex_job_cancel {jobId}.",
+    );
+  }
   const port = daemonPort();
   if (port != null) {
     return refuse(
@@ -1807,7 +1816,6 @@ export function splitOut(stdout) {
   }
   return { out: null, rest: text };
 }
-export function parseOut(stdout) { return splitOut(stdout).out; }
 
 /** Reply diet (#2672): the verdict without the bulk. `args.full` restores the whole reply. Pure — body is the
  *  parsed result of runSpawn. doctor: non-pass check rows + the pass count; unit_test: pass/fail counts and failing
@@ -2360,6 +2368,8 @@ export async function garageOpen(args, { spawnChild = spawn, readyTimeoutMs = 18
   });
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (d) => log(`[garage] ${String(d).trim().slice(0, 400)}`));
+  // EPIPE from a dying child is an 'error' event: unhandled, it took the whole server down.
+  child.stdin?.on("error", (e) => log(`[garage] stdin: ${e.message}`));
   child.on("exit", (code, sig) => {
     g.exited = true;
     if (g.killTimer) clearTimeout(g.killTimer);
@@ -2470,8 +2480,15 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_catalog") return handleCatalog(args);
   if (name === "apex_locations") {
-    const custom = args.designs ? loadSurveyDesigns(path.resolve(ROOT, args.designs)) : null;
-    const all = listSurveyLocations(args.track, custom);
+    let all;
+    try {
+      // A missing or malformed designs file is the caller's argument, not a server fault (was internal_error).
+      const custom = args.designs ? loadSurveyDesigns(path.resolve(ROOT, args.designs)) : null;
+      all = listSurveyLocations(args.track, custom);
+    } catch (e) {
+      if (e.refuse) return e.refuse;
+      return refuse("bad_args", String(e.message || e), "Pass designs as a readable custom-survey designs JSON path, or omit it.");
+    }
     const search = args.search?.trim().toLowerCase();
     const exact = search && all.filter(l => l.id === search || l.aliases.includes(search));
     const locations = !search ? all : exact.length ? exact : all.filter(l =>
@@ -2887,7 +2904,14 @@ async function handleRpc(msg) {
   return { jsonrpc: "2.0", id: mid, error: { code: -32601, message: `Method not found: ${method}` } };
 }
 
+/** A host stops a server with a signal; Node's default action skips process.on("exit"), so every detached child
+ *  (runSpawn groups, garage, jobs, track session) outlived it. Exit instead, which runs those hooks. */
+function exitOnSignals() {
+  for (const [s, n] of [["SIGTERM", 15], ["SIGINT", 2], ["SIGHUP", 1]]) process.once(s, () => process.exit(128 + n));
+}
+
 function cmdServe() {
+  exitOnSignals();
   const rl = require("readline").createInterface({
     input: process.stdin,
     crlfDelay: Infinity,
@@ -2895,7 +2919,11 @@ function cmdServe() {
   const pending = new Set();
   let closing = false;
   const finish = () => {
-    if (closing && !pending.size) { garageClose("stdio closed"); process.exitCode = 0; }
+    if (!closing || pending.size) return;
+    garageClose("stdio closed");
+    // An open apex_track session would otherwise keep the server alive, holding the browser lock.
+    if (extrasInst) extrasInst.closeAll("stdio closed");
+    process.exitCode = 0;
   };
   rl.on("line", (line) => {
     line = line.trim();
@@ -2945,6 +2973,7 @@ export function httpRefusal(req) {
 }
 
 export function cmdServeHttp() {
+  exitOnSignals();
   const port = /^\d+$/.test(String(process.env.APEX_MCP_HTTP_PORT || ""))
     ? Number(process.env.APEX_MCP_HTTP_PORT)
     : HTTP_PORT_DEFAULT;

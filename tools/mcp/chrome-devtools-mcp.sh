@@ -33,6 +33,20 @@ detect_chrome() {
   exit 1
 }
 
+# run only: a session's MCP servers start while SessionStart may still be
+# installing Chromium, and detect_chrome's `exit 1` killed the server for the
+# whole session. Retry briefly, then print nothing (run starts without
+# --executablePath and the browser tools report the gap), like playwright-mcp.sh.
+wait_chrome() {
+  local found i wait_s="${APEX_CHROME_WAIT_S:-10}"
+  for ((i = 0; i <= wait_s; i++)); do
+    found="$(find_chrome 2>/dev/null)" && [[ -n "$found" ]] && { echo "$found"; return 0; }
+    if ((i < wait_s)); then sleep 1; fi
+  done
+  echo "No Chromium found after ${wait_s}s; starting without --executablePath. Run: npx playwright install chromium" >&2
+  return 0
+}
+
 # WebGPU + software-WebGL flags, both MEASURED on Chrome 148 in this container:
 #
 #   --enable-unsafe-webgpu       WGX could not boot at all without it: headless
@@ -52,7 +66,7 @@ build_mcp_args() {
   MCP_ARGS=(
     --headless
     --isolated
-    --executablePath "$chrome"
+    ${chrome:+--executablePath "$chrome"}
     --memoryDebugging
     --viewport "844x390"
   )
@@ -85,7 +99,7 @@ local_ok() {
 
 run_mcp() {
   local chrome
-  chrome="$(detect_chrome)"
+  chrome="$(wait_chrome)"
   build_mcp_args "$chrome"
   local source_root patched_bin npx_bin
   if local_ok; then
