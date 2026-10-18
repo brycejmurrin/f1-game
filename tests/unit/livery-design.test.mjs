@@ -251,7 +251,7 @@ test("integrated adjustments disable only controls unused by the current spine d
 test("surface sections and spine families preserve one button per choice and label their scope", () => {
   const { root, spineRow, D } = editorFixture();
   const headings = root.querySelectorAll('[role="heading"]').map((el) => el.textContent);
-  for (const title of ["BODY PAINT & BASE FINISH", "ENGINE COVER — SHAPE & PAINT", "SPINE TOP — ARTWORK & COLOURS", "WINGS", "TAIL FIN", "TEAM MARKS & NUMBERS", "COCKPIT & CAMERA", "REVIEW & SAVE"]) assert.ok(headings.includes(title), title);
+  for (const title of ["BODY PAINT & BASE FINISH", "ENGINE COVER — SHAPE & PAINT", "SPINE TOP — ARTWORK & COLOURS", "WINGS", "TAIL FIN", "TEAM MARKS & NUMBERS", "COCKPIT & CAMERA"]) assert.ok(headings.includes(title), title);
   assert.equal(spineRow.getAttribute("data-liv-section"), "SPINE TOP — ARTWORK & COLOURS");
   assert.equal(spineRow.querySelector('[role="group"]').getAttribute("aria-label"), "SPINE TOP");
   assert.deepEqual(spineRow.querySelectorAll(".cs-liv-ed-sec").map((el) => el.textContent), ["MARKS & IDENTITY", "FIXED GRAPHICS", "ADJUSTABLE PATTERNS"]);
@@ -347,20 +347,21 @@ test("SPINE ONLY greys except on CAP and CONTRAST greys without a fin — and th
   }
 });
 
-// D3: HALO FINISH was 0 of 9 on every car — an unset or grey halo is built as metal, and finishes remap paint.
-test("HALO FINISH greys unless HALO is coloured — and Car3D agrees on every cockpit", async () => {
+// D3: HALO FINISH was 0 of 9 on every car. #2829 (#2796 1) made an explicit HALO FINISH land on the titanium too,
+// so it is live for an unset or grey halo as well, and Car3D agrees on every cockpit.
+test("HALO FINISH is live whatever the HALO colour — and Car3D agrees on every cockpit", async () => {
   const { root, draft, editor } = editorFixture();
   const row = root.querySelectorAll("button").find((b) => b.dataset.csPill === "haloFinish:matte").parentNode.parentNode;
-  for (const [halo, live] of [["", false], ["#808085", false], ["#7a8a80", false], ["#e01080", true], ["#808f80", false], ["#80b080", true]]) {
+  for (const [halo, live] of [["", true], ["#808085", true], ["#7a8a80", true], ["#e01080", true], ["#808f80", true], ["#80b080", true]]) {
     draft.halo = halo; editor.changed();
-    assert.equal(row.getAttribute("aria-disabled"), String(!live), halo || "unset");
+    assert.notEqual(row.getAttribute("aria-disabled"), String(live), halo || "unset");
   }
   const M = loadParts(), hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
   const cockpit = M.Parts.CATALOG.find((c) => c.id === "cockpit");
   for (const team of M.Teams.LIST.filter((t) => ["mclaren", "ferrari", "redbull"].includes(t.id))) {
     for (const opt of cockpit.options) {
       const parts = M.Parts.getVisualTiers({ cockpit: opt.id }, team);
-      for (const [halo, live] of [["", false], ["#808085", false], ["#e01080", true], ["#80b080", true]]) {
+      for (const [halo, live] of [["", true], ["#808085", true], ["#e01080", true], ["#80b080", true]]) {
         const liv = halo ? { halo: hex(halo) } : {};
         const mats = (f) => Array.from(M.Car3D.build(team.color, team.color2, { livery: { ...liv, haloFinish: f }, teamId: team.id, num: 4, parts, noWheels: true }).mat).join();
         assert.equal(mats("matte") !== mats("inherit"), live, team.id + " " + opt.id + " halo " + (halo || "unset"));
@@ -379,6 +380,73 @@ test("TAIL STYLE TEAM names the motif it paints — and the atlas agrees for eve
     assert.ok(A.LT.TAIL_STYLE_IDS.includes(kind), t.id + ": " + kind + " is a pill");
     assert.equal(ops(t.id, { ...base, finStyle: kind }), ops(t.id, { ...base, finStyle: "team" }), t.id + ": TEAM paints " + kind);
   }
+});
+
+// D1: the editor previewed a draft as the team's own scheme (id "default", brand mark palette) and
+// SAVE & FIT stored it under a custom id, so the marks changed colour the moment you saved.
+test("a paint job started from the team's own scheme saves the marks the editor showed, on every team", () => {
+  const A = loadAtlas(), sheet = source("js/garage/setup-sheet.js"), game = source("js/game.js");
+  const ctx = vm.createContext({ LiveryTex: A.LT, Liveries: A.Liveries, Math, Object, Array, String, Number, JSON, parseInt });
+  for (const name of ["hexToArr", "arrToHex"]) vm.runInContext(game.match(new RegExp("^function " + name + "\\(.*$", "m"))[0], ctx);
+  vm.runInContext(sheet.slice(sheet.indexOf("const LIV_DRAFT_COLORS"), sheet.indexOf("// WHAT EACH ROW ACTUALLY PAINTS")), ctx);
+  vm.runInContext(sheet.slice(sheet.indexOf("function livDraftFrom("), sheet.indexOf("function csTabId(")), ctx);
+  const run = (code) => vm.runInContext(code, ctx);
+  const ops = (team, liv) => JSON.stringify(A.paint(team, liv));
+  const livOf = (d, id) => run(`(d) => Object.assign({ id: ${JSON.stringify(id)}, c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, false))`)(d);
+  assert.match(sheet, /id: "custom_draft"/, "the live preview resolves the draft under a custom id, as the save does");
+  let sensitive = 0;
+  for (const t of A.Teams.LIST.filter((x) => !x.legends && x.id !== "custom")) {
+    const own = A.Liveries.forTeam(t)[0], shape = {};
+    for (const k of ["finShape", "spineHeight", "spineLogo", "spineSide", "finStyle", "finBadge", "tcam", "coverVents"]) if (t.livery && t.livery[k]) shape[k] = t.livery[k];
+    for (const [door, src] of [["copy", own], ["new", Object.assign({ c1: t.color, c2: t.color2 }, shape)]]) {
+      const shown = ops(t.id, livOf(run("livDraftFrom")(src, "x"), "default"));   // what the old preview showed
+      const saved = livOf(run("livDraftFromOwn")(src, "x", t.id), "custom_1");
+      assert.equal(ops(t.id, saved), shown, t.id + " " + door + ": the saved marks are the previewed marks");
+      if (ops(t.id, livOf(run("livDraftFrom")(src, "x"), "custom_1")) !== shown) sensitive++;
+    }
+  }
+  assert.ok(sensitive >= 10, "without the seed the saved marks differ (" + sensitive + " doors), so this test can fail");
+});
+
+// Reorganization option B (orchestrator pick, 2026-10-18): one car area at a time.
+test("car-area tabs: every control in exactly one area, advanced rows reachable, edits survive a tab switch", () => {
+  const { root, draft, click } = editorFixture();
+  const tabs = root.querySelectorAll('[role="tab"]'), panes = root.querySelectorAll('[role="tabpanel"]');
+  assert.ok(tabs.length >= 3 && tabs.length === panes.length, "one tab per area pane");
+  assert.equal(root.querySelectorAll('[role="tablist"]').length, 1);
+  assert.equal(panes.filter((p) => !p.hidden).length, 1, "one area shows at a time");
+  assert.equal(tabs[0].textContent, "QUICK START");
+  assert.equal(tabs[0].getAttribute("aria-selected"), "true");
+  for (const [i, t] of tabs.entries()) assert.equal(t.getAttribute("aria-controls"), panes[i].id);
+  // every setting control lives in exactly one pane
+  const keyed = root.querySelectorAll("input, button").filter((c) => c.dataset.livField || c.dataset.csPill || c.dataset.csFinish);
+  assert.ok(keyed.length > 40);
+  for (const c of keyed) {
+    let n = 0;
+    for (const p of panes) if (p.contains(c)) n++;
+    assert.equal(n, 1, (c.dataset.livField || c.dataset.csPill) + " is in exactly one area");
+  }
+  // UNDO and NAME are in QUICK START, not at the foot of seventy rows
+  const quick = panes[0];
+  assert.ok(quick.contains(root.querySelectorAll("button").find((b) => b.textContent === "UNDO")));
+  // advanced rows sit under ADVANCED at the foot of their area and are reachable
+  const width = root.querySelectorAll("input").find((el) => el.dataset.livField === "patternWidth");
+  const pane = panes.find((p) => p.contains(width)), tab = tabs[panes.indexOf(pane)];
+  const kids = pane.children, adv = kids.findIndex((k) => k.textContent === "ADVANCED");
+  assert.ok(adv > 0 && kids.indexOf(width.parentNode) > adv, "pattern size is an ADVANCED row");
+  assert.equal(pane.hidden, true);
+  tab.onclick();
+  assert.equal(pane.hidden, false); assert.equal(quick.hidden, true);
+  // a switch loses nothing
+  click("CONTOUR LINES"); width.value = "40"; width.oninput(); width.onchange();
+  tabs[0].onclick(); tab.onclick();
+  assert.equal(draft.spineLogo, "contours"); assert.equal(draft.patternWidth, "40"); assert.equal(String(width.value), "40");
+  // arrow keys move between tabs
+  const list = root.querySelector('[role="tablist"]'), at = tabs.indexOf(tab);
+  list.onkeydown({ key: "ArrowRight", preventDefault() {} });
+  assert.equal(tabs[(at + 1) % tabs.length].getAttribute("aria-selected"), "true");
+  list.onkeydown({ key: "Home", preventDefault() {} });
+  assert.equal(tabs[0].getAttribute("aria-selected"), "true");
 });
 
 test("2026-motif designs: named, registered in their colour/line lists, and each paints distinct art", () => {

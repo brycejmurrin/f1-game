@@ -1209,7 +1209,7 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
    seven declarations byte for byte; this is their one statement. The 16px is
    the iOS zoom floor: Safari zooms the page when a focused control sits under
    it, and the zoom sticks after the keyboard closes. */
-#as-sp-id, #sp-search, #as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 {
+#as-sp-id, #sp-search, #sp-playlist2, #sp-device2 {
   font: inherit; font-size: 16px;
   background: var(--plate-hover); color: var(--text);
   border: 1px solid var(--plate-line); border-radius: var(--r-sm);
@@ -1246,8 +1246,7 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
   min-height: var(--chip-h);
 }
 #sp-results:empty { display: none; }
-#as-sp-playlist, #as-sp-device, #sp-playlist2, #sp-device2 { width: 100%; }
-#as-sp-playlist:disabled, #as-sp-device:disabled,
+#sp-playlist2, #sp-device2 { width: 100%; }
 #sp-playlist2:disabled, #sp-device2:disabled { opacity: 0.45; }
 .sp-uri {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-micro);

@@ -12,7 +12,7 @@ import path from "node:path";
 import {
   GUARDS_A, GUARDS_B, GUARDS_JOB,
   guardsVerdict, localVerdict, evaluate, shaPrefixMatch, stampReadySha, newestByName,
-  planVerdict, withPlan, resolveSha, verdictLine,
+  planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine,
 } from "../../tools/ci/ready-gate.mjs";
 
 const run = (name, status, conclusion, id = 1) => ({
@@ -319,7 +319,12 @@ test("withPlan: a closed Plan passes; no Plan passes with a warning; red and no-
 
 test("resolveSha --pr returns the PR body alongside its head sha", () => {
   const head = "b".repeat(40);
-  const r = resolveSha({ pr: "7", request: () => ({ json: { head: { sha: head }, body: "## Plan\n- [x] a" } }) });
+  const request = (url) => {
+    if (url === "pulls/7") return { json: { head: { sha: head }, body: "## Plan\n- [x] a", title: "t" } };
+    if (url.startsWith("pulls/7/files")) return { json: [] };
+    return { error: `unexpected ${url}` };
+  };
+  const r = resolveSha({ pr: "7", request });
   assert.equal(r.sha, head);
   assert.equal(r.pr, 7);
   assert.equal(r.body, "## Plan\n- [x] a");
@@ -360,4 +365,63 @@ test("planVerdict: [~] and Deferred: items count as closed (#2397)", () => {
 test("#2430: the verdict line carries the FULL 40-char sha a merge call needs", () => {
   const sha = "4dc3d6226176b48601a9e9cb0612989cc7ec916b";
   assert.match(verdictLine({ state: "passed", evidence: "ok", sha, source: "ci" }), /^= ready-gate passed — ok sha=[0-9a-f]{40} source=ci$/);
+});
+
+test("memoryVerdict: .claude/memory/ edits refuse without an explicit memory-change marker", () => {
+  assert.equal(memoryVerdict(["AGENTS.md", "js/game.js"]).state, "ok");
+  assert.equal(memoryVerdict([".claude/memory/MEMORY.md"], { title: "fix hud" }).state, "memory-leak");
+  // A bare "memory" word or a path mention must NOT unlock the gate (#2901 review).
+  assert.equal(memoryVerdict([".claude/memory/foo.md"], { title: "Memory index prune" }).state, "memory-leak");
+  assert.equal(memoryVerdict([".claude/memory/foo.md"], {
+    title: "harness", body: "## Goal\nsee `.claude/memory/MEMORY.md` and prune",
+  }).state, "memory-leak");
+  assert.equal(memoryVerdict([".claude/memory/foo.md"], {
+    title: "harness", body: "memory-change: prune stale index lines\n## Goal\nx",
+  }).state, "ok");
+  assert.equal(memoryVerdict([".claude/memory/foo.md"], {
+    title: "harness", body: "## Goal\nx", labels: ["memory-change"],
+  }).state, "ok");
+  assert.match(memoryVerdict([".claude/memory/a.md", "css/hud.css"], { title: "livery" }).evidence, /non-memory PR|memory-change/);
+});
+
+test("withMemory: a memory-leak turns a green tip into memory-leak (exit 1)", () => {
+  const v = withMemory(GREEN, [".claude/memory/MEMORY.md"], { title: "Harness audit" });
+  assert.equal(v.state, "memory-leak");
+  assert.equal(v.code, 1);
+  assert.equal(withMemory(GREEN, ["AGENTS.md"], { title: "docs" }).code, 0);
+  assert.equal(withMemory(GREEN, null), GREEN, "no file list ( --sha ) skips the check");
+});
+
+test("withMemory: a files-API failure fails closed (never treats as no memory edits)", () => {
+  const v = withMemory(GREEN, undefined, { filesError: "HTTP 502" });
+  assert.equal(v.state, "memory-unknown");
+  assert.equal(v.code, 1);
+  assert.match(v.evidence, /HTTP 502|files/);
+});
+
+test("resolveSha --pr returns title and files for the memory gate", () => {
+  const head = "c".repeat(40);
+  const request = (url) => {
+    if (url === "pulls/9") return { json: { head: { sha: head }, body: "## Plan\n- [x] a", title: "Plugin policy", labels: [{ name: "run-ci" }] } };
+    if (url.startsWith("pulls/9/files")) return { json: [{ filename: ".claude/memory/MEMORY.md" }, { filename: "AGENTS.md" }] };
+    return { error: `unexpected ${url}` };
+  };
+  const r = resolveSha({ pr: "9", request });
+  assert.equal(r.sha, head);
+  assert.equal(r.title, "Plugin policy");
+  assert.deepEqual(r.files, [".claude/memory/MEMORY.md", "AGENTS.md"]);
+  assert.equal(r.filesError, null);
+});
+
+test("resolveSha --pr records filesError when the files list cannot be fetched", () => {
+  const head = "d".repeat(40);
+  const request = (url) => {
+    if (url === "pulls/11") return { json: { head: { sha: head }, body: "memory-change: x", title: "t", labels: [] } };
+    if (url.startsWith("pulls/11/files")) return { error: "HTTP 502" };
+    return { error: `unexpected ${url}` };
+  };
+  const r = resolveSha({ pr: "11", request });
+  assert.equal(r.sha, head);
+  assert.match(r.filesError || "", /HTTP 502/);
+  assert.equal(r.files, null, "a failed files fetch must not look like an empty diff");
 });

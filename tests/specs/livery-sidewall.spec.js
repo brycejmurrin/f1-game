@@ -7,6 +7,15 @@
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared-page.js";
 
+// One car area at a time: open the area that holds a control before acting on it.
+async function reveal(page, sel) {
+  await page.evaluate((s) => {
+    const pane = document.querySelector(s)?.closest('[role="tabpanel"]');
+    if (pane && pane.hidden) document.getElementById(pane.getAttribute("aria-labelledby")).click();
+  }, sel);
+  return page.locator(sel);
+}
+
 test.describe("Livery sidewall ink", () => {
   test("sidewallInk recolours the four wheels' lettering, keeps the compound band, and nothing else", async ({ page }) => {
     await ensureLive(page);
@@ -67,6 +76,7 @@ test.describe("Livery sidewall ink", () => {
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
     await page.locator(".cs-liv-create").click();
+    await reveal(page, 'input[data-liv-field="sidewallInk"]');
     const sec = page.locator('[data-liv-section="WHEELS & BRAKES"]');
     await expect(sec.locator('input[data-liv-field="sidewallInk"]')).toHaveCount(1);
     await sec.locator('input[data-liv-field="sidewallInk"]').fill("#ff00ff");

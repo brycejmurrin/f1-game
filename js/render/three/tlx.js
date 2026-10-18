@@ -2524,6 +2524,17 @@ const TLX = (function () {
         b.visible++; setRange0(im, b.visible * 16); im.needsUpdate = true;
         return true;
       }
+      // A freed decal source must release its hidden instance buffer/render object
+      // too. Geometry.dispose alone leaves the run in both strong registries.
+      function _decalDrop(geo) {
+        const b = _decalRuns.get(geo);
+        if (!b) return;
+        _decalRuns.delete(geo);
+        const ix = _instRegistry.indexOf(b.imesh);
+        if (ix >= 0) _instRegistry.splice(ix, 1);
+        dropWrapper(b.imesh);   // waits for an in-flight compile before disposal
+        b.rec = -1;
+      }
       // R1 (perf hunt 3) — REPEATED OPAQUE DRAWS AS ONE INSTANCED RUN PER PASS. The field's wheel layers
       // were ~150 records over ~42 meshes on a bunched grid, one three RenderObject each (6-9 us of JS per
       // object, census + bench). A draw whose opts carry `coalesce` (car-draw.js sets it on the opaque
@@ -3439,6 +3450,7 @@ const TLX = (function () {
         meshByGeo.delete(geo);
         if (shadowSys && shadowSys.releaseGeometry) shadowSys.releaseGeometry(geo);   // its parked casters too
         _coDrop(geo);   // R1: its coalesced runs
+        _decalDrop(geo);   // F3: its batched decal run
       }
 
       function disposeGeometry(geo) {
@@ -3617,8 +3629,8 @@ const TLX = (function () {
       const _chunkRelOptIn = (function () {
         try { return localStorage.getItem("apex26.tlxChunkRelease") === "1"; } catch (_) { return false; }
       })();
-      let _mirrorSweepAt = 0;
-      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, gate: "?", gateBits: -1 };
+      let _mirrorSweepAt = 0, _carMirrorAt = 0;
+      const _mirrorStat = { sweeps: 0, geos: 0, freedMB: 0, drains: 0, chunks: 0, carSh: 0, gate: "?", gateBits: -1 };
       // Throttled on performance.now(), never a frame counter: a frame counter
       // is not a clock, and the first attempt at this lever shipped
       // `(++n % 90) === 0` that never once fired (PERF-FINDINGS 2m).
@@ -3669,6 +3681,21 @@ const TLX = (function () {
           if (n) { freed += n; _mirrorStat.geos++; }
         }
         if (freed) _mirrorStat.freedMB = +(_mirrorStat.freedMB + freed / 1048576).toFixed(2);
+      }
+      // M-2: shadow-caster meshes (:sh / silhouette) — release CPU mirrors on every
+      // tier including phones. The static mirror sweep stays off mobile; car casters
+      // are frustumCulled=false depth-only geometry with cached bounds.
+      function sweepCarShadowMirrors(now) {
+        if (now - _carMirrorAt < 2000) return;
+        _carMirrorAt = now;
+        for (let i = 0; i < _geoReg.length; i++) {
+          const ref = _geoReg[i];
+          const g = ref && ref.deref ? ref.deref() : null;
+          if (!g || g.__tlxKind !== "carSh" || g.__tlxFreed) continue;
+          if (g.__tlxDrawnBatch === undefined) continue;
+          const n = releaseGeoMirrors(g);
+          if (n) { _mirrorStat.carSh++; _mirrorStat.freedMB = +(_mirrorStat.freedMB + n / 1048576).toFixed(2); }
+        }
       }
 
       function _regGeo(g, kind) { try { g.__tlxKind = kind; _geoReg.push(new WeakRef(g)); } catch (_) { /* no WeakRef: census degrades, nothing leaks */ } return g; }
@@ -4329,7 +4356,8 @@ const TLX = (function () {
         createMesh(data) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
           _meshMade.mesh++;
-          return { __tlx: true, geo: buildGeometry(data), count: (data.idx && data.idx.length) || 0 };
+          const kind = data._releaseCpuMirror ? "carSh" : "mesh";
+          return { __tlx: true, geo: _regGeo(buildGeometry(data), kind), count: (data.idx && data.idx.length) || 0 };
         },
         createTexMesh(data) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
@@ -5765,6 +5793,7 @@ const TLX = (function () {
           // an override that cannot reach the failing path is not an override.
           // Default OFF, so nothing reaches a player through it.
           if (_sweepOptIn && !_mirUsed) sweepGeoMirrors(_now);
+          sweepCarShadowMirrors(_now);
           // Evicted materials dispose only now — after paint, when no drawList
           // record can still reference them (safe since the #33952 backport).
           for (let i = 0; i < _matDispose.length; i++) { try { _matDispose[i].dispose(); } catch (_) { /* already disposed */ } }

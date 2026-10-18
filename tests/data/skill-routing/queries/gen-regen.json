@@ -1,0 +1,8 @@
+[
+{"query": "CI failed agent-indexes.test.mjs declaredTests mismatch after I added a spec — run npm run gen not rerun Actions?", "expect": "gen-regen"},
+{"query": "gen:check red on gen-arch-table and ARCHITECTURE module table drifted from manifest.cjs — regen workflow?", "expect": "gen-regen"},
+{"query": "Merge conflict only package.json test scripts and docs/agent-index.json — impact-map key missing after sync.", "expect": "gen-regen"},
+{"query": "npm run gen:check fails on agent-index declaredTests after merging ship — commit generated outputs.", "expect": "gen-regen"},
+{"query": "Pick tests passed but gen:check fails agent-index impact-map stale generated files.", "expect": "gen-regen"},
+{"query": "Edited .claude agents only but gen:check says docs/agent-index.json drift — npm run gen?", "expect": "gen-regen"}
+]

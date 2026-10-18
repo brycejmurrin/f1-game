@@ -4,8 +4,8 @@ Unofficial WebGL2 F1 fan game. No build step, no frameworks: pure IIFE modules l
 files on GitHub Pages.
 
 This file holds the rules every session needs and nothing else. Evidence lives in `docs/` (start at `docs/README.md`, then `docs/VERIFICATION.md`),
-workflows in `.claude/skills/`, enforced rules in `.claude/hooks/`, renderer rules in `.claude/rules/` (they load with
-their files). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
+workflows in `.claude/skills/`, enforced rules in `.claude/hooks/`, rules in `.claude/rules/` (`fleet-core` every
+session; path-scoped attach with their files; Cursor twins from `gen-cursor-rules`). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
 
 ## The loop — every change, in order
 ```sh
@@ -21,9 +21,9 @@ git commit && git push -u origin cursor/<topic>-<hash>   # 7. commit runs test:g
 Docs-only fast path — every changed path is prose (`docs/`, `*.md`, `.claude/skills/`, `.claude/agents/`; no generated
 doc): skip steps 1 and 3–6, check with `node --test tests/unit/docs-integrity.test.mjs tests/unit/agent-config.test.mjs`
 (the commit hook then runs docs-integrity alone, no ratchet raise), and skip the 1 h timer. With no PR the push starts
-no CI (`= ci none`); an open PR still gets a fast tier of guards plus seconds, so one `ci-watch.mjs --sha` Monitor suffices.
+no CI (`= ci none`); a ready PR, or a draft labelled `run-ci`, gets a fast tier of guards plus seconds, so one `ci-watch.mjs --sha` Monitor suffices.
 
-Then watch CI (rule 12). Auto memory is ON (synced to `.claude/memory/`) for corrections and tastes; a measured lesson goes to `docs/notes/`, a rule to a hook or test, a work log to the PR body.
+Then watch CI (rule 12). Every host: `.claude/memory/MEMORY.md` + `.claude/rules/fleet-core.md`; edit via `node tools/env/apex-memory.mjs list|show|retire` (docs/notes/AGENT-MEMORY.md). A measured lesson goes to `docs/notes/`, a rule to a hook or test, a work log to the PR body.
 
 ## Verification — scale it to the change
 One browser GROUP costs 10–40 minutes of serialized SwiftShader here, so running more than the change needs is slower
@@ -85,8 +85,8 @@ Session shape — twelve rules that control wall time, waiting and handoff:
 4. Pixel screenshot — visual sign-off only, never an assertion source (live poking: skill `mcp-probe`).
 
 This container has no real GPU: renderers blit onto `#game-soft` and a probe waits on `awaitSoftPresent()`
-(`docs/notes/CI-RENDERING-PERFORMANCE.md`). Never run Chrome MCP while Playwright runs; a `version.json` check is
-agent `deploy-research`. A unit test of a renderer backend is not evidence that it runs: boot it live and confirm one
+(`docs/notes/CI-RENDERING-PERFORMANCE.md`). Never run Chrome MCP while Playwright runs.
+A unit test of a renderer backend is not evidence that it runs: boot it live and confirm one
 positive signal (`docs/ARCHITECTURE.md` §Boot evidence, `.claude/skills/mcp-probe/references/recipes.md`; each
 backend's gate is in `.claude/rules/render-wgx.md` / `render-tlx.md`).
 

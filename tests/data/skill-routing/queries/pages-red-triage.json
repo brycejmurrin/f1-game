@@ -1,0 +1,8 @@
+[
+{"query": "pages.yml red on deploy branch after merges — triage nested ci job and merge freeze?", "expect": "pages-red-triage"},
+{"query": "GitHub Pages pages.yml failed but PR ci.yml was green — bisect merges since last green Pages.", "expect": "pages-red-triage"},
+{"query": "Ship push ok but pages.yml train red on before_sha — pages-red-triage steps?", "expect": "pages-red-triage"},
+{"query": "Two merges and pages.yml still red with gen:check in nested job — freeze merges?", "expect": "pages-red-triage"},
+{"query": "pages.yml pending train replaced — Level 3 one merge per green Pages pacing.", "expect": "pages-red-triage"},
+{"query": "pages.yml wrapper green but nested smoke failed — which lane in pages deploy?", "expect": "pages-red-triage"}
+]

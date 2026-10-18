@@ -1,0 +1,1 @@
+Improved: Settings › Appearance shows each look setting once. Theme, accents, UI and text size and high contrast live in the studio; HUD style, size and layout and reduce motion link to their own pages.

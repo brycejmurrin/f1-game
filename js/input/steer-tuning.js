@@ -60,8 +60,10 @@ const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 //                             tilt and keys.
 //  pm-smooth   STEER SMOOTHING One-Euro min-cutoff, set as LAG in ms — higher
 //                             slider = more lag = steadier/smoother tilt.
-//  pm-tiltdeg  TILT RANGE     MAX_TILT — degrees of tilt for full lock (the one
-//                             tilt-sensitivity knob; dead zone is fixed at 2.5°).
+//  pm-tiltsimple TILT SENSITIVITY (FEEL) MAX_TILT — degrees of tilt for full lock
+//                             (the one tilt-sensitivity knob, key tiltDeg; dead zone
+//                             fixed at 2.5°). ADVANCED's old TILT RANGE copy is now a
+//                             jump link to it (#pm-tiltdeg-jump).
 //  pm-lock     STEER LOCK     STEER_MAX_SLIP — max road-wheel steer angle (rad).
 //  pm-speedsteer SPEED STEER  STEER_SPEED_REF — high slider = keeps more steering
 //                             at speed (sharper); low = calmer/stabler at speed.
@@ -643,7 +645,6 @@ function applySteerTuning() {
   $("pm-rate").value    = rate;    $("pm-rate-v").textContent    = rate;
   $("pm-expo").value    = expo;    $("pm-expo-v").textContent    = expo;
   $("pm-smooth").value  = smooth;  $("pm-smooth-v").textContent  = smooth;
-  $("pm-tiltdeg").value = tiltdeg; $("pm-tiltdeg-v").textContent = tiltdeg;
   $("pm-lock").value    = lock;    $("pm-lock-v").textContent    = lock;
   $("pm-speedsteer").value = spdsteer; $("pm-speedsteer-v").textContent = spdsteer;
   if ($("pm-weight")) { $("pm-weight").value = weight; $("pm-weight-v").textContent = weight; }
@@ -709,10 +710,6 @@ $("pm-expo").oninput = (e) => {
 $("pm-smooth").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("steerSmooth", v);
   Input.setTiltSmoothing(cutoffFromSmooth(v)); $("pm-smooth-v").textContent = v; clearPreset();
-};
-$("pm-tiltdeg").oninput = (e) => {
-  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("tiltDeg", v);
-  Input.setTiltSensitivity(tiltDegFromRange(v)); $("pm-tiltdeg-v").textContent = v; clearPreset();
 };
 $("pm-lock").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("steerLock", v);

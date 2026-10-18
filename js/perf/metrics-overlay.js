@@ -736,7 +736,7 @@ function paintLogVisibility() {
 }
 
 function paintPosBtn(btn) { paintRow(btn, "SIDE", pos()); }
-function paintSizeBtn(btn) { paintRow(btn, "SIZE", size()); }
+function paintSizeBtn(btn) { paintRow(btn, "METRICS SIZE", size()); }
 
 function paintSettingBtns() {
   paintBtn(_btn);
@@ -985,7 +985,7 @@ function initUI() {
     ins = insertAfter(host, ins, _posBtn);
 
     _sizeBtn = makeMetricsRow(
-      "pm-metrics-size", "SIZE",
+      "pm-metrics-size", "METRICS SIZE",
       "How large the metrics overlay is. S is the phone default. The S/M/L chip on the overlay also cycles this.",
       up(SIZES), size, setSize, paintSizeBtn,
     );
