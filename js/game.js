@@ -95,7 +95,7 @@ const lazyBundles = LazyBundles.create({
     marshalPanels = MarshalPanels.create(G);
     records = SessionRecords.create(G);
     if (G.daily.isActive() && G.daily.current().class === "standard") records.prepareDaily();   // a STANDARD daily picked before this bundle landed was prepared by the stub (a no-op): every lap would be refused
-    raceRadio = RaceRadio.create(G);
+    raceRadio = (eventJournal = EventJournal.create(G), RaceRadio.create(G, EventJournal.radioHooks(eventJournal)));
     flyingStart = FlyingStart.create(G, {
       realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.status().active) || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())),
     });
@@ -2702,7 +2702,7 @@ async function startRaceBody() {
     quitToMenu();   // a bare setState("menu") left the HUD, in-race class, lights and engine up (RESTART from the pause card)
     return false;
   }
-  resultsCam.reset();   // restore a montage before replacing the previous field
+  resultsCam.reset(); eventJournal.reset();   // restore a montage before replacing the previous field
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
   raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
@@ -3658,7 +3658,7 @@ announcer = Announcer.create(G);
 let records = SessionRecords.create(G);   // LAZY_RACE_SESSION
 const coach = DrivingCoach.create(G);     // FULL — UiExperience captures this instance
 setupTrialSession = SetupTrialSession.create(G);
-let raceRadio = RaceRadio.create(G);      // LAZY_RACE_SESSION — recreated on ensure
+let eventJournal = EventJournal.create(G), raceRadio = RaceRadio.create(G, EventJournal.radioHooks(eventJournal));   // LAZY_RACE_SESSION — journal + radio
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 let flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())) });   // LAZY_RACE_SESSION
@@ -4762,7 +4762,7 @@ function update(dt) {
   _s8Pres.dt += dt;
   if (_audioParamStep) {
     _s8Stamp = (_s8Stamp == null ? 0 : _s8Stamp) + 1;
-    updateCaution(_s8Pres.dt); coach.update(_s8Pres.dt); raceRadio.update(_s8Pres.dt);
+    updateCaution(_s8Pres.dt); coach.update(_s8Pres.dt); raceRadio.update(_s8Pres.dt); eventJournal.update(_s8Pres.dt);
     _s8Pres.dt = 0;
   }
 
