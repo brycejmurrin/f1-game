@@ -6529,6 +6529,7 @@
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchet-reason.test.mjs",
         "tests/unit/ratchets.test.mjs",
+        "tests/unit/ready-gate.test.mjs",
         "tests/unit/report-server.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",

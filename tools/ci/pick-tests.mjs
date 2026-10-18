@@ -323,6 +323,7 @@ export const RULES = [
   [/^types\//, ["tooling-fast"], "the authored .d.ts contracts are checked by game-ctx-surface"],
   [/^desktop\//, ["desktop-unit", "tooling-fast"], "electron-builder config, identity, notices, version"],
   [/^(AGENTS|CLAUDE|README)\.md$|^docs\/|^\.claude\/(skills|agents|rules)\/|^\.agents\/skills\//, ["tooling-fast"], "docs integrity is a real test"],
+  [/^package\.json$/, ["tooling-fast"], "gen scripts and test:* entries — tooling-fast + gen:check"],
 ];
 
 /** Manifest files that ONLY the two blanket rules (tiny / tooling-fast) reach:
