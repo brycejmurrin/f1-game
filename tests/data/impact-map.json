@@ -9707,7 +9707,8 @@
     },
     "js/physics/drive-tune.js": {
       "create": [
-        "tests/unit/carve-a-modules.test.mjs"
+        "tests/unit/carve-a-modules.test.mjs",
+        "tests/unit/physics-rows-vm.test.mjs"
       ]
     },
     "js/physics/grip-steer.js": {
