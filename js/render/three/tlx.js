@@ -14,6 +14,7 @@ const TLX = (function () {
     const pump = { cb: null };
     pump.requestAnimationFrame = (cb) => { pump.cb = cb; return 1; };
     pump.cancelAnimationFrame = () => { pump.cb = null; };
+    pump.drain = () => { const cb = pump.cb; if (cb) { pump.cb = null; cb(typeof performance !== "undefined" ? performance.now() : 0); } };
     anim.stop(); anim.setContext(pump); anim.start();   // start() ticks once now and parks the next tick in the pump
     return pump;
   }
@@ -5110,8 +5111,7 @@ const TLX = (function () {
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
           // three's per-frame tick (info.reset, nodeFrame.update), once per drawn frame — see pumpAnimation.
-          const _pump = renderer.__apexPump;
-          if (_pump && _pump.cb) { const cb = _pump.cb; _pump.cb = null; cb(performance.now()); }
+          if (renderer.__apexPump) renderer.__apexPump.drain();
           resizeNow();
           _sizeOwned = true;   // the next resize() defers to the next begin() (no rAF + cancel per frame)
           // Existing bounded retry remains synchronous. Fully warmed recovery

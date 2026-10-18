@@ -43,11 +43,13 @@ test("the pump parks three's tick and runs it once per drain, never through the 
   assert.ok(pump && typeof pump.cb === "function", "the next tick is parked in the pump");
   assert.equal(windowCalls, 1, "after the swap the window is never asked again");
   const before = anim.ticks;
-  for (let i = 0; i < 3; i++) { const cb = pump.cb; pump.cb = null; cb(0); }   // what begin() does, 3 frames
+  for (let i = 0; i < 3; i++) pump.drain();         // what begin() does, 3 frames
   assert.equal(anim.ticks - before, 3, "one tick per drained frame");
   assert.equal(windowCalls, 1);
-  pump.cancelAnimationFrame();
+  anim.stop();                                       // three's stop() cancels through the pump
   assert.equal(pump.cb, null, "stop() clears the parked tick");
+  pump.drain();
+  assert.equal(anim.ticks - before, 3, "a drain after stop() runs nothing");
 });
 
 test("XRManager's save/restore of the context keeps the pump", () => {
@@ -73,7 +75,7 @@ test("only the WebGL2 backend installs the pump; begin() drains it when present"
   assert.equal(install.length, 1, "one install site");
   assert.match(SRC, /if \(renderer\.backend && renderer\.backend\.isWebGLBackend\) renderer\.__apexPump = pumpAnimation\(renderer\);/,
     "WebGPU keeps three's own loop: the install is gated on isWebGLBackend");
-  assert.match(SRC, /begin\(frame\) \{[\s\S]{0,400}?const _pump = renderer\.__apexPump;\s*if \(_pump && _pump\.cb\) \{ const cb = _pump\.cb; _pump\.cb = null; cb\(performance\.now\(\)\); \}/,
+  assert.match(SRC, /begin\(frame\) \{[\s\S]{0,400}?if \(renderer\.__apexPump\) renderer\.__apexPump\.drain\(\);/,
     "begin() drains the parked tick before the frame is drawn");
   const iife = SRC.indexOf("const TLX = (function () {"), fn = SRC.indexOf("function pumpAnimation(");
   assert.ok(iife >= 0 && fn > iife, "pumpAnimation lives inside the TLX IIFE, not on the global scope");
