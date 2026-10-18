@@ -2837,11 +2837,13 @@
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-helmet-style.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
       "designFor": [
-        "tests/unit/helmets.test.mjs"
+        "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-helmet-style.test.mjs"
       ],
       "generated": [
         "tests/unit/helmets.test.mjs"
@@ -2850,13 +2852,17 @@
         "tests/unit/helmets.test.mjs"
       ],
       "painter": [
-        "tests/unit/helmets.test.mjs"
+        "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-helmet-style.test.mjs"
       ],
       "pointAt": [
         "tests/unit/helmets.test.mjs"
       ],
       "shell": [
         "tests/unit/helmets.test.mjs"
+      ],
+      "styled": [
+        "tests/unit/livery-helmet-style.test.mjs"
       ]
     },
     "js/car/input-ghost.js": {
@@ -6598,6 +6604,9 @@
       "restore": [
         "tests/unit/livery-design.test.mjs"
       ],
+      "section": [
+        "tests/unit/livery-helmet-style.test.mjs"
+      ],
       "*": [
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
@@ -6954,6 +6963,7 @@
         "tests/unit/garage-interior-gate.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-helmet-style.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",
