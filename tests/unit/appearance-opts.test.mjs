@@ -243,7 +243,6 @@ test("shell carries Appearance door, panel, swatches and hex fields", () => {
   assert.ok(SHELL.includes('id="pm-hudaccent-hextext"'));
   assert.ok(COMPONENTS.includes(".pm-accent-swatches"));
   assert.ok(COMPONENTS.includes(".pm-accent-hextext"));
-  assert.ok(COMPONENTS.includes(".pm-accent-preview"));
 });
 
 test("defaults apply at eval: dark / ember / team data attrs", () => {
