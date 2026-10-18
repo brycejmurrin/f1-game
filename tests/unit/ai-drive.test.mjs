@@ -292,6 +292,26 @@ test("craft late-brake raises the limit when attacking with room", () => {
   assert.ok(attack > plain);
 });
 
+test("aggression closes the follow gap and yields less on contact (spacing half)", () => {
+  const hot = { ...mid, aggression: 1 };
+  const cold = { ...mid, aggression: -1 };
+  const neut = { ...mid, aggression: 0 };
+  const gap = (t, tight) => A.followGap(t, false, 40, tight || 0);
+  // Open following is historical (pace ladder); spacing bites when a pass is tight.
+  assert.equal(gap(hot), gap(neut), "open follow ignores aggression");
+  assert.equal(gap(neut), A.followGap(mid, false, 40), "aggression 0 is the historical headway");
+  assert.ok(gap(hot, 1) < gap(neut, 1) && gap(neut, 1) < gap(cold, 1),
+    `tight pass headway shrinks with aggression (${gap(hot, 1)} < ${gap(neut, 1)} < ${gap(cold, 1)})`);
+  assert.ok(gap(hot, 0.6) < gap(neut, 0.6), "armed/tow partial tight still bites");
+  assert.equal(A.followGap(hot, true, 40), A.followGap(cold, true, 40), "streets keep the metre gap");
+  assert.ok(A.contactGive(true, hot) < A.contactGive(true, neut)
+    && A.contactGive(true, neut) < A.contactGive(true, cold), "less give as aggression rises");
+  assert.equal(A.contactGive(true, neut), A.contactGive(true, mid));
+  assert.ok(A.contactGive(true, hot, true) < A.contactGive(true, neut, true), "street contact still monotone");
+  assert.ok(A.contactGive(true, hot, true) < A.contactGive(true, hot, false), "streets still yield more than permanents");
+  assert.equal(A.contactGive(false, hot), 1);
+});
+
 test("aggression raises otFireRate and shortens queue patience (fire half)", () => {
   const base = {
     traits: { ...mid, aggression: 0 }, blockerGap: 5, gapAhead: 5, roomL: 3, roomR: 2,
