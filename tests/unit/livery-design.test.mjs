@@ -5,6 +5,7 @@ import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { loadCrests, paintAt } from "../../tools/car/crest-sweep.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { loadAtlas } from "../../tools/car/livery-contrast.mjs";
 
 const source = (path) => fs.readFileSync(new URL("../../" + path, import.meta.url), "utf8");
 function load(extra = {}) {
@@ -180,19 +181,24 @@ function editorFixture() {
   const bodyRow = dom.document.createElement("label"); root.appendChild(bodyRow);
   const spineRow = pillRow("SPINE TOP", "spineLogo", ["stripe", ...D.PATTERNS], "stripe");
   const nextRow = pillRow("COVER BIND", "coverBind", ["independent", "saddleWrap", "spineOnly"], "independent");
+  pillRow("FIN HANDOFF", "finHandoff", ["match", "contrast", "hardCut"], "match");
+  pillRow("FIN SHAPE", "finShape", ["standard", "none"], "standard");
+  pillRow("HALO FINISH", "haloFinish", ["inherit", "gloss", "matte"], "inherit");
+  pillRow("TAIL STYLE", "finStyle", ["team", "chevron", "none"], "team");
   Object.defineProperty(spineRow, "nextSibling", { get: () => root.children[root.children.indexOf(spineRow) + 1] });
   const nameRow = dom.document.createElement("label"); root.appendChild(nameRow);
+  ctx.LiveryTex = { tailStyleOf: (id) => (id === "mclaren" ? "chevron" : "diag") };
   editor = E.attach(root, draft, { flush() {}, changed, preview(value) { previews.push(plain(value)); },
-    pillRow, spineRow, bodyRow, nameRow });
+    pillRow, spineRow, bodyRow, nameRow, teamId: "mclaren" });
   const click = (text) => { const b = root.querySelectorAll("button").find((b) => b.textContent === text); assert.ok(b, text); assert.ok(!b.disabled, text + " enabled"); b.onclick(); };
-  return { root, draft, editor, previews, click, spineRow, nextRow, bodyRow, nameRow };
+  return { root, draft, editor, previews, click, spineRow, nextRow, bodyRow, nameRow, D };
 }
 
 test("existing SPINE TOP controls drive undo, palettes and pattern adjustments without duplicate menus", () => {
-  const { root, draft, editor, previews, click, spineRow, nextRow, bodyRow, nameRow } = editorFixture();
+  const { root, draft, editor, previews, click, spineRow, nextRow, bodyRow, nameRow, D } = editorFixture();
   assert.equal(root.querySelectorAll("select, details").length, 0, "no parallel design, surface or preset menus");
   assert.equal(root.querySelectorAll('[data-liv-design-tools]').length, 0);
-  assert.equal(spineRow.querySelectorAll("button").length, 22, "all adjustable patterns share the existing SPINE TOP row");
+  assert.equal(spineRow.querySelectorAll("button").length, D.PATTERNS.length + 1, "all adjustable patterns share the existing SPINE TOP row");
   const rows = Array.from(root.children), width = root.querySelectorAll("input").find((input) => input.dataset.livField === "patternWidth");
   assert.ok(rows.indexOf(width.parentNode) > rows.indexOf(spineRow));
   assert.ok(rows.indexOf(width.parentNode) < rows.indexOf(nextRow), "adjustments stay after SPINE TOP and before cover-side controls");
@@ -243,14 +249,14 @@ test("integrated adjustments disable only controls unused by the current spine d
 
 
 test("surface sections and spine families preserve one button per choice and label their scope", () => {
-  const { root, spineRow } = editorFixture();
+  const { root, spineRow, D } = editorFixture();
   const headings = root.querySelectorAll('[role="heading"]').map((el) => el.textContent);
   for (const title of ["BODY PAINT & BASE FINISH", "ENGINE COVER — SHAPE & PAINT", "SPINE TOP — ARTWORK & COLOURS", "WINGS", "TAIL FIN", "TEAM MARKS & NUMBERS", "COCKPIT & CAMERA", "REVIEW & SAVE"]) assert.ok(headings.includes(title), title);
   assert.equal(spineRow.getAttribute("data-liv-section"), "SPINE TOP — ARTWORK & COLOURS");
   assert.equal(spineRow.querySelector('[role="group"]').getAttribute("aria-label"), "SPINE TOP");
   assert.deepEqual(spineRow.querySelectorAll(".cs-liv-ed-sec").map((el) => el.textContent), ["MARKS & IDENTITY", "FIXED GRAPHICS", "ADJUSTABLE PATTERNS"]);
   const buttons = spineRow.querySelectorAll("button"), ids = buttons.map((b) => b.dataset.csPill);
-  assert.equal(ids.length, 22); assert.equal(new Set(ids).size, ids.length, "grouping moves original buttons without duplication");
+  assert.equal(ids.length, D.PATTERNS.length + 1); assert.equal(new Set(ids).size, ids.length, "grouping moves original buttons without duplication");
   const swatches = root.querySelectorAll('.cs-liv-swatch');
   assert.equal(swatches.length, 9); assert.ok(swatches.every((swatch) => swatch.getAttribute("aria-hidden") === "true"));
 });
@@ -287,4 +293,114 @@ test("new design controls support undo, redo, reset and meaningful line-weight a
   click("UNDO"); assert.equal(draft.patternRotation, "35"); assert.equal(draft.patternWeight, "175");
   click("ANGULAR SHARDS"); assert.equal(input("patternWeight").disabled, true);
   click("CIRCUIT TRACES"); assert.equal(input("patternWeight").disabled, false);
+});
+
+
+// Livery editor audit 2026-10-18, D2/D8: a greyed control said why only in `title`, which a phone never shows.
+test("a greyed control explains itself on screen, and the line goes when it comes back", async () => {
+  const { root, click } = editorFixture();
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const width = root.querySelectorAll("input").find((input) => input.dataset.livField === "patternWidth").parentNode;
+  const why = (row) => row.querySelectorAll("span").filter((el) => "livWhy" in el.dataset).map((el) => el.textContent);
+  await settle();
+  assert.equal(width.getAttribute("aria-disabled"), "true");
+  assert.deepEqual(why(width), ["Choose an adjustable design in SPINE TOP"], "visible reason under the greyed slider");
+  const slider = width.querySelectorAll("input")[0], line = width.querySelectorAll("span").find((el) => "livWhy" in el.dataset);
+  assert.ok(line.id && slider.getAttribute("aria-describedby").split(" ").includes(line.id), "the slider is described by the reason line");
+  assert.equal(line.getAttribute("aria-hidden"), "true", "read once, as the description, not again as label text");
+  const design = root.querySelectorAll("button").find((b) => b.textContent === "SWAP COLOURS").parentNode.parentNode;
+  assert.equal(design.getAttribute("aria-disabled"), "true", "SWAP / RESET grey as one row with the other pattern controls");
+  click("CONTOUR LINES"); await settle();
+  assert.deepEqual(why(width), [], "a live row carries no reason");
+  assert.equal(slider.hasAttribute("aria-describedby"), false, "and its description goes with it");
+  assert.equal(design.getAttribute("aria-disabled"), "false");
+  assert.deepEqual(why(design), ["SWAP COLOURS — Needs a two-colour design in SPINE TOP"], "a live row names its one dead choice");
+  click("CHECKERED FLAG"); await settle();
+  assert.deepEqual(why(design), []);
+});
+
+// D5 / D6: choices that changed neither mesh nor atlas outside one design, measured; now greyed with their reason.
+test("SPINE ONLY greys except on CAP and CONTRAST greys without a fin — and the painter agrees", async () => {
+  const { root, draft, editor } = editorFixture();
+  const pill = (id) => root.querySelectorAll("button").find((b) => b.dataset.csPill === id);
+  assert.equal(pill("coverBind:spineOnly").disabled, true);
+  assert.match(pill("coverBind:spineOnly").title, /CAP/);
+  draft.spineLogo = "cap"; editor.changed();
+  assert.equal(pill("coverBind:spineOnly").disabled, false);
+  assert.equal(pill("coverBind:saddleWrap").disabled, false, "the other binds stay live");
+  assert.equal(pill("finHandoff:contrast").disabled, false);
+  draft.finShape = "none"; editor.changed();
+  assert.equal(pill("finHandoff:contrast").disabled, true);
+  assert.equal(pill("finHandoff:hardCut").disabled, false, "HARD CUT also stops the cover pattern at the tail, fin or not");
+  // The rule against the rasterised atlas: SPINE ONLY differs from INDEPENDENT on CAP, and nowhere else.
+  const A = loadAtlas(), ops = (team, liv) => JSON.stringify(A.paint(team, liv));
+  for (const team of ["mclaren", "ferrari", "cadillac"]) {
+    const t = A.Teams.LIST.find((x) => x.id === team), base = { id: "custom_1", c1: t.color, c2: t.color2, finShape: "none" };
+    for (const top of A.LT.SPINE_LOGO_IDS) {
+      const acts = ops(team, { ...base, spineLogo: top, coverBind: "spineOnly" }) !== ops(team, { ...base, spineLogo: top });
+      assert.equal(acts, top === "cap", team + " " + top + ": SPINE ONLY " + (acts ? "acts" : "is inert"));
+    }
+    for (const side of A.LT.SPINE_SIDE_IDS)
+      assert.equal(ops(team, { ...base, spineSide: side, coverBind: "spineOnly" }), ops(team, { ...base, spineSide: side }), team + " side " + side);
+    for (const top of ["logo", "stripe", "checker"])
+      assert.equal(ops(team, { ...base, spineLogo: top, finHandoff: "contrast" }), ops(team, { ...base, spineLogo: top }), team + " " + top + ": CONTRAST without a fin");
+  }
+});
+
+// D3: HALO FINISH was 0 of 9 on every car — an unset or grey halo is built as metal, and finishes remap paint.
+test("HALO FINISH greys unless HALO is coloured — and Car3D agrees on every cockpit", async () => {
+  const { root, draft, editor } = editorFixture();
+  const row = root.querySelectorAll("button").find((b) => b.dataset.csPill === "haloFinish:matte").parentNode.parentNode;
+  for (const [halo, live] of [["", false], ["#808085", false], ["#7a8a80", false], ["#e01080", true], ["#808f80", false], ["#80b080", true]]) {
+    draft.halo = halo; editor.changed();
+    assert.equal(row.getAttribute("aria-disabled"), String(!live), halo || "unset");
+  }
+  const M = loadParts(), hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+  const cockpit = M.Parts.CATALOG.find((c) => c.id === "cockpit");
+  for (const team of M.Teams.LIST.filter((t) => ["mclaren", "ferrari", "redbull"].includes(t.id))) {
+    for (const opt of cockpit.options) {
+      const parts = M.Parts.getVisualTiers({ cockpit: opt.id }, team);
+      for (const [halo, live] of [["", false], ["#808085", false], ["#e01080", true], ["#80b080", true]]) {
+        const liv = halo ? { halo: hex(halo) } : {};
+        const mats = (f) => Array.from(M.Car3D.build(team.color, team.color2, { livery: { ...liv, haloFinish: f }, teamId: team.id, num: 4, parts, noWheels: true }).mat).join();
+        assert.equal(mats("matte") !== mats("inherit"), live, team.id + " " + opt.id + " halo " + (halo || "unset"));
+      }
+    }
+  }
+});
+
+// D7: TAIL STYLE TEAM paints one of the named motifs, so its twin looked like a dead pill.
+test("TAIL STYLE TEAM names the motif it paints — and the atlas agrees for every team", () => {
+  const { root } = editorFixture();
+  assert.equal(root.querySelectorAll("button").find((b) => b.dataset.csPill === "finStyle:team").textContent, "TEAM · CHEVRON");
+  const A = loadAtlas(), ops = (team, liv) => JSON.stringify(A.paint(team, liv));
+  for (const t of A.Teams.LIST.filter((x) => !x.legends)) {
+    const base = { id: "custom_1", c1: t.color, c2: t.color2, finShape: "standard" }, kind = A.LT.tailStyleOf(t.id);
+    assert.ok(A.LT.TAIL_STYLE_IDS.includes(kind), t.id + ": " + kind + " is a pill");
+    assert.equal(ops(t.id, { ...base, finStyle: kind }), ops(t.id, { ...base, finStyle: "team" }), t.id + ": TEAM paints " + kind);
+  }
+});
+
+test("2026-motif designs: named, registered in their colour/line lists, and each paints distinct art", () => {
+  const { D } = load();
+  const motifs = ["keylineSplit", "halftone", "chevronStack", "gradBands", "slashBlock", "lineFade"];
+  for (const id of motifs) {
+    assert.ok(D.PATTERNS.includes(id), id); assert.ok(D.LABELS[id], id + " has an editor label");
+  }
+  for (const list of [D.SECOND_COLOR, D.LINE_PATTERNS]) for (const id of list) assert.ok(D.PATTERNS.includes(id), id);
+  for (const id of ["keylineSplit", "chevronStack", "slashBlock"]) assert.ok(D.SECOND_COLOR.includes(id), id + " uses the second colour");
+  const sigs = new Set();
+  for (const id of motifs) {
+    const a = drawing(), b = drawing(), liv = { spineLogo: id, c1: [0, 0, 0], c2: [1, 1, 1], accent: [1, 0, 0] };
+    D.drawAtlas(a.ctx, liv, a.regions, a.flank, a.each); D.drawAtlas(b.ctx, liv, b.regions, b.flank, b.each);
+    assert.deepEqual(a.ops, b.ops, id + " is deterministic");
+    sigs.add(JSON.stringify(a.ops));
+  }
+  assert.equal(sigs.size, motifs.length, "no two motifs paint the same art");
+  // the fades really fade: art toward the rear (larger z) is smaller than at the front
+  for (const id of ["halftone", "lineFade"]) {
+    const a = drawing(); D.drawAtlas(a.ctx, { spineLogo: id }, a.regions, a.flank, a.each);
+    const rects = a.ops.filter((p) => p.length === 4 && id === "lineFade");
+    if (rects.length) assert.ok(rects[0][3] > rects.at(-1)[3], "lineFade bars thin toward the rear");
+  }
 });

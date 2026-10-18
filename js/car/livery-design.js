@@ -1,9 +1,15 @@
 /* Optional, bounded cover artwork. Coordinates are shared by crown, tail and both flanks. */
 "use strict";
 const LiveryDesign = (function () {
-  const PATTERNS = Object.freeze(["ribbon", "brokenChevron", "contours", "honeycomb", "segments", "gradient", "twoTone", "checker", "diamonds", "slashes", "pinstripes", "dots", "lightning", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade", "speedlines"]);
-  const SECOND_COLOR = Object.freeze(["gradient", "twoTone", "segments", "checker", "diamonds", "dots", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade"]);
-  const LINE_PATTERNS = Object.freeze(["contours", "honeycomb", "waves", "herringbone", "circuit", "speedlines"]);
+  const PATTERNS = Object.freeze(["ribbon", "brokenChevron", "contours", "honeycomb", "segments", "gradient", "twoTone", "checker", "diamonds", "slashes", "pinstripes", "dots", "lightning", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade", "speedlines",
+    // 2026-grid motifs (docs/notes/LIVERY-REF-2026-10-18.md): generic geometry, no team's or sponsor's mark.
+    "keylineSplit", "halftone", "chevronStack", "gradBands", "slashBlock", "lineFade"]);
+  const SECOND_COLOR = Object.freeze(["gradient", "twoTone", "segments", "checker", "diamonds", "dots", "waves", "sunburst", "scallops", "herringbone", "circuit", "shards", "pixelFade",
+    "keylineSplit", "chevronStack", "slashBlock"]);
+  const LINE_PATTERNS = Object.freeze(["contours", "honeycomb", "waves", "herringbone", "circuit", "speedlines", "keylineSplit"]);
+  // Editor names for the 2026-motif designs; the garage editor falls back to the id for any it does not name.
+  const LABELS = Object.freeze({ keylineSplit: "Keyline split", halftone: "Halftone fade", chevronStack: "Chevron stack",
+    gradBands: "Graduated bands", slashBlock: "Slash block", lineFade: "Line fade" });
   const RANGES = Object.freeze({
     patternWidth: [20, 100, 70], patternRepeat: [2, 12, 6], patternOffset: [-40, 40, 0],
     patternTaper: [0, 80, 20], patternOpacity: [10, 100, 100],
@@ -180,6 +186,57 @@ const LiveryDesign = (function () {
         }
         ctx.closePath(); ctx.stroke();
       }
+    } else if (kind === "keylineSplit") {
+      // Two blocks meeting on a raked edge, the edge picked out by a thin keyline in the car's accent.
+      const edge = (z) => offset - 0.25 + (z - 0.5) * 0.3, key = color(liv.accent, "#ffffff");
+      ctx.fillRect(-1.2, 0.5, 2.4, 1.5);
+      ctx.fillStyle = secondary; ctx.beginPath(); ctx.moveTo(edge(0.5), 0.5); ctx.lineTo(edge(2), 2);
+      ctx.lineTo(1.2, 2); ctx.lineTo(1.2, 0.5); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = key; ctx.lineWidth = 0.03 * weight;
+      ctx.beginPath(); ctx.moveTo(edge(0.5), 0.5); ctx.lineTo(edge(2), 2); ctx.stroke();
+    } else if (kind === "halftone") {
+      // Dots shrink from full at the front to nothing at the rear: a print-screen fade.
+      const pitch = step * 0.7;
+      for (let row = 0; row <= 24; row++) for (let col = -12; col <= 12; col++) {
+        const z = 0.5 + row * pitch, x = offset + (col + (row % 2) / 2) * pitch;
+        const r = pitch * 0.42 * Math.max(0, 1 - (z - 0.5) / 1.5);
+        if (z > 2 || r < 0.004 || Math.abs(x - offset) > width + pitch) continue;
+        ctx.beginPath(); ctx.moveTo(x + r, z);
+        for (let i = 1; i < 8; i++) ctx.lineTo(x + Math.cos(i * Math.PI / 4) * r, z + Math.sin(i * Math.PI / 4) * r);
+        ctx.closePath(); ctx.fill();
+      }
+    } else if (kind === "chevronStack") {
+      // Solid arrowheads nested toward the nose, alternating colours, each one shallower than the last.
+      for (let i = 0, z = 0.5; z < 2.2; i++, z += step) {
+        const depth = step * (0.9 - Math.min(0.5, i * 0.06));
+        ctx.fillStyle = i % 2 ? secondary : primary;
+        ctx.beginPath(); ctx.moveTo(offset, z); ctx.lineTo(offset + width, z + depth);
+        ctx.lineTo(offset + width, z + depth + step * 0.5); ctx.lineTo(offset, z + step * 0.5);
+        ctx.lineTo(offset - width, z + depth + step * 0.5); ctx.lineTo(offset - width, z + depth); ctx.closePath(); ctx.fill();
+      }
+    } else if (kind === "gradBands") {
+      // Raked parallel bands that thin out across the panel, widest first (not a fixed-count stripe set).
+      const n = Math.max(2, Math.min(7, Math.round(value(liv, "patternRepeat"))));
+      let x = offset - width;
+      for (let i = 0; i < n && x < offset + width; i++) {
+        const w = width * 0.5 * Math.pow(0.68, i);
+        ctx.beginPath(); ctx.moveTo(x, 0.5); ctx.lineTo(x + w, 0.5); ctx.lineTo(x + w + 0.45, 2); ctx.lineTo(x + 0.45, 2); ctx.closePath(); ctx.fill();
+        x += w * 1.6;
+      }
+    } else if (kind === "slashBlock") {
+      // One broad diagonal slash with a thin parallel trailer in the second colour.
+      const slash = (x0, w) => {
+        ctx.beginPath(); ctx.moveTo(x0 - 0.7, 0.5); ctx.lineTo(x0 - 0.7 + w, 0.5);
+        ctx.lineTo(x0 + 0.7 + w, 2); ctx.lineTo(x0 + 0.7, 2); ctx.closePath(); ctx.fill();
+      };
+      slash(offset - width * 0.4, width * 0.55);
+      ctx.fillStyle = secondary; slash(offset + width * 0.25, width * 0.12);
+    } else if (kind === "lineFade") {
+      // Bars across the panel whose thickness falls toward the rear: a solid block dissolving into lines.
+      for (let z = 0.5; z < 2; z += step * 0.5) {
+        const t = Math.max(0, 1 - (z - 0.5) / 1.5) * step * 0.45;
+        if (t > 0.003) ctx.fillRect(-1.2, z, 2.4, t);
+      }
     }
     ctx.restore();
   }
@@ -218,5 +275,5 @@ const LiveryDesign = (function () {
       original: () => clone(original),
     };
   }
-  return Object.freeze({ PATTERNS, SECOND_COLOR, LINE_PATTERNS, RANGES, PALETTES, value, drawAtlas, history });
+  return Object.freeze({ PATTERNS, SECOND_COLOR, LINE_PATTERNS, LABELS, RANGES, PALETTES, value, drawAtlas, history });
 })();

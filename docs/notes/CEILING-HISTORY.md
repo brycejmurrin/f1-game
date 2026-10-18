@@ -1,5 +1,13 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-18 — PR #2856 (cursor/captions-comfort-d9e8): captions wave 1 (#1597)
+
+`css/hud.css` codeLines 2193 → **2239** (+46), lines 2428 → **2475** (+47). Deliberate raise past the
+40-line absorb. The growth is the `#captions` strip (position/size/background tokens, speaker tint,
+spotter line, reduced-motion), plus `index.html` shell nodes for the HUD caption root. Tree metrics
+`cssClasses` (+7), `dynamicIdReads` (+1), `rawColor` (+2), `shellNodes` (+7) move with the new markup
+and loading-card caption line. Fragment delta: `tests/data/ratchets.d/cursor--captions-comfort-d9e8.json`.
+
 ## 2026-10-15 — PR #1922 (cursor/host-remove-guest-7951): host removes a guest from VS Friend
 
 `js/net/lobby.js` lines 2194 → **2306** (+112). Deliberate raise past the 40-line absorb. The growth is

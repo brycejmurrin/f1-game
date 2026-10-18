@@ -313,6 +313,8 @@ const AppearanceOpts = (function () {
     if (textSize === "normal") delete el.dataset.textSize; else el.dataset.textSize = textSize;
     if (contrast === "high") el.dataset.uiContrast = "high"; else delete el.dataset.uiContrast;
     if (cvdMode === "off") delete el.dataset.cvd; else el.dataset.cvd = cvdMode;
+    // CvdPalette owns the hex; data-cvd stays the stylesheet fallback.
+    if (typeof CvdPalette !== "undefined" && CvdPalette.set) CvdPalette.set(cvdMode);
     if (help === "off") el.dataset.menuHelp = "off"; else delete el.dataset.menuHelp;
     // Race HUD digit boost rides TEXT SIZE (menus already scale via --fs-*).
     // HUD SIZE remains the player's primary zoom; this is a readability nudge.
@@ -417,6 +419,7 @@ const AppearanceOpts = (function () {
   function setCvdMode(v) {
     cvdMode = oneOf(v, CVD_MODES, "off");
     store.set(K_CVD, cvdMode);
+    if (typeof CvdPalette !== "undefined" && CvdPalette.set) CvdPalette.set(cvdMode);
     applyAll();
     paintRow("pm-cvd", cvdMode);
     return cvdMode;
@@ -533,6 +536,7 @@ const AppearanceOpts = (function () {
     if (byId("pm-cvd")) {
       SettingRow.wire("pm-cvd", { values: CVD_MODES, read: () => cvdMode, write: (v) => setCvdMode(v) });
     }
+    if (typeof Captions !== "undefined" && Captions.initAppearanceRows) Captions.initAppearanceRows();
     SettingRow.wire("pm-units", { values: UNITS, read: () => units, write: (v) => setUnits(v) });
     SettingRow.wire("pm-helptext", { values: HELPS, read: () => help, write: (v) => setHelp(v) });
     buildSwatches("pm-menuaccent-swatches", "menu");

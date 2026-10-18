@@ -94,8 +94,8 @@ test("overtake and aero fire on their own signals, and two marks never land toge
   assert.equal(said.length, 3);
   assert.deepEqual(said.map((s) => s[0].split(" — ")[0]), ["BRAKE", "OVERTAKE", "ACTIVE AERO"]);
   step(on, 1, 9);
-  assert.equal(said.length, 3, "all three shown: the module goes quiet for good");
-  assert.equal(on.state().done, true);
+  assert.equal(said.length, 3, "brake, overtake and aero — harvest is a separate gate");
+  assert.equal(on.state().done, false, "four marks now; three shown is not done");
 });
 
 test("a coach mark never stomps a race message, and never speaks outside a race", () => {
@@ -228,6 +228,21 @@ test("it stops after two races even with a mark unseen, and reset() puts it back
   on.reset();
   assert.equal(on.state().shown, 0);
   assert.equal(on.state().done, false);
+});
+
+test("harvest clip cue fires once on a full pack at straight-line pace", () => {
+  const { on, G, said } = load({ stored: { onboarded: 7 } });
+  G.player = {
+    energy: 0.99, deploying: false, otT: 0, otArmed: false, xArmed: false, aeroX: 0,
+    speed: 70, throttleDemand: 0.4, brakeDemand: 0,
+  };
+  G.vTop = () => 90;
+  on.tick(1 / 60);
+  assert.equal(said.length, 1);
+  assert.match(said[0][0], /ENERGY FULL — LIFT OR DEPLOY ON STRAIGHTS/);
+  assert.match(said[0][0], /full battery can clip the engine on straights/);
+  step(on, 30);
+  assert.equal(said.length, 1, "once only");
 });
 
 test("the module reads reports only — no Tracks, no curvature, no car writes", () => {

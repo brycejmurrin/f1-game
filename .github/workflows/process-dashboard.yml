@@ -1,0 +1,89 @@
+name: Process dashboard
+
+# NIGHTLY PROCESS DASHBOARD (docs/plans/research-2026-09-16/measurement.md §1).
+# Writes per-job p50/p90, cancel rate, same-SHA re-gate count and push-to-live
+# for the last 60 completed ci.yml runs, plus pages.yml on the deploy branch.
+# The JSON and its markdown twin land on `metrics`, which agents read with
+#   git fetch origin metrics && git show origin/metrics:process-dashboard.json
+# They never land on claude/f1-game-project-26h3ng: a bot commit on the deploy
+# branch would ship the site and fight the review rule.
+#
+# TIME RATCHETS run in this job only (measurement.md §5). tools/ci/process-dashboard.mjs
+# --check reads the JSON it just wrote. It does not re-run the suites. A thin
+# sample (n < n_min) is skipped, not failed. test:guards never calls --check.
+on:
+  schedule:
+    - cron: "47 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: process-dashboard
+  cancel-in-progress: false
+
+env:
+  METRICS_BRANCH: metrics
+
+jobs:
+  publish:
+    name: Publish process-dashboard.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          fetch-depth: 1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Reduce the last 60 runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          node tools/ci/process-dashboard.mjs --runs 60 \
+            --out "$RUNNER_TEMP/process-dashboard.json" \
+            --md "$RUNNER_TEMP/process-dashboard.md" \
+            --baseline
+          cat "$RUNNER_TEMP/process-dashboard.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # BEFORE the metrics checkout: that checkout replaces this tree, and the
+      # tool's imports live on the deploy branch, not on `metrics`.
+      - name: Time ratchets (this job only)
+        run: node tools/ci/process-dashboard.mjs --check "$RUNNER_TEMP/process-dashboard.json"
+
+      - name: Push the record to the metrics branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          case "$METRICS_BRANCH" in
+            claude/f1-game-project-26h3ng|""|*[!a-z0-9._/-]*)
+              echo "::error::unsafe metrics branch"; exit 2 ;;
+          esac
+          cp "$RUNNER_TEMP/process-dashboard.json" /tmp/process-dashboard.json
+          cp "$RUNNER_TEMP/process-dashboard.md" /tmp/process-dashboard.md
+          git config user.name "apex-metrics-bot"
+          git config user.email "noreply@users.noreply.github.com"
+          if git fetch -q origin "$METRICS_BRANCH" 2>/dev/null; then
+            git checkout -B "$METRICS_BRANCH" "origin/$METRICS_BRANCH"
+          else
+            git checkout --orphan "$METRICS_BRANCH"
+            git rm -rfq . >/dev/null 2>&1 || true
+          fi
+          cp /tmp/process-dashboard.json process-dashboard.json
+          cp /tmp/process-dashboard.md process-dashboard.md
+          git add process-dashboard.json process-dashboard.md
+          if git diff --cached --quiet; then
+            echo "metrics already matches this window"
+          else
+            git commit -m "chore(metrics): process dashboard ${{ github.run_id }}"
+            git push origin "HEAD:$METRICS_BRANCH"
+          fi
+          echo "pushed $METRICS_BRANCH" >> "$GITHUB_STEP_SUMMARY"

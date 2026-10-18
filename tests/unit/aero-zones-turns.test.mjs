@@ -6,11 +6,9 @@
 // with the length-only fallback it is meant to be equivalent to. A mismatch
 // here means a stale AERO_ZONE_TURNS entry, not a bug in def.turns.
 //
-// Second guard: bahrain and jeddah must NEVER get a turn-pair entry. Their
-// start lines were not re-derived this pass (jeddah's still measures IN A
-// CORNER — tools/track/startline-probe.cjs), so def.turns[0] is not trustworthy as
-// Turn 1 there, and turn-pair authoring on top of that would silently name
-// the wrong straight instead of failing loud.
+// Second guard: bahrain and jeddah must NEVER get a turn-pair entry until a
+// located start coordinate is recorded (bahrain) or turn-pair spans are
+// re-keyed after a start-line move (jeddah — length-only ZONE_COUNT=3 for now).
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -65,7 +63,7 @@ test("AERO_ZONE_TURNS never names bahrain or jeddah", () => {
   assert.equal(AeroZones.AERO_ZONE_TURNS.bahrain, undefined,
     "bahrain's start line was not re-derived this pass — turn numbers there are not trustworthy");
   assert.equal(AeroZones.AERO_ZONE_TURNS.jeddah, undefined,
-    "jeddah's line still measures IN A CORNER — turn numbers there are not trustworthy");
+    "jeddah turn-pair spans are not re-keyed yet — ZONE_COUNT fallback only");
 });
 
 test("every AERO_ZONE_TURNS entry reproduces the length-only selection exactly", () => {

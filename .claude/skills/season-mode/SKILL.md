@@ -50,8 +50,48 @@ Quali on/off:
 - `stage()` is `"race"|"sprint"` only and never reads `quali`, so a "qualifying stage" that survives quali-OFF is a consumer, not the SETUP screen: `js/race/race-settings.js` (START label, GRID row locked to QUALIFYING when `quali()`), `js/ui/quali-sheet.js`, `js/game.js` (`gridFromQuali`, `openQuali`; locate with `rg -n "gridFromQuali|openQuali" js/game.js`).
 - Unit tests: `a season with qualifying off never qualifies` and `a no-qualifying sprint weekend...` in `season-cal.test.mjs`; the chip itself is browser-only (`season.spec.js`, `season-format.spec.js`).
 
-`modes` (`test:modes` in `tests/groups.json`) is real-race + season + career + quali + TT + track-designer. `season-(cal|ui).js` also
-routes to `ui` (the SETUP screen) and `state-unit`.
+`modes` is a browser group; `node tools/ci/pick-tests.mjs` names the rest.
+
+## Presets — "2026 REAL" and the calendar chips
+
+`PRESETS` (`season-cal.js` ~661; chips `#ss-presets` in `season-ui.js`) →
+`preset(id)` → a draft patch. Only `real2026` ("2026 REAL") sets format too:
+`trackIds` from `REAL_2026` (the frozen 23-round table at ~650, each
+`{id, from, to, sprint}`), `sprint: "rounds"` and `sprintIds` from its sprint
+rows (~680-683). Every other preset is a calendar only (`CLASSICS` = `t.classic`).
+`gpName()` (~168-176, `REAL_2026_GP`) renames Sepang to "Bahrain GP" and
+Catalunya to "Barcelona-Catalunya GP" only under `fmtActive()` AND an unedited
+calendar (exact ids, in order) — one reorder drops the names, by design.
+Tests: `2026 REAL: every round is a shipped circuit…` and `presets slice the
+championship…` in `season-cal.test.mjs`; `badges.test.mjs` and
+`real-race-script.test.mjs` also read `REAL_2026`. A new 2026 venue needs its
+circuit shipped first (`knownIds` drops an unknown id).
+
+## Config normalisation — old saves still load
+
+`normalize()` (~63-77) keeps only legal values; check it before blaming the UI:
+- `trackIds` / `sprintIds` go through `knownIds()`: unknown ids and repeats
+  are dropped, never fatal (test `normalise drops unknown ids…`); empty →
+  the default calendar.
+- `quali`: only an explicit `false` turns it off. `sprint`: `true`,
+  `"rounds"` or `false` (a pre-per-round save has no `sprintIds` and means
+  what it meant).
+- `laps` must be in `LAP_OPTS` (`[3,5,10,25,57]`, ~24), else the default — a
+  "20 laps" ask needs a new option, not a looser check. `drop` must be in
+  `DROP_OPTS` (`[0,2,3]`), `flPoint` must be `=== true`, `points` is
+  `"classic"` or `"modern"`.
+- Old season saves: tests `an OLD mid-weekend save…` and `an old save without
+  roundPts…`. Persisted config is the normalised one (`setConfig persists the
+  NORMALISED config…`).
+
+## Scoring
+
+`pointsTable()` (~442): `CLASSIC_POINTS` (1991-2002) when `fmtActive()` and
+`points === "classic"`, else `Teams.POINTS`; `payTable()` scales short races
+(`SHORT_POINTS`); sprints: `references/sprint-scoring.md`. Standings use
+`netPts(season, id)` (~538-550): with `drop`, only the best
+`trackIds.length − drop` rounds count (test `DROP WORST 2 ranks on the best
+rounds…`).
 
 ## Config and save lifecycle
 

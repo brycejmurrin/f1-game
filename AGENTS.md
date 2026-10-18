@@ -93,7 +93,8 @@ backend's gate is in `.claude/rules/render-wgx.md` / `render-tlx.md`).
 ## Layout
 `js/track/` is the ENGINE, `js/circuits/` is the DATA (one file per circuit; script-tag order == `Tracks.LIST` ==
 picker order). The module roster and load order live in `tools/manifest.cjs` — the truth, not this file; per-directory
-tables: `docs/ARCHITECTURE.md`.
+tables: `docs/ARCHITECTURE.md`. A named symbol (`Name`, `Head.member`, `G.x`) → MCP `apex-lsp` (definition with body, references, callers,
+outline; `lsp_diagnostics` after a js/ edit), not grep — skill `code-nav`, rule `.claude/rules/js-nav.md`; grep stays for text, comments, CSS.
 
 - `js/core/log.js` loads FIRST. `js/game.js` is the entry; it hands the `G` façade to the extracted modules — one
   `Module.create(G)` per file, a module never reaches into game.js, and `types/game-ctx.d.ts` is the machine-checked
@@ -147,7 +148,7 @@ session. `obs()`/`physState()` need `player.px` initialised (`jump()` or `step()
 ## Agent extensions (skills / subagents / hooks / MCP)
 Available workflows are skills (`.claude/skills/`, index `.claude/skills/README.md`): they say when and how, and load
 when matched. Subagents (`.claude/agents/`) isolate noisy work; `docs/AGENT-SURFACE.md` maps which CLIs are
-wrapped as `apex_*`. Routes: live canvas → skill `mcp-probe`; pre-push or deploy → skill `check-changes` (spawns agent
+wrapped as `apex_*`. Routes: a JS symbol (definition, uses, callers, exports) → skill `code-nav`; live canvas → skill `mcp-probe`; pre-push or deploy → skill `check-changes` (spawns agent
 `verify-agent`; `--base <ref>` is the "was it already red?" check); live `version.json` → agent `deploy-research`; dead
 code / fat skill → skill `slim-bloat` and agent `bloat-auditor`; PR sweeps → skill `ci-watch` + `tools/ci/pr-board.mjs`
 (agent `ci-watcher` returns the board; agent `merge-desk` runs the desk); owning PRs → skill `steward`; messaging, claims and authority between sessions
@@ -158,14 +159,14 @@ WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change,
 
 Hooks (`.claude/hooks/`, wired by `.claude/settings.json`): `session-start.sh` installs deps and prints the orientation line; `protect-files.sh` blocks generated-file edits and source edits during a live browser run (Write/Edit and Bash writes);
 `bash-guard.sh` runs the guards on the STAGED commit (`git add`, then `git commit`; a pass tells the model its guard path), blocks `pkill -f`, PID kills of a test-bg run, a browser run inside a subagent (`mcp-browser-guard.sh` for the MCP browser tools, and any unreadable payload) and any Actions run cancel; `github-mcp-guard.sh` and bash-guard's `gh pr merge`/`gh pr ready`/`gh api` check (one text, `merge_policy.py`) deny squash/rebase and run cancels (merge, arm and draft→ready run without a prompt under `APEX_MERGE_DESK=1`: §Concurrent PRs is behavioural); `post-edit.sh` (advisory) flags a `js/` edit that does not parse or staled a generated file;
-`stop-guard.sh` nudges once when a turn would end over a live run (`live-run.py`); `subagent-contract.py` (SubagentStop, advisory) bounces a reporter agent's malformed report; `skill-hint.py` (UserPromptSubmit, advisory) names the skills a prompt matches; `ui-fixer-uncommitted.sh` (UserPromptSubmit, advisory) reminds a `cursor/*` branch with an hour-old commit and a dirty tree to commit WIP; `memory-sync.sh` carries auto memory across cloud containers (`docs/notes/AGENT-MEMORY.md`). `touch .claude/allow-protected` lifts the generated-file rules only (never the live-run, surveyor or reviewer rules). Never duplicate skills or agents under `.cursor/`.
+`lsp-hint.py` (PostToolUse Grep/Bash, advisory) names the apex-lsp call after a search for a bare JS symbol; `stop-guard.sh` nudges once when a turn would end over a live run (`live-run.py`); `subagent-contract.py` (SubagentStop, advisory) bounces a reporter agent's malformed report; `skill-hint.py` (UserPromptSubmit, advisory) names the skills a prompt matches; `ui-fixer-uncommitted.sh` (UserPromptSubmit, advisory) reminds a `cursor/*` branch with an hour-old commit and a dirty tree to commit WIP; `memory-sync.sh` carries auto memory across cloud containers (`docs/notes/AGENT-MEMORY.md`). `touch .claude/allow-protected` lifts the generated-file rules only (never the live-run, surveyor or reviewer rules). Never duplicate skills or agents under `.cursor/`.
 
 Cloud agent stall abort, handoff fields, and merge-not-rebase: `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md`.
 
 ## Cursor Cloud specific instructions
 `.cursor/environment.json` bootstraps every Cloud VM (`mcpServerAllowlist` = `.mcp.json`'s servers); Cursor enters via
 `.cursor/rules/apex-shared.mdc` (the Cursor-only rules: model id, cloud MCP namespaces, cloud browser), Codex via `.codex/config.toml` and the tracked `.agents/skills/` symlinks (`tools/env/mirror-skills.sh` repairs them).
-Checklist: `docs/AGENT-SURFACE.md` §Bootstrap. Multi-agent runs (orchestrator, workers, launch prompts): skill `agent-fleet`; every sibling session, Merge Desk and orchestrators included, runs in auto mode (in default mode `send_message`/`send_later` prompt whatever the allow rules say), and a worker acts only on user grants quoted in its launch prompt or typed into its own session (relayed authority is refused): `references/orchestrator.md` §Authority.
+Checklist: `docs/AGENT-SURFACE.md` §Bootstrap. Multi-agent runs (orchestrator, workers, launch prompts): skill `agent-fleet`; every sibling session, Merge Desk and orchestrators included, runs in auto mode (in default mode `send_message`/`send_later` prompt whatever the allow rules say), and a worker acts only on user grants quoted in its launch prompt or typed into its own session (relayed authority is refused): `references/authority.md`.
 
 ## Git branch & deploy
 Work happens on a `cursor/<topic>-<hash>` branch (topic slug + 4–8 char disambiguator); legacy `claude/<topic>` PRs

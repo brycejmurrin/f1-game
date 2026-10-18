@@ -554,6 +554,10 @@ jobs:
     permissions:
       contents: read
       actions: read
+    env:
+      # #1715: persist V8 compile cache across node --test processes (disabled when
+      # NODE_V8_COVERAGE / APEX_JS_COVERAGE is set — see node-compile-cache.cjs).
+      NODE_COMPILE_CACHE: ${{ github.workspace }}/artifacts/.node-compile-cache
     # THREE RUNNERS, NOT ONE (2026-09-16). This job ran its scripts one after
     # another and measured 11.3 min on 40 of 40 runs — the floor of the fast
     # tier, hence of every deploy push, and never shortened by anything. The
