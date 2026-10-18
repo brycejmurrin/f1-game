@@ -685,8 +685,14 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
           null, { polling: 100, timeout: BOOT_MS });
         await page.evaluate(() => window.GameHud && GameHud.invalidateFit && GameHud.invalidateFit());
         // invalidateFit voids --hud-fit-stamp; the app republishes it once a full fit has landed. A fixed sleep
-        // read the unfitted 126 px paint when a slow CI frame had not ticked the HUD yet (#2801).
-        await waitPhoneHudFitClearance(page);
+        // read the unfitted 126 px paint when a slow CI frame had not ticked the HUD yet (#2801). The predicate
+        // is synchronous on purpose: waitForFunction does `if (success)`, so an async one (a Promise) is always
+        // truthy and passes at once, which is why waitPhoneHudFitClearance does not wait for the stamp.
+        await page.waitForFunction(() => {
+          if (document.body.classList.contains("desktop")) return false;
+          GameHud.syncPhoneFit();
+          return /^\d+$/.test(document.documentElement.style.getPropertyValue("--hud-fit-stamp"));
+        }, null, { polling: 100, timeout: 60_000 });
         fitDiag[hud] = await page.evaluate(() => { const st = document.documentElement.style; return { zDock: st.getPropertyValue("--hud-z-dock"), stamp: st.getPropertyValue("--hud-fit-stamp"), vp: innerWidth + "x" + innerHeight, sab: getComputedStyle(document.documentElement).getPropertyValue("--sab") }; });
         rects[hud] = await page.evaluate((ids) => Object.fromEntries(ids.map((id) => {
           const el = document.getElementById(id);
