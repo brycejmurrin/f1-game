@@ -36,8 +36,9 @@ Existing savings to retain (source inspected):
   stdout; `slimBody` summarizes doctor, successful unit tests and spec selection.
   These tools already offer `full:true`; do not invent a new compression layer
   for work they do today. Failed unit tests retain their diagnostic stream.
-- `tools/mcp/apex-extras.mjs`: job listings are bounded; progress tails cap at
-  4,000 characters; parsed job results over 20,000 characters are summarized.
+- `tools/mcp/apex-extras.mjs`: job listings are bounded; stdout and stderr
+  tails each cap at 4,000 characters (the combined tail can exceed 8,000);
+  parsed job results over 20,000 characters are summarized.
   The constant is called a byte cap, but the implementation uses string length.
   A named job status still returns a tail or result, so repeated polling can
   resend substantial content. Existing `wait` reduces repeat calls.
