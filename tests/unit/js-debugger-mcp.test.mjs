@@ -252,6 +252,13 @@ test("evaluation rejects side effects by default and reports JavaScript exceptio
   assert.equal(r.isError, true); assert.equal(c.calls.at(-1).params.throwOnSideEffect, true);
   await s.evaluate(token, 0, "x++", true); assert.equal(c.calls.at(-1).params.throwOnSideEffect, false);
 });
+test("evaluate returns a one-line summary of an object result from V8's preview", async () => {
+  const { s, c } = await attached(); paused(c);
+  c.reply = async () => ({ result: { type: "object", objectId: "o1", description: "Object", preview: { overflow: false, properties: [{ name: "now", value: "31448" }, { name: "state", value: "menu" }] } } });
+  const r = await s.evaluate(s.pause.token, 0, "({now, state})");
+  assert.equal(r.summary, "{now: 31448, state: menu}"); assert.equal(c.calls.at(-1).params.generatePreview, true);
+  assert.equal(r.result.preview, undefined);
+});
 test("property reads return getter descriptors without invoking them; rejects foreign objects", async () => {
   const { s, c } = await attached(); paused(c);
   c.reply = async () => ({ result: [{ name: "value", get: { type: "function", objectId: "getter1" } }] });

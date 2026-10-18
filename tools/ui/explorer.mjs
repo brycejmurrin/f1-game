@@ -30,7 +30,7 @@ const HELP = `UI explorer — one Chromium, bounded captures, offline HTML evide
   node tools/ui/explorer.mjs report <report.json> --out DIR
   node tools/ui/explorer.mjs inspect --screen settingsappearance [--selector '#pmsettings'] [--styles '#as-uiScale']
     [--viewports 390x844,844x390,1280x800] [--roundtrip] [--audit FILE]   # 1..8 bounded sizes; restores the original viewport
-    [--touch] [--boot 932x430] [--safe 0,59,21,59] [--summary]   # touch context, boot size, env(safe-area-inset-*) T,R,B,L; one line per issue
+    [--touch] [--boot 932x430] [--safe 0,59,21,59] [--summary]   # touch context, boot size, env(safe-area-inset-*) T,R,B,L; coverage + issues per size
   node tools/ui/explorer.mjs --list|--help
 Flags: --url URL --out DIR --modes a,b --scenario FILE --max-shots 0..25
        --max-attempts 1..30 --track ID --frac 0..1 --repro FILE --reference IMAGE
@@ -121,15 +121,21 @@ export function loadDeferral(load = os.loadavg()[0]) {
   return load >= 3 ? deferral("Browser deferred: load average is >=3; do not start another software-rendered run") : null;
 }
 
-/** One line per issue: screen, viewport, kind, selector, message; provisional when the layout never settled. */
+/** Coverage per observation, then issue lines; no findings never implies complete verification. */
 export function summarizeInspection(report, screen) {
-  const records = report.records || [{ requestedViewport: report.viewport, inspection: report }];
+  const records = report.records || [{ requestedViewport: report.viewport, inspection: report, settlement: report.settlement }];
   const lines = [];
   for (const r of records) {
     const v = r.requestedViewport ? `${r.requestedViewport.width}x${r.requestedViewport.height}` : "?";
+    const i = r.inspection, c = i?.coverage;
+    const bounds = [i?.truncated && "controls", i?.layoutContextsTruncated && "layout-contexts", i?.accessibilityTruncated && "accessibility",
+      i?.styles?.truncated && "css", r.settlement?.truncated && "settlement", r.settlement?.history?.truncated && "history"].filter(Boolean);
+    const bindings = c ? Object.entries(c.bindings).map(([k, n]) => `${k}:${n}`).join(",") : "unknown";
+    lines.push([screen, v, i ? i.issues?.length ? "findings" : "no-findings" : "unavailable", "coverage",
+      `controls=${c ? `${c.controls.inspected}/${c.controls.total}` : "unknown"}; bindings=${bindings}; settlement=${r.settlement?.stable === true ? "stable" : r.settlement?.stable === false ? "unstable" : "unknown"}; truncated=${bounds.join(",") || "none-reported"}; behavior=not-tested; persistence=not-tested`].join("\t"));
     for (const i of r.inspection?.issues || []) lines.push([screen, v, i.kind + (i.provisional ? " (provisional)" : ""), i.selector, i.message].join("\t"));
   }
-  return lines.length ? lines.join("\n") : `${screen}\tclean`;
+  return lines.length ? lines.join("\n") : `${screen}\tunavailable\tno observations`;
 }
 
 function readJSON(file) {

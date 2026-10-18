@@ -12,6 +12,8 @@ REPO_URL="https://github.com/ChromeDevTools/chrome-devtools-mcp.git"
 # Audited live in this repository on 2026-08-17. Pin the network fallback so a
 # fresh machine cannot silently run a different MCP release than CI/tests saw.
 MCP_NPM_PACKAGE="chrome-devtools-mcp@1.7.0"
+PATCHER="$ROOT/tools/mcp/chrome-devtools-runtime.mjs"
+PATCH_CACHE_ROOT="${APEX_CHROME_MCP_CACHE_ROOT:-$ROOT/scratch/chrome-devtools-runtime}"
 
 # Probe for a Chromium binary. Prints the path and returns 0, or returns 1
 # with no stdout. status/help MUST call this rather than detect_chrome — the
@@ -98,15 +100,29 @@ local_ok() {
 run_mcp() {
   local chrome
   chrome="$(wait_chrome)"
+  # Bounded wait for the SessionStart npm install (stderr only; stdout is JSON-RPC).
+  . "$ROOT/tools/mcp/mcp-preflight.sh"
+  if local_ok; then mcp_preflight; else mcp_preflight "${MCP_NPM_PACKAGE%@*}"; fi
   build_mcp_args "$chrome"
+  local source_root patched_bin npx_bin
   if local_ok; then
-    exec node "$BIN" "${MCP_ARGS[@]}" "$@"
-  fi
+    source_root="$REPO"
+  else
   # The npm package is the normal path on a fresh container (the clone is an
   # opt-in for hacking on the server itself), so say so only when asked:
   # two stderr lines on every session start is noise, not a warning.
   [[ -n "${APEX_MCP_VERBOSE:-}" ]] && echo "No local clone ($0 clone && $0 build) — running npx $MCP_NPM_PACKAGE" >&2
-  exec npx -y "$MCP_NPM_PACKAGE" "${MCP_ARGS[@]}" "$@"
+    # `npm exec --package` resolves the exact audited release. We launch the
+    # materialized copy directly so signals/exit status flow through this exec.
+    npx_bin="$(npm exec --yes --package="$MCP_NPM_PACKAGE" -- bash -c 'command -v chrome-devtools-mcp')"
+    [[ -n "$npx_bin" ]] || { echo "Could not resolve pinned $MCP_NPM_PACKAGE" >&2; exit 1; }
+    npx_bin="$(node -e 'process.stdout.write(require("fs").realpathSync(process.argv[1]))' "$npx_bin")"
+    source_root="$(cd "$(dirname "$npx_bin")/../../.." && pwd)"
+  fi
+  # Both the optional clone and pinned npm fallback take the same guarded path;
+  # an incompatible clone fails closed instead of silently bypassing the fixes.
+  patched_bin="$(node "$PATCHER" --source-root "$source_root" --cache-root "$PATCH_CACHE_ROOT")"
+  exec node "$patched_bin" "${MCP_ARGS[@]}" "$@"
 }
 
 cmd_build() {
@@ -159,6 +175,7 @@ cmd_status() {
   local chrome
   chrome="$(find_chrome || true)"
   echo "Chrome: ${chrome:-"(not found)"}"
+  echo "Runtime patch: $MCP_NPM_PACKAGE + apex-dialog-close-v1 (version/SHA256 guarded)"
   echo "MCP config: $ROOT/.mcp.json → $0 run"
 }
 
@@ -221,6 +238,8 @@ For the deployed site use the deploy-research subagent (host fetch / WebFetch),
 not this browser — github.io is blocked from this container's Chromium.
 
 Falls back to pinned npx $MCP_NPM_PACKAGE when the local clone is missing.
+Both backends are copied into scratch/chrome-devtools-runtime and receive the
+version/SHA256-guarded #2902 dialog-click and #2903 selected-close fixes.
 EOF
     ;;
   *)

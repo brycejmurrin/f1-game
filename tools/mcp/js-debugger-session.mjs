@@ -7,6 +7,13 @@ import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
 import { recordException, traceMethods } from "./js-debugger-trace.mjs";
 
 const clip = (s, max = 2000) => String(s || "").slice(0, max);
+/** One-line value of an object result from V8's preview, so an agent need not chain debugger_properties for `{a, b}`. */
+function previewSummary(r) {
+  const props = r?.preview?.properties;
+  if (!props) return undefined;
+  const body = props.slice(0, 12).map(p => `${clip(p.name, 40)}: ${clip(p.value, 60)}`).join(", ");
+  return clip(`${r.subtype === "array" ? "[" : "{"}${body}${r.preview.overflow || props.length > 12 ? ", …" : ""}${r.subtype === "array" ? "]" : "}"}`, 600);
+}
 const sourceLocation = p => ({ scriptId: p.scriptId, line: p.lineNumber + 1, column: (p.columnNumber ?? 0) + 1 });
 function exceptionPreview(value) {
   if (!value || typeof value.type !== "string") return undefined;
@@ -30,9 +37,9 @@ export class DebugSession {
     this.discover = discover; this.open = open;
     this.cdp = null; this.pause = null; this.sequence = 0;
     this.scripts = new Map(); this.objects = new Set(); this.breakpoints = new Map();
-    this.operations = new Map(); this.operationSequence = 0; this.connecting = false;
+    this.operations = new Map(); this.operationSequence = 0; this.connecting = false; this.attachGeneration = 0;
     this.operationGroups = new Set();
-    this.logpoints = new Map(); this.logpointSequence = 0; this.exceptionLog = null; this.lost = null; this.lastEndpoint = null;
+    this.logpoints = new Map(); this.logpointRings = new Set(); this.logpointSequence = 0; this.exceptionLog = null; this.lost = null; this.lastEndpoint = null;
     this.generation = randomUUID();
   }
   resetPause() {
@@ -141,10 +148,15 @@ export class DebugSession {
     if (!endpoint) throw Error("endpoint is required: pass endpoint (e.g. http://127.0.0.1:9222) or call debugger_targets first, which remembers it");
     this.lastEndpoint = endpoint;
     if (this.connecting || this.cdp) throw Error("Already attached or attaching; detach first");
+    const attachGeneration = ++this.attachGeneration;
+    const current = () => {
+      if (this.attachGeneration !== attachGeneration) throw Error("Attach cancelled by detach");
+    };
     this.connecting = true;
     let client;
     try {
       const rows = await this.discover(endpoint, "all");
+      current();
       const target = rows.find(t => t.id === targetId);
       if (!target) throw Error("Unknown page targetId; use debugger_targets");
       // The repository's debugger works on local repros, never the deployed site.
@@ -154,16 +166,18 @@ export class DebugSession {
       }
       const ws = localUrl(target.webSocketDebuggerUrl, true), origin = localUrl(endpoint);
       if (ws.host !== origin.host) throw Error("Target WebSocket must use the discovery host and port");
-      client = await this.open(ws.href); this.cdp = client;
+      client = await this.open(ws.href); current(); this.cdp = client;
       this.lost = null; this.target = { id: target.id, type: target.type, url: clip(target.url, 1000), title: clip(target.title, 200) };
-      this.generation = randomUUID(); this.operations.clear(); this.scripts.clear();
+      this.generation = randomUUID(); this.operations.clear(); this.scripts.clear(); this.logpointRings.clear();
       client.on("Debugger.scriptParsed", s => {
+        if (this.cdp !== client) return;
         if (this.scripts.size >= 2000 && !this.scripts.has(s.scriptId)) this.forgetScript(this.evictable());
         this.scripts.set(s.scriptId, { scriptId: s.scriptId, url: clip(s.url), startLine: s.startLine + 1, endLine: s.endLine + 1, executionContextId: s.executionContextId });
         for (const b of s.resolvedBreakpoints || []) this.resolveBreakpoint(b.breakpointId, b.location);
       });
-      client.on("Debugger.breakpointResolved", b => this.resolveBreakpoint(b.breakpointId, b.location));
+      client.on("Debugger.breakpointResolved", b => { if (this.cdp === client) this.resolveBreakpoint(b.breakpointId, b.location); });
       client.on("Debugger.paused", event => {
+        if (this.cdp !== client) return;
         // Exception log mode records and resumes: the page never visibly stops.
         if (recordException(this, event)) return;
         this.resetPause();
@@ -176,10 +190,11 @@ export class DebugSession {
             line: f.location.lineNumber + 1, column: f.location.columnNumber + 1, callFrameId: f.callFrameId,
             scopes: f.scopeChain.slice(0, 6).map(s => ({ type: s.type, name: clip(s.name, 100), object: this.remember(s.object) })) })) };
       });
-      client.on("Debugger.resumed", () => { this.resetPause(); this.markOperations("paused", "pending"); });
-      client.on("Runtime.executionContextsCleared", () => { this.resetPause(); this.clearScripts(); this.abortOperations("aborted: context destroyed (page reload or navigation)"); });
-      client.on("Inspector.detached", e => { this.lost = e?.reason || "inspector detached"; });
+      client.on("Debugger.resumed", () => { if (this.cdp !== client) return; this.resetPause(); this.markOperations("paused", "pending"); });
+      client.on("Runtime.executionContextsCleared", () => { if (this.cdp !== client) return; this.resetPause(); this.clearScripts(); this.abortOperations("aborted: context destroyed (page reload or navigation)"); });
+      client.on("Inspector.detached", e => { if (this.cdp === client) this.lost = e?.reason || "inspector detached"; });
       client.on("Runtime.executionContextDestroyed", event => {
+        if (this.cdp !== client) return;
         const wasPaused = !!this.pause;
         this.resetPause();
         for (const [id, script] of this.scripts) if (script.executionContextId === event.executionContextId) this.forgetScript(id);
@@ -189,21 +204,32 @@ export class DebugSession {
         if (wasPaused) this.pause = { token: `${this.generation}:${++this.sequence}`,
           reason: "executionContextDestroyed", hitBreakpoints: [], frames: [] };
       });
-      client.on("Debugger.globalObjectCleared", () => { this.resetPause(); this.clearScripts(); this.abortOperations("aborted: context destroyed (page reload or navigation)"); });
+      client.on("Debugger.globalObjectCleared", () => { if (this.cdp !== client) return; this.resetPause(); this.clearScripts(); this.abortOperations("aborted: context destroyed (page reload or navigation)"); });
       client.on("disconnect", () => {
-        this.resetPause(); this.scripts.clear(); this.breakpoints.clear(); this.operationGroups.clear(); this.logpoints.clear(); this.exceptionLog = null;
-        if (this.cdp === client) { if (!this.deliberate) this.lost = this.lost || "CDP connection closed (Chrome exited, the page closed, or the container resumed)"; this.abortOperations("aborted: target disconnected"); this.cdp = null; this.target = null; }
+        if (this.cdp !== client) return;
+        this.resetPause(); this.scripts.clear(); this.breakpoints.clear(); this.operationGroups.clear(); this.logpoints.clear(); this.logpointRings.clear(); this.exceptionLog = null;
+        if (!this.deliberate) this.lost = this.lost || "CDP connection closed (Chrome exited, the page closed, or the container resumed)";
+        this.abortOperations("aborted: target disconnected"); this.cdp = null; this.target = null;
       });
       await client.send("Runtime.enable");
+      current();
       await client.send("Debugger.enable");
+      current();
       await client.send("Debugger.setAsyncCallStackDepth", { maxDepth: 8 });
+      current();
       return this.state();
-    } catch (e) { client?.close(); this.cdp = null; this.target = null; throw e; }
-    finally { this.connecting = false; }
+    } catch (e) {
+      client?.close();
+      if (this.cdp === client || this.attachGeneration === attachGeneration) { this.cdp = null; this.target = null; }
+      throw e;
+    }
+    finally { if (this.attachGeneration === attachGeneration) this.connecting = false; }
   }
   // T13: detach ALWAYS drops the local session, however the CDP cleanup fares (a wedged page, a
   // timed-out evaluate): cleanup runs under one deadline, failures are reported, the daemon stays attachable.
   async detach(deadlineMs = 4000) {
+    const detachGeneration = ++this.attachGeneration;
+    this.connecting = false;
     const client = this.cdp;
     if (!client) { this.pause = null; return { detached: true, cleanupErrors: [] }; }
     const cleanupErrors = [], cleanupWarnings = [];
@@ -217,11 +243,17 @@ export class DebugSession {
       ...[...this.operationGroups].map(objectGroup => ["Runtime.releaseObjectGroup", { objectGroup }]),
       ["Runtime.releaseObjectGroup", { objectGroup: this.generation }]];
     if (this.pause) commands.push(["Runtime.releaseObjectGroup", { objectGroup: this.pause.token }]);
-    if (this.logpoints.size) commands.push(["Runtime.evaluate", { expression: "delete globalThis.__apexDbgLog", silent: true }]);
+    if (this.logpointRings.size) {
+      const ids = JSON.stringify([...this.logpointRings]);
+      commands.push(["Runtime.evaluate", { expression: `(function(ids){var R=globalThis.__apexDbgLog;if(!R)return false;ids.forEach(function(id){delete R[id]});if(!Object.keys(R).length)delete globalThis.__apexDbgLog;return true})(${ids})`, returnByValue: true, silent: true }]);
+    }
     const wasPaused = !!this.pause;
     const cleanup = async () => {
       await Promise.all(commands.map(async ([method, params]) => {
-        try { await client.send(method, params, 1000); } catch (e) { cleanupErrors.push(`${method}: ${clip(e.message)}`); }
+        try {
+          const result = await client.send(method, params, 1000);
+          if (result?.exceptionDetails) throw Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || "page evaluation failed");
+        } catch (e) { cleanupErrors.push(`${method}: ${clip(e.message)}`); }
       }));
       for (const method of [...(wasPaused ? ["Debugger.resume"] : []), "Debugger.disable"]) {
         try { await client.send(method, {}, 1000); } catch (e) {
@@ -238,9 +270,13 @@ export class DebugSession {
       clearTimeout(timer);
       this.deliberate = true;
       try { client.close(); } catch {} finally { this.deliberate = false; }
-      this.cdp = null; this.target = null; this.pause = null; this.objects.clear(); this.exceptionLog = null;
       try { client.removeListener("Debugger.resumed", observed); } catch {}
-      this.breakpoints.clear(); this.logpoints.clear(); this.scripts.clear(); this.operationGroups.clear(); this.connecting = false;
+      // A target-close event can make a new attach possible while old cleanup is
+      // still settling. Never let that old detach erase the replacement session.
+      if (this.attachGeneration === detachGeneration) {
+        this.cdp = null; this.target = null; this.pause = null; this.objects.clear(); this.exceptionLog = null;
+        this.breakpoints.clear(); this.logpoints.clear(); this.logpointRings.clear(); this.scripts.clear(); this.operationGroups.clear(); this.connecting = false;
+      }
     }
     return { detached: true, cleanupErrors: [...cleanupErrors], cleanupWarnings, cleanupAcknowledged: cleanupErrors.length === 0, resumedEventObserved };
   }
@@ -279,6 +315,14 @@ export class DebugSession {
   async dropBreakpoint(bp) {
     await this.connected().send("Debugger.removeBreakpoint", { breakpointId: bp.id });
     this.breakpoints.delete(bp.id); this.logpoints.delete(bp.logpoint);
+    if (bp.logpoint) {
+      const expression = `(function(id){var R=globalThis.__apexDbgLog;if(!R)return false;delete R[id];if(!Object.keys(R).length)delete globalThis.__apexDbgLog;return true})(${JSON.stringify(bp.logpoint)})`;
+      try {
+        const result = await this.connected().send("Runtime.evaluate", { expression, returnByValue: true, silent: true }, 5000);
+        if (result?.exceptionDetails) throw Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || "page evaluation failed");
+        this.logpointRings.delete(bp.logpoint);
+      } catch {}
+    }
   }
   async setBreakpoint(url, line, column = 1, condition = "", extra = {}) {
     const same = [...this.breakpoints.values()].find(b => b.url === url && b.line === line && b.column === column);
@@ -288,6 +332,7 @@ export class DebugSession {
       columnNumber: column - 1, condition });
     const bp = { id: r.breakpointId, url, line, column, condition: clip(condition, 300), locations: [], ...extra };
     this.breakpoints.set(bp.id, bp);
+    if (bp.logpoint) this.logpointRings.add(bp.logpoint);
     for (const p of (r.locations || []).slice(0, 5)) this.resolveBreakpoint(bp.id, p);
     if (!bp.locations.length) {
       const base = url.split(/[?#]/)[0].split("/").pop();
@@ -327,10 +372,10 @@ export class DebugSession {
     if (!callFrame) throw Error("Unknown frame index");
     const result = await this.connected().send("Debugger.evaluateOnCallFrame", { callFrameId: callFrame.callFrameId,
       expression, silent: true, throwOnSideEffect: !allowSideEffects, returnByValue: false,
-      generatePreview: false, objectGroup: token, timeout: 1000 }, 2000);
+      generatePreview: true, objectGroup: token, timeout: 1000 }, 2000);
     this.paused(token);
     const refused = !allowSideEffects && result.exceptionDetails && /side.?effect/i.test(JSON.stringify(result.exceptionDetails));
-    return { ...result, result: this.remember(result.result), ok: !result.exceptionDetails,
+    return { ...result, result: this.remember(result.result), summary: previewSummary(result.result), ok: !result.exceptionDetails,
       ...(refused ? { hint: "Refused as a possible side effect (V8 also treats localStorage/sessionStorage and similar reads as side-effecting). If the read is intended, retry with allowSideEffects:true." } : {}) };
   }
   async properties(token, objectId, offset, limit) {

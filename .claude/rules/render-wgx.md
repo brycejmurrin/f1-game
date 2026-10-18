@@ -18,7 +18,8 @@ paths:
   `renderer-soft-lifecycle.test.mjs` (both in `test:tooling-fast`). Then
   `node tools/gfx/gfx-probe.mjs --backend webgpu montreal` with `gpuErrors` 0.
   Pixel truth needs a real GPU: dispatch `gpu-census.yml` on `macos-latest`
-  and read its Verdict step.
+  and read its Verdict step. One census run per branch — a second queues, a
+  third replaces it; dispatch A/B arms sequentially.
 - Five WGSL rules a mock device cannot enforce; breaking any makes the backend
   refuse silently and fall back (`docs/research/WEBGPU-PARITY.md` §5a):
   `sampleCount` is 1 or 4 only; `dpdx`/`dpdy`/`fwidth` only under uniform

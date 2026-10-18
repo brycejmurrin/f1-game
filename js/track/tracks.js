@@ -427,6 +427,7 @@ const Tracks = (function () {
       if (opts && opts.retainGraph === false && !opts.retainGeometry && !keepGeometry) {
         track.propsGeo = track.glassGeo = track.waterGeo = null;
       }
+      dropRibbonCpuIfReady(track, opts);
     }
     Log.info("track", "build done " + def.id + " total=" + (track && track.total && +track.total.toFixed(1)) + " n=" + (track && track.n) + " night=" + !!(track && track._night));
     return track;
@@ -772,5 +773,27 @@ const Tracks = (function () {
   // page's keepGeometry flag, so replay must stamp _keepPositions itself.
   function getKeepGeometry() { return keepGeometry; }
 
-  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, keepGeometry: getKeepGeometry, setCompactProps, diagnosticBuild, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident };
+  // M-3b: road/terrain nrm/col/mat are only needed until GPU copies exist (chunked
+  // or fused). Pos+idx stay for debris, groundY and late-chunk recovery is gone
+  // once both ribbons are settled on this tier.
+  function ribbonGpuSettled(track, which) {
+    const m = track && track.meshes;
+    if (!m) return false;
+    const tierHigh = typeof PerfGov !== "undefined" && PerfGov.tier() >= 3;
+    if (tierHigh && m[which]) return true;   // no lazy chunked rebuild this session
+    const ch = m[which + "Chunked"];
+    return !!(ch && ch.chunks && ch.chunks.length);
+  }
+  function dropRibbonCpuIfReady(track, opts) {
+    if (!track || track._ribbonCpuDropped || (opts && opts.retainGeometry) || (opts && opts.retainRibbonCpu) || keepGeometry) return;
+    if (!track.roadGeo || !track.terrainGeo) return;
+    if (!ribbonGpuSettled(track, "road") || !ribbonGpuSettled(track, "terrain")) return;
+    for (const geo of [track.roadGeo, track.terrainGeo]) {
+      geo.nrm = geo.col = geo.mat = null;
+      if (geo.trk) geo.trk = null;
+    }
+    track._ribbonCpuDropped = true;
+  }
+
+  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, keepGeometry: getKeepGeometry, setCompactProps, diagnosticBuild, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident, dropRibbonCpuIfReady, ribbonGpuSettled };
 })();

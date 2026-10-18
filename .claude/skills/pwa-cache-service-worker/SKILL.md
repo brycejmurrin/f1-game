@@ -78,3 +78,4 @@ Related: `node tools/gen/gen-shell.mjs --check`, **check-changes**.
 - DEFERRED triple, offline check, mid-run bump, mistakes, stale-shell diagnosis →
   [references/workflow.md](references/workflow.md).
 - Handshake, cache name, fetch races → [references/sw-internals.md](references/sw-internals.md).
+- PWA perf / CWV playbook → [references/web-quality-perf.md](references/web-quality-perf.md).

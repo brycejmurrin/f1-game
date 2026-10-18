@@ -84,8 +84,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
+          # No package-manager cache: this job builds installers, and a restored cache is
+          # an input a PR run could have written (zizmor cache-poisoning); setup-node v6+
+          # enables one implicitly unless told otherwise. npm ci is ~30 s.
+          package-manager-cache: false
 
       - name: Install desktop deps
         working-directory: desktop
@@ -159,8 +161,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
+          # No package-manager cache: this job builds installers, and a restored cache is
+          # an input a PR run could have written (zizmor cache-poisoning); setup-node v6+
+          # enables one implicitly unless told otherwise. npm ci is ~30 s.
+          package-manager-cache: false
 
       - name: Install desktop deps
         working-directory: desktop

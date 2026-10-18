@@ -194,6 +194,7 @@ function boot(opts = {}) {
   sb.window = sb;
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: "js/ui/live-region.js" });
   vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: "js/ui/hud-readouts.js" });
+  vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: "js/ui/hud-minimap.js" });   // GameHud.create builds its HudMinimap (#1656)
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: "js/race/overtake-mode.js" });
   const $ = (id) => dom.byId(id);

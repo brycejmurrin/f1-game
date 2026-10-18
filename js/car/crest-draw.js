@@ -260,7 +260,77 @@ const LiveryCrests = (function () {
       cadillac: crestTraced,
     };
 
-    return { CRESTS, crestGeneric, tracePath };
+    // ORIGINAL EMBLEMS (livery.crestStyle): generic marks a player can wear in place of the
+    // team's crest — a shield, a roundel, swept wings, an arrowhead, a star. Geometry only,
+    // modelled on no team's or sponsor's mark (docs/notes/LIVERY-REF-2026-10-18.md). Each
+    // carries the team's initial so the car still says whose it is; colours come from P.
+    function emblemLetter(ctx, f, P, teamId, cx, cy, size) {
+      const legend = legendOf(teamId);
+      const name = legend && legend.car ? String(legend.car) : teamShort(teamId);
+      const ch = (name.trim()[0] || "A").toUpperCase();
+      drawWordmark(ctx, ch, { x: f.X(cx - size / 2), y: f.Y(cy - size / 2), w: f.S(size), h: f.S(size) }, P.alt, { align: "center", pad: 0 });
+    }
+    function poly(ctx, f, pts) {
+      ctx.beginPath();
+      pts.forEach(([u, v], i) => (i ? ctx.lineTo(f.X(u), f.Y(v)) : ctx.moveTo(f.X(u), f.Y(v))));
+      ctx.closePath();
+    }
+    function emblemShield(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN);
+      ctx.save(); ctx.fillStyle = css(P.mark);
+      poly(ctx, f, [[0.16, 0.10], [0.84, 0.10], [0.84, 0.50], [0.50, 0.92], [0.16, 0.50]]); ctx.fill();
+      ctx.strokeStyle = css(P.alt); ctx.lineWidth = swMin(f, 0.05);
+      poly(ctx, f, [[0.24, 0.40], [0.50, 0.58], [0.76, 0.40]]); ctx.stroke();
+      emblemLetter(ctx, f, P, teamId, 0.5, 0.27, 0.26);
+      ctx.restore();
+    }
+    function emblemRoundel(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN);
+      ctx.save(); ctx.fillStyle = css(P.mark);
+      ctx.beginPath(); ctx.arc(f.X(0.5), f.Y(0.5), f.S(0.44), 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = css(P.alt); ctx.lineWidth = swMin(f, 0.05);
+      ctx.beginPath(); ctx.arc(f.X(0.5), f.Y(0.5), f.S(0.34), 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = css(P.alt); ctx.fillRect(f.X(0.10), f.Y(0.46), f.S(0.80), f.S(0.08));
+      ctx.fillStyle = css(P.mark); ctx.fillRect(f.X(0.36), f.Y(0.36), f.S(0.28), f.S(0.28));
+      emblemLetter(ctx, f, P, teamId, 0.5, 0.5, 0.26);
+      ctx.restore();
+    }
+    function emblemWings(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN);
+      ctx.save(); ctx.fillStyle = css(P.mark);
+      for (const s of [-1, 1]) {
+        for (let i = 0; i < 3; i++) {
+          const y = 0.34 + i * 0.12, x0 = 0.5 + s * 0.16, x1 = 0.5 + s * (0.46 - i * 0.08);
+          poly(ctx, f, [[x0, y], [x1, y - 0.06], [x1 - s * 0.05, y + 0.05], [x0, y + 0.08]]); ctx.fill();
+        }
+      }
+      ctx.beginPath(); ctx.arc(f.X(0.5), f.Y(0.5), f.S(0.15), 0, Math.PI * 2); ctx.fill();
+      emblemLetter(ctx, f, P, teamId, 0.5, 0.5, 0.18);
+      ctx.restore();
+    }
+    function emblemArrow(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN);
+      ctx.save(); ctx.fillStyle = css(P.mark);
+      poly(ctx, f, [[0.08, 0.22], [0.92, 0.50], [0.08, 0.78], [0.30, 0.50]]); ctx.fill();
+      ctx.fillStyle = css(P.alt);
+      poly(ctx, f, [[0.36, 0.42], [0.60, 0.50], [0.36, 0.58], [0.42, 0.50]]); ctx.fill();
+      ctx.restore();
+    }
+    function emblemStar(ctx, R, P, bare, teamId) {
+      const f = fit(R, CREST_MARGIN), pts = [];
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 0.19 : 0.44;
+        pts.push([0.5 + Math.cos(a) * r, 0.53 + Math.sin(a) * r]);
+      }
+      ctx.save(); ctx.fillStyle = css(P.mark); poly(ctx, f, pts); ctx.fill();
+      emblemLetter(ctx, f, P, teamId, 0.5, 0.55, 0.2);
+      ctx.restore();
+    }
+    // "team" (or unset) keeps the team's own crest; the garage lists EMBLEM_IDS in this order.
+    const EMBLEMS = Object.freeze({ shield: emblemShield, roundel: emblemRoundel, wings: emblemWings, arrow: emblemArrow, star: emblemStar });
+    const EMBLEM_IDS = Object.freeze(["team", ...Object.keys(EMBLEMS)]);
+
+    return { CRESTS, crestGeneric, tracePath, EMBLEMS, EMBLEM_IDS };
   }
 
   return { create };

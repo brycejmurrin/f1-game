@@ -245,6 +245,7 @@ function swOptionalBlock() {
     ["LAZY_XR — WebXR session behind navigator.xr / ENTER VR", MANIFEST.LAZY_XR || []],
     ["LAZY_CAM_EDITOR — camera tuner + flyby shot editor panels", MANIFEST.LAZY_CAM_EDITOR || []],
     ["LAZY_CAREER_UI — CAREER screen behind the title CAREER door", MANIFEST.LAZY_CAREER_UI || []],
+    ["LOCALES — manifest only until a non-English language ships", MANIFEST.SW_LOCALES || []],
   ];
   const out = [];
   for (const [title, files] of groups) {

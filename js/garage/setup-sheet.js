@@ -104,7 +104,7 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           patternOffset: "0", patternTaper: "20", patternOpacity: "100",
                           patternRotation: "0", patternStretch: "100", patternWeight: "100",
                           coverFinish: "inherit", wingFinish: "inherit", haloFinish: "inherit",
-                          podFinish: "inherit", finFinish: "inherit", mirrorFinish: "inherit", helmetStyle: "team" };
+                          podFinish: "inherit", finFinish: "inherit", mirrorFinish: "inherit", helmetStyle: "team", crestStyle: "team" };
 // WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
 // named a SURFACE, so the sheet could not answer its own first question: what
 // does this change? Worse, two rows read as a pair and are not one — ACCENT is
@@ -135,6 +135,7 @@ const LIV_ROW_HINT = {
   plateTint: "PLATE — the board SPINE SIDE's PLATE / TITLE designs paint on. The colour you pick is used as-is. Unset = SECONDARY, contrast-checked against the flank — never BODY STRIPE. Lettering auto-inks.",
   wing: "WINGS — the front and rear FLAPS. Unset = ACCENT.",
   rearWing: "REAR WING — the rear mainplane block. Unset = ACCENT.",
+  crestStyle: "CREST — TEAM keeps the team's own mark; the others are original emblems (shield, roundel, wings, arrow, star) worn wherever the mark sits: nose, cover, fin and flanks.",
   endplate: "ENDPLATES — the front-wing endplates and the rear-wing endplate bodies. Unset = the secondary body colour at the front, dark at the rear.",
   fin: "TAIL FIN — the shark-fin plate. The colour you pick is used as-is (even under FIN HANDOFF CONTRAST). Unset = ACCENT, or a contrast-derived colour when HANDOFF is CONTRAST. Needs a FIN SHAPE other than NONE.",
   finArt: "TAIL GRAPHIC — fin motif / badge ink. The colour you pick is used as-is. Unset = first base colour that clears the fin plate.",
@@ -192,6 +193,26 @@ function livDraftFrom(liv, name) {
   const d = { name, c1: arrToHex(src.c1), c2: arrToHex(src.c2) };
   for (const k of LIV_DRAFT_COLORS) d[k] = src[k] ? arrToHex(src[k]) : "";
   for (const k in LIV_DRAFT_PILLS) d[k] = src[k] || LIV_DRAFT_PILLS[k];
+  return d;
+}
+
+// THE PREVIEW IS THE SAVE (livery editor audit 2026-10-18, D1). The editor previews
+// a draft under a custom id, as SAVE & FIT stores it, so the team marks on screen are
+// the marks you get. A paint job started from the team's OWN scheme (NEW, or a copy of
+// Team Livery) would then lose the brand colours that scheme resolves its mark to
+// (Ferrari's yellow shield went white on save), so they are written into the mark
+// rows instead: visible, editable, saved. mark → logo, plate → logo2 reproduces the
+// team's own atlas exactly on every team (livery-design.test.mjs).
+function livDraftFromOwn(src, name, teamId) {
+  const d = livDraftFrom(src, name);
+  const LTn = typeof LiveryTex !== "undefined" ? LiveryTex : null;
+  if (!LTn || !LTn.markPalette || !LTn.markSlots) return d;
+  const slots = LTn.markSlots(teamId);
+  if (slots[0] && slots[0].label === "EMBLEM TINT") return d;   // an uploaded emblem: a tint is not its look
+  const own = Object.assign({}, src, { id: "default" });
+  const pal = LTn.markPalette(teamId, own, [own.cover || own.c1], false);
+  if (!d.logo && pal.mark) d.logo = arrToHex(pal.mark);
+  if (!d.logo2 && pal.plate && slots.some((x) => x.key === "logo2")) d.logo2 = arrToHex(pal.plate);
   return d;
 }
 
@@ -839,7 +860,7 @@ function buildLiveryOptions(container, team) {
       // it with the grid: the only thing a new paint job changes is the paint.
       const shape = {};
       if (team.livery) for (const k in LIV_DRAFT_PILLS) if (team.livery[k]) shape[k] = team.livery[k];
-      csLivDraft = livDraftFrom(Object.assign({ c1: team.color, c2: team.color2 }, shape), "");
+      csLivDraft = livDraftFromOwn(Object.assign({ c1: team.color, c2: team.color2 }, shape), "", team.id);
       csLivEditId = null;
       csLivCreating = true; csLivTeamId = team.id;
       if (G.soundOn) GameAudio.uiSelect();
@@ -915,7 +936,8 @@ function buildLiveryOptions(container, team) {
       dup.title = "Customize a copy of this livery";
       dup.setAttribute("aria-label", "Customize a copy of " + liv.name);
       dup.onclick = () => {
-        csLivDraft = livDraftFrom(liv, (liv.name || "Custom").slice(0, 14) + " MK2");
+        const copyName = (liv.name || "Custom").slice(0, 14) + " MK2";
+        csLivDraft = liv.id === "default" ? livDraftFromOwn(liv, copyName, team.id) : livDraftFrom(liv, copyName);
         csLivEditId = null;   // create-new: never overwrites the stock scheme
         csLivCreating = true; csLivTeamId = team.id;
         if (G.soundOn) GameAudio.uiSelect();
@@ -1209,6 +1231,7 @@ function buildLiveryCreator(container, team) {
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
   pillRow("NUMBER FONT", "numFont", LT && LT.NUM_FONT_IDS || ["default"], "default");
   pillRow("SPONSORS", "sponsors", LT && LT.SPONSOR_PACK_IDS || ["default"], "default");
+  pillRow("CREST", "crestStyle", LT && LT.CREST_STYLE_IDS || ["team"], "team");
   // The tail DESIGN: what the fin is shaped like, what is painted on it, what it
   // carries, and whether the crest also repeats on the spine. Four single-choice
   // fields, so four pill rows — the same node shape as FINISH above.
@@ -1337,10 +1360,11 @@ function livePreviewDraft(team, d) {
   _livPreviewKey = key;
   _livPrevDraft = Object.assign({}, d);
   if (invalidateDecalTextures) invalidateDecalTextures(team.id);
-  // id:"default" keeps brand plates / markOnField on while editing — a draft
-  // without an id skipped the plated-mark path and looked like a bare car.
+  // A custom id, as SAVE & FIT writes: "default" gave the draft the team's brand
+  // mark palette, which the saved paint job then lost (audit D1; livDraftFromOwn
+  // seeds those colours into the draft instead).
   G.livDraftOverride = { teamId: team.id,
-    liv: Object.assign({ id: "default", c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, true)) };
+    liv: Object.assign({ id: "custom_draft", c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, true)) };
   if (!skipMesh) G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
