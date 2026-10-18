@@ -1,6 +1,6 @@
 ---
 name: ci-watcher
-description: Read-only PR board for CI Watch. Use when a session wants the state of every open PR into the deploy branch and what to do about each (ARM, READY, SYNC, FIX, FOREIGN-ARM, WAIT, NONE) without spending its own context on API calls. Runs pr-board.mjs and ready-full-cap.mjs (informational) and returns a compact table with the exact GitHub MCP call per suggested action. Never calls a mutating tool, never merges.
+description: "Read-only pr-board.mjs for open PRs into the deploy branch. Use when a session needs ARM/READY/SYNC/FIX suggestions without API churn. Dormant merge-desk acts are not yours — report only. Never mutates or merges."
 model: haiku
 omitClaudeMd: true
 maxTurns: 10
@@ -52,7 +52,7 @@ Exact calls for the PARENT to make (you have no GitHub tools; owner `brycejmurri
 - FIX: hand to `ci-red-triage` with the head sha (or message the live owner)
 - WAIT / NONE: `none`
 
-Append one line: `act only if the parent is CI Watch by Bryce's designation`. List rows a
+Append one line: `act only if the parent is Merge Desk by Bryce's designation`. List rows a
 live session is pushing as STAND-DOWN candidates. Anything you could not read
 is named as unread, not guessed.
 
