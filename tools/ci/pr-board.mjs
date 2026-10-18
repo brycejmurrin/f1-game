@@ -54,7 +54,7 @@ export { DEPLOY, MAX_LIVE };
 /** At most this many PRs armed repo-wide (AGENTS.md §Concurrent PRs, Merge Desk's hard gate). */
 export const MAX_ARMED = 2;
 /** The one merge method allowed (AGENTS.md MERGE-COMMIT-ONLY). */
-export const MERGE_METHOD = "merge";
+const MERGE_METHOD = "merge";
 
 /** A PR-body line that STARTS with `MERGE-HOLD:`, outside an HTML comment, is
  *  the one veto on arming or merging (AGENTS.md); a mid-sentence mention is not. */

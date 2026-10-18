@@ -109,7 +109,7 @@ export const RUN_ALL_PATHS = [
 
 /** The browser groups the ADAPTED specs belong to, read from package.json's
  *  generated scripts so a regroup moves the trigger with the spec. */
-export function adaptedGroupsByRunner(scripts = pkgScripts()) {
+function adaptedGroupsByRunner(scripts = pkgScripts()) {
   const browser = Object.keys(scripts).filter((s) => s.startsWith("test:") && scripts[s].includes("run-playwright"));
   const out = {};
   for (const [group, members] of Object.entries(ADAPTED_PAGE_GROUPS)) {

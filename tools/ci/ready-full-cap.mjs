@@ -35,7 +35,7 @@ export const CI_PATH = ".github/workflows/ci.yml";
 /** Max ready PRs allowed to hold an in-progress or queued full-tier ci.yml run. */
 export const MAX_LIVE = 8;
 /** Run statuses that hold or wait for runners (the REST `status` filter's live values). */
-export const LIVE_RUN_STATUSES = ["in_progress", "queued", "pending", "waiting", "requested"];
+const LIVE_RUN_STATUSES = ["in_progress", "queued", "pending", "waiting", "requested"];
 
 /**
  * @param {string} pathQs
