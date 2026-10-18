@@ -2163,6 +2163,7 @@ const Car3D = (function () {
     shadeFlags.coverHi = true;
     if (shade && !sil) CarShade.smooth(out, { skip: [SURFACES.emissive] });   // a shadow caster keeps the shape; depth never reads normals
     // Measure each closed section from the vertices it emitted.
+    if (sil) out._releaseCpuMirror = true;   // TLX: car shadow casters only (plan M-2)
     if (opts && opts.measure) out.parts = sections.filter((sec) => sec.to > sec.from).map((sec) => {
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity,
           z0 = Infinity, z1 = -Infinity;

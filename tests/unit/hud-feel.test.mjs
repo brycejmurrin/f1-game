@@ -110,6 +110,7 @@ function boot(opts = {}) {
   // #announce-live's one writer, as in the shell (it loads before hud.js).
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: "js/ui/live-region.js" });
   vm.runInNewContext(src("js/ui/hud-skin.js"), sb, { filename: "js/ui/hud-skin.js" });
+  vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: "js/ui/hud-minimap.js" });   // GameHud.create builds its HudMinimap (#1656)
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
   // The OVERTAKE chip converts the allowance to MJ through the real module.
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: "js/race/overtake-mode.js" });
@@ -832,7 +833,7 @@ test("minimap sector arcs are the podium metals from tokens — no purple, no re
     assert.ok(r >= 1.25, `S${i + 1} vs S${j + 1}: ${r.toFixed(2)}:1`);
   }
   // Both drawers read the helper; the stale "= the sector labels" claim is gone.
-  const hudSrc = read("js/ui/hud.js"), tmSrc = read("js/ui/track-maps.js");
+  const hudSrc = read("js/ui/hud.js") + read("js/ui/hud-minimap.js"), tmSrc = read("js/ui/track-maps.js");   // the map drawer moved to hud-minimap.js (#1656)
   assert.match(hudSrc, /const SC = TrackMaps\.sectorColors\(\);/);
   assert.match(tmSrc, /SC = sectorColors\(\)/); assert.match(tmSrc, /g\.strokeStyle = SC\[s\];/);
   assert.doesNotMatch(hudSrc, /= the sector labels/);

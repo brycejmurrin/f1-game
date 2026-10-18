@@ -104,7 +104,7 @@ async function build(m) {
   const src = scenerySrc(def);
   if (typeof Assets !== "undefined" && Assets.modelsReady) await Assets.modelsReady(0, src);
   const t0 = performance.now();
-  const track = Tracks.build(def, Object.assign({}, m.opts, { gfx }));
+  const track = Tracks.build(def, Object.assign({}, m.opts, { gfx, retainRibbonCpu: true }));
   const ms = performance.now() - t0;
   track._gfx = null; track.surface = null; track._nodeGrid = null; track.graph = null; track.def = null;
   // terrainGrid()'s cell lists: a pure cache the page rebuilds on first use (tracks.js).

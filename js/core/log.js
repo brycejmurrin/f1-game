@@ -27,6 +27,7 @@ const Log = (function () {
     "race",
     "xr",
     "sw",
+    "i18n",
   ];
 
   const RING = 500;

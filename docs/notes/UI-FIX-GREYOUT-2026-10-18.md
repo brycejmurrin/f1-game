@@ -59,3 +59,33 @@ its grey. A later rule in the same pass greys it again if it still applies (unit
   screen; they land with their screen's PR.
 - Duplicates and labels: their own PRs. The Appearance Studio regroup goes to the orchestrator first, as options with
   phone screenshots.
+
+## PR 2: reasons for controls their owner greys (`EXPLAIN`)
+
+LE's scan found 46 controls greyed by their own module with no reason on screen at 852×393. `SettingDeps.EXPLAIN` is a
+second table in the same module. It never disables anything. While an owner has a control disabled (`disabled` or
+`aria-disabled="true"`), it shows why in the same reason slot and wires `aria-describedby`. A labelled row gets a suffix
+inside its label; a button group gets one line under the group. Where the owner already writes a status line, the
+control is also described by that line (`link`): the practice state, Spotify status, the battle-tone status, voice
+notes, the Photo Studio message. A MutationObserver on `disabled` / `aria-disabled` follows owners that grey on their
+own clock (Spotify connecting, a DAILY race opening). SettingDeps' own writes are change-only, so the observer cannot
+loop.
+
+| Screen | Controls | Reason |
+|---|---|---|
+| Controls | GEARS; RESET THIS CONTROLLER PROFILE | MANUAL needs TILT or a pad; Connect a controller first |
+| HUD & camera | HUD, LIGHTING, CAMERA, FLYBY; phone recorder SHARE/COPY, RECORD, QUICK | Only during a race; RECORD a run first; Stop AUTO SOAK first; Already recording |
+| Session review / Pause | DOWNLOAD SESSION DATA; SAVE START, TRY AGAIN, REWIND 10s, DRILL; RESTART | Drive with COACH on first; the practice state line; Off in online sessions |
+| Music & sound | battle-tone previews; voice PITCH/RATE ×8; TEST RACE MIX / STOP TEST | Turn SOUND on / Turn BATTLE TONES on, else the owner's note; Test already playing; No test playing |
+| Spotify | CONNECT, DISCONNECT, DEVICE, REFRESH, PLAYLIST, PLAY, PAUSE, NEXT, CHECK, OPEN; the sheet's controls | Paste a CLIENT ID first / CONNECT Spotify first / Already connected / Not connected, plus the status line |
+| Race settings | LAPS, WEATHER, TIME OF DAY; GRID | Set by DAILY CHALLENGE; Set by SEASON SETUP |
+| Photo Studio / Appearance | SAVE PHOTO, DOWNLOAD PNG, MENU BACKGROUND; APPLY PROFILE, DELETE; saved photo, CHOOSE PHOTO | CAPTURE a photo first; Pick a saved PROFILE first; No saved photos yet / Select a saved photo first |
+| Title screen | EDIT ON TITLE SCREEN, PEEK; WIDTH −/+ | Open from the TITLE screen; Select the BUTTONS piece |
+| Track designer / Data hub | Clear / Focus selection, TEST HERE, START HERE, DELETE POINT; Download | Select a point first; Press GATHER first |
+| HUD arrange | VISIBILITY | its own hint line now says it (`hud-arrange.js`) |
+
+Runtime controls with no id got one in their owned module (`ap-*` in Appearance Studio, `pm-pad-profile-reset`,
+`as-mix-test` / `as-mix-stop`, `data-peek` on PEEK). The track designer's SPAN WIDTH −/+ got
+`td-spanw-dn` / `td-spanw-up` in #2851's own PR (reason "Select a RANGE of points"). With #2847 the Spotify
+playlist/device pickers live only in the sheet; its device row reads "Only in REMOTE mode" when connected in
+IN BROWSER mode.

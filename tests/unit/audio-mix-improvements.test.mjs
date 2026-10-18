@@ -9,7 +9,7 @@ const copy = (v) => JSON.parse(JSON.stringify(v));
 test('Spotify actual input invalidates pending searches synchronously, including clear', async () => {
   const src = read('js/audio/spotify.js'), pending = [], timers = new Map(); let input, seq = 0;
   const ctx = vm.createContext({ sessionGen: 1, searchRevision: 0, results: [], searchT: null, render() {}, encodeURIComponent, readJson: (r) => Promise.resolve().then(() => r.json()).catch(() => null), api: () => new Promise((resolve) => pending.push(resolve)), on: (id, event, fn) => { input = fn; }, setTimeout: (fn) => { timers.set(++seq, fn); return seq; }, clearTimeout: (id) => timers.delete(id) });
-  vm.runInContext(src.slice(src.indexOf('  function searchPlaylists(q'), src.indexOf('  function playUri(uri) {')) + src.slice(src.indexOf('    on("sp-search", "input",'), src.indexOf('    on("as-sp-playlist",')), ctx);
+  vm.runInContext(src.slice(src.indexOf('  function searchPlaylists(q'), src.indexOf('  function playUri(uri) {')) + src.slice(src.indexOf('    on("sp-search", "input",'), src.indexOf('    on("as-sp-play", "click",')), ctx);
   const fire = () => { const list = [...timers.values()]; timers.clear(); list.forEach((fn) => fn()); };
   const resolve = async (i, name) => { pending[i]({ ok: true, json: () => Promise.resolve({ playlists: { items: [{ name, uri: name }] } }) }); for (let j = 0; j < 10; j++) await Promise.resolve(); };
   input({ target: { value: 'old' } }); fire(); input({ target: { value: 'new' } }); await resolve(0, 'OLD'); assert.equal(ctx.results.length, 0, 'stale response during debounce is ignored');
