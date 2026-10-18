@@ -152,6 +152,25 @@ test("a branch checkout that lacks a memory is not a deletion; a committed delet
   } finally { r.done(); }
 });
 
+test("an index line removed by this branch's own commit stays removed (2026-10-18, #2873)", () => {
+  const r = rig();
+  const main = path.dirname(path.dirname(r.repo));
+  const git = (...a) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: main, encoding: "utf8" });
+  try {
+    r.put(r.repo, "MEMORY.md", "# idx\n- [A](a.md)\n- [A](a.md) stale dup\n");
+    r.put(r.repo, "a.md", topic("a", "alpha"));
+    git("add", ".claude"); git("commit", "-qm", "base");
+    r.run("restore");
+    // the session dedupes the TRACKED index and commits it: HEAD moves, the live copy is untouched
+    r.put(r.repo, "MEMORY.md", "# idx\n- [A](a.md)\n");
+    r.run("unmark");                             // as bash-guard does before `git add`
+    git("add", ".claude"); git("commit", "-qm", "dedupe index");
+    r.run("save");
+    assert.equal(r.get(r.repo, "MEMORY.md"), "# idx\n- [A](a.md)\n", "the committed removal is not re-added to the repo");
+    assert.equal(r.get(r.live, "MEMORY.md"), "# idx\n- [A](a.md)\n", "and reaches the live index");
+  } finally { r.done(); }
+});
+
 test("save from an unrelated PostToolUse edit does nothing", () => {
   const r = rig();
   try {

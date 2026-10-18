@@ -347,7 +347,8 @@
         "tests/unit/driving-cues.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs"
       ]
     },
     "js/audio/engine.js": {
@@ -9577,7 +9578,8 @@
         "tests/unit/brake-cue.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs"
       ]
     },
     "js/physics/collide.js": {
@@ -9883,6 +9885,7 @@
         "tests/unit/player-forces.test.mjs"
       ],
       "*": [
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/trail-brake-turnin.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
@@ -14031,6 +14034,29 @@
         "tests/unit/html-sink-lint.test.mjs",
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/player-tools-ui.test.mjs"
+      ]
+    },
+    "js/ui/captions.js": {
+      "push": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "radioWho": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setBg": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setMode": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setPos": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setSize": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setSpeakerInk": [
+        "tests/unit/captions.test.mjs"
       ]
     },
     "js/ui/condition-cue-controls.js": {

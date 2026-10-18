@@ -52,6 +52,11 @@ expectation vs real regression.
    `test:tooling` also runs the slow full-fleet sweeps — reserve that for
    geometry pushes.
 
+5. **A retired rule leaves no constant behind.** When AGENTS.md retires a rule,
+   grep `tools/` and `.claude/hooks/` for its constant in the same PR (the
+   ready-PR cap retired 2026-10-16 still ran as 3 in `ready-full-cap.mjs`, and
+   sessions obeyed it).
+
 ## Reading failures
 
 When a spec fails, first decide **stale expectation vs real regression**:
