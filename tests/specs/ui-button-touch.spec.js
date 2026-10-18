@@ -761,6 +761,18 @@ test.describe("Selection screen — iOS tablet portrait layout", () => {
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
 
+    // Tracks are filled after the sheet opens. A first paint can still report
+    // scrollWidth === clientWidth (Pages 39083584427: Expected >0, Received 0
+    // on the later scrollLeft assert after a zero-overflow aim). Wait until the
+    // strip actually overflows, same pattern as the garage category strip.
+    await page.waitForFunction(() => {
+      const list = document.getElementById("sel-tracks");
+      if (!list) return false;
+      const cs = getComputedStyle(list);
+      if (cs.overflowX !== "auto" || cs.overflowY !== "hidden") return false;
+      return list.scrollWidth > list.clientWidth;
+    }, null, { polling: 100, timeout: BOOT_MS });
+
     const before = await page.locator("#sel-tracks").evaluate((list) => ({
       clientWidth: list.clientWidth,
       scrollWidth: list.scrollWidth,
@@ -807,6 +819,12 @@ test.describe("Selection screen — iOS phone portrait touch scrolling", () => {
     await waitReady(page);
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
+
+    // Same settle as the tablet twin: assert overflow only after the strip fills.
+    await page.waitForFunction(() => {
+      const list = document.getElementById("sel-tracks");
+      return !!(list && list.scrollWidth > list.clientWidth);
+    }, null, { polling: 100, timeout: BOOT_MS });
 
     const list = await page.locator("#sel-tracks").evaluate((element) => ({
       clientWidth: element.clientWidth,
