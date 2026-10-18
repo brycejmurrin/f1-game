@@ -154,7 +154,7 @@ test("an owner's own disable survives a dependency turning back on", () => {
 
 test("a parent missing from the DOM greys nothing (lazy panels)", () => {
   const h = boot();
-  const [input] = buildTarget(h, "pm-tiltdeg");
+  const [input] = buildTarget(h, "pm-tiltcurve");
   h.Deps.refresh();
   assert.equal(input.disabled, false);
 });

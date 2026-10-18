@@ -919,6 +919,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/setting-deps.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
+  "tests/unit/settings-one-home.test.mjs",
   "tests/unit/settings-search.test.mjs",
   // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
   "tests/unit/settings-tabs.test.mjs",

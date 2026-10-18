@@ -1363,6 +1363,7 @@
         "tests/unit/setting-deps.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/settings-export.test.mjs",
+        "tests/unit/settings-one-home.test.mjs",
         "tests/unit/settings-search.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/share-code.test.mjs",

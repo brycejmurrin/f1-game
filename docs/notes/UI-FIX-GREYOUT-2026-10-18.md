@@ -29,7 +29,7 @@ LE's dependency table row numbers in brackets; issues #2843–#2853.
 
 | Rule | Controls | Inert when | Row |
 |---|---|---|---|
-| steer-tilt | TILT SENSITIVITY, TILT RANGE, STEER SMOOTHING, TILT CURVE | STEERING INPUT ≠ TILT | 1–2 |
+| steer-tilt | TILT SENSITIVITY, STEER SMOOTHING, TILT CURVE | STEERING INPUT ≠ TILT | 1–2 |
 | steer-touch(-speed) | TOUCH SENSITIVITY, DRAG SMOOTHING, DRAG CURVE, DRAG AT SPEED | STEERING INPUT ≠ TOUCH | 3 |
 | throttle-touch | THROTTLE | STEERING INPUT = TOUCH (always AUTO) | 12 |
 | touch-dock | BUTTON SIZE, BUTTON OPACITY, LEFT-HANDED | no touch controls | 13–14 |
