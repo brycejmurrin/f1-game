@@ -63,6 +63,11 @@ export async function performAction(session, a) {
     case "reload": await page.reload({ waitUntil: "domcontentloaded" }); break;
     case "wait": await page.locator(a.selector).waitFor({ state: a.state || "visible" }); break;
     case "checkpoint": break;
+    case "assert": {
+      const check = a.oracle.type === "binding" ? await checkBinding(session, a.oracle) : { matches: await matchesOracle(session, a.oracle) };
+      if (!check.matches) throw new Error(`Replay assertion failed: ${JSON.stringify({ expected: a.oracle, actual: check.actual ?? null })}`);
+      break;
+    }
     case "scene": await positionScene(page, a); break;
     default: throw new Error(`Unsupported action ${a.type}`);
   }
@@ -71,6 +76,7 @@ export async function performAction(session, a) {
 export async function matchesOracle(session, oracle) {
   if (!oracle) return false;
   const { page, logs } = session;
+  if (oracle.type === "binding") return (await checkBinding(session, oracle)).matches;
   if (oracle.type === "game") {
     const state = await page.evaluate(() => ({ ...window.__apex.info(), weather: window.__apex.repro().wx }));
     return (!oracle.track || state.track === oracle.track) && (!oracle.weather || state.weather === oracle.weather) && (!oracle.state || state.state === oracle.state);
@@ -84,6 +90,16 @@ export async function matchesOracle(session, oracle) {
   if (state === "detached") return await l.count() === 0;
   const v = await l.isVisible();
   return state === "visible" ? v : !v;
+}
+
+/** Exact visible control, current DOM/runtime agreement and optional explicit saved value. */
+export async function checkBinding({ page }, oracle) {
+  const report = await page.evaluate(inspectUI, { root: oracle.selector });
+  const c = report.controls.length === 1 ? report.controls[0] : null;
+  const b = c?.binding;
+  return { matches: !!b && b.status === "matches" && Object.is(b.runtime, oracle.runtime) &&
+      (!Object.hasOwn(oracle, "saved") || b.saved?.status === "read" && Object.is(b.saved.value, oracle.saved)),
+    actual: c ? { value: c.value, pressed: c.pressed, binding: b } : { controls: report.controls.length } };
 }
 
 /** Serializable: collect the just-presented camera, then leave 3D paused for DOM work. */

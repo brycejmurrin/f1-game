@@ -16,12 +16,16 @@
  *   FOREIGN-ARM  auto-merge armed with a method other than MERGE (squash, rebase)
  *   SYNC         mergeable_state dirty (merge conflict with the deploy branch)
  *   FIX          ci.yml failed on the head, or the Structural guards check failed
- *   ARM          ready, not armed, Structural guards passed, ci succeeded with
- *                full-tier job evidence, no MERGE-HOLD, fewer than MAX_ARMED armed
- *   READY        draft, ci green, Structural guards passed, Plan closed
+ *   ARM          ready, not armed, Structural guards passed, ci.yml completed
+ *                with success on the head plus full-tier job evidence, no
+ *                MERGE-HOLD, Plan closed, fewer than MAX_ARMED armed
+ *   READY        draft, ci.yml completed+success, Structural guards passed,
+ *                no MERGE-HOLD, Plan closed
  *   NONE         armed (MERGE) and healthy
- *   WAIT         anything else: ci running, gate pending/absent, a
+ *   WAIT         anything else: ci queued/running/absent, gate pending/absent, a
  *                MERGE-HOLD, MAX_ARMED already armed, Plan items open
+ * ARM and READY never fire on a row ready-gate.mjs --pr would refuse
+ * (plan-open), nor on a MERGE-HOLD: line (#2737 / #2789, 2026-10-18).
  * The cap (ready-full-cap.mjs, MAX_LIVE = 8) is REPORTED, never a WAIT: since
  * 2026-10-16 (CI/CD review #2333 finding 7) GitHub's own `queue: max` lanes
  * bound the browser legs, and the cap sat at 13/3 while 12 ready PRs were open.
@@ -132,6 +136,9 @@ export function ciState(runs) {
   return { state, runId: newest.id ?? null };
 }
 
+/** ready-gate.mjs's planVerdict says open: the same rule `ready-gate --pr` exits 1 on. */
+const planOpen = (row) => !!(row.plan && row.plan.state === "open");
+
 /**
  * The decision for one row. Pure. `ctx.room` is how many more full-tier slots a
  * READY may take (default: ctx.cap.cap - ctx.cap.count).
@@ -154,7 +161,8 @@ export function decide(row, ctx = {}) {
     if (row.armed) return { action: "NONE", why: "armed (MERGE) and healthy" };
     if (row.ci !== "success") return { action: "WAIT", why: `ready, ci ${row.ci}: the full tier is not green on the head` };
     if (row.fullTier !== true) return { action: "WAIT", why: "ready, no successful full-tier job evidence on this CI run" };
-    if (gateOk && row.hold) return { action: "WAIT", why: "ready and green, but the body carries MERGE-HOLD:" };
+    if (row.hold) return { action: "WAIT", why: "ready and green, but the body carries MERGE-HOLD: (the one veto)" };
+    if (planOpen(row)) return { action: "WAIT", why: `ready and green, but ${row.plan.open.length} Plan item(s) are open (ready-gate exits 1: plan-open)` };
     if (gateOk && (ctx.armed ?? 0) >= MAX_ARMED) return { action: "WAIT", why: `ready and green, but ${MAX_ARMED} PRs are already armed` };
     if (gateOk) return { action: "ARM", why: "ready, Structural guards passed, ci succeeded" };
     return { action: "WAIT", why: `ready, Structural guards ${row.gate}` };
@@ -162,7 +170,8 @@ export function decide(row, ctx = {}) {
   if (row.ci === "queued" || row.ci === "in_progress") return { action: "WAIT", why: `draft, ci ${row.ci}` };
   if (!gateOk) return { action: "WAIT", why: `draft, Structural guards ${row.gate}` };
   if (row.ci !== "success") return { action: "WAIT", why: `draft, ci ${row.ci}: the fast tier is not green on the head` };
-  if (row.plan && row.plan.state === "open") {
+  if (row.hold) return { action: "WAIT", why: "draft is green, but the body carries MERGE-HOLD: (the one veto)" };
+  if (planOpen(row)) {
     return { action: "WAIT", why: `draft is green but ${row.plan.open.length} Plan item(s) are open (ready-gate refuses)` };
   }
   // `room` is informational since 2026-10-16: the lanes in ci.yml bound the legs.

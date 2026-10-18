@@ -82,8 +82,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/aero-flap-travel.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
-  // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
-  // asserted instead of described; under a second.
+  // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via
+  // gen-cursor-rules, the hooks — asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
   // The orchestrator/worker contract (skill agent-fleet): host-correct PR
   // subscribe tools, one fleet block, the mandated launch fields. < 0.1 s.
@@ -116,6 +116,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apca-timing.test.mjs",
   "tests/unit/apex-arg-guards.test.mjs",
   "tests/unit/apex-career-delete.test.mjs",
+  // Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.
+  "tests/unit/apex-memory.test.mjs",
   "tests/unit/apex-server-fixes.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
@@ -942,6 +944,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/session-status.test.mjs",
   "tests/unit/session-stub-surface.test.mjs",
   "tests/unit/session-transcript.test.mjs",
+  "tests/unit/setting-deps.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
   "tests/unit/settings-search.test.mjs",
@@ -959,6 +962,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The sun shadow map's depth span holds a 250 m caster: drives the real
   // ShadowPass.sunPass on a stub renderer and projects through its light VP.
   "tests/unit/shadow-pass-depth.test.mjs",
+  "tests/unit/share-card-data.test.mjs",
+  "tests/unit/share-card-layout.test.mjs",
+  "tests/unit/share-card.test.mjs",
   "tests/unit/share-code.test.mjs",
   "tests/unit/shared-math.test.mjs",
   "tests/unit/sheet-per-screen.test.mjs",
@@ -1235,6 +1241,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/validation-cli.test.mjs",
   "tests/unit/verify-live.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
+  // tools/viewer: the 3D viewer page carries the engine-built car (within 0.5 mm) and circuit. ~6 s, no browser.
+  "tests/unit/viewer.test.mjs",
   "tests/unit/visual-oracle.test.mjs",
   "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
