@@ -435,6 +435,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/lsp-eval.mjs** | apex-lsp vs grep on fixed code questions with known answers: correctness, output chars, time; `--json`. | — |
 | **mcp/lsp-mcp.mjs** | Stdio MCP code intelligence over TypeScript 7's native `tsc --lsp`: definition, references, symbols, hover, diagnostics. | — |
 | **mcp/lsp-mcp.sh** | apex-lsp MCP wrapper: serve (stdio), or def\|refs\|sym\|hover\|diag from a shell over TypeScript 7 `tsc --lsp`. | — |
+| **mcp/lsp-navigation-bench.mjs** | Measure real-tree LSP navigation latency and output size, with cold/first queries separated from warm queries. | — |
 | **mcp/mcp-cli.mjs** | chrome-devtools MCP over stdio against a running build: `probe --backend webgpu`, `--eval`, `--console RE`, `--dry-run`. | mcp-probe |
 | **mcp/mcp-preflight.sh** | Sourced by the MCP launchers: bounded wait (<= 60 s) for the SessionStart `npm install`; stderr only. | mcp-probe |
 | **mcp/mcp-smoke.mjs** | Pokes the repo MCP wrappers (`apex_status`, probe help, chrome-devtools `status`, tinyfish `help`). No Chromium. | check-changes |
