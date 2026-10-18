@@ -925,14 +925,14 @@ const FlybySeq = (function () {
   const DEFAULT = [
     // ---- establish: where are we -------------------------------------------
     {
-      id: "wide", dur: 0.09, ease: "inOut",
+      id: "wide", dur: 0.09, ease: "inOut", sway: 0.35,
       eye: [{ at: "centre", bear: -0.30, distR: 1.10, yR: 0.36 },
             { at: "centre", bear: -0.12, distR: 1.00, yR: 0.32 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
       fov: [36, 38],
     },
     {
-      id: "wide2", dur: 0.08, ease: "inOut",
+      id: "wide2", dur: 0.08, ease: "inOut", sway: 0.25,
       eye: [{ at: "centre", bear: 2.35, distR: 0.80, yR: 0.30 },
             { at: "centre", bear: 2.55, distR: 0.70, yR: 0.25 }],
       look: [{ at: "centre", distR: 0, yR: 0 }, { at: "centre", distR: 0, yR: 0 }],
@@ -1038,11 +1038,57 @@ const FlybySeq = (function () {
       fov: [36, 40],
     },
   ];
+  const GRID_SHOTS = Object.freeze(DEFAULT.filter((shot) => /^grid/.test(shot.id || "")));
+  function gridProgress(lightsLit) {
+    const lit = Math.max(1, Math.min(3, lightsLit | 0));
+    return (lit - 0.5) / 3;
+  }
 
   // ---- solve ---------------------------------------------------------------
 
   const _eye = [0, 0, 0], _tgt = [0, 0, 0];
   const _out = { eye: _eye, tgt: _tgt, fov: 50, index: 0, id: "", cut: false, lift: 0, corner: 0 };
+
+  /* ONE CAR THROUGH EACH CORNER SHOT. The menu field is scenery, not a
+     simulation: move the player's menu model along the baked racing line while a turn is on
+     air, then put it back on its grid box before the finale. The apex is the
+     midpoint by construction; speedAt supplies both the travel window and the
+     displayed wheel/body speed. This is broadcast-only and never runs on the
+     player's physics state or after the menu hands over to the countdown. The
+     player's model is deliberate: the field renderer culls rivals more than
+     550 m from the grid-seated player, while it always keeps that model. */
+  let _heroCars = null, _hero = null, _heroHome = null;
+  function restoreHero() {
+    if (_hero && _heroHome) Object.assign(_hero, _heroHome);
+  }
+  function setHeroCars(cars) {
+    if (cars === _heroCars) return;
+    restoreHero();
+    _heroCars = Array.isArray(cars) ? cars : null;
+    _hero = _heroCars && (_heroCars.find((c) => c && c.isPlayer) || _heroCars[0]) || null;
+    _heroHome = _hero ? {
+      s: _hero.s, x: _hero.x, xVis: _hero.xVis, px: _hero.px, pz: _hero.pz, speed: _hero.speed,
+      rPrevS: _hero.rPrevS, rPrevX: _hero.rPrevX, rPrevPx: _hero.rPrevPx, rPrevPz: _hero.rPrevPz,
+    } : null;
+  }
+  const _heroSmp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 10 };
+  function driveHero(track, apexS, t, seconds, cars) {
+    if (cars !== undefined) setHeroCars(cars);
+    if (!_hero || !track || typeof DrivingLine === "undefined" || !DrivingLine.speedAt ||
+        typeof TrackLine === "undefined" || !TrackLine.at) return null;
+    const apexV = DrivingLine.speedAt(apexS);
+    if (!(apexV > 0)) return null;
+    let s = apexS + (Math.max(0, Math.min(1, t)) - 0.5) * apexV * Math.max(0, seconds || 0);
+    s %= track.total; if (s < 0) s += track.total;
+    const line = TrackLine.at(track, s), v = DrivingLine.speedAt(s);
+    Tracks.sample(track, s, _heroSmp);
+    const x = line && isFinite(line.x) ? line.x : 0;
+    _hero.s = _hero.rPrevS = s; _hero.x = _hero.rPrevX = _hero.xVis = x;
+    _hero.px = _hero.rPrevPx = _heroSmp.p[0] + _heroSmp.r[0] * x;
+    _hero.pz = _hero.rPrevPz = _heroSmp.p[2] + _heroSmp.r[2] * x;
+    _hero.speed = v > 0 ? v : apexV;
+    return _hero;
+  }
 
   /** The camera at `u` (0..1) through the whole sequence. Returns a POOLED
    *  object — read it, do not keep it. `cut` is true on the frame a new shot
@@ -1164,6 +1210,15 @@ const FlybySeq = (function () {
     // number by now), or 0. The loading card marks it on its map (airCorner).
     const k = shotCorner(shot);
     _out.corner = _airCorner = typeof k === "number" && k > 0 ? k : 0;
+    if (_out.corner) driveHero(track, cornerS(track, _out.corner), t, dur / total * _flyS);
+    else restoreHero();
+    const reduced = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const sway = swayAt(shot, t, reduced);
+    if (sway) {
+      let dx = _tgt[0] - _eye[0], dz = _tgt[2] - _eye[2], dl = Math.hypot(dx, dz) || 1;
+      dx /= dl; dz /= dl; _eye[0] -= dz * sway; _eye[2] += dx * sway;
+    }
+    syncPresentation(presentation(u, list, reduced), _out.cut);
     return _out;
   }
   let _lastIdx = -1, _airCorner = 0;
@@ -1424,6 +1479,44 @@ const FlybySeq = (function () {
   const PAN_RUNGS = Math.floor(Math.log(PAN_MIN_K) / Math.log(PAN_K) + 1e-9);   // 0.85^21 = 0.033: the walk's last rung (0.103 left a lift ramp whipping at the bottom)
   let _flyS = REF_S;
   function setDuration(ms) { _flyS = ms > 0 ? ms / 1000 : REF_S; }
+  function boundaries(shots) {
+    const list = (shots && shots.length) ? shots : DEFAULT;
+    let total = 0;
+    for (const shot of list) total += shot.dur || 0;
+    if (!(total > 0)) return [];
+    const out = []; let acc = 0;
+    for (let i = 0; i < list.length - 1; i++) { acc += list[i].dur || 0; out.push(acc / total); }
+    return out;
+  }
+  const DIP_MS = 150, REDUCED_DIP_MS = 300;
+  function presentation(u, shots, reduced) {
+    const on = shotAt(u, shots), cuts = boundaries(shots);
+    let near = Infinity;
+    for (const cut of cuts) near = Math.min(near, Math.abs((+u || 0) - cut) * _flyS * 1000);
+    const dipMs = reduced ? REDUCED_DIP_MS : DIP_MS;
+    const id = on.id || "";
+    return {
+      dip: near < dipMs ? 1 - near / dipMs : 0,
+      dipMs,
+      sectors: id === "wide" ? on.t : (/^wide/.test(id) ? 1 : 0),
+    };
+  }
+  function swayAt(shot, t, reduced) {
+    if (reduced || !(shot && shot.sway > 0)) return 0;
+    return shot.sway * Math.sin(Math.max(0, Math.min(1, t)) * Math.PI * 2);
+  }
+  let _dipTimer = 0;
+  function syncPresentation(p, cut) {
+    if (typeof document === "undefined" || !document.getElementById) return;
+    const el = document.getElementById("loading");
+    if (!el || !el.dataset || el.dataset.phase !== "run") return;
+    el.dataset.sectors = p.sectors > 0 ? p.sectors.toFixed(3) : "";
+    if (!cut) return;
+    el.dataset.dip = "";
+    if (el.animate) el.animate([{ opacity: 1 }, { opacity: 0.78 }, { opacity: 1 }], { duration: p.dipMs, easing: "ease-in-out" });
+    clearTimeout(_dipTimer);
+    _dipTimer = setTimeout(() => { if (el.dataset) delete el.dataset.dip; }, p.dipMs);
+  }
   function squeeze(track, pair, k) {
     const a = pair[0], b = pair[1];
     if (trackAnchored(a) && trackAnchored(b)) {
@@ -1964,7 +2057,8 @@ const FlybySeq = (function () {
     landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
     anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
     poseFromWorld, shotFromView, nearestCorner, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
-    DEFAULT, EASE,
+    boundaries, presentation, swayAt, setHeroCars, driveHero, gridProgress,
+    DEFAULT, GRID_SHOTS, EASE,
     POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX, PARA_MAX,
   };
 })();

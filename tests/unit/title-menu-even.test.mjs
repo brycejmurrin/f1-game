@@ -171,7 +171,7 @@ test("narrow title column hides the native bar and reserves a tap under the last
   );
   assert.match(
     menus,
-    /has\(#home-motion:not\(\[hidden\]\)\):has\(#install-chip:not\(\[hidden\]\)\) #overlay #menu-buttons/,
+    /has\(> :where\(#overlay\) > #home-motion:not\(\[hidden\]\)\):has\(> #install-chip:not\(\[hidden\]\)\) #overlay #menu-buttons/,
     "two bottom chips share one :has so INSTALL cannot cover the last door",
   );
   assert.match(
@@ -290,12 +290,12 @@ test("INSTALL APP lifts one tap when ANIMATE BACKGROUND is showing", () => {
   const overlays = readCssSource("css/overlays.css");
   assert.match(
     overlays,
-    /body\[data-shape="tall"\]:has\(#home-motion:not\(\[hidden\]\)\) #install-chip \{[^}]*bottom:\s*calc\(var\(--safe-b\) \+ var\(--tap\) \+ var\(--gap\)\)/,
+    /body\[data-shape="tall"\]:has\(> :where\(#overlay\) > #home-motion:not\(\[hidden\]\)\) #install-chip \{[^}]*bottom:\s*calc\(var\(--safe-b\) \+ var\(--tap\) \+ var\(--gap\)\)/,
     "tall title lifts INSTALL when ANIMATE is showing (both chips share the bottom)",
   );
   assert.doesNotMatch(
     overlays,
-    /^body:has\(#home-motion:not\(\[hidden\]\)\) #install-chip \{/m,
+    /^body:has\(> :where\(#overlay\) > #home-motion:not\(\[hidden\]\)\) #install-chip \{/m,
     "must not lift INSTALL on desktop Classic where ANIMATE stays top-left",
   );
   // experience.css's live-scene padding shorthand is @layer overlays; a

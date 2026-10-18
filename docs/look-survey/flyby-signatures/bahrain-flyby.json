@@ -1,0 +1,219 @@
+{
+  "track": "bahrain",
+  "backend": "webgl2",
+  "timeOfDay": "night",
+  "weather": "dry",
+  "seed": 3,
+  "grid": "tier",
+  "shots": null,
+  "sheet": "bahrain-sheet.png",
+  "frames": [
+    {
+      "u": 0,
+      "shot": "wide",
+      "index": 0,
+      "fov": 36,
+      "eye": [
+        403.93,
+        249.92,
+        -647.82
+      ],
+      "target": [
+        90.63,
+        76,
+        51.74
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "bahrain-u000-wide.png"
+    },
+    {
+      "u": 0.125,
+      "shot": "wide2",
+      "index": 1,
+      "fov": 37.1,
+      "eye": [
+        297.12,
+        183.88,
+        538.09
+      ],
+      "target": [
+        90.63,
+        57.32,
+        51.74
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "bahrain-u013-wide2.png"
+    },
+    {
+      "u": 0.25,
+      "shot": "landmark1",
+      "index": 2,
+      "fov": 38,
+      "eye": [
+        -426.07,
+        16,
+        392.34
+      ],
+      "target": [
+        -366.9,
+        8.56,
+        425.4
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "bahrain-u025-landmark1.png"
+    },
+    {
+      "u": 0.375,
+      "shot": "turn-first",
+      "index": 4,
+      "fov": 39.2,
+      "eye": [
+        378.24,
+        8.67,
+        570.38
+      ],
+      "target": [
+        344.82,
+        0.72,
+        598.69
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "bahrain-u038-turn-first.png"
+    },
+    {
+      "u": 0.5,
+      "shot": "turn-mid",
+      "index": 5,
+      "fov": 43.8,
+      "eye": [
+        129.21,
+        8.14,
+        433.08
+      ],
+      "target": [
+        158.82,
+        0.59,
+        413.56
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "bahrain-u050-turn-mid.png"
+    },
+    {
+      "u": 0.625,
+      "shot": "grid-walk",
+      "index": 7,
+      "fov": 49.7,
+      "eye": [
+        387.89,
+        1.67,
+        -86.28
+      ],
+      "target": [
+        386.08,
+        0.69,
+        0.3
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": 0,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "bahrain-u063-grid-walk.png"
+    },
+    {
+      "u": 0.75,
+      "shot": "grid-crane",
+      "index": 8,
+      "fov": 31.6,
+      "eye": [
+        390.58,
+        5,
+        -130.53
+      ],
+      "target": [
+        385.62,
+        0.77,
+        -44.79
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": -0.22,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "bahrain-u075-grid-crane.png"
+    },
+    {
+      "u": 0.875,
+      "shot": "grid-front",
+      "index": 9,
+      "fov": 40,
+      "eye": [
+        378.84,
+        1.76,
+        40.9
+      ],
+      "target": [
+        382.36,
+        0.54,
+        19.02
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": 2.51,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "bahrain-u088-grid-front.png"
+    },
+    {
+      "u": 1,
+      "shot": "grid-mine",
+      "index": 10,
+      "fov": 40,
+      "eye": [
+        383.97,
+        1.38,
+        -66.02
+      ],
+      "target": [
+        379.89,
+        1.15,
+        74.96
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": 2.8,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "bahrain-u100-grid-mine.png"
+    }
+  ]
+}

@@ -80,7 +80,7 @@ const MULTI_GLOBAL = {
 // adds the writer (e.g. a new shader file merging into GLXShaders).
 const SHARED_GLOBALS = {
   GLXShaders: 4,  // shaders/lit|sky|fx|post.js each merge their GLSL sources in
-  TLXShaders: 8,  // the three/ TSL family does the same for the deferred backend
+  TLXShaders: 9,  // the three/ TSL family does the same for the deferred backend
   // LAZY_AUDIO reinjection: stub.js then the real module (cap 2 each).
   GameAudio: 2, GameAudioSignal: 2, GameAudioSoundtrack: 2, GameAudioRadioFx: 2,
   GameAudioToneModel: 2, CarSfx: 2, ErsLayer: 2, RivalAudio: 2, VoicePack: 2,
@@ -129,7 +129,7 @@ const KNOWN_EXTERNAL_READS = {
     "__APEX_NATIVE__",              // Electron preload
     "Capacitor",                    // Capacitor runtime; isNativePlatform / getPlatform / Plugins
   ],
-  "js/ui/select-screen.js": ["__APEX_BUILD", "TrackDesigner"],   // exportRecovery stamps the shell build id; EDIT IN DESIGNER on a custom circuit's preview (typeof-guarded behind CustomTracks.ensureEditor())
+  "js/ui/select-screen.js": ["__APEX_BUILD", "TrackDesigner"],   // exportRecovery stamps the shell build id; EDIT on a custom circuit's preview (typeof-guarded behind CustomTracks.ensureEditor())
   "js/career/career-backup.js": ["__APEX_BUILD"],     // backup envelope stamps the shell build id
   "js/editor/codec.js": ["__APEX_BUILD"],             // the track file envelope stamps the shell build id, like the backup
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —

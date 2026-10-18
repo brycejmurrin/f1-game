@@ -18,15 +18,20 @@
     } = TSL;
     const { vnoise, ignoise } = ctx.chunks;
     const SHD = ctx.shadow || null;   // tlx-shadow.js subsystem (godray needs it)
+    // Fixed-target viewport mapping (tsl-viewport.js, #2655). Without ctx.vp (or
+    // with the flag off) every helper is the identity: the graph below is the
+    // one that shipped. Each pass gets its OUTPUT view V (the logical size the
+    // chain sets before the draw); every texture it reads is a VP.tex wrapper.
+    const VP = ctx.vp || { enabled: false, view: () => null, uv: () => screenUV, tex: (n) => n };
 
     // GL bottom-left uv -> the node system's top-left texture space.
     const TL = (u) => vec2(u.x, u.y.oneMinus());
     // Shadow-map UV flip — the tsl-lit.js flipUV convention for compare taps.
     const flipUV = TL;
 
-    const sceneT = texture(ctx.sceneTex);
-    const tagT = texture(ctx.sceneTagTex || ctx.sceneTex);
-    const depthT = texture(ctx.sceneDepthTex);
+    const sceneT = VP.tex(texture(ctx.sceneTex));
+    const tagT = VP.tex(texture(ctx.sceneTagTex || ctx.sceneTex));
+    const depthT = VP.tex(texture(ctx.sceneDepthTex));
     const dirtT = texture(ctx.dirtTex || ctx.blackTex);
     const depthAt = (uvGl) => float(depthT.sample(TL(uvGl)));
     /** Fullscreen overwrite pass material (POST_VS role is three's QuadMesh). */
@@ -48,10 +53,11 @@
     // threshold is in EXPOSED units (glsl-post.js BRIGHT_FS): the test runs on
     // luminance x exposure; the output stays scene-referred.
     const brightU = { threshold: uniform(0.75), exposure: uniform(1.0) };
+    const brightV = VP.view();
     const bright = {
-      U: brightU,
+      U: brightU, V: brightV,
       mat: passMaterial(Fn(() => {
-        const suv = vec2(screenUV).toVar();
+        const suv = vec2(VP.uv(brightV)).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const c = vec3(sceneT.sample(TL(vUV)).rgb).toVar();
         const l = max(max(c.r, c.g), c.b).mul(brightU.exposure).toVar();
@@ -70,10 +76,11 @@
     // weights and order, so AO keeps exactly one blur pair. aoA 0 passes the
     // centre alpha through (a dead 1.0 for the R8 AO targets and night godray).
     function makeBlur(key) {
-      const tex = texture(ctx.blackTex);
+      const tex = VP.tex(texture(ctx.blackTex));
+      const V = VP.view();
       const U = { dir: uniform(new THREE.Vector2()), aoA: uniform(0) };
       const mat = passMaterial(Fn(() => {
-        const suv = vec2(screenUV).toVar();
+        const suv = vec2(VP.uv(V)).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const o1 = U.dir.mul(1.3846153846);
         const o2 = U.dir.mul(3.2307692308);
@@ -85,7 +92,7 @@
         s.addAssign(tex.sample(TL(vUV.sub(o2))).mul(0.0702702703));
         return vec4(s.rgb, select(U.aoA.greaterThan(0.5), s.a, c0.a));
       })(), key);
-      return { mat, tex, U };
+      return { mat, tex, U, V };
     }
     const blurAO = makeBlur("tlx-post-blur-ao");
     const blurGR = makeBlur("tlx-post-blur-godray");
@@ -99,12 +106,13 @@
     const blurGRV = makeBlur("tlx-post-blur-gr-v");
 
     function makeDown(key) {
-      const downTex = texture(ctx.blackTex);
+      const downTex = VP.tex(texture(ctx.blackTex));
       const downU = { texel: uniform(new THREE.Vector2()), karis: uniform(0) };
+      const V = VP.view();
       return {
-        tex: downTex, U: downU,
+        tex: downTex, U: downU, V,
         mat: passMaterial(Fn(() => {
-          const suv = vec2(screenUV).toVar();
+          const suv = vec2(VP.uv(V)).toVar();
           const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
           const t = vec2(downU.texel).toVar();
           const tap = (x, y) => vec3(downTex.sample(TL(vUV.add(t.mul(vec2(x, y))))).rgb);
@@ -150,10 +158,11 @@
      *    would re-inject it at full sharpness). Shared BLOOM SPREAD knob. */
     const spread = uniform(1.0);
     function makeUp(additive, key) {
-      const tex = texture(ctx.blackTex);
+      const tex = VP.tex(texture(ctx.blackTex));
+      const V = VP.view();
       const U = { texel: uniform(new THREE.Vector2()) };
       const mat = passMaterial(Fn(() => {
-        const suv = vec2(screenUV).toVar();
+        const suv = vec2(VP.uv(V)).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const t = vec2(U.texel.mul(spread)).toVar();
         const tp = (x, y) => vec3(tex.sample(TL(vUV.add(t.mul(vec2(x, y))))).rgb);
@@ -165,7 +174,7 @@
       if (additive) {
         m8Additive(mat);
       }
-      return { mat, tex, U };
+      return { mat, tex, U, V };
     }
     function m8Additive(mat) {
       mat.blending = THREE.CustomBlending;
@@ -282,10 +291,11 @@
         });
         return res;
     }
+    const ssaoV = VP.view();
     const ssao = {
-      U: ssaoU,
+      U: ssaoU, V: ssaoV,
       mat: passMaterial(Fn(() => {
-        const suv = vec2(screenUV).toVar();
+        const suv = vec2(VP.uv(ssaoV)).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const d = depthAt(vUV).toVar();
         const res = ssaoTerm(vUV, d);
@@ -353,11 +363,12 @@
         return res;
       });
 
+      const grV = VP.view();
       godray = {
-        U: grU,
+        U: grU, V: grV,
         lightPos: grPos, lightCol: grCol, lightDir: grDir, lightGeo: grGeo,
         mat: passMaterial(Fn(() => {
-          const suv = vec2(screenUV).toVar();
+          const suv = vec2(VP.uv(grV)).toVar();
           const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
           const d = depthAt(vUV).toVar();
           // D7: SSAO folded in (same target size, so the same vUV / pixel and
@@ -510,12 +521,12 @@
     // key). The godray slot therefore gets its own "off" texture (it shared
     // blackTex with bloom), and the folded AO is read through godrayTexN, never
     // by binding godrayRT to ssaoTexN as well.
-    const bloomTexN = texture(ctx.blackTex);
-    const ssaoTexN = texture(ctx.whiteTex);
+    const bloomTexN = VP.tex(texture(ctx.blackTex));
+    const ssaoTexN = VP.tex(texture(ctx.whiteTex));
     const grOffTex = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
     grOffTex.colorSpace = THREE.NoColorSpace;
     grOffTex.needsUpdate = true;
-    const godrayTexN = texture(grOffTex);
+    const godrayTexN = VP.tex(texture(grOffTex));
 
     const acesTonemap = (x0) => {
       const x = max(x0, vec3(0.0));
@@ -562,11 +573,12 @@
       c.addAssign(vec3(d0n.add(d1n).sub(1.0).div(255.0)));
     }
 
+    const compV = VP.view();
     const composite = {
-      U: C, tex: { bloom: bloomTexN, ssao: ssaoTexN, godray: godrayTexN }, grOffTex,
+      U: C, V: compV, tex: { bloom: bloomTexN, ssao: ssaoTexN, godray: godrayTexN }, grOffTex,
       mat: passMaterial(Fn(() => {
         // anchors
-        const suv = vec2(screenUV).toVar();
+        const suv = vec2(VP.uv(compV)).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const fragXY = vec2(screenCoordinate.xy).toVar();
 
@@ -971,7 +983,8 @@
      *    (lMax-lMin < max(0.04, lMax*0.125)) so flat regions stay pixel-exact. */
     const mirrorTex = texture(ctx.blackTex);
     const mirrorU = { rect: uniform(new THREE.Vector4(0, 0, 1, 1)), hdr: uniform(1), flip: uniform(1) };   // flip 0: the broadcast PiP
-    const fxaaTex = texture(ctx.blackTex);
+    const fxaaTex = VP.tex(texture(ctx.blackTex));
+    const fxaaV = VP.view();
     // mir 1: the mirror inset is drawn INSIDE this pass (hunt D8; mirrorU's
     // rect / hdr / flip, its own texture node on the same mirror target).
     const fxaaMirTex = texture(ctx.blackTex);
@@ -980,9 +993,9 @@
     const FXAA_STEP = [1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 12.0];
     const FXAA_SUBPIX = 0.75;
     const fxaa = {
-      tex: fxaaTex, U: fxaaU, mirTex: fxaaMirTex,
+      tex: fxaaTex, U: fxaaU, V: fxaaV, mirTex: fxaaMirTex,
       mat: passMaterial(Fn(() => {
-        const suv = vec2(screenUV).toVar();
+        const suv = vec2(VP.uv(fxaaV)).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const t = vec2(fxaaU.texel).toVar();
         const fxL = (p) => fxLuma(fxaaTex.sample(TL(p)).rgb);
@@ -1069,14 +1082,18 @@
     /* SGSR1 spatial upscale (SGSR_FS in glsl-post.js) — present-size
      *    reconstruct from render-size LDR/FXAA. 4-tap gatherComp (no
      *    textureGather) for GLX/WGX parity. Flag-gated in tlx-post.js. */
-    const sgsrTex = texture(ctx.blackTex);
+    const sgsrTex = VP.tex(texture(ctx.blackTex));
     const sgsrU = { viewport: uniform(new THREE.Vector4(1, 1, 1, 1)) }; // (1/w,1/h,w,h)
+    // Fixed targets (VP.enabled): plain 1 = the bilinear read only, the stand-in for the
+    // browser's canvas upscale when SGSR itself is not the player's choice.
+    if (VP.enabled) sgsrU.plain = uniform(1);
+    const sgsrV = VP.view();
     const sgsr = {
-      tex: sgsrTex, U: sgsrU,
+      tex: sgsrTex, U: sgsrU, V: sgsrV,
       mat: passMaterial(Fn(() => {
         const EdgeThreshold = float(8.0 / 255.0);
         const EdgeSharpness = float(2.0);
-        const suv = vec2(screenUV).toVar();
+        const suv = vec2(VP.uv(sgsrV)).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const vp = vec4(sgsrU.viewport).toVar();
         const t = vec2(vp.x, vp.y).toVar();
@@ -1099,7 +1116,9 @@
         const edgeVote = abs(left0.z.sub(left0.y))
           .add(abs(color.w.sub(left0.y)))
           .add(abs(color.w.sub(left0.z))).toVar();
-        If(edgeVote.greaterThan(EdgeThreshold), () => {
+        const sharpGate = VP.enabled ? edgeVote.greaterThan(EdgeThreshold).and(sgsrU.plain.lessThan(0.5))
+          : edgeVote.greaterThan(EdgeThreshold);
+        If(sharpGate, () => {
           const coord = vec2(coord0.x.add(t.x), coord0.y).toVar();
           const right0 = gatherG(coord.add(vec2(t.x, 0.0))).toVar();
           const ud0 = gatherG(coord.add(vec2(0.0, t.y.negate()))).toVar();
@@ -1154,12 +1173,13 @@
 
     /* BLIT (debug ?viz= bisect): paint any chain texture to the canvas.
      *    mono=1 spreads .r to rgb (SSAO); gain rescales HDR sources. */
-    const blitTex = texture(ctx.blackTex);
+    const blitTex = VP.tex(texture(ctx.blackTex));
     const blitU = { mono: uniform(0), gain: uniform(1) };
+    const blitV = VP.view();
     const blit = {
-      tex: blitTex, U: blitU,
+      tex: blitTex, U: blitU, V: blitV,
       mat: passMaterial(Fn(() => {
-        const suv = vec2(screenUV).toVar();
+        const suv = vec2(VP.uv(blitV)).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const s = vec4(blitTex.sample(TL(vUV))).toVar();
         const c = select(blitU.mono.greaterThan(0.5), vec3(s.r), s.rgb).mul(blitU.gain);

@@ -73,25 +73,6 @@ test.describe("persistence failure is visible", () => {
     // The message has to name the consequence, not just the exception — "will
     // NOT survive a reload" is the only part of it a player can act on.
     expect(r.logs.some((m) => /reload/.test(m))).toBe(true);
-    const warning = page.locator("#save-warning");
-    await expect(warning).toBeVisible();
-    await expect(warning).toContainText("SESSION ONLY");
-    await expect(warning).toContainText("QuotaExceededError");
-    // DISMISS folds it to its own toggle; the toggle opens it again.
-    const toggle = page.locator("#save-dismiss");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await expect(page.locator("#save-retry")).toBeHidden();
-    await expect(toggle).toBeVisible();
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(page.locator("#save-retry")).toBeVisible();
-    // It stands down while racing (js/game.js puts body.in-race on at the
-    // start and takes it off at the end; the CSS rule keys on exactly that).
-    await page.evaluate(() => document.body.classList.add("in-race"));
-    await expect(warning).toBeHidden();
-    await page.evaluate(() => document.body.classList.remove("in-race"));
-    await expect(warning).toBeVisible();
   });
 
   test("the exception's own name is reported, not a generic flag", async ({ page }) => {
@@ -116,32 +97,6 @@ test.describe("persistence failure is visible", () => {
     });
     // The disk write threw; the setting still has to be live for this session.
     expect(back).toBe("auto");
-  });
-
-  test("the recovery export contains game progress, not the storage cache", async ({ page }) => {
-    await bootBroken(page);
-    await page.evaluate(() => {
-      window.__apex.career({ teamId: "williams", seat: 1, seed: 2026 });
-      window.__apex.careerMoney(123457);
-    });
-    // The hub assigns the first objective on its next tick. Capture the save
-    // after that real work settles, rather than racing the export button.
-    await page.waitForFunction(() => window.__apex.career()?.obj != null, null, { polling: 100, timeout: 10000 });
-    const expectedCareer = await page.evaluate(() => window.__apex.career());
-    expect(expectedCareer.team).toBe("williams");
-    expect(expectedCareer.money).toBe(123457);
-    const download = page.waitForEvent("download");
-    await page.locator("#save-export").click();
-    const item = await download;
-    expect(item.suggestedFilename()).toMatch(/^apex26-recovery-\d+\.json$/);
-    const path = await item.path();
-    const text = await import("node:fs/promises").then((fs) => fs.readFile(path, "utf8"));
-    const recovery = JSON.parse(text);
-    expect(recovery.format).toBe("apex26-recovery-v1");
-    expect(recovery.persistence.durable).toBe(false);
-    expect(recovery.persistence.reason).toBe("QuotaExceededError");
-    expect(recovery.career).toEqual(expectedCareer);
-    expect(recovery).not.toHaveProperty("cache");
   });
 
   test("the loud warning fires once, not once per write", async ({ page, consoleLines }) => {

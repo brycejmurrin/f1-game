@@ -54,10 +54,10 @@ test("CSS: flag and announce clear the gaps strip; tyre stack; strat under REL",
     "announce max-height budgets the caution step (flag-slot + 40), not a bare 5.5em");
   // STRATEGY used to sidestep by a literal 168px and sat on REL at HUD 150%.
   assert.match(CSS,
-    /body:not\(\.desktop\):has\(#hud-rel:not\(\[hidden\]\)\) #hud-strat:not\(\[data-hl-user\]\)[\s\S]{0,200}?--rc-rel-h/,
+    /body:not\(\.desktop\):has\(> :where\(#hud\) > #hud-rel:not\(\[hidden\]\)\) #hud-strat:not\(\[data-hl-user\]\)[\s\S]{0,200}?--rc-rel-h/,
     "with REL on, STRATEGY stacks under it via --rc-rel-h (not a 168px sidestep)");
   assert.doesNotMatch(CSS,
-    /body:not\(\.desktop\):has\(#hud-rel:not\(\[hidden\]\)\) #hud-strat:not\(\[data-hl-user\]\)\s*\{\s*left:\s*calc\(168px/,
+    /body:not\(\.desktop\):has\(> :where\(#hud\) > #hud-rel:not\(\[hidden\]\)\) #hud-strat:not\(\[data-hl-user\]\)\s*\{\s*left:\s*calc\(168px/,
     "the 168px STRATEGY sidestep is gone — it overlapped REL at phoneL 150%");
   assert.match(CSS, /--hud-cluster-y/,
     "announce height-caps against --hud-cluster-y");

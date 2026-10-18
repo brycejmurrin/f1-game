@@ -5563,3 +5563,28 @@ Not measured: the real-GPU cost of the menu-time `compileAsync` (it runs hidden,
 while the sheet is read) and the three flyby-time links, which seat no cars in the
 hidden frame (the car loop breaks in the menu) — the remaining lever if a hitch is
 seen on the grid shots.
+
+## 2am. Race-entry evidence available without a new runner harness (2026-10-17)
+
+Grok Bot selected route B for #1651/#2572: preserve the historical Apple/Metal
+before arm and cite existing instrumented ship runs, with no workflow, tool or
+runtime off-switch change.
+
+| circuit / backend | historical before, longest / total block | ship after, longest / total block |
+|---|---:|---:|
+| vegas GLX / Metal | 2193 / 4856 ms | 1722 / 6931 ms (`38513041950`, `7f0a0c240`) |
+| vegas TLX / WebGPU / Metal | — | 1134 / 7935 ms (same run) |
+| spa GLX / Metal | — | 1326 / 5876 ms (`38507400652`, `a52e9108b`) |
+| spa TLX / WebGPU / Metal | — | 1486 / 8457 ms (same run) |
+
+Both after runs reported Apple adapters, `anyHardware: true` and a green
+`gpu-census.yml` verdict. The numbers do not prove a win: the only comparable
+row, vegas GLX, has a shorter longest block but more total blocking.
+
+**Gaps:** the historical before arm has no named spans or spa sample. The
+selected after revisions expose only `raceCall`, `trackReady` and `parked`, not
+the later detailed span analyzer, so no named-span delta exists. The #2572
+same-circuit rebuild, context-loss, visibility/pageshow, orientation,
+quality-tier and night-toggle sweep was not executed on a real GPU: the
+existing workflow runs one race per backend and does not invoke it. Those
+requirements remain follow-up harness work.

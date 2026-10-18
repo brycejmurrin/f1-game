@@ -156,7 +156,9 @@ test("no CSS selector can never match", () => {
         if (!s) continue;
         // Blank out parenthesised arguments before looking for combinators:
         // `body:has(#x > #y)` is a body-rooted rule, not a descendant of #x.
-        const outer = s.replace(/\([^()]*\)/g, (m) => " ".repeat(m.length));
+        // Innermost first, until none is left: `html:has(> body > #x:not([hidden]))` nests.
+        let outer = s, prev;
+        do { prev = outer; outer = outer.replace(/\([^()]*\)/g, (m) => " ".repeat(m.length)); } while (outer !== prev);
         if (/[\s>+~](body|html)\b/.test(outer)) {
           bad.push(`${f}: body/html as a descendant — ${s.slice(0, 100)}`);
         }

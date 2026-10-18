@@ -2089,10 +2089,6 @@
       <!-- Fades drop ALPHA and repeat the colour. SVG gradients are not
            premultiplied, so a stop of `transparent` is transparent BLACK and
            would smear a grey halo through the red. -->
-      <linearGradient id="tc-edge" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stop-color="currentColor" stop-opacity="0.85"/>
-        <stop offset="1" stop-color="currentColor" stop-opacity="0"/>
-      </linearGradient>
       <!-- Ground trails fade AWAY from the car, so the near end is solid and
            the far end dissolves. currentColor, not a literal, so the whole
            layer still themes off the one `color` declaration. -->
@@ -2101,11 +2097,6 @@
         <stop offset="0.30" stop-color="currentColor" stop-opacity="0.62"/>
         <stop offset="0.62" stop-color="currentColor" stop-opacity="0.18"/>
         <stop offset="1" stop-color="currentColor" stop-opacity="0"/>
-      </linearGradient>
-      <!-- Brush marks: a loaded stroke starts wet and runs dry. -->
-      <linearGradient id="tc-ink" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="currentColor" stop-opacity="0.72"/>
-        <stop offset="1" stop-color="currentColor" stop-opacity="0.16"/>
       </linearGradient>
     </defs>
     <!-- THE WHOLE CAR, ON THE GAME'S OWN CAMERA. Shot the real mesh with
@@ -3631,6 +3622,7 @@
 <script defer crossorigin="anonymous" src="js/input/input.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/stub.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/circuit-lore.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/data/flyby-overrides.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/parts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liveries.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/custom-liveries.js?v=dev"></script>
@@ -3742,6 +3734,7 @@
 <script defer crossorigin="anonymous" src="js/camera/cam-tuner-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/brake-cue.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/steer-tuning.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/perf/thermal-drift.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/governor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/loop-health.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/render-rate.js?v=dev"></script>
@@ -3780,6 +3773,8 @@
 <script defer crossorigin="anonymous" src="js/ui/screen-looks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/debris-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/metrics-overlay.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/perf/soak-run.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/perf/phone-recorder.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-comfort.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/fov-fit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage.js?v=dev"></script>

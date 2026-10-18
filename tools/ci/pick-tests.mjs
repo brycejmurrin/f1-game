@@ -204,6 +204,7 @@ export const RULES = [
   [/^js\/audio\/engine\.js/, ["audio-unit"], "GameAudio init attach of the rival pass-by pool"],
   [/^js\/audio\/ers-layer\.js/, ["audio-unit"], "MGU-K electric deploy/harvest + overtake/boost cue"],
   [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
+  [/^js\/perf\/(phone-recorder|soak-run)\.js/, ["phone-recorder"], "PHONE TEST recorder + AUTO SOAK (#1633)"],
   [/^js\/perf\/(metrics-overlay|race-entry-profile)\.js/, ["perf-frametime", "ui"], "frametime bench seam + metrics overlay"],
   [/^js\/perf\/governor\.js/, ["hooks", "modes", "state-unit"], ""],
   [/^tests\/specs\/perf-frametime\.spec\.js/, ["perf-frametime"], "SwiftShader frame-time regression lane (soft by default)"],

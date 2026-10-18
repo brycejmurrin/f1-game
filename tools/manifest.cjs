@@ -233,6 +233,7 @@ const FULL = [
   // The announcer's authored half. Data only, read at CALL time and guarded on
   // the global, so the order is for tidiness rather than correctness.
   "js/data/circuit-lore.js",
+  "js/data/flyby-overrides.js",
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
@@ -349,6 +350,7 @@ const FULL = [
   "js/physics/brake-cue.js",
   // driving-cues.js is LAZY_AUDIO (SteerTuning and game.js already typeof-guard it).
   "js/input/steer-tuning.js",
+  "js/perf/thermal-drift.js",    // ThermalDrift: pure slow-drift detector + opt-in 45/30 render gate (#2652); before governor
   "js/perf/governor.js",
   "js/perf/loop-health.js",
   "js/perf/render-rate.js",   // RenderRate: phones draw every 2nd rAF on a 100 Hz+ display (physics unchanged)
@@ -387,6 +389,8 @@ const FULL = [
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
   "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
+  "js/perf/soak-run.js",       // SoakRun: AUTO SOAK, the hands-free soak (drives the player INPUT only; soak-gated; before game.js binds it)
+  "js/perf/phone-recorder.js", // PhoneRecorder: SETTINGS > METRICS > PHONE TEST (RECORD / SHARE soak JSON, #1633); reads PerfGov/GLX, writes neither
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
   "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
   "js/camera/vantage.js",
@@ -901,6 +905,7 @@ const DEFERRED = {
   ],
   three: [
     "js/render/three/tsl-chunks.js",
+    "js/render/three/tsl-viewport.js",
     "js/render/three/tsl-lit.js",
     "js/render/three/tsl-sky.js",
     "js/render/three/tsl-fx.js",
@@ -1202,6 +1207,7 @@ const LAZY_NET = [
   "js/net/lobby-roster.js", // LobbyRoster: the room roster's stateless DOM leaves (before lobby)
   "js/net/snapshot.js",
   "js/net/session.js",
+  "js/net/spectate.js",
   "js/net/netplay.js",
   "js/net/lobby.js",
   // PHONE AS CONTROLLER rides the same wire (rtc + handshake + rendezvous), so
@@ -1254,6 +1260,7 @@ const CONTROLLER = [
 // not one module gathering the rest.
 const LAZY_NET_EDGES = [
   ["js/net/snapshot.js", "js/net/session.js"],
+  ["js/net/spectate.js", "js/net/netplay.js"],
   ["js/net/sdp.js", "js/net/handshake.js"],
   ["js/net/qr.js", "js/net/lobby-codes.js"],
   ["js/net/qr.js", "js/net/lobby.js"],
@@ -1421,11 +1428,6 @@ const MOVED = {
   "tools/slider-effect-live.mjs": "tools/lighting/slider-effect-live.mjs",
   "tools/slider-effect-view.py": "tools/lighting/slider-effect-view.py",
   "tools/look-survey-sheet.py": "tools/lighting/look-survey-sheet.py",
-  "tools/lighting-campaign/capture.mjs": "tools/lighting/campaign/capture.mjs",
-  "tools/lighting-campaign/config.mjs": "tools/lighting/campaign/config.mjs",
-  "tools/lighting-campaign/io.mjs": "tools/lighting/campaign/io.mjs",
-  "tools/lighting-campaign/metrics.mjs": "tools/lighting/campaign/metrics.mjs",
-  "tools/lighting-campaign/tune.mjs": "tools/lighting/campaign/tune.mjs",
   "tools/harness.mjs": "tools/lib/harness.mjs",
   "tools/output-paths.mjs": "tools/lib/output-paths.mjs",
   "tools/game-vm.cjs": "tools/lib/game-vm.cjs",

@@ -160,6 +160,17 @@
     }
     const dirtTex = makeDirtTex();
 
+    // FIXED TARGETS (#2655, apex26.tlxFixedTargets; tlx.js decides, tsl-viewport.js
+    // is the shader half). On: every target is allocated ONCE at the PRESENT size
+    // (PW x PH; half and bloom levels derive from it exactly as they did from the
+    // render size) and a resolution step only moves the LOGICAL rect (W x H) the
+    // chain draws into — rt.viewport (0, 0, lw, lh), the top-left of the target on
+    // both backends — and the ratio uniforms of the VP.tex readers. Off: place()
+    // is rtSetSize and nothing else here changes.
+    const VP = ctx.vp || null;
+    const fixed = !!(ctx.fixedTargets && VP && VP.enabled);
+    let PW = 1, PH = 1;   // the physical (present) size; fixed mode only
+
     // render-target helpers
     function makeRT(w, h, type, format) {
       const rt = ownRT(new THREE.RenderTarget(w, h, {
@@ -303,25 +314,44 @@
         if (rt.depthTexture) rt.depthTexture.dispose();
       } catch (_) { /* best-effort; the worst case is r184's own leak */ }
     }
+    // Give rt its logical size lw x lh inside the physical pw x ph. Off: a plain
+    // resize. On: the allocation only changes when the physical size does; the
+    // viewport and the readers' ratio follow the logical size every time.
+    function place(rt, lw, lh, pw, ph) {
+      if (!fixed) { rtSetSize(rt, lw, lh); return; }
+      rtSetSize(rt, pw, ph);                 // no-op once allocated at this size
+      rt.viewport.set(0, 0, lw, lh);         // rtSetSize/setSize resets it: set AFTER
+      const ts = rt.textures || (rt.texture ? [rt.texture] : []);
+      for (let i = 0; i < ts.length; i++) VP.layout(ts[i], lw, lh, pw, ph);
+      if (rt.depthTexture) VP.layout(rt.depthTexture, lw, lh, pw, ph);
+    }
+    const halfOf = (v) => Math.max(1, Math.floor(v / 2));
     function layoutHalf() {
-      aoW = Math.max(1, Math.floor(W / 2));
-      aoH = Math.max(1, Math.floor(H / 2));
+      aoW = halfOf(W);
+      aoH = halfOf(H);
       grW = aoW; grH = aoH;
-      if (ssaoRT) { rtSetSize(ssaoRT, aoW, aoH); rtSetSize(ssaoBlurRT, aoW, aoH); }
-      if (godrayRT) { rtSetSize(godrayRT, grW, grH); rtSetSize(godrayBlurRT, grW, grH); }
+      const pw = fixed ? halfOf(PW) : aoW, ph = fixed ? halfOf(PH) : aoH;
+      if (ssaoRT) { place(ssaoRT, aoW, aoH, pw, ph); place(ssaoBlurRT, aoW, aoH, pw, ph); }
+      if (godrayRT) { place(godrayRT, grW, grH, pw, ph); place(godrayBlurRT, grW, grH, pw, ph); }
     }
     function layoutBloom() {
       if (!bloomLv) return;
       let bw = Math.max(1, Math.floor(W / BLOOM_DIV));
       let bh = Math.max(1, Math.floor(H / BLOOM_DIV));
+      let pbw = Math.max(1, Math.floor(PW / BLOOM_DIV)), pbh = Math.max(1, Math.floor(PH / BLOOM_DIV));
       nLv = 0;
       for (let i = 0; i < bloomLv.length; i++) {
+        // Fixed: a level exists while the PHYSICAL one does; the logical count can only be lower.
         if (bw >= 8 && bh >= 8) {
-          rtSetSize(bloomLv[i].rt, bw, bh);
+          place(bloomLv[i].rt, bw, bh, pbw, pbh);
           bloomLv[i].w = bw; bloomLv[i].h = bh;
           nLv++;
+        } else if (fixed && pbw >= 8 && pbh >= 8) {
+          place(bloomLv[i].rt, 1, 1, pbw, pbh);   // allocated, unused at this scale
+          bloomLv[i].w = 1; bloomLv[i].h = 1;
         }
         bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1);
+        pbw = Math.max(1, pbw >> 1); pbh = Math.max(1, pbh >> 1);
       }
     }
 
@@ -330,7 +360,7 @@
       chunks: ctx.chunks, shadow,
       sceneTex: sceneRT.texture, sceneTagTex, sceneDepthTex,
       dirtTex, whiteTex, blackTex,
-      trackMaterial,
+      trackMaterial, vp: fixed ? VP : null,
     });
     ownTexture(P.composite && P.composite.grOffTex);   // the godray slot's own "off" black
     if (P.composite && P.composite.U) P.composite.U.sceneHdr.value = _sceneHdr;
@@ -444,26 +474,32 @@
     const _last = { ssao: false, bloom: false, shafts: false, ssr: false, fxaa: false, sgsr: false };
     let _lastPresentRT = null;
 
-    function resize(w, h) {
-      if (w === W && h === H) {
+    // w x h: the render (logical) size; pw x ph: the present size (fixed mode only).
+    function resize(w, h, pw, ph) {
+      const nPW = fixed ? Math.max(1, pw | 0, w | 0) : 0, nPH = fixed ? Math.max(1, ph | 0, h | 0) : 0;
+      if (w === W && h === H && nPW === PW && nPH === PH) {
         // Still may need aaRT when flag toggles at same render size.
         syncAaRT();
         return;
       }
       W = Math.max(1, w | 0); H = Math.max(1, h | 0);
-      rtSetSize(sceneRT, W, H);
-      rtSetSize(ldrRT, W, H);
+      PW = nPW; PH = nPH;
+      place(sceneRT, W, H, PW, PH);
+      place(ldrRT, W, H, PW, PH);
       layoutHalf();
       layoutBloom();
       syncAaRT();
     }
     function syncAaRT() {
-      const want = !!(P.sgsr && ctx.wantSpatialUpscale && ctx.wantSpatialUpscale());
+      // Fixed: the AA target always exists (the upscale reads it the moment the
+      // logical size drops below the present size — allocating then would be the realloc).
+      const want = !!(P.sgsr && (fixed || (ctx.wantSpatialUpscale && ctx.wantSpatialUpscale())));
       if (want) {
         if (!aaRT) {
-          aaRT = makeRT(W, H, THREE.UnsignedByteType);
+          aaRT = makeRT(fixed ? 1 : W, fixed ? 1 : H, THREE.UnsignedByteType);
           aaRT.texture.name = "TLXPostAA";
-        } else rtSetSize(aaRT, W, H);
+        }
+        place(aaRT, W, H, PW, PH);
       } else if (aaRT) {
         // _lastPresentRT may still BE this target (present() stores `dest ||
         // aaRT`), and presentedTarget() hands it to a capture. Disposing
@@ -474,6 +510,13 @@
         try { ownedRTs.delete(aaRT); aaRT.dispose(); } catch (_) { /* dying */ }
         aaRT = null;
       }
+    }
+
+    // Output logical size of a pass (fixed mode only; the shaders' VP.uv reads it).
+    function vset(pass, w, h) { if (fixed && pass && pass.V) pass.V.set(w, h); }
+    function presentSize() {
+      const ps = ctx.getPresentSize ? ctx.getPresentSize() : null;
+      return [ps && ps.width ? ps.width : PW, ps && ps.height ? ps.height : PH];
     }
 
     /** Resolve the HDR scene to the canvas — the glx/post.js present() port.
@@ -495,6 +538,7 @@
       // throw mid-chain latches autoClear=false for every later classic-path
       // frame, which skips three's clear and smears the canvas until reload.
       try {
+      if (fixed) VP.sync();   // the readers' logical/physical ratio for the targets as bound NOW
 
       const threshold = o.threshold !== undefined ? o.threshold : 0.75;
       const bloomAmt = o.bloom !== undefined ? o.bloom : 0.55;
@@ -533,6 +577,7 @@
         U.contact.value = csOn ? contactStr : 0;
       }
       if (haveAO) {
+        vset(P.ssao, aoW, aoH); vset(P.blurAOH, aoW, aoH); vset(P.blurAOV, aoW, aoH); vset(P.blurAO, aoW, aoH);
         runPass(P.ssao.mat, ssaoRT);
         // Blur H (ssao -> blur) then V (blur -> ssao). Half res.
         if (_fixedMats && P.blurAOH) {
@@ -604,6 +649,7 @@
         U.hgAniso.value = gk("godrayAniso");       // GOD-RAY FOCUS knob
         U.hgFloor.value = gk("godrayFloor");      // GOD-RAY HAZE knob
         U.aoOn.value = aoFold ? 1 : 0;
+        vset(P.godray, grW, grH); vset(P.blurGRH, grW, grH); vset(P.blurGRV, grW, grH); vset(P.blurGR, grW, grH);
         runPass(P.godray.mat, godrayRT);
         // Double separable blur (H+V twice) — soft wide volumes, no stripes.
         // TLX-PERF-PLAN G1: lamp beams alone (no sun shafts) take ONE blur pair.
@@ -645,17 +691,20 @@
       if (haveBloom && useLv > 0) {
         P.bright.U.threshold.value = threshold;
         P.bright.U.exposure.value = o.exposure !== undefined ? o.exposure : 1.0;   // threshold is in exposed units
+        vset(P.bright, bloomLv[0].w, bloomLv[0].h);
         runPass(P.bright.mat, bloomLv[0].rt);
         for (let i = 1; i < useLv; i++) {
           if (_fixedMats && P.downFixed && P.downFixed[i - 1]) {
             const d = P.downFixed[i - 1];
             d.U.texel.value.set(1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
             d.U.karis.value = i === 1 ? 1 : 0;
+            vset(d, bloomLv[i].w, bloomLv[i].h);
             runPass(d.mat, bloomLv[i].rt);
           } else {
             P.down.tex.value = bloomLv[i - 1].rt.texture;
             P.down.U.texel.value.set(1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
             P.down.U.karis.value = i === 1 ? 1 : 0;   // firefly fix on the first mip only
+            vset(P.down, bloomLv[i].w, bloomLv[i].h);
             runPass(P.down.mat, bloomLv[i].rt);
           }
         }
@@ -673,6 +722,7 @@
             up.tex.value = bloomLv[i].rt.texture;
           }
           up.U.texel.value.set(1 / bloomLv[i].w, 1 / bloomLv[i].h);
+          vset(up, bloomLv[i - 1].w, bloomLv[i - 1].h);
           runPass(up.mat, bloomLv[i - 1].rt, i > 1);   // i > 1: additive, must load
         }
       }
@@ -796,8 +846,10 @@
           : (viz === "shafts" || viz === "godray") ? (haveGR ? godrayRT.texture : blackTex)
           : sceneRT.texture;   // composite-off | scene: the raw HDR world
         _vizDest = dest;   // the blit must read what this pass wrote, not ldrRT
+        if (fixed) { const ps = presentSize(); vset(B, ps[0], ps[1]); }
         runPass(B.mat, dest);
       } else {
+        vset(P.composite, W, H); vset(P.fxaa, W, H);
         runPass(P.composite.mat, ldrRT);
         P.fxaa.tex.value = ldrRT.texture;
         P.fxaa.U.texel.value.set(1 / W, 1 / H);
@@ -807,6 +859,11 @@
           runPass(P.fxaa.mat, aaRT);
           P.sgsr.tex.value = aaRT.texture;
           P.sgsr.U.viewport.value.set(1 / W, 1 / H, W, H);
+          if (fixed) {
+            const ps = presentSize();
+            vset(P.sgsr, ps[0], ps[1]);   // the canvas / soft target: always present-sized
+            P.sgsr.U.plain.value = ctx.userSpatialUpscale && ctx.userSpatialUpscale() ? 0 : 1;
+          }
           runPass(P.sgsr.mat, dest);
           mirrorPass(dest);
           _lastPresentRT = dest || aaRT;
@@ -968,6 +1025,7 @@
       presentedTarget: () => (viz ? _vizDest : (_lastPresentRT || ldrRT)),
       // SGSR linked — tlx.js wantSpatialUpscale() requires this (fail-closed).
       spatialOk: () => !!(P && P.sgsr && P.sgsr.mat),
+      fixedOk: () => fixed && !!(P && P.sgsr && P.sgsr.mat),   // #2655: tlx.js keeps the canvas present-sized
       resize,
       warm,
       drawWarm,   // A-W1
@@ -987,6 +1045,7 @@
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],
         rtResizes: _rtResizes,
+        fixed: fixed ? { physical: [PW, PH], logical: [W, H] } : null,
       }),
       // Drop last-presented block flags (Home garage / mid-warm frames must
       // not satisfy a race probe that waits on shafts/bloom before Singapore

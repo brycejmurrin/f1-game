@@ -70,11 +70,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
  *  before it was added; the count check below is what keeps that true. */
 export const TWINNED = {
   "tests/specs/active-aero.spec.js":        "tests/unit/active-aero-vm.test.mjs",
+  "tests/specs/agent-determinism.spec.js":  "tests/unit/agent-determinism-vm.test.mjs",
   "tests/specs/agent-view.spec.js":         "tests/unit/agent-view-vm.test.mjs",
   "tests/specs/aero-zones.spec.js":         "tests/unit/aero-zones-vm.test.mjs",
   "tests/specs/collision-ai-fixes.spec.js": "tests/unit/collision-ai-fixes-vm.test.mjs",
   "tests/specs/collisions-deep.spec.js":    "tests/unit/collisions-deep-vm.test.mjs",
   "tests/specs/collisions.spec.js":         "tests/unit/collisions-vm.test.mjs",
+  "tests/specs/dev-tools.spec.js":          "tests/unit/dev-tools-vm.test.mjs",
   "tests/specs/drift.spec.js":              "tests/unit/drift-vm.test.mjs",
   "tests/specs/elevation-tracks.spec.js":   "tests/unit/elevation-tracks-vm.test.mjs",
   "tests/specs/headless-api.spec.js":       "tests/unit/headless-api-vm.test.mjs",
@@ -82,6 +84,7 @@ export const TWINNED = {
   "tests/specs/longitudinal.spec.js":       "tests/unit/longitudinal-vm.test.mjs",
   "tests/specs/obs-act-edge.spec.js":       "tests/unit/obs-act-edge-vm.test.mjs",
   "tests/specs/offtrack.spec.js":           "tests/unit/offtrack-vm.test.mjs",
+  "tests/specs/persistence.spec.js":        "tests/unit/persistence-vm.test.mjs",
   "tests/specs/wake-lock.spec.js":          "tests/unit/wake-lock-vm.test.mjs",
   "tests/specs/world-physics.spec.js":      "tests/unit/world-physics-vm.test.mjs",
 };
@@ -153,7 +156,10 @@ export const ADAPTED = {
  *  reason is the whole entry. twinDebt() excludes these, so the ratchet can
  *  reach zero without asking for a substitution that would be a hole. */
 export const BROWSER_ONLY = {
+  "tests/specs/props-over-road.spec.js": "passes 52/52 under APEX_VM_PAGE=1 (~285 s, measured 2026-10-17) but is the selected-gate pin for js/track + js/circuits diffs: adapting it would drop it from the blocking browser plan and schedule 285 s of page-a on every circuit edit (select-specs.test.mjs pins it selected, PR #1289). The audit itself is already node-ported in tests/unit/props-over-road.test.mjs (test:sweeps)",
+  "tests/specs/terrain-over-road.spec.js": "APEX_VM_PAGE=1 times out at BOOT_MS on the first waitForFunction (`window.__apex?.race`, line 25) and again for Red Bull Ring (line 46) — measured 45 s each, 2026-10-17; the groundY gap checks need the real boot/track settle the VM never reaches, and VM geometry has no asset pack. Structural, not a flake",
   "tests/specs/pit-signs.spec.js": "APEX_VM_PAGE=1 boots Albert Park but pitSigns().drawn stays 0 through TRACK_MS (waitForFunction 45 s) — the decal draw needs a real renderer frame, not a structural flake (measured 2026-09-30)",
+  "tests/specs/soak-run.spec.js": "AUTO SOAK drives the player from a real requestAnimationFrame loop through a live wet race build; game-vm never pumps rAF, and the unit twin tests/unit/soak-run.test.mjs already covers the controller in a VM — this copy proves the wiring into game.js",
   "tests/specs/smoke.spec.js": "the boot gate: it proves a real Chromium boots the shell, which is the one thing no VM can",
   "tests/specs/physics-characterization.spec.js": "tests/data/physics-baseline.json is a real-Chromium measurement; the VM twin asserts parity WITH it, so the browser copy is the reference",
   // The selected-gate pin for js/physics/ (same role as render-boot for js/render/).

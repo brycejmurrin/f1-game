@@ -29,6 +29,7 @@
     ],
     "three": [
       "js/render/three/tsl-chunks.js",
+      "js/render/three/tsl-viewport.js",
       "js/render/three/tsl-lit.js",
       "js/render/three/tsl-sky.js",
       "js/render/three/tsl-fx.js",
@@ -486,6 +487,7 @@
     "js/net/lobby-roster.js",
     "js/net/snapshot.js",
     "js/net/session.js",
+    "js/net/spectate.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
     "js/input/phone-pad.js"
@@ -494,6 +496,10 @@
     [
       "js/net/snapshot.js",
       "js/net/session.js"
+    ],
+    [
+      "js/net/spectate.js",
+      "js/net/netplay.js"
     ],
     [
       "js/net/sdp.js",

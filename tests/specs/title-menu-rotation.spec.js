@@ -305,3 +305,91 @@ test.describe("title rotation late-iOS size settle", () => {
     expect(after.density, "density follows silent settle").toBe("compact");
   });
 });
+
+// HOME FIT — portrait and desktop share the phone-landscape door grid: every door is one tile of a
+// consistent height, nothing clips or splits a word, and the utility row is never below the fold.
+const HOME_FIT = [
+  { name: "iphone14 portrait", size: { width: 390, height: 844 }, touch: true, fits: true },
+  { name: "pro-max portrait", size: { width: 430, height: 932 }, touch: true, fits: true },
+  { name: "desktop 1280x720", size: { width: 1280, height: 720 }, touch: false, fits: true },
+  { name: "desktop 1440x900", size: { width: 1440, height: 900 }, touch: false, fits: true },
+  { name: "desktop 1920x1080", size: { width: 1920, height: 1080 }, touch: false, fits: true },
+  { name: "desktop 1024x600", size: { width: 1024, height: 600 }, touch: false, fits: true },
+  { name: "iphone14 portrait 200%", size: { width: 390, height: 844 }, touch: true, fits: false, scale: 200 },
+  { name: "desktop 1440x900 200%", size: { width: 1440, height: 900 }, touch: false, fits: false, scale: 200 },
+];
+
+/** @param {import("@playwright/test").Page} page */
+function homeFit(page) {
+  return page.evaluate(() => {
+    const mb = document.getElementById("menu-buttons");
+    const mr = mb.getBoundingClientRect();
+    const tiles = [...mb.querySelectorAll("button")].filter((b) => {
+      const r = b.getBoundingClientRect();
+      return !b.hidden && r.width > 1 && r.height > 1 && b.checkVisibility();
+    });
+    const broken = [], small = [], wide = [];
+    for (const t of tiles) {
+      const tr = t.getBoundingClientRect();
+      if (Math.min(tr.width, tr.height) < 44) small.push(`${t.id}:${Math.round(tr.width)}x${Math.round(tr.height)}`);
+      if (tr.left < -1 || tr.right > window.innerWidth + 1) wide.push(t.id);
+      const walker = document.createTreeWalker(t, NodeFilter.SHOW_TEXT);
+      for (let n; (n = walker.nextNode());) {
+        const ps = getComputedStyle(n.parentElement);
+        if (ps.display === "none" || ps.textOverflow === "ellipsis") continue;
+        for (const m of n.data.matchAll(/\S+/g)) {
+          const rg = document.createRange(); rg.setStart(n, m.index); rg.setEnd(n, m.index + m[0].length);
+          const lines = new Set([...rg.getClientRects()].map((r) => Math.round(r.top))).size;
+          const wr = rg.getBoundingClientRect();
+          if (lines > 1 || wr.right > tr.right + 1 || wr.left < tr.left - 1) broken.push(t.id + ":" + m[0]);
+        }
+      }
+    }
+    // The 2-column play grid: RACE..GARAGE tiles share one height inside a row (and, at default size, across rows).
+    const grid = ["mb-race", "mb-tt", "mb-vs", "mb-season", "mb-practice", "mb-garage"]
+      .map((id) => Math.round(document.getElementById(id)?.getBoundingClientRect().height ?? 0));
+    const rowSpread = [0, 2, 4].map((i) => Math.abs(grid[i] - grid[i + 1]));
+    const settings = document.getElementById("mb-settings").getBoundingClientRect();
+    const clipped = tiles.filter((t) => { const r = t.getBoundingClientRect(); return r.bottom > mr.bottom + 1 && !mb.classList.contains("sf-scroll"); }).map((t) => t.id);
+    return {
+      sh: mb.scrollHeight, ch: mb.clientHeight, scrolls: mb.classList.contains("sf-scroll") || mb.scrollHeight > mb.clientHeight + 1,
+      broken, small, wide, clipped,
+      rowSpread, gridRatio: Math.max(...grid) / Math.max(1, Math.min(...grid)),
+      settingsInView: settings.top >= -1 && settings.bottom <= window.innerHeight + 1,
+      docOverflow: document.documentElement.scrollHeight > window.innerHeight + 1 || document.documentElement.scrollWidth > window.innerWidth + 1,
+    };
+  });
+}
+
+for (const c of HOME_FIT) {
+  test.describe(`home fit ${c.name}`, () => {
+    test.use({ viewport: c.size, hasTouch: c.touch, isMobile: c.touch });
+
+    test("every door is a consistent tile, nothing clips or splits a word", async ({ page }) => {
+      test.setTimeout(120_000);
+      await page.goto("/");
+      await waitTitle(page);
+      if (c.scale) await page.evaluate((p) => window.__apex.uiScale(p), c.scale);
+      // Settled = the scroller's geometry and the density class held for 20 frames in a row.
+      await page.evaluate(() => new Promise((done) => {
+        let last = "", stable = 0;
+        const tick = () => {
+          const key = document.getElementById("menu-buttons").scrollHeight + "/" + document.body.dataset.density;
+          if (key === last) { if (++stable >= 20) return done(); } else { stable = 0; last = key; }
+          requestAnimationFrame(tick);
+        };
+        tick();
+      }));
+      const f = await homeFit(page);
+      expect(f.broken, "no tile label splits or overflows a word").toEqual([]);
+      expect(f.small, "tap targets reach the 44px floor").toEqual([]);
+      expect(f.wide, "no tile leaves the viewport horizontally").toEqual([]);
+      expect(f.docOverflow, "the page itself never scrolls").toBe(false);
+      expect(f.rowSpread.every((d) => d <= 1), `paired play tiles share a row height ${f.rowSpread}`).toBe(true);
+      expect(f.gridRatio, "RACE..GARAGE rows stay within 1.5x of each other (a wrapped label is the only difference)").toBeLessThanOrEqual(1.5);
+      expect(f.settingsInView, "the utility row is never below the fold").toBe(true);
+      if (c.fits) expect(f.sh, "Home fits without scrolling").toBeLessThanOrEqual(f.ch + 1);
+      else expect(f.clipped, "when it scrolls, it scrolls (no tile cut by the box)").toEqual([]);
+    });
+  });
+}

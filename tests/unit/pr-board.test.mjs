@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  fullTierPassed, DEPLOY, MAX_LIVE, MAX_ARMED, SUGGESTIONS, hasMergeHold, ciState, decide, suggest, evaluate, render, measure,
+  fullTierPassed, DEPLOY, MAX_LIVE, MAX_ARMED, SUGGESTIONS, hasMergeHold, parseFleetStatus, fleetStatus, ageLabel, ciState, decide, suggest, evaluate, render, measure,
 } from "../../tools/ci/pr-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -20,7 +20,7 @@ const ctx = (count = 0) => ({ cap: { cap: 3, count } });
 
 test("defaults come from ready-full-cap", () => {
   assert.equal(DEPLOY, "claude/f1-game-project-26h3ng");
-  assert.equal(MAX_LIVE, 3);
+  assert.equal(MAX_LIVE, 8);
   assert.deepEqual([...SUGGESTIONS].sort(), ["ARM", "FIX", "FOREIGN-ARM", "NONE", "READY", "SYNC", "WAIT"]);
 });
 
@@ -157,8 +157,8 @@ test("render: header, one line per PR, a footer; empty board says so", () => {
   const r = evaluate([{ pr: prObj(1, { title: "x".repeat(80) }), runs: [], checkRuns: guard() }], { cap: { cap: 3, count: 0 } });
   const out = render(r, { capLine: "ready-full-cap: 0/3" });
   const lines = out.split("\n");
-  assert.match(lines[0], /^PR\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+PLAN\s+SUGGEST$/);
-  assert.match(lines[1], /^#1\s+x{39}…\s+ready\s+a{39}1\s+clean\s+-\s+none\s+-\s+passed\s+-\s+WAIT$/);
+  assert.match(lines[0], /^PR\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+PLAN\s+FLEET\s+SUGGEST$/);
+  assert.match(lines[1], /^#1\s+x{39}…\s+ready\s+a{39}1\s+clean\s+-\s+none\s+-\s+passed\s+-\s+-\s+WAIT$/);
   assert.match(lines.at(-1), /^pr-board: 1 open PR\(s\); ready-full-cap: 0\/3$/);
   const empty = render(evaluate([], { cap: { cap: 3, count: 0 } }));
   assert.match(empty, /no open PRs into claude\/f1-game-project-26h3ng/);
@@ -394,7 +394,7 @@ test("evaluate + render: PLAN is done/items from the body, HOLD is flagged, a sw
   assert.deepEqual(r.rows.map((x) => x.suggest), ["NONE", "ARM", "WAIT", "WAIT"], "1 armed + 1 ARM = MAX_ARMED; the hold waits");
   assert.match(r.rows[3].why, /2 PRs are already armed/);
   const lines = render(r).split("\n");
-  assert.match(lines[2], /\s2\/3\s+ARM$/, "two of three items closed (one ticked, one struck)");
+  assert.match(lines[2], /\s2\/3\s+-\s+ARM$/, "two of three items closed (one ticked, one struck)");
   assert.match(lines[3], /WAIT \(HOLD\)$/);
 });
 
@@ -430,4 +430,53 @@ test("measure paginates successful ready run jobs and ties evidence to that exac
   const item = { pr: prObj(1), runs: [{ id: 77, status: "completed", conclusion: "success" }], checkRuns: guard(), jobs: fullJobs() };
   assert.equal(evaluate([{ ...item, jobsRunId: 76 }]).rows[0].fullTier, false);
   assert.equal(evaluate([{ ...item, jobsRunId: 77 }]).rows[0].fullTier, true);
+});
+
+test("fleet-status: body line parsed; template placeholder and HTML comments ignored", () => {
+  assert.equal(parseFleetStatus("no block"), null);
+  assert.equal(parseFleetStatus("fleet-status: <working|blocked|needs-decision|ready|red|done> | <reason> | <UTC time>"), null);
+  assert.equal(parseFleetStatus("<!-- fleet-status: red | x | 2026-10-17T19:00:00Z -->"), null);
+  assert.deepEqual(parseFleetStatus("```fleet\nstate: fixing\nfleet-status: red | Selected specs failed | 2026-10-17T19:00:00Z\n```"),
+    { state: "red", reason: "Selected specs failed", at: "2026-10-17T19:00:00.000Z" });
+  assert.deepEqual(parseFleetStatus("fleet-status: working"), { state: "working", reason: "", at: null });
+});
+
+test("fleet-status: a newer fleet-status or NEEDS-DECISION comment wins; an older one does not", () => {
+  const body = "fleet-status: working | fixing red | 2026-10-17T19:00:00Z";
+  const older = { body: "fleet-status: ready | green | 2026-10-17T18:00:00Z", created_at: "2026-10-17T18:00:00Z" };
+  const ask = { body: "@orchestrator NEEDS-DECISION: re-baseline ratchets?\nmore text", created_at: "2026-10-17T19:30:00Z" };
+  const chatter = { body: "looks good", created_at: "2026-10-17T20:00:00Z" };
+  assert.equal(fleetStatus(body, [older, chatter]).source, "body");
+  assert.deepEqual(fleetStatus(body, [older, ask, chatter]),
+    { state: "needs-decision", reason: "re-baseline ratchets?", at: "2026-10-17T19:30:00.000Z", source: "comment" });
+  assert.equal(fleetStatus("", [older]).state, "ready");
+  assert.equal(fleetStatus("", []), null);
+});
+
+test("fleet-status: ageLabel and the FLEET column", () => {
+  const now = Date.parse("2026-10-17T20:00:00Z");
+  assert.equal(ageLabel("2026-10-17T19:15:00Z", now), "45m");
+  assert.equal(ageLabel("2026-10-17T15:00:00Z", now), "5h");
+  assert.equal(ageLabel("2026-10-14T20:00:00Z", now), "3d");
+  assert.equal(ageLabel(null, now), "?");
+  const pr = prObj(1, { body: "fleet-status: blocked | quota until 21:00Z | 2026-10-17T19:00:00Z" });
+  const out = render(evaluate([{ pr, runs: [] }], { cap: { cap: 3, count: 0 } }), { now });
+  assert.match(out.split("\n")[1], /\sblocked 1h: quota until 21:00Z\s/);
+});
+
+test("measure reads the newest comment page for FLEET, and a failed read is not fatal", () => {
+  const prs = [prObj(1, { comments: 150, body: "" })];
+  const { request, calls } = fakeApi({ prs });
+  const withComments = (qs) => (qs === "issues/1/comments?per_page=100&page=2"
+    ? { json: [{ body: "fleet-status: red | guards | 2026-10-17T19:00:00Z", created_at: "2026-10-17T19:00:00Z" }] } : request(qs));
+  const v = measure({ request: withComments });
+  assert.equal(v.ok, true);
+  assert.equal(v.rows[0].fleet.state, "red");
+  const bare = measure({ request });
+  assert.equal(bare.ok, true, "comments 'unexpected' error is advisory");
+  assert.equal(bare.rows[0].fleet, null);
+  assert.ok(calls.includes("issues/1/comments?per_page=100&page=2"));
+  const none = fakeApi({ prs: [prObj(2)] });
+  measure({ request: none.request });
+  assert.ok(!none.calls.some((c) => c.startsWith("issues/")), "no comment read when the PR has none");
 });

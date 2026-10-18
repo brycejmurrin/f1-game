@@ -138,7 +138,7 @@ test("TLX-01: begin() retries a dead post chain on a 2 s timer, 3-strike cap and
   assert.ok(stateStart>0&&stateEnd>stateStart&&deathStart>0&&deathEnd>deathStart&&retryStart>bi&&retryEnd>retryStart,"post lifecycle extraction anchors remain production-owned");
   let now=100, builds=0, resizes=0, disposals=0, direct=0;
   const candidate=()=>({dispose(){disposals++;},resize(w,h){assert.equal(w,640);assert.equal(h,360);resizes++;}});
-  const c=vm.createContext({post:candidate(),painted:false,_warmPending:null,W:640,H:360,
+  const c=vm.createContext({post:candidate(),painted:false,_warmPending:null,W:640,H:360,presentW:640,presentH:360,
     performance:{now:()=>now},_cancelSoftBlits(){},paintCanvas(){direct++;},persistFail(){},buildPost(){builds++;return candidate();}});
   vm.runInContext(TLX.slice(stateStart,stateEnd)+";globalThis.status=()=>({strikes:_postStrikes,rebuild:_postRebuild,retryAt:_postRetryAt,health:_postHealth});",c);
   for(let strike=1;strike<=4;strike++){
@@ -267,4 +267,69 @@ test("TLX-11: present()'s failure-ladder closures are hoisted; update ranges reu
   assert.equal(attr.updateRanges[0], first, "no new {start,count} object per frame");
   assert.deepEqual({ ...attr.updateRanges[0] }, { start: 0, count: 48 });
   assert.ok(!/addUpdateRange\(0, n \* 16\)/.test(read("js/render/three/tlx-shadow.js")));
+});
+
+test("setRange0 rewrites the same range without length=0 between same-frame calls", () => {
+  // _blobAppend / _decalAppend / _coAppend call setRange0 once per instance
+  // before three's clearUpdateRanges. length=0 drops V8's backing store and
+  // the following push allocates a new one (~150 B) on every call.
+  const hi = TLX.indexOf("function setRange0");
+  const setRange0 = new Function(`"use strict";${TLX.slice(hi, TLX.indexOf("\n  }\n", hi) + 4)};return setRange0;`)();
+  const attr = { updateRanges: [] };
+  let pushes = 0;
+  const ur = attr.updateRanges;
+  const push = ur.push.bind(ur);
+  ur.push = (x) => { pushes++; return push(x); };
+  setRange0(attr, 16);
+  setRange0(attr, 32);
+  assert.equal(pushes, 1, "a second write before three clears must not push again");
+  assert.equal(attr.updateRanges.length, 1);
+  assert.equal(attr.updateRanges[0].count, 32);
+  assert.equal(attr.updateRanges[0].start, 0);
+});
+
+test("createTexMesh uses Uint16 indices at or under 65535 verts and Uint32 above", () => {
+  const m = TLX.match(/createTexMesh\(data\) \{/);
+  assert.ok(m, "createTexMesh moved");
+  let depth = 1, i = m.index + m[0].length;
+  for (; i < TLX.length && depth; i++) {
+    if (TLX[i] === "{") depth++;
+    else if (TLX[i] === "}") depth--;
+  }
+  const body = TLX.slice(m.index + m[0].length, i - 1);
+  const THREE = CORE;
+  const _meshMade = { tex: 0 };
+  const noopMesh = () => ({ noop: true });
+  const _regGeo = (g) => g;
+  const createTexMesh = eval("(function(data){" + body + "})");
+  const mesh = (vCount) => createTexMesh({
+    pos: new Float32Array(vCount * 3),
+    nrm: new Float32Array(vCount * 3),
+    uv: new Float32Array(vCount * 2),
+    idx: [0, 1, 2],
+  });
+  assert.ok(mesh(3).geo.index.array instanceof Uint16Array, "a decal fits in 16-bit indices");
+  assert.ok(mesh(65535).geo.index.array instanceof Uint16Array, "65535 verts is still Uint16");
+  assert.ok(mesh(65536).geo.index.array instanceof Uint32Array, "65536 verts needs Uint32");
+  assert.equal(mesh(3).geo.index.array[2], 2);
+});
+
+test("pruneGeoRegistry's cold walk does not allocate an iterator result per geometry", () => {
+  const m = TLX.match(/function pruneGeoRegistry\(now\) \{/);
+  assert.ok(m, "pruneGeoRegistry moved");
+  let depth = 1, i = m.index + m[0].length;
+  for (; i < TLX.length && depth; i++) {
+    if (TLX[i] === "{") depth++;
+    else if (TLX[i] === "}") depth--;
+  }
+  const body = TLX.slice(m.index + m[0].length, i - 1);
+  const _geoReg = [];
+  for (let n = 0; n < 4000; n++) _geoReg.push(new WeakRef({ n }));
+  let _geoPruneAt = -Infinity;
+  const prune = eval("(function(now){" + body + "})");
+  const before = process.memoryUsage().heapUsed;
+  prune(0);
+  const delta = process.memoryUsage().heapUsed - before;
+  assert.equal(_geoReg.length, 4000, "live refs stay");
+  assert.ok(delta < 40000, `cold prune allocated ${delta} bytes (for-of result objects)`);
 });

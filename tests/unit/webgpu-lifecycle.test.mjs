@@ -107,6 +107,7 @@ function makeGpuHarness(opts = {}) {
   const textureWrites = [];   // queue.writeTexture calls: { texture, origin, bytes } (P4 pins layer order)
   const pipelines = [];
   let textureCalls = 0;
+  let submitCount = 0;   // queue.submit calls (h.submitCount)
   let viewCalls = 0;
   let bindGroupCalls = 0;
   let failTextureAt = Infinity;
@@ -164,7 +165,7 @@ function makeGpuHarness(opts = {}) {
       },
       writeTexture(dst, bytes) { textureWrites.push({ texture: dst && dst.texture, origin: dst && dst.origin, bytes }); },
       copyExternalImageToTexture(src, dst) { textureWrites.push({ texture: dst && dst.texture, origin: dst && dst.origin, bytes: null, source: src && src.source }); },
-      submit() {},
+      submit() { submitCount += 1; },
     },
     createSampler: () => ({}),
     createBindGroupLayout: () => ({}),
@@ -408,6 +409,7 @@ function makeGpuHarness(opts = {}) {
     writes,
     textureWrites,
     passCalls,
+    get submitCount() { return submitCount; },
     pipelineDescs,
     asyncDescs,
     configureCalls,
@@ -1429,7 +1431,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /texture_2d_array/);
   assert.match(CHUNKS_SOURCE, /fn applyMaterial\(/);
   assert.match(CHUNKS_SOURCE, /fn applyMaterialNormal\(/);
-  assert.match(CHUNKS_SOURCE, /surfaceId <= 33/);
+  assert.match(CHUNKS_SOURCE, /surfaceId <= 37/);
   // Every livery-finish surface must exist in WGSL too — a finish implemented
   // on GLX alone is invisible on WebGPU and nothing else would catch it.
   for (const id of [28, 29, 30, 31, 33])
@@ -2721,6 +2723,49 @@ test("a capture NEVER reconfigures the swapchain inside an encoded frame", async
   const cfgAt = beginFn.indexOf("_configureCanvas()");
   const encAt = beginFn.indexOf("createCommandEncoder");
   assert.ok(cfgAt >= 0 && encAt > cfgAt, "the reconfigure must precede this frame's encoder");
+});
+
+test("WGX shadow casts with an unchanged model reuse the bound ring slot", async () => {
+  // castShadowInstanced passes one identity model and most track/prop casts pass MAT_IDENT: every cast used to take
+  // a new ring slot, copy the same 16 floats and re-bind group 1 at a new offset. Group 1 is bound only there and a
+  // pass is new per Begin, so an equal model in the same pass is an exact hit.
+  const h = makeGpuHarness({ recordPass: true });
+  const gfx = await h.create();
+  gfx.resize();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mesh = gfx.createMesh(tri);
+  const id = new Float32Array(16); id[0] = id[5] = id[10] = id[15] = 1;
+  const moved = new Float32Array(id); moved[12] = 5;
+  const g1 = () => h.passCalls.filter(([n, a]) => n === "setBindGroup" && a[0] === 1).length;
+  gfx.shadowBegin(id);
+  const n0 = g1();
+  for (let i = 0; i < 5; i++) gfx.castShadow(mesh, id);
+  assert.equal(g1() - n0, 1, "five identical-model casts bind group 1 once");
+  gfx.castShadow(mesh, moved);
+  assert.equal(g1() - n0, 2, "a different model takes a new slot and binds again");
+  gfx.castShadow(mesh, id);
+  assert.equal(g1() - n0, 3, "going back to the first model is not a hit: the binding now points at the moved slot");
+  gfx.shadowEnd();
+  gfx.shadowBegin(id);
+  const n1 = g1();
+  gfx.castShadow(mesh, id); gfx.castShadow(mesh, id);
+  assert.equal(g1() - n1, 1, "a new pass binds afresh, then dedupes");
+
+});
+
+test("WGX mirror frame records its mip ladder into the mirror's own submit", async () => {
+  // _generateMips opened a second command encoder and a second queue.submit after every mirror pass. Level 0 is
+  // written by the mirror pass and each mip pass reads the level above in a separate pass of the same encoder, so
+  // one encoder / one submit is enough.
+  const h = makeGpuHarness({ recordPass: true, reflectTextures: true });
+  const gfx = await h.create();
+  gfx.resize();
+  const submits0 = h.submitCount, passes0 = h.passCalls.filter(([n]) => n === "beginRenderPass").length;
+  assert.equal(gfx.mirrorBegin({}, 64, 16), true);
+  gfx.mirrorEnd();
+  const passes = h.passCalls.filter(([n]) => n === "beginRenderPass").length - passes0;
+  assert.equal(h.submitCount - submits0, 1, "one submit for the mirror pass AND its mips");
+  assert.ok(passes >= 1 + 6, `the mirror pass plus the 6-level mip ladder still record (${passes} passes)`);
 });
 
 test("WGX mirror-pass cull gets its own pack, buffer and cell-set key: main and mirror no longer evict each other", async () => {
