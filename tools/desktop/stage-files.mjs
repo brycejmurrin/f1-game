@@ -17,6 +17,7 @@ export const STAGE_ROOT_FILES = Object.freeze([
   "bench.html",
   "controller.html",
   "cockpit-view.html",
+  "overlay.html",
   "version.json",
   "manifest.json",
   "sw.js",
