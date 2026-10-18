@@ -181,6 +181,15 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   :root:not([data-title-btns="row"]) #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create) > .bigbtn {
     flex: 0 0 auto; width: 100%; min-width: 0;
   }
+  /* Two-col Play cells are ~4rem wide here: drop icons and tighten type so
+     "RACE A FRIEND" / PRACTICE / GARAGE stay inside their boxes (ui-scale
+     Factory Home mb-vs clip @ 667×320). Cap at --fs-micro (no raw px under
+     the subFloorFontSize ratchet). */
+  #overlay #menu-buttons :is(#menu-primary, #menu-garage) .btn-ico { display: none; }
+  #overlay #menu-buttons :is(#menu-primary, #menu-garage) > .bigbtn {
+    font-size: clamp(0.6rem, calc(2.1 * var(--vwz)), var(--fs-micro));
+    padding-inline: calc(var(--gap) * .25);
+  }
 }
 
 @container title-menu (max-width: 20rem) {
