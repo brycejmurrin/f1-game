@@ -727,6 +727,41 @@ test("orphaned upper spectator treads retain crowds on ground-reaching piers wit
   assert.equal(spectatorHillFixture().footings.length, 0, "ordinary complete banks need no added piers");
 });
 
+test("outside-bend terrace treads do not interpenetrate between stations (overlap ≤ 0.5 m)", () => {
+  const Geom = load("js/track/core/geom.js", "TrackGeom");
+  const Nature = load("js/track/scenery/nature.js", "SceneryNature", {
+    TrackGeom: Geom, TrackGraph: { NODE_COLOR: [1, 1, 1] },
+    TrackSceneryData: { CROWD_DAY: [[1, 1, 1]] },
+  });
+  const n = 100, ds = Math.PI * 2 * 38 / n, radius = 38;
+  const track = { rx: [], ry: [], rz: [], tx: [], ty: [], tz: [] }, px = [], pz = [];
+  for (let k = 0; k < n; k++) {
+    const angle = k * Math.PI * 2 / n;
+    px.push(radius * Math.cos(angle)); pz.push(radius * Math.sin(angle));
+    track.rx.push(-Math.cos(angle)); track.ry.push(0); track.rz.push(-Math.sin(angle));
+    track.tx.push(-Math.sin(angle)); track.ty.push(0); track.tz.push(Math.cos(angle));
+  }
+  const boxes = [];
+  Nature.create({
+    out: {}, track, n, ds, hw: Array(n).fill(6), px, py: Array(n).fill(0), pz,
+    def: {}, MAT: {}, vadd: Geom.vadd, norm: Geom.norm, hash: () => 0.25,
+    terrainYAt: () => 0, upOf: () => [0, 1, 0], bankOffsetAt: () => 0,
+    indexSolid: () => {}, rejBox: () => false,
+    along: (a, b, step, fn) => { fn(25, ds * 2); fn(27, ds * 2); },
+    addBox: (out, center, size, color, basis) => boxes.push({ center, size, basis }),
+    instance: () => {},
+  }).spectatorHill(0.25, 0.27, -1, 24, { rows: 3, rise: 1.1, depth: 1.9, step: 8, density: 1 });
+  assert.ok(boxes.length >= 4, "several rows on a tight bend");
+  const byAlong = boxes.slice().sort((a, b) => a.center[2] - b.center[2]);
+  for (let i = 0; i < byAlong.length - 1; i++) {
+    const a = byAlong[i], b = byAlong[i + 1];
+    const delta = a.center.map((v, j) => b.center[j] - v), distance = Math.hypot(...delta);
+    const support = (box) => box.basis.reduce((s, axis, j) => s + box.size[j] / 2 * Math.abs(axis.reduce((d, v, k) => d + v * delta[k], 0)) / distance, 0);
+    const gap = distance - support(a) - support(b);
+    assert.ok(gap >= -0.5 - 1e-9, `outside-bend overlap ${(-gap).toFixed(3)} m exceeds 0.5 m`);
+  }
+});
+
 test("inside-bend terrace treads meet separating planes and retain every spectator", () => {
   const { boxes, spectators } = spectatorHillFixture();
   assert.equal(boxes.length, 6, "every terrace row remains");

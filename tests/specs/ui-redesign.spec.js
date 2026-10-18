@@ -793,7 +793,7 @@ test("How to Play contents rail jumps within its single scroller", async ({ page
   // removed section is a dead link, which is how a restructure loses a
   // section without anything failing.
   expect(before.links).toEqual([
-    "#htp-controls", "#htp-racing", "#htp-pits",
+    "#htp-controls", "#htp-racing", "#htp-2026rules", "#htp-pits",
     "#htp-driving", "#htp-setup", "#htp-modes", "#htp-friends",
   ]);
   expect(before.linkTargetsExist).toBe(true);

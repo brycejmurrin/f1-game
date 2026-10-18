@@ -100,3 +100,21 @@ test("a design the map calls INERT paints nothing in that row", () => {
   }
   assert.deepEqual(bad, [], "declared inert but the colour reached the car");
 });
+
+test("a design the map calls INERT paints nothing in that row, under EVERY cover bind", () => {
+  // The half above runs under INDEPENDENT only, which is how BAND stayed greyed while SADDLE WRAP
+  // painted the saddle with it (saddleFill's fallback; livery editor audit 2026-10-18, D4).
+  const bad = [];
+  for (const team of A.Teams.LIST.slice(0, 3)) {
+    const base = A.Liveries.forTeam(team)[0];
+    for (const coverBind of ["saddleWrap", "spineOnly"]) for (const f of LT.FILL_SURFACES) {
+      for (const top of LT.SPINE_LOGO_IDS) {
+        const design = { spineLogo: top, spineSide: "none", coverBind };
+        if (!LT.fillInert(f.key, design)) continue;
+        if (probeLands(team.id, isolate(base, design, f.key)))
+          bad.push(`${team.id} ${f.key} declared inert on SPINE TOP ${top} + ${coverBind}, but it painted`);
+      }
+    }
+  }
+  assert.deepEqual(bad, [], "declared inert but the colour reached the car");
+});
