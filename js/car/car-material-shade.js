@@ -121,6 +121,54 @@ const CarMaterialShade = (function () {
     chromaFloor: 0.04,
   });
 
-  return { CARBON, GLOSS, MATTE, METAL, TINTED, CHAMELEON, FLAKE, CANDY };
+  // FORGED CARBON (FINISH_SURFACE.forged -> 38). Chopped carbon, not the twill of 31: chip = max(hash(cellA), hash(cellB)),
+  // cellA = floor(objPos * cellsPerM), cellB = floor(skew(objPos) * cellsPerM2) (skew = (x+z, y-x, z+y), so chip edges never
+  // align); chip is faded to chipMean (the mean of a max of two uniforms, 2/3) over fadeStartM..+fadeSpanM like the weave.
+  // albedo = mix(albedo * resinKeep + resin, albedo * tintKeep, tintMix) * (1 + (chip - chipMean) * chipGain);
+  // rough = clamp(rough, roughLo, roughHi) + (chip - chipMean) * roughGain; a satin-gloss lacquer with the env mirror.
+  const FORGED = Object.freeze({
+    cellsPerM: 60.0,        // ~1.7 cm chips
+    cellsPerM2: 95.0,       // the skewed second grid
+    fadeStartM: 10.0,
+    fadeSpanM: 10.0,
+    chipMean: 0.667,
+    chipGain: 0.90,
+    resin: Object.freeze([0.026, 0.027, 0.030]),
+    resinKeep: 0.10,
+    tintKeep: 0.22,
+    tintMix: 0.20,
+    roughLo: 0.28,
+    roughHi: 0.42,
+    roughGain: 0.20,
+    clearcoatLo: 0.40,
+    clearcoatHi: 0.60,
+    metalness: 0.08,
+    specular: 0.48,
+  });
+
+  // GUNMETAL (FINISH_SURFACE.gunmetal -> 39). Anodised dark metal between brushed 29 and chrome 27: a metal lobe
+  // (metalness >= metalness, rough in roughLo..roughHi, a thin film clearcoat <= clearcoatMax) over
+  // albedo = mix(base, hue * hueGain, hueMix), hue = albedo / max(maxChannel, chromaFloor); the METAL darkEnvBoost applies.
+  const GUNMETAL = Object.freeze({
+    base: Object.freeze([0.20, 0.205, 0.22]),
+    hueGain: 0.24,
+    hueMix: 0.40,
+    chromaFloor: 0.04,
+    metalness: 0.85,
+    specular: 0.90,
+    roughLo: 0.16,
+    roughHi: 0.28,
+    clearcoatMax: 0.30,
+  });
+
+  // GOLD PLATE (FINISH_SURFACE.goldplate -> 40). Chrome 27's mirror response with a FIXED gold that ignores the livery:
+  // albedo = gold (0xd4a63a), the lacquer reflection *= mix(1, hue, envTint) and the lit colour *= hue after the metal block.
+  const GOLDPLATE = Object.freeze({
+    gold: Object.freeze([0.83, 0.65, 0.23]),
+    hue: Object.freeze([1.0, 0.78, 0.27]),   // gold / its brightest channel
+    envTint: 0.88,
+  });
+
+  return { CARBON, GLOSS, MATTE, METAL, TINTED, CHAMELEON, FLAKE, CANDY, FORGED, GUNMETAL, GOLDPLATE };
 })();
 Object.freeze(CarMaterialShade);
