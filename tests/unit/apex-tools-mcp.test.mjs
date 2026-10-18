@@ -60,6 +60,7 @@ test(".mcp.json registers apex-tools alongside the separate debugger server", ()
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
+    "apex-lsp",
     "apex-tools",
     "chrome-devtools",
     "js-debugger",
@@ -2238,4 +2239,22 @@ test("tool descriptions state the host ceiling and the per-call boot (#2673)", (
   const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "utf8");
   assert.match(src, /name: "apex_job_status"[\s\S]{0,400}~120 s/);
   assert.match(src, /name: "apex_agent"[\s\S]{0,300}COLD-BOOTS/);
+});
+
+test("server boots with no node_modules: its static import graph names only node: and relative modules", () => {
+  // .mcp.json starts the server alongside SessionStart's npm install; a bare static import (sharp, 2026-10-18) crashed it to CONNECTION_CLOSED.
+  const seen = new Set(), bare = [];
+  const walk = (f) => {
+    if (seen.has(f) || !fs.existsSync(f)) return;
+    seen.add(f);
+    const src = fs.readFileSync(f, "utf8");
+    for (const m of src.matchAll(/^\s*(?:import|export)\s[^;]*?\bfrom\s*["']([^"']+)["']|^\s*import\s*["']([^"']+)["']/gm)) {
+      const spec = m[1] || m[2];
+      if (spec.startsWith(".")) walk(path.resolve(path.dirname(f), spec));
+      else if (!spec.startsWith("node:")) bare.push(`${spec} <- ${path.relative(ROOT, f)}`);
+    }
+  };
+  walk(MCP);
+  assert.ok(seen.size > 3, `walked ${seen.size} files`);
+  assert.deepEqual(bare, [], "load npm packages with a lazy `await import()` at the call site");
 });

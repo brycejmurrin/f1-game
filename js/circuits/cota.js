@@ -25,6 +25,7 @@
     night: false,
     theme: "green",
     lengthKm: 5.5,
+    tyreSeverity: 1.12,  // Bumpy US GP surface + thermal; between Miami 1.22 and neutral 1.0 (Pirelli Cota notes)
     baseHW: 8,
     sceneryCoordinates: "racing",
     // 60, not 48: since the SRTM bake lifted the straight/T1 up to 10 m over

@@ -20,6 +20,11 @@
       "type": "stdio",
       "command": "bash",
       "args": ["tools/mcp/js-debugger-mcp.sh", "serve"]
+    },
+    "apex-lsp": {
+      "type": "stdio",
+      "command": "bash",
+      "args": ["tools/mcp/lsp-mcp.sh", "serve"]
     }
   }
 }
