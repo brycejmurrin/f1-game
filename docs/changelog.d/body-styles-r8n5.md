@@ -1,0 +1,1 @@
+New: BODY in the livery designer puts any chassis on any car: another team's nose, sidepods and airbox, or one of six concept bodies (Needle, Brick, Anteater, Arched, Wedge, Barge). Looks only; performance is unchanged.

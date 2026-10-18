@@ -820,9 +820,9 @@ const CarDraw = (function () {
       // A loaded GLB is a static body and does not consume procedural part recipes;
       // keep its overlay on stable default/legacy anchors as setup options change.
       const legacyBody = !!carModelBuf;
-      const rl = cockpit ? null : deps.resolveLivery(team);
-      const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id) :
-        getCarDecalMesh(state.val, state.parts, legacyBody, team.id, rl.finShape, rl.spineHeight);
+      const rl = deps.resolveLivery(team);
+      const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id, rl.bodyStyle) :
+        getCarDecalMesh(state.val, state.parts, legacyBody, team.id, rl.finShape, rl.spineHeight, rl.bodyStyle);
       // PHOTO MODE upgrades rivals to the player-tier PREVIEW, lazily: one new
       // preview atlas per frame, nearest the photo camera first, a bounded set,
       // all freed when the mode closes (decalTextureFor / planPhotoAtlases).
@@ -922,7 +922,7 @@ const CarDraw = (function () {
     const cockpitBodyOrder = [];
     // The last key's inputs, so the per-frame call (default camera) builds no
     // string and no closure on a hit — the hoisted factory reads _cb*.
-    let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "";
+    let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbBs = null;
     function buildPendingCockpitBody() {
       const team = _cbTeam, liv = deps.resolveLivery(team);
       return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
@@ -945,11 +945,11 @@ const CarDraw = (function () {
       // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
       // is always this team's key — no per-frame partsVisualKey() rebuild.
       const num = carDecalNum(team, car), haloSz = CockpitOpts.haloSize();   // 0 off, 1 slim, 2 standard, 3 thick, 4 faired
-      const body = CockpitOpts.body();
-      if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || num !== _cbNum) {
-        _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + ":" + num;   // halo size keys the cache: a change rebuilds, no reload
+      const body = CockpitOpts.body(), bs = deps.resolveLivery(team).bodyStyle || null;   // the livery's chassis (Car3D.bodyStyleKey)
+      if (team.id !== _cbId || visualKey !== _cbVk || haloSz !== _cbHalo || body !== _cbBody || num !== _cbNum || bs !== _cbBs) {
+        _cbKey = team.id + ":" + visualKey + ":H" + haloSz + ":B" + CockpitOpts.body() + ":" + num + (bs ? ":S" + bs : "");   // halo size keys the cache: a change rebuilds, no reload
         _cbShKey = _cbKey + ":FP";   // the first-person caster: same cache (and wipes), its own key
-        _cbId = team.id; _cbVk = visualKey; _cbHalo = haloSz; _cbBody = body; _cbNum = num;
+        _cbId = team.id; _cbVk = visualKey; _cbHalo = haloSz; _cbBody = body; _cbNum = num; _cbBs = bs;
       }
       _cbTeam = team;
     }

@@ -84,6 +84,7 @@ code { font-family: var(--f-mono); font-size: 12px; }
   <section class="custom" id="custom" hidden aria-label="Customise this car">
     <div class="field"><label for="c-livery">Livery</label><select id="c-livery"></select></div>
     <div class="field"><label for="c-finish">Finish</label><select id="c-finish"></select></div>
+    <div class="field"><label for="c-body">Body</label><select id="c-body"></select></div>
     <div class="field"><label for="c-num">Number</label><input id="c-num" type="number" min="0" max="99" inputmode="numeric" placeholder="Driver's"></div>
     <div class="actions"><button type="button" id="c-random">Randomise</button><button type="button" id="c-reset">Factory</button></div>
     <details class="parts-box"><summary>Garage parts</summary><div class="parts" id="c-parts"></div></details>
@@ -170,7 +171,7 @@ const HAS_CARS = typeof Car3D !== "undefined" && typeof Parts !== "undefined";
 const FINISHES = HAS_CARS ? ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)] : [];
 const teamOf = (id) => Teams.LIST.find((t) => t.id === id) || Teams.LIST[0];
 const titleCase = (s) => String(s).replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
-let spec = { team: null, livery: null, finish: "", num: null, parts: {} }, framedTeam = null;
+let spec = { team: null, livery: null, finish: "", body: "", num: null, parts: {} }, framedTeam = null;
 try { const s = JSON.parse(store.get("car") || "null"); if (s && s.team) spec = Object.assign(spec, s); } catch (e) {}
 
 /** Everything a picker can offer for one team: the garage's own lists. */
@@ -179,6 +180,8 @@ function carOptions(teamId) {
   return {
     liveries: Liveries.forTeam(team).map((l) => ({ id: l.id, name: l.name || titleCase(l.id) })),
     finishes: FINISHES,
+    // "" = the livery's own body; then the concept bodies and every team's (Car3D.BODY_STYLE_IDS).
+    bodies: (Car3D.BODY_STYLE_IDS || []).map((id) => ({ id, name: Car3D.TEAM_STYLE[id] ? teamOf(id).name + " body" : titleCase(id) })),
     parts: Parts.CATALOG.map((c) => ({ id: c.id, label: titleCase(c.label || c.id),
       options: c.options.map((o) => ({ id: o.id, label: o.label || titleCase(o.id) })) })),
     factory: Parts.getFactorySetup(team),
@@ -191,6 +194,7 @@ function resolveLivery(team, s) {
   const o = { c1: l.c1, c2: l.c2 };
   for (const f of Liveries.FIELDS) o[f] = l[f] != null ? l[f] : null;
   o.finish = s.finish ? (s.finish === "gloss" ? null : s.finish) : (l.finish || null);
+  if (s.body) o.bodyStyle = s.body;
   return { o, name: l.name || titleCase(l.id), finish: o.finish || "gloss" };
 }
 function carGeometry(s) {
@@ -217,7 +221,7 @@ function carGeometry(s) {
 }
 
 function buildCar(teamId) {
-  if (teamId !== spec.team) spec = { team: teamId, livery: null, finish: "", num: null, parts: {} };
+  if (teamId !== spec.team) spec = { team: teamId, livery: null, finish: "", body: "", num: null, parts: {} };
   store.set("car", JSON.stringify(spec));
   clearWorld(); world = new THREE.Group(); scene.add(world);
   scene.environment = studio();
@@ -260,6 +264,7 @@ function fillCustom() {
   };
   sel($("c-livery"), O.liveries.map((l) => ({ id: l.id, label: l.name })), spec.livery || O.liveries[0].id);
   sel($("c-finish"), [{ id: "", label: "Livery's own" }, ...O.finishes.map((f) => ({ id: f, label: titleCase(f) }))], spec.finish || "");
+  sel($("c-body"), [{ id: "", label: "Team's own" }, ...O.bodies.map((b) => ({ id: b.id, label: b.name }))], spec.body || "");
   $("c-num").value = spec.num != null ? spec.num : "";
   const parts = $("c-parts"); parts.innerHTML = "";
   for (const cat of O.parts) {
@@ -274,14 +279,15 @@ function setSpec(patch) { spec = Object.assign({}, spec, patch); buildCar(spec.t
 function wireCustom() {
   $("c-livery").addEventListener("change", (e) => setSpec({ livery: e.target.value }));
   $("c-finish").addEventListener("change", (e) => setSpec({ finish: e.target.value }));
+  $("c-body").addEventListener("change", (e) => setSpec({ body: e.target.value }));
   $("c-num").addEventListener("change", (e) => setSpec({ num: e.target.value === "" ? null : Math.max(0, Math.min(99, +e.target.value | 0)) }));
   $("c-parts").addEventListener("change", (e) => { if (e.target.dataset.cat) setSpec({ parts: Object.assign({}, spec.parts, { [e.target.dataset.cat]: e.target.value }) }); });
   $("c-random").addEventListener("click", () => {
     const O = carOptions(spec.team), pick = (a) => a[Math.floor(Math.random() * a.length)];
     const parts = {}; for (const c of O.parts) parts[c.id] = pick(c.options).id;
-    setSpec({ livery: pick(O.liveries).id, finish: pick(["", ...O.finishes]), parts });
+    setSpec({ livery: pick(O.liveries).id, finish: pick(["", ...O.finishes]), body: pick(["", ...O.bodies.map((b) => b.id)]), parts });
   });
-  $("c-reset").addEventListener("click", () => setSpec({ livery: null, finish: "", num: null, parts: {} }));
+  $("c-reset").addEventListener("click", () => setSpec({ livery: null, finish: "", body: "", num: null, parts: {} }));
 }
 
 // ── circuits ─────────────────────────────────────────────────────────
@@ -425,7 +431,7 @@ window.APEX_VIEWER = {
   select: (m, id) => { setMode(m); select(id); },
   // Cars: every livery / finish / part id the page can build for a team, and one exact build.
   options: (teamId) => carOptions(teamId),
-  car: (s) => { if (mode !== "cars") setMode("cars"); spec = Object.assign({ livery: null, finish: "", num: null, parts: {} }, s);
+  car: (s) => { if (mode !== "cars") setMode("cars"); spec = Object.assign({ livery: null, finish: "", body: "", num: null, parts: {} }, s);
     for (const b of $("picker").children) b.setAttribute("aria-pressed", String(b.dataset.id === spec.team));
     return buildCar(spec.team); },
   still: () => new Promise((done) => { frozen = true; $("hint").hidden = true; requestAnimationFrame(() => requestAnimationFrame(() => done(true))); }),

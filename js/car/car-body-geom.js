@@ -8,7 +8,7 @@ const CarBodyGeom = (function () {
     const {
       SURFACES, CARBON, DARK, INTAKE, PANEL,
       TYRE_BAND, BRAKE_CALIPER,
-      AXLES, CHASSIS, DEFAULT_STYLE, DEFAULT_WING, TEAM_STYLE, teamStyleOf,
+      AXLES, CHASSIS, DEFAULT_STYLE, DEFAULT_WING, TEAM_STYLE, BODY_STYLES = {}, teamStyleOf,
       geometry, shadeFlags,
     } = context;
     const { addTri, addQuad, addLoft, addBox, addBlock, addSpan, foilThick, FOIL_CAMBER,
@@ -239,8 +239,8 @@ const CarBodyGeom = (function () {
   const NOSE_DROOP_FLOOR = (function () {
     const zMid = CHASSIS.nose[1].z, zTip = CHASSIS.nose[0].z;
     let worst = 0;
-    for (const k of Object.keys(TEAM_STYLE)) {
-      const st = TEAM_STYLE[k], d = st.noseDroop || 0;
+    for (const st of [...Object.values(TEAM_STYLE), ...Object.values(BODY_STYLES)]) {
+      const d = st.noseDroop || 0;
       if (d >= 0) continue;                       // a raised nose only adds room
       const tipZ = zTip + (st.noseTipZ || 0);
       for (const z of [2.00, 2.16]) {             // the window NOSE_UNDER covers

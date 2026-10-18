@@ -17,6 +17,8 @@ const CAR_DECAL_CACHE_MAX = 24;
 // Is this decal sheet for the ROUNDED car? The same switch Car3D.build reads
 // (CarShade.on(teamId)); an imported body never is.
 const decalRound = (legacyBody, teamId) => !legacyBody && typeof CarShade !== "undefined" && CarShade.on(teamId);
+// The body the anchors follow: a livery's bodyStyle swaps the chassis, not the team (Car3D.bodyStyleKey).
+const anchorKey = (teamId, bodyStyle) => (Car3D.bodyStyleKey ? Car3D.bodyStyleKey(teamId, bodyStyle) : teamId);
 // A colour's "r,g,b" key at 0.01 (the toFixed(2) every colour-keyed cache here
 // uses), memoised per ARRAY and re-derived the moment its numbers move: the
 // key build ran per wheel and per flap, per car, per frame. A new array (a
@@ -31,7 +33,7 @@ function colKey3(c) {
   e.r = c[0]; e.g = c[1]; e.b = c[2]; e.k = k;
   return k;
 }
-function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
+function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bodyStyle) {
   const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
   const out = { pos: [], nrm: [], uv: [], idx: [] };
   // Imported GLBs are static and do not consume the procedural parts recipe.
@@ -44,7 +46,7 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   // `round`: the rounded car (CarShade on for this team, as Car3D.build decides
   // it) carries the coke-bottle cover and the downwash ramp in its anchors.
   const round = decalRound(legacyBody, teamId);
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight, round) : null;
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : anchorKey(teamId, bodyStyle), spineHeight, round) : null;
   // Map a canvas-pixel region → UV rect (v flipped: createTexture uploads FLIP_Y).
   const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / SH, vB: 1 - (r.y + r.h) / SH });
   // corners in [BL, BR, TR, TL] order (upright as seen from outside) → the region.
@@ -331,20 +333,20 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
 // (finShape / spineHeight), a GLB swap (legacyBody) or the CarShade switch
 // (round) rebuilds through the string path below — still the backing store.
 const _decalKeyMemo = new WeakMap(), _decalNoParts = {};
-function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
+function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight, bodyStyle) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
   const round = decalRound(legacyBody, teamId);
   const pk = parts == null ? _decalNoParts : typeof parts === "object" ? parts : null;
   const m = pk && _decalKeyMemo.get(pk);
   let k;
   if (m && m.aLvl === aLvl && m.legacy === legacyBody && m.team === teamId && m.fin === finShape
-    && m.spine === spineHeight && m.round === round) k = m.k;
+    && m.spine === spineHeight && m.round === round && m.body === bodyStyle) k = m.k;
   else {
-    k = decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, round);
-    if (pk) _decalKeyMemo.set(pk, { aLvl, legacy: legacyBody, team: teamId, fin: finShape, spine: spineHeight, round, k });
+    k = decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, round, bodyStyle);
+    if (pk) _decalKeyMemo.set(pk, { aLvl, legacy: legacyBody, team: teamId, fin: finShape, spine: spineHeight, round, body: bodyStyle, k });
   }
   if (!_carDecalMeshes[k]) {
-    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(aLvl == null ? 2 : Number(aLvl), parts, legacyBody, teamId, finShape || "standard", spineHeight));
+    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(aLvl == null ? 2 : Number(aLvl), parts, legacyBody, teamId, finShape || "standard", spineHeight, bodyStyle));
     _carDecalOrder.push(k);
     while (_carDecalOrder.length > CAR_DECAL_CACHE_MAX) {
       const old = _carDecalOrder.shift(), mesh = _carDecalMeshes[old];
@@ -354,11 +356,11 @@ function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight)
   }
   return _carDecalMeshes[k];
 }
-function decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, round) {
+function decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, round, bodyStyle) {
   const anchorParts = legacyBody ? null : parts;
   // spineHeight reaches the cache key through anchors.key (the lift is in it),
   // and so does the rounded car ("|r": its flank is draped at the loft's rings).
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight, round) : { key: "legacy" };
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : anchorKey(teamId, bodyStyle), spineHeight, round) : { key: "legacy" };
   const level = aLvl == null ? 2 : Number(aLvl);
   // anchors.key covers the engine-cover fields and the team, NOT the aero
   // recipe — so a fin-height change alone would hit a cached decal mesh built
@@ -382,10 +384,11 @@ function decalKeyOf(aLvl, parts, legacyBody, teamId, finShape, spineHeight, roun
   return level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
 }
 let _cockpitDecalMesh = null, _cockpitDecalKey = "";
-function getCockpitDecalMesh(parts, teamId) {
+function getCockpitDecalMesh(parts, teamId, bodyStyle) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
-  const anchorsForKey = Car3D.bodyAnchors ? Car3D.bodyAnchors(parts, teamId) : null;
-  const wantKey = (teamId || "") + "|" + (anchorsForKey ? anchorsForKey.key : "legacy");
+  const sk = anchorKey(teamId, bodyStyle);
+  const anchorsForKey = Car3D.bodyAnchors ? Car3D.bodyAnchors(parts, sk) : null;
+  const wantKey = (sk || "") + "|" + (anchorsForKey ? anchorsForKey.key : "legacy");
   if (_cockpitDecalMesh && _cockpitDecalKey !== wantKey) {
     if (_gfx.freeMesh) _gfx.freeMesh(_cockpitDecalMesh);
     _cockpitDecalMesh = null;

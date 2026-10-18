@@ -30,9 +30,9 @@ function cdnBody(url, cacheDir) {
 /** Expand one --sheet spec ("liveries:ferrari", "finishes:ferrari", "parts:aero:ferrari") into car specs, in-page. */
 export function parseSheet(spec) {
   const [kind, a, b] = String(spec).split(":");
-  if (kind === "liveries" || kind === "finishes") { if (!a) throw new Error(`--sheet=${kind}:<team>`); return { kind, team: a }; }
+  if (kind === "liveries" || kind === "finishes" || kind === "bodies") { if (!a) throw new Error(`--sheet=${kind}:<team>`); return { kind, team: a }; }
   if (kind === "parts") { if (!a || !b) throw new Error("--sheet=parts:<category>:<team>"); return { kind, cat: a, team: b }; }
-  throw new Error(`unknown --sheet kind "${kind}" (liveries | finishes | parts)`);
+  throw new Error(`unknown --sheet kind "${kind}" (liveries | finishes | bodies | parts)`);
 }
 
 /**
@@ -60,6 +60,7 @@ export async function shootViewer(htmlPath, { cars = [], circuits = [], sheet = 
       const O = await page.evaluate((t) => window.APEX_VIEWER.options(t), S.team);
       const ok = (id) => !keep || keep.test(id);
       if (S.kind === "liveries") for (const l of O.liveries.filter((x) => ok(x.id))) jobs.push([`livery-${S.team}-${l.id}`, l.name, { team: S.team, livery: l.id }]);
+      if (S.kind === "bodies") for (const b of O.bodies.filter((x) => ok(x.id))) jobs.push([`body-${S.team}-${b.id}`, b.name, { team: S.team, body: b.id }]);
       if (S.kind === "finishes") for (const f of O.finishes.filter(ok)) jobs.push([`finish-${S.team}-${f}`, f, { team: S.team, finish: f }]);
       if (S.kind === "parts") {
         const cat = O.parts.find((c) => c.id === S.cat);

@@ -101,6 +101,10 @@
      "number" are the crown designs that carry no mark (LiveryTex.SPINE_LOGO_IDS).
      The band designs run on down the tail top (REGIONS.tail); the crest and
      the number read top-down, nose up (the chase camera's view).
+   bodyStyle? optional BODY — the chassis the car is built on: absent / "team"
+     keeps the team's own (Car3D.TEAM_STYLE); another team's id borrows its
+     nose, pods and airbox; Car3D.BODY_STYLES adds concept bodies (needle,
+     brick, anteater, arched, wedge, barge). Geometry only, never performance.
    finShape? optional FIN SHAPE — the blade's outline: "standard" (absent),
      "swept" (raked leading edge), "stub" (short rear blade) or "none" (no fin;
      the fin's graphic and badge go with it). Geometry, not paint — the one
@@ -509,7 +513,9 @@ const Liveries = (function () {
     "patternOffset", "patternTaper", "patternOpacity", "patternRotation", "patternStretch", "patternWeight", "coverFinish", "wingFinish", "haloFinish",
     // GARAGE FINISHES/PARTS contract (docs/notes/GARAGE-FINISHES-PARTS-2026-10-17.md): one row per field, owned by the slice named there.
     "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent",
-    "podFinish", "finFinish", "mirrorFinish", "helmetStyle"];
+    "podFinish", "finFinish", "mirrorFinish", "helmetStyle",
+    // BODY (2026-10-18): the chassis shape, Car3D.bodyStyleKey — geometry, like finShape.
+    "bodyStyle"];
 
   // One-shot paint migrate: fold ridge→BAND, airbox→COVER; drop lettering overrides.
   // Idempotent. Mutates and returns `liv` (or a shallow copy when null-safe).

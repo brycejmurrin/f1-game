@@ -64,8 +64,27 @@ const Car3D = (function () {
     astonmartin: Object.freeze({ noseTipZ:  0.05, noseSlim: 0.96, noseDroop: -0.030,  airbox: 0.96, fin: 0, mirror: 1, inlet: -0.030, inletH: -0.010, inletW: -0.040, undercutD:  0.035, waist: -0.030, floorStep:  0.025, coverCrown:  0.020, wingStyle: W({ arch: 0.50, twist: 0.27, teCurve: 0.115, chordTaper: 0.34, tipRise: 0.030 }) }),
     cadillac:    Object.freeze({ noseTipZ: -0.02, noseSlim: 1.02, noseDroop:  0,      airbox: 1.00, fin: 1, mirror: 2, inlet:  0.010, inletH:  0.010, inletW: -0.020, undercutD: -0.010, waist:  0.015, floorStep: -0.005, coverCrown: -0.020, wingStyle: W({ arch: 0.70, twist: 0.20, teCurve: 0.086, canard: 2, foot: 1.16, tipRise: 0.024 }) }),
   });
+  // BODY STYLES (2026-10-18): chassis looks a livery can wear on any team via
+  // `bodyStyle` — an id here or any TEAM_STYLE key (another team's body).
+  // Same fields and ranges as TEAM_STYLE; noseDroop stays above the shipped
+  // worst so CarBodyGeom's NOSE_DROOP_FLOOR (the flap solver's floor) is unchanged.
+  const BODY_STYLES = Object.freeze({
+    needle:  Object.freeze({ noseTipZ:  0.10, noseSlim: 0.66, noseDroop: -0.020, airbox: 0.74, fin: 0, mirror: 0, inlet: -0.040, inletH:  0.060, inletW: -0.080, undercutD:  0.070, waist: -0.080, floorStep:  0.040, coverCrown: -0.010, wingStyle: W({ arch: 0.40, twist: 0.12, teCurve: 0.050, chordTaper: 0.20, foot: 0.90, tipRise: 0.012 }) }),
+    brick:   Object.freeze({ noseTipZ: -0.10, noseSlim: 1.40, noseDroop:  0,     airbox: 1.32, fin: 1, mirror: 1, inlet:  0.045, inletH:  0.080, inletW:  0.080, undercutD: -0.060, waist:  0.080, floorStep:  0.045, coverCrown: -0.030, wingStyle: W({ flaps: 2, arch: 0.36, twist: 0.10, teCurve: 0.040, chordTaper: 0.18, foot: 0.90, canard: 0, tipRise: 0.010 }) }),
+    anteater: Object.freeze({ noseTipZ: 0.08, noseSlim: 0.86, noseDroop:  0.080, airbox: 1.00, fin: 0, mirror: 2, inlet: -0.020, inletH: -0.050, inletW:  0.060, undercutD:  0.020, waist:  0.000, floorStep: -0.030, coverCrown:  0.080, wingStyle: W({ arch: 0.76, twist: 0.32, teCurve: 0.140, chordTaper: 0.38, canard: 2, tipRise: 0.040 }) }),
+    arched:  Object.freeze({ noseTipZ:  0.02, noseSlim: 0.98, noseDroop: -0.022, airbox: 1.20, fin: 1, mirror: 0, inlet:  0.010, inletH:  0.060, inletW:  0.000, undercutD:  0.050, waist: -0.030, floorStep:  0.010, coverCrown:  0.100, wingStyle: W({ arch: 0.96, twist: 0.28, teCurve: 0.130, foot: 1.30, tipRise: 0.040 }) }),
+    wedge:   Object.freeze({ noseTipZ:  0.10, noseSlim: 1.08, noseDroop: -0.010, airbox: 0.78, fin: 0, mirror: 1, inlet: -0.040, inletH: -0.060, inletW:  0.040, undercutD:  0.070, waist: -0.060, floorStep:  0.045, coverCrown:  0.070, wingStyle: W({ flaps: 2, arch: 0.55, twist: 0.20, teCurve: 0.090, chordTaper: 0.30, tipRise: 0.024 }) }),
+    barge:   Object.freeze({ noseTipZ: -0.10, noseSlim: 1.30, noseDroop: -0.008, airbox: 1.10, fin: 1, mirror: 2, inlet:  0.040, inletH: -0.030, inletW:  0.080, undercutD: -0.060, waist:  0.080, floorStep: -0.045, coverCrown: -0.030, wingStyle: W({ arch: 0.86, twist: 0.24, teCurve: 0.110, foot: 1.30, canard: 2, tipRise: 0.034 }) }),
+  });
+  const BODY_STYLE_IDS = Object.freeze([...Object.keys(BODY_STYLES), ...Object.keys(TEAM_STYLE)]);
   function teamStyleOf(teamId) {
-    return (teamId && TEAM_STYLE[teamId]) || DEFAULT_STYLE;
+    return (teamId && (TEAM_STYLE[teamId] || BODY_STYLES[teamId])) || DEFAULT_STYLE;
+  }
+  // The style key a car's GEOMETRY is built from: the livery's bodyStyle when it
+  // names a known body, else the team's own. Every geometry caller (Car3D.build,
+  // decal anchors, mirror lights) resolves through this so they cannot disagree.
+  function bodyStyleKey(teamId, bodyStyle) {
+    return bodyStyle && (TEAM_STYLE[bodyStyle] || BODY_STYLES[bodyStyle]) ? bodyStyle : teamId;
   }
 
   /* WHO WEARS THE LID, for a team whose number is not a 2026 seat. A legend or a
@@ -106,7 +125,7 @@ const Car3D = (function () {
   const body = CarBodyGeom.create({
     SURFACES, CARBON, DARK, INTAKE, PANEL,
     TYRE_BAND, BRAKE_CALIPER,
-    AXLES, CHASSIS, DEFAULT_STYLE, DEFAULT_WING, TEAM_STYLE, teamStyleOf,
+    AXLES, CHASSIS, DEFAULT_STYLE, DEFAULT_WING, TEAM_STYLE, BODY_STYLES, teamStyleOf,
     geometry, shadeFlags,
   });
   const {
@@ -209,7 +228,8 @@ const Car3D = (function () {
     const floorStyle = design.floor;
     const cockpitStyle = design.cockpit;
     const wheelStyle = design.wheels;
-    const teamStyle = teamStyleOf(opts && opts.teamId);
+    const styleKey = bodyStyleKey(opts && opts.teamId, liv.bodyStyle);
+    const teamStyle = teamStyleOf(styleKey);
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
     // ownHalo (exterior builds only): the cockpit build's halo (opts.halo, the
     // player's COCKPIT halo choice; 0 = none) replaces the factory hoop and its
@@ -218,7 +238,7 @@ const Car3D = (function () {
     // around the seat, but nothing over the cockpit the player cannot see.
     const exHalo = !ckpt && !(opts && opts.ownHalo);
     const shade = !ckpt && typeof CarShade !== "undefined" && (opts && opts.smooth != null ? !!opts.smooth : CarShade.on(teamId));
-    const anchors = bodyAnchors(T, opts && opts.teamId, liv.spineHeight, shade);   // rounded: coke foot + downwash ramp
+    const anchors = bodyAnchors(T, styleKey, liv.spineHeight, shade);   // rounded: coke foot + downwash ramp
     const floorEdge = Math.max(0.72, Math.min(1.35, aeroStyle.floorEdge));
     const floorCut = Math.max(0, Math.min(0.24, aeroStyle.floorCut));
     // Same envelope the front wing now respects: at the catalog's widest floor
@@ -2206,7 +2226,7 @@ const Car3D = (function () {
   return { build, buildComplete, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
-           TEAM_STYLE, teamStyleOf,
+           TEAM_STYLE, BODY_STYLES, BODY_STYLE_IDS, teamStyleOf, bodyStyleKey,
            endplate: endplateGeom, numberBoard, frontPlate: frontPlateGeom,
            wingBand: wingBandGeom,
            aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,

@@ -8,7 +8,7 @@
 //   node tools/viewer/build-viewer.mjs --cars=all --circuits=imola --out=scratch/v.html
 //   node tools/viewer/build-viewer.mjs --cars=all --shots      also PNG stills + a contact sheet (artifacts/viewer/shots/)
 //   node tools/viewer/build-viewer.mjs --cars=ferrari --sheet=liveries:ferrari   every livery of one team on one sheet
-//       (also finishes:<team>, parts:<category>:<team>; implies --shots of that axis only)
+//       (also finishes:<team>, bodies:<team>, parts:<category>:<team>; implies --shots of that axis only)
 //   ... --sheet=liveries:haas --match='^(neo_|retro_)'   only the variants whose id matches
 //   node tools/viewer/build-viewer.mjs --list                  the valid team and circuit ids
 //   node tools/viewer/build-viewer.mjs --json                  one JSON line: {ok,out,bytes,cars,circuits[,shots,sheet]}
