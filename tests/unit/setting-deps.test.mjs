@@ -235,9 +235,10 @@ test("an owner-greyed control shows its reason (or links the owner's status) and
 
 test("EXPLAIN never speaks for a control SettingDeps greyed itself", () => {
   const h = boot();
-  const [input] = buildTarget(h, "pm-tiltdeg");
+  // pm-smooth: a steer-tilt row (TILT RANGE / pm-tiltdeg left the rule with #2883's jump).
+  const [input] = buildTarget(h, "pm-smooth");
   setParent(h, { id: "pm-steer", want: "tilt", off: "buttons" }, false);
   h.Deps.refresh();
   const reasons = (input.getAttribute("aria-describedby") || "").split(" ").filter(Boolean);
-  assert.deepEqual(reasons, ["pm-tiltdeg-dep"]);
+  assert.deepEqual(reasons, ["pm-smooth-dep"]);
 });
