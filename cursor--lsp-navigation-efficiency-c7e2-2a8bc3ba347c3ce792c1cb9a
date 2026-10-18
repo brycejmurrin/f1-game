@@ -1,1 +1,1 @@
-1792352205	Bryce Murrin	LSP navigation efficiency experiments and backend improvements: tools/mcp/lsp-mcp.mjs plus separate focused regression/benchmark suites; leave PR2899 output wrapper/code-nav guidance untouched.  [cursor/lsp-navigation-efficiency-c7e2; session 2a8bc3ba347c3ce792c1cb9a]
+1792353923	Bryce Murrin	LSP navigation efficiency: ab45c75cb frozen under full local deploy gate; tools/mcp/lsp-mcp.mjs and separate regression/benchmark suite. Leave PR2899 wrapper/code-nav guidance untouched.  [cursor/lsp-navigation-efficiency-c7e2; session 2a8bc3ba347c3ce792c1cb9a]
