@@ -97,7 +97,7 @@ test("the three MCP catalogs name the same servers with the same launch lines", 
 test("path-scoped renderer rules exist for Claude Code and Cursor with identical bodies", () => {
   // Claude Code: .claude/rules/<x>.md with `paths:`; Cursor: .cursor/rules/<x>.mdc
   // with `globs:`. Same body, same glob, or the two hosts drift apart.
-  for (const name of ["render-wgx", "render-tlx"]) {
+  for (const name of ["render-wgx", "render-tlx", "js-nav"]) {
     const claude = stripFrontmatter(read(`.claude/rules/${name}.md`));
     const cursor = stripFrontmatter(read(`.cursor/rules/${name}.mdc`));
     assert.equal(cursor.body, claude.body, `${name}: .cursor/rules body drifted from .claude/rules`);

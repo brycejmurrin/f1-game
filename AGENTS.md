@@ -93,8 +93,8 @@ backend's gate is in `.claude/rules/render-wgx.md` / `render-tlx.md`).
 ## Layout
 `js/track/` is the ENGINE, `js/circuits/` is the DATA (one file per circuit; script-tag order == `Tracks.LIST` ==
 picker order). The module roster and load order live in `tools/manifest.cjs` — the truth, not this file; per-directory
-tables: `docs/ARCHITECTURE.md`. A named symbol (`Name`, `Head.member`, `G.x`) → MCP `apex-lsp`: `lsp_definition` (`body`), `lsp_references`, `lsp_callers`,
-`lsp_outline`, `lsp_diagnostics` after an edit (shell `tools/mcp/lsp-mcp.sh <cmd>`); grep stays for text, comments, CSS.
+tables: `docs/ARCHITECTURE.md`. A named symbol (`Name`, `Head.member`, `G.x`) → MCP `apex-lsp` (definition with body, references, callers,
+outline; `lsp_diagnostics` after a js/ edit), not grep — skill `code-nav`, rule `.claude/rules/js-nav.md`; grep stays for text, comments, CSS.
 
 - `js/core/log.js` loads FIRST. `js/game.js` is the entry; it hands the `G` façade to the extracted modules — one
   `Module.create(G)` per file, a module never reaches into game.js, and `types/game-ctx.d.ts` is the machine-checked
@@ -148,7 +148,7 @@ session. `obs()`/`physState()` need `player.px` initialised (`jump()` or `step()
 ## Agent extensions (skills / subagents / hooks / MCP)
 Available workflows are skills (`.claude/skills/`, index `.claude/skills/README.md`): they say when and how, and load
 when matched. Subagents (`.claude/agents/`) isolate noisy work; `docs/AGENT-SURFACE.md` maps which CLIs are
-wrapped as `apex_*`. Routes: live canvas → skill `mcp-probe`; pre-push or deploy → skill `check-changes` (spawns agent
+wrapped as `apex_*`. Routes: a JS symbol (definition, uses, callers, exports) → skill `code-nav`; live canvas → skill `mcp-probe`; pre-push or deploy → skill `check-changes` (spawns agent
 `verify-agent`; `--base <ref>` is the "was it already red?" check); live `version.json` → agent `deploy-research`; dead
 code / fat skill → skill `slim-bloat` and agent `bloat-auditor`; PR sweeps → skill `ci-watch` + `tools/ci/pr-board.mjs`
 (agent `ci-watcher` returns the board; agent `merge-desk` runs the desk); owning PRs → skill `steward`; messaging, claims and authority between sessions
