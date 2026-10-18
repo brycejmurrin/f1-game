@@ -1,0 +1,1 @@
+Improved: the livery editor shows one car area at a time — QUICK START, BODY, ENGINE COVER, WINGS, TAIL FIN, MARKS & NUMBERS, COCKPIT, WHEELS (and HELMET) — with UNDO and NAME up front, rarely used rows under ADVANCED, and CANCEL / SAVE always in reach.

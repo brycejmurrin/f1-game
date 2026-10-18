@@ -78,7 +78,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_Module index over 32 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_Module index over 33 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -203,6 +203,7 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `editor-workspace.js` | `EditorWorkspace` | tag | Shared tuner furniture only. |
 | `settings-search.js` | `SettingsSearch` | tag | Find settings by player terms. |
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
+| `setting-deps.js` | `SettingDeps` | tag | SettingDeps — the ONE place a setting greys out because another setting makes it do nothing (tilt sliders under TOUCH steering, engine-layer levels with the… |
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › SAVES & DATA, which carries a player's state OUT of the browser and back IN. |
 | `captions.js` | `Captions` | tag | Captions: on-screen text for radio, spotter, and pre-race announcer. |
@@ -574,6 +575,14 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `xr-session.js` | `XrSession` | LAZY_XR | WebXR immersive-vr session owner (Phase 0 spike). |
 | `apex-xr.js` | `ApexXR` | LAZY_XR | ApexXR: thin façade over XRPlan + XrSession for boot / settings. |
 | `xr-ui.js` | `XrUi` | LAZY_XR | ENTER VR button (Phase 0). |
+
+**`js/share/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `share-card-data.js` | `ShareCardData` | tag | pure, JSON-safe data models for exported result cards. |
+| `share-card-layout.js` | `ShareCardLayout` | tag | pure card layout: model + spec + text metric -> paint ops. |
+| `share-card.js` | `ShareCard` | tag | canvas painter, PNG encoder and Web Share/download delivery. |
 
 **`js/render/glx/shaders/`**
 

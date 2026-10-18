@@ -15,7 +15,7 @@ test("explorer CLI rejects unbounded probes, typo modes and credential URLs befo
   assert.deepEqual(parseOptions(["all"]).modes.sort(), Object.keys(MODE_TITLES).sort());
 });
 
-test("all three shipped missions are validated data with a real goal oracle", () => {
+test("shipped missions are validated data with a real goal oracle", () => {
   for (const m of MISSIONS) { const v = validateScenario(m); assert(v.actions.length > 3); assert(v.oracle); }
   const b = missionBrief(MISSIONS[0], "https://preview.example/game/");
   assert(b.task.includes(MISSIONS[0].goal));
@@ -229,8 +229,58 @@ test("inspect summary prints one line per issue and marks provisional records", 
   const report = { records: [
     { requestedViewport: { width: 932, height: 430 }, inspection: { issues: [{ kind: "blocked", selector: "#a", message: "A covered", provisional: true }] } },
     { requestedViewport: { width: 844, height: 390 }, inspection: { issues: [] } }] };
-  assert.equal(summarizeInspection(report, "select"), "select\t932x430\tblocked (provisional)\t#a\tA covered");
-  assert.equal(summarizeInspection({ viewport: { width: 1280, height: 800 }, issues: [] }, "settings"), "settings\tclean");
+  const summary = summarizeInspection(report, "select");
+  assert(summary.includes("select\t932x430\tblocked (provisional)\t#a\tA covered"));
+  assert(summary.includes("select\t844x390\tno-findings\tcoverage"));
+  assert(summary.includes("bindings=unknown"));
+  const single = summarizeInspection({ viewport: { width: 1280, height: 800 }, issues: [], settlement: { stable: true, truncated: true } }, "settings");
+  assert(single.includes("settlement=stable; truncated=settlement"));
+  assert(single.includes("behavior=not-tested; persistence=not-tested"));
+  assert(!single.includes("clean"));
+});
+
+test("binding assertions require live agreement and the exact saved value, never an unmapped pass", async () => {
+  const { checkBinding } = await import("../../tools/ui/explorer/browser.mjs");
+  let binding = { status: "matches", runtime: "light", saved: { status: "read", value: "light" } };
+  const session = { page: { evaluate: async () => ({ controls: [{ binding }] }) } };
+  const oracle = { type: "binding", selector: "#theme", runtime: "light", saved: "light" };
+  assert.equal((await checkBinding(session, oracle)).matches, true);
+  for (const change of [{ status: "unmapped" }, { status: "unavailable" }, { status: "mismatch" },
+    { saved: { status: "unavailable", value: "light" } }, { saved: { status: "read", value: null } }, { runtime: "dark" }]) {
+    binding = { status: "matches", runtime: "light", saved: { status: "read", value: "light" }, ...change };
+    assert.equal((await checkBinding(session, oracle)).matches, false);
+    await assert.rejects(() => performAction(session, { type: "assert", oracle }), /Replay assertion failed:.*actual/);
+  }
+});
+
+test("inspector scopes include the control itself, reject ambiguity and expose bounded coverage", () => {
+  const rect = { x: 5, y: 5, width: 120, height: 44, right: 125, bottom: 49 };
+  let runtime = "dark", ambiguous = false;
+  const group = { id: "as-uiTheme", tagName: "DIV", parentElement: null, getBoundingClientRect: () => rect, children: [] };
+  const buttons = ["Dark", "Light", "System"].map((textContent, index) => ({ id: `theme-${index}`, tagName: "BUTTON", type: "button", textContent,
+    parentElement: group, getAttribute: k => k === "aria-pressed" ? String(index === 0) : null,
+    closest: () => null, contains: () => false, matches: s => s !== ":disabled", querySelectorAll: () => [], getBoundingClientRect: () => rect }));
+  group.children = buttons;
+  const document = { querySelectorAll: s => s === "#scope" ? ambiguous ? [group, group] : [group] : s === "#theme-0" ? [buttons[0]] : [],
+    elementFromPoint: () => buttons[0], documentElement: { scrollWidth: 1000, dataset: {} }, activeElement: null };
+  group.querySelectorAll = () => buttons;
+  const context = vm.createContext({ document, window: {}, AppearanceOpts: { theme: () => runtime }, GameStore: { store: { get: () => "dark" } },
+    innerWidth: 1000, innerHeight: 800, location: { href: "http://localhost/" }, CSS: { escape: s => s },
+    getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1" }), matchMedia: () => ({ matches: false }) });
+  const inspect = options => JSON.parse(JSON.stringify(vm.runInContext(`(${inspectUI.toString()})(${JSON.stringify(options)})`, context)));
+  const single = inspect({ root: "#theme-0" });
+  assert.equal(single.controls.length, 1);
+  assert.equal(single.controls[0].binding.status, "matches");
+  assert.equal(single.coverage.bindings.matches, 1);
+  runtime = "light";
+  assert.equal(inspect({ root: "#theme-0" }).controls[0].binding.status, "mismatch");
+  const limited = inspect({ root: "#scope", limit: 1 });
+  assert.deepEqual(limited.coverage.controls, { total: 3, inspected: 1, omitted: 2 });
+  assert.equal(limited.truncated, true);
+  assert.equal(limited.coverage.persistence, "not-tested");
+  ambiguous = true;
+  assert.throws(() => inspect({ root: "#scope" }), /exactly one.*matched 2/);
+  assert.throws(() => inspect({ root: "#missing" }), /exactly one.*matched 0/);
 });
 
 test("inspector counts a native label as the tap target and the bare root as not hit-testable", () => {

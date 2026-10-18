@@ -365,7 +365,7 @@ nothing ran could be committed and fail only at tooling-fast or the deploy gate.
    `physics-*` already covers it); a unit file joins `toolingFast` or a node group
    ci.yml's "Pure-node unit suites" step runs. This is what makes CI, `pick-tests`,
    `select-specs` and the nightly rota see it — none of them has a per-file list.
-2. **A row on the generated coverage page** — `node tools/docs/gen-coverage-table.mjs` (it reads the file's header, or the note above it in `tests/groups.json`). §5 below links to that page.
+2. **A row in the §5 coverage table** below: what it covers.
 3. **Nothing to regenerate for the counts** — no doc quotes the ladder sizes or an exact spec count (floors like "120+" only; `gen-ladder-figures.mjs` measures).
 4. **A spec only:** add it to `RENDER_SPECS` in `playwright.config.js` if it is
    GL-heavy, and declare the `test.setTimeout` it really needs if it boots a
@@ -767,6 +767,20 @@ cd /tmp/cisim && node --test tests/<your-guard>.test.mjs
 If a guard needs history, the job needs `fetch-depth: 0` — today guards, the
 sweeps jobs, the ship filter and select have it; `node-suites` and smoke do
 not (smoke is depth 1), so a unit file that reads history skips there.
+
+### Workflow and shader lints (the `lints` job, 2026-10-18)
+
+`node tools/check/workflow-lint.mjs` runs actionlint (with shellcheck) and zizmor over `.github/workflows`;
+`node tools/check/shader-validate.mjs` runs glslangValidator over every GLX GLSL ES 3.00 program and naga (advisory) over the WGX
+WGSL modules. Both are offline. The binaries come from `bash tools/env/install-lint-bins.sh` (pinned and checksummed: zizmor by
+`pip --require-hashes`, actionlint by `go install`, naga by `cargo --locked`, glslang and shellcheck by apt); `--plan` prints
+what it would do. **An absent binary SKIPS LOUDLY** (a `SKIP … NOT CHECKED` line naming the install command, exit 0) and fails
+under `--require` / `APEX_REQUIRE_LINT_BINS=1`, which the `lints` job in `ci.yml` sets. The unit tests
+(`workflow-lint.test.mjs`, `shader-validate.test.mjs`) fail a planted bad workflow/shader (`tests/fixtures/`) and pass the tree;
+they are in `tooling-fast`, where they skip loudly because the shards install nothing, and run with the binaries in `lints`.
+Suppressions live in `.github/actionlint.yaml`, `.github/zizmor.yml` and inline `# zizmor: ignore[audit] reason` comments; the test
+rejects a blanket ignore or a reasonless one. TLX is not checked (TSL node graphs have no static shader stage), and WGSL
+authority stays `tools/gfx/wgx-validate.mjs`. Evidence: `docs/notes/SKILL-MCP-SCOUT-2026-10-18.md` §Adopted.
 
 ### Renderer specs on a real GPU (`macos-latest`) — first run 2026-09-03 (see §Field notes 2026-09-03, `image-grade-visual`)
 
