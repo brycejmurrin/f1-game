@@ -695,6 +695,8 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
       }
       const base = rects[100];
       expect(Object.values(base).filter(Boolean).length, JSON.stringify(base)).toBeGreaterThanOrEqual(7);
+      // Controls that do not fit shrink to fit: none may sit off-screen (BOOST at y -14, #2801).
+      for (const hud of [70, 100, 200]) for (const [id, r] of Object.entries(rects[hud])) if (r) expect(r[1], `${id} at HUD SIZE ${hud}`).toBeGreaterThanOrEqual(0);
       // Non-vacuous: HUD SIZE really did resize the readouts it is meant to resize.
       expect(gearW[200], JSON.stringify(gearW)).toBeGreaterThan(gearW[70] * 1.3);
       for (const hud of [70, 200]) expect(rects[hud], `HUD SIZE ${hud} vs 100`).toEqual(base);

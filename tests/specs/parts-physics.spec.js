@@ -670,7 +670,6 @@ test.describe("Parts module — visual recipes", () => {
         proceduralPositionsEqual: JSON.stringify(proceduralLow.pos) === JSON.stringify(proceduralHigh.pos),
       };
     });
-    await page.waitForTimeout(100);
     const runtimeAnchors = await page.evaluate(() => window.__importAnchorInputs);
     expect(result.loaded).toBe(true);
     expect(result.importedPositionsEqual).toBe(true);

@@ -62,7 +62,6 @@ test("Red Bull Ring owns a safe migrated alpine foundation", async ({ page }) =>
       clearanceProbes,
     };
   });
-  await page.waitForTimeout(100);
 
   expect(result.coordinates).toBe("racing");
   expect(result.terrainOuter).toBeGreaterThanOrEqual(28);

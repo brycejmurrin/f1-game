@@ -42,7 +42,7 @@ body[data-density="compact"] #ps-panel button[data-step] {
    #ps-aspect, #ps-grid-select, #ps-postcard). Floor min-height at
    --tap-paint (52 painted on touch; --tap-min with a mouse) like #1530/#1740.
    min-height only: landscape already met --tap and must not shrink. */
-#ps-panel :is(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard) {
+#ps-panel :is(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard, #ps-tod, #ps-weather) {
   min-height: var(--tap-paint);
 }
 #ps-panel .tune-row { display: flex; flex-direction: column; gap: calc(var(--gap) * .5); }

@@ -104,7 +104,11 @@ test.describe("Las Vegas track foundation migration", () => {
 
   test("keeps full-lap street walls tight and retains night lighting", async ({ page }) => {
     await loadVegas(page, "night");
-    await page.waitForTimeout(300);
+    await page.waitForFunction(() => {
+      const w = window.__apex.wallStats();
+      const l = window.__apex.lightState();
+      return !!(w && w.street && l && l.numLights > 0);
+    }, null, { polling: 100, timeout: BOOT_MS });
     const result = await page.evaluate(() => ({
       walls: window.__apex.wallStats(),
       lights: window.__apex.lightState(),
