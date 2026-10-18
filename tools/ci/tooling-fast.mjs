@@ -695,6 +695,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lsp-config-freshness.test.mjs",
   // apex-lsp as an MCP client: definition / references / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). ~2 s.
   "tests/unit/lsp-mcp.test.mjs",
+  "tests/unit/lsp-navigation-efficiency.test.mjs",
   "tests/unit/lsp-reference-fixes.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.

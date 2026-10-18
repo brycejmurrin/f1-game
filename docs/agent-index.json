@@ -1115,6 +1115,7 @@
         "tests/unit/lsp-caller-fixes.test.mjs",
         "tests/unit/lsp-config-freshness.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
+        "tests/unit/lsp-navigation-efficiency.test.mjs",
         "tests/unit/lsp-reference-fixes.test.mjs",
         "tests/unit/ui-explorer-core.test.mjs",
         "tests/unit/ui-explorer-report.test.mjs",
