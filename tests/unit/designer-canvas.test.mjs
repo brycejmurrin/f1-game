@@ -39,7 +39,7 @@ function boot(hooksExtra = {}, pts = null, wrapShape = null) {
     const st = { _dash: [] };
     return new Proxy(st, {
       get: (t, k) => {
-        if (k === "stroke") return () => rec.strokes.push({ style: t.strokeStyle, dash: t._dash.slice() });
+        if (k === "stroke") return () => rec.strokes.push({ style: t.strokeStyle, dash: t._dash.slice(), width: t.lineWidth });
         if (k === "fill") return () => rec.fills.push(t.fillStyle);
         if (k === "setLineDash") return (d) => { t._dash = d.slice(); rec.dashes.push(d.slice()); };
         if (k === "fillText") return (s) => rec.texts.push(String(s));
@@ -506,4 +506,20 @@ test("water preview footprints retain native world-axis alignment", () => {
   const water = scene.ground.filter((item) => item.kind === "water");
   assert.ok(water.length > 0, "theme emits water for the orientation check");
   assert.ok(water.every((item) => item.angle === 0), "waterSurface renders world-axis boxes, independently of the road normal");
+});
+
+test("HEIGHT heat stays visible at whole-lap zoom: a 6 px colour ribbon and handles that never bury the road", () => {
+  const n = 240, pts = [];
+  for (let i = 0; i < n; i++) { const t = i / n * Math.PI * 2; pts.push([Math.round(900 * Math.cos(t) * 4) / 4, Math.round(600 * Math.sin(t) * 4) / 4]); }
+  const h = boot({}, pts);
+  const py = Float32Array.from({ length: n }, (_, i) => Math.round(8 * Math.sin(i / n * 6.28) * 4) / 4);
+  const tr = { n, px: pts.map(p => p[0]), pz: pts.map(p => p[1]), py, hw: new Float32Array(n).fill(7), total: 5000 };
+  h.cv.setBuilt(tr);
+  h.rec.strokes.length = 0; h.rec.arcs.length = 0;
+  h.cv.setHeat(py, "elevation");
+  const colours = ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"];
+  const ribbon = h.rec.strokes.filter((s) => colours.includes(s.style) && s.width >= 6);
+  assert.ok(new Set(ribbon.map((s) => s.style)).size >= 4, "thin road gets a ≥6 px ribbon in the height colours");
+  const gap = 2 * Math.PI * 750 * h.cv.view().scale / n;
+  assert.ok(h.rec.arcs.length && h.rec.arcs.every((r) => r < 4.5 && r <= gap * 0.5), "idle handle dots are no wider than the point spacing");
 });

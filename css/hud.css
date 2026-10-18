@@ -1629,11 +1629,11 @@ body:not(.desktop):not(.hud-radio-top):not([data-radio-corner]):not(.hud-mirror-
    dialog, where the up/down buttons landed across QUIT TO MENU. Nothing here is
    usable while a dialog is open anyway — you cannot fly a paused game — so the
    whole fly-cam overlay stands down until it closes. */
-body:has(.screen.dim:not([hidden])) #photo-controls { display: none; }
+body:has(> .screen.dim:not([hidden])) #photo-controls { display: none; }
 /* Pause owns paused navigation. JS already hideCamPicker()s on setPaused; this
    is the CSS twin so #campicker cannot paint in the dim beside the pause card
    if the hidden attribute lags. Same :has() as #photo-controls above. */
-body:has(.screen.dim:not([hidden])) #campicker { display: none; }
+body:has(> .screen.dim:not([hidden])) #campicker { display: none; }
 /* Same moment: stand the race chrome down while ANY menu screen is open.
    Measured MCP 852×393 @ UI SIZE 150%: #pm-quit overlapped #hud-speed /
    #hud-gear / #hud-energy (quit bot 401 on vh 393) and the touch pads still
@@ -1645,7 +1645,7 @@ body:has(.screen.dim:not([hidden])) #campicker { display: none; }
    #carsetup / #datahub are full-viewport pages without `.dim`, and their
    scrims still show POS/LAP/CHASE/BOOST through the wash. A HUD that is
    already hidden at menu time is a no-op under visibility. */
-body:has(.screen:not([hidden])) :is(
+body:has(> .screen:not([hidden])) :is(
   .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #hud-damage, #lights, #announce, #btn-cam, .dock, #pausebtn,
   #hud-mirror, #hud-mirror-chip
 ) {
@@ -1653,7 +1653,7 @@ body:has(.screen:not([hidden])) :is(
 }
 /* DISPLAY settings: keep the live HUD (tower / map / gaps) so LAYOUT/MAP/GAPS
    toggles can be seen without closing the sheet. */
-body:has(#pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
+body:has(> #pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
   visibility: visible;
 }
 /* MOVE & SIZE (js/ui/hud-layout.js). A moved element carries data-hl and its own
@@ -1911,8 +1911,8 @@ body.pc-uihidden #fc-dof { display: none !important; }
    drives at race start and race end, rather than a list of screen ids that would
    go stale the next time one is added. The .screen.dim arm is the same idiom
    #photo-controls and #campicker use for a sheet opened OVER a live race. */
-body:has(#hud[hidden]) #game-metrics,
-body:has(.screen.dim:not([hidden])) #game-metrics { display: none !important; }
+body:has(> #hud[hidden]) #game-metrics,
+body:has(> .screen.dim:not([hidden])) #game-metrics { display: none !important; }
 body.pc-uihidden #hud,
 body.pc-uihidden #lights,
 body.pc-uihidden #announce,
@@ -2256,7 +2256,7 @@ body[data-hud-hide~="inputs"] #hud-inputs { display: none !important; }
 body.hud-prof-minimal :is(#hud-rel, #hud-strat, #hud-inputs),
 body.hud-bcam :is(#hud-rel, #hud-strat, #hud-inputs),
 body.bc-on :is(#hud-rel, #hud-strat, #hud-inputs) { display: none !important; }
-body:has(.screen:not([hidden])) :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: hidden; }
+body:has(> .screen:not([hidden])) :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: hidden; }
 /* TOUCH HOMES. RELATIVE and INPUTS used to ship where the touch columns sit
    (RELATIVE over BRAKE / OT, INPUTS over the steer arrows — the 2026-10-04
    HUD survey, 844x390 cockpit), so on a touch screen they stayed hidden until
