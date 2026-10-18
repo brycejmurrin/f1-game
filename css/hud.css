@@ -2289,6 +2289,8 @@ body:not([data-hud-arrange]) :is(#hud-rel, #hud-strat, #hud-inputs)[data-col-dro
 #hud-strat > div > span { color: var(--dim); letter-spacing: 0.06em; }
 #hud-strat [data-k="uc"] { color: var(--faster); font-weight: 800; }
 #hud-strat [data-k="uc"] > span { color: inherit; }
+#hud-strat [data-k="cov"] { color: var(--slower); font-weight: 800; }
+#hud-strat [data-k="cov"] > span { color: inherit; }
 #hud-inputs {
   left: calc(10px + var(--sal) / var(--hud-z));
   bottom: calc(22svh / var(--hud-z));

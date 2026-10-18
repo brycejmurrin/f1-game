@@ -1269,7 +1269,7 @@ function buildLiveryCreator(container, team) {
 
   if (typeof GarageLiveryDesignEditor !== "undefined") designTools = GarageLiveryDesignEditor.attach(wrap, d, {
     changed: applyPreview, flush: flushLivPreview, preview: (value) => livePreviewDraft(team, value),
-    pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns,
+    pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns, teamId: team.id,
   });
   container.appendChild(wrap);
   applyPreview();
@@ -1347,6 +1347,10 @@ function endLivPreview(team) {
   _livPrevDraft = null;
   G.livDraftOverride = null;
   if (invalidateDecalTextures) invalidateDecalTextures(team.id);
+  // The race body caches key on the SAVED livery id: one built while the draft
+  // was live (a garage opened mid-race) holds the draft's paint (#2796 item 4).
+  const cd = typeof CarDraw !== "undefined" && CarDraw.instance && CarDraw.instance();
+  if (cd && cd.invalidateCustomMeshCaches) cd.invalidateCustomMeshCaches(team.id);
   G._spMeshKey = "";
 }
 

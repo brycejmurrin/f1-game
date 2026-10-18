@@ -17,6 +17,10 @@
     {
       "name": "js-debugger",
       "command": "*bash tools/mcp/js-debugger-mcp.sh serve"
+    },
+    {
+      "name": "apex-lsp",
+      "command": "*bash tools/mcp/lsp-mcp.sh serve"
     }
   ]
 }

@@ -572,6 +572,7 @@
         "tests/specs/custom-team.spec.js",
         "tests/specs/garage-aero.spec.js",
         "tests/specs/garage-first-frame.spec.js",
+        "tests/specs/garage-livery-churn.spec.js",
         "tests/specs/garage-out-before-card.spec.js",
         "tests/specs/garage-prebuild.spec.js",
         "tests/specs/livery-sidewall.spec.js",
@@ -1105,6 +1106,7 @@
         "tests/unit/environment-json.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/js-debugger-mcp.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/ui-explorer-core.test.mjs",
         "tests/unit/ui-explorer-report.test.mjs",
         "tests/unit/ui-explorer.test.mjs",
@@ -3814,6 +3816,12 @@
     {
       "path": "js/race/race-facts.js",
       "global": "RaceFacts",
+      "order": 327,
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/event-journal.js",
+      "global": "EventJournal",
       "order": 327,
       "roster": "LAZY_RACE_SESSION"
     },

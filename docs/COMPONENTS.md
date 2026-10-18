@@ -198,6 +198,11 @@ file changes a screen owned by another.
 
 **Deliberate sharing — one component, re-tuned elsewhere:**
 
+- `.cs-liv-editor` / `.cs-liv-ed-row` / `.cs-opt-desc` — `carsetup` + `garage-experience`. The paint editor's rows
+  are built in carsetup.css; garage-experience.css owns the greyed-row look and its visible reason line
+  (`[data-liv-why]`), and shows the editor's live feedback (`.cs-opt-desc[role=status]`, `[aria-live]`) on the compact
+  tier that otherwise hides `.cs-opt-desc`.
+
 - `.q-time` — `career` + `components`. Shared timing text; race result gaps sit
   on a second line inside the driver name so they remain readable on phones.
 
