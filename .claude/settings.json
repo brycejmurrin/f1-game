@@ -155,8 +155,29 @@
       "mcp__github__delete_file",
       "mcp__github__update_pull_request_branch",
       "mcp__github__create_repository",
-      "mcp__github__fork_repository"
+      "mcp__github__fork_repository",
+      "Skill(agent-protocols:ship)",
+      "Skill(agent-protocols:build)",
+      "Skill(agent-protocols:plan)",
+      "Skill(agent-protocols:git-workflow-and-versioning)",
+      "Skill(agent-protocols:ci-cd-and-automation)",
+      "Skill(agent-protocols:shipping-and-launch)",
+      "Skill(engineering:code-review)",
+      "Skill(engineering:debug)",
+      "Skill(engineering:deploy-checklist)",
+      "Skill(engineering:incident-response)",
+      "Skill(agent-smith:create-agent)"
     ]
+  },
+  "enabledPlugins": {
+    "agent-army@synced": false,
+    "agent-context-kit@synced": false,
+    "cc-bootstrapper@synced": false,
+    "claude-code-toolkit@synced": false,
+    "claude-context-optimizer@synced": false,
+    "claude-cursor-orchestration@synced": false,
+    "claude-review-loop@synced": false,
+    "handoff@synced": false
   },
   "worktree": {
     "baseRef": "head"
