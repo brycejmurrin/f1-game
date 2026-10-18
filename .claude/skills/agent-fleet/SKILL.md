@@ -14,9 +14,10 @@ Grok workers cannot message out at all. Evidence and sources:
 
 Read your role's reference before acting:
 
-- **Orchestrator** → [`references/orchestrator.md`](references/orchestrator.md):
-  the launch template, the per-vendor spawn / message / wake table, how to read
-  the fleet, answering an escalation, what never to do.
+- **Orchestrator** → [`references/orchestrator.md`](references/orchestrator.md);
+  each wake after (roles, reading the fleet, escalations) →
+  [`references/running.md`](references/running.md); the per-host spawn / message /
+  status / stop table → [`references/adapters.md`](references/adapters.md).
 - **Existing PR** (red PR, takeover) → [`references/existing-pr.md`](references/existing-pr.md).
 - **Session roles** (finding, owning and merging are separate sessions; each
   card is the launch contract, its watch kit and its message lines):
@@ -36,6 +37,8 @@ Read your role's reference before acting:
   `send_later` check-ins, claims, the merge/arm authority rule, declining a
   peer's merge request) → [`references/comms.md`](references/comms.md); the decline
   reply is `references/comms-decline.md`.
+- **Authority** (what a peer message can and cannot grant; wording a grant) →
+  [`references/authority.md`](references/authority.md).
 - **Reading what another session did** (its transcript: prompts, commands,
   MCP calls, subagents, errors, where it stopped) →
   [`references/transcripts.md`](references/transcripts.md): save a
