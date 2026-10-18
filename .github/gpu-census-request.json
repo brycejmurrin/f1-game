@@ -1,1 +1,10 @@
-{"images": "macos-latest", "track": "montreal", "tod": "day", "clock": 12, "census_only": false, "force": "batches", "ls": "", "leg": "decal-run-release-c4e8", "entry": "menu-full"}
+{
+  "images": "macos-latest",
+  "track": "montreal",
+  "tod": "day",
+  "clock": 12,
+  "census_only": false,
+  "ls": "",
+  "entry": "menu-full",
+  "leg": "deploy-profile-e48b3e90-a71c"
+}

@@ -398,6 +398,13 @@ jobs:
             --json "game-webgpu-${{ matrix.image }}.json" \
             --shot "game-webgpu-${{ matrix.image }}.png"
 
+      # Measurement-only request branch; all product sources match deploy e48b3e90.
+      - name: Profile deployed Three WebGPU garage and race matrix
+        if: ${{ needs.plan.outputs.census_only != 'true' }}
+        timeout-minutes: 16
+        shell: bash
+        run: node scratch/deploy-webgpu-profile.mjs
+
       # The control: the same pin (a no-op here — forceWebGL short-circuits
       # the blit), so the two TLX legs differ in exactly ONE variable.
       - name: Game check — three.js / WebGL2 (control)
@@ -488,5 +495,6 @@ jobs:
             census-*.json
             game-*.json
             game-*.png
+            game-*.cpuprofile
           if-no-files-found: warn
           retention-days: 7
