@@ -195,6 +195,26 @@ function livDraftFrom(liv, name) {
   return d;
 }
 
+// THE PREVIEW IS THE SAVE (livery editor audit 2026-10-18, D1). The editor previews
+// a draft under a custom id, as SAVE & FIT stores it, so the team marks on screen are
+// the marks you get. A paint job started from the team's OWN scheme (NEW, or a copy of
+// Team Livery) would then lose the brand colours that scheme resolves its mark to
+// (Ferrari's yellow shield went white on save), so they are written into the mark
+// rows instead: visible, editable, saved. mark → logo, plate → logo2 reproduces the
+// team's own atlas exactly on every team (livery-design.test.mjs).
+function livDraftFromOwn(src, name, teamId) {
+  const d = livDraftFrom(src, name);
+  const LTn = typeof LiveryTex !== "undefined" ? LiveryTex : null;
+  if (!LTn || !LTn.markPalette || !LTn.markSlots) return d;
+  const slots = LTn.markSlots(teamId);
+  if (slots[0] && slots[0].label === "EMBLEM TINT") return d;   // an uploaded emblem: a tint is not its look
+  const own = Object.assign({}, src, { id: "default" });
+  const pal = LTn.markPalette(teamId, own, [own.cover || own.c1], false);
+  if (!d.logo && pal.mark) d.logo = arrToHex(pal.mark);
+  if (!d.logo2 && pal.plate && slots.some((x) => x.key === "logo2")) d.logo2 = arrToHex(pal.plate);
+  return d;
+}
+
 // THE REVERSE, and the ONLY one: the SAVE and livePreviewDraft both build
 // through it, so the car you are LOOKING at while dragging a colour and the
 // livery you get on SAVE & FIT cannot be assembled by different code.
@@ -839,7 +859,7 @@ function buildLiveryOptions(container, team) {
       // it with the grid: the only thing a new paint job changes is the paint.
       const shape = {};
       if (team.livery) for (const k in LIV_DRAFT_PILLS) if (team.livery[k]) shape[k] = team.livery[k];
-      csLivDraft = livDraftFrom(Object.assign({ c1: team.color, c2: team.color2 }, shape), "");
+      csLivDraft = livDraftFromOwn(Object.assign({ c1: team.color, c2: team.color2 }, shape), "", team.id);
       csLivEditId = null;
       csLivCreating = true; csLivTeamId = team.id;
       if (G.soundOn) GameAudio.uiSelect();
@@ -915,7 +935,8 @@ function buildLiveryOptions(container, team) {
       dup.title = "Customize a copy of this livery";
       dup.setAttribute("aria-label", "Customize a copy of " + liv.name);
       dup.onclick = () => {
-        csLivDraft = livDraftFrom(liv, (liv.name || "Custom").slice(0, 14) + " MK2");
+        const copyName = (liv.name || "Custom").slice(0, 14) + " MK2";
+        csLivDraft = liv.id === "default" ? livDraftFromOwn(liv, copyName, team.id) : livDraftFrom(liv, copyName);
         csLivEditId = null;   // create-new: never overwrites the stock scheme
         csLivCreating = true; csLivTeamId = team.id;
         if (G.soundOn) GameAudio.uiSelect();
@@ -1337,10 +1358,11 @@ function livePreviewDraft(team, d) {
   _livPreviewKey = key;
   _livPrevDraft = Object.assign({}, d);
   if (invalidateDecalTextures) invalidateDecalTextures(team.id);
-  // id:"default" keeps brand plates / markOnField on while editing — a draft
-  // without an id skipped the plated-mark path and looked like a bare car.
+  // A custom id, as SAVE & FIT writes: "default" gave the draft the team's brand
+  // mark palette, which the saved paint job then lost (audit D1; livDraftFromOwn
+  // seeds those colours into the draft instead).
   G.livDraftOverride = { teamId: team.id,
-    liv: Object.assign({ id: "default", c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, true)) };
+    liv: Object.assign({ id: "custom_draft", c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, true)) };
   if (!skipMesh) G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
