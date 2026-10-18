@@ -1471,7 +1471,7 @@ const LiveryTex = (function () {
       ctx.restore();
     });
   }
-  const { drawSpineTop, drawTailTop, drawTailGraphic } = LiveryGraphics.create({
+  const { drawSpineTop, drawTailTop, drawTailGraphic, tailStyleOf } = LiveryGraphics.create({
     cssA, clipToRegion, drawNumber, drawWordmark, CROWN_SQUASH, coverBindOf,
     saddleFill, ridgeFill, pickOn, INK_LIGHT, INK_DARK, SUN_FLOOR, TAIL_STYLE_IDS,
   });
@@ -1510,9 +1510,11 @@ const LiveryTex = (function () {
     { key: "patternTint", label: "DESIGN COLOUR", why: "Choose a new spine design", tops: typeof LiveryDesign !== "undefined" ? LiveryDesign.PATTERNS : [] },
     { key: "patternSecond", label: "SECOND DESIGN COLOUR", why: "Choose a two-colour design", tops: typeof LiveryDesign !== "undefined" ? LiveryDesign.SECOND_COLOR : [] },
     { key: "spineTint", label: "BAND",
-      why: "Needs a SPINE TOP that paints a band (e.g. stripe, saddle, panel)",
+      why: "Needs a SPINE TOP that paints a band (e.g. stripe, saddle, panel) or COVER BIND SADDLE WRAP",
       tops: ["saddle", "panel", "stripe", "streaks", "twin", "chevron", "wedge",
-             "rungs", "tricolour", "carbon", "cap", "ridge", "fade"] },
+             "rungs", "tricolour", "carbon", "cap", "ridge", "fade"],
+      // SADDLE WRAP paints its saddle block in BAND while SADDLE is unset (saddleFill).
+      binds: ["saddleWrap"] },
     { key: "saddleTint", label: "SADDLE",
       why: "Needs SADDLE top, SADDLE WRAP bind, or a shoulder side",
       // NOT `rake`: that fill reads SADDLE only under a saddleWrap bind (see
@@ -2590,7 +2592,7 @@ const LiveryTex = (function () {
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,
-           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, CREST_STYLE_IDS: EMBLEM_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
+           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, tailStyleOf, CREST_STYLE_IDS: EMBLEM_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
            FILL_SURFACES, fillInert,
            airboxMeshColour, resolveFinPaint,
            hasFlankBull: (teamId) => !!bullPath(teamId) };

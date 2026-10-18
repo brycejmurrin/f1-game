@@ -425,6 +425,22 @@ sharedTest.describe("Apex 26 — HUD", () => {
     });
     // 80 m/s ≈ 288 km/h — should show a non-zero value
     expect(kph).toBeGreaterThan(0);
+
+    // hText REWRITES the digits' text node (`.data`) instead of swapping it, so a
+    // per-frame repaint is no child-list mutation and re-runs no :has()/:empty
+    // rule (docs/notes/PERF-P2-HTEXT-2026-10-18.md). Same node, new digits, and
+    // the accessibility tree reads the new value.
+    const after = await page.evaluate(() => {
+      const n = document.getElementById("hud-speed-n");
+      const before = n.firstChild;
+      window.__apex.jump(0, 40, 0);
+      return { same: n.firstChild === before, kids: n.childNodes.length, text: n.textContent };
+    });
+    expect(after.same, "the text node is reused, not replaced").toBe(true);
+    expect(after.kids).toBe(1);
+    expect(parseInt(after.text, 10)).toBeGreaterThan(0);
+    expect(parseInt(after.text, 10)).toBeLessThan(kph);
+    expect(await page.locator("#hud-speed").ariaSnapshot()).toContain(after.text);
   });
 
   sharedTest("minimap canvas has content after race starts", async ({ page }) => {

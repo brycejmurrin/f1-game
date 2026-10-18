@@ -29,6 +29,19 @@ Load from the SKILL.md index when the task needs this detail.
    node tools/track/import-circuit-path.mjs <gameId>:<featureId>     # emit one new `path:` line
    node tools/track/import-circuit-path.mjs --classics               # emit every CLASSICS trace at once
    ```
+   **Not in bacinger (e.g. Portimão)?** bacinger's 40 features are all shipped,
+   so a further circuit comes from OpenStreetMap: add a row to
+   `tools/track/osm-circuits.json` `circuits` (`name`, `country`, `bbox`
+   `[s,w,n,e]`, `target` = the real lap length in metres of the configuration
+   F1 raced, from its Wikipedia infobox — a wrong number picks a wrong layout —
+   and `gp` years), then
+   ```sh
+   node tools/track/stitch-osm-ring.mjs <id>     # ad hoc instead: --bbox <s,w,n,e> --target <m>
+   node tools/track/import-circuit-path.mjs --source artifacts/osm-rings.geojson <id>:<id>
+   ```
+   (header of `stitch-osm-ring.mjs`: its output file and the shape-error gate).
+   `bake-elevation.mjs` reads the same row for an SRTM profile.
+
    Paste the emitted `path: { len, pts }` line into the new def. Then author
    `turns` (and `sectors` if researched), `furniture`, `kit`, `standSet` and —
    for street/modern circuits — `barrier` / `cityStyle`; copy a sibling's rows
@@ -55,9 +68,11 @@ Load from the SKILL.md index when the task needs this detail.
 
    - **Season circuits** (24 rounds): append in calendar order at the end of the
      season block (before the `classic: true` section).
-   - **Retired circuits**: set `classic: true` in the def and append after the
-     season rounds (see the `// ── appended circuits … ──` comment in
-     `manifest.cjs`).
+   - **Not a current-season round → `classic: true`** (retired, or never on the
+     calendar, e.g. Portimão): set it in the def and append after the season
+     rounds (see the `// ── appended circuits … ──` comment in `manifest.cjs`).
+     `Tracks.SEASON` is `LIST.filter(t => !t.classic)`, so a missing flag adds a
+     25th round and breaks `SEASON.length`.
    - **The roster count is asserted, in two places.**
      `tests/unit/shared-track-foundation-characterization.test.cjs` and
      `tests/unit/circuit-def-fields.test.mjs` both pin `Tracks.LIST.length`
@@ -83,38 +98,32 @@ Load from the SKILL.md index when the task needs this detail.
      used to name: `js/circuits/<id>.js`, `js/circuits/scenery/<id>.js`, its
      `CIRCUITS` entry, and every row above. `index.html` is GENERATED — run
      `node tools/gen/gen-shell.mjs`, never hand-edit the tag.
-   Verify with `__apex.tracks()` that the id appears.
-3. **Headless build guard** — the fast pre-push check that needs no browser:
-   ```sh
-   node tools/track/verify-track.cjs <id>
-   ```
-   Success prints `OK <id>: props X verts (road Y, terrain Z)`. A non-zero exit
-   means the spline/road/terrain build or the `scenery(api)` callback **threw** —
-   which in the running game would strand the player on the menu. Fix before
-   pushing. Common causes: a missing destructure (`out` not pulled from `api`), a
-   node index out of range, or bad track data.
-4. **Shell sync** — `node tools/gen/gen-shell.mjs --check` (or `gen-shell.mjs`
-   after a `tools/manifest.cjs` change) ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
-5. **Visual check** — load and screenshot it (use the `playwright-probe` skill's `shot.mjs`):
+3. **Headless build guard and shell sync** — the fast pre-push checks, no browser:
+   ```sh
+   node tools/track/verify-track.cjs <id>     # OK <id>: props X verts (road Y, terrain Z)
+   node tools/gen/gen-shell.mjs --check       # or gen-shell.mjs after a manifest change (?v=dev, no bump)
+   ```
+   A non-zero `verify-track` exit means the spline/road/terrain build or the
+   `scenery(api)` callback **threw** — which in the running game would strand the
+   player on the menu. Common causes: a missing destructure (`out` not pulled
+   from `api`), a node index out of range, or bad track data.
+
+4. **Visual check** — `__apex.tracks()` lists the id; then load and screenshot it
+   (the `playwright-probe` skill's `shot.mjs`):
    ```js
    __apex.race("<id>"); __apex.park(0.1);          // stationary at 10% lap
    __apex.orbit(0.1, 45, 15, 40);                  // inspect from all sides
    __apex.trackProfile();                          // [{frac,y,k,hw,slope}] elevation/curvature sanity
    ```
-6. **Tests**:
-   ```sh
-   node tools/track/verify-track.cjs <id>   # default gate (no browser)
-   node tools/ci/pick-tests.mjs             # which groups the change needs
-   ```
-   The single browser check is that circuit's `tests/specs/<id>-foundation.spec.js`
+
+5. **Tests** — `node tools/ci/pick-tests.mjs` names the groups. The single
+   browser check is that circuit's `tests/specs/<id>-foundation.spec.js`
    (AGENTS.md verification table; hyphenated file names, e.g. `albert-park-`), run via
    `test-bg.mjs` in the background (AGENTS.md rules 4-5). Only 16 circuits have one (madrid does not):
-   with none, run what `pick-tests` names, plus `tests/specs/f1-track-accuracy.spec.js` and `terrain-over-road.spec.js`
-   when geometry moved. A whole group is the parent's call.
-   The `terrain-over-road.spec.js` audit (part of the full suite) catches terrain
-   triangles rendering above the racing line — re-run it if you changed elevation
-   or a street/terrain flag.
+   with none, run what `pick-tests` names, plus `tests/specs/f1-track-accuracy.spec.js` and
+   `terrain-over-road.spec.js` (terrain above the racing line) when geometry, elevation or a
+   street/terrain flag moved. A whole group is the parent's call.
 
 ## Editing an existing circuit (no browser; verified on monza)
 

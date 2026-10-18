@@ -68,7 +68,7 @@ const MULTI_GLOBAL = {
   // Title-boot race-session stub; ensureRaceSession() reinjects via `var`.
   "js/race/session-stub.js": [
     "Damage", "Duel", "FlyingStart", "JumpStartPenalty", "MarshalPanels", "PitLane", "RaceEngineer",
-    "RaceFacts", "RaceRadio", "RadioLines", "Reliability", "SessionRecords",
+    "EventJournal", "RaceFacts", "RaceRadio", "RadioLines", "Reliability", "SessionRecords",
     "Spotter", "StartLights",
   ],
 };
@@ -87,7 +87,7 @@ const SHARED_GLOBALS = {
   RecordedAnnouncer: 2, DrivingCues: 2, RadioVoice: 2, Announcer: 2, AudioPanel: 2,
   // LAZY_RACE_SESSION reinjection: session-stub.js then the real module (cap 2).
   Damage: 2, Duel: 2, FlyingStart: 2, JumpStartPenalty: 2, MarshalPanels: 2, PitLane: 2, RaceEngineer: 2,
-  RaceFacts: 2, RaceRadio: 2, RadioLines: 2, Reliability: 2, SessionRecords: 2,
+  EventJournal: 2, RaceFacts: 2, RaceRadio: 2, RadioLines: 2, Reliability: 2, SessionRecords: 2,
   Spotter: 2, StartLights: 2,
 };
 

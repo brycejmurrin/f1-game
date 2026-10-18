@@ -76,6 +76,15 @@ Back-stack (Escape/BACK goes to the wrong screen or closes too much). Suspects i
    (`js/ui/platform-session.js` `initInput`).
 4. Then `paused` / `state`, and whether `hidden` on `#pmsettings` was flipped by
    something other than the door.
+5. Key-bind capture (CONTROLS rebind): `onKey` in `js/ui/key-binds.js` listens on
+   `window` in the CAPTURE phase and, while `armed`, `preventDefault`s +
+   `stopPropagation`s Escape and `disarm()`s — Escape cancels the capture and must
+   never reach `TopModal`. If the dialog closes instead, check `armed` / `onScreen()`
+   (an off-screen capture disarms without consuming) and that no listener sits ahead of it.
+6. Native `<dialog>` `cancel`: a second Escape in a row fires a NON-cancelable
+   `cancel`, so the dialog closes behind `preventDefault`; `wire()`'s `close`
+   handler in `js/ui/modal.js` then presses the door. A double page-skip lives here.
+A fixed back-stack bug gets a pin in `tests/unit/menu-a11y-audit.test.mjs`.
 Node-level pins (no browser, run singly):
 `node --test tests/unit/menu-a11y-audit.test.mjs` (Escape/door lockstep, "repeated
 keyboard Escape advances one dialog page"), `tests/unit/ui-improve-pass.test.mjs`
@@ -135,5 +144,4 @@ pointer) and the unrun tool in the PR.
 Check OS `prefers-reduced-motion` and the in-game MOTION setting separately.
 Inspect view transitions, looping HUD cues and programmatic focus scrolling.
 The tokens.css reduced-motion declarations are static evidence; native animation
-and scroll behavior still require the parent browser check. Modal rank must come
-from managed opening order, never querySelectorAll document order.
+and scroll behavior still require the parent browser check.

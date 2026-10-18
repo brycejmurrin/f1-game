@@ -5,6 +5,7 @@ import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { loadCrests, paintAt } from "../../tools/car/crest-sweep.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { loadAtlas } from "../../tools/car/livery-contrast.mjs";
 
 const source = (path) => fs.readFileSync(new URL("../../" + path, import.meta.url), "utf8");
 function load(extra = {}) {
@@ -180,10 +181,15 @@ function editorFixture() {
   const bodyRow = dom.document.createElement("label"); root.appendChild(bodyRow);
   const spineRow = pillRow("SPINE TOP", "spineLogo", ["stripe", ...D.PATTERNS], "stripe");
   const nextRow = pillRow("COVER BIND", "coverBind", ["independent", "saddleWrap", "spineOnly"], "independent");
+  pillRow("FIN HANDOFF", "finHandoff", ["match", "contrast", "hardCut"], "match");
+  pillRow("FIN SHAPE", "finShape", ["standard", "none"], "standard");
+  pillRow("HALO FINISH", "haloFinish", ["inherit", "gloss", "matte"], "inherit");
+  pillRow("TAIL STYLE", "finStyle", ["team", "chevron", "none"], "team");
   Object.defineProperty(spineRow, "nextSibling", { get: () => root.children[root.children.indexOf(spineRow) + 1] });
   const nameRow = dom.document.createElement("label"); root.appendChild(nameRow);
+  ctx.LiveryTex = { tailStyleOf: (id) => (id === "mclaren" ? "chevron" : "diag") };
   editor = E.attach(root, draft, { flush() {}, changed, preview(value) { previews.push(plain(value)); },
-    pillRow, spineRow, bodyRow, nameRow });
+    pillRow, spineRow, bodyRow, nameRow, teamId: "mclaren" });
   const click = (text) => { const b = root.querySelectorAll("button").find((b) => b.textContent === text); assert.ok(b, text); assert.ok(!b.disabled, text + " enabled"); b.onclick(); };
   return { root, draft, editor, previews, click, spineRow, nextRow, bodyRow, nameRow, D };
 }
@@ -287,6 +293,86 @@ test("new design controls support undo, redo, reset and meaningful line-weight a
   click("UNDO"); assert.equal(draft.patternRotation, "35"); assert.equal(draft.patternWeight, "175");
   click("ANGULAR SHARDS"); assert.equal(input("patternWeight").disabled, true);
   click("CIRCUIT TRACES"); assert.equal(input("patternWeight").disabled, false);
+});
+
+
+// Livery editor audit 2026-10-18, D2/D8: a greyed control said why only in `title`, which a phone never shows.
+test("a greyed control explains itself on screen, and the line goes when it comes back", async () => {
+  const { root, click } = editorFixture();
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const width = root.querySelectorAll("input").find((input) => input.dataset.livField === "patternWidth").parentNode;
+  const why = (row) => row.querySelectorAll("span").filter((el) => "livWhy" in el.dataset).map((el) => el.textContent);
+  await settle();
+  assert.equal(width.getAttribute("aria-disabled"), "true");
+  assert.deepEqual(why(width), ["Choose an adjustable design in SPINE TOP"], "visible reason under the greyed slider");
+  const slider = width.querySelectorAll("input")[0], line = width.querySelectorAll("span").find((el) => "livWhy" in el.dataset);
+  assert.ok(line.id && slider.getAttribute("aria-describedby").split(" ").includes(line.id), "the slider is described by the reason line");
+  assert.equal(line.getAttribute("aria-hidden"), "true", "read once, as the description, not again as label text");
+  const design = root.querySelectorAll("button").find((b) => b.textContent === "SWAP COLOURS").parentNode.parentNode;
+  assert.equal(design.getAttribute("aria-disabled"), "true", "SWAP / RESET grey as one row with the other pattern controls");
+  click("CONTOUR LINES"); await settle();
+  assert.deepEqual(why(width), [], "a live row carries no reason");
+  assert.equal(slider.hasAttribute("aria-describedby"), false, "and its description goes with it");
+  assert.equal(design.getAttribute("aria-disabled"), "false");
+  assert.deepEqual(why(design), ["SWAP COLOURS — Needs a two-colour design in SPINE TOP"], "a live row names its one dead choice");
+  click("CHECKERED FLAG"); await settle();
+  assert.deepEqual(why(design), []);
+});
+
+// D5 / D6: choices that changed neither mesh nor atlas outside one design, measured; now greyed with their reason.
+test("SPINE ONLY greys except on CAP and CONTRAST greys without a fin — and the painter agrees", async () => {
+  const { root, draft, editor } = editorFixture();
+  const pill = (id) => root.querySelectorAll("button").find((b) => b.dataset.csPill === id);
+  assert.equal(pill("coverBind:spineOnly").disabled, true);
+  assert.match(pill("coverBind:spineOnly").title, /CAP/);
+  draft.spineLogo = "cap"; editor.changed();
+  assert.equal(pill("coverBind:spineOnly").disabled, false);
+  assert.equal(pill("coverBind:saddleWrap").disabled, false, "the other binds stay live");
+  assert.equal(pill("finHandoff:contrast").disabled, false);
+  draft.finShape = "none"; editor.changed();
+  assert.equal(pill("finHandoff:contrast").disabled, true);
+  assert.equal(pill("finHandoff:hardCut").disabled, false, "HARD CUT also stops the cover pattern at the tail, fin or not");
+  // The rule against the rasterised atlas: SPINE ONLY differs from INDEPENDENT on CAP, and nowhere else.
+  const A = loadAtlas(), ops = (team, liv) => JSON.stringify(A.paint(team, liv));
+  for (const team of ["mclaren", "ferrari", "cadillac"]) {
+    const t = A.Teams.LIST.find((x) => x.id === team), base = { id: "custom_1", c1: t.color, c2: t.color2, finShape: "none" };
+    for (const top of A.LT.SPINE_LOGO_IDS) {
+      const acts = ops(team, { ...base, spineLogo: top, coverBind: "spineOnly" }) !== ops(team, { ...base, spineLogo: top });
+      assert.equal(acts, top === "cap", team + " " + top + ": SPINE ONLY " + (acts ? "acts" : "is inert"));
+    }
+    for (const side of A.LT.SPINE_SIDE_IDS)
+      assert.equal(ops(team, { ...base, spineSide: side, coverBind: "spineOnly" }), ops(team, { ...base, spineSide: side }), team + " side " + side);
+    for (const top of ["logo", "stripe", "checker"])
+      assert.equal(ops(team, { ...base, spineLogo: top, finHandoff: "contrast" }), ops(team, { ...base, spineLogo: top }), team + " " + top + ": CONTRAST without a fin");
+  }
+});
+
+// D3 retired after #2829: HALO FINISH reaches the hoop/blade/wing paint; the row stays live.
+test("HALO FINISH stays live and matte changes the mesh even without a coloured HALO (#2829)", async () => {
+  const { root, draft, editor } = editorFixture();
+  const row = root.querySelectorAll("button").find((b) => b.dataset.csPill === "haloFinish:matte").parentNode.parentNode;
+  for (const halo of ["", "#808085", "#e01080"]) {
+    draft.halo = halo; editor.changed();
+    assert.notEqual(row.getAttribute("aria-disabled"), "true", halo || "unset");
+  }
+  const M = loadParts();
+  const cockpit = M.Parts.CATALOG.find((c) => c.id === "cockpit");
+  const team = M.Teams.LIST.find((t) => t.id === "ferrari");
+  const parts = M.Parts.getVisualTiers({ cockpit: "standard" }, team);
+  const mats = (f) => Array.from(M.Car3D.build(team.color, team.color2, { livery: { haloFinish: f }, teamId: team.id, num: 4, parts, noWheels: true }).mat).join();
+  assert.notEqual(mats("matte"), mats("inherit"), "ferrari standard halo unset");
+});
+
+// D7: TAIL STYLE TEAM paints one of the named motifs, so its twin looked like a dead pill.
+test("TAIL STYLE TEAM names the motif it paints — and the atlas agrees for every team", () => {
+  const { root } = editorFixture();
+  assert.equal(root.querySelectorAll("button").find((b) => b.dataset.csPill === "finStyle:team").textContent, "TEAM · CHEVRON");
+  const A = loadAtlas(), ops = (team, liv) => JSON.stringify(A.paint(team, liv));
+  for (const t of A.Teams.LIST.filter((x) => !x.legends)) {
+    const base = { id: "custom_1", c1: t.color, c2: t.color2, finShape: "standard" }, kind = A.LT.tailStyleOf(t.id);
+    assert.ok(A.LT.TAIL_STYLE_IDS.includes(kind), t.id + ": " + kind + " is a pill");
+    assert.equal(ops(t.id, { ...base, finStyle: kind }), ops(t.id, { ...base, finStyle: "team" }), t.id + ": TEAM paints " + kind);
+  }
 });
 
 test("2026-motif designs: named, registered in their colour/line lists, and each paints distinct art", () => {
