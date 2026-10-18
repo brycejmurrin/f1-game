@@ -158,6 +158,13 @@ relabel.
 | LOW | Calendar move up / down disabled at the list ends without a reason (self-evident) | scan | — |
 | LOW | Raise the fitted cap: title says "Needs 1,300 cr more"; a visible "SHORT n cr" exists | career-ui.js:1114-1133 | — |
 
+## Portrait and desktop
+
+- **390×844 portrait (touch):** the same HIGH and MED findings as 852×393, row for row. Nothing is specific to portrait.
+- **1440×900 desktop:** the same findings except one. GEARS AUTO is not greyed on desktop, which is correct, because
+  that rule is touch-only. Six screens timed out on this box under load: results, trackdetail, standings, customize,
+  lighting tuner, camera tuner. The phone and portrait passes cover them.
+
 ## Regression scripts
 
 `scratch/ui-scan/scan.mjs` + `analyze.cjs` produced the scan rows (artifacts, regenerable). The paint editor's rule now
