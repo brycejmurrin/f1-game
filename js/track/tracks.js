@@ -785,7 +785,7 @@ const Tracks = (function () {
     return !!(ch && ch.chunks && ch.chunks.length);
   }
   function dropRibbonCpuIfReady(track, opts) {
-    if (!track || track._ribbonCpuDropped || (opts && opts.retainGeometry) || keepGeometry) return;
+    if (!track || track._ribbonCpuDropped || (opts && opts.retainGeometry) || (opts && opts.retainRibbonCpu) || keepGeometry) return;
     if (!track.roadGeo || !track.terrainGeo) return;
     if (!ribbonGpuSettled(track, "road") || !ribbonGpuSettled(track, "terrain")) return;
     for (const geo of [track.roadGeo, track.terrainGeo]) {
