@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { titlesIn, audit, observedTitles } from "../../tools/ci/test-observed.mjs";
+import { titlesIn, audit, observedTitles, parseLiveReporterLine, reporterTitle } from "../../tools/ci/test-observed.mjs";
 
 // The repo root, whose artifacts/logs is what tools/ci/test-observed.mjs reads.
 // (Resolving "../artifacts/logs" from tests/unit pointed at tests/artifacts/logs,
@@ -77,6 +77,27 @@ test("regex metacharacters in a template's literal chunks are escaped", () => {
   const [t] = titlesIn(src, "tests/specs/smoke.spec.js");
   assert.ok(t.pattern.test("tests/specs/smoke.spec.js › specs/smoke.spec.js › x: a + b (c)"));
   assert.ok(!t.pattern.test("tests/specs/smoke.spec.js › specs/smoke.spec.js › x: a  b  c "));
+});
+
+test("parseLiveReporterLine matches live-reporter and strips a GHA log prefix", () => {
+  const plain = "[06:07:16] + pass   1/3 tests/specs/smoke.spec.js › Apex 26 — smoke › jump() sets player speed and lateral offset (73.0s)";
+  const gha = `2026-10-13T11:48:07.8838909Z ${plain}`;
+  const title = "tests/specs/smoke.spec.js › Apex 26 — smoke › jump() sets player speed and lateral offset";
+  assert.equal(parseLiveReporterLine(plain), title);
+  assert.equal(parseLiveReporterLine(gha), title);
+  assert.equal(parseLiveReporterLine("[06:07:16] ! retry  1/3 tests/specs/smoke.spec.js › x (1.0s)"), null);
+});
+
+test("reporterTitle matches live-reporter for nested describes", () => {
+  const file = "tests/specs/hud-mirror.spec.js";
+  const full = "tests/specs/hud-mirror.spec.js › HUD rear-view mirror › TLX › TLX prepares an enabled mirror";
+  const rep = reporterTitle(file, ["HUD rear-view mirror", "TLX", "TLX prepares an enabled mirror"]);
+  assert.equal(rep, "tests/specs/hud-mirror.spec.js › TLX › TLX prepares an enabled mirror");
+  const [d] = titlesIn(`test.describe("HUD rear-view mirror", () => {
+    test.describe("TLX", () => { test("TLX prepares an enabled mirror", async () => {}); });
+  });`, file);
+  assert.equal(d.full, full);
+  assert.equal(d.reporter, rep);
 });
 
 test("skipped tests are declared but not counted as unobserved", () => {
