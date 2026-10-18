@@ -425,6 +425,7 @@ Self-contained three.js pages of engine-built cars and circuits, for hosts that 
 |---|---|---|
 | **viewer/build-viewer.mjs** | Writes one self-contained three.js viewer page of engine-built team cars and circuits, to open or publish. | playwright-probe |
 | **viewer/viewer-data.mjs** | Viewer payloads: Tracks.build circuits and Car3D.buildComplete team cars as compact JSON for viewer.html. | playwright-probe |
+| **viewer/viewer-shots.mjs** | Renders a built viewer page headlessly: one PNG per car and circuit, plus a labelled contact sheet. | playwright-probe |
 | **viewer/viewer.html** | Template for viewer/build-viewer.mjs: the three.js car and circuit page; data is spliced in at the DATA marker. | — |
 
 ### `tools/net/`

@@ -6,12 +6,14 @@
 //   node tools/viewer/build-viewer.mjs --cars=ferrari,mclaren  just these cars (no circuits)
 //   node tools/viewer/build-viewer.mjs --circuits=all          every circuit (no cars)
 //   node tools/viewer/build-viewer.mjs --cars=all --circuits=imola --out=scratch/v.html
+//   node tools/viewer/build-viewer.mjs --cars=all --shots      also PNG stills + a contact sheet (artifacts/viewer/shots/)
 //   node tools/viewer/build-viewer.mjs --list                  the valid team and circuit ids
-//   node tools/viewer/build-viewer.mjs --json                  one JSON line: {ok,out,bytes,cars,circuits}
+//   node tools/viewer/build-viewer.mjs --json                  one JSON line: {ok,out,bytes,cars,circuits[,shots,sheet]}
 //
 // Offline and browser-free: the data is built in node (tools/viewer/viewer-data.mjs)
 // and spliced into tools/viewer/viewer.html. The page loads three.js from
-// jsDelivr. Default output: artifacts/viewer/apex-viewer.html.
+// jsDelivr. Default output: artifacts/viewer/apex-viewer.html. --shots renders
+// the page in headless Chromium (viewer-shots.mjs) for a still to post in chat.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,12 +23,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 export const DEFAULT_CIRCUITS = ["monza", "spa", "monaco", "suzuka"];
 
 export function parseArgs(argv) {
-  const a = { cars: null, circuits: null, out: null, json: false, list: false };
+  const a = { cars: null, circuits: null, out: null, json: false, list: false, shots: false };
   for (const s of argv) {
     const m = /^--(cars|circuits|out)=(.*)$/.exec(s);
     if (m) a[m[1]] = m[2];
     else if (s === "--json") a.json = true;
     else if (s === "--list") a.list = true;
+    else if (s === "--shots") a.shots = true;
     else throw new Error(`unknown argument "${s}" (see the header of tools/viewer/build-viewer.mjs)`);
   }
   return a;
@@ -46,14 +49,22 @@ export function resolveSelection({ cars, circuits }, valid = { cars: teamIds(), 
   return { cars: pick(cars, valid.cars, "team"), circuits: pick(circuits, valid.circuits, "circuit") };
 }
 
-export function buildViewer(args) {
+export async function buildViewer(args) {
   const sel = resolveSelection(args);
   if (!sel.cars.length && !sel.circuits.length) throw new Error("nothing selected: pass --cars and/or --circuits");
   const html = viewerHtml(sel);
   const out = path.resolve(ROOT, args.out || "artifacts/viewer/apex-viewer.html");
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, html);
-  return { ok: true, out: path.relative(ROOT, out), bytes: Buffer.byteLength(html), ...sel };
+  const result = { ok: true, out: path.relative(ROOT, out), bytes: Buffer.byteLength(html), ...sel };
+  if (args.shots) {
+    const { shootViewer } = await import("./viewer-shots.mjs");
+    const dir = path.join(path.dirname(out), "shots");
+    const r = await shootViewer(out, { ...sel, outDir: dir, cacheDir: path.join(ROOT, "artifacts/viewer/cdn") });
+    result.shots = r.shots.map((s) => path.relative(ROOT, s.png));
+    result.sheet = r.sheet && path.relative(ROOT, r.sheet);
+  }
+  return result;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -63,9 +74,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       console.log("teams:    " + teamIds().join(" "));
       console.log("circuits: " + circuitIds().join(" "));
     } else {
-      const r = buildViewer(args);
+      const r = await buildViewer(args);
       if (args.json) console.log(JSON.stringify(r));
-      else console.log(`viewer: ${r.out} (${(r.bytes / 1e6).toFixed(2)} MB) — ${r.cars.length} car(s), ${r.circuits.length} circuit(s)`);
+      else {
+        console.log(`viewer: ${r.out} (${(r.bytes / 1e6).toFixed(2)} MB) — ${r.cars.length} car(s), ${r.circuits.length} circuit(s)`);
+        if (r.shots) console.log(`shots: ${r.shots.length} PNG(s)` + (r.sheet ? `, sheet ${r.sheet}` : ""));
+      }
     }
   } catch (e) {
     if (process.argv.includes("--json")) console.log(JSON.stringify({ ok: false, error: e.message }));

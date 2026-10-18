@@ -68,5 +68,7 @@ test("build-viewer: selection defaults, 'all', and refusals", () => {
   assert.throws(() => resolveSelection({ cars: "ferari" }, valid), /unknown team: ferari/);
   assert.throws(() => parseArgs(["--car=x"]), /unknown argument/);
   assert.deepEqual(parseArgs(["--cars=a,b", "--json"]).cars, "a,b");
+  assert.equal(parseArgs(["--shots"]).shots, true, "--shots is a flag");
+  assert.equal(parseArgs([]).shots, false);
   assert.ok(teamIds().includes("ferrari"));
 });
