@@ -1,1 +1,1 @@
-1792320993	Bryce Murrin	PR2900 UI inspector: correct stale HALO assertion after merged PR2829; tests/unit/livery-design.test.mjs only for blocker; tools/ui/explorer validation  [cursor/ui-inspector-evidence-b61f; session 2364f491e71d4cd182d7dc38]
+1792324887	Bryce Murrin	PR2900 UI inspector integration: ship HALO fix #2905 and canonical physics-test dependency #2912; no edits to owned physics/livery source  [cursor/ui-inspector-evidence-b61f; session 2364f491e71d4cd182d7dc38]
