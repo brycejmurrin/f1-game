@@ -115,3 +115,119 @@ test("shade contract numbers appear in all three lit backends", () => {
   assert.match(src.TLX, /select\(matteSurface, float\(0\.0\)/, "TLX: matte clearcoat stays 0");
   assert.match(src.WGX, /if \(matteSurface\) \{ clearcoat = 0\.0; \}/, "WGX: matte clearcoat stays 0");
 });
+
+// ---- Garage finishes S3: tinted chrome (36) and chameleon (37) ----------------------------------------------
+
+function shaderSources() {
+  return {
+    GLX: read("js/render/glx/shaders/glsl-lit.js"),
+    TLX: read("js/render/three/tsl-lit.js"),
+    WGX: read("js/render/webgpu/wgsl-chunks.js"),
+  };
+}
+
+test("FINISH_SURFACE rows tinted 36 and chameleon 37 exist, in the reserved ids", () => {
+  const { CarMaterials } = loadMaterials();
+  assert.equal(CarMaterials.FINISH_SURFACE.tinted, 36);
+  assert.equal(CarMaterials.FINISH_SURFACE.chameleon, 37);
+  assert.equal(CarMaterials.FINISH_RESERVED.tinted, 36);
+  assert.equal(CarMaterials.FINISH_RESERVED.chameleon, 37);
+  // shipped rows unchanged and still first (the chip order is the key order)
+  assert.deepEqual(Object.keys(CarMaterials.FINISH_SURFACE).slice(0, 6), ["satin", "chrome", "matte", "carbon", "brushed", "pearl"]);
+  assert.equal(CarMaterials.FINISH_SURFACE.pearl, 30);
+});
+
+test("tinted/chameleon remap only paint vertices; gloss and unset stay byte-identical", () => {
+  const { CarMaterials } = loadMaterials();
+  const { SURFACES, applyFinish } = CarMaterials;
+  for (const [name, id] of [["tinted", 36], ["chameleon", 37]]) {
+    const out = { mat: [SURFACES.paint, SURFACES.carbon, SURFACES.glass, SURFACES.rubber, SURFACES.paint] };
+    applyFinish(out, name);
+    assert.deepEqual(out.mat, [id, SURFACES.carbon, SURFACES.glass, SURFACES.rubber, id]);
+    const zone = { mat: [SURFACES.paint, SURFACES.paint] };
+    applyFinish(zone, "gloss", [{ name: "mirrors", from: 0, to: 1 }], { mirrorFinish: name });
+    assert.deepEqual(zone.mat, [id, SURFACES.paint]);
+  }
+  const base = { mat: [SURFACES.paint, SURFACES.carbon, SURFACES.paint] };
+  applyFinish(base, "gloss");
+  applyFinish(base, undefined);
+  assert.deepEqual(base.mat, [SURFACES.paint, SURFACES.carbon, SURFACES.paint]);
+});
+
+test("the garage chip rows are derived from FINISH_SURFACE, so the new finishes appear (and only rendered ones)", () => {
+  const { CarMaterials } = loadMaterials();
+  const sheet = read("js/garage/setup-sheet.js");
+  assert.match(sheet, /pillRow\("FINISH", "finish", \["gloss", \.\.\.Object\.keys\(Car3D\.FINISH_SURFACE\)\], "gloss"\)/);
+  assert.match(sheet, /\["inherit", "gloss", \.\.\.Object\.keys\(Car3D\.FINISH_SURFACE\)\]/);
+  const chips = ["gloss", ...Object.keys(CarMaterials.FINISH_SURFACE)];
+  assert.ok(chips.includes("tinted") && chips.includes("chameleon"));
+  // Rule: a row is only added once its branch exists in all three shaders.
+  const src = shaderSources();
+  for (const id of Object.values(CarMaterials.FINISH_SURFACE)) {
+    assert.match(src.GLX, new RegExp(`surfaceId == ${id}\\b`), `GLX has no branch for finish id ${id}`);
+    assert.match(src.WGX, new RegExp(`surfaceId == ${id}\\b`), `WGX has no branch for finish id ${id}`);
+    assert.match(src.TLX, new RegExp(`surfaceId\\.equal\\(${id}\\.0\\)`), `TLX has no branch for finish id ${id}`);
+  }
+});
+
+test("Teams.liveryEnumOk accepts the new finish names (derived from FINISH_SURFACE) and still refuses junk", () => {
+  const { CarMaterials } = loadMaterials();
+  const cx = vm.createContext({ console, Math, Object, Array, JSON, Number, String, Boolean, Map, Set });
+  cx.Car3D = { FINISH_SURFACE: CarMaterials.FINISH_SURFACE };
+  vm.runInContext(read("js/data/teams.js"), cx, { filename: "js/data/teams.js" });
+  const Teams = vm.runInContext("Teams", cx);
+  for (const f of ["gloss", "pearl", "tinted", "chameleon"]) assert.equal(Teams.liveryEnumOk("finish", f), true, f);
+  for (const f of ["constructor", "tintedd"]) assert.equal(Teams.liveryEnumOk("finish", f), false, f);
+});
+
+test("tinted chrome: mirror response + livery-hue reflection, same numbers in GLX / TLX / WGX", () => {
+  const { CarMaterialShade } = loadMaterials();
+  const T = CarMaterialShade.TINTED;
+  const src = shaderSources();
+  const pins = {
+    GLX: [/bool tintedSurface = surfaceId == 36;/, /bool mirrorSurface = surfaceId == 27 \|\| tintedSurface;/,
+      new RegExp(`if \\(tintedSurface\\) addCC \\*= mix\\(vec3\\(1\\.0\\), albedo / max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\), ${T.envTint}\\);`)],
+    WGX: [/let tintedSurface = surfaceId == 36;/, /let mirrorSurface = surfaceId == 27 \|\| tintedSurface;/,
+      new RegExp(`if \\(tintedSurface\\) \\{ addCC = addCC \\* mix\\(vec3<f32>\\(1\\.0\\), albedo / max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\), vec3<f32>\\(${T.envTint}\\)\\); \\}`)],
+    TLX: [/const tintedSurface = surfaceId\.equal\(36\.0\)\.toVar\(\);/, /const mirrorSurface = surfaceId\.equal\(27\.0\)\.or\(tintedSurface\)\.toVar\(\);/,
+      new RegExp(`addCC\\.mulAssign\\(mix\\(vec3\\(1\\.0\\), albedo\\.div\\(max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\)\\), ${T.envTint}\\)\\);`)],
+  };
+  for (const [name, res] of Object.entries(pins)) for (const re of res) assert.match(src[name], re, `${name}: tinted chrome drifted: ${re}`);
+  // the whole lit colour takes the hue after the metal block (T.finalTint): a red car stays red instead of washing pink
+  assert.equal(T.finalTint, true);
+  const hue = `albedo / max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\)`;
+  assert.match(src.GLX, new RegExp(`if \\(tintedSurface\\) color \\*= ${hue};`));
+  assert.match(src.WGX, new RegExp(`if \\(tintedSurface\\) \\{ color = color \\* \\(${hue}\\); \\}`));
+  assert.match(src.TLX, new RegExp(`If\\(tintedSurface, \\(\\) => \\{\\s*color\\.mulAssign\\(albedo\\.div\\(max\\(max\\(albedo\\.r, max\\(albedo\\.g, albedo\\.b\\)\\), ${T.chromaFloor}\\)\\)\\);`));
+  // the mirror response it inherits (chrome 27) is unchanged
+  assert.match(src.GLX, /mirrorSurface \? max\(uClearcoat, 0\.85\)/);
+  assert.match(src.GLX, /if \(mirrorSurface\) rough = min\(rough, 0\.09\);/);
+});
+
+test("chameleon: team hue face-on, fixed flip hue at grazing angles on the LIT colour, same numbers in GLX / TLX / WGX; pearl 30 untouched", () => {
+  const { CarMaterialShade } = loadMaterials();
+  const H = CarMaterialShade.CHAMELEON;
+  const src = shaderSources();
+  const f2 = (v) => v.toFixed(2);
+  const lit = (v) => (Number.isInteger(v) ? v.toFixed(1) : String(v));   // 1 -> "1.0", 0.25 -> "0.25": the spelling the shaders use
+  const [r, g, b] = H.flipHue.map(lit);
+  const lo = f2(H.flipFresLo), hi = f2(H.flipFresHi), w = f2(H.flipWeight);
+  const pins = {
+    GLX: [/bool chamSurface = surfaceId == 37;/, /bool iriSurface = surfaceId == 30 \|\| chamSurface;/,
+      new RegExp(`chamFlip = smoothstep\\(${lo}, ${hi}, fres\\);`),
+      new RegExp(`if \\(chamSurface\\) color \\*= mix\\(chamHue, vec3\\(${r}, ${g}, ${b}\\), chamFlip \\* ${w}\\);`)],
+    WGX: [/let chamSurface = surfaceId == 37;/, /let iriSurface = surfaceId == 30 \|\| chamSurface;/,
+      new RegExp(`chamFlip = smoothstep\\(${lo}, ${hi}, fres\\);`),
+      new RegExp(`if \\(chamSurface\\) \\{ color = color \\* mix\\(chamHue, vec3<f32>\\(${r}, ${g}, ${b}\\), vec3<f32>\\(chamFlip \\* ${w}\\)\\); \\}`)],
+    TLX: [/const chamSurface = surfaceId\.equal\(37\.0\)\.toVar\(\);/, /const iriSurface = surfaceId\.equal\(30\.0\)\.or\(chamSurface\)\.toVar\(\);/,
+      new RegExp(`chamFlip\\.assign\\(smoothstep\\(${lo}, ${hi}, fres\\)\\);`),
+      new RegExp(`color\\.mulAssign\\(mix\\(chamHue, vec3\\(${r}, ${g}, ${b}\\), chamFlip\\.mul\\(${w}\\)\\)\\);`)],
+  };
+  for (const [name, res] of Object.entries(pins)) for (const re of res) assert.match(src[name], re, `${name}: chameleon drifted: ${re}`);
+  // pearl 30 keeps its own constants (1.4 sweep, 0.30..0.92 window, 0.40 weight) in every backend
+  assert.match(src.GLX, /fres \* 1\.4\)\);[\s\S]{0,400}smoothstep\(0\.30, 0\.92, fres\) \* 0\.40/);
+  assert.match(src.WGX, /fres \* 1\.4\)\)\);[\s\S]{0,500}smoothstep\(0\.30, 0\.92, fres\) \* 0\.40/);
+  assert.match(src.TLX, /fres\.mul\(1\.4\)[\s\S]{0,400}smoothstep\(0\.30, 0\.92, fres\)\.mul\(0\.40\)/);
+  // the flip window sits in the grazing half and keeps the face-on colour
+  assert.ok(H.flipFresLo > 0.5 && H.flipWeight < 1.0);
+});

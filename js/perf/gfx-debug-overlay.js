@@ -98,6 +98,32 @@ const GfxDebug = (() => {
   // Brightness of what is actually on screen. On a WebGPU-claimed canvas a 2D
   // getImageData is impossible, so read the soft blit when there is one and say
   // so plainly when there is not — a missing number beats a made-up one
+  // I-5 (#1648): one pasteable line. Heap is Chrome-only (performance.memory);
+  // geometries / textures / render objects come from the TLX memState the
+  // renderer already keeps. A backend without that hook prints "?".
+  function pushMem(lines, glx) {
+    let heap = "n/a";
+    try {
+      const m = performance.memory;
+      if (m && typeof m.usedJSHeapSize === "number") heap = (m.usedJSHeapSize / 1048576).toFixed(1) + "MB";
+    } catch (_) { /* performance.memory is Chromium-only */ }
+    let geo = "?", tex = "?", rObj = "?";
+    try {
+      const ms = glx.__tlx && glx.__tlx.memState && glx.__tlx.memState();
+      if (ms) { geo = num(ms.rGeo); tex = num(ms.rTex); rObj = num(ms.rObj); }
+    } catch (_) { /* memState threw: the rest of the line still pastes */ }
+    let tier = "?", strikes = "?";
+    try {
+      const rs = (typeof window !== "undefined" && window.__apex && window.__apex.renderScale)
+        ? window.__apex.renderScale() : null;
+      if (rs) { tier = num(rs.tier); strikes = num(rs.crashStrikes); }
+    } catch (_) { /* pre-boot */ }
+    try {
+      if (strikes === "?" && typeof PerfGov !== "undefined" && PerfGov.strikes) strikes = num(PerfGov.strikes());
+    } catch (_) { /* governor not loaded */ }
+    lines.push(`mem heap=${heap} rObj=${rObj} geo=${geo} tex=${tex} tier=${tier} crashStrikes=${strikes}`);
+  }
+
   function pushFrameState(lines, glx) {
     // The BACKEND says whether it soft-presents, not the DOM: WGX blits onto
     // #game itself (its GPU canvas is offscreen), so "no #game-soft" read as
@@ -196,6 +222,7 @@ const GfxDebug = (() => {
     }
 
     if (glx.__tlx) pushThreeState(lines, glx.__tlx);
+    pushMem(lines, glx);
     pushFrameState(lines, glx);
     pushLoopState(lines);
 

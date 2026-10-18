@@ -24,17 +24,23 @@ test.describe("Garage categories — touch scrolling", () => {
       null, { polling: 100, timeout: BOOT_MS });
   }
 
-  async function swipe(context, page, axis, distance, group) {
-    const point = await page.locator("#cs-tabs").evaluate((rail, group) => {
+  async function swipe(context, page, axis, distance, group, edge = "inner") {
+    const point = await page.locator("#cs-tabs").evaluate((rail, arg) => {
       const r = rail.getBoundingClientRect();
-      const row = [...rail.querySelectorAll('[role="group"]')].find((el) => el.getAttribute("aria-label") === group);
-      if (!row) throw new Error(`missing category group: ${group}`);
+      const row = [...rail.querySelectorAll('[role="group"]')].find((el) => el.getAttribute("aria-label") === arg.group);
+      if (!row) throw new Error(`missing category group: ${arg.group}`);
       const visible = [...row.querySelectorAll(".cs-tab")].map((tab) => tab.getBoundingClientRect())
-        .filter((b) => b.left >= r.left && b.right <= r.right && b.top >= r.top && b.bottom <= r.bottom);
-      const b = visible[Math.max(0, visible.length - 2)];
+        .filter((b) => b.width > 0 && b.height > 0 && b.left >= r.left - 1 && b.right <= r.right + 1 && b.top >= r.top - 1 && b.bottom <= r.bottom + 1);
+      const b = arg.edge === "last" ? visible[visible.length - 1] : visible[Math.max(0, visible.length - 2)];
       if (!b) throw new Error("no category button inside the scrollport");
       return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
-    }, group);
+    }, { group, edge });
+    const hit = await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      const rail = document.getElementById("cs-tabs");
+      return { ok: !!(el && rail && (el === rail || rail.contains(el))), tag: el ? (el.getAttribute("data-cs-cat") || el.id || el.tagName) : "none" };
+    }, point);
+    if (!hit.ok) throw new Error(`category swipe missed #cs-tabs (${hit.tag} at ${Math.round(point.x)},${Math.round(point.y)})`);
     const cdp = await context.newCDPSession(page);
     try {
       await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
@@ -82,8 +88,33 @@ test.describe("Garage categories — touch scrolling", () => {
     await garage(page, 115);
     await expect(page.locator("#cs-inner")).toHaveAttribute("data-pair", "off");
     const rail = page.locator("#cs-tabs");
-    await swipe(context, page, "x", -140, "Performance categories");
-    await expect.poll(() => rail.evaluate((el) => el.scrollLeft)).toBeGreaterThan(20);
+    // data-pair flips in the same classify pass that makes #cs-tabs the
+    // horizontal scroller. Swiping on the first paint scrolls a node the next
+    // rebuild replaces, so scrollLeft is 0 and the retry — once the strip has
+    // stopped changing — passes (#2742, render shard, scrollLeft received 0).
+    await page.waitForFunction(() => {
+      const el = document.getElementById("cs-tabs");
+      const inner = document.getElementById("cs-inner");
+      if (!el || !inner || inner.dataset.pair !== "off") return false;
+      const overflowX = getComputedStyle(el).overflowX;
+      if (overflowX !== "auto" && overflowX !== "scroll") return false;
+      if (el.scrollWidth <= el.clientWidth + 20) return false;
+      const box = el.getBoundingClientRect();
+      const sig = `${el.querySelectorAll(".cs-tab").length}:${el.scrollWidth}:${Math.round(box.width)}x${Math.round(box.height)}`;
+      if (el._apexStripSig !== sig) { el._apexStripSig = sig; el._apexStripHits = 0; }
+      el._apexStripHits += 1;
+      return el._apexStripHits >= 3;
+    }, null, { polling: 100, timeout: BOOT_MS });
+    const travel = await rail.evaluate((el) => {
+      const railBox = el.getBoundingClientRect();
+      const next = [...el.querySelectorAll(".cs-tab")].find((t) => t.getBoundingClientRect().left > railBox.left + 8);
+      const w = next ? next.getBoundingClientRect().width : 80;
+      const delta = next ? next.getBoundingClientRect().left - railBox.left : 140;
+      // Past the mandatory snap midpoint, so a zero-velocity release cannot return home.
+      return Math.ceil(delta + w * 0.6);
+    });
+    await swipe(context, page, "x", -Math.max(travel, 80), "Performance categories", "last");
+    await expect.poll(() => rail.evaluate((el) => el.scrollLeft), { timeout: 5_000 }).toBeGreaterThan(20);
     await rail.locator('[data-cs-cat="aero"]').tap();
     await expect(page.locator("#cs-options")).toHaveAttribute("aria-labelledby", "cs-tab-aero");
   });
@@ -730,6 +761,18 @@ test.describe("Selection screen — iOS tablet portrait layout", () => {
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
 
+    // Tracks are filled after the sheet opens. A first paint can still report
+    // scrollWidth === clientWidth (Pages 39083584427: Expected >0, Received 0
+    // on the later scrollLeft assert after a zero-overflow aim). Wait until the
+    // strip actually overflows, same pattern as the garage category strip.
+    await page.waitForFunction(() => {
+      const list = document.getElementById("sel-tracks");
+      if (!list) return false;
+      const cs = getComputedStyle(list);
+      if (cs.overflowX !== "auto" || cs.overflowY !== "hidden") return false;
+      return list.scrollWidth > list.clientWidth;
+    }, null, { polling: 100, timeout: BOOT_MS });
+
     const before = await page.locator("#sel-tracks").evaluate((list) => ({
       clientWidth: list.clientWidth,
       scrollWidth: list.scrollWidth,
@@ -776,6 +819,12 @@ test.describe("Selection screen — iOS phone portrait touch scrolling", () => {
     await waitReady(page);
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
+
+    // Same settle as the tablet twin: assert overflow only after the strip fills.
+    await page.waitForFunction(() => {
+      const list = document.getElementById("sel-tracks");
+      return !!(list && list.scrollWidth > list.clientWidth);
+    }, null, { polling: 100, timeout: BOOT_MS });
 
     const list = await page.locator("#sel-tracks").evaluate((element) => ({
       clientWidth: element.clientWidth,

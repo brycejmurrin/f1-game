@@ -1040,3 +1040,34 @@ test("Supersedes: / Superseded by: pairs in docs/notes are two-way and indexed",
           `docs/notes/${f} says it is superseded by ${nu}, which must exist and carry the matching "Supersedes:" line`);
   }
 });
+
+// #1637. The KTX2/UASTC call was made on 2026-10-16 and left as "open" in the
+// plan and the asset-research rollout row. This is the one prose decision the
+// suite holds, because a standing "maybe" was the bug.
+test("#1637 Task 4 records the 2026-10-16 no to KTX2/UASTC", () => {
+  const md = read("docs/plans/2026-09-14-texture-memory-plan.md");
+  const start = md.indexOf("### Task 4:");
+  assert.ok(start >= 0, "Task 4 heading missing");
+  const rest = md.slice(start);
+  const next = rest.indexOf("\n### ", 1);
+  const body = next === -1 ? rest : rest.slice(0, next);
+  assert.match(body, /2026-10-16/, "the decision date");
+  assert.match(body, /not adopting KTX2\/UASTC/, "the decision");
+  assert.match(body, /dependency/, "the reason: a new runtime dependency");
+  assert.match(body, /failure path on phones/, "the reason: phone failure path");
+  assert.match(body, /- \[x\] Decide whether ~9 MB/);
+  assert.doesNotMatch(body, /- \[ \] Decide whether/);
+  assert.match(body, /- \[x\] If yes: UASTC/);
+  assert.match(body, /N\/A — the decision is no/);
+});
+
+test("#1637 ASSET-API-RESEARCH row 4 matches the same no", () => {
+  const research = read("docs/research/ASSET-API-RESEARCH.md");
+  const row = research.split("\n").find((line) => line.startsWith("| 4 | KTX2"));
+  assert.ok(row, "rollout row 4 missing");
+  assert.match(row, /\*\*no\*\*/);
+  assert.doesNotMatch(row, /\*\*open\*\*/);
+  assert.match(row, /2026-10-16/);
+  assert.match(row, /dependency/);
+  assert.match(row, /failure path on phones/);
+});

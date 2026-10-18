@@ -408,7 +408,7 @@ test("TEAM PICKER: opens on the current team, and a pick returns focus to the re
   assert.equal(h.dom.document.activeElement, card, "focus is on the NEW #cs-team-card, not <body>");
 });
 
-test("circuit filter chip click/Enter keeps focus on the rebuilt active chip", () => {
+test("circuit filter chip click/Enter keeps focus on the active chip", () => {
   // Bug hunt 2026-10-06: ArrowRight restored focus after setTrackFilter rebuild;
   // onclick (Enter/Space activate <button> via click) passed focus:false and
   // left document.activeElement on <body>, killing the filter roving tabindex.
@@ -421,9 +421,9 @@ test("circuit filter chip click/Enter keeps focus on the rebuilt active chip", (
   season.onclick({ stopPropagation() {}, detail: 0 });
   assert.equal(JSON.parse(h.data.get("trackFilter")), "season");
   const rebuilt = chip("season");
-  assert.ok(rebuilt, "bar rebuilt with season chip");
-  assert.notEqual(rebuilt, season, "the pressed chip node was replaced");
-  assert.equal(h.dom.document.activeElement, rebuilt, "focus lands on the new season chip");
+  assert.ok(rebuilt, "season chip still exists");
+  assert.equal(rebuilt, season, "the bar is updated in place: the pressed chip node is kept");
+  assert.equal(h.dom.document.activeElement, rebuilt, "focus stays on the season chip");
   assert.equal(rebuilt.getAttribute("aria-pressed"), "true");
   assert.equal(rebuilt.tabIndex, 0);
 });
@@ -2095,7 +2095,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   // unset (0px) with no mirror, so the own slot is what shows.
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px), calc(var(--mir-bot, 0px) + 8px))",
     "compact radio cards sit right under the timing row, like every other density");
-  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(#hud-flag:not([hidden])) #announce', "top"), "calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(> :where(#hud) > #hud-flag:not([hidden])) #announce', "top"), "calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px)",
     "…and step below the flag chip while a caution shows, never on top of it");
   assert.equal(decl(css("css/hud.css"), ":root[data-gap-drop] #announce", "--flag-slot-top"), "max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--hud-gaps-b, 0px) + 8px))",
     "gap-drop raises --flag-slot-top so announce steps from the dropped flag edge (and clears --hud-gaps-b)");
@@ -2105,7 +2105,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/hud.css"), "body:not(.desktop) #hud-inputs:not([data-hl-user])", "top"),
     "calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) * var(--hud-z-top, var(--hud-scale)) / var(--hud-z) + 12px + var(--inputs-below-limits, 0px))",
     "phone INPUTS park under the sector plate, and below the #hud-limits chip only while it shows");
-  assert.equal(decl(css("css/hud.css"), 'body:not([data-hud-hide~="limits"]):has(#hud-limits:not([hidden])) #hud-inputs', "--inputs-below-limits"), "calc(2.6em + 3px)",
+  assert.equal(decl(css("css/hud.css"), 'body:not([data-hud-hide~="limits"]):has(> :where(#hud) > #hud-limits:not([hidden])) #hud-inputs', "--inputs-below-limits"), "calc(2.6em + 3px)",
     "the limits step is the chip's own rule");
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "max(calc(72px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px))",
     "compact flag clears --hud-gaps-b (72px alone sat inside the gaps strip at phoneL 150%)");

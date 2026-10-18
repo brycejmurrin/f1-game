@@ -426,3 +426,34 @@ test("the solid-in-road audit still measures: a planted pillar is found, a lifte
   const lifted = box(t.py[k] + 6);
   assert.deepEqual(lifted, [], `a pillar 6 m up is overhead, not in the road; got ${JSON.stringify(lifted)}`);
 });
+
+// The browser spec used to accept a null gap (the carved road under the
+// asphalt) as "terrain is fine", so a missing mesh passed. These laterals sit
+// outside that carve. Measured 2026-10-17 in this VM; TOL matches the spec.
+test("basin probes outside the road carve are real numbers under the asphalt", () => {
+  const T = ctxOnce().Tracks;
+  const TOL = 0.18;
+  const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+  const cases = [
+    ["hungaroring", [0.163], [-14, -10, 10, 14], "gap"],
+    ["redbull", [0.98, 0.335], [-14, -10, 10, 14], "gap"],
+    ["mexico", [0.735, 0.78, 0.84, 0.855], [-18, 18], "over"],
+  ];
+  for (const [id, fracs, lats, which] of cases) {
+    const track = T.build(T.LIST.find((d) => d.id === id));
+    for (const f of fracs) {
+      const s = f * track.total;
+      T.sample(track, s, smp);
+      for (const lat of lats) {
+        const x = smp.p[0] + smp.r[0] * lat, z = smp.p[2] + smp.r[2] * lat;
+        const ty = T.terrainY(track, x, z);
+        assert.equal(typeof ty, "number", `${id} f=${f} lat=${lat} has no terrain`);
+        const bank = T.banking(track, s, lat);
+        const dy = bank && typeof bank.dy === "number" ? bank.dy : 0;
+        const gap = which === "over" ? ty - smp.p[1] - dy : ty - smp.p[1];
+        assert.ok(gap <= TOL, `${id} f=${f} lat=${lat} ${which}=${gap} above ${TOL}`);
+      }
+    }
+    ctxOnce().release(track);
+  }
+});

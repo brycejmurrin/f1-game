@@ -5,6 +5,7 @@
 // one of the world-view hooks, printing JSON.
 //
 //   node tools/shot/agent.mjs help
+//   node tools/shot/agent.mjs help physState   # one hook from docs/agent-index.json, no browser
 //   node tools/shot/agent.mjs monza world --detail brief
 //   node tools/shot/agent.mjs monza world --detail full --at 0.25 --speed 70
 //   node tools/shot/agent.mjs monaco track --what corners
@@ -44,7 +45,7 @@ import { parseFlags } from "../lib/cli-args.mjs";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 const COMMANDS = {
-  help: "the agent surface manifest (still boots Chromium; browser-free: createGame(...).apex.agentHelp() in tools/lib/game-vm.cjs)",
+  help: "the agent surface manifest; `help <hook>` prints one row from docs/agent-index.json and does not boot",
   world: "egocentric snapshot   --detail brief|drive|full  --horizon <s>  --points <n>",
   track: "static track data     --what corners|sectors|profile|all",
   field: "the grid / standings  --detail brief|full",
@@ -81,6 +82,48 @@ if (!COMMANDS[cmd]) {
   console.error(`unknown command "${cmd}" — one of: ${Object.keys(COMMANDS).join(", ")}`);
   process.exit(1);
 }
+
+// Flags that take a following value (the rest of the known list are booleans).
+const FLAG_VALUE = new Set(["at", "camera", "cols", "detail", "from", "horizon", "id", "kind", "kinds", "lateral", "lats", "limit", "near", "offset", "out", "points", "radius", "range", "reach", "rows", "samples", "seconds", "seed", "speed", "ss", "stations", "steer", "team", "to", "tod", "weather", "what"]);
+
+/** The hook name in `help <hook>` / `<track> help <hook>`, or null for a full manifest. */
+function helpHookName(args) {
+  const i = args.indexOf("help");
+  if (i < 0) return null;
+  for (let j = i + 1; j < args.length; j++) {
+    const a = args[j];
+    if (a.startsWith("--")) {
+      const name = a.split("=")[0].slice(2);
+      if (!a.includes("=") && FLAG_VALUE.has(name) && args[j + 1] && !args[j + 1].startsWith("--")) j++;
+      continue;
+    }
+    if (COMMANDS[a]) continue;
+    return a.replace(/\(\)$/, "");
+  }
+  return null;
+}
+
+/** One index row. Reads the generated index so a single hook does not boot Chromium. */
+function printOneHook(name) {
+  const fs = createRequire(ROOT + "/package.json")("node:fs");
+  const file = ROOT + "/docs/agent-index.json";
+  let idx;
+  try { idx = JSON.parse(fs.readFileSync(file, "utf8")); }
+  catch (e) {
+    console.error(`agent: docs/agent-index.json is not readable (${e.message}) — node tools/docs/gen-agent-index.mjs`);
+    return 2;
+  }
+  const hits = (idx.hooks || []).filter((h) => h.name === name);
+  if (!hits.length) {
+    console.error(`agent: no hook named "${name}" in docs/agent-index.json`);
+    return 1;
+  }
+  console.log(JSON.stringify(hits.length === 1 ? hits[0] : hits, null, 2));
+  return 0;
+}
+
+const hookQuery = cmd === "help" ? helpHookName(argv) : null;
+if (hookQuery) process.exit(printOneHook(hookQuery));
 
 const flag = (name, def) => {
   const equal = argv.find((arg) => arg.startsWith("--" + name + "="));
