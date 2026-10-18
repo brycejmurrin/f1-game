@@ -29,3 +29,8 @@ tool_timeout_sec = 300
 command = "bash"
 args = ["tools/mcp/js-debugger-mcp.sh", "serve"]
 startup_timeout_sec = 60
+
+[mcp_servers.apex-lsp]
+command = "bash"
+args = ["tools/mcp/lsp-mcp.sh", "serve"]
+startup_timeout_sec = 30

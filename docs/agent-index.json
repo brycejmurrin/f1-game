@@ -1105,6 +1105,7 @@
         "tests/unit/environment-json.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/js-debugger-mcp.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/ui-explorer-core.test.mjs",
         "tests/unit/ui-explorer-report.test.mjs",
         "tests/unit/ui-explorer.test.mjs",
