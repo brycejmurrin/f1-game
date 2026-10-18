@@ -225,3 +225,31 @@ test("reads game modules that are top-level consts, not window properties (the r
   assert.equal(s.tier, 1);
   assert.equal(s.preset, "high");
 });
+
+test("repeated recorder downloads release superseded blobs and keep the current link valid", () => {
+  const timers = [];
+  const PR = load({ setTimeout: (fn, ms) => { timers.push({ fn, ms }); } }), live = new Map(), revoked = [], anchors = [];
+  let serial = 0;
+  const URLc = {
+    createObjectURL(blob) { const url = 'blob:recorder-' + ++serial; live.set(url, blob); return url; },
+    revokeObjectURL(url) { revoked.push(url); live.delete(url); },
+  };
+  const doc = { createElement: () => { const a = { style: {}, click() { anchors.push(a.href); }, remove() {} }; return a; }, body: { appendChild() {} } };
+  let latest;
+  for (let i = 0; i < 40; i++) latest = PR.download('recording ' + i, 'run.json', { doc, URL: URLc });
+  assert.equal(live.size, 40, 'give asynchronous browser downloads time to read the old URL');
+  assert.equal(revoked.length, 0);
+  assert.equal(timers.length, 39);
+  for (const timer of timers.splice(0)) { assert.equal(timer.ms, 10000); timer.fn(); }
+  assert.equal(live.size, 1, 'after the read window, only the current fallback link stays alive');
+  assert.equal(revoked.length, 39);
+  assert.equal(live.has(latest.url), true, 'do not revoke the still-visible download link');
+  assert.equal(anchors.at(-1), latest.url);
+  // Revocation belongs to the URL provider that allocated it, even when the
+  // next export gets a different dependency (e.g. an embedded host).
+  PR.download('next', 'next.json', { doc, URL: { createObjectURL: () => 'blob:other', revokeObjectURL() {} } });
+  assert.equal(live.size, 1);
+  timers.shift().fn();
+  assert.equal(live.size, 0);
+  assert.equal(revoked.length, 40);
+});
