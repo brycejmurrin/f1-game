@@ -79,6 +79,7 @@ export async function thumbBlock(png, width = 640) {
 export function createExtras(ctx) {
   const { ROOT, toolResult, refuse, acquireLock, releaseLock, occupancyRefuse, assertSafeOut,
     knownCircuits, runSpawn, log, mockMode } = ctx;
+  const spawnChild = ctx.spawnChild || spawn;   // tests inject a fake track-session child
   /** verify-change --fast exits 2 for a "partial" verdict (the browser groups are not run by design): a result, not a failure — the sync tool allowed 0 and 2 too. */
   const jobExitOk = (kind, code) => code === 0 || (kind === "verify_change_fast" && code === 2);
   const nodeArgv = (rel, ...a) => [process.execPath, path.join(ROOT, "tools", rel), ...a];
@@ -137,7 +138,7 @@ export function createExtras(ctx) {
     if (mockMode()) return toolResult({ ok: true, mock: true, op: "open", argv });
     const took = acquireLock("apex_track");
     if (took) return took;
-    const child = spawn(argv[0], argv.slice(1), { cwd: ROOT, env: surveyGlEnv(args), stdio: ["pipe", "pipe", "pipe"], detached: true });
+    const child = spawnChild(argv[0], argv.slice(1), { cwd: ROOT, env: surveyGlEnv(args), stdio: ["pipe", "pipe", "pipe"], detached: true });
     const s = sess = { child, track, pending: new Map(), seq: 0, buf: "", started: Date.now(), shots: 0, exited: false, out };
     const ready = new Promise((resolve) => {
       s.onReady = resolve;
@@ -157,6 +158,8 @@ export function createExtras(ctx) {
     });
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (d) => log(`[track] ${String(d).trim().slice(0, 300)}`));
+    // EPIPE from a dying child is an 'error' event: unhandled, it took the whole server down.
+    child.stdin.on("error", (e) => log(`[track] stdin: ${e.message}`));
     child.on("exit", (code, sig) => {
       s.exited = true;
       s.onReady(null);
@@ -871,6 +874,18 @@ export function createExtras(ctx) {
   return {
     thumbBlock,
     sessionInfo,
+    /** Server shutdown: close the track session (it holds the browser lock); resolves once its tree is gone. */
+    closeAll(reason) {
+      const s = sess;
+      return sessClose(reason) ? s.closing : Promise.resolve(null);
+    },
+    /** The running browser job, in memory or on disk. A one-shot `call` records its own short-lived pid as the lock
+     *  owner, so the lock reads stale while the job's browser runs; occupancyRefuse asks this too. */
+    runningBrowserJob() {
+      for (const j of jobs.values()) if (j.browser && j.state === "running") return { id: j.id, kind: j.kind, pid: j.pid };
+      const d = listDiskJobs().find((j) => j.browser && j.state === "running" && !jobs.has(j.id));
+      return d ? { id: d.id, kind: d.kind, pid: d.pid } : null;
+    },
     handlers: {
       apex_shot_survey: (a) => handleShotSurvey(a),
       apex_track: (a) => handleTrack(a),
