@@ -96,6 +96,9 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `wake-lock.js` | `RaceWakeLock` | tag | RaceWakeLock: asynchronous screen wake-lock ownership. |
 | `save-schema-registry.js` | `SaveSchemaRegistry` | tag | SaveSchemaRegistry: manifest of every apex26.* persistence key. |
 | `store.js` | `GameStore` | tag | persistence for js/game.js: the cached localStorage wrapper (`store`, all keys prefixed "apex26.", plus the uncached raw-string lane the settings panels… |
+| `i18n-pseudo.js` | `I18nPseudo` | tag | pseudo-locale expansion for layout stress (en-XA). |
+| `i18n.js` | `I18n` | tag | gettext-style I18n: English defaults at the call site, optional locale JSON. |
+| `dom-apply.js` | `I18nDom` | tag | apply data-i18n / data-i18n-attr when the active language is not plain English. |
 
 **`js/`**
 

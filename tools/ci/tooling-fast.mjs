@@ -575,6 +575,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-tyres.test.mjs",
   // Round-2: hwZones are control-point index fractions — every zone with a curated turn inside its window narrows that corner.
   "tests/unit/hw-zones.test.mjs",
+  "tests/unit/i18n.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
   "tests/unit/import-models.test.mjs",
