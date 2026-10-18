@@ -1,6 +1,6 @@
 ---
 name: steward
-description: "Use when you own, pick up or are handed a PR, or a PR or the deploy branch is red, cancelled, conflicting or its CI watch expired: keep its Plan current, name the failing test, sync-pr, push once per green cycle."
+description: "Use when you own, pick up or are handed a PR, or a PR or the deploy branch is red, cancelled, conflicting or its CI watch expired: Plan, failing test, sync-pr, push once per green cycle."
 ---
 
 # Driving a PR to green in Apex 26
@@ -22,69 +22,46 @@ Review, hunt or survey findings on the PR → agent `finding-verifier` before yo
 4. Fix on the branch; sync only when §2 says you must.
 5. Gate: `node tools/ci/deploy.mjs --gate-only` (§6).
 6. ONE push per verified batch; refresh the PR body's Plan and Status.
-7. Watch (§7, §9) until `= ci passed`; then `who-is-on-it.mjs --release`.
+7. Draft → ready only when `node tools/ci/ready-gate.mjs --pr <n>` exits 0 (no ready cap).
+8. Watch (§7, §9) until `= ci passed`; then `who-is-on-it.mjs --release`.
 
-## 1. `cancelled` means three different things — read the jobs, not the conclusion
+## 1. `cancelled`: read the jobs, not the conclusion
 
-A live sibling run on the same `head_sha` is the draft/ready dedupe (AGENTS.md
-rule 8): do not re-run it or report it as a failure. Deploy-branch pushes queue
-in pages.yml's `pages-train-*` group (only the newest waiting push stays
-pending; `ci-watch.mjs --sha` says `superseded`). Before marking ready, run
-`node tools/ci/ready-gate.mjs --pr <n>` (there is no ready cap).
+Which `cancelled` is benign (the draft/ready dedupe on one `head_sha`) and which
+is a timeout is AGENTS.md rule 8. Deploy-branch pushes queue in pages.yml's
+`pages-train-*` group (`ci-watch.mjs --sha` says `superseded`). A job at its
+`timeout-minutes` cap with zero failures is a real red. List the run's jobs
+before deciding; `ci-red-triage` does that and returns the status line.
 
-The other two look identical from the conclusion alone:
+A PR that ends `cancelled` twice with zero failures:
 
-- **A job that hit `timeout-minutes` reports `cancelled`** with zero failures
-  and every test green right up to the kill — that is a real red (why
-  `node-suites` runs as matrix slices, each with its own cap; `CI` is the one required check).
-- Anywhere else, `cancelled` with zero failures is a timeout until proven
-  otherwise (AGENTS.md rule 8).
+1. `node tools/ci/ci-watch.mjs --sha <head sha> --once` (exit 2 / `= ci cancelled` =
+   newest run per workflow, no failed job, no live sibling).
+2. Same head SHA both times → the dedupe or a push over a live run: wait for
+   the newest run, do not re-run.
+3. The newest run itself `cancelled` → `ci-red-triage` for a job at its cap (a
+   real red); check `/proc/loadavg`.
+4. Neither → re-dispatch `ci.yml` once (`group: <name>`); never sync to
+   "refresh" it (§2). Re-run only via `tools/ci/ci-rerun.mjs <run_id>`.
 
-So: list the run's jobs and look for a failed one and for a job at its cap
-before you decide. `ci-red-triage` does exactly this and returns the status line.
+## 2. A base merge is `sync-pr.mjs`, never a hand merge, and only when you must
 
-A PR that ends `cancelled` twice, zero failures — the recipe:
-
-    node tools/ci/ci-watch.mjs --sha <head sha> --once   # exit 2 / `= ci cancelled` = newest run per workflow, no failed job, no live sibling
-
-1. Is the head SHA the same both times? Then it is the draft/ready dedupe or a
-   push over a live run (a newer push to the same `head.ref` cancels the older
-   run too): wait for the newest run, do not re-run. 2. Newest run itself
-   `cancelled`: open its jobs (`ci-red-triage`) for one at its `timeout-minutes`
-   cap — a real red — and check `/proc/loadavg`. 3. Neither: re-dispatch
-   `ci.yml` once (`group: <name>`), do NOT sync the branch to "refresh" it
-   (section 2: a sync is a new full PR run and can cancel again). Re-run only via `tools/ci/ci-rerun.mjs <run_id>`.
-
-## 2. A base merge is `sync-pr.mjs`, never a hand merge — and only when you must
+When to sync is AGENTS.md §Git branch & deploy; `node tools/ci/needs-sync.mjs <branch>`
+answers it (`= sync needed: conflict | stale-red | no`) and `sync-pr` refuses `no`.
 
     node tools/ci/sync-pr.mjs <branch> --plan   # cached refs only; no conflict proof
+    node tools/ci/sync-pr.mjs <branch>          # real merge, pushes nothing, leaves you ON sync-pr-<branch>
     node tools/ci/sync-pr.mjs <branch> --push   # fresh verified sync, when publication is intended
 
-**Run `node tools/ci/needs-sync.mjs <branch>` first** (`= sync needed: conflict | stale-red | no`; `sync-pr` refuses `no`, exit 4, without `--force-clean-behind`). **Do not sync on every tip move.** Branch protection requires the `CI`
-check green on the PR's own head, NOT an up-to-date branch, and every re-sync is a fresh PR run. Sync when GitHub
-reports a conflict, or when a required check is red on the tip and the fix
-is already there. A green PR merges as it stands. **Red AND conflicting:** fix the red on the branch first, then sync once, then ONE push (two pushes cancel the live run — AGENTS.md rule 4).
-Bare `sync-pr <branch>` (no flag) does the real merge and pushes nothing. Prose-only clean merge: `--verify=none --push` (role-pr-owner.md).
-
-A base merge can conflict on generated files (ratchets are per-branch deltas
-now); `sync-pr` cures those and hands back the rest. It leaves you ON
-`sync-pr-<branch>` and pushes nothing without `--push` — publish already verified output using its printed manual push command, or
-inspect/rename an existing temp branch before a fresh sync. Recovery is in
-`check-changes` SKILL.md §After `sync-pr.mjs` (not references/deploy.md).
-
-**Hand-written files conflict (prose, a help sheet, a ratchet's FORM):**
-`sync-pr` runs `merge --abort`, prints `real conflicts … resolve by hand`
-(a `(moved to <path>)` tag = re-apply their edit there), and returns you to
-the branch you started on; `sync-pr-<branch>` is left as an unmerged copy of the
-PR head — inspect it before removal or rename. An existing temp branch makes
-a fresh sync refuse rather than delete unpublished output. Order:
-`sync-pr <branch> --plan` (cached refs; `conflicts:null`, `conflictsChecked:false`;
-no fetch or merge-tree) → `who-is-on-it.mjs` if the base file is not yours → `git checkout
-<branch> && git merge origin/claude/f1-game-project-26h3ng` → keep BOTH sides'
-intent in each hand-written file → generated leftovers at the source + `npm
-run gen` → `git add`/commit → `deploy.mjs --gate-only` → plain `git push`
-(never force). Record the files and the resolution in the PR body: a ticked
-Plan item with the merge sha (AGENTS.md rule 12). Generated files: AGENTS.md rule 11.
+- **Red AND conflicting:** fix the red on the branch first, sync once, then ONE push.
+- Verify by diff size: a clean merge where gen rewrote nothing and the PR diff is
+  prose or generated files only → `--verify=none --push` (CI re-gates the head);
+  else the default `--verify=fast` plus `tooling-fast --changed` (a full ladder
+  measured 723 s vs 110 s).
+- Generated-file conflicts `sync-pr` cures; hand-written ones it aborts and
+  hands back. The temp-branch trap and the hand-resolve recipe:
+  `check-changes` [`references/sync-pr.md`](../check-changes/references/sync-pr.md).
+  Record the files and resolution as a ticked Plan item with the merge sha.
 
 ## 3. A red you did not cause → find out who is on it FIRST
 

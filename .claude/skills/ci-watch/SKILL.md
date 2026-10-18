@@ -1,6 +1,6 @@
 ---
 name: ci-watch
-description: "Use when designated Merge Desk / CI Watch: sweep open PRs, ready green drafts, disable SQUASH/REBASE arms, arm MERGE auto-merge."
+description: "Use when designated Merge Desk / CI Watch or sent SWEEP <PR#>: pr-board sweeps, ready green drafts, disable foreign SQUASH/REBASE arms, arm MERGE auto-merge."
 ---
 
 # Merge Desk sweep procedure (this skill kept its old `ci-watch` name)
@@ -37,10 +37,11 @@ ARM a PR only when ALL hold; any miss is WAIT (say which):
   token is the only veto; other wording ("do not merge") is not one, and never
   write such lines. Only whoever set it clears it, by deleting the line.
 
-**Re-check the board's suggestion yourself.** Until `pr-board.mjs` is fixed it
-has suggested ARM while CI still runs, ARM with an open Plan item, and READY
-on a PR whose body holds `MERGE-HOLD:`. Before any READY or ARM, run
-`ready-gate.mjs --pr <n>` and read the body for a `MERGE-HOLD:` line.
+**The board suggests; this gate decides.** `pr-board.mjs` before PR #2864 can
+suggest ARM while CI still runs, ARM with an open Plan item, and READY on a PR
+whose body holds `MERGE-HOLD:`; from #2864 it applies these checks itself. On
+either version, before any READY or ARM run `ready-gate.mjs --pr <n>` and read
+the body for a `MERGE-HOLD:` line: the gate is the backstop.
 
 No ready cap since 2026-10-16: ci.yml's `queue: max` lanes bound the browser
 legs inside GitHub; `ready-full-cap.mjs` prints the count for information only.

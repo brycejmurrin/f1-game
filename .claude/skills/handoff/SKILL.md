@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "Use when the user asks for a handoff prompt, to continue in a new session, or a cold-start brief."
+description: "Use when the user asks for a handoff or paste-ready cold-start prompt, to continue in a new session or chat, or nears the context limit."
 user-invocable: true
 ---
 

@@ -84,7 +84,7 @@ Keep working on anything the blocker does not touch while you wait.
   (`send_later`), and end the turn silently. A green per-job event needs no
   reply; only a red, a review or a merge conflict is work.
 - The harness Stop hook (`~/.claude/stop-hook-git-check.sh`, outside the repo,
-  not changeable here) is answered, not obeyed, when a push is held or the PR
+  not changeable here, and absent on some hosts) is answered, not obeyed, when a push is held or the PR
   merged: `git checkout --detach origin/<deploy>` clears its unpushed count.
   A user's "don't commit X" beats the hook.
 - One git verb per Bash call for `push`, `fetch` and `worktree add`; chained

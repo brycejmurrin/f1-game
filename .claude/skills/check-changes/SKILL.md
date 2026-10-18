@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: "Use when asked did I break anything, pick tests, validate/pre-push, verify track edits, js/css shell/cache policy, deploy-branch merge/push, or Playwright timeout triage. Red Actions → ci-red-triage."
+description: "Use when asked did I break anything, pick the minimum tests, validate/pre-push, verify track edits, js/css shell/cache policy, deploy-branch merge/push, or Playwright timeout triage. Red Actions → ci-red-triage."
 ---
 
 # Validate changes before committing/pushing
@@ -36,21 +36,16 @@ node tools/ci/verify-change.mjs              # fast gate + start batch 1 (backgr
 node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked
 ```
 
-`--fast` is the edit-loop rung, not the top one (AGENTS.md rules 3–5). Before a
-push, run the only check that runs what the deploy runs, once:
+`--fast` is the edit-loop rung; before a push run `node tools/ci/deploy.mjs --gate-only`
+once (the ladder: AGENTS.md rule 3). A started batch's verdict is its log's `= run …` line
+(`references/triage.md`).
 
-```sh
-node tools/ci/deploy.mjs --gate-only         # pushes NOTHING; a dirty tree is fine
-```
-
-A started batch's verdict is its log's `= run …` line (`references/triage.md`).
-
-Is the tree already red? Not a `--plan` question: `node tools/ci/deploy.mjs --train`
-prints the deploy branch's last ci / pages / nightly conclusions; before blaming your
-change, `verify-agent` with `--base <ref>` answers `DELTA: same-red | new-on-session |
-already-red-on-ref`; before fixing a red you did not cause, `node tools/ci/who-is-on-it.mjs`.
-Scale the plan to AGENTS.md §Verification's table: its `batches` can list more browser
-groups than the cap; the engine / physics recipe is `references/engine-physics.md`.
+- **Already red?** `node tools/ci/deploy.mjs --train` prints the deploy branch's last ci /
+  pages / nightly conclusions; `verify-agent --base <ref>` answers `DELTA: same-red |
+  new-on-session | already-red-on-ref`; a red you did not cause → `who-is-on-it.mjs` first.
+- **Which groups, in what order?** `--plan`'s `batches` can exceed AGENTS.md §Verification's
+  cap. Order: plan, then the two most specific groups one at a time (the master-gate spec
+  alone for a quick signal), the rest named not-run, then the gate: `references/engine-physics.md`.
 
 Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 
@@ -63,9 +58,6 @@ Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
 node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wrap)
 ./tools/mcp/apex-tools-mcp.sh smoke
 ```
-
-- When AGENTS.md retires a rule, grep `tools/` and `.claude/hooks/` for its constant in the same PR
-  (the ready-PR cap retired 2026-10-16 still ran as 3 in `ready-full-cap.mjs` and sessions obeyed it).
 
 ## Load on demand
 

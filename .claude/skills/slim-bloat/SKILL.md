@@ -1,6 +1,6 @@
 ---
 name: slim-bloat
-description: "Use when files, docs or the tree grow too large for agents — saturated size ratchet, dead or duplicate code, repeated docs rules, stale comments, extract/split candidates, or \"simplify this / too much context\". Not CSS restructure (css-play) or skill hygiene (agent-config)."
+description: "Use when files, docs or the tree grow too large — saturated size ratchet, dead or duplicate code, repeated docs rules, stale comments, extract/split candidates, or \"simplify this / too much context\". Not CSS (css-play) or skills (agent-config)."
 ---
 
 # Cut agent bloat (Claude-simplify for Apex 26)
@@ -17,7 +17,7 @@ node tools/check/ratchets.mjs --json                # per-metric lines/codeLines
 node tools/check/extract-module.mjs js/game.js <start> <end>   # free refs of ONE whole function: take its line range from grep -n first
 ```
 
-Slack 0 on every row = saturated: the scan names no block. First `node tools/check/ratchets.mjs --base origin/<ship>`
+Slack 0 on every row = saturated: the scan names no block. First `node tools/check/ratchets.mjs --base origin/<ship>` (`<ship>` = the deploy branch, `claude/f1-game-project-26h3ng`)
 (names raises: a blocked commit may be a raise, not saturation). Seed the auditor with
 `docs/ARCHITECTURE.md` §Deferred follow-ups / §Extraction lessons (sort by boundary crossings). Candidates come
 only from `bloat-auditor` (a cohesive block with few free names — `extract-module`
@@ -45,11 +45,10 @@ locksteps; if `tools/manifest.cjs` changed, run `node tools/gen/gen-shell.mjs`
    (`ARCHITECTURE.md` §Reorg — copied constants, leftover `_cautionOn`).
 2. **Never raise a ratchet to hide growth.** `node tools/check/ratchets.mjs --update`
    in the same commit as the extract. Same for skill line caps.
-3. **Never convert IIFE → ESM.** New-file lockstep: file + `<script>` +
-   `tools/manifest.cjs` (+ `HARD_EDGES` if eval-time) + `node tools/gen/gen-shell.mjs`.
-4. **Never hand the auditor a browser run.** Dead `__apex` hooks: parent
-   confirms with **mcp-probe** / `node tools/mcp/mcp-cli.mjs probe` after `apex_status`.
-   Context7 / WebFetch are fine (Agent Skills caps, library docs).
+3. **Never convert IIFE → ESM**; a carved-out file follows AGENTS.md §Critical
+   conventions' new-file recipe.
+4. **Never hand the auditor a browser run** (AGENTS.md rule 10, `bash-guard.sh`).
+   Dead `__apex` hooks: the parent confirms with **mcp-probe**.
 5. **Never "simplify" physics, the timestep, or `updateCar`/`render()`.**
    See do-not.md.
 

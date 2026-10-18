@@ -1,6 +1,6 @@
 ---
 name: agent-config
-description: "Use when editing AGENTS.md/CLAUDE.md, adding a skill or a SKILL.md description, subagents, hooks, skill-routing queries or eval, or a description budget fails. Code or docs bloat → slim-bloat."
+description: "Use when editing AGENTS.md/CLAUDE.md, a skill or its description, subagents, hooks, skill-routing queries or eval, or a description budget fails. Code or docs bloat → slim-bloat."
 ---
 
 # Edit the agent surface — instructions, skills, subagents, hooks
@@ -16,15 +16,16 @@ description: "Use when editing AGENTS.md/CLAUDE.md, adding a skill or a SKILL.md
 
 ## Budgets the tests enforce (`tests/unit/agent-config.test.mjs`)
 
-- `AGENTS.md` ≤ 28,500 B; every root-to-nested AGENTS.md chain ≤ 31,000 B
-  (Codex's 32 KiB project-doc cap); ≤ 75 rule-bearing lines.
-- All skill descriptions together stay under the word and char budgets in
-  `agent-config.test.mjs` (read the live figures there, not here); one
-  description ≤ 1,024 chars; every `→ name` must be a skill or agent. The
-  failure message prints the live totals — trim one to add one.
-- Every skill needs `tests/data/skill-routing/queries/<skill>.json` (5+
-  should-fire, 3 near-miss rows naming the neighbour) and a recipe in
-  `tools/check/skill-smoke-recipes.json` (`tests/unit/skill-progressive.test.mjs`).
+Read the live figures in the test, not here; each failure message prints the
+current total, so trim one to add one.
+
+- `AGENTS.md` and every root-to-nested AGENTS.md chain under byte caps (Codex's
+  32 KiB project-doc cap), plus a rule-bearing line cap (`AGENTS_MAX`,
+  `CHAIN_MAX` and the line budget in the test).
+- All skill descriptions together under the word and char budgets; one
+  description ≤ 1,024 chars (the spec cap); every `→ name` must be a skill or agent.
+- Every skill needs a routing query file and a smoke recipe (§New skill steps 3–4;
+  `tests/unit/skill-progressive.test.mjs`).
 - SKILL.md body under 500 lines; frontmatter keys only from the allowlist in
   `tests/unit/agent-surface.test.mjs`.
 
@@ -55,7 +56,10 @@ description: "Use when editing AGENTS.md/CLAUDE.md, adding a skill or a SKILL.md
    npm run gen:check          # tools/README.md is generated from @doc / @skill headers
    npm run test:docs-guards   # the whole agent-surface group
    ```
-4. A/B the routing (one `claude -p` per query — budget it):
+4. A/B the routing. It needs the `claude` CLI on PATH, logged in, and spends
+   real model calls: one `claude -p` per query per run per side, so
+   `--only <skill>,<neighbour> --runs 3` on 8-row files is 2 × 8 × 3 × 2 = 96
+   calls. Run it only when a description change is contested:
    ```sh
    git worktree add ../wt-base origin/claude/f1-game-project-26h3ng
    python3 tools/check/skill-routing-eval.py --queries tests/data/skill-routing/queries --root ../wt-base --out artifacts/route-base.json --only <skill>,<neighbour> --runs 3 --grace 2

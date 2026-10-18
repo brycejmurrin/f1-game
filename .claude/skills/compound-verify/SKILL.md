@@ -9,7 +9,6 @@ This project copy is an explicit opt-in. The repository subsystem skills, `check
 
 The F1 checks, cheapest first: `node tools/ci/pick-tests.mjs` names the groups a change needs; `node tools/ci/tooling-fast.mjs --changed --jobs=3` in the edit loop and `npm run test:tooling-fast` before a code push; one browser group at a time via `node tools/ci/test-bg.mjs <group>` in the background, its verdict the log's `= run …` line (AGENTS.md rules 4–5). Never run a browser inside a subagent (rule 10): mark that coverage Skip with the reason.
 
-
 # Verify changed behavior
 
 Done when every scoped behavior has a Pass, Fail, or Skip outcome with supporting evidence, and the report makes clear which environments and checks were exercised.
@@ -22,7 +21,7 @@ For browser behavior, map changed files to affected routes and critical interact
 
 Use sandbox data for consequential external flows. If authentication or human action is unavailable, mark that flow Skip with the exact reason and continue independent checks. Do not send messages, make purchases, or write to external systems unless the user's request authorizes the action. Start local development services only within the authorized project scope and record any process left running.
 
-For game animation or camera work, follow the game's existing diagnostic and animation skills. Compare matching scenes and opening, middle, and ending frames or traces; one still cannot establish smooth motion. Record the checkout revision, renderer, viewport, real or synthetic replay source, and reduced-motion setting. Do not claim that a synthetic replay proves the real WATCH flow.
+For game animation or camera work, follow the game's existing diagnostic and animation skills (`f1-animation-cameras`). Compare matching scenes and opening, middle, and ending frames or traces; one still cannot establish smooth motion. Record the checkout revision, renderer, viewport, real or synthetic replay source, and reduced-motion setting. Do not claim that a synthetic replay proves the real WATCH flow.
 
 Report a table of behaviors or routes with Pass, Fail, or Skip and evidence or reason. Include the actual check outcomes and remaining blockers. Overall PASS requires every required behavior to pass; a failure makes the result FAIL, and required skipped coverage makes it PARTIAL. Cleanup temporary verification changes while preserving requested fixes and useful evidence.
 
