@@ -1053,6 +1053,62 @@
         }
       ],
       "evidenceScope": "Offline debugger pause/position/concurrency contracts only; excludes game behavior and target-device verification"
+    },
+    {
+      "skill": "gen-regen",
+      "task": "Exercise agent-index render matches committed docs/agent-index.json",
+      "fixture": "tests/unit/agent-indexes.test.mjs",
+      "pattern": "renderIndex",
+      "expected": { "minPass": 1, "maxFail": 0 },
+      "timeoutMs": 15000,
+      "prerequisites": ["Node.js and npm install; repository test fixture only"],
+      "followups": [
+        { "kind": "browser", "status": "unverified", "prerequisites": "N/A — gen only" },
+        { "kind": "hardware", "status": "unverified", "prerequisites": "N/A — gen only" }
+      ],
+      "evidenceScope": "Offline gen-index contract only"
+    },
+    {
+      "skill": "pages-red-triage",
+      "task": "Exercise deploy tool knows pages workflow id",
+      "fixture": "tests/unit/deploy-tool.test.mjs",
+      "pattern": "pages",
+      "expected": { "minPass": 1, "maxFail": 0 },
+      "timeoutMs": 15000,
+      "prerequisites": ["Node.js and npm install; repository test fixture only"],
+      "followups": [
+        { "kind": "browser", "status": "unverified", "prerequisites": "N/A — triage prose skill" },
+        { "kind": "hardware", "status": "unverified", "prerequisites": "N/A — triage prose skill" }
+      ],
+      "evidenceScope": "Offline deploy/pages reference only"
+    },
+    {
+      "skill": "perf-memory-census",
+      "task": "Exercise perf profile CLI exists",
+      "fixture": "tests/unit/tools-runnable.test.mjs",
+      "pattern": "tools/perf/profile\\.mjs",
+      "expected": { "minPass": 1, "maxFail": 0 },
+      "timeoutMs": 15000,
+      "prerequisites": ["Node.js and npm install; repository test fixture only"],
+      "followups": [
+        { "kind": "browser", "status": "unverified", "prerequisites": "Heap/LCP needs chrome-devtools MCP" },
+        { "kind": "hardware", "status": "unverified", "prerequisites": "Phone/GPU census needs target device" }
+      ],
+      "evidenceScope": "Offline tools/perf guard only"
+    },
+    {
+      "skill": "flake-rerun",
+      "task": "Exercise flaky quarantine data file parses",
+      "fixture": "tests/unit/flaky-quarantine.test.mjs",
+      "pattern": "flaky-quarantine\\.json",
+      "expected": { "minPass": 1, "maxFail": 0 },
+      "timeoutMs": 15000,
+      "prerequisites": ["Node.js and npm install; repository test fixture only"],
+      "followups": [
+        { "kind": "browser", "status": "unverified", "prerequisites": "N/A — policy skill" },
+        { "kind": "hardware", "status": "unverified", "prerequisites": "N/A — policy skill" }
+      ],
+      "evidenceScope": "Offline quarantine registry mention only"
     }
   ]
 }

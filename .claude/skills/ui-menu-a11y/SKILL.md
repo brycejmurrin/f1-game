@@ -64,3 +64,5 @@ Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
 
 - Layer/Escape/zoom implementation, pause-settings overlay, mistakes →
   [references/workflow.md](references/workflow.md).
+- Lighthouse a11y / web-quality playbook →
+  [references/lighthouse-a11y-playbook.md](references/lighthouse-a11y-playbook.md).

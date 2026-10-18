@@ -1,6 +1,6 @@
 ---
 name: renderer-debug
-description: "Use when any renderer looks wrong on TLX (three.js), GLX (WebGL2) or WGX (WebGPU): blank/black canvas, missing road/world, NaN-white surfaces, lights wrong, shadow acne, bloom wrong, HDR/MSAA format issues, GL_INVALID_OPERATION, shader/WGSL/GPU validation errors, device lost or frozen frame, silent WebGL2 fallback, transparent cars, wgx-validate, WebXR/VR (js/xr/). Washed-out night → lighting-tuner; garbled or wrong-colour PBR material on any backend → asset-pack; shimmer while driving → playwright-probe."
+description: "Use when TLX/GLX/WGX/WebGPU looks wrong: black/NaN canvas, WGSL validation, shaders, shadows, bloom, HDR, GL errors, device lost, silent WebGL2 fallback, WebXR/VR/Quest black frame. Night washout → lighting-tuner; MAT garble → asset-pack; driving shimmer → playwright-probe."
 ---
 
 # Debug the renderer — TLX, GLX or WGX
@@ -106,3 +106,5 @@ textured-vs-procedural material look on WGX is **asset-pack**.
 
 `js/xr/` (ENTER VR, `XrBoot` / `XrSession`, the WebGL2-default VR path, Quest
 controllers, `test:xr` under IWER): [references/xr.md](references/xr.md).
+
+Chrome DevTools heap/LCP playbook: [references/chrome-devtools-perf.md](references/chrome-devtools-perf.md). Census workflow: skill **perf-memory-census**.

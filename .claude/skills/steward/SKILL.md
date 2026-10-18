@@ -69,23 +69,11 @@ with #2295's per-branch deltas); `sync-pr` cures those and hands back the rest. 
 inspect/rename an existing temp branch before a fresh sync. Recovery is in
 `check-changes` SKILL.md §After `sync-pr.mjs` (not references/deploy.md).
 
-**Hand-written files conflict (prose, a help sheet, a ratchet's FORM):**
-`sync-pr` runs `merge --abort`, prints `real conflicts … resolve by hand`
-(a `(moved to <path>)` tag = re-apply their edit there), and returns you to
-the branch you started on; `sync-pr-<branch>` is left as an unmerged copy of the
-PR head — inspect it before removal or rename. An existing temp branch makes
-a fresh sync refuse rather than delete unpublished output. Order:
-`sync-pr <branch> --plan` (cached refs; `conflicts:null`, `conflictsChecked:false`;
-no fetch or merge-tree) → `who-is-on-it.mjs` if the base file is not yours → `git checkout
-<branch> && git merge origin/claude/f1-game-project-26h3ng` → keep BOTH sides'
-intent in each hand-written file → generated leftovers at the source + `npm
-run gen` → `git add`/commit → `deploy.mjs --gate-only` → plain `git push`
-(never force). Record the files and the resolution in the PR body: a ticked
-Plan item with the merge sha (AGENTS.md rule 12).
+**Hand-written conflicts:** `sync-pr` aborts and leaves `sync-pr-<branch>` for
+inspection — full order in [`references/sync-hand-merge.md`](references/sync-hand-merge.md).
 
-Resolve a generated-file conflict at the SOURCE and run `npm run gen`; never
-hand-edit one (the edit hook blocks it, and `gen:check` names drift). The list
-is AGENTS.md Session shape rule 11.
+**Generated conflicts:** resolve at source, then `npm run gen` (**gen-regen**); never
+hand-edit generated files (AGENTS.md rule 11).
 
 ## 3. A red you did not cause → find out who is on it FIRST
 

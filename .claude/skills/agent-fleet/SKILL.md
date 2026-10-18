@@ -73,12 +73,12 @@ reference §Escalate).
 
 ## Rules that bind both roles
 
-- Nobody in the fleet merges or arms auto-merge: Merge Desk arms (merge commit
-  only, ≤ 2 armed); Grok Bot, the sole coordinator (orchestrator, merge holder,
-  ship/Pages watcher), merges or arms only at the level recorded in
-  references/role-merge-holder.md, the single source for it. With
-  no live desk, the orchestrator arms only at the merge level the user set in
-  its own session (references/role-merge-holder.md). A hold
+- Nobody in the fleet merges or arms auto-merge on their own initiative. When a
+  **merge desk** session is live it may arm MERGE (merge commit only, ≤ 2 armed).
+  The **orchestrator** (sole coordinator) merges only at the level in
+  references/role-merge-holder.md — Level 3 merges directly with head-sha pin,
+  one merge per green Pages run, `gen:check` on the merge result first. With
+  no live desk, the orchestrator holds that queue. A hold
   is a PR-body line starting `MERGE-HOLD:`, never "do not merge" wording.
   Draft → ready only after `node tools/ci/ready-gate.mjs` exits 0.
 - One owner per path: OWNED / FORBIDDEN globs in the launch prompt, a

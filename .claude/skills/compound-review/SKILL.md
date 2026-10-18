@@ -1,6 +1,6 @@
 ---
 name: compound-review
-description: Use when compound-review.
+description: "Use when the user names compound-review: invoke scoped workflow — inspect tool change, structured pre-merge review, report evidence on authorized diff."
 disable-model-invocation: true
 ---
 ## F1 project integration

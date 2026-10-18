@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: "Use when the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, A-B physics settings, a physics sweep, ROAD_FOLLOW, or whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change physics. Skidpad/step-steer/`player-dyn` VM A/B. Camera lag → playwright-probe; gamepad/touch/tilt/steer sliders → input-controls; AI → ai-racecraft."
+description: "Use when driving feel is wrong (under/oversteer, grip, pace, ROAD_FOLLOW), game feel/juice/shake must not change physics, or skidpad A/B tuning. Input sliders → input-controls; AI → ai-racecraft; cameras → playwright-probe."
 ---
 
 # Tune the physics

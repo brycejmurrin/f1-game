@@ -92,3 +92,5 @@ Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
 The `"*|tod"` layer applies only when `gfx.hasPerChunkLights`. COPY VALUES exports
 `LightEdits` deltas; merged `lightState()` is observation, not a full export.
 The `apex-eval`/`slider-effect --live`/capture commands boot Chromium: parent session only, never a subagent (AGENTS.md rule 10).
+
+Upstream graphics playbook (atmosphere, grading, shadows): [references/graphics-atmosphere-playbook.md](references/graphics-atmosphere-playbook.md).
