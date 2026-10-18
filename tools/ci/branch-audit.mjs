@@ -47,7 +47,7 @@ import fs from "node:fs";
 // would ever decide it (its verdict is usually pr-closed). The claims board
 // (who-is-on-it.mjs) is coordination state, never surveyed.
 export const SURVEY_QUIET_HOURS = 48;
-export const NEVER_SURVEYED = /^claude\/claims(\/|-board$)/;
+const NEVER_SURVEYED = /^claude\/claims(\/|-board$)/;
 export function inSurvey(b, { prs = new Map(), now = Math.floor(Date.now() / 1000), quietHours = SURVEY_QUIET_HOURS } = {}) {
   if (NEVER_SURVEYED.test(b.name)) return false;
   const pr = prs.get(b.name);
@@ -58,7 +58,7 @@ export function inSurvey(b, { prs = new Map(), now = Math.floor(Date.now() / 100
   return Number.isFinite(b.time) && now - b.time >= quietHours * 3600;
 }
 
-export const MIN_LINE = 6;              // shorter trimmed lines ("});", "}") match anything
+const MIN_LINE = 6;              // shorter trimmed lines ("});", "}") match anything
 export const SUPERSEDED_PCT = 95;       // >= this share of added lines present anywhere in deploy
 export const VERDICTS = {
   active: "open PR, or too recent to judge — keep",
@@ -142,7 +142,7 @@ const git = (args, opts = {}) => execFileSync("git", args, { encoding: "utf8", m
 const tryGit = (args) => { try { return git(args).trim(); } catch (_) { return null; } };
 
 /** Every text line (trimmed, >= MIN_LINE) of a tree, per file and in one set — one cat-file process. */
-export function treeLines(ref) {
+function treeLines(ref) {
   const files = git(["ls-tree", "-r", ref]).split("\n").map((l) => {
     const m = /^\d+ blob ([0-9a-f]+)\t(.+)$/.exec(l);
     return m && /\.(m?js|cjs|ts|css|html|md|json|ya?ml|sh|py|txt)$/.test(m[2]) ? { sha: m[1], path: m[2] } : null;

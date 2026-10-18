@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SubagentStop hook: checks a read-only reporter subagent's final report
+# SubagentStop (and PreToolUse SubagentHandback) hook: checks a read-only reporter subagent's final report
 # against the return contract its .claude/agents/<name>.md states, and sends a
 # malformed report BACK to the subagent to fix instead of letting it reach the
 # parent (2026-10-14).
