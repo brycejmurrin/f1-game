@@ -144,6 +144,29 @@ const DailyChallenge = (function () {
       return parts.join(" · ");
     }
 
+    async function shareCard(medal) {
+      if (typeof ShareCardData === "undefined" || typeof ShareCard === "undefined") {
+        throw new Error("Share cards are unavailable");
+      }
+      const p = active || plan(), day = data().days[p.day];
+      const context = G.records && G.records.key();
+      const entry = context ? day && day.classes && day.classes[context] : day;
+      if (medal === undefined) medal = entry && entry.best != null && typeof Quali !== "undefined" && G.referencePole
+        ? Quali.medalFor(entry.best, G.referencePole()) : null;
+      let link = null;
+      if (typeof ShareCode !== "undefined" && ShareCode.encode) {
+        const encoded = ShareCode.encode("daily", {
+          day: p.day, track: p.trackId, trackName: p.trackName, weather: p.weather,
+          best: entry && entry.best, medal, streak: liveStreak(), class: p.class || "standard",
+        });
+        if (encoded.ok) link = encoded.url;
+      }
+      const model = ShareCardData.fromDaily(p, entry, medal, liveStreak(), { link });
+      const blob = await ShareCard.render(model, "portrait");
+      return ShareCard.deliver(blob, "apex26-daily-" + p.day + ".png",
+        { title: "APEX 26 DAILY", text: shareText(medal), url: link });
+    }
+
     function stop() {
       if (G.records) G.records.restoreDaily();
       // The seed setter ALSO rewinds the draw stream to its start, so "race, Daily, race" repeated the
@@ -161,7 +184,7 @@ const DailyChallenge = (function () {
       return st.count > 0 && (st.last === day || st.last === prevDay(day)) ? st.count : 0;
     }
 
-    return { plan, dayKey, select, open, record, shareText, stop, isActive, current, data, today, liveStreak };
+    return { plan, dayKey, select, open, record, shareText, shareCard, stop, isActive, current, data, today, liveStreak };
   }
 
   return { create, plan, dayKey, prevDay };
