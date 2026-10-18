@@ -6,6 +6,9 @@ description: "Use when night looks washed out or like day, dawn sun is too high,
 
 # Tune and validate scene lighting via __apex probes
 
+The `__apex` probes, `apex-eval`, `slider-effect --live` and capture commands boot
+Chromium: parent session only, never a subagent (AGENTS.md rule 10).
+
 **Reach for the tuner knobs FIRST.** Nearly every hand-tuned value is a live
 `TUNE_DEFS` knob (`js/lighting/knobs.js`) read via `LT.<id>` each frame.
 
@@ -26,7 +29,7 @@ localStorage (`apex26.lightTune`) outranks shipped presets — RESET in the
 LIGHTING TUNER drops the current track/tod/weather back to shipped. Legacy
 `"*"` profiles may still win; clear that key if a global override sticks.
 
-**One condition, all 52 circuits.** `__apex.lightCopy()` spreads knobs tuned
+**One condition, every circuit** (`Tracks.LIST`). `__apex.lightCopy()` spreads knobs tuned
 here (merged); `lightCopy("look")` sends every live value. Both persist and
 return `undo` — `lightCopy({undo})` reverts the fan-out.
 
@@ -75,9 +78,9 @@ Outputs per knob: `a.png`, `b.png`, `filter.png` (changed pixels only),
 `diff.png` (red = B brighter, blue = B darker), `heat.png`, `sheet.png`,
 `result.json`. Batch runs also write `summary.png` — one row per knob.
 
-Do NOT run `--live` while `cdmcp-cli.py look-survey` holds the box.
+Do NOT run `--live` while `tools/mcp/cdmcp-cli.py look-survey` holds the box.
 Do NOT launch from an agent session without an explicit ask:
-`lighting-tuner-sweep.mjs` or `ab-lighting.mjs run all` — those are human/CI lattices. Agent default
+`tools/lighting/lighting-tuner-sweep.mjs` or `tools/lighting/ab-lighting.mjs run all` — those are human/CI lattices. Agent default
 is classify → `--live <one id>` → bake.
 Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
 
@@ -91,6 +94,5 @@ Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
 
 The `"*|tod"` layer applies only when `gfx.hasPerChunkLights`. COPY VALUES exports
 `LightEdits` deltas; merged `lightState()` is observation, not a full export.
-The `apex-eval`/`slider-effect --live`/capture commands boot Chromium: parent session only, never a subagent (AGENTS.md rule 10).
 
 Upstream graphics playbook (atmosphere, grading, shadows): [references/graphics-atmosphere-playbook.md](references/graphics-atmosphere-playbook.md).
