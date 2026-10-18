@@ -1,1 +1,0 @@
-1792334166	Bryce Murrin	Original active owner PR2904 complete MCP fixes1547d9289; preserved peerbfb3 and latestdeployd603, merge hold active until complete publication/CI. Full gate1f passed; final exact-tip gate4 running708files. One normal push after green.  [cursor/mcp-deep-hardening-a8c4; session 8133a24db0e209ab9e225ff8]
