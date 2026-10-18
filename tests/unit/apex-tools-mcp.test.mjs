@@ -173,6 +173,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_frame_report",
     "apex_garage",
     "apex_graph_parity",
+    "apex_help",
     "apex_hud_mock",
     "apex_hud_shot",
     "apex_hud_survey",
@@ -195,6 +196,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_ui_shot",
     "apex_unit_test",
     "apex_verify_change_fast",
+    "apex_viewer",
     "apex_who_is_on_it",
   ]);
   for (const n of names) {
@@ -926,7 +928,7 @@ test("every tool carries title, honest MCP annotations and an outputSchema; resu
   assert.deepEqual(destructive, ["apex_job_cancel"]);
   assert.deepEqual(openWorld.sort(), ["apex_ci_status", "apex_who_is_on_it"]);
   for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
-  for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
+  for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
 });
@@ -1974,6 +1976,7 @@ const ARG_BASES = {
   apex_graph_parity: [{ base: "HEAD", id: "monza" }],
   apex_pick_tests: [{}],
   apex_track_audit: [{ track: "monza" }],
+  apex_viewer: [{}],
   apex_car_audit: [{ check: "ladder" }, { check: "crest" }],               // teams: the crest sweep only
   apex_garage: [{ op: "open", team: "ferrari" }, { op: "team", team: "mercedes" }, { op: "design" }, { op: "design", design: { stripe: "#ffffff" } }, { op: "shot" }, { op: "sheet" }],   // each op reads its own keys; base only with a design
   apex_track: [{ op: "survey", track: "monza" }, { op: "shot" }, { op: "eval" }],
@@ -2224,6 +2227,17 @@ test("slimBody (#2672): doctor keeps failures + pass count, unit_test keeps coun
   assert.deepEqual(sel.out.shards, [{ name: "s1", specCount: 2 }]);
 });
 
+test("slimBody: eval scope hint, profile_query ENOENT hint, who_is_on_it drops stale and released claims", async () => {
+  const { slimBody } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  assert.match(slimBody("apex_eval", { ok: false, out: { err: "info is not defined" } }).fix, /a\.info\(\)/);
+  const browserThrow = slimBody("apex_eval", { ok: true, exit: 0, out: { err: "boom" } });
+  assert.equal(browserThrow.ok, false); assert.equal(browserThrow.fix, undefined);
+  assert.equal(slimBody("apex_eval", { ok: true, out: { v: 1 } }).ok, true);
+  assert.match(slimBody("apex_profile_query", { ok: false, stderr: "ENOENT: no such file" }).fix, /apex_job_start/);
+  const w = slimBody("apex_who_is_on_it", { out: { claims: [{ slug: "a" }, { slug: "b", stale: true }, { slug: "c", released: true }] } });
+  assert.deepEqual(w.out.claims, [{ slug: "a" }]); assert.equal(w.out.hiddenClaims, 2);
+});
+
 test("hudEstimateMs (#2673): tracks measured cost and scales with cells; the kill budget is not the estimate", async () => {
   const { hudEstimateMs } = await import("../../tools/mcp/apex-tools-mcp.mjs");
   const { expandMatrix } = await import("../../tools/lib/hud-survey-matrix.mjs");
@@ -2236,13 +2250,35 @@ test("hudEstimateMs (#2673): tracks measured cost and scales with cells; the kil
   assert.ok(all < 20 * 60000, "and far less than the old 18-minute claim for one cell");
 });
 
+test("tools/list stays compact and apex_help returns the full text it shortens", () => {
+  const out = rpc([
+    { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} },
+    { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_help", arguments: { tool: "apex_shot_survey" } } },
+    { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "apex_help", arguments: { tool: "apex_nope" } } },
+  ]);
+  const listed = out.find((m) => m.id === 1).result;
+  assert.ok(JSON.stringify(listed).length < 55000, `tools/list is ${JSON.stringify(listed).length} bytes`);
+  const help = listed.tools.find((t) => t.name === "apex_help");
+  assert.equal(help.annotations.readOnlyHint, true);
+  assert.ok(help.outputSchema && help.outputSchema.type === "object");
+  const short = listed.tools.find((t) => t.name === "apex_shot_survey");
+  const full = out.find((m) => m.id === 2).result.structuredContent;
+  assert.equal(full.ok, true);
+  assert.ok(full.description.length > short.description.length, "help carries the uncompacted description");
+  assert.match(short.description, /apex_help/);
+  assert.ok(Object.keys(full.inputSchema.properties.camera.properties).includes("fov"), "nested object bodies live in apex_help");
+  for (const t of listed.tools) for (const k of t.inputSchema.required || []) assert.ok(t.inputSchema.properties[k], `${t.name} keeps required ${k}`);
+  const miss = out.find((m) => m.id === 3).result;
+  assert.equal(miss.isError, true);
+});
+
 test("tool descriptions state the host ceiling and the per-call boot (#2673)", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "utf8");
   assert.match(src, /name: "apex_job_status"[\s\S]{0,400}~120 s/);
   assert.match(src, /name: "apex_agent"[\s\S]{0,300}COLD-BOOTS/);
 });
 
-test("server boots with no node_modules: its static import graph names only node: and relative modules", () => {
+test("servers boot with no node_modules: static import graphs (apex-tools, js-debugger) name only node: and relative modules", () => {
   // .mcp.json starts the server alongside SessionStart's npm install; a bare static import (sharp, 2026-10-18) crashed it to CONNECTION_CLOSED.
   const seen = new Set(), bare = [];
   const walk = (f) => {
@@ -2256,8 +2292,15 @@ test("server boots with no node_modules: its static import graph names only node
     }
   };
   walk(MCP);
+  walk(path.join(ROOT, "tools/mcp/js-debugger-mcp.mjs"));
   assert.ok(seen.size > 3, `walked ${seen.size} files`);
   assert.deepEqual(bare, [], "load npm packages with a lazy `await import()` at the call site");
+});
+
+test("track-session accepts the flags shot-survey passes (--output-root, --designs): apex_shot_survey died with 'unknown flag'", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(process.execPath, ["tools/shot/track-session.mjs", "--serve", "--track", "monza", "--output-root", "scratch/none", "--designs", "scratch/none.json"], { encoding: "utf8", timeout: 20000 });
+  assert.doesNotMatch(r.stderr, /unknown flag/);
 });
 
 // ── robustness (code-hunter 2026-10-18) ──────────────────────────────────
@@ -2360,7 +2403,7 @@ test("chrome-devtools-mcp.sh run tolerates a missing Chromium instead of exiting
   const sh = fs.readFileSync(path.join(ROOT, "tools/mcp/chrome-devtools-mcp.sh"), "utf8");
   const fn = sh.match(/^wait_chrome\(\) \{[\s\S]*?^\}$/m);
   assert.ok(fn, "wait_chrome()");
-  assert.match(sh, /run_mcp\(\) \{\n  local chrome\n  chrome="\$\(wait_chrome\)"/);
+  assert.match(sh, /run_mcp\(\) \{[\s\S]*?\n  local chrome\n  chrome="\$\(wait_chrome\)"/);   // the preflight lines sit between the brace and `local chrome`
   const r = spawnSync("bash", ["-c", `set -euo pipefail\nfind_chrome() { return 1; }\n${fn[0]}\nc="$(wait_chrome)"\nargs=(--x \${c:+--executablePath "$c"})\necho "rc=$? c=[$c] n=\${#args[@]}"`],
     { encoding: "utf8", env: { ...process.env, APEX_CHROME_WAIT_S: "0" }, timeout: 10000 });
   assert.equal(r.status, 0, r.stderr);
