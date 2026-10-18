@@ -1,0 +1,1 @@
+Fixed: Jeddah start/finish moved to the main straight (`startFrac` 0.9160, `sceneryStartFrac` 0.9625) so the grid and line pass `startline-probe` with Turn 1 about 256 m ahead. Tier-stand chord caps on Magny-Cours `vaultStand` and Paul Ricard scaffold bleachers; night `crowdBand` keeps a dark mass with speckle-only phone lights.
