@@ -5194,6 +5194,7 @@
         "tests/unit/telemetry-view-resize.test.mjs"
       ],
       "*": [
+        "tests/unit/css-has-scope.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ]
     },
