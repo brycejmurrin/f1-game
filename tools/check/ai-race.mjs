@@ -51,6 +51,7 @@ if (!cmd || map[cmd] === null || !(cmd in map)) {
   node tools/check/ai-race.mjs pace    [args]   # lap-time median per difficulty
   node tools/check/ai-race.mjs field   [args]   # spread / passes / dwell / clumps
   node tools/check/ai-race.mjs tactics [args]   # intervals (s), stuck, conversion, swap-backs, lap 1 (+ --mode human)
+  # --repeat N is --runs N (spread across seeds)
   node tools/check/ai-race.mjs line    [args]   # approach offset + apex depth
   node tools/check/ai-race.mjs human   [args]   # how the AI races a PLAYER, not itself
   node tools/check/ai-race.mjs ratings [args]   # DriverRatings Pearson / style zero-mean
@@ -64,7 +65,14 @@ Owned by ai-racecraft (not tune-physics).`);
   process.exit(cmd && map[cmd] === null ? 0 : 2);
 }
 
-const r = spawnSync(process.execPath, [path.join(HERE, map[cmd]), ...rest], {
+// `--repeat N` is the spread flag the pass-completion brief uses; the race
+// instruments already name that `--runs`.
+const forwarded = [];
+for (let i = 0; i < rest.length; i++) {
+  if (rest[i] === "--repeat") { forwarded.push("--runs", rest[i + 1]); i++; }
+  else forwarded.push(rest[i]);
+}
+const r = spawnSync(process.execPath, [path.join(HERE, map[cmd]), ...forwarded], {
   stdio: "inherit",
 });
 process.exit(r.status == null ? 1 : r.status);

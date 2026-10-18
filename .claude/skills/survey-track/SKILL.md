@@ -66,24 +66,32 @@ hands over to **new-track**, not dressing; routing is in the description.
 
 ## Short loop
 
-1. Read the brief, source pair and parent evidence — select 3–5 fixes supported
-   by a measured defect or dated source.
-2. Read the parent's baseline captures and record camera framings alongside
-   Node VM measurements. Request missing views in the hand-back; the surveyor
-   never captures them. Parent probes may include aerial/orbit/EYE and obliques.
-3. Edit dressing in `js/circuits/scenery/<id>.js` (the closure; the def
-   `js/circuits/<id>.js` is the other half of the pair). Complete all pair edits
-   before verification. New fields, terrain consumers, the `TrackDef.fromRaw`
-   copy, shared engine code, landmark registries, baselines and tests belong to
-   the parent. Coordinate edits around any live parent browser run.
-4. `verify-track.cjs <id>` — a THROW strands the game on the menu.
-5. Return changes, before/after numbers, source/year evidence, baseline deltas
-   and uncertainties. Parent captures the same framings after integration.
-6. The surveyor stops after `audit-circuit`. Parent integration, browser checks and
-   shipping follow **check-changes**.
+Parent (this session):
+1. Read the brief and source pair; run the `audit-circuit` baseline and take the
+   captures (aerial/orbit/EYE, obliques) the surveyor will measure against.
+2. Spawn one `track-surveyor` with [delegation.md](references/delegation.md).
+3. Merge its branch into yours (AGENTS.md rule 10), capture the same framings
+   after integration, then browser checks and shipping via **check-changes**.
+
+Surveyor (`.claude/agents/track-surveyor.md` steps 1-5; it never captures):
+1. Pick 3-5 fixes, each backed by a measured defect or dated source; request
+   missing views in the hand-back.
+2. Edit the pair — dressing in `js/circuits/scenery/<id>.js`, the def in
+   `js/circuits/<id>.js` — all edits before verifying. New fields, terrain
+   consumers, the `TrackDef.fromRaw` copy, engine code, landmark registries,
+   baselines and tests belong to the parent.
+3. Verify once: `verify-track.cjs <id>` (a THROW strands the game on the menu),
+   `coplanar-audit.cjs <id>`, and `float-audit.cjs <id>` if floats were flagged.
+4. Return changes, before/after numbers, source/year evidence, baseline deltas
+   and uncertainties.
 
 Montreal already ships `flatTerrain: true` + `terrainOuter: 70` — survey
 before re-applying that fix.
+
+**apex-tools MCP down?** Every `apex_*` route has a CLI under `tools/`: audits
+`tools/track/{audit-circuit,ground-audit,clip-audit,coplanar-audit,float-audit}.cjs`,
+`centreline-kinks.cjs`, `verify-track.cjs`; multi-shot surveys
+`tools/shot/shot-survey.mjs` or `tools/shot/track-session.mjs` (parent only: browser).
 
 ## Parent brief and commit recipe (plan WS6; #2399)
 

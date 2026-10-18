@@ -6,6 +6,7 @@
       "mcp__playwright-official",
       "mcp__chrome-devtools",
       "mcp__js-debugger",
+      "mcp__apex-lsp",
       "mcp__claude-code-remote",
       "mcp__Context7",
       "mcp__Claude_Docs",
@@ -25,6 +26,7 @@
       "mcp__playwright-official__*",
       "mcp__chrome-devtools__*",
       "mcp__js-debugger__*",
+      "mcp__apex-lsp__*",
       "mcp__claude-code-remote__*",
       "mcp__Context7__*",
       "mcp__Claude_Docs__*",
@@ -190,7 +192,8 @@
     "apex-tools",
     "playwright-official",
     "chrome-devtools",
-    "js-debugger"
+    "js-debugger",
+    "apex-lsp"
   ],
   "hooks": {
     "SessionStart": [
@@ -220,98 +223,6 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(*git*)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*gh *)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*kill*)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*pgrep*)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*curl*)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*node*)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*npm*)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*npx*)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*playwright*)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*chrom*)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*python*)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*sh *)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*eval*)",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
-            "onFailure": "block"
-          },
-          {
-            "type": "command",
-            "if": "Bash(*xargs*)",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
             "timeout": 360,
             "onFailure": "block"
@@ -359,6 +270,16 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "Grep|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/lsp-hint.py\"",
+            "timeout": 5
+          }
+        ]
+      },
       {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [

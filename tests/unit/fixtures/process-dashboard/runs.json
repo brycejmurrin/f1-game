@@ -1,0 +1,146 @@
+{
+  "generated": "2026-10-17T12:00Z",
+  "flakeEvents": [
+    { "test": "wake-lock.spec.js › late release", "red": true },
+    { "test": "wake-lock.spec.js › late release", "red": false }
+  ],
+  "ciRuns": [
+    {
+      "id": 1,
+      "head_sha": "aaa",
+      "conclusion": "success",
+      "run_started_at": "2026-10-01T00:00:00Z",
+      "updated_at": "2026-10-01T00:14:00Z",
+      "jobs": [
+        {
+          "name": "Structural guards (tooling A)",
+          "conclusion": "success",
+          "started_at": "2026-10-01T00:00:10Z",
+          "completed_at": "2026-10-01T00:02:10Z",
+          "steps": [{ "name": "npm ci", "started_at": "2026-10-01T00:00:20Z", "completed_at": "2026-10-01T00:00:22Z" }]
+        },
+        {
+          "name": "Pure-node unit suites (vm-a1)",
+          "conclusion": "success",
+          "started_at": "2026-10-01T00:00:10Z",
+          "completed_at": "2026-10-01T00:08:10Z",
+          "steps": []
+        },
+        {
+          "name": "Pure-node unit suites (fast)",
+          "conclusion": "success",
+          "started_at": "2026-10-01T00:00:10Z",
+          "completed_at": "2026-10-01T00:02:10Z",
+          "steps": []
+        },
+        {
+          "name": "Smoke (page boots, __apex responds) (1)",
+          "conclusion": "success",
+          "started_at": "2026-10-01T00:02:00Z",
+          "completed_at": "2026-10-01T00:06:00Z",
+          "steps": []
+        },
+        {
+          "name": "Smoke (page boots, __apex responds) (2)",
+          "conclusion": "success",
+          "started_at": "2026-10-01T00:02:00Z",
+          "completed_at": "2026-10-01T00:05:00Z",
+          "steps": []
+        },
+        {
+          "name": "Selected specs (change-aware gate) (selected, 1)",
+          "conclusion": "success",
+          "started_at": "2026-10-01T00:06:00Z",
+          "completed_at": "2026-10-01T00:14:00Z",
+          "steps": []
+        },
+        {
+          "name": "Selected specs (verdict)",
+          "conclusion": "success",
+          "started_at": "2026-10-01T00:14:00Z",
+          "completed_at": "2026-10-01T00:14:05Z",
+          "steps": []
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "head_sha": "aaa",
+      "conclusion": "cancelled",
+      "run_started_at": "2026-10-01T01:00:00Z",
+      "updated_at": "2026-10-01T01:03:00Z",
+      "jobs": [
+        {
+          "name": "Structural guards (tooling A)",
+          "conclusion": "cancelled",
+          "started_at": "2026-10-01T01:00:05Z",
+          "completed_at": "2026-10-01T01:01:05Z",
+          "steps": []
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "head_sha": "bbb",
+      "conclusion": "success",
+      "run_started_at": "2026-10-02T00:00:00Z",
+      "updated_at": "2026-10-02T00:06:00Z",
+      "jobs": [
+        {
+          "name": "Structural guards (tooling A)",
+          "conclusion": "success",
+          "started_at": "2026-10-02T00:00:00Z",
+          "completed_at": "2026-10-02T00:02:00Z",
+          "steps": [{ "name": "npm ci", "started_at": "2026-10-02T00:00:01Z", "completed_at": "2026-10-02T00:00:02Z" }]
+        },
+        {
+          "name": "Pure-node unit suites (vm-a1)",
+          "conclusion": "success",
+          "started_at": "2026-10-02T00:00:00Z",
+          "completed_at": "2026-10-02T00:06:00Z",
+          "steps": []
+        },
+        {
+          "name": "Pure-node unit suites (fast)",
+          "conclusion": "failure",
+          "started_at": "2026-10-02T00:00:00Z",
+          "completed_at": "2026-10-02T00:01:00Z",
+          "steps": []
+        },
+        {
+          "name": "Selected specs (verdict)",
+          "conclusion": "success",
+          "started_at": "2026-10-02T00:06:00Z",
+          "completed_at": "2026-10-02T00:06:04Z",
+          "steps": []
+        }
+      ]
+    }
+  ],
+  "pagesRuns": [
+    {
+      "id": 10,
+      "conclusion": "success",
+      "run_started_at": "2026-10-01T00:00:00Z",
+      "updated_at": "2026-10-01T00:14:00Z"
+    },
+    {
+      "id": 11,
+      "conclusion": "cancelled",
+      "run_started_at": "2026-10-01T02:00:00Z",
+      "updated_at": "2026-10-01T02:01:00Z"
+    },
+    {
+      "id": 12,
+      "conclusion": "failure",
+      "run_started_at": "2026-10-01T03:00:00Z",
+      "updated_at": "2026-10-01T03:02:00Z"
+    },
+    {
+      "id": 13,
+      "conclusion": "success",
+      "run_started_at": "2026-10-01T04:00:00Z",
+      "updated_at": "2026-10-01T04:10:00Z"
+    }
+  ]
+}

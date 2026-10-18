@@ -230,9 +230,14 @@ html:has(> body > #pausemenu[open]) #ios-install {
 /* It STANDS DOWN during a race — it sat in .hud-top's top-centre box for the
    whole session, over POS / LAP / TIME — and under any open dialog, where the
    modal makes it inert anyway (a button you can see and cannot press). It is
-   back the moment the race or the dialog ends; nothing is lost by waiting. */
+   back the moment the race or the dialog ends; nothing is lost by waiting.
+   Scoped like css-has-scope.test.mjs asks: every <dialog> is a <body> child
+   but the Data Hub telemetry popup, a child of #datahub. An unscoped
+   `body:has(dialog[open])` searched all ~4.9k nodes on every body restyle
+   (docs/notes/PERF-P2-2026-10-18.md). */
 body.in-race #save-warning,
-body:has(dialog[open]) #save-warning { display: none; }
+body:has(> dialog[open]) #save-warning,
+body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
 /* The words stack in the first column; the three buttons span both rows. */
 #save-warning strong { grid-column: 1; color: #ffd180; letter-spacing: var(--ls-2); }
 #save-warning-detail { grid-column: 1; min-width: 0; }
@@ -272,7 +277,8 @@ body:has(dialog[open]) #save-warning { display: none; }
    chips stay `--text` while career guide/history stay `--dim`. */
 #htp-contents a { color: var(--text); }
 #howtoplay:has(#htp-controls:target) #htp-contents a[href="#htp-controls"],
-#howtoplay:has(#htp-racing:target) #htp-contents a[href="#htp-racing"] {
+#howtoplay:has(#htp-racing:target) #htp-contents a[href="#htp-racing"],
+#howtoplay:has(#htp-2026rules:target) #htp-contents a[href="#htp-2026rules"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
 }
 #howtoplay:has(#htp-pits:target) #htp-contents a[href="#htp-pits"],
@@ -915,8 +921,10 @@ body[data-shape="wide"]:not([data-density="compact"]) #overlay[data-home-scene]:
    z-index outranks, and makes everything outside it inert — the chip sat under
    the ::backdrop, visible and unpressable. A popover would draw above it and
    still be inert ("except the dialog and its descendants": MDN, showModal()).
-   It stands down like #save-warning and is back when the dialog closes. */
-body:has(dialog:modal) #update-chip { display: none; }
+   It stands down like #save-warning and is back when the dialog closes,
+   scoped the same way (the telemetry popup is #datahub's child). */
+body:has(> dialog:modal) #update-chip,
+body:has(> :where(#datahub) > dialog:modal) #update-chip { display: none; }
 
 /* ===== Boot-critical-path trim (from css/responsive.css) =====
    Same @layer overlays. These rules style title-hidden or in-race UI only,

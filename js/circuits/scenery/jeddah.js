@@ -12,6 +12,11 @@
         cityFront, modelGroup, waterSurface, waterBand, onTrack, hash, every, circuitKit,
         lampPost, seat, along } = api;
 
+      // sl(f) lands at RACING frac f (brands_hatch idiom): authored s = 0 is the
+      // scenery origin (sceneryStartFrac 0.9625), not the start line (#2201).
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+
       // ── Night Corniche palette ─────────────────────────────────────────────
       const SEA     = [0.02, 0.04, 0.08];   // deep black-mirror water
       const SPANGLE = [1.0,  0.80, 0.40];   // warm amber reflections
@@ -356,7 +361,8 @@
       }
 
       // ── START/FINISH gantries ─────────────────────────────────────────────
-      gantry(0.0,   13, [0.12, 0.13, 0.17]);
+      // Start gantry over the REAL line (sl); exit gantry stays authored-frame.
+      gantry(sl(0.0), 13, [0.12, 0.13, 0.17]);
       // .030, past the complex's exit line (.0211): at .012 its portal leg at
       // 1.5 m stood ON the exit road's lane (measured, an 11.2 m box at lat 2.0).
       gantry(0.030, 11, [0.12, 0.13, 0.17]);

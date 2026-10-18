@@ -132,7 +132,7 @@ var Spotter = (() => {
         const rollback = () => { if (st === state) st = { ...before, t: st.t, lastCallT: st.lastCallT }; };
         const expected = key === "clear" ? 0 : key === "three wide" ? 3 : key === "car left" ? LEFT : key === "car right" ? RIGHT : st.cur;
         spoke = true;
-        return pack.speak(voice, KEYS[key], { channel: "spotter", volume: G.radio.volume ? G.radio.volume() : 1,
+        const spokeOk = pack.speak(voice, KEYS[key], { channel: "spotter", volume: G.radio.volume ? G.radio.volume() : 1,
           // Decode failure/watchdog calls onEnd without valid(): roll back the
           // unheard transition so it can retry, retaining any earlier heard side
           // and the attempt's call gap to avoid decoding again every physics tick.
@@ -146,6 +146,8 @@ var Spotter = (() => {
             if (!valid) rollback();
             validated = !!valid;
             return validated; } });
+        if (spokeOk && typeof Captions !== "undefined" && Captions.onSpotter) Captions.onSpotter(KEYS[key], key);
+        return spokeOk;
       };
       const key = step(st, occupied, dt, speak);
       return key;

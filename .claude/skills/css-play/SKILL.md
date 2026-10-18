@@ -1,6 +1,6 @@
 ---
 name: css-play
-description: "Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots, no full layout audit), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging a CSS methodology (BEM/CUBE/ITCSS/utilities). Cramped screen: ui-menu-a11y; every screen: survey-ui-matrix; dead selectors: slim-bloat."
+description: "Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots, no full layout audit), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging a CSS methodology (BEM/CUBE/ITCSS). Cramped screen: ui-menu-a11y; every screen: survey-ui-matrix; dead selectors: slim-bloat."
 ---
 
 # Playing with menu / HUD CSS
@@ -12,10 +12,13 @@ hot-swap the stylesheet, screenshot. No cache bump in the loop.
 
 - "Tweak the settings sheet", "the garage tabs wrap", "try this token".
 - Before/after pixels of a named menu, plus boxes / computed styles.
+- Restructuring screens, the DOM or the class/token system (duplicate component
+  families, a screen layer, splitting `index.html`, class counts) →
+  [references/restructure.md](references/restructure.md) first.
 
 **Not this skill:** a cramped / clipped screen, a short landscape phone, UI scale
-(**ui-menu-a11y** owns the fit; this skill keeps the edit loop once you are in it); whole matrix → **survey-ui-matrix**. Restructure / class
-counts → `references/restructure.md`. One Escape/a11y bug → **ui-menu-a11y**.
+(**ui-menu-a11y** owns the fit; this skill keeps the edit loop once you are in it); whole matrix → **survey-ui-matrix**.
+One Escape/a11y bug → **ui-menu-a11y**.
 Canvas / 3D → **playwright-probe**.
 
 ## Command

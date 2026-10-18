@@ -347,7 +347,8 @@
         "tests/unit/driving-cues.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs"
       ]
     },
     "js/audio/engine.js": {
@@ -796,6 +797,7 @@
       "create": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/pause-silence.test.mjs",
@@ -1701,7 +1703,8 @@
         "tests/unit/flyby-shots.test.mjs"
       ],
       "project": [
-        "tests/unit/flyby-shots.test.mjs"
+        "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/spline-project-height.test.mjs"
       ],
       "propBoxes": [
         "tests/unit/flyby-shots.test.mjs"
@@ -2459,6 +2462,7 @@
       ],
       "getAeroFlapSet": [
         "tests/unit/aero-flap-travel.test.mjs",
+        "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs"
       ],
       "getCarDecalMesh": [
@@ -2515,6 +2519,9 @@
         "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/frame-hotpath-alloc.test.mjs",
         "tests/unit/mirror-glass-night.test.mjs"
+      ],
+      "releaseIdleFlaps": [
+        "tests/unit/car-mesh-crew-cache.test.mjs"
       ],
       "*": [
         "tests/unit/hud-speed-parity.test.mjs"
@@ -2837,11 +2844,13 @@
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-helmet-style.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
       "designFor": [
-        "tests/unit/helmets.test.mjs"
+        "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-helmet-style.test.mjs"
       ],
       "generated": [
         "tests/unit/helmets.test.mjs"
@@ -2850,13 +2859,17 @@
         "tests/unit/helmets.test.mjs"
       ],
       "painter": [
-        "tests/unit/helmets.test.mjs"
+        "tests/unit/helmets.test.mjs",
+        "tests/unit/livery-helmet-style.test.mjs"
       ],
       "pointAt": [
         "tests/unit/helmets.test.mjs"
       ],
       "shell": [
         "tests/unit/helmets.test.mjs"
+      ],
+      "styled": [
+        "tests/unit/livery-helmet-style.test.mjs"
       ]
     },
     "js/car/input-ghost.js": {
@@ -2881,7 +2894,8 @@
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
-        "tests/unit/livery-wheels.test.mjs"
+        "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ]
     },
     "js/car/livery-design.js": {
@@ -2889,6 +2903,9 @@
         "tests/unit/livery-design.test.mjs"
       ],
       "history": [
+        "tests/unit/livery-design.test.mjs"
+      ],
+      "paint": [
         "tests/unit/livery-design.test.mjs"
       ],
       "value": [
@@ -5194,6 +5211,7 @@
         "tests/unit/telemetry-view-resize.test.mjs"
       ],
       "*": [
+        "tests/unit/css-has-scope.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ]
     },
@@ -6482,6 +6500,7 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/metrics.test.mjs",
         "tests/unit/mobile-sync-web.test.mjs",
         "tests/unit/node-plan.test.mjs",
@@ -6490,6 +6509,7 @@
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/race-session-fixes.test.mjs",
@@ -6595,6 +6615,9 @@
       ],
       "restore": [
         "tests/unit/livery-design.test.mjs"
+      ],
+      "section": [
+        "tests/unit/livery-helmet-style.test.mjs"
       ],
       "*": [
         "tests/unit/livery-sidewall.test.mjs",
@@ -6832,6 +6855,9 @@
       "garageNow": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "garageSeat": [
+        "tests/unit/car-mesh-crew-cache.test.mjs"
+      ],
       "getSetupPreviewMesh": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
@@ -6846,6 +6872,9 @@
       ],
       "presentOpts": [
         "tests/unit/garage-panel-side.test.mjs"
+      ],
+      "spMeshBust": [
+        "tests/unit/car-mesh-crew-cache.test.mjs"
       ],
       "startDriveOut": [
         "tests/unit/garage-arrival.test.mjs",
@@ -6925,6 +6954,9 @@
         "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "endLivPreview": [
+        "tests/unit/livery-draft-mesh-cache.test.mjs"
+      ],
       "framePreset": [
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -6940,6 +6972,7 @@
         "tests/specs/parts-setup-ids.spec.js",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-followups.test.mjs",
+        "tests/unit/livery-draft-mesh-cache.test.mjs",
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "renderStatBars": [
@@ -6952,6 +6985,7 @@
         "tests/unit/garage-interior-gate.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-helmet-style.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",
@@ -9541,7 +9575,8 @@
         "tests/unit/brake-cue.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs"
       ]
     },
     "js/physics/collide.js": {
@@ -9627,6 +9662,7 @@
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/pace-math.test.mjs",
         "tests/unit/parts-ladder.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
@@ -9846,6 +9882,7 @@
         "tests/unit/player-forces.test.mjs"
       ],
       "*": [
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/trail-brake-turnin.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
@@ -10353,6 +10390,20 @@
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/voice-pack.test.mjs"
+      ]
+    },
+    "js/race/event-journal.js": {
+      "create": [
+        "tests/unit/event-journal.test.mjs"
+      ],
+      "onFacts": [
+        "tests/unit/event-journal.test.mjs"
+      ],
+      "push": [
+        "tests/unit/event-journal.test.mjs"
+      ],
+      "update": [
+        "tests/unit/event-journal.test.mjs"
       ]
     },
     "js/race/flying-start.js": {
@@ -10950,10 +11001,12 @@
     },
     "js/race/race-facts.js": {
       "create": [
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
       ],
       "observe": [
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs"
       ],
       "reset": [
@@ -11019,6 +11072,7 @@
       "create": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
@@ -11064,6 +11118,7 @@
       ],
       "update": [
         "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
       ]
@@ -11132,6 +11187,7 @@
     "js/race/radio-lines.js": {
       "create": [
         "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-lines.test.mjs",
@@ -12766,6 +12822,9 @@
       "disposeKeepingContext": [
         "tests/unit/hunt-tlx-create-undo.test.mjs"
       ],
+      "disposePooled": [
+        "tests/unit/tlx-texture-release.test.mjs"
+      ],
       "drawInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
@@ -12896,6 +12955,9 @@
       ],
       "resizeNow": [
         "tests/unit/tlx-round2.test.mjs"
+      ],
+      "retireTexture": [
+        "tests/unit/tlx-texture-release.test.mjs"
       ],
       "setRange0": [
         "tests/unit/tlx-hunt3.test.mjs",
@@ -13826,6 +13888,7 @@
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/load-order.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/props-tri-ratchet.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs",
@@ -13856,6 +13919,9 @@
       ],
       "setContrast": [
         "tests/unit/appearance-opts.test.mjs"
+      ],
+      "setCvdMode": [
+        "tests/unit/cvd-palette.test.mjs"
       ],
       "setHelp": [
         "tests/unit/appearance-opts.test.mjs"
@@ -13962,6 +14028,29 @@
         "tests/unit/player-tools-ui.test.mjs"
       ]
     },
+    "js/ui/captions.js": {
+      "push": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "radioWho": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setBg": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setMode": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setPos": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setSize": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "setSpeakerInk": [
+        "tests/unit/captions.test.mjs"
+      ]
+    },
     "js/ui/condition-cue-controls.js": {
       "apply": [
         "tests/unit/player-tools-ui.test.mjs"
@@ -13983,6 +14072,23 @@
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ]
+    },
+    "js/ui/cvd-palette.js": {
+      "dE2000": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
+      "labFromLinear": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
+      "rgb01": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
+      "simulate": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
+      "simulateLinear": [
+        "tests/unit/cvd-palette.test.mjs"
       ]
     },
     "js/ui/debris-opts.js": {
@@ -14414,6 +14520,9 @@
       ]
     },
     "js/ui/hud-strategy.js": {
+      "behindThreat": [
+        "tests/unit/hud-strategy.test.mjs"
+      ],
       "fmtLaps": [
         "tests/unit/hud-strategy.test.mjs"
       ],
@@ -15113,6 +15222,7 @@
       "*": [
         "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/global-registry.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/source-integrity.test.mjs",
