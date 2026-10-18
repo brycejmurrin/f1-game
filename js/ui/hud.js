@@ -73,7 +73,11 @@ const _hudTxt = new WeakMap();   // el -> last textContent
 const _hudSty = new WeakMap();   // el -> { prop: lastVal }; remove through hUnstyle, or an equal rewrite is skipped
 const _hudCls = new WeakMap();   // el -> last className
 const _hudTog = new WeakMap();   // el -> { cls: lastBool }
-function hText(el, v) { if (!el) return; if (_hudTxt.get(el) !== v) { _hudTxt.set(el, v); el.textContent = v; } }
+// REWRITE THE TEXT NODE, DO NOT REPLACE IT: textContent swaps the child, the element passes through :empty and Blink
+// re-runs :has() up to <html> (~175/s on the speed digits, docs/notes/PERF-P2-HTEXT-2026-10-18.md). `.data` is a
+// character-data change: same text and accessible name, no child-list mutation.
+function hText(el, v) { if (!el) return; if (_hudTxt.get(el) !== v) { _hudTxt.set(el, v); const t = el.firstChild;
+  if (t && t.nodeType === 3 && !t.nextSibling && typeof v === "string" && v !== "") t.data = v; else el.textContent = v; } }
 function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m) { m = {}; _hudSty.set(el, m); }
   if (m[prop] !== v) { m[prop] = v; if (prop.charCodeAt(0) === 45) el.style.setProperty(prop, v); else el.style[prop] = v; } }
 function hUnstyle(el, prop) { if (!el) return; const m = _hudSty.get(el); if (m) delete m[prop]; if (el.style && el.style.removeProperty) el.style.removeProperty(prop); }
