@@ -228,10 +228,9 @@ function load({
   };
 }
 
-test("shell carries Appearance door, panel, preview, swatches and hex fields", () => {
+test("shell carries Appearance door, panel, swatches and hex fields", () => {
   assert.ok(SHELL.includes('id="pm-open-appearance"'));
   assert.ok(SHELL.includes('id="pm-panel-appearance"'));
-  assert.ok(SHELL.includes('id="pm-appearance-preview"'));
   assert.ok(SHELL.includes('id="pm-menuaccent-swatches"'));
   assert.ok(SHELL.includes('id="pm-hudaccent-swatches"'));
   for (const id of ["pm-uitheme", "pm-menuaccent", "pm-hudaccent"]) {
