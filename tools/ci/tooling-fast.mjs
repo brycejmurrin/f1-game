@@ -759,9 +759,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/photo-kit.test.mjs",
   "tests/unit/photo-studio.test.mjs",
   "tests/unit/photomode-hold.test.mjs",
-  "tests/unit/share-card-data.test.mjs",
-  "tests/unit/share-card-layout.test.mjs",
-  "tests/unit/share-card.test.mjs",
   // The physics baseline's provenance stamp (_blessed): reason, data hash,
   // blessing commit. One file read and one git call, well under a second, and
   // it must fail where the baseline is edited, not on a nightly.
@@ -932,6 +929,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The sun shadow map's depth span holds a 250 m caster: drives the real
   // ShadowPass.sunPass on a stub renderer and projects through its light VP.
   "tests/unit/shadow-pass-depth.test.mjs",
+  "tests/unit/share-card-data.test.mjs",
+  "tests/unit/share-card-layout.test.mjs",
+  "tests/unit/share-card.test.mjs",
   "tests/unit/share-code.test.mjs",
   "tests/unit/shared-math.test.mjs",
   "tests/unit/sheet-per-screen.test.mjs",
