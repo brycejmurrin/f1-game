@@ -45,6 +45,7 @@
     // (channel beacon, shuttered podiums, the stalled waterfront).
     theme: "green",
     lengthKm: 5.613,
+    tyreSeverity: 1.38,  // Historic Yeongam abrasive + heat band
     baseHW: 8,
     sceneryCoordinates: "racing",
     terrainOuter: 110,

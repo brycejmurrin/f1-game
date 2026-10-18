@@ -162,7 +162,10 @@ jobs:
           git config user.email "noreply@anthropic.com"
           git checkout -B "$TIMINGS_BRANCH"
           git add tests/data/spec-timings.json
-          git commit -m "chore(timings): merge junit durations from CI run ${{ github.event.workflow_run.id || 'dispatch' }}
+          # Hooks off for the commit too (2026-10-18, as #2084 did for the push):
+          # .githooks/pre-commit runs test:guards over the whole tree, so any
+          # unrelated guard red on the deploy tip blocked this one-file data commit.
+          git -c core.hooksPath=/dev/null commit -m "chore(timings): merge junit durations from CI run ${{ github.event.workflow_run.id || 'dispatch' }}
 
           Bounded rolling record (KEEP samples per key, per env bucket), written
           by tools/ci/spec-timings.mjs. Merge this branch to let
