@@ -15,6 +15,9 @@ const Captions = (function () {
   const SIZES = Object.freeze([["small", "SMALL"], ["medium", "MEDIUM"], ["large", "LARGE"]]);
   const POSITIONS = Object.freeze([["auto", "AUTO"], ["top", "TOP"], ["bottom", "BOTTOM"], ["mirror", "BESIDE MIRROR"]]);
   const SPEAKER_INK = Object.freeze([["on", "ON"], ["off", "OFF"]]);
+  const BG_OPTS = Object.freeze([
+    ["40", "40%"], ["55", "55%"], ["70", "70%"], ["82", "DEFAULT"], ["90", "90%"], ["100", "100%"],
+  ]);
 
   const RING_MAX = 12;
   const TEXT_CH_MAX = 38;
@@ -230,42 +233,11 @@ const Captions = (function () {
     const rows = [
       ["pm-caption-size", "CAPTION SIZE", SIZES, () => size, setSize],
       ["pm-caption-pos", "CAPTION POSITION", POSITIONS, () => pos, setPos],
-      ["pm-caption-bg", "CAPTION BACKGROUND", null, () => bg, setBg],
+      ["pm-caption-bg", "CAPTION BACKGROUND", BG_OPTS, () => String(bg), (v) => setBg(v)],
       ["pm-caption-speaker", "SPEAKER COLOUR", SPEAKER_INK, () => speakerInk, setSpeakerInk],
     ];
     for (const [id, label, values, read, write] of rows) {
       if (byId(id)) continue;
-      if (id === "pm-caption-bg") {
-        const row = document.createElement("div");
-        row.className = "setting-row";
-        row.id = id;
-        const lab = document.createElement("span");
-        lab.className = "setting-label";
-        lab.textContent = label;
-        const val = document.createElement("span");
-        val.className = "setting-value";
-        const inp = document.createElement("input");
-        inp.type = "range";
-        inp.min = "40";
-        inp.max = "100";
-        inp.step = "1";
-        inp.id = id + "-range";
-        inp.value = String(bg);
-        const out = document.createElement("span");
-        out.id = id + "-out";
-        out.textContent = bg + "%";
-        inp.addEventListener("input", () => {
-          const v = setBg(inp.value);
-          out.textContent = v + "%";
-        });
-        val.appendChild(inp);
-        val.appendChild(out);
-        row.appendChild(lab);
-        row.appendChild(val);
-        insertAfter(row, last);
-        last = row;
-        continue;
-      }
       const built = SettingRow.build(id, label, values);
       insertAfter(built.row, last);
       last = built.row;

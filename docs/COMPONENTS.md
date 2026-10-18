@@ -140,6 +140,8 @@ not.
 | `team-` | 7 | `select.css` | `components.css` |
 | `steer-` | 11 | `touch-controls.css` | `hud.css` |
 | `bc-` | 25 | `hud.css` | — |
+| `cap-` | 5 | `hud.css` | — |
+| `ld-` | 3 | `loading.css` | — |
 | `tdc-` | 7 | `track-detail.css` | — |
 | `co-` | 12 | `career.css` | — |
 | `pm-` | 66 | `settings.css` | `settings-controls.css`, `components.css`, `tokens.css` |
