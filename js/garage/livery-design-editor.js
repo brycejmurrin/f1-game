@@ -175,5 +175,5 @@ const GarageLiveryDesignEditor = (function () {
       },
     });
   }
-  return Object.freeze({ attach, label: (id) => LABELS[id] || id });
+  return Object.freeze({ attach, label: (id) => LABELS[id] || (typeof LiveryDesign !== "undefined" && LiveryDesign.LABELS && LiveryDesign.LABELS[id]) || id });
 })();
