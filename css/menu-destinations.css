@@ -124,7 +124,12 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
    stacked PRACTICE under GARAGE (ui-scale Factory Home click intercept). */
 :root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
   grid-column: 2; grid-row: 1;
-  width: calc(30 * var(--vwz)); max-width: 100%; min-width: 0;
+  /* 34vwz keeps the CSS inline size above the 12rem title-menu container at
+     Factory Home 667×320 and phone-landscape @ 200% (geometry zoom 1.25
+     shrinks used width). 30vwz fell under 12rem and either stacked Play
+     (Garage over Practice) or, after the 2-col keep, clipped labels / crushed
+     200% control text. */
+  width: calc(34 * var(--vwz)); max-width: 100%; min-width: 0;
   height: 100%; max-height: 100%; align-self: stretch; justify-self: center;
   align-content: safe center; pointer-events: auto;
   container: title-menu / inline-size;
@@ -181,16 +186,8 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   :root:not([data-title-btns="row"]) #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create) > .bigbtn {
     flex: 0 0 auto; width: 100%; min-width: 0;
   }
-  /* Two-col Play cells are ~4rem wide here: drop icons and tighten type so
-     "RACE A FRIEND" / PRACTICE / GARAGE stay inside their boxes (ui-scale
-     Factory Home mb-vs clip @ 667×320). Cap at --fs-micro (no raw px under
-     the subFloorFontSize ratchet). */
-  #overlay #menu-buttons :is(#menu-primary, #menu-garage) .btn-ico { display: none; }
-  #overlay #menu-buttons :is(#menu-primary, #menu-garage) > .bigbtn {
-    font-size: clamp(0.6rem, calc(2.1 * var(--vwz)), var(--fs-micro));
-    padding-inline: calc(var(--gap) * .25);
-  }
 }
+
 
 @container title-menu (max-width: 20rem) {
   #overlay #menu-buttons #menu-create .btn-ico { display: none; }
