@@ -2891,6 +2891,7 @@
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/fin-design.test.mjs",
+        "tests/unit/livery-design.test.mjs",
         "tests/unit/team-livery.test.mjs"
       ],
       "migratePaint": [
@@ -2899,7 +2900,6 @@
       "*": [
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
-        "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
@@ -6108,6 +6108,9 @@
         "tests/unit/storm-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ],
+      "hexToArr": [
+        "tests/unit/livery-design.test.mjs"
+      ],
       "idxOr": [
         "tests/unit/boot-input-shape.test.mjs"
       ],
@@ -6507,7 +6510,6 @@
         "tests/unit/js-debugger-mcp.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
         "tests/unit/light-grid.test.mjs",
-        "tests/unit/livery-design.test.mjs",
         "tests/unit/lockup-smoke-vm.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/metrics.test.mjs",
@@ -6527,6 +6529,7 @@
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchet-reason.test.mjs",
         "tests/unit/ratchets.test.mjs",
+        "tests/unit/ready-gate.test.mjs",
         "tests/unit/report-server.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
@@ -6963,6 +6966,9 @@
         "tests/unit/team-livery.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
+      "csTabId": [
+        "tests/unit/livery-design.test.mjs"
+      ],
       "endLivPreview": [
         "tests/unit/livery-draft-mesh-cache.test.mjs"
       ],
@@ -6971,6 +6977,9 @@
       ],
       "livDraftFrom": [
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/team-livery.test.mjs"
+      ],
+      "livDraftFromOwn": [
         "tests/unit/team-livery.test.mjs"
       ],
       "livDraftTo": [
