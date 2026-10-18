@@ -380,3 +380,29 @@ test("TAIL STYLE TEAM names the motif it paints — and the atlas agrees for eve
     assert.equal(ops(t.id, { ...base, finStyle: kind }), ops(t.id, { ...base, finStyle: "team" }), t.id + ": TEAM paints " + kind);
   }
 });
+
+// D1: the editor previewed a draft as the team's own scheme (id "default", brand mark palette) and
+// SAVE & FIT stored it under a custom id, so the marks changed colour the moment you saved.
+test("a paint job started from the team's own scheme saves the marks the editor showed, on every team", () => {
+  const A = loadAtlas(), sheet = source("js/garage/setup-sheet.js"), game = source("js/game.js");
+  const ctx = vm.createContext({ LiveryTex: A.LT, Liveries: A.Liveries, Math, Object, Array, String, Number, JSON, parseInt });
+  for (const name of ["hexToArr", "arrToHex"]) vm.runInContext(game.match(new RegExp("^function " + name + "\\(.*$", "m"))[0], ctx);
+  vm.runInContext(sheet.slice(sheet.indexOf("const LIV_DRAFT_COLORS"), sheet.indexOf("// WHAT EACH ROW ACTUALLY PAINTS")), ctx);
+  vm.runInContext(sheet.slice(sheet.indexOf("function livDraftFrom("), sheet.indexOf("function csTabId(")), ctx);
+  const run = (code) => vm.runInContext(code, ctx);
+  const ops = (team, liv) => JSON.stringify(A.paint(team, liv));
+  const livOf = (d, id) => run(`(d) => Object.assign({ id: ${JSON.stringify(id)}, c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, false))`)(d);
+  assert.match(sheet, /id: "custom_draft"/, "the live preview resolves the draft under a custom id, as the save does");
+  let sensitive = 0;
+  for (const t of A.Teams.LIST.filter((x) => !x.legends && x.id !== "custom")) {
+    const own = A.Liveries.forTeam(t)[0], shape = {};
+    for (const k of ["finShape", "spineHeight", "spineLogo", "spineSide", "finStyle", "finBadge", "tcam", "coverVents"]) if (t.livery && t.livery[k]) shape[k] = t.livery[k];
+    for (const [door, src] of [["copy", own], ["new", Object.assign({ c1: t.color, c2: t.color2 }, shape)]]) {
+      const shown = ops(t.id, livOf(run("livDraftFrom")(src, "x"), "default"));   // what the old preview showed
+      const saved = livOf(run("livDraftFromOwn")(src, "x", t.id), "custom_1");
+      assert.equal(ops(t.id, saved), shown, t.id + " " + door + ": the saved marks are the previewed marks");
+      if (ops(t.id, livOf(run("livDraftFrom")(src, "x"), "custom_1")) !== shown) sensitive++;
+    }
+  }
+  assert.ok(sensitive >= 10, "without the seed the saved marks differ (" + sensitive + " doors), so this test can fail");
+});
