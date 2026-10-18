@@ -4,8 +4,8 @@ Load from the SKILL.md index when the task needs this detail.
 
 ## Contents
 - Workflow
-- Editing an existing circuit (no browser; verified on monza)
-- Adding a bridge or an elevation bump to an existing def (walked read-only on zandvoort)
+- Editing an existing circuit (no browser)
+- Adding a bridge or an elevation bump to an existing def
 - Gotchas
 
 ## Workflow
@@ -125,7 +125,7 @@ Load from the SKILL.md index when the task needs this detail.
    `terrain-over-road.spec.js` (terrain above the racing line) when geometry, elevation or a
    street/terrain flag moved. A whole group is the parent's call.
 
-## Editing an existing circuit (no browser; verified on monza)
+## Editing an existing circuit (no browser)
 
 Before an edit, read `docs/tracks/<id>.md` (and `docs/tracks/START-LINES.md`); a hero-landmark edit also touches
 `tests/data/landmarks/<id>.json` (rules in `js/circuits/AGENTS.md`). Then:
@@ -141,13 +141,16 @@ Green = each count equals its `"<id>"` row in `tools/track/{clip,coplanar,float}
 a geometry/scenery edit that moves a count means updating that baseline row to the measured value, in the same commit.
 `import-circuit-path.mjs --self-check` can exit 1 on a known committed-path drift row (see `docs/plans/skilltest-content-pipeline.md`); a FAIL row for the circuit you touched is yours.
 
-## Adding a bridge or an elevation bump to an existing def (walked read-only on zandvoort)
+## Adding a bridge or an elevation bump to an existing def
 
 Both are cosine bumps `{ s, halfM, rise }` (full width 2 x halfM, peak `rise` m), added to the road height in `buildCenterline` (`js/track/tracks.js` (`buildCenterline`)).
 - **`elevations`** — terrain follows the road.
   - Silently DROPPED (`js/track/core/def.js` `fromRaw`) when the id has a profile in `js/track/circuit-elevations.js` (SRTM bake).
   - Then edit the bake (`tools/gen/bake-elevation.mjs`), not the def. Check first: `grep -c "^    <id>:" js/track/circuit-elevations.js`.
-- **`bridges`** — road lifts, `js/track/core/surface.js` (~L74) carves the ground back flat under the deck, `js/track/scenery/build-props.js` (~L2209) adds four pillar pairs. Only suzuka has one; pick `s` from the real crossover (a bridge over nothing is a bare hump), and keep `halfM` short.
+- **`bridges`** — the road lifts.
+  - `profile()` in `js/track/core/surface.js` (`if (def.bridges)`) carves the ground back flat under the deck.
+  - The `const brs = def.bridges` block in `js/track/scenery/build-props.js` adds four pillar pairs.
+  - Only suzuka has one; pick `s` from the real crossover (a bridge over nothing is a bare hump), and keep `halfM` short.
 - **`s` frame:** authored against `sceneryStartFrac` (else `startFrac`), remapped to racing frac by `materializeListPoints`, then shifted by `def._sceneryShift` at every consumer (road, ground carve, pillars).
   - `_sceneryShift` is nonzero ONLY when the def names `sceneryStartFrac`; with none, `s` is a plain racing-lap fraction.
   - With it: `racing = authored + _sceneryShift - sceneryStartFrac` (read imola's def for a worked case).

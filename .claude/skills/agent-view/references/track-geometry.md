@@ -53,9 +53,10 @@ Every hook above except `render`/screens runs in `tools/lib/game-vm.cjs` (~5 s p
 then `a.info() / a.corners() / a.trackProfile(400) / a.trackInfo({what:"corners"})` as usual (end with `process.exit(0)`;
 write the script under `scratch/`, not `/tmp`). Compare circuits: loop `createGame` per id;
 elevation range = max−min of `trackProfile(n).y`, tightest radius = `1/max|k|`.
-Illustrative only (2026-09-30; re-measure, never quote): monza 11 `turns` / 24 peaks / 6.0 m / minR 15 m; spa 20 / 42 / 102 m / 13 m.
-`1/max|k|` is the instantaneous peak (spa 13 m at frac 0.035); `trackInfo` corners' `radiusM` is averaged over the corner window (spa T1 30 m, tightest listed T20 29 m) — name which one "sharpest" means.
-Note `trackInfo().cornerCount` (monza 10, spa 15) can be lower than `info().turns` (11, 20): quote which hook you used.
+Measure, never quote a number from this file: circuits are re-surveyed and every figure drifts.
+`1/max|k|` is the instantaneous peak; `trackInfo` corners' `radiusM` is averaged over the corner window, so the two
+disagree on the same corner — name which one "sharpest" means.
+`trackInfo().cornerCount` can be lower than `info().turns` (curated apexes): quote which hook you used.
 `tools/track/verify-track.cjs <id>` (VM) checks the build only; it prints no geometry stats.
 
 ### Whole-lap recipe: steepest grade and worst terrain-over-road (any id)

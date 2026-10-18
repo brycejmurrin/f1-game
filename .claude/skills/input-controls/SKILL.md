@@ -78,9 +78,9 @@ Player knobs, all in `js/input/steer-tuning.js` (`applySteerTuning` + `wireTune`
   `tests/unit/key-binds.test.mjs` (calibrate persists, full lock both sides); browser
   `tests/specs/gamepad.spec.js` "centre dead zone", `sliders.spec.js`.
 - Drifting stick triage (read `inputState()`, wheel vs pad, per-pad rest) → `references/pad-drift.md`.
-- No added lag: `padAxisShape` (`input.js` ~837) is STATELESS (rest → dead zone →
+- No added lag: `padAxisShape` (`input.js`) is STATELESS (rest → dead zone →
   saturation, no filter), so a drift fix belongs there or in `padRest`, never a
-  smoothing/slew stage; the response curve is `analogShape` (~1713). Full lock:
+  smoothing/slew stage; the response curve is `analogShape` (same file). Full lock:
   each side is divided by its own travel (`1 ± rest`, `|rest| ≤ 0.5` so neither
   divisor is below 0.5) and `span = max(0.05, 1 − dz − sat)` — a worn pad that
   tops out short needs SATURATION, not a bigger rest.
@@ -122,6 +122,12 @@ Cross-check `UiLayers.anyOpen()` and `document.activeElement` when debugging foc
   centre: an offset after rotation needs RECALIBRATE (`calibrate()` takes the
   RAW angle). Spec `tilt-pipeline.spec.js` (dead zone, full lock at MAX_TILT,
   slew, calibrate).
+- "Racing-line help stays highlighted" is not an input latch. The on-track ribbon is
+  `js/render/shared/driving-line.js` (mode OFF / CORNERS / FULL from RACE SETTINGS; green →
+  amber → red from the player's speed, so it stays red while you are over the target);
+  colour/opacity/brake-cue prefs are `js/ui/driving-line-opts.js`; pins
+  `tests/unit/driving-line*.test.mjs`. The steering PULL toward the line is the `raceLine`
+  assist (table above). Fix the held button first; re-check the line only if it outlives the release.
 - Reproduce at phone landscape (844×390) with touch first.
 
 ## Sharp edges
