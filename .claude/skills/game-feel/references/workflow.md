@@ -43,8 +43,12 @@ Generic trauma-shake math: [feedback-recipes.md](feedback-recipes.md).
 - Allocating FX inside `updateCar`. Emit `c.fxSparkI` / bump `shake`, consume
   in render/audio.
 - Applying shake to car/track/heading/collision. Camera/view only.
-- Hit-stop by pausing the physics clock. Visual/audio freeze only. NB the existing `hitStop` (game.js, `simTime = dt * 0.15`,
-  fed only by car-to-car `collideFx`, `impact * 0.015` s; wall impacts add shake, not hitStop) DOES slow the sim clock: it is live-only determinism-affecting, so do not extend it to kerbs; a kerb
-  cue never needs it.
+- A NEW hit-stop that touches the sim clock. The one exception already exists:
+  `feel.hitStop` (game.js, `simTime = dt * 0.15`) slows the sim, fed only by
+  car-to-car `collideFx` (`impact * 0.015` s); wall impacts add shake, not hitStop.
+  Leave it as the only sim-slowing cue and never feed it from kerbs or walls.
+  For any other "freeze" (the "hit-stop with no lap-time change" ask), hold the
+  render instead: freeze the camera/particle/audio update for 1–3 frames while
+  `updateCar` keeps stepping, so `obs()` and lap times are unchanged.
 - Random effects that change headless runs. Isolate RNG from the sim stream.
 - Ignoring reduce-intensity / low-end: cap shake/flash, decay quickly.

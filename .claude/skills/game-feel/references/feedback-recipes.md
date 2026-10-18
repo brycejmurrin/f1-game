@@ -66,17 +66,17 @@ IEnumerator Pop(Transform t, float dur = 0.18f) {
 
 - **Flash:** tint the sprite/material white for 1–3 frames on hit (`modulate`/material color),
   then tween back. Cheap, hugely legible.
-- **Knockback:** apply an impulse away from the hit normal, clamped and short; let
-  **tune-physics** own stability. Pair with brief control lockout, not a long one.
+- **Knockback:** a physics impulse, so out of scope here (it changes `obs()`); in Apex
+  the collision response belongs to **race-incidents-control** / **tune-physics**.
 - **Number/text pop:** spawn a damage number that rises, fades, and eases out; randomize the
   horizontal drift so stacked hits fan out.
 - **Particles:** a short burst at the contact point (sparks, dust, debris). Pool them
   (`js/perf/governor.js`) — do not instance-and-free per hit.
-- **Freeze frame:** the hit-stop in the body; scale duration to importance (0.04 s light →
-  0.15 s heavy). Optionally freeze only the attacker+target, not the whole world.
+- **Freeze frame:** in Apex a render-only hold (see workflow.md, hit-stop); scale duration
+  to importance (0.04 s light → 0.15 s heavy). The sim never pauses.
 - **Anticipation & follow-through:** a tiny wind-up before a big action and a settle after read
   as weight; this is animation, not code (engine animation skill).
-- **Chromatic/▒vignette/zoom punch:** post-process nudges for big moments; keep brief.
+- **Chromatic/vignette/zoom punch:** post-process nudges for big moments; keep brief.
 
 ## 4. Importance tiers (keep the whole game proportional)
 

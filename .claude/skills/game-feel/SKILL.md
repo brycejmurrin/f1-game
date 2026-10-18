@@ -40,7 +40,8 @@ replay identically, so feedback may *read* physics state but never write it.
 - The car's measured behaviour is wrong (understeer, grip, pace) → **tune-physics**.
 - Camera lag or framing → **playwright-probe**; replay/broadcast cuts → **f1-animation-cameras**.
 - Rumble/haptics *mapping* on a gamepad → **input-controls**.
-- FX allocation inside `updateCar`, or hit-stop/shake that changes `obs()`/`act()`.
+- FX allocation inside `updateCar`, or shake/freeze that changes `obs()`/`act()`
+  (a new hit-stop holds the render, never the sim clock: references/workflow.md).
 
 ## Load on demand
 
