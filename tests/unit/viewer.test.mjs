@@ -72,6 +72,7 @@ test("build-viewer: selection defaults, 'all', and refusals", () => {
   assert.equal(parseArgs(["--shots"]).shots, true, "--shots is a flag");
   assert.equal(parseArgs([]).shots, false);
   assert.equal(parseArgs(["--sheet=liveries:ferrari"]).sheet, "liveries:ferrari");
+  assert.equal(parseArgs(["--match=^neo_"]).match, "^neo_");
   assert.deepEqual(parseSheet("parts:aero:haas"), { kind: "parts", cat: "aero", team: "haas" });
   assert.deepEqual(parseSheet("finishes:haas"), { kind: "finishes", team: "haas" });
   assert.throws(() => parseSheet("wheels:haas"), /unknown --sheet kind/);

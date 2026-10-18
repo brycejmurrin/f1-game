@@ -37,11 +37,13 @@ export function parseSheet(spec) {
 
 /**
  * @param {string} htmlPath  a page written by build-viewer.mjs
- * @param {{cars?:string[], circuits?:string[], sheet?:string|null, outDir:string, cacheDir:string}} opts
- *   cars/circuits: one still each (the factory car, the circuit). sheet: every variant of one axis instead.
+ * @param {{cars?:string[], circuits?:string[], sheet?:string|null, match?:string|null, outDir:string, cacheDir:string}} opts
+ *   cars/circuits: one still each (the factory car, the circuit). sheet: every variant of one axis instead;
+ *   match: a regex a variant id must match to be shot (e.g. the ids a change adds).
  * @returns {Promise<{shots:{label:string,png:string}[], sheet:string|null}>}
  */
-export async function shootViewer(htmlPath, { cars = [], circuits = [], sheet = null, outDir, cacheDir }) {
+export async function shootViewer(htmlPath, { cars = [], circuits = [], sheet = null, match = null, outDir, cacheDir }) {
+  const keep = match ? new RegExp(match) : null;
   fs.mkdirSync(outDir, { recursive: true });
   const browser = await chromium.launch({ executablePath: chromiumPath(), args: ["--use-gl=swiftshader", "--enable-unsafe-swiftshader"] });
   try {
@@ -56,12 +58,13 @@ export async function shootViewer(htmlPath, { cars = [], circuits = [], sheet = 
     if (sheet) {
       const S = parseSheet(sheet);
       const O = await page.evaluate((t) => window.APEX_VIEWER.options(t), S.team);
-      if (S.kind === "liveries") for (const l of O.liveries) jobs.push([`livery-${S.team}-${l.id}`, l.name, { team: S.team, livery: l.id }]);
-      if (S.kind === "finishes") for (const f of O.finishes) jobs.push([`finish-${S.team}-${f}`, f, { team: S.team, finish: f }]);
+      const ok = (id) => !keep || keep.test(id);
+      if (S.kind === "liveries") for (const l of O.liveries.filter((x) => ok(x.id))) jobs.push([`livery-${S.team}-${l.id}`, l.name, { team: S.team, livery: l.id }]);
+      if (S.kind === "finishes") for (const f of O.finishes.filter(ok)) jobs.push([`finish-${S.team}-${f}`, f, { team: S.team, finish: f }]);
       if (S.kind === "parts") {
         const cat = O.parts.find((c) => c.id === S.cat);
         if (!cat) throw new Error(`no part category "${S.cat}" (one of: ${O.parts.map((c) => c.id).join(", ")})`);
-        for (const o of cat.options) jobs.push([`part-${S.team}-${S.cat}-${o.id}`, o.label, { team: S.team, parts: { [S.cat]: o.id } }]);
+        for (const o of cat.options.filter((x) => ok(x.id))) jobs.push([`part-${S.team}-${S.cat}-${o.id}`, o.label, { team: S.team, parts: { [S.cat]: o.id } }]);
       }
     } else {
       for (const id of cars) jobs.push([`car-${id}`, null, { team: id }]);
@@ -79,6 +82,7 @@ export async function shootViewer(htmlPath, { cars = [], circuits = [], sheet = 
       shots.push({ label: label || title, png });
     }
     if (errors.length) throw new Error("viewer page errors: " + errors.join(" | "));
+    if (!shots.length) throw new Error(`nothing to shoot${match ? ` (--match=${match} kept no variant)` : ""}`);
     const sheetPng = shots.length > 1 ? await contactSheet(browser, shots, path.join(outDir, sheet ? `sheet-${sheet.replace(/[^A-Za-z0-9_-]/g, "_")}.png` : "sheet.png")) : null;
     return { shots, sheet: sheetPng };
   } finally {
