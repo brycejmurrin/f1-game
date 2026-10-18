@@ -4244,6 +4244,11 @@
         "tests/unit/dev-flags.test.mjs"
       ]
     },
+    "js/core/dom-apply.js": {
+      "*": [
+        "tests/unit/i18n.test.mjs"
+      ]
+    },
     "js/core/hash32.js": {
       "*": [
         "tests/unit/career-ai-dev.test.mjs",
@@ -4259,6 +4264,25 @@
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
+      ]
+    },
+    "js/core/i18n-pseudo.js": {
+      "*": [
+        "tests/unit/i18n.test.mjs"
+      ]
+    },
+    "js/core/i18n.js": {
+      "_installCatalog": [
+        "tests/unit/i18n.test.mjs"
+      ],
+      "_resetForTest": [
+        "tests/unit/i18n.test.mjs"
+      ],
+      "boot": [
+        "tests/unit/i18n.test.mjs"
+      ],
+      "pluralCategories": [
+        "tests/unit/i18n.test.mjs"
       ]
     },
     "js/core/lazy-bundles.js": {
@@ -4632,6 +4656,7 @@
         "tests/unit/data-api-status.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/i18n.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
@@ -5053,6 +5078,7 @@
         "tests/specs/debris.spec.js",
         "tests/unit/driving-coach.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
+        "tests/unit/i18n.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/store-registry.test.mjs",
         "tests/unit/tools-runnable.test.mjs"
