@@ -1199,6 +1199,9 @@
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
+      "applyFx": [
+        "tests/unit/cam-comfort.test.mjs"
+      ],
       "boot": [
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
@@ -1827,6 +1830,7 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "comfortGet": [
+        "tests/unit/cam-comfort.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "comfortSet": [
@@ -1850,15 +1854,18 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "decodeShare": [
+        "tests/unit/cam-comfort.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "encodeShare": [
+        "tests/unit/cam-comfort.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "exportEdits": [
         "tests/unit/camera-defaults.test.mjs"
       ],
       "exportPack": [
+        "tests/unit/cam-comfort.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "fovBias": [
@@ -1871,12 +1878,14 @@
         "tests/unit/camera-defaults.test.mjs"
       ],
       "importPack": [
+        "tests/unit/cam-comfort.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "importText": [
         "tests/unit/camera-defaults.test.mjs"
       ],
       "load": [
+        "tests/unit/cam-comfort.test.mjs",
         "tests/unit/camera-defaults.test.mjs"
       ],
       "persist": [
@@ -1891,6 +1900,9 @@
       ],
       "rollTarget": [
         "tests/unit/camera-defaults.test.mjs"
+      ],
+      "setContext": [
+        "tests/unit/cam-comfort.test.mjs"
       ],
       "setGlobal": [
         "tests/unit/camera-defaults.test.mjs"
@@ -4448,6 +4460,7 @@
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/pace-math.test.mjs",
         "tests/unit/pad-haptics.test.mjs",
         "tests/unit/phone-pad.test.mjs",
@@ -8147,6 +8160,7 @@
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/storm-vm.test.mjs"
@@ -8169,6 +8183,7 @@
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/storm-weather.test.mjs"
       ],
@@ -8204,6 +8219,7 @@
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/ratchets.test.mjs",
         "tests/unit/storm-weather.test.mjs",
@@ -8297,6 +8313,7 @@
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/race-settings-vm.test.mjs"
       ],
       "finishLap": [
@@ -8319,16 +8336,22 @@
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
-        "tests/unit/net-roster.test.mjs"
+        "tests/unit/net-roster.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
       ],
       "ownsClassification": [
-        "tests/unit/net-authority.test.mjs"
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
       ],
       "ownsRaceControl": [
-        "tests/unit/net-authority.test.mjs"
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
       ],
       "qualiReporters": [
         "tests/unit/net-authority.test.mjs"
+      ],
+      "rejoin": [
+        "tests/unit/netplay-resilience.test.mjs"
       ],
       "reportCaution": [
         "tests/unit/net-authority.test.mjs"
@@ -8346,6 +8369,7 @@
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/race-settings-vm.test.mjs"
       ],
       "stop": [
@@ -8364,7 +8388,8 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
-        "tests/unit/net-stub-surface.test.mjs"
+        "tests/unit/net-stub-surface.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
       ],
       "validQuali": [
         "tests/unit/net-authority.test.mjs"
@@ -8506,7 +8531,8 @@
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
-        "tests/unit/net-transport.test.mjs"
+        "tests/unit/net-transport.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
       ],
       "deliverState": [
         "tests/unit/net-roster.test.mjs"
@@ -8518,7 +8544,8 @@
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
-        "tests/unit/net-transport.test.mjs"
+        "tests/unit/net-transport.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
       ],
       "release": [
         "tests/unit/net-authority.test.mjs",
@@ -8541,7 +8568,8 @@
       "decodeSnapshot": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
-        "tests/unit/net-snapshot.test.mjs"
+        "tests/unit/net-snapshot.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
       ],
       "encodeAged": [
         "tests/unit/net-authority.test.mjs",
@@ -8551,7 +8579,8 @@
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-roster.test.mjs",
-        "tests/unit/net-snapshot.test.mjs"
+        "tests/unit/net-snapshot.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
       ],
       "push": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
@@ -8562,7 +8591,8 @@
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-snapshot.test.mjs",
-        "tests/unit/net-start-arming.test.mjs"
+        "tests/unit/net-start-arming.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
       ],
       "sample": [
         "tests/unit/mechanics-coherence.test.mjs",
@@ -8573,6 +8603,11 @@
       ],
       "toView": [
         "tests/unit/net-session.test.mjs"
+      ]
+    },
+    "js/net/spectate.js": {
+      "*": [
+        "tests/unit/netplay-resilience.test.mjs"
       ]
     },
     "js/net/transport.js": {
@@ -8588,6 +8623,7 @@
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/net-transport.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
