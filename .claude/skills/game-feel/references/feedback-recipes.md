@@ -1,6 +1,6 @@
 # Feedback recipes — depth for `game-feel`
 
-Detail [game-feel.md](game-feel.md) defers here: the shake math, easing cheat sheet, the rest of the
+Detail [the game-feel SKILL.md](../SKILL.md) defers here: the shake math, easing cheat sheet, the rest of the
 feedback menu (knockback, flash, number pop, freeze), importance-tier presets, and the
 per-engine bindings for tweens and particles. All snippets target **Godot 4.x** and **Unity 6**.
 

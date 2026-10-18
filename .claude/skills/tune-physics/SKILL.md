@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: "Use when the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, A-B physics settings, a physics sweep, ROAD_FOLLOW, or whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change physics. Skidpad/step-steer/`player-dyn` VM A/B. Camera lag → playwright-probe; gamepad/touch/tilt/steer sliders → input-controls; AI → ai-racecraft."
+description: "Use when the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, A-B physics settings, a physics sweep, ROAD_FOLLOW, or whether driving feel improved; skidpad/step-steer/`player-dyn` VM A/B. Shake/hit-stop/juice → game-feel; camera lag → playwright-probe; gamepad/touch/tilt/steer sliders → input-controls; AI → ai-racecraft."
 ---
 
 # Tune the physics
@@ -61,7 +61,8 @@ node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>  # browser (laun
 No browser (Node VM, `tools/lib/game-vm.cjs`, deterministic — the first stop for an A/B):
 
 ```sh
-TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json]   # skidpad, step-steer, trail-brake, midCorner_*; no flags to set physics
+TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json] [--seat pin|shipped]   # skidpad, step-steer, trail-brake, midCorner_*
+# --seat pin (default) = the bare driving model; --seat shipped = the car a fresh browser boots. Say which seat an A/B measured.
 node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SHAPES
 ```
 
@@ -80,11 +81,5 @@ If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` ([shell/cache
 - Worked slow-corner understeer A/B → [references/understeer-recipe.md](references/understeer-recipe.md).
 - Closed-loop trial, parallel sweep (`polling: 100`), trail-brake, house-style
   assertions → [references/harness.md](references/harness.md).
-- **Game feel / juice** — which Apex system owns which channel, and the hard
-  line that juice is a render/audio layer that must never write `car.px/pz`,
-  `s`, `x`, `psi` or change `obs()`/`act()` determinism →
-  [references/game-feel.md](references/game-feel.md); channel table and the
-  kerb-vs-kickup mistakes in
-  [references/game-feel-workflow.md](references/game-feel-workflow.md);
-  trauma-shake math (inspiration only) in
-  [references/game-feel-feedback-recipes.md](references/game-feel-feedback-recipes.md).
+- Game feel / juice (shake, hit-stop, kerb and impact feedback that must not
+  change physics) is its own skill → **game-feel**.
