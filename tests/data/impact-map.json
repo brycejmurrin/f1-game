@@ -4683,6 +4683,9 @@
       "positions": [
         "tests/unit/data-api-status.test.mjs"
       ],
+      "schedule": [
+        "tests/unit/data-schedule-tz.test.mjs"
+      ],
       "sessionResult": [
         "tests/unit/data-api-status.test.mjs"
       ],
@@ -4984,6 +4987,9 @@
       ]
     },
     "js/data/schedule.js": {
+      "countdown": [
+        "tests/unit/data-schedule-tz.test.mjs"
+      ],
       "create": [
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
@@ -5001,11 +5007,17 @@
       "nextFlipAt": [
         "tests/unit/data-schedule-tz.test.mjs"
       ],
+      "nextRace": [
+        "tests/unit/data-schedule-tz.test.mjs"
+      ],
       "raceInstant": [
         "tests/unit/data-schedule-tz.test.mjs"
       ],
-      "*": [
+      "tick": [
         "tests/unit/phone-touch-surface.test.mjs"
+      ],
+      "weekendSessions": [
+        "tests/unit/data-schedule-tz.test.mjs"
       ]
     },
     "js/data/settings-defaults.js": {
@@ -8654,6 +8666,37 @@
         "tests/unit/phone-input-improvements.test.mjs"
       ]
     },
+    "js/overlay/feed.js": {
+      "accept": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
+      "battle": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
+      "createDiffer": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
+      "frame": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
+      "sector": [
+        "tests/unit/overlay-feed.test.mjs"
+      ]
+    },
+    "js/overlay/render.js": {
+      "create": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
+      "options": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
+      "paint": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
+      "text": [
+        "tests/unit/overlay-feed.test.mjs"
+      ]
+    },
     "js/perf/gfx-debug-overlay.js": {
       "install": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -10047,6 +10090,7 @@
       "create": [
         "tests/unit/director.test.mjs",
         "tests/unit/mirror-pass.test.mjs",
+        "tests/unit/overlay-feed.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
@@ -10091,6 +10135,7 @@
       ],
       "tick": [
         "tests/unit/director.test.mjs",
+        "tests/unit/overlay-feed.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "towerAt": [
@@ -11512,6 +11557,17 @@
       ],
       "*": [
         "tests/unit/tyre-model.test.mjs"
+      ]
+    },
+    "js/race/tv-graphics.js": {
+      "create": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
+      "diff": [
+        "tests/unit/overlay-feed.test.mjs"
+      ],
+      "tick": [
+        "tests/unit/overlay-feed.test.mjs"
       ]
     },
     "js/race/weather-arc.js": {
@@ -14412,6 +14468,7 @@
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/overlay-feed.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/race-radio.test.mjs"
       ],
