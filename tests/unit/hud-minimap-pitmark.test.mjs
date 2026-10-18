@@ -12,9 +12,10 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
+// The minimap left js/ui/hud.js for js/ui/hud-minimap.js (#1656); the block ends at create()'s return.
+const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud-minimap.js"), "utf8");
 const a = hud.indexOf("const _mmPitGlyph");
-const b = hud.indexOf("// loadTrack() calls this");
+const b = hud.indexOf("\nreturn {", a);
 assert.ok(a > 0 && b > a, "mmPitMark block present");
 
 function makeCtx(log) {

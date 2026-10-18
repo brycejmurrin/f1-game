@@ -205,7 +205,13 @@
       // The chicane bowl walls (bowlSeatWall 0.700–0.730 L, 0.742–0.775 R, gap
       // 24) stand where the 22/26 m hedges run: the hedge chunks were built
       // straight through the seating mass. The dune grass stops at the bowl.
-      const HEDGE_SKIP = [[0.687, 0.738, -1], [0.737, 0.782, 1]];
+      // The last three (+1 side) are where the lap brings ANOTHER stretch of
+      // road within 5 m of the hedge line (hedge()'s onTrack(…, 5) guard):
+      // 0.196-0.198 (26 m run past Hugenholtz), 0.288-0.311 (32 m run at
+      // Hunserug) and 0.656-0.673 (26 m run). The engine dropped those 66
+      // segments every build (verify-track guard drops, 2026-10-18).
+      const HEDGE_SKIP = [[0.687, 0.738, -1], [0.737, 0.782, 1],
+                          [0.194, 0.200, 1], [0.286, 0.313, 1], [0.654, 0.675, 1]];
       const marramHedge = (s0, s1, side, gap, h, col) => {
         const step = 5 / track.total;
         let i = 0;
@@ -757,32 +763,14 @@
         });
       }
 
-      {
-        const roofAccent = [0.98, 0.95, 0.88];   // near-white warm fascia
-        const spotCol    = [1.00, 0.97, 0.84];   // warm spot luminaire
-
-        // Pit straight main stand (s≈0.01, side=1, gap=12, len=36)
-        for (const [s, side, gap, len] of [
-          [0.01,  1,  16, 36],   // pit straight main R
-          [0.205, 1,   26, 38],   // Hugenholtz banked L (gap updated to match grandstand)
-          [0.915, 1,  28, 80],   // Arie Luyendyk massive R (gap updated to match grandstand)
-          [0.588, 1,  14, 42],
-        ]) {
-          const k = K(s), a = anchor(k, side, gap + 5);
-          const b = [a.r, a.u, a.t];
-          // Roof-fascia emissive strip (just below canopy)
-          addBox(out, vadd(a.c, a.u, 13.5), [11, 0.45, len + 4], roofAccent, b);
-          // Row of small spot boxes suspended under canopy edge
-          const spotCount = Math.round(len / 8);
-          for (let i = 0; i < spotCount; i++) {
-            const offset = (i - (spotCount - 1) / 2) * 8;
-            // Hung FROM the fascia (bottom 13.275): at 12.6 each spot floated
-            // 0.4 m under it (ground-audit).
-            addBox(out, vadd(vadd(a.c, a.u, 13.03), a.t, offset),
-                   [0.6, 0.5, 0.6], spotCol, b);
-          }
-        }
-      }
+      // (Removed 2026-10-18) A circuit-side roof-fascia strip + spot row used to
+      // hang at a fixed 13.5 / 13.03 m on anchor(gap+5) under the 0.01, 0.205,
+      // 0.588 and 0.915 stands. All four are `tiers: 2`: grandstandEx lifts the
+      // roof to 13 + topLift (the built upper rake, js/track/scenery/nature.js
+      // roofY), so those strips sat INSIDE the upper seat rake. The engine owns
+      // the roof height and does not export it, and it already emits the
+      // under-roof strip itself (NIGHT only, at roofY - 0.65), so the block is
+      // dropped rather than re-deriving the engine constants here.
 
       function lighthouse(k, side, dist) {
         const a = anchor(k, side, dist);

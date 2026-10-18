@@ -78,6 +78,23 @@ export function inspectUI(options = {}) {
       return { kind: "appearance-preference", key, source: "js/ui/appearance-opts.js", saved: stored(key), runtime,
         status: runtime === null ? "unavailable" : String(e.value) === String(runtime) ? "matches" : "mismatch" };
     }
+    // Studio choices are buttons, not the legacy selects. Only recognize the
+    // known group and exact option labels/order; never guess a binding by text.
+    const choices = {
+      "as-uiTheme": ["uiTheme", "theme", ["dark", "light", "system"], ["Dark", "Light", "System"]],
+      "as-textSize": ["textSize", "textSize", ["normal", "large", "larger"], ["Normal", "Large", "Larger"]],
+      "as-uiContrast": ["uiContrast", "contrast", ["off", "high"], ["Off", "On"]],
+    };
+    if (e.tagName === "BUTTON" && choices[e.parentElement?.id]) {
+      const [key, getter, values, labels] = choices[e.parentElement.id];
+      const buttons = [...e.parentElement.children];
+      if (buttons.length !== labels.length || buttons.some((b, i) => b.tagName !== "BUTTON" || text(b.textContent) !== labels[i]))
+        return { status: "unmapped", reason: "Studio option structure differs from the explicit adapter" };
+      const runtime = typeof AppearanceOpts !== "undefined" ? safe(() => AppearanceOpts[getter]()) : null;
+      const option = values[buttons.indexOf(e)], pressed = e.getAttribute("aria-pressed");
+      return { kind: "appearance-choice", key, source: "js/ui/appearance-studio.js", option, runtime, saved: stored(key),
+        status: runtime == null || !values.includes(runtime) ? "unavailable" : pressed === String(runtime === option) ? "matches" : "mismatch" };
+    }
     if (e.id?.startsWith("ct-cin-") && typeof CamTune !== "undefined") {
       const key = e.id.slice(7), raw = stored("camComfort"), runtime = safe(() => CamTune.comfortGet(key));
       if (!safe(() => CamTune.comfortDefs().some(d => d.id === key), false)) return { status: "unmapped", reason: "Unknown camera comfort key" };
@@ -104,14 +121,19 @@ export function inspectUI(options = {}) {
         status: runtime === null ? "unavailable" : Math.abs(Number(e.value) - runtime) < 0.000001 ? "matches" : "mismatch",
         saved: { status: "unmapped", value: null }, limitation: "Profile persistence and rendered lighting not inferred from the slider" };
     }
+    if (["BUTTON", "A", "SUMMARY"].includes(e.tagName) && !e.getAttribute("role") &&
+        e.getAttribute("aria-pressed") === null && e.getAttribute("aria-selected") === null)
+      return { status: "not-applicable", reason: "Action/navigation control; its outcome requires replay, not a value binding" };
     return { status: "unmapped", reason: "No explicit runtime adapter registered" };
   };
   // UiLayers.top() stamps modal ordering; inspect DOM focus without mutating it.
   const top = safe(() => document.activeElement?.closest('dialog[open],[role="dialog"]'));
-  const scope = options.root ? document.querySelector(options.root) : document;
-  if (!scope) throw new Error(`Inspector root missing: ${options.root}`);
+  const scopes = options.root ? document.querySelectorAll(options.root) : [document];
+  if (scopes.length !== 1) throw new Error(`Inspector root must identify exactly one element (matched ${scopes.length}): ${options.root}`);
+  const scope = scopes[0];
   const roots = [...document.querySelectorAll('.screen,dialog,[role="dialog"],#overlay,#hud,#pausemenu,#photo-studio')].filter(visible).map(e => e.id || name(e));
-  const candidates = [...scope.querySelectorAll('button,a[href],input:not([type="hidden"]),select,textarea,summary,[role="button"],[role="tab"],[role="switch"],[role="slider"],[role="checkbox"],[role="radio"]')].filter(visible);
+  const controlSelector = 'button,a[href],input:not([type="hidden"]),select,textarea,summary,[role="button"],[role="tab"],[role="switch"],[role="slider"],[role="checkbox"],[role="radio"]';
+  const candidates = [...(scope.matches?.(controlSelector) ? [scope] : []), ...scope.querySelectorAll(controlSelector)].filter(visible);
   const controls = [], issues = [];
   for (const e of candidates.slice(0, limit)) {
     const r = e.getBoundingClientRect(), sel = selector(e), label = name(e);
@@ -186,12 +208,17 @@ export function inspectUI(options = {}) {
     devicePixelRatio: window.devicePixelRatio || null, media: Object.fromEntries(media.map(q => [q, matchMedia(q).matches])),
     rootTokens: css(rootStyle, "--ui-scale --hud-scale --hud-btn-scale --safe-t --safe-r --safe-b --safe-l --safe-w --safe-h --tap-min --tap-paint"),
     preferences: Object.fromEntries(["uiTheme", "menuAccent", "hudAccent", "textSize", "uiContrast", "cvd", "menuHelp", "motion"].filter(k => document.documentElement.dataset[k] !== undefined).map(k => [k, document.documentElement.dataset[k]])) };
+  const bindings = { matches: 0, mismatch: 0, unavailable: 0, unmapped: 0, "not-applicable": 0 };
+  for (const c of controls) bindings[c.binding.status]++;
+  const coverage = { controls: { total: candidates.length, inspected: controls.length, omitted: Math.max(0, candidates.length - controls.length) },
+    bindings, behavior: "not-tested", persistence: "not-tested",
+    limitation: "Binding matches are observations of current state, not proof that an action works or survives reload" };
   return { version: 1, readOnly: true, title: document.title, url: location.href, root: options.root || null,
     roots: [...new Set(roots)], topLayer: top ? selector(top) : null, topLayerSource: "focused-dialog; stacking order not inferred",
     dialogs: [...document.querySelectorAll('dialog[open],[role="dialog"]')].filter(visible).map(e => e.id || name(e)),
     viewport: { width: innerWidth, height: innerHeight, textScale: Number(document.documentElement.dataset.explorerTextScale || 100) },
     adaptive, layoutContexts: [...layoutContexts.values()], layoutContextsTruncated,
-    controls, issues, totalControls: candidates.length, truncated: candidates.length > limit,
+    controls, issues, coverage, totalControls: candidates.length, truncated: candidates.length > limit,
     focus: document.activeElement ? { selector: selector(document.activeElement), name: name(document.activeElement), tag: document.activeElement.tagName } : null,
     errorOverlay: [...document.querySelectorAll('#__err_overlay,#vite-error-overlay')].filter(visible).map(e => e.textContent.slice(0, 1000)),
     game: { devAPI: !!window.__apex }, limitations: ["DOM names are screening; accessibility snapshot is authoritative", "Only explicit scale/appearance/camera/lighting bindings are mapped", "No game dev hooks invoked: some getters lazily build tracks", "CSS tokens retain browser serialization, including unresolved calc expressions; visual viewport metadata does not prove virtual keyboard behavior", "Layout ancestry is bounded to 12 ancestors per control and 256 unique contexts; clipping still checks every ancestor"] };

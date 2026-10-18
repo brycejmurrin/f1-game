@@ -27,4 +27,24 @@
      warning (audit D13). Section notes stay hidden for room; live feedback does not. */
   #cs-inner[data-density="compact"] .cs-liv-editor .cs-opt-desc[role="status"],
   #cs-inner[data-density="compact"] .cs-liv-editor .cs-opt-desc[aria-live]:not([hidden]) { display: block; }
+  /* Car-area tabs (livery-design-editor.js, option B). The chip strip stays in view and scrolls
+     sideways when the areas do not fit; CANCEL / SAVE stay pinned at the foot of the pane, in the
+     flow, so the last row of an area scrolls clear of them. The swatch shrinks to a strip: on a
+     phone the pane leaves ~200 px for the controls themselves. */
+  .cs-liv-editor [role="tablist"] {
+    display: flex; gap: calc(var(--gap) * 0.5); overflow-x: auto; scrollbar-width: none;
+    overscroll-behavior-x: contain; touch-action: pan-x;
+    position: sticky; top: 0; z-index: 2; background: var(--carbon); padding-block: calc(var(--gap) * 0.5);
+  }
+  .cs-liv-editor [role="tab"] { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
+  .cs-liv-editor [role="tab"][aria-selected="true"],
+  .cs-liv-editor [role="tab"][aria-selected="true"]:is(:active, :focus) { background: var(--red); border-color: transparent; color: var(--text); }
+  .cs-liv-editor [role="tabpanel"] { display: flex; flex-direction: column; gap: inherit; }
+  .cs-liv-editor [role="tabpanel"][hidden] { display: none; }
+  .cs-liv-editor > .cs-liv-ed-btns { position: sticky; bottom: 0; z-index: 2; background: var(--carbon); padding-block: calc(var(--gap) * 0.4); margin-top: 0; }
+  .cs-liv-editor > .cs-liv-ed-btns > button { min-height: 44px; padding-block: calc(var(--gap) * 0.3); }
+  .cs-liv-editor .cs-liv-ed-prev { min-height: 0; height: calc(var(--gap) * 1.2); }
+  @media (hover: hover) and (pointer: fine) {
+    .cs-liv-editor [role="tab"][aria-selected="true"]:hover { background: var(--red); border-color: transparent; color: var(--text); }
+  }
 }

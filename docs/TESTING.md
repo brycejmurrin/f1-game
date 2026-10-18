@@ -365,7 +365,7 @@ nothing ran could be committed and fail only at tooling-fast or the deploy gate.
    `physics-*` already covers it); a unit file joins `toolingFast` or a node group
    ci.yml's "Pure-node unit suites" step runs. This is what makes CI, `pick-tests`,
    `select-specs` and the nightly rota see it — none of them has a per-file list.
-2. **A row on the generated coverage page** — `node tools/docs/gen-coverage-table.mjs` (it reads the file's header, or the note above it in `tests/groups.json`). §5 below links to that page.
+2. **A row in the §5 coverage table** below: what it covers.
 3. **Nothing to regenerate for the counts** — no doc quotes the ladder sizes or an exact spec count (floors like "120+" only; `gen-ladder-figures.mjs` measures).
 4. **A spec only:** add it to `RENDER_SPECS` in `playwright.config.js` if it is
    GL-heavy, and declare the `test.setTimeout` it really needs if it boots a
@@ -449,7 +449,7 @@ tools directly.)
 | `vm-page` | local compatibility alias: runs both vm-page partitions serially through `tests/unit/adapted-specs.test.mjs` |
 | `vm-page-a` | four adapted specs (Albert Park foundation, autopilot, logging, projection), each as its own `APEX_VM_PAGE=1 node --test` child; CI slice `page-a` |
 | `vm-page-b` | seven adapted specs (agent-drive bench, COTA and Imola foundations, livery contrast, physics fixes, pit lane, race control), each as its own child; CI slice `page-b` |
-| `mcp` | [UI explorer](UI-EXPLORER.md) replay, navigation graph, reduction, fault adapters and offline evidence contracts; plus the `.cursor/environment.json` bootstrap pins (`environment-json`) — CI's node suites always, locally when touching `tools/*-mcp.*` or `.cursor/environment.json`. The two CLI-only MCP wrapper suites (`tinyfish-mcp`, `probe-mcp`: spawn-heavy, not MCP-attached) moved to `tests/manual/` on 2026-09-10 and are run by path; their fast-gate half is `mcp-cli.test.mjs` |
+| `mcp` | Server defect regressions (`lsp-reference-fixes`, `lsp-config-freshness`, `lsp-caller-fixes`, `apex-server-fixes`, `js-debugger-lifecycle-fixes`, `chrome-server-fixes`); debugger primitive exceptions, reserved-name counts and trace regressions (`js-debugger-trace`); [UI explorer](UI-EXPLORER.md) replay, navigation graph, reduction, fault adapters and offline evidence contracts; plus the `.cursor/environment.json` bootstrap pins (`environment-json`) — CI's node suites always, locally when touching `tools/*-mcp.*` or `.cursor/environment.json`. The two CLI-only MCP wrapper suites (`tinyfish-mcp`, `probe-mcp`: spawn-heavy, not MCP-attached) moved to `tests/manual/` on 2026-09-10 and are run by path; their fast-gate half is `mcp-cli.test.mjs` |
 | `docs-guards` | the unit files that READ the prose trees ci.yml's `paths-ignore` skips (`docs/**`, `**/*.md`, `.claude/**`, `.cursor/**`, `.codex/**`): docs-integrity, generated-docs, agent-config, skill-progressive, hooks-documented, F1 Dev Tools scene/preset/replay helper contracts and the rest of `tests/groups.json`'s list. `.github/workflows/docs-guards.yml` ran this group on every pull request from 2026-09-25 until 2026-10-15, when its required context was removed and the workflow retired (every file is in `tooling-fast`, so ci.yml's guards job already covered a prose PR; the second workflow was one job start per PR event — `docs/notes/CI-CLOG-SURVEY-2026-10-15.md`). The group remains the local alias the docs-only fast path and the agent-config skill call. |
 | `node-slow` | the raster/spawn-heavy car files (`cockpit-pale-surfaces`, `crest-marks`, `slider-effect`; 152 s of the old 315 s loop) plus `flyby-fleet` (the flyby's twelve-circuit audit, ~1 min) and `foundation-core-vm` (~26 s, builds all sixteen foundation circuits) — CI guards always, locally when pick-tests names it |
 | `sweeps` | the full-fleet geometry audits (`package.json` `test:sweeps` IS the list; the enumeration that used to stand here had drifted four files behind it, so read the script). Most rebuild every circuit through `tools/lib/track-build-vm.cjs`; a few build no circuit at all (driving-line's synthetic stadium, driving-line-opts' store round-trip, track-build-vm-release.test.mjs's two-circuit harness check) and ride here beside the geometry they serve. `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
@@ -767,6 +767,20 @@ cd /tmp/cisim && node --test tests/<your-guard>.test.mjs
 If a guard needs history, the job needs `fetch-depth: 0` — today guards, the
 sweeps jobs, the ship filter and select have it; `node-suites` and smoke do
 not (smoke is depth 1), so a unit file that reads history skips there.
+
+### Workflow and shader lints (the `lints` job, 2026-10-18)
+
+`node tools/check/workflow-lint.mjs` runs actionlint (with shellcheck) and zizmor over `.github/workflows`;
+`node tools/check/shader-validate.mjs` runs glslangValidator over every GLX GLSL ES 3.00 program and naga (advisory) over the WGX
+WGSL modules. Both are offline. The binaries come from `bash tools/env/install-lint-bins.sh` (pinned and checksummed: zizmor by
+`pip --require-hashes`, actionlint by `go install`, naga by `cargo --locked`, glslang and shellcheck by apt); `--plan` prints
+what it would do. **An absent binary SKIPS LOUDLY** (a `SKIP … NOT CHECKED` line naming the install command, exit 0) and fails
+under `--require` / `APEX_REQUIRE_LINT_BINS=1`, which the `lints` job in `ci.yml` sets. The unit tests
+(`workflow-lint.test.mjs`, `shader-validate.test.mjs`) fail a planted bad workflow/shader (`tests/fixtures/`) and pass the tree;
+they are in `tooling-fast`, where they skip loudly because the shards install nothing, and run with the binaries in `lints`.
+Suppressions live in `.github/actionlint.yaml`, `.github/zizmor.yml` and inline `# zizmor: ignore[audit] reason` comments; the test
+rejects a blanket ignore or a reasonless one. TLX is not checked (TSL node graphs have no static shader stage), and WGSL
+authority stays `tools/gfx/wgx-validate.mjs`. Evidence: `docs/notes/SKILL-MCP-SCOUT-2026-10-18.md` §Adopted.
 
 ### Renderer specs on a real GPU (`macos-latest`) — first run 2026-09-03 (see §Field notes 2026-09-03, `image-grade-visual`)
 
