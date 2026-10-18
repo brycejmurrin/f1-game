@@ -138,6 +138,8 @@ const HudArrange = (() => {
       visibilityPick.id = "hud-arrange-vis";
       visibilityPick.setAttribute("aria-label", "Selected element visibility");
       visibilityPick.setAttribute("data-arrows", "own");
+      // Its hint line carries the reason the row is greyed (UI audit 2026-10-18).
+      visibilityPick.setAttribute("aria-describedby", "hud-arrange-hint");
       visibilityPick.style.cssText = picker.style.cssText;
       visibilityRow.appendChild(visibilityPick);
       SettingRow.wire(visibilityRow, { values: [], read: () => HudLayout.visibility(selected)?.value || "", write: (value) => {
@@ -186,6 +188,7 @@ const HudArrange = (() => {
       hintEl.textContent = clash && clash.length ? "OVERLAP: " + clash.slice(0, 2).map((p) => p.map(labelOf).join(" × ")).join(", ")
         : off ? "hidden in the race \u00b7 SHOW brings it back"
         : visibility && visibility.value === "mixed" ? "some tower readouts are hidden"
+        : selected && !visibility ? "VISIBILITY: shown automatically with race events"
         : "";
       hintEl.hidden = !hintEl.textContent;
       if (visibilityRow) {
