@@ -2093,7 +2093,11 @@ const TLX = (function () {
 
       function cullInstances(batch, planes, opts) {
         if (!batch || !batch.cells) return batch ? batch.instances : 0;
-        let samePack = !!batch._cullPlanes;
+        const shadow = !!(opts && opts.upload === false);
+        const eye = shadow ? null : (_mirActive ? _mirEye : frameEye);
+        const cd = shadow ? 0 : (_mirActive ? _mirCull : frameCullDist);
+        const fog = shadow ? null : (_mirActive ? _mirFog : frameCullFog);
+        let samePack = !shadow && !!batch._cullPlanes && InstCells.sameRadial(batch, eye, cd, fog);
         if (samePack) {
           let po = 0;
           for (let pi = 0; pi < 6 && samePack; pi++) {
@@ -2110,11 +2114,10 @@ const TLX = (function () {
         // unchanged set skips the copy loop AND the upload. The shadow cull
         // (upload:false) neither consults nor records it — the key means "this
         // pack is in imesh", and a shadow pack never is.
-        const shadow = !!(opts && opts.upload === false);
         const cs = batch.cells;
         const useKey = !shadow && InstCells.enabled();
         const ks = useKey ? InstCells.scratchKeys(batch, cs.length) : null;
-        const kN = useKey ? InstCells.collectVisible(planes, cs, ks, TLXShaders.aabbInFrustum) : -1;
+        const kN = useKey ? InstCells.collectVisible(planes, cs, ks, TLXShaders.aabbInFrustum, eye, cd, fog) : -1;
         // NOT writing _cullPlanes on a hit is load-bearing: it must keep
         // describing the frustum that physically wrote imesh.
         if (useKey && InstCells.sameKey(batch, ks, kN)) { batch.visible = batch._cullN; return batch._cullN; }
@@ -2160,6 +2163,8 @@ const TLX = (function () {
         for (let ci = firstCell, cn = useKey ? kN : cs.length; ci < cn; ci++) {
           const c = useKey ? cs[ks[ci]] : cs[ci];
           if (!useKey && !TLXShaders.aabbInFrustum(planes, c.mn, c.mx)) continue;
+          if (!useKey && eye && (cd > 0 || (fog && fog[0] > 0))
+              && Frustum.radialCulled(c.mn, c.mx, eye[0], eye[1], eye[2], cd, fog)) continue;
           if (reach && TLXShaders.aabbDist2(c.mn, c.mx, reach[0], reach[1], reach[2]) > reach2) continue;
           // Indexed for — `for…of` on c.idx minted an iterator per visible cell
           // per cull (camera + shadow). GLX/WGX already use indexed loops.
@@ -2193,6 +2198,7 @@ const TLX = (function () {
           const p = planes[pi];
           for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
         }
+        InstCells.recordRadial(batch, eye, cd, fog);
         batch._cullN = n;
         if (useKey) InstCells.recordKey(batch, ks, kN);
         return n;
@@ -4339,6 +4345,9 @@ const TLX = (function () {
         lampShadowKeep(idx) { return !!(shadowSys && shadowSys.lampShadowKeep(idx)); },
         // `armed` is the frame-live gate the lit uniforms read; `arms` is a
         // lifetime counter that stays true straight through a strobe.
+        // Read by the producer before resolving/packing casters; mobile Begin hooks are no-ops.
+        get carShadowEnabled() { return !!(shadowSys && shadowSys.S.carEnabled); },
+        get lampShadowEnabled() { return !!(shadowSys && shadowSys.S.lampEnabled); },
         carShadowState() {
           const s = shadowSys && shadowSys.S;
           return s ? { enabled: s.carEnabled, arms: s.carArms, armed: s.carArmed } : { enabled: false, arms: 0, armed: false };

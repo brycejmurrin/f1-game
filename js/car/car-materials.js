@@ -7,7 +7,7 @@ const CarMaterials = (function () {
     emissive: 25, functionalEmissive: 25, panel: 26, mirror: 27, sidewall: 33,   // 33: satin tyre sidewall (glsl-lit.js)
   });
   // A livery FINISH is a surface-id remap on painted vertices, not a material
-  // uniform: the shaders classify car surfaces 20-33 and branch per id, so a new
+  // uniform: the shaders classify car surfaces 20-40 and branch per id, so a new
   // finish costs an id in that chain (js/render/glx/shaders/glsl-lit.js and its WGSL/TSL
   // mirrors) and one row here. `carbon` gets id 31 rather than reusing
   // SURFACES.carbon (21): 21 keeps the vertex colour, so pointing the finish at
@@ -22,12 +22,13 @@ const CarMaterials = (function () {
   const FINISH_SURFACE = Object.freeze({
     satin: 26, chrome: 27, matte: 28, carbon: 31, brushed: 29, pearl: 30,
     flake: 34, candy: 35, tinted: 36, chameleon: 37,   // shader branches exist in GLX/TLX/WGX (surface-id-parity.test.mjs)
+    forged: 38, gunmetal: 39, goldplate: 40,
   });
   // RESERVED FINISH IDS (garage finishes contract, 2026-10-17). A finish row joins FINISH_SURFACE only when its
   // shader branch exists in GLX, TLX and WGX, so the garage never offers a finish that renders as plain paint;
   // the id is fixed here first so the slices cannot take the same one. tests/unit/livery-finish-contract.test.mjs
   // pins that no id repeats and that every FINISH_SURFACE id is either shipped (<= 33) or reserved.
-  const FINISH_RESERVED = Object.freeze({ flake: 34, candy: 35, tinted: 36, chameleon: 37 });
+  const FINISH_RESERVED = Object.freeze({ flake: 34, candy: 35, tinted: 36, chameleon: 37, forged: 38, gunmetal: 39, goldplate: 40 });
   const DARK   = [0.05, 0.05, 0.05];
   // Deeper resin base so the shader weave (CarMaterialShade.CARBON) reads at
   // garage and near-track distance instead of flat charcoal paint.
