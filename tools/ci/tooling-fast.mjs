@@ -412,6 +412,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Job 6: MGU-K electric deploy/harvest + overtake boost cue (fake-audio VM).
   "tests/unit/ers-audio-layer.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
+  // ...and the race radio: every phrasebook line fits its card when spoken,
+  // pools deal like a deck, gaps come from the timing loop, a pass must hold,
+  // lines wait for the straight and die when stale, commentary only while
+  // the player is watching. ~0.1 s.
+  "tests/unit/event-journal.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
   "tests/unit/f1-dev-tools.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
@@ -824,10 +829,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",
   "tests/unit/race-insights.test.mjs",
-  // ...and the race radio: every phrasebook line fits its card when spoken,
-  // pools deal like a deck, gaps come from the timing loop, a pass must hold,
-  // lines wait for the straight and die when stale, commentary only while
-  // the player is watching. ~0.1 s.
   "tests/unit/race-radio.test.mjs",
   "tests/unit/race-session-fixes.test.mjs",
   "tests/unit/race-session-lazy.test.mjs",

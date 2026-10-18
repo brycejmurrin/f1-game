@@ -44,6 +44,14 @@ var RaceFacts = {
   create: () => ({ update: function () {}, reset: function () {}, snapshot: () => ({}) }),
 };
 
+var EventJournal = {
+  _stub: true,
+  CAP: 256,
+  radioHooks: () => ({}),
+  create: () => ({ reset: function () {}, update: function () {}, onFacts: function () {},
+    events: () => [], count: () => 0, CAP: 256 }),
+};
+
 var Spotter = {
   _stub: true,
   KEYS: {}, OVERLAP_ARC: 0, SIDE_MIN: 0, SIDE_MAX: 0, DEBOUNCE_S: 0, CLEAR_S: 0, STILL_S: 0, GAP_S: 0,

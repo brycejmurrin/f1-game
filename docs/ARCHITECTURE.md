@@ -328,6 +328,7 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `engineer.js` | `RaceEngineer` | LAZY_RACE_SESSION | RACE ENGINEER: the voice that makes the tyre model legible. |
 | `radio-lines.js` | `RadioLines` | LAZY_RACE_SESSION | RADIO LINES: the phrasebook the race engineer and the TV commentator speak from (js/race/race-radio.js decides WHEN; this decides the WORDS). |
 | `race-facts.js` | `RaceFacts` | LAZY_RACE_SESSION | RACE FACTS: what is happening in the race, as numbers and events a radio can talk about (js/race/race-radio.js is the only reader). |
+| `event-journal.js` | `EventJournal` | LAZY_RACE_SESSION | EVENT JOURNAL: read-only per-race log for highlight reels. |
 | `spotter.js` | `Spotter` | LAZY_RACE_SESSION | Spotter — "car left", "car right", "clear": the call a driver gets when a car is alongside, which a mirror at 300 km/h does not give you. |
 | `race-radio.js` | `RaceRadio` | LAZY_RACE_SESSION | RACE RADIO: the race engineer's situational awareness and the TV commentator, on the one radio card (js/game.js announce()). |
 | `start-lights.js` | `StartLights` | LAZY_RACE_SESSION | the start gantry's lights. |

@@ -796,6 +796,7 @@
       "create": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/pause-silence.test.mjs",
@@ -10385,6 +10386,20 @@
         "tests/unit/voice-pack.test.mjs"
       ]
     },
+    "js/race/event-journal.js": {
+      "create": [
+        "tests/unit/event-journal.test.mjs"
+      ],
+      "onFacts": [
+        "tests/unit/event-journal.test.mjs"
+      ],
+      "push": [
+        "tests/unit/event-journal.test.mjs"
+      ],
+      "update": [
+        "tests/unit/event-journal.test.mjs"
+      ]
+    },
     "js/race/flying-start.js": {
       "create": [
         "tests/unit/flying-start.test.mjs"
@@ -10980,10 +10995,12 @@
     },
     "js/race/race-facts.js": {
       "create": [
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
       ],
       "observe": [
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs"
       ],
       "reset": [
@@ -11049,6 +11066,7 @@
       "create": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/key-binds.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
@@ -11094,6 +11112,7 @@
       ],
       "update": [
         "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/s8-once-per-frame.test.mjs"
       ]
@@ -11162,6 +11181,7 @@
     "js/race/radio-lines.js": {
       "create": [
         "tests/unit/battle-earcon.test.mjs",
+        "tests/unit/event-journal.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/radio-lines.test.mjs",
