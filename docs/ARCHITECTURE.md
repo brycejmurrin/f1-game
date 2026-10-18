@@ -142,6 +142,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `settings-defaults.js` | `SettingsDefaults` | tag | SettingsDefaults: the SHIPPED DEFAULT for any player preference, in one file, as data. |
 | `garage-defaults.js` | `GarageDefaults` | tag | GarageDefaults: the SHIPPED DEFAULT garage (parts, liveries, setups, team/driver) in one file, as data. |
 | `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
+| `flyby-overrides.js` | `FlybyOverrides` | tag | per-circuit signature flyby shots. |
 | `tab-utils.js` | `DataTabUtils` | LAZY_DATA | shared Data Hub driver colors and lane identity counts. |
 | `api-transport.js` | `F1Transport` | LAZY_DATA | serialized API transport: cache, rate limits, timeouts, retries and cancellation. |
 | `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica + OpenF1 endpoint mapping and session cache policy. |
@@ -643,6 +644,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `lobby-roster.js` | `LobbyRoster` | LAZY_NET | LobbyRoster: the stateless leaves of the VS FRIEND room's roster DOM (team lookup, css colour, span/replace/summaryRow helpers, driver/team labels, the seat… |
 | `snapshot.js` | `NetSnapshot` | LAZY_NET | NetSnapshot — what actually goes on the wire, and how a rival is drawn smoothly from packets that arrive late, out of order, or not at all. |
 | `session.js` | `NetSession` | LAZY_NET | NetSession — the layer between a transport and the game. |
+| `spectate.js` | `NetSpectate` | LAZY_NET | NetSpectate — the role policy shared by NetPlay's seat assignment and send gates. |
 | `netplay.js` | `NetPlay` | LAZY_NET | NetPlay — the game side of multiplayer. |
 | `lobby.js` | `NetLobby` | LAZY_NET | NetLobby — getting two people into the same race, with no server. |
 <!-- /@gen-arch:modules -->

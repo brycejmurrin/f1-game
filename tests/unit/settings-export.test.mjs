@@ -384,9 +384,13 @@ test("a changed key carries its value, the default it replaced and the source th
     "apex26.camTune": JSON.stringify({ chase: { dist: 2 } }),
     "apex26.camTuneGlobal": JSON.stringify({ fov: 4 }),
     "apex26.camComfort": JSON.stringify({ bob: 0.3 }),
+    "apex26.camTuneTrack": JSON.stringify({ monza: { modes: { chase: { dist: 3 } } } }),
+    "apex26.camTuneCar": JSON.stringify({ mclaren: { comfort: { bob: 0.2 } } }),
+    "apex26.motionBlur": "7",
+    "apex26.speedLines": "4",
   } });
   const f = collect("changes");
-  assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camComfort", "camera.camTune", "camera.camTuneGlobal", "camera.cockpitHalo", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
+  assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camComfort", "camera.camTune", "camera.camTuneCar", "camera.camTuneGlobal", "camera.camTuneTrack", "camera.cockpitHalo", "camera.motionBlur", "camera.speedLines", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
   assert.equal(f.settings.audio.volMusic, 0.8);
   assert.equal(f.defaults.audio.volMusic, 0.6, "SPEC mirrors the authoritative SettingsDefaults value");
   assert.equal(f.settings.steering.pace, 14);
@@ -398,6 +402,10 @@ test("a changed key carries its value, the default it replaced and the source th
   assert.deepEqual(f.settings.camera.camTune, { chase: { dist: 2 } });
   assert.deepEqual(f.settings.camera.camTuneGlobal, { fov: 4 });
   assert.deepEqual(f.settings.camera.camComfort, { bob: 0.3 });
+  assert.deepEqual(f.settings.camera.camTuneTrack, { monza: { modes: { chase: { dist: 3 } } } });
+  assert.deepEqual(f.settings.camera.camTuneCar, { mclaren: { comfort: { bob: 0.2 } } });
+  assert.equal(f.settings.camera.motionBlur, 7);
+  assert.equal(f.settings.camera.speedLines, 4);
   for (const name of f.changed) assert.match(f.where[name], /^js\//, name + " names its source");
   assert.equal(f.settings.driving.reliability, undefined, "an untouched key is absent from CHANGES");
 });
@@ -706,6 +714,10 @@ test("a file round-trips: save it, load it into a fresh store, get the same valu
     "apex26.voiceTune": JSON.stringify({ control: { name: "Daniel", rate: 1.2, pitch: 0.9 } }),
     "apex26.pace": "14",
     "apex26.cockpitHalo": "1",
+    "apex26.camTuneTrack": JSON.stringify({ monza: { modes: { chase: { dist: 3 } } } }),
+    "apex26.camTuneCar": JSON.stringify({ mclaren: { comfort: { bob: 0.2 } } }),
+    "apex26.motionBlur": "7",
+    "apex26.speedLines": "4",
   };
   const saved = boot({ disk }).collect("all");
   assert.equal(saved.settings.audio.radioVoice, true);
@@ -720,6 +732,10 @@ test("a file round-trips: save it, load it into a fresh store, get the same valu
     { control: { name: "Daniel", rate: 1.2, pitch: 0.9 } });
   assert.equal(b2.disk.get("apex26.pace"), "14");
   assert.equal(b2.disk.get("apex26.cockpitHalo"), "1");
+  assert.deepEqual(JSON.parse(b2.disk.get("apex26.camTuneTrack")), { monza: { modes: { chase: { dist: 3 } } } });
+  assert.deepEqual(JSON.parse(b2.disk.get("apex26.camTuneCar")), { mclaren: { comfort: { bob: 0.2 } } });
+  assert.equal(b2.disk.get("apex26.motionBlur"), "7");
+  assert.equal(b2.disk.get("apex26.speedLines"), "4");
   const g1 = boot({ disk: GARAGE }).garage();
   const b3 = boot();
   assert.equal(b3.loadGarage(g1).applied, 7);

@@ -19,6 +19,15 @@ const NetPlay = (function () {
   // advancing) made every guest's predict() run a parked car at full speed.
   const RELAY_FRESH_MS = 500;
   const RACE_GRACE_MS = 25000;
+  // Direct Node harnesses historically evaluate netplay.js alone. Production
+  // loads the dedicated policy first (manifest edge); this identical fallback
+  // keeps those harnesses testing NetPlay rather than its script loader.
+  const SpectatePolicy = typeof NetSpectate !== "undefined" ? NetSpectate : Object.freeze({
+    DRIVER: "driver", SPECTATOR: "spectator",
+    kind: (peer) => ((typeof peer === "string" ? peer : peer && (peer.kind || peer.role)) === "spectator" ? "spectator" : "driver"),
+    isSpectator(peer) { return this.kind(peer) === this.SPECTATOR; },
+    canPublish: (role) => role !== "spectator",
+  });
 
   const EV = {
     MODEL: "model", STRATEGY: "strategy", // versioned reliable compatibility + tyre/pit state
@@ -35,6 +44,7 @@ const NetPlay = (function () {
     CAUTION: "caution",                   // host -> guest race control (flags)
     BYE: "bye",                           // clean leave
     LEFT: "left",                         // host -> guests: this wire id went back to AI
+    REJOIN: "rejoin",                     // host -> guests: this wire id is human-owned again
   };
 
   // WIRE CLAMPS AND THE QUALI SEAM — module-level, shared with the lobby.
@@ -249,6 +259,8 @@ const NetPlay = (function () {
   function create(G) {
     G_lapsTarget = () => G.lapsTarget;
     const sessions = new Map(), peerEpochs = new Map();
+    const sessionKinds = new Map(), peerInfo = new Map(), departedPeers = new Map();
+    const peerKind = (peer) => SpectatePolicy.kind(peer);
     let epoch = null;
     function broadcastStrategy(data) {
       for (const [id, s] of sessions) {
@@ -267,9 +279,10 @@ const NetPlay = (function () {
     }
     const peerCar = new Map();            // peerId -> wireId
     const remoteFor = (id) => (peerCar.has(id) ? peerCar.get(id) : null);
-    let role = null;                      // "host" | "guest"
+    let role = null;                      // "host" | "guest" | "spectator"
     let active = false;
     let localCar = null;
+    let raceOpts = null;
     const remotes = new Map();
     const remoteList = () => [...remotes.values()];
     // GUEST ONLY: wireId -> remote for an AI car the HOST simulates. Kept apart
@@ -496,7 +509,7 @@ const NetPlay = (function () {
     }
 
     function onState(bytes, from, fromId, arrivedAt) {
-      if (!active || !remotes.size) return;
+      if (!active || (!remotes.size && !aiRemotes.size)) return;
       const pkt = NetSnapshot.decodeSnapshot(bytes);
       if (!pkt || !pkt.cars.length) return;
       const clock = from || session;
@@ -531,6 +544,7 @@ const NetPlay = (function () {
       // not new trust — it already owns the AI and race control.
       let ownOnly = null;
       if (role === "host" && fromId != null) {
+        if (sessionKinds.get(fromId) === SpectatePolicy.SPECTATOR) return;
         ownOnly = remoteFor(fromId);
         if (ownOnly == null) return;
       }
@@ -553,6 +567,7 @@ const NetPlay = (function () {
     function bindSession(id, s) {
       const qualiGate = rateGate(QUALI_RATE);
       function sendersOwnDriver(d, legacyLap = false) {
+        if (sessionKinds.get(id) === SpectatePolicy.SPECTATOR) return false;
         if (role !== "host") return true;
         const wid = remoteFor(id);
         const r = wid != null ? remotes.get(wid) : null;
@@ -569,9 +584,14 @@ const NetPlay = (function () {
         if (closeWhy.has(id)) { why = closeWhy.get(id); closeWhy.delete(id); }
         sessions.delete(id);
         const carFor = remoteFor(id);
+        const remote = carFor != null ? remotes.get(carFor) : null;
+        const kind = sessionKinds.get(id);
+        const info = peerInfo.get(id);
         armedPeers.delete(id);
         peerCar.delete(id);
         peerEpochs.delete(id);
+        sessionKinds.delete(id);
+        peerInfo.delete(id);
         // stop() closes remaining sockets after active=false. Real NetSession
         // close() fires onClose("local") synchronously; without this guard that
         // re-enters stop("local") while inactive, clears lastReason, and fires
@@ -590,8 +610,14 @@ const NetPlay = (function () {
            and tear the session down for every remaining player.
            Whether we keep running is a question about the HOST still having
            peers; what we do about a car is a separate question inside it. */
-        if (sessions.size && role === "host") {
-          if (carFor != null) handBackToAI(why, carFor);
+        if (role === "host") {
+          if (carFor != null) {
+            if (kind !== SpectatePolicy.SPECTATOR && remote) {
+              departedPeers.set(id, { wire: carFor, car: remote.car, profile: info && info.profile,
+                mods: info && info.mods });
+            }
+            handBackToAI(why, carFor);
+          }
           // Star, not mesh: the other guests only ever learned this rival
           // existed through the host's relay, and the relay simply stops
           // naming a dropped wire id. Nothing told them it was gone, so their
@@ -615,6 +641,9 @@ const NetPlay = (function () {
         s.onEvent(name, (d) => {
           eventLog.push({ type: name, data: d, from: id });
           if (eventLog.length > 32) eventLog.shift();
+          // A spectator may negotiate protocol compatibility, but never owns a
+          // car, race control or a result. Ignore every gameplay declaration.
+          if (role === "host" && sessionKinds.get(id) === SpectatePolicy.SPECTATOR && name !== EV.MODEL) return;
           if (name === EV.MODEL) {
             if (!d || d.physics !== modelRevision() || d.strategy !== STRATEGY_VERSION) {
               // ONE INCOMPATIBLE PEER IS ONE RIVAL, NOT THE SESSION — the rule
@@ -783,6 +812,14 @@ const NetPlay = (function () {
               if (G.announce) G.announce("RIVAL DISCONNECTED", 2);
             } else handBackToAI(d.why || "peer_closed", d.wire);
           }
+          if (name === EV.REJOIN && role === "guest" && d && Number.isFinite(d.wire) && aiRemotes.has(d.wire)) {
+            const r = aiRemotes.get(d.wire);
+            aiRemotes.delete(d.wire);
+            r.hostAi = false; r.stale = false;
+            r.car._nHuman = true; r.car._nFallback = false;
+            G.setCarRole(r.car, true, false);
+            remotes.set(d.wire, r);
+          }
           if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
         });
       }
@@ -834,15 +871,18 @@ const NetPlay = (function () {
         return { ok: false, error: "no_track", message: "Load a track before starting a session." };
       }
 
-      role = opts.role === "host" ? "host" : "guest";
+      role = opts.role === "host" ? "host"
+        : opts.role === SpectatePolicy.SPECTATOR ? SpectatePolicy.SPECTATOR : "guest";
+      raceOpts = opts;
       onStop = typeof opts.onStop === "function" ? opts.onStop : null;
       peerProfile = opts.peerProfile || null;
-      sessions.clear(); peerEpochs.clear();
+      sessions.clear(); peerEpochs.clear(); sessionKinds.clear(); peerInfo.clear(); departedPeers.clear();
       epoch = Date.now().toString(36) + "-" + (++epochSerial);
       const incoming = opts.sessions
         || (opts.session ? [{ id: PEER_ONE, session: opts.session }] : null)
         || [{ id: PEER_ONE, session: NetSession.create({ transport: opts.transport }) }];
-      localCar = (G.cars || []).find((c) => c.local) || G.player || null;
+      localCar = role === SpectatePolicy.SPECTATOR ? null
+        : (G.cars || []).find((c) => c.local) || G.player || null;
       remotes.clear();
       // One profile today, an array when the room grows; Phase C only changes
       // where the list comes from.
@@ -860,12 +900,17 @@ const NetPlay = (function () {
       // pickRemoteSlot(null) has always had the any-free-car arm for that — so
       // an empty or profile-less join must still fall through to it rather
       // than being read as "no peers".
-      const joining = (opts.peers && opts.peers.length) ? opts.peers
+      const joining = ((opts.peers && opts.peers.length) ? opts.peers
         : (opts.sessions && opts.sessions.length)
-          ? opts.sessions.map((e) => ({ profile: null, mods: null, id: e.id != null ? e.id : PEER_ONE }))
-          : [{ profile: peerProfile, mods: opts.peerMods, id: PEER_ONE }];
+          ? opts.sessions.map((e) => ({ profile: null, mods: null, kind: peerKind(e), id: e.id != null ? e.id : PEER_ONE }))
+          : [{ profile: peerProfile, mods: opts.peerMods, id: PEER_ONE }])
+        .filter((peer) => !SpectatePolicy.isSpectator(peer));
+      const hasSpectator = incoming.some((entry) => {
+        const id = entry.id != null ? entry.id : PEER_ONE;
+        return SpectatePolicy.isSpectator((opts.peers || []).find((peer) => peer.id === id) || entry);
+      });
       peerCar.clear();
-      for (const j of joining) {
+      for (const j of role === SpectatePolicy.SPECTATOR ? [] : joining) {
         const car = pickRemoteSlot(j.profile);
         if (!car) continue;
         peerCar.set(j.id != null ? j.id : PEER_ONE, G.wireId(car));
@@ -875,7 +920,8 @@ const NetPlay = (function () {
         car.mods = j.mods || car.mods || null;
         remotes.set(G.wireId(car), makeRemote(car, opts, { profile: j.profile || null }));
       }
-      if (!localCar || !remotes.size) {
+      if ((role !== SpectatePolicy.SPECTATOR && (!localCar || (!remotes.size && !(role === "host" && hasSpectator))))
+          || (role === SpectatePolicy.SPECTATOR && !(G.cars || []).length)) {
         // start() adopts the lobby's sessions, but a failed adoption must not
         // leave their handlers/socket alive behind a race that never started.
         // Slot selection has already marked any partial rival as human, so
@@ -900,24 +946,27 @@ const NetPlay = (function () {
         const id = entry.id != null ? entry.id : PEER_ONE;
         const s = entry.session || entry;
         sessions.set(id, s);
+        const info = (opts.peers || []).find((p) => p.id === id) || entry;
+        sessionKinds.set(id, peerKind(info));
+        peerInfo.set(id, info || {});
         bindSession(id, s);
         // The race's silence grace (STALE_MS hands a silent car to the local
         // AI meanwhile); the lobby's 6 s stays the lobby's.
         if (typeof s.setTimeoutMs === "function") s.setTimeoutMs(RACE_GRACE_MS);
       }
       session = sessionList()[0] || null;
-      separateGrid();
+      if (role !== SpectatePolicy.SPECTATOR) separateGrid();
 
       // AI REPLICATION, guest side: every car that is neither ours nor a human
       // rival's is the HOST's to simulate. Seat it as a host-owned remote —
       // owns() is then true, updateCar skips it and poseRemote poses it from
       // the host's packets, exactly as a human rival. Its role stays AI.
       aiRemotes.clear();
-      aiReplicated = role === "guest" && opts.hostAi !== false;
+      aiReplicated = (role === "guest" || role === SpectatePolicy.SPECTATOR) && opts.hostAi !== false;
       if (aiReplicated) {
         for (const c of G.cars || []) {
           const wid = G.wireId(c);
-          if (c === localCar || wid < 0 || remotes.has(wid) || c.human) continue;
+          if (c === localCar || wid < 0 || remotes.has(wid) || (role !== SpectatePolicy.SPECTATOR && c.human)) continue;
           aiRemotes.set(wid, makeRemote(c, opts, { hostAi: true }));
         }
       }
@@ -939,6 +988,35 @@ const NetPlay = (function () {
       Log.info("net", "play start " + role + " n=" + remotes.size);
       const ids = remoteList().map((r) => G.cars.indexOf(r.car));
       return { ok: true, role, localId: G.cars.indexOf(localCar), remoteId: ids[0], remoteIds: ids };
+    }
+
+    // Adopt a replacement race connection for a driver that this host already
+    // seated. The stable peer id is the reconnect credential at this layer:
+    // NetPlay never lets a new id choose a wire, and never changes MAX_GUESTS.
+    function rejoin(opts) {
+      opts = opts || {};
+      if (!active || role !== "host") return { ok: false, error: "not_host" };
+      const id = opts.id, s = opts.session;
+      const gone = departedPeers.get(id);
+      if (!gone || !s || sessions.has(id)) return { ok: false, error: "unknown_peer" };
+      const wire = gone.wire, car = gone.car;
+      const info = { id, profile: gone.profile || null, mods: gone.mods || null, kind: SpectatePolicy.DRIVER };
+      peerCar.set(id, wire);
+      peerInfo.set(id, info);
+      sessionKinds.set(id, SpectatePolicy.DRIVER);
+      sessions.set(id, s);
+      G.setCarRole(car, true, false);
+      car._nHuman = true; car._nFallback = false;
+      remotes.set(wire, makeRemote(car, raceOpts || {}, { profile: gone.profile || null }));
+      bindSession(id, s);
+      if (typeof s.setTimeoutMs === "function") s.setTimeoutMs(RACE_GRACE_MS);
+      try { s.sendEvent(EV.MODEL, { physics: modelRevision(), strategy: STRATEGY_VERSION, epoch }); } catch (e) { /* replacement already closed */ }
+      leftWires.delete(wire);
+      departedPeers.delete(id);
+      broadcast(EV.REJOIN, { wire });
+      session = sessionList()[0] || null;
+      lastReason = null; lastStrategy = -Infinity;
+      return { ok: true, wire };
     }
 
     const SETTLE_MS = 600;
@@ -982,7 +1060,7 @@ const NetPlay = (function () {
     const armedPeers = new Set();
     const closeWhy = new Map();   // peer id -> why, for a close WE start on its behalf (close() itself reports "local")
     const leftWires = new Map();          // host: wire id -> reason, for every rival that left this race
-    const allArmed = () => armedPeers.size >= Math.max(1, remotes.size);
+    const allArmed = () => armedPeers.size >= remotes.size;
 
     // CLAMP THE WIRE MOMENT TOO. `atPeerMs` is peer-supplied and reaches
     // game.js as `netStart.at` in `(COUNTDOWN_S + hold) - (at - now())/1000`:
@@ -1046,9 +1124,11 @@ const NetPlay = (function () {
 
     // Publish OUR driven qualifying lap / the lap so far — qualiReporters
     // (module scope), the same senders the lobby phase uses.
-    const { reportQuali, reportQualiLive } = qualiReporters(broadcast, () => sessions.size > 0);
+    const { reportQuali, reportQualiLive } = qualiReporters(broadcast,
+      () => sessions.size > 0 && SpectatePolicy.canPublish(role));
 
     function reportLap(data) {
+      if (!SpectatePolicy.canPublish(role)) return false;
       // The host also owns AI retirements. Bind their reliable state to each
       // receiver's race, so a queued DNF cannot park next race's fresh car.
       if (role === "host" && data && data.retired) {
@@ -1066,7 +1146,7 @@ const NetPlay = (function () {
     }
 
     function reportResult(data) {
-      return sessions.size ? broadcast(EV.RESULT, data) : false;
+      return (sessions.size && SpectatePolicy.canPublish(role)) ? broadcast(EV.RESULT, data) : false;
     }
 
     // The GUEST holds the chequered flag briefly, waiting for the host's
@@ -1101,7 +1181,7 @@ const NetPlay = (function () {
       // Every connection, not just the first — a host leaving must not strand
       // two guests holding open sockets to a race that has ended.
       for (const s of sessionList()) { try { s.close(); } catch (e) { /* already gone */ } }
-      sessions.clear(); peerEpochs.clear();
+      sessions.clear(); peerEpochs.clear(); sessionKinds.clear(); peerInfo.clear(); departedPeers.clear();
       peerCar.clear();
       session = null;
       armDeadline = 0;
@@ -1245,7 +1325,7 @@ const NetPlay = (function () {
       // contact against a ghost and never saw the silence that hands the car to
       // their local AI. Silent, they do; goWire resumes it when this tab returns.
       const hidden = typeof document !== "undefined" && !!document && document.hidden === true;
-      if (localCar && !hidden && now - lastPublish >= PUBLISH_MS) {
+      if (localCar && SpectatePolicy.canPublish(role) && !hidden && now - lastPublish >= PUBLISH_MS) {
         // A FIXED 20 Hz, whatever the frame rate. `lastPublish = now` dropped
         // the phase remainder every time: 50 ms is three 60 Hz frames and a
         // bit, so the rate alternated 15-20 Hz, sat at 15 Hz at 30 fps and
@@ -1305,7 +1385,7 @@ const NetPlay = (function () {
     function ownsClassification() { return !active || role === "host"; }
 
     return {
-      start, stop, tick,
+      start, rejoin, stop, tick,
       ownsRaceControl, ownsClassification,
       hostStart, reportLap, reportResult, reportCaution, awaitingResult, reportQuali, reportQualiLive,
       awaitingStart: () =>
@@ -1335,7 +1415,8 @@ const NetPlay = (function () {
         const raw = r ? r.interp.predict(now == null ? nowMs() : now) : null;
         return raw ? clampWire(raw, (G.track && G.track.total) || 0, G.lapsTarget) : null;
       },
-      sendEvent: (type, data) => (sessions.size ? broadcast(type, data) : false),
+      sendEvent: (type, data) =>
+        (sessions.size && SpectatePolicy.canPublish(role) ? broadcast(type, data) : false),
       onEvent: (type, fn) => (session ? session.onEvent(type, fn) : false),
       status: () => ({
         active, role, reason: lastReason,
@@ -1347,6 +1428,7 @@ const NetPlay = (function () {
         })),
         slotFallback: lastSlotFallback,
         hostAi: aiRemotes.size,                    // guest: AI cars posed from the host
+        spectators: [...sessionKinds.values()].filter((kind) => kind === SpectatePolicy.SPECTATOR).length,
         stale: [...remotes.values(), ...aiRemotes.values()].filter((r) => r.stale).map((r) => G.wireId(r.car)),
         net: session ? session.stats() : null,
         buffered: remoteList().length ? remoteList()[0].interp.size() : 0,

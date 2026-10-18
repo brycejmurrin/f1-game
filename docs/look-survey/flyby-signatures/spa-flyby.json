@@ -1,0 +1,226 @@
+{
+  "track": "spa",
+  "backend": "webgl2",
+  "timeOfDay": "default",
+  "weather": "dry",
+  "seed": 3,
+  "grid": "tier",
+  "shots": null,
+  "sheet": "spa-sheet.png",
+  "frames": [
+    {
+      "u": 0,
+      "shot": "wide",
+      "index": 0,
+      "fov": 36,
+      "eye": [
+        -109.85,
+        485.28,
+        687.17
+      ],
+      "target": [
+        -44.97,
+        257.53,
+        -160.35
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "spa-u000-wide.png"
+    },
+    {
+      "u": 0.125,
+      "shot": "wide2",
+      "index": 1,
+      "fov": 37.1,
+      "eye": [
+        -615.37,
+        355.34,
+        -785.13
+      ],
+      "target": [
+        -44.97,
+        -5.47,
+        -160.35
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "spa-u013-wide2.png"
+    },
+    {
+      "u": 0.25,
+      "shot": "landmark1",
+      "index": 2,
+      "fov": 38,
+      "eye": [
+        308.44,
+        -12.43,
+        -368.69
+      ],
+      "target": [
+        241.9,
+        -17.13,
+        -377.1
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "spa-u025-landmark1.png"
+    },
+    {
+      "u": 0.375,
+      "shot": "turn-first",
+      "index": 4,
+      "fov": 39.2,
+      "eye": [
+        371.71,
+        14.77,
+        987.53
+      ],
+      "target": [
+        355.17,
+        6.53,
+        1028.42
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "spa-u038-turn-first.png"
+    },
+    {
+      "u": 0.5,
+      "shot": "turn-mid",
+      "index": 5,
+      "fov": 39.6,
+      "eye": [
+        129.29,
+        19.39,
+        490.05
+      ],
+      "target": [
+        92.06,
+        -7,
+        531.6
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "spa-u050-turn-mid.png"
+    },
+    {
+      "u": 0.625,
+      "shot": "grid-walk",
+      "index": 7,
+      "fov": 49.7,
+      "eye": [
+        187.03,
+        -1.55,
+        697.46
+      ],
+      "target": [
+        232.79,
+        -0.63,
+        771
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": 0,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "spa-u063-grid-walk.png"
+    },
+    {
+      "u": 0.75,
+      "shot": "grid-crane",
+      "index": 8,
+      "fov": 31.6,
+      "eye": [
+        165.06,
+        -0.17,
+        658.94
+      ],
+      "target": [
+        207.76,
+        -1.35,
+        733.47
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": -0.22,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "spa-u075-grid-crane.png"
+    },
+    {
+      "u": 0.875,
+      "shot": "grid-front",
+      "index": 9,
+      "fov": 40,
+      "eye": [
+        248.39,
+        2.11,
+        809.2
+      ],
+      "target": [
+        239.59,
+        -0.1,
+        788.86
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": 2.5,
+      "inside": {
+        "kind": "gantry",
+        "size": [
+          18.2,
+          7.7,
+          11.2
+        ]
+      },
+      "defect": null,
+      "liftWarn": false,
+      "file": "spa-u088-grid-front.png"
+    },
+    {
+      "u": 1,
+      "shot": "grid-mine",
+      "index": 10,
+      "fov": 40,
+      "eye": [
+        194.63,
+        -1.25,
+        716.67
+      ],
+      "target": [
+        267.5,
+        2.29,
+        837.41
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": 3,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "spa-u100-grid-mine.png"
+    }
+  ]
+}

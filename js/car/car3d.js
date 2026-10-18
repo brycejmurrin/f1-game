@@ -2128,9 +2128,9 @@ const Car3D = (function () {
       const rimColor = wt.rim || (brakeStyle && brakeStyle.rim);   // premium alloy rims (else default dark)
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32,
-          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle);
+          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink);
         addWheel(out, s*0.76, AXLES.wheelY, AXLES.rearZ, 0.34, 0.38,
-          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle);
+          tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink);
       }
     }
     // Fixed deflectors belong to the chassis, including the split race body.
