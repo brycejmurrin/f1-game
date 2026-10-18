@@ -26,7 +26,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const TOOLS = ["tools/check/ratchets.mjs", "tools/check/merge-hygiene.mjs"];
+const TOOLS = ["tools/check/ratchets.mjs", "tools/check/merge-hygiene.mjs", "tools/hooks/ratchet-reason.mjs"];
 
 function repo() {
   fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });

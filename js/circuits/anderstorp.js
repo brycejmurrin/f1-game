@@ -27,6 +27,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.017,
+    tyreSeverity: 0.9,  // Swedish airfield permanent; low-moderate band
     // Runway width. hwZones can only NARROW (applyHwZones keeps the smaller
     // half-width), so the runway is the base and the rest of the lap is the zones:
     // 10.5 m half-width (21 m, the ~20 m Flight Straight runway) on control points

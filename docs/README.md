@@ -18,7 +18,7 @@ drives it.
 | 2 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | **New contributors start here** — boot path, layer map, data flow, where to edit what. Ten-minute read. |
 | 3 | [VERIFICATION.md](VERIFICATION.md) | The current edit-loop, pre-push, docs-only, CI and Pages command meanings. |
 | 4 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module **contract**, the `G` façade, the game loop, and the three renderers behind one seam. Skim the generated module index; read the section for the directory you are about to edit. |
-| 5 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. §5 is a lookup table, not reading. |
+| 5 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. The per-file table is [TESTING-COVERAGE.md](TESTING-COVERAGE.md). One hook is [AGENT-HOOKS.md](AGENT-HOOKS.md) (`node tools/shot/agent.mjs help <hook>`), not the whole of DEBUG-HOOKS.md. |
 | 6 | the area doc | One of the area docs below. Load it only when the task touches its area. |
 | 7 | the skill | `.claude/skills/README.md` picks it; the skill drives the tools. |
 
