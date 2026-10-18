@@ -94,7 +94,7 @@ export function planMatrix(group, shards, scripts) {
 export const SPEC_RE = /^tests\/specs\/[A-Za-z0-9._-]+\.spec\.js$/;
 const SPEC_OR_GLOB_RE = /^tests\/specs\/[A-Za-z0-9._*-]+\.spec\.js$/;
 /** A piece of a fat spec: Playwright's native `--shard=j/k` over ONE file. */
-export const PIECE_RE = /^([1-9]\d?)\/([1-9]\d?)$/;
+const PIECE_RE = /^([1-9]\d?)\/([1-9]\d?)$/;
 /** No spec is split into more than this many pieces, and no piece is expected
  *  under MIN_PIECE_SEC (a piece still boots a browser and a server, ~20 s;
  *  hud-layout at ~1,480 s measured is 3-4 pieces of ~400-500 s). */
