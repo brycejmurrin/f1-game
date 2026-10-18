@@ -13,11 +13,9 @@ Write captures under `artifacts/` and return paths plus explicit unverified cell
 
 The SessionStart hook installs deps and the headless shell (AGENTS.md
 §Verification 1); `browserType.launch: Executable doesn't exist` means it did
-not run — `bash tools/env/cloud-agent-install.sh`. Capture rules that differ by
-backend: WGX on SwiftShader needs `tools/gfx/gfx-probe.mjs` for the visible
-`#game` (soft-present blit), never a raw canvas screenshot; HeadlessChrome GLX
-hides `#game` (opacity 0, reads black) and blits onto `#game-soft` — await
-`awaitSoftPresent()` then capture that.
+not run — `bash tools/env/cloud-agent-install.sh`. Backend pinning, the
+soft-present (`#game-soft`) capture rule and a dead `DISPLAY`:
+[references/recipes.md](references/recipes.md) §Backends and display.
 
 Interactive resize / DOM / CSS survey is the **playwright-official** MCP
 (`browser_*`, skill `survey-ui-matrix`), not this batch harness.
@@ -41,11 +39,7 @@ cover most needs; drop to a custom harness for bespoke sweeps.
 node tools/shot/apex-eval.mjs <track> "<expr>"        # `a` = __apex; async ok; --raw for full JSON
 node tools/shot/apex-eval.mjs monaco "a.camera()"
 node tools/shot/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
-# apex-eval/flicker-gate default to TLX; pin a renderer with --backend three|webgl2|webgpu
-# (apex-eval) / --backend three (flicker-gate; default webgl2 = GLX). A GLX.*() read under
-# the TLX default answers for TLX. shot.mjs takes --backend three|webgl2|webgpu (default three;
-# webgl2 costs ~4 min a boot on SwiftShader vs ~40 s for TLX); the apex_eval/apex_shot MCP wraps pass none.
-node tools/shot/apex-eval.mjs monaco "a.info()" --backend webgl2
+node tools/shot/apex-eval.mjs monaco "a.info()" --backend webgl2   # pin a backend (recipes.md §Backends)
 
 # Parallel screenshot validation (writes PNGs + a blank/fail manifest):
 node tools/shot/apex-capture.mjs cameras [track] [outdir]
@@ -55,12 +49,6 @@ node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
 # SAME framed scene on GLX vs TLX (+ numeric pixel diff, per-backend console errors):
 node tools/shot/backend-compare.mjs monaco 0.52 park --backends webgl2,three --out artifacts/cmp/before --label tunnel-exit
 ```
-
-`garage-angles` boots its own static server (no `:3456` serve). A dead local
-`DISPLAY=:N` (no `/tmp/.X11-unix/XN`) used to make WebGL null and hang on
-`__apex` — `launchChromium` clears that automatically; fallback is
-`unset DISPLAY` or `xvfb-run -a`. Details:
-[garage-parts-livery/references/garage-angles.md](../garage-parts-livery/references/garage-angles.md).
 
 ## Single framed screenshot (`shot.mjs`)
 
@@ -86,10 +74,14 @@ Speed notes: `docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md`.
 `turns:` has no tunnel/bridge entries: read the circuit file's comments (Monaco bore
 racing 0.449-0.524) or `flicker-gate.mjs --list` (sites carry racing/scenery fracs).
 
-**Before/after:** the tools serve the working tree: shoot A, apply the edit (or `git stash`), shoot B with
-the SAME args. `backend-compare` diffs GLX vs TLX within one run, not A vs B; compare the two runs'
-PNGs/manifests (`<label>-manifest.json`) yourself. Recipe: [references/recipes.md](references/recipes.md) §Tunnel before/after.
-Car-only: `garage-angles.mjs --against=<git ref>` does both in one run.
+**Before/after:** the tools serve the working tree, and rule 2 forbids source edits while a
+capture runs. Edit already made: `git stash push -m pp-<tag>` → shoot BEFORE → `git stash apply <sha>`
+(never `pop`; the stack is shared) → shoot AFTER with the SAME args. Name the out path per state:
+`artifacts/cmp/{before,after}/<track>-T1.png`. Several corners: one `--batch` file per state,
+`[{"track":"bahrain","frac":0.1038,"cam":"park","out":"artifacts/cmp/before/bahrain-T1.png"}, …]`
+(one boot each). `backend-compare` diffs GLX vs TLX within one run, not A vs B; compare the two
+runs' PNGs/manifests (`<label>-manifest.json`) yourself. Recipe: [references/recipes.md](references/recipes.md)
+§Tunnel before/after. Car-only: `garage-angles.mjs --against=<git ref>` does both in one run.
 
 ## Motion and profiling (still this harness)
 
@@ -103,9 +95,8 @@ node tools/shot/profile-gameloop.mjs singapore render        # .cpuprofile → C
 motion-capture's reference points at. A still frame cannot show shimmer and a CPU chart cannot see fill-bound work —
 both references say what the numbers mean before you A/B on them.
 
-**Combined galleries:** `apex_shot_survey {tracks:["monza","spa"],preset:"quick"}` writes every view into a root HTML gallery. To combine existing surveys without recapturing, use `apex_shot_survey {reports:["artifacts/a/findings.json","artifacts/b/findings.json"],out:"artifacts/combined"}`; copied image assets make that folder portable. Preserve the actual custom track ID in report metadata.
-
-**Image budget** (plan WS4; #2399): `Read` at most 8 images, then compact; never re-`Read` an old shot; JPEG ≤ 800 px wide for anything a model will look at; for more than 3 shots use `apex_shot_survey` / `apex_track op survey`, never a loop of `apex_shot`. A request over 32 MB kills the session and `/compact` with it.
+**Image budget:** `Read` at most 8 images, then compact; JPEG ≤ 800 px wide; more than 3 shots
+→ `apex_shot_survey` (combined galleries: recipes.md §Galleries and image budget).
 
 ## Load on demand
 
