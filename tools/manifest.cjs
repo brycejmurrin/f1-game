@@ -323,6 +323,7 @@ const FULL = [
   "js/ui/editor-workspace.js",
   "js/ui/settings-search.js",
   "js/ui/settings-tabs.js",
+  "js/ui/setting-deps.js",     // SettingDeps: declarative grey-out of settings another setting makes inert
   "js/ui/key-binds.js",
   "js/ui/settings-export.js",
   "js/physics/aero-zones.js",

@@ -6555,6 +6555,7 @@
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchet-reason.test.mjs",
         "tests/unit/ratchets.test.mjs",
+        "tests/unit/ready-gate.test.mjs",
         "tests/unit/report-server.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/season-cal.test.mjs",
@@ -15307,6 +15308,11 @@
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/ui-journey-career.test.mjs"
+      ]
+    },
+    "js/ui/setting-deps.js": {
+      "refresh": [
+        "tests/unit/setting-deps.test.mjs"
       ]
     },
     "js/ui/setting-row.js": {
