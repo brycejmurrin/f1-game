@@ -684,7 +684,21 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
         await page.waitForFunction(() => { const b = document.getElementById("pausebtn"); return !!b && !b.hidden; },
           null, { polling: 100, timeout: BOOT_MS });
         await page.evaluate(() => window.GameHud && GameHud.invalidateFit && GameHud.invalidateFit());
-        await page.evaluate(() => new Promise((r) => setTimeout(r, 1500))); // let fitHud settle
+        // Let fitHud settle: the control rects must hold still for 4 consecutive 250 ms polls. A fixed
+        // 1.5 s sleep raced the fit under CI load (Pages 00d61cc2: HUD SIZE 200 vs 100, passes solo).
+        await page.evaluate(() => { window.__hudSettle = { last: "", same: 0 }; });
+        await page.waitForFunction((ids) => {
+          const snap = JSON.stringify(ids.map((id) => {
+            const el = document.getElementById(id);
+            if (!el || el.hidden) return null;
+            const r = el.getBoundingClientRect();
+            return [r.x, r.y, r.width, r.height].map((n) => Math.round(n * 2) / 2);
+          }));
+          const st = window.__hudSettle;
+          st.same = snap === st.last ? st.same + 1 : 0;
+          st.last = snap;
+          return st.same >= 4;
+        }, CONTROL_IDS, { polling: 250, timeout: 30_000 });
         rects[hud] = await page.evaluate((ids) => Object.fromEntries(ids.map((id) => {
           const el = document.getElementById(id);
           if (!el || el.hidden) return [id, null];
