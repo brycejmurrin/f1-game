@@ -36,9 +36,11 @@
     position: sticky; top: 0; z-index: 2; background: var(--carbon); padding-block: calc(var(--gap) * 0.5);
   }
   .cs-liv-editor [role="tab"] { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
-  .cs-liv-editor [role="tab"][aria-selected="true"] { background: var(--red); border-color: transparent; color: var(--text); }
+  .cs-liv-editor [role="tab"][aria-selected="true"],
+  .cs-liv-editor [role="tab"][aria-selected="true"]:is(:hover, :active, :focus) { background: var(--red); border-color: transparent; color: var(--text); }
   .cs-liv-editor [role="tabpanel"] { display: flex; flex-direction: column; gap: inherit; }
   .cs-liv-editor [role="tabpanel"][hidden] { display: none; }
-  .cs-liv-editor > .cs-liv-ed-btns { position: sticky; bottom: 0; z-index: 2; background: var(--carbon); padding-block: calc(var(--gap) * 0.5); }
+  .cs-liv-editor > .cs-liv-ed-btns { position: sticky; bottom: 0; z-index: 2; background: var(--carbon); padding-block: calc(var(--gap) * 0.4); margin-top: 0; }
+  .cs-liv-editor > .cs-liv-ed-btns > button { min-height: 44px; padding-block: calc(var(--gap) * 0.3); }
   .cs-liv-editor .cs-liv-ed-prev { min-height: 0; height: calc(var(--gap) * 1.2); }
 }
