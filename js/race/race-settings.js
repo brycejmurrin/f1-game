@@ -253,6 +253,7 @@ const RaceSettings = (function () {
       paintPlan(tt, raceLaps);
       const matched = paintPresetState(full);
       paintFolds();
+      paintHelpDisclosures();
       // Title after preset match: FULL WEEKEND + START QUALIFYING → header
       // names the weekend (CTA already says START QUALIFYING above).
       const rsTitle = $("dlg-racesettings");
@@ -519,6 +520,49 @@ const RaceSettings = (function () {
       return b;
     }
 
+    // Keep the original preset nodes and bindings; disclosure state belongs to
+    // the player and survives draft paints and orientation changes.
+    function presetDisclosure(row, matched) {
+      let fold = row.parentElement;
+      if (!fold) return;
+      if (fold.id !== "rs-preset-options") {
+        const parent = fold;
+        fold = document.createElement("details");
+        fold.id = "rs-preset-options";
+        const summary = document.createElement("summary");
+        summary.className = "adv-more-btn";
+        fold.appendChild(summary);
+        parent.insertBefore(fold, row);
+        parent.removeChild(row);
+        fold.appendChild(row);
+      }
+      fold.hidden = row.hidden;
+      const label = { quick: "QUICK RACE", weekend: "FULL WEEKEND", endurance: "ENDURANCE" };
+      fold.querySelector("summary").textContent = "PRESET · " + (label[matched] || "CUSTOM");
+    }
+
+    // Long explanations are available beside their setting without consuming
+    // the initial editable view. Keep each original description/id intact.
+    // #rs-duel-help stays a visible direct child of #rs-duel: browser-ui-hunt
+    // pins that containment (help belongs to the Duel control at every width).
+    function paintHelpDisclosures() {
+      for (const row of $("rs-body").querySelectorAll(".set-row")) {
+        const help = Array.from(row.children).find(el => el.classList.contains("adv-help"));
+        if (!help || help.hasAttribute("role") || help.hasAttribute("aria-live")) continue;
+        if (help.id === "rs-duel-help") continue;
+        const label = row.querySelector(".tune-label");
+        if (!label) continue;
+        const fold = document.createElement("details");
+        fold.setAttribute("data-rs-help", "");
+        const summary = document.createElement("summary");
+        summary.textContent = "About " + label.textContent.trim().toLowerCase();
+        fold.appendChild(summary);
+        row.insertBefore(fold, help);
+        row.removeChild(help);
+        fold.appendChild(help);
+      }
+    }
+
     function paintPresetState(full) {
       const now = currentPresetValues();
       const row = $("rs-presets");
@@ -539,6 +583,7 @@ const RaceSettings = (function () {
         custom.setAttribute("aria-pressed", on ? "true" : "false");
         row.setAttribute("data-rs-match", matched || "custom");
       }
+      presetDisclosure(row, matched);
       return matched;
     }
 
