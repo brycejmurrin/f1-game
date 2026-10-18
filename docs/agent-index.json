@@ -676,7 +676,7 @@
         "tests/unit/test-groups.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
-      "declaredTests": 587,
+      "declaredTests": 589,
       "twinned": false
     },
     {
@@ -986,7 +986,7 @@
         "tests/unit/team-style-relief.test.mjs",
         "tests/unit/tyre-recipes-open-rim.test.mjs"
       ],
-      "declaredTests": 278,
+      "declaredTests": 282,
       "twinned": false
     },
     {
@@ -1054,7 +1054,7 @@
         "tests/unit/twin-fidelity.test.mjs",
         "tests/unit/twinned-specs.test.mjs"
       ],
-      "declaredTests": 420,
+      "declaredTests": 422,
       "twinned": false
     },
     {
