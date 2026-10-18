@@ -16,6 +16,10 @@ node_modules
 # Regenerable output
 scratch/
 artifacts/
+# Generated galleries and ad-hoc screenshot runs belong on track-survey-assets.
+# Keep the gallery builders in tools/ tracked; these are root output folders.
+/gallery/
+/shots/
 # tools/ci/queue-depth.mjs --write: a live gauge, never committed
 apex-status/
 # Run screenshots. A June 2026 lap audit committed ~1,700 versions of these in
