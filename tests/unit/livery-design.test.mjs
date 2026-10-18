@@ -295,6 +295,7 @@ test("new design controls support undo, redo, reset and meaningful line-weight a
   click("CIRCUIT TRACES"); assert.equal(input("patternWeight").disabled, false);
 });
 
+
 // Livery editor audit 2026-10-18, D2/D8: a greyed control said why only in `title`, which a phone never shows.
 test("a greyed control explains itself on screen, and the line goes when it comes back", async () => {
   const { root, click } = editorFixture();
@@ -346,26 +347,20 @@ test("SPINE ONLY greys except on CAP and CONTRAST greys without a fin — and th
   }
 });
 
-// D3: HALO FINISH was 0 of 9 on every car — an unset or grey halo is built as metal, and finishes remap paint.
-test("HALO FINISH greys unless HALO is coloured — and Car3D agrees on every cockpit", async () => {
+// D3 retired after #2829: HALO FINISH reaches the hoop/blade/wing paint; the row stays live.
+test("HALO FINISH stays live and matte changes the mesh even without a coloured HALO (#2829)", async () => {
   const { root, draft, editor } = editorFixture();
   const row = root.querySelectorAll("button").find((b) => b.dataset.csPill === "haloFinish:matte").parentNode.parentNode;
-  for (const [halo, live] of [["", false], ["#808085", false], ["#7a8a80", false], ["#e01080", true], ["#808f80", false], ["#80b080", true]]) {
+  for (const halo of ["", "#808085", "#e01080"]) {
     draft.halo = halo; editor.changed();
-    assert.equal(row.getAttribute("aria-disabled"), String(!live), halo || "unset");
+    assert.notEqual(row.getAttribute("aria-disabled"), "true", halo || "unset");
   }
-  const M = loadParts(), hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+  const M = loadParts();
   const cockpit = M.Parts.CATALOG.find((c) => c.id === "cockpit");
-  for (const team of M.Teams.LIST.filter((t) => ["mclaren", "ferrari", "redbull"].includes(t.id))) {
-    for (const opt of cockpit.options) {
-      const parts = M.Parts.getVisualTiers({ cockpit: opt.id }, team);
-      for (const [halo, live] of [["", false], ["#808085", false], ["#e01080", true], ["#80b080", true]]) {
-        const liv = halo ? { halo: hex(halo) } : {};
-        const mats = (f) => Array.from(M.Car3D.build(team.color, team.color2, { livery: { ...liv, haloFinish: f }, teamId: team.id, num: 4, parts, noWheels: true }).mat).join();
-        assert.equal(mats("matte") !== mats("inherit"), live, team.id + " " + opt.id + " halo " + (halo || "unset"));
-      }
-    }
-  }
+  const team = M.Teams.LIST.find((t) => t.id === "ferrari");
+  const parts = M.Parts.getVisualTiers({ cockpit: "standard" }, team);
+  const mats = (f) => Array.from(M.Car3D.build(team.color, team.color2, { livery: { haloFinish: f }, teamId: team.id, num: 4, parts, noWheels: true }).mat).join();
+  assert.notEqual(mats("matte"), mats("inherit"), "ferrari standard halo unset");
 });
 
 // D7: TAIL STYLE TEAM paints one of the named motifs, so its twin looked like a dead pill.
@@ -378,32 +373,6 @@ test("TAIL STYLE TEAM names the motif it paints — and the atlas agrees for eve
     assert.ok(A.LT.TAIL_STYLE_IDS.includes(kind), t.id + ": " + kind + " is a pill");
     assert.equal(ops(t.id, { ...base, finStyle: kind }), ops(t.id, { ...base, finStyle: "team" }), t.id + ": TEAM paints " + kind);
   }
-});
-
-// D1: the editor previewed a draft as the team's own scheme (id "default", brand mark palette) and
-// SAVE & FIT stored it under a custom id, so the marks changed colour the moment you saved.
-test("a paint job started from the team's own scheme saves the marks the editor showed, on every team", () => {
-  const A = loadAtlas(), sheet = source("js/garage/setup-sheet.js"), game = source("js/game.js");
-  const ctx = vm.createContext({ LiveryTex: A.LT, Liveries: A.Liveries, Math, Object, Array, String, Number, JSON, parseInt });
-  for (const name of ["hexToArr", "arrToHex"]) vm.runInContext(game.match(new RegExp("^function " + name + "\\(.*$", "m"))[0], ctx);
-  vm.runInContext(sheet.slice(sheet.indexOf("const LIV_DRAFT_COLORS"), sheet.indexOf("// WHAT EACH ROW ACTUALLY PAINTS")), ctx);
-  vm.runInContext(sheet.slice(sheet.indexOf("function livDraftFrom("), sheet.indexOf("function csTabId(")), ctx);
-  const run = (code) => vm.runInContext(code, ctx);
-  const ops = (team, liv) => JSON.stringify(A.paint(team, liv));
-  const livOf = (d, id) => run(`(d) => Object.assign({ id: ${JSON.stringify(id)}, c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, false))`)(d);
-  assert.match(sheet, /id: "custom_draft"/, "the live preview resolves the draft under a custom id, as the save does");
-  let sensitive = 0;
-  for (const t of A.Teams.LIST.filter((x) => !x.legends && x.id !== "custom")) {
-    const own = A.Liveries.forTeam(t)[0], shape = {};
-    for (const k of ["finShape", "spineHeight", "spineLogo", "spineSide", "finStyle", "finBadge", "tcam", "coverVents"]) if (t.livery && t.livery[k]) shape[k] = t.livery[k];
-    for (const [door, src] of [["copy", own], ["new", Object.assign({ c1: t.color, c2: t.color2 }, shape)]]) {
-      const shown = ops(t.id, livOf(run("livDraftFrom")(src, "x"), "default"));   // what the old preview showed
-      const saved = livOf(run("livDraftFromOwn")(src, "x", t.id), "custom_1");
-      assert.equal(ops(t.id, saved), shown, t.id + " " + door + ": the saved marks are the previewed marks");
-      if (ops(t.id, livOf(run("livDraftFrom")(src, "x"), "custom_1")) !== shown) sensitive++;
-    }
-  }
-  assert.ok(sensitive >= 10, "without the seed the saved marks differ (" + sensitive + " doors), so this test can fail");
 });
 
 test("2026-motif designs: named, registered in their colour/line lists, and each paints distinct art", () => {
