@@ -21,7 +21,7 @@ git commit && git push -u origin cursor/<topic>-<hash>   # 7. commit runs test:g
 Docs-only fast path — every changed path is prose (`docs/`, `*.md`, `.claude/skills/`, `.claude/agents/`; no generated
 doc): skip steps 1 and 3–6, check with `node --test tests/unit/docs-integrity.test.mjs tests/unit/agent-config.test.mjs`
 (the commit hook then runs docs-integrity alone, no ratchet raise), and skip the 1 h timer. With no PR the push starts
-no CI (`= ci none`); an open PR still gets a fast tier of guards plus seconds, so one `ci-watch.mjs --sha` Monitor suffices.
+no CI (`= ci none`); a ready PR, or a draft labelled `run-ci`, gets a fast tier of guards plus seconds, so one `ci-watch.mjs --sha` Monitor suffices.
 
 Then watch CI (rule 12). Auto memory is ON (synced to `.claude/memory/`) for corrections and tastes; a measured lesson goes to `docs/notes/`, a rule to a hook or test, a work log to the PR body.
 
@@ -158,7 +158,7 @@ WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change,
 
 Hooks (`.claude/hooks/`, wired by `.claude/settings.json`): `session-start.sh` installs deps and prints the orientation line; `protect-files.sh` blocks generated-file edits and source edits during a live browser run (Write/Edit and Bash writes);
 `bash-guard.sh` runs the guards on the STAGED commit (`git add`, then `git commit`; a pass tells the model its guard path), blocks `pkill -f`, PID kills of a test-bg run, a browser run inside a subagent (`mcp-browser-guard.sh` for the MCP browser tools, and any unreadable payload) and any Actions run cancel; `github-mcp-guard.sh` and bash-guard's `gh pr merge`/`gh pr ready`/`gh api` check (one text, `merge_policy.py`) deny squash/rebase and run cancels (merge, arm and draft→ready run without a prompt under `APEX_MERGE_DESK=1`: §Concurrent PRs is behavioural); `post-edit.sh` (advisory) flags a `js/` edit that does not parse or staled a generated file;
-`stop-guard.sh` nudges once when a turn would end over a live run (`live-run.py`); `subagent-contract.py` (SubagentStop, advisory) bounces a reporter agent's malformed report; `skill-hint.py` (UserPromptSubmit, advisory) names the skills a prompt matches; `ui-fixer-uncommitted.sh` (UserPromptSubmit, advisory) reminds a `cursor/*` branch with an hour-old commit and a dirty tree to commit WIP; `memory-sync.sh` carries auto memory across cloud containers (`docs/notes/AGENT-MEMORY.md`). `touch .claude/allow-protected` lifts the generated-file rules only (never the live-run, surveyor or reviewer rules). Never duplicate skills or agents under `.cursor/`.
+`stop-guard.sh` nudges once when a turn would end over a live run (`live-run.py`); `subagent-contract.py` (SubagentStop + PreToolUse SubagentHandback, advisory) bounces a reporter agent's malformed report; `skill-hint.py` (UserPromptSubmit, advisory) names the skills a prompt matches; `ui-fixer-uncommitted.sh` (UserPromptSubmit, advisory) reminds a `cursor/*` branch with an hour-old commit and a dirty tree to commit WIP; `memory-sync.sh` carries auto memory across cloud containers (`docs/notes/AGENT-MEMORY.md`). `touch .claude/allow-protected` lifts the generated-file rules only (never the live-run, surveyor or reviewer rules). Never duplicate skills or agents under `.cursor/`.
 
 Cloud agent stall abort, handoff fields, and merge-not-rebase: `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md`.
 

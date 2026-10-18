@@ -28,7 +28,7 @@
 #    the parsed argv (round 2, see "one parse" below).
 #  git push / gh — force, mirror, delete, deploy-branch pushes are blocked;
 #    `gh pr merge --squash|--rebase` is denied and other merges / ready flips
-#    ask (merge_policy.py, shared with github-mcp-guard.sh); the queue-depth
+#    ask, silent under APEX_MERGE_DESK=1 (merge_policy.py, shared with github-mcp-guard.sh); the queue-depth
 #    push hold is retired (2026-10-16, see below), and an Actions run cancel (`gh run cancel`,
 #    …/actions/runs/<id>/cancel) is refused (APEX_RUN_CANCEL_OK=1 overrides).
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
