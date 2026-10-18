@@ -32,8 +32,8 @@ import { commitTreeId } from "../lib/work-tree-id.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
 /** Sidecar written by a full green tooling-fast suite (see tooling-fast.mjs). */
-export const LOCAL_STAMP = path.join(ROOT, "artifacts/logs/tooling-fast-ready.sha");
-export const LOCAL_LOG = path.join(ROOT, "artifacts/logs/tooling-fast-suite.log");
+const LOCAL_STAMP = path.join(ROOT, "artifacts/logs/tooling-fast-ready.sha");
+const LOCAL_LOG = path.join(ROOT, "artifacts/logs/tooling-fast-suite.log");
 /** Aggregator job name in ci.yml — halves are tooling A/B. */
 export const GUARDS_JOB = "Structural guards";
 export const GUARDS_A = "Structural guards (tooling A)";

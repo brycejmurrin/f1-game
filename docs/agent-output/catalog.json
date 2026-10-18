@@ -24,9 +24,9 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. sourceBytes are source-file snapshots, not output sizes or tokens. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 393,
+    "files": 396,
     "classifications": {
-      "entrypoint-candidate": 297,
+      "entrypoint-candidate": 300,
       "asset": 1,
       "data": 11,
       "ambiguous": 44,
@@ -1245,7 +1245,7 @@
       "path": "tools/check/skill-smoke-recipes.json",
       "classification": "data",
       "evidence": [],
-      "sourceBytes": 40602,
+      "sourceBytes": 43199,
       "doc": null,
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -1512,7 +1512,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 14333,
+      "sourceBytes": 14312,
       "doc": "Verdicts for branches with no PR and no commit in 48 h: ancestry, merge-tree, line presence, CI (--all: every branch).",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -1534,7 +1534,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 13633,
+      "sourceBytes": 13619,
       "doc": "Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -1695,7 +1695,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 41294,
+      "sourceBytes": 41252,
       "doc": "Watches a SHA's CI runs (`--pages`: the Pages train too); one `[ci-watch]` line per job, then a `= ci <verdict>` line.",
       "skill": "steward",
       "nativeOutputFlagMentions": [
@@ -1717,7 +1717,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 8203,
+      "sourceBytes": 8175,
       "doc": "Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -1780,7 +1780,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 39882,
+      "sourceBytes": 39763,
       "doc": "Nightly flake tally — first-try fails and pass-on-retry by spec+title across recent scheduled CI runs.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -1801,7 +1801,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 9230,
+      "sourceBytes": 9223,
       "doc": "Fleet board: pinned issue of ready/claimed/blocked issues, PRs, live claims; mirrors the `claimed` label; syncs labels.",
       "skill": "ci-watch",
       "nativeOutputFlagMentions": [],
@@ -1908,6 +1908,50 @@
       ]
     },
     {
+      "path": "tools/ci/measure-guard-commit.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "main-guard",
+        "argv-or-parser"
+      ],
+      "sourceBytes": 3487,
+      "doc": "Measure commit-guard wall time vs a direct test:guards run (#2647).",
+      "skill": "check-changes",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/ci/measure-guard-commit.mjs"
+      ]
+    },
+    {
+      "path": "tools/ci/measure-pr-ci-after-close.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "main-guard",
+        "argv-or-parser"
+      ],
+      "sourceBytes": 6277,
+      "doc": "24 h scan: PR ci.yml job-minutes starting after close + peak-hour PR wall median (#2213, epic #1949).",
+      "skill": "steward",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/ci/measure-pr-ci-after-close.mjs"
+      ]
+    },
+    {
       "path": "tools/ci/needs-sync.mjs",
       "classification": "entrypoint-candidate",
       "evidence": [
@@ -1957,7 +2001,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 15200,
+      "sourceBytes": 15193,
       "doc": "Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -2058,7 +2102,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 19576,
+      "sourceBytes": 19555,
       "doc": "Which Pure-node CI matrix slices a diff needs (fail-safe → all).",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -2118,7 +2162,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 19306,
+      "sourceBytes": 19299,
       "doc": "One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch.",
       "skill": "ci-watch",
       "nativeOutputFlagMentions": [
@@ -2180,7 +2224,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 16900,
+      "sourceBytes": 16858,
       "doc": "Lists or deletes merged/absorbed branches with no open PR; --also verdicts are archived to refs/archive/* first.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -2203,7 +2247,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 13343,
+      "sourceBytes": 13301,
       "doc": "Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch.",
       "skill": "steward",
       "nativeOutputFlagMentions": [
@@ -2224,7 +2268,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 22326,
+      "sourceBytes": 22298,
       "doc": "Actions queue gauge: queued + running JOBS by OS vs the 40 Linux / 5 macOS slots; `= queue ok|hold`.",
       "skill": "steward",
       "nativeOutputFlagMentions": [
@@ -2245,7 +2289,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 9009,
+      "sourceBytes": 9002,
       "doc": "Count ready PRs with live full-tier CI (informational since 2026-10-16; no gate reads it).",
       "skill": "steward",
       "nativeOutputFlagMentions": [
@@ -2266,7 +2310,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 16258,
+      "sourceBytes": 17007,
       "doc": "Gate for marking a PR ready: require green tooling-fast / Structural guards on the tip SHA.",
       "skill": "steward",
       "nativeOutputFlagMentions": [
@@ -2309,7 +2353,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 27030,
+      "sourceBytes": 27023,
       "doc": "One test:* browser group on 4 llvmpipe runners (browser-group.yml), time-packed shards; line per shard, then `= group`.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [],
@@ -2498,7 +2542,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 87219,
+      "sourceBytes": 87212,
       "doc": "Per-SPEC change-aware selection for the blocking CI job: cuts at `select-budget` capacity and names every skip.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -2605,7 +2649,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 18239,
+      "sourceBytes": 18232,
       "doc": "Merges junit/reporter durations into `tests/data/spec-timings.json` (bounded, per env); `--check` flags 2x growth.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -2627,7 +2671,7 @@
         "main-guard",
         "argv-or-parser"
       ],
-      "sourceBytes": 4447,
+      "sourceBytes": 4426,
       "doc": "Deterministic measured-time packing for the geometry sweep CI matrix.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -2648,7 +2692,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 18921,
+      "sourceBytes": 18914,
       "doc": "Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -2669,7 +2713,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 34900,
+      "sourceBytes": 34893,
       "doc": "Starts test groups in the BACKGROUND and hands back a log to tail; sequential by default (`--parallel`, `--wait`).",
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -2772,7 +2816,7 @@
         "npm-script-reference",
         "argv-or-parser"
       ],
-      "sourceBytes": 109193,
+      "sourceBytes": 109195,
       "doc": "Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -2875,7 +2919,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 24346,
+      "sourceBytes": 24339,
       "doc": "Recent pushes per branch, who touched your paths, live claims: the check before fixing a shared red.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -4861,7 +4905,7 @@
       "path": "tools/mcp/apex-tools-mcp.json",
       "classification": "data",
       "evidence": [],
-      "sourceBytes": 1191,
+      "sourceBytes": 1208,
       "doc": null,
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -4873,7 +4917,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 156373,
+      "sourceBytes": 162249,
       "doc": "Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock).",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -4895,7 +4939,7 @@
       "evidence": [
         "shell-or-python-shebang"
       ],
-      "sourceBytes": 491,
+      "sourceBytes": 1012,
       "doc": "Cursor / Cloud stdio entry for the `apex_*` MCP (`.mcp.json` → `serve`); `help`/`call`/`smoke` from a shell.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [],
@@ -5056,7 +5100,7 @@
         "argv-or-parser",
         "shell-or-python-shebang"
       ],
-      "sourceBytes": 9321,
+      "sourceBytes": 9527,
       "doc": "Wrapper for the local `scratch/chrome-devtools-mcp` clone: `clone`/`build`/`run`/`verify`/`status`/`help`.",
       "skill": "mcp-probe",
       "nativeOutputFlagMentions": [],
@@ -5146,7 +5190,7 @@
         "main-guard",
         "argv-or-parser"
       ],
-      "sourceBytes": 16176,
+      "sourceBytes": 16771,
       "doc": "Opt-in stdio JavaScript debugger MCP: attach, breakpoints, step, scopes; no browser launch.",
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -5182,7 +5226,7 @@
       "path": "tools/mcp/js-debugger-session.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 27669,
+      "sourceBytes": 28193,
       "doc": "Agent debugger session: pause generations, breakpoints, scopes and nonblocking execution.",
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -5304,6 +5348,25 @@
       ]
     },
     {
+      "path": "tools/mcp/mcp-preflight.sh",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "shell-or-python-shebang"
+      ],
+      "sourceBytes": 2068,
+      "doc": "Sourced by the MCP launchers: bounded wait (<= 60 s) for the SessionStart `npm install`; stderr only.",
+      "skill": "mcp-probe",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "bash",
+        "tools/mcp/mcp-preflight.sh"
+      ]
+    },
+    {
       "path": "tools/mcp/mcp-smoke.mjs",
       "classification": "entrypoint-candidate",
       "evidence": [
@@ -5369,7 +5432,7 @@
       "evidence": [
         "shell-or-python-shebang"
       ],
-      "sourceBytes": 4060,
+      "sourceBytes": 4339,
       "doc": "Official `@playwright/mcp@0.0.79` wrapper (help/status/run): the `playwright-official` stdio server.",
       "skill": "survey-ui-matrix / css-play / mcp-probe",
       "nativeOutputFlagMentions": [],
@@ -6312,7 +6375,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 17704,
+      "sourceBytes": 17734,
       "doc": "Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each.",
       "skill": "survey-track",
       "nativeOutputFlagMentions": [

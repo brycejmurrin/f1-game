@@ -636,6 +636,7 @@
     "tests/unit/mcp-cli.test.mjs",
     "tests/unit/mcp-http-origin.test.mjs",
     "tests/unit/mcp-smoke.test.mjs",
+    "tests/unit/measure-pr-ci-after-close.test.mjs",
     "tests/unit/mechanics-coherence.test.mjs",
     "tests/unit/meeting-picker-labels.test.mjs",
     "// The track-switch growth verdict (mem-census sustainedGrowthMB) replayed on the #773 / 2026-10-04 leak numbers and the Metal warm-up step. ~0.1 s.",
