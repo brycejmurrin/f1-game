@@ -481,6 +481,41 @@ jobs:
           echo "guards-a=$A guards-b=$B"
           [ "$A" = success ] && [ "$B" = success ]
 
+  lints:
+    name: Workflow and shader lints
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '') }}
+    permissions:
+      contents: read
+    env:
+      # An absent binary is a FAILURE here, never the loud local SKIP: this job exists to run them.
+      APEX_REQUIRE_LINT_BINS: "1"
+    # actionlint + zizmor over .github/workflows, glslang over the GLX GLSL, naga (advisory) over the
+    # WGX WGSL (tools/check/workflow-lint.mjs, shader-validate.mjs). Binaries are pinned and checksummed
+    # by tools/env/install-lint-bins.sh; artifacts/bin is cached on a hash of that script, so a warm run installs nothing (a cold run compiles naga-cli, ~4 min).
+    # The two unit tests run here too, with the binaries, so a planted-defect fixture that stopped
+    # failing is red; in tooling-fast shards they skip loudly because the shards install nothing.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex
+      - name: Lint binaries cache
+        id: bins
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: artifacts/bin
+          key: lint-bins-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/env/install-lint-bins.sh') }}
+      - name: Install lint binaries
+        run: bash tools/env/install-lint-bins.sh
+      - name: Workflow lint (actionlint + zizmor)
+        run: node tools/check/workflow-lint.mjs
+      - name: Shader validation (glslang + naga)
+        run: node tools/check/shader-validate.mjs
+      - name: Planted-defect fixtures
+        run: node --test tests/unit/workflow-lint.test.mjs tests/unit/shader-validate.test.mjs
+
   node-suites:
     # Name `Pure-node unit suites (<slice>)`: the six strings WERE the deploy
     # branch's required checks until 2026-10-15, when Bryce made `CI` the one
@@ -1271,7 +1306,7 @@ jobs:
         # argv to `playwright test`).
         # --shard=1/1 on PRs and the Pages call (one runner, see the matrix);
         # the flag stays so a return to more shards is one number.
-        run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/1
+        run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/1   # zizmor: ignore[template-injection] matrix.shard is a workflow-literal integer (ci-coverage.test.mjs pins this exact form)
       # The wide run: the whole boot group, 4 shards, nightly — or, on dispatch,
       # whichever browser group the `group` input names (default tiny). On
       # llvmpipe since 2026-09-16, for the smoke numbers measured above (corner
@@ -1307,7 +1342,7 @@ jobs:
           # with `gl: swiftshader`, and so is this step).
           APEX_GL: llvmpipe
           LIBGL_ALWAYS_SOFTWARE: 1
-        run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
+        run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4   # zizmor: ignore[template-injection] matrix.shard is a workflow-literal integer (ci-coverage.test.mjs pins this exact form)
       # The same run on ANGLE's SwiftShader (dispatch input `gl: swiftshader`):
       # the opt-out, for measuring a spec on both rasterisers or for a renderer
       # verdict that must match the pre-2026-09-16 history. Its own step so the
@@ -1321,7 +1356,7 @@ jobs:
           APEX_FAIL_ON_FLAKY: 1
           APEX_WITH_TWINNED: 1
           GROUP: ${{ inputs.group || 'tiny' }}
-        run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
+        run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4   # zizmor: ignore[template-injection] matrix.shard is a workflow-literal integer (ci-coverage.test.mjs pins this exact form)
       # THE TIMINGS OF A GREEN RUN ARE THE DATA, and they were being thrown away.
       # Every per-test duration this job measures is written to junit.xml by
       # playwright.config.js, and the only step that uploaded it ran
@@ -2025,6 +2060,8 @@ jobs:
                        -H "Accept: application/vnd.github+json" "$API") \
             || run_all "could not reach the deployments API"
           DEPLOYMENTS_FILE="${RUNNER_TEMP:-.}/pages-deployments.tsv"
+          # The node program below is single-quoted on purpose; its ${} is JavaScript, not shell.
+          # shellcheck disable=SC2016
           printf '%s' "$RESP" | node -e '
             let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
               try {
@@ -2476,9 +2513,9 @@ jobs:
         run: |
           mkdir -p carry
           i=0
-          for f in $(find junit-in -name junit.xml 2>/dev/null); do
+          while IFS= read -r f; do
             i=$((i+1)); mkdir -p "carry/test-results-$i"; cp "$f" "carry/test-results-$i/junit.xml"
-          done
+          done < <(find junit-in -name junit.xml 2>/dev/null)
       # A DROPPED SPEC IS A RED, WHATEVER ELSE RAN (2026-10-04). This used to
       # read `dropped` only when `selected` was skipped, so a plan that ran
       # one spec and named forty others as unaffordable was green. The
@@ -2515,9 +2552,9 @@ jobs:
           mkdir -p carry
           if [ ! -d carry/test-results-1 ] && [ -d junit-in ]; then
             i=0
-            for f in $(find junit-in -name junit.xml 2>/dev/null); do
+            while IFS= read -r f; do
               i=$((i+1)); mkdir -p "carry/test-results-$i"; cp "$f" "carry/test-results-$i/junit.xml"
-            done
+            done < <(find junit-in -name junit.xml 2>/dev/null)
           fi
           node tools/ci/junit-failed.mjs carry > .selected-failed.txt || true
       - name: Save failing specs
@@ -2620,6 +2657,7 @@ jobs:
       - guards-a
       - guards-b
       - guards
+      - lints
       - node-suites
       - sweeps-parts
       - sweeps

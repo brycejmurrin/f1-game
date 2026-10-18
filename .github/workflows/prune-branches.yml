@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1   # zizmor: ignore[artipacked] this job pushes refs/archive/* and deletes branches
         with:
           ref: claude/f1-game-project-26h3ng
           fetch-depth: 0    # every branch, full history: the ancestry test needs both

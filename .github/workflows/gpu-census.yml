@@ -287,6 +287,7 @@ jobs:
       CENSUS_LS: ${{ needs.plan.outputs.ls }}
       CENSUS_CLOCK: ${{ needs.plan.outputs.clock }}
       CENSUS_TOD: ${{ needs.plan.outputs.tod }}
+      IMAGE: ${{ matrix.image }}   # run-block uses read $IMAGE, never a ${{ }} expansion (zizmor template-injection)
       CENSUS_FORCE: ${{ needs.plan.outputs.force }}
       CENSUS_ONLY: ${{ needs.plan.outputs.census_only }}
       CENSUS_CAM: ${{ needs.plan.outputs.cam }}
@@ -326,7 +327,7 @@ jobs:
       - name: WebGPU adapter census
         id: census
         shell: bash
-        run: node tools/gfx/gpu-census.mjs --json "census-${{ matrix.image }}.json"
+        run: node tools/gfx/gpu-census.mjs --json "census-${IMAGE}.json"
 
       # Put the verdict in the job summary, not just the log. A job's log is a
       # 404 until the whole job ends, so the game checks would hide a census
@@ -337,10 +338,10 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## ${{ matrix.image }}"
+            echo "## ${IMAGE}"
             echo '```'
             node -e '
-              const r = require("./census-${{ matrix.image }}.json");
+              const r = require("./census-" + process.env.IMAGE + ".json");
               console.log("anyHardware:", r.anyHardware, "| platform:", r.platform, r.arch);
               for (const x of r.runs) {
                 const a = x.adapter || {};
@@ -394,8 +395,8 @@ jobs:
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --backend three --path webgpu --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
-            --json "game-webgpu-${{ matrix.image }}.json" \
-            --shot "game-webgpu-${{ matrix.image }}.png"
+            --json "game-webgpu-${IMAGE}.json" \
+            --shot "game-webgpu-${IMAGE}.png"
 
       # The control: the same pin (a no-op here — forceWebGL short-circuits
       # the blit), so the two TLX legs differ in exactly ONE variable.
@@ -414,8 +415,8 @@ jobs:
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --backend three --path webgl2 --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
-            --json "game-webgl2-${{ matrix.image }}.json" \
-            --shot "game-webgl2-${{ matrix.image }}.png"
+            --json "game-webgl2-${IMAGE}.json" \
+            --shot "game-webgl2-${IMAGE}.png"
 
       # GLX — the explicit WebGL2 backend and the fallback every backend
       # failure lands on; without this leg a js/render/glx/ regression could
@@ -435,8 +436,8 @@ jobs:
           # this pin) can override it; the A/B rows print the mode and gens.
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --beats 20 --ls apex26.wgxCapture=0 --backend webgl2 $LS \
-            --json "game-glx-${{ matrix.image }}.json" \
-            --shot "game-glx-${{ matrix.image }}.png"
+            --json "game-glx-${IMAGE}.json" \
+            --shot "game-glx-${IMAGE}.png"
 
       # WGX — the native WebGPU backend (js/render/webgpu/), opt-in for
       # players; the in-container Dawn validates but never executes, so this
@@ -448,7 +449,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 6
         shell: bash
-        run: |
+        run: |   # zizmor: ignore[template-injection] matrix.image is one of the plan job's validated runner-image names; ci-coverage.test.mjs pins this exact form
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
           # wgxCapture=0 (hunt 4 I3), as on the other three legs: without it WGX
           # soft-presents every frame under the headless UA — copyTextureToBuffer,
@@ -460,7 +461,7 @@ jobs:
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --beats 20 --ls apex26.wgxCapture=0 --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
-            --shot "game-wgx-${{ matrix.image }}.png"
+            --shot "game-wgx-${IMAGE}.png"
 
       # THE GATE. The four legs above are continue-on-error, so before this
       # step the job was green whatever the game said (run 33228195259 passed
