@@ -861,6 +861,7 @@ declare const TyreModel: GameModuleFactory;
 declare const SoakRun: GameModuleFactory;
 declare const PitLane: GameModuleFactory;
 declare const RaceEngineer: GameModuleFactory;
+declare const EventJournal: GameModuleFactory;
 declare const RaceRadio: GameModuleFactory;
 declare const CamModes: GameModuleFactory;
 declare const CamTunerPanel: GameModuleFactory;
