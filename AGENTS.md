@@ -85,8 +85,8 @@ Session shape — twelve rules that control wall time, waiting and handoff:
 4. Pixel screenshot — visual sign-off only, never an assertion source (live poking: skill `mcp-probe`).
 
 This container has no real GPU: renderers blit onto `#game-soft` and a probe waits on `awaitSoftPresent()`
-(`docs/notes/CI-RENDERING-PERFORMANCE.md`). Never run Chrome MCP while Playwright runs; a `version.json` check is
-agent `deploy-research`. A unit test of a renderer backend is not evidence that it runs: boot it live and confirm one
+(`docs/notes/CI-RENDERING-PERFORMANCE.md`). Never run Chrome MCP while Playwright runs.
+A unit test of a renderer backend is not evidence that it runs: boot it live and confirm one
 positive signal (`docs/ARCHITECTURE.md` §Boot evidence, `.claude/skills/mcp-probe/references/recipes.md`; each
 backend's gate is in `.claude/rules/render-wgx.md` / `render-tlx.md`).
 
