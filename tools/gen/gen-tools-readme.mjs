@@ -194,6 +194,7 @@ export const GROUPS = [
   ["ui", "Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) they share."],
   ["lighting", "The lighting tuner: A/B harnesses, slider effectiveness, and the batch campaign package."],
   ["mcp", "MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools and TinyFish bridges, the phone report pair."],
+  ["viewer", "Self-contained three.js pages of engine-built cars and circuits, for hosts that cannot render an MCP Apps panel."],
   ["net", "WebRTC and Nostr end-to-end harnesses plus the local relay and TURN servers."],
   ["env", "Container bootstrap: browsers and the Cursor Cloud install."],
   ["desktop", "Electron desktop packaging: stage the Pages allow-list into a site folder the shell serves over app://."],

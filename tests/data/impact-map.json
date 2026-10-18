@@ -2858,7 +2858,8 @@
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/fin-design.test.mjs",
-        "tests/unit/team-livery.test.mjs"
+        "tests/unit/team-livery.test.mjs",
+        "tests/unit/viewer.test.mjs"
       ],
       "migratePaint": [
         "tests/unit/fin-design.test.mjs"
@@ -4672,6 +4673,9 @@
       "positions": [
         "tests/unit/data-api-status.test.mjs"
       ],
+      "schedule": [
+        "tests/unit/data-schedule-tz.test.mjs"
+      ],
       "sessionResult": [
         "tests/unit/data-api-status.test.mjs"
       ],
@@ -4973,6 +4977,9 @@
       ]
     },
     "js/data/schedule.js": {
+      "countdown": [
+        "tests/unit/data-schedule-tz.test.mjs"
+      ],
       "create": [
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
@@ -4990,11 +4997,17 @@
       "nextFlipAt": [
         "tests/unit/data-schedule-tz.test.mjs"
       ],
+      "nextRace": [
+        "tests/unit/data-schedule-tz.test.mjs"
+      ],
       "raceInstant": [
         "tests/unit/data-schedule-tz.test.mjs"
       ],
-      "*": [
+      "tick": [
         "tests/unit/phone-touch-surface.test.mjs"
+      ],
+      "weekendSessions": [
+        "tests/unit/data-schedule-tz.test.mjs"
       ]
     },
     "js/data/settings-defaults.js": {

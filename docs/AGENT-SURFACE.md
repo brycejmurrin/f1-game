@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Thirty-three `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Thirty-four `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -252,7 +252,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Thirty-three tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Thirty-four tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -287,6 +287,10 @@ and viewports) in one read, sourced from the tools' own schemas so it cannot dri
 31 → 32 on 2026-10-16 for `apex_profile`, the same job as a direct browser-kind tool (`profile` joined the settings matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`); it returns a jobId and holds the browser lock until the job exits.
 32 → 33 on 2026-10-16 for `apex_locations`: authored turn and sector targets
 on all 52 circuits, plus curated named scenery with source-located fractions.
+33 → 34 on 2026-10-18 for `apex_viewer` (`viewer/build-viewer.mjs`): one
+self-contained three.js page of engine-built team cars and circuits, written to
+`artifacts/viewer/` with no browser, for publishing as an Artifact where a host
+does not render MCP Apps panels.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -314,6 +318,7 @@ on all 52 circuits, plus curated named scenery with source-located fractions.
 | `apex_car_audit` | `car/parts-ladder.mjs` | tree | garage-parts-livery |
 | `apex_track_audit` | `track/audit-circuit.cjs` | tree | survey-track |
 | `apex_unit_test` | built-in | tree | check-changes |
+| `apex_viewer` | `viewer/build-viewer.mjs` | tree | playwright-probe |
 | `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |

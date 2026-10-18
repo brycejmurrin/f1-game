@@ -1,0 +1,272 @@
+<title>Apex 26 Viewer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- @doc Template for viewer/build-viewer.mjs: the three.js car and circuit page; data is spliced in at the DATA marker. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: timing-screen header strip, one big 3D viewport, a legend rail under it. */
+:root {
+  --bg: #eef0f2; --panel: #ffffff; --fg: #1b2026; --muted: #5d6670; --line: #d3d8de;
+  --accent: #d1171f; --grass: #6f8f5e; --road: #6b7078; --race: #0a8fb3; --sky: #e4e8ec; --floor: #aab3bc;
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161b; --panel: #1a1f26; --fg: #e8ecf0; --muted: #98a2ad; --line: #2c333c;
+  --accent: #ff4b4f; --grass: #22402a; --road: #59606a; --race: #33d1ff; --sky: #0e1216; --floor: #242a31; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161b; --panel: #1a1f26; --fg: #e8ecf0; --muted: #98a2ad; --line: #2c333c;
+  --accent: #ff4b4f; --grass: #22402a; --road: #59606a; --race: #33d1ff; --sky: #0e1216; --floor: #242a31; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px; }
+.wrap { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(30px, 6vw, 46px); line-height: 1; margin: 2px 0 0; text-transform: uppercase; letter-spacing: .01em; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.modes, .picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.modes button, .picker button { font: 600 16px/1 var(--f-display); letter-spacing: .04em; text-transform: uppercase; color: var(--fg);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 9px 14px; cursor: pointer; }
+.modes button { font-size: 14px; padding: 7px 12px; }
+.modes button[aria-pressed="true"], .picker button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.modes button:focus-visible, .picker button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.picker i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.stat { background: var(--panel); padding: 10px 12px; min-width: 0; }
+.stat b { display: block; font-family: var(--f-mono); font-weight: 500; font-size: 20px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stat small { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+@media (max-width: 560px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.view { position: relative; width: 100%; aspect-ratio: 16 / 10; max-height: 72vh; max-width: 100%; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: var(--sky); touch-action: none; }
+@media (max-width: 560px) { .view { aspect-ratio: 4 / 5; } }
+.view canvas { display: block; width: 100%; height: 100%; }
+.hint { position: absolute; left: 10px; bottom: 8px; font-family: var(--f-mono); font-size: 11px; color: var(--muted); pointer-events: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--muted); align-items: center; }
+.legend i { display: inline-block; width: 22px; height: 8px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.ramp { background: linear-gradient(90deg, var(--road), #f2c230, #e5481c); }
+.race { background: var(--race); height: 3px !important; }
+.car { background: var(--accent); width: 10px !important; }
+p.note { margin: 0; max-width: 72ch; color: var(--muted); font-size: 13px; }
+code { font-family: var(--f-mono); font-size: 12px; }
+.empty { padding: 24px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow" id="eyebrow">Apex 26</div>
+      <h1 id="title">Viewer</h1>
+    </div>
+    <div class="modes" id="modes" role="group" aria-label="What to view"></div>
+  </header>
+  <div class="picker" id="picker" role="group" aria-label="Pick one"></div>
+
+  <div class="stats">
+    <div class="stat"><small id="l1">–</small><b id="s1">–</b></div>
+    <div class="stat"><small id="l2">–</small><b id="s2">–</b></div>
+    <div class="stat"><small id="l3">–</small><b id="s3">–</b></div>
+    <div class="stat"><small id="l4">–</small><b id="s4">–</b></div>
+  </div>
+
+  <div class="view" id="view"><span class="hint" id="hint">Drag to orbit · pinch or scroll to zoom</span></div>
+
+  <div class="legend" id="legend"></div>
+  <p class="note" id="note"></p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+"use strict";
+const DATA = /*@DATA*/null;
+const $ = (id) => document.getElementById(id);
+const view = $("view");
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const store = { get(k) { try { return localStorage.getItem("apex26.viewer." + k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem("apex26.viewer." + k, v); } catch (e) {} } };
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+view.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(36, 1, 0.05, 500);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(-4, 10, 6); scene.add(sun);
+
+let world = null, tick = null;
+function clearWorld() {
+  if (!world) return;
+  scene.remove(world);
+  world.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  world = null; tick = null;
+}
+function stats(rows) { rows.forEach(([l, v], i) => { $("l" + (i + 1)).textContent = l; $("s" + (i + 1)).textContent = v; }); }
+const fmt = (n) => Number(n).toLocaleString("en-GB");
+function b64(s, T) { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new T(u.buffer); }
+
+// ── cars ─────────────────────────────────────────────────────────────
+function buildCar(id) {
+  const D = DATA.cars[id];
+  clearWorld(); world = new THREE.Group(); scene.add(world);
+  const pos = b64(D.pos, Int16Array), col = b64(D.col, Uint8Array), idx = b64(D.idx, D.idx32 ? Uint32Array : Uint16Array);
+  const g = new THREE.BufferGeometry();
+  const p = new Float32Array(pos.length); for (let i = 0; i < pos.length; i++) p[i] = pos[i] / 1000;
+  g.setAttribute("position", new THREE.BufferAttribute(p, 3));
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3, true));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  const body = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.45, metalness: 0.15, side: THREE.DoubleSide }));
+  world.add(body);
+  g.computeBoundingBox();
+  const bb = g.boundingBox;
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(4.2, 64), new THREE.MeshLambertMaterial({ color: css("--floor") }));
+  floor.rotation.x = -Math.PI / 2; floor.position.y = bb.min.y - 0.002; world.add(floor);
+  const fit = 1 / Math.min(1, camera.aspect);
+  camera.position.set(4.6 * fit, 1.9 * fit, 4.2 * fit); controls.target.set(0, 0.45, 0.1); controls.maxPolarAngle = Math.PI * 0.49;
+  controls.minDistance = 1.5; controls.maxDistance = 14; controls.update();
+  const spin = new THREE.Group(); world.remove(body); spin.add(body); world.add(spin);
+  tick = (dt) => { if (!reduced) spin.rotation.y += dt * 0.25; };
+  $("eyebrow").textContent = "Apex 26 · Car3D.buildComplete · factory setup";
+  $("title").textContent = D.name;
+  stats([["Team code", D.short], ["Car number", D.num], ["Vertices", fmt(D.verts)],
+    ["Length", ((bb.max.z - bb.min.z)).toFixed(2) + " m"]]);
+  $("legend").innerHTML = "";
+  $("note").innerHTML = "The procedural 2026 car exactly as <code>Car3D.buildComplete()</code> builds it for this team's default livery and factory parts, with vertex paint only. Sponsor and number decals are a separate texture and are not shown.";
+}
+
+// ── circuits ─────────────────────────────────────────────────────────
+function buildCircuit(id) {
+  const D = DATA.circuits[id];
+  clearWorld(); world = new THREE.Group(); scene.add(world);
+  const N = D.x.length;
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, minY = Infinity, maxY = -Infinity, maxK = 0;
+  for (let i = 0; i < N; i++) {
+    minX = Math.min(minX, D.x[i]); maxX = Math.max(maxX, D.x[i]);
+    minZ = Math.min(minZ, D.z[i]); maxZ = Math.max(maxZ, D.z[i]);
+    minY = Math.min(minY, D.y[i]); maxY = Math.max(maxY, D.y[i]);
+    maxK = Math.max(maxK, Math.abs(D.k[i]));
+  }
+  const S = 10 / Math.max(maxX - minX, maxZ - minZ), cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+  const range = Math.max(maxY - minY, 0.1);
+  const YEX = Math.round(Math.min(15, Math.max(1, 0.9 / (range * S))));
+  const W = 3;
+  const P = (i, lat, lift) => new THREE.Vector3((D.x[i] + D.rx[i] * lat - cx) * S, (D.y[i] - minY) * S * YEX + lift, (D.z[i] + D.rz[i] * lat - cz) * S);
+  const quad = (i, N) => { const j = (i + 1) % N; return [2 * i, 2 * j, 2 * i + 1, 2 * i + 1, 2 * j, 2 * j + 1]; };
+
+  const pos = [], col = [], idx = [], c = new THREE.Color();
+  const road = new THREE.Color(css("--road")), mid = new THREE.Color(0xf2c230), hot = new THREE.Color(0xe5481c);
+  for (let i = 0; i < N; i++) {
+    const a = P(i, -D.hw[i] * W, 0.01), b = P(i, D.hw[i] * W, 0.01);
+    pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+    const t = Math.min(Math.abs(D.k[i]) / 0.03, 1);
+    if (t < 0.5) c.copy(road).lerp(mid, t * 2); else c.copy(mid).lerp(hot, (t - 0.5) * 2);
+    col.push(c.r, c.g, c.b, c.r, c.g, c.b);
+    idx.push(...quad(i, N));
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  world.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+
+  // Skirt down to the ground so elevation reads as a solid embankment.
+  const sk = [], si = [];
+  for (let i = 0; i < N; i++) { const p = P(i, 0, 0); sk.push(p.x, p.y, p.z, p.x, -0.02, p.z); si.push(...quad(i, N)); }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.Float32BufferAttribute(sk, 3)); sg.setIndex(si);
+  world.add(new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.12, side: THREE.DoubleSide })));
+
+  const pts = []; for (let i = 0; i < N; i++) pts.push(P(i, D.l[i] * W, 0.03));
+  const curve = new THREE.CatmullRomCurve3(pts, true);
+  world.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(3000)), new THREE.LineBasicMaterial({ color: css("--race") })));
+
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry((maxX - minX) * S + 2, (maxZ - minZ) * S + 2), new THREE.MeshLambertMaterial({ color: css("--grass") }));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; world.add(ground);
+  world.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([P(0, -D.hw[0] * W, 0.02), P(0, D.hw[0] * W, 0.02)]), new THREE.LineBasicMaterial({ color: 0xffffff })));
+
+  const car = new THREE.Group();
+  const paint = new THREE.MeshLambertMaterial({ color: css("--accent") });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.035, 0.2), paint); body.position.y = 0.03; car.add(body);
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.012, 0.03), new THREE.MeshLambertMaterial({ color: 0x15181c })); wing.position.set(0, 0.065, -0.09); car.add(wing);
+  world.add(car);
+  let u = 0; const ahead = new THREE.Vector3();
+  const place = () => { curve.getPointAt(u, car.position); curve.getPointAt((u + 0.0015) % 1, ahead); car.lookAt(ahead); };
+  place();
+  tick = (dt) => { if (!reduced) { u = (u + 220 * dt / D.total) % 1; place(); } };
+
+  const xs = (maxX - minX) * S, zs = (maxZ - minZ) * S;
+  const fit = 1.25 / Math.min(1, camera.aspect);
+  camera.position.set(-xs * 0.35 * fit, Math.max(xs, zs) * 0.85 * fit, zs * 0.8 * fit);
+  controls.target.set(0, 0, 0); controls.maxPolarAngle = Math.PI * 0.48; controls.minDistance = 0.5; controls.maxDistance = 40; controls.update();
+
+  $("eyebrow").textContent = "Apex 26 · Tracks.build centreline";
+  $("title").innerHTML = "";
+  const parts = String(D.name).split("-");
+  $("title").append(parts[0]);
+  if (parts.length > 1) { const s = document.createElement("span"); s.textContent = "-" + parts.slice(1).join("-"); $("title").append(s); }
+  stats([["Lap length", fmt(D.total) + " m"], ["Built nodes", fmt(D.nodes)], ["Elevation range", range.toFixed(1) + " m"],
+    ["Tightest radius", maxK ? Math.round(1 / maxK) + " m" : "–"]]);
+  $("legend").innerHTML = '<span><i class="ramp"></i>Road, coloured by curvature (straight → hairpin)</span><span><i class="race"></i>Racing line</span><span><i class="car"></i>Car on the line</span><span>Height ×' + YEX + ", width ×" + W + "</span>";
+  $("note").innerHTML = "Every point comes from <code>Tracks.build()</code>, sampled to about 500 nodes. Road width and racing-line offsets are drawn 3× wide so they read at circuit scale; height is exaggerated by the factor shown above.";
+}
+
+// ── chrome ───────────────────────────────────────────────────────────
+const MODES = [["cars", "Cars", buildCar], ["circuits", "Circuits", buildCircuit]].filter(([k]) => Object.keys(DATA[k] || {}).length);
+let mode = null, pick = {};
+function setMode(m) {
+  mode = m; store.set("mode", m);
+  for (const b of $("modes").children) b.setAttribute("aria-pressed", String(b.dataset.mode === m));
+  const picker = $("picker"); picker.innerHTML = "";
+  for (const id of Object.keys(DATA[m])) {
+    const b = document.createElement("button");
+    b.type = "button"; b.id = "pick-" + m + "-" + id; b.dataset.id = id;
+    b.textContent = m === "cars" ? DATA.cars[id].short : String(DATA.circuits[id].name).split("-")[0];
+    b.title = m === "cars" ? DATA.cars[id].name : DATA.circuits[id].name;
+    b.addEventListener("click", () => select(id));
+    picker.appendChild(b);
+  }
+  const saved = store.get(m);
+  select(saved && DATA[m][saved] ? saved : Object.keys(DATA[m])[0]);
+}
+function select(id) {
+  pick[mode] = id; store.set(mode, id);
+  for (const b of $("picker").children) b.setAttribute("aria-pressed", String(b.dataset.id === id));
+  MODES.find(([k]) => k === mode)[2](id);
+  renderer.setClearColor(new THREE.Color(css("--sky")));
+}
+for (const [k, label] of MODES) {
+  const b = document.createElement("button");
+  b.type = "button"; b.id = "mode-" + k; b.dataset.mode = k; b.textContent = label;
+  b.addEventListener("click", () => setMode(k));
+  $("modes").appendChild(b);
+}
+if (MODES.length < 2) $("modes").hidden = true;
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(view);
+const repaint = () => { if (mode) select(pick[mode]); };
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", repaint);
+new MutationObserver(repaint).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.max(0, Math.min((now - last) / 1000, 0.1)); last = now;
+  if (tick) tick(dt);
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+resize();
+if (MODES.length) {
+  const savedMode = store.get("mode");
+  setMode(MODES.some(([k]) => k === savedMode) ? savedMode : MODES[0][0]);
+} else {
+  view.innerHTML = '<p class="empty">This page was built with no cars and no circuits.</p>';
+}
+window.APEX_VIEWER = { ready: true, select: (m, id) => { setMode(m); select(id); } };
+requestAnimationFrame(frame);
+</script>

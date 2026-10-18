@@ -417,6 +417,16 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/tinyfish-mcp.sh** | Local TinyFish MCP proxy helper: `setup`/`start`/`stop`/`status`/`fetch`/`search`/`deploy-check`/`deploy-js` on :3711. | mcp-probe |
 | **mcp/tinyfish-rpc.py** | Unwraps TinyFish `fetch_content`/`search` JSON-RPC results: `unwrap` / `deploy-summary` / `live-build` / `tool-names`. | mcp-probe |
 
+### `tools/viewer/`
+
+Self-contained three.js pages of engine-built cars and circuits, for hosts that cannot render an MCP Apps panel.
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **viewer/build-viewer.mjs** | Writes one self-contained three.js viewer page of engine-built team cars and circuits, to open or publish. | playwright-probe |
+| **viewer/viewer-data.mjs** | Viewer payloads: Tracks.build circuits and Car3D.buildComplete team cars as compact JSON for viewer.html. | playwright-probe |
+| **viewer/viewer.html** | Template for viewer/build-viewer.mjs: the three.js car and circuit page; data is spliced in at the DATA marker. | — |
+
 ### `tools/net/`
 
 WebRTC and Nostr end-to-end harnesses plus the local relay and TURN servers.
