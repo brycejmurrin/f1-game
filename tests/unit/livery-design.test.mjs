@@ -251,7 +251,7 @@ test("integrated adjustments disable only controls unused by the current spine d
 test("surface sections and spine families preserve one button per choice and label their scope", () => {
   const { root, spineRow, D } = editorFixture();
   const headings = root.querySelectorAll('[role="heading"]').map((el) => el.textContent);
-  for (const title of ["BODY PAINT & BASE FINISH", "ENGINE COVER — SHAPE & PAINT", "SPINE TOP — ARTWORK & COLOURS", "WINGS", "TAIL FIN", "TEAM MARKS & NUMBERS", "COCKPIT & CAMERA", "REVIEW & SAVE"]) assert.ok(headings.includes(title), title);
+  for (const title of ["BODY PAINT & BASE FINISH", "ENGINE COVER — SHAPE & PAINT", "SPINE TOP — ARTWORK & COLOURS", "WINGS", "TAIL FIN", "TEAM MARKS & NUMBERS", "COCKPIT & CAMERA"]) assert.ok(headings.includes(title), title);
   assert.equal(spineRow.getAttribute("data-liv-section"), "SPINE TOP — ARTWORK & COLOURS");
   assert.equal(spineRow.querySelector('[role="group"]').getAttribute("aria-label"), "SPINE TOP");
   assert.deepEqual(spineRow.querySelectorAll(".cs-liv-ed-sec").map((el) => el.textContent), ["MARKS & IDENTITY", "FIXED GRAPHICS", "ADJUSTABLE PATTERNS"]);
@@ -406,6 +406,47 @@ test("a paint job started from the team's own scheme saves the marks the editor 
     }
   }
   assert.ok(sensitive >= 10, "without the seed the saved marks differ (" + sensitive + " doors), so this test can fail");
+});
+
+// Reorganization option B (orchestrator pick, 2026-10-18): one car area at a time.
+test("car-area tabs: every control in exactly one area, advanced rows reachable, edits survive a tab switch", () => {
+  const { root, draft, click } = editorFixture();
+  const tabs = root.querySelectorAll('[role="tab"]'), panes = root.querySelectorAll('[role="tabpanel"]');
+  assert.ok(tabs.length >= 3 && tabs.length === panes.length, "one tab per area pane");
+  assert.equal(root.querySelectorAll('[role="tablist"]').length, 1);
+  assert.equal(panes.filter((p) => !p.hidden).length, 1, "one area shows at a time");
+  assert.equal(tabs[0].textContent, "QUICK START");
+  assert.equal(tabs[0].getAttribute("aria-selected"), "true");
+  for (const [i, t] of tabs.entries()) assert.equal(t.getAttribute("aria-controls"), panes[i].id);
+  // every setting control lives in exactly one pane
+  const keyed = root.querySelectorAll("input, button").filter((c) => c.dataset.livField || c.dataset.csPill || c.dataset.csFinish);
+  assert.ok(keyed.length > 40);
+  for (const c of keyed) {
+    let n = 0;
+    for (const p of panes) if (p.contains(c)) n++;
+    assert.equal(n, 1, (c.dataset.livField || c.dataset.csPill) + " is in exactly one area");
+  }
+  // UNDO and NAME are in QUICK START, not at the foot of seventy rows
+  const quick = panes[0];
+  assert.ok(quick.contains(root.querySelectorAll("button").find((b) => b.textContent === "UNDO")));
+  // advanced rows sit under ADVANCED at the foot of their area and are reachable
+  const width = root.querySelectorAll("input").find((el) => el.dataset.livField === "patternWidth");
+  const pane = panes.find((p) => p.contains(width)), tab = tabs[panes.indexOf(pane)];
+  const kids = pane.children, adv = kids.findIndex((k) => k.textContent === "ADVANCED");
+  assert.ok(adv > 0 && kids.indexOf(width.parentNode) > adv, "pattern size is an ADVANCED row");
+  assert.equal(pane.hidden, true);
+  tab.onclick();
+  assert.equal(pane.hidden, false); assert.equal(quick.hidden, true);
+  // a switch loses nothing
+  click("CONTOUR LINES"); width.value = "40"; width.oninput(); width.onchange();
+  tabs[0].onclick(); tab.onclick();
+  assert.equal(draft.spineLogo, "contours"); assert.equal(draft.patternWidth, "40"); assert.equal(String(width.value), "40");
+  // arrow keys move between tabs
+  const list = root.querySelector('[role="tablist"]'), at = tabs.indexOf(tab);
+  list.onkeydown({ key: "ArrowRight", preventDefault() {} });
+  assert.equal(tabs[(at + 1) % tabs.length].getAttribute("aria-selected"), "true");
+  list.onkeydown({ key: "Home", preventDefault() {} });
+  assert.equal(tabs[0].getAttribute("aria-selected"), "true");
 });
 
 test("2026-motif designs: named, registered in their colour/line lists, and each paints distinct art", () => {

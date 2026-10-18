@@ -8,6 +8,15 @@ import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared
 
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
 
+// One car area at a time: open the area that holds a control before acting on it.
+async function reveal(page, sel) {
+  await page.evaluate((s) => {
+    const pane = document.querySelector(s)?.closest('[role="tabpanel"]');
+    if (pane && pane.hidden) document.getElementById(pane.getAttribute("aria-labelledby")).click();
+  }, sel);
+  return page.locator(sel);
+}
+
 test("CREST emblems: every style is a tappable pill, and the chosen one repaints the car's marks", async ({ page }) => {
   await ensureLive(page);
   const key = await page.evaluate(() => "livery.custom." + Teams.LIST[2].id);
@@ -25,19 +34,20 @@ test("CREST emblems: every style is a tappable pill, and the chosen one repaints
 
   const ids = await page.evaluate(() => Array.from(LiveryTex.CREST_STYLE_IDS));
   expect(ids).toEqual(["team", "shield", "roundel", "wings", "arrow", "star"]);
+  await reveal(page, '[data-cs-pill="crestStyle:team"]');
   for (const id of ids) await expect(page.locator(`[data-cs-pill="crestStyle:${id}"]`), id).toHaveCount(1);
   await expect(page.locator('[data-cs-pill="crestStyle:team"]')).toHaveAttribute("aria-pressed", "true");
 
   // The garage repaints marks through a fresh livery atlas build ("[car] livery <team>").
   const mark = await page.evaluate(() => (Log.records().at(-1) || { id: 0 }).id);
-  const pill = page.locator('[data-cs-pill="crestStyle:shield"]');
+  const pill = await reveal(page, '[data-cs-pill="crestStyle:shield"]');
   await pill.scrollIntoViewIfNeeded();
   await pill.tap();
   await expect(pill).toHaveAttribute("aria-pressed", "true");
   await expect.poll(() => page.evaluate((since) => Log.records({ ns: "car", since })
     .some((r) => /livery/.test(JSON.stringify(r))), mark), { timeout: 30_000 }).toBe(true);
 
-  const save = page.locator(".cs-liv-ed-save");
+  const save = await reveal(page, ".cs-liv-ed-save");
   await save.scrollIntoViewIfNeeded();
   await save.tap();
   const r = await page.evaluate((k) => {

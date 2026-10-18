@@ -6680,6 +6680,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
         if (track.terrainGeo && gfx.createChunkedMesh) {
           track.terrainGeo._keepPositions = true;
           track.meshes.terrainChunked = gfx.createChunkedMesh(track.terrainGeo, 72);
+          if (typeof Tracks !== "undefined" && Tracks.dropRibbonCpuIfReady) Tracks.dropRibbonCpuIfReady(track);
         }
       }
       const _tc = track.meshes.terrainChunked;
@@ -6726,6 +6727,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
         if (track.roadGeo && gfx.createChunkedMesh) {
           track.roadGeo._keepPositions = true;
           track.meshes.roadChunked = gfx.createChunkedMesh(track.roadGeo, 72);
+          if (typeof Tracks !== "undefined" && Tracks.dropRibbonCpuIfReady) Tracks.dropRibbonCpuIfReady(track);
         }
       }
       const _rc = track.meshes.roadChunked;

@@ -9,6 +9,15 @@ import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared
 
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
 
+// One car area at a time: open the area that holds a control before acting on it.
+async function reveal(page, sel) {
+  await page.evaluate((s) => {
+    const pane = document.querySelector(s)?.closest('[role="tabpanel"]');
+    if (pane && pane.hidden) document.getElementById(pane.getAttribute("aria-labelledby")).click();
+  }, sel);
+  return page.locator(sel);
+}
+
 const lastLogId = (page) => page.evaluate(() => (Log.records().at(-1) || { id: 0 }).id);
 // The garage repaints through a fresh Car3D build ("[car] build <team>"): a deterministic signal.
 const rebuiltSince = (page, since) => expect.poll(() => page.evaluate((s) => Log.records({ ns: "car", since: s })
@@ -30,20 +39,20 @@ test("zone finishes and ENDPLATES: tappable on a phone, and the saved car carrie
   await expect(page.locator(".cs-liv-editor")).toBeVisible();
 
   for (const sel of ['[data-cs-pill="haloFinish:matte"]', '[data-cs-pill="podFinish:chrome"]']) {
-    const pill = page.locator(sel);
+    const pill = await reveal(page, sel);
     await pill.scrollIntoViewIfNeeded();
     const mark = await lastLogId(page);
     await pill.tap();
     await expect(pill).toHaveAttribute("aria-pressed", "true");
     await rebuiltSince(page, mark);
   }
-  const ep = page.locator('input[data-liv-field="endplate"]');
+  const ep = await reveal(page, 'input[data-liv-field="endplate"]');
   await ep.scrollIntoViewIfNeeded();
   const mark = await lastLogId(page);
   await ep.fill("#00c060");
   await rebuiltSince(page, mark);
 
-  const save = page.locator(".cs-liv-ed-save");
+  const save = await reveal(page, ".cs-liv-ed-save");
   await save.scrollIntoViewIfNeeded();
   await save.tap();
   const r = await page.evaluate((k) => {

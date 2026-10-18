@@ -903,6 +903,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/res-scale-census.test.mjs",
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
+  "tests/unit/ribbon-cpu-release.test.mjs",
   "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
   "tests/unit/rival-contact-sfx.test.mjs",
@@ -1071,6 +1072,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/title-menu-even.test.mjs",
   // three's per-frame tick once per drawn frame on WebGL2 (the pump), WebGPU untouched: the real pumpAnimation over a fake three Animation, and the install gate.
   "tests/unit/tlx-anim-pump.test.mjs",
+  "tests/unit/tlx-car-shadow-cpu.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
   "tests/unit/tlx-cull-shadow-pack.test.mjs",
   // A throw in one TLX subsystem costs that subsystem only: the car/lamp shadow
