@@ -319,7 +319,7 @@ test("garage contour borrows the current decal mesh adapter for procedural and l
   const h = host(), game = gameSource(), camera = read("js/garage/setup-camera.js");
   const callback = game.match(/previewDecalMesh:\s*(\(team\)\s*=>\s*\{[\s\S]*?\})\s*\}\);/);
   assert.ok(callback, "the actual SetupCamera dependency injects its mesh getter");
-  const team = { id: "mercedes" }, parts = { body: "works" }, liv = { finShape: "none", spineHeight: "dorsal" }, procMesh = {}, glbMesh = {}, model = {}, calls = [], draws = [];
+  const team = { id: "mercedes" }, parts = { body: "works" }, liv = { finShape: "none", spineHeight: "dorsal", bodyStyle: "needle" }, procMesh = {}, glbMesh = {}, model = {}, calls = [], draws = [];
   h.sb.carDraw = { modelBuf: null }; h.sb.teamDecalState = () => ({ val: 2, parts }); h.sb.resolveLivery = () => liv;
   h.sb.getCarDecalMesh = (...args) => { calls.push(args); return args[2] ? glbMesh : procMesh; };
   const getter = vm.runInContext("(" + callback[1] + ")", h.sb);
@@ -329,7 +329,7 @@ test("garage contour borrows the current decal mesh adapter for procedural and l
   const draw = () => vm.runInContext(camera.slice(start, end), h.sb);
   draw(); assert.equal(draws[0].mesh, procMesh); assert.equal(draws[0].matrix, model);
   h.sb.carDraw.modelBuf = { loaded: true }; draw(); assert.equal(draws[1].mesh, glbMesh, "a runtime GLB switch uses the existing pass's legacy anchors");
-  assert.deepEqual(calls.map((args) => args.slice(2)), [[false, "mercedes", "none", "dorsal"], [true, "mercedes", "none", "dorsal"]]);
+  assert.deepEqual(calls.map((args) => args.slice(2)), [[false, "mercedes", "none", "dorsal", "needle"], [true, "mercedes", "none", "dorsal", "needle"]]);
   assert.equal(calls[1][0], 2); assert.equal(calls[1][1], parts);
   delete h.sb.deps.previewDecalMesh; draw(); assert.equal(draws.length, 2, "no independent hardcoded mesh fallback");
 });
