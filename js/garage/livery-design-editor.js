@@ -110,9 +110,11 @@ const GarageLiveryDesignEditor = (function () {
       draft.patternPlacement = "crown"; draft.patternSide = "both";
       api.changed(); status.textContent = "Design size, placement, rotation, stretch, line weight and opacity reset. Colours and selected design are kept. Undo restores your settings.";
     }, actions);
+    patternRows.push({ row: actionRow, when: () => true });
     bindings.push(() => {
       reset.disabled = !LiveryDesign.PATTERNS.includes(draft.spineLogo);
       swap.disabled = !LiveryDesign.SECOND_COLOR.includes(draft.spineLogo);
+      swap.title = swap.disabled ? "Needs a two-colour design in SPINE TOP" : "";
     });
     // Keep each setting and its paint beside the part it changes. Move the
     // original nodes, so their handlers, dependency rules and keyboard state survive.
@@ -146,7 +148,7 @@ const GarageLiveryDesignEditor = (function () {
     section("COVER SIDES & TAIL LINK", "Side artwork and its fills. COVER BIND links top and side graphics; FIN HANDOFF controls the transition to the tail.",
       ["spineSide", "sideTint", "plateTint", "coverBind", "finHandoff"]);
     section("WINGS", "Front and rear wing paint. Carbon flaps keep their carbon material; WING FINISH applies to painted wing surfaces.",
-      ["wingCarbon", "wing", "rearWing", "wingFinish"]);
+      ["wingCarbon", "wing", "rearWing", "endplate", "wingFinish"]);
     section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
       ["finShape", "fin", "finFinish", "finStyle", "finArt", "finBadge"]);
     section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
@@ -168,6 +170,66 @@ const GarageLiveryDesignEditor = (function () {
       labelNode.textContent = label; labelNode.style.flexBasis = "100%"; group.appendChild(labelNode);
       for (const b of choices) if (accepts(b.dataset.csPill.split(":")[1])) group.appendChild(b);
     }
+    // CHOICES THAT ONLY ACT ON SOME CARS, measured by the 2026-10-18 livery editor
+    // audit (D5, D6): each one changed neither mesh nor atlas outside its `when`, so it greys
+    // like every other dependent row instead of looking broken. (HALO FINISH is not one: since #2829 it
+    // lands on an unset or grey halo too, car3d.js haloOn.)
+    const rules = [
+      { pill: "coverBind:spineOnly", when: () => draft.spineLogo === "cap", why: "SPINE ONLY changes only the CAP design in SPINE TOP" },
+      { pill: "finHandoff:contrast", when: () => (draft.finShape || "standard") !== "none", why: "Needs a tail fin — pick a FIN SHAPE other than NONE" },
+    ];
+    const pills = Array.from(root.querySelectorAll("button"));
+    for (const rule of rules) if (rule.pill) rule.pill = pills.find((b) => b.dataset.csPill === rule.pill) || null;
+    bindings.push(() => {
+      for (const rule of rules) {
+        const off = !rule.when();
+        if (rule.pill === null) continue;
+        if (rule.pill) { rule.pill.disabled = off; rule.pill.title = off ? rule.why : ""; continue; }
+        if (!rule.row) continue;
+        rule.row.setAttribute("aria-disabled", String(off)); rule.row.title = off ? rule.why : "";
+        for (const input of rule.row.querySelectorAll("button, input")) input.disabled = off;
+      }
+    });
+    // WHY IT IS GREY, ON SCREEN. Every dependency wrote its reason to `title`, a hover tooltip:
+    // a phone never shows one and a screen reader never reads it (audit D2). One line under
+    // each greyed row, or under a live row for its dead choices, carries the same text, and
+    // every control in the row is described by it (aria-describedby; the line itself is
+    // aria-hidden so a label row does not read it twice). The sheet's own pass runs after
+    // ours in applyPreview, so this reads the settled state a microtask later.
+    const reasons = new Map();
+    let reasonSeq = 0;
+    function describe(el, id, on) {
+      const ids = (el.getAttribute("aria-describedby") || "").split(" ").filter((x) => x && x !== id);
+      if (on) ids.push(id);
+      if (ids.length) el.setAttribute("aria-describedby", ids.join(" ")); else el.removeAttribute("aria-describedby");
+    }
+    function explain() {
+      for (const r of root.querySelectorAll(".cs-liv-ed-row, .tune-row")) {
+        let text = "";
+        if (r.getAttribute("aria-disabled") === "true") text = r.title;
+        else {
+          const why = [];
+          for (const b of r.querySelectorAll("button")) if (b.disabled && b.title && !b.dataset.csColour) why.push(b.textContent + " — " + b.title);
+          text = why.join(" · ");
+        }
+        let line = reasons.get(r);
+        if (!text && !line) continue;
+        if (!line) {
+          line = document.createElement("span"); line.dataset.livWhy = "";
+          line.id = "cs-liv-why-" + ++reasonSeq; line.setAttribute("aria-hidden", "true"); reasons.set(r, line);
+        }
+        for (const c of [r, ...r.querySelectorAll("button, input")]) if (c !== line) describe(c, line.id, !!text);
+        if (!text) { line.remove(); reasons.delete(r); continue; }
+        if (line.parentNode !== r) r.appendChild(line);
+        line.textContent = text;
+      }
+    }
+    // TAIL STYLE "team" paints one of the named motifs (McLaren's is CHEVRON), so it says which:
+    // otherwise its named twin looks like a pill that changes nothing (audit D7).
+    const teamTail = pills.find((b) => b.dataset.csPill === "finStyle:team");
+    const kind = teamTail && api.teamId && typeof LiveryTex !== "undefined" && LiveryTex.tailStyleOf && LiveryTex.tailStyleOf(api.teamId);
+    if (kind) teamTail.textContent = "TEAM · " + (LABELS[kind] || kind).toUpperCase();
+    bindings.push(() => { Promise.resolve().then(explain); });
     sync();
     return Object.freeze({
       changed(drag) {

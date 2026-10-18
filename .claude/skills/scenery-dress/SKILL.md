@@ -16,7 +16,8 @@ Node-based helpers take `(k, side, dist, …)`:
 - `k` — node index `0 … n-1`. Lap fraction: `Math.round(s * n) % n`.
 - `side` — `-1` left / `+1` right of racing direction.
 - `dist` — metres **beyond the road edge**.
-- `s` — lap fraction `0 → 1` where helpers take it.
+- `s` — lap fraction `0 → 1` where helpers take it: `grandstand` / `grandstandEx`
+  take `(s, side, …)`; range helpers take fraction endpoints; raw primitives take world coordinates.
 
 Destructure `out` from `api` first; `verify-track` catches a `scenery()` throw.
 
@@ -50,20 +51,22 @@ node tools/track/clip-audit.cjs <id> --why    # ~3 s: prop-vs-prop clipping; `--
 node tools/track/props-tris.cjs <id>          # ~3 s: post-strip props tris; tests/unit/props-tri-ratchet.test.mjs fails past +0.5 %
 ```
 
-Grounded = float-audit clean and ground-audit no worse than `tests/data/scenery-audit-baseline.json`;
-added props must also stay inside the clip and props-tris baselines (a denser circuit raises the tris one in a commit that says why). Then `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)). Visual: **playwright-probe** `shot.mjs`. Picture-driven
-accuracy / floating-tree survey → **survey-track** (Montreal already ships
-`flatTerrain`). Instancing migration →
-[references/instancing.md](references/instancing.md).
+Edit the closure, then run the block above once, in order.
+- **Grounded** = float-audit clean and ground-audit no worse than `tests/data/scenery-audit-baseline.json`.
+- **Baselines**: added props stay inside the clip and props-tris baselines (a denser
+  circuit raises the tris one in a commit that says why).
+- **Shell check**: `node tools/gen/gen-shell.mjs --check` (no cache bump — [shell policy](../check-changes/references/bump.md)).
+- **Visual**: **playwright-probe** `shot.mjs`.
+- Picture-driven accuracy / floating-tree survey → **survey-track** (Montreal
+  already ships `flatTerrain`). Instancing migration → [references/instancing.md](references/instancing.md).
 
 ## Load on demand
 
 - Floating/sunk prop fix (find the emitter, footing, engine-fix gates) →
   [references/float-fix.md](references/float-fix.md).
-- Rejection / `rejBox` / `RAW.*` / vertex budget / trees vs `blockAt` →
+- A prop silently vanished, keep it off the run-off / tarmac, keep trees and lamps
+  clear of barriers: rejection / `rejBox` / `RAW.*` / vertex budget / trees vs `blockAt` →
   [references/rules.md](references/rules.md).
 - `TrackGraph.instance` migration, `apex_graph_parity` / `BASE=` parity,
   `batches()` / `bakeOnly`, `__apex.trackGraph()` stats →
   [references/instancing.md](references/instancing.md).
-
-`grandstand` / `grandstandEx` take a lap fraction `(s,side,...)`; range helpers take fraction endpoints; raw primitives take world coordinates.

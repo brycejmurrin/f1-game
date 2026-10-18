@@ -648,6 +648,9 @@ export class Lsp {
   // Every code (non-comment, non-string) occurrence of `A.b` / `A`, after the declaration
   // row; for `A.b`, also each file's `const { b } = A` / `const X = A` binding and the
   // uses of the local name that binding introduces (the checker sees none of them).
+  // Whole-head aliases also accept the guarded forms agents write for window globals:
+  // `typeof H !== "undefined" ? H : {}`, `(typeof H !== "undefined" && H) || {}`,
+  // and `H || {}` / `window.H || {}` (e.g. `const PC = …` then `PC.VMAX`).
   async textRefs(parts, def, includeDeclaration = true) {
     const name = parts.at(-1), head = parts.slice(0, -1).join("."), esc = x => x.replace(/[$.]/g, "\\$&");
     const refs = includeDeclaration ? [def] : [], seen = new Set([`${def.uri}:${def.range.start.line}:${def.range.start.character}`]);
@@ -670,7 +673,44 @@ export class Lsp {
       usesOf(f, direct, name.length);
       if (parts.length < 2) continue;
       const bindings = [];
-      const owner = n => n?.type === "Identifier" ? n.name : n?.type === "MemberExpression" && !n.computed && n.object.name === "window" ? n.property.name : "";
+      // Bare `H` / `window.H`, plus guarded aliases: ternary, `(typeof && H) || {}`, `H || {}`.
+      const unwrap = n => { while (n?.type === "ParenthesizedExpression") n = n.expression; return n; };
+      const headAtom = n => {
+        n = unwrap(n);
+        if (n?.type === "Identifier") return n.name;
+        if (n?.type === "MemberExpression" && !n.computed && n.object?.name === "window" && n.property?.type === "Identifier") return n.property.name;
+        return "";
+      };
+      const emptyObj = n => { n = unwrap(n); return n?.type === "ObjectExpression" && !(n.properties?.length); };
+      const typeofUndef = n => {
+        n = unwrap(n);
+        if (n?.type !== "BinaryExpression" || (n.operator !== "!==" && n.operator !== "!=")) return "";
+        const typ = x => { x = unwrap(x); return x?.type === "UnaryExpression" && x.operator === "typeof" && unwrap(x.argument)?.type === "Identifier" ? unwrap(x.argument).name : ""; };
+        const lit = x => { x = unwrap(x); return x?.type === "Literal" && x.value === "undefined"; };
+        if (typ(n.left) && lit(n.right)) return typ(n.left);
+        if (lit(n.left) && typ(n.right)) return typ(n.right);
+        return "";
+      };
+      const owner = n => {
+        n = unwrap(n);
+        const bare = headAtom(n);
+        if (bare) return bare;
+        if (n?.type === "LogicalExpression" && n.operator === "||" && emptyObj(n.right)) {
+          const leftBare = headAtom(n.left);
+          if (leftBare) return leftBare;
+          const and = unwrap(n.left);
+          if (and?.type === "LogicalExpression" && and.operator === "&&") {
+            const checked = typeofUndef(and.left), right = headAtom(and.right);
+            if (checked && checked === right) return checked;
+          }
+        }
+        if (n?.type === "ConditionalExpression") {
+          const checked = typeofUndef(n.test), cons = headAtom(n.consequent);
+          const alt = unwrap(n.alternate);
+          if (checked && checked === cons && (emptyObj(alt) || (alt?.type === "Literal" && alt.value === null))) return checked;
+        }
+        return "";
+      };
       visit(this.astOf(f), n => {
         if (n.type !== "VariableDeclarator" || owner(n.init) !== head) return;
         if (n.id.type === "ObjectPattern") for (const p of n.id.properties) {

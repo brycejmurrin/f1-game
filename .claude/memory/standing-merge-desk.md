@@ -1,6 +1,6 @@
 ---
 name: standing-merge-desk
-description: "2026-10-15 a standing [Merge Desk] session + hourly wake ran the desk; Bryce stopped and archived it at ~10:35Z and the wake is disabled"
+description: "2026-10-15 a standing [Merge Desk] session + hourly wake ran the desk; that desk no longer exists (not found 2026-10-16)"
 metadata:
   node_type: memory
   type: project

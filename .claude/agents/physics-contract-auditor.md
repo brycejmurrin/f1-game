@@ -33,17 +33,26 @@ stopped is safe, one that implies completeness is not.
    "arc must not reach the driver" table): it lists every approved site and why.
    A site already in it is classified; quote its row rather than re-deriving it.
 1. Run `node tools/check/vstd-lint.mjs` on the paths the parent named (or
-   `js/game.js` plus the four domain directories that carry the reads —
-   `js/physics/`, `js/race/`, `js/camera/`, `js/agent/` — if none). Report
-   every hit verbatim. It is a REPORT, NOT A GATE: it always exits 0 and its
-   ~24 hits are the steady state, so the exit code tells you nothing. The gate
+   `js/game.js` plus every directory the §Curvature channels table names —
+   `js/physics/`, `js/race/`, `js/camera/`, `js/agent/`, `js/track/`,
+   `js/render/`, `js/audio/`, `js/perf/`, `js/ui/`, `js/editor/`, `js/car/` —
+   if none; re-derive that list from the table, it grows). Report every hit
+   verbatim. It is a REPORT, NOT A GATE: it always exits 0 and its hit count
+   drifts with the tree (32 on 2026-10-18; print the live count from its last
+   line, never compare to a remembered one), so the exit code tells you nothing. The gate
    is `node --test tests/unit/vstd-invariant.test.mjs` (every approved site
    carries a written justification) — run it and report pass/fail. Also run `node --test tests/unit/curvature-channels.test.mjs` (the file-coverage gate for the curvature channels) and report pass/fail.
    There is no `js/game/` directory: the 2026-09 restructure dissolved it, so
    a scope naming it greps nothing and the audit reports a clean tree it
    never read.
 2. Grep `Tracks.curvature(` AND its aliases `kPath`, `c.kCur`, `S.k` (trace the human-branch `k` to its consumers), plus racing-line reads under `js/game.js` and those
-   directories. For each site, assign **exactly one** column from
+   directories. The player/AI split in `js/game.js` is `c.human`: inside
+   `updateCar()`, after the vmax set-up, the AI block opens with
+   `if (!c.human) {` (its `} else if (c.human) {` tail is the player), and
+   `updateCarBrakePlan()`, `updateCarLateral()` and `updateCarBicycle()` each
+   open their own `if (c.human) {` player branch (`updateCarLongitudinal()`
+   splits per line); `setCarRole()` sets the flag. Find them with
+   `grep -nE "^function updateCar|if \(!?c\.human\)" js/game.js` (line numbers drift). For each site, assign **exactly one** column from
    `docs/PHYSICS.md` / AGENTS.md:
    - **AI-only** — field cars, not the player
    - **assist-gated** — behind `drivingHelp` / `ROAD_FOLLOW` / racing line
