@@ -5,9 +5,23 @@ Node VM only, no browser (AGENTS.md rule 10 applies to Chromium; this boots none
 1. Baseline: `node tools/check/player-dyn.mjs --json > scratch/pd-base.json`. `TRACK`/`FRAC` only pick the straight the car is
    pinned to (position only), so they do not select a corner. Slow corner = the `skidpad` rows at `v` 20 and 30 m/s
    (`lockTaper` blend is 15-30 m/s, so these exercise it).
-2. Sweep, in a `scratch/*.mjs` script: `createGame({track, storage:{difficulty:"normal", autoThrottle:false}})`
-   (copy `main()` in `tools/check/player-dyn.mjs`), `await g.race(track)`, then per value
-   `g.apex.setPhysics({frontGrip: x})` (or `yawInertia`, `wheelbase`) and `measure(g, frac)` (import it from player-dyn).
+2. Sweep with this script (verified 2026-10-18: ~25 s for three values, Node only). Save it as
+   `scratch/sweep-frontgrip.mjs` at the repo root; swap `frontGrip` for `yawInertia` or `wheelbase`:
+   ```js
+   import { createRequire } from "node:module";
+   import { measure } from "../tools/check/player-dyn.mjs";
+   const { createGame } = createRequire(import.meta.url)("../tools/lib/game-vm.cjs");
+   const track = "monza", rows = [];
+   for (const x of [0.9, 1.0, 1.1]) {              // one fresh game per value: no state carry-over
+     const g = await createGame({ track, seat: "pin", storage: { difficulty: "normal", autoThrottle: false } });
+     await g.race(track);
+     g.apex.setPhysics({ frontGrip: x });
+     const slow = measure(g, 0).skidpad.filter((r) => r.v <= 30);
+     rows.push({ frontGrip: x, slow: slow.map(({ v, steer, yaw, uF, uR }) => ({ v, steer, yaw, uF, uR })) });
+     g.close();
+   }
+   console.log(JSON.stringify(rows, null, 1));
+   ```
 3. Read the same-`v`, same-`steer` skidpad rows: `uF` (front utilisation), `uR`, `aF`/`aR` (slip angles), `yaw`.
    Understeer = `uF` past its peak with `uR` settled.
 4. Improved = at the slow `v` rows, `yaw` rises (or `uF` falls) for the same `steer`, and `uR` stays below saturation

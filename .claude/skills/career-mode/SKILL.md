@@ -43,9 +43,9 @@ Do **not** use this for:
 | Research facility | `Career.facilityDiscount()` — discount on **research cost only**; does NOT raise the fitted part budget cap |
 | Fitted budget cap | `Career.budget()` / `budgetLvl` — separate from facility; `Career.upgradeBudget()` lives on `Career` in `js/career/career.js` (the UI in `career-ui.js` only calls it) |
 | Sponsors | **MY TEAM only** — `sponsorAt()`/`sponsor()` return `null` whenever `career.flavour !== "myteam"`; a DRIVER career never has one, by design (a driver is paid a salary, an owner is paid by sponsors) |
-| Regulation eras | `Regulations.ERAS` — the dearest `BAN_TOP` options in three categories go illegal for `ERA_SEASONS`. Applied via `Parts.setLegality()` so the AI's FACTORY builds re-resolve too; `career.owned` is never touched. Only a career installs one, so GP/Season stay unregulated |
-| Season target | `deal.ambition` indexes `AMBITION` (0 modest / 1 expected / 2 ambitious). **Rung 1 is the pre-existing behaviour**, so an absent field resolves byte-identically. `career.amb` is the PENDING pick, `deal.ambition` what was signed — `rollover()` prices by the signed one |
-| Weekend format in a career | NONE: `SeasonCal` gates (`calCustom`, `fmtActive`) keep sprint/quali/laps/points at defaults and the calendar `Tracks.SEASON`; a "wrong sprint in my career" is a widened gate or a stale `career.season` field — [workflow step 9](references/workflow.md) |
+| Regulation eras | `Regulations.ERAS` legality filter, career-only; `career.owned` never touched — `docs/CAREER.md` §Regulation eras |
+| Season target | `deal.ambition` (signed) vs `career.amb` (pending); absent = rung 1 — `docs/CAREER.md` (`AMBITION`) |
+| Weekend format in a career | NONE: `SeasonCal` gates (`calCustom`, `fmtActive`) keep the defaults and `Tracks.SEASON`; a career sprint bug is a widened gate or stale `career.season` field — [workflow step 9](references/workflow.md), `docs/CAREER.md` §In career |
 | Randomness | Use `Career.rnd(...parts)`; do not consume `simRnd` or `Math.random` |
 | Ratings | `DriverRatings` apply in all modes; career adds deltas on top |
 
@@ -70,9 +70,8 @@ Hooks:
 | `__apex.retirements()` | Inspect staged reliability/DNF plan |
 | `__apex.ratings(code?)` | Driver ratings with career deltas folded in |
 
-**Proving a sponsor was just paid is NOT a `careerState()` read**: no `__apex` hook surfaces `sponsorPay` (it lives in
-`G.careerSettlement`), and `careerState().sponsor` already describes the NEXT window. Use `careerSim(n)` or see
-[workflow "Sponsor payout"](references/workflow.md).
+Sponsor "just paid" / double pay, and research or facility credits that do not add up: traces in
+[references/workflow.md](references/workflow.md) (no hook exposes `sponsorPay`).
 
 Commands:
 

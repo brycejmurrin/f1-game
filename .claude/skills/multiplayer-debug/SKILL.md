@@ -45,6 +45,11 @@ Do **not** use this for:
 | `js/net/session.js` | Clock sync, packet routing, heartbeat |
 | `js/net/netplay.js` | Authority: own car never corrected; host relays guests and owns AI/race control |
 | `js/net/lobby.js` | VS FRIEND UI; sequential invites; profiles filed by connection |
+| `js/net/lobby-codes.js` | Paste/copy/share/scan/QR routes for invite and answer codes (`codeFrom` on pasted links) |
+| `js/net/lobby-roster.js` | Stateless roster DOM leaves (team lookup, seat rows) |
+| `js/net/qr.js` / `js/net/scan.js` | `NetQr` encodes the invite QR; `NetScan` reads one in-page (BarcodeDetector, else jsQR) — the phone Camera→Safari route needs neither |
+| `js/net/spectate.js` | `NetSpectate` driver/spectator role policy for seats and send gates |
+| `js/net/bytes.js` | `NetBytes` shared base64url/hex codecs (loads first in LAZY_NET) |
 
 Hooks:
 
@@ -84,4 +89,4 @@ Read first:
 ## Load on demand
 
 - Phone pairing, corporate NAT, TURN over TCP, nostr-probe → [references/phone-nat.md](references/phone-nat.md).
-- Layer-classify workflow, loopback-first, ICE/TURN, three-player star, common mistakes → [references/workflow.md](references/workflow.md).
+- Layer-classify workflow, loopback-first, QR routes, ICE/TURN (incl. pair up but channel never opens), build mismatch, three-player star, common mistakes → [references/workflow.md](references/workflow.md).

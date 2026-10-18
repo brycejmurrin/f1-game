@@ -12,10 +12,13 @@ hot-swap the stylesheet, screenshot. No cache bump in the loop.
 
 - "Tweak the settings sheet", "the garage tabs wrap", "try this token".
 - Before/after pixels of a named menu, plus boxes / computed styles.
+- Restructuring screens, the DOM or the class/token system (duplicate component
+  families, a screen layer, splitting `index.html`, class counts) →
+  [references/restructure.md](references/restructure.md) first.
 
 **Not this skill:** a cramped / clipped screen, a short landscape phone, UI scale
-(**ui-menu-a11y** owns the fit; this skill keeps the edit loop once you are in it); whole matrix → **survey-ui-matrix**. Restructure / class
-counts → `references/restructure.md`. One Escape/a11y bug → **ui-menu-a11y**.
+(**ui-menu-a11y** owns the fit; this skill keeps the edit loop once you are in it); whole matrix → **survey-ui-matrix**.
+One Escape/a11y bug → **ui-menu-a11y**.
 Canvas / 3D → **playwright-probe**.
 
 ## Command

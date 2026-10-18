@@ -1,0 +1,10 @@
+[
+{"query":"Hitting the kerbs and walls feels weak. Add punchier feedback on collisions and gear shifts (screen shake, a short hit-stop, some particles) but it must not alter lap times or the physics-characterization results.","expect":"game-feel"},
+{"query":"kerb strikes at monza feel like nothing happens, can you make them rumble more - a bit of shake and the pad buzz - without touching grip","expect":"game-feel"},
+{"query":"When two cars touch there is no impact at all on screen. Add a hit-stop and sparks on car-to-car contact, and prove obs()/act() runs still replay identically.","expect":"game-feel"},
+{"query":"Gear shifts sound and look flat. Layer a small camera tick and a stronger shift sound on upshifts at high rpm; keep it cosmetic.","expect":"game-feel"},
+{"query":"Going off at Spa the gravel kickup barely shows and there are no tyre marks; make the off-track moment read better visually without changing the sim.","expect":"game-feel"},
+{"query":"The car still understeers on turn-in after my kerb feedback change; run a step-steer A/B on frontGrip and tell me if the balance moved.","expect":"tune-physics"},
+{"query":"The chase camera lags behind the car in fast corners and the framing drifts. Take before/after screenshots at Eau Rouge and tune the camera smoothing.","expect":"playwright-probe"},
+{"query":"My gamepad rumble is mapped to the wrong motor and the dead zone is too large; fix the controller vibration mapping and stick calibration.","expect":"input-controls"}
+]
