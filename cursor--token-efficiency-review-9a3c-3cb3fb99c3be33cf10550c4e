@@ -1,1 +1,1 @@
-1792320642	Bryce Murrin	Token efficiency: session-status summary + code-nav/check-changes skill bodies only; exclude active MCP/LSP/root guidance owners  [cursor/token-efficiency-review-9a3c; session 3cb3fb99c3be33cf10550c4e]
+1792322958	Bryce Murrin	Token efficiency PR2899: shared output runner/gateway + MCP launch configs, hook runner normalization, session summary, skill routing and generated output catalog; native MCP implementations excluded  [cursor/token-efficiency-review-9a3c; session 3cb3fb99c3be33cf10550c4e]
