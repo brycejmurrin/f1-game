@@ -1044,9 +1044,9 @@ test("a dropped gap strip carries the radio card's caution step down with the fl
   assert.match(css, /:root\[data-gap-drop\] #hud-flag \{\s*top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\)/);
   assert.match(css, /:root\[data-gap-drop\] #announce \{ --flag-slot-top: max\(calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 44px\), calc\(var\(--hud-gaps-b, 0px\) \+ 8px\)\); \}/,
     "the dropped strip raises the card's flag slot to the chip's edge");
-  assert.match(css, /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 38px\); \}/,
+  assert.match(css, /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(> :where\(#hud\) > #hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 38px\); \}/,
     "the card sits 38px under the flag slot, wherever the chip is");
-  assert.match(css, /body\[data-density="compact"\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(#hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 34px\); \}/,
+  assert.match(css, /body\[data-density="compact"\]:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(> :where\(#hud\) > #hud-flag:not\(\[hidden\]\)\) #announce \{ top: calc\(max\(var\(--flag-slot-top\), calc\(var\(--mir-bot, 0px\) \+ 8px\)\) \+ 34px\); \}/,
     "compact keeps its tighter step under the chip");
   assert.doesNotMatch(css, /body\[data-gap-drop\]/, "no body[data-gap-drop] twin: the slot token is the one writer");
   assert.doesNotMatch(hud, /body\.(setAttribute|removeAttribute|hasAttribute)\("data-gap-drop"/, "gapForm no longer mirrors the drop onto body");
@@ -1375,7 +1375,7 @@ test("a moved (data-hl) piece whose words change width re-fits on the next tick,
 
 test("the caution step-aside needs the card's other slot to really apply; TEXT LARGER grows the ERS bar", () => {
   const rules = cssRules(read("css/hud.css"));
-  const caution = rules.filter((r) => /:has\(#hud-flag:not\(\[hidden\]\)\) #announce$/.test(r.selector));
+  const caution = rules.filter((r) => /:has\(> :where\(#hud\) > #hud-flag:not\(\[hidden\]\)\) #announce$/.test(r.selector));
   assert.equal(caution.length, 2, "base and compact caution rules — the dropped-gap-strip case rides --flag-slot-top, not a twin rule");
   for (const r of caution) assert.match(r.selector, /:not\(\.hud-mirror-on\.hud-mirror-side\)/, r.selector);
   for (const r of caution) assert.match(r.selector, /:not\(\[data-radio-placed\]\)/, "automatic caution placement cannot move a manually positioned radio");

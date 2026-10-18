@@ -137,6 +137,16 @@ const ScreenLooks = (function () {
       undo.push(standInto(opts, ["STANDARD", "UPGRADED", "WORKS"].map((t) => mk("span", "cs-opt", t))));
     return undo.length ? () => undo.forEach((f) => f()) : null;
   }
+  function designerStandIn() {
+    const dlg = byId("trackdesigner");
+    if (!dlg || dlg.querySelector(".td-body")) return null;   // a built designer is its own preview
+    const head = mk("div", "sheet-head"); head.appendChild(mk("h2", "", "TRACK DESIGNER"));
+    const stage = mk("div", "td-stage"); stage.appendChild(mk("div", "td-hint", "MAP"));
+    const rail = mk("div", "td-rail");
+    for (const t of ["1 DRAW", "2 EDIT", "3 ELEVATION", "4 SCENERY", "5 TEST"]) rail.appendChild(mk("span", "sel-chip", t));
+    const body = mk("div", "td-body"); body.append(stage, rail);
+    return standInto(dlg, [head, body]);
+  }
   function popupsStandIn() {
     const body = byId("standings-body");
     return body && isEmpty(body) ? standInto(body, sampleRows(10)) : null;
@@ -214,6 +224,17 @@ const ScreenLooks = (function () {
         rng("pw", "PANEL WIDTH", 100, 150, 5, 100),
         cyc("glass", "PANEL", [["solid", "SOLID"], ["shipped", "SHIPPED"], ["glass", "GLASS"]], "shipped"),
         cyc("stats", "STAT BARS", SHOWHIDE, "show"),
+      ]),
+    }),
+    Object.freeze({
+      id: "designer", key: "lookDesigner", title: "TRACK DESIGNER",
+      help: "The in-game circuit designer. DESIGNER SIZE scales the whole screen; MAP WIDTH is how much of the width the map gets against the controls panel (side-by-side layouts); TEXT SIZE and PROFILE HEIGHT (the elevation strip) tune the rest. Tap targets never drop below their floor.",
+      target: () => byId("trackdesigner"), standIn: designerStandIn,
+      knobs: Object.freeze([
+        rng("size", "DESIGNER SIZE", 70, 200, 5, 100),
+        rng("split", "MAP WIDTH", 40, 70, 1, 55, { token: "pct" }),
+        cyc("text", "TEXT SIZE", [["small", "SMALL"], ["medium", "MEDIUM"], ["large", "LARGE"]], "medium"),
+        cyc("profile", "PROFILE HEIGHT", [["short", "SHORT"], ["normal", "NORMAL"], ["tall", "TALL"]], "normal"),
       ]),
     }),
     Object.freeze({

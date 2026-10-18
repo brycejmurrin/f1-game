@@ -68,6 +68,29 @@ const CarMaterialShade = (function () {
     darkEnvBoost: 0.32,
   });
 
-  return { CARBON, GLOSS, MATTE, METAL };
+  // TINTED CHROME (FINISH_SURFACE.tinted -> 36). Mirror response of chrome (27: clearcoat >= 0.85, metalness
+  // >= 0.55, specular 1, rough <= 0.09). The lacquer env reflection is multiplied by the livery hue
+  // (addCC *= mix(1, albedo / max(maxChannel(albedo), chromaFloor), envTint)) AND, after the metal block, the whole lit
+  // colour is multiplied by that hue (finalTint) — the env terms alone left a red car pink, because the white sun glint,
+  // sky and metal reflections dominate. White/grey paint (hue 1) stays chrome.
+  const TINTED = Object.freeze({
+    envTint: 0.88,          // how much of the livery hue the lacquer reflection takes
+    chromaFloor: 0.04,      // max-channel floor, so near-black paint cannot divide by ~0
+    finalTint: true,        // lit colour *= hue after the metal block
+  });
+
+  // CHAMELEON (FINISH_SURFACE.chameleon -> 37). Pearl's classification (clearcoat >= 0.70, metalness
+  // >= 0.25, rough <= 0.22). The albedo is NOT blended (the white clearcoat/metal terms washed any albedo-only flip to
+  // icy silver at every angle): after the metal block the lit colour is multiplied by mix(teamHue, flipHue, flip) with
+  // flip = smoothstep(flipFresLo, flipFresHi, fresnel) * flipWeight. Pearl 30 itself is untouched.
+  const CHAMELEON = Object.freeze({
+    flipFresLo: 0.58,
+    flipFresHi: 1.00,
+    flipWeight: 0.90,
+    flipHue: Object.freeze([0.25, 0.55, 1.0]),
+    chromaFloor: 0.04,
+  });
+
+  return { CARBON, GLOSS, MATTE, METAL, TINTED, CHAMELEON };
 })();
 Object.freeze(CarMaterialShade);

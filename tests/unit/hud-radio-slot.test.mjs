@@ -158,7 +158,7 @@ test("css/hud.css: one radio home per profile — no leftover broadcast 14svh, f
     /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\.hud-mirror-side\) #announce/,
     "the hanging dock lane stands down for BOTH slot markers, not only hud-radio-top");
   assert.match(css,
-    /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(#hud-flag:not\(\[hidden\]\)\) #announce/,
+    /body:not\(\.hud-mirror-on\.hud-mirror-side\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\[data-radio-placed\]\):has\(> :where\(#hud\) > #hud-flag:not\(\[hidden\]\)\) #announce/,
     "the caution step-down stands down for both slots and manually placed cards");
   assert.match(css,
     /body\.hud-mirror-on\.hud-mirror-side:not\(\.hud-radio-top\):not\(\[data-radio-corner\]\) #announce/,

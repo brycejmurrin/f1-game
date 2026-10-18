@@ -2,6 +2,22 @@
 "use strict";
 
 const TLX = (function () {
+  // three r186 Renderer.init() starts its own window rAF loop (Animation: info.reset, nodeFrame.update ->
+  // frameId, inspector) that ticks every vsync beside the game loop: 2.04 rAF callbacks per drawn frame on
+  // TLX vs 1.04 on GLX (gpu-census 39071040057), 0.12 ms each on the phone-shaped VM probe. TLX never sets
+  // an animation loop, so its context becomes a pump that begin() drains: frameId still advances once per
+  // DRAWN frame (FRAME-type nodes such as post passes key on it), an idle canvas runs no three callback,
+  // and XRManager's session swap still restores it (it saves getContext() and puts it back on end).
+  function pumpAnimation(r) {
+    const anim = r && r._animation;
+    if (!anim || typeof anim.setContext !== "function" || typeof anim.stop !== "function" || typeof anim.start !== "function") return null;
+    const pump = { cb: null };
+    pump.requestAnimationFrame = (cb) => { pump.cb = cb; return 1; };
+    pump.cancelAnimationFrame = () => { pump.cb = null; };
+    pump.drain = () => { const cb = pump.cb; if (cb) { pump.cb = null; cb(typeof performance !== "undefined" ? performance.now() : 0); } };
+    anim.stop(); anim.setContext(pump); anim.start();   // start() ticks once now and parks the next tick in the pump
+    return pump;
+  }
   let _lastFailure = null, _presentWarned = false;
   function _fail(reason) {
     _lastFailure = { reason: String(reason), at: Date.now() };
@@ -478,6 +494,8 @@ const TLX = (function () {
         try {
           await renderer.init();
           checkInit();
+          // WebGL2 only: that is the phone's path, measured (paired census); WebGPU keeps three's own loop untouched.
+          if (renderer.backend && renderer.backend.isWebGLBackend) renderer.__apexPump = pumpAnimation(renderer);
         } catch (e) {
           // AUTO WebGPU→WebGL2 retry (and the outer create catch) must not keep
           // a half-booted three renderer / GPUDevice alive across the fallback.
@@ -1085,9 +1103,12 @@ const TLX = (function () {
       let DPR_CAP = mobileTier ? 1.5 : 2;   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
 
       // M9 GPU frame timer state
-      // supported only where three's timestamp-query feature is present — the
-      // WebGPU backend with the adapter feature; never on the WebGL2 fallback
-      // (SwiftShader/CI), keeping the GLX {supported:false} shape there.
+      // supported only where three's timestamp-query feature is present: the
+      // WebGPU adapter feature, or on three's WebGL2 backend (the iPhone's
+      // path) EXT_disjoint_timer_query_webgl2, which three maps to the same
+      // feature name and times per outermost render() (a nested render is
+      // skipped, not double-counted). Software GL (SwiftShader/CI) stays
+      // {supported:false}: it exposes the extension, but its time means nothing.
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
       let _inspectorHold = false;   // dev Inspector owns timestamp resolution (inspectorHost below)
       function resolveGpuTimer() {
@@ -1104,7 +1125,10 @@ const TLX = (function () {
       }
       function _gpuSupported() {
         try {
-          return !!(renderer.backend && renderer.backend.isWebGPUBackend)
+          const be = renderer.backend;
+          // SwiftShader exposes the GL extension too (measured 2026-10-17): a
+          // software GPU time is no evidence, so the WebGL path needs real GL.
+          return !!(be && (be.isWebGPUBackend || (be.isWebGLBackend && !softwareGL)))
             && typeof renderer.hasFeature === "function"
             && !!renderer.hasFeature("timestamp-query");
         } catch (_) { return false; }
@@ -4185,10 +4209,10 @@ const TLX = (function () {
         isMobile,
         mobileTier,
         // GPU frame timer — the GLX gpuTimer/gpuMs contract (_gpuTimerBegin/_gpuMs in glx.js).
-        // WebGPU exposes it through three's timestamp-query pass; the WebGL2
-        // fallback (SwiftShader/CI via tlxForceGL) has no timestamp-query
-        // feature -> {supported:false} / gpuMs()=-1, byte-identical to GLX on
-        // SwiftShader. Never fabricates: gpuMs mirrors three's own resolved
+        // Both three backends expose it through three's timestamp-query pool
+        // (WebGL2: EXT_disjoint_timer_query_webgl2, e.g. Chrome on Apple
+        // Metal in gpu-census); software GL (SwiftShader/CI) -> {supported:false}
+        // / gpuMs()=-1 even though it exposes the extension. Never fabricates: gpuMs mirrors three's own resolved
         // renderer.info.render.timestamp (already in ms), populated async in
         // present() only while the timer is on.
         gpuTimer(on) {
@@ -5086,6 +5110,8 @@ const TLX = (function () {
         },
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
+          // three's per-frame tick (info.reset, nodeFrame.update), once per drawn frame — see pumpAnimation.
+          if (renderer.__apexPump) renderer.__apexPump.drain();
           resizeNow();
           _sizeOwned = true;   // the next resize() defers to the next begin() (no rAF + cancel per frame)
           // Existing bounded retry remains synchronous. Fully warmed recovery

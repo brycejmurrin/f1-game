@@ -184,6 +184,7 @@ export const GROUPS = [
   ["ci", "The test runner and the release pipeline: what to run, how to run it in the background, what CI selected, and the deploy."],
   ["check", "Static guards over the source — a red exit here is a defect, not a report."],
   ["gen", "Author-time generation: the generated doc blocks, the shell, and the asset bakes."],
+  ["docs", "Agent-facing generated pages: the coverage table, the hook index and the static impact map."],
   ["shot", "Headless observation of the running game: framed screenshots, one-expression evals, the agent surface, a CPU profile."],
   ["perf", "The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and the A/B delta against a git ref."],
   ["capture", "Shared Playwright probe helpers and garage/menu capture gates reused by shot tools."],
