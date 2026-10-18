@@ -2025,16 +2025,11 @@
           <button id="as-sp-mode-remote" class="opt-btn" type="button">REMOTE</button>
           <button id="as-sp-mode-browser" class="opt-btn" type="button">IN BROWSER</button>
         </div>
-        <p class="as-note">REMOTE plays through the Spotify app on your phone or computer &mdash; open it once so it shows up below. IN BROWSER plays here, but needs desktop Chrome/Edge/Firefox.</p>
-        <label class="tune-row"><span class="tune-label">DEVICE</span>
-          <select id="as-sp-device" aria-label="Spotify device"></select></label>
-        <button id="as-sp-refresh" class="adv-more-btn" type="button">&#8635; REFRESH DEVICES</button>
-
-        <!-- WHAT TO PLAY. Connecting only makes this browser a Spotify device;
-             it does not queue anything, and a browser that has never played has
-             no context to resume — which is why "connected" could be silent. -->
-        <label class="tune-row"><span class="tune-label">PLAY FROM</span>
-          <select id="as-sp-playlist" aria-label="Spotify playlist"></select></label>
+        <p class="as-note">REMOTE plays through the Spotify app on your phone or computer &mdash; open it once so OPEN PLAYER can pick it. IN BROWSER plays here, but needs desktop Chrome/Edge/Firefox.</p>
+        <!-- WHAT TO PLAY and WHERE. The playlist and device pickers live only in
+             the player sheet (#sp-playlist2 / #sp-device2): one home, not two
+             copies with the same handlers (#2847). PLAY here resumes whatever
+             was chosen there. -->
         <div class="opt-row">
           <button id="as-sp-play" class="opt-btn" type="button">&#9654; PLAY</button>
           <button id="as-sp-pause" class="opt-btn" type="button">&#10074;&#10074; PAUSE</button>
