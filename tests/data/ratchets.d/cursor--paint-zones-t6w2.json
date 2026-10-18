@@ -1,11 +1,11 @@
 {
   "files": {
-    "js/car/car3d.js": {
-      "lines": 1
-    },
     "js/ui/hud.js": {
-      "codeLines": -8,
-      "lines": -4
+      "codeLines": 8,
+      "lines": 4
     }
+  },
+  "tree": {
+    "shellNodes": -7
   }
 }
