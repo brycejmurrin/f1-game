@@ -272,6 +272,7 @@ const ACCENT_DECOR = {
     "`--accent-dim` on the sector rows — the same stripe again, dimmed",
     "`#bc-tower` border-left — the WATCH timing tower wears the same team stripe as `.hud-box`; every row's state (on camera, fastest, pit, out) is carried by its own text and fill, never by the stripe",
     "`#announce-num` background — the radio card's number PLATE. The team colour is the ground, not the message: the number on it is `--accent-ink`, picked per team to clear 4.5:1 (proved below), and the CHANNEL a message came in on is carried by the WHO line's colour, never by the plate",
+    "`#captions .cap-who` — optional SPEAKER COLOUR tint on the spotter label; the call text is `--text`, and SPEAKER COLOUR off uses `--text` only (same ornament/channel split as the radio WHO line)",
   ],
   "css/tokens.css": [
     "`--accent-dim` derivation",

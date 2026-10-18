@@ -1,7 +1,7 @@
 # Game-feel channels, workflow, mistakes
 
 Load this when picking a channel for kerb / wall / shift / collision juice.
-Generic trauma-shake math: [game-feel-feedback-recipes.md](game-feel-feedback-recipes.md).
+Generic trauma-shake math: [feedback-recipes.md](feedback-recipes.md).
 
 ## Where to add feedback
 
@@ -20,18 +20,10 @@ Generic trauma-shake math: [game-feel-feedback-recipes.md](game-feel-feedback-re
 
 ## Workflow
 
-1. Name the discrete event (impact, kerb entry, shift, sector). Continuous
-   events need cooldowns.
-2. Choose 2–3 channels. Scale from existing data (slip, impact, gear).
-3. FX may **read** physics, never write forces/pose/timers/AI.
-4. Verify visual/audio with hooks; run the relevant deterministic tests.
-5. Determinism proof, no browser: `node --test tests/unit/physics-characterization-vm.test.mjs` (~3 s, same
-   `tests/data/physics-baseline.json` as the browser spec; never regenerate it) plus `player-dynamics-vm.test.mjs`. These fixtures pin their exercised simulation paths; headless green alone
-   does not establish live hit-stop wall/sim timing. Existing `hitStop` deliberately
-   scales live sim time, while cosmetic shake belongs only in camera/render.
-   Compare equal simulation time separately from equal wall time in a frame-driver
-   contract before changing impact behavior; do not extend the slowdown to kerbs.
-   Then the browser spec `physics-characterization` once (test-bg `physics-core`).
+The loop and its determinism commands are in [SKILL.md](../SKILL.md) §Loop. One caveat
+it leaves out: the VM fixtures pin the simulation paths they exercise, so a headless
+green does not prove live wall-clock timing. A change touching `feel.hitStop` must
+compare equal sim time and equal wall time separately.
 
 ## Common mistakes
 
@@ -43,8 +35,12 @@ Generic trauma-shake math: [game-feel-feedback-recipes.md](game-feel-feedback-re
 - Allocating FX inside `updateCar`. Emit `c.fxSparkI` / bump `shake`, consume
   in render/audio.
 - Applying shake to car/track/heading/collision. Camera/view only.
-- Hit-stop by pausing the physics clock. Visual/audio freeze only. NB the existing `hitStop` (game.js, `simTime = dt * 0.15`,
-  fed only by car-to-car `collideFx`, `impact * 0.015` s; wall impacts add shake, not hitStop) DOES slow the sim clock: it is live-only determinism-affecting, so do not extend it to kerbs; a kerb
-  cue never needs it.
+- A NEW hit-stop that touches the sim clock. The one exception already exists:
+  `feel.hitStop` (game.js, `simTime = dt * 0.15`) slows the sim, fed only by
+  car-to-car `collideFx` (`impact * 0.015` s); wall impacts add shake, not hitStop.
+  Leave it as the only sim-slowing cue and never feed it from kerbs or walls.
+  For any other "freeze" (the "hit-stop with no lap-time change" ask), hold the
+  render instead: freeze the camera/particle/audio update for 1–3 frames while
+  `updateCar` keeps stepping, so `obs()` and lap times are unchanged.
 - Random effects that change headless runs. Isolate RNG from the sim stream.
 - Ignoring reduce-intensity / low-end: cap shake/flash, decay quickly.

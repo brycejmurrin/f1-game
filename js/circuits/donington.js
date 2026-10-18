@@ -38,6 +38,7 @@
     night: false,
     theme: "green",
     lengthKm: 3.998,
+    tyreSeverity: 1,  // UK permanent; calendar-neutral proxy
     baseHW: 7,
     sceneryCoordinates: "racing",
     terrainOuter: 110,

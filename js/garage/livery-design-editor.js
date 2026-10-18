@@ -149,13 +149,14 @@ const GarageLiveryDesignEditor = (function () {
     section("COVER SIDES & TAIL LINK", "Side artwork and its fills. COVER BIND links top and side graphics; FIN HANDOFF controls the transition to the tail.",
       ["spineSide", "sideTint", "plateTint", "coverBind", "finHandoff"]);
     section("WINGS", "Front and rear wing paint. Carbon flaps keep their carbon material; WING FINISH applies to painted wing surfaces.",
-      ["wingCarbon", "wing", "rearWing", "wingFinish"]);
+      ["wingCarbon", "wing", "rearWing", "endplate", "wingFinish"]);
     section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
       ["finShape", "fin", "finFinish", "finStyle", "finArt", "finBadge"]);
     section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
-      ["logo", "logo2", "logo3", "numFont", "sponsors"], [api.markNote]);
+      ["crestStyle", "logo", "logo2", "logo3", "numFont", "sponsors"], [api.markNote]);
     section("COCKPIT & CAMERA", "Halo, mirror and T-cam: paint, finish and mirror housing colour.", ["halo", "haloFinish", "mirrorTint", "mirrorFinish", "tcam"]);
     section("WHEELS & BRAKES", "Paint-only wheel colours, applied to all four wheels. NONE keeps the BRAKES and TYRES parts' own colours.", ["rimTint", "caliperTint", "sidewallInk"]);
+    section("HELMET", "Helmets for both of this team's drivers, like the rest of the paint job. TEAM keeps each driver's own design; the other styles repaint it from HELMET BASE and HELMET ACCENT.", ["helmetStyle", "helmetBase", "helmetAccent"]);
     section("REVIEW & SAVE", "Undo or compare your edits, then name and save this paint job.", [], [historyRow, status, api.nameRow, api.saveRow]);
     // One SPINE TOP selection, divided by purpose rather than a wall of pills.
     const group = api.spineRow.querySelector(".cs-liv-ed-finish"), choices = Array.from(group.querySelectorAll("button"));
@@ -234,17 +235,10 @@ const GarageLiveryDesignEditor = (function () {
     try { remembered = sessionStorage.getItem(TAB_KEY) || ""; } catch (_) { /* no storage */ }
     showTab(Math.max(0, panes.findIndex((p) => p.id === remembered)), false);
     // CHOICES THAT ONLY ACT ON SOME CARS, measured by the 2026-10-18 livery editor
-    // audit (D3, D5, D6): each one changed neither mesh nor atlas outside its `when`, so it greys
-    // like every other dependent row instead of looking broken. A grey or unset HALO is built as
-    // bare metal (car3d.js haloS: a spread over 0.15 is paint), and finishes remap paint only.
-    const coloured = (hex) => {
-      if (!/^#[0-9a-f]{6}$/i.test(hex || "")) return false;
-      const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-      return Math.max(...c) - Math.min(...c) > 0.15;
-    };
+    // audit (D5, D6): each one changed neither mesh nor atlas outside its `when`, so it greys
+    // like every other dependent row instead of looking broken. (HALO FINISH is not one: since #2829 it
+    // lands on an unset or grey halo too, car3d.js haloOn.)
     const rules = [
-      { row: fields.get("haloFinish"), when: () => coloured(draft.halo),
-        why: "Needs a coloured HALO — an unset or grey halo is bare titanium, which takes no finish" },
       { pill: "coverBind:spineOnly", when: () => draft.spineLogo === "cap", why: "SPINE ONLY changes only the CAP design in SPINE TOP" },
       { pill: "finHandoff:contrast", when: () => (draft.finShape || "standard") !== "none", why: "Needs a tail fin — pick a FIN SHAPE other than NONE" },
     ];
@@ -308,5 +302,5 @@ const GarageLiveryDesignEditor = (function () {
       },
     });
   }
-  return Object.freeze({ attach, label: (id) => LABELS[id] || id });
+  return Object.freeze({ attach, label: (id) => LABELS[id] || (typeof LiveryDesign !== "undefined" && LiveryDesign.LABELS && LiveryDesign.LABELS[id]) || id });
 })();

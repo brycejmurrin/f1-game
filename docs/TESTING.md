@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 800+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 804+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -452,7 +452,7 @@ tools directly.)
 | `mcp` | [UI explorer](UI-EXPLORER.md) replay, navigation graph, reduction, fault adapters and offline evidence contracts; plus the `.cursor/environment.json` bootstrap pins (`environment-json`) — CI's node suites always, locally when touching `tools/*-mcp.*` or `.cursor/environment.json`. The two CLI-only MCP wrapper suites (`tinyfish-mcp`, `probe-mcp`: spawn-heavy, not MCP-attached) moved to `tests/manual/` on 2026-09-10 and are run by path; their fast-gate half is `mcp-cli.test.mjs` |
 | `docs-guards` | the unit files that READ the prose trees ci.yml's `paths-ignore` skips (`docs/**`, `**/*.md`, `.claude/**`, `.cursor/**`, `.codex/**`): docs-integrity, generated-docs, agent-config, skill-progressive, hooks-documented, F1 Dev Tools scene/preset/replay helper contracts and the rest of `tests/groups.json`'s list. `.github/workflows/docs-guards.yml` ran this group on every pull request from 2026-09-25 until 2026-10-15, when its required context was removed and the workflow retired (every file is in `tooling-fast`, so ci.yml's guards job already covered a prose PR; the second workflow was one job start per PR event — `docs/notes/CI-CLOG-SURVEY-2026-10-15.md`). The group remains the local alias the docs-only fast path and the agent-config skill call. |
 | `node-slow` | the raster/spawn-heavy car files (`cockpit-pale-surfaces`, `crest-marks`, `slider-effect`; 152 s of the old 315 s loop) plus `flyby-fleet` (the flyby's twelve-circuit audit, ~1 min) and `foundation-core-vm` (~26 s, builds all sixteen foundation circuits) — CI guards always, locally when pick-tests names it |
-| `sweeps` | the full-fleet geometry audits (`package.json` `test:sweeps` IS the list; the enumeration that used to stand here had drifted four files behind it, so read the script). Most rebuild every circuit through `tools/lib/track-build-vm.cjs`; a few build no circuit at all (driving-line's synthetic stadium, driving-line-opts' store round-trip, track-build-vm-release's two-circuit harness check) and ride here beside the geometry they serve. `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
+| `sweeps` | the full-fleet geometry audits (`package.json` `test:sweeps` IS the list; the enumeration that used to stand here had drifted four files behind it, so read the script). Most rebuild every circuit through `tools/lib/track-build-vm.cjs`; a few build no circuit at all (driving-line's synthetic stadium, driving-line-opts' store round-trip, track-build-vm-release.test.mjs's two-circuit harness check) and ride here beside the geometry they serve. `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
 | `sweeps-parts` | the parts option-resolution census (`parts-visual-distinctness`) alone — all 297 options built and compared across worker threads, ~70 s on four cores (559 s single-threaded before the integer grid, the bounding-sphere prefilter and the per-category workers); split out of `sweeps` so the geometry sweeps finish in ~7 min; its own CI job |
 | `garage-unit` | the garage and livery files in Node (39 s): the bay's per-vertex material column, sign occlusion, fin design, the front-wing decal, livery decal surfaces + contrast, team livery, setup tune, body split, cover legibility, the 297-option mesh census, helmets. In CI's node step since 2026-09-10 — five of these files had been in NO gate; the sub-5 s ones are in `tooling-fast` too |
 | `desktop-unit` | Electron desktop packaging in Node: stage/version (`1.0.<build>`), `app://` protocol helpers, native SW/Spotify gates, unpacked-bin paths, electron-builder 26 config (NSIS save-data, extraResources `site`, entitlements), third-party notices sources. Also on `tooling-fast` |
@@ -1293,23 +1293,3 @@ One hook, without loading `docs/DEBUG-HOOKS.md`:
 ```sh
 node tools/shot/agent.mjs help physState
 ```
-
-`jq '.hooks[] | select(.name=="physState")' docs/agent-index.json` reads the same row. The generated page is [`AGENT-HOOKS.md`](AGENT-HOOKS.md). The machine index is [`agent-index.json`](agent-index.json) (`node tools/docs/gen-agent-index.mjs`). The static impact map is [`../tests/data/impact-map.json`](../tests/data/impact-map.json).
-
-## See also
-
-- [`tests/manual/README.md`](../tests/manual/README.md) — the human-run suites
-- `docs/DEBUG-HOOKS.md` — the full `__apex` reference
-- `js/core/log.js` — the logging facility the fixtures capture
-- `playwright.config.js`, `tests/helpers/fixtures.js`, `tests/helpers/global-setup.js`,
-  `tests/helpers/live-reporter.js` — the infrastructure sources
-- `tools/ci/pick-tests.mjs`, `tools/ci/test-bg.mjs` — the runners
-
----
-
-## Operational field notes
-
-Dated measurements of this box and of CI — boot walls, the two-worker factor,
-the instruments that lie here, the real-GPU runs — live in
-[`notes/TESTING-FIELD-NOTES.md`](notes/TESTING-FIELD-NOTES.md). They churn with every
-measurement; §1-§5 above do not.

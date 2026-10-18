@@ -42,13 +42,16 @@ class Bitmap {
   close() { this.closeCalls++; this.width = this.height = 0; }
 }
 
-function liftTextures({ mobileTier = false, initTexture = () => {} } = {}) {
+function liftTextures({ mobileTier = false, initTexture = () => {}, fx = null } = {}) {
   const create = slice(TLX, "        createTexture(", "        // Upload a createTexture() handle NOW", "createTexture");
   const free = slice(TLX, "        freeTexture(t) {", "        texCensus:", "freeTexture");
-  const { releaseTexSource } = liftRelease(fakeDoc(), Bitmap);
-  // The real backend methods, real vendored Texture/dispose dispatcher; only GPU upload is stubbed.
-  return new Function("THREE", "releaseTexSource", "mobileTier", "renderer", "fx",
-    `return ({${create}${free}});`)(THREE, releaseTexSource, mobileTier, { initTexture }, null);
+  const pool = slice(TLX, "      const _texPool = [];", "      let envCubeCam = null;", "texture pool");
+  const { releaseTexSource, texStandIn } = liftRelease(fakeDoc(), Bitmap);
+  // The real backend methods and retired-texture pool, real vendored Texture/dispose dispatcher;
+  // only GPU upload is stubbed. `pool`/`stat`/`age` expose the pool for the reuse tests below.
+  return new Function("THREE", "releaseTexSource", "texStandIn", "mobileTier", "renderer", "fx", "ImageBitmap",
+    `${pool}return ({${create}${free} pool: _texPool, stat: _texStat, age: ageTexPool });`)(
+    THREE, releaseTexSource, texStandIn, mobileTier, { initTexture }, fx, Bitmap);
 }
 
 test("an owned bitmap stays open through upload and closes once when its texture is freed", () => {
@@ -179,10 +182,12 @@ test("createTexture wires the release hook, and uploads at creation on the mobil
   assert.match(TLX, /const mobileTier = \(typeof GLX !== "undefined" && !!GLX\.mobileTier\);/);
 });
 
-test("freeTexture retires the decal materials bound to the texture", () => {
+test("freeTexture retires the decal materials bound to the texture when it is disposed", () => {
   const free = slice(TLX, "        freeTexture(t) {", "        texCensus:", "freeTexture");
-  assert.match(free, /fx\.releaseTexture\(t\.tex\)/);
-  assert.ok(free.indexOf("fx.releaseTexture") < free.indexOf("t.tex.dispose()"));
+  assert.match(free, /retireTexture\(t\.tex,/);
+  const pool = slice(TLX, "      const _texPool = [];", "      let envCubeCam = null;", "texture pool");
+  const disposeBody = slice(pool, "function disposePooled(t) {", "function retireTexture(", "disposePooled");
+  assert.ok(disposeBody.indexOf("fx.releaseTexture(t)") >= 0 && disposeBody.indexOf("fx.releaseTexture(t)") < disposeBody.indexOf("t.dispose()"));
 
   const body = slice(FX, "    function releaseTexture(tex) {", "    function decalMaterialFor(tex, glow) {", "releaseTexture");
   assert.match(FX, /decalMaterialFor, releaseTexture,/, "releaseTexture is not exported from TLXShaders.fx");
@@ -199,4 +204,99 @@ test("freeTexture retires the decal materials bound to the texture", () => {
   assert.deepEqual(_evicted, [mA0, mA1], "disposal is deferred to present(), like the LRU eviction");
   assert.deepEqual(_fxMats, [mB], "the SSR-MRT registry must not pin a retired material");
   assert.equal(releaseTexture(null), 0);
+});
+
+// ── RETIRED TEXTURES ARE REUSED (garage livery edits; WebKit #76225) ─────────────────────────────
+// A livery edit frees and re-creates the same-sized atlases. freeTexture parks the texture in a
+// small pool and the next createTexture of the SAME size re-fills it in place (three r186 re-uploads
+// a version bump into the existing GPU texture), so N edits cost 0 new GPU textures after the first.
+const canvas = (w = 1024, h = 1280) => ({ width: w, height: h, tag: "canvas" });
+function poolRig() {
+  const released = [], disposed = [];
+  const gfx = liftTextures({ fx: { releaseTexture: (t) => released.push(t) } });
+  const watch = (h) => { h.tex.addEventListener("dispose", () => disposed.push(h.tex)); return h; };
+  return { gfx, released, disposed, watch };
+}
+
+test("N same-size free/create cycles allocate ONE texture and re-fill it in place", () => {
+  const { gfx, disposed } = poolRig();
+  const first = gfx.createTexture(canvas()), T = first.tex;
+  T.onUpdate(T);
+  let h = first;
+  for (let i = 0; i < 50; i++) {
+    gfx.freeTexture(h);
+    const src = canvas();
+    h = gfx.createTexture(src);
+    assert.equal(h.tex, T, `edit ${i + 1}: the retired texture is reused`);
+    assert.equal(h.tex.image, src, "the new source is the image to upload");
+    assert.ok(h.tex.version > 1, "needsUpdate moved the version: three re-uploads in place");
+    assert.equal(typeof h.tex.onUpdate, "function", "the reused texture drops its source after the next upload too");
+    h.tex.onUpdate(h.tex);
+  }
+  assert.deepEqual({ made: gfx.stat.made, reused: gfx.stat.reused }, { made: 1, reused: 50 });
+  assert.equal(disposed.length, 0);
+});
+
+test("a different size or source kind never takes a pooled texture", () => {
+  const { gfx } = poolRig();
+  const a = gfx.createTexture(canvas(1024, 1280));
+  gfx.freeTexture(a);
+  const pooled = gfx.pool[0].t;
+  assert.notEqual(gfx.createTexture(canvas(512, 640)).tex, pooled, "size differs");
+  assert.notEqual(gfx.createTexture(new Bitmap({ width: 1024, height: 1280 })).tex, pooled,
+    "a bitmap never takes a canvas texture (three's flipY path differs by source kind)");
+  assert.equal(gfx.pool.length, 1, "still parked for the next same-size canvas");
+  assert.equal(gfx.createTexture(canvas(1024, 1280)).tex, pooled);
+});
+
+test("an owned bitmap (car-draw's hi-res swap) closes when its texture is retired, and the texture takes the next one", () => {
+  const { gfx, released } = poolRig();
+  const b1 = new Bitmap({ width: 2048, height: 2560 }), b2 = new Bitmap({ width: 2048, height: 2560 });
+  const close = (src) => src.close();
+  const h1 = gfx.createTexture(b1, { disposeSource: close }), T = h1.tex;
+  T.onUpdate(T);
+  gfx.freeTexture(h1);
+  assert.equal(b1.closeCalls, 1, "retired = released: the bitmap storage is not held by the pool");
+  assert.equal((T._listeners?.dispose || []).length, 0, "its dispose listener went with it");
+  const h2 = gfx.createTexture(b2, { disposeSource: close });
+  assert.equal(h2.tex, T, "same size, same kind: re-filled in place");
+  assert.equal(T.image, b2);
+  assert.equal(b2.closeCalls, 0);
+  gfx.age(performance.now() + 60000);   // nothing pooled: the live texture is untouched
+  assert.equal(b2.closeCalls, 0);
+  gfx.freeTexture(h2); gfx.age(performance.now() + 60000);
+  assert.equal(b2.closeCalls, 1, "closed exactly once when the texture finally dies");
+  assert.deepEqual(released, [T], "and only then its decal materials go");
+  assert.deepEqual({ made: gfx.stat.made, reused: gfx.stat.reused, disposed: gfx.stat.disposed }, { made: 1, reused: 1, disposed: 1 });
+});
+
+test("a source with no size is disposed on free, never parked", () => {
+  const { gfx, released } = poolRig();
+  const h = gfx.createTexture({ tag: "sizeless" }), t = h.tex;
+  gfx.freeTexture(h);
+  assert.equal(gfx.pool.length, 0);
+  assert.deepEqual(released, [t]);
+});
+
+test("the pool is bounded and ages out: the oldest is disposed, with its decal materials", () => {
+  const { gfx, released } = poolRig();
+  const hs = [1, 2, 3, 4, 5, 6].map((i) => gfx.createTexture(canvas(64 * i, 64)));
+  const texes = hs.map((h) => h.tex);
+  for (const h of hs) gfx.freeTexture(h);
+  assert.equal(gfx.pool.length, 4, "TEX_POOL_MAX");
+  assert.deepEqual(released, texes.slice(0, 2), "only the disposed lose their decal materials; a pooled one keeps it for the next fill");
+  for (const h of hs.slice(2)) assert.equal(h.tex, null);
+  gfx.age(performance.now() + 60000);
+  assert.equal(gfx.pool.length, 0, "an idle pool empties: a race never carries the garage's atlases");
+  assert.deepEqual(released, texes);
+  assert.equal(gfx.stat.disposed, 6);
+});
+
+test("a parked texture drops its CPU source", () => {
+  const { gfx } = poolRig();
+  const src = canvas(), h = gfx.createTexture(src), t = h.tex;   // freed before any upload
+  gfx.freeTexture(h);
+  assert.notEqual(t.image, src, "the canvas is not pinned by the pool");
+  assert.equal(t.image.width, 1);
+  assert.equal(t.onUpdate, null);
 });

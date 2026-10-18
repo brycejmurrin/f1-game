@@ -1,4 +1,7 @@
-/* Apex 26 — first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation actually arises, worded for the control the player is really using. Onboard.create(G). Read-only — it never touches the car. */
+/* Apex 26 — first-run COACH MARKS: four one-shot prompts (brake, overtake, active aero,
+   energy harvest clip) shown through the existing #announce channel the first time each
+   situation actually arises, worded for the control the player is really using.
+   Onboard.create(G). Read-only — it never touches the car. */
 "use strict";
 
 const Onboard = (function () {
@@ -7,9 +10,10 @@ const Onboard = (function () {
   // memory, so RACES_MAX "two races and the player has seen enough" restarted
   // at every page load and an unseen mark could still appear a month in.
   const RACES_KEY = "onboardRaces";
-  const MARKS = ["brake", "ot", "aero"];
-  const BIT = { brake: 1, ot: 2, aero: 4 };
-  const ALL = 7;
+  const MARKS = ["brake", "ot", "aero", "harvest"];
+  const BIT = { brake: 1, ot: 2, aero: 4, harvest: 8 };
+  const ALL = 15;
+  const PACK_FULL = 0.97;
   const GAP = 8;                // s between marks — never two at once
   const RETRY = 1;              // s before a mark the banner refused is offered again
   const RACES_MAX = 2;          // after two races the player has seen enough
@@ -17,7 +21,24 @@ const Onboard = (function () {
     brake: "into the corner",
     ot: "you are close enough to use it",
     aero: "you can open it now",
+    harvest: "full battery can clip the engine on straights",
   };
+
+  /** Broadcast-only: mirrors the 2026 PU harvest clip gate in js/audio/engine.js
+   * (pack full + part throttle or lift-and-coast at pace). Reads player reports. */
+  function harvestClipCue(p, vTopFn) {
+    if (!p || p.deploying || (p.otT > 0)) return false;
+    const e = p.energy;
+    if (!(e > PACK_FULL)) return false;
+    const vT = vTopFn ? vTopFn() : 80;
+    const v = p.speed || 0;
+    if (v < vT * 0.35) return false;
+    const thr = p.throttleDemand != null ? p.throttleDemand : 0;
+    const brk = p.brakeDemand != null ? p.brakeDemand : 0;
+    if (thr > 0.1 && thr < 0.72 && brk < 0.12) return true;
+    if (thr <= 0.05 && brk < 0.12 && v > vT * 0.25) return true;
+    return false;
+  }
 
   /* THE PROMPT MUST NAME THE CONTROL THIS PLAYER ACTUALLY HAS, and until now
      it named the control the game shipped with — which is not the same thing,
@@ -50,6 +71,7 @@ const Onboard = (function () {
     return typeof Input !== "undefined" && Input.touchControlsNeeded && Input.touchControlsNeeded() ? "touch" : "keyboard";
   }
   function verb(key) {
+    if (key === "harvest") return "ENERGY FULL — LIFT OR DEPLOY ON STRAIGHTS";
     const action = ACTION_OF[key];
     const touch = !!(typeof Input !== "undefined" && Input.touchControlsNeeded && Input.touchControlsNeeded());
     const NOUN = { brake: "BRAKE", ot: "OVERTAKE", aero: "ACTIVE AERO" }[key];
@@ -145,6 +167,7 @@ const Onboard = (function () {
       if (!(shown & BIT.aero) && G.raceAeroMode !== "auto") {
         if (p.xArmed && !(p.aeroX > 0.02)) return fire("aero");
       }
+      if (!(shown & BIT.harvest) && harvestClipCue(p, G.vTop)) return fire("harvest");
       return false;
     }
 
@@ -164,6 +187,6 @@ const Onboard = (function () {
     return { tick, reset, state, MARKS };
   }
 
-  return { create, resetControlsRefresher, MARKS, BIT, ALL };
+  return { create, resetControlsRefresher, harvestClipCue, MARKS, BIT, ALL };
 })();
 Object.freeze(Onboard);
