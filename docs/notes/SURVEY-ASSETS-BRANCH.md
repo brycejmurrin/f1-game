@@ -1,5 +1,12 @@
 # Survey assets branch (`track-survey-assets`)
 
+**New captures:** use [Generated evidence storage](../EVIDENCE-STORAGE.md) and
+`tools/shot/publish-evidence.mjs` to upload release assets outside Git history.
+The workflow below remains for existing survey PRs and historical pinned links;
+their bases and contents are not changed by the new storage policy.
+
+## Existing branch workflow
+
 Image-heavy track-survey output (frames, `gallery/tracks`, HTML reports) is hundreds of MB, so it lives on the standing branch `track-survey-assets`, which is never merged into the deploy branch `claude/f1-game-project-26h3ng`.
 
 - Survey and gallery PRs use `track-survey-assets` as the base. Name survey branches `cursor/<id>-survey-<hash>` (the pattern the gallery builder scans).

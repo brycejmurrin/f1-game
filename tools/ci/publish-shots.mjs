@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch.
+ * @doc Legacy screenshot branch publisher; use tools/shot/publish-evidence.mjs for new evidence outside Git history.
  * @section runner
  * @skill steward
  *
@@ -41,6 +41,9 @@ const BRANCH_RE = /^shots\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\.png$/i;
 
 export const HELP = `usage: node tools/ci/publish-shots.mjs <topic> <png...> [options]
+
+LEGACY: new capture output belongs in release assets, not Git image branches.
+Use tools/shot/publish-evidence.mjs instead; see docs/EVIDENCE-STORAGE.md.
 
 Publishes screenshots to branch shots/<topic>, cut from origin/${DEPLOY} in a
 temporary worktree under artifacts/publish-shots/. No PR branch is touched and

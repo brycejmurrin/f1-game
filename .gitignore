@@ -16,7 +16,7 @@ node_modules
 # Regenerable output
 scratch/
 artifacts/
-# Generated galleries and ad-hoc screenshot runs belong on track-survey-assets.
+# Generated galleries and screenshot runs are published as release assets.
 # Keep the gallery builders in tools/ tracked; these are root output folders.
 /gallery/
 /shots/
