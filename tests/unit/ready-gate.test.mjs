@@ -367,12 +367,21 @@ test("#2430: the verdict line carries the FULL 40-char sha a merge call needs", 
   assert.match(verdictLine({ state: "passed", evidence: "ok", sha, source: "ci" }), /^= ready-gate passed — ok sha=[0-9a-f]{40} source=ci$/);
 });
 
-test("memoryVerdict: .claude/memory/ edits refuse on a non-memory PR", () => {
+test("memoryVerdict: .claude/memory/ edits refuse without an explicit memory-change marker", () => {
   assert.equal(memoryVerdict(["AGENTS.md", "js/game.js"]).state, "ok");
   assert.equal(memoryVerdict([".claude/memory/MEMORY.md"], { title: "fix hud" }).state, "memory-leak");
-  assert.equal(memoryVerdict([".claude/memory/foo.md"], { title: "Memory index prune" }).state, "ok");
-  assert.equal(memoryVerdict([".claude/memory/foo.md"], { title: "harness", body: "## Goal\nprune the memory index" }).state, "ok");
-  assert.match(memoryVerdict([".claude/memory/a.md", "css/hud.css"], { title: "livery" }).evidence, /non-memory PR/);
+  // A bare "memory" word or a path mention must NOT unlock the gate (#2901 review).
+  assert.equal(memoryVerdict([".claude/memory/foo.md"], { title: "Memory index prune" }).state, "memory-leak");
+  assert.equal(memoryVerdict([".claude/memory/foo.md"], {
+    title: "harness", body: "## Goal\nsee `.claude/memory/MEMORY.md` and prune",
+  }).state, "memory-leak");
+  assert.equal(memoryVerdict([".claude/memory/foo.md"], {
+    title: "harness", body: "memory-change: prune stale index lines\n## Goal\nx",
+  }).state, "ok");
+  assert.equal(memoryVerdict([".claude/memory/foo.md"], {
+    title: "harness", body: "## Goal\nx", labels: ["memory-change"],
+  }).state, "ok");
+  assert.match(memoryVerdict([".claude/memory/a.md", "css/hud.css"], { title: "livery" }).evidence, /non-memory PR|memory-change/);
 });
 
 test("withMemory: a memory-leak turns a green tip into memory-leak (exit 1)", () => {
@@ -383,10 +392,17 @@ test("withMemory: a memory-leak turns a green tip into memory-leak (exit 1)", ()
   assert.equal(withMemory(GREEN, null), GREEN, "no file list ( --sha ) skips the check");
 });
 
+test("withMemory: a files-API failure fails closed (never treats as no memory edits)", () => {
+  const v = withMemory(GREEN, undefined, { filesError: "HTTP 502" });
+  assert.equal(v.state, "memory-unknown");
+  assert.equal(v.code, 1);
+  assert.match(v.evidence, /HTTP 502|files/);
+});
+
 test("resolveSha --pr returns title and files for the memory gate", () => {
   const head = "c".repeat(40);
   const request = (url) => {
-    if (url === "pulls/9") return { json: { head: { sha: head }, body: "## Plan\n- [x] a", title: "Plugin policy" } };
+    if (url === "pulls/9") return { json: { head: { sha: head }, body: "## Plan\n- [x] a", title: "Plugin policy", labels: [{ name: "run-ci" }] } };
     if (url.startsWith("pulls/9/files")) return { json: [{ filename: ".claude/memory/MEMORY.md" }, { filename: "AGENTS.md" }] };
     return { error: `unexpected ${url}` };
   };
@@ -394,4 +410,18 @@ test("resolveSha --pr returns title and files for the memory gate", () => {
   assert.equal(r.sha, head);
   assert.equal(r.title, "Plugin policy");
   assert.deepEqual(r.files, [".claude/memory/MEMORY.md", "AGENTS.md"]);
+  assert.equal(r.filesError, null);
+});
+
+test("resolveSha --pr records filesError when the files list cannot be fetched", () => {
+  const head = "d".repeat(40);
+  const request = (url) => {
+    if (url === "pulls/11") return { json: { head: { sha: head }, body: "memory-change: x", title: "t", labels: [] } };
+    if (url.startsWith("pulls/11/files")) return { error: "HTTP 502" };
+    return { error: `unexpected ${url}` };
+  };
+  const r = resolveSha({ pr: "11", request });
+  assert.equal(r.sha, head);
+  assert.match(r.filesError || "", /HTTP 502/);
+  assert.equal(r.files, null, "a failed files fetch must not look like an empty diff");
 });
