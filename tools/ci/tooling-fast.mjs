@@ -956,6 +956,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The sun shadow map's depth span holds a 250 m caster: drives the real
   // ShadowPass.sunPass on a stub renderer and projects through its light VP.
   "tests/unit/shadow-pass-depth.test.mjs",
+  "tests/unit/share-card-data.test.mjs",
+  "tests/unit/share-card-layout.test.mjs",
+  "tests/unit/share-card.test.mjs",
   "tests/unit/share-code.test.mjs",
   "tests/unit/shared-math.test.mjs",
   "tests/unit/sheet-per-screen.test.mjs",
@@ -1232,6 +1235,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/validation-cli.test.mjs",
   "tests/unit/verify-live.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
+  // tools/viewer: the 3D viewer page carries the engine-built car (within 0.5 mm) and circuit. ~6 s, no browser.
+  "tests/unit/viewer.test.mjs",
   "tests/unit/visual-oracle.test.mjs",
   "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",

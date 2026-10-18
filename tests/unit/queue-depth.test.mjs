@@ -49,7 +49,8 @@ test("ok under every threshold; the line names jobs in flight, queued and macOS"
 test("each threshold alone is a hold", () => {
   const linux = evaluate(countJobs(many(60, "in_progress")));
   assert.equal(linux.verdict, "hold");
-  assert.match(reportLine(linux), /^= queue hold \(60 Linux jobs in flight \/ 40, 0 queued, 0 macOS \/ 5; 60 Linux running\) — Linux jobs in flight 60 ≥ 60/);
+  assert.match(reportLine(linux), /^= queue hold \(60 Linux jobs in flight \/ 40, 0 queued, 0 macOS \/ 5; 60 Linux running\) — info: Linux jobs in flight 60 ≥ 60 \(informational since 2026-10-16: no push hold\)$/);
+  assert.doesNotMatch(reportLine(linux), /do not push|commit locally/, "the push hold was retired 2026-10-16");
   const queued = evaluate(countJobs([...many(5, "queued"), ...many(5, "queued", "macos-latest")]));
   assert.equal(queued.verdict, "hold", "macOS queued jobs count toward the queued threshold");
   assert.deepEqual(queued.reasons, ["queued jobs 10 ≥ 10", "macOS jobs in flight 5 ≥ 5"]);
