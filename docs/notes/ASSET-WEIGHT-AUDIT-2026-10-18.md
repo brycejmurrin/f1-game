@@ -31,9 +31,13 @@ glTF+Draco/Meshopt models, Opus audio, startup under ~2 MB, lazy loading). Numbe
 | `assets/voice/*.bin` (24) | Concatenated MP3, 64 kbps 24 kHz mono, 101.5 MB | Opus 24–32 kbps mono with MP3 fallback | ~50–60 % (2–3.5 MB per voice set a player fetches) | Med: older iOS Safari Opus decode; clip offsets in each `.json` must be rebuilt |
 | `assets/atlases/*.png` (6) | 15.1 MB, never fetched by the game | Leave out of the deploy staging | 15 MB deployed, 0 B per player | Low |
 | music song2/song5/menu | MP3 192/192/160 kbps, 13.3 MB | MP3 128 kbps, or Opus ~96 kbps with fallback | 3.5–6.5 MB | Low–Med |
-| `assets/pack/mat-*-256.png` | PNG filmstrips, 1.67 MB (each strip 4.46 MB of GPU RGBA8) | Lossless WebP first (~20–30 %); KTX2/UASTC later | 0.3–1.1 MB wire, up to 4× GPU memory | WebP low; KTX2 Med–High (transcoder wasm, roughness in alpha) |
+| `assets/pack/mat-*-256.png` | PNG filmstrips, 1.67 MB (each strip 4.46 MB of GPU RGBA8) | Lossless WebP (~20–30 %). **KTX2/UASTC was already decided NO** (`docs/plans/2026-09-14-texture-memory-plan.md` Task 4, `docs/research/ASSET-API-RESEARCH.md` rollout row 4, pinned by a test since #2756); reopen only with a measured texture-size or load-time problem | 0.3–0.5 MB wire | Low (WebP decode is native) |
 | `assets/pack/models` (AX26 v2) | 2.0 MB, float32 positions | int16 positions per model | 0.4–0.8 MB | Low–Med: writer and reader both change |
 | Startup JS | 2.28 MB gzipped | Move more of the FULL list to lazy bundles | Varies | Med; minifying conflicts with the no-build rule |
+
+## Prior art
+
+No earlier record exists for Opus voice packs, music bitrate, the deployed-but-unused atlases or the startup payload size. KTX2 is covered above. `docs/notes/GPU-MEM-CENSUS-2026-10-17.md` and `docs/notes/PERF-RESEARCH-2026-10-17.md` hold the GPU-memory side.
 
 ## Already well optimised
 
@@ -46,4 +50,4 @@ audio, scenery, editor, net and career bundles; non-critical CSS via the `media=
 1. Drop `assets/atlases/` from the deploy staging: `assets/atlases/README.md` says the game never fetches them (only `tools/gen/assets.mjs bake-atlas` reads them), so zero player risk.
 2. Re-encode the three high-bitrate music tracks to 128 kbps MP3: no format risk.
 3. Opus voice packs with MP3 fallback: the largest per-player win.
-4. Lossless WebP pack textures; KTX2 only after measuring GPU memory on a phone.
+4. Lossless WebP pack textures. Not KTX2: rejected and test-pinned (see the table).
