@@ -508,6 +508,56 @@ values with candidate declarations/source lines; they do not guess cascade winne
 Known limits and truncation are recorded in JSON. No new browser controller,
 framework, hosted service, WebMCP dependency or settings mutation is required.
 
+Inspection roots must match exactly one element; a control used as the root is
+included in its own report. `coverage` counts inspected/total/omitted controls
+and binding matches, mismatches, unavailable, unmapped and not-applicable actions.
+Action/navigation controls still need replay evidence. Theme, text-size and
+contrast studio choices have explicit pressed-state adapters; other unmapped
+choices stay unverified. An inspection always reports behavior and persistence
+as `not-tested`. A matching current value is not an action or reload test.
+
+Saved inspection JSON can be summarized without starting Chromium:
+
+```sh
+node --input-type=module -e 'import fs from "node:fs"; import {summarizeInspection} from "./tools/ui/explorer.mjs"; console.log(summarizeInspection(JSON.parse(fs.readFileSync(process.argv[1],"utf8")),"saved"))' artifacts/inspection.json
+```
+
+For source navigation, use a binding's `source` file with
+`bash tools/mcp/lsp-mcp.sh outline <file> --all`, then request a definition at
+the returned file/line position with `--body`. This exposes internal UI handlers
+and avoids ambiguous global names; positions must come from the current checkout.
+Pair CSS candidate locations with the report's matched rules and adaptive metadata
+before choosing an edit. When moving an offline HTML report, retain its relative
+evidence directory too: rebuilding from report JSON alone does not copy those files.
+
+`--summary` prints coverage and limits per size, followed by findings. It says
+`no-findings`, never a blanket clean pass, and retains settlement, CSS, ARIA,
+control and layout-context truncation. With the JS debugger, query
+`__apex.ui.inspect({root:'#appearance-studio'}).coverage` or one control's
+`binding` instead of returning the full report (which can exceed the debugger's
+result cap). Install the inspector again after navigation.
+
+For the debugger's existing local game page, install with an awaited
+`debugger_run` expression (no second browser or controller):
+`(async()=>{const m=await import('/tools/ui/explorer/inspector.mjs');return m.inspectUI({install:true});})()`.
+Read its completed operation from `debugger_state`. Raw `ui.inspect` is an
+instantaneous sample: a zero-control sample during a transition is not proof
+that the screen has no controls. Before judging it, use the existing sampler
+in another awaited run and return only its bounded verdict:
+`(async()=>{const m=await import('/tools/ui/explorer/transitions.mjs');const s=await m.settleLayout({root:'#appearance-studio'});return {stable:s.stable,truncated:s.truncated};})()`.
+Then query `coverage` or one binding. Settlement remains sampled evidence,
+and does not prove later asynchronous work cannot change the page.
+
+The `settings-persistence` mission uses real clicks to choose Light, checks its
+DOM/live/saved agreement, reloads, reopens the studio and checks again. Export
+that entry from `tools/ui/explorer/catalog.mjs` to an artifact JSON and run it
+with `explorer.mjs replay <file>`. Replay data accepts
+`{type:'assert',oracle:{type:'binding',selector:'#control',runtime:125,saved:125}}`.
+The optional `saved` field is an explicit expected scalar (or null for no
+override); unavailable/unmapped bindings never satisfy it. Assertions fail
+with expected and actual values; existing traces and action timings preserve
+the reproduction. No executable expression is accepted in replay data.
+
 Adaptive CSS diagnostics include each control's computed sizing, wrapping, zoom,
 font and container properties, with deduplicated ancestor boxes and scroll metrics
 (`layoutContexts`, at most 12 ancestors per control / 256 unique contexts).
@@ -553,7 +603,7 @@ floor; a resize cannot switch this). `--boot WxH` boots at that size, so
 boot-time classifiers see the phone. `--safe T,R,B,L` sets real
 `env(safe-area-inset-*)` values through CDP `Emulation.setSafeAreaInsetsOverride`
 (0–200 px each; the iPhone Pro Max landscape notch is about 0,59,21,59).
-`--summary` prints one tab-separated line per issue (screen, size, kind,
+`--summary` prints tab-separated coverage and issue lines (screen, size, kind,
 selector, message) instead of the JSON, which is still written to `--out`.
 `provenance.emulation` records the settings. A sweep record that has not settled
 gets one more settlement budget (`settlement.retried`). Settlement also waits for finite running CSS animations on, inside or above the root (`settlement.animating`): a fade or pointer-events transition leaves geometry final while hit tests still answer `<html>`; infinite animations are ignored. If it is still moving,
