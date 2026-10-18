@@ -24,12 +24,12 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. sourceBytes are source-file snapshots, not output sizes or tokens. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 396,
+    "files": 400,
     "classifications": {
-      "entrypoint-candidate": 300,
-      "asset": 1,
+      "entrypoint-candidate": 301,
+      "asset": 2,
       "data": 11,
-      "ambiguous": 44,
+      "ambiguous": 46,
       "library": 40
     },
     "npmScripts": 69,
@@ -2081,7 +2081,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 39010,
+      "sourceBytes": 39114,
       "doc": "What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`).",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -2162,7 +2162,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 19299,
+      "sourceBytes": 19977,
       "doc": "One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch.",
       "skill": "ci-watch",
       "nativeOutputFlagMentions": [
@@ -2268,7 +2268,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 22298,
+      "sourceBytes": 22523,
       "doc": "Actions queue gauge: queued + running JOBS by OS vs the 40 Linux / 5 macOS slots; `= queue ok|hold`.",
       "skill": "steward",
       "nativeOutputFlagMentions": [
@@ -2289,7 +2289,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 9002,
+      "sourceBytes": 9116,
       "doc": "Count ready PRs with live full-tier CI (informational since 2026-10-16; no gate reads it).",
       "skill": "steward",
       "nativeOutputFlagMentions": [
@@ -2816,7 +2816,7 @@
         "npm-script-reference",
         "argv-or-parser"
       ],
-      "sourceBytes": 109195,
+      "sourceBytes": 109461,
       "doc": "Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -3472,7 +3472,7 @@
         "main-guard",
         "npm-script-reference"
       ],
-      "sourceBytes": 14714,
+      "sourceBytes": 14844,
       "doc": "Generates `tools/README.md` from each tool's `@doc` / `@skill` / `@section` header tags; `--check` fails on drift.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [],
@@ -4862,7 +4862,7 @@
       "path": "tools/manifest.cjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 96798,
+      "sourceBytes": 97228,
       "doc": "Load-order truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `HARD_EDGES`, `TRACK_VM`; index.html must match.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [],
@@ -4905,7 +4905,7 @@
       "path": "tools/mcp/apex-tools-mcp.json",
       "classification": "data",
       "evidence": [],
-      "sourceBytes": 1208,
+      "sourceBytes": 1227,
       "doc": null,
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -4917,7 +4917,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 162249,
+      "sourceBytes": 164047,
       "doc": "Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock).",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -7020,7 +7020,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 16086,
+      "sourceBytes": 17002,
       "doc": "UI exploration: missions, navigation atlas, filmstrips, phone/fault/a11y probes, replay reduction, scene reports.",
       "skill": "survey-ui-matrix",
       "nativeOutputFlagMentions": [
@@ -7050,7 +7050,7 @@
       "path": "tools/ui/explorer/browser.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 12386,
+      "sourceBytes": 13437,
       "doc": "UI explorer browser adapter: real actions, bounded DOM evidence, fault injection and Chromium traces.",
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -7060,7 +7060,7 @@
       "path": "tools/ui/explorer/catalog.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 2851,
+      "sourceBytes": 3737,
       "doc": "UI explorer mission recipes and independent-browser task briefs.",
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -7070,7 +7070,7 @@
       "path": "tools/ui/explorer/core.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 12322,
+      "sourceBytes": 13112,
       "doc": "Validated UI replay data, semantic atlas states and bounded delta debugging without executable input.",
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -7090,7 +7090,7 @@
       "path": "tools/ui/explorer/inspector.mjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 24616,
+      "sourceBytes": 27004,
       "doc": "Read-only UI inspection: semantic controls, explicit live bindings, hit tests, CDP styles and state differences.",
       "skill": null,
       "nativeOutputFlagMentions": [],
@@ -7255,6 +7255,58 @@
       "sourceBytes": 3034,
       "doc": "The `--scale=` axis (40–200 % interface size) shared by layout-audit, menu-fit and fit-audit.",
       "skill": "survey-ui-matrix",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": []
+    },
+    {
+      "path": "tools/viewer/build-viewer.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "argv-or-parser"
+      ],
+      "sourceBytes": 5698,
+      "doc": "Writes one self-contained three.js viewer page of engine-built team cars and circuits, to open or publish.",
+      "skill": "playwright-probe",
+      "nativeOutputFlagMentions": [
+        "--json",
+        "--out"
+      ],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/viewer/build-viewer.mjs"
+      ]
+    },
+    {
+      "path": "tools/viewer/viewer-data.mjs",
+      "classification": "ambiguous",
+      "evidence": [],
+      "sourceBytes": 3997,
+      "doc": "Viewer payloads: Tracks.build circuits as compact JSON, and the js/car sources the page builds cars from.",
+      "skill": "playwright-probe",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": []
+    },
+    {
+      "path": "tools/viewer/viewer-shots.mjs",
+      "classification": "ambiguous",
+      "evidence": [],
+      "sourceBytes": 10742,
+      "doc": "Renders a built viewer page headlessly: a PNG per car/circuit or per livery/finish/part variant, plus a contact sheet.",
+      "skill": "playwright-probe",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": []
+    },
+    {
+      "path": "tools/viewer/viewer.html",
+      "classification": "asset",
+      "evidence": [],
+      "sourceBytes": 29558,
+      "doc": "Template for viewer/build-viewer.mjs: the three.js car and circuit page; data is spliced in at the DATA marker.",
+      "skill": null,
       "nativeOutputFlagMentions": [],
       "npmScripts": []
     }
@@ -7874,7 +7926,7 @@
     },
     {
       "name": "test:state-unit",
-      "command": "node --test tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/pause-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs",
+      "command": "node --test tests/unit/a11y-opts.test.mjs tests/unit/apex-arg-guards.test.mjs tests/unit/apex-career-delete.test.mjs tests/unit/appearance-opts.test.mjs tests/unit/badges.test.mjs tests/unit/career-ai-dev.test.mjs tests/unit/career-backup.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/career-data-audio-improvements.test.mjs tests/unit/career-legends.test.mjs tests/unit/career-regulations.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-ui-lazy.test.mjs tests/unit/daily-challenge.test.mjs tests/unit/damage.test.mjs tests/unit/debris-opts.test.mjs tests/unit/duel-row.test.mjs tests/unit/duel.test.mjs tests/unit/hud-announce-lane-cache.test.mjs tests/unit/hud-control-clearance.test.mjs tests/unit/hud-dock-pack.test.mjs tests/unit/hud-elements.test.mjs tests/unit/hud-fit-idempotent.test.mjs tests/unit/hud-gap-decimals.test.mjs tests/unit/hud-helmet-placement.test.mjs tests/unit/hud-inputs.test.mjs tests/unit/hud-layout.test.mjs tests/unit/hud-pins.test.mjs tests/unit/hud-portrait-cluster.test.mjs tests/unit/hud-radio-slot.test.mjs tests/unit/hud-readouts.test.mjs tests/unit/hud-relative.test.mjs tests/unit/hud-speed-parity.test.mjs tests/unit/hud-status-stack.test.mjs tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/legend-parts-seed.test.mjs tests/unit/legends-team.test.mjs tests/unit/overlay-feed.test.mjs tests/unit/pause-opts.test.mjs tests/unit/quali-persist.test.mjs tests/unit/race-session-lazy.test.mjs tests/unit/real-race-script.test.mjs tests/unit/real-race-tab-gap-refresh.test.mjs tests/unit/real-race.test.mjs tests/unit/save-durability.test.mjs tests/unit/screen-looks.test.mjs tests/unit/season-cal.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/share-card-data.test.mjs tests/unit/share-card-layout.test.mjs tests/unit/share-card.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/title-fx.test.mjs tests/unit/title-layout.test.mjs",
       "agentCommand": [
         "node",
         "tools/agent-run.mjs",
