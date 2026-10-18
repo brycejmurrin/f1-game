@@ -498,6 +498,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
 | **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
+| **ci/process-dashboard.mjs** | Nightly CI process dashboard: per-job p50/p90, cancel and re-gate rates, push-to-live. |
 | **ci/publish-shots.mjs** | Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch. |
 | **ci/queue-depth.mjs** | Actions queue gauge: queued + running JOBS by OS vs the 40 Linux / 5 macOS slots; `= queue ok\|hold`. |
 | **ci/ready-full-cap.mjs** | Count ready PRs with live full-tier CI (informational since 2026-10-16; no gate reads it). |

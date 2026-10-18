@@ -799,6 +799,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
+  // Nightly process dashboard reducer (tools/ci/process-dashboard.mjs): fixture
+  // percentiles, tier walls, push-to-live, time-ratchet skip. No network, < 0.2 s.
+  "tests/unit/process-dashboard.test.mjs",
   "tests/unit/profile-lib.test.mjs",
   "tests/unit/profile-mcp.test.mjs",
   // The branch-prune rule behind prune-branches.yml: merged-only, never an
