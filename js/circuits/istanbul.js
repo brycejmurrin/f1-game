@@ -24,6 +24,7 @@
     night: false,
     theme: "green",
     lengthKm: 5.3,
+    tyreSeverity: 1.22,  // High lateral Istanbul Park; near Miami abrasion band
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     terrainOuter: 120,

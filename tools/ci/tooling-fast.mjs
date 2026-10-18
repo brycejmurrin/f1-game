@@ -42,10 +42,14 @@
  * imports TOOLING_FAST_FILES). Keep package.json as `node tools/ci/tooling-fast.mjs`.
  */
 import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
+const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
 import { changedPaths } from "../lib/changed-files.mjs";
 import { loadGroups } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
@@ -713,6 +717,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/night-washout-presets.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
+  "tests/unit/node-compile-cache.test.mjs",
   "tests/unit/node-plan.test.mjs",
   "tests/unit/nontext-contrast.test.mjs",
   // Round-2: a slow/offline navigation to controller.html never gets the game shell; controller.html is precached as optional.
@@ -1482,7 +1487,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // test, e.g. tooling-fast-runner.test.mjs), it switches that child into
   // report-to-parent mode, where a failing or hung file exits 0 — measured:
   // both hang tests "passed" until this line. Each child is a fresh runner.
-  const childEnv = { ...process.env };
+  const childEnv = { ...process.env, ...augmentNodeCompileCache(process.env, ROOT) };
   delete childEnv.NODE_TEST_CONTEXT;
   const reap = (sig) => {
     for (const c of live) { try { process.kill(-c.pid, "SIGKILL"); } catch (_) { /* already gone */ } }

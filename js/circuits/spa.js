@@ -16,6 +16,7 @@
     night: false,
     theme: "green",
     lengthKm: 7,
+    tyreSeverity: 0.85,  // Belgium hards 0.042 s/lap at Spa 2026 (F1 Chronicle) — ÷ 0.0493
     sunAzimBias: 0.44,   // afternoon sun swings SW over the Ardennes ridge — long shadows down the Kemmel straight
     baseHW: 8,
     sceneryCoordinates: "racing",
