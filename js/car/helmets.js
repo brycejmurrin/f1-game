@@ -375,6 +375,25 @@ const Helmets = (function () {
     return { name: d.name, base: d.alt, visor: d.visor, zones: d.zones, generated: d.generated, shifted: true };
   }
 
+  /* THE PLAYER'S OWN LID. livery.helmetStyle repaints the helmet from two livery
+     colours instead of the driver's number-keyed design, in the same zone
+     vocabulary. "team" (the default), unset or any unknown id returns `des`
+     itself, so the shipped mesh is byte-identical. Colours without a style are
+     ignored; the visor, gasket and neck trim are the shell's, never a design's. */
+  const STYLES = ["team", "solid", "cap", "band", "stripe", "chevron"];
+  const okCol = (c) => Array.isArray(c) && c.length >= 3 && c.every((v) => typeof v === "number" && isFinite(v));
+  function styled(des, style, base, accent) {
+    if (!des || STYLES.indexOf(style) < 1) return des;
+    const b = okCol(base) ? base : des.base;
+    const zc = des.zones && des.zones.find((q) => q && q.c);
+    const a = okCol(accent) ? accent : (des.alt || (zc && zc.c) || C.white);
+    const zones = style === "cap" ? [z.cap(0.30, a)]
+      : style === "band" ? [z.band(0.16, 0.30, a)]
+      : style === "stripe" ? centre(14, a)
+      : style === "chevron" ? [z.chevron(0, 40, 0.04, 0.40, a)] : [];
+    return { name: des.name, base: b, alt: a, visor: des.visor, zones, generated: des.generated, styled: style };
+  }
+
   /* (t, az) -> colour, for one vertex of the shell. Zones paint in order, so a
      later one covers an earlier one exactly as a painter's masks would.
      Returns the base where nothing claims the vertex. */
@@ -825,7 +844,7 @@ const Helmets = (function () {
     return out;
   }
 
-  return { DESIGNS, COLORS: C, designFor, painter, shell, isVisor, generated, keyNum, ZONES, SHAPE, pointAt, build, buildAero, surfAt,
+  return { DESIGNS, COLORS: C, designFor, styled, STYLES, painter, shell, isVisor, generated, keyNum, ZONES, SHAPE, pointAt, build, buildAero, surfAt,
            RINGS, SLICES, FIELD_RINGS, FIELD_SLICES, ringT, MAX_SPLIT };   // the tessellation, so previews/tests can name both detail levels
 })();
 Object.freeze(Helmets);
