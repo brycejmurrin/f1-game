@@ -134,11 +134,12 @@ test("smoke --real: tree tools only, judged on ok + a result, exit 0 in mock mod
   assert.equal(judgeReal({ ok: true, out: { answer: 42 } }, 1).pass, false, "a nonzero process exit cannot be a pass even after valid output");
   assert.equal(judgeReal({ ok: true, out: { answer: 42 } }, null).pass, false, "termination by signal is not a successful tool process");
   assert.throws(() => realCalls([]), /No smoke tools available/, "an empty tool catalog cannot report 0/0 green");
-  const r = run(["--real", "--no-write", "--only=apex_status,apex_pick_tests"], { APEX_MCP_MOCK: "1" });
+  const r = run(["--real", "--no-write", "--only=apex_status,apex_pick_tests,apex_help"], { APEX_MCP_MOCK: "1" });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.match(r.stdout, /PASS apex_status/);
   assert.match(r.stdout, /PASS apex_pick_tests/);
-  assert.match(r.stdout, /mcp-smoke --real ok: 2\/2/);
+  assert.match(r.stdout, /PASS apex_help/, "required help arguments must work through the real smoke path");
+  assert.match(r.stdout, /mcp-smoke --real ok: 3\/3/);
 });
 
 // 2026-10-10: --real covered only the tree tools. --browser adds one cheap call per browser path (ui_fit, ui_shot, eval), one at a
