@@ -679,7 +679,7 @@ const Car3D = (function () {
       }
     }
     // LED STRIP (STYLE): a full-length lit strip down each pod shoulder in the pack's LED colour.
-    if (!ckpt && ersStyle && ersStyle.ledStrip) addPodFlankSpan(0.45, -0.95, 0.99, 0.045, ersGlow, SURFACES.emissive, 0.03);
+    if (!ckpt && ersStyle && ersStyle.ledStrip) addPodFlankSpan(0.45, -0.95, 0.99, 0.045, ersGlow, SURFACES.metal, 0.03);
     const ersBlister = Math.max(0, Math.min(2, Math.round((ersStyle && ersStyle.blister) || 0)));
     if (ersBlister > 0 && !ckpt) {
       const bS = 0.92 + 0.18 * Math.max(0, ersPack - 1);
@@ -901,7 +901,7 @@ const Car3D = (function () {
     // BIG CAP (STYLE): a wide painted filler plate on the cover crown, so a fuel option reads from above.
     if (!ckpt && fuelStyle && fuelStyle.capBig) {
       const cz = -0.52, cyb = coverSurfaceY(anchors.coverAt(cz), 0);
-      addBox(out, 0, cyb + 0.012, cz, 0.30, 0.024, 0.36, (fuelStyle.cap || [0.9, 0.5, 0.1]).map((v) => Math.min(v, 1)), SURFACES.metal);
+      addBox(out, 0, cyb + 0.012, cz, 0.16, 0.024, 0.80, (fuelStyle.cap || [0.9, 0.5, 0.1]).map((v) => Math.min(v, 1)), SURFACES.metal);
     }
     // SKIRT (STYLE): a painted strip down each floor edge.
     if (!ckpt && floorStyle && floorStyle.skirt) for (const s of [-1, 1])
@@ -1143,7 +1143,8 @@ const Car3D = (function () {
       addLoft(out, 0.495, 0, 0.668, 0.34, 0.018,
                    0.605, 0, 0.710, 0.16, 0.014, VISOR, SURFACES.glass);
       // screen 2 (STYLE): a tall wrap-around aeroscreen over the halo's front.
-      if (cockpitStyle.screen >= 2) addLoft(out, 0.47, 0, 0.700, 0.46, 0.02, 0.60, 0, 0.880, 0.36, 0.016, VISOR, SURFACES.glass);
+      if (cockpitStyle.screen >= 2) { addLoft(out, 0.47, 0, 0.700, 0.46, 0.02, 0.60, 0, 0.880, 0.36, 0.016, VISOR, SURFACES.glass);
+        addLoft(out, 0.60, 0, 0.880, 0.40, 0.03, 0.62, 0, 0.900, 0.38, 0.03, c1); }   // painted top frame so it reads
       for (const s of [-1, 1]) {
         addLoft(out, 0.50, s * 0.16, 0.690, 0.10, 0.020,
                      0.58, s * 0.06, 0.730, 0.06, 0.016, DARK);
@@ -1465,8 +1466,8 @@ const Car3D = (function () {
     const exhStack = Math.max(0, Math.min(2, Math.round(exhStyle.stack || 0)));
     for (let i = 0; i < exhStack; i++) {
       const sx = exhStack === 2 ? (i ? 0.13 : -0.13) : 0;
-      addTube(out, [[sx, 0.46, -2.30], [sx, 0.62, -2.50], [sx, 0.80, -2.60]], 0.055 * exhBore, 8, exhMetal, SURFACES.metal);
-      addBox(out, sx, 0.83, -2.62, 0.13 * exhBore, 0.05, 0.13 * exhBore, glazeOf(fuelFlame), SURFACES.metal);
+      addTube(out, [[sx, 0.46, -2.30], [sx, 0.70, -2.50], [sx, 0.98, -2.62]], 0.06 * exhBore, 8, [0.62, 0.60, 0.58], SURFACES.metal);
+      addBox(out, sx, 1.01, -2.63, 0.15 * exhBore, 0.06, 0.15 * exhBore, fuelFlame.map((v) => Math.min(v, 1)), SURFACES.metal);
     }
     }
 
@@ -1955,7 +1956,7 @@ const Car3D = (function () {
     }
     // REAR FINS (STYLE): tall painted fins either side of the gearbox crash structure.
     if (!ckpt && gbStyle && gbStyle.rearFins) for (const s of [-1, 1]) {
-      addBox(out, s * 0.25, 0.46, -2.30, 0.022, 0.34, 0.46, c2);
+      addBox(out, s * 0.25, 0.46, -2.30, 0.022, 0.34, 0.46, c1);
       addBox(out, s * 0.25, 0.64, -2.30, 0.06, 0.02, 0.46, CARBON);
     }
 
