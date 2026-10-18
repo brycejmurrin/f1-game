@@ -82,5 +82,45 @@ sample of each query from warm samples and includes output hashes. It has no
 timing threshold, browser workload, or tokenizer dependency. Correctness and
 freshness belong in the registered LSP regression suites, not a speed assertion.
 
+## Test realistic investigations as well as known-answer lookups
+
+A second experiment assigned twelve independent GPT-5.6 Sol workers to six real
+bug-hunting workflows: ghost recording, audio lifecycle, input state, livery
+imports, race lifecycle, and career saves. Each task had an LSP-assisted worker
+and an `rg`/file-read worker, with a 36-call budget, separate saved commands and
+results, actual-source VM probes, and independent finding validation.
+
+| Condition | Calls, including probes | Probe calls | Returned characters |
+|---|---:|---:|---:|
+| LSP-assisted | 192 | 6 | 762,581 |
+| `rg` and reads | 201 | 8 | 849,450 |
+
+LSP returned 10.23% less text overall, but its input investigation returned
+51.01% more text than the paired `rg` investigation. These exploratory workers
+chose different hypotheses; this is not an exhaustive recall or causal
+efficiency comparison. The earlier known-answer pilot's 80.75% reduction does
+not generalize to these workflows. No billed token usage was available.
+
+Real investigations exposed two missing navigation cases: CommonJS-tailed
+browser globals lost consumers in other scripts, and repeated top-level `var`
+IIFEs used for lazy stub replacement hid inline exported members. The fixes
+preserve lexical shadow filtering, report multiple implementation candidates,
+and avoid guessing runtime load order or injected parameter aliases. Repeated
+IIFE discovery skips implausible files and caches its index with each file's
+text revision; ordinary lookups must not parse unrelated files for this case.
+
+Validation also confirmed livery import state/ID conflicts and career migration
+data loss for accepted string version markers. It rejected a dormant replay API
+as intentional groundwork and treated existing held-key menu behavior as a
+product-policy question. A WebKit activation concern remained unverified.
+Finding count alone would have rewarded unsupported claims.
+
+The harness contributed twelve invalid-scope errors and six malformed probe
+attempts; one explicit production MCP error and successful-but-incomplete
+semantic answers are counted separately. Broad search clipping, silently capped
+file reads, bounded `rg` results, later path guidance, concurrent verification,
+and the CLI proxy's explicit schemas limit interpretation. Keep those failures
+in the evidence instead of rewriting the original runs after fixes.
+
 Protocol reference: [MCP tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools).
 The original server comparison is in [LSP over MCP](LSP-MCP-2026-10-18.md).

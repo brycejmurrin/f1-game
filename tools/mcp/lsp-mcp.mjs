@@ -731,7 +731,10 @@ export class Lsp {
     const c = await this.candidates(args);
     // Untyped heads never answer from the checker: skip the round-trips.
     if (c.parts.length === 2 && FACADES[c.parts[0]]) return { ...c, ...(await this.facade(c.parts, method, extra)) };
-    if (c.parts.length > 1 && this.windowDecl(c.parts.slice(0, -1).join("."))) return { ...c, ...await this.textFallback(c.parts, method, c.head, extra) };
+    if (c.parts.length > 1) {
+      const owner = c.parts.slice(0, -1).join(".");
+      if (this.windowDecl(owner) || this.repeatedIifeDecl(owner)) return { ...c, ...await this.textFallback(c.parts, method, c.head, extra) };
+    }
     const g = c.parts.length === 1 && method === "textDocument/references" && this.windowDecl(c.parts[0]);
     if (g) {
       const p = c.top[0], def = { uri: this.uriOf(p.file), range: { start: { line: p.line0, character: p.col0 } } };
@@ -791,9 +794,40 @@ export class Lsp {
     }
     return all ? declarations : null;
   }
+  // Lazy bundles replace a title stub with a real implementation by evaluating
+  // another top-level `var H = (function () { return { ... }; })()` script.
+  // Only treat repeated declarations of that exact shape as one reinjected
+  // browser global; an ordinary local/object with the same name is unrelated.
+  repeatedIifeDecl(h, all = false) {
+    const declarations = [];
+    for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
+      const t = this.textOf(f);
+      t.repeatedIifes ??= new Map();
+      if (!t.repeatedIifes.has(h)) {
+        const found = [];
+        // This only rejects impossible files. Exact shape/top-level validation
+        // stays in the AST, so comments, newlines and multi-declarators work.
+        if (/\bvar\b/.test(t.text) && new RegExp(`(^|[^\\w$])${h.replace(/[$]/g, "\\$")}([^\\w$]|$)`).test(t.text)) {
+          for (const statement of this.astOf(f)?.body || []) {
+            if (statement.type !== "VariableDeclaration" || statement.kind !== "var") continue;
+            for (const n of statement.declarations) {
+              const callee = n.init?.type === "CallExpression" ? n.init.callee : null;
+              if (n.id.type !== "Identifier" || n.id.name !== h || !["FunctionExpression", "ArrowFunctionExpression"].includes(callee?.type)) continue;
+              found.push({ file: f, line0: statement.loc.start.line - 1, col0: statement.loc.start.column,
+                idLine0: n.id.loc.start.line - 1, idCol0: n.id.loc.start.column, kind: "script" });
+            }
+          }
+        }
+        t.repeatedIifes.set(h, found);
+      }
+      declarations.push(...t.repeatedIifes.get(h));
+    }
+    if (declarations.length < 2) return all ? [] : null;
+    return all ? declarations : declarations[0];
+  }
   async textFallback(parts, method, head, extra = {}) {
     const [h, member] = [parts.slice(0, -1).join("."), parts.at(-1)];
-    const d = this.windowDecl(h);
+    const d = this.windowDecl(h) || this.repeatedIifeDecl(h);
     if (!d && head) throw Error(`${h} (${head.file}:${head.line0 + 1}) has no member ${member} the checker can see; try lsp_hover ${h} or lsp_symbols ${member}`);
     if (!d) throw Error(`symbol not found: ${h} is not a global the checker or a window.${h} assignment declares`);
     // Read the actual assignment/initializer and its exported object. A later
@@ -829,24 +863,30 @@ export class Lsp {
       return { nodes: [], uncertain: true };
     };
     const defs = []; let uncertain = false;
-    const owners = d.kind === "window" ? this.windowDecl(h, true).filter(x => x.kind === "window") : [d];
+    const owners = d.kind === "window" ? this.windowDecl(h, true).filter(x => x.kind === "window")
+      : d.kind === "script" ? this.repeatedIifeDecl(h, true) : [d];
     for (const owner of owners) {
       const candidates = [];
       visit(this.astOf(owner.file), n => {
         if (n.loc.start.line - 1 !== owner.line0 || n.loc.start.column !== owner.col0) return;
         if (owner.kind === "window" && n.type === "AssignmentExpression" && ownerName(n.left) === `window.${h}`) candidates.push(n.right);
-        if (owner.kind === "cjs" && n.type === "VariableDeclaration") for (const v of n.declarations) if (ownerName(v.id) === h) candidates.push(v.init);
+        if (["cjs", "script"].includes(owner.kind) && n.type === "VariableDeclaration") for (const v of n.declarations) {
+          if (ownerName(v.id) !== h) continue;
+          if (owner.kind === "script" && (v.id.loc.start.line - 1 !== owner.idLine0 || v.id.loc.start.column !== owner.idCol0)) continue;
+          candidates.push(v.init);
+        }
       });
       const ast = this.astOf(owner.file);
       for (const init of candidates) {
         const fn = init?.type === "CallExpression" && ["FunctionExpression", "ArrowFunctionExpression"].includes(init.callee.type) ? init.callee : null;
-        const returns = fn?.body?.body ? fn.body.body.filter(n => n.type === "ReturnStatement").map(n => n.argument) : [init];
+        const returns = fn ? fn.body.type === "BlockStatement"
+          ? fn.body.body.filter(n => n.type === "ReturnStatement").map(n => n.argument) : [fn.body] : [init];
         for (const value of returns) {
           const found = memberNodes(owner.file, ast, value); uncertain ||= found.uncertain;
           for (const prop of found.nodes) {
             let at = prop.key;
             if (fn && prop?.value?.type === "Identifier") {
-              for (const n of fn.body.body) {
+              for (const n of fn.body.body || []) {
                 if (n.type === "FunctionDeclaration" && n.id?.name === prop.value.name) at = n.id;
                 if (n.type === "VariableDeclaration") for (const v of n.declarations) if (v.id.name === prop.value.name) at = v.id;
               }
@@ -856,11 +896,14 @@ export class Lsp {
         }
       }
     }
-    if (!defs.length) throw Error(`${d.kind === "cjs" ? h : `window.${h}`} (${d.file}:${d.line0 + 1}) has no member ${member}`);
+    if (!defs.length) throw Error(`${d.kind === "window" ? `window.${h}` : h} (${d.file}:${d.line0 + 1}) has no member ${member}`);
     const qualifications = [];
     if (owners.length > 1 || defs.length > 1) qualifications.push("multiple assignments/member contributions; candidates shown; runtime load order may determine the winner");
     if (uncertain) qualifications.push("a spread or dynamic source participates in overwrite order; candidates shown in source order");
-    const note = `${d.kind === "cjs" ? `text match: ${d.file} ends in module.exports, so the checker scopes ${h} to that file` : `text match: window.${h} is untyped for the checker`}${qualifications.length ? `; ${qualifications.join("; ")}` : ""}`;
+    const ownerNote = d.kind === "cjs" ? `text match: ${d.file} ends in module.exports, so the checker scopes ${h} to that file`
+      : d.kind === "script" ? `text match: repeated top-level var ${h} IIFEs form a reinjected browser global`
+      : `text match: window.${h} is untyped for the checker`;
+    const note = `${ownerNote}${qualifications.length ? `; ${qualifications.join("; ")}` : ""}`;
     const def = defs[0], p = { file: this.rel(def.uri), line0: def.range.start.line, col0: def.range.start.character };
     if (method !== "textDocument/references") return { p, result: method === "textDocument/hover" ? { contents: `(${note})` } : defs, note };
     const refs = await this.textRefs(parts, def, extra.context?.includeDeclaration !== false);
@@ -892,7 +935,8 @@ export class Lsp {
   // and `H || {}` / `window.H || {}` (e.g. `const PC = …` then `PC.VMAX`).
   async textRefs(parts, def, includeDeclaration = true) {
     const name = parts.at(-1), head = parts.slice(0, -1).join("."), esc = x => x.replace(/[$.]/g, "\\$&");
-    const fallbackOwner = head && this.windowDecl(head);
+    const fallbackOwner = head && (this.windowDecl(head) || this.repeatedIifeDecl(head));
+    const repeatedOwners = fallbackOwner?.kind === "script" ? this.repeatedIifeDecl(head, true) : [];
     const refs = includeDeclaration ? [def] : [], seen = new Set([`${def.uri}:${def.range.start.line}:${def.range.start.character}`]);
     const add = (f, i, col, via = false) => { const uri = this.uriOf(f), k = `${uri}:${i}:${col}`; if (!seen.has(k)) { seen.add(k); refs.push({ uri, range: { start: { line: i, character: col } }, ...(via ? { via: true } : {}) }); } };
     const usesOf = (f, re, nameLen, fromLine = 0, via = false) => {
@@ -910,13 +954,17 @@ export class Lsp {
     for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
       const { text } = this.textOf(f);
       if (!text.includes(name) || (head && !text.includes(head))) continue;   // every ref spells the member name
-      let cjsOwner = null;
-      if (fallbackOwner?.kind === "cjs" && fallbackOwner.file === f) visit(this.astOf(f), n => {
-        if (cjsOwner || n.type !== "VariableDeclarator" || n.id.type !== "Identifier" || n.id.name !== head || n.loc.start.line - 1 !== fallbackOwner.line0) return;
-        cjsOwner = this.lexicalRefs(f).get(n.id.range[0]) || null;
+      let lexicalOwner = null;
+      const owner = fallbackOwner?.kind === "script" ? repeatedOwners.find(x => x.file === f) : fallbackOwner?.file === f ? fallbackOwner : null;
+      if (owner && ["cjs", "script"].includes(owner.kind)) visit(this.astOf(f), n => {
+        if (lexicalOwner || n.type !== "VariableDeclarator" || n.id.type !== "Identifier" || n.id.name !== head ||
+          n.id.loc.start.line - 1 !== (owner.idLine0 ?? owner.line0) || n.id.loc.start.column !== (owner.idCol0 ?? n.id.loc.start.column)) return;
+        lexicalOwner = this.lexicalRefs(f).get(n.id.range[0]) || null;
       });
-      const validHead = n => fallbackOwner?.kind === "cjs"
-        ? !!cjsOwner && n?.type === "Identifier" && this.lexicalRefs(f).get(n.range[0]) === cjsOwner
+      const validHead = n => ["cjs", "script"].includes(fallbackOwner?.kind)
+        ? owner
+          ? !!lexicalOwner && n?.type === "Identifier" && this.lexicalRefs(f).get(n.range[0]) === lexicalOwner
+          : this.isGlobalHead(f, n, head)
         : this.isGlobalHead(f, n, head);
       if (parts.length < 2 || FACADES[head]) usesOf(f, direct, name.length);
       else visit(this.astOf(f), n => {

@@ -12,7 +12,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 async function fixture(fn) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-nav-"));
   const files = {
-    "jsconfig.json": JSON.stringify({ compilerOptions: { allowJs: true, noEmit: true }, include: ["src/**/*.js"] }),
+    "jsconfig.json": JSON.stringify({ compilerOptions: { allowJs: true, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }),
     "src/core/log.js": '"use strict";\n',
     "src/core/ops.js": 'const Ops = (() => {\n  function run(v) { return v + 1; }\n  return { run };\n})();\n',
     "src/ui/panel.js": 'const Panel = (() => {\n  const alias = Ops.run;\n  const draw = () => alias(2);\n  const { run: picked } = Ops;\n  const drawPicked = () => picked(5);\n  function update() { return Ops.run(1); }\n  return { draw, drawPicked, update };\n})();\n',

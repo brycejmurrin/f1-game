@@ -697,6 +697,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/lsp-mcp.test.mjs",
   "tests/unit/lsp-navigation-efficiency.test.mjs",
   "tests/unit/lsp-reference-fixes.test.mjs",
+  "tests/unit/lsp-workflow-fixes.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
   "tests/unit/marshal-panels.test.mjs",
