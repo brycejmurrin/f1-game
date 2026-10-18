@@ -20,18 +20,10 @@ Generic trauma-shake math: [feedback-recipes.md](feedback-recipes.md).
 
 ## Workflow
 
-1. Name the discrete event (impact, kerb entry, shift, sector). Continuous
-   events need cooldowns.
-2. Choose 2–3 channels. Scale from existing data (slip, impact, gear).
-3. FX may **read** physics, never write forces/pose/timers/AI.
-4. Verify visual/audio with hooks; run the relevant deterministic tests.
-5. Determinism proof, no browser: `node --test tests/unit/physics-characterization-vm.test.mjs` (~3 s, same
-   `tests/data/physics-baseline.json` as the browser spec; never regenerate it) plus `player-dynamics-vm.test.mjs`. These fixtures pin their exercised simulation paths; headless green alone
-   does not establish live hit-stop wall/sim timing. Existing `hitStop` deliberately
-   scales live sim time, while cosmetic shake belongs only in camera/render.
-   Compare equal simulation time separately from equal wall time in a frame-driver
-   contract before changing impact behavior; do not extend the slowdown to kerbs.
-   Then the browser spec `physics-characterization` once (test-bg `physics-core`).
+The loop and its determinism commands are in [SKILL.md](../SKILL.md) §Loop. One caveat
+it leaves out: the VM fixtures pin the simulation paths they exercise, so a headless
+green does not prove live wall-clock timing. A change touching `feel.hitStop` must
+compare equal sim time and equal wall time separately.
 
 ## Common mistakes
 

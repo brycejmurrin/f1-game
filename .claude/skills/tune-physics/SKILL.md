@@ -38,11 +38,8 @@ defaults come from `js/input/steer-tuning.js` `applySteerTuning()` (slider defau
 the game.js literals are dead.
 `PACE` is a scale, not a cap; compare speeds via `vTop()`/`vStd()`/`aStd()`.
 
-**The arc must not reach the driver.** With assists off, nothing derived from
-track curvature / racing line may affect the player. New `Tracks.curvature()`
-(or equivalent) reads belong in a legitimate column — AI-only, assist-gated,
-broadcast-only, or surface — see `docs/PHYSICS.md`. Do not "help" the player
-by feeding path curvature into steer/throttle when assists are off.
+**The arc must not reach the driver** (AGENTS.md §Physics; columns in `docs/PHYSICS.md`): never "help"
+the player by feeding path curvature into steer/throttle with assists off.
 
 **`ROAD_FOLLOW` ships at `0` (OFF)** on purpose. The DRIVING HELP slider maps
 notch 1..10 to `0..0.70` (notch 1 = off). Recommending a raised default is a
@@ -52,9 +49,7 @@ Fixed in `js/physics/consts.js` (`PhysicsConsts`, not `setPhysics`): `LONG_GRIP`
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
 ```sh
-# Verify per AGENTS.md rule 4 and its table: prefer ONE spec (`npm test -- tests/specs/understeer-cue.spec.js`,
-# `physics-characterization.spec.js`) via test-bg.mjs, then `test-bg.mjs --wait --timeout 45`; cap two groups
-# (physics-core, collisions, aero, input; `pick-tests` names them); a whole group → remote-group.mjs on the pushed branch.
+# Browser verify (AGENTS.md table): ONE spec — understeer-cue.spec.js or physics-characterization.spec.js — via test-bg.mjs.
 node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>  # browser (launchChromium) — stability probe, not an A/B
 ```
 
@@ -66,14 +61,13 @@ TRACK=monza FRAC=0.0 node tools/check/player-dyn.mjs [--json] [--seat pin|shippe
 node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SHAPES
 ```
 
-`player-dyn.mjs` exports `measure(g, frac)`: to A/B one setting, script it in
-`scratch/` — `createGame({track, storage: {difficulty: "normal", autoThrottle: false}})` (copy `main()`'s options), `await g.race(track)`, `g.apex.setPhysics({frontGrip: x})`,
-`measure(g, frac)` per value — and diff the JSON (read `aF`/`aR`, `uF`/`uR`, `yaw`; front
+`player-dyn.mjs` exports `measure(g, frac)`: to A/B one setting, copy the sweep script in
+[references/understeer-recipe.md](references/understeer-recipe.md) step 2 and diff the JSON (read `aF`/`aR`, `uF`/`uR`, `yaw`; front
 slip past its peak with rear settled = understeer). `physics-tune-sweep.mjs` is BROWSER + long (sharded
 DOM-slider laps, `APEX_WORKERS`): not for one setting. Verdict: a directional change in the
 same tables; worked "understeers in slow corners" example → [references/understeer-recipe.md](references/understeer-recipe.md).
 
-If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)) before commit. Theory:
+Theory:
 `docs/PHYSICS.md`, `docs/research/steering-research.md`.
 
 ## Load on demand

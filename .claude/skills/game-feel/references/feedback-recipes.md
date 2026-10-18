@@ -1,109 +1,81 @@
 # Feedback recipes — depth for `game-feel`
 
-Detail [the game-feel SKILL.md](../SKILL.md) defers here: the shake math, easing cheat sheet, the rest of the
-feedback menu (knockback, flash, number pop, freeze), importance-tier presets, and the
-per-engine bindings for tweens and particles. All snippets target **Godot 4.x** and **Unity 6**.
+Detail [the game-feel SKILL.md](../SKILL.md) defers here: the shake math, which easing
+curve for which job, the rest of the feedback menu, importance tiers and accessibility.
+Plain JS/CSS for this codebase; every value is a render/audio input, never a physics one.
 
 ## Contents
 - 1. The trauma model (why shake feels good)
-- 2. Easing cheat sheet — which curve for which job
+- 2. Easing cheat sheet
 - 3. The rest of the feedback menu
-- 4. Importance tiers (keep the whole game proportional)
-- 5. Accessibility (ship these toggles)
-- 6. Per-engine binding summary
+- 4. Importance tiers
+- 5. Accessibility
 
 ## 1. The trauma model (why shake feels good)
 
-Track a single `trauma` value in `[0, 1]`. Events **add** trauma; it **decays** linearly each
-frame. The actual shake amount is `trauma^2` (or `trauma^3`) so:
+Track one `trauma` value in `[0, 1]`. Events **add** trauma; it **decays** linearly each
+frame. The applied shake is `trauma ** 2`, so small frequent events barely nudge the view,
+big ones punch, and shake always ends on its own.
 
-- small/frequent events barely nudge the screen (low trauma, squared → tiny),
-- big events punch hard (high trauma, squared → near full),
-- shake **always ends** on its own because trauma decays to 0.
+Offset and roll are `max * shake * noise(t)`. Sample summed sines (or value noise) across
+time — never a fresh `Math.random()` per frame: that buzzes instead of shaking, and an RNG
+draw in the frame loop is how cosmetic code breaks headless determinism.
 
-Offset and rotation are `max_* * shake * noise(t)`. Sample a noise function or summed sines
-across time — never a fresh `rand()` per frame, which produces a harsh buzz instead of a shake.
-
-```gdscript
-# 1D value-noise-ish sampler without an addon: layered sines at incommensurate rates.
-func _shake_axis(seed: float, t: float) -> float:
-    return 0.6 * sin(t * 11.0 + seed) + 0.4 * sin(t * 23.0 + seed * 2.0)
+```js
+const axis = (seed, t) => 0.6 * Math.sin(t * 11 + seed) + 0.4 * Math.sin(t * 23 + seed * 2);
+// per render frame, camera only:
+trauma = Math.max(0, trauma - decay * dt);
+const s = trauma * trauma;
+camOffsetX = maxOffset * s * axis(1.7, t);
+camRoll    = maxRoll   * s * axis(4.2, t);
 ```
 
-Tunable starting points: `max_offset = (8..16, 6..10) px`, `max_roll = 0.05..0.12 rad`,
-`decay = 1.0..1.5` trauma/sec, per-hit trauma `0.15` (light) → `0.8` (heavy).
+Starting points: `maxRoll` 0.03–0.08 rad, `decay` 1.0–1.5 /s, per-event trauma 0.15 (light)
+→ 0.8 (heavy). In Apex `feel.shake` (js/game.js) is the existing accumulator; feed it rather
+than adding a second one.
 
-## 2. Easing cheat sheet — which curve for which job
+## 2. Easing cheat sheet
 
-| Goal | Ease | Godot `Tween` | Notes |
-|------|------|---------------|-------|
-| UI/element "pop" in | overshoot | `TRANS_BACK`, `EASE_OUT` | shoots past target, settles back |
-| Bouncy, lively land | bounce/elastic | `TRANS_ELASTIC`/`TRANS_BOUNCE`, `EASE_OUT` | use sparingly; reads as cartoonish |
-| Settle / decelerate | ease-out | `TRANS_CUBIC`/`TRANS_QUAD`, `EASE_OUT` | the default for "comes to rest" |
-| Anticipation / wind-up | ease-in | `TRANS_CUBIC`, `EASE_IN` | slow start before a fast action |
-| Smooth A→B both ends | ease-in-out | `TRANS_SINE`, `EASE_IN_OUT` | camera moves, menu slides |
+| Goal | Curve | CSS | Notes |
+|------|-------|-----|-------|
+| HUD/element "pop" in | overshoot | `cubic-bezier(.34,1.56,.64,1)` | shoots past, settles back |
+| Settle / decelerate | ease-out | `cubic-bezier(.22,1,.36,1)` | the default "comes to rest" |
+| Wind-up before a fast action | ease-in | `cubic-bezier(.55,0,1,.45)` | slow start |
+| Smooth A→B both ends | ease-in-out | `ease-in-out` | camera moves, menu slides |
+| Bouncy land | elastic | JS spring only | sparingly; reads as cartoonish |
 
-Unity 6 has no built-in tween library; options in order of preference: `Vector3.SmoothDamp`
-for spring-like follow, `Mathf.SmoothStep`/hand-rolled ease in a coroutine, Animator curves,
-or a third-party tween package if the project already uses one. Keep the *curve choice* the
-same regardless of tool.
-
-```csharp
-// Unity 6: a minimal eased scale "pop" in a coroutine (no external deps).
-IEnumerator Pop(Transform t, float dur = 0.18f) {
-    t.localScale = new Vector3(1.3f, 0.7f, 1f);            // squash on the event
-    for (float e = 0; e < dur; e += Time.deltaTime) {
-        float k = e / dur;
-        float back = 1f + 2.7f * Mathf.Pow(1 - k, 2) * (k - 0); // overshoot-ish
-        t.localScale = Vector3.Lerp(t.localScale, Vector3.one, k * k);
-        yield return null;
-    }
-    t.localScale = Vector3.one;
-}
-```
+Prefer CSS transitions for DOM/HUD (no per-frame JS). In the render loop, a critically
+damped follow (`x += (target - x) * (1 - Math.exp(-k * dt))`) is frame-rate independent.
 
 ## 3. The rest of the feedback menu
 
-- **Flash:** tint the sprite/material white for 1–3 frames on hit (`modulate`/material color),
-  then tween back. Cheap, hugely legible.
+- **Flash:** tint the HUD element or material toward white for 1–3 frames on hit, then ease
+  back. Cheap, hugely legible.
 - **Knockback:** a physics impulse, so out of scope here (it changes `obs()`); in Apex
   the collision response belongs to **race-incidents-control** / **tune-physics**.
-- **Number/text pop:** spawn a damage number that rises, fades, and eases out; randomize the
-  horizontal drift so stacked hits fan out.
-- **Particles:** a short burst at the contact point (sparks, dust, debris). Pool them
-  (`js/perf/governor.js`) — do not instance-and-free per hit.
+- **Particles:** a short burst at the contact point (sparks, dust, debris) via
+  `js/fx/particles.js`. Respect the `js/perf/governor.js` budget; never allocate per hit.
 - **Freeze frame:** in Apex a render-only hold (see workflow.md, hit-stop); scale duration
   to importance (0.04 s light → 0.15 s heavy). The sim never pauses.
-- **Anticipation & follow-through:** a tiny wind-up before a big action and a settle after read
-  as weight; this is animation, not code (engine animation skill).
+- **Audio layer:** a transient on the event (thud, scrape, shift clunk) in
+  `js/audio/engine.js`, scaled from the same impact value as the shake.
 - **Chromatic/vignette/zoom punch:** post-process nudges for big moments; keep brief.
 
-## 4. Importance tiers (keep the whole game proportional)
+## 4. Importance tiers
 
-Define three presets and assign every juicy event to one. This is what stops a game from
-feeling either dead (under-juiced) or exhausting (everything maxed).
+Assign every event to one tier so the game is neither dead nor exhausting.
 
-| Tier | Trauma | Hit-stop | Particles | Extra | Example events |
-|------|:------:|:--------:|:---------:|-------|----------------|
-| small | 0.10–0.20 | none | 0–4 | tick SFX | footstep, UI hover, coin |
-| medium | 0.30–0.50 | 0.04–0.06 s | 6–12 | flash | normal hit, jump-land, pickup |
-| large | 0.70–1.00 | 0.10–0.15 s | 20–40 | flash + zoom + number | crit, boss hit, death, explosion |
+| Tier | Trauma | Freeze | Particles | Extra | Apex examples |
+|------|:------:|:------:|:---------:|-------|---------------|
+| small | 0.10–0.20 | none | 0–4 | tick sfx | kerb entry, gear shift |
+| medium | 0.30–0.50 | none | 6–12 | flash | light car contact, gravel entry |
+| large | 0.70–1.00 | 0.10–0.15 s render hold | 20–40 | flash + zoom | heavy wall hit, big car-car crash |
 
-## 5. Accessibility (ship these toggles)
+## 5. Accessibility
 
-- **Reduce screen shake** (scale trauma output by a 0–100% setting, default ~60–80%).
-- **Reduce/disable flashing** (photosensitivity) — replace white flashes with a static tint.
-- **Reduce camera motion** — cut shake roll and zoom punches.
+- **Reduce screen shake:** scale trauma output by a 0–100 % setting.
+- **Reduce flashing** (photosensitivity): replace white flashes with a static tint.
+- **Reduce camera motion:** cut roll and zoom punches.
 
-Expose these through the repo's own settings/accessibility UI when an Apex
-implementation needs player control over intensity.
-
-## 6. Per-engine binding summary
-
-- **Godot 4.x:** `create_tween()` + `tween_property().set_trans().set_ease()`; `GPUParticles2D/3D`
-  one-shot; `Engine.time_scale` + `ignore_time_scale` timer; shake on `Camera2D.offset`.
-- **Unity 6:** coroutines + `SmoothDamp`/curves (or a tween package); `ParticleSystem.Play()`;
-  `Time.timeScale` + `WaitForSecondsRealtime`; shake via `CinemachineBasicMultiChannelPerlin`
-  amplitude/frequency driven by `trauma^2`.
-- **Web (Phaser/Pixi/three):** tween via the engine/library tween; `this.cameras.main.shake()`
-  in Phaser; `requestAnimationFrame`-driven eases elsewhere.
+Expose these through the existing settings UI (**ui-menu-a11y** owns the menu), and honour
+`prefers-reduced-motion` for DOM effects.
