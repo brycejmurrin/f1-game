@@ -621,7 +621,7 @@ test("compact catalogue keeps a pannable toolbar and shrinks the strip to flags"
   assert.equal(decl(menus, "#sel-track-search", "min-width"), "12rem",
     "search keeps a readable floor so the row actually overflows at 200%");
   for (const w of [360, 420, 440]) {
-    assert.ok(!menus.some((r) => r.context.some((c) => c === `@container sheet (max-width: ${w}px)`)), `no @container sheet (max-width: ${w}px) block`);
+    assert.ok(!menus.some((r) => r.selector.includes("#sel-") && r.context.some((c) => c === `@container sheet (max-width: ${w}px)`)), `no @container sheet (max-width: ${w}px) block`);
   }
   const compact = '#sel-inner[data-density="compact"]';
   assert.equal(decl(menus, `${compact} #sel-tracks .track-row-name`, "display"), "none",
@@ -1535,16 +1535,16 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   assert.match(raceSettings, /wrap:\s*false/, "LAPS chevrons stop at the ends");
   assert.match(raceSettings, /\[\["tier", "PACE ORDER"\], \["quali", "QUALIFYING"\]/);
   const menus = css("css/menus.css");
-  // The race-settings body is a plain one-or-two column grid of rows now: the
-  // data-shape / data-density grid-row placement that fitted seven chip groups
-  // must not come back with the chips.
+  // Rows retain intrinsic one/two-column layout; short sheets promote the
+  // whole task to a single scroller rather than pinning chrome around it.
   assert.equal(decl(menus, /#rs-body$/, "display"), "grid");
-  assert.equal(decl(menus, /#rs-body$/, "overflow-y"), "auto", "the race-settings body is the one scroller");
-  assert.ok(rulesFor(menus, /^#rs-body$/, { context: /@container sheet \(min-width: 440px\)/ }).some((r) =>
+  assert.equal(decl(menus, /#rs-body$/, "overflow-y"), "auto", "roomy race settings scroll within the body");
+  assert.ok(rulesFor(menus, /^#rs-body$/, { context: /@container sheet \(min-width: 640px\)/ }).some((r) =>
     /1fr\) minmax\(0, 1fr\)$/.test(r.decls.get("grid-template-columns") || "")), "two columns once the sheet is wide");
   assert.equal(rulesFor(menus, /#rs-/).filter((r) => r.decls.has("grid-row")).length, 0, "no per-section grid-row placement");
-  assert.equal(rulesFor(menus, /data-shape|data-density/).filter((r) => /#rs-|race-settings/.test(r.selector)).length, 0);
-  assert.equal(decl(css("css/components.css"), "#race-settings .sheet", "--compact-at"), "760px");
+  assert.equal(decl(menus, '#race-settings > .sheet:is([data-density="compact"], [data-shape="tall"])', "overflow-y"), "auto");
+  assert.equal(decl(menus, '#race-settings > .sheet:is([data-density="compact"], [data-shape="tall"]) > #rs-body', "overflow"), "visible");
+  assert.equal(decl(menus, "#race-settings > .sheet", "--compact-at"), "260px");
   assert.match(spotify, /settings\.hidden\s*=\s*true\b/);
   assert.match(spotify, /settings\.hidden\s*=\s*false\b/);
 });
@@ -1692,7 +1692,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "minmax(0, 1fr) minmax(0, 1fr)", "wide stacked modes picker is two-up; tall stacks");
   assert.doesNotMatch(readCssSource("css/career.css"), /-webkit-line-clamp:\s*2/,
     "mode intros wrap in full (no ellipsis at UI SIZE 150/200, Bryce 2026-10-17)");
-  assert.equal(decl(css("css/components.css"), "#race-settings", "--sheet-w"), "760px",
+  assert.equal(decl(css("css/race-setup.css"), "#race-settings", "--sheet-w"), "760px",
     "race settings spends the same safe width as settings / customize");
   assert.equal(decl(css("css/components.css"), "#standings", "--sheet-w"), "760px");
   assert.equal(decl(css("css/components.css"), "#results", "--sheet-w"), "760px");

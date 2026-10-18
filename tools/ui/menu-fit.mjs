@@ -10,6 +10,8 @@
 //   * children painted outside their scroll container's box (clipped)
 //   * vertical overflow that is NOT scrollable (content lost below the fold)
 // plus a screenshot per screen.
+// Touch-only at every viewport size. Use layout-audit's viewport catalog for
+// desktop comparisons; changing WxH here does not change the input profile.
 //
 //   node tools/ui/menu-fit.mjs                 # default 852x393 (iPhone 15 Pro landscape)
 //   node tools/ui/menu-fit.mjs 844x390 390x844 932x430
@@ -47,6 +49,9 @@ const argv = process.argv.slice(2);
 exitIfHelp(argv, `menu-fit — cramped/clipped audit at a viewport (+ --safe= notch insets)
 
   node tools/ui/menu-fit.mjs [WxH …] [--safe=L,T,R,B] [--scale=100,130] [--only=…]
+
+Touch-only at every viewport size; desktop-sized windows still use touch defaults.
+For desktop comparisons, use tools/ui/layout-audit.mjs and its viewport catalog.
 
 --safe is why this CLI still exists (layout-audit has no notch axis yet).
 Browser-only otherwise; use layout-audit.mjs --list for a no-browser catalog.`);
