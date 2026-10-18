@@ -36,6 +36,16 @@ async function openSetup(page) {
 
 // Creator tests need an empty custom list. forgetStored alone is a miss, so
 // GarageDefaults refills the shipped McLaren custom (CI selected-6: length 2).
+// The paint editor shows one car area at a time (car-area tabs): open the area that holds a
+// control before acting on it. A no-op for anything outside a hidden area.
+async function reveal(page, sel) {
+  await page.evaluate((s) => {
+    const pane = document.querySelector(s)?.closest('[role="tabpanel"]');
+    if (pane && pane.hidden) document.getElementById(pane.getAttribute("aria-labelledby")).click();
+  }, sel);
+  return page.locator(sel);
+}
+
 async function pinEmptyCustoms(page) {
   const key = await page.evaluate(() => "livery.custom." + Teams.LIST[2].id);
   await forgetStored(page, [key]);
@@ -208,7 +218,7 @@ test.describe("Liveries — creator", () => {
   test("the paint editor outweighs the garage chrome above it", async ({ page }) => {
     await load(page);
     await openSetup(page);
-    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await (await reveal(page, '#cs-tabs [data-cs-cat="livery"]')).click();
 
     const h = (sel) => page.evaluate((s) => {
       const e = document.querySelector(s);
@@ -218,7 +228,7 @@ test.describe("Liveries — creator", () => {
     const before = await h("#cs-options");
     expect(before, "precondition: the option list has a box to grow from").toBeGreaterThan(0);
 
-    await page.locator(".cs-liv-create").click();
+    await (await reveal(page, ".cs-liv-create")).click();
     await expect(page.locator(".cs-liv-editor")).toBeVisible();
 
     const [opts, tabs, head] = [await h("#cs-options"), await h("#cs-tabs"), await h("#cs-header")];
@@ -231,8 +241,8 @@ test.describe("Liveries — creator", () => {
   test("FIN SHAPE none greys out the four fin rows, and a fin brings them back", async ({ page }) => {
     await load(page);
     await openSetup(page);
-    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
-    await page.locator(".cs-liv-create").click();
+    await (await reveal(page, '#cs-tabs [data-cs-cat="livery"]')).click();
+    await (await reveal(page, ".cs-liv-create")).click();
 
     const badgeRow = page.locator('.cs-liv-ed-row:has([data-cs-pill^="finBadge:"])');
     const styleRow = page.locator('.cs-liv-ed-row:has([data-cs-pill^="finStyle:"])');
@@ -243,11 +253,11 @@ test.describe("Liveries — creator", () => {
     // teams, a stepped fin on the boot team (js/data/teams.js) — so the rows open
     // in whatever state that team ships. This test is about the dependency RULE,
     // not about the shipped default — so it sets the fin itself rather than inheriting one.
-    await page.locator('[data-cs-pill="finShape:standard"]').click();
+    await (await reveal(page, '[data-cs-pill="finShape:standard"]')).click();
     for (const r of rows) await expect(r).toHaveAttribute("aria-disabled", "false");
     await expect(page.locator('[data-cs-pill="finBadge:logo"]')).toBeEnabled();
 
-    await page.locator('[data-cs-pill="finShape:none"]').click();
+    await (await reveal(page, '[data-cs-pill="finShape:none"]')).click();
     for (const r of rows) await expect(r).toHaveAttribute("aria-disabled", "true");
     await expect(page.locator('[data-cs-pill="finBadge:logo"]')).toBeDisabled();
     await expect(page.locator('[data-cs-pill="finStyle:team"]')).toBeDisabled();
@@ -274,7 +284,7 @@ test.describe("Liveries — creator", () => {
     expect(opacity).toBe("row 1, reason 1, control 0.38");
     await page.screenshot({ path: galleryPath("parts-liveries", "creator-no-fin-rows.png") });
 
-    await page.locator('[data-cs-pill="finShape:standard"]').click();
+    await (await reveal(page, '[data-cs-pill="finShape:standard"]')).click();
     for (const r of rows) await expect(r).toHaveAttribute("aria-disabled", "false");
     await expect(reason).toHaveCount(0);
     await expect(page.locator('[data-cs-pill="finBadge:logo"]')).toBeEnabled();
@@ -283,53 +293,53 @@ test.describe("Liveries — creator", () => {
   test("a plain fin greys TAIL GRAPHIC, and the CLEAN sponsor pack greys the wordmark pills", async ({ page }) => {
     await load(page);
     await openSetup(page);
-    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
-    await page.locator(".cs-liv-create").click();
+    await (await reveal(page, '#cs-tabs [data-cs-cat="livery"]')).click();
+    await (await reveal(page, ".cs-liv-create")).click();
 
     const artRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL GRAPHIC"))');
     // A NEW paint job starts on the TEAM'S OWN silhouette — fin-less on most 2026
     // teams, a stepped fin on the boot team (js/data/teams.js) — so the rows open
     // in whatever state that team ships. This test is about the dependency RULE,
     // not about the shipped default — so it sets the fin itself rather than inheriting one.
-    await page.locator('[data-cs-pill="finShape:standard"]').click();
+    await (await reveal(page, '[data-cs-pill="finShape:standard"]')).click();
     await expect(artRow).toHaveAttribute("aria-disabled", "false");
     // Motif off + logo badge: nothing takes the colour.
-    await page.locator('[data-cs-pill="finStyle:none"]').click();
+    await (await reveal(page, '[data-cs-pill="finStyle:none"]')).click();
     await expect(artRow).toHaveAttribute("aria-disabled", "true");
     // A number badge inks with it again.
-    await page.locator('[data-cs-pill="finBadge:number"]').click();
+    await (await reveal(page, '[data-cs-pill="finBadge:number"]')).click();
     await expect(artRow).toHaveAttribute("aria-disabled", "false");
-    await page.locator('[data-cs-pill="finBadge:logo"]').click();
+    await (await reveal(page, '[data-cs-pill="finBadge:logo"]')).click();
     await expect(artRow).toHaveAttribute("aria-disabled", "true");
-    await page.locator('[data-cs-pill="finStyle:team"]').click();
+    await (await reveal(page, '[data-cs-pill="finStyle:team"]')).click();
     await expect(artRow).toHaveAttribute("aria-disabled", "false");
 
     const wordPills = ['[data-cs-pill="spineLogo:wordmark"]', '[data-cs-pill="spineSide:wordmark"]', '[data-cs-pill="spineSide:duo"]'];
     for (const p of wordPills) await expect(page.locator(p)).toBeEnabled();
-    await page.locator('[data-cs-pill="sponsors:clean"]').click();
+    await (await reveal(page, '[data-cs-pill="sponsors:clean"]')).click();
     for (const p of wordPills) await expect(page.locator(p)).toBeDisabled();
     // Only the name-writing pills, never their rows.
     await expect(page.locator('[data-cs-pill="spineSide:number"]')).toBeEnabled();
     await expect(page.locator('.cs-liv-ed-row:has([data-cs-pill^="spineSide:"])')).not.toHaveAttribute("aria-disabled", "true");
-    await page.locator('[data-cs-pill="sponsors:default"]').click();
+    await (await reveal(page, '[data-cs-pill="sponsors:default"]')).click();
     for (const p of wordPills) await expect(page.locator(p)).toBeEnabled();
   });
 
   test("WING FLAPS carbon greys the WINGS and REAR WING colours, and the stars motif is offered", async ({ page }) => {
     await load(page);
     await openSetup(page);
-    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
-    await page.locator(".cs-liv-create").click();
+    await (await reveal(page, '#cs-tabs [data-cs-cat="livery"]')).click();
+    await (await reveal(page, ".cs-liv-create")).click();
 
     const wings = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("WINGS"))');
     const rear = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("REAR WING"))');
     await expect(wings).toHaveAttribute("aria-disabled", "false");
     await expect(rear).toHaveAttribute("aria-disabled", "false");
-    await page.locator('[data-cs-pill="wingCarbon:carbon"]').click();
+    await (await reveal(page, '[data-cs-pill="wingCarbon:carbon"]')).click();
     await expect(wings).toHaveAttribute("aria-disabled", "true");
     await expect(rear).toHaveAttribute("aria-disabled", "true");
     await expect(rear.locator('input[type="color"]')).toBeDisabled();
-    await page.locator('[data-cs-pill="wingCarbon:paint"]').click();
+    await (await reveal(page, '[data-cs-pill="wingCarbon:paint"]')).click();
     await expect(wings).toHaveAttribute("aria-disabled", "false");
     await expect(rear).toHaveAttribute("aria-disabled", "false");
     // ENGINE COVER is its own colour zone and is never gated by the wings.
@@ -341,15 +351,15 @@ test.describe("Liveries — creator", () => {
     expect(styles).toContain("stars");
     // TAIL STYLE only paints on a fin, and a new draft inherits the team's
     // own 2026 shape (often fin-less), so give the car a blade before asking.
-    await page.locator('[data-cs-pill="finShape:standard"]').click();
+    await (await reveal(page, '[data-cs-pill="finShape:standard"]')).click();
     await expect(page.locator('[data-cs-pill="finStyle:stars"]')).toBeEnabled();
   });
 
   test("a new paint job opens on the team's own silhouette, not the plain car", async ({ page }) => {
     await load(page);
     await openSetup(page);
-    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
-    await page.locator(".cs-liv-create").click();
+    await (await reveal(page, '#cs-tabs [data-cs-cat="livery"]')).click();
+    await (await reveal(page, ".cs-liv-create")).click();
     // NEW used to default every pill to the plain 2020s shape — a standard
     // shark fin on a standard spine — which no 2026 team runs, so a fresh
     // paint job silently changed the car's outline before a colour was picked.
@@ -380,9 +390,9 @@ test.describe("Liveries — creator", () => {
     // a fin-less one — and FIN SHAPE itself always stays live.
     const finRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL FIN"))');
     await expect(finRow).toHaveAttribute("aria-disabled", want.finShape === "none" ? "true" : "false");
-    await page.locator('[data-cs-pill="finShape:none"]').click();
+    await (await reveal(page, '[data-cs-pill="finShape:none"]')).click();
     await expect(finRow).toHaveAttribute("aria-disabled", "true");
-    await page.locator('[data-cs-pill="finShape:standard"]').click();
+    await (await reveal(page, '[data-cs-pill="finShape:standard"]')).click();
     await expect(finRow).toHaveAttribute("aria-disabled", "false");
   });
 
@@ -391,8 +401,8 @@ test.describe("Liveries — creator", () => {
     await pinEmptyCustoms(page);
     await openSetup(page);
 
-    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
-    await page.locator(".cs-liv-create").click();
+    await (await reveal(page, '#cs-tabs [data-cs-cat="livery"]')).click();
+    await (await reveal(page, ".cs-liv-create")).click();
 
     // Against Car3D.FINISH_SURFACE, not a literal. This asserted 3 and the row
     // has offered 7 since four finishes landed on 2026-08-28 (3898741) — the
@@ -409,14 +419,14 @@ test.describe("Liveries — creator", () => {
     await expect(finish).toHaveCount(finishes);
     await expect(page.locator('.cs-liv-ed-finish [data-cs-finish="gloss"]')).toHaveClass(/active/);
 
-    await page.locator('.cs-liv-ed-finish [data-cs-finish="chrome"]').click();
+    await (await reveal(page, '.cs-liv-ed-finish [data-cs-finish="chrome"]')).click();
     await expect(page.locator('.cs-liv-ed-finish [data-cs-finish="chrome"]')).toHaveClass(/active/);
     await expect(page.locator('.cs-liv-ed-finish [data-cs-finish="gloss"]')).not.toHaveClass(/active/);
     await expect(page.locator('.cs-liv-ed-finish [data-cs-finish="chrome"]')).toHaveAttribute("aria-pressed", "true");
 
     await page.locator(".cs-liv-ed-name").fill("Chrome Test");
     await page.screenshot({ path: galleryPath("parts-liveries", "creator-finish-row.png") });
-    await page.locator(".cs-liv-ed-save").click();
+    await (await reveal(page, ".cs-liv-ed-save")).click();
 
     const saved = await page.evaluate(() => {
       const team = Teams.LIST[2];
@@ -434,10 +444,10 @@ test.describe("Liveries — creator", () => {
     await pinEmptyCustoms(page);
     await openSetup(page);
 
-    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
-    await page.locator(".cs-liv-create").click();
+    await (await reveal(page, '#cs-tabs [data-cs-cat="livery"]')).click();
+    await (await reveal(page, ".cs-liv-create")).click();
     await page.locator(".cs-liv-ed-name").fill("Plain Test");
-    await page.locator(".cs-liv-ed-save").click();
+    await (await reveal(page, ".cs-liv-ed-save")).click();
 
     const saved = await page.evaluate(() =>
       JSON.parse(localStorage.getItem("apex26.livery.custom." + Teams.LIST[2].id) || "[]"));
@@ -448,7 +458,7 @@ test.describe("Liveries — creator", () => {
   test("stock satin and chrome schemes are badged in the picker", async ({ page }) => {
     await load(page);
     await openSetup(page);
-    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await (await reveal(page, '#cs-tabs [data-cs-cat="livery"]')).click();
     const badges = await page.locator("#cs-options .cs-opt-tag").allTextContents();
     expect(badges).toContain("SATIN");
     expect(badges).toContain("CHROME");

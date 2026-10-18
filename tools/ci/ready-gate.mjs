@@ -184,7 +184,29 @@ export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
     if (one.error) return { sha: null, error: `PR #${n}: ${one.error}` };
     const head = one.json?.head?.sha;
     if (!head || !/^[0-9a-f]{40}$/i.test(head)) return { sha: null, error: `PR #${n}: no head sha` };
-    return { sha: head, error: null, pr: n, body: one.json?.body || "" };
+    // File list for the memory-leak gate (paginate; a big PR can exceed 100).
+    // A failed fetch must NOT look like an empty diff (#2901 review): fail closed.
+    const files = [];
+    let filesError = null;
+    let page = 1;
+    for (;;) {
+      const batch = request(`pulls/${n}/files?per_page=100${page > 1 ? `&page=${page}` : ""}`);
+      if (batch.error) { filesError = batch.error; break; }
+      const rows = Array.isArray(batch.json) ? batch.json : (batch.json?.length != null ? batch.json : null);
+      if (!Array.isArray(rows)) { filesError = "bad files payload"; break; }
+      for (const row of rows) if (row?.filename) files.push(row.filename);
+      if (rows.length < 100) break;
+      page++;
+    }
+    const labels = (one.json?.labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
+    return {
+      sha: head, error: null, pr: n,
+      body: one.json?.body || "",
+      title: one.json?.title || "",
+      labels,
+      files: filesError ? null : files,
+      filesError,
+    };
   }
   const r = git("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" });
   if (r.status !== 0) return { sha: null, error: "git rev-parse HEAD failed" };
@@ -279,6 +301,51 @@ export function withPlan(v, body) {
   return { ...v, plan: p };
 }
 
+/**
+ * `.claude/memory/` edits need an explicit intent marker on the PR — a body
+ * line `memory-change: <reason>` or the `memory-change` label (docs/notes/
+ * AGENT-MEMORY.md §memory-change). A bare "memory" word or a path mention
+ * does NOT unlock the gate (#2901 review).
+ * @returns {{ state: "ok"|"memory-leak"|"none", files: string[], evidence: string, code: number }}
+ */
+export function memoryVerdict(files, { title = "", body = "", labels = [] } = {}) {
+  const list = (files || []).map((f) => String(f || "").replace(/^\.\//, ""));
+  const mem = list.filter((f) => f === ".claude/memory" || f.startsWith(".claude/memory/"));
+  if (!mem.length) return { state: "ok", files: [], evidence: "no .claude/memory/ edits", code: 0 };
+  const marker = /^memory-change:\s*\S+/mi.test(String(body || ""));
+  const labelled = (labels || []).some((l) => String(l).toLowerCase() === "memory-change");
+  if (marker || labelled) {
+    return { state: "ok", files: mem, evidence: marker ? "memory-change: body marker" : "memory-change label", code: 0 };
+  }
+  const shown = mem.slice(0, 4).join(", ") + (mem.length > 4 ? ", ..." : "");
+  return {
+    state: "memory-leak",
+    files: mem,
+    code: 1,
+    evidence: `.claude/memory/ edited without memory-change: marker or label (${shown}) — add \`memory-change: <reason>\` to the PR body (docs/notes/AGENT-MEMORY.md) or drop the paths`,
+  };
+}
+
+/** Fold memoryVerdict onto a green tip the same way withPlan does.
+ *  `meta.filesError` fails closed: a missing file list must not look like
+ *  "no memory edits". Pass `files` as null/undefined with filesError set. */
+export function withMemory(v, files, meta = {}) {
+  if (!v || v.code !== 0) return v;
+  if (meta.filesError) {
+    return {
+      ...v, state: "memory-unknown", code: 1,
+      evidence: `cannot list PR files for the memory gate (${meta.filesError}) — re-run ready-gate when the API is up`,
+      memory: { state: "unknown", filesError: meta.filesError, code: 1 },
+    };
+  }
+  if (files == null) return v;
+  const m = memoryVerdict(files, meta);
+  if (m.state === "memory-leak") {
+    return { ...v, state: "memory-leak", code: 1, memory: m, evidence: m.evidence };
+  }
+  return { ...v, memory: m };
+}
+
 /** Write LOCAL_STAMP after a green full suite (called from tooling-fast): the
  *  head the run STARTED on, plus `tree` — the hash of the tree it measured. */
 export function stampReadySha(sha, { tree = "", stampPath = LOCAL_STAMP, write = fs.writeFileSync, mkdir = fs.mkdirSync } = {}) {
@@ -291,8 +358,10 @@ export function stampReadySha(sha, { tree = "", stampPath = LOCAL_STAMP, write =
 
 const USAGE = `usage: node tools/ci/ready-gate.mjs [--sha <sha|ref>] [--pr <n>] [--local] [--json]
   Exit 0 only when tooling-fast / Structural guards is green on the tip (AGENTS.md §Concurrent PRs)
-  and, with --pr, every item of the PR body's ## Plan checklist is ticked or struck (rule 12).
-  Evidence: #1111 designer-canvas Structural guards red that local tooling-fast would have caught.
+  and, with --pr, every item of the PR body's ## Plan checklist is ticked or struck (rule 12),
+  and .claude/memory/ edits carry an explicit intent marker: a body line
+  \`memory-change: <reason>\` or the \`memory-change\` label (docs/notes/AGENT-MEMORY.md).
+  A failed PR-files fetch fails closed (never "no memory edits"). Evidence: #1111.
   --local uses artifacts/logs/tooling-fast-ready.sha + tooling-fast-suite.log only (no GitHub API).`;
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -310,7 +379,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     say(`= ready-gate unknown — ${resolved.error}`);
     process.exit(3);
   }
-  const v = withPlan(evaluate({ sha: resolved.sha, localOnly }), resolved.body);
+  const planned = withPlan(evaluate({ sha: resolved.sha, localOnly }), resolved.body);
+  const v = withMemory(planned, resolved.files, {
+    title: resolved.title || "",
+    body: resolved.body || "",
+    labels: resolved.labels || [],
+    filesError: resolved.filesError || null,
+  });
   const line = verdictLine(v);
   if (asJson) console.log(JSON.stringify({ ...v, pr: resolved.pr || null }, null, 2));
   else {

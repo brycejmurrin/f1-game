@@ -820,7 +820,7 @@
      camera tuners open from DISPLAY's advanced visuals. -->
 <dialog id="pmsettings" class="screen dim" data-esc-close="pm-settings-close" aria-labelledby="dlg-settings" hidden>
   <div id="pmsettings-inner" class="sheet">
-    <div class="sheet-head"><h2 id="dlg-settings">SETTINGS</h2></div>
+    <div class="sheet-head"><h2 id="dlg-settings" data-i18n="settings.title">SETTINGS</h2></div>
     <div id="pm-settings-body" class="sheet-body pane">
       <nav id="pm-settings-index" class="pm-doors" aria-label="Settings">
         <button id="pm-open-controls" type="button">CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
@@ -1141,6 +1141,7 @@
         </div>
       </div>
       <p class="adv-help">How much of each corner the car steers for you. Higher = easier to stay on track.</p>
+      <button id="pm-helplevel-jump" type="button" class="adv-more-btn" data-settings-jump="advanced" data-jump-target="pm-help">DRIVING HELP · FINE, in ADVANCED &rsaquo;</button>
     </div>
     <div class="adv-item">
       <div id="pm-linemode" class="set-row" role="group" aria-labelledby="pm-linemode-label">
@@ -1152,6 +1153,7 @@
         </div>
       </div>
       <p class="adv-help">Gently steers toward the ideal line. This changes the car’s steering; the visual DRIVING LINE is separate, in RACE SETTINGS.</p>
+      <button id="pm-linemode-jump" type="button" class="adv-more-btn" data-settings-jump="advanced" data-jump-target="pm-line">STEER ASSIST · FINE, in ADVANCED &rsaquo;</button>
     </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">6</b></span>
@@ -1357,27 +1359,15 @@
         </section>
         <section id="pm-panel-appearance" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
-          <p class="adv-help">Everything here applies straight away. GENERAL has its own preview; every other fold shows the real screen behind this page while you change it (PEEK holds it; tap or Esc to come back).</p>
-          <!-- GENERAL: colours, readability and motion — the knobs that reach
-               every screen — in one fold with the menu / HUD preview. The
-               per-screen folds after TITLE SCREEN are built by
-               js/ui/screen-looks.js. -->
-          <details id="pm-general" class="pm-renderer-sub">
-          <summary class="adv-more-btn" id="pm-general-sum">GENERAL · COLOURS, SIZE &amp; READABILITY</summary>
-          <div id="pm-general-body" role="group" aria-label="General appearance">
-          <div id="pm-appearance-preview" class="pm-accent-preview" aria-hidden="true">
-            <div class="pm-look-menu">
-              <span class="pm-look-kicker">GRAND PRIX</span>
-              <span class="pm-look-title">MONZA</span>
-              <span class="pm-look-chips"><span class="pm-look-chip" data-on="1">RACE</span><span class="pm-look-chip">QUALI</span></span>
-              <span class="bigbtn pm-accent-preview-btn">START</span>
-            </div>
-            <div class="pm-look-hud">
-              <span class="pm-accent-preview-hud"><b>P3</b></span>
-              <span class="pm-look-lap">LAP <b>4</b>/12</span>
-              <span class="pm-look-spd"><b id="pm-look-speed">287</b><span class="pm-look-unit">KM/H</span></span>
-            </div>
-          </div>
+          <p class="adv-help">Everything here applies straight away. The studio has its own preview; every other fold shows the real screen behind this page while you change it (PEEK holds it; tap or Esc to come back).</p>
+          <!-- GENERAL: speed units and help text. The per-screen folds after
+               TITLE SCREEN are built by js/ui/screen-looks.js. -->
+          <!-- ONE HOME (#2846): THEME, MENU / HUD ACCENT, UI SIZE, TEXT SIZE and
+               HIGH CONTRAST were here AND in the Appearance Studio's own rows.
+               These two blocks are now the only copy: js/ui/appearance-studio.js
+               adopts them into its MENU · GLOBAL and RACE HUD groups (ids and
+               wiring unchanged: appearance-opts.js, scale.js). -->
+          <div id="pm-appearance-menu" data-studio-home="menu">
           <h4 class="pm-look-h">COLOURS</h4>
           <div id="pm-uitheme" class="set-row" role="group" aria-labelledby="pm-uitheme-label">
             <span class="tune-label" id="pm-uitheme-label">THEME</span>
@@ -1403,23 +1393,6 @@
             <div>
               <input id="pm-menuaccent-hex" type="color" value="#e10600" aria-labelledby="pm-menuaccent-hex-label">
               <input id="pm-menuaccent-hextext" class="pm-accent-hextext" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Menu accent hex" value="#e10600">
-            </div>
-          </div>
-          <div id="pm-hudaccent" class="set-row" role="group" aria-labelledby="pm-hudaccent-label">
-            <span class="tune-label" id="pm-hudaccent-label">HUD ACCENT</span>
-            <div>
-              <button id="pm-hudaccent-prev" type="button" data-step="-1" aria-label="Previous HUD accent">&lsaquo;</button>
-              <select id="pm-hudaccent-sel" aria-labelledby="pm-hudaccent-label"></select>
-              <button id="pm-hudaccent-next" type="button" data-step="1" aria-label="Next HUD accent">&rsaquo;</button>
-            </div>
-          </div>
-          <div id="pm-hudaccent-swatches" class="pm-accent-swatches" role="listbox" aria-label="HUD accent presets"></div>
-          <p class="adv-help">The stripes on the race HUD and the radio number plate. TEAM uses your team&rsquo;s colour.</p>
-          <div id="pm-hudaccent-custom" class="set-row pm-accent-custom" role="group" aria-labelledby="pm-hudaccent-hex-label" hidden>
-            <span class="tune-label" id="pm-hudaccent-hex-label">CUSTOM HUD</span>
-            <div>
-              <input id="pm-hudaccent-hex" type="color" value="#e10600" aria-labelledby="pm-hudaccent-hex-label">
-              <input id="pm-hudaccent-hextext" class="pm-accent-hextext" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" aria-label="HUD accent hex" value="#e10600">
             </div>
           </div>
           <h4 class="pm-look-h">READABILITY</h4>
@@ -1453,6 +1426,30 @@
             </div>
           </div>
           <p class="adv-help" id="pm-contrast-help">Solid panels behind menus and the HUD, brighter labels and stronger outlines. Helps in sunlight.</p>
+          </div>
+          <div id="pm-appearance-hud" data-studio-home="hud">
+          <div id="pm-hudaccent" class="set-row" role="group" aria-labelledby="pm-hudaccent-label">
+            <span class="tune-label" id="pm-hudaccent-label">HUD ACCENT</span>
+            <div>
+              <button id="pm-hudaccent-prev" type="button" data-step="-1" aria-label="Previous HUD accent">&lsaquo;</button>
+              <select id="pm-hudaccent-sel" aria-labelledby="pm-hudaccent-label"></select>
+              <button id="pm-hudaccent-next" type="button" data-step="1" aria-label="Next HUD accent">&rsaquo;</button>
+            </div>
+          </div>
+          <div id="pm-hudaccent-swatches" class="pm-accent-swatches" role="listbox" aria-label="HUD accent presets"></div>
+          <p class="adv-help">The stripes on the race HUD and the radio number plate. TEAM uses your team&rsquo;s colour.</p>
+          <div id="pm-hudaccent-custom" class="set-row pm-accent-custom" role="group" aria-labelledby="pm-hudaccent-hex-label" hidden>
+            <span class="tune-label" id="pm-hudaccent-hex-label">CUSTOM HUD</span>
+            <div>
+              <input id="pm-hudaccent-hex" type="color" value="#e10600" aria-labelledby="pm-hudaccent-hex-label">
+              <input id="pm-hudaccent-hextext" class="pm-accent-hextext" type="text" inputmode="text" maxlength="7" spellcheck="false" autocomplete="off" aria-label="HUD accent hex" value="#e10600">
+            </div>
+          </div>
+          </div>
+          <details id="pm-general" class="pm-renderer-sub">
+          <summary class="adv-more-btn" id="pm-general-sum">GENERAL · SPEED UNITS &amp; HELP TEXT</summary>
+          <div id="pm-general-body" role="group" aria-label="General appearance">
+          <button id="pm-general-jump" type="button" class="adv-more-btn" data-settings-jump="appearance" data-jump-target="pm-uitheme-sel">THEME, ACCENTS, SIZES &amp; CONTRAST are in MENU · GLOBAL &rsaquo;</button>
           <div id="pm-units" class="set-row" role="group" aria-labelledby="pm-units-label">
             <span class="tune-label" id="pm-units-label">SPEED UNITS</span>
             <div>
@@ -1550,9 +1547,9 @@
     <div id="adv-extra">
     <h3 class="adv-sec">TILT INPUT <span>how phone motion becomes steering (tilt mode)</span></h3>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">TILT RANGE <b id="pm-tiltdeg-v">5</b></span>
-        <input id="pm-tiltdeg" type="range" min="1" max="10" step="1" value="5" aria-label="Tilt range"></label>
-      <p class="adv-help">The same sensitivity as the top slider, with a finer label: how far you tilt the phone for full lock. Higher = less tilt needed; lower = relaxed, big tilts.</p>
+      <!-- TILT RANGE was a second slider on the same tiltDeg key as FEEL ›
+           TILT SENSITIVITY (UI audit 2026-10-18): one home, and this jumps to it. -->
+      <button id="pm-tiltdeg-jump" type="button" class="adv-more-btn" data-settings-jump="controls" data-jump-target="pm-tiltsimple">TILT SENSITIVITY is in CONTROLS › FEEL &rsaquo;</button>
     </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">6</b></span>
@@ -1608,9 +1605,10 @@
 
     <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">DRIVING HELP <b id="pm-help-v">6</b></span>
-        <input id="pm-help" type="range" min="1" max="10" step="1" value="6" aria-label="Driving help"></label>
+      <label class="tune-row"><span class="tune-label">DRIVING HELP · FINE <b id="pm-help-v">6</b></span>
+        <input id="pm-help" type="range" min="1" max="10" step="1" value="6" aria-label="Driving help, fine steps"></label>
       <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob. GRIP STEER (below, and in ROOKIE / RELAX) caps lock at the front peak without reading the road arc.</p>
+      <button id="pm-help-jump" type="button" class="adv-more-btn" data-settings-jump="driving" data-jump-target="pm-helplevel-sel">DRIVING HELP is in DRIVING AIDS &rsaquo;</button>
     </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
@@ -1645,9 +1643,10 @@
 
     <h3 class="adv-sec">DRIVER AID</h3>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">RACING LINE <b id="pm-line-v">OFF</b></span>
-        <input id="pm-line" type="range" min="-5" max="5" step="1" value="0" aria-label="Racing line"></label>
+      <label class="tune-row"><span class="tune-label">STEER ASSIST · FINE <b id="pm-line-v">OFF</b></span>
+        <input id="pm-line" type="range" min="-5" max="5" step="1" value="0" aria-label="Steer assist, fine steps"></label>
       <p class="adv-help">Optional bias toward the line. PULL (+) eases toward the apex; PUSH (&minus;) runs wider; OFF = pure manual. Never overrides your steering.</p>
+      <button id="pm-line-jump" type="button" class="adv-more-btn" data-settings-jump="driving" data-jump-target="pm-linemode-sel">STEER ASSIST is in DRIVING AIDS &rsaquo;</button>
     </div>
     </div><!-- /#adv-extra -->
     </details>
@@ -1668,7 +1667,7 @@
             <button id="as-music-next" type="button" data-step="1" aria-label="Next music">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">VOLUME <b id="as-mvol-v">5</b></span>
+        <label class="tune-row"><span class="tune-label">MUSIC VOLUME <b id="as-mvol-v">5</b></span>
           <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
         <p class="as-note">The soundtrack in the menus and on track. VOLUME sets the music alone; SOURCE picks which songs play.</p>
         <!-- Which library the MUSIC controls drive. SPOTIFY is only selectable
@@ -1712,7 +1711,7 @@
             <button id="as-sound-next" type="button" data-step="1" aria-label="Next sound effects">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">VOLUME <b id="as-svol-v">10</b></span>
+        <label class="tune-row"><span class="tune-label">EFFECTS VOLUME <b id="as-svol-v">10</b></span>
           <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
         <div id="as-ui" class="set-row" role="group" aria-labelledby="as-ui-label">
           <span class="tune-label" id="as-ui-label">MENU SOUNDS</span>
@@ -1921,13 +1920,13 @@
           <input id="as-t-curve" type="range" min="0" max="21" step="1" value="6" aria-label="Rev curve bend: low hangs low and climbs late, high rises early"></label>
         <h3 class="adv-sec">CHARACTER</h3>
         <p class="as-note">The engine&rsquo;s timbre: GRAVEL is low-rev roughness, DETUNE a thicker, less pure note, BRIGHTNESS the treble, SUB the low-octave weight.</p>
-        <label class="tune-row"><span class="tune-label">GRAVEL <b id="as-t-gravel-v">100</b></span>
+        <label class="tune-row"><span class="tune-label">GRAVEL LEVEL <b id="as-t-gravel-v">100</b></span>
           <input id="as-t-gravel" type="range" min="0" max="16" step="1" value="4" aria-label="Low-rev roughness"></label>
         <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">100</b></span>
           <input id="as-t-detune" type="range" min="0" max="16" step="1" value="4" aria-label="Engine detune"></label>
         <label class="tune-row"><span class="tune-label">BRIGHTNESS <b id="as-t-bright-v">100</b></span>
           <input id="as-t-bright" type="range" min="0" max="44" step="1" value="14" aria-label="Engine brightness"></label>
-        <label class="tune-row"><span class="tune-label">SUB <b id="as-t-sub-v">100</b></span>
+        <label class="tune-row"><span class="tune-label">SUB LEVEL <b id="as-t-sub-v">100</b></span>
           <input id="as-t-sub" type="range" min="0" max="16" step="1" value="4" aria-label="Sub-octave weight"></label>
         <h3 class="adv-sec">LIMITER</h3>
         <p class="as-note">The rev-limiter cut: DEPTH is how hard it chops, RATE how fast, PITCH SAG how far the note dips on each cut.</p>
@@ -1945,23 +1944,23 @@
           <input id="as-t-boostlift" type="range" min="0" max="16" step="1" value="4" aria-label="Engine pitch lift while deploying"></label>
         <h3 class="adv-sec">LAYERS</h3>
         <p class="as-note">The sounds stacked on the engine. The sliders set their levels; the switches under them mute a layer entirely.</p>
-        <label class="tune-row"><span class="tune-label">TURBO <b id="as-t-whine-v">100</b></span>
+        <label class="tune-row"><span class="tune-label">TURBO LEVEL <b id="as-t-whine-v">100</b></span>
           <input id="as-t-whine" type="range" min="0" max="200" step="1" value="50" aria-label="Turbo whine and wastegate level"></label>
-        <label class="tune-row"><span class="tune-label">HARVEST <b id="as-t-harvest-v">100</b></span>
+        <label class="tune-row"><span class="tune-label">HARVEST LEVEL <b id="as-t-harvest-v">100</b></span>
           <input id="as-t-harvest" type="range" min="0" max="16" step="1" value="4" aria-label="MGU-K harvest whirr level"></label>
-        <label class="tune-row"><span class="tune-label">WIND <b id="as-t-wind-v">100</b></span>
+        <label class="tune-row"><span class="tune-label">WIND LEVEL <b id="as-t-wind-v">100</b></span>
           <input id="as-t-wind" type="range" min="0" max="16" step="1" value="4" aria-label="Airflow level"></label>
-        <label class="tune-row"><span class="tune-label">TYRES <b id="as-t-tyres-v">100</b></span>
+        <label class="tune-row"><span class="tune-label">TYRES LEVEL <b id="as-t-tyres-v">100</b></span>
           <input id="as-t-tyres" type="range" min="0" max="16" step="1" value="4" aria-label="Tyre screech level"></label>
-        <label class="tune-row"><span class="tune-label">BRAKES <b id="as-t-brakes-v">100</b></span>
+        <label class="tune-row"><span class="tune-label">BRAKES LEVEL <b id="as-t-brakes-v">100</b></span>
           <input id="as-t-brakes" type="range" min="0" max="16" step="1" value="4" aria-label="Brake roar level"></label>
-        <label class="tune-row"><span class="tune-label">SHIFT <b id="as-t-shift-v">100</b></span>
+        <label class="tune-row"><span class="tune-label">SHIFT LEVEL <b id="as-t-shift-v">100</b></span>
           <input id="as-t-shift" type="range" min="0" max="12" step="1" value="4" aria-label="Gear-shift crack level"></label>
-        <label class="tune-row"><span class="tune-label">RIVALS <b id="as-t-rivals-v">100</b></span>
+        <label class="tune-row"><span class="tune-label">RIVALS LEVEL <b id="as-t-rivals-v">100</b></span>
           <input id="as-t-rivals" type="range" min="0" max="16" step="1" value="4" aria-label="Rival engine level"></label>
-        <label class="tune-row"><span class="tune-label">SPACE <b id="as-t-rev-v">100</b></span>
+        <label class="tune-row"><span class="tune-label">SPACE LEVEL <b id="as-t-rev-v">100</b></span>
           <input id="as-t-rev" type="range" min="0" max="16" step="1" value="4" aria-label="Circuit reverb amount"></label>
-        <label class="tune-row"><span class="tune-label">OVERRUN <b id="as-t-ovr-v">100</b></span>
+        <label class="tune-row"><span class="tune-label">OVERRUN LEVEL <b id="as-t-ovr-v">100</b></span>
           <input id="as-t-ovr" type="range" min="0" max="16" step="1" value="4" aria-label="Off-throttle crackle"></label>
         <!-- Layer switches. Each names a real node in the engine graph, so an
              off layer is silent rather than merely quiet. -->
@@ -2025,16 +2024,11 @@
           <button id="as-sp-mode-remote" class="opt-btn" type="button">REMOTE</button>
           <button id="as-sp-mode-browser" class="opt-btn" type="button">IN BROWSER</button>
         </div>
-        <p class="as-note">REMOTE plays through the Spotify app on your phone or computer &mdash; open it once so it shows up below. IN BROWSER plays here, but needs desktop Chrome/Edge/Firefox.</p>
-        <label class="tune-row"><span class="tune-label">DEVICE</span>
-          <select id="as-sp-device" aria-label="Spotify device"></select></label>
-        <button id="as-sp-refresh" class="adv-more-btn" type="button">&#8635; REFRESH DEVICES</button>
-
-        <!-- WHAT TO PLAY. Connecting only makes this browser a Spotify device;
-             it does not queue anything, and a browser that has never played has
-             no context to resume — which is why "connected" could be silent. -->
-        <label class="tune-row"><span class="tune-label">PLAY FROM</span>
-          <select id="as-sp-playlist" aria-label="Spotify playlist"></select></label>
+        <p class="as-note">REMOTE plays through the Spotify app on your phone or computer &mdash; open it once so OPEN PLAYER can pick it. IN BROWSER plays here, but needs desktop Chrome/Edge/Firefox.</p>
+        <!-- WHAT TO PLAY and WHERE. The playlist and device pickers live only in
+             the player sheet (#sp-playlist2 / #sp-device2): one home, not two
+             copies with the same handlers (#2847). PLAY here resumes whatever
+             was chosen there. -->
         <div class="opt-row">
           <button id="as-sp-play" class="opt-btn" type="button">&#9654; PLAY</button>
           <button id="as-sp-pause" class="opt-btn" type="button">&#10074;&#10074; PAUSE</button>
@@ -3585,6 +3579,9 @@
 <script defer crossorigin="anonymous" src="js/data/garage-defaults.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/save-schema-registry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/i18n-pseudo.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/i18n.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/dom-apply.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/restore-points.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-backup.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>
@@ -3712,6 +3709,7 @@
 <script defer crossorigin="anonymous" src="js/ui/editor-workspace.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-search.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-tabs.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/setting-deps.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/key-binds.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-export.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/aero-zones.js?v=dev"></script>
@@ -3798,10 +3796,14 @@
 <script defer crossorigin="anonymous" src="js/camera/mode-switch.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-boot.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-minimap.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/results-story.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/results-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/quali-model.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/share/share-card-data.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/share/share-card-layout.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/share/share-card.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/daily-challenge.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-studio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/home-world.js?v=dev"></script>

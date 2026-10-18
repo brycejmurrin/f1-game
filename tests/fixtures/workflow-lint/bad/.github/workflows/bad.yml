@@ -1,0 +1,14 @@
+# Planted defects for tests/unit/workflow-lint.test.mjs. Not a real workflow: lives under tests/.
+name: planted
+on:
+  issues:
+    types: [opened]
+jobs:
+  bad:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # actionlint: `github.evnet` is not a property of the github context
+      - run: echo "${{ github.evnet.issue.number }}"
+      # zizmor template-injection: attacker-controlled title expanded into a shell script
+      - run: echo "${{ github.event.issue.title }}"

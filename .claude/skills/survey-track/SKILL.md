@@ -12,7 +12,10 @@ circuit with [the delegation prompt](references/delegation.md). The surveyor
 does the browser-free measurements and source diagnosis, edits only that
 circuit's pair of files in its OWN worktree (`isolation: worktree`, so disjoint
 circuits run in parallel), and stops at `verify-track` — engine work and the
-fleet gate below are the PARENT's, after it returns.
+fleet gate below are the PARENT's, after it returns. ONE circuit and a small fix:
+the parent may run the surveyor steps below inline instead (same pair-only edits,
+same stop at `verify-track`); spawn when circuits run in parallel or the
+diagnosis would flood this context.
 
 Several circuits (`$ARGUMENTS` = circuit ids, optional target year; every id in
 `Tracks.LIST`): the campaign procedure is [references/campaign.md](references/campaign.md)
@@ -24,6 +27,8 @@ The surveyor's edits are on its worktree branch, not in this checkout. Its repor
 names the branch and path; merge it before verifying here
 (`git merge --no-ff <surveyor-branch>`, then `verify-track` on the merged tree), and
 remove the worktree once merged (`git worktree remove <path>`).
+
+## Baseline audits (parent, before and after)
 
 ```sh
 node tools/track/audit-circuit.cjs <id> --json   # ONE offline call: verify/float/clip/coplanar/props/ground vs baselines
@@ -85,12 +90,10 @@ Surveyor (`.claude/agents/track-surveyor.md` steps 1-5; it never captures):
 4. Return changes, before/after numbers, source/year evidence, baseline deltas
    and uncertainties.
 
-Montreal already ships `flatTerrain: true` + `terrainOuter: 70` — survey
-before re-applying that fix.
-
 **apex-tools MCP down?** Every `apex_*` route has a CLI under `tools/`: audits
 `tools/track/{audit-circuit,ground-audit,clip-audit,coplanar-audit,float-audit}.cjs`,
-`centreline-kinks.cjs`, `verify-track.cjs`; multi-shot surveys
+`centreline-kinks.cjs`, `graph-parity.cjs`, `verify-track.cjs`; `apex_frame_report` =
+`tools/shot/frame-report.mjs --track <id>`; multi-shot surveys
 `tools/shot/shot-survey.mjs` or `tools/shot/track-session.mjs` (parent only: browser).
 
 ## Parent brief and evidence publication
@@ -106,7 +109,7 @@ before re-applying that fix.
   Code/scenery fixes use a separate image-free deploy-branch PR.
 - Shots: more than 3 go through `apex_shot_survey` / `apex_track op survey`, not
   a loop of `apex_shot` (a 52-shot serial survey took 56 min).
-- **Image budget** (plan WS4; #2399): `Read` at most 8 images, then compact; never re-`Read` an old shot; JPEG ≤ 800 px wide for anything a model will look at. A request over 32 MB kills the session and `/compact` with it.
+- **Image budget** → [playwright-probe recipes §Galleries and image budget](../playwright-probe/references/recipes.md#galleries-and-image-budget).
 
 ## Load on demand
 

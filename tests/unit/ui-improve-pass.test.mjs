@@ -1850,8 +1850,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "TILT recalibrate help sits on the button, not under RESET DOCK LAYOUT");
   assert.match(read("css/settings-controls.css"), /body\.desktop #pm-calib-help/,
     "desktop hides the TILT help with RECALIBRATE TILT");
-  assert.equal(decl(css("css/settings-controls.css"), "#pm-calib:disabled + #pm-calib-help", "visibility"), "hidden",
-    "disabled TILT help keeps its slot so steer-mode changes do not reflow");
+  // UI audit 2026-10-18: the help IS the reason RECALIBRATE is grey, so it stays
+  // readable (dimmed) instead of hidden; the slot never collapses either way.
+  assert.ok(!decl(css("css/settings-controls.css"), "#pm-calib:disabled + #pm-calib-help", "visibility"),
+    "disabled TILT help stays visible: it is the reason RECALIBRATE is grey");
+  assert.equal(decl(css("css/settings-controls.css"), "#pm-calib:disabled + #pm-calib-help", "color"), "var(--dim)",
+    "disabled TILT help dims with its button and keeps its slot");
   assert.equal(decl(css("css/settings-controls.css"), "#pm-calib[hidden] + #pm-calib-help", "display"), "none",
     "hidden RECALIBRATE also drops its described-by copy");
   assert.equal(decl(css("css/settings-controls.css"), "#pm-panel-controls", "padding-bottom"), "var(--tap)",

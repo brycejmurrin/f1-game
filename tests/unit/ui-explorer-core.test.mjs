@@ -78,6 +78,14 @@ test('normalizes declarative oracles and refuses arbitrary code or regex objects
   ]) assert.throws(() => validateScenario({ ...scenario([]), oracle }), TypeError);
 });
 
+test('binding replay assertions accept finite data and reject executable or unknown fields', () => {
+  const oracle = { type: 'binding', selector: '#theme', runtime: 'light', saved: 'light' };
+  const result = validateScenario(scenario([{ type: 'assert', oracle }]));
+  assert.deepEqual(result.actions[0].oracle, oracle);
+  for (const bad of [{ ...oracle, runtime: NaN }, { ...oracle, runtime: null }, { ...oracle, saved: {} }, { ...oracle, expression: 'true' }])
+    assert.throws(() => validateScenario(scenario([{ type: 'assert', oracle: bad }])), TypeError);
+});
+
 test('state signature ignores timers, logs and source ordering but preserves interaction states', () => {
   const first = snapshot({
     time: 123, logs: ['first'], roots: [{ role: 'main', id: 'title', time: 1 }],

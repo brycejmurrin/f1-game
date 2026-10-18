@@ -38,7 +38,9 @@ when the body has none).
 
 ARM a PR only when ALL hold; any miss is WAIT (say which):
 
-- non-draft, ci.yml `success` on the head, `node tools/ci/ready-gate.mjs --pr <n>` exits 0;
+- non-draft, ci.yml `success` on the head (the board WAITs while CI runs, on
+  an open Plan item and on `MERGE-HOLD:` since 2026-10-18; still confirm),
+  `node tools/ci/ready-gate.mjs --pr <n>` exits 0;
 - `mergeableState` is not `dirty` — never arm a DIRTY/CONFLICTING PR;
 - fewer than 2 PRs armed repo-wide right now (count every armed row, any method);
 - no PR-body line starting with `MERGE-HOLD:` (outside an HTML comment). That

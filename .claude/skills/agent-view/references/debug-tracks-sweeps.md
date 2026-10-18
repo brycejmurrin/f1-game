@@ -57,6 +57,8 @@ these hooks are how you investigate a failure. After any `js/circuits/*` edit, r
 
 ## Terrain-over-road sweep (VM)
 
+A whole-lap scan for any id is `track-geometry.md` §Whole-lap recipe; this is the narrow version,
+for one known window (the spa id and the 0.13-0.18 frac range below are an example: change both).
 Script under `scratch/`; `f` is the RACING frac (`s = f * total`, already past `_sceneryShift`), `lat` is metres, +right.
 ```js
 const {createGame}=require("../tools/lib/game-vm.cjs");
