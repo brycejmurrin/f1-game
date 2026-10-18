@@ -83,20 +83,75 @@ const CarMaterials = (function () {
     const value = livery && livery[field];
     return value === "gloss" || Object.hasOwn(FINISH_SURFACE, value) ? value : livery && livery.finish || null;
   }
+  // Section (or zone) name -> the livery field that picks its own finish. A section not listed takes
+  // the whole-car `finish`. NOSE is not a section: noseFinish takes every PAINTED chassis / hood /
+  // livery vertex ahead of the bulkhead (z >= NOSE_Z) — the cone, its cap and its stripes — so the
+  // nose needs no split of the shared chassis loft.
+  const ZONE_FINISH = Object.freeze({ engineCover: "coverFinish", frontWing: "wingFinish", rearAssembly: "wingFinish",
+    halo: "haloFinish", sidepods: "podFinish", sharkFin: "finFinish", mirrors: "mirrorFinish",
+    floor: "floorFinish", suspension: "suspFinish" });
+  const NOSE_Z = 1.55, NOSE_SECTIONS = ["chassis", "hood", "livery"];
+  const pickedFinish = (v) => v === "gloss" || Object.hasOwn(FINISH_SURFACE, v) ? v : null;
   function applyFinish(out, finish, sections, livery) {
-    if (sections && livery && [livery.coverFinish, livery.wingFinish, livery.haloFinish, livery.podFinish, livery.finFinish, livery.mirrorFinish].some((v) => v && v !== "inherit")) {
-      const fields = { engineCover: "coverFinish", frontWing: "wingFinish", rearAssembly: "wingFinish", halo: "haloFinish",
-        sidepods: "podFinish", sharkFin: "finFinish", mirrors: "mirrorFinish" };
+    const noseFin = livery && pickedFinish(livery.noseFinish), nose = [];
+    if (noseFin && sections) for (const section of sections) if (NOSE_SECTIONS.includes(section.name))
+      for (let i = section.from; i < section.to; i++) if (out.mat[i] === SURFACES.paint && out.pos[i * 3 + 2] >= NOSE_Z) nose.push(i);
+    if (sections && livery && Object.values(ZONE_FINISH).some((f) => livery[f] && livery[f] !== "inherit")) {
       for (const section of sections) {
-        const choice = finishOf(livery, fields[section.name]), local = FINISH_SURFACE[choice] || SURFACES.paint;
+        const choice = finishOf(livery, ZONE_FINISH[section.name]), local = FINISH_SURFACE[choice] || SURFACES.paint;
         for (let i = section.from; i < section.to; i++) if (out.mat[i] === SURFACES.paint) out.mat[i] = local;
       }
-      return;
+    } else {
+      const finishSurface = FINISH_SURFACE[finish];
+      if (finishSurface) {
+        for (let i = 0; i < out.mat.length; i++) {
+          if (out.mat[i] === SURFACES.paint) out.mat[i] = finishSurface;
+        }
+      }
     }
-    const finishSurface = FINISH_SURFACE[finish];
-    if (finishSurface) {
-      for (let i = 0; i < out.mat.length; i++) {
-        if (out.mat[i] === SURFACES.paint) out.mat[i] = finishSurface;
+    const noseId = FINISH_SURFACE[noseFin] || SURFACES.paint;
+    for (const i of nose) out.mat[i] = noseId;
+  }
+  // PAINT ZONES (paint-zones-t6w2): parts that were fixed carbon or body colour take an optional
+  // livery tint. Each row names a zone range (Car3D's zone()) or a whole Car3D section. A tint
+  // recolours the range's paint and carbon vertices (voids darker than VOID stay: inlet mouths) and
+  // makes that carbon PAINT, so FINISH or the row's own finish then lands on it; a finish alone also
+  // makes the carbon paint (the mirror-housing rule). paintOnly rows recolour paint, never carbon.
+  // Every field unset = nothing runs = today's mesh, byte for byte. Runs BEFORE applyFinish.
+  const PAINT_ZONES = Object.freeze([
+    { colour: "floorTint", finish: "floorFinish", zone: "floor" },
+    { colour: "suspTint", finish: "suspFinish", section: "suspension" },
+    { colour: "ductTint", section: "brakeDucts" },
+    { colour: "deflectorTint", zone: "deflector" },
+    { colour: "cockpitTint", zone: "headrest" },
+    { colour: "cockpitTint", section: "bolsters", paintOnly: true },
+    { colour: "boardTint", section: "sponsorBoard", paintOnly: true },
+  ].map(Object.freeze));
+  const VOID = 0.045;
+  function zoneColour(v) {
+    if (Array.isArray(v)) return v.length >= 3 && v.slice(0, 3).every(Number.isFinite) ? [v[0], v[1], v[2]] : null;
+    const m = typeof v === "string" && /^#?([0-9a-f]{6})$/i.exec(v);
+    if (!m) return null;
+    const n = parseInt(m[1], 16);
+    return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
+  }
+  function applyZones(out, zones, sections, livery, dim) {
+    if (!livery) return;
+    for (const z of PAINT_ZONES) {
+      const raw = zoneColour(livery[z.colour]), fin = z.finish && pickedFinish(livery[z.finish]);
+      if (!raw && !fin) continue;
+      const t = raw && (dim ? dim(raw) : raw), c = t && t.map((x) => Math.min(Math.max(x, 0), 1));
+      for (const r of (z.zone ? zones : sections) || []) {
+        if (r.name !== (z.zone || z.section)) continue;
+        for (let i = r.from; i < r.to; i++) {
+          const m = out.mat[i];
+          if (m !== SURFACES.paint) {
+            if (z.paintOnly || m !== SURFACES.carbon) continue;
+            if (Math.max(out.col[i * 3], out.col[i * 3 + 1], out.col[i * 3 + 2]) < VOID) continue;
+            out.mat[i] = SURFACES.paint;
+          }
+          if (c) { out.col[i * 3] = c[0]; out.col[i * 3 + 1] = c[1]; out.col[i * 3 + 2] = c[2]; }
+        }
       }
     }
   }
@@ -110,7 +165,7 @@ const CarMaterials = (function () {
     DARK, CARBON, VISOR, PANEL, TYRE, RIM, HUB, INTAKE, HALO, EXHAUST,
     TYRE_BAND, BRAKE_CALIPER,
     TCAM_IDS, tcamColour,
-    smoothSkin, applyBodySplit, applyFinish,
+    smoothSkin, applyBodySplit, applyFinish, applyZones, PAINT_ZONES, ZONE_FINISH, zoneColour,
   };
 })();
 Object.freeze(CarMaterials);

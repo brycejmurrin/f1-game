@@ -351,6 +351,7 @@ const Teams = (function () {
     const ids = k === "finShape" ? (typeof Car3D !== "undefined" && Car3D.FIN_SHAPE_IDS)
       : k === "numFont" ? (typeof LiveryTex !== "undefined" && LiveryTex.NUM_FONT_IDS)
       : k === "finish" ? (typeof Car3D !== "undefined" && Car3D.FINISH_SURFACE && ["gloss"].concat(Object.keys(Car3D.FINISH_SURFACE)))
+      : /^[a-z]+Finish$/.test(k) ? (typeof Car3D !== "undefined" && Car3D.FINISH_SURFACE && ["inherit", "gloss"].concat(Object.keys(Car3D.FINISH_SURFACE)))   // zone finishes (floorFinish, rimFinish, …)
       : null;
     return !ids || ids.indexOf(v) >= 0;
   }

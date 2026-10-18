@@ -1200,9 +1200,9 @@ const CarDraw = (function () {
         const caliper = wt.cal || (playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier]);
         const rim = wt.rim || (playerBrakeVisual && playerBrakeVisual.rim);
         const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false,
-          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink);
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf);
         const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false,
-          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink);
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf);
         return {
           F: G.gfx.createMesh(front.rotating),
           R: G.gfx.createMesh(rear.rotating),
@@ -1255,8 +1255,8 @@ const CarDraw = (function () {
         const wt = _fwTints;
         const caliper = wt.cal || (brake ? brake.cal : Car3D.BRAKE_CALIPER[vt.brakes]);
         const rim = wt.rim || (brake && brake.rim);
-        const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel, wt.ink);
-        const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel, wt.ink);
+        const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel, wt.ink, wt.surf);
+        const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel, wt.ink, wt.surf);
         // A MARKER, not behaviour (Car3D.build's `field` opt is the same idea): this
         // cache and getPlayerWheelMeshes() call buildWheelLayers identically, so a
         // mesh probe cannot otherwise tell a FIELD pair from a PLAYER one, and
