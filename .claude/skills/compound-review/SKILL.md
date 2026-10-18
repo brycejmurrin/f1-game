@@ -1,12 +1,13 @@
 ---
 name: compound-review
-description: Use when compound-review.
+description: "Use when /compound-review is typed: report-only review of a scoped diff."
 disable-model-invocation: true
 ---
 ## F1 project integration
 
 This project copy is an explicit opt-in. The repository subsystem skills, `check-changes`, browser occupancy rules, generated-file policy, and verification gates govern F1 work. Use those workflows for their mechanisms; this skill supplies supporting diagnosis, review, or verification reasoning. It does not authorize bypassing repository gates or publishing changes.
 
+In this repo: `node tools/ci/pick-tests.mjs` names the groups the diff needs (judge test gaps against it); agent `verify-agent` with `--base <ref>` tells a new red from one the base already had; never a browser run inside a subagent (AGENTS.md rule 10).
 
 # Review a scoped change
 

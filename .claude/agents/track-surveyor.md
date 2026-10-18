@@ -36,6 +36,31 @@ floating tree and not reach the line that places it.
    samples before calling a cliff real. Float-audit checks props, not every
    terrain-over-road or water defect. No `survey-track.mjs`, `agent.mjs`,
    `apex-eval.mjs`, `ground-profile.mjs`, Chromium or cloudBrowser in this fork.
+
+   When the `apex-tools` MCP server is down (it fails to connect in some
+   containers), run the CLIs its tools wrap, one plain command per call:
+   `node tools/track/audit-circuit.cjs <id> --json` (= `apex_track_audit`
+   with checks: verify, float, clip, coplanar, props, ground);
+   `node tools/track/ground-audit.cjs <id> --why`,
+   `node tools/track/clip-audit.cjs <id> --why`,
+   `node tools/track/coplanar-audit.cjs <id>`,
+   `node tools/track/float-audit.cjs <id> --json`,
+   `node tools/track/centreline-kinks.cjs <id>`;
+   `node tools/track/graph-parity.cjs <id>` (= `apex_graph_parity`, base
+   HEAD); `node tools/shot/frame-report.mjs --track <id>` (= `apex_frame_report`).
+
+   The worktree guard refuses shell loops, heredocs and `awk -v`: iterate
+   with separate calls, or put the loop inside `node -e "…"`.
+
+   Geometry facts the def does not show: built banking lives in
+   `track.bankP` (`bankingProfile()` in `js/track/core/mesh.js`; `lift[k]` is
+   the raised-edge height in METRES per centreline node, `bsign[k]` its side)
+   and is applied per vertex by `bankOffsetAt()`; `track.bank[]` is 0 on
+   every circuit, so the centreline frame stays level (the right vector's
+   `ry` is 0) and `py` carries no lift — reading any of them reports "flat". To attribute a primitive to the emitter that placed
+   it, build with `buildContext({ stackFor })` from
+   `tools/lib/track-build-vm.cjs` (a Set of `minX|minY|minZ` keys at 0.1 m)
+   — each matching record gains a `stack`; without it a box names nothing.
 3. Edit the assigned pair only — `js/circuits/<id>.js` (geometry, metadata, palette) and
    `js/circuits/scenery/<id>.js` (the `scenery(api)` dressing). Which `k` or
    `frac` each emitter expects (`def._sceneryShift`, `K(s)`, `along()`,

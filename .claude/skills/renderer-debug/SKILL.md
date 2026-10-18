@@ -33,10 +33,10 @@ __apex.diag({download:false}).env.backend   // "three" | "webgl2" | "webgpu"
 ```
 
 A value like `webgl2 (pick: webgpu)` means the pick failed and the fallback
-bound: `env.backendFallback` says why (renderer-boot's step: null or slow adapter,
+bound: `env.backendFallback` says why (written by `js/render/renderer-boot.js`: null or slow adapter,
 canary strike, hung fetch/init, refused create), then read `localStorage["apex26.gfxWgxFail"]` / `["apex26.gfxTlxFail"]`
 and `env.backendState` (`pin`, `forceWebGL`, `gpuErrors`). Pin a backend for a
-probe with `apex-eval.mjs <track> <expr> --backend three|webgl2|webgpu` (a
+probe with `tools/shot/apex-eval.mjs <track> <expr> --backend three|webgl2|webgpu` (a
 `GLX.*()` / `WGX.*()` expression silently answers for TLX without it).
 Headless/software adapters blit onto `#game-soft` (`awaitSoftPresent()`): a
 black `#game` is that overlay's gap, not yet a shader miss. A software probe

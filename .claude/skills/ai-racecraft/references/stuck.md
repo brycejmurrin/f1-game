@@ -1,8 +1,6 @@
 # Stuck / unstuck recipe (AI wedged, never recovers)
 
-Discriminator: `__apex.caution().level` 0 with `speed < 7` and `stuckT` growing is
-this skill; level ≠ 0 or `caution().sinceT` growing (flag or safety car stuck
-out) is **race-incidents-control**.
+Confirm the SKILL.md discriminator first (caution level 0, `stuckT` growing).
 
 Two timers live in `updateCar` (`game.js`; search `stuckT` / `rescueT`).
 `stuckT` grows while speed is below 7 and `AiDrive.isBoxed` finds no room both

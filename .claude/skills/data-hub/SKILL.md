@@ -1,6 +1,6 @@
 ---
 name: data-hub
-description: "Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare specs change, a tab is empty/stale/wrong season or year, or WATCH/HIGHLIGHTS loads the wrong driver/race after a picker change. Not standalone Season setup (season-mode), hub menu layout (ui-menu-a11y) or in-race physState telemetry (agent-view)."
+description: "Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare specs change, a tab is empty/stale/wrong year, or WATCH/HIGHLIGHTS loads the wrong driver/race after a picker change. Not standalone Season setup (season-mode), hub menu layout (ui-menu-a11y) or in-race physState telemetry (agent-view)."
 ---
 
 # Data Hub / F1API
@@ -24,9 +24,13 @@ follow-owner state → **f1-animation-cameras** (`references/replay.md`).
 | race | `loadRealRace` | 60 min |
 | export | `loadExport` | 24 h |
 
-`MAX_AGE` controls reuse of tab DOM nodes; it is independent of the API cache
-TTL in `js/data/api.js` (schedule responses: 24 h). Refreshing a tab can reuse
-a cached API response.
+`MAX_AGE` controls reuse of tab DOM nodes (the check is `showTab` in
+`js/data/hub.js` ~373-386: `st.node` younger than `maxAge` and not past its own
+`nextFlipAt`); it is independent of the API cache TTL in `js/data/api.js`
+(schedule responses: 24 h). Refreshing a tab can reuse a cached API response.
+A standings table tagged `LAST SEASON · <y> FINAL` is the intended fallback
+(`loadStandings` in `js/data/standings.js` ~123-130: the current year is empty,
+so it fetches `season() − 1`), not a stale cache.
 
 RACE IT (`js/data/real-race-tab.js`) builds one Grand Prix's timing into the
 script `js/race/real-race.js` replays (grid, per-lap pace, stops, flags,
@@ -56,8 +60,8 @@ pinned by `tests/unit/data-export.test.mjs` (mock OpenF1 → unzip: file list, C
 Season/year (schedule/results take no year, standings an optional one; `LAST SEASON` tag, wrong clock,
 stale `apex26.api.*` cache, mock answering every year as 2026) → `references/season-year.md`.
 
-Start with `tests/specs/data-lifecycle.spec.js` or the telemetry comparison
-spec through `test-solo.mjs <path>` as one background task with a log in `artifacts/logs/`
+Start with `tests/specs/data-lifecycle.spec.js` or `tests/specs/telemetry-compare.spec.js`
+through `test-solo.mjs <path>` as one background task with a log in `artifacts/logs/`
 (parent-owned browser, AGENTS.md rule 4). Reserve the
 `test-bg.mjs hooks` group for changes that need its wider surface. Node-only, seconds, run first:
 `node --test tests/unit/data-api-status.test.mjs` (also `data-standings`, `data-results`,
