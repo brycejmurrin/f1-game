@@ -203,6 +203,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `editor-workspace.js` | `EditorWorkspace` | tag | Shared tuner furniture only. |
 | `settings-search.js` | `SettingsSearch` | tag | Find settings by player terms. |
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
+| `setting-deps.js` | `SettingDeps` | tag | SettingDeps — the ONE place a setting greys out because another setting makes it do nothing (tilt sliders under TOUCH steering, engine-layer levels with the… |
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › SAVES & DATA, which carries a player's state OUT of the browser and back IN. |
 | `captions.js` | `Captions` | tag | Captions: on-screen text for radio, spotter, and pre-race announcer. |

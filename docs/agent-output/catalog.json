@@ -24,15 +24,15 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. sourceBytes are source-file snapshots, not output sizes or tokens. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 400,
+    "files": 402,
     "classifications": {
-      "entrypoint-candidate": 301,
+      "entrypoint-candidate": 303,
       "asset": 2,
       "data": 11,
       "ambiguous": 46,
       "library": 40
     },
-    "npmScripts": 69,
+    "npmScripts": 72,
     "configuredMcpServers": 5
   },
   "tools": [
@@ -2081,7 +2081,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 39114,
+      "sourceBytes": 39339,
       "doc": "What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`).",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -2310,7 +2310,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 17007,
+      "sourceBytes": 20537,
       "doc": "Gate for marking a PR ready: require green tooling-fast / Structural guards on the tip SHA.",
       "skill": "steward",
       "nativeOutputFlagMentions": [
@@ -2816,7 +2816,7 @@
         "npm-script-reference",
         "argv-or-parser"
       ],
-      "sourceBytes": 109461,
+      "sourceBytes": 109640,
       "doc": "Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.",
       "skill": null,
       "nativeOutputFlagMentions": [
@@ -3035,6 +3035,30 @@
         "--",
         "node",
         "tools/docs/gen-coverage-table.mjs"
+      ]
+    },
+    {
+      "path": "tools/env/apex-memory.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "npm-script-reference",
+        "argv-or-parser"
+      ],
+      "sourceBytes": 3557,
+      "doc": "List, show, and retire `.claude/memory` topic files from any host; no assume-unchanged.",
+      "skill": "agent-config",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": [
+        "memory:list",
+        "memory:retire",
+        "memory:show"
+      ],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/env/apex-memory.mjs"
       ]
     },
     {
@@ -3282,6 +3306,30 @@
         "--",
         "node",
         "tools/gen/gen-circuit-meta.mjs"
+      ]
+    },
+    {
+      "path": "tools/gen/gen-cursor-rules.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "main-guard",
+        "npm-script-reference",
+        "argv-or-parser"
+      ],
+      "sourceBytes": 5432,
+      "doc": "Emit `.cursor/rules/*.mdc` from `.claude/rules` (`paths`→`globs`, else `alwaysApply`); `--check`.",
+      "skill": "agent-config",
+      "nativeOutputFlagMentions": [],
+      "npmScripts": [
+        "gen",
+        "gen:check"
+      ],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/gen/gen-cursor-rules.mjs"
       ]
     },
     {
@@ -4862,7 +4910,7 @@
       "path": "tools/manifest.cjs",
       "classification": "ambiguous",
       "evidence": [],
-      "sourceBytes": 97228,
+      "sourceBytes": 97336,
       "doc": "Load-order truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `HARD_EDGES`, `TRACK_VM`; index.html must match.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [],
@@ -7326,7 +7374,7 @@
     },
     {
       "name": "gen",
-      "command": "node tools/gen/gen-circuit-meta.mjs && node tools/gen/gen-shell.mjs && node tools/gen/title-art.mjs && node tools/gen/gen-test-groups.mjs && npm run gen:docs",
+      "command": "node tools/gen/gen-circuit-meta.mjs && node tools/gen/gen-shell.mjs && node tools/gen/title-art.mjs && node tools/gen/gen-test-groups.mjs && node tools/gen/gen-cursor-rules.mjs && npm run gen:docs",
       "agentCommand": [
         "node",
         "tools/agent-run.mjs",
@@ -7338,7 +7386,7 @@
     },
     {
       "name": "gen:check",
-      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check",
+      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check",
       "agentCommand": [
         "node",
         "tools/agent-run.mjs",
@@ -7358,6 +7406,42 @@
         "npm",
         "run",
         "gen:docs"
+      ]
+    },
+    {
+      "name": "memory:list",
+      "command": "node tools/env/apex-memory.mjs list",
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "npm",
+        "run",
+        "memory:list"
+      ]
+    },
+    {
+      "name": "memory:retire",
+      "command": "node tools/env/apex-memory.mjs retire",
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "npm",
+        "run",
+        "memory:retire"
+      ]
+    },
+    {
+      "name": "memory:show",
+      "command": "node tools/env/apex-memory.mjs show",
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "npm",
+        "run",
+        "memory:show"
       ]
     },
     {
@@ -7938,7 +8022,7 @@
     },
     {
       "name": "test:steering-unit",
-      "command": "node --test tests/unit/brake-cue.test.mjs tests/unit/controller-profiles.test.mjs tests/unit/digital-steer.test.mjs tests/unit/dock-layout.test.mjs tests/unit/driving-cues.test.mjs tests/unit/editor-workspace.test.mjs tests/unit/garage-defaults.test.mjs tests/unit/grip-steer.test.mjs tests/unit/hud-arrange.test.mjs tests/unit/input-bindings.test.mjs tests/unit/key-binds.test.mjs tests/unit/low-speed-lock.test.mjs tests/unit/onboard.test.mjs tests/unit/pad-haptics.test.mjs tests/unit/phone-input-improvements.test.mjs tests/unit/phone-pad.test.mjs tests/unit/player-tools-backup.test.mjs tests/unit/player-tools-ui.test.mjs tests/unit/settings-defaults.test.mjs tests/unit/settings-export.test.mjs tests/unit/settings-search.test.mjs tests/unit/settings-tabs.test.mjs tests/unit/share-code.test.mjs tests/unit/steer-lock-taper.test.mjs tests/unit/steer-tuning-lock.test.mjs tests/unit/throttle-latch.test.mjs tests/unit/touch-drag-anchor.test.mjs tests/unit/touch-drag-speed.test.mjs tests/unit/xr-opts.test.mjs tests/unit/xr-phase0.test.mjs tests/unit/xr-plan.test.mjs",
+      "command": "node --test tests/unit/brake-cue.test.mjs tests/unit/controller-profiles.test.mjs tests/unit/digital-steer.test.mjs tests/unit/dock-layout.test.mjs tests/unit/driving-cues.test.mjs tests/unit/editor-workspace.test.mjs tests/unit/garage-defaults.test.mjs tests/unit/grip-steer.test.mjs tests/unit/hud-arrange.test.mjs tests/unit/input-bindings.test.mjs tests/unit/key-binds.test.mjs tests/unit/low-speed-lock.test.mjs tests/unit/onboard.test.mjs tests/unit/pad-haptics.test.mjs tests/unit/phone-input-improvements.test.mjs tests/unit/phone-pad.test.mjs tests/unit/player-tools-backup.test.mjs tests/unit/player-tools-ui.test.mjs tests/unit/setting-deps.test.mjs tests/unit/settings-defaults.test.mjs tests/unit/settings-export.test.mjs tests/unit/settings-search.test.mjs tests/unit/settings-tabs.test.mjs tests/unit/share-code.test.mjs tests/unit/steer-lock-taper.test.mjs tests/unit/steer-tuning-lock.test.mjs tests/unit/throttle-latch.test.mjs tests/unit/touch-drag-anchor.test.mjs tests/unit/touch-drag-speed.test.mjs tests/unit/xr-opts.test.mjs tests/unit/xr-phase0.test.mjs tests/unit/xr-plan.test.mjs",
       "agentCommand": [
         "node",
         "tools/agent-run.mjs",
