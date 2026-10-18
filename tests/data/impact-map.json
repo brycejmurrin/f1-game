@@ -2881,7 +2881,8 @@
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
-        "tests/unit/livery-wheels.test.mjs"
+        "tests/unit/livery-wheels.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ]
     },
     "js/car/livery-design.js": {
