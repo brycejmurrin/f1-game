@@ -21,6 +21,10 @@
  *   godray pair and the bloom chain are created lazily on the first frame
  *   their gate opens (ensure*()); until then the composite reads the 1x1
  *   white/black no-op fallbacks, exactly like GLX's whiteTex/blackTex binds.
+ *   A block that later stays shut for SHED_FRAMES presents (a governor shed,
+ *   day after night shafts) disposes those targets. The next open frame
+ *   allocates them again. One closed frame does not: a sun that clips the
+ *   frame edge must not free and rebuild the godray pair every other present.
  *
  * LAMP-MAP SNAPSHOT: present() reads S.lampArmed for the godray lamp-index
  *   mapping BEFORE tlx.js clears the armed flags (clearArmed runs after this
@@ -364,6 +368,61 @@
     });
     ownTexture(P.composite && P.composite.grOffTex);   // the godray slot's own "off" black
     if (P.composite && P.composite.U) P.composite.U.sceneHdr.value = _sceneHdr;
+
+    // Frames a lazy block may stay shut before its targets are disposed.
+    // Eight presents is ~130 ms at 60 Hz: long enough that a one-frame gate
+    // flicker keeps the pair, short enough that a shed does not hold the
+    // half-res surfaces for the rest of the session (plan M-11).
+    const SHED_FRAMES = 8;
+    let aoIdle = 0, grIdle = 0, bloomIdle = 0;
+    function dropRT(rt) {
+      if (!rt) return;
+      ownedRTs.delete(rt);
+      try { rt.dispose(); } catch (_) { /* device already dying */ }
+    }
+    function unbind(slot, fallback) {
+      if (slot) slot.value = fallback;
+    }
+    function releaseAO() {
+      if (!ssaoRT && !ssaoBlurRT) return;
+      if (P.blurAOH) unbind(P.blurAOH.tex, whiteTex);
+      if (P.blurAOV) unbind(P.blurAOV.tex, whiteTex);
+      if (P.blurAO) unbind(P.blurAO.tex, whiteTex);
+      if (P.composite && P.composite.tex) unbind(P.composite.tex.ssao, whiteTex);
+      dropRT(ssaoRT); dropRT(ssaoBlurRT);
+      ssaoRT = null; ssaoBlurRT = null;
+    }
+    function releaseGR() {
+      if (!godrayRT && !godrayBlurRT) return;
+      if (P.blurGRH) unbind(P.blurGRH.tex, blackTex);
+      if (P.blurGRV) unbind(P.blurGRV.tex, blackTex);
+      if (P.blurGR) unbind(P.blurGR.tex, blackTex);
+      if (P.godray) unbind(P.godray.tex, blackTex);
+      if (P.composite && P.composite.tex) unbind(P.composite.tex.godray, P.composite.grOffTex || blackTex);
+      dropRT(godrayRT); dropRT(godrayBlurRT);
+      godrayRT = null; godrayBlurRT = null;
+    }
+    function releaseBloom() {
+      if (!bloomLv) return;
+      if (P.bright) unbind(P.bright.tex, blackTex);
+      if (P.down) unbind(P.down.tex, blackTex);
+      if (P.upFinal) unbind(P.upFinal.tex, blackTex);
+      if (P.upAdd) unbind(P.upAdd.tex, blackTex);
+      if (P.downFixed) for (let i = 0; i < P.downFixed.length; i++) if (P.downFixed[i]) unbind(P.downFixed[i].tex, blackTex);
+      if (P.upFinalFixed) unbind(P.upFinalFixed.tex, blackTex);
+      if (P.upAddFixed) for (let i = 0; i < P.upAddFixed.length; i++) if (P.upAddFixed[i]) unbind(P.upAddFixed[i].tex, blackTex);
+      if (P.composite && P.composite.tex) unbind(P.composite.tex.bloom, blackTex);
+      for (let i = 0; i < bloomLv.length; i++) dropRT(bloomLv[i].rt);
+      bloomLv = null;
+      nLv = 0;
+    }
+    // have* is this frame's gate. A shut block counts; an open one resets.
+    function shedIdle(live, idle, release) {
+      if (live) return 0;
+      idle++;
+      if (idle >= SHED_FRAMES) { release(); return 0; }
+      return idle;
+    }
 
     // fullscreen runner
     quad = new THREE.QuadMesh();
@@ -882,6 +941,11 @@
       _last.shafts = !!haveGR;
       _last.ssr = !!(haveRefl && reflStr > 0.001);
       _last.fxaa = !viz;
+      // After the composite has rebound the 1x1 fallbacks. Releasing on the
+      // same frame the block drew would dispose a target runPass just wrote.
+      aoIdle = shedIdle(!!haveAO, aoIdle, releaseAO);
+      grIdle = shedIdle(!!haveGR, grIdle, releaseGR);
+      bloomIdle = shedIdle(!!(haveBloom && useLv > 0), bloomIdle, releaseBloom);
       } finally {
         if (!dest) {
           try { renderer.setRenderTarget(null); } catch (_) { /* device dying: tlx.js's catch owns the fallback */ }
@@ -1044,6 +1108,9 @@
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
                   ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],
+        // Lazy targets still alive. A shed that stuck must drop these; the
+        // leak test counts them after N closed presents.
+        held: { ssao: !!ssaoRT, bloom: !!bloomLv, shafts: !!godrayRT },
         rtResizes: _rtResizes,
         fixed: fixed ? { physical: [PW, PH], logical: [W, H] } : null,
       }),

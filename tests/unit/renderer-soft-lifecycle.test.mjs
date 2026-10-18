@@ -94,6 +94,97 @@ test("TLX post chain disposes every owned base resource exactly once", () => {
   for (const material of h.made.materials) assert.equal(material.disposeCount, 1);
 });
 
+test("TLX post sheds SSAO targets after closed presents and does not grow them across a second cycle", () => {
+  const made = { targets: [] };
+  class Disposable {
+    constructor(bucket) { this.disposeCount = 0; if (bucket) bucket.push(this); }
+    dispose() { this.disposeCount++; }
+  }
+  class Texture extends Disposable {
+    constructor() { super(); this.isTexture = true; this.generateMipmaps = false; this.colorSpace = null; }
+  }
+  class DataTexture extends Texture { constructor() { super(); } }
+  class DepthTexture extends Texture { constructor() { super(); } }
+  class RenderTarget extends Disposable {
+    constructor(w, h, opts = {}) {
+      super(made.targets);
+      this.width = w; this.height = h;
+      this.textures = Array.from({ length: opts.count || 1 }, () => new Texture());
+      this.texture = this.textures[0];
+      this.depthTexture = opts.depthTexture || null;
+      this.depthBuffer = !!opts.depthBuffer;
+      this.samples = opts.samples || 0;
+    }
+    setSize(w, h) { this.width = w; this.height = h; }
+    dispose() {
+      super.dispose();
+      for (const texture of this.textures) texture.dispose();
+      if (this.depthTexture) this.depthTexture.dispose();
+    }
+  }
+  class QuadMesh { constructor() { this.material = null; } render() {} }
+  const flex = () => ({ set() {}, fromArray() {} });
+  const uniBag = () => new Proxy({}, {
+    get(t, k) {
+      if (typeof k !== "string") return undefined;
+      if (!t[k]) t[k] = { value: flex() };
+      return t[k];
+    },
+  });
+  const pass = () => ({ mat: {}, U: uniBag(), tex: { value: null } });
+  const THREE = {
+    DataTexture, DepthTexture, RenderTarget, QuadMesh, Texture,
+    NoColorSpace: "none", HalfFloatType: "f16", UnsignedByteType: "u8",
+    RGBAFormat: "rgba", RedFormat: "r", LinearFilter: "linear",
+  };
+  const TLXShaders = {
+    post() {
+      return {
+        ssao: pass(),
+        blurAOH: pass(),
+        blurAOV: pass(),
+        composite: {
+          mat: {}, U: uniBag(),
+          tex: { bloom: { value: null }, ssao: { value: null }, godray: { value: null } },
+        },
+        fxaa: pass(),
+      };
+    },
+  };
+  const sandbox = {
+    window: { TLXShaders }, TLXShaders,
+    document: { createElement: () => ({ getContext: () => null, width: 0, height: 0 }) },
+    Log: { info() {}, warn() {} },
+    performance: { now: () => 0 },
+  };
+  vm.runInNewContext(read("js/render/shared/post-common.js"), sandbox, { filename: "post-common.js" });
+  vm.runInNewContext(read("js/render/three/tlx-post.js"), sandbox, { filename: "tlx-post.js" });
+  const chain = sandbox.window.TLXShaders.postChain(THREE, {}, {
+    renderer: { backend: {}, autoClear: true, setRenderTarget() {} },
+    chunks: {}, shadow: null,
+  });
+  const base = made.targets.filter((t) => t.disposeCount === 0).length;
+  const F = { invProj: new Array(16).fill(0) };
+  const off = { ssao: 0, godray: 0, bloom: 0, contact: 0, reflect: 0, carReflect: 0, flareMul: 0 };
+  chain.present(Object.assign({}, off, { ssao: 0.8 }), F);
+  const afterOne = made.targets.filter((t) => t.disposeCount === 0).length;
+  assert.equal(chain.state().held.ssao, true);
+  assert.ok(afterOne > base, "the first open frame allocates the SSAO pair");
+  for (let i = 0; i < 7; i++) chain.present(off, F);
+  assert.equal(chain.state().held.ssao, true, "a short close keeps the pair");
+  assert.equal(made.targets.filter((t) => t.disposeCount === 0).length, afterOne);
+  chain.present(off, F);
+  const afterShed = made.targets.filter((t) => t.disposeCount === 0).length;
+  assert.equal(chain.state().held.ssao, false);
+  assert.ok(afterShed <= afterOne, "closed presents do not keep the SSAO pair");
+  assert.equal(afterShed, base, "only the base scene and LDR targets remain");
+  chain.present(Object.assign({}, off, { ssao: 0.8 }), F);
+  for (let i = 0; i < 8; i++) chain.present(off, F);
+  const afterSecond = made.targets.filter((t) => t.disposeCount === 0).length;
+  assert.equal(afterSecond, afterShed, "a second open/close cycle does not accumulate targets");
+  chain.dispose();
+});
+
 test("TLX post construction failure unwinds targets, textures, and tracked materials", () => {
   const h = postHarness(true);
   assert.throws(() => h.create(), /post graph failed/);
