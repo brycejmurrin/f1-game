@@ -101,13 +101,14 @@ helmet fields (no rows on this base; #2752 adds them). This passes today, but th
 | D7 | Low | **TAIL STYLE TEAM duplicates a named style.** McLaren's TEAM motif is CHEVRON, so CHEVRON looks like a dead pill. | 0/1 on McLaren in S0 and S1; 7/7 once TEAM is not the start value. | Fix PR 1: TEAM names its motif ("TEAM · CHEVRON") |
 | D8 | Low | **Two grey looks for one state.** Colour and pill rows dim to 0.38 (`carsetup.css`); pattern range rows dim to 0.75 (`tuner.css .tune-off`). | CSS. | Fix PR 1 |
 | D9 | — | Region finish GLOSS = INHERIT while FINISH is GLOSS. Expected (INHERIT means "use FINISH"); not a defect. | 8/9 in every scenario. | none |
-| D10 | Medium (latent) | **The import cap is two fields from silently dropping paint.** `GARAGE_KEYS_MAX = 64` fields per livery (`js/ui/settings-export.js` `cleanLivery`). A fully authored livery has 62 today, so two more fields (LD is adding zones) and an export/import loses fields with no warning. | Field count, persist probe. | Reported to P2 (`js/ui/**` owner); not OWNED |
+| D10 | Medium (latent) | **The import cap is two fields from silently dropping paint.** `GARAGE_KEYS_MAX = 64` fields per livery (`js/ui/settings-export.js` `cleanLivery`). A fully authored livery has 62 today, so two more fields (LD is adding zones) and an export/import loses fields with no warning. | Field count, persist probe. | Covered by Livery #3's #2806 (derives the cap from `Liveries.FIELDS`) |
 | D11 | — | Helmet fields have hints and draft slots but no rows. | Fixed by #2752. | none |
+| D13 | Medium | **On a phone, the editor's answers to an action are hidden.** The compact tier rule `#cs-inner[data-density="compact"] .cs-opt-desc { display: none }` (carsetup.css) also hides the UNDO / REDO / COMPARE status line (`role="status"`, so it is not announced either) and the team-mark legibility warning. | 852×393 phone: density `compact`; after UNDO the status reads "Previous edit restored." with `display: none`, 0×0. | Fix PR 1 (both shown on compact; section notes stay hidden for room) |
 | D12 | Low | **Default-value vocabulary is mixed.** TEAM, INHERIT, DEFAULT, STANDARD, LOGO and NONE all mean "what the team ships", and no pill marks the team's own default. | DOM. | Noted; no fix in this pass |
 
 ## Coordination
 
-- `js/garage/setup-sheet.js` builds the editor's DOM but is outside this worker's OWNED globs, and #2752 edits it, so
-  D1 and the setup-sheet half of D2 wait for #2752 to merge and for an OK from the orchestrator.
-- D4's rule and D7's motif name live in LD's files (`liverytex.js` `FILL_SURFACES`, `livery-graphics.js` `TAIL_STYLE`).
-- D10 is P2's (`js/ui/settings-export.js`).
+- `js/garage/setup-sheet.js` builds the editor's DOM; the orchestrator added it to this worker's OWNED globs, and the
+  fixes stack on #2752's branch (which also edits it).
+- D4's rule and D7's motif name live in LD's files (`liverytex.js` `FILL_SURFACES`, `livery-graphics.js` `TAIL_STYLE`); LD OK'd both edits. D3's root (an unpainted halo is metal) is LD's zones work; the editor greys the control honestly meanwhile.
+- D10 is covered by #2806.
