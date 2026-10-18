@@ -122,8 +122,9 @@ BAND_CEIL = 1
    paid by extract.
 6. **Coordination.** Do not edit stuck-detection, `isBoxed`, spacing recovery,
    or parked-player rescue beyond reading existing traits. Aggression's
-   *spacing* half (`followPad`, `contactGive`) waits until the stuck/bunching
-   workstream has landed or is explicitly coordinated in a tiny follow-up PR.
+   *spacing* half (`followGap`, the old `followPad`, and `contactGive`) is the
+   follow-up after the stuck/bunching work (#1545): neutral aggression keeps
+   the historical headway and give; streets keep the metre gap.
 
 ## Ordered slices (each independently shippable)
 
@@ -244,7 +245,12 @@ Gates:
 
 ### Deferred (explicitly NOT this workstream)
 
-- Aggression spacing half (`followPad`, `contactGive`) — after stuck/bunching PR lands.
+- Aggression spacing half (`followGap` / `contactGive`) — landed on #2783 as the
+  pass-completion lever (#1564): open follow stays historical (pace ladder);
+  tight-only headway + contactGive scale. Shallow tow hunger for #2356 was
+  tried and reverted. `ai-human` contactPct can sit above tip while
+  contactGive is shared with the player path in `game.js` (player-aware carve
+  is outside that PR). Stuck detection, rescue teleport and `isBoxed` stay out.
 - Composure / energy bias / line-style / tyre-care / quali bias from the
   2026-09-16 ranking (§5 items 3–7) — later workstreams.
 - Learning / Drivatar / Sophy.

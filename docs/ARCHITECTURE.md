@@ -209,6 +209,7 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `dock-layout.js` | `DockLayout` | tag | DockLayout: per-scheme touch-dock REPOSITION offsets. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
+| `cvd-palette.js` | `CvdPalette` | tag | CvdPalette: the one JS table of semantic colours. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences, and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT). |
 | `a11y-opts.js` | `A11yOpts` | tag | A11yOpts: SETTINGS › ACCESSIBILITY. |
 | `hud-elements.js` | `HudElements` | tag | per-element HUD visibility toggles (SETTINGS › DISPLAY › HUD). |
@@ -442,8 +443,8 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `grip-steer.js` | `GripSteer` | tag | GripSteer: own-state steering cap at the front's peak slip. |
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
-| `ai-band.js` | `AiBand` | tag | AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace. |
-| `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |
+| `ai-band.js` | `AiBand` | tag | @ts-check |
+| `ai-corridor.js` | `AiCorridor` | tag | @ts-check |
 | `aero-zones.js` | `AeroZones` | tag | AeroZones: the ACTIVE AERO activation zones for the loaded circuit. |
 | `drive-tune.js` | `DriveTune` | tag | DriveTune: the live driving-feel lets (PACE, wheelbase, steer, grip). |
 | `brake-cue.js` | `BrakeCue` | tag | braking CUE: pulse RATE that says when to brake, never brakes for you. |
@@ -452,7 +453,7 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `incident-sim.js` | `IncidentSim` | tag | Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 + C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). |
 | `contact-geometry.js` | `ContactGeometry` | tag | Physical road boundaries and oriented boxes in the local road plane. |
 | `collide.js` | `Collide` | tag | Collide — car-to-car contact in the Frenet (prog, x) plane: the arc-bucket broadphase, the mass-weighted relaxation passes, the hard separation pass, the… |
-| `wall-end-face.js` | `WallEndFace` | tag | WALL END FACE: the one case the lateral wall clamp gets wrong. |
+| `wall-end-face.js` | `WallEndFace` | tag | @ts-check |
 | `wall-clamp.js` | `WallClamp` | tag | WALL CLAMP: per-side barrier / pit-wall / gantry limits, human slide-along + scrub, lane-side pit clamp, and the conditional road→world writeback when xPinned. |
 
 **`js/lighting/`**
