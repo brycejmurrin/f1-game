@@ -1,7 +1,7 @@
 {
   "schema": 2,
   "method": "emitted model bounds plus source viewpoints where available; nearest built racing-road projection otherwise",
-  "sourceDigest": "fb4884ae13b5231b24f76b39f68d9c37794a1989200e3e54e5e09a51cb8d206d",
+  "sourceDigest": "b2ece55b251c367163894c77d830593ce8dc70361d40c7716460e56aff707f93",
   "locations": [
     {
       "id": "abudhabi/ferrari-world",
@@ -1399,16 +1399,16 @@
       "track": "jeddah",
       "name": "Fountain",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.2,
+      "frac": 0.247924,
       "target": [
-        -307.46,
+        -307.82,
         177.07,
-        -432.35
+        -431.14
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/jeddah.js anchor K(0.20)",
-      "projectedFrac": 0.165062,
-      "nearestRoadDistanceM": 206.9,
+      "projectedFrac": 0.213104,
+      "nearestRoadDistanceM": 207.6,
       "viewDistanceM": 266,
       "source": "tests/data/landmarks/jeddah.json; js/circuits/scenery/jeddah.js"
     },
@@ -1418,11 +1418,11 @@
       "track": "jeddah",
       "name": "Floating Mosque",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.164935,
+      "frac": 0.212987,
       "target": [
-        -335.14,
+        -334.76,
         19.6,
-        -423.18
+        -422.17
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 236,
@@ -1435,16 +1435,16 @@
       "track": "jeddah",
       "name": "Blue Sail",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.275,
+      "frac": 0.322924,
       "target": [
-        157.91,
+        158.3,
         63.01,
-        37.5
+        38.89
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/jeddah.js anchor K(0.275)",
-      "projectedFrac": 0.701744,
-      "nearestRoadDistanceM": 53.5,
+      "projectedFrac": 0.749399,
+      "nearestRoadDistanceM": 53.6,
       "viewDistanceM": 92.3,
       "source": "tests/data/landmarks/jeddah.json; js/circuits/scenery/jeddah.js"
     },
@@ -1454,11 +1454,11 @@
       "track": "jeddah",
       "name": "Golden Tower Hotel",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.055126,
+      "frac": 0.10318,
       "target": [
-        -247.4,
+        -247.23,
         26.05,
-        -1167.11
+        -1166.38
       ],
       "stationMethod": "nearest-road-projection",
       "nearestRoadDistanceM": 80,
@@ -1471,17 +1471,17 @@
       "track": "jeddah",
       "name": "Flagpole",
       "nameSource": "authored model ID; real-world identity unverified",
-      "frac": 0.3,
+      "frac": 0.347924,
       "target": [
-        163.1,
+        163.52,
         80.9,
-        252.68
+        251.92
       ],
       "stationMethod": "source-viewpoint",
       "viewpointSource": "js/circuits/scenery/jeddah.js anchor K(0.30)",
-      "projectedFrac": 0.665971,
-      "nearestRoadDistanceM": 40.4,
-      "viewDistanceM": 138.9,
+      "projectedFrac": 0.714013,
+      "nearestRoadDistanceM": 41.1,
+      "viewDistanceM": 139,
       "source": "tests/data/landmarks/jeddah.json; js/circuits/scenery/jeddah.js"
     },
     {

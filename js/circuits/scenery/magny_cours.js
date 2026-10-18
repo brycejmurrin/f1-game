@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["magny_cours"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, ds, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
         pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost,
         fence, guardrail, tyreWall, groundPatch, modelGroup, seat, terrainYAt,
@@ -383,19 +383,50 @@
         opts = opts || {};
         const rows = opts.rows || 7, rise = opts.rise || 0.8, depth = opts.depth || 1.2;
         const R = opts.span != null ? opts.span : 6.4;
-        along(s0, s1, opts.step || 8, (k, spacing) => {
+        const step = opts.step || 8;
+        along(s0, s1, step, (k, spacing) => {
           const a = anchor(k, side, gap);
-          const b = [a.r, a.u, a.t], seg = spacing * 0.95;
+          const b = [a.r, a.u, a.t];
+          const nb = Math.max(1, Math.round(step / ds));
+          const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap));
+          const chord = (lat) => {
+            const p = vadd(a.c, a.r, lat);
+            let c = spacing;
+            for (const q of kn) {
+              const pq = vadd(q.c, q.r, lat);
+              c = Math.min(c, Math.hypot(pq[0] - p[0], pq[1] - p[1], pq[2] - p[2]));
+            }
+            return c;
+          };
+          const swing = (() => {
+            let t = 0;
+            for (const q of kn) {
+              const dx = q.c[0] - a.c[0], dy = q.c[1] - a.c[1], dz = q.c[2] - a.c[2], dl = Math.hypot(dx, dy, dz) || 1;
+              const cos = Math.abs((dx * a.t[0] + dy * a.t[1] + dz * a.t[2]) / dl);
+              t = Math.max(t, Math.sqrt(Math.max(0, 1 - cos * cos)) / Math.max(0.2, cos));
+            }
+            return t;
+          })();
+          const rowSeg = (back) => {
+            const half = depth / 2;
+            const c = Math.min(spacing, chord(back - half), chord(back + half), chord(back));
+            const l = (c - depth * 0.5 * swing) * 0.95;
+            return l < 1.0 ? 0 : l;
+          };
+          const seg = rowSeg(side * (rows - 1) * depth / 2);
+          if (seg <= 0) return;
           out._mat = MAT.CONCRETE;
           for (let r = 0; r < rows; r++) {
             const back = r * depth, up = 0.6 + r * rise;
+            const rs = rowSeg(side * back) || seg;
+            if (rs <= 0) continue;
             addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
-              [depth, rise + 0.2, seg], r & 1 ? [0.70, 0.70, 0.68] : [0.64, 0.64, 0.62], b);
+              [depth, rise + 0.2, rs], r & 1 ? [0.70, 0.70, 0.68] : [0.64, 0.64, 0.62], b);
             const h = hash(k * 29 + r * 7);
             if (h > 0.42) continue;
             out._mat = MAT.FABRIC;
             addBox(out, vadd(vadd(vadd(a.c, a.r, side * back),
-              a.t, (h - 0.21) * seg * 0.8), a.u, up + rise * 0.5 + 0.55),
+              a.t, (h - 0.21) * rs * 0.8), a.u, up + rise * 0.5 + 0.55),
               [0.55, 1.0, 0.6],
               h < 0.14 ? [0.24, 0.36, 0.66] : h < 0.28 ? [0.88, 0.88, 0.84] : [0.78, 0.30, 0.24], b);
             out._mat = MAT.CONCRETE;

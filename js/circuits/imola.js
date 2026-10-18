@@ -25,6 +25,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.9,
+    tyreSeverity: 1.02,  // Classic permanent; Emilia-Romagna band ≈ calendar neutral (no 2026 rate)
     baseHW: 7,
     terrainOuter: 120,
     dressingExclusions: [

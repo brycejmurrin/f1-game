@@ -5,8 +5,10 @@
   {
     id: "jeddah",
     reverse: false, // real-world CW/CCW direction
-    // Known-wrong corner placement (START-LINES: no usable source). Deliberately untouched.
-    startFrac: 0.9625,
+    // Start on the main straight before T1 (LEFT ~256 m): was 0.9625 on the T27 bend.
+    // Scenery/authored fracs stay on the old origin until re-anchored by hand.
+    startFrac: 0.9160,
+    sceneryStartFrac: 0.9625,
     name: "JEDDAH",
     gp: "Saudi Arabian GP",
     country: "Saudi Arabia",
@@ -55,8 +57,8 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    sectors: [0.3, 0.62],
-    turns: [0.1725, 0.1820, 0.2055, 0.2565, 0.2660, 0.2765, 0.2860, 0.3000, 0.3190, 0.3285, 0.3530, 0.3695, 0.4790, 0.4865, 0.4950, 0.5075, 0.5550, 0.5780, 0.5935, 0.6045, 0.6115, 0.6385, 0.7880, 0.8045, 0.8260, 0.8755, 0.9975],
+    sectors: [0.28, 0.62],
+    turns: [0.0176, 0.0671, 0.1891, 0.3641, 0.3736, 0.3971, 0.4481, 0.4576, 0.4681, 0.4776, 0.4916, 0.5106, 0.5201, 0.5446, 0.5611, 0.6706, 0.6781, 0.6866, 0.6991, 0.7466, 0.7696, 0.7851, 0.7961, 0.8031, 0.8301, 0.9796, 0.9961],
     // Jeddah night: pale grey concrete rail (not solid green) + green/gold day accents
     barrier: { a: [0.95, 0.95, 0.96], b: [0.05, 0.52, 0.28], c: [0.95, 0.80, 0.12], night: [0.42, 0.44, 0.48], tyre: [0.05, 0.52, 0.28] },
     furniture: { tree: "none",  fol: [0.22, 0.44, 0.20], lamp: "arm",   lc: [1.0, 0.88, 0.60] },
