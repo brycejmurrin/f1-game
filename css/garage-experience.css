@@ -14,4 +14,17 @@
   .cs-inspection p { margin: 0; color: var(--dim); font-size: var(--fs-2); line-height: 1.4; }
   .cs-inspection > button { justify-self: start; }
   #cs-options .cs-opt:focus-visible { outline-color: var(--red); outline-offset: calc(var(--gap) * 0.25); }
+  /* Paint editor: ONE greyed look for every dependent row (pill and colour rows dimmed to
+     0.38, pattern sliders to tuner.css's 0.75 — two looks for one state, audit D8), with the
+     reason line ([data-liv-why], livery-design-editor.js) left at full strength so it can be read. */
+  .cs-liv-editor .cs-liv-ed-row[aria-disabled="true"],
+  .cs-liv-editor .tune-row[aria-disabled="true"] { opacity: 1; }
+  .cs-liv-editor .cs-liv-ed-row[aria-disabled="true"] > :not([data-liv-why]),
+  .cs-liv-editor .tune-row[aria-disabled="true"] > :not([data-liv-why]) { opacity: 0.38; }
+  .cs-liv-editor [data-liv-why] { display: block; flex-basis: 100%; font-size: var(--fs-2); line-height: 1.35; color: var(--dim); }
+  /* The compact tier hides every .cs-opt-desc (carsetup.css), which on a phone also hid the two
+     lines that ANSWER an action: the UNDO / REDO / COMPARE status and the team-mark legibility
+     warning (audit D13). Section notes stay hidden for room; live feedback does not. */
+  #cs-inner[data-density="compact"] .cs-liv-editor .cs-opt-desc[role="status"],
+  #cs-inner[data-density="compact"] .cs-liv-editor .cs-opt-desc[aria-live]:not([hidden]) { display: block; }
 }

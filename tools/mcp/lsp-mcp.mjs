@@ -648,6 +648,9 @@ export class Lsp {
   // Every code (non-comment, non-string) occurrence of `A.b` / `A`, after the declaration
   // row; for `A.b`, also each file's `const { b } = A` / `const X = A` binding and the
   // uses of the local name that binding introduces (the checker sees none of them).
+  // Whole-head aliases also accept the guarded forms agents write for window globals:
+  // `typeof H !== "undefined" ? H : {}`, `(typeof H !== "undefined" && H) || {}`,
+  // and `H || {}` / `window.H || {}` (e.g. `const PC = …` then `PC.VMAX`).
   async textRefs(parts, def, includeDeclaration = true) {
     const name = parts.at(-1), head = parts.slice(0, -1).join("."), esc = x => x.replace(/[$.]/g, "\\$&");
     const refs = includeDeclaration ? [def] : [], seen = new Set([`${def.uri}:${def.range.start.line}:${def.range.start.character}`]);
@@ -671,8 +674,16 @@ export class Lsp {
       if (parts.length < 2) continue;
       const bindings = [];
       const owner = n => n?.type === "Identifier" ? n.name : n?.type === "MemberExpression" && !n.computed && n.object.name === "window" ? n.property.name : "";
+      const emptyFallback = n => n?.type === "ObjectExpression" && n.properties.length === 0 || n?.type === "Literal" && n.value === null;
+      const typeofGuard = n => n?.type === "BinaryExpression" && n.operator === "!==" &&
+        n.left?.type === "UnaryExpression" && n.left.operator === "typeof" && owner(n.left.argument) === head &&
+        n.right?.type === "Literal" && n.right.value === "undefined";
+      const headAlias = n => owner(n) === head ||
+        n?.type === "ConditionalExpression" && typeofGuard(n.test) && owner(n.consequent) === head && emptyFallback(n.alternate) ||
+        n?.type === "LogicalExpression" && n.operator === "||" && emptyFallback(n.right) &&
+          (owner(n.left) === head || n.left?.type === "LogicalExpression" && n.left.operator === "&&" && typeofGuard(n.left.left) && owner(n.left.right) === head);
       visit(this.astOf(f), n => {
-        if (n.type !== "VariableDeclarator" || owner(n.init) !== head) return;
+        if (n.type !== "VariableDeclarator" || !headAlias(n.init)) return;
         if (n.id.type === "ObjectPattern") for (const p of n.id.properties) {
           if (p.type !== "Property" || p.computed || (p.key.name || p.key.value) !== name) continue;
           const local = p.value.type === "AssignmentPattern" ? p.value.left : p.value;

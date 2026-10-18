@@ -33,6 +33,20 @@ test("fmtLaps / fmtLoss / fmtNext", () => {
 });
 
 const base = { hasRival: true, rivalInPit: false, rivalLapped: false, stopLeft: true, gapS: 8, lossS: 20, rivalWear: 0.6, myWear: 0.4 };
+const behindBase = { hasBehind: true, behindInPit: false, stopLeft: true, gapS: 8, lossS: 20, behindWear: 0.3, myWear: 0.55, lapsToStop: 2, behindWindow: "P14", behindLap: 13 };
+test("behindThreat: rival behind due in on fresher rubber while our stop is near", () => {
+  const S = load();
+  assert.equal(S.behindThreat(behindBase), true);
+  assert.equal(S.behindThreat({ ...behindBase, behindInPit: true }), true, "already in the lane");
+  assert.equal(S.behindThreat({ ...behindBase, gapS: 30 }), false, "too far back");
+  assert.equal(S.behindThreat({ ...behindBase, behindWear: 0.52 }), false, "not fresher");
+  assert.equal(S.behindThreat({ ...behindBase, lapsToStop: 5 }), false, "our stop too far out");
+  assert.equal(S.behindThreat({ ...behindBase, myWear: 0.2 }), false, "set too fresh to care");
+  assert.equal(S.behindThreat({ ...behindBase, behindWindow: "P20" }), false, "pit window not this lap");
+  assert.equal(S.behindThreat({ ...behindBase, stopLeft: false }), false);
+  assert.equal(S.behindThreat(null), false);
+});
+
 test("undercut: car ahead inside the pit-loss window on older tyres", () => {
   const S = load();
   assert.equal(S.undercut(base), true);
@@ -61,15 +75,20 @@ function fakeDom() {
 test("tick: race + wear only; shows laps, loss, next, and the cue with the rival's code", () => {
   const { root, doc } = fakeDom();
   const S = load({ document: doc, HudElements: { isOn: () => true } });
-  const p = { rank: 2, prog: 1000, speed: 50, tyre: { code: "M" }, tyreWear: 0.4 };
+  const p = { rank: 2, prog: 1000, speed: 50, tyre: { code: "M" }, tyreWear: 0.4, lap: 12 };
   const a = { rank: 1, prog: 1300, speed: 50, code: "VER", pitState: "none", tyreWear: 0.7 };
+  const b = { rank: 3, prog: 700, speed: 50, code: "NOR", pitState: "none", tyreWear: 0.25, lap: 12 };
   let wear = true;
   const G = {
-    state: "race", session: "race", cars: [a, p], ranked: [a, p], track: { total: 5000 }, vTop: () => 90,
+    state: "race", session: "race", cars: [a, p, b], ranked: [a, p, b], track: { total: 5000 }, vTop: () => 90,
     tyres: { on: () => wear, spent: (c) => c.tyreWear, lapsLeft: () => 9.6 },
-    pits: { estimate: () => ({ lossS: 21 }), planInfo: () => ({ next: 14, code: "H", stops: 1 }) },
+    pits: {
+      estimate: () => ({ lossS: 21 }),
+      planInfo: () => ({ next: 14, code: "H", stops: 1, lapsToStop: 2 }),
+      windowOf: (c) => (c === b ? "P13" : ""),
+    },
   };
-  const snap = JSON.stringify([p, a]);
+  const snap = JSON.stringify([p, a, b]);
   S.tick(G, p);
   assert.equal(root.hidden, false);
   const row = (k) => root.children.find((r) => r.attrs["data-k"] === k);
@@ -79,8 +98,13 @@ test("tick: race + wear only; shows laps, loss, next, and the cue with the rival
   assert.equal(val("next"), "L14 H");
   assert.equal(row("uc").hidden, false, "300 m at 50 m/s = 6 s < 21 s, older tyres");
   assert.equal(val("uc"), "VER");
+  assert.equal(row("cov").hidden, false, "300 m behind at 50 m/s, fresher rival due in");
+  assert.equal(val("cov"), "NOR");
   assert.match(root.attrs["aria-label"], /undercut on VER/);
-  assert.equal(JSON.stringify([p, a]), snap, "the HUD reads only");
+  assert.match(root.attrs["aria-label"], /cover from NOR/);
+  assert.equal(JSON.stringify([p, a, b]), snap, "the HUD reads only");
+  b.tyreWear = 0.5; S.tick(G, p);
+  assert.equal(row("cov").hidden, true, "rival no longer fresher enough");
   a.tyreWear = 0.3; S.tick(G, p);
   assert.equal(row("uc").hidden, true, "fresher rival: no cue");
   wear = false; S.tick(G, p);

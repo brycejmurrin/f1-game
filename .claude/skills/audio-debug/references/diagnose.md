@@ -87,7 +87,9 @@ GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
 5. `__apex.timing().raceT` should be increasing. A frozen sim means
    `setEngine()` never runs and pitch stays at the last value.
 6. Flat only at top speed: that is `rev` pinned at 1 (`rpmFor` caps at
-   `MAX_RPM·1.04`, `revFrac` is clamped), not a bug in the curve. Above 98.5%
+   `MAX_RPM·1.04` — `js/race/pace-math.js` ~91-97; `MAX_RPM` 15000 /
+   `IDLE_RPM` 5000 in `js/physics/consts.js` ~210; `revFrac` is clamped 0..1 in
+   `js/game.js` ~4585 before `GameAudio.setEngine`), not a bug in the curve. Above 98.5%
    revs the limiter chops, and in top gear it fades to a steady note after
    `LIM_HOLD` + `LIM_FADE` (`limiterHeld()`, `limiterDepth()`). Read
    `GameAudio.rate()` (or `__apex.audio().rate`) at two speeds in top gear:

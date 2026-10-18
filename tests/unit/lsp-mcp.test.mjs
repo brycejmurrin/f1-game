@@ -1,8 +1,9 @@
 // apex-lsp (tools/mcp/lsp-mcp.mjs) driven as an MCP CLIENT drives it — stdio
 // JSON-RPC, initialize → tools/list → tools/call — against the REAL js/ tree and
 // TypeScript 7's native `tsc --lsp`. Proves cross-file definition, semantic
-// references and workspace symbols resolve for script-global IIFEs (jsconfig.json).
-// No browser. ~2 s (one tsc --lsp project load).
+// references and workspace symbols resolve for script-global IIFEs (jsconfig.json),
+// including guarded head aliases (`typeof H !== "undefined" ? H : {}`, `(typeof H && H) || {}`,
+// `H || {}`) that feed PC.VMAX-style member reads. No browser. ~2 s (one tsc --lsp project load).
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -187,6 +188,61 @@ test("fixture workspace: freshness, ambiguity, window globals, honest misses", {
     assert.match(r.t, /src\/b\.js:6:\d+ {2}\[use\] \(top level\) {2}const v2 = Alpha\.ping\(2\);/, r.t);
     assert.match(r.t, /src\/a\.js:4:\d+ {2}\[def\] \(Alpha\) {2}function ping/, "the moved declaration is at its new line");
   } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Guarded whole-head aliases (`const PC = typeof PhysicsConsts !== "undefined" ? …`)
+// must feed PC.VMAX (etc.) into textRefs — the bare `const X = Head` pattern missed them.
+test("fixture: guarded typeof / || {} head aliases feed member refs", { timeout: 60000 }, async () => {
+  const os = await import("node:os");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lsp-mcp-guard-"));
+  const w = (f, t) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), t); };
+  w("jsconfig.json", JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, typeAcquisition: { enable: false }, include: ["src/**/*.js"] }));
+  w("src/c.js", `"use strict";\nwindow.Beta = {\n  KEY: 5,\n};\n`);
+  // The three forms that appear on PhysicsConsts (player-forces / brake-cue / driving-cues /
+  // overtake-mode style): ternary, (typeof && H) || {}, and window.H || {} / H || {}.
+  w("src/d.js", `"use strict";
+const A = typeof Beta !== "undefined" ? Beta : {};
+const B = (typeof Beta !== "undefined" && Beta) || {};
+const C = window.Beta || {};
+const D = Beta || {};
+const E = typeof Beta !== "undefined" ? Beta : null;
+const Wrong = typeof Beta !== "undefined" ? Other : {};
+const Unguarded = enabled ? Beta : {};
+const a = A.KEY;
+const b = B.KEY;
+const c = C.KEY;
+const d = D.KEY;
+const e = E.KEY;
+const wrong = Wrong.KEY;
+const unguarded = Unguarded.KEY;
+`);
+  const lsp = new Lsp({ root: dir, src: "src", anchor: "src/c.js", idleMs: 0 });
+  try {
+    const r = await callTool(lsp, "lsp_references", { symbol: "Beta.KEY" });
+    const t = r.content[0].text;
+    assert.equal(r.isError, false, t);
+    // Member reads through the local (`A.KEY`) tag as [alias], same as `const again = B.KEY`.
+    assert.match(t, /src\/d\.js:\d+:\d+ {2}\[alias\] \(top level\) {2}const a = A\.KEY;/);
+    assert.match(t, /src\/d\.js:\d+:\d+ {2}\[alias\] \(top level\) {2}const b = B\.KEY;/);
+    assert.match(t, /src\/d\.js:\d+:\d+ {2}\[alias\] \(top level\) {2}const c = C\.KEY;/);
+    assert.match(t, /src\/d\.js:\d+:\d+ {2}\[alias\] \(top level\) {2}const d = D\.KEY;/);
+    assert.match(t, /\[alias\].*const e = E\.KEY;/);
+    assert.doesNotMatch(t, /const (?:wrong|unguarded) =/);
+    assert.match(t, /^6 references in 2 files .*5 of them through a destructure or alias/, t);
+  } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("real tree: PhysicsConsts.VMAX refs include PC.VMAX behind guarded aliases", { timeout: 90000 }, async () => {
+  const lsp = new Lsp({ idleMs: 0 });
+  try {
+    const r = await callTool(lsp, "lsp_references", { symbol: "PhysicsConsts.VMAX", limit: 2000 });
+    assert.equal(r.isError, false, r.content[0].text);
+    const t = r.content[0].text;
+    // The files that only spell VMAX as PC.VMAX after a guarded `const PC = …`.
+    for (const f of ["js/physics/player-forces.js", "js/physics/brake-cue.js", "js/audio/driving-cues.js"]) {
+      assert.match(t, new RegExp(f.replace(/\//g, "\\/") + ":\\d+:\\d+ {2}\\[\\w+\\].*PC\\.VMAX"), `${f} PC.VMAX missing:\n${t.slice(0, 800)}`);
+    }
+  } finally { lsp.stop(); }
 });
 
 test("classify tags a row by the identifier at the column", () => {

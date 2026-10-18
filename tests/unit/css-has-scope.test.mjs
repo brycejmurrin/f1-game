@@ -112,6 +112,7 @@ test("every scoped :has(> …) chain is the shell's real parent chain, step by s
     n++;
     for (const step of steps) {
       if (/^\.screen\b|^dialog\.screen\b/.test(step) && up === body) break;   // pinned by the .screen test below
+      if (/^dialog\b/.test(step) && (up === body || up.id === "datahub")) break;   // pinned by the <dialog> test below
       const el = stepEl(step, up);
       if (!el || el.up !== up) { bad.push(`${file}: ${m[0]} — "${step}" is not a child of ${up.id ? "#" + up.id : up.tag} in index.html`); break; }
       up = el;
@@ -151,4 +152,25 @@ test("a <body> or #hud child is never searched for unscoped (write `:has(> #id�
     if (id && (BODY_KIDS.has(id[1]) || HUD_KIDS.has(id[1]))) bad.push(`${file}: ${m[0]}`);
   }
   assert.deepEqual(bad, []);
+});
+
+// `body:has(dialog[open])` / `body:has(dialog:modal)` were the last whole-document searches
+// (selector stats, phone race: a third of all selector time; docs/notes/PERF-P2-2026-10-18.md).
+// Scoped to `> dialog` plus `> :where(#datahub) > dialog`, which holds only while every shell
+// <dialog> is a body child and the one built at runtime (the telemetry popup) is #datahub's child.
+test("scoped :has(> dialog…) holds: every shell <dialog> is a <body> child; the runtime one hangs off #datahub", () => {
+  const dialogs = ELS.filter((e) => e.tag === "dialog");
+  assert.ok(dialogs.length >= 15, "dialogs found");
+  assert.deepEqual(dialogs.filter((e) => e.parent !== "body").map((e) => e.id || e.tag), []);
+  const built = [];
+  const walk = (dir) => { for (const f of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+    const rel = dir + "/" + f.name;
+    if (f.isDirectory()) { if (f.name !== "vendor") walk(rel); } else if (f.name.endsWith(".js") && /(?:createElement|\bel)\(\s*["']dialog["']/.test(read(rel))) built.push(rel);
+  } };
+  walk("js");
+  assert.deepEqual(built, ["js/data/telemetry.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
+  assert.match(read("js/data/telemetry.js"), /const host = document\.getElementById\("datahub"\) \|\| document\.body;\s*host\.appendChild\(overlay\);/);
+  const bad = [];
+  for (const [file, src] of CSS) for (const m of hasArgs(src)) if (/^dialog\b/.test(m[2])) bad.push(`${file}: ${m[0]}`);
+  assert.deepEqual(bad, [], "write `:has(> dialog…)` and `:has(> :where(#datahub) > dialog…)`");
 });
