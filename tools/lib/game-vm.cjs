@@ -44,6 +44,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 const { performance } = require("perf_hooks");
+const { runScriptCached } = require("./vm-script-cache.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
 const MANIFEST = require("../manifest.cjs");
@@ -544,7 +545,9 @@ function runFile(ctx, relPath, record) {
   // Absolute filename: Node's V8 coverage (NODE_V8_COVERAGE / --experimental-test-coverage)
   // silently drops scripts whose name is not an absolute path, so a relative
   // name made every twin report 0 % for the game sources it ran.
-  const r = vm.runInContext(src.replace(/^const\b/gm, "var"), ctx, { filename: path.join(ROOT, relPath) });
+  const body = src.replace(/^const\b/gm, "var");
+  const filename = path.join(ROOT, relPath);
+  const r = runScriptCached(body, ctx, { filename, root: ROOT });
   record.scripts.push({ file: relPath, ms: +(performance.now() - t0).toFixed(1) });
   return r;
 }

@@ -18,6 +18,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.5,
+    tyreSeverity: 1.05,  // Moderate African permanent; slight above neutral
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     // The pit complex (TrackPit): LEFT of the main straight in the (clockwise)
