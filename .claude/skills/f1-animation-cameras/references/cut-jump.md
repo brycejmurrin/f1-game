@@ -7,6 +7,13 @@ Owners in `js/camera/` (locate symbols with `rg`):
 - `director.js` — the live TV auto-cut (`tv` mode); `Director.live().status()` reports its state.
 - `drive-broadcast.js` — lens/FOV only for broadcast cams; it does not move the rig.
 - `cam-avoid.js` — wall/building avoidance for broadcast eyes; `cam-comfort.js` — touch comfort preset.
+- Camera tuner: `offsets.js` (`CamTune` knob registry + `apex26.camTune` store), `tuner-panel.js` (`CamTunerEditor` sliders),
+  `cam-tuner-boot.js` (`CamTunerPanel` stub); tests `camera-tuner-a11y.test.mjs`, `camera-defaults.test.mjs`.
+- `feel.js` (`CamFeel`) — free-look, look-back, speed FOV, shake; test `camera-feel.test.mjs`.
+- Flyby: `flyby-seq.js` (`FlybySeq` shot sequencer), `flyby-panel.js` (shot algebra), `flyby-editor.js` (DOM panel);
+  tests `flyby-shots.test.mjs`, `flyby-panel.test.mjs`.
+- `trackside.js` (`TracksideCams`) — roadside fixed eyes per corner; test `trackside.test.mjs`.
+- `free-cam.js` (`FreeCam`) — photo-mode fly-cam panel; test `free-cam.test.mjs`.
 
 Recipe for "cut jumps" (e.g. at a hairpin when switching to TV):
 1. Read the target mode's `cut` in `mode-switch.js`; a 0 means a hard cut by design.
