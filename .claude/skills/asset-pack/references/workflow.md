@@ -13,14 +13,11 @@ mismatch.
 
 17 slots — `MAT.FLAT(0)` … `MAT.ASPHALT(16)`. Must match `TrackGeom.MAT`
 (`js/track/core/geom.js`) and `MAT_LAYERS` in both `tools/gen/assets.mjs` and
-`js/render/shared/assets.js`. If you change the layer count, `17` is also hardcoded
-in `js/render/glx/shaders/glsl-lit.js` (`uMatTexScale[17]`, `mid > 16` in `matTexUV()`),
-`js/render/glx/glx.js` (`MAT_TEX_LAYERS`), `js/render/three/tsl-lit.js`
-(`uniformArray(Array(17).fill(0))` and the `for (let i = 0; i < 17; i++)` upload
-loop), `js/render/three/tlx.js` (`grey()` placeholders and `layers || 17`) and
-`js/render/webgpu/` (`wgx.js` `MAT_TEX_LAYERS`; `wgsl-chunks.js` `MatScaleU`
-`array<vec4<f32>, 5>` and `mid > 16`). Miss one and the extra layer's scale
-silently reads `0.0` (GLX) or is dropped (TLX/WGX).
+`js/render/shared/assets.js`. The count `17` is also hardcoded in every backend's
+shader/uniform sizing; `tests/unit/assets-pack.test.mjs` ("the shader's layer count
+matches the MAT table size") names each site — change the count there first and let
+it list what else to edit. Miss one and the extra layer's scale silently reads
+`0.0` (GLX) or is dropped (TLX/WGX).
 
 **Never bake:** `GLASS`, `FLAG`, `FLAT` — glass needs mirror read; flags are
 vertex-displaced; FLAT is the no-material id.
@@ -33,6 +30,12 @@ vertex-displaced; FLAT is the no-material id.
    __apex.matTex()
    __apex.lightTune({ matTexMix: 0.5 })
    ```
+   Wrong layer on a surface: compare what was UPLOADED with what the pack SAYS.
+   `__apex.assets().scales[m]` is the per-MAT scale the backend holds; each
+   `assets/pack/manifest.json` `materials.layers[]` entry is `{mat, id, scale}`
+   (`node -e 'for (const l of require("./assets/pack/manifest.json").materials.layers) console.log(l.mat, l.id, l.scale)'`).
+   A scale on the wrong index, or `0` where the manifest has a layer, is MAT-id
+   drift between `TrackGeom.MAT` and the pack — not a texture problem.
 
 2. **Check the pack offline** (Node only, ~2 s, writes nothing; expect
    `verify: OK`, ~4.1 MB of 8 MB; `tests/unit/assets-pack.test.mjs` is the

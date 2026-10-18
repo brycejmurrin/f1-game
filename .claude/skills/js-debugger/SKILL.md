@@ -36,7 +36,8 @@ client reload/trust. Never edit global agent instructions for this workflow.
 ## Get a Chrome to attach to
 
 ```sh
-node tools/mcp/debug-chrome.mjs start     # static server 3456 + headless Chromium on 9222; refuses beside a test run
+node tools/mcp/debug-chrome.mjs start     # static server 3456 + headless Chromium on 9222, 844x390 phone-landscape
+                                          # (--device desktop = 1280x720); refuses beside a test run
 node tools/mcp/debug-chrome.mjs status    # endpoint + targets;  stop: kills only its own PIDs
 ```
 

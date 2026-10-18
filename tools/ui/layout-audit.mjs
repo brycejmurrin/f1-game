@@ -8,6 +8,7 @@
 //   node tools/ui/layout-audit.mjs --help
 //   node tools/ui/layout-audit.mjs --list
 //   node tools/ui/layout-audit.mjs --report
+//   node tools/ui/layout-audit.mjs --diff=audit.before.json [--after=audit.json]
 //
 //   # Geometry matrix (default) — clip / tap / overflow / starved
 //   node tools/ui/layout-audit.mjs
@@ -44,6 +45,7 @@ import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
 import { launchChromium, startStaticServer } from "../lib/harness.mjs";
 import { collectDomInfo } from "./css-play.mjs";
+import { runDiff } from "./audit-diff.mjs";
 import { SCREENS, VIEWPORTS, OVERLAY_IDS, pickScreens, pickViewports } from "./menu-screens.mjs";
 import {
   runMenuGallery,
@@ -63,6 +65,8 @@ function printHelp() {
 
   --list                         screen / viewport catalog (no browser)
   --report                       summarize last --gallery run
+  --diff=BEFORE.json [--after=F] compare a saved audit.json with the current one
+                                 (no browser; exit 1 on a new finding)
   --help
 
   (default)                      geometry matrix → artifacts/layout-audit/
@@ -104,6 +108,8 @@ function parseArgv(argv) {
     help: has("--help") || has("-h"),
     list: has("--list"),
     report: has("--report"),
+    diff: arg("--diff=") || (argv.indexOf("--diff") >= 0 ? argv[argv.indexOf("--diff") + 1] : null),
+    after: arg("--after="),
     gallery: gallery || !!screen,
     screen,
     survey,
@@ -604,6 +610,9 @@ if (opts.help) {
 if (opts.list) {
   printMenuCatalog();
   process.exit(0);
+}
+if (opts.diff) {
+  process.exit(runDiff(path.resolve(opts.diff), path.resolve(opts.after || path.join(GEOM_OUT, "audit.json"))));
 }
 if (opts.report) {
   const r = reportMenuGallery(opts.outDir);
