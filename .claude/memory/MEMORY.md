@@ -7,7 +7,7 @@ topic file. User preferences and corrections only — a measured lesson belongs 
 code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [PR auto-merge](pr-auto-merge.md) — never arm or merge on my own; Merge Desk arms MERGE-commit only (squash retired 2026-10-13); `MERGE-HOLD:` is the only veto line, never paste "do not merge"
 - [Small steps for API analysis](small-steps-for-api-analysis.md) — prefer small incremental queries over bulk fetch scripts
-- [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — default never merge (mark ready at tip-green when asked to expedite); only on Bryce's explicit in-session "merge it asap" / "push and merge asap override": MERGE-commit via MCP, never squash, 1 h gate (and the push hold, `APEX_PUSH_HOLD=0`) skipped and said so
+- [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — default never merge (mark ready at tip-green when asked to expedite); only on Bryce's explicit in-session "merge it asap" / "push and merge asap override": MERGE-commit via MCP, never squash, 1 h gate skipped and said so
 - [One subagent per skill](one-subagent-per-skill.md) — skill reviews: one Sonnet subagent per skill, never grouped
 - [GitHub Pro: 40 concurrent jobs](github-plan-pro-40-jobs.md) — account upgraded 2026-09-30; size CI against 40 standard / 5 macOS slots, not 20
 - [Stacked PRs land bottom-up](stacked-prs-land-bottom-up.md) — since 2026-10-15 branches auto-delete on merge and GitHub retargets the stack (verify the base, no hand retarget); sync-pr on ratchets conflicts, ready one at a time (never arm)
@@ -22,14 +22,12 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [gpu-census: one run per branch](gpu-census-one-run-per-branch.md) — a second dispatch queues, a third replaces it; dispatch A/B arms sequentially, pair ≥2 runs per arm, read counts not fps
 - [Orchestrator may spawn sessions](orchestrator-may-spawn-sessions.md) — fleet work: launch sibling sessions without asking, tell Bryce each time; respect a single denied launch
 - [Merge method: verify parents](merge-method-verify-parents.md) — a "merge" merge_pull_request landed as a squash (#1743); check two parents after every merge
-- [Merge Desk session](merge-desk-session.md) — the Sonnet desk session_01WQY3pk… no longer exists (not found 2026-10-16); find the live `[Merge Desk]` via list_sessions or ask Bryce before sending SWEEP
+- [Merge Desk session](merge-desk-session.md) — the Sonnet desk session_01WQY3pk… no longer exists (not found 2026-10-16); no desk named in the launch prompt → `SWEEP-N/A` (AGENTS.md §Concurrent PRs), never hunt with list_sessions
 - [MCP allow rules, measured](mcp-allow-rules-measured.md) — read `permission_decision` in list_events; a repo can't approve its own .mcp.json servers (auto mode's classifier does); auto siblings need an auto parent + `source_url`; MDN/BrowserStack prompt regardless (claude.ai connector setting)
 - [Survey PRs merge to assets; cap 5](survey-prs-merge-to-assets-cap5.md) — 2026-10-15: green survey PRs merge into track-survey-assets; full-tier cap 5 while queue ok, 3 on hold
-- [Standing Merge Desk](standing-merge-desk.md) — since 2026-10-15 a Sonnet `[Merge Desk]` sibling (agent merge-desk.md) runs sweeps and spawns Sonnet lane workers, woken hourly; send SWEEP there
+- [Standing Merge Desk](standing-merge-desk.md) — 2026-10-15 history: the standing Sonnet desk is gone (not found 2026-10-16); ask Bryce before relaunching from agent merge-desk.md
 - [Sessions run Sonnet](sessions-run-sonnet.md) — 2026-10-16: lanes/workers/fresh-session scheduled tasks use claude-sonnet-5-5, never Fable
-- [Merge Desk session](merge-desk-session.md) — persistent Claude Merge Desk session_01WQY3pk…; workers send `SWEEP <PR#>`; it never merges
 - [Fixers may screenshot](fixers-may-screenshot.md) — UI sessions: screenshots and screenshot loops allowed (Bryce 06:37Z 10-17); keep the ~15-min per-defect cap
 - [Merge level 3](merge-level-3.md) — since 2026-10-17 04:19Z the orchestrator arms/merges fleet PRs when ready + full-tier green + no conflict + no MERGE-HOLD; never Bryce's Cursor PRs
 - [Rejected design: hold immediately](rejected-design-hold-immediately.md) — on an in-session rejection or "wait", MERGE-HOLD the PR and tell the orchestrator first; "wait" pauses me, not the fleet (#2611 merged under a 2 h-late hold)
 - [Lanes keep working](lanes-keep-working.md) — 2026-10-17: lanes pull deploy and take the next item in their area after a dry round; no FINAL unless the area is empty
-- [Fixers may screenshot](fixers-may-screenshot.md) — stuck UI fixer: allow screenshots (no loops), 15-min cap then push with a named known-red, or the orchestrator finishes it
