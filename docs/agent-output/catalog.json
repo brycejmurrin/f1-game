@@ -4830,7 +4830,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 53260,
+      "sourceBytes": 54296,
       "doc": "Handlers for apex_track (track session), apex_job_* (background CLIs), apex_ui_*, apex_car_audit, apex_track_audit.",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -4873,7 +4873,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 154981,
+      "sourceBytes": 156373,
       "doc": "Repo MCP server: wraps a pinned subset of these CLIs as `apex_*` tools; tree (no lock) vs browser (lock).",
       "skill": "check-changes",
       "nativeOutputFlagMentions": [
@@ -5056,7 +5056,7 @@
         "argv-or-parser",
         "shell-or-python-shebang"
       ],
-      "sourceBytes": 8628,
+      "sourceBytes": 9321,
       "doc": "Wrapper for the local `scratch/chrome-devtools-mcp` clone: `clone`/`build`/`run`/`verify`/`status`/`help`.",
       "skill": "mcp-probe",
       "nativeOutputFlagMentions": [],
