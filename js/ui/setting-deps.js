@@ -49,11 +49,12 @@ const SettingDeps = (function () {
   function is(id, ...values) { const v = val(id); return v === null ? null : values.includes(v); }
   const S = Object.freeze({ val, on, is });
 
-  /* A rule: { key, ids: [control or container id…], parent, values?, reason }.
-     With `values` the rule is live while the parent's value is one of them;
-     without, while the parent is ON (aria-pressed, a checkbox, or any value but
-     "off"). A rule whose parent is module state, not a control, gives
-     `when(S)` instead. Every predicate answers true (live), false (grey) or
+  /* A rule: { key, ids: [control or container id…], parent, values? | except?,
+     reason, runtime? }. With `values` the rule is live while the parent's value
+     is one of them, with `except` while it is none of them; with neither, while
+     the parent is ON (aria-pressed, a checkbox, or any value but "off"). A rule
+     whose parent is module state, not a control, gives `when(S)` instead.
+     `runtime` marks targets a module builds (not in index.html). Every predicate answers true (live), false (grey) or
      null (parent unknown: leave the control alone). `reason` stays short: it
      sits inside a one-line label. */
   const layer = (slider, toggle, name) => ({ key: "layer-" + toggle, ids: [slider], parent: toggle, reason: name + " layer is off" });
@@ -64,6 +65,23 @@ const SettingDeps = (function () {
       parent: "pm-steer", values: ["tilt"], reason: "TILT steering only" },
     { key: "steer-touch", ids: ["pm-touchrange", "pm-dragsmooth", "pm-touchcurve"],
       parent: "pm-steer", values: ["touch"], reason: "TOUCH steering only" },
+    { key: "steer-touch-speed", ids: ["pm-touchdragspeed"], runtime: true,
+      parent: "pm-steer", values: ["touch"], reason: "TOUCH steering only" },
+    // TOUCH always drives the throttle for you (game.js throttleMode()).
+    { key: "throttle-touch", ids: ["pm-throttlemode"], parent: "pm-steer", except: ["touch"], reason: "TOUCH uses AUTO gas" },
+    // PREDICTIVE CUE (1 = OFF) outranks the line-speed cue and is what condition-aware timing adjusts.
+    { key: "cue-line", ids: ["pm-linebrakecue"], parent: "pm-brakecue", values: ["1"], reason: "PREDICTIVE CUE is on" },
+    { key: "cue-condition", ids: ["pm-condition-cues"], runtime: true,
+      parent: "pm-brakecue", except: ["1"], reason: "PREDICTIVE CUE is OFF" },
+    { key: "hud-off", ids: ["pm-hudprofile", "pm-hudmetrics", "pm-hudmap", "pm-hudgaps", "pm-hudmirror", "pm-panelopacity"],
+      parent: "pm-hidehud", values: ["on"], reason: "HUD is OFF" },
+    // SGSR reconstructs a below-full buffer; at HIGH there is nothing to upscale.
+    { key: "upscale-full", ids: ["pm-upscale"], parent: "pm-res", except: ["high"], reason: "Needs RESOLUTION below HIGH" },
+    { key: "titleart-off", ids: ["pm-tl-art-size", "pm-tl-art-x", "pm-tl-art-y"], runtime: true,
+      parent: "pm-titleart", except: ["off"], reason: "TITLE ART is OFF" },
+    // The intro never plays under REDUCE MOTION (title-fx.js); the effective mode folds in the OS setting.
+    { key: "intro-motion", ids: ["pm-titleintro", "pm-replay-intro"], reason: "Off under REDUCE MOTION",
+      when: () => (typeof TitleFx !== "undefined" && TitleFx.mode ? TitleFx.mode() !== "reduce" : null) },
     layer("as-t-whine", "as-l-whine", "TURBO"),
     layer("as-t-harvest", "as-l-harvest", "HARVEST"),
     layer("as-t-boost", "as-l-ers", "ERS"),
@@ -94,7 +112,7 @@ const SettingDeps = (function () {
   // Where the greyed look goes: the one-line row around a control, else the target.
   function rowOf(el) {
     if (isRow(el) || isContainer(el)) return el;
-    return (el.closest && el.closest(".set-row, .tune-row, .adv-item")) || el;
+    return (el.closest && el.closest(".set-row, .tune-row, .adv-item, .player-tool-row")) || el;
   }
   // The label the reason suffix joins, so the line height never changes.
   function labelOf(el, row) {
@@ -173,7 +191,10 @@ const SettingDeps = (function () {
   // state(rule): true active, false greyed, null unknown (left alone).
   function state(rule) {
     try {
-      const v = rule.when ? rule.when(S) : rule.values ? S.is(rule.parent, ...rule.values) : S.on(rule.parent);
+      const v = rule.when ? rule.when(S)
+        : rule.values ? S.is(rule.parent, ...rule.values)
+        : rule.except ? S.is(rule.parent, ...rule.except) === null ? null : !S.is(rule.parent, ...rule.except)
+        : S.on(rule.parent);
       return v === null || v === undefined ? null : !!v;
     }
     catch (e) { Log.warn("game", "SettingDeps rule " + rule.key + " failed: " + (e && e.message)); return null; }

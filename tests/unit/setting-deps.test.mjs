@@ -17,18 +17,28 @@ const read = (p) => fs.readFileSync(new URL("../../" + p, import.meta.url), "utf
 const SRC = read("js/ui/setting-deps.js").replace(/^const SettingDeps\b/m, "var SettingDeps");
 const SHELL = read("index.html");
 
-// The parent a rule reads, as data: { id, want } (want = the value that makes it live).
-const parentOf = (rule) => (rule.parent ? { id: rule.parent, want: rule.values ? rule.values[0] : "on" } : null);
+// The parent a rule reads, as data: { id, want, off } — the values that make it live and inert.
+const parentOf = (rule) => {
+  if (!rule.parent) return null;
+  if (rule.values) return { id: rule.parent, want: rule.values[0], off: "__not-" + rule.values[0] };
+  if (rule.except) return { id: rule.parent, want: "__not-" + rule.except[0], off: rule.except[0] };
+  return { id: rule.parent, want: "on", off: "off" };
+};
+// A when() rule reads module state; each one names how the test turns it off and on.
+const WHEN = {
+  "line-off": (h, on) => { h.mode.line = on ? "full" : "off"; },
+  "intro-motion": (h, on) => { h.mode.motion = on ? "on" : "reduce"; },
+};
 
 function boot() {
   const dom = makeDom({ readyState: "complete" });
   const d = dom.document;
   d.getElementById = (id) => d.querySelector("#" + id);
   const el = (tag, id, parent = dom.body) => { const n = dom.makeElement(tag, id); parent.appendChild(n); return n; };
-  const mode = { line: "full" };
+  const mode = { line: "full", motion: "on" };
   const ctx = vm.createContext({
     document: d, setTimeout, Log: { info() {}, warn() {} },
-    DrivingLine: { mode: () => mode.line },
+    DrivingLine: { mode: () => mode.line }, TitleFx: { mode: () => mode.motion },
   });
   vm.runInContext(SRC, ctx);
   return { dom, d, el, ctx, mode, Deps: ctx.SettingDeps };
@@ -64,7 +74,13 @@ function buildTarget(h, id) {
     const b = h.el("button", id + "-b", det);
     return [a, b];
   }
-  const btn = h.el(shape || "button", id); return [btn];
+  if (!shape) { // runtime-built: a labelled range (sliders) or a checkbox row
+    const lab = h.el("label"); lab.classList.add("tune-row");
+    const name = h.el("span", null, lab); name.classList.add("tune-label");
+    const input = h.el("input", id, lab); input.value = "4";
+    return [input];
+  }
+  const btn = h.el(shape, id); return [btn];
 }
 
 function setParent(h, p, on) {
@@ -77,16 +93,16 @@ function setParent(h, p, on) {
   let sel = h.d.getElementById(p.id + "-sel");
   if (!sel) { const row = h.el("div", p.id); row.classList.add("set-row"); sel = h.el("select", p.id + "-sel", row); }
   // OFF = a value no rule accepts; ON = the value(s) the rule asks for.
-  sel.value = on ? p.want : "off";
+  sel.value = on ? p.want : p.off;
 }
 
 test("every rule target and parent id exists in the shell", () => {
   const h = boot();
   for (const rule of h.Deps.RULES) {
-    for (const id of rule.ids) assert.match(SHELL, new RegExp(`id="${id}"`), `${rule.key}: target #${id} missing from index.html`);
+    for (const id of rule.runtime ? [] : rule.ids) assert.match(SHELL, new RegExp(`id="${id}"`), `${rule.key}: target #${id} missing from index.html`);
     const p = parentOf(rule);
     if (p) assert.match(SHELL, new RegExp(`id="${p.id}"`), `${rule.key}: parent #${p.id} missing`);
-    else assert.equal(typeof rule.when, "function", `${rule.key}: no parent and no when()`);
+    else assert.equal(typeof WHEN[rule.key], "function", `${rule.key}: a when() rule needs a WHEN entry in this test`);
     assert.ok(rule.reason && rule.reason.length <= 28, `${rule.key}: reason must fit a one-line label (≤ 28 chars)`);
   }
 });
@@ -98,7 +114,7 @@ test("each parent OFF greys every dependent with a described reason; ON restores
     const before = live.map((c) => c.value);
     const parents = [parentOf(rule)].filter(Boolean);
     for (const p of parents) setParent(h, p, false);
-    h.mode.line = "off";
+    if (WHEN[rule.key]) WHEN[rule.key](h, false);
     h.Deps.refresh();
     for (const c of live) {
       assert.equal(c.disabled, true, `${rule.key}: #${c.id} not disabled with its parent off`);
@@ -109,7 +125,7 @@ test("each parent OFF greys every dependent with a described reason; ON restores
       assert.equal(reason.hidden, false, `${rule.key}: reason hidden`);
     }
     for (const p of parents) setParent(h, p, true);
-    h.mode.line = "full";
+    if (WHEN[rule.key]) WHEN[rule.key](h, true);
     h.Deps.refresh();
     live.forEach((c, i) => {
       assert.equal(c.disabled, false, `${rule.key}: #${c.id} still disabled with its parent on`);
