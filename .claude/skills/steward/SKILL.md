@@ -61,7 +61,8 @@ answers it (`= sync needed: conflict | stale-red | no`) and `sync-pr` refuses `n
 - Generated-file conflicts `sync-pr` cures; hand-written ones it aborts and
   hands back. The temp-branch trap and the hand-resolve recipe:
   `check-changes` [`references/sync-pr.md`](../check-changes/references/sync-pr.md).
-  Record the files and resolution as a ticked Plan item with the merge sha.
+  After a cure: `npm run gen` (**gen-regen**) then `gen:check`. Record the files
+  and resolution as a ticked Plan item with the merge sha.
 
 ## 3. A red you did not cause → find out who is on it FIRST
 

@@ -59,6 +59,13 @@ assertion tolerance to make a spec pass.
 the whole file onto one machine-state; look for shared-page state leaks and
 order dependence — `docs/notes/TESTING-FIELD-NOTES.md` has the worked example.
 
+## Stale generated indexes (not load, not a rerun)
+
+When the failure mentions `gen:check`, `agent-indexes.test.mjs`, `declaredTests`,
+`impact-map.json`, or ARCHITECTURE.md module tables — run **`npm run gen`**,
+**`npm run gen:check`**, commit generated outputs, push. Skill **gen-regen**.
+Do not re-dispatch CI until gen is clean.
+
 ## Rules that prevent the class
 
 - ONE Playwright process. `verify-change.mjs` batches at **one group** per
