@@ -308,3 +308,16 @@ for (const dy of [-8, 8]) {
     assert.equal(commits(h.ev)[0].h, change.h);
   });
 }
+
+test("dense polygon: idle grips shrink to the point spacing instead of a solid band of circles", () => {
+  const h = boot();
+  const tr = h.tr, n = 300, pts = [];
+  for (let i = 0; i < n; i++) { const k = Math.floor(i / n * tr.n); pts.push([tr.px[k], tr.pz[k]]); }
+  h.pr.setBuilt(tr, null, pts);
+  h.pr.setHeights(new Array(n).fill(0).map((_, i) => Math.round(5 * Math.sin(i / 9) * 4) / 4));
+  h.pr.render();
+  const gap = W / n;
+  const arcs = h.rec.arcs.filter((a) => a.r < 20);
+  assert.ok(arcs.length >= n, "every control point is still drawn");
+  assert.ok(arcs.every((a) => a.r <= gap * 0.5 + 1e-6 || a.r <= 1.5), "no idle grip is wider than ~half its spacing (was 7 px: overlapping band)");
+});

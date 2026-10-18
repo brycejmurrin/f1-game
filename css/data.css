@@ -701,6 +701,8 @@ body[data-density="compact"] .dh-canvas.dh-map { max-width: 220px; }
 button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-legend-item.dh-off { opacity: 0.35; }
 .dh-legend-item.dh-legend-static { cursor: default; font-style: italic; }
+/* a colour key is not a target: no chip tap floor, so the map key stays a few short lines */
+.dh-legend-item.dh-legend-static { min-height: 0; min-width: 0; }
 /* compare-mode legend group: [LABEL][solid chip][dashed chip] — the label
    toggles both lines, each chip toggles that driver's line */
 .dh-leg-group {
@@ -1221,7 +1223,17 @@ body[data-width="wide"][data-density="compact"] {
   .dh-telem-side .dh-dash { gap: 5px; padding: 8px 10px; }
   .dh-telem-side .dh-gval { font-size: 15px; }
   .dh-telem-side .dh-glabel { font-size: var(--fs-micro); }
+  /* Short landscape phone: the body is the one scroller (a column that scrolled
+     on its own hid the map legend behind the card edge), the chart takes the
+     free width, and the readout is two fixed columns whose labels wrap. */
+  .dh-tpopup-body { overflow-y: auto; align-items: flex-start; overscroll-behavior-y: contain; touch-action: pan-y; }
+  .dh-telem-main { overflow: visible; }
+  .dh-telem-side { overflow: visible; }
+  .dh-telem-main .dh-canvas, .dh-telem-main .dh-delta { max-width: none; }
+  .dh-telem-side .dh-dash { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* The readout labels wrap instead of colliding with their neighbour column. */
+.dh-telem-side .dh-glabel { white-space: normal; overflow-wrap: anywhere; line-height: 1.15; letter-spacing: var(--ls-1); }
 body[data-width="wide"][data-density="normal"] {
   .dh-telem-main { padding: var(--gap) calc(var(--gap) * 7 / 6); }
   .dh-telem-side { width: 340px; padding: var(--gap) calc(var(--gap) * 7 / 6); }
@@ -1234,7 +1246,9 @@ body[data-width="wide"][data-density="normal"] {
 }
 body[data-density="compact"] {
   .dh-tpopup-card {
-    max-height: calc(100svh - var(--sat) - var(--sab));
+    /* the card is zoomed: heights use --svhz (÷ zoom), or it outgrows the screen
+       by the zoom factor and the centred card loses its header off the top */
+    max-height: calc(100 * var(--svhz) - (var(--sat) + var(--sab)) / var(--ui-scale));
     border-radius: var(--r-md);
     width: 100%;
   }

@@ -491,6 +491,7 @@ async function precacheAssetLists() {
     "js/net/lobby-roster.js",
     "js/net/snapshot.js",
     "js/net/session.js",
+    "js/net/spectate.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
     "js/input/phone-pad.js",
