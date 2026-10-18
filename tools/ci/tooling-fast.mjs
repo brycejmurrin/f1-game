@@ -750,6 +750,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/photo-kit.test.mjs",
   "tests/unit/photo-studio.test.mjs",
   "tests/unit/photomode-hold.test.mjs",
+  "tests/unit/share-card-data.test.mjs",
+  "tests/unit/share-card-layout.test.mjs",
+  "tests/unit/share-card.test.mjs",
   // The physics baseline's provenance stamp (_blessed): reason, data hash,
   // blessing commit. One file read and one git call, well under a second, and
   // it must fail where the baseline is edited, not on a nightly.
