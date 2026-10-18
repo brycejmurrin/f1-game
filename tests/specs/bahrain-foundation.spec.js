@@ -10,7 +10,10 @@ test("Bahrain props stay clear of the racing surface", async ({ page }) => {
   await page.evaluate(() => window.__apex.trackGeometry(true));
   await page.evaluate(() => window.__apex.race("bahrain", "day", "dry"));
   await page.waitForFunction(() => window.__apex.info().track === "bahrain", null, { polling: 100, timeout: BOOT_MS });
-  await page.waitForTimeout(1200);
+  await page.waitForFunction(() => {
+    const g = window.__apex.trackGeometry();
+    return !!(g && g.props && g.props.pos && g.props.pos.length > 1000);
+  }, null, { polling: 100, timeout: BOOT_MS });
 
   const result = await page.evaluate(() => {
     const caps = window.__apex.trackGeometry();

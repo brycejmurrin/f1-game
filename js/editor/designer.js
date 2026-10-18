@@ -912,6 +912,19 @@ const TrackDesigner = (function () {
     files.append(ui.share, ui.card, ui.export, ui.import);
     foot.append(ui.save, ui.race, ui.tt, files, ui.file, ui.msg);
     root.append(body, foot);
+    // Short landscape phone: the foot rides under the rail (inside the body) so the dialog never scrolls.
+    // Sizes are the effective ones (UI SIZE zooms the dialog); a very narrow effective width keeps the stacked layout.
+    const seatFoot = () => {
+      let tuck = false;
+      try {
+        const cs = getComputedStyle(document.documentElement);
+        const k = (parseFloat(cs.getPropertyValue("--ui-scale")) || 1) * (parseFloat(cs.getPropertyValue("--look-designer-size")) || 1);
+        tuck = innerWidth > innerHeight && innerHeight / k <= 600 && innerWidth / k >= 560;
+      } catch (_) { /* no layout engine (unit VM): the foot stays under the body */ }
+      (tuck ? body : root).appendChild(foot); root.dataset.foot = tuck ? "in" : "out";
+    };
+    if (typeof addEventListener === "function") addEventListener("resize", seatFoot);
+    seatFoot();
     workspace = DesignerWorkspace.create({ root, ui, files, el, btn,
       onTest: () => { showPane("design"); setMode("test"); },
       onHelp: () => {

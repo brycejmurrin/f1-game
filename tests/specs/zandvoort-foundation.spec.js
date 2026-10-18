@@ -12,7 +12,11 @@ async function loadZandvoort(page, timeOfDay = "day") {
   await page.evaluate(() => window.__apex.trackGeometry(true));
   await page.evaluate((tod) => window.__apex.race("zandvoort", tod, "dry"), timeOfDay);
   await page.waitForFunction(() => window.__apex.info().track === "zandvoort", null, { polling: 100, timeout: BOOT_MS });
-  await page.waitForTimeout(1200);
+  // Props, not a fixed settle: the clearance read below needs the props mesh.
+  await page.waitForFunction(() => {
+    const g = window.__apex.trackGeometry();
+    return !!(g && g.props && g.props.pos && g.props.pos.length > 1000);
+  }, null, { polling: 100, timeout: BOOT_MS });
 }
 
 async function propClearance(page) {
