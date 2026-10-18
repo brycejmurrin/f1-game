@@ -69,6 +69,15 @@ if [ -z "$CMD" ]; then
   fi
   exit 0
 fi
+# settings.json deliberately invokes this one guard for every Bash call. Skip
+# SCAN and shellparse work for ordinary commands without relying on Claude
+# Code's non-portable per-hook `if` field (Cursor imports the file but does not
+# document that field); JSON command extraction still runs first.
+# Keep this union in lockstep with the 14 former `if: Bash(*word*)` filters.
+GUARD_TRIGGER='git|gh |kill|pgrep|curl|node|npm|npx|playwright|chrom|python|sh |eval|xargs'
+if ! printf '%s' "$CMD" | grep -Eq "$GUARD_TRIGGER"; then
+  exit 0
+fi
 # SCAN is the command as the kill rules below see it (2026-09-22). Two holes
 # and one false positive were reproduced in the raw text: `sh -c "pkill -f
 # chrome"` and `/usr/bin/pkill -f chrome` walked past a regex that matched only

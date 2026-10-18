@@ -17,6 +17,7 @@
     // job with the grandstands and the Caspian exclusion, not a key flip).
     pit: { mode: "street", side: 1 },
     lengthKm: 6,
+    tyreSeverity: 0.82,  // Long straights, low lateral deg; one-stop Baku band below Monaco 1.01 (Pirelli previews)
     baseHW: 6,
     sceneryCoordinates: "racing",
     dressingExclusions: [

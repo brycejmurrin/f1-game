@@ -572,6 +572,7 @@ var Announcer = (function () {
       generation++;            // before cancel(): a queued onend must already see itself as stale
       const owned = !!speaking; speaking = null;
       if (owned) try { synth.cancel(); } catch (e) { /* already ended */ }
+      if (typeof Captions !== "undefined" && Captions.announcerDone) Captions.announcerDone();
     }
     // Pause paths cut the read the same way RadioVoice.halt does for the radio
     // (#988 / #1029 / #1064). speechSynthesis / recorded pack clips sit outside
@@ -829,6 +830,7 @@ var Announcer = (function () {
           next();
         };
         speaking = u;
+        if (typeof Captions !== "undefined" && Captions.onAnnouncerLine) Captions.onAnnouncerLine(parts[i - 1]);
         try { synth.speak(u); } catch (e) { Log.info("audio", "Announcer speak failed"); speaking = null; return; }
         // Bugzilla 1522074, the same one radio-voice.js documents: a speak()
         // straight after a cancel() is silently dropped, and resume() is the fix.

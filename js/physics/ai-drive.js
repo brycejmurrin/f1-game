@@ -131,8 +131,14 @@ const AiDrive = (function () {
       return followBase(true) + lerp(-0.8, 2.2, t.awareness) * houseMul(team, 0.92, 1.08, "hold", seat, stats)
         * 0.5 * ordersMul(team, seat, other, "follow") + v * (extra || 0);
     }
-    const T = lerp(followTime(t, street, team, seat, other, stats), FOLLOW_TIGHT, clamp(tight || 0, 0, 1)) + (extra || 0);
-    return Math.min(followBase(street) + v * T, FOLLOW_MAX);
+    const tightN = clamp(tight || 0, 0, 1);
+    let T = lerp(followTime(t, street, team, seat, other, stats), FOLLOW_TIGHT, tightN) + (extra || 0);
+    // SPACING HALF (#1564). Aggression is zero-mean style. Open following stays
+    // the historical headway (a permanent shrink moved the pace ladder > 0.5 %).
+    // Bite only while a pass is tight (latched / armed / towing).
+    const aggr = clamp(t && t.aggression != null ? t.aggression : 0, -1, 1);
+    if (tightN > 0) T *= 1 - aggr * (0.10 + 0.16 * tightN);
+    return Math.min(followBase(street) + v * Math.max(T, 0), FOLLOW_MAX);
   }
 
   // Slipstream vmax gain. Streets get a half-size tow: with none, the 8 m train
@@ -177,6 +183,10 @@ const AiDrive = (function () {
   // Needs pace fields (vmax and/or scripted pace), never live speed.
   function passHunger(ctx) {
     if (!ctx || ctx.street) return 1;
+    // PASS_EDGE (0.7 %) stays the hunger gate. A shallow tow floor was tried
+    // for #2356 and reverted: it raised AI-AI contact without cutting the
+    // longest episode. Aggression spacing (followGap / contactGive) is the
+    // pass-completion lever on this PR.
     const edgeN = pairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ctx.vTop);
     if (!edgeN) return 1;
     const stuckN = clamp((ctx.queueT || 0) / 12, 0, 1);
@@ -330,7 +340,11 @@ const AiDrive = (function () {
 
   function contactGive(contacting, t, street) {
     if (!contacting) return 1;
-    const give = lerp(0.55, 0.25, t.awareness);
+    // Less give when aggressive (#1564). Neutral is the historical give.
+    // Shared with the player path in game.js — ai-human contactPct can rise
+    // above tip; a player-aware carve needs a game.js flag (outside this PR).
+    const aggr = clamp(t && t.aggression != null ? t.aggression : 0, -1, 1);
+    const give = lerp(0.55, 0.25, t.awareness) * (1 - aggr * 0.16);
     return street ? give * 0.72 : give;
   }
 

@@ -1,6 +1,6 @@
 ---
 name: new-track
-description: "Use when asked to add a track/circuit, edit Monza/Spa/etc. layout, change circuit geometry/metadata/palette/theme/bridges (flyover, overpass, figure-8 crossover)/elevation (add a hill, crest or dip), register a circuit in js/circuits/, or the in-game TRACK DESIGNER (js/editor/, custom circuits, share codes). Read-only corner/terrain/grade diagnosis → agent-view; picture-driven accuracy → survey-track; scenery(api) and floating/sunken props → scenery-dress."
+description: "Use when adding a track/circuit, editing a layout, changing circuit geometry/metadata/palette/theme/bridges (flyover, figure-8 crossover)/elevation (add a hill, crest or dip), registering a circuit in js/circuits/, or the in-game TRACK DESIGNER (js/editor/, MY CIRCUITS, apex26.customTracks, share codes). Read-only corner/terrain/grade diagnosis → agent-view; picture-driven accuracy → survey-track; scenery(api) and floating/sunken props → scenery-dress."
 ---
 
 # Author or edit a track
