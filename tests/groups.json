@@ -2046,6 +2046,7 @@
         "tests/specs/persistence.spec.js",
         "tests/specs/photo-studio-conditions.spec.js",
         "tests/specs/photo-studio.spec.js",
+        "tests/specs/picker-edit-button.spec.js",
         "tests/specs/picker-tab-inplace.spec.js",
         "tests/specs/rotation-recovery.spec.js",
         "tests/specs/title-menu-rotation.spec.js",

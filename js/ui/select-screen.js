@@ -1020,18 +1020,23 @@ function updateTrackPreview() {
     for (const [cls, label] of kinds) {
       const b = document.createElement("span"); b.className = cls; b.textContent = label; factsEl.appendChild(b);
     }
-    if (t.custom) {
-      // Straight from the picker into the designer with THIS design; the
-      // LAZY_EDITOR bundle loads on the first click (CustomTracks.ensureEditor).
-      const e = document.createElement("button"); e.type = "button"; e.className = "sel-chip"; e.textContent = "EDIT IN DESIGNER";
-      e.setAttribute("aria-label", "Edit " + t.name + " in the track designer");
-      e.onclick = () => {
-        if (G.soundOn) GameAudio.uiSelect();
-        CustomTracks.ensureEditor().then((ok) => { if (ok && typeof TrackDesigner !== "undefined") TrackDesigner.open({ design: CustomTracks.get(t.id), originId: t.id }); });
-      };
-      factsEl.appendChild(e);
-    }
   }
+  // EDIT sits beside CIRCUIT DETAIL (the facts row is hidden at compact density,
+  // where the phone lives). Straight from the picker into the designer with THIS
+  // design; the LAZY_EDITOR bundle loads on the first click (CustomTracks.ensureEditor).
+  const detail = document.getElementById("sel-detail-chip");
+  let edit = document.getElementById("sel-edit-chip");
+  if (detail && t.custom) {
+    if (!edit) {
+      edit = document.createElement("button"); edit.id = "sel-edit-chip"; edit.type = "button"; edit.className = "sel-chip"; edit.textContent = "EDIT";
+      detail.after(edit);
+    }
+    edit.setAttribute("aria-label", "Edit " + t.name + " in the track designer");
+    edit.onclick = () => {
+      if (G.soundOn) GameAudio.uiSelect();
+      CustomTracks.ensureEditor().then((ok) => { if (ok && typeof TrackDesigner !== "undefined") TrackDesigner.open({ design: CustomTracks.get(t.id), originId: t.id }); });
+    };
+  } else if (edit) edit.remove();
   // The numbers beside the still, as a definition list (label over value).
   const km = t.lengthKm || 0;
   const selInner = document.getElementById("sel-inner") || {};
