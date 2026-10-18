@@ -1045,7 +1045,7 @@ const CATALOG = [
     name: "apex_viewer",
     week: 8,
     kind: "tree",
-    description: "Tree — writes ONE self-contained three.js viewer page (no browser, ~10 s) of engine-built team cars (Car3D.buildComplete, factory setup) and circuits (Tracks.build centreline, racing line, curvature): artifacts/viewer/apex-viewer.html. Publish it as an Artifact to show the user. Neither list given: all cars + monza, spa, monaco, suzuka. Skill: playwright-probe.",
+    description: "Tree — writes ONE self-contained three.js viewer page (no browser, seconds): a car customiser that runs the game's own Car3D in the page (every team, livery, finish and garage part) and circuits (Tracks.build centreline, racing line, curvature): artifacts/viewer/apex-viewer.html. Publish it as an Artifact to show the user. Neither list given: all cars + monza, spa, monaco, suzuka. PNG stills and variant sheets are the CLI's --shots / --sheet (they launch Chromium). Skill: playwright-probe.",
     inputSchema: {
       type: "object",
       additionalProperties: false,

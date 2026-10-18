@@ -2858,8 +2858,7 @@
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/fin-design.test.mjs",
-        "tests/unit/team-livery.test.mjs",
-        "tests/unit/viewer.test.mjs"
+        "tests/unit/team-livery.test.mjs"
       ],
       "migratePaint": [
         "tests/unit/fin-design.test.mjs"

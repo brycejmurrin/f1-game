@@ -288,10 +288,11 @@ and viewports) in one read, sourced from the tools' own schemas so it cannot dri
 32 → 33 on 2026-10-16 for `apex_locations`: authored turn and sector targets
 on all 52 circuits, plus curated named scenery with source-located fractions.
 33 → 34 on 2026-10-18 for `apex_viewer` (`viewer/build-viewer.mjs`): one
-self-contained three.js page of engine-built team cars and circuits, written to
+self-contained three.js page (a live car customiser running the game's own
+`Car3D` — every team, livery, finish and garage part — and circuits), written to
 `artifacts/viewer/` with no browser, for publishing as an Artifact where a host
-does not render MCP Apps panels. Its `--shots` stills (one PNG per item plus a
-contact sheet, to post into a chat on a phone) launch Chromium, so they stay a
+does not render MCP Apps panels. Its `--shots` stills and `--sheet` variant sheets
+(one PNG per item plus a contact sheet, to post into a chat on a phone) launch Chromium, so they stay a
 CLI flag rather than an argument of this tree-kind tool.
 
 <!-- WRAP-MAP -->

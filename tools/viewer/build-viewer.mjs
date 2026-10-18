@@ -7,6 +7,8 @@
 //   node tools/viewer/build-viewer.mjs --circuits=all          every circuit (no cars)
 //   node tools/viewer/build-viewer.mjs --cars=all --circuits=imola --out=scratch/v.html
 //   node tools/viewer/build-viewer.mjs --cars=all --shots      also PNG stills + a contact sheet (artifacts/viewer/shots/)
+//   node tools/viewer/build-viewer.mjs --cars=ferrari --sheet=liveries:ferrari   every livery of one team on one sheet
+//       (also finishes:<team>, parts:<category>:<team>; implies --shots of that axis only)
 //   node tools/viewer/build-viewer.mjs --list                  the valid team and circuit ids
 //   node tools/viewer/build-viewer.mjs --json                  one JSON line: {ok,out,bytes,cars,circuits[,shots,sheet]}
 //
@@ -23,9 +25,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 export const DEFAULT_CIRCUITS = ["monza", "spa", "monaco", "suzuka"];
 
 export function parseArgs(argv) {
-  const a = { cars: null, circuits: null, out: null, json: false, list: false, shots: false };
+  const a = { cars: null, circuits: null, out: null, json: false, list: false, shots: false, sheet: null };
   for (const s of argv) {
-    const m = /^--(cars|circuits|out)=(.*)$/.exec(s);
+    const m = /^--(cars|circuits|out|sheet)=(.*)$/.exec(s);
     if (m) a[m[1]] = m[2];
     else if (s === "--json") a.json = true;
     else if (s === "--list") a.list = true;
@@ -50,6 +52,8 @@ export function resolveSelection({ cars, circuits }, valid = { cars: teamIds(), 
 }
 
 export async function buildViewer(args) {
+  // A variant sheet needs the car code in the page and nothing else.
+  if (args.sheet && args.cars == null) args = { ...args, cars: "all", circuits: args.circuits == null ? "" : args.circuits };
   const sel = resolveSelection(args);
   if (!sel.cars.length && !sel.circuits.length) throw new Error("nothing selected: pass --cars and/or --circuits");
   const html = viewerHtml(sel);
@@ -57,10 +61,10 @@ export async function buildViewer(args) {
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, html);
   const result = { ok: true, out: path.relative(ROOT, out), bytes: Buffer.byteLength(html), ...sel };
-  if (args.shots) {
+  if (args.shots || args.sheet) {
     const { shootViewer } = await import("./viewer-shots.mjs");
     const dir = path.join(path.dirname(out), "shots");
-    const r = await shootViewer(out, { ...sel, outDir: dir, cacheDir: path.join(ROOT, "artifacts/viewer/cdn") });
+    const r = await shootViewer(out, { ...sel, sheet: args.sheet, outDir: dir, cacheDir: path.join(ROOT, "artifacts/viewer/cdn") });
     result.shots = r.shots.map((s) => path.relative(ROOT, s.png));
     result.sheet = r.sheet && path.relative(ROOT, r.sheet);
   }
