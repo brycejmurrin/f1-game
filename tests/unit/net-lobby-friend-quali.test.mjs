@@ -113,6 +113,7 @@ test("the HUD hides eligible garage work during a friend race and restores it wh
     performance: { now: () => 1000 }, Log: globalThis.Log, M4: globalThis.M4,
     PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 } };
   sb.window = sb;
+  vm.runInNewContext(src("js/ui/hud-minimap.js"), sb);   // GameHud.create builds its HudMinimap (#1656)
   const hud = vm.runInNewContext(src("js/ui/hud.js") + ";GameHud", sb).create(G);
   const tick = () => hud.updateHud(true);
   tick();

@@ -14453,6 +14453,24 @@
         "tests/unit/hud-survey.test.mjs"
       ]
     },
+    "js/ui/hud-minimap.js": {
+      "create": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/hud-fit-idempotent.test.mjs",
+        "tests/unit/hud-minimap-pitmark.test.mjs",
+        "tests/unit/hud-pins.test.mjs",
+        "tests/unit/hud-radio-slot.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs"
+      ],
+      "mmPitMark": [
+        "tests/unit/hud-minimap-pitmark.test.mjs"
+      ],
+      "*": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ]
+    },
     "js/ui/hud-readouts.js": {
       "bbText": [
         "tests/unit/hud-readouts.test.mjs"
@@ -14627,6 +14645,7 @@
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-layout.test.mjs",
+        "tests/unit/hud-minimap-pitmark.test.mjs",
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
@@ -14671,9 +14690,6 @@
       ],
       "invalidateMap": [
         "tests/unit/hud-feel.test.mjs"
-      ],
-      "mmPitMark": [
-        "tests/unit/hud-minimap-pitmark.test.mjs"
       ],
       "paintInstruments": [
         "tests/unit/hud-metrics-layout.test.mjs"
