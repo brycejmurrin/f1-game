@@ -1,8 +1,9 @@
+import {chromium} from 'playwright';
 import {mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {resolve} from 'node:path';
 import {createHash} from 'node:crypto';
-import {launchChromium,startStaticServer,shutdown,WEBGPU_LAVAPE_CHROMIUM_ARGS} from '../tools/lib/harness.mjs';
+import {launchChromium,startStaticServer,shutdown,chromiumLaunchInfo,WEBGPU_LAVAPE_CHROMIUM_ARGS} from '../tools/lib/harness.mjs';
 import {installProbeInit,gotoGame} from '../tools/shot/probe-page.mjs';
 import {installGarageGpuAllocationProbe} from './garage-webgpu-allocation-init.mjs';
 import {installRenderSubmitMetrics} from './render-submit-metrics.mjs';
@@ -32,7 +33,8 @@ function installBench(){
 let browser;
 try{
  const srv=await startStaticServer(root),icd=root+'/scratch/vulkan-runtime/lvp-local.json';
- browser=await launchChromium({args:hardware?['--enable-unsafe-webgpu','--enable-precise-memory-info','--disable-background-timer-throttling']:[...WEBGPU_LAVAPE_CHROMIUM_ARGS,'--headless=new','--enable-precise-memory-info'],...(!hardware?{env:{...process.env,VK_ICD_FILENAMES:icd,VK_DRIVER_FILES:icd}}:{})});
+ browser=await launchChromium({...(hardware?{executablePath:chromium.executablePath()}:{}),args:hardware?['--enable-unsafe-webgpu','--enable-precise-memory-info','--disable-background-timer-throttling']:[...WEBGPU_LAVAPE_CHROMIUM_ARGS,'--headless=new','--enable-precise-memory-info'],...(!hardware?{env:{...process.env,VK_ICD_FILENAMES:icd,VK_DRIVER_FILES:icd}}:{})});
+ report.browser=chromiumLaunchInfo(browser);report.browserVersion=browser.version();save();
  for(let pair=0;pair<pairs;pair++)for(const arm of(pair%2?['candidate','baseline']:['baseline','candidate'])){
   const row={pair:pair+1,arm,edits:[],pageErrors:[],consoleErrors:[]};report.arms.push(row);save();log('start pair '+row.pair+' '+arm);
   const ctx=await browser.newContext({viewport:report.viewport,deviceScaleFactor:1,reducedMotion:'reduce'});
