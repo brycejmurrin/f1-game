@@ -5,7 +5,7 @@ description: "Use for brycejmurrin/f1-game (Apex 26) scene reproduction, camera 
 
 # F1 Dev Tools
 
-Use the game's existing Apex tools and camera tuner. This plugin supplies a workflow and executable helpers, not a hosted game or a new renderer. All five workflows are described in [workflows.md](references/workflows.md). The plugin advertises the checkout's four configured MCP servers; their names and commands remain owned by `.mcp.json`, `.cursor/mcp.json` and `.codex/config.toml`.
+Use the game's existing Apex tools and camera tuner. This plugin supplies a workflow and executable helpers, not a hosted game or a new renderer. All five workflows are described in [workflows.md](references/workflows.md). The plugin advertises the checkout's five configured MCP servers; their names and commands remain owned by `.mcp.json`, `.cursor/mcp.json` and `.codex/config.toml`.
 
 ## Start
 
@@ -22,6 +22,10 @@ The shell fallback is its persistent `js-debugger-mcp.sh serve-http` daemon with
 separate `call debugger_*` clients. Do not launch another browser. Read the fresh
 pause token after each step, resume before dependent browser actions, and detach
 when finished. This route inspects JavaScript; it is not GPU profiling.
+
+To find where a symbol is defined or used, ask the `apex-lsp` MCP (`lsp_definition`,
+`lsp_references` with `Name` or `Head.member`) before grepping; the shell fallback is
+`tools/mcp/lsp-mcp.sh def|refs <name>`.
 
 ## Choose a workflow
 

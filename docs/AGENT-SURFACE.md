@@ -129,7 +129,7 @@ does not discover, install or validate hosted tools.
 end (Playwright chrome-channel symlink + `mcp-smoke.mjs`) — that validates the
 VM, not host MCP attachment. If `environment-info` shows an allowlist without
 **`name`** on each row, re-**Save** the environment from git’s
-`.cursor/environment.json`, then start a **new** agent with all four MCPs enabled.
+`.cursor/environment.json`, then start a **new** agent with all five MCPs enabled.
 
 When the host catalog is empty, use the Fallback column below (and
 `./tools/mcp/apex-tools-mcp.sh call …`). Only add allowlist names that exist
@@ -155,6 +155,7 @@ auto-load them — then use the Fallback column.
 | **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **survey-ui-matrix**, **css-play**. Batch shots → **playwright-probe** (CLI, not this MCP). | `bash tools/mcp/playwright-mcp.sh run` (stdio) |
 | **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
 | **js-debugger** | `debugger_*` | Parent-owned source debugging of an existing local Chrome page: breakpoints, pause/step, stack/locals and resume; non-pausing logpoints, exception log, incident screenshot, listener and instance counts. Does not launch a browser (`node tools/mcp/debug-chrome.mjs start` does, as a CLI). Setup: [Agent JS debugger](research/AGENT-JS-DEBUGGER-MCP.md). | `tools/mcp/js-debugger-mcp.sh serve-http`, then `call <debugger_tool> '{…}'` against that persistent session |
+| **apex-lsp** | `lsp_*` | Code intelligence over TypeScript 7's native `tsc --lsp` (jsconfig.json: js/ as one script project): `lsp_definition`, `lsp_references`, `lsp_symbols`, `lsp_hover`, `lsp_diagnostics` by `Name` / `Head.member` or file:line. Use instead of grep for a named symbol. Measurements: [LSP-MCP](notes/LSP-MCP-2026-10-18.md). | `tools/mcp/lsp-mcp.sh def Liveries.forTeam` (`refs`, `sym`, `hover`, `diag`) |
 
 **Removed 2026-09 (CLI only now, not MCP-attached):**
 

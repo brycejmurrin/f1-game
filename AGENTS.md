@@ -93,7 +93,8 @@ backend's gate is in `.claude/rules/render-wgx.md` / `render-tlx.md`).
 ## Layout
 `js/track/` is the ENGINE, `js/circuits/` is the DATA (one file per circuit; script-tag order == `Tracks.LIST` ==
 picker order). The module roster and load order live in `tools/manifest.cjs` — the truth, not this file; per-directory
-tables: `docs/ARCHITECTURE.md`.
+tables: `docs/ARCHITECTURE.md`. Finding a named symbol (`Name`, `Head.member`): MCP `apex-lsp` `lsp_definition`/`lsp_references`
+(shell: `tools/mcp/lsp-mcp.sh def|refs|sym <name>`) beats grep — semantic, comment-free; grep stays for text and CSS.
 
 - `js/core/log.js` loads FIRST. `js/game.js` is the entry; it hands the `G` façade to the extracted modules — one
   `Module.create(G)` per file, a module never reaches into game.js, and `types/game-ctx.d.ts` is the machine-checked

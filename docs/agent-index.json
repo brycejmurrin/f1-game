@@ -1079,7 +1079,7 @@
         "tests/specs/telemetry-fit.spec.js",
         "tests/specs/wake-lock.spec.js"
       ],
-      "declaredTests": 277,
+      "declaredTests": 278,
       "twinned": true
     },
     {
@@ -1126,6 +1126,7 @@
         "tests/unit/environment-json.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/js-debugger-mcp.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/ui-explorer-core.test.mjs",
         "tests/unit/ui-explorer-report.test.mjs",
         "tests/unit/ui-explorer.test.mjs",
@@ -1133,7 +1134,7 @@
         "tests/unit/ui-inspector-css.test.mjs",
         "tests/unit/ui-inspector-transitions.test.mjs"
       ],
-      "declaredTests": 212,
+      "declaredTests": 219,
       "twinned": false
     },
     {
