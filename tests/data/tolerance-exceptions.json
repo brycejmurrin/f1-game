@@ -1,4 +1,10 @@
 {
   "_doc": "Rows excused from tools/check/tolerance-diff.mjs: {file, line, reason}. `line` is a substring of the ADDED assertion line. A row that matches nothing in the diff is reported stale; delete it. Every row needs a reason a reviewer can read (AGENTS.md rule 9: never widen a tolerance to get green).",
-  "exceptions": []
+  "exceptions": [
+    {
+      "file": "tests/unit/webgpu-lifecycle.test.mjs",
+      "line": "surfaceId <= 37",
+      "reason": "Not a tolerance: the pinned value is the top of the car surface-id range in the WGSL classifier. Garage slice S3 (#2748) adds finish ids 36 (tinted chrome) and 37 (chameleon) under the reserved range from #2745, so the classifier bound moves 33 -> 37 in GLX, TLX and WGX together; car-materials/livery-finish-contract tests pin the new ids."
+    }
+  ]
 }
