@@ -1952,13 +1952,22 @@
       ]
     },
     "js/camera/photo-kit.js": {
+      "apply": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
       "applyDof": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
+      "createLookSession": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "deleteMark": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "marksFor": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
+      "mountLookControls": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "nextGrid": [
@@ -8882,6 +8891,9 @@
       "create": [
         "tests/unit/phone-recorder.test.mjs"
       ],
+      "download": [
+        "tests/unit/phone-recorder.test.mjs"
+      ],
       "fileName": [
         "tests/unit/phone-recorder.test.mjs"
       ],
@@ -10201,7 +10213,8 @@
         "tests/unit/badges.test.mjs",
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
-        "tests/unit/loading-card.test.mjs"
+        "tests/unit/loading-card.test.mjs",
+        "tests/unit/share-card.test.mjs"
       ],
       "current": [
         "tests/unit/daily-challenge.test.mjs"
@@ -10222,7 +10235,8 @@
       "open": [
         "tests/specs/menu-baseline.spec.js",
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/share-card.test.mjs"
       ],
       "plan": [
         "tests/unit/daily-challenge.test.mjs",
@@ -10234,12 +10248,16 @@
       "record": [
         "tests/unit/badges.test.mjs",
         "tests/unit/career-backup.test.mjs",
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/share-card.test.mjs"
       ],
       "select": [
         "tests/unit/badges.test.mjs",
         "tests/unit/career-backup.test.mjs",
         "tests/unit/daily-challenge.test.mjs"
+      ],
+      "shareCard": [
+        "tests/unit/share-card.test.mjs"
       ],
       "shareText": [
         "tests/unit/career-backup.test.mjs",
@@ -13440,6 +13458,30 @@
         "tests/unit/three-inspector.test.mjs"
       ]
     },
+    "js/share/share-card-data.js": {
+      "fromDaily": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "text": [
+        "tests/unit/share-card-data.test.mjs"
+      ]
+    },
+    "js/share/share-card-layout.js": {
+      "layout": [
+        "tests/unit/share-card-layout.test.mjs"
+      ]
+    },
+    "js/share/share-card.js": {
+      "deliver": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "paint": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "render": [
+        "tests/unit/share-card.test.mjs"
+      ]
+    },
     "js/track/build-client.js": {
       "build": [
         "tests/unit/boot-idle-prefetch.test.mjs",
@@ -14995,6 +15037,9 @@
         "tests/specs/photo-studio-conditions.spec.js",
         "tests/specs/photo-studio.spec.js",
         "tests/unit/photo-studio.test.mjs"
+      ],
+      "*": [
+        "tests/unit/photo-kit.test.mjs"
       ]
     },
     "js/ui/platform-session.js": {
@@ -15084,6 +15129,7 @@
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],

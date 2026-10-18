@@ -365,7 +365,7 @@ nothing ran could be committed and fail only at tooling-fast or the deploy gate.
    `physics-*` already covers it); a unit file joins `toolingFast` or a node group
    ci.yml's "Pure-node unit suites" step runs. This is what makes CI, `pick-tests`,
    `select-specs` and the nightly rota see it — none of them has a per-file list.
-2. **A row on the generated coverage page** — `node tools/docs/gen-coverage-table.mjs` (it reads the file's header, or the note above it in `tests/groups.json`). §5 below links to that page.
+2. **A row in the §5 coverage table** below: what it covers.
 3. **Nothing to regenerate for the counts** — no doc quotes the ladder sizes or an exact spec count (floors like "120+" only; `gen-ladder-figures.mjs` measures).
 4. **A spec only:** add it to `RENDER_SPECS` in `playwright.config.js` if it is
    GL-heavy, and declare the `test.setTimeout` it really needs if it boots a

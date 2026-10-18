@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Thirty-nine `apex_*` tools (33 wraps + `apex_help {tool}`, the full text `tools/list` shortens, plus five bounded UI/diagnostics tools) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Forty `apex_*` tools (`apex_help {tool}`, the full text `tools/list` shortens, plus `apex_viewer` and five bounded UI/diagnostics tools) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -258,7 +258,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Thirty-nine tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Forty tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -294,7 +294,14 @@ and viewports) in one read, sourced from the tools' own schemas so it cannot dri
 32 → 33 on 2026-10-16 for `apex_locations`: authored turn and sector targets
 on all 52 circuits, plus curated named scenery with source-located fractions.
 33 → 34 on 2026-10-18 for `apex_help`; `tools/list` now publishes a compact form (71.5 → ~51 KB).
-34 → 39 on 2026-10-18 for `apex_ui_inspect` (bounded semantic/CSS inspection),
+34 → 35 on 2026-10-18 for `apex_viewer` (`viewer/build-viewer.mjs`): one
+self-contained three.js page (a live car customiser running the game's own
+`Car3D` — every team, livery, finish and garage part — and circuits), written to
+`artifacts/viewer/` with no browser, for publishing as an Artifact where a host
+does not render MCP Apps panels. Its `--shots` stills and `--sheet` variant sheets
+(one PNG per item plus a contact sheet, to post into a chat on a phone) launch Chromium, so they stay a
+CLI flag rather than an argument of this tree-kind tool.
+35 → 40 on 2026-10-18 for `apex_ui_inspect` (bounded semantic/CSS inspection),
 `apex_ui_diff` (saved inspection comparison), `apex_ui_mission_plan` (named replay
 scenario preparation), `apex_garage_plan` (browser-free camera/design matrix) and
 `apex_diagnostics` (capabilities, background memory/GPU/renderer/VM probes, and
@@ -333,6 +340,7 @@ and report comparison do not launch Chromium.
 | `apex_car_audit` | `car/parts-ladder.mjs` | tree | garage-parts-livery |
 | `apex_track_audit` | `track/audit-circuit.cjs` | tree | survey-track |
 | `apex_unit_test` | built-in | tree | check-changes |
+| `apex_viewer` | `viewer/build-viewer.mjs` | tree | playwright-probe |
 | `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |

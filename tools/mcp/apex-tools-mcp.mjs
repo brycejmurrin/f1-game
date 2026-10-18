@@ -6,7 +6,7 @@ import { loadSurveyDesigns } from '../lib/custom-survey-locations.mjs';
  * apex-tools-mcp — wrap committed tools/ CLIs as MCP tools (apex_* only).
  *
  * One of the FOUR .mcp.json servers (beside playwright-official, chrome-devtools and js-debugger).
- * The catalog serves 39 tools (33 wraps + apex_help, which returns the full text tools/list shortens, plus five bounded UI/diagnostics tools);
+ * The catalog serves 40 tools (apex_help, apex_viewer, five bounded UI/diagnostics tools, and the prior wraps);
  * `node tools/mcp/apex-tools-mcp.mjs list-tools` is the live count. Never chrome_* / tinyfish_*. Local working tree only; no github.io.
  * Design: docs/research/APEX-TOOLS-MCP.md — map: docs/AGENT-SURFACE.md
  *
@@ -1085,6 +1085,23 @@ const CATALOG = [
       required: ["file"],
     },
   },
+  {
+    name: "apex_viewer",
+    week: 8,
+    kind: "tree",
+    description: "Tree — writes ONE self-contained three.js viewer page (no browser, seconds): a car customiser that runs the game's own Car3D in the page (every team, livery, finish and garage part) and circuits (Tracks.build centreline, racing line, curvature): artifacts/viewer/apex-viewer.html. Publish it as an Artifact to show the user. Neither list given: all cars + monza, spa, monaco, suzuka. PNG stills and variant sheets are the CLI's --shots / --sheet (they launch Chromium). Skill: playwright-probe.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        cars: { type: "array", maxItems: 12, items: { type: "string" }, description: "Team ids (Teams.LIST), or [\"all\"]; [] for none." },
+        circuits: { type: "array", maxItems: 80, items: { type: "string" }, description: "Circuit ids (Tracks.LIST), or [\"all\"]; [] for none." },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
 ];
 
 function badArgs(message, fix) {
@@ -1710,6 +1727,16 @@ function buildArgv(name, args) {
         argv.push("--test-name-pattern", pat);
       }
       argv.push(file);
+      return argv;
+    }
+    case "apex_viewer": {
+      const argv = [...nodeTool("viewer/build-viewer.mjs"), "--json"];
+      for (const k of ["cars", "circuits"]) {
+        if (args[k] === undefined) continue;
+        const ids = (Array.isArray(args[k]) ? args[k] : []).map(String);
+        if (ids.some((id) => !/^[a-z0-9_]{1,32}$/.test(id))) badArgs(`apex_viewer: ${k} must be lowercase ids`, `e.g. {"${k}":["${k === "cars" ? "ferrari" : "monza"}"]}, or ["all"].`);
+        argv.push(`--${k}=${ids.join(",")}`);
+      }
       return argv;
     }
     case "apex_eval": {
@@ -2685,7 +2712,7 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 // wrap here; derive honest hints from the catalog instead of restating them per
 // tool. Clients treat these as untrusted hints, so they are self-description,
 // not a permission boundary — the pins and the lock remain the real guards.
-const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity"]);
+const NOT_READ_ONLY = new Set(["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_graph_parity", "apex_viewer"]);
 const DESTRUCTIVE = new Set(["apex_job_cancel"]);
 const OPEN_WORLD = new Set(["apex_ci_status", "apex_who_is_on_it"]);
 function toolAnnotations(entry) {
@@ -2773,6 +2800,7 @@ const OUTPUT_SCHEMAS = {
   apex_who_is_on_it: cliOut({ hours: S("number"), fetched: S("boolean"), branch: S("string"), live: S("array"), claims: S("array"),
     touched: S("array") }),
   apex_car_audit: cliOut({}, ["array", "null"]),
+  apex_viewer: cliOut({ ok: S("boolean"), out: S("string"), bytes: S("number"), cars: S("array"), circuits: S("array"), error: S("string") }),
   apex_track_audit: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), track: S("string"), verify: S("object"),
     float: S("object"), hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
   apex_job_status: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), jobs: S("array"), error: S("string"),
@@ -2789,7 +2817,7 @@ function toolOutputSchema(entry) {
 // first sentences + the "Skill:" pointer, long property prose is cut, and object schemas nested below the
 // top level collapse to their type. apex_help {tool} returns the full text and schema. Validation always
 // uses the full CATALOG schema; only the published copy is compact.
-const DESC_LONG = 240, DESC_KEEP = 100, PROP_KEEP = 70;
+const DESC_LONG = 240, DESC_KEEP = 60, PROP_KEEP = 60;
 function cutAt(text, max) {
   if (text.length <= max) return text;
   const head = text.slice(0, max);
@@ -2835,10 +2863,11 @@ function denseSchema(t) {
   const plain = compactSchema(t.inputSchema);
   return JSON.stringify(plain).length > 1500 ? compactSchema(t.inputSchema, 0, true) : plain;
 }
-// These five landed after the 55 KB tools/list ceiling. Their full parameters stay in apex_help
+// Tools that landed after the 55 KB tools/list ceiling. Full parameters stay in apex_help
 // and in validateArgs; the published copy keeps only required fields so a session start stays under the cap.
 const HELP_ONLY_PUBLISHED = new Set([
   "apex_diagnostics", "apex_ui_inspect", "apex_ui_diff", "apex_ui_mission_plan", "apex_garage_plan",
+  "apex_viewer",
 ]);
 function publishedInputSchema(t) {
   const schema = denseSchema(t);
