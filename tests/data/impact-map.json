@@ -347,7 +347,8 @@
         "tests/unit/driving-cues.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs"
       ]
     },
     "js/audio/engine.js": {
@@ -9570,7 +9571,8 @@
         "tests/unit/brake-cue.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/lsp-mcp.test.mjs"
       ]
     },
     "js/physics/collide.js": {
@@ -9876,6 +9878,7 @@
         "tests/unit/player-forces.test.mjs"
       ],
       "*": [
+        "tests/unit/lsp-mcp.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/trail-brake-turnin.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
