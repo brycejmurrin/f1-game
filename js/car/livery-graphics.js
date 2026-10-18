@@ -497,7 +497,9 @@ const LiveryGraphics = (function () {
       ctx.restore();
     }
 
-    return { drawSpineTop, drawTailTop, drawTailGraphic };
+    // The motif TAIL STYLE "team" paints, so the garage can name it (TEAM is not a style of its own).
+    const tailStyleOf = (teamId) => (TAIL_STYLE[teamId] || { kind: "diag" }).kind;
+    return { drawSpineTop, drawTailTop, drawTailGraphic, tailStyleOf };
   }
 
   return { create };
