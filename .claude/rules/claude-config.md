@@ -1,0 +1,14 @@
+---
+paths:
+  - ".claude/**"
+---
+
+# .claude/ config — loads with .claude/
+
+- Hooks (`.claude/hooks/**`) and `.claude/settings*.json` need Bryce's explicit
+  yes before ready — do not edit them without that grant.
+- Memory (`.claude/memory/`) edits belong in a memory-focused PR; `ready-gate`
+  flags them on other PRs. Index lines must not restate fleet-core topics.
+- Skills and agents live under `.claude/skills` / `.claude/agents`; keep the
+  Codex mirror with `bash tools/env/mirror-skills.sh`. Never fork under
+  `.cursor/skills/` or `.cursor/agents/`.

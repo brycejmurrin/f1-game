@@ -4,8 +4,8 @@ Unofficial WebGL2 F1 fan game. No build step, no frameworks: pure IIFE modules l
 files on GitHub Pages.
 
 This file holds the rules every session needs and nothing else. Evidence lives in `docs/` (start at `docs/README.md`, then `docs/VERIFICATION.md`),
-workflows in `.claude/skills/`, enforced rules in `.claude/hooks/`, renderer rules in `.claude/rules/` (they load with
-their files). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
+workflows in `.claude/skills/`, enforced rules in `.claude/hooks/`, rules in `.claude/rules/` (`fleet-core` every
+session; path-scoped attach with their files; Cursor twins from `gen-cursor-rules`). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
 
 ## The loop — every change, in order
 ```sh
