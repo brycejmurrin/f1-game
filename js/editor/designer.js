@@ -917,8 +917,9 @@ const TrackDesigner = (function () {
     const seatFoot = () => {
       let tuck = false;
       try {
-        const k = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
-        tuck = innerWidth > innerHeight && innerHeight / k <= 500 && innerWidth / k >= 560;
+        const cs = getComputedStyle(document.documentElement);
+        const k = (parseFloat(cs.getPropertyValue("--ui-scale")) || 1) * (parseFloat(cs.getPropertyValue("--look-designer-size")) || 1);
+        tuck = innerWidth > innerHeight && innerHeight / k <= 600 && innerWidth / k >= 560;
       } catch (_) { /* no layout engine (unit VM): the foot stays under the body */ }
       (tuck ? body : root).appendChild(foot); root.dataset.foot = tuck ? "in" : "out";
     };
