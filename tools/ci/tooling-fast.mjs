@@ -42,10 +42,14 @@
  * imports TOOLING_FAST_FILES). Keep package.json as `node tools/ci/tooling-fast.mjs`.
  */
 import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
+const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
 import { changedPaths } from "../lib/changed-files.mjs";
 import { loadGroups } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
@@ -222,6 +226,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/change-kind.test.mjs",
   "tests/unit/changed-files.test.mjs",
   "tests/unit/changelog-fragments.test.mjs",
+  // Opt-in checkJs: files marked // @ts-check type-check clean under tsc (~0.5 s).
+  "tests/unit/check-js-types.test.mjs",
   // resolveChromium finds Playwright's headless shell when the full archive
   // was never unpacked — the cloud-agent / MCP bootstrap path.
   "tests/unit/chromium-shell.test.mjs",
@@ -296,6 +302,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the 52 and never in SEASON; hostile stored input is repaired or dropped.
   // Runs the TRACK_VM engine over a stub store, ~3 s.
   "tests/unit/custom-tracks.test.mjs",
+  // COLOUR VISION palette: off matches today's tokens, Machado + CIEDE2000.
+  "tests/unit/cvd-palette.test.mjs",
   // The three suites the feature batches added. Each is pure rules over a
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.
@@ -635,6 +643,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Pure artwork and paint-editor VM regression; selected for all source edits.
   "tests/unit/livery-design.test.mjs",
   "tests/unit/livery-finish-contract.test.mjs",
+  "tests/unit/livery-helmet-style.test.mjs",
   // Livery sidewallInk (S5): unset = byte-identical wheels, set = band/lettering colour only. VM, ~1 s.
   "tests/unit/livery-sidewall.test.mjs",
   "tests/unit/livery-tier.test.mjs",
@@ -664,6 +673,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Low-speed lock plateau pin (1.06× → ≈0.371 rad at notch 7) + high-speed
   // Object.is vs pre-boost raw; companion to steer-lock-taper. Source + VM, ~3 s.
   "tests/unit/low-speed-lock.test.mjs",
+  // apex-lsp as an MCP client drives it: definition / references / symbols on the real js/ tree via tsc --lsp. ~2 s.
+  "tests/unit/lsp-mcp.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
   "tests/unit/marshal-panels.test.mjs",
@@ -712,6 +723,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/night-washout-presets.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
+  "tests/unit/node-compile-cache.test.mjs",
   "tests/unit/node-plan.test.mjs",
   "tests/unit/nontext-contrast.test.mjs",
   // Round-2: a slow/offline navigation to controller.html never gets the game shell; controller.html is precached as optional.
@@ -792,6 +804,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
+  // Nightly process dashboard reducer (tools/ci/process-dashboard.mjs): fixture
+  // percentiles, tier walls, push-to-live, time-ratchet skip. No network, < 0.2 s.
+  "tests/unit/process-dashboard.test.mjs",
   "tests/unit/profile-lib.test.mjs",
   "tests/unit/profile-mcp.test.mjs",
   // The branch-prune rule behind prune-branches.yml: merged-only, never an
@@ -1482,7 +1497,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // test, e.g. tooling-fast-runner.test.mjs), it switches that child into
   // report-to-parent mode, where a failing or hung file exits 0 — measured:
   // both hang tests "passed" until this line. Each child is a fresh runner.
-  const childEnv = { ...process.env };
+  const childEnv = { ...process.env, ...augmentNodeCompileCache(process.env, ROOT) };
   delete childEnv.NODE_TEST_CONTEXT;
   const reap = (sig) => {
     for (const c of live) { try { process.kill(-c.pid, "SIGKILL"); } catch (_) { /* already gone */ } }

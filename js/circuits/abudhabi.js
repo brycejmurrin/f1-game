@@ -15,6 +15,7 @@
     night: true,
     theme: "desert",
     lengthKm: 5.3,
+    tyreSeverity: 0.88,  // Smooth Yas Marina one-stop band; near Britain/Silverstone cluster (Pirelli)
     baseHW: 8,
     sceneryCoordinates: "racing",
     // The pit straight is authored in scenery/abudhabi.js (stands, garages, fascia, screens at
