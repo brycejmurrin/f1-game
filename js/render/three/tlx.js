@@ -493,7 +493,8 @@ const TLX = (function () {
         try {
           await renderer.init();
           checkInit();
-          renderer.__apexPump = pumpAnimation(renderer);
+          // WebGL2 only: that is the phone's path, measured (paired census); WebGPU keeps three's own loop untouched.
+          if (renderer.backend && renderer.backend.isWebGLBackend) renderer.__apexPump = pumpAnimation(renderer);
         } catch (e) {
           // AUTO WebGPU→WebGL2 retry (and the outer create catch) must not keep
           // a half-booted three renderer / GPUDevice alive across the fallback.
