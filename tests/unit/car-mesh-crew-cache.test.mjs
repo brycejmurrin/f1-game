@@ -193,3 +193,68 @@ test("cockpit wheel and cabin: the same livery object is an early hit; a new obj
   assert.ok(P.freed.includes(w) && P.freed.includes(c), "the old rig meshes are freed");
   assert.notEqual(P.CarMesh.getCockpitWheel(edit, "round"), P.CarMesh.getCockpitWheel(edit, "f1"), "style is in the key");
 });
+
+// M1 (docs/notes/MEM-M1-2026-10-18.md): the garage livery editor mints a new wing colour or finish per edit,
+// and the flap caches' FIFO caps (64 sets, 128 elements) are sized for a race grid that draws every set every
+// frame. 60 edits kept 60 dead flap sets resident, each with a hidden coalesced TLX run. A draw stamps its
+// mesh; releaseIdleFlaps(ms) — the garage calls it on every livery/parts edit (setup-camera.js spMeshBust) —
+// frees every flap mesh not drawn for `ms`.
+function clockOf(P) {
+  // The VM realm's own global (loadParts gives no handle): its Function constructor runs there.
+  const g = P.CarMesh.init.constructor("return globalThis")();
+  let t = 1;
+  g.performance = { now: () => t };
+  return { advance: (ms) => { t += ms; } };
+}
+
+test("aero flap sets: N garage edits leave one paint job resident, not N; a set drawn every frame stays", () => {
+  const P = loadReal(), clk = clockOf(P);
+  const set = (col, open) => P.CarMesh.getAeroFlapSet(2, col, null, null, open);
+  const rival = set([0.9, 0.1, 0.1], false);   // a car still on screen (drawn every frame)
+  const edits = [];
+  for (let i = 0; i < 60; i++) {
+    edits.push(set([i / 100, 0.5, 0.5], false));   // edit i: the turntable's wings in the new colour
+    for (let f = 0; f < 3; f++) { clk.advance(1000); set([i / 100, 0.5, 0.5], false); assert.equal(set([0.9, 0.1, 0.1], false), rival); }
+    P.CarMesh.releaseIdleFlaps(2000);   // the next edit busts the preview
+  }
+  const live = edits.filter((m) => !P.freed.includes(m)).length;
+  assert.equal(live, 1, `${live} of 60 edits' flap sets still resident (the FIFO alone kept 60)`);
+  assert.ok(!P.freed.includes(edits[59]), "the current paint job is drawn, so never idle");
+  assert.ok(!P.freed.includes(rival), "a set drawn every frame is never idle");
+  assert.equal(set([0.9, 0.1, 0.1], false), rival, "the memo never hands back a freed mesh");
+  const back = set([0.0, 0.5, 0.5], false);
+  assert.ok(!P.freed.includes(back) && back !== edits[0], "a freed paint job is rebuilt on demand");
+});
+
+test("aero flap elements (the opening wings): idle colours are released too", () => {
+  const P = loadReal(), clk = clockOf(P);
+  const { parts } = factoryParts(P);
+  const st = P.Car3D.aeroStyleOf(parts), lvl = P.Car3D.aeroLevelOf(parts);
+  const flaps = P.Car3D.aeroFlaps(lvl, st);
+  const firsts = [];
+  for (let i = 0; i < 40; i++) {
+    for (let k = 0; k < flaps.length; k++) {
+      const m = P.CarMesh.getAeroFlap(lvl, [i / 100, 0.2, 0.2], k, st, flaps[k], null);
+      if (k === 0) firsts.push(m);
+    }
+    clk.advance(3000);
+    P.CarMesh.releaseIdleFlaps(2000);
+  }
+  assert.equal(firsts.filter((m) => !P.freed.includes(m)).length, 0);
+});
+
+test("the race path never releases: without a releaseIdleFlaps call (or without a clock) the FIFO cap alone applies", () => {
+  const P = loadReal(), clk = clockOf(P);
+  const a = P.CarMesh.getAeroFlapSet(2, [0.1, 0.1, 0.1], null, null, false);
+  for (let i = 0; i < 40; i++) { clk.advance(10000); P.CarMesh.getAeroFlapSet(2, [i / 100, 0.3, 0.3], null, null, false); }
+  assert.ok(!P.freed.includes(a), "idle, but nobody asked: kept until the 64 cap");
+  const Q = loadReal();
+  Q.CarMesh.getAeroFlapSet(2, [0.2, 0.2, 0.2], null, null, false);
+  assert.equal(Q.CarMesh.releaseIdleFlaps(0), 0, "no clock in a bare VM: nothing is idle");
+});
+
+test("the garage calls releaseIdleFlaps when a livery or parts edit busts the preview", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/garage/setup-camera.js"), "utf8");
+  const bust = src.slice(src.indexOf("function spMeshBust()"), src.indexOf("function garageSeat()"));
+  assert.match(bust, /CarMesh\.releaseIdleFlaps\(FLAP_IDLE_MS\)/);
+});

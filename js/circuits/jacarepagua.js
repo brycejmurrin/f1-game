@@ -17,6 +17,7 @@
     night: false,
     theme: "modern",
     lengthKm: 5.0,
+    tyreSeverity: 1.12,  // Historic Rio abrasive permanent band
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     terrainOuter: 120,
