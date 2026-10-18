@@ -14096,7 +14096,8 @@
       "*": [
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/settings-one-home.test.mjs"
       ]
     },
     "js/ui/aria-state.js": {
@@ -15509,7 +15510,8 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
-        "tests/unit/perf-try.test.mjs"
+        "tests/unit/perf-try.test.mjs",
+        "tests/unit/settings-one-home.test.mjs"
       ]
     },
     "js/ui/share-code.js": {

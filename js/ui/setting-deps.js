@@ -73,7 +73,7 @@ const SettingDeps = (function () {
     { key: "sound-engine", ids: ["as-engine-details"], parent: ["as-sound", "soundbtn"], reason: "Applies when SOUND is on" },
     // Radio voices play through the master bus (radio-voice.js).
     { key: "sound-radio", ids: ["as-spot", "as-focus", "as-rpack", "as-rpreset"], parent: "soundbtn", reason: "SOUND is muted" },
-    { key: "steer-tilt", ids: ["pm-tiltsimple", "pm-tiltdeg", "pm-smooth", "pm-tiltcurve"],
+    { key: "steer-tilt", ids: ["pm-tiltsimple", "pm-smooth", "pm-tiltcurve"],
       parent: "pm-steer", values: ["tilt"], reason: "TILT steering only" },
     { key: "steer-touch", ids: ["pm-touchrange", "pm-dragsmooth", "pm-touchcurve"],
       parent: "pm-steer", values: ["touch"], reason: "TOUCH steering only" },
