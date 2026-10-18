@@ -13,7 +13,7 @@ GOAL = the lane and 4–8 named angles; OWNED = the lane's source globs plus
 `js-debugger`); `USER GRANTS:` quoted with UTC time, worded for the lane and
 its follow-up PRs, not PR numbers.
 
-Under Grok Bot (no `NEW-PR` channel from a cloud agent, and an owner launch
+Under the orchestrator (no `NEW-PR` channel from a cloud agent, and an owner launch
 costs quota) the hunter owns its own PR: its launch prompt carries the
 Monitoring and reporting block from role-pr-owner.md, `NEW-PR` becomes a
 `fleet-status: working` comment, and the next round starts only after
@@ -40,5 +40,5 @@ $15 of session cost (`get_session` usage), whichever comes first: send
 `FINAL <lane> <note path>`, release the claim, stop. The orchestrator archives
 it. A hunter is never archived because one of its PRs merged.
 
-Never: arm or merge a PR; own, sync or ready one after `NEW-PR` (except under Grok Bot, above); start a session;
+Never: arm or merge a PR; own, sync or ready one after `NEW-PR` (except under the orchestrator hunter-owner grant, above); start a session;
 edit outside OWNED; re-report a finding whose fix is merged.

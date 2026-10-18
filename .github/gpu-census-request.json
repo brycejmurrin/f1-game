@@ -1,1 +1,1 @@
-{"images": "macos-latest", "track": "montreal", "tod": "day", "clock": 12, "census_only": false, "force": "env,chunked", "ls": "", "leg": "hunt-recovery-texture-ownership-6e21"}
+{"images": "macos-latest", "track": "montreal", "tod": "day", "clock": 12, "census_only": false, "force": "batches", "ls": "", "leg": "decal-run-release-c4e8", "entry": "menu-full"}

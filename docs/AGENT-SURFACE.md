@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Thirty-four `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Forty `apex_*` tools (`apex_help {tool}`, the full text `tools/list` shortens, plus `apex_viewer` and five bounded UI/diagnostics tools) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -211,6 +211,11 @@ apex-tools HTTP `3713` (`127.0.0.1` only). Design / refuses:
 | Live `version.json` / Pages | **deploy-research** (host fetch / WebFetch / hosted TinyFish) | `mcp-probe`, curl github.io, `tinyfish-mcp.sh` in-container |
 | Batch screenshots | skill **playwright-probe** (`shot.mjs` / `apex-capture`) | Chrome MCP while Playwright runs |
 | Multi-angle car / garage (ONE Chromium) | `garage-angles-fetch.mjs` (BEFORE pack) · `render-car.mjs --preset=spine` / `--shot=` · `garage-angles.mjs` AFTER only | N× recapturing the 11-team garage grid; Car shot / `carview.html` |
+| Garage capture matrix preflight | `apex_garage_plan` with explicit shot/time limits; capture only through the parent-owned garage workflow | planning as rendered evidence |
+| Semantic controls, CSS, hit targets and live/saved UI bindings | `apex_ui_inspect` on one local catalog screen; optional bounded viewport sequence | probe completion as a UI pass |
+| Compare saved UI inspections | `apex_ui_diff` with matching viewport sequences | unrelated screenshots as semantic evidence |
+| Named player navigation scenario | `apex_ui_mission_plan`, then parent-owned replay with its outer deadline and shared browser lock | scenario preparation as interaction verification |
+| Heap growth, memory lifecycle, GPU allocations or renderer diagnostics | `apex_diagnostics` capabilities → bounded run → saved report query; `apex_profile` for CPU/copy spans and `debugger_*` for source state | heap growth alone as a leak; software GPU timing as player hardware evidence |
 | Tiny car inspect JPEG | `tools/car/carshot.mjs` (soft→CDP clip) | full `apex-capture` sweep |
 | Interactive host browser | **playwright-official** (`browser_*`) | `test-bg.mjs`; chrome-devtools at the same time |
 | One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` matrix / `--gallery` |
@@ -253,7 +258,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Thirty-four tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Forty tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -288,19 +293,32 @@ and viewports) in one read, sourced from the tools' own schemas so it cannot dri
 31 → 32 on 2026-10-16 for `apex_profile`, the same job as a direct browser-kind tool (`profile` joined the settings matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`); it returns a jobId and holds the browser lock until the job exits.
 32 → 33 on 2026-10-16 for `apex_locations`: authored turn and sector targets
 on all 52 circuits, plus curated named scenery with source-located fractions.
-33 → 34 on 2026-10-18 for `apex_viewer` (`viewer/build-viewer.mjs`): one
+33 → 34 on 2026-10-18 for `apex_help`; `tools/list` now publishes a compact form (71.5 → ~51 KB).
+34 → 35 on 2026-10-18 for `apex_viewer` (`viewer/build-viewer.mjs`): one
 self-contained three.js page (a live car customiser running the game's own
 `Car3D` — every team, livery, finish and garage part — and circuits), written to
 `artifacts/viewer/` with no browser, for publishing as an Artifact where a host
 does not render MCP Apps panels. Its `--shots` stills and `--sheet` variant sheets
 (one PNG per item plus a contact sheet, to post into a chat on a phone) launch Chromium, so they stay a
 CLI flag rather than an argument of this tree-kind tool.
+35 → 40 on 2026-10-18 for `apex_ui_inspect` (bounded semantic/CSS inspection),
+`apex_ui_diff` (saved inspection comparison), `apex_ui_mission_plan` (named replay
+scenario preparation), `apex_garage_plan` (browser-free camera/design matrix) and
+`apex_diagnostics` (capabilities, background memory/GPU/renderer/VM probes, and
+saved report queries). Browser diagnostics use the existing job lock; planning
+and report comparison do not launch Chromium.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
 |---|---|---|---|
 | `apex_status` | built-in | tree | check-changes |
 | `apex_catalog` | built-in | tree | check-changes |
+| `apex_help` | built-in | tree | check-changes |
+| `apex_diagnostics` | `perf/diagnostics.mjs` | tree | renderer-debug |
+| `apex_garage_plan` | `shot/garage-angles.mjs` | tree | garage-parts-livery |
+| `apex_ui_mission_plan` | `ui/explorer.mjs` | tree | survey-ui-matrix |
+| `apex_ui_inspect` | `ui/explorer.mjs` | browser | ui-menu-a11y |
+| `apex_ui_diff` | `ui/explorer/inspector.mjs` | tree | ui-menu-a11y |
 | `apex_locations` | built-in | tree | survey-track |
 | `apex_doctor` | `check/doctor.mjs` | tree | check-changes |
 | `apex_pick_tests` | `ci/pick-tests.mjs` | tree | check-changes |
@@ -333,6 +351,15 @@ CLI flag rather than an argument of this tree-kind tool.
 | `apex_hud_mock` | `shot/hud-mock.mjs` | browser | survey-ui-matrix |
 | `apex_profile` | `perf/profile.mjs` | browser | playwright-probe |
 | `apex_profile_query` | `perf/query.mjs` | tree | playwright-probe |
+
+`apex_catalog` retains its general response when `section` is omitted. For focused
+discovery use `section: "parts"`, `"liveries"` or `"garage"`, with optional literal
+`filter`, `offset` and `limit` (default 25, maximum 100). Parts support canonical
+`category` and `team` filters and expose cost, stat multipliers and supplier/team
+restrictions. This does not evaluate career ownership. Livery discovery excludes
+optional Legends additions and saved custom paint. `apex_car_audit` ladder and
+`apex_job_start` parts_sweep accept `categories` and `team`; the latter applies
+team availability before serial or parallel mesh measurement.
 
 Not wrapped as their own `apex_*` tool: `profile.mjs --mode hitch|trace` (hitch wraps `gfx/frame-hitch.mjs`, trace writes a Perfetto JSON; `--base <ref>` prints `incomparable` when the base lacks the `apex26.wgxCapture` key, #2674) and the three.js Inspector (`?inspector=1`, `__apex.inspector()`, see §three.js Inspector below).
 
@@ -506,6 +533,56 @@ values with candidate declarations/source lines; they do not guess cascade winne
 Known limits and truncation are recorded in JSON. No new browser controller,
 framework, hosted service, WebMCP dependency or settings mutation is required.
 
+Inspection roots must match exactly one element; a control used as the root is
+included in its own report. `coverage` counts inspected/total/omitted controls
+and binding matches, mismatches, unavailable, unmapped and not-applicable actions.
+Action/navigation controls still need replay evidence. Theme, text-size and
+contrast studio choices have explicit pressed-state adapters; other unmapped
+choices stay unverified. An inspection always reports behavior and persistence
+as `not-tested`. A matching current value is not an action or reload test.
+
+Saved inspection JSON can be summarized without starting Chromium:
+
+```sh
+node --input-type=module -e 'import fs from "node:fs"; import {summarizeInspection} from "./tools/ui/explorer.mjs"; console.log(summarizeInspection(JSON.parse(fs.readFileSync(process.argv[1],"utf8")),"saved"))' artifacts/inspection.json
+```
+
+For source navigation, use a binding's `source` file with
+`bash tools/mcp/lsp-mcp.sh outline <file> --all`, then request a definition at
+the returned file/line position with `--body`. This exposes internal UI handlers
+and avoids ambiguous global names; positions must come from the current checkout.
+Pair CSS candidate locations with the report's matched rules and adaptive metadata
+before choosing an edit. When moving an offline HTML report, retain its relative
+evidence directory too: rebuilding from report JSON alone does not copy those files.
+
+`--summary` prints coverage and limits per size, followed by findings. It says
+`no-findings`, never a blanket clean pass, and retains settlement, CSS, ARIA,
+control and layout-context truncation. With the JS debugger, query
+`__apex.ui.inspect({root:'#appearance-studio'}).coverage` or one control's
+`binding` instead of returning the full report (which can exceed the debugger's
+result cap). Install the inspector again after navigation.
+
+For the debugger's existing local game page, install with an awaited
+`debugger_run` expression (no second browser or controller):
+`(async()=>{const m=await import('/tools/ui/explorer/inspector.mjs');return m.inspectUI({install:true});})()`.
+Read its completed operation from `debugger_state`. Raw `ui.inspect` is an
+instantaneous sample: a zero-control sample during a transition is not proof
+that the screen has no controls. Before judging it, use the existing sampler
+in another awaited run and return only its bounded verdict:
+`(async()=>{const m=await import('/tools/ui/explorer/transitions.mjs');const s=await m.settleLayout({root:'#appearance-studio'});return {stable:s.stable,truncated:s.truncated};})()`.
+Then query `coverage` or one binding. Settlement remains sampled evidence,
+and does not prove later asynchronous work cannot change the page.
+
+The `settings-persistence` mission uses real clicks to choose Light, checks its
+DOM/live/saved agreement, reloads, reopens the studio and checks again. Export
+that entry from `tools/ui/explorer/catalog.mjs` to an artifact JSON and run it
+with `explorer.mjs replay <file>`. Replay data accepts
+`{type:'assert',oracle:{type:'binding',selector:'#control',runtime:125,saved:125}}`.
+The optional `saved` field is an explicit expected scalar (or null for no
+override); unavailable/unmapped bindings never satisfy it. Assertions fail
+with expected and actual values; existing traces and action timings preserve
+the reproduction. No executable expression is accepted in replay data.
+
 Adaptive CSS diagnostics include each control's computed sizing, wrapping, zoom,
 font and container properties, with deduplicated ancestor boxes and scroll metrics
 (`layoutContexts`, at most 12 ancestors per control / 256 unique contexts).
@@ -551,7 +628,7 @@ floor; a resize cannot switch this). `--boot WxH` boots at that size, so
 boot-time classifiers see the phone. `--safe T,R,B,L` sets real
 `env(safe-area-inset-*)` values through CDP `Emulation.setSafeAreaInsetsOverride`
 (0–200 px each; the iPhone Pro Max landscape notch is about 0,59,21,59).
-`--summary` prints one tab-separated line per issue (screen, size, kind,
+`--summary` prints tab-separated coverage and issue lines (screen, size, kind,
 selector, message) instead of the JSON, which is still written to `--out`.
 `provenance.emulation` records the settings. A sweep record that has not settled
 gets one more settlement budget (`settlement.retried`). Settlement also waits for finite running CSS animations on, inside or above the root (`settlement.animating`): a fade or pointer-events transition leaves geometry final while hit tests still answer `<html>`; infinite animations are ignored. If it is still moving,

@@ -168,16 +168,19 @@ function eligibleTeam(Parts, Teams, option, fallback) {
   return byId[fallback] ? fallback : teams[0].id;
 }
 
-export function catalogRows(Parts, Teams, fallback = "mclaren") {
+export function catalogRows(Parts, Teams, fallback = "mclaren", teamId = null) {
+  const team = teamId == null ? null : Teams.LIST.find((t) => t.id === teamId);
+  if (teamId != null && !team) throw new Error(`unknown team ${teamId}`);
   const rows = [];
   for (const cat of Parts.CATALOG) {
     for (const opt of cat.options) {
-      const teamId = eligibleTeam(Parts, Teams, opt, fallback);
-      if (!teamId) throw new Error(`no eligible team for ${cat.id}/${opt.id}`);
+      if (team && !Parts.isOptionAvailable(opt, team)) continue;
+      const resolvedTeam = team ? team.id : eligibleTeam(Parts, Teams, opt, fallback);
+      if (!resolvedTeam) throw new Error(`no eligible team for ${cat.id}/${opt.id}`);
       // A SIGNATURE or a STYLE reskin is measured against the twin it copies.
       const sig = (opt.tag === "SIGNATURE" || opt.tag === "STYLE") && opt.equivalent;
       rows.push({
-        cat: cat.id, optionId: opt.id, label: opt.label, teamId,
+        cat: cat.id, optionId: opt.id, label: opt.label, teamId: resolvedTeam,
         signature: !!sig, equivalent: sig || null,
         isDefault: Parts.DEFAULTS[cat.id] === opt.id,
         // A SIGNATURE's baseline is the twin it exists to differ from; a
@@ -694,10 +697,10 @@ export function classify(row, TH = THRESHOLDS) {
 }
 
 // ── sweep ──────────────────────────────────────────────────────────────────
-export function sweep({ cats, M, vis } = {}) {
+export function sweep({ cats, M, vis, teamId } = {}) {
   const mods = M || loadParts();
   assertFlapSig();
-  const rows = catalogRows(mods.Parts, mods.Teams)
+  const rows = catalogRows(mods.Parts, mods.Teams, "mclaren", teamId)
     .filter((r) => !cats || cats.includes(r.cat));
   const zero = { dHaus: 0, dHausVis: 0, movedArea: 0, colMax: 0, colArea: 0, matArea: 0,
                  bboxMax: 0, dCorr: 0, dTri: 0, dVert: 0, where: "-" };
@@ -849,14 +852,16 @@ export function clampScan(M, cats, opts = {}) {
 // four cores. `workers: 1` runs sweep() in-process, which is what --attribute
 // and a debugger want.
 const WORKER_ROLE = "parts-sweep-worker";
-export function sweepParallel({ cats, M, vis, workers } = {}) {
-  const Parts = (M || loadParts()).Parts;
+export function sweepParallel({ cats, M, vis, workers, teamId } = {}) {
+  const mods = M || loadParts();
+  const Parts = mods.Parts;
+  if (teamId != null && !mods.Teams.LIST.some((t) => t.id === teamId)) throw new Error(`unknown team ${teamId}`);
   // Array.from, not CATALOG.map: CATALOG is a vm-realm array, and mapping it
   // yields vm-realm arrays all the way to the caller, which deepStrictEqual
   // rejects against a host `[]` even when both are empty.
   const ids = Array.from(Parts.CATALOG, (c) => c.id).filter((id) => !cats || cats.includes(id));
   const n = Math.max(1, Math.min(workers || Math.min(4, os.availableParallelism()), ids.length));
-  if (n === 1) return Promise.resolve(sweep({ cats, M, vis }));
+  if (n === 1) return Promise.resolve(sweep({ cats, M: mods, vis, teamId }));
   const cost = (id) => Parts.CATALOG.find((c) => c.id === id).options.length * (id === "aero" ? 2 : 1);
   const queue = [...ids].sort((a, b) => cost(b) - cost(a));
   const done = new Map();
@@ -872,7 +877,7 @@ export function sweepParallel({ cats, M, vis, workers } = {}) {
     };
     for (let i = 0; i < n; i++) {
       const w = new Worker(fileURLToPath(import.meta.url), {
-        workerData: { role: WORKER_ROLE, vis },
+        workerData: { role: WORKER_ROLE, vis, teamId },
         resourceLimits: { maxOldGenerationSizeMb: 3072 },
       });
       pool.push(w);
@@ -897,7 +902,7 @@ export function sweepParallel({ cats, M, vis, workers } = {}) {
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
-    console.log(`Usage: node tools/car/parts-sweep.mjs [--cats=…] [--only=…] [--calibrate] [--attribute] [--clamp-scan] [--novis] [--json] [--workers=N]
+    console.log(`Usage: node tools/car/parts-sweep.mjs [--cats=…] [--team=<id>] [--only=…] [--calibrate] [--attribute] [--clamp-scan] [--novis] [--json] [--workers=N]
 
 How much does each catalog option change the car? Offline via node:vm.
 Exits non-zero when any row is INVISIBLE or BROKEN.`);
@@ -909,11 +914,16 @@ Exits non-zero when any row is INVISIBLE or BROKEN.`);
   const workers = workersArg ? +workersArg.slice(10) : undefined;
   const catsArg = args.find((a) => a.startsWith("--cats="));
   const cats = catsArg ? catsArg.slice(7).split(",") : null;
+  const teamArg = args.find((a) => a.startsWith("--team="));
+  const teamId = teamArg ? teamArg.slice(7) : undefined;
   const onlyArg = args.find((a) => a.startsWith("--only="));
   const only = onlyArg ? onlyArg.slice(7).split(",") : null;
 
   const vis = !has("novis");
   const M = loadParts();
+  if (cats && cats.some((id) => !M.Parts.CATALOG.some((c) => c.id === id))) throw new Error("unknown part category");
+  if (teamId != null && !M.Teams.LIST.some((t) => t.id === teamId)) throw new Error(`unknown team ${teamId}`);
+  if (teamId && has("clamp-scan")) throw new Error("--team is not supported by --clamp-scan");
 
   if (has("clamp-scan")) {
     assertFlapSig();
@@ -929,7 +939,7 @@ Exits non-zero when any row is INVISIBLE or BROKEN.`);
     return;
   }
 
-  const rows = await sweepParallel({ cats, M, vis, workers });
+  const rows = await sweepParallel({ cats, M, vis, workers, teamId });
 
   if (has("attribute")) {
     const flagged = rows.filter((r) => only ? only.includes(r.cls)
@@ -994,7 +1004,7 @@ if (!isMainThread && workerData && workerData.role === WORKER_ROLE) {
   const M = loadParts();
   parentPort.on("message", (msg) => {
     if (msg.done) { parentPort.close(); return; }
-    parentPort.postMessage({ cat: msg.cat, rows: sweep({ cats: [msg.cat], M, vis: workerData.vis }) });
+    parentPort.postMessage({ cat: msg.cat, rows: sweep({ cats: [msg.cat], M, vis: workerData.vis, teamId: workerData.teamId }) });
   });
 } else if (isMainThread && process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main();

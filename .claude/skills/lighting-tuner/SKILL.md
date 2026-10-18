@@ -17,13 +17,22 @@ __apex.lightTune()
 __apex.lightTune({ lampLevel: 0.4 })
 ```
 
-Precedence, lowest→highest: `TUNE_DEFS.def` → shipped
-`js/lighting/presets.js` `"*"` → shipped `"*|tod|wx"` (shared stamp, e.g. `"*|night|dry"`) → shipped `"track|tod|weather"` →
-shipped `"*|tod"` when `gfx.hasPerChunkLights` (all presets/device classes) → localStorage `"*"` → localStorage **`track|tod|weather`**. Live slider edits
-write the **current condition** key (`LightStore.set` → `profiles[key()]`),
-not global `"*"`. Ship a look by merging the COPY VALUES `LightEdits` delta into
-`js/lighting/presets.js` ([references/bake.md](references/bake.md)). Edit `applyRaceSettings` only
-for STRUCTURAL changes.
+Precedence, lowest → highest (a later layer wins):
+
+1. `TUNE_DEFS.def`
+2. shipped `js/lighting/presets.js` `"*"`
+3. shipped `"*|tod|wx"` (shared stamp, e.g. `"*|night|dry"`)
+4. shipped `"track|tod|weather"`
+5. shipped `"*|tod"` — only when `gfx.hasPerChunkLights` (all presets/device classes)
+6. localStorage `"*"`
+7. localStorage **`track|tod|weather`**
+
+Live slider edits write the **current condition** key (`LightStore.set` →
+`profiles[key()]`), not global `"*"`. Ship a look by merging the COPY VALUES
+`LightEdits` delta into `js/lighting/presets.js`; no blob, just one number to
+change → edit that key by hand per
+[references/bake.md §One-key hand-merge](references/bake.md#one-key-hand-merge-no-bakemjs).
+Edit `applyRaceSettings` only for STRUCTURAL changes.
 
 localStorage (`apex26.lightTune`) outranks shipped presets — RESET in the
 LIGHTING TUNER drops the current track/tod/weather back to shipped. Legacy
@@ -92,5 +101,6 @@ Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
   COPY VALUES) → [references/bake.md](references/bake.md) — `scripts/bake.mjs`
   is a FULL REPLACE, `scripts/merge-proposals.mjs` merges a delta.
 
-The `"*|tod"` layer applies only when `gfx.hasPerChunkLights`. COPY VALUES exports
-`LightEdits` deltas; merged `lightState()` is observation, not a full export.
+COPY VALUES exports `LightEdits` deltas; merged `lightState()` is observation, not a full export.
+
+Upstream graphics playbook (atmosphere, grading, shadows): [references/graphics-atmosphere-playbook.md](references/graphics-atmosphere-playbook.md).

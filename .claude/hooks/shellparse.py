@@ -739,7 +739,7 @@ PW_BIN = re.compile(r"(^|/)(playwright(\.js|\.cmd)?|@playwright/test|(@?playwrig
 # apex_* tools whose CLI boots Chromium (tools/mcp/apex-tools-mcp.mjs kind
 # "browser" / week 2, plus apex_job_start); mcp-browser-guard.sh holds the same list.
 APEX_BROWSER = {"apex_eval", "apex_shot", "apex_shot_survey", "apex_agent", "apex_garage", "apex_hud_shot",
-                "apex_hud_survey", "apex_hud_mock", "apex_track", "apex_ui_fit", "apex_ui_shot", "apex_profile", "apex_job_start"}
+                "apex_hud_survey", "apex_hud_mock", "apex_track", "apex_ui_fit", "apex_ui_shot", "apex_ui_inspect", "apex_diagnostics", "apex_profile", "apex_job_start"}
 
 
 def _opts_after(args, help_only=False):
@@ -783,6 +783,18 @@ def _browser_script(path, args, cwd):
             t = args[k + 1] if args[k + 1].startswith("apex_") else "apex_" + args[k + 1]
             return f"{b} call {t}" if t in APEX_BROWSER else None
         return None
+    if b == "diagnostics.mjs":
+        # The supervisor's JSON dryRun/op fields do not suppress execution.
+        # Only its explicit VM producer is browser-free; unknown invocations
+        # stay closed rather than depending on a future default.
+        return None if args and args[0] == "vm_lifecycle" else b
+    if b in ("mem-census.mjs", "gpu-mem-census.mjs", "gfx-probe.mjs"):
+        # These producers do not implement the generic --plan/--dry-run
+        # escape hatch. An ignored flag must not authorize Chromium.
+        return b
+    if b == "explorer.mjs":
+        return None if ((args and args[0] in ("brief", "report")) or
+                        any(a in ("--list", "--help") for a in args)) else b
     if any(CAPTURE.search(n) for n in names):
         return None if any(re.match(r"^--(help|plan|dry-run)(=|$)", a) for a in args) else b
     return None
@@ -825,7 +837,7 @@ def browser_starts(text, groups, cwd=None, depth=0):
                 why = _browser_script(args[k], args[k + 1:], c)
         elif b in SHELLS:
             k = _first_positional(args, set())
-            if k < len(args) and os.path.basename(args[k]) == "js-debugger-mcp.sh":
+            if k < len(args) and os.path.basename(args[k]) in ("js-debugger-mcp.sh", "apex-tools-mcp.sh"):
                 why = _browser_script(args[k], args[k + 1:], c)
         elif b in ("node", "nodejs", "bun", "deno", "python", "python3", "tsx", "ts-node"):
             if "--test" in args or "-e" in args or "-c" in args or "--eval" in args or "-p" in args:
