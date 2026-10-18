@@ -73,11 +73,7 @@ const ZONE_COUNT = {
 // Per `docs/tracks/START-LINES.md` every circuit below has a verified start line (line on a straight, first apex hand-checked), so
 // `def.turns[0]` really is Turn 1 and the array runs in physical order. That
 // makes turn-pair authoring safe again — with one deliberate omission: BAHRAIN
-// and JEDDAH stay on the length-only fallback below, because their start lines
-// were never re-derived (no reliable coordinate was found for either) and
-// jeddah's still measures IN A CORNER (`tools/track/startline-probe.cjs`). Turn
-// numbers built on an unverified line are exactly the trap this table exists to
-// avoid, so those two circuits are excluded rather than guessed.
+// stays on the length-only fallback below (no located start coordinate yet).
 //
 // Each pair is the turn BEFORE the straight and the turn AFTER it (1-based, T1
 // meaning `def.turns[0]`; a pair naming the last turn and T1 wraps across the

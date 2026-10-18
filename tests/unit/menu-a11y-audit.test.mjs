@@ -795,6 +795,6 @@ test("the SAVING UNAVAILABLE banner is static, spoken once, dismissible, and sta
   const css = cssRules(readCssSource("css/overlays.css"));
   assert.equal(decl(css, "#save-warning button", "min-height"), "var(--tap)", "≥ 44 px (52 on touch), not the 24 px --tap-min");
   assert.ok(ruleFor(css, /(^|, )body\.in-race #save-warning(,|$)/), "hidden during a race");
-  assert.ok(ruleFor(css, /body:has\(dialog\[open\]\) #save-warning/), "hidden under an open dialog, where it is inert");
+  assert.ok(ruleFor(css, /body:has\(> dialog\[open\]\) #save-warning/), "hidden under an open dialog, where it is inert");
   assert.equal(decl(css, "#save-warning[data-collapsed] > :not(#save-dismiss)", "display"), "none", "DISMISS folds it to its toggle");
 });

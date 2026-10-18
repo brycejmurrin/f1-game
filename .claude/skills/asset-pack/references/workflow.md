@@ -58,9 +58,9 @@ vertex-displaced; FLAT is the no-material id.
    survive.
 
 4. **Slice a generated 4×4 atlas** onto scenery MAT slots (`bake-atlas`
-   leaves ASPHALT unmapped; NB the committed manifest currently lists all 14
-   layers, ASPHALT included, as `Apex26-Procedural`; the `assets.mjs` header
-   comment still says Poly Haven, so trust the manifest):
+   leaves ASPHALT unmapped and stamps `generated:<file>#col,row`; the committed
+   pack is `bake-synthetic` output — `materials.layers` in
+   `assets/pack/manifest.json` is the live list):
    ```sh
    node tools/gen/assets.mjs bake-atlas --preset generated
    node tools/gen/assets.mjs verify
