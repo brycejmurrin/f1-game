@@ -43,6 +43,7 @@
     // the generic skyline; only the theme does.
     theme: "green",
     lengthKm: 5.138,
+    tyreSeverity: 1.42,  // Hot abrasive Buddh circuit (Indian GP Pirelli era)
     baseHW: 8,
     sceneryCoordinates: "racing",
     terrainOuter: 110,

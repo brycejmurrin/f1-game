@@ -13,6 +13,7 @@
     reverse: false,
     sceneryCoordinates: "racing",
     lengthKm: 5.47,   // official Madring length; the OSM trace builds 5.343 km
+    tyreSeverity: 1.18,  // New 2026 Madring asphalt; street-circuit band 1.1–1.25 (no measured Chronicle rate yet)
     baseHW: 7,
     terrainOuter: 56,
     // grandstandEx(0.00,-1,…) owns the pit-straight stand. The generic 7-box
