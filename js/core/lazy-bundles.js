@@ -29,6 +29,7 @@ const RACE_SESSION_READY = {
   "js/race/engineer.js": () => typeof RaceEngineer !== "undefined" && !!RaceEngineer && !RaceEngineer._stub,
   "js/race/radio-lines.js": () => typeof RadioLines !== "undefined" && !!RadioLines && !RadioLines._stub,
   "js/race/race-facts.js": () => typeof RaceFacts !== "undefined" && !!RaceFacts && !RaceFacts._stub,
+  "js/race/event-journal.js": () => typeof EventJournal !== "undefined" && !!EventJournal && !EventJournal._stub,
   "js/race/spotter.js": () => typeof Spotter !== "undefined" && !!Spotter && !Spotter._stub,
   "js/race/race-radio.js": () => typeof RaceRadio !== "undefined" && !!RaceRadio && !RaceRadio._stub,
   "js/race/start-lights.js": () => typeof StartLights !== "undefined" && !!StartLights && !StartLights._stub,

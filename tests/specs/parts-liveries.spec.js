@@ -260,10 +260,23 @@ test.describe("Liveries — creator", () => {
     await expect(page.locator('[data-cs-pill="spineLogo:logo"]')).toBeEnabled();
     await expect(page.locator('[data-cs-pill="spineSide:none"]')).toBeEnabled();
     await expect(page.locator('.cs-liv-ed-row:has([data-cs-pill^="spineSide:"])')).not.toHaveAttribute("aria-disabled", "true");
+    // The reason is ON SCREEN, not a hover title a phone never shows (the 2026-10-18 livery editor audit, D2/D8):
+    // one readable line under the greyed row while its controls dim, and gone once the fin is back.
+    const reason = finRow.locator("[data-liv-why]");
+    await expect(reason).toHaveText("Needs a tail fin — pick a FIN SHAPE other than NONE");
+    await expect(reason).toBeVisible();
+    // The menus animate opacity: finish the transitions, then read the settled values.
+    const opacity = await finRow.evaluate((r) => {
+      for (const a of document.getAnimations()) a.finish();
+      return ["row " + getComputedStyle(r).opacity, "reason " + getComputedStyle(r.querySelector("[data-liv-why]")).opacity,
+        "control " + getComputedStyle(r.querySelector("input")).opacity].join(", ");
+    });
+    expect(opacity).toBe("row 1, reason 1, control 0.38");
     await page.screenshot({ path: galleryPath("parts-liveries", "creator-no-fin-rows.png") });
 
     await page.locator('[data-cs-pill="finShape:standard"]').click();
     for (const r of rows) await expect(r).toHaveAttribute("aria-disabled", "false");
+    await expect(reason).toHaveCount(0);
     await expect(page.locator('[data-cs-pill="finBadge:logo"]')).toBeEnabled();
   });
 
