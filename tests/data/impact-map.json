@@ -2891,6 +2891,9 @@
       "history": [
         "tests/unit/livery-design.test.mjs"
       ],
+      "paint": [
+        "tests/unit/livery-design.test.mjs"
+      ],
       "value": [
         "tests/unit/livery-design.test.mjs"
       ]
