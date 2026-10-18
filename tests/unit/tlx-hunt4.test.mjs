@@ -40,6 +40,7 @@ const slice = (from, to) => {
 // (+ _aiMesh), the FX streams. Only the surroundings below are stand-ins.
 const SRC = {
   range0: fnSource(TLX, "function setRange0(attr, count) {"),
+  instanceRange: fnSource(TLX, "function setInstanceRange(attr, start, count) {"),
   batch: slice("      let _instStamp = 0;", "      function cullInstances(batch, planes, opts) {"),
   mir: fnSource(TLX, "function _mirOf(batch) {"),
   r1: slice("      let _coOn = true;", "      function ensureStream(slot, verts) {"),
@@ -86,11 +87,12 @@ async function rig(t, ls = {}) {
     let _warmPending = null;
     ${SRC.drop}
     ${SRC.range0}
+    ${SRC.instanceRange}
     ${SRC.batch}
     ${SRC.mir}
     ${SRC.r1}
     ${SRC.streams}
-    return { createInstancedBatch, updateInstances, _mirOf, _coAppend, _coRuns, ensureStream, wrapStream, uploadStream,
+    return { createInstancedBatch, updateInstances, _writeInstanceMatrices, _mirOf, _coAppend, _coRuns, ensureStream, wrapStream, uploadStream,
       materialFor, resetRecs, drawList, usage: _instUsage, usageOf: _instUsageOf, aiOn: _aiInst,
       _coDrop, _dropQueue, flushDropped, warm: (p) => { _warmPending = p; } };`);
   const R = mk(THREE, TSL, scene, renderer, camera, { getItem: (k) => (k in ls ? ls[k] : null) }, lit, globalThis);
@@ -158,6 +160,27 @@ test("A-H1: a changed frame uploads exactly the written range — matrices alone
   assert.equal(m3, K * 64 + 5 * 64, "each write uploads its own range at the render that follows it");
   const gpu = h.renderer.backend.get(b.imesh.instanceMatrix);
   assert.ok(gpu && gpu.bufferGPU, "the stream lives on the GPU");
+});
+
+test("instance suffix ranges reach the vendored backend with the correct component offsets", async (t) => {
+  const h = await rig(t), b = batchOf(h, 8), im = b.imesh;
+  h.render();
+  const m = im.instanceMatrix.array, c = im.geometry.getAttribute("instanceTint").array;
+  m[6 * 16 + 12] = 17; c[6 * 3] = 0.3;
+  h.R._writeInstanceMatrices(im, m, c, 8, 6);
+  // First allocation leaves the initial range pending in three; preserve it
+  // until an update consumes it, even though the buffer was already created.
+  assert.deepEqual(im.instanceMatrix.updateRanges, [{ start: 0, count: 128 }]);
+  assert.equal(h.bytes(() => h.render()), 8 * (64 + 12));
+  m[6 * 16 + 12] = 18;
+  h.R._writeInstanceMatrices(im, m, c, 8, 6);
+  assert.deepEqual(im.instanceMatrix.updateRanges, [{ start: 96, count: 32 }]);
+  const sent = h.bytes(() => h.render());
+  assert.equal(sent, 2 * (64 + 12), "only two matrix/tint rows pass through the actual backend");
+  assert.equal(h.bytes(() => h.render()), 0, "the consumed suffix stays clean");
+  h.R._writeInstanceMatrices(im, m, c, 5, 5);
+  assert.equal(im.count, 5);
+  assert.equal(h.bytes(() => h.render()), 0, "shrinking the tail only changes draw count");
 });
 
 test("A-H1: the mirror view, the R1 runs and the FX streams are Stream: unchanged renders send 0, a write sends its range", async (t) => {
@@ -328,9 +351,10 @@ test("A-H1: tlx.js wiring — every plain-Mesh family on _instUsage, every Insta
   // No other Dynamic site crept back in tlx.js (two InstancedMesh runs + the releaseGeoMirrors skip + the knob).
   assert.equal((TLX.match(/setUsage\(THREE\.DynamicDrawUsage\)/g) || []).length, 2);
   // Every write site pushes a range and bumps the version (a Stream buffer uploads nothing otherwise).
-  const wim = fnSource(TLX, "function _writeInstanceMatrices(imesh, matrices, colors, n) {");
-  assert.match(wim, /setRange0\(col, nc\); col\.needsUpdate = true;/);
-  assert.match(wim, /setRange0\(im, nf\);\s*im\.needsUpdate = true;/);
+  const wim = fnSource(TLX, "function _writeInstanceMatrices(imesh, matrices, colors, n, firstDirty = 0) {");
+  assert.match(wim, /setInstanceRange\(col, from, nc - from\)/);
+  assert.match(wim, /setInstanceRange\(im, from, nf - from\)/);
+  assert.match(SRC.instanceRange, /attr\.needsUpdate = true/);
   assert.match(fnSource(TLX, "function _coAppend(geo, w, opts) {"), /setRange0\(b\.ib, b\.visible \* CO_STRIDE\); b\.ib\.needsUpdate = true;/);
   assert.match(fnSource(TLX, "function uploadStream(slot, floats) {"), /setRange0\(slot\.ib, floats\);[^\n]*\n\s*slot\.ib\.needsUpdate = true;/);
 });
