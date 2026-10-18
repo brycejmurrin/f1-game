@@ -66,6 +66,7 @@ export const RULES = [
    "load order, docs integrity, api contracts — ~2 min at three files at a time, catches the structural slips"],
 
   [/^tests\/unit\/render-final-contracts\.test\.mjs$/, ["tooling-fast"], "renderer ownership, post health, material detail and particle residency contracts"],
+  [/^plugins\/f1-dev-tools\//, ["tooling-fast"], "F1 Dev Tools helpers and package routing — f1-dev-tools.test.mjs"],
   // ── renderer ────────────────────────────────────────────────────────────
   // NOT "visual" — tests/manual/tracks-visual.spec.js is PARKED. It has no
   // committed golden baselines and self-skips all 40 circuits, so the group

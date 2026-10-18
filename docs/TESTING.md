@@ -1302,6 +1302,13 @@ comment saying why they are not one.
 
 The per-file table is generated, so this how-to stays short. What each spec and unit file covers is [`TESTING-COVERAGE.md`](TESTING-COVERAGE.md) (`node tools/docs/gen-coverage-table.mjs`; `--check` is on `npm run gen:check`). A new suite is described by its header comment, or by the note above its path in `tests/groups.json`.
 
+Focused browser-free diagnostics contracts also run in `tooling-fast`:
+
+| Unit file | Coverage |
+|---|---|
+| `tests/unit/catalog-discovery.test.mjs` | Canonical parts/livery/garage discovery, bounded pagination/filtering, availability restrictions and sweep filters. |
+| `tests/unit/diagnostics-tools.test.mjs` | Bounded diagnostic plans, local artifact paths, output reservation, saved-result summaries, job routing and feature-detected runtime memory counters. |
+
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 
 ```sh

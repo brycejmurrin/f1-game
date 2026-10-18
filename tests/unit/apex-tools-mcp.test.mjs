@@ -21,8 +21,11 @@ function rpc(lines, env = {}) {
     env: { ...process.env, APEX_MCP_MOCK: "1", ...env },
     cwd: ROOT,
     timeout: 15000,
+    // Batched schema-contract probes now publish 38 tool schemas and hundreds
+    // of typed refusals; keep the transport fixture bounded above 1 MiB.
+    maxBuffer: 8 * 1024 * 1024,
   });
-  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.status, 0, r.error?.message || r.stderr);
   return r.stdout
     .split("\n")
     .map((l) => l.trim())
@@ -168,10 +171,12 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_car_audit",
     "apex_catalog",
     "apex_ci_status",
+    "apex_diagnostics",
     "apex_doctor",
     "apex_eval",
     "apex_frame_report",
     "apex_garage",
+    "apex_garage_plan",
     "apex_graph_parity",
     "apex_help",
     "apex_hud_mock",
@@ -192,7 +197,10 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_status",
     "apex_track",
     "apex_track_audit",
+    "apex_ui_diff",
     "apex_ui_fit",
+    "apex_ui_inspect",
+    "apex_ui_mission_plan",
     "apex_ui_shot",
     "apex_unit_test",
     "apex_verify_change_fast",
@@ -1962,6 +1970,12 @@ test("syncStructured makes structuredContent match the refined text body, and le
 // call must be refused as invalid), unless the argument is exempt below WITH a reason. A new argument that does nothing fails here
 // until it is wired or exempted; an exemption that has become unnecessary fails too, so the table cannot rot.
 const ARG_BASES = {
+  apex_ui_inspect: [{ screen: "title" }],
+  apex_ui_diff: [{ before: "scratch/before.json", after: "scratch/after.json" }],
+  apex_ui_mission_plan: [{ mission: "first-race" }],
+  apex_garage_plan: [{}],
+  apex_diagnostics: [{ op: "run", kind: "memory_census" }],
+  apex_catalog: [{ section: "parts" }],
   apex_shot: [{ track: "monza" }],
   apex_agent: [{ track: "monza" }],
   apex_eval: [{ track: "monza", expr: "1" }],
@@ -1997,7 +2011,7 @@ const argCandidates = (spec) => {
     const lo = spec.exclusiveMinimum != null ? spec.exclusiveMinimum + 1 : (spec.minimum ?? 0) + 1;
     return [lo, lo + 1];
   }
-  if (spec.type === "array") return [spec.items?.enum ? [spec.items.enum[0]] : spec.items?.type === "number" ? [0.3] : spec.items?.type === "object" ? [{}] : ["a"]];
+  if (spec.type === "array") return spec.items?.enum ? [[spec.items.enum[0]], [spec.items.enum.at(-1)]] : [spec.items?.type === "number" ? [0.3] : spec.items?.type === "object" ? [{}] : ["a"]];
   if (spec.type === "object") return [{ a: 1 }];
   return [spec.pattern ? "probe-1" : "probe"];
 };
@@ -2295,6 +2309,147 @@ test("servers boot with no node_modules: static import graphs (apex-tools, js-de
   walk(path.join(ROOT, "tools/mcp/js-debugger-mcp.mjs"));
   assert.ok(seen.size > 3, `walked ${seen.size} files`);
   assert.deepEqual(bare, [], "load npm packages with a lazy `await import()` at the call site");
+});
+
+// Semantic inspection wrappers: browser-free contract tests, with injected CLI
+// execution. A browser pass is owned by the parent and is not implied here.
+test('UI inspector schema bounds sizes, selectors, flags and local target', () => {
+  for (const args of [
+    { viewports: Array(9).fill({ width: 844, height: 390 }) },
+    { safe: [0, 1, 2] }, { safe: [0, 0, 201, 0] },
+    { selector: 'x'.repeat(513) }, { screen: 'not-a-screen' },
+    { boot: { width: 239, height: 390 } }, { flags: '--help' },
+    { roundtrip: true },
+  ]) {
+    const r = callCli('apex_ui_inspect', { ...args, dryRun: true });
+    assert.equal(r.status, 1, JSON.stringify(args));
+    assert.equal(JSON.parse(r.stdout).error, 'bad_args');
+  }
+  const r = callCli('apex_ui_inspect', { screen: 'title', selector: '--help', styles: '#title', viewports: [{ width: 844, height: 390 }], touch: true, safe: [0, 59, 21, 59], roundtrip: true, dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  const b = JSON.parse(r.stdout);
+  assert.ok(b.argv.includes('--selector=--help'), 'selector cannot turn into CLI option');
+  assert.ok(b.argv.includes('844x390'));
+  assert.equal(b.lockOwner, 'tools/ui/explorer.mjs');
+  for (const args of [{ target: 'deploy' }, { url: 'https://example.com' }, { out: '../escape' }]) {
+    assert.equal(callCli('apex_ui_inspect', { ...args, dryRun: true }).status, 1);
+  }
+});
+
+test('UI inspector delegates locking to the canonical CLI and summarizes unknown bindings', async () => {
+  const { createUITools } = await import('../../tools/mcp/ui-tools.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apex-ui-contract-'));
+  const report = { viewport: { width: 844, height: 390 }, controls: [
+    { selector: '#a', binding: { status: 'matches' } },
+    { selector: '#b', binding: { status: 'unavailable' } },
+    { selector: '#c', binding: { status: 'unmapped' } },
+  ], issues: [{ kind: 'small-target', selector: '#a' }], settlement: { stable: false } };
+  const result = body => ({ content: [{ type: 'text', text: JSON.stringify(body) }] });
+  let spawned = 0;
+  const ctx = { ROOT: dir, assertSafeOut: p => path.resolve(dir, p), mockMode: () => false,
+    occupancyRefuse: () => null, toolResult: result,
+    refuse: (error, message) => result({ ok: false, error, message }),
+    runSpawn: async (argv, options) => {
+      spawned++; assert.equal(options.timeoutMs, 180000);
+      const out = argv[argv.indexOf('--out') + 1];
+      fs.mkdirSync(out, { recursive: true }); fs.writeFileSync(path.join(out, 'inspection.json'), JSON.stringify(report));
+      return result({ ok: true });
+    } };
+  try {
+    const handlers = createUITools(ctx).handlers;
+    const b = JSON.parse((await handlers.apex_ui_inspect({})).content[0].text);
+    assert.equal(spawned, 1); assert.equal(b.ok, true);
+    assert.equal(b.records[0].bindings.unavailable, 1);
+    assert.equal(b.records[0].bindings.unmapped, 1);
+    assert.equal(b.records[0].advisoryTotal, 1);
+    assert.equal(b.records[0].settlement.stable, false);
+    assert.match(b.limitation, /not a UI pass/);
+    const busy = createUITools({ ...ctx, occupancyRefuse: () => result({ ok: false, error: 'lock_held' }) }).handlers;
+    assert.equal(JSON.parse((await busy.apex_ui_inspect({})).content[0].text).error, 'lock_held');
+    assert.equal(spawned, 1, 'busy check must prevent CLI spawn');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('saved UI diffs are browser free, reject incompatible or oversized evidence, and bound findings', async () => {
+  const { createUITools } = await import('../../tools/mcp/ui-tools.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apex-ui-diff-'));
+  const result = body => ({ content: [{ type: 'text', text: JSON.stringify(body) }] });
+  const ctx = { ROOT: dir, assertSafeOut: p => path.resolve(dir, p), mockMode: () => false,
+    toolResult: result, refuse: (error, message) => result({ ok: false, error, message }),
+    runSpawn: () => { throw new Error('must not spawn'); }, occupancyRefuse: () => { throw new Error('must not inspect browser'); } };
+  const handler = createUITools(ctx).handlers.apex_ui_diff;
+  const save = (name, value) => fs.writeFileSync(path.join(dir, name), JSON.stringify(value));
+  const report = { provenance: { screen: 'title' }, viewport: { width: 844, height: 390 }, controls: [{ selector: '#a', value: 'one', binding: { status: 'unmapped' } }], issues: [] };
+  try {
+    save('before', report); save('after', { ...report, controls: [{ ...report.controls[0], value: 'two' }], issues: Array(101).fill({ kind: 'test' }) });
+    let b = JSON.parse(handler({ before: 'before', after: 'after' }).content[0].text);
+    assert.equal(b.ok, true); assert.equal(b.browser, false);
+    assert.equal(b.comparisons[0].changedTotal, 1); assert.equal(b.comparisons[0].issues.length, 100); assert.equal(b.comparisons[0].totals.issues, 101);
+    save('after', { ...report, viewport: { width: 1280, height: 800 } });
+    assert.equal(JSON.parse(handler({ before: 'before', after: 'after' }).content[0].text).error, 'incompatible_inspections');
+    save('after', { invalid: true });
+    assert.equal(JSON.parse(handler({ before: 'before', after: 'after' }).content[0].text).error, 'bad_args');
+    fs.writeFileSync(path.join(dir, 'after'), 'x'.repeat(5 * 1024 * 1024 + 1));
+    assert.equal(JSON.parse(handler({ before: 'before', after: 'after' }).content[0].text).error, 'bad_args');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('named UI mission plans cannot supply actions or unbounded capture budgets', () => {
+  for (const args of [{ mission: 'anything' }, { mission: 'first-race', maxShots: 6 }, { mission: 'first-race', timeoutSeconds: 181 }, { mission: 'first-race', actions: [] }]) {
+    assert.equal(callCli('apex_ui_mission_plan', { ...args, dryRun: true }).status, 1);
+  }
+  const r = callCli('apex_ui_mission_plan', { mission: 'first-race', maxShots: 2, timeoutSeconds: 60, dryRun: true });
+  assert.equal(r.status, 0, r.stderr);
+  const b = JSON.parse(r.stdout);
+  assert.equal(b.planOnly, true); assert.equal(b.written, false);
+  assert.equal(b.limits.missions, 1); assert.equal(b.limits.maxShots, 2); assert.equal(b.limits.timeoutMs, 60000);
+  assert.ok(b.argv.includes('replay'));
+});
+
+test('garage plan uses canonical frame/paint/team selectors and explicit budgets without a browser', () => {
+  for (const args of [
+    { team: 'invented' }, { frames: ['unknown'] },
+    { frames: ['spineTop', 'spineSide'], maxShots: 1 },
+    { field: 'spineLogo', options: ['unknown'] },
+    { field: 'spineLogo' }, { maxShots: 17 }, { budgetSeconds: 181 },
+  ]) assert.equal(callCli('apex_garage_plan', { ...args, dryRun: true }).status, 1, JSON.stringify(args));
+  const r = callCli('apex_garage_plan', { team: 'mclaren', frames: ['spineTop'], maxShots: 1, budgetSeconds: 180 });
+  assert.equal(r.status, 0, r.stderr);
+  const b = JSON.parse(r.stdout);
+  assert.equal(b.browser, false); assert.equal(b.planOnly, true);
+  assert.equal(b.plan.shotCount, 1); assert.equal(b.plan.budget, 180);
+});
+
+test('canonical catalog and car filters integrate with the published MCP schemas', () => {
+  let r = callCli('apex_catalog', { section: 'parts', category: 'fuel', team: 'haas', limit: 2 });
+  assert.equal(r.status, 0, r.stderr);
+  let b = JSON.parse(r.stdout);
+  assert.equal(b.section, 'parts'); assert.ok(b.rows.length <= 2);
+  assert.ok(b.rows.every(row => row.category === 'fuel'));
+  for (const [name, args] of [
+    ['apex_car_audit', { check: 'ladder', categories: ['fuel'], team: 'haas' }],
+    ['apex_job_start', { kind: 'parts_sweep', categories: ['fuel'], team: 'haas' }],
+  ]) {
+    r = callCli(name, { ...args, dryRun: true });
+    assert.equal(r.status, 0, r.stderr);
+    b = JSON.parse(r.stdout);
+    assert.ok(b.argv.includes('--cats=fuel')); assert.ok(b.argv.includes('--team=haas'));
+    assert.equal(callCli(name, { ...args, team: 'invented', dryRun: true }).status, 1);
+  }
+});
+
+test('diagnostics registry exposes bounded capabilities and all four named job kinds', () => {
+  const r = callCli('apex_diagnostics', { op: 'capabilities' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout).jobs, ['memory_census', 'gpu_memory_census', 'renderer_probe', 'vm_lifecycle']);
+  for (const kind of ['memory_census', 'gpu_memory_census', 'renderer_probe', 'vm_lifecycle']) {
+    const run = callCli('apex_job_start', { kind, dryRun: true });
+    assert.equal(run.status, 0, run.stderr + run.stdout);
+    const plan = JSON.parse(run.stdout);
+    assert.equal(plan.kind, kind);
+    assert.ok(plan.argv.some(s => s.endsWith('/tools/perf/diagnostics.mjs')), 'persistent bounded supervisor owns execution');
+  }
+  assert.equal(callCli('apex_diagnostics', { op: 'run', kind: 'shell', dryRun: true }).status, 1);
 });
 
 test("track-session accepts the flags shot-survey passes (--output-root, --designs): apex_shot_survey died with 'unknown flag'", async () => {
