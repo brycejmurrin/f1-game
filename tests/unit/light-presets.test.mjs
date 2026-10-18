@@ -442,8 +442,8 @@ test("no preset sets a condition-gated knob where its gate is shut (dead entries
   // 12 overcast lightning and 44 dawn|wet nightAmbLift entries were deleted
   // 2026-10-04 (review-wgx-lighting item 16), and 70 per-weather sun offsets
   // with the track x tod sun (item 2).
-  const src = read("js/game.js");
-  assert.match(src, /if \(raining && _ltBase && LT\.lightning > 0\)/, "the lightning gate moved — re-check this test");
+  const src = read("js/race/storm-flash.js");
+  assert.match(src, /if \(raining && s\._ltBase && LT\.lightning > 0\)/, "the lightning gate moved — re-check this test");
   assert.match(read("js/lighting/atmosphere.js"), /if \(isNightSession\) _nightAmbientBand\(\);/, "the night-band gate moved — re-check this test");
   assert.match(read("js/lighting/profiles.js"), /const TOD_KEYED = new Set\(\["sunElev", "sunAzim"\]\);/, "the sun keying moved — re-check this test");
   const P = presets(), dead = [];

@@ -303,9 +303,9 @@ test("the AI look-ahead bank is |bank|, like the player's bankRoll", async () =>
 // keep ERS/X leftover on a descent.
 // ---------------------------------------------------------------------------
 test("shipped turn-in is snappier than the understeer-safe 0.89 / 0.7 pair", async () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(src, /let FRONT_GRIP = 0\.94/, "FRONT_GRIP default must stay 0.94 (was 0.89)");
-  assert.match(src, /let YAW_INERTIA = 0\.58/, "YAW_INERTIA default must stay 0.58 (was 0.7)");
+  const tune = readFileSync(join(ROOT, "js/physics/drive-tune.js"), "utf8");
+  assert.match(tune, /FRONT_GRIP: 0\.94/, "FRONT_GRIP default must stay 0.94 (was 0.89)");
+  assert.match(tune, /YAW_INERTIA: 0\.58/, "YAW_INERTIA default must stay 0.58 (was 0.7)");
   await startRace();
   const a = g.apex;
   const t = a.tuning();

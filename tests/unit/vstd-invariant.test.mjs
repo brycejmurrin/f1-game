@@ -258,7 +258,7 @@ const ALLOWED = [
   },
   {
     file: "js/game.js", expr: "c.speed < GRASS_V",
-    code: "function beachedAt(c) { return c.offroad && c.speed < GRASS_V * 0.6 * Math.max(PACE, 0.05) + 1.5 * Math.max(PACE, 0.05); }",
+    code: "function beachedAt(c) { return c.offroad && c.speed < GRASS_V * 0.6 * Math.max(driveTune.PACE, 0.05) + 1.5 * Math.max(driveTune.PACE, 0.05); }",
     why: "already PACE-scaled by hand (the A5 repair): GRASS_V is a pace-1 number and the bound multiplies it by max(PACE, 0.05) to clear the pace-scaled grass-drag floor",
   },
   {
