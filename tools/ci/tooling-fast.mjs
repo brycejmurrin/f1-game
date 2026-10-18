@@ -42,10 +42,14 @@
  * imports TOOLING_FAST_FILES). Keep package.json as `node tools/ci/tooling-fast.mjs`.
  */
 import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
+const { augmentNodeCompileCache } = require("../lib/node-compile-cache.cjs");
 import { changedPaths } from "../lib/changed-files.mjs";
 import { loadGroups } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
@@ -84,6 +88,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The orchestrator/worker contract (skill agent-fleet): host-correct PR
   // subscribe tools, one fleet block, the mandated launch fields. < 0.1 s.
   "tests/unit/agent-fleet.test.mjs",
+  // Generated agent index, hook page, coverage page and per-hook help. No browser.
+  "tests/unit/agent-indexes.test.mjs",
   "tests/unit/agent-surface.test.mjs",
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
@@ -210,6 +216,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-seat-rollover.test.mjs",
   "tests/unit/career-settle.test.mjs",
   "tests/unit/career-ui-lazy.test.mjs",
+  "tests/unit/carve-a-modules.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   // gpu-census.yml's real-GPU Verdict as functions (tools/gfx/census-verdict.mjs)
   // plus its plan gate (nightly skip, push request) executed on a scratch repo; < 1 s.
@@ -293,6 +300,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the 52 and never in SEASON; hostile stored input is repaired or dropped.
   // Runs the TRACK_VM engine over a stub store, ~3 s.
   "tests/unit/custom-tracks.test.mjs",
+  // COLOUR VISION palette: off matches today's tokens, Machado + CIEDE2000.
+  "tests/unit/cvd-palette.test.mjs",
   // The three suites the feature batches added. Each is pure rules over a
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.
@@ -710,6 +719,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/night-washout-presets.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
+  "tests/unit/node-compile-cache.test.mjs",
   "tests/unit/node-plan.test.mjs",
   "tests/unit/nontext-contrast.test.mjs",
   // Round-2: a slow/offline navigation to controller.html never gets the game shell; controller.html is precached as optional.
@@ -718,6 +728,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.
   "tests/unit/ot-ahead-scan-gate.test.mjs",
   "tests/unit/over-road-scan.test.mjs",
+  // Stream overlay v1 schema/diffs, transform painter, TV pass/battle/fastest cards, and staged root page.
+  "tests/unit/overlay-feed.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
   // PaceMath (js/race/pace-math.js): vTop/vStd/aStd + X-mode/ERS/gearHi pins from pre-extract goldens. ~0.1 s.
   "tests/unit/pace-math.test.mjs",
@@ -788,6 +800,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
   // pre-push command executes. It must be IN the gate to guard the gate.
   "tests/unit/prepush-gate-coverage.test.mjs",
+  // Nightly process dashboard reducer (tools/ci/process-dashboard.mjs): fixture
+  // percentiles, tier walls, push-to-live, time-ratchet skip. No network, < 0.2 s.
+  "tests/unit/process-dashboard.test.mjs",
   "tests/unit/profile-lib.test.mjs",
   "tests/unit/profile-mcp.test.mjs",
   // The branch-prune rule behind prune-branches.yml: merged-only, never an
@@ -828,6 +843,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/rain-cells.test.mjs",
   // Two PRs auto-raising one module's ceiling merge clean (ratchets.d fragments, #2291).
   "tests/unit/ratchet-merge-hotspot.test.mjs",
+  "tests/unit/ratchet-reason.test.mjs",
   "tests/unit/ratchets-fold-schedule.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
@@ -1476,7 +1492,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // test, e.g. tooling-fast-runner.test.mjs), it switches that child into
   // report-to-parent mode, where a failing or hung file exits 0 — measured:
   // both hang tests "passed" until this line. Each child is a fresh runner.
-  const childEnv = { ...process.env };
+  const childEnv = { ...process.env, ...augmentNodeCompileCache(process.env, ROOT) };
   delete childEnv.NODE_TEST_CONTEXT;
   const reap = (sig) => {
     for (const c of live) { try { process.kill(-c.pid, "SIGKILL"); } catch (_) { /* already gone */ } }

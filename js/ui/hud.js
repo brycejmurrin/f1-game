@@ -1068,7 +1068,11 @@ function fitHud() {
   // 2026-10-04). So each data-hl element's `hidden` is in the key — a list
   // re-read only on a full fit (HudLayout.apply invalidates it), a flag read
   // per tick, no layout.
-  const head = vpW() + "x" + vpH() + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
+  // Which dock buttons are showing is part of the key: showTouchControls hides/unhides BOOST, OT, AERO
+  // and the shifts after the first fit, and a taller column under a stale cap overflowed the top.
+  let dockSig = "";
+  for (const d of [_dockL, _dockR]) if (d) for (const b of d.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn")) dockSig += b.hidden ? "0" : "1";
+  const head = vpW() + "x" + vpH() + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "." + dockSig + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
   const tail = "|" + document.body.className;
   if (head + hlKey() + tail === _fitKey && --_fitWait > 0) {
     // Same-key backoff must not lock a short --dock-r-w while wrap-reverse
@@ -1163,7 +1167,7 @@ function fitHud() {
   // through, still retrying (bounded) in case it is merely not populated yet.
   let retry = !top;
   if (!top && !wide(els.minimap, zTopPub) && !wide(els.hudSectors, zTopPub) && !span(_hudBottom, zBotPub) && !wide(_dockL, zDockPub) && !wide(_dockR, zDockPub)) {
-    if (++_fitRetry <= 30) _fitKey = "";
+    if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; }   // nothing fitted: no --hud-fit-stamp yet
     return;
   }
   // The dock's painted floor (declared above): read past the nothing-laid-out retry, which a
@@ -1623,7 +1627,7 @@ function fitHud() {
       if (avail > 0 && denom > 0) capBot = Math.min(capBot, avail / denom);
     }
   }
-  if (retry) { if (++_fitRetry <= 30) _fitKey = ""; } else _fitRetry = 0;
+  if (retry) { if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; } } else _fitRetry = 0;   // pending: the dock cap is not in yet
   // EACH CAP IS COMPARED AGAINST THE SLIDER THAT DRIVES IT. The readout bands
   // ride --hud-scale; the touch dock rides --hud-btn-scale (BUTTON SIZE, its
   // own slider — css/overlays.css), which defaults to --hud-scale and is only

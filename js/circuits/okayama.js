@@ -27,6 +27,7 @@
     night: false,
     theme: "green",
     lengthKm: 3.704,
+    tyreSeverity: 0.84,  // Smooth Japanese permanent; low band
     baseHW: 7,
     sceneryCoordinates: "racing",
     terrainOuter: 120,

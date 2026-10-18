@@ -155,6 +155,9 @@
     "js/agent/agentview-corners.js",
     "js/agent/agentview.js",
     "js/agent/apex-net.js",
+    "js/agent/apex-cam.js",
+    "js/agent/apex-track.js",
+    "js/agent/apex-lobby.js",
     "js/agent/apex.js"
   ],
     LAZY_EDGES: [
@@ -164,6 +167,18 @@
     ],
     [
       "js/agent/apex-net.js",
+      "js/agent/apex.js"
+    ],
+    [
+      "js/agent/apex-cam.js",
+      "js/agent/apex.js"
+    ],
+    [
+      "js/agent/apex-track.js",
+      "js/agent/apex.js"
+    ],
+    [
+      "js/agent/apex-lobby.js",
       "js/agent/apex.js"
     ],
     [
@@ -487,6 +502,7 @@
     "js/net/lobby-roster.js",
     "js/net/snapshot.js",
     "js/net/session.js",
+    "js/net/spectate.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
     "js/input/phone-pad.js"
@@ -495,6 +511,10 @@
     [
       "js/net/snapshot.js",
       "js/net/session.js"
+    ],
+    [
+      "js/net/spectate.js",
+      "js/net/netplay.js"
     ],
     [
       "js/net/sdp.js",

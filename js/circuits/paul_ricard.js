@@ -23,6 +23,7 @@
     night: false,
     theme: "modern",
     lengthKm: 5.8,
+    tyreSeverity: 1.28,  // High summer track temps + abrasion (historic French GP Pirelli)
     baseHW: 8,
     sceneryCoordinates: "racing",
     ownPitStraight: true,   // its own 150 m main stand (scenery grandstandEx 0.005); the generic 7-box stand stood inside it

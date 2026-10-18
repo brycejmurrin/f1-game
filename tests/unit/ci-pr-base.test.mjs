@@ -78,7 +78,7 @@ test("Structural guards ignores ship ceiling raises but still rejects a PR raise
   });
   try {
     g("init", "-q", "-b", "main"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
-    for (const file of ["tools/ci/ci-pr-base.sh", "tools/check/ratchets.mjs"]) {
+    for (const file of ["tools/ci/ci-pr-base.sh", "tools/check/ratchets.mjs", "tools/hooks/ratchet-reason.mjs"]) {
       fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
       fs.copyFileSync(path.join(ROOT, file), path.join(dir, file));
     }

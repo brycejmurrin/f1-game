@@ -187,6 +187,11 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
         window.__apex.park(0.1);
         window.__apex.jump(0.1, 50, 0);
         window.__apex.snapCam();
+        // The mode is already published (the CAM button reads HOOD) but the
+        // next SwiftShader frame can hold the main thread longer than this
+        // wait's budget, so the predicate never runs (#2741, landscape 3/3).
+        // headless stops that frame; the wait then reads the published mode.
+        window.__apex.headless(true);
       });
       await page.waitForFunction(() => window.__apex.camera().mode === "hood", null, { polling: 100, timeout: 5_000 });
       await shot(page, `${orient}-12-hood-cam`);
@@ -284,6 +289,8 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
         window.__apex.park(0.1);
         window.__apex.jump(0.1, 50, 0);
         window.__apex.snapCam();
+        // Same starvation as the hood shot (#2741): freeze before the mode wait.
+        window.__apex.headless(true);
       });
       await page.waitForFunction(() => window.__apex.camera().mode === "cockpit", null, { polling: 100, timeout: 5_000 });
       await shot(page, `${orient}-19-cockpit-cam`);

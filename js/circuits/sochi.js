@@ -16,6 +16,7 @@
     night: false,
     theme: "modern",
     lengthKm: 5.8,
+    tyreSeverity: 0.86,  // Smooth Olympic park asphalt; low permanent band
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     terrainOuter: 100,
