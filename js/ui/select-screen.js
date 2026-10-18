@@ -490,22 +490,13 @@ function setTrackFilter(id, focus, keepDaily) {
   // Explicit choices leave a custom circuit too. The passive-entry fallback
   // keeps a designer's custom pick visible, but must not override this click.
   snapTrackToFilter(id);
-  // The chip rebuild is deferred through view transitions; the hero must not
-  // keep describing the circuit the filter just hid (FINDINGS tracks-ui #1).
-  updateTrackPreview();
-  vt(() => {
-    buildSelect();
-    // THE BAR IS NOT INSIDE THE STRIP. mountToolbar puts it on the SHELF, as a
-    // sibling of #sel-tracks and not a child, precisely so it does not scroll
-    // sideways with the tiles — and this read searched the strip, found
-    // nothing, and the `?.` swallowed it. Every arrow press therefore rebuilt
-    // the bar and left focus on <body>: the filter changed, the keyboard user
-    // lost their place, and the next arrow key had nothing to act on. Measured
-    // before the fix: aria-pressed moved to "season" while document.activeElement
-    // was BODY. Red since the assertion was written (menu-keyboard.spec.js,
-    // "circuit filter tabs ... expose distinct semantics").
-    if (focus) mountedToolbar()?.querySelector('[data-filter="' + id + '"]')?.focus();
-  });
+  updateTrackPreview();   // the hero must not keep describing the circuit the filter just hid
+  // IN PLACE: a view transition crossfaded the whole page and the bar was
+  // rebuilt (the flash on ALL/SEASON/CLASSICS/MY CIRCUITS), and the build
+  // restarted for the snapped circuit. Tiles swap in one task; the bar keeps
+  // its buttons (so focus stays) and RACE SETUP prepares the world.
+  buildSelect({ inPlace: true });
+  if (focus) mountedToolbar()?.querySelector('[data-filter="' + id + '"]')?.focus();
 }
 
 function trackFilterBar() {
@@ -668,7 +659,8 @@ function revealActiveTile() {
   if (on && on.scrollIntoView) on.scrollIntoView({ inline: "center", block: "nearest" });
 }
 
-function buildSelect() {
+function buildSelect(opts) {
+  const inPlace = !!(opts && opts.inPlace);
   // ONE QUESTION: WHERE. WHO and WHAT are chosen in the garage via YOUR CAR.
   // NEXT opens race settings. The only thing that differs between modes here
   // is what the screen is called and what the foot button promises next.
@@ -742,7 +734,15 @@ function buildSelect() {
     }
     updateTrackPreview();       // …which also writes the "Round n of N" caption
   } else {
-    mountToolbar(trackFilterBar());
+    if (inPlace && mountedToolbar() && !mountedToolbar().querySelector("#sel-daily")) {   // the daily chip carries state the loop below does not
+      const vis = visibleTrackFilter();
+      mountedToolbar().querySelectorAll("[data-filter]").forEach((b) => {
+        const on = b.dataset.filter === vis;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+        b.tabIndex = on ? 0 : -1;
+      });
+    } else mountToolbar(trackFilterBar());
     // Two groups: the championship calendar, then the retired circuits. Only the
     // divider changes — every tile is a normal, selectable circuit either way.
     // Filter chips (ALL / SEASON / CLASSICS) hide a group rather than renumber
@@ -813,7 +813,7 @@ function buildSelect() {
     updateTrackPreview();
   }
   // Prepare the initial/current tile too, even when no tile is clicked.
-  if (!seasonComplete) scheduleFlybyTrack(true);
+  if (!seasonComplete && !inPlace) scheduleFlybyTrack(true);
   // buildSelect runs while #select is still hidden at every entry point, so
   // the synchronous preview pass can only draw against placeholder geometry.
   // Refit after two frames: the first exposes and classifies the sheet, the

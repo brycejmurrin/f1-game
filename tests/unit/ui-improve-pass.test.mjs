@@ -408,7 +408,7 @@ test("TEAM PICKER: opens on the current team, and a pick returns focus to the re
   assert.equal(h.dom.document.activeElement, card, "focus is on the NEW #cs-team-card, not <body>");
 });
 
-test("circuit filter chip click/Enter keeps focus on the rebuilt active chip", () => {
+test("circuit filter chip click/Enter keeps focus on the active chip", () => {
   // Bug hunt 2026-10-06: ArrowRight restored focus after setTrackFilter rebuild;
   // onclick (Enter/Space activate <button> via click) passed focus:false and
   // left document.activeElement on <body>, killing the filter roving tabindex.
@@ -421,9 +421,9 @@ test("circuit filter chip click/Enter keeps focus on the rebuilt active chip", (
   season.onclick({ stopPropagation() {}, detail: 0 });
   assert.equal(JSON.parse(h.data.get("trackFilter")), "season");
   const rebuilt = chip("season");
-  assert.ok(rebuilt, "bar rebuilt with season chip");
-  assert.notEqual(rebuilt, season, "the pressed chip node was replaced");
-  assert.equal(h.dom.document.activeElement, rebuilt, "focus lands on the new season chip");
+  assert.ok(rebuilt, "season chip still exists");
+  assert.equal(rebuilt, season, "the bar is updated in place: the pressed chip node is kept");
+  assert.equal(h.dom.document.activeElement, rebuilt, "focus stays on the season chip");
   assert.equal(rebuilt.getAttribute("aria-pressed"), "true");
   assert.equal(rebuilt.tabIndex, 0);
 });
