@@ -1024,7 +1024,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
   let surfaceId = i32(vMatId + 0.5);
-  let classifiedCar = surfaceId >= 20 && surfaceId <= 37;
+  let classifiedCar = surfaceId >= 20 && surfaceId <= 40;
   // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (see js/render/glx/shaders/glsl-lit.js); the grain / saturation / rim
   // are layered in the albedo and env blocks (CarMaterialShade.FLAKE / .CANDY).
   let flakeSurface = surfaceId == 34;
@@ -1043,7 +1043,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // (keeps clearcoat + env lobe) but metallic and nearly smooth.
   // 36 = TINTED CHROME: mirror response with the lacquer reflection tinted by the livery hue (CarMaterialShade.TINTED).
   let tintedSurface = surfaceId == 36;
-  let mirrorSurface = surfaceId == 27 || tintedSurface;
+  // 40 = GOLD PLATE: chrome's mirror response with a FIXED warm gold albedo and hue, livery ignored (CarMaterialShade.GOLDPLATE).
+  // 38 = FORGED carbon, 39 = GUNMETAL (mirrors js/render/glx/shaders/glsl-lit.js).
+  let goldSurface = surfaceId == 40;
+  let mirrorSurface = surfaceId == 27 || tintedSurface || goldSurface;
+  let forgedSurface = surfaceId == 38;
+  let gunSurface = surfaceId == 39;
   // Three more livery finishes, mirroring js/render/glx/shaders/glsl-lit.js. A finish
   // costs a SURFACE ID, not a uniform: car3d.js FINISH_SURFACE remaps a painted
   // vertex. Carbon needs no id — 21 already exists and the finish points at it.
@@ -1065,10 +1070,21 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
     wvT = vec2<f32>(cos(wv.x) * sin(wv.y), sin(wv.x) * cos(wv.y)) * wvFade;
   }
+  // FORGED CARBON (38): irregular chips (max of two object-space cell hashes, one grid skewed), faded to the mean 2/3
+  // over 10-20 m like the weave (CarMaterialShade.FORGED; glsl-lit.js).
+  var fgM = 0.667;
+  if (forgedSurface) {
+    let fgF = clamp(1.0 - (vDist - 10.0) / 10.0, 0.0, 1.0);
+    if (fgF > 0.0) {
+      let fgA = floor(in.objPos * 60.0);
+      let fgB = floor(vec3<f32>(in.objPos.x + in.objPos.z, in.objPos.y - in.objPos.x, in.objPos.z + in.objPos.y) * 95.0);
+      fgM = mix(0.667, max(hash21(fgA.xy + fgA.z * 19.7), hash21(fgB.xz + fgB.y * 7.3)), fgF);
+    }
+  }
   // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
   // clearcoat, but a DIELECTRIC env response, not chrome — see baseRefl below.
   let visorSurface = surfaceId == 32;
-  let paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface;
+  let paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface || forgedSurface || gunSurface;
   if (classifiedCar) {
     if (paintLike) {
       carPaint = D.mat1.w;
@@ -1077,6 +1093,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       if (mirrorSurface) { clearcoat = max(D.mat1.z, 0.85); }
       if (iriSurface) { clearcoat = max(D.mat1.z, 0.70); }
       if (satinMetalSurface) { clearcoat = min(D.mat1.z, 0.25); }
+      if (forgedSurface) { clearcoat = clamp(D.mat1.z, 0.40, 0.60); }
+      if (gunSurface) { clearcoat = min(D.mat1.z, 0.30); }
     } else {
       carPaint = 0.0;
       clearcoat = select(0.0, D.mat1.z * 0.45, glassSurface || visorSurface);
@@ -1161,6 +1179,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (satinMetalSurface) { metalness = max(D.mat0.w, 0.60); }
     if (iriSurface) { metalness = max(D.mat0.w, 0.25); }
     if (matteSurface) { metalness = 0.0; }
+    if (forgedSurface) { metalness = 0.08; specular = 0.48; }
+    if (gunSurface) { metalness = max(D.mat0.w, 0.85); specular = 0.90; }
     if (rubberSurface) { specular = 0.18; }
     if (sidewallSurface) { specular = 0.35; }
     if (metalSurface || mirrorSurface) { specular = 1.0; }
@@ -1181,6 +1201,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (matteSurface) { rough = max(rough, 0.92); }
     if (satinMetalSurface) { rough = clamp(rough, 0.24, 0.40); }
     if (iriSurface) { rough = min(rough, 0.22); }
+    if (forgedSurface) { rough = clamp(rough, 0.28, 0.42) + (fgM - 0.667) * 0.20; }
+    if (gunSurface) { rough = clamp(rough, 0.16, 0.28); }
   }
   // [Block 1b] Procedural ground ALBEDO grain (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js):
   // coarse+fine value-noise grain + repair-patch tint/roughness + sparse crack lines.
@@ -1233,6 +1255,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (candySurface) {
     let cdL = dot(albedo, vec3<f32>(0.299, 0.587, 0.114));
     albedo = max(mix(vec3<f32>(cdL), albedo, vec3<f32>(1.35)), vec3<f32>(0.0)) * 0.62;
+  }
+  // FORGED (38) resin + chips, GUNMETAL (39) dark anodised livery hue, GOLD PLATE (40) fixed gold (glsl-lit.js).
+  if (forgedSurface) {
+    albedo = mix(albedo * 0.10 + vec3<f32>(0.026, 0.027, 0.03), albedo * 0.22, vec3<f32>(0.20)) * (1.0 + (fgM - 0.667) * 0.90);
+  } else if (gunSurface) {
+    albedo = mix(vec3<f32>(0.2, 0.205, 0.22), albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04) * 0.24, vec3<f32>(0.40));
+  } else if (goldSurface) {
+    albedo = vec3<f32>(0.83, 0.65, 0.23);
   }
   var chamFlip = 0.0;
   var chamHue = vec3<f32>(1.0);
@@ -1663,6 +1693,8 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     var addCC = envCC * envW;
     // TINTED CHROME: the reflection takes the livery hue (albedo / its brightest channel, 88 % mixed in).
     if (tintedSurface) { addCC = addCC * mix(vec3<f32>(1.0), albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04), vec3<f32>(0.88)); }
+    // GOLD PLATE: the reflection takes the fixed gold hue (not the livery's).
+    if (goldSurface) { addCC = addCC * mix(vec3<f32>(1.0), vec3<f32>(1.0, 0.78, 0.27), vec3<f32>(0.88)); }
     // CANDY: the lacquer is tinted (55 %) and the Fresnel rim glows in the saturated livery hue.
     if (candySurface) {
       let cdHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
@@ -1743,7 +1775,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // the block above drops with (1 - metalness) — env x Schlick(NoV, F0 = albedo)
   // x metalness; sky/ground split + live probe exactly as the lacquer's envCC
   // (same -y probe read), x ccTrans under a lacquer. No sun disc: GGX owns it.
-  if (metalSurface || satinMetalSurface || mirrorSurface) {
+  if (metalSurface || satinMetalSurface || mirrorSurface || gunSurface) {
     let Rm = reflect(-V, N);
     let skyM = mix(F.skyHorizon.xyz * 1.2, F.skyZenith.xyz, sqrt(max(Rm.y, 0.0)));
     var envMet = mix(F.ambGround.xyz * 0.6, skyM, smoothstep(-0.12, 0.30, Rm.y));
@@ -1753,7 +1785,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     }
     var metAdd = envMet * F_Schlick(NoV, albedo, 1.0 - rough * 0.5) * (metalness * (1.0 - rough * 0.7) * ccTrans);
     // Dark metals (halo titanium, exhaust) — CarMaterialShade.METAL.darkEnvBoost.
-    if (metalSurface) {
+    if (metalSurface || gunSurface) {   // GUNMETAL reads on a phone through this same dark-metal boost
       let metLum = dot(albedo, vec3<f32>(0.299, 0.587, 0.114));
       metAdd = metAdd * (1.0 + (1.0 - clamp(metLum * 4.0, 0.0, 1.0)) * 0.32);
     }
@@ -1761,6 +1793,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   }
   // TINTED CHROME / CHAMELEON: the white lit terms take the livery hue (mirrors glsl-lit.js).
   if (tintedSurface) { color = color * (albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04)); }
+  if (goldSurface) { color = color * vec3<f32>(1.0, 0.78, 0.27); }   // GOLD PLATE: lit terms take the fixed gold hue
   if (chamSurface) { color = color * mix(chamHue, vec3<f32>(0.25, 0.55, 1.0), vec3<f32>(chamFlip * 0.90)); }
 
   // Sky rim / fresnel (GLX js/render/glx/shaders/glsl-lit.js): grazing-angle atmospheric

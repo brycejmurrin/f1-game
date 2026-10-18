@@ -972,10 +972,10 @@ void main() {
   // the analytic env mirror below — orange-peel/flake live UNDER the clearcoat,
   // they must not roughen the mirror shell (that's what read as "ghostly" before).
   vec3 Ngeo = N;
-  // Car3D surface ids occupy 20..37, above TrackGeom's 0..15 material range.
+  // Car3D surface ids occupy 20..40, above TrackGeom's 0..15 material range.
   // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
   int surfaceId = int(vMat + 0.5);
-  bool classifiedCar = surfaceId >= 20 && surfaceId <= 37;
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 40;
   // 34 = METALLIC FLAKE and 35 = CANDY (FINISH_SURFACE.flake / .candy): both are PAINT responses (gloss
   // clearcoat, env mirror, sparkle), so paintSurface includes them; the flake grain and the candy
   // saturation / rim / tinted lacquer are layered on below (CarMaterialShade.FLAKE / .CANDY).
@@ -998,7 +998,12 @@ void main() {
   // 36 = TINTED CHROME (FINISH_SURFACE.tinted): the same mirror response as 27, but the lacquer
   // env reflection below is multiplied by the livery hue so a red car stays red (CarMaterialShade.TINTED).
   bool tintedSurface = surfaceId == 36;
-  bool mirrorSurface = surfaceId == 27 || tintedSurface;
+  // 40 = GOLD PLATE (FINISH_SURFACE.goldplate): chrome's mirror response with a FIXED warm gold albedo and hue that
+  // ignore the livery colour (CarMaterialShade.GOLDPLATE). 38 = FORGED carbon, 39 = GUNMETAL: see below.
+  bool goldSurface = surfaceId == 40;
+  bool mirrorSurface = surfaceId == 27 || tintedSurface || goldSurface;
+  bool forgedSurface = surfaceId == 38;   // chopped-carbon chips in dark resin under a satin-gloss lacquer
+  bool gunSurface = surfaceId == 39;      // anodised dark metal: the livery hue as a dark tint on a metal lobe
   // Three more livery finishes, on the SAME mechanism the existing ones use:
   // car3d.js FINISH_SURFACE remaps a painted vertex's id, so a finish costs a
   // surface id here rather than a new uniform. CARBON needs no id at all — 21
@@ -1013,7 +1018,7 @@ void main() {
   // THE HELMET VISOR is glass-like in roughness and clearcoat but NOT a chrome
   // mirror: see the baseRefl split in the env block below.
   bool visorSurface = surfaceId == 32;
-  bool paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface;
+  bool paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface || forgedSurface || gunSurface;
   // CARBON WEAVE — the bare finish (31) and the real carbon parts (21: floor,
   // wings, halo). A 3.3 cm cross-hatch, faded to its mean over 10-20 m so it
   // cannot moire at range while garage + near-track keep the twill readable
@@ -1028,11 +1033,25 @@ void main() {
     weave = 0.5 + 0.5 * sin(wv.x) * sin(wv.y) * wvFade;
     wvT = vec2(cos(wv.x) * sin(wv.y), sin(wv.x) * cos(wv.y)) * wvFade;
   }
+  // FORGED CARBON (38): irregular chips, not the woven twill of 31 — the max of two object-space cell hashes, one grid
+  // skewed, so the chip edges never line up. fgM is the chip value faded to its mean (2/3) over 10-20 m like the weave,
+  // so the far car is flat resin and nothing moires (CarMaterialShade.FORGED). Albedo and roughness read it below.
+  float fgM = 0.667;
+  if (forgedSurface) {
+    float fgF = clamp(1.0 - (vDist - 10.0) / 10.0, 0.0, 1.0);
+    if (fgF > 0.0) {
+      vec3 fgA = floor(vObjPos * 60.0);
+      vec3 fgB = floor(vec3(vObjPos.x + vObjPos.z, vObjPos.y - vObjPos.x, vObjPos.z + vObjPos.y) * 95.0);
+      fgM = mix(0.667, max(hash21(fgA.xy + fgA.z * 19.7), hash21(fgB.xz + fgB.y * 7.3)), fgF);
+    }
+  }
   float carPaint = classifiedCar ? (paintLike ? uCarPaint : 0.0) : uCarPaint;
   // Carbon parts carry a THIN lacquer (min 0.30): F1 carbon is clear-coated, so
   // the weave sits under a crisp sun/lamp glint. No env mirror (carPaint 0).
+  // FORGED keeps a satin-gloss lacquer (0.40-0.60) with the env mirror; GUNMETAL an anodised film (<= 0.30).
   float clearcoat = classifiedCar
-    ? (candySurface ? max(uClearcoat, 0.90)
+    ? (forgedSurface ? clamp(uClearcoat, 0.40, 0.60) : gunSurface ? min(uClearcoat, 0.30)
+      : candySurface ? max(uClearcoat, 0.90)
       : paintSurface ? uClearcoat
       : (mirrorSurface ? max(uClearcoat, 0.85)
       : (iriSurface ? max(uClearcoat, 0.70)
@@ -1052,7 +1071,7 @@ void main() {
   // (1.0 - metalness) factors on diffuse and on envAdd). Scoped to paintSurface:
   // rubber, glass, emissive and panel stay dielectric at 0.0.
   float metalness = classifiedCar
-    ? (metalSurface ? max(uMetalness, 0.82)
+    ? (forgedSurface ? 0.08 : gunSurface ? max(uMetalness, 0.85) : metalSurface ? max(uMetalness, 0.82)
       : (mirrorSurface ? max(uMetalness, 0.55)
       : (satinMetalSurface ? max(uMetalness, 0.60)
       : (matteSurface ? 0.0
@@ -1060,7 +1079,7 @@ void main() {
       : ((carbonSurface || carbonFinish) ? 0.08 : (paintSurface ? (flakeSurface ? max(uMetalness, 0.35) : uMetalness) : 0.0)))))))
     : uMetalness;
   float specular = classifiedCar
-    ? (rubberSurface ? 0.18 : sidewallSurface ? 0.35 : ((metalSurface || mirrorSurface) ? 1.0
+    ? (forgedSurface ? 0.48 : gunSurface ? 0.90 : rubberSurface ? 0.18 : sidewallSurface ? 0.35 : ((metalSurface || mirrorSurface) ? 1.0
       : (satinMetalSurface ? 0.82 : (matteSurface ? 0.11
       : ((carbonSurface || carbonFinish) ? 0.48 : (panelSurface ? 0.35 : uSpecular))))))
     : uSpecular;
@@ -1199,6 +1218,15 @@ void main() {
     float cdL = dot(albedo, vec3(0.299, 0.587, 0.114));
     albedo = max(mix(vec3(cdL), albedo, 1.35), vec3(0.0)) * 0.62;
   }
+  // FORGED (38): crush the livery to dark resin (a trace of team tint kept), then the chips lighten/darken it.
+  // GUNMETAL (39): a dark anodised grey carrying the livery hue. GOLD PLATE (40): a fixed warm gold, livery ignored.
+  if (forgedSurface) {
+    albedo = mix(albedo * 0.10 + vec3(0.026, 0.027, 0.03), albedo * 0.22, 0.20) * (1.0 + (fgM - 0.667) * 0.90);
+  } else if (gunSurface) {
+    albedo = mix(vec3(0.2, 0.205, 0.22), albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04) * 0.24, 0.40);
+  } else if (goldSurface) {
+    albedo = vec3(0.83, 0.65, 0.23);
+  }
   float chamFlip = 0.0; vec3 chamHue = vec3(1.0);
   if (chamSurface) {
     // CHAMELEON keeps the team hue face-on and flips toward a fixed blue at grazing angles. The flip is applied to the LIT colour
@@ -1227,6 +1255,8 @@ void main() {
   if (matteSurface) rough = max(rough, 0.92);
   if (satinMetalSurface) rough = clamp(rough, 0.24, 0.40);
   if (iriSurface) rough = min(rough, 0.22);
+  if (forgedSurface) rough = clamp(rough, 0.28, 0.42) + (fgM - 0.667) * 0.20;   // each chip catches the light differently
+  if (gunSurface) rough = clamp(rough, 0.16, 0.28);   // between chrome 27 (<= 0.09) and brushed 29 (0.24-0.40)
   // Repair patches read glossier: fold the patch mask into roughness (max
   // +-0.08) before the specular AA below widens it.
   if (uDetail > 0.0) rough = clamp(rough + (patchM - 0.5) * 0.16 * min(uDetail * 4.0, 1.0), 0.04, 1.0);
@@ -1762,6 +1792,8 @@ void main() {
     vec3 addCC = envCC * envW;
     // TINTED CHROME: the reflection takes the livery hue (albedo / its brightest channel, 88 % mixed in).
     if (tintedSurface) addCC *= mix(vec3(1.0), albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04), 0.88);
+    // GOLD PLATE: the reflection takes the fixed gold hue (not the livery's).
+    if (goldSurface) addCC *= mix(vec3(1.0), vec3(1.0, 0.78, 0.27), 0.88);
     // CANDY: the lacquer is tinted (55 %) and the Fresnel rim glows in the saturated livery hue.
     if (candySurface) {
       vec3 cdHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
@@ -1874,7 +1906,7 @@ void main() {
   // own colour: env x Schlick(NoV, F0 = albedo), x metalness. Sky/ground split
   // and live probe exactly as the clearcoat mirror builds envCC (no sun disc —
   // the GGX lobe owns the sun); under a lacquer only ccTrans reaches the metal.
-  if (metalSurface || satinMetalSurface || mirrorSurface) {
+  if (metalSurface || satinMetalSurface || mirrorSurface || gunSurface) {
     vec3 Rm = reflect(-V, N);
     vec3 skyM = mix(uSkyHorizon * 1.2, uSkyZenith, sqrt(max(Rm.y, 0.0)));
     vec3 envMet = mix(uAmbGround * 0.6, skyM, smoothstep(-0.12, 0.30, Rm.y));
@@ -1882,7 +1914,7 @@ void main() {
     vec3 metAdd = envMet * F_Schlick(NoV, albedo, 1.0 - rough * 0.5) * (metalness * (1.0 - rough * 0.7) * ccTrans);
     // Dark metals (halo titanium, exhaust) need more env punch at garage range;
     // bright hubs stay near 1× (CarMaterialShade.METAL.darkEnvBoost).
-    if (metalSurface) {
+    if (metalSurface || gunSurface) {   // GUNMETAL reads on a phone through this same dark-metal boost
       float metLum = dot(albedo, vec3(0.299, 0.587, 0.114));
       metAdd *= 1.0 + (1.0 - clamp(metLum * 4.0, 0.0, 1.0)) * 0.32;
     }
@@ -1891,6 +1923,7 @@ void main() {
   // TINTED CHROME: every white term above (sun glint, sky rim, lacquer and metal env) takes the livery hue, so the coat reflects in the
   // car's colour instead of washing to pink (CarMaterialShade.TINTED.finalTint).
   if (tintedSurface) color *= albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
+  if (goldSurface) color *= vec3(1.0, 0.78, 0.27);   // GOLD PLATE: the white lit terms take the fixed gold hue
   if (chamSurface) color *= mix(chamHue, vec3(0.25, 0.55, 1.0), chamFlip * 0.90);
 
   // Sky rim / fresnel: a subtle atmospheric brightening at grazing angles,

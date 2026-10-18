@@ -404,11 +404,15 @@ const ShadowPass = (function () {
         // disarms by making no call at all, and keep() declines until the pass has
         // run at least once (GLX and WGX do not prime these maps: an unwritten one
         // reads fully shadowed).
-        const _carShadowWanted = G.gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 &&
+        // A present Begin hook can still be a no-op (mobile maps, or a failed target).
+        // Stop before resolving silhouette meshes or packing casters when no map consumes them.
+        // Undefined preserves older renderer/stub contracts; all shipped backends expose live getters.
+        const _carMapWanted = G.gfx.carShadowEnabled !== false && !(LT.shadowStr <= 0);
+        const _carShadowWanted = _carMapWanted && G.gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 &&
             (_hasLivePlayerShadow || _shadowCount > 0) && G.player && G.state !== "menu" &&
             (_shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01));
         if (_carShadowWanted && !_carShadowFrame && G.gfx.carShadowKeep && !_carMapEmpty) G.gfx.carShadowKeep();
-        if (G.gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && _carShadowFrame &&
+        if (_carMapWanted && G.gfx.carShadowBegin && LT.carShadow && PerfGov.tier() < 3 && _carShadowFrame &&
             (_hasLivePlayerShadow || _shadowCount > 0) && G.player && G.state !== "menu") {
           const _ck = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
           // Same clear-night MOON SHADOWS relaxation as the prop gate above: with
@@ -505,7 +509,7 @@ const ShadowPass = (function () {
       // one-frame lag as the car sun-shadow pass) + the props/city chunks inside
       // the lamp frustum (barriers, grandstands, buildings). Desktop only — all
       // three backends expose lampShadowBegin; the mobile tier never creates the map.
-      if (G.gfx.lampShadowBegin && LT.lampShadow && PerfGov.tier() < 2 && frame.lights && !G._studioRig &&
+      if (G.gfx.lampShadowEnabled !== false && G.gfx.lampShadowBegin && LT.lampShadow && PerfGov.tier() < 2 && frame.lights && !G._studioRig &&
           G.player && G.state !== "menu") {
         // Gate on the KEY being dim (true night): by day/dusk the sun owns the
         // shadows, and a daytime-floods pool shadow would fight the sun's.

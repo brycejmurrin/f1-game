@@ -19,7 +19,7 @@
 // are summed per key per frame and averaged over the measured frames.
 //
 //   node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object] [--json PATH]
-//        [--camera chase|helmet|...]   (a __apex camera mode name; default: leave the race default)
+//        [--camera chase|helmet|...] [--park] [--tune knob=value]...
 //
 // Output: one table row per pass key: frames it ran in (of N), mean draw calls and triangles per frame it
 // ran, and per game frame. Then `= pass-census {…}` with the totals.
@@ -31,9 +31,11 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
-exitIfHelp(argv, `usage: node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object] [--camera MODE] [--json PATH]
+exitIfHelp(argv, `usage: node tools/gfx/pass-census.mjs [track=monaco] [--frames 120] [--warm 60] [--real-link] [--mobile] [--by-object] [--camera MODE] [--park] [--tune knob=value]... [--json PATH]
   --by-object attributes each pass's triangles to object groups (the mesh's userData flags: tlxLgRoad, tlxBatch, ...), for the mirror and main passes.
   --mobile forces the phone tier (apex26.forceMobileTier=1: mirror "lite" rung etc.).
+  --park freezes the normal camera at 10% of the track, pins tier/resolution, and preserves the real fog/distance budgets (free cameras disable them).
+  --tune applies a numeric lighting knob after staging; repeatable (e.g. --tune fogDensityMul=3.625).
   Draw calls and triangles per render pass per frame on TLX's WebGL2 path (exact counts, not timings).
   Link calls are stubbed unless --real-link, so the scene reaches steady state quickly under SwiftShader.`);
 
@@ -44,7 +46,7 @@ function flag(name, dflt) {
   }
   return dflt;
 }
-const VALUED = new Set(["--frames", "--warm", "--json", "--camera"]);
+const VALUED = new Set(["--frames", "--warm", "--json", "--camera", "--tune"]);
 const track = argv.filter((a, i) => !a.startsWith("--") && !VALUED.has(argv[i - 1]))[0] || "monaco";
 const FRAMES = Math.max(10, +flag("--frames", 120) || 120);
 const WARM = Math.max(0, +flag("--warm", 60) || 60);
@@ -52,6 +54,14 @@ const REAL_LINK = argv.includes("--real-link");
 const MOBILE = argv.includes("--mobile");
 const BY_OBJECT = argv.includes("--by-object");
 const CAMERA = flag("--camera", null);
+const PARK = argv.includes("--park");
+const TUNES = {};
+for (let i = 0; i < argv.length; i++) if (argv[i] === "--tune" || argv[i].startsWith("--tune=")) {
+  const value = argv[i] === "--tune" ? argv[++i] : argv[i].slice(7);
+  const pair = /^(\w+)=(-?(?:\d+(?:\.\d*)?|\.\d+))$/.exec(value || "");
+  if (!pair || !Number.isFinite(+pair[2])) throw new Error("--tune requires knob=number");
+  TUNES[pair[1]] = +pair[2];
+}
 const JSON_OUT = flag("--json", null);
 const WAIT_MS = Math.max(60000, +process.env.APEX_PROFILE_WAIT_MS || 60000);
 
@@ -144,6 +154,12 @@ async function main() {
       const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
       for (let i = 0; i < warm; i++) { A.setInput({ throttle: true, steer: 0.35 * Math.sin(i / 25) }); await raf(); }
     }, WARM);
+    if (PARK || Object.keys(TUNES).length) await page.evaluate(async ({ park, tunes }) => {
+      const A = window.__apex;
+      if (park) { A.govHold(true); A.renderScale(1); A.jump(0.1, 0, 0); A.snapCam(); A.freeze(true); }
+      if (Object.keys(tunes).length) A.lightTune(tunes);
+      for (let i = 0; i < 5; i++) await new Promise(r => requestAnimationFrame(r));
+    }, { park: PARK, tunes: TUNES });
     await page.evaluate(installWrap);
     const rows = await page.evaluate(async ({ n, by }) => {
       const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
@@ -180,7 +196,8 @@ async function main() {
       if (!byObj.length) console.log("(no renderObject calls seen: this three build does not expose renderer.renderObject)");
     }
     const summary = { track, frames: rows.frames, backend: backend.api, forceWebGL: backend.forceWebGL,
-      stubbedLinks: !REAL_LINK, mobileTier: MOBILE, callsPerFrame: +total.calls.toFixed(1), trisPerFrame: total.tris, pageErrors: errors.length };
+      stubbedLinks: !REAL_LINK, mobileTier: MOBILE, parked: PARK, tunes: TUNES,
+      callsPerFrame: +total.calls.toFixed(1), trisPerFrame: total.tris, pageErrors: errors.length };
     console.log("= pass-census " + JSON.stringify(summary));
     if (JSON_OUT) { mkdirSync(dirname(JSON_OUT), { recursive: true }); writeFileSync(JSON_OUT, JSON.stringify({ summary, table, byObject: byObj, errors }, null, 2)); }
     if (!table.length) { console.error("no render() calls recorded"); process.exitCode = 1; }

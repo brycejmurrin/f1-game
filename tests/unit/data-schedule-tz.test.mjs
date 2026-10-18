@@ -176,3 +176,51 @@ test("countdown is stable at boundaries and never goes negative", () => {
   assert.equal(S.countdown(0), "STARTED");
   assert.equal(S.countdown(-1), "STARTED");
 });
+
+
+test("countdown ownership retires document observers and timers, including queued deliveries", async () => {
+  const observers = new Set(), timers = new Set(), microtasks = [];
+  class Observer {
+    constructor(fn) { this.fn = fn; }
+    observe() { observers.add(this); }
+    disconnect() { observers.delete(this); }
+  }
+  function el(tag, cls, text) {
+    return {tag, cls, text, attrs: {}, isConnected: false, parentElement: null, children: [],
+      addEventListener() {}, removeAttribute(k) { delete this.attrs[k]; },
+      setAttribute(k, value) { this.attrs[k] = value; },
+      appendChild(child) { child.parentElement = this; this.children.push(child); return child; },
+      classList: {add() {}}, scrollWidth: 0, clientWidth: 0};
+  }
+  const context = vm.createContext({MutationObserver: Observer,
+    document: {documentElement: {}, querySelector: () => null},
+    queueMicrotask: fn => microtasks.push(fn),
+    setInterval: fn => { timers.add(fn); return fn; }, clearInterval: id => timers.delete(id),
+    F1API: {schedule: () => Promise.resolve([{...VEGAS, date: "2099-11-22"}])}});
+  vm.runInContext(SRC + ";globalThis.S = DataSchedule;", context);
+  const {loadSchedule} = context.S.create({el, emptyMsg: t => el("div", "empty", t)});
+  for (let i = 0; i < 40; i++) {
+    const wrap = await loadSchedule();
+    const observer = Array.from(observers)[0];
+    wrap.dispose(); wrap.dispose();
+    // A queued delivery or initial sync cannot restart a disposed interval.
+    wrap.isConnected = true;
+    while (microtasks.length) microtasks.shift()();
+    observer.fn();
+  }
+  assert.equal(observers.size, 0);
+  assert.equal(timers.size, 0);
+  const cached = await loadSchedule();
+  cached.isConnected = true;
+  while (microtasks.length) microtasks.shift()();
+  assert.equal(timers.size, 1, "late attachment starts the countdown");
+  const observer = Array.from(observers)[0];
+  cached.hidden = true; observer.fn();
+  assert.equal(timers.size, 0);
+  assert.equal(observers.size, 1, "a cached view keeps its observer until replaced");
+  cached.hidden = false; observer.fn();
+  assert.equal(timers.size, 1, "cached view resumes on return");
+  cached.dispose(); observer.fn();
+  assert.equal(timers.size, 0);
+  assert.equal(observers.size, 0);
+});

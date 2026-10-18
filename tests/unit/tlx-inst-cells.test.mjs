@@ -41,15 +41,17 @@ function load(storage = {}) {
   // eslint-disable-next-line no-new-func
   const Frustum = new Function(read("js/render/shared/frustum.js") + ";return Frustum;")();
   // eslint-disable-next-line no-new-func
-  const InstCells = new Function("localStorage",
-    read("js/render/shared/inst-cells.js") + ";return InstCells;")(localStorage);
+  const InstCells = new Function("localStorage", "Frustum",
+    read("js/render/shared/inst-cells.js") + ";return InstCells;")(localStorage, Frustum);
   const writes = [];
   const _writeInstanceMatrices = (imesh, m, c, n) => { writes.push(n); };
   const TLXShaders = { aabbInFrustum: Frustum.aabbInFrustum };
   // eslint-disable-next-line no-new-func
-  const fns = new Function("TLXShaders", "InstCells", "_writeInstanceMatrices",
-    `"use strict";${lift(TLX, "cullInstances")}\n${lift(TLX, "updateInstances")}\n` +
-    "return { cullInstances, updateInstances };")(TLXShaders, InstCells, _writeInstanceMatrices);
+  const fns = new Function("TLXShaders", "InstCells", "_writeInstanceMatrices", "Frustum",
+    `"use strict"; const _mirActive = false, frameEye = null, frameCullDist = 0, frameCullFog = null,
+      _mirEye = null, _mirCull = 0, _mirFog = null;
+      ${lift(TLX, "cullInstances")}\n${lift(TLX, "updateInstances")}\n` +
+    "return { cullInstances, updateInstances };")(TLXShaders, InstCells, _writeInstanceMatrices, Frustum);
   // Ten instances on a line, x = 5, 15, ... 95: one per 10 m cell.
   const n = 10, mats = new Float32Array(n * 16);
   for (let i = 0; i < n; i++) {
@@ -141,13 +143,19 @@ function loadGpuPack() {
   // eslint-disable-next-line no-new-func
   const Frustum = new Function(read("js/render/shared/frustum.js") + ";return Frustum;")();
   // eslint-disable-next-line no-new-func
-  const InstCells = new Function("localStorage", read("js/render/shared/inst-cells.js") + ";return InstCells;")(localStorage);
+  const InstCells = new Function("localStorage", "Frustum",
+    read("js/render/shared/inst-cells.js") + ";return InstCells;")(localStorage, Frustum);
   const TLXShaders = { aabbInFrustum: Frustum.aabbInFrustum };
   const declarations = ["setInstanceRange", "_writeInstanceMatrices", "cullInstances", "updateInstances"]
     .map(name => fnSource(TLX, `function ${name}(`)).join("\n");
+  // Radial frame locals match load() — cullInstances reads frameEye/frameCullDist
+  // (and _mir*) after the instance-suffix / radial cull work on this PR.
   // eslint-disable-next-line no-new-func
-  const fns = new Function("TLXShaders", "InstCells", "_instColorAttr", `${declarations}
-    return { cullInstances, updateInstances, write: _writeInstanceMatrices };`)(TLXShaders, InstCells, mesh => mesh.tint);
+  const fns = new Function("TLXShaders", "InstCells", "_instColorAttr", "Frustum",
+    `"use strict"; const _mirActive = false, frameEye = null, frameCullDist = 0, frameCullFog = null,
+      _mirEye = null, _mirCull = 0, _mirFog = null;
+      ${declarations}
+      return { cullInstances, updateInstances, write: _writeInstanceMatrices };`)(TLXShaders, InstCells, mesh => mesh.tint, Frustum);
 
   function attribute(length) {
     let version = 0, sentVersion = 0;
