@@ -701,7 +701,6 @@ body.desktop #pm-calib-help { display: none !important; }
 #pm-hud-elements-list [data-hud-el-row] { min-width:0; }
 #pm-hud-elements-list [data-hud-reason] { display:block; color:var(--dim); font-size:var(--fs-micro); }
 #pm-hud-elements-list [data-hud-reason-link] { font-size:var(--fs-micro); margin-top:calc(var(--gap) / 3); }
-}
 
 /* SettingDeps (js/ui/setting-deps.js): a setting another setting makes inert.
    Greyed, never hidden or reflowed: the label dims to --dim and a short reason
@@ -713,3 +712,4 @@ body.desktop #pm-calib-help { display: none !important; }
 [data-dep-reason] { margin-left: 0.5em; font-size: 0.8em; font-weight: 400; color: var(--text); white-space: nowrap; }
 [data-dep-reason][hidden] { display: none; }
 [data-dep-reason="line"] { display: block; margin: 0.25em 0 0.5em; }
+}
