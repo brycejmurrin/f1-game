@@ -5,7 +5,11 @@ ships, no runtime change. Bryce: "Set that up with one session" (2026-10-18).
 
 ## How it works
 
-- `tsconfig.json`: `allowJs`, `checkJs: false`, `noEmit`, `include` = `js/physics/*.js` + `types/checkjs-globals.d.ts`.
+The config is `tsconfig.checkjs.json`, not `tsconfig.json`: a root `tsconfig.json` is discovered before the root `jsconfig.json` that
+the `apex-lsp` MCP server (PR #2832) uses for its whole-`js/` project, and would shrink that project to `js/physics`. The checker
+passes `-p tsconfig.checkjs.json` explicitly.
+
+- `tsconfig.checkjs.json`: `allowJs`, `checkJs: false`, `noEmit`, `include` = `js/physics/*.js` + `types/checkjs-globals.d.ts`.
   With `checkJs` off, tsc still parses every included file (so cross-file globals such as `ContactGeometry` and
   `AiDrive` are inferred from their own JS) but REPORTS only files that start with `// @ts-check`. Chosen over an
   explicit per-file `include` list: opting in is one line in the file, and the checker cannot drift from a list.
@@ -38,7 +42,7 @@ Starters: `js/physics/wall-end-face.js`, `ai-band.js`, `ai-corridor.js`.
 - No `.ts` files, no ES modules (`import`/`export`), no bundler, no transpile step.
 - No `checkJs: true` globally: ~every module would go red at once.
 - No `@ts-ignore` to get green; fix the type or narrow the claim.
-- Do not run it on the shipped files' behalf: `types/` and `tsconfig.json` are never served or cached.
+- Do not run it on the shipped files' behalf: `types/` and `tsconfig.checkjs.json` are never served or cached.
 
 ## References
 

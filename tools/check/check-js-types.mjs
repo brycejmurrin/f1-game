@@ -7,7 +7,7 @@
  *   node tools/check/check-js-types.mjs            # exit 1 on any type error
  *   node tools/check/check-js-types.mjs --json     # machine-readable result
  *
- * tsconfig.json parses `js/physics/*.js` (allowJs, checkJs false) and tsc reports
+ * tsconfig.checkjs.json parses `js/physics/*.js` (allowJs, checkJs false) and tsc reports
  * only files that carry `// @ts-check`. Nothing is emitted and nothing here ships.
  * How to opt a file in: docs/notes/CHECKJS-ROLLOUT-2026-10-18.md.
  */
@@ -24,7 +24,7 @@ if (!existsSync(TSC)) {
   console.error("check-js-types: node_modules/.bin/tsc missing — run npm install");
   process.exit(2);
 }
-const r = spawnSync(TSC, ["-p", "tsconfig.json", "--noEmit", "--pretty", "false"], { cwd: ROOT, encoding: "utf8" });
+const r = spawnSync(TSC, ["-p", "tsconfig.checkjs.json", "--noEmit", "--pretty", "false"], { cwd: ROOT, encoding: "utf8" });
 const out = (r.stdout || "") + (r.stderr || "");
 const errors = out.split("\n").filter((l) => /\(\d+,\d+\): error TS\d+/.test(l));
 if (json) console.log(JSON.stringify({ ok: r.status === 0, errors }, null, 2));
