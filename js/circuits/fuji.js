@@ -27,6 +27,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.554,
+    tyreSeverity: 1,  // Permanent Fuji; calendar-neutral proxy
     baseHW: 8,
     sceneryCoordinates: "racing",
     terrainOuter: 110,
