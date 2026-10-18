@@ -12,6 +12,8 @@ test("careerSlotDelete preserves conflict and session-only durability metadata",
     Career: { deleteSlot: () => result, load: () => { loads++; }, slots: () => slots },
   });
   vm.runInContext(fs.readFileSync(new URL("../../js/agent/apex-net.js", import.meta.url), "utf8"), context);
+  for (const f of ["apex-cam.js", "apex-track.js", "apex-lobby.js"])
+    vm.runInContext(fs.readFileSync(new URL("../../js/agent/" + f, import.meta.url), "utf8"), context);
   vm.runInContext(fs.readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8"), context);
   const api = vm.runInContext("ApexApi", context).create({ track: {}, refreshCareerButton: () => { refreshes++; } });
   result = { ok: false, durable: false, reason: "conflict" };
@@ -34,6 +36,8 @@ function loadApex(extra, G) {
     AgentView: { create: () => ({}) },
   }, extra));
   vm.runInContext(fs.readFileSync(new URL("../../js/agent/apex-net.js", import.meta.url), "utf8"), context);
+  for (const f of ["apex-cam.js", "apex-track.js", "apex-lobby.js"])
+    vm.runInContext(fs.readFileSync(new URL("../../js/agent/" + f, import.meta.url), "utf8"), context);
   vm.runInContext(fs.readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8"), context);
   return vm.runInContext("ApexApi", context).create(G);
 }

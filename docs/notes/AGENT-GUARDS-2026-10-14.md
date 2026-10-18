@@ -83,9 +83,27 @@ Now:
   session 2026-10-14. A clone with no install: run that one command.
   `tests/unit/cross-tool-guards.test.mjs` pins all of the above.
 
+### Cursor Cloud hook fan-out (2026-10-17)
+
+Cursor's [third-party hooks documentation](https://cursor.com/docs/reference/third-party-hooks)
+says it imports `.claude/settings.json` by default and runs all matching hooks
+from every source. Its documented Claude-compatible command-step schema has
+`type`, `command`, `timeout`, and `statusMessage`, but not Claude Code's `if`
+field. The 14 `bash-guard.sh` steps formerly distinguished only by `if:
+Bash(*word*)` therefore all matched one Cursor shell call and started parallel
+commit gates. The configuration now has one `Bash` entry; `bash-guard.sh`
+recreates the same 14-word filter as an early exit inside the script.
+
+On the measured Cloud VM, `core.hooksPath` was not `.githooks`; Cursor set it
+to `/home/ubuntu/.cursor/agent-hooks/<workspace-id>`. That directory contains a
+universal dispatcher plus Cursor's `pre-commit.cursor` and
+`commit-msg.cursor` secret scanners. The dispatcher records the prior path in
+`.cursor-original-hooks-path`, runs a prior executable hook when present, then
+runs each matching `*.cursor*` hook. Repository setup must not overwrite this
+managed path merely to activate `.githooks`.
+
 ## Not done
 - Hook tests for stop-guard / post-edit / session-start (survey A10).
-- No Cursor/Codex hook adapter: these guards are Claude Code only.
 
 ## Red-team round 2 (2026-10-14)
 Input: the red-team table at `scratch/retest/hooks-redteam.md` (189 payloads piped into the hooks, plus

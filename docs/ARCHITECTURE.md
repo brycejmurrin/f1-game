@@ -209,6 +209,7 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `dock-layout.js` | `DockLayout` | tag | DockLayout: per-scheme touch-dock REPOSITION offsets. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
+| `cvd-palette.js` | `CvdPalette` | tag | CvdPalette: the one JS table of semantic colours. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences, and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT). |
 | `a11y-opts.js` | `A11yOpts` | tag | A11yOpts: SETTINGS › ACCESSIBILITY. |
 | `hud-elements.js` | `HudElements` | tag | per-element HUD visibility toggles (SETTINGS › DISPLAY › HUD). |
@@ -301,6 +302,10 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `wind.js` | `Wind` | tag | WIND: a per-race wind (direction, mean speed, gusts) and what it does to a car. |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
 | `overtake-mode.js` | `OvertakeMode` | tag | OVERTAKE MODE (FIA 2026 Sporting Regs B7.2.3(c)): one Detection Line per circuit, the 1 s check there, and the 0.5 MJ allowance granted at the Activation Line… |
+| `lap-record.js` | `LapRecord` | tag | LapRecord: time-trial record and sector-clock state moved out of game.js. |
+| `storm-flash.js` | `StormFlash` | tag | StormFlash: the in-frame lightning flash (strike, thunder, ambient spike). |
+| `announce-banner.js` | `AnnounceBanner` | tag | AnnounceBanner: the race-radio card, its floor and its queue. |
+| `light-tune-edit.js` | `LightTuneEdit` | tag | LightTuneEdit: the lighting-tuner write path (latch clear + store). |
 | `pace-math.js` | `PaceMath` | tag | PACE / ERS math: vTop/vStd/aStd, X-mode aero gains, paceRef buffer, ERS drain/regen/overtake duration, aeroDfMult, and gearHi/rpmFor. |
 | `sporting-regs.js` | `SportingRegs` | tag | SPORTING REGULATIONS the player is held to, as pure rules. |
 | `tv-graphics.js` | `TvGraphics` | tag | broadcast-profile lower thirds, battle bar and fastest-lap banner. |
@@ -438,16 +443,17 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `grip-steer.js` | `GripSteer` | tag | GripSteer: own-state steering cap at the front's peak slip. |
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
-| `ai-band.js` | `AiBand` | tag | AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace. |
-| `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |
+| `ai-band.js` | `AiBand` | tag | @ts-check |
+| `ai-corridor.js` | `AiCorridor` | tag | @ts-check |
 | `aero-zones.js` | `AeroZones` | tag | AeroZones: the ACTIVE AERO activation zones for the loaded circuit. |
+| `drive-tune.js` | `DriveTune` | tag | DriveTune: the live driving-feel lets (PACE, wheelbase, steer, grip). |
 | `brake-cue.js` | `BrakeCue` | tag | braking CUE: pulse RATE that says when to brake, never brakes for you. |
 | `debris-draw.js` | `DebrisDraw` | tag | DebrisDraw: instanced drawing of the DebrisWorld pools (shard / marble / cone / panel). |
 | `debris-world.js` | `DebrisWorld` | tag | Rapier side-world for render-only debris (adoption phases R0+R1, see spike/ADOPTION-PLAN.md Part 2). |
 | `incident-sim.js` | `IncidentSim` | tag | Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 + C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). |
 | `contact-geometry.js` | `ContactGeometry` | tag | Physical road boundaries and oriented boxes in the local road plane. |
 | `collide.js` | `Collide` | tag | Collide — car-to-car contact in the Frenet (prog, x) plane: the arc-bucket broadphase, the mass-weighted relaxation passes, the hard separation pass, the… |
-| `wall-end-face.js` | `WallEndFace` | tag | WALL END FACE: the one case the lateral wall clamp gets wrong. |
+| `wall-end-face.js` | `WallEndFace` | tag | @ts-check |
 | `wall-clamp.js` | `WallClamp` | tag | WALL CLAMP: per-side barrier / pit-wall / gantry limits, human slide-along + scrub, lane-side pit clamp, and the conditional road→world writeback when xPinned. |
 
 **`js/lighting/`**
@@ -493,6 +499,7 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision and plank sparks, gravel/grass kickup, rain spray) for js/game.js. |
 | `droplets.js` | `Droplets` | tag | Droplets: rain on the lens / visor for the ONBOARD cameras (cockpit, hood, visor, helmet, T-cam). |
+| `grade-tint.js` | `GradeTint` | tag | GradeTint: car-paint bases, the tuner scratch, and sky grade hue/sat. |
 | `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
 | `car-fx.js` | `CarFx` | tag | CarFx: per-car motion effects js/game.js's render loop asks for once a car's grounded basis is built — the PLANK SPARKS a car throws when its floor bottoms… |
 
@@ -621,6 +628,9 @@ _Module index over 32 directories, in load order. `tag` = a `<script>` in index.
 | `agentview-corners.js` | `AgentCorners` | LAZY_AGENT | AgentCorners: the corner table of the agent view (buildCorners, roadShapeAt, peakFracs, corners, nextCorner, upcomingCorners). |
 | `agentview.js` | `AgentView` | LAZY_AGENT | AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … |
 | `apex-net.js` | `ApexNet` | LAZY_AGENT | ApexNet: the netplay and VS FRIEND lobby hooks of the window.__apex API (net, netLoopback, netPeer*, netTick, lobby*). |
+| `apex-cam.js` | `ApexCam` | LAZY_AGENT | ApexCam: camera hooks of window.__apex (camera, flyby, free-cam, orbit). |
+| `apex-track.js` | `ApexTrack` | LAZY_AGENT | ApexTrack: track-geometry hooks of window.__apex. |
+| `apex-lobby.js` | `ApexLobby` | LAZY_AGENT | ApexLobby: session and field hooks of window.__apex. |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
 
 **`js/circuits/`**
