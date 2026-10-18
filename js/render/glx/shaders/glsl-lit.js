@@ -976,7 +976,12 @@ void main() {
   // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
   int surfaceId = int(vMat + 0.5);
   bool classifiedCar = surfaceId >= 20 && surfaceId <= 37;
-  bool paintSurface = surfaceId == 20;
+  // 34 = METALLIC FLAKE and 35 = CANDY (FINISH_SURFACE.flake / .candy): both are PAINT responses (gloss
+  // clearcoat, env mirror, sparkle), so paintSurface includes them; the flake grain and the candy
+  // saturation / rim / tinted lacquer are layered on below (CarMaterialShade.FLAKE / .CANDY).
+  bool flakeSurface = surfaceId == 34;
+  bool candySurface = surfaceId == 35;
+  bool paintSurface = surfaceId == 20 || flakeSurface || candySurface;
   bool carbonSurface = surfaceId == 21;
   bool rubberSurface = surfaceId == 22;
   // TYRE SIDEWALL (car3d.js SURFACES.sidewall = 33): the moulded wall, its
@@ -1027,7 +1032,8 @@ void main() {
   // Carbon parts carry a THIN lacquer (min 0.30): F1 carbon is clear-coated, so
   // the weave sits under a crisp sun/lamp glint. No env mirror (carPaint 0).
   float clearcoat = classifiedCar
-    ? (paintSurface ? uClearcoat
+    ? (candySurface ? max(uClearcoat, 0.90)
+      : paintSurface ? uClearcoat
       : (mirrorSurface ? max(uClearcoat, 0.85)
       : (iriSurface ? max(uClearcoat, 0.70)
       : (satinMetalSurface ? min(uClearcoat, 0.25)
@@ -1051,7 +1057,7 @@ void main() {
       : (satinMetalSurface ? max(uMetalness, 0.60)
       : (matteSurface ? 0.0
       : (iriSurface ? max(uMetalness, 0.25)
-      : ((carbonSurface || carbonFinish) ? 0.08 : (paintSurface ? uMetalness : 0.0)))))))
+      : ((carbonSurface || carbonFinish) ? 0.08 : (paintSurface ? (flakeSurface ? max(uMetalness, 0.35) : uMetalness) : 0.0)))))))
     : uMetalness;
   float specular = classifiedCar
     ? (rubberSurface ? 0.18 : sidewallSurface ? 0.35 : ((metalSurface || mirrorSurface) ? 1.0
@@ -1175,6 +1181,23 @@ void main() {
     albedo *= 0.84 + 0.32 * weave;
   } else if (carbonSurface) {
     albedo *= 0.88 + 0.24 * weave;
+  }
+  // METALLIC FLAKE (34): object-space hash cells (welded to the panels), a zero-mean albedo grain plus sparse bright
+  // flakes and a specular lift. Near field only: full inside 10 m, gone by 26 m (no moire under motion).
+  if (flakeSurface) {
+    float fkF = clamp(1.0 - (vDist - 10.0) / 16.0, 0.0, 1.0);
+    if (fkF > 0.0) {
+      vec3 fkC = floor(vObjPos * 140.0);
+      float fkH = hash21(fkC.xy + fkC.z * 19.7);
+      float fkS = smoothstep(0.82, 1.0, fkH);
+      albedo *= 1.0 + ((fkH - 0.5) * 0.30 + (fkS - 0.09) * 0.90) * fkF;
+      specular = min(1.0, specular + fkS * 0.40 * fkF);
+    }
+  }
+  // CANDY (35): a darker, more saturated base under a tinted lacquer.
+  if (candySurface) {
+    float cdL = dot(albedo, vec3(0.299, 0.587, 0.114));
+    albedo = max(mix(vec3(cdL), albedo, 1.35), vec3(0.0)) * 0.62;
   }
   float chamFlip = 0.0; vec3 chamHue = vec3(1.0);
   if (chamSurface) {
@@ -1739,6 +1762,12 @@ void main() {
     vec3 addCC = envCC * envW;
     // TINTED CHROME: the reflection takes the livery hue (albedo / its brightest channel, 88 % mixed in).
     if (tintedSurface) addCC *= mix(vec3(1.0), albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04), 0.88);
+    // CANDY: the lacquer is tinted (55 %) and the Fresnel rim glows in the saturated livery hue.
+    if (candySurface) {
+      vec3 cdHue = albedo / max(max(albedo.r, max(albedo.g, albedo.b)), 0.04);
+      addCC *= mix(vec3(1.0), cdHue, 0.55);
+      color += cdHue * ccF * 0.45;
+    }
     color += addCC / (1.0 + addCC * 0.35);                 // gentle soft-clip — keeps bright reflections bright
   }
 

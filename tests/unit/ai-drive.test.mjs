@@ -1564,6 +1564,7 @@ test("AI heading reuses current grip without changing normal or recovery steerin
     const { AiDrive, gripMult, tyres, dirtyAirMul, aeroDfMult, clamp, damp, K, aiT } = deps;
     const { VMAX, LAT_MAX, STEER_VMAX, AI_HEAD_VMIN, AI_XTRACK_GAIN, AI_HEAD_MAX, AI_YAW_LAT, AI_YAW_MAX } = K;
     const vStd = speed => speed * VMAX / (VMAX * Math.max(PACE, 0.05));
+    const driveTune = { PACE };
     // updateCar's per-step weather grip (gripMult(c) × aquaplane, read once into the scratch S.gmC).
     const S = { gmC: gripMult(c) };
     ${decl[1]}
@@ -1663,5 +1664,5 @@ test("game.js hands wantBoost and defendPull the pace envelope (vTop)", () => {
   assert.match(game, /_aiBoost\.vTop = (?:vTop\(\)|vT);/, "wantBoost's tolerances need vTop");
   assert.match(game, /_aiDefend\.vTop = (?:vTop\(\)|vT);/, "defendPull's not-closing gate needs vTop");
   if (/\.vTop = vT;/.test(game)) assert.match(game, /\bconst vT = vTop\(\)/, "vT is vTop()");
-  assert.match(game, /_aiBr\.pace = PACE; _aiBr\.vmax = VMAX/, "brakeTarget reads vScale from pace");
+  assert.match(game, /_aiBr\.pace = driveTune\.PACE; _aiBr\.vmax = VMAX/, "brakeTarget reads vScale from pace");
 });
