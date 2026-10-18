@@ -284,10 +284,12 @@ tolerate no banding), **ETC1S for albedo/ORM** (much smaller). The cost is a
 ~250 KB Basis transcoder wasm — vendored, lazily fetched, exactly the shape of
 the existing optional `vendor/three-0.184.0/` arrangement.
 
-**Suggested v1 path:** ship WebP at 512² first (zero new vendor code, decode via
-`createImageBitmap` → `texSubImage3D` per layer), measure on the mobile tier,
-then upgrade the *container* to KTX2 behind the same `Assets` API if the 35 MB
-bites. The shader does not change between the two.
+**Suggested v1 path (historical, 2026-08):** ship WebP at 512² first (zero new
+vendor code, decode via `createImageBitmap` → `texSubImage3D` per layer),
+measure on the mobile tier, then upgrade the *container* to KTX2 behind the
+same `Assets` API if the 35 MB bites. The shader does not change between the
+two. **Decided no on 2026-10-16** — see rollout row 4. The shipped pack is the
+PNG arrays; KTX2/UASTC is not adopted.
 
 Mobile guard: `gfx.isMobile` / `mobileTier` already exist. Tier down to 256² or
 skip the array entirely and fall back to the procedural path — which is a
@@ -375,7 +377,7 @@ does exactly that kind of pixel comparison.
 | 1 | `tools/gen/assets.mjs` + manifest + licence `verify` | **shipped**, guarded by `tests/unit/assets-pack.test.mjs` |
 | 2 | `Assets` global + `createTextureArray` + `uMatTexMix` at 0 | **shipped** on GLX, TLX, and WGX |
 | 3 | Tune `matTexMix` per profile, bake into `light-presets.js` | **open** — needs a human eye on a real screen |
-| 4 | KTX2 container + vendored transcoder | **open** — the 561 KB PNG pack is far under budget, so this is not yet needed |
+| 4 | KTX2 container + vendored transcoder | **no** (2026-10-16, Merge Desk on Bryce's delegation) — not adopting KTX2/UASTC. The shipped PBR pack works; a wasm transcoder is a new runtime dependency and a failure path on phones. The 561 KB PNG pack is far under the download budget. Reopen only if texture size or load time is a measured problem |
 | 5 | `bake-model` | **shipped**, round-tripped in test; no circuit consumes a baked model yet |
 | 6 | HDRI → env ambient | **partial** — `bake-env` + `Assets.env()` exist; nothing reads them yet |
 
@@ -386,7 +388,9 @@ does exactly that kind of pixel comparison.
 - **Repo weight.** GitHub Pages soft-limits a published site to ~1 GB and
   individual files to 100 MB, but the real cost is clone time for a repo that
   has been fast. Budget: **≤8 MB of baked assets total**, enforced by
-  `assets.mjs verify`. KTX2 is what makes that number reachable.
+  `assets.mjs verify`. KTX2 would be what makes a much larger pack reachable;
+  the 2026-10-16 decision (rollout row 4) is not to adopt it. The shipped pack
+  stays inside the budget without a transcoder.
 - **Licence hygiene.** Mixed-licence sources (Sketchfab) are the trap. The
   allow-list in `verify` should default to CC0 only, and every entry must carry
   a source URL. `CREDITS.md` must be generated, never hand-edited.
@@ -490,8 +494,10 @@ the pack lands asynchronously. That is the same trick `setEnvCube` already used.
   committed `generated` preset now also covers WOOD / FABRIC / SNOW from
   `atlas-variety-*.png`.
   Sources: `assets/atlases/`.
-- **KTX2.** The pack is ~5.4 MB against an 8 MB budget. The VRAM argument in §3.2
-  still stands for a full-resolution scan bake — revisit at that point, not now.
+- **KTX2.** Decided **no** on 2026-10-16 (rollout row 4): not adopting
+  KTX2/UASTC. The pack is ~5.4 MB against an 8 MB budget, and a transcoder is a
+  new runtime dependency plus a failure path on phones. Reopen only if texture
+  size or load time is a measured problem.
 
 ### Known gaps
 
@@ -532,8 +538,9 @@ Measured after the 2k→256 full-pack rebake + Chromium A/B (`matTex` 0 vs 1):
 2. **HDRI → `Assets.env()`** — **done** for `*|default|day|dusk|dawn` via
    `bake-env-hdri` (Poly Haven 1k `.hdr` hemisphere sample). Night skipped on
    purpose. `atmosphere.js` now applies env after every non-night TOD base.
-3. **KTX2 / Basis Universal** when (if) we want 512² or more layers — VRAM stays
-   compressed; PNG/WebP always expand.
+3. **KTX2 / Basis Universal** — **no** (2026-10-16, rollout row 4). Not adopted.
+   A later 512² bake would still expand PNG/WebP in VRAM; that is not a reason
+   to take the transcoder dependency now.
 4. **Prop geometry, not prop textures.** Trees/grandstands still read flat —
    `bakedModel` + Quaternius/Kenney CC0 stands.
 5. **Motion-capture before raising ASPHALT normals.** Shader clamps asphalt
