@@ -11,14 +11,15 @@
       "interface": {
         "displayName": "F1 Dev Tools",
         "shortDescription": "Camera and replay workflows",
-        "longDescription": "Five development workflows for brycejmurrin/f1-game: scene reproduction, camera inspection, before/after comparisons, WATCH replay transition checks, and camera preset preview/export. Uses the repository's apex-tools, playwright-official, chrome-devtools and js-debugger MCP servers for deterministic game probes, live browser checks, performance inspection and source debugging.",
+        "longDescription": "Five development workflows for brycejmurrin/f1-game: scene reproduction, camera inspection, before/after comparisons, WATCH replay transition checks, and camera preset preview/export. Uses the repository's apex-tools, playwright-official, chrome-devtools, js-debugger and apex-lsp MCP servers for deterministic game probes, live browser checks, performance inspection, source debugging and code navigation.",
         "developerName": "F1 Game",
         "category": "Developer Tools",
         "capabilities": [
           "apex-tools",
           "playwright-official",
           "chrome-devtools",
-          "js-debugger"
+          "js-debugger",
+          "apex-lsp"
         ],
         "defaultPrompt": "Use the configured apex-tools MCP for game identity and diagnostics, then one browser MCP at a time: playwright-official for navigation/DOM/screenshots or chrome-devtools for live console/network/performance inspection. For source debugging, use js-debugger on the parent's existing local Chrome page; inspect fresh pause tokens and detach afterward. Reproduce and inspect the f1-game camera or replay problem, then validate the change with matching render traces."
       }
