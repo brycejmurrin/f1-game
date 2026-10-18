@@ -1372,7 +1372,7 @@
         "tests/unit/title-fx.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
-      "declaredTests": 933,
+      "declaredTests": 934,
       "twinned": false
     },
     {
@@ -1412,7 +1412,7 @@
         "tests/unit/xr-phase0.test.mjs",
         "tests/unit/xr-plan.test.mjs"
       ],
-      "declaredTests": 618,
+      "declaredTests": 619,
       "twinned": false
     },
     {

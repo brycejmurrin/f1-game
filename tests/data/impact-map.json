@@ -14286,6 +14286,9 @@
       ]
     },
     "js/ui/hud-strategy.js": {
+      "behindThreat": [
+        "tests/unit/hud-strategy.test.mjs"
+      ],
       "fmtLaps": [
         "tests/unit/hud-strategy.test.mjs"
       ],
