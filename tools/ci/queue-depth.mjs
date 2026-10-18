@@ -19,7 +19,8 @@
  *
  * INFORMATIONAL since 2026-10-16 (CI/CD review #2333 finding 7): nothing refuses
  * a push on this line any more — the pool ran at 39 of 40 slots all day and a
- * held push only moves its wait. `hold` (exit 1) still reads when ANY of:
+ * held push only moves its wait. The gauge state `hold` (exit 0, informational)
+ * still reads when ANY of:
  *   Linux jobs in flight (queued + running) ≥ LINUX_HOLD (60; the account has 40 slots)
  *   queued jobs, any OS                     ≥ QUEUED_HOLD (10) — runner-queued only; a `pending`
  *                                             job waits in a CI concurrency lane and drives no hold
@@ -54,7 +55,8 @@
  * for 2 min (HYSTERESIS_MS), so one quiet poll between two bursts is not a green light.
  * An API error is retried; three in a row exit 3.
  *
- * Exit: 0 ok, 1 hold, 2 bad args, 3 no token / API unreachable, 124 --wait timeout.
+ * Exit: 0 ok or hold (the gauge never blocks; read the line), 2 bad args,
+ * 3 no token / API unreachable, 124 --wait timeout.
  *
  * REST (read 2026-10-14):
  *   https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28#list-workflow-runs-for-a-repository
@@ -89,11 +91,11 @@ export const QUEUED_HOLD = 10;
 /** Live runs examined per call (one jobs request each). */
 export const MAX_RUNS = 30;
 /** Further QUEUED runs counted by jobs total_count (one per_page=1 request each). */
-export const MAX_COUNTED = 60;
+const MAX_COUNTED = 60;
 /** Pages of 100 runs read per status. */
-export const MAX_PAGES = 3;
+const MAX_PAGES = 3;
 /** Run statuses listed, waiting-for-a-runner first: that is where queued jobs live (#2181). */
-export const RUN_STATUSES = ["queued", "pending", "requested", "waiting", "in_progress"];
+const RUN_STATUSES = ["queued", "pending", "requested", "waiting", "in_progress"];
 const QUEUED_RUN = new Set(["queued", "pending", "requested", "waiting"]);
 export const DEFAULT_OUT = "apex-status/queue-depth.json";
 
@@ -187,7 +189,7 @@ export function reportLine(v) {
   const seen = `; ${v.linux.running} Linux running${v.linux.oldestQueuedMin == null ? "" : `, oldest queued ${v.linux.oldestQueuedMin}m`}`
     + (v.laneWaiting ? `, ${v.laneWaiting} waiting in CI lanes` : "");
   return `= queue ${v.verdict} (${v.linux.inFlight} Linux jobs in flight / ${v.linux.slots}, ${v.queued} queued, `
-    + `${v.macos.inFlight} macOS / ${v.macos.slots}${seen}${more})${v.hold ? ` — ${v.reasons.join("; ")}: commit locally, do not push` : ""}`;
+    + `${v.macos.inFlight} macOS / ${v.macos.slots}${seen}${more})${v.hold ? ` — info: ${v.reasons.join("; ")} (informational since 2026-10-16: no push hold)` : ""}`;
 }
 
 /**
@@ -308,7 +310,7 @@ export function pushVerdict(text, current, request = api) {
 
 /** Minutes of continuous ok that turn a hold into a go (--wait). */
 export const HYSTERESIS_MS = 2 * 60_000;
-export const WAIT_INTERVAL_S = 30;
+const WAIT_INTERVAL_S = 30;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const arrow = (xs) => xs.slice(-8).join("→");
 
@@ -367,7 +369,8 @@ Counts queued + running Actions JOBS by OS against ${LINUX_SLOTS} Linux / ${MACO
 Hold at ≥${LINUX_HOLD} Linux in flight, ≥${QUEUED_HOLD} queued, or ≥${MACOS_SLOTS} macOS. --write defaults to ${DEFAULT_OUT}.
 --push: exit 0 with "= queue skip" when every pushed branch has no open PR or a draft without run-ci.
 --wait <min>: block (run it as ONE background task) until ok has held 2 min; prints the in-flight/queued trend each poll; exit 0 ok, 124 timeout.
-Exit 0 = ok, 1 = hold (commit locally, do not push), 2 = bad args, 3 = API/token.`);
+Informational since 2026-10-16: nothing holds a push on this line (AGENTS.md rule 4).
+Exit 0 = ok or hold (never blocks), 2 = bad args, 3 = API/token.`);
   const args = parseArgs(argv);
   if (args.error) { console.error(`queue-depth: ${args.error}`); process.exit(2); }
   if (args.push !== null) {
@@ -387,5 +390,5 @@ Exit 0 = ok, 1 = hold (commit locally, do not push), 2 = bad args, 3 = API/token
     fs.writeFileSync(file, JSON.stringify(v, null, 2) + "\n");
   }
   console.log(args.json ? JSON.stringify(v, null, 2) : v.line);
-  process.exit(v.hold ? 1 : 0);
+  process.exit(0); // informational: a busy pool is not a refusal (retired 2026-10-16)
 }

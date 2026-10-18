@@ -351,6 +351,20 @@ test("sanitizeCustom keeps only real finShape / numFont / finish ids", () => {
   assert.deepEqual(Object.keys(good).sort(), ["finShape", "finish", "numFont"], "real ids pass");
 });
 
+// #2796 (5): the zone finish rows (pod/fin/mirror/cover/wing/halo) store a finish id or "inherit"; an unknown id was
+// saved and the editor then showed no selected chip.
+test("sanitizeCustom keeps only real zone-finish ids (inherit, gloss or a FINISH_SURFACE key)", () => {
+  const T = M.Teams;
+  const run = (livery) => JSON.parse(JSON.stringify(T.sanitizeCustom({ livery }).livery));
+  const zones = ["podFinish", "finFinish", "mirrorFinish", "coverFinish", "wingFinish", "haloFinish"];
+  const ok = ["inherit", "gloss"].concat(Object.keys(M.Car3D.FINISH_SURFACE));
+  for (const k of zones) {
+    assert.equal(Object.hasOwn(run({ [k]: "no-such-finish" }), k), false, k + " unknown id dropped");
+    assert.equal(Object.hasOwn(run({ [k]: "constructor" }), k), false, k + " prototype name dropped");
+    for (const id of ok) assert.equal(run({ [k]: id })[k], id, k + " keeps " + id);
+  }
+});
+
 test("My Team livery adapters stay within the active slot and invalidate cache without a store write", () => {
   let active = true, selected = 0, revision = 1, refused = false;
   const global = new Map([["livery.custom", "gp"], ["livery.custom.custom", [{ id: "gp", c1: [0,1,0], c2: [0,1,0] }]]]);
