@@ -28,14 +28,14 @@ const CSS_ALL = fs.readdirSync(path.join(ROOT, "css")).filter((f) => f.endsWith(
 const PEEK_LAYER = RESP + "\n" + OVERLAYS;
 
 const TARGETS = { pausemenu: "dialog", datahub: "dialog", select: "div", "race-settings": "dialog",
-  career: "div", carsetup: "div", standings: "dialog", pmsettings: "dialog", overlay: "div" };
+  career: "div", carsetup: "div", trackdesigner: "dialog", standings: "dialog", pmsettings: "dialog", overlay: "div" };
 
 function boot({ stored = {}, settingsOpen = true, withPause = false } = {}) {
   const dom = makeDom();
   const mk = (tag, id, parent) => { const e = dom.makeElement(tag, id); (parent || dom.body).appendChild(e); return e; };
   for (const [id, tag] of Object.entries(TARGETS)) mk(tag, id);
   dom.byId("pmsettings").hidden = !settingsOpen;
-  for (const id of ["pausemenu", "datahub", "race-settings", "standings"]) dom.byId(id).hidden = true;
+  for (const id of ["pausemenu", "datahub", "race-settings", "standings", "trackdesigner"]) dom.byId(id).hidden = true;
   for (const id of ["select", "career", "carsetup"]) dom.byId(id).hidden = true;
   const panel = mk("section", "pm-panel-appearance", dom.byId("pmsettings"));
   const general = mk("details", "pm-general", panel);
@@ -96,7 +96,7 @@ function boot({ stored = {}, settingsOpen = true, withPause = false } = {}) {
 test("registry: unique screens, keys and knobs; every default is a legal value", () => {
   const { M } = boot();
   const ids = M.SCREENS.map((s) => s.id);
-  assert.deepEqual(plain(ids), ["pause", "datahub", "select", "race", "career", "garage", "popups"]);
+  assert.deepEqual(plain(ids), ["pause", "datahub", "select", "race", "career", "garage", "designer", "popups"]);
   assert.equal(new Set(M.SCREENS.map((s) => s.key)).size, ids.length);
   for (const s of M.SCREENS) {
     assert.match(s.key, /^look[A-Z]\w+$/, s.key);
@@ -196,7 +196,7 @@ test("build: one fold per screen after TITLE SCREEN, in registry order; pause ro
   const { dom, M, panel, pauseBody, tsBody, replay } = boot();
   const kids = panel.children;
   const ts = kids.indexOf(dom.byId("pm-titlescreen"));
-  const folds = ["datahub", "select", "race", "career", "garage", "popups"].map((id) => dom.byId("pm-look-" + id));
+  const folds = ["datahub", "select", "race", "career", "garage", "designer", "popups"].map((id) => dom.byId("pm-look-" + id));
   folds.forEach((f, i) => {
     assert.ok(f, "fold " + i);
     assert.equal(f.tagName, "DETAILS");
@@ -390,4 +390,36 @@ test("a peek swallows only the dismissing click, not the next one", () => {
   assert.match(fn, /pointerup/);
   assert.match(fn, /pointercancel/);
   assert.match(fn, /f\.contains\(t\)\) return/, "a click inside the fold still does not end the peek");
+});
+
+/* ── TRACK DESIGNER ───────────────────────────────────────────────────── */
+test("designer: shipped defaults write nothing; a changed knob persists in apex26.lookDesigner and round-trips", () => {
+  const { M, data, html } = boot();
+  const s = M.SCREENS.find((x) => x.id === "designer");
+  assert.equal(s.key, "lookDesigner");
+  assert.deepEqual(plain(M.read("designer")), { size: 100, split: 55, text: "medium", profile: "normal" });
+  assert.equal(M.isShipped("designer"), true);
+  assert.equal(data.lookDesigner, undefined, "nothing is stored at the defaults");
+  assert.ok(!Object.keys(html.dataset).some((k) => k.startsWith("lookDesigner")), "no attribute at the defaults");
+  M.set("designer", "size", 150);
+  M.set("designer", "split", 62);
+  M.set("designer", "text", "large");
+  M.set("designer", "profile", "tall");
+  assert.deepEqual(plain(data.lookDesigner), { size: 150, split: 62, text: "large", profile: "tall" });
+  assert.equal(html.dataset.lookDesignerText, "large");
+  assert.equal(html.style.getPropertyValue("--look-designer-size"), "1.5");
+  assert.equal(html.style.getPropertyValue("--look-designer-split"), "62%");
+  // A hand-edited store clamps / falls back instead of throwing.
+  const b = boot({ stored: { lookDesigner: { size: 999, split: 5, text: "huge", profile: 3 } } });
+  assert.deepEqual(plain(b.M.read("designer")), { size: 200, split: 40, text: "medium", profile: "normal" });
+  M.reset("designer");
+  assert.equal(data.lookDesigner, undefined);
+  assert.equal(M.isShipped("designer"), true);
+});
+
+test("designer: the knob is in the settings export, and the CSS keeps the tap floor under DESIGNER SIZE", () => {
+  assert.match(EXPORT, /\{ k: "lookDesigner", lane: "json", group: "appearance", def: null,/, "SettingsExport carries lookDesigner");
+  const editor = read("css/editor.css");
+  assert.match(editor, /:root\[data-look-designer-size\] #trackdesigner \{[^}]*--tap: max\(44px, calc\(24px \/ var\(--td-zoom\)\)\)/, "floors are re-derived against the designer's own zoom");
+  assert.match(editor, /zoom: var\(--td-zoom\);/, "the dialog zooms by UI SIZE x DESIGNER SIZE");
 });

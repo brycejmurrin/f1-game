@@ -4725,6 +4725,14 @@
         "tests/unit/source-integrity.test.mjs"
       ]
     },
+    "js/data/flyby-overrides.js": {
+      "patches": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "resolve": [
+        "tests/unit/flyby-shots.test.mjs"
+      ]
+    },
     "js/data/garage-defaults.js": {
       "file": [
         "tests/unit/garage-defaults.test.mjs"
@@ -4933,6 +4941,9 @@
       ],
       "weatherFor": [
         "tests/unit/real-race-script.test.mjs"
+      ],
+      "*": [
+        "tests/unit/ratchets.test.mjs"
       ]
     },
     "js/data/results.js": {
@@ -5003,6 +5014,9 @@
       ]
     },
     "js/data/teams.js": {
+      "liveryEnumOk": [
+        "tests/unit/car-materials.test.mjs"
+      ],
       "sanitizeCustom": [
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/team-livery.test.mjs"
@@ -6896,6 +6910,7 @@
       ],
       "*": [
         "tests/specs/career.spec.js",
+        "tests/unit/car-materials.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/garage-interior-gate.test.mjs",
         "tests/unit/garage-panel-side.test.mjs",
@@ -7111,6 +7126,7 @@
       "*": [
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/ratchets.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
@@ -7534,6 +7550,7 @@
         "tests/specs/menu-keyboard.spec.js",
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/pit-lane.test.mjs",
+        "tests/unit/ratchets.test.mjs",
         "tests/unit/reject-lint.test.mjs",
         "tests/unit/steer-tuning-lock.test.mjs"
       ]
@@ -8726,6 +8743,7 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "*": [
+        "tests/unit/ratchets.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
@@ -12647,6 +12665,9 @@
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
+      "pumpAnimation": [
+        "tests/unit/tlx-anim-pump.test.mjs"
+      ],
       "pushRec": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
@@ -13356,6 +13377,7 @@
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/driving-line.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/ratchets.test.mjs",
         "tests/unit/road-lut-frame.test.mjs"
       ]
     },
@@ -13623,6 +13645,9 @@
       ],
       "setKeepGeometry": [
         "tests/unit/baked-model-road-guard.test.mjs",
+        "tests/unit/props-over-road.test.mjs"
+      ],
+      "terrainY": [
         "tests/unit/props-over-road.test.mjs"
       ],
       "*": [

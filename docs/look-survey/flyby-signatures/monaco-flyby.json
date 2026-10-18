@@ -1,0 +1,219 @@
+{
+  "track": "monaco",
+  "backend": "webgl2",
+  "timeOfDay": "default",
+  "weather": "dry",
+  "seed": 3,
+  "grid": "tier",
+  "shots": null,
+  "sheet": "monaco-sheet.png",
+  "frames": [
+    {
+      "u": 0,
+      "shot": "wide",
+      "index": 0,
+      "fov": 36,
+      "eye": [
+        584.96,
+        258.23,
+        -300.1
+      ],
+      "target": [
+        40.3,
+        8.23,
+        46.49
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "monaco-u000-wide.png"
+    },
+    {
+      "u": 0.125,
+      "shot": "wide2",
+      "index": 1,
+      "fov": 37.1,
+      "eye": [
+        -396.75,
+        173.06,
+        130.21
+      ],
+      "target": [
+        40.3,
+        8.23,
+        46.49
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "monaco-u013-wide2.png"
+    },
+    {
+      "u": 0.25,
+      "shot": "landmark1",
+      "index": 2,
+      "fov": 38,
+      "eye": [
+        271.78,
+        32.35,
+        -374.85
+      ],
+      "target": [
+        321.8,
+        45.27,
+        -442.3
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "monaco-u025-landmark1.png"
+    },
+    {
+      "u": 0.375,
+      "shot": "turn-first",
+      "index": 4,
+      "fov": 39.2,
+      "eye": [
+        -273.69,
+        36.15,
+        421.98
+      ],
+      "target": [
+        -317.14,
+        20.72,
+        394.31
+      ],
+      "lift": 0,
+      "onRoad": false,
+      "lat": null,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "monaco-u038-turn-first.png"
+    },
+    {
+      "u": 0.5,
+      "shot": "turn-mid",
+      "index": 5,
+      "fov": 37.6,
+      "eye": [
+        228.6,
+        5.14,
+        -423.82
+      ],
+      "target": [
+        186.23,
+        0.7,
+        -462.84
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": -3,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "monaco-u050-turn-mid.png"
+    },
+    {
+      "u": 0.625,
+      "shot": "grid-walk",
+      "index": 7,
+      "fov": 49.7,
+      "eye": [
+        337.31,
+        1.79,
+        -322.6
+      ],
+      "target": [
+        359.22,
+        0.49,
+        -238.75
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": 0,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "monaco-u063-grid-walk.png"
+    },
+    {
+      "u": 0.75,
+      "shot": "grid-crane",
+      "index": 8,
+      "fov": 31.6,
+      "eye": [
+        324.67,
+        4.87,
+        -365.11
+      ],
+      "target": [
+        348.36,
+        0.8,
+        -282.55
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": -0.22,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "monaco-u075-grid-crane.png"
+    },
+    {
+      "u": 0.875,
+      "shot": "grid-front",
+      "index": 9,
+      "fov": 40,
+      "eye": [
+        360.19,
+        1.99,
+        -197.64
+      ],
+      "target": [
+        359.94,
+        0.64,
+        -219.77
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": 2.51,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "monaco-u088-grid-front.png"
+    },
+    {
+      "u": 1,
+      "shot": "grid-mine",
+      "index": 10,
+      "fov": 40,
+      "eye": [
+        340.95,
+        1.56,
+        -302.4
+      ],
+      "target": [
+        365.85,
+        1.03,
+        -164.09
+      ],
+      "lift": 0,
+      "onRoad": true,
+      "lat": 2,
+      "inside": null,
+      "defect": null,
+      "liftWarn": false,
+      "file": "monaco-u100-grid-mine.png"
+    }
+  ]
+}

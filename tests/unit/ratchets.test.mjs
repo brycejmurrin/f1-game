@@ -5,6 +5,7 @@
 // Run: node --test tests/unit/ratchets.test.mjs   (npm run test:tooling-fast)
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { load, measure, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES } from "../../tools/check/ratchets.mjs";
 
 test("every ratcheted metric is at or under its ceiling", async () => {
@@ -279,4 +280,30 @@ test("baked data files are excluded from the size ratchet (#1659)", () => {
   assert.equal(out.files["js/lighting/presets.js"], undefined, "an excluded row is dropped, with or without a fragment delta");
   assert.equal(out.files["js/net/lobby.js"].lines, 2417, "other rows still take their deltas");
   assert.equal(load().files["js/lighting/presets.js"], undefined, "the live ceilings carry no row for it");
+});
+
+// Hunt-2 D-rows that rg proved have no caller (#1673). A reintroduction fails
+// here before a browser run. Kept rows (game.js destructures, alongAdx,
+// deleteMark, doneByInto, getBoostFlame, CamTune, beginUi/afterPaint,
+// streetLamp/gridshellCanopy/underpassPortal) still have callers or sit in a
+// forbidden file; they are not in this list.
+test("hunt-2 zero-ref exports stay deleted (#1673)", () => {
+  const gone = [
+    ["js/perf/metrics-overlay.js", /\bPANEL_STYLE\b/],
+    ["js/track/core/mesh.js", /\bbuildPitGarages\b/],
+    ["js/data/real-race-tab.js", /\blapEvents\b/],
+    ["js/input/haptics.js", /\btriggerHapticsEnabled\b/],
+    ["js/input/input.js", /\btriggerHapticsEnabled\b/],
+    ["index.html", /\bid="tc-edge"/],
+    ["index.html", /\bid="tc-ink"/],
+  ];
+  const still = gone.filter(([file, re]) => re.test(fs.readFileSync(file, "utf8")));
+  assert.deepEqual(still.map(([file, re]) => `${file} ${re}`), [],
+    "a hunt-2 zero-ref export is back");
+});
+
+test("terrain-over-road does not treat a missing gap as a pass (#1674)", () => {
+  const src = fs.readFileSync("tests/specs/terrain-over-road.spec.js", "utf8");
+  assert.equal(/gap === null/.test(src), false,
+    "gap === null must not be an accepted success; sample where terrain exists and require a number");
 });

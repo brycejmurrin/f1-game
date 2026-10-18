@@ -26,18 +26,21 @@ test("Hungaroring terrain stays below the racing surface through the T2 basin", 
   await page.evaluate(() => window.__apex.race("hungaroring", "day", "dry"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   // Sample only once the terrain mesh exists: a null gap before that is "not built
-  // yet", which the gap === null assertions below would accept. (terrainY at lat 0
+  // yet". (terrainY at lat 0
   // is legitimately null under a carved road, so it cannot be the readiness signal.)
   await page.waitForFunction(() => !!window.__apex.trackGeometry(), null, { polling: 100, timeout: BOOT_MS });
 
+  // |lat| under ~8 m is the carved road: terrainY is null there by construction
+  // and accepting that null let this test pass with no terrain at all. These
+  // laterals sit just outside the carve (hw is 7 m) where the basin mesh exists.
+  // Measured in the track-build VM: each is a number and below the asphalt.
   const gaps = await page.evaluate(() =>
-    [-6, -3, 0, 3, 6].map((lat) => window.__apex.groundY(0.163, lat).gap)
+    [-14, -10, 10, 14].map((lat) => window.__apex.groundY(0.163, lat).gap)
   );
 
   for (const gap of gaps) {
-    // No covering terrain is also safe; any terrain that does cover the sample
-    // must remain below the asphalt within interpolation tolerance.
-    expect(gap === null || gap <= TOL).toBe(true);
+    expect(typeof gap).toBe("number");
+    expect(gap).toBeLessThanOrEqual(TOL);
   }
 });
 
@@ -47,18 +50,20 @@ test("Red Bull Ring terrain stays below both nearby road sections", async ({ pag
   await page.evaluate(() => window.__apex.race("redbull", "day", "dry"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   // Sample only once the terrain mesh exists: a null gap before that is "not built
-  // yet", which the gap === null assertions below would accept. (terrainY at lat 0
+  // yet". (terrainY at lat 0
   // is legitimately null under a carved road, so it cannot be the readiness signal.)
   await page.waitForFunction(() => !!window.__apex.trackGeometry(), null, { polling: 100, timeout: BOOT_MS });
 
+  // Same carve as Hungaroring: ±6 m is null under the road. ±10/±14 are on the
+  // mesh (track-build VM) and must be numbers at or under the asphalt.
   const probes = await page.evaluate(() =>
     [0.98, 0.335].flatMap((frac) =>
-      [-6, -3, 0, 3, 6].map((lat) => ({ frac, lat, gap: window.__apex.groundY(frac, lat).gap }))
+      [-14, -10, 10, 14].map((lat) => ({ frac, lat, gap: window.__apex.groundY(frac, lat).gap }))
     )
   );
   for (const probe of probes) {
-    expect(probe.gap === null || probe.gap <= TOL,
-      `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${probe.gap}`).toBe(true);
+    expect(typeof probe.gap, `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m`).toBe("number");
+    expect(probe.gap, `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${probe.gap}`).toBeLessThanOrEqual(TOL);
   }
 });
 
@@ -68,7 +73,7 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
   await page.evaluate(() => window.__apex.race("mexico", "day", "dry"));
   await page.waitForFunction(() => window.__apex.info().track === "mexico", null, { polling: 100, timeout: BOOT_MS });
   // Sample only once the terrain mesh exists: a null gap before that is "not built
-  // yet", which the gap === null assertions below would accept. (terrainY at lat 0
+  // yet". (terrainY at lat 0
   // is legitimately null under a carved road, so it cannot be the readiness signal.)
   await page.waitForFunction(() => !!window.__apex.trackGeometry(), null, { polling: 100, timeout: BOOT_MS });
 
@@ -84,8 +89,10 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
     // (b3acbb088, 2026-09-24) the probe at lat 18 m reads gap 0.429 but
     // overRoad -0.192: below the road surface, which is what this asserts.
     // Off a bankZone the two are identical.
+    // ±18 m is outside the carve at every one of these fracs (track-build VM).
+    // The old ±10/0 ladder included nulls, and `null || gap <= TOL` passed them.
     const grounds = [0.735, 0.78, 0.84, 0.855].flatMap((frac) =>
-      [-18, -10, 0, 10, 18].map((lat) => ({ frac, lat, gap: window.__apex.groundY(frac, lat).overRoad }))
+      [-18, 18].map((lat) => ({ frac, lat, gap: window.__apex.groundY(frac, lat).overRoad }))
     );
     return {
       elevationRange: Math.max(...profile.map((point) => point.y)) -
@@ -148,8 +155,8 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
   expect(audit.walls.minOverHw).toBeGreaterThan(0);
   expect(audit.walls.tightFrac, "Foro Sol concrete walls register collision").toBeGreaterThan(0.3);
   for (const probe of audit.grounds) {
-    expect(probe.gap === null || probe.gap <= TOL,
-      `Mexico terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${probe.gap}`).toBe(true);
+    expect(typeof probe.gap, `Mexico terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m`).toBe("number");
+    expect(probe.gap, `Mexico terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${probe.gap}`).toBeLessThanOrEqual(TOL);
   }
 });
 

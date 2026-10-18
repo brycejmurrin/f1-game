@@ -1431,7 +1431,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /texture_2d_array/);
   assert.match(CHUNKS_SOURCE, /fn applyMaterial\(/);
   assert.match(CHUNKS_SOURCE, /fn applyMaterialNormal\(/);
-  assert.match(CHUNKS_SOURCE, /surfaceId <= 33/);
+  assert.match(CHUNKS_SOURCE, /surfaceId <= 37/);
   // Every livery-finish surface must exist in WGSL too — a finish implemented
   // on GLX alone is invisible on WebGPU and nothing else would catch it.
   for (const id of [28, 29, 30, 31, 33])
