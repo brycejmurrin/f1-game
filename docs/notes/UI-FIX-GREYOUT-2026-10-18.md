@@ -85,5 +85,7 @@ loop.
 | HUD arrange | VISIBILITY | its own hint line now says it (`hud-arrange.js`) |
 
 Runtime controls with no id got one in their owned module (`ap-*` in Appearance Studio, `pm-pad-profile-reset`,
-`as-mix-test` / `as-mix-stop`, `data-peek` on PEEK). The track designer's SPAN WIDTH −/+ has no stable selector and
-stays for #2851's own PR.
+`as-mix-test` / `as-mix-stop`, `data-peek` on PEEK). The track designer's SPAN WIDTH −/+ got
+`td-spanw-dn` / `td-spanw-up` in #2851's own PR (reason "Select a RANGE of points"). With #2847 the Spotify
+playlist/device pickers live only in the sheet; its device row reads "Only in REMOTE mode" when connected in
+IN BROWSER mode.

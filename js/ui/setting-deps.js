@@ -155,9 +155,13 @@ const SettingDeps = (function () {
     { key: "why-sp-connect", ids: ["as-sp-connect"],
       why: (s) => (s.val("as-sp-id") === null ? PASTE : s.data("as-sp-wrap", "spState") === "connecting" ? "Connecting…" : "Already connected") },
     { key: "why-sp-disconnect", ids: ["as-sp-disconnect"], why: (s) => (s.val("as-sp-id") === null ? PASTE : "Not connected") },
-    { key: "why-sp", ids: ["as-sp-device", "as-sp-refresh", "as-sp-playlist", "as-sp-play", "as-sp-pause", "as-sp-next", "as-sp-check", "as-sp-open"],
+    // The playlist and device pickers live only in the sheet (#2847).
+    { key: "why-sp", ids: ["as-sp-play", "as-sp-pause", "as-sp-next", "as-sp-check", "as-sp-open"],
       why: (s) => (s.val("as-sp-id") === null ? PASTE : s.data("as-sp-wrap", "spState") === "connected" ? null : CONNECT), link: "as-sp-status" },
-    { key: "why-sp-sheet", ids: ["sp-toggle", "sp-prev", "sp-fwd", "sp-refresh2", "sp-playlist2", "sp-device2"], why: CONNECT, link: "sp-status2" },
+    { key: "why-sp-sheet", ids: ["sp-toggle", "sp-prev", "sp-fwd", "sp-playlist2"], why: CONNECT, link: "sp-status2" },
+    // The sheet's device row is REMOTE-only: IN BROWSER plays in this tab.
+    { key: "why-sp-device", ids: ["sp-refresh2", "sp-device2"],
+      why: (s) => (s.data("as-sp-wrap", "spState") === "connected" ? "Only in REMOTE mode" : CONNECT), link: "sp-status2" },
     // RACE SETTINGS (race-settings.js locks these for a DAILY race / SEASON quali)
     { key: "why-daily", ids: ["rs-laps", "rs-weather", "rs-time"], why: "Set by DAILY CHALLENGE" },
     { key: "why-season-quali", ids: ["rs-quali"], why: "Set by SEASON SETUP" },
@@ -172,6 +176,7 @@ const SettingDeps = (function () {
     // TRACK DESIGNER (js/editor) and DATA HUB (js/data) build these with no ids.
     { key: "why-td-point", why: "Select a point first",
       sel: 'button[aria-label="Clear point selection"], button[aria-label="Focus selected points on the map and profile"], button[aria-label="Test drive from the selected point"]' },
+    { key: "why-td-span", ids: ["td-spanw-dn", "td-spanw-up"], why: "Select a RANGE of points" },
     { key: "why-td-chip", sel: ".td-chips button", text: ["START HERE", "DELETE POINT"], why: "Select a point first" },
     { key: "why-dh-download", sel: ".dh-export-row button", text: ["Download"], why: "Press GATHER first" },
   ]);
