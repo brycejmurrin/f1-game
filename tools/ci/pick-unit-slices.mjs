@@ -188,7 +188,7 @@ function changedFiles(argv) {
 }
 
 /** Unit files that live only in tooling-fast / sweeps — not a CI node slice. */
-export function classifyUnitFile(f, owners, groupsJson = null) {
+function classifyUnitFile(f, owners, groupsJson = null) {
   if (owners.has(f)) return { kind: "slice", slices: [...owners.get(f)] };
   const g = groupsJson || JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8"));
   const sweepsFiles = new Set(g.groups?.["test:sweeps"]?.files || []);
@@ -218,7 +218,7 @@ const PAGE_SOURCES = [
   /^js\/core\/log\.js$/, /^js\/track\/core\/(space|spline|pit|line)\.js$/,
   /^js\/physics\//, /^js\/agent\//,
 ];
-export function adaptedSourceWhy(f) {
+function adaptedSourceWhy(f) {
   if (PAGE_SOURCES.some((re) => re.test(f))) return `source of an ADAPTED spec (vm-page runs it): ${f}`;
   if (!/^js\/circuits\/.+\.js$/.test(f)) return "";
   const m = /^js\/circuits\/(scenery\/)?([^/]+)\.js$/.exec(f);
@@ -232,7 +232,7 @@ export function adaptedSourceWhy(f) {
   return built === null || built.has(id) ? `circuit ${id} is built by an ADAPTED spec (vm-page runs it)` : "";
 }
 
-export function pickAll(why = "--all") {
+function pickAll(why = "--all") {
   const slices = new Map();
   for (const s of SLICES) slices.set(s, new Set([why]));
   return { slices, unmatched: [], reason: "all" };
