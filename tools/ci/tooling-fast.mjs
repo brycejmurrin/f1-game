@@ -300,6 +300,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the 52 and never in SEASON; hostile stored input is repaired or dropped.
   // Runs the TRACK_VM engine over a stub store, ~3 s.
   "tests/unit/custom-tracks.test.mjs",
+  // COLOUR VISION palette: off matches today's tokens, Machado + CIEDE2000.
+  "tests/unit/cvd-palette.test.mjs",
   // The three suites the feature batches added. Each is pure rules over a
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.

@@ -13860,6 +13860,9 @@
       "setContrast": [
         "tests/unit/appearance-opts.test.mjs"
       ],
+      "setCvdMode": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
       "setHelp": [
         "tests/unit/appearance-opts.test.mjs"
       ],
@@ -13986,6 +13989,23 @@
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ]
+    },
+    "js/ui/cvd-palette.js": {
+      "dE2000": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
+      "labFromLinear": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
+      "rgb01": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
+      "simulate": [
+        "tests/unit/cvd-palette.test.mjs"
+      ],
+      "simulateLinear": [
+        "tests/unit/cvd-palette.test.mjs"
       ]
     },
     "js/ui/debris-opts.js": {
