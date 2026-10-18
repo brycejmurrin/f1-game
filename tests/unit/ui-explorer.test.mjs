@@ -375,3 +375,99 @@ test("inspector: a control whose centre is under a sibling past a scroller edge 
   input.getBoundingClientRect = () => rect(10, 100, 300, 40); // fully inside the scroller: a real overlay stays blocked
   assert.equal(inspect().controls[0].reachability.hit, "blocked");
 });
+
+
+test('binding assertions tolerate finite numeric serialization without coercing other types', async () => {
+  const { checkBinding } = await import('../../tools/ui/explorer/browser.mjs');
+  let runtime = 109.00000000000001, saved = runtime;
+  const session = { page: { evaluate: async () => ({ controls: [{ binding: {
+    status: 'matches', runtime, saved: { status: 'read', value: saved },
+  } }] }) } };
+  const oracle = { type: 'binding', selector: '#scale', runtime: 109, saved: 109 };
+  assert.equal((await checkBinding(session, oracle)).matches, true);
+  for (const wrong of [109.001, '109', true, NaN, Infinity]) {
+    runtime = wrong;
+    assert.equal((await checkBinding(session, oracle)).matches, false);
+  }
+  runtime = 109; saved = '109';
+  assert.equal((await checkBinding(session, oracle)).matches, false);
+  runtime = 'light'; saved = 'light';
+  assert.equal((await checkBinding(session, { ...oracle, runtime: 'light', saved: 'light' })).matches, true);
+});
+
+test('inspector includes pointer-only controls, named canvases and bounded select options in boxless regions', () => {
+  const rect = { x: 10, y: 10, width: 100, height: 44, right: 110, bottom: 54 };
+  const element = (id, tagName, attrs = {}) => ({ id, tagName, parentElement: null, textContent: '', tabIndex: 0,
+    getAttribute: k => attrs[k] ?? null, closest: () => null, contains: () => false, matches: () => false,
+    querySelectorAll: () => [], getBoundingClientRect: () => rect });
+  const pointer = element('next', 'BUTTON', { 'aria-hidden': 'true' });
+  pointer.closest = s => s.includes('aria-hidden') ? pointer : null;
+  const canvas = element('editor', 'CANVAS', { 'aria-label': 'Track drawing' });
+  const decorative = element('decorative', 'CANVAS');
+  const select = element('theme', 'SELECT', { 'aria-label': 'Theme' });
+  select.value = 'dark';
+  select.options = Array.from({ length: 70 }, (_, i) => ({ label: i === 0 ? 'x'.repeat(170) : `Choice ${i}`,
+    value: String(i), selected: i === 0, disabled: false, closest: () => i === 1 ? {} : null }));
+  const region = element('sheet', 'DIV');
+  region.getBoundingClientRect = () => ({ ...rect, width: 0, height: 0 });
+  region.querySelectorAll = () => [pointer];
+  const unfocusable = element('inactive-canvas', 'CANVAS', { 'aria-label': 'Inactive' }); unfocusable.tabIndex = -1;
+  const hidden = element('hidden', 'BUTTON'); hidden.closest = s => s.includes('[hidden]') ? hidden : null;
+  let activeView = canvas;
+  const controls = [pointer, canvas, decorative, select, unfocusable, hidden];
+  const document = { querySelectorAll: s => s.includes('.screen') ? [region] : s.startsWith('button') ? controls : s.startsWith('[role=') ? [activeView] : [],
+    documentElement: { scrollWidth: 1000, dataset: {} }, activeElement: null, elementFromPoint: () => pointer };
+  const context = vm.createContext({ document, window: {}, innerWidth: 1000, innerHeight: 800,
+    location: { href: 'http://localhost/' }, CSS: { escape: s => s }, matchMedia: () => ({ matches: false }),
+    getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }) });
+  const report = JSON.parse(JSON.stringify(vm.runInContext(`(${inspectUI.toString()})()`, context)));
+  assert.deepEqual(report.roots, ['sheet']);
+  assert.deepEqual(report.views, ['#editor']);
+  activeView = element('dh-panel', 'DIV', { 'aria-labelledby': 'dh-tab-export' });
+  const exportView = JSON.parse(JSON.stringify(vm.runInContext(`(${inspectUI.toString()})()`, context)));
+  assert.deepEqual(exportView.views, ['#dh-panel[aria-labelledby=\"dh-tab-export\"]']);
+  assert.deepEqual(report.controls.map(c => c.selector), ['#next', '#editor', '#theme']);
+  assert.equal(report.controls[0].interactionKind, 'pointer-only');
+  assert.equal(report.controls[0].ariaHidden, true);
+  assert.equal(report.controls[1].interactionKind, 'custom-surface');
+  assert(!report.issues.some(i => i.kind === 'unnamed' && i.selector === '#next'));
+  const choices = report.controls[2];
+  assert.equal(choices.options.length, 64);
+  assert.equal(choices.options[0].name.length, 160);
+  assert.equal(choices.options[0].truncated, true);
+  assert.equal(choices.options[1].disabled, true);
+  assert.deepEqual(choices.optionCoverage, { total: 70, inspected: 64, omitted: 6, truncated: true });
+});
+
+test('garage routes stop when deferred content never becomes ready', async () => {
+  const { openGarageTab } = await import('../../tools/ui/menu-screens.mjs');
+  const clicks = [];
+  const page = { click: async s => clicks.push(s), waitForSelector: async s => {
+    if (s.includes('aria-busy')) throw new Error('Garage content remained busy');
+  } };
+  await assert.rejects(() => openGarageTab(page, 'team'), /remained busy/);
+  assert.deepEqual(clicks, ['#mb-garage'], 'never silently skip a missing tab or click stale content');
+});
+
+test('theme persistence recipe exercises the current native control on both sides of reload', () => {
+  const mission = MISSIONS.find(m => m.id === 'settings-persistence');
+  const reload = mission.actions.findIndex(a => a.type === 'reload');
+  assert(mission.actions.some(a => a.type === 'select' && a.selector === '#pm-uitheme-sel' && a.value === 'light'));
+  for (const actions of [mission.actions.slice(0, reload), mission.actions.slice(reload + 1)]) {
+    assert(actions.some(a => a.type === 'assert' && a.oracle.selector === '#pm-uitheme-sel' && a.oracle.saved === 'light'));
+  }
+});
+
+test('reload blocks subsequent replay actions until the game boot boundary', async () => {
+  const seen = []; let releaseBoot;
+  const page = { reload: async () => seen.push('document'),
+    waitForFunction: async () => { seen.push('boot-pending'); await new Promise(resolve => { releaseBoot = resolve; }); },
+    evaluate: async () => seen.push('pause-menu-rendering') };
+  let finished = false;
+  const work = performAction({ page }, { type: 'reload' }).then(() => { finished = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(finished, false, 'DOMContentLoaded alone cannot authorize a replay click');
+  assert.deepEqual(seen, ['document', 'boot-pending']);
+  releaseBoot(); await work;
+  assert.deepEqual(seen, ['document', 'boot-pending', 'pause-menu-rendering']);
+});

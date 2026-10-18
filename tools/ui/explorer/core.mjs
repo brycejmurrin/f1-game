@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 const ID = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
 const STATES = ['visible', 'hidden', 'attached', 'detached'];
 const ROLES = new Set(('alert alertdialog application article banner blockquote button caption cell checkbox code columnheader combobox complementary contentinfo definition deletion dialog directory document emphasis feed figure form generic grid gridcell group heading img insertion link list listbox listitem log main marquee math meter menu menubar menuitem menuitemcheckbox menuitemradio navigation none note option paragraph presentation progressbar radio radiogroup region row rowgroup rowheader scrollbar search searchbox separator slider spinbutton status strong subscript superscript switch tab table tablist tabpanel term textbox time timer toolbar tooltip tree treegrid treeitem').split(' '));
-const SEMANTIC = ['id', 'selector', 'role', 'name', 'label', 'type', 'disabled', 'checked', 'value', 'expanded', 'pressed', 'selected', 'open'];
+const SEMANTIC = ['id', 'selector', 'role', 'name', 'label', 'type', 'disabled', 'checked', 'value', 'expanded', 'pressed', 'selected', 'open', 'ariaHidden', 'interactionKind'];
 const fail = message => { throw new TypeError(message); };
 const object = (value, label) => {
   if (!value || typeof value !== 'object' || Array.isArray(value) || ![Object.prototype, null].includes(Object.getPrototypeOf(value))) fail(`${label} must be an object`);
@@ -150,7 +150,7 @@ export function validateScenario(input) {
 function signature(snapshot) {
   object(snapshot, 'snapshot');
   const result = {};
-  for (const group of ['roots', 'dialogs', 'controls']) {
+  for (const group of ['roots', 'views', 'dialogs', 'controls']) {
     const entries = snapshot[group] ?? [];
     if (!Array.isArray(entries) || entries.length > 2048) fail(`${group} must be a bounded array`);
     result[group] = Array.from(entries, entry => {
@@ -178,6 +178,19 @@ function signature(snapshot) {
 
 export function stateKey(snapshot) {
   return createHash('sha256').update(JSON.stringify(signature(snapshot))).digest('hex');
+}
+
+/** Shared roots prove only a container visit; subviews require observed DOM markers. */
+export function catalogCoverage(catalog, snapshots) {
+  const counts = new Map();
+  for (const screen of catalog) counts.set(screen.root, (counts.get(screen.root) || 0) + 1);
+  return catalog.map(screen => {
+    const observed = snapshots.filter(s => (s.roots || []).some(r => (typeof r === 'string' ? r : r.id) === screen.root.replace(/^#/, '')));
+    const identified = !!screen.view || counts.get(screen.root) === 1;
+    return { id: screen.id, root: screen.root, ...(screen.view ? { view: screen.view } : {}),
+      visited: identified && observed.some(s => !screen.view || (s.views || []).includes(screen.view)),
+      basis: screen.view ? 'observed-subview' : identified ? 'observed-root' : 'shared-root-unidentified' };
+  });
 }
 
 export function addGraphStep(graph, before, after, input) {
