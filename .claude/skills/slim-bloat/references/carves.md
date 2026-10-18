@@ -40,7 +40,8 @@ before/after counts (`bloat-scan.mjs --json`).
 
 - Engine vs data: `js/track/` vs `js/circuits/<id>.js`.
 - New module: it goes in the DOMAIN directory (`js/physics/`, `js/race/`,
-  `js/ui/`, …) — `js/game/` was dissolved in the 2026-09 restructure.
+  `js/ui/`, …). Entry state lives in `js/game.js` (`G` façade); there is no
+  `js/game/` directory after the 2026-09 restructure.
   Hyphenated name; grandfathered squashed names stay.
 - `tools/` subdir: `tools/README.md` must name the file (or `family/`).
 - `tests/` split is done — do not invent a third layout. Guards in

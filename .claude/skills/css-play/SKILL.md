@@ -1,6 +1,6 @@
 ---
 name: css-play
-description: "Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots, no full layout audit), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging a CSS methodology (BEM/CUBE/ITCSS). Cramped screen: ui-menu-a11y; every screen: survey-ui-matrix; dead selectors: slim-bloat."
+description: "Use when iterating one menu/HUD stylesheet with screenshots, or restructuring screens/DOM/token system (BEM/CUBE/ITCSS). Cramped screen → ui-menu-a11y; full matrix → survey-ui-matrix; dead CSS → slim-bloat."
 ---
 
 # Playing with menu / HUD CSS

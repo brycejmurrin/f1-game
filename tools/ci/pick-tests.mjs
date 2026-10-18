@@ -221,6 +221,7 @@ export const RULES = [
   // lifecycle. Pure Node suite (xr-phase0.test.mjs) in steering-unit / tooling-fast;
   // the optional iwer Playwright smoke is test:xr (not selected by path alone).
   [/^js\/xr\//, ["steering-unit", "tooling-fast"], "xr-phase0.test.mjs — rig compose, input map, sessionInit, vendored XR addons"],
+  [/^js\/share\//, ["state-unit"], "share-card data/layout/painter and Daily Challenge delivery hook"],
   [/^js\/ui\/scale\.js/, ["ui"], "ui-scale.spec.js"],
   [/^js\/ui\/dock-layout\.js/, ["steering-unit", "ui"], "dock-layout.test.mjs + ui-button-touch reposition"],
   [/^js\/ui\/hud-arrange\.js/, ["steering-unit", "ui"], "hud-arrange.test.mjs (pure drag / pinch / clash maths) + the pause-card editor"],
