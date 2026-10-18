@@ -116,10 +116,10 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 :where(body[data-shape="tall"]) #overlay #disclaimer { flex: 1 1 0; min-width: 0; text-align: start; margin: 0; }
 :where(body[data-shape="tall"]) #overlay #soundbtn { margin: 0; flex: none; }
 
-/* Phone landscape ships the player's preferred hierarchy: identity and art
-   left, a compact destination cluster right. Keep desktop, portrait and saved
-   custom layouts independent. The width is a starting composition, not a text
-   squeeze: groups wrap locally and the menu owns any vertical overflow. */
+/* Phone landscape: identity/art left, compact destination cluster right.
+   No zoom here — menus.css owns the short/narrow 1.25 cap; desktop-sized
+   hasTouch windows keep --ui-scale (ui-scale @ 1280×742 / 200%).
+   Leave grid-row alone so compact Home rows 2/3/4 (above) still apply. */
 :root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
   grid-column: 2; grid-row: 1;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -127,18 +127,16 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   width: calc(30 * var(--vwz)); max-width: 100%; min-width: 0;
   height: 100%; max-height: 100%; align-self: stretch; justify-self: center;
   align-content: safe center; pointer-events: auto;
-  zoom: calc(var(--ui-compact-scale, var(--ui-scale)) * var(--tl-btns-size, 1));
   container: title-menu / inline-size;
 }
 :root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
-  grid-column: 1 / -1; grid-row: auto; width: 100%; min-width: 0;
+  grid-column: 1 / -1; width: 100%; min-width: 0;
 }
 /* Play's five buttons and Garage's sixth share three rows in DOM order.
    Dissolve only these groups; the real menu scroll box remains intact. */
 :root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons :is(#menu-primary, #menu-garage) { display: contents; }
 :root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-brand {
   align-self: start; margin-top: calc(4 * var(--vhz));
-  zoom: calc(var(--ui-compact-brand-scale, var(--ui-scale)) * var(--tl-title-size, 1));
   background: transparent; width: 100%;
 }
 :root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #title {

@@ -203,10 +203,15 @@ test("setting help preserves descriptions, open state and hidden-row ownership a
   };
   const weather = seed("rs-weather", "WEATHER");
   const mixed = seed("rs-mixed", "CONDITIONS");
+  const duel = seed("rs-duel", "DUEL");
   const status = seed("rs-test-status", "STATUS", { role: "status" });
   const live = seed("rs-test-live", "FORECAST", { "aria-live": "polite" });
 
   h.rs.openRaceSettings("select");
+  assert.equal(duel.help.parentElement, duel.row,
+    "#rs-duel-help stays a visible direct child of #rs-duel (browser-ui-hunt containment)");
+  assert.equal(duel.row.querySelectorAll("[data-rs-help]").length, 0,
+    "Duel help is not wrapped in an optional disclosure");
   const fold = weather.help.parentElement;
   assert.equal(fold.tagName, "DETAILS");
   assert.equal(fold.hasAttribute("data-rs-help"), true);

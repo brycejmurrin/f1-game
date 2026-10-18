@@ -543,10 +543,13 @@ const RaceSettings = (function () {
 
     // Long explanations are available beside their setting without consuming
     // the initial editable view. Keep each original description/id intact.
+    // #rs-duel-help stays a visible direct child of #rs-duel: browser-ui-hunt
+    // pins that containment (help belongs to the Duel control at every width).
     function paintHelpDisclosures() {
       for (const row of $("rs-body").querySelectorAll(".set-row")) {
         const help = Array.from(row.children).find(el => el.classList.contains("adv-help"));
         if (!help || help.hasAttribute("role") || help.hasAttribute("aria-live")) continue;
+        if (help.id === "rs-duel-help") continue;
         const label = row.querySelector(".tune-label");
         if (!label) continue;
         const fold = document.createElement("details");
