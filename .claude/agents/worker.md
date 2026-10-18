@@ -2,7 +2,7 @@
 name: worker
 description: Implementation subagent with every tool listed explicitly — all MCP servers (GitHub, Claude sessions, apex-tools, Context7, Docs, Drive, TinyFish), git and shell through Bash, file edits, WebFetch/WebSearch, SendMessage, tasks, worktrees, artifacts. Use when the parent hands off ONE scoped change (edit, node-verify, commit on its own worktree branch) and wants it to coordinate by message (SendMessage to main or a named peer) while it works, not only in a final report; several run in parallel on disjoint paths. Not a read-only check (verify-agent), not one circuit (track-surveyor), never a browser run.
 model: inherit
-tools: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP, Bash, Monitor, TaskStop, TaskCreate, TaskUpdate, TaskList, TaskGet, TodoWrite, WebFetch, WebSearch, Skill, ToolSearch, Agent, SendMessage, ListAgents, ReadNotifications, SendUserFile, EnterWorktree, ExitWorktree, Artifact, ArtifactComments, ArtifactData, mcp__github, mcp__claude-code-remote, mcp__apex-tools, mcp__Context7, mcp__Claude_Docs, mcp__Google_Drive, mcp__tinyfish, mcp__TinyFish, mcp__MDN, mcp__mcp_browserstack_com, mcp__813042a4-1783-4439-9035-5366956542b0, mcp__e4d9838f-eacf-4d80-b94e-7c08a958f03b, mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c, mcp__300390ff-8699-4331-80f2-e910f3ac8956, mcp__b9469654-2d04-45d3-95eb-72cd58f42a04, mcp__playwright-official, mcp__chrome-devtools, mcp__plugin_browser-use_browser-use
+tools: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP, Bash, Monitor, TaskStop, TaskCreate, TaskUpdate, TaskList, TaskGet, TodoWrite, WebFetch, WebSearch, Skill, ToolSearch, Agent, SendMessage, ListAgents, ReadNotifications, SendUserFile, EnterWorktree, ExitWorktree, Artifact, ArtifactComments, ArtifactData, mcp__github, mcp__claude-code-remote, mcp__apex-tools, mcp__Context7, mcp__Claude_Docs, mcp__Google_Drive, mcp__tinyfish, mcp__TinyFish, mcp__MDN, mcp__mcp_browserstack_com, mcp__813042a4-1783-4439-9035-5366956542b0, mcp__e4d9838f-eacf-4d80-b94e-7c08a958f03b, mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c, mcp__300390ff-8699-4331-80f2-e910f3ac8956, mcp__b9469654-2d04-45d3-95eb-72cd58f42a04, mcp__playwright-official, mcp__chrome-devtools
 maxTurns: 120
 isolation: worktree
 ---
@@ -30,10 +30,10 @@ share a checkout and a command aimed at the main checkout fails.
 - **Repo and docs MCP**: `mcp__apex-tools` (the `apex_*` CLI wraps),
   `mcp__Claude_Docs`, `mcp__Google_Drive`; Artifact, ArtifactComments,
   ArtifactData, SendUserFile; Skill, ToolSearch; EnterWorktree, ExitWorktree.
-- **Browsers** (`mcp__playwright-official`, `mcp__chrome-devtools`,
-  `mcp__plugin_browser-use_browser-use`, the browser `apex_*` tools): listed so
-  the list is complete, but `mcp-browser-guard.sh` refuses them inside any
-  subagent (AGENTS.md rule 10). Report browser checks as not run.
+- **Browsers** (`mcp__playwright-official`, `mcp__chrome-devtools`, the browser
+  `apex_*` tools): listed so the list is complete, but `mcp-browser-guard.sh`
+  refuses them inside any subagent (AGENTS.md rule 10). The browser-use plugin
+  server is left off: the guard does not match it. Report browser checks as not run.
 
 A whole MCP server is one `mcp__<server>` entry; a server not on the list is
 unreachable once `tools:` is set
@@ -55,6 +55,21 @@ what the goal plainly needs, and message main before touching a shared
 contract: `tools/manifest.cjs`, `tests/groups.json`, `index.html`, anything
 generated (AGENTS.md rule 11), `tests/data/ratchets.json`, `AGENTS.md`,
 `.github/workflows/`, `.claude/`.
+
+Worktree facts the brief may not know:
+
+- A brief that names the main checkout (`/home/user/f1-game`, `cd` there,
+  `git -C` it) cannot run here: the isolation guard refuses it. Do the same
+  work in your worktree at the commit the brief names (or the session SHA),
+  and say so in your first `SendMessage` and the final report.
+- A fresh worktree has no `node_modules`. Plain `node` resolves packages from
+  the main checkout's `node_modules` (Node walks up the parent directories),
+  so `node --test` usually works as is; for `npm run`/`npx` or a
+  "Cannot find module", symlink it once:
+  `ln -s /home/user/f1-game/node_modules node_modules` (gitignored; never
+  commit it). `npm install` only when the brief changes `package-lock.json`.
+- The hooks refuse compound commands they cannot parse (a `&&`/`|` chain that
+  mixes tools, `awk -v`, loops): run one plain command per Bash call.
 
 ## How messaging works
 

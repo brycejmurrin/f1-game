@@ -1,0 +1,8 @@
+[
+{"query": "perf-memory-census: phone OOM heap snapshots and tools/perf profile before/after shadow road copies #1647.", "expect": "perf-memory-census"},
+{"query": "Dispatch gpu-census.yml macos Verdict for WGX VRAM — perf memory census evidence.", "expect": "perf-memory-census"},
+{"query": "ChunkBins mobile sizing — tools/perf query.mjs census CPU-side duplicates.", "expect": "perf-memory-census"},
+{"query": "perf-memory-census: chrome-devtools take_heapsnapshot localhost Apex lap workflow.", "expect": "perf-memory-census"},
+{"query": "PWA LCP load shell version.json — perf census vs shader work (separate skills).", "expect": "perf-memory-census"},
+{"query": "perf-memory-census numbers for renderer leak suspicion — not one screenshot.", "expect": "perf-memory-census"}
+]

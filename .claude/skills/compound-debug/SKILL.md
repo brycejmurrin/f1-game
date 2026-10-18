@@ -1,6 +1,6 @@
 ---
 name: compound-debug
-description: Use when compound-debug.
+description: "Use when the user names compound-debug: invoke on a scoped change — inspect, reproduce, hypothesize, report evidence, smallest fix, re-check. check-changes gates still govern pushes."
 disable-model-invocation: true
 ---
 ## F1 project integration

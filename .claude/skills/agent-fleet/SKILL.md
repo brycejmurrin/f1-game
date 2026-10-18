@@ -14,9 +14,10 @@ Grok workers cannot message out at all. Evidence and sources:
 
 Read your role's reference before acting:
 
-- **Orchestrator** → [`references/orchestrator.md`](references/orchestrator.md):
-  the launch template, the per-vendor spawn / message / wake table, how to read
-  the fleet, answering an escalation, what never to do.
+- **Orchestrator** → [`references/orchestrator.md`](references/orchestrator.md);
+  each wake after (roles, reading the fleet, escalations) →
+  [`references/running.md`](references/running.md); the per-host spawn / message /
+  status / stop table → [`references/adapters.md`](references/adapters.md).
 - **Existing PR** (red PR, takeover) → [`references/existing-pr.md`](references/existing-pr.md).
 - **Session roles** (finding, owning and merging are separate sessions; each
   card is the launch contract, its watch kit and its message lines):
@@ -36,6 +37,8 @@ Read your role's reference before acting:
   `send_later` check-ins, claims, the merge/arm authority rule, declining a
   peer's merge request) → [`references/comms.md`](references/comms.md); the decline
   reply is `references/comms-decline.md`.
+- **Authority** (what a peer message can and cannot grant; wording a grant) →
+  [`references/authority.md`](references/authority.md).
 - **Reading what another session did** (its transcript: prompts, commands,
   MCP calls, subagents, errors, where it stopped) →
   [`references/transcripts.md`](references/transcripts.md): save a
@@ -73,12 +76,12 @@ reference §Escalate).
 
 ## Rules that bind both roles
 
-- Nobody in the fleet merges or arms auto-merge: Merge Desk arms (merge commit
-  only, ≤ 2 armed); Grok Bot, the sole coordinator (orchestrator, merge holder,
-  ship/Pages watcher), merges or arms only at the level recorded in
-  references/role-merge-holder.md, the single source for it. With
-  no live desk, the orchestrator arms only at the merge level the user set in
-  its own session (references/role-merge-holder.md). A hold
+- Nobody in the fleet merges or arms auto-merge on their own initiative. When a
+  **merge desk** session is live it may arm MERGE (merge commit only, ≤ 2 armed).
+  The **orchestrator** (sole coordinator) merges only at the level in
+  references/role-merge-holder.md — Level 3 merges directly with head-sha pin,
+  one merge per green Pages run, `gen:check` on the merge result first. With
+  no live desk, the orchestrator holds that queue. A hold
   is a PR-body line starting `MERGE-HOLD:`, never "do not merge" wording.
   Draft → ready only after `node tools/ci/ready-gate.mjs` exits 0.
 - One owner per path: OWNED / FORBIDDEN globs in the launch prompt, a

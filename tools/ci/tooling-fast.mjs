@@ -184,6 +184,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/camera-feel.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   "tests/unit/camera-tuner-a11y.test.mjs",
+  "tests/unit/captions.test.mjs",
   "tests/unit/capture-tools-regressions.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
   // test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit
@@ -679,7 +680,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Low-speed lock plateau pin (1.06× → ≈0.371 rad at notch 7) + high-speed
   // Object.is vs pre-boost raw; companion to steer-lock-taper. Source + VM, ~3 s.
   "tests/unit/low-speed-lock.test.mjs",
-  // apex-lsp as an MCP client drives it: definition / references / symbols on the real js/ tree via tsc --lsp. ~2 s.
+  // apex-lsp as an MCP client: definition / references / symbols on the real js/ tree via tsc --lsp; guarded typeof / || {} head aliases (PC.VMAX). ~2 s.
   "tests/unit/lsp-mcp.test.mjs",
   // The marshal posts' light panels show race control: a waved yellow in the
   // sector, steady yellow under VSC/SC, red, a green after the clear. VM, ~0.1 s.
@@ -690,6 +691,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/mcp-cli.test.mjs",
   "tests/unit/mcp-http-origin.test.mjs",
   "tests/unit/mcp-smoke.test.mjs",
+  "tests/unit/measure-pr-ci-after-close.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",
   "tests/unit/meeting-picker-labels.test.mjs",
   // The track-switch growth verdict (mem-census sustainedGrowthMB) replayed on the #773 / 2026-10-04 leak numbers and the Metal warm-up step. ~0.1 s.
@@ -968,8 +970,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // skidmarks.js lays marks per SECOND of laying (was per frame): a VM run of
   // the ring buffer at three refresh rates, ~0.1 s.
   "tests/unit/skidmarks-cadence.test.mjs",
+  // 2026-10-18 skill-surface retest pins (gameplay + render/UI prose), < 1 s.
+  "tests/unit/skill-gameplay-surface.test.mjs",
   "tests/unit/skill-hint-hook.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
+  "tests/unit/skill-render-ui-surface.test.mjs",
   // skill-routing-eval.py against a fake `claude` on PATH (no model calls), ~1.5 s.
   "tests/unit/skill-routing-eval.test.mjs",
   "tests/unit/skill-smoke.test.mjs",
@@ -1305,7 +1310,7 @@ const fmtDur = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
  * fast files started early cost nothing. `--order=list` restores list order;
  * `--record` rewrites the committed table from this run. */
 export const TIMINGS_FILE = path.join(ROOT, "tests/data/tooling-fast-timings.json");
-export const LOCAL_TIMINGS_FILE = path.join(LOGDIR, "tooling-fast-timings.json");
+const LOCAL_TIMINGS_FILE = path.join(LOGDIR, "tooling-fast-timings.json");
 
 /** { <repo-relative file>: ms } — local measurements override committed ones. */
 export function loadTimings(files = [TIMINGS_FILE, LOCAL_TIMINGS_FILE]) {
@@ -1437,8 +1442,8 @@ export function tapFailureDetail(text) {
  * 540 s; the 600 s wall still lands inside ci.yml's 15-minute guards job for a
  * file that starts first, which longest-first makes the slow ones do.
  * APEX_TOOLING_TEST_TIMEOUT_S / APEX_TOOLING_FILE_TIMEOUT_S override both. */
-export const PER_TEST_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_TEST_TIMEOUT_S) || 540) * 1000;
-export const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT_S) || 600) * 1000;
+const PER_TEST_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_TEST_TIMEOUT_S) || 540) * 1000;
+const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT_S) || 600) * 1000;
 
 /**
  * Run the structural suites one file at a time.
@@ -1665,7 +1670,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
 export const DEFAULT_JOBS = 1;
 
 /** Paths that force a full tooling-fast run in --changed mode (fail-safe). */
-export const TOOLING_FAST_CHANGED_RUN_ALL = [
+const TOOLING_FAST_CHANGED_RUN_ALL = [
   /^tests\/groups\.json$/,
   /^package(-lock)?\.json$/,
   /^playwright\.config\.js$/,
@@ -1698,7 +1703,7 @@ function indexPathKey(map, key, testFile) {
 }
 
 /** Map repo-relative paths → tooling-fast unit files that pin them in source. */
-export function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
+function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
   const map = new Map();
   for (const f of files) {
     if (f.startsWith("//")) continue;
@@ -1729,7 +1734,7 @@ export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardC
 }
 
 /** Changed paths vs the deploy branch (merge-base with origin/DEPLOY_BRANCH). */
-export function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
+function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
   try {
     const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
     return changedPaths([base], { cwd: root });
@@ -1820,7 +1825,7 @@ export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against 
 
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
-export const TOOLING_FAST_FLAGS = Object.freeze([
+const TOOLING_FAST_FLAGS = Object.freeze([
   "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--stop", "--help", "-h",
 ]);
 
