@@ -16,6 +16,7 @@
     night: false,
     theme: "green",
     lengthKm: 5.4,
+    tyreSeverity: 1.02,  // Historic US permanent; near-neutral
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     terrainOuter: 120,

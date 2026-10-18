@@ -102,3 +102,5 @@ Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
   is a FULL REPLACE, `scripts/merge-proposals.mjs` merges a delta.
 
 COPY VALUES exports `LightEdits` deltas; merged `lightState()` is observation, not a full export.
+
+Upstream graphics playbook (atmosphere, grading, shadows): [references/graphics-atmosphere-playbook.md](references/graphics-atmosphere-playbook.md).

@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: "Use when asked did I break anything, pick tests, validate/pre-push, verify track edits, js/css shell/cache policy, deploy-branch merge/push, or Playwright timeout triage. Red Actions → ci-red-triage; green PR → steward."
+description: "Use when asked did I break anything, pick the minimum tests, validate/pre-push, verify track edits, js/css shell/cache policy, deploy-branch merge/push, or Playwright timeout triage. Red Actions → ci-red-triage."
 ---
 
 # Validate changes before committing/pushing
@@ -9,7 +9,7 @@ The canonical command meanings and ladder are in
 [`docs/VERIFICATION.md`](../../../docs/VERIFICATION.md). This skill adds the
 failure triage and tool-routing details; it does not redefine the ladder.
 
-Check scoped `DEFECT-LEDGER.md` entries and see [`references/vm-twin.md`](references/vm-twin.md) for VM-twin routing and DEFECT-LEDGER checks.
+Before fixing a known-class defect, grep [`docs/notes/DEFECT-LEDGER.md`](../../../docs/notes/DEFECT-LEDGER.md) for its scope; moving a browser spec onto the node gate (a VM twin) → [`references/vm-twin.md`](references/vm-twin.md).
 
 ## This tree, right now
 
@@ -36,30 +36,16 @@ node tools/ci/verify-change.mjs              # fast gate + start batch 1 (backgr
 node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked
 ```
 
-**BEFORE A PUSH, `--fast` IS NOT THE TOP RUNG.** AGENTS.md rule 3 is a ladder
-and `verify-change` sits on rung 2: `test:tooling-fast` is a SUBSET of the unit
-files (the live figures are rule 3's, generated), and the rest have taken deploys
-red three times. The only pre-push
-check that runs what the deploy runs is
+`--fast` is the edit-loop rung; before a push run `node tools/ci/deploy.mjs --gate-only`
+once (the ladder: AGENTS.md rule 3). A started batch's verdict is its log's `= run …` line
+(`references/triage.md`).
 
-```sh
-node tools/ci/deploy.mjs --gate-only         # pushes NOTHING; a dirty tree is fine
-```
-
-Use `verify-change --fast` in the edit loop and for a subagent verdict; run
-`--gate-only` once before you push. Green on rung 2 never means green on
-rung 3 (`docs/notes/PREPUSH-GATE-LADDER.md`).
-
-`--wait` blocks for the full queue. Subagents and the default loop use `--fast` or a single
-started batch, then read the log's `= run …` verdict line (anchor and waiter: `references/triage.md` §Rules
-that prevent the class; AGENTS.md rules 4-5). Push once per verified batch: a push over a live run cancels it.
-
-Is the tree already red? Not a `--plan` question: `node tools/ci/deploy.mjs --train`
-prints the deploy branch's last ci / pages / nightly conclusions; before blaming your
-change, `verify-agent` with `--base <ref>` answers `DELTA: same-red | new-on-session |
-already-red-on-ref`; before fixing a red you did not cause, `node tools/ci/who-is-on-it.mjs`.
-Scale the plan to AGENTS.md §Verification's table: its `batches` can list more browser
-groups than the cap; the engine / physics recipe is `references/engine-physics.md`.
+- **Already red?** `node tools/ci/deploy.mjs --train` prints the deploy branch's last ci /
+  pages / nightly conclusions; `verify-agent --base <ref>` answers `DELTA: same-red |
+  new-on-session | already-red-on-ref`; a red you did not cause → `who-is-on-it.mjs` first.
+- **Which groups, in what order?** `--plan`'s `batches` can exceed AGENTS.md §Verification's
+  cap. Order: plan, then the two most specific groups one at a time (the master-gate spec
+  alone for a quick signal), the rest named not-run, then the gate: `references/engine-physics.md`.
 
 Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 
@@ -72,9 +58,6 @@ Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
 node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wrap)
 ./tools/mcp/apex-tools-mcp.sh smoke
 ```
-
-- When AGENTS.md retires a rule, grep `tools/` and `.claude/hooks/` for its constant in the same PR
-  (the ready-PR cap retired 2026-10-16 still ran as 3 in `ready-full-cap.mjs` and sessions obeyed it).
 
 ## Load on demand
 

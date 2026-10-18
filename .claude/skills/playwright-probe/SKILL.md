@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: "Use when asked for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after or GLX-vs-TLX frames (backend-compare), flicker/shimmer/z-fighting clips (motion-capture), CPU profiles / flame charts / GC spikes, the CAR STUDIO (livery, sponsors, carview.html), or camera modes (cockpit/chase/orbit/roadside, camState/viewState, framing a corner, camera lag). Not the parts catalog (garage-parts-livery), UI-fit shots (survey-ui-matrix) or a live canvas (mcp-probe)."
+description: "Use when batch headless screenshots/evals (shot.mjs, apex-eval, apex-capture), GLX-vs-TLX compares, shimmer/z-fighting motion-capture clips, CPU profiles, CAR STUDIO livery/sponsors, camera modes (cockpit/chase), or lag/framing. Not garage catalog, UI matrix, live canvas (mcp-probe)."
 ---
 
 # Headless Playwright probing
@@ -118,3 +118,5 @@ both references say what the numbers mean before you A/B on them.
   [references/cameras.md](references/cameras.md), free-cam table and framing
   recipes in
   [references/debug-cameras-framing.md](references/debug-cameras-framing.md).
+- Anti-flake Playwright patterns → [references/anti-flake-playbook.md](references/anti-flake-playbook.md).
+- Smoke / visual / bot-playtest templates → [references/smoke-visual-playbook.md](references/smoke-visual-playbook.md).

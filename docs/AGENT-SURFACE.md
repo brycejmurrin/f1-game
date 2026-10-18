@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Thirty-three `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Thirty-four `apex_*` tools (33 wraps + `apex_help {tool}`, the full text `tools/list` shortens) wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -129,7 +129,7 @@ does not discover, install or validate hosted tools.
 end (Playwright chrome-channel symlink + `mcp-smoke.mjs`) — that validates the
 VM, not host MCP attachment. If `environment-info` shows an allowlist without
 **`name`** on each row, re-**Save** the environment from git’s
-`.cursor/environment.json`, then start a **new** agent with all four MCPs enabled.
+`.cursor/environment.json`, then start a **new** agent with all five MCPs enabled.
 
 When the host catalog is empty, use the Fallback column below (and
 `./tools/mcp/apex-tools-mcp.sh call …`). Only add allowlist names that exist
@@ -155,6 +155,7 @@ auto-load them — then use the Fallback column.
 | **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **survey-ui-matrix**, **css-play**. Batch shots → **playwright-probe** (CLI, not this MCP). | `bash tools/mcp/playwright-mcp.sh run` (stdio) |
 | **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
 | **js-debugger** | `debugger_*` | Parent-owned source debugging of an existing local Chrome page: breakpoints, pause/step, stack/locals and resume; non-pausing logpoints, exception log, incident screenshot, listener and instance counts. Does not launch a browser (`node tools/mcp/debug-chrome.mjs start` does, as a CLI). Setup: [Agent JS debugger](research/AGENT-JS-DEBUGGER-MCP.md). | `tools/mcp/js-debugger-mcp.sh serve-http`, then `call <debugger_tool> '{…}'` against that persistent session |
+| **apex-lsp** | `lsp_*` | Code intelligence over TypeScript 7's native `tsc --lsp` (jsconfig.json: js/ as one script project), by `Name` / `Head.member` / `G.x` or file:line: `lsp_definition` (`body: true` returns the source), `lsp_references` (rows tagged `[def|export|alias|use]` with the enclosing function; `files`, `offset`, `format: concise`), `lsp_callers` (uses grouped by calling function), `lsp_outline` (a module's exports), `lsp_symbols`, `lsp_hover`, `lsp_diagnostics` (errors an edit introduced vs HEAD). `window.X`, CommonJS-flagged and `G` façade symbols fall back to labelled text matches. Hook `lsp-hint.py` names the call when a grep pattern is a bare symbol. Measured: [LSP-MCP](notes/LSP-MCP-2026-10-18.md); `node tools/mcp/lsp-eval.mjs` re-scores it against grep. | `tools/mcp/lsp-mcp.sh def Liveries.forTeam --body` (`refs`, `callers`, `outline`, `sym`, `hover`, `diag`) |
 
 **Removed 2026-09 (CLI only now, not MCP-attached):**
 
@@ -252,7 +253,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Thirty-three tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Thirty-four tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -287,12 +288,14 @@ and viewports) in one read, sourced from the tools' own schemas so it cannot dri
 31 → 32 on 2026-10-16 for `apex_profile`, the same job as a direct browser-kind tool (`profile` joined the settings matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`); it returns a jobId and holds the browser lock until the job exits.
 32 → 33 on 2026-10-16 for `apex_locations`: authored turn and sector targets
 on all 52 circuits, plus curated named scenery with source-located fractions.
+33 → 34 on 2026-10-18 for `apex_help`; `tools/list` now publishes a compact form (71.5 → ~51 KB).
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
 |---|---|---|---|
 | `apex_status` | built-in | tree | check-changes |
 | `apex_catalog` | built-in | tree | check-changes |
+| `apex_help` | built-in | tree | check-changes |
 | `apex_locations` | built-in | tree | survey-track |
 | `apex_doctor` | `check/doctor.mjs` | tree | check-changes |
 | `apex_pick_tests` | `ci/pick-tests.mjs` | tree | check-changes |

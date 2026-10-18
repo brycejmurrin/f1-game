@@ -2524,6 +2524,17 @@ const TLX = (function () {
         b.visible++; setRange0(im, b.visible * 16); im.needsUpdate = true;
         return true;
       }
+      // A freed decal source must release its hidden instance buffer/render object
+      // too. Geometry.dispose alone leaves the run in both strong registries.
+      function _decalDrop(geo) {
+        const b = _decalRuns.get(geo);
+        if (!b) return;
+        _decalRuns.delete(geo);
+        const ix = _instRegistry.indexOf(b.imesh);
+        if (ix >= 0) _instRegistry.splice(ix, 1);
+        dropWrapper(b.imesh);   // waits for an in-flight compile before disposal
+        b.rec = -1;
+      }
       // R1 (perf hunt 3) — REPEATED OPAQUE DRAWS AS ONE INSTANCED RUN PER PASS. The field's wheel layers
       // were ~150 records over ~42 meshes on a bunched grid, one three RenderObject each (6-9 us of JS per
       // object, census + bench). A draw whose opts carry `coalesce` (car-draw.js sets it on the opaque
@@ -2762,7 +2773,57 @@ const TLX = (function () {
       // counters prove the track build ran on THIS backend (never a real GLX
       // WebGL2 context, which is never init'd when TLX is active).
       const _meshMade = { mesh: 0, chunked: 0, tex: 0 };
-
+      // RETIRED TEXTURES ARE REUSED, NOT DESTROYED. A garage livery edit frees
+      // and re-creates the same-sized atlases (the car's decal atlas and its
+      // deferred hi-res swap, the bay's dress and live screens) on every change.
+      // Destroy + create is a fresh GPU allocation per edit (~27 MB for the
+      // desktop hi-res atlas), a fresh bind group per material, and on Safari's
+      // WebGPU a destroyed GPUTexture's memory stays held while any bind group
+      // that referenced it waits for GC (https://github.com/WebKit/WebKit/pull/76225),
+      // so a long editing session stacks freed atlases. three r186 re-uploads a
+      // texture whose .version moved INTO its existing GPU texture
+      // (Textures.updateTexture creates only while isDefaultTexture; there is no
+      // size check), so a retired texture of the SAME size and source kind takes
+      // the next source in place. Same size is what makes that safe; same kind
+      // keeps three's ImageBitmap flipY path what it was. Bounded by count and
+      // aged out after TEX_POOL_MS idle, so a race never carries the garage's.
+      const _texPool = [];   // { t, w, h, bmp, at } — oldest first
+      // 10 s, not a frame or two: car-draw's hi-res swap re-fills its 2048 texture from an idle callback,
+      // seconds after the edit on a slow device, and an aged-out entry is a fresh ~27 MB allocation again.
+      const TEX_POOL_MAX = 4, TEX_POOL_MS = 10000;
+      const _texStat = { made: 0, reused: 0, retired: 0, disposed: 0 };
+      const _isBitmap = (img) => typeof ImageBitmap !== "undefined" && img instanceof ImageBitmap;
+      function takePooledTexture(src) {
+        if (!src || !(src.width > 0 && src.height > 0)) return null;
+        const bmp = _isBitmap(src);
+        for (let i = 0; i < _texPool.length; i++) {
+          const e = _texPool[i];
+          if (e.w === src.width && e.h === src.height && e.bmp === bmp) { _texPool.splice(i, 1); return e.t; }
+        }
+        return null;
+      }
+      // The decal material cache keys on the texture: a pooled one keeps its
+      // material (the next fill reuses both, no node build), a disposed one
+      // drops it — kept, it pinned the freed texture until LRU pressure.
+      function disposePooled(t) {
+        _texStat.disposed++;
+        if (fx && fx.releaseTexture) { try { fx.releaseTexture(t); } catch (_) { /* cache bookkeeping only */ } }
+        try { t.dispose(); } catch (_) { /* device already dying */ }
+      }
+      function retireTexture(t, now) {
+        if (!t.__tlxPoolW) { disposePooled(t); return; }
+        _texStat.retired++;
+        // An owned source closes now, as its dispose would have; a canvas is
+        // swapped for the stand-in so a never-uploaded one is not pinned here.
+        if (t.__tlxRelease) t.__tlxRelease();
+        else if (t.image && !_isBitmap(t.image)) { const stand = texStandIn(); if (stand) t.image = stand; }
+        t.onUpdate = null;
+        _texPool.push({ t, w: t.__tlxPoolW, h: t.__tlxPoolH, bmp: !!t.__tlxPoolBmp, at: now });
+        while (_texPool.length > TEX_POOL_MAX) disposePooled(_texPool.shift().t);
+      }
+      function ageTexPool(now) {
+        while (_texPool.length && now - _texPool[0].at > TEX_POOL_MS) disposePooled(_texPool.shift().t);
+      }
       let envCubeCam = null;
       let envFacesMask = 0, envReady = false, _envActive = false;
       // Software / soft-GPU faces clear black and skip the world. envReady
@@ -3389,6 +3450,7 @@ const TLX = (function () {
         meshByGeo.delete(geo);
         if (shadowSys && shadowSys.releaseGeometry) shadowSys.releaseGeometry(geo);   // its parked casters too
         _coDrop(geo);   // R1: its coalesced runs
+        _decalDrop(geo);   // F3: its batched decal run
       }
 
       function disposeGeometry(geo) {
@@ -4307,19 +4369,32 @@ const TLX = (function () {
           return { __tlx: true, geo: buildGeometry(data), chunked: true, count: (data.idx && data.idx.length) || 0 };
         },
         createTexture(src, opts) {
-          const t = new THREE.Texture(src);
+          // A retired same-size texture takes this source in place (see _texPool):
+          // its settings below are already these, and needsUpdate re-uploads.
+          let t = takePooledTexture(src);
+          if (t) { t.image = src; _texStat.reused++; }
+          else { t = new THREE.Texture(src); _texStat.made++; }
           // Borrow sources by default. A caller-created bitmap must stay open
-          // for three's flipY checks/reuploads, then close when its texture dies.
+          // for three's flipY checks/reuploads, then close when its texture dies
+          // (or is retired to the pool: retireTexture calls the same release).
+          t.__tlxRelease = null;
           if (opts && typeof opts.disposeSource === "function") {
             const disposeSource = opts.disposeSource;
             const release = () => {
               t.removeEventListener("dispose", release);
+              if (t.__tlxRelease === release) t.__tlxRelease = null;
               try { disposeSource(src); } catch (_) { /* keep GPU disposal running */ }
             };
             t.addEventListener("dispose", release);
+            t.__tlxRelease = release;
           }
+          // The size its GPU copy is allocated at (.image becomes a 1x1 stand-in
+          // after upload) and the source kind: what a later source must match.
+          if (src && src.width > 0 && src.height > 0) { t.__tlxPoolW = src.width; t.__tlxPoolH = src.height; t.__tlxPoolBmp = _isBitmap(src); }
           t.flipY = true;                       // GLX uploads UNPACK_FLIP_Y
-          t.anisotropy = 4;
+          // Never lowered on a reused texture: its sampler was made at the first
+          // upload, and car-draw's crispPlayerDecal raised the player's to 8.
+          if (!(t.anisotropy >= 4)) t.anisotropy = 4;
           t.colorSpace = THREE.NoColorSpace;    // no-sRGB calibration invariant
           t.premultiplyAlpha = true;            // decal atlas: premultiplied, ONE/ONE_MINUS_SRC_ALPHA (GLX parity)
           // Drop the CPU source once three has copied it to the GPU (see
@@ -4350,11 +4425,10 @@ const TLX = (function () {
         },
         freeTexture(t) {
           if (t && t.tex) {
-            // The decal material cache keys on the texture: without this its
-            // entries kept the freed texture (and, before releaseTexSource, its
-            // 5 MB canvas) alive until LRU pressure happened to evict them.
-            if (fx && fx.releaseTexture) { try { fx.releaseTexture(t.tex); } catch (_) { /* cache bookkeeping only */ } }
-            t.tex.dispose(); t.tex = null; return;
+            // Pooled or disposed (retireTexture); disposal also releases its
+            // decal materials (disposePooled).
+            retireTexture(t.tex, typeof performance !== "undefined" ? performance.now() : Date.now());
+            t.tex = null; return;
           }
           if (t && t.isTexture) t.dispose();          // a material array (createTextureArray)
         },
@@ -5708,6 +5782,7 @@ const TLX = (function () {
           for (let i = 0; i < _matDispose.length; i++) { try { _matDispose[i].dispose(); } catch (_) { /* already disposed */ } }
           _matDispose.length = 0;
           if (fx && fx.flushEvicted) fx.flushEvicted();
+          if (_texPool.length) ageTexPool(_now);
           _fxLast.shadows = _fxFrame.shadows; _fxLast.marks = _fxFrame.marks;
           _fxLast.skidVerts = _fxFrame.skidVerts; _fxLast.glow = _fxFrame.glow;
           _fxLast.particles = _fxFrame.particles; _fxLast.decals = _fxFrame.decals;
@@ -5815,7 +5890,10 @@ const TLX = (function () {
             return out;
           },
           meshState() {
-            return { mesh: _meshMade.mesh, chunked: _meshMade.chunked, tex: _meshMade.tex };
+            return { mesh: _meshMade.mesh, chunked: _meshMade.chunked, tex: _meshMade.tex,
+                     // createTexture: new GPU textures vs retired ones re-filled in place (_texPool)
+                     texMade: _texStat.made, texReused: _texStat.reused, texRetired: _texStat.retired,
+                     texDisposed: _texStat.disposed, texPooled: _texPool.length };
           },
           // R1: live?, runs held, and lifetime run records / instances / per-record fallbacks.
           coState() {

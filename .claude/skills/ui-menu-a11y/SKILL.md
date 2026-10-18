@@ -1,6 +1,6 @@
 ---
 name: ui-menu-a11y
-description: "Use when menus, settings, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, screen-reader output, aria-selected and aria-pressed state, scroll affordances, UI scale, touch layout, a cramped or clipped screen (short landscape phone), or menu/HUD accessibility regressions change. Single-screen fit only — DOM/class restructure or the token system is css-play; the full matrix → survey-ui-matrix. In-race driving input → input-controls."
+description: "Use when menus, settings, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, screen-reader output, scroll affordances, UI scale, touch layout, a cramped or clipped screen (short landscape phone), or menu/HUD accessibility regressions change. DOM/class restructure or the token system is css-play; the full matrix → survey-ui-matrix. In-race driving input → input-controls."
 ---
 
 # Menu / HUD accessibility
@@ -47,3 +47,5 @@ Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
 
 - Layer/Escape/zoom implementation, pause-settings overlay, mistakes →
   [references/workflow.md](references/workflow.md).
+- Lighthouse a11y / web-quality playbook →
+  [references/lighthouse-a11y-playbook.md](references/lighthouse-a11y-playbook.md).

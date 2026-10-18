@@ -122,6 +122,36 @@ test("settings.json turns the merge prompts off for every session, and squash/re
     assert.match(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: m }), /"deny"/, `${m} stays denied`);
 });
 
+test("settings.json registers bash-guard once, without unsupported per-step filters", () => {
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
+  const hooks = settings.hooks.PreToolUse
+    .filter((group) => group.matcher === "Bash")
+    .flatMap((group) => group.hooks)
+    .filter((entry) => entry.command.includes("bash-guard.sh"));
+  assert.equal(hooks.length, 1, "one Bash call must start one imported Claude bash-guard");
+  assert.equal(Object.hasOwn(hooks[0], "if"), false, "Cursor does not document Claude hook-step `if` filters");
+  assert.equal(hooks[0].timeout, 360);
+  assert.equal(hooks[0].onFailure, "block");
+});
+
+test("bash-guard fast-exits non-trigger commands within 500 ms", () => {
+  const src = fs.readFileSync(HOOK, "utf8");
+  const trigger = src.match(/^GUARD_TRIGGER='([^']+)'$/m);
+  assert.ok(trigger, "bash-guard declares its fast-path trigger union");
+  assert.deepEqual(trigger[1].split("|").sort(),
+    ["git", "gh ", "kill", "pgrep", "curl", "node", "npm", "npx", "playwright", "chrom", "python", "sh ", "eval", "xargs"].sort(),
+    "the fast path stays in lockstep with the 14 former settings filters");
+  const started = Date.now();
+  const r = spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command: "echo ordinary-command" } }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  const elapsed = Date.now() - started;
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout, "");
+  assert.ok(elapsed < 500, `ordinary Bash guard path took ${elapsed} ms`);
+});
+
 test("pkill -f blocks whatever its pattern names: it always matches its own shell (#2125)", () => {
   // `pkill -f "serve -l 3456"` passed the old browser-word filter and killed its
   // own shell (exit 144) in two census siblings on 2026-10-15.
@@ -951,6 +981,37 @@ test("H4: a push over a red tooling-fast run is refused; && chains, green logs a
     fs.writeFileSync(log, "= run failed (1 passed, 1 failed)\n");
     const old = new Date(Date.now() - 86400e3); fs.utimesSync(log, old, old);
     assert.notEqual(push("git push -u origin x").status, 2, "stale log");
+  } finally { repo.rm(); }
+});
+
+// H1 (#2662): harness Stop hook — memory dir excluded from porcelain; push-hold silences unpushed nag.
+test("H1: stop-hook-git-check.sample treats synced memory and a held push as clean (Bryce applies the same to ~/.claude)", () => {
+  const sample = path.join(ROOT, "tests/fixtures/stop-hook-git-check.sample.sh");
+  const repo = scratchRepo("hook-stophook-");
+  const run = (env = {}) => spawnSync("bash", [sample], {
+    cwd: repo.dir, encoding: "utf8",
+    env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, STOP_HOOK_UPSTREAM: "origin/main", ...env },
+  });
+  try {
+    fs.mkdirSync(path.join(repo.dir, ".claude/memory"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, ".claude/memory/a.md"), "mem\n");
+    repo.g("add", "-A"); repo.g("commit", "-qm", "init");
+    repo.g("branch", "-M", "main");
+    fs.writeFileSync(path.join(repo.dir, ".claude/memory/a.md"), "mem dirty\n");
+    assert.equal(run().status, 0, "only .claude/memory dirty must not nag");
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "other\n");
+    assert.equal(run().status, 2, "dirty prose outside memory still nags");
+    repo.g("checkout", "-q", "main");
+    repo.g("reset", "-q", "--hard");
+    const base = repo.g("rev-parse", "HEAD").stdout.trim();
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "ahead note\n");
+    repo.g("add", "docs/PHYSICS.md"); repo.g("commit", "-qm", "ahead");
+    repo.g("config", "remote.origin.url", repo.dir);
+    repo.g("config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*");
+    repo.g("update-ref", "refs/remotes/origin/main", base);
+    assert.equal(run().status, 2, `unpushed commits nag without push-hold (${run().stderr})`);
+    fs.writeFileSync(path.join(repo.dir, ".claude/push-hold"), "live CI on pushed tip\n");
+    assert.equal(run().status, 0, "push-hold clears the unpushed nag while CI is live");
   } finally { repo.rm(); }
 });
 
