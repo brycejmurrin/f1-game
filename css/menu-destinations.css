@@ -170,10 +170,15 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 @container title-menu (max-width: 12rem) {
   #overlay #menu-buttons #menu-secondary { flex-wrap: wrap; }
   #overlay #menu-buttons #menu-secondary > .bigbtn { flex: 1 1 calc(50% - var(--gap)); width: auto; min-width: 0; overflow-wrap: anywhere; }
-  :root:not([data-title-btns="row"]) #overlay #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) {
+  /* Retention / explore / create stack when the cluster is too narrow for a
+     pair. Leave #menu-primary as the compact 2×2+PRACTICE grid and
+     #menu-garage as the bottom-right overlay — column-flex on primary made
+     PRACTICE full-width so Garage intercepted its clicks (ui-scale Factory
+     Home @ 667×320 / phone-landscape 30vwz cluster). */
+  :root:not([data-title-btns="row"]) #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create) {
     display: flex; flex-direction: column; flex-wrap: nowrap;
   }
-  :root:not([data-title-btns="row"]) #overlay #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) > .bigbtn {
+  :root:not([data-title-btns="row"]) #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create) > .bigbtn {
     flex: 0 0 auto; width: 100%; min-width: 0;
   }
 }
