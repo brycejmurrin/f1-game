@@ -101,6 +101,23 @@ test("MCP client: definition, references and symbols on the real tree", { timeou
 
     const pos = await c.call("lsp_definition", { file: "js/ui/select-screen.js", line: 1, column: 1 });
     assert.equal(pos.isError, false, pos.content[0].text);
+    // Pipelined requests must keep the diagnostic overlay isolated and recover
+    // after an invalid tool argument without dropping the next response.
+    const queued = await Promise.all([
+      c.call("lsp_diagnostics", { file: "js/core/log.js", all: true }),
+      c.call("lsp_symbols", { query: "GameHud", limit: -1 }),
+      c.call("lsp_definition", { symbol: "Liveries.forTeam" }),
+    ]);
+    assert.deepEqual(queued.map(r => r.isError), [false, true, false]);
+    assert.match(queued[2].content[0].text, /function forTeam/);
+    const frozenExport = await c.call("lsp_definition", { symbol: "FlybyOverrides.resolve", body: true });
+    assert.equal(frozenExport.isError, false, frozenExport.content[0].text);
+    assert.match(frozenExport.content[0].text, /js\/data\/flyby-overrides\.js:38:.*function resolve/);
+    for (const member of ["SHADOW_VS", "LIT_VS", "SKY_VS"]) {
+      const assignedExport = await c.call("lsp_definition", { symbol: `GLXShaders.${member}` });
+      assert.equal(assignedExport.isError, false, assignedExport.content[0].text);
+      assert.match(assignedExport.content[0].text, new RegExp(member));
+    }
   } finally { c.close(); }
 });
 
@@ -343,4 +360,90 @@ test("lsp-hint.py: builtins and lowercase heads stay quiet; option values are no
   for (const loud of [{ tool_name: "Bash", tool_input: { command: "rg -t js GameHud js/" } }, { tool_name: "Bash", tool_input: { command: "grep -A 3 GameHud js/ui" } },
     { tool_name: "Bash", tool_input: { command: "grep -rn -e Tracks.curvature js" } }, { tool_name: "Grep", tool_input: { pattern: "G\\.player" } }])
     assert.equal(hint(loud), true, JSON.stringify(loud));
+});
+
+test("advertised argument constraints and JSON-RPC envelopes fail before starting tsc", async () => {
+  const { handleRpc } = await import("../../tools/mcp/lsp-mcp.mjs");
+  const never = { prepare() { throw Error("unexpected tsc start"); } };
+  for (const [name, args] of [
+    ["lsp_symbols", { query: "Beta", limit: -1 }], ["lsp_symbols", { query: "Beta", offset: 0.5 }],
+    ["lsp_symbols", { query: "Beta", limit: 2001 }], ["lsp_symbols", { query: "" }],
+    ["lsp_symbols", { query: 123 }], ["lsp_definition", { symbol: "Beta.[" }],
+    ["lsp_definition", { file: "src/a.js", line: 0 }], ["lsp_definition", { symbol: "Beta", body: "true" }],
+    ["lsp_references", { symbol: "Beta", format: "json" }], ["lsp_hover", { line: 1 }],
+    ["lsp_definition", { symbol: "Beta", file: "src/a.js", line: 1 }], ["lsp_symbols", null],
+    ["lsp_symbols", []], ["lsp_symbols", JSON.parse('{"query":"Beta","__proto__":{}}')], ["lsp_references", { symbol: "Beta", includeDeclaration: 0 }],
+  ]) {
+    const r = await callTool(never, name, args);
+    assert.equal(r.isError, true, JSON.stringify(args));
+    assert.doesNotMatch(r.content[0].text, /unexpected tsc start/);
+  }
+  for (const request of [null, [], { jsonrpc: "1.0", id: 1, method: "ping" },
+    { jsonrpc: "2.0", id: {}, method: "ping" }, { jsonrpc: "2.0", id: 1, method: "ping", params: [] }])
+    assert.equal((await handleRpc(never, request)).error.code, -32600);
+  for (const params of [{}, { name: "lsp_symbols", arguments: [] }, { name: "lsp_symbols", arguments: null }])
+    assert.equal((await handleRpc(never, { jsonrpc: "2.0", id: 1, method: "tools/call", params })).error.code, -32602);
+  assert.equal(await handleRpc(never, { jsonrpc: "2.0", method: "notifications/initialized" }), null);
+  assert.equal((await handleRpc(never, { jsonrpc: "2.0", id: null, method: "ping" })).id, null);
+  assert.equal((await handleRpc(never, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: {} } })).error.code, -32602);
+  assert.equal((await handleRpc(never, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "unsupported" } })).result.protocolVersion, "2025-06-18");
+});
+
+test("fixture: declaration freshness, owner boundaries, lexical aliases, dependency baseline and file lifecycle", { timeout: 60000 }, async () => {
+  const { execFileSync } = await import("node:child_process");
+  const base = path.join(ROOT, "scratch"); fs.mkdirSync(base, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(base, "lsp-hardening-"));
+  const w = (f, t) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), t); };
+  const git = (...args) => execFileSync("git", ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", ...args], { cwd: dir, stdio: "ignore" });
+  w("jsconfig.json", JSON.stringify({ compilerOptions: { allowJs: true, checkJs: false, noEmit: true }, include: ["src/**/*.js", "types/**/*.d.ts"] }));
+  w("src/a.js", "const Alpha = { ping(x) { return x; } };\n");
+  w("src/b.js", "const value = Alpha.ping(1);\n");
+  w("src/w.js", "window.Beta = { KEY: 1 };\nwindow.Other = { nope: 2 };\nfunction local() { const { KEY: key } = Beta; return key; }\nfunction unrelated(key) { return key; }\n// const { KEY: commented } = Beta;\nfunction unrelatedComment(commented) { return commented; }\nfunction alias() { const B = Beta; return B.KEY; }\nfunction shadow(B) { return B.KEY; }\nfunction shadowOwner() { const Beta = { shadowOnly: 2 }; }\n");
+  w("src/frozen.js", "window.Frozen = (function () {\n  function resolve() { return 1; }\n  function internal() { return 2; }\n  return Object.freeze({ resolve });\n})();\n");
+  w("src/assigned.js", "window.Merged = Object.assign(window.Merged || {}, { first: 1 });\n");
+  w("src/assigned-extra.js", "window.Merged = Object.assign(window.Merged || {}, Object.freeze({ second: 2 }));\nwindow.Foreign = { hidden: 3 };\n");
+  w("types/game-ctx.d.ts", "interface GameCtx {\n  old: number;\n}\ninterface OldType {}\n");
+  git("init", "-q"); git("add", "."); git("commit", "-qm", "base");
+  const lsp = new Lsp({ root: dir, src: "src", anchor: "src/a.js", idleMs: 0 });
+  const q = async (name, args) => { const r = await callTool(lsp, name, args); assert.equal(r.isError, false, r.content[0].text); return r.content[0].text; };
+  try {
+    assert.match(await q("lsp_definition", { symbol: "G.old" }), /old: number/);
+    w("types/game-ctx.d.ts", "interface GameCtx {\n  fresh: string;\n}\ninterface FreshType {}\n");
+    assert.match(await q("lsp_definition", { symbol: "G.fresh" }), /fresh: string/);
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "G.old" })).isError, true);
+    assert.match(await q("lsp_definition", { symbol: "FreshType" }), /interface FreshType/);
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "OldType" })).isError, true);
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "Beta.nope" })).isError, true);
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "Beta.shadowOnly" })).isError, true);
+    assert.match(await q("lsp_definition", { symbol: "Frozen.resolve" }), /function resolve/);
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "Frozen.internal" })).isError, true);
+    assert.match(await q("lsp_definition", { symbol: "Merged.first" }), /src\/assigned\.js/);
+    assert.match(await q("lsp_definition", { symbol: "Merged.second" }), /src\/assigned-extra\.js/);
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "Merged.hidden" })).isError, true);
+    const refs = await q("lsp_references", { symbol: "Beta.KEY", includeDeclaration: false });
+    assert.doesNotMatch(refs, /\[def\]|unrelated|commented|shadow/);
+    assert.match(refs, /return key/); assert.match(refs, /return B\.KEY/);
+    assert.match(refs, /^3 references/, refs); // alias binding, same-line local read, whole-object alias read
+    assert.match(await q("lsp_diagnostics", { file: "src/b.js" }), /0 high-signal diagnostics.*HEAD subtraction skipped/);
+    w("src/a.js", "const Alpha = { ping() { return 1; } };\n");
+    const diag = await q("lsp_diagnostics", { file: "src/b.js" });
+    assert.match(diag, /HEAD subtraction skipped.*dependencies differ from HEAD/);
+    assert.match(diag, /TS2554 Expected 0 arguments, but got 1/);
+    await q("lsp_definition", { symbol: "Alpha.ping" });
+    fs.renameSync(path.join(dir, "src/a.js"), path.join(dir, "src/moved.js"));
+    assert.match(await q("lsp_definition", { symbol: "Alpha.ping" }), /src\/moved\.js/);
+    fs.unlinkSync(path.join(dir, "src/moved.js"));
+    assert.equal((await callTool(lsp, "lsp_definition", { symbol: "Alpha.ping" })).isError, true);
+    w("src/new.js", "const Added = { yes: 1 };\nconst useAdded = Added.yes;\n");
+    assert.match(await q("lsp_definition", { symbol: "Added.yes" }), /src\/new\.js/);
+    // A staged rename has a source path in status's unprefixed second record.
+    // Moving a dependency outside src must prevent a false clean HEAD baseline.
+    w("src/a.js", "const Alpha = { ping(x) { return x; } };\n");
+    git("checkout", "HEAD", "--", "types/game-ctx.d.ts");
+    fs.unlinkSync(path.join(dir, "src/new.js"));
+    git("mv", "src/a.js", "outside-a.js");
+    const movedDependency = await q("lsp_diagnostics", { file: "src/b.js" });
+    assert.match(movedDependency, /HEAD subtraction skipped.*dependencies differ from HEAD/);
+    assert.match(movedDependency, /TS2304 Cannot find name 'Alpha'/);
+  } finally { lsp.stop(); fs.rmSync(dir, { recursive: true, force: true }); }
 });

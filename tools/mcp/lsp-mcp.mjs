@@ -25,6 +25,7 @@
  */
 import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
+import { parse } from "espree";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -123,10 +124,19 @@ export function inCommentOrString(line, i) {
   return !!codeMask(line)[i];
 }
 
+function visit(node, fn) {
+  if (!node || typeof node.type !== "string") return;
+  fn(node);
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) for (const child of value) visit(child, fn);
+    else if (value && typeof value === "object") visit(value, fn);
+  }
+}
+
 function walk(root, dir, out = []) {
   for (const e of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
     const p = `${dir}/${e.name}`;
-    if (e.isDirectory()) walk(root, p, out); else if (e.name.endsWith(".js")) out.push(p);
+    if (e.isDirectory()) walk(root, p, out); else if (/\.(?:[cm]?js|ts)$/.test(e.name)) out.push(p);
   }
   return out;
 }
@@ -201,7 +211,7 @@ export class Lsp {
   // Working-tree freshness: stat every js/ file, tell the server what moved.
   scan(first = false) {
     const seen = new Set(), changes = [];
-    for (const f of walk(this.root, this.src)) {
+    for (const f of [...walk(this.root, this.src), ...(fs.existsSync(path.join(this.root, "types")) ? walk(this.root, "types") : [])]) {
       seen.add(f);
       let m;
       try { m = fs.statSync(path.join(this.root, f)).mtimeMs; } catch { continue; }   // deleted mid-walk
@@ -212,14 +222,22 @@ export class Lsp {
       changes.push({ uri: this.uriOf(f), type: was === undefined ? 1 : 2 });
       if (this.open.has(f)) { this.notify("textDocument/didClose", { textDocument: { uri: this.uriOf(f) } }); this.open.delete(f); }
     }
-    for (const f of [...this.mtimes.keys()]) if (!seen.has(f)) { this.mtimes.delete(f); this.lines.delete(f); changes.push({ uri: this.uriOf(f), type: 3 }); }
+    for (const f of [...this.mtimes.keys()]) if (!seen.has(f)) { this.mtimes.delete(f); this.lines.delete(f); this.syms.delete(f); if (this.open.has(f)) { this.notify("textDocument/didClose", { textDocument: { uri: this.uriOf(f) } }); this.open.delete(f); } changes.push({ uri: this.uriOf(f), type: 3 }); }
     if (changes.length) this.notify("workspace/didChangeWatchedFiles", { changes });
   }
   ensureOpen(file) {
     if (this.open.has(file)) return this.open.get(file);
-    this.notify("textDocument/didOpen", { textDocument: { uri: this.uriOf(file), languageId: "javascript", version: 1, text: fs.readFileSync(path.join(this.root, file), "utf8") } });
+    this.notify("textDocument/didOpen", { textDocument: { uri: this.uriOf(file), languageId: /\.ts$/.test(file) ? "typescript" : "javascript", version: 1, text: fs.readFileSync(path.join(this.root, file), "utf8") } });
     this.open.set(file, 1);
     return 1;
+  }
+  astOf(file) {
+    const t = this.textOf(file);
+    if (t.ast === undefined) {
+      try { t.ast = parse(t.text, { ecmaVersion: "latest", sourceType: "script", loc: true, range: true }); }
+      catch { t.ast = null; } // Invalid syntax cannot justify an invented fallback.
+    }
+    return t.ast;
   }
   textLines(file) { return this.textOf(file).lines; }
   textOf(file) {
@@ -419,6 +437,18 @@ export class Lsp {
       try { head = execFileSync("git", ["show", `HEAD:${f}`], { cwd: this.root, stdio: ["ignore", "pipe", "ignore"] }).toString(); } catch { /* untracked or no git */ }
       const fmt = d => `${f}:${d.line0 + 1}:${d.col0 + 1}  TS${d.code} ${d.msg}`;
       if (head === null || all) return `${now.length} high-signal diagnostic${now.length === 1 ? "" : "s"} in ${f} (${head === null ? "not tracked at HEAD" : "all"}; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
+      // A per-file HEAD overlay cannot reproduce HEAD with edited dependencies.
+      // Report current errors honestly instead of classifying them as old.
+      let dependenciesChanged = true;
+      try {
+        // --no-renames reports both ends as ordinary paths, including a
+        // dependency moved out of src/. Unlike status -z, no second record
+        // has a different prefix format. Include untracked dependencies too.
+        const gitPaths = args => execFileSync("git", args, { cwd: this.root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).split("\0");
+        const changed = [...gitPaths(["diff", "--name-only", "--no-renames", "-z", "HEAD", "--"]), ...gitPaths(["ls-files", "--others", "--exclude-standard", "-z"])];
+        dependenciesChanged = changed.some(other => other !== f && /\.(?:[cm]?js|ts)$/.test(other) && (other.startsWith(`${this.src}/`) || other.startsWith("types/")));
+      } catch { /* no trustworthy baseline */ }
+      if (dependenciesChanged) return `${now.length} high-signal diagnostics in ${f} (HEAD subtraction skipped: JavaScript or declaration dependencies differ from HEAD; per-file @ts-check)\n${now.map(fmt).join("\n")}`.trim();
       const before = await check(head), key = d => `${d.code}|${d.msg}|${d.src}`, pool = new Map();
       for (const d of before) pool.set(key(d), (pool.get(key(d)) || 0) + 1);
       const fresh = now.filter(d => { const n = pool.get(key(d)) || 0; if (n) { pool.set(key(d), n - 1); return false; } return true; });
@@ -462,7 +492,7 @@ export class Lsp {
       return { cands: hits.map(at), parts, top: (top.length ? top : hits).map(at) };
     }
     const re = new RegExp(`\\b${parts.map(p => p.replace(/[$]/g, "\\$")).join("\\??\\.")}\\b`, "g");
-    for (const f of [...this.mtimes.keys()].sort()) {
+    for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
       const { text, lines } = this.textOf(f);
       if (!text.includes(symbol.replace("?.", "."))) continue;
       for (let i = 0; i < lines.length && cands.length < CANDIDATES; i++) {
@@ -484,11 +514,11 @@ export class Lsp {
     const c = await this.candidates(args);
     // Untyped heads never answer from the checker: skip the round-trips.
     if (c.parts.length === 2 && FACADES[c.parts[0]]) return { ...c, ...(await this.facade(c.parts, method, extra)) };
-    if (c.parts.length > 1 && this.windowDecl(c.parts.slice(0, -1).join("."))) return { ...c, ...this.textFallback(c.parts, method, c.head) };
+    if (c.parts.length > 1 && this.windowDecl(c.parts.slice(0, -1).join("."))) return { ...c, ...await this.textFallback(c.parts, method, c.head, extra) };
     const g = c.parts.length === 1 && method === "textDocument/references" && this.windowDecl(c.parts[0]);
     if (g) {
       const p = c.top[0], def = { uri: this.uriOf(p.file), range: { start: { line: p.line0, character: p.col0 } } };
-      return { ...c, p, result: this.textRefs(c.parts, def), note: g.kind === "cjs" ? `text match: ${g.file} ends in module.exports, so the checker scopes ${c.parts[0]} to that file` : `text match: window.${c.parts[0]} is untyped for the checker` };
+      return { ...c, p, result: await this.textRefs(c.parts, def, extra.context?.includeDeclaration !== false), note: g.kind === "cjs" ? `text match: ${g.file} ends in module.exports, so the checker scopes ${c.parts[0]} to that file` : `text match: window.${c.parts[0]} is untyped for the checker` };
     }
     let first = null;
     for (const p of c.cands) {
@@ -498,7 +528,7 @@ export class Lsp {
       if (answered(result)) return { ...c, p, result, note: p.note };
     }
     if (c.parts.length === 2 && FACADES[c.parts[0]]) return { ...c, ...(await this.facade(c.parts, method, extra)) };
-    if (c.parts.length > 1) return { ...c, ...this.textFallback(c.parts, method, c.head) };
+    if (c.parts.length > 1) return { ...c, ...await this.textFallback(c.parts, method, c.head, extra) };
     if (c.parts.length === 1 && method === "textDocument/definition") {
       const p = c.top[0];
       return { ...c, p, result: c.top.map(l => ({ uri: this.uriOf(l.file), range: { start: { line: l.line0, character: l.col0 } } })) };
@@ -520,36 +550,83 @@ export class Lsp {
     }
     return null;
   }
-  windowDecl(h) {
-    const esc = h.replace(/[$.]/g, "\\$&");
-    const win = new RegExp(`^\\s*window\\.${esc}\\s*=`, "m"), cjs = new RegExp(`^(?:const|let|var|function|class)\\s+${esc}\\b`, "m");
-    for (const f of [...this.mtimes.keys()].sort()) {
+  windowDecl(h, all = false) {
+    const esc = h.replace(/[$.]/g, "\\$&"), declarations = [];
+    const win = new RegExp(`^\\s*window\\.${esc}\\s*=`, "gm"), cjs = new RegExp(`^(?:const|let|var|function|class)\\s+${esc}\\b`, "gm");
+    for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
       const { text } = this.textOf(f);
       if (!text.includes(h)) continue;
-      let m = text.includes(`window.${h}`) && win.exec(text), kind = "window";
-      if (!m && text.includes("module.exports")) { m = cjs.exec(text); kind = "cjs"; }
-      if (m) return { file: f, line0: this.posOf(f, m.index + (kind === "window" ? m[0].indexOf("window") : 0)).line0, kind };
+      for (const [re, kind] of [[win, "window"], ...(text.includes("module.exports") ? [[cjs, "cjs"]] : [])]) {
+        re.lastIndex = 0;
+        for (const m of text.matchAll(re)) {
+          const pos = this.posOf(f, m.index + (kind === "window" ? m[0].indexOf("window") : 0));
+          if (this.nonCode(f, pos.line0, pos.col0)) continue;
+          const d = { file: f, ...pos, kind };
+          if (!all) return d;
+          declarations.push(d);
+        }
+      }
     }
-    return null;
+    return all ? declarations : null;
   }
-  textFallback(parts, method, head) {
+  async textFallback(parts, method, head, extra = {}) {
     const [h, member] = [parts.slice(0, -1).join("."), parts.at(-1)];
     const d = this.windowDecl(h);
     if (!d && head) throw Error(`${h} (${head.file}:${head.line0 + 1}) has no member ${member} the checker can see; try lsp_hover ${h} or lsp_symbols ${member}`);
     if (!d) throw Error(`symbol not found: ${h} is not a global the checker or a window.${h} assignment declares`);
-    const em = member.replace(/[$]/g, "\\$");
-    const key = new RegExp(`(^\\s*|[{,]\\s*)(${em})\\s*[:(,}]|^\\s*(?:async\\s+)?(?:get\\s+|set\\s+)?(${em})\\s*\\(|\\b(?:function\\*?|const|let|var|class)\\s+(${em})\\b`);
-    const lines = this.textLines(d.file);
+    // Read the actual assignment/initializer and its exported object. A later
+    // object or an internal helper is never evidence of a member on this owner.
+    const ownerName = n => n?.type === "Identifier" ? n.name : n?.type === "MemberExpression" && !n.computed ? `${ownerName(n.object)}.${ownerName(n.property)}` : "";
+    const objectsIn = n => {
+      if (n?.type === "ObjectExpression") return [n];
+      if (n?.type !== "CallExpression") return [];
+      if (ownerName(n.callee) === "Object.freeze" && n.arguments.length === 1) return objectsIn(n.arguments[0]);
+      if (ownerName(n.callee) === "Object.assign") {
+        // Later static sources win. Stop at an unknown source: it could
+        // overwrite anything before it, but cannot overwrite a later literal.
+        const objects = [];
+        for (const arg of [...n.arguments].reverse()) {
+          const known = objectsIn(arg);
+          if (!known.length) break;
+          objects.push(...known);
+        }
+        return objects;
+      }
+      return [];
+    };
     let def = null;
-    for (let i = d.line0; i < lines.length && !def; i++) {
-      if (this.nonCode(d.file, i, Math.max(0, lines[i].search(/\S/)))) continue;
-      const m = key.exec(lines[i]);
-      if (m) def = { uri: this.uriOf(d.file), range: { start: { line: i, character: lines[i].indexOf(member, m.index) } } };
+    const owners = d.kind === "window" ? this.windowDecl(h, true).filter(x => x.kind === "window") : [d];
+    for (const owner of owners) {
+      const candidates = [];
+      visit(this.astOf(owner.file), n => {
+        if (n.loc.start.line - 1 !== owner.line0 || n.loc.start.column !== owner.col0) return;
+        if (owner.kind === "window" && n.type === "AssignmentExpression" && ownerName(n.left) === `window.${h}`) candidates.push(n.right);
+        if (owner.kind === "cjs" && n.type === "VariableDeclaration") for (const v of n.declarations) if (ownerName(v.id) === h) candidates.push(v.init);
+      });
+      for (const init of candidates) {
+        const fn = init?.type === "CallExpression" && ["FunctionExpression", "ArrowFunctionExpression"].includes(init.callee.type) ? init.callee : null;
+        const objects = fn?.body?.body ? fn.body.body.filter(n => n.type === "ReturnStatement").flatMap(n => objectsIn(n.argument)) : objectsIn(init);
+        for (const obj of objects) {
+          const prop = [...obj.properties].reverse().find(n => n.type === "Property" && !n.computed && (n.key.name || n.key.value) === member);
+          if (!prop) continue;
+          let at = prop.key;
+          if (fn && prop.value.type === "Identifier") {
+            for (const n of fn.body.body) {
+              if (n.type === "FunctionDeclaration" && n.id?.name === prop.value.name) at = n.id;
+              if (n.type === "VariableDeclaration") for (const v of n.declarations) if (v.id.name === prop.value.name) at = v.id;
+            }
+          }
+          def = { uri: this.uriOf(owner.file), range: { start: { line: at.loc.start.line - 1, character: at.loc.start.column } } };
+          break;
+        }
+        if (def) break;
+      }
+      if (def) break;
     }
     if (!def) throw Error(`${d.kind === "cjs" ? h : `window.${h}`} (${d.file}:${d.line0 + 1}) has no member ${member}`);
     const note = d.kind === "cjs" ? `text match: ${d.file} ends in module.exports, so the checker scopes ${h} to that file` : `text match: window.${h} is untyped for the checker`;
-    if (method !== "textDocument/references") return { p: { file: d.file, line0: def.range.start.line, col0: def.range.start.character }, result: method === "textDocument/hover" ? { contents: `(${note})` } : [def], note };
-    return { p: { file: d.file, line0: def.range.start.line, col0: def.range.start.character }, result: this.textRefs(parts, def), note };
+    if (method !== "textDocument/references") return { p: { file: this.rel(def.uri), line0: def.range.start.line, col0: def.range.start.character }, result: method === "textDocument/hover" ? { contents: `(${note})` } : [def], note };
+    return { p: { file: this.rel(def.uri), line0: def.range.start.line, col0: def.range.start.character }, result: await this.textRefs(parts, def, extra.context?.includeDeclaration !== false), note };
   }
   async facade([h, member], method, extra) {
     // tsgo's workspace/symbol skips .d.ts files: read the interface block, then let the checker type the row.
@@ -563,7 +640,7 @@ export class Lsp {
     }
     if (!p) throw Error(`${iface} (the ${h} façade, ${file}) has no member ${member}`);
     const def = { uri: this.uriOf(file), range: { start: { line: p.line0, character: p.col0 } } }, note = `${h} is the ${iface} façade; contract row in ${file}`;
-    if (method === "textDocument/references") return { p, result: this.textRefs([h, member], def), note: `${note}; uses are text matches of ${h}.${member}` };
+    if (method === "textDocument/references") return { p, result: await this.textRefs([h, member], def, extra.context?.includeDeclaration !== false), note: `${note}; uses are text matches of ${h}.${member}` };
     if (method === "textDocument/definition") return { p, result: [def], note };
     this.ensureOpen(p.file);
     return { p, result: await this.request(method, { textDocument: { uri: def.uri }, position: def.range.start, ...extra }), note };
@@ -571,9 +648,9 @@ export class Lsp {
   // Every code (non-comment, non-string) occurrence of `A.b` / `A`, after the declaration
   // row; for `A.b`, also each file's `const { b } = A` / `const X = A` binding and the
   // uses of the local name that binding introduces (the checker sees none of them).
-  textRefs(parts, def) {
+  async textRefs(parts, def, includeDeclaration = true) {
     const name = parts.at(-1), head = parts.slice(0, -1).join("."), esc = x => x.replace(/[$.]/g, "\\$&");
-    const refs = [def], seen = new Set([`${def.uri}:${def.range.start.line}:${def.range.start.character}`]);
+    const refs = includeDeclaration ? [def] : [], seen = new Set([`${def.uri}:${def.range.start.line}:${def.range.start.character}`]);
     const add = (f, i, col, via = false) => { const uri = this.uriOf(f), k = `${uri}:${i}:${col}`; if (!seen.has(k)) { seen.add(k); refs.push({ uri, range: { start: { line: i, character: col } }, ...(via ? { via: true } : {}) }); } };
     const usesOf = (f, re, nameLen, fromLine = 0, via = false) => {
       const { text, lines } = this.textOf(f);
@@ -583,27 +660,42 @@ export class Lsp {
         if (line0 >= fromLine && !this.nonCode(f, line0, col0)) add(f, line0, col0 + m[0].length - nameLen, via);
       }
     };
-    const destr = new RegExp(`\\b(?:const|let|var)\\s*\\{([^}]*)\\}\\s*=\\s*(?:window\\.)?${esc(head)}\\b(?![\\w$.])`, "g");
-    const whole = new RegExp(`\\b(?:const|let|var)\\s+([\\w$]+)\\s*=\\s*(?:window\\.)?${esc(head)}\\s*[;,\\n]`, "g");
     // Literal-first pattern (a leading lookbehind made V8 test every offset); the
     // boundary before the match is checked by hand: start of a name, or `window.`.
     const direct = new RegExp(`${parts.map(esc).join("\\??\\.")}(?![\\w$])`, "g");
     const startsName = (text, i) => !/[\w$.]/.test(text[i - 1] || "") || text.slice(Math.max(0, i - 7), i) === "window." && !/[\w$.]/.test(text[i - 8] || "");
-    for (const f of [...this.mtimes.keys()].sort()) {
+    for (const f of [...this.mtimes.keys()].filter(f => !f.endsWith(".ts")).sort()) {
       const { text } = this.textOf(f);
       if (!text.includes(name) || (head && !text.includes(head))) continue;   // every ref spells the member name
       usesOf(f, direct, name.length);
       if (parts.length < 2) continue;
-      for (const m of text.matchAll(destr)) {
-        const inner = m[1], km = new RegExp(`(?<![\\w$])${esc(name)}(?![\\w$])(?:\\s*:\\s*([\\w$]+))?`).exec(inner);
-        if (!km) continue;
-        const { line0, col0 } = this.posOf(f, m.index + m[0].indexOf(inner) + km.index);
-        add(f, line0, col0, true);
-        const local = km[1] || name;
-        usesOf(f, new RegExp(`(?<![\\w$.])${esc(local)}(?![\\w$]|\\s*:)`, "g"), local.length, line0 + 1, true);
-      }
-      for (const m of text.matchAll(whole)) {
-        usesOf(f, new RegExp(`(?<![\\w$.])${esc(m[1])}\\??\\.${esc(name)}(?![\\w$])`, "g"), name.length, this.posOf(f, m.index).line0, true);
+      const bindings = [];
+      const owner = n => n?.type === "Identifier" ? n.name : n?.type === "MemberExpression" && !n.computed && n.object.name === "window" ? n.property.name : "";
+      visit(this.astOf(f), n => {
+        if (n.type !== "VariableDeclarator" || owner(n.init) !== head) return;
+        if (n.id.type === "ObjectPattern") for (const p of n.id.properties) {
+          if (p.type !== "Property" || p.computed || (p.key.name || p.key.value) !== name) continue;
+          const local = p.value.type === "AssignmentPattern" ? p.value.left : p.value;
+          if (local.type === "Identifier") bindings.push({ local, key: p.key });
+        }
+        if (n.id.type === "Identifier") bindings.push({ local: n.id, whole: true });
+      });
+      for (const { local, key, whole } of bindings) {
+        this.ensureOpen(f);
+        const position = { line: local.loc.start.line - 1, character: local.loc.start.column };
+        const found = await this.request("textDocument/references", { textDocument: { uri: this.uriOf(f) }, position, context: { includeDeclaration: false } }) || [];
+        if (key) add(f, key.loc.start.line - 1, key.loc.start.column, true);
+        for (const r of found) {
+          if (r.uri !== this.uriOf(f)) continue;
+          const pos = r.range.start;
+          if (pos.line === position.line && pos.character === position.character) continue;
+          if (!whole) add(f, pos.line, pos.character, true);
+          else {
+            const tail = this.textLines(f)[pos.line].slice(pos.character + local.name.length);
+            const m = new RegExp(`^\\??\\.${esc(name)}(?![\\w$])`).exec(tail);
+            if (m) add(f, pos.line, pos.character + local.name.length + m[0].length - name.length, true);
+          }
+        }
       }
     }
     return refs;
@@ -668,7 +760,7 @@ export const TOOLS = [
   def("lsp_symbols", "Find a symbol by name or prefix: declarations listed (exact name first, top-level before nested), aliases (`const x = Y.x`, destructuring) collapsed to a count.",
     { query: str("Symbol name or prefix, e.g. GameHud"), limit: int("Rows (default 30)", 1, MAX_ROWS), offset: page.offset }, ["query"]),
   def("lsp_hover", "Inferred type and JSDoc (type first, then where it was asked). JS parameters without JSDoc read as any.", where),
-  def("lsp_diagnostics", "After an edit: the errors it INTRODUCED in one file. Checks the file with // @ts-check (the project has checkJs off) for high-signal codes only (unknown name, 'did you mean' typo, wrong arity, assign to const, calling a non-function, redeclare, syntax) and hides the ones already present at git HEAD. all: true lists every high-signal one.",
+  def("lsp_diagnostics", "After an edit: the errors it INTRODUCED in one file. Checks the file with // @ts-check (the project has checkJs off) for high-signal codes only (unknown name, 'did you mean' typo, wrong arity, assign to const, calling a non-function, redeclare, syntax) and hides the ones already present at git HEAD. If other JavaScript or declaration dependencies differ from HEAD, subtraction is skipped and current diagnostics are reported explicitly. all: true lists every high-signal one.",
     { file: where.file, all: { type: "boolean", description: "Also list diagnostics already present at HEAD" } }, ["file"]),
 ];
 
@@ -676,8 +768,20 @@ export async function callTool(lsp, name, a = {}) {
   try {
     const tool = TOOLS.find(t => t.name === name);
     if (!tool) throw Error(`Unknown tool: ${name}`);
-    for (const k of Object.keys(a)) if (!tool.inputSchema.properties[k]) throw Error(`Unknown argument: ${k}; valid: ${Object.keys(tool.inputSchema.properties).join(", ")}`);
+    if (!a || typeof a !== "object" || Array.isArray(a)) throw Error("arguments must be an object");
+    for (const k of Object.keys(a)) if (!Object.hasOwn(tool.inputSchema.properties, k)) throw Error(`Unknown argument: ${k}; valid: ${Object.keys(tool.inputSchema.properties).join(", ")}`);
     for (const k of tool.inputSchema.required) if (a[k] == null) throw Error(`Missing argument: ${k}`);
+    for (const [k, value] of Object.entries(a)) {
+      const schema = tool.inputSchema.properties[k];
+      if (schema.type === "string" && (typeof value !== "string" || value.length < schema.minLength || value.length > schema.maxLength)) throw Error(`${k} must be a string of ${schema.minLength || 1}–${schema.maxLength || 400} characters`);
+      if (schema.type === "integer" && (!Number.isInteger(value) || value < schema.minimum || value > schema.maximum)) throw Error(`${k} must be an integer from ${schema.minimum} to ${schema.maximum}`);
+      if (schema.type === "boolean" && typeof value !== "boolean") throw Error(`${k} must be a boolean`);
+      if (schema.enum && !schema.enum.includes(value)) throw Error(`${k} must be one of: ${schema.enum.join(", ")}`);
+    }
+    if (a.symbol !== undefined && !/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(a.symbol)) throw Error("symbol must be Name or Head.member");
+    if (a.symbol && a.file) throw Error("pass symbol or file+line, not both");
+    if ((a.line !== undefined || a.column !== undefined) && !a.file) throw Error("line and column need file");
+    if (!["lsp_symbols", "lsp_diagnostics", "lsp_outline"].includes(name) && !a.file && !a.symbol) throw Error("pass symbol (Name or Head.member) or file+line[+column]");
     if (a.file && a.line == null && !["lsp_diagnostics", "lsp_outline"].includes(name)) throw Error("file needs line");
     if (name === "lsp_outline" && !a.file === !a.symbol) throw Error("lsp_outline takes symbol or file (one of them)");
     const offset = a.offset || 0, limit = a.limit || MAX_ROWS;
@@ -706,7 +810,7 @@ export async function callTool(lsp, name, a = {}) {
     } else if (name === "lsp_hover") {
       const { p, result, note } = await lsp.at(a, "textDocument/hover");
       const c = result?.contents, body = typeof c === "string" ? c : Array.isArray(c) ? c.map(x => x.value || x).join("\n") : c?.value;
-      text = `${body || "(no type information)"}\nat ${lsp.row(p.file, p.line0, p.col0)}${note && !body?.includes(note) ? `\n(${note})` : ""}`;
+      text = `${body || "(no type information)"}${p ? `\nat ${lsp.row(p.file, p.line0, p.col0)}` : ""}${note && !body?.includes(note) ? `\n(${note})` : ""}`;
     } else {
       const isDef = name === "lsp_definition", callers = name === "lsp_callers";
       const method = isDef ? "textDocument/definition" : "textDocument/references";
@@ -776,15 +880,21 @@ export async function callTool(lsp, name, a = {}) {
 
 const rpcError = (id, code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
 export async function handleRpc(lsp, msg) {
-  if (!msg || typeof msg.method !== "string") return rpcError(null, -32600, "Invalid JSON-RPC request");
+  if (!msg || Array.isArray(msg) || msg.jsonrpc !== "2.0" || typeof msg.method !== "string" ||
+    (Object.hasOwn(msg, "id") && !(msg.id === null || typeof msg.id === "string" || (typeof msg.id === "number" && Number.isFinite(msg.id)))) ||
+    (msg.params !== undefined && (!msg.params || typeof msg.params !== "object" || Array.isArray(msg.params)))) return rpcError(null, -32600, "Invalid JSON-RPC request");
   if (!Object.hasOwn(msg, "id")) return null;
   const { id, method } = msg, result = value => ({ jsonrpc: "2.0", id, result: value });
-  if (method === "initialize") return result({ protocolVersion: msg.params?.protocolVersion || "2025-06-18", capabilities: { tools: {} },
+  if (method === "initialize" && (msg.params?.protocolVersion !== undefined && typeof msg.params.protocolVersion !== "string")) return rpcError(id, -32602, "protocolVersion must be a string");
+  if (method === "initialize") return result({ protocolVersion: ["2024-11-05", "2025-03-26", "2025-06-18"].includes(msg.params?.protocolVersion) ? msg.params.protocolVersion : "2025-06-18", capabilities: { tools: {} },
     serverInfo: { name: "apex-lsp", version: "0.1.0" },
     instructions: "TypeScript-checker code intelligence for js/ (script-global IIFEs). Prefer lsp_definition / lsp_references over grep for a named symbol: `Name`, `Head.member` or `G.member`. Rows are tagged [def|export|alias|use]. ONE-based positions. First call ~1-2 s (project load), then tens of ms; tsc exits after 10 idle minutes and restarts on demand." });
   if (method === "ping") return result({});
   if (method === "tools/list") return result({ tools: TOOLS });
-  if (method === "tools/call") return result(await callTool(lsp, msg.params?.name, msg.params?.arguments ?? {}));
+  if (method === "tools/call") {
+    if (!msg.params || typeof msg.params.name !== "string" || (msg.params.arguments !== undefined && (!msg.params.arguments || typeof msg.params.arguments !== "object" || Array.isArray(msg.params.arguments)))) return rpcError(id, -32602, "tools/call needs name and object arguments");
+    return result(await callTool(lsp, msg.params.name, msg.params.arguments ?? {}));
+  }
   return rpcError(id, -32601, "Method not found");
 }
 

@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { smokePlan } from "../../tools/mcp/mcp-smoke.mjs";
+import { smokePlan, realCalls } from "../../tools/mcp/mcp-smoke.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SMOKE = path.join(ROOT, "tools/mcp/mcp-smoke.mjs");
@@ -131,6 +131,9 @@ test("smoke --real: tree tools only, judged on ok + a result, exit 0 in mock mod
   assert.equal(judgeReal({ ok: true, out: null, dryRun: true }).pass, true);
   assert.equal(judgeReal({ ok: true, jobs: [], total: 0 }).pass, true, "a tool's own result keys count");
   assert.equal(judgeReal({ ok: false, error: "x" }).pass, false);
+  assert.equal(judgeReal({ ok: true, out: { answer: 42 } }, 1).pass, false, "a nonzero process exit cannot be a pass even after valid output");
+  assert.equal(judgeReal({ ok: true, out: { answer: 42 } }, null).pass, false, "termination by signal is not a successful tool process");
+  assert.throws(() => realCalls([]), /No smoke tools available/, "an empty tool catalog cannot report 0/0 green");
   const r = run(["--real", "--no-write", "--only=apex_status,apex_pick_tests"], { APEX_MCP_MOCK: "1" });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.match(r.stdout, /PASS apex_status/);
@@ -150,4 +153,34 @@ test("smoke --real --browser adds the browser checks, opt-in, and judges them th
   assert.match(on.stdout, /PASS apex_ui_fit/);
   assert.match(on.stdout, /PASS apex_ui_shot/);
   assert.match(on.stdout, /mcp-smoke --real ok: 3\/3 tools \(tree \+ browser\)/);
+});
+
+test("real smoke supplies fresh-checkout inputs for locations and profile query, then removes its synthetic fixture", () => {
+  const fixtures = () => fs.existsSync(path.join(ROOT, "scratch")) ? fs.readdirSync(path.join(ROOT, "scratch")).filter(n => n.startsWith("mcp-smoke-")) : [];
+  const before = fixtures();
+  const r = run(["--real", "--no-write", "--only=apex_locations,apex_profile_query"], { APEX_MCP_MOCK: "" });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /PASS apex_locations/);
+  assert.match(r.stdout, /PASS apex_profile_query/);
+  assert.match(r.stdout, /mcp-smoke --real ok: 2\/2/);
+  assert.deepEqual(fixtures(), before, "synthetic profiles must not survive the check");
+});
+
+test("misspelled, empty, unsupported and mixed selections fail before running any tool", () => {
+  for (const only of ["apex_statuz", "", "apex_status,apex_statuz", "apex_shot", "apex_ui_fit"]) {
+    const r = run(["--real", "--no-write", `--only=${only}`], { APEX_MCP_MOCK: "1" });
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.match(r.stderr, /No valid smoke selection/);
+    assert.match(r.stderr, /Available/);
+    assert.doesNotMatch(r.stdout, /PASS|0\/0/);
+  }
+});
+
+test("invalid smoke timeouts are errors instead of silently restoring defaults", () => {
+  for (const timeout of ["0", "-1", "NaN", "1.5", "3601", ""]) {
+    const r = run(["--real", "--no-write", "--only=apex_status", `--timeout=${timeout}`]);
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.match(r.stderr, /--timeout must be an integer/);
+    assert.equal(r.stdout, "");
+  }
 });
