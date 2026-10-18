@@ -468,9 +468,32 @@ test("a memory's source: paths still exist", () => {
   }
 });
 
-// MEMORY.md index drift guards (duplicate topic links, fleet-core keyword
-// restatements, type:project "Stale check" topics) land with the prune commit
-// after #2873 — see the same test name below once MEMORY.md is clean.
+// Fleet-core owns merge/MERGE-HOLD/SWEEP/arm; the MEMORY.md index must not
+// restate those topics. Topic files with a "Stale check" note are themselves
+// stale — delete or rewrite, do not keep the flag.
+test("MEMORY.md index has no duplicate topic links, no fleet-core restatements, no Stale-check topics", () => {
+  const index = read(".claude/memory/MEMORY.md");
+  const links = [...index.matchAll(/^\s*-\s*\[[^\]]*\]\(([^)]+\.md)\)/gm)].map((m) => m[1]);
+  const seen = new Map();
+  for (const f of links) {
+    assert.ok(!seen.has(f), `MEMORY.md links ${f} twice — keep one index line per topic file`);
+    seen.set(f, true);
+  }
+  const FLEET_RE = /\bMERGE-HOLD\b|\bsquash\b|\bSWEEP\b|\bauto-?merge\b|\barms?\b|\barming\b|\barmed\b/i;
+  for (const line of index.split("\n")) {
+    if (!/^\s*-\s*\[/.test(line)) continue;
+    assert.doesNotMatch(line, FLEET_RE,
+      `MEMORY.md index restates fleet-core (${line.slice(0, 80)}…) — move to .claude/rules/fleet-core.md or trim`);
+  }
+  const dir = path.join(ROOT, ".claude/memory");
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".md") && n !== "MEMORY.md")) {
+    const text = read(`.claude/memory/${f}`);
+    const fm = text.match(/^---\n([\s\S]*?)\n---/)?.[1] || "";
+    if (!/^\s*type:\s*project\s*$/m.test(fm)) continue;
+    assert.doesNotMatch(text, /\*\*Stale check\b|^Stale check\b/m,
+      `.claude/memory/${f} is type: project with a Stale check note — delete or rewrite the topic`);
+  }
+});
 
 // Instructions are an attack surface: the 2025 "Rules File Backdoor" hid
 // prompts in agent rules files with zero-width and bidi characters that render

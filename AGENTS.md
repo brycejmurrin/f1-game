@@ -23,7 +23,7 @@ doc): skip steps 1 and 3–6, check with `node --test tests/unit/docs-integrity.
 (the commit hook then runs docs-integrity alone, no ratchet raise), and skip the 1 h timer. With no PR the push starts
 no CI (`= ci none`); a ready PR, or a draft labelled `run-ci`, gets a fast tier of guards plus seconds, so one `ci-watch.mjs --sha` Monitor suffices.
 
-Then watch CI (rule 12). Auto memory is ON (synced to `.claude/memory/`) for corrections and tastes; a measured lesson goes to `docs/notes/`, a rule to a hook or test, a work log to the PR body.
+Then watch CI (rule 12). Every host: `.claude/memory/MEMORY.md` + `.claude/rules/fleet-core.md`; edit via `node tools/env/apex-memory.mjs list|show|retire` (docs/notes/AGENT-MEMORY.md). A measured lesson goes to `docs/notes/`, a rule to a hook or test, a work log to the PR body.
 
 ## Verification — scale it to the change
 One browser GROUP costs 10–40 minutes of serialized SwiftShader here, so running more than the change needs is slower
