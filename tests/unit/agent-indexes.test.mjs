@@ -95,3 +95,9 @@ test("impact map is a narrow file to function to specs table", () => {
     assert.ok(specs.every((s) => s.startsWith("tests/")));
   }
 });
+
+test("agent index carries no volatile test counts (#2808)", () => {
+  const index = JSON.parse(read("docs/agent-index.json"));
+  assert.ok(index.groups.length > 10);
+  for (const g of index.groups) assert.ok(!("declaredTests" in g), `${g.id} carries a declaredTests count`);
+});

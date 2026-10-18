@@ -1171,7 +1171,7 @@ function fitHud() {
   // through, still retrying (bounded) in case it is merely not populated yet.
   let retry = !top;
   if (!top && !wide(els.minimap, zTopPub) && !wide(els.hudSectors, zTopPub) && !span(_hudBottom, zBotPub) && !wide(_dockL, zDockPub) && !wide(_dockR, zDockPub)) {
-    if (++_fitRetry <= 30) _fitKey = "";
+    if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; }   // nothing fitted: no --hud-fit-stamp yet
     return;
   }
   // The dock's painted floor (declared above): read past the nothing-laid-out retry, which a
@@ -1631,7 +1631,7 @@ function fitHud() {
       if (avail > 0 && denom > 0) capBot = Math.min(capBot, avail / denom);
     }
   }
-  if (retry) { if (++_fitRetry <= 30) _fitKey = ""; } else _fitRetry = 0;
+  if (retry) { if (++_fitRetry <= 30) { _fitKey = ""; _fitPending = true; } } else _fitRetry = 0;   // pending: the dock cap is not in yet
   // EACH CAP IS COMPARED AGAINST THE SLIDER THAT DRIVES IT. The readout bands
   // ride --hud-scale; the touch dock rides --hud-btn-scale (BUTTON SIZE, its
   // own slider — css/overlays.css), which defaults to --hud-scale and is only

@@ -38,6 +38,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.243,
+    tyreSeverity: 1,  // Historic Canadian permanent; calendar-neutral
     baseHW: 7,
     sceneryCoordinates: "racing",
     terrainOuter: 110,
