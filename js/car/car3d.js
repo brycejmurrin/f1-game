@@ -678,6 +678,8 @@ const Car3D = (function () {
           ersGlow, SURFACES.metal);
       }
     }
+    // LED STRIP (STYLE): a full-length lit strip down each pod shoulder in the pack's LED colour.
+    if (!ckpt && ersStyle && ersStyle.ledStrip) addPodFlankSpan(0.45, -0.95, 0.99, 0.045, ersGlow, SURFACES.emissive, 0.03);
     const ersBlister = Math.max(0, Math.min(2, Math.round((ersStyle && ersStyle.blister) || 0)));
     if (ersBlister > 0 && !ckpt) {
       const bS = 0.92 + 0.18 * Math.max(0, ersPack - 1);
@@ -895,6 +897,15 @@ const Car3D = (function () {
         }
       }
     }
+
+    // BIG CAP (STYLE): a wide painted filler plate on the cover crown, so a fuel option reads from above.
+    if (!ckpt && fuelStyle && fuelStyle.capBig) {
+      const cz = -0.52, cyb = coverSurfaceY(anchors.coverAt(cz), 0);
+      addBox(out, 0, cyb + 0.012, cz, 0.30, 0.024, 0.36, (fuelStyle.cap || [0.9, 0.5, 0.1]).map((v) => Math.min(v, 1)), SURFACES.metal);
+    }
+    // SKIRT (STYLE): a painted strip down each floor edge.
+    if (!ckpt && floorStyle && floorStyle.skirt) for (const s of [-1, 1])
+      addBox(out, s * 0.76, Math.max(CHASSIS.floor.cy + rideDY, 0.052) + 0.03, -0.30, 0.035, 0.07, 2.4, c2);
 
     part("livery");
     // Nose TIP z moves per team (TEAM_STYLE.noseTipZ, ±0.10): the cap and both
@@ -1131,6 +1142,8 @@ const Car3D = (function () {
                    0.62, 0, 0.720, 0.20, 0.022, DARK);
       addLoft(out, 0.495, 0, 0.668, 0.34, 0.018,
                    0.605, 0, 0.710, 0.16, 0.014, VISOR, SURFACES.glass);
+      // screen 2 (STYLE): a tall wrap-around aeroscreen over the halo's front.
+      if (cockpitStyle.screen >= 2) addLoft(out, 0.47, 0, 0.700, 0.46, 0.02, 0.60, 0, 0.880, 0.36, 0.016, VISOR, SURFACES.glass);
       for (const s of [-1, 1]) {
         addLoft(out, 0.50, s * 0.16, 0.690, 0.10, 0.020,
                      0.58, s * 0.06, 0.730, 0.06, 0.016, DARK);
@@ -1447,6 +1460,14 @@ const Car3D = (function () {
       }
     }
     exhTipRForLamp = tipRShow * (exhFlare > 0 && !exhTwin ? (1 + 1.15 * exhFlare) : 1);
+    // STACK (STYLE parts, 2026-10-18): an upswept tail-pipe stack over the crash
+    // structure, 1 single / 2 twin, so an exhaust option reads from behind.
+    const exhStack = Math.max(0, Math.min(2, Math.round(exhStyle.stack || 0)));
+    for (let i = 0; i < exhStack; i++) {
+      const sx = exhStack === 2 ? (i ? 0.13 : -0.13) : 0;
+      addTube(out, [[sx, 0.46, -2.30], [sx, 0.62, -2.50], [sx, 0.80, -2.60]], 0.055 * exhBore, 8, exhMetal, SURFACES.metal);
+      addBox(out, sx, 0.83, -2.62, 0.13 * exhBore, 0.05, 0.13 * exhBore, glazeOf(fuelFlame), SURFACES.metal);
+    }
     }
 
     part("sharkFin");
@@ -1932,6 +1953,11 @@ const Car3D = (function () {
       }
       if (gbFin) addBox(out, 0, 0.27 + gbFinSY / 2, -2.30, 0.02, gbFinSY, gbFinSZ, CARBON);
     }
+    // REAR FINS (STYLE): tall painted fins either side of the gearbox crash structure.
+    if (!ckpt && gbStyle && gbStyle.rearFins) for (const s of [-1, 1]) {
+      addBox(out, s * 0.25, 0.46, -2.30, 0.022, 0.34, 0.46, c2);
+      addBox(out, s * 0.25, 0.64, -2.30, 0.06, 0.02, 0.46, CARBON);
+    }
 
     part("brakeDucts");
     const brakesT = tier("brakes");
@@ -1970,11 +1996,20 @@ const Car3D = (function () {
       }
     }
 
+    // BIG SCOOP (STYLE): an oversized brake-duct mouth proud of each FRONT tyre's leading edge.
+    if (!ckpt && brakeStyle && brakeStyle.bigScoop) {
+      const sc = (brakeStyle.cal || [0.85, 0.12, 0.10]).map((v) => Math.min(v, 1));
+      for (const s of [-1, 1]) {
+        addBox(out, s * 0.60, 0.34, AXLES.frontZ + 0.40, 0.16, 0.20, 0.16, DARK);
+        addBox(out, s * 0.60, 0.34, AXLES.frontZ + 0.49, 0.18, 0.22, 0.03, sc, SURFACES.metal);
+      }
+    }
+
     part("suspension");
     const wbMul = suspStyle ? suspStyle.arm : (suspT === 0 ? 0.85 : suspT === 2 ? 1.3 : 1.0);
     const wbPush = suspStyle ? suspStyle.push : (suspT === 2 ? 1 : 0);
     const wbPull = suspStyle && suspStyle.pull ? 1 : 0;
-    const armTh = 0.026 * wbMul, suspC = [0.11, 0.11, 0.13];
+    const armTh = 0.026 * wbMul, suspC = (suspStyle && suspStyle.armTint) || [0.11, 0.11, 0.13];   // armTint: a painted STYLE kit
     const rockerLvl = Math.max(0, Math.min(2, Math.round(suspStyle.rocker || 0)));
     const heaveOn = Math.max(0, Math.min(1, Math.round(suspStyle.heave || 0)));
     const fairArms = !!(wbPush || wbPull || rockerLvl || heaveOn);
@@ -2125,7 +2160,7 @@ const Car3D = (function () {
       // Per-option caliper accent peeking through the rim spokes, else tier.
       const wt = CarWheels.tints(liv);   // livery rimTint / caliperTint override the brakes catalog (unset = null)
       const caliperColor = wt.cal || (brakeStyle ? brakeStyle.cal : BRAKE_CALIPER[brakesT]);
-      const rimColor = wt.rim || (brakeStyle && brakeStyle.rim);   // premium alloy rims (else default dark)
+      const rimColor = wt.rim || (wheelStyle && wheelStyle.rim) || (brakeStyle && brakeStyle.rim);   // premium alloy rims (else default dark)
       for (const s of [-1, 1]) {
         addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32,
           tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle, wt.ink);
