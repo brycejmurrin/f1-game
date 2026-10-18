@@ -1,1 +1,1 @@
-1792322039	Bryce Murrin	User-requested complete MCP server fixes: #2885 #2892 #2895 #2896 #2902 #2903; preserve open #2870/#2878 contributions  [cursor/mcp-deep-hardening-a8c4; session 8133a24db0e209ab9e225ff8]
+1792325335	Bryce Murrin	Original active session PR2904: all six server fixes implemented local08c8853b6; correcting gate fixture isolation and importing existing upstream2870/2905; duplicate adoption notified comment6249692707; final full gate then one normal push  [cursor/mcp-deep-hardening-a8c4; session 8133a24db0e209ab9e225ff8]
