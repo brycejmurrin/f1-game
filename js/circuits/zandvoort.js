@@ -26,6 +26,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.3,
+    tyreSeverity: 1.05,  // Banking adds vertical energy (Pirelli Dutch GP notes); no 2026 Chronicle rate — calendar band ~1.0
     gpLaps: 72,   // real race distance (4.259 km); lengthKm's 1 dp derives 71
     baseHW: 7,
     sceneryCoordinates: "racing",

@@ -498,7 +498,14 @@ let _spMesh = null, _spMeshKey = "", _spHull = null;
 // spineSide moves the service panels aft of its flank band.
 const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide"];
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
-function spMeshBust() { _spMeshKey = ""; GarageScene.dropPreviewMeshes(); }
+// The wings are drawn beside the mesh (drawAeroFlaps), from CarMesh's flap caches
+// keyed on colour and finish: the old paint job's flaps go too once nothing has
+// drawn them for FLAP_IDLE_MS, or a session of edits kept every one (M1).
+const FLAP_IDLE_MS = 2000;
+function spMeshBust() {
+  _spMeshKey = ""; GarageScene.dropPreviewMeshes();
+  if (typeof CarMesh !== "undefined" && CarMesh.releaseIdleFlaps) CarMesh.releaseIdleFlaps(FLAP_IDLE_MS);
+}
 function garageSeat() {
   const team = Teams.LIST[G.teamIdx];
   if (typeof GarageScene !== "undefined" && GarageScene.seatDriverAt)

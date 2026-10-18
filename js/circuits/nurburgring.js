@@ -13,6 +13,7 @@
     night: false,
     theme: "green",
     lengthKm: 5.1,
+    tyreSeverity: 1,  // Permanent GP layout; calendar-neutral proxy (no published rate)
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     terrainOuter: 100,
