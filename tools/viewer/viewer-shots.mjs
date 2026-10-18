@@ -62,9 +62,11 @@ export async function shootViewer(htmlPath, { cars = [], circuits = [], sheet = 
       if (S.kind === "liveries") for (const l of O.liveries.filter((x) => ok(x.id))) jobs.push([`livery-${S.team}-${l.id}`, l.name, { team: S.team, livery: l.id }]);
       if (S.kind === "finishes") for (const f of O.finishes.filter(ok)) jobs.push([`finish-${S.team}-${f}`, f, { team: S.team, finish: f }]);
       if (S.kind === "parts") {
-        const cat = O.parts.find((c) => c.id === S.cat);
-        if (!cat) throw new Error(`no part category "${S.cat}" (one of: ${O.parts.map((c) => c.id).join(", ")})`);
-        for (const o of cat.options.filter((x) => ok(x.id))) jobs.push([`part-${S.team}-${S.cat}-${o.id}`, o.label, { team: S.team, parts: { [S.cat]: o.id } }]);
+        // "all" walks every category in catalog order — with --match, one sheet of a change's new parts.
+        const cats = S.cat === "all" ? O.parts : O.parts.filter((c) => c.id === S.cat);
+        if (!cats.length) throw new Error(`no part category "${S.cat}" (one of: all, ${O.parts.map((c) => c.id).join(", ")})`);
+        for (const cat of cats) for (const o of cat.options.filter((x) => ok(x.id)))
+          jobs.push([`part-${S.team}-${cat.id}-${o.id}`, `${cat.label}: ${o.label}`, { team: S.team, parts: { [cat.id]: o.id } }]);
       }
     } else {
       for (const id of cars) jobs.push([`car-${id}`, null, { team: id }]);
