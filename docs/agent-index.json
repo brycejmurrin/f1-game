@@ -735,6 +735,7 @@
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
@@ -822,6 +823,7 @@
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/player-dynamics-shipped-vm.test.mjs",
@@ -918,6 +920,7 @@
         "tests/unit/persistence-vm.test.mjs",
         "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-feel-vm.test.mjs",
+        "tests/unit/physics-oracle.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
@@ -3149,657 +3152,663 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/cvd-palette.js",
+      "global": "CvdPalette",
+      "order": 218,
+      "roster": "tag"
+    },
+    {
       "path": "js/ui/appearance-opts.js",
       "global": "AppearanceOpts",
-      "order": 218,
+      "order": 219,
       "roster": "tag"
     },
     {
       "path": "js/ui/a11y-opts.js",
       "global": "A11yOpts",
-      "order": 219,
+      "order": 220,
       "roster": "tag"
     },
     {
       "path": "js/ui/hud-elements.js",
       "global": "HudElements",
-      "order": 220,
+      "order": 221,
       "roster": "tag"
     },
     {
       "path": "js/ui/hud-tyres.js",
       "global": "HudTyres",
-      "order": 221,
+      "order": 222,
       "roster": "tag"
     },
     {
       "path": "js/ui/hud-damage.js",
       "global": "HudDamage",
-      "order": 222,
+      "order": 223,
       "roster": "tag"
     },
     {
       "path": "js/ui/live-region.js",
       "global": "LiveRegion",
-      "order": 223,
+      "order": 224,
       "roster": "tag"
     },
     {
       "path": "js/ui/hud-skin.js",
       "global": "HudSkin",
-      "order": 224,
+      "order": 225,
       "roster": "tag"
     },
     {
       "path": "js/ui/hud-readouts.js",
       "global": "HudReadouts",
-      "order": 225,
+      "order": 226,
       "roster": "tag"
     },
     {
       "path": "js/ui/hud-relative.js",
       "global": "HudRelative",
-      "order": 226,
+      "order": 227,
       "roster": "tag"
     },
     {
       "path": "js/ui/hud-strategy.js",
       "global": "HudStrategy",
-      "order": 227,
+      "order": 228,
       "roster": "tag"
     },
     {
       "path": "js/ui/hud-inputs.js",
       "global": "HudInputs",
-      "order": 228,
+      "order": 229,
       "roster": "tag"
     },
     {
       "path": "js/camera/cam-groups.js",
       "global": "CamGroups",
-      "order": 229,
+      "order": 230,
       "roster": "tag"
     },
     {
       "path": "js/ui/hud-layout.js",
       "global": "HudLayout",
-      "order": 230,
+      "order": 231,
       "roster": "tag"
     },
     {
       "path": "js/ui/hud-arrange.js",
       "global": "HudArrange",
-      "order": 231,
+      "order": 232,
       "roster": "tag"
     },
     {
       "path": "js/ui/title-layout.js",
       "global": "TitleLayout",
-      "order": 232,
+      "order": 233,
       "roster": "tag"
     },
     {
       "path": "js/ui/pause-opts.js",
       "global": "PauseOpts",
-      "order": 233,
+      "order": 234,
       "roster": "tag"
     },
     {
       "path": "js/ui/screen-looks.js",
       "global": "ScreenLooks",
-      "order": 234,
+      "order": 235,
       "roster": "tag"
     },
     {
       "path": "js/ui/debris-opts.js",
       "global": "DebrisOpts",
-      "order": 235,
+      "order": 236,
       "roster": "tag"
     },
     {
       "path": "js/perf/metrics-overlay.js",
       "global": "GameMetrics",
-      "order": 236,
+      "order": 237,
       "roster": "tag"
     },
     {
       "path": "js/perf/soak-run.js",
       "global": "SoakRun",
-      "order": 237,
+      "order": 238,
       "roster": "tag"
     },
     {
       "path": "js/perf/phone-recorder.js",
       "global": "PhoneRecorder",
-      "order": 238,
+      "order": 239,
       "roster": "tag"
     },
     {
       "path": "js/camera/cam-comfort.js",
       "global": "CamComfort",
-      "order": 239,
+      "order": 240,
       "roster": "tag"
     },
     {
       "path": "js/camera/fov-fit.js",
       "global": "CamFovFit",
-      "order": 240,
+      "order": 241,
       "roster": "tag"
     },
     {
       "path": "js/camera/vantage.js",
       "global": "GameCams",
-      "order": 241,
+      "order": 242,
       "roster": "tag"
     },
     {
       "path": "js/camera/mode-switch.js",
       "global": "CamModes",
-      "order": 242,
+      "order": 243,
       "roster": "tag"
     },
     {
       "path": "js/xr/xr-opts.js",
       "global": "XROpts",
-      "order": 243,
+      "order": 244,
       "roster": "tag"
     },
     {
       "path": "js/xr/xr-boot.js",
       "global": "XrBoot",
-      "order": 244,
+      "order": 245,
       "roster": "tag"
     },
     {
       "path": "js/ui/hud.js",
       "global": "GameHud",
-      "order": 245,
+      "order": 246,
       "roster": "tag",
       "ratchetLines": 2737
     },
     {
       "path": "js/ui/results-story.js",
       "global": "ResultsStory",
-      "order": 246,
+      "order": 247,
       "roster": "tag"
     },
     {
       "path": "js/ui/results-sheet.js",
       "global": "GameResults",
-      "order": 247,
+      "order": 248,
       "roster": "tag"
     },
     {
       "path": "js/race/quali-model.js",
       "global": "Quali",
-      "order": 248,
+      "order": 249,
       "roster": "tag"
     },
     {
       "path": "js/race/daily-challenge.js",
       "global": "DailyChallenge",
-      "order": 249,
+      "order": 250,
       "roster": "tag"
     },
     {
       "path": "js/ui/appearance-studio.js",
       "global": "AppearanceStudio",
-      "order": 250,
+      "order": 251,
       "roster": "tag"
     },
     {
       "path": "js/ui/home-world.js",
       "global": "HomeWorld",
-      "order": 251,
+      "order": 252,
       "roster": "tag"
     },
     {
       "path": "js/ui/photo-studio.js",
       "global": "PhotoStudio",
-      "order": 252,
+      "order": 253,
       "roster": "tag"
     },
     {
       "path": "js/ui/experience.js",
       "global": "UiExperience",
-      "order": 253,
+      "order": 254,
       "roster": "tag"
     },
     {
       "path": "js/ui/share-code.js",
       "global": "ShareCode",
-      "order": 254,
+      "order": 255,
       "roster": "tag"
     },
     {
       "path": "js/ui/title-menu.js",
       "global": "TitleMenu",
-      "order": 255,
+      "order": 256,
       "roster": "tag"
     },
     {
       "path": "js/ui/deep-link.js",
       "global": "DeepLink",
-      "order": 256,
+      "order": 257,
       "roster": "tag"
     },
     {
       "path": "js/ui/title-flow.js",
       "global": "TitleFlow",
-      "order": 257,
+      "order": 258,
       "roster": "tag"
     },
     {
       "path": "js/race/quali-net.js",
       "global": "QualiNet",
-      "order": 258,
+      "order": 259,
       "roster": "tag"
     },
     {
       "path": "js/race/race-settings.js",
       "global": "RaceSettings",
-      "order": 259,
+      "order": 260,
       "roster": "tag"
     },
     {
       "path": "js/career/custom-team.js",
       "global": "CustomTeam",
-      "order": 260,
+      "order": 261,
       "roster": "tag"
     },
     {
       "path": "js/ui/quali-sheet.js",
       "global": "QualiSheet",
-      "order": 261,
+      "order": 262,
       "roster": "tag"
     },
     {
       "path": "js/ui/onboard.js",
       "global": "Onboard",
-      "order": 262,
+      "order": 263,
       "roster": "tag"
     },
     {
       "path": "js/physics/debris-draw.js",
       "global": "DebrisDraw",
-      "order": 263,
+      "order": 264,
       "roster": "tag"
     },
     {
       "path": "js/physics/debris-world.js",
       "global": "DebrisWorld",
-      "order": 264,
+      "order": 265,
       "roster": "tag"
     },
     {
       "path": "js/physics/incident-sim.js",
       "global": "IncidentSim",
-      "order": 265,
+      "order": 266,
       "roster": "tag"
     },
     {
       "path": "js/physics/contact-geometry.js",
       "global": "ContactGeometry",
-      "order": 266,
+      "order": 267,
       "roster": "tag"
     },
     {
       "path": "js/physics/collide.js",
       "global": "Collide",
-      "order": 267,
+      "order": 268,
       "roster": "tag"
     },
     {
       "path": "js/physics/wall-end-face.js",
       "global": "WallEndFace",
-      "order": 268,
+      "order": 269,
       "roster": "tag"
     },
     {
       "path": "js/physics/wall-clamp.js",
       "global": "WallClamp",
-      "order": 269,
+      "order": 270,
       "roster": "tag"
     },
     {
       "path": "js/race/car-fields.js",
       "global": "CarFields",
-      "order": 270,
+      "order": 271,
       "roster": "tag"
     },
     {
       "path": "js/car/field-lod.js",
       "global": "FieldLod",
-      "order": 271,
+      "order": 272,
       "roster": "tag"
     },
     {
       "path": "js/car/car-draw.js",
       "global": "CarDraw",
-      "order": 272,
+      "order": 273,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/shadow-pass.js",
       "global": "ShadowPass",
-      "order": 273,
+      "order": 274,
       "roster": "tag"
     },
     {
       "path": "js/render/shared/mirror-pass.js",
       "global": "MirrorPass",
-      "order": 274,
+      "order": 275,
       "roster": "tag"
     },
     {
       "path": "js/ui/platform-session.js",
       "global": "PlatformSession",
-      "order": 275,
+      "order": 276,
       "roster": "tag"
     },
     {
       "path": "js/ui/update-check.js",
       "global": "UpdateCheck",
-      "order": 276,
+      "order": 277,
       "roster": "tag"
     },
     {
       "path": "js/ui/race-message-history.js",
       "global": "RaceMessageHistory",
-      "order": 277,
+      "order": 278,
       "roster": "tag"
     },
     {
       "path": "js/ui/controller-profile-controls.js",
       "global": "ControllerProfileControls",
-      "order": 278,
+      "order": 279,
       "roster": "tag"
     },
     {
       "path": "js/ui/condition-cue-controls.js",
       "global": "ConditionCueControls",
-      "order": 279,
+      "order": 280,
       "roster": "tag"
     },
     {
       "path": "js/ui/race-mix-controls.js",
       "global": "RaceMixControls",
-      "order": 280,
+      "order": 281,
       "roster": "tag"
     },
     {
       "path": "js/game.js",
       "global": null,
-      "order": 281,
+      "order": 282,
       "roster": "tag",
       "ratchetLines": 9626
     },
     {
       "path": "js/render/glx/shaders/glsl-chunks.js",
       "global": "GLXChunks",
-      "order": 282,
+      "order": 283,
       "roster": "DEFERRED:webgl2"
     },
     {
       "path": "js/render/glx/shaders/glsl-lit.js",
       "global": "GLXShaders",
-      "order": 283,
+      "order": 284,
       "roster": "DEFERRED:webgl2"
     },
     {
       "path": "js/render/glx/shaders/glsl-sky.js",
       "global": "GLXShaders",
-      "order": 284,
+      "order": 285,
       "roster": "DEFERRED:webgl2"
     },
     {
       "path": "js/render/glx/shaders/glsl-fx.js",
       "global": "GLXShaders",
-      "order": 285,
+      "order": 286,
       "roster": "DEFERRED:webgl2"
     },
     {
       "path": "js/render/glx/shaders/glsl-post.js",
       "global": "GLXShaders",
-      "order": 286,
+      "order": 287,
       "roster": "DEFERRED:webgl2"
     },
     {
       "path": "js/render/glx/post.js",
       "global": "GLXPost",
-      "order": 287,
+      "order": 288,
       "roster": "DEFERRED:webgl2"
     },
     {
       "path": "js/render/glx/shadow.js",
       "global": "GLXShadow",
-      "order": 288,
+      "order": 289,
       "roster": "DEFERRED:webgl2"
     },
     {
       "path": "js/render/glx/chunked.js",
       "global": "GLXChunked",
-      "order": 289,
+      "order": 290,
       "roster": "DEFERRED:webgl2"
     },
     {
       "path": "js/render/glx/glx.js",
       "global": "GLXBackend",
-      "order": 290,
+      "order": 291,
       "roster": "DEFERRED:webgl2",
       "ratchetLines": 2978
     },
     {
       "path": "js/render/webgpu/wgsl-chunks.js",
       "global": "WGSLChunks",
-      "order": 291,
+      "order": 292,
       "roster": "DEFERRED:webgpu"
     },
     {
       "path": "js/render/webgpu/wgsl-post.js",
       "global": "WGSLPost",
-      "order": 292,
+      "order": 293,
       "roster": "DEFERRED:webgpu"
     },
     {
       "path": "js/render/webgpu/wgsl-fx.js",
       "global": "WGSLFx",
-      "order": 293,
+      "order": 294,
       "roster": "DEFERRED:webgpu"
     },
     {
       "path": "js/render/webgpu/wgx-shadow.js",
       "global": "WGXShadow",
-      "order": 294,
+      "order": 295,
       "roster": "DEFERRED:webgpu"
     },
     {
       "path": "js/render/webgpu/wgx-chunked.js",
       "global": "WGXChunked",
-      "order": 295,
+      "order": 296,
       "roster": "DEFERRED:webgpu"
     },
     {
       "path": "js/render/webgpu/wgx-post.js",
       "global": "WGXPost",
-      "order": 296,
+      "order": 297,
       "roster": "DEFERRED:webgpu"
     },
     {
       "path": "js/render/webgpu/wgx-roadlut.js",
       "global": "WGXRoadLut",
-      "order": 297,
+      "order": 298,
       "roster": "DEFERRED:webgpu"
     },
     {
       "path": "js/render/webgpu/wgx.js",
       "global": "WGX",
-      "order": 298,
+      "order": 299,
       "roster": "DEFERRED:webgpu"
     },
     {
       "path": "js/render/three/tsl-chunks.js",
       "global": "TLXShaders",
-      "order": 299,
+      "order": 300,
       "roster": "DEFERRED:three"
     },
     {
       "path": "js/render/three/tsl-viewport.js",
       "global": "TLXShaders",
-      "order": 300,
+      "order": 301,
       "roster": "DEFERRED:three"
     },
     {
       "path": "js/render/three/tsl-lit.js",
       "global": "TLXShaders",
-      "order": 301,
+      "order": 302,
       "roster": "DEFERRED:three"
     },
     {
       "path": "js/render/three/tsl-sky.js",
       "global": "TLXShaders",
-      "order": 302,
+      "order": 303,
       "roster": "DEFERRED:three"
     },
     {
       "path": "js/render/three/tsl-fx.js",
       "global": "TLXShaders",
-      "order": 303,
+      "order": 304,
       "roster": "DEFERRED:three"
     },
     {
       "path": "js/render/three/tsl-post.js",
       "global": "TLXShaders",
-      "order": 304,
+      "order": 305,
       "roster": "DEFERRED:three"
     },
     {
       "path": "js/render/three/tlx-shadow.js",
       "global": "TLXShaders",
-      "order": 305,
+      "order": 306,
       "roster": "DEFERRED:three"
     },
     {
       "path": "js/render/three/tlx-chunked.js",
       "global": "TLXShaders",
-      "order": 306,
+      "order": 307,
       "roster": "DEFERRED:three"
     },
     {
       "path": "js/render/three/tlx-post.js",
       "global": "TLXShaders",
-      "order": 307,
+      "order": 308,
       "roster": "DEFERRED:three"
     },
     {
       "path": "js/render/three/tlx.js",
       "global": "TLX",
-      "order": 308,
+      "order": 309,
       "roster": "DEFERRED:three"
     },
     {
       "path": "js/agent/agentview-raster.js",
       "global": "AgentRaster",
-      "order": 309,
+      "order": 310,
       "roster": "LAZY_AGENT"
     },
     {
       "path": "js/agent/agentview-corners.js",
       "global": "AgentCorners",
-      "order": 310,
+      "order": 311,
       "roster": "LAZY_AGENT"
     },
     {
       "path": "js/agent/agentview.js",
       "global": "AgentView",
-      "order": 311,
+      "order": 312,
       "roster": "LAZY_AGENT",
       "ratchetLines": 2584
     },
     {
       "path": "js/agent/apex-net.js",
       "global": "ApexNet",
-      "order": 312,
+      "order": 313,
       "roster": "LAZY_AGENT"
     },
     {
       "path": "js/agent/apex-cam.js",
       "global": "ApexCam",
-      "order": 313,
+      "order": 314,
       "roster": "LAZY_AGENT"
     },
     {
       "path": "js/agent/apex-track.js",
       "global": "ApexTrack",
-      "order": 314,
+      "order": 315,
       "roster": "LAZY_AGENT"
     },
     {
       "path": "js/agent/apex-lobby.js",
       "global": "ApexLobby",
-      "order": 315,
+      "order": 316,
       "roster": "LAZY_AGENT"
     },
     {
       "path": "js/agent/apex.js",
       "global": "ApexApi",
-      "order": 316,
+      "order": 317,
       "roster": "LAZY_AGENT",
       "ratchetLines": 3323
     },
     {
       "path": "js/lighting/presets.js",
       "global": "LightPresets",
-      "order": 317,
+      "order": 318,
       "roster": "LAZY_RACE",
       "ratchetLines": 7339
     },
     {
       "path": "js/race/reliability.js",
       "global": "Reliability",
-      "order": 318,
+      "order": 319,
       "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/damage.js",
       "global": "Damage",
-      "order": 319,
+      "order": 320,
       "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/duel.js",
       "global": "Duel",
-      "order": 320,
+      "order": 321,
       "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/session-records.js",
       "global": "SessionRecords",
-      "order": 321,
+      "order": 322,
       "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/pit-lane.js",
       "global": "PitLane",
-      "order": 322,
+      "order": 323,
       "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/engineer.js",
       "global": "RaceEngineer",
-      "order": 323,
+      "order": 324,
       "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/radio-lines.js",
       "global": "RadioLines",
-      "order": 324,
+      "order": 325,
       "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/race-facts.js",
       "global": "RaceFacts",
-      "order": 325,
+      "order": 326,
       "roster": "LAZY_RACE_SESSION"
     },
     {

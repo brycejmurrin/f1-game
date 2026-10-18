@@ -811,23 +811,21 @@ test("no agent-facing file tells an agent to arm or merge with SQUASH", () => {
   assert.deepEqual(bad, [], "squash is retired — Merge Desk arms MERGE (merge commit) only");
 });
 
-test("bash-guard's `if:` filters parse, and every policed command shape still reaches it (#1711)", () => {
-  /* Hook handlers take ONE permission rule in `if` (https://code.claude.com/docs/en/hooks);
-     a subcommand of a compound is matched on its own, and an unparseable command runs the
-     hook regardless. Matching here: `*` = any text, whole command. protect-files.sh on Bash
-     stays unfiltered on purpose: it polices writes (redirects, any interpreter), which no
-     verb list covers. */
+test("bash-guard's in-script trigger filter covers every policed command shape (#1711)", () => {
+  /* Cursor imports Claude hooks but does not document Claude's per-step `if`.
+     Keep one Bash hook and do the same 14-word filtering inside the script.
+     protect-files.sh stays unfiltered on purpose: it polices writes (redirects,
+     any interpreter), which no verb list covers. */
   const settings = JSON.parse(read(".claude/settings.json"));
   const group = settings.hooks.PreToolUse.find((g) => g.matcher === "Bash");
   const guards = group.hooks.filter((h) => h.command.includes("bash-guard.sh"));
-  assert.ok(guards.length > 0 && guards.every((h) => typeof h.if === "string"), "every bash-guard handler needs an `if`");
+  assert.equal(guards.length, 1, "one Bash call starts one imported bash-guard");
+  assert.equal(guards[0].if, undefined, "the handler does not rely on an undocumented Cursor field");
   assert.ok(group.hooks.some((h) => h.command.includes("protect-files.sh") && !h.if), "protect-files keeps polling every Bash write");
-  const res = guards.map((h) => {
-    const m = /^Bash\((.+)\)$/.exec(h.if);
-    assert.ok(m, `unparseable if: ${h.if}`);
-    return new RegExp("^" + m[1].replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
-  });
-  const reaches = (cmd) => cmd.split(/&&|\|\||;|\|/).some((sub) => res.some((r) => r.test(sub.trim())));
+  const src = read(".claude/hooks/bash-guard.sh");
+  const trigger = src.match(/^GUARD_TRIGGER='([^']+)'$/m);
+  assert.ok(trigger, "bash-guard declares its fast-path trigger union");
+  const reaches = (cmd) => new RegExp(trigger[1]).test(cmd);
   for (const cmd of ["git commit -m x", "foo && git commit -m x", "FOO=1 git push -u origin b", "pkill -f chrome", "kill 123",
     "killall node", "gh pr merge 1", "curl -X POST x/runs/1/cancel", "node tools/ci/test-bg.mjs g", "npm run test:guards",
     "npx playwright test", "playwright test", "bash -c 'git commit'", "timeout 5 pkill -f x", "python3 x.py", "eval 'git commit'",
