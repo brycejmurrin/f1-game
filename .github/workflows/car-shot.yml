@@ -98,7 +98,7 @@ jobs:
         shell: bash
         run: |
           python3 -m http.server 3456 --bind 127.0.0.1 >/tmp/serve.log 2>&1 &
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             curl -fsS -o /dev/null "http://127.0.0.1:3456/tools/carview.html" && exit 0
             sleep 1
           done

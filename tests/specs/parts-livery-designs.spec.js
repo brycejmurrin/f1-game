@@ -11,6 +11,15 @@ import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared
 
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
 
+// One car area at a time: open the area that holds a control before acting on it.
+async function reveal(page, sel) {
+  await page.evaluate((s) => {
+    const pane = document.querySelector(s)?.closest('[role="tabpanel"]');
+    if (pane && pane.hidden) document.getElementById(pane.getAttribute("aria-labelledby")).click();
+  }, sel);
+  return page.locator(sel);
+}
+
 async function openCreator(page) {
   await ensureLive(page);
   const key = await page.evaluate(() => "livery.custom." + Teams.LIST[2].id);
@@ -32,6 +41,7 @@ test("2026-motif patterns: listed by name in SPINE TOP, tappable, and they repai
   const key = await openCreator(page);
   const ids = await page.evaluate(() => Object.keys(LiveryDesign.LABELS));
   expect(ids.length).toBeGreaterThanOrEqual(6);
+  await reveal(page, `[data-cs-pill="spineLogo:${ids[0]}"]`);
   for (const id of ids) {
     const pill = page.locator(`[data-cs-pill="spineLogo:${id}"]`);
     await expect(pill, id).toHaveCount(1);
@@ -41,7 +51,7 @@ test("2026-motif patterns: listed by name in SPINE TOP, tappable, and they repai
   // The garage repaints the car through a fresh livery atlas build ("[car] livery <team>");
   // waiting on that record is deterministic where a frame diff waits on a render loop.
   const mark = await page.evaluate(() => (Log.records().at(-1) || { id: 0 }).id);
-  const pill = page.locator('[data-cs-pill="spineLogo:halftone"]');
+  const pill = await reveal(page, '[data-cs-pill="spineLogo:halftone"]');
   await pill.scrollIntoViewIfNeeded();
   await pill.tap();
   await expect(pill).toHaveAttribute("aria-pressed", "true");
@@ -49,7 +59,7 @@ test("2026-motif patterns: listed by name in SPINE TOP, tappable, and they repai
     .some((r) => /livery/.test(JSON.stringify(r))), mark), { timeout: 30_000 }).toBe(true);
   await page.screenshot({ path: galleryPath("parts-livery-designs", "halftone-pill-852x393.png") });
 
-  const save = page.locator(".cs-liv-ed-save");
+  const save = await reveal(page, ".cs-liv-ed-save");
   await save.scrollIntoViewIfNeeded();
   await save.tap();
   const r = await page.evaluate((k) => {

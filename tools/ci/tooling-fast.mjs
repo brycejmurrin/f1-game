@@ -82,8 +82,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/aero-flap-travel.test.mjs",
   "tests/unit/aero-zone-tables.test.mjs",
   "tests/unit/aero-zones-turns.test.mjs",
-  // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
-  // asserted instead of described; under a second.
+  // Host configs — the three MCP catalogs, Claude rules → Cursor .mdc via
+  // gen-cursor-rules, the hooks — asserted instead of described; under a second.
   "tests/unit/agent-config.test.mjs",
   // The orchestrator/worker contract (skill agent-fleet): host-correct PR
   // subscribe tools, one fleet block, the mandated launch fields. < 0.1 s.
@@ -116,6 +116,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/apca-timing.test.mjs",
   "tests/unit/apex-arg-guards.test.mjs",
   "tests/unit/apex-career-delete.test.mjs",
+  // Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.
+  "tests/unit/apex-memory.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/appearance-opts.test.mjs",
   "tests/unit/appearance-studio.test.mjs",
@@ -900,6 +902,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/res-scale-census.test.mjs",
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
+  "tests/unit/ribbon-cpu-release.test.mjs",
   "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
   "tests/unit/rival-contact-sfx.test.mjs",
@@ -935,6 +938,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/session-status.test.mjs",
   "tests/unit/session-stub-surface.test.mjs",
   "tests/unit/session-transcript.test.mjs",
+  "tests/unit/setting-deps.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
   "tests/unit/settings-search.test.mjs",
@@ -949,6 +953,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/setup-screens-state.test.mjs",
   "tests/unit/setup-trial-session.test.mjs",
   "tests/unit/setup-tune.test.mjs",
+  // tools/check/shader-validate.mjs: glslang over the GLX GLSL, naga (advisory) over the WGX WGSL. Extraction runs
+  // unconditionally; the compilers SKIP loudly when absent (tools/env/install-lint-bins.sh) and the CI `lints` job fails a SKIP. ~3 s.
+  "tests/unit/shader-validate.test.mjs",
   // The sun shadow map's depth span holds a 250 m caster: drives the real
   // ShadowPass.sunPass on a stub renderer and projects through its light VP.
   "tests/unit/shadow-pass-depth.test.mjs",
@@ -1067,6 +1074,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/title-menu-even.test.mjs",
   // three's per-frame tick once per drawn frame on WebGL2 (the pump), WebGPU untouched: the real pumpAnimation over a fake three Animation, and the install gate.
   "tests/unit/tlx-anim-pump.test.mjs",
+  "tests/unit/tlx-car-shadow-cpu.test.mjs",
   "tests/unit/tlx-chunked-lifecycle.test.mjs",
   "tests/unit/tlx-cull-shadow-pack.test.mjs",
   // A throw in one TLX subsystem costs that subsystem only: the car/lamp shadow
@@ -1267,6 +1275,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // WIND (js/race/wind.js): a pure function of (seed, circuit, weather, clock), fog calm and a storm gusty,
   // gusts and the side force capped, head/tail wind a few km/h of top speed, OFF a true no-op. VM, ~1 s.
   "tests/unit/wind.test.mjs",
+  // tools/check/workflow-lint.mjs: actionlint + zizmor (offline) over .github/workflows; fails a planted bad workflow, passes the tree.
+  // Skips loudly when a binary is absent; the CI `lints` job fails a SKIP. ~3 s.
+  "tests/unit/workflow-lint.test.mjs",
   "tests/unit/xr-backend-pin.test.mjs",
   "tests/unit/xr-cull-union.test.mjs",
   "tests/unit/xr-opts.test.mjs",

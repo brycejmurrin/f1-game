@@ -24,7 +24,7 @@ name: Spec timings
 # Timings are evidence, and evidence that edits the branch it describes without
 # anyone looking is how a budget drifts silently in the other direction.
 on:
-  workflow_run:
+  workflow_run:   # zizmor: ignore[dangerous-triggers] trusted-only: the job's `if` admits the deploy branch (checked out by name, never the triggering PR's head) or a dispatch
     # "Deploy to GitHub Pages" too (2026-09-24): pages.yml runs ci.yml as a
     # REUSABLE workflow, so the train's gate uploads its junit into the Pages
     # run — and a `workflow_run` on "CI" never fires for it. The train is the
@@ -77,7 +77,7 @@ jobs:
       ${{ github.event_name == 'workflow_dispatch'
           || github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1   # zizmor: ignore[artipacked] this job force-pushes the bot/spec-timings side branch
         with:
           ref: claude/f1-game-project-26h3ng
           fetch-depth: 0
@@ -140,7 +140,8 @@ jobs:
           APEX_GL: llvmpipe
         run: |
           set -eu
-          node tools/ci/spec-timings.mjs $(find junit-in -name junit.xml | sort)
+          mapfile -t JUNIT < <(find junit-in -name junit.xml | sort)
+          node tools/ci/spec-timings.mjs "${JUNIT[@]}"
           node tools/ci/spec-timings.mjs --check || true
           git --no-pager diff --stat tests/data/spec-timings.json || true
 
