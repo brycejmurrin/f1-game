@@ -162,7 +162,8 @@ test("a hidden HUD does not keep measuring or painting the map", () => {
   const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
   const fit = hud.slice(hud.indexOf("function fitHud"), hud.indexOf("function updateHud"));
   assert.match(fit, /classList.contains\("hud-hidden"\)/);
-  const mm = hud.slice(hud.indexOf("function drawMinimap"), hud.indexOf("function drawMinimap") + 800);
+  const mmSrc = fs.readFileSync(path.join(root, "js/ui/hud-minimap.js"), "utf8");   // #1656: the minimap's own file
+  const mm = mmSrc.slice(mmSrc.indexOf("function drawMinimap"), mmSrc.indexOf("function drawMinimap") + 800);
   assert.match(mm, /if \(!player \|\| !track \|\| !track\.map\) return;/);
   assert.match(mm, /classList.contains\("hud-hidden"\)/);
 });

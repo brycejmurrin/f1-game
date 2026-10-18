@@ -180,6 +180,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/gen-hooks-table.mjs** | Regenerates the `__apex` hook index block in `docs/DEBUG-HOOKS.md` from `apex.js` + `agentHelp()`; `--check`. | agent-view |
 | **gen/gen-ladder-figures.mjs** | Prints the gate-ladder sizes (unit files per rung) from tests/groups.json; --json / --table. Writes nothing. | check-changes |
 | **gen/gen-lib.mjs** | Shared writer for the `gen-*.mjs` generators: `--check` vs write, marker-block replacement. | check-changes |
+| **gen/gen-locales.mjs** | Regenerate locales/en.json and manifest hashes from I18n.t / data-i18n call sites. | — |
 | **gen/gen-shell.mjs** | Generates the shell tag blocks, sw.js precache seed and js/roster.js from the manifest; `--check` fails on drift. | check-changes |
 | **gen/gen-slider-doc.mjs** | Regenerates the slider tables in `docs/LIGHTING-TUNER-SLIDERS.md` from `TUNE_DEFS`; `--check` fails on drift. | lighting-tuner |
 | **gen/gen-test-groups.mjs** | Regenerates package.json's `test:*` scripts and tooling-fast's file list from tests/groups.json; `--check`. | check-changes |
@@ -412,6 +413,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/cdmcp-lamps.py** | Night lamp screenshot suite via chrome-devtools MCP (Qatar, Singapore, Bahrain, Monza); `--port`, `--only`, `--limit`. | mcp-probe |
 | **mcp/cdmcp-measure.py** | Background-friendly Chromium MCP measure suite: boot (network/console/LCP), ui floors, full(+heap); `= run` verdict. | mcp-probe |
 | **mcp/chrome-devtools-mcp.sh** | Wrapper for the local `scratch/chrome-devtools-mcp` clone: `clone`/`build`/`run`/`verify`/`status`/`help`. | mcp-probe |
+| **mcp/chrome-devtools-runtime.mjs** | Materialize the two Apex-reviewed chrome-devtools-mcp 1.7.0 fixes without mutating npm or clone sources. | — |
 | **mcp/debug-chrome.mjs** | CLI, not an MCP tool: start/status/stop a headless Chromium (CDP 9222) plus static server for the js-debugger. | — |
 | **mcp/js-debugger-cdp.mjs** | Bounded CDP transport and loopback target discovery for js-debugger-mcp. | — |
 | **mcp/js-debugger-cli.mjs** | Separate debugger server CLI: stdio, persistent loopback daemon and state-preserving shell calls. | — |

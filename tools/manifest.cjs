@@ -175,6 +175,9 @@ const FULL = [
   "js/data/garage-defaults.js",
   "js/core/save-schema-registry.js",
   "js/core/store.js",
+  "js/core/i18n-pseudo.js",
+  "js/core/i18n.js",
+  "js/core/dom-apply.js",
   "js/career/restore-points.js",
   "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
@@ -413,6 +416,7 @@ const FULL = [
   // names them, and a session without navigator.xr never fetches them.
   "js/xr/xr-opts.js",   // SETTINGS › VR rows; call-time GameStore / SettingRow
   "js/xr/xr-boot.js",
+  "js/ui/hud-minimap.js",    // HudMinimap: the #minimap track map GameHud draws each HUD tick (#1656)
   "js/ui/hud.js",
   "js/ui/results-story.js",
   "js/ui/results-sheet.js",
@@ -679,10 +683,14 @@ const HARD_EDGES = [
   ["js/camera/cam-groups.js", "js/ui/hud.js"],      // ONBOARD_IDS = CamGroups.ONBOARD at eval
   ["js/ui/hud-tyres.js", "js/ui/hud.js"],
   ["js/ui/hud-skin.js", "js/ui/hud.js"],            // updateHud calls HudSkin.skinAccent (call time; ordered with its peers)
+  ["js/ui/hud-minimap.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its HudMinimap
   ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
   ["js/core/store.js", "js/ui/debris-opts.js"],   // binds GameStore.store at eval
+  ["js/core/i18n-pseudo.js", "js/core/i18n.js"],
+  ["js/core/store.js", "js/core/i18n.js"],
+  ["js/core/i18n.js", "js/core/dom-apply.js"],
   ["js/core/store.js", "js/ui/title-fx.js"],      // binds GameStore.store and applies data-motion at eval
   ["js/core/store.js", "js/ui/title-layout.js"],  // binds GameStore.store and applies the title layout at eval
   ["js/core/store.js", "js/ui/pause-opts.js"],    // binds GameStore.store and applies data-pause-* at eval
@@ -1615,8 +1623,12 @@ const MOVED = {
   "js/game/quali.js": "js/race/quali-model.js",
 };
 
+/** Locale manifest only (English players need no locale JSON fetch). */
+const SW_LOCALES = ["locales/manifest.json"];
+
 module.exports = {
   MOVED,
+  SW_LOCALES,
   CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
   LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES,

@@ -88,6 +88,7 @@ const SaveSchemaRegistry = (function () {
     "glxPerspScalar": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "grLite": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "homeVisit": entry("js/ui/experience.js", "json", 1, "json"),
+    "lang": entry("js/core/i18n.js (active locale; picker/export deferred until shipped languages land)", "json", 1, "string"),
     "iceRelayOnly": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "inputDebug": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "instCellCache": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
