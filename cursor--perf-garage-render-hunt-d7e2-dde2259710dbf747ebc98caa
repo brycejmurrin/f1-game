@@ -1,1 +1,1 @@
-1792354196	Cursor Agent	#2898 ready full-tier CI on cd6cfa6bb; ship tip moved ae9ff8622 needs-sync=conflict but GitHub still MERGEABLE — hold sync until CONFLICTING/red  [cursor/perf-garage-render-hunt-d7e2; session dde2259710dbf747ebc98caa]
+1792355098	Cursor Agent	#2898 tip red full-tier #39161939214; sync ship + fix OWNED  [cursor/perf-garage-render-hunt-d7e2; session dde2259710dbf747ebc98caa]
