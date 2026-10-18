@@ -133,13 +133,11 @@ const AiDrive = (function () {
     }
     const tightN = clamp(tight || 0, 0, 1);
     let T = lerp(followTime(t, street, team, seat, other, stats), FOLLOW_TIGHT, tightN) + (extra || 0);
-    // SPACING HALF (#1564 / #2356). Aggression is zero-mean style, excluded from
-    // the top-speed product. It only scales the time headway: a hot driver sits
-    // closer (stronger once a pass is tight, so the move finishes inside the
-    // tow) and a patient one hangs back. Neutral (0) is the historical headway,
-    // so the awareness band above is unchanged. Streets never reach this branch.
+    // SPACING HALF (#1564). Aggression is zero-mean style. Open following stays
+    // the historical headway (a permanent shrink moved the pace ladder > 0.5 %).
+    // Bite only while a pass is tight (latched / armed / towing).
     const aggr = clamp(t && t.aggression != null ? t.aggression : 0, -1, 1);
-    T *= 1 - aggr * (0.14 + 0.12 * tightN);
+    if (tightN > 0) T *= 1 - aggr * (0.10 + 0.16 * tightN);
     return Math.min(followBase(street) + v * Math.max(T, 0), FOLLOW_MAX);
   }
 
@@ -165,45 +163,35 @@ const AiDrive = (function () {
   const PASS_EDGE = 0.007;       // ~0.7 % of vTop — want / concede floor
   const PASS_EDGE_FULL = 0.012;  // ~1.2 % — full hunger (stuck pairs were 0.85–1.24 %)
   const CONCEDE_EDGE_FULL = 0.008; // defender cover fully yields by ≥0.8 % (Done-when)
-  function paceEdgeN(fasterV, slowerV, vTop, full, floor) {
+  function paceEdgeN(fasterV, slowerV, vTop, full) {
     const ref = vTop > 0 ? vTop : 72;
     const edge = ((fasterV || 0) - (slowerV || 0)) / ref;
-    const edgeFloor = floor != null ? floor : PASS_EDGE;
-    if (edge < edgeFloor) return 0;
-    const edgeFull = full > edgeFloor ? full : (floor != null ? edgeFloor + (PASS_EDGE_FULL - PASS_EDGE) : PASS_EDGE_FULL);
-    const span = edgeFull - edgeFloor;
-    return clamp((edge - edgeFloor) / span, 0, 1);
+    if (edge < PASS_EDGE) return 0;
+    const span = (full > PASS_EDGE ? full : PASS_EDGE_FULL) - PASS_EDGE;
+    return clamp((edge - PASS_EDGE) / span, 0, 1);
   }
   // Pace edge from vmax (m/s, over vTop) and/or scripted pace (tierV×skill, a
   // unitless multiplier near 1 — its edge is the ratio, the same one ai-tactics
   // uses for stuck-longest). Take the larger so a compressed vmax still sees a
   // real field-pace gap.
-  function pairEdgeN(fasterV, slowerV, fasterP, slowerP, vTop, full, floor) {
-    const a = (fasterV > 0 && slowerV > 0) ? paceEdgeN(fasterV, slowerV, vTop, full, floor) : 0;
-    const b = (fasterP > 0 && slowerP > 0) ? paceEdgeN(fasterP / slowerP, 1, 1, full, floor) : 0;
+  function pairEdgeN(fasterV, slowerV, fasterP, slowerP, vTop, full) {
+    const a = (fasterV > 0 && slowerV > 0) ? paceEdgeN(fasterV, slowerV, vTop, full) : 0;
+    const b = (fasterP > 0 && slowerP > 0) ? paceEdgeN(fasterP / slowerP, 1, 1, full) : 0;
     return Math.max(a, b);
   }
-  // Tow-only floor (#2356). The 0.7 % PASS_EDGE never saw the 0.3–0.6 % pairs
-  // that own the longest faster-behind-slower episodes, and those pairs sit
-  // 20–45 m back so queueT stays ~0. This floor feeds passHunger (tow / run)
-  // only — otWant, coverConcede and otFireRate keep PASS_EDGE.
-  const TOW_EDGE = 0.0035;
-  const TOW_EDGE_FULL = 0.005;
-  // 1..~2.2: stuck time behind a slower car → run / tow boost.
+  // 1..~2.2: stuck time behind a slower car → fire / latch / run / tow boost.
   // Needs pace fields (vmax and/or scripted pace), never live speed.
   function passHunger(ctx) {
     if (!ctx || ctx.street) return 1;
+    // PASS_EDGE (0.7 %) stays the hunger gate. A shallow tow floor was tried
+    // for #2356 and reverted: it raised AI-AI contact without cutting the
+    // longest episode. Aggression spacing (followGap / contactGive) is the
+    // pass-completion lever on this PR.
     const edgeN = pairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ctx.vTop);
-    const towN = pairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ctx.vTop, TOW_EDGE_FULL, TOW_EDGE);
-    const use = Math.max(edgeN, towN);
-    if (!use) return 1;
+    if (!edgeN) return 1;
     const stuckN = clamp((ctx.queueT || 0) / 12, 0, 1);
     const craft = lerp(0.75, 1.15, ctx.traits ? ctx.traits.craft : 0.75);
-    // A real (≥0.7 %) edge keeps the old 0.25 floor. A shallow edge never
-    // builds queueT, so the tow has to pull without it.
-    const dwell = edgeN > 0 ? 0.25 : 0.9;
-    const aggr = clamp(ctx.traits && ctx.traits.aggression != null ? ctx.traits.aggression : 0, -1, 1);
-    return (1 + use * Math.max(stuckN, dwell) * 1.15 * craft) * (1 + aggr * 0.06);
+    return 1 + edgeN * Math.max(stuckN, 0.25) * 1.15 * craft;
   }
   // 0..1: defender yields the cover against a clearly faster attacker.
   // Awareness / experience decide how soon they recognise they are beaten.
@@ -352,9 +340,9 @@ const AiDrive = (function () {
 
   function contactGive(contacting, t, street) {
     if (!contacting) return 1;
-    // Less give when aggressive (#1564): the awareness lerp is the base, and
-    // style scales it. Neutral is the historical give. Streets keep the 0.72
-    // factor so a player lean-on pass still sticks more there than on a permanent.
+    // Less give when aggressive (#1564). Neutral is the historical give.
+    // Shared with the player path in game.js — ai-human contactPct can rise
+    // above tip; a player-aware carve needs a game.js flag (outside this PR).
     const aggr = clamp(t && t.aggression != null ? t.aggression : 0, -1, 1);
     const give = lerp(0.55, 0.25, t.awareness) * (1 - aggr * 0.16);
     return street ? give * 0.72 : give;
@@ -426,9 +414,8 @@ const AiDrive = (function () {
     const craftMul = lerp(0.45, 1.55, t.craft);
     const awareMul = lerp(1.25, 0.7, t.awareness);     // careful = slower to pull the trigger
     const expMul = lerp(0.75, 1.15, t.experience);      // rookies hesitate
-    // Aggression fire half: ±22 % around the craft/awareness window.
-    // The spacing half lives on followGap / contactGive (not on λ — a fire bump
-    // raised contact; tactics.md).
+    // Aggression (Slice 3 fire half): ±35 % around the craft/awareness window.
+    // Spacing half (followTime / contactGive) stays out — stuck/bunching workstream.
     const aggrMul = 1 + clamp(t.aggression != null ? t.aggression : 0, -1, 1) * 0.22;
     const house = houseMulCtx(ctx, 0.88, 1.12, "attack");
     const orders = ordersMul(ctx.team, ctx.seat, ctx.other, "ot");

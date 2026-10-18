@@ -52,24 +52,22 @@ test("passHunger: streets always 1; equal pace always 1", () => {
   }), 1, "sub-0.7 % scripted edge is noise");
 });
 
-test("passHunger: a 0.5 % edge tows without queue time; fire rate stays put", () => {
-  // The longest stuck pairs are +0.3–0.6 %, under PASS_EDGE, and queueT never
-  // builds at 20–45 m. Tow hunger has to move without the 0.7 % gate.
-  const half = {
+test("passHunger: sub-0.7 % edge stays 1; spacing not hunger is the aggression lever", () => {
+  // Shallow tow floors were tried and reverted (#2356 / #2783): they raised
+  // contact without cutting the longest episode. Aggression acts on followGap /
+  // contactGive, not on passHunger (tip hunger shape).
+  assert.equal(A.passHunger({
     street: false, traits: mid, vTop, ourVmax: us, blockerVmax: us * 0.995, queueT: 0,
+  }), 1, "0.5 % edge is below PASS_EDGE");
+  const real = {
+    street: false, traits: mid, vTop, ourVmax: us, blockerVmax: them, queueT: 12,
   };
-  const h = A.passHunger(half);
-  assert.ok(h > 1.5, `0.5 % edge hungers in the tow with queueT 0: ${h}`);
-  assert.equal(A.passHunger({ ...half, street: true }), 1, "streets ignore the shallow edge");
-  const fire = {
-    traits: mid, blockerGap: 5, gapAhead: 5, roomL: 3, roomR: 2,
-    speed: 58, aheadSpeed: 54, kAhead: 0.002, street: false, vTop,
-  };
-  assert.equal(A.otFireRate({ ...fire, ...half }), A.otFireRate(fire),
-    "shallow tow hunger does not raise λ");
-  const hot = A.passHunger({ ...half, traits: { ...mid, aggression: 1 } });
-  const cold = A.passHunger({ ...half, traits: { ...mid, aggression: -1 } });
-  assert.ok(hot > h && h > cold, `aggression scales tow hunger ${cold} < ${h} < ${hot}`);
+  const h = A.passHunger(real);
+  assert.ok(h > 1, `≥0.7 % edge hungers: ${h}`);
+  const hot = A.passHunger({ ...real, traits: { ...mid, aggression: 1 } });
+  const cold = A.passHunger({ ...real, traits: { ...mid, aggression: -1 } });
+  assert.equal(hot, h, "aggression does not scale passHunger");
+  assert.equal(cold, h, "aggression does not scale passHunger");
 });
 
 test("passHunger: ≥0.7 % edge + queue time raises fire hunger (bounded)", () => {

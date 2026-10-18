@@ -245,9 +245,12 @@ Gates:
 
 ### Deferred (explicitly NOT this workstream)
 
-- Aggression spacing half (`followGap` / `contactGive`) — landed as the
-  pass-completion lever (#1564, #2356). Stuck detection, rescue teleport and
-  `isBoxed` stay out.
+- Aggression spacing half (`followGap` / `contactGive`) — landed on #2783 as the
+  pass-completion lever (#1564): open follow stays historical (pace ladder);
+  tight-only headway + contactGive scale. Shallow tow hunger for #2356 was
+  tried and reverted. `ai-human` contactPct can sit above tip while
+  contactGive is shared with the player path in `game.js` (player-aware carve
+  is outside that PR). Stuck detection, rescue teleport and `isBoxed` stay out.
 - Composure / energy bias / line-style / tyre-care / quali bias from the
   2026-09-16 ranking (§5 items 3–7) — later workstreams.
 - Learning / Drivatar / Sophy.
