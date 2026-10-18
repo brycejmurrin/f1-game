@@ -2302,6 +2302,8 @@ const GLXBackend = (function () {
     if (ctxGone()) return 0;
     if (!batch || !batch.cells) return batch ? batch.instances : 0;
     const shadow = !!(opts && opts.upload === false);
+    const eye = shadow ? null : frameEye, cd = shadow ? 0 : frameCullDist,
+          fog = shadow ? null : frameCullFog;
     if (!shadow) {
       const v = _passBatch(batch);
       if (v !== batch) {
@@ -2312,7 +2314,7 @@ const GLXBackend = (function () {
     }
     // There is one camera GPU instance buffer, so only its resident pack can be
     // a hit. The shadow path never consults or writes that cache.
-    let samePack = !shadow && !!batch._cullPlanes;
+    let samePack = !shadow && !!batch._cullPlanes && InstCells.sameRadial(batch, eye, cd, fog);
     if (samePack) {
       let po = 0;
       for (let pi = 0; pi < 6 && samePack; pi++) {
@@ -2332,7 +2334,7 @@ const GLXBackend = (function () {
     let ks = null;
     if (InstCells.enabled() || shadow) {
       ks = InstCells.scratchKeys(batch, cn);
-      cellKeyN = InstCells.collectVisible(planes, cs, ks, CHK.aabbInFrustum);   // a plain function (Frustum.aabbInFrustum): no `this`, no per-call closure
+      cellKeyN = InstCells.collectVisible(planes, cs, ks, CHK.aabbInFrustum, eye, cd, fog);   // a plain function (Frustum.aabbInFrustum): no `this`, no per-call closure
       if (!shadow && InstCells.enabled() && InstCells.sameKey(batch, ks, cellKeyN)) {
         // NOT writing _cullPlanes here is load-bearing: it must keep describing
         // whichever frustum physically wrote the buffer (canary-pinned).
@@ -2381,6 +2383,8 @@ const GLXBackend = (function () {
       for (let ci = 0; ci < cn; ci++) {
         const c = cs[ci];
         if (!CHK.aabbInFrustum(planes, c.mn, c.mx)) continue;
+        if (eye && (cd > 0 || (fog && fog[0] > 0))
+            && Frustum.radialCulled(c.mn, c.mx, eye[0], eye[1], eye[2], cd, fog)) continue;
         const idx = c.idx;
         for (let j = 0, jn = idx.length; j < jn; j++) {
           const i = idx[j];
@@ -2424,6 +2428,7 @@ const GLXBackend = (function () {
       const p = planes[pi];
       for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
     }
+    InstCells.recordRadial(batch, eye, cd, fog);
     batch._cullN = n;
     if (InstCells.enabled() && cellKeyN >= 0 && ks) {
       InstCells.recordKey(batch, ks, cellKeyN);
@@ -2965,6 +2970,8 @@ const GLXBackend = (function () {
     // `armed` is the frame-live gate the LIT uniform reads; `arms` is a lifetime
     // counter that stays true straight through a strobe, which is exactly why the
     // 30 Hz car strobe and the vanished lamp shadow were invisible to every test.
+    get carShadowEnabled() { return !!SHD.carEnabled; },
+    get lampShadowEnabled() { return !!SHD.lampEnabled; },
     carShadowState: () => ({ enabled: SHD.carEnabled, arms: SHD.carArms, armed: SHD.carArmed }),
     // Same for the nearest-floodlight spot shadow map (idx = frame.lights slot).
     lampShadowState: () => ({ enabled: SHD.lampEnabled, arms: SHD.lampArms, idx: SHD.lampIdx, armed: SHD.lampArmed }),
