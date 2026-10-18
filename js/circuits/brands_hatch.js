@@ -38,6 +38,7 @@
     night: false,
     theme: "green",
     lengthKm: 3.899,
+    tyreSeverity: 1.1,  // Short abrasive UK permanent band
     baseHW: 7,
     sceneryCoordinates: "racing",
     terrainOuter: 110,

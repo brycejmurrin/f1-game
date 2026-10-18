@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 800+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 804+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1293,23 +1293,3 @@ One hook, without loading `docs/DEBUG-HOOKS.md`:
 ```sh
 node tools/shot/agent.mjs help physState
 ```
-
-`jq '.hooks[] | select(.name=="physState")' docs/agent-index.json` reads the same row. The generated page is [`AGENT-HOOKS.md`](AGENT-HOOKS.md). The machine index is [`agent-index.json`](agent-index.json) (`node tools/docs/gen-agent-index.mjs`). The static impact map is [`../tests/data/impact-map.json`](../tests/data/impact-map.json).
-
-## See also
-
-- [`tests/manual/README.md`](../tests/manual/README.md) — the human-run suites
-- `docs/DEBUG-HOOKS.md` — the full `__apex` reference
-- `js/core/log.js` — the logging facility the fixtures capture
-- `playwright.config.js`, `tests/helpers/fixtures.js`, `tests/helpers/global-setup.js`,
-  `tests/helpers/live-reporter.js` — the infrastructure sources
-- `tools/ci/pick-tests.mjs`, `tools/ci/test-bg.mjs` — the runners
-
----
-
-## Operational field notes
-
-Dated measurements of this box and of CI — boot walls, the two-worker factor,
-the instruments that lie here, the real-GPU runs — live in
-[`notes/TESTING-FIELD-NOTES.md`](notes/TESTING-FIELD-NOTES.md). They churn with every
-measurement; §1-§5 above do not.

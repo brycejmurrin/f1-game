@@ -41,6 +41,14 @@ else
   status+=("Chromium: MISSING — run bash tools/env/install-browsers.sh (artifacts/session-browsers.log)")
 fi
 
+# apex-lsp (.mcp.json, tools/mcp/lsp-mcp.mjs) runs TypeScript 7's native
+# `tsc --lsp` from the npm install above: nothing else to fetch, only report it.
+if tsv=$(timeout 5 "$ROOT/node_modules/.bin/tsc" --version 2>/dev/null); then
+  status+=("lsp: tsc ${tsv#Version } (apex-lsp)")
+else
+  status+=("lsp: MISSING node_modules/.bin/tsc — npm install")
+fi
+
 # ORIENTATION IN THE SAME LINE (2026-09-16): the branch, its distance from
 # the deploy tip, the dirty count, the load and whether a Playwright run is
 # already live — the four or five calls every session used to spend before
