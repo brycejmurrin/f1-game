@@ -37,7 +37,7 @@
  * is groups × workers. WORKERS defaults to 1 on ≤4 cores (2 above); keep concurrent
  * groups at 1 unless you know the box is quiet.
  */
-import { spawn, execSync } from "node:child_process";
+import { spawn, execSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -458,6 +458,23 @@ function spawnGroup(group, pkg, { lastFailed = false } = {}) {
   return { group, pid: child.pid, starttime: procStart(child.pid), bootId: BOOT_ID, log, started, browser: forward.length > 0 };
 }
 
+/** The live `probe-mcp.py chrome-start` daemons on this BOX (any checkout):
+ *  its tmux sessions are named `probe-chrome-<sha256(root)[:16]>`. A Chrome
+ *  rendering beside a Playwright run starves it (skill mcp-probe, hard rule 1),
+ *  so the check is box-wide, not per worktree. No tmux = no daemon. */
+export function probeChromeSessions(list = () => spawnSync("tmux", ["ls", "-F", "#S"], { encoding: "utf8", timeout: 3000 }).stdout || "") {
+  let out = "";
+  try { out = list(); } catch (_) { return []; }
+  return String(out).split("\n").map((l) => l.trim()).filter((l) => /^probe-chrome-[0-9a-f]{16}$/.test(l));
+}
+
+/** The refusal text when a browser group would start beside a live MCP Chrome, else null. */
+export function chromeRefusal({ browser, force, sessions }) {
+  if (force || !browser || !sessions.length) return null;
+  return `[test-bg] REFUSED: the MCP Chrome daemon is live (tmux ${sessions.join(", ")}) — a Chrome beside Playwright starves it.\n` +
+    `[test-bg] park it to about:blank, then: python3 tools/mcp/probe-mcp.py chrome-stop   (or --force, and do not trust a timeout).`;
+}
+
 function start(groups, { force = false, parallel = false, lastFailed = false } = {}) {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
@@ -466,6 +483,11 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
     console.error(`[test-bg] available: ${Object.keys(pkg.scripts).filter((k) => k.startsWith("test:")).map((k) => k.slice(5)).join(" ")}`);
     process.exit(2);
   }
+  const refusal = chromeRefusal({
+    browser: groups.some((g) => /run-playwright/.test(pkg.scripts[`test:${g}`])),
+    force, sessions: force ? [] : probeChromeSessions(),
+  });
+  if (refusal) { console.error(refusal); process.exit(3); }
 
   // Default: one group at a time. --parallel raises the cap to cores/WORKERS.
   // --force removes the cap (legacy escape hatch).

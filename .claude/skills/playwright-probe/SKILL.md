@@ -95,8 +95,8 @@ node tools/shot/profile-gameloop.mjs singapore render        # .cpuprofile → C
 motion-capture's reference points at. A still frame cannot show shimmer and a CPU chart cannot see fill-bound work —
 both references say what the numbers mean before you A/B on them.
 
-**Image budget:** `Read` at most 8 images, then compact; JPEG ≤ 800 px wide; more than 3 shots
-→ `apex_shot_survey` (combined galleries: recipes.md §Galleries and image budget).
+**Image budget** (Read caps, JPEG width, when to switch to `apex_shot_survey`) →
+[references/recipes.md §Galleries and image budget](references/recipes.md#galleries-and-image-budget).
 
 ## Load on demand
 
