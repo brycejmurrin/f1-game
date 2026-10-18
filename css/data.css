@@ -345,6 +345,29 @@ body[data-density="compact"] .dh-error { padding: 14px var(--gap); }
    migration as --steel (steel-role.test.mjs). */
 .dh-footnote { margin-top: calc(var(--gap) * 4 / 3); padding-top: calc(var(--gap) * 2 / 3); border-top: 1px solid rgba(255,255,255,0.05); font-size: var(--fs-2); color: var(--dim); text-align: right; }
 
+/* schedule */
+[data-nextgp="tile"] {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: calc(var(--gap) / 3) var(--gap);
+  padding: var(--gap); border: 1px solid var(--plate-line);
+  border-radius: var(--r-lg); background: color-mix(in oklab, var(--red) 12%, var(--plate));
+}
+[data-nextgp="kicker"] { color: var(--red); font-size: var(--fs-1); font-weight: 900; font-style: italic; letter-spacing: var(--ls-5); }
+[data-nextgp="name"] { margin: 0; color: var(--text); font-size: var(--fs-6); line-height: 1.05; }
+[data-nextgp="place"] { min-width: 0; color: var(--dim); font-size: var(--fs-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-nextgp="countdown"] {
+  grid-column: 2; grid-row: 1 / span 3; align-self: center; color: var(--text);
+  font-size: var(--fs-5); font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+[data-nextgp="sessions"] {
+  grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: calc(var(--gap) / 3); margin-top: calc(var(--gap) * 0.5);
+}
+[data-nextgp="session"] { display: flex; flex-direction: column; gap: calc(var(--gap) / 6); padding-top: calc(var(--gap) / 3); border-top: 1px solid var(--plate-line); }
+[data-nextgp="session-label"] { color: var(--steel); font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-3); }
+[data-nextgp="session-time"] { color: var(--text); font-size: var(--fs-1); white-space: nowrap; }
+body[data-width="narrow"] [data-nextgp="tile"] { grid-template-columns: 1fr; }
+body[data-width="narrow"] [data-nextgp="countdown"] { grid-column: 1; grid-row: auto; }
+
 /* schedule rows */
 .dh-race {
   display: flex; align-items: flex-start; gap: 10px;
