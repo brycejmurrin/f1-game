@@ -1701,7 +1701,8 @@
         "tests/unit/flyby-shots.test.mjs"
       ],
       "project": [
-        "tests/unit/flyby-shots.test.mjs"
+        "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/spline-project-height.test.mjs"
       ],
       "propBoxes": [
         "tests/unit/flyby-shots.test.mjs"
