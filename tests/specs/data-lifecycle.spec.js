@@ -311,6 +311,49 @@ test("LIVE refreshes coalesce and AUTO schedules only after settlement", async (
   await expect.poll(() => page.evaluate(() => window.__life.weatherCalls.length)).toBe(2);
 });
 
+test("closing the hub clears the NEXT GP countdown interval", async ({ page }) => {
+  await dataReady(page);
+  await page.evaluate(() => {
+    const nativeSetInterval = window.setInterval.bind(window);
+    const nativeClearInterval = window.clearInterval.bind(window);
+    const active = new Set();
+    let nextId = 700000;
+    window.__scheduleTimers = active;
+    window.setInterval = (fn, ms, ...args) => {
+      if (ms !== 1000) return nativeSetInterval(fn, ms, ...args);
+      const id = ++nextId;
+      active.add(id);
+      return id;
+    };
+    window.clearInterval = (id) => {
+      active.delete(id);
+      if (id < 700000) nativeClearInterval(id);
+    };
+    F1API.schedule = () => Promise.resolve([{
+      round: 24,
+      name: "Abu Dhabi Grand Prix",
+      circuit: "Yas Marina Circuit",
+      locality: "Abu Dhabi",
+      country: "UAE",
+      date: "2026-12-06",
+      time: "13:00:00Z",
+      sessions: {
+        fp1: { date: "2026-12-04", time: "09:30:00Z" },
+        fp2: { date: "2026-12-04", time: "13:00:00Z" },
+        fp3: { date: "2026-12-05", time: "10:30:00Z" },
+        q: { date: "2026-12-05", time: "14:00:00Z" }
+      }
+    }]);
+    DataHub.init(document.getElementById("datahub"));
+    DataHub.open("schedule");
+  });
+
+  await expect(page.locator('[data-nextgp="tile"]')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__scheduleTimers.size)).toBe(1);
+  await page.evaluate(() => DataHub.close());
+  await expect.poll(() => page.evaluate(() => window.__scheduleTimers.size)).toBe(0);
+});
+
 test("deselecting every telemetry driver synchronously restores the empty state", async ({ page }) => {
   await dataReady(page);
   await installPickerApi(page, { deferTelemetry: true });
