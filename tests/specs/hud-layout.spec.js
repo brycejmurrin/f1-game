@@ -751,6 +751,8 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     await page.evaluate(() => window.__apex.go());
     await page.waitForFunction(() => document.getElementById("hud-sectors").getBoundingClientRect().height > 65,
       null, { polling: 100, timeout: 30_000 });
+    // Hold timing content steady while normal HUD ticks continue fitting.
+    await page.evaluate(() => { __apex.freeze(true); __apex.headless(true); });
     // DRAGGED THERE, not dropped: the old pass was bistable; a finger drag crosses both positions.
     for (const [x, y] of [[23, 5], [25, 10]]) {
       await page.evaluate(([x, y]) => { HudLayout.set("sectors", { x, y }); GameHud.invalidateFit(); }, [x, y]);
@@ -769,12 +771,75 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     const st = await page.evaluate(() => {
       const sec = document.getElementById("hud-sectors"), r = sec.getBoundingClientRect();
       const hits = [...document.querySelectorAll(".touchbtn")].filter((b) => !b.hidden).map((b) => [b.id, b.getBoundingClientRect()])
-        .filter(([, b]) => b.width && r.left < b.right && b.left < r.right && r.top < b.bottom && b.top < r.bottom).map(([id]) => id);
-      return { w: r.width, mw: sec.style.maxWidth, hits };
+        // Match clearControls' half-pixel tolerance for fractional zoom edges.
+        .filter(([, b]) => b.width && r.left < b.right - .5 && b.left < r.right - .5 && r.top < b.bottom - .5 && b.top < r.bottom - .5).map(([id]) => id);
+      return { w: r.width, mw: sec.style.maxWidth, hits, sector: r.toJSON(), brake: document.getElementById("btn-brake").getBoundingClientRect().toJSON() };
     });
     expect(st.mw, JSON.stringify(st)).toBe("");
     expect(st.w, JSON.stringify(st)).toBeGreaterThan(52);
     expect(st.hits, JSON.stringify(st)).toEqual([]);
+  });
+
+  test("small sectors right of Boost survive arranger Done and Resume", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    // Fresh shipped appearance; only the player's explicitly enlarged HUD/buttons differ.
+    await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      __apex.go(); __apex.headless(true); __apex.freeze(true);
+      __apex.hudScale(155.25); __apex.btnScale(245); __apex.jump(.1, 30, 0);
+    });
+    await page.addStyleTag({ content: "#hud-sectors .sec-val::after{content:' 31.234';}" });
+    await page.locator("#pausebtn").click();
+    await page.locator("#pm-settings").click();
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
+    await page.locator("#pm-hud-arrange").click();
+    await page.locator("#hud-arrange-element").selectOption("sectors");
+    for (let i = 0; i < 4; i++) await page.locator("#hud-arrange-smaller").click();
+    await page.locator("#hud-arrange-move").focus();
+    for (let i = 0; i < 5; i++) await page.keyboard.press("Shift+ArrowRight");
+    await page.keyboard.press("Shift+ArrowDown");
+    const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
+    await page.locator("#hud-arrange-done").click();
+    await page.locator("#pm-settings-close").click();
+    await page.locator("#pm-settings-close").click();
+    await page.locator("#pm-resume").click();
+    const samples = await page.evaluate(async () => {
+      const out = [];
+      for (let i = 0; i < 12; i++) {
+        GameHud.invalidateFit(); __apex.jump(.1, 30, 0);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const sec = document.getElementById("hud-sectors"), s = sec.getBoundingClientRect();
+        const b = document.getElementById("btn-boost").getBoundingClientRect();
+        out.push({ x: s.x, y: s.y, w: s.width, h: s.height, mw: sec.style.maxWidth,
+          bands: ["top", "bot", "dock"].map(band => document.documentElement.style.getPropertyValue("--hud-z-" + band)),
+          rightOfBoost: s.left >= b.right + 4 && s.top < b.bottom && b.top < s.bottom,
+          boost: [b.x, b.y, b.width, b.height], size: sec.style.getPropertyValue("--hl-s") });
+      }
+      return out;
+    });
+    expect(samples.every(s => s.rightOfBoost), JSON.stringify(samples)).toBe(true);
+    expect(samples.every(s => s.mw === "" && s.size === "0.6")).toBe(true);
+    // Allow the initial resume fit to converge; a continuing two-state loop still fails.
+    expect(new Set(samples.slice(-6).map(JSON.stringify)).size, "one plate/button size across settled fits: " + JSON.stringify(samples)).toBe(1);
+    const live = await page.evaluate(async () => {
+      // Physics is held, but the normal render-loop HUD cadence and periodic fit continue.
+      const states = new Set();
+      for (let i = 0; i < 40; i++) {
+        await new Promise(r => setTimeout(r, 100));
+        const s = document.getElementById("hud-sectors").getBoundingClientRect();
+        const b = document.getElementById("btn-boost").getBoundingClientRect();
+        states.add(JSON.stringify([s.x, s.y, s.width, s.height, b.width, b.height,
+          ...["top", "bot", "dock"].map(band => document.documentElement.style.getPropertyValue("--hud-z-" + band))]));
+      }
+      __apex.freeze(true);
+      return [...states];
+    });
+    expect(live, "stable across normal HUD ticks and the periodic fit").toHaveLength(1);
+    expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(saved);
   });
 });
 
