@@ -1558,15 +1558,11 @@ const TrackMesh = (function () {
     return out;
   }
 
-  // Kept for the export's shape. The garages are js/track/scenery/pits.js's,
-  // built into the props mesh from the same row the boxes are painted from.
-  function buildPitGarages(track, out) {
-    return out;
-  }
-
+  // The garages are js/track/scenery/pits.js's, built into the props mesh from
+  // the same row the boxes are painted from.
   // buildKerbs stays private — it is only ever appended to buildRoad's buffers.
   return { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
            nodeGrid, buildRoad, buildTerrain, buildTerrainSteps, buildFloor, gridSlot, buildGridBoxes,
-           buildPitLane, buildPitMarks, buildPitBoxes, buildPitGarages, pitHatch, buildPitHatch, GRID_SLOTS };
+           buildPitLane, buildPitMarks, buildPitBoxes, pitHatch, buildPitHatch, GRID_SLOTS };
 })();
 Object.freeze(TrackMesh);

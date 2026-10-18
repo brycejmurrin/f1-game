@@ -24,7 +24,7 @@ Profiler, self time per frame), `trace.mjs` (DevTools trace, main-thread event t
 | 1 | `body:has(#x…)` rules search the whole document whenever body restyles | style recalc 5.6-7.3 → 3.6-4.2 ms/frame | **fixed here**: 54 `:has(` arguments scoped to `> #x` |
 | 2 | HUD full fit (`fitHud`, every ~3.3 s on the same key) is a 54-125 ms task; each fit ping-pongs root custom properties | profile bursts; 13-16 ms per root-var write + read | reported to the HUD-fit owner (PR #2743 lane) |
 | 3 | `HudLayout.clearReadouts` costs 9-24 ms per call at ~2 calls/s (ResizeObserver, plus 4 per full fit) | 397 ms of 20 s | open, hud-layout.js |
-| 4 | 7 `body:has(#hud-*)` rules whose element sits inside `#hud` are still unscoped | selector stats | open: try `> #hud #hud-x` |
+| 4 | `body:has(#hud-*)` / `#home-motion` / DISPLAY-panel rules search below a body child | style recalc 3.87-4.10 → 3.10-3.17 ms/frame | **#2792**: exact child chains, `:where()` middle steps |
 | 5 | `shownLayer` is still the top named JS function on the real-GPU census (macOS) | 1.1 %, 235 ms / 20.8 s, run 39042826810 | open, low |
 
 ### 1. `:has()` scope (fixed)
@@ -78,6 +78,15 @@ p50 (a whole-document restyle; 9 ms with `#pmsettings` detached), against 0.6 ms
 +120 ms timeout 55. The observer fires about 0.8 times a second on legitimate size changes: radio cards coming and
 going, and `#hud-damage` width jitter of 131.9-137.9 px as its digits change. Most of the cost is forced style and layout
 (`box` 217 ms of self time); `querySelectorAll` adds 71 ms (a 15-selector list costs 1.3 ms over 4.9k nodes).
+
+### 4. Nested `:has()` targets (#2792)
+
+After #1, CSS selector stats (stats on, 8 s, same harness) still ranked rules whose target sits BELOW a body child:
+`body:has(> #pmsettings:not([hidden]) #pm-panel-display…)` 181 ms (the descendant half walks the 2.9k-node sheet),
+`:has(#hud-limits…)` 115, `:has(#hud-mirror-chip…)` 69, then `#home-motion`, `#hud-damage`, `#hud-rel` and the
+radio-corner `:has(#hud-flag)` at 26-52 each. All sit at a fixed depth in index.html, so each argument became its exact
+child chain (`> :where(#hud) > #hud-limits…`); the added steps are `:where()` so specificity is unchanged. A/B against
+the #1 head, interleaved: UpdateLayoutTree 3.87 → 3.10 and 4.10 → 3.17 ms/frame.
 
 ### 5. shownLayer on real hardware
 

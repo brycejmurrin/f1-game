@@ -848,7 +848,7 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   }
   /* A readable sector plate and the centred caution banner cannot share a
      390 px row. Stack the flag under the plate (the data-flag-low slot). */
-  body:not(.desktop):not(.hud-prof-broadcast):has(#hud-sectors) #hud-flag {
+  body:not(.desktop):not(.hud-prof-broadcast):has(> :where(#hud) > #hud-sectors) #hud-flag {
     top: max(
       calc(var(--hud-sec-bottom, 0px) / var(--hud-z) + 8px),
       calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px),
@@ -958,7 +958,7 @@ body.hud-radio-top #announce:not([hidden]) {
    and later in the file: the same :has() term plus a quadrupled attribute make
    this (2,6,1). The slot already clears the
    flag chip, so stepping down under it would land the card on INPUTS. */
-body[data-radio-corner][data-radio-corner][data-radio-corner][data-radio-corner]:has(#hud-flag) #announce:not([hidden]):not([data-lane-collapsed]) {
+body[data-radio-corner][data-radio-corner][data-radio-corner][data-radio-corner]:has(> :where(#hud) > #hud-flag) #announce:not([hidden]):not([data-lane-collapsed]) {
   top: calc(var(--radio-top-y) / var(--hud-z));
   left: auto;
   right: calc(var(--radio-top-r) / var(--hud-z));
@@ -974,7 +974,7 @@ body[data-radio-corner][data-radio-corner][data-radio-corner][data-radio-corner]
    It hangs from one fixed point, the top-centre quarter (50vw, 25svh), so MOVE & SIZE's --hl-x/-y
    (±50 % of the screen) is where it sits and reaches every edge of the top three quarters. Outranks
    the caution step-down and the touch lane: five attributes plus :has(#hud-flag) are (2,6,1). */
-body[data-radio-placed][data-radio-placed][data-radio-placed][data-radio-placed][data-radio-placed]:has(#hud-flag) #announce:not([hidden]) {
+body[data-radio-placed][data-radio-placed][data-radio-placed][data-radio-placed][data-radio-placed]:has(> :where(#hud) > #hud-flag) #announce:not([hidden]) {
   top: calc(25svh / var(--hud-z)); left: calc(50vw / var(--hud-z)); right: auto;
   transform: none; min-width: 0; width: max-content;
   max-width: calc(min(360px, 45vw) / var(--hud-z));
@@ -984,10 +984,10 @@ body:is(.hud-radio-top, [data-radio-corner]) #announce-body {
   padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.6);
 }
 /* The chip is unzoomed (screen px): its bottom edge divided into this zoom. */
-body:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag) {
+body:has(> :where(#hud) > #hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag) {
   --mir-bot: calc((var(--sat) + (16px + var(--hud-top-h, 54px)) * var(--hud-z-top, var(--hud-scale)) + var(--tap)) / var(--hud-z));
 }
-body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag) {
+body.hud-prof-broadcast:has(> :where(#hud) > #hud-mirror-chip:not([hidden])) :is(#announce, #hud-flag) {
   --mir-bot: calc((8px + var(--sat) + var(--tap)) / var(--hud-z));
 }
 #hud-flag {
@@ -1269,8 +1269,8 @@ body[data-density="compact"] #announce { --flag-slot-top: max(calc(72px + var(--
 body[data-density="compact"] #announce-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 :root[data-gap-drop] #announce { --flag-slot-top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 44px), calc(var(--hud-gaps-b, 0px) + 8px)); }
 :root[data-flag-low] #announce { --flag-slot-top: max(calc((8px + var(--tap-hud) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 8px), calc(var(--hud-gaps-b, 0px) + 8px)); }
-body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
-body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(#hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
+body:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(> :where(#hud) > #hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 38px); }
+body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-top):not([data-radio-corner]):not([data-radio-placed]):has(> :where(#hud) > #hud-flag:not([hidden])) #announce { top: calc(max(var(--flag-slot-top), calc(var(--mir-bot, 0px) + 8px)) + 34px); }
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
@@ -1653,7 +1653,7 @@ body:has(> .screen:not([hidden])) :is(
 }
 /* DISPLAY settings: keep the live HUD (tower / map / gaps) so LAYOUT/MAP/GAPS
    toggles can be seen without closing the sheet. */
-body:has(> #pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
+body:has(> #pmsettings:not([hidden]) > :where(#pmsettings-inner) > :where(#pm-settings-body) > :where(.pm-groups) > #pm-panel-display:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
   visibility: visible;
 }
 /* MOVE & SIZE (js/ui/hud-layout.js). A moved element carries data-hl and its own
@@ -2160,10 +2160,10 @@ body[data-helmet-cam] #hud::before {
    (touch 32 + 4px, desktop 48 + 6px); this chip 2.9em of svg + 0.6 --gap. A
    limits chip crossed left (data-limits-left) still reserves its slot here, as
    INPUTS always did. */
-body:not([data-hud-hide~="limits"]):has(#hud-limits:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-limits-h: 2.6em; }
-body:not([data-hud-hide~="inputs"]):has(#hud-inputs:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-inputs-h: calc(2.6em + 3px); }
-body.desktop:not([data-hud-hide~="inputs"]):has(#hud-inputs:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-inputs-h: calc(3.9em + 3px); }
-body:not([data-hud-hide~="damage"]):has(#hud-damage:not([hidden])) #hud-rel { --rc-damage-h: 3.3em; }
+body:not([data-hud-hide~="limits"]):has(> :where(#hud) > #hud-limits:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-limits-h: 2.6em; }
+body:not([data-hud-hide~="inputs"]):has(> :where(#hud) > #hud-inputs:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-inputs-h: calc(2.6em + 3px); }
+body.desktop:not([data-hud-hide~="inputs"]):has(> :where(#hud) > #hud-inputs:not([hidden])) :is(#hud-damage, #hud-rel) { --rc-inputs-h: calc(3.9em + 3px); }
+body:not([data-hud-hide~="damage"]):has(> :where(#hud) > #hud-damage:not([hidden])) #hud-rel { --rc-damage-h: 3.3em; }
 #hud-damage svg { width: 1.6em; height: 2.9em; flex: none; }
 #hud-damage [data-part] { fill: color-mix(in srgb, var(--text) 18%, transparent); stroke: color-mix(in srgb, var(--text) 55%, transparent); stroke-width: 0.6; }
 #hud-damage [data-part="body"] { fill: none; }
@@ -2292,8 +2292,8 @@ body:not(.desktop) #hud-strat {
   top: calc(max(var(--hud-left-h, 152px), var(--hud-metrics-b, 0px)) + 8px + 2.6em + 8px);
 }
 /* STRATEGY under REL (was a 168px sidestep that sat on REL at HUD 150%). */
-body:not([data-hud-hide~="rel"]):has(#hud-rel:not([hidden])) #hud-strat { --rc-rel-h: 7.2em; }
-body:not(.desktop):has(#hud-rel:not([hidden])) #hud-strat:not([data-hl-user]) {
+body:not([data-hud-hide~="rel"]):has(> :where(#hud) > #hud-rel:not([hidden])) #hud-strat { --rc-rel-h: 7.2em; }
+body:not(.desktop):has(> :where(#hud) > #hud-rel:not([hidden])) #hud-strat:not([data-hl-user]) {
   left: calc(10px + var(--sal) / var(--hud-z));
   top: calc(var(--hud-left-h, 152px) + 8px + var(--rc-rel-h, 7.2em));
 }
@@ -2342,7 +2342,7 @@ body:not(.desktop) #hud-inputs:not([data-hl-user]) #hud-inputs-cv {
    (limits at +15px, this trace at +12px), so a strike painted one over the other in 12 of the 13
    quick-matrix cells (survey 2026-10-10: 2.7k px² at 1280x720). The chip is ~2.6em tall (DAMAGE steps
    the same amount, below). The reserve is only while the chip has a box. */
-body:not([data-hud-hide~="limits"]):has(#hud-limits:not([hidden])) #hud-inputs { --inputs-below-limits: calc(2.6em + 3px); }
+body:not([data-hud-hide~="limits"]):has(> :where(#hud) > #hud-limits:not([hidden])) #hud-inputs { --inputs-below-limits: calc(2.6em + 3px); }
 body.desktop #hud-inputs:not([data-hl-user]) {
   left: auto;
   right: calc(10px + var(--sar) / var(--hud-z));

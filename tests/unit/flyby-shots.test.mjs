@@ -17,6 +17,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { gameSource } from "../helpers/game-source.mjs";
 
@@ -33,6 +34,7 @@ const RACE_ENTRY_PROFILE_STUB = {
 };
 const require = createRequire(import.meta.url);
 const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
+const execFileP = promisify(execFile);
 
 // The circuits worth paying for here: an open park circuit, a street circuit
 // (where the buildings press right up to the barriers), and a desert night
@@ -93,6 +95,85 @@ async function withTrack(id, fn, opts) {
   const g = await vmFor(id);
   return await fn(g.G.track, g);
 }
+
+async function flybyCli(...args) {
+  return execFileP(process.execPath, [path.join(ROOT, "tools/shot/flyby.mjs"), ...args],
+    { cwd: ROOT, timeout: 30000 });
+}
+
+test("flyby CLI advertises and validates condition and variation flags before browser boot", async () => {
+  const { stdout } = await flybyCli("--help");
+  for (const flag of ["--tod", "--weather", "--seed"]) assert.match(stdout, new RegExp(flag), `${flag} is documented`);
+  const source = fs.readFileSync(path.join(ROOT, "tools/shot/flyby.mjs"), "utf8");
+  assert.doesNotMatch(source, /addScriptTag[\s\S]{0,100}flyby-overrides/,
+    "the registered data script is not reinjected inline (the shell CSP blocks that)");
+  assert.match(source, /FlybyOverrides\.resolve\(id, FlybySeq\.DEFAULT/,
+    "page evaluation reads FlybySeq's global lexical binding, not a missing window property");
+
+  for (const [flag, value, message] of [
+    ["--tod", "noon", /--tod must be one of/],
+    ["--weather", "snow", /--weather must be one of/],
+    ["--seed", "-1", /--seed must be a uint32/],
+  ]) {
+    await assert.rejects(flybyCli(flag, value), (error) => {
+      assert.equal(error.code, 2);
+      assert.match(error.stderr, message);
+      return true;
+    });
+  }
+});
+
+async function withOverrides(id, fn) {
+  return withTrack(id, (track, g) => {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/flyby-overrides.js"), "utf8"),
+      g.sandbox, { filename: "js/data/flyby-overrides.js" });
+    return fn(track, g);
+  });
+}
+
+test("saved shots beat circuit overrides, which patch DEFAULT by shot id without mutation", async () => {
+  await withOverrides("monaco", (_track, g) => {
+    const F = g.sandbox.FlybySeq, O = g.sandbox.FlybyOverrides;
+    const base = F.DEFAULT, snapshot = JSON.stringify(base);
+    const resolved = O.resolve("monaco", base, null), saved = [{ id: "saved" }];
+
+    assert.strictEqual(O.resolve("monaco", base, saved), saved, "an authored list wins unchanged");
+    assert.notStrictEqual(resolved, base, "a circuit with signatures gets a resolved list");
+    assert.equal(JSON.stringify(base), snapshot, "resolving does not mutate DEFAULT");
+    assert.deepEqual(resolved.map((shot) => shot.id), base.map((shot) => shot.id), "patching preserves sequence identity");
+    assert.strictEqual(O.resolve("monza", base, null), base, "a circuit without overrides reuses DEFAULT");
+    assert.notDeepEqual(resolved.find((shot) => shot.id === "turn-mid"),
+      base.find((shot) => shot.id === "turn-mid"), "Monaco replaces the signature shot");
+    return null;
+  });
+});
+
+test("every signature list is playable and keeps its camera out of solid scenery", async () => {
+  const { shotErrors } = await import("../../tools/gen/bake-flyby.mjs");
+  for (const id of ["monaco", "spa"]) {
+    await withOverrides(id, (track, g) => {
+      const F = g.sandbox.FlybySeq, O = g.sandbox.FlybyOverrides;
+      const list = O.resolve(id, F.DEFAULT, null);
+      assert.deepEqual(shotErrors(JSON.parse(JSON.stringify(list))), [], `${id}: playable shot list`);
+      assert.ok(O.patches(id), `${id}: has a signature patch`);
+
+      F.reset();
+      const defects = [];
+      for (let i = 0; i <= 240; i++) {
+        const view = F.solve(track, i / 240, list), shot = list[view.index];
+        if (F.onRoadPose(shot.eye[0]) && F.onRoadPose(shot.eye[1])) {
+          const projected = g.sandbox.Tracks.project(track, view.eye[0], view.eye[2], null, view.eye[1]);
+          if (!projected || Math.abs(projected.lat) > 12) defects.push(`${view.id}: off-road`);
+        } else {
+          const hit = F.insideProp(track, view.eye, 0);
+          if (hit) defects.push(`${view.id}: inside ${hit.kind}`);
+        }
+      }
+      assert.deepEqual([...new Set(defects)], [], `${id}: signature containment`);
+      return null;
+    });
+  }
+});
 
 function loadFlybyRuntime(extra = {}) {
   const sb = Object.assign({

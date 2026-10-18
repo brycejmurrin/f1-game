@@ -455,3 +455,9 @@ to the validation results, including when red issues block saving.
   circuits.
 
 In MY CIRCUITS, **RECOVER PREVIOUS DRAFT** restores the unsaved design displaced by a load or import, including after a reload. Your current unsaved design remains one UNDO away. The backup holds the most recently displaced unsaved design.
+
+## Look and size on a phone
+
+SETTINGS › APPEARANCE › **TRACK DESIGNER** tunes the designer on its own, in the same way as the other screens: **DESIGNER SIZE** (70–200 %, on top of UI SIZE), **MAP WIDTH** (40–70 % of the width; side-by-side layouts), **TEXT SIZE** (small, medium, large) and **PROFILE HEIGHT** (the elevation strip: short, normal, tall). PEEK shows the designer behind the settings page while you change them. The defaults are the shipped look, the choices are saved with your other settings and travel with SETTINGS export and import, and small controls keep their minimum painted size at every setting.
+
+On a short landscape phone the designer drops its title bar (the close button sits in the tab row) and puts SAVE, RACE, TIME TRIAL and SHARE & FILES under the right-hand panel, so the map, the elevation strip and every action fit without scrolling.

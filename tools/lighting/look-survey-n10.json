@@ -1,0 +1,17 @@
+{
+  "combos": "dawn|dry,dawn|wet,dawn|rain,dawn|fog,dawn|overcast,day|dry,day|wet,day|rain,day|fog,day|overcast,dusk|dry,dusk|wet,dusk|rain,dusk|fog,dusk|overcast,night|dry,night|wet,night|rain,night|fog,night|overcast",
+  "tracks": [
+    { "id": "anderstorp", "frac": 0.4 },
+    { "id": "brands_hatch", "frac": 0.4 },
+    { "id": "buddh", "frac": 0.4 },
+    { "id": "dijon", "frac": 0.4 },
+    { "id": "donington", "frac": 0.4 },
+    { "id": "fuji", "frac": 0.4 },
+    { "id": "jerez", "frac": 0.4 },
+    { "id": "korea", "frac": 0.4 },
+    { "id": "mont_tremblant", "frac": 0.4 },
+    { "id": "mosport", "frac": 0.4 },
+    { "id": "okayama", "frac": 0.4 },
+    { "id": "zolder", "frac": 0.4 }
+  ]
+}
