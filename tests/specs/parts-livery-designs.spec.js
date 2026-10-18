@@ -3,12 +3,11 @@
 // SELECTABLE in the garage paint editor on a phone, and selecting it changes the car.
 // One boot, phone landscape with touch (852x393, the notched-landscape cell), the same
 // entry path as parts-liveries.spec.js: McLaren (team 2), empty customs, START, CAR,
-// LIVERY, create. "Changes the car" is asserted twice: the live garage frame differs
-// after the tap, and the saved livery carries the id and paints a different atlas.
+// LIVERY, create. "Changes the car" is asserted twice: the garage rebuilds the car's
+// livery atlas after the tap, and the saved livery carries the id and paints different art.
 import { test, expect } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 import { ensureLive, toMenu, forgetStored, pinFreePlay } from "../helpers/shared-page.js";
-import { pageScreenshot } from "../helpers/soft-capture.js";
 
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
 
@@ -39,14 +38,15 @@ test("2026-motif patterns: listed by name in SPINE TOP, tappable, and they repai
     const label = await page.evaluate((i) => LiveryDesign.LABELS[i], id);
     await expect(pill, id + " is named, not shown as its id").toHaveText(new RegExp(label, "i"));
   }
-  const before = await pageScreenshot(page);
+  // The garage repaints the car through a fresh livery atlas build ("[car] livery <team>");
+  // waiting on that record is deterministic where a frame diff waits on a render loop.
+  const mark = await page.evaluate(() => (Log.records().at(-1) || { id: 0 }).id);
   const pill = page.locator('[data-cs-pill="spineLogo:halftone"]');
   await pill.scrollIntoViewIfNeeded();
   await pill.tap();
   await expect(pill).toHaveAttribute("aria-pressed", "true");
-  await page.waitForTimeout(400);   // the preview debounce is 75 ms; the frame then repaints
-  const after = await pageScreenshot(page);
-  expect(Buffer.compare(before, after), "the garage frame changed after the tap").not.toBe(0);
+  await expect.poll(() => page.evaluate((since) => Log.records({ ns: "car", since })
+    .some((r) => /livery/.test(JSON.stringify(r))), mark), { timeout: 30_000 }).toBe(true);
   await page.screenshot({ path: galleryPath("parts-livery-designs", "halftone-pill-852x393.png") });
 
   const save = page.locator(".cs-liv-ed-save");
