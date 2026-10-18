@@ -1,6 +1,6 @@
 ---
 name: game-feel
-description: "Use when impacts, kerbs, walls, gear shifts or collisions feel weak or flat: screen shake, hit-stop, sparks/kickup, tyre marks, haptics, punchier camera/audio polish that must NOT change physics or determinism. Car behaviour wrong → tune-physics."
+description: "Use when impacts, kerbs, walls, gear shifts or collisions feel weak or flat: screen shake, hit-stop, sparks/kickup, tyre marks, haptics, punchier audio polish that must NOT change physics or determinism. Car behaviour wrong → tune-physics; camera lag → playwright-probe."
 ---
 
 # Game feel for Apex 26
