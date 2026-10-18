@@ -305,6 +305,7 @@ export const RULES = [
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
   [/^js\/race\/setup-trial-session\.js$/, ["garage-unit"], "fresh solo setup-trial ownership and starting conditions"],
   [/^js\/ui\/settings-search\.js$/, ["steering-unit"], "settings search ownership and focus regressions"],
+  [/^js\/ui\/setting-deps\.js$/, ["steering-unit"], "settings grey-out dependency map: every rule greys with a reason"],
   // Two rules, because "script tags + DOM shell" is LOAD-BEARING: it is one of
   // select-specs' BOOT_FALLBACK_REASONS, the strings that let node-plan.mjs
   // drop the boot group from the VM plan when only a blanket rule named it

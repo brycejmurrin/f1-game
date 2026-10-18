@@ -15284,6 +15284,11 @@
         "tests/unit/ui-journey-career.test.mjs"
       ]
     },
+    "js/ui/setting-deps.js": {
+      "refresh": [
+        "tests/unit/setting-deps.test.mjs"
+      ]
+    },
     "js/ui/setting-row.js": {
       "build": [
         "tests/unit/hud-layout.test.mjs",
