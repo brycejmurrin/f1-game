@@ -1821,6 +1821,18 @@ export function parseOut(stdout) { return splitOut(stdout).out; }
  *  `selected` already carries. */
 export function slimBody(name, body, args = {}) {
   if (args.full || !body || body.error) return body;
+  if (name === "apex_eval" && typeof body.out?.err === "string") {
+    // The browser route exits 0 with {err} for a throwing expr; the VM route exits 1.
+    const fix = /\bis not defined\b/.test(body.out.err) ? "The expression scope is `a` (= __apex): write `a.info()`, not `info()`." : body.fix;
+    return { ...body, ok: false, ...(fix && { fix }) };
+  }
+  if (name === "apex_profile_query" && body.ok === false && !body.fix && /ENOENT/.test(String(body.stderr))) {
+    return { ...body, fix: "No such profile: apex_job_start {kind:\"profile\"} writes artifacts/profiles/<name>.json; pass that path as `file`." };
+  }
+  if (name === "apex_who_is_on_it" && Array.isArray(body.out?.claims)) {
+    const live = body.out.claims.filter((c) => !c.stale && !c.released);
+    return { ...body, out: { ...body.out, claims: live, hiddenClaims: body.out.claims.length - live.length } };
+  }
   if (name === "apex_doctor" && body.out && Array.isArray(body.out.checks)) {
     const checks = body.out.checks;
     return { ...body, out: { ...body.out, checks: checks.filter((c) => c.status !== "pass"), passed: checks.filter((c) => c.status === "pass").length, slim: "pass rows omitted; {full:true} lists them" } };
@@ -1838,7 +1850,7 @@ export function slimBody(name, body, args = {}) {
   }
   return body;
 }
-const SLIMMED = new Set(["apex_doctor", "apex_unit_test", "apex_select_specs"]);
+const SLIMMED = new Set(["apex_doctor", "apex_unit_test", "apex_select_specs", "apex_eval", "apex_profile_query", "apex_who_is_on_it"]);
 
 /** Run a CLI without blocking the server. spawnSync froze the whole process
  *  for a browser tool's 30–100 s: apex_status could not answer, and when a

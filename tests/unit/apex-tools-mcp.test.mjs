@@ -2223,6 +2223,17 @@ test("slimBody (#2672): doctor keeps failures + pass count, unit_test keeps coun
   assert.deepEqual(sel.out.shards, [{ name: "s1", specCount: 2 }]);
 });
 
+test("slimBody: eval scope hint, profile_query ENOENT hint, who_is_on_it drops stale and released claims", async () => {
+  const { slimBody } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  assert.match(slimBody("apex_eval", { ok: false, out: { err: "info is not defined" } }).fix, /a\.info\(\)/);
+  const browserThrow = slimBody("apex_eval", { ok: true, exit: 0, out: { err: "boom" } });
+  assert.equal(browserThrow.ok, false); assert.equal(browserThrow.fix, undefined);
+  assert.equal(slimBody("apex_eval", { ok: true, out: { v: 1 } }).ok, true);
+  assert.match(slimBody("apex_profile_query", { ok: false, stderr: "ENOENT: no such file" }).fix, /apex_job_start/);
+  const w = slimBody("apex_who_is_on_it", { out: { claims: [{ slug: "a" }, { slug: "b", stale: true }, { slug: "c", released: true }] } });
+  assert.deepEqual(w.out.claims, [{ slug: "a" }]); assert.equal(w.out.hiddenClaims, 2);
+});
+
 test("hudEstimateMs (#2673): tracks measured cost and scales with cells; the kill budget is not the estimate", async () => {
   const { hudEstimateMs } = await import("../../tools/mcp/apex-tools-mcp.mjs");
   const { expandMatrix } = await import("../../tools/lib/hud-survey-matrix.mjs");
