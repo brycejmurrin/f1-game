@@ -215,11 +215,11 @@ Workflow findings triaged (actionlint 1 + shellcheck 17, zizmor 59):
 - **Real, fixed:** `import-models.yml` zip validation used a heredoc whose terminator sat off column 0, so `<<'PY'` never closed
   and Python read the rest of the script as source (the unsafe-archive guard could not have run); now `python3 -c`, tested
   against a benign and a `../` archive. 2 `find` loops now `while read`, 1 unquoted `$(find …)`, 1 unused loop variable.
-  11 `${{ matrix.image }}` expansions in gpu-census `run:` blocks moved to `$IMAGE` (one stays, pinned by `ci-coverage.test.mjs`); 2 desktop jobs drop the implicit setup-node package cache
+  3 `${{ matrix.image }}` expansions in gpu-census `run:` blocks moved to `$IMAGE` (the 4 game-leg `--json` forms stay, pinned by `census-verdict.test.mjs`, with reasoned ignores); 2 desktop jobs drop the implicit setup-node package cache
   (cache-poisoning); 3 fetch-only jobs set `persist-credentials: false`.
 - **Not real, suppressed with the reason next to the line or in the config:** actionlint v1.7.12 predates `concurrency.queue: max`
-  (GitHub, May 2026); `matrix.shard` and `matrix.image` are workflow-literal / allow-listed and `ci-coverage.test.mjs`
-  pins their form; the 4 pushing workflows keep persisted credentials; `spec-timings.yml`'s `workflow_run` runs deploy-branch
+  (GitHub, May 2026); `matrix.shard` and `matrix.image` are workflow-literal / allow-listed and `ci-coverage.test.mjs` /
+  `census-verdict.test.mjs` pin their form; the 4 pushing workflows keep persisted credentials; `spec-timings.yml`'s `workflow_run` runs deploy-branch
   code only; `SC2086:info` in the three files that split flag lists on purpose; the 35 stylistic `self-repository` notes
   (`uses: $/…` is July 2026 syntax that the pinned actionlint rejects).
 

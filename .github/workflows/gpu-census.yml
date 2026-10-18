@@ -378,7 +378,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 6
         shell: bash
-        run: |
+        run: |   # zizmor: ignore[template-injection] matrix.image is one of the plan job's allow-listed runner-image names; census-verdict.test.mjs pins this form
           FORCE="${CENSUS_FORCE}"
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
           # wgxCapture=0 IS THE POINT OF THIS LEG. tlx.js arms its soft blit
@@ -395,8 +395,8 @@ jobs:
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --backend three --path webgpu --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
-            --json "game-webgpu-${IMAGE}.json" \
-            --shot "game-webgpu-${IMAGE}.png"
+            --json "game-webgpu-${{ matrix.image }}.json" \
+            --shot "game-webgpu-${{ matrix.image }}.png"
 
       # The control: the same pin (a no-op here — forceWebGL short-circuits
       # the blit), so the two TLX legs differ in exactly ONE variable.
@@ -405,7 +405,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 6
         shell: bash
-        run: |
+        run: |   # zizmor: ignore[template-injection] matrix.image is one of the plan job's allow-listed runner-image names; census-verdict.test.mjs pins this form
           FORCE="${CENSUS_FORCE}"
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
           # Same pin as the WebGPU leg, and a no-op here: forceWebGL
@@ -415,8 +415,8 @@ jobs:
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --backend three --path webgl2 --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
-            --json "game-webgl2-${IMAGE}.json" \
-            --shot "game-webgl2-${IMAGE}.png"
+            --json "game-webgl2-${{ matrix.image }}.json" \
+            --shot "game-webgl2-${{ matrix.image }}.png"
 
       # GLX — the explicit WebGL2 backend and the fallback every backend
       # failure lands on; without this leg a js/render/glx/ regression could
@@ -426,7 +426,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 6
         shell: bash
-        run: |
+        run: |   # zizmor: ignore[template-injection] matrix.image is one of the plan job's allow-listed runner-image names; census-verdict.test.mjs pins this form
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
           # wgxCapture=0 = SCREENSHOTS NATIVE, which GLX honours since hunt 4
           # I1: no preserveDrawingBuffer and no opaque #game-soft overlay — the
@@ -436,8 +436,8 @@ jobs:
           # this pin) can override it; the A/B rows print the mode and gens.
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --beats 20 --ls apex26.wgxCapture=0 --backend webgl2 $LS \
-            --json "game-glx-${IMAGE}.json" \
-            --shot "game-glx-${IMAGE}.png"
+            --json "game-glx-${{ matrix.image }}.json" \
+            --shot "game-glx-${{ matrix.image }}.png"
 
       # WGX — the native WebGPU backend (js/render/webgpu/), opt-in for
       # players; the in-container Dawn validates but never executes, so this
@@ -461,7 +461,7 @@ jobs:
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --beats 20 --ls apex26.wgxCapture=0 --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
-            --shot "game-wgx-${IMAGE}.png"
+            --shot "game-wgx-${{ matrix.image }}.png"
 
       # THE GATE. The four legs above are continue-on-error, so before this
       # step the job was green whatever the game said (run 33228195259 passed
