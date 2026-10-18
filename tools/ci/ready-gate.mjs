@@ -237,8 +237,25 @@ export function verdictLine(v) {
   return `= ready-gate ${v.state} — ${v.evidence} sha=${v.sha || ""} source=${v.source || "—"}`;
 }
 
+/**
+ * Plan checklist text for ready-gate. Cursor Cloud's ManagePullRequest writes
+ * only inside `<!-- CURSOR_AGENT_PR_BODY_* -->`; stripping every HTML comment
+ * left owners unable to close Plan items on a human-opened PR (outer Plan stayed
+ * open; agent ticks lived in the stripped slice). Prefer the agent slice's Plan
+ * when it has checklist items; otherwise use the body with comments removed.
+ */
+export function planBodySource(body) {
+  const raw = String(body || "");
+  const agent = /<!--\s*CURSOR_AGENT_PR_BODY_BEGIN\s*-->([\s\S]*?)<!--\s*CURSOR_AGENT_PR_BODY_END\s*-->/i.exec(raw);
+  if (agent) {
+    const slice = agent[1];
+    if (/^##[ \t]+Plan\b/m.test(slice) && /^[ \t]*[-*][ \t]+\[[ xX~]\]/m.test(slice)) return slice;
+  }
+  return raw.replace(/<!--[\s\S]*?-->/g, "");
+}
+
 export function planVerdict(body) {
-  const text = String(body || "").replace(/<!--[\s\S]*?-->/g, "");
+  const text = planBodySource(body);
   const head = /^##[ \t]+Plan\b.*$/m.exec(text);
   if (!head) return { state: "none", items: 0, open: [] };
   const rest = text.slice(head.index + head[0].length);

@@ -357,6 +357,25 @@ test("planVerdict: [~] and Deferred: items count as closed (#2397)", () => {
   assert.deepEqual(open.open, ["still todo", "Deferred-ish not closed"]);
 });
 
+test("planVerdict: CURSOR_AGENT_PR_BODY Plan wins over an outer open Plan (#2899)", () => {
+  const dual = [
+    "## Plan",
+    "- [ ] **now:** outer human opener still open",
+    "- [x] publish",
+    "",
+    "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->",
+    "## Plan",
+    "- [x] synced tip — 8e0900369",
+    "- [x] CI passed — run 39126646785",
+    "- [~] Deferred: Bryce follow-up",
+    "<!-- CURSOR_AGENT_PR_BODY_END -->",
+    "",
+  ].join("\n");
+  assert.deepEqual(planVerdict(dual), { state: "done", items: 3, open: [] });
+  // Ordinary HTML comments still do not count as Plan items.
+  assert.equal(planVerdict(body("<!-- - [ ] example -->\n- [x] real")).state, "done");
+});
+
 test("#2430: the verdict line carries the FULL 40-char sha a merge call needs", () => {
   const sha = "4dc3d6226176b48601a9e9cb0612989cc7ec916b";
   assert.match(verdictLine({ state: "passed", evidence: "ok", sha, source: "ci" }), /^= ready-gate passed — ok sha=[0-9a-f]{40} source=ci$/);
