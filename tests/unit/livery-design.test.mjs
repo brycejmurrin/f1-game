@@ -347,20 +347,27 @@ test("SPINE ONLY greys except on CAP and CONTRAST greys without a fin — and th
   }
 });
 
-// D3 retired after #2829: HALO FINISH reaches the hoop/blade/wing paint; the row stays live.
-test("HALO FINISH stays live and matte changes the mesh even without a coloured HALO (#2829)", async () => {
+// D3: HALO FINISH was 0 of 9 on every car. #2829 (#2796 1) made an explicit HALO FINISH land on the titanium too,
+// so it is live for an unset or grey halo as well, and Car3D agrees on every cockpit.
+test("HALO FINISH is live whatever the HALO colour — and Car3D agrees on every cockpit", async () => {
   const { root, draft, editor } = editorFixture();
   const row = root.querySelectorAll("button").find((b) => b.dataset.csPill === "haloFinish:matte").parentNode.parentNode;
-  for (const halo of ["", "#808085", "#e01080"]) {
+  for (const [halo, live] of [["", true], ["#808085", true], ["#7a8a80", true], ["#e01080", true], ["#808f80", true], ["#80b080", true]]) {
     draft.halo = halo; editor.changed();
-    assert.notEqual(row.getAttribute("aria-disabled"), "true", halo || "unset");
+    assert.notEqual(row.getAttribute("aria-disabled"), String(live), halo || "unset");
   }
-  const M = loadParts();
+  const M = loadParts(), hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
   const cockpit = M.Parts.CATALOG.find((c) => c.id === "cockpit");
-  const team = M.Teams.LIST.find((t) => t.id === "ferrari");
-  const parts = M.Parts.getVisualTiers({ cockpit: "standard" }, team);
-  const mats = (f) => Array.from(M.Car3D.build(team.color, team.color2, { livery: { haloFinish: f }, teamId: team.id, num: 4, parts, noWheels: true }).mat).join();
-  assert.notEqual(mats("matte"), mats("inherit"), "ferrari standard halo unset");
+  for (const team of M.Teams.LIST.filter((t) => ["mclaren", "ferrari", "redbull"].includes(t.id))) {
+    for (const opt of cockpit.options) {
+      const parts = M.Parts.getVisualTiers({ cockpit: opt.id }, team);
+      for (const [halo, live] of [["", true], ["#808085", true], ["#e01080", true], ["#80b080", true]]) {
+        const liv = halo ? { halo: hex(halo) } : {};
+        const mats = (f) => Array.from(M.Car3D.build(team.color, team.color2, { livery: { ...liv, haloFinish: f }, teamId: team.id, num: 4, parts, noWheels: true }).mat).join();
+        assert.equal(mats("matte") !== mats("inherit"), live, team.id + " " + opt.id + " halo " + (halo || "unset"));
+      }
+    }
+  }
 });
 
 // D7: TAIL STYLE TEAM paints one of the named motifs, so its twin looked like a dead pill.

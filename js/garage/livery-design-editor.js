@@ -152,7 +152,7 @@ const GarageLiveryDesignEditor = (function () {
     section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
       ["finShape", "fin", "finFinish", "finStyle", "finArt", "finBadge"]);
     section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
-      ["crestStyle", "logo", "logo2", "logo3", "numFont", "sponsors"], [api.markNote]);
+      ["logo", "logo2", "logo3", "numFont", "sponsors"], [api.markNote]);
     section("COCKPIT & CAMERA", "Halo, mirror and T-cam: paint, finish and mirror housing colour.", ["halo", "haloFinish", "mirrorTint", "mirrorFinish", "tcam"]);
     section("WHEELS & BRAKES", "Paint-only wheel colours, applied to all four wheels. NONE keeps the BRAKES and TYRES parts' own colours.", ["rimTint", "caliperTint", "sidewallInk"]);
     section("HELMET", "Helmets for both of this team's drivers, like the rest of the paint job. TEAM keeps each driver's own design; the other styles repaint it from HELMET BASE and HELMET ACCENT.", ["helmetStyle", "helmetBase", "helmetAccent"]);
@@ -171,7 +171,9 @@ const GarageLiveryDesignEditor = (function () {
       for (const b of choices) if (accepts(b.dataset.csPill.split(":")[1])) group.appendChild(b);
     }
     // CHOICES THAT ONLY ACT ON SOME CARS, measured by the 2026-10-18 livery editor
-    // audit (D3, D5, D6): each one changed neither mesh nor atlas outside its `when`, so it greys
+    // audit (D5, D6): each one changed neither mesh nor atlas outside its `when`, so it greys
+    // like every other dependent row instead of looking broken. (HALO FINISH is not one: since #2829 it
+    // lands on an unset or grey halo too, car3d.js haloOn.)
     const rules = [
       { pill: "coverBind:spineOnly", when: () => draft.spineLogo === "cap", why: "SPINE ONLY changes only the CAP design in SPINE TOP" },
       { pill: "finHandoff:contrast", when: () => (draft.finShape || "standard") !== "none", why: "Needs a tail fin — pick a FIN SHAPE other than NONE" },
