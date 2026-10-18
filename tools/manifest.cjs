@@ -419,6 +419,9 @@ const FULL = [
   "js/ui/results-story.js",
   "js/ui/results-sheet.js",
   "js/race/quali-model.js",
+  "js/share/share-card-data.js",
+  "js/share/share-card-layout.js",
+  "js/share/share-card.js",
   "js/race/daily-challenge.js",
   "js/ui/appearance-studio.js",
   "js/ui/home-world.js",
@@ -826,6 +829,9 @@ const HARD_EDGES = [
   ["js/race/race-control.js", "js/physics/incident-sim.js"], // takeover line crossings share RaceControl semantics
   ["js/race/weather-arc.js", "js/game.js"],    // game.js calls WeatherArc.create(G, deps) at eval time
   // start-lights / marshal-panels → LAZY_RACE_SESSION (ensureRaceSession before startRace)
+  ["js/share/share-card-data.js", "js/race/daily-challenge.js"], // Daily shareCard builds the canonical model
+  ["js/share/share-card-layout.js", "js/share/share-card.js"],   // ShareCard.render lays out before painting
+  ["js/share/share-card.js", "js/race/daily-challenge.js"],      // Daily shareCard renders and delivers the PNG
   ["js/race/daily-challenge.js", "js/game.js"],   // game.js calls DailyChallenge.create(G) at eval time
   ["js/ui/title-menu.js", "js/game.js"],          // game.js calls TitleMenu.create(G) at eval time
   ["js/ui/title-flow.js", "js/game.js"],          // game.js calls TitleFlow.create(G) at eval time

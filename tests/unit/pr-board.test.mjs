@@ -389,12 +389,15 @@ test("evaluate + render: PLAN is done/items from the body, HOLD is flagged, a sw
     { pr: prObj(2, { body }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
     { pr: prObj(3, { body: "MERGE-HOLD: Bryce\n" }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
     { pr: prObj(4), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
+    { pr: prObj(5), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
   ];
   const r = evaluate(items, { cap: { cap: 3, count: 0 } });
-  assert.deepEqual(r.rows.map((x) => x.suggest), ["NONE", "ARM", "WAIT", "WAIT"], "1 armed + 1 ARM = MAX_ARMED; the hold waits");
-  assert.match(r.rows[3].why, /2 PRs are already armed/);
+  assert.deepEqual(r.rows.map((x) => x.suggest), ["NONE", "WAIT", "WAIT", "ARM", "WAIT"],
+    "an open Plan and the hold wait; 1 armed + 1 ARM = MAX_ARMED");
+  assert.match(r.rows[1].why, /1 Plan item\(s\) are open/);
+  assert.match(r.rows[4].why, /2 PRs are already armed/);
   const lines = render(r).split("\n");
-  assert.match(lines[2], /\s2\/3\s+-\s+ARM$/, "two of three items closed (one ticked, one struck)");
+  assert.match(lines[2], /\s2\/3\s+-\s+WAIT$/, "two of three items closed (one ticked, one struck)");
   assert.match(lines[3], /WAIT \(HOLD\)$/);
 });
 
@@ -479,4 +482,49 @@ test("measure reads the newest comment page for FLEET, and a failed read is not 
   const none = fakeApi({ prs: [prObj(2)] });
   measure({ request: none.request });
   assert.ok(!none.calls.some((c) => c.startsWith("issues/")), "no comment read when the PR has none");
+});
+
+// 2026-10-18 dry runs: the board said ARM for #2737 (ready-gate exit 1, plan-open)
+// and READY for #2789 (a MERGE-HOLD: line). Neither may fire on such a row.
+test("suggest: a MERGE-HOLD: body never yields ARM or READY, at any gate/ci state", () => {
+  for (const draft of [false, true]) {
+    for (const ci of ["success", "in_progress", "queued", "none"]) {
+      const row = { ...base, draft, ci, hold: true };
+      const d = decide(row, ctx());
+      assert.ok(!["ARM", "READY"].includes(d.action), `${draft ? "draft" : "ready"} ci=${ci}: ${d.action}`);
+    }
+    const green = decide({ ...base, draft, hold: true }, ctx());
+    assert.equal(green.action, "WAIT");
+    assert.match(green.why, /MERGE-HOLD:/);
+  }
+  const body = "## Goal\nx\nMERGE-HOLD: waiting on Bryce\n";
+  const item = (draft) => ({ pr: prObj(1, { draft, body }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() });
+  assert.equal(evaluate([item(true)]).rows[0].suggest, "WAIT", "#2789: no READY under a hold");
+  assert.equal(evaluate([item(false)]).rows[0].suggest, "WAIT");
+});
+
+test("suggest: an open Plan item (ready-gate plan-open) never yields ARM", () => {
+  const open = { state: "open", items: 3, open: ["**now:** b"] };
+  const d = decide({ ...base, plan: open }, ctx());
+  assert.equal(d.action, "WAIT");
+  assert.match(d.why, /Plan item\(s\) are open/);
+  assert.equal(suggest({ ...base, plan: { state: "done", items: 3, open: [] } }, ctx()), "ARM");
+  assert.equal(suggest({ ...base, plan: { state: "none", items: 0, open: [] } }, ctx()), "ARM", "no Plan: ready-gate only warns");
+  // #2737 end to end: the body is parsed by ready-gate's own planVerdict.
+  const body = "## Plan\n- [x] a — sha\n- [ ] **now:** b\n";
+  const r = evaluate([{ pr: prObj(2737, { body }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() }]);
+  assert.equal(r.rows[0].plan.state, "open");
+  assert.equal(r.rows[0].suggest, "WAIT");
+});
+
+test("suggest: ci.yml pending on the head never yields ARM or READY, even with full-tier jobs and the gate", () => {
+  for (const status of ["queued", "in_progress", "pending", "waiting", "requested"]) {
+    const runs = [{ id: 1, status: "completed", conclusion: "success" }, { id: 2, status }];
+    for (const draft of [false, true]) {
+      const r = evaluate([{ pr: prObj(1, { draft }), runs, jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() }]);
+      assert.equal(r.rows[0].suggest, "WAIT", `${status} ${draft ? "draft" : "ready"}`);
+      assert.notEqual(r.rows[0].ci, "success");
+    }
+  }
+  assert.equal(evaluate([{ pr: prObj(1), runs: [{ id: 1, status: "completed", conclusion: null }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() }]).rows[0].suggest, "WAIT");
 });

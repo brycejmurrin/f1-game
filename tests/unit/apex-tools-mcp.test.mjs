@@ -196,6 +196,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_ui_shot",
     "apex_unit_test",
     "apex_verify_change_fast",
+    "apex_viewer",
     "apex_who_is_on_it",
   ]);
   for (const n of names) {
@@ -927,7 +928,7 @@ test("every tool carries title, honest MCP annotations and an outputSchema; resu
   assert.deepEqual(destructive, ["apex_job_cancel"]);
   assert.deepEqual(openWorld.sort(), ["apex_ci_status", "apex_who_is_on_it"]);
   for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_session_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
-  for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
+  for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
   assert.deepEqual(call.structuredContent, JSON.parse(call.content[0].text), "structuredContent mirrors the first text block");
 });
@@ -1975,6 +1976,7 @@ const ARG_BASES = {
   apex_graph_parity: [{ base: "HEAD", id: "monza" }],
   apex_pick_tests: [{}],
   apex_track_audit: [{ track: "monza" }],
+  apex_viewer: [{}],
   apex_car_audit: [{ check: "ladder" }, { check: "crest" }],               // teams: the crest sweep only
   apex_garage: [{ op: "open", team: "ferrari" }, { op: "team", team: "mercedes" }, { op: "design" }, { op: "design", design: { stripe: "#ffffff" } }, { op: "shot" }, { op: "sheet" }],   // each op reads its own keys; base only with a design
   apex_track: [{ op: "survey", track: "monza" }, { op: "shot" }, { op: "eval" }],
