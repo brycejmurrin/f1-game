@@ -28,12 +28,17 @@
 //   node tools/ci/fleet-bus.mjs send GAME-SLOT --to '*' "#2990 <head sha>"   # before a game merge (merge-gate.mjs reads it)
 //   node tools/ci/fleet-bus.mjs read [--to merge-holder --to '#2990'] [--since <sha>] [--last 20] [--json]
 //
+// `--to` must be deliverable (addressProblem): *, #<PR>, a fleet letter (A, B·O3), a role, or a real
+// <host>:<session id>; a claims-board hash is refused (plan §8.7). A `to:#<PR>` send also dispatches fleet.yml,
+// whose fleet-bus-mirror.mjs step posts the line as a comment on that PR (plan §7, item 2).
+//
 // Identity: --as <host>:<id>, else APEX_FLEET_AS, else claude:session_<id> (cloud), claude:<CLAUDE_CODE_SESSION_ID>
 // or codex:<CODEX_THREAD_ID>. Exit: 0 ok, 1 usage or git failure, 2 refused.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { pokeFleetBoard } from "./who-is-on-it.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const BUS_BRANCH = "claude/fleet-bus";
@@ -58,10 +63,42 @@ export function whoAmI(env = process.env, flag = "") {
   return null;
 }
 
-/** One bus line. Pure; throws on an unknown type or an empty address. */
+/** Bare-word roles that real bus traffic and the docs address (`git log origin/claude/fleet-bus --format=%s`, 2026-10-19). */
+export const ROLES = ["orchestrator", "merge-holder", "merge-desk", "tools", "track-engine"];
+/** The forms `--to` accepts, quoted in the refusal. */
+export const ADDRESS_FORMS = "* | #<PR> | fleet letter A..Z[·<slot>] (A, B·O3) | role (" + ROLES.join(", ") +
+  ") | claude:session_<id> | claude:cse_<id> | claude:<uuid> | codex:<uuid|slug-hex> | cursor:bc-<id> | cursor:<uuid|slug-hex> | grok:<uuid|slug-hex>";
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+/** A lane slug ending in a hex disambiguator: `refactor-all-b71e`, `track-engine-8d41`. */
+const SLUG_HEX = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*-[0-9a-f]{4,}";
+const SESSION_ID = {
+  claude: new RegExp(`^(?:session_[A-Za-z0-9]{20,}|cse_[A-Za-z0-9]{20,}|${UUID})$`),
+  codex: new RegExp(`^(?:${UUID}|${SLUG_HEX})$`),
+  cursor: new RegExp(`^(?:bc-[A-Za-z0-9-]{8,}|${UUID}|${SLUG_HEX})$`),
+  grok: new RegExp(`^(?:${UUID}|${SLUG_HEX})$`),
+};
+
+/**
+ * Why `to` cannot be delivered, or "" when it can. Pure. A bare 24-hex id is a claims-board hash
+ * (who-is-on-it.mjs sessionId: sha256 of a session id cut to 24 hex), which no session receives:
+ * on 2026-10-19 C·O1's BLOCKED lines to `claude:1923dcd1d9ef874aad548d82` reached nobody (plan §8.7).
+ */
+export function addressProblem(to) {
+  const a = String(to || "");
+  if (!a || /\s/.test(a)) return "--to needs one address";
+  if (a === "*" || /^#\d+$/.test(a) || /^[A-Z](?:·[A-Z0-9][A-Za-z0-9]*)*$/.test(a) || ROLES.includes(a)) return "";
+  const m = /^([a-z]+):(.+)$/.exec(a);
+  if (!m) return `${a} is not an address`;
+  if (!SESSION_ID[m[1]]) return `unknown host ${m[1]} (claude, codex, cursor, grok)`;
+  if (/^[0-9a-f]{24}$/.test(m[2])) return `${a} is a claims-board hash, not a session id: no session receives it`;
+  return SESSION_ID[m[1]].test(m[2]) ? "" : `${a} is not a ${m[1]} session id`;
+}
+
+/** One bus line. Pure; throws on an unknown type or an unaddressable recipient (parseLine still reads old lines). */
 export function formatLine(type, to, from, text = "") {
   if (!TYPES.includes(type)) throw new Error(`unknown type ${type} (one of ${TYPES.join(" ")})`);
-  if (!to || /\s/.test(to)) throw new Error("--to needs one address: a role, #<PR>, <host>:<id> or *");
+  const bad = addressProblem(to);
+  if (bad) throw new Error(`${bad}. --to takes one of: ${ADDRESS_FORMS}`);
   return `${type} to:${to} from:${from} ${String(text).replace(/\s+/g, " ").trim()}`.trim();
 }
 
@@ -223,13 +260,13 @@ const cursorFile = (me) => path.join(CURSOR_DIR, `cursor-${String(me).replace(/[
 function usage(msg) {
   if (msg) console.error(`fleet-bus: ${msg}`);
   console.error("usage: fleet-bus.mjs lease [acquire|renew|release|check|break] [--ttl MIN] [--note T] [--grant T]\n" +
-    "       fleet-bus.mjs send <TYPE> --to <role|#PR|host:id|*> \"<text>\"\n" +
+    "       fleet-bus.mjs send <TYPE> --to <ADDR> \"<text>\"   ADDR: " + ADDRESS_FORMS + "\n" +
     "       fleet-bus.mjs read [--to ADDR ...] [--since SHA] [--last N] [--json]\n" +
     "       common: --as <host>:<id>   types: " + TYPES.join(" "));
   return 1;
 }
 
-export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 1000), log = console.log } = {}) {
+export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 1000), log = console.log, dispatch = pokeFleetBoard } = {}) {
   const flags = {}, multi = { to: [] }, pos = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -277,6 +314,13 @@ export function main(argv, { cwd = ROOT, now = () => Math.floor(Date.now() / 100
       const line = formatLine(sub, multi.to[0], me, pos.slice(2).join(" "));
       const r = writeBus(() => ({ ok: true, line, lease: undefined }), { cwd });
       log(r.ok ? `= sent ${r.sha}: ${line}` : `= send FAILED: ${r.reason}`);
+      // A `to:#<PR>` line reaches the PR's owner as a comment (fleet-bus-mirror.mjs in fleet.yml): ask for that run
+      // now instead of at the next :23/:53. Best effort — a failed dispatch never fails the send.
+      if (r.ok && /^#\d+$/.test(multi.to[0])) {
+        let how;
+        try { how = dispatch(); } catch (e) { how = `not dispatched (${e.message})`; }
+        log(`= mirror ${how}`);
+      }
       return r.ok ? 0 : 1;
     }
     if (cmd === "read") {
