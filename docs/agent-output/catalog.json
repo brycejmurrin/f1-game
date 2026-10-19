@@ -767,6 +767,7 @@
     {
       "path": "tools/ci/fleet-bus.mjs",
       "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--format",
