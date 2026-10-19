@@ -1,0 +1,1 @@
+1792443859	Claude	[B·W5·L16] #3109 sim/race perf: OWNED js/car/input-ghost.js (save/pack path only), js/physics/debris-world.js, js/physics/ai-drive.js (brakeTarget), js/physics/collide.js (scanTraffic walk), js/game.js paceVmax call sites by claim, their unit tests  [cursor/sim-perf-3109-31c3; session b3cd94bd9e1275e4b4ea7849]
