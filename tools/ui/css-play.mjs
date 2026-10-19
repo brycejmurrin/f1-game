@@ -33,6 +33,7 @@ import {
 } from "../lib/output-paths.mjs";
 
 import { menuReady } from "./menu-readiness.mjs";
+import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 const ROOT = pathFromModule(import.meta.url);
 
 function pathFromModule(metaUrl) {
@@ -109,6 +110,7 @@ export function parseCssPlayArgs(argv) {
     css: null,
     inject: null,
     viewport: { width: 852, height: 393 },
+    desktop: false,
     out: null,
     json: false,
     shot: true,
@@ -126,7 +128,7 @@ export function parseCssPlayArgs(argv) {
     else if (a === "--list" || a === "list") out.mode = "list";
     else if (a === "--json") out.json = true;
     else if (a === "--no-shot") out.shot = false;
-    else if (a === "--desktop") out.viewport = { width: 1280, height: 720 };
+    else if (a === "--desktop") { out.desktop = true; out.viewport = { width: 1280, height: 720 }; }
     else if (a === "--screen") out.screen = resolveScreen(next());
     else if (a === "--sel") out.sel = next();
     else if (a === "--css") out.css = assertCssRel(next());
@@ -163,7 +165,7 @@ Flags:
   --css css/FILE    hot-swap that stylesheet from disk (?play=<mtime>, no cache bump)
   --inject CSS      overlay <style id="apex-css-play"> after the screen opens
   --viewport WxH    default 852x393 (play-shape iPhone landscape)
-  --desktop         1280x720
+  --desktop         desktop mouse profile at 1280x720 (default: mobile touch)
   --scale N         __apex.uiScale(N) after boot (finite 40..200 %)
   --click SEL,SEL   extra clicks after the catalog path (or instead, with --root)
   --root SEL        screen root when not using a catalog id
@@ -337,9 +339,10 @@ export async function runCssPlay(opts) {
   let browser;
   try {
     browser = await launchChromium();
-    const page = await browser.newPage({
-      viewport: { width: opts.viewport.width, height: opts.viewport.height },
-    });
+    // DPR 1 intentionally keeps CSS inspection shots cheap; mobile identity is retained.
+    const { contextOptions, profile } = resolveUIProfile({ touch: !opts.desktop,
+      viewport: opts.viewport, deviceScaleFactor: 1 });
+    const page = await browser.newPage(contextOptions);
     const bootUrl = def.surveyHud
       ? srv.url + (srv.url.includes("?") ? "&" : "?") + "APEX_SURVEY_HUD=1"
       : srv.url;
@@ -403,6 +406,7 @@ export async function runCssPlay(opts) {
       root,
       url: srv.url,
       viewport: `${opts.viewport.width}x${opts.viewport.height}`,
+      profile,
       css: opts.css,
       inject: opts.inject ? true : false,
       sel: opts.sel,

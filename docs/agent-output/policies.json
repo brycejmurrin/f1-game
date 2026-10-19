@@ -1296,6 +1296,11 @@
       "presentation": "native",
       "preserve": "@c3"
     },
+    "tools/lib/ui-device-profile.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c3"
+    },
     "tools/lib/ui-mock-core.mjs": {
       "action": "no-direct-output",
       "presentation": "native",

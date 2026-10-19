@@ -1,15 +1,13 @@
 {
   "files": {
     "css/hud.css": {
-      "codeLines": 36,
-      "lines": 42
+      "codeLines": 35,
+      "lines": 40
     },
     "js/ui/hud.js": {
-      "codeLines": 1,
-      "lines": 1
+      "codeLines": -2,
+      "lines": -1
     }
   },
-  "tree": {
-    "shellNodes": -7
-  }
+  "tree": {}
 }

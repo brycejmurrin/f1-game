@@ -28,6 +28,7 @@
 //   node tools/ui/fit-audit.mjs --scale=100,130,150   # ...crossed with interface size
 //
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
+import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import fs from "node:fs";
 import path from "node:path";
@@ -252,7 +253,9 @@ try {
   const browser = await launchChromium({ args: ["--use-angle=swiftshader"] });
   for (const [name, setup, sel, opts] of SCREENS) {
     if (ONLY && !ONLY.some((f) => name.includes(f))) continue;
-    const page = await browser.newPage({ viewport: SIZES[0], hasTouch: true, deviceScaleFactor: 1 });
+    // All sizes remain touch stress cells; DPR 1 intentionally saves raster cost.
+    const page = await browser.newPage(resolveUIProfile({ touch: true,
+      viewport: SIZES[0], deviceScaleFactor: 1 }).contextOptions);
     if (opts.mock && setupApiMocks) await setupApiMocks(page);
     await page.goto(srv.url);
     await page.waitForFunction(() => window.__apex != null, null, { timeout: 20000 });

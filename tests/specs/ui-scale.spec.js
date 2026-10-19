@@ -23,7 +23,9 @@
 // exactly what the component restructure is about to do. Every check here is
 // relative or a containment test.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
+// Explicit phone cells use a coherent mobile identity; DPR 1 intentionally limits raster cost.
 const LANDSCAPE = { width: 852, height: 393 };   // iPhone 15 Pro — primary play shape
 // 50 is SCALE_MIN; 100 is what ships; 115 stays because three defects confirmed
 // on 2026-08-08 were invisible at 100% and present at 115% (garage overlapping
@@ -187,7 +189,7 @@ test.describe("UI scale", () => {
 
   for (const [shape, viewport] of SHAPES) {
     test.describe(shape, () => {
-      test.use({ viewport });
+      test.use({ ...uiTestOptions({ touch: true, viewport, deviceScaleFactor: 1 }) });
 
       for (const pct of SCALES) {
         test(`every main screen fits at ${pct}%`, async ({ page }) => {
@@ -875,7 +877,7 @@ test.describe("UI scale", () => {
 
 
 test.describe("Broadcast map control clearance", () => {
-  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 }) });
   test("unplaced map clears tall left pedals while custom placement and dimensions survive", async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem("apex26.steerMode", JSON.stringify("tilt"));
@@ -1454,7 +1456,7 @@ test.describe("Race setup adaptive task", () => {
 });
 
 test.describe("Custom Home width on touch", () => {
-  test.use({ hasTouch: true, viewport: { width: 852, height: 393 } });
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 852, height: 393 }, deviceScaleFactor: 1 }) });
 
   test("a narrow saved Home stack stays bounded and actionable after rotation", async ({ page }, testInfo) => {
     const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
@@ -1535,9 +1537,8 @@ test.describe("Custom Home width on touch", () => {
 });
 
 test.describe("Factory Home on touch", () => {
-  // This is a layout contract: finite room transitions must not consume the
-  // inspector's bounded settlement window after returning to Home.
-  test.use({ hasTouch: true, reducedMotion: "reduce", viewport: { width: 852, height: 393 } });
+  // Keep finite transitions disabled while measuring the layout contract.
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 852, height: 393 }, deviceScaleFactor: 1 }), reducedMotion: "reduce" });
 
   test("default Home separates landscape regions and keeps destinations readable through enlargement", async ({ page }, testInfo) => {
     const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");

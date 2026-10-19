@@ -30,14 +30,14 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 423,
+    "files": 424,
     "classifications": {
       "entrypoint-candidate": 286,
       "ambiguous": 56,
       "protocol-entrypoint": 28,
       "asset": 2,
       "data": 11,
-      "library": 40
+      "library": 41
     },
     "npmScripts": 72,
     "configuredMcpServers": 5
@@ -1978,6 +1978,11 @@
     },
     {
       "path": "tools/lib/tumftm.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/ui-device-profile.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
