@@ -1,0 +1,1 @@
+1792436724	Bryce Murrin	CODE SIMPLIFICATION: js/data/standings.js private score-cell deduplication; tests/unit/data-standings.test.mjs edge coverage only. No hub/manifest/API/persistence edits.  [cursor/data-tab-simplify-e7c4; session 84d5d84aa15b4006df352b67]
