@@ -46,8 +46,11 @@ floating tree and not reach the line that places it.
    `node tools/track/coplanar-audit.cjs <id>`,
    `node tools/track/float-audit.cjs <id> --json`,
    `node tools/track/centreline-kinks.cjs <id>`;
-   `node tools/track/graph-parity.cjs <id>` (= `apex_graph_parity`, base
-   HEAD); `node tools/shot/frame-report.mjs --track <id>` (= `apex_frame_report`).
+   `BASE=<parent-supplied-baseline-ref> node tools/track/graph-parity.cjs <id>`
+   (= `apex_graph_parity` with explicit base). A clean tree refuses implicit
+   HEAD; without a meaningful baseline report parity unverified, never force
+   HEAD-vs-itself into a pass. `node tools/shot/frame-report.mjs --track <id>`
+   (= `apex_frame_report`).
 
    The worktree guard refuses shell loops, heredocs and `awk -v`: iterate
    with separate calls, or put the loop inside `node -e "…"`.
