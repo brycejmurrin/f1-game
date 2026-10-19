@@ -140,6 +140,29 @@ test.describe("garage active aero", () => {
     for (const m of rear) expect(m.mm, `${m.id} leading edge travel`).toBeGreaterThan(80);
   });
 
+  // P2-32: the button's own branch (setup-camera.js setSetupAero: lit class,
+  // aria-pressed, the CORNER/STRAIGHT label) is reachable only by clicking it —
+  // garageAero() sets the same state without proving the control shows it.
+  test("the AERO button drives the flap and shows its state", async ({ page }) => {
+    await openGarage(page);
+    const read = () => page.evaluate(() => {
+      const b = document.getElementById("cs-aero");
+      const v = b.querySelector(".cs-aero-val");
+      return { pressed: b.getAttribute("aria-pressed"), lit: b.classList.contains("active"),
+               label: v ? v.textContent : null, xOn: window.__apex.garageAero().xOn };
+    });
+    expect(await read()).toEqual({ pressed: "false", lit: false, label: "CORNER MODE", xOn: false });
+    await clickId(page, "cs-aero");
+    expect(await read()).toEqual({ pressed: "true", lit: true, label: "STRAIGHT MODE", xOn: true });
+    // The click starts the real ease, not a snap.
+    const opened = await page.evaluate(() => window.__apex.garageStep(1 / 60, 60));
+    expect(opened.aeroX).toBe(1);
+    await clickId(page, "cs-aero");
+    expect(await read()).toEqual({ pressed: "false", lit: false, label: "CORNER MODE", xOn: false });
+    const shut = await page.evaluate(() => window.__apex.garageStep(1 / 60, 120));
+    expect(shut).toEqual({ xOn: false, aeroX: 0, mode: "Z" });
+  });
+
   test("switching X on from the turntable AIMS at the rear wing", async ({ page }) => {
     await openGarage(page);
     const before = await page.evaluate(() => window.__apex.garageCam());

@@ -41,6 +41,20 @@ const LANDSCAPE = { width: 844, height: 390 };
 
 test.use({ viewport: LANDSCAPE });
 
+// The probes below wrap GLX / LiveryTex / Car3D on the SHARED page. Each install
+// queues its undo on window.__customTeamRestore; this puts the originals back
+// (newest first) so the next test on the worker sees unwrapped modules.
+test.afterEach(async ({ page }) => {
+  await page.evaluate(() => {
+    const undo = window.__customTeamRestore || [];
+    while (undo.length) undo.pop()();
+    delete window.__customTeamRestore;
+    delete window.__customTeamTextureProbe;
+    delete window.__customAtlases;
+    delete window.__customTeamMeshProbe;
+  });
+});
+
 test("custom-team color save frees and rebuilds its decal texture", async ({ page }) => {
   // Two full trips through the garage and the custom-team editor under
   // SwiftShader, same as the mesh-variant test below and for the same reason:
@@ -74,6 +88,11 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
     const createTexture = GLX.createTexture;
     const freeTexture = GLX.freeTexture;
     const buildAtlas = LiveryTex.buildAtlas;
+    (window.__customTeamRestore = window.__customTeamRestore || []).push(() => {
+      LiveryTex.buildAtlas = buildAtlas;
+      GLX.createTexture = createTexture;
+      GLX.freeTexture = freeTexture;
+    });
 
     LiveryTex.buildAtlas = function (teamId, ...rest) {
       pendingTeam = teamId;
@@ -148,6 +167,11 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
     const build = Car3D.build;
     const createMesh = GLX.createMesh;
     const freeMesh = GLX.freeMesh;
+    (window.__customTeamRestore = window.__customTeamRestore || []).push(() => {
+      Car3D.build = build;
+      GLX.createMesh = createMesh;
+      GLX.freeMesh = freeMesh;
+    });
 
     Car3D.build = function (c1, c2, opts) {
       const data = build(c1, c2, opts);

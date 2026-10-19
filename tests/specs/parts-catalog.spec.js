@@ -1,6 +1,6 @@
 // @ts-check
 // Tests for car setup UI catalog rendering:
-// - All 12 categories appear as tabs in the setup panel
+// - Every Parts.CATALOG category appears as a tab in the setup panel
 // - GEARBOX and FUEL options are visible and selectable via the active tab
 // - Factory/supplier-exclusive parts only appear for the matching team engine
 // - Part descriptions update when an option is selected
@@ -51,14 +51,26 @@ function opt(page, optId) {
   return page.locator(`#cs-options [data-cs-opt="${optId}"]`);
 }
 
+// Expectations come from the catalog itself (js/car/parts.js), so a legitimate
+// price, copy or category change moves the test with it instead of failing it.
+async function catalogOpt(page, catId, optId) {
+  return page.evaluate(([c, o]) => {
+    const cat = Parts.CATALOG.find((x) => x.id === c);
+    const op = cat && cat.options.find((x) => x.id === o);
+    if (!op) throw new Error(`parts-catalog: no ${c}/${o} in Parts.CATALOG`);
+    return { cost: op.cost, desc: op.desc || "", tag: op.tag || "" };
+  }, [catId, optId]);
+}
+
 test.describe("Car setup catalog — all categories render", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("all 12 category labels are visible", async ({ page }) => {
+  test("every catalog category label is visible", async ({ page }) => {
     await openSetup(page, "mclaren", { draw: true });
 
-    for (const id of ["engine", "aero", "suspension", "brakes", "tyres", "ers",
-                      "gearbox", "fuel", "exhaust", "floor", "cockpit", "wheels"]) {
+    const ids = await page.evaluate(() => Parts.CATALOG.map((c) => c.id));
+    expect(ids.length, "Parts.CATALOG has categories").toBeGreaterThan(0);
+    for (const id of ids) {
       await expect(page.locator(`#cs-tabs [data-cs-cat="${id}"]`)).toBeVisible();
     }
     await page.screenshot({ path: galleryPath("parts-catalog", "catalog-all-categories.png") });
@@ -80,12 +92,19 @@ test.describe("Car setup catalog — all categories render", () => {
     await expect(opt(page, "quali_mix")).toBeVisible();
   });
 
-  test("ENGINE section has at least 6 options visible for non-factory team", async ({ page }) => {
+  test("ENGINE section shows every engine option the team may fit", async ({ page }) => {
     await openSetup(page);
 
     await openCat(page, "engine");
-    const chipCount = await page.locator("#cs-options .cs-opt").count();
-    expect(chipCount).toBeGreaterThanOrEqual(6);
+    const want = await page.evaluate(() => {
+      const team = Teams.LIST.find((t) => t.id === "mclaren");
+      return Parts.CATALOG.find((c) => c.id === "engine").options
+        .filter((o) => Parts.isOptionAvailable(o, team)).map((o) => o.id).sort();
+    });
+    expect(want.length, "McLaren may fit more than the stock unit").toBeGreaterThan(1);
+    const shown = await page.locator("#cs-options .cs-opt[data-cs-opt]")
+      .evaluateAll((els) => els.map((e) => e.getAttribute("data-cs-opt")).sort());
+    expect(shown).toEqual(want);
   });
 });
 
@@ -129,8 +148,10 @@ test.describe("Car setup catalog — option interaction", () => {
 
     await openCat(page, "fuel");
     await opt(page, "race_blend").click();
+    const { desc: want } = await catalogOpt(page, "fuel", "race_blend");
+    expect(want, "race_blend carries a description").not.toBe("");
     const desc = await page.locator("#cs-options .cs-opt.active .cs-opt-desc").textContent();
-    expect(desc).toContain("energy density");
+    expect(desc).toBe(want);
   });
 
   test("GEARBOX Sequential Pro option has a cost badge", async ({ page }) => {
@@ -139,8 +160,9 @@ test.describe("Car setup catalog — option interaction", () => {
     await openCat(page, "gearbox");
     const seqPro = opt(page, "sequential_pro");
     await expect(seqPro.locator(".cs-opt-cost")).toBeVisible();
-    const cost = await seqPro.locator(".cs-opt-cost").textContent();
-    expect(cost).toMatch(/90/);
+    const { cost: want } = await catalogOpt(page, "gearbox", "sequential_pro");
+    expect(want, "Sequential Pro is a paid part").toBeGreaterThan(0);
+    await expect(seqPro.locator(".cs-opt-cost")).toHaveText(`${want} cr`);
   });
 });
 
@@ -166,7 +188,9 @@ test.describe("Car setup catalog — factory/supplier parts", () => {
   test("factory option has FACTORY tag badge", async ({ page }) => {
     await openSetup(page, "mercedes");
     await openCat(page, "engine");
-    await expect(opt(page, "manu_mercedes").locator(".cs-opt-tag")).toContainText("FACTORY");
+    const { tag } = await catalogOpt(page, "engine", "manu_mercedes");
+    expect(tag).not.toBe("");
+    await expect(opt(page, "manu_mercedes").locator(".cs-opt-tag")).toContainText(tag);
   });
 
   test("unrestricted options have UNIVERSAL badges", async ({ page }) => {
@@ -178,7 +202,9 @@ test.describe("Car setup catalog — factory/supplier parts", () => {
   test("team signatures are visible only to their eligible team", async ({ page }) => {
     await openSetup(page, "mclaren");
     await openCat(page, "aero");
-    await expect(opt(page, "sig_mclaren_flex").locator(".cs-opt-tag")).toContainText("SIGNATURE");
+    const { tag } = await catalogOpt(page, "aero", "sig_mclaren_flex");
+    expect(tag).not.toBe("");
+    await expect(opt(page, "sig_mclaren_flex").locator(".cs-opt-tag")).toContainText(tag);
 
     // DONE goes on to race settings; openSetup walks back from there and
     // re-enters as Mercedes (the reload this replaced only existed to make the
@@ -187,6 +213,82 @@ test.describe("Car setup catalog — factory/supplier parts", () => {
     await openSetup(page, "mercedes", { draw: true });
     await openCat(page, "aero");
     await expect(opt(page, "sig_mclaren_flex")).toHaveCount(0);
+  });
+});
+
+// C2-23: livery-tier.test.mjs, parts-ladder.test.mjs and
+// parts-locked-equivalent.test.mjs pin the TIER DATA in node; this block runs
+// the code that APPLIES it on the shipped page — Parts.getVisualTiers into
+// Car3D.build, and LiveryTex.buildAtlas at each atlas tier — so a regression
+// in the applying code fails a test, not only one in the tables.
+test.describe("Car setup catalog — tiers reach the mesh", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  test("every visual tier of every category builds a different car mesh", async ({ page }) => {
+    await toMenu(page);
+    const r = await page.evaluate(() => {
+      const team = Teams.LIST.find((t) => t.id === "mclaren");
+      // A cheap, order-sensitive fingerprint of the built geometry.
+      const fp = (m) => {
+        let s = 0;
+        for (let i = 0; i < m.pos.length; i += 7) s += m.pos[i] * ((i % 13) + 1);
+        return m.pos.length + ":" + s.toFixed(3);
+      };
+      const out = {};
+      for (const cat of Parts.CATALOG) {
+        const byTier = new Map();   // first option the team may fit, per visualTier
+        for (const o of cat.options) {
+          if (!Parts.isOptionAvailable(o, team)) continue;
+          const t = o.visualTier != null ? o.visualTier : 1;
+          if (!byTier.has(t)) byTier.set(t, o.id);
+        }
+        out[cat.id] = [...byTier].sort((a, b) => a[0] - b[0]).map(([tier, id]) => {
+          const parts = Parts.getVisualTiers(Object.assign({}, Parts.DEFAULTS, { [cat.id]: id }), team);
+          return { tier, id, applied: parts[cat.id], fp: fp(Car3D.build(team.color, team.color2, { teamId: team.id, parts })) };
+        });
+      }
+      return out;
+    });
+    const cats = Object.keys(r);
+    expect(cats.length, "Parts.CATALOG has categories").toBeGreaterThan(0);
+    for (const cat of cats) {
+      const rows = r[cat];
+      expect(rows.length, `${cat}: more than one visual tier on sale`).toBeGreaterThan(1);
+      for (const row of rows) expect(row.applied, `${cat}/${row.id}: getVisualTiers keeps the tier`).toBe(row.tier);
+      const fps = rows.map((x) => x.fp);
+      expect(new Set(fps).size, `${cat}: each tier builds its own mesh ${JSON.stringify(rows)}`).toBe(fps.length);
+    }
+  });
+
+  test("each livery atlas tier paints a canvas of its own size", async ({ page }) => {
+    await toMenu(page);
+    const r = await page.evaluate(() => {
+      const team = Teams.LIST.find((t) => t.id === "mclaren");
+      const mobile = (player) => LiveryTex.atlasMobile(player, LiveryTex.IS_MOBILE, LiveryTex.IS_PHONE);
+      const tiers = [["ai", false, false], ["player", true, false], ["playerHi", true, true]];
+      return tiers.map(([name, player, hi]) => {
+        const div = LiveryTex.atlasDiv(player, mobile(player), hi);
+        const cv = LiveryTex.buildAtlas(team.id, {}, undefined, player, hi);
+        // Painted, not just allocated: shrink to 64×80 and count opaque texels.
+        const thumb = document.createElement("canvas");
+        thumb.width = 64; thumb.height = 80;
+        const tctx = thumb.getContext("2d");
+        tctx.drawImage(cv, 0, 0, 64, 80);
+        const px = tctx.getImageData(0, 0, 64, 80).data;
+        let opaque = 0;
+        for (let i = 3; i < px.length; i += 4) if (px[i] > 0) opaque++;
+        return { name, div, w: cv.width, h: cv.height, wantW: LiveryTex.SIZE / div, wantH: LiveryTex.SIZE_H / div, opaque };
+      });
+    });
+    for (const t of r) {
+      expect(t.w, `${t.name} atlas width`).toBe(t.wantW);
+      expect(t.h, `${t.name} atlas height`).toBe(t.wantH);
+      expect(t.opaque, `${t.name} atlas is painted`).toBeGreaterThan(0);
+    }
+    // The tiers are real tiers: the player never gets less than an AI car.
+    const by = Object.fromEntries(r.map((t) => [t.name, t]));
+    expect(by.player.w).toBeGreaterThanOrEqual(by.ai.w);
+    expect(by.playerHi.w).toBeGreaterThanOrEqual(by.player.w);
   });
 });
 

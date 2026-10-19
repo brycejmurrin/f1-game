@@ -3036,6 +3036,7 @@
         "tests/unit/setup-tune.test.mjs"
       ],
       "getVisualTiers": [
+        "tests/specs/parts-catalog.spec.js",
         "tests/unit/aero-defaults-2026.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
@@ -3044,6 +3045,7 @@
         "tests/unit/livery-wheels.test.mjs"
       ],
       "isOptionAvailable": [
+        "tests/specs/parts-catalog.spec.js",
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs"
