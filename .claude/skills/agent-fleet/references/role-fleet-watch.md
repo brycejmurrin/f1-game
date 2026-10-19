@@ -48,20 +48,16 @@ with that session (`watched-by-other` in state); never fight for it.
 
 ## Every wake
 
-1. `git fetch -q origin`. Load state from `artifacts/fleet-watch/state.json`.
-2. **PRs:** `node tools/ci/pr-board.mjs --json`, plus `node tools/ci/needs-sync.mjs`
-   and `node tools/ci/who-is-on-it.mjs` once. Per PR: state, head, CI, mergeable,
-   `MERGE-HOLD:`, Plan progress, the `fleet-status:` line, and its owner (a
-   session id from the fleet block, or a push or claim under 15 min old).
-3. **CI:** for the deploy tip, `node tools/ci/ci-watch.mjs --sha <tip> --once` and `--pages --once`.
-4. **Full sweep only:**
-   - ONE `list_sessions` call (mine: true, first page). Its rows carry the same
-     metadata as `get_session`; save it to `artifacts/fleet-watch/sessions.json`
-     and run `node tools/ci/fleet-flags.mjs` on the fleet rows.
-   - For each working fleet session, save the newest 100 events and digest them
-     with `node tools/ci/session-transcript.mjs <page> --summary`. Never read a
-     raw page into context (references/transcripts.md).
-5. Diff against state. Act (below), report, update the dashboard, save state, arm the next tick.
+1. `git fetch -q origin`, then `node tools/ci/fleet-tick.mjs` (add `--sessions artifacts/fleet-watch/sessions.json`
+   on a full sweep). It runs the board (with its needs-sync verdicts), ship CI and Pages, diffs against
+   `artifacts/fleet-watch/state.json`, writes the new state and prints only changed rows plus one `= tick` line.
+   Never print the raw board, a `list_sessions` page or a `list_events` page into context.
+2. **Full sweep only:** ONE `list_sessions` call (mine: true), saved straight to
+   `artifacts/fleet-watch/sessions.json` (flags: cost incl. `external_metadata.usage.cost_usd`, context, drift,
+   stalls). For each working fleet session save the newest 100 events and digest them with
+   `node tools/ci/session-transcript.mjs <page> --summary`.
+3. Owner check for a flagged PR only: `node tools/ci/who-is-on-it.mjs`.
+4. Act (below), report, update the dashboard, arm the next tick.
 
 ## What it fixes itself
 
