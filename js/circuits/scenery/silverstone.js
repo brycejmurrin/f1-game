@@ -523,17 +523,30 @@
       {
         // Paddock Racing Kit modules (#1617 Slice C) — pits / tents / awning
         // replace the retired synthetic industrial / commercial yard.
+        // A pit block is a ROW of 5 m kit garages (the kit tiles): one garage
+        // blown up x2.6 read as a plain beige block with no door (#3044). An
+        // array id is a row centred on s, its scale snapped so a module is a
+        // whole number of nodes wide and neighbours abut.
         const yards = [
-          ["k_pitsgarage", 0.93, 1, 78, 2.6],
-          ["k_pitsgarageclosed", 0.96, 1, 82, 2.6],
+          [["k_pitsgarageclosed", "k_pitsgarage", "k_pitsgarageclosed"], 0.93, 1, 78, 1.8],
+          [["k_pitsgarage", "k_pitsgarageclosed", "k_pitsgarage"], 0.96, 1, 82, 1.8],
           ["k_pitsoffice", 0.995, 1, 80, 2.6],
           ["k_tentclosedlong", 0.91, 1, 88, 2.4],
           ["k_pitsofficeroof", 0.94, 1, 100, 2.8],
           ["k_tentlong", 0.98, 1, 96, 2.6],
           ["k_grandstandawning", 0.915, -1, 70, 2.4],
         ];
-        for (const [id, s, side, dist, sc] of yards) {
-          if (!bakedModel(id, k(s), side, dist, { scale: sc }))
+        const pitRow = (ids, s, side, dist, sc) => {
+          const row = [].concat(ids), step = Math.max(1, Math.round(5 * sc / ds));
+          const scale = row.length > 1 ? step * ds / 5 : sc;
+          let placed = 0;
+          row.forEach((id, i) => {
+            if (bakedModel(id, k(s) + (i - (row.length - 1) / 2) * step, side, dist, { scale })) placed++;
+          });
+          return placed > 0;
+        };
+        for (const [ids, s, side, dist, sc] of yards) {
+          if (!pitRow(ids, s, side, dist, sc))
             building(k(s), side, dist, 16, 12, 14,
               { kind: "hall", wall: [0.74, 0.70, 0.64], window: [0.22, 0.26, 0.30], floor: 4 });
         }
@@ -542,10 +555,10 @@
         for (const [id, s, side, dist, sc] of [
           ["k_pitsoffice", 0.455, 1, 58, 2.6],
           ["k_pitsofficecorner", 0.468, 1, 62, 2.6],
-          ["k_pitsgarage", 0.490, 1, 54, 2.8],
-          ["k_pitsgarageclosed", 0.502, 1, 56, 2.8],
+          [["k_pitsgarage", "k_pitsgarageclosed", "k_pitsgarage"], 0.490, 1, 54, 1.8],
+          [["k_pitsgarageclosed", "k_pitsgarage", "k_pitsgarageclosed"], 0.502, 1, 56, 1.8],
         ]) {
-          if (!bakedModel(id, k(s), side, dist, { scale: sc }))
+          if (!pitRow(id, s, side, dist, sc))
             building(k(s), side, dist, 10, 6, 14,
               { kind: "hall", wall: [0.70, 0.72, 0.74], window: [0.20, 0.28, 0.36], floor: 2 });
         }

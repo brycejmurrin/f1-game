@@ -535,14 +535,25 @@
       {
         // Paddock Racing Kit modules (#1617 Slice C) — pits / tents / radar /
         // banner towers replace the retired synthetic industrial yard.
+        // A pit block is a ROW of 5 m kit garages side by side, as the kit is
+        // built to tile: one garage blown up x2.6 read as a featureless grey
+        // cube (#3044), its door and trim too faint at that size. An array id
+        // is a row, centred on s; the scale is snapped so a module is exactly
+        // a whole number of nodes wide and neighbours abut (no coplanar overlap).
         const yards = [
-          ["k_pitsgarage", 0.935, -1, 62, 2.6],
-          ["k_pitsgarageclosed", 0.958, -1, 64, 2.6],
+          [["k_pitsgarageclosed", "k_pitsgarage", "k_pitsgarageclosed", "k_pitsgarage"], 0.935, -1, 62, 1.8],
+          [["k_pitsgarage", "k_pitsgarageclosed", "k_pitsgarage"], 0.958, -1, 64, 1.8],
           ["k_pitsoffice", 0.012, -1, 60, 2.6],
           ["k_tentlong", 0.988, -1, 68, 2.4],
         ];
-        for (const [id, s, side, dist, sc] of yards) {
-          if (!bakedModel(id, K(s), side, dist, { scale: sc }))
+        for (const [ids, s, side, dist, sc] of yards) {
+          const row = [].concat(ids), step = Math.max(1, Math.round(5 * sc / ds));
+          const scale = row.length > 1 ? step * ds / 5 : sc;
+          let placed = 0;
+          row.forEach((id, i) => {
+            if (bakedModel(id, K(s) + (i - (row.length - 1) / 2) * step, side, dist, { scale })) placed++;
+          });
+          if (!placed)
             building(K(s), side, dist, 18, 12, 14,
               { kind: "hall", wall: [0.72, 0.72, 0.74], window: [0.28, 0.32, 0.38], floor: 4 });
         }
