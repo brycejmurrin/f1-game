@@ -58,6 +58,11 @@ recorded here: transcripts carry prompts and paths, so they stay uncommitted. Th
     (`ci-watch` + `perf-memory-census`; `pages-red-triage` + `survey-ui-matrix` on a peer message before the
     envelope fix). The envelope skip does not address typed prompts; the score floor (`MIN_SCORE`) is the lever,
     and `tests/unit/skill-hint-hook.test.mjs` holds the routing-eval floor that any change must keep.
+11. **Orchestrators rotated four times in about three hours (ORCH6 to ORCH10), each at its context cap.** Every handover
+    cost each live worker one wake: an unverified "ORCHn LIVE" message to accept and re-address. Relayed decisions
+    (a merge level, a user grant) also had to be re-confirmed in the worker's own session, because a relayed grant
+    carries no authority. Shorter orchestrator turns, such as compact `list_sessions`/`list_events` reads (finding 7 of
+    #3038), would slow the rotation more than any worker-side rule.
 
 ## Compact MCP output: a four-agent experiment (2026-10-19)
 
