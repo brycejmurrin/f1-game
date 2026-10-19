@@ -187,6 +187,7 @@ export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
     // File list for the memory-leak gate (paginate; a big PR can exceed 100).
     // A failed fetch must NOT look like an empty diff (#2901 review): fail closed.
     const files = [];
+    let fileRows = 0;
     let filesError = null;
     let page = 1;
     for (;;) {
@@ -194,9 +195,20 @@ export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
       if (batch.error) { filesError = batch.error; break; }
       const rows = Array.isArray(batch.json) ? batch.json : (batch.json?.length != null ? batch.json : null);
       if (!Array.isArray(rows)) { filesError = "bad files payload"; break; }
-      for (const row of rows) if (row?.filename) files.push(row.filename);
+      fileRows += rows.length;
+      for (const row of rows) {
+        if (row?.filename) files.push(row.filename);
+        // A rename out of the store still removes memory; inspect both paths.
+        if (row?.previous_filename) files.push(row.previous_filename);
+      }
       if (rows.length < 100) break;
       page++;
+    }
+    // GitHub caps this endpoint at 3000 files; an incomplete diff cannot clear
+    // the memory gate. Count rows, not paths (a rename contributes two paths).
+    const expectedFiles = one.json?.changed_files;
+    if (!filesError && Number.isInteger(expectedFiles) && fileRows !== expectedFiles) {
+      filesError = `incomplete files list: received ${fileRows} of ${expectedFiles} changed files`;
     }
     const labels = (one.json?.labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
     return {
@@ -312,7 +324,7 @@ export function memoryVerdict(files, { title = "", body = "", labels = [] } = {}
   const list = (files || []).map((f) => String(f || "").replace(/^\.\//, ""));
   const mem = list.filter((f) => f === ".claude/memory" || f.startsWith(".claude/memory/"));
   if (!mem.length) return { state: "ok", files: [], evidence: "no .claude/memory/ edits", code: 0 };
-  const marker = /^memory-change:\s*\S+/mi.test(String(body || ""));
+  const marker = /^memory-change:[\t ]*\S+/mi.test(String(body || ""));
   const labelled = (labels || []).some((l) => String(l).toLowerCase() === "memory-change");
   if (marker || labelled) {
     return { state: "ok", files: mem, evidence: marker ? "memory-change: body marker" : "memory-change label", code: 0 };
