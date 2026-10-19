@@ -287,7 +287,9 @@ attached page session:
   unnamed script is matched by content (line count, first 400 chars after the harnesses' `^const`→`var`
   rewrite) and bound by scriptId (`boundBy: "source (unnamed vm script)"`). The entry process does this
   inside a pause before each script runs (`Debugger.setInstrumentationBreakpoint`, armed at Break on
-  start), so a call in the load's own tick still hits; `vmTopLevel:false` skips the pauses. Each vm
+  start), so a call in the load's own tick still hits; `vmTopLevel:false` skips the pauses. Every script
+  execution pauses while armed, so it stops after `vmPauseBudget` (default 300) and says so in
+  `vmNote` (a heavy game-vm test: 121 s uncapped, 42 s capped, 38 s without). Each vm
   context counts separately (`contexts: N`). Prefer line-only probes: the rewrite shifts columns on
   top-level `const` lines. A function's header line never hits on a call; probe its first body line.
 - `children:true` (implied by `runner:"test"`) auto-attaches every Node process the test spawns: a
