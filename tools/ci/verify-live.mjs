@@ -9,16 +9,55 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 
 const timeoutMs = 15_000;
+/** GitHub Pages / Fastly occasionally answers 502/503 for one lazy path while
+ *  version.json and index.html are already live (pages.yml verify-live, Oct 18
+ *  failures on fuji.js / spotter.js / tlx-shadow.js). Retry those, not 404. */
+const TRANSIENT_HTTP = new Set([502, 503, 504, 429]);
 const digest = (bytes, encoding = "base64") => createHash("sha256").update(bytes).digest(encoding);
 const cleanBase = (base) => base.endsWith("/") ? base : `${base}/`;
 const urlFor = (base, rel) => new URL(rel.replace(/^\//, ""), cleanBase(base)).href;
 
-async function fetchBytes(url) {
-  const signal = AbortSignal.timeout(timeoutMs);
-  const response = await fetch(url, { cache: "no-store", signal });
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
-  return bytes;
+function defaultSleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Cache-busted GET with bounded retries on transient CDN status codes.
+ * @param {string} url
+ * @param {{retries?: number, sleep?: (ms:number)=>Promise<void>, fetchImpl?: typeof fetch}} [opts]
+ */
+export async function fetchBytes(url, opts = {}) {
+  const retries = opts.retries ?? 4;
+  const sleep = opts.sleep ?? defaultSleep;
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const signal = AbortSignal.timeout(timeoutMs);
+      const response = await fetchImpl(url, { cache: "no-store", signal });
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (!response.ok) {
+        const err = new Error(`${url}: HTTP ${response.status}`);
+        if (TRANSIENT_HTTP.has(response.status) && attempt < retries) {
+          lastError = err;
+          await sleep(Math.min(8_000, 400 * 2 ** attempt));
+          continue;
+        }
+        throw err;
+      }
+      return bytes;
+    } catch (error) {
+      lastError = error;
+      const status = Number(/HTTP (\d+)/.exec(error?.message || "")?.[1] || 0);
+      const transient = TRANSIENT_HTTP.has(status) || /ECONNRESET|ETIMEDOUT|abort/i.test(error?.message || "");
+      if (transient && attempt < retries) {
+        await sleep(Math.min(8_000, 400 * 2 ** attempt));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
 }
 
 async function readExpected(root, rel) {
@@ -36,9 +75,17 @@ function jsonBlock(html, id) {
  * Verify a stamped runtime tree against a live Pages base URL.
  * @param {{baseUrl:string, root:string, files?:string[]}} options
  */
-export async function verifyLive({ baseUrl, root, files = ["index.html", "version.json", "sw.js", "controller.html", "cockpit-view.html"] }) {
+export async function verifyLive({
+  baseUrl,
+  root,
+  files = ["index.html", "version.json", "sw.js", "controller.html", "cockpit-view.html"],
+  fetchOpts = {},
+} = {}) {
   const cacheBust = `__verify=${Date.now()}`;
-  const get = (rel) => fetchBytes(`${urlFor(baseUrl, rel)}${urlFor(baseUrl, rel).includes("?") ? "&" : "?"}${cacheBust}`);
+  const get = (rel) => fetchBytes(
+    `${urlFor(baseUrl, rel)}${urlFor(baseUrl, rel).includes("?") ? "&" : "?"}${cacheBust}`,
+    fetchOpts,
+  );
   const errors = [];
   const checked = [];
   const compare = async (rel) => {

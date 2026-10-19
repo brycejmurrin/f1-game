@@ -600,6 +600,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/hud-tyres.test.mjs",
   // Round-2: hwZones are control-point index fractions — every zone with a curated turn inside its window narrows that corner.
   "tests/unit/hw-zones.test.mjs",
+  // i18n contribution lint + migrated-file guard (Slice 2 / #1601): fixtures + ship locales + --guard.
+  "tests/unit/i18n-lint.test.mjs",
   "tests/unit/i18n.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/import-models-workflow.test.mjs",
@@ -821,6 +823,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/player-forces.test.mjs",
   "tests/unit/player-tools-backup.test.mjs",
   "tests/unit/player-tools-ui.test.mjs",
+  "tests/unit/poll-live-shell.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
   "tests/unit/pr-board.test.mjs",
   // PR plumbing (#2387, #2397): pr-body.mjs transforms, handback.mjs, post-merge.mjs.

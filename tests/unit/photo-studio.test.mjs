@@ -40,6 +40,7 @@ function boot(options = {}) {
     cmd: (v) => { current = v; restored = v; },
   };
   const garage = { snapshot: () => ({ az: 1, spin: true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); } };
+  const scene = { value: options.homeScene || "photo" };
   const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
@@ -47,13 +48,14 @@ function boot(options = {}) {
       out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
     } }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
     NativeDownload: options.nativeDownload,
+    GameStore: { store: { get: (k, d) => (k === "homeScene" ? scene.value : d), set: (k, v) => { if (k === "homeScene") scene.value = v; } } },
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
   vm.runInContext(source, ctx);
   const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => order.push("draw"),
     borrowCar: options.borrowCar ? () => options.borrowCar(G) : undefined });
-  return { api, PS, dom, order, downloads, canvasOps, G, storage, closed: () => closed, restored: () => restored, overlays: () => overlays };
+  return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
 
 test("Home circuit photo borrows a subject, places its complete pose, and returns ownership", () => {
@@ -346,6 +348,28 @@ test("missing IndexedDB uses a visit-only library and localStorage quota failure
   assert.equal(b.PS.setBackground("data:image/jpeg;base64,ZmFrZQ=="), false);
   assert.equal(b.PS.setBackground("javascript:alert(1)"), false);
   assert.equal(b.api.state().busy, false);
+});
+
+// #2848: USE AS MENU BACKGROUND / library tiles stay inert unless Appearance Scene is My photo.
+test("menu background stays inert unless Appearance Scene is My photo", async () => {
+  const b = boot({ homeScene: "garage", storageFull: true });
+  b.api.open({ source: "garage" });
+  await b.api.capture();
+  await b.api.savePhoto();
+  b.dom.byId("ps-background").click();
+  assert.match(b.dom.byId("ps-message").textContent, /My photo/i);
+  const bg = b.dom.byId("ps-library").querySelector("button.ps-use-bg");
+  assert.ok(bg, "library MENU BACKGROUND carries .ps-use-bg for SettingDeps");
+  assert.equal(bg.disabled, true);
+  bg.click();
+  assert.match(b.dom.byId("ps-message").textContent, /My photo/i);
+  b.scene.value = "photo";
+  b.api.close(false);
+  b.api.open({ source: "garage" });
+  await turn();
+  const live = b.dom.byId("ps-library").querySelector("button.ps-use-bg");
+  assert.ok(live, "saved visit photo still listed after reopen");
+  assert.equal(live.disabled, false);
 });
 test("failed PNG encoding reports a recoverable error instead of creating a bogus download", async () => {
   const b = boot({ nullBlob: true }); b.api.open(); await b.api.capture(); await b.api.exportPhoto();

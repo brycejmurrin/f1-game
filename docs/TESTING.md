@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 804+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 854+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1309,6 +1309,7 @@ Focused browser-free diagnostics contracts also run in `tooling-fast`:
 | `tests/unit/catalog-discovery.test.mjs` | Canonical parts/livery/garage discovery, bounded pagination/filtering, availability restrictions and sweep filters. |
 | `tests/unit/diagnostics-tools.test.mjs` | Bounded diagnostic plans, local artifact paths, output reservation, saved-result summaries, job routing and feature-detected runtime memory counters. |
 | `tests/unit/body-styles.test.mjs` | Livery BODY styles: every concept chassis builds, nose/cover/pod anchors move, team swaps resolve when gated, flap nose-droop floor holds. ~3 s. |
+| `tests/unit/i18n-lint.test.mjs` | Locale contribution lint (`tools/check/i18n-lint.mjs`): fixture locales (valid / missing-key / bad-placeholder / wrong-plural), ship `locales/` clean, `--guard` on `tests/data/i18n-migrated.json`. |
 
 One hook, without loading `docs/DEBUG-HOOKS.md`:
 
