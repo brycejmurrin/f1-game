@@ -94,18 +94,23 @@ test("LOW_YAW_* locals live in player-forces.js; fast-path rdot order preserved"
 
 test("pin seat: no Δr chatter at 3–4 m/s full lock; ≥8 m/s stays calm", () => {
   for (const v of [3, 4]) {
-    const { flips, step } = chatter(gPin, v);
+    const { flips, step, yawLast, yrs } = chatter(gPin, v);
+    assert.equal(yrs.length, TICKS);
+    assert.ok(Math.abs(yawLast) > 0.2, `pin@${v}: car must actually yaw (yawLast ${yawLast})`);
     assert.ok(flips <= 4, `pin@${v}: Δr sign-flips ${flips} (want ≤4, was 56)`);
     assert.ok(step < 0.02, `pin@${v}: median |Δr| ${step} (want <0.02, was ~0.21)`);
   }
   const at8 = chatter(gPin, 8);
+  assert.ok(Math.abs(at8.yawLast) > 0.2, `pin@8: car must actually yaw (${at8.yawLast})`);
   assert.ok(at8.flips <= 4, `pin@8: flips ${at8.flips}`);
   assert.ok(at8.step < 0.02, `pin@8: step ${at8.step}`);
 });
 
 test("shipped seat: no Δr chatter at 3–4 m/s full lock", () => {
   for (const v of [3, 4]) {
-    const { flips, step } = chatter(gShip, v);
+    const { flips, step, yawLast, yrs } = chatter(gShip, v);
+    assert.equal(yrs.length, TICKS);
+    assert.ok(Math.abs(yawLast) > 0.2, `shipped@${v}: car must actually yaw (yawLast ${yawLast})`);
     assert.ok(flips <= 4, `shipped@${v}: Δr sign-flips ${flips} (want ≤4, was 56)`);
     assert.ok(step < 0.02, `shipped@${v}: median |Δr| ${step} (want <0.02, was ~0.40)`);
   }
