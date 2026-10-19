@@ -2394,6 +2394,7 @@
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ]
@@ -2412,6 +2413,7 @@
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
@@ -2424,7 +2426,8 @@
         "tests/unit/aero-flap-travel.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/cockpit-pale-surfaces.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs"
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs"
       ],
       "carDecalData": [
         "tests/specs/parts-physics.spec.js"
@@ -2611,6 +2614,7 @@
       "buildWheelLayers": [
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
@@ -2619,6 +2623,7 @@
         "tests/unit/car-wing-foil.test.mjs"
       ],
       "tints": [
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
       ],
@@ -2708,6 +2713,7 @@
       ],
       "*": [
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },
@@ -2902,6 +2908,7 @@
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
@@ -4384,6 +4391,7 @@
         "tests/unit/legends-team.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/livery-design.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
@@ -6670,6 +6678,7 @@
         "tests/unit/livery-helmet-style.test.mjs"
       ],
       "*": [
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs"
@@ -7042,6 +7051,7 @@
         "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-helmet-style.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/livery-zone-finish.test.mjs",
