@@ -152,7 +152,7 @@ export function latestPerWorkflow(runs) {
   const by = new Map();
   for (const r of runs) {
     const cur = by.get(r.name), t = Date.parse(r.created_at), ct = cur ? Date.parse(cur.created_at) : -Infinity;
-    if (!cur || t > ct || (t === ct && r.id > cur.id)) by.set(r.name, r);
+    if (!cur || t > ct || (t === ct && (r.conclusion === "cancelled") === (cur.conclusion === "cancelled") && r.id > cur.id) || (t === ct && cur.conclusion === "cancelled" && r.conclusion !== "cancelled")) by.set(r.name, r);
   }
   return [...by.values()];
 }
