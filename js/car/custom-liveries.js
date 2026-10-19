@@ -77,7 +77,7 @@ const CustomLiveries = (function () {
     "mirrorTint", "rimTint", "caliperTint", "sidewallInk", "helmetBase", "helmetAccent",
     "podFinish", "finFinish", "mirrorFinish", "helmetStyle", "endplate", "crestStyle",
     "floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "rimFinish", "deflectorTint",
-    "cockpitTint", "gripTint", "noseFinish", "boardTint", "exhaustTint"];
+    "cockpitTint", "gripTint", "noseFinish", "boardTint", "exhaustTint", "bodyStyle"];
     // A stored garage file may still carry the four RETIRED keys, so every read
     // path folds them once, here, and the list above never mentions them again:
     // RIDGE was the crown's centreline only and is now the BAND it always fell

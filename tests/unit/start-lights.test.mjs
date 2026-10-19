@@ -17,7 +17,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
-import { symbolSource } from "../helpers/game-source.mjs";
+import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/start-lights.js"), "utf8");
@@ -202,32 +202,33 @@ test("a lookup before the props list exists is not memoised: the lamps appear on
 // clamped to 0.25 s, at most 5 steps of 1/60 s), so a slow frame rate stretched
 // the lights — at 1 fps the solo sequence took ~70 s at 0 KPH. countCredit
 // hands the countdown back what the clamp and the dropped backlog took. This
-// replays tickBody's accounting frame by frame at several frame rates.
-function countdownWall(fps, credit) {
-  const PHYS_DT = 1 / 60, frame = 1 / fps, target = 5 + 1.0;   // five lamps + a 1 s hold
-  let countT = 0, physAcc = 0, wall = 0;
-  while (countT <= target && wall < 600) {
-    wall += frame;
-    const dt = Math.max(0, Math.min(frame, 1 / 4));
-    physAcc += dt;
-    let steps = 0;
-    while (physAcc >= PHYS_DT && steps < 5) { countT += PHYS_DT; physAcc -= PHYS_DT; steps++; }
-    const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;
-    if (dropped) physAcc %= PHYS_DT;
-    if (credit) countT += credit(frame, dt, dropped);
-  }
-  return wall;
+// pumps the REAL game's frame loop (game-vm: tickBody, the step cap, the credit
+// call) at several frame rates and reads when the fifth lamp lights (RC2-09).
+async function lampsWall(g, fps) {
+  await g.G.startRace();
+  g.apex.headless(true);
+  let now = 100000;
+  g.pumpFrame(now);                         // seeds tickBody's lastFrame
+  let frames = 0;
+  while (g.G.lightsLit < 5 && frames < 4000) { now += 1000 / fps; g.pumpFrame(now); frames++; }
+  assert.equal(g.G.state, "count", "still counting down (the hold has not run out)");
+  return frames / fps;
 }
 
-test("#1882: the solo countdown keeps wall-clock time at any frame rate", () => {
-  const SL = load();
-  assert.equal(typeof SL.countCredit, "function", "StartLights.countCredit exists");
-  for (const fps of [60, 30, 12, 8, 2, 1]) {
-    const wall = countdownWall(fps, SL.countCredit);
-    assert.ok(Math.abs(wall - 6) <= 1 / fps + 0.02, `${fps} fps: lights out after ${wall.toFixed(2)} s of wall time, want ~6 s`);
-  }
-  // Without the credit the same 1 fps run is the issue's stuck grid.
-  assert.ok(countdownWall(1, null) > 60, "uncredited 1 fps countdown takes over a minute");
+test("#1882: the real solo countdown keeps wall-clock time at any frame rate", async () => {
+  const require = createRequire(import.meta.url);
+  const { createGame } = require("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ track: "monza" });
+  try {
+    g.G.daily.stop();
+    // The first frame after a build sees a huge gap from lastFrame and is (rightly) credited a lamp:
+    // run one throwaway start so every measured start seeds from an earlier clock.
+    await lampsWall(g, 60);
+    for (const fps of [60, 30, 12, 8, 2, 1]) {
+      const wall = await lampsWall(g, fps);
+      assert.ok(Math.abs(wall - 5) <= 1 / fps + 0.05, `${fps} fps: the fifth lamp after ${wall.toFixed(2)} s of wall time, want ~5 s`);
+    }
+  } finally { g.close(); }
 });
 
 test("#1882: countCredit gives nothing back at full rate and caps a resumed tab at one lamp", () => {
@@ -240,11 +241,8 @@ test("#1882: countCredit gives nothing back at full rate and caps a resumed tab 
   assert.equal(SL.create({ state: "count" }, { Particles: null }).countCredit, SL.countCredit);
 });
 
-test("#1882: tickBody credits the countdown only solo, after the step loop", () => {
-  const body = symbolSource("function tickBody(");
-  const at = body.indexOf("startLights.countCredit(_dtMs / 1000, dt, dropped)");
-  assert.ok(at > body.indexOf("update(PHYS_DT)"), "credited after the fixed steps");
-  assert.match(body, /state === "count" && !netStart && !\(netPlay && netPlay\.awaitingStart && netPlay\.awaitingStart\(\)\)\) countT \+= startLights\.countCredit/);
-  const stub = fs.readFileSync(path.join(ROOT, "js/race/session-stub.js"), "utf8");
-  assert.match(stub, /var StartLights = \{[\s\S]*?countCredit: \(\) => 0/, "the race-session stub answers too");
+test("#1882: the race-session stub answers countCredit with no credit", () => {
+  const sb = vm.createContext({ console, Log: { info() {}, warn() {}, debug() {} } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/session-stub.js"), "utf8"), sb, { filename: "js/race/session-stub.js" });
+  assert.equal(vm.runInContext("StartLights.create({}).countCredit(30, 0.25, 0.1)", sb), 0);
 });

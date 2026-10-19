@@ -30,16 +30,16 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 434,
+    "files": 437,
     "classifications": {
-      "entrypoint-candidate": 293,
+      "entrypoint-candidate": 296,
       "ambiguous": 58,
       "protocol-entrypoint": 28,
       "asset": 2,
       "data": 11,
       "library": 42
     },
-    "npmScripts": 73,
+    "npmScripts": 74,
     "configuredMcpServers": 5
   },
   "tools": [
@@ -857,6 +857,15 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/ci/live-run-check.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/measure-guard-commit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1100,6 +1109,7 @@
         "test:smoke",
         "test:tiny",
         "test:ui",
+        "test:webkit",
         "test:xr"
       ]
     },
@@ -1134,6 +1144,15 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/ci/session-ledger.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
     },
     {
       "path": "tools/ci/session-status.mjs",
@@ -1269,6 +1288,12 @@
     },
     {
       "path": "tools/ci/wait-for.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/ci/webkit-leg-summary.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
@@ -3495,6 +3520,10 @@
     {
       "name": "test:vm-page-b",
       "command": "APEX_VM_PAGE_GROUP=b node --test tests/unit/adapted-specs.test.mjs"
+    },
+    {
+      "name": "test:webkit",
+      "command": "node tools/ci/run-playwright.mjs --project=webkit tests/specs/webkit-boot.spec.js"
     },
     {
       "name": "test:xr",

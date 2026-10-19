@@ -57,9 +57,11 @@ const GarageCrew = (function () {
     poleMesh = gfx.createMesh(p);
   }
   function free() {
-    if (!gfx || !gfx.freeMesh) return;
-    for (const mesh of [mechMesh, bodyMesh, poleMesh]) if (mesh) gfx.freeMesh(mesh);
+    if (!gfx || !gfx.freeMesh) return 0;
+    let n = 0;
+    for (const mesh of [mechMesh, bodyMesh, poleMesh]) if (mesh) { gfx.freeMesh(mesh); n++; }
     mechMesh = bodyMesh = poleMesh = null; key = -1;
+    return n;
   }
   // Column-major T * Ry(ay) * Rz(az) into _m (scene.js mk's convention).
   function mk(tx, ty, tz, ay, az) {
