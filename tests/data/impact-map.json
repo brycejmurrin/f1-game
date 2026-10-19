@@ -12251,6 +12251,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-boot-timeout.test.mjs"
       ],
+      "gpuAdapterAvailable": [
+        "tests/unit/boot-idle-prefetch.test.mjs"
+      ],
       "proved": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],

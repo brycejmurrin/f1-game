@@ -994,3 +994,17 @@ test("the survey-track delegation template owns exactly what the track-surveyor 
     assert.match(wgx, /apex-eval\.mjs monza .* --backend webgpu/);
   });
 }
+
+// stop-guard.sh nudges once over a live browser run; the two paths that must NEVER block a
+// stop are deterministic and spawned here (the live-run nudge itself needs a real playwright
+// process, so it stays out of the node ladder).
+test("stop-guard.sh lets a stop through when Claude is already continuing, and on junk input", () => {
+  const run = (input) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/stop-guard.sh")], {
+    input, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  const cont = run(JSON.stringify({ hook_event_name: "Stop", stop_hook_active: true }));
+  assert.equal(cont.status, 0, `stop_hook_active must pass: ${cont.stderr}`);
+  assert.equal(cont.stdout, "");
+  const junk = run("not json at all");
+  assert.notEqual(junk.status, 1, `a malformed payload must not crash the hook: ${junk.stderr}`);
+});
