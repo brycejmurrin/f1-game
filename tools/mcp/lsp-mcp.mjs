@@ -723,7 +723,7 @@ export class Lsp {
     }
     const head = (await this.symbols(parts[0])).find(s => s.name === parts[0] && !s.containerName);
     const uses = cands.length;
-    if (head) for (const s of (await this.symbols(name)).filter(s => s.name === name && s.location.uri === head.location.uri)) cands.push({ ...at(s), note: `no ${symbol} use in ${this.src}/; this is the ${name} declared in ${parts[0]}'s file, which it may not export` });
+    if (head) for (const s of (await this.symbols(name)).filter(s => s.name === name && s.location.uri === head.location.uri)) cands.push({ ...at(s), note: `no direct ${symbol} use in ${this.src}/; module-file fallback for ${name}; export and caller coverage unverified` });
     return { cands, parts, uses, head: head && at(head) };
   }
   async at(args, method, extra = {}) {

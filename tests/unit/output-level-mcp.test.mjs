@@ -66,6 +66,9 @@ test('paginated schemas retain upstream constraints and full output schema; coll
   assert.equal(first.nextCursor, 'second'); assert.equal(first.tools.length, 2);
   for (const tool of first.tools) assert.deepEqual(tool.inputSchema.properties.outputLevel.enum, ['compact', 'diagnostic', 'full']);
   assert.equal(first.tools[0].inputSchema.additionalProperties, false);
+  assert.ok(first.tools[0].description.startsWith('Echo\n'), 'keep upstream description');
+  assert.ok(Buffer.byteLength(first.tools[0].description) - Buffer.byteLength('Echo') <= 256, 'presentation hint stays bounded per discovered tool');
+  for (const needed of ['compact', 'diagnostic', 'full', 'final-page', 'structuredContent.artifact.path', '_meta["apex/agent-output"].artifact.path']) assert.ok(first.tools[0].description.includes(needed), needed);
   assert.equal(first.tools[0].outputSchema.anyOf[0].required[0], 'value');
   assert.equal(first.tools[0].outputSchema.anyOf[1].required[0], 'outputLevel');
   assert.equal(Object.hasOwn(first.tools[1], 'outputSchema'), false);

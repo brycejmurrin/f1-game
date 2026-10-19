@@ -25,6 +25,11 @@ tiny commands: prefer the existing concise native answer for commands marked
 For bounded worker comparisons and automatic command accounting, see
 [workflow experiments](experiments.md).
 
+Full MCP presentation preserves the original result object, including upstream
+metadata. Its private retained copy adds no new receipt to that object. Use the
+complete returned result or its host capture; only follow a receipt when one was
+returned. Do not repeat a full action merely to obtain a compact receipt.
+
 ## Terminal commands
 
 Use the shared entrypoint for any explicit command, keeping its arguments after

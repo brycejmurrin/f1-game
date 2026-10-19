@@ -597,6 +597,7 @@
       ],
       "stopRain": [
         "tests/unit/async-lifecycle.test.mjs",
+        "tests/unit/audio-recovery.test.mjs",
         "tests/unit/radio-voice.test.mjs"
       ],
       "syncReplayRpms": [

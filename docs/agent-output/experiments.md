@@ -54,6 +54,12 @@ guarantee. `--heavy --lock-path /shared/experiment.lock` serializes expensive
 probes when every participant uses that same lock. Do not overlap them with a
 broad tooling or browser suite.
 
+The ledger covers admitted child commands. Recorder argument/preflight refusals
+happen before append and are not included in its emitted-byte totals. Preserve
+those host execution errors separately when available; do not describe the ledger
+as a complete host transcript or reconstruct missing bytes from worker estimates.
+Errors use a bounded message; request `--help` for full usage.
+
 Records distinguish exact child exit/signal, timeout and launch error. Emitted
 terminal bytes include the preview and receipt, and differ from raw captured
 stdout/stderr. Reaped-child CPU excludes existing shared services. Host-visible
@@ -74,6 +80,9 @@ Require a bounded worker JSON digest containing `pass`, `family`, `instruction`,
 `failureVisible`, `warningVisible`, `retainedReceipt`, `retries`, and `limitations`.
 Limit strings to 512 characters and limitations to eight entries. Link the ledger;
 never embed it, raw outputs, arbitrary nested telemetry or source/argv strings.
+Before follow-ups, retain immutable primary reports and ledger-prefix hashes. Use
+a distinct follow-up ledger and report; never overwrite primary evidence or fold
+follow-up costs into the original comparison.
 The parent validates this allowlist before collecting reports, derives usage
 from ledgers, and retains the original captures separately. A missing record is
 unknown, never reconstructed from a worker estimate.

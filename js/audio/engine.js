@@ -2150,7 +2150,7 @@ var GameAudio = (function () {
   }
 
   function stopRain(keepWant) {
-    if (!keepWant) rainWanted = false;
+    if (!keepWant) { rainWanted = false; resumeRain = false; }
     // No source: a prior stopRain may still be running its 1.2 s teardown with
     // a startRain queued behind it. A real (dry) stop cancels that queued
     // restart — rain→dry→rain→dry inside the window otherwise restarted rain

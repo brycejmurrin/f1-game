@@ -6045,7 +6045,7 @@
         "main-guard",
         "argv-or-parser"
       ],
-      "sourceBytes": 92147,
+      "sourceBytes": 92150,
       "outputPolicy": "page-results",
       "outputContract": "ONE-based positions/tags, ambiguity/errors and baseline-subtraction caveat",
       "doc": "Stdio MCP code intelligence over TypeScript 7's native `tsc --lsp`: definition, references, symbols, hover, diagnostics.",
@@ -6174,7 +6174,7 @@
         "main-guard",
         "argv-or-parser"
       ],
-      "sourceBytes": 14867,
+      "sourceBytes": 14699,
       "outputPolicy": "targeted-summary",
       "outputContract": "isError, MIME/images/resources, structured schema refs and reserved key collisions",
       "doc": "Wrap a stdio MCP server with bounded output levels and saved-result retrieval.",

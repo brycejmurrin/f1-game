@@ -15,8 +15,13 @@ import time
 import uuid
 
 
+class CompactParser(argparse.ArgumentParser):
+    def error(self, message):
+        self.exit(2, f"{self.prog}: {message[:1000]}\nUse --help for usage.\n")
+
+
 def main():
-    p = argparse.ArgumentParser(description=__doc__)
+    p = CompactParser(description=__doc__)
     p.add_argument('--worktree', required=True)
     p.add_argument('--expected-head')
     p.add_argument('--tag', default='command')

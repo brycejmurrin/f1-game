@@ -36,8 +36,8 @@ function boot(opts = {}) {
   const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date: opts.Date || Date, Error, parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn(...a) { if (opts.log) console.log("  Log.warn:", a.join(" ")); }, debug() {}, error() {} },
     document: { addEventListener(type, fn) { listeners[type] = fn; }, hidden: !!opts.hidden }, addEventListener() {}, removeEventListener() {},
-    setTimeout: (fn, ms) => { if (typeof fn === "function") return setTimeout(fn, ms || 0); return 0; },
-    clearTimeout: (id) => { if (id) clearTimeout(id); },
+    setTimeout: opts.setTimeout || ((fn, ms) => { if (typeof fn === "function") return setTimeout(fn, ms || 0); return 0; }),
+    clearTimeout: opts.clearTimeout || ((id) => { if (id) clearTimeout(id); }),
     navigator: opts.userActivation ? { userActivation: opts.userActivation } : {},
     AudioContext: function () { return createContext(); },
     fetch: (url) => { fetched.push(url); const ab = new ArrayBuffer(8); ab.url = url; return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(/^blob:/.test(url) && opts.bytes || 8), { _url: url })) }); } };
@@ -179,6 +179,32 @@ test("gesture recovery clears the soundtrack cache and restores the running trac
   assert.equal(fetched.filter((url) => /song3/.test(url)).length, 2, "the replacement context decodes its own buffer");
 });
 
+
+test("an explicit dry stop while hidden cancels rain resume; ordinary hide preserves it", async () => {
+  for (const dry of [true, false]) {
+    const timers = new Map(); let nextTimer = 0;
+    const { A, started, document, listeners } = boot({
+      setTimeout: (fn, ms) => { const id = ++nextTimer; timers.set(id, { fn, ms }); return id; },
+      clearTimeout: (id) => timers.delete(id),
+    });
+    const finishRainStop = () => {
+      for (const [id, timer] of timers) if (timer.ms === 1200) { timers.delete(id); timer.fn(); }
+    };
+    A.setMusicEnabled(false);
+    A.init(); await flush();
+    A.startRain(0.12);
+    const rainStarts = () => started.filter((n) => n.kind === "src" && n.loop).length;
+    assert.equal(rainStarts(), 1);
+    document.hidden = true; listeners.visibilitychange();
+    if (dry) A.stopRain();
+    finishRainStop();
+    document.hidden = false; listeners.visibilitychange(); await flush();
+    assert.equal(rainStarts(), dry ? 1 : 2, dry
+      ? "explicit dry intent overrides the wet snapshot after teardown"
+      : "ordinary tab return still resumes the wanted rain");
+    A.stopRain(); finishRainStop();
+  }
+});
 
 test("turning SOUND EFFECTS on mid-race starts the rain the race asked for", async () => {
   const { A, started } = boot();
