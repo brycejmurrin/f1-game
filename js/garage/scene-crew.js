@@ -128,7 +128,7 @@ const GarageCrew = (function () {
   }
   // A manual jack from the hands to a saddle at height sy, 1.5 m ahead: the
   // saddle's face stops at local z 1.62, so the figure stands 1.62 m off the
-  // nose tip or the rear crash structure and the jack touches it, never enters.
+  // front wing's leading edge or the rear crash structure and the jack touches it, never enters.
   function jack(out, sy) {
     tube(out, [0, 0.92, 0.52], [0, sy, 1.46], 0.03, ALLOY, 8);                       // the long handle
     block(out, 0, 0.92, 0.52, 0.16, 0.025, 0.025, JACK);                             // its T-bar
@@ -182,7 +182,7 @@ const GarageCrew = (function () {
           (o) => tyre(o, [0, 0.88, 0.5], 0.17, false, soft, true));                                            // tyre on
         person(m, c1, c2, "stand", "helmet", wx + s * 1.55, wz + (wz > 0 ? -0.9 : 0.9), FACE_X(s));    // tyre off
       }
-      person(m, c1, c2, "jack", "helmet", 0, 3.18 + 1.62, Math.PI, (o) => jack(o, 0.16));          // nose tip
+      person(m, c1, c2, "jack", "helmet", 0, 2.72 + 1.62, Math.PI, (o) => jack(o, 0.12));          // front wing LE (Car3D nose tip 2.60 sits behind it)
       person(m, c1, c2, "jack", "helmet", 0, -2.69 - 1.62, 0, (o) => jack(o, 0.34));             // crash structure
       for (const s of [-1, 1]) person(m, c1, c2, "crouch", "helmet", s * 1.35, 0.1, FACE_X(s));        // stabilisers
     } else if (id === "workshop") {
