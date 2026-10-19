@@ -30,9 +30,9 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 439,
+    "files": 440,
     "classifications": {
-      "entrypoint-candidate": 297,
+      "entrypoint-candidate": 298,
       "ambiguous": 59,
       "protocol-entrypoint": 28,
       "asset": 2,
@@ -850,6 +850,12 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/ci/inputs-hash.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
     },
     {
       "path": "tools/ci/junit-failed.mjs",
