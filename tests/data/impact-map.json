@@ -4300,20 +4300,17 @@
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs"
       ],
+      "ensure": [
+        "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs"
+      ],
       "ensureAudio": [
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "ensureCircuit": [
         "tests/unit/data-lazy-loader.test.mjs"
-      ],
-      "ensureDataHub": [
-        "tests/unit/data-lazy-loader.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/lazy-bundles-prefetch.test.mjs"
-      ],
-      "ensureNet": [
-        "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "ensureRaceSession": [
         "tests/unit/global-registry.test.mjs",
@@ -8169,6 +8166,7 @@
         "tests/unit/net-sdp.test.mjs"
       ],
       "*": [
+        "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -8437,6 +8435,7 @@
         "tests/unit/net-lobby-lifecycle.test.mjs"
       ],
       "wire": [
+        "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs"
@@ -8456,6 +8455,7 @@
         "tests/unit/net-roster.test.mjs"
       ],
       "create": [
+        "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
@@ -8517,6 +8517,7 @@
       ],
       "start": [
         "tests/specs/multiplayer-session.spec.js",
+        "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",

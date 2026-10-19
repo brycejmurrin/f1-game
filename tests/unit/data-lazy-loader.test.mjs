@@ -144,3 +144,134 @@ test("a failed lighting-presets fetch is retried at the next race start, then no
   await flush();
   assert.equal(attempts.length, 2, "resident: nothing more to fetch");
 });
+
+// DATA and VS FRIEND both retain evaluated lexical globals across failed loads
+// and failed app startup. Exercise the public doors through the real scheduler.
+for (const domain of ["data", "net"]) {
+  test(`${domain} shares concurrent attempts and retries startup without redeclaring scripts`, async () => {
+    const files = domain === "data"
+      ? ["js/data/schedule.js", "js/data/hub.js"]
+      : ["js/net/bytes.js", "js/net/netplay.js", "js/net/lobby.js"];
+    const globals = domain === "data" ? ["DataSchedule", "DataHub"] : ["NetBytes", "NetPlay", "NetLobby"];
+    const edges = files.slice(1).map((file, i) => [files[i], file]);
+    const attempts = new Map(), waiting = [], errors = [];
+    let starts = 0, failStartup = true;
+    const ctx = vm.createContext({
+      ApexRoster: {
+        LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
+        LAZY_DATA: domain === "data" ? files : [], LAZY_DATA_EDGES: edges,
+        LAZY_NET: domain === "net" ? files : [], LAZY_NET_EDGES: edges,
+      },
+      window: {}, els: { datahub: {} },
+      Log: { warn() {}, error: (_ns, message) => errors.push(message) },
+      __start() { starts++; if (failStartup) throw new Error("startup failed"); },
+      document: {
+        createElement: () => ({ dataset: {}, remove() {} }),
+        head: { appendChild(node) {
+          const file = node.src.split("?")[0];
+          attempts.set(file, (attempts.get(file) || 0) + 1);
+          waiting.push(() => {
+            if (file === files[0] && attempts.get(file) === 1) { node.onerror(); return; }
+            const name = globals[files.indexOf(file)];
+            for (const [before, after] of edges) {
+              if (after === file) assert.equal(vm.runInContext(`typeof ${globals[files.indexOf(before)]}`, ctx), "object");
+            }
+            vm.runInContext(`const ${name} = ${name === "DataHub" ? "{ init() { __start(); } }" : "{}"};`, ctx);
+            node.onload();
+          });
+        } },
+      },
+    });
+    vm.runInContext(loader + "\n" + bundles + `
+      globalThis.__ensure = LazyBundles.create({ els,
+        loadBackendScripts: ScriptLoader.create().load,
+        createNetwork: () => ({ wire() { __start(); } }),
+      }).${domain === "data" ? "ensureDataHub" : "ensureNet"};`, ctx);
+    const flush = async () => {
+      // Every append queues a completion; drain until the dependency chain ends.
+      for (let i = 0; i < 16; i++) {
+        while (waiting.length) waiting.shift()();
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    };
+    const failedLoad = ctx.__ensure();
+    assert.equal(ctx.__ensure(), failedLoad, "concurrent callers await the same attempt");
+    await flush();
+    assert.equal(await failedLoad, false);
+    assert.equal(starts, 0, "startup cannot run after a predecessor fails");
+    for (const file of files.slice(1)) assert.equal(attempts.has(file), false, "strict dependents must not evaluate");
+
+    const failedStartup = ctx.__ensure();
+    assert.notEqual(failedStartup, failedLoad);
+    assert.equal(ctx.__ensure(), failedStartup);
+    await flush();
+    assert.equal(await failedStartup, false, "a throwing app hook resolves false");
+    assert.equal(starts, 1);
+    assert.match(errors[0], /startup failed/);
+    failStartup = false;
+    const retry = ctx.__ensure();
+    assert.equal(ctx.__ensure(), retry);
+    await flush();
+    assert.equal(await retry, true);
+    assert.equal(starts, 2);
+    assert.equal(ctx.__ensure(), retry, "success remains memoised without repeating app startup");
+    assert.equal(attempts.get(files[0]), 2);
+    for (const file of files.slice(1)) assert.equal(attempts.get(file), 1, "successful const globals must not be reinjected");
+  });
+}
+
+for (const domain of ["data", "net"]) {
+  test(`${domain} preserves its readiness policy for an unregistered file`, async () => {
+    let started = 0;
+    const ctx = vm.createContext({
+      ApexRoster: {
+        LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
+        LAZY_DATA: ["unknown.js"], LAZY_DATA_EDGES: [],
+        LAZY_NET: ["unknown.js"], LAZY_NET_EDGES: [],
+      },
+      window: {}, els: {}, Log: { warn() {} },
+      __start() { started++; },
+      document: {
+        createElement: () => ({ dataset: {}, remove() {} }),
+        head: { appendChild(node) { queueMicrotask(() => node.onload()); } },
+      },
+    });
+    vm.runInContext(loader + "\n" + bundles + `
+      const NetPlay = {}, NetLobby = {};
+      const DataHub = { init() { __start(); } };
+      globalThis.__ensure = LazyBundles.create({ els,
+        loadBackendScripts: ScriptLoader.create().load,
+        createNetwork: () => ({ wire() { __start(); } }),
+      }).${domain === "data" ? "ensureDataHub" : "ensureNet"};`, ctx);
+    assert.equal(await ctx.__ensure(), domain === "net");
+    assert.equal(started, domain === "net" ? 1 : 0);
+  });
+}
+
+for (const domain of ["data", "net"]) {
+  for (const resident of [false, true]) {
+    test(`${domain} ${resident ? "resident globals" : "missing known globals"} retain their completion result`, async () => {
+      let started = 0;
+      const ctx = vm.createContext({
+        ApexRoster: {
+          LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
+          LAZY_DATA: resident ? [] : ["js/data/hub.js"], LAZY_DATA_EDGES: [],
+          LAZY_NET: resident ? [] : ["js/net/netplay.js"], LAZY_NET_EDGES: [],
+        },
+        window: {}, els: {}, Log: { warn() {} }, __start() { started++; },
+        document: {
+          createElement: () => ({ dataset: {}, remove() {} }),
+          head: { appendChild(node) { queueMicrotask(() => node.onload()); } },
+        },
+      });
+      if (resident) vm.runInContext("const DataHub = { init() { __start(); } }, NetPlay = {}, NetLobby = {};", ctx);
+      vm.runInContext(loader + "\n" + bundles + `
+        globalThis.__ensure = LazyBundles.create({ els,
+          loadBackendScripts: ScriptLoader.create().load,
+          createNetwork: () => ({ wire() { __start(); } }),
+        }).${domain === "data" ? "ensureDataHub" : "ensureNet"};`, ctx);
+      assert.equal(await ctx.__ensure(), resident);
+      assert.equal(started, resident ? 1 : 0, "only a complete resident group may start app code");
+    });
+  }
+}

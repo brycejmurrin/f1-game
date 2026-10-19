@@ -37,7 +37,7 @@ const RACE_SESSION_READY = {
   "js/race/flying-start.js": () => typeof FlyingStart !== "undefined" && !!FlyingStart && !FlyingStart._stub,
   "js/race/jump-start-penalty.js": () => typeof JumpStartPenalty !== "undefined" && !!JumpStartPenalty && !JumpStartPenalty._stub,
 };
-// Files that evaluated for real, kept across a failed attempt (the dataScriptsLoaded
+// Files that evaluated for real, kept across a failed attempt (the bundleAttempt loaded-set
 // idiom): a retry loads only the rest. The hook runs once, on the transition to complete.
 const raceSessionLoaded = new Set();
 let raceSessionHooked = false;
@@ -258,7 +258,6 @@ const DATA_FILES = ApexRoster.LAZY_DATA;
 const DATA_EDGES = ApexRoster.LAZY_DATA_EDGES;
 // Keep successfully evaluated script-level consts across a failed attempt:
 // reinjecting one on retry throws "Identifier has already been declared".
-const dataScriptsLoaded = new Set();
 const DATA_READY = {
   "js/data/api-transport.js": () => typeof F1Transport !== "undefined",
   "js/data/tab-utils.js": () => typeof DataTabUtils !== "undefined",
@@ -276,39 +275,46 @@ const DATA_READY = {
   "js/data/real-race-tab.js": () => typeof DataRealRace !== "undefined",
   "js/data/hub.js": () => typeof DataHub !== "undefined",
 };
-// Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
-// inject the bundle twice, and the second tap has to await the first load
-// rather than call DataHub.open() while hub.js is still in flight.
-let dataHubLoad = null;
-function ensureDataHub() {
-  if (dataHubLoad) return dataHubLoad;
-  dataHubLoad = loadBackendScripts(DATA_FILES, DATA_EDGES, {
-    strict: true, loaded: dataScriptsLoaded,
-    ready: (src) => DATA_READY[src] && DATA_READY[src](),
-  }).then((complete) => {
-    // Bare global, not window.DataHub: hub.js is a script-level `const`, a
-    // lexical binding that is never a window property. Null the memo on an
-    // incomplete group so a later tap retries instead of latching failure.
-    // A failed sibling must not even START hub.js. The binding can be in its
-    // temporal dead zone after a script exception, so do not probe it on an
-    // incomplete load (even typeof throws in that case).
-    if (!complete) {
-      Log.warn("data", "the data hub bundle did not load — DATA stays closed");
-      dataHubLoad = null;
-      return false;
-    }
-    try { DataHub.init(els.datahub); }
-    catch (e) {
-      // Post-load app code must not latch a rejected memo: DATA would stay dead
-      // until reload. Null it so the next tap retries.
-      Log.error("data", "the data hub failed to start: " + (e && e.message));
-      dataHubLoad = null;
-      return false;
-    }
-    return true;
-  });
-  return dataHubLoad;
+// Standard const bundles share attempt ownership; domain readiness and startup
+// stay at the call site. Memoise the PROMISE so concurrent taps await one load.
+function bundleAttempt(spec) {
+  const loaded = new Set();
+  let pending = null;
+  return function ensure() {
+    if (pending) return pending;
+    pending = loadBackendScripts(spec.files, spec.edges, {
+      strict: true, loaded, ready: spec.ready,
+    }).then((complete) => {
+      // A failed sibling must not even START its dependent: the binding can be
+      // in its temporal dead zone, where even typeof throws. Probe only after
+      // the strict loader reports a complete group.
+      if (!complete || (spec.resident && !spec.resident())) {
+        Log.warn(spec.namespace, spec.loadWarning);
+        pending = null;
+        return false;
+      }
+      try { spec.commit(); }
+      catch (e) {
+        // Post-load app code must not latch a rejected memo until reload.
+        // Keep evaluated script-level consts; the next ask retries only startup.
+        Log.error(spec.namespace, spec.startError + (e && e.message));
+        pending = null;
+        return false;
+      }
+      return true;
+    });
+    return pending;
+  };
 }
+const ensureDataHub = bundleAttempt({
+  files: DATA_FILES, edges: DATA_EDGES,
+  ready: (src) => DATA_READY[src] && DATA_READY[src](),
+  // Bare global: hub.js is a script-level const, never a window property.
+  commit: () => DataHub.init(els.datahub),
+  namespace: "data",
+  loadWarning: "the data hub bundle did not load — DATA stays closed",
+  startError: "the data hub failed to start: ",
+});
 
 // LAZY_NET (tools/manifest.cjs) — the 241 KB WebRTC stack. Loaded from the ONE
 // player-facing entry (VS FRIEND) and, at boot, whenever the agent surface is
@@ -318,12 +324,10 @@ function ensureDataHub() {
 // confines this change to players, who load neither.
 const NET_FILES = ApexRoster.LAZY_NET;
 const NET_EDGES = ApexRoster.LAZY_NET_EDGES;
-let netLoad = null;
 // Every net file declares a script-level `const`, so re-injecting one that already
 // evaluated throws "Identifier has already been declared" (13 SyntaxErrors and the
 // red overlay on a VS FRIEND retry). Same cure as the data hub: remember what
 // landed, and only START a dependent once its predecessors really evaluated.
-const netScriptsLoaded = new Set();
 const NET_READY = {
   "js/net/bytes.js": () => typeof NetBytes !== "undefined",
   "js/net/nostr.js": () => typeof NetNostr !== "undefined",
@@ -340,36 +344,21 @@ const NET_READY = {
   "js/net/lobby.js": () => typeof NetLobby !== "undefined",
   "js/input/phone-pad.js": () => typeof PhonePad !== "undefined",
 };
-function ensureNet() {
-  if (netLoad) return netLoad;
-  netLoad = loadBackendScripts(NET_FILES, NET_EDGES, {
-    strict: true, loaded: netScriptsLoaded,
-    ready: (src) => !NET_READY[src] || NET_READY[src](),
-  }).then((complete) => {
-    // A failed group may leave a binding in its temporal dead zone, where even
-    // typeof throws: only probe the globals after a complete load.
-    if (!complete || typeof NetPlay === "undefined" || typeof NetLobby === "undefined") {
-      // inject() resolves on error, so this is the only place a miss shows.
-      // Keep the stubs (the game stays playable solo) and null the memo so a
-      // second attempt can succeed rather than latching for the session.
-      Log.warn("net", "the multiplayer bundle did not load — VS FRIEND unavailable");
-      netLoad = null;
-      return false;
-    }
-    try {
-      const netLobby = deps.createNetwork();
-      // The real lobby binds #vsfriend here — the boot position the stub's inert
-      // wire() stood in for. Once, because ensureNet() memoises on the promise.
-      netLobby.wire();
-    } catch (e) {
-      Log.error("net", "the multiplayer lobby failed to start: " + (e && e.message));
-      netLoad = null;
-      return false;
-    }
-    return true;
-  });
-  return netLoad;
-}
+const ensureNet = bundleAttempt({
+  files: NET_FILES, edges: NET_EDGES,
+  ready: (src) => !NET_READY[src] || NET_READY[src](),
+  resident: () => typeof NetPlay !== "undefined" && typeof NetLobby !== "undefined",
+  commit: () => {
+    const netLobby = deps.createNetwork();
+    // The real lobby binds #vsfriend here — the boot position the stub's inert
+    // wire() stood in for. Once, because ensureNet memoises on the promise.
+    netLobby.wire();
+  },
+  namespace: "net",
+  // Keep the stubs (the game stays playable solo); a later ask retries.
+  loadWarning: "the multiplayer bundle did not load — VS FRIEND unavailable",
+  startError: "the multiplayer lobby failed to start: ",
+});
 
 // LAZY_AUDIO (tools/manifest.cjs) — ~449 KB WebAudio engine + panel/voice.
 // Title boots the stub; real modules reinject via top-level `var` and
@@ -565,7 +554,7 @@ function wantAgentSurface() {
 // ensureDataHub idiom): boot and a METRICS toggle must never fetch it twice.
 let _agentLoad = null;
 // Files that evaluated, kept across a failed attempt so a retry never re-injects a
-// script-level const (the dataScriptsLoaded idiom).
+// script-level const (the bundleAttempt loaded-set idiom).
 const agentScriptsLoaded = new Set();
 function loadAgentSurface() {
   if (!_agentLoad) _agentLoad = (async () => {
