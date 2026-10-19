@@ -17,7 +17,7 @@ import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-const WRITE_OPS = new Set(["set", "write", "rawSet", "setItem"]);
+const WRITE_OPS = new Set(["set", "write", "rawSet", "setItem", "remove", "removeItem"]);   // removes count: a stale or unregistered key is dropped or migrated by name
 const PREFIX_WRITES = [
   { prefix: "parts.", re: /["']parts\.["']\s*\+/ },
   { prefix: "livery.", re: /["']livery\.["']\s*\+/ },
@@ -28,7 +28,8 @@ const PREFIX_WRITES = [
   { prefix: "setup.", re: /\bKEY\s*\+\s*teamId/ },
 ];
 
-/** Files that only write keys already named in SPEC / PREFIX helpers. */
+/** Files whose DYNAMIC-key writes relay keys named elsewhere (SPEC / PREFIX helpers).
+ *  Literal keys in these files are still checked. */
 const PASSTHROUGH_FILES = new Set([
   "js/career/custom-team.js",   // identitySet/Get relays: keys are customTeam / livery.* below
   "js/car/custom-liveries.js",   // setIdentityValue relay for livery.* keys
@@ -42,11 +43,17 @@ const PASSTHROUGH_FILES = new Set([
   "js/ui/share-code.js",
   "js/input/steer-tuning.js",
   "js/perf/metrics-overlay.js",
-  "js/perf/phone-recorder.js",   // apex26.phoneRec: a transient soak-run scratch blob, not a setting or save field (kept out of export/backup on purpose)
+  "js/perf/phone-recorder.js",
   "js/audio/spotify.js",
   "js/camera/cockpit-opts.js",
   "js/career/career.js",
   "js/race/pit-lane.js",
+]);
+
+/** The only literal keys deliberately unregistered, by file. */
+const LITERAL_EXEMPT = new Map([
+  ["js/car/ghost.js", new Set(["apex_ghost_v1"])],   // legacy key, only ever read and removed after migration to the registered ghost store
+  ["js/perf/phone-recorder.js", new Set(["phoneRec"])],   // transient soak-run scratch blob, kept out of export/backup on purpose
 ]);
 
 function walk(node, fn) {
@@ -151,8 +158,11 @@ test("every store/localStorage write in js/ resolves in the manifest", () => {
   const bad = [];
   for (const f of jsFiles("js")) {
     for (const site of scanStoreWrites(f)) {
-      if (PASSTHROUGH_FILES.has(site.file)) continue;
+      // A passthrough file may relay a DYNAMIC key (resolved by its caller); a
+      // LITERAL apex26.* key written there must still resolve (review M1-17).
+      if (PASSTHROUGH_FILES.has(site.file) && !site.key) continue;
       if (site.key) {
+        if (LITERAL_EXEMPT.get(site.file)?.has(site.key)) continue;
         if (!R.resolve(site.key)) bad.push(`${site.file}:${site.line} apex26.${site.key}`);
         continue;
       }

@@ -174,6 +174,40 @@ test("the stride and the field offsets are the ones bindAttribs points at", () =
   for (const c of calls) assert.equal(c.stride, P.STRIDE_TRK);
 });
 
+// The GLSL decode macros, mirrored in JS from the #defines the shader carries
+// (read out of LIT_VS above, not copied): aCol = rgb * COL_SCALE, aMat = a * MAT_SCALE.
+const decodeShader = (u16, so) => ({
+  col: [0, 1, 2].map((k) => (u16[so + 10 + k] / 65535) * glslDefine("COL_SCALE")),
+  mat: (u16[so + 13] / 65535) * glslDefine("MAT_SCALE"),
+});
+
+test("a multi-vertex buffer decodes every vertex at its own stride (T5-20)", () => {
+  // Distinct values per vertex: a stride or offset bug that only shows from the
+  // second vertex on cannot pass with one packed vertex.
+  const pos = [1, 2, 3, -4, 5.5, 6, 7.25, -8, 9];
+  const nrm = [0, 1, 0, 1, 0, 0, 0, 0, -1];
+  const col = [0.5, 1, 2.5, 3.2, 0, 1.5, 0.25, 0.75, 3.4];
+  const mat = [3, 15.25, 16];
+  const trk = [10.5, 20, 30, 1234.5, -2.25, 6, 7, 8, 9];
+  for (const withTrk of [false, true]) {
+    const buf = P.pack(3, Float32Array.from(pos), Float32Array.from(nrm), Float32Array.from(col),
+      Float32Array.from(mat), withTrk ? Float32Array.from(trk) : null);
+    const stride = withTrk ? P.STRIDE_TRK : P.STRIDE;
+    assert.equal(buf.byteLength, 3 * stride);
+    const f32 = new Float32Array(buf), i16 = new Int16Array(buf), u16 = new Uint16Array(buf);
+    for (let v = 0; v < 3; v++) {
+      const fo = v * (stride >> 2), so = v * (stride >> 1), p = v * 3;
+      const tag = `vertex ${v} trk=${withTrk}`;
+      assert.deepEqual([f32[fo], f32[fo + 1], f32[fo + 2]], pos.slice(p, p + 3), `${tag} position`);
+      for (let k = 0; k < 3; k++) assert.ok(Math.abs(i16[so + 6 + k] / 32767 - nrm[p + k]) < 1e-4, `${tag} normal ${k}`);
+      const d = decodeShader(u16, so);
+      for (let k = 0; k < 3; k++) assert.ok(Math.abs(d.col[k] - col[p + k]) <= P.COL_SCALE / 65535 / 2 + 1e-9, `${tag} colour ${k}: ${d.col[k]} vs ${col[p + k]}`);
+      assert.ok(Math.abs(d.mat - mat[v]) <= P.MAT_SCALE / 65535, `${tag} material ${d.mat} vs ${mat[v]}`);
+      if (withTrk) assert.deepEqual([f32[fo + 7], f32[fo + 8], f32[fo + 9]], trk.slice(p, p + 3), `${tag} track coords`);
+    }
+  }
+});
+
 // ── the half-float encoder, which WGX and TLX both depend on ───────────────
 // Node has no Math.f16round on this runtime and three exports no converter, so
 // this is ours and has to be tested as arithmetic, not assumed.

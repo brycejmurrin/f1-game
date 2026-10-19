@@ -136,6 +136,7 @@ if (dropped.length && !args.includes("--list")) {
     process.exit(1);
   }
   if (nothingToRun) {
+    console.error(`[playwright] WARNING: every named spec is twinned/adapted, so this ran the VM twin(s) and NO browser. For a real browser run set APEX_WITH_TWINNED=1.`);
     console.error(`= run passed  (${passed}/${passed} done, 0 failed)  [VM twins, no browser]`);
     process.exit(0);
   }

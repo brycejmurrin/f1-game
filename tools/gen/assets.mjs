@@ -1759,16 +1759,23 @@ async function bakeSyntheticModels(_args) {
       md5: crypto.createHash("md5").update(buf).digest("hex"),
     };
   }
-  // Remove Kenney (or other) bins that are no longer in the synthetic catalog,
-  // and drop their manifest entries so verify cannot see a stale CC0 download.
+  // Drop retired Apex26-Procedural recipes no longer in the catalog. Keep
+  // imported CC0 models (Racing Kit `k_*`, etc.) — a synth bake must not wipe
+  // the real pack (#1617).
   for (const id of Object.keys(m.models)) {
-    if (!SYNTH_MODEL_IDS.includes(id)) {
-      const f = m.models[id].file;
-      const abs = path.join(PACK, f);
-      if (fs.existsSync(abs)) fs.unlinkSync(abs);
-      delete m.models[id];
-      console.log(`removed non-catalog model ${id}`);
+    if (SYNTH_MODEL_IDS.includes(id)) continue;
+    const entry = m.models[id];
+    const procedural = entry.licence === "Apex26-Procedural"
+      || String(entry.source || "").startsWith("procedural:");
+    if (!procedural) {
+      keepFiles.add(path.basename(entry.file));
+      continue;
     }
+    const f = entry.file;
+    const abs = path.join(PACK, f);
+    if (fs.existsSync(abs)) fs.unlinkSync(abs);
+    delete m.models[id];
+    console.log(`removed retired procedural model ${id}`);
   }
   for (const f of fs.readdirSync(path.join(PACK, "models"))) {
     if (f.endsWith(".bin") && !keepFiles.has(f)) {

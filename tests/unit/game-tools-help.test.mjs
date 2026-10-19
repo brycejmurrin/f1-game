@@ -46,6 +46,13 @@ const CASES = [
   ["tools/track/graph-parity.cjs", /graph-parity/],
   ["tools/gfx/glx-call-census.mjs", /glx-call-census/],
   ["tools/gen/gen-shell.mjs", /gen-shell/],
+  // R2-10 (#2952): moved here from lighting-tuner-sweep.test.mjs, whose copies
+  // were unrelated --help smokes; career-economy is already above.
+  [".claude/skills/lighting-tuner/scripts/bake.mjs", /FULL REPLACE|LightPresets/],
+  [".claude/skills/survey-track/ground-profile.mjs", /Usage:.*ground-profile/],
+  ["tools/car/carshot.mjs", /Usage:.*carshot/],
+  ["tools/car/trace-car.mjs", /Usage:.*trace-car/],
+  ["tools/gfx/ssr-probe.mjs", /Usage:.*ssr-probe/],
 ];
 
 // #1708: the remaining tools/car and tools/gfx content CLIs (the issue's own

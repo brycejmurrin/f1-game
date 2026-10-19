@@ -974,7 +974,7 @@ body[data-radio-corner][data-radio-corner][data-radio-corner][data-radio-corner]
 }
 /* A RADIO CARD THE PLAYER MOVED (body[data-radio-placed], js/ui/hud-layout.js): no slot, no lane.
    It hangs from one fixed point, the top-centre quarter (50vw, 25svh), so MOVE & SIZE's --hl-x/-y
-   (±50 % of the screen) is where it sits and reaches every edge of the top three quarters. Outranks
+   is its unrestricted offset from that home. Outranks
    the caution step-down and the touch lane: five attributes plus :has(#hud-flag) are (2,6,1). */
 body[data-radio-placed][data-radio-placed][data-radio-placed][data-radio-placed][data-radio-placed]:has(> :where(#hud) > #hud-flag) #announce:not([hidden]) {
   top: calc(25svh / var(--hud-z)); left: calc(50vw / var(--hud-z)); right: auto;
@@ -1721,13 +1721,8 @@ body:has(> #pmsettings:not([hidden]) > :where(#pmsettings-inner) > :where(#pm-se
   scale: var(--hl-s, 1);
   transform-origin: var(--hl-o, center);
 }
-/* OVERTAKE / CORNER MODE: cockpit --hl-x (+30vw) parks both chips under the
-   right dock — BOOST / OT / AERO taps and the shift column. Hud-survey ranked
-   aero×shift-up on desktop/tablet/portrait; Bryce cockpit shots show OT/BOOST
-   covering the labels. When either dock holds a lit touch control, keep the
-   raised --hl-y and drop only the horizontal shove. A real desktop race has
-   empty docks (:has fails) so the strip beside the wheel is unchanged. */
-body:has(.dock .touchbtn:not([hidden])) :is(#hud-ot, #hud-aero)[data-hl] {
+/* Only automatic cockpit chips relinquish their horizontal offset to touch controls. */
+body:has(.dock .touchbtn:not([hidden])) :is(#hud-ot, #hud-aero)[data-hl]:not([data-hl-v4]) {
   translate: 0 calc(var(--hl-y, 0) * 1svh / var(--hud-z, 1));
 }
 /* Its PEEK (js/ui/screen-looks.js PEEK_ONLY.hud): the whole race HUD shows
@@ -2271,7 +2266,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 /* Optional panels retain their text size when space only holds one row. */
 #hud-rel[data-col-compact] > div:not([data-col-row]),
 #hud-strat[data-col-compact] > div:not([data-k="next"]) { display: none; }
-body:not([data-hud-arrange]) :is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop] { display: none !important; }
+body:not([data-hud-arrange]) :is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop]:not([data-hl-user]) { display: none !important; }
 #hud-rel [data-k="gap"] { text-align: right; }
 #hud-rel [data-k="code"] { font-weight: 800; letter-spacing: 0.04em; }
 #hud-rel [data-k="lap"] { font-weight: 800; }
@@ -2440,7 +2435,7 @@ body.desktop #hud-inputs:not([data-hl-user]) {
        helmet, the whole bar). The shipped y:-6 translate would also make the
        tyre an invalid anchor. Drop that translate so the dock anchor on
        TYRES is the only shift. */
-    body[data-hl-set="helmet"]:not(.desktop) #hud-tyre[data-hl] { translate: none; }
+    body[data-hl-set="helmet"]:not(.desktop) #hud-tyre[data-hl]:not([data-hl-v4]) { translate: none; }
   }
   /* TOUCH SECTORS ↔ RIGHT DOCK: no CSS anchor here. --dock-r-w is the
      painted inset from the leftmost right-dock control (fitHud), so the
@@ -2474,5 +2469,50 @@ body.desktop #hud-inputs:not([data-hl-user]) {
 #pm-phonerec button:disabled { opacity: .45; }
 #pm-phonerec ol { padding-left: 1.4em; }
 #pm-phonerec a { display: inline-block; min-height: 44px; line-height: 44px; }
+
+/* A saved widget owns its outer geometry. Keep clipping within bars, canvases
+   and message text; only the widget's responsive bounds stand down. Top-level
+   widgets use HUD SIZE directly, including instruments detached from the
+   bottom flex/grid cluster by HudLayout. */
+[data-hl][data-hl-v4] {
+  --hud-z: var(--hud-scale) !important;
+  --vwzh: calc(1vw / var(--hud-z)) !important;
+  zoom: var(--hud-z) !important;
+  max-width: none !important; max-height: none !important;
+}
+[data-hl-bottom] {
+  position: fixed !important; position-anchor: auto !important;
+  left: calc(50vw / var(--hud-z)) !important; right: auto !important;
+  top: auto !important; bottom: calc(12px + var(--sab) / var(--hud-z)) !important;
+  transform: translateX(-50%) !important; margin: 0 !important; width: max-content;
+}
+body:has(> .screen:not([hidden])) [data-hl-bottom] { visibility: hidden; }
+:root:root[data-appearance-peek="hud"] [data-hl-bottom], body[data-hud-arrange] [data-hl-bottom] { visibility: visible; }
+body:is(.hud-hidden, .bc-on, .hud-prof-broadcast.hud-bcam) [data-hl-bottom] { display: none !important; }
+:is(.hud-top, .hud-gaps, #hud-sectors, #hud-limits, #hud-damage, #hud-rel, #hud-strat, #hud-inputs, #hud-flag)[data-hl-v4] { width: max-content !important; }
+/* Avoid stale zoomed row borders during reduced-motion geometry updates. */
+[data-hl-user], [data-hl-user] *, [data-hl-user] *::before, [data-hl-user] *::after {
+  transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow !important;
+}
+/* Stable homes keep the saved screen-share offsets meaningful when automatic
+   docks, rows or transient messages change. translate/scale remain the saved
+   MOVE & SIZE values above; these rules never alter their internal content. */
+.hud-top[data-hl-v4] { top: calc(8px + var(--sat) / var(--hud-z)) !important; left: 50% !important; transform: translateX(-50%) !important; flex-wrap: nowrap; }
+body.hud-prof-broadcast .hud-top[data-hl-v4] { left: calc(10px + var(--sal) / var(--hud-z)) !important; transform: none !important; }
+#minimap[data-hl-v4] { top: calc(8px + var(--sat) / var(--hud-z)) !important; width: 128px !important; height: 128px !important; }
+.hud-gaps[data-hl-v4] { top: calc(8px + var(--sat) / var(--hud-z)) !important; left: calc(146px + var(--sal) / var(--hud-z)) !important; }
+:is(#hud-sectors, #hud-limits, #hud-damage, #hud-rel)[data-hl-v4] { right: calc(10px + var(--sar) / var(--hud-z)) !important; left: auto !important; }
+#hud-sectors[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z)) !important; }
+#hud-limits[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z) + 4.8em + 15px) !important; }
+#hud-damage[data-hl-v4] { top: calc((12px + var(--tap) + var(--sat)) / var(--hud-z) + 7.4em + 18px) !important; }
+#hud-rel[data-hl-v4] { top: calc(38svh / var(--hud-z)) !important; }
+#hud-strat[data-hl-v4] { top: calc(40svh / var(--hud-z)) !important; left: calc(10px + var(--sal) / var(--hud-z)) !important; }
+#hud-inputs[data-hl-v4] { top: auto !important; bottom: calc(22svh / var(--hud-z)) !important; left: calc(10px + var(--sal) / var(--hud-z)) !important; right: auto !important; }
+#hud-flag[data-hl-v4] { top: calc(100px + var(--sat) / var(--hud-z)) !important; left: 50% !important; transform: translateX(-50%) !important; }
+#hud-mirror[data-hl-v4] { top: calc(70px + var(--sat) / var(--hud-z)) !important; width: 180px; height: calc(180px * 2 / 7); }
+#announce[data-hl-v4] { top: calc(25svh / var(--hud-z)) !important; left: calc(50vw / var(--hud-z)) !important; right: auto !important; transform: none !important; width: max-content !important; min-height: 0 !important; }
+:is(#hud-tyre, #hud-energy)[data-hl-v4] { width: 130px !important; }
+
+#pm-hudlayout input[type="number"] { box-sizing: border-box; width: 100%; min-height: 44px; padding: .4em .65em; border: 1px solid var(--dim); border-radius: .4em; background: var(--panel); color: var(--text); font: inherit; }
 
 } /* @layer hud */

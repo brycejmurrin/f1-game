@@ -1,0 +1,218 @@
+# Physics batch rows (physics-1, physics-2) for docs/notes/test-review-2026-10-19/src/rows.py.
+# exec'd after R="reviewer"; U="subagent-unverified".
+#
+# (1) REPORT STATUS
+#  physics-1 (c6260119034, FINAL): 68 unit files, 0 specs, 15,665 lines. `node --test` over all 68:
+#    743 tests, 742 pass, 0 fail, 1 skip (physics-baseline-provenance ancestry: shallow clone), 247 s;
+#    each file alone (2 jobs) all exit 0, 604 s sum; no retries, no flakes.
+#    Debugger: js-debugger MCP cannot attach to node (re-confirms DBG-01); hand-rolled CDP client
+#    (artifacts/test-review/physics-1/cdp-bp.mjs). Addendum c6260210052: 64/68 files hit (cdp), 4 n.a.
+#    (css-layers, css-prefers-cascade, image-grade-shaders, twin-drift: no executable code under test).
+#    Anonymous vm scripts matched as evalmachine.<anonymous>; eval/new Function code needed
+#    beforeScriptExecution instrumentation bps (re-confirms DBG-02).
+#    Mis-batched: ~37 of 68 files are not physics (UI, input, tooling, CSS, audio...); regroup in pass 2.
+#  physics-2 (c6260073941 PARTIAL 1/2 + c6260077911 PARTIAL 2/2, stopped at 300k context cap):
+#    40 files (10 unit, 30 spec). Unit 10/10 pass. Browser specs passed: physics-characterization,
+#    physics-boot, physics-fixes (also under vm-page), physics-hotpath, longitudinal, steering. VM twins
+#    passed: drift, active-aero, aero-zones, world-physics, collisions. 0 fail, 0 flakes so far.
+#    Debugger: 10 unit files over raw CDP, 9 hit + tyre-recipes-open-rim n.a.; spec browser-MCP pass
+#    NOT done (driver artifacts/test-review/physics-2/dbg-browser.mjs written, never ran). Spec rows were
+#    read by the reviewer plus two read-only subagents; top claims re-verified by line/VM probe.
+#    MCP cannot attach to node: re-confirms DBG-01 (physics-1, physics-2). vm/eval scripts without
+#    filename: re-confirms DBG-02 (physics-1).
+#
+# (2) SLOWEST FILES
+#  physics-1: quali-pace-parity-vm 65.8 s (game-vm, game-vm-b, game-vm-b1); aero-zones-vm 50.1 s (game-vm-b1);
+#    aero-zone-tables 49.7 s (toolingFast -> slow-in-fast); player-dynamics-vm 37.6 s (game-vm-b1);
+#    fuzz-untrusted-inputs 31.2 s (net-unit AND toolingFast -> slow-in-fast); collision-ai-fixes-vm 25.1 s
+#    (game-vm-b2); change-driver-tools 20.9 s (toolingFast, borderline).
+#  physics-2: longitudinal.spec 556 s browser (physics-core; VM twin 18 s); physics-fixes.spec 378 s browser
+#    (vm-page-b in CI, 25 s); physics-characterization.spec 100 s; steering.spec 92 s (input);
+#    tyre-strategy-vm 21 s (game-vm-b2).
+#
+# (3) NOT RUN
+#  physics-1: none (1 skip by design: provenance ancestry needs a full-depth clone).
+#  physics-2: browser chain C still running, results never read: understeer-cue, parts-ers, sliders,
+#    steer-migration, tilt-pipeline, touch-steer, gamepad, agent-drive-bench, parts-persistence,
+#    persistence-dom, camera-driving-hooks, css-player-smoke, garage-aero, menu-traversal, menu-baseline,
+#    parts-physics. Browser copies of twinned specs not run in a browser: drift, active-aero, aero-zones,
+#    world-physics, collisions; collisions-deep, collision-ai-fixes, persistence ran in neither browser nor
+#    twin. Browser-MCP debugger pass not run for any of the 30 specs (menu-baseline n.a.).
+#
+# synth verification: the 'confirmed@cd907d4c' rows were read with `git show cd907d4c:<path>`
+# (the deploy tip has since moved to 217b8342, 9 commits later).
+NEW = [
+# ---- physics-1
+("P1-01","physics-1","tests/unit/aero-zone-tables.test.mjs","45-50,66-86,101-111","wrong-target","high","high",
+ "the 'every authored table resolves' test asks runForTurnPair about runs it builds itself at 25 m spacing (runsOf, :45-50) while zonesFor samples at X_ZONE_STEP=8 (aero-zones.js:24), and Log.warn is a no-op stub so the module's 'turn table unusable' warning (aero-zones.js:183) is never observed; the debugger saw the table branch (:174) run for 2 of 21 tables",
+ "a table that resolves at 25 m but not at 8 m passes, so the silent whole-table discard this file exists to catch is invisible",
+ "capture Log.warn in the ctx, call zonesFor() on all 21 circuits and assert no 'turn table unusable' warning; delete runsOf","S","aero",R,"confirmed@cd907d4c: runsOf uses /25, module X_ZONE_STEP=8, Log.warn stubbed","player",["stub-copy"],None),
+("P1-02","physics-1","tests/unit/steer-lock-taper.test.mjs","26,40-67,108-110","tautology","high","high",
+ "3 of 5 tests check a lockTaper copy defined in the test (:26); the live VM test drives only vs~12 and ~70, and a conditional breakpoint 15<vs<30 on game.js:5930 got 0 hits",
+ "the 15-30 blend (the part that changed) never runs in shipped code; the copy tests cannot fail",
+ "delete the copy tests; sweep the applied driverDelta/STEER_MAX_SLIP in game-vm at vs 5/15/20/25/30/45 against the expected curve","S","steering",R,"confirmed@cd907d4c: copy at :26, VM measures 10 and 60 m/s only","player",["stub-copy","source-scan"],None),
+("P1-03","physics-1","tests/unit/collision-ai-fixes-vm.test.mjs","223-241","wrong-target","high","high",
+ "A.reset(frac) calls gridUp() and moves only the player (apex.js:2041-2068), so the 'flat' and 'banked' AI averages both measure the grid launch",
+ "AI banking grip (elevation audit bug #1) is untested; the test passes whatever banking does",
+ "place the AI cars at 0.65 and 0.0 per car and compare their speeds at matched entry","S","ai-physics",R,"confirmed@cd907d4c: reset() calls gridUp() and sets only G.player","player",[],None),
+("P1-04","physics-1","tests/unit/collision-contact-vm.test.mjs","225-235,269,311-324","wrong-target","high","high",
+ "the 'mirror' eLongT/eLatT blends the extents linearly (HL*(1-k)+k*f(psi)) while collide.js:60-69 rotates by the blended angle (cos(psi*k)); they differ between 20 and 60 deg",
+ "the 'shipped extents' table and the LCAR_MAX broadphase bound check describe a formula that does not ship",
+ "export extLong/extLat (or yawMix) from Collide and assert on the real ones","S","collision",R,"confirmed@cd907d4c: test blends values, collide.js blends psi","player",["stub-copy"],None),
+("P1-05","physics-1","tests/unit/physics-rows-vm.test.mjs","474-484","source-scan","high","high",
+ "'load sensitivity' is a src.includes over player-forces.js plus a grip() formula computed in the test; PlayerForces is never executed",
+ "a reformat breaks it, a wrong formula elsewhere passes; the 1.3 % braking-grip claim is not measured",
+ "call PlayerForces.step with loadF +/-0.18 and assert the front/rear grip ratios","S","player-physics",R,None,"player",["source-scan","stub-copy"],None),
+("P1-06","physics-1","tests/unit/collision-contact-vm.test.mjs","172-200,344-370","tautology","high","high",
+ "asserts on test-local scaled/rawSide, walk and rest rather than pairContact, _colForBucketPairs or AiDrive.bumpRestitution; only regex pins link them to source",
+ "a contact-cost or restitution formula change passes",
+ "call the real functions (AiDrive.bumpRestitution is already loaded at :616)","S","collision",R,None,"player",["tautology","stub-copy","source-scan"],None),
+("P1-07","physics-1","tests/unit/persistence-vm.test.mjs","77-84","vacuous","high","high",
+ "'the loud warning fires once' asserts warned.length <= 1; the debugger read warned=0 here because the one warning fired in an earlier test on the shared boot (same bug in tests/specs/persistence.spec.js:111)",
+ "cannot tell 'fires once' from 'never fires', so the player-visible save-failed warning could vanish silently",
+ "fresh createGame, break storage, 6 writes, assert.equal(warned.length, 1); merge the browser twin","S","persistence",R,"confirmed@cd907d4c: <= 1 in both the VM test and persistence.spec.js:111","player",[],None),
+("P1-08","physics-1","tests/unit/grip-steer.test.mjs","127,131-141","vacuous","high","high",
+ "titled 'pools without changing the apply result' but never compares forPlayer with apply() nor a with b (only finite and |a|<=0.3); :127 compares VX_FLOOR to the literal 4 while player-forces.js hard-codes its own Math.max(vAbs, 4)",
+ "the pooling path and the shared slip floor can drift with the test green",
+ "assert.equal(forPlayer(...), apply(...).delta); make player-forces read GripSteer.VX_FLOOR","S","steering",R,"confirmed@cd907d4c","player",["tautology"],None),
+("P1-09","physics-1","tests/unit/change-driver-tools.test.mjs","122","vacuous","high","high",
+ "/sequential|maxConcurrent|.../ matches the @doc comment on tools/ci/test-bg.mjs:2 ('sequential by default')",
+ "the one-concurrent-group default (AGENTS.md rule 5) could change unnoticed",
+ "assert on test-bg.mjs --plan/--json output, or match the PARALLEL_MAX use site with comments stripped","S","tooling",R,"confirmed@cd907d4c: test-bg.mjs:2 @doc contains 'sequential'","pipeline",["source-scan","slow-in-fast"],None),
+("P1-10","physics-1","tests/unit/collisions-deep-vm.test.mjs","92-111,310-326","vacuous","high","high",
+ "'loses speed' asserts no speed; 'desyncs prog/s' checks only finiteness (same v1-never-asserted gap in tests/specs/collisions-deep.spec.js:76-109)",
+ "a wall that scrubs no speed, or a prog/s desync, passes",
+ "add vEnd < 60 - k and |wrapS(prog) - s| < eps","S","collision",R,None,"player",[],None),
+("P1-11","physics-1","tests/unit/player-forces.test.mjs","120,165","tautology","high","high",
+ "`Math.sign(sFull - s0) !== 0 || ...` is true for any non-zero difference; :120 forceFront !== 0 || forceRear !== 0 is equally weak",
+ "'reverse flips the steer term' is near-vacuous (only :167 carries a real check)",
+ "assert sign(slipAt(-2) - slipAt(2)) === -sign(delta)","S","player-physics",R,None,"player",["tautology"],None),
+("P1-12","physics-1","tests/unit/fuzz-untrusted-inputs.test.mjs","54-56,596","vacuous","med","high",
+ "the 'null-or-value' shape branch returns without asserting (Snapshot/Sdp/Qr); the 'under 10 s' test times CPU for 200 decodes and BUDGET_MS is a dead void",
+ "three untrusted decode surfaces have no shape check and the budget test name is false",
+ "assert r == null || typeof r === 'object' plus assertCleanLive; rename or enforce the budget","S","net",R,None,"player",["slow-in-fast"],None),
+("P1-13","physics-1","tests/unit/physics-baseline-provenance.test.mjs","46,59","gap","med","high",
+ "the blessing hash (tests/helpers/baseline-blessing.mjs:17) is an unkeyed sha256 of the data and the ancestry half skips on a shallow clone (as on CI checkouts here)",
+ "catches only a naive hand edit: a scripted or VM-twin regeneration with any 8-char reason passes",
+ "when tests/data/physics-baseline.json changes, select-specs requires the browser characterization spec on that head and provenance asserts stamp sha == that head","M","physics-gate",R,None,"pipeline",["condition-wrapped"],None),
+("P1-14","physics-1","tests/unit/collision-ai-fixes-vm.test.mjs","98-111,243","wrong-target","med","high",
+ "wrong-way test asserts obs.done without obs.wrongWay; the 'with racing-line assist' test never enables an assist (same in tests/specs/collision-ai-fixes.spec.js:91-106,335-354)",
+ "passes on any done cause; the named assist mode is never run",
+ "assert wrongWay === true first; enable the assist or rename","S","collision",R,"confirmed@cd907d4c: :111 asserts only obs.done","player",[],None),
+("P1-15","physics-1","tests/unit/trail-brake-turnin.test.mjs","3,101-108","stale-doc","med","high",
+ "duplicates player-dynamics-shipped-vm (same bench, two more boots); header says the shipped seat is Mercedes (now Red Bull); skidpad anchor 5.35+/-0.08 conflicts with shipped-vm's 4.8-5.9 band",
+ "two places to retune with contradictory bands; a 16 s duplicate",
+ "fold its turn-in and mid-corner rows into player-dynamics-shipped-vm and keep one band","S","player-physics",R,None,"hygiene",[],None),
+("P1-16","physics-1","tests/unit/physics-characterization-vm.test.mjs","","gap","high","high",
+ "the master gate's VM twin covers 4 scenarios on one circuit at default PACE, no assists-on/wet/kerb/banked/reverse/hairpin row, 6 fields every 15 steps (debugger: exactly 390 scripted steps)",
+ "an extraction from game.js that breaks any unsampled regime passes the guard that makes extraction safe",
+ "widen scenarios in the browser spec (APEX_UPDATE_BASELINE) and the twin follows","M","physics-gate",R,None,"player",[],"P2-11"),
+("P1-17","physics-1","(js/game.js player path)","","gap","high","med",
+ "'the arc must not reach the driver' (AGENTS.md physics rule) has no behavioural test: hud-tyres:108 only greps and physics-rows covers the AI bank only",
+ "a curvature or racing-line term leaking into the player's assists-off physics ships green",
+ "game-vm run with assists off, perturb Tracks.curvature and the racing line, assert physState rows bit-identical","M","player-physics",R,None,"player",[],None),
+("P1-18","physics-1","tests/unit/brake-cue.test.mjs","46-49","gap","med","med",
+ "BrakeCue.create().tick() ON path is unreached (pace-scaled look-ahead brake-cue.js:89-92, pulse period, haptics); urgencyOf tests are range-only and BrakeCue.urgencyOf / DrivingCues.urgencyOf are duplicates with no parity test",
+ "the player-facing braking cue can regress with the file green",
+ "drive tick() with a stub track at two PACE values and assert pulse timing; add a parity test of the two urgencyOf","S","race-ux",R,None,"player",[],None),
+("P1-19","physics-1","tests/unit/physics-rows-vm.test.mjs","379-401","vacuous","low","high",
+ "Spa descent search has no anti-vacuity check (dn=0/dnAt=0 fallback, `vmaxNow || 72`); latent: the debugger shows it finds dn -0.098 @0.467, vmax 73.9 today",
+ "a broken search would pass silently","assert dn < -0.03 && vmaxNow > 0","S","player-physics",R,None,"hygiene",[],None),
+("P1-20","physics-1","tests/unit/image-grade-shaders.test.mjs","115-165","wrong-target","med","high",
+ "numeric tests check a JS copy of the grade, shaders are regex-only, and the TLX grade (default backend, tsl-post.js:877-892) is unpinned; debugger n.a. (no executable code under test)",
+ "the default renderer's HDR grade can drift from GLX/WGX with the test green",
+ "evaluate the TLX node graph or a shared JS source the shaders are generated from","M","render",R,None,"player",["stub-copy","source-scan"],None),
+("P1-21","physics-1","tests/unit/quali-persist.test.mjs","162-","source-scan","med","high",
+ "about 32 regexes over game.js wiring from :162 stand in for behaviour",
+ "brittle to reformat; wiring regressions with matching text pass","drive the reopen-quali flow through game-vm","M","race-ux",R,None,"hygiene",["source-scan"],None),
+("P1-22","physics-1","tests/unit/aero-zone-tables.test.mjs","","slow","med","high",
+ "49.7 s file in toolingFast (fuzz-untrusted-inputs 31.2 s also in toolingFast and net-unit)",
+ "slows every pre-push tooling-fast run","move both to a node-slow or game-vm shard; P1-01's rewrite can sample fewer circuits","S","tooling",R,"confirmed: both in toolingFast (tests/groups.json)","pipeline",["slow-in-fast"],None),
+("P1-23","physics-1","(batcher)","","tooling","low","high",
+ "~37 of 68 physics-1 files are not physics (UI, input, tooling, CSS, audio); the batcher keyed on name words (drive/steer/physics/aero)",
+ "reviewers spend context on the wrong subsystem","regroup by module under test in pass 2","S","tooling",R,None,"pipeline",[],None),
+# ---- physics-2
+("P2-01","physics-2","tests/specs/longitudinal.spec.js","96-106","vacuous","high","high",
+ "the grass test starts at 80 m/s (above vTop) so v1<v0 holds on tarmac too; VM control over the same 60 frames: tarmac 80->77.89, grass 80->65.55",
+ "grassDrag (game.js:5378/:5487) can break silently; a player could gain a shortcut over grass with the spec green",
+ "start at 40 m/s (VM: tarmac 40->42.92, grass 40->27.59) or assert grass v1 < tarmac v1 - margin","S","player-physics",R,"confirmed@cd907d4c: jump(0.0,80,-14) and only v1<v0","player",[],None),
+("P2-02","physics-2","tests/specs/world-physics.spec.js","51-52","vacuous","high","high",
+ "`((s1-s0)+1e6)%1e6 > 35` maps a backward move to ~1e6 (probe: -2.89 m -> 999997.1, passes); twin tests/unit/world-physics-vm.test.mjs:69 copies it",
+ "the main progress check cannot catch a direction/sign regression",
+ "unwrap with info().total and assert 35 < ds < 60 in both","S","player-physics",R,"confirmed@cd907d4c: both files use the +1e6 %1e6 unwrap","player",["stub-copy"],None),
+("P2-03","physics-2","tests/specs/aero-zones.spec.js","109-123","tautology","high","high",
+ "the pace-invariance test changes PACE after the race is built and reads __apex.aeroZones(), which maps the cached G.aeroZones (apex.js:1956) built once at race start (game.js:2052)",
+ "a zonesFor that starts reading pace stays green",
+ "set pace before race() per run, or call AeroZones.zonesFor(G.track) after each pace","S","aero",R,"confirmed@cd907d4c: setPhysics after loadTrack, aeroZones() maps G.aeroZones","player",["tautology"],None),
+("P2-04","physics-2","tests/specs/steer-migration.spec.js","123-149","wrong-target","high","high",
+ "the 'once per version' test seeds the CURRENT schema, so migrateSteerStore returns at its first line (steer-tuning.js:536); the v2->v3 double-apply it documents is never exercised and the v4/v5 steps (steer-tuning.js:517-531) are untested anywhere",
+ "the only code that overwrites a player's chosen settings (assists, pace) can regress to data loss with the spec green",
+ "loop steerSchema 2..N-1 seeded with drivingHelp 8/raceLine 4 and assert unchanged; add v4/v5 cases","S","input",R,"confirmed@cd907d4c: seeds steerSchema: schema; `if (from >= STEER_SCHEMA) return`","player",[],None),
+("P2-05","physics-2","tests/specs/parts-ers.spec.js","2-8,33,52","vacuous","high","high",
+ "header promises 'PUSH and COST' but boostRun's `gained` (:52) is never asserted; only the energy drain is",
+ "the thrust half of the BOOST taper bug is unpinned above TAPER_HI: BOOST could be inert and stay green",
+ "compare boost on vs off at 70 m/s and assert gained_on > gained_off","S","ers",R,"confirmed@cd907d4c: gained returned, not asserted","player",[],None),
+("P2-06","physics-2","tests/specs/collisions-deep.spec.js","183","wrong-target","high","high",
+ "maxWallOvershoot() is instantaneous (apex-track.js:94-103 scans current car x only), read once after the 90-step loop",
+ "mid-run tunnelling clamped back by the last frame passes the 'hard boundary' test",
+ "sample maxWallOvershoot every frame inside the loop and assert the max","S","collision",R,"confirmed@cd907d4c: read in the return object after the loop","player",[],None),
+("P2-07","physics-2","tests/specs/physics-boot.spec.js","52-55,88-89","tautology","high","high",
+ "slipFactor<=1 is true by construction: physState().slipFactor is sqrt(1-axFrac^2) recomputed in AgentView.slipBudget (agentview.js:89-91, apex.js:583); the player-forces-written drivenSlip (apex.js:596) is never asserted",
+ "the cheap js/physics boot gate cannot see a broken driven-axle slip circle",
+ "assert drivenSlip finite in (0,1], axFracF/R finite, sign(yawRate)==sign(steer)","S","player-physics",R,None,"player",["tautology"],None),
+("P2-08","physics-2","tests/specs/physics-hotpath.spec.js","120-236","tautology","high","high",
+ "test 2 compares two in-test copies (fullScan/bucketScan :159-215) of a stale _onTrafO (collide.js:175-211: no blockerReach >34 m, finishers dropped, no passFailOf width); Collide.scanTraffic is never called, and a 22-car race is booted unused",
+ "passes while the shipped traffic scan diverges; duplicates tests/unit/traffic-arc-buckets.test.mjs",
+ "delete test 2","S","ai-physics",R,None,"hygiene",["stub-copy"],None),
+("P2-09","physics-2","tests/unit/tyre-peak-slip.test.mjs","37-47","tautology","high","high",
+ "'front peak in 6-9 deg' never calls the model: alpha = 10.5*(CURVE_PEAK_X_F/(pi/2))*scale is the constant's own definition (tyre-model.js:80); mu is computed and only printed",
+ "a change to the real front force path (player-forces.js:22, CS_FRONT, mu) cannot fail it",
+ "sweep slip angle through -mu*lateralCurve(cs*a/mu) at CS_FRONT and assert argmax in 6-9 deg","S","tyres",R,None,"player",["tautology"],None),
+("P2-10","physics-2","tests/specs/steering.spec.js","449-450,471-495","tautology","high","high",
+ "store.get('raceLine',0) after forgetStored returns the test's own default; the burst pair has identical config (repeatability, not a leak check)",
+ "the default-off racing-line assist contract is pinned only by :454",
+ "read fresh-boot tuning().raceLineAssist; replace the burst pair with assist-on vs off","S","input",U,None,"player",["tautology"],None),
+("P2-11","physics-2","tests/specs/physics-characterization.spec.js","64-73,131,148","gap","high","high",
+ "the master gate samples 4 monza/dry scenarios and 6 fields (s,x,speed,slipDeg,head,prog): no right-hand loaded corner, BOOST/ERS, X-mode, wet, kerb, gear/rpm, yawRate or AI car; the hard expect loop (:148) stops at the first drifted scenario",
+ "an extraction that breaks ERS deploy, aero-X drag, wet grip or AI driving passes the guard that makes extracting from game.js safe",
+ "add right-hand, BOOST+X straight, wet, kerb and one AI-trace scenarios plus yawRate/gear/aeroX/energy columns; expect.soft per scenario","M","physics-gate",R,None,"player",[],None),
+("P2-12","physics-2","tests/specs/garage-aero.spec.js","84-97,121-141","tautology","high","high",
+ "'starts shut' cannot fail (openGarage forces garageAero(false) plus 120 close steps first); 'MOVES the wing' re-implements the pivot rotation on flap metadata and never touches the aeroX draw path (car-mesh.js:1796)",
+ "the shipped bug class (draw ignores aeroX) stays green",
+ "read state on first garage entry; assert through the draw path","S","garage",U,None,"player",["tautology","stub-copy"],None),
+("P2-13","physics-2","tests/unit/tyre-squeal-slip.test.mjs","104-137","wrong-target","med","high",
+ "HIDDEN BUG: the race calls GameAudio.setSkid with scalar skidIntensity (game.js:4599), already normalised and gated at 0.10 rad (game.js:6105-6106), so squealFromSlip's second 0.10 gate (engine.js:297-301) moves onset to ~0.12 rad and the tested {lat,long} long-slip pitch/gain voice (+long*120 Hz) never runs in a race",
+ "the test pins an audio path players never hear while the composed in-race map (double gate, no lock-up pitch) is untested",
+ "add a game-vm slide/lock-up test reading GameAudio.skidLevel(); pass {lat,long} from game.js or drop the second gate; drop dead locals mk/gains","S","audio",R,"partly: (cd907d4c) both gates confirmed; the second acts on the normalised 0-1 scale (onset 0.10->0.12 rad), and lock-up enters as lat via max(), so long stays 0","player",[],None),
+("P2-14","physics-2","tests/specs/physics-fixes.spec.js","97-108","wrong-target","med","high",
+ "wall-scrub test (gentle > hard + 8) never asserts either run touched the wall (jump x=4.5 with hw~4.6, monaco.js:88)",
+ "could pass with WallClamp removed, on full-lock tyre scrub alone",
+ "assert contact via Tracks.wallAt in both runs and add a clear-of-wall control","S","collision",U,None,"player",[],None),
+("P2-15","physics-2","tests/specs/camera-driving-hooks.spec.js","136,164-172","wrong-target","med","high",
+ "HIDDEN BUG: __apex.carOrbit returns carIdx: idx (apex-cam.js:311) even when idx<=0 or out of range made it orbit the player (:293), and the spec only checks the echoed argument, never that cars[1] is AI or that target matches its position",
+ "an agent asking to orbit a missing AI car is told it got that car while framing the player",
+ "return the index actually used; assert target ~ cars[idx] position and cars[idx] is AI","S","dev-api",R,"confirmed@cd907d4c: carIdx: idx after fallback to G.player","pipeline",[],None),
+("P2-16","physics-2","tests/specs/parts-persistence.spec.js","204-212","wrong-target","med","med",
+ "isolation test is weak: pinFreePlay writes parts.<other>={} (shared-page.js:152) just before the assert, erasing a write-side leak",
+ "a garage pick leaking between teams passes","assert the other team's slot before any helper rewrites it","S","garage",U,None,"player",[],None),
+("P2-17","physics-2","tests/specs/aero-zones.spec.js","125-141,143-163","vacuous","med","high",
+ "'wrap included' computes `wrapped` (:136) and never asserts it; 'counts down' checks only >0/finite",
+ "a zone that crosses the line, or a wrong zoneAhead countdown, passes","assert wrapped for a crossing zone and zoneAhead == zones[k].start - s","S","aero",R,"confirmed@cd907d4c: wrapped returned, not asserted","player",[],None),
+("P2-18","physics-2","tests/unit/tyre-model.test.mjs","275-282,774-796,858-870","source-scan","med","high",
+ "3 tests regex-scan game.js (vmax *= trMul, shipped default level, the setter) where game-vm exists; same pattern in uilayers-modal-order.test.mjs:147-159, which asserts a COMMENT exists",
+ "brittle to reformat; wiring regressions with matching text pass",
+ "replace with game-vm boots (fresh-boot level, G.tyres.level(), worn-tyre vmax); dispatch focusin for the uilayers cases","S","tyres",R,None,"hygiene",["source-scan"],None),
+("P2-19","physics-2","tests/unit/vstd-invariant.test.mjs","338","gap","low","high",
+ "vstd-lint is lexical: `const lim = 30; speed > lim` (lowercase local) evades it by design",
+ "a PACE-sensitive raw m/s threshold (the A13 bug class) can land via a local","add a dataflow-lite rule for locals initialised from numeric literals compared to speed","M","tooling",R,None,"pipeline",[],None),
+("P2-20","physics-2","(input / persistence / haptics)","","gap","med","med",
+ "untested anywhere: tiltCurve/touchCurve/padCurve clamps, tilt deadzone->maxTilt re-clamp (input.js:2006), retrySave RETRY->SAVE RESTORED (select-screen.js:76-96), rear-slip haptic cue (player-forces.js:289-294)",
+ "phone-default steering and the save-recovery path can regress silently",
+ "extend sliders.spec clamp table, add a tilt re-clamp case, a persistence-dom RETRY test and a positive rear-slip cue test","M","input",R,None,"player",[],None),
+("P2-21","physics-2","tests/specs/drift.spec.js","72-88","vacuous","low","high",
+ "self-align test never checks |vLat|>1.5 before release (same in drift-vm:100)",
+ "passes if no slide ever developed","assert a slide existed at :79 before releasing","S","player-physics",R,None,"hygiene",[],None),
+("P2-22","physics-2","tests/specs/gamepad.spec.js","336,537,563","stale-doc","low","high",
+ "'clears instantly' (:537) has no assertion; comments at :336/:563 say PAD_DEADZONE 0.14 while input.js:113 is 0.05",
+ "a pad that does not clear passes; misleading tuning comments","add the assert after :537; fix the comments","S","input",U,None,"hygiene",[],None),
+]

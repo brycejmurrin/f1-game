@@ -4,6 +4,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { installProbeInit, gotoGame, mutateCaptureScene, awaitCaptureReady, screenshotPresentedCanvas } from "../../shot/probe-page.mjs";
 import { pixelEvidence } from "../../shot/capture-contract.mjs";
+import { resolveUIProfile, measureUIProfile } from "../../lib/ui-device-profile.mjs";
 
 export { inspectUI } from "./inspector.mjs";
 import { inspectUI } from "./inspector.mjs";
@@ -18,9 +19,9 @@ export function observeErrors(page) {
 }
 
 /** Each scenario gets a fresh context. Replays never inherit a prior candidate's storage. */
-export async function openSession(browser, url, { touch = false, background = false, timeout = 90000, repro = null, backend = "three", viewport = { width: 1280, height: 800 } } = {}) {
-  const context = await browser.newContext({ viewport, deviceScaleFactor: 1,
-    hasTouch: touch, isMobile: touch, serviceWorkers: "block" });
+export async function openSession(browser, url, { touch = false, background = false, timeout = 90000, repro = null, backend = "three", viewport = null, device = null, deviceScaleFactor = null, settings = null } = {}) {
+  const { contextOptions, profile } = resolveUIProfile({ touch, viewport: viewport || (touch || device ? null : { width: 1280, height: 800 }), device, deviceScaleFactor });
+  const context = await browser.newContext({ ...contextOptions, serviceWorkers: "block" });
   let bootTimer;
   const bootDeadline = new Promise((_, reject) => { bootTimer = setTimeout(() => { void context.close(); reject(new Error("UI boot exceeded its evidence deadline")); }, timeout + 1000); });
   try { return await Promise.race([bootDeadline, (async () => {
@@ -35,9 +36,16 @@ export async function openSession(browser, url, { touch = false, background = fa
     }, repro);
     await gotoGame(page, url, timeout);
     const help = await page.evaluate(() => window.__apex.agentHelp());
+    let settingsImport = null;
+    if (settings) {
+      settingsImport = await page.evaluate(data => SettingsExport.applySettings(data, {}), settings);
+      if (!settingsImport.ok || settingsImport.failed || settingsImport.skipped) throw new Error(`Settings baseline import incomplete: ${JSON.stringify(settingsImport)}`);
+      await gotoGame(page, url, timeout);
+    }
     if (!background) await page.evaluate(() => window.__apex.headless(true));
     await page.locator("#mb-race").waitFor({ state: "visible", timeout });
-    return { page, context, logs, help, background, backend };
+    return { page, context, logs, help, background, backend, profile, settingsImport,
+      engine: browser.browserType().name(), environment: await page.evaluate(measureUIProfile) };
   })()]); } catch (e) { await context.close(); throw e; }
   finally { clearTimeout(bootTimer); }
 }
@@ -46,7 +54,7 @@ export async function performAction(session, a) {
   const { page, context } = session;
   const loc = () => a.selector ? page.locator(a.selector) : page.getByRole(a.role, { name: a.name, exact: true });
   switch (a.type) {
-    case "click": await loc().click(); break;
+    case "click": if (session.profile?.hasTouch) await loc().tap(); else await loc().click(); break;
     case "fill": await loc().fill(a.value); break;
     case "select": await loc().selectOption(a.value); break;
     case "press": await page.keyboard.press(a.key); break;
@@ -120,6 +128,10 @@ export function captureSceneDiagnostics() {
 
 export async function captureRecord(session, outDir, id, label, budget, extra = {}) {
   const started = performance.now(), { page } = session;
+  extra = { ...extra, details: { ...extra.details, device: { requested: session.profile, engine: session.engine,
+    settingsBaseline: session.settingsImport ? "imported" : "fresh-shipped", settingsImport: session.settingsImport,
+    measured: await page.evaluate(measureUIProfile), rendering: extra.mode === "scene" ? "presented-scene" : session.background ? "live-background" : "UI-only; background paused",
+    screenshotScale: extra.mode === "scene" ? "capture-contract" : "css" } } };
   let sceneShot;
   // Present and pause FIRST. DOM/ARIA walks while software 3D keeps rendering
   // starve the browser and turn a two-angle inspection into a timeout.
@@ -166,10 +178,8 @@ export async function captureRecord(session, outDir, id, label, budget, extra = 
     record.details.scene = sceneShot.spatial.scene; record.details.camera = sceneShot.spatial.camera;
   } else if (budget.used < budget.max && extra.mode !== "scene") {
     record.screenshot = `evidence/${id}.jpg`;
-    const cdp = await page.context().newCDPSession(page);
-    try { const { data } = await cdp.send("Page.captureScreenshot", { format: "jpeg", quality: 72 });
-      fs.writeFileSync(path.join(outDir, record.screenshot), Buffer.from(data, "base64")); budget.used++; }
-    finally { await cdp.detach(); }
+    await page.screenshot({ path: path.join(outDir, record.screenshot), type: "jpeg", quality: 72, scale: "css" });
+    budget.used++;
   } else { if (record.status !== "failed") record.status = "partial"; record.details.captureNotRun = "Screenshot budget exhausted"; }
   fs.writeFileSync(path.join(dir, `${id}.dom.json`), JSON.stringify(after, null, 2));
   record.artifacts = { ...record.artifacts, dom: `evidence/${id}.dom.json` };

@@ -30,6 +30,7 @@ export const EXCLUDED = {
   "test": "the whole suite — hours, and the point of a rotation is to fit one night",
   "test:gfx": "macOS/Metal, and it already has its own renderer-macos job",
   "test:xr": "IWER emulated-VR — path-gated xr job in ci.yml, not a nightly rotation slot",
+  "test:webkit": "WebKit iPhone-path proxy — dispatch-only webkit-leg.yml, not a nightly rotation slot",
   "test:baseline": "the golden trial runs itself on the nightly, non-blocking",
   "test:gallery": "a screenshot gallery with no assertions — nothing to go red",
   "test:render": "a PARTITION (--project=render), not a topical group: every RENDER_SPECS file also sits in a topical group the rota already runs",
@@ -54,6 +55,7 @@ export const ROTATION = Object.keys(GROUPS)
 // tooling-fast.mjs, and fails on a group that appears in none of them and is
 // not listed below — a NEW orphan can no longer be added silently.
 export const UNSCHEDULED = {
+  "test:agent-output": "alias: all shared output tests run in tooling-fast on every PR; local focused entrypoint",
   // Compatibility alias retained for local callers; CI uses the two measured page partitions.
   "test:vm-page": "alias: local full adapted-spec runner; CI runs test:vm-page-a and test:vm-page-b separately",
   // An ALIAS, not coverage: every file in it is in tooling-fast, which ci.yml's

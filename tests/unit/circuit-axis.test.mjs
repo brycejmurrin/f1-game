@@ -22,6 +22,27 @@ test("the spread actually spans tall to wide", () => {
     "the spread has collapsed — the axis can no longer fail");
 });
 
+test("the recorded aspects are what TrackMaps.aspect() measures on the shipped defs", async () => {
+  // The table is the fit tools' own copy; compare it to the engine's number so
+  // a re-shaped circuit (or a stale table) cannot keep the axis "spanning".
+  const fs = await import("node:fs");
+  const vm = await import("node:vm");
+  const { createRequire } = await import("node:module");
+  const { buildContext } = createRequire(import.meta.url)("../../tools/track/verify-track.cjs");
+  const Tracks = buildContext();
+  const ctx = Tracks._vmContext;
+  const src = fs.readFileSync(new URL("../../js/ui/track-maps.js", import.meta.url), "utf8")
+    .replace(/^const\b/gm, "var");
+  vm.runInContext(`${src}\nthis.TrackMaps = TrackMaps;`, ctx, { filename: "js/ui/track-maps.js" });
+  for (const [id, recorded] of CIRCUITS) {
+    const def = Tracks.LIST.find((d) => d.id === id);
+    assert.ok(def, `${id} is not in Tracks.LIST`);
+    const live = ctx.TrackMaps.aspect(def);
+    assert.ok(Math.abs(live - recorded) <= 0.02,
+      `${id}: tools/ui/circuit-axis.mjs records ${recorded}, TrackMaps.aspect() measures ${live.toFixed(3)}`);
+  }
+});
+
 test("every circuit in the spread is a real circuit file", async () => {
   const fs = await import("node:fs");
   const path = await import("node:path");

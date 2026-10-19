@@ -75,7 +75,10 @@ test("a js/game file with its own browser spec routes to that spec's group", () 
     ["js/physics/aero-zones.js", "aero"],
     ["js/garage/scene.js", "car"],
   ];
-  const specific = RULES.slice(2);
+  // The "always" rules are the ones that fire for ANY js edit (tiny boot gate, tooling-fast floor);
+  // identified by behaviour, so reordering RULES cannot change what is checked here.
+  const specific = RULES.filter(([re, gs]) => !(re.test("js/" + "zz-probe.js") && gs.every((g) => g === "tiny" || g === "tooling-fast")));
+  assert.ok(specific.length < RULES.length && specific.length > 10, "the always-rules were found and removed");
   for (const [file, group] of specBacked) {
     const groups = new Set(specific.filter(([re]) => re.test(file)).flatMap(([, g]) => g));
     assert.ok(groups.has(group), `${file} must route to test:${group} (got ${[...groups].join(",") || "nothing"})`);
@@ -196,8 +199,8 @@ test("the manual suites stay out of default discovery", () => {
   const cfg = read("playwright.config.js");
   assert.match(cfg, /MANUAL_IGNORE = MANUAL_RUN \? \[\] : \["\*\*\/manual\/\*\*"\]/,
     "playwright.config.js must keep **/manual/** out of default discovery");
-  assert.equal((cfg.match(/testIgnore: (\[[^\]]*)?\.{0,3}MANUAL_IGNORE/g) || []).length, 4,
-    "the manual ignore is applied at the top level AND in each of the three projects");
+  assert.equal((cfg.match(/testIgnore: (\[[^\]]*)?\.{0,3}MANUAL_IGNORE/g) || []).length, 5,
+    "the manual ignore is applied at the top level AND in each of the four projects");
   assert.ok(fs.existsSync(path.join(ROOT, "tests/manual/README.md")),
     "tests/manual/ needs a README saying what is in it and how to run it");
 });
@@ -220,6 +223,11 @@ test("RENDER_SPECS / XR_SPECS partition root specs — every named project entry
   assert.deepEqual(dangling, [],
     "RENDER_SPECS / XR_SPECS names a spec that no longer exists");
   assert.match(cfg, /name:\s*"xr-emulated"/, "xr-emulated Playwright project required for IWER suite");
+  assert.match(cfg, /const WEBKIT_SPECS = \[/, "WEBKIT_SPECS list required for the iPhone-path proxy project");
+  assert.match(cfg, /APEX_WEBKIT === "1"/, "webkit project is opt-in via APEX_WEBKIT (default npm test must not require WebKit)");
+  assert.match(cfg, /name:\s*"webkit"/, "webkit Playwright project required for webkit-leg.yml");
+  assert.match(cfg, /testIgnore: \[\.\.\.RENDER_SPECS, \.\.\.XR_SPECS, \.\.\.WEBKIT_SPECS, \.\.\.MANUAL_IGNORE\]/,
+    "headless must ignore WEBKIT_SPECS so default Chromium runs never select them");
 });
 
 test("a spec that CAPTURES an image is in RENDER_SPECS", () => {
@@ -289,27 +297,35 @@ test("no test:* group pins a --project that excludes one of the specs it names",
 
   const scripts = JSON.parse(read("package.json")).scripts || {};
   const offenders = [];
+  // The same scan on a synthetic table proves it CAN find an offender, which the real
+  // (dormant: no script names a spec beside --project) table cannot.
+  const SPEC_REF = /tests\/(?:[a-z0-9-]+\/)*([a-z0-9-]+)\.spec\.js/g;
+  const scan = (table) => {
+      const out = [];
+      for (const [name, cmd] of Object.entries(table)) {
+        const proj = cmd.match(/--project=(\w+)/);
+        if (!proj) continue;
+        for (const m of cmd.matchAll(SPEC_REF)) {
+          const inRender = render.has(m[1]);
+          if (proj[1] === "render" && !inRender) out.push(`${name}: ${m[1]}`);
+          if (proj[1] === "headless" && inRender) out.push(`${name}: ${m[1]}`);
+        }
+      }
+      return out;
+    };
+    const anyRender = [...render][0];
+    assert.deepEqual(scan({ ok: `playwright test --project=render tests/specs/${anyRender}.spec.js` }), []);
+    assert.deepEqual(scan({ bad: "playwright test --project=render tests/specs/" + "definitely-not-render.spec.js" }), ["bad: definitely-not-render"]);
+    assert.deepEqual(scan({ bad2: `playwright test --project=headless tests/specs/${anyRender}.spec.js` }), [`bad2: ${anyRender}`]);
+    assert.deepEqual(scan({ unpinned: "playwright test tests/specs/" + "x.spec.js" }), []);
   // The path pattern admits SUBDIRECTORIES. It used to be `tests/([a-z0-9-]+)`,
   // which the tests/ split (AUDIT-SYNTHESIS §R2) would have stopped matching
   // entirely — the loop body would never run, `offenders` would stay empty, and
   // this test would have gone on passing while checking nothing. `matched`
   // below is the part that makes that impossible to repeat: a pattern that
   // finds nothing is a broken pattern, not a clean repo.
-  const SPEC_REF = /tests\/(?:[a-z0-9-]+\/)*([a-z0-9-]+)\.spec\.js/g;
-  let matched = 0;
-  for (const [name, cmd] of Object.entries(scripts)) {
-    const proj = cmd.match(/--project=(\w+)/);
-    if (!proj) continue;                       // no pin, both projects are eligible
-    const wants = proj[1];
-    if (wants !== "render" && wants !== "headless") continue;
-    for (const m of cmd.matchAll(SPEC_REF)) {
-      matched++;
-      const spec = m[1];
-      const inRender = render.has(spec);
-      if (wants === "render" && !inRender) offenders.push(`${name}: ${spec} is not in RENDER_SPECS`);
-      if (wants === "headless" && inRender) offenders.push(`${name}: ${spec} IS in RENDER_SPECS`);
-    }
-  }
+  const matched = Object.values(scripts).reduce((n, cmd) => n + (/--project=(render|headless)\b/.test(cmd) ? [...cmd.matchAll(SPEC_REF)].length : 0), 0);
+  offenders.push(...scan(scripts));
   // WHY the input set is empty matters more than the output set being empty.
   //
   // This guard is DORMANT today, measured: the only scripts carrying
@@ -399,7 +415,45 @@ test("Playwright collects tests/specs/*.spec.js by default — no unit file, no 
   const stray = [...collected].filter((f) => !/^tests\/specs\/[^/]+\.spec\.js$/.test(f));
   assert.deepEqual(stray, [], "default discovery reaches outside tests/specs/*.spec.js");
   const specs = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js")).map((f) => `tests/specs/${f}`);
-  assert.deepEqual([...collected].sort(), specs.sort(), "every spec is still collected by some project");
+  // WEBKIT_SPECS are opt-in (APEX_WEBKIT=1): the webkit project is absent by
+  // default so bare `npm test` never needs a WebKit binary (#2705). They stay
+  // on disk and in test:webkit / webkit-leg.yml.
+  const webkitOptIn = specs.filter((f) => /\/webkit-[^/]+\.spec\.js$/.test(f));
+  const expectedDefault = specs.filter((f) => !webkitOptIn.includes(f));
+  assert.deepEqual([...collected].sort(), expectedDefault.sort(),
+    "every non-opt-in spec is still collected by some default project");
+  assert.ok(webkitOptIn.length >= 1, "expected at least one webkit-*.spec.js opt-in file");
+  assert.deepEqual(webkitOptIn.filter((f) => collected.has(f)), [],
+    "webkit-*.spec.js must NOT be collected without APEX_WEBKIT=1");
+  const webkitProbe = cp.execFileSync(process.execPath, ["--input-type=module", "-e", `
+    import fs from "node:fs";
+    import path from "node:path";
+    import { createRequire } from "node:module";
+    const require = createRequire(import.meta.url);
+    const { createFileMatcher } = require("playwright/lib/util");
+    const ROOT = ${JSON.stringify(ROOT)};
+    const cfg = (await import(path.join(ROOT, "playwright.config.js"))).default;
+    const files = [];
+    const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { if (e.name !== "node_modules" && !e.name.endsWith("-snapshots")) walk(p); }
+      else files.push(p);
+    } };
+    walk(path.join(ROOT, "tests"));
+    const take = (a, b, d) => (a !== undefined ? a : b !== undefined ? b : d);
+    const collected = new Set();
+    for (const proj of cfg.projects) {
+      const match = createFileMatcher(take(proj.testMatch, cfg.testMatch, "**/*.@(spec|test).?(c|m)[jt]s?(x)"));
+      const ignore = createFileMatcher(take(proj.testIgnore, cfg.testIgnore, []));
+      for (const f of files) if (match(f) && !ignore(f)) collected.add(path.relative(ROOT, f).split(path.sep).join("/"));
+    }
+    process.stdout.write(JSON.stringify({ projects: cfg.projects.map((p) => p.name), collected: [...collected].sort() }));
+  `], { cwd: ROOT, encoding: "utf8", env: { ...process.env, APEX_WEBKIT: "1", APEX_MANUAL_RUN: "" } });
+  const withWebkit = JSON.parse(webkitProbe);
+  assert.ok(withWebkit.projects.includes("webkit"), "APEX_WEBKIT=1 adds the webkit project");
+  for (const f of webkitOptIn) {
+    assert.ok(withWebkit.collected.includes(f), `APEX_WEBKIT=1 collects ${f}`);
+  }
   // A command line that names a manual suite still runs it (tests/manual/README.md).
   const probe = (argv) => cp.execFileSync(process.execPath, ["--input-type=module", "-e",
     `process.argv.push(${JSON.stringify(argv)}); const m = await import(${JSON.stringify(cfgPath)}); ` +

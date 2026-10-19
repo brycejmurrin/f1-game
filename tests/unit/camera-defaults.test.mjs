@@ -4,9 +4,25 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
-import { gameSource } from "../helpers/game-source.mjs";
+import { loadRig, makeTrack, BEND } from "../helpers/camera-rig.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
+
+// Drive the REAL chase/heli rig round the left hairpin of the shared curved-track fixture, easing in over
+// 60 frames (a one-shot solve has no hang to ease), with the CamTune stub answering `tune`.
+function bendSolve(mode, tune) {
+  const r = loadRig(), tr = makeTrack(BEND), smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+  Object.assign(r.state, tune);
+  r.feel.resetFollow(); r.cams.resetSmoothing();
+  let v = null;
+  for (let j = -60; j <= 0; j++) {
+    r.ctx.Tracks.sample(tr, 500 + j, smp);
+    v = r.cams.vantage(tr, mode, 500 + j, 0, 60, 0, { att: {}, carPos: [smp.p[0], smp.p[2]],
+      carHead: Math.atan2(smp.t[0], smp.t[2]), dt: 1 / 60, snap: j === -60 });
+  }
+  return v;
+}
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 test("CAM touch release preserves the long-press picker; cancelled holds never consume the next tap", () => {
   for (const ending of ["release", "pointercancel", "lostpointercapture"]) {
@@ -145,10 +161,14 @@ test("CORNER HANG ships at 1 and 0 stays stored", () => {
   CamTune.reset("chase");
   assert.equal(CamTune.stored("chase", "cornerHang"), false);
   assert.equal(CamTune.cornerHang("cockpit"), null);
-  const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
-  assert.match(src, /hangScale\("chase"\)/);
-  assert.match(src, /hangScale\("heli"\)/);
-  assert.match(src, /CamTune\.cornerHang\(mode\)/);
+});
+
+test("the stored CORNER HANG moves the chase and heli eyes in a bend; an unset one is the shipped full hang", () => {
+  for (const mode of ["chase", "heli"]) {
+    const shipped = bendSolve(mode, { hang: null }).eye, full = bendSolve(mode, { hang: 1 }).eye, none = bendSolve(mode, { hang: 0 }).eye;
+    assert.ok(dist(shipped, full) < 1e-6, `${mode}: unset hang is the full hang`);
+    assert.ok(dist(none, full) > 1, `${mode}: hang 0 pulls the eye off the bend side (${dist(none, full).toFixed(2)} m)`);
+  }
 });
 
 test("the six geometric knobs stay deltas defaulting to 0", () => {
@@ -159,20 +179,9 @@ test("the six geometric knobs stay deltas defaulting to 0", () => {
   }
 });
 
-// The shipped NUMBER is checked live by "CORNER LEAD's registry default is the
-// shipped lead" above; a regex on the constant could only ever restate it.
-test("vantage.js reads the tuner's corner lead", () => {
-  const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
-  assert.match(src, /CamTune\.cornerLead\(mode\)/);
-});
-
-test("cockpit interior uses the heading viewmodel, not a road-locked basis", () => {
-  const src = gameSource();
-  assert.match(src, /GameCams\.cockpitViewmodelAxes/,
-    "the cockpit draw must yaw with the body; a raw smp2.t basis crabs through turns");
-  assert.doesNotMatch(src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
-    /cockpitRigOnly[\s\S]{0,250}basisMat\(sR, _cockU, sF/,
-    "do not restore the road-tangent cockpit basis");
+test("the stored CORNER LEAD swings the chase aim into the bend", () => {
+  const off = bendSolve("chase", { lead: 0 }), on = bendSolve("chase", { lead: 1 });
+  assert.ok(dist(off.tgt, on.tgt) > 0.3, `lead 0 vs 1 moves the aim point (${dist(off.tgt, on.tgt).toFixed(2)} m)`);
 });
 
 test("cockpit turn chasing is a 0–1 look-ahead blend, shipped at 0.4", () => {
@@ -474,33 +483,13 @@ test("CamTune global baseline layers under per-mode; copyFrom and presets work",
   assert.equal(CamTune.bob(), 1);
 });
 
-test("vantage.js FOV blends use comfort speedFov", () => {
-  const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
-  assert.match(src, /const spFov = spN \* \(typeof CamTune/);
-  // Chase/far FOV goes through CamFeel.modeFov(..., spFov, ...) when CamFeel is
-  // loaded; the bare lerp stays as the no-CamFeel fallback. Either form must
-  // still blend on comfort-scaled spFov (never raw spN).
-  assert.match(src, /CamFeel\.modeFov\(\s*far \? "far" : "chase",\s*spFov/);
-  assert.match(src, /lerp\(57, 63, spFov\)/);
-  assert.doesNotMatch(src, /lerp\(57, 63, spN\)/);
+test("chase FOV at speed follows the comfort speedFov scale, not the raw speed", () => {
+  const fovAt = (spFov) => bendSolve("chase", { spFov }).fov;
+  assert.ok(fovAt(1) - fovAt(0) > 1, `comfort speedFov 0 flattens the speed widening (${(fovAt(1) - fovAt(0)).toFixed(2)} deg)`);
 });
 
 // Announcement filtering across these cameras is exercised as behavior in
 // pause-hud-layout.test.mjs, including the driving warnings that stay visible.
-
-
-test("broadcast HUD profile keeps two-decimal gaps", () => {
-  const src = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
-  assert.match(src, /function gapDecimals\(/);
-  // Standard shares hundredths under ~10 s via HudReadouts; broadcast stays at 2 always.
-  assert.match(src, /_ro\.fmtGapSec|_ro\.gapDecimals/);
-  // The two-decimal broadcast rule itself now lives in HudReadouts.gapDecimals (and hud.js's boot fallback).
-  assert.match(fs.readFileSync(path.join(root, "js/ui/hud-readouts.js"), "utf8"), /p === "broadcast"\) return 2/);
-  assert.match(src, /=== "broadcast" \? 2 :/);
-  const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
-  assert.match(css, /body\.hud-prof-broadcast \.hud-top/);
-  assert.match(css, /body\.hud-prof-broadcast\.hud-bcam \.hud-bottom/);
-});
 
 
 test("explicit camera defaults override global values through export/load until reset", () => {
