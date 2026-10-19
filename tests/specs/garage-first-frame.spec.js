@@ -152,3 +152,111 @@ test.describe("garage first frame on entry (no panel input)", () => {
   });
 });
 
+test.describe("garage arrival preview touch exit", () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test.setTimeout(180_000);
+
+  test("PREVIEW IN and OUT can be stopped by a visible touch control", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.gfxBackend", "three");
+      localStorage.setItem("apex26.garageArrival", JSON.stringify({ enabled: true, speed: 0.5 }));
+      localStorage.setItem("apex26.tlxForceGL", "1");
+    });
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+    await toMenu(page);
+    expect(await page.evaluate(() => GLX.backend)).toBe("three");
+    expect(await page.evaluate(() => GLX.backendState().api)).toBe("webgl2");
+    await clickId(page, "mb-settings");
+    await clickId(page, "pm-open-visual");
+    await page.locator("#pm-garrival").tap();
+    for (const dir of ["in", "out"]) {
+      await page.locator("#ga-preview-" + dir).tap();
+      await expect(page.locator("#garrival-inner")).toBeHidden();
+      const stop = page.locator("#ga-preview-stop");
+      await expect(stop).toBeVisible();
+      const box = await stop.boundingBox();
+      expect(box?.height, "stop remains a phone-sized target").toBeGreaterThanOrEqual(44);
+      // A real tap verifies ancestor visibility, hit testing and pointer-events;
+      // invoking onclick through evaluate hid the original untappable DONE.
+      await stop.tap();
+      await expect(stop).toBeHidden();
+      await expect(page.locator("#garrival-inner")).toBeVisible();
+      await expect(page.locator("#ga-preview-" + dir)).toBeFocused();
+      expect(await page.evaluate(() => window.__apex.garageCam().on)).toBe(false);
+    }
+    await page.locator("#ga-close").tap();
+    await expect(page.locator("#garrival")).toBeHidden();
+    await expect(page.locator("#pmsettings")).toBeVisible();
+  });
+});
+
+test.describe("garage touch gesture lifecycle", () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test.setTimeout(180_000);
+  const pageErrors = new WeakMap();
+  test.beforeEach(async ({ page }) => {
+    const errors = [];
+    pageErrors.set(page, errors);
+    page.on("pageerror", error => errors.push(error.message));
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.gfxBackend", "three");
+      localStorage.setItem("apex26.tlxForceGL", "1");
+      localStorage.setItem("apex26.garageArrival", JSON.stringify({ enabled: false }));
+    });
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.agentHelp());
+    await openGarageNoPanelInput(page);
+    expect(await page.evaluate(() => ({ backend: GLX.backend, api: GLX.backendState().api })))
+      .toEqual({ backend: "three", api: "webgl2" });
+  });
+  test.afterEach(async ({ page }) => {
+    expect(pageErrors.get(page), "gesture paths produce no page errors").toEqual([]);
+  });
+
+  // Dispatch browser PointerEvents to exercise the installed listeners with
+  // overlapping touch IDs. This is event integration, not a native Safari or
+  // compositor performance test; no render/timing improvement is claimed.
+  async function pointer(page, type, id, x) {
+    await page.evaluate(({ type, id, x }) => {
+      const target = type === "pointerdown" ? document.getElementById("game") : window;
+      target.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: id, pointerType: "touch", clientX: x, clientY: 200 }));
+    }, { type, id, x });
+  }
+  async function leaveTwoFingers(page) {
+    await pointer(page, "pointerdown", 11, 100);
+    await pointer(page, "pointerdown", 12, 200);
+  }
+  async function freshDragAndPinch(page) {
+    await pointer(page, "pointerdown", 31, 100);
+    const before = await page.evaluate(() => window.__apex.garageCam());
+    await pointer(page, "pointermove", 31, 150);
+    const dragged = await page.evaluate(() => window.__apex.garageCam());
+    expect(dragged.az, "fresh finger orbits instead of joining stale pinch IDs").toBeLessThan(before.az);
+    expect(dragged.dist, "one-finger orbit keeps zoom unchanged").toBe(before.dist);
+    await pointer(page, "pointerdown", 32, 250);
+    await pointer(page, "pointermove", 32, 350);
+    const pinched = await page.evaluate(() => window.__apex.garageCam());
+    expect(pinched.dist, "genuine new two-finger pinch still zooms").toBeLessThan(dragged.dist);
+    await pointer(page, "pointercancel", 31, 150);
+    await pointer(page, "pointerup", 32, 350);
+  }
+
+  test("blur and pagehide abandon old pinch IDs before the next gesture", async ({ page }) => {
+    for (const type of ["blur", "pagehide"]) {
+      await leaveTwoFingers(page);
+      await page.evaluate(type => window.dispatchEvent(new Event(type)), type);
+      await freshDragAndPinch(page);
+    }
+  });
+
+  test("closing and reopening garage abandons the previous gesture", async ({ page }) => {
+    await leaveTwoFingers(page);
+    await clickId(page, "cs-back");
+    await expect(page.locator("#carsetup")).toBeHidden();
+    await openGarageNoPanelInput(page);
+    await freshDragAndPinch(page);
+  });
+});
+

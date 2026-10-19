@@ -192,8 +192,8 @@ function driveOutSound(pose, gap) {
 // race — so a speed, angle or lens is judged by eye. An explicit click, so it plays
 // with PLAY ARRIVAL off or reduced motion on. Its own clock on the render dt, as the
 // WORK ON CAR arrival runs; it never calls arrival.start()/chrome(), whose sheet is
-// not up. It ends by itself, on DONE or on Escape (the panel is hidden meanwhile,
-// so the layer stack cannot route Escape to DONE).
+// not up. It ends by itself, on STOP PREVIEW or on Escape. The playback stop is
+// outside the hidden panel so touch and keyboard users retain an exit.
 let preview = null;
 function startArrivalPreview(dir, btn) {
   if (!dir) return stopPreview();
@@ -206,6 +206,8 @@ function startArrivalPreview(dir, btn) {
   G.setupPreviewOn = true;
   const inner = $("garrival-inner");
   if (inner) inner.hidden = true;
+  const stop = $("ga-preview-stop");
+  if (stop) { stop.hidden = false; if (stop.focus) stop.focus(); }
   return true;
 }
 function stepPreview(dt) {
@@ -222,12 +224,16 @@ function stopPreview() {
   G.setupPreviewOn = p.was;
   const inner = $("garrival-inner");
   if (inner) inner.hidden = false;
+  const stop = $("ga-preview-stop");
+  if (stop) stop.hidden = true;
   if (p.btn && p.btn.focus) p.btn.focus();
   // A PAUSED RACE renders nothing while no tuner is open, so the garage would
   // stay on the canvas: one more frame, outside the render this may be called from.
   if (!p.was && typeof requestAnimationFrame === "function") requestAnimationFrame(() => render(0));
   return true;
 }
+const previewStop = $("ga-preview-stop");
+if (previewStop) previewStop.onclick = stopPreview;
 window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || !preview) return;
   stopPreview();
@@ -468,6 +474,7 @@ function applyHeldSetupCam(dt) {
     setupPan((spHeld.strafe || 0) * dt, (spHeld.dolly || 0) * dt);
 }
 function resetSetupCam() {
+  clearSetupGestures();
   endHome();
   arrival.cancel();
   setupPreviewAz = 0.6;
@@ -929,6 +936,11 @@ $("cs-view-reset").onclick = () => { resetSetupCam(); if (G.soundOn) GameAudio.u
 // control that only moves on click is one you have to jab at twenty times to get
 // round the car, so press-and-hold is the primary interaction and the discrete
 // step is what a keyboard activation gets.
+const setupGestureResets = [];
+function clearSetupGestures() {
+  spHeld = null;
+  for (const reset of setupGestureResets) reset();
+}
 function holdSetupCtl(id, rates, step) {
   const el = $(id);
   if (!el) return;
@@ -938,6 +950,7 @@ function holdSetupCtl(id, rates, step) {
     pointerId = null;
     if (spHeld === rates) spHeld = null;
   };
+  setupGestureResets.push(() => release());
   el.addEventListener("pointerdown", (e) => {
     if (!G.setupPreviewOn || preview || (arrival.state && arrival.state.active)) return;
     if (pointerId !== null) return;
@@ -979,6 +992,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
   // orbit without a separate touch-event path.
   const spPtr = new Map();
   let spPinch = 0;
+  setupGestureResets.push(() => { spPtr.clear(); spPinch = 0; });
   const pinchGap = () => {
     const p = [...spPtr.values()];
     return p.length >= 2 ? Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) : 0;
@@ -1028,11 +1042,23 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
     };
     window.addEventListener("pointerup", release);
     window.addEventListener("pointercancel", release);
+    canvas.addEventListener("lostpointercapture", release);
     canvas.addEventListener("wheel", (e) => {
       if (!canPointerOrbit(e)) return;
       e.preventDefault();
       setupZoom(e.deltaY > 0 ? 1.1 : 1 / 1.1);
     }, { passive: false });
+  }
+}
+window.addEventListener("blur", clearSetupGestures);
+window.addEventListener("pagehide", clearSetupGestures);
+document.addEventListener("visibilitychange", () => { if (document.hidden) clearSetupGestures(); });
+// Exiting the garage/photo studio can hide the surface before a finger lifts.
+// Drop its gesture now, so a later visit never inherits that finger's baseline.
+if (typeof MutationObserver === "function") {
+  for (const surface of [$("carsetup"), $("photo-studio")]) {
+    if (surface) new MutationObserver(() => { if (surface.hidden) clearSetupGestures(); })
+      .observe(surface, { attributes: true, attributeFilter: ["hidden"] });
   }
 }
 

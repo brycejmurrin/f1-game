@@ -388,7 +388,7 @@ const CarDraw = (function () {
     // anisotropy for player / garage atlases so sponsor boards stay crisp at
     // grazing 3/4 angles. GLX/WGX already apply their own cap inside
     // createTexture (4×) — those handles have no `.tex`, so this is a no-op.
-    // Render backends stay untouched (OWNED: car-draw only).
+    // TLX also receives this sampler before eager upload can release its canvas.
     function crispPlayerDecal(t) {
       const tex = t && t.tex;
       if (!tex || typeof tex.anisotropy !== "number") return t;
@@ -473,7 +473,7 @@ const CarDraw = (function () {
         try {
           if (!owns()) return;
           const transfer = !!bitmap && G.gfx.backend === "three";
-          const next = crispPlayerDecal(G.gfx.createTexture(src, transfer ? { disposeSource: closeBitmap } : undefined));
+          const next = crispPlayerDecal(G.gfx.createTexture(src, transfer ? { disposeSource: closeBitmap, anisotropy: 8 } : { anisotropy: 8 }));
           if (!next) throw new Error("no texture");   // keep the preview rather than cache a null over it
           keep = transfer;   // TLX owns this bitmap until Texture.dispose; GLX/WGX already copied it
           const prev = _decalTexCache[key];
@@ -542,7 +542,7 @@ const CarDraw = (function () {
           // Sync path is ALWAYS the preview tier for the player (hiRes false).
           // Full 2048 is schedulePlayerHiRes only — never boot / garage-open.
           const canvas = LiveryTex.buildAtlas(team.id, deps.resolveLivery(team), num, !!isPlayer, false);
-          t = G.gfx.createTexture(canvas);
+          t = G.gfx.createTexture(canvas, isPlayer ? { anisotropy: 8 } : undefined);
           if (isPlayer) t = crispPlayerDecal(t);
           _decalTexBytes[key] = atlasBytes(canvas);
         }

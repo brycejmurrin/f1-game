@@ -978,7 +978,7 @@ function buildLiveryCreator(container, team) {
   // choose a fin again and the earlier badge returns — and every control in it
   // is `disabled` for real, so a tap does nothing rather than editing a field
   // the car cannot show. Registered by the row builders; synced on every edit,
-  // after refreshPalettes has rebuilt the palette chips it also disables.
+  // after refreshPalettes has synced the palette chips it also disables.
   // A dep is a ROW (every control in it) or one PILL (a value that paints
   // nothing under the current draft — SPINE TOP "wordmark" with SPONSORS at
   // "clean" has no name to write). The audit behind the rules, from
@@ -1041,9 +1041,16 @@ function buildLiveryCreator(container, team) {
     add(arrToHex(team.color)); add(arrToHex(team.color2));
     return seen;
   };
-  const palRows = [];   // rebuilt on every edit: the palette IS the other slots
+  const palRows = [];   // the palette IS the other slots
+  let paletteKey = null;
   const refreshPalettes = () => {
     const cols = paletteColours();
+    const key = cols.slice().sort().join(",");
+    if (key === paletteKey) {
+      for (const pr of palRows) for (const chip of pr.el.children)
+        chip.classList.toggle("active", (d[pr.key] || "").toLowerCase() === chip.dataset.csColour);
+      return null;   // unchanged chips keep their handlers and keyboard focus
+    }
     const focused = document.activeElement;
     let replacement = null;
     for (let i = 0; i < palRows.length; i++) {
@@ -1065,6 +1072,7 @@ function buildLiveryCreator(container, team) {
         if (ownedFocus && (cols[c] === focusColour || (!cols.includes(focusColour) && cols[c] === (d[pr.key] || "").toLowerCase()))) replacement = chip;
       }
     }
+    paletteKey = key;
     return replacement;
   };
 

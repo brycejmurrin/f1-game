@@ -15,6 +15,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { carDrawVm } from "../helpers/car-draw-vm.mjs";
+import vm from "node:vm";
+import { loadCrests } from "../../tools/car/crest-sweep.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
@@ -42,17 +44,85 @@ class Bitmap {
   close() { this.closeCalls++; this.width = this.height = 0; }
 }
 
-function liftTextures({ mobileTier = false, initTexture = () => {}, fx = null } = {}) {
+function liftTextures({ mobileTier = false, isMobile = false, initTexture = () => {}, fx = null } = {}) {
   const create = slice(TLX, "        createTexture(", "        // Upload a createTexture() handle NOW", "createTexture");
   const free = slice(TLX, "        freeTexture(t) {", "        texCensus:", "freeTexture");
   const pool = slice(TLX, "      const _texPool = [];", "      let envCubeCam = null;", "texture pool");
   const { releaseTexSource, texStandIn } = liftRelease(fakeDoc(), Bitmap);
   // The real backend methods and retired-texture pool, real vendored Texture/dispose dispatcher;
   // only GPU upload is stubbed. `pool`/`stat`/`age` expose the pool for the reuse tests below.
-  return new Function("THREE", "releaseTexSource", "texStandIn", "mobileTier", "renderer", "fx", "ImageBitmap",
+  return new Function("THREE", "releaseTexSource", "texStandIn", "mobileTier", "isMobile", "renderer", "fx", "ImageBitmap",
     `${pool}return ({${create}${free} pool: _texPool, stat: _texStat, age: ageTexPool });`)(
-    THREE, releaseTexSource, texStandIn, mobileTier, { initTexture }, fx, Bitmap);
+    THREE, releaseTexSource, texStandIn, mobileTier, isMobile, { initTexture }, fx, Bitmap);
 }
+
+test("phone AI atlases snapshot before scratch reuse on STANDARD and HIGH, including pooled textures", () => {
+  const { RecCtx } = loadCrests();
+  for (const [isMobile, mobileTier] of [[true, true], [true, false], [false, false]]) {
+    const document = { querySelector: () => null, createElement: () => {
+      const ctx = new RecCtx(); let width, height, generation = 0;
+      return { getContext: () => ctx, get generation() { return generation; },
+        get width() { return width; }, set width(v) { width = v; generation++; },
+        get height() { return height; }, set height(v) { height = v; generation++; } };
+    } };
+    const ctx = vm.createContext({ document, GLX: { isMobile, mobileTier }, console: { log() {}, warn() {}, error() {}, info() {} } });
+    for (const file of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js", "js/car/crest-paths.js",
+      "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
+      vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx, { filename: file });
+    const painter = vm.runInContext("LiveryTex", ctx), copies = new Map(); let uploads = 0;
+    const upload = tex => { uploads++; copies.set(tex, tex.image.generation); tex.onUpdate?.(tex); };
+    const gfx = liftTextures({ isMobile, mobileTier, initTexture: upload });
+    const firstCanvas = painter.buildAtlas("ferrari", { c1: [.8, 0, 0], c2: [0, 0, 0] }, 16, false, false);
+    const expected = firstCanvas.generation, first = gfx.createTexture(firstCanvas), firstTex = first.tex;
+    const secondCanvas = painter.buildAtlas("mercedes", { c1: [0, .8, .8], c2: [0, 0, 0] }, 63, false, false);
+    const second = gfx.createTexture(secondCanvas);
+    assert.equal(firstTex.anisotropy, 4, "fresh AI textures retain their existing 4x sampler");
+    assert.equal(second.tex.anisotropy, 4);
+    assert.equal(firstCanvas === secondCanvas, isMobile, "only phones reuse the actual painter's scratch canvas");
+    assert.equal(uploads, isMobile ? 2 : 0, "each phone create snapshots once synchronously; desktop stays deferred");
+    if (!isMobile) { upload(firstTex); upload(second.tex); }
+    assert.equal(copies.get(firstTex), expected, "first car pixels are captured before painting the second car");
+    gfx.freeTexture(first);
+    const thirdCanvas = painter.buildAtlas("ferrari", { c1: [.2, .2, .8], c2: [0, 0, 0] }, 16, false, false);
+    const thirdExpected = thirdCanvas.generation, beforeReuse = uploads, third = gfx.createTexture(thirdCanvas);
+    assert.equal(third.tex, firstTex, "same-size canvas still reuses the retired texture");
+    assert.equal(uploads - beforeReuse, isMobile ? 1 : 0, "pooled phone texture also snapshots exactly once");
+    if (!isMobile) upload(third.tex);
+    assert.equal(copies.get(third.tex), thirdExpected);
+    assert.deepEqual({ made: gfx.stat.made, reused: gfx.stat.reused }, { made: 2, reused: 1 });
+  }
+});
+
+test("player atlas anisotropy is final before eager upload releases its canvas, including pooled reuse", () => {
+  for (const [isMobile, mobileTier] of [[true, true], [true, false], [false, false]]) {
+    const r = carDrawVm(), copies = []; let generation = 0;
+    const gfx = liftTextures({ isMobile, mobileTier, initTexture: tex => {
+      copies.push({ tex, anisotropy: tex.anisotropy, version: tex.version, generation: tex.image.generation });
+      tex.onUpdate?.(tex);
+    } });
+    Object.assign(r.G.gfx, gfx, { isMobile, mobileTier, backend: "three" });
+    r.ctx.LiveryTex = { IS_MOBILE: mobileTier, playerHiResDeferred: () => false,
+      buildAtlas: () => ({ width: 1024, height: 1280, generation: ++generation }) };
+    let firstTex;
+    for (let edit = 0; edit < 2; edit++) {
+      const before = copies.length;
+      const handle = r.carDraw.getCarDecalTexture({ id: "ferrari" }, 16, true, false);
+      const tex = handle.tex;
+      assert.equal(tex.anisotropy, 8, "the player's grazing-angle quality remains 8x");
+      if (edit) assert.equal(tex, firstTex, "player atlas keeps retired texture reuse");
+      else firstTex = tex;
+      assert.equal(copies.length - before, isMobile ? 1 : 0, "desktop remains deferred; phone snapshots once");
+      if (isMobile) {
+        const uploaded = copies.at(-1);
+        assert.equal(uploaded.anisotropy, 8, "sampler is final before onUpdate drops the source");
+        assert.equal(tex.version, uploaded.version, "crispPlayerDecal cannot schedule a second upload from the 1x1 stand-in");
+        assert.equal(uploaded.generation, edit + 1);
+        assert.equal(tex.image.width, 1, "the source was genuinely released during eager upload");
+      }
+      r.carDraw.invalidateDecalTextures("ferrari");
+    }
+  }
+});
 
 test("an owned bitmap stays open through upload and closes once when its texture is freed", () => {
   const gfx = liftTextures(), bitmap = new Bitmap();
@@ -168,18 +238,19 @@ test("no document (worker / harness): the source is kept rather than nulled", ()
   assert.equal(t.image, src);
 });
 
-test("createTexture wires the release hook, and uploads at creation on the mobile tier", () => {
+test("createTexture wires the release hook, and uploads at creation on every phone", () => {
   const body = slice(TLX, "        createTexture(src, opts) {", "        // Upload a createTexture() handle NOW", "createTexture");
   assert.match(body, /t\.onUpdate = releaseTexSource;/);
   assert.ok(body.indexOf("t.onUpdate = releaseTexSource") < body.indexOf("t.needsUpdate = true"),
     "the hook must be set before the upload can run");
   // liverytex.js paints every phone atlas on ONE scratch canvas: a deferred
   // upload would copy whichever car was painted last.
-  assert.match(body, /if \(mobileTier\) \{ try \{ renderer\.initTexture\(t\); \}/);
+  assert.match(body, /if \(mobileTier \|\| isMobile\) \{ try \{ renderer\.initTexture\(t\); \}/);
   const lt = fs.readFileSync(path.join(ROOT, "js/car/liverytex.js"), "utf8");
   assert.match(lt, /IS_MOBILE = typeof GLX !== "undefined" && !!GLX\.mobileTier/,
     "liverytex's scratch gate changed — re-check TLX's eager-upload gate matches it");
   assert.match(TLX, /const mobileTier = \(typeof GLX !== "undefined" && !!GLX\.mobileTier\);/);
+  assert.match(TLX, /const isMobile = \(typeof GLX !== "undefined" && !!GLX\.isMobile\);/);
 });
 
 test("freeTexture retires the decal materials bound to the texture when it is disposed", () => {

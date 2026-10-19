@@ -50,7 +50,9 @@
  *   createMesh({pos,nrm,col,idx,mat?})           interleaved lit mesh.
  *   createTexMesh({pos,nrm,uv,idx})              textured mesh (decals).
  *   createChunkedMesh(data, cellSize)            frustum-cullable prop mesh.
- *   createTexture(src)                           2D texture from a canvas/image.
+ *   createTexture(src, opts?)                    2D texture from a canvas/image.
+ *     TLX accepts {anisotropy} to set the final sampler before eager upload;
+ *     callers must not raise it after a canvas source has been released.
  *     TLX accepts {disposeSource(src)} as a second argument to transfer source
  *     cleanup on successful creation; without it the source remains borrowed.
  *   freeMesh(mesh) / freeChunkedMesh(mesh) / freeTexture(tex)

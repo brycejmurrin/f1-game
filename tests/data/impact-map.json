@@ -2662,7 +2662,8 @@
     },
     "js/car/crest-draw.js": {
       "create": [
-        "tests/unit/livery-design.test.mjs"
+        "tests/unit/livery-design.test.mjs",
+        "tests/unit/tlx-texture-release.test.mjs"
       ],
       "*": [
         "tests/unit/cover-legibility.test.mjs",
@@ -2680,7 +2681,8 @@
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/legends-team.test.mjs",
         "tests/unit/livery-design.test.mjs",
-        "tests/unit/livery-tier.test.mjs"
+        "tests/unit/livery-tier.test.mjs",
+        "tests/unit/tlx-texture-release.test.mjs"
       ]
     },
     "js/car/custom-liveries.js": {
@@ -2905,7 +2907,8 @@
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
-        "tests/unit/settings-export.test.mjs"
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/tlx-texture-release.test.mjs"
       ]
     },
     "js/car/livery-design.js": {
@@ -2920,12 +2923,16 @@
       ],
       "value": [
         "tests/unit/livery-design.test.mjs"
+      ],
+      "*": [
+        "tests/unit/garage-followups.test.mjs"
       ]
     },
     "js/car/livery-graphics.js": {
       "create": [
         "tests/unit/livery-cover-graphics.test.mjs",
-        "tests/unit/livery-design.test.mjs"
+        "tests/unit/livery-design.test.mjs",
+        "tests/unit/tlx-texture-release.test.mjs"
       ],
       "drawSpineTop": [
         "tests/unit/livery-cover-graphics.test.mjs"
@@ -2953,7 +2960,8 @@
         "tests/unit/fin-design.test.mjs",
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-design.test.mjs",
-        "tests/unit/livery-tier.test.mjs"
+        "tests/unit/livery-tier.test.mjs",
+        "tests/unit/tlx-texture-release.test.mjs"
       ],
       "clipToRegion": [
         "tests/unit/livery-cover-graphics.test.mjs"
@@ -3032,8 +3040,7 @@
       "*": [
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/legends-team.test.mjs",
-        "tests/unit/tlx-texture-release.test.mjs"
+        "tests/unit/legends-team.test.mjs"
       ]
     },
     "js/car/parts.js": {
@@ -4392,6 +4399,7 @@
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/select-specs.test.mjs",
+        "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs",
         "tests/unit/track-foundation.test.mjs",
         "tests/unit/track-line.test.mjs",
@@ -5166,6 +5174,7 @@
         "tests/unit/settings-export.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/setup-tune.test.mjs",
+        "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/tyre-model.test.mjs",
         "tests/unit/voice-pack.test.mjs",
@@ -6663,11 +6672,20 @@
       "attach": [
         "tests/unit/livery-design.test.mjs"
       ],
+      "button": [
+        "tests/unit/garage-followups.test.mjs"
+      ],
+      "insert": [
+        "tests/unit/garage-followups.test.mjs"
+      ],
       "restore": [
         "tests/unit/livery-design.test.mjs"
       ],
       "section": [
         "tests/unit/livery-helmet-style.test.mjs"
+      ],
+      "sync": [
+        "tests/unit/garage-followups.test.mjs"
       ],
       "*": [
         "tests/unit/livery-sidewall.test.mjs",
@@ -6896,6 +6914,7 @@
       ],
       "endHome": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-panel-side.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
       "garageCtx": [
@@ -6921,6 +6940,12 @@
         "tests/unit/garage-panel-side.test.mjs"
       ],
       "presentOpts": [
+        "tests/unit/garage-panel-side.test.mjs"
+      ],
+      "resetSetupCam": [
+        "tests/unit/garage-panel-side.test.mjs"
+      ],
+      "setSetupSpin": [
         "tests/unit/garage-panel-side.test.mjs"
       ],
       "spMeshBust": [
