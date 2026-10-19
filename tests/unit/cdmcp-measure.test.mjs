@@ -216,10 +216,10 @@ test("N10 look-survey command is dry-runnable and targets ignored artifacts", ()
     timeout: 5000,
   });
   assert.equal(r.status, 0, r.stderr);
-  for (const id of [
-    "anderstorp", "brands_hatch", "buddh", "dijon", "donington", "fuji",
-    "jerez", "korea", "mont_tremblant", "mosport", "okayama", "zolder",
-  ]) assert.match(r.stdout, new RegExp(`\\b${id}\\b`));
+  // The ids come from the plan the command itself runs, not a copied list.
+  const plan = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/lighting/look-survey-n10.json"), "utf8"));
+  assert.ok(plan.tracks.length >= 1, "the N10 plan names circuits");
+  for (const { id } of plan.tracks) assert.match(r.stdout, new RegExp(`\\b${id}\\b`));
   assert.match(r.stdout, /artifacts\/lighting\/sheets/);
   assert.match(r.stdout, /cdmcp-cli\.py look-survey/);
   assert.match(r.stdout, /look-survey-sheet\.py/);

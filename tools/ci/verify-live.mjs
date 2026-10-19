@@ -13,12 +13,46 @@ const timeoutMs = 15_000;
  *  version.json and index.html are already live (pages.yml verify-live, Oct 18
  *  failures on fuji.js / spotter.js / tlx-shadow.js). Retry those, not 404. */
 const TRANSIENT_HTTP = new Set([502, 503, 504, 429]);
+const TRANSIENT_TRANSPORT = new Set([
+  "ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH",
+  "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT", "UND_ERR_SOCKET",
+]);
 const digest = (bytes, encoding = "base64") => createHash("sha256").update(bytes).digest(encoding);
 const cleanBase = (base) => base.endsWith("/") ? base : `${base}/`;
 const urlFor = (base, rel) => new URL(rel.replace(/^\//, ""), cleanBase(base)).href;
 
 function defaultSleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Node fetch wraps transport errors in TypeError("fetch failed"). Inspect the
+// bounded cause graph, including AggregateError children, without following cycles.
+function errorChain(error) {
+  const found = [], seen = new Set(), pending = [{ error, depth: 0 }];
+  while (pending.length && found.length < 16) {
+    const { error: item, depth } = pending.shift();
+    if (!item || (typeof item !== "object" && typeof item !== "function") || seen.has(item)) continue;
+    seen.add(item);
+    found.push(item);
+    if (depth >= 4) continue;
+    if (item.cause) pending.push({ error: item.cause, depth: depth + 1 });
+    if (Array.isArray(item.errors)) {
+      for (const child of item.errors.slice(0, 8)) pending.push({ error: child, depth: depth + 1 });
+    }
+  }
+  return found;
+}
+
+function transientTransport(error) {
+  return errorChain(error).some((item) => TRANSIENT_TRANSPORT.has(item.code)
+    || item.name === "AbortError" || item.name === "TimeoutError"
+    || /ECONNRESET|ETIMEDOUT|abort/i.test(item.message || ""));
+}
+
+function contextualError(url, error) {
+  const details = errorChain(error).map((item) => [item.name, item.code, item.message]
+    .filter(Boolean).map((value) => String(value).replace(/[\r\n]/g, " ").slice(0, 240)).join(": "));
+  return new Error(`${url}: ${details.join(" <- ") || String(error).slice(0, 240)}`, { cause: error });
 }
 
 /**
@@ -49,12 +83,12 @@ export async function fetchBytes(url, opts = {}) {
     } catch (error) {
       lastError = error;
       const status = Number(/HTTP (\d+)/.exec(error?.message || "")?.[1] || 0);
-      const transient = TRANSIENT_HTTP.has(status) || /ECONNRESET|ETIMEDOUT|abort/i.test(error?.message || "");
+      const transient = status ? TRANSIENT_HTTP.has(status) : transientTransport(error);
       if (transient && attempt < retries) {
         await sleep(Math.min(8_000, 400 * 2 ** attempt));
         continue;
       }
-      throw error;
+      throw contextualError(url, error);
     }
   }
   throw lastError;
@@ -97,7 +131,7 @@ export async function verifyLive({
       }
       return actual;
     } catch (error) {
-      errors.push(error.message);
+      errors.push(`${rel}: ${error.message}`);
       return null;
     }
   };
@@ -118,7 +152,7 @@ export async function verifyLive({
         checked.push(rel);
         if (sri !== expectedSri) errors.push(`${rel}: live hash ${sri} does not match shell ${expectedSri}`);
         if (sri !== expectedFileSri) errors.push(`${rel}: live bytes differ from checked-out commit`);
-      } catch (error) { errors.push(error.message); }
+      } catch (error) { errors.push(`${rel}: ${error.message}`); }
     }));
     void results;
   }
