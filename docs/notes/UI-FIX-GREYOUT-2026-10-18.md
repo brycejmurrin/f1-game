@@ -55,8 +55,9 @@ its grey. A later rule in the same pass greys it again if it still applies (unit
 
 - Controls greyed by their owner with no reason (Spotify, Photo Studio, race settings DAILY/season, RESTART, Data hub,
   saves): next PR, the same module with owner-state reason rules.
-- Rows 19 (home camera), 22 (TURN CHASING), 37 (USE AS MENU BACKGROUND): the parent is a camera or store state on another
-  screen; they land with their screen's PR.
+- Row 19 (home camera): the parent is Appearance Scene state on another screen; lands with that screen's PR.
+- Rows 22 (TURN CHASING) and 37 (USE AS MENU BACKGROUND): landed in the UI inert-reasons PR (`turnchase-cam`,
+  `photo-scene` + garage/HUD-arrange EXPLAIN) — Issues #2844 / #2848 / #2852.
 - Duplicates and labels: their own PRs. The Appearance Studio regroup goes to the orchestrator first, as options with
   phone screenshots.
 
@@ -83,6 +84,7 @@ loop.
 | Title screen | EDIT ON TITLE SCREEN, PEEK; WIDTH −/+ | Open from the TITLE screen; Select the BUTTONS piece |
 | Track designer / Data hub | Clear / Focus selection, TEST HERE, START HERE, DELETE POINT; Download | Select a point first; Press GATHER first |
 | HUD arrange | VISIBILITY | its own hint line now says it (`hud-arrange.js`) |
+| Garage team tab | team card, driver chips, EDIT MY TEAM | Fixed while in a race / Fixed by your career / Taken by the other player |
 
 Runtime controls with no id got one in their owned module (`ap-*` in Appearance Studio, `pm-pad-profile-reset`,
 `as-mix-test` / `as-mix-stop`, `data-peek` on PEEK). The track designer's SPAN WIDTH −/+ got
