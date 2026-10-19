@@ -102,6 +102,10 @@ export const FIXED_GATE_SPECS = new Set([
 // put them on a selected command.
 export const MANUAL_OPT_IN_SPECS = new Set([
   "tests/specs/material-shimmer.spec.js",
+  // WebKit iPhone-path proxy (#2705): only webkit-leg.yml / `npm run test:webkit`
+  // (APEX_WEBKIT=1 / --project=webkit). Chromium selected/oversize jobs cannot
+  // launch WebKit and must not schedule this file.
+  "tests/specs/webkit-boot.spec.js",
 ]);
 
 /** Fold a numeric constant expression: literals, `+ - * /`, unary `-`, and a
