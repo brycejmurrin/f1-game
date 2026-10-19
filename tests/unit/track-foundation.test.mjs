@@ -107,6 +107,30 @@ test("a def's POINT and RANGE scenery are read in the SAME coordinate space", ()
   assert.equal(TrackSpace.scenerySpace(DEFS[5]), "racing", "legacy: forward defaults to racing");
 });
 
+test("full-lap ranges preserve coverage in every coordinate frame", () => {
+  const S = loadGlobal(P.TRACK_SPACE, "TrackSpace");
+  for (const reverse of [false, true]) for (const sceneryLapMirror of [false, true]) {
+    for (const sceneryCoordinates of ["source", "racing"]) {
+      const def = { startFrac: 0.25, reverse, sceneryLapMirror, sceneryCoordinates, _sceneryShift: 0.37 };
+      for (const [s0, s1] of [[0, 1], [0.2, 1.2], [1, 0], [-0.5, 1.5]]) {
+        for (const space of ["source", "racing"]) {
+          assert.deepEqual({ ...S.range(def, s0, s1, space) }, { s0: 0, s1: 1 });
+        }
+        assert.deepEqual({ ...S.sceneryRange(def, s0, s1) }, { s0: 0, s1: 1 },
+          "the scenery-origin shift must not collapse a preserved full lap");
+      }
+      // Equal endpoints still mean a point; a short seam-crossing range still
+      // has its authored span, with reversal/mirroring only changing the ends.
+      for (const space of ["source", "racing"]) {
+        const point = S.range(def, 0.2, 0.2, space);
+        assert.equal(point.s0, point.s1);
+        const short = S.range(def, 0.9, 0.1, space);
+        assert.ok(Math.abs(S.wrap01(short.s1 - short.s0) - 0.2) < 1e-12);
+      }
+    }
+  }
+});
+
 test("Miami declares explicit racing scenery and source-mapped Turnpike elevation", () => {
   const TrackSpace = loadGlobal(P.TRACK_SPACE, "TrackSpace");
   const [miami] = loadGlobal(MANIFEST.circuitPath("miami"), "TrackDefs");

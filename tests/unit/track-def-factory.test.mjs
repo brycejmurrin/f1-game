@@ -61,6 +61,27 @@ test("every shipped circuit builds to the bytes it built to before the factory m
   assert.equal(Object.keys(GOLDEN).length, Tracks.LIST.filter((t) => !t.custom).length, "golden rows == shipped circuits");
 });
 
+test("rotating or reversing a full-lap width zone still narrows the whole built road", () => {
+  const Tracks = buildContext(undefined, { quiet: true });
+  const { TrackDef, TrackDefs } = Tracks._vmContext;
+  // Source-space Monaco is reversed; Suzuka is rotated with a crossover;
+  // Spa and banked Zandvoort are unrotated controls. Clone data, never mutate
+  // the shipped defs or their lazy point caches.
+  for (const id of ["monaco", "suzuka", "spa", "zandvoort"]) {
+    const raw = TrackDefs.find((d) => d.id === id);
+    const ordinary = TrackDef.fromRaw(raw);
+    const narrowed = TrackDef.fromRaw({ ...raw, hwZones: [{ s0: 0, s1: 1, hw: 3, ease: 0.001 }] });
+    const before = Tracks.buildCenterline(ordinary, { line: false });
+    const after = Tracks.buildCenterline(narrowed, { line: false });
+    assert.equal(after.n, before.n, `${id}: the resample is unchanged`);
+    assert.equal(after.total, before.total, `${id}: lap length is unchanged`);
+    for (const axis of ["px", "py", "pz"]) assert.deepEqual(after[axis], before[axis], `${id}: ${axis}`);
+    assert.ok(narrowed.points.every((p) => p[3] === 3), `${id}: every control point receives the zone`);
+    assert.ok(after.hw.every((hw) => hw === 3), `${id}: every resampled road node receives the zone`);
+    assert.ok(before.hw.some((hw) => hw > 3), `${id}: the width change is observable`);
+  }
+});
+
 test("fromRaw IS the LIST mapper: the same raw def yields the same entry", () => {
   const Tracks = buildContext(undefined, { quiet: true });
   const ctx = Tracks._vmContext;
