@@ -44,8 +44,8 @@ red in OWNED → fix, `tooling-fast --changed` plus the failing test, push once;
 CONFLICTING/DIRTY → `node tools/ci/sync-pr.mjs <branch>` (merge origin, no
 force, no rebase); draft with a green tip and `ready-gate.mjs --pr <n>` exit 0
 → mark ready, then keep watching until merged.
-Do not enable auto-merge or merge: the merge desk / orchestrator holds merges
-(role-merge-holder.md, Level 3).
+Do not enable auto-merge or merge: your orchestrator merges through
+merge-gate.mjs (role-merge-holder.md, AGENTS.md standing authority).
 REPORT: a cloud agent has no direct channel to the orchestrator. Keep this line in the
 PR body current, just under the fleet block (not inside it):
   fleet-status: <working|blocked|needs-decision|ready|red|done> | <one-line reason> | <UTC time>

@@ -28,6 +28,7 @@ import { fileURLToPath } from "node:url";
 import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { commitTreeId } from "../lib/work-tree-id.mjs";
+import { writeReceipt } from "../lib/gate-receipt.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
@@ -404,6 +405,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     filesError: resolved.filesError || null,
   });
   const line = verdictLine(v);
+  // The receipt github-mcp-guard.sh requires before a draft→ready flip (tools/lib/gate-receipt.mjs):
+  // written for a --pr run only, pass or refuse, so the hook can say WHY the last gate run refused.
+  if (resolved.pr) {
+    try { writeReceipt(ROOT, "ready", { pr: resolved.pr, head: v.sha, ok: v.code === 0, evidence: v.code === 0 ? "" : `${v.state}: ${v.evidence}` }); }
+    catch (e) { say(`warning: could not write the ready-gate receipt: ${e.message}`); }
+  }
   if (asJson) console.log(JSON.stringify({ ...v, pr: resolved.pr || null }, null, 2));
   else {
     if (v.planWarning) say(`warning: ${v.planWarning}`);
