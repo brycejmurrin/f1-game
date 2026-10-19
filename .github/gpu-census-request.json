@@ -1,1 +1,1 @@
-{"images": "macos-latest", "track": "montreal", "tod": "day", "clock": 12, "census_only": false, "force": "batches", "ls": "", "cam": "helmet", "entry": "api", "leg": "garage-retry-63a1"}
+{"images":"macos-latest","track":"montreal","tod":"day","clock":12,"census_only":true,"force":"batches","ls":"","cam":"helmet","entry":"api","leg":"garage-reanalysis-367dc"}

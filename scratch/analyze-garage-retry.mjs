@@ -2,6 +2,7 @@
 // Reads game-garage-retry-ab.json and adjacent CPU profiles; writes analysis.json/report.md there.
 import fs from 'node:fs';
 import path from 'node:path';
+import {createHash} from 'node:crypto';
 const argv=process.argv.slice(2);
 if(argv.includes('--help')){console.log('usage: node scratch/analyze-garage-retry.mjs INPUT_DIR_OR_JSON [--software]\n--software explicitly validates the small software pilot; never emits native hardware claims.');process.exit(0);}
 const unknown=argv.filter(x=>x.startsWith('--')&&x!=='--software');
@@ -42,22 +43,54 @@ function idle(window){
 function profile(name,required){
  const p=path.join(dir,name);
  if(!fs.existsSync(p)){if(required)check(false,'missing CPU profile '+name);return null;}
- let x;try{x=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){check(false,'invalid CPU profile '+name+': '+e.message);return null;}
- const nodes=new Map((x.nodes||[]).map(n=>[n.id,n.callFrame||{}])),self=new Map();
- check(Array.isArray(x.samples)&&Array.isArray(x.timeDeltas)&&x.samples.length===x.timeDeltas.length,'CPU profile sample/delta lengths match: '+name);
- for(let i=0;i<(x.samples||[]).length;i++){
-  const frame=nodes.get(x.samples[i])||{},ms=(x.timeDeltas?.[i]||0)/1000;
-  if(!num(ms)||ms<0){check(false,'invalid CPU sample duration in '+name);continue;}
+ const raw=fs.readFileSync(p),rawSha256=createHash('sha256').update(raw).digest('hex');
+ let x;try{x=JSON.parse(raw.toString('utf8'));}catch(e){check(false,'invalid CPU profile '+name+': '+e.message);return null;}
+ const boundsValid=check(Number.isSafeInteger(x.startTime)&&Number.isSafeInteger(x.endTime)&&x.endTime>=x.startTime,'CPU profile has valid integer bounds: '+name);
+ const arraysValid=check(Array.isArray(x.samples)&&Array.isArray(x.timeDeltas)&&x.samples.length>0&&x.samples.length===x.timeDeltas.length,'CPU profile sample/delta lengths match: '+name);
+ if(!boundsValid||!arraysValid)return {file:name,rawSha256,valid:false,topSampledWall:[]};
+ const nodes=new Map((x.nodes||[]).map(n=>[n.id,n.callFrame||{}]));
+ const idsValid=check(x.samples.every(id=>Number.isSafeInteger(id)&&nodes.has(id)),'CPU profile samples resolve to nodes: '+name);
+ const deltasValid=check(x.timeDeltas.every(Number.isSafeInteger),'CPU profile has integer time deltas: '+name);
+ if(!idsValid||!deltasValid)return {file:name,rawSha256,valid:false,samples:x.samples.length,topSampledWall:[]};
+ let absolute=x.startTime;
+ const negativeDeltas=[],points=x.timeDeltas.map((deltaUs,index)=>{
+  const beforeTimestampUs=absolute;absolute+=deltaUs;
+  if(deltaUs<0)negativeDeltas.push({index,deltaUs,beforeTimestampUs,afterTimestampUs:absolute,sampleId:x.samples[index]});
+  return {timestampUs:absolute,sampleId:x.samples[index],originalIndex:index};
+ });
+ const timestampsValid=check(points.every(p=>Number.isSafeInteger(p.timestampUs)&&p.timestampUs>=x.startTime&&p.timestampUs<=x.endTime),'CPU profile reconstructed timestamps stay within bounds: '+name);
+ // DevTools reconstructs timestamps, then sorts timestamps WITH their sample IDs.
+ // Preserve raw bytes and every sample; no clamp, absolute value, dropping or tolerance.
+ const ordered=points.slice().sort((a,b)=>a.timestampUs-b.timestampUs||a.originalIndex-b.originalIndex);
+ const sortedValid=check(ordered.length===x.samples.length&&ordered.every((p,i)=>!i||p.timestampUs>=ordered[i-1].timestampUs),'CPU profile chronological sample count/order preserved: '+name);
+ if(!timestampsValid||!sortedValid)return {file:name,rawSha256,valid:false,samples:x.samples.length,negativeDeltas,topSampledWall:[]};
+ const attributed=new Map();let previous=x.startTime;
+ for(const p of ordered){
+  // Deliberate preceding-interval WALL attribution, retaining the analyzer's
+  // weighting convention after chronological normalization. Not DevTools' hit-
+  // count self table, pure CPU execution time, or GPU time. Tail stays separate.
+  const ms=(p.timestampUs-previous)/1000;previous=p.timestampUs;
+  const frame=nodes.get(p.sampleId);
   const label=(frame.functionName||'(anonymous)')+' @ '+(frame.url||'(runtime)')+':'+((frame.lineNumber??-1)+1);
-  self.set(label,(self.get(label)||0)+ms);
+  attributed.set(label,(attributed.get(label)||0)+ms);
  }
- check((x.samples||[]).every(id=>nodes.has(id)),'CPU profile samples resolve to nodes: '+name);
- const rows=[...self].map(([site,selfMs])=>({site,selfMs})).sort((a,b)=>b.selfMs-a.selfMs);
- const sampledMs=rows.reduce((s,x)=>s+x.selfMs,0);
- return {file:name,samples:x.samples?.length||0,profileWallMs:(x.endTime-x.startTime)/1000,sampledMs,
-  topSelf:rows.slice(0,20).map(x=>({...x,sampledSharePct:sampledMs?100*x.selfMs/sampledMs:null})),
-  ownedJsSelf:rows.filter(x=>/\/js\/|\bjs\//.test(x.site)).slice(0,15)};
+ const rows=[...attributed].map(([site,sampledWallMs])=>({site,sampledWallMs})).sort((a,b)=>b.sampledWallMs-a.sampledWallMs);
+ const lastTimestampUs=ordered.at(-1).timestampUs,attributedUs=lastTimestampUs-x.startTime,tailUs=x.endTime-lastTimestampUs;
+ check(attributedUs+tailUs===x.endTime-x.startTime,'CPU profile exact attribution span plus tail equals profile wall span: '+name);
+ const rawMin=Math.min(...points.map(p=>p.timestampUs)),rawMax=Math.max(...points.map(p=>p.timestampUs));
+ check(ordered[0].timestampUs===rawMin&&lastTimestampUs===rawMax,'CPU profile sample timestamp span preserved: '+name);
+ return {file:name,rawSha256,valid:true,samples:x.samples.length,profileWallMs:(x.endTime-x.startTime)/1000,
+  sampledWallAttributedMs:attributedUs/1000,unattributedTailMs:tailUs/1000,
+  weighting:'Normalized chronological preceding-sample-interval WALL attribution; not DevTools hit-count self table, pure CPU execution, or GPU time.',
+  normalization:{method:'Reconstruct integer absolute microsecond timestamps; stable sort timestamp and sample ID together, original index breaks ties. No raw mutations, clamps, drops, absolute values, or tolerance.',
+   source:'https://github.com/ChromeDevTools/devtools-frontend/blob/main/front_end/models/cpu_profile/CPUProfileDataModel.ts',
+   negativeDeltas,reorderedSamples:ordered.filter((p,i)=>p.originalIndex!==i).length,
+   profileStartUs:x.startTime,profileEndUs:x.endTime,rawDeltaSumUs:x.timeDeltas.reduce((a,b)=>a+b,0),rawLastTimestampUs:absolute,
+   firstTimestampUs:ordered[0].timestampUs,leadingGapUs:ordered[0].timestampUs-x.startTime,leadingGapPolicy:'The profile-start to first-sample interval is attributed to the first chronological sample by this preceding-interval wall convention; its execution stack was not continuously observed.',lastTimestampUs,attributedUs,tailUs,sampleSpanUs:rawMax-rawMin},
+  topSampledWall:rows.slice(0,20).map(x=>({...x,sampledSharePct:attributedUs?100*x.sampledWallMs/(attributedUs/1000):null})),
+  ownedJsSampledWall:rows.filter(x=>/\/js\/|\bjs\//.test(x.site)).slice(0,15)};
 }
+
 check(r.schema==='garage-retry-ab/v1','recognized report schema');
 check(r.software===software,software?'input explicitly identifies software pilot':'native mode rejects software input (use --software for a pilot)');
 const expectedPairs=software?1:3,expectedEdits=software?2:10,expectedProfiled=software?0:10;
@@ -160,16 +193,23 @@ const entrySignature = a => ({
 const entrySignatures = (r.arms||[]).map(a=>({pair:a.pair,arm:a.arm,signature:entrySignature(a)}));
 const entryPrebuildMatched = entrySignatures.length===expectedPairs*2
   && new Set(entrySignatures.map(x=>json(x.signature))).size===1;
-const entryComparisonMatched = entryPrebuildMatched;
+const entryDrawSignature = a => (a?.entry?.render?.rows||[]).map(row=>({name:row.name,width:row.width??null,height:row.height??null,main:!!row.main,renders:row.renders,calls:row.calls,triangles:row.triangles})).sort((a,b)=>json(a).localeCompare(json(b)));
+const entryFirstDrawSignatures = (r.arms||[]).map(a=>({pair:a.pair,arm:a.arm,signature:entryDrawSignature(a)}));
+const entryFirstDrawMatched=entryFirstDrawSignatures.length===expectedPairs*2&&entryFirstDrawSignatures.every(x=>x.signature.length>0)
+ &&new Set(entryFirstDrawSignatures.map(x=>json(x.signature))).size===1;
+const entryComparisonMatched = entryPrebuildMatched&&entryFirstDrawMatched;
+if(!entryFirstDrawMatched)warnings.push('Entry first-render call/triangle counts or target dimensions differ across arms: entry speedup is not a controlled comparison. Warmed edit validation remains separate.');
 if (!entryPrebuildMatched) warnings.push('Entry prewarm/asset state differs across arms: entry paired latencies are not controlled. Warmed edit validation remains separate.');
 for (const p of paired) {
   const group=entrySignatures.filter(a=>a.pair===p.pair);
   p.entryPrebuildMatched=group.length===2&&json(group[0].signature)===json(group[1].signature);
-  p.entryComparisonMatched=p.entryPrebuildMatched;
+  const drawGroup=entryFirstDrawSignatures.filter(a=>a.pair===p.pair);
+  p.entryFirstDrawMatched=drawGroup.length===2&&drawGroup.every(x=>x.signature.length>0)&&json(drawGroup[0].signature)===json(drawGroup[1].signature);
+  p.entryComparisonMatched=p.entryPrebuildMatched&&p.entryFirstDrawMatched;
 }
 const pairedAggregate={};for(const key of Object.keys(paired[0]?.metrics||{}))pairedAggregate[key]={baselinePairMedians:stats(paired.map(p=>p.metrics[key].baseline)),candidatePairMedians:stats(paired.map(p=>p.metrics[key].candidate)),pairedReductionPct:stats(paired.map(p=>p.metrics[key].reductionPct))};
 const analysis={schema:'garage-retry-analysis/v1',input:file,software,validationPassed:!errors.length,nativeHardwareClaimsAllowed:!software&&!errors.length,
- baseline:r.baseline,candidate:r.candidate,entryMode:r.entryMode||null,entryPrebuildMatched,entryComparisonMatched,entrySignatures,checks,errors,warnings,paired,pairedAggregate,arms,cpuProfiles:profiles,entryPrebuild,
+ baseline:r.baseline,candidate:r.candidate,entryMode:r.entryMode||null,entryPrebuildMatched,entryFirstDrawMatched,entryComparisonMatched,entrySignatures,entryFirstDrawSignatures,checks,errors,warnings,paired,pairedAggregate,arms,cpuProfiles:profiles,entryPrebuild,
  limitations:['Allocation bytes are createBuffer descriptor totals minus observed explicit destroy; not resident VRAM or leak proof. Texture allocations are counts only.',
  'Fresh page contexts share one browser and GPU-driver caches. Cold fast tap is not a cleared GPU shader cache.',
  'Entry prewarm parity is reported without requiring assets uploaded=0; network completion may vary. A mismatched entry comparison does not invalidate independently controlled warmed edits.',
@@ -177,7 +217,7 @@ const analysis={schema:'garage-retry-analysis/v1',input:file,software,validation
  'Main begin-to-present durations are synchronous wall times with possible driver submission stalls; not GPU execution times. Cadence under paused/resumed rendering is not player FPS.',
  'Idle draw/triangle differences are flagged for investigation. Matching counts alone do not prove pixels or resource lifetime correctness.',
  'Exact-revision comparison cannot attribute entry changes to any historical DOM suspect. Entry mechanisms are unchanged between these revisions.',
- 'CPU self time comes from CDP sampling timeDeltas, including idle/runtime buckets. Sample shares are not GPU time. No benchmark tolerance or missing-data substitution is used.']};
+ 'CPU profile rows use normalized chronological preceding-sample-interval WALL attribution, including idle/runtime buckets. This is not DevTools hit-count self time, pure CPU execution time, or GPU time. Raw profile SHA256 and negative-delta evidence are retained. The potentially large profile-start to first-sample gap is reported separately and attributed to the first sample by convention; it is not evidence that the first stack executed throughout that gap. No benchmark tolerance or missing-data substitution is used.']};
 const f=x=>num(x)?x.toFixed(2):'n/a';
 let md=`# Garage retry A/B analysis\n\n${software?'SOFTWARE PILOT — no native performance claims.':'Native Apple Three WebGPU experiment.'}\n\nValidation: **${analysis.validationPassed?'PASS':'FAIL'}**. Native hardware claims allowed: **${analysis.nativeHardwareClaimsAllowed}**.\n\nBaseline: \`${r.baseline}\`\n\nCandidate: \`${r.candidate}\`\n\nEntry mode: ${r.entryMode||'not recorded'}.\n\n`;
 if(errors.length)md+='Validation failures:\n\n'+errors.map(x=>'- '+x).join('\n')+'\n\n';
@@ -187,11 +227,13 @@ if(!software){
  md+='\nUntouched first-open stock garage (editor closed; finish control irrelevant):\n\n| Pair / arm | Main renders | Begin-present median ms | Draw calls / main render | Triangles / main render |\n|---|---:|---:|---:|---:|\n';
  for(const a of arms)md+=`| ${a.pair} ${a.arm} | ${a.stockIdle?.mainRenders??'n/a'} | ${f(a.stockIdle?.mainBuildPresentMs.p50)} | ${f(a.stockIdle?.drawCallsPerMainRender)} | ${f(a.stockIdle?.trianglesPerMainRender)} |\n`;
 }
-md+='\nEntry prebuild matched across arms: **'+entryPrebuildMatched+'**. Entry comparison matched: **'+entryComparisonMatched+'**. '+(entryComparisonMatched?'':'Entry paired latencies are **not controlled**. ')+ 'Entry rows are **profiled exploratory measurements**, not clean player timing. Fresh contexts share browser/GPU-driver caches; cold fast tap does not clear shader caches.\n\nTimed-edit allocation counter deltas:\n\n| Pair / arm | Buffers created | Created bytes | Buffers destroyed | Destroyed bytes | Undestroyed delta | Pipelines sync / async | Shader modules |\n|---|---:|---:|---:|---:|---:|---:|---:|\n';
+md+='\nEntry prebuild matched across arms: **'+entryPrebuildMatched+'**. Entry first draw matched: **'+entryFirstDrawMatched+'**. Entry comparison matched: **'+entryComparisonMatched+'**. '+(entryComparisonMatched?'':'Entry paired latencies are **not controlled**. ')+ 'Entry rows are **profiled exploratory measurements**, not clean player timing. Fresh contexts share browser/GPU-driver caches; cold fast tap does not clear shader caches.\n\nTimed-edit allocation counter deltas:\n\n| Pair / arm | Buffers created | Created bytes | Buffers destroyed | Destroyed bytes | Undestroyed delta | Pipelines sync / async | Shader modules |\n|---|---:|---:|---:|---:|---:|---:|---:|\n';
 for(const a of arms){const d=a.allocationTimedEditDelta||{};md+=`| ${a.pair} ${a.arm} | ${d.bufferCreated??'n/a'} | ${d.bufferCreatedBytes??'n/a'} | ${d.bufferDestroyed??'n/a'} | ${d.bufferDestroyedBytes??'n/a'} | ${d.bufferUndestroyedBytes??'n/a'} | ${d.pipelineCreated??'n/a'} / ${d.pipelineAsyncCreated??'n/a'} | ${d.shaderModulesCreated??'n/a'} |\n`;}
 md+='\nFull cumulative before/after counters, usage-bitmask deltas, idle parity, prebuild/firstFrame telemetry and paired aggregates are in analysis.json.\n\n';
 if(warnings.length)md+='Investigate:\n\n'+warnings.map(x=>'- '+x).join('\n')+'\n\n';
-md+='CPU profiles (sampled self time):\n\n';for(const p of profiles){md+=`- ${p.pair} ${p.arm} ${p.kind}: ${p.samples} samples, ${f(p.sampledMs)} ms sampled; profile wall ${f(p.profileWallMs)} ms. Top: `+p.topSelf.slice(0,5).map(x=>`${x.site} (${f(x.selfMs)} ms)`).join('; ')+'.\n';}
+md+='CPU profiles (sampled WALL attribution, not pure CPU execution or DevTools hit-count self time):\n\n';
+for(const p of profiles){md+=`- ${p.pair} ${p.arm} ${p.kind}: ${p.samples??0} samples, ${f(p.sampledWallAttributedMs)} ms attributed; profile wall ${f(p.profileWallMs)} ms; leading gap ${f((p.normalization?.leadingGapUs??NaN)/1000)} ms (first-sample attribution by convention, not continuously observed execution); tail ${f(p.unattributedTailMs)} ms. Raw SHA256 \`${p.rawSha256}\`. Negative deltas: ${p.normalization?.negativeDeltas?.length??'invalid profile'}; reordered samples: ${p.normalization?.reorderedSamples??'n/a'}. Top: `+(p.topSampledWall||[]).slice(0,5).map(x=>`${x.site} (${f(x.sampledWallMs)} ms)`).join('; ')+'.\n';}
+
 md+='\nLimitations:\n\n'+analysis.limitations.map(x=>'- '+x).join('\n')+'\n';
 fs.writeFileSync(path.join(dir,'analysis.json'),JSON.stringify(analysis,null,2));fs.writeFileSync(path.join(dir,'report.md'),md);
 console.log(JSON.stringify({validationPassed:analysis.validationPassed,nativeHardwareClaimsAllowed:analysis.nativeHardwareClaimsAllowed,arms:arms.length,errors:errors.length,warnings:warnings.length,analysis:path.join(dir,'analysis.json'),report:path.join(dir,'report.md')}));

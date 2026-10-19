@@ -149,6 +149,7 @@ jobs:
       cam: ${{ steps.split.outputs.cam }}
       entry: ${{ steps.split.outputs.entry }}
       run: ${{ steps.gate.outputs.run }}
+      reanalysis: ${{ steps.split.outputs.reanalysis }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
@@ -223,6 +224,7 @@ jobs:
           if os.environ.get("EVENT") == "push":
             with open(".github/gpu-census-request.json", encoding="utf-8") as f:
               req = json.load(f)
+          print("reanalysis=" + str(req.get("leg") == "garage-reanalysis-367dc").lower())
           allow = {"ubuntu-latest", "ubuntu-24.04", "macos-latest", "macos-15", "macos-14",
                    "macos-13", "windows-latest", "windows-2022"}
           raw = str(req.get("images") or os.environ.get("INPUT_IMAGES") or "macos-latest")
@@ -519,4 +521,46 @@ jobs:
             game-*.json
             game-*.png
           if-no-files-found: warn
+          retention-days: 7
+
+  garage_reanalysis:
+    name: Revalidate preserved native garage captures
+    needs: plan
+    if: ${{ needs.plan.outputs.run != 'false' && needs.plan.outputs.reanalysis == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download original Apple garage captures
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: garage-retry-ab
+          run-id: 39189412012
+          github-token: ${{ github.token }}
+          path: evidence/garage
+      - name: Download original four renderer controls
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: gpu-census-macos-latest
+          run-id: 39189412012
+          github-token: ${{ github.token }}
+          path: evidence/controls
+      - name: Validate provenance and analyze preserved data
+        run: |
+          node --version
+          node -e 'const r=require("./evidence/garage/game-garage-retry-ab.json");if(r.request!=="367dc4103ecb14dc5d595dce2bfe813ef884fcaa")throw Error("unexpected source capture");const fs=require("node:fs");fs.copyFileSync("evidence/garage/analysis.json","evidence/garage/analysis.original.json");fs.copyFileSync("evidence/garage/report.md","evidence/garage/report.original.md");'
+          node scratch/analyze-garage-retry.mjs evidence/garage
+          node tools/gfx/census-verdict.mjs --image macos-latest --dir evidence/controls
+      - name: Upload corrected analysis and original captures
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: garage-reanalysis-367dc
+          path: evidence/
+          if-no-files-found: error
           retention-days: 7
