@@ -399,3 +399,19 @@ for _L in LANES:
         _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
         _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"] and not f.startswith("js/")]
         _L["ids"] = _L["ids"] + _i
+
+# ---- late continuations 2: race-2 part 3/3 (race-2b), physics-2 part 3c (physics-2c), both final
+_FOLD8 = {
+ "L10": (["physics-2"], ["P2-29", "P2-31"]),
+ "L12": (["physics-2"], ["P2-30"]),
+ "L14": (["physics-2"], ["P2-33"]),
+ "L15": (["race-2"], ["RC2-22"]),
+ "L17": (["race-2"], ["RC2-23", "RC2-24"]),
+ "L19": (["physics-2"], ["P2-32"]),
+}
+for _L in LANES:
+    if _L["id"] in _FOLD8:
+        _b, _i = _FOLD8[_L["id"]]
+        _L["batches"] = _L["batches"] + [b for b in _b if b not in _L["batches"]]
+        _L["owned"] = _L["owned"] + [f for f in _files(_i) if f not in _L["owned"]]
+        _L["ids"] = _L["ids"] + _i
