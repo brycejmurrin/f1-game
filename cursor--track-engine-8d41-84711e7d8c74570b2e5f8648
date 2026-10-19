@@ -1,0 +1,1 @@
+1792437757	Bryce Murrin	TRACK ENGINE: bounded segment-grid construction and exact linear fallback; OWNED js/track/core/spline.js tests/unit/spline-project-height.test.mjs docs/changelog.d/track-projection-grid.md. No circuit data, renderer, worker/client, scenery kit or physics changes.  [cursor/track-engine-8d41; session 84711e7d8c74570b2e5f8648]
