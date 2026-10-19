@@ -788,6 +788,12 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/ci/fleet-bus-mirror.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/fleet-bus.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
