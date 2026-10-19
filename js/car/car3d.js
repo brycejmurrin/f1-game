@@ -1246,10 +1246,11 @@ const Car3D = (function () {
       const stalkTop = ckpt ? mY - mH / 2 + 0.006 : sB + sR*1.5 + aY;
       const stalkZ = mz + (ckpt ? 0.025 : 0); // tuck the stay behind the glass
       if (onHalo) {
-        // Two swept stays from the hoop's crown corner (x 0.30, y ~0.84,
-        // z ~0.02) out to the housing's inboard end, plus a lower brace.
-        addBeamBetween(out, [s * 0.295, 0.845, 0.04], [s * (mx - mW * 0.40), mY + 0.010, mz], 0.014, mStalkC, SURFACES.carbon);
-        addBeamBetween(out, [s * 0.285, 0.820, -0.04], [s * (mx - mW * 0.30), mY - 0.022, mz + 0.02], 0.010, mStalkC, SURFACES.carbon);
+        // Two swept stays rooted ON the hoop centreline at its crown corner
+        // (x 0.30, crownY, z ~0.02: fit-audit found 5.7 mm of air at 0.845)
+        // out to the housing's inboard end, plus a lower brace.
+        addBeamBetween(out, [s * 0.30, crownY, 0.03], [s * (mx - mW * 0.48), mY + 0.010, mz], 0.014, mStalkC, SURFACES.carbon);
+        addBeamBetween(out, [s * 0.297, crownY - 0.004, -0.02], [s * (mx - mW * 0.48), mY - 0.022, mz + 0.01], 0.010, mStalkC, SURFACES.carbon);
       } else addBlock(out, [
         [xi, sB + aY, mz - (ckpt ? 0.026 : 0.045)], [xi, sB + aY, mz + (ckpt ? 0.026 : 0.045)], [xi, sB + sR + aY, mz + (ckpt ? 0.026 : 0.045)], [xi, sB + sR + aY, mz - (ckpt ? 0.026 : 0.045)],
         [xo, (ckpt ? stalkTop-0.016 : sB+sR*.75+aY), stalkZ - (ckpt ? 0.012 : 0.020)], [xo, (ckpt ? stalkTop-0.016 : sB+sR*.75+aY), stalkZ + (ckpt ? 0.012 : 0.020)],  [xo, stalkTop, stalkZ + (ckpt ? 0.012 : 0.020)], [xo, stalkTop, stalkZ - (ckpt ? 0.012 : 0.020)],
