@@ -85,31 +85,12 @@ jobs:
         shell: bash
         run: |
           set -eu
-          REPORT=artifacts/webkit-leg/report.json
           {
             echo "## WebKit leg (iPhone-path proxy)"
             echo
             echo "Playwright WebKit is a **proxy** (JavaScriptCore + WebKit WebGL; ANGLE-Metal on macOS), not the phone's Safari. playwright-core 1.63.0 pins WebKit 26.6."
             echo
-            if [ -f "$REPORT" ]; then
-              node -e '
-                const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-                const lines = [
-                  `| field | value |`,
-                  `|---|---|`,
-                  `| browser.version() | \`${r.browserVersion}\` |`,
-                  `| track | \`${r.track}\` |`,
-                  `| backend / bound | \`${r.boot && r.boot.backend}\` / \`${r.boot && r.boot.bound}\` |`,
-                  `| first frame | \`${r.firstFrame && r.firstFrame.presented}\` (${r.firstFrame && r.firstFrame.canvas && r.firstFrame.canvas.id} ${r.firstFrame && r.firstFrame.canvas && r.firstFrame.canvas.w}x${r.firstFrame && r.firstFrame.canvas && r.firstFrame.canvas.h}) |`,
-                  `| frame-time p50 / n | \`${r.frameTimes && r.frameTimes.p50}\` ms / \`${r.frameTimes && r.frameTimes.n}\` |`,
-                  `| heap after 2 race cycles | \`${r.heapAfterTwoRaceCycles && r.heapAfterTwoRaceCycles.usedJSHeapSize}\` (null = WebKit has no performance.memory) |`,
-                  `| pass-census | blocked: harness is Chromium-only |`,
-                ];
-                console.log(lines.join("\n"));
-              ' "$REPORT"
-            else
-              echo "_No report.json — the boot step failed before writing artifacts/webkit-leg/report.json._"
-            fi
+            node tools/ci/webkit-leg-summary.mjs artifacts/webkit-leg/report.json
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload WebKit leg artifacts

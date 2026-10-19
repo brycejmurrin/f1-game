@@ -8,15 +8,22 @@
 //
 // Writes artifacts/webkit-leg/report.json (boot, first race frame, short
 // frame-time sample, heap after two race cycles) for the workflow summary.
+//
+// Imports `@playwright/test` directly — NOT tests/helpers/fixtures.js. Fixtures
+// pin apex26.gfxBackend=webgl2 (we need three+tlxForceGL), and a new fixtures
+// consumer would raise tools/ci/fixture-consumer-audit.mjs FLOOR outside this
+// PR's OWNED set. Boot budgets match fixtures.js BOOT_MS / TRACK_MS.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { test, expect, BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
+import { test, expect } from "@playwright/test";
 import { awaitPresentedFrame } from "../helpers/presented-canvas.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const OUT_DIR = path.join(ROOT, "artifacts", "webkit-leg");
 const TRACK = process.env.APEX_WEBKIT_TRACK || "montreal";
+const BOOT_MS = 45_000;
+const TRACK_MS = 45_000;
 const FRAME_WARM_MS = 2_000;
 const FRAME_SAMPLE_MS = 5_000;
 
