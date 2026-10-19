@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_01381dVqqgcXWWQuT94wo9rM ORCH10 -> ORCH11 claude:session_015jmH5WuFwif7r9JYAAZ36y; lease released; tip e6686e5c
+LEASE to:* from:claude:session_015jmH5WuFwif7r9JYAAZ36y acquire ttl=60m until=2026-10-19T13:30Z ORCH11 session_015jmH5WuFwif7r9JYAAZ36y orchestrator, Level 3
