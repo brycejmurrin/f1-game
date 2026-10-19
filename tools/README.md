@@ -226,6 +226,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/capture-diagnostics.mjs** | Bounded Chromium GPU provenance and opt-in streamed capture tracing. | — |
 | **shot/capture-options.mjs** | Validated shared screenshot profiles, scope, rendering stack, and session options. | — |
 | **shot/capture-runtime.mjs** | Serial browser capture lifecycle with identity, diagnostics and teardown on every path. | — |
+| **shot/export-history-evidence.mjs** | Export selected committed evidence files, preserving Git blob identities without executing the old checkout. | — |
 | **shot/flicker-gate.mjs** | Rendered z-fighting gate: still camera at known fight sites, sub-mm dolly jitter, per-site flip ceiling; JSON + exit 1. | playwright-probe |
 | **shot/flyby.mjs** | Contact sheet + JSON of the pre-race FLYBY shots, flagging a camera in scenery. `--track --frames --out --u --shots`. | — |
 | **shot/frame-report.mjs** | Node-only FRAMING REPORT of flyby shots: cover, occlusion, sky, motion, ASCII; --fleet sweeps all, --diff compares two. | playwright-probe |
