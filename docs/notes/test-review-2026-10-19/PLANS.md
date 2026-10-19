@@ -1,6 +1,6 @@
 # Test suite review 2026-10-19 — pass-2 fix plans
 
-**PLANS FINAL** (2026-10-19 08:10Z): all 22 batches reported; 27 of 37 lanes are ready to launch. A draft lane names the continuation it waits on; fold that continuation into its row file and lane, then launch.
+**PLANS FINAL** (2026-10-19 11:04Z): all 22 batches reported; 31 of 37 lanes are ready to launch. A draft lane names the continuation it waits on; fold that continuation into its row file and lane, then launch.
 
 Generated with `SYNTHESIS.md`. Each lane is one PR-sized owner session; OWNED globs are disjoint between lanes. A lane stays **draft** until every batch it draws from has a final report.
 
@@ -323,12 +323,12 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 - **Depends on:** the tracks-2 report is partial (tracks-walls, vegas, zandvoort verdicts and the props-over-road tail from spa are unfinished): fold its continuation here before launch; TK2-01 needs one browser read of groundY on the lat ±6 probes before the assert is tightened
 - **PR slices:** PR 1: TK2-01, TK2-05, TK2-12, TK2-19 (foundation-spec escapes; one circuit per commit); PR 2: TK1-06, TK1-16–TK1-22, TK1-26, TK2-10, TK2-16, TK2-17 (circuit-data units and accuracy spec)
 
-### L28 — Track scenery build tests that bite (draft)
+### L28 — Track scenery build tests that bite (ready to launch)
 
 - **Goal:** scenery guards, night override and lazy build run the real build and fail on a floating, missing or wrongly lit prop; span kinds and the scenery(api) contract are asserted from the engine, not a list copy
 - **Owned:** `tests/specs/props-over-road.spec.js`, `tests/unit/circuit-vocab.test.mjs`, `tests/unit/lazy-track-build.test.mjs`, `tests/unit/scenery-api-contract.test.mjs`, `tests/unit/scenery-guards.test.mjs`, `tests/unit/span-kinds.test.mjs`, `tests/unit/track-build-vm-release.test.mjs`, `tests/unit/track-night-override.test.mjs`, `tests/unit/marshal-post-grounding.test.mjs`, `tests/unit/baked-model-road-guard.test.mjs`, `tests/specs/new-hooks.spec.js`
 - **Closes:** TK1-01, TK1-02, TK1-05, TK1-07, TK1-08, TK1-12, TK1-25, TK2-03, T3-09, M1-06, PL-14, PL-15 (12 findings; effort S×7 M×5 L×0)
-- **Draws from batches:** tracks-1, tracks-2, tooling-3, modes-1, platform — waiting on: platform
+- **Draws from batches:** tracks-1, tracks-2, tooling-3, modes-1, platform
 - **Verify:** `node --test on the owned units; props-over-road.spec.js alone via test-bg.mjs (or remote-group.mjs on the pushed branch)`
 - **Effort:** M
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
@@ -346,12 +346,12 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
 - **Depends on:** TK2-06 may be an environment timeout: re-run track-designer.spec.js alone at loadavg < 3 before changing it
 
-### L30 — Agent API tests assert the hook, not its copy (draft)
+### L30 — Agent API tests assert the hook, not its copy (ready to launch)
 
 - **Goal:** __apex hook tests (agent-view, anchors, obs/act edges, headless, the apex-tools MCP) call the live hook in the game VM and assert its documented shape and effect, not a hand-built object or a doc string
 - **Owned:** `tests/unit/agent-anchors-vm.test.mjs`, `tests/unit/agent-view-vm.test.mjs`, `tests/unit/agentview-api-contract.test.mjs`, `tests/unit/headless-api-vm.test.mjs`, `tests/unit/hooks-documented.test.mjs`, `tests/unit/obs-act-edge-vm.test.mjs`, `tests/specs/agent-determinism.spec.js`, `tests/specs/headless-api.spec.js`, `tests/specs/obs-act-edge.spec.js`, `tools/ci/twinned-specs.mjs`
 - **Closes:** T1-05, T1-11, T1-12, T3-02, T3-11, T3-12, PL-09, PL-10, PL-11, PL-26 (10 findings; effort S×9 M×1 L×0)
-- **Draws from batches:** tooling-1, tooling-3, platform — waiting on: platform
+- **Draws from batches:** tooling-1, tooling-3, platform
 - **Verify:** `node --test on the owned files`
 - **Effort:** M
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
@@ -401,27 +401,27 @@ Every lane: one draft PR into the deploy branch, `Closes` nothing (the parent #2
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
 - **Depends on:** none (modes-1 final)
 
-### L35 — UI specs on the shipped look and the phone profile (draft)
+### L35 — UI specs on the shipped look and the phone profile (ready to launch)
 
 - **Goal:** ui-resize, ui-scale, ui-redesign, ui-audit and button-touch specs run with the shipped appearance defaults (large text, high contrast) and a phone profile (844x390 landscape, hasTouch + isMobile) instead of pinning desktop defaults
 - **Owned:** `tests/specs/ui-audit.spec.js`, `tests/specs/ui-button-touch.spec.js`, `tests/specs/ui-redesign.spec.js`, `tests/specs/ui-resize.spec.js`, `tests/specs/ui-scale.spec.js`
-- **Closes:** PL-04, PL-17, PL-18, PL-19, PL-20, PL-21 (6 findings; effort S×2 M×4 L×0)
-- **Draws from batches:** platform — waiting on: platform
+- **Closes:** PL-04, PL-17, PL-18, PL-19, PL-20, PL-21, PL-27, PL-28, PL-29 (9 findings; effort S×4 M×5 L×0)
+- **Draws from batches:** platform
 - **Verify:** `each owned spec alone via test-bg.mjs at 844x390 touch first (fleet-core); remote-group.mjs for a whole group`
 - **Effort:** M
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
-- **Depends on:** platform is partial 1/n (7 of 22 specs read but never run, no debugger pass): fold its continuation before launch
+- **Depends on:** none (platform final); ui-scale portrait @200% (PL-27) is red on a real assertion: debug it before changing ui-scale; ui-resize (PL-28) and ui-button-touch (PL-29) are red alone on this box, so take their verdict from CI shards (remote-group.mjs)
 
-### L36 — Boot, smoke and runtime specs that can fail (draft)
+### L36 — Boot, smoke and runtime specs that can fail (ready to launch)
 
 - **Goal:** smoke, audit, boot-guard, wake-lock, soak, autopilot and dev-tools specs assert an outcome that a regression would change (the audit rival coast compares against a non-player speed, boot-guard covers the lazy-script exemption and offline), and the 120 s timeouts are triaged alone before any assert change
 - **Owned:** `tests/specs/audit.spec.js`, `tests/specs/autopilot.spec.js`, `tests/specs/boot-guard.spec.js`, `tests/specs/dev-tools-dom.spec.js`, `tests/specs/dev-tools.spec.js`, `tests/specs/logging.spec.js`, `tests/specs/map-hooks.spec.js`, `tests/specs/output-paths.spec.js`, `tests/specs/smoke.spec.js`, `tests/specs/soak-run.spec.js`, `tests/specs/wake-lock.spec.js`
 - **Closes:** PL-01, PL-02, PL-03, PL-05, PL-06, PL-07, PL-08, PL-12, PL-13, PL-16, PL-22, PL-23, PL-24, PL-25 (14 findings; effort S×11 M×3 L×0)
-- **Draws from batches:** platform — waiting on: platform
+- **Draws from batches:** platform
 - **Verify:** `each owned spec alone via test-bg.mjs at loadavg < 3; smoke.spec.js first`
 - **Effort:** M
 - **Model:** claude-sonnet-5-5 — scoped test rewrites inside one subsystem; the fleet default for lanes (Bryce 2026-10-16, memory `sessions-run-sonnet`)
-- **Depends on:** platform is partial 1/n (7 of 22 specs read but never run, no debugger pass): fold its continuation before launch; smoke, dev-tools-dom and ui-audit were red on 120 s timeouts: re-run each alone before classifying
+- **Depends on:** none (platform final); smoke and dev-tools-dom time out alone on an idle box (SwiftShader cost, PL-01/PL-02): take their verdict from CI llvmpipe (remote-group.mjs), not a local run
 
 ### L11 — Test-tree lints (draft)
 
