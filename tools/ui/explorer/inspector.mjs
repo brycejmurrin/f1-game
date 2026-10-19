@@ -19,7 +19,7 @@ export function inspectUI(options = {}) {
   const safe = (fn, fallback = null) => { try { return fn(); } catch (_) { return fallback; } };
   const text = value => String(value || "").replace(/\s+/g, " ").trim().slice(0, 160);
   const visible = e => {
-    if (!e || e.closest('[hidden],[inert],[aria-hidden="true"]')) return false;
+    if (!e || e.closest('[hidden],[inert]')) return false;
     if (e.checkVisibility && !e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return false;
     for (let p = e.parentElement; p; p = p.parentElement) {
       if (p.tagName === "DETAILS" && !p.open && !p.querySelector(":scope > summary")?.contains(e)) return false;
@@ -131,12 +131,18 @@ export function inspectUI(options = {}) {
   const scopes = options.root ? document.querySelectorAll(options.root) : [document];
   if (scopes.length !== 1) throw new Error(`Inspector root must identify exactly one element (matched ${scopes.length}): ${options.root}`);
   const scope = scopes[0];
-  const roots = [...document.querySelectorAll('.screen,dialog,[role="dialog"],#overlay,#hud,#pausemenu,#photo-studio')].filter(visible).map(e => e.id || name(e));
-  const controlSelector = 'button,a[href],input:not([type="hidden"]),select,textarea,summary,[role="button"],[role="tab"],[role="switch"],[role="slider"],[role="checkbox"],[role="radio"]';
-  const candidates = [...(scope.matches?.(controlSelector) ? [scope] : []), ...scope.querySelectorAll(controlSelector)].filter(visible);
+  const controlSelector = 'button,a[href],input:not([type="hidden"]),select,textarea,summary,canvas[tabindex],[role="button"],[role="tab"],[role="switch"],[role="slider"],[role="checkbox"],[role="radio"]';
+  const paintedRoot = e => visible(e) || !e.closest('[hidden],[inert]') && safe(() => [...e.querySelectorAll('.sheet,button,input,select,canvas[tabindex]')].some(visible), false);
+  const roots = [...document.querySelectorAll('.screen,dialog,[role="dialog"],[role="region"][data-esc-close],#overlay,#hud,#pausemenu,#photo-studio')].filter(paintedRoot).map(e => e.id || name(e));
+  const viewNodes = [...document.querySelectorAll('[role="region"][id],[role="tabpanel"][id],[role="tab"][aria-selected="true"][id],#pm-settings-index,#advanced,#audioset')].filter(visible);
+  const views = viewNodes.slice(0, 128).map(e => e.id === 'dh-panel' && e.getAttribute('aria-labelledby')
+    ? `${selector(e)}[aria-labelledby="${CSS.escape(e.getAttribute('aria-labelledby'))}"]` : selector(e));
+  const candidates = [...(scope.matches?.(controlSelector) ? [scope] : []), ...scope.querySelectorAll(controlSelector)]
+    .filter(e => visible(e) && (e.tagName !== 'CANVAS' || e.tabIndex >= 0 && !!name(e)));
   const controls = [], issues = [];
   for (const e of candidates.slice(0, limit)) {
     const r = e.getBoundingClientRect(), sel = selector(e), label = name(e);
+    const ariaHidden = !!e.closest('[aria-hidden="true"]');
     let left = Math.max(0, r.x), right = Math.min(innerWidth, r.right), topY = Math.max(0, r.y), bottom = Math.min(innerHeight, r.bottom);
     let scrollX = false, scrollY = false;
     let reachableX = [r.x, r.right], reachableY = [r.y, r.bottom];
@@ -187,13 +193,21 @@ export function inspectUI(options = {}) {
       { x: r.x, y: r.y, right: r.right, bottom: r.bottom });
     const target = { width: area.right - area.x, height: area.bottom - area.y };
     const c = { selector: sel, role: role(e), name: label, disabled, checked: e.checked, expanded: e.getAttribute("aria-expanded"),
+      ariaHidden, interactionKind: e.tagName === 'CANVAS' ? 'custom-surface' : ariaHidden ? 'pointer-only' : 'standard',
       pressed: e.getAttribute("aria-pressed"), selected: e.getAttribute("aria-selected"), open: e.tagName === "SUMMARY" ? e.parentElement?.open : undefined,
       value: e.type === "password" || /password|secret|token/i.test(e.name || "") ? "[redacted]" : typeof e.value === "string" ? e.value.slice(0, 512) : e.value,
       min: e.min || null, max: e.max || null, step: e.step || null, box: box(e), reachability, binding: binding(e),
       layout: css(getComputedStyle(e), layoutProperties), layoutAncestors };
+    if (e.tagName === 'SELECT') {
+      const options = [...(e.options || [])];
+      c.options = options.slice(0, 64).map(o => ({ name: text(o.label || o.textContent), value: String(o.value).slice(0, 512),
+        disabled: !!o.disabled || !!o.closest?.('optgroup[disabled]'), selected: !!o.selected,
+        truncated: String(o.label || o.textContent || '').replace(/\s+/g, ' ').trim().length > 160 || String(o.value).length > 512 }));
+      c.optionCoverage = { total: options.length, inspected: c.options.length, omitted: Math.max(0, options.length - c.options.length), truncated: options.length > c.options.length };
+    }
     controls.push(c);
     const issue = (kind, message) => issues.push({ kind, selector: sel, message });
-    if (!label) issue("unnamed", "Visible control has no name in this DOM screening.");
+    if (!label && !ariaHidden) issue("unnamed", "Visible control has no name in this DOM screening.");
     if (((r.x < -1 || r.right > innerWidth + 1) && !scrollX) || ((r.y < -1 || r.bottom > innerHeight + 1) && !scrollY)) issue("offscreen", `${label || sel} escapes the viewport without scrolling on that axis.`);
     if (clippedBy.length) issue("clipped", `${label || sel} extends past a non-scrolling clip.`);
     if (reachability.hit === "blocked" && !disabled) issue("blocked", `${label || sel} is intercepted by ${reachability.interceptor}.`);
@@ -214,7 +228,7 @@ export function inspectUI(options = {}) {
     bindings, behavior: "not-tested", persistence: "not-tested",
     limitation: "Binding matches are observations of current state, not proof that an action works or survives reload" };
   return { version: 1, readOnly: true, title: document.title, url: location.href, root: options.root || null,
-    roots: [...new Set(roots)], topLayer: top ? selector(top) : null, topLayerSource: "focused-dialog; stacking order not inferred",
+    roots: [...new Set(roots)], views, viewsTruncated: viewNodes.length > 128, topLayer: top ? selector(top) : null, topLayerSource: "focused-dialog; stacking order not inferred",
     dialogs: [...document.querySelectorAll('dialog[open],[role="dialog"]')].filter(visible).map(e => e.id || name(e)),
     viewport: { width: innerWidth, height: innerHeight, textScale: Number(document.documentElement.dataset.explorerTextScale || 100) },
     adaptive, layoutContexts: [...layoutContexts.values()], layoutContextsTruncated,
@@ -267,7 +281,8 @@ export function diffInspections(before, after) {
   return { added: [...b.keys()].filter(k => !a.has(k)), removed: [...a.keys()].filter(k => !b.has(k)), changed: changed.slice(0, 100), changedTotal: changed.length, truncated: changed.length > 100, layout,
     layoutContexts,
     viewportChanged: JSON.stringify(before.viewport) !== JSON.stringify(after.viewport), environmentChanged: JSON.stringify(before.adaptive) !== JSON.stringify(after.adaptive),
-    focusChanged: JSON.stringify(before.focus) !== JSON.stringify(after.focus), rootsChanged: JSON.stringify(before.roots) !== JSON.stringify(after.roots), issues: after.issues };
+    focusChanged: JSON.stringify(before.focus) !== JSON.stringify(after.focus), rootsChanged: JSON.stringify(before.roots) !== JSON.stringify(after.roots),
+    viewsChanged: JSON.stringify(before.views) !== JSON.stringify(after.views), issues: after.issues };
 }
 
 /** Explicit viewport mutation only. Reuse the current tab/state; never guess a screen's opener or change saved settings. */

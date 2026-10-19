@@ -4,6 +4,8 @@
 // @skill ui-menu-a11y
 // Companion numbers matrix beside layout-audit (tap/type/spacing/overflow).
 // survey-ui-matrix owns layout-audit; use this when you need the type/spacing floors.
+// Touch-only: every viewport uses touch input and its shipped defaults, including
+// desktop-sized windows. Use layout-audit's viewport catalog for desktop comparisons.
 //
 // menu-fit answers "is this screen clipped at one viewport" and takes pictures.
 // This answers the questions that only show up across a MATRIX of sizes and
@@ -42,6 +44,9 @@ exitIfHelp(argv, `fit-audit — numbers matrix: tap / type / spacing / overflow 
   node tools/ui/fit-audit.mjs [--only=select,menu] [--sizes=852x393,…] [--scale=100,130] [--json]
   Native JSON is saved to artifacts/fit-audit/audit.json.
 
+Touch-only at every viewport size; desktop-sized windows still use touch defaults.
+For desktop comparisons, use tools/ui/layout-audit.mjs and its viewport catalog.
+
 Browser-only. Prefer layout-audit.mjs --list / --help to see the catalog without launching.`);
 const arg = (k) => { const a = argv.find((x) => x.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : null; };
 const ONLY = arg("only") ? arg("only").split(",").filter(Boolean) : null;
@@ -52,7 +57,7 @@ const ONLY = arg("only") ? arg("only").split(",").filter(Boolean) : null;
 const SCALES = parseScales(argv);
 
 // The matrix. Both orientations of the three phone classes the game targets,
-// both of a tablet, and a desktop — a menu that fits at 852x393 can still lose
+// both of a tablet, and a desktop-sized touch window — a menu that fits at 852x393 can still lose
 // its primary button at 667x375, which is the whole reason this is a sweep.
 const SIZES = (arg("sizes") || [
   "375x667",   // iPhone SE portrait — the smallest screen that matters
@@ -63,7 +68,7 @@ const SIZES = (arg("sizes") || [
   "932x430",   // Pro Max landscape
   "768x1024",  // iPad portrait
   "1024x768",  // iPad landscape
-  "1440x900",  // desktop
+  "1440x900",  // desktop-sized window, still touch input
 ].join(",")).split(",").map((s) => { const [w, h] = s.split("x").map(Number); return { width: w, height: h }; });
 
 const UNTIL = `

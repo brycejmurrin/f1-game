@@ -115,4 +115,81 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 :where(body[data-shape="tall"]) #overlay #menu-meta { flex-direction: row; flex-wrap: nowrap; justify-content: center; align-items: center; margin-top: calc(var(--gap) * .3); }
 :where(body[data-shape="tall"]) #overlay #disclaimer { flex: 1 1 0; min-width: 0; text-align: start; margin: 0; }
 :where(body[data-shape="tall"]) #overlay #soundbtn { margin: 0; flex: none; }
+
+/* Phone landscape: identity/art left, compact destination cluster right.
+   No zoom here — menus.css owns the short/narrow 1.25 cap; desktop-sized
+   hasTouch windows keep --ui-scale (ui-scale @ 1280×742 / 200%).
+   Keep compact Home's primary 2×2 + PRACTICE and the #menu-garage overlay
+   (rows 2/3/4): dissolving those groups onto explicit explore/create rows
+   stacked PRACTICE under GARAGE (ui-scale Factory Home click intercept). */
+:root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
+  grid-column: 2; grid-row: 1;
+  /* 34vwz keeps the CSS inline size above the 12rem title-menu container at
+     Factory Home 667×320 and phone-landscape @ 200% (geometry zoom 1.25
+     shrinks used width). 30vwz fell under 12rem and either stacked Play
+     (Garage over Practice) or, after the 2-col keep, clipped labels / crushed
+     200% control text. */
+  width: calc(34 * var(--vwz)); max-width: 100%; min-width: 0;
+  height: 100%; max-height: 100%; align-self: stretch; justify-self: center;
+  align-content: safe center; pointer-events: auto;
+  container: title-menu / inline-size;
+}
+:root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-brand {
+  align-self: start; margin-top: calc(4 * var(--vhz));
+  background: transparent; width: 100%;
+}
+:root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #title {
+  font-size: min(calc(7.2 * var(--vwz)), 21cqi);
+}
+:root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-brand :is(#disclaimer, #audiostate) { display: block; }
+:root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #tc-frame {
+  transform: translate(69px, 145px) scale(0.902);
+}
+:root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
+  flex-wrap: nowrap;
+}
+:root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn {
+  flex: 1 1 0; width: auto; min-width: min-content;
+  overflow-wrap: normal;
+}
+:root:where(:not([data-title-btnw]):not([data-title-btns]):not([data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-retention > .bigbtn { white-space: normal; }
+/* Explicit widths use the same independent stack. This layer also owns the
+   destination placements, so an overlay-layer fix alone cannot undo subgrid. */
+:root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
+  grid-column: 2; grid-row: 1;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: none; grid-auto-rows: max-content;
+  max-width: 100%;
+  max-height: max(var(--tap), calc(100% - 2 * max(var(--tl-btns-y, 0px), calc(-1 * var(--tl-btns-y, 0px)))));
+  align-self: center; align-content: start; pointer-events: auto;
+  container: title-menu / inline-size;
+}
+:root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
+  grid-column: 1; grid-row: auto; width: 100%; min-width: 0;
+}
+:root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { flex-wrap: wrap; }
+:root[data-title-side="swap"][data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons { grid-column: 1; }
+/* A 20%-wide saved cluster cannot hold two readable destinations or three
+   creation tools. Change their composition at the cluster's own width; leave
+   an explicitly requested ROW layout in the player's control. */
+@container title-menu (max-width: 12rem) {
+  #overlay #menu-buttons #menu-secondary { flex-wrap: wrap; }
+  #overlay #menu-buttons #menu-secondary > .bigbtn { flex: 1 1 calc(50% - var(--gap)); width: auto; min-width: 0; overflow-wrap: anywhere; }
+  /* Retention / explore / create stack when the cluster is too narrow for a
+     pair. Leave #menu-primary as the compact 2×2+PRACTICE grid and
+     #menu-garage as the bottom-right overlay — column-flex on primary made
+     PRACTICE full-width so Garage intercepted its clicks (ui-scale Factory
+     Home @ 667×320 / phone-landscape 30vwz cluster). */
+  :root:not([data-title-btns="row"]) #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create) {
+    display: flex; flex-direction: column; flex-wrap: nowrap;
+  }
+  :root:not([data-title-btns="row"]) #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create) > .bigbtn {
+    flex: 0 0 auto; width: 100%; min-width: 0;
+  }
+}
+
+
+@container title-menu (max-width: 20rem) {
+  #overlay #menu-buttons #menu-create .btn-ico { display: none; }
+}
 }

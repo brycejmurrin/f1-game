@@ -2419,6 +2419,11 @@ test('garage plan uses canonical frame/paint/team selectors and explicit budgets
   const b = JSON.parse(r.stdout);
   assert.equal(b.browser, false); assert.equal(b.planOnly, true);
   assert.equal(b.plan.shotCount, 1); assert.equal(b.plan.budget, 180);
+  const gloss = callCli('apex_garage_plan', { team: 'mclaren', frames: ['spineTop'], field: 'finish', options: ['gloss', 'chrome'], maxShots: 2, budgetSeconds: 180 });
+  assert.equal(gloss.status, 0, gloss.stderr + gloss.stdout);
+  const finishPlan = JSON.parse(gloss.stdout);
+  assert.equal(finishPlan.browser, false); assert.equal(finishPlan.planOnly, true);
+  assert.equal(finishPlan.plan.shotCount, 2); assert.equal(finishPlan.withinBudget, true);
 });
 
 test('canonical catalog and car filters integrate with the published MCP schemas', () => {

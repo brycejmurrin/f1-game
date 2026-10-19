@@ -328,6 +328,40 @@ function forceUnresolvableClash(h) {
   return { boost, sectors, reads: () => reads };
 }
 
+test("fitHud: a small plate right of Boost does not trigger same-key collision retries", () => {
+  const h = bootFlipHarness();
+  const boost = h.$("btn-boost"), sec = h.$("hud-sectors");
+  boost.hidden = false; boost._rect = h.R(h.W - 180, 200, 80, 80);
+  sec.hidden = false; sec._rect = h.R(h.W - 80, 210, 60, 50);
+  sec.setAttribute("data-hl-user", ""); sec.setAttribute("data-hl", "");
+  let fits = 0;
+  h.sb.HudLayout = { fit() { fits++; } };
+  h.invalidate(); h.tick();
+  const initial = fits;
+  for (let i = 0; i < 5; i++) h.tick();
+  assert.equal(fits, initial, "a non-overlapping saved plate does not reopen the full fitter");
+});
+
+test("fitHud keeps the smaller cap when zoomed font metrics offer subpixel growth", () => {
+  const h = bootFlipHarness();
+  const before = h.pub();
+  h.paintAt(before);
+  const sec = h.$("hud-sectors");
+  // Same content, with the small intrinsic-width change caused by font rounding at another zoom.
+  sec._rect.left += .2 * before;
+  sec._rect.width -= .2 * before;
+  h.invalidate(); h.tick();
+  assert.equal(h.pub(), before, "a fraction of a screen pixel must not restart scale hunting");
+});
+
+test("fitHud still grows a map-only band when timing tiles are hidden", () => {
+  const h = bootFlipHarness({ intrinsic: { map: 480, top: 0, sectors: 140, gaps: 84 } });
+  h.root.style.setProperty("--hud-z-top", ".6");
+  h.paintAt(.6);
+  h.invalidate(); h.tick();
+  assert.ok(h.pub() > .8, "visible map growth is measured even with no timing tower");
+});
+
 test("fitHud: an unresolvable painted clash backs off to the 3 s cadence after a few tries", () => {
   const h = bootFlipHarness();
   const c = forceUnresolvableClash(h);
@@ -634,4 +668,24 @@ test("fitHud dock pass: a sector plate ABOVE the dock is not on it (agrees with 
   };
   assert.equal(run(100), "", "plate above the buttons: no max-width clamp (the clamp ping-pongs with clearControls' --hl-x)");
   assert.notEqual(run(240), "", "plate level with the buttons still shrinks away from them");
+});
+
+test("fitHud leaves a manually sized sector plate to HudLayout and releases stale automatic width", () => {
+  const h = bootFlipHarness();
+  const sec = h.$("hud-sectors");
+  Object.defineProperty(sec.style, "maxWidth", {
+    get() { return this.getPropertyValue("max-width"); },
+    set(v) { this.setProperty("max-width", v); },
+    configurable: true,
+  });
+  sec.hidden = false;
+  sec._rect = h.R(h.W - 160, 240, 140, 72);
+  h.invalidate(); h.tick();
+  assert.ok(sec.style.maxWidth, "automatic plate is constrained next to the dock");
+  sec.setAttribute("data-hl-user", "");
+  sec.setAttribute("data-hl", "");
+  for (let i = 0; i < 4; i++) {
+    h.invalidate(); h.tick();
+    assert.equal(sec.style.getPropertyValue("max-width"), "", "saved plate keeps its intrinsic width on every fit");
+  }
 });

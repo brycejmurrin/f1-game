@@ -1,5 +1,5 @@
 /* light-grid.test.mjs — every shipped lighting value must be REACHABLE on its
- * own slider.
+ * own slider; also pins TLX lamp-grid textureLoad gating (#2927).
  *
  * The LIGHTING TUNER renders each knob as `<input type="range" min step>`, so
  * the thumb can only ever land on min + k*step. A shipped preset value that is
@@ -682,4 +682,32 @@ test("car-paint flake sparkle fades out inside 4 m on all three backends", () =>
   for (const [name, file] of [["GLX", "js/render/glx/shaders/glsl-lit.js"], ["TLX", "js/render/three/tsl-lit.js"], ["WGX", "js/render/webgpu/wgsl-chunks.js"]]) {
     assert.match(read(file), near[name], `${name}: the sparkle fade has the near-range term`);
   }
+});
+
+// ── per-chunk lamp-grid textureLoad gate (#2927) ───────────────────────────
+// Disabled grids / non-road ordinary draws / out-of-extent positions used to
+// still evaluate textureLoad(LG_TEX.grid, …) via select(inside, …) coords, then
+// discard the texel. Integer textureLoad has no derivatives, so the fetch may
+// sit in If(inside). base/count stay 0 → use false → global lamp fallback.
+test("TSL lamp-grid: textureLoad(grid) only when inside (#2927)", () => {
+  const src = read("js/render/three/tsl-lit.js");
+  const start = src.indexOf("/* PER-CHUNK LAMP SOURCE.");
+  assert.ok(start >= 0, "PER-CHUNK LAMP SOURCE block present");
+  const end = src.indexOf("// Resolve slot `i` to a lamp record", start);
+  assert.ok(end > start, "lamp-row resolver follows the PC block");
+  const block = src.slice(start, end);
+  assert.doesNotMatch(block,
+    /textureLoad\(\s*LG_TEX\.grid[\s\S]{0,120}?select\(\s*inside/,
+    "grid textureLoad must not use select(inside,…) coords (fetch still runs when outside)");
+  assert.match(block, /const base = float\(0\.0\)\.toVar\(\)/,
+    "base initializes to 0");
+  assert.match(block, /const cnt = float\(0\.0\)\.toVar\(\)/,
+    "count initializes to 0");
+  assert.match(block,
+    /If\(\s*inside\s*,\s*\(\)\s*=>\s*\{[\s\S]*?textureLoad\(\s*LG_TEX\.grid\s*,\s*ivec2\(\s*cx\s*,\s*cz\s*\)\s*\)/,
+    "textureLoad(grid) sits inside If(inside)");
+  assert.match(block, /base\.assign\(\s*g\.x\s*\)/, "base assigned from grid.x when inside");
+  assert.match(block, /cnt\.assign\(\s*g\.y\s*\)/, "count assigned from grid.y when inside");
+  assert.match(block, /use:\s*cnt\.greaterThan\(0\.5\)/,
+    "empty/outside cells keep use false → global lamp fallback");
 });
