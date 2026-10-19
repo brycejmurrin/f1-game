@@ -297,14 +297,16 @@ async function race(page, steer, manual, ins, opts) {
     await page.waitForFunction(() => {
       const tower = document.querySelector(".hud-top");
       if (!tower) return false;
-      const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
-      const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
-      if (!(height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1)) return false;
-      // Phone: wait until S3 has cleared a lit BOOST and the radio card (CI
-      // oversize APEX_WORKERS=2: wrap-reverse / lane settle after --hud-top-h).
-      if (document.body.classList.contains("desktop")) return true;
-      // Portrait rotate gate owns the screen; landscape clearance/stamp waits
-      // never apply (async predicates used to skip this whole wait — #2825).
+      // Portrait rotate gate / portrait viewport: landscape --hud-top-h match +
+      // clearance/stamp waits do not apply. Must short-circuit BEFORE the
+      // published-height check — on CI portrait, height vs --hud-top-h never
+      // lands within 0.1 while the rotate card owns the screen (#2941).
+      // Async predicates used to skip this whole wait (#2825).
+      if (document.body.classList.contains("desktop")) {
+        const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
+        const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
+        return height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1;
+      }
       const rotate = document.getElementById("rotate-device");
       let rotateUp = false;
       try {
@@ -312,9 +314,16 @@ async function race(page, steer, manual, ins, opts) {
           && getComputedStyle(rotate).display !== "none");
       } catch (_) { /* */ }
       if (rotateUp || window.innerHeight > window.innerWidth) {
+        if (!(tower.getBoundingClientRect().height > 0)) return false;
+        try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
         try { window.__apex.freeze(true); } catch (_) { /* */ }
         return true;
       }
+      const height = tower.getBoundingClientRect().height / (tower.currentCSSZoom || 1);
+      const published = parseFloat(document.documentElement.style.getPropertyValue("--hud-top-h"));
+      if (!(height > 0 && Number.isFinite(published) && Math.abs(height - published) <= 0.1)) return false;
+      // Phone landscape: wait until S3 has cleared a lit BOOST and the radio
+      // card (CI oversize APEX_WORKERS=2: wrap-reverse / lane settle).
       const phoneSteer = document.body.classList.contains("steer-buttons")
         || document.body.classList.contains("steer-touch");
       const boost = document.getElementById("btn-boost");
