@@ -28,12 +28,12 @@ Never run while a Playwright group is in flight (starves SwiftShader).
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
 import subprocess
 import sys
-import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,6 +46,14 @@ JSON_PATH = LOGDIR / "cdmcp-measure.json"
 STATE_PATH = LOGDIR / "cdmcp-bg.json"
 ARTIFACT_DIR = ROOT / "artifacts" / "tmp" / "cdmcp-measure"
 TIMEOUT = 180
+
+# Load by sibling path: callers also import these adapters via importlib specs.
+_transport_spec = importlib.util.spec_from_file_location(
+    "cdmcp_transport", Path(__file__).with_name("cdmcp_transport.py")
+)
+assert _transport_spec and _transport_spec.loader
+_transport = importlib.util.module_from_spec(_transport_spec)
+_transport_spec.loader.exec_module(_transport)
 
 PROFILES = ("boot", "ui", "full")
 
@@ -75,88 +83,18 @@ class Log:
             pass
 
 
-class McpClient:
-    """JSON-RPC client that answers roots/list so artifacts/ writes succeed."""
+class McpClient(_transport.StdioRpcClient):
+    """JSON-RPC adapter that answers roots/list so artifacts/ writes succeed."""
 
     def __init__(self, log: Log) -> None:
         self.log = log
-        self._id = 0
-        self._pending: dict[int, dict] = {}
-        self._lock = threading.Lock()
-        self.proc = subprocess.Popen(
+        super().__init__(
             [str(WRAPPER), "run"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
+            roots=[{"uri": ROOT.as_uri(), "name": "workspace"},
+                   {"uri": Path("/tmp").as_uri(), "name": "tmp"}],
+            timeout=TIMEOUT, shutdown="kill",
+            unknown_request_error=True, strict_server_requests=True,
         )
-        assert self.proc.stdin and self.proc.stdout
-        threading.Thread(target=self._reader, daemon=True).start()
-
-    def _reader(self) -> None:
-        assert self.proc.stdout
-        for raw in self.proc.stdout:
-            line = raw.strip()
-            if not line:
-                continue
-            try:
-                msg = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            # Server→client request (roots/list)
-            if "method" in msg and "id" in msg and "result" not in msg and "error" not in msg:
-                self._handle_server_request(msg)
-                continue
-            mid = msg.get("id")
-            if mid is not None:
-                with self._lock:
-                    if mid in self._pending:
-                        self._pending[mid]["result"] = msg
-
-    def _handle_server_request(self, msg: dict) -> None:
-        method = msg.get("method")
-        rid = msg["id"]
-        if method == "roots/list":
-            roots = [
-                {"uri": ROOT.as_uri(), "name": "workspace"},
-                {"uri": Path("/tmp").as_uri(), "name": "tmp"},
-            ]
-            self._send({"jsonrpc": "2.0", "id": rid, "result": {"roots": roots}})
-        else:
-            self._send(
-                {
-                    "jsonrpc": "2.0",
-                    "id": rid,
-                    "error": {"code": -32601, "message": f"unsupported: {method}"},
-                }
-            )
-
-    def _send(self, payload: dict) -> None:
-        assert self.proc.stdin
-        with self._lock:
-            self.proc.stdin.write(json.dumps(payload) + "\n")
-            self.proc.stdin.flush()
-
-    def _request(self, method: str, params: dict | None = None) -> dict:
-        self._id += 1
-        rid = self._id
-        with self._lock:
-            self._pending[rid] = {}
-        self._send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}})
-        deadline = time.time() + TIMEOUT
-        while time.time() < deadline:
-            with self._lock:
-                if "result" in self._pending.get(rid, {}):
-                    msg = self._pending.pop(rid)["result"]
-                    if "error" in msg:
-                        raise RuntimeError(json.dumps(msg["error"]))
-                    return msg.get("result", msg)
-            time.sleep(0.05)
-        raise TimeoutError(method)
-
-    def _notify(self, method: str, params: dict | None = None) -> None:
-        self._send({"jsonrpc": "2.0", "method": method, "params": params or {}})
 
     def start(self) -> None:
         self._request(
@@ -188,17 +126,6 @@ class McpClient:
         if t2.startswith("{") or t2.startswith("["):
             return json.loads(t2)
         raise RuntimeError(t[:800])
-
-    def close(self) -> None:
-        # Soft park — never block the measure terminal line on a hung navigate.
-        try:
-            self.proc.kill()
-        except Exception:
-            pass
-        try:
-            self.proc.wait(timeout=3)
-        except Exception:
-            pass
 
 
 def parse_lighthouse_scores(text: str) -> dict:

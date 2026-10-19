@@ -2272,6 +2272,10 @@
       "interpreter": "python3"
     },
     {
+      "path": "tools/mcp/cdmcp_transport.py",
+      "classification": "ambiguous"
+    },
+    {
       "path": "tools/mcp/chrome-devtools-mcp.sh",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only"

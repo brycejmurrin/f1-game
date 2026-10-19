@@ -23,12 +23,12 @@ __apex.lightTune() knob's before/after visual effect.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import socket
 import subprocess
 import sys
-import threading
 import time
 from pathlib import Path
 
@@ -36,88 +36,26 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 WRAPPER = ROOT / "tools" / "mcp" / "chrome-devtools-mcp.sh"
 TIMEOUT = 180
 
+# Load by sibling path: callers also import these adapters via importlib specs.
+_transport_spec = importlib.util.spec_from_file_location(
+    "cdmcp_transport", Path(__file__).with_name("cdmcp_transport.py")
+)
+assert _transport_spec and _transport_spec.loader
+_transport = importlib.util.module_from_spec(_transport_spec)
+_transport_spec.loader.exec_module(_transport)
 
-class McpClient:
+
+class McpClient(_transport.StdioRpcClient):
     def __init__(self, roots: list[str] | None = None) -> None:
-        self._id = 0
-        self._pending: dict[int, dict] = {}
-        self._buf = ""
         # Advertise workspace so take_screenshot(filePath=…) under /workspace works.
         # docs/research/CHROME-DEVTOOLS-MCP.md — without roots, writes are denied.
-        self._roots = roots or [f"file://{ROOT}"]
-        self.proc = subprocess.Popen(
+        roots = roots or [f"file://{ROOT}"]
+        super().__init__(
             [str(WRAPPER), "run"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
+            roots=[{"uri": u, "name": Path(u.replace("file://", "")).name or "root"} for u in roots],
+            timeout=TIMEOUT, shutdown="eof",
+            unknown_request_error=False, strict_server_requests=False,
         )
-        assert self.proc.stdin and self.proc.stdout
-        threading.Thread(target=self._reader, daemon=True).start()
-
-    def _reply(self, rid: int, result: dict) -> None:
-        assert self.proc.stdin
-        self.proc.stdin.write(
-            json.dumps({"jsonrpc": "2.0", "id": rid, "result": result}) + "\n"
-        )
-        self.proc.stdin.flush()
-
-    def _reader(self) -> None:
-        assert self.proc.stdout
-        for line in self.proc.stdout:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                msg = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            # Server → client request (e.g. roots/list) — answer it.
-            if "method" in msg and "id" in msg:
-                method = msg["method"]
-                rid = msg["id"]
-                if method == "roots/list":
-                    self._reply(
-                        rid,
-                        {
-                            "roots": [
-                                {"uri": u, "name": Path(u.replace("file://", "")).name or "root"}
-                                for u in self._roots
-                            ]
-                        },
-                    )
-                else:
-                    self._reply(rid, {})
-                continue
-            mid = msg.get("id")
-            if mid is not None and mid in self._pending:
-                self._pending[mid]["result"] = msg
-
-    def _request(self, method: str, params: dict | None = None) -> dict:
-        self._id += 1
-        rid = self._id
-        payload = {"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}}
-        self._pending[rid] = {}
-        assert self.proc.stdin
-        self.proc.stdin.write(json.dumps(payload) + "\n")
-        self.proc.stdin.flush()
-        deadline = time.time() + TIMEOUT
-        while time.time() < deadline:
-            if "result" in self._pending[rid]:
-                msg = self._pending.pop(rid)["result"]
-                if "error" in msg:
-                    raise RuntimeError(json.dumps(msg["error"]))
-                return msg.get("result", msg)
-            time.sleep(0.05)
-        raise TimeoutError(method)
-
-    def _notify(self, method: str, params: dict | None = None) -> None:
-        assert self.proc.stdin
-        self.proc.stdin.write(
-            json.dumps({"jsonrpc": "2.0", "method": method, "params": params or {}}) + "\n"
-        )
-        self.proc.stdin.flush()
 
     def start(self) -> None:
         self._request(
@@ -169,14 +107,6 @@ class McpClient:
         if result.get("isError"):
             raise RuntimeError(f"{name}: {text_result(result)}")
         return result
-
-    def close(self) -> None:
-        if self.proc.stdin:
-            self.proc.stdin.close()
-        try:
-            self.proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            self.proc.kill()
 
 
 def text_result(result: dict) -> str:

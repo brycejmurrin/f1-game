@@ -283,3 +283,161 @@ print("ok")
   const r = spawnSync("python3", ["-c", script], { cwd: ROOT, encoding: "utf8", timeout: 5000 });
   assert.equal(r.status, 0, r.stderr); assert.equal(r.stdout.trim(), "ok");
 });
+
+test("DevTools Python adapters share newline RPC without changing startup, roots or tool policies", () => {
+  const script = String.raw`
+import importlib.util, json, os, pathlib, subprocess, sys, threading
+root = pathlib.Path.cwd()
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, root / "tools/mcp" / (name + ".py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+# This subprocess speaks only fixture JSON-RPC; it never imports a browser tool.
+server = r'''
+import json, os, sys
+state = {"notifications": [], "env": os.environ.get("CDMCP_TRANSPORT_FIXTURE")}
+def send(value):
+    print(json.dumps(value), flush=True)
+def result(rid, value):
+    send({"jsonrpc":"2.0", "id":rid, "result":value})
+for line in sys.stdin:
+    msg = json.loads(line)
+    if "method" not in msg:
+        state["roots" if msg["id"] == "roots-fixture" else "unknown"] = msg
+        if "roots" in state and "unknown" in state:
+            result(state["initialize_id"], {})
+        continue
+    method = msg["method"]
+    if method.startswith("notifications/"):
+        state["notifications"].append(method)
+        continue
+    rid, params = msg["id"], msg.get("params", {})
+    if method == "initialize":
+        state["initialize_id"], state["initialize"] = rid, params
+        print("fixture chatter, not JSON", flush=True)
+        print("", flush=True)
+        send({"jsonrpc":"2.0","id":"roots-fixture","method":"roots/list"})
+        send({"jsonrpc":"2.0","id":"unknown-fixture","method":"fixture/unknown"})
+    elif method == "tools/list":
+        result(rid, {"tools":[{"name":"evaluate_script","inputSchema":{"required":["pageId"]}}]})
+    elif method == "tools/call":
+        name = params["name"]
+        if name == "list_pages":
+            result(rid, {"content":[{"type":"text","text":"3: unselected\n9: selected [selected]"}]})
+        elif name == "tool-error":
+            result(rid, {"isError":True,"content":[{"type":"text","text":"fixture tool failure"}]})
+        else:
+            result(rid, {"arguments":params["arguments"]})
+    elif method == "rpc-error":
+        send({"jsonrpc":"2.0","id":rid,"error":{"code":-32000,"message":"fixture rpc failure"}})
+    elif method == "fixture/state":
+        result(rid, state)
+    elif method != "never":
+        result(rid, params)
+'''
+real_popen = subprocess.Popen
+launches = []
+def fixture_popen(argv, **kwargs):
+    launches.append((argv, kwargs))
+    return real_popen([sys.executable, "-u", "-c", server], **kwargs)
+os.environ["CDMCP_TRANSPORT_FIXTURE"] = "inherited"
+for name in ["cdmcp-cli", "cdmcp-measure"]:
+    m = load(name)
+    m._transport.subprocess.Popen = fixture_popen
+    assert m.TIMEOUT == 180
+    m.TIMEOUT = 2
+    c = m.McpClient(roots=["file:///fixture/work", "file:///"]) if name == "cdmcp-cli" else m.McpClient(None)
+    try:
+        c.start()
+        state = c._request("fixture/state")
+        init = state["initialize"]
+        assert init == {"protocolVersion":"2025-06-18","capabilities":{"roots":{"listChanged":name == "cdmcp-cli"}},"clientInfo":{"name":name,"version":"1"}}, init
+        expected_roots = [{"uri":"file:///fixture/work","name":"work"},{"uri":"file:///","name":"root"}] if name == "cdmcp-cli" else [{"uri":root.as_uri(),"name":"workspace"},{"uri":"file:///tmp","name":"tmp"}]
+        assert state["roots"] == {"jsonrpc":"2.0","id":"roots-fixture","result":{"roots":expected_roots}}, state
+        unknown = state["unknown"]
+        if name == "cdmcp-cli":
+            assert unknown["result"] == {} and "error" not in unknown
+        else:
+            assert unknown["error"] == {"code":-32601,"message":"unsupported: fixture/unknown"}
+        expected_notifications = ["notifications/initialized"] + (["notifications/roots/list_changed"] if name == "cdmcp-cli" else [])
+        assert state["notifications"] == expected_notifications, state
+        assert state["env"] == "inherited"
+        args = {"function":"() => 1"}
+        got = c.call("evaluate_script", args)
+        assert got["arguments"] == (dict(args, pageId=9) if name == "cdmcp-cli" else args)
+        assert args == {"function":"() => 1"}, "page selection must not mutate caller args"
+        assert c.call("evaluate_script", {"pageId":7})["arguments"] == {"pageId":7}
+        try:
+            got = c.call("tool-error", {})
+            assert name == "cdmcp-measure" and got["isError"] is True
+        except RuntimeError as e:
+            assert name == "cdmcp-cli" and str(e) == "tool-error: fixture tool failure"
+        try:
+            c._request("rpc-error")
+            raise AssertionError("RPC error swallowed")
+        except RuntimeError as e:
+            assert json.loads(str(e)) == {"code":-32000,"message":"fixture rpc failure"}
+        responses, failures = [], []
+        def echo(n):
+            try: responses.append(c._request("echo", {"n":n})["n"])
+            except BaseException as e: failures.append(e)
+        threads = [threading.Thread(target=echo, args=(n,)) for n in range(12)]
+        for thread in threads: thread.start()
+        for thread in threads: thread.join(timeout=3)
+        assert not any(thread.is_alive() for thread in threads)
+        assert not failures and sorted(responses) == list(range(12)), (responses, failures)
+        c._timeout = 0.02
+        try:
+            c._request("never")
+            raise AssertionError("missing timeout")
+        except TimeoutError as e:
+            assert str(e) == "never"
+    finally:
+        c.close()
+        c.proc.wait(timeout=3)
+        for pipe in [c.proc.stdin, c.proc.stdout, c.proc.stderr]:
+            if pipe and not pipe.closed: pipe.close()
+    argv, opts = launches[-1]
+    assert argv == [str(root / "tools/mcp/chrome-devtools-mcp.sh"), "run"]
+    assert opts == {"stdin":subprocess.PIPE,"stdout":subprocess.PIPE,"stderr":subprocess.PIPE,"text":True,"bufsize":1}, opts
+subprocess.Popen = real_popen
+print("ok")
+`;
+  const r = spawnSync("python3", ["-c", script], { cwd: ROOT, encoding: "utf8", timeout: 15000 });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.stdout.trim(), "ok");
+});
+
+test("shared DevTools transport preserves EOF-then-kill versus immediate-kill cleanup", () => {
+  const script = String.raw`
+import importlib.util, subprocess
+spec = importlib.util.spec_from_file_location("transport", "tools/mcp/cdmcp_transport.py")
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+for policy, hung, expected in [
+    ("eof", False, ["eof", ("wait",5)]),
+    ("eof", True, ["eof", ("wait",5), "kill"]),
+    ("kill", False, ["kill", ("wait",3)]),
+    ("kill", True, ["kill", ("wait",3)]),
+]:
+    events = []
+    class Pipe:
+        def close(self): events.append("eof")
+    class Process:
+        stdin = Pipe()
+        def kill(self):
+            events.append("kill")
+            if policy == "kill" and hung: raise OSError("already gone")
+        def wait(self, timeout):
+            events.append(("wait",timeout))
+            if hung: raise subprocess.TimeoutExpired("fixture", timeout)
+    c = m.StdioRpcClient.__new__(m.StdioRpcClient)
+    c._shutdown, c.proc = policy, Process()
+    c.close()
+    assert events == expected, events
+print("ok")
+`;
+  const r = spawnSync("python3", ["-c", script], { cwd: ROOT, encoding: "utf8", timeout: 5000 });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.stdout.trim(), "ok");
+});
