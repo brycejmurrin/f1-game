@@ -92,7 +92,7 @@ try {
   }
   const init = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "native-smoke", version: "1" } });
   check("stdio initialize and tool discovery", () => assert.equal(init.serverInfo.name, "js-debugger-mcp"));
-  assert.equal((await rpc("tools/list")).tools.length, 19);
+  assert.equal((await rpc("tools/list")).tools.length, 22);
   const target = (await call("debugger_targets", { endpoint })).targets.find(t => t.url === url + "/"); assert.ok(target);
   await call("debugger_attach", { endpoint, targetId: target.id });
   const script = (await call("debugger_scripts", { filter: "fixture.js" })).scripts[0]; assert.ok(script);
