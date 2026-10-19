@@ -157,6 +157,7 @@ test("--summary is one line: title, cost, last real turn, quota state, hook erro
   const s = summarize(normalize(PARKED));
   assert.deepEqual(s, { title: "Fix the flaky spec", cost: 818.99, lastRealTurn: "07:00:05", quota: "quota-parked",
     resets: "Oct 20, 3pm", retries: 3, hookErrors: 1 });
+  assert.equal(Object.hasOwn(s, "by_type"), false, "by_type absent when subagent_stats has none");
   const line = summaryLine(s);
   assert.equal(line.split("\n").length, 1);
   assert.equal(line, "Fix the flaky spec | $818.99 | last real turn 07:00:05 | quota-parked until Oct 20, 3pm (×3) | 1 hook errors");
@@ -164,4 +165,25 @@ test("--summary is one line: title, cost, last real turn, quota state, hook erro
   assert.equal(ok.quota, "active");
   assert.equal(ok.title, "CI watch");
   assert.equal(ok.hookErrors, 1);
+  assert.equal(Object.hasOwn(ok, "by_type"), false, "ordinary fixture has no by_type");
+});
+
+test("--summary / --json surface by_type from result.subagent_stats (#2893 item 10)", () => {
+  const withTypes = [
+    hear(1, "Run the board"),
+    wrap("result", 2, {
+      subtype: "success", is_error: false, num_turns: 3, duration_ms: 5000, total_cost_usd: 2.25,
+      subagent_stats: { spawned: 6, completed: 6, failed: 0,
+        by_type: { "general-purpose": 3, "deploy-research": 2, "ci-red-triage": 1 } },
+    }),
+  ];
+  const s = summarize(normalize(withTypes));
+  assert.deepEqual(s.by_type, { "general-purpose": 3, "deploy-research": 2, "ci-red-triage": 1 });
+  assert.match(summaryLine(s), /by_type general-purpose×3,deploy-research×2,ci-red-triage×1/);
+  const emptyType = [
+    hear(1, "No agents"),
+    wrap("result", 2, { subtype: "success", is_error: false, num_turns: 1, duration_ms: 100,
+      total_cost_usd: 0.1, subagent_stats: { spawned: 0, completed: 0, failed: 0, by_type: {} } }),
+  ];
+  assert.equal(Object.hasOwn(summarize(normalize(emptyType)), "by_type"), false, "empty by_type omitted");
 });

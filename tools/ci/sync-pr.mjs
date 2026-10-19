@@ -20,8 +20,8 @@
 // skipped by name in `fast` (the default; CI re-gates the pushed head anyway);
 // `full` runs them all; `none` only after a clean merge that regenerated
 // nothing. Each stage has a timeout, and a stopped stage prints the resume
-// command. `--push` asks queue-depth.mjs first, as bash-guard does for a hand
-// push (#2182): a push that starts CI waits while the queue holds.
+// command. `--push` checks that the remote branch has not moved, then pushes;
+// the former queue-depth push hold was retired on 2026-10-16.
 //
 // WHY THIS EXISTS: an open PR sits for hours while the deploy branch keeps
 // moving (other sessions land commits continuously), so its branch drifts and
@@ -123,7 +123,7 @@ function usage() {
     "  <branch>  the PR's own head branch, e.g. claude/ui-consistency-2026-09-15",
     "  --plan    print head/tip/conflicts for that branch against the deploy tip, run nothing",
     "  --push    on a clean verify, push the result to origin/<branch> (default: leaves it on a local sync-pr-<branch> branch for review);",
-    "            a push that starts CI waits while queue-depth.mjs holds (APEX_PUSH_HOLD=0 when the user asked for it now)",
+    "            checks that origin/<branch> has not moved before pushing; no queue-depth push hold",
     "  --verify  fast (default): tooling-fast --changed --jobs=3 (the branch's own diff; ~2 min vs ~12 min whole) + the node suites node-plan.mjs needs for it;",
     "            full: every ci.yml node suite; none: only after a clean merge that regenerated nothing",
     "  --force-clean-behind  sync although needs-sync.mjs says `no` (clean-behind is not a reason; exit 4 without it)",

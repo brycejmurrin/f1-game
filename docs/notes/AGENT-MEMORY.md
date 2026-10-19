@@ -74,7 +74,20 @@ closed (never "no memory edits").
    a topic file changed on both sides keeps the repo copy and prints
    `CONFLICT`, and **edit vs delete honours the delete** on both sides
    (never resurrects; #2901). `tests/unit/memory-sync.test.mjs` drives the
-   real hook.
+   real hook. After a branch change, missing ancestry or a failed history query
+   defers the entire sync with `WARNING sync deferred`: live memory, tracked
+   memory and baseline (including `.head`) remain unchanged. An empty shallow
+   deletion log is not proof that a branch never had a topic. Restore the old
+   HEAD object/common ancestry (deepen or unshallow the clone), then rerun
+   `bash .claude/hooks/memory-sync.sh restore`; do not delete the baseline.
+   Full-history checkouts still preserve memories a branch never had and
+   honour committed topic/index retirements.
+
+   Claude worktrees share the main checkout's live store and baseline: the
+   hook uses the main checkout's HEAD and `.claude/memory/`, not the linked
+   worktree's branch. The cross-host CLI edits its own checkout directly;
+   linked-worktree changes reach Claude's shared store when they reach the
+   main checkout.
 
 ## Rules
 

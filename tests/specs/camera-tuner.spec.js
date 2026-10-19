@@ -216,12 +216,16 @@ test("PITCH and YAW rotate the aim without moving the eye", async ({ page }) => 
   expect(Math.abs(dAz)).toBeCloseTo(15, 0);
 });
 
-test("a tuned camera never touches the other twelve", async ({ page }) => {
+test("a tuned camera never touches any other mode", async ({ page }) => {
   await loadMonza(page);
+  // Every registered mode but the tuned one: a leak into any of them is a bug,
+  // not just the four that happened to be listed first.
+  const others = (await page.evaluate(() => __apex.camera().modes)).filter((m) => m !== "chase");
+  expect(others.length).toBeGreaterThan(15);
   const before = {};
-  for (const m of ["hood", "cockpit", "heli", "tcam"]) before[m] = await frame(page, m);
+  for (const m of others) before[m] = await frame(page, m);
   await page.evaluate(() => __apex.camTune("chase", { height: 3, dist: 5, yaw: 20 }));
-  for (const m of ["hood", "cockpit", "heli", "tcam"]) {
+  for (const m of others) {
     const now = await frame(page, m);
     for (let i = 0; i < 3; i++) {
       expect(now.eye[i]).toBeCloseTo(before[m].eye[i], 3);
