@@ -631,13 +631,13 @@ function litRig(src) {
 // switch is inert unless a mood is chosen: GarageScene.mood(id), the URL
 // ?garageMood=<id>, or localStorage apex26.garageMood. Gains scale the rig
 // GROUPS of FIXTURES (key 0-1, fill 2-5, wash 6-9), the team dado uplights
-// and the night gantry; sky/amb (a number or per-channel rgb) scale the skylight and hemisphere ambient
+// and the night gantry; sky/amb/ambG (a number or per-channel rgb) scale the skylight and hemisphere ambient
 // IN PLACE (setup-camera reads the arrays per frame); exposure, bloom and
 // glare are read by setup-camera's presentOpts / drawGlow; sheen scales the
 // floor mirror; night forces the hour outside (pit lane, gantry, backdrop).
 // Real-garage references for each mood are cited in the design gallery.
 const MOOD_DEF = { key: 1, fill: 1, wash: 1, up: 1, gantry: 1, keyTint: null, fillTint: null, washTint: null,
-  sky: 1, amb: 1, sun: null, bd: null, backdrop: 1, exposure: 1, bloom: 1, glare: 1, sheen: 1, night: null };
+  sky: 1, amb: 1, ambG: null, sun: null, bd: null, backdrop: 1, exposure: 1, bloom: 1, glare: 1, sheen: 1, night: null };
 const MOODS = {
   shipped: {},
   // Race-weekend TV look: every light box on, ~5600 K, flat even fill, a
@@ -655,11 +655,12 @@ const MOODS = {
     sky: 0.05, amb: 0.12, sun: [0, 0.97, 0.24], bd: [0.004, 0.004, 0.006], exposure: 1.15, bloom: 1.6, glare: 1.8, sheen: 3.0 },
   // Door up on a sunny pit lane: daylight is the key, low and from the
   // door; the ceiling rig is secondary and the outside is bright.
-  // The sun is warm and the shade is blue, so the colour split is what reads
-  // as daylight rather than just a brighter room. The rig drops to a cool 6500 K
-  // fill and the outside is bright.
+  // The roof shadows the sun everywhere but the door, so daylight has to
+  // arrive as AMBIENT: blue sky fill from above, warm sun bounce off the
+  // apron from below (ambG). That split, not brightness, is what tells it
+  // from broadcast. The rig drops to a cool 6500 K fill; the outside is bright.
   daylight: { night: false, key: 0.35, fill: 0.45, wash: 0.6, up: 0.25, keyTint: [0.92, 0.98, 1.10], fillTint: [0.90, 0.97, 1.12],
-    sky: [3.4, 2.75, 1.85], amb: [1.15, 1.45, 2.25], sun: [0, 0.42, 0.9075], bd: [0.62, 0.70, 0.82],
+    sky: [3.4, 2.75, 1.85], amb: [1.25, 1.65, 2.6], ambG: [3.0, 2.3, 1.4], sun: [0, 0.42, 0.9075], bd: [0.62, 0.70, 0.82],
     exposure: 1.08, bloom: 0.7, glare: 0.25, sheen: 1.3 },
 };
 const SKY_BASE = SKYLIGHT.slice(), AMB_SKY_BASE = AMB_SKY.slice(), AMB_GROUND_BASE = AMB_GROUND.slice();
@@ -670,9 +671,9 @@ function mood(id) {
   const m = MOODS[id] ? id : "shipped";
   moodId = m; MD = Object.assign({}, MOOD_DEF, MOODS[m]);
   for (let k = 0; k < 3; k++) {
-    const sk = Array.isArray(MD.sky) ? MD.sky[k] : MD.sky, am = Array.isArray(MD.amb) ? MD.amb[k] : MD.amb;
-    SKYLIGHT[k] = SKY_BASE[k] * sk;
-    AMB_SKY[k] = AMB_SKY_BASE[k] * am; AMB_GROUND[k] = AMB_GROUND_BASE[k] * am;
+    const ch = (v) => (Array.isArray(v) ? v[k] : v), am = ch(MD.amb);
+    SKYLIGHT[k] = SKY_BASE[k] * ch(MD.sky);
+    AMB_SKY[k] = AMB_SKY_BASE[k] * am; AMB_GROUND[k] = AMB_GROUND_BASE[k] * (MD.ambG === null ? am : ch(MD.ambG));
   }
   return moodId;
 }
