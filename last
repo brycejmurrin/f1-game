@@ -1,1 +1,1 @@
-LEASE to:* from:claude:session_015jmH5WuFwif7r9JYAAZ36y release
+HANDOFF to:* from:claude:session_015jmH5WuFwif7r9JYAAZ36y ORCH11 -> ORCH12 claude:session_015sP1rL5Zhbk8uUishsEqQw; lease released; tip 6e5c3fd0; workers W1-W9 report to ORCH12
