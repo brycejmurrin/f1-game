@@ -68,7 +68,9 @@ cause occurs in the middle, plus reported test counts and artifact/verdict
 receipts where available. Diagnostic adds surrounding context. Test counts
 describe reported stream summaries; nested/repeated suites can overlap, so the
 exit/status remains authoritative. Passing TAP/spec test names cannot consume
-failure slots; explicit failure markers take priority over generic error text.
+failure slots, including markers after bracketed producer tags such as
+`[tooling-fast]`. Explicit failure markers take priority over generic error text
+and zero-valued expectations inside an assertion.
 Warnings have a separate bounded `warnings` block in each stream summary.
 Status-bearing JSON collections prioritize failed/warning rows regardless of
 their field name (`rows`, `items`, or producer-specific names); ordinary arrays

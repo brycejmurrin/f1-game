@@ -43,7 +43,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 15166,
+      "sourceBytes": 15266,
       "outputPolicy": "job-status",
       "outputContract": "Literal argv, no command-argument persistence, no implicit timeout, child cancellation ownership, separate stream retention, --read cursor/limits, full-mode compatibility.",
       "doc": "Runs commands with selectable output levels and saved stdout/stderr; --read retrieves without rerunning.",

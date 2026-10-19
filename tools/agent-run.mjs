@@ -105,9 +105,10 @@ async function streamSummary(root, artifact, level) {
         receipts.push(line); if (receipts.length > 8) receipts.shift();
       }
       // Passing negative-case names describe expected errors; they are not failures.
-      const passed = /^\s*(?:ok\b|[✔✓]|PASS(?:ED)?\b)/i.test(line);
-      const zeroFailures = /^(?:#|ℹ)\s*fail\s+0\s*$|\b0 (?:failed|failures|errors)\b|\b(?:failed|failures|errors)\s*[:=]\s*0\b/i.test(line);
-      const explicitFailure = /^\s*(?:not ok\b|[✖✗×]|FAIL(?:ED)?\b|(?:Assertion|Type|Reference|Syntax|Range)?Error\b)/i.test(line);
+      const marker = line.replace(/^\s*(?:\[[^\]\r\n]{1,80}\]\s*)+/, '');
+      const passed = /^\s*(?:ok\b|[✔✓]|PASS(?:ED)?\b)/i.test(marker);
+      const explicitFailure = /^\s*(?:not ok\b|[✖✗×]|FAIL(?:ED)?\b|(?:Assertion|Type|Reference|Syntax|Range)?Error\b)/i.test(marker);
+      const zeroFailures = !explicitFailure && /^(?:#|ℹ)\s*fail\s+0\s*$|\b0 (?:failed|failures|errors)\b|\b(?:failed|failures|errors)\s*[:=]\s*0\b/i.test(marker);
       const match = !passed && !zeroFailures && (explicitFailure || /error|fail|exception|caused by|\bat .+?:\d|^\s*not ok\b/i.test(line));
       const rank = match ? (explicitFailure ? 2 : 1) : 0;
       if (rank && (!active || rank > active.rank) && failures[rank].length < cap) {

@@ -187,6 +187,27 @@ test('passing error-related test names and generic chatter cannot crowd out real
   }
 });
 
+test('tagged producer markers preserve real failures and zero-valued assertion expectations', t => {
+  const root = fixture(t);
+  for (const cause of ['[tooling-fast] FAIL REAL_TAGGED_CAUSE expected=1 actual=2', 'AssertionError: expected failures: 0, actual: 1; REAL_ZERO_EXPECTATION']) {
+    const lines = Array.from({ length: 1200 }, (_, i) => `INFO nominal ${i} ${'.'.repeat(85)}`);
+    for (const i of [100, 200, 300]) lines[i] = '[tooling-fast] PASS expected error handling case';
+    lines[650] = cause;
+    lines[900] = '[tooling-fast] WARNING stale sensor';
+    lines[950] = '[tooling-fast] PASS warning is expected for invalid input';
+    const source = path.join(root, 'tagged.log'); fs.writeFileSync(source, lines.join('\n'));
+    for (const level of ['compact', 'diagnostic']) {
+      const run = cli(root, ['--output-level', level, '--', process.execPath, '-e', 'process.stdout.write(require("node:fs").readFileSync(process.argv[1]));process.exitCode=7', source]);
+      assert.equal(run.status, 7);
+      const data = JSON.parse(run.stdout);
+      assert.ok(JSON.stringify(data.stdout.diagnostics).includes(cause));
+      assert.doesNotMatch(JSON.stringify(data.stdout.diagnostics), /PASS expected error handling/);
+      assert.match(JSON.stringify(data.stdout.warnings), /WARNING stale sensor/);
+      assert.doesNotMatch(JSON.stringify(data.stdout.warnings), /PASS warning is expected/);
+    }
+  }
+});
+
 test('spec failure markers are actionable even when their names contain no error keywords', t => {
   const root = fixture(t);
   const log = 'INFO nominal\n'.repeat(1200) + '✖ wrong pose at tools/agent-run.mjs:3\n';
