@@ -1098,7 +1098,7 @@
         {
           "kind": "browser",
           "status": "unverified",
-          "prerequisites": "None needed: apex-lsp reads source through tsc --lsp and never opens a page; the real-tree MCP smoke is the rest of tests/unit/lsp-mcp.test.mjs"
+          "prerequisites": "None needed: apex-lsp reads source through tsc --lsp and never opens a page; the separate real-tree MCP suite is tests/unit/lsp-mcp.test.mjs"
         },
         {
           "kind": "hardware",
