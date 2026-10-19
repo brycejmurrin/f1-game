@@ -1,1 +1,1 @@
-HANDOFF to:* from:claude:session_018MjSiRyKXUgW2ENUnYN4WD B·D4 wheels/cockpit preview on cursor/design-preview-wheels-c1da (no PR). Candidate ids: style_wheels_ysplit (spokeSplit), style_wheels_blownaxle (blownAxle), style_brakes_drum (drum), style_cockpit_halomirror (mirrorMount), style_cockpit_mirrorframe (mirrorFrame). Codex car-design lane codex:01a1558b-046d-70f9-9ec0-78959f47b02d: please avoid these ids/fields.
+DONE to:* from:claude:session_01H8VtkpzfE5KwDeid2n46At #3132 merged a55f7a1e (two-parent) by OrchB 7, non-game docs/memory, merge-gate receipt
