@@ -2,24 +2,8 @@
 // The DOM half of persistence.spec.js: the on-screen warning and the recovery
 // download. The JSON contract (persistState, the log ring, the session cache)
 // is tests/unit/persistence-vm.test.mjs.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
-
-async function bootBroken(page, name = "QuotaExceededError") {
-  await page.addInitScript(([errName]) => {
-    const proto = Object.getPrototypeOf(window.localStorage) || Storage.prototype;
-    const real = proto.setItem;
-    proto.setItem = function (k, v) {
-      if (String(k).startsWith("apex26.")) {
-        const e = new Error("storage is full");
-        e.name = errName;
-        throw e;
-      }
-      return real.call(this, k, v);
-    };
-  }, [name]);
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-}
+import { test, expect } from "../helpers/fixtures.js";
+import { bootBroken } from "../helpers/persistence-browser.js";
 
 test.describe("persistence failure on screen", () => {
   test("the warning names the session-only consequence and folds away", async ({ page }) => {
