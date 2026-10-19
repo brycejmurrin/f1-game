@@ -654,7 +654,6 @@
       "kind": "node",
       "files": [
         "tests/unit/agent-config.test.mjs",
-        "tests/unit/agent-fleet.test.mjs",
         "tests/unit/agent-surface.test.mjs",
         "tests/unit/apex-tools-mcp.test.mjs",
         "tests/unit/assets-pack.test.mjs",
