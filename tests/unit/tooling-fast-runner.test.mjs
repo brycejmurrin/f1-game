@@ -14,7 +14,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
-  selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, changedHeader, EMPTY_DIFF_MESSAGE }
+  selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, changedHeader, EMPTY_DIFF_MESSAGE,
+  isScriptTagOnlyIndexHtmlDiff, isScriptsOnlyPackageJsonDiff, isVersionOnlySwJsDiff, widenedLine,
+  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS }
   from "../../tools/ci/tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -435,4 +437,83 @@ test("--changed CLI: the empty branch prints the message and exits 3 before any 
   const src = fs.readFileSync(fileURLToPath(new URL("../../tools/ci/tooling-fast.mjs", import.meta.url)), "utf8");
   assert.match(src, /if \(changedMeta\.reason === "empty"\) \{[\s\S]{0,600}console\.error\(EMPTY_DIFF_MESSAGE\);\s*process\.exit\(3\);/);
   assert.ok(src.indexOf('changedMeta.reason === "empty"') < src.indexOf("await runToolingFast(files"), "the guard runs before the runner");
+});
+
+// #2890 — script-tag / scripts-only / version-only infra must not widen to the full suite.
+test("#2890 classifiers: script-tag index.html, scripts-only package.json, version-only sw.js", () => {
+  assert.equal(isScriptTagOnlyIndexHtmlDiff(
+    "diff --git a/index.html b/index.html\n--- a/index.html\n+++ b/index.html\n@@ -10 +10 @@\n+  <script src=\"js/game.js?v=dev\"></script>\n"), true);
+  assert.equal(isScriptTagOnlyIndexHtmlDiff(
+    "--- a/index.html\n+++ b/index.html\n@@ -1 +1 @@\n-<title>Apex</title>\n+<title>Apex 26</title>\n"), false);
+  const pkgBase = { name: "f1-game", version: "0.0.0", scripts: { test: "node --test" }, dependencies: { x: "1" } };
+  assert.equal(isScriptsOnlyPackageJsonDiff(
+    JSON.stringify(pkgBase),
+    JSON.stringify({ ...pkgBase, scripts: { test: "node --test", "test:x": "node x" }, version: "0.0.1" })), true);
+  assert.equal(isScriptsOnlyPackageJsonDiff(
+    JSON.stringify(pkgBase),
+    JSON.stringify({ ...pkgBase, dependencies: { x: "2" } })), false);
+  assert.equal(isVersionOnlySwJsDiff(
+    "--- a/sw.js\n+++ b/sw.js\n@@ -19 +19 @@\n-const CACHE_PREFIX = \"apex26-\";\n+const CACHE_PREFIX = \"apex26-v2-\";\n"), true);
+  assert.equal(isVersionOnlySwJsDiff(
+    "--- a/sw.js\n+++ b/sw.js\n@@ -1 +1 @@\n-const NAV_RACE_MS = 3000;\n+const NAV_RACE_MS = 4000;\n"), false, "NAV_RACE_MS is not a cache/version constant name");
+});
+
+test("#2890 --changed: script-tag-only index.html selects a named set, not the full suite", () => {
+  const seeds = NARROW_INFRA_TESTS["index.html"];
+  const all = [...seeds, "tests/unit/agent-config.test.mjs", "tests/unit/behind-ship.test.mjs"];
+  const r = selectToolingFastChanged(["index.html"], {
+    allFiles: all, pinIndex: new Map(), scripts: {},
+    fileDiffs: { "index.html": "--- a/index.html\n+++ b/index.html\n@@ -10 +10 @@\n+<script src=\"js/core/log.js?v=dev\"></script>\n" },
+  });
+  assert.equal(r.reason, "narrow-infra");
+  assert.ok(r.files.length < all.length, `expected narrow, got ${r.files.length}/${all.length}`);
+  assert.deepEqual(r.files.sort(), seeds.filter((f) => all.includes(f)).sort());
+  assert.equal(r.widened, undefined);
+});
+
+test("#2890 --changed: scripts-only package.json does not widen", () => {
+  const seeds = NARROW_INFRA_TESTS["package.json"];
+  const all = [...seeds, "tests/unit/agent-config.test.mjs"];
+  const before = JSON.stringify({ name: "f1-game", version: "0.0.0", scripts: { a: "1" }, dependencies: { x: "1" } });
+  const after = JSON.stringify({ name: "f1-game", version: "0.0.1", scripts: { a: "1", b: "2" }, dependencies: { x: "1" } });
+  const r = selectToolingFastChanged(["package.json"], {
+    allFiles: all, pinIndex: new Map(), scripts: { a: "1", b: "2" },
+    filePairs: { "package.json": { before, after } },
+  });
+  assert.ok(r.reason === "narrow-infra" || r.reason === "matched", r.reason);
+  assert.ok(r.files.length < all.length);
+  assert.ok(r.files.every((f) => seeds.includes(f)));
+});
+
+test("#2890 --changed: sw.js version-only bump does not widen", () => {
+  const seeds = NARROW_INFRA_TESTS["sw.js"];
+  const all = [...seeds, "tests/unit/agent-config.test.mjs"];
+  const r = selectToolingFastChanged(["sw.js"], {
+    allFiles: all, pinIndex: new Map(), scripts: {},
+    fileDiffs: { "sw.js": "--- a/sw.js\n+++ b/sw.js\n@@ -19 +19 @@\n-const CACHE_PREFIX = \"apex26-\";\n+const CACHE_PREFIX = \"apex26-x-\";\n" },
+  });
+  assert.ok(r.files.length < all.length);
+  assert.ok(r.files.every((f) => seeds.includes(f)));
+});
+
+test("#2890 --changed: non-benign index.html still widens and names WIDENED:", () => {
+  const all = ["tests/unit/load-order.test.mjs", "tests/unit/agent-config.test.mjs", "tests/unit/behind-ship.test.mjs"];
+  const r = selectToolingFastChanged(["index.html"], {
+    allFiles: all, pinIndex: new Map(), scripts: {},
+    fileDiffs: { "index.html": "--- a/index.html\n+++ b/index.html\n@@ -1 +1 @@\n-<title>A</title>\n+<title>B</title>\n" },
+  });
+  assert.equal(r.reason, "tracked");
+  assert.equal(r.files.length, all.length);
+  assert.equal(r.because, "index.html");
+  assert.equal(r.widened, "index.html non-script change");
+  assert.equal(widenedLine(r, all.length), `WIDENED: index.html non-script change (${all.length} files)`);
+});
+
+test("#2890 --changed CLI prints WIDENED first and the long-run hint when estimated over ~2 min (source pin)", () => {
+  const src = fs.readFileSync(fileURLToPath(new URL("../../tools/ci/tooling-fast.mjs", import.meta.url)), "utf8");
+  assert.match(src, /widenedLine\(changedMeta/);
+  assert.match(src, /LONG_RUN_HINT/);
+  assert.match(src, /criticalPathMs/);
+  assert.ok(LONG_RUN_MS >= 120_000);
+  assert.match(LONG_RUN_HINT, /nohup npm run test:tooling-fast -- --changed/);
 });

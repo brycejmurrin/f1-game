@@ -341,6 +341,10 @@ jobs:
     permissions:
       contents: read
       actions: read
+    env:
+      # #1712: nightly schedule is the NO_MEMO auditor (always runs); other events
+      # may skip on an inputs-hash verdict-cache hit.
+      NO_MEMO: ${{ github.event_name == 'schedule' && '1' || '' }}
     steps:
       # BLOB-LESS FULL HISTORY (2026-10-14, Actions audit C6: 25 s -> 9 s).
       # Every history read in guards-a/-b/guards, unit-plan and xr-filter is a
@@ -372,8 +376,25 @@ jobs:
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
+      # #1712: per-job inputs-hash verdict cache (lookup-only). A prior green
+      # run on the same declared inputs (any branch; deploy tip is the default
+      # branch so its verdicts are visible) skips the shard. Nightly NO_MEMO=1
+      # always runs. actions/cache lookup-only:
+      # https://github.com/actions/cache#inputs (`lookup-only`, `cache-hit`).
+      - name: Inputs hash (guards)
+        id: h
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
+        run: echo "key=guards-a-${{ runner.os }}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+      - name: Verdict cache lookup
+        id: memo
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .verdict-guards-a
+          key: ${{ steps.h.outputs.key }}
+          lookup-only: true
       - name: Tooling-fast shard 1/2
-        if: steps.reuse.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
         # --bail (2026-10-16 CI jobs review): stop STARTING files after the first
@@ -381,6 +402,18 @@ jobs:
         # already in flight finish and the log names each. The local
         # `npm run test:tooling-fast` stays without it so an author sees every red.
         run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=1/2 --bail
+      - name: Record green verdict
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
+        run: date -u > .verdict-guards-a
+      - name: Save verdict cache
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .verdict-guards-a
+          key: ${{ steps.h.outputs.key }}
+      - name: Memoized skip
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit == 'true'
+        run: echo "SKIPPED tooling A — inputs-hash verdict cache hit for ${{ steps.h.outputs.key }}"
       - name: Reused draft
         if: steps.reuse.outputs.reuse == 'true'
         run: echo "SKIPPED tooling A — draft fast-tier already green on this head SHA"
@@ -393,6 +426,9 @@ jobs:
     permissions:
       contents: read
       actions: read
+    env:
+      # #1712: same NO_MEMO auditor as guards-a (nightly schedule always runs).
+      NO_MEMO: ${{ github.event_name == 'schedule' && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -410,8 +446,20 @@ jobs:
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
+      - name: Inputs hash (guards)
+        id: h
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
+        run: echo "key=guards-b-${{ runner.os }}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+      - name: Verdict cache lookup
+        id: memo
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .verdict-guards-b
+          key: ${{ steps.h.outputs.key }}
+          lookup-only: true
       - name: Tooling-fast shard 2/2
-        if: steps.reuse.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
         run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=2/2 --bail
@@ -419,7 +467,7 @@ jobs:
       # guards` aggregator 2026-10-15): the same tree and node_modules, no
       # second checkout + npm ci, and the aggregator needs no runner time.
       - name: Ratchet ceilings vs the base
-        if: steps.reuse.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         env:
           RATCHET_BASE: ${{ github.event.pull_request.base.sha || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && github.event.before) || (inputs.concurrency_key != '' && github.sha) || 'origin/claude/f1-game-project-26h3ng' }}
           RATCHET_MODE: ${{ (github.event_name == 'push' || inputs.concurrency_key != '') && '--advisory' || '' }}
@@ -436,7 +484,7 @@ jobs:
       # A PR that loosens a test tolerance next to production changes fails (#1685; AGENTS.md rule 9). Rows that
       # are genuinely right go in tests/data/tolerance-exceptions.json with a reason.
       - name: Test tolerances are not loosened
-        if: steps.reuse.outputs.reuse != 'true' && github.event_name == 'pull_request'
+        if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true') && github.event_name == 'pull_request'
         env:
           TOL_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -444,19 +492,31 @@ jobs:
           git cat-file -e "$base^{commit}" 2>/dev/null || base=origin/claude/f1-game-project-26h3ng
           node tools/check/tolerance-diff.mjs --base "$base"
       - name: Every test file belongs to a topical group
-        if: steps.reuse.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         run: npm run test:audit
       - name: What does this gate cover?
-        if: steps.reuse.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         run: node tools/ci/ci-coverage.mjs
       - name: How far behind ship?
-        if: github.event_name == 'pull_request' && steps.reuse.outputs.reuse != 'true'
+        if: github.event_name == 'pull_request' && steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         env:
           BEHIND_SHIP_HEAD: ${{ github.event.pull_request.head.sha }}
           BEHIND_SHIP_SHIP: origin/claude/f1-game-project-26h3ng
         run: |
           git fetch --no-tags --depth=1 origin claude/f1-game-project-26h3ng 2>/dev/null || true
           node tools/ci/behind-ship.mjs
+      - name: Record green verdict
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
+        run: date -u > .verdict-guards-b
+      - name: Save verdict cache
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .verdict-guards-b
+          key: ${{ steps.h.outputs.key }}
+      - name: Memoized skip
+        if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit == 'true'
+        run: echo "SKIPPED tooling B — inputs-hash verdict cache hit for ${{ steps.h.outputs.key }}"
       - name: Reused draft
         if: steps.reuse.outputs.reuse == 'true'
         run: echo "SKIPPED tooling B — draft fast-tier already green on this head SHA"
@@ -838,6 +898,9 @@ jobs:
     # ~7 min and this never blocks them. The census now runs its categories
     # across worker threads over an integer-keyed grid: 71 s on four cores
     # (2026-09-10, byte-identical rows). 10 = well over 2x that, plus setup.
+    # #1712: `tools/ci/inputs-hash.mjs sweeps-parts` declares the path set; the
+    # lookup-only cache is wired on Structural guards first (this job's filter
+    # `if:` is pinned by deploy-tool.test.mjs).
     timeout-minutes: 10
     env:
       NODE_OPTIONS: --max-old-space-size=6144
