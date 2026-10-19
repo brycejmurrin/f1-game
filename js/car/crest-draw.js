@@ -340,12 +340,13 @@ const LiveryCrests = (function () {
     function emblemLaurel(ctx, R, P, bare, teamId) {
       const f = fit(R, CREST_MARGIN);
       ctx.save(); ctx.fillStyle = css(P.mark);
-      // seven leaves up each side of an open wreath, tips leaning in toward the crown
+      // five broad leaves up each side of an open wreath, tips leaning in toward the
+      // crown. Seven narrow ones read as a dotted ring at crest size (flat raster, round 1).
       for (const s of [-1, 1]) {
-        for (let i = 0; i < 7; i++) {
-          const a = Math.PI / 2 + s * (0.35 + i * 0.36), r = 0.38;
-          const cx = 0.5 + Math.cos(a) * r, cy = 0.5 + Math.sin(a) * r, ta = a + s * Math.PI / 2;
-          const lx = Math.cos(ta) * 0.09, ly = Math.sin(ta) * 0.09, nx = -ly * 0.45, ny = lx * 0.45;
+        for (let i = 0; i < 5; i++) {
+          const a = Math.PI / 2 + s * (0.42 + i * 0.48), r = 0.36;
+          const cx = 0.5 + Math.cos(a) * r, cy = 0.5 + Math.sin(a) * r, ta = a + s * (Math.PI / 2 - 0.5);
+          const lx = Math.cos(ta) * 0.13, ly = Math.sin(ta) * 0.13, nx = -ly * 0.55, ny = lx * 0.55;
           poly(ctx, f, [[cx - lx, cy - ly], [cx + nx, cy + ny], [cx + lx, cy + ly], [cx - nx, cy - ny]]); ctx.fill();
         }
       }
