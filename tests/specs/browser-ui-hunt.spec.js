@@ -14,6 +14,28 @@ async function waitReady(page) {
 
 test.describe("Accessible settings discovery", () => {
   test.use({ ...uiTestOptions({ touch: true, viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 }) });
+  test("settings cross-links restore their page, scroll and focus before returning to search", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("apex26.gfxBackend", "webgl2"));
+    await waitReady(page); await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#mb-settings").tap(); await page.locator("#pm-open-appearance").tap();
+    const jump = page.locator('#appearance-studio [data-settings-jump="a11y"]'), body = page.locator("#pm-settings-body"), motion = page.locator("#pm-motion-sel");
+    const value = await motion.inputValue();
+    for (const escape of [true, false]) {
+      await jump.scrollIntoViewIfNeeded(); const scroll = await body.evaluate(e => e.scrollTop);
+      await jump.tap(); await expect(motion).toBeFocused(); await expect(motion).toBeInViewport();
+      if (escape) await page.keyboard.press("Escape"); else await page.locator("#pm-settings-close").tap();
+      await expect(jump).toBeFocused(); await expect(jump).toBeInViewport();
+      await expect.poll(() => body.evaluate(e => e.scrollTop)).toBeCloseTo(scroll, 0);
+      await expect(motion).toHaveValue(value);
+    }
+    await page.keyboard.press("Escape"); await expect(page.locator("#pm-open-appearance")).toBeFocused();
+    const search = page.getByRole("searchbox", { name: "Find a setting" }); await search.fill("caption size");
+    const result = page.locator("[data-setting-result]").first(); await result.tap();
+    await jump.tap(); await expect(motion).toBeFocused();
+    await page.keyboard.press("Escape"); await expect(jump).toBeFocused();
+    await page.keyboard.press("Escape"); await expect(result).toBeFocused(); await expect(search).toHaveValue("caption size");
+    await page.locator("#pm-settings-close").tap(); await expect(page.locator("#mb-settings")).toBeFocused();
+  });
   test("search opens caption and hold controls without changing them, and Escape restores the result", async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("apex26.gfxBackend", "webgl2"));
     await waitReady(page);

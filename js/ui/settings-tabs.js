@@ -214,15 +214,18 @@ const SettingsNav = (function () {
       return false;
     }
 
-    const doors = Object.fromEntries(Object.entries(routes).filter(([, route]) => route.door).map(([id, route]) => [id, route.door()]));
-    for (const [id, door] of Object.entries(doors)) if (door) door.onclick = () => {
-      if (search) search.cancel();
+    function enter(id, door, after) {
       if (current !== "home") stack.push({ page: current, door, origin: originDoor, scroll: document.getElementById("pm-settings-body")?.scrollTop || 0 });
       originDoor = door;
       // LAZY_AUDIO: MUSIC & SOUND's SettingRows demote the static ‹ › chevrons.
       // show() reveals audio only after ensureAudio so MenuNav.items matches a
       // wired panel (otherwise arrow-walk marks ~12 chevrons missed — menu-traversal).
-      show(id, true, () => { if (onSelect) onSelect(id); });
+      show(id, true, () => { if (onSelect) onSelect(id); return typeof after === "function" && after(); });
+    }
+    const doors = Object.fromEntries(Object.entries(routes).filter(([, route]) => route.door).map(([id, route]) => [id, route.door()]));
+    for (const [id, door] of Object.entries(doors)) if (door) door.onclick = () => {
+      if (search) search.cancel();
+      enter(id, door);
     };
     // Every open starts at the door index. Do not steal focus here: the dialog
     // seam owns focus when it opens, and its opener should remain authoritative.
@@ -242,7 +245,7 @@ const SettingsNav = (function () {
         const b = e.target && e.target.closest ? e.target.closest("[data-settings-jump]") : null;
         if (!b || !live) return;
         const target = b.getAttribute("data-jump-target");
-        live.show(b.getAttribute("data-settings-jump"), true,
+        live.enter(b.getAttribute("data-settings-jump"), b,
           () => typeof SettingsSearch !== "undefined" && SettingsSearch.reveal(document.querySelector("#" + target)));
       });
     }
@@ -254,7 +257,7 @@ const SettingsNav = (function () {
       returnToSearch: () => { direct = false; stack.length = 0; show("home", false); return !!search && search.restore(); },
       showDirect: (id, focus) => { direct = true; stack.length = 0; show(id, focus); },
       current: () => current,
-      show, back, invalidate: () => { generation++; if (current !== "home") fireLeave(current); current = "home"; direct = false; stack.length = 0; },
+      show, enter, back, invalidate: () => { generation++; if (current !== "home") fireLeave(current); current = "home"; direct = false; stack.length = 0; },
     };
     return live;
   }

@@ -162,3 +162,31 @@ test("frozen route metadata owns titles, panels, doors and default hierarchy", (
     if (route.door) assert.equal(typeof route.door().onclick, "function");
   }
 });
+
+test("a cross-link returns through nested pages with each launcher's focus and scroll", () => {
+  const selected = [], h = boot({ ensure: () => Promise.resolve(true), onSelect: id => selected.push(id) });
+  const controls = h.dom.byId("pm-panel-controls"), advanced = h.dom.byId("advanced"), door = h.dom.byId("pm-advanced"), body = h.dom.byId("pm-settings-body");
+  controls.appendChild(door);
+  h.dom.byId("pm-open-controls").focus(); h.dom.byId("pm-open-controls").onclick();
+  body.scrollTop = 120; door.onclick();
+  const jump = h.dom.makeElement("button", "pm-tiltdeg-jump"); advanced.appendChild(jump);
+  jump.setAttribute("data-settings-jump", "controls"); jump.setAttribute("data-jump-target", "pm-tiltsimple");
+  body.scrollTop = 87; h.dom.dispatch(jump, { type: "click", bubbles: true });
+  assert.equal(h.nav.current(), "controls");
+  assert.deepEqual(selected, ["controls", "advanced", "controls"]);
+  h.nav.back(); assert.equal(h.nav.current(), "advanced"); assert.equal(h.dom.document.activeElement, jump); assert.equal(body.scrollTop, 87);
+  h.nav.back(); assert.equal(h.nav.current(), "controls"); assert.equal(h.dom.document.activeElement, door); assert.equal(body.scrollTop, 120);
+  h.nav.back(); assert.equal(h.nav.current(), "home"); assert.equal(h.dom.document.activeElement, h.dom.byId("pm-open-controls"));
+});
+
+test("a runtime-mounted cross-link keeps its origin even when its child is clicked", () => {
+  const h = boot({ ensure: () => Promise.resolve(true) }), body = h.dom.byId("pm-settings-body"), origin = h.dom.byId("pm-open-appearance");
+  origin.focus(); origin.onclick();
+  const jump = h.dom.makeElement("button"), label = h.dom.makeElement("span");
+  jump.setAttribute("data-settings-jump", "a11y"); jump.setAttribute("data-jump-target", "pm-motion-sel"); jump.appendChild(label);
+  h.dom.byId("pm-panel-appearance").appendChild(jump); body.scrollTop = 300;
+  h.dom.dispatch(label, { type: "click", bubbles: true });
+  assert.equal(h.nav.current(), "a11y");
+  h.nav.back(); assert.equal(h.nav.current(), "appearance"); assert.equal(h.dom.document.activeElement, jump); assert.equal(body.scrollTop, 300);
+  h.nav.back(); assert.equal(h.nav.current(), "home"); assert.equal(h.dom.document.activeElement, origin);
+});
