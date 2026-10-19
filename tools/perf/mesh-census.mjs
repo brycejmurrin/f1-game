@@ -114,9 +114,11 @@ function installTlxWrap(bandM) {
   const rows = [];
   const orig = r.render.bind(r);
   const state = { rows, on: false, curPass: "main", cam: null, frames: 0,
-    chunkDrawn: 0, chunkTotal: 0, infoSamples: [] };
+    chunkDrawn: 0, chunkTotal: 0, infoSamples: [], passKeys: Object.create(null) };
   r.__meshCensus = state;
-  const _wp = { x: 0, y: 0, z: 0 };
+  // three.getWorldPosition requires a Vector3 (plain {x,y,z} silently fails).
+  const THREE = window.THREE;
+  const _wp = THREE && THREE.Vector3 ? new THREE.Vector3() : null;
 
   const labelOf = (o) => {
     const ud = o.userData || {};
@@ -125,7 +127,8 @@ function installTlxWrap(bandM) {
   };
   const isChunk = (o) => {
     const ud = o.userData || {};
-    return !!(ud.tlxLgRoad || ud.tlxChunked || (o.geometry && o.geometry.userData && o.geometry.userData.tlxChunked));
+    return !!(ud.tlxLgRoad || ud.tlxChunked || o.__tlxChunk
+      || (o.geometry && o.geometry.userData && o.geometry.userData.tlxChunked));
   };
   const sourceOf = (lab) => {
     const s = String(lab).toLowerCase();
@@ -134,17 +137,27 @@ function installTlxWrap(bandM) {
     return "other";
   };
 
+  // Keep in lockstep with tools/perf/mesh-census-lib.mjs classifyPass.
   const passOf = (key) => {
     const k = String(key || "").toLowerCase();
+    if (!k || k === "canvas") return "main";
     if (/mirror|rear|hud-mirror|pip/.test(k)) return "mirror";
     if (/shadow|depth|sunshadow|carshadow|lampshadow/.test(k)) return "shadow";
     if (/env|cube|probe|post|bloom|ssao|fxaa|sgsr|composite|godray/.test(k)) return "aux";
-    return "main";
+    const dim = k.match(/(\d+)\s*x\s*(\d+)/);
+    if (dim) {
+      const w = +dim[1], h = +dim[2];
+      if (w === h && (w === 256 || w === 512 || w === 1024 || w === 2048)) return "shadow";
+      if (h <= 160 && w / Math.max(1, h) >= 2.2) return "mirror";
+      if (w * h >= 80_000) return "main";
+    }
+    if (/output|scene|hdr|color|main/.test(k)) return "main";
+    return "aux";
   };
 
   if (typeof r.renderObject === "function") {
     const origRO = r.renderObject.bind(r);
-    r.renderObject = function (object, ...rest) {
+    r.renderObject = function (object) {
       if (!state.on) return origRO.apply(this, arguments);
       const pass = state.curPass;
       if (pass === "shadow" || pass === "aux") return origRO.apply(this, arguments);
@@ -158,20 +171,24 @@ function installTlxWrap(bandM) {
       let dist = NaN;
       try {
         const cam = state.cam || r.__meshCensusCam;
-        if (cam && object.getWorldPosition) {
+        if (cam && object.getWorldPosition && _wp) {
           object.getWorldPosition(_wp);
-          const dx = _wp.x - cam.position.x, dy = _wp.y - cam.position.y, dz = _wp.z - cam.position.z;
-          dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        } else if (cam && object.position) {
-          const dx = object.position.x - cam.position.x, dy = object.position.y - cam.position.y, dz = object.position.z - cam.position.z;
-          dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          dist = cam.position.distanceTo(_wp);
+        } else if (cam && object.position && cam.position) {
+          dist = cam.position.distanceTo(object.position);
         }
       } catch (_) { /* no world matrix yet */ }
       const band = Number.isFinite(dist) ? (dist < bandM ? "near" : "far") : "unknown";
       let source = sourceOf(lab);
       if (source === "other" && isChunk(object)) source = "ribbon";
+      // Chunked road often lands as unflagged in renderObject; large indexed
+      // BufferGeometry draws without instancing are the ribbon path.
+      if (source === "other" && object.geometry && object.geometry.index
+          && !object.isInstancedMesh && (tris | 0) >= 500) source = "ribbon";
       rows.push({ pass, source, band, draws: 1, tris, calls, dist, group: lab });
-      if (pass === "main" && isChunk(object)) state._drawnChunkIds.add(object.uuid || object.id);
+      if (pass === "main" && (isChunk(object) || source === "ribbon")) {
+        state._drawnChunkIds.add(object.uuid || object.id);
+      }
       return out;
     };
   }
@@ -182,6 +199,7 @@ function installTlxWrap(bandM) {
       ? ((t.texture && t.texture.name) || t.name || "rt") + " " + t.width + "x" + t.height
       : "canvas";
     state.curPass = passOf(key);
+    state.passKeys[key] = (state.passKeys[key] || 0) + 1;
     state.cam = camera || state.cam;
     r.__meshCensusCam = state.cam;
     const i = r.info.render, c0 = i.drawCalls | 0, t0 = i.triangles | 0;
@@ -202,7 +220,9 @@ function installTlxWrap(bandM) {
         let total = 0;
         scene.traverse((o) => {
           if (!o.isMesh && !o.isInstancedMesh) return;
-          if (isChunk(o) || (o.userData && o.userData.tlxLgRoad)) total++;
+          if (isChunk(o) || (o.userData && o.userData.tlxLgRoad) || (o.visible && o.geometry && o.geometry.index && !o.isInstancedMesh)) {
+            total++;
+          }
         });
         const drawn = (state._drawnChunkIds && state._drawnChunkIds.size) || 0;
         state.chunkTotal += total;
@@ -216,22 +236,22 @@ function installTlxWrap(bandM) {
   return true;
 }
 
-/** GLX: wrap draw* + bindFramebuffer; attribute by FBO pass and stack site. */
+/** GLX: wrap draw*; pass from the DRAW stack (not bindFramebuffer — that mis-tags main as mirror). */
 function installGlxWrap(bandM) {
   const canvas = document.getElementById("game");
   const gl = canvas && canvas.getContext("webgl2");
   if (!gl || gl.__meshCensus) return !!gl;
   const state = {
     rows: [], on: false, curPass: "main", fboName: "canvas",
-    eye: null, frames: 0, infoSamples: [],
+    eye: null, frames: 0, infoSamples: [], passKeys: Object.create(null),
   };
   gl.__meshCensus = state;
 
-  const passOfFbo = (name) => {
-    const k = String(name || "").toLowerCase();
-    if (/mirror|rear|pip/.test(k)) return "mirror";
-    if (/shadow|depth/.test(k)) return "shadow";
-    if (/env|cube|probe|post|bloom|ssao|fxaa|composite/.test(k)) return "aux";
+  const passOfStack = (stack) => {
+    const s = String(stack || "").toLowerCase();
+    if (/mirror-pass|mirrorbegin|mirrorend|\/mirror[\./]|drawmirror/i.test(s)) return "mirror";
+    if (/shadowbegin|castshadow|shadowend|shadow\.js|sunshadow|carshadow/i.test(s)) return "shadow";
+    if (/envface|envprobe|post\.js|bloom|ssao|fxaa|sgsr|composite|godray/i.test(s)) return "aux";
     return "main";
   };
   const sourceOfStack = (stack) => {
@@ -241,53 +261,23 @@ function installGlxWrap(bandM) {
     return "other";
   };
 
-  // Name FBOs when created so bindFramebuffer can classify the pass.
-  const fboNames = new WeakMap();
-  const origCFB = gl.createFramebuffer.bind(gl);
-  gl.createFramebuffer = function () {
-    const fb = origCFB();
-    fboNames.set(fb, "fbo-" + (fboNames._n = (fboNames._n || 0) + 1));
-    return fb;
-  };
-  // Prefer texture/renderbuffer labels when the renderer sets them via extensions — rare; we also
-  // sniff the stack on the first draw into an FBO.
-  const origBind = gl.bindFramebuffer.bind(gl);
-  gl.bindFramebuffer = function (target, fb) {
-    if (!fb) { state.fboName = "canvas"; state.curPass = "main"; }
-    else {
-      let name = fboNames.get(fb) || "fbo";
-      // Heuristic: read stack once to rename mirror / shadow FBOs.
-      if (!fboNames.get(fb) || /^fbo-\d+$/.test(name)) {
-        const st = (new Error()).stack || "";
-        if (/mirror/i.test(st)) name = "mirror";
-        else if (/shadow/i.test(st)) name = "shadow";
-        else if (/env|probe/i.test(st)) name = "env";
-        fboNames.set(fb, name);
-      }
-      state.fboName = name;
-      state.curPass = passOfFbo(name);
-    }
-    return origBind(target, fb);
-  };
-
   const wrapDraw = (name, countIdx) => {
     const orig = gl[name].bind(gl);
     gl[name] = function (...args) {
       if (!state.on) return orig.apply(this, args);
-      const pass = state.curPass;
+      const st = (new Error()).stack || "";
+      const pass = passOfStack(st);
       if (pass === "shadow" || pass === "aux") return orig.apply(this, args);
       const count = args[countIdx] | 0;
       const inst = name.includes("Instanced") ? (args[countIdx + 1] | 0) || 1 : 1;
-      // drawArrays/Elements count is vertices; triangles ≈ count/3 for TRIANGLES.
       const mode = args[0];
       const tris = (mode === gl.TRIANGLES || mode === 4) ? Math.floor((count * inst) / 3) : 0;
-      const st = (new Error()).stack || "";
       const source = sourceOfStack(st);
-      // Distance: without per-chunk AABB on the GL path, band from eye→origin proxy is
-      // unknown; mark unknown unless the stack carries a prior census tag.
       const band = "unknown";
+      const passKey = pass + ":" + name;
+      state.passKeys[passKey] = (state.passKeys[passKey] || 0) + 1;
       state.rows.push({ pass, source, band, draws: 1, tris, calls: 1, group: name + ":" + source });
-      state.infoSamples.push({ pass, passKey: state.fboName, calls: 1, tris });
+      state.infoSamples.push({ pass, passKey, calls: 1, tris });
       return orig.apply(this, args);
     };
   };
@@ -295,27 +285,29 @@ function installGlxWrap(bandM) {
   wrapDraw("drawArrays", 2);
   if (gl.drawElementsInstanced) wrapDraw("drawElementsInstanced", 2);
   if (gl.drawArraysInstanced) wrapDraw("drawArraysInstanced", 2);
-  // multiDraw: count ranges as calls; triangle estimate from summed counts when available.
   if (typeof gl.multiDrawElementsWEBGL === "function") {
     const orig = gl.multiDrawElementsWEBGL.bind(gl);
     gl.multiDrawElementsWEBGL = function (mode, counts, countsOffset, type, offsets, offsetsOffset, drawCount) {
-      if (state.on && state.curPass !== "shadow" && state.curPass !== "aux") {
+      if (!state.on) return orig.apply(this, arguments);
+      const st = (new Error()).stack || "";
+      const pass = passOfStack(st);
+      if (pass !== "shadow" && pass !== "aux") {
         let tris = 0;
         const n = drawCount | 0;
         if (counts && counts.length) {
           for (let i = 0; i < n; i++) tris += Math.floor(((counts[countsOffset + i] | 0)) / 3);
         }
-        const st = (new Error()).stack || "";
+        const source = sourceOfStack(st);
         state.rows.push({
-          pass: state.curPass, source: sourceOfStack(st), band: "unknown",
-          draws: n, tris, calls: 1, group: "multiDraw:" + sourceOfStack(st),
+          pass, source, band: "unknown",
+          draws: n, tris, calls: 1, group: "multiDraw:" + source,
         });
-        state.infoSamples.push({ pass: state.curPass, passKey: state.fboName, calls: 1, tris });
+        state.infoSamples.push({ pass, passKey: "multiDraw", calls: 1, tris });
       }
       return orig.apply(this, arguments);
     };
   }
-  void bandM; // GLX distance banding filled post-hoc from chase eye + build oracle when available
+  void bandM;
   return true;
 }
 
@@ -332,11 +324,13 @@ async function runOne(page, track, backend) {
     A.govHold && A.govHold(true);
     A.renderScale && A.renderScale(1);
     A.snapCam && A.snapCam();
-    A.freeze && A.freeze(true);
+    // Do NOT freeze: freeze stalls MirrorPass and yields mirror=0 (pass-census drives).
   });
-  // Ensure mirror is on so the mirror pass runs.
-  await page.evaluate(() => {
+  // Ensure mirror is on so the mirror pass runs; settle one frame for shown/rect.
+  await page.evaluate(async () => {
     try { if (window.__apex.mirror) window.__apex.mirror("on"); } catch (_) { /* no mirror hook */ }
+    await new Promise((r) => requestAnimationFrame(r));
+    await new Promise((r) => requestAnimationFrame(r));
   });
   await page.evaluate(async (warm) => {
     const A = window.__apex, raf = () => new Promise((r) => requestAnimationFrame(r));
@@ -418,9 +412,12 @@ async function runOne(page, track, backend) {
       } catch (e) { oracle = { err: String(e && e.message || e) }; }
     }
     const frames = Math.max(1, state.frames || n);
+    let mirrorState = null;
+    try { mirrorState = A.mirror ? A.mirror() : null; } catch (_) { /* */ }
     return {
       rows: state.rows.slice(),
       infoSamples: state.infoSamples.slice(),
+      passKeys: state.passKeys || {},
       frames,
       chunkDrawn: state.chunkDrawn,
       chunkTotal: state.chunkTotal,
@@ -428,7 +425,8 @@ async function runOne(page, track, backend) {
       multiDraw,
       occlusion,
       oracle,
-      backendLive: (A.info && A.info().gfx) || (A.diag && (() => { try { return A.diag({ download: false }); } catch { return null; } })()),
+      mirrorState,
+      backendLive: (A.info && A.info().gfx) || null,
     };
   }, { n: FRAMES, backend, bandM: BAND_M });
 
@@ -477,6 +475,8 @@ async function runOne(page, track, backend) {
       main: { callsPerFrame: +mainCalls.toFixed(1), trisPerFrame: mainTris },
       mirror: { callsPerFrame: +mirrorCalls.toFixed(1), trisPerFrame: mirrorTris },
     },
+    passKeys: captured.passKeys || {},
+    mirrorState: captured.mirrorState || null,
     chunks: backend === "tlx" ? {
       visiblePerFrame: visibleChunks,
       totalPerFrame: totalChunks,
@@ -516,6 +516,7 @@ async function main() {
           console.log(formatBandTable(one.bandTable));
           console.log(`pass totals: main ${one.passInfo.main.callsPerFrame} calls / ${one.passInfo.main.trisPerFrame} tris; ` +
             `mirror ${one.passInfo.mirror.callsPerFrame} calls / ${one.passInfo.mirror.trisPerFrame} tris`);
+          if (one.passKeys) console.log("passKeys:", JSON.stringify(one.passKeys));
           if (one.chunks) {
             console.log(`chunks (main): visible ${one.chunks.visiblePerFrame} / total ${one.chunks.totalPerFrame} (culled ${one.chunks.culledPerFrame})`);
           }

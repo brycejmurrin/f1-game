@@ -27,6 +27,7 @@ export function classifySource(label) {
 /**
  * Map a render-target key to a logical pass.
  * Shadow / env / post are never presented as the main scene (#2631 contract).
+ * Unnamed TLX mirror targets are often just `rt 207x59` (no "mirror" in the name).
  */
 export function classifyPass(key) {
   const k = String(key || "").toLowerCase();
@@ -34,8 +35,19 @@ export function classifyPass(key) {
   if (/mirror|rear|hud-mirror|pip/.test(k)) return "mirror";
   if (/shadow|depth|sunshadow|carshadow|lampshadow/.test(k)) return "shadow";
   if (/env|cube|probe|post|bloom|ssao|fxaa|sgsr|composite|godray/.test(k)) return "aux";
+  const dim = k.match(/(\d+)\s*x\s*(\d+)/);
+  if (dim) {
+    const w = +dim[1], h = +dim[2];
+    // Square power-of-two → shadow / depth atlas (not the HUD mirror).
+    if (w === h && (w === 256 || w === 512 || w === 1024 || w === 2048)) return "shadow";
+    // HUD mirror / PiP: wide short targets (pass-census: ~207×59, lite ~138×39).
+    // Aspect ≥ 2.2 keeps bloom mips (≈16:9) out of the mirror bucket.
+    if (h <= 160 && w / Math.max(1, h) >= 2.2) return "mirror";
+  }
   // Named HDR / scene colour targets are the main lit pass.
   if (/output|scene|hdr|color|main/.test(k)) return "main";
+  // Soft-present / main colour RTs are large and non-square.
+  if (dim && (+dim[1] * +dim[2]) >= 80_000) return "main";
   return "aux";
 }
 

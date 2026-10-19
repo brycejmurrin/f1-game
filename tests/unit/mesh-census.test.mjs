@@ -29,7 +29,12 @@ test("classifyPass: never treat shadow as main (#2631)", () => {
   assert.equal(classifyPass("canvas"), "main");
   assert.equal(classifyPass("output 576x324"), "main");
   assert.equal(classifyPass("mirror 207x59"), "mirror");
+  assert.equal(classifyPass("rt 207x59"), "mirror", "unnamed TLX mirRT is still the mirror");
+  assert.equal(classifyPass("rt 138x39"), "mirror", "phone lite mirror rung");
+  assert.equal(classifyPass("rt 160x90"), "aux", "bloom mip must not count as mirror");
+  assert.equal(classifyPass("rt 80x45"), "aux", "bloom mip chain");
   assert.equal(classifyPass("TLXSunShadow 512x512"), "shadow");
+  assert.equal(classifyPass("rt 512x512"), "shadow", "square pot → shadow atlas");
   assert.equal(classifyPass("car shadow depth"), "shadow");
   assert.equal(classifyPass("bloom mip"), "aux");
 });
