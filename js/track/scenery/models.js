@@ -56,10 +56,13 @@ const TrackModels = (function () {
     // to 1e-6 m, and the canonical path accumulates in plain-array f64 — f32
     // here put every circuit ~6e-5 m (f32 epsilon at world scale) off parity.
     // Halving the accumulator footprint needs BOTH paths converted together.
+    // col is the exception: every backend uploads it as f32, so storing f32
+    // here rounds once, exactly as that upload would (-3 to -6 MB per track).
+    // mat stays f64: it holds non-integer ids compared with zero tolerance.
     return {
       pos: makeAccum(Float64Array, v * 3),
       nrm: makeAccum(Float64Array, v * 3),
-      col: makeAccum(Float64Array, v * 3),
+      col: makeAccum(Float32Array, v * 3),
       mat: makeAccum(Float64Array, v),
       idx: makeAccum(Uint32Array, v * 3),
       _mat: 0,

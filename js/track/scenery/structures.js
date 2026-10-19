@@ -1,6 +1,9 @@
 /* Apex 26 — SceneryStructures: the linear track furniture + race-infrastructure band of the buildProps composite-model toolkit — the along() node walker, the barr… */
 const SceneryStructures = (function () {
   "use strict";
+  // Local alias: inside the TRACK_VM context a bare global costs ~88 ns per read
+  // against ~7 ns here, so bare Math inflated these emitters ~12x in VM profiles (#3113).
+  const __M = Math;
 
   function create(ctx) {
     const { out, track, def, n, ds, hw, px, py, pz, NIGHT, MAT,
@@ -37,7 +40,7 @@ const SceneryStructures = (function () {
     const laid = new Map();   // key -> [[a, b], …] lap-fraction runs already emitted
     let reLaidWarned = false;
     const alreadyLaid = (kind, s0, s1, side, gap, style) => {
-      const key = `${kind}|${side}|${Math.round(gap * 10)}|${style || ""}`;
+      const key = `${kind}|${side}|${__M.round(gap * 10)}|${style || ""}`;
       const runs = laid.get(key) || [];
       // Compare on the unwrapped lap fraction; a full-lap run covers everything.
       // A run that ENDS on the lap boundary (s1 = 1.0) ends at 1, not 0: read as
@@ -48,12 +51,12 @@ const SceneryStructures = (function () {
       // offset of 0 and ±1. Compared raw, a >= ra && b <= rb read madrid's
       // [0.98, 0.06] guardrail as contained in its [0.48, 0.88] run and dropped
       // it, barrier and all.
-      const a = s0 % 1, full = Math.abs(s1 - s0) >= 0.999;
+      const a = s0 % 1, full = __M.abs(s1 - s0) >= 0.999;
       let b = s1 > s0 && s1 % 1 === 0 ? 1 : s1 % 1;
       if (!full && b < a) b += 1;
       const within = (ra, rb) => [0, 1, -1].some((o) => a + o >= ra - 1e-6 && b + o <= rb + 1e-6);
       for (const [ra, rb] of runs) {
-        const rFull = Math.abs(rb - ra) >= 0.999;
+        const rFull = __M.abs(rb - ra) >= 0.999;
         if (rFull || (!full && within(ra, rb))) {
           if (!reLaidWarned) {
             reLaidWarned = true;
@@ -80,15 +83,15 @@ const SceneryStructures = (function () {
     // still emits, because there the second panel is not a duplicate.
     const walked = new Map();
     const along = (s0, s1, stepM, fn, tag) => {
-      const k0 = ((Math.round(s0 * n) % n) + n) % n, k1 = ((Math.round(s1 * n) % n) + n) % n;
+      const k0 = ((__M.round(s0 * n) % n) + n) % n, k1 = ((__M.round(s1 * n) % n) + n) % n;
       const wrapped = ((k1 - k0) + n) % n;
       // Full lap = endpoints ~a whole lap apart that round to one node. Walk
       // n-1, not n: i===n lands back on k0 and emits a second byte-identical
       // panel there — two coincident boxes, the purest z-fight (see the qatar
       // tyre-pair note in tracks.js) — and promotes a genuinely sub-node
       // authored span to a surprise full lap of geometry.
-      const span = wrapped === 0 && Math.abs(s1 - s0) > 0.5 ? n - 1 : wrapped;
-      const step = Math.max(1, Math.round(stepM / ds));
+      const span = wrapped === 0 && __M.abs(s1 - s0) > 0.5 ? n - 1 : wrapped;
+      const step = __M.max(1, __M.round(stepM / ds));
       let seen = null, i0 = 0;
       if (tag) {
         seen = walked.get(tag);
@@ -190,7 +193,7 @@ const SceneryStructures = (function () {
           : track.surface && track.surface.floorY;
         const uy = p.u[1];
         const extra = Number.isFinite(ground) && Number.isFinite(uy) && uy > 0.1
-          ? Math.max(0, (p.c[1] - ground) / uy - 0.4) : 0;
+          ? __M.max(0, (p.c[1] - ground) / uy - 0.4) : 0;
         const postPlace = { o: vadd(p.c, p.u, -0.4 - extra),
                             r: p.r, u: p.u, t: p.t, s: [1, h + 0.4 + extra, 1] };
         ctx.instance(postKey, postPlace,                                       // grounded footing; top unchanged
@@ -239,7 +242,7 @@ const SceneryStructures = (function () {
       // against gap 0.5 failed for ANY curvature and dropped every post of
       // every Monaco armco (220 of them) while recordBarrier still tightened
       // the driving limit to a rail that was not there.
-      const railMargin = Math.min(0.5, gap * 0.5);
+      const railMargin = __M.min(0.5, gap * 0.5);
       along(s0, s1, 4, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], railMargin)) {
@@ -328,7 +331,7 @@ const SceneryStructures = (function () {
     };
     const gantry = (s, h, col, opts) => {
       const st = (opts && opts.style) || kitOf("gantry", "box");
-      const k = ((Math.round(s * n) % n) + n) % n, c = col || [0.16, 0.16, 0.19];
+      const k = ((__M.round(s * n) % n) + n) % n, c = col || [0.16, 0.16, 0.19];
       const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       const housing = vadd(beam, u, -0.62);   // the lamp housing's centre (below)
@@ -338,10 +341,10 @@ const SceneryStructures = (function () {
       // put Jeddah's 7.5 m off the road's centre, inside a portal leg.
       ctx.note("gantry", [(aL.c[0] + aR.c[0]) / 2, aL.c[1] + h / 2,
                           (aL.c[2] + aR.c[2]) / 2],
-               [Math.hypot(aR.c[0] - aL.c[0], aR.c[2] - aL.c[2]), h, 1],
+               [__M.hypot(aR.c[0] - aL.c[0], aR.c[2] - aL.c[2]), h, 1],
                { k, side: 0, lamp: housing, face: 0.30 });   // side 0 = straddles the road
       const b = [aL.r, u, aL.t];
-      const uy = Math.max(0.5, u[1]);
+      const uy = __M.max(0.5, u[1]);
       const legH = (aC) => (h - 0.45) + (py[k] - aC[1]) / uy + 0.3;   // +0.3 into the beam
       const mast = (aC, basis) => {
         const L = legH(aC);
@@ -350,8 +353,8 @@ const SceneryStructures = (function () {
           for (const [dr, dt] of [[-1, -1], [-1, 1], [1, -1], [1, 1]])
             addCyl(out, vadd(vadd(aC, basis[0], dr * 0.55), basis[2], dt * 0.55),
               0.11, L, c, 4, basis);
-          for (let i = 0; i < Math.max(2, Math.floor(L / 3)); i++)
-            addBox(out, vadd(aC, basis[1], (i + 0.5) * (L / Math.max(2, Math.floor(L / 3)))),
+          for (let i = 0; i < __M.max(2, __M.floor(L / 3)); i++)
+            addBox(out, vadd(aC, basis[1], (i + 0.5) * (L / __M.max(2, __M.floor(L / 3)))),
               [1.3, 0.10, 1.3], c, basis);
         } else if (st === "portal") {
           addBox(out, vadd(aC, basis[1], L / 2), [1.5, L, 1.1], c, basis);      // solid leg
@@ -359,8 +362,8 @@ const SceneryStructures = (function () {
         } else if (st === "scaffold") {
           for (const dt of [-0.5, 0.5])
             addCyl(out, vadd(aC, basis[2], dt), 0.09, L, c, 4, basis);
-          for (let i = 0; i < Math.max(2, Math.floor(L / 2.2)); i++)
-            addBox(out, vadd(aC, basis[1], (i + 0.5) * (L / Math.max(2, Math.floor(L / 2.2)))),
+          for (let i = 0; i < __M.max(2, __M.floor(L / 2.2)); i++)
+            addBox(out, vadd(aC, basis[1], (i + 0.5) * (L / __M.max(2, __M.floor(L / 2.2)))),
               [0.16, 0.10, 1.3], c, basis);
         } else if (st === "cantilever") {
           addCyl(out, aC, 0.42, L, c, 8, basis);                                 // single fat mast
@@ -503,7 +506,7 @@ const SceneryStructures = (function () {
     };
     const cameraTower = (k, side, gap, opts) => {
       opts = opts || {};
-      const h = Math.max(5, Math.min(40, opts.h != null ? opts.h : 14));
+      const h = __M.max(5, __M.min(40, opts.h != null ? opts.h : 14));
       const col = opts.col || [0.40, 0.42, 0.46];
       const p = anchor(k, side, gap), b = [p.r, p.u, p.t];
       const legR = 1.1;
@@ -521,8 +524,8 @@ const SceneryStructures = (function () {
         for (const sr of [-1, 1]) for (const st of [-1, 1])
           addCyl(out, vadd(vadd(vadd(p.c, p.r, sr * legR * 0.7), p.t, st * legR * 0.7),
             p.u, -0.4), 0.09, h + 0.8, col, 4, b);
-        for (let i = 1; i < Math.max(2, Math.round(h / 2.2)); i++)
-          addBox(out, vadd(p.c, p.u, (i / Math.max(2, Math.round(h / 2.2))) * h),
+        for (let i = 1; i < __M.max(2, __M.round(h / 2.2)); i++)
+          addBox(out, vadd(p.c, p.u, (i / __M.max(2, __M.round(h / 2.2))) * h),
             [legR * 1.5, 0.09, legR * 1.5], col, b);
       } else {
         for (const sr of [-1, 1]) for (const st of [-1, 1]) {
@@ -530,7 +533,7 @@ const SceneryStructures = (function () {
           addCyl(out, vadd(foot, p.u, -0.4), 0.13, h + 0.8, col, 4, b);   // base-anchored: -0.4 → h+0.4
         }
         // X-bracing every ~3 m — what makes a lattice read as a lattice.
-        const bays = Math.max(1, Math.round(h / 3));
+        const bays = __M.max(1, __M.round(h / 3));
         for (let i = 1; i < bays; i++) {
           const y = (i / bays) * h;
           for (const sr of [-1, 1])
@@ -584,8 +587,8 @@ const SceneryStructures = (function () {
             addBox(out, vadd(vadd(p.c, p.t, st * panel * 0.36), p.u, 0.22),
                    [0.13, 0.9, 0.14], postCol, b);
         } else if (hst === "led") {                   // continuous emissive ribbon
-          const lit = NIGHT ? [Math.min(1.4, col[0] * 1.35 + 0.1), Math.min(1.4, col[1] * 1.35 + 0.1),
-                               Math.min(1.4, col[2] * 1.35 + 0.1)] : col;
+          const lit = NIGHT ? [__M.min(1.4, col[0] * 1.35 + 0.1), __M.min(1.4, col[1] * 1.35 + 0.1),
+                               __M.min(1.4, col[2] * 1.35 + 0.1)] : col;
           addBox(out, c, [0.12, h, panel], lit, b);
           addBox(out, vadd(c, p.u, h * 0.56), [0.2, 0.12, panel], postCol, b);
           // Two slim legs inside the ribbon's depth: it had none and floated
@@ -638,18 +641,18 @@ const SceneryStructures = (function () {
       const nbr = [];
       for (const q of kn) {
         const pq = at(q, latFromAnchor);
-        const d = Math.hypot(pq[0] - p[0], pq[1] - p[1], pq[2] - p[2]);
-        if (d > 1e-6) { cMin = Math.min(cMin, d); nbr.push(pq); }
+        const d = __M.hypot(pq[0] - p[0], pq[1] - p[1], pq[2] - p[2]);
+        if (d > 1e-6) { cMin = __M.min(cMin, d); nbr.push(pq); }
         for (const s of [-1, 1]) {
           const p2 = at(a, latFromAnchor + s * halfW);
           const q2 = at(q, latFromAnchor + s * halfW);
-          const d2 = Math.hypot(q2[0] - p2[0], q2[1] - p2[1], q2[2] - p2[2]);
-          if (d2 > 1e-6) cMin = Math.min(cMin, d2);
+          const d2 = __M.hypot(q2[0] - p2[0], q2[1] - p2[1], q2[2] - p2[2]);
+          if (d2 > 1e-6) cMin = __M.min(cMin, d2);
         }
         const dx = q.c[0] - a.c[0], dy = q.c[1] - a.c[1], dz = q.c[2] - a.c[2];
-        const dl = Math.hypot(dx, dy, dz) || 1;
-        const cos = Math.abs((dx * a.t[0] + dy * a.t[1] + dz * a.t[2]) / dl);
-        swing = Math.max(swing, Math.sqrt(Math.max(0, 1 - cos * cos)) / Math.max(0.2, cos));
+        const dl = __M.hypot(dx, dy, dz) || 1;
+        const cos = __M.abs((dx * a.t[0] + dy * a.t[1] + dz * a.t[2]) / dl);
+        swing = __M.max(swing, __M.sqrt(__M.max(0, 1 - cos * cos)) / __M.max(0.2, cos));
       }
       if (!(cMin < Infinity)) return { seg: 0, b: [a.r, a.u, a.t] };
       let κ = 0;
@@ -657,31 +660,31 @@ const SceneryStructures = (function () {
         const prev = kn[1], next = kn[0];
         const e1x = a.c[0] - prev.c[0], e1z = a.c[2] - prev.c[2];
         const e2x = next.c[0] - a.c[0], e2z = next.c[2] - a.c[2];
-        const l1 = Math.hypot(e1x, e1z) || 1, l2 = Math.hypot(e2x, e2z) || 1;
-        κ = Math.atan2(e1x * e2z - e1z * e2x, e1x * e2x + e1z * e2z) / ((l1 + l2) / 2);
+        const l1 = __M.hypot(e1x, e1z) || 1, l2 = __M.hypot(e2x, e2z) || 1;
+        κ = __M.atan2(e1x * e2z - e1z * e2x, e1x * e2x + e1z * e2z) / ((l1 + l2) / 2);
       }
       // Hairpin / fold ceiling: never longer than the curvature-scaled arc.
-      const curveCap = spacing * Math.min(1.85, Math.max(0.15, 1 + κ * lat));
-      const c = Math.min(cMin, curveCap);
+      const curveCap = spacing * __M.min(1.85, __M.max(0.15, 1 + κ * lat));
+      const c = __M.min(cMin, curveCap);
       if (!(c > 1.0)) return { seg: 0, b: [a.r, a.u, a.t] };
       // The (1 − factor) pad is capped at 4 cm: a full 2 % of a ~4 m chord left
       // 7 cm between bays, and a legless bay's rows then hang free (ground-audit).
-      const l = (c - halfW * swing) - (1 - factor) * Math.min(c, 2);
+      const l = (c - halfW * swing) - (1 - factor) * __M.min(c, 2);
       let t = a.t;
-      if (nbr.length >= 2 && Math.abs(κ * spacing) < 0.55) {
+      if (nbr.length >= 2 && __M.abs(κ * spacing) < 0.55) {
         let tx = nbr[0][0] - nbr[1][0], ty = nbr[0][1] - nbr[1][1], tz = nbr[0][2] - nbr[1][2];
-        const tl = Math.hypot(tx, ty, tz) || 1;
+        const tl = __M.hypot(tx, ty, tz) || 1;
         t = [tx / tl, ty / tl, tz / tl];
         if (t[0] * a.t[0] + t[1] * a.t[1] + t[2] * a.t[2] < 0) t = [-t[0], -t[1], -t[2]];
       }
       let rx = a.r[0], ry = a.r[1], rz = a.r[2];
       const rt = rx * t[0] + ry * t[1] + rz * t[2];
       rx -= t[0] * rt; ry -= t[1] * rt; rz -= t[2] * rt;
-      let rl = Math.hypot(rx, ry, rz);
+      let rl = __M.hypot(rx, ry, rz);
       if (rl < 1e-6) { rx = a.r[0]; ry = a.r[1]; rz = a.r[2]; rl = 1; }
       const r = [rx / rl, ry / rl, rz / rl];
       const uu = cross(t, r);
-      const ul = Math.hypot(uu[0], uu[1], uu[2]) || 1;
+      const ul = __M.hypot(uu[0], uu[1], uu[2]) || 1;
       let u = [uu[0] / ul, uu[1] / ul, uu[2] / ul];
       if (u[0] * a.u[0] + u[1] * a.u[1] + u[2] * a.u[2] < 0) {
         u = [-u[0], -u[1], -u[2]];
@@ -697,7 +700,7 @@ const SceneryStructures = (function () {
       const cols = (pal && pal.length) ? pal : (CROWD_DAY && CROWD_DAY.length ? CROWD_DAY : CROWD_FALLBACK);
       const pick = (t) => NIGHT
         ? (t > 0.945 ? [2.5, 2.3, 1.9] : t > 0.55 ? [0.10, 0.11, 0.14] : [0.15, 0.16, 0.20])
-        : cols[Math.floor(t * cols.length) % cols.length];
+        : cols[__M.floor(t * cols.length) % cols.length];
       const prevMat = out._mat;
       out._mat = MAT.FABRIC;
       const bt = hash(seed * 1.7);
@@ -709,7 +712,7 @@ const SceneryStructures = (function () {
       // arrived at by hand. Each stands proud of the band (taller, nudged
       // trackward) so it is never coplanar with it: buried inside it would cost
       // vertices and show nothing.
-      const cnt = Math.min(16, Math.floor(len / 6));
+      const cnt = __M.min(16, __M.floor(len / 6));
       for (let i = 0; i < cnt; i++) {
         const hp = hash(seed + i * 13.7);
         if (hp > dens) continue;
@@ -718,11 +721,11 @@ const SceneryStructures = (function () {
         const off = cnt > 1 ? (i / (cnt - 1) - 0.5) * (len - 2) : 0;
         addBox(out, vadd(vadd(vadd(c, b[2], off), b[1], h / 2 + headH / 2),
                          b[0], -side * thick * 0.25),
-               [Math.min(thick * 0.5, 0.28), headH, NIGHT ? 0.18 : 0.28], NIGHT ? pick(hash(seed * 3.1 + i)) : skin, b);
+               [__M.min(thick * 0.5, 0.28), headH, NIGHT ? 0.18 : 0.28], NIGHT ? pick(hash(seed * 3.1 + i)) : skin, b);
       }
       out._mat = prevMat;
     };
-    // Was the one DIVERGENT copy in the tree — `Math.max(lo, Math.min(hi, v))`
+    // Was the one DIVERGENT copy in the tree — `__M.max(lo, __M.min(hi, v))`
     // against everyone else's comparison ladder. VERDICT: not a bug. The two
     // forms differ only ABOVE an inverted range (lo > hi: the Math form pins to
     // lo, the ladder to hi), on -0, and on a non-number argument (Math coerces,
@@ -735,7 +738,7 @@ const SceneryStructures = (function () {
 
     const bleacher = (s0, s1, side, gap, opts) => {
       opts = opts || {};
-      const rows = clamp(Math.round(opts.rows || 7), 2, 16);
+      const rows = clamp(__M.round(opts.rows || 7), 2, 16);
       const rise = opts.rise != null ? opts.rise : 0.72;      // per-row height gain
       const setback = opts.setback != null ? opts.setback : 0.95;   // per-row recede
       const timber = opts.frame === "timber";
@@ -753,7 +756,7 @@ const SceneryStructures = (function () {
       ctx.indexSolid(s0, s1, side, gap, depth);
       along(s0, s1, step, (k, spacing) => {
         const a = anchor(k, side, gap);
-        const nb = Math.max(1, Math.round(step / ds));
+        const nb = __M.max(1, __M.round(step / ds));
         const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap));
         const mid = curveTier(a, kn, side * depth / 2, setback / 2, 0.98, spacing, side, gap, k);
         const seg = mid.seg, b = mid.b;
@@ -772,15 +775,15 @@ const SceneryStructures = (function () {
         // Horizontal ledgers every ~2.2 m — what makes a frame read as a frame.
         for (let y = 1.6; y < topH; y += 2.2)
           addBox(out, vadd(vadd(a.c, a.r, backLat / 2), a.u, y),
-                 [Math.abs(backLat) + 0.4, 0.12, 0.12], frameCol, b);
+                 [__M.abs(backLat) + 0.4, 0.12, 0.12], frameCol, b);
         // Diagonal cross-braces on the side face — bolted bleachers always
         // triangulate; without these the frame reads as a ladder of boxes.
-        if (topH > 2.5 && Math.abs(backLat) > 1.2) {
+        if (topH > 2.5 && __M.abs(backLat) > 1.2) {
           const braceCol = [frameCol[0] * 0.9, frameCol[1] * 0.9, frameCol[2] * 0.92];
           for (const sgn of [-1, 1]) {
             const midP = vadd(vadd(a.c, a.r, backLat / 2), a.u, topH * 0.45);
             addBox(out, vadd(midP, b[2], sgn * seg * 0.42),
-                   [Math.abs(backLat) * 0.95, 0.10, 0.10], braceCol, b);
+                   [__M.abs(backLat) * 0.95, 0.10, 0.10], braceCol, b);
           }
         }
         for (let r = 0; r < rows; r++) {
@@ -811,7 +814,7 @@ const SceneryStructures = (function () {
 
     const scaffoldStand = (s0, s1, side, gap, opts) => {
       opts = opts || {};
-      const rows = clamp(Math.round(opts.rows || 5), 2, 12);
+      const rows = clamp(__M.round(opts.rows || 5), 2, 12);
       const rise = opts.rise != null ? opts.rise : 1.15;
       const setback = opts.setback != null ? opts.setback : 1.9;
       const tube = opts.tubeCol || [0.62, 0.63, 0.66];
@@ -820,7 +823,7 @@ const SceneryStructures = (function () {
         : [[0.80, 0.78, 0.74], [0.30, 0.36, 0.52], [0.72, 0.28, 0.24]];
       const dens = opts.density != null ? clamp(opts.density, 0.05, 1) : 0.58;
       const step = opts.step || 6;
-      const legEvery = Math.max(1, Math.round(opts.legEvery || 2));
+      const legEvery = __M.max(1, __M.round(opts.legEvery || 2));
       const depth = rows * setback + 1.2;
       const topH = 1.2 + rows * rise;
       ctx.noteSpan("scaffoldStand", s0, s1, side, gap, { h: topH, rows });
@@ -828,7 +831,7 @@ const SceneryStructures = (function () {
       let bay = 0;
       along(s0, s1, step, (k, spacing) => {
         const a = anchor(k, side, gap);
-        const nb = Math.max(1, Math.round(step / ds));
+        const nb = __M.max(1, __M.round(step / ds));
         const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap));
         const mid = curveTier(a, kn, side * depth / 2, setback / 2, 0.98, spacing, side, gap, k);
         const seg = mid.seg, b = mid.b;
@@ -858,14 +861,14 @@ const SceneryStructures = (function () {
                [0.11, 0.11, seg], tube, b);                                              // handrail
         // One leaning ledger per bay reads as the full X-brace at speed.
         addBox(out, vadd(vadd(a.c, a.r, backLat / 2), a.u, topH * 0.45),
-               [Math.abs(backLat) + 0.6, 0.13, 0.13], tube, b);
+               [__M.abs(backLat) + 0.6, 0.13, 0.13], tube, b);
         if (opts.awning) {
           const aw = (opts.awningCols && opts.awningCols.length) ? opts.awningCols
             : [[0.88, 0.86, 0.82], [0.80, 0.26, 0.22]];
           addCyl(out, vadd(vadd(a.c, a.r, backLat), a.u, topH + 1.4), 0.10, 2.6, tube, 5, b);
           out._mat = MAT.FABRIC;
           addBox(out, vadd(vadd(a.c, a.r, backLat * 0.45), a.u, topH + 3.6),
-                 [Math.abs(backLat) + 1.6, 0.22, seg], aw[bay % aw.length], b);
+                 [__M.abs(backLat) + 1.6, 0.22, seg], aw[bay % aw.length], b);
         }
         out._mat = 0;
         bay++;
@@ -874,7 +877,7 @@ const SceneryStructures = (function () {
 
     const terrace = (s0, s1, side, gap, opts) => {
       opts = opts || {};
-      const rows = clamp(Math.round(opts.rows || 6), 2, 16);
+      const rows = clamp(__M.round(opts.rows || 6), 2, 16);
       const rise = opts.rise != null ? opts.rise : 1.5;
       const dep = opts.depth != null ? opts.depth : 2.6;
       const conc = opts.conc || [0.72, 0.71, 0.67];
@@ -888,7 +891,7 @@ const SceneryStructures = (function () {
       along(s0, s1, step, (k, spacing) => {
         const a = anchor(k, side, gap);
         // #2204: size + aim each row at the neighbour chord (lengthen outside, shorten inside).
-        const nb = Math.max(1, Math.round(step / ds));
+        const nb = __M.max(1, __M.round(step / ds));
         const kn = [(k + nb) % n, (k - nb + n) % n].map((kk) => anchor(kk, side, gap));
         const rowAt = (back) => {
           const ct = curveTier(a, kn, back, dep / 2, 0.98, spacing, side, gap, k);
@@ -928,7 +931,7 @@ const SceneryStructures = (function () {
           if (typeof terrainYAt === "function") {
             for (const o of [-0.5, 0, 0.5]) {
               const p = vadd(wc, bb[2], o * tbSeg), ty = terrainYAt(p[0], p[2]);
-              if (ty != null) drop = Math.max(drop, (p[1] - ty) / Math.max(0.5, a.u[1]));
+              if (ty != null) drop = __M.max(drop, (p[1] - ty) / __M.max(0.5, a.u[1]));
             }
           }
           const wallH = topH + drop;
@@ -946,7 +949,7 @@ const SceneryStructures = (function () {
 
     const tieredBowl = (s0, s1, side, gap, opts) => {
       opts = opts || {};
-      const tiers = clamp(Math.round(opts.tiers || 4), 1, 8);
+      const tiers = clamp(__M.round(opts.tiers || 4), 1, 8);
       const tierDepth = opts.tierDepth != null ? opts.tierDepth : 5.6;
       const base = opts.base != null ? opts.base : 3.0;    // first tier's riser height
       const rise = opts.rise != null ? opts.rise : 3.3;    // added per tier
@@ -959,7 +962,7 @@ const SceneryStructures = (function () {
       ctx.noteSpan("tieredBowl", s0, s1, side, gap, { h: topH, tiers });
       ctx.indexSolid(s0, s1, side, gap, tiers * tierDepth + 2);
       along(s0, s1, step, (k, spacing) => {
-        const nb = Math.max(1, Math.round(step / ds));
+        const nb = __M.max(1, __M.round(step / ds));
         let seg = 0;
         for (let t = 0; t < tiers; t++) {
           const a = anchor(k, side, gap + t * tierDepth);
@@ -1023,7 +1026,7 @@ const SceneryStructures = (function () {
         // digits floated 1.1-1.8 m up on a bare post (indianapolis, qatar).
         if (addCyl(out, cc, R, 0.05, [0.85, 0.16, 0.14], 12, db) === false) return;       // red rim disc
         if (addCyl(out, vadd(cc, fwd, 0.02), R * 0.80, 0.05, [0.95, 0.95, 0.93], 12, db) === false) return;   // white face
-        const digs = String(Math.max(10, Math.min(99, value || 80))).split("").map(Number);
+        const digs = String(__M.max(10, __M.min(99, value || 80))).split("").map(Number);
         digs.forEach((d, i) => {
           const dc = vadd(cc, p.t, (i - (digs.length - 1) / 2) * 0.36);
           signDigit(dc, p.r, p.u, p.t, 0.34, 0.62, -side * 0.06, [0.10, 0.10, 0.12], d);
@@ -1031,7 +1034,7 @@ const SceneryStructures = (function () {
       } else if (kind === "braking") {
         const w2 = 1.3, h2 = 0.9, cc = vadd(p.c, p.u, postH + h2 / 2);
         if (addBox(out, cc, [0.05, h2, w2], [0.92, 0.92, 0.90], b) === false) return;   // white panel face
-        const nStripes = Math.max(1, Math.min(3, value || 2));
+        const nStripes = __M.max(1, __M.min(3, value || 2));
         const diagU = norm([p.u[0] + p.t[0], p.u[1] + p.t[1], p.u[2] + p.t[2]]);
         for (let i = 0; i < nStripes; i++) {
           const sx = (i - (nStripes - 1) / 2) * (w2 / (nStripes + 0.4));
@@ -1041,7 +1044,7 @@ const SceneryStructures = (function () {
       } else {   // "corner" number board
         const w2 = 1.0, h2 = 0.85, cc = vadd(p.c, p.u, postH + h2 / 2);
         if (addBox(out, cc, [0.05, h2, w2], [0.92, 0.92, 0.90], b) === false) return;
-        const digs = String(Math.max(1, Math.min(99, value || 1))).split("").map(Number);
+        const digs = String(__M.max(1, __M.min(99, value || 1))).split("").map(Number);
         digs.forEach((d, i) => {
           const dc = vadd(cc, p.t, (i - (digs.length - 1) / 2) * 0.38);
           signDigit(dc, p.r, p.u, p.t, 0.36, 0.58, proud, [0.10, 0.10, 0.12], d);
@@ -1050,7 +1053,7 @@ const SceneryStructures = (function () {
     };
     function ferrisWheel(k, side, dist, radius) {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
-      const tl = Math.hypot(track.tx[k], track.tz[k]) || 1;
+      const tl = __M.hypot(track.tx[k], track.tz[k]) || 1;
       const tn = [track.tx[k] / tl, 0, track.tz[k] / tl];   // horizontal tangent
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
@@ -1077,7 +1080,7 @@ const SceneryStructures = (function () {
       const wheelCol = NIGHT ? [0.30, 0.31, 0.4] : [0.62, 0.63, 0.68];
       const rim = [];
       for (let i = 0; i < seg; i++) {
-        const a = (i / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+        const a = (i / seg) * __M.PI * 2, ca = __M.cos(a), sa = __M.sin(a);
         rim.push([hub[0] + tn[0] * ca * radius, hub[1] + sa * radius, hub[2] + tn[2] * ca * radius]);
       }
       // `ax` shifts the member along the wheel AXIS. Every spoke and every rim
@@ -1089,7 +1092,7 @@ const SceneryStructures = (function () {
       // bracing between them — and puts any remaining pair past 700 m.
       const strut = (p0, p1, thick, col, ax) => {
         const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
-        const L = Math.hypot(d[0], d[1], d[2]) || 1;
+        const L = __M.hypot(d[0], d[1], d[2]) || 1;
         const up = [d[0] / L, d[1] / L, d[2] / L];
         let rr = norm(cross(up, tn)); if (!isFinite(rr[0])) rr = [1, 0, 0];
         const ff = norm(cross(up, rr));
@@ -1100,7 +1103,7 @@ const SceneryStructures = (function () {
       const HUB_R = 1.7;
       for (let i = 0; i < seg; i++) {
         const d = [rim[i][0] - hub[0], rim[i][1] - hub[1], rim[i][2] - hub[2]];
-        const L = Math.hypot(d[0], d[1], d[2]) || 1;
+        const L = __M.hypot(d[0], d[1], d[2]) || 1;
         const root = [hub[0] + d[0] / L * HUB_R, hub[1] + d[1] / L * HUB_R,
                       hub[2] + d[2] / L * HUB_R];
         strut(root, rim[i], 0.28, wheelCol, i % 2 ? 0.06 : -0.06);                // spoke

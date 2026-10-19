@@ -68,3 +68,46 @@ test("a point inside a sloped triangle interpolates height", () => {
   assert.ok(Math.abs(at(geo, 5, 0) - 5) < 1e-9);
   assert.equal(at(geo, 9, 9), null);
 });
+
+// propTop/instTop (tracks.js) skip terrainY wherever y - lo[cell] cannot beat the
+// best so far, so lo must sit under EVERY height terrainY returns in that cell —
+// including the up-to-TRI_EPS extrapolation past a steep triangle's edge.
+test("terrainGrid's per-cell floor lies under every terrainY answer", () => {
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const N = 12, S = 9, pos = [], idx = [];
+  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) pos.push(i * S + (rnd() - 0.5) * 6, (rnd() - 0.5) * 80, j * S + (rnd() - 0.5) * 6);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const a = j * (N + 1) + i, b = a + 1, c = a + N + 1, d = c + 1;
+    idx.push(a, b, d, a, d, c);
+  }
+  const track = { terrainGeo: { pos, idx } };
+  let probes = 0;
+  for (let n = 0; n < 20000; n++) {
+    // Half the probes on a triangle edge pushed 0-1.2 cm outward, where the slack extrapolates.
+    let x = rnd() * N * S, z = rnd() * N * S;
+    if (n & 1) {
+      const t = 3 * Math.floor(rnd() * idx.length / 3), p = idx[t] * 3, q = idx[t + 1] * 3, f = rnd();
+      const ex = pos[q] - pos[p], ez = pos[q + 2] - pos[p + 2], L = Math.hypot(ex, ez), o = (rnd() - 0.5) * 0.024;
+      x = pos[p] + ex * f + (ez / L) * o; z = pos[p + 2] + ez * f - (ex / L) * o;
+    }
+    const y = T.terrainY(track, x, z);
+    if (y == null) continue;
+    const G = track._terrGrid;
+    const i = Math.min(G.nx - 1, Math.max(0, Math.floor((x - G.mnx) / G.cell)));
+    const k = Math.min(G.nz - 1, Math.max(0, Math.floor((z - G.mnz) / G.cell))) * G.nx + i;
+    assert.ok(y >= G.lo[k], `terrainY ${y} at ${x},${z} under the cell floor ${G.lo[k]}`);
+    probes++;
+  }
+  assert.ok(probes > 15000, "most probes hit terrain");
+});
+
+// The case the TRI_EPS term in the floor exists for: no neighbour covers the
+// probe, so terrainY is the steep triangle's own extrapolation below its lowest
+// vertex (y = 10x + 10z, probed 5 mm outside both edges at the origin: -0.1 m).
+test("the floor covers a lone steep triangle's extrapolation past its lowest corner", () => {
+  const track = { terrainGeo: { pos: [0, 0, 0, 5, 50, 0, 0, 50, 5], idx: [0, 1, 2] } };
+  const y = T.terrainY(track, -0.005, -0.005);
+  assert.ok(Math.abs(y + 0.1) < 1e-9, `extrapolated ${y}`);
+  assert.ok(y >= track._terrGrid.lo[0], `floor ${track._terrGrid.lo[0]} over ${y}`);
+});

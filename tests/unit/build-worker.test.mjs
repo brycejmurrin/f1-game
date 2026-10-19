@@ -332,14 +332,21 @@ test("worker world == main-thread world WITH baked models, pit signs and MY TEAM
   assert.notDeepEqual(c.log, a.log, "premise: the baked models change the uploads");
 });
 
-test("the worker's reply carries no terrain lookup cache (bug-hunt 6.7)", async () => {
+test("the worker's reply carries the terrain lookup grid as flat typed arrays (perf hunt #3113 F3)", async () => {
   const { T, page } = pageWithWorker();
   const id = "monza", def = T.LIST.find((d) => d.id === id);
   await page.Assets.loadModels();
   const msg = await page.TrackBuildClient.build(MANIFEST.CIRCUITS.indexOf(id), def, { chunkRibbons: true, retainGraph: false }, recorder().gfx, MANIFEST.sceneryPath(id));
   assert.ok(msg, "the worker answered a world");
-  // terrainGrid() (tracks.js) rebuilds this on first use: the cell lists were structured-cloned for nothing.
-  assert.ok(!msg.track._terrGrid, "no _terrGrid in the post");
+  // Bug-hunt 6.7 dropped the grid when it was arrays of arrays (structured-cloned
+  // element by element); the CSR form transfers, and the page must not rebuild it.
+  const grid = msg.track._terrGrid, tp = msg.track.terrainGeo.pos;
+  assert.ok(grid, "_terrGrid rides along in the post");
+  for (const k of ["start", "list", "lo"]) assert.ok(ArrayBuffer.isView(grid[k]), k + " is a typed array (transferable)");
+  assert.equal(grid.geo, msg.track.terrainGeo, "the clone keeps grid.geo === terrainGeo, so terrainGrid() reuses it");
+  const y = page.Tracks.terrainY(msg.track, tp[0], tp[2]);
+  assert.ok(Number.isFinite(y), "terrainY answers at a terrain vertex");
+  assert.equal(msg.track._terrGrid, grid, "the first page-side terrainY did not rebuild the grid");
   console.log("props.list size on " + id + ": " + (msg.track.props && msg.track.props.list ? msg.track.props.list.length : "n/a"));
 });
 
