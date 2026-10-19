@@ -24,9 +24,9 @@
     "limitations": "Static evidence only; flag mentions may be comments or subcommand-specific. No candidate executes during generation. sourceBytes are source-file snapshots, not output sizes or tokens. Host-owned tools and unconfigured MCP servers are outside this catalog."
   },
   "counts": {
-    "files": 422,
+    "files": 423,
     "classifications": {
-      "entrypoint-candidate": 285,
+      "entrypoint-candidate": 286,
       "protocol-entrypoint": 28,
       "asset": 2,
       "data": 11,
@@ -2329,6 +2329,25 @@
       ]
     },
     {
+      "path": "tools/ci/poll-live-shell.mjs",
+      "classification": "entrypoint-candidate",
+      "evidence": [
+        "argv-or-parser"
+      ],
+      "sourceBytes": 11716,
+      "doc": "Poll github.io until the live shell matches this deploy, a newer train",
+      "skill": null,
+      "nativeOutputFlagMentions": [],
+      "npmScripts": [],
+      "agentCommand": [
+        "node",
+        "tools/agent-run.mjs",
+        "--",
+        "node",
+        "tools/ci/poll-live-shell.mjs"
+      ]
+    },
+    {
       "path": "tools/ci/post-merge.mjs",
       "classification": "entrypoint-candidate",
       "evidence": [
@@ -3048,7 +3067,7 @@
         "npm-script-reference",
         "argv-or-parser"
       ],
-      "sourceBytes": 111309,
+      "sourceBytes": 111482,
       "outputPolicy": "job-status",
       "outputContract": "NotStarted/bail, timeouts/empty-run, unchanged-tree stamp, suite terminal line",
       "doc": "Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.",
@@ -3119,7 +3138,7 @@
       "evidence": [
         "argv-or-parser"
       ],
-      "sourceBytes": 3878,
+      "sourceBytes": 5418,
       "outputPolicy": "keep-native",
       "outputContract": "checked entries and errors; base URL/runtime root; non-ok exits 1, missing URL exits 2",
       "doc": "Post-deploy byte and SHA-256 verification for the shell, secondary pages, service worker, and lazy assets.",
@@ -6024,7 +6043,7 @@
         "main-guard",
         "argv-or-parser"
       ],
-      "sourceBytes": 91336,
+      "sourceBytes": 92147,
       "outputPolicy": "page-results",
       "outputContract": "ONE-based positions/tags, ambiguity/errors and baseline-subtraction caveat",
       "doc": "Stdio MCP code intelligence over TypeScript 7's native `tsc --lsp`: definition, references, symbols, hover, diagnostics.",
@@ -9100,7 +9119,7 @@
     },
     {
       "name": "test:mcp",
-      "command": "node --test tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs",
+      "command": "node --test --test-concurrency=1 tests/unit/apex-server-fixes.test.mjs tests/unit/chrome-server-fixes.test.mjs tests/unit/debug-chrome.test.mjs tests/unit/environment-json.test.mjs tests/unit/hud-survey.test.mjs tests/unit/js-debugger-lifecycle-fixes.test.mjs tests/unit/js-debugger-mcp.test.mjs tests/unit/js-debugger-trace.test.mjs tests/unit/lsp-caller-fixes.test.mjs tests/unit/lsp-config-freshness.test.mjs tests/unit/lsp-mcp.test.mjs tests/unit/lsp-navigation-efficiency.test.mjs tests/unit/lsp-reference-fixes.test.mjs tests/unit/lsp-workflow-fixes.test.mjs tests/unit/ui-explorer-core.test.mjs tests/unit/ui-explorer-report.test.mjs tests/unit/ui-explorer.test.mjs tests/unit/ui-inspector-audit.test.mjs tests/unit/ui-inspector-css.test.mjs tests/unit/ui-inspector-transitions.test.mjs",
       "agentCommand": [
         "node",
         "tools/agent-run.mjs",
