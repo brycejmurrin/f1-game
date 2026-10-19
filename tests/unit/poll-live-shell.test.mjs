@@ -96,6 +96,39 @@ test("backoffMs grows then caps", () => {
   assert.ok(backoffMs(0) >= BACKOFF_BASE_MS);
   assert.ok(backoffMs(20) <= BACKOFF_CAP_MS);
   assert.equal(backoffMs(50), BACKOFF_CAP_MS);
+  // Strictly growing before the cap, so a constant CAP cannot pass.
+  assert.ok(backoffMs(0) < backoffMs(1) && backoffMs(1) < backoffMs(5), "the delay grows with the attempt");
+  assert.ok(backoffMs(5) < BACKOFF_CAP_MS, "attempt 5 is still below the cap");
+});
+
+test("pollLiveShell survives a rejecting fetch, sleeps with backoff, and recovers", async () => {
+  let calls = 0;
+  const sleeps = [];
+  const lines = [];
+  const result = await pollLiveShell({
+    pageUrl: "https://example.test/game/", build: 50, sha: SHA_A, attempts: 3, runId: "t",
+    wait: async (ms) => { sleeps.push(ms); },
+    log: (...args) => lines.push(args.join(" ")),
+    isAncestor: () => false,
+    fetchText: async (url) => {
+      calls++;
+      if (calls <= 2) throw new Error("socket hang up");
+      return url.includes("version.json") ? JSON.stringify({ build: 50, sha: SHA_A }) : shellHtml(50, SHA_A);
+    },
+  });
+  assert.equal(result.ok, true, "a transient fetch failure must not end the poll");
+  assert.ok(lines.some((l) => /fetch failed: socket hang up/.test(l)), "the throw is logged");
+  assert.ok(sleeps.length >= 1 && sleeps[0] === backoffMs(0), `slept the backoff after the throw: ${sleeps}`);
+});
+
+test("pollLiveShell that never fetches ends in a timeout naming the fetch error", async () => {
+  const result = await pollLiveShell({
+    pageUrl: "https://example.test/game/", build: 50, sha: SHA_A, attempts: 2, runId: "t",
+    wait: async () => {}, log: () => {}, isAncestor: () => false,
+    fetchText: async () => { throw new Error("ECONNRESET"); },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /fetch failed: ECONNRESET/);
 });
 
 test("worst-case poll plus overhead fits inside the verify-live job timeout", () => {
@@ -187,4 +220,21 @@ test("pollLiveShell eventually matches after behind snapshots", async () => {
   });
   assert.equal(result.ok, true);
   assert.equal(result.status, "match");
+});
+
+test("pollLiveShell cache-busts every fetch with a query unique per attempt and per file pair", async () => {
+  const urls = [];
+  await pollLiveShell({
+    pageUrl: "https://example.test/game", build: 50, sha: SHA_A, attempts: 3, runId: "t",
+    wait: async () => {}, log: () => {}, isAncestor: () => false,
+    fetchText: async (url) => {
+      urls.push(url);
+      return url.includes("version.json") ? JSON.stringify({ build: 40, sha: SHA_B }) : shellHtml(40, SHA_B);
+    },
+  });
+  assert.equal(urls.length, 6, "version.json + index.html on each of 3 attempts");
+  const busts = urls.map((u) => new URL(u).searchParams.get("_"));
+  assert.ok(busts.every((b) => /^t-\d+-\d+$/.test(b)), `bust shape runId-attempt-time: ${busts}`);
+  assert.equal(new Set(busts.filter((_, i) => i % 2 === 0)).size, 3, "each attempt busts differently");
+  assert.equal(busts[0], busts[1], "the pair within one attempt shares its bust");
 });

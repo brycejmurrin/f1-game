@@ -193,7 +193,10 @@ const STRIP = {
   //   scenery/monaco.js): +702 emitted / +702 survive (280539/259319); the strip share is unchanged
   // → extend the hairpin cliff city/foliage exclusion (Monaco eye at 0.4):
   //   −3894 emitted / −3121 kept; hand-built Fairmont/Mirabeau remain.
-  monaco: { before: 276645, after: 256198 },
+  // → #1617 kenney_→k_ kit swap (2026-10-19): harbour suburban boxes → Racing
+  //   Kit pits/tents/billboard; emission 276645 → 273889, strip-after
+  //   256198 → 254325.
+  monaco: { before: 273889, after: 254317 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
@@ -228,7 +231,10 @@ const STRIP = {
   // → #2209 Rettifilo entry chamfer (2026-10-18): one control point split,
   //   centreline moves at most 0.52 m, so along-road dress reseats. Emission
   //   325542 → 325396, strip-after 294895 → 294760.
-  monza: { before: 325396, after: 294760 },
+  // → #1617 kenney_→k_ kit swap (2026-10-19): paddock industrial boxes → Racing
+  //   Kit pits/tents/radar/banner; Rettifilo drops synthetic barrier/cone
+  //   fallback. Emission 325396 → 320558, strip-after 294760 → 290837.
+  monza: { before: 320558, after: 290837 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

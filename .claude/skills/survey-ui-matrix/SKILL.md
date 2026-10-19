@@ -94,3 +94,16 @@ Interactive poking: Playwright MCP (`tools/mcp/playwright-mcp.sh`) or Chrome Dev
 - Race HUD: [`references/hud-mock.md`](references/hud-mock.md) (look-fast), [`references/hud-survey.md`](references/hud-survey.md) (devices x cameras x settings; MCP `apex_hud_survey` / `apex_hud_shot` / `apex_hud_mock`)
 - Probe recipes and viewport catalogue: [`references/probes.md`](references/probes.md)
 - Environment setup (browsers, MCP): [`references/setup.md`](references/setup.md)
+
+## Capture identity
+
+For device-profile captures use the shared `tools/lib/ui-device-profile.mjs`
+resolver rather than constructing `{hasTouch, viewport}` alone. See
+[`MOBILE-UI-EMULATION.md`](../../../docs/notes/MOBILE-UI-EMULATION.md).
+Explorer supports `--device 'iPhone 13' --settings FILE` for a supplied baseline;
+without `--settings` the context uses fresh shipped settings. Follow the user's
+requested baseline. Preserve the import result and actual scale in evidence.
+Full-screen geometry cells, browser-content device profiles, custom CSS resize
+stress cases and DPR1 optimized probes are distinct. Do not infer CSS dimensions
+or browser Page Zoom from screenshot pixel dimensions. Record the actual engine;
+iPhone UA in Chromium does not establish Safari behavior.

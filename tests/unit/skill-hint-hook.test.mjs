@@ -97,3 +97,16 @@ print(sum(1 for q in rows if q["expect"] in h.matches(q["query"], ${JSON.stringi
   const hit = Number(r.stdout.trim());
   assert.ok(hit / rows.length >= 0.85, `skill-hint top-2 hit ${hit}/${rows.length} — below the 85% floor`);
 });
+
+
+test("host notification events skip routing while user audit and notification requests still route", () => {
+  const prompt = "Soft tyres last the whole race; audit the notification about tyre-model.js stint life and pit lane loss";
+  for (const event of ["Notification", "Stop", "PostToolUse"]) {
+    for (const mode of ["targeted", "generic"]) {
+      assert.deepEqual(hint(JSON.stringify({prompt,hook_event_name:event}),mode),{code:0,out:""});
+    }
+  }
+  assert.equal(hint(JSON.stringify({prompt,notification_type:"idle_prompt"})).out,"");
+  assert.match(ask(prompt).out,/Skill check:/);
+  assert.match(hint(JSON.stringify({prompt})).out,/Skill check:/,"legacy eval input still routes");
+});

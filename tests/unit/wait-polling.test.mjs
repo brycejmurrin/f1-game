@@ -32,6 +32,27 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 // is docs/notes/CEILING-HISTORY.md. What stays here is the LINT's behaviour:
 // what counts as a site, what does not, and that it still finds real ones.
 
+test("an async predicate is flagged — Playwright treats a Promise as success (#2825)", () => {
+  for (const src of [
+    `await page.waitForFunction(async () => true, null, { polling: 100, timeout: 1000 });`,
+    `await page.waitForFunction(async (x) => x > 0, 1, { polling: 100, timeout: 1000 });`,
+    `await page.waitForFunction(async function () { return true; }, null, { polling: 100 });`,
+  ]) {
+    const { sites } = lintSource(src);
+    assert.ok(sites.some((s) => s.kind === "async-predicate"), src);
+  }
+  assert.deepEqual(
+    lintSource(`await page.waitForFunction(() => true, null, { polling: 100, timeout: 1000 });`).sites,
+    []);
+});
+
+test("no scanned file keeps an async waitForFunction predicate", () => {
+  const bad = lintAll().flatMap((r) => (r.sites || [])
+    .filter((s) => s.kind === "async-predicate")
+    .map((s) => `${r.file}:${s.line}`));
+  assert.deepEqual(bad, [], "async predicates never wait — make them synchronous (#2825)");
+});
+
 test("a declared timeout with no polling is flagged", () => {
   const { sites } = lintSource(
     `await page.waitForFunction(() => window.x === 1, null, { timeout: 30_000 });`);

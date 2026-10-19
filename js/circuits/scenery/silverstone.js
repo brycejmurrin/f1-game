@@ -521,23 +521,23 @@
         [0.92, 38, 12, 6, 26, [0.78, 0.77, 0.73]],
       ]) motorhome(k(s), 1, d, w, h, ln, { wall: col, window: [0.28, 0.32, 0.36] });
       {
+        // Paddock Racing Kit modules (#1617 Slice C) — pits / tents / awning
+        // replace the retired synthetic industrial / commercial yard.
         const yards = [
-          ["kenney_ind_building-e", 0.93, 1, 78, 1],
-          ["kenney_ind_building-g", 0.96, 1, 82, 1],
-          ["kenney_ind_building-c", 0.995, 1, 80, 1],
-          ["kenney_com_low-detail-building-wide-b", 0.91, 1, 88, 1],
-          // Pass-2 facade dress (Kenney commercial / suburban) — scale ~2 so
-          // the ~4 m kit reads at paddock distance.
-          ["kenney_com_building-a", 0.94, 1, 100, 2.2],
-          ["kenney_com_building-e", 0.98, 1, 96, 2.2],
-          ["kenney_sub_building-type-h", 0.915, -1, 70, 2.0],
+          ["k_pitsgarage", 0.93, 1, 78, 2.6],
+          ["k_pitsgarageclosed", 0.96, 1, 82, 2.6],
+          ["k_pitsoffice", 0.995, 1, 80, 2.6],
+          ["k_tentclosedlong", 0.91, 1, 88, 2.4],
+          ["k_pitsofficeroof", 0.94, 1, 100, 2.8],
+          ["k_tentlong", 0.98, 1, 96, 2.6],
+          ["k_grandstandawning", 0.915, -1, 70, 2.4],
         ];
         for (const [id, s, side, dist, sc] of yards) {
-          if (!bakedModel(id, k(s), side, dist, sc !== 1 ? { scale: sc } : undefined))
+          if (!bakedModel(id, k(s), side, dist, { scale: sc }))
             building(k(s), side, dist, 16, 12, 14,
               { kind: "hall", wall: [0.74, 0.70, 0.64], window: [0.22, 0.26, 0.30], floor: 4 });
         }
-        bakedModel("kenney_ind_chimney-large", k(0.945), 1, 90, { scale: 0.7 });
+        bakedModel("k_bannertowergreen", k(0.945), 1, 90, { scale: 1.8 });
         // Pit-lane offices / garage modules (Racing Kit) — audit-gated below.
         for (const [id, s, side, dist, sc] of [
           ["k_pitsoffice", 0.455, 1, 58, 2.6],
@@ -550,15 +550,12 @@
               { kind: "hall", wall: [0.70, 0.72, 0.74], window: [0.20, 0.28, 0.36], floor: 2 });
         }
       }
-      // Kenney Racing Kit (CC0) barriers and pylons; the synthetic construction
-      // props stay the fallback for a build the pack has not reached.
+      // Kenney Racing Kit (CC0) barriers and pylons on the National runoff.
       along(0.038, 0.05, 4.5, (kk) => {
-        if (!bakedModel("k_barrierred", kk, 1, 5.8, { scale: 1.5 }))
-          bakedModel("kenney_construction-barrier", kk, 1, 5.8, { scale: 1.15 });
+        bakedModel("k_barrierred", kk, 1, 5.8, { scale: 1.5 });
       });
       along(0.039, 0.049, 6.0, (kk) => {
-        if (!bakedModel("k_pylon", kk, 1, 4.6, { scale: 1.3 }))
-          bakedModel("kenney_construction-cone", kk, 1, 4.6, { tint: [1.0, 0.42, 0.10] });
+        bakedModel("k_pylon", kk, 1, 4.6, { scale: 1.3 });
       });
       // marquee / hospitality tents (white prism roofs) in the paddock
       for (const [s, d, tCol] of [

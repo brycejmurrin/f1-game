@@ -26,7 +26,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { episodeLeaks } from "../../tools/check/episode-diff.mjs";
+import { episodeLeaks, snapshot } from "../../tools/check/episode-diff.mjs";
 
 const TRACKS = ["monza", "singapore"];
 
@@ -42,6 +42,34 @@ for (const track of TRACKS) {
     }
   });
 }
+
+// POSITIVE CONTROL (review T2-09). The two track tests above pass when
+// episodeLeaks() reports nothing — which is also what a dead scanner (a
+// snapshot with no per-car keys, a diff that never compares) would do. Plant a
+// per-car field that changes between episodes and demand it is named.
+test("episodeLeaks reports a planted per-car leak (the guard can fail)", async () => {
+  const { createRequire } = await import("node:module");
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ track: "monza" });
+  try {
+    await g.race("monza");
+    const A = g.apex, G = g.G;
+    const realReset = A.reset.bind(A);
+    let n = 0;
+    A.reset = (...args) => {
+      const r = realReset(...args);
+      n++;
+      for (const c of G.cars) c._plantedLeak = n;   // survives "reset" and differs per episode
+      return r;
+    };
+    const { rows, carsChecked } = await episodeLeaks({ seed: 42, episodes: 2, seconds: 0.5, game: g });
+    assert.ok(carsChecked > 1, "the snapshot must cover the whole field");
+    const hit = rows.find((r) => r.field === "_plantedLeak");
+    assert.ok(hit, `planted leak not reported; rows: ${rows.map((r) => r.field).join(", ") || "(none)"}`);
+    assert.equal(hit.cars, carsChecked, "every car carries the planted field");
+    assert.ok(Object.keys(snapshot(G.cars)[0]).length > 10, "snapshot() must read the car's own fields");
+  } finally { g.close(); }
+});
 
 // ── RACE-END STATE (bug hunt 2026-09-27) ─────────────────────────────────────
 // A 4 s rollout never retires or classifies a car, so the diff above cannot see

@@ -63,10 +63,11 @@ function referenced() {
   }
 
   // Runtime URLs built in JS — `new URL("../../vendor/…", src)` is how the
-  // debris world reaches rapier, and no tag or importmap mentions it.
+  // debris world reaches rapier, and no tag or importmap mentions it. assets/ and
+  // worker/ literals are fetched the same way, so they are swept too.
   for (const file of walk("js")) {
     const src = fs.readFileSync(path.join(ROOT, file), "utf8");
-    for (const m of src.matchAll(/["'`]((?:\.\.\/)*vendor\/[^"'`]+)["'`]/g)) {
+    for (const m of src.matchAll(/["'`]((?:\.\.\/)*(?:vendor|assets|worker)\/[^"'`\s]+)["'`]/g)) {
       add(m[1].replace(/^(\.\.\/)+/, ""), file);
     }
   }

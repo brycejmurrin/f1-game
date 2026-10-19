@@ -9,11 +9,13 @@ import { gotoGame, mutateCaptureScene } from "../../shot/probe-page.mjs";
 import { inspectUI, openSession, performAction, matchesOracle, captureRecord, startPerformanceTrace, installFault, positionScene } from "./browser.mjs";
 import { diffInspections } from "./inspector.mjs";
 import { settleLayout } from "./transitions.mjs";
+import { resolveUIProfile } from "../../lib/ui-device-profile.mjs";
 
 export async function explore(browser, url, options) {
   const { outDir, modes = Object.keys(MODE_TITLES), maxShots = 25 } = options;
   fs.mkdirSync(path.join(outDir, "evidence"), { recursive: true });
-  const bundle = { version: 1, meta: { title: "Apex UI Explorer", url, gitHead: options.gitHead, startedAt: new Date().toISOString(), browser: browser.version(), viewport: { width: 1280, height: 800 },
+  const bundle = { version: 1, meta: { title: "Apex UI Explorer", url, gitHead: options.gitHead, startedAt: new Date().toISOString(), browser: browser.version(),
+    viewport: options.device ? resolveUIProfile({ device: options.device }).profile.viewport : { scope: "Varies by mode; measured CSS viewport is recorded per capture" },
     limitations: ["Passed means a probe completed, not that the UI has no defects. DOM findings are screening advisories requiring review.", "Menu background rendering is paused after boot; guided races omit rendered loading/flyby timing. Browser actions use visible controls. Scene investigations explicitly resume rendering.", "Fresh contexts block service workers for repeatable network faults; service-worker recovery is not covered.", "Touch emulation is Chromium, not proof of Safari/iOS behavior. Root text enlargement does not scale fixed-pixel text.", "Blind Browser Use missions are exported briefs, separate from deterministic guided recipes; no independent-agent verdict is invented."] },
     capabilities: Object.entries(MODE_TITLES).map(([id, title]) => ({ id, title, status: "not-run", reason: modes.includes(id) ? "Pending execution" : "Outside selected scope", records: [] })), graph: { nodes: [], edges: [] }, findings: [] };
   const budget = { used: 0, max: maxShots }, candidates = [];
@@ -47,7 +49,7 @@ export async function explore(browser, url, options) {
     return { before, after, settlement, diff: diffInspections(before, after), durationMs: Math.round(performance.now() - started) };
   };
   const withSession = async (fn, opts) => {
-    const s = await openSession(browser, url, opts); let timer;
+    const s = await openSession(browser, url, { device: options.device, settings: options.settings, ...opts }); let timer;
     const work = Promise.resolve().then(() => fn(s));
     try { return await Promise.race([work, new Promise((_, reject) => { timer = setTimeout(() => { void s.context.close(); reject(new Error("Session exceeded 180-second evidence deadline")); }, 180000); })]); }
     finally { clearTimeout(timer); await s.context.close(); await work.catch(() => {}); }
@@ -120,7 +122,7 @@ export async function explore(browser, url, options) {
       const resize = { type: "viewport", ...vp }; actions.push(resize); await step(s, resize);
       if (i === 2) { const a = { type: "textScale", percent: 150 }; actions.push(a); await step(s, a); }
       const tab = { type: "press", key: "Tab" }; actions.push(tab); await step(s, tab);
-      await record(s, "responsive", `responsive-${i}`, `${vp.width} × ${vp.height} touch${i === 2 ? ", enlarged root text" : ""}`, [...actions], { touch: true, focus: await s.page.evaluate(() => document.activeElement?.id) });
+      await record(s, "responsive", `responsive-${i}`, `${vp.width} × ${vp.height} ${s.profile.hasTouch ? "touch" : "mouse"} resize stress${i === 2 ? ", enlarged root text" : ""}`, [...actions], { touch: s.profile.hasTouch, focus: await s.page.evaluate(() => document.activeElement?.id) });
     }
   }, { touch: true }));
 

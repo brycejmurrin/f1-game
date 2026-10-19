@@ -362,26 +362,23 @@ test("planVerdict: [~] and Deferred: items count as closed (#2397)", () => {
   assert.deepEqual(open.open, ["still todo", "Deferred-ish not closed"]);
 });
 
-test("planVerdict: when several ## Plan sections remain, the last with items wins (Cursor agent append)", () => {
+test("planVerdict: CURSOR_AGENT_PR_BODY Plan wins over an outer open Plan (#2899)", () => {
   const dual = [
     "## Plan",
-    "- [ ] **now:** stale human item",
-    "- [ ] another open",
+    "- [ ] **now:** outer human opener still open",
+    "- [x] publish",
     "",
     "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->",
     "## Plan",
-    "- [x] sync — sha",
-    "- [~] Deferred: hosted upload",
-    "- [x] CI green",
+    "- [x] synced tip — 8e0900369",
+    "- [x] CI passed — run 39126646785",
+    "- [~] Deferred: Bryce follow-up",
     "<!-- CURSOR_AGENT_PR_BODY_END -->",
     "",
   ].join("\n");
-  const v = planVerdict(dual);
-  assert.equal(v.state, "done");
-  assert.equal(v.items, 3);
-  assert.deepEqual(v.open, []);
-  const onlyStaleLast = "## Plan\n- [x] a\n\n## Plan\n- [ ] still open\n";
-  assert.equal(planVerdict(onlyStaleLast).state, "open");
+  assert.deepEqual(planVerdict(dual), { state: "done", items: 3, open: [] });
+  // Ordinary HTML comments still do not count as Plan items.
+  assert.equal(planVerdict(body("<!-- - [ ] example -->\n- [x] real")).state, "done");
 });
 
 test("#2430: the verdict line carries the FULL 40-char sha a merge call needs", () => {
@@ -412,6 +409,37 @@ test("withMemory: a memory-leak turns a green tip into memory-leak (exit 1)", ()
   assert.equal(v.code, 1);
   assert.equal(withMemory(GREEN, ["AGENTS.md"], { title: "docs" }).code, 0);
   assert.equal(withMemory(GREEN, null), GREEN, "no file list ( --sha ) skips the check");
+});
+
+test("memoryVerdict: a marker needs a reason on the same line", () => {
+  const files = [".claude/memory/foo.md"];
+  for (const body of ["memory-change:\n## Goal\nUnrelated text", "memory-change:\t \r\n## Goal", "memory-change:\t "]) {
+    assert.equal(memoryVerdict(files, { body }).state, "memory-leak", JSON.stringify(body));
+  }
+  assert.equal(memoryVerdict(files, { body: "## Goal\nMemory cleanup\nmemory-change:\t prune stale links\r\n## Plan" }).state, "ok");
+});
+
+test("PR-file renames into or out of memory require explicit intent", () => {
+  const head = "c".repeat(40);
+  for (const [previous, current, expected] of [
+    [".claude/memory/orphan.md", "docs/README.md", "memory-leak"],
+    ["docs/README.md", ".claude/memory/orphan.md", "memory-leak"],
+    ["docs/VERIFICATION.md", "docs/DEBUG-HOOKS.md", "passed"],
+  ]) {
+    const request = (url) => {
+      if (url === "pulls/9") return { json: { head: { sha: head }, changed_files: 101 } };
+      if (url === "pulls/9/files?per_page=100") return { json: Array.from({ length: 100 }, (_, i) => ({ filename: `docs/page-${i}.md` })) };
+      if (url === "pulls/9/files?per_page=100&page=2") return { json: [{ status: "renamed", previous_filename: previous, filename: current }] };
+      return { error: `unexpected ${url}` };
+    };
+    const resolved = resolveSha({ pr: "9", request });
+    assert.equal(resolved.filesError, null);
+    const verdict = withMemory(GREEN, resolved.files, resolved);
+    assert.equal(verdict.state, expected, `${previous} -> ${current}`);
+    if (expected === "memory-leak") {
+      assert.equal(withMemory(GREEN, resolved.files, { ...resolved, body: "memory-change: move topic" }).state, "passed");
+    }
+  }
 });
 
 test("withMemory: a files-API failure fails closed (never treats as no memory edits)", () => {
@@ -446,4 +474,14 @@ test("resolveSha --pr records filesError when the files list cannot be fetched",
   assert.equal(r.sha, head);
   assert.match(r.filesError || "", /HTTP 502/);
   assert.equal(r.files, null, "a failed files fetch must not look like an empty diff");
+});
+
+test("resolveSha --pr fails closed when the API returns fewer files than the PR reports", () => {
+  const request = (url) => url === "pulls/11"
+    ? { json: { head: { sha: "d".repeat(40) }, changed_files: 3001 } }
+    : { json: Array.from({ length: url.includes("page=31") ? 0 : 100 }, (_, i) => ({ filename: `docs/file-${i}.md` })) };
+  const resolved = resolveSha({ pr: "11", request });
+  assert.equal(resolved.files, null);
+  assert.match(resolved.filesError, /received 3000 of 3001/);
+  assert.equal(withMemory(GREEN, resolved.files, resolved).state, "memory-unknown");
 });

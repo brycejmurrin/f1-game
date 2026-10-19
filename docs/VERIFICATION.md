@@ -51,13 +51,24 @@ Run `npm run gen:check` when a generated reader or a tool `@doc` header changed.
 
 ## CI and Pages
 
-PR CI validates the PR head. Ship CI validates the deploy-branch push. Pages runs
-the release gate against its selected `before_sha` and publishes the staged
-artifact. A green PR is not proof that Pages is live; verify live `version.json`
+PR CI validates the PR head. A deploy-branch push starts the Pages release train;
+there is no separate ship-push CI run. Pages runs the reusable CI release gate
+against its selected `before_sha` and publishes the staged artifact.
+A green PR is not proof that Pages is live; verify live `version.json`
 and the apex SHA with `deploy-research` after Pages succeeds.
 
 For failure triage, use `ci-watch` and `ci-red-triage`; do not infer a verdict
 from a running job with zero failures or from a cancelled superseded run.
+
+## Routine status reporting
+
+`node tools/ci/session-status.mjs --summary` returns a bounded snapshot: branch,
+push/dirty/live-run state, inventory counts, and up to three failed or unresolved
+log examples. Omitted details remain available in the full default Markdown or
+with `--json`; `--json` takes precedence over `--summary` and returns full data.
+Add `--pr <n>` when live PR/CI evidence is needed. The local log counts describe
+historical files, not verification of the current commit; unknown states stay
+unknown and the ready gate is not evaluated by this command.
 
 ## Related readers
 
