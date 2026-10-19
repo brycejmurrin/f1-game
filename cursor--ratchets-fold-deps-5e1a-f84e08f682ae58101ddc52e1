@@ -1,1 +1,0 @@
-1792417711	Claude	ratchets-fold.yml fails: no npm ci before ratchets.mjs --fold (espree missing, run 39259294196); use ./.github/actions/setup-apex; OWNED .github/workflows/ratchets-fold.yml  [cursor/ratchets-fold-deps-5e1a; session f84e08f682ae58101ddc52e1]
