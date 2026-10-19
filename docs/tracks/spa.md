@@ -30,7 +30,9 @@ multiple curvature peaks in Bruxelles/Fagnes/Stavelot as extra corners.
 Marker fractions are racing arc fractions; do not apply `_sceneryShift`.
 The existing aero-zone turn pairs are re-keyed to preserve the same five
 physical gameplay intervals; the map's 2025 DRS markings do not certify 2026
-active-aero regulations. Built length is 6947.385 m, not a certified 7004 m:
+active-aero regulations. The signature-capture recipe also retains its physical
+compression/crest anchors through the new T3/T4 identities; its offsets and FOV
+are unchanged. Built length is 6947.385 m, not a certified 7004 m:
 a normalized outline cannot establish absolute length or start/sector positions.
 The current source describes its 64-knot elevation profile as a fit
 to SRTM 30 m samples of the imported road trace, with canopy smoothing and an

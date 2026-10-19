@@ -21,11 +21,12 @@ window.FlybyOverrides = (function () {
     spa: Object.freeze({
       // Eau Rouge and Raidillon from the compression: the eye stays below the
       // climb while the look runs through the left crest.
+      // Rekey the original physical anchors to 2025 GP T3/T4 after adding T2.
       "turn-mid": Object.freeze({
-        eye: [{ at: "corner", n: 2, off: -115, x: 10, y: 3.2 },
-              { at: "corner", n: 2, off: -58, x: 12, y: 4.2 }],
-        look: [{ at: "corner", n: 3, off: -24, x: 0, y: 0.8 },
-               { at: "corner", n: 3, off: 30, x: 0, y: 0.8 }],
+        eye: [{ at: "corner", n: 3, off: -115, x: 10, y: 3.2 },
+              { at: "corner", n: 3, off: -58, x: 12, y: 4.2 }],
+        look: [{ at: "corner", n: 4, off: -24, x: 0, y: 0.8 },
+               { at: "corner", n: 4, off: 30, x: 0, y: 0.8 }],
         fov: [36, 40],
       }),
     }),
